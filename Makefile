@@ -12,7 +12,7 @@
 export
 
 # Uruni is one Go binary at the repo root (ADR-001) with the React app in web/,
-# and SQLite by default (ADR-004) — so dev needs no containers at all. The
+# and SQLite as its only store (ADR-004) — so dev needs no containers at all. The
 # repo-root docker-compose.yml is the *operator* self-host stack; the stack-*
 # targets below exercise it locally, they are not the dev loop.
 COMPOSE := docker-compose.yml

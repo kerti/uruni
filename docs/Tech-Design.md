@@ -21,7 +21,7 @@ The individual decisions live as one-file-per-ADR in [`ADR/`](./ADR/README.md) �
 
 ## Stack at a glance
 
-**Go** backend (API + server-rendered public report + serves the React bundle, single origin) · **React** SPA (Vite, PWA) · **sqlc** over **SQLite** (Postgres optional) · integer-only money · Go sessions + argon2id auth · Caddy TLS · single Docker image · Fly.io + Neon as the maintainer's reference deployment.
+**Go** backend (API + server-rendered public report + serves the React bundle, single origin) · **React** SPA (Vite, PWA) · **sqlc** over **SQLite** (the only engine through `0.x` — ADR-004) · integer-only money · Go sessions + argon2id auth · Caddy TLS · single Docker image · a small VPS or Fly.io as the maintainer's reference deployment.
 
 Rationale for the two anchors: both React and Go are the most densely and accurately represented stacks in the model's training data, which matters because Uruni is built with AI assistance — fewer hallucinated APIs, more idiomatic output. They also mirror Balances, so proven patterns carry over. Go's single static binary is the best possible fit for "dead-simple self-host."
 
@@ -34,7 +34,7 @@ Full text — and the current `draft` / implemented stage of each — in [`ADR/`
 | [ADR-001](./ADR/001-one-go-binary-single-origin.md) | Overall shape: one Go binary, single origin |
 | [ADR-002](./ADR/002-languages-go-and-react.md) | Languages: Go (server) + TypeScript/React (client) |
 | [ADR-003](./ADR/003-frontend-react-spa-backend-go.md) | Frontend: React SPA (Vite) + backend: Go |
-| [ADR-004](./ADR/004-database-sqlite-default-postgres-option.md) | Database: SQLite default, Postgres option |
+| [ADR-004](./ADR/004-database-sqlite-only.md) | Database: SQLite only through 0.x |
 | [ADR-005](./ADR/005-data-access-sqlc.md) | Data access: sqlc |
 | [ADR-006](./ADR/006-money-integer-minor-units.md) | Money is integer minor units (never floats) |
 | [ADR-007](./ADR/007-auth-local-email-password.md) | Auth: local email/password now, OIDC later |
@@ -61,7 +61,7 @@ Internet ──▶ Caddy (TLS) ──▶ Go app  (single binary)
                                ├─ JSON API            /api/*
                                ├─ Public report (SSR) /report/*
                                ├─ React SPA (embed.FS) everything else
-                               ├─ SQLite file   (volume)   ── or Neon/Postgres
+                               ├─ SQLite file   (volume)
                                ├─ uploads/      (volume)
                                └─ backups/      (volume)
 ```

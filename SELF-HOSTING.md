@@ -27,7 +27,6 @@ Then open your domain and sign in as the treasurer.
 | `URUNI_DOMAIN` | Domain Caddy serves + fetches TLS for. |
 | `URUNI_BASE_URL` | Public base URL (used in the shareable report link). |
 | `URUNI_SESSION_SECRET` | Long random secret for session cookies. |
-| `DATABASE_URL` | Optional — use Postgres instead of the default SQLite. |
 | `SMTP_URL` | Optional — enable emailed periodic backups. |
 
 ## Data & backups

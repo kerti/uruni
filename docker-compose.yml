@@ -8,7 +8,6 @@ services:
       - URUNI_BASE_URL=${URUNI_BASE_URL}
       - URUNI_SESSION_SECRET=${URUNI_SESSION_SECRET}
       - URUNI_DB=/data/uruni.db
-      # - DATABASE_URL=${DATABASE_URL}   # set to use Postgres instead of SQLite
       # - SMTP_URL=${SMTP_URL}           # optional, for emailed backups
     volumes:
       - uruni-data:/data

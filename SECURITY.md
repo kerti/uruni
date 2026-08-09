@@ -8,7 +8,7 @@ Include, where possible: what you found, how to reproduce it, and the potential 
 
 ## Scope
 
-Uruni is **self-hosted**: each community runs its own instance, and the project operates no central service holding anyone's data. Reports about the Uruni code — the API, the public report page, authentication, backups, the container image — are in scope. Issues in a *particular operator's* deployment (their server, their TLS, their Postgres) are the operator's responsibility, though we welcome reports that reveal a weakness in the defaults we ship.
+Uruni is **self-hosted**: each community runs its own instance, and the project operates no central service holding anyone's data. Reports about the Uruni code — the API, the public report page, authentication, backups, the container image — are in scope. Issues in a *particular operator's* deployment (their server, their TLS, their volumes) are the operator's responsibility, though we welcome reports that reveal a weakness in the defaults we ship.
 
 ## Supported versions
 

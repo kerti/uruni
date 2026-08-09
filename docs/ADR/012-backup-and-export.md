@@ -9,3 +9,5 @@
 - **Email delivery**: optional, via `net/smtp` (or **gomail**) using host-configured SMTP.
 
 **Consequences.** The JSON schema needs a `version` field and a documented shape (own sub-doc when building).
+
+**The import half is load-bearing.** Since [ADR-004](./004-database-sqlite-only.md) makes SQLite the only engine through `0.x`, this document is also the **sanctioned engine-migration path**, not just disaster recovery. A round-trip test — export → fresh empty database → import → identical balances — is therefore required, not a nice-to-have.
