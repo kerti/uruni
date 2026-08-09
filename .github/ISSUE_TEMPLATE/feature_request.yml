@@ -1,0 +1,40 @@
+name: Feature request
+description: Suggest something — please read the scope bar first.
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **Uruni stays small.** This is the most important rule in the project, so
+        a friendly "no, that belongs in another product" is a normal and expected
+        answer here — it isn't a judgement on the idea.
+
+        Already ruled out: payment reminders and automated chasing, member logins
+        or a member portal, QRIS / payment gateways, bank sync, accounting
+        journals, analytics dashboards, multi-currency, and anything on the "RT
+        operating system" list. See
+        [`docs/PRD.md` §4](https://github.com/kerti/uruni/blob/main/docs/PRD.md)
+        — an absolute URL because relative links don't resolve on the new-issue page.
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem does the treasurer have?
+      description: Describe the situation, not the solution. What goes wrong today?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What do you suggest?
+    validations:
+      required: true
+  - type: textarea
+    id: bar
+    attributes:
+      label: Does it clear the bar?
+      description: >
+        "Would the accidental treasurer notice and love this, without having to
+        learn anything?" If it adds a screen, a setting, or a concept, say how
+        it earns that.
+    validations:
+      required: true

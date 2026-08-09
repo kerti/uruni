@@ -1,0 +1,51 @@
+name: Bug report
+description: Something Uruni does is wrong.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Please don't paste real member names or real amounts — this is a public
+        repo. Neutral fixtures and toy numbers reproduce bugs just as well.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, what you expected, what you got instead.
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. …
+        2. …
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: Output of `uruni version`, or the image tag you're running.
+      placeholder: v0.1.0-alpha.1
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Recording a transaction
+        - Balance or reconciliation (the numbers are wrong)
+        - Dues / members
+        - Public report
+        - Backup / export
+        - Login
+        - Self-hosting / deploy
+        - Something else
+  - type: checkboxes
+    id: money
+    attributes:
+      label: Trust core
+      options:
+        - label: This bug involves a balance, a reconciliation, or an amount being wrong.
+          required: false

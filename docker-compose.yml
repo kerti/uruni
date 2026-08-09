@@ -1,0 +1,43 @@
+# Uruni self-host stack: the app (single Go binary serving API + report + SPA)
+# behind Caddy for automatic HTTPS. Copy .env.example to .env and fill it in.
+services:
+  app:
+    image: ghcr.io/kerti/uruni:${URUNI_TAG:-latest}
+    restart: unless-stopped
+    environment:
+      - URUNI_BASE_URL=${URUNI_BASE_URL}
+      - URUNI_SESSION_SECRET=${URUNI_SESSION_SECRET}
+      - URUNI_DB=/data/uruni.db
+      # - DATABASE_URL=${DATABASE_URL}   # set to use Postgres instead of SQLite
+      # - SMTP_URL=${SMTP_URL}           # optional, for emailed backups
+    volumes:
+      - uruni-data:/data
+      - uruni-uploads:/uploads
+      - uruni-backups:/backups
+    expose:
+      - "8080"
+    # The image ships its own HEALTHCHECK (`uruni healthcheck` against /healthz,
+    # ADR-019); this only makes Caddy wait for it rather than for bare start.
+
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    depends_on:
+      app:
+        condition: service_healthy
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      - URUNI_DOMAIN=${URUNI_DOMAIN}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+
+volumes:
+  uruni-data:
+  uruni-uploads:
+  uruni-backups:
+  caddy-data:
+  caddy-config:

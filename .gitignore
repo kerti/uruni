@@ -1,1 +1,42 @@
+# Go build output
+/uruni
+/bin/
+*.out
+coverage.*
+
+# SQLite data
+*.db
+*.db-wal
+*.db-shm
+
+# Node / Vite
+node_modules/
+web/node_modules/
+
+# The built SPA is ignored, but web/dist/.gitkeep is committed on purpose: the
+# `//go:embed web/dist` directive fails to compile if the directory is missing,
+# so a bare `go build`/`go vet` on a fresh clone needs it there (CONTRIBUTING.md).
+# This must stay in `dir/*` + negation form — a plain `web/dist/` rule stops git
+# descending into the directory at all, and the negation would never be reached.
+web/dist/*
+!web/dist/.gitkeep
+
+# Test artifacts (Vitest coverage, Playwright reports — ADR-015)
+web/coverage/
+web/test-results/
+web/playwright-report/
+web/.playwright/
+
+# Env & secrets
+.env
+*.local
+
+# Local PII denylist for the pre-commit pii-guard (the real terms are the PII)
+.pii-patterns
+
+# Claude Code: .claude/settings.json and .claude/hooks/ are committed and shared;
+# only your personal per-clone settings stay out.
+.claude/settings.local.json
+
+# OS / editor
 .DS_Store

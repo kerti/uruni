@@ -1,0 +1,71 @@
+{
+  "$comment": [
+    "Shared, committed Claude Code settings for Uruni — every clone gets the same",
+    "agent behaviour. Personal settings (your permission approvals, commit",
+    "attribution) belong in .claude/settings.local.json, which is gitignored;",
+    "`make claude-install` seeds it from .claude/settings.local.json.example.",
+    "Paths use ${CLAUDE_PROJECT_DIR} so this file is portable across clones —",
+    "never hardcode an absolute path here.",
+    "Note: allow-rules in a committed settings.json require the one-time",
+    "workspace-trust prompt before they take effect."
+  ],
+  "permissions": {
+    "allow": [
+      "Bash(make check)",
+      "Bash(make test)",
+      "Bash(make lint)",
+      "Bash(make build)",
+      "Bash(make migrate-status)",
+      "Bash(make servers-status)",
+      "Bash(make restart)",
+      "Bash(make server-restart)",
+      "Bash(make web-restart)",
+      "Bash(make sqlc)",
+      "Bash(go build *)",
+      "Bash(go test *)",
+      "Bash(gofmt *)",
+      "Bash(git status)",
+      "Bash(git diff *)",
+      "Bash(git log *)",
+      "Bash(git checkout -b *)",
+      "Bash(git switch -c *)",
+      "Bash(gh issue *)",
+      "Bash(gh pr view *)"
+    ]
+  },
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|resume",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CLAUDE_PROJECT_DIR}/.claude/hooks/session-start.sh"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CLAUDE_PROJECT_DIR}/.claude/hooks/pre-push-gate.sh"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CLAUDE_PROJECT_DIR}/.claude/hooks/format-file.sh"
+          }
+        ]
+      }
+    ]
+  }
+}

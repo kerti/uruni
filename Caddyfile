@@ -1,0 +1,6 @@
+# Automatic HTTPS via Let's Encrypt. Set URUNI_DOMAIN in .env.
+# For a wildcard subdomain, switch to Caddy's DNS-challenge (see docs/Tech-Design.md ADR-009).
+{$URUNI_DOMAIN} {
+	encode zstd gzip
+	reverse_proxy app:8080
+}
