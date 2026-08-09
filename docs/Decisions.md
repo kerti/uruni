@@ -14,7 +14,7 @@ Last updated: 2026-08-09 (ADRs split one-file-each into `docs/ADR/`)
 
 ## Interview #1 findings (2026-08-01)
 
-Respondent: Adit's wife, ~2–3 months into being treasurer of a work-unit (office room). Small group: 8 people (was 10, may fall to 6). ~Rp 1–2 million/month. Records in a shared **Google Sheets** everyone can see; laptop-based today but *wants* mobile.
+Respondent: a treasurer of ~2–3 months, looking after a work-unit (office room) fund. Small group: 8 people (was 10, may fall to 6). ~Rp 1–2 million/month. Records in a shared **Google Sheets** everyone can see; laptop-based today but *wants* mobile.
 
 **What overturned our assumptions:**
 
@@ -56,14 +56,14 @@ Respondent: Adit's wife, ~2–3 months into being treasurer of a work-unit (offi
 10. **Scope discipline** — hard "no feature creep" rule. **Drop reminders/chasing from the core** for now (revisit only if a larger-group persona validates it). *(refined)*
 11. **License direction** — **AGPL-3.0** (consistent with "Balances"). Now an even better fit: with a self-hosted server, the network clause forces anyone hosting Uruni to keep it open. ~~App-store nuance for the mobile client to resolve at ship time.~~ **Moot as of ADR-008** — the client is a PWA served from the same origin, so there is no app-store distribution and no store-policy/AGPL tension to resolve. Copyright notice lives in `NOTICE`. *(reinforced; app-store caveat retired 2026-08-09)*
 12. **Design language** — keep it *simpler than a spreadsheet* and reliable enough to replace it. **Downgrade** the emotional-context UI ("2 birthdays · 1 graduation") from signature to nice-to-have; **elevate** one-tap capture + an always-honest running balance + a reconciliation check as the signature. Plus Jakarta Sans / soft palette still fine, low priority. *(revised)*
-14. **Adoption model (new, accepted trade-off)** — self-hosting means the reluctant treasurer needs a technical helper to run her instance. For interview-#1's user, that's Adit. Uruni targets communities with access to someone technical; it is explicitly **not** a tap-to-install consumer app. Consistent with "don't generalize too hard."
+14. **Adoption model (new, accepted trade-off)** — self-hosting means the reluctant treasurer needs a technical helper to run her instance. Interview #1's user has one. Uruni targets communities with access to someone technical; it is explicitly **not** a tap-to-install consumer app. Consistent with "don't generalize too hard."
 13. **Build plan** — built with Claude Code in a separate repo (folder TBD). *(unchanged)*
 
 ---
 
 ## Architecture — resolved (was the big open question)
 
-Interview #2 settled it. She distrusts sync/offline (won't reason about "which copy is valid"), wants an always-on server so a lost phone loses nothing, and doesn't need Google Sheets at all (never uses it herself; members never read it). Decision: **client-server, self-hostable only** — see Decision 6. Adit holds the principle ("hold nothing") over the persona's convenience, accepting the adoption trade-off (Decision 14): the treasurer needs a technical helper to host, which for interview-#1's user is Adit himself.
+Interview #2 settled it. She distrusts sync/offline (won't reason about "which copy is valid"), wants an always-on server so a lost phone loses nothing, and doesn't need Google Sheets at all (never uses it herself; members never read it). Decision: **client-server, self-hostable only** — see Decision 6. The principle ("hold nothing") wins over the persona's convenience, accepting the adoption trade-off (Decision 14): the treasurer needs a technical helper to host, and interview #1's user has one.
 
 ## Open questions — resolved (2026-08-08)
 

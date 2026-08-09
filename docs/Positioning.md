@@ -39,7 +39,7 @@ A **mobile app** that makes the treasurer's job effortless capture and honest ma
 **Uruni the project holds nothing.** There is no Uruni-run service sitting on communities' money records. Instead, a community runs its **own always-on Uruni server** — one source of truth in the cloud, so records are safe even if a phone is lost, and there's never a "which copy is right?" question.
 
 - The server is **open source and self-hostable**. A community's data lives on the community's *own* instance, under its own control.
-- For the validated user, a technical helper stands the instance up (in her case, Adit). It's not a tap-to-install consumer app, and we don't pretend it is.
+- For the validated user, a technical helper stands the instance up. It's not a tap-to-install consumer app, and we don't pretend it is.
 - **AGPL-3.0**: anyone who hosts Uruni for their community must keep the code open. The trust story is auditable and true by construction.
 
 Every competitor is a company's server holding your data. With Uruni, the server is *yours*.
