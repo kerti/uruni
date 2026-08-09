@@ -11,7 +11,7 @@ A small, calm app that helps a reluctant, non-accountant **treasurer** keep a co
 ## Source-of-truth docs (`/docs`)
 
 - `PRD.md` — what to build and why (the requirements). Also `PRD-ID.md` (Indonesian).
-- `Tech-Design.md` — the stack and architecture overview; the decisions themselves are one file per ADR in `ADR/` (`docs/ADR/README.md` is the index). **ADR numbers are permanent** — supersede with a new ADR, never renumber or rewrite one in place.
+- `Tech-Design.md` — the stack and architecture overview; the decisions themselves are one file per ADR in `ADR/` (`docs/ADR/README.md` is the index). **ADR numbers are permanent** — never reused, never renumbered. An ADR tagged **`draft`** has no code behind it yet and may be edited in place; once a slice implements it the tag comes off and it changes only by a **superseding** ADR.
 - `Design-System.md` — colors, type, components, voice.
 - `Positioning.md` — the product thesis and emotional core.
 - `ROADMAP.md` — milestones (= minors), the release cadence, and the one-line status cursor.
@@ -84,7 +84,7 @@ Build one slice at a time and **stop for review** before the next. Do not run ah
 
 ## Definition of done (per slice)
 
-Builds cleanly · tests pass (money/reconciliation especially) · matches the PRD and design tokens · Indonesian, sentence-case copy · no scope creep · `Decisions.md` updated if anything was actually decided.
+Builds cleanly · tests pass (money/reconciliation especially) · matches the PRD and design tokens · Indonesian, sentence-case copy · no scope creep · `Decisions.md` updated if anything was actually decided · **the `draft` tag dropped from every ADR this slice now implements** (that tag is what keeps an ADR editable — see `docs/ADR/README.md`).
 
 ## Release & versioning (see `ROADMAP.md`, Tech-Design ADR-017/018)
 

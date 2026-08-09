@@ -1,6 +1,6 @@
 # ADR-017 — CI/CD: GitHub Actions
 
-**Status:** Accepted · [ADR index](./README.md)
+**Status:** Accepted · implemented — change only by adding a superseding ADR · [ADR index](./README.md)
 
 **Context.** Public GitHub repo, AGPL-3.0, solo maintainer, release by pushing tags.
 

@@ -1,6 +1,6 @@
 # Auto-generated release-notes config — used by the GitHub "Generate release notes"
 # button and `gh release create --generate-notes`. Groups merged PRs by label into a
-# terse digest. See docs/Tech-Design.md ADR-018. Issues + PRs are the system of record.
+# terse digest. See docs/ADR/018-release-and-versioning.md. Issues + PRs are the system of record.
 changelog:
   exclude:
     labels:

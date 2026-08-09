@@ -1,6 +1,6 @@
 # ADR-019 — CLI surface & runtime config (the scaffold's contract)
 
-**Status:** Accepted · [ADR index](./README.md)
+**Status:** Accepted · `draft` — no code implements this yet, so it may still be edited in place · [ADR index](./README.md)
 
 **Context.** The `Makefile`, `ci.yml`, and the repo's hooks were written *before* the scaffold and already invoke a binary that doesn't exist yet. That inversion is deliberate — the tooling is easier to reason about than the code it will drive — but it only works if the surface it assumes is pinned down. Otherwise the scaffold invents subcommand names ad hoc and the tooling silently rots on day one.
 

@@ -1,6 +1,6 @@
 # ADR-003 — Frontend: React SPA (Vite) + backend: Go
 
-**Status:** Accepted (supersedes the earlier SvelteKit proposal) · [ADR index](./README.md)
+**Status:** Accepted (supersedes the earlier SvelteKit proposal) · `draft` — no code implements this yet, so it may still be edited in place · [ADR index](./README.md)
 
 **Context.** Built with AI assistance, so stack fluency is a first-class criterion; Balances is React + Go.
 

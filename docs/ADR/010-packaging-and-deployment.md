@@ -1,6 +1,6 @@
 # ADR-010 — Packaging & deployment
 
-**Status:** Accepted · [ADR index](./README.md)
+**Status:** Accepted · implemented — change only by adding a superseding ADR · [ADR index](./README.md)
 
 **Decision.**
 - Multi-stage **Dockerfile**: build the React bundle, then `go build` embedding it → a small **distroless/scratch** image with a single binary. Publish to **GHCR**.

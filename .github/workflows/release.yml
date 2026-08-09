@@ -1,7 +1,7 @@
 # Build and publish the release container image to GHCR on a version tag.
 # Build-once / promote-many: the image ghcr.io/<owner>/uruni:<tag> exists for every
 # tag ever cut. Deploying that image to the maintainer's instance is a separate,
-# manual ops step kept out of this repo (see docs/Tech-Design.md ADR-016/017).
+# manual ops step kept out of this repo (see docs/ADR/, ADR-016/017).
 name: Release image
 
 on:

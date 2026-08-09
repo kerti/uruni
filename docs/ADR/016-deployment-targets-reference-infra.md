@@ -1,6 +1,6 @@
 # ADR-016 — Deployment targets & reference infra
 
-**Status:** Accepted · [ADR index](./README.md)
+**Status:** Accepted · implemented — change only by adding a superseding ADR · [ADR index](./README.md)
 
 **Context.** Uruni is open-source and self-hostable; it must not be coupled to any one provider. The maintainer also needs to actually host his wife's instance.
 

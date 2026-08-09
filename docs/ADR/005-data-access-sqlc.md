@@ -1,6 +1,6 @@
 # ADR-005 — Data access: sqlc
 
-**Status:** Accepted · [ADR index](./README.md)
+**Status:** Accepted · `draft` — no code implements this yet, so it may still be edited in place · [ADR index](./README.md)
 
 **Context.** Want type-safe, transparent SQL in Go without a heavy ORM; must target both SQLite and Postgres.
 

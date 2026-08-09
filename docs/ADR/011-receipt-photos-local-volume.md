@@ -1,6 +1,6 @@
 # ADR-011 — Receipt photos: local volume
 
-**Status:** Accepted · [ADR index](./README.md)
+**Status:** Accepted · `draft` — no code implements this yet, so it may still be edited in place · [ADR index](./README.md)
 
 **Decision.** Store optional uploaded images on a mounted **local volume**, path referenced in the DB; enforce a size cap and downscale on upload. Avoids an object-storage dependency.
 

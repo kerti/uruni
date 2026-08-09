@@ -144,7 +144,14 @@ Left open on purpose: **narrowing `Bash(git checkout *)`** in `.claude/settings.
 
 `Tech-Design.md` had grown to 251 lines carrying twenty ADRs inline, and the ADR count only goes up from here — every slice from M2 on adds decisions. Split into [`ADR/`](./ADR/README.md), one file per decision (`NNN-slug.md`), with `Tech-Design.md` kept as the framing and index: constraints, stack at a glance, production topology, open questions, deferred.
 
-Why keep `Tech-Design.md` rather than fold it into `ADR/README.md`: the non-ADR content needs a home, and ~10 files across docs, CI and the Makefile already reference decisions as "Tech-Design ADR-0NN" — that phrasing stays true. **ADR numbers are permanent**: change a decision by adding a superseding ADR and marking the old one superseded, never by rewriting or renumbering in place. ADR bodies moved verbatim; the only edits were the added status line and cross-ADR references turned into links.
+Why keep `Tech-Design.md` rather than fold it into `ADR/README.md`: the non-ADR content needs a home, and ~10 files across docs, CI and the Makefile already reference decisions as "Tech-Design ADR-0NN" — that phrasing stays true. ADR bodies moved verbatim; the only edits were the added status line and cross-ADR references turned into links.
+
+**Mutability rule, decided in the same PR.** The first draft of this said simply "supersede, never rewrite" — too rigid for twenty decisions that are still prose with no code behind them, and it would have forced the pending SQLite/Postgres grill to mint a superseding ADR before a single query exists. Split in two instead:
+
+- **Numbers are permanent** — never reused, never renumbered. 73 bare "ADR-0NN" mentions across the repo depend on that.
+- **Text is editable while an ADR is tagged `draft`**, meaning no code implements it. The tag comes off in the PR that implements it, and from then on the decision changes only by a superseding ADR. Migrations stay stricter (ADR-018: immutable from first production deploy).
+
+Enforcement is one line in `CLAUDE.md`'s definition of done: a slice drops the `draft` tag from every ADR it implements. At the split, **six were already implemented** by the tooling that shipped ahead of the code — 009 and 010 (`Caddyfile`, Dockerfile, compose), 016 (provider-agnostic packaging, no `deploy.yml`), 017 and 018 (workflows, release-notes config, branch protection), 020 (`Makefile`, committed guards) — and the other fourteen are `draft`.
 
 ## Live state — no HANDOFF file (decided 2026-08-08)
 

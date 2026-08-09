@@ -1,6 +1,6 @@
 # ADR-007 — Auth: local email/password now, OIDC later
 
-**Status:** Accepted · [ADR index](./README.md)
+**Status:** Accepted · `draft` — no code implements this yet, so it may still be edited in place · [ADR index](./README.md)
 
 **Decision.** **Local auth** — email/password hashed with **argon2id** (`golang.org/x/crypto/argon2`), server-side sessions with httpOnly secure cookies (e.g. **alexedwards/scs**, or a minimal hand-rolled store given it's effectively one user). OIDC is an additive option later (`coreos/go-oidc`).
 

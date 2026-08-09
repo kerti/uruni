@@ -1,6 +1,6 @@
 # ADR-018 — Release & versioning: tag-driven SemVer, operator upgrade contract
 
-**Status:** Accepted · [ADR index](./README.md)
+**Status:** Accepted · implemented — change only by adding a superseding ADR · [ADR index](./README.md)
 
 **Context.** Uruni is self-hostable, so the version string is a **contract for the operator's `docker compose pull && up`**, not a marketing brand. (Learned wholesale from Balances ADR-0029/0033.)
 

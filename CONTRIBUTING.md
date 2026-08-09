@@ -36,7 +36,7 @@ Production build embeds the SPA into the Go binary — `make build` does it in t
 ## How a change flows (GitHub Flow)
 
 1. **An issue first.** For anything beyond a typo, open or claim one so the shape can be discussed.
-2. **Decisions get recorded.** Architectural or hard-to-reverse calls go in `docs/ADR/` as a new numbered ADR (or `docs/Decisions.md`) before coding. ADR numbers are permanent — supersede, never rewrite.
+2. **Decisions get recorded.** Architectural or hard-to-reverse calls go in `docs/ADR/` as a new numbered ADR (or `docs/Decisions.md`) before coding. Numbers are permanent; an ADR tagged `draft` (no code behind it yet) can be edited in place, an implemented one changes only by a superseding ADR. Implementing a `draft` ADR means dropping its tag in the same PR.
 3. **Branch → PR → squash-merge.** `main` is protected and always releasable; the human merge is the sign-off.
 4. **Label the PR** with one type (`enhancement` / `bug` / `documentation` / `dependencies`) at merge — unlabeled PRs fall through the auto-generated release notes.
 5. **Migrations** stay in the same PR as their feature; **renumber at merge** (filename prefix, not timestamps) so apply-order == merge-order.

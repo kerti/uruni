@@ -1,6 +1,6 @@
 # ADR-013 — Scheduling: in-process
 
-**Status:** Accepted · [ADR index](./README.md)
+**Status:** Accepted · `draft` — no code implements this yet, so it may still be edited in place · [ADR index](./README.md)
 
 **Decision.** An **in-process scheduler** in the Go app (**robfig/cron** or a `time.Ticker`). No Redis, no separate worker.
 

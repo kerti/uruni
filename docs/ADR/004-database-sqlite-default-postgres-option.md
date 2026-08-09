@@ -1,6 +1,6 @@
 # ADR-004 — Database: SQLite default, Postgres option
 
-**Status:** Accepted · [ADR index](./README.md)
+**Status:** Accepted · `draft` — no code implements this yet, so it may still be edited in place · [ADR index](./README.md)
 
 **Context.** One tiny instance per community, single writer, integrity-critical; self-host simplicity is priority. Balances uses Postgres on Neon.
 

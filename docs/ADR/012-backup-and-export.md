@@ -1,6 +1,6 @@
 # ADR-012 — Backup & export implementation
 
-**Status:** Accepted · [ADR index](./README.md)
+**Status:** Accepted · `draft` — no code implements this yet, so it may still be edited in place · [ADR index](./README.md)
 
 **Decision.**
 - **JSON export**: Go `encoding/json` serializes all tables into one **versioned** document; a matching **import** restores it.

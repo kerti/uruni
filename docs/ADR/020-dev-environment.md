@@ -1,6 +1,6 @@
 # ADR-020 — Dev environment: one entry point, guards committed
 
-**Status:** Accepted · [ADR index](./README.md)
+**Status:** Accepted · implemented — change only by adding a superseding ADR · [ADR index](./README.md)
 
 **Context.** A solo maintainer working with AI agents on a public AGPL repo that is developed against a *real* community's fund. Two failure modes matter more than convenience: real neighbours' names leaking into a public repo, and setup steps that exist only in someone's shell history. Balances has good guards but keeps its entire agent configuration in a gitignored `.claude/settings.local.json` full of absolute paths — nothing about it survives a clone.
 
