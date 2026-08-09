@@ -2,7 +2,7 @@
 
 *A running record of what we've decided and why. Anything here can still change.*
 
-Last updated: 2026-08-09 (dev tooling contract — ADR-019/020)
+Last updated: 2026-08-09 (ADRs split one-file-each into `docs/ADR/`)
 
 ## Related documents
 
@@ -90,7 +90,7 @@ No product-level open questions remain.
 
 ## Technical design (separate doc — started 2026-08-08)
 
-Implementation choices live in [`Tech-Design.md`](./Tech-Design.md) as ADRs, kept out of the PRD so the product spec stays stable. **Stack confirmed 2026-08-08:** **Go** backend (single origin — serves the API, server-renders the public report, and serves the React bundle embedded via `embed.FS`) + **React** SPA (Vite, PWA) — chosen for AI-codegen accuracy and to mirror Balances · **sqlc** over **SQLite** (Postgres/Neon optional) · integer-only (`int64`) money · Go sessions + argon2id auth (OIDC later) · minimal PWA, no offline data · Caddy TLS · single Docker image + GHCR · local-volume receipt photos · JSON/Excel/scheduled/email backups · Indonesian-first i18n · `go test`/Vitest/Playwright with reconciliation math as the priority target. Dev keeps frontend/backend separate (Vite HMR + Go, proxied). Infra: product is provider-agnostic; the maintainer's own hosted instance is a separate reference deployment kept out of the repo (ADR-016).
+Implementation choices live as ADRs in [`ADR/`](./ADR/README.md), kept out of the PRD so the product spec stays stable; [`Tech-Design.md`](./Tech-Design.md) holds the framing around them (constraints, stack at a glance, topology, what's still open) and indexes the set. **Stack confirmed 2026-08-08:** **Go** backend (single origin — serves the API, server-renders the public report, and serves the React bundle embedded via `embed.FS`) + **React** SPA (Vite, PWA) — chosen for AI-codegen accuracy and to mirror Balances · **sqlc** over **SQLite** (Postgres/Neon optional) · integer-only (`int64`) money · Go sessions + argon2id auth (OIDC later) · minimal PWA, no offline data · Caddy TLS · single Docker image + GHCR · local-volume receipt photos · JSON/Excel/scheduled/email backups · Indonesian-first i18n · `go test`/Vitest/Playwright with reconciliation math as the priority target. Dev keeps frontend/backend separate (Vite HMR + Go, proxied). Infra: product is provider-agnostic; the maintainer's own hosted instance is a separate reference deployment kept out of the repo (ADR-016).
 
 Design system: [`Design-System.md`](./Design-System.md) created 2026-08-08 — **Tailwind + shadcn/ui + lucide** (own-your-code, CSS-var theming, training-dense), **Plus Jakarta Sans** (self-hosted), **Sage palette** (Forest `#1F5D50` primary, Sage accent, Cream bg, terracotta `#C96C4A` for "selisih", green `#2E7D5B` for reconciled "cocok"), soft rounded, mobile-first, integer money formatted `id-ID`.
 
@@ -139,6 +139,12 @@ What *is* an unmet obligation: MIT and BSD both require their copyright notice t
 - Cheapest resolution consistent with staying small: a generated `THIRD-PARTY-NOTICES` (e.g. `go-licenses` + `license-checker`) produced at release time, not a hand-maintained file. Decide at M9.
 
 Left open on purpose: **narrowing `Bash(git checkout *)`** in `.claude/settings.json`, which auto-approves `git checkout -- .` and can destroy uncommitted work with no prompt. Wants a human hand on the permissions file. *(applied by the maintainer 2026-08-09.)*
+
+## ADRs are one file each (decided 2026-08-09)
+
+`Tech-Design.md` had grown to 251 lines carrying twenty ADRs inline, and the ADR count only goes up from here — every slice from M2 on adds decisions. Split into [`ADR/`](./ADR/README.md), one file per decision (`NNN-slug.md`), with `Tech-Design.md` kept as the framing and index: constraints, stack at a glance, production topology, open questions, deferred.
+
+Why keep `Tech-Design.md` rather than fold it into `ADR/README.md`: the non-ADR content needs a home, and ~10 files across docs, CI and the Makefile already reference decisions as "Tech-Design ADR-0NN" — that phrasing stays true. **ADR numbers are permanent**: change a decision by adding a superseding ADR and marking the old one superseded, never by rewriting or renumbering in place. ADR bodies moved verbatim; the only edits were the added status line and cross-ADR references turned into links.
 
 ## Live state — no HANDOFF file (decided 2026-08-08)
 

@@ -74,7 +74,7 @@ A single **Go** binary serves the JSON API, server-renders the public report, an
 
 The app is **connection-required by design**: no local data store, no write queue, no offline sync. When disconnected it shows a clear "butuh koneksi" state. That's a deliberate choice made with the validated user, who preferred no "which copy is valid?" ambiguity over any offline capability.
 
-Details in [`docs/Tech-Design.md`](docs/Tech-Design.md).
+Details in [`docs/Tech-Design.md`](docs/Tech-Design.md); the decisions themselves are one file per ADR in [`docs/ADR/`](docs/ADR/README.md).
 
 ## Voice
 
@@ -96,7 +96,8 @@ Contributions to copy and UI should keep this tone: warm, human, never corporate
 |---|---|
 | [`docs/Positioning.md`](docs/Positioning.md) | The product thesis and emotional core |
 | [`docs/PRD.md`](docs/PRD.md) · [`docs/PRD-ID.md`](docs/PRD-ID.md) | What to build and why (English / Indonesian) |
-| [`docs/Tech-Design.md`](docs/Tech-Design.md) | Stack and architecture (ADRs) |
+| [`docs/Tech-Design.md`](docs/Tech-Design.md) | Stack and architecture — the overview |
+| [`docs/ADR/`](docs/ADR/README.md) | The architecture decisions, one file each |
 | [`docs/Design-System.md`](docs/Design-System.md) | Colors, type, components, voice |
 | [`docs/ROADMAP.md`](docs/ROADMAP.md) | Milestones and release cadence |
 | [`docs/Decisions.md`](docs/Decisions.md) | The running decision log |

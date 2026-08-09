@@ -11,7 +11,7 @@ A small, calm app that helps a reluctant, non-accountant **treasurer** keep a co
 ## Source-of-truth docs (`/docs`)
 
 - `PRD.md` — what to build and why (the requirements). Also `PRD-ID.md` (Indonesian).
-- `Tech-Design.md` — the stack and architecture (ADRs).
+- `Tech-Design.md` — the stack and architecture overview; the decisions themselves are one file per ADR in `ADR/` (`docs/ADR/README.md` is the index). **ADR numbers are permanent** — supersede with a new ADR, never renumber or rewrite one in place.
 - `Design-System.md` — colors, type, components, voice.
 - `Positioning.md` — the product thesis and emotional core.
 - `ROADMAP.md` — milestones (= minors), the release cadence, and the one-line status cursor.
@@ -52,7 +52,7 @@ A small, calm app that helps a reluctant, non-accountant **treasurer** keep a co
     db/          goose migrations
   web/           React + Vite app (embedded into the binary at build)
   docker/        Dockerfile, docker-compose.yml, Caddyfile
-  docs/          PRD, Tech-Design, Design-System, Positioning, Decisions
+  docs/          PRD, Tech-Design, ADR/, Design-System, Positioning, Decisions
 ```
 
 ## Dev workflow
