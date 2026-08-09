@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/kerti/uruni/security/advisories/new
+    about: Report privately via the Security tab — never in a public issue.
+  - name: Scope, principles, and non-goals
+    url: https://github.com/kerti/uruni/blob/main/docs/PRD.md
+    about: Check an idea against the non-goals in §4 before opening a request.

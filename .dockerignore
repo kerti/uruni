@@ -1,0 +1,28 @@
+# Keep the build context small and the layer cache stable: the Dockerfile does
+# `COPY . .`, so anything listed here neither busts the cache nor reaches a layer.
+.git
+.github
+.githooks
+.claude
+docs
+research
+*.md
+
+# Never ship the local PII denylist — the terms in it ARE the PII (ADR-020).
+.pii-patterns
+.pii-patterns.example
+
+node_modules
+web/node_modules
+web/dist
+web/coverage
+web/test-results
+web/playwright-report
+
+*.db
+*.db-wal
+*.db-shm
+.env
+*.out
+coverage.*
+.DS_Store

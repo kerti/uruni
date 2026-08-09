@@ -1,0 +1,46 @@
+# Build and publish the release container image to GHCR on a version tag.
+# Build-once / promote-many: the image ghcr.io/<owner>/uruni:<tag> exists for every
+# tag ever cut. Deploying that image to the maintainer's instance is a separate,
+# manual ops step kept out of this repo (see docs/Tech-Design.md ADR-016/017).
+name: Release image
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  image:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository_owner }}/uruni
+          tags: |
+            type=semver,pattern={{version}}
+            type=raw,value=${{ github.ref_name }}
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          # amd64 for typical VPS hosts, arm64 for the Pi / Ampere boxes a
+          # self-hoster is just as likely to have (ADR-010: compose is the
+          # make-or-break deployment UX).
+          platforms: linux/amd64,linux/arm64
+          # Without this the image reports `version=dev` forever — and ADR-019
+          # makes `uruni version` the operator's half of the upgrade contract.
+          build-args: |
+            VERSION=${{ github.ref_name }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}

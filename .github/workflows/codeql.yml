@@ -1,0 +1,67 @@
+name: CodeQL
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: "0 3 * * 1"
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  # Same pre-scaffold gate as ci.yml: CodeQL's Go autobuild fails outright
+  # without a go.mod, and there is no JS/TS to analyze until web/ exists.
+  preflight:
+    # Distinct from ci.yml's preflight on purpose: branch-protection required
+    # checks are selected by display name, and two identically-named check runs
+    # from different workflows are ambiguous to pick between.
+    name: Detect what exists (CodeQL)
+    runs-on: ubuntu-latest
+    outputs:
+      languages: ${{ steps.detect.outputs.languages }}
+      any: ${{ steps.detect.outputs.any }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: detect
+        run: |
+          # if/else rather than `[ x ] && y` — the latter leaves the statement
+          # with a non-zero status under the runner's `set -e` shell.
+          langs=""
+          if [ -f go.mod ]; then
+            langs='"go"'
+          fi
+          if [ -f web/package.json ]; then
+            if [ -n "$langs" ]; then
+              langs="$langs,"
+            fi
+            langs="$langs\"javascript-typescript\""
+          fi
+          if [ -z "$langs" ]; then
+            echo "any=false" >> "$GITHUB_OUTPUT"
+            echo "languages=[]" >> "$GITHUB_OUTPUT"
+            echo "::notice::Nothing to analyze yet — skipped until the M1 scaffold lands."
+          else
+            echo "any=true" >> "$GITHUB_OUTPUT"
+            echo "languages=[$langs]" >> "$GITHUB_OUTPUT"
+          fi
+
+  analyze:
+    name: Analyze (${{ matrix.language }})
+    needs: preflight
+    if: needs.preflight.outputs.any == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        language: ${{ fromJSON(needs.preflight.outputs.languages) }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: github/codeql-action/init@v3
+        with:
+          languages: ${{ matrix.language }}
+      - uses: github/codeql-action/autobuild@v3
+      - uses: github/codeql-action/analyze@v3

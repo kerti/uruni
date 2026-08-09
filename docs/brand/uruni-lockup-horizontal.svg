@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 184 64" width="184" height="64" role="img" aria-label="Uruni horizontal lockup">
+  <title>Uruni logo — horizontal lockup</title>
+  <path d="M21 18 L21 31 A11 11 0 0 0 43 31 L43 18" fill="none" stroke="#1F5D50" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="32" cy="30" r="5" fill="#7BAE8D"/>
+  <text x="74" y="41" font-family="'Plus Jakarta Sans', sans-serif" font-size="34" font-weight="700" letter-spacing="-1" fill="#22323A">uruni</text>
+</svg>

@@ -1,0 +1,107 @@
+# CI — runs on every PR and push to main. Local mirror: `make check`.
+# Before making the repo public, pin each action to a commit SHA (supply-chain
+# hardening — a lesson carried over from the Balances project).
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+env:
+  # Keep in lockstep with the `version: "2"` schema in .golangci.yml and with
+  # whatever `make lint` runs locally — that lockstep IS `make check`'s promise
+  # that green-locally means green-in-CI (ADR-020). golangci-lint-action v8
+  # drives golangci-lint v2; do not drop back to action v6 (v1 only).
+  GOLANGCI_VERSION: v2.12.2
+
+jobs:
+  # The Makefile, hooks and workflows were deliberately written before the
+  # scaffold (ADR-019), so between now and M1 there is no go.mod and no web/.
+  # Rather than let `main` sit red — which would break "never tag a red main"
+  # (ROADMAP) — each job waits until the tree it lints actually exists. Once M1
+  # lands, both flags flip to true permanently and this gate becomes inert.
+  preflight:
+    name: Detect what exists (CI)
+    runs-on: ubuntu-latest
+    outputs:
+      backend: ${{ steps.detect.outputs.backend }}
+      frontend: ${{ steps.detect.outputs.frontend }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: detect
+        run: |
+          if [ -f go.mod ]; then
+            echo "backend=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "backend=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::No go.mod yet — backend job skipped until the M1 scaffold lands."
+          fi
+          if [ -f web/package.json ]; then
+            echo "frontend=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "frontend=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::No web/package.json yet — frontend job skipped until the M1 scaffold lands."
+          fi
+
+  backend:
+    name: Backend (lint + test)
+    needs: preflight
+    if: needs.preflight.outputs.backend == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Lint
+        uses: golangci/golangci-lint-action@v8
+        with:
+          version: ${{ env.GOLANGCI_VERSION }}
+      - name: Test (race + coverage)
+        run: go test ./... -race -covermode=atomic -coverprofile=coverage.out
+      - name: Upload coverage
+        uses: codecov/codecov-action@v5
+        with:
+          files: coverage.out
+          flags: backend
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+
+  frontend:
+    name: Frontend (lint + typecheck + test + build)
+    needs: preflight
+    if: needs.preflight.outputs.frontend == 'true'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          # Resolved from the repo root: `defaults.run.working-directory` applies
+          # to `run:` steps only, never to an action's own inputs.
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm run test -- --coverage
+      - name: Upload coverage
+        uses: codecov/codecov-action@v5
+        with:
+          working-directory: web
+          flags: frontend
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+      - run: npm run build
