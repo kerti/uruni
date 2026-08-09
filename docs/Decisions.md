@@ -2,7 +2,7 @@
 
 *A running record of what we've decided and why. Anything here can still change.*
 
-Last updated: 2026-08-09 (dev tooling contract — ADR-019/020)
+Last updated: 2026-08-09 (ADRs split one-file-each into `docs/ADR/`)
 
 ## Related documents
 
@@ -14,7 +14,7 @@ Last updated: 2026-08-09 (dev tooling contract — ADR-019/020)
 
 ## Interview #1 findings (2026-08-01)
 
-Respondent: Adit's wife, ~2–3 months into being treasurer of a work-unit (office room). Small group: 8 people (was 10, may fall to 6). ~Rp 1–2 million/month. Records in a shared **Google Sheets** everyone can see; laptop-based today but *wants* mobile.
+Respondent: a treasurer of ~2–3 months, looking after a work-unit (office room) fund. Small group: 8 people (was 10, may fall to 6). ~Rp 1–2 million/month. Records in a shared **Google Sheets** everyone can see; laptop-based today but *wants* mobile.
 
 **What overturned our assumptions:**
 
@@ -56,14 +56,14 @@ Respondent: Adit's wife, ~2–3 months into being treasurer of a work-unit (offi
 10. **Scope discipline** — hard "no feature creep" rule. **Drop reminders/chasing from the core** for now (revisit only if a larger-group persona validates it). *(refined)*
 11. **License direction** — **AGPL-3.0** (consistent with "Balances"). Now an even better fit: with a self-hosted server, the network clause forces anyone hosting Uruni to keep it open. ~~App-store nuance for the mobile client to resolve at ship time.~~ **Moot as of ADR-008** — the client is a PWA served from the same origin, so there is no app-store distribution and no store-policy/AGPL tension to resolve. Copyright notice lives in `NOTICE`. *(reinforced; app-store caveat retired 2026-08-09)*
 12. **Design language** — keep it *simpler than a spreadsheet* and reliable enough to replace it. **Downgrade** the emotional-context UI ("2 birthdays · 1 graduation") from signature to nice-to-have; **elevate** one-tap capture + an always-honest running balance + a reconciliation check as the signature. Plus Jakarta Sans / soft palette still fine, low priority. *(revised)*
-14. **Adoption model (new, accepted trade-off)** — self-hosting means the reluctant treasurer needs a technical helper to run her instance. For interview-#1's user, that's Adit. Uruni targets communities with access to someone technical; it is explicitly **not** a tap-to-install consumer app. Consistent with "don't generalize too hard."
+14. **Adoption model (new, accepted trade-off)** — self-hosting means the reluctant treasurer needs a technical helper to run her instance. Interview #1's user has one. Uruni targets communities with access to someone technical; it is explicitly **not** a tap-to-install consumer app. Consistent with "don't generalize too hard."
 13. **Build plan** — built with Claude Code in a separate repo (folder TBD). *(unchanged)*
 
 ---
 
 ## Architecture — resolved (was the big open question)
 
-Interview #2 settled it. She distrusts sync/offline (won't reason about "which copy is valid"), wants an always-on server so a lost phone loses nothing, and doesn't need Google Sheets at all (never uses it herself; members never read it). Decision: **client-server, self-hostable only** — see Decision 6. Adit holds the principle ("hold nothing") over the persona's convenience, accepting the adoption trade-off (Decision 14): the treasurer needs a technical helper to host, which for interview-#1's user is Adit himself.
+Interview #2 settled it. She distrusts sync/offline (won't reason about "which copy is valid"), wants an always-on server so a lost phone loses nothing, and doesn't need Google Sheets at all (never uses it herself; members never read it). Decision: **client-server, self-hostable only** — see Decision 6. The principle ("hold nothing") wins over the persona's convenience, accepting the adoption trade-off (Decision 14): the treasurer needs a technical helper to host, and interview #1's user has one.
 
 ## Open questions — resolved (2026-08-08)
 
@@ -90,7 +90,7 @@ No product-level open questions remain.
 
 ## Technical design (separate doc — started 2026-08-08)
 
-Implementation choices live in [`Tech-Design.md`](./Tech-Design.md) as ADRs, kept out of the PRD so the product spec stays stable. **Stack confirmed 2026-08-08:** **Go** backend (single origin — serves the API, server-renders the public report, and serves the React bundle embedded via `embed.FS`) + **React** SPA (Vite, PWA) — chosen for AI-codegen accuracy and to mirror Balances · **sqlc** over **SQLite** (Postgres/Neon optional) · integer-only (`int64`) money · Go sessions + argon2id auth (OIDC later) · minimal PWA, no offline data · Caddy TLS · single Docker image + GHCR · local-volume receipt photos · JSON/Excel/scheduled/email backups · Indonesian-first i18n · `go test`/Vitest/Playwright with reconciliation math as the priority target. Dev keeps frontend/backend separate (Vite HMR + Go, proxied). Infra: product is provider-agnostic; the maintainer's own hosted instance is a separate reference deployment kept out of the repo (ADR-016).
+Implementation choices live as ADRs in [`ADR/`](./ADR/README.md), kept out of the PRD so the product spec stays stable; [`Tech-Design.md`](./Tech-Design.md) holds the framing around them (constraints, stack at a glance, topology, what's still open) and indexes the set. **Stack confirmed 2026-08-08:** **Go** backend (single origin — serves the API, server-renders the public report, and serves the React bundle embedded via `embed.FS`) + **React** SPA (Vite, PWA) — chosen for AI-codegen accuracy and to mirror Balances · **sqlc** over **SQLite** (Postgres/Neon optional) · integer-only (`int64`) money · Go sessions + argon2id auth (OIDC later) · minimal PWA, no offline data · Caddy TLS · single Docker image + GHCR · local-volume receipt photos · JSON/Excel/scheduled/email backups · Indonesian-first i18n · `go test`/Vitest/Playwright with reconciliation math as the priority target. Dev keeps frontend/backend separate (Vite HMR + Go, proxied). Infra: product is provider-agnostic; the maintainer's own hosted instance is a separate reference deployment kept out of the repo (ADR-016).
 
 Design system: [`Design-System.md`](./Design-System.md) created 2026-08-08 — **Tailwind + shadcn/ui + lucide** (own-your-code, CSS-var theming, training-dense), **Plus Jakarta Sans** (self-hosted), **Sage palette** (Forest `#1F5D50` primary, Sage accent, Cream bg, terracotta `#C96C4A` for "selisih", green `#2E7D5B` for reconciled "cocok"), soft rounded, mobile-first, integer money formatted `id-ID`.
 
@@ -139,6 +139,19 @@ What *is* an unmet obligation: MIT and BSD both require their copyright notice t
 - Cheapest resolution consistent with staying small: a generated `THIRD-PARTY-NOTICES` (e.g. `go-licenses` + `license-checker`) produced at release time, not a hand-maintained file. Decide at M9.
 
 Left open on purpose: **narrowing `Bash(git checkout *)`** in `.claude/settings.json`, which auto-approves `git checkout -- .` and can destroy uncommitted work with no prompt. Wants a human hand on the permissions file. *(applied by the maintainer 2026-08-09.)*
+
+## ADRs are one file each (decided 2026-08-09)
+
+`Tech-Design.md` had grown to 251 lines carrying twenty ADRs inline, and the ADR count only goes up from here — every slice from M2 on adds decisions. Split into [`ADR/`](./ADR/README.md), one file per decision (`NNN-slug.md`), with `Tech-Design.md` kept as the framing and index: constraints, stack at a glance, production topology, open questions, deferred.
+
+Why keep `Tech-Design.md` rather than fold it into `ADR/README.md`: the non-ADR content needs a home, and ~10 files across docs, CI and the Makefile already reference decisions as "Tech-Design ADR-0NN" — that phrasing stays true. ADR bodies moved verbatim; the only edits were the added status line and cross-ADR references turned into links.
+
+**Mutability rule, decided in the same PR.** The first draft of this said simply "supersede, never rewrite" — too rigid for twenty decisions that are still prose with no code behind them, and it would have forced the pending SQLite/Postgres grill to mint a superseding ADR before a single query exists. Split in two instead:
+
+- **Numbers are permanent** — never reused, never renumbered. 73 bare "ADR-0NN" mentions across the repo depend on that.
+- **Text is editable while an ADR is tagged `draft`**, meaning no code implements it. The tag comes off in the PR that implements it, and from then on the decision changes only by a superseding ADR. Migrations stay stricter (ADR-018: immutable from first production deploy).
+
+Enforcement is one line in `CLAUDE.md`'s definition of done: a slice drops the `draft` tag from every ADR it implements. At the split, **six were already implemented** by the tooling that shipped ahead of the code — 009 and 010 (`Caddyfile`, Dockerfile, compose), 016 (provider-agnostic packaging, no `deploy.yml`), 017 and 018 (workflows, release-notes config, branch protection), 020 (`Makefile`, committed guards) — and the other fourteen are `draft`.
 
 ## Live state — no HANDOFF file (decided 2026-08-08)
 

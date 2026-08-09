@@ -6,7 +6,7 @@ Thanks for your interest. Uruni is a **small, opinionated** project — a calm t
 
 - **What it is and why:** [`docs/Positioning.md`](docs/Positioning.md) and [`docs/PRD.md`](docs/PRD.md).
 - **The domain language:** [`CONTEXT.md`](CONTEXT.md) — use these exact words in code and copy.
-- **How it's built:** [`docs/Tech-Design.md`](docs/Tech-Design.md) (ADRs).
+- **How it's built:** [`docs/Tech-Design.md`](docs/Tech-Design.md), with each decision as its own ADR in [`docs/ADR/`](docs/ADR/README.md).
 - **Look and voice:** [`docs/Design-System.md`](docs/Design-System.md).
 - **Where the project is going:** [`docs/ROADMAP.md`](docs/ROADMAP.md); decisions in [`docs/Decisions.md`](docs/Decisions.md).
 - **The rules a change must respect:** [`CLAUDE.md`](CLAUDE.md).
@@ -36,7 +36,7 @@ Production build embeds the SPA into the Go binary — `make build` does it in t
 ## How a change flows (GitHub Flow)
 
 1. **An issue first.** For anything beyond a typo, open or claim one so the shape can be discussed.
-2. **Decisions get recorded.** Architectural or hard-to-reverse calls go in `docs/Tech-Design.md` (or `docs/Decisions.md`) before coding.
+2. **Decisions get recorded.** Architectural or hard-to-reverse calls go in `docs/ADR/` as a new numbered ADR (or `docs/Decisions.md`) before coding. Numbers are permanent; an ADR tagged `draft` (no code behind it yet) can be edited in place, an implemented one changes only by a superseding ADR. Implementing a `draft` ADR means dropping its tag in the same PR.
 3. **Branch → PR → squash-merge.** `main` is protected and always releasable; the human merge is the sign-off.
 4. **Label the PR** with one type (`enhancement` / `bug` / `documentation` / `dependencies`) at merge — unlabeled PRs fall through the auto-generated release notes.
 5. **Migrations** stay in the same PR as their feature; **renumber at merge** (filename prefix, not timestamps) so apply-order == merge-order.
