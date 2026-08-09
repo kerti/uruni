@@ -22,7 +22,7 @@ Standing decisions that no ADR owns go in [`../Decisions.md`](../Decisions.md).
 | [001](./001-one-go-binary-single-origin.md) | Overall shape: one Go binary, single origin | `draft` |
 | [002](./002-languages-go-and-react.md) | Languages: Go (server) + TypeScript/React (client) | `draft` |
 | [003](./003-frontend-react-spa-backend-go.md) | Frontend: React SPA (Vite) + backend: Go | `draft` |
-| [004](./004-database-sqlite-default-postgres-option.md) | Database: SQLite default, Postgres option | `draft` |
+| [004](./004-database-sqlite-only.md) | Database: SQLite only through 0.x | `draft` |
 | [005](./005-data-access-sqlc.md) | Data access: sqlc | `draft` |
 | [006](./006-money-integer-minor-units.md) | Money is integer minor units (never floats) | `draft` |
 | [007](./007-auth-local-email-password.md) | Auth: local email/password now, OIDC later | `draft` |

@@ -19,8 +19,7 @@ Runtime config is environment variables only (no config file):
 
 | Variable | Default | Meaning |
 |---|---|---|
-| `URUNI_DB` | `./uruni.db` | SQLite file path. |
-| `DATABASE_URL` | — | Postgres DSN. When set, **takes precedence** over `URUNI_DB` ([ADR-004](./004-database-sqlite-default-postgres-option.md)). |
+| `URUNI_DB` | `./uruni.db` | SQLite file path. The only store — there is no `DATABASE_URL` ([ADR-004](./004-database-sqlite-only.md)). |
 | `PORT` | `8080` | Listen port. |
 | `URUNI_BASE_URL` | — | Public origin, used to build the shareable report link. |
 | `URUNI_SESSION_SECRET` | — | Session signing key. Server refuses to start on the placeholder value. |

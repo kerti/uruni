@@ -23,7 +23,7 @@ A small, calm app that helps a reluctant, non-accountant **treasurer** keep a co
 
 - **Backend:** Go — serves the JSON API, server-renders the public report (`html/template`), and serves the React SPA. Single origin. In production the built SPA is embedded via `embed.FS` into one binary.
 - **Frontend:** React + Vite, as a connection-required PWA. Tailwind + shadcn/ui + lucide-react.
-- **Data:** sqlc over SQLite by default (Postgres/Neon optional via config). Migrations via goose.
+- **Data:** sqlc over SQLite — the only engine through `0.x`, no `DATABASE_URL` (ADR-004). Migrations via goose.
 - **Auth:** local email/password (argon2id) + secure cookie sessions.
 - **License:** AGPL-3.0.
 
@@ -35,7 +35,7 @@ A small, calm app that helps a reluctant, non-accountant **treasurer** keep a co
 4. **Offline = unavailable.** No local data store, no write queue, no offline sync. When disconnected the app shows a clear "butuh koneksi" state. (Deliberate — do not add offline-first.)
 5. **Auth:** local only; no central accounts. The public report route is **unauthenticated by design**. Login guards the treasurer's writes.
 6. **Data minimization:** collect only names, amounts, dates, notes. No member email/phone required.
-7. **Self-host simplicity wins ties.** Fewest moving parts. Keep SQL portable (SQLite↔Postgres). Prefer stdlib/light deps over heavy frameworks.
+7. **Self-host simplicity wins ties.** Fewest moving parts. **SQLite is the only engine** — write the best SQLite SQL (`STRICT` tables, `CHECK` constraints), not a portable subset; the escape hatch is ADR-012's canonical JSON export/import, not dialect discipline. Prefer stdlib/light deps over heavy frameworks.
 8. **Bahasa Indonesia first.** All user-facing copy in Indonesian, sentence case, warm and human (see Positioning voice). Centralize strings for future i18n.
 9. **Use the design tokens** from `Design-System.md` — Forest `#1F5D50` primary, Sage accent, gentle semantic states (green = reconciled "cocok", terracotta = "selisih", never alarm-red for a normal discrepancy).
 
