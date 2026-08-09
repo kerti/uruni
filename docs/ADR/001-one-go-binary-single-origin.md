@@ -1,6 +1,6 @@
 # ADR-001 — Overall shape: one Go binary, single origin
 
-**Status:** Accepted · `draft` — no code implements this yet, so it may still be edited in place · [ADR index](./README.md)
+**Status:** Accepted · implemented — change only by adding a superseding ADR · [ADR index](./README.md)
 
 **Context.** Self-hosters should run as little as possible; a split SPA + separate API adds CORS, a static host, and more to deploy.
 

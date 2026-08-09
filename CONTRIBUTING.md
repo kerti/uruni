@@ -31,7 +31,7 @@ make web-dev   # Vite on :5173, proxies /api and /report -> :8080
 
 Production build embeds the SPA into the Go binary — `make build` does it in the right order.
 
-> Build-order gotcha: the `//go:embed web/dist` directive fails to compile if `web/dist` doesn't exist, so the web app must be built **before** the Go build (CI and the Dockerfile already do this in order). Commit a `web/dist/.gitkeep` so a bare `go build`/`go vet` on a fresh clone doesn't fail before you've run the frontend build.
+> Build-order gotcha: the `//go:embed all:web/dist` directive fails to compile if `web/dist` doesn't exist, so the web app must be built **before** the Go build (CI and the Dockerfile already do this in order). `web/dist/.gitkeep` is committed for exactly this reason — don't delete it, or a bare `go build`/`go vet` on a fresh clone fails before you've run the frontend build.
 
 ## How a change flows (GitHub Flow)
 

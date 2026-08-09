@@ -70,7 +70,7 @@ help:
 	@echo "  web-install             npm install"
 	@echo "  web-dev                 run the vite dev server in the foreground (:5173)"
 	@echo "  web-build               production build to web/dist (embedded by 'build')"
-	@echo "  web-lint                eslint"
+	@echo "  web-lint                oxlint"
 	@echo "  web-typecheck           tsc"
 	@echo "  web-test                vitest"
 	@echo ""
@@ -357,7 +357,7 @@ check:
 	  printf '%-14s' 'go'; echo '– skipped (no go.mod yet — ci.yml skips too)'; \
 	fi; \
 	if [ -f web/package.json ]; then \
-	  printf '%-14s' 'eslint';        (cd web && npm run -s lint)      >/tmp/uruni-check-web-lint.log 2>&1 && echo '✓' || { echo '✗ → /tmp/uruni-check-web-lint.log'; fail=1; }; \
+	  printf '%-14s' 'oxlint';        (cd web && npm run -s lint)      >/tmp/uruni-check-web-lint.log 2>&1 && echo '✓' || { echo '✗ → /tmp/uruni-check-web-lint.log'; fail=1; }; \
 	  printf '%-14s' 'tsc';           (cd web && npm run -s typecheck) >/tmp/uruni-check-web-tsc.log  2>&1 && echo '✓' || { echo '✗ → /tmp/uruni-check-web-tsc.log';  fail=1; }; \
 	  printf '%-14s' 'vitest';        (cd web && npm run -s test)      >/tmp/uruni-check-web-test.log 2>&1 && echo '✓' || { echo '✗ → /tmp/uruni-check-web-test.log'; fail=1; }; \
 	  printf '%-14s' 'web build';     (cd web && npm run -s build)     >/tmp/uruni-check-web-build.log 2>&1 && echo '✓' || { echo '✗ → /tmp/uruni-check-web-build.log'; fail=1; }; \

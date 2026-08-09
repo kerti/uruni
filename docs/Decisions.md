@@ -2,7 +2,7 @@
 
 *A running record of what we've decided and why. Anything here can still change.*
 
-Last updated: 2026-08-09 (ADRs split one-file-each into `docs/ADR/`)
+Last updated: 2026-08-09 (M1.1 scaffold — the tracer bullet landed)
 
 ## Related documents
 
@@ -172,3 +172,17 @@ Five decisions came out of it:
 ## Live state — no HANDOFF file (decided 2026-08-08)
 
 Uruni leans on GitHub issues/PRs from the start, so there is **no standalone `HANDOFF.md`** (Balances' HANDOFF drifted to ~488 lines duplicating PRs/release notes before it was gutted — avoided here by not starting one). The four jobs it did are homed explicitly: **cursor / in-flight** → current GitHub milestone + open issues; **what changed** → issues + PRs + Releases; **standing decisions no issue/ADR owns** → this file; **you-are-here** → a single status line in `ROADMAP.md`. Rule that prevents drift: a doc may *point to* the GitHub board, never *copy* it. Build approach: seed repo with docs, then supervised **vertical slices** (data model → money/reconciliation + tests → API → auth → UI → public report → backup → deploy), reviewing between slices rather than full-auto.
+
+## Scaffold choices at M1.1 (decided 2026-08-09)
+
+The tracer bullet ([#10](https://github.com/kerti/uruni/issues/10)) turned ADR-001/002/003 into running code; the choices below were made along the way and are not big enough to be ADRs of their own.
+
+- **oxlint, not eslint.** `create-vite` now scaffolds oxlint and ships an `.oxlintrc.json`; adopting it costs nothing and keeps the linter the one the template maintains. `make check`'s label changed from `eslint` to `oxlint` — `ci.yml` calls `npm run lint`, so it needed no change. Vendored shadcn sources under `web/src/components/ui` are lint-excluded: they are ours to keep, not ours to hand-edit.
+- **shadcn was initialized, then trimmed.** Its current CLI installs a preset that pulls `shadcn`, `tw-animate-css` and the Geist font in as *runtime* dependencies. All three were removed after `init`: the palette is replaced by `Design-System.md`'s tokens verbatim, the animation variants belong to components we haven't added, and the font is Plus Jakarta Sans. Only `button` and `card` are installed — what the smoke page renders.
+- **Dark mode stays off deliberately.** `Design-System.md` defers it, so the `dark` variant is bound to a `.dark` ancestor that nothing sets. Left at Tailwind's default it would be `prefers-color-scheme`, and shadcn's `dark:` utilities would fire against the light palette on any machine in dark mode.
+- **The font is self-hosted from npm** (`@fontsource-variable/plus-jakarta-sans`, OFL-1.1) — no CDN call, per the design system's privacy note; Vite fingerprints the woff2 files into the bundle.
+- **Copy is centralized in `web/src/copy/id.ts`**, a plain module rather than react-i18next — ADR-014 allows "a light equivalent", and a dependency that exists to switch between one language earns nothing yet. It becomes react-i18next when a second language or real pluralization arrives; ADR-014 stays `draft` until then.
+- **`//go:embed all:web/dist`**, with the `all:` prefix, so the committed `.gitkeep` is itself embeddable and a fresh clone compiles before Vite has ever run. A production build empties `web/dist` and deleted that placeholder — a deletion that would have ridden along in the next commit and broken the next fresh clone — so a six-line Vite plugin writes it back after every build.
+- **`PORT` is parsed and range-checked already**, a milestone earlier than the rest of the config table (M1.2): gosec flags logging an unvalidated env var as taint, and validating it was the honest fix.
+
+**Licence audit** (the M1 close-out item, done early because the trees are small): the Go module has **zero third-party dependencies** — stdlib only. The npm tree is MIT/ISC/Apache-2.0/BSD/0BSD/CC0/BlueOak, plus OFL-1.1 for the font and **MPL-2.0 for `lightningcss`** (a Tailwind build-time dependency). MPL is file-level copyleft and explicitly compatible with distribution under a secondary licence like AGPL, and lightningcss is not linked into the shipped binary in any case. Nothing copyleft-incompatible landed.
