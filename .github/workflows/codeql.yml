@@ -25,7 +25,7 @@ jobs:
       languages: ${{ steps.detect.outputs.languages }}
       any: ${{ steps.detect.outputs.any }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - id: detect
         run: |
           # if/else rather than `[ x ] && y` — the latter leaves the statement
@@ -59,7 +59,7 @@ jobs:
       matrix:
         language: ${{ fromJSON(needs.preflight.outputs.languages) }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: github/codeql-action/init@v4
         with:
           languages: ${{ matrix.language }}
