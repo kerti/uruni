@@ -1,6 +1,8 @@
 # CLAUDE.md — Uruni
 
-Guidance for Claude Code working in this repo. Read this first, every session. When in doubt, the `/docs` are the source of truth; follow them over assumptions.
+Guidance for **any** AI agent working in this repo. Read this first, every session. When in doubt, the `/docs` are the source of truth; follow them over assumptions.
+
+`AGENTS.md` is a symlink to this file, so tools that look for that name (Codex, Cursor, Jules, Zed) land here too — one source of truth, nothing to keep in sync. The rules below bind whichever agent is holding the keyboard. Only `.claude/` is Claude Code-specific; if your tool can't run those hooks, run `make check` yourself before you push, because nothing else will.
 
 ## What Uruni is
 
