@@ -1,6 +1,6 @@
 # ADR-022 — Logging: stdlib `log/slog`, adopted at M1.2
 
-**Status:** Accepted · `draft` — no code implements this yet, so it may still be edited in place · [ADR index](./README.md)
+**Status:** Accepted · implemented — change only by adding a superseding ADR · [ADR index](./README.md)
 
 **Context.** M1.1 logs one line with `log.Printf`, which is fine for one line and wrong as a habit: the operator's only window into a self-hosted instance is its container logs, and by M4 those need request context (method, path, status, duration) that a `Printf` string can't carry without inventing a format.
 
@@ -14,3 +14,5 @@
 **Why stdlib.** slog is structured, in the standard library since Go 1.21, and fast enough by a wide margin for one small instance — the self-host-simplicity tiebreak in `CLAUDE.md` says stdlib wins ties, and this is not even close. A third-party logger would be the binary's first non-essential dependency and would buy nothing an RT treasurer's server can feel.
 
 **Consequences.** Handlers take a logger (or pull one off the request context) rather than calling a global, which is slightly more plumbing and much easier to test — assertions run against a handler writing to a buffer. Request logging becomes a middleware at M4, on chi ([ADR-021](./021-http-routing-chi.md)).
+
+**As built (M1.2).** The logger is constructed in `cmd/uruni` from the config and stays there: it is not threaded into `internal/http` yet, because the router has nothing to say until the request-logging middleware arrives at M4. Passing a logger nobody calls would be plumbing with no reader on the other end.
