@@ -8,26 +8,60 @@
 package http
 
 import (
+	"encoding/json"
 	"io/fs"
 	"net/http"
 	"path"
 	"strings"
 )
 
-// New builds the router over the embedded SPA assets.
-func New(assets fs.FS) http.Handler {
+// Build identifies the running binary. It is a struct rather than two string
+// arguments because two adjacent strings are trivially passed in the wrong
+// order, and the version is an operator contract (ADR-018) — a silently swapped
+// one would be worse than none.
+type Build struct {
+	Version string
+	Commit  string
+}
+
+// New builds the router over the embedded SPA assets. build is what /healthz
+// reports, so which binary is live can be read over HTTP without shell access
+// to the container.
+func New(assets fs.FS, build Build) http.Handler {
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET /healthz", healthz)
+	mux.HandleFunc("GET /healthz", healthz(build))
 	mux.Handle("/", spa(assets))
 	return mux
 }
 
+// health is what /healthz returns. Operator-facing, so English, like the CLI and
+// the logs — Indonesian is the treasurer's surface (ADR-014).
+//
+// version identifies a tagged deploy; commit identifies an untagged one, where
+// version is only ever `dev` and the SHA is the sole thing naming what runs.
+type health struct {
+	Status  string `json:"status"`
+	Version string `json:"version"`
+	Commit  string `json:"commit"`
+}
+
 // healthz is unauthenticated by design: the dev-server readiness poll and the
 // container HEALTHCHECK both call it before there is any session (ADR-019).
-func healthz(w http.ResponseWriter, _ *http.Request) {
-	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-	w.WriteHeader(http.StatusOK)
-	_, _ = w.Write([]byte("ok"))
+//
+// This is a *liveness* check — it answers "is this process serving?", which is
+// all the container HEALTHCHECK needs, and all there is to say while the binary
+// has no store behind it. When one lands (M1.3) a failing dependency belongs
+// here as a non-ok status, not as a second endpoint.
+func healthz(build Build) http.HandlerFunc {
+	return func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		w.WriteHeader(http.StatusOK)
+		_ = json.NewEncoder(w).Encode(health{
+			Status:  "ok",
+			Version: build.Version,
+			Commit:  build.Commit,
+		})
+	}
 }
 
 // spa serves the built bundle, falling back to index.html so client-side routes

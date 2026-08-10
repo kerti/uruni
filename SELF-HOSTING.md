@@ -44,7 +44,10 @@ The version is your **upgrade contract**: patch = drop-in; minor = additive migr
 To see what you are actually running:
 
 ```bash
-docker compose exec app /uruni version
+docker compose exec app /uruni version   # uruni v0.1.0-alpha.1 (commit 1a2b3c4)
+curl https://your-domain/healthz         # {"status":"ok","version":"v0.1.0-alpha.1","commit":"1a2b3c4"}
 ```
+
+`/healthz` is unauthenticated, so the second one works from anywhere and needs no shell on the host — handy for confirming an upgrade actually took.
 
 > TODO (filled in as the app is built): exact env var names, first-run setup, migration/boot behavior, and a worked backup/restore example.
