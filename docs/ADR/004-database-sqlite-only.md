@@ -1,6 +1,6 @@
 # ADR-004 — Database: SQLite only through 0.x
 
-**Status:** Accepted · `draft` — no code implements this yet, so it may still be edited in place · [ADR index](./README.md)
+**Status:** Accepted · implemented — change only by adding a superseding ADR · [ADR index](./README.md)
 
 **Context.** One tiny instance per community, single writer, integrity-critical; self-host simplicity is the tie-breaker. This ADR originally kept SQL portable "so PostgreSQL is a config swap." Grilled 2026-08-09 and rejected on three grounds: **sqlc generates per engine** — placeholders differ (`?` vs `$1`) and so do the generated types, so query files cannot be shared; dual support means two schema dirs, two query dirs, two generated packages and a hand-written interface over them, which is a second data layer for the trust core. **goose migrations don't port either** (identity columns, `timestamptz`, real booleans). And **nothing in `make check` would run Postgres**, so the promise was never verified — an assertion rather than a feature, which [ADR-016](./016-deployment-targets-reference-infra.md) had already softened to "may".
 

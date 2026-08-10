@@ -49,9 +49,12 @@ type health struct {
 // container HEALTHCHECK both call it before there is any session (ADR-019).
 //
 // This is a *liveness* check — it answers "is this process serving?", which is
-// all the container HEALTHCHECK needs, and all there is to say while the binary
-// has no store behind it. When one lands (M1.3) a failing dependency belongs
-// here as a non-ok status, not as a second endpoint.
+// all the container HEALTHCHECK needs. The store exists as of M1.3 but is
+// deliberately not probed here: ADR-019 pins this endpoint to 200-when-up, and
+// the container HEALTHCHECK calls it, so reporting a broken database as a 503
+// would turn an unwritable file into a restart loop. Revisit at M4, when there
+// are real queries behind it, as an amendment to ADR-019 — and if a dependency
+// does get reported it belongs here as a non-ok status, not as a second endpoint.
 func healthz(build Build) http.HandlerFunc {
 	return func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")

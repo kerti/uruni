@@ -22,8 +22,8 @@ Standing decisions that no ADR owns go in [`../Decisions.md`](../Decisions.md).
 | [001](./001-one-go-binary-single-origin.md) | Overall shape: one Go binary, single origin | implemented |
 | [002](./002-languages-go-and-react.md) | Languages: Go (server) + TypeScript/React (client) | implemented |
 | [003](./003-frontend-react-spa-backend-go.md) | Frontend: React SPA (Vite) + backend: Go | implemented |
-| [004](./004-database-sqlite-only.md) | Database: SQLite only through 0.x | `draft` |
-| [005](./005-data-access-sqlc.md) | Data access: sqlc | `draft` |
+| [004](./004-database-sqlite-only.md) | Database: SQLite only through 0.x | implemented |
+| [005](./005-data-access-sqlc.md) | Data access: sqlc | implemented |
 | [006](./006-money-integer-minor-units.md) | Money is integer minor units (never floats) | `draft` |
 | [007](./007-auth-local-email-password.md) | Auth: local email/password now, OIDC later | `draft` |
 | [008](./008-pwa-no-offline-data.md) | PWA: installable shell, no offline data | `draft` |
@@ -42,7 +42,7 @@ Standing decisions that no ADR owns go in [`../Decisions.md`](../Decisions.md).
 | [021](./021-http-routing-chi.md) | HTTP routing: chi, adopted at M4 | `draft` |
 | [022](./022-logging-slog.md) | Logging: stdlib `log/slog`, adopted at M1.2 | implemented |
 
-Six were implemented by the tooling that shipped ahead of the code: the `Caddyfile` and compose stack (009, 010), the provider-agnostic packaging and the deliberate absence of a `deploy.yml` (016), the four workflows and release-notes config (017, 018), and the `Makefile` + committed guards (020). The M1.1 scaffold added three more — the one-binary shape and the two language/framework calls (001, 002, 003) now have running code behind them. M1.2 closed the loop on the two the tooling had been addressing on credit: the CLI surface and its env-var config (019) and the logger they configure (022).
+Six were implemented by the tooling that shipped ahead of the code: the `Caddyfile` and compose stack (009, 010), the provider-agnostic packaging and the deliberate absence of a `deploy.yml` (016), the four workflows and release-notes config (017, 018), and the `Makefile` + committed guards (020). The M1.1 scaffold added three more — the one-binary shape and the two language/framework calls (001, 002, 003) now have running code behind them. M1.2 closed the loop on the two the tooling had been addressing on credit: the CLI surface and its env-var config (019) and the logger they configure (022). M1.3 stood the database path up — the pure-Go driver, the pragmas and the one-connection pool (004) with goose and sqlc over them (005) — and did it with no domain tables, so the decisions became running code while the grill that produced them was still fresh.
 
 **A number is claimed when its ADR is written**, first come. No issue or plan reserves one in advance — a reservation would either block the next decision that needs a number or dictate the order decisions get made in.
 

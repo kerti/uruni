@@ -48,12 +48,11 @@ Builds clean · tests pass (money/reconciliation especially) · matches PRD + de
 
 The repo is **already public**, so this stopped being a pre-flight checklist and became a status. What is still open is tracked as an **issue** — nothing below is a to-do that lives only in this file.
 
-**Done.** PR labels the release notes depend on (`enhancement`, `bug`, `documentation`, `dependencies`) · Private Vulnerability Reporting enabled, which is where `SECURITY.md` sends people · branch protection on `main` — PR required, green CI required across every `ci.yml` job plus gitleaks and CodeQL, branches must be up to date, linear history, no force-push, admin bypass kept (2026-08-10, once M1.1 made those checks real) · image owner `ghcr.io/kerti/uruni` in `docker-compose.yml` · `NOTICE` carrying the AGPL copyright line, with the pii-guard taught to exempt licensing files · `web/dist/.gitkeep` committed so a fresh clone compiles before Vite has run.
+**Done.** PR labels the release notes depend on (`enhancement`, `bug`, `documentation`, `dependencies`) · Private Vulnerability Reporting enabled, which is where `SECURITY.md` sends people · branch protection on `main` — PR required, green CI required across every `ci.yml` job plus gitleaks and CodeQL, branches must be up to date, linear history, no force-push, admin bypass kept (2026-08-10, once M1.1 made those checks real) · image owner `ghcr.io/kerti/uruni` in `docker-compose.yml` · `NOTICE` carrying the AGPL copyright line, with the pii-guard taught to exempt licensing files · `web/dist/.gitkeep` committed so a fresh clone compiles before Vite has run · the **pure-Go SQLite driver** (`modernc.org/sqlite`), landed with the store bootstrap — `CGO_ENABLED=0` verified cross-compiling for `linux/arm64` without QEMU.
 
 **Open.**
 
 - **Pin every GitHub Action to a commit SHA** — [#13](https://github.com/kerti/uruni/issues/13). Workflows still use `@vN` tags for readability, which is the weaker supply-chain position now that the repo is public.
-- **Pure-Go SQLite driver** (`modernc.org/sqlite`) — lands with the store bootstrap, [#12](https://github.com/kerti/uruni/issues/12). `CGO_ENABLED=0` is what lets the release image cross-compile for arm64 without QEMU.
 
 **Not tracked, on purpose.** `CODECOV_TOKEN` is optional now the repo is public — Codecov v5 uploads tokenless from a public repo; set the secret only if uploads turn flaky. And *"scrub for real names, figures and local paths"* is not a task to close but a standing rule, enforced on every commit by the pii-guard ([ADR-020](./ADR/020-dev-environment.md)).
 
@@ -76,7 +75,7 @@ There is **no `HANDOFF.md`** and no standalone status doc. The live board is **G
 - **Standing decisions no issue or ADR owns** → [`Decisions.md`](./Decisions.md).
 - **You-are-here** → the one status line below (changes ~once per milestone; never holds shipped detail).
 
-**Status:** **M1 — scaffold (`v0.1.0`)** in progress; the tracer bullet is through.
+**Status:** **M2 — data model** next; M1's scaffold is complete, with the database path open, migrating and queried end to end.
 
 ## Open
 

@@ -1,0 +1,11 @@
+-- Ping proves the store is reachable through the generated code — open, migrate,
+-- query — without naming a table, which M1.3 deliberately has none of. Every
+-- real query arrives with the schema at M2; this one stays as the readiness
+-- probe /healthz calls.
+--
+-- The `AS ok` alias is load-bearing: sqlc's SQLite engine truncates a bare
+-- `SELECT 1` to `SELE` in the generated constant — silently, with no error
+-- (sqlc v1.31.1). ADR-005 warned this engine's inference is the young one; keep
+-- every projected expression named.
+-- name: Ping :one
+SELECT 1 AS ok;
