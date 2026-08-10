@@ -2,7 +2,7 @@
 
 **Status:** Accepted · implemented — change only by adding a superseding ADR · [ADR index](./README.md)
 
-**Context.** The `Makefile`, `ci.yml`, and the repo's hooks were written *before* the scaffold and already invoke a binary that doesn't exist yet. That inversion is deliberate — the tooling is easier to reason about than the code it will drive — but it only works if the surface it assumes is pinned down. Otherwise the scaffold invents subcommand names ad hoc and the tooling silently rots on day one.
+**Context.** The `Makefile`, `ci.yml`, and the repo's hooks were written *before* the scaffold and already invoke a binary that doesn't exist yet. That inversion is deliberate — the tooling is easier to reason about than the code it will drive — but it only works if the surface it assumes is pinned down. Otherwise the scaffold invents subcommand names ad hoc and the tooling silently rots on day one. That inversion made this the one ADR that sat `draft` while tooling already invoked it; M1.1–M1.3 built the surface (`serve`, `version`, `healthcheck`, then `migrate`), and the tag came off with it.
 
 **Decision.** One binary, `uruni`, built from `./cmd/uruni`, with these subcommands and nothing else:
 

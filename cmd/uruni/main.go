@@ -18,6 +18,7 @@ import (
 
 	"github.com/kerti/uruni"
 	"github.com/kerti/uruni/internal/config"
+	"github.com/kerti/uruni/internal/db"
 	uruniHTTP "github.com/kerti/uruni/internal/http"
 )
 
@@ -39,9 +40,10 @@ var (
 )
 
 // usage lists the subcommands that exist *today*. ADR-019's table also holds
-// `migrate`, `create-user` and `seed-e2e`; each lands with the milestone that
-// gives it something to do, and until then it is not advertised here.
-const usage = "try: uruni serve | version | healthcheck"
+// `create-user` and `seed-e2e`; each lands with the milestone that gives it
+// something to do (M5, and whenever fixtures exist), and until then it is not
+// advertised here.
+const usage = "try: uruni serve | migrate up|down|status | version | healthcheck"
 
 func run(args []string) error {
 	if len(args) == 0 {
@@ -51,6 +53,10 @@ func run(args []string) error {
 	switch args[0] {
 	case "serve":
 		return serve()
+	case "migrate":
+		ctx, cancel := context.WithTimeout(context.Background(), migrateTimeout)
+		defer cancel()
+		return migrate(ctx, args[1:], os.Stdout)
 	case "version":
 		return printVersion(os.Stdout)
 	case "healthcheck":
@@ -76,6 +82,29 @@ func serve() error {
 	// middleware at M4, on chi (ADR-021).
 	logger := newLogger(cfg, os.Stderr)
 
+	// SIGINT/SIGTERM close in-flight requests cleanly — `make restart` and
+	// `docker compose down` both stop the process this way. Established before
+	// the store opens so a Ctrl-C during a long first migration is honoured.
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	// The store, opened once for the process (ADR-004: one connection, so
+	// everything serializes). M4's handlers take it; for now it is what the
+	// migrations run against.
+	sqlDB, err := db.Open(ctx, cfg.DBPath)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = sqlDB.Close() }()
+
+	// Migrations run on boot, so self-hosting stays `docker compose up` with no
+	// migration step for the operator (ADR-019). The cost is a slower first boot
+	// after an upgrade, which is the right side of that trade for one small
+	// instance per community.
+	if _, err := db.Up(ctx, sqlDB, logger); err != nil {
+		return err
+	}
+
 	srv := &http.Server{
 		Addr:    fmt.Sprintf(":%d", cfg.Port),
 		Handler: uruniHTTP.New(assets, uruniHTTP.Build{Version: version, Commit: buildCommit()}),
@@ -83,11 +112,6 @@ func serve() error {
 		// slow client indefinitely.
 		ReadHeaderTimeout: 10 * time.Second,
 	}
-
-	// SIGINT/SIGTERM close in-flight requests cleanly — `make restart` and
-	// `docker compose down` both stop the process this way.
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer stop()
 
 	errc := make(chan error, 1)
 	go func() {

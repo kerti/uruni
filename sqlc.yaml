@@ -1,0 +1,24 @@
+version: "2"
+# Type-safe Go from hand-written SQL (ADR-005). One engine, one generated
+# package: SQLite is the only store through 0.x (ADR-004), so there is no second
+# schema/queries pair and nothing to abstract over.
+#
+# schema is the goose migrations directory itself — the migrations *are* the
+# schema, so there is no second copy to drift. sqlc reads the goose
+# `-- +goose Up` annotations and applies the up side only.
+sql:
+  - engine: "sqlite"
+    schema: "internal/db/migrations"
+    queries: "internal/store/queries"
+    gen:
+      go:
+        package: "store"
+        out: "internal/store"
+        # Uruni's own SQL, not sqlc's default naming: money is int64 rupiah
+        # (ADR-006) and NOT NULL columns should land as plain Go types rather
+        # than sql.NullXxx wrappers, so nullability is visible in the type.
+        emit_json_tags: false
+        emit_prepared_queries: false
+        emit_interface: true
+        emit_empty_slices: true
+        emit_pointers_for_null_types: true

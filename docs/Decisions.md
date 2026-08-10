@@ -2,7 +2,7 @@
 
 *A running record of what we've decided and why. Anything here can still change.*
 
-Last updated: 2026-08-10 (M1.1 review — what belongs in this file)
+Last updated: 2026-08-10 (M1.3 — Go dependency licences)
 
 ## What belongs in this file
 
@@ -187,9 +187,9 @@ Uruni leans on GitHub issues/PRs from the start, so there is **no standalone `HA
 
 The CLI, its errors and the server logs are the **operator's** surface and are **English**, like the self-hosting docs. **Indonesian is the treasurer's surface** — the SPA and the public report ([ADR-014](./ADR/014-localization-indonesian-first.md), still `draft`, now says so). Settled in review on [#14](https://github.com/kerti/uruni/pull/14) after the M1.1 scaffold shipped Indonesian CLI errors; [#11](https://github.com/kerti/uruni/issues/11)'s acceptance criteria were corrected to match.
 
-## Dependency licences stay permissive (checked at M1.1)
+## Dependency licences stay permissive (checked at M1.1, Go side at M1.3)
 
-Audited on [#14](https://github.com/kerti/uruni/pull/14) — Go has no third-party dependencies; the npm tree is MIT/ISC/Apache-2.0/BSD/0BSD/CC0/BlueOak plus OFL-1.1 (font) and MPL-2.0 (`lightningcss`, a Tailwind build-time dependency, AGPL-compatible and not linked into the binary). **Nothing copyleft-incompatible with AGPL-3.0 may land**; re-check when a dependency is added, not on a schedule.
+Audited on [#14](https://github.com/kerti/uruni/pull/14) and again on [#17](https://github.com/kerti/uruni/pull/17) once Go had dependencies — goose is MIT, `modernc.org/sqlite` and its support modules BSD-3, the rest of the transitive Go set MIT/BSD-3/Apache-2.0; the npm tree is MIT/ISC/Apache-2.0/BSD/0BSD/CC0/BlueOak plus OFL-1.1 (font) and MPL-2.0 (`lightningcss`, a Tailwind build-time dependency, AGPL-compatible and not linked into the binary). **Nothing copyleft-incompatible with AGPL-3.0 may land**; re-check when a dependency is added, not on a schedule.
 
 *The scaffold's own implementation choices — oxlint, the trimmed shadcn install, dark mode off, the self-hosted font, the `all:` embed prefix — live in [#14](https://github.com/kerti/uruni/pull/14)'s body, per the rule at the top of this file.*
 
