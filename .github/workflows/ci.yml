@@ -66,13 +66,16 @@ jobs:
           version: ${{ env.GOLANGCI_VERSION }}
       - name: Test (race + coverage)
         run: go test ./... -race -covermode=atomic -coverprofile=coverage.out
+      # The token is an input, not step env: the action builds its own CLI
+      # invocation and passes `-t` only from the input, so an env-only token left
+      # every upload tokenless. Codecov rejects those even from a public repo, and
+      # the action does not fail the build on an upload error — so this was silent.
       - name: Upload coverage
         uses: codecov/codecov-action@v5
         with:
           files: coverage.out
           flags: backend
-        env:
-          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+          token: ${{ secrets.CODECOV_TOKEN }}
 
   frontend:
     name: Frontend (lint + typecheck + test + build)
@@ -102,6 +105,5 @@ jobs:
         with:
           working-directory: web
           flags: frontend
-        env:
-          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+          token: ${{ secrets.CODECOV_TOKEN }}
       - run: npm run build

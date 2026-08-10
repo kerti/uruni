@@ -2,7 +2,7 @@
 
 *A running record of what we've decided and why. Anything here can still change.*
 
-Last updated: 2026-08-10 (M1.3 — the store bootstrap)
+Last updated: 2026-08-10 (M1.3 — Go dependency licences)
 
 ## What belongs in this file
 
@@ -187,9 +187,9 @@ Uruni leans on GitHub issues/PRs from the start, so there is **no standalone `HA
 
 The CLI, its errors and the server logs are the **operator's** surface and are **English**, like the self-hosting docs. **Indonesian is the treasurer's surface** — the SPA and the public report ([ADR-014](./ADR/014-localization-indonesian-first.md), still `draft`, now says so). Settled in review on [#14](https://github.com/kerti/uruni/pull/14) after the M1.1 scaffold shipped Indonesian CLI errors; [#11](https://github.com/kerti/uruni/issues/11)'s acceptance criteria were corrected to match.
 
-## Dependency licences stay permissive (checked at M1.1)
+## Dependency licences stay permissive (checked at M1.1, Go side at M1.3)
 
-Audited on [#14](https://github.com/kerti/uruni/pull/14) — Go has no third-party dependencies; the npm tree is MIT/ISC/Apache-2.0/BSD/0BSD/CC0/BlueOak plus OFL-1.1 (font) and MPL-2.0 (`lightningcss`, a Tailwind build-time dependency, AGPL-compatible and not linked into the binary). **Nothing copyleft-incompatible with AGPL-3.0 may land**; re-check when a dependency is added, not on a schedule.
+Audited on [#14](https://github.com/kerti/uruni/pull/14) and again on [#17](https://github.com/kerti/uruni/pull/17) once Go had dependencies — goose is MIT, `modernc.org/sqlite` and its support modules BSD-3, the rest of the transitive Go set MIT/BSD-3/Apache-2.0; the npm tree is MIT/ISC/Apache-2.0/BSD/0BSD/CC0/BlueOak plus OFL-1.1 (font) and MPL-2.0 (`lightningcss`, a Tailwind build-time dependency, AGPL-compatible and not linked into the binary). **Nothing copyleft-incompatible with AGPL-3.0 may land**; re-check when a dependency is added, not on a schedule.
 
 *The scaffold's own implementation choices — oxlint, the trimmed shadcn install, dark mode off, the self-hosted font, the `all:` embed prefix — live in [#14](https://github.com/kerti/uruni/pull/14)'s body, per the rule at the top of this file.*
 
@@ -201,15 +201,3 @@ Two calls made building the CLI's runtime config ([#11](https://github.com/kerti
 2. **A config error names the variable but never prints its value, for `URUNI_SESSION_SECRET` and `SMTP_URL`.** Both are credentials, and a boot failure is precisely the output an operator pastes into an issue. Everything else (`PORT`, the log variables) *does* echo, because seeing what was actually read is the difference between a one-minute fix and a puzzle. Same rule as [ADR-022](./ADR/022-logging-slog.md)'s "log IDs, not names or amounts", applied to errors rather than logs.
 
 Also closed here: the **third** of the three release-image faults recorded above under CI hardening. `VERSION` was wired at that point but `COMMIT` was not, and `.dockerignore` keeps `.git` out of the build context — so Go's own VCS stamping had nothing to read and every tagged image would have reported `commit unknown`. It now has a build-arg of its own, filled from `github.sha`; a local `go build` has the mirror-image situation (no stamp, readable `.git`) and falls back to `debug.ReadBuildInfo`.
-
-## The store bootstrap: a no-op baseline migration, and one sqlc quirk worth naming (decided 2026-08-10)
-
-Three calls from standing the database path up with **zero domain tables** ([#12](https://github.com/kerti/uruni/issues/12), [ADR-004](./ADR/004-database-sqlite-only.md)/[ADR-005](./ADR/005-data-access-sqlc.md)):
-
-1. **`00001_baseline.sql` is a deliberate no-op, and it is deleted at M2.** goose treats an empty migrations filesystem as an error rather than an empty set, so proving the pipeline runs in *both* directions needed at least one version to apply and roll back. The alternatives were worse: a real table would have been a PRD §6 entity smuggled into M1, and shipping M2's schema as version 1 would have made the slice the data-model slice. So it exists as scaffolding, not as history — **when the real domain entities land, the no-op goes away and M2's schema becomes `00001`**, rather than a permanent empty version sitting at the bottom of the ledger. Safe because nothing is deployed: migrations only become immutable at the first live treasurer's instance ([`ROADMAP.md`](./ROADMAP.md)). Whoever does it drops their local database file first, or goose finds version 1 applied with no migration on disk to match. The CLI test that names the file is left to fail as the reminder.
-2. **Pragmas are set through the DSN, not by a per-connection hook.** `database/sql` has no connection-init callback, so the driver's `_pragma=` parameters are the only way to configure a connection the pool opens *later* — and a long-lived server does retire and reopen connections. The test asserts all four by querying them back on a first and a reopened connection, because SQLite silently ignores a pragma name it doesn't recognise; a typo would otherwise leave `foreign_keys` off with nothing to show it.
-3. **Every projected expression in a sqlc query gets an alias.** A bare `SELECT 1` compiles to the truncated string `SELE` in the generated Go constant — silently, no error (sqlc v1.31.1); `SELECT 1 AS ok` is correct. This is exactly the weakness [ADR-005](./ADR/005-data-access-sqlc.md) predicted for sqlc's younger SQLite engine, now with a concrete failure mode attached: the generator can produce *wrong SQL*, not just weak types, so generated queries need a test that actually runs them.
-
-**Licence re-check (Go side, now that there are Go dependencies).** `modernc.org/sqlite` and its `libc`/`mathutil`/`memory` support modules are BSD-3, goose is MIT, and the rest of the transitive set is MIT, BSD-3 or Apache-2.0 (`sethvargo/go-retry`) — all permissive, nothing copyleft, no conflict with shipping AGPL-3.0. This closes the M1 confirmation the file predicted at [#14](https://github.com/kerti/uruni/pull/14); the standing rule is unchanged — re-check when a dependency is added, not on a schedule.
-
-**Left open on purpose:** `/healthz` still reports liveness only. `internal/http` had pencilled in a store probe for this slice, but [ADR-019](./ADR/019-cli-surface-and-runtime-config.md) is implemented and says the endpoint returns 200 when the server is up — and the container `HEALTHCHECK` calls it, so a DB-down 503 would turn an unwritable database into a restart loop. Revisit at M4, when there are real queries behind it, as an amendment to ADR-019 rather than a quiet change.
