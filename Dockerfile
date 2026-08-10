@@ -18,15 +18,25 @@ RUN npm run build
 #    final image can be static/distroless.
 FROM --platform=$BUILDPLATFORM golang:1.26-alpine AS build
 WORKDIR /src
-COPY go.mod go.sum ./
+# go.sum* not go.sum: the module has no third-party dependencies yet, so the file
+# does not exist and a literal COPY fails the whole build. The glob makes it
+# optional now and picks it up unchanged once M1.3 adds the SQLite driver and
+# goose. (Latent since this file was written — no tag had ever exercised it.)
+COPY go.mod go.sum* ./
 RUN go mod download
 COPY . .
 COPY --from=web /web/dist ./web/dist
+# VERSION and COMMIT are what `uruni version` reports, and that line is the
+# operator's half of the upgrade contract (ADR-018) — an image that says `dev`
+# makes the contract unverifiable. release.yml fills both from the pushed tag.
+# COMMIT needs its own build-arg because .dockerignore keeps .git out of the
+# build context, so Go's own VCS stamping has nothing to read here.
 ARG VERSION=dev
+ARG COMMIT=""
 ARG TARGETOS
 ARG TARGETARCH
 RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -trimpath \
-    -ldflags="-s -w -X main.version=${VERSION}" \
+    -ldflags="-s -w -X main.version=${VERSION} -X main.commit=${COMMIT}" \
     -o /out/uruni ./cmd/uruni
 
 # 2b) Stage the writable data directories. Docker seeds a fresh named volume from

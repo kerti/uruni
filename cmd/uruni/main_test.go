@@ -1,28 +1,17 @@
 package main
 
 import (
+	"bytes"
 	"errors"
+	"log/slog"
+	"net/http"
+	"net/http/httptest"
+	"strings"
 	"testing"
+	"time"
+
+	"github.com/kerti/uruni/internal/config"
 )
-
-func TestListenPortDefaultsAndValidates(t *testing.T) {
-	t.Setenv("PORT", "")
-	if got, err := listenPort(); err != nil || got != defaultPort {
-		t.Errorf("listenPort() with PORT unset = (%d, %v), want (%d, nil)", got, err, defaultPort)
-	}
-
-	t.Setenv("PORT", "8099")
-	if got, err := listenPort(); err != nil || got != 8099 {
-		t.Errorf("listenPort() with PORT=8099 = (%d, %v), want (8099, nil)", got, err)
-	}
-
-	for _, bad := range []string{"eight thousand", "0", "70000"} {
-		t.Setenv("PORT", bad)
-		if _, err := listenPort(); !errors.Is(err, ErrInvalidPort) {
-			t.Errorf("listenPort() with PORT=%q = %v, want ErrInvalidPort", bad, err)
-		}
-	}
-}
 
 func TestRunRejectsAnEmptyCommand(t *testing.T) {
 	if err := run(nil); !errors.Is(err, ErrNoCommand) {
@@ -31,7 +20,104 @@ func TestRunRejectsAnEmptyCommand(t *testing.T) {
 }
 
 func TestRunRejectsAnUnknownCommand(t *testing.T) {
-	if err := run([]string{"migrate-everything"}); !errors.Is(err, ErrUnknownCommand) {
+	err := run([]string{"migrate-everything"})
+	if !errors.Is(err, ErrUnknownCommand) {
 		t.Fatalf("run([migrate-everything]) = %v, want ErrUnknownCommand", err)
+	}
+	// The subcommands are a contract the Makefile and the Dockerfile are
+	// written against (ADR-019); a typo should say what the alternatives are.
+	for _, cmd := range []string{"serve", "version", "healthcheck"} {
+		if !strings.Contains(err.Error(), cmd) {
+			t.Errorf("run([migrate-everything]) = %q, want it to mention %q", err, cmd)
+		}
+	}
+}
+
+func TestPrintVersion(t *testing.T) {
+	var out bytes.Buffer
+	if err := printVersion(&out); err != nil {
+		t.Fatalf("printVersion() = %v, want nil", err)
+	}
+
+	got := out.String()
+	// An unstamped build is a dev build and says so — the point of the line is
+	// that a *tagged* image says something else (ADR-018).
+	if !strings.HasPrefix(got, "uruni "+version+" ") {
+		t.Errorf("printVersion() = %q, want it to lead with the version %q", got, version)
+	}
+	if !strings.Contains(got, "commit ") {
+		t.Errorf("printVersion() = %q, want it to report a commit", got)
+	}
+}
+
+func TestBuildCommitPrefersTheLinkerStamp(t *testing.T) {
+	original := commit
+	t.Cleanup(func() { commit = original })
+
+	commit = "0123456789abcdef0123456789abcdef01234567"
+	if got := buildCommit(); got != "0123456" {
+		t.Errorf("buildCommit() = %q, want the abbreviated stamp %q", got, "0123456")
+	}
+
+	// No stamp: `go test` binaries carry no VCS record either, so this is the
+	// honest fallback rather than an empty string.
+	commit = ""
+	if got := buildCommit(); got == "" {
+		t.Error("buildCommit() = \"\", want a non-empty commit")
+	}
+}
+
+func TestProbeHealthAcceptsAHealthyServer(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+
+	if err := probeHealth(srv.URL+"/healthz", time.Second); err != nil {
+		t.Fatalf("probeHealth() against a healthy server = %v, want nil", err)
+	}
+}
+
+func TestProbeHealthRejectsAnUnhealthyServer(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusServiceUnavailable)
+	}))
+	defer srv.Close()
+
+	if err := probeHealth(srv.URL+"/healthz", time.Second); err == nil {
+		t.Fatal("probeHealth() against a 503 = nil, want an error")
+	}
+}
+
+func TestProbeHealthRejectsAServerThatIsNotThere(t *testing.T) {
+	// Bound then immediately closed, so the port is real and refusing — the
+	// container's "the binary died but the container is up" case.
+	srv := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
+	url := srv.URL + "/healthz"
+	srv.Close()
+
+	if err := probeHealth(url, time.Second); err == nil {
+		t.Fatal("probeHealth() against a closed port = nil, want an error")
+	}
+}
+
+func TestNewLoggerHonoursFormatAndLevel(t *testing.T) {
+	var out bytes.Buffer
+
+	logger := newLogger(config.Config{LogLevel: slog.LevelInfo, LogFormat: config.LogFormatJSON}, &out)
+	logger.Info("listening", "port", 8080)
+	if got := out.String(); !strings.HasPrefix(got, "{") {
+		t.Errorf("json format logged %q, want JSON", got)
+	}
+
+	out.Reset()
+	logger = newLogger(config.Config{LogLevel: slog.LevelInfo, LogFormat: config.LogFormatText}, &out)
+	logger.Debug("noisy")
+	if got := out.String(); got != "" {
+		t.Errorf("debug at info level logged %q, want nothing", got)
+	}
+	logger.Info("listening", "port", 8080)
+	if got := out.String(); !strings.Contains(got, "port=8080") {
+		t.Errorf("text format logged %q, want a key=value line", got)
 	}
 }

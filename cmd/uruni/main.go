@@ -8,19 +8,18 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
+	"io"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
-	"strconv"
 	"syscall"
 	"time"
 
 	"github.com/kerti/uruni"
+	"github.com/kerti/uruni/internal/config"
 	uruniHTTP "github.com/kerti/uruni/internal/http"
 )
-
-const defaultPort = 8080
 
 func main() {
 	if err := run(os.Args[1:]); err != nil {
@@ -39,53 +38,47 @@ var (
 	ErrUnknownCommand = errors.New("unknown command")
 )
 
+// usage lists the subcommands that exist *today*. ADR-019's table also holds
+// `migrate`, `create-user` and `seed-e2e`; each lands with the milestone that
+// gives it something to do, and until then it is not advertised here.
+const usage = "try: uruni serve | version | healthcheck"
+
 func run(args []string) error {
 	if len(args) == 0 {
-		return fmt.Errorf("%w — try: uruni serve", ErrNoCommand)
+		return fmt.Errorf("%w — %s", ErrNoCommand, usage)
 	}
 
 	switch args[0] {
 	case "serve":
 		return serve()
+	case "version":
+		return printVersion(os.Stdout)
+	case "healthcheck":
+		return healthcheck()
 	default:
-		return fmt.Errorf("%w: %q — try: uruni serve", ErrUnknownCommand, args[0])
+		return fmt.Errorf("%w: %q — %s", ErrUnknownCommand, args[0], usage)
 	}
-}
-
-// ErrInvalidPort is returned when PORT is set to something that is not a usable
-// TCP port.
-var ErrInvalidPort = errors.New("invalid PORT")
-
-// listenPort reads PORT (ADR-019). It is the only environment variable the
-// binary reads today; the rest of the table — and a single internal/config
-// package that owns all of it, so os.Getenv appears in exactly one place —
-// lands with the CLI surface in M1.2 (#11).
-func listenPort() (int, error) {
-	raw := os.Getenv("PORT")
-	if raw == "" {
-		return defaultPort, nil
-	}
-	port, err := strconv.Atoi(raw)
-	if err != nil || port < 1 || port > 65535 {
-		return 0, fmt.Errorf("%w: %q is not a TCP port between 1 and 65535", ErrInvalidPort, raw)
-	}
-	return port, nil
 }
 
 func serve() error {
+	cfg, err := config.Load()
+	if err != nil {
+		return err
+	}
+
 	assets, err := uruni.WebAssets()
 	if err != nil {
 		return fmt.Errorf("opening the embedded web assets: %w", err)
 	}
 
-	port, err := listenPort()
-	if err != nil {
-		return err
-	}
+	// One logger, built at startup and passed down — no package-level global
+	// (ADR-022). Nothing below main needs it yet; request logging arrives as
+	// middleware at M4, on chi (ADR-021).
+	logger := newLogger(cfg, os.Stderr)
 
 	srv := &http.Server{
-		Addr:    fmt.Sprintf(":%d", port),
-		Handler: uruniHTTP.New(assets),
+		Addr:    fmt.Sprintf(":%d", cfg.Port),
+		Handler: uruniHTTP.New(assets, uruniHTTP.Build{Version: version, Commit: buildCommit()}),
 		// Set explicitly: a server with no header timeout can be held open by a
 		// slow client indefinitely.
 		ReadHeaderTimeout: 10 * time.Second,
@@ -98,9 +91,9 @@ func serve() error {
 
 	errc := make(chan error, 1)
 	go func() {
-		// Structured logging (log/slog) is decided but not yet built — ADR-022,
-		// implemented with the rest of the runtime config in M1.2 (#11).
-		log.Printf("uruni listening on :%d", port)
+		// The version goes in the boot line on purpose: it is the first thing
+		// worth knowing when an operator pastes their logs into an issue.
+		logger.Info("listening", "port", cfg.Port, "version", version, "db", cfg.DBPath)
 		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			errc <- err
 		}
@@ -111,8 +104,22 @@ func serve() error {
 	case err := <-errc:
 		return err
 	case <-ctx.Done():
+		logger.Info("shutting down")
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 		return srv.Shutdown(shutdownCtx)
 	}
+}
+
+// newLogger builds the one logger the process uses. Text to stderr by default,
+// JSON when the operator ships logs somewhere that parses them (ADR-022).
+//
+// Whatever ends up here is operator-facing and public: never log a member name,
+// a note, or an amount. Log IDs (PRD §6, data minimization).
+func newLogger(cfg config.Config, w io.Writer) *slog.Logger {
+	opts := &slog.HandlerOptions{Level: cfg.LogLevel}
+	if cfg.LogFormat == config.LogFormatJSON {
+		return slog.New(slog.NewJSONHandler(w, opts))
+	}
+	return slog.New(slog.NewTextHandler(w, opts))
 }

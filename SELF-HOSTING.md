@@ -26,8 +26,12 @@ Then open your domain and sign in as the treasurer.
 | `URUNI_TAG` | Pinned image version to run. |
 | `URUNI_DOMAIN` | Domain Caddy serves + fetches TLS for. |
 | `URUNI_BASE_URL` | Public base URL (used in the shareable report link). |
-| `URUNI_SESSION_SECRET` | Long random secret for session cookies. |
+| `URUNI_SESSION_SECRET` | Long random secret for session cookies. Generate one with `openssl rand -base64 48` — **the app refuses to start unset or on the `change-me` placeholder.** |
 | `SMTP_URL` | Optional — enable emailed periodic backups. |
+| `URUNI_LOG_LEVEL` | Optional — `debug`, `info` (default), `warn`, `error`. |
+| `URUNI_LOG_FORMAT` | Optional — `text` (default) or `json`. |
+
+If a variable is wrong the app exits on boot with one line naming it; `docker compose logs app` shows it.
 
 ## Data & backups
 
@@ -36,5 +40,14 @@ Your data lives on Docker volumes (`uruni-data`, `uruni-uploads`, `uruni-backups
 ## Upgrading
 
 The version is your **upgrade contract**: patch = drop-in; minor = additive migration, applied on boot, drop-in; major = breaking but data survives, **read the release notes** for manual steps. Bump `URUNI_TAG`, then `docker compose pull && docker compose up -d`.
+
+To see what you are actually running:
+
+```bash
+docker compose exec app /uruni version   # uruni v0.1.0-alpha.1 (commit 1a2b3c4)
+curl https://your-domain/healthz         # {"status":"ok","version":"v0.1.0-alpha.1","commit":"1a2b3c4"}
+```
+
+`/healthz` is unauthenticated, so the second one works from anywhere and needs no shell on the host — handy for confirming an upgrade actually took.
 
 > TODO (filled in as the app is built): exact env var names, first-run setup, migration/boot behavior, and a worked backup/restore example.

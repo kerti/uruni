@@ -38,9 +38,12 @@ jobs:
           # self-hoster is just as likely to have (ADR-010: compose is the
           # make-or-break deployment UX).
           platforms: linux/amd64,linux/arm64
-          # Without this the image reports `version=dev` forever — and ADR-019
-          # makes `uruni version` the operator's half of the upgrade contract.
+          # Without these the image reports `dev (commit unknown)` forever — and
+          # ADR-019 makes `uruni version` the operator's half of the upgrade
+          # contract. COMMIT is passed explicitly because .dockerignore keeps
+          # .git out of the build context, so Go cannot stamp it itself.
           build-args: |
             VERSION=${{ github.ref_name }}
+            COMMIT=${{ github.sha }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}

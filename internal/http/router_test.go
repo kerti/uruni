@@ -1,6 +1,7 @@
 package http
 
 import (
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -18,10 +19,14 @@ func testAssets() fstest.MapFS {
 	}
 }
 
+// testBuild stands in for the linker stamp; the point of the /healthz body is
+// that whatever was stamped comes back out.
+var testBuild = Build{Version: "v9.9.9-test", Commit: "abc1234"}
+
 func get(t *testing.T, path string) *httptest.ResponseRecorder {
 	t.Helper()
 	rec := httptest.NewRecorder()
-	New(testAssets()).ServeHTTP(rec, httptest.NewRequest(http.MethodGet, path, nil))
+	New(testAssets(), testBuild).ServeHTTP(rec, httptest.NewRequest(http.MethodGet, path, nil))
 	return rec
 }
 
@@ -30,8 +35,36 @@ func TestHealthzIsUnauthenticatedAndOK(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("GET /healthz = %d, want %d", rec.Code, http.StatusOK)
 	}
-	if got := rec.Body.String(); got != "ok" {
-		t.Errorf("body = %q, want %q", got, "ok")
+	if got := rec.Header().Get("Content-Type"); got != "application/json; charset=utf-8" {
+		t.Errorf("Content-Type = %q, want JSON", got)
+	}
+
+	var got health
+	if err := json.NewDecoder(rec.Body).Decode(&got); err != nil {
+		t.Fatalf("decoding /healthz body: %v", err)
+	}
+	want := health{Status: "ok", Version: testBuild.Version, Commit: testBuild.Commit}
+	if got != want {
+		t.Errorf("GET /healthz = %+v, want %+v", got, want)
+	}
+}
+
+// The stamp has to be the one the binary was built with, not a constant baked
+// into the router — that is the whole point of reading it off a deployment. An
+// untagged build is the case that needs the commit: version is only ever `dev`,
+// so the SHA is the sole thing naming what runs.
+func TestHealthzReportsTheBuildItWasStampedWith(t *testing.T) {
+	untagged := Build{Version: "dev", Commit: "deadbee"}
+	rec := httptest.NewRecorder()
+	New(testAssets(), untagged).ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/healthz", nil))
+
+	var got health
+	if err := json.NewDecoder(rec.Body).Decode(&got); err != nil {
+		t.Fatalf("decoding /healthz body: %v", err)
+	}
+	if got.Version != untagged.Version || got.Commit != untagged.Commit {
+		t.Errorf("GET /healthz = %+v, want version %q and commit %q",
+			got, untagged.Version, untagged.Commit)
 	}
 }
 
