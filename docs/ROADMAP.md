@@ -7,13 +7,13 @@ How Uruni gets built and released. Milestones map 1:1 to the supervised build sl
 ## How we version & release
 
 - **SemVer pre-releases, tag-driven.** `main` is always releasable. Branch → PR → squash-merge; several PRs batch up, then one `vX.Y.Z-alpha.N` tag cuts a release (pushing the tag builds the image to GHCR).
-- **Milestone = minor**, by convention. Within a milestone the `alpha.N` counter advances per batch; closing a milestone rolls the minor (`v0.3.0-alpha.k` → `v0.4.0-alpha.1`).
+- **Milestone = minor**, by convention. Within a milestone the `alpha.N` counter advances per batch; the batch that meets the milestone's definition of done is tagged `vX.Y.0` **final** rather than another alpha (`v0.3.0-alpha.1` → `v0.3.0` → `v0.4.0-alpha.1`). The `Version` column below is that final.
 - **`0.x` is honestly unstable.** Breaking changes ride minor bumps during the ramp. The first real deployment to a live treasurer's instance is the **production** moment — that's when migrations become immutable and major-vs-minor discipline turns on (likely `v1.0.0`, but the number isn't reserved).
 - **The version is the operator's upgrade contract**, not a brand: patch = drop-in, minor = additive migration drop-in, major = breaking-but-survivable (read the notes), new repo = data can't forward-migrate.
 
 ## Cadence — when we cut
 
-Cut an **`alpha.N`** whenever a slice (or a coherent batch within one) lands green on `main` and is worth looking at. Roll the **minor** when a milestone's definition of done is met. No calendar dates yet — the rhythm is *slice → review → tag*, sized to a solo, AI-assisted, part-time pace. (We can add target dates once availability is known.)
+Cut an **`alpha.N`** whenever a slice (or a coherent batch within one) lands green on `main` and is worth looking at. When a batch *also* meets the milestone's definition of done, tag it `vX.Y.0` final instead of another alpha — so **decide DoD before tagging the last batch**, or you pay a duplicate tag and a second multi-arch build on the same commit (`release.yml` rebuilds per tag; nothing promotes an existing image). No calendar dates yet — the rhythm is *slice → review → tag*, sized to a solo, AI-assisted, part-time pace. (We can add target dates once availability is known.)
 
 ## Milestones
 
