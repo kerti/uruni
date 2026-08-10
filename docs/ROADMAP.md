@@ -20,7 +20,7 @@ Cut an **`alpha.N`** whenever a slice (or a coherent batch within one) lands gre
 | Milestone | Version | Slice | Outcome |
 |---|---|---|---|
 | **M1 Scaffold** | `v0.1.0` | 1 | Go module, Vite/React, Tailwind + shadcn, `embed.FS` pipeline, Docker skeleton, `/docs` in place, CI green. |
-| **M2 Data model** | `v0.2.0` | 2 | Migrations for PRD §6 entities (Fund, Account/Location, Purpose tag, Member, Dues rate, Transaction, Incidental, Reconciliation snapshot). |
+| **M2 Data model** | `v0.2.0` | 2 | Migrations for PRD §6 entities (Fund, Account/Location, Purpose tag, Member, Dues rate, Transaction, Incidental, Reconciliation snapshot). **Deletes M1.3's no-op baseline migration** — the real schema becomes `00001`. |
 | **M3 Money & reconciliation** | `v0.3.0` | 3 | The `money` (int64) package + ledger/reconciliation logic, **heavily tested**. The trust core. Review hardest. |
 | **M4 Core API** | `v0.4.0` | 4 | Transactions, dues, incidental, pass-through, reconcile, balances over the model. |
 | **M5 Auth** | `v0.5.0` | 5 | Local email/password + sessions. |
