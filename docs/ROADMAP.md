@@ -77,7 +77,7 @@ There is **no `HANDOFF.md`** and no standalone status doc. The live board is **G
 - **Standing decisions no issue or ADR owns** → [`Decisions.md`](./Decisions.md).
 - **You-are-here** → the one status line below (changes ~once per milestone; never holds shipped detail).
 
-**Status:** **M1 — scaffold (`v0.1.0`)** in progress. The tracer bullet is through: one binary serves the embedded React app and `/healthz`, and CI now lints and tests real code instead of abstaining. Next in M1: the CLI surface and runtime config, then the store bootstrap.
+**Status:** **M1 — scaffold (`v0.1.0`)** in progress; the tracer bullet is through.
 
 ## Open
 

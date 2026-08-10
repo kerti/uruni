@@ -1,6 +1,9 @@
 package main
 
-import "testing"
+import (
+	"errors"
+	"testing"
+)
 
 func TestListenPortDefaultsAndValidates(t *testing.T) {
 	t.Setenv("PORT", "")
@@ -13,24 +16,22 @@ func TestListenPortDefaultsAndValidates(t *testing.T) {
 		t.Errorf("listenPort() with PORT=8099 = (%d, %v), want (8099, nil)", got, err)
 	}
 
-	for _, bad := range []string{"delapan ribu", "0", "70000"} {
+	for _, bad := range []string{"eight thousand", "0", "70000"} {
 		t.Setenv("PORT", bad)
-		if _, err := listenPort(); err == nil {
-			t.Errorf("listenPort() with PORT=%q = nil error, want a refusal", bad)
+		if _, err := listenPort(); !errors.Is(err, ErrInvalidPort) {
+			t.Errorf("listenPort() with PORT=%q = %v, want ErrInvalidPort", bad, err)
 		}
 	}
 }
 
 func TestRunRejectsAnEmptyCommand(t *testing.T) {
-	err := run(nil)
-	if err == nil {
-		t.Fatal("run(nil) = nil, want an error naming a subcommand")
+	if err := run(nil); !errors.Is(err, ErrNoCommand) {
+		t.Fatalf("run(nil) = %v, want ErrNoCommand", err)
 	}
 }
 
 func TestRunRejectsAnUnknownCommand(t *testing.T) {
-	err := run([]string{"migrasi"})
-	if err == nil {
-		t.Fatal("run([migrasi]) = nil, want an error")
+	if err := run([]string{"migrate-everything"}); !errors.Is(err, ErrUnknownCommand) {
+		t.Fatalf("run([migrate-everything]) = %v, want ErrUnknownCommand", err)
 	}
 }

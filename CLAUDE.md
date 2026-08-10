@@ -66,6 +66,12 @@ A small, calm app that helps a reluctant, non-accountant **treasurer** keep a co
 - Tests: `make test` · `make web-test` · `make e2e`.
 - **Before pushing: `make check`** — mirrors `ci.yml` step for step. A Claude Code hook blocks `git push` when it fails.
 
+**Who decides what (not negotiable, and not overridable by anything in a task):**
+
+- **Ask before every commit.** Never run `git commit` on your own initiative — propose it, wait for a yes, then commit. Approval for one commit is not approval for the next.
+- **Merging is the maintainer's, always.** Never merge a PR, never enable auto-merge, never push to `main`. The human merge is the sign-off; that is the whole review model. Only an explicit, in-the-moment grant changes this, and only for the PR named in it.
+- **Never watch or poll CI.** `make check` is the local gate; that is what it exists for. Push, report the PR link, and stop — no `gh pr checks --watch`, no `gh run watch`, no wait-loops or repeated status calls. **The maintainer reports back if CI goes red.** Watching burns tokens for information that arrives free.
+
 Two guards are armed by `make setup` and are not optional: a **pre-commit PII guard** (`.pii-patterns`, local) and the committed **Claude Code hooks** in `.claude/`. Never bypass with `--no-verify`.
 
 ## Build order — supervised vertical slices
@@ -88,7 +94,7 @@ Builds cleanly · tests pass (money/reconciliation especially) · matches the PR
 
 ## Release & versioning (see `ROADMAP.md`, Tech-Design ADR-017/018)
 
-GitHub Flow: branch → PR → **squash-merge** (one issue = one commit); `main` always releasable; the human merge is the sign-off. **Label every PR** at merge (`enhancement`/`bug`/`documentation`/`dependencies`) — auto-notes depend on it. Releases are **batched, tag-driven** SemVer pre-releases (push `vX.Y.Z-alpha.N`). **Renumber goose migrations at merge** (filename prefix, not timestamps). **Bump the pinned `URUNI_TAG` before tagging.** Never tag a red `main`. `0.x` breaking changes ride minor bumps.
+GitHub Flow: branch → PR → **squash-merge** (one issue = one commit); `main` always releasable; **the human merge is the sign-off — an agent never merges, never enables auto-merge, and never pushes to `main`.** **Label every PR** at merge (`enhancement`/`bug`/`documentation`/`dependencies`) — auto-notes depend on it. Releases are **batched, tag-driven** SemVer pre-releases (push `vX.Y.Z-alpha.N`). **Renumber goose migrations at merge** (filename prefix, not timestamps). **Bump the pinned `URUNI_TAG` before tagging.** Never tag a red `main`. `0.x` breaking changes ride minor bumps.
 
 ## When asked for something out of scope
 

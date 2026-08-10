@@ -1,6 +1,10 @@
 // Package http wires the server's routes. One origin serves everything: the
 // JSON API under /api, the server-rendered public report under /report, and the
 // React SPA everywhere else (ADR-001).
+//
+// The router is stdlib http.ServeMux while there are two routes to serve. chi
+// takes over at M4, when the API brings route groups and middleware worth
+// composing — decided in ADR-021, which also explains why not sooner.
 package http
 
 import (

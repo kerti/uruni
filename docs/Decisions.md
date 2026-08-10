@@ -2,7 +2,17 @@
 
 *A running record of what we've decided and why. Anything here can still change.*
 
-Last updated: 2026-08-09 (M1.1 scaffold — the tracer bullet landed)
+Last updated: 2026-08-10 (M1.1 review — what belongs in this file)
+
+## What belongs in this file
+
+This is **not** a journal of every choice made in every PR — that way the file grows without bound and nobody reads it. Three homes, and only one of them is here:
+
+- **Architectural or cross-cutting** → an **[ADR](./ADR/README.md)**, numbered and permanent.
+- **The reasoning behind one slice's implementation choices** → **the PR body**, which is durable, searchable (`gh pr view <n>`), and attached to the diff it explains. It does not get copied here.
+- **Standing decisions that outlive their PR and that no ADR owns** → **here**, a few lines each, linking to the PR or issue rather than restating it.
+
+Same rule as the board: a doc may *point at* GitHub, never duplicate it.
 
 ## Related documents
 
@@ -165,7 +175,7 @@ Five decisions came out of it:
 4. **sqlc survives, but its rationale was rebuilt.** Its stated context was dual-engine targeting; that premise died, so it now stands on money-code safety alone — explicit reviewable SQL, generated types, a fakeable `Querier`. Accepted cost: sqlc's SQLite engine is younger than its Postgres one, so a query it can't parse drops to hand-written `database/sql` rather than bending the schema.
 5. **A single `*sql.DB` with `SetMaxOpenConns(1)`**, plus WAL / `busy_timeout` / `foreign_keys` / `synchronous=NORMAL`. Serializing everything makes `SQLITE_BUSY` structurally impossible — no retry logic and no intermittent failure in the ledger — at the cost of the public report queueing behind a write. Upgrade path if latency ever proves it matters: split writer(1)/reader(N) pools under WAL.
 
-**Process note.** 004, 005, 012 and 019 are `draft`, so all four were edited in place per the mutability rule above. [ADR-016](./ADR/016-deployment-targets-reference-infra.md) is *implemented* and said the product ships "SQLite or any Postgres" — handled as a dated **erratum** striking three words rather than a superseding ADR, on the grounds that the clause was illustrative evidence for provider-agnosticism, not the decision, and the decision is unchanged. That also leaves **ADR-021 free for issue #8's demo environment**, which had already claimed the number.
+**Process note.** 004, 005, 012 and 019 are `draft`, so all four were edited in place per the mutability rule above. [ADR-016](./ADR/016-deployment-targets-reference-infra.md) is *implemented* and said the product ships "SQLite or any Postgres" — handled as a dated **erratum** striking three words rather than a superseding ADR, on the grounds that the clause was illustrative evidence for provider-agnosticism, not the decision, and the decision is unchanged. Issue #8's demo environment needs a superseding ADR of its own; it claims a number when that ADR is written, not before.
 
 **Downstream:** issue #8 is unblocked — Fly.io with SQLite on ephemeral disk, no Neon, exactly as it proposed.
 
@@ -173,16 +183,12 @@ Five decisions came out of it:
 
 Uruni leans on GitHub issues/PRs from the start, so there is **no standalone `HANDOFF.md`** (Balances' HANDOFF drifted to ~488 lines duplicating PRs/release notes before it was gutted — avoided here by not starting one). The four jobs it did are homed explicitly: **cursor / in-flight** → current GitHub milestone + open issues; **what changed** → issues + PRs + Releases; **standing decisions no issue/ADR owns** → this file; **you-are-here** → a single status line in `ROADMAP.md`. Rule that prevents drift: a doc may *point to* the GitHub board, never *copy* it. Build approach: seed repo with docs, then supervised **vertical slices** (data model → money/reconciliation + tests → API → auth → UI → public report → backup → deploy), reviewing between slices rather than full-auto.
 
-## Scaffold choices at M1.1 (decided 2026-08-09)
+## Language boundary: operator English, treasurer Indonesian (decided 2026-08-10)
 
-The tracer bullet ([#10](https://github.com/kerti/uruni/issues/10)) turned ADR-001/002/003 into running code; the choices below were made along the way and are not big enough to be ADRs of their own.
+The CLI, its errors and the server logs are the **operator's** surface and are **English**, like the self-hosting docs. **Indonesian is the treasurer's surface** — the SPA and the public report ([ADR-014](./ADR/014-localization-indonesian-first.md), still `draft`, now says so). Settled in review on [#14](https://github.com/kerti/uruni/pull/14) after the M1.1 scaffold shipped Indonesian CLI errors; [#11](https://github.com/kerti/uruni/issues/11)'s acceptance criteria were corrected to match.
 
-- **oxlint, not eslint.** `create-vite` now scaffolds oxlint and ships an `.oxlintrc.json`; adopting it costs nothing and keeps the linter the one the template maintains. `make check`'s label changed from `eslint` to `oxlint` — `ci.yml` calls `npm run lint`, so it needed no change. Vendored shadcn sources under `web/src/components/ui` are lint-excluded: they are ours to keep, not ours to hand-edit.
-- **shadcn was initialized, then trimmed.** Its current CLI installs a preset that pulls `shadcn`, `tw-animate-css` and the Geist font in as *runtime* dependencies. All three were removed after `init`: the palette is replaced by `Design-System.md`'s tokens verbatim, the animation variants belong to components we haven't added, and the font is Plus Jakarta Sans. Only `button` and `card` are installed — what the smoke page renders.
-- **Dark mode stays off deliberately.** `Design-System.md` defers it, so the `dark` variant is bound to a `.dark` ancestor that nothing sets. Left at Tailwind's default it would be `prefers-color-scheme`, and shadcn's `dark:` utilities would fire against the light palette on any machine in dark mode.
-- **The font is self-hosted from npm** (`@fontsource-variable/plus-jakarta-sans`, OFL-1.1) — no CDN call, per the design system's privacy note; Vite fingerprints the woff2 files into the bundle.
-- **Copy is centralized in `web/src/copy/id.ts`**, a plain module rather than react-i18next — ADR-014 allows "a light equivalent", and a dependency that exists to switch between one language earns nothing yet. It becomes react-i18next when a second language or real pluralization arrives; ADR-014 stays `draft` until then.
-- **`//go:embed all:web/dist`**, with the `all:` prefix, so the committed `.gitkeep` is itself embeddable and a fresh clone compiles before Vite has ever run. A production build empties `web/dist` and deleted that placeholder — a deletion that would have ridden along in the next commit and broken the next fresh clone — so a six-line Vite plugin writes it back after every build.
-- **`PORT` is parsed and range-checked already**, a milestone earlier than the rest of the config table (M1.2): gosec flags logging an unvalidated env var as taint, and validating it was the honest fix.
+## Dependency licences stay permissive (checked at M1.1)
 
-**Licence audit** (the M1 close-out item, done early because the trees are small): the Go module has **zero third-party dependencies** — stdlib only. The npm tree is MIT/ISC/Apache-2.0/BSD/0BSD/CC0/BlueOak, plus OFL-1.1 for the font and **MPL-2.0 for `lightningcss`** (a Tailwind build-time dependency). MPL is file-level copyleft and explicitly compatible with distribution under a secondary licence like AGPL, and lightningcss is not linked into the shipped binary in any case. Nothing copyleft-incompatible landed.
+Audited on [#14](https://github.com/kerti/uruni/pull/14) — Go has no third-party dependencies; the npm tree is MIT/ISC/Apache-2.0/BSD/0BSD/CC0/BlueOak plus OFL-1.1 (font) and MPL-2.0 (`lightningcss`, a Tailwind build-time dependency, AGPL-compatible and not linked into the binary). **Nothing copyleft-incompatible with AGPL-3.0 may land**; re-check when a dependency is added, not on a schedule.
+
+*The scaffold's own implementation choices — oxlint, the trimmed shadcn install, dark mode off, the self-hosted font, the `all:` embed prefix — live in [#14](https://github.com/kerti/uruni/pull/14)'s body, per the rule at the top of this file.*

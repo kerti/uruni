@@ -29,21 +29,37 @@ func main() {
 	}
 }
 
+// The CLI and the server logs are the *operator's* surface, so they are in
+// English like the rest of the self-hosting documentation. Indonesian is for
+// the treasurer's surface — the SPA and the public report (ADR-014).
+var (
+	// ErrNoCommand and ErrUnknownCommand are sentinels so callers and tests can
+	// branch on identity rather than on message text.
+	ErrNoCommand      = errors.New("no command given")
+	ErrUnknownCommand = errors.New("unknown command")
+)
+
 func run(args []string) error {
 	if len(args) == 0 {
-		return errors.New("perintah belum diisi — coba: uruni serve")
+		return fmt.Errorf("%w — try: uruni serve", ErrNoCommand)
 	}
 
 	switch args[0] {
 	case "serve":
 		return serve()
 	default:
-		return fmt.Errorf("perintah tidak dikenal: %s", args[0])
+		return fmt.Errorf("%w: %q — try: uruni serve", ErrUnknownCommand, args[0])
 	}
 }
 
-// listenPort reads PORT (ADR-019); the rest of the runtime config lands with
-// the CLI surface in M1.2.
+// ErrInvalidPort is returned when PORT is set to something that is not a usable
+// TCP port.
+var ErrInvalidPort = errors.New("invalid PORT")
+
+// listenPort reads PORT (ADR-019). It is the only environment variable the
+// binary reads today; the rest of the table — and a single internal/config
+// package that owns all of it, so os.Getenv appears in exactly one place —
+// lands with the CLI surface in M1.2 (#11).
 func listenPort() (int, error) {
 	raw := os.Getenv("PORT")
 	if raw == "" {
@@ -51,7 +67,7 @@ func listenPort() (int, error) {
 	}
 	port, err := strconv.Atoi(raw)
 	if err != nil || port < 1 || port > 65535 {
-		return 0, fmt.Errorf("PORT bukan nomor port yang sah: %q", raw)
+		return 0, fmt.Errorf("%w: %q is not a TCP port between 1 and 65535", ErrInvalidPort, raw)
 	}
 	return port, nil
 }
@@ -59,7 +75,7 @@ func listenPort() (int, error) {
 func serve() error {
 	assets, err := uruni.WebAssets()
 	if err != nil {
-		return fmt.Errorf("membuka aset web: %w", err)
+		return fmt.Errorf("opening the embedded web assets: %w", err)
 	}
 
 	port, err := listenPort()
@@ -82,6 +98,8 @@ func serve() error {
 
 	errc := make(chan error, 1)
 	go func() {
+		// Structured logging (log/slog) is decided but not yet built — ADR-022,
+		// implemented with the rest of the runtime config in M1.2 (#11).
 		log.Printf("uruni listening on :%d", port)
 		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			errc <- err
