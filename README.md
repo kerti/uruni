@@ -88,7 +88,7 @@ Contributions to copy and UI should keep this tone: warm, human, never corporate
 
 ## Status
 
-**Pre-code.** The product thesis, requirements, and architecture are settled; the app is being built in supervised vertical slices. Next up: **M1 — scaffold (`v0.1.0`)**.
+**Early scaffold.** The product thesis, requirements, and architecture are settled; the app is being built in supervised vertical slices. **M1 — scaffold (`v0.1.0`)** is in progress: one binary already serves the embedded React app and `/healthz`. There is no ledger yet.
 
 ## Documentation
 

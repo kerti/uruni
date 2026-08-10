@@ -73,7 +73,6 @@ Dev: `vite` (React, HMR) + `go run`, with `/api` and `/report` proxied to Go.
 - JSON export schema: concrete shape + version strategy (own sub-doc when building).
 - Balance derivation: compute-on-read by summing the ledger (recommended at this scale) vs. maintained running totals — confirm.
 - Receipt uploads: include in the default scheduled backup, or document as a separate host responsibility?
-- Router: stdlib `net/http` (Go 1.22+ routing) vs. `chi` — minor, decide at scaffold.
 
 ## Not deciding yet (deferred)
 

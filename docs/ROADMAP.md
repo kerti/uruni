@@ -77,7 +77,7 @@ There is **no `HANDOFF.md`** and no standalone status doc. The live board is **G
 - **Standing decisions no issue or ADR owns** → [`Decisions.md`](./Decisions.md).
 - **You-are-here** → the one status line below (changes ~once per milestone; never holds shipped detail).
 
-**Status:** pre-code. Repo initialized; docs, tooling, CI and the self-host skeleton are committed and CI is green-by-abstention until there's code to check. Next: **M1 — scaffold (`v0.1.0`)**.
+**Status:** **M1 — scaffold (`v0.1.0`)** in progress; the tracer bullet is through.
 
 ## Open
 

@@ -1,0 +1,99 @@
+@import 'tailwindcss';
+@import '@fontsource-variable/plus-jakarta-sans';
+
+/* Dark mode is deferred (Design-System.md), so the `dark:` variant is bound to a
+   `.dark` ancestor that nothing sets — rather than Tailwind's default
+   prefers-color-scheme, which would fire shadcn's dark: utilities against the
+   light palette on an OS in dark mode. */
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --font-sans: 'Plus Jakarta Sans Variable', ui-sans-serif, system-ui, sans-serif;
+  --font-heading: var(--font-sans);
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary-hover: var(--primary-hover);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-success: var(--success);
+  --color-success-soft: var(--success-soft);
+  --color-attention: var(--attention);
+  --color-attention-soft: var(--attention-soft);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+
+  --shadow-sm: 0 1px 2px rgb(34 50 58 / 0.06);
+  --shadow-card: 0 2px 8px rgb(34 50 58 / 0.06);
+  --shadow-floating: 0 8px 24px rgb(34 50 58 / 0.1);
+}
+
+/* The palette is Design-System.md verbatim — Forest as the action colour, Sage
+   as a tint only, and gentle semantics (terracotta for "selisih", never
+   alarm-red). Change these there first, then here. */
+:root {
+  --background: #f6f4ef;
+  --foreground: #22323a;
+  --card: #ffffff;
+  --card-foreground: #22323a;
+  --popover: #ffffff;
+  --popover-foreground: #22323a;
+
+  --primary: #1f5d50;
+  --primary-foreground: #ffffff;
+  --primary-hover: #184c41;
+  --secondary: #e7f1ea;
+  --secondary-foreground: #1f5d50;
+  --accent: #7bae8d;
+  --accent-foreground: #22323a;
+
+  --muted: #eeebe3;
+  --muted-foreground: #67757c;
+  --border: #e4e0d7;
+  --input: #e4e0d7;
+  --ring: #2f6f60;
+
+  --success: #2e7d5b;
+  --success-soft: #e3f1e9;
+  --attention: #c96c4a;
+  --attention-soft: #f6e6dd;
+  --destructive: #b4453c;
+  --destructive-foreground: #ffffff;
+
+  --radius: 0.875rem;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  html {
+    @apply font-sans;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+  /* Money always aligns in columns (Design-System.md). */
+  .tabular {
+    font-variant-numeric: tabular-nums;
+  }
+}
