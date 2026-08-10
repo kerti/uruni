@@ -1,5 +1,5 @@
 .PHONY: help setup hooks-install claude-install doctor \
-        run build test test-cover lint fmt tidy sqlc migrate-up migrate-down migrate-status \
+        run serve-bin build test test-cover lint fmt tidy sqlc migrate-up migrate-down migrate-status \
         web-install web-dev web-build web-lint web-typecheck web-test \
         server-stop server-restart web-stop web-restart restart servers-status \
         e2e e2e-reset e2e-server stack-up stack-down stack-logs stack-ps \
@@ -56,6 +56,7 @@ help:
 	@echo "Go server (repo root):"
 	@echo "  run                     run the server in the foreground (:$(SERVER_PORT))"
 	@echo "  build                   build web/dist, then the embedding binary to bin/uruni"
+	@echo "  serve-bin               build, then run bin/uruni itself (real version stamp)"
 	@echo "  test                    run all Go tests"
 	@echo "  test-cover              go test with race + coverage profile (as CI runs it)"
 	@echo "  lint                    golangci-lint"
@@ -173,6 +174,17 @@ run:
 # binary — you'll embed a stale (or empty) web/dist.
 build: web-build
 	go build -o bin/uruni ./cmd/uruni
+
+# Run the built artifact rather than `go run`, with .env exported for you — the
+# gap that makes a bare `./bin/uruni serve` fail on URUNI_SESSION_SECRET, since
+# .env is a Makefile convenience and the binary reads only real environment
+# variables (ADR-019: env vars only, no config file).
+#
+# Worth having separately from `run` because `go run` binaries carry no VCS
+# record, so `uruni version` and /healthz report commit "unknown" under it. This
+# reports the real SHA, which is what the image does.
+serve-bin: build
+	./bin/uruni serve
 
 test:
 	go test ./...
