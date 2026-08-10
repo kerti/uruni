@@ -44,19 +44,18 @@ Builds clean · tests pass (money/reconciliation especially) · matches PRD + de
 - **Release notes are a non-technical digest** (Added / Fixed / Behind the scenes) with the raw changelog folded beneath — written for a treasurer, not a developer.
 - **Never tag a red `main`.**
 
-## Before the repo goes public
+## Public-repo hardening
 
-One-time hardening, mostly pre-staged in config comments — do these before the first public push:
+The repo is **already public**, so this stopped being a pre-flight checklist and became a status. What is still open is tracked as an **issue** — nothing below is a to-do that lives only in this file.
 
-- **Pin every GitHub Action to a commit SHA** (workflows currently use `@vN` tags for readability).
-- **Create the PR labels** the release notes depend on: `enhancement`, `bug`, `documentation`, `dependencies`.
-- **Enable branch protection on `main`**: require a PR + green CI, linear history, admin bypass on.
-- **Enable Private Vulnerability Reporting** (Security tab) — `SECURITY.md` points people there.
-- **Set the `CODECOV_TOKEN`** repo secret (Codecov v5; without it, tokenless upload only works once the repo is public).
-- **Pick the pure-Go SQLite driver** (`modernc.org/sqlite`) at scaffold, and commit `web/dist/.gitkeep` — `.gitignore` already carries the `web/dist/*` + negation form that makes that possible, and `CGO_ENABLED=0` is what lets the release image cross-compile for arm64 without QEMU.
-- **Scrub for real names / figures / local paths** — this is a public, AGPL repo.
+**Done.** PR labels the release notes depend on (`enhancement`, `bug`, `documentation`, `dependencies`) · Private Vulnerability Reporting enabled, which is where `SECURITY.md` sends people · branch protection on `main` — PR required, green CI required across every `ci.yml` job plus gitleaks and CodeQL, branches must be up to date, linear history, no force-push, admin bypass kept (2026-08-10, once M1.1 made those checks real) · image owner `ghcr.io/kerti/uruni` in `docker-compose.yml` · `NOTICE` carrying the AGPL copyright line, with the pii-guard taught to exempt licensing files · `web/dist/.gitkeep` committed so a fresh clone compiles before Vite has run.
 
-*Done 2026-08-09:* image owner set to `ghcr.io/kerti/uruni` in `docker-compose.yml`; `NOTICE` added with the AGPL copyright line (and the pii-guard taught to exempt licensing files, since the maintainer's own name is in the local denylist).
+**Open.**
+
+- **Pin every GitHub Action to a commit SHA** — [#13](https://github.com/kerti/uruni/issues/13). Workflows still use `@vN` tags for readability, which is the weaker supply-chain position now that the repo is public.
+- **Pure-Go SQLite driver** (`modernc.org/sqlite`) — lands with the store bootstrap, [#12](https://github.com/kerti/uruni/issues/12). `CGO_ENABLED=0` is what lets the release image cross-compile for arm64 without QEMU.
+
+**Not tracked, on purpose.** `CODECOV_TOKEN` is optional now the repo is public — Codecov v5 uploads tokenless from a public repo; set the secret only if uploads turn flaky. And *"scrub for real names, figures and local paths"* is not a task to close but a standing rule, enforced on every commit by the pii-guard ([ADR-020](./ADR/020-dev-environment.md)).
 
 ## Deliberately NOT doing (staying small)
 
