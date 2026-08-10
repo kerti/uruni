@@ -48,11 +48,9 @@ Builds clean · tests pass (money/reconciliation especially) · matches PRD + de
 
 The repo is **already public**, so this stopped being a pre-flight checklist and became a status. What is still open is tracked as an **issue** — nothing below is a to-do that lives only in this file.
 
-**Done**, and verifiable where it lives rather than listed here: branch protection, Private Vulnerability Reporting and the release labels are the repo's GitHub settings; the `NOTICE`, the pii-guard's licensing exemptions, `web/dist/.gitkeep`, the image owner and the pure-Go SQLite driver are in the tree.
+**Done**, and verifiable where it lives rather than listed here: branch protection, Private Vulnerability Reporting and the release labels are the repo's GitHub settings; the `NOTICE`, the pii-guard's licensing exemptions, `web/dist/.gitkeep`, the image owner, the pure-Go SQLite driver and the SHA-pinned Actions are in the tree.
 
-**Open.**
-
-- **Pin every GitHub Action to a commit SHA** — [#13](https://github.com/kerti/uruni/issues/13). Workflows still use `@vN` tags for readability, which is the weaker supply-chain position now that the repo is public.
+**Nothing open.** Anything found later is an issue, not a line here.
 
 **Coverage needs a token after all.** Codecov rejects tokenless uploads even from a public repo (`Token required - not valid tokenless upload`), and the action defaults to not failing the build — so uploads died silently through M1.1–M1.2 with no report, no PR comment and no hint in a green CI. `CODECOV_TOKEN` is now a repo secret and `ci.yml` passes it as an input (2026-08-10).
 
