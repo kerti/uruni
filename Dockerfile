@@ -18,7 +18,11 @@ RUN npm run build
 #    final image can be static/distroless.
 FROM --platform=$BUILDPLATFORM golang:1.26-alpine AS build
 WORKDIR /src
-COPY go.mod go.sum ./
+# go.sum* not go.sum: the module has no third-party dependencies yet, so the file
+# does not exist and a literal COPY fails the whole build. The glob makes it
+# optional now and picks it up unchanged once M1.3 adds the SQLite driver and
+# goose. (Latent since this file was written — no tag had ever exercised it.)
+COPY go.mod go.sum* ./
 RUN go mod download
 COPY . .
 COPY --from=web /web/dist ./web/dist
