@@ -40,6 +40,15 @@ SELECT CAST(COALESCE(SUM(CASE WHEN direction = 'in' THEN amount ELSE -amount END
 FROM "transaction"
 WHERE fund_id = ? AND purpose_id = ?;
 
+-- The frozen half of a reconciliation: the same sum as AccountBalance, cut off
+-- at the snapshot's through_transaction_id. Ordered by id, not occurred_on, so
+-- a correction backdated after the count keeps its higher id and stays outside
+-- the old snapshot's arithmetic while counting toward today's balance.
+-- name: AccountBalanceThrough :one
+SELECT CAST(COALESCE(SUM(CASE WHEN direction = 'in' THEN amount ELSE -amount END), 0) AS INTEGER) AS balance_amount
+FROM "transaction"
+WHERE fund_id = ? AND account_id = ? AND id <= ?;
+
 -- name: ListDuesPaymentsByMember :many
 SELECT id, fund_id, account_id, purpose_id, direction, amount, occurred_on, kind,
        member_id, dues_period, reimbursement_id, transfer_id, note, created_at
