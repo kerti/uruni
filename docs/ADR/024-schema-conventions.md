@@ -2,7 +2,7 @@
 
 **Status:** Accepted · implemented — change only by adding a superseding ADR · [ADR index](./README.md)
 
-**Context.** M2 lays down every table Uruni will ever have a strong opinion about. Migrations become immutable at the first live treasurer's instance ([ADR-018](./018-release-and-versioning.md)), so a convention chosen loosely here is a convention forever. SQLite is the only engine through `0.x` ([ADR-004](./004-database-sqlite-only.md)), which removes the usual reason to write a cautious portable subset — the escape hatch is [ADR-012](./012-backup-and-export.md)'s canonical JSON, not dialect discipline.
+**Context.** M2 lays down every table Uruni will ever have a strong opinion about. The schema stays editable in place through the whole `0.x` ramp and freezes at the first live treasurer's instance ([ADR-025](./025-one-migration-file-until-1.0.md)) — so the *wording* of a table can still change, but a convention chosen loosely here is one the app is built on long before then. SQLite is the only engine through `0.x` ([ADR-004](./004-database-sqlite-only.md)), which removes the usual reason to write a cautious portable subset — the escape hatch is [ADR-012](./012-backup-and-export.md)'s canonical JSON, not dialect discipline.
 
 ## Decision
 

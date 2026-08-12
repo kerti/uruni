@@ -1,6 +1,8 @@
--- The PRD §6 data model, built up one M2 slice at a time in a single migration
--- file — nothing is deployed yet, so the schema stays editable until the epic
--- reaches main (#21). So far: fund, the location money physically sits in
+-- The PRD §6 data model. This is the only migration Uruni has, and the only one
+-- it gets before v1.0.0 — every schema change edits this file in place, so it
+-- always reads as the complete current schema (ADR-025). After pulling a change
+-- to it, run `make db-reset`: goose tracks migrations by number and cannot see
+-- that this one moved. fund, the location money physically sits in
 -- (account), the tag every transaction carries (purpose), and who owes dues
 -- (dues_tier, dues_rate, member), the ledger itself — transfer, reimbursement,
 -- transaction, receipt — and the counts taken against it (reconciliation,
