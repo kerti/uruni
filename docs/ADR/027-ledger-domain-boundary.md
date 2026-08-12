@@ -1,6 +1,6 @@
 # ADR-027 — The ledger domain boundary: one package, one transaction helper, sentinel errors
 
-**Status:** Accepted · `draft` — no code implements this yet, so it may still be edited in place · [ADR index](./README.md)
+**Status:** Accepted · `draft` — editable in place until M3 closes; an edit made once code exists ships with that code · [ADR index](./README.md)
 
 **Context.** M3's premise is domain services — derived balances, posting a transaction, transfer pairs, settling a reimbursement, rolling an incidental leftover, taking a reconciliation snapshot — as Go code over `internal/store`'s generated `Querier`, with no HTTP yet (M4 is a thin chi layer over whatever this ADR builds). `CLAUDE.md`'s proposed repo layout lists `internal/ledger`, `internal/members`, `internal/dues`, `internal/incidental` as sibling packages. That list was written before M2's schema existed; this ADR checks it against what the code actually needs.
 

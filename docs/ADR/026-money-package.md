@@ -1,6 +1,6 @@
 # ADR-026 — The `money` package: overflow-checked `Amount`, arithmetic only
 
-**Status:** Accepted · `draft` — no code implements this yet, so it may still be edited in place · [ADR index](./README.md)
+**Status:** Accepted · `draft` — editable in place until M3 closes; an edit made once code exists ships with that code · [ADR index](./README.md)
 
 **Context.** [ADR-006](./006-money-integer-minor-units.md) already decided *what* Uruni's money is: `int64` integer rupiah, no floats. [ADR-024](./024-schema-conventions.md) already promised *when* the promise gets a name: "from M3 the `money` package carries the unit in the Go type." M3 is where that promise becomes a concrete package, and the concrete shape — what methods it has, what a caller gets back on overflow, how it crosses the sqlc boundary, how it serializes to JSON, whether it parses treasurer input — has not been decided anywhere yet.
 

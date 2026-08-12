@@ -1,6 +1,6 @@
 # ADR-006 — Money is integer minor units (never floats)
 
-**Status:** Accepted · `draft` — no code implements this yet, so it may still be edited in place · [ADR index](./README.md)
+**Status:** Accepted · `draft` — editable in place until M3 closes; an edit made once code exists ships with that code · [ADR index](./README.md)
 
 **Decision.** Store and compute all amounts as **`int64`** integer rupiah. IDR is effectively whole-rupiah, so the minor unit and the major unit are the same thing and there is no scale factor to remember. No float arithmetic beyond display.
 

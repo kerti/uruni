@@ -1,6 +1,6 @@
 # ADR-028 — Testing the trust core: `internal/money` and `internal/ledger`
 
-**Status:** Accepted · `draft` — no code implements this yet, so it may still be edited in place · [ADR index](./README.md)
+**Status:** Accepted · `draft` — editable in place until M3 closes; an edit made once code exists ships with that code · [ADR index](./README.md)
 
 **Context.** [ADR-015](./015-testing-money-math.md) (itself `draft`) already names `go test` and "the ledger/reconciliation logic as the highest-priority target," without saying how a test gets a real SQLite to run against. M2 already answered a version of that question for its own package: `internal/db`'s tests open a real temp file, deliberately not `:memory:`, because — per that package's own comment — "the pragmas under test (WAL especially) behave differently for an in-memory database, which would make the test prove less than it appears to." M3's premise, set by the maintainer, calls for `:memory:` instead. This ADR reconciles the two rather than picking one blind.
 
