@@ -97,7 +97,8 @@ Key entities:
 - On close, show the leftover and offer a one-tap **roll into Kas Utama**.
 
 ### 7.6 Pass-through (Kas Bidang)
-- Record money collected on behalf of the parent org and its forwarding, so it never inflates the fund's own balance.
+- Record money collected on behalf of the parent org (e.g. Kas Bidang) and its forwarding, each as an ordinary transaction tagged `Pass-through`, so the report shows plainly what came in for the parent body and what went out to it.
+- **The balance does not exclude it.** While the money sits in the wallet it really is in the wallet, so it counts — §6's "one pooled real balance, separated in meaning, not in separate pots" applies here too. Uruni does not track a levy as owed-but-unpaid and has no second "available" figure; a levy is an ordinary expense on the day it is paid. (Revised 2026-08-12: the original wording promised the balance would never be inflated by pass-through money, which required a second balance the treasurer would have to reconcile in her head — and would have been inconsistent anyway, since incidental collections are earmarked just as firmly and were never excluded. See [ADR-024](./ADR/024-schema-conventions.md).)
 
 ### 7.7 Balance & home screen
 - Home shows: current total balance, balance per location (Cash / Bank), and a **reconciliation status**: "cocok" or "selisih Rp X — cek?".
