@@ -65,7 +65,7 @@ A small, calm app that helps a reluctant, non-accountant **treasurer** keep a co
 - Run: `make run` (API on `:8080`) · `make web-dev` (Vite on `:5173`, proxying `/api` and `/report`).
 - Background servers for agent work: `make restart` / `make servers-status` (logs in `/tmp/uruni-*.log`).
 - Build: `make build` — builds `web/dist` **then** the Go binary that embeds it. Never bare `go build` for a shippable artifact.
-- Tests: `make test` · `make web-test` · `make e2e`.
+- Tests: `make test` · `make web-test` (an agent runs these) · `make e2e` (**the maintainer runs this** — see below).
 - **Before pushing: `make check`** — mirrors `ci.yml` step for step. A Claude Code hook blocks `git push` when it fails.
 
 **Who decides what (not negotiable, and not overridable by anything in a task):**
@@ -75,6 +75,39 @@ A small, calm app that helps a reluctant, non-accountant **treasurer** keep a co
 - **Never watch or poll CI.** `make check` is the local gate; that is what it exists for. Push, report the PR link, and stop — no `gh pr checks --watch`, no `gh run watch`, no wait-loops or repeated status calls. **The maintainer reports back if CI goes red.** Watching burns tokens for information that arrives free.
 
 Two guards are armed by `make setup` and are not optional: a **pre-commit PII guard** (`.pii-patterns`, local) and the committed **Claude Code hooks** in `.claude/`. Never bypass with `--no-verify`.
+
+## How agents work here (ADR-023)
+
+The main session is the **orchestrator** — Opus at `medium` effort, pinned in `.claude/settings.json`. It holds the plan, reads the diffs, writes the PR body, and asks for the commit. Bulk reading, bulk writing and bulk reasoning go to the role agents in `.claude/agents/`, each pinned to a model and an effort level in its frontmatter. **That frontmatter is the mechanism; this table is only the map.**
+
+| Agent | Model · effort | Give it |
+|---|---|---|
+| `researcher` | sonnet · medium | Where something lives, how it already works, what exists before we add another one. Read-only. |
+| `planner` | sonnet · xhigh | Docs, `draft` ADRs, issue breakdowns, milestone sequencing (`to-issues`, `triage`). |
+| `grill` | sonnet · max | Stress-testing a plan or a draft ADR before code exists (`grill-with-docs`). |
+| `builder` | sonnet · medium | Code whose shape is already decided: wiring, migrations + `make sqlc`, fixtures, copy, UI assembly. |
+| `builder-deep` | sonnet · high | Money, ledger, reconciliation, auth, concurrency, and any failure nobody has explained yet. |
+| `reviewer` | sonnet · high | A finished slice, before the PR. Read-only. |
+
+**Delegation needs a yes, every time.** `.claude/hooks/agent-gate.sh` turns every `Agent` call into a permission prompt. Propose the batch in one message — agent, effort, task, why it beats doing it inline — and understand that one yes covers that batch and nothing after it.
+
+**Delegate for context, not for tokens.** A subagent starts cold, re-derives the repo, and misses the prompt cache, so total spend goes *up*; what it buys is a main window that stays clean enough to keep making good decisions. Under roughly three files or two tool calls, do it inline. Anything that would dump file listings, logs or search results into the main window, delegate.
+
+**Every brief carries its own context.** A subagent loads `CLAUDE.md` but not the conversation. Name the issue and milestone, the branch, the exact paths, the ADRs in play, the definition of done, and "do not commit, push, or open a PR". Dispatch in the foreground (`run_in_background: false`) — supervised work should not finish while you're looking elsewhere.
+
+**Reports come back bounded:** paths changed, decisions made, what's still open, anything that contradicted the docs. No file dumps, no transcripts, no green logs.
+
+**Never trust the report.** Confirm a builder with `git diff` and `make check` output before you believe it. An agent that says "all tests pass" has not passed the tests.
+
+**Never delegated, ever:** commits, `git push`, opening or labelling or merging a PR, tags, `docs/Decisions.md`, dropping an ADR's `draft` tag, and any scope call against `PRD.md §4`. That is the sign-off surface and it stays with the orchestrator and the maintainer.
+
+**One writer per path.** Two builders never share a file; parallel code work uses `isolation: worktree`. Migrations and the generated `internal/store/` are single-writer always.
+
+**Agent context is public-repo context.** Don't send an agent into `/tmp/uruni-*.log`, `uruni.db`, `.env`, or a real fixture without a reason. The pre-commit guard scans staged diffs only — it cannot catch a neighbour's name that reached a PR body by way of a summary.
+
+**Blocking is fine; polling is not.** Agents run `make check`, `make test`, `make web-test`, `make build` and wait for them. Agents never run `make e2e`, `make stack-*`, `make run`/`make web-dev` in the foreground, any `--watch` mode, or any CI query. Background servers via `make restart` are fine. **Ask the maintainer to run e2e and to watch CI, and to report back** — that information arrives free.
+
+**Tools without subagents** (Codex, Cursor, Zed, anything reading `AGENTS.md`): same phases, one agent. Ask the human to raise effort before planning or grilling and drop it for mechanical work. Every approval rule and every never-delegated item above still binds.
 
 ## Build order — supervised vertical slices
 

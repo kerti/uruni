@@ -29,6 +29,8 @@ make web-dev   # Vite on :5173, proxies /api and /report -> :8080
 
 `make` with no target lists everything. `make setup` also arms the **pre-commit PII guard** — see "Scrub the diff" below; it's the mechanism behind that rule.
 
+If you work through AI agents, the repo ships its own configuration for them: pinned models and effort levels per role in `.claude/agents/`, and a hook that asks before any subagent is spawned. The rules are in [`CLAUDE.md`](CLAUDE.md), the reasoning in [ADR-023](docs/ADR/023-agent-operating-model.md), and [`.claude/README.md`](.claude/README.md) is the operator's cheat sheet — how to override the pinned defaults, and what each choice costs. Nothing there is required to contribute by hand.
+
 Production build embeds the SPA into the Go binary — `make build` does it in the right order.
 
 > Build-order gotcha: the `//go:embed all:web/dist` directive fails to compile if `web/dist` doesn't exist, so the web app must be built **before** the Go build (CI and the Dockerfile already do this in order). `web/dist/.gitkeep` is committed for exactly this reason — don't delete it, or a bare `go build`/`go vet` on a fresh clone fails before you've run the frontend build.
