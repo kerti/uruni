@@ -47,8 +47,7 @@ A small, calm app that helps a reluctant, non-accountant **treasurer** keep a co
 /                cmd/uruni/main.go, embed.go
   internal/
     money/       int64 money package (+ tests)
-    ledger/      transactions, balances, reconciliation (+ tests) — the core
-    members/ dues/ incidental/
+    ledger/      transactions, balances, reconciliation, dues, incidental (+ tests) — the core
     http/        router, handlers, session auth, report SSR
     store/       sqlc-generated queries
     db/          goose migrations

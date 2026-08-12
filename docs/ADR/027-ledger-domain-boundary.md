@@ -10,7 +10,7 @@
 
 Every operation M3 owns — post a transaction, a transfer pair, settle a reimbursement, roll an incidental leftover, take a reconciliation snapshot, derive dues status — shares one primitive (insert one or more `"transaction"` rows inside one DB transaction) and one connection ([ADR-004](./004-database-sqlite-only.md)'s single `*sql.DB`). A transfer pair and the incidental leftover roll are **the same mechanism** — `reclass_purpose` vs. `between_accounts` is a parameter to one function, not a different code path (see the M3 plan). Splitting the package now would draw boundaries around table names rather than around the one real seam that exists (read vs. write, or "needs a `*sql.Tx`" vs. "doesn't"). `internal/members` is dropped entirely: member CRUD carries no derived invariant beyond what the schema already enforces, so M4 calls `store.Queries` directly for it — exactly how M2's own tests already treat members, with no domain wrapper.
 
-This is a correction to `CLAUDE.md`'s proposed layout, **flagged here, not made there** — `CLAUDE.md` is not this plan's surface to edit; see the M3 plan's "contradicts the docs" section.
+`CLAUDE.md`'s proposed layout table was corrected to match in the same PR as this ADR, rather than left contradicting the decision an agent reads next.
 
 Proposed file layout inside the package (an implementation detail, listed so a builder isn't guessing, not itself load-bearing): `ledger.go` (the type and the transaction helper), `transaction.go`, `transfer.go`, `reimbursement.go`, `reconciliation.go`, `dues.go`, `balance.go`, `errors.go`.
 
@@ -71,7 +71,7 @@ Those failures are a **fourth error category**, `ErrInvalidArgument`, wrapped wi
 
 ## Consequences
 
-`internal/ledger` is the only new package M3 adds under `internal/`. `CLAUDE.md`'s proposed layout table should drop `members/`, `dues/`, `incidental/` as separate packages — flagged in the M3 plan, not edited here.
+`internal/ledger` is the only new package M3 adds under `internal/`; `CLAUDE.md`'s layout table no longer lists `members/`, `dues/` or `incidental/` beside it.
 
 Every write-path test needs the real harness ([ADR-028](./028-testing-the-trust-core.md)); read-only logic that operates on already-fetched rows (dues-status classification, once the query results are in hand) can be tested with a hand-rolled `store.Querier` fake or plain structs, at the test author's discretion — the fakeability [ADR-005](./005-data-access-sqlc.md) promised is real, just scoped to the reads.
 
