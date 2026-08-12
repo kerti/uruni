@@ -52,3 +52,48 @@ type Purpose struct {
 	Name      string
 	CreatedAt int64
 }
+
+type Receipt struct {
+	ID              int64
+	FundID          int64
+	TransactionID   *int64
+	ReimbursementID *int64
+	Path            string
+	UploadedAt      int64
+}
+
+type Reimbursement struct {
+	ID         int64
+	FundID     int64
+	MemberID   int64
+	PurposeID  int64
+	Amount     int64
+	IncurredOn string
+	WaivedOn   *string
+	Note       *string
+	CreatedAt  int64
+}
+
+type Transaction struct {
+	ID              int64
+	FundID          int64
+	AccountID       int64
+	PurposeID       int64
+	Direction       string
+	Amount          int64
+	OccurredOn      string
+	Kind            string
+	MemberID        *int64
+	DuesPeriod      *string
+	ReimbursementID *int64
+	TransferID      *int64
+	Note            *string
+	CreatedAt       int64
+}
+
+type Transfer struct {
+	ID        int64
+	FundID    int64
+	Kind      string
+	CreatedAt int64
+}

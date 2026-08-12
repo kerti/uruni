@@ -2,8 +2,9 @@
 -- file — nothing is deployed yet, so the schema stays editable until the epic
 -- reaches main (#21). So far: fund, the location money physically sits in
 -- (account), the tag every transaction carries (purpose), and who owes dues
--- (dues_tier, dues_rate, member). The ledger itself — transaction, transfer,
--- reimbursement, receipt — and the snapshots land in #24 and #25.
+-- (dues_tier, dues_rate, member), and the ledger itself — transfer,
+-- reimbursement, transaction, receipt. The reconciliation snapshots and
+-- incidental envelopes land in #25.
 --
 -- Conventions below follow docs/ADR/024-schema-conventions.md; see it for the
 -- reasoning, not restated here.
@@ -83,8 +84,138 @@ CREATE TABLE member (
   FOREIGN KEY (fund_id, tier_id) REFERENCES dues_tier(fund_id, id)
 ) STRICT;
 
+CREATE TABLE transfer (                   -- pair-holder: cash<->bank, or purpose reclass
+  -- Value-neutral movements are two transactions of equal amount and opposite
+  -- direction, bound by one of these rows (ADR-024). A single row would change
+  -- the fund's total; nothing moved, so nothing may.
+  id         INTEGER PRIMARY KEY,
+  fund_id    INTEGER NOT NULL REFERENCES fund(id),
+  kind       TEXT    NOT NULL CHECK (kind IN ('between_accounts','reclass_purpose')),
+  created_at INTEGER NOT NULL,
+  UNIQUE (fund_id, id)                    -- see account.id above: enables composite FKs from children
+) STRICT;
+
+CREATE TABLE reimbursement (              -- off-ledger until settled
+  -- A member fronting their own money does not move the kas, so there is no
+  -- ledger row until the payout. Settling posts one real 'out'; waived_on
+  -- closes a claim that will never be repaid (ADR-024).
+  id          INTEGER PRIMARY KEY,
+  fund_id     INTEGER NOT NULL,
+  member_id   INTEGER NOT NULL,
+  purpose_id  INTEGER NOT NULL,
+  amount      INTEGER NOT NULL CHECK (amount > 0),
+  incurred_on TEXT    NOT NULL CHECK (date(incurred_on) IS NOT NULL AND incurred_on = date(incurred_on)),
+  waived_on   TEXT             CHECK (waived_on IS NULL OR (date(waived_on) IS NOT NULL AND waived_on = date(waived_on))),
+  note        TEXT,
+  created_at  INTEGER NOT NULL,
+  UNIQUE (fund_id, id),
+  FOREIGN KEY (fund_id) REFERENCES fund(id),
+  FOREIGN KEY (fund_id, member_id)  REFERENCES member(fund_id, id),
+  FOREIGN KEY (fund_id, purpose_id) REFERENCES purpose(fund_id, id)
+) STRICT;
+
+CREATE TABLE "transaction" (              -- the ledger. insert-only.
+  id          INTEGER PRIMARY KEY,
+  fund_id     INTEGER NOT NULL,
+  account_id  INTEGER NOT NULL,
+  purpose_id  INTEGER NOT NULL,
+  direction   TEXT    NOT NULL CHECK (direction IN ('in','out')),
+  -- The sign lives in direction, never in the amount, so summing the ledger is
+  -- one CASE and a negative amount is impossible rather than merely unexpected.
+  amount      INTEGER NOT NULL CHECK (amount > 0),
+  occurred_on TEXT    NOT NULL CHECK (date(occurred_on) IS NOT NULL AND occurred_on = date(occurred_on)),
+  kind        TEXT    NOT NULL CHECK (kind IN
+                ('opening','normal','dues','reimbursement','adjustment','transfer')),
+  member_id        INTEGER,               -- dues
+  dues_period      TEXT,                  -- 'YYYY-MM'; several months paid at once = several rows
+  reimbursement_id INTEGER,               -- the settling payout
+  transfer_id      INTEGER,
+  note        TEXT,
+  created_at  INTEGER NOT NULL,
+  UNIQUE (fund_id, id),
+  -- Five composite FKs: each one is what stops a transaction borrowing another
+  -- fund's row, which a single-column REFERENCES would happily allow.
+  FOREIGN KEY (fund_id, account_id)       REFERENCES account(fund_id, id),
+  FOREIGN KEY (fund_id, purpose_id)       REFERENCES purpose(fund_id, id),
+  FOREIGN KEY (fund_id, member_id)        REFERENCES member(fund_id, id),
+  FOREIGN KEY (fund_id, reimbursement_id) REFERENCES reimbursement(fund_id, id),
+  FOREIGN KEY (fund_id, transfer_id)      REFERENCES transfer(fund_id, id),
+  CHECK (dues_period IS NULL OR (dues_period GLOB '[0-9][0-9][0-9][0-9]-[0-1][0-9]'
+                                 AND date(dues_period||'-01') IS NOT NULL)),
+  CHECK (kind <> 'dues'          OR (member_id IS NOT NULL AND dues_period IS NOT NULL AND direction = 'in')),
+  CHECK (kind =  'dues'          OR (member_id IS NULL AND dues_period IS NULL)),
+  CHECK (kind <> 'reimbursement' OR (reimbursement_id IS NOT NULL AND direction = 'out')),
+  CHECK (kind <> 'transfer'      OR transfer_id IS NOT NULL)
+  -- kind='adjustment' deliberately requires nothing extra: a correction may be
+  -- raised on any Tuesday, not only during a reconciliation (ADR-024).
+) STRICT;
+
+-- "Settle once" was otherwise only prose. Partial, so the NULLs on every other
+-- kind are unconstrained.
+CREATE UNIQUE INDEX reimbursement_settled_once ON "transaction"(reimbursement_id) WHERE kind = 'reimbursement';
+
+CREATE TABLE receipt (                    -- attachment, not a ledger fact; addable after the fact
+  -- Its own table precisely because ledger rows are immutable: a photo taken
+  -- after the entry was posted still has somewhere to go (ADR-011).
+  id               INTEGER PRIMARY KEY,
+  fund_id          INTEGER NOT NULL,
+  transaction_id   INTEGER,
+  reimbursement_id INTEGER,
+  path             TEXT    NOT NULL CHECK (length(trim(path)) > 0),
+  uploaded_at      INTEGER NOT NULL,
+  CHECK ((transaction_id IS NULL) <> (reimbursement_id IS NULL)),   -- exactly one parent
+  FOREIGN KEY (fund_id, transaction_id)   REFERENCES "transaction"(fund_id, id),
+  FOREIGN KEY (fund_id, reimbursement_id) REFERENCES reimbursement(fund_id, id)
+) STRICT;
+
+CREATE INDEX transaction_by_date    ON "transaction"(fund_id, occurred_on);
+CREATE INDEX transaction_by_account ON "transaction"(account_id, occurred_on);
+CREATE INDEX transaction_by_purpose ON "transaction"(purpose_id);
+CREATE INDEX transaction_by_dues    ON "transaction"(member_id, dues_period) WHERE kind = 'dues';
+
+-- Immutability is a trigger, not a convention (ADR-024, CLAUDE.md rule 3).
+-- INSERT stays open, which is what lets ADR-012's import restore a database.
+-- The reconciliation tables get the same pair when they land in #25.
+
+-- +goose StatementBegin
+CREATE TRIGGER transaction_immutable_update BEFORE UPDATE ON "transaction" BEGIN
+  SELECT RAISE(ABORT, 'transaction rows are immutable - post an adjusting entry');
+END;
+-- +goose StatementEnd
+
+-- +goose StatementBegin
+CREATE TRIGGER transaction_immutable_delete BEFORE DELETE ON "transaction" BEGIN
+  SELECT RAISE(ABORT, 'transaction rows are immutable - post an adjusting entry');
+END;
+-- +goose StatementEnd
+
+-- +goose StatementBegin
+CREATE TRIGGER transfer_immutable_update BEFORE UPDATE ON transfer BEGIN
+  SELECT RAISE(ABORT, 'transfer rows are immutable - post an adjusting entry');
+END;
+-- +goose StatementEnd
+
+-- +goose StatementBegin
+CREATE TRIGGER transfer_immutable_delete BEFORE DELETE ON transfer BEGIN
+  SELECT RAISE(ABORT, 'transfer rows are immutable - post an adjusting entry');
+END;
+-- +goose StatementEnd
+
 -- +goose Down
 
+DROP TRIGGER transfer_immutable_delete;
+DROP TRIGGER transfer_immutable_update;
+DROP TRIGGER transaction_immutable_delete;
+DROP TRIGGER transaction_immutable_update;
+DROP INDEX transaction_by_dues;
+DROP INDEX transaction_by_purpose;
+DROP INDEX transaction_by_account;
+DROP INDEX transaction_by_date;
+DROP TABLE receipt;
+DROP INDEX reimbursement_settled_once;
+DROP TABLE "transaction";
+DROP TABLE reimbursement;
+DROP TABLE transfer;
 DROP TABLE member;
 DROP TABLE dues_rate;
 DROP TABLE dues_tier;
