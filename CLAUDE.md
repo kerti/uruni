@@ -129,7 +129,7 @@ Builds cleanly · tests pass (money/reconciliation especially) · matches the PR
 
 ## Release & versioning (see `ROADMAP.md`, Tech-Design ADR-017/018)
 
-GitHub Flow: branch → PR → **squash-merge** (one issue = one commit); `main` always releasable; **the human merge is the sign-off — an agent never merges, never enables auto-merge, and never pushes to `main`.** **Label every PR** at merge (`enhancement`/`bug`/`documentation`/`dependencies`) — auto-notes depend on it. Releases are **batched, tag-driven** SemVer pre-releases (push `vX.Y.Z-alpha.N`). **Renumber goose migrations at merge** (filename prefix, not timestamps). **Bump the pinned `URUNI_TAG` before tagging.** Never tag a red `main`. `0.x` breaking changes ride minor bumps.
+GitHub Flow: branch → PR → **squash-merge** (one issue = one commit); `main` always releasable; **the human merge is the sign-off — an agent never merges, never enables auto-merge, and never pushes to `main`.** **Label every PR** at merge (`enhancement`/`bug`/`documentation`/`dependencies`) — auto-notes depend on it. Releases are **batched, tag-driven** SemVer pre-releases (push `vX.Y.Z-alpha.N`). **One migration file through all of `0.x`** — `internal/db/migrations/00001_schema.sql`, edited in place, never a second file before `v1.0.0` (ADR-025). It must always read as the complete current schema, and after pulling a schema change you run **`make db-reset`**, not `make migrate-up` — goose cannot see that a file it already applied has changed. **Bump the pinned `URUNI_TAG` before tagging.** Never tag a red `main`. `0.x` breaking changes ride minor bumps.
 
 ## When asked for something out of scope
 

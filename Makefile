@@ -1,5 +1,5 @@
 .PHONY: help setup hooks-install claude-install doctor \
-        run serve-bin build test test-cover lint fmt tidy sqlc migrate-up migrate-down migrate-status \
+        run serve-bin build test test-cover lint fmt tidy sqlc migrate-up migrate-down migrate-status db-reset \
         web-install web-dev web-build web-lint web-typecheck web-test \
         server-stop server-restart web-stop web-restart restart servers-status \
         e2e e2e-reset e2e-server stack-up stack-down stack-logs stack-ps \
@@ -30,6 +30,10 @@ WEB_PROC := $(CURDIR)/web/node_modules
 # Port the Go server listens on (matches the config default); used by the
 # readiness poll in `server-restart`. Override by setting PORT in .env.
 SERVER_PORT := $(or $(PORT),8080)
+
+# The dev database `db-reset` deletes. Matches the binary's own default
+# (config.DefaultDBPath); URUNI_DB in .env wins, exactly as it does for `run`.
+DEV_DB := $(or $(URUNI_DB),./uruni.db)
 
 # E2E (ADR-015). SQLite makes this cheap: a throwaway database *file*, deleted
 # and re-migrated each run, so the dev DB is never touched and there is no
@@ -66,6 +70,7 @@ help:
 	@echo "  migrate-up              apply pending migrations"
 	@echo "  migrate-down            roll back the last migration"
 	@echo "  migrate-status          show migration status"
+	@echo "  db-reset                delete $(DEV_DB) and re-migrate — run this after a schema change"
 	@echo ""
 	@echo "Web (Vite/React, in web/):"
 	@echo "  web-install             npm install"
@@ -212,6 +217,17 @@ migrate-down:
 
 migrate-status:
 	go run ./cmd/uruni migrate status
+
+# Through 0.x the schema is one file edited in place (ADR-025), and goose
+# records applied migrations by *number* — so it cannot tell that 00001 changed
+# under it and will happily report "up to date" against a stale database. This
+# is the normal move after pulling a schema change, not a recovery step: there
+# is no data to lose before v1.0.0. -wal/-shm go too, or SQLite replays a
+# journal belonging to a file that no longer exists.
+db-reset:
+	@rm -f $(DEV_DB) $(DEV_DB)-wal $(DEV_DB)-shm
+	@URUNI_DB="$(DEV_DB)" go run ./cmd/uruni migrate up
+	@echo "dev db: $(DEV_DB) recreated from internal/db/migrations/"
 
 # ---- web -------------------------------------------------------------------
 

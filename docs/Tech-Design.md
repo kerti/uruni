@@ -6,7 +6,7 @@ Companion to [`PRD.md`](./PRD.md). The PRD owns *what* and *why*; this doc owns 
 
 The individual decisions live as one-file-per-ADR in [`ADR/`](./ADR/README.md) — each a single call with context, options, the decision, and consequences. This page keeps what frames them: the constraints, the stack at a glance, the production topology, and what is deliberately still open.
 
-**ADR numbers are permanent** — never reused, never renumbered. An ADR's *text* is editable while it carries the **`draft`** tag, meaning no code implements it yet; once a slice ships code behind it the tag comes off and the decision changes only by adding a **superseding** ADR. Migrations are stricter than either: immutable from the first production deploy ([ADR-018](./ADR/018-release-and-versioning.md)).
+**ADR numbers are permanent** — never reused, never renumbered. An ADR's *text* is editable while it carries the **`draft`** tag, meaning no code implements it yet; once a slice ships code behind it the tag comes off and the decision changes only by adding a **superseding** ADR. Migrations run the other way round: through `0.x` there is **one file, edited in place** ([ADR-025](./ADR/025-one-migration-file-until-1.0.md)) — looser than any ADR — and from the first production deploy it freezes for good, stricter than any ADR.
 
 > Version caveat: recommendations reflect the ecosystem as of ~mid-2025. Before building, verify current versions and that named libraries are still actively maintained.
 
