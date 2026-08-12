@@ -8,7 +8,7 @@ How Uruni gets built and released. Milestones map 1:1 to the supervised build sl
 
 - **SemVer pre-releases, tag-driven.** `main` is always releasable. Branch → PR → squash-merge; several PRs batch up, then one `vX.Y.Z-alpha.N` tag cuts a release (pushing the tag builds the image to GHCR).
 - **Milestone = minor**, by convention. Within a milestone the `alpha.N` counter advances per batch; the batch that meets the milestone's definition of done is tagged `vX.Y.0` **final** rather than another alpha (`v0.3.0-alpha.1` → `v0.3.0` → `v0.4.0-alpha.1`). The `Version` column below is that final.
-- **`0.x` is honestly unstable.** Breaking changes ride minor bumps during the ramp. The first real deployment to a live treasurer's instance is the **production** moment — that's when migrations become immutable and major-vs-minor discipline turns on (likely `v1.0.0`, but the number isn't reserved).
+- **`0.x` is honestly unstable.** Breaking changes ride minor bumps during the ramp, and **the schema is one file edited in place** the whole way ([ADR-025](./ADR/025-one-migration-file-until-1.0.md)) — so upgrading a `0.x` instance can mean starting the data over. The first real deployment to a live treasurer's instance is the **production** moment — that's when that file freezes, migrations become immutable, and major-vs-minor discipline turns on (likely `v1.0.0`, but the number isn't reserved).
 - **The version is the operator's upgrade contract**, not a brand: patch = drop-in, minor = additive migration drop-in, major = breaking-but-survivable (read the notes), new repo = data can't forward-migrate.
 
 ## Cadence — when we cut
@@ -39,7 +39,7 @@ Builds clean · tests pass (money/reconciliation especially) · matches PRD + de
 ## Release hygiene (learned from Balances)
 
 - **Label each PR at merge time** (`enhancement`/`bug`/`documentation`/`dependencies`) — unlabeled PRs fall through the auto-notes.
-- **Renumber migrations at merge** (filename prefix, not timestamps) so apply-order == merge-order.
+- **One migration file until `v1.0.0`** — `00001_schema.sql`, edited in place, never a second file (ADR-025). Nothing to renumber; `make db-reset` after pulling a schema change.
 - **Bump the pinned `URUNI_TAG` before tagging**, not after — the tagged tree must recommend itself.
 - **Release notes are a non-technical digest** (Added / Fixed / Behind the scenes) with the raw changelog folded beneath — written for a treasurer, not a developer.
 - **Never tag a red `main`.**

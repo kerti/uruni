@@ -11,7 +11,7 @@ One file per decision. Each ADR is a single call with its context, the decision,
 - **`draft`** — no code implements this decision yet. **Edit it in place.** Grilling a draft, changing your mind, tightening the wording: all fine, no ceremony.
 - **no tag (implemented)** — a slice has shipped code behind this decision. **Change it only by adding a superseding ADR** and marking this one superseded.
 
-**The tag comes off in the PR that implements the ADR** — that's part of the definition of done for a slice (see [`../../CLAUDE.md`](../../CLAUDE.md)). Migrations are stricter than either state: immutable from the first production deploy ([ADR-018](./018-release-and-versioning.md)).
+**The tag comes off in the PR that implements the ADR** — that's part of the definition of done for a slice (see [`../../CLAUDE.md`](../../CLAUDE.md)). Migrations run the other way round: **looser** than an ADR through `0.x` — one file, edited in place ([ADR-025](./025-one-migration-file-until-1.0.md)) — then stricter than one from the first production deploy, when that file freezes for good.
 
 Standing decisions that no ADR owns go in [`../Decisions.md`](../Decisions.md).
 
@@ -42,7 +42,8 @@ Standing decisions that no ADR owns go in [`../Decisions.md`](../Decisions.md).
 | [021](./021-http-routing-chi.md) | HTTP routing: chi, adopted at M4 | `draft` |
 | [022](./022-logging-slog.md) | Logging: stdlib `log/slog`, adopted at M1.2 | implemented |
 | [023](./023-agent-operating-model.md) | Agent operating model: one orchestrator, pinned role agents | implemented |
-| [024](./024-schema-conventions.md) | Schema conventions: STRICT SQLite, integer ids, two time types | `implemented` |
+| [024](./024-schema-conventions.md) | Schema conventions: STRICT SQLite, integer ids, two time types | implemented |
+| [025](./025-one-migration-file-until-1.0.md) | One migration file, edited in place, until v1.0.0 | implemented |
 
 The **Stage** column is the record, and it is all this index says about implementation: `draft` means editable in place, `implemented` means superseding-ADR-only. *Which* slice put code behind a given ADR belongs in that ADR and in the PR that dropped its tag — restated here, this index becomes a changelog.
 
