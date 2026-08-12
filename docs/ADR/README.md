@@ -44,6 +44,9 @@ Standing decisions that no ADR owns go in [`../Decisions.md`](../Decisions.md).
 | [023](./023-agent-operating-model.md) | Agent operating model: one orchestrator, pinned role agents | implemented |
 | [024](./024-schema-conventions.md) | Schema conventions: STRICT SQLite, integer ids, two time types | implemented |
 | [025](./025-one-migration-file-until-1.0.md) | One migration file, edited in place, until v1.0.0 | implemented |
+| [026](./026-money-package.md) | Money package: overflow-checked `Amount`, arithmetic only | `draft` |
+| [027](./027-ledger-domain-boundary.md) | Ledger domain boundary: one package, transactional writes | `draft` |
+| [028](./028-testing-the-trust-core.md) | Testing the trust core: `internal/money` and `internal/ledger` | `draft` |
 
 The **Stage** column is the record, and it is all this index says about implementation: `draft` means editable in place, `implemented` means superseding-ADR-only. *Which* slice put code behind a given ADR belongs in that ADR and in the PR that dropped its tag — restated here, this index becomes a changelog.
 
