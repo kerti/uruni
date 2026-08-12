@@ -42,6 +42,10 @@ BalanceCast(ctx, fundID) (int64, error)        // CAST(COALESCE(SUM(CASE …), 0
 
 Every derived balance in Uruni is that query, so without the cast the trust core loses its compiler exactly where `CLAUDE.md` rule 1 needs it most — and nothing turns red: `sqlc generate` succeeds, and the `interface{}` only surfaces at M3. [ADR-005](./005-data-access-sqlc.md) predicted this class of gap in the abstract; this is the concrete rule.
 
+**Query files are pure ASCII** — no em dashes, no `§`, no curly quotes, in `internal/store/queries/*.sql`. sqlc v1.31.1's SQLite engine measures a statement's end in runes but slices the source in bytes, so **every non-ASCII character in a query file chops one more byte off the tail of the generated SQL constant**, silently, with a green build. Three em dashes in `ping.sql`'s comment turned `SELECT 1 AS ok` into `SELECT 1` — which still runs, and is why this went unnoticed through M1. One em dash above `GetEffectiveDuesRate` turned `LIMIT 1` into `LIMIT`, which does not run at all.
+
+The earlier reading of the same symptom — that a bare `SELECT 1` truncates to `SELE` and an alias is the fix — was the byte/rune bug misdiagnosed; the alias was never what saved it. `TestQueryFilesAreASCII` enforces the real rule, because prose is exactly what a careful author adds above a subtle query. Migrations are unaffected: goose reads them verbatim, and sqlc's schema parse showed no truncation.
+
 **Fund scoping is enforced by composite foreign keys.** Every fund-scoped table carries `UNIQUE (fund_id, id)`; children reference `(fund_id, parent_id)` rather than `parent_id` alone. SQLite then rejects a transaction whose account belongs to another fund, which is otherwise an invariant only the application remembers. PRD §6 requires the model to allow several funds without UI complexity; this is what makes that claim true rather than aspirational.
 
 **The rule that matters is coverage:** *every* nullable pointer to a fund-scoped table gets the composite form. Single-column `REFERENCES` on a fund-scoped parent is a bug, not a shortcut — it checks existence and says nothing about ownership.

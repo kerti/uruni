@@ -3,6 +3,7 @@ package db
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"strings"
 	"testing"
 
@@ -166,7 +167,7 @@ func TestMigrationAppliesFromEmptyAndRoundTrips(t *testing.T) {
 		t.Fatalf("Up() from an empty database = %v, want no error", err)
 	}
 
-	// The three tables exist and are queryable through the generated store.
+	// The tables exist and are queryable through the generated store.
 	q := store.New(sqlDB)
 	if _, err := q.ListFunds(ctx); err != nil {
 		t.Fatalf("ListFunds() after Up() = %v, want no error", err)
@@ -190,5 +191,179 @@ func TestMigrationAppliesFromEmptyAndRoundTrips(t *testing.T) {
 	}
 	if _, err := q.ListFunds(ctx); err != nil {
 		t.Fatalf("ListFunds() after reapplying = %v, want no error", err)
+	}
+}
+
+func createDuesTier(t *testing.T, sqlDB *sql.DB, fundID int64, name string) int64 {
+	t.Helper()
+	tier, err := store.New(sqlDB).CreateDuesTier(context.Background(), store.CreateDuesTierParams{
+		FundID: fundID, Name: name, CreatedAt: 1,
+	})
+	if err != nil {
+		t.Fatalf("CreateDuesTier(%d, %q) = %v, want no error", fundID, name, err)
+	}
+	return tier.ID
+}
+
+func TestEffectiveDuesRateFollowsAMidYearChange(t *testing.T) {
+	sqlDB := migratedTestDB(t)
+	ctx := context.Background()
+	q := store.New(sqlDB)
+
+	fundID := createFund(t, sqlDB, "Kas RT", validSlug)
+	tierID := createDuesTier(t, sqlDB, fundID, "warga")
+
+	// One-sided intervals: the July row ends the January row by existing.
+	for _, r := range []struct {
+		from   string
+		amount int64
+	}{{"2026-01", 25000}, {"2026-07", 30000}} {
+		if _, err := q.CreateDuesRate(ctx, store.CreateDuesRateParams{
+			TierID: tierID, Amount: r.amount, EffectiveFrom: r.from, CreatedAt: 1,
+		}); err != nil {
+			t.Fatalf("CreateDuesRate(%s, %d) = %v, want no error", r.from, r.amount, err)
+		}
+	}
+
+	tests := []struct {
+		period string
+		want   int64
+	}{
+		{"2026-01", 25000},
+		{"2026-06", 25000}, // the month before the change still pays the old rate
+		{"2026-07", 30000}, // the change applies from its own month
+		{"2026-12", 30000},
+		{"2027-03", 30000}, // no end date, so the latest rate runs forward forever
+	}
+	for _, tt := range tests {
+		t.Run(tt.period, func(t *testing.T) {
+			got, err := q.GetEffectiveDuesRate(ctx, store.GetEffectiveDuesRateParams{
+				TierID: tierID, EffectiveFrom: tt.period,
+			})
+			if err != nil {
+				t.Fatalf("GetEffectiveDuesRate(%s) = %v, want no error", tt.period, err)
+			}
+			if got.Amount != tt.want {
+				t.Errorf("GetEffectiveDuesRate(%s).Amount = %d, want %d", tt.period, got.Amount, tt.want)
+			}
+		})
+	}
+
+	// A period before every rate has no answer, and that is not an error state
+	// the schema can express - it is simply no row.
+	if _, err := q.GetEffectiveDuesRate(ctx, store.GetEffectiveDuesRateParams{
+		TierID: tierID, EffectiveFrom: "2025-12",
+	}); !errors.Is(err, sql.ErrNoRows) {
+		t.Errorf("GetEffectiveDuesRate before the first rate = %v, want sql.ErrNoRows", err)
+	}
+}
+
+func TestMemberCannotBorrowAnotherFundsTier(t *testing.T) {
+	sqlDB := migratedTestDB(t)
+	ctx := context.Background()
+	q := store.New(sqlDB)
+
+	fundA := createFund(t, sqlDB, "Fund A", validSlug)
+	fundB := createFund(t, sqlDB, "Fund B", "bcdefghijklmnopqrstuvw")
+	tierB := createDuesTier(t, sqlDB, fundB, "warga")
+
+	// The tier exists, so a single-column FK would have accepted this. Only the
+	// composite (fund_id, tier_id) FK knows it belongs to the wrong fund.
+	if _, err := q.CreateMember(ctx, store.CreateMemberParams{
+		FundID: fundA, Name: "Bu Sri", TierID: &tierB, CreatedAt: 1,
+	}); err == nil {
+		t.Fatal("CreateMember with another fund's tier = nil error, want the composite FK to reject it")
+	}
+
+	tierA := createDuesTier(t, sqlDB, fundA, "warga")
+	if _, err := q.CreateMember(ctx, store.CreateMemberParams{
+		FundID: fundA, Name: "Bu Sri", TierID: &tierA, CreatedAt: 1,
+	}); err != nil {
+		t.Fatalf("CreateMember with its own fund's tier = %v, want no error", err)
+	}
+
+	// NULL tier_id is a member with no dues obligation, and SQLite's MATCH
+	// SIMPLE leaves the composite FK satisfied.
+	if _, err := q.CreateMember(ctx, store.CreateMemberParams{
+		FundID: fundA, Name: "Pak Yanto", TierID: nil, CreatedAt: 1,
+	}); err != nil {
+		t.Fatalf("CreateMember with a NULL tier_id = %v, want no error", err)
+	}
+}
+
+func TestDuesTierNameIsUniquePerFund(t *testing.T) {
+	sqlDB := migratedTestDB(t)
+	ctx := context.Background()
+	q := store.New(sqlDB)
+
+	fundA := createFund(t, sqlDB, "Fund A", validSlug)
+	fundB := createFund(t, sqlDB, "Fund B", "bcdefghijklmnopqrstuvw")
+	createDuesTier(t, sqlDB, fundA, "warga")
+
+	if _, err := q.CreateDuesTier(ctx, store.CreateDuesTierParams{
+		FundID: fundA, Name: "warga", CreatedAt: 1,
+	}); err == nil {
+		t.Fatal("duplicate tier name in the same fund = nil error, want UNIQUE (fund_id, name) to reject it")
+	}
+
+	if _, err := q.CreateDuesTier(ctx, store.CreateDuesTierParams{
+		FundID: fundB, Name: "warga", CreatedAt: 1,
+	}); err != nil {
+		t.Fatalf("the same tier name in a different fund = %v, want no error", err)
+	}
+}
+
+func TestDateAndPeriodChecksRejectImpossibleValues(t *testing.T) {
+	sqlDB := migratedTestDB(t)
+	ctx := context.Background()
+	q := store.New(sqlDB)
+
+	fundID := createFund(t, sqlDB, "Kas RT", validSlug)
+	tierID := createDuesTier(t, sqlDB, fundID, "warga")
+
+	// date() validation, not LIKE '____-__-__': ADR-024 records that the LIKE
+	// form accepts every one of these.
+	for _, bad := range []string{"2026-13-45", "not-a-date", "2026-02-30", "2026-08"} {
+		t.Run("joined_on/"+bad, func(t *testing.T) {
+			d := bad
+			if _, err := q.CreateMember(ctx, store.CreateMemberParams{
+				FundID: fundID, Name: "Bu Sri", JoinedOn: &d, CreatedAt: 1,
+			}); err == nil {
+				t.Errorf("CreateMember with joined_on %q = nil error, want the CHECK to reject it", bad)
+			}
+		})
+	}
+
+	valid := "2026-08-12"
+	if _, err := q.CreateMember(ctx, store.CreateMemberParams{
+		FundID: fundID, Name: "Bu Sri", JoinedOn: &valid, CreatedAt: 1,
+	}); err != nil {
+		t.Fatalf("CreateMember with joined_on %q = %v, want no error", valid, err)
+	}
+
+	// 'YYYY-MM' periods: GLOB restricts to digits where LIKE's _ does not, and
+	// date(p||'-01') rejects a month that does not exist.
+	for _, bad := range []string{"2026-13", "2026-8", "202x-08", "2026-08-12", "aaaa-bb"} {
+		t.Run("effective_from/"+bad, func(t *testing.T) {
+			if _, err := q.CreateDuesRate(ctx, store.CreateDuesRateParams{
+				TierID: tierID, Amount: 25000, EffectiveFrom: bad, CreatedAt: 1,
+			}); err == nil {
+				t.Errorf("CreateDuesRate with effective_from %q = nil error, want the CHECK to reject it", bad)
+			}
+		})
+	}
+}
+
+func TestDuesRateAmountCannotBeNegative(t *testing.T) {
+	sqlDB := migratedTestDB(t)
+	ctx := context.Background()
+
+	fundID := createFund(t, sqlDB, "Kas RT", validSlug)
+	tierID := createDuesTier(t, sqlDB, fundID, "warga")
+
+	if _, err := store.New(sqlDB).CreateDuesRate(ctx, store.CreateDuesRateParams{
+		TierID: tierID, Amount: -1, EffectiveFrom: "2026-01", CreatedAt: 1,
+	}); err == nil {
+		t.Fatal("CreateDuesRate with a negative amount = nil error, want the CHECK to reject it")
 	}
 }

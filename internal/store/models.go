@@ -12,11 +12,36 @@ type Account struct {
 	CreatedAt int64
 }
 
+type DuesRate struct {
+	ID            int64
+	TierID        int64
+	Amount        int64
+	EffectiveFrom string
+	CreatedAt     int64
+}
+
+type DuesTier struct {
+	ID        int64
+	FundID    int64
+	Name      string
+	CreatedAt int64
+}
+
 type Fund struct {
 	ID         int64
 	Name       string
 	Currency   string
 	ReportSlug string
+	CreatedAt  int64
+}
+
+type Member struct {
+	ID         int64
+	FundID     int64
+	Name       string
+	TierID     *int64
+	JoinedOn   *string
+	InactiveOn *string
 	CreatedAt  int64
 }
 
