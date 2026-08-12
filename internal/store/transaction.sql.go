@@ -27,6 +27,29 @@ func (q *Queries) AccountBalance(ctx context.Context, arg AccountBalanceParams) 
 	return balance_amount, err
 }
 
+const accountBalanceThrough = `-- name: AccountBalanceThrough :one
+SELECT CAST(COALESCE(SUM(CASE WHEN direction = 'in' THEN amount ELSE -amount END), 0) AS INTEGER) AS balance_amount
+FROM "transaction"
+WHERE fund_id = ? AND account_id = ? AND id <= ?
+`
+
+type AccountBalanceThroughParams struct {
+	FundID    int64
+	AccountID int64
+	ID        int64
+}
+
+// The frozen half of a reconciliation: the same sum as AccountBalance, cut off
+// at the snapshot's through_transaction_id. Ordered by id, not occurred_on, so
+// a correction backdated after the count keeps its higher id and stays outside
+// the old snapshot's arithmetic while counting toward today's balance.
+func (q *Queries) AccountBalanceThrough(ctx context.Context, arg AccountBalanceThroughParams) (int64, error) {
+	row := q.db.QueryRowContext(ctx, accountBalanceThrough, arg.FundID, arg.AccountID, arg.ID)
+	var balance_amount int64
+	err := row.Scan(&balance_amount)
+	return balance_amount, err
+}
+
 const createTransaction = `-- name: CreateTransaction :one
 INSERT INTO "transaction" (
   fund_id, account_id, purpose_id, direction, amount, occurred_on, kind,

@@ -35,6 +35,15 @@ type Fund struct {
 	CreatedAt  int64
 }
 
+type Incidental struct {
+	PurposeID    int64
+	Occasion     string
+	TargetAmount *int64
+	OpenedOn     string
+	ClosedOn     *string
+	CreatedAt    int64
+}
+
 type Member struct {
 	ID         int64
 	FundID     int64
@@ -60,6 +69,27 @@ type Receipt struct {
 	ReimbursementID *int64
 	Path            string
 	UploadedAt      int64
+}
+
+type Reconciliation struct {
+	ID                   int64
+	FundID               int64
+	PerformedAt          int64
+	ThroughTransactionID *int64
+	Note                 *string
+	CreatedAt            int64
+}
+
+type ReconciliationLine struct {
+	ID                      int64
+	FundID                  int64
+	ReconciliationID        int64
+	AccountID               int64
+	RecordedAmount          int64
+	ActualAmount            int64
+	DifferenceAmount        int64
+	Resolution              string
+	AdjustmentTransactionID *int64
 }
 
 type Reimbursement struct {

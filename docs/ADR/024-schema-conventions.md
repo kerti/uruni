@@ -1,6 +1,6 @@
 # ADR-024 — Schema conventions: STRICT SQLite, integer ids, two time types
 
-**Status:** Accepted · `draft` — no code implements this yet, so it may still be edited in place · [ADR index](./README.md)
+**Status:** Accepted · implemented — change only by adding a superseding ADR · [ADR index](./README.md)
 
 **Context.** M2 lays down every table Uruni will ever have a strong opinion about. Migrations become immutable at the first live treasurer's instance ([ADR-018](./018-release-and-versioning.md)), so a convention chosen loosely here is a convention forever. SQLite is the only engine through `0.x` ([ADR-004](./004-database-sqlite-only.md)), which removes the usual reason to write a cautious portable subset — the escape hatch is [ADR-012](./012-backup-and-export.md)'s canonical JSON, not dialect discipline.
 

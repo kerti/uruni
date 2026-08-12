@@ -2,9 +2,10 @@
 -- file — nothing is deployed yet, so the schema stays editable until the epic
 -- reaches main (#21). So far: fund, the location money physically sits in
 -- (account), the tag every transaction carries (purpose), and who owes dues
--- (dues_tier, dues_rate, member), and the ledger itself — transfer,
--- reimbursement, transaction, receipt. The reconciliation snapshots and
--- incidental envelopes land in #25.
+-- (dues_tier, dues_rate, member), the ledger itself — transfer, reimbursement,
+-- transaction, receipt — and the counts taken against it (reconciliation,
+-- reconciliation_line) plus the incidental envelope. That is every PRD §6
+-- entity; the file is complete.
 --
 -- Conventions below follow docs/ADR/024-schema-conventions.md; see it for the
 -- reasoning, not restated here.
@@ -168,6 +169,60 @@ CREATE TABLE receipt (                    -- attachment, not a ledger fact; adda
   FOREIGN KEY (fund_id, reimbursement_id) REFERENCES reimbursement(fund_id, id)
 ) STRICT;
 
+CREATE TABLE reconciliation (             -- a count of the real money, frozen
+  -- The one place a total is stored rather than derived (CLAUDE.md rule 2), and
+  -- only because it is a historical claim: "on this day the recorded figure was
+  -- this". through_transaction_id is the ledger cutoff that makes the claim
+  -- reproducible - a backdated entry posted afterwards gets a higher id, so it
+  -- lands in today's balance without silently rewriting last month's snapshot.
+  id           INTEGER PRIMARY KEY,
+  fund_id      INTEGER NOT NULL,
+  performed_at INTEGER NOT NULL,
+  through_transaction_id INTEGER,
+  note         TEXT,
+  created_at   INTEGER NOT NULL,
+  UNIQUE (fund_id, id),                   -- see account.id above: enables composite FKs from children
+  FOREIGN KEY (fund_id) REFERENCES fund(id),
+  FOREIGN KEY (fund_id, through_transaction_id) REFERENCES "transaction"(fund_id, id)
+) STRICT;
+
+CREATE TABLE reconciliation_line (        -- one counted location within a snapshot
+  id                INTEGER PRIMARY KEY,
+  fund_id           INTEGER NOT NULL,
+  reconciliation_id INTEGER NOT NULL,
+  account_id        INTEGER NOT NULL,
+  recorded_amount   INTEGER NOT NULL,     -- frozen at snapshot time
+  actual_amount     INTEGER NOT NULL,     -- what the treasurer counted
+  difference_amount INTEGER NOT NULL,
+  resolution        TEXT    NOT NULL CHECK (resolution IN ('matched','entry_added','adjusted','left_open')),
+  adjustment_transaction_id INTEGER,      -- the entry that squared this line
+  UNIQUE (reconciliation_id, account_id), -- a location is counted once per snapshot
+  FOREIGN KEY (fund_id, reconciliation_id)         REFERENCES reconciliation(fund_id, id),
+  FOREIGN KEY (fund_id, account_id)                REFERENCES account(fund_id, id),
+  FOREIGN KEY (fund_id, adjustment_transaction_id) REFERENCES "transaction"(fund_id, id),
+  -- Stored because the report reads it, and checked because a stored derived
+  -- figure that disagrees with its inputs is worse than no figure at all.
+  CHECK (difference_amount = actual_amount - recorded_amount),
+  -- "This line was adjusted" is the claim capable of being a lie (ADR-024), so
+  -- it must name the entry. The other three resolutions name nothing.
+  CHECK (resolution <> 'adjusted' OR adjustment_transaction_id IS NOT NULL)
+) STRICT;
+
+CREATE TABLE incidental (                 -- the envelope's lifecycle, 1:1 with its purpose row
+  -- Not a column on purpose: only kind='incidental' rows have an occasion, a
+  -- target or a closing date, and a table keeps those out of every other tag.
+  -- The money itself is ordinary transactions carrying purpose_id; closing an
+  -- envelope moves nothing, which is why closed_on lives here and not in the
+  -- ledger. Mutable by design - opening a collection is a decision that gets
+  -- revised, and nothing here is a posted fact.
+  purpose_id    INTEGER PRIMARY KEY REFERENCES purpose(id),
+  occasion      TEXT    NOT NULL CHECK (length(trim(occasion)) > 0),
+  target_amount INTEGER CHECK (target_amount IS NULL OR target_amount > 0),
+  opened_on     TEXT    NOT NULL CHECK (date(opened_on) IS NOT NULL AND opened_on = date(opened_on)),
+  closed_on     TEXT             CHECK (closed_on IS NULL OR (date(closed_on) IS NOT NULL AND closed_on = date(closed_on))),
+  created_at    INTEGER NOT NULL
+) STRICT;
+
 CREATE INDEX transaction_by_date    ON "transaction"(fund_id, occurred_on);
 CREATE INDEX transaction_by_account ON "transaction"(account_id, occurred_on);
 CREATE INDEX transaction_by_purpose ON "transaction"(purpose_id);
@@ -175,7 +230,9 @@ CREATE INDEX transaction_by_dues    ON "transaction"(member_id, dues_period) WHE
 
 -- Immutability is a trigger, not a convention (ADR-024, CLAUDE.md rule 3).
 -- INSERT stays open, which is what lets ADR-012's import restore a database.
--- The reconciliation tables get the same pair when they land in #25.
+-- A snapshot is a claim about a moment, so it is as immutable as the ledger:
+-- revisiting a left_open difference means a second snapshot, not an edit to the
+-- first. incidental is deliberately absent - see its comment above.
 
 -- +goose StatementBegin
 CREATE TRIGGER transaction_immutable_update BEFORE UPDATE ON "transaction" BEGIN
@@ -201,8 +258,36 @@ CREATE TRIGGER transfer_immutable_delete BEFORE DELETE ON transfer BEGIN
 END;
 -- +goose StatementEnd
 
+-- +goose StatementBegin
+CREATE TRIGGER reconciliation_immutable_update BEFORE UPDATE ON reconciliation BEGIN
+  SELECT RAISE(ABORT, 'reconciliation rows are immutable - take a new snapshot');
+END;
+-- +goose StatementEnd
+
+-- +goose StatementBegin
+CREATE TRIGGER reconciliation_immutable_delete BEFORE DELETE ON reconciliation BEGIN
+  SELECT RAISE(ABORT, 'reconciliation rows are immutable - take a new snapshot');
+END;
+-- +goose StatementEnd
+
+-- +goose StatementBegin
+CREATE TRIGGER reconciliation_line_immutable_update BEFORE UPDATE ON reconciliation_line BEGIN
+  SELECT RAISE(ABORT, 'reconciliation_line rows are immutable - take a new snapshot');
+END;
+-- +goose StatementEnd
+
+-- +goose StatementBegin
+CREATE TRIGGER reconciliation_line_immutable_delete BEFORE DELETE ON reconciliation_line BEGIN
+  SELECT RAISE(ABORT, 'reconciliation_line rows are immutable - take a new snapshot');
+END;
+-- +goose StatementEnd
+
 -- +goose Down
 
+DROP TRIGGER reconciliation_line_immutable_delete;
+DROP TRIGGER reconciliation_line_immutable_update;
+DROP TRIGGER reconciliation_immutable_delete;
+DROP TRIGGER reconciliation_immutable_update;
 DROP TRIGGER transfer_immutable_delete;
 DROP TRIGGER transfer_immutable_update;
 DROP TRIGGER transaction_immutable_delete;
@@ -211,6 +296,9 @@ DROP INDEX transaction_by_dues;
 DROP INDEX transaction_by_purpose;
 DROP INDEX transaction_by_account;
 DROP INDEX transaction_by_date;
+DROP TABLE incidental;
+DROP TABLE reconciliation_line;
+DROP TABLE reconciliation;
 DROP TABLE receipt;
 DROP INDEX reimbursement_settled_once;
 DROP TABLE "transaction";
