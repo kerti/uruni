@@ -7,8 +7,14 @@
     "Paths use ${CLAUDE_PROJECT_DIR} so this file is portable across clones —",
     "never hardcode an absolute path here.",
     "Note: allow-rules in a committed settings.json require the one-time",
-    "workspace-trust prompt before they take effect."
+    "workspace-trust prompt before they take effect.",
+    "model + effortLevel pin the orchestrator (ADR-023). They are a default, not",
+    "enforcement: /effort, --effort and CLAUDE_CODE_EFFORT_LEVEL all win, and the",
+    "env var wins over everything. Role agents pin their own effort in",
+    ".claude/agents/*.md frontmatter, which overrides the session level."
   ],
+  "model": "opus",
+  "effortLevel": "medium",
   "permissions": {
     "allow": [
       "Bash(make check)",
@@ -52,6 +58,15 @@
           {
             "type": "command",
             "command": "${CLAUDE_PROJECT_DIR}/.claude/hooks/pre-push-gate.sh"
+          }
+        ]
+      },
+      {
+        "matcher": "Agent",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CLAUDE_PROJECT_DIR}/.claude/hooks/agent-gate.sh"
           }
         ]
       }

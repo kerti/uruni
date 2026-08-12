@@ -143,7 +143,7 @@ claude-install:
 	  echo "⚠ jq not found — the Claude Code hooks parse tool JSON with it and will" >&2; \
 	  echo "  silently no-op until it's installed (brew install jq)." >&2; \
 	fi
-	@echo "✓ Claude Code hooks armed (session-start, pre-push gate, format-on-write)"
+	@echo "✓ Claude Code hooks armed (session-start, pre-push gate, agent gate, format-on-write)"
 
 # Report on the parts of the environment the Makefile can't install for you.
 # Never fails — it's a status readout, not a gate.
