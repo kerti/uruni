@@ -13,7 +13,7 @@ A small, calm app that helps a reluctant, non-accountant **treasurer** keep a co
 ## Source-of-truth docs (`/docs`)
 
 - `PRD.md` — what to build and why (the requirements). Also `PRD-ID.md` (Indonesian).
-- `Tech-Design.md` — the stack and architecture overview; the decisions themselves are one file per ADR in `ADR/` (`docs/ADR/README.md` is the index). **ADR numbers are permanent** — never reused, never renumbered. An ADR tagged **`draft`** has no code behind it yet and may be edited in place; once a slice implements it the tag comes off and it changes only by a **superseding** ADR.
+- `Tech-Design.md` — the stack and architecture overview; the decisions themselves are one file per ADR in `ADR/` (`docs/ADR/README.md` is the index). **ADR numbers are permanent** — never reused, never renumbered. An ADR tagged **`draft`** may be edited in place; the tag comes off when the decision is **fully** implemented — the last slice of the milestone that implements it, not the first — after which it changes only by a **superseding** ADR. Once any code exists behind a draft, an edit to it ships in the same PR as the code that makes it true (`docs/ADR/README.md` has the rule and the reasoning).
 - `Design-System.md` — colors, type, components, voice.
 - `Positioning.md` — the product thesis and emotional core.
 - `ROADMAP.md` — milestones (= minors), the release cadence, and the one-line status cursor.
@@ -47,8 +47,7 @@ A small, calm app that helps a reluctant, non-accountant **treasurer** keep a co
 /                cmd/uruni/main.go, embed.go
   internal/
     money/       int64 money package (+ tests)
-    ledger/      transactions, balances, reconciliation (+ tests) — the core
-    members/ dues/ incidental/
+    ledger/      transactions, balances, reconciliation, dues, incidental (+ tests) — the core
     http/        router, handlers, session auth, report SSR
     store/       sqlc-generated queries
     db/          goose migrations
@@ -125,7 +124,7 @@ Build one slice at a time and **stop for review** before the next. Do not run ah
 
 ## Definition of done (per slice)
 
-Builds cleanly · tests pass (money/reconciliation especially) · matches the PRD and design tokens · Indonesian, sentence-case copy · no scope creep · `Decisions.md` updated if anything was actually decided · **the `draft` tag dropped from every ADR this slice now implements** (that tag is what keeps an ADR editable — see `docs/ADR/README.md`).
+Builds cleanly · tests pass (money/reconciliation especially) · matches the PRD and design tokens · Indonesian, sentence-case copy · no scope creep · `Decisions.md` updated if anything was actually decided · **the `draft` tag dropped from every ADR this slice *finishes* implementing** — held to the milestone's last slice for an ADR several slices build out, and any edit to a draft that already has code behind it rides in the PR with that code (that tag is what keeps an ADR editable — see `docs/ADR/README.md`).
 
 ## Release & versioning (see `ROADMAP.md`, Tech-Design ADR-017/018)
 

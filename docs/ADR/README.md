@@ -8,10 +8,14 @@ One file per decision. Each ADR is a single call with its context, the decision,
 
 **Text depends on the tag:**
 
-- **`draft`** — no code implements this decision yet. **Edit it in place.** Grilling a draft, changing your mind, tightening the wording: all fine, no ceremony.
+- **`draft`** — the decision is still editable in place. **Edit it in place.** Grilling a draft, changing your mind, tightening the wording: all fine, no ceremony.
 - **no tag (implemented)** — a slice has shipped code behind this decision. **Change it only by adding a superseding ADR** and marking this one superseded.
 
-**The tag comes off in the PR that implements the ADR** — that's part of the definition of done for a slice (see [`../../CLAUDE.md`](../../CLAUDE.md)). Migrations run the other way round: **looser** than an ADR through `0.x` — one file, edited in place ([ADR-025](./025-one-migration-file-until-1.0.md)) — then stricter than one from the first production deploy, when that file freezes for good.
+**The tag comes off when the decision is fully implemented — which is the last slice of the milestone that implements it, not the first.** For an ADR one PR implements end to end, those are the same PR and nothing changes. For one that several slices build out, holding the tag to the milestone's close is deliberate: an ADR frozen after slice one turns everything slices two through nine *learn* into a superseding ADR against a decision no shipped code had tested yet, which is the ceremony `draft` exists to avoid.
+
+**One rule comes with holding it.** Once any code exists behind a `draft` ADR, the tag no longer means "free to edit" — it means "editable, but something depends on this now", and that difference is invisible in the tag itself. So from the first slice on, **an edit to that ADR ships in the same PR as the code that makes it true.** Prose drifting ahead of the implementation is the failure mode, not the editing.
+
+The milestone's final PR then does a real reconciliation pass — read each ADR against what actually shipped, fix what drifted, drop the tags — rather than a checkbox on every slice. Dropping a tag stays the orchestrator's and the maintainer's call, never an agent's (see [`../../CLAUDE.md`](../../CLAUDE.md)). Migrations run the other way round: **looser** than an ADR through `0.x` — one file, edited in place ([ADR-025](./025-one-migration-file-until-1.0.md)) — then stricter than one from the first production deploy, when that file freezes for good.
 
 Standing decisions that no ADR owns go in [`../Decisions.md`](../Decisions.md).
 
@@ -44,6 +48,9 @@ Standing decisions that no ADR owns go in [`../Decisions.md`](../Decisions.md).
 | [023](./023-agent-operating-model.md) | Agent operating model: one orchestrator, pinned role agents | implemented |
 | [024](./024-schema-conventions.md) | Schema conventions: STRICT SQLite, integer ids, two time types | implemented |
 | [025](./025-one-migration-file-until-1.0.md) | One migration file, edited in place, until v1.0.0 | implemented |
+| [026](./026-money-package.md) | Money package: overflow-checked `Amount`, arithmetic only | `draft` |
+| [027](./027-ledger-domain-boundary.md) | Ledger domain boundary: one package, transactional writes | `draft` |
+| [028](./028-testing-the-trust-core.md) | Testing the trust core: `internal/money` and `internal/ledger` | `draft` |
 
 The **Stage** column is the record, and it is all this index says about implementation: `draft` means editable in place, `implemented` means superseding-ADR-only. *Which* slice put code behind a given ADR belongs in that ADR and in the PR that dropped its tag — restated here, this index becomes a changelog.
 
