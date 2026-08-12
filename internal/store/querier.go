@@ -9,12 +9,23 @@ import (
 )
 
 type Querier interface {
+	AccountBalance(ctx context.Context, arg AccountBalanceParams) (int64, error)
 	CreateAccount(ctx context.Context, arg CreateAccountParams) (Account, error)
 	CreateDuesRate(ctx context.Context, arg CreateDuesRateParams) (DuesRate, error)
 	CreateDuesTier(ctx context.Context, arg CreateDuesTierParams) (DuesTier, error)
 	CreateFund(ctx context.Context, arg CreateFundParams) (Fund, error)
 	CreateMember(ctx context.Context, arg CreateMemberParams) (Member, error)
 	CreatePurpose(ctx context.Context, arg CreatePurposeParams) (Purpose, error)
+	CreateReceipt(ctx context.Context, arg CreateReceiptParams) (Receipt, error)
+	CreateReimbursement(ctx context.Context, arg CreateReimbursementParams) (Reimbursement, error)
+	CreateTransaction(ctx context.Context, arg CreateTransactionParams) (Transaction, error)
+	CreateTransfer(ctx context.Context, arg CreateTransferParams) (Transfer, error)
+	// Every balance in Uruni is this shape: sum the ledger, never read a stored
+	// total (CLAUDE.md rule 2). direction carries the sign, so the CASE is the
+	// only place a minus appears. The CAST is not decoration - without it sqlc
+	// emits interface{} for the aggregate and the trust core loses its compiler
+	// exactly where it is needed most (ADR-024).
+	FundBalance(ctx context.Context, fundID int64) (int64, error)
 	GetAccount(ctx context.Context, id int64) (Account, error)
 	GetDuesTier(ctx context.Context, id int64) (DuesTier, error)
 	// The rate in force for a period: the latest row whose effective_from is at or
@@ -25,12 +36,29 @@ type Querier interface {
 	GetFund(ctx context.Context, id int64) (Fund, error)
 	GetMember(ctx context.Context, id int64) (Member, error)
 	GetPurpose(ctx context.Context, id int64) (Purpose, error)
+	GetReimbursement(ctx context.Context, id int64) (Reimbursement, error)
+	GetTransaction(ctx context.Context, id int64) (Transaction, error)
+	GetTransfer(ctx context.Context, id int64) (Transfer, error)
 	ListAccountsByFund(ctx context.Context, fundID int64) ([]Account, error)
+	ListDuesPaymentsByMember(ctx context.Context, memberID *int64) ([]Transaction, error)
 	ListDuesRatesByTier(ctx context.Context, tierID int64) ([]DuesRate, error)
 	ListDuesTiersByFund(ctx context.Context, fundID int64) ([]DuesTier, error)
 	ListFunds(ctx context.Context) ([]Fund, error)
 	ListMembersByFund(ctx context.Context, fundID int64) ([]Member, error)
+	// What the fund still owes its members: neither settled by a payout nor
+	// waived. Both halves are conditions SQLite cannot express as a CHECK across
+	// tables, so the settle path filters on them here instead.
+	ListOutstandingReimbursementsByFund(ctx context.Context, fundID int64) ([]Reimbursement, error)
 	ListPurposesByFund(ctx context.Context, fundID int64) ([]Purpose, error)
+	ListReceiptsByReimbursement(ctx context.Context, reimbursementID *int64) ([]Receipt, error)
+	ListReceiptsByTransaction(ctx context.Context, transactionID *int64) ([]Receipt, error)
+	ListReimbursementsByFund(ctx context.Context, fundID int64) ([]Reimbursement, error)
+	ListTransactionsByFund(ctx context.Context, fundID int64) ([]Transaction, error)
+	ListTransfersByFund(ctx context.Context, fundID int64) ([]Transfer, error)
+	// The outstanding total, cast so it lands as int64 rather than interface{}:
+	// sqlc's SQLite engine cannot infer the type of a summed expression, and an
+	// uncast aggregate is a silent failure that only surfaces at M3 (ADR-024).
+	OutstandingReimbursementTotal(ctx context.Context, fundID int64) (int64, error)
 	// Ping proves the store is reachable through the generated code (open,
 	// migrate, query) without naming a table, which M1.3 deliberately has none of.
 	// Every real query arrives with the schema at M2; this one stays as the
@@ -44,6 +72,7 @@ type Querier interface {
 	// `SELECT 1 AS ok` was written; it still ran, which is what makes it
 	// dangerous. `LIMIT 1` losing its `1` does not. See ADR-024 and ADR-005.
 	Ping(ctx context.Context) (int64, error)
+	PurposeBalance(ctx context.Context, arg PurposeBalanceParams) (int64, error)
 }
 
 var _ Querier = (*Queries)(nil)
