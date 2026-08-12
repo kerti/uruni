@@ -9,6 +9,15 @@ import (
 )
 
 type Querier interface {
+	CreateAccount(ctx context.Context, arg CreateAccountParams) (Account, error)
+	CreateFund(ctx context.Context, arg CreateFundParams) (Fund, error)
+	CreatePurpose(ctx context.Context, arg CreatePurposeParams) (Purpose, error)
+	GetAccount(ctx context.Context, id int64) (Account, error)
+	GetFund(ctx context.Context, id int64) (Fund, error)
+	GetPurpose(ctx context.Context, id int64) (Purpose, error)
+	ListAccountsByFund(ctx context.Context, fundID int64) ([]Account, error)
+	ListFunds(ctx context.Context) ([]Fund, error)
+	ListPurposesByFund(ctx context.Context, fundID int64) ([]Purpose, error)
 	// Ping proves the store is reachable through the generated code — open, migrate,
 	// query — without naming a table, which M1.3 deliberately has none of. Every
 	// real query arrives with the schema at M2; this one stays as the readiness

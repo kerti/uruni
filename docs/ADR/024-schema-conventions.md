@@ -56,6 +56,8 @@ It also fixed a case the cycle had quietly forbidden. `CLAUDE.md` rule 3 makes e
 
 **Identifiers, enum values and comments are English, exclusively.** Bahasa Indonesia lives in UI labels and translation files and nowhere else — see [ADR-014](./014-localization-indonesian-first.md). The routine purpose is **Kas Utama** to the treasurer and `main` in the schema; `CONTEXT.md` records that mapping. Data a user types (a tier named "pelaksana") is data, not an identifier, and is exempt.
 
+**Discriminator columns are named `kind`, never `type`.** `type` is a Go keyword, so the column and every local that reads it would disagree forever — `typ`, `t`, or `kind` in the code against `type` in the schema. `kind` is what Go (`reflect.Kind`) and TypeScript (the discriminant property of a discriminated union) both already use for a tag column, and unlike `TYPE` it needs no quoting in any dialect. The word repeats across `account`, `purpose`, `transaction` and `transfer` for four unrelated enumerations, which is deliberate: sqlc namespaces per struct so nothing collides, and one word doing one job consistently beats four invented synonyms.
+
 **Immutability is enforced by triggers, not by convention.** `"transaction"`, `reconciliation` and `reconciliation_line` each get a `BEFORE UPDATE` and a `BEFORE DELETE` trigger that `RAISE(ABORT, …)`. `transfer` gets the pair too, so the two rows it binds cannot be re-labelled after the fact. `INSERT` stays open, which is what lets ADR-012's import restore a database.
 
 ## The model's load-bearing choices
