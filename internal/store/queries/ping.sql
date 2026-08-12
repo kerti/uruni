@@ -1,11 +1,14 @@
--- Ping proves the store is reachable through the generated code — open, migrate,
--- query — without naming a table, which M1.3 deliberately has none of. Every
--- real query arrives with the schema at M2; this one stays as the readiness
--- probe /healthz calls.
+-- Ping proves the store is reachable through the generated code (open,
+-- migrate, query) without naming a table, which M1.3 deliberately has none of.
+-- Every real query arrives with the schema at M2; this one stays as the
+-- readiness probe /healthz calls.
 --
--- The `AS ok` alias is load-bearing: sqlc's SQLite engine truncates a bare
--- `SELECT 1` to `SELE` in the generated constant — silently, with no error
--- (sqlc v1.31.1). ADR-005 warned this engine's inference is the young one; keep
--- every projected expression named.
+-- Every comment in this directory is pure ASCII, and that is load-bearing:
+-- sqlc v1.31.1's SQLite engine measures a statement's end in runes but slices
+-- the source in bytes, so each non-ASCII character in a query's leading
+-- comment silently chops one more byte off the tail of the generated constant.
+-- Three em dashes here used to cost six bytes, leaving `SELECT 1` where
+-- `SELECT 1 AS ok` was written; it still ran, which is what makes it
+-- dangerous. `LIMIT 1` losing its `1` does not. See ADR-024 and ADR-005.
 -- name: Ping :one
 SELECT 1 AS ok;

@@ -99,7 +99,8 @@ Entitas utama:
 - Saat ditutup, tampilkan sisanya dan tawarkan **alihkan ke Kas Utama** dengan satu ketukan.
 
 ### 7.6 Titipan (Kas Bidang)
-- Mencatat uang yang dikumpulkan atas nama organisasi di atasnya beserta penerusannya, sehingga tidak pernah menggelembungkan saldo dana sendiri.
+- Mencatat uang yang dikumpulkan atas nama organisasi di atasnya (mis. Kas Bidang) beserta penerusannya — masing-masing sebagai transaksi biasa dengan tag `Titipan`, supaya laporan menunjukkan dengan jelas apa yang masuk untuk organisasi di atasnya dan apa yang sudah diteruskan.
+- **Saldo tidak mengecualikannya.** Selama uangnya masih ada di dompet, uang itu memang ada di dompet, jadi ikut terhitung — prinsip §6 "satu saldo riil yang tergabung, dipisahkan secara makna, bukan dalam pos yang terpisah-pisah" berlaku di sini juga. Uruni tidak mencatat setoran ke atas sebagai utang yang belum dibayar dan tidak punya angka "tersedia" yang kedua; setoran itu jadi pengeluaran biasa pada hari ia dibayarkan. (Direvisi 2026-08-12; lihat [ADR-024](./ADR/024-schema-conventions.md).)
 
 ### 7.7 Saldo & layar utama
 - Layar utama menampilkan: total saldo saat ini, saldo per lokasi (Tunai / Bank), dan **status rekonsiliasi**: "cocok" atau "selisih Rp X — cek?".

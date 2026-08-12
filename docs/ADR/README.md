@@ -42,6 +42,7 @@ Standing decisions that no ADR owns go in [`../Decisions.md`](../Decisions.md).
 | [021](./021-http-routing-chi.md) | HTTP routing: chi, adopted at M4 | `draft` |
 | [022](./022-logging-slog.md) | Logging: stdlib `log/slog`, adopted at M1.2 | implemented |
 | [023](./023-agent-operating-model.md) | Agent operating model: one orchestrator, pinned role agents | implemented |
+| [024](./024-schema-conventions.md) | Schema conventions: STRICT SQLite, integer ids, two time types | implemented |
 | [025](./025-one-migration-file-until-1.0.md) | One migration file, edited in place, until v1.0.0 | implemented |
 
 The **Stage** column is the record, and it is all this index says about implementation: `draft` means editable in place, `implemented` means superseding-ADR-only. *Which* slice put code behind a given ADR belongs in that ADR and in the PR that dropped its tag — restated here, this index becomes a changelog.

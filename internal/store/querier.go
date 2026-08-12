@@ -9,16 +9,98 @@ import (
 )
 
 type Querier interface {
-	// Ping proves the store is reachable through the generated code — open, migrate,
-	// query — without naming a table, which M1.3 deliberately has none of. Every
-	// real query arrives with the schema at M2; this one stays as the readiness
-	// probe /healthz calls.
+	AccountBalance(ctx context.Context, arg AccountBalanceParams) (int64, error)
+	// The frozen half of a reconciliation: the same sum as AccountBalance, cut off
+	// at the snapshot's through_transaction_id. Ordered by id, not occurred_on, so
+	// a correction backdated after the count keeps its higher id and stays outside
+	// the old snapshot's arithmetic while counting toward today's balance.
+	AccountBalanceThrough(ctx context.Context, arg AccountBalanceThroughParams) (int64, error)
+	// Closing an envelope moves no money, so this is an UPDATE rather than a ledger
+	// entry - incidental carries no immutability trigger for exactly this reason.
+	CloseIncidental(ctx context.Context, arg CloseIncidentalParams) (Incidental, error)
+	CreateAccount(ctx context.Context, arg CreateAccountParams) (Account, error)
+	CreateDuesRate(ctx context.Context, arg CreateDuesRateParams) (DuesRate, error)
+	CreateDuesTier(ctx context.Context, arg CreateDuesTierParams) (DuesTier, error)
+	CreateFund(ctx context.Context, arg CreateFundParams) (Fund, error)
+	CreateIncidental(ctx context.Context, arg CreateIncidentalParams) (Incidental, error)
+	CreateMember(ctx context.Context, arg CreateMemberParams) (Member, error)
+	CreatePurpose(ctx context.Context, arg CreatePurposeParams) (Purpose, error)
+	CreateReceipt(ctx context.Context, arg CreateReceiptParams) (Receipt, error)
+	CreateReconciliation(ctx context.Context, arg CreateReconciliationParams) (Reconciliation, error)
+	CreateReconciliationLine(ctx context.Context, arg CreateReconciliationLineParams) (ReconciliationLine, error)
+	CreateReimbursement(ctx context.Context, arg CreateReimbursementParams) (Reimbursement, error)
+	CreateTransaction(ctx context.Context, arg CreateTransactionParams) (Transaction, error)
+	CreateTransfer(ctx context.Context, arg CreateTransferParams) (Transfer, error)
+	// Every balance in Uruni is this shape: sum the ledger, never read a stored
+	// total (CLAUDE.md rule 2). direction carries the sign, so the CASE is the
+	// only place a minus appears. The CAST is not decoration - without it sqlc
+	// emits interface{} for the aggregate and the trust core loses its compiler
+	// exactly where it is needed most (ADR-024).
+	FundBalance(ctx context.Context, fundID int64) (int64, error)
+	GetAccount(ctx context.Context, id int64) (Account, error)
+	GetDuesTier(ctx context.Context, id int64) (DuesTier, error)
+	// The rate in force for a period: the latest row whose effective_from is at or
+	// before it. One-sided intervals mean there is no end date to check, and no
+	// row at all is a legitimate answer: a tier whose rate is not yet decided.
+	// effective_from is 'YYYY-MM', so a string comparison is a chronological one.
+	GetEffectiveDuesRate(ctx context.Context, arg GetEffectiveDuesRateParams) (DuesRate, error)
+	GetFund(ctx context.Context, id int64) (Fund, error)
+	GetIncidental(ctx context.Context, purposeID int64) (Incidental, error)
+	GetMember(ctx context.Context, id int64) (Member, error)
+	GetPurpose(ctx context.Context, id int64) (Purpose, error)
+	GetReconciliation(ctx context.Context, id int64) (Reconciliation, error)
+	GetReimbursement(ctx context.Context, id int64) (Reimbursement, error)
+	GetTransaction(ctx context.Context, id int64) (Transaction, error)
+	GetTransfer(ctx context.Context, id int64) (Transfer, error)
+	LatestReconciliation(ctx context.Context, fundID int64) (Reconciliation, error)
+	ListAccountsByFund(ctx context.Context, fundID int64) ([]Account, error)
+	ListDuesPaymentsByMember(ctx context.Context, memberID *int64) ([]Transaction, error)
+	ListDuesRatesByTier(ctx context.Context, tierID int64) ([]DuesRate, error)
+	ListDuesTiersByFund(ctx context.Context, fundID int64) ([]DuesTier, error)
+	ListFunds(ctx context.Context) ([]Fund, error)
+	// Joined through purpose because that is where fund ownership lives; incidental
+	// has no fund_id of its own (it is 1:1 with a purpose row).
+	ListIncidentalsByFund(ctx context.Context, fundID int64) ([]Incidental, error)
+	ListMembersByFund(ctx context.Context, fundID int64) ([]Member, error)
+	ListOpenIncidentalsByFund(ctx context.Context, fundID int64) ([]Incidental, error)
+	// Differences the treasurer chose to sleep on. They are not errors, and the
+	// next snapshot is where they get picked up again - a line is never edited.
+	ListOpenReconciliationLinesByFund(ctx context.Context, fundID int64) ([]ReconciliationLine, error)
+	// What the fund still owes its members: neither settled by a payout nor
+	// waived. Both halves are conditions SQLite cannot express as a CHECK across
+	// tables, so the settle path filters on them here instead.
+	ListOutstandingReimbursementsByFund(ctx context.Context, fundID int64) ([]Reimbursement, error)
+	ListPurposesByFund(ctx context.Context, fundID int64) ([]Purpose, error)
+	ListReceiptsByReimbursement(ctx context.Context, reimbursementID *int64) ([]Receipt, error)
+	ListReceiptsByTransaction(ctx context.Context, transactionID *int64) ([]Receipt, error)
+	ListReconciliationLines(ctx context.Context, reconciliationID int64) ([]ReconciliationLine, error)
+	// Newest first: the home screen wants the last count, not the first.
+	ListReconciliationsByFund(ctx context.Context, fundID int64) ([]Reconciliation, error)
+	ListReimbursementsByFund(ctx context.Context, fundID int64) ([]Reimbursement, error)
+	ListTransactionsByFund(ctx context.Context, fundID int64) ([]Transaction, error)
+	ListTransfersByFund(ctx context.Context, fundID int64) ([]Transfer, error)
+	// The outstanding total, cast so it lands as int64 rather than interface{}:
+	// sqlc's SQLite engine cannot infer the type of a summed expression, and an
+	// uncast aggregate is a silent failure that only surfaces at M3 (ADR-024).
+	OutstandingReimbursementTotal(ctx context.Context, fundID int64) (int64, error)
+	// Ping proves the store is reachable through the generated code (open,
+	// migrate, query) without naming a table, which M1.3 deliberately has none of.
+	// Every real query arrives with the schema at M2; this one stays as the
+	// readiness probe /healthz calls.
 	//
-	// The `AS ok` alias is load-bearing: sqlc's SQLite engine truncates a bare
-	// `SELECT 1` to `SELE` in the generated constant — silently, with no error
-	// (sqlc v1.31.1). ADR-005 warned this engine's inference is the young one; keep
-	// every projected expression named.
+	// Every comment in this directory is pure ASCII, and that is load-bearing:
+	// sqlc v1.31.1's SQLite engine measures a statement's end in runes but slices
+	// the source in bytes, so each non-ASCII character in a query's leading
+	// comment silently chops one more byte off the tail of the generated constant.
+	// Three em dashes here used to cost six bytes, leaving `SELECT 1` where
+	// `SELECT 1 AS ok` was written; it still ran, which is what makes it
+	// dangerous. `LIMIT 1` losing its `1` does not. See ADR-024 and ADR-005.
 	Ping(ctx context.Context) (int64, error)
+	PurposeBalance(ctx context.Context, arg PurposeBalanceParams) (int64, error)
+	// Whether the fund as a whole came out even. Cast so the trust core gets an
+	// int64 rather than interface{} - sqlc's SQLite engine cannot infer the type of
+	// a summed expression (ADR-024).
+	ReconciliationDifferenceTotal(ctx context.Context, reconciliationID int64) (int64, error)
 }
 
 var _ Querier = (*Queries)(nil)

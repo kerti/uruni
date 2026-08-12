@@ -75,7 +75,7 @@ There is **no `HANDOFF.md`** and no standalone status doc. The live board is **G
 - **Standing decisions no issue or ADR owns** → [`Decisions.md`](./Decisions.md).
 - **You-are-here** → the one status line below (changes ~once per milestone; never holds shipped detail).
 
-**Status:** **M2 — data model** next; M1's scaffold is complete, with the database path open, migrating and queried end to end.
+**Status:** **M3 — money & reconciliation** next; M2's schema is complete, with every PRD §6 entity in one migration and its invariants enforced by the database.
 
 ## Open
 
