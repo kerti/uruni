@@ -3,6 +3,8 @@ package ledger
 import (
 	"context"
 	"errors"
+	"io"
+	"math/big"
 	"testing"
 
 	"github.com/kerti/uruni/internal/store"
@@ -233,5 +235,33 @@ func TestSetUpFundAtomicityNoOrphanFundWhenThePurposeInsertFails(t *testing.T) {
 	}
 	if accountCount != 0 {
 		t.Errorf("account row count = %d, want 0 - the purpose failure must happen before either account insert", accountCount)
+	}
+}
+
+func TestSetUpFundAbortsWhenTheSlugSourceFails(t *testing.T) {
+	l := newTestLedger(t)
+	ctx := context.Background()
+
+	// A failing random source is not a real operating condition, but the slug
+	// is the one value here that must never be quietly weakened: it is
+	// generated once, never rotates, and PRD §7.9 leans on it being
+	// unguessable. Setup must abort rather than fall back to anything.
+	original := randInt
+	randInt = func(io.Reader, *big.Int) (*big.Int, error) {
+		return nil, errors.New("no entropy available")
+	}
+	t.Cleanup(func() { randInt = original })
+
+	_, err := l.SetUpFund(ctx, SetUpFundParams{FundName: "Test Fund"})
+	if err == nil {
+		t.Fatal("SetUpFund() = nil error, want the slug failure to abort setup")
+	}
+
+	funds, err := store.New(l.db).ListFunds(ctx)
+	if err != nil {
+		t.Fatalf("ListFunds() = %v, want no error", err)
+	}
+	if len(funds) != 0 {
+		t.Errorf("ListFunds() = %d rows, want 0 - a fund must not exist with an unverified slug", len(funds))
 	}
 }

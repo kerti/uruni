@@ -5,7 +5,11 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
+
+	"github.com/kerti/uruni/internal/ledger"
+	"github.com/kerti/uruni/internal/store"
 )
 
 func postSetup(t *testing.T, r http.Handler, name string) *httptest.ResponseRecorder {
@@ -120,5 +124,71 @@ func TestGetFundReturnsTheFundAfterSetup(t *testing.T) {
 	}
 	if got != created.Fund {
 		t.Errorf("GET /api/fund = %+v, want %+v (the fund POST /api/setup created)", got, created.Fund)
+	}
+}
+
+func TestPostSetupRejectsMalformedJSON(t *testing.T) {
+	// The one shape problem this layer can see that the ledger cannot: the
+	// body never becomes a request at all, so there is nothing to pass down.
+	rec := httptest.NewRecorder()
+	testRouter(t).ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/api/setup", strings.NewReader("{oops")))
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("POST /api/setup with malformed JSON = %d, want %d", rec.Code, http.StatusBadRequest)
+	}
+
+	var body errorEnvelope
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+		t.Fatalf("decoding the body = %v, want the JSON error envelope (body: %q)", err, rec.Body.String())
+	}
+	if body.Error.Code != "invalid_json" {
+		t.Errorf("error code = %q, want %q", body.Error.Code, "invalid_json")
+	}
+}
+
+func TestAPIRejectsAnUnsupportedMethodInTheEnvelope(t *testing.T) {
+	// /api/setup exists, DELETE does not - chi answers 405 rather than 404,
+	// and it has to do so in the same envelope as everything else under /api.
+	rec := httptest.NewRecorder()
+	testRouter(t).ServeHTTP(rec, httptest.NewRequest(http.MethodDelete, "/api/setup", nil))
+
+	if rec.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("DELETE /api/setup = %d, want %d", rec.Code, http.StatusMethodNotAllowed)
+	}
+
+	var body errorEnvelope
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+		t.Fatalf("decoding the body = %v, want the JSON error envelope (body: %q)", err, rec.Body.String())
+	}
+	if body.Error.Code != "method_not_allowed" {
+		t.Errorf("error code = %q, want %q", body.Error.Code, "method_not_allowed")
+	}
+}
+
+func TestGetFundReportsAStoreFailureAsA500(t *testing.T) {
+	// A read that fails for a reason no handler can anticipate - here the
+	// store is closed underneath it, which is what an unwritable or vanished
+	// database file looks like from up here. It must not be mistaken for
+	// "no fund yet", which is a 404 and means something entirely different
+	// to the client: run setup.
+	sqlDB := testStoreDB(t)
+	router := New(testAssets(), testBuild, ledger.New(sqlDB), store.New(sqlDB), testLogger())
+	if err := sqlDB.Close(); err != nil {
+		t.Fatalf("closing the store = %v, want no error", err)
+	}
+
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/fund", nil))
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("GET /api/fund with a closed store = %d, want %d", rec.Code, http.StatusInternalServerError)
+	}
+
+	var body errorEnvelope
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+		t.Fatalf("decoding the body = %v, want the JSON error envelope (body: %q)", err, rec.Body.String())
+	}
+	if body.Error.Code != "internal_error" {
+		t.Errorf("error code = %q, want %q", body.Error.Code, "internal_error")
 	}
 }

@@ -41,11 +41,19 @@ const reportSlugLength = 32
 // report_slug is the backstop if the impossible ever happens - CreateFund
 // would surface it as an ordinary unique-violation, mapped like any other by
 // M4's error handling, not silently accepted.
+// randInt is crypto/rand.Int, indirected so the tests can drive the failure
+// below. A random source that errors is not a real operating condition, but
+// this is the one call in setup whose silent failure would matter: a fund is
+// created once, its slug never rotates, and the link is only unguessable if
+// this call actually produced what it claims to have. The test that stubs
+// this proves setup aborts rather than falling back to something weaker.
+var randInt = rand.Int
+
 func generateReportSlug() (string, error) {
 	alphabetSize := big.NewInt(int64(len(reportSlugAlphabet)))
 	b := make([]byte, reportSlugLength)
 	for i := range b {
-		n, err := rand.Int(rand.Reader, alphabetSize)
+		n, err := randInt(rand.Reader, alphabetSize)
 		if err != nil {
 			return "", fmt.Errorf("generating report slug: %w", err)
 		}
