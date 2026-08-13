@@ -46,7 +46,20 @@ func (l *Ledger) postTransferPair(ctx context.Context, fundID int64, kind string
 	from, to leg, amount money.Amount, occurredOn string) (store.Transfer, error)
 ```
 
-**A leg does not carry its own direction, and that is the point.** The primitive assigns `out` at `from` and `in` at `to` by position. Were direction leg data, a caller could construct a both-`out` or both-`in` pair that writes two rows, satisfies every schema `CHECK` — they require only that `transfer_id` is set, never that the two legs oppose — and does **not** net to zero. That is a transfer which silently changes the fund's total, which is the single failure this whole mechanism exists to prevent. Deriving direction from position makes it unrepresentable rather than merely tested against.
+**A leg does not carry its own direction, and that is the point.** The primitive assigns `out` at `from` and `in` at `to` by position.
+
+The alternative is to put a `Direction` field on `leg` and let the caller fill it in. Then this compiles:
+
+```go
+postTransferPair(ctx, fundID, "between_accounts",
+	leg{cashID, mainID, "out"},
+	leg{bankID, mainID, "out"},   // both "out"
+	40_000, "2026-08-12")
+```
+
+Two `out` rows, both referencing a real `transfer` row. **Every schema `CHECK` passes** — the only one touching transfers is `kind <> 'transfer' OR transfer_id IS NOT NULL`, which says nothing about the legs opposing or the amounts matching. The fund's total falls by 80,000 on a movement that is supposed to move nothing at all, and the ledger still looks well-formed.
+
+Assigning direction by position removes the field the caller could get wrong. The bug stops being something tests must catch and becomes something the type cannot express.
 
 The primitive validates nothing; each exported entry point checks its own argument shape first, per the rule below.
 
