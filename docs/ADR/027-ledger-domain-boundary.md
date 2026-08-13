@@ -37,7 +37,33 @@ func (l *Ledger) withTx(ctx context.Context, fn func(store.Querier) error) error
 
 Read-only derived-balance methods use `l.q` directly — a single `SELECT` is already consistent, no transaction needed. **Every write goes through `withTx`, including a single-row insert**, for one uniform pattern instead of a per-operation judgment call about which write "needs" a transaction. Under [ADR-004](./004-database-sqlite-only.md)'s `SetMaxOpenConns(1)`, opening a transaction never contends with anything else the process is doing, so the uniformity is free. This keeps [ADR-005](./005-data-access-sqlc.md)'s stated benefit — a fakeable `Querier` — for the read-only methods, while being honest that the write methods need a real `*sql.Tx` and are therefore exercised against [ADR-028](./028-testing-the-trust-core.md)'s real SQLite harness, not a fake.
 
-**Transfer pairs, atomically, one primitive for both uses.** `PostTransferBetweenAccounts` and `RollIncidentalLeftover` both call one unexported `postTransferPair(ctx, fundID, kind, legA, legB, amount, occurredOn)` inside `withTx`: insert one `transfer` row, then two `"transaction"` rows referencing it (`kind='transfer'`, `transfer_id` = that row's id), equal amount, opposite direction. The fund's total is unchanged by construction — one amount, two directions — which every caller's test asserts directly (`FundBalance` before `==` `FundBalance` after), mirroring `internal/db`'s existing `TestTransferKindRequiresATransfer`. `between_accounts`: same `purpose_id`, different `account_id`. `reclass_purpose` (the incidental leftover roll): same `account_id`, different `purpose_id` — and per the M3 plan, the *choice* of account is immaterial to correctness, since a same-account pair always nets to zero on that account regardless of which accounts the original contributions came in through. `CloseIncidentalAndRoll` therefore takes one `account_id` parameter with no derivation logic behind it.
+**Transfer pairs, atomically, one primitive for both uses.** `PostTransferBetweenAccounts` and `CloseIncidentalAndRoll` both call one unexported primitive inside `withTx`, which inserts one `transfer` row and then two `"transaction"` rows referencing it (`kind='transfer'`, `transfer_id` = that row's id), equal amount, opposite direction:
+
+```go
+type leg struct{ AccountID, PurposeID int64 }
+
+func (l *Ledger) postTransferPair(ctx context.Context, fundID int64, kind string,
+	from, to leg, amount money.Amount, occurredOn string) (store.Transfer, error)
+```
+
+**A leg does not carry its own direction, and that is the point.** The primitive assigns `out` at `from` and `in` at `to` by position.
+
+The alternative is to put a `Direction` field on `leg` and let the caller fill it in. Then this compiles:
+
+```go
+postTransferPair(ctx, fundID, "between_accounts",
+	leg{cashID, mainID, "out"},
+	leg{bankID, mainID, "out"},   // both "out"
+	40_000, "2026-08-12")
+```
+
+Two `out` rows, both referencing a real `transfer` row. **Every schema `CHECK` passes** — the only one touching transfers is `kind <> 'transfer' OR transfer_id IS NOT NULL`, which says nothing about the legs opposing or the amounts matching. The fund's total falls by 80,000 on a movement that is supposed to move nothing at all, and the ledger still looks well-formed.
+
+Assigning direction by position removes the field the caller could get wrong. The bug stops being something tests must catch and becomes something the type cannot express.
+
+The primitive validates nothing; each exported entry point checks its own argument shape first, per the rule below.
+
+**Every exported write takes a params struct, not positional arguments.** `PostTransactionParams`, `PostTransferBetweenAccountsParams`, `PostDuesPaymentParams` and their successors: these methods carry four to eight fields, several of them `int64` ids that a positional call site can silently transpose, and a struct literal names each one at the point of the call. The two positional signatures still written below (`SettleReimbursement`, `TakeReconciliation`) predate that convention and are **specifications awaiting their slices** — [#41](https://github.com/kerti/uruni/issues/41) and [#44](https://github.com/kerti/uruni/issues/44) — not descriptions of shipped code. Each is synced to what actually shipped in the PR that implements it, which is the rule for editing a `draft` ADR that already has code behind it. The fund's total is unchanged by construction — one amount, two directions — which every caller's test asserts directly (`FundBalance` before `==` `FundBalance` after), mirroring `internal/db`'s existing `TestTransferKindRequiresATransfer`. `between_accounts`: same `purpose_id`, different `account_id`. `reclass_purpose` (the incidental leftover roll): same `account_id`, different `purpose_id` — and per the M3 plan, the *choice* of account is immaterial to correctness, since a same-account pair always nets to zero on that account regardless of which accounts the original contributions came in through. `CloseIncidentalAndRoll` therefore takes one `account_id` parameter with no derivation logic behind it.
 
 **Closing an envelope and rolling its leftover are one call, not two.** `CloseIncidentalAndRoll(ctx, fundID, purposeID, accountID, closedOn)` posts the `reclass_purpose` pair and sets `incidental.closed_on` inside a single `withTx`; a leftover of zero — or a negative one, an envelope that disbursed more than it collected — closes it and posts nothing, returning `0` and no error, because an error inside `withTx` would roll the close back and nothing asks for an over-disbursed envelope to stay open. The one refusal is `ErrIncidentalAlreadyClosed`: a second roll would move money that already moved. PRD §7.5 describes one gesture ("on close, show the leftover and offer a one-tap roll into Kas Utama"), and splitting it across two calls means a crash between them leaves an envelope rolled but open — a state nothing in the schema forbids and nothing in the UI expects. The cost is that this package no longer *only* inserts: `incidental` is the one table M2 deliberately left without an immutability trigger, precisely because closing a collection moves no money and is a decision that gets revised, so an `UPDATE` here trips nothing and contradicts no non-negotiable.
 
