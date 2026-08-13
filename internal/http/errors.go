@@ -59,6 +59,8 @@ func mapLedgerError(w http.ResponseWriter, logger *slog.Logger, err error) {
 		writeAPIError(w, http.StatusConflict, "incidental_already_closed", "This incidental has already been closed.")
 	case errors.Is(err, ledger.ErrOpeningBalanceExists):
 		writeAPIError(w, http.StatusConflict, "opening_balance_exists", "An opening balance already exists for this account.")
+	case errors.Is(err, ledger.ErrFundAlreadyExists):
+		writeAPIError(w, http.StatusConflict, "fund_already_exists", "A fund has already been set up.")
 	case errors.Is(err, money.ErrOverflow):
 		// err's own message embeds the operands that overflowed — the amounts
 		// themselves — which ADR-022 forbids logging. Every other unrecognized

@@ -1,6 +1,9 @@
 package http
 
 import (
+	"encoding/json"
+	"errors"
+	"io"
 	"log/slog"
 	"net/http"
 
@@ -41,4 +44,32 @@ func (a *api) routes(r chi.Router) {
 	r.MethodNotAllowed(func(w http.ResponseWriter, _ *http.Request) {
 		writeAPIError(w, http.StatusMethodNotAllowed, "method_not_allowed", "That method is not allowed on this resource.")
 	})
+
+	r.Post("/setup", a.setupFund)
+	r.Get("/fund", a.getFund)
+}
+
+// writeJSON is writeAPIError's counterpart for a successful response: every
+// route in this package that answers with a body goes through this one
+// function, the same way every failure goes through writeAPIError, so the
+// two shapes can't drift route by route either.
+func writeJSON(w http.ResponseWriter, status int, body any) {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(status)
+	_ = json.NewEncoder(w).Encode(body)
+}
+
+// decodeJSON decodes r's body into dst and reports whether the handler
+// should continue. An empty body (io.EOF) is not itself an error here - it
+// decodes to dst's zero value and lets the ledger's own ErrInvalidArgument
+// checks name the missing field, per ADR-027: handlers decode and pass
+// through, they do not re-check what the ledger already validates. Malformed
+// JSON is a shape problem this layer alone can see, so it is the one case
+// answered here rather than passed down.
+func decodeJSON(w http.ResponseWriter, r *http.Request, dst any) bool {
+	if err := json.NewDecoder(r.Body).Decode(dst); err != nil && !errors.Is(err, io.EOF) {
+		writeAPIError(w, http.StatusBadRequest, "invalid_json", "The request body is not valid JSON.")
+		return false
+	}
+	return true
 }

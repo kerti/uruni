@@ -57,6 +57,23 @@ var ErrReimbursementWaived = errors.New("ledger: reimbursement has been waived")
 // and closes no window the index does not already close.
 var ErrReimbursementAlreadySettled = errors.New("ledger: reimbursement has already been settled")
 
+// ErrFundAlreadyExists is returned by SetUpFund when a fund already exists.
+//
+// Unlike ErrOpeningBalanceExists and ErrReimbursementAlreadySettled, this is
+// not a pre-check ahead of a unique index the schema already enforces: there
+// is deliberately no such index. "At most one fund" is application policy,
+// not a schema-level fact - PRD §6 keeps multiple funds open at the *model*
+// level, and a CHECK or a partial unique index baked into `fund` would need a
+// migration to lift later if that policy ever changes. So this pre-check
+// inside SetUpFund's own withTx is the entire guarantee, the same shape as
+// ErrIncidentalAlreadyClosed's. What makes it honest rather than a check with
+// a race hiding behind it: ADR-004's SetMaxOpenConns(1) already rules out two
+// concurrent writers on this process, and #62's single-instance lock rules
+// out a second `uruni serve` process against the same database file - the
+// thing SetMaxOpenConns(1) alone cannot reach, since it protects one
+// *sql.DB, not one file on disk.
+var ErrFundAlreadyExists = errors.New("ledger: a fund already exists")
+
 // ErrIncidentalAlreadyClosed is returned by CloseIncidentalAndRoll when the
 // envelope's closed_on is already set.
 //
