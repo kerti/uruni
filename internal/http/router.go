@@ -2,17 +2,25 @@
 // JSON API under /api, the server-rendered public report under /report, and the
 // React SPA everywhere else (ADR-001).
 //
-// The router is stdlib http.ServeMux while there are two routes to serve. chi
-// takes over at M4, when the API brings route groups and middleware worth
-// composing — decided in ADR-021, which also explains why not sooner.
+// chi replaces stdlib http.ServeMux as of M4 (ADR-021): the API brings route
+// groups and middleware worth composing — one /api mount for M5's session
+// middleware to wrap, request logging, panic recovery — that stdlib routing
+// would otherwise hand-roll.
 package http
 
 import (
 	"encoding/json"
 	"io/fs"
+	"log/slog"
 	"net/http"
 	"path"
 	"strings"
+
+	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/chi/v5/middleware"
+
+	"github.com/kerti/uruni/internal/ledger"
+	"github.com/kerti/uruni/internal/store"
 )
 
 // Build identifies the running binary. It is a struct rather than two string
@@ -27,11 +35,32 @@ type Build struct {
 // New builds the router over the embedded SPA assets. build is what /healthz
 // reports, so which binary is live can be read over HTTP without shell access
 // to the container.
-func New(assets fs.FS, build Build) http.Handler {
-	mux := http.NewServeMux()
-	mux.HandleFunc("GET /healthz", healthz(build))
-	mux.Handle("/", spa(assets))
-	return mux
+//
+// l and q are both handed in rather than l alone: store.Queries is a stateless
+// wrapper over the shared *sql.DB (ADR-004's single connection), so a second,
+// independent store.New(sqlDB) alongside ledger.New(sqlDB) costs nothing and
+// avoids adding a Querier accessor to ADR-027's already-implemented boundary —
+// direct-CRUD routes (members, accounts, purposes — ADR-027's "no domain
+// wrapper" list) call q directly; routes with a derived invariant call l.
+func New(assets fs.FS, build Build, l *ledger.Ledger, q store.Querier, logger *slog.Logger) http.Handler {
+	r := chi.NewRouter()
+	r.Use(middleware.Recoverer)
+	r.Use(requestLogger(logger))
+
+	r.Get("/healthz", healthz(build))
+
+	// Every /api route lives under this one mount, so M5's session middleware
+	// has exactly one seam to wrap instead of routes scattered across the tree
+	// (ADR-021). No routes are registered yet — this slice builds the mount and
+	// the shared error mapping; M4.2 onward hang handlers off api.routes.
+	r.Route("/api", (&api{ledger: l, queries: q, logger: logger}).routes)
+
+	// The SPA fallback is chi's NotFound handler (ADR-021): chi checks every
+	// registered route first, so /api and /report still 404 instead of falling
+	// through to the shell.
+	r.NotFound(spa(assets))
+
+	return r
 }
 
 // health is what /healthz returns. Operator-facing, so English, like the CLI and
@@ -49,12 +78,12 @@ type health struct {
 // container HEALTHCHECK both call it before there is any session (ADR-019).
 //
 // This is a *liveness* check — it answers "is this process serving?", which is
-// all the container HEALTHCHECK needs. The store exists as of M1.3 but is
-// deliberately not probed here: ADR-019 pins this endpoint to 200-when-up, and
-// the container HEALTHCHECK calls it, so reporting a broken database as a 503
-// would turn an unwritable file into a restart loop. Revisit at M4, when there
-// are real queries behind it, as an amendment to ADR-019 — and if a dependency
-// does get reported it belongs here as a non-ok status, not as a second endpoint.
+// all the container HEALTHCHECK needs. Considered and kept at M4, not amended:
+// M4 puts real load on the single shared connection (ADR-004), so a check that
+// also probed the store would misfire *more* often, not less, and a 503 turns a
+// momentarily-busy or unwritable file into a restart loop instead of a passing
+// liveness check with a slow request behind it. If a dependency is ever worth
+// reporting, it belongs here as a non-ok status, not as a second endpoint.
 func healthz(build Build) http.HandlerFunc {
 	return func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
@@ -68,13 +97,14 @@ func healthz(build Build) http.HandlerFunc {
 }
 
 // spa serves the built bundle, falling back to index.html so client-side routes
-// survive a page reload. /api and /report are the server's own namespaces, so
-// they 404 rather than silently returning the SPA shell — a mistyped API path
-// should look like a mistake, not like HTML.
-func spa(assets fs.FS) http.Handler {
+// survive a page reload. It is registered as chi's NotFound handler, so /api and
+// /report never reach it — a registered route always wins over NotFound, which
+// is what keeps those namespaces 404-ing instead of silently returning the SPA
+// shell.
+func spa(assets fs.FS) http.HandlerFunc {
 	files := http.FileServerFS(assets)
 
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
 		if isServerRoute(r.URL.Path) {
 			http.NotFound(w, r)
 			return
@@ -89,7 +119,7 @@ func spa(assets fs.FS) http.Handler {
 			}
 		}
 		files.ServeHTTP(w, r)
-	})
+	}
 }
 
 func isServerRoute(p string) bool {

@@ -6,6 +6,9 @@ import (
 	"net/http/httptest"
 	"testing"
 	"testing/fstest"
+
+	"github.com/kerti/uruni/internal/ledger"
+	"github.com/kerti/uruni/internal/store"
 )
 
 func testAssets() fstest.MapFS {
@@ -23,10 +26,20 @@ func testAssets() fstest.MapFS {
 // that whatever was stamped comes back out.
 var testBuild = Build{Version: "v9.9.9-test", Commit: "abc1234"}
 
+// testRouter builds a router over a real, migrated in-memory database — the
+// ledger and store arguments are threaded through New for later M4 slices to
+// use, so building it for real here (rather than passing nil) is what proves
+// the constructor's new signature actually wires together.
+func testRouter(t *testing.T) http.Handler {
+	t.Helper()
+	sqlDB := testStoreDB(t)
+	return New(testAssets(), testBuild, ledger.New(sqlDB), store.New(sqlDB), testLogger())
+}
+
 func get(t *testing.T, path string) *httptest.ResponseRecorder {
 	t.Helper()
 	rec := httptest.NewRecorder()
-	New(testAssets(), testBuild).ServeHTTP(rec, httptest.NewRequest(http.MethodGet, path, nil))
+	testRouter(t).ServeHTTP(rec, httptest.NewRequest(http.MethodGet, path, nil))
 	return rec
 }
 
@@ -55,8 +68,10 @@ func TestHealthzIsUnauthenticatedAndOK(t *testing.T) {
 // so the SHA is the sole thing naming what runs.
 func TestHealthzReportsTheBuildItWasStampedWith(t *testing.T) {
 	untagged := Build{Version: "dev", Commit: "deadbee"}
+	sqlDB := testStoreDB(t)
 	rec := httptest.NewRecorder()
-	New(testAssets(), untagged).ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/healthz", nil))
+	New(testAssets(), untagged, ledger.New(sqlDB), store.New(sqlDB), testLogger()).
+		ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/healthz", nil))
 
 	var got health
 	if err := json.NewDecoder(rec.Body).Decode(&got); err != nil {
@@ -97,6 +112,28 @@ func TestClientRoutesFallBackToIndex(t *testing.T) {
 		if got := rec.Body.String(); got != "<!doctype html><title>Uruni</title>" {
 			t.Errorf("GET %s served %q, want index.html", path, got)
 		}
+	}
+}
+
+func TestUnknownAPIPathsAnswerWithTheErrorEnvelope(t *testing.T) {
+	// A mistyped path is when a client is least able to cope with a second
+	// error shape, so /api answers in the envelope every other API failure
+	// uses rather than chi's plain-text default.
+	rec := get(t, "/api/no-such-route")
+
+	if rec.Code != http.StatusNotFound {
+		t.Errorf("GET /api/no-such-route = %d, want %d", rec.Code, http.StatusNotFound)
+	}
+	if got, want := rec.Header().Get("Content-Type"), "application/json; charset=utf-8"; got != want {
+		t.Errorf("Content-Type = %q, want %q", got, want)
+	}
+
+	var body errorEnvelope
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+		t.Fatalf("decoding the body = %v, want the JSON error envelope (body: %q)", err, rec.Body.String())
+	}
+	if body.Error.Code != "not_found" {
+		t.Errorf("error code = %q, want %q", body.Error.Code, "not_found")
 	}
 }
 
