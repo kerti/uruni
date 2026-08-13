@@ -16,7 +16,7 @@ import (
 
 func TestMaxTransactionIDByFundIsNoRowsOnAnEmptyFund(t *testing.T) {
 	sqlDB := migratedTestDB(t)
-	f := newScenarioFund(t, sqlDB, "Kas RT 05", validSlug)
+	f := newScenarioFund(t, sqlDB, "Neighborhood Fund", validSlug)
 
 	// This is the whole reason the query is ORDER BY ... LIMIT 1 rather than
 	// an aggregate: a fund's first-ever reconciliation must see a clean
@@ -31,7 +31,7 @@ func TestMaxTransactionIDByFundIsTheHighestIDInTheFund(t *testing.T) {
 	sqlDB := migratedTestDB(t)
 	ctx := context.Background()
 	q := store.New(sqlDB)
-	f := newScenarioFund(t, sqlDB, "Kas RT 05", validSlug)
+	f := newScenarioFund(t, sqlDB, "Neighborhood Fund", validSlug)
 
 	f.entry(t, sqlDB, store.CreateTransactionParams{
 		AccountID: f.cashID, PurposeID: f.mainID, Direction: "in", Amount: 100_000,
@@ -45,7 +45,7 @@ func TestMaxTransactionIDByFundIsTheHighestIDInTheFund(t *testing.T) {
 	// A second fund with a higher-numbered row of its own - scoping proof, not
 	// just a happy path. If the query forgot fund_id it would return this row
 	// instead of the first fund's.
-	g := newScenarioFund(t, sqlDB, "Kas RW", "zyxwvutsrqponmlkjihgfe")
+	g := newScenarioFund(t, sqlDB, "Community Fund", "zyxwvutsrqponmlkjihgfe")
 	g.entry(t, sqlDB, store.CreateTransactionParams{
 		AccountID: g.cashID, PurposeID: g.mainID, Direction: "in", Amount: 999_000,
 		OccurredOn: "2026-08-03", Kind: "opening",
@@ -64,8 +64,8 @@ func TestIncidentalTotalsSeparatesCollectedFromDisbursed(t *testing.T) {
 	sqlDB := migratedTestDB(t)
 	ctx := context.Background()
 	q := store.New(sqlDB)
-	f := newScenarioFund(t, sqlDB, "Kas RT 05", validSlug)
-	kurbanID := createPurpose(t, sqlDB, f.fundID, "incidental", "Kurban 2026")
+	f := newScenarioFund(t, sqlDB, "Neighborhood Fund", validSlug)
+	kurbanID := createPurpose(t, sqlDB, f.fundID, "incidental", "Lent 2026")
 
 	// Nothing posted yet: both figures are zero, not an error.
 	totals, err := q.IncidentalTotals(ctx, store.IncidentalTotalsParams{
@@ -105,8 +105,8 @@ func TestDuesPaidByPeriodCoversFullPartialAndUnpaidMembers(t *testing.T) {
 	sqlDB := migratedTestDB(t)
 	ctx := context.Background()
 	q := store.New(sqlDB)
-	f := newScenarioFund(t, sqlDB, "Kas RT 05", validSlug)
-	tierID := createDuesTier(t, sqlDB, f.fundID, "warga tetap")
+	f := newScenarioFund(t, sqlDB, "Neighborhood Fund", validSlug)
+	tierID := createDuesTier(t, sqlDB, f.fundID, "permanent resident")
 	if _, err := q.CreateDuesRate(ctx, store.CreateDuesRateParams{
 		TierID: tierID, Amount: 25_000, EffectiveFrom: "2026-01", CreatedAt: 1,
 	}); err != nil {
@@ -114,35 +114,35 @@ func TestDuesPaidByPeriodCoversFullPartialAndUnpaidMembers(t *testing.T) {
 	}
 	period := "2026-08"
 
-	sri, err := q.CreateMember(ctx, store.CreateMemberParams{
-		FundID: f.fundID, Name: "Bu Sri", TierID: &tierID, CreatedAt: 1,
+	jane, err := q.CreateMember(ctx, store.CreateMemberParams{
+		FundID: f.fundID, Name: "Jane Doe", TierID: &tierID, CreatedAt: 1,
 	})
 	if err != nil {
-		t.Fatalf("CreateMember(Bu Sri) = %v, want no error", err)
+		t.Fatalf("CreateMember(Jane Doe) = %v, want no error", err)
 	}
-	budi, err := q.CreateMember(ctx, store.CreateMemberParams{
-		FundID: f.fundID, Name: "Pak Budi", TierID: &tierID, CreatedAt: 1,
+	john, err := q.CreateMember(ctx, store.CreateMemberParams{
+		FundID: f.fundID, Name: "John Doe", TierID: &tierID, CreatedAt: 1,
 	})
 	if err != nil {
-		t.Fatalf("CreateMember(Pak Budi) = %v, want no error", err)
+		t.Fatalf("CreateMember(John Doe) = %v, want no error", err)
 	}
-	tono, err := q.CreateMember(ctx, store.CreateMemberParams{
-		FundID: f.fundID, Name: "Pak Tono", TierID: &tierID, CreatedAt: 1,
+	jack, err := q.CreateMember(ctx, store.CreateMemberParams{
+		FundID: f.fundID, Name: "Jack Doe", TierID: &tierID, CreatedAt: 1,
 	})
 	if err != nil {
-		t.Fatalf("CreateMember(Pak Tono) = %v, want no error", err)
+		t.Fatalf("CreateMember(Jack Doe) = %v, want no error", err)
 	}
 
-	// Bu Sri paid in full, Pak Budi paid part of it, Pak Tono has not paid at
+	// Jane Doe paid in full, John Doe paid part of it, Jack Doe has not paid at
 	// all - and so has no row in the result at all, since GROUP BY member_id
 	// only sees members who posted a dues row for this period.
 	f.entry(t, sqlDB, store.CreateTransactionParams{
 		AccountID: f.cashID, PurposeID: f.mainID, Direction: "in", Amount: 25_000,
-		OccurredOn: "2026-08-05", Kind: "dues", MemberID: &sri.ID, DuesPeriod: &period,
+		OccurredOn: "2026-08-05", Kind: "dues", MemberID: &jane.ID, DuesPeriod: &period,
 	})
 	f.entry(t, sqlDB, store.CreateTransactionParams{
 		AccountID: f.cashID, PurposeID: f.mainID, Direction: "in", Amount: 10_000,
-		OccurredOn: "2026-08-05", Kind: "dues", MemberID: &budi.ID, DuesPeriod: &period,
+		OccurredOn: "2026-08-05", Kind: "dues", MemberID: &john.ID, DuesPeriod: &period,
 	})
 
 	rows, err := q.DuesPaidByPeriod(ctx, store.DuesPaidByPeriodParams{
@@ -160,16 +160,16 @@ func TestDuesPaidByPeriodCoversFullPartialAndUnpaidMembers(t *testing.T) {
 		paid[*r.MemberID] = r.PaidAmount
 	}
 	if len(paid) != 2 {
-		t.Fatalf("DuesPaidByPeriod rows = %d, want 2 (Pak Tono never paid, so no row)", len(paid))
+		t.Fatalf("DuesPaidByPeriod rows = %d, want 2 (Jack Doe never paid, so no row)", len(paid))
 	}
-	if paid[sri.ID] != 25_000 {
-		t.Errorf("Bu Sri paid = %d, want 25000 (paid in full)", paid[sri.ID])
+	if paid[jane.ID] != 25_000 {
+		t.Errorf("Jane Doe paid = %d, want 25000 (paid in full)", paid[jane.ID])
 	}
-	if paid[budi.ID] != 10_000 {
-		t.Errorf("Pak Budi paid = %d, want 10000 (partial)", paid[budi.ID])
+	if paid[john.ID] != 10_000 {
+		t.Errorf("John Doe paid = %d, want 10000 (partial)", paid[john.ID])
 	}
-	if _, ok := paid[tono.ID]; ok {
-		t.Errorf("Pak Tono has a row = %v, want none - he never paid this period", paid[tono.ID])
+	if _, ok := paid[jack.ID]; ok {
+		t.Errorf("Jack Doe has a row = %v, want none - he never paid this period", paid[jack.ID])
 	}
 }
 
@@ -177,8 +177,8 @@ func TestLatestDuesPeriodPaidByMemberIsTheChronologicalMax(t *testing.T) {
 	sqlDB := migratedTestDB(t)
 	ctx := context.Background()
 	q := store.New(sqlDB)
-	f := newScenarioFund(t, sqlDB, "Kas RT 05", validSlug)
-	memberID := createMember(t, sqlDB, f.fundID, "Bu Sri")
+	f := newScenarioFund(t, sqlDB, "Neighborhood Fund", validSlug)
+	memberID := createMember(t, sqlDB, f.fundID, "Jane Doe")
 
 	// Posted out of order, so a lexicographic MAX genuinely has to sort them,
 	// not just echo insertion order.
@@ -214,8 +214,8 @@ func TestGetReimbursementSettlement(t *testing.T) {
 	sqlDB := migratedTestDB(t)
 	ctx := context.Background()
 	q := store.New(sqlDB)
-	f := newScenarioFund(t, sqlDB, "Kas RT 05", validSlug)
-	memberID := createMember(t, sqlDB, f.fundID, "Bu Sri")
+	f := newScenarioFund(t, sqlDB, "Neighborhood Fund", validSlug)
+	memberID := createMember(t, sqlDB, f.fundID, "Jane Doe")
 
 	unsettled := createReimbursement(t, sqlDB, f.fundID, memberID, f.mainID, 150_000)
 	if _, err := q.GetReimbursementSettlement(ctx, store.GetReimbursementSettlementParams{
@@ -250,7 +250,7 @@ func TestGetReimbursementSettlementDoesNotSeeAnotherFundsClaim(t *testing.T) {
 	q := store.New(sqlDB)
 	a := newScenarioFund(t, sqlDB, "Fund A", validSlug)
 	b := newScenarioFund(t, sqlDB, "Fund B", "bcdefghijklmnopqrstuvw")
-	memberB := createMember(t, sqlDB, b.fundID, "Bu Sri")
+	memberB := createMember(t, sqlDB, b.fundID, "Jane Doe")
 
 	claimB := createReimbursement(t, sqlDB, b.fundID, memberB, b.mainID, 80_000)
 	b.entry(t, sqlDB, store.CreateTransactionParams{
