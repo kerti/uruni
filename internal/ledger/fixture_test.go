@@ -67,6 +67,7 @@ type fixture struct {
 	mainID    int64
 	memberID  int64
 	incidenID int64
+	passID    int64
 }
 
 func newFixture(t *testing.T, l *Ledger) fixture {
@@ -77,7 +78,7 @@ func newFixture(t *testing.T, l *Ledger) fixture {
 	f := fixture{}
 
 	fund, err := q.CreateFund(ctx, store.CreateFundParams{
-		Name: "Kas RT", Currency: "IDR", ReportSlug: validSlug, CreatedAt: 1,
+		Name: "Test Fund", Currency: "IDR", ReportSlug: validSlug, CreatedAt: 1,
 	})
 	if err != nil {
 		t.Fatalf("CreateFund() = %v, want no error", err)
@@ -88,6 +89,7 @@ func newFixture(t *testing.T, l *Ledger) fixture {
 	f.bankID = createAccount(t, q, f.fundID, "bank", "Bank Account")
 	f.mainID = createPurpose(t, q, f.fundID, "main", "Primary Cash")
 	f.incidenID = createPurpose(t, q, f.fundID, "incidental", "John's birthday")
+	f.passID = createPurpose(t, q, f.fundID, "pass_through", "Pass-through")
 
 	member, err := q.CreateMember(ctx, store.CreateMemberParams{
 		FundID: f.fundID, Name: "Jane", CreatedAt: 1,
