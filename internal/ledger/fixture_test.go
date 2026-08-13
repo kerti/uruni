@@ -84,13 +84,13 @@ func newFixture(t *testing.T, l *Ledger) fixture {
 	}
 	f.fundID = fund.ID
 
-	f.cashID = createAccount(t, q, f.fundID, "cash", "Kas tunai")
-	f.bankID = createAccount(t, q, f.fundID, "bank", "Rekening")
-	f.mainID = createPurpose(t, q, f.fundID, "main", "Kas Utama")
-	f.incidenID = createPurpose(t, q, f.fundID, "incidental", "Duka Pak Budi")
+	f.cashID = createAccount(t, q, f.fundID, "cash", "Cash")
+	f.bankID = createAccount(t, q, f.fundID, "bank", "Bank Account")
+	f.mainID = createPurpose(t, q, f.fundID, "main", "Primary Cash")
+	f.incidenID = createPurpose(t, q, f.fundID, "incidental", "John's birthday")
 
 	member, err := q.CreateMember(ctx, store.CreateMemberParams{
-		FundID: f.fundID, Name: "Bu Sri", CreatedAt: 1,
+		FundID: f.fundID, Name: "Jane", CreatedAt: 1,
 	})
 	if err != nil {
 		t.Fatalf("CreateMember() = %v, want no error", err)
