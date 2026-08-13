@@ -23,3 +23,17 @@ import "errors"
 // would be a second source of truth for something the schema already answers
 // (ADR-027).
 var ErrInvalidArgument = errors.New("ledger: invalid argument")
+
+// ErrOpeningBalanceExists is returned by PostOpeningBalance when the account
+// already carries a kind='opening' row.
+//
+// The schema's opening_balance_once_per_account partial unique index is the
+// actual guarantee - a second opening row cannot exist once the write reaches
+// it, under any caller, including one that bypasses this package entirely.
+// PostOpeningBalance's pre-check exists only to turn that into a clean, named
+// error instead of a raw "UNIQUE constraint failed" string, exactly as
+// ADR-027 describes for SettleReimbursement's settled-once check: under
+// ADR-004's SetMaxOpenConns(1), a race between the pre-check and the insert
+// is structurally impossible, so this is not a lock and closes no window the
+// index does not already close.
+var ErrOpeningBalanceExists = errors.New("ledger: opening balance already exists for this account")

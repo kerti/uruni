@@ -51,6 +51,12 @@ type Querier interface {
 	GetFund(ctx context.Context, id int64) (Fund, error)
 	GetIncidental(ctx context.Context, purposeID int64) (Incidental, error)
 	GetMember(ctx context.Context, id int64) (Member, error)
+	// The one-opening-per-account pre-check, same shape as
+	// GetReimbursementSettlement above: no aggregate, so a fund with no opening
+	// entry on this account yet returns a clean sql.ErrNoRows (the expected,
+	// non-error path) rather than a NULL forced through an aggregate. A row means
+	// one already exists.
+	GetOpeningBalance(ctx context.Context, arg GetOpeningBalanceParams) (Transaction, error)
 	GetPurpose(ctx context.Context, id int64) (Purpose, error)
 	GetReconciliation(ctx context.Context, id int64) (Reconciliation, error)
 	GetReimbursement(ctx context.Context, id int64) (Reimbursement, error)

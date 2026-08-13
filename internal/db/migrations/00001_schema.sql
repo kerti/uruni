@@ -157,6 +157,13 @@ CREATE TABLE "transaction" (              -- the ledger. insert-only.
 -- kind are unconstrained.
 CREATE UNIQUE INDEX reimbursement_settled_once ON "transaction"(reimbursement_id) WHERE kind = 'reimbursement';
 
+-- One opening entry per account, enforced the same way and for a sharper
+-- reason: nothing else in the schema stops a second opening row, and a second
+-- one silently doubles the money the fund starts with. Partial, so every
+-- non-opening kind - and every account that has no opening row at all - stays
+-- unconstrained.
+CREATE UNIQUE INDEX opening_balance_once_per_account ON "transaction"(account_id) WHERE kind = 'opening';
+
 CREATE TABLE receipt (                    -- attachment, not a ledger fact; addable after the fact
   -- Its own table precisely because ledger rows are immutable: a photo taken
   -- after the entry was posted still has somewhere to go (ADR-011).
@@ -302,6 +309,7 @@ DROP TABLE incidental;
 DROP TABLE reconciliation_line;
 DROP TABLE reconciliation;
 DROP TABLE receipt;
+DROP INDEX opening_balance_once_per_account;
 DROP INDEX reimbursement_settled_once;
 DROP TABLE "transaction";
 DROP TABLE reimbursement;
