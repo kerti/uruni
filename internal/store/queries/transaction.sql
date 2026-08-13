@@ -110,3 +110,14 @@ SELECT id, fund_id, account_id, purpose_id, direction, amount, occurred_on, kind
        member_id, dues_period, reimbursement_id, transfer_id, note, created_at
 FROM "transaction"
 WHERE fund_id = ? AND reimbursement_id = ? AND kind = 'reimbursement';
+
+-- The one-opening-per-account pre-check, same shape as
+-- GetReimbursementSettlement above: no aggregate, so a fund with no opening
+-- entry on this account yet returns a clean sql.ErrNoRows (the expected,
+-- non-error path) rather than a NULL forced through an aggregate. A row means
+-- one already exists.
+-- name: GetOpeningBalance :one
+SELECT id, fund_id, account_id, purpose_id, direction, amount, occurred_on, kind,
+       member_id, dues_period, reimbursement_id, transfer_id, note, created_at
+FROM "transaction"
+WHERE fund_id = ? AND account_id = ? AND kind = 'opening';

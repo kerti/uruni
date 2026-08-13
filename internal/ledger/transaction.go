@@ -2,6 +2,8 @@ package ledger
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 	"fmt"
 	"time"
 
@@ -84,6 +86,85 @@ func (l *Ledger) PostTransaction(ctx context.Context, p PostTransactionParams) (
 	})
 	if err != nil {
 		return store.Transaction{}, fmt.Errorf("posting transaction: %w", err)
+	}
+	return posted, nil
+}
+
+// PostOpeningBalanceParams is every argument PostOpeningBalance needs to
+// record one account's starting figure.
+//
+// There is no Direction field: an opening balance is always kind='opening',
+// direction='in' - a starting figure is money the ledger begins with, never
+// money it begins owing.
+type PostOpeningBalanceParams struct {
+	FundID     int64
+	AccountID  int64
+	PurposeID  int64
+	Amount     money.Amount // must be >= 0; a zero amount posts no row (see below)
+	OccurredOn string       // "YYYY-MM-DD", a real calendar date
+	Note       *string
+}
+
+// PostOpeningBalance writes one kind='opening' row, direction='in', carrying
+// an account's starting figure, and returns the created row.
+//
+// A zero amount posts no row and returns no error, rather than the naive
+// reading "zero is legal, so write it": "transaction" carries CHECK (amount
+// > 0), binding every kind, so a zero-amount row cannot exist without
+// weakening the constraint that protects every other kind too. It also
+// carries no information the ledger lacks - an account with no opening entry
+// already derives to 0 by summing an empty set (FundBalance, AccountBalance),
+// which is exactly CLAUDE.md rule 2's "balances are derived by summing the
+// ledger". A negative amount is ErrInvalidArgument.
+//
+// On that zero path the returned store.Transaction is the zero value, so a
+// caller needing to tell "posted nothing" from "posted a row" tests
+// posted.ID != 0. Nothing in M3 needs to; M4's setup flow is the first caller
+// that might.
+//
+// A second call for an account that already has an opening entry returns
+// ErrOpeningBalanceExists and writes nothing. The pre-check inside withTx
+// exists to name that error cleanly; the schema's
+// opening_balance_once_per_account partial unique index is the actual
+// guarantee, and under ADR-004's SetMaxOpenConns(1) a race between the check
+// and the insert cannot happen, so this is not a lock (ADR-027, mirroring
+// SettleReimbursement's settled-once check).
+func (l *Ledger) PostOpeningBalance(ctx context.Context, p PostOpeningBalanceParams) (store.Transaction, error) {
+	if p.Amount < 0 {
+		return store.Transaction{}, fmt.Errorf("%w: amount must not be negative, got %d", ErrInvalidArgument, p.Amount.Int64())
+	}
+	if err := validateOccurredOn(p.OccurredOn); err != nil {
+		return store.Transaction{}, err
+	}
+	if p.Amount == 0 {
+		return store.Transaction{}, nil
+	}
+
+	var posted store.Transaction
+	err := l.withTx(ctx, func(q store.Querier) error {
+		_, err := q.GetOpeningBalance(ctx, store.GetOpeningBalanceParams{FundID: p.FundID, AccountID: p.AccountID})
+		if err == nil {
+			return ErrOpeningBalanceExists
+		}
+		if !errors.Is(err, sql.ErrNoRows) {
+			return fmt.Errorf("checking for an existing opening balance: %w", err)
+		}
+
+		posted, err = q.CreateTransaction(ctx, store.CreateTransactionParams{
+			FundID:     p.FundID,
+			AccountID:  p.AccountID,
+			PurposeID:  p.PurposeID,
+			Direction:  "in",
+			Amount:     p.Amount.Int64(),
+			OccurredOn: p.OccurredOn,
+			Kind:       "opening",
+			Note:       p.Note,
+			CreatedAt:  time.Now().Unix(),
+		})
+		return err
+	})
+	if err != nil {
+		return store.Transaction{}, fmt.Errorf("posting opening balance: %w", err)
 	}
 	return posted, nil
 }
