@@ -112,6 +112,49 @@ func (q *Queries) CreateTransaction(ctx context.Context, arg CreateTransactionPa
 	return i, err
 }
 
+const duesPaidByPeriod = `-- name: DuesPaidByPeriod :many
+SELECT member_id, CAST(COALESCE(SUM(amount), 0) AS INTEGER) AS paid_amount
+FROM "transaction"
+WHERE fund_id = ? AND kind = 'dues' AND dues_period = ?
+GROUP BY member_id
+`
+
+type DuesPaidByPeriodParams struct {
+	FundID     int64
+	DuesPeriod *string
+}
+
+type DuesPaidByPeriodRow struct {
+	MemberID   *int64
+	PaidAmount int64
+}
+
+// The roster query behind "who has paid / partially / not yet" for one
+// dues_period, across every member in one pass rather than one query per
+// member.
+func (q *Queries) DuesPaidByPeriod(ctx context.Context, arg DuesPaidByPeriodParams) ([]DuesPaidByPeriodRow, error) {
+	rows, err := q.db.QueryContext(ctx, duesPaidByPeriod, arg.FundID, arg.DuesPeriod)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []DuesPaidByPeriodRow{}
+	for rows.Next() {
+		var i DuesPaidByPeriodRow
+		if err := rows.Scan(&i.MemberID, &i.PaidAmount); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const fundBalance = `-- name: FundBalance :one
 SELECT CAST(COALESCE(SUM(CASE WHEN direction = 'in' THEN amount ELSE -amount END), 0) AS INTEGER) AS balance_amount
 FROM "transaction"
@@ -128,6 +171,43 @@ func (q *Queries) FundBalance(ctx context.Context, fundID int64) (int64, error) 
 	var balance_amount int64
 	err := row.Scan(&balance_amount)
 	return balance_amount, err
+}
+
+const getReimbursementSettlement = `-- name: GetReimbursementSettlement :one
+SELECT id, fund_id, account_id, purpose_id, direction, amount, occurred_on, kind,
+       member_id, dues_period, reimbursement_id, transfer_id, note, created_at
+FROM "transaction"
+WHERE fund_id = ? AND reimbursement_id = ? AND kind = 'reimbursement'
+`
+
+type GetReimbursementSettlementParams struct {
+	FundID          int64
+	ReimbursementID *int64
+}
+
+// The settle-once pre-check. Returns sql.ErrNoRows when the claim has not
+// been settled yet (the expected, non-error path) or the settling row when
+// it has.
+func (q *Queries) GetReimbursementSettlement(ctx context.Context, arg GetReimbursementSettlementParams) (Transaction, error) {
+	row := q.db.QueryRowContext(ctx, getReimbursementSettlement, arg.FundID, arg.ReimbursementID)
+	var i Transaction
+	err := row.Scan(
+		&i.ID,
+		&i.FundID,
+		&i.AccountID,
+		&i.PurposeID,
+		&i.Direction,
+		&i.Amount,
+		&i.OccurredOn,
+		&i.Kind,
+		&i.MemberID,
+		&i.DuesPeriod,
+		&i.ReimbursementID,
+		&i.TransferID,
+		&i.Note,
+		&i.CreatedAt,
+	)
+	return i, err
 }
 
 const getTransaction = `-- name: GetTransaction :one
@@ -157,6 +237,76 @@ func (q *Queries) GetTransaction(ctx context.Context, id int64) (Transaction, er
 		&i.CreatedAt,
 	)
 	return i, err
+}
+
+const incidentalTotals = `-- name: IncidentalTotals :one
+SELECT
+  CAST(COALESCE(SUM(CASE WHEN direction = 'in' THEN amount ELSE 0 END), 0) AS INTEGER) AS collected_amount,
+  CAST(COALESCE(SUM(CASE WHEN direction = 'out' THEN amount ELSE 0 END), 0) AS INTEGER) AS disbursed_amount
+FROM "transaction"
+WHERE fund_id = ? AND purpose_id = ?
+`
+
+type IncidentalTotalsParams struct {
+	FundID    int64
+	PurposeID int64
+}
+
+type IncidentalTotalsRow struct {
+	CollectedAmount int64
+	DisbursedAmount int64
+}
+
+// The two figures PRD 7.5 wants shown side by side for an incidental envelope.
+// Leftover is collected minus disbursed, computed in Go via money.Amount.Sub,
+// rather than a third column here - one aggregate pass over the ledger is
+// enough for both the display figures and the roll amount.
+func (q *Queries) IncidentalTotals(ctx context.Context, arg IncidentalTotalsParams) (IncidentalTotalsRow, error) {
+	row := q.db.QueryRowContext(ctx, incidentalTotals, arg.FundID, arg.PurposeID)
+	var i IncidentalTotalsRow
+	err := row.Scan(&i.CollectedAmount, &i.DisbursedAmount)
+	return i, err
+}
+
+const latestDuesPeriodPaidByMember = `-- name: LatestDuesPeriodPaidByMember :many
+SELECT member_id, CAST(MAX(dues_period) AS TEXT) AS latest_period
+FROM "transaction"
+WHERE fund_id = ? AND kind = 'dues'
+GROUP BY member_id
+`
+
+type LatestDuesPeriodPaidByMemberRow struct {
+	MemberID     *int64
+	LatestPeriod string
+}
+
+// The "paid in advance" signal. dues_period is 'YYYY-MM', so a lexicographic
+// MAX is also the chronological one. The CAST(... AS TEXT) is load-bearing,
+// not decoration: uncast, MAX(dues_period) generates interface{} - the same
+// untyped-interface trap ADR-024 documents for SUM, reached here through MAX
+// on a TEXT column - and a .(string) assertion on it is a live panic risk
+// since drivers commonly hand back []byte.
+func (q *Queries) LatestDuesPeriodPaidByMember(ctx context.Context, fundID int64) ([]LatestDuesPeriodPaidByMemberRow, error) {
+	rows, err := q.db.QueryContext(ctx, latestDuesPeriodPaidByMember, fundID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []LatestDuesPeriodPaidByMemberRow{}
+	for rows.Next() {
+		var i LatestDuesPeriodPaidByMemberRow
+		if err := rows.Scan(&i.MemberID, &i.LatestPeriod); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const listDuesPaymentsByMember = `-- name: ListDuesPaymentsByMember :many
@@ -249,6 +399,28 @@ func (q *Queries) ListTransactionsByFund(ctx context.Context, fundID int64) ([]T
 		return nil, err
 	}
 	return items, nil
+}
+
+const maxTransactionIDByFund = `-- name: MaxTransactionIDByFund :one
+SELECT id
+FROM "transaction"
+WHERE fund_id = ?
+ORDER BY id DESC
+LIMIT 1
+`
+
+// The reconciliation cutoff. Deliberately not an aggregate: SELECT
+// CAST(MAX(id) AS INTEGER) generates a non-nullable (int64, error), and a
+// bare aggregate with no GROUP BY still returns one row on an empty table
+// with the value NULL - so a fund's first-ever reconciliation would fail
+// with "converting NULL to int64 is unsupported". This form returns zero
+// rows instead, giving a clean sql.ErrNoRows the domain reads as "no ledger
+// yet".
+func (q *Queries) MaxTransactionIDByFund(ctx context.Context, fundID int64) (int64, error) {
+	row := q.db.QueryRowContext(ctx, maxTransactionIDByFund, fundID)
+	var id int64
+	err := row.Scan(&id)
+	return id, err
 }
 
 const purposeBalance = `-- name: PurposeBalance :one

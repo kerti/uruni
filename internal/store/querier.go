@@ -31,6 +31,10 @@ type Querier interface {
 	CreateReimbursement(ctx context.Context, arg CreateReimbursementParams) (Reimbursement, error)
 	CreateTransaction(ctx context.Context, arg CreateTransactionParams) (Transaction, error)
 	CreateTransfer(ctx context.Context, arg CreateTransferParams) (Transfer, error)
+	// The roster query behind "who has paid / partially / not yet" for one
+	// dues_period, across every member in one pass rather than one query per
+	// member.
+	DuesPaidByPeriod(ctx context.Context, arg DuesPaidByPeriodParams) ([]DuesPaidByPeriodRow, error)
 	// Every balance in Uruni is this shape: sum the ledger, never read a stored
 	// total (CLAUDE.md rule 2). direction carries the sign, so the CASE is the
 	// only place a minus appears. The CAST is not decoration - without it sqlc
@@ -50,8 +54,24 @@ type Querier interface {
 	GetPurpose(ctx context.Context, id int64) (Purpose, error)
 	GetReconciliation(ctx context.Context, id int64) (Reconciliation, error)
 	GetReimbursement(ctx context.Context, id int64) (Reimbursement, error)
+	// The settle-once pre-check. Returns sql.ErrNoRows when the claim has not
+	// been settled yet (the expected, non-error path) or the settling row when
+	// it has.
+	GetReimbursementSettlement(ctx context.Context, arg GetReimbursementSettlementParams) (Transaction, error)
 	GetTransaction(ctx context.Context, id int64) (Transaction, error)
 	GetTransfer(ctx context.Context, id int64) (Transfer, error)
+	// The two figures PRD 7.5 wants shown side by side for an incidental envelope.
+	// Leftover is collected minus disbursed, computed in Go via money.Amount.Sub,
+	// rather than a third column here - one aggregate pass over the ledger is
+	// enough for both the display figures and the roll amount.
+	IncidentalTotals(ctx context.Context, arg IncidentalTotalsParams) (IncidentalTotalsRow, error)
+	// The "paid in advance" signal. dues_period is 'YYYY-MM', so a lexicographic
+	// MAX is also the chronological one. The CAST(... AS TEXT) is load-bearing,
+	// not decoration: uncast, MAX(dues_period) generates interface{} - the same
+	// untyped-interface trap ADR-024 documents for SUM, reached here through MAX
+	// on a TEXT column - and a .(string) assertion on it is a live panic risk
+	// since drivers commonly hand back []byte.
+	LatestDuesPeriodPaidByMember(ctx context.Context, fundID int64) ([]LatestDuesPeriodPaidByMemberRow, error)
 	LatestReconciliation(ctx context.Context, fundID int64) (Reconciliation, error)
 	ListAccountsByFund(ctx context.Context, fundID int64) ([]Account, error)
 	ListDuesPaymentsByMember(ctx context.Context, memberID *int64) ([]Transaction, error)
@@ -79,6 +99,14 @@ type Querier interface {
 	ListReimbursementsByFund(ctx context.Context, fundID int64) ([]Reimbursement, error)
 	ListTransactionsByFund(ctx context.Context, fundID int64) ([]Transaction, error)
 	ListTransfersByFund(ctx context.Context, fundID int64) ([]Transfer, error)
+	// The reconciliation cutoff. Deliberately not an aggregate: SELECT
+	// CAST(MAX(id) AS INTEGER) generates a non-nullable (int64, error), and a
+	// bare aggregate with no GROUP BY still returns one row on an empty table
+	// with the value NULL - so a fund's first-ever reconciliation would fail
+	// with "converting NULL to int64 is unsupported". This form returns zero
+	// rows instead, giving a clean sql.ErrNoRows the domain reads as "no ledger
+	// yet".
+	MaxTransactionIDByFund(ctx context.Context, fundID int64) (int64, error)
 	// The outstanding total, cast so it lands as int64 rather than interface{}:
 	// sqlc's SQLite engine cannot infer the type of a summed expression, and an
 	// uncast aggregate is a silent failure that only surfaces at M3 (ADR-024).
