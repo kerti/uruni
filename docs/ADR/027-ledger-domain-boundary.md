@@ -65,7 +65,7 @@ The primitive validates nothing; each exported entry point checks its own argume
 
 The fund's total is unchanged by construction — one amount, two directions — which every caller's test asserts directly (`FundBalance` before `==` `FundBalance` after), mirroring `internal/db`'s existing `TestTransferKindRequiresATransfer`. `between_accounts`: same `purpose_id`, different `account_id`. `reclass_purpose` (the incidental leftover roll): same `account_id`, different `purpose_id` — and per the M3 plan, the *choice* of account is immaterial to correctness, since a same-account pair always nets to zero on that account regardless of which accounts the original contributions came in through. `CloseIncidentalAndRoll` therefore takes one `account_id` parameter with no derivation logic behind it.
 
-**Every exported write takes a params struct, not positional arguments.** `PostTransactionParams`, `PostTransferBetweenAccountsParams`, `PostDuesPaymentParams` and their successors: these methods carry four to eight fields, several of them `int64` ids that a positional call site can silently transpose, and a struct literal names each one at the point of the call. The positional signature still written below for `TakeReconciliation` predates that convention and is a **specification awaiting its slice** — [#44](https://github.com/kerti/uruni/issues/44) — not a description of shipped code. `SettleReimbursement`'s own paragraph has already been synced to what shipped in [#41](https://github.com/kerti/uruni/issues/41), which is the rule for editing a `draft` ADR that already has code behind it: an edit made once code exists ships with that code.
+**Every exported write takes a params struct, not positional arguments.** `PostTransactionParams`, `PostTransferBetweenAccountsParams`, `PostDuesPaymentParams` and their successors: these methods carry four to eight fields, several of them `int64` ids that a positional call site can silently transpose, and a struct literal names each one at the point of the call. As of M3's close every signature in this ADR describes shipped code: each was synced by the PR that implemented it, which is the rule for editing a `draft` ADR that already has code behind it — an edit made once code exists ships with that code.
 
 **Opening an envelope, and closing-and-rolling it, are each one call, not two.** Shipped in [#42](https://github.com/kerti/uruni/issues/42), following the params-struct convention above rather than the positional shape this paragraph specified before that slice existed:
 
@@ -100,12 +100,37 @@ Posting the pair from inside `CloseIncidentalAndRoll`'s own `withTx` needed one 
 **A reconciliation is one call, and it posts its own fix entries.** The snapshot tables are immutable and `CHECK (resolution <> 'adjusted' OR adjustment_transaction_id IS NOT NULL)` requires the fix row to exist before the line that names it — so the ordering is forced, and the only question is who inserts the fix.
 
 ```go
-func (l *Ledger) TakeReconciliation(ctx context.Context, fundID int64, counts []AccountCount, fixes []Fix) (store.Reconciliation, error)
+type TakeReconciliationParams struct {
+    FundID int64
+    Note   *string
+    Counts []AccountCount
+}
+
+type AccountCount struct {
+    AccountID    int64
+    ActualAmount money.Amount // what the treasurer counted; must not be negative
+    Resolution   string       // "matched", "left_open", "adjusted", "entry_added"
+    Fix          *Fix         // required for "adjusted"/"entry_added", nil for the other two
+}
+
+type Fix struct {
+    PurposeID  int64
+    Direction  string
+    Amount     money.Amount
+    OccurredOn string
+    Note       *string
+}
+
+func (l *Ledger) TakeReconciliation(ctx context.Context, p TakeReconciliationParams) (store.Reconciliation, error)
 ```
 
 Inside one `withTx`, in this order: take the cutoff, read `recorded_amount` per counted account **through that cutoff**, insert each `Fix` as a `"transaction"`, then insert the `reconciliation` and its lines naming those ids. The sequence is the whole point. If the fix were posted through an ordinary `PostTransaction` call beforehand, the cutoff taken afterwards would already include it, `recorded_amount` would equal `actual_amount`, and a line labelled `entry_added` would be stored with `difference_amount = 0` — schema-legal, since the `CHECK` verifies arithmetic and not history, and a false record that no gap was ever found. Uruni exists to make that number trustworthy, so the call that writes it owns every input to it.
 
-The caller therefore hands over raw fix data (account, purpose, direction, amount, date, note), never a transaction id. `AccountCount` is one counted location: an `account_id`, the `actual_amount` the treasurer counted, and the `resolution` she chose.
+The caller therefore hands over raw fix data (purpose, direction, amount, date, note), never a transaction id.
+
+**A fix hangs off the line it resolves, rather than arriving in a parallel slice.** This paragraph originally sketched `counts []AccountCount` beside `fixes []Fix`, which would have left the association between them implicit — index order, or a second `account_id` on the fix that could disagree with the line's own. `CHECK (resolution <> 'adjusted' OR adjustment_transaction_id IS NOT NULL)` demands that a line name *the transaction that squared that line*, so the two travel together: `AccountCount.Fix` is nil for `matched` and `left_open`, and required for `adjusted` and `entry_added`. Both fix kinds are posted on the counted account, which removes the question of which account a fix belongs to before it can be asked.
+
+The cutoff is taken once, before any fix is inserted, so a fix posted while resolving the first counted account cannot leak into the second account's `recorded_amount` — `AccountBalanceThrough` filters `id <= cutoff` and every fix in the call has a higher id than that.
 
 **Reimbursement settlement posts exactly one row, after a pre-check that exists to produce a named error, not to close a race that cannot happen.** Shipped in [#41](https://github.com/kerti/uruni/issues/41), following the params-struct convention above rather than the four-positional-argument shape this paragraph specified before that slice existed:
 
