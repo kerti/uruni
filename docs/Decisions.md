@@ -201,3 +201,11 @@ Two calls made building the CLI's runtime config ([#11](https://github.com/kerti
 2. **A config error names the variable but never prints its value, for `URUNI_SESSION_SECRET` and `SMTP_URL`.** Both are credentials, and a boot failure is precisely the output an operator pastes into an issue. Everything else (`PORT`, the log variables) *does* echo, because seeing what was actually read is the difference between a one-minute fix and a puzzle. Same rule as [ADR-022](./ADR/022-logging-slog.md)'s "log IDs, not names or amounts", applied to errors rather than logs.
 
 Also closed here: the **third** of the three release-image faults recorded above under CI hardening. `VERSION` was wired at that point but `COMMIT` was not, and `.dockerignore` keeps `.git` out of the build context — so Go's own VCS stamping had nothing to read and every tagged image would have reported `commit unknown`. It now has a build-arg of its own, filled from `github.sha`; a local `go build` has the mirror-image situation (no stamp, readable `.git`) and falls back to `debug.ReadBuildInfo`.
+
+## Test data is generic English, and that is not the Bahasa rule bending (decided 2026-08-13)
+
+`CLAUDE.md`'s "Bahasa Indonesia first" rule covers **the treasurer's surface** — the SPA and the public report. It was never about fixtures, and M3's tests had drifted into using Indonesian fund, member, account and purpose names because the domain they model is Indonesian.
+
+Test data is now **generic English**: `Test Fund`, `Jane`, `Cash`, `Bank Account`, `Main`. Two reasons, neither of them style. Person-shaped names in a public AGPL repo are exactly what the pii-guard exists to keep out, and they arrive through the one door it cannot watch — a fixture nobody thinks of as data about anyone. And a Go identifier outlives the string it was named for: `sri := createMember(..., "Jane")` passes every test while reading worse than either name alone, which is how [#50](https://github.com/kerti/uruni/pull/50) found half its work.
+
+The schema has used English identifiers since M2 ([ADR-024](./ADR/024-schema-conventions.md)); this is the same rule reaching the values underneath them. Indonesian stays where it belongs: [ADR-014](./ADR/014-localization-indonesian-first.md)'s UI labels and translation files.
