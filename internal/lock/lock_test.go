@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"golang.org/x/sys/unix"
 )
 
 func TestPathForSitsBesideTheDatabaseFile(t *testing.T) {
@@ -51,6 +53,96 @@ func TestAcquireRefusesASecondHolder(t *testing.T) {
 	if !strings.Contains(err.Error(), "already running") {
 		t.Errorf("second Acquire() error = %q, want it to say another instance is running", err)
 	}
+}
+
+func TestAcquireReportsAnUnopenableLockPath(t *testing.T) {
+	// A lock file the operator's URUNI_DB implies but that cannot be created —
+	// here because its parent directory does not exist, which is what a typo'd
+	// or unmounted data path looks like at boot.
+	path := filepath.Join(t.TempDir(), "no-such-directory", "uruni.db.lock")
+
+	_, err := Acquire(path)
+	if err == nil {
+		t.Fatal("Acquire() with an unopenable path = nil, want an error")
+	}
+	if errors.Is(err, ErrLocked) {
+		t.Errorf("Acquire() = %v, want a file error rather than ErrLocked — the lock is not held, it could not be opened", err)
+	}
+	if !strings.Contains(err.Error(), path) {
+		t.Errorf("Acquire() error = %q, want it to name %q so the operator can see which path failed", err, path)
+	}
+}
+
+func TestAcquireReportsAFlockFailureThatIsNotContention(t *testing.T) {
+	// An exclusive flock on a valid descriptor has no real-world failure other
+	// than contention, so the syscall is stubbed. The branch still has to be
+	// right: a kernel refusal is not "someone else holds it", and reporting it
+	// as ErrLocked would send an operator hunting for a second process that
+	// does not exist.
+	stubFlock(t, func(int, int) error { return unix.EIO })
+
+	_, err := Acquire(filepath.Join(t.TempDir(), "uruni.db.lock"))
+	if err == nil {
+		t.Fatal("Acquire() with a failing flock = nil, want an error")
+	}
+	if errors.Is(err, ErrLocked) {
+		t.Errorf("Acquire() = %v, want the underlying error rather than ErrLocked", err)
+	}
+	if !errors.Is(err, unix.EIO) {
+		t.Errorf("Acquire() = %v, want it to wrap the syscall error", err)
+	}
+}
+
+func TestReleaseReportsAFailedUnlock(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "uruni.db.lock")
+
+	l, err := Acquire(path)
+	if err != nil {
+		t.Fatalf("Acquire() = %v, want nil", err)
+	}
+
+	// Stubbed only after the lock is held, so the failure lands on the unlock.
+	stubFlock(t, func(int, int) error { return unix.EBADF })
+
+	if err := l.Release(); err == nil {
+		t.Error("Release() with a failing unlock = nil, want an error")
+	} else if !strings.Contains(err.Error(), path) {
+		t.Errorf("Release() error = %q, want it to name %q", err, path)
+	}
+}
+
+func TestReleaseTwiceIsANoOpAndNeverTouchesAReusedDescriptor(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "uruni.db.lock")
+
+	l, err := Acquire(path)
+	if err != nil {
+		t.Fatalf("Acquire() = %v, want nil", err)
+	}
+	if err := l.Release(); err != nil {
+		t.Fatalf("first Release() = %v, want nil", err)
+	}
+
+	// serve releases through a defer, so an explicit release followed by the
+	// deferred one is an ordinary shape, not an abuse. The second call must not
+	// reach the syscall at all: the descriptor is closed, and the kernel is free
+	// to have given that number to any file opened since — unlocking which would
+	// release a lock this process never took.
+	stubFlock(t, func(int, int) error {
+		t.Error("second Release() called flock on a closed descriptor")
+		return nil
+	})
+
+	if err := l.Release(); err != nil {
+		t.Errorf("second Release() = %v, want nil", err)
+	}
+}
+
+// stubFlock replaces the flock syscall for one test and restores it afterwards.
+func stubFlock(t *testing.T, fn func(fd, how int) error) {
+	t.Helper()
+	original := flock
+	flock = fn
+	t.Cleanup(func() { flock = original })
 }
 
 func TestReleaseAllowsAnOrdinaryRestart(t *testing.T) {

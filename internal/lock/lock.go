@@ -28,6 +28,16 @@ import (
 // errors.Is rather than parsing the message.
 var ErrLocked = errors.New("lock: already held by another process")
 
+// flock is unix.Flock, indirected so the tests can drive the two failure
+// branches below. Neither is reachable by any arrangement of real files: a
+// non-EWOULDBLOCK error from an exclusive flock on a valid descriptor, and a
+// failed unlock, both mean the kernel refused something it had already
+// accepted. They are handled rather than ignored because this lock is the
+// only thing standing between two processes and the un-backstopped fund
+// guard (see the package doc) — a silent failure here is the one outcome
+// worse than refusing to boot.
+var flock = unix.Flock
+
 // Lock is an acquired advisory file lock. The zero value is not usable —
 // obtain one from Acquire.
 type Lock struct {
@@ -64,7 +74,7 @@ func Acquire(path string) (*Lock, error) {
 		return nil, fmt.Errorf("opening lock file %s: %w", path, err)
 	}
 
-	if err := unix.Flock(int(f.Fd()), unix.LOCK_EX|unix.LOCK_NB); err != nil {
+	if err := flock(int(f.Fd()), unix.LOCK_EX|unix.LOCK_NB); err != nil {
 		_ = f.Close()
 		if errors.Is(err, unix.EWOULDBLOCK) {
 			return nil, fmt.Errorf("%w: %s — another instance of uruni is already running against this database", ErrLocked, path)
@@ -80,10 +90,26 @@ func Acquire(path string) (*Lock, error) {
 // so the next Acquire simply reopens it and takes the lock again; deleting it
 // here would only invite a race with a process that opened it a moment
 // earlier and is still waiting to lock it.
+//
+// Calling Release twice is a no-op, and that is a safety property rather than
+// a convenience: the first call closes the descriptor, and the kernel is free
+// to hand that same number to the next file anything in the process opens. An
+// unguarded second call would then unlock *that* file — a stranger's lock,
+// released by a caller that believed it was tidying up its own. Since serve
+// releases through a defer, the shape that reaches this is an ordinary one
+// (an explicit Release followed by the deferred one), so it has to be safe
+// rather than merely discouraged.
 func (l *Lock) Release() error {
-	defer func() { _ = l.f.Close() }()
-	if err := unix.Flock(int(l.f.Fd()), unix.LOCK_UN); err != nil {
-		return fmt.Errorf("releasing lock %s: %w", l.f.Name(), err)
+	if l.f == nil {
+		return nil
+	}
+
+	f := l.f
+	l.f = nil
+
+	defer func() { _ = f.Close() }()
+	if err := flock(int(f.Fd()), unix.LOCK_UN); err != nil {
+		return fmt.Errorf("releasing lock %s: %w", f.Name(), err)
 	}
 	return nil
 }
