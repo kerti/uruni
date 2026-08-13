@@ -108,7 +108,7 @@ func TestMul(t *testing.T) {
 		want     money.Amount
 		overflow bool
 	}{
-		{name: "three months of dues at the pelaksana rate", a: 50_000, n: 3, want: 150_000},
+		{name: "three months of dues at a fixed rate", a: 50_000, n: 3, want: 150_000},
 		{name: "no periods owed", a: 50_000, n: 0, want: 0},
 		{name: "no rate set", a: 0, n: 12, want: 0},
 		{name: "zero times zero", a: 0, n: 0, want: 0},
