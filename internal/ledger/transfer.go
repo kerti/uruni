@@ -26,51 +26,68 @@ func legsIdentical(from, to leg) bool {
 	return from.AccountID == to.AccountID && from.PurposeID == to.PurposeID
 }
 
-// postTransferPair is the one primitive behind every value-neutral movement
-// (ADR-024, ADR-027): insert one transfer row, then two "transaction" rows
-// referencing it, equal amount, opposite direction, all inside one withTx.
-// The fund's total is unchanged by construction - one amount, two directions
-// - because nothing moved, only where the money sits (between_accounts) or
+// postTransferPairTx is the one primitive behind every value-neutral
+// movement (ADR-024, ADR-027): insert one transfer row, then two
+// "transaction" rows referencing it, equal amount, opposite direction. The
+// fund's total is unchanged by construction - one amount, two directions -
+// because nothing moved, only where the money sits (between_accounts) or
 // what it is for (reclass_purpose).
 //
 // kind selects which of the two the transfer row records; the two rows this
 // function posts are identical either way, since the "same purpose" or "same
 // account" constraint each caller upholds lives in the leg values it passes,
-// not in this function's logic. This is deliberate: postTransferPair does
+// not in this function's logic. This is deliberate: postTransferPairTx does
 // not know or check which fields its two callers hold equal, so
-// RollIncidentalLeftover (#42) needs no second code path, only different
+// CloseIncidentalAndRoll (#42) needs no second code path, only different
 // legs and kind='reclass_purpose'.
 //
 // No argument-shape validation happens here (ADR-027): that is each exported
 // caller's job, because the message a caller wants ("from_account_id and
 // to_account_id must differ") reads differently depending on which two
 // fields the caller holds fixed. This function trusts its caller completely.
+//
+// It takes an already-open store.Querier rather than opening its own
+// transaction, unlike its predecessor before #42: CloseIncidentalAndRoll
+// needs the pair and the incidental UPDATE in the same atomic write, and a
+// second l.withTx nested inside the first would try to open a second
+// connection while the outer transaction still holds the only one
+// ADR-004's SetMaxOpenConns(1) allows - a deadlock, not a safety net.
+// postTransferPair below is the thin, transaction-owning wrapper that
+// PostTransferBetweenAccounts and the existing tests still call.
+func (l *Ledger) postTransferPairTx(ctx context.Context, q store.Querier, fundID int64, kind string, from, to leg, amount money.Amount, occurredOn string) (store.Transfer, error) {
+	now := time.Now().Unix()
+
+	transfer, err := q.CreateTransfer(ctx, store.CreateTransferParams{
+		FundID: fundID, Kind: kind, CreatedAt: now,
+	})
+	if err != nil {
+		return store.Transfer{}, fmt.Errorf("creating transfer: %w", err)
+	}
+
+	for _, p := range [...]struct {
+		leg       leg
+		direction string
+	}{{from, "out"}, {to, "in"}} {
+		if _, err := q.CreateTransaction(ctx, store.CreateTransactionParams{
+			FundID: fundID, AccountID: p.leg.AccountID, PurposeID: p.leg.PurposeID,
+			Direction: p.direction, Amount: amount.Int64(), OccurredOn: occurredOn,
+			Kind: "transfer", TransferID: &transfer.ID, CreatedAt: now,
+		}); err != nil {
+			return store.Transfer{}, fmt.Errorf("posting transfer leg (%s): %w", p.direction, err)
+		}
+	}
+	return transfer, nil
+}
+
+// postTransferPair wraps postTransferPairTx in its own withTx, for a caller
+// that has no outer transaction of its own to share - PostTransferBetweenAccounts,
+// and the reclass_purpose shape exercised directly in transfer_test.go.
 func (l *Ledger) postTransferPair(ctx context.Context, fundID int64, kind string, from, to leg, amount money.Amount, occurredOn string) (store.Transfer, error) {
 	var transfer store.Transfer
 	err := l.withTx(ctx, func(q store.Querier) error {
-		now := time.Now().Unix()
-
 		var err error
-		transfer, err = q.CreateTransfer(ctx, store.CreateTransferParams{
-			FundID: fundID, Kind: kind, CreatedAt: now,
-		})
-		if err != nil {
-			return fmt.Errorf("creating transfer: %w", err)
-		}
-
-		for _, p := range [...]struct {
-			leg       leg
-			direction string
-		}{{from, "out"}, {to, "in"}} {
-			if _, err := q.CreateTransaction(ctx, store.CreateTransactionParams{
-				FundID: fundID, AccountID: p.leg.AccountID, PurposeID: p.leg.PurposeID,
-				Direction: p.direction, Amount: amount.Int64(), OccurredOn: occurredOn,
-				Kind: "transfer", TransferID: &transfer.ID, CreatedAt: now,
-			}); err != nil {
-				return fmt.Errorf("posting transfer leg (%s): %w", p.direction, err)
-			}
-		}
-		return nil
+		transfer, err = l.postTransferPairTx(ctx, q, fundID, kind, from, to, amount, occurredOn)
+		return err
 	})
 	if err != nil {
 		return store.Transfer{}, err
