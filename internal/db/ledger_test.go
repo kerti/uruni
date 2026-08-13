@@ -78,9 +78,9 @@ func newLedgerFixture(t *testing.T, sqlDB *sql.DB, name, slug string) ledgerFixt
 	t.Helper()
 	f := ledgerFixture{}
 	f.fundID = createFund(t, sqlDB, name, slug)
-	f.accountID = createAccount(t, sqlDB, f.fundID, "cash", "Kas tunai")
-	f.purposeID = createPurpose(t, sqlDB, f.fundID, "main", "Kas Utama")
-	f.memberID = createMember(t, sqlDB, f.fundID, "Bu Sri")
+	f.accountID = createAccount(t, sqlDB, f.fundID, "cash", "Cash")
+	f.purposeID = createPurpose(t, sqlDB, f.fundID, "main", "Main")
+	f.memberID = createMember(t, sqlDB, f.fundID, "Jane")
 	return f
 }
 
@@ -101,7 +101,7 @@ func (f ledgerFixture) post(t *testing.T, sqlDB *sql.DB, direction string, amoun
 
 func TestPostedTransactionCannotBeUpdatedOrDeleted(t *testing.T) {
 	sqlDB := migratedTestDB(t)
-	f := newLedgerFixture(t, sqlDB, "Kas RT", validSlug)
+	f := newLedgerFixture(t, sqlDB, "Test Fund", validSlug)
 	txID := f.post(t, sqlDB, "in", 50000)
 
 	const want = "transaction rows are immutable"
@@ -130,7 +130,7 @@ func TestPostedTransactionCannotBeUpdatedOrDeleted(t *testing.T) {
 
 func TestTransferCannotBeUpdatedOrDeleted(t *testing.T) {
 	sqlDB := migratedTestDB(t)
-	fundID := createFund(t, sqlDB, "Kas RT", validSlug)
+	fundID := createFund(t, sqlDB, "Test Fund", validSlug)
 	transferID := createTransfer(t, sqlDB, fundID, "between_accounts")
 
 	const want = "transfer rows are immutable"
@@ -152,7 +152,7 @@ func TestTransferCannotBeUpdatedOrDeleted(t *testing.T) {
 
 func TestImmutableTablesStillAcceptInserts(t *testing.T) {
 	sqlDB := migratedTestDB(t)
-	f := newLedgerFixture(t, sqlDB, "Kas RT", validSlug)
+	f := newLedgerFixture(t, sqlDB, "Test Fund", validSlug)
 
 	// ADR-012's import restores a database by inserting rows, so the triggers
 	// must guard UPDATE and DELETE only. (reconciliation and
@@ -169,7 +169,7 @@ func TestReimbursementIsSettledAtMostOnce(t *testing.T) {
 	sqlDB := migratedTestDB(t)
 	ctx := context.Background()
 	q := store.New(sqlDB)
-	f := newLedgerFixture(t, sqlDB, "Kas RT", validSlug)
+	f := newLedgerFixture(t, sqlDB, "Test Fund", validSlug)
 
 	reimbID := createReimbursement(t, sqlDB, f.fundID, f.memberID, f.purposeID, 2000)
 	settle := store.CreateTransactionParams{
@@ -190,7 +190,7 @@ func TestReimbursementKindRequiresItsClaimAndAnOutwardDirection(t *testing.T) {
 	sqlDB := migratedTestDB(t)
 	ctx := context.Background()
 	q := store.New(sqlDB)
-	f := newLedgerFixture(t, sqlDB, "Kas RT", validSlug)
+	f := newLedgerFixture(t, sqlDB, "Test Fund", validSlug)
 	reimbID := createReimbursement(t, sqlDB, f.fundID, f.memberID, f.purposeID, 2000)
 
 	if _, err := q.CreateTransaction(ctx, store.CreateTransactionParams{
@@ -214,7 +214,7 @@ func TestDuesFieldsBelongToDuesAndNothingElse(t *testing.T) {
 	sqlDB := migratedTestDB(t)
 	ctx := context.Background()
 	q := store.New(sqlDB)
-	f := newLedgerFixture(t, sqlDB, "Kas RT", validSlug)
+	f := newLedgerFixture(t, sqlDB, "Test Fund", validSlug)
 	period := "2026-08"
 
 	base := func() store.CreateTransactionParams {
@@ -276,12 +276,12 @@ func TestDuesFieldsBelongToDuesAndNothingElse(t *testing.T) {
 
 func TestAdjustmentStandsAloneWithNoReconciliation(t *testing.T) {
 	sqlDB := migratedTestDB(t)
-	f := newLedgerFixture(t, sqlDB, "Kas RT", validSlug)
+	f := newLedgerFixture(t, sqlDB, "Test Fund", validSlug)
 
 	// CLAUDE.md rule 3 makes every correction an adjusting entry, not only the
 	// ones raised during a reconciliation. An earlier draft of the schema had a
 	// CHECK forcing a Tuesday-afternoon correction to masquerade as 'normal'.
-	note := "koreksi selisih kas"
+	note := "cash discrepancy correction"
 	if _, err := store.New(sqlDB).CreateTransaction(context.Background(), store.CreateTransactionParams{
 		FundID: f.fundID, AccountID: f.accountID, PurposeID: f.purposeID,
 		Direction: "out", Amount: 5000, OccurredOn: "2026-08-12", Kind: "adjustment",
@@ -295,7 +295,7 @@ func TestTransferKindRequiresATransfer(t *testing.T) {
 	sqlDB := migratedTestDB(t)
 	ctx := context.Background()
 	q := store.New(sqlDB)
-	f := newLedgerFixture(t, sqlDB, "Kas RT", validSlug)
+	f := newLedgerFixture(t, sqlDB, "Test Fund", validSlug)
 
 	if _, err := q.CreateTransaction(ctx, store.CreateTransactionParams{
 		FundID: f.fundID, AccountID: f.accountID, PurposeID: f.purposeID,
@@ -307,7 +307,7 @@ func TestTransferKindRequiresATransfer(t *testing.T) {
 
 	// The pair itself: equal amounts, opposite directions, one transfer row, and
 	// a fund total that has not moved.
-	bankID := createAccount(t, sqlDB, f.fundID, "bank", "Rekening BRI")
+	bankID := createAccount(t, sqlDB, f.fundID, "bank", "Bank Account")
 	transferID := createTransfer(t, sqlDB, f.fundID, "between_accounts")
 	f.post(t, sqlDB, "in", 100000)
 
@@ -383,7 +383,7 @@ func TestTransactionAmountMustBePositive(t *testing.T) {
 	sqlDB := migratedTestDB(t)
 	ctx := context.Background()
 	q := store.New(sqlDB)
-	f := newLedgerFixture(t, sqlDB, "Kas RT", validSlug)
+	f := newLedgerFixture(t, sqlDB, "Test Fund", validSlug)
 
 	// direction carries the sign. A negative or zero amount is a second way to
 	// say the same thing, and two ways is one too many.
@@ -402,7 +402,7 @@ func TestReceiptHasExactlyOneParent(t *testing.T) {
 	sqlDB := migratedTestDB(t)
 	ctx := context.Background()
 	q := store.New(sqlDB)
-	f := newLedgerFixture(t, sqlDB, "Kas RT", validSlug)
+	f := newLedgerFixture(t, sqlDB, "Test Fund", validSlug)
 
 	txID := f.post(t, sqlDB, "out", 30000)
 	reimbID := createReimbursement(t, sqlDB, f.fundID, f.memberID, f.purposeID, 2000)
@@ -425,7 +425,7 @@ func TestReceiptCanBeAttachedAfterTheEntryIsPosted(t *testing.T) {
 	sqlDB := migratedTestDB(t)
 	ctx := context.Background()
 	q := store.New(sqlDB)
-	f := newLedgerFixture(t, sqlDB, "Kas RT", validSlug)
+	f := newLedgerFixture(t, sqlDB, "Test Fund", validSlug)
 
 	// The whole reason receipt is its own table: the ledger row is immutable, so
 	// a photo taken later has nowhere to go if it lives as a column (ADR-011).
@@ -449,8 +449,8 @@ func TestBalancesSumTheLedgerAndLandAsInt64(t *testing.T) {
 	sqlDB := migratedTestDB(t)
 	ctx := context.Background()
 	q := store.New(sqlDB)
-	f := newLedgerFixture(t, sqlDB, "Kas RT", validSlug)
-	bankID := createAccount(t, sqlDB, f.fundID, "bank", "Rekening BRI")
+	f := newLedgerFixture(t, sqlDB, "Test Fund", validSlug)
+	bankID := createAccount(t, sqlDB, f.fundID, "bank", "Bank Account")
 
 	f.post(t, sqlDB, "in", 500000)
 	f.post(t, sqlDB, "out", 120000)
@@ -499,7 +499,7 @@ func TestOutstandingReimbursementsExcludeSettledAndWaived(t *testing.T) {
 	sqlDB := migratedTestDB(t)
 	ctx := context.Background()
 	q := store.New(sqlDB)
-	f := newLedgerFixture(t, sqlDB, "Kas RT", validSlug)
+	f := newLedgerFixture(t, sqlDB, "Test Fund", validSlug)
 
 	outstanding := createReimbursement(t, sqlDB, f.fundID, f.memberID, f.purposeID, 2000)
 	settled := createReimbursement(t, sqlDB, f.fundID, f.memberID, f.purposeID, 3000)
