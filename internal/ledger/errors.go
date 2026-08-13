@@ -56,3 +56,18 @@ var ErrReimbursementWaived = errors.New("ledger: reimbursement has been waived")
 // pre-check and the insert is structurally impossible, so this is not a lock
 // and closes no window the index does not already close.
 var ErrReimbursementAlreadySettled = errors.New("ledger: reimbursement has already been settled")
+
+// ErrIncidentalAlreadyClosed is returned by CloseIncidentalAndRoll when the
+// envelope's closed_on is already set.
+//
+// Unlike ErrOpeningBalanceExists and ErrReimbursementAlreadySettled, this is
+// not a pre-check ahead of a unique index the schema already enforces:
+// incidental carries no immutability trigger, closing it is a plain UPDATE
+// (ADR-024), and the purpose it tags stays open to new postings even after
+// closed_on is set. Nothing in the schema stops a second UPDATE, and nothing
+// stops a contribution landing against a closed envelope's purpose_id later.
+// This check is therefore the entire guarantee, not a defense-in-depth
+// belt-and-braces on top of one: without it, a stray post-close contribution
+// would roll again on the next call, quietly moving money out of an envelope
+// the treasurer already considers settled and reported.
+var ErrIncidentalAlreadyClosed = errors.New("ledger: incidental has already been closed")

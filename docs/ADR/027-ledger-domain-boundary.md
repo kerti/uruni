@@ -67,7 +67,35 @@ The fund's total is unchanged by construction — one amount, two directions —
 
 **Every exported write takes a params struct, not positional arguments.** `PostTransactionParams`, `PostTransferBetweenAccountsParams`, `PostDuesPaymentParams` and their successors: these methods carry four to eight fields, several of them `int64` ids that a positional call site can silently transpose, and a struct literal names each one at the point of the call. The positional signature still written below for `TakeReconciliation` predates that convention and is a **specification awaiting its slice** — [#44](https://github.com/kerti/uruni/issues/44) — not a description of shipped code. `SettleReimbursement`'s own paragraph has already been synced to what shipped in [#41](https://github.com/kerti/uruni/issues/41), which is the rule for editing a `draft` ADR that already has code behind it: an edit made once code exists ships with that code.
 
-**Closing an envelope and rolling its leftover are one call, not two.** `CloseIncidentalAndRoll(ctx, fundID, purposeID, accountID, closedOn)` posts the `reclass_purpose` pair and sets `incidental.closed_on` inside a single `withTx`; a leftover of zero — or a negative one, an envelope that disbursed more than it collected — closes it and posts nothing, returning `0` and no error, because an error inside `withTx` would roll the close back and nothing asks for an over-disbursed envelope to stay open. The one refusal is `ErrIncidentalAlreadyClosed`: a second roll would move money that already moved. PRD §7.5 describes one gesture ("on close, show the leftover and offer a one-tap roll into Kas Utama"), and splitting it across two calls means a crash between them leaves an envelope rolled but open — a state nothing in the schema forbids and nothing in the UI expects. The cost is that this package no longer *only* inserts: `incidental` is the one table M2 deliberately left without an immutability trigger, precisely because closing a collection moves no money and is a decision that gets revised, so an `UPDATE` here trips nothing and contradicts no non-negotiable.
+**Opening an envelope, and closing-and-rolling it, are each one call, not two.** Shipped in [#42](https://github.com/kerti/uruni/issues/42), following the params-struct convention above rather than the positional shape this paragraph specified before that slice existed:
+
+```go
+type OpenIncidentalParams struct {
+    FundID       int64
+    Occasion     string        // becomes both purpose.name and incidental.occasion
+    TargetAmount *money.Amount // nil = no target (the schema allows NULL); must be > 0 if set
+    OpenedOn     string        // "YYYY-MM-DD"
+}
+
+func (l *Ledger) OpenIncidental(ctx context.Context, p OpenIncidentalParams) (store.Incidental, error)
+
+type CloseIncidentalAndRollParams struct {
+    FundID    int64
+    PurposeID int64
+    AccountID int64  // the reclass pair's account on both legs - immaterial to correctness, see above
+    ClosedOn  string // "YYYY-MM-DD"
+}
+
+func (l *Ledger) CloseIncidentalAndRoll(ctx context.Context, p CloseIncidentalAndRollParams) (money.Amount, error)
+```
+
+`OpenIncidental` writes one `purpose` row (`kind='incidental'`) and the `incidental` row 1:1 with it inside a single `withTx`. Nothing in the schema ties their creation together - they are two inserts into two different tables - so the shape M4 would otherwise have reached for, two raw `store.Queries` calls with nothing in M3 owning the invariant, leaves a crash between them free to strand an **orphan purpose**: a tag that exists, appears in purpose lists, accepts transactions, and has no occasion, target or `opened_on` behind it. That is the same atomicity argument this paragraph already made for closing, applied to the other end of the same lifecycle - PRD §7.5 requires creating an incidental at all, so this closes a gap rather than adding scope, the same class as the opening-balance gap [#51](https://github.com/kerti/uruni/issues/51) closed.
+
+`CloseIncidentalAndRoll` posts the `reclass_purpose` pair and sets `incidental.closed_on` inside a single `withTx`; a leftover of zero — or a negative one, an envelope that disbursed more than it collected — closes it and posts nothing, returning `0` and no error, because an error inside `withTx` would roll the close back and nothing asks for an over-disbursed envelope to stay open. The one refusal is `ErrIncidentalAlreadyClosed`: a second roll would move money that already moved, and the purpose it closes stays open to new postings even afterward, so the check is the entire guarantee rather than a pre-check ahead of something the schema also enforces. PRD §7.5 describes one gesture ("on close, show the leftover and offer a one-tap roll into Kas Utama"), and splitting it across two calls means a crash between them leaves an envelope rolled but open — a state nothing in the schema forbids and nothing in the UI expects. The cost is that this package no longer *only* inserts: `incidental` is the one table M2 deliberately left without an immutability trigger, precisely because closing a collection moves no money and is a decision that gets revised, so an `UPDATE` here trips nothing and contradicts no non-negotiable.
+
+Posting the pair from inside `CloseIncidentalAndRoll`'s own `withTx` needed one change to the transfer-pair primitive above: as first shipped, `postTransferPair` opened its own transaction, and calling it from inside a transaction already open would try to check out a second connection while the first still held the only one `SetMaxOpenConns(1)` allows - a deadlock, not a safety net. The primitive is now `postTransferPairTx(ctx, q store.Querier, fundID, kind, from, to, amount, occurredOn)`, taking the caller's own `store.Querier` and doing no transaction management itself; `postTransferPair` is now the thin `withTx`-owning wrapper that `PostTransferBetweenAccounts` and the reclass-purpose test still call unchanged, and `CloseIncidentalAndRoll` calls the `Tx` form directly with the `store.Querier` its own `withTx` already opened.
+
+**The general rule, because this one does not fail loudly.** An exported method owns its transaction. A domain operation built out of another one therefore never calls the exported form from inside `withTx` — it calls a `…Tx` variant taking the caller's `store.Querier`, or it is not composed at all. Verified rather than reasoned about: a nested `withTx` **hangs** until the test timeout rather than returning an error, because it waits forever for a connection the outer transaction is still holding. No `if err != nil` catches it and no assertion fails; a suite that hits it simply stops. The next operation this binds is [#44](https://github.com/kerti/uruni/issues/44)'s `TakeReconciliation`, which posts its own fix entries inside its own `withTx` and so must reach for the same `…Tx` shape rather than `PostTransaction`.
 
 **A reconciliation is one call, and it posts its own fix entries.** The snapshot tables are immutable and `CHECK (resolution <> 'adjusted' OR adjustment_transaction_id IS NOT NULL)` requires the fix row to exist before the line that names it — so the ordering is forced, and the only question is who inserts the fix.
 
