@@ -37,3 +37,22 @@ var ErrInvalidArgument = errors.New("ledger: invalid argument")
 // is structurally impossible, so this is not a lock and closes no window the
 // index does not already close.
 var ErrOpeningBalanceExists = errors.New("ledger: opening balance already exists for this account")
+
+// ErrReimbursementWaived is returned by SettleReimbursement when the claim's
+// waived_on is set: a claim the treasurer has already written off as never
+// going to be repaid cannot also be settled.
+var ErrReimbursementWaived = errors.New("ledger: reimbursement has been waived")
+
+// ErrReimbursementAlreadySettled is returned by SettleReimbursement when
+// GetReimbursementSettlement finds an existing kind='reimbursement' row for
+// the claim.
+//
+// The schema's reimbursement_settled_once partial unique index is the actual
+// guarantee - a second settling row cannot exist once the write reaches it,
+// under any caller, including one that bypasses this package entirely.
+// SettleReimbursement's pre-check exists only to turn that into a clean,
+// named error instead of a raw "UNIQUE constraint failed" string, exactly as
+// ADR-027 describes: under ADR-004's SetMaxOpenConns(1), a race between the
+// pre-check and the insert is structurally impossible, so this is not a lock
+// and closes no window the index does not already close.
+var ErrReimbursementAlreadySettled = errors.New("ledger: reimbursement has already been settled")
