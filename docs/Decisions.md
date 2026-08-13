@@ -2,7 +2,7 @@
 
 *A running record of what we've decided and why. Anything here can still change.*
 
-Last updated: 2026-08-10 (M1.3 — Go dependency licences)
+Last updated: 2026-08-13 (M4 planning — the one-fund rule and receipt-photo ownership)
 
 ## What belongs in this file
 
@@ -209,3 +209,11 @@ Also closed here: the **third** of the three release-image faults recorded above
 Test data is now **generic English**: `Test Fund`, `Jane`, `Cash`, `Bank Account`, `Main`. Two reasons, neither of them style. Person-shaped names in a public AGPL repo are exactly what the pii-guard exists to keep out, and they arrive through the one door it cannot watch — a fixture nobody thinks of as data about anyone. And a Go identifier outlives the string it was named for: `sri := createMember(..., "Jane")` passes every test while reading worse than either name alone, which is how [#50](https://github.com/kerti/uruni/pull/50) found half its work.
 
 The schema has used English identifiers since M2 ([ADR-024](./ADR/024-schema-conventions.md)); this is the same rule reaching the values underneath them. Indonesian stays where it belongs: [ADR-014](./ADR/014-localization-indonesian-first.md)'s UI labels and translation files.
+
+## The one-fund rule is policy, and it needs a lock to be true (decided 2026-08-13)
+
+M4's planning pass had to answer [#61](https://github.com/kerti/uruni/issues/61): who owns first-run setup. The slice-level reasoning lives in [#64](https://github.com/kerti/uruni/issues/64) and its PR; two things outlive it.
+
+**"At most one fund" is an application-level refusal, deliberately not a schema constraint.** PRD §6 keeps multiple funds open at the *model* level, and a `CHECK` would need a migration to lift. The cost is that the refusal has no schema backstop, unlike `ErrOpeningBalanceExists` and `ErrReimbursementAlreadySettled` — whose Go pre-checks sit on a `UNIQUE` index that is the real guarantee. `SetMaxOpenConns(1)` protects one `*sql.DB`, not one database file, and nothing stopped a second `uruni serve` against the same one. So the guard gets a real backstop: a single-instance lock in `serve` ([#62](https://github.com/kerti/uruni/issues/62)), which also makes honest every other "`SetMaxOpenConns(1)` makes this safe" comment already in the tree.
+
+**Receipt photos belong to M6** ([#73](https://github.com/kerti/uruni/issues/73)) — the backend and the optional-photo affordance land together, and [ADR-011](./ADR/011-receipt-photos-local-volume.md)'s `draft` tag drops there. They are explicitly **not** M4: the pre-auth stance that lets M4 ship open reasons about JSON write endpoints, and an unauthenticated multipart file upload is a different risk class. [ADR-012](./ADR/012-backup-and-export.md) already commits M8's export to covering the uploads volume, so this cannot drift further without dragging backup/export with it.
