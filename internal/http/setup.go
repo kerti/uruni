@@ -76,18 +76,32 @@ func (a *api) setupFund(w http.ResponseWriter, r *http.Request) {
 // getFund is GET /api/fund: a direct-CRUD read (no derived invariant), so it
 // calls a.queries itself rather than going through the ledger, the same
 // split api's own doc comment describes. No fund_id in the route - v1 is
-// exactly one fund, so the handler resolves it server-side: the first (and
-// only) row ListFunds returns, or 404 meaning "run setup."
+// exactly one fund, so the handler resolves it server-side via resolveFund:
+// the first (and only) row ListFunds returns, or 404 meaning "run setup."
 func (a *api) getFund(w http.ResponseWriter, r *http.Request) {
+	fund, ok := a.resolveFund(w, r)
+	if !ok {
+		return
+	}
+	writeJSON(w, http.StatusOK, toFundResponse(fund))
+}
+
+// resolveFund returns the single fund every fund-scoped route in this
+// package operates against, or answers the request itself (404, "run
+// setup") and reports false. v1 is exactly one fund and no route takes a
+// fund_id, so "the fund" always means the first (and only) row ListFunds
+// returns - the resolution getFund used alone until #65 gave it siblings
+// (members, dues tiers, dues rates) that need the identical check, at
+// which point it moved here to stay the one place that check is made.
+func (a *api) resolveFund(w http.ResponseWriter, r *http.Request) (store.Fund, bool) {
 	funds, err := a.queries.ListFunds(r.Context())
 	if err != nil {
 		mapSQLiteError(w, a.logger, err)
-		return
+		return store.Fund{}, false
 	}
 	if len(funds) == 0 {
 		writeAPIError(w, http.StatusNotFound, "not_found", "No fund has been set up yet.")
-		return
+		return store.Fund{}, false
 	}
-
-	writeJSON(w, http.StatusOK, toFundResponse(funds[0]))
+	return funds[0], true
 }

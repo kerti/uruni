@@ -47,6 +47,16 @@ func (a *api) routes(r chi.Router) {
 
 	r.Post("/setup", a.setupFund)
 	r.Get("/fund", a.getFund)
+
+	// #65: the roster side of setup. Direct-CRUD (ADR-027) - no derived
+	// invariant, so these call a.queries rather than a.ledger, same split
+	// as getFund above.
+	r.Post("/members", a.createMember)
+	r.Get("/members", a.listMembers)
+	r.Post("/dues-tiers", a.createDuesTier)
+	r.Get("/dues-tiers", a.listDuesTiers)
+	r.Post("/dues-tiers/{id}/rates", a.createDuesRate)
+	r.Get("/dues-tiers/{id}/rates", a.listDuesRates)
 }
 
 // writeJSON is writeAPIError's counterpart for a successful response: every
