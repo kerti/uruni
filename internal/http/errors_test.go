@@ -169,6 +169,39 @@ func TestMapSQLiteErrorMapsAGenuineCheckViolation(t *testing.T) {
 	}
 }
 
+func TestMapSQLiteErrorMapsAGenuineForeignKeyViolation(t *testing.T) {
+	sqlDB := testStoreDB(t)
+	q := store.New(sqlDB)
+	ctx := context.Background()
+
+	fund, err := q.CreateFund(ctx, store.CreateFundParams{
+		Name: "Test Fund", Currency: "IDR", ReportSlug: "abcdefghijklmnopqrstuv", CreatedAt: 1,
+	})
+	if err != nil {
+		t.Fatalf("CreateFund() = %v, want no error", err)
+	}
+
+	// tier_id 999 names no dues_tier row - the composite FK requires
+	// (fund_id, tier_id) to match a real dues_tier, which this cannot.
+	noSuchTier := int64(999)
+	_, err = q.CreateMember(ctx, store.CreateMemberParams{
+		FundID: fund.ID, Name: "Jane", TierID: &noSuchTier, CreatedAt: 1,
+	})
+	if err == nil {
+		t.Fatalf("CreateMember(tier_id=999) = nil error, want a FOREIGN KEY violation")
+	}
+
+	rec := httptest.NewRecorder()
+	mapSQLiteError(rec, testLogger(), err)
+	if rec.Code != 400 {
+		t.Fatalf("status = %d, want 400", rec.Code)
+	}
+	got := decodeError(t, rec)
+	if got.Code != "invalid_argument" {
+		t.Errorf("code = %q, want %q", got.Code, "invalid_argument")
+	}
+}
+
 func TestMapSQLiteErrorMapsNoRowsToNotFound(t *testing.T) {
 	rec := httptest.NewRecorder()
 	mapSQLiteError(rec, testLogger(), sql.ErrNoRows)

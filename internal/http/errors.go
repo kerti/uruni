@@ -98,6 +98,15 @@ func mapSQLiteError(w http.ResponseWriter, logger *slog.Logger, err error) {
 		case sqlite3.SQLITE_CONSTRAINT_UNIQUE:
 			writeAPIError(w, http.StatusConflict, "unique_violation", "This value conflicts with an existing record.")
 			return
+		case sqlite3.SQLITE_CONSTRAINT_FOREIGNKEY:
+			// A reference to a row that does not exist - e.g. a member's
+			// tier_id naming no dues_tier. #63's raw-SQLite driver check
+			// (internal/db's foreign_keys=ON) is what makes this reachable
+			// at all; without it SQLite would silently accept the row. 400,
+			// not 404: the failing id is a field on the request the client
+			// sent, not a path segment naming "the resource" being fetched.
+			writeAPIError(w, http.StatusBadRequest, "invalid_argument", "The request references a record that does not exist.")
+			return
 		}
 	}
 
