@@ -20,7 +20,9 @@ import (
 	"github.com/kerti/uruni/internal/config"
 	"github.com/kerti/uruni/internal/db"
 	uruniHTTP "github.com/kerti/uruni/internal/http"
+	"github.com/kerti/uruni/internal/ledger"
 	"github.com/kerti/uruni/internal/lock"
+	"github.com/kerti/uruni/internal/store"
 )
 
 func main() {
@@ -94,8 +96,8 @@ func serve() error {
 	}
 
 	// One logger, built at startup and passed down — no package-level global
-	// (ADR-022). Nothing below main needs it yet; request logging arrives as
-	// middleware at M4, on chi (ADR-021).
+	// (ADR-022). Threaded into internal/http below, where its request-logging
+	// middleware and error mappers use it (ADR-021).
 	logger := newLogger(cfg, os.Stderr)
 
 	// SIGINT/SIGTERM close in-flight requests cleanly — `make restart` and
@@ -121,9 +123,16 @@ func serve() error {
 		return err
 	}
 
+	// A second, independent store.New(sqlDB) alongside ledger.New(sqlDB):
+	// store.Queries is a stateless wrapper over the shared *sql.DB (ADR-004's
+	// single connection), so this costs nothing and avoids adding a Querier
+	// accessor to ADR-027's already-implemented ledger boundary.
+	q := store.New(sqlDB)
+	l := ledger.New(sqlDB)
+
 	srv := &http.Server{
 		Addr:    fmt.Sprintf(":%d", cfg.Port),
-		Handler: uruniHTTP.New(assets, uruniHTTP.Build{Version: version, Commit: buildCommit()}),
+		Handler: uruniHTTP.New(assets, uruniHTTP.Build{Version: version, Commit: buildCommit()}, l, q, logger),
 		// Set explicitly: a server with no header timeout can be held open by a
 		// slow client indefinitely.
 		ReadHeaderTimeout: 10 * time.Second,
