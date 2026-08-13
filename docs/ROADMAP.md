@@ -75,7 +75,7 @@ There is **no `HANDOFF.md`** and no standalone status doc. The live board is **G
 - **Standing decisions no issue or ADR owns** → [`Decisions.md`](./Decisions.md).
 - **You-are-here** → the one status line below (changes ~once per milestone; never holds shipped detail).
 
-**Status:** **M3 — money & reconciliation** next; M2's schema is complete, with every PRD §6 entity in one migration and its invariants enforced by the database.
+**Status:** **M4 — core API** next; M3's trust core is complete — `money.Amount`, the ledger's writes and derived balances, dues status and the reconciliation snapshot, all over a real SQLite harness rather than a fake.
 
 ## Open
 

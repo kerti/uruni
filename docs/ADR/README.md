@@ -28,7 +28,7 @@ Standing decisions that no ADR owns go in [`../Decisions.md`](../Decisions.md).
 | [003](./003-frontend-react-spa-backend-go.md) | Frontend: React SPA (Vite) + backend: Go | implemented |
 | [004](./004-database-sqlite-only.md) | Database: SQLite only through 0.x | implemented |
 | [005](./005-data-access-sqlc.md) | Data access: sqlc | implemented |
-| [006](./006-money-integer-minor-units.md) | Money is integer minor units (never floats) | `draft` |
+| [006](./006-money-integer-minor-units.md) | Money is integer minor units (never floats) | implemented |
 | [007](./007-auth-local-email-password.md) | Auth: local email/password now, OIDC later | `draft` |
 | [008](./008-pwa-no-offline-data.md) | PWA: installable shell, no offline data | `draft` |
 | [009](./009-reverse-proxy-caddy.md) | Reverse proxy & TLS: Caddy | implemented |
@@ -48,9 +48,9 @@ Standing decisions that no ADR owns go in [`../Decisions.md`](../Decisions.md).
 | [023](./023-agent-operating-model.md) | Agent operating model: one orchestrator, pinned role agents | implemented |
 | [024](./024-schema-conventions.md) | Schema conventions: STRICT SQLite, integer ids, two time types | implemented |
 | [025](./025-one-migration-file-until-1.0.md) | One migration file, edited in place, until v1.0.0 | implemented |
-| [026](./026-money-package.md) | Money package: overflow-checked `Amount`, arithmetic only | `draft` |
-| [027](./027-ledger-domain-boundary.md) | Ledger domain boundary: one package, transactional writes | `draft` |
-| [028](./028-testing-the-trust-core.md) | Testing the trust core: `internal/money` and `internal/ledger` | `draft` |
+| [026](./026-money-package.md) | Money package: overflow-checked `Amount`, arithmetic only | implemented |
+| [027](./027-ledger-domain-boundary.md) | Ledger domain boundary: one package, transactional writes | implemented |
+| [028](./028-testing-the-trust-core.md) | Testing the trust core: `internal/money` and `internal/ledger` | implemented |
 
 The **Stage** column is the record, and it is all this index says about implementation: `draft` means editable in place, `implemented` means superseding-ADR-only. *Which* slice put code behind a given ADR belongs in that ADR and in the PR that dropped its tag — restated here, this index becomes a changelog.
 
