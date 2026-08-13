@@ -8,6 +8,7 @@ coverage.*
 *.db
 *.db-wal
 *.db-shm
+*.db.lock
 
 # Node / Vite
 node_modules/

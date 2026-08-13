@@ -20,6 +20,7 @@ import (
 	"github.com/kerti/uruni/internal/config"
 	"github.com/kerti/uruni/internal/db"
 	uruniHTTP "github.com/kerti/uruni/internal/http"
+	"github.com/kerti/uruni/internal/lock"
 )
 
 func main() {
@@ -71,6 +72,21 @@ func serve() error {
 	if err != nil {
 		return err
 	}
+
+	// Only `serve` takes this lock. `migrate` is a short, operator-invoked,
+	// one-shot command — including `migrate status`, which an operator
+	// legitimately runs *while* a server is up to check what it has applied —
+	// and SQLite's own single connection plus busy_timeout (internal/db/db.go)
+	// already serialize its DDL against whatever else touches the file. What
+	// this guards against is two long-lived `serve` processes both reaching
+	// the domain-level singleton guard M4 adds next (first-run setup refusing
+	// a second fund) at once — see internal/lock's package doc.
+	lockPath := lock.PathFor(cfg.DBPath)
+	instanceLock, err := lock.Acquire(lockPath)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = instanceLock.Release() }()
 
 	assets, err := uruni.WebAssets()
 	if err != nil {
