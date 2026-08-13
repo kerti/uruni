@@ -47,7 +47,7 @@ func TestStrictRejectsAFloatInAnIntegerColumn(t *testing.T) {
 	// instead of a silently truncated or coerced value (ADR-024, ADR-006).
 	_, err := sqlDB.Exec(
 		`INSERT INTO fund (name, currency, report_slug, created_at) VALUES (?, ?, ?, 1000.50)`,
-		"Kas RT", "IDR", validSlug,
+		"Test Fund", "IDR", validSlug,
 	)
 	if err == nil {
 		t.Fatal("INSERT with a float into created_at = nil error, want STRICT to reject it")
@@ -63,19 +63,19 @@ func TestPurposeSingleMainIsScopedPerFund(t *testing.T) {
 	fundB := createFund(t, sqlDB, "Fund B", "bcdefghijklmnopqrstuvw")
 
 	if _, err := q.CreatePurpose(ctx, store.CreatePurposeParams{
-		FundID: fundA, Kind: "main", Name: "Kas Utama", CreatedAt: 1,
+		FundID: fundA, Kind: "main", Name: "Main", CreatedAt: 1,
 	}); err != nil {
 		t.Fatalf("first main purpose in fund A = %v, want no error", err)
 	}
 
 	if _, err := q.CreatePurpose(ctx, store.CreatePurposeParams{
-		FundID: fundA, Kind: "main", Name: "Kas Utama Kedua", CreatedAt: 1,
+		FundID: fundA, Kind: "main", Name: "Second Main", CreatedAt: 1,
 	}); err == nil {
 		t.Fatal("second main purpose in the same fund = nil error, want the partial index to reject it")
 	}
 
 	if _, err := q.CreatePurpose(ctx, store.CreatePurposeParams{
-		FundID: fundB, Kind: "main", Name: "Kas Utama", CreatedAt: 1,
+		FundID: fundB, Kind: "main", Name: "Main", CreatedAt: 1,
 	}); err != nil {
 		t.Fatalf("main purpose in a different fund = %v, want no error", err)
 	}
@@ -87,7 +87,7 @@ func TestAccountRejectsAFundIDThatDoesNotExist(t *testing.T) {
 	q := store.New(sqlDB)
 
 	_, err := q.CreateAccount(ctx, store.CreateAccountParams{
-		FundID: 999999, Kind: "cash", Name: "Kas tunai", CreatedAt: 1,
+		FundID: 999999, Kind: "cash", Name: "Cash", CreatedAt: 1,
 	})
 	if err == nil {
 		t.Fatal("CreateAccount with a nonexistent fund_id = nil error, want the FK to reject it")
@@ -210,7 +210,7 @@ func TestEffectiveDuesRateFollowsAMidYearChange(t *testing.T) {
 	ctx := context.Background()
 	q := store.New(sqlDB)
 
-	fundID := createFund(t, sqlDB, "Kas RT", validSlug)
+	fundID := createFund(t, sqlDB, "Test Fund", validSlug)
 	tierID := createDuesTier(t, sqlDB, fundID, "warga")
 
 	// One-sided intervals: the July row ends the January row by existing.
@@ -270,14 +270,14 @@ func TestMemberCannotBorrowAnotherFundsTier(t *testing.T) {
 	// The tier exists, so a single-column FK would have accepted this. Only the
 	// composite (fund_id, tier_id) FK knows it belongs to the wrong fund.
 	if _, err := q.CreateMember(ctx, store.CreateMemberParams{
-		FundID: fundA, Name: "Bu Sri", TierID: &tierB, CreatedAt: 1,
+		FundID: fundA, Name: "Jane", TierID: &tierB, CreatedAt: 1,
 	}); err == nil {
 		t.Fatal("CreateMember with another fund's tier = nil error, want the composite FK to reject it")
 	}
 
 	tierA := createDuesTier(t, sqlDB, fundA, "warga")
 	if _, err := q.CreateMember(ctx, store.CreateMemberParams{
-		FundID: fundA, Name: "Bu Sri", TierID: &tierA, CreatedAt: 1,
+		FundID: fundA, Name: "Jane", TierID: &tierA, CreatedAt: 1,
 	}); err != nil {
 		t.Fatalf("CreateMember with its own fund's tier = %v, want no error", err)
 	}
@@ -285,7 +285,7 @@ func TestMemberCannotBorrowAnotherFundsTier(t *testing.T) {
 	// NULL tier_id is a member with no dues obligation, and SQLite's MATCH
 	// SIMPLE leaves the composite FK satisfied.
 	if _, err := q.CreateMember(ctx, store.CreateMemberParams{
-		FundID: fundA, Name: "Pak Yanto", TierID: nil, CreatedAt: 1,
+		FundID: fundA, Name: "Alex", TierID: nil, CreatedAt: 1,
 	}); err != nil {
 		t.Fatalf("CreateMember with a NULL tier_id = %v, want no error", err)
 	}
@@ -318,7 +318,7 @@ func TestDateAndPeriodChecksRejectImpossibleValues(t *testing.T) {
 	ctx := context.Background()
 	q := store.New(sqlDB)
 
-	fundID := createFund(t, sqlDB, "Kas RT", validSlug)
+	fundID := createFund(t, sqlDB, "Test Fund", validSlug)
 	tierID := createDuesTier(t, sqlDB, fundID, "warga")
 
 	// date() validation, not LIKE '____-__-__': ADR-024 records that the LIKE
@@ -327,7 +327,7 @@ func TestDateAndPeriodChecksRejectImpossibleValues(t *testing.T) {
 		t.Run("joined_on/"+bad, func(t *testing.T) {
 			d := bad
 			if _, err := q.CreateMember(ctx, store.CreateMemberParams{
-				FundID: fundID, Name: "Bu Sri", JoinedOn: &d, CreatedAt: 1,
+				FundID: fundID, Name: "Jane", JoinedOn: &d, CreatedAt: 1,
 			}); err == nil {
 				t.Errorf("CreateMember with joined_on %q = nil error, want the CHECK to reject it", bad)
 			}
@@ -336,7 +336,7 @@ func TestDateAndPeriodChecksRejectImpossibleValues(t *testing.T) {
 
 	valid := "2026-08-12"
 	if _, err := q.CreateMember(ctx, store.CreateMemberParams{
-		FundID: fundID, Name: "Bu Sri", JoinedOn: &valid, CreatedAt: 1,
+		FundID: fundID, Name: "Jane", JoinedOn: &valid, CreatedAt: 1,
 	}); err != nil {
 		t.Fatalf("CreateMember with joined_on %q = %v, want no error", valid, err)
 	}
@@ -358,7 +358,7 @@ func TestDuesRateAmountCannotBeNegative(t *testing.T) {
 	sqlDB := migratedTestDB(t)
 	ctx := context.Background()
 
-	fundID := createFund(t, sqlDB, "Kas RT", validSlug)
+	fundID := createFund(t, sqlDB, "Test Fund", validSlug)
 	tierID := createDuesTier(t, sqlDB, fundID, "warga")
 
 	if _, err := store.New(sqlDB).CreateDuesRate(ctx, store.CreateDuesRateParams{

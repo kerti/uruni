@@ -27,9 +27,9 @@ func newScenarioFund(t *testing.T, sqlDB *sql.DB, name, slug string) scenarioFun
 	t.Helper()
 	f := scenarioFund{}
 	f.fundID = createFund(t, sqlDB, name, slug)
-	f.cashID = createAccount(t, sqlDB, f.fundID, "cash", "Kas tunai")
-	f.bankID = createAccount(t, sqlDB, f.fundID, "bank", "Rekening BRI")
-	f.mainID = createPurpose(t, sqlDB, f.fundID, "main", "Kas Utama")
+	f.cashID = createAccount(t, sqlDB, f.fundID, "cash", "Cash")
+	f.bankID = createAccount(t, sqlDB, f.fundID, "bank", "Bank Account")
+	f.mainID = createPurpose(t, sqlDB, f.fundID, "main", "Main")
 	return f
 }
 
@@ -82,7 +82,7 @@ func (f scenarioFund) purposeBalance(t *testing.T, sqlDB *sql.DB, purposeID int6
 
 func TestOpeningBalancesAreLedgerRowsLikeAnyOther(t *testing.T) {
 	sqlDB := migratedTestDB(t)
-	f := newScenarioFund(t, sqlDB, "Kas RT 05", validSlug)
+	f := newScenarioFund(t, sqlDB, "Test Fund", validSlug)
 
 	// Day one: the treasurer counts what is already there. Nothing about an
 	// opening figure is special enough to earn a column of its own.
@@ -109,8 +109,8 @@ func TestOpeningBalancesAreLedgerRowsLikeAnyOther(t *testing.T) {
 func TestSeveralMonthsOfDuesPaidInOneVisit(t *testing.T) {
 	sqlDB := migratedTestDB(t)
 	ctx := context.Background()
-	f := newScenarioFund(t, sqlDB, "Kas RT 05", validSlug)
-	memberID := createMember(t, sqlDB, f.fundID, "Bu Sri")
+	f := newScenarioFund(t, sqlDB, "Test Fund", validSlug)
+	memberID := createMember(t, sqlDB, f.fundID, "Jane")
 
 	// Three months settled at the door. One row per period, never one row for
 	// 75000 - otherwise "which months has she paid?" stops being answerable.
@@ -143,7 +143,7 @@ func TestPartialAndAdvanceDuesAreOrdinaryRows(t *testing.T) {
 	sqlDB := migratedTestDB(t)
 	ctx := context.Background()
 	q := store.New(sqlDB)
-	f := newScenarioFund(t, sqlDB, "Kas RT 05", validSlug)
+	f := newScenarioFund(t, sqlDB, "Test Fund", validSlug)
 	tierID := createDuesTier(t, sqlDB, f.fundID, "warga tetap")
 	if _, err := q.CreateDuesRate(ctx, store.CreateDuesRateParams{
 		TierID: tierID, Amount: 25_000, EffectiveFrom: "2026-01", CreatedAt: 1,
@@ -151,7 +151,7 @@ func TestPartialAndAdvanceDuesAreOrdinaryRows(t *testing.T) {
 		t.Fatalf("CreateDuesRate = %v, want no error", err)
 	}
 	memberID, err := q.CreateMember(ctx, store.CreateMemberParams{
-		FundID: f.fundID, Name: "Pak Budi", TierID: &tierID, CreatedAt: 1,
+		FundID: f.fundID, Name: "John", TierID: &tierID, CreatedAt: 1,
 	})
 	if err != nil {
 		t.Fatalf("CreateMember = %v, want no error", err)
@@ -202,11 +202,11 @@ func TestPartialAndAdvanceDuesAreOrdinaryRows(t *testing.T) {
 	}
 }
 
-func TestIncidentalOverCollectsThenRollsItsLeftoverIntoKasUtama(t *testing.T) {
+func TestIncidentalOverCollectsThenRollsItsLeftoverIntoMain(t *testing.T) {
 	sqlDB := migratedTestDB(t)
 	ctx := context.Background()
 	q := store.New(sqlDB)
-	f := newScenarioFund(t, sqlDB, "Kas RT 05", validSlug)
+	f := newScenarioFund(t, sqlDB, "Test Fund", validSlug)
 
 	kurbanID := createPurpose(t, sqlDB, f.fundID, "incidental", "Kurban 2026")
 	target := int64(3_000_000)
@@ -259,13 +259,13 @@ func TestIncidentalOverCollectsThenRollsItsLeftoverIntoKasUtama(t *testing.T) {
 		t.Errorf("envelope after the roll-in = %d, want %d", got, want)
 	}
 	if got, want := f.purposeBalance(t, sqlDB, f.mainID), int64(200_000); got != want {
-		t.Errorf("Kas Utama after the roll-in = %d, want %d", got, want)
+		t.Errorf("Main after the roll-in = %d, want %d", got, want)
 	}
 }
 
 func TestCashDepositedAtTheBankMovesWithoutChangingTheTotal(t *testing.T) {
 	sqlDB := migratedTestDB(t)
-	f := newScenarioFund(t, sqlDB, "Kas RT 05", validSlug)
+	f := newScenarioFund(t, sqlDB, "Test Fund", validSlug)
 
 	f.entry(t, sqlDB, store.CreateTransactionParams{
 		AccountID: f.cashID, PurposeID: f.mainID, Direction: "in", Amount: 1_000_000,
@@ -296,15 +296,15 @@ func TestCashDepositedAtTheBankMovesWithoutChangingTheTotal(t *testing.T) {
 
 func TestPassThroughMoneyCountsWhileItIsHeld(t *testing.T) {
 	sqlDB := migratedTestDB(t)
-	f := newScenarioFund(t, sqlDB, "Kas RT 05", validSlug)
-	bidangID := createPurpose(t, sqlDB, f.fundID, "pass_through", "Kas Bidang")
+	f := newScenarioFund(t, sqlDB, "Test Fund", validSlug)
+	passID := createPurpose(t, sqlDB, f.fundID, "pass_through", "Pass-through")
 
 	// PRD §7.6 as amended (ADR-024): pass-through is descriptive, and drives no
 	// arithmetic. While the money sits in the tin it is in the tin, so it is in
 	// the balance - two headline figures that disagree is the wrong thing to put
 	// on the calmest screen in the app.
 	f.entry(t, sqlDB, store.CreateTransactionParams{
-		AccountID: f.cashID, PurposeID: bidangID, Direction: "in", Amount: 500_000,
+		AccountID: f.cashID, PurposeID: passID, Direction: "in", Amount: 500_000,
 		OccurredOn: "2026-08-01", Kind: "normal",
 	})
 	if got, want := f.fundBalance(t, sqlDB), int64(500_000); got != want {
@@ -312,14 +312,14 @@ func TestPassThroughMoneyCountsWhileItIsHeld(t *testing.T) {
 	}
 
 	f.entry(t, sqlDB, store.CreateTransactionParams{
-		AccountID: f.cashID, PurposeID: bidangID, Direction: "out", Amount: 500_000,
+		AccountID: f.cashID, PurposeID: passID, Direction: "out", Amount: 500_000,
 		OccurredOn: "2026-08-09", Kind: "normal",
 	})
 	if got, want := f.fundBalance(t, sqlDB), int64(0); got != want {
 		t.Errorf("fund balance after forwarding = %d, want %d", got, want)
 	}
-	if got, want := f.purposeBalance(t, sqlDB, bidangID), int64(0); got != want {
-		t.Errorf("Kas Bidang after forwarding = %d, want %d", got, want)
+	if got, want := f.purposeBalance(t, sqlDB, passID), int64(0); got != want {
+		t.Errorf("Pass-through after forwarding = %d, want %d", got, want)
 	}
 }
 
@@ -327,19 +327,19 @@ func TestOneMemberIsRepaidAndAnotherWaivesTheClaim(t *testing.T) {
 	sqlDB := migratedTestDB(t)
 	ctx := context.Background()
 	q := store.New(sqlDB)
-	f := newScenarioFund(t, sqlDB, "Kas RT 05", validSlug)
-	sri := createMember(t, sqlDB, f.fundID, "Bu Sri")
-	budi := createMember(t, sqlDB, f.fundID, "Pak Budi")
+	f := newScenarioFund(t, sqlDB, "Test Fund", validSlug)
+	jane := createMember(t, sqlDB, f.fundID, "Jane")
+	john := createMember(t, sqlDB, f.fundID, "John")
 	f.entry(t, sqlDB, store.CreateTransactionParams{
 		AccountID: f.cashID, PurposeID: f.mainID, Direction: "in", Amount: 500_000,
 		OccurredOn: "2026-08-01", Kind: "opening",
 	})
 
-	// Fronting your own money does not move the kas, so neither claim is on the
+	// Fronting your own money does not move the fund's cash, so neither claim is on the
 	// ledger yet and the balance has not budged.
-	sriClaim := createReimbursement(t, sqlDB, f.fundID, sri, f.mainID, 150_000)
-	budiClaim, err := q.CreateReimbursement(ctx, store.CreateReimbursementParams{
-		FundID: f.fundID, MemberID: budi, PurposeID: f.mainID, Amount: 80_000,
+	janeClaim := createReimbursement(t, sqlDB, f.fundID, jane, f.mainID, 150_000)
+	johnClaim, err := q.CreateReimbursement(ctx, store.CreateReimbursementParams{
+		FundID: f.fundID, MemberID: john, PurposeID: f.mainID, Amount: 80_000,
 		IncurredOn: "2026-08-02", CreatedAt: 1,
 	})
 	if err != nil {
@@ -357,14 +357,14 @@ func TestOneMemberIsRepaidAndAnotherWaivesTheClaim(t *testing.T) {
 		t.Errorf("outstanding total = %d, want %d", total, want)
 	}
 
-	// Bu Sri is paid back: one real 'out'. Pak Budi tells the treasurer to keep
+	// Jane is paid back: one real 'out'. John tells the treasurer to keep
 	// it, which closes his claim without any money moving.
 	f.entry(t, sqlDB, store.CreateTransactionParams{
 		AccountID: f.cashID, PurposeID: f.mainID, Direction: "out", Amount: 150_000,
-		OccurredOn: "2026-08-15", Kind: "reimbursement", ReimbursementID: &sriClaim,
+		OccurredOn: "2026-08-15", Kind: "reimbursement", ReimbursementID: &janeClaim,
 	})
 	waived := "2026-08-16"
-	if _, err := sqlDB.Exec(`UPDATE reimbursement SET waived_on = ? WHERE id = ?`, waived, budiClaim.ID); err != nil {
+	if _, err := sqlDB.Exec(`UPDATE reimbursement SET waived_on = ? WHERE id = ?`, waived, johnClaim.ID); err != nil {
 		t.Fatalf("waiving a claim = %v, want no error - reimbursement carries no immutability trigger", err)
 	}
 
@@ -376,7 +376,7 @@ func TestOneMemberIsRepaidAndAnotherWaivesTheClaim(t *testing.T) {
 		t.Errorf("outstanding claims = %d, want 0 - one settled, one waived", len(open))
 	}
 	if got, want := f.fundBalance(t, sqlDB), int64(350_000); got != want {
-		t.Errorf("fund balance = %d, want %d - only the payout touched the kas", got, want)
+		t.Errorf("fund balance = %d, want %d - only the payout touched the fund's cash", got, want)
 	}
 }
 
@@ -384,7 +384,7 @@ func TestReconciliationRecordsWhatWasCountedAndHowItWasResolved(t *testing.T) {
 	sqlDB := migratedTestDB(t)
 	ctx := context.Background()
 	q := store.New(sqlDB)
-	f := newScenarioFund(t, sqlDB, "Kas RT 05", validSlug)
+	f := newScenarioFund(t, sqlDB, "Test Fund", validSlug)
 
 	f.entry(t, sqlDB, store.CreateTransactionParams{
 		AccountID: f.cashID, PurposeID: f.mainID, Direction: "in", Amount: 500_000,
@@ -415,7 +415,7 @@ func TestReconciliationRecordsWhatWasCountedAndHowItWasResolved(t *testing.T) {
 	// The tin is 20000 short. The treasurer posts an adjusting entry - never an
 	// edit to a posted row (CLAUDE.md rule 3) - and the line names it.
 	cashRecorded := frozenBalance(t, sqlDB, f, f.cashID, cutoff)
-	note := "selisih kas tunai"
+	note := "cash count difference"
 	fix := f.entry(t, sqlDB, store.CreateTransactionParams{
 		AccountID: f.cashID, PurposeID: f.mainID, Direction: "out", Amount: 20_000,
 		OccurredOn: "2026-08-31", Kind: "adjustment", Note: &note,
@@ -441,7 +441,7 @@ func TestReconciliationRecordsWhatWasCountedAndHowItWasResolved(t *testing.T) {
 
 	// A second fund, counted the same day, where the treasurer decides to sleep
 	// on the difference instead. 'left_open' is a resolution, not a failure.
-	g := newScenarioFund(t, sqlDB, "Kas RW", "zyxwvutsrqponmlkjihgfe")
+	g := newScenarioFund(t, sqlDB, "Other Fund", "zyxwvutsrqponmlkjihgfe")
 	g.entry(t, sqlDB, store.CreateTransactionParams{
 		AccountID: g.cashID, PurposeID: g.mainID, Direction: "in", Amount: 100_000,
 		OccurredOn: "2026-08-01", Kind: "opening",
@@ -475,7 +475,7 @@ func TestALeftOpenDifferenceIsRevisitedAsASecondSnapshot(t *testing.T) {
 	sqlDB := migratedTestDB(t)
 	ctx := context.Background()
 	q := store.New(sqlDB)
-	f := newScenarioFund(t, sqlDB, "Kas RT 05", validSlug)
+	f := newScenarioFund(t, sqlDB, "Test Fund", validSlug)
 
 	f.entry(t, sqlDB, store.CreateTransactionParams{
 		AccountID: f.cashID, PurposeID: f.mainID, Direction: "in", Amount: 300_000,

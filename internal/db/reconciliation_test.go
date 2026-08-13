@@ -16,7 +16,7 @@ func TestReconciliationLineDifferenceMustAgreeWithItsInputs(t *testing.T) {
 	sqlDB := migratedTestDB(t)
 	ctx := context.Background()
 	q := store.New(sqlDB)
-	f := newLedgerFixture(t, sqlDB, "Kas RT", validSlug)
+	f := newLedgerFixture(t, sqlDB, "Test Fund", validSlug)
 
 	rec, err := q.CreateReconciliation(ctx, store.CreateReconciliationParams{
 		FundID: f.fundID, PerformedAt: 100, CreatedAt: 100,
@@ -48,7 +48,7 @@ func TestAdjustedResolutionMustNameTheEntryThatSquaredTheLine(t *testing.T) {
 	sqlDB := migratedTestDB(t)
 	ctx := context.Background()
 	q := store.New(sqlDB)
-	f := newLedgerFixture(t, sqlDB, "Kas RT", validSlug)
+	f := newLedgerFixture(t, sqlDB, "Test Fund", validSlug)
 
 	rec, err := q.CreateReconciliation(ctx, store.CreateReconciliationParams{
 		FundID: f.fundID, PerformedAt: 100, CreatedAt: 100,
@@ -72,7 +72,7 @@ func TestAdjustedResolutionMustNameTheEntryThatSquaredTheLine(t *testing.T) {
 	})
 
 	t.Run("adjusted naming another fund's entry", func(t *testing.T) {
-		other := newLedgerFixture(t, sqlDB, "Kas RW", "zyxwvutsrqponmlkjihgfe")
+		other := newLedgerFixture(t, sqlDB, "Other Fund", "zyxwvutsrqponmlkjihgfe")
 		stranger := other.post(t, sqlDB, "out", 5000)
 
 		p := line()
@@ -97,7 +97,7 @@ func TestSnapshotsAreImmutable(t *testing.T) {
 	sqlDB := migratedTestDB(t)
 	ctx := context.Background()
 	q := store.New(sqlDB)
-	f := newLedgerFixture(t, sqlDB, "Kas RT", validSlug)
+	f := newLedgerFixture(t, sqlDB, "Test Fund", validSlug)
 
 	rec, err := q.CreateReconciliation(ctx, store.CreateReconciliationParams{
 		FundID: f.fundID, PerformedAt: 100, CreatedAt: 100,
@@ -139,8 +139,8 @@ func TestSnapshotCannotBorrowAnotherFundsRow(t *testing.T) {
 	sqlDB := migratedTestDB(t)
 	ctx := context.Background()
 	q := store.New(sqlDB)
-	f := newLedgerFixture(t, sqlDB, "Kas RT", validSlug)
-	other := newLedgerFixture(t, sqlDB, "Kas RW", "zyxwvutsrqponmlkjihgfe")
+	f := newLedgerFixture(t, sqlDB, "Test Fund", validSlug)
+	other := newLedgerFixture(t, sqlDB, "Other Fund", "zyxwvutsrqponmlkjihgfe")
 
 	t.Run("a cutoff in another fund's ledger", func(t *testing.T) {
 		stranger := other.post(t, sqlDB, "in", 10000)
@@ -171,7 +171,7 @@ func TestALocationIsCountedOncePerSnapshot(t *testing.T) {
 	sqlDB := migratedTestDB(t)
 	ctx := context.Background()
 	q := store.New(sqlDB)
-	f := newLedgerFixture(t, sqlDB, "Kas RT", validSlug)
+	f := newLedgerFixture(t, sqlDB, "Test Fund", validSlug)
 
 	rec, err := q.CreateReconciliation(ctx, store.CreateReconciliationParams{
 		FundID: f.fundID, PerformedAt: 100, CreatedAt: 100,
@@ -195,7 +195,7 @@ func TestIncidentalIsOneEnvelopePerPurposeAndStaysEditable(t *testing.T) {
 	sqlDB := migratedTestDB(t)
 	ctx := context.Background()
 	q := store.New(sqlDB)
-	fundID := createFund(t, sqlDB, "Kas RT", validSlug)
+	fundID := createFund(t, sqlDB, "Test Fund", validSlug)
 	purposeID := createPurpose(t, sqlDB, fundID, "incidental", "Kurban 2026")
 
 	target := int64(3000000)
@@ -226,7 +226,7 @@ func TestIncidentalRejectsImpossibleDatesAndTargets(t *testing.T) {
 	sqlDB := migratedTestDB(t)
 	ctx := context.Background()
 	q := store.New(sqlDB)
-	fundID := createFund(t, sqlDB, "Kas RT", validSlug)
+	fundID := createFund(t, sqlDB, "Test Fund", validSlug)
 
 	base := func(name string) store.CreateIncidentalParams {
 		return store.CreateIncidentalParams{
