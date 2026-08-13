@@ -1,6 +1,6 @@
 # ADR-028 — Testing the trust core: `internal/money` and `internal/ledger`
 
-**Status:** Accepted · `draft` — editable in place until M3 closes; an edit made once code exists ships with that code · [ADR index](./README.md)
+**Status:** Accepted · implemented at M3 — change only by adding a superseding ADR · [ADR index](./README.md)
 
 **Context.** [ADR-015](./015-testing-money-math.md) (itself `draft`) already names `go test` and "the ledger/reconciliation logic as the highest-priority target," without saying how a test gets a real SQLite to run against. M2 already answered a version of that question for its own package: `internal/db`'s tests open a real temp file, deliberately not `:memory:`, because — per that package's own comment — "the pragmas under test (WAL especially) behave differently for an in-memory database, which would make the test prove less than it appears to." M3's premise, set by the maintainer, calls for `:memory:` instead. This ADR reconciles the two rather than picking one blind.
 
@@ -8,7 +8,7 @@
 
 **Harness: reuse `internal/db.Open(ctx, ":memory:")` + `internal/db.Up(ctx, sqlDB, logger)`. No second connection-opening helper.**
 
-Verified empirically (see the M3 plan) rather than assumed:
+Verified empirically before this was written, rather than assumed:
 
 - `internal/db.Open`'s DSN already carries `foreign_keys(ON)` as a query parameter the driver replays on **every** connection it opens — file or `:memory:` alike. The well-known "foreign keys default off, per connection" gotcha is closed by reusing plumbing that already exists, not by a pragma call written specifically for tests.
 - `journal_mode(WAL)` silently falls back to SQLite's own "memory" journal mode on an in-memory database (`PRAGMA journal_mode=WAL` against `:memory:` reports back `memory`, confirmed with the `sqlite3` CLI). This is harmless for what `internal/ledger`'s tests check — `CHECK`s, composite FKs, triggers, derived sums — and is exactly why `internal/db` keeps its *own* tests on a real file: those tests assert the WAL pragma itself, which `internal/ledger`'s tests never do.
@@ -25,7 +25,7 @@ So the harness is not new code so much as a new *call*: `db.Open(ctx, ":memory:"
 
 **Coverage bar: `internal/money` ≥ 90%, `internal/ledger` ≥ 85%.** Reviewed at the PR that lands each slice — `CLAUDE.md`'s "review this hardest" instruction for M3 is the enforcement mechanism, not new CI machinery. `codecov.yml`'s existing project-wide `target: auto, threshold: 1%` already catches a regression a low-coverage addition here would cause, at the whole-project level. A **hard per-package minimum** would need a new `component_management` block in `codecov.yml`, and is **declined** (2026-08-12): it is CI machinery bought before any drift has happened, against a bar no slice has missed yet, and `CLAUDE.md`'s "fewest moving parts" tiebreak applies to the build as much as to the binary. Revisit if a slice ever lands under the bar and the review does not catch it — that is the evidence this would need.
 
-**What [ADR-015](./015-testing-money-math.md) should say — named here, not edited here.** ADR-015 stays the test-*pyramid* policy (`go test`/Vitest/Playwright, priority order); this ADR is the mechanics underneath its highest-priority line. The concrete edit, for whoever implements this slice and drops ADR-015's `draft` tag: append one sentence to its Consequences, e.g. *"`internal/money` and `internal/ledger` carry a numeric coverage bar (≥90% / ≥85%), reviewed per slice; harness and fixture mechanics are [ADR-028](./028-testing-the-trust-core.md)."*
+**Its relationship to [ADR-015](./015-testing-money-math.md).** ADR-015 is the test-*pyramid* policy (`go test`/Vitest/Playwright, in priority order); this ADR is the mechanics underneath its highest-priority line. The coverage bars were written into ADR-015's Consequences at M3's close, as this section originally proposed. **ADR-015 keeps its `draft` tag even so**: its Playwright leg does not exist yet and belongs to M6, and a tag comes off only when a decision is fully implemented. This one is, which is why they part company here.
 
 ## Consequences
 
