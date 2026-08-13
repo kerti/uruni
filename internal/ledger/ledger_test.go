@@ -48,7 +48,7 @@ func TestHarnessEnforcesCompositeForeignKeys(t *testing.T) {
 	ctx := context.Background()
 
 	other, err := store.New(l.db).CreateFund(ctx, store.CreateFundParams{
-		Name: "Kas Bidang", Currency: "IDR", ReportSlug: "zyxwvutsrqponmlkjihgfe", CreatedAt: 1,
+		Name: "Other Fund", Currency: "IDR", ReportSlug: "zyxwvutsrqponmlkjihgfe", CreatedAt: 1,
 	})
 	if err != nil {
 		t.Fatalf("CreateFund() = %v, want no error", err)
