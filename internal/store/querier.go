@@ -31,6 +31,12 @@ type Querier interface {
 	CreateReimbursement(ctx context.Context, arg CreateReimbursementParams) (Reimbursement, error)
 	CreateTransaction(ctx context.Context, arg CreateTransactionParams) (Transaction, error)
 	CreateTransfer(ctx context.Context, arg CreateTransferParams) (Transfer, error)
+	// DeleteDuesRate is what makes a wrong-month rate correctable at all, since
+	// UNIQUE (tier_id, effective_from) refuses the corrected row otherwise.
+	DeleteDuesRate(ctx context.Context, id int64) error
+	// DeleteMember leans on the composite foreign keys from "transaction" and
+	// reimbursement to refuse it once a real row references the member.
+	DeleteMember(ctx context.Context, id int64) error
 	// The roster query behind "who has paid / partially / not yet" for one
 	// dues_period, across every member in one pass rather than one query per
 	// member.
@@ -42,6 +48,10 @@ type Querier interface {
 	// exactly where it is needed most (ADR-024).
 	FundBalance(ctx context.Context, fundID int64) (int64, error)
 	GetAccount(ctx context.Context, id int64) (Account, error)
+	// GetDuesRate is the lookup PATCH and DELETE both do ahead of the write: an
+	// UPDATE's RETURNING would answer an unknown id with sql.ErrNoRows, but a
+	// DELETE affecting zero rows raises nothing at all.
+	GetDuesRate(ctx context.Context, id int64) (DuesRate, error)
 	GetDuesTier(ctx context.Context, id int64) (DuesTier, error)
 	// The rate in force for a period: the latest row whose effective_from is at or
 	// before it. One-sided intervals mean there is no end date to check, and no
@@ -135,6 +145,17 @@ type Querier interface {
 	// int64 rather than interface{} - sqlc's SQLite engine cannot infer the type of
 	// a summed expression (ADR-024).
 	ReconciliationDifferenceTotal(ctx context.Context, reconciliationID int64) (int64, error)
+	// UpdateDuesRate corrects a mistyped amount. effective_from stays fixed: a
+	// rate filed against the wrong month is deleted and re-posted, not moved.
+	UpdateDuesRate(ctx context.Context, arg UpdateDuesRateParams) (DuesRate, error)
+	// UpdateDuesTier renames a tier - reference data, not history.
+	UpdateDuesTier(ctx context.Context, arg UpdateDuesTierParams) (DuesTier, error)
+	// UpdateMember is a correction to reference data, not a ledger event. name
+	// is NOT NULL, so COALESCE covers it: a nil argument can only mean "leave
+	// alone". The three nullable columns need the set_* flags, because there a
+	// null argument is ambiguous between "leave alone" and "clear it" - the CASE
+	// substitutes the new value, NULL included, only when the caller sent it.
+	UpdateMember(ctx context.Context, arg UpdateMemberParams) (Member, error)
 }
 
 var _ Querier = (*Queries)(nil)

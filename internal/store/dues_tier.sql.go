@@ -85,3 +85,28 @@ func (q *Queries) ListDuesTiersByFund(ctx context.Context, fundID int64) ([]Dues
 	}
 	return items, nil
 }
+
+const updateDuesTier = `-- name: UpdateDuesTier :one
+UPDATE dues_tier
+SET name = ?
+WHERE id = ?
+RETURNING id, fund_id, name, created_at
+`
+
+type UpdateDuesTierParams struct {
+	Name string
+	ID   int64
+}
+
+// UpdateDuesTier renames a tier - reference data, not history.
+func (q *Queries) UpdateDuesTier(ctx context.Context, arg UpdateDuesTierParams) (DuesTier, error) {
+	row := q.db.QueryRowContext(ctx, updateDuesTier, arg.Name, arg.ID)
+	var i DuesTier
+	err := row.Scan(
+		&i.ID,
+		&i.FundID,
+		&i.Name,
+		&i.CreatedAt,
+	)
+	return i, err
+}

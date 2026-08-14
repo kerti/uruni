@@ -113,3 +113,20 @@ func mapSQLiteError(w http.ResponseWriter, logger *slog.Logger, err error) {
 	logger.Error("unhandled sqlite error", "error", err)
 	writeAPIError(w, http.StatusInternalServerError, "internal_error", "Something went wrong.")
 }
+
+// mapSQLiteDeleteError is mapSQLiteError's counterpart for a DELETE.
+// SQLITE_CONSTRAINT_FOREIGNKEY carries two opposite meanings and one result
+// code, so the calling handler is what distinguishes them: on a create or an
+// update it means "you named a row that doesn't exist" (400, above); on a
+// delete it means the row exists and real data still points at it - a member
+// with posted transactions - which is a conflict, not a malformed request.
+// Every other class means the same either way and delegates unchanged.
+func mapSQLiteDeleteError(w http.ResponseWriter, logger *slog.Logger, err error) {
+	var sqliteErr *sqlite.Error
+	if errors.As(err, &sqliteErr) && sqliteErr.Code() == sqlite3.SQLITE_CONSTRAINT_FOREIGNKEY {
+		writeAPIError(w, http.StatusConflict, "referenced_by_other_records",
+			"This record is referenced by other data and cannot be deleted.")
+		return
+	}
+	mapSQLiteError(w, logger, err)
+}

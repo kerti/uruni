@@ -40,6 +40,40 @@ func (q *Queries) CreateDuesRate(ctx context.Context, arg CreateDuesRateParams) 
 	return i, err
 }
 
+const deleteDuesRate = `-- name: DeleteDuesRate :exec
+DELETE FROM dues_rate
+WHERE id = ?
+`
+
+// DeleteDuesRate is what makes a wrong-month rate correctable at all, since
+// UNIQUE (tier_id, effective_from) refuses the corrected row otherwise.
+func (q *Queries) DeleteDuesRate(ctx context.Context, id int64) error {
+	_, err := q.db.ExecContext(ctx, deleteDuesRate, id)
+	return err
+}
+
+const getDuesRate = `-- name: GetDuesRate :one
+SELECT id, tier_id, amount, effective_from, created_at
+FROM dues_rate
+WHERE id = ?
+`
+
+// GetDuesRate is the lookup PATCH and DELETE both do ahead of the write: an
+// UPDATE's RETURNING would answer an unknown id with sql.ErrNoRows, but a
+// DELETE affecting zero rows raises nothing at all.
+func (q *Queries) GetDuesRate(ctx context.Context, id int64) (DuesRate, error) {
+	row := q.db.QueryRowContext(ctx, getDuesRate, id)
+	var i DuesRate
+	err := row.Scan(
+		&i.ID,
+		&i.TierID,
+		&i.Amount,
+		&i.EffectiveFrom,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
 const getEffectiveDuesRate = `-- name: GetEffectiveDuesRate :one
 SELECT id, tier_id, amount, effective_from, created_at
 FROM dues_rate
@@ -104,4 +138,31 @@ func (q *Queries) ListDuesRatesByTier(ctx context.Context, tierID int64) ([]Dues
 		return nil, err
 	}
 	return items, nil
+}
+
+const updateDuesRate = `-- name: UpdateDuesRate :one
+UPDATE dues_rate
+SET amount = ?
+WHERE id = ?
+RETURNING id, tier_id, amount, effective_from, created_at
+`
+
+type UpdateDuesRateParams struct {
+	Amount int64
+	ID     int64
+}
+
+// UpdateDuesRate corrects a mistyped amount. effective_from stays fixed: a
+// rate filed against the wrong month is deleted and re-posted, not moved.
+func (q *Queries) UpdateDuesRate(ctx context.Context, arg UpdateDuesRateParams) (DuesRate, error) {
+	row := q.db.QueryRowContext(ctx, updateDuesRate, arg.Amount, arg.ID)
+	var i DuesRate
+	err := row.Scan(
+		&i.ID,
+		&i.TierID,
+		&i.Amount,
+		&i.EffectiveFrom,
+		&i.CreatedAt,
+	)
+	return i, err
 }

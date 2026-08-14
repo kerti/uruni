@@ -1,8 +1,14 @@
 package http
 
 import (
+	"encoding/json"
+	"errors"
+	"io"
 	"net/http"
+	"strconv"
 	"time"
+
+	"github.com/go-chi/chi/v5"
 
 	"github.com/kerti/uruni/internal/store"
 )
@@ -94,4 +100,132 @@ func (a *api) listMembers(w http.ResponseWriter, r *http.Request) {
 		resp = append(resp, toMemberResponse(m))
 	}
 	writeJSON(w, http.StatusOK, resp)
+}
+
+// resolveMember looks up {id}, or answers the request and reports false. The
+// lookup is a pre-fetch rather than leaning on sql.ErrNoRows, which a DELETE
+// affecting zero rows never raises.
+func (a *api) resolveMember(w http.ResponseWriter, r *http.Request) (store.Member, bool) {
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		writeAPIError(w, http.StatusBadRequest, "invalid_argument", "The member id is not a valid number.")
+		return store.Member{}, false
+	}
+
+	member, err := a.queries.GetMember(r.Context(), id)
+	if err != nil {
+		mapSQLiteError(w, a.logger, err) // sql.ErrNoRows -> 404 not_found
+		return store.Member{}, false
+	}
+	return member, true
+}
+
+// updateMemberRequest is PATCH /api/members/{id}'s body. An absent key means
+// "leave alone"; an explicit null on tier_id, joined_on or inactive_on means
+// "clear it" - clearing tier_id drops the dues obligation, clearing
+// inactive_on reinstates the member.
+//
+// Hence the *Set flags and the map decode below: no struct tag can carry this
+// distinction. Both *T and **T leave the field nil for a missing key and for
+// an explicit null alike (checked against encoding/json, not assumed).
+type updateMemberRequest struct {
+	Name          *string
+	NameSet       bool
+	TierID        *int64
+	TierIDSet     bool
+	JoinedOn      *string
+	JoinedOnSet   bool
+	InactiveOn    *string
+	InactiveOnSet bool
+}
+
+func decodeUpdateMemberRequest(w http.ResponseWriter, r *http.Request) (updateMemberRequest, bool) {
+	var raw map[string]json.RawMessage
+	if err := json.NewDecoder(r.Body).Decode(&raw); err != nil && !errors.Is(err, io.EOF) {
+		writeAPIError(w, http.StatusBadRequest, "invalid_json", "The request body is not valid JSON.")
+		return updateMemberRequest{}, false
+	}
+
+	var req updateMemberRequest
+	fields := []struct {
+		key string
+		set *bool
+		dst any
+	}{
+		{"name", &req.NameSet, &req.Name},
+		{"tier_id", &req.TierIDSet, &req.TierID},
+		{"joined_on", &req.JoinedOnSet, &req.JoinedOn},
+		{"inactive_on", &req.InactiveOnSet, &req.InactiveOn},
+	}
+	for _, f := range fields {
+		v, ok := raw[f.key]
+		if !ok {
+			continue
+		}
+		*f.set = true
+		if err := json.Unmarshal(v, f.dst); err != nil {
+			writeAPIError(w, http.StatusBadRequest, "invalid_json", "The request body is not valid JSON.")
+			return updateMemberRequest{}, false
+		}
+	}
+	return req, true
+}
+
+// updateMember is PATCH /api/members/{id}: a correction to reference data,
+// not a ledger event - a transaction references a member by id, so a rename
+// or a tier change breaks nothing already posted. inactive_on only exposes
+// the column; DuesStatusForPeriod owns what it means.
+func (a *api) updateMember(w http.ResponseWriter, r *http.Request) {
+	member, ok := a.resolveMember(w, r)
+	if !ok {
+		return
+	}
+
+	req, ok := decodeUpdateMemberRequest(w, r)
+	if !ok {
+		return
+	}
+
+	params := store.UpdateMemberParams{ID: member.ID}
+	if req.NameSet {
+		params.Name = req.Name
+	}
+	if req.TierIDSet {
+		params.SetTierID = 1
+		params.TierID = req.TierID
+	}
+	if req.JoinedOnSet {
+		params.SetJoinedOn = 1
+		params.JoinedOn = req.JoinedOn
+	}
+	if req.InactiveOnSet {
+		params.SetInactiveOn = 1
+		params.InactiveOn = req.InactiveOn
+	}
+
+	updated, err := a.queries.UpdateMember(r.Context(), params)
+	if err != nil {
+		mapSQLiteError(w, a.logger, err)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, toMemberResponse(updated))
+}
+
+// deleteMember is DELETE /api/members/{id}: for a duplicate added at setup,
+// never for a member who left - that is inactive_on. No pre-check for
+// referencing rows; the composite foreign keys already refuse it, and a
+// COUNT(*) first would only race them.
+func (a *api) deleteMember(w http.ResponseWriter, r *http.Request) {
+	member, ok := a.resolveMember(w, r)
+	if !ok {
+		return
+	}
+
+	if err := a.queries.DeleteMember(r.Context(), member.ID); err != nil {
+		mapSQLiteDeleteError(w, a.logger, err)
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
 }

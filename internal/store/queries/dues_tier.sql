@@ -13,3 +13,10 @@ SELECT id, fund_id, name, created_at
 FROM dues_tier
 WHERE fund_id = ?
 ORDER BY id;
+
+-- UpdateDuesTier renames a tier - reference data, not history.
+-- name: UpdateDuesTier :one
+UPDATE dues_tier
+SET name = ?
+WHERE id = ?
+RETURNING id, fund_id, name, created_at;

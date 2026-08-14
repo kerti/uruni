@@ -69,9 +69,10 @@ func (a *api) resolveDuesTier(w http.ResponseWriter, r *http.Request) (store.Due
 }
 
 // createDuesRate is POST /api/dues-tiers/{id}/rates. A dues rate is edited
-// by adding a row, never by updating one (PRD §6, "editable, effective over
-// time") - there is no update or delete route, only this one and the list
-// below. A duplicate (tier_id, effective_from) hits dues_rate's own UNIQUE
+// by adding a row for a new period, never by repricing an existing one (PRD
+// §6, "editable, effective over time"); #81's PATCH below is the narrower
+// case of a mistyped amount on the row you already have, not a price change.
+// A duplicate (tier_id, effective_from) hits dues_rate's own UNIQUE
 // constraint and comes back as 409 through mapSQLiteError.
 func (a *api) createDuesRate(w http.ResponseWriter, r *http.Request) {
 	var req duesRateRequest
@@ -96,6 +97,85 @@ func (a *api) createDuesRate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusCreated, toDuesRateResponse(rate))
+}
+
+// resolveDuesRate is resolveDuesTier's counterpart over dues_rate, and a
+// pre-fetch for the same reason: a DELETE affecting zero rows never raises
+// sql.ErrNoRows.
+func (a *api) resolveDuesRate(w http.ResponseWriter, r *http.Request) (store.DuesRate, bool) {
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		writeAPIError(w, http.StatusBadRequest, "invalid_argument", "The dues rate id is not a valid number.")
+		return store.DuesRate{}, false
+	}
+
+	rate, err := a.queries.GetDuesRate(r.Context(), id)
+	if err != nil {
+		mapSQLiteError(w, a.logger, err) // sql.ErrNoRows -> 404 not_found
+		return store.DuesRate{}, false
+	}
+	return rate, true
+}
+
+// updateDuesRateRequest is PATCH /api/dues-rates/{id}'s body: the corrected
+// amount only. No effective_from - a rate filed against the wrong month is
+// deleted and re-posted, not moved.
+//
+// Amount must stay a pointer. CHECK (amount >= 0) admits zero, so a plain
+// int64 turns a body with no amount - {}, or a misspelt key - into a free
+// tier, which reads every derived dues status for those periods as paid.
+// nil is a 400.
+type updateDuesRateRequest struct {
+	Amount *int64 `json:"amount"`
+}
+
+// updateDuesRate is PATCH /api/dues-rates/{id}: corrects a mistyped amount.
+// This retroactively changes derived dues status for the periods the rate
+// covers, deliberately - the alternative is a wrong number nobody can fix.
+func (a *api) updateDuesRate(w http.ResponseWriter, r *http.Request) {
+	rate, ok := a.resolveDuesRate(w, r)
+	if !ok {
+		return
+	}
+
+	var req updateDuesRateRequest
+	if !decodeJSON(w, r, &req) {
+		return
+	}
+	if req.Amount == nil {
+		writeAPIError(w, http.StatusBadRequest, "invalid_argument", "The corrected amount is required.")
+		return
+	}
+
+	updated, err := a.queries.UpdateDuesRate(r.Context(), store.UpdateDuesRateParams{
+		ID:     rate.ID,
+		Amount: *req.Amount,
+	})
+	if err != nil {
+		mapSQLiteError(w, a.logger, err)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, toDuesRateResponse(updated))
+}
+
+// deleteDuesRate is DELETE /api/dues-rates/{id}: what makes a rate filed
+// against the wrong month correctable at all, since UNIQUE (tier_id,
+// effective_from) otherwise refuses the corrected row. Nothing references a
+// dues_rate - a dues payment stores the amount paid, not the rate - so no
+// foreign key can fire here.
+func (a *api) deleteDuesRate(w http.ResponseWriter, r *http.Request) {
+	rate, ok := a.resolveDuesRate(w, r)
+	if !ok {
+		return
+	}
+
+	if err := a.queries.DeleteDuesRate(r.Context(), rate.ID); err != nil {
+		mapSQLiteDeleteError(w, a.logger, err)
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
 }
 
 // listDuesRates is GET /api/dues-tiers/{id}/rates: every rate ever set for
