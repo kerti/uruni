@@ -114,22 +114,13 @@ func mapSQLiteError(w http.ResponseWriter, logger *slog.Logger, err error) {
 	writeAPIError(w, http.StatusInternalServerError, "internal_error", "Something went wrong.")
 }
 
-// mapSQLiteDeleteError is mapSQLiteError's counterpart for a DELETE route
-// (issue #81): the two directions a SQLITE_CONSTRAINT_FOREIGNKEY violation
-// can mean read oppositely from the caller's point of view, and the driver's
-// result code cannot tell them apart, so which mapper a handler calls is
-// what has to. mapSQLiteError's own case above answers "you named a row that
-// doesn't exist" (400) - the shape a CREATE or an UPDATE hits, e.g. a
-// member's tier_id naming no dues_tier. A DELETE that trips the same code
-// means the opposite: the targeted row exists and real data still points at
-// it - deleting a member with posted transactions, which would orphan real
-// money. That is a conflict with the current state of the world, not a
-// malformed request, so it is 409, matching the UNIQUE case's status rather
-// than the FOREIGNKEY case's.
-//
-// Every other violation class - CHECK, UNIQUE, no-rows, unrecognized - means
-// the same thing regardless of which statement provoked it, so this
-// delegates straight back to mapSQLiteError for all of them.
+// mapSQLiteDeleteError is mapSQLiteError's counterpart for a DELETE.
+// SQLITE_CONSTRAINT_FOREIGNKEY carries two opposite meanings and one result
+// code, so the calling handler is what distinguishes them: on a create or an
+// update it means "you named a row that doesn't exist" (400, above); on a
+// delete it means the row exists and real data still points at it - a member
+// with posted transactions - which is a conflict, not a malformed request.
+// Every other class means the same either way and delegates unchanged.
 func mapSQLiteDeleteError(w http.ResponseWriter, logger *slog.Logger, err error) {
 	var sqliteErr *sqlite.Error
 	if errors.As(err, &sqliteErr) && sqliteErr.Code() == sqlite3.SQLITE_CONSTRAINT_FOREIGNKEY {

@@ -3,13 +3,9 @@ INSERT INTO dues_rate (tier_id, amount, effective_from, created_at)
 VALUES (?, ?, ?, ?)
 RETURNING id, tier_id, amount, effective_from, created_at;
 
--- GetDuesRate is the resolve-by-id lookup PATCH and DELETE /api/dues-rates/{id}
--- need ahead of the write (issue #81), the same "look it up, 404 if it's not
--- there" shape resolveDuesTier already uses for the tier routes: an UPDATE's
--- RETURNING clause would answer an unknown id with sql.ErrNoRows too, but a
--- DELETE affecting zero rows does not error at all, so the two routes need a
--- consistent pre-check rather than one that only accidentally works for one
--- of them.
+-- GetDuesRate is the lookup PATCH and DELETE both do ahead of the write: an
+-- UPDATE's RETURNING would answer an unknown id with sql.ErrNoRows, but a
+-- DELETE affecting zero rows raises nothing at all.
 -- name: GetDuesRate :one
 SELECT id, tier_id, amount, effective_from, created_at
 FROM dues_rate
@@ -32,22 +28,16 @@ FROM dues_rate
 WHERE tier_id = ?
 ORDER BY effective_from;
 
--- UpdateDuesRate corrects a mistyped amount (issue #81). effective_from is
--- deliberately not editable here: the row's period is what UNIQUE (tier_id,
--- effective_from) polices, and a rate entered against the wrong month is
--- fixed by deleting it and creating a new one for the right one (below),
--- not by mutating the period in place.
+-- UpdateDuesRate corrects a mistyped amount. effective_from stays fixed: a
+-- rate filed against the wrong month is deleted and re-posted, not moved.
 -- name: UpdateDuesRate :one
 UPDATE dues_rate
 SET amount = ?
 WHERE id = ?
 RETURNING id, tier_id, amount, effective_from, created_at;
 
--- DeleteDuesRate is what makes a rate entered against the wrong month
--- correctable at all, since UNIQUE (tier_id, effective_from) otherwise
--- refuses the corrected row outright (issue #81). Nothing in the ledger
--- references a dues_rate - a dues payment stores the amount paid, not the
--- rate (ADR-027) - so there is no foreign key for SQLite to enforce here.
+-- DeleteDuesRate is what makes a wrong-month rate correctable at all, since
+-- UNIQUE (tier_id, effective_from) refuses the corrected row otherwise.
 -- name: DeleteDuesRate :exec
 DELETE FROM dues_rate
 WHERE id = ?;

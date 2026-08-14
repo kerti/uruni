@@ -48,23 +48,24 @@ func (a *api) routes(r chi.Router) {
 	r.Post("/setup", a.setupFund)
 	r.Get("/fund", a.getFund)
 
-	// #65: the roster side of setup. Direct-CRUD (ADR-027) - no derived
-	// invariant, so these call a.queries rather than a.ledger, same split
-	// as getFund above.
+	// The roster, one block per entity. Direct-CRUD (ADR-027) - no derived
+	// invariant, so these call a.queries rather than a.ledger, same split as
+	// getFund above. DELETE is only ever for a duplicate added at setup; a
+	// member who actually leaves gets inactive_on, which is a PATCH.
 	r.Post("/members", a.createMember)
 	r.Get("/members", a.listMembers)
-	r.Post("/dues-tiers", a.createDuesTier)
-	r.Get("/dues-tiers", a.listDuesTiers)
-	r.Post("/dues-tiers/{id}/rates", a.createDuesRate)
-	r.Get("/dues-tiers/{id}/rates", a.listDuesRates)
-
-	// #81: the correction surface #65 didn't build - renaming, repricing and
-	// the three-way split between a typo (PATCH), a setup duplicate (DELETE,
-	// only while nothing references it) and a member who leaves (inactive_on
-	// via PATCH, never a delete).
 	r.Patch("/members/{id}", a.updateMember)
 	r.Delete("/members/{id}", a.deleteMember)
+
+	r.Post("/dues-tiers", a.createDuesTier)
+	r.Get("/dues-tiers", a.listDuesTiers)
 	r.Patch("/dues-tiers/{id}", a.updateDuesTier)
+
+	// Rates are created and listed under their tier, but corrected by their
+	// own id: a rate is only ever reached through one tier, and {id} in the
+	// nested path already means the tier.
+	r.Post("/dues-tiers/{id}/rates", a.createDuesRate)
+	r.Get("/dues-tiers/{id}/rates", a.listDuesRates)
 	r.Patch("/dues-rates/{id}", a.updateDuesRate)
 	r.Delete("/dues-rates/{id}", a.deleteDuesRate)
 }

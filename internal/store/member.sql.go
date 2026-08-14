@@ -51,10 +51,8 @@ DELETE FROM member
 WHERE id = ?
 `
 
-// DeleteMember relies on the composite foreign keys from "transaction" and
-// reimbursement to refuse this once a real row references the member (issue
-// #81) - no pre-check here, that would only race the constraint the schema
-// already enforces.
+// DeleteMember leans on the composite foreign keys from "transaction" and
+// reimbursement to refuse it once a real row references the member.
 func (q *Queries) DeleteMember(ctx context.Context, id int64) error {
 	_, err := q.db.ExecContext(ctx, deleteMember, id)
 	return err
@@ -140,14 +138,11 @@ type UpdateMemberParams struct {
 	ID            int64
 }
 
-// UpdateMember is a correction to reference data (issue #81), not a new
-// ledger event: a typo in name, a tier reassignment, or the two nullable
-// dates. name is COALESCE'd - a member's name is NOT NULL, so "leave alone"
-// is the only thing a nil argument can mean. tier_id, joined_on and
-// inactive_on are each nullable columns where "clear it" is a real, distinct
-// request from "leave alone" (a null sqlc.narg cannot say which), so each
-// gets its own set_* flag: the CASE only substitutes the new value - which
-// may itself be NULL - when the caller actually sent that field.
+// UpdateMember is a correction to reference data, not a ledger event. name
+// is NOT NULL, so COALESCE covers it: a nil argument can only mean "leave
+// alone". The three nullable columns need the set_* flags, because there a
+// null argument is ambiguous between "leave alone" and "clear it" - the CASE
+// substitutes the new value, NULL included, only when the caller sent it.
 func (q *Queries) UpdateMember(ctx context.Context, arg UpdateMemberParams) (Member, error) {
 	row := q.db.QueryRowContext(ctx, updateMember,
 		arg.Name,

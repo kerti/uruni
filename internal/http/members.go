@@ -102,13 +102,9 @@ func (a *api) listMembers(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, resp)
 }
 
-// resolveMember reads the {id} path segment PATCH and DELETE /api/members/{id}
-// both need and looks the member up, or answers the request itself and
-// reports false - the same shape as dues_rates.go's resolveDuesTier, for the
-// same reason: a non-numeric id is a 400 this layer alone can see, and a
-// well-formed id naming no row is a 404 read ahead of the write rather than
-// leaning on mapSQLiteError's sql.ErrNoRows case, which a DELETE affecting
-// zero rows would never even reach.
+// resolveMember looks up {id}, or answers the request and reports false. The
+// lookup is a pre-fetch rather than leaning on sql.ErrNoRows, which a DELETE
+// affecting zero rows never raises.
 func (a *api) resolveMember(w http.ResponseWriter, r *http.Request) (store.Member, bool) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
@@ -124,17 +120,14 @@ func (a *api) resolveMember(w http.ResponseWriter, r *http.Request) (store.Membe
 	return member, true
 }
 
-// updateMemberRequest is PATCH /api/members/{id}'s body. Every field is
-// optional - an absent key means "leave alone" - and tier_id, joined_on and
-// inactive_on can each also be sent explicitly as JSON null, which means
-// "clear it": clearing tier_id removes the member's dues obligation
-// entirely, and clearing inactive_on reinstates a member who had been marked
-// inactive. Decoding straight into a struct of *T (or even **T - verified
-// against encoding/json directly, not assumed: a missing key and an explicit
-// null both leave a **T field nil) cannot tell "absent" from "present and
-// null" apart, so this type is filled in from a map[string]json.RawMessage
-// instead: each field's own *Set bool records whether its key appeared in
-// the body at all, independent of what it decoded to.
+// updateMemberRequest is PATCH /api/members/{id}'s body. An absent key means
+// "leave alone"; an explicit null on tier_id, joined_on or inactive_on means
+// "clear it" - clearing tier_id drops the dues obligation, clearing
+// inactive_on reinstates the member.
+//
+// Hence the *Set flags and the map decode below: no struct tag can carry this
+// distinction. Both *T and **T leave the field nil for a missing key and for
+// an explicit null alike (checked against encoding/json, not assumed).
 type updateMemberRequest struct {
 	Name          *string
 	NameSet       bool
@@ -178,13 +171,10 @@ func decodeUpdateMemberRequest(w http.ResponseWriter, r *http.Request) (updateMe
 	return req, true
 }
 
-// updateMember is PATCH /api/members/{id}: a correction to reference data
-// (issue #81), never a new ledger event - a transaction references a member
-// by id, so renaming one or reassigning its tier breaks nothing already
-// posted. Setting inactive_on is exactly what internal/ledger's
-// DuesStatusForPeriod (M3) already interprets: the member owes their final
-// month in full and is excluded from every period after it. This route only
-// exposes the column; the semantics live there and stay there.
+// updateMember is PATCH /api/members/{id}: a correction to reference data,
+// not a ledger event - a transaction references a member by id, so a rename
+// or a tier change breaks nothing already posted. inactive_on only exposes
+// the column; DuesStatusForPeriod owns what it means.
 func (a *api) updateMember(w http.ResponseWriter, r *http.Request) {
 	member, ok := a.resolveMember(w, r)
 	if !ok {
@@ -222,13 +212,10 @@ func (a *api) updateMember(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, toMemberResponse(updated))
 }
 
-// deleteMember is DELETE /api/members/{id}: for a duplicate added twice at
-// setup, never for a member who actually left (issue #81) - that is what
-// inactive_on is for. No pre-check for referencing rows: the composite
-// foreign keys from "transaction" and reimbursement already refuse this
-// once real rows point at the member, and mapSQLiteError turns that refusal
-// into a clean 409. A hand-rolled COUNT(*) first would only race the
-// constraint the schema already enforces.
+// deleteMember is DELETE /api/members/{id}: for a duplicate added at setup,
+// never for a member who left - that is inactive_on. No pre-check for
+// referencing rows; the composite foreign keys already refuse it, and a
+// COUNT(*) first would only race them.
 func (a *api) deleteMember(w http.ResponseWriter, r *http.Request) {
 	member, ok := a.resolveMember(w, r)
 	if !ok {

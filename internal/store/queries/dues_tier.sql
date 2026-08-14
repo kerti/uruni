@@ -14,10 +14,7 @@ FROM dues_tier
 WHERE fund_id = ?
 ORDER BY id;
 
--- UpdateDuesTier renames a tier - reference data, not history (issue #81).
--- name is the tier's only mutable field and is NOT NULL, so there is no
--- "leave alone vs. clear" ambiguity here the way there is on member: a
--- rename always names the new value.
+-- UpdateDuesTier renames a tier - reference data, not history.
 -- name: UpdateDuesTier :one
 UPDATE dues_tier
 SET name = ?

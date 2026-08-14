@@ -52,12 +52,10 @@ func (a *api) createDuesTier(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, toDuesTierResponse(tier))
 }
 
-// updateDuesTier is PATCH /api/dues-tiers/{id}: a rename, the correction a
-// typo needs (issue #81). Reuses resolveDuesTier from dues_rates.go rather
-// than a second {id}-lookup helper - both routes resolve the same path
-// segment against the same table. name is dues_tier's only mutable field and
-// is NOT NULL, so unlike member there is no "leave alone vs. clear"
-// distinction to make: a PATCH always names the new value.
+// updateDuesTier is PATCH /api/dues-tiers/{id}: a rename. name is the only
+// mutable field and is NOT NULL, so unlike member there is no "leave alone
+// vs. clear" to express - a PATCH always names the new value, and an empty
+// one is refused by the column's own CHECK.
 func (a *api) updateDuesTier(w http.ResponseWriter, r *http.Request) {
 	tier, ok := a.resolveDuesTier(w, r)
 	if !ok {

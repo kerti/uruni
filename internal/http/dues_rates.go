@@ -99,13 +99,9 @@ func (a *api) createDuesRate(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, toDuesRateResponse(rate))
 }
 
-// resolveDuesRate reads the {id} path segment PATCH and DELETE
-// /api/dues-rates/{id} both need and looks the rate up, or answers the
-// request itself and reports false - the same shape as resolveDuesTier
-// above, over dues_rate instead of dues_tier. A pre-fetch rather than
-// leaning on mapSQLiteError's sql.ErrNoRows case: DELETE affecting zero rows
-// does not error at all, so both routes need the same explicit check ahead
-// of the write.
+// resolveDuesRate is resolveDuesTier's counterpart over dues_rate, and a
+// pre-fetch for the same reason: a DELETE affecting zero rows never raises
+// sql.ErrNoRows.
 func (a *api) resolveDuesRate(w http.ResponseWriter, r *http.Request) (store.DuesRate, bool) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
@@ -121,30 +117,21 @@ func (a *api) resolveDuesRate(w http.ResponseWriter, r *http.Request) (store.Due
 	return rate, true
 }
 
-// updateDuesRateRequest is PATCH /api/dues-rates/{id}'s body: just the
-// corrected amount (issue #81). No effective_from - the row's period is what
-// UNIQUE (tier_id, effective_from) polices, and a rate entered against the
-// wrong month is fixed by deleting it and posting a new one (below), not by
-// mutating the period in place.
+// updateDuesRateRequest is PATCH /api/dues-rates/{id}'s body: the corrected
+// amount only. No effective_from - a rate filed against the wrong month is
+// deleted and re-posted, not moved.
 //
-// Amount is a pointer so an absent key is distinguishable from a sent one.
-// A plain int64 would decode a body with no amount - an empty {}, or one
-// where the key is misspelt - to 0, and CHECK (amount >= 0) admits 0, so the
-// rate would silently become free and every derived dues status for the
-// periods it covers would read as paid. That is the precise failure this
-// route exists to make fixable, so the one field it takes is required: nil
-// is a 400, not a zero. member's nullable columns need the richer
-// present-vs-null decoding in members.go; amount is NOT NULL and never
-// cleared, so a pointer says everything there is to say here.
+// Amount must stay a pointer. CHECK (amount >= 0) admits zero, so a plain
+// int64 turns a body with no amount - {}, or a misspelt key - into a free
+// tier, which reads every derived dues status for those periods as paid.
+// nil is a 400.
 type updateDuesRateRequest struct {
 	Amount *int64 `json:"amount"`
 }
 
 // updateDuesRate is PATCH /api/dues-rates/{id}: corrects a mistyped amount.
 // This retroactively changes derived dues status for the periods the rate
-// covers - a deliberate, accepted consequence (issue #81), the same shape as
-// the mid-year-promotion limitation ADR-024 already accepts. No guard is
-// added against it.
+// covers, deliberately - the alternative is a wrong number nobody can fix.
 func (a *api) updateDuesRate(w http.ResponseWriter, r *http.Request) {
 	rate, ok := a.resolveDuesRate(w, r)
 	if !ok {
@@ -172,12 +159,11 @@ func (a *api) updateDuesRate(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, toDuesRateResponse(updated))
 }
 
-// deleteDuesRate is DELETE /api/dues-rates/{id}: what makes a rate entered
-// against the wrong month correctable at all (issue #81), since UNIQUE
-// (tier_id, effective_from) otherwise refuses the corrected row outright.
-// Nothing in the ledger references a dues_rate - a dues payment stores the
-// amount paid, not the rate (ADR-027) - so there is no foreign key here for
-// SQLite to enforce and nothing to map to 409.
+// deleteDuesRate is DELETE /api/dues-rates/{id}: what makes a rate filed
+// against the wrong month correctable at all, since UNIQUE (tier_id,
+// effective_from) otherwise refuses the corrected row. Nothing references a
+// dues_rate - a dues payment stores the amount paid, not the rate - so no
+// foreign key can fire here.
 func (a *api) deleteDuesRate(w http.ResponseWriter, r *http.Request) {
 	rate, ok := a.resolveDuesRate(w, r)
 	if !ok {
