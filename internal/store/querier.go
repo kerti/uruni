@@ -31,6 +31,17 @@ type Querier interface {
 	CreateReimbursement(ctx context.Context, arg CreateReimbursementParams) (Reimbursement, error)
 	CreateTransaction(ctx context.Context, arg CreateTransactionParams) (Transaction, error)
 	CreateTransfer(ctx context.Context, arg CreateTransferParams) (Transfer, error)
+	// DeleteDuesRate is what makes a rate entered against the wrong month
+	// correctable at all, since UNIQUE (tier_id, effective_from) otherwise
+	// refuses the corrected row outright (issue #81). Nothing in the ledger
+	// references a dues_rate - a dues payment stores the amount paid, not the
+	// rate (ADR-027) - so there is no foreign key for SQLite to enforce here.
+	DeleteDuesRate(ctx context.Context, id int64) error
+	// DeleteMember relies on the composite foreign keys from "transaction" and
+	// reimbursement to refuse this once a real row references the member (issue
+	// #81) - no pre-check here, that would only race the constraint the schema
+	// already enforces.
+	DeleteMember(ctx context.Context, id int64) error
 	// The roster query behind "who has paid / partially / not yet" for one
 	// dues_period, across every member in one pass rather than one query per
 	// member.
@@ -42,6 +53,14 @@ type Querier interface {
 	// exactly where it is needed most (ADR-024).
 	FundBalance(ctx context.Context, fundID int64) (int64, error)
 	GetAccount(ctx context.Context, id int64) (Account, error)
+	// GetDuesRate is the resolve-by-id lookup PATCH and DELETE /api/dues-rates/{id}
+	// need ahead of the write (issue #81), the same "look it up, 404 if it's not
+	// there" shape resolveDuesTier already uses for the tier routes: an UPDATE's
+	// RETURNING clause would answer an unknown id with sql.ErrNoRows too, but a
+	// DELETE affecting zero rows does not error at all, so the two routes need a
+	// consistent pre-check rather than one that only accidentally works for one
+	// of them.
+	GetDuesRate(ctx context.Context, id int64) (DuesRate, error)
 	GetDuesTier(ctx context.Context, id int64) (DuesTier, error)
 	// The rate in force for a period: the latest row whose effective_from is at or
 	// before it. One-sided intervals mean there is no end date to check, and no
@@ -135,6 +154,26 @@ type Querier interface {
 	// int64 rather than interface{} - sqlc's SQLite engine cannot infer the type of
 	// a summed expression (ADR-024).
 	ReconciliationDifferenceTotal(ctx context.Context, reconciliationID int64) (int64, error)
+	// UpdateDuesRate corrects a mistyped amount (issue #81). effective_from is
+	// deliberately not editable here: the row's period is what UNIQUE (tier_id,
+	// effective_from) polices, and a rate entered against the wrong month is
+	// fixed by deleting it and creating a new one for the right one (below),
+	// not by mutating the period in place.
+	UpdateDuesRate(ctx context.Context, arg UpdateDuesRateParams) (DuesRate, error)
+	// UpdateDuesTier renames a tier - reference data, not history (issue #81).
+	// name is the tier's only mutable field and is NOT NULL, so there is no
+	// "leave alone vs. clear" ambiguity here the way there is on member: a
+	// rename always names the new value.
+	UpdateDuesTier(ctx context.Context, arg UpdateDuesTierParams) (DuesTier, error)
+	// UpdateMember is a correction to reference data (issue #81), not a new
+	// ledger event: a typo in name, a tier reassignment, or the two nullable
+	// dates. name is COALESCE'd - a member's name is NOT NULL, so "leave alone"
+	// is the only thing a nil argument can mean. tier_id, joined_on and
+	// inactive_on are each nullable columns where "clear it" is a real, distinct
+	// request from "leave alone" (a null sqlc.narg cannot say which), so each
+	// gets its own set_* flag: the CASE only substitutes the new value - which
+	// may itself be NULL - when the caller actually sent that field.
+	UpdateMember(ctx context.Context, arg UpdateMemberParams) (Member, error)
 }
 
 var _ Querier = (*Queries)(nil)

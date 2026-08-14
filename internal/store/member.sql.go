@@ -46,6 +46,20 @@ func (q *Queries) CreateMember(ctx context.Context, arg CreateMemberParams) (Mem
 	return i, err
 }
 
+const deleteMember = `-- name: DeleteMember :exec
+DELETE FROM member
+WHERE id = ?
+`
+
+// DeleteMember relies on the composite foreign keys from "transaction" and
+// reimbursement to refuse this once a real row references the member (issue
+// #81) - no pre-check here, that would only race the constraint the schema
+// already enforces.
+func (q *Queries) DeleteMember(ctx context.Context, id int64) error {
+	_, err := q.db.ExecContext(ctx, deleteMember, id)
+	return err
+}
+
 const getMember = `-- name: GetMember :one
 SELECT id, fund_id, name, tier_id, joined_on, inactive_on, created_at
 FROM member
@@ -103,4 +117,57 @@ func (q *Queries) ListMembersByFund(ctx context.Context, fundID int64) ([]Member
 		return nil, err
 	}
 	return items, nil
+}
+
+const updateMember = `-- name: UpdateMember :one
+UPDATE member
+SET name        = COALESCE(?1, name),
+    tier_id     = CASE WHEN CAST(?2     AS INTEGER) = 1 THEN ?3     ELSE tier_id     END,
+    joined_on   = CASE WHEN CAST(?4   AS INTEGER) = 1 THEN ?5   ELSE joined_on   END,
+    inactive_on = CASE WHEN CAST(?6 AS INTEGER) = 1 THEN ?7 ELSE inactive_on END
+WHERE id = ?8
+RETURNING id, fund_id, name, tier_id, joined_on, inactive_on, created_at
+`
+
+type UpdateMemberParams struct {
+	Name          *string
+	SetTierID     int64
+	TierID        *int64
+	SetJoinedOn   int64
+	JoinedOn      *string
+	SetInactiveOn int64
+	InactiveOn    *string
+	ID            int64
+}
+
+// UpdateMember is a correction to reference data (issue #81), not a new
+// ledger event: a typo in name, a tier reassignment, or the two nullable
+// dates. name is COALESCE'd - a member's name is NOT NULL, so "leave alone"
+// is the only thing a nil argument can mean. tier_id, joined_on and
+// inactive_on are each nullable columns where "clear it" is a real, distinct
+// request from "leave alone" (a null sqlc.narg cannot say which), so each
+// gets its own set_* flag: the CASE only substitutes the new value - which
+// may itself be NULL - when the caller actually sent that field.
+func (q *Queries) UpdateMember(ctx context.Context, arg UpdateMemberParams) (Member, error) {
+	row := q.db.QueryRowContext(ctx, updateMember,
+		arg.Name,
+		arg.SetTierID,
+		arg.TierID,
+		arg.SetJoinedOn,
+		arg.JoinedOn,
+		arg.SetInactiveOn,
+		arg.InactiveOn,
+		arg.ID,
+	)
+	var i Member
+	err := row.Scan(
+		&i.ID,
+		&i.FundID,
+		&i.Name,
+		&i.TierID,
+		&i.JoinedOn,
+		&i.InactiveOn,
+		&i.CreatedAt,
+	)
+	return i, err
 }

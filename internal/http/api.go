@@ -57,6 +57,16 @@ func (a *api) routes(r chi.Router) {
 	r.Get("/dues-tiers", a.listDuesTiers)
 	r.Post("/dues-tiers/{id}/rates", a.createDuesRate)
 	r.Get("/dues-tiers/{id}/rates", a.listDuesRates)
+
+	// #81: the correction surface #65 didn't build - renaming, repricing and
+	// the three-way split between a typo (PATCH), a setup duplicate (DELETE,
+	// only while nothing references it) and a member who leaves (inactive_on
+	// via PATCH, never a delete).
+	r.Patch("/members/{id}", a.updateMember)
+	r.Delete("/members/{id}", a.deleteMember)
+	r.Patch("/dues-tiers/{id}", a.updateDuesTier)
+	r.Patch("/dues-rates/{id}", a.updateDuesRate)
+	r.Delete("/dues-rates/{id}", a.deleteDuesRate)
 }
 
 // writeJSON is writeAPIError's counterpart for a successful response: every

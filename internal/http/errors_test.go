@@ -202,6 +202,59 @@ func TestMapSQLiteErrorMapsAGenuineForeignKeyViolation(t *testing.T) {
 	}
 }
 
+// TestMapSQLiteDeleteErrorMapsAGenuineForeignKeyViolationTo409 is
+// mapSQLiteError's foreign-key test above, but for a DELETE: the same
+// SQLITE_CONSTRAINT_FOREIGNKEY code, read the opposite way (issue #81).
+func TestMapSQLiteDeleteErrorMapsAGenuineForeignKeyViolationTo409(t *testing.T) {
+	sqlDB := testStoreDB(t)
+	q := store.New(sqlDB)
+	ctx := context.Background()
+
+	fund, err := q.CreateFund(ctx, store.CreateFundParams{
+		Name: "Test Fund", Currency: "IDR", ReportSlug: "abcdefghijklmnopqrstuv", CreatedAt: 1,
+	})
+	if err != nil {
+		t.Fatalf("CreateFund() = %v, want no error", err)
+	}
+	if _, err := q.CreateMember(ctx, store.CreateMemberParams{FundID: fund.ID, Name: "Jane", CreatedAt: 1}); err != nil {
+		t.Fatalf("CreateMember() = %v, want no error", err)
+	}
+
+	// fund is referenced by member.fund_id (plain FOREIGN KEY) - deleting it
+	// out from under a real member is what a genuine "row exists, real data
+	// still points at it" DELETE-time FK violation looks like here.
+	_, err = sqlDB.ExecContext(ctx, "DELETE FROM fund WHERE id = ?", fund.ID)
+	if err == nil {
+		t.Fatalf("DELETE FROM fund with a real member = nil error, want a FOREIGN KEY violation")
+	}
+
+	rec := httptest.NewRecorder()
+	mapSQLiteDeleteError(rec, testLogger(), err)
+	if rec.Code != 409 {
+		t.Fatalf("status = %d, want 409", rec.Code)
+	}
+	got := decodeError(t, rec)
+	if got.Code != "referenced_by_other_records" {
+		t.Errorf("code = %q, want %q", got.Code, "referenced_by_other_records")
+	}
+}
+
+// TestMapSQLiteDeleteErrorDelegatesNonForeignKeyViolations proves the
+// delegation for every other class - CHECK, UNIQUE, no-rows, unrecognized -
+// still behaves exactly like mapSQLiteError, so the DELETE-only override is
+// scoped to the one violation class it exists for.
+func TestMapSQLiteDeleteErrorDelegatesNonForeignKeyViolations(t *testing.T) {
+	rec := httptest.NewRecorder()
+	mapSQLiteDeleteError(rec, testLogger(), sql.ErrNoRows)
+	if rec.Code != 404 {
+		t.Fatalf("status = %d, want 404", rec.Code)
+	}
+	got := decodeError(t, rec)
+	if got.Code != "not_found" {
+		t.Errorf("code = %q, want %q", got.Code, "not_found")
+	}
+}
+
 func TestMapSQLiteErrorMapsNoRowsToNotFound(t *testing.T) {
 	rec := httptest.NewRecorder()
 	mapSQLiteError(rec, testLogger(), sql.ErrNoRows)

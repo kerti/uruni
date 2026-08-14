@@ -40,6 +40,47 @@ func (q *Queries) CreateDuesRate(ctx context.Context, arg CreateDuesRateParams) 
 	return i, err
 }
 
+const deleteDuesRate = `-- name: DeleteDuesRate :exec
+DELETE FROM dues_rate
+WHERE id = ?
+`
+
+// DeleteDuesRate is what makes a rate entered against the wrong month
+// correctable at all, since UNIQUE (tier_id, effective_from) otherwise
+// refuses the corrected row outright (issue #81). Nothing in the ledger
+// references a dues_rate - a dues payment stores the amount paid, not the
+// rate (ADR-027) - so there is no foreign key for SQLite to enforce here.
+func (q *Queries) DeleteDuesRate(ctx context.Context, id int64) error {
+	_, err := q.db.ExecContext(ctx, deleteDuesRate, id)
+	return err
+}
+
+const getDuesRate = `-- name: GetDuesRate :one
+SELECT id, tier_id, amount, effective_from, created_at
+FROM dues_rate
+WHERE id = ?
+`
+
+// GetDuesRate is the resolve-by-id lookup PATCH and DELETE /api/dues-rates/{id}
+// need ahead of the write (issue #81), the same "look it up, 404 if it's not
+// there" shape resolveDuesTier already uses for the tier routes: an UPDATE's
+// RETURNING clause would answer an unknown id with sql.ErrNoRows too, but a
+// DELETE affecting zero rows does not error at all, so the two routes need a
+// consistent pre-check rather than one that only accidentally works for one
+// of them.
+func (q *Queries) GetDuesRate(ctx context.Context, id int64) (DuesRate, error) {
+	row := q.db.QueryRowContext(ctx, getDuesRate, id)
+	var i DuesRate
+	err := row.Scan(
+		&i.ID,
+		&i.TierID,
+		&i.Amount,
+		&i.EffectiveFrom,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
 const getEffectiveDuesRate = `-- name: GetEffectiveDuesRate :one
 SELECT id, tier_id, amount, effective_from, created_at
 FROM dues_rate
@@ -104,4 +145,34 @@ func (q *Queries) ListDuesRatesByTier(ctx context.Context, tierID int64) ([]Dues
 		return nil, err
 	}
 	return items, nil
+}
+
+const updateDuesRate = `-- name: UpdateDuesRate :one
+UPDATE dues_rate
+SET amount = ?
+WHERE id = ?
+RETURNING id, tier_id, amount, effective_from, created_at
+`
+
+type UpdateDuesRateParams struct {
+	Amount int64
+	ID     int64
+}
+
+// UpdateDuesRate corrects a mistyped amount (issue #81). effective_from is
+// deliberately not editable here: the row's period is what UNIQUE (tier_id,
+// effective_from) polices, and a rate entered against the wrong month is
+// fixed by deleting it and creating a new one for the right one (below),
+// not by mutating the period in place.
+func (q *Queries) UpdateDuesRate(ctx context.Context, arg UpdateDuesRateParams) (DuesRate, error) {
+	row := q.db.QueryRowContext(ctx, updateDuesRate, arg.Amount, arg.ID)
+	var i DuesRate
+	err := row.Scan(
+		&i.ID,
+		&i.TierID,
+		&i.Amount,
+		&i.EffectiveFrom,
+		&i.CreatedAt,
+	)
+	return i, err
 }

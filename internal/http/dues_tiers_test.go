@@ -3,6 +3,7 @@ package http
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -102,6 +103,112 @@ func TestPostDuesTiersRejectsAnEmptyName(t *testing.T) {
 	got := decodeError(t, rec)
 	if got.Code != "check_violation" {
 		t.Errorf("error code = %q, want %q", got.Code, "check_violation")
+	}
+}
+
+func patchDuesTier(t *testing.T, r http.Handler, id int64, name string) *httptest.ResponseRecorder {
+	t.Helper()
+	body, err := json.Marshal(duesTierRequest{Name: name})
+	if err != nil {
+		t.Fatalf("marshaling dues tier request: %v", err)
+	}
+	rec := httptest.NewRecorder()
+	path := fmt.Sprintf("/api/dues-tiers/%d", id)
+	r.ServeHTTP(rec, httptest.NewRequest(http.MethodPatch, path, bytes.NewReader(body)))
+	return rec
+}
+
+func TestPatchDuesTiersRenamesItAndListReflectsIt(t *testing.T) {
+	r := testRouter(t)
+	tier := setUpTier(t, r, "Full")
+
+	rec := patchDuesTier(t, r, tier.ID, "Penuh")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("PATCH /api/dues-tiers/%d = %d, want %d (body: %s)", tier.ID, rec.Code, http.StatusOK, rec.Body.String())
+	}
+	var got duesTierResponse
+	if err := json.NewDecoder(rec.Body).Decode(&got); err != nil {
+		t.Fatalf("decoding response: %v (body: %s)", err, rec.Body.String())
+	}
+	if got.ID != tier.ID {
+		t.Errorf("dues_tier.id = %d, want %d", got.ID, tier.ID)
+	}
+	if got.Name != "Penuh" {
+		t.Errorf("dues_tier.name = %q, want %q", got.Name, "Penuh")
+	}
+
+	list := httptest.NewRecorder()
+	r.ServeHTTP(list, httptest.NewRequest(http.MethodGet, "/api/dues-tiers", nil))
+	var tiers []duesTierResponse
+	if err := json.NewDecoder(list.Body).Decode(&tiers); err != nil {
+		t.Fatalf("decoding response: %v", err)
+	}
+	if len(tiers) != 1 || tiers[0].Name != "Penuh" {
+		t.Errorf("GET /api/dues-tiers = %+v, want a single tier named %q", tiers, "Penuh")
+	}
+}
+
+func TestPatchDuesTiersRejectsAnEmptyName(t *testing.T) {
+	r := testRouter(t)
+	tier := setUpTier(t, r, "Full")
+
+	rec := patchDuesTier(t, r, tier.ID, "")
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("PATCH /api/dues-tiers/%d with empty name = %d, want %d (body: %s)", tier.ID, rec.Code, http.StatusBadRequest, rec.Body.String())
+	}
+	got := decodeError(t, rec)
+	if got.Code != "check_violation" {
+		t.Errorf("error code = %q, want %q", got.Code, "check_violation")
+	}
+}
+
+func TestPatchDuesTiersReturns404ForAnUnknownID(t *testing.T) {
+	r := testRouter(t)
+	if rec := postSetup(t, r, "Test Fund"); rec.Code != http.StatusCreated {
+		t.Fatalf("POST /api/setup = %d, want %d", rec.Code, http.StatusCreated)
+	}
+
+	rec := patchDuesTier(t, r, 999, "Penuh")
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("PATCH /api/dues-tiers/999 = %d, want %d (body: %s)", rec.Code, http.StatusNotFound, rec.Body.String())
+	}
+	got := decodeError(t, rec)
+	if got.Code != "not_found" {
+		t.Errorf("error code = %q, want %q", got.Code, "not_found")
+	}
+}
+
+func TestPatchDuesTiersReturns400ForANonNumericID(t *testing.T) {
+	r := testRouter(t)
+	if rec := postSetup(t, r, "Test Fund"); rec.Code != http.StatusCreated {
+		t.Fatalf("POST /api/setup = %d, want %d", rec.Code, http.StatusCreated)
+	}
+
+	rec := httptest.NewRecorder()
+	body, _ := json.Marshal(duesTierRequest{Name: "Penuh"})
+	r.ServeHTTP(rec, httptest.NewRequest(http.MethodPatch, "/api/dues-tiers/abc", bytes.NewReader(body)))
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("PATCH /api/dues-tiers/abc = %d, want %d (body: %s)", rec.Code, http.StatusBadRequest, rec.Body.String())
+	}
+	got := decodeError(t, rec)
+	if got.Code != "invalid_argument" {
+		t.Errorf("error code = %q, want %q", got.Code, "invalid_argument")
+	}
+}
+
+func TestPatchDuesTiersRejectsMalformedJSON(t *testing.T) {
+	r := testRouter(t)
+	tier := setUpTier(t, r, "Full")
+
+	rec := httptest.NewRecorder()
+	path := fmt.Sprintf("/api/dues-tiers/%d", tier.ID)
+	r.ServeHTTP(rec, httptest.NewRequest(http.MethodPatch, path, bytes.NewReader([]byte("{oops"))))
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("PATCH /api/dues-tiers/%d with malformed JSON = %d, want %d", tier.ID, rec.Code, http.StatusBadRequest)
+	}
+	got := decodeError(t, rec)
+	if got.Code != "invalid_json" {
+		t.Errorf("error code = %q, want %q", got.Code, "invalid_json")
 	}
 }
 
