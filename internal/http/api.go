@@ -48,6 +48,13 @@ func (a *api) routes(r chi.Router) {
 	r.Post("/setup", a.setupFund)
 	r.Get("/fund", a.getFund)
 
+	// The fund's structure. Read-only but for the one purpose a treasurer
+	// creates herself: accounts are the two locations setup made, and the
+	// other two purpose kinds are written by SetUpFund and OpenIncidental.
+	r.Get("/accounts", a.listAccounts)
+	r.Get("/purposes", a.listPurposes)
+	r.Post("/pass-through-purposes", a.createPassThroughPurpose)
+
 	// The roster, one block per entity. Direct-CRUD (ADR-027) - no derived
 	// invariant, so these call a.queries rather than a.ledger, same split as
 	// getFund above. DELETE is only ever for a duplicate added at setup; a
