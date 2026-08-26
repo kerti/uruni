@@ -87,6 +87,7 @@ Entitas utama:
 ### 7.3 Iuran
 - Melihat anggota dan, untuk periode berjalan, siapa yang sudah bayar / bayar sebagian / bayar di muka (ada yang membayar beberapa bulan sekaligus).
 - Menandai pembayaran iuran (nominal terisi otomatis dari jenjang anggota, dapat diubah; lokasi; tunai/transfer).
+- Membatalkan pembayaran iuran yang salah dicatat (salah anggota, tercatat dua kali) — pembayaran itu dibalik dengan entri baru, bukan dihapus, dan anggota kembali terbaca belum bayar untuk periode tersebut.
 - Tampilan sederhana "belum bayar". **Tanpa pengingat, tanpa penagihan otomatis.**
 
 ### 7.4 Penggantian (reimbursement)
@@ -149,4 +150,4 @@ Tidak ada lagi pertanyaan terbuka di tingkat produk. Keputusan tingkat implement
 
 ## 11. Di luar cakupan / kemungkinan ke depan
 
-Aplikasi untuk anggota, banyak bendahara/peran, pelaporan yang lebih kaya, tampilan "uang ini menjadi apa" yang bernuansa emosional (nilai tambah, ditunda), panduan rekening khusus, serta persona tambahan (RT/kelompok besar).
+Aplikasi untuk anggota, banyak bendahara/peran, pelaporan yang lebih kaya, tampilan "uang ini menjadi apa" yang bernuansa emosional (nilai tambah, ditunda), panduan rekening khusus, persona tambahan (RT/kelompok besar), serta memindahkan pembayaran iuran yang sudah tercatat ke anggota lain dalam satu langkah (saat ini: dibalik dulu, lalu dicatat ulang atas nama anggota yang benar).
