@@ -104,11 +104,12 @@ func TestDuesStatusForPeriodPartialMemberPaidLessThanTheRate(t *testing.T) {
 	createDuesRate(t, q, tierID, 25_000, "2026-01")
 	memberID := createDuesMember(t, q, f.fundID, duesMemberParams{name: "Jane", tierID: &tierID})
 
-	if _, err := l.PostDuesPayment(ctx, PostDuesPaymentParams{
+	if _, err := l.PostDuesPayments(ctx, PostDuesPaymentsParams{
 		FundID: f.fundID, AccountID: f.cashID, PurposeID: f.mainID,
-		MemberID: memberID, DuesPeriod: "2026-06", Amount: 10_000, OccurredOn: "2026-06-15",
+		MemberID: memberID, OccurredOn: "2026-06-15",
+		Periods: []PeriodAmount{{DuesPeriod: "2026-06", Amount: 10_000}},
 	}); err != nil {
-		t.Fatalf("PostDuesPayment() = %v, want no error", err)
+		t.Fatalf("PostDuesPayments() = %v, want no error", err)
 	}
 
 	rows, err := l.DuesStatusForPeriod(ctx, f.fundID, "2026-06")
@@ -138,11 +139,12 @@ func TestDuesStatusForPeriodPaidMemberPaidExactlyTheRate(t *testing.T) {
 	createDuesRate(t, q, tierID, 25_000, "2026-01")
 	memberID := createDuesMember(t, q, f.fundID, duesMemberParams{name: "Jane", tierID: &tierID})
 
-	if _, err := l.PostDuesPayment(ctx, PostDuesPaymentParams{
+	if _, err := l.PostDuesPayments(ctx, PostDuesPaymentsParams{
 		FundID: f.fundID, AccountID: f.cashID, PurposeID: f.mainID,
-		MemberID: memberID, DuesPeriod: "2026-06", Amount: 25_000, OccurredOn: "2026-06-15",
+		MemberID: memberID, OccurredOn: "2026-06-15",
+		Periods: []PeriodAmount{{DuesPeriod: "2026-06", Amount: 25_000}},
 	}); err != nil {
-		t.Fatalf("PostDuesPayment() = %v, want no error", err)
+		t.Fatalf("PostDuesPayments() = %v, want no error", err)
 	}
 
 	rows, err := l.DuesStatusForPeriod(ctx, f.fundID, "2026-06")
@@ -173,11 +175,12 @@ func TestDuesStatusForPeriodOverpaymentReadsAsPaid(t *testing.T) {
 	createDuesRate(t, q, tierID, 25_000, "2026-01")
 	memberID := createDuesMember(t, q, f.fundID, duesMemberParams{name: "Jane", tierID: &tierID})
 
-	if _, err := l.PostDuesPayment(ctx, PostDuesPaymentParams{
+	if _, err := l.PostDuesPayments(ctx, PostDuesPaymentsParams{
 		FundID: f.fundID, AccountID: f.cashID, PurposeID: f.mainID,
-		MemberID: memberID, DuesPeriod: "2026-06", Amount: 40_000, OccurredOn: "2026-06-15",
+		MemberID: memberID, OccurredOn: "2026-06-15",
+		Periods: []PeriodAmount{{DuesPeriod: "2026-06", Amount: 40_000}},
 	}); err != nil {
-		t.Fatalf("PostDuesPayment() = %v, want no error", err)
+		t.Fatalf("PostDuesPayments() = %v, want no error", err)
 	}
 
 	rows, err := l.DuesStatusForPeriod(ctx, f.fundID, "2026-06")
@@ -215,11 +218,12 @@ func TestDuesStatusForPeriodPaidInAdvanceWhenALaterPeriodIsAlsoPaid(t *testing.T
 	memberID := createDuesMember(t, q, f.fundID, duesMemberParams{name: "Jane", tierID: &tierID})
 
 	for _, period := range []string{"2026-06", "2026-08"} {
-		if _, err := l.PostDuesPayment(ctx, PostDuesPaymentParams{
+		if _, err := l.PostDuesPayments(ctx, PostDuesPaymentsParams{
 			FundID: f.fundID, AccountID: f.cashID, PurposeID: f.mainID,
-			MemberID: memberID, DuesPeriod: period, Amount: 25_000, OccurredOn: "2026-08-01",
+			MemberID: memberID, OccurredOn: "2026-08-01",
+			Periods: []PeriodAmount{{DuesPeriod: period, Amount: 25_000}},
 		}); err != nil {
-			t.Fatalf("PostDuesPayment(%q) = %v, want no error", period, err)
+			t.Fatalf("PostDuesPayments(%q) = %v, want no error", period, err)
 		}
 	}
 
@@ -251,11 +255,12 @@ func TestDuesStatusForPeriodSkippedPeriodStaysUnpaidDespiteALaterPayment(t *test
 	memberID := createDuesMember(t, q, f.fundID, duesMemberParams{name: "Jane", tierID: &tierID})
 
 	// Paid August, but never paid the July being queried below.
-	if _, err := l.PostDuesPayment(ctx, PostDuesPaymentParams{
+	if _, err := l.PostDuesPayments(ctx, PostDuesPaymentsParams{
 		FundID: f.fundID, AccountID: f.cashID, PurposeID: f.mainID,
-		MemberID: memberID, DuesPeriod: "2026-08", Amount: 25_000, OccurredOn: "2026-08-01",
+		MemberID: memberID, OccurredOn: "2026-08-01",
+		Periods: []PeriodAmount{{DuesPeriod: "2026-08", Amount: 25_000}},
 	}); err != nil {
-		t.Fatalf("PostDuesPayment() = %v, want no error", err)
+		t.Fatalf("PostDuesPayments() = %v, want no error", err)
 	}
 
 	rows, err := l.DuesStatusForPeriod(ctx, f.fundID, "2026-07")
@@ -286,11 +291,12 @@ func TestDuesStatusForPeriodSeveralMonthsPaidAtOnceShowCorrectlyPerPeriod(t *tes
 	memberID := createDuesMember(t, q, f.fundID, duesMemberParams{name: "Jane", tierID: &tierID})
 
 	for _, period := range []string{"2026-06", "2026-07", "2026-08"} {
-		if _, err := l.PostDuesPayment(ctx, PostDuesPaymentParams{
+		if _, err := l.PostDuesPayments(ctx, PostDuesPaymentsParams{
 			FundID: f.fundID, AccountID: f.cashID, PurposeID: f.mainID,
-			MemberID: memberID, DuesPeriod: period, Amount: 25_000, OccurredOn: "2026-08-01",
+			MemberID: memberID, OccurredOn: "2026-08-01",
+			Periods: []PeriodAmount{{DuesPeriod: period, Amount: 25_000}},
 		}); err != nil {
-			t.Fatalf("PostDuesPayment(%q) = %v, want no error", period, err)
+			t.Fatalf("PostDuesPayments(%q) = %v, want no error", period, err)
 		}
 	}
 
@@ -541,11 +547,12 @@ func TestDuesStatusForPeriodScopesToOneFund(t *testing.T) {
 	tier2 := createDuesTier(t, q, other.ID, "Tier A")
 	createDuesRate(t, q, tier2, 99_000, "2026-01")
 	member2 := createDuesMember(t, q, other.ID, duesMemberParams{name: "John", tierID: &tier2})
-	if _, err := l.PostDuesPayment(ctx, PostDuesPaymentParams{
+	if _, err := l.PostDuesPayments(ctx, PostDuesPaymentsParams{
 		FundID: other.ID, AccountID: f2cash, PurposeID: f2main,
-		MemberID: member2, DuesPeriod: "2026-06", Amount: 99_000, OccurredOn: "2026-06-01",
+		MemberID: member2, OccurredOn: "2026-06-01",
+		Periods: []PeriodAmount{{DuesPeriod: "2026-06", Amount: 99_000}},
 	}); err != nil {
-		t.Fatalf("PostDuesPayment() = %v, want no error", err)
+		t.Fatalf("PostDuesPayments() = %v, want no error", err)
 	}
 
 	rows, err := l.DuesStatusForPeriod(ctx, f1.fundID, "2026-06")
