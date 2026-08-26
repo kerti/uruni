@@ -151,7 +151,7 @@ func TestPostDuesPaymentsRejectsEmptyPeriods(t *testing.T) {
 
 // TestPostDuesPaymentsRejectsNonPositiveAmount is the dues-payments half of
 // the slice's "non-positive amount surfaces as 400" acceptance criterion -
-// PostDuesPayment's own check answers, not a second one in the handler.
+// PostDuesPayments' own check answers, not a second one in the handler.
 func TestPostDuesPaymentsRejectsNonPositiveAmount(t *testing.T) {
 	r := testRouter(t)
 	setup := setUpFundForTransactions(t, r)
@@ -218,14 +218,15 @@ func TestPostDuesPaymentsRejectsMalformedJSON(t *testing.T) {
 	}
 }
 
-// TestPostDuesPaymentsStopsAtTheFailingPeriodButKeepsEarlierRows documents
-// the consequence of ADR-027's boundary applied to a batch: each period is
-// posted (and validated) independently by PostDuesPayment, so a failure
-// partway through leaves every already-posted row standing rather than
-// rolling anything back - transactions are immutable (CLAUDE.md rule 3),
-// and there is no code path here that could undo a posted row even if this
-// wanted to.
-func TestPostDuesPaymentsStopsAtTheFailingPeriodButKeepsEarlierRows(t *testing.T) {
+// TestPostDuesPaymentsAMidBatchFailureWritesNothing is the HTTP-level half
+// of #96's regression test: a batch whose second period is malformed must
+// post ZERO rows, not the first period that would have succeeded on its
+// own. Before the fix, each period was posted by its own independently
+// committed call, so the first period's row was left standing when the
+// second failed; PostDuesPayments now validates every period before writing
+// any of them, and writes every row inside one database transaction, so a
+// mid-batch failure leaves nothing behind at all.
+func TestPostDuesPaymentsAMidBatchFailureWritesNothing(t *testing.T) {
 	r, l := testRouterAndLedger(t)
 	setup := setUpFundForTransactions(t, r)
 
@@ -252,7 +253,16 @@ func TestPostDuesPaymentsStopsAtTheFailingPeriodButKeepsEarlierRows(t *testing.T
 	if err != nil {
 		t.Fatalf("FundBalance() = %v, want no error", err)
 	}
-	if fundBal.Int64() != 25_000 {
-		t.Errorf("FundBalance() = %d, want %d - the first period posted before the failure, the third never ran", fundBal.Int64(), 25_000)
+	if fundBal.Int64() != 0 {
+		t.Errorf("FundBalance() = %d, want 0 - a failure anywhere in the batch must leave nothing written, not just the periods before it", fundBal.Int64())
+	}
+
+	list := getTransactions(t, r)
+	var allTx []transactionResponse
+	if err := json.NewDecoder(list.Body).Decode(&allTx); err != nil {
+		t.Fatalf("decoding GET /api/transactions response: %v", err)
+	}
+	if len(allTx) != 0 {
+		t.Errorf("GET /api/transactions after a mid-batch failure returned %d rows, want 0", len(allTx))
 	}
 }

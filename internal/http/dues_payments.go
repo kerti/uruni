@@ -31,24 +31,26 @@ type duesPaymentRequest struct {
 	Periods    []duesPaymentPeriod `json:"periods"`
 }
 
-// createDuesPayment is POST /api/dues-payments: wraps Ledger.PostDuesPayment
-// once per entry in Periods, in the order given, posting one row per period
-// exactly as PostDuesPayment's own doc comment describes - never flattened
-// into a single multi-period row, and the response echoes that back as one
-// array entry per posted row.
+// createDuesPayment is POST /api/dues-payments: makes one call to
+// Ledger.PostDuesPayments, which posts one row per entry in Periods inside a
+// single database transaction - never flattened into one multi-period row,
+// and the response echoes that back as one array entry per posted row, in
+// the order given.
 //
-// Periods must not be empty - not a ledger rule (PostDuesPayment has no
-// concept of a batch; it posts exactly one row per call), but a request-shape
-// check this handler owns, the same way resolveMember owns "the id in the
-// path is a valid number": an empty array would silently post nothing and
-// answer 201, which is worse than naming the problem.
+// Periods must not be empty - a request-shape check this handler owns, the
+// same way resolveMember owns "the id in the path is a valid number": an
+// empty array would otherwise reach the ledger meaning "post nothing," which
+// PostDuesPayments itself also rejects as ErrInvalidArgument (the two layers
+// deliberately agree). Checking it here first keeps this handler's existing
+// 400 message specific to the request body, before a fund lookup even runs.
 //
-// Each period is independently validated and posted by PostDuesPayment; a
-// failure partway through Periods leaves every already-posted period's row
-// standing - transactions are immutable (CLAUDE.md rule 3), so nothing here
-// rolls one back - and reports the failing period's error. A caller that
-// needs to know which periods made it through before the failure can read
-// GET /api/transactions.
+// A failure on any period - including one partway through a multi-period
+// batch - rolls back every row PostDuesPayments would otherwise have posted
+// for this call: the ledger validates every period before writing any of
+// them, and writes all of them inside one transaction. Nothing here loops
+// over PostDuesPayment per period any more (#96) - that shape left an
+// earlier period's row standing when a later one failed, because each call
+// owned and committed its own transaction independently.
 func (a *api) createDuesPayment(w http.ResponseWriter, r *http.Request) {
 	var req duesPaymentRequest
 	if !decodeJSON(w, r, &req) {
@@ -65,23 +67,31 @@ func (a *api) createDuesPayment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	resp := make([]transactionResponse, 0, len(req.Periods))
+	periods := make([]ledger.PeriodAmount, 0, len(req.Periods))
 	for _, period := range req.Periods {
-		posted, err := a.ledger.PostDuesPayment(r.Context(), ledger.PostDuesPaymentParams{
-			FundID:     fund.ID,
-			AccountID:  req.AccountID,
-			PurposeID:  req.PurposeID,
-			MemberID:   req.MemberID,
+		periods = append(periods, ledger.PeriodAmount{
 			DuesPeriod: period.DuesPeriod,
 			Amount:     money.Amount(period.Amount),
-			OccurredOn: req.OccurredOn,
-			Note:       req.Note,
 		})
-		if err != nil {
-			mapLedgerError(w, a.logger, err)
-			return
-		}
-		resp = append(resp, toTransactionResponse(posted))
+	}
+
+	posted, err := a.ledger.PostDuesPayments(r.Context(), ledger.PostDuesPaymentsParams{
+		FundID:     fund.ID,
+		AccountID:  req.AccountID,
+		PurposeID:  req.PurposeID,
+		MemberID:   req.MemberID,
+		OccurredOn: req.OccurredOn,
+		Note:       req.Note,
+		Periods:    periods,
+	})
+	if err != nil {
+		mapLedgerError(w, a.logger, err)
+		return
+	}
+
+	resp := make([]transactionResponse, 0, len(posted))
+	for _, row := range posted {
+		resp = append(resp, toTransactionResponse(row))
 	}
 
 	writeJSON(w, http.StatusCreated, resp)

@@ -545,11 +545,12 @@ func TestDeleteMemberWithTransactionsReturns409(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	if _, err := l.PostDuesPayment(ctx, ledger.PostDuesPaymentParams{
+	if _, err := l.PostDuesPayments(ctx, ledger.PostDuesPaymentsParams{
 		FundID: setup.Fund.ID, AccountID: setup.CashAccountID, PurposeID: setup.MainPurposeID,
-		MemberID: member.ID, DuesPeriod: "2026-01", Amount: 50_000, OccurredOn: "2026-01-15",
+		MemberID: member.ID, OccurredOn: "2026-01-15",
+		Periods: []ledger.PeriodAmount{{DuesPeriod: "2026-01", Amount: 50_000}},
 	}); err != nil {
-		t.Fatalf("PostDuesPayment() = %v, want no error", err)
+		t.Fatalf("PostDuesPayments() = %v, want no error", err)
 	}
 
 	rec := deleteMember(t, r, member.ID)
