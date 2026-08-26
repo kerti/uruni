@@ -75,7 +75,7 @@ jobs:
       # every upload tokenless. Codecov rejects those even from a public repo, and
       # the action does not fail the build on an upload error — so this was silent.
       - name: Upload coverage
-        uses: codecov/codecov-action@0fb7174895f61a3b6b78fc075e0cd60383518dac # v5.5.5
+        uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
         with:
           files: coverage.out
           flags: backend
@@ -105,7 +105,7 @@ jobs:
       - run: npm run typecheck
       - run: npm run test -- --coverage
       - name: Upload coverage
-        uses: codecov/codecov-action@0fb7174895f61a3b6b78fc075e0cd60383518dac # v5.5.5
+        uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
         with:
           working-directory: web
           flags: frontend
