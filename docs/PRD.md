@@ -85,6 +85,7 @@ Key entities:
 ### 7.3 Dues
 - View members and, for the current period, who has paid / partially paid / paid in advance (some pay several months at once).
 - Mark a dues payment (amount auto-filled from the member's tier, editable; location; cash/transfer).
+- Undo a dues payment recorded in error (wrong member, entered twice) — the payment is reversed by a new entry, never edited away, and the member reads as unpaid for that period again.
 - A simple "not yet paid" view. **No reminders, no nagging automation.**
 
 ### 7.4 Reimbursements
@@ -147,4 +148,4 @@ No product-level open questions remain. Implementation-level decisions (stack, d
 
 ## 11. Out of scope / possible future
 
-Member-facing app, multiple treasurers/roles, richer reporting, the emotional-context "what the money became" view (nice-to-have, deferred), dedicated-account guidance, additional personas (RT/large groups).
+Member-facing app, multiple treasurers/roles, richer reporting, the emotional-context "what the money became" view (nice-to-have, deferred), dedicated-account guidance, additional personas (RT/large groups), reassigning a posted dues payment to a different member in one step (today: reverse it, then post it again against the right member).
