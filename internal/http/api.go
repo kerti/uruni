@@ -75,6 +75,16 @@ func (a *api) routes(r chi.Router) {
 	r.Get("/dues-tiers/{id}/rates", a.listDuesRates)
 	r.Patch("/dues-rates/{id}", a.updateDuesRate)
 	r.Delete("/dues-rates/{id}", a.deleteDuesRate)
+
+	// The everyday loop's write path (PRD §7.2, §7.3, §7.6) and the
+	// reconcile flow's read path (PRD §7.8). A pass-through movement and a
+	// correction are both ordinary POST /api/transactions calls - see
+	// transactionRequest's own comment - so there is no separate route for
+	// either.
+	r.Post("/transactions", a.createTransaction)
+	r.Get("/transactions", a.listTransactions)
+	r.Post("/dues-payments", a.createDuesPayment)
+	r.Get("/dues-status", a.getDuesStatus)
 }
 
 // writeJSON is writeAPIError's counterpart for a successful response: every
