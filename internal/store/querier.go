@@ -40,6 +40,11 @@ type Querier interface {
 	// The roster query behind "who has paid / partially / not yet" for one
 	// dues_period, across every member in one pass rather than one query per
 	// member.
+	// The AND NOT EXISTS clause is ADR-029's half of the reversal design: a
+	// reversed dues row itself never matched kind = 'dues' in the first place
+	// (a reversal is posted as kind='adjustment'), so this drops the ORIGINAL
+	// row from the sum once something reverses it - which is what makes a
+	// reversed payment disappear from "paid" rather than simply counting twice.
 	DuesPaidByPeriod(ctx context.Context, arg DuesPaidByPeriodParams) ([]DuesPaidByPeriodRow, error)
 	// Every balance in Uruni is this shape: sum the ledger, never read a stored
 	// total (CLAUDE.md rule 2). direction carries the sign, so the CASE is the
@@ -48,6 +53,13 @@ type Querier interface {
 	// exactly where it is needed most (ADR-024).
 	FundBalance(ctx context.Context, fundID int64) (int64, error)
 	GetAccount(ctx context.Context, id int64) (Account, error)
+	// The reversed-once pre-check, same shape as GetReimbursementSettlement and
+	// GetOpeningBalance above: sql.ErrNoRows means "not yet reversed, proceed"
+	// (the expected, non-error path); a row means it already has been. The
+	// dues_payment_reversed_once partial unique index is the actual guarantee -
+	// this pre-check only turns a raw constraint violation into a clean, named
+	// error (ADR-029, mirroring ADR-027's ErrReimbursementAlreadySettled).
+	GetDuesPaymentReversal(ctx context.Context, arg GetDuesPaymentReversalParams) (Transaction, error)
 	// GetDuesRate is the lookup PATCH and DELETE both do ahead of the write: an
 	// UPDATE's RETURNING would answer an unknown id with sql.ErrNoRows, but a
 	// DELETE affecting zero rows raises nothing at all.
@@ -66,15 +78,22 @@ type Querier interface {
 	// entry on this account yet returns a clean sql.ErrNoRows (the expected,
 	// non-error path) rather than a NULL forced through an aggregate. A row means
 	// one already exists.
-	GetOpeningBalance(ctx context.Context, arg GetOpeningBalanceParams) (Transaction, error)
+	GetOpeningBalance(ctx context.Context, arg GetOpeningBalanceParams) (GetOpeningBalanceRow, error)
 	GetPurpose(ctx context.Context, id int64) (Purpose, error)
 	GetReconciliation(ctx context.Context, id int64) (Reconciliation, error)
 	GetReimbursement(ctx context.Context, id int64) (Reimbursement, error)
 	// The settle-once pre-check. Returns sql.ErrNoRows when the claim has not
 	// been settled yet (the expected, non-error path) or the settling row when
 	// it has.
-	GetReimbursementSettlement(ctx context.Context, arg GetReimbursementSettlementParams) (Transaction, error)
+	GetReimbursementSettlement(ctx context.Context, arg GetReimbursementSettlementParams) (GetReimbursementSettlementRow, error)
 	GetTransaction(ctx context.Context, id int64) (Transaction, error)
+	// The fund-scoped fetch a dues reversal fetches its target through (ADR-029):
+	// WHERE fund_id = ? AND id = ?, not id alone, so a transaction belonging to
+	// another fund reads as sql.ErrNoRows here rather than being found and only
+	// later rejected by the composite FK. GetTransaction above stays as it is -
+	// other callers already have their fund-scoped row in hand - this is the one
+	// new caller that fetches a transaction by id from an untrusted request.
+	GetTransactionForFund(ctx context.Context, arg GetTransactionForFundParams) (Transaction, error)
 	GetTransfer(ctx context.Context, id int64) (Transfer, error)
 	// The two figures PRD 7.5 wants shown side by side for an incidental envelope.
 	// Leftover is collected minus disbursed, computed in Go via money.Amount.Sub,
@@ -87,10 +106,14 @@ type Querier interface {
 	// untyped-interface trap ADR-024 documents for SUM, reached here through MAX
 	// on a TEXT column - and a .(string) assertion on it is a live panic risk
 	// since drivers commonly hand back []byte.
+	// The AND NOT EXISTS clause is ADR-029's fix for the specific bug the chosen
+	// design exists to avoid: without it, a reversed row would still be the
+	// chronological MAX(dues_period) for its member, reading as "paid in
+	// advance" through a period that was reversed and is no longer paid at all.
 	LatestDuesPeriodPaidByMember(ctx context.Context, fundID int64) ([]LatestDuesPeriodPaidByMemberRow, error)
 	LatestReconciliation(ctx context.Context, fundID int64) (Reconciliation, error)
 	ListAccountsByFund(ctx context.Context, fundID int64) ([]Account, error)
-	ListDuesPaymentsByMember(ctx context.Context, memberID *int64) ([]Transaction, error)
+	ListDuesPaymentsByMember(ctx context.Context, memberID *int64) ([]ListDuesPaymentsByMemberRow, error)
 	ListDuesRatesByTier(ctx context.Context, tierID int64) ([]DuesRate, error)
 	ListDuesTiersByFund(ctx context.Context, fundID int64) ([]DuesTier, error)
 	ListFunds(ctx context.Context) ([]Fund, error)

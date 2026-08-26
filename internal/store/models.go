@@ -105,20 +105,21 @@ type Reimbursement struct {
 }
 
 type Transaction struct {
-	ID              int64
-	FundID          int64
-	AccountID       int64
-	PurposeID       int64
-	Direction       string
-	Amount          int64
-	OccurredOn      string
-	Kind            string
-	MemberID        *int64
-	DuesPeriod      *string
-	ReimbursementID *int64
-	TransferID      *int64
-	Note            *string
-	CreatedAt       int64
+	ID                    int64
+	FundID                int64
+	AccountID             int64
+	PurposeID             int64
+	Direction             string
+	Amount                int64
+	OccurredOn            string
+	Kind                  string
+	MemberID              *int64
+	DuesPeriod            *string
+	ReimbursementID       *int64
+	TransferID            *int64
+	ReversesTransactionID *int64
+	Note                  *string
+	CreatedAt             int64
 }
 
 type Transfer struct {

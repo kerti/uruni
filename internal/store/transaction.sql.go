@@ -53,27 +53,30 @@ func (q *Queries) AccountBalanceThrough(ctx context.Context, arg AccountBalanceT
 const createTransaction = `-- name: CreateTransaction :one
 INSERT INTO "transaction" (
   fund_id, account_id, purpose_id, direction, amount, occurred_on, kind,
-  member_id, dues_period, reimbursement_id, transfer_id, note, created_at
+  member_id, dues_period, reimbursement_id, transfer_id, reverses_transaction_id,
+  note, created_at
 )
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 RETURNING id, fund_id, account_id, purpose_id, direction, amount, occurred_on, kind,
-          member_id, dues_period, reimbursement_id, transfer_id, note, created_at
+          member_id, dues_period, reimbursement_id, transfer_id, reverses_transaction_id,
+          note, created_at
 `
 
 type CreateTransactionParams struct {
-	FundID          int64
-	AccountID       int64
-	PurposeID       int64
-	Direction       string
-	Amount          int64
-	OccurredOn      string
-	Kind            string
-	MemberID        *int64
-	DuesPeriod      *string
-	ReimbursementID *int64
-	TransferID      *int64
-	Note            *string
-	CreatedAt       int64
+	FundID                int64
+	AccountID             int64
+	PurposeID             int64
+	Direction             string
+	Amount                int64
+	OccurredOn            string
+	Kind                  string
+	MemberID              *int64
+	DuesPeriod            *string
+	ReimbursementID       *int64
+	TransferID            *int64
+	ReversesTransactionID *int64
+	Note                  *string
+	CreatedAt             int64
 }
 
 func (q *Queries) CreateTransaction(ctx context.Context, arg CreateTransactionParams) (Transaction, error) {
@@ -89,6 +92,7 @@ func (q *Queries) CreateTransaction(ctx context.Context, arg CreateTransactionPa
 		arg.DuesPeriod,
 		arg.ReimbursementID,
 		arg.TransferID,
+		arg.ReversesTransactionID,
 		arg.Note,
 		arg.CreatedAt,
 	)
@@ -106,6 +110,7 @@ func (q *Queries) CreateTransaction(ctx context.Context, arg CreateTransactionPa
 		&i.DuesPeriod,
 		&i.ReimbursementID,
 		&i.TransferID,
+		&i.ReversesTransactionID,
 		&i.Note,
 		&i.CreatedAt,
 	)
@@ -114,8 +119,9 @@ func (q *Queries) CreateTransaction(ctx context.Context, arg CreateTransactionPa
 
 const duesPaidByPeriod = `-- name: DuesPaidByPeriod :many
 SELECT member_id, CAST(COALESCE(SUM(amount), 0) AS INTEGER) AS paid_amount
-FROM "transaction"
-WHERE fund_id = ? AND kind = 'dues' AND dues_period = ?
+FROM "transaction" t
+WHERE t.fund_id = ? AND t.kind = 'dues' AND t.dues_period = ?
+  AND NOT EXISTS (SELECT 1 FROM "transaction" r WHERE r.reverses_transaction_id = t.id)
 GROUP BY member_id
 `
 
@@ -132,6 +138,11 @@ type DuesPaidByPeriodRow struct {
 // The roster query behind "who has paid / partially / not yet" for one
 // dues_period, across every member in one pass rather than one query per
 // member.
+// The AND NOT EXISTS clause is ADR-029's half of the reversal design: a
+// reversed dues row itself never matched kind = 'dues' in the first place
+// (a reversal is posted as kind='adjustment'), so this drops the ORIGINAL
+// row from the sum once something reverses it - which is what makes a
+// reversed payment disappear from "paid" rather than simply counting twice.
 func (q *Queries) DuesPaidByPeriod(ctx context.Context, arg DuesPaidByPeriodParams) ([]DuesPaidByPeriodRow, error) {
 	rows, err := q.db.QueryContext(ctx, duesPaidByPeriod, arg.FundID, arg.DuesPeriod)
 	if err != nil {
@@ -173,6 +184,48 @@ func (q *Queries) FundBalance(ctx context.Context, fundID int64) (int64, error) 
 	return balance_amount, err
 }
 
+const getDuesPaymentReversal = `-- name: GetDuesPaymentReversal :one
+SELECT id, fund_id, account_id, purpose_id, direction, amount, occurred_on, kind,
+       member_id, dues_period, reimbursement_id, transfer_id, reverses_transaction_id,
+       note, created_at
+FROM "transaction"
+WHERE fund_id = ? AND reverses_transaction_id = ?
+`
+
+type GetDuesPaymentReversalParams struct {
+	FundID                int64
+	ReversesTransactionID *int64
+}
+
+// The reversed-once pre-check, same shape as GetReimbursementSettlement and
+// GetOpeningBalance above: sql.ErrNoRows means "not yet reversed, proceed"
+// (the expected, non-error path); a row means it already has been. The
+// dues_payment_reversed_once partial unique index is the actual guarantee -
+// this pre-check only turns a raw constraint violation into a clean, named
+// error (ADR-029, mirroring ADR-027's ErrReimbursementAlreadySettled).
+func (q *Queries) GetDuesPaymentReversal(ctx context.Context, arg GetDuesPaymentReversalParams) (Transaction, error) {
+	row := q.db.QueryRowContext(ctx, getDuesPaymentReversal, arg.FundID, arg.ReversesTransactionID)
+	var i Transaction
+	err := row.Scan(
+		&i.ID,
+		&i.FundID,
+		&i.AccountID,
+		&i.PurposeID,
+		&i.Direction,
+		&i.Amount,
+		&i.OccurredOn,
+		&i.Kind,
+		&i.MemberID,
+		&i.DuesPeriod,
+		&i.ReimbursementID,
+		&i.TransferID,
+		&i.ReversesTransactionID,
+		&i.Note,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
 const getOpeningBalance = `-- name: GetOpeningBalance :one
 SELECT id, fund_id, account_id, purpose_id, direction, amount, occurred_on, kind,
        member_id, dues_period, reimbursement_id, transfer_id, note, created_at
@@ -185,14 +238,31 @@ type GetOpeningBalanceParams struct {
 	AccountID int64
 }
 
+type GetOpeningBalanceRow struct {
+	ID              int64
+	FundID          int64
+	AccountID       int64
+	PurposeID       int64
+	Direction       string
+	Amount          int64
+	OccurredOn      string
+	Kind            string
+	MemberID        *int64
+	DuesPeriod      *string
+	ReimbursementID *int64
+	TransferID      *int64
+	Note            *string
+	CreatedAt       int64
+}
+
 // The one-opening-per-account pre-check, same shape as
 // GetReimbursementSettlement above: no aggregate, so a fund with no opening
 // entry on this account yet returns a clean sql.ErrNoRows (the expected,
 // non-error path) rather than a NULL forced through an aggregate. A row means
 // one already exists.
-func (q *Queries) GetOpeningBalance(ctx context.Context, arg GetOpeningBalanceParams) (Transaction, error) {
+func (q *Queries) GetOpeningBalance(ctx context.Context, arg GetOpeningBalanceParams) (GetOpeningBalanceRow, error) {
 	row := q.db.QueryRowContext(ctx, getOpeningBalance, arg.FundID, arg.AccountID)
-	var i Transaction
+	var i GetOpeningBalanceRow
 	err := row.Scan(
 		&i.ID,
 		&i.FundID,
@@ -224,12 +294,29 @@ type GetReimbursementSettlementParams struct {
 	ReimbursementID *int64
 }
 
+type GetReimbursementSettlementRow struct {
+	ID              int64
+	FundID          int64
+	AccountID       int64
+	PurposeID       int64
+	Direction       string
+	Amount          int64
+	OccurredOn      string
+	Kind            string
+	MemberID        *int64
+	DuesPeriod      *string
+	ReimbursementID *int64
+	TransferID      *int64
+	Note            *string
+	CreatedAt       int64
+}
+
 // The settle-once pre-check. Returns sql.ErrNoRows when the claim has not
 // been settled yet (the expected, non-error path) or the settling row when
 // it has.
-func (q *Queries) GetReimbursementSettlement(ctx context.Context, arg GetReimbursementSettlementParams) (Transaction, error) {
+func (q *Queries) GetReimbursementSettlement(ctx context.Context, arg GetReimbursementSettlementParams) (GetReimbursementSettlementRow, error) {
 	row := q.db.QueryRowContext(ctx, getReimbursementSettlement, arg.FundID, arg.ReimbursementID)
-	var i Transaction
+	var i GetReimbursementSettlementRow
 	err := row.Scan(
 		&i.ID,
 		&i.FundID,
@@ -251,7 +338,8 @@ func (q *Queries) GetReimbursementSettlement(ctx context.Context, arg GetReimbur
 
 const getTransaction = `-- name: GetTransaction :one
 SELECT id, fund_id, account_id, purpose_id, direction, amount, occurred_on, kind,
-       member_id, dues_period, reimbursement_id, transfer_id, note, created_at
+       member_id, dues_period, reimbursement_id, transfer_id, reverses_transaction_id,
+       note, created_at
 FROM "transaction"
 WHERE id = ?
 `
@@ -272,6 +360,49 @@ func (q *Queries) GetTransaction(ctx context.Context, id int64) (Transaction, er
 		&i.DuesPeriod,
 		&i.ReimbursementID,
 		&i.TransferID,
+		&i.ReversesTransactionID,
+		&i.Note,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
+const getTransactionForFund = `-- name: GetTransactionForFund :one
+SELECT id, fund_id, account_id, purpose_id, direction, amount, occurred_on, kind,
+       member_id, dues_period, reimbursement_id, transfer_id, reverses_transaction_id,
+       note, created_at
+FROM "transaction"
+WHERE fund_id = ? AND id = ?
+`
+
+type GetTransactionForFundParams struct {
+	FundID int64
+	ID     int64
+}
+
+// The fund-scoped fetch a dues reversal fetches its target through (ADR-029):
+// WHERE fund_id = ? AND id = ?, not id alone, so a transaction belonging to
+// another fund reads as sql.ErrNoRows here rather than being found and only
+// later rejected by the composite FK. GetTransaction above stays as it is -
+// other callers already have their fund-scoped row in hand - this is the one
+// new caller that fetches a transaction by id from an untrusted request.
+func (q *Queries) GetTransactionForFund(ctx context.Context, arg GetTransactionForFundParams) (Transaction, error) {
+	row := q.db.QueryRowContext(ctx, getTransactionForFund, arg.FundID, arg.ID)
+	var i Transaction
+	err := row.Scan(
+		&i.ID,
+		&i.FundID,
+		&i.AccountID,
+		&i.PurposeID,
+		&i.Direction,
+		&i.Amount,
+		&i.OccurredOn,
+		&i.Kind,
+		&i.MemberID,
+		&i.DuesPeriod,
+		&i.ReimbursementID,
+		&i.TransferID,
+		&i.ReversesTransactionID,
 		&i.Note,
 		&i.CreatedAt,
 	)
@@ -309,8 +440,9 @@ func (q *Queries) IncidentalTotals(ctx context.Context, arg IncidentalTotalsPara
 
 const latestDuesPeriodPaidByMember = `-- name: LatestDuesPeriodPaidByMember :many
 SELECT member_id, CAST(MAX(dues_period) AS TEXT) AS latest_period
-FROM "transaction"
-WHERE fund_id = ? AND kind = 'dues'
+FROM "transaction" t
+WHERE t.fund_id = ? AND t.kind = 'dues'
+  AND NOT EXISTS (SELECT 1 FROM "transaction" r WHERE r.reverses_transaction_id = t.id)
 GROUP BY member_id
 `
 
@@ -325,6 +457,10 @@ type LatestDuesPeriodPaidByMemberRow struct {
 // untyped-interface trap ADR-024 documents for SUM, reached here through MAX
 // on a TEXT column - and a .(string) assertion on it is a live panic risk
 // since drivers commonly hand back []byte.
+// The AND NOT EXISTS clause is ADR-029's fix for the specific bug the chosen
+// design exists to avoid: without it, a reversed row would still be the
+// chronological MAX(dues_period) for its member, reading as "paid in
+// advance" through a period that was reversed and is no longer paid at all.
 func (q *Queries) LatestDuesPeriodPaidByMember(ctx context.Context, fundID int64) ([]LatestDuesPeriodPaidByMemberRow, error) {
 	rows, err := q.db.QueryContext(ctx, latestDuesPeriodPaidByMember, fundID)
 	if err != nil {
@@ -356,15 +492,32 @@ WHERE member_id = ? AND kind = 'dues'
 ORDER BY dues_period, id
 `
 
-func (q *Queries) ListDuesPaymentsByMember(ctx context.Context, memberID *int64) ([]Transaction, error) {
+type ListDuesPaymentsByMemberRow struct {
+	ID              int64
+	FundID          int64
+	AccountID       int64
+	PurposeID       int64
+	Direction       string
+	Amount          int64
+	OccurredOn      string
+	Kind            string
+	MemberID        *int64
+	DuesPeriod      *string
+	ReimbursementID *int64
+	TransferID      *int64
+	Note            *string
+	CreatedAt       int64
+}
+
+func (q *Queries) ListDuesPaymentsByMember(ctx context.Context, memberID *int64) ([]ListDuesPaymentsByMemberRow, error) {
 	rows, err := q.db.QueryContext(ctx, listDuesPaymentsByMember, memberID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []Transaction{}
+	items := []ListDuesPaymentsByMemberRow{}
 	for rows.Next() {
-		var i Transaction
+		var i ListDuesPaymentsByMemberRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.FundID,
@@ -396,7 +549,8 @@ func (q *Queries) ListDuesPaymentsByMember(ctx context.Context, memberID *int64)
 
 const listTransactionsByFund = `-- name: ListTransactionsByFund :many
 SELECT id, fund_id, account_id, purpose_id, direction, amount, occurred_on, kind,
-       member_id, dues_period, reimbursement_id, transfer_id, note, created_at
+       member_id, dues_period, reimbursement_id, transfer_id, reverses_transaction_id,
+       note, created_at
 FROM "transaction"
 WHERE fund_id = ?
 ORDER BY occurred_on, id
@@ -424,6 +578,7 @@ func (q *Queries) ListTransactionsByFund(ctx context.Context, fundID int64) ([]T
 			&i.DuesPeriod,
 			&i.ReimbursementID,
 			&i.TransferID,
+			&i.ReversesTransactionID,
 			&i.Note,
 			&i.CreatedAt,
 		); err != nil {

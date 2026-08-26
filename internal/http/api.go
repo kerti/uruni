@@ -84,6 +84,7 @@ func (a *api) routes(r chi.Router) {
 	r.Post("/transactions", a.createTransaction)
 	r.Get("/transactions", a.listTransactions)
 	r.Post("/dues-payments", a.createDuesPayment)
+	r.Post("/dues-payments/{id}/reversal", a.reverseDuesPayment)
 	r.Get("/dues-status", a.getDuesStatus)
 }
 

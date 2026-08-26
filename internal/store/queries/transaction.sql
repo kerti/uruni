@@ -1,21 +1,51 @@
 -- name: CreateTransaction :one
 INSERT INTO "transaction" (
   fund_id, account_id, purpose_id, direction, amount, occurred_on, kind,
-  member_id, dues_period, reimbursement_id, transfer_id, note, created_at
+  member_id, dues_period, reimbursement_id, transfer_id, reverses_transaction_id,
+  note, created_at
 )
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 RETURNING id, fund_id, account_id, purpose_id, direction, amount, occurred_on, kind,
-          member_id, dues_period, reimbursement_id, transfer_id, note, created_at;
+          member_id, dues_period, reimbursement_id, transfer_id, reverses_transaction_id,
+          note, created_at;
 
 -- name: GetTransaction :one
 SELECT id, fund_id, account_id, purpose_id, direction, amount, occurred_on, kind,
-       member_id, dues_period, reimbursement_id, transfer_id, note, created_at
+       member_id, dues_period, reimbursement_id, transfer_id, reverses_transaction_id,
+       note, created_at
 FROM "transaction"
 WHERE id = ?;
 
+-- The fund-scoped fetch a dues reversal fetches its target through (ADR-029):
+-- WHERE fund_id = ? AND id = ?, not id alone, so a transaction belonging to
+-- another fund reads as sql.ErrNoRows here rather than being found and only
+-- later rejected by the composite FK. GetTransaction above stays as it is -
+-- other callers already have their fund-scoped row in hand - this is the one
+-- new caller that fetches a transaction by id from an untrusted request.
+-- name: GetTransactionForFund :one
+SELECT id, fund_id, account_id, purpose_id, direction, amount, occurred_on, kind,
+       member_id, dues_period, reimbursement_id, transfer_id, reverses_transaction_id,
+       note, created_at
+FROM "transaction"
+WHERE fund_id = ? AND id = ?;
+
+-- The reversed-once pre-check, same shape as GetReimbursementSettlement and
+-- GetOpeningBalance above: sql.ErrNoRows means "not yet reversed, proceed"
+-- (the expected, non-error path); a row means it already has been. The
+-- dues_payment_reversed_once partial unique index is the actual guarantee -
+-- this pre-check only turns a raw constraint violation into a clean, named
+-- error (ADR-029, mirroring ADR-027's ErrReimbursementAlreadySettled).
+-- name: GetDuesPaymentReversal :one
+SELECT id, fund_id, account_id, purpose_id, direction, amount, occurred_on, kind,
+       member_id, dues_period, reimbursement_id, transfer_id, reverses_transaction_id,
+       note, created_at
+FROM "transaction"
+WHERE fund_id = ? AND reverses_transaction_id = ?;
+
 -- name: ListTransactionsByFund :many
 SELECT id, fund_id, account_id, purpose_id, direction, amount, occurred_on, kind,
-       member_id, dues_period, reimbursement_id, transfer_id, note, created_at
+       member_id, dues_period, reimbursement_id, transfer_id, reverses_transaction_id,
+       note, created_at
 FROM "transaction"
 WHERE fund_id = ?
 ORDER BY occurred_on, id;
@@ -71,9 +101,15 @@ WHERE fund_id = ? AND purpose_id = ?;
 -- dues_period, across every member in one pass rather than one query per
 -- member.
 -- name: DuesPaidByPeriod :many
+-- The AND NOT EXISTS clause is ADR-029's half of the reversal design: a
+-- reversed dues row itself never matched kind = 'dues' in the first place
+-- (a reversal is posted as kind='adjustment'), so this drops the ORIGINAL
+-- row from the sum once something reverses it - which is what makes a
+-- reversed payment disappear from "paid" rather than simply counting twice.
 SELECT member_id, CAST(COALESCE(SUM(amount), 0) AS INTEGER) AS paid_amount
-FROM "transaction"
-WHERE fund_id = ? AND kind = 'dues' AND dues_period = ?
+FROM "transaction" t
+WHERE t.fund_id = ? AND t.kind = 'dues' AND t.dues_period = ?
+  AND NOT EXISTS (SELECT 1 FROM "transaction" r WHERE r.reverses_transaction_id = t.id)
 GROUP BY member_id;
 
 -- The "paid in advance" signal. dues_period is 'YYYY-MM', so a lexicographic
@@ -83,9 +119,14 @@ GROUP BY member_id;
 -- on a TEXT column - and a .(string) assertion on it is a live panic risk
 -- since drivers commonly hand back []byte.
 -- name: LatestDuesPeriodPaidByMember :many
+-- The AND NOT EXISTS clause is ADR-029's fix for the specific bug the chosen
+-- design exists to avoid: without it, a reversed row would still be the
+-- chronological MAX(dues_period) for its member, reading as "paid in
+-- advance" through a period that was reversed and is no longer paid at all.
 SELECT member_id, CAST(MAX(dues_period) AS TEXT) AS latest_period
-FROM "transaction"
-WHERE fund_id = ? AND kind = 'dues'
+FROM "transaction" t
+WHERE t.fund_id = ? AND t.kind = 'dues'
+  AND NOT EXISTS (SELECT 1 FROM "transaction" r WHERE r.reverses_transaction_id = t.id)
 GROUP BY member_id;
 
 -- The reconciliation cutoff. Deliberately not an aggregate: SELECT

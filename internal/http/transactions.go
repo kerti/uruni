@@ -42,8 +42,13 @@ type transactionResponse struct {
 	DuesPeriod      *string `json:"dues_period"`
 	ReimbursementID *int64  `json:"reimbursement_id"`
 	TransferID      *int64  `json:"transfer_id"`
-	Note            *string `json:"note"`
-	CreatedAt       int64   `json:"created_at"`
+	// The dues payment this row reverses (ADR-029), set only on a reversal.
+	// It is on the wire for the same reason the row exists: a client reading
+	// a transaction has no other way to tell a reversal apart from an
+	// ordinary correction, or to say which payment it undid.
+	ReversesTransactionID *int64  `json:"reverses_transaction_id"`
+	Note                  *string `json:"note"`
+	CreatedAt             int64   `json:"created_at"`
 }
 
 func toTransactionResponse(t store.Transaction) transactionResponse {
@@ -59,8 +64,11 @@ func toTransactionResponse(t store.Transaction) transactionResponse {
 		DuesPeriod:      t.DuesPeriod,
 		ReimbursementID: t.ReimbursementID,
 		TransferID:      t.TransferID,
-		Note:            t.Note,
-		CreatedAt:       t.CreatedAt,
+
+		ReversesTransactionID: t.ReversesTransactionID,
+
+		Note:      t.Note,
+		CreatedAt: t.CreatedAt,
 	}
 }
 

@@ -74,6 +74,40 @@ var ErrReimbursementAlreadySettled = errors.New("ledger: reimbursement has alrea
 // *sql.DB, not one file on disk.
 var ErrFundAlreadyExists = errors.New("ledger: a fund already exists")
 
+// ErrDuesPaymentNotFound is returned by ReverseDuesPayment when
+// GetTransactionForFund finds no row for the given fund and transaction id.
+//
+// The fetch is fund-scoped (WHERE fund_id = ? AND id = ?), not id alone, so a
+// transaction id that is real but belongs to another fund answers with this
+// same sentinel rather than being found and only then rejected for ownership
+// (ADR-029). That is what makes the composite FK on reverses_transaction_id
+// load-bearing rather than decorative: a treasurer of one fund cannot even
+// name a row belonging to another as the payment they are reversing, because
+// the lookup that would name it never finds it in the first place.
+var ErrDuesPaymentNotFound = errors.New("ledger: no such transaction")
+
+// ErrNotADuesPayment is returned by ReverseDuesPayment when the fetched row's
+// Kind is not "dues".
+//
+// This also rules out reversing a reversal: a reversal itself is posted as
+// kind='adjustment' (ADR-029), never kind='dues', so it fails this same
+// check rather than needing a separate one.
+var ErrNotADuesPayment = errors.New("ledger: transaction is not a dues payment")
+
+// ErrDuesPaymentAlreadyReversed is returned by ReverseDuesPayment when
+// GetDuesPaymentReversal finds an existing reversal row for the payment.
+//
+// The schema's dues_payment_reversed_once partial unique index is the actual
+// guarantee - a second reversal of the same payment cannot exist once the
+// write reaches it, under any caller, including one that bypasses this
+// package entirely. This pre-check exists only to turn that into a clean,
+// named error instead of a raw "UNIQUE constraint failed" string, exactly as
+// ADR-027 describes for ErrReimbursementAlreadySettled: under ADR-004's
+// SetMaxOpenConns(1), a race between the pre-check and the insert is
+// structurally impossible, so this is not a lock and closes no window the
+// index does not already close.
+var ErrDuesPaymentAlreadyReversed = errors.New("ledger: dues payment has already been reversed")
+
 // ErrIncidentalAlreadyClosed is returned by CloseIncidentalAndRoll when the
 // envelope's closed_on is already set.
 //
