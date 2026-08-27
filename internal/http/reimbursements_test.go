@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -364,6 +365,79 @@ func TestPostSettlementRejectsAMalformedOccurredOn(t *testing.T) {
 	got := decodeError(t, rec)
 	if got.Code != "invalid_argument" {
 		t.Errorf("error code = %q, want %q", got.Code, "invalid_argument")
+	}
+}
+
+func TestPostReimbursementsRejectsMalformedJSON(t *testing.T) {
+	r := testRouter(t)
+	setUpFundForTransactions(t, r)
+
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/api/reimbursements", strings.NewReader("{oops")))
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("POST /api/reimbursements with malformed JSON = %d, want %d", rec.Code, http.StatusBadRequest)
+	}
+	got := decodeError(t, rec)
+	if got.Code != "invalid_json" {
+		t.Errorf("error code = %q, want %q", got.Code, "invalid_json")
+	}
+}
+
+func TestGetReimbursementsRequiresAFund(t *testing.T) {
+	rec := getReimbursements(t, testRouter(t), "")
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("GET /api/reimbursements before setup = %d, want %d (body: %s)", rec.Code, http.StatusNotFound, rec.Body.String())
+	}
+	got := decodeError(t, rec)
+	if got.Code != "not_found" {
+		t.Errorf("error code = %q, want %q", got.Code, "not_found")
+	}
+}
+
+func TestPostSettlementRequiresAFund(t *testing.T) {
+	rec := postSettlement(t, testRouter(t), 1, settleReimbursementRequest{
+		AccountID: 1, OccurredOn: "2026-08-20",
+	})
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("settle before setup = %d, want %d (body: %s)", rec.Code, http.StatusNotFound, rec.Body.String())
+	}
+	got := decodeError(t, rec)
+	if got.Code != "not_found" {
+		t.Errorf("error code = %q, want %q", got.Code, "not_found")
+	}
+}
+
+// TestPostSettlementRejectsANonNumericID covers the one check this handler
+// owns itself: {id} is a path segment, so a non-numeric one never reaches
+// the ledger to be judged there.
+func TestPostSettlementRejectsANonNumericID(t *testing.T) {
+	r := testRouter(t)
+	setUpFundForTransactions(t, r)
+
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/api/reimbursements/abc/settle",
+		strings.NewReader(`{"account_id":1,"occurred_on":"2026-08-20"}`)))
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("settle with a non-numeric id = %d, want %d (body: %s)", rec.Code, http.StatusBadRequest, rec.Body.String())
+	}
+	got := decodeError(t, rec)
+	if got.Code != "invalid_argument" {
+		t.Errorf("error code = %q, want %q", got.Code, "invalid_argument")
+	}
+}
+
+func TestPostSettlementRejectsMalformedJSON(t *testing.T) {
+	r := testRouter(t)
+	setUpFundForTransactions(t, r)
+
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/api/reimbursements/1/settle", strings.NewReader("{oops")))
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("settle with malformed JSON = %d, want %d", rec.Code, http.StatusBadRequest)
+	}
+	got := decodeError(t, rec)
+	if got.Code != "invalid_json" {
+		t.Errorf("error code = %q, want %q", got.Code, "invalid_json")
 	}
 }
 
