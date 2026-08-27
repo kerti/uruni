@@ -57,6 +57,16 @@ func mapLedgerError(w http.ResponseWriter, logger *slog.Logger, err error) {
 		writeAPIError(w, http.StatusConflict, "reimbursement_already_settled", "This reimbursement has already been settled.")
 	case errors.Is(err, ledger.ErrDuesPaymentNotFound):
 		writeAPIError(w, http.StatusNotFound, "not_found", "The requested resource was not found.")
+	case errors.Is(err, sql.ErrNoRows):
+		// A ledger method that fetches the row it is about before writing —
+		// SettleReimbursement's GetReimbursement — wraps the driver's own
+		// sql.ErrNoRows rather than a sentinel of its own when the id names
+		// nothing. That is a 404 for the same reason ErrDuesPaymentNotFound
+		// above is: the id came from the path and names the resource being
+		// acted on. Without this case it reaches the default and answers 500,
+		// telling the client the server broke when it was the id that was
+		// wrong (#69).
+		writeAPIError(w, http.StatusNotFound, "not_found", "The requested resource was not found.")
 	case errors.Is(err, ledger.ErrNotADuesPayment):
 		writeAPIError(w, http.StatusBadRequest, "invalid_argument", "That transaction is not a dues payment and cannot be reversed.")
 	case errors.Is(err, ledger.ErrDuesPaymentAlreadyReversed):
