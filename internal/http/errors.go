@@ -86,9 +86,41 @@ func mapLedgerError(w http.ResponseWriter, logger *slog.Logger, err error) {
 		logger.Error("unhandled ledger error", "kind", "overflow")
 		writeAPIError(w, http.StatusInternalServerError, "internal_error", "Something went wrong.")
 	default:
+		// A constraint the caller's own input tripped, not a domain bug.
+		// ADR-027 sent every schema violation from the ledger here to become
+		// a 500, on the premise that "the IDs involved arrive from earlier
+		// Querier calls the domain itself made." UpdateReimbursement (#103)
+		// broke that premise: a PATCH body carries a member_id and a
+		// purpose_id straight from the client into the write, so a FOREIGN
+		// KEY violation there is a typo, not a bug, and a 500 would blame
+		// the server for it. Classification is mapSQLiteError's, unchanged;
+		// only which errors reach it is new — see ADR-027's Amendments.
+		var sqliteErr *sqlite.Error
+		if errors.As(err, &sqliteErr) {
+			mapSQLiteError(w, logger, err)
+			return
+		}
 		logger.Error("unhandled ledger error", "error", err)
 		writeAPIError(w, http.StatusInternalServerError, "internal_error", "Something went wrong.")
 	}
+}
+
+// mapLedgerDeleteError is mapLedgerError's counterpart for a DELETE through
+// the ledger, mirroring the mapSQLiteError / mapSQLiteDeleteError pair
+// exactly and for the same reason: SQLITE_CONSTRAINT_FOREIGNKEY means "you
+// named a row that doesn't exist" on a write and "real data still points at
+// this row" on a delete — 400 and 409, one result code.
+//
+// The ledger sentinels are checked first and identically, so a settled claim
+// is still its own named 409 rather than a foreign-key story.
+func mapLedgerDeleteError(w http.ResponseWriter, logger *slog.Logger, err error) {
+	var sqliteErr *sqlite.Error
+	if errors.As(err, &sqliteErr) && sqliteErr.Code() == sqlite3.SQLITE_CONSTRAINT_FOREIGNKEY {
+		writeAPIError(w, http.StatusConflict, "referenced_by_other_records",
+			"This record is referenced by other data and cannot be deleted.")
+		return
+	}
+	mapLedgerError(w, logger, err)
 }
 
 // mapSQLiteError answers an error from a direct-CRUD route — one that calls

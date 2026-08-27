@@ -91,6 +91,8 @@ Key entities:
 ### 7.4 Reimbursements
 - Record that a member fronted money → it becomes owed to them.
 - Settle the reimbursement when repaid. Receipt optional and never required (parking Rp 2.000 needs no nota).
+- **Waive it** when the member says to keep it — *"sudah, saya yang tanggung."* The claim was real and stays in the history; it just stops being owed. Reversible, because a waive can be mis-entered too. (Added 2026-08-27: settlement was the only exit the model had, so a claim nobody would ever repay sat in "what the fund owes" forever.)
+- **Correct or remove a claim entered wrongly** — the wrong amount, the wrong member, or one that should never have existed. Only until it is settled: after that the payout is a posted ledger row, and the correction is an ordinary adjusting entry like any other.
 
 ### 7.5 Incidental collections
 - Create an incidental for an occasion (sickness, death, sunatan, pension).

@@ -1,6 +1,9 @@
 package http
 
 import (
+	"encoding/json"
+	"errors"
+	"io"
 	"net/http"
 	"strconv"
 	"time"
@@ -8,6 +11,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/kerti/uruni/internal/ledger"
+	"github.com/kerti/uruni/internal/money"
 	"github.com/kerti/uruni/internal/store"
 )
 
@@ -17,9 +21,10 @@ import (
 // waived_on is deliberately absent, for the same reason memberRequest omits
 // inactive_on: PRD §7.4 never asks to waive a claim, so #69 adds no waive
 // route - and accepting waived_on at creation would be that route by the back
-// door, a claim born unpayable with no way to undo it. The column stays in
-// the schema for the waive that has not been asked for; CreateReimbursement
-// always gets a nil WaivedOn here.
+// door, a claim born unpayable with no way to undo it. It stays off the
+// create body now that PATCH can set it (#103) - a claim is born owed, and
+// waiving it is a later event with its own date; CreateReimbursement always
+// gets a nil WaivedOn here.
 type reimbursementRequest struct {
 	MemberID   int64   `json:"member_id"`
 	PurposeID  int64   `json:"purpose_id"`
@@ -37,13 +42,19 @@ type reimbursementRequest struct {
 // about this row, and the one query that knows it is what
 // GET /api/reimbursements?outstanding=true runs. A client asking "who is
 // still owed money" asks that question directly rather than filtering a
-// field. waived_on is off the wire because nothing in this API can set it.
+// field.
+//
+// waived_on is on the wire as of #103, when it became settable: a claim the
+// member forgave is not owed and not paid, and nothing else on this row says
+// so. It was withheld while #69 left it unsettable, since a field that is
+// always null tells a client nothing.
 type reimbursementResponse struct {
 	ID         int64   `json:"id"`
 	MemberID   int64   `json:"member_id"`
 	PurposeID  int64   `json:"purpose_id"`
 	Amount     int64   `json:"amount"`
 	IncurredOn string  `json:"incurred_on"`
+	WaivedOn   *string `json:"waived_on"`
 	Note       *string `json:"note"`
 	CreatedAt  int64   `json:"created_at"`
 }
@@ -55,6 +66,7 @@ func toReimbursementResponse(r store.Reimbursement) reimbursementResponse {
 		PurposeID:  r.PurposeID,
 		Amount:     r.Amount,
 		IncurredOn: r.IncurredOn,
+		WaivedOn:   r.WaivedOn,
 		Note:       r.Note,
 		CreatedAt:  r.CreatedAt,
 	}
@@ -168,9 +180,8 @@ type settleReimbursementRequest struct {
 // claim is ErrReimbursementWaived; both reach the client as their own named
 // 409 through the shared mapper, which already knows them.
 func (a *api) settleReimbursement(w http.ResponseWriter, r *http.Request) {
-	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
-	if err != nil {
-		writeAPIError(w, http.StatusBadRequest, "invalid_argument", "The reimbursement id is not a valid number.")
+	id, ok := reimbursementID(w, r)
+	if !ok {
 		return
 	}
 
@@ -196,4 +207,161 @@ func (a *api) settleReimbursement(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusCreated, toTransactionResponse(posted))
+}
+
+// updateReimbursementRequest is PATCH /api/reimbursements/{id}'s body. An
+// absent key means "leave alone"; an explicit null on note or waived_on
+// means "clear it" - clearing waived_on un-waives a claim, which is why
+// waiving is a field here rather than a /waive route of its own. The four
+// NOT NULL columns cannot be cleared, so they need no flag.
+//
+// Same *Set-flag shape as updateMemberRequest, and for the same reason: no
+// struct tag distinguishes a missing key from an explicit null.
+type updateReimbursementRequest struct {
+	MemberID      *int64
+	MemberIDSet   bool
+	PurposeID     *int64
+	PurposeIDSet  bool
+	Amount        *int64
+	AmountSet     bool
+	IncurredOn    *string
+	IncurredOnSet bool
+	Note          *string
+	NoteSet       bool
+	WaivedOn      *string
+	WaivedOnSet   bool
+}
+
+func decodeUpdateReimbursementRequest(w http.ResponseWriter, r *http.Request) (updateReimbursementRequest, bool) {
+	var raw map[string]json.RawMessage
+	if err := json.NewDecoder(r.Body).Decode(&raw); err != nil && !errors.Is(err, io.EOF) {
+		writeAPIError(w, http.StatusBadRequest, "invalid_json", "The request body is not valid JSON.")
+		return updateReimbursementRequest{}, false
+	}
+
+	var req updateReimbursementRequest
+	fields := []struct {
+		key string
+		set *bool
+		dst any
+	}{
+		{"member_id", &req.MemberIDSet, &req.MemberID},
+		{"purpose_id", &req.PurposeIDSet, &req.PurposeID},
+		{"amount", &req.AmountSet, &req.Amount},
+		{"incurred_on", &req.IncurredOnSet, &req.IncurredOn},
+		{"note", &req.NoteSet, &req.Note},
+		{"waived_on", &req.WaivedOnSet, &req.WaivedOn},
+	}
+	for _, f := range fields {
+		v, ok := raw[f.key]
+		if !ok {
+			continue
+		}
+		*f.set = true
+		if err := json.Unmarshal(v, f.dst); err != nil {
+			writeAPIError(w, http.StatusBadRequest, "invalid_json", "The request body is not valid JSON.")
+			return updateReimbursementRequest{}, false
+		}
+	}
+	return req, true
+}
+
+// updateReimbursement is PATCH /api/reimbursements/{id}: correcting a claim
+// the treasurer got wrong, and waiving one the member has forgiven - the
+// same route, because waiving sets a column (#103).
+//
+// It goes through the ledger rather than a.queries, unlike the POST above:
+// "only until settled" is a fact in the transaction table, and a cross-table
+// invariant is ADR-027's own test for what belongs in internal/ledger.
+//
+// A settled claim is refused with its named 409. Nothing here re-checks it,
+// and nothing here pre-checks that member_id names a real member either -
+// that reaches SQLite's foreign key and comes back through the mapper.
+func (a *api) updateReimbursement(w http.ResponseWriter, r *http.Request) {
+	id, ok := reimbursementID(w, r)
+	if !ok {
+		return
+	}
+
+	req, ok := decodeUpdateReimbursementRequest(w, r)
+	if !ok {
+		return
+	}
+
+	fund, ok := a.resolveFund(w, r)
+	if !ok {
+		return
+	}
+
+	params := ledger.UpdateReimbursementParams{FundID: fund.ID, ReimbursementID: id}
+	if req.MemberIDSet {
+		params.MemberID = req.MemberID
+	}
+	if req.PurposeIDSet {
+		params.PurposeID = req.PurposeID
+	}
+	if req.AmountSet && req.Amount != nil {
+		amount := money.Amount(*req.Amount)
+		params.Amount = &amount
+	}
+	if req.IncurredOnSet {
+		params.IncurredOn = req.IncurredOn
+	}
+	if req.NoteSet {
+		params.SetNote = true
+		params.Note = req.Note
+	}
+	if req.WaivedOnSet {
+		params.SetWaivedOn = true
+		params.WaivedOn = req.WaivedOn
+	}
+
+	updated, err := a.ledger.UpdateReimbursement(r.Context(), params)
+	if err != nil {
+		mapLedgerError(w, a.logger, err)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, toReimbursementResponse(updated))
+}
+
+// deleteReimbursement is DELETE /api/reimbursements/{id}: for a claim that
+// should never have existed - the treasurer's own typo. A claim the member
+// actually forgave is waived through the PATCH above, not deleted: that one
+// happened, and the record should keep saying so.
+//
+// A claim that still has a receipt photo attached is refused by receipt's
+// foreign key as a 409, the same answer deleting a member with posted
+// transactions gives. Receipts have no milestone owner yet (#73), so that
+// path is latent rather than dead.
+func (a *api) deleteReimbursement(w http.ResponseWriter, r *http.Request) {
+	id, ok := reimbursementID(w, r)
+	if !ok {
+		return
+	}
+
+	fund, ok := a.resolveFund(w, r)
+	if !ok {
+		return
+	}
+
+	if err := a.ledger.DeleteReimbursement(r.Context(), fund.ID, id); err != nil {
+		mapLedgerDeleteError(w, a.logger, err)
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// reimbursementID parses {id}, or answers the request and reports false.
+// Unlike resolveMember it does not pre-fetch the row: every caller hands the
+// id to a ledger method that fetches it anyway, and a second read would only
+// duplicate the 404 that method already produces.
+func reimbursementID(w http.ResponseWriter, r *http.Request) (int64, bool) {
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		writeAPIError(w, http.StatusBadRequest, "invalid_argument", "The reimbursement id is not a valid number.")
+		return 0, false
+	}
+	return id, true
 }
