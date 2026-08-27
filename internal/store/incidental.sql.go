@@ -74,13 +74,24 @@ func (q *Queries) CreateIncidental(ctx context.Context, arg CreateIncidentalPara
 }
 
 const getIncidental = `-- name: GetIncidental :one
-SELECT purpose_id, occasion, target_amount, opened_on, closed_on, created_at
-FROM incidental
-WHERE purpose_id = ?
+SELECT i.purpose_id, i.occasion, i.target_amount, i.opened_on, i.closed_on, i.created_at
+FROM incidental i
+JOIN purpose p ON p.id = i.purpose_id
+WHERE i.purpose_id = ? AND p.fund_id = ?
 `
 
-func (q *Queries) GetIncidental(ctx context.Context, purposeID int64) (Incidental, error) {
-	row := q.db.QueryRowContext(ctx, getIncidental, purposeID)
+type GetIncidentalParams struct {
+	PurposeID int64
+	FundID    int64
+}
+
+// Fund-scoped through purpose, which is where the envelope's fund_id lives
+// (incidental is 1:1 with its purpose row and carries no fund_id of its own).
+// An id names a row, it does not prove the caller may see it: PRD section 6 allows a
+// server to hold more than one fund, so a bare WHERE purpose_id = ? would be a
+// cross-fund read the moment a second fund exists.
+func (q *Queries) GetIncidental(ctx context.Context, arg GetIncidentalParams) (Incidental, error) {
+	row := q.db.QueryRowContext(ctx, getIncidental, arg.PurposeID, arg.FundID)
 	var i Incidental
 	err := row.Scan(
 		&i.PurposeID,

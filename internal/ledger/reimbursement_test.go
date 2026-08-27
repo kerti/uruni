@@ -254,7 +254,7 @@ func TestSettleReimbursementLedgerDateIsTheSettleDateNotIncurredOn(t *testing.T)
 		t.Errorf("posted.OccurredOn = %q, want the settle date %q", posted.OccurredOn, settledOn)
 	}
 
-	refetched, err := q.GetReimbursement(ctx, claim.ID)
+	refetched, err := q.GetReimbursement(ctx, store.GetReimbursementParams{ID: claim.ID, FundID: f.fundID})
 	if err != nil {
 		t.Fatalf("GetReimbursement() = %v, want no error", err)
 	}
@@ -469,7 +469,7 @@ func TestUpdateAndDeleteRefuseASettledClaim(t *testing.T) {
 	}
 
 	// And nothing was written: the claim still reads as it did.
-	after, err := q.GetReimbursement(ctx, claim.ID)
+	after, err := q.GetReimbursement(ctx, store.GetReimbursementParams{ID: claim.ID, FundID: f.fundID})
 	if err != nil {
 		t.Fatalf("GetReimbursement() = %v, want no error", err)
 	}

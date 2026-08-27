@@ -2,6 +2,7 @@ package ledger
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"reflect"
 	"testing"
@@ -70,7 +71,7 @@ func TestOpenIncidentalCreatesBothRows(t *testing.T) {
 		t.Errorf("purpose.Name = %q, want %q", purpose.Name, "Jane's wedding")
 	}
 
-	fetched, err := q.GetIncidental(ctx, created.PurposeID)
+	fetched, err := q.GetIncidental(ctx, store.GetIncidentalParams{PurposeID: created.PurposeID, FundID: f.fundID})
 	if err != nil {
 		t.Fatalf("GetIncidental() = %v, want no error", err)
 	}
@@ -306,7 +307,7 @@ func TestCloseIncidentalAndRollPositiveLeftoverRollsAndCloses(t *testing.T) {
 		t.Errorf("PurposeBalance(main) after = %d, want %d (before + the 70000 leftover)", mainAfter, mainBefore+70_000)
 	}
 
-	closed, err := q.GetIncidental(ctx, envelope.PurposeID)
+	closed, err := q.GetIncidental(ctx, store.GetIncidentalParams{PurposeID: envelope.PurposeID, FundID: f.fundID})
 	if err != nil {
 		t.Fatalf("GetIncidental() = %v, want no error", err)
 	}
@@ -361,7 +362,7 @@ func TestCloseIncidentalAndRollZeroLeftoverClosesWithoutPosting(t *testing.T) {
 		t.Errorf("ListTransactionsByFund() returned %d rows after a zero-leftover close, want %d (unchanged) - nothing should have posted", len(txAfter), len(txBefore))
 	}
 
-	closed, err := q.GetIncidental(ctx, envelope.PurposeID)
+	closed, err := q.GetIncidental(ctx, store.GetIncidentalParams{PurposeID: envelope.PurposeID, FundID: f.fundID})
 	if err != nil {
 		t.Fatalf("GetIncidental() = %v, want no error", err)
 	}
@@ -418,7 +419,7 @@ func TestCloseIncidentalAndRollNegativeLeftoverClosesWithoutPosting(t *testing.T
 		t.Errorf("ListTransactionsByFund() returned %d rows after a negative-leftover close, want %d (unchanged) - nothing should have posted", len(txAfter), len(txBefore))
 	}
 
-	closed, err := q.GetIncidental(ctx, envelope.PurposeID)
+	closed, err := q.GetIncidental(ctx, store.GetIncidentalParams{PurposeID: envelope.PurposeID, FundID: f.fundID})
 	if err != nil {
 		t.Fatalf("GetIncidental() = %v, want no error", err)
 	}
@@ -474,7 +475,7 @@ func TestCloseIncidentalAndRollSecondCallReturnsAlreadyClosed(t *testing.T) {
 		t.Errorf("ListTransactionsByFund() returned %d rows after a refused second roll, want %d (unchanged)", len(txAfter), len(txBefore))
 	}
 
-	closed, err := q.GetIncidental(ctx, envelope.PurposeID)
+	closed, err := q.GetIncidental(ctx, store.GetIncidentalParams{PurposeID: envelope.PurposeID, FundID: f.fundID})
 	if err != nil {
 		t.Fatalf("GetIncidental() = %v, want no error", err)
 	}
@@ -534,7 +535,7 @@ func TestCloseIncidentalAndRollPairFailureLeavesEnvelopeOpen(t *testing.T) {
 		t.Errorf("ListTransactionsByFund() returned %d rows after a failed roll, want %d (unchanged) - the whole write must have rolled back", len(txAfter), len(txBefore))
 	}
 
-	stillOpen, err := q.GetIncidental(ctx, envelope.PurposeID)
+	stillOpen, err := q.GetIncidental(ctx, store.GetIncidentalParams{PurposeID: envelope.PurposeID, FundID: f.fundID})
 	if err != nil {
 		t.Fatalf("GetIncidental() = %v, want no error", err)
 	}
@@ -557,11 +558,83 @@ func TestCloseIncidentalAndRollRejectsInvalidClosedOn(t *testing.T) {
 		t.Fatalf("CloseIncidentalAndRoll() = %v, want an error wrapping ErrInvalidArgument", err)
 	}
 
-	stillOpen, err := store.New(l.db).GetIncidental(ctx, envelope.PurposeID)
+	stillOpen, err := store.New(l.db).GetIncidental(ctx, store.GetIncidentalParams{PurposeID: envelope.PurposeID, FundID: f.fundID})
 	if err != nil {
 		t.Fatalf("GetIncidental() = %v, want no error", err)
 	}
 	if stillOpen.ClosedOn != nil {
 		t.Errorf("ClosedOn = %v, want nil - a rejected call must not close the envelope", stillOpen.ClosedOn)
+	}
+}
+
+// A second fund's envelope is invisible to the first fund, and closing it
+// across the fund boundary is refused. An id names a row; it does not prove
+// the caller may see it. PRD section 6 allows a server to hold more than one
+// fund, so these two are the scoping tests that keep that honest - v1's
+// single-fund rule is a setup constraint, not a reason to read unscoped.
+func TestASecondFundsIncidentalIsInvisibleToTheFirstFund(t *testing.T) {
+	l := newTestLedger(t)
+	f := newFixture(t, l)
+	ctx := context.Background()
+
+	q := store.New(l.db)
+	other, err := q.CreateFund(ctx, store.CreateFundParams{
+		Name: "Other Fund", Currency: "IDR", ReportSlug: "zyxwvutsrqponmlkjihgfe", CreatedAt: 1,
+	})
+	if err != nil {
+		t.Fatalf("CreateFund() = %v, want no error", err)
+	}
+
+	envelope, err := l.OpenIncidental(ctx, OpenIncidentalParams{
+		FundID: other.ID, Occasion: "Fund 2's occasion", OpenedOn: "2026-08-12",
+	})
+	if err != nil {
+		t.Fatalf("OpenIncidental(fund 2) = %v, want no error", err)
+	}
+
+	if _, err := l.GetIncidentalDetail(ctx, f.fundID, envelope.PurposeID); !errors.Is(err, sql.ErrNoRows) {
+		t.Errorf("GetIncidentalDetail(fund 1, fund 2's envelope) = %v, want an error wrapping sql.ErrNoRows", err)
+	}
+
+	// The same envelope read through its own fund still resolves, so the
+	// test above is scoping and not a broken lookup.
+	if _, err := l.GetIncidentalDetail(ctx, other.ID, envelope.PurposeID); err != nil {
+		t.Errorf("GetIncidentalDetail(fund 2, fund 2's envelope) = %v, want no error", err)
+	}
+}
+
+func TestClosingASecondFundsIncidentalAcrossTheBoundaryIsRefused(t *testing.T) {
+	l := newTestLedger(t)
+	f := newFixture(t, l)
+	ctx := context.Background()
+
+	q := store.New(l.db)
+	other, err := q.CreateFund(ctx, store.CreateFundParams{
+		Name: "Other Fund", Currency: "IDR", ReportSlug: "zyxwvutsrqponmlkjihgfe", CreatedAt: 1,
+	})
+	if err != nil {
+		t.Fatalf("CreateFund() = %v, want no error", err)
+	}
+
+	envelope, err := l.OpenIncidental(ctx, OpenIncidentalParams{
+		FundID: other.ID, Occasion: "Fund 2's occasion", OpenedOn: "2026-08-12",
+	})
+	if err != nil {
+		t.Fatalf("OpenIncidental(fund 2) = %v, want no error", err)
+	}
+
+	_, err = l.CloseIncidentalAndRoll(ctx, CloseIncidentalAndRollParams{
+		FundID: f.fundID, PurposeID: envelope.PurposeID, AccountID: f.cashID, ClosedOn: "2026-08-13",
+	})
+	if !errors.Is(err, sql.ErrNoRows) {
+		t.Fatalf("CloseIncidentalAndRoll(fund 1, fund 2's envelope) = %v, want an error wrapping sql.ErrNoRows", err)
+	}
+
+	stillOpen, err := l.GetIncidentalDetail(ctx, other.ID, envelope.PurposeID)
+	if err != nil {
+		t.Fatalf("GetIncidentalDetail() = %v, want no error", err)
+	}
+	if stillOpen.Incidental.ClosedOn != nil {
+		t.Errorf("ClosedOn = %v, want nil - a cross-fund close must not close the envelope", stillOpen.Incidental.ClosedOn)
 	}
 }

@@ -76,7 +76,12 @@ type Querier interface {
 	// effective_from is 'YYYY-MM', so a string comparison is a chronological one.
 	GetEffectiveDuesRate(ctx context.Context, arg GetEffectiveDuesRateParams) (DuesRate, error)
 	GetFund(ctx context.Context, id int64) (Fund, error)
-	GetIncidental(ctx context.Context, purposeID int64) (Incidental, error)
+	// Fund-scoped through purpose, which is where the envelope's fund_id lives
+	// (incidental is 1:1 with its purpose row and carries no fund_id of its own).
+	// An id names a row, it does not prove the caller may see it: PRD section 6 allows a
+	// server to hold more than one fund, so a bare WHERE purpose_id = ? would be a
+	// cross-fund read the moment a second fund exists.
+	GetIncidental(ctx context.Context, arg GetIncidentalParams) (Incidental, error)
 	GetMember(ctx context.Context, id int64) (Member, error)
 	// The one-opening-per-account pre-check, same shape as
 	// GetReimbursementSettlement above: no aggregate, so a fund with no opening
@@ -86,7 +91,11 @@ type Querier interface {
 	GetOpeningBalance(ctx context.Context, arg GetOpeningBalanceParams) (GetOpeningBalanceRow, error)
 	GetPurpose(ctx context.Context, id int64) (Purpose, error)
 	GetReconciliation(ctx context.Context, id int64) (Reconciliation, error)
-	GetReimbursement(ctx context.Context, id int64) (Reimbursement, error)
+	// Fund-scoped on purpose: an id names a row, it does not prove the caller may
+	// see it. PRD section 6 allows a server to hold more than one fund, so a bare
+	// lookup by id alone would be a cross-fund read the moment a second fund
+	// exists.
+	GetReimbursement(ctx context.Context, arg GetReimbursementParams) (Reimbursement, error)
 	// The settle-once pre-check. Returns sql.ErrNoRows when the claim has not
 	// been settled yet (the expected, non-error path) or the settling row when
 	// it has.

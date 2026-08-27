@@ -69,11 +69,20 @@ func (q *Queries) DeleteReimbursement(ctx context.Context, id int64) error {
 const getReimbursement = `-- name: GetReimbursement :one
 SELECT id, fund_id, member_id, purpose_id, amount, incurred_on, waived_on, note, created_at
 FROM reimbursement
-WHERE id = ?
+WHERE id = ? AND fund_id = ?
 `
 
-func (q *Queries) GetReimbursement(ctx context.Context, id int64) (Reimbursement, error) {
-	row := q.db.QueryRowContext(ctx, getReimbursement, id)
+type GetReimbursementParams struct {
+	ID     int64
+	FundID int64
+}
+
+// Fund-scoped on purpose: an id names a row, it does not prove the caller may
+// see it. PRD section 6 allows a server to hold more than one fund, so a bare
+// lookup by id alone would be a cross-fund read the moment a second fund
+// exists.
+func (q *Queries) GetReimbursement(ctx context.Context, arg GetReimbursementParams) (Reimbursement, error) {
+	row := q.db.QueryRowContext(ctx, getReimbursement, arg.ID, arg.FundID)
 	var i Reimbursement
 	err := row.Scan(
 		&i.ID,

@@ -3,10 +3,14 @@ INSERT INTO reimbursement (fund_id, member_id, purpose_id, amount, incurred_on, 
 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
 RETURNING id, fund_id, member_id, purpose_id, amount, incurred_on, waived_on, note, created_at;
 
+-- Fund-scoped on purpose: an id names a row, it does not prove the caller may
+-- see it. PRD section 6 allows a server to hold more than one fund, so a bare
+-- lookup by id alone would be a cross-fund read the moment a second fund
+-- exists.
 -- name: GetReimbursement :one
 SELECT id, fund_id, member_id, purpose_id, amount, incurred_on, waived_on, note, created_at
 FROM reimbursement
-WHERE id = ?;
+WHERE id = ? AND fund_id = ?;
 
 -- name: ListReimbursementsByFund :many
 SELECT id, fund_id, member_id, purpose_id, amount, incurred_on, waived_on, note, created_at

@@ -124,7 +124,9 @@ func (l *Ledger) CloseIncidentalAndRoll(ctx context.Context, p CloseIncidentalAn
 
 	var rolled money.Amount
 	err := l.withTx(ctx, func(q store.Querier) error {
-		envelope, err := q.GetIncidental(ctx, p.PurposeID)
+		envelope, err := q.GetIncidental(ctx, store.GetIncidentalParams{
+			PurposeID: p.PurposeID, FundID: p.FundID,
+		})
 		if err != nil {
 			return fmt.Errorf("fetching incidental: %w", err)
 		}
@@ -170,6 +172,47 @@ func (l *Ledger) CloseIncidentalAndRoll(ctx context.Context, p CloseIncidentalAn
 		return 0, err
 	}
 	return rolled, nil
+}
+
+// IncidentalDetail is one envelope together with the totals PRD §7.5 shows
+// for it - what it has collected and disbursed so far, summed straight from
+// the ledger (CLAUDE.md rule 2) rather than tracked as a running balance on
+// the row itself.
+type IncidentalDetail struct {
+	Incidental store.Incidental
+	Collected  money.Amount
+	Disbursed  money.Amount
+}
+
+// GetIncidentalDetail fetches one envelope and its collected/disbursed
+// totals for GET /api/incidentals/{purposeID}.
+//
+// Both halves are fund-scoped. An id names a row, it does not prove the
+// caller may see it: PRD section 6 allows a server to hold more than one
+// fund, so an unscoped read here would be a cross-fund read the moment a
+// second fund exists. A purpose_id belonging to another fund is
+// sql.ErrNoRows - indistinguishable from an unknown id, which is the answer
+// it should get.
+func (l *Ledger) GetIncidentalDetail(ctx context.Context, fundID, purposeID int64) (IncidentalDetail, error) {
+	envelope, err := l.q.GetIncidental(ctx, store.GetIncidentalParams{
+		PurposeID: purposeID, FundID: fundID,
+	})
+	if err != nil {
+		return IncidentalDetail{}, fmt.Errorf("fetching incidental: %w", err)
+	}
+
+	totals, err := l.q.IncidentalTotals(ctx, store.IncidentalTotalsParams{
+		FundID: fundID, PurposeID: purposeID,
+	})
+	if err != nil {
+		return IncidentalDetail{}, fmt.Errorf("computing incidental totals: %w", err)
+	}
+
+	return IncidentalDetail{
+		Incidental: envelope,
+		Collected:  money.FromDB(totals.CollectedAmount),
+		Disbursed:  money.FromDB(totals.DisbursedAmount),
+	}, nil
 }
 
 // mainPurposeID finds the fund's one kind='main' purpose. purpose_single_main
