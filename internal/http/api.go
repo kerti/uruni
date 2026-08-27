@@ -129,6 +129,13 @@ func (a *api) routes(r chi.Router) {
 	r.Get("/reconciliations/latest", a.latestReconciliation)
 	r.Get("/reconciliations/open-lines", a.listOpenReconciliationLines)
 	r.Get("/reconciliations/{id}", a.getReconciliation)
+
+	// The composed view-model for the home screen (PRD section 7.7): the
+	// fund total, every account's balance and every purpose's balance, in one
+	// round trip. See getBalances's own comment for why this is the one route
+	// in M4 built by composing ledger reads rather than wrapping a single
+	// ledger call.
+	r.Get("/balances", a.getBalances)
 }
 
 // writeJSON is writeAPIError's counterpart for a successful response: every
