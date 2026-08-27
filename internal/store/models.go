@@ -104,6 +104,12 @@ type Reimbursement struct {
 	CreatedAt  int64
 }
 
+type Session struct {
+	Token     string
+	Data      []byte
+	ExpiresAt int64
+}
+
 type Transaction struct {
 	ID                    int64
 	FundID                int64
@@ -127,4 +133,11 @@ type Transfer struct {
 	FundID    int64
 	Kind      string
 	CreatedAt int64
+}
+
+type User struct {
+	ID           int64
+	Email        string
+	PasswordHash string
+	CreatedAt    int64
 }

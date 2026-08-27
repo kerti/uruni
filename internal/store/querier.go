@@ -18,6 +18,10 @@ type Querier interface {
 	// Closing an envelope moves no money, so this is an UPDATE rather than a ledger
 	// entry - incidental carries no immutability trigger for exactly this reason.
 	CloseIncidental(ctx context.Context, arg CloseIncidentalParams) (Incidental, error)
+	// CountUsers is how register (#114) knows whether the one-shot bootstrap
+	// account already exists (ADR-030 decision 2): the gate is the count, not a
+	// duplicate-email collision.
+	CountUsers(ctx context.Context) (int64, error)
 	CreateAccount(ctx context.Context, arg CreateAccountParams) (Account, error)
 	CreateDuesRate(ctx context.Context, arg CreateDuesRateParams) (DuesRate, error)
 	CreateDuesTier(ctx context.Context, arg CreateDuesTierParams) (DuesTier, error)
@@ -29,11 +33,17 @@ type Querier interface {
 	CreateReconciliation(ctx context.Context, arg CreateReconciliationParams) (Reconciliation, error)
 	CreateReconciliationLine(ctx context.Context, arg CreateReconciliationLineParams) (ReconciliationLine, error)
 	CreateReimbursement(ctx context.Context, arg CreateReimbursementParams) (Reimbursement, error)
+	CreateSession(ctx context.Context, arg CreateSessionParams) (Session, error)
 	CreateTransaction(ctx context.Context, arg CreateTransactionParams) (Transaction, error)
 	CreateTransfer(ctx context.Context, arg CreateTransferParams) (Transfer, error)
+	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
 	// DeleteDuesRate is what makes a wrong-month rate correctable at all, since
 	// UNIQUE (tier_id, effective_from) refuses the corrected row otherwise.
 	DeleteDuesRate(ctx context.Context, id int64) error
+	// DeleteExpiredSessions is the lazy sweep: called as a side effect of a
+	// session write, never by a background ticker (ADR-013's scope stays
+	// untouched by this slice).
+	DeleteExpiredSessions(ctx context.Context, expiresAt int64) error
 	// DeleteMember leans on the composite foreign keys from "transaction" and
 	// reimbursement to refuse it once a real row references the member.
 	DeleteMember(ctx context.Context, id int64) error
@@ -42,6 +52,7 @@ type Querier interface {
 	// a photo attached, the same way DeleteMember leans on its referencing
 	// tables; the settled check is internal/ledger's, above.
 	DeleteReimbursement(ctx context.Context, id int64) error
+	DeleteSession(ctx context.Context, token string) error
 	// The roster query behind "who has paid / partially / not yet" for one
 	// dues_period, across every member in one pass rather than one query per
 	// member.
@@ -103,6 +114,9 @@ type Querier interface {
 	// been settled yet (the expected, non-error path) or the settling row when
 	// it has.
 	GetReimbursementSettlement(ctx context.Context, arg GetReimbursementSettlementParams) (GetReimbursementSettlementRow, error)
+	// GetSession only returns a row still inside its idle window; a session past
+	// expires_at is functionally gone even before DeleteExpiredSessions sweeps it.
+	GetSession(ctx context.Context, arg GetSessionParams) (Session, error)
 	GetTransaction(ctx context.Context, id int64) (Transaction, error)
 	// The fund-scoped fetch a dues reversal fetches its target through (ADR-029):
 	// WHERE fund_id = ? AND id = ?, not id alone, so a transaction belonging to
@@ -112,6 +126,7 @@ type Querier interface {
 	// new caller that fetches a transaction by id from an untrusted request.
 	GetTransactionForFund(ctx context.Context, arg GetTransactionForFundParams) (Transaction, error)
 	GetTransfer(ctx context.Context, id int64) (Transfer, error)
+	GetUserByEmail(ctx context.Context, email string) (User, error)
 	// The two figures PRD 7.5 wants shown side by side for an incidental envelope.
 	// Leftover is collected minus disbursed, computed in Go via money.Amount.Sub,
 	// rather than a third column here - one aggregate pass over the ledger is
@@ -185,6 +200,10 @@ type Querier interface {
 	// int64 rather than interface{} - sqlc's SQLite engine cannot infer the type of
 	// a summed expression (ADR-024).
 	ReconciliationDifferenceTotal(ctx context.Context, reconciliationID int64) (int64, error)
+	// TouchSession is the sliding 30-day idle timeout (#113): every read that
+	// proves the session still valid pushes expires_at forward by the same fixed
+	// window, computed by the caller - there is no absolute cap to enforce here.
+	TouchSession(ctx context.Context, arg TouchSessionParams) (Session, error)
 	// UpdateDuesRate corrects a mistyped amount. effective_from stays fixed: a
 	// rate filed against the wrong month is deleted and re-posted, not moved.
 	UpdateDuesRate(ctx context.Context, arg UpdateDuesRateParams) (DuesRate, error)
