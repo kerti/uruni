@@ -256,6 +256,42 @@ func TestDuesFieldsBelongToDuesAndNothingElse(t *testing.T) {
 		}
 	})
 
+	t.Run("a non-adjustment claiming to reverse a dues payment", func(t *testing.T) {
+		// ADR-029's reverses_transaction_id guards itself: without that CHECK
+		// a kind='normal' row carrying no member and no period satisfies the
+		// dues CHECK and still sets the column, which hides the original
+		// payment from DuesPaidByPeriod (its NOT EXISTS only asks whether
+		// *something* points at the row) and consumes the reversed-once slot
+		// so the real reversal can never be posted.
+		paid := base()
+		paid.Kind, paid.MemberID, paid.DuesPeriod = "dues", &f.memberID, &period
+		posted, err := q.CreateTransaction(ctx, paid)
+		if err != nil {
+			t.Fatalf("posting the dues payment to reverse = %v, want no error", err)
+		}
+
+		p := base()
+		p.Direction, p.ReversesTransactionID = "out", &posted.ID
+		if _, err := q.CreateTransaction(ctx, p); err == nil {
+			t.Error("kind='normal' with reverses_transaction_id = nil error, want the CHECK to reject it")
+		}
+	})
+
+	t.Run("an adjustment reversing without naming the member and period", func(t *testing.T) {
+		paid := base()
+		paid.Kind, paid.MemberID, paid.DuesPeriod = "dues", &f.memberID, &period
+		posted, err := q.CreateTransaction(ctx, paid)
+		if err != nil {
+			t.Fatalf("posting the dues payment to reverse = %v, want no error", err)
+		}
+
+		p := base()
+		p.Kind, p.Direction, p.ReversesTransactionID = "adjustment", "out", &posted.ID
+		if _, err := q.CreateTransaction(ctx, p); err == nil {
+			t.Error("a reversal with no member_id or dues_period = nil error, want the CHECK to reject it")
+		}
+	})
+
 	t.Run("a normal entry carrying dues fields", func(t *testing.T) {
 		p := base()
 		p.Kind, p.MemberID, p.DuesPeriod = "normal", &f.memberID, &period

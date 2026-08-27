@@ -133,29 +133,57 @@ CREATE TABLE "transaction" (              -- the ledger. insert-only.
   dues_period      TEXT,                  -- 'YYYY-MM'; several months paid at once = several rows
   reimbursement_id INTEGER,               -- the settling payout
   transfer_id      INTEGER,
+  reverses_transaction_id INTEGER,        -- the dues payment this adjustment reverses (ADR-029)
   note        TEXT,
   created_at  INTEGER NOT NULL,
   UNIQUE (fund_id, id),
-  -- Five composite FKs: each one is what stops a transaction borrowing another
-  -- fund's row, which a single-column REFERENCES would happily allow.
+  -- Six composite FKs: each one is what stops a transaction borrowing another
+  -- fund's row, which a single-column REFERENCES would happily allow. The
+  -- reverses_transaction_id one is what stops a treasurer of one fund naming
+  -- another fund's row as the payment they are reversing (ADR-029).
   FOREIGN KEY (fund_id, account_id)       REFERENCES account(fund_id, id),
   FOREIGN KEY (fund_id, purpose_id)       REFERENCES purpose(fund_id, id),
   FOREIGN KEY (fund_id, member_id)        REFERENCES member(fund_id, id),
   FOREIGN KEY (fund_id, reimbursement_id) REFERENCES reimbursement(fund_id, id),
   FOREIGN KEY (fund_id, transfer_id)      REFERENCES transfer(fund_id, id),
+  FOREIGN KEY (fund_id, reverses_transaction_id) REFERENCES "transaction"(fund_id, id),
   CHECK (dues_period IS NULL OR (dues_period GLOB '[0-9][0-9][0-9][0-9]-[0-1][0-9]'
                                  AND date(dues_period||'-01') IS NOT NULL)),
   CHECK (kind <> 'dues'          OR (member_id IS NOT NULL AND dues_period IS NOT NULL AND direction = 'in')),
-  CHECK (kind =  'dues'          OR (member_id IS NULL AND dues_period IS NULL)),
+  -- A dues reversal (ADR-029) is the one shape of kind='adjustment' allowed to
+  -- carry a member and a period - and it must carry both, plus the row it
+  -- reverses, and flow 'out'. Every other kind still needs neither.
+  CHECK (kind =  'dues'          OR (member_id IS NULL AND dues_period IS NULL)
+                                 OR (kind = 'adjustment' AND reverses_transaction_id IS NOT NULL
+                                     AND member_id IS NOT NULL AND dues_period IS NOT NULL
+                                     AND direction = 'out')),
+  -- ...and the column guards itself in the other direction: nothing that is
+  -- not a dues reversal may claim to reverse anything. Without this, a
+  -- kind='normal' row carrying no member and no period satisfies the CHECK
+  -- above and still sets reverses_transaction_id - which would both hide the
+  -- original dues payment from DuesPaidByPeriod (the NOT EXISTS only asks
+  -- whether *something* points at the row) and consume the reversed-once
+  -- slot, so the genuine reversal could never be posted. The ledger never
+  -- writes that row; the schema is what makes it unrepresentable (ADR-029).
+  CHECK (reverses_transaction_id IS NULL
+         OR (kind = 'adjustment' AND direction = 'out'
+             AND member_id IS NOT NULL AND dues_period IS NOT NULL)),
   CHECK (kind <> 'reimbursement' OR (reimbursement_id IS NOT NULL AND direction = 'out')),
   CHECK (kind <> 'transfer'      OR transfer_id IS NOT NULL)
-  -- kind='adjustment' deliberately requires nothing extra: a correction may be
-  -- raised on any Tuesday, not only during a reconciliation (ADR-024).
+  -- kind='adjustment' otherwise requires nothing extra: an ordinary
+  -- correction may be raised on any Tuesday, not only during a
+  -- reconciliation (ADR-024).
 ) STRICT;
 
 -- "Settle once" was otherwise only prose. Partial, so the NULLs on every other
 -- kind are unconstrained.
 CREATE UNIQUE INDEX reimbursement_settled_once ON "transaction"(reimbursement_id) WHERE kind = 'reimbursement';
+
+-- A dues payment is reversible at most once, the same partial-unique shape as
+-- reimbursement_settled_once above (ADR-029). Partial, so every row that
+-- carries no reversal - which is everything except a dues reversal itself -
+-- stays unconstrained.
+CREATE UNIQUE INDEX dues_payment_reversed_once ON "transaction"(reverses_transaction_id) WHERE reverses_transaction_id IS NOT NULL;
 
 -- One opening entry per account, enforced the same way and for a sharper
 -- reason: nothing else in the schema stops a second opening row, and a second
@@ -310,6 +338,7 @@ DROP TABLE reconciliation_line;
 DROP TABLE reconciliation;
 DROP TABLE receipt;
 DROP INDEX opening_balance_once_per_account;
+DROP INDEX dues_payment_reversed_once;
 DROP INDEX reimbursement_settled_once;
 DROP TABLE "transaction";
 DROP TABLE reimbursement;

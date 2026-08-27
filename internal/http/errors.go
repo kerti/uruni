@@ -55,6 +55,12 @@ func mapLedgerError(w http.ResponseWriter, logger *slog.Logger, err error) {
 		writeAPIError(w, http.StatusConflict, "reimbursement_waived", "This reimbursement has been waived.")
 	case errors.Is(err, ledger.ErrReimbursementAlreadySettled):
 		writeAPIError(w, http.StatusConflict, "reimbursement_already_settled", "This reimbursement has already been settled.")
+	case errors.Is(err, ledger.ErrDuesPaymentNotFound):
+		writeAPIError(w, http.StatusNotFound, "not_found", "The requested resource was not found.")
+	case errors.Is(err, ledger.ErrNotADuesPayment):
+		writeAPIError(w, http.StatusBadRequest, "invalid_argument", "That transaction is not a dues payment and cannot be reversed.")
+	case errors.Is(err, ledger.ErrDuesPaymentAlreadyReversed):
+		writeAPIError(w, http.StatusConflict, "dues_payment_already_reversed", "This dues payment has already been reversed.")
 	case errors.Is(err, ledger.ErrIncidentalAlreadyClosed):
 		writeAPIError(w, http.StatusConflict, "incidental_already_closed", "This incidental has already been closed.")
 	case errors.Is(err, ledger.ErrOpeningBalanceExists):

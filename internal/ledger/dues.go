@@ -2,6 +2,8 @@ package ledger
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 	"fmt"
 	"time"
 
@@ -108,6 +110,109 @@ func (l *Ledger) postDuesPaymentTx(ctx context.Context, q store.Querier, p PostD
 		Note:       p.Note,
 		CreatedAt:  time.Now().Unix(),
 	})
+}
+
+// ReverseDuesPaymentParams is every argument ReverseDuesPayment needs to
+// reverse one previously-posted dues payment.
+//
+// There is deliberately no AccountID, PurposeID, Amount, MemberID or
+// DuesPeriod field: all five are copied from the original row by
+// ReverseDuesPayment itself, never re-typed by the caller - the same
+// discipline ADR-027 already applies to SettleReimbursementParams, which
+// carries no Amount or PurposeID for exactly this reason. A reversal that
+// could name a different amount or member than the payment it reverses
+// would not be a reversal of that payment (ADR-029).
+type ReverseDuesPaymentParams struct {
+	FundID        int64
+	TransactionID int64  // the kind='dues' row being reversed
+	OccurredOn    string // "YYYY-MM-DD", the reversal's own date - not the original payment's
+	Note          *string
+}
+
+// ReverseDuesPayment posts one kind='adjustment', direction='out' row that
+// reverses a previously-posted kind='dues' payment, carrying a new
+// reverses_transaction_id naming the row it reverses (ADR-029). It returns
+// the posted reversal row.
+//
+// account_id, purpose_id, amount, member_id and dues_period are copied from
+// the original payment, inside the same withTx that posts the reversal -
+// never re-typed by the caller (see ReverseDuesPaymentParams). Only
+// occurred_on and note are the caller's to choose: the date the correction
+// is actually made, and why.
+//
+// The original row is fetched fund-scoped (GetTransactionForFund: WHERE
+// fund_id = ? AND id = ?), not by id alone. That is what makes
+// ErrDuesPaymentNotFound the answer for a transaction id belonging to
+// another fund, exactly as it is for one that does not exist at all - the
+// composite FK on reverses_transaction_id backs the same guarantee at the
+// schema level, but the fund-scoped fetch is what stops this method from
+// ever constructing the cross-fund insert in the first place.
+//
+// Three named errors, each a pre-check ahead of a guarantee the schema
+// already enforces on its own - here purely to give the caller a clean,
+// named error instead of a raw constraint string (ADR-027's
+// ErrReimbursementAlreadySettled shape):
+//
+//   - ErrDuesPaymentNotFound: no row with this id exists in this fund.
+//   - ErrNotADuesPayment: the row exists but its Kind is not "dues" - which
+//     also rules out reversing a reversal, since a reversal is itself
+//     posted as kind='adjustment', never kind='dues'.
+//   - ErrDuesPaymentAlreadyReversed: GetDuesPaymentReversal already finds a
+//     reversal row for this payment - the dues_payment_reversed_once
+//     partial unique index is the actual guarantee, at most once ever.
+func (l *Ledger) ReverseDuesPayment(ctx context.Context, p ReverseDuesPaymentParams) (store.Transaction, error) {
+	if err := validateOccurredOn(p.OccurredOn); err != nil {
+		return store.Transaction{}, err
+	}
+
+	var reversal store.Transaction
+	err := l.withTx(ctx, func(q store.Querier) error {
+		original, err := q.GetTransactionForFund(ctx, store.GetTransactionForFundParams{
+			FundID: p.FundID,
+			ID:     p.TransactionID,
+		})
+		if err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				return ErrDuesPaymentNotFound
+			}
+			return fmt.Errorf("fetching transaction to reverse: %w", err)
+		}
+
+		if original.Kind != "dues" {
+			return ErrNotADuesPayment
+		}
+
+		_, err = q.GetDuesPaymentReversal(ctx, store.GetDuesPaymentReversalParams{
+			FundID:                p.FundID,
+			ReversesTransactionID: &p.TransactionID,
+		})
+		if err == nil {
+			return ErrDuesPaymentAlreadyReversed
+		}
+		if !errors.Is(err, sql.ErrNoRows) {
+			return fmt.Errorf("checking for an existing reversal: %w", err)
+		}
+
+		reversal, err = q.CreateTransaction(ctx, store.CreateTransactionParams{
+			FundID:                p.FundID,
+			AccountID:             original.AccountID,
+			PurposeID:             original.PurposeID,
+			Direction:             "out",
+			Amount:                original.Amount,
+			OccurredOn:            p.OccurredOn,
+			Kind:                  "adjustment",
+			MemberID:              original.MemberID,
+			DuesPeriod:            original.DuesPeriod,
+			ReversesTransactionID: &p.TransactionID,
+			Note:                  p.Note,
+			CreatedAt:             time.Now().Unix(),
+		})
+		return err
+	})
+	if err != nil {
+		return store.Transaction{}, fmt.Errorf("reversing dues payment: %w", err)
+	}
+	return reversal, nil
 }
 
 // validateDuesPeriod rejects anything that is not a real "YYYY-MM" calendar
