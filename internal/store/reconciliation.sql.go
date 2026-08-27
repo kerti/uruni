@@ -46,11 +46,19 @@ func (q *Queries) CreateReconciliation(ctx context.Context, arg CreateReconcilia
 const getReconciliation = `-- name: GetReconciliation :one
 SELECT id, fund_id, performed_at, through_transaction_id, note, created_at
 FROM reconciliation
-WHERE id = ?
+WHERE id = ? AND fund_id = ?
 `
 
-func (q *Queries) GetReconciliation(ctx context.Context, id int64) (Reconciliation, error) {
-	row := q.db.QueryRowContext(ctx, getReconciliation, id)
+type GetReconciliationParams struct {
+	ID     int64
+	FundID int64
+}
+
+// Fund-scoped: an id names a row, it does not prove the caller may see it.
+// PRD section 6 allows a server to hold more than one fund, so a bare lookup
+// by id alone would be a cross-fund read the moment a second fund exists.
+func (q *Queries) GetReconciliation(ctx context.Context, arg GetReconciliationParams) (Reconciliation, error) {
+	row := q.db.QueryRowContext(ctx, getReconciliation, arg.ID, arg.FundID)
 	var i Reconciliation
 	err := row.Scan(
 		&i.ID,
