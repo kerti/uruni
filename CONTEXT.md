@@ -9,6 +9,7 @@ Where a concept's Indonesian name is the one the treasurer sees, the identifier 
 - **Fund** (kas) — a community's shared pool of money. One instance may hold one or more; one is enough for the validated user.
 - **Account / Location** — *where money physically sits*: `Cash` (dompet) or `Bank`. Balances are tracked per location because that split is where discrepancies come from.
 - **Purpose tag** (`purpose`) — what a transaction is *for*, over one pooled balance: **Kas Utama** (routine, `main`), a named **Incidental** (`incidental`), or **Pass-through** (`pass_through`). Exactly one Kas Utama per fund.
+- **User** (`user`) — the treasurer's login: an email and an argon2id password hash. One per instance, created once at first run ([ADR-030](./docs/ADR/030-multi-fund-scoping.md)). Distinct from **Member** (a person in the group, who never logs in) and from **Account** (a place money sits). The only entity in the schema that is not scoped to a fund.
 - **Member** (anggota) — a person in the group. Name + role/tier only; no email/phone (data minimization).
 - **Dues rate** (iuran) — the recurring amount owed, which **varies by member tier** (e.g. pelaksana, fungsional pertama/muda/madya).
 
