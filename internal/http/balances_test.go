@@ -4,7 +4,11 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
+
+	"github.com/kerti/uruni/internal/ledger"
+	"github.com/kerti/uruni/internal/store"
 )
 
 func getBalances(t *testing.T, r http.Handler) *httptest.ResponseRecorder {
@@ -279,5 +283,39 @@ func TestGetBalancesTransferMovesAccountsLeavesFundTotalUnchanged(t *testing.T) 
 	}
 	if after.FundTotal != before.FundTotal {
 		t.Errorf("fund_total after transfer = %d, want unchanged at %d", after.FundTotal, before.FundTotal)
+	}
+}
+
+// TestGetBalancesOnADeadDatabaseIs500 pins down that a dead database produces
+// a clean 500 with the generic envelope - not a panic, and not a half-written
+// 200 body carrying a fund_total the handler could not finish.
+//
+// Note what it does NOT reach. resolveFund runs first and queries the same
+// database, so any fault wide enough to break FundBalance breaks ListFunds a
+// line earlier and returns there. The five `if err != nil` branches below
+// resolveFund are unreachable through this route by any whole-database
+// failure; distinguishing them would take per-call fault injection, and the
+// seam that would need is not worth owning for branches that only ever fire
+// together. They stay as honest defensive code, uncovered on purpose.
+func TestGetBalancesOnADeadDatabaseIs500(t *testing.T) {
+	sqlDB := testStoreDB(t)
+	r := New(testAssets(), testBuild, ledger.New(sqlDB), store.New(sqlDB), testLogger())
+
+	if rec := postSetup(t, r, "Dana Warga"); rec.Code != http.StatusCreated {
+		t.Fatalf("POST /api/setup = %d, want %d (body: %s)", rec.Code, http.StatusCreated, rec.Body.String())
+	}
+
+	// Nothing can read after this, so every branch below the first is
+	// unreachable by construction - the point is the shape of the answer.
+	if err := sqlDB.Close(); err != nil {
+		t.Fatalf("closing the test database = %v, want no error", err)
+	}
+
+	rec := getBalances(t, r)
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("GET /api/balances on a closed database = %d, want %d (body: %s)", rec.Code, http.StatusInternalServerError, rec.Body.String())
+	}
+	if body := rec.Body.String(); strings.Contains(body, "fund_total") {
+		t.Errorf("body = %s, want no partial balances payload - the handler must not write before it has every figure", body)
 	}
 }
