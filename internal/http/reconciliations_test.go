@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/kerti/uruni/internal/auth"
 	"github.com/kerti/uruni/internal/ledger"
 	"github.com/kerti/uruni/internal/store"
 )
@@ -430,7 +431,7 @@ func TestTakeReconciliationBackdatedFixLandsInNextSnapshotNotThisOne(t *testing.
 // ledger's own schema already refuses (ADR-027).
 func TestTakeReconciliationRejectsAnotherFundsAccount(t *testing.T) {
 	sqlDB := testStoreDB(t)
-	r := New(testAssets(), testBuild, ledger.New(sqlDB), store.New(sqlDB), testLogger())
+	r := New(testAssets(), testBuild, ledger.New(sqlDB), store.New(sqlDB), testLogger(), auth.New(sqlDB), "")
 	setUpFundForTransactions(t, r)
 
 	// A second fund, created directly through the store - the app itself
@@ -475,7 +476,7 @@ func TestTakeReconciliationRejectsAnotherFundsAccount(t *testing.T) {
 // fund setup created and so cannot address a second fund's router of its own.
 func TestGetReconciliationDetailOnAnotherFundsSnapshotIs404(t *testing.T) {
 	sqlDB := testStoreDB(t)
-	r := New(testAssets(), testBuild, ledger.New(sqlDB), store.New(sqlDB), testLogger())
+	r := New(testAssets(), testBuild, ledger.New(sqlDB), store.New(sqlDB), testLogger(), auth.New(sqlDB), "")
 	setUpFundForTransactions(t, r)
 
 	q := store.New(sqlDB)

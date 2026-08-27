@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/kerti/uruni/internal/auth"
 	"github.com/kerti/uruni/internal/ledger"
 	"github.com/kerti/uruni/internal/store"
 )
@@ -299,7 +300,7 @@ func TestGetBalancesTransferMovesAccountsLeavesFundTotalUnchanged(t *testing.T) 
 // together. They stay as honest defensive code, uncovered on purpose.
 func TestGetBalancesOnADeadDatabaseIs500(t *testing.T) {
 	sqlDB := testStoreDB(t)
-	r := New(testAssets(), testBuild, ledger.New(sqlDB), store.New(sqlDB), testLogger())
+	r := New(testAssets(), testBuild, ledger.New(sqlDB), store.New(sqlDB), testLogger(), auth.New(sqlDB), "")
 
 	if rec := postSetup(t, r, "Dana Warga"); rec.Code != http.StatusCreated {
 		t.Fatalf("POST /api/setup = %d, want %d (body: %s)", rec.Code, http.StatusCreated, rec.Body.String())

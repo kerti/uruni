@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/kerti/uruni/internal/auth"
 	"github.com/kerti/uruni/internal/ledger"
 	"github.com/kerti/uruni/internal/store"
 )
@@ -172,7 +173,7 @@ func TestGetFundReportsAStoreFailureAsA500(t *testing.T) {
 	// "no fund yet", which is a 404 and means something entirely different
 	// to the client: run setup.
 	sqlDB := testStoreDB(t)
-	router := New(testAssets(), testBuild, ledger.New(sqlDB), store.New(sqlDB), testLogger())
+	router := New(testAssets(), testBuild, ledger.New(sqlDB), store.New(sqlDB), testLogger(), auth.New(sqlDB), "")
 	if err := sqlDB.Close(); err != nil {
 		t.Fatalf("closing the store = %v, want no error", err)
 	}

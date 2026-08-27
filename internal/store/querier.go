@@ -227,6 +227,15 @@ type Querier interface {
 	// the four NOT NULL columns cannot mean "clear it", the two nullable ones
 	// can, and only a set_* flag can tell that from "leave alone".
 	UpdateReimbursement(ctx context.Context, arg UpdateReimbursementParams) (Reimbursement, error)
+	// UpsertSession is what a session store commits through: one atomic
+	// statement, because a commit rewrites a token that may or may not already
+	// exist. A delete-then-insert pair cannot stand in for it - ADR-004's
+	// SetMaxOpenConns(1) serialises the two statements but does not join them,
+	// so two concurrent requests carrying the same cookie interleave as
+	// DELETE / DELETE / INSERT / INSERT and the second INSERT trips
+	// session.token's primary key. ON CONFLICT makes the rewrite one statement,
+	// which is the only thing that closes that window.
+	UpsertSession(ctx context.Context, arg UpsertSessionParams) (Session, error)
 }
 
 var _ Querier = (*Queries)(nil)

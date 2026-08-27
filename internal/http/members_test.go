@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/kerti/uruni/internal/auth"
 	"github.com/kerti/uruni/internal/ledger"
 	"github.com/kerti/uruni/internal/store"
 )
@@ -182,7 +183,7 @@ func testRouterAndLedger(t *testing.T) (http.Handler, *ledger.Ledger) {
 	t.Helper()
 	sqlDB := testStoreDB(t)
 	l := ledger.New(sqlDB)
-	return New(testAssets(), testBuild, l, store.New(sqlDB), testLogger()), l
+	return New(testAssets(), testBuild, l, store.New(sqlDB), testLogger(), auth.New(sqlDB), ""), l
 }
 
 func patchMember(t *testing.T, r http.Handler, id int64, body string) *httptest.ResponseRecorder {

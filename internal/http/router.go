@@ -19,6 +19,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 
+	"github.com/kerti/uruni/internal/auth"
 	"github.com/kerti/uruni/internal/ledger"
 	"github.com/kerti/uruni/internal/store"
 )
@@ -42,7 +43,12 @@ type Build struct {
 // avoids adding a Querier accessor to ADR-027's already-implemented boundary —
 // direct-CRUD routes (members, accounts, purposes — ADR-027's "no domain
 // wrapper" list) call q directly; routes with a derived invariant call l.
-func New(assets fs.FS, build Build, l *ledger.Ledger, q store.Querier, logger *slog.Logger) http.Handler {
+//
+// au and baseURL are M5's addition (issue #114): au is the bootstrap-account
+// service POST /api/register calls, and baseURL is read once here, purely to
+// derive the session cookie's Secure flag from its scheme (session.go) —
+// never stored or exposed beyond that.
+func New(assets fs.FS, build Build, l *ledger.Ledger, q store.Querier, logger *slog.Logger, au *auth.Auth, baseURL string) http.Handler {
 	r := chi.NewRouter()
 	r.Use(middleware.Recoverer)
 	r.Use(requestLogger(logger))
@@ -51,9 +57,9 @@ func New(assets fs.FS, build Build, l *ledger.Ledger, q store.Querier, logger *s
 
 	// Every /api route lives under this one mount, so M5's session middleware
 	// has exactly one seam to wrap instead of routes scattered across the tree
-	// (ADR-021). No routes are registered yet — this slice builds the mount and
-	// the shared error mapping; M4.2 onward hang handlers off api.routes.
-	r.Route("/api", (&api{ledger: l, queries: q, logger: logger}).routes)
+	// (ADR-021).
+	sm := newSessionManager(q, baseURL)
+	r.Route("/api", (&api{ledger: l, queries: q, logger: logger, auth: au, sessionManager: sm}).routes)
 
 	// The SPA fallback is chi's NotFound handler (ADR-021): chi checks every
 	// registered route first, so /api and /report still 404 instead of falling

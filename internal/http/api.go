@@ -7,8 +7,10 @@ import (
 	"log/slog"
 	"net/http"
 
+	"github.com/alexedwards/scs/v2"
 	"github.com/go-chi/chi/v5"
 
+	"github.com/kerti/uruni/internal/auth"
 	"github.com/kerti/uruni/internal/ledger"
 	"github.com/kerti/uruni/internal/store"
 )
@@ -24,6 +26,14 @@ type api struct {
 	ledger  *ledger.Ledger
 	queries store.Querier
 	logger  *slog.Logger
+
+	// auth and sessionManager are M5's addition (issue #114): the bootstrap
+	// account and the session cookie that logs it straight in. Both are nil
+	// only in the sense that no handler before this milestone reached for
+	// them - every handler in this file still goes through ledger or
+	// queries exactly as before.
+	auth           *auth.Auth
+	sessionManager *scs.SessionManager
 }
 
 // routes registers the /api surface on the mount New creates. No handlers at
@@ -44,6 +54,18 @@ func (a *api) routes(r chi.Router) {
 	r.MethodNotAllowed(func(w http.ResponseWriter, _ *http.Request) {
 		writeAPIError(w, http.StatusMethodNotAllowed, "method_not_allowed", "That method is not allowed on this resource.")
 	})
+
+	// Scoped to /api rather than the whole router (ADR-030): a cookie has no
+	// business being parsed or issued for a static asset request or the SSR
+	// public report, and this is the one mount every session-aware route
+	// already funnels through.
+	r.Use(a.sessionManager.LoadAndSave)
+
+	// The bootstrap account (#114). Unauthenticated by design (ADR-030's
+	// consequences list it as one of the few routes that stay outside the
+	// gate #116 adds) - there is no session yet to gate it with, and it
+	// refuses itself the moment any account exists (auth.ErrAlreadyRegistered).
+	r.Post("/register", a.register)
 
 	r.Post("/setup", a.setupFund)
 	r.Get("/fund", a.getFund)
