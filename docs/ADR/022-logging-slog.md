@@ -15,4 +15,12 @@
 
 **Consequences.** Handlers take a logger (or pull one off the request context) rather than calling a global, which is slightly more plumbing and much easier to test — assertions run against a handler writing to a buffer. Request logging becomes a middleware at M4, on chi ([ADR-021](./021-http-routing-chi.md)).
 
-**As built (M1.2).** The logger is constructed in `cmd/uruni` from the config and stays there: it is not threaded into `internal/http` yet, because the router has nothing to say until the request-logging middleware arrives at M4. Passing a logger nobody calls would be plumbing with no reader on the other end.
+**As built (M1.2, amended at M4).** The logger is constructed in `cmd/uruni` from the config and threaded into `internal/http`, where the router and the handlers hold it. Through M1.2–M3 it stayed in `cmd/uruni` alone, because the router had nothing to say until the request-logging middleware arrived; M4 is when it gained a reader.
+
+`requestLogger` in `internal/http/middleware.go` is that middleware, and it delivers this ADR's promise: one line per request with method, path, status and duration, reading the status back through chi's `WrapResponseWriter`.
+
+The data-minimization rule above is enforced by what the middleware reads rather than by care at each call site — `r.URL.Path` only, never `RawQuery` and never the body, because a query string or a posted body is exactly where a member name, a note or an amount would be.
+
+## Amendments
+
+**2026-08-27 ([#72](https://github.com/kerti/uruni/issues/72)).** The *As built* section above previously read: *"The logger is constructed in `cmd/uruni` from the config and stays there: it is not threaded into `internal/http` yet, because the router has nothing to say until the request-logging middleware arrives at M4. Passing a logger nobody calls would be plumbing with no reader on the other end."* True when written at M1.2; false from M4, when the middleware landed and the handlers took the logger. The decision is untouched — stdlib `slog`, no global, request logging as chi middleware — so this is a correction of fact, not a change of mind.

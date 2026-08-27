@@ -75,7 +75,7 @@ There is **no `HANDOFF.md`** and no standalone status doc. The live board is **G
 - **Standing decisions no issue or ADR owns** → [`Decisions.md`](./Decisions.md).
 - **You-are-here** → the one status line below (changes ~once per milestone; never holds shipped detail).
 
-**Status:** **M4 — core API** in progress; planned and broken into slices on the milestone board. M3's trust core is complete — `money.Amount`, the ledger's writes and derived balances, dues status and the reconciliation snapshot, all over a real SQLite harness rather than a fake.
+**Status:** **M4 — core API** is complete and tagged `v0.4.0`; **M5 — auth** is next and its slices are not planned yet. The whole ledger is reachable over HTTP: transactions, dues, transfers, reimbursements, incidentals, reconciliation and a composed balances view. Nothing is authenticated yet — that is M5's entire job.
 
 ## Open
 
