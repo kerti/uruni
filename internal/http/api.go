@@ -83,6 +83,11 @@ func (a *api) routes(r chi.Router) {
 	// either.
 	r.Post("/transactions", a.createTransaction)
 	r.Get("/transactions", a.listTransactions)
+	// Moving money between the two accounts without changing what the fund
+	// holds in total (PRD §6). No GET: a transfer's two legs are ordinary
+	// transaction rows and already surface through GET /api/transactions.
+	r.Post("/transfers", a.createTransfer)
+
 	r.Post("/dues-payments", a.createDuesPayment)
 	r.Post("/dues-payments/{id}/reversal", a.reverseDuesPayment)
 	r.Get("/dues-status", a.getDuesStatus)
