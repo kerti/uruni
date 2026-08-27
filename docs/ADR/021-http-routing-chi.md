@@ -1,6 +1,6 @@
 # ADR-021 — HTTP routing: chi, adopted at M4
 
-**Status:** Accepted · `draft` — implemented at M4; the tag drop is proposed in the M4.10 PR and is the maintainer's call · [ADR index](./README.md)
+**Status:** Accepted · implemented at M4 — change only by adding a superseding ADR · [ADR index](./README.md)
 
 **Context.** [`Tech-Design.md`](../Tech-Design.md) left this open as *"Router: stdlib `net/http` (Go 1.22+ routing) vs. `chi` — minor, decide at scaffold."* The M1.1 scaffold then picked stdlib `http.ServeMux` silently, which is how an open question turns into an accident. The real question isn't the two routes M1 has; it's what the API, session auth and the public report need — route groups, per-group middleware, and URL parameters, in M4 through M7.
 

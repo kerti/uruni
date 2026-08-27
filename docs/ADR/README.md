@@ -45,7 +45,7 @@ Standing decisions that no ADR owns go in [`../Decisions.md`](../Decisions.md).
 | [018](./018-release-and-versioning.md) | Release & versioning: tag-driven SemVer, operator upgrade contract | implemented |
 | [019](./019-cli-surface-and-runtime-config.md) | CLI surface & runtime config (the scaffold's contract) | implemented |
 | [020](./020-dev-environment.md) | Dev environment: one entry point, guards committed | implemented |
-| [021](./021-http-routing-chi.md) | HTTP routing: chi, adopted at M4 | `draft` |
+| [021](./021-http-routing-chi.md) | HTTP routing: chi, adopted at M4 | implemented |
 | [022](./022-logging-slog.md) | Logging: stdlib `log/slog`, adopted at M1.2 | implemented |
 | [023](./023-agent-operating-model.md) | Agent operating model: one orchestrator, pinned role agents | implemented |
 | [024](./024-schema-conventions.md) | Schema conventions: STRICT SQLite, integer ids, two time types | implemented |
