@@ -88,6 +88,15 @@ func (a *api) routes(r chi.Router) {
 	// transaction rows and already surface through GET /api/transactions.
 	r.Post("/transfers", a.createTransfer)
 
+	// A member fronting their own money (PRD §7.4). Recording the claim
+	// moves nothing - only settling posts a ledger row, which is why the
+	// recorded balance still matches the wallet while a claim is
+	// outstanding. There is deliberately no waive route: PRD §7.4 never
+	// asks for one.
+	r.Post("/reimbursements", a.createReimbursement)
+	r.Get("/reimbursements", a.listReimbursements)
+	r.Post("/reimbursements/{id}/settle", a.settleReimbursement)
+
 	r.Post("/dues-payments", a.createDuesPayment)
 	r.Post("/dues-payments/{id}/reversal", a.reverseDuesPayment)
 	r.Get("/dues-status", a.getDuesStatus)
