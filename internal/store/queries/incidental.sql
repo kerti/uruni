@@ -3,10 +3,16 @@ INSERT INTO incidental (purpose_id, occasion, target_amount, opened_on, closed_o
 VALUES (?, ?, ?, ?, ?, ?)
 RETURNING purpose_id, occasion, target_amount, opened_on, closed_on, created_at;
 
+-- Fund-scoped through purpose, which is where the envelope's fund_id lives
+-- (incidental is 1:1 with its purpose row and carries no fund_id of its own).
+-- An id names a row, it does not prove the caller may see it: PRD section 6 allows a
+-- server to hold more than one fund, so a bare WHERE purpose_id = ? would be a
+-- cross-fund read the moment a second fund exists.
 -- name: GetIncidental :one
-SELECT purpose_id, occasion, target_amount, opened_on, closed_on, created_at
-FROM incidental
-WHERE purpose_id = ?;
+SELECT i.purpose_id, i.occasion, i.target_amount, i.opened_on, i.closed_on, i.created_at
+FROM incidental i
+JOIN purpose p ON p.id = i.purpose_id
+WHERE i.purpose_id = ? AND p.fund_id = ?;
 
 -- Closing an envelope moves no money, so this is an UPDATE rather than a ledger
 -- entry - incidental carries no immutability trigger for exactly this reason.

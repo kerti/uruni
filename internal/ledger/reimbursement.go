@@ -218,7 +218,9 @@ func (l *Ledger) DeleteReimbursement(ctx context.Context, fundID, reimbursementI
 // caller's own, and the reimbursement_settled_once partial index remains
 // the actual guarantee for settling; this exists to name the case.
 func unsettledClaim(ctx context.Context, q store.Querier, fundID, reimbursementID int64) (store.Reimbursement, error) {
-	claim, err := q.GetReimbursement(ctx, reimbursementID)
+	claim, err := q.GetReimbursement(ctx, store.GetReimbursementParams{
+		ID: reimbursementID, FundID: fundID,
+	})
 	if err != nil {
 		return store.Reimbursement{}, fmt.Errorf("fetching reimbursement: %w", err)
 	}

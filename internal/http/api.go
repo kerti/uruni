@@ -106,6 +106,17 @@ func (a *api) routes(r chi.Router) {
 	r.Post("/dues-payments", a.createDuesPayment)
 	r.Post("/dues-payments/{id}/reversal", a.reverseDuesPayment)
 	r.Get("/dues-status", a.getDuesStatus)
+
+	// A one-off collection for an occasion, tracked separately from the
+	// general fund and closed when it's over (PRD §7.5). Addressed by
+	// purpose id, matching how an incidental is addressed everywhere else
+	// in the domain. There is deliberately no contribute route: a
+	// contribution is an ordinary transaction tagged to the envelope's
+	// purpose, posted through POST /api/transactions above (#67).
+	r.Post("/incidentals", a.openIncidental)
+	r.Get("/incidentals", a.listIncidentals)
+	r.Get("/incidentals/{purposeID}", a.getIncidental)
+	r.Post("/incidentals/{purposeID}/close", a.closeIncidental)
 }
 
 // writeJSON is writeAPIError's counterpart for a successful response: every
