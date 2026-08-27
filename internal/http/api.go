@@ -117,6 +117,18 @@ func (a *api) routes(r chi.Router) {
 	r.Get("/incidentals", a.listIncidentals)
 	r.Get("/incidentals/{purposeID}", a.getIncidental)
 	r.Post("/incidentals/{purposeID}/close", a.closeIncidental)
+
+	// Counting the real money and comparing it to the recorded balance (PRD
+	// section 7.7's home banner, section 7.8's reconcile flow). "latest" and
+	// "open-lines" are literal path segments, not ids - they are registered
+	// ahead of the {id} route below so chi's router resolves them as their own
+	// static routes rather than the {id} wildcard swallowing "latest" as an
+	// id chi then fails to parse as an integer.
+	r.Post("/reconciliations", a.takeReconciliation)
+	r.Get("/reconciliations", a.listReconciliations)
+	r.Get("/reconciliations/latest", a.latestReconciliation)
+	r.Get("/reconciliations/open-lines", a.listOpenReconciliationLines)
+	r.Get("/reconciliations/{id}", a.getReconciliation)
 }
 
 // writeJSON is writeAPIError's counterpart for a successful response: every

@@ -2,6 +2,7 @@ package ledger
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"strings"
 	"testing"
@@ -445,7 +446,7 @@ func TestTakeReconciliationLeftOpenIsRevisitedAsASecondSnapshotFirstUntouched(t 
 	}
 
 	// Both snapshots coexist with their own numbers.
-	firstStillThere, err := q.GetReconciliation(ctx, first.ID)
+	firstStillThere, err := q.GetReconciliation(ctx, store.GetReconciliationParams{ID: first.ID, FundID: f.fundID})
 	if err != nil {
 		t.Fatalf("GetReconciliation(first) = %v, want no error", err)
 	}
@@ -865,5 +866,51 @@ func TestTakeReconciliationFixThatUndershootsStillRecordsTheWholeGap(t *testing.
 	}
 	if bal != 120_000 {
 		t.Errorf("AccountBalance() = %d, want 120000", bal)
+	}
+}
+
+// A second fund's reconciliation is invisible to the first fund - the #105
+// scoping test mirrored for GetReconciliationDetail, the same shape
+// TestASecondFundsIncidentalIsInvisibleToTheFirstFund uses for
+// GetIncidentalDetail. An id names a row; it does not prove the caller may
+// see it. PRD section 6 allows a server to hold more than one fund, so this
+// is the scoping test that keeps that honest - v1's single-fund rule is a
+// setup constraint, not a reason to read unscoped.
+func TestASecondFundsReconciliationIsInvisibleToTheFirstFund(t *testing.T) {
+	l := newTestLedger(t)
+	f := newFixture(t, l)
+	ctx := context.Background()
+
+	q := store.New(l.db)
+	other, err := q.CreateFund(ctx, store.CreateFundParams{
+		Name: "Other Fund", Currency: "IDR", ReportSlug: "zyxwvutsrqponmlkjihgfe", CreatedAt: 1,
+	})
+	if err != nil {
+		t.Fatalf("CreateFund() = %v, want no error", err)
+	}
+	otherCash := createAccount(t, q, other.ID, "cash", "Other Fund's Cash")
+
+	rec, err := l.TakeReconciliation(ctx, TakeReconciliationParams{
+		FundID: other.ID,
+		Counts: []AccountCount{
+			{AccountID: otherCash, ActualAmount: 0, Resolution: "matched"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("TakeReconciliation(fund 2) = %v, want no error", err)
+	}
+
+	if _, err := l.GetReconciliationDetail(ctx, f.fundID, rec.ID); !errors.Is(err, sql.ErrNoRows) {
+		t.Errorf("GetReconciliationDetail(fund 1, fund 2's snapshot) = %v, want an error wrapping sql.ErrNoRows", err)
+	}
+
+	// The same snapshot read through its own fund still resolves, so the
+	// test above is scoping and not a broken lookup.
+	detail, err := l.GetReconciliationDetail(ctx, other.ID, rec.ID)
+	if err != nil {
+		t.Errorf("GetReconciliationDetail(fund 2, fund 2's snapshot) = %v, want no error", err)
+	}
+	if detail.Reconciliation.ID != rec.ID || len(detail.Lines) != 1 {
+		t.Errorf("GetReconciliationDetail(fund 2, fund 2's snapshot) = %+v, want the snapshot with its 1 line", detail)
 	}
 }

@@ -90,7 +90,10 @@ type Querier interface {
 	// one already exists.
 	GetOpeningBalance(ctx context.Context, arg GetOpeningBalanceParams) (GetOpeningBalanceRow, error)
 	GetPurpose(ctx context.Context, id int64) (Purpose, error)
-	GetReconciliation(ctx context.Context, id int64) (Reconciliation, error)
+	// Fund-scoped: an id names a row, it does not prove the caller may see it.
+	// PRD section 6 allows a server to hold more than one fund, so a bare lookup
+	// by id alone would be a cross-fund read the moment a second fund exists.
+	GetReconciliation(ctx context.Context, arg GetReconciliationParams) (Reconciliation, error)
 	// Fund-scoped on purpose: an id names a row, it does not prove the caller may
 	// see it. PRD section 6 allows a server to hold more than one fund, so a bare
 	// lookup by id alone would be a cross-fund read the moment a second fund

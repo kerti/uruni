@@ -261,6 +261,40 @@ func (l *Ledger) TakeReconciliation(ctx context.Context, p TakeReconciliationPar
 	return rec, nil
 }
 
+// ReconciliationDetail is one snapshot together with the counted-account lines
+// it froze - what GET /api/reconciliations/{id} shows (PRD section 7.8),
+// composed the same way GetIncidentalDetail composes an envelope with its
+// totals.
+type ReconciliationDetail struct {
+	Reconciliation store.Reconciliation
+	Lines          []store.ReconciliationLine
+}
+
+// GetReconciliationDetail fetches one snapshot and its lines for GET
+// /api/reconciliations/{id}.
+//
+// The snapshot fetch is fund-scoped (GetReconciliation now takes fund_id
+// alongside id, #105): an id names a row, it does not prove the caller may
+// see it, the same reasoning GetIncidentalDetail's own comment gives. The line
+// fetch that follows is not separately fund-scoped - reconciliation_id alone
+// is enough once the snapshot itself is already known to belong to this fund,
+// since a line can only ever be created against the reconciliation that owns
+// it (reconciliation_line's own composite FK ties fund_id to
+// reconciliation_id).
+func (l *Ledger) GetReconciliationDetail(ctx context.Context, fundID, id int64) (ReconciliationDetail, error) {
+	rec, err := l.q.GetReconciliation(ctx, store.GetReconciliationParams{ID: id, FundID: fundID})
+	if err != nil {
+		return ReconciliationDetail{}, fmt.Errorf("fetching reconciliation: %w", err)
+	}
+
+	lines, err := l.q.ListReconciliationLines(ctx, rec.ID)
+	if err != nil {
+		return ReconciliationDetail{}, fmt.Errorf("listing reconciliation lines: %w", err)
+	}
+
+	return ReconciliationDetail{Reconciliation: rec, Lines: lines}, nil
+}
+
 // validateTakeReconciliationParams checks TakeReconciliation's own inputs
 // before anything is written: an unrecognised resolution, a Fix present or
 // missing where the resolution disagrees, a non-positive or malformed Fix,
