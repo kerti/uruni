@@ -5,6 +5,7 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/kerti/uruni/internal/money"
 	"github.com/kerti/uruni/internal/store"
 )
 
@@ -300,6 +301,253 @@ func TestSettleReimbursementRejectsInvalidOccurredOn(t *testing.T) {
 			}
 			if len(rows) != 0 {
 				t.Errorf("ledger holds %d rows after a rejected settlement, want 0 - the claim lookup should never have been reached", len(rows))
+			}
+		})
+	}
+}
+
+// An unsettled claim is correctable in place: it is off the ledger, so
+// CLAUDE.md rule 3's "corrections are new adjusting entries" does not reach
+// it, and the schema agrees by carrying no immutability trigger.
+func TestUpdateReimbursementCorrectsAnUnsettledClaim(t *testing.T) {
+	l := newTestLedger(t)
+	f := newFixture(t, l)
+	ctx := context.Background()
+	q := store.New(l.db)
+
+	claim := createReimbursement(t, q, f, 75_000, "2026-08-01", nil)
+
+	amount := money.Amount(90_000)
+	incurredOn := "2026-08-02"
+	note := "the receipt said ninety"
+	updated, err := l.UpdateReimbursement(ctx, UpdateReimbursementParams{
+		FundID: f.fundID, ReimbursementID: claim.ID,
+		Amount: &amount, IncurredOn: &incurredOn, Note: &note, SetNote: true,
+	})
+	if err != nil {
+		t.Fatalf("UpdateReimbursement() = %v, want no error", err)
+	}
+	if updated.Amount != 90_000 {
+		t.Errorf("Amount = %d, want 90000", updated.Amount)
+	}
+	if updated.IncurredOn != "2026-08-02" {
+		t.Errorf("IncurredOn = %q, want %q", updated.IncurredOn, "2026-08-02")
+	}
+	if updated.Note == nil || *updated.Note != note {
+		t.Errorf("Note = %v, want %q", updated.Note, note)
+	}
+	// Untouched fields keep their values - an absent field is "leave alone",
+	// never "clear it".
+	if updated.MemberID != claim.MemberID || updated.PurposeID != claim.PurposeID {
+		t.Errorf("member/purpose = %d/%d, want the claim's own %d/%d",
+			updated.MemberID, updated.PurposeID, claim.MemberID, claim.PurposeID)
+	}
+	if updated.WaivedOn != nil {
+		t.Errorf("WaivedOn = %v, want nil - it was never sent", updated.WaivedOn)
+	}
+}
+
+// Waiving and un-waiving are the same call with SetWaivedOn, which is the
+// whole reason waiving is a field rather than a route: the member who says
+// "saya yang tanggung" can change their mind, and a dedicated /waive route
+// would leave the claim stuck.
+func TestUpdateReimbursementWaivesAndUnwaives(t *testing.T) {
+	l := newTestLedger(t)
+	f := newFixture(t, l)
+	ctx := context.Background()
+	q := store.New(l.db)
+
+	claim := createReimbursement(t, q, f, 75_000, "2026-08-01", nil)
+
+	waivedOn := "2026-08-05"
+	waived, err := l.UpdateReimbursement(ctx, UpdateReimbursementParams{
+		FundID: f.fundID, ReimbursementID: claim.ID,
+		WaivedOn: &waivedOn, SetWaivedOn: true,
+	})
+	if err != nil {
+		t.Fatalf("UpdateReimbursement() waiving = %v, want no error", err)
+	}
+	if waived.WaivedOn == nil || *waived.WaivedOn != waivedOn {
+		t.Fatalf("WaivedOn = %v, want %q", waived.WaivedOn, waivedOn)
+	}
+
+	// A waived claim is no longer owed, so it leaves both outstanding views.
+	outstanding, err := q.ListOutstandingReimbursementsByFund(ctx, f.fundID)
+	if err != nil {
+		t.Fatalf("ListOutstandingReimbursementsByFund() = %v, want no error", err)
+	}
+	if len(outstanding) != 0 {
+		t.Errorf("outstanding claims = %d, want 0 - a waived claim is not owed", len(outstanding))
+	}
+	total, err := q.OutstandingReimbursementTotal(ctx, f.fundID)
+	if err != nil {
+		t.Fatalf("OutstandingReimbursementTotal() = %v, want no error", err)
+	}
+	if total != 0 {
+		t.Errorf("outstanding total = %d, want 0", total)
+	}
+
+	// It is still history: the unfiltered list keeps it.
+	all, err := q.ListReimbursementsByFund(ctx, f.fundID)
+	if err != nil {
+		t.Fatalf("ListReimbursementsByFund() = %v, want no error", err)
+	}
+	if len(all) != 1 {
+		t.Errorf("all claims = %d, want 1 - waiving is not deleting", len(all))
+	}
+
+	unwaived, err := l.UpdateReimbursement(ctx, UpdateReimbursementParams{
+		FundID: f.fundID, ReimbursementID: claim.ID, SetWaivedOn: true,
+	})
+	if err != nil {
+		t.Fatalf("UpdateReimbursement() un-waiving = %v, want no error", err)
+	}
+	if unwaived.WaivedOn != nil {
+		t.Errorf("WaivedOn = %v, want nil after un-waiving", unwaived.WaivedOn)
+	}
+
+	outstanding, err = q.ListOutstandingReimbursementsByFund(ctx, f.fundID)
+	if err != nil {
+		t.Fatalf("ListOutstandingReimbursementsByFund() = %v, want no error", err)
+	}
+	if len(outstanding) != 1 {
+		t.Errorf("outstanding claims after un-waiving = %d, want 1", len(outstanding))
+	}
+}
+
+// A waived claim still cannot be settled - the two rules compose, and
+// waiving through this method reaches the same refusal a claim created
+// waived already got.
+func TestSettleRefusesAClaimWaivedThroughUpdate(t *testing.T) {
+	l := newTestLedger(t)
+	f := newFixture(t, l)
+	ctx := context.Background()
+	q := store.New(l.db)
+
+	claim := createReimbursement(t, q, f, 75_000, "2026-08-01", nil)
+
+	waivedOn := "2026-08-05"
+	if _, err := l.UpdateReimbursement(ctx, UpdateReimbursementParams{
+		FundID: f.fundID, ReimbursementID: claim.ID, WaivedOn: &waivedOn, SetWaivedOn: true,
+	}); err != nil {
+		t.Fatalf("UpdateReimbursement() = %v, want no error", err)
+	}
+
+	_, err := l.SettleReimbursement(ctx, SettleReimbursementParams{
+		FundID: f.fundID, ReimbursementID: claim.ID, AccountID: f.cashID, OccurredOn: "2026-08-12",
+	})
+	if !errors.Is(err, ErrReimbursementWaived) {
+		t.Fatalf("SettleReimbursement() = %v, want ErrReimbursementWaived", err)
+	}
+}
+
+// Settlement is the boundary. Once a payout row copies the claim's amount
+// and purpose onto an immutable transaction, correcting or deleting the
+// claim would let the two disagree while both look authoritative.
+func TestUpdateAndDeleteRefuseASettledClaim(t *testing.T) {
+	l := newTestLedger(t)
+	f := newFixture(t, l)
+	ctx := context.Background()
+	q := store.New(l.db)
+
+	claim := createReimbursement(t, q, f, 75_000, "2026-08-01", nil)
+	if _, err := l.SettleReimbursement(ctx, SettleReimbursementParams{
+		FundID: f.fundID, ReimbursementID: claim.ID, AccountID: f.cashID, OccurredOn: "2026-08-12",
+	}); err != nil {
+		t.Fatalf("SettleReimbursement() = %v, want no error", err)
+	}
+
+	amount := money.Amount(90_000)
+	if _, err := l.UpdateReimbursement(ctx, UpdateReimbursementParams{
+		FundID: f.fundID, ReimbursementID: claim.ID, Amount: &amount,
+	}); !errors.Is(err, ErrReimbursementAlreadySettled) {
+		t.Errorf("UpdateReimbursement() on a settled claim = %v, want ErrReimbursementAlreadySettled", err)
+	}
+
+	if err := l.DeleteReimbursement(ctx, f.fundID, claim.ID); !errors.Is(err, ErrReimbursementAlreadySettled) {
+		t.Errorf("DeleteReimbursement() on a settled claim = %v, want ErrReimbursementAlreadySettled", err)
+	}
+
+	// And nothing was written: the claim still reads as it did.
+	after, err := q.GetReimbursement(ctx, claim.ID)
+	if err != nil {
+		t.Fatalf("GetReimbursement() = %v, want no error", err)
+	}
+	if after.Amount != 75_000 {
+		t.Errorf("Amount = %d, want the original 75000 - the refusal must not have written", after.Amount)
+	}
+}
+
+// Waiving a settled claim is refused for the same reason: it is neither
+// owed nor forgiven, it is paid.
+func TestUpdateRefusesToWaiveASettledClaim(t *testing.T) {
+	l := newTestLedger(t)
+	f := newFixture(t, l)
+	ctx := context.Background()
+	q := store.New(l.db)
+
+	claim := createReimbursement(t, q, f, 75_000, "2026-08-01", nil)
+	if _, err := l.SettleReimbursement(ctx, SettleReimbursementParams{
+		FundID: f.fundID, ReimbursementID: claim.ID, AccountID: f.cashID, OccurredOn: "2026-08-12",
+	}); err != nil {
+		t.Fatalf("SettleReimbursement() = %v, want no error", err)
+	}
+
+	waivedOn := "2026-08-20"
+	_, err := l.UpdateReimbursement(ctx, UpdateReimbursementParams{
+		FundID: f.fundID, ReimbursementID: claim.ID, WaivedOn: &waivedOn, SetWaivedOn: true,
+	})
+	if !errors.Is(err, ErrReimbursementAlreadySettled) {
+		t.Fatalf("UpdateReimbursement() waiving a settled claim = %v, want ErrReimbursementAlreadySettled", err)
+	}
+}
+
+func TestDeleteReimbursementRemovesAnUnsettledClaim(t *testing.T) {
+	l := newTestLedger(t)
+	f := newFixture(t, l)
+	ctx := context.Background()
+	q := store.New(l.db)
+
+	claim := createReimbursement(t, q, f, 75_000, "2026-08-01", nil)
+
+	if err := l.DeleteReimbursement(ctx, f.fundID, claim.ID); err != nil {
+		t.Fatalf("DeleteReimbursement() = %v, want no error", err)
+	}
+
+	all, err := q.ListReimbursementsByFund(ctx, f.fundID)
+	if err != nil {
+		t.Fatalf("ListReimbursementsByFund() = %v, want no error", err)
+	}
+	if len(all) != 0 {
+		t.Errorf("claims after delete = %d, want 0", len(all))
+	}
+}
+
+// Argument-shape validation is this method's own (ADR-027), so the message
+// names the field rather than leaving SQLite's CHECK to say "constraint".
+func TestUpdateReimbursementRejectsBadArguments(t *testing.T) {
+	l := newTestLedger(t)
+	f := newFixture(t, l)
+	ctx := context.Background()
+	q := store.New(l.db)
+
+	claim := createReimbursement(t, q, f, 75_000, "2026-08-01", nil)
+
+	zero := money.Amount(0)
+	badDate := "2026-02-30"
+	for _, tc := range []struct {
+		name string
+		p    UpdateReimbursementParams
+	}{
+		{"non-positive amount", UpdateReimbursementParams{Amount: &zero}},
+		{"malformed incurred_on", UpdateReimbursementParams{IncurredOn: &badDate}},
+		{"malformed waived_on", UpdateReimbursementParams{WaivedOn: &badDate, SetWaivedOn: true}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			p := tc.p
+			p.FundID, p.ReimbursementID = f.fundID, claim.ID
+			if _, err := l.UpdateReimbursement(ctx, p); !errors.Is(err, ErrInvalidArgument) {
+				t.Errorf("UpdateReimbursement() = %v, want ErrInvalidArgument", err)
 			}
 		})
 	}

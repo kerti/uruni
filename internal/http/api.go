@@ -93,8 +93,14 @@ func (a *api) routes(r chi.Router) {
 	// recorded balance still matches the wallet while a claim is
 	// outstanding. There is deliberately no waive route: PRD §7.4 never
 	// asks for one.
+	// PATCH is both the correction and the waive (#103): waiving sets one
+	// column, so pairing it with the ordinary correction is what makes
+	// un-waiving free, and keeps the block the same POST/GET/PATCH/DELETE
+	// shape as members. Both are refused once the claim is settled.
 	r.Post("/reimbursements", a.createReimbursement)
 	r.Get("/reimbursements", a.listReimbursements)
+	r.Patch("/reimbursements/{id}", a.updateReimbursement)
+	r.Delete("/reimbursements/{id}", a.deleteReimbursement)
 	r.Post("/reimbursements/{id}/settle", a.settleReimbursement)
 
 	r.Post("/dues-payments", a.createDuesPayment)

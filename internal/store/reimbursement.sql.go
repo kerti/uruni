@@ -52,6 +52,20 @@ func (q *Queries) CreateReimbursement(ctx context.Context, arg CreateReimburseme
 	return i, err
 }
 
+const deleteReimbursement = `-- name: DeleteReimbursement :exec
+DELETE FROM reimbursement
+WHERE id = ?
+`
+
+// DeleteReimbursement removes a claim that should never have existed. It
+// leans on receipt's composite foreign key to refuse a claim that still has
+// a photo attached, the same way DeleteMember leans on its referencing
+// tables; the settled check is internal/ledger's, above.
+func (q *Queries) DeleteReimbursement(ctx context.Context, id int64) error {
+	_, err := q.db.ExecContext(ctx, deleteReimbursement, id)
+	return err
+}
+
 const getReimbursement = `-- name: GetReimbursement :one
 SELECT id, fund_id, member_id, purpose_id, amount, incurred_on, waived_on, note, created_at
 FROM reimbursement
@@ -182,4 +196,66 @@ func (q *Queries) OutstandingReimbursementTotal(ctx context.Context, fundID int6
 	var total_amount int64
 	err := row.Scan(&total_amount)
 	return total_amount, err
+}
+
+const updateReimbursement = `-- name: UpdateReimbursement :one
+UPDATE reimbursement
+SET member_id   = COALESCE(?1, member_id),
+    purpose_id  = COALESCE(?2, purpose_id),
+    amount      = COALESCE(?3, amount),
+    incurred_on = COALESCE(?4, incurred_on),
+    note        = CASE WHEN CAST(?5      AS INTEGER) = 1 THEN ?6      ELSE note      END,
+    waived_on   = CASE WHEN CAST(?7 AS INTEGER) = 1 THEN ?8 ELSE waived_on END
+WHERE id = ?9
+RETURNING id, fund_id, member_id, purpose_id, amount, incurred_on, waived_on, note, created_at
+`
+
+type UpdateReimbursementParams struct {
+	MemberID    *int64
+	PurposeID   *int64
+	Amount      *int64
+	IncurredOn  *string
+	SetNote     int64
+	Note        *string
+	SetWaivedOn int64
+	WaivedOn    *string
+	ID          int64
+}
+
+// UpdateReimbursement corrects a claim that has not been settled yet - a
+// wrong amount, the wrong member, or the day it was actually spent. The
+// claim is off the ledger until it is settled (ADR-024), so this is an
+// UPDATE and not an adjusting entry; the settled check that keeps it that
+// way lives in internal/ledger, because it reads another table.
+//
+// waived_on rides on the same statement rather than a route of its own:
+// waiving is one column, and pairing it with the ordinary correction is
+// what makes un-waiving free. Same COALESCE/set_* split as UpdateMember -
+// the four NOT NULL columns cannot mean "clear it", the two nullable ones
+// can, and only a set_* flag can tell that from "leave alone".
+func (q *Queries) UpdateReimbursement(ctx context.Context, arg UpdateReimbursementParams) (Reimbursement, error) {
+	row := q.db.QueryRowContext(ctx, updateReimbursement,
+		arg.MemberID,
+		arg.PurposeID,
+		arg.Amount,
+		arg.IncurredOn,
+		arg.SetNote,
+		arg.Note,
+		arg.SetWaivedOn,
+		arg.WaivedOn,
+		arg.ID,
+	)
+	var i Reimbursement
+	err := row.Scan(
+		&i.ID,
+		&i.FundID,
+		&i.MemberID,
+		&i.PurposeID,
+		&i.Amount,
+		&i.IncurredOn,
+		&i.WaivedOn,
+		&i.Note,
+		&i.CreatedAt,
+	)
+	return i, err
 }

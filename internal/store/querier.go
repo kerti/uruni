@@ -37,6 +37,11 @@ type Querier interface {
 	// DeleteMember leans on the composite foreign keys from "transaction" and
 	// reimbursement to refuse it once a real row references the member.
 	DeleteMember(ctx context.Context, id int64) error
+	// DeleteReimbursement removes a claim that should never have existed. It
+	// leans on receipt's composite foreign key to refuse a claim that still has
+	// a photo attached, the same way DeleteMember leans on its referencing
+	// tables; the settled check is internal/ledger's, above.
+	DeleteReimbursement(ctx context.Context, id int64) error
 	// The roster query behind "who has paid / partially / not yet" for one
 	// dues_period, across every member in one pass rather than one query per
 	// member.
@@ -179,6 +184,18 @@ type Querier interface {
 	// null argument is ambiguous between "leave alone" and "clear it" - the CASE
 	// substitutes the new value, NULL included, only when the caller sent it.
 	UpdateMember(ctx context.Context, arg UpdateMemberParams) (Member, error)
+	// UpdateReimbursement corrects a claim that has not been settled yet - a
+	// wrong amount, the wrong member, or the day it was actually spent. The
+	// claim is off the ledger until it is settled (ADR-024), so this is an
+	// UPDATE and not an adjusting entry; the settled check that keeps it that
+	// way lives in internal/ledger, because it reads another table.
+	//
+	// waived_on rides on the same statement rather than a route of its own:
+	// waiving is one column, and pairing it with the ordinary correction is
+	// what makes un-waiving free. Same COALESCE/set_* split as UpdateMember -
+	// the four NOT NULL columns cannot mean "clear it", the two nullable ones
+	// can, and only a set_* flag can tell that from "leave alone".
+	UpdateReimbursement(ctx context.Context, arg UpdateReimbursementParams) (Reimbursement, error)
 }
 
 var _ Querier = (*Queries)(nil)

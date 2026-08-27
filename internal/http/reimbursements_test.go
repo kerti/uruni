@@ -465,3 +465,306 @@ func decodeReimbursements(t *testing.T, rec *httptest.ResponseRecorder) []reimbu
 	}
 	return claims
 }
+
+func patchReimbursement(t *testing.T, r http.Handler, id int64, body string) *httptest.ResponseRecorder {
+	t.Helper()
+	rec := httptest.NewRecorder()
+	path := fmt.Sprintf("/api/reimbursements/%d", id)
+	r.ServeHTTP(rec, httptest.NewRequest(http.MethodPatch, path, strings.NewReader(body)))
+	return rec
+}
+
+func deleteReimbursementReq(t *testing.T, r http.Handler, id int64) *httptest.ResponseRecorder {
+	t.Helper()
+	rec := httptest.NewRecorder()
+	path := fmt.Sprintf("/api/reimbursements/%d", id)
+	r.ServeHTTP(rec, httptest.NewRequest(http.MethodDelete, path, nil))
+	return rec
+}
+
+// claimFor creates one unsettled claim and returns it.
+func claimFor(t *testing.T, r http.Handler, setup setupResponse, memberID int64) reimbursementResponse {
+	t.Helper()
+	rec := postReimbursement(t, r, reimbursementRequest{
+		MemberID: memberID, PurposeID: setup.MainPurposeID,
+		Amount: 80_000, IncurredOn: "2026-08-10",
+	})
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("POST /api/reimbursements = %d, want %d (body: %s)", rec.Code, http.StatusCreated, rec.Body.String())
+	}
+	var claim reimbursementResponse
+	if err := json.NewDecoder(rec.Body).Decode(&claim); err != nil {
+		t.Fatalf("decoding reimbursement response: %v", err)
+	}
+	return claim
+}
+
+func decodeReimbursement(t *testing.T, rec *httptest.ResponseRecorder) reimbursementResponse {
+	t.Helper()
+	var claim reimbursementResponse
+	if err := json.NewDecoder(rec.Body).Decode(&claim); err != nil {
+		t.Fatalf("decoding reimbursement response: %v", err)
+	}
+	return claim
+}
+
+// TestPatchReimbursementCorrectsAnUnsettledClaim is the correction half of
+// #103: the wrong amount, the wrong member and a note, fixed in place
+// because the claim is off the ledger until it is settled.
+func TestPatchReimbursementCorrectsAnUnsettledClaim(t *testing.T) {
+	r := testRouter(t)
+	setup := setUpFundForTransactions(t, r)
+	memberID := memberFor(t, r, "Jane")
+	otherID := memberFor(t, r, "Sam")
+	claim := claimFor(t, r, setup, memberID)
+
+	rec := patchReimbursement(t, r, claim.ID, `{"amount":95000,"member_id":`+fmt.Sprint(otherID)+`,"note":"it was Sam who paid"}`)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("PATCH /api/reimbursements/{id} = %d, want %d (body: %s)", rec.Code, http.StatusOK, rec.Body.String())
+	}
+	updated := decodeReimbursement(t, rec)
+	if updated.Amount != 95_000 {
+		t.Errorf("amount = %d, want 95000", updated.Amount)
+	}
+	if updated.MemberID != otherID {
+		t.Errorf("member_id = %d, want %d", updated.MemberID, otherID)
+	}
+	if updated.Note == nil || *updated.Note != "it was Sam who paid" {
+		t.Errorf("note = %v, want the corrected note", updated.Note)
+	}
+	// Absent keys are "leave alone", not "clear it".
+	if updated.IncurredOn != claim.IncurredOn {
+		t.Errorf("incurred_on = %q, want the untouched %q", updated.IncurredOn, claim.IncurredOn)
+	}
+	if updated.WaivedOn != nil {
+		t.Errorf("waived_on = %v, want nil - it was never sent", updated.WaivedOn)
+	}
+}
+
+// TestPatchReimbursementWaivesAndUnwaives is the waive half: one field, so
+// the member who says "saya yang tanggung" and then changes their mind is
+// not stuck.
+func TestPatchReimbursementWaivesAndUnwaives(t *testing.T) {
+	r := testRouter(t)
+	setup := setUpFundForTransactions(t, r)
+	memberID := memberFor(t, r, "Jane")
+	claim := claimFor(t, r, setup, memberID)
+
+	rec := patchReimbursement(t, r, claim.ID, `{"waived_on":"2026-08-15"}`)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("waive = %d, want %d (body: %s)", rec.Code, http.StatusOK, rec.Body.String())
+	}
+	waived := decodeReimbursement(t, rec)
+	if waived.WaivedOn == nil || *waived.WaivedOn != "2026-08-15" {
+		t.Fatalf("waived_on = %v, want %q", waived.WaivedOn, "2026-08-15")
+	}
+
+	if got := decodeReimbursements(t, getReimbursements(t, r, "?outstanding=true")); len(got) != 0 {
+		t.Errorf("outstanding after waiving = %d claims, want 0", len(got))
+	}
+	if got := decodeReimbursements(t, getReimbursements(t, r, "")); len(got) != 1 {
+		t.Errorf("all claims after waiving = %d, want 1 - waiving is not deleting", len(got))
+	}
+
+	rec = patchReimbursement(t, r, claim.ID, `{"waived_on":null}`)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("un-waive = %d, want %d (body: %s)", rec.Code, http.StatusOK, rec.Body.String())
+	}
+	if unwaived := decodeReimbursement(t, rec); unwaived.WaivedOn != nil {
+		t.Errorf("waived_on = %v, want nil after un-waiving", unwaived.WaivedOn)
+	}
+	if got := decodeReimbursements(t, getReimbursements(t, r, "?outstanding=true")); len(got) != 1 {
+		t.Errorf("outstanding after un-waiving = %d claims, want 1", len(got))
+	}
+}
+
+// TestSettleRefusesAClaimWaivedOverHTTP closes the loop between the two
+// routes: waiving through PATCH reaches the same 409 settling has always
+// given a claim created waived.
+func TestSettleRefusesAClaimWaivedOverHTTP(t *testing.T) {
+	r := testRouter(t)
+	setup := setUpFundForTransactions(t, r)
+	memberID := memberFor(t, r, "Jane")
+	claim := claimFor(t, r, setup, memberID)
+
+	if rec := patchReimbursement(t, r, claim.ID, `{"waived_on":"2026-08-15"}`); rec.Code != http.StatusOK {
+		t.Fatalf("waive = %d, want %d (body: %s)", rec.Code, http.StatusOK, rec.Body.String())
+	}
+
+	rec := postSettlement(t, r, claim.ID, settleReimbursementRequest{
+		AccountID: setup.CashAccountID, OccurredOn: "2026-08-20",
+	})
+	if rec.Code != http.StatusConflict {
+		t.Fatalf("settling a waived claim = %d, want %d (body: %s)", rec.Code, http.StatusConflict, rec.Body.String())
+	}
+	if got := decodeError(t, rec); got.Code != "reimbursement_waived" {
+		t.Errorf("error code = %q, want %q", got.Code, "reimbursement_waived")
+	}
+}
+
+func TestDeleteReimbursementRemovesAnUnsettledClaim(t *testing.T) {
+	r := testRouter(t)
+	setup := setUpFundForTransactions(t, r)
+	memberID := memberFor(t, r, "Jane")
+	claim := claimFor(t, r, setup, memberID)
+
+	rec := deleteReimbursementReq(t, r, claim.ID)
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("DELETE /api/reimbursements/{id} = %d, want %d (body: %s)", rec.Code, http.StatusNoContent, rec.Body.String())
+	}
+	if got := decodeReimbursements(t, getReimbursements(t, r, "")); len(got) != 0 {
+		t.Errorf("claims after delete = %d, want 0", len(got))
+	}
+}
+
+// TestPatchAndDeleteRefuseASettledClaim is the boundary at the route: once
+// a payout references the claim, both are its named 409.
+func TestPatchAndDeleteRefuseASettledClaim(t *testing.T) {
+	r := testRouter(t)
+	setup := setUpFundForTransactions(t, r)
+	memberID := memberFor(t, r, "Jane")
+	claim := claimFor(t, r, setup, memberID)
+
+	if rec := postSettlement(t, r, claim.ID, settleReimbursementRequest{
+		AccountID: setup.CashAccountID, OccurredOn: "2026-08-20",
+	}); rec.Code != http.StatusCreated {
+		t.Fatalf("settle = %d, want %d (body: %s)", rec.Code, http.StatusCreated, rec.Body.String())
+	}
+
+	for _, tc := range []struct {
+		name string
+		rec  func() *httptest.ResponseRecorder
+	}{
+		{"patch", func() *httptest.ResponseRecorder { return patchReimbursement(t, r, claim.ID, `{"amount":95000}`) }},
+		{"waive", func() *httptest.ResponseRecorder {
+			return patchReimbursement(t, r, claim.ID, `{"waived_on":"2026-08-25"}`)
+		}},
+		{"delete", func() *httptest.ResponseRecorder { return deleteReimbursementReq(t, r, claim.ID) }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			rec := tc.rec()
+			if rec.Code != http.StatusConflict {
+				t.Fatalf("%s on a settled claim = %d, want %d (body: %s)", tc.name, rec.Code, http.StatusConflict, rec.Body.String())
+			}
+			if got := decodeError(t, rec); got.Code != "reimbursement_already_settled" {
+				t.Errorf("error code = %q, want %q", got.Code, "reimbursement_already_settled")
+			}
+		})
+	}
+}
+
+// TestPatchReimbursementUnknownMemberIs400 is the case that made
+// mapLedgerError classify SQLite errors at all: the id comes from the
+// request body, so a foreign-key violation is the caller's typo, not a
+// server fault, and answering 500 would blame the wrong party.
+func TestPatchReimbursementUnknownMemberIs400(t *testing.T) {
+	r := testRouter(t)
+	setup := setUpFundForTransactions(t, r)
+	memberID := memberFor(t, r, "Jane")
+	claim := claimFor(t, r, setup, memberID)
+
+	rec := patchReimbursement(t, r, claim.ID, `{"member_id":9999}`)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("PATCH with an unknown member_id = %d, want %d (body: %s)", rec.Code, http.StatusBadRequest, rec.Body.String())
+	}
+	if got := decodeError(t, rec); got.Code != "invalid_argument" {
+		t.Errorf("error code = %q, want %q", got.Code, "invalid_argument")
+	}
+}
+
+func TestPatchReimbursementRejectsBadArguments(t *testing.T) {
+	for _, tc := range []struct{ name, body string }{
+		{"non-positive amount", `{"amount":0}`},
+		{"malformed incurred_on", `{"incurred_on":"2026-02-30"}`},
+		{"malformed waived_on", `{"waived_on":"not-a-date"}`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			r := testRouter(t)
+			setup := setUpFundForTransactions(t, r)
+			memberID := memberFor(t, r, "Jane")
+			claim := claimFor(t, r, setup, memberID)
+
+			rec := patchReimbursement(t, r, claim.ID, tc.body)
+			if rec.Code != http.StatusBadRequest {
+				t.Fatalf("PATCH %s = %d, want %d (body: %s)", tc.body, rec.Code, http.StatusBadRequest, rec.Body.String())
+			}
+			if got := decodeError(t, rec); got.Code != "invalid_argument" {
+				t.Errorf("error code = %q, want %q", got.Code, "invalid_argument")
+			}
+		})
+	}
+}
+
+func TestPatchAndDeleteOnAnUnknownClaimAre404(t *testing.T) {
+	r := testRouter(t)
+	setUpFundForTransactions(t, r)
+
+	if rec := patchReimbursement(t, r, 9_999, `{"amount":95000}`); rec.Code != http.StatusNotFound {
+		t.Errorf("PATCH on an unknown claim = %d, want %d (body: %s)", rec.Code, http.StatusNotFound, rec.Body.String())
+	}
+	if rec := deleteReimbursementReq(t, r, 9_999); rec.Code != http.StatusNotFound {
+		t.Errorf("DELETE on an unknown claim = %d, want %d (body: %s)", rec.Code, http.StatusNotFound, rec.Body.String())
+	}
+}
+
+func TestPatchReimbursementRejectsMalformedJSONAndIDs(t *testing.T) {
+	r := testRouter(t)
+	setUpFundForTransactions(t, r)
+
+	rec := patchReimbursement(t, r, 1, "{oops")
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("PATCH with malformed JSON = %d, want %d", rec.Code, http.StatusBadRequest)
+	}
+	if got := decodeError(t, rec); got.Code != "invalid_json" {
+		t.Errorf("error code = %q, want %q", got.Code, "invalid_json")
+	}
+
+	for _, method := range []string{http.MethodPatch, http.MethodDelete} {
+		rec := httptest.NewRecorder()
+		r.ServeHTTP(rec, httptest.NewRequest(method, "/api/reimbursements/abc", strings.NewReader(`{}`)))
+		if rec.Code != http.StatusBadRequest {
+			t.Errorf("%s /api/reimbursements/abc = %d, want %d", method, rec.Code, http.StatusBadRequest)
+		}
+	}
+}
+
+func TestPatchAndDeleteRequireAFund(t *testing.T) {
+	if rec := patchReimbursement(t, testRouter(t), 1, `{"amount":95000}`); rec.Code != http.StatusNotFound {
+		t.Errorf("PATCH before setup = %d, want %d", rec.Code, http.StatusNotFound)
+	}
+	if rec := deleteReimbursementReq(t, testRouter(t), 1); rec.Code != http.StatusNotFound {
+		t.Errorf("DELETE before setup = %d, want %d", rec.Code, http.StatusNotFound)
+	}
+}
+
+// TestDeleteReimbursementWithAReceiptIs409 answers #103's open question:
+// a claim that still has a photo attached is refused rather than taking the
+// receipt down with it, the same answer deleting a member with posted
+// transactions gives. Receipts have no route yet (#73), so the row is
+// written through store.Queries - the path an import would use.
+func TestDeleteReimbursementWithAReceiptIs409(t *testing.T) {
+	sqlDB := testStoreDB(t)
+	q := store.New(sqlDB)
+	r := New(testAssets(), testBuild, ledger.New(sqlDB), q, testLogger())
+
+	setup := setUpFundForTransactions(t, r)
+	memberID := memberFor(t, r, "Jane")
+	claim := claimFor(t, r, setup, memberID)
+
+	if _, err := q.CreateReceipt(context.Background(), store.CreateReceiptParams{
+		FundID:          setup.Fund.ID,
+		ReimbursementID: &claim.ID,
+		Path:            "receipts/1.jpg",
+		UploadedAt:      time.Now().Unix(),
+	}); err != nil {
+		t.Fatalf("CreateReceipt() = %v, want no error", err)
+	}
+
+	rec := deleteReimbursementReq(t, r, claim.ID)
+	if rec.Code != http.StatusConflict {
+		t.Fatalf("deleting a claim with a receipt = %d, want %d (body: %s)", rec.Code, http.StatusConflict, rec.Body.String())
+	}
+	if got := decodeError(t, rec); got.Code != "referenced_by_other_records" {
+		t.Errorf("error code = %q, want %q", got.Code, "referenced_by_other_records")
+	}
+}
