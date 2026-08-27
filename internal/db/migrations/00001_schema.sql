@@ -9,10 +9,32 @@
 -- reconciliation_line) plus the incidental envelope. That is every PRD §6
 -- entity; the file is complete.
 --
+-- user and session (M5 Auth, ADR-030) are not PRD §6 entities: they are the
+-- treasurer's login, the only rows in this schema not scoped to a fund
+-- (ADR-030 decision 2) - no fund_id, no membership table.
+--
 -- Conventions below follow docs/ADR/024-schema-conventions.md; see it for the
 -- reasoning, not restated here.
 
 -- +goose Up
+
+CREATE TABLE "user" (                     -- the treasurer's login; the only table not scoped to a fund (ADR-030)
+  id            INTEGER PRIMARY KEY,
+  email         TEXT    NOT NULL UNIQUE CHECK (length(trim(email)) > 0),
+  password_hash TEXT    NOT NULL CHECK (length(trim(password_hash)) > 0),
+  created_at    INTEGER NOT NULL
+) STRICT;
+
+CREATE TABLE session (                    -- a logged-in session; token is the cookie value
+  -- No fund_id (ADR-030): a session proves the treasurer, not a fund. Rows are
+  -- swept lazily as a side effect of session writes (#113), never a background
+  -- ticker (ADR-013's scope).
+  token      TEXT    PRIMARY KEY CHECK (length(token) > 0),
+  data       BLOB    NOT NULL,
+  expires_at INTEGER NOT NULL
+) STRICT;
+
+CREATE INDEX session_by_expiry ON session(expires_at);
 
 CREATE TABLE fund (
   id          INTEGER PRIMARY KEY,
@@ -350,3 +372,6 @@ DROP INDEX purpose_single_main;
 DROP TABLE purpose;
 DROP TABLE account;
 DROP TABLE fund;
+DROP INDEX session_by_expiry;
+DROP TABLE session;
+DROP TABLE "user";
