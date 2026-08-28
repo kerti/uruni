@@ -3,6 +3,21 @@ INSERT INTO session (token, data, expires_at)
 VALUES (?, ?, ?)
 RETURNING token, data, expires_at;
 
+-- UpsertSession is what a session store commits through: one atomic
+-- statement, because a commit rewrites a token that may or may not already
+-- exist. A delete-then-insert pair cannot stand in for it - ADR-004's
+-- SetMaxOpenConns(1) serialises the two statements but does not join them,
+-- so two concurrent requests carrying the same cookie interleave as
+-- DELETE / DELETE / INSERT / INSERT and the second INSERT trips
+-- session.token's primary key. ON CONFLICT makes the rewrite one statement,
+-- which is the only thing that closes that window.
+-- name: UpsertSession :one
+INSERT INTO session (token, data, expires_at)
+VALUES (?, ?, ?)
+ON CONFLICT (token) DO UPDATE
+SET data = excluded.data, expires_at = excluded.expires_at
+RETURNING token, data, expires_at;
+
 -- GetSession only returns a row still inside its idle window; a session past
 -- expires_at is functionally gone even before DeleteExpiredSessions sweeps it.
 -- name: GetSession :one

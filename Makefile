@@ -112,11 +112,22 @@ help:
 # Everything here is deterministic. What a Makefile *cannot* do is install or
 # authenticate Claude Code itself, or grant it permissions — `make doctor`
 # reports on those instead of pretending to fix them.
+#
+# The generated .env rewrites two lines of .env.example, because that file is
+# the self-host template and its values are production values. The session
+# secret is generated. URUNI_BASE_URL is rewritten to a loopback http origin
+# because the cookie's Secure flag is derived from its scheme (internal/http/
+# session.go): shipping the https:// template value into local dev sets a
+# Secure cookie on a plain-HTTP origin, which the browser then declines to
+# keep on any dev origin that is not localhost — testing on a phone over the
+# LAN being the one that matters. Only the scheme is read for that, so the
+# port here need not match `make web-dev`'s 5173.
 setup: hooks-install claude-install web-install
 	@if [ ! -f .env ]; then \
-	  sed "s|^URUNI_SESSION_SECRET=.*|URUNI_SESSION_SECRET=$$(openssl rand -base64 48 | tr -d '\n')|" \
+	  sed -e "s|^URUNI_SESSION_SECRET=.*|URUNI_SESSION_SECRET=$$(openssl rand -base64 48 | tr -d '\n')|" \
+	      -e "s|^URUNI_BASE_URL=.*|URUNI_BASE_URL=http://localhost:8080|" \
 	    .env.example > .env; \
-	  echo "setup: created .env from .env.example (session secret generated)"; \
+	  echo "setup: created .env from .env.example (session secret generated, base URL set to loopback)"; \
 	fi
 	@echo "✓ setup complete — next: make migrate-up && make run"
 

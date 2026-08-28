@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/kerti/uruni"
+	"github.com/kerti/uruni/internal/auth"
 	"github.com/kerti/uruni/internal/config"
 	"github.com/kerti/uruni/internal/db"
 	uruniHTTP "github.com/kerti/uruni/internal/http"
@@ -129,10 +130,12 @@ func serve() error {
 	// accessor to ADR-027's already-implemented ledger boundary.
 	q := store.New(sqlDB)
 	l := ledger.New(sqlDB)
+	au := auth.New(sqlDB)
 
 	srv := &http.Server{
-		Addr:    fmt.Sprintf(":%d", cfg.Port),
-		Handler: uruniHTTP.New(assets, uruniHTTP.Build{Version: version, Commit: buildCommit()}, l, q, logger),
+		Addr: fmt.Sprintf(":%d", cfg.Port),
+		Handler: uruniHTTP.New(assets, uruniHTTP.Build{Version: version, Commit: buildCommit()}, l, q, logger,
+			au, cfg.BaseURL),
 		// Set explicitly: a server with no header timeout can be held open by a
 		// slow client indefinitely.
 		ReadHeaderTimeout: 10 * time.Second,

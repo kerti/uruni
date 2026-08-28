@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/kerti/uruni/internal/auth"
 	"github.com/kerti/uruni/internal/ledger"
 	"github.com/kerti/uruni/internal/store"
 )
@@ -193,7 +194,7 @@ func TestPostSettlementTwiceReturnsItsNamed409(t *testing.T) {
 func TestPostSettlementOnAWaivedClaimReturnsItsNamed409(t *testing.T) {
 	sqlDB := testStoreDB(t)
 	q := store.New(sqlDB)
-	r := New(testAssets(), testBuild, ledger.New(sqlDB), q, testLogger())
+	r := New(testAssets(), testBuild, ledger.New(sqlDB), q, testLogger(), auth.New(sqlDB), "")
 
 	setup := setUpFundForTransactions(t, r)
 	memberID := memberFor(t, r, "Jane")
@@ -745,7 +746,7 @@ func TestPatchAndDeleteRequireAFund(t *testing.T) {
 func TestDeleteReimbursementWithAReceiptIs409(t *testing.T) {
 	sqlDB := testStoreDB(t)
 	q := store.New(sqlDB)
-	r := New(testAssets(), testBuild, ledger.New(sqlDB), q, testLogger())
+	r := New(testAssets(), testBuild, ledger.New(sqlDB), q, testLogger(), auth.New(sqlDB), "")
 
 	setup := setUpFundForTransactions(t, r)
 	memberID := memberFor(t, r, "Jane")

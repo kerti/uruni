@@ -93,3 +93,32 @@ func (q *Queries) TouchSession(ctx context.Context, arg TouchSessionParams) (Ses
 	err := row.Scan(&i.Token, &i.Data, &i.ExpiresAt)
 	return i, err
 }
+
+const upsertSession = `-- name: UpsertSession :one
+INSERT INTO session (token, data, expires_at)
+VALUES (?, ?, ?)
+ON CONFLICT (token) DO UPDATE
+SET data = excluded.data, expires_at = excluded.expires_at
+RETURNING token, data, expires_at
+`
+
+type UpsertSessionParams struct {
+	Token     string
+	Data      []byte
+	ExpiresAt int64
+}
+
+// UpsertSession is what a session store commits through: one atomic
+// statement, because a commit rewrites a token that may or may not already
+// exist. A delete-then-insert pair cannot stand in for it - ADR-004's
+// SetMaxOpenConns(1) serialises the two statements but does not join them,
+// so two concurrent requests carrying the same cookie interleave as
+// DELETE / DELETE / INSERT / INSERT and the second INSERT trips
+// session.token's primary key. ON CONFLICT makes the rewrite one statement,
+// which is the only thing that closes that window.
+func (q *Queries) UpsertSession(ctx context.Context, arg UpsertSessionParams) (Session, error) {
+	row := q.db.QueryRowContext(ctx, upsertSession, arg.Token, arg.Data, arg.ExpiresAt)
+	var i Session
+	err := row.Scan(&i.Token, &i.Data, &i.ExpiresAt)
+	return i, err
+}

@@ -10,6 +10,7 @@ import (
 	"modernc.org/sqlite"
 	sqlite3 "modernc.org/sqlite/lib"
 
+	"github.com/kerti/uruni/internal/auth"
 	"github.com/kerti/uruni/internal/ledger"
 	"github.com/kerti/uruni/internal/money"
 )
@@ -101,6 +102,21 @@ func mapLedgerError(w http.ResponseWriter, logger *slog.Logger, err error) {
 			return
 		}
 		logger.Error("unhandled ledger error", "error", err)
+		writeAPIError(w, http.StatusInternalServerError, "internal_error", "Something went wrong.")
+	}
+}
+
+// mapAuthError answers an error returned by an internal/auth call, per that
+// package's own sentinel taxonomy - the same one-switch-per-domain-package
+// shape mapLedgerError already uses.
+func mapAuthError(w http.ResponseWriter, logger *slog.Logger, err error) {
+	switch {
+	case errors.Is(err, auth.ErrInvalidArgument):
+		writeAPIError(w, http.StatusBadRequest, "invalid_argument", "The request contains an invalid argument.")
+	case errors.Is(err, auth.ErrAlreadyRegistered):
+		writeAPIError(w, http.StatusConflict, "already_registered", "An account has already been registered on this instance.")
+	default:
+		logger.Error("unhandled auth error", "error", err)
 		writeAPIError(w, http.StatusInternalServerError, "internal_error", "Something went wrong.")
 	}
 }

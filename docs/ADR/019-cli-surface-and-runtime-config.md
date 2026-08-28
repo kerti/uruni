@@ -10,7 +10,7 @@
 |---|---|---|
 | `serve` | Run the HTTP server — JSON API, SSR public report, embedded SPA. Applies pending migrations on boot. | M1.1 / M1.2 |
 | `migrate up` / `down` / `status` | goose, embedded. `down` rolls back one step. | M1.3, with the store |
-| `create-user <email> <password>` | Create or reset a local account (argon2id). The only way to mint a login. | **M5** — needs a users table and argon2id |
+| `create-user <email> <password>` | Create or reset a local account (argon2id). | **M5** — needs a users table and argon2id |
 | `seed-e2e` | Reset + migrate + seed the Playwright fixture database. Dev-only; refuses to run against a non-throwaway DB. | **when fixtures exist** — needs a domain to seed |
 | `version` | Print the version/commit — the operator's half of the upgrade contract ([ADR-018](./018-release-and-versioning.md)). | M1.2 |
 | `healthcheck` | Probe `/healthz` on the local `PORT`; exit 0 when healthy. Exists **only** because the runtime image is distroless — no shell, no curl — so a container `HEALTHCHECK` has nothing else to call. Added 2026-08-09. | M1.2 |
@@ -24,7 +24,7 @@ Runtime config is environment variables only (no config file, no third-party con
 | `URUNI_DB` | `./uruni.db` | SQLite file path. The only store — there is no `DATABASE_URL` ([ADR-004](./004-database-sqlite-only.md)). |
 | `PORT` | `8080` | Listen port. |
 | `URUNI_BASE_URL` | — | Public origin, used to build the shareable report link. Must be absolute if set. |
-| `URUNI_SESSION_SECRET` | — | Session signing key. Server refuses to start unset or on the placeholder value. |
+| `URUNI_SESSION_SECRET` | — | Session secret. Server refuses to start unset or on the placeholder value. |
 | `SMTP_URL` | — | Optional, for emailed backups ([ADR-012](./012-backup-and-export.md)). Parsed and validated on boot; delivery is M8. |
 | `URUNI_LOG_LEVEL` | `info` | `debug` \| `info` \| `warn` \| `error` ([ADR-022](./022-logging-slog.md)). |
 | `URUNI_LOG_FORMAT` | `text` | `text` \| `json` ([ADR-022](./022-logging-slog.md)). |
@@ -37,4 +37,16 @@ The compose stack does not restate the healthcheck — the image carries its own
 
 `version` reports what the linker stamped: `VERSION` and `COMMIT` build-args → `-X main.version` / `-X main.commit`, filled by `release.yml` from the pushed tag and its SHA. `COMMIT` needs a build-arg of its own because `.dockerignore` keeps `.git` out of the build context, so Go's own VCS stamping has nothing to read; a local `go build` has the reverse (no stamp, but a readable `.git`) and falls back to `debug.ReadBuildInfo`. An unstamped build reports `dev`, which is what it is.
 
-**Consequences.** The Makefile is the executable form of this table, so a rename is a three-file change — binary, Makefile, this ADR — landing in one PR. `seed-e2e` guarding its own blast radius matters because the e2e target deletes a database file. Auto-migrate-on-`serve` keeps self-hosting to `docker compose up` with no migration step for the operator, at the cost of a slower first boot after an upgrade. Requiring `URUNI_SESSION_SECRET` before *any* subcommand runs costs a bare `go run ./cmd/uruni healthcheck` outside `make` (which exports `.env`), and buys the guarantee that no instance ever signs a session with a value published in this repo.
+**Consequences.** The Makefile is the executable form of this table, so a rename is a three-file change — binary, Makefile, this ADR — landing in one PR. `seed-e2e` guarding its own blast radius matters because the e2e target deletes a database file. Auto-migrate-on-`serve` keeps self-hosting to `docker compose up` with no migration step for the operator, at the cost of a slower first boot after an upgrade. Requiring `URUNI_SESSION_SECRET` before *any* subcommand runs costs a bare `go run ./cmd/uruni healthcheck` outside `make` (which exports `.env`), and buys the guarantee that no instance ever derives a session secret from a value published in this repo.
+
+## Amendments
+
+An amendment corrects a statement of fact about the code that has since become false. It never changes a decision, a trade-off or an accepted cost — that is still a superseding ADR. See the [ADR index](./README.md) for the rule.
+
+**2026-08-28 ([#114](https://github.com/kerti/uruni/issues/114))** — the `create-user` row's Purpose column said "Create or reset a local account (argon2id). **The only way to mint a login.**"
+
+`POST /api/register` now mints the login: it is the one-shot bootstrap account ADR-030 decision 2 requires, and it lands before `create-user` does — `create-user` still has nowhere to run until a users table exists, so it stays unimplemented at M5 despite appearing in this table since M1. The row's substance is unchanged: `create-user` is still the described command, still argon2id, still lands whenever a password-reset path is built (plausibly M10 — `ROADMAP.md`'s M9 is the last milestone listed, not necessarily the last before `v1.0.0`). Only the claim that it is the *only* way became false the moment registration shipped, so the sentence is dropped rather than reworded into something this ADR was never about deciding.
+
+**2026-08-28 ([#114](https://github.com/kerti/uruni/issues/114))** — the runtime-config table called `URUNI_SESSION_SECRET` a "**Session signing key**", and the Consequences paragraph said requiring it buys the guarantee that "no instance ever **signs a session** with a value published in this repo."
+
+Sessions turned out not to be signed. The session cookie this milestone shipped carries an opaque `crypto/rand` token and nothing else; every byte of session state lives in the `session` table server-side, so there is no cookie payload for a key to sign. `Config.SessionSecret` is still validated at boot and is, as of this PR, read by no other code. The requirement itself is untouched — an instance still refuses to start on the placeholder — so this is a wording correction, not a change of decision. Whether the variable earns its keep at all is a separate question this amendment does not answer.

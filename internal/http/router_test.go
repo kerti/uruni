@@ -7,6 +7,7 @@ import (
 	"testing"
 	"testing/fstest"
 
+	"github.com/kerti/uruni/internal/auth"
 	"github.com/kerti/uruni/internal/ledger"
 	"github.com/kerti/uruni/internal/store"
 )
@@ -33,7 +34,7 @@ var testBuild = Build{Version: "v9.9.9-test", Commit: "abc1234"}
 func testRouter(t *testing.T) http.Handler {
 	t.Helper()
 	sqlDB := testStoreDB(t)
-	return New(testAssets(), testBuild, ledger.New(sqlDB), store.New(sqlDB), testLogger())
+	return New(testAssets(), testBuild, ledger.New(sqlDB), store.New(sqlDB), testLogger(), auth.New(sqlDB), "")
 }
 
 func get(t *testing.T, path string) *httptest.ResponseRecorder {
@@ -70,7 +71,7 @@ func TestHealthzReportsTheBuildItWasStampedWith(t *testing.T) {
 	untagged := Build{Version: "dev", Commit: "deadbee"}
 	sqlDB := testStoreDB(t)
 	rec := httptest.NewRecorder()
-	New(testAssets(), untagged, ledger.New(sqlDB), store.New(sqlDB), testLogger()).
+	New(testAssets(), untagged, ledger.New(sqlDB), store.New(sqlDB), testLogger(), auth.New(sqlDB), "").
 		ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/healthz", nil))
 
 	var got health
