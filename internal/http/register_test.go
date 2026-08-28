@@ -243,3 +243,82 @@ func TestPostRegisterRejectsAShortPassword(t *testing.T) {
 		t.Errorf("CountUsers() = %d, want 0", count)
 	}
 }
+
+// TestPostRegisterRejectsAMalformedBody: decodeJSON's own refusal, before
+// internal/auth is ever called - a body that is not JSON is a 400 and
+// writes nothing.
+func TestPostRegisterRejectsAMalformedBody(t *testing.T) {
+	r, sqlDB := testRouterAndDB(t)
+
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/api/register", strings.NewReader("{not json")))
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("POST /api/register(malformed body) = %d, want %d (body: %s)", rec.Code, http.StatusBadRequest, rec.Body.String())
+	}
+
+	count, err := store.New(sqlDB).CountUsers(context.Background())
+	if err != nil {
+		t.Fatalf("CountUsers() = %v, want no error", err)
+	}
+	if count != 0 {
+		t.Errorf("CountUsers() = %d, want 0", count)
+	}
+}
+
+// TestPostRegisterFailsClosedWhenTheSessionCannotBeRenewed is the fixation
+// guard's failure arm. RenewToken deletes the token the request arrived
+// with before a new one is minted; if that delete fails, the handler must
+// answer 500 and put nothing in the session, because the alternative -
+// carrying on - would leave the treasurer's identity on a token that
+// existed before she was known, which is exactly what RenewToken is there
+// to prevent.
+//
+// The setup is the only shape that reaches it: a request needs a session
+// that already exists (otherwise there is nothing to delete) while the
+// instance still has no account (otherwise Register refuses first). So a
+// first register makes both, the user row is then removed underneath, and a
+// trigger refuses the delete the second attempt's RenewToken will make.
+func TestPostRegisterFailsClosedWhenTheSessionCannotBeRenewed(t *testing.T) {
+	r, sqlDB := testRouterAndDB(t)
+
+	first := postRegister(t, r, "first@example.org", "correct-horse-battery")
+	if first.Code != http.StatusCreated {
+		t.Fatalf("first POST /api/register = %d, want %d (body: %s)", first.Code, http.StatusCreated, first.Body.String())
+	}
+	token := sessionCookie(first)
+	if token == "" {
+		t.Fatal("register set no session cookie")
+	}
+
+	if _, err := sqlDB.Exec("DELETE FROM user"); err != nil {
+		t.Fatalf("removing the user row: %v", err)
+	}
+	if _, err := sqlDB.Exec(`CREATE TRIGGER refuse_session_delete BEFORE DELETE ON session
+		BEGIN SELECT RAISE(ABORT, 'no'); END`); err != nil {
+		t.Fatalf("creating the trigger: %v", err)
+	}
+
+	//nolint:gosec // not a credential leak - this is the request body POST /api/register's own contract requires
+	body, err := json.Marshal(registerRequest{Email: "second@example.org", Password: "another-long-enough-password"})
+	if err != nil {
+		t.Fatalf("marshaling register request: %v", err)
+	}
+	req := httptest.NewRequest(http.MethodPost, "/api/register", bytes.NewReader(body))
+	req.AddCookie(&http.Cookie{Name: "session", Value: token}) //nolint:gosec // request-side cookie carries name and value only
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("POST /api/register with an unrenewable session = %d, want %d (body: %s)", rec.Code, http.StatusInternalServerError, rec.Body.String())
+	}
+	if got := decodeError(t, rec).Code; got != "internal_error" {
+		t.Errorf("error code = %q, want %q", got, "internal_error")
+	}
+
+	// The old token must not have become the one carrying the new account.
+	var userID sql.NullInt64
+	if err := sqlDB.QueryRow("SELECT 1 FROM session WHERE token = ?", token).Scan(&userID); err != nil {
+		t.Fatalf("the pre-existing session row is gone: %v", err)
+	}
+}

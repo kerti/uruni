@@ -75,6 +75,17 @@ func TestVerifyPasswordRejectsAMalformedHash(t *testing.T) {
 		"$argon2id$v=19$m=19456,t=2,p=1$c2FsdA$",
 		// A hash of the right shape but the wrong length - a partial paste.
 		"$argon2id$v=19$m=19456,t=2,p=1$c2FsdA$aGFzaA",
+		// The version field itself unreadable - a row written by some
+		// other tool that happens to start "$argon2id$".
+		"$argon2id$version=19$m=19456,t=2,p=1$c2FsdA$aGFzaA",
+		// The parameter field in a shape Sscanf cannot read back, so the
+		// cost parameters this hash was actually made with are unknown -
+		// verifying under today's constants instead would silently compare
+		// against a different hash.
+		"$argon2id$v=19$memory=19456$c2FsdA$aGFzaA",
+		// Salt and hash fields that are not base64 at all.
+		"$argon2id$v=19$m=19456,t=2,p=1$sa!t$aGFzaA",
+		"$argon2id$v=19$m=19456,t=2,p=1$c2FsdA$aGF6!A",
 	} {
 		if _, err := verifyPassword("whatever", encoded); !errors.Is(err, ErrMalformedHash) {
 			t.Errorf("verifyPassword(_, %q) error = %v, want ErrMalformedHash", encoded, err)

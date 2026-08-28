@@ -11,6 +11,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/kerti/uruni/internal/auth"
 	"github.com/kerti/uruni/internal/db"
 	"github.com/kerti/uruni/internal/ledger"
 	"github.com/kerti/uruni/internal/money"
@@ -82,6 +83,38 @@ func TestMapLedgerErrorMapsSentinelsToStatusAndCode(t *testing.T) {
 			}
 			got := decodeError(t, rec)
 			if got.Code != tc.code {
+				t.Errorf("code = %q, want %q", got.Code, tc.code)
+			}
+		})
+	}
+}
+
+// TestMapAuthErrorMapsSentinelsToStatusAndCode is mapLedgerError's twin for
+// internal/auth's taxonomy. The unrecognized arm matters most: a database
+// fault out of Register has to read as 500, never as the 409 that would
+// tell the treasurer an account already exists when none does.
+func TestMapAuthErrorMapsSentinelsToStatusAndCode(t *testing.T) {
+	cases := []struct {
+		name   string
+		err    error
+		status int
+		code   string
+	}{
+		{"invalid argument", auth.ErrInvalidArgument, 400, "invalid_argument"},
+		{"already registered", auth.ErrAlreadyRegistered, 409, "already_registered"},
+		{"wrapped sentinel", fmt.Errorf("registering: %w", auth.ErrAlreadyRegistered), 409, "already_registered"},
+		{"unrecognized", errors.New("some database failure"), 500, "internal_error"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			rec := httptest.NewRecorder()
+			mapAuthError(rec, testLogger(), tc.err)
+
+			if rec.Code != tc.status {
+				t.Errorf("status = %d, want %d", rec.Code, tc.status)
+			}
+			if got := decodeError(t, rec); got.Code != tc.code {
 				t.Errorf("code = %q, want %q", got.Code, tc.code)
 			}
 		})
