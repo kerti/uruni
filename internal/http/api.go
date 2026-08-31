@@ -34,6 +34,12 @@ type api struct {
 	// queries exactly as before.
 	auth           *auth.Auth
 	sessionManager *scs.SessionManager
+
+	// loginLimiter is POST /api/login's rate limiter (issue #115) - one
+	// instance per api, so it accumulates across requests for the life of
+	// the process (and, in a test, for the life of the one router that
+	// test built) rather than resetting per call.
+	loginLimiter *rateLimiter
 }
 
 // routes registers the /api surface on the mount New creates. No handlers at
@@ -66,6 +72,11 @@ func (a *api) routes(r chi.Router) {
 	// gate #116 adds) - there is no session yet to gate it with, and it
 	// refuses itself the moment any account exists (auth.ErrAlreadyRegistered).
 	r.Post("/register", a.register)
+
+	// The everyday login (#115), alongside register above - also
+	// unauthenticated by design, and for the same reason: there is no
+	// session yet for a session-gated route to check.
+	r.Post("/login", a.login)
 
 	r.Post("/setup", a.setupFund)
 	r.Get("/fund", a.getFund)
