@@ -115,6 +115,13 @@ func mapAuthError(w http.ResponseWriter, logger *slog.Logger, err error) {
 		writeAPIError(w, http.StatusBadRequest, "invalid_argument", "The request contains an invalid argument.")
 	case errors.Is(err, auth.ErrAlreadyRegistered):
 		writeAPIError(w, http.StatusConflict, "already_registered", "An account has already been registered on this instance.")
+	case errors.Is(err, auth.ErrInvalidCredentials):
+		// The one body POST /api/login answers with on any failed login,
+		// unknown email or wrong password alike (issue #115) - code and
+		// message are both fixed strings, never interpolating which case
+		// this was, so the response bytes cannot become the oracle
+		// Authenticate's own doc comment says they must not be.
+		writeAPIError(w, http.StatusUnauthorized, "invalid_credentials", "Invalid email or password.")
 	default:
 		logger.Error("unhandled auth error", "error", err)
 		writeAPIError(w, http.StatusInternalServerError, "internal_error", "Something went wrong.")

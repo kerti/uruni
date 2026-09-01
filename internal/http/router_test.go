@@ -1,6 +1,7 @@
 package http
 
 import (
+	"database/sql"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -30,11 +31,57 @@ var testBuild = Build{Version: "v9.9.9-test", Commit: "abc1234"}
 // testRouter builds a router over a real, migrated in-memory database — the
 // ledger and store arguments are threaded through New for later M4 slices to
 // use, so building it for real here (rather than passing nil) is what proves
-// the constructor's new signature actually wires together.
+// the constructor's new signature actually wires together. It carries a
+// valid session throughout - see authedRouterFor's own comment for why.
 func testRouter(t *testing.T) http.Handler {
 	t.Helper()
-	sqlDB := testStoreDB(t)
-	return New(testAssets(), testBuild, ledger.New(sqlDB), store.New(sqlDB), testLogger(), auth.New(sqlDB), "")
+	return authedRouterFor(t, testStoreDB(t))
+}
+
+// authedRouterFor builds the same router New builds, then makes one real
+// POST /api/register call against it before returning, so every request the
+// caller sends afterward already carries a valid session. #116 moved the
+// entire surface but for four routes behind sessionRequired; this package's
+// hundred-plus pre-existing business-logic tests exist to prove what a route
+// does once a session is present, not to each separately reprove they can
+// get past the gate, so the fixture absorbs that once here rather than at
+// every call site.
+//
+// A test that means to exercise the gate itself - or the two routes that
+// stay reachable without one - talks to testRouterAndDB, postRegister,
+// postLogin or postLogout directly, never this.
+func authedRouterFor(t *testing.T, sqlDB *sql.DB) http.Handler {
+	t.Helper()
+	r := New(testAssets(), testBuild, ledger.New(sqlDB), store.New(sqlDB), testLogger(), auth.New(sqlDB), "")
+
+	reg := postRegister(t, r, "treasurer@example.org", "correct-horse-battery")
+	if reg.Code != http.StatusCreated {
+		t.Fatalf("fixture POST /api/register = %d, want %d (body: %s)", reg.Code, http.StatusCreated, reg.Body.String())
+	}
+	token := sessionCookie(reg)
+	if token == "" {
+		t.Fatal("fixture register set no session cookie")
+	}
+	return withSessionCookie{Handler: r, token: token}
+}
+
+// withSessionCookie attaches one fixed, already-established session cookie
+// to any request that doesn't already carry one of its own, then delegates.
+// It exists so the hundred-plus tests already constructing their own
+// httptest.NewRequest calls throughout this package did not each need to
+// learn how to carry a cookie forward - they ask testRouter for a handler
+// exactly as before, and the handler now happens to answer every request as
+// the one treasurer authedRouterFor registered.
+type withSessionCookie struct {
+	http.Handler
+	token string
+}
+
+func (w withSessionCookie) ServeHTTP(rw http.ResponseWriter, r *http.Request) {
+	if _, err := r.Cookie("session"); err != nil {
+		r.AddCookie(&http.Cookie{Name: "session", Value: w.token}) //nolint:gosec // test fixture cookie, not a credential
+	}
+	w.Handler.ServeHTTP(rw, r)
 }
 
 func get(t *testing.T, path string) *httptest.ResponseRecorder {

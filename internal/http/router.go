@@ -56,10 +56,18 @@ func New(assets fs.FS, build Build, l *ledger.Ledger, q store.Querier, logger *s
 	r.Get("/healthz", healthz(build))
 
 	// Every /api route lives under this one mount, so M5's session middleware
-	// has exactly one seam to wrap instead of routes scattered across the tree
-	// (ADR-021).
-	sm := newSessionManager(q, baseURL)
-	r.Route("/api", (&api{ledger: l, queries: q, logger: logger, auth: au, sessionManager: sm}).routes)
+	// (LoadAndSave, then sessionRequired for every route but the four public
+	// ones - api.go's two groups) has exactly one seam to wrap instead of
+	// routes scattered across the tree (ADR-021).
+	sm := newSessionManager(q, baseURL, logger)
+	r.Route("/api", (&api{
+		ledger:         l,
+		queries:        q,
+		logger:         logger,
+		auth:           au,
+		sessionManager: sm,
+		loginLimiter:   newRateLimiter(loginRateLimitMaxAttempts, loginRateLimitWindow),
+	}).routes)
 
 	// The SPA fallback is chi's NotFound handler (ADR-021): chi checks every
 	// registered route first, so /api and /report still 404 instead of falling
