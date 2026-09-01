@@ -31,7 +31,7 @@ Standing decisions that no ADR owns go in [`../Decisions.md`](../Decisions.md).
 | [004](./004-database-sqlite-only.md) | Database: SQLite only through 0.x | implemented |
 | [005](./005-data-access-sqlc.md) | Data access: sqlc | implemented |
 | [006](./006-money-integer-minor-units.md) | Money is integer minor units (never floats) | implemented |
-| [007](./007-auth-local-email-password.md) | Auth: local email/password now, OIDC later | `draft` |
+| [007](./007-auth-local-email-password.md) | Auth: local email/password now, OIDC later | implemented |
 | [008](./008-pwa-no-offline-data.md) | PWA: installable shell, no offline data | `draft` |
 | [009](./009-reverse-proxy-caddy.md) | Reverse proxy & TLS: Caddy | implemented |
 | [010](./010-packaging-and-deployment.md) | Packaging & deployment | implemented |
@@ -54,7 +54,7 @@ Standing decisions that no ADR owns go in [`../Decisions.md`](../Decisions.md).
 | [027](./027-ledger-domain-boundary.md) | Ledger domain boundary: one package, transactional writes | implemented |
 | [028](./028-testing-the-trust-core.md) | Testing the trust core: `internal/money` and `internal/ledger` | implemented |
 | [029](./029-reversing-a-dues-payment.md) | Reversing a dues payment: linked adjustment row, not netting | implemented |
-| [030](./030-multi-fund-scoping.md) | Multi-fund scoping: implicit fund resolution, single-account auth | draft |
+| [030](./030-multi-fund-scoping.md) | Multi-fund scoping: implicit fund resolution, single-account auth | implemented |
 
 The **Stage** column is the record, and it is all this index says about implementation: `draft` means editable in place, `implemented` means superseding-ADR-only. *Which* slice put code behind a given ADR belongs in that ADR and in the PR that dropped its tag — restated here, this index becomes a changelog.
 
