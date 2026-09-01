@@ -7,10 +7,6 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
-
-	"github.com/kerti/uruni/internal/auth"
-	"github.com/kerti/uruni/internal/ledger"
-	"github.com/kerti/uruni/internal/store"
 )
 
 func postSetup(t *testing.T, r http.Handler, name string) *httptest.ResponseRecorder {
@@ -173,7 +169,16 @@ func TestGetFundReportsAStoreFailureAsA500(t *testing.T) {
 	// "no fund yet", which is a 404 and means something entirely different
 	// to the client: run setup.
 	sqlDB := testStoreDB(t)
-	router := New(testAssets(), testBuild, ledger.New(sqlDB), store.New(sqlDB), testLogger(), auth.New(sqlDB), "")
+	router := authedRouterFor(t, sqlDB)
+
+	// The session cookie has to be minted before the store dies - #116 gates
+	// GET /api/fund, and the session manager's own ErrorFunc (session.go)
+	// answers a *store* failure met while loading that cookie's session with
+	// this exact same 500 envelope, so this test would still pass even if it
+	// never got past the gate to resolveFund at all. Extracting the cookie
+	// and asserting on it isn't needed for that reason - either failure
+	// point answers identically, which is the point of routing both through
+	// writeAPIError.
 	if err := sqlDB.Close(); err != nil {
 		t.Fatalf("closing the store = %v, want no error", err)
 	}
