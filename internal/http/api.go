@@ -34,6 +34,12 @@ type api struct {
 	// queries exactly as before.
 	auth           *auth.Auth
 	sessionManager *scs.SessionManager
+
+	// loginLimiter is POST /api/login's rate limiter (issue #115) - one
+	// instance per api, so it accumulates across requests for the life of
+	// the process (and, in a test, for the life of the one router that
+	// test built) rather than resetting per call.
+	loginLimiter *rateLimiter
 }
 
 // routes registers the /api surface on the mount New creates. No handlers at
@@ -61,103 +67,139 @@ func (a *api) routes(r chi.Router) {
 	// already funnels through.
 	r.Use(a.sessionManager.LoadAndSave)
 
-	// The bootstrap account (#114). Unauthenticated by design (ADR-030's
-	// consequences list it as one of the few routes that stay outside the
-	// gate #116 adds) - there is no session yet to gate it with, and it
-	// refuses itself the moment any account exists (auth.ErrAlreadyRegistered).
-	r.Post("/register", a.register)
+	// The four routes a stranger can reach with no session at all (#116).
+	// Nothing joins this group without an explicit reason on the spot -
+	// every other handler in this file, setup included, sits behind
+	// sessionRequired in the group below.
+	r.Group(func(r chi.Router) {
+		// The bootstrap account (#114). Unauthenticated by design - there is
+		// no session yet to gate it with, and it refuses itself the moment
+		// any account exists (auth.ErrAlreadyRegistered).
+		r.Post("/register", a.register)
 
-	r.Post("/setup", a.setupFund)
-	r.Get("/fund", a.getFund)
+		// The everyday login (#115), alongside register above - also
+		// unauthenticated by design, and for the same reason: there is no
+		// session yet for a session-gated route to check.
+		r.Post("/login", a.login)
 
-	// The fund's structure. Read-only but for the one purpose a treasurer
-	// creates herself: accounts are the two locations setup made, and the
-	// other two purpose kinds are written by SetUpFund and OpenIncidental.
-	r.Get("/accounts", a.listAccounts)
-	r.Get("/purposes", a.listPurposes)
-	r.Post("/pass-through-purposes", a.createPassThroughPurpose)
+		// The one read a booting, logged-out client needs before it has
+		// anything to authenticate with: cookies are httpOnly, so this is
+		// the SPA's only way to tell whether to render register or login.
+		r.Get("/session", a.getSession)
 
-	// The roster, one block per entity. Direct-CRUD (ADR-027) - no derived
-	// invariant, so these call a.queries rather than a.ledger, same split as
-	// getFund above. DELETE is only ever for a duplicate added at setup; a
-	// member who actually leaves gets inactive_on, which is a PATCH.
-	r.Post("/members", a.createMember)
-	r.Get("/members", a.listMembers)
-	r.Patch("/members/{id}", a.updateMember)
-	r.Delete("/members/{id}", a.deleteMember)
+		// Destroying a session a caller may or may not still have. Public
+		// for the same reason getSession is: a caller with an already-
+		// expired cookie is asking for exactly what logout gives, and a 401
+		// there would be hostile for no gain.
+		r.Post("/logout", a.logout)
+	})
 
-	r.Post("/dues-tiers", a.createDuesTier)
-	r.Get("/dues-tiers", a.listDuesTiers)
-	r.Patch("/dues-tiers/{id}", a.updateDuesTier)
+	// Every other route in the surface, now that a session proves "you are
+	// the treasurer" (ADR-030 decision 2). sessionRequired runs first so
+	// nothing below it is ever reached without one.
+	r.Group(func(r chi.Router) {
+		r.Use(a.sessionRequired)
 
-	// Rates are created and listed under their tier, but corrected by their
-	// own id: a rate is only ever reached through one tier, and {id} in the
-	// nested path already means the tier.
-	r.Post("/dues-tiers/{id}/rates", a.createDuesRate)
-	r.Get("/dues-tiers/{id}/rates", a.listDuesRates)
-	r.Patch("/dues-rates/{id}", a.updateDuesRate)
-	r.Delete("/dues-rates/{id}", a.deleteDuesRate)
+		// POST /setup sits *inside* the gate - ADR-030's explicit ruling,
+		// and the one placement worth stating outright because the opposite
+		// reads as obvious and is wrong. Registration closes after first
+		// use, but between the treasurer registering and finishing setup
+		// there is a window in which a public /setup would let a stranger
+		// create and name her own fund - and ErrFundAlreadyExists would make
+		// that permanent, report_slug and all, for the treasurer who
+		// registered first. Gating it here is what closes that window.
+		r.Post("/setup", a.setupFund)
+		r.Get("/fund", a.getFund)
 
-	// The everyday loop's write path (PRD §7.2, §7.3, §7.6) and the
-	// reconcile flow's read path (PRD §7.8). A pass-through movement and a
-	// correction are both ordinary POST /api/transactions calls - see
-	// transactionRequest's own comment - so there is no separate route for
-	// either.
-	r.Post("/transactions", a.createTransaction)
-	r.Get("/transactions", a.listTransactions)
-	// Moving money between the two accounts without changing what the fund
-	// holds in total (PRD §6). No GET: a transfer's two legs are ordinary
-	// transaction rows and already surface through GET /api/transactions.
-	r.Post("/transfers", a.createTransfer)
+		// The fund's structure. Read-only but for the one purpose a treasurer
+		// creates herself: accounts are the two locations setup made, and the
+		// other two purpose kinds are written by SetUpFund and OpenIncidental.
+		r.Get("/accounts", a.listAccounts)
+		r.Get("/purposes", a.listPurposes)
+		r.Post("/pass-through-purposes", a.createPassThroughPurpose)
 
-	// A member fronting their own money (PRD §7.4). Recording the claim
-	// moves nothing - only settling posts a ledger row, which is why the
-	// recorded balance still matches the wallet while a claim is
-	// outstanding. There is deliberately no waive route: PRD §7.4 never
-	// asks for one.
-	// PATCH is both the correction and the waive (#103): waiving sets one
-	// column, so pairing it with the ordinary correction is what makes
-	// un-waiving free, and keeps the block the same POST/GET/PATCH/DELETE
-	// shape as members. Both are refused once the claim is settled.
-	r.Post("/reimbursements", a.createReimbursement)
-	r.Get("/reimbursements", a.listReimbursements)
-	r.Patch("/reimbursements/{id}", a.updateReimbursement)
-	r.Delete("/reimbursements/{id}", a.deleteReimbursement)
-	r.Post("/reimbursements/{id}/settle", a.settleReimbursement)
+		// The roster, one block per entity. Direct-CRUD (ADR-027) - no derived
+		// invariant, so these call a.queries rather than a.ledger, same split as
+		// getFund above. DELETE is only ever for a duplicate added at setup; a
+		// member who actually leaves gets inactive_on, which is a PATCH.
+		r.Post("/members", a.createMember)
+		r.Get("/members", a.listMembers)
+		r.Patch("/members/{id}", a.updateMember)
+		r.Delete("/members/{id}", a.deleteMember)
 
-	r.Post("/dues-payments", a.createDuesPayment)
-	r.Post("/dues-payments/{id}/reversal", a.reverseDuesPayment)
-	r.Get("/dues-status", a.getDuesStatus)
+		r.Post("/dues-tiers", a.createDuesTier)
+		r.Get("/dues-tiers", a.listDuesTiers)
+		r.Patch("/dues-tiers/{id}", a.updateDuesTier)
 
-	// A one-off collection for an occasion, tracked separately from the
-	// general fund and closed when it's over (PRD §7.5). Addressed by
-	// purpose id, matching how an incidental is addressed everywhere else
-	// in the domain. There is deliberately no contribute route: a
-	// contribution is an ordinary transaction tagged to the envelope's
-	// purpose, posted through POST /api/transactions above (#67).
-	r.Post("/incidentals", a.openIncidental)
-	r.Get("/incidentals", a.listIncidentals)
-	r.Get("/incidentals/{purposeID}", a.getIncidental)
-	r.Post("/incidentals/{purposeID}/close", a.closeIncidental)
+		// Rates are created and listed under their tier, but corrected by their
+		// own id: a rate is only ever reached through one tier, and {id} in the
+		// nested path already means the tier.
+		r.Post("/dues-tiers/{id}/rates", a.createDuesRate)
+		r.Get("/dues-tiers/{id}/rates", a.listDuesRates)
+		r.Patch("/dues-rates/{id}", a.updateDuesRate)
+		r.Delete("/dues-rates/{id}", a.deleteDuesRate)
 
-	// Counting the real money and comparing it to the recorded balance (PRD
-	// section 7.7's home banner, section 7.8's reconcile flow). "latest" and
-	// "open-lines" are literal path segments, not ids - they are registered
-	// ahead of the {id} route below so chi's router resolves them as their own
-	// static routes rather than the {id} wildcard swallowing "latest" as an
-	// id chi then fails to parse as an integer.
-	r.Post("/reconciliations", a.takeReconciliation)
-	r.Get("/reconciliations", a.listReconciliations)
-	r.Get("/reconciliations/latest", a.latestReconciliation)
-	r.Get("/reconciliations/open-lines", a.listOpenReconciliationLines)
-	r.Get("/reconciliations/{id}", a.getReconciliation)
+		// The everyday loop's write path (PRD §7.2, §7.3, §7.6) and the
+		// reconcile flow's read path (PRD §7.8). A pass-through movement and a
+		// correction are both ordinary POST /api/transactions calls - see
+		// transactionRequest's own comment - so there is no separate route for
+		// either.
+		r.Post("/transactions", a.createTransaction)
+		r.Get("/transactions", a.listTransactions)
+		// Moving money between the two accounts without changing what the fund
+		// holds in total (PRD §6). No GET: a transfer's two legs are ordinary
+		// transaction rows and already surface through GET /api/transactions.
+		r.Post("/transfers", a.createTransfer)
 
-	// The composed view-model for the home screen (PRD section 7.7): the
-	// fund total, every account's balance and every purpose's balance, in one
-	// round trip. See getBalances's own comment for why this is the one route
-	// in M4 built by composing ledger reads rather than wrapping a single
-	// ledger call.
-	r.Get("/balances", a.getBalances)
+		// A member fronting their own money (PRD §7.4). Recording the claim
+		// moves nothing - only settling posts a ledger row, which is why the
+		// recorded balance still matches the wallet while a claim is
+		// outstanding. There is deliberately no waive route: PRD §7.4 never
+		// asks for one.
+		// PATCH is both the correction and the waive (#103): waiving sets one
+		// column, so pairing it with the ordinary correction is what makes
+		// un-waiving free, and keeps the block the same POST/GET/PATCH/DELETE
+		// shape as members. Both are refused once the claim is settled.
+		r.Post("/reimbursements", a.createReimbursement)
+		r.Get("/reimbursements", a.listReimbursements)
+		r.Patch("/reimbursements/{id}", a.updateReimbursement)
+		r.Delete("/reimbursements/{id}", a.deleteReimbursement)
+		r.Post("/reimbursements/{id}/settle", a.settleReimbursement)
+
+		r.Post("/dues-payments", a.createDuesPayment)
+		r.Post("/dues-payments/{id}/reversal", a.reverseDuesPayment)
+		r.Get("/dues-status", a.getDuesStatus)
+
+		// A one-off collection for an occasion, tracked separately from the
+		// general fund and closed when it's over (PRD §7.5). Addressed by
+		// purpose id, matching how an incidental is addressed everywhere else
+		// in the domain. There is deliberately no contribute route: a
+		// contribution is an ordinary transaction tagged to the envelope's
+		// purpose, posted through POST /api/transactions above (#67).
+		r.Post("/incidentals", a.openIncidental)
+		r.Get("/incidentals", a.listIncidentals)
+		r.Get("/incidentals/{purposeID}", a.getIncidental)
+		r.Post("/incidentals/{purposeID}/close", a.closeIncidental)
+
+		// Counting the real money and comparing it to the recorded balance (PRD
+		// section 7.7's home banner, section 7.8's reconcile flow). "latest" and
+		// "open-lines" are literal path segments, not ids - they are registered
+		// ahead of the {id} route below so chi's router resolves them as their own
+		// static routes rather than the {id} wildcard swallowing "latest" as an
+		// id chi then fails to parse as an integer.
+		r.Post("/reconciliations", a.takeReconciliation)
+		r.Get("/reconciliations", a.listReconciliations)
+		r.Get("/reconciliations/latest", a.latestReconciliation)
+		r.Get("/reconciliations/open-lines", a.listOpenReconciliationLines)
+		r.Get("/reconciliations/{id}", a.getReconciliation)
+
+		// The composed view-model for the home screen (PRD section 7.7): the
+		// fund total, every account's balance and every purpose's balance, in one
+		// round trip. See getBalances's own comment for why this is the one route
+		// in M4 built by composing ledger reads rather than wrapping a single
+		// ledger call.
+		r.Get("/balances", a.getBalances)
+	})
 }
 
 // writeJSON is writeAPIError's counterpart for a successful response: every

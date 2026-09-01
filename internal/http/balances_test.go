@@ -6,10 +6,6 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
-
-	"github.com/kerti/uruni/internal/auth"
-	"github.com/kerti/uruni/internal/ledger"
-	"github.com/kerti/uruni/internal/store"
 )
 
 func getBalances(t *testing.T, r http.Handler) *httptest.ResponseRecorder {
@@ -300,7 +296,7 @@ func TestGetBalancesTransferMovesAccountsLeavesFundTotalUnchanged(t *testing.T) 
 // together. They stay as honest defensive code, uncovered on purpose.
 func TestGetBalancesOnADeadDatabaseIs500(t *testing.T) {
 	sqlDB := testStoreDB(t)
-	r := New(testAssets(), testBuild, ledger.New(sqlDB), store.New(sqlDB), testLogger(), auth.New(sqlDB), "")
+	r := authedRouterFor(t, sqlDB)
 
 	if rec := postSetup(t, r, "Dana Warga"); rec.Code != http.StatusCreated {
 		t.Fatalf("POST /api/setup = %d, want %d (body: %s)", rec.Code, http.StatusCreated, rec.Body.String())
@@ -308,6 +304,11 @@ func TestGetBalancesOnADeadDatabaseIs500(t *testing.T) {
 
 	// Nothing can read after this, so every branch below the first is
 	// unreachable by construction - the point is the shape of the answer.
+	// That now includes the session manager's own store read (session.go's
+	// ErrorFunc): #116 gates this route, so the request below needs its
+	// cookie's session loaded before GetBalances ever runs, and a dead
+	// database answers that lookup with the identical 500 envelope this
+	// test already asserts on.
 	if err := sqlDB.Close(); err != nil {
 		t.Fatalf("closing the test database = %v, want no error", err)
 	}
