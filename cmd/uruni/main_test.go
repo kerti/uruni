@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -26,10 +27,21 @@ func TestRunRejectsAnUnknownCommand(t *testing.T) {
 	}
 	// The subcommands are a contract the Makefile and the Dockerfile are
 	// written against (ADR-019); a typo should say what the alternatives are.
-	for _, cmd := range []string{"serve", "migrate", "version", "healthcheck"} {
+	for _, cmd := range []string{"serve", "migrate", "version", "healthcheck", "seed-e2e"} {
 		if !strings.Contains(err.Error(), cmd) {
 			t.Errorf("run([migrate-everything]) = %q, want it to mention %q", err, cmd)
 		}
+	}
+}
+
+// TestRunDispatchesSeedE2E: the subcommand table is a contract the Makefile is
+// written against (ADR-019), so the wiring itself — the name `make e2e-reset`
+// invokes reaching seedE2E — is worth a test, not just seedE2E's own behaviour.
+func TestRunDispatchesSeedE2E(t *testing.T) {
+	t.Setenv("URUNI_DB", filepath.Join(t.TempDir(), "uruni-e2e.db"))
+
+	if err := run([]string{"seed-e2e"}); err != nil {
+		t.Fatalf("run([seed-e2e]) = %v, want nil", err)
 	}
 }
 

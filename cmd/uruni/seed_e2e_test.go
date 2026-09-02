@@ -2,9 +2,13 @@ package main
 
 import (
 	"context"
+	"errors"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/kerti/uruni/internal/auth"
 )
 
 // TestSeedE2ERefusesAnUnsetURUNI_DB is the guard's most important case: no
@@ -53,16 +57,60 @@ func TestSeedE2ERefusesATempPathWithoutE2EInTheName(t *testing.T) {
 
 // TestSeedE2ESeedsAThrowawayDatabase is the happy path: a path that satisfies
 // both halves of the guard (under a temp directory, "e2e" in the filename)
-// resets, migrates and seeds cleanly, and running it twice is not itself an
-// error the caller has to special-case — `make e2e-reset` deletes the file
-// first, but this proves seedE2E doesn't depend on that deletion to succeed
-// against a database it has never seen.
+// migrates and seeds cleanly against a database that does not exist yet —
+// which is the only state `make e2e` ever calls it in, since `make e2e-reset`
+// deletes the file first.
 func TestSeedE2ESeedsAThrowawayDatabase(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "uruni-e2e.db")
 	t.Setenv("URUNI_DB", path)
 
 	if err := seedE2E(context.Background()); err != nil {
 		t.Fatalf("seedE2E() = %v, want no error against a fresh throwaway path", err)
+	}
+}
+
+// TestSeedE2ERefusesAnAlreadySeededDatabase pins the other half of that: the
+// command is *not* idempotent and must not pretend to be. auth.Register is
+// single-account by design (ErrAlreadyRegistered), so a second run against a
+// database that still has the first fixture fails loudly rather than seeding a
+// second fund on top of the first. `make e2e-reset` deleting the file is what
+// makes a re-run work, and this is the test that says so.
+func TestSeedE2ERefusesAnAlreadySeededDatabase(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "uruni-e2e.db")
+	t.Setenv("URUNI_DB", path)
+
+	if err := seedE2E(context.Background()); err != nil {
+		t.Fatalf("first seedE2E() = %v, want no error", err)
+	}
+
+	err := seedE2E(context.Background())
+	if err == nil {
+		t.Fatal("second seedE2E() = nil, want an error against an already-seeded database")
+	}
+	if !errors.Is(err, auth.ErrAlreadyRegistered) {
+		t.Errorf("second seedE2E() = %v, want auth.ErrAlreadyRegistered", err)
+	}
+}
+
+// TestSeedE2EReportsADatabaseItCannotOpen covers the failure an operator is
+// most likely to actually hit past the guard: the path looks throwaway but is
+// not a file seedE2E can open. The error has to name the path, because the
+// only thing the operator controls here is URUNI_DB.
+func TestSeedE2EReportsADatabaseItCannotOpen(t *testing.T) {
+	// A directory where a database file should be: passes both halves of the
+	// guard, then fails at db.Open's ping.
+	path := filepath.Join(t.TempDir(), "uruni-e2e.db")
+	if err := os.Mkdir(path, 0o750); err != nil {
+		t.Fatalf("creating the directory standing in for a database: %v", err)
+	}
+	t.Setenv("URUNI_DB", path)
+
+	err := seedE2E(context.Background())
+	if err == nil {
+		t.Fatal("seedE2E() = nil, want an error for a database it cannot open")
+	}
+	if !strings.Contains(err.Error(), path) {
+		t.Errorf("seedE2E() = %q, want it to name %q", err, path)
 	}
 }
 
