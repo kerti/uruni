@@ -6,7 +6,6 @@ services:
     restart: unless-stopped
     environment:
       - URUNI_BASE_URL=${URUNI_BASE_URL}
-      - URUNI_SESSION_SECRET=${URUNI_SESSION_SECRET}
       - URUNI_DB=/data/uruni.db
       # - SMTP_URL=${SMTP_URL}           # optional, for emailed backups
     volumes:

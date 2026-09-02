@@ -113,21 +113,21 @@ help:
 # authenticate Claude Code itself, or grant it permissions — `make doctor`
 # reports on those instead of pretending to fix them.
 #
-# The generated .env rewrites two lines of .env.example, because that file is
-# the self-host template and its values are production values. The session
-# secret is generated. URUNI_BASE_URL is rewritten to a loopback http origin
-# because the cookie's Secure flag is derived from its scheme (internal/http/
-# session.go): shipping the https:// template value into local dev sets a
-# Secure cookie on a plain-HTTP origin, which the browser then declines to
-# keep on any dev origin that is not localhost — testing on a phone over the
-# LAN being the one that matters. Only the scheme is read for that, so the
-# port here need not match `make web-dev`'s 5173.
+# The generated .env rewrites one line of .env.example, because that file is the
+# self-host template and its values are production values. URUNI_BASE_URL is
+# rewritten to a loopback http origin for two reasons. The server refuses to
+# start on the template value — that refusal is the "did you configure this
+# instance at all?" gate (ADR-019) — and the cookie's Secure flag is derived
+# from the scheme (internal/http/session.go): shipping the https:// template
+# value into local dev sets a Secure cookie on a plain-HTTP origin, which the
+# browser then declines to keep on any dev origin that is not localhost —
+# testing on a phone over the LAN being the one that matters. Only the scheme
+# is read for that, so the port here need not match `make web-dev`'s 5173.
 setup: hooks-install claude-install web-install
 	@if [ ! -f .env ]; then \
-	  sed -e "s|^URUNI_SESSION_SECRET=.*|URUNI_SESSION_SECRET=$$(openssl rand -base64 48 | tr -d '\n')|" \
-	      -e "s|^URUNI_BASE_URL=.*|URUNI_BASE_URL=http://localhost:8080|" \
+	  sed -e "s|^URUNI_BASE_URL=.*|URUNI_BASE_URL=http://localhost:8080|" \
 	    .env.example > .env; \
-	  echo "setup: created .env from .env.example (session secret generated, base URL set to loopback)"; \
+	  echo "setup: created .env from .env.example (base URL set to loopback)"; \
 	fi
 	@echo "✓ setup complete — next: make migrate-up && make run"
 
@@ -192,7 +192,7 @@ build: web-build
 	go build -o bin/uruni ./cmd/uruni
 
 # Run the built artifact rather than `go run`, with .env exported for you — the
-# gap that makes a bare `./bin/uruni serve` fail on URUNI_SESSION_SECRET, since
+# gap that makes a bare `./bin/uruni serve` fail on URUNI_BASE_URL, since
 # .env is a Makefile convenience and the binary reads only real environment
 # variables (ADR-019: env vars only, no config file).
 #
