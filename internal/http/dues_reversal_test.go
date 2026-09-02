@@ -27,7 +27,7 @@ func postDuesPaymentReversal(t *testing.T, r http.Handler, transactionID int64, 
 // /api/transactions already use.
 func TestPostDuesPaymentReversalReturnsThePostedRow(t *testing.T) {
 	r := testRouter(t)
-	setup := setUpFundForTransactions(t, r)
+	setup := setUpFund(t, r)
 
 	memberRec := postMember(t, r, memberRequest{Name: "Jane"})
 	var member memberResponse
@@ -36,7 +36,7 @@ func TestPostDuesPaymentReversalReturnsThePostedRow(t *testing.T) {
 	}
 
 	payRec := postDuesPayment(t, r, duesPaymentRequest{
-		AccountID: setup.CashAccountID, PurposeID: setup.MainPurposeID,
+		AccountID: setup.CashAccountID(t), PurposeID: setup.MainPurposeID,
 		MemberID: member.ID, OccurredOn: "2026-08-12",
 		Periods: []duesPaymentPeriod{{DuesPeriod: "2026-08", Amount: 25_000}},
 	})
@@ -113,7 +113,7 @@ func TestPostDuesPaymentReversalReturnsThePostedRow(t *testing.T) {
 // already uses.
 func TestPostDuesPaymentReversalNoSuchTransactionIs404(t *testing.T) {
 	r := testRouter(t)
-	setUpFundForTransactions(t, r)
+	setUpFund(t, r)
 
 	rec := postDuesPaymentReversal(t, r, 999_999, reverseDuesPaymentRequest{OccurredOn: "2026-08-15"})
 	if rec.Code != http.StatusNotFound {
@@ -131,10 +131,10 @@ func TestPostDuesPaymentReversalNoSuchTransactionIs404(t *testing.T) {
 // ErrInvalidArgument does everywhere else in this mapper.
 func TestPostDuesPaymentReversalNonDuesTransactionIs400(t *testing.T) {
 	r := testRouter(t)
-	setup := setUpFundForTransactions(t, r)
+	setup := setUpFund(t, r)
 
 	txRec := postTransaction(t, r, transactionRequest{
-		AccountID: setup.CashAccountID, PurposeID: setup.MainPurposeID,
+		AccountID: setup.CashAccountID(t), PurposeID: setup.MainPurposeID,
 		Direction: "in", Amount: 50_000, OccurredOn: "2026-08-01",
 	})
 	if txRec.Code != http.StatusCreated {
@@ -160,7 +160,7 @@ func TestPostDuesPaymentReversalNonDuesTransactionIs400(t *testing.T) {
 // way ErrReimbursementAlreadySettled already is.
 func TestPostDuesPaymentReversalTwiceIs409(t *testing.T) {
 	r := testRouter(t)
-	setup := setUpFundForTransactions(t, r)
+	setup := setUpFund(t, r)
 
 	memberRec := postMember(t, r, memberRequest{Name: "Jane"})
 	var member memberResponse
@@ -169,7 +169,7 @@ func TestPostDuesPaymentReversalTwiceIs409(t *testing.T) {
 	}
 
 	payRec := postDuesPayment(t, r, duesPaymentRequest{
-		AccountID: setup.CashAccountID, PurposeID: setup.MainPurposeID,
+		AccountID: setup.CashAccountID(t), PurposeID: setup.MainPurposeID,
 		MemberID: member.ID, OccurredOn: "2026-08-12",
 		Periods: []duesPaymentPeriod{{DuesPeriod: "2026-08", Amount: 25_000}},
 	})

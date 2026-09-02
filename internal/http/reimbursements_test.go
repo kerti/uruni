@@ -78,7 +78,7 @@ func TestPostReimbursementsRequiresAFund(t *testing.T) {
 // single 'out' row that pays it.
 func TestReimbursementRoundTripsFromClaimToSettlement(t *testing.T) {
 	r, l := testRouterAndLedger(t)
-	setup := setUpFundForTransactions(t, r)
+	setup := setUpFund(t, r)
 	memberID := memberFor(t, r, "Jane")
 
 	note := "bought lightbulbs for the pos ronda"
@@ -109,7 +109,7 @@ func TestReimbursementRoundTripsFromClaimToSettlement(t *testing.T) {
 	}
 
 	settleRec := postSettlement(t, r, claim.ID, settleReimbursementRequest{
-		AccountID: setup.CashAccountID, OccurredOn: "2026-08-20",
+		AccountID: setup.CashAccountID(t), OccurredOn: "2026-08-20",
 	})
 	if settleRec.Code != http.StatusCreated {
 		t.Fatalf("POST /api/reimbursements/{id}/settle = %d, want %d (body: %s)", settleRec.Code, http.StatusCreated, settleRec.Body.String())
@@ -153,7 +153,7 @@ func TestReimbursementRoundTripsFromClaimToSettlement(t *testing.T) {
 // payout and not a generic 500.
 func TestPostSettlementTwiceReturnsItsNamed409(t *testing.T) {
 	r := testRouter(t)
-	setup := setUpFundForTransactions(t, r)
+	setup := setUpFund(t, r)
 	memberID := memberFor(t, r, "Jane")
 
 	createRec := postReimbursement(t, r, reimbursementRequest{
@@ -166,14 +166,14 @@ func TestPostSettlementTwiceReturnsItsNamed409(t *testing.T) {
 	}
 
 	first := postSettlement(t, r, claim.ID, settleReimbursementRequest{
-		AccountID: setup.CashAccountID, OccurredOn: "2026-08-20",
+		AccountID: setup.CashAccountID(t), OccurredOn: "2026-08-20",
 	})
 	if first.Code != http.StatusCreated {
 		t.Fatalf("first settle = %d, want %d (body: %s)", first.Code, http.StatusCreated, first.Body.String())
 	}
 
 	second := postSettlement(t, r, claim.ID, settleReimbursementRequest{
-		AccountID: setup.CashAccountID, OccurredOn: "2026-08-21",
+		AccountID: setup.CashAccountID(t), OccurredOn: "2026-08-21",
 	})
 	if second.Code != http.StatusConflict {
 		t.Fatalf("second settle = %d, want %d (body: %s)", second.Code, http.StatusConflict, second.Body.String())
@@ -194,7 +194,7 @@ func TestPostSettlementOnAWaivedClaimReturnsItsNamed409(t *testing.T) {
 	q := store.New(sqlDB)
 	r := authedRouterFor(t, sqlDB)
 
-	setup := setUpFundForTransactions(t, r)
+	setup := setUpFund(t, r)
 	memberID := memberFor(t, r, "Jane")
 
 	waivedOn := "2026-08-15"
@@ -208,7 +208,7 @@ func TestPostSettlementOnAWaivedClaimReturnsItsNamed409(t *testing.T) {
 	}
 
 	rec := postSettlement(t, r, claim.ID, settleReimbursementRequest{
-		AccountID: setup.CashAccountID, OccurredOn: "2026-08-20",
+		AccountID: setup.CashAccountID(t), OccurredOn: "2026-08-20",
 	})
 	if rec.Code != http.StatusConflict {
 		t.Fatalf("settling a waived claim = %d, want %d (body: %s)", rec.Code, http.StatusConflict, rec.Body.String())
@@ -224,7 +224,7 @@ func TestPostSettlementOnAWaivedClaimReturnsItsNamed409(t *testing.T) {
 // ?outstanding=true keeps only what is still owed.
 func TestGetReimbursementsOutstandingFiltersToUnsettledClaims(t *testing.T) {
 	r := testRouter(t)
-	setup := setUpFundForTransactions(t, r)
+	setup := setUpFund(t, r)
 	memberID := memberFor(t, r, "Jane")
 
 	var claims []reimbursementResponse
@@ -244,7 +244,7 @@ func TestGetReimbursementsOutstandingFiltersToUnsettledClaims(t *testing.T) {
 	}
 
 	settleRec := postSettlement(t, r, claims[0].ID, settleReimbursementRequest{
-		AccountID: setup.CashAccountID, OccurredOn: "2026-08-20",
+		AccountID: setup.CashAccountID(t), OccurredOn: "2026-08-20",
 	})
 	if settleRec.Code != http.StatusCreated {
 		t.Fatalf("settle = %d, want %d (body: %s)", settleRec.Code, http.StatusCreated, settleRec.Body.String())
@@ -270,7 +270,7 @@ func TestGetReimbursementsOutstandingFiltersToUnsettledClaims(t *testing.T) {
 
 func TestGetReimbursementsRejectsAnUnparseableOutstandingFilter(t *testing.T) {
 	r := testRouter(t)
-	setUpFundForTransactions(t, r)
+	setUpFund(t, r)
 
 	rec := getReimbursements(t, r, "?outstanding=yes")
 	if rec.Code != http.StatusBadRequest {
@@ -306,7 +306,7 @@ func TestPostReimbursementsRejectsWhatTheSchemaRefuses(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			r := testRouter(t)
-			setup := setUpFundForTransactions(t, r)
+			setup := setUpFund(t, r)
 			memberID := memberFor(t, r, "Jane")
 
 			rec := postReimbursement(t, r, tc.req(setup, memberID))
@@ -327,10 +327,10 @@ func TestPostReimbursementsRejectsWhatTheSchemaRefuses(t *testing.T) {
 // path segment, not a server failure.
 func TestPostSettlementOnAnUnknownClaimIs404(t *testing.T) {
 	r := testRouter(t)
-	setup := setUpFundForTransactions(t, r)
+	setup := setUpFund(t, r)
 
 	rec := postSettlement(t, r, 9_999, settleReimbursementRequest{
-		AccountID: setup.CashAccountID, OccurredOn: "2026-08-20",
+		AccountID: setup.CashAccountID(t), OccurredOn: "2026-08-20",
 	})
 	if rec.Code != http.StatusNotFound {
 		t.Fatalf("settling an unknown claim = %d, want %d (body: %s)", rec.Code, http.StatusNotFound, rec.Body.String())
@@ -343,7 +343,7 @@ func TestPostSettlementOnAnUnknownClaimIs404(t *testing.T) {
 
 func TestPostSettlementRejectsAMalformedOccurredOn(t *testing.T) {
 	r := testRouter(t)
-	setup := setUpFundForTransactions(t, r)
+	setup := setUpFund(t, r)
 	memberID := memberFor(t, r, "Jane")
 
 	createRec := postReimbursement(t, r, reimbursementRequest{
@@ -356,7 +356,7 @@ func TestPostSettlementRejectsAMalformedOccurredOn(t *testing.T) {
 	}
 
 	rec := postSettlement(t, r, claim.ID, settleReimbursementRequest{
-		AccountID: setup.CashAccountID, OccurredOn: "not-a-date",
+		AccountID: setup.CashAccountID(t), OccurredOn: "not-a-date",
 	})
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("settle with a malformed date = %d, want %d (body: %s)", rec.Code, http.StatusBadRequest, rec.Body.String())
@@ -369,7 +369,7 @@ func TestPostSettlementRejectsAMalformedOccurredOn(t *testing.T) {
 
 func TestPostReimbursementsRejectsMalformedJSON(t *testing.T) {
 	r := testRouter(t)
-	setUpFundForTransactions(t, r)
+	setUpFund(t, r)
 
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/api/reimbursements", strings.NewReader("{oops")))
@@ -411,7 +411,7 @@ func TestPostSettlementRequiresAFund(t *testing.T) {
 // the ledger to be judged there.
 func TestPostSettlementRejectsANonNumericID(t *testing.T) {
 	r := testRouter(t)
-	setUpFundForTransactions(t, r)
+	setUpFund(t, r)
 
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/api/reimbursements/abc/settle",
@@ -427,7 +427,7 @@ func TestPostSettlementRejectsANonNumericID(t *testing.T) {
 
 func TestPostSettlementRejectsMalformedJSON(t *testing.T) {
 	r := testRouter(t)
-	setUpFundForTransactions(t, r)
+	setUpFund(t, r)
 
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/api/reimbursements/1/settle", strings.NewReader("{oops")))
@@ -444,7 +444,7 @@ func TestPostSettlementRejectsMalformedJSON(t *testing.T) {
 // §7.4 never asks to waive a claim, so the route is absent and stays absent.
 func TestNoWaiveRouteExists(t *testing.T) {
 	r := testRouter(t)
-	setUpFundForTransactions(t, r)
+	setUpFund(t, r)
 
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/api/reimbursements/1/waive", nil))
@@ -512,7 +512,7 @@ func decodeReimbursement(t *testing.T, rec *httptest.ResponseRecorder) reimburse
 // because the claim is off the ledger until it is settled.
 func TestPatchReimbursementCorrectsAnUnsettledClaim(t *testing.T) {
 	r := testRouter(t)
-	setup := setUpFundForTransactions(t, r)
+	setup := setUpFund(t, r)
 	memberID := memberFor(t, r, "Jane")
 	otherID := memberFor(t, r, "Sam")
 	claim := claimFor(t, r, setup, memberID)
@@ -545,7 +545,7 @@ func TestPatchReimbursementCorrectsAnUnsettledClaim(t *testing.T) {
 // not stuck.
 func TestPatchReimbursementWaivesAndUnwaives(t *testing.T) {
 	r := testRouter(t)
-	setup := setUpFundForTransactions(t, r)
+	setup := setUpFund(t, r)
 	memberID := memberFor(t, r, "Jane")
 	claim := claimFor(t, r, setup, memberID)
 
@@ -582,7 +582,7 @@ func TestPatchReimbursementWaivesAndUnwaives(t *testing.T) {
 // given a claim created waived.
 func TestSettleRefusesAClaimWaivedOverHTTP(t *testing.T) {
 	r := testRouter(t)
-	setup := setUpFundForTransactions(t, r)
+	setup := setUpFund(t, r)
 	memberID := memberFor(t, r, "Jane")
 	claim := claimFor(t, r, setup, memberID)
 
@@ -591,7 +591,7 @@ func TestSettleRefusesAClaimWaivedOverHTTP(t *testing.T) {
 	}
 
 	rec := postSettlement(t, r, claim.ID, settleReimbursementRequest{
-		AccountID: setup.CashAccountID, OccurredOn: "2026-08-20",
+		AccountID: setup.CashAccountID(t), OccurredOn: "2026-08-20",
 	})
 	if rec.Code != http.StatusConflict {
 		t.Fatalf("settling a waived claim = %d, want %d (body: %s)", rec.Code, http.StatusConflict, rec.Body.String())
@@ -603,7 +603,7 @@ func TestSettleRefusesAClaimWaivedOverHTTP(t *testing.T) {
 
 func TestDeleteReimbursementRemovesAnUnsettledClaim(t *testing.T) {
 	r := testRouter(t)
-	setup := setUpFundForTransactions(t, r)
+	setup := setUpFund(t, r)
 	memberID := memberFor(t, r, "Jane")
 	claim := claimFor(t, r, setup, memberID)
 
@@ -620,12 +620,12 @@ func TestDeleteReimbursementRemovesAnUnsettledClaim(t *testing.T) {
 // a payout references the claim, both are its named 409.
 func TestPatchAndDeleteRefuseASettledClaim(t *testing.T) {
 	r := testRouter(t)
-	setup := setUpFundForTransactions(t, r)
+	setup := setUpFund(t, r)
 	memberID := memberFor(t, r, "Jane")
 	claim := claimFor(t, r, setup, memberID)
 
 	if rec := postSettlement(t, r, claim.ID, settleReimbursementRequest{
-		AccountID: setup.CashAccountID, OccurredOn: "2026-08-20",
+		AccountID: setup.CashAccountID(t), OccurredOn: "2026-08-20",
 	}); rec.Code != http.StatusCreated {
 		t.Fatalf("settle = %d, want %d (body: %s)", rec.Code, http.StatusCreated, rec.Body.String())
 	}
@@ -658,7 +658,7 @@ func TestPatchAndDeleteRefuseASettledClaim(t *testing.T) {
 // server fault, and answering 500 would blame the wrong party.
 func TestPatchReimbursementUnknownMemberIs400(t *testing.T) {
 	r := testRouter(t)
-	setup := setUpFundForTransactions(t, r)
+	setup := setUpFund(t, r)
 	memberID := memberFor(t, r, "Jane")
 	claim := claimFor(t, r, setup, memberID)
 
@@ -679,7 +679,7 @@ func TestPatchReimbursementRejectsBadArguments(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			r := testRouter(t)
-			setup := setUpFundForTransactions(t, r)
+			setup := setUpFund(t, r)
 			memberID := memberFor(t, r, "Jane")
 			claim := claimFor(t, r, setup, memberID)
 
@@ -696,7 +696,7 @@ func TestPatchReimbursementRejectsBadArguments(t *testing.T) {
 
 func TestPatchAndDeleteOnAnUnknownClaimAre404(t *testing.T) {
 	r := testRouter(t)
-	setUpFundForTransactions(t, r)
+	setUpFund(t, r)
 
 	if rec := patchReimbursement(t, r, 9_999, `{"amount":95000}`); rec.Code != http.StatusNotFound {
 		t.Errorf("PATCH on an unknown claim = %d, want %d (body: %s)", rec.Code, http.StatusNotFound, rec.Body.String())
@@ -708,7 +708,7 @@ func TestPatchAndDeleteOnAnUnknownClaimAre404(t *testing.T) {
 
 func TestPatchReimbursementRejectsMalformedJSONAndIDs(t *testing.T) {
 	r := testRouter(t)
-	setUpFundForTransactions(t, r)
+	setUpFund(t, r)
 
 	rec := patchReimbursement(t, r, 1, "{oops")
 	if rec.Code != http.StatusBadRequest {
@@ -746,7 +746,7 @@ func TestDeleteReimbursementWithAReceiptIs409(t *testing.T) {
 	q := store.New(sqlDB)
 	r := authedRouterFor(t, sqlDB)
 
-	setup := setUpFundForTransactions(t, r)
+	setup := setUpFund(t, r)
 	memberID := memberFor(t, r, "Jane")
 	claim := claimFor(t, r, setup, memberID)
 

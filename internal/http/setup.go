@@ -30,46 +30,67 @@ func toFundResponse(f store.Fund) fundResponse {
 	}
 }
 
-// setupRequest is POST /api/setup's body: the one thing first-run setup asks
-// the treasurer for directly (PRD §7.1, "name the fund"). Everything else
-// SetUpFund creates - the main purpose, the cash and bank accounts - is
-// fixed, not user input; see setup.go's own comment in internal/ledger.
-type setupRequest struct {
+// setupAccountRequest is one entry of setupRequest.Accounts: the kind and
+// name the treasurer gives one location at setup (#78). Shape only - whether
+// kind names a real kind and name is non-blank after trimming are the
+// schema's own CHECKs to refuse, not re-checked here (ADR-027).
+type setupAccountRequest struct {
+	Kind string `json:"kind"`
 	Name string `json:"name"`
 }
 
-// setupResponse is pinned by #64, not a builder's choice: fund is the whole
-// row because it carries report_slug, which M7's public report needs, and
-// the three ids are what slices #65-#67 post against the moment setup
-// returns.
+// setupRequest is POST /api/setup's body: the fund's name (PRD §7.1, "name
+// the fund") and every account the treasurer wants it to start with (#78) -
+// at least one, SetUpFund's own job to refuse if empty. The main purpose is
+// still not on the wire: "Kas Utama" is the domain's own fixed name
+// (CONTEXT.md, ADR-014), never user input.
+type setupRequest struct {
+	Name     string                `json:"name"`
+	Accounts []setupAccountRequest `json:"accounts"`
+}
+
+// setupResponse is pinned by #64 for fund and main_purpose_id; accounts
+// became a list under #78 - the fixed two-field CashAccountID/BankAccountID
+// shape assumed exactly the pair SetUpFund no longer creates.
 type setupResponse struct {
-	Fund          fundResponse `json:"fund"`
-	MainPurposeID int64        `json:"main_purpose_id"`
-	CashAccountID int64        `json:"cash_account_id"`
-	BankAccountID int64        `json:"bank_account_id"`
+	Fund          fundResponse      `json:"fund"`
+	MainPurposeID int64             `json:"main_purpose_id"`
+	Accounts      []accountResponse `json:"accounts"`
 }
 
 // setupFund is POST /api/setup. No fund_id anywhere: v1 is exactly one fund,
 // and SetUpFund itself is what refuses a second one - this handler decodes
-// and passes the name through, it does not pre-check anything the ledger
-// already checks (ADR-027).
+// and passes the name and accounts through, it does not pre-check anything
+// the ledger already checks (ADR-027).
 func (a *api) setupFund(w http.ResponseWriter, r *http.Request) {
 	var req setupRequest
 	if !decodeJSON(w, r, &req) {
 		return
 	}
 
-	result, err := a.ledger.SetUpFund(r.Context(), ledger.SetUpFundParams{FundName: req.Name})
+	accounts := make([]ledger.AccountInput, 0, len(req.Accounts))
+	for _, acc := range req.Accounts {
+		accounts = append(accounts, ledger.AccountInput{Kind: acc.Kind, Name: acc.Name})
+	}
+
+	result, err := a.ledger.SetUpFund(r.Context(), ledger.SetUpFundParams{
+		FundName: req.Name,
+		Accounts: accounts,
+	})
 	if err != nil {
 		mapLedgerError(w, a.logger, err)
 		return
 	}
 
+	accountsResp := make([]accountResponse, 0, len(result.Accounts))
+	for _, acc := range result.Accounts {
+		accountsResp = append(accountsResp, toAccountResponse(acc))
+	}
+
 	writeJSON(w, http.StatusCreated, setupResponse{
 		Fund:          toFundResponse(result.Fund),
 		MainPurposeID: result.MainPurposeID,
-		CashAccountID: result.CashAccountID,
-		BankAccountID: result.BankAccountID,
+		Accounts:      accountsResp,
 	})
 }
 

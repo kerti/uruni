@@ -95,7 +95,7 @@ func TestPostIncidentalsRequiresAFund(t *testing.T) {
 // a fresh envelope, unclosed, with the target amount it was opened with.
 func TestOpenIncidentalCreatesAnOpenEnvelope(t *testing.T) {
 	r := testRouter(t)
-	setUpFundForTransactions(t, r)
+	setUpFund(t, r)
 
 	target := int64(500_000)
 	rec := postIncidental(t, r, openIncidentalRequest{
@@ -144,7 +144,7 @@ func TestPostIncidentalsRejectsWhatTheLedgerRefuses(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			r := testRouter(t)
-			setUpFundForTransactions(t, r)
+			setUpFund(t, r)
 
 			rec := postIncidental(t, r, tc.req)
 			if rec.Code != http.StatusBadRequest {
@@ -160,7 +160,7 @@ func TestPostIncidentalsRejectsWhatTheLedgerRefuses(t *testing.T) {
 
 func TestPostIncidentalsRejectsMalformedJSON(t *testing.T) {
 	r := testRouter(t)
-	setUpFundForTransactions(t, r)
+	setUpFund(t, r)
 
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/api/incidentals", strings.NewReader("{oops")))
@@ -210,7 +210,7 @@ func TestPostCloseRequiresAFund(t *testing.T) {
 // nothing: the path segment is the client's mistake, not a server fault.
 func TestGetIncidentalDetailOnAnUnknownPurposeIs404(t *testing.T) {
 	r := testRouter(t)
-	setUpFundForTransactions(t, r)
+	setUpFund(t, r)
 
 	rec := getIncidentalDetail(t, r, 9_999)
 	if rec.Code != http.StatusNotFound {
@@ -224,7 +224,7 @@ func TestGetIncidentalDetailOnAnUnknownPurposeIs404(t *testing.T) {
 
 func TestGetIncidentalDetailRejectsANonNumericID(t *testing.T) {
 	r := testRouter(t)
-	setUpFundForTransactions(t, r)
+	setUpFund(t, r)
 
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/incidentals/abc", nil))
@@ -242,13 +242,13 @@ func TestGetIncidentalDetailRejectsANonNumericID(t *testing.T) {
 // keeps only the ones still collecting.
 func TestGetIncidentalsOpenFiltersToOpenEnvelopes(t *testing.T) {
 	r := testRouter(t)
-	setup := setUpFundForTransactions(t, r)
+	setup := setUpFund(t, r)
 
 	still := openIncidentalFor(t, r, "Flood relief", "2026-08-01")
 	toClose := openIncidentalFor(t, r, "Jane's wedding", "2026-08-02")
 
 	closeRec := postCloseIncidental(t, r, toClose.PurposeID, closeIncidentalRequest{
-		AccountID: setup.CashAccountID, ClosedOn: "2026-08-20",
+		AccountID: setup.CashAccountID(t), ClosedOn: "2026-08-20",
 	})
 	if closeRec.Code != http.StatusOK {
 		t.Fatalf("close = %d, want %d (body: %s)", closeRec.Code, http.StatusOK, closeRec.Body.String())
@@ -274,7 +274,7 @@ func TestGetIncidentalsOpenFiltersToOpenEnvelopes(t *testing.T) {
 
 func TestGetIncidentalsRejectsAnUnparseableOpenFilter(t *testing.T) {
 	r := testRouter(t)
-	setUpFundForTransactions(t, r)
+	setUpFund(t, r)
 
 	rec := getIncidentals(t, r, "?open=yes")
 	if rec.Code != http.StatusBadRequest {
@@ -291,17 +291,17 @@ func TestGetIncidentalsRejectsAnUnparseableOpenFilter(t *testing.T) {
 // posted against the envelope's purpose - not stored anywhere on the row.
 func TestGetIncidentalDetailReturnsTotals(t *testing.T) {
 	r := testRouter(t)
-	setup := setUpFundForTransactions(t, r)
+	setup := setUpFund(t, r)
 	envelope := openIncidentalFor(t, r, "Jane's wedding", "2026-08-01")
 
 	if rec := postTransaction(t, r, transactionRequest{
-		AccountID: setup.CashAccountID, PurposeID: envelope.PurposeID,
+		AccountID: setup.CashAccountID(t), PurposeID: envelope.PurposeID,
 		Direction: "in", Amount: 100_000, OccurredOn: "2026-08-02",
 	}); rec.Code != http.StatusCreated {
 		t.Fatalf("contribution = %d, want %d (body: %s)", rec.Code, http.StatusCreated, rec.Body.String())
 	}
 	if rec := postTransaction(t, r, transactionRequest{
-		AccountID: setup.CashAccountID, PurposeID: envelope.PurposeID,
+		AccountID: setup.CashAccountID(t), PurposeID: envelope.PurposeID,
 		Direction: "out", Amount: 30_000, OccurredOn: "2026-08-03",
 	}); rec.Code != http.StatusCreated {
 		t.Fatalf("disbursement = %d, want %d (body: %s)", rec.Code, http.StatusCreated, rec.Body.String())
@@ -336,17 +336,17 @@ func TestGetIncidentalDetailReturnsTotals(t *testing.T) {
 // return value alone.
 func TestCloseIncidentalRollsLeftoverVerifiedThroughBalances(t *testing.T) {
 	r, l := testRouterAndLedger(t)
-	setup := setUpFundForTransactions(t, r)
+	setup := setUpFund(t, r)
 	envelope := openIncidentalFor(t, r, "Jane's wedding", "2026-08-01")
 
 	if rec := postTransaction(t, r, transactionRequest{
-		AccountID: setup.CashAccountID, PurposeID: envelope.PurposeID,
+		AccountID: setup.CashAccountID(t), PurposeID: envelope.PurposeID,
 		Direction: "in", Amount: 100_000, OccurredOn: "2026-08-02",
 	}); rec.Code != http.StatusCreated {
 		t.Fatalf("contribution = %d, want %d (body: %s)", rec.Code, http.StatusCreated, rec.Body.String())
 	}
 	if rec := postTransaction(t, r, transactionRequest{
-		AccountID: setup.CashAccountID, PurposeID: envelope.PurposeID,
+		AccountID: setup.CashAccountID(t), PurposeID: envelope.PurposeID,
 		Direction: "out", Amount: 30_000, OccurredOn: "2026-08-03",
 	}); rec.Code != http.StatusCreated {
 		t.Fatalf("disbursement = %d, want %d (body: %s)", rec.Code, http.StatusCreated, rec.Body.String())
@@ -363,7 +363,7 @@ func TestCloseIncidentalRollsLeftoverVerifiedThroughBalances(t *testing.T) {
 	}
 
 	closeRec := postCloseIncidental(t, r, envelope.PurposeID, closeIncidentalRequest{
-		AccountID: setup.CashAccountID, ClosedOn: "2026-08-20",
+		AccountID: setup.CashAccountID(t), ClosedOn: "2026-08-20",
 	})
 	if closeRec.Code != http.StatusOK {
 		t.Fatalf("POST /api/incidentals/{id}/close = %d, want %d (body: %s)", closeRec.Code, http.StatusOK, closeRec.Body.String())
@@ -412,17 +412,17 @@ func TestCloseIncidentalRollsLeftoverVerifiedThroughBalances(t *testing.T) {
 // balance rather than assumed from a 201 status alone.
 func TestCloseIncidentalZeroLeftoverPostsNothing(t *testing.T) {
 	r, l := testRouterAndLedger(t)
-	setup := setUpFundForTransactions(t, r)
+	setup := setUpFund(t, r)
 	envelope := openIncidentalFor(t, r, "Jane's wedding", "2026-08-01")
 
 	if rec := postTransaction(t, r, transactionRequest{
-		AccountID: setup.CashAccountID, PurposeID: envelope.PurposeID,
+		AccountID: setup.CashAccountID(t), PurposeID: envelope.PurposeID,
 		Direction: "in", Amount: 50_000, OccurredOn: "2026-08-02",
 	}); rec.Code != http.StatusCreated {
 		t.Fatalf("contribution = %d, want %d (body: %s)", rec.Code, http.StatusCreated, rec.Body.String())
 	}
 	if rec := postTransaction(t, r, transactionRequest{
-		AccountID: setup.CashAccountID, PurposeID: envelope.PurposeID,
+		AccountID: setup.CashAccountID(t), PurposeID: envelope.PurposeID,
 		Direction: "out", Amount: 50_000, OccurredOn: "2026-08-03",
 	}); rec.Code != http.StatusCreated {
 		t.Fatalf("disbursement = %d, want %d (body: %s)", rec.Code, http.StatusCreated, rec.Body.String())
@@ -435,7 +435,7 @@ func TestCloseIncidentalZeroLeftoverPostsNothing(t *testing.T) {
 	}
 
 	closeRec := postCloseIncidental(t, r, envelope.PurposeID, closeIncidentalRequest{
-		AccountID: setup.CashAccountID, ClosedOn: "2026-08-20",
+		AccountID: setup.CashAccountID(t), ClosedOn: "2026-08-20",
 	})
 	if closeRec.Code != http.StatusOK {
 		t.Fatalf("close = %d, want %d (body: %s)", closeRec.Code, http.StatusOK, closeRec.Body.String())
@@ -462,17 +462,17 @@ func TestCloseIncidentalZeroLeftoverPostsNothing(t *testing.T) {
 
 func TestCloseIncidentalNegativeLeftoverPostsNothing(t *testing.T) {
 	r, l := testRouterAndLedger(t)
-	setup := setUpFundForTransactions(t, r)
+	setup := setUpFund(t, r)
 	envelope := openIncidentalFor(t, r, "Jane's wedding", "2026-08-01")
 
 	if rec := postTransaction(t, r, transactionRequest{
-		AccountID: setup.CashAccountID, PurposeID: envelope.PurposeID,
+		AccountID: setup.CashAccountID(t), PurposeID: envelope.PurposeID,
 		Direction: "in", Amount: 20_000, OccurredOn: "2026-08-02",
 	}); rec.Code != http.StatusCreated {
 		t.Fatalf("contribution = %d, want %d (body: %s)", rec.Code, http.StatusCreated, rec.Body.String())
 	}
 	if rec := postTransaction(t, r, transactionRequest{
-		AccountID: setup.CashAccountID, PurposeID: envelope.PurposeID,
+		AccountID: setup.CashAccountID(t), PurposeID: envelope.PurposeID,
 		Direction: "out", Amount: 50_000, OccurredOn: "2026-08-03",
 	}); rec.Code != http.StatusCreated {
 		t.Fatalf("disbursement = %d, want %d (body: %s)", rec.Code, http.StatusCreated, rec.Body.String())
@@ -485,7 +485,7 @@ func TestCloseIncidentalNegativeLeftoverPostsNothing(t *testing.T) {
 	}
 
 	closeRec := postCloseIncidental(t, r, envelope.PurposeID, closeIncidentalRequest{
-		AccountID: setup.CashAccountID, ClosedOn: "2026-08-20",
+		AccountID: setup.CashAccountID(t), ClosedOn: "2026-08-20",
 	})
 	if closeRec.Code != http.StatusOK {
 		t.Fatalf("close = %d, want %d (body: %s)", closeRec.Code, http.StatusOK, closeRec.Body.String())
@@ -512,25 +512,25 @@ func TestCloseIncidentalNegativeLeftoverPostsNothing(t *testing.T) {
 // roll and not a generic 500.
 func TestCloseIncidentalTwiceReturnsItsNamed409(t *testing.T) {
 	r := testRouter(t)
-	setup := setUpFundForTransactions(t, r)
+	setup := setUpFund(t, r)
 	envelope := openIncidentalFor(t, r, "Jane's wedding", "2026-08-01")
 
 	if rec := postTransaction(t, r, transactionRequest{
-		AccountID: setup.CashAccountID, PurposeID: envelope.PurposeID,
+		AccountID: setup.CashAccountID(t), PurposeID: envelope.PurposeID,
 		Direction: "in", Amount: 100_000, OccurredOn: "2026-08-02",
 	}); rec.Code != http.StatusCreated {
 		t.Fatalf("contribution = %d, want %d (body: %s)", rec.Code, http.StatusCreated, rec.Body.String())
 	}
 
 	first := postCloseIncidental(t, r, envelope.PurposeID, closeIncidentalRequest{
-		AccountID: setup.CashAccountID, ClosedOn: "2026-08-20",
+		AccountID: setup.CashAccountID(t), ClosedOn: "2026-08-20",
 	})
 	if first.Code != http.StatusOK {
 		t.Fatalf("first close = %d, want %d (body: %s)", first.Code, http.StatusOK, first.Body.String())
 	}
 
 	second := postCloseIncidental(t, r, envelope.PurposeID, closeIncidentalRequest{
-		AccountID: setup.CashAccountID, ClosedOn: "2026-08-21",
+		AccountID: setup.CashAccountID(t), ClosedOn: "2026-08-21",
 	})
 	if second.Code != http.StatusConflict {
 		t.Fatalf("second close = %d, want %d (body: %s)", second.Code, http.StatusConflict, second.Body.String())
@@ -543,10 +543,10 @@ func TestCloseIncidentalTwiceReturnsItsNamed409(t *testing.T) {
 
 func TestPostCloseOnAnUnknownPurposeIs404(t *testing.T) {
 	r := testRouter(t)
-	setup := setUpFundForTransactions(t, r)
+	setup := setUpFund(t, r)
 
 	rec := postCloseIncidental(t, r, 9_999, closeIncidentalRequest{
-		AccountID: setup.CashAccountID, ClosedOn: "2026-08-20",
+		AccountID: setup.CashAccountID(t), ClosedOn: "2026-08-20",
 	})
 	if rec.Code != http.StatusNotFound {
 		t.Fatalf("close on an unknown purpose = %d, want %d (body: %s)", rec.Code, http.StatusNotFound, rec.Body.String())
@@ -559,11 +559,11 @@ func TestPostCloseOnAnUnknownPurposeIs404(t *testing.T) {
 
 func TestPostCloseRejectsAMalformedClosedOn(t *testing.T) {
 	r := testRouter(t)
-	setup := setUpFundForTransactions(t, r)
+	setup := setUpFund(t, r)
 	envelope := openIncidentalFor(t, r, "Jane's wedding", "2026-08-01")
 
 	rec := postCloseIncidental(t, r, envelope.PurposeID, closeIncidentalRequest{
-		AccountID: setup.CashAccountID, ClosedOn: "not-a-date",
+		AccountID: setup.CashAccountID(t), ClosedOn: "not-a-date",
 	})
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("close with a malformed date = %d, want %d (body: %s)", rec.Code, http.StatusBadRequest, rec.Body.String())
@@ -576,7 +576,7 @@ func TestPostCloseRejectsAMalformedClosedOn(t *testing.T) {
 
 func TestPostCloseRejectsANonNumericID(t *testing.T) {
 	r := testRouter(t)
-	setUpFundForTransactions(t, r)
+	setUpFund(t, r)
 
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/api/incidentals/abc/close",
@@ -592,7 +592,7 @@ func TestPostCloseRejectsANonNumericID(t *testing.T) {
 
 func TestPostCloseRejectsMalformedJSON(t *testing.T) {
 	r := testRouter(t)
-	setUpFundForTransactions(t, r)
+	setUpFund(t, r)
 	envelope := openIncidentalFor(t, r, "Jane's wedding", "2026-08-01")
 
 	rec := httptest.NewRecorder()
@@ -612,7 +612,7 @@ func TestPostCloseRejectsMalformedJSON(t *testing.T) {
 // an ordinary transaction posted through POST /api/transactions.
 func TestNoContributeRouteExists(t *testing.T) {
 	r := testRouter(t)
-	setUpFundForTransactions(t, r)
+	setUpFund(t, r)
 	envelope := openIncidentalFor(t, r, "Jane's wedding", "2026-08-01")
 
 	rec := httptest.NewRecorder()

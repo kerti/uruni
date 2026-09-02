@@ -52,6 +52,10 @@ CREATE TABLE account (                    -- location: where money physically si
   kind       TEXT    NOT NULL CHECK (kind IN ('cash','bank')),
   name       TEXT    NOT NULL CHECK (length(trim(name)) > 0),
   created_at INTEGER NOT NULL,
+  -- A used-then-retired location (a bank switch, a tin no longer kept), not a
+  -- never-used duplicate (that's DELETE). Mirrors member.inactive_on exactly,
+  -- below - same shape, same reasoning (M6.1, #134).
+  inactive_on TEXT CHECK (inactive_on IS NULL OR (date(inactive_on) IS NOT NULL AND inactive_on = date(inactive_on))),
   -- Not a second key: (fund_id, id) is what a later fund-scoped child (e.g. a
   -- transaction) references instead of id alone, so SQLite itself rejects a
   -- row whose parent belongs to another fund (ADR-024's composite-FK rule).

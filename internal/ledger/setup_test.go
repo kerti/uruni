@@ -10,14 +10,14 @@ import (
 	"github.com/kerti/uruni/internal/store"
 )
 
-// SetUpFund writes exactly the fund, its main purpose, and its cash and bank
-// accounts, and returns every id the caller needs right away.
+// SetUpFund writes exactly the fund, its main purpose, and every requested
+// account, and returns every id the caller needs right away.
 func TestSetUpFundCreatesFundMainPurposeAndAccounts(t *testing.T) {
 	l := newTestLedger(t)
 	ctx := context.Background()
 	q := store.New(l.db)
 
-	result, err := l.SetUpFund(ctx, SetUpFundParams{FundName: "Test Fund"})
+	result, err := l.SetUpFund(ctx, SetUpFundParams{FundName: "Test Fund", Accounts: defaultSetupAccounts})
 	if err != nil {
 		t.Fatalf("SetUpFund() = %v, want no error", err)
 	}
@@ -49,29 +49,44 @@ func TestSetUpFundCreatesFundMainPurposeAndAccounts(t *testing.T) {
 		t.Errorf("main purpose FundID = %d, want %d", mainPurpose.FundID, result.Fund.ID)
 	}
 
-	if result.CashAccountID == 0 {
-		t.Error("CashAccountID is zero")
+	if len(result.Accounts) != 2 {
+		t.Fatalf("len(result.Accounts) = %d, want 2", len(result.Accounts))
 	}
-	cash, err := q.GetAccount(ctx, result.CashAccountID)
+
+	cashID := result.CashAccountID(t)
+	if cashID == 0 {
+		t.Error("cash account id is zero")
+	}
+	cash, err := q.GetAccount(ctx, cashID)
 	if err != nil {
 		t.Fatalf("GetAccount(cash) = %v, want no error", err)
 	}
 	if cash.Kind != "cash" {
 		t.Errorf("cash account Kind = %q, want %q", cash.Kind, "cash")
 	}
+	if cash.Name != "Tunai" {
+		t.Errorf("cash account Name = %q, want %q", cash.Name, "Tunai")
+	}
 	if cash.FundID != result.Fund.ID {
 		t.Errorf("cash account FundID = %d, want %d", cash.FundID, result.Fund.ID)
 	}
-
-	if result.BankAccountID == 0 {
-		t.Error("BankAccountID is zero")
+	if cash.InactiveOn != nil {
+		t.Errorf("cash account InactiveOn = %v, want nil (never retired at setup)", cash.InactiveOn)
 	}
-	bank, err := q.GetAccount(ctx, result.BankAccountID)
+
+	bankID := result.BankAccountID(t)
+	if bankID == 0 {
+		t.Error("bank account id is zero")
+	}
+	bank, err := q.GetAccount(ctx, bankID)
 	if err != nil {
 		t.Fatalf("GetAccount(bank) = %v, want no error", err)
 	}
 	if bank.Kind != "bank" {
 		t.Errorf("bank account Kind = %q, want %q", bank.Kind, "bank")
+	}
+	if bank.Name != "Bank" {
+		t.Errorf("bank account Name = %q, want %q", bank.Name, "Bank")
 	}
 	if bank.FundID != result.Fund.ID {
 		t.Errorf("bank account FundID = %d, want %d", bank.FundID, result.Fund.ID)
@@ -103,17 +118,80 @@ func TestSetUpFundCreatesFundMainPurposeAndAccounts(t *testing.T) {
 	}
 }
 
+// #78: a fund is not pinned to exactly two accounts. Three named locations
+// are all written atomically with the fund and its main purpose, in the
+// order given.
+func TestSetUpFundWritesEveryRequestedAccountAtomically(t *testing.T) {
+	l := newTestLedger(t)
+	ctx := context.Background()
+	q := store.New(l.db)
+
+	requested := []AccountInput{
+		{Kind: "cash", Name: "Tunai RT"},
+		{Kind: "bank", Name: "BCA"},
+		{Kind: "bank", Name: "Mandiri"},
+	}
+
+	result, err := l.SetUpFund(ctx, SetUpFundParams{FundName: "Test Fund", Accounts: requested})
+	if err != nil {
+		t.Fatalf("SetUpFund() = %v, want no error", err)
+	}
+
+	if len(result.Accounts) != len(requested) {
+		t.Fatalf("len(result.Accounts) = %d, want %d", len(result.Accounts), len(requested))
+	}
+	for i, want := range requested {
+		got := result.Accounts[i]
+		if got.Kind != want.Kind || got.Name != want.Name {
+			t.Errorf("result.Accounts[%d] = {Kind: %q, Name: %q}, want {Kind: %q, Name: %q}",
+				i, got.Kind, got.Name, want.Kind, want.Name)
+		}
+		if got.FundID != result.Fund.ID {
+			t.Errorf("result.Accounts[%d].FundID = %d, want %d", i, got.FundID, result.Fund.ID)
+		}
+	}
+
+	accounts, err := q.ListAccountsByFund(ctx, result.Fund.ID)
+	if err != nil {
+		t.Fatalf("ListAccountsByFund() = %v, want no error", err)
+	}
+	if len(accounts) != len(requested) {
+		t.Errorf("ListAccountsByFund() = %d rows, want %d", len(accounts), len(requested))
+	}
+}
+
+// Zero requested accounts is ErrInvalidArgument, and nothing is written -
+// the same "at least one" rule FundName's own empty check already enforces,
+// aimed at the slice instead.
+func TestSetUpFundRejectsZeroAccounts(t *testing.T) {
+	l := newTestLedger(t)
+	ctx := context.Background()
+
+	_, err := l.SetUpFund(ctx, SetUpFundParams{FundName: "Test Fund", Accounts: nil})
+	if !errors.Is(err, ErrInvalidArgument) {
+		t.Fatalf("SetUpFund(zero accounts) = %v, want an error wrapping ErrInvalidArgument", err)
+	}
+
+	funds, listErr := store.New(l.db).ListFunds(ctx)
+	if listErr != nil {
+		t.Fatalf("ListFunds() = %v, want no error", listErr)
+	}
+	if len(funds) != 0 {
+		t.Errorf("ListFunds() = %d rows after a rejected call, want 0", len(funds))
+	}
+}
+
 // Two different funds - necessarily two different databases, since a second
 // SetUpFund call against the same one is refused (see the test below) - get
 // two different slugs. This is the whole entropy argument made observable,
 // not a proof of uniqueness (no test can prove that), but a check that the
 // generator is not, say, returning a constant.
 func TestSetUpFundGeneratesDistinctReportSlugs(t *testing.T) {
-	first, err := newTestLedger(t).SetUpFund(context.Background(), SetUpFundParams{FundName: "Fund One"})
+	first, err := newTestLedger(t).SetUpFund(context.Background(), SetUpFundParams{FundName: "Fund One", Accounts: defaultSetupAccounts})
 	if err != nil {
 		t.Fatalf("first SetUpFund() = %v, want no error", err)
 	}
-	second, err := newTestLedger(t).SetUpFund(context.Background(), SetUpFundParams{FundName: "Fund Two"})
+	second, err := newTestLedger(t).SetUpFund(context.Background(), SetUpFundParams{FundName: "Fund Two", Accounts: defaultSetupAccounts})
 	if err != nil {
 		t.Fatalf("second SetUpFund() = %v, want no error", err)
 	}
@@ -126,7 +204,7 @@ func TestSetUpFundGeneratesDistinctReportSlugs(t *testing.T) {
 func TestSetUpFundRejectsEmptyFundName(t *testing.T) {
 	l := newTestLedger(t)
 
-	_, err := l.SetUpFund(context.Background(), SetUpFundParams{FundName: "   "})
+	_, err := l.SetUpFund(context.Background(), SetUpFundParams{FundName: "   ", Accounts: defaultSetupAccounts})
 	if !errors.Is(err, ErrInvalidArgument) {
 		t.Fatalf("SetUpFund(blank name) = %v, want an error wrapping ErrInvalidArgument", err)
 	}
@@ -146,12 +224,12 @@ func TestSetUpFundSecondCallIsRefusedAndPostsNoSecondFund(t *testing.T) {
 	l := newTestLedger(t)
 	ctx := context.Background()
 
-	first, err := l.SetUpFund(ctx, SetUpFundParams{FundName: "Test Fund"})
+	first, err := l.SetUpFund(ctx, SetUpFundParams{FundName: "Test Fund", Accounts: defaultSetupAccounts})
 	if err != nil {
 		t.Fatalf("first SetUpFund() = %v, want no error", err)
 	}
 
-	_, err = l.SetUpFund(ctx, SetUpFundParams{FundName: "Second Fund"})
+	_, err = l.SetUpFund(ctx, SetUpFundParams{FundName: "Second Fund", Accounts: defaultSetupAccounts})
 	if !errors.Is(err, ErrFundAlreadyExists) {
 		t.Fatalf("second SetUpFund() = %v, want an error wrapping ErrFundAlreadyExists", err)
 	}
@@ -206,7 +284,7 @@ func TestSetUpFundAtomicityNoOrphanFundWhenThePurposeInsertFails(t *testing.T) {
 		t.Fatalf("re-enabling foreign_keys after setup = %v, want no error", err)
 	}
 
-	_, err := l.SetUpFund(ctx, SetUpFundParams{FundName: "Test Fund"})
+	_, err := l.SetUpFund(ctx, SetUpFundParams{FundName: "Test Fund", Accounts: defaultSetupAccounts})
 	if err == nil {
 		t.Fatal("SetUpFund() = nil error, want a purpose_single_main conflict on the main purpose insert")
 	}
@@ -234,7 +312,7 @@ func TestSetUpFundAtomicityNoOrphanFundWhenThePurposeInsertFails(t *testing.T) {
 		t.Fatalf("counting account rows = %v, want no error", err)
 	}
 	if accountCount != 0 {
-		t.Errorf("account row count = %d, want 0 - the purpose failure must happen before either account insert", accountCount)
+		t.Errorf("account row count = %d, want 0 - the purpose failure must happen before any account insert", accountCount)
 	}
 }
 
@@ -252,7 +330,7 @@ func TestSetUpFundAbortsWhenTheSlugSourceFails(t *testing.T) {
 	}
 	t.Cleanup(func() { randInt = original })
 
-	_, err := l.SetUpFund(ctx, SetUpFundParams{FundName: "Test Fund"})
+	_, err := l.SetUpFund(ctx, SetUpFundParams{FundName: "Test Fund", Accounts: defaultSetupAccounts})
 	if err == nil {
 		t.Fatal("SetUpFund() = nil error, want the slug failure to abort setup")
 	}

@@ -9,22 +9,26 @@ import (
 	"testing"
 )
 
+// postSetup is the generic "just get a fund to exist" fixture every test in
+// this package that doesn't care which accounts it has reaches for - one
+// default cash account, the minimum #78 requires. A test that needs a
+// specific set of accounts (this file's own response-shape and refusal
+// tests, accounts_test.go) calls postSetupWithAccounts directly instead;
+// a test that needs the package's usual cash+bank pair calls setUpFund
+// (testhelpers_test.go).
 func postSetup(t *testing.T, r http.Handler, name string) *httptest.ResponseRecorder {
 	t.Helper()
-	body, err := json.Marshal(setupRequest{Name: name})
-	if err != nil {
-		t.Fatalf("marshaling setup request: %v", err)
-	}
-	rec := httptest.NewRecorder()
-	r.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/api/setup", bytes.NewReader(body)))
-	return rec
+	return postSetupWithAccounts(t, r, name, []setupAccountRequest{{Kind: "cash", Name: "Tunai"}})
 }
 
-// The 201 response body is exactly {fund, main_purpose_id, cash_account_id,
-// bank_account_id} - pinned by #64, asserted here rather than only on the
-// error path, since #65-#67 all consume these ids the moment setup returns.
+// The 201 response body is exactly {fund, main_purpose_id, accounts} -
+// pinned by #64 for fund and main_purpose_id; accounts became a list under
+// #78, in the order requested.
 func TestPostSetupReturnsThePinnedResponseShape(t *testing.T) {
-	rec := postSetup(t, testRouter(t), "Test Fund")
+	rec := postSetupWithAccounts(t, testRouter(t), "Test Fund", []setupAccountRequest{
+		{Kind: "cash", Name: "Tunai"},
+		{Kind: "bank", Name: "Bank"},
+	})
 
 	if rec.Code != http.StatusCreated {
 		t.Fatalf("POST /api/setup = %d, want %d (body: %s)", rec.Code, http.StatusCreated, rec.Body.String())
@@ -53,14 +57,99 @@ func TestPostSetupReturnsThePinnedResponseShape(t *testing.T) {
 	if got.MainPurposeID == 0 {
 		t.Error("main_purpose_id is zero")
 	}
-	if got.CashAccountID == 0 {
-		t.Error("cash_account_id is zero")
+
+	if len(got.Accounts) != 2 {
+		t.Fatalf("len(accounts) = %d, want 2", len(got.Accounts))
 	}
-	if got.BankAccountID == 0 {
-		t.Error("bank_account_id is zero")
+	if got.Accounts[0].Kind != "cash" || got.Accounts[0].Name != "Tunai" {
+		t.Errorf("accounts[0] = %+v, want {Kind: cash, Name: Tunai}", got.Accounts[0])
 	}
-	if got.CashAccountID == got.BankAccountID {
-		t.Errorf("cash_account_id and bank_account_id are both %d, want two distinct accounts", got.CashAccountID)
+	if got.Accounts[1].Kind != "bank" || got.Accounts[1].Name != "Bank" {
+		t.Errorf("accounts[1] = %+v, want {Kind: bank, Name: Bank}", got.Accounts[1])
+	}
+	if got.Accounts[0].ID == 0 || got.Accounts[1].ID == 0 {
+		t.Error("an account id is zero")
+	}
+	if got.Accounts[0].ID == got.Accounts[1].ID {
+		t.Errorf("accounts[0] and accounts[1] share id %d, want two distinct accounts", got.Accounts[0].ID)
+	}
+	if got.Accounts[0].InactiveOn != nil || got.Accounts[1].InactiveOn != nil {
+		t.Error("a freshly set-up account has a non-nil inactive_on, want nil")
+	}
+}
+
+// #78: any positive number of accounts is accepted, not only two - a single
+// cash-only fund is exactly as valid as the cash+bank default.
+func TestPostSetupAcceptsASingleAccount(t *testing.T) {
+	rec := postSetupWithAccounts(t, testRouter(t), "Test Fund", []setupAccountRequest{
+		{Kind: "cash", Name: "Tunai"},
+	})
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("POST /api/setup with one account = %d, want %d (body: %s)", rec.Code, http.StatusCreated, rec.Body.String())
+	}
+
+	var got setupResponse
+	if err := json.NewDecoder(rec.Body).Decode(&got); err != nil {
+		t.Fatalf("decoding response: %v", err)
+	}
+	if len(got.Accounts) != 1 {
+		t.Fatalf("len(accounts) = %d, want 1", len(got.Accounts))
+	}
+}
+
+// Zero accounts is refused with the ledger's own ErrInvalidArgument, mapped
+// to a clean 400 - not a 500, and no fund left standing for the wizard to
+// collide with on retry.
+func TestPostSetupRejectsZeroAccounts(t *testing.T) {
+	r := testRouter(t)
+
+	rec := postSetupWithAccounts(t, r, "Test Fund", nil)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("POST /api/setup with zero accounts = %d, want %d (body: %s)", rec.Code, http.StatusBadRequest, rec.Body.String())
+	}
+	got := decodeError(t, rec)
+	if got.Code != "invalid_argument" {
+		t.Errorf("error code = %q, want %q", got.Code, "invalid_argument")
+	}
+
+	// The refused call must not have left a fund behind - a retry with real
+	// accounts has to still succeed, not collide with ErrFundAlreadyExists.
+	retry := postSetupWithAccounts(t, r, "Test Fund", []setupAccountRequest{{Kind: "cash", Name: "Tunai"}})
+	if retry.Code != http.StatusCreated {
+		t.Fatalf("POST /api/setup retry after a rejected zero-account call = %d, want %d (body: %s)", retry.Code, http.StatusCreated, retry.Body.String())
+	}
+}
+
+// A malformed kind is refused by the schema's own CHECK (kind IN
+// ('cash','bank')), surfaced as a 400 rather than a 500 - the same
+// check_violation path account_test.go's own malformed-kind test exercises
+// for POST /api/accounts.
+func TestPostSetupRejectsAMalformedAccountKind(t *testing.T) {
+	rec := postSetupWithAccounts(t, testRouter(t), "Test Fund", []setupAccountRequest{
+		{Kind: "wallet", Name: "Dompet"},
+	})
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("POST /api/setup with kind=wallet = %d, want %d (body: %s)", rec.Code, http.StatusBadRequest, rec.Body.String())
+	}
+	got := decodeError(t, rec)
+	if got.Code != "check_violation" {
+		t.Errorf("error code = %q, want %q", got.Code, "check_violation")
+	}
+}
+
+// A blank account name is refused by the schema's own CHECK
+// (length(trim(name)) > 0), the same rule the fund name itself already
+// enforces one level up (SetUpFund's own ErrInvalidArgument).
+func TestPostSetupRejectsABlankAccountName(t *testing.T) {
+	rec := postSetupWithAccounts(t, testRouter(t), "Test Fund", []setupAccountRequest{
+		{Kind: "cash", Name: "   "},
+	})
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("POST /api/setup with a blank account name = %d, want %d (body: %s)", rec.Code, http.StatusBadRequest, rec.Body.String())
+	}
+	got := decodeError(t, rec)
+	if got.Code != "check_violation" {
+		t.Errorf("error code = %q, want %q", got.Code, "check_violation")
 	}
 }
 
@@ -197,4 +286,18 @@ func TestGetFundReportsAStoreFailureAsA500(t *testing.T) {
 	if body.Error.Code != "internal_error" {
 		t.Errorf("error code = %q, want %q", body.Error.Code, "internal_error")
 	}
+}
+
+// postSetupWithAccounts is postSetup's counterpart when a test needs to name
+// its own accounts rather than take postSetup's single-cash-account default
+// or setUpFund's cash+bank pair (testhelpers_test.go).
+func postSetupWithAccounts(t *testing.T, r http.Handler, name string, accounts []setupAccountRequest) *httptest.ResponseRecorder {
+	t.Helper()
+	body, err := json.Marshal(setupRequest{Name: name, Accounts: accounts})
+	if err != nil {
+		t.Fatalf("marshaling setup request: %v", err)
+	}
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/api/setup", bytes.NewReader(body)))
+	return rec
 }

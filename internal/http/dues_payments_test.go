@@ -41,7 +41,7 @@ func TestPostDuesPaymentsRequiresAFund(t *testing.T) {
 // that shape back rather than collapsing it.
 func TestPostDuesPaymentsSeveralPeriodsYieldsOneRowPerPeriod(t *testing.T) {
 	r, l := testRouterAndLedger(t)
-	setup := setUpFundForTransactions(t, r)
+	setup := setUpFund(t, r)
 
 	memberRec := postMember(t, r, memberRequest{Name: "Jane"})
 	if memberRec.Code != http.StatusCreated {
@@ -58,7 +58,7 @@ func TestPostDuesPaymentsSeveralPeriodsYieldsOneRowPerPeriod(t *testing.T) {
 		{DuesPeriod: "2026-08", Amount: 25_000},
 	}
 	rec := postDuesPayment(t, r, duesPaymentRequest{
-		AccountID: setup.CashAccountID, PurposeID: setup.MainPurposeID,
+		AccountID: setup.CashAccountID(t), PurposeID: setup.MainPurposeID,
 		MemberID: member.ID, OccurredOn: "2026-08-12",
 		Periods: periods,
 	})
@@ -118,7 +118,7 @@ func TestPostDuesPaymentsSeveralPeriodsYieldsOneRowPerPeriod(t *testing.T) {
 
 func TestPostDuesPaymentsRejectsEmptyPeriods(t *testing.T) {
 	r := testRouter(t)
-	setup := setUpFundForTransactions(t, r)
+	setup := setUpFund(t, r)
 
 	memberRec := postMember(t, r, memberRequest{Name: "Jane"})
 	var member memberResponse
@@ -127,7 +127,7 @@ func TestPostDuesPaymentsRejectsEmptyPeriods(t *testing.T) {
 	}
 
 	rec := postDuesPayment(t, r, duesPaymentRequest{
-		AccountID: setup.CashAccountID, PurposeID: setup.MainPurposeID,
+		AccountID: setup.CashAccountID(t), PurposeID: setup.MainPurposeID,
 		MemberID: member.ID, OccurredOn: "2026-08-12",
 		Periods: nil,
 	})
@@ -154,7 +154,7 @@ func TestPostDuesPaymentsRejectsEmptyPeriods(t *testing.T) {
 // PostDuesPayments' own check answers, not a second one in the handler.
 func TestPostDuesPaymentsRejectsNonPositiveAmount(t *testing.T) {
 	r := testRouter(t)
-	setup := setUpFundForTransactions(t, r)
+	setup := setUpFund(t, r)
 
 	memberRec := postMember(t, r, memberRequest{Name: "Jane"})
 	var member memberResponse
@@ -163,7 +163,7 @@ func TestPostDuesPaymentsRejectsNonPositiveAmount(t *testing.T) {
 	}
 
 	rec := postDuesPayment(t, r, duesPaymentRequest{
-		AccountID: setup.CashAccountID, PurposeID: setup.MainPurposeID,
+		AccountID: setup.CashAccountID(t), PurposeID: setup.MainPurposeID,
 		MemberID: member.ID, OccurredOn: "2026-08-12",
 		Periods: []duesPaymentPeriod{{DuesPeriod: "2026-08", Amount: 0}},
 	})
@@ -181,7 +181,7 @@ func TestPostDuesPaymentsRejectsNonPositiveAmount(t *testing.T) {
 // a real "YYYY-MM" month.
 func TestPostDuesPaymentsRejectsAMalformedDuesPeriod(t *testing.T) {
 	r := testRouter(t)
-	setup := setUpFundForTransactions(t, r)
+	setup := setUpFund(t, r)
 
 	memberRec := postMember(t, r, memberRequest{Name: "Jane"})
 	var member memberResponse
@@ -190,7 +190,7 @@ func TestPostDuesPaymentsRejectsAMalformedDuesPeriod(t *testing.T) {
 	}
 
 	rec := postDuesPayment(t, r, duesPaymentRequest{
-		AccountID: setup.CashAccountID, PurposeID: setup.MainPurposeID,
+		AccountID: setup.CashAccountID(t), PurposeID: setup.MainPurposeID,
 		MemberID: member.ID, OccurredOn: "2026-08-12",
 		Periods: []duesPaymentPeriod{{DuesPeriod: "2026-13", Amount: 25_000}},
 	})
@@ -205,7 +205,7 @@ func TestPostDuesPaymentsRejectsAMalformedDuesPeriod(t *testing.T) {
 
 func TestPostDuesPaymentsRejectsMalformedJSON(t *testing.T) {
 	r := testRouter(t)
-	setUpFundForTransactions(t, r)
+	setUpFund(t, r)
 
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/api/dues-payments", strings.NewReader("{oops")))
@@ -228,7 +228,7 @@ func TestPostDuesPaymentsRejectsMalformedJSON(t *testing.T) {
 // mid-batch failure leaves nothing behind at all.
 func TestPostDuesPaymentsAMidBatchFailureWritesNothing(t *testing.T) {
 	r, l := testRouterAndLedger(t)
-	setup := setUpFundForTransactions(t, r)
+	setup := setUpFund(t, r)
 
 	memberRec := postMember(t, r, memberRequest{Name: "Jane"})
 	var member memberResponse
@@ -237,7 +237,7 @@ func TestPostDuesPaymentsAMidBatchFailureWritesNothing(t *testing.T) {
 	}
 
 	rec := postDuesPayment(t, r, duesPaymentRequest{
-		AccountID: setup.CashAccountID, PurposeID: setup.MainPurposeID,
+		AccountID: setup.CashAccountID(t), PurposeID: setup.MainPurposeID,
 		MemberID: member.ID, OccurredOn: "2026-08-12",
 		Periods: []duesPaymentPeriod{
 			{DuesPeriod: "2026-06", Amount: 25_000},

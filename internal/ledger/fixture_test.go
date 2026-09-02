@@ -113,6 +113,39 @@ func createAccount(t *testing.T, q *store.Queries, fundID int64, kind, name stri
 	return a.ID
 }
 
+// defaultSetupAccounts is the cash+bank pair every SetUpFund test in this
+// package builds on unless it's specifically exercising #78's "N accounts,
+// not a fixed two" - one shared default rather than each test re-typing the
+// same two-element literal, the ledger-package equivalent of
+// internal/http/testhelpers_test.go's shared fixture.
+var defaultSetupAccounts = []AccountInput{
+	{Kind: "cash", Name: "Tunai"},
+	{Kind: "bank", Name: "Bank"},
+}
+
+// CashAccountID and BankAccountID find SetUpFundResult's own cash/bank
+// account by Kind rather than assuming a fixed slice order or count - #78
+// dropped both assumptions from production code, so the test helper that
+// reads a result back out does not get to lean on them either.
+func (r SetUpFundResult) CashAccountID(t *testing.T) int64 {
+	return accountIDByKind(t, r.Accounts, "cash")
+}
+
+func (r SetUpFundResult) BankAccountID(t *testing.T) int64 {
+	return accountIDByKind(t, r.Accounts, "bank")
+}
+
+func accountIDByKind(t *testing.T, accounts []store.Account, kind string) int64 {
+	t.Helper()
+	for _, a := range accounts {
+		if a.Kind == kind {
+			return a.ID
+		}
+	}
+	t.Fatalf("no account of kind %q among %+v", kind, accounts)
+	return 0
+}
+
 func createPurpose(t *testing.T, q *store.Queries, fundID int64, kind, name string) int64 {
 	t.Helper()
 	p, err := q.CreatePurpose(context.Background(), store.CreatePurposeParams{

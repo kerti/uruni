@@ -37,6 +37,11 @@ type Querier interface {
 	CreateTransaction(ctx context.Context, arg CreateTransactionParams) (Transaction, error)
 	CreateTransfer(ctx context.Context, arg CreateTransferParams) (Transfer, error)
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
+	// DeleteAccount leans on the composite foreign keys from "transaction" and
+	// reconciliation_line to refuse it once real data references the account -
+	// for a never-used duplicate only; a used-then-retired account gets
+	// UpdateAccount's inactive_on instead.
+	DeleteAccount(ctx context.Context, id int64) error
 	// DeleteDuesRate is what makes a wrong-month rate correctable at all, since
 	// UNIQUE (tier_id, effective_from) refuses the corrected row otherwise.
 	DeleteDuesRate(ctx context.Context, id int64) error
@@ -204,6 +209,13 @@ type Querier interface {
 	// proves the session still valid pushes expires_at forward by the same fixed
 	// window, computed by the caller - there is no absolute cap to enforce here.
 	TouchSession(ctx context.Context, arg TouchSessionParams) (Session, error)
+	// UpdateAccount is a correction to a location's own label, not a ledger
+	// event: renaming or retiring an account changes nothing already posted
+	// (account.name is a label, not a posted fact). name is NOT NULL, so
+	// COALESCE covers it the same way UpdateMember's does; inactive_on needs the
+	// set_inactive_on flag for the same reason UpdateMember's does - a null
+	// argument is ambiguous between "leave alone" and "reinstate".
+	UpdateAccount(ctx context.Context, arg UpdateAccountParams) (Account, error)
 	// UpdateDuesRate corrects a mistyped amount. effective_from stays fixed: a
 	// rate filed against the wrong month is deleted and re-posted, not moved.
 	UpdateDuesRate(ctx context.Context, arg UpdateDuesRateParams) (DuesRate, error)

@@ -139,7 +139,7 @@ func TestGetReconciliationDetailRequiresAFund(t *testing.T) {
 // not an empty 200. See latestReconciliation's own doc comment for why.
 func TestGetReconciliationLatestBeforeAnySnapshotIs404(t *testing.T) {
 	r := testRouter(t)
-	setUpFundForTransactions(t, r)
+	setUpFund(t, r)
 
 	rec := getLatestReconciliation(t, r)
 	if rec.Code != http.StatusNotFound {
@@ -158,7 +158,7 @@ func TestGetReconciliationLatestBeforeAnySnapshotIs404(t *testing.T) {
 // fail strconv.ParseInt on "latest"/"open-lines" as invalid_argument.
 func TestReconciliationsLatestAndOpenLinesAreNotParsedAsIDs(t *testing.T) {
 	r := testRouter(t)
-	setUpFundForTransactions(t, r)
+	setUpFund(t, r)
 
 	latest := getLatestReconciliation(t, r)
 	if latest.Code == http.StatusBadRequest {
@@ -191,10 +191,10 @@ func TestReconciliationsLatestAndOpenLinesAreNotParsedAsIDs(t *testing.T) {
 // and the detail route.
 func TestTakeReconciliationMatchedRoundTripsThroughListAndDetail(t *testing.T) {
 	r := testRouter(t)
-	setup := setUpFundForTransactions(t, r)
+	setup := setUpFund(t, r)
 
 	if rec := postTransaction(t, r, transactionRequest{
-		AccountID: setup.CashAccountID, PurposeID: setup.MainPurposeID,
+		AccountID: setup.CashAccountID(t), PurposeID: setup.MainPurposeID,
 		Direction: "in", Amount: 100_000, OccurredOn: "2026-08-01",
 	}); rec.Code != http.StatusCreated {
 		t.Fatalf("seed transaction = %d, want %d (body: %s)", rec.Code, http.StatusCreated, rec.Body.String())
@@ -204,7 +204,7 @@ func TestTakeReconciliationMatchedRoundTripsThroughListAndDetail(t *testing.T) {
 	takeRec := postReconciliation(t, r, takeReconciliationRequest{
 		Note: &note,
 		Counts: []accountCountRequest{
-			{AccountID: setup.CashAccountID, ActualAmount: 100_000, Resolution: "matched"},
+			{AccountID: setup.CashAccountID(t), ActualAmount: 100_000, Resolution: "matched"},
 		},
 	})
 	if takeRec.Code != http.StatusCreated {
@@ -276,11 +276,11 @@ func TestTakeReconciliationMatchedRoundTripsThroughListAndDetail(t *testing.T) {
 // false record that no gap was ever found.
 func TestTakeReconciliationAdjustedStoresTheGapFoundNotZero(t *testing.T) {
 	r, l := testRouterAndLedger(t)
-	setup := setUpFundForTransactions(t, r)
+	setup := setUpFund(t, r)
 	ctx := t.Context()
 
 	if rec := postTransaction(t, r, transactionRequest{
-		AccountID: setup.CashAccountID, PurposeID: setup.MainPurposeID,
+		AccountID: setup.CashAccountID(t), PurposeID: setup.MainPurposeID,
 		Direction: "in", Amount: 100_000, OccurredOn: "2026-08-01",
 	}); rec.Code != http.StatusCreated {
 		t.Fatalf("seed transaction = %d, want %d (body: %s)", rec.Code, http.StatusCreated, rec.Body.String())
@@ -289,7 +289,7 @@ func TestTakeReconciliationAdjustedStoresTheGapFoundNotZero(t *testing.T) {
 	note := "tin was short"
 	takeRec := postReconciliation(t, r, takeReconciliationRequest{
 		Counts: []accountCountRequest{{
-			AccountID: setup.CashAccountID, ActualAmount: 80_000, Resolution: "adjusted",
+			AccountID: setup.CashAccountID(t), ActualAmount: 80_000, Resolution: "adjusted",
 			Fix: &fixRequest{
 				PurposeID: setup.MainPurposeID, Direction: "out", Amount: 20_000,
 				OccurredOn: "2026-08-31", Note: &note,
@@ -300,7 +300,7 @@ func TestTakeReconciliationAdjustedStoresTheGapFoundNotZero(t *testing.T) {
 		t.Fatalf("POST /api/reconciliations = %d, want %d (body: %s)", takeRec.Code, http.StatusCreated, takeRec.Body.String())
 	}
 	created := decodeReconciliationDetail(t, takeRec)
-	line := lineFor(t, created.Lines, setup.CashAccountID)
+	line := lineFor(t, created.Lines, setup.CashAccountID(t))
 
 	if line.RecordedAmount != 100_000 {
 		t.Errorf("recorded_amount = %d, want 100000 (before the fix)", line.RecordedAmount)
@@ -320,14 +320,14 @@ func TestTakeReconciliationAdjustedStoresTheGapFoundNotZero(t *testing.T) {
 	// never silently rewritten to 0 by a second read.
 	detailRec := getReconciliationDetail(t, r, created.ID)
 	detail := decodeReconciliationDetail(t, detailRec)
-	againLine := lineFor(t, detail.Lines, setup.CashAccountID)
+	againLine := lineFor(t, detail.Lines, setup.CashAccountID(t))
 	if againLine.DifferenceAmount != -20_000 {
 		t.Fatalf("difference_amount on re-read = %d, want -20000 (still the gap found, not zeroed on read-back)", againLine.DifferenceAmount)
 	}
 
 	// The fix itself really moved the ledger: cash is now 80000, verified fresh
 	// off the ledger rather than trusted from the response alone.
-	balance, err := l.AccountBalance(ctx, setup.Fund.ID, setup.CashAccountID)
+	balance, err := l.AccountBalance(ctx, setup.Fund.ID, setup.CashAccountID(t))
 	if err != nil {
 		t.Fatalf("AccountBalance() = %v, want no error", err)
 	}
@@ -345,16 +345,16 @@ func TestTakeReconciliationAdjustedStoresTheGapFoundNotZero(t *testing.T) {
 // snapshot's cutoff regardless of its calendar date.
 func TestTakeReconciliationBackdatedFixLandsInNextSnapshotNotThisOne(t *testing.T) {
 	r := testRouter(t)
-	setup := setUpFundForTransactions(t, r)
+	setup := setUpFund(t, r)
 
 	if rec := postTransaction(t, r, transactionRequest{
-		AccountID: setup.CashAccountID, PurposeID: setup.MainPurposeID,
+		AccountID: setup.CashAccountID(t), PurposeID: setup.MainPurposeID,
 		Direction: "in", Amount: 300_000, OccurredOn: "2026-08-01",
 	}); rec.Code != http.StatusCreated {
 		t.Fatalf("seed in = %d, want %d (body: %s)", rec.Code, http.StatusCreated, rec.Body.String())
 	}
 	if rec := postTransaction(t, r, transactionRequest{
-		AccountID: setup.CashAccountID, PurposeID: setup.MainPurposeID,
+		AccountID: setup.CashAccountID(t), PurposeID: setup.MainPurposeID,
 		Direction: "out", Amount: 50_000, OccurredOn: "2026-08-05",
 	}); rec.Code != http.StatusCreated {
 		t.Fatalf("seed out = %d, want %d (body: %s)", rec.Code, http.StatusCreated, rec.Body.String())
@@ -362,14 +362,14 @@ func TestTakeReconciliationBackdatedFixLandsInNextSnapshotNotThisOne(t *testing.
 
 	firstRec := postReconciliation(t, r, takeReconciliationRequest{
 		Counts: []accountCountRequest{
-			{AccountID: setup.CashAccountID, ActualAmount: 240_000, Resolution: "left_open"},
+			{AccountID: setup.CashAccountID(t), ActualAmount: 240_000, Resolution: "left_open"},
 		},
 	})
 	if firstRec.Code != http.StatusCreated {
 		t.Fatalf("POST /api/reconciliations (first) = %d, want %d (body: %s)", firstRec.Code, http.StatusCreated, firstRec.Body.String())
 	}
 	first := decodeReconciliationDetail(t, firstRec)
-	firstLine := lineFor(t, first.Lines, setup.CashAccountID)
+	firstLine := lineFor(t, first.Lines, setup.CashAccountID(t))
 	if firstLine.RecordedAmount != 250_000 || firstLine.DifferenceAmount != -10_000 {
 		t.Fatalf("first line = %+v, want recorded=250000 difference=-10000", firstLine)
 	}
@@ -379,7 +379,7 @@ func TestTakeReconciliationBackdatedFixLandsInNextSnapshotNotThisOne(t *testing.
 	// id - through the ordinary transactions route, not as part of a
 	// reconciliation call.
 	if rec := postTransaction(t, r, transactionRequest{
-		AccountID: setup.CashAccountID, PurposeID: setup.MainPurposeID,
+		AccountID: setup.CashAccountID(t), PurposeID: setup.MainPurposeID,
 		Direction: "out", Amount: 10_000, OccurredOn: "2026-08-03", IsAdjustment: true,
 	}); rec.Code != http.StatusCreated {
 		t.Fatalf("late entry = %d, want %d (body: %s)", rec.Code, http.StatusCreated, rec.Body.String())
@@ -388,7 +388,7 @@ func TestTakeReconciliationBackdatedFixLandsInNextSnapshotNotThisOne(t *testing.
 	// The first snapshot's frozen line must not have moved.
 	firstAgainRec := getReconciliationDetail(t, r, first.ID)
 	firstAgain := decodeReconciliationDetail(t, firstAgainRec)
-	firstLineAgain := lineFor(t, firstAgain.Lines, setup.CashAccountID)
+	firstLineAgain := lineFor(t, firstAgain.Lines, setup.CashAccountID(t))
 	if firstLineAgain.RecordedAmount != 250_000 || firstLineAgain.DifferenceAmount != -10_000 {
 		t.Errorf("first snapshot after the late entry = %+v, want unchanged recorded=250000 difference=-10000", firstLineAgain)
 	}
@@ -397,14 +397,14 @@ func TestTakeReconciliationBackdatedFixLandsInNextSnapshotNotThisOne(t *testing.
 	// toward today's balance.
 	secondRec := postReconciliation(t, r, takeReconciliationRequest{
 		Counts: []accountCountRequest{
-			{AccountID: setup.CashAccountID, ActualAmount: 240_000, Resolution: "matched"},
+			{AccountID: setup.CashAccountID(t), ActualAmount: 240_000, Resolution: "matched"},
 		},
 	})
 	if secondRec.Code != http.StatusCreated {
 		t.Fatalf("POST /api/reconciliations (second) = %d, want %d (body: %s)", secondRec.Code, http.StatusCreated, secondRec.Body.String())
 	}
 	second := decodeReconciliationDetail(t, secondRec)
-	secondLine := lineFor(t, second.Lines, setup.CashAccountID)
+	secondLine := lineFor(t, second.Lines, setup.CashAccountID(t))
 	if secondLine.RecordedAmount != 240_000 || secondLine.DifferenceAmount != 0 {
 		t.Errorf("second snapshot = %+v, want recorded=240000 difference=0 - the late entry now counts", secondLine)
 	}
@@ -430,7 +430,7 @@ func TestTakeReconciliationBackdatedFixLandsInNextSnapshotNotThisOne(t *testing.
 func TestTakeReconciliationRejectsAnotherFundsAccount(t *testing.T) {
 	sqlDB := testStoreDB(t)
 	r := authedRouterFor(t, sqlDB)
-	setUpFundForTransactions(t, r)
+	setUpFund(t, r)
 
 	// A second fund, created directly through the store - the app itself
 	// only ever exposes one (v1), so the only way to get a genuine
@@ -475,7 +475,7 @@ func TestTakeReconciliationRejectsAnotherFundsAccount(t *testing.T) {
 func TestGetReconciliationDetailOnAnotherFundsSnapshotIs404(t *testing.T) {
 	sqlDB := testStoreDB(t)
 	r := authedRouterFor(t, sqlDB)
-	setUpFundForTransactions(t, r)
+	setUpFund(t, r)
 
 	q := store.New(sqlDB)
 	ctx := t.Context()
@@ -543,10 +543,10 @@ func TestTakeReconciliationRejectsInvalidArgumentsBeforeAnyWrite(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			r := testRouter(t)
-			setup := setUpFundForTransactions(t, r)
+			setup := setUpFund(t, r)
 			for i := range tc.req.Counts {
 				if tc.req.Counts[i].AccountID == 1 {
-					tc.req.Counts[i].AccountID = setup.CashAccountID
+					tc.req.Counts[i].AccountID = setup.CashAccountID(t)
 				}
 			}
 
@@ -574,7 +574,7 @@ func TestTakeReconciliationRejectsInvalidArgumentsBeforeAnyWrite(t *testing.T) {
 
 func TestPostReconciliationsRejectsMalformedJSON(t *testing.T) {
 	r := testRouter(t)
-	setUpFundForTransactions(t, r)
+	setUpFund(t, r)
 
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/api/reconciliations", strings.NewReader("{oops")))
@@ -589,7 +589,7 @@ func TestPostReconciliationsRejectsMalformedJSON(t *testing.T) {
 
 func TestGetReconciliationDetailRejectsANonNumericID(t *testing.T) {
 	r := testRouter(t)
-	setUpFundForTransactions(t, r)
+	setUpFund(t, r)
 
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/reconciliations/abc", nil))
@@ -604,7 +604,7 @@ func TestGetReconciliationDetailRejectsANonNumericID(t *testing.T) {
 
 func TestGetReconciliationDetailOnAnUnknownIDIs404(t *testing.T) {
 	r := testRouter(t)
-	setUpFundForTransactions(t, r)
+	setUpFund(t, r)
 
 	rec := getReconciliationDetail(t, r, 9_999)
 	if rec.Code != http.StatusNotFound {
@@ -623,10 +623,10 @@ func TestGetReconciliationDetailOnAnUnknownIDIs404(t *testing.T) {
 // reconciliation_id is asserted here and not merely present on the type.
 func TestGetReconciliationOpenLinesReturnsLeftOpenLinesWithTheirSnapshot(t *testing.T) {
 	r := testRouter(t)
-	setup := setUpFundForTransactions(t, r)
+	setup := setUpFund(t, r)
 
 	if rec := postTransaction(t, r, transactionRequest{
-		AccountID: setup.CashAccountID, PurposeID: setup.MainPurposeID,
+		AccountID: setup.CashAccountID(t), PurposeID: setup.MainPurposeID,
 		Direction: "in", Amount: 300_000, OccurredOn: "2026-08-01",
 	}); rec.Code != http.StatusCreated {
 		t.Fatalf("seed = %d, want %d (body: %s)", rec.Code, http.StatusCreated, rec.Body.String())
@@ -636,8 +636,8 @@ func TestGetReconciliationOpenLinesReturnsLeftOpenLinesWithTheirSnapshot(t *test
 	// cash: only the second belongs in open-lines.
 	takeRec := postReconciliation(t, r, takeReconciliationRequest{
 		Counts: []accountCountRequest{
-			{AccountID: setup.BankAccountID, ActualAmount: 0, Resolution: "matched"},
-			{AccountID: setup.CashAccountID, ActualAmount: 285_000, Resolution: "left_open"},
+			{AccountID: setup.BankAccountID(t), ActualAmount: 0, Resolution: "matched"},
+			{AccountID: setup.CashAccountID(t), ActualAmount: 285_000, Resolution: "left_open"},
 		},
 	})
 	if takeRec.Code != http.StatusCreated {
@@ -663,8 +663,8 @@ func TestGetReconciliationOpenLinesReturnsLeftOpenLinesWithTheirSnapshot(t *test
 	if got.Resolution != "left_open" {
 		t.Errorf("Resolution = %q, want %q", got.Resolution, "left_open")
 	}
-	if got.AccountID != setup.CashAccountID {
-		t.Errorf("AccountID = %d, want the cash account %d", got.AccountID, setup.CashAccountID)
+	if got.AccountID != setup.CashAccountID(t) {
+		t.Errorf("AccountID = %d, want the cash account %d", got.AccountID, setup.CashAccountID(t))
 	}
 	if got.ReconciliationID != snapshot.ID {
 		t.Errorf("ReconciliationID = %d, want the snapshot it was found in, %d", got.ReconciliationID, snapshot.ID)
