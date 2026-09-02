@@ -37,6 +37,11 @@ export const copy = {
       already_registered: 'Akun bendahara untuk Uruni ini sudah pernah dibuat.',
       invalid_credentials: 'Email atau kata sandi salah.',
       too_many_requests: 'Terlalu banyak percobaan. Coba lagi beberapa menit lagi, ya.',
+      // M6.5's setup wizard: a second POST /api/setup, a second opening
+      // balance for the same location, and a malformed request body.
+      fund_already_exists: 'Kas ini sudah pernah disiapkan.',
+      opening_balance_exists: 'Saldo awal untuk lokasi ini sudah pernah dicatat.',
+      invalid_json: 'Ada yang tidak beres saat mengirim data. Coba lagi.',
     },
     // Shown for a code not in the map above.
     unknownError: 'Ada yang tidak beres. Coba lagi sebentar lagi.',
@@ -60,6 +65,47 @@ export const copy = {
       submitting: 'Sedang masuk…',
       invalidCredentials: 'Email atau kata sandi salah. Coba periksa lagi.',
       tooManyRequests: 'Terlalu banyak percobaan masuk. Coba lagi beberapa menit lagi, ya.',
+    },
+  },
+  // The first-run setup wizard (M6.5, PRD §7.1): four steps, only the first
+  // two (fund name, at least one location) mandatory - balances and roster
+  // are both openly optional per-step, not gated behind a forced review.
+  setup: {
+    stepLabel: (step: number) => `Langkah ${step} dari 4`,
+    back: 'Kembali',
+    next: 'Lanjut',
+    submitting: 'Menyimpan…',
+    fund: {
+      heading: 'Beri nama kas ini',
+      body: 'Nama ini akan muncul di laporan publik dan di seluruh aplikasi — bisa diganti nanti kalau perlu.',
+      nameLabel: 'Nama kas',
+    },
+    locations: {
+      heading: 'Pilih tempat kas disimpan',
+      body: 'Setiap tempat penyimpanan uang — tunai atau rekening bank — dicatat sebagai satu lokasi. Boleh diganti namanya, boleh ditambah.',
+      kindLabel: 'Jenis',
+      kindCash: 'Tunai',
+      kindBank: 'Bank',
+      nameLabel: 'Nama lokasi',
+      addRow: 'Tambah lokasi',
+      removeRow: 'Hapus lokasi',
+      minOneLocation: 'Minimal satu lokasi diperlukan.',
+    },
+    balances: {
+      heading: 'Isi saldo awal (opsional)',
+      body: 'Kosongkan kalau lokasi ini belum punya saldo untuk dicatat sekarang — bisa ditambah nanti lewat menu lokasi.',
+      amountLabel: (accountName: string) => `Saldo awal — ${accountName}`,
+    },
+    roster: {
+      heading: 'Tambah anggota dan iuran (opsional)',
+      body: 'Bisa dilewati dan diisi nanti kapan saja lewat menu anggota.',
+      tierNameLabel: 'Nama golongan iuran',
+      rateAmountLabel: 'Besar iuran per bulan',
+      memberNameLabel: 'Nama anggota',
+      addMember: 'Tambah anggota',
+      removeMember: 'Hapus anggota',
+      skip: 'Lewati',
+      finish: 'Selesai',
     },
   },
 } as const

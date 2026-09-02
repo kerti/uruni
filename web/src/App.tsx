@@ -9,25 +9,30 @@ import Loading from '@/components/states/Loading'
 import ErrorState from '@/components/states/ErrorState'
 import Register from '@/screens/Register'
 import Login from '@/screens/Login'
+import Setup from '@/screens/Setup/Setup'
 import { getSession } from '@/lib/auth'
+import { getFund } from '@/lib/setup'
 import { useApi } from '@/lib/useApi'
 import type { SessionStatus, AuthUser } from '@/lib/auth'
+import type { Fund } from '@/lib/setup'
 import { copy } from '@/copy/id'
 
 /**
- * Router root for the whole SPA (M6.2, extended by M6.4's session probe).
- * This shell has a known death date: M6.6 replaces it with the everyday-loop
- * layout, and SmokePage is itself a placeholder M6.5 replaces once setup
- * lands. It exists now so `/healthz` keeps resolving through a real router
- * during review, before any of that lands.
+ * Router root for the whole SPA (M6.2, extended by M6.4's session probe and
+ * M6.5's fund probe). This shell has a known death date: M6.6 replaces it
+ * with the everyday-loop layout, and SmokePage is itself a placeholder M6.9
+ * replaces once home lands. It exists now so `/healthz` keeps resolving
+ * through a real router during review, before any of that lands.
  *
  * On mount it probes GET /api/session once and routes off the result:
  * `has_account: false` renders Register, `has_account: true,
- * authenticated: false` renders Login, and `authenticated: true` renders
- * the (still-placeholder) authenticated branch - M6.5 decides setup-vs-home
- * there from GET /api/fund, not here. A successful register or login calls
- * back into this component and optimistically marks the probe authenticated
- * rather than re-fetching /api/session, so the handoff needs no reload.
+ * authenticated: false` renders Login, and `authenticated: true` hands off
+ * to AuthedGate, which probes GET /api/fund the same way: 404 renders Setup
+ * (M6.5), 200 renders the (still-placeholder) SmokePage - M6.9 gives that
+ * branch a real home. A successful register or login calls back into this
+ * component and optimistically marks the session probe authenticated rather
+ * than re-fetching /api/session, so the handoff needs no reload; Setup's
+ * onDone re-probes GET /api/fund the same way once setup finishes.
  */
 export default function App() {
   const [state, run] = useApi<SessionStatus>()
@@ -94,6 +99,41 @@ function AuthGate({
 
   if (!state.data.authenticated) {
     return <Login onLoggedIn={onAuthenticated} />
+  }
+
+  return <AuthedGate />
+}
+
+/**
+ * Once GET /api/session says authenticated: true, this decides setup-vs-home
+ * from GET /api/fund - the same probe-once shape as AuthGate's own session
+ * probe above, just one layer in. A 404 (no fund yet) renders Setup; any
+ * other success renders SmokePage until M6.9 gives home a real screen.
+ */
+function AuthedGate() {
+  const [state, run] = useApi<Fund>()
+
+  useEffect(() => {
+    void run(getFund)
+  }, [run])
+
+  if (state.status === 'idle' || state.status === 'loading') {
+    return (
+      <main className="flex min-h-dvh items-center justify-center p-6">
+        <Loading />
+      </main>
+    )
+  }
+
+  if (state.status === 'error') {
+    if (state.error?.code === 'not_found') {
+      return <Setup onDone={() => void run(getFund)} />
+    }
+    return (
+      <main className="flex min-h-dvh items-center justify-center p-6">
+        {state.error && <ErrorState error={state.error} onRetry={() => void run(getFund)} />}
+      </main>
+    )
   }
 
   return <SmokePage />

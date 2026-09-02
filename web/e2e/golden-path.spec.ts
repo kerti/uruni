@@ -13,7 +13,7 @@ import { copy } from '../src/copy/id'
 // part of that milestone's own definition of done, not here:
 //
 //   M6.4  register / login (this slice)
-//   M6.5  first-run setup (fund, accounts, dues tier)
+//   M6.5  first-run setup (fund, accounts, dues tier) (this slice)
 //   M6.8  record a transaction
 //   M6.9  home (balance hero + reconciliation status)
 //   M6.10 reconcile
@@ -27,6 +27,17 @@ import { copy } from '../src/copy/id'
 // Login. Register has no e2e coverage as a result; it is covered instead by
 // the vitest suite (web/src/screens/Register.test.tsx), which can reach a
 // fresh, unregistered instance a shared e2e fixture cannot.
+//
+// The same is true one layer in for M6.5's setup wizard: the same fixture
+// also seeds a fund (cmd/uruni/seed_e2e.go), so GET /api/fund always answers
+// 200 on a seeded instance and the wizard is never reachable here either —
+// logging in lands straight past it on the home placeholder, which is what
+// this slice's own test below proves (App.tsx's fund probe took the 200
+// branch). The wizard's own four steps - the minimum-one-location guard, the
+// optional-balance skip path, the skippable roster, and POST /api/setup
+// firing exactly once - are covered instead by the vitest suite
+// (web/src/screens/Setup/Setup.test.tsx and App.test.tsx), which can reach a
+// fresh, fund-less instance a shared e2e fixture cannot.
 test.describe('golden path', () => {
   // The seeded treasurer account (cmd/uruni/seed_e2e.go) - literals, not an
   // import, because that file is Go and this spec can't reach into it; only
@@ -45,13 +56,14 @@ test.describe('golden path', () => {
     await page.getByLabel(copy.auth.login.passwordLabel).fill(seedPassword)
     await page.getByRole('button', { name: copy.auth.login.submit }).click()
 
-    // Past auth is still M6.2's placeholder shell today (M6.5 replaces it
-    // with real setup-or-home routing) - reaching it proves the login
-    // itself worked, which is all this slice owns.
+    // Past auth is still M6.2's placeholder shell today (M6.9 replaces it
+    // with a real home) - reaching it proves both the login itself and the
+    // fund probe's 200 branch worked: the seeded fund means Setup is never
+    // rendered here, only SmokePage. See the file header comment for why the
+    // wizard's own steps have no e2e coverage.
     await expect(page.getByText(copy.smoke.heading)).toBeVisible()
   })
 
-  test.fixme('first-run setup: fund, accounts, dues tier (M6.5)', async () => {})
   test.fixme('record a transaction (M6.8)', async () => {})
   test.fixme('home: balance hero + reconciliation status (M6.9)', async () => {})
   test.fixme('reconcile (M6.10)', async () => {})
