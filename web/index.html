@@ -3,7 +3,10 @@
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- viewport-fit=cover is what makes the env(safe-area-inset-*) values in
+         Shell.tsx non-zero on a notched phone; without it the shell's header
+         and bottom action pad against nothing. -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="theme-color" content="#1F5D50" />
     <title>Uruni</title>
   </head>

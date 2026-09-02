@@ -1,10 +1,11 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { CircleCheck, TriangleAlert } from 'lucide-react'
 import { BrowserRouter, Route, Routes } from 'react-router-dom'
 
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import OfflineBanner from '@/components/states/OfflineBanner'
+import Shell from '@/components/Shell'
 import Loading from '@/components/states/Loading'
 import ErrorState from '@/components/states/ErrorState'
 import Register from '@/screens/Register'
@@ -53,6 +54,17 @@ export default function App() {
     void run(async () => ({ authenticated: true, has_account: true }))
   }
 
+  // Mirror image of handleAuthenticated, for the shell's logout button
+  // (M6.6): POST /api/logout has already destroyed the server session by the
+  // time Shell calls this, so the client's view is brought back in line
+  // without a second round trip. has_account stays true - the account still
+  // exists, it is only the session that is gone - so this lands on Login,
+  // never back on Register. useCallback because Shell's success effect
+  // depends on this identity.
+  const handleLoggedOut = useCallback(() => {
+    void run(async () => ({ authenticated: false, has_account: true }))
+  }, [run])
+
   return (
     <BrowserRouter>
       <OfflineBanner />
@@ -60,7 +72,12 @@ export default function App() {
         <Route
           path="*"
           element={
-            <AuthGate state={state} onRetry={() => void run(getSession)} onAuthenticated={handleAuthenticated} />
+            <AuthGate
+              state={state}
+              onRetry={() => void run(getSession)}
+              onAuthenticated={handleAuthenticated}
+              onLoggedOut={handleLoggedOut}
+            />
           }
         />
       </Routes>
@@ -72,10 +89,12 @@ function AuthGate({
   state,
   onRetry,
   onAuthenticated,
+  onLoggedOut,
 }: {
   state: ReturnType<typeof useApi<SessionStatus>>[0]
   onRetry: () => void
   onAuthenticated: (user: AuthUser) => void
+  onLoggedOut: () => void
 }) {
   if (state.status === 'idle' || state.status === 'loading') {
     return (
@@ -101,7 +120,7 @@ function AuthGate({
     return <Login onLoggedIn={onAuthenticated} />
   }
 
-  return <AuthedGate />
+  return <AuthedGate onLoggedOut={onLoggedOut} />
 }
 
 /**
@@ -109,8 +128,13 @@ function AuthGate({
  * from GET /api/fund - the same probe-once shape as AuthGate's own session
  * probe above, just one layer in. A 404 (no fund yet) renders Setup; any
  * other success renders SmokePage until M6.9 gives home a real screen.
+ *
+ * The 200 branch is also where M6.6's Shell starts: everything past setup
+ * renders inside it, titled with the fund's own name. Register, Login and
+ * the setup wizard stay outside it deliberately - there is no fund to name
+ * in the header yet, and no session worth offering a logout button for.
  */
-function AuthedGate() {
+function AuthedGate({ onLoggedOut }: { onLoggedOut: () => void }) {
   const [state, run] = useApi<Fund>()
 
   useEffect(() => {
@@ -136,7 +160,11 @@ function AuthedGate() {
     )
   }
 
-  return <SmokePage />
+  return (
+    <Shell title={state.data?.name ?? copy.app.name} onLoggedOut={onLoggedOut}>
+      <SmokePage />
+    </Shell>
+  )
 }
 
 type Health = 'idle' | 'checking' | 'online' | 'offline'
@@ -145,6 +173,9 @@ type Health = 'idle' | 'checking' | 'online' | 'offline'
  * The M1 smoke page, carried over unpolished as a connectivity check a human
  * can still run by hand. Nothing here is meant to survive the screens later
  * M6 slices add in its place.
+ *
+ * Renders a plain div, not its own <main>: since M6.6 it is a child of
+ * Shell, which owns the page's single <main> landmark.
  */
 function SmokePage() {
   const [health, setHealth] = useState<Health>('idle')
@@ -160,7 +191,7 @@ function SmokePage() {
   }
 
   return (
-    <main className="flex min-h-dvh items-center justify-center p-6">
+    <div className="flex justify-center">
       <Card className="w-full max-w-sm shadow-card" size="default">
         <CardHeader>
           <img src="/favicon.svg" alt="" className="size-12" />
@@ -185,6 +216,6 @@ function SmokePage() {
           )}
         </CardContent>
       </Card>
-    </main>
+    </div>
   )
 }

@@ -127,6 +127,62 @@ describe('App (fund probe)', () => {
   })
 })
 
+describe('App (app shell chrome)', () => {
+  it('titles the shell with the fund name and puts the authed screen inside it', async () => {
+    vi.stubGlobal('fetch', authenticatedWithFund())
+    render(<App />)
+
+    expect(await screen.findByRole('heading', { name: fund.name })).toBeInTheDocument()
+    expect(screen.getByRole('main')).toHaveTextContent(copy.smoke.heading)
+  })
+
+  it('logs out from the shell and lands back on Login, not Register', async () => {
+    vi.stubGlobal(
+      'fetch',
+      routedFetch({
+        '/api/session': () => Promise.resolve(sessionResponse({ authenticated: true, has_account: true })),
+        '/api/fund': () => Promise.resolve(fundFoundResponse()),
+        '/api/logout': () => Promise.resolve(new Response(null, { status: 204 })),
+      }),
+    )
+    render(<App />)
+    await screen.findByText(copy.smoke.heading)
+
+    await userEvent.click(screen.getByRole('button', { name: copy.shell.logout }))
+
+    // has_account stays true through a logout - the account still exists, it
+    // is only the session that is gone.
+    expect(await screen.findByText(copy.auth.login.heading)).toBeInTheDocument()
+    expect(screen.queryByText(copy.auth.register.heading)).not.toBeInTheDocument()
+  })
+
+  // Neither auth nor the wizard renders inside the shell: there is no fund to
+  // name in the header yet, and no session worth offering a logout for.
+  it('does not render the shell around Login or the setup wizard', async () => {
+    vi.stubGlobal(
+      'fetch',
+      routedFetch({
+        '/api/session': () => Promise.resolve(sessionResponse({ authenticated: false, has_account: true })),
+      }),
+    )
+    const { unmount } = render(<App />)
+    await screen.findByText(copy.auth.login.heading)
+    expect(screen.queryByRole('button', { name: copy.shell.logout })).not.toBeInTheDocument()
+    unmount()
+
+    vi.stubGlobal(
+      'fetch',
+      routedFetch({
+        '/api/session': () => Promise.resolve(sessionResponse({ authenticated: true, has_account: true })),
+        '/api/fund': () => Promise.resolve(fundNotFoundResponse()),
+      }),
+    )
+    render(<App />)
+    await screen.findByText(copy.setup.fund.heading)
+    expect(screen.queryByRole('button', { name: copy.shell.logout })).not.toBeInTheDocument()
+  })
+})
+
 describe('App (router shell)', () => {
   it('still answers the /healthz smoke check through the router', async () => {
     vi.stubGlobal(
