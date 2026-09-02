@@ -44,10 +44,10 @@ var (
 )
 
 // usage lists the subcommands that exist *today*. ADR-019's table also holds
-// `create-user` and `seed-e2e`; each lands with the milestone that gives it
-// something to do (M5, and whenever fixtures exist), and until then it is not
-// advertised here.
-const usage = "try: uruni serve | migrate up|down|status | version | healthcheck"
+// `create-user`; it lands with the milestone that gives it something to do
+// (M5) and until then is not advertised here. `seed-e2e` landed at M6.3 — the
+// first milestone with a domain (real screens, real data) to seed.
+const usage = "try: uruni serve | migrate up|down|status | version | healthcheck | seed-e2e"
 
 func run(args []string) error {
 	if len(args) == 0 {
@@ -65,6 +65,8 @@ func run(args []string) error {
 		return printVersion(os.Stdout)
 	case "healthcheck":
 		return healthcheck()
+	case "seed-e2e":
+		return seedE2E(context.Background())
 	default:
 		return fmt.Errorf("%w: %q — %s", ErrUnknownCommand, args[0], usage)
 	}

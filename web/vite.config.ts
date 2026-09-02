@@ -2,7 +2,7 @@ import { writeFileSync } from 'node:fs'
 import path from 'node:path'
 import tailwindcss from '@tailwindcss/vite'
 import react from '@vitejs/plugin-react'
-import { defineConfig, type Plugin } from 'vitest/config'
+import { configDefaults, defineConfig, type Plugin } from 'vitest/config'
 
 // In production the Go binary is the single origin (ADR-001). In dev the two
 // halves run apart for hot-reload, so vite proxies the server's routes — `/api`
@@ -41,6 +41,11 @@ export default defineConfig({
     environment: 'jsdom',
     globals: true,
     setupFiles: ['./src/test/setup.ts'],
+    // web/e2e holds Playwright specs (ADR-015's browser leg, M6.3) — a
+    // different test runner with its own config (playwright.config.ts), not
+    // one of Vitest's `*.spec.ts` unit tests. Vitest's default include glob
+    // would otherwise pick them up and fail importing '@playwright/test'.
+    exclude: [...configDefaults.exclude, 'e2e/**'],
     coverage: {
       reporter: ['text', 'lcov'],
       reportsDirectory: './coverage',
