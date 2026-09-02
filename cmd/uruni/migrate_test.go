@@ -17,8 +17,8 @@ func TestMigrateRejectsAnEmptyVerb(t *testing.T) {
 }
 
 func TestMigrateRejectsAnUnknownVerbBeforeTouchingTheDatabase(t *testing.T) {
-	// No URUNI_SESSION_SECRET is set here on purpose: a rejected verb must not get
-	// as far as config.Load or as creating a database file.
+	// No URUNI_BASE_URL is set here on purpose: a rejected verb must not get as
+	// far as config.Load or as creating a database file.
 	err := migrate(context.Background(), []string{"sideways"}, io.Discard)
 	if !errors.Is(err, ErrUnknownCommand) {
 		t.Fatalf("migrate([sideways]) = %v, want ErrUnknownCommand", err)
@@ -33,7 +33,7 @@ func TestMigrateRejectsAnUnknownVerbBeforeTouchingTheDatabase(t *testing.T) {
 func TestMigrateUpStatusDownAgainstAFreshFile(t *testing.T) {
 	dbPath := filepath.Join(t.TempDir(), "uruni.db")
 	t.Setenv("URUNI_DB", dbPath)
-	t.Setenv("URUNI_SESSION_SECRET", "test-secret-not-the-placeholder")
+	t.Setenv("URUNI_BASE_URL", "https://uruni.test")
 
 	run := func(t *testing.T, verb string) string {
 		t.Helper()

@@ -22,7 +22,7 @@ import (
 )
 
 // Defaults for the variables that have one. The rest are either optional
-// (URUNI_BASE_URL, SMTP_URL) or required outright (URUNI_SESSION_SECRET).
+// (SMTP_URL) or required outright (URUNI_BASE_URL).
 const (
 	DefaultDBPath    = "./uruni.db"
 	DefaultPort      = 8080
@@ -37,10 +37,12 @@ const (
 	LogFormatJSON = "json"
 )
 
-// placeholderSessionSecret is the value .env.example ships. Booting on it would
-// mean every self-hosted instance signs sessions with a public constant, so the
-// server refuses to start rather than quietly accepting it (ADR-019).
-const placeholderSessionSecret = "change-me"
+// placeholderBaseURL is the value .env.example ships. Refusing it is what makes
+// URUNI_BASE_URL the "did you configure this instance at all?" gate: it is the
+// one variable an operator must set for the instance to be reachable at the
+// address it hands out, and booting on the template value produces a shareable
+// report link that works nowhere but the operator's own browser (ADR-019).
+const placeholderBaseURL = "https://uruni.example.com"
 
 // ErrInvalidConfig wraps every configuration failure, so callers and tests can
 // branch on identity rather than on message text. The message names the
@@ -55,11 +57,10 @@ type Config struct {
 	DBPath string
 	// Port is the TCP port the server listens on.
 	Port int
-	// BaseURL is this instance's public origin, used to build the shareable
-	// report link (M7). Empty until an operator sets one.
+	// BaseURL is this instance's public origin. It builds the shareable report
+	// link (M7), and its scheme decides whether the session cookie is Secure
+	// (ADR-007). Required — an instance with no origin is an unconfigured one.
 	BaseURL string
-	// SessionSecret signs session cookies (M5). Required, and never logged.
-	SessionSecret string
 	// SMTPURL is optional, for emailed backups. Validated here, used at M8
 	// (ADR-012). Contains a password, so it is never echoed in an error.
 	SMTPURL string
@@ -83,9 +84,6 @@ func Load() (Config, error) {
 	}
 
 	if err := loadPort(&cfg); err != nil {
-		return Config{}, err
-	}
-	if err := loadSessionSecret(&cfg); err != nil {
 		return Config{}, err
 	}
 	if err := loadBaseURL(&cfg); err != nil {
@@ -114,23 +112,16 @@ func loadPort(cfg *Config) error {
 	return nil
 }
 
-func loadSessionSecret(cfg *Config) error {
-	secret := strings.TrimSpace(os.Getenv("URUNI_SESSION_SECRET"))
-	switch secret {
-	case "":
-		return invalid("URUNI_SESSION_SECRET",
-			"not set — generate one with `openssl rand -base64 48`, or run `make setup`")
-	case placeholderSessionSecret:
-		return invalid("URUNI_SESSION_SECRET",
-			"still the placeholder from .env.example — generate a real one with `openssl rand -base64 48`")
-	}
-	cfg.SessionSecret = secret
-	return nil
-}
-
 func loadBaseURL(cfg *Config) error {
-	if cfg.BaseURL == "" {
-		return nil
+	switch cfg.BaseURL {
+	case "":
+		return invalid("URUNI_BASE_URL",
+			"not set — the public origin this instance is reached at, e.g. https://uruni.example.com; `make setup` writes a loopback one for local dev")
+	case placeholderBaseURL:
+		// Safe to echo: unlike the SMTP URL, an origin is not a credential, and
+		// seeing the template value quoted back is what makes the fault obvious.
+		return invalidValue("URUNI_BASE_URL", cfg.BaseURL,
+			"still the placeholder from .env.example; set the origin this instance is actually reached at")
 	}
 	u, err := url.Parse(cfg.BaseURL)
 	// The report link is pasted into a WhatsApp group, so a relative or
@@ -178,9 +169,10 @@ func loadLogging(cfg *Config) error {
 	return nil
 }
 
-// invalid reports a bad variable without repeating its value — for secrets and
-// for URLs that carry credentials. Anything printed here can end up in a
-// container log the operator pastes into an issue.
+// invalid reports a bad variable without repeating its value — for URLs that
+// carry credentials, and for the unset case, where there is no value to show.
+// Anything printed here can end up in a container log the operator pastes into
+// an issue.
 func invalid(name, why string) error {
 	return fmt.Errorf("%w: %s %s", ErrInvalidConfig, name, why)
 }

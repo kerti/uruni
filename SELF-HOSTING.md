@@ -10,8 +10,8 @@ Uruni is one small Go binary (API + public report + the embedded web app) behind
 # 1. Get the compose file + example env (from a release, or the repo).
 cp .env.example .env
 
-# 2. Edit .env — set your domain, a strong URUNI_SESSION_SECRET, and pin URUNI_TAG
-#    to the release you want. Point the compose image at ghcr.io/<owner>/uruni.
+# 2. Edit .env — set your domain and URUNI_BASE_URL, and pin URUNI_TAG to the
+#    release you want. Point the compose image at ghcr.io/<owner>/uruni.
 
 # 3. Bring it up (Caddy fetches a TLS cert automatically for your domain).
 docker compose up -d
@@ -25,8 +25,7 @@ Then open your domain and sign in as the treasurer.
 |---|---|
 | `URUNI_TAG` | Pinned image version to run. |
 | `URUNI_DOMAIN` | Domain Caddy serves + fetches TLS for. |
-| `URUNI_BASE_URL` | Public base URL (used in the shareable report link). |
-| `URUNI_SESSION_SECRET` | Long random secret for session cookies. Generate one with `openssl rand -base64 48` — **the app refuses to start unset or on the `change-me` placeholder.** |
+| `URUNI_BASE_URL` | Public base URL — the shareable report link is built from it, and its scheme decides whether the session cookie is `Secure`. **Required: the app refuses to start unset or on the `https://uruni.example.com` placeholder.** |
 | `SMTP_URL` | Optional — enable emailed periodic backups. |
 | `URUNI_LOG_LEVEL` | Optional — `debug`, `info` (default), `warn`, `error`. |
 | `URUNI_LOG_FORMAT` | Optional — `text` (default) or `json`. |

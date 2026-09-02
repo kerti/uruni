@@ -2,7 +2,7 @@
 
 *A running record of what we've decided and why. Anything here can still change.*
 
-Last updated: 2026-08-13 (M4 planning — the one-fund rule and receipt-photo ownership)
+Last updated: 2026-09-02 (M5.5 — the boot gate moves to `URUNI_BASE_URL`)
 
 ## What belongs in this file
 
@@ -193,12 +193,12 @@ Audited on [#14](https://github.com/kerti/uruni/pull/14) and again on [#17](http
 
 *The scaffold's own implementation choices — oxlint, the trimmed shadcn install, dark mode off, the self-hosted font, the `all:` embed prefix — live in [#14](https://github.com/kerti/uruni/pull/14)'s body, per the rule at the top of this file.*
 
-## The session secret is a boot gate, and errors never echo a credential (decided 2026-08-10)
+## Exactly one variable is a boot gate, and errors never echo a credential (decided 2026-08-10, gate moved 2026-09-02)
 
 Two calls made building the CLI's runtime config ([#11](https://github.com/kerti/uruni/issues/11), [ADR-019](./ADR/019-cli-surface-and-runtime-config.md)):
 
-1. **`URUNI_SESSION_SECRET` is checked in `config.Load()`, so it gates *every* subcommand, not just `serve`.** Unset fails the same way the `.env.example` placeholder does — an absent secret is the worse of the two, and treating them differently would have meant the value that fails loudly is the one an operator at least noticed. The cost is real and accepted: a bare `go run ./cmd/uruni healthcheck` outside `make` (which exports `.env`) now needs the variable. The alternative — a second, laxer config path for the operator tools — buys a debugging convenience by adding a way to run the binary with no secret, which is the thing being prevented.
-2. **A config error names the variable but never prints its value, for `URUNI_SESSION_SECRET` and `SMTP_URL`.** Both are credentials, and a boot failure is precisely the output an operator pastes into an issue. Everything else (`PORT`, the log variables) *does* echo, because seeing what was actually read is the difference between a one-minute fix and a puzzle. Same rule as [ADR-022](./ADR/022-logging-slog.md)'s "log IDs, not names or amounts", applied to errors rather than logs.
+1. **One required variable is checked in `config.Load()`, so it gates *every* subcommand, not just `serve`** — it is the "did the operator edit `.env` at all?" check, and unset fails the same way the `.env.example` placeholder does. The cost is real and accepted: a bare `go run ./cmd/uruni healthcheck` outside `make` (which exports `.env`) needs the variable. The alternative — a second, laxer config path for the operator tools — buys a debugging convenience by adding a way to run the binary un-configured, which is the thing being prevented. **That variable is `URUNI_BASE_URL` as of [#119](https://github.com/kerti/uruni/issues/119).** It was `URUNI_SESSION_SECRET`, which M5 proved nothing reads — the session cookie is an opaque token with all its state in the `session` table, so there was never anything to key. A wrong base URL fails visibly, as a report link that works nowhere but the operator's own browser; a wrong session secret produced nothing at all.
+2. **A config error names the variable but never prints its value, for `SMTP_URL`.** It carries a password, and a boot failure is precisely the output an operator pastes into an issue. Everything else (`URUNI_BASE_URL`, `PORT`, the log variables) *does* echo, because seeing what was actually read is the difference between a one-minute fix and a puzzle. Same rule as [ADR-022](./ADR/022-logging-slog.md)'s "log IDs, not names or amounts", applied to errors rather than logs.
 
 Also closed here: the **third** of the three release-image faults recorded above under CI hardening. `VERSION` was wired at that point but `COMMIT` was not, and `.dockerignore` keeps `.git` out of the build context — so Go's own VCS stamping had nothing to read and every tagged image would have reported `commit unknown`. It now has a build-arg of its own, filled from `github.sha`; a local `go build` has the mirror-image situation (no stamp, readable `.git`) and falls back to `debug.ReadBuildInfo`.
 
