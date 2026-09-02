@@ -183,6 +183,59 @@ describe('App (app shell chrome)', () => {
   })
 })
 
+describe('App (record loop)', () => {
+  const accounts = [{ id: 1, kind: 'cash', name: 'Tunai', inactive_on: null, created_at: 1 }]
+  const purposes = [{ id: 11, kind: 'main', name: 'Kas utama', created_at: 1 }]
+
+  function authenticatedWithRecordRoutes() {
+    return routedFetch({
+      '/api/session': () => Promise.resolve(sessionResponse({ authenticated: true, has_account: true })),
+      '/api/fund': () => Promise.resolve(fundFoundResponse()),
+      '/api/accounts': () =>
+        Promise.resolve(new Response(JSON.stringify(accounts), { headers: { 'Content-Type': 'application/json' } })),
+      '/api/purposes': () =>
+        Promise.resolve(new Response(JSON.stringify(purposes), { headers: { 'Content-Type': 'application/json' } })),
+      '/api/transactions': () => Promise.resolve(new Response(JSON.stringify({ id: 1 }), { status: 201 })),
+    })
+  }
+
+  it('reaches the form from the add-FAB, posts, and confirms on home', async () => {
+    vi.stubGlobal('fetch', authenticatedWithRecordRoutes())
+    render(<App />)
+    await screen.findByText(copy.smoke.heading)
+
+    await userEvent.click(screen.getByRole('link', { name: copy.record.addAction }))
+    await screen.findByRole('heading', { name: copy.record.heading })
+
+    await userEvent.type(screen.getByLabelText(copy.record.amountLabel), '50000')
+    await userEvent.click(screen.getByRole('button', { name: copy.record.submit }))
+
+    expect(await screen.findByText(copy.record.successOut)).toBeInTheDocument()
+    expect(screen.getByText(copy.smoke.heading)).toBeInTheDocument()
+  })
+
+  // The confirmation belongs to the history entry the successful post
+  // created, not to the session: opening the form again and coming back must
+  // not re-show a message about a transaction recorded minutes ago.
+  it('does not re-show the confirmation on a later visit to home', async () => {
+    vi.stubGlobal('fetch', authenticatedWithRecordRoutes())
+    render(<App />)
+    await screen.findByText(copy.smoke.heading)
+
+    await userEvent.click(screen.getByRole('link', { name: copy.record.addAction }))
+    await userEvent.type(await screen.findByLabelText(copy.record.amountLabel), '50000')
+    await userEvent.click(screen.getByRole('button', { name: copy.record.submit }))
+    await screen.findByText(copy.record.successOut)
+
+    await userEvent.click(screen.getByRole('link', { name: copy.record.addAction }))
+    await screen.findByRole('heading', { name: copy.record.heading })
+    await userEvent.click(screen.getByRole('button', { name: copy.record.cancel }))
+
+    expect(await screen.findByText(copy.smoke.heading)).toBeInTheDocument()
+    expect(screen.queryByText(copy.record.successOut)).not.toBeInTheDocument()
+  })
+})
+
 describe('App (router shell)', () => {
   it('still answers the /healthz smoke check through the router', async () => {
     vi.stubGlobal(

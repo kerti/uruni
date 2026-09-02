@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
-import { CircleCheck, TriangleAlert } from 'lucide-react'
-import { BrowserRouter, Route, Routes } from 'react-router-dom'
+import { CircleCheck, Plus, TriangleAlert } from 'lucide-react'
+import { BrowserRouter, Link, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -12,6 +12,7 @@ import ErrorState from '@/components/states/ErrorState'
 import Register from '@/screens/Register'
 import Login from '@/screens/Login'
 import Setup from '@/screens/Setup/Setup'
+import RecordTransaction from '@/screens/RecordTransaction'
 import { getSession } from '@/lib/auth'
 import { getFund } from '@/lib/setup'
 import { useApi } from '@/lib/useApi'
@@ -20,18 +21,16 @@ import type { Fund } from '@/lib/setup'
 import { copy } from '@/copy/id'
 
 /**
- * Router root for the whole SPA (M6.2, extended by M6.4's session probe and
- * M6.5's fund probe). This shell has a known death date: M6.6 replaces it
- * with the everyday-loop layout, and SmokePage is itself a placeholder M6.9
- * replaces once home lands. It exists now so `/healthz` keeps resolving
- * through a real router during review, before any of that lands.
+ * Router root for the whole SPA (M6.2, extended by M6.4's session probe,
+ * M6.5's fund probe and M6.8's everyday-loop routes). SmokePage is still a
+ * placeholder M6.9 replaces once home lands.
  *
  * On mount it probes GET /api/session once and routes off the result:
  * `has_account: false` renders Register, `has_account: true,
  * authenticated: false` renders Login, and `authenticated: true` hands off
  * to AuthedGate, which probes GET /api/fund the same way: 404 renders Setup
- * (M6.5), 200 renders the (still-placeholder) SmokePage - M6.9 gives that
- * branch a real home. A successful register or login calls back into this
+ * (M6.5), 200 renders the everyday-loop routes inside M6.6's Shell - home
+ * (still SmokePage until M6.9) and "/catat". A successful register or login calls back into this
  * component and optimistically marks the session probe authenticated rather
  * than re-fetching /api/session, so the handoff needs no reload; Setup's
  * onDone re-probes GET /api/fund the same way once setup finishes.
@@ -125,11 +124,18 @@ function AuthGate({
   return <AuthedGate onLoggedOut={onLoggedOut} />
 }
 
+/** What a successful record hands to home through the history entry it creates. */
+interface HomeState {
+  recorded: 'in' | 'out'
+}
+
 /**
  * Once GET /api/session says authenticated: true, this decides setup-vs-home
  * from GET /api/fund - the same probe-once shape as AuthGate's own session
  * probe above, just one layer in. A 404 (no fund yet) renders Setup; any
- * other success renders SmokePage until M6.9 gives home a real screen.
+ * other success renders the everyday-loop routes (M6.8): "/" is home
+ * (still SmokePage until M6.9), "/catat" is RecordTransaction, both inside
+ * Shell.
  *
  * The 200 branch is also where M6.6's Shell starts: everything past setup
  * renders inside it, titled with the fund's own name. Register, Login and
@@ -138,10 +144,26 @@ function AuthGate({
  */
 function AuthedGate({ onLoggedOut }: { onLoggedOut: () => void }) {
   const [state, run] = useApi<Fund>()
+  const navigate = useNavigate()
+  const location = useLocation()
 
   useEffect(() => {
     void run(getFund)
   }, [run])
+
+  // The record form's own onRecorded contract (RecordTransaction.tsx): fired
+  // once after a successful POST /api/transactions. Home has no
+  // recent-activity list yet (M6.9's job), so a success banner is the whole
+  // of this slice's "the write landed".
+  //
+  // Carried as router location state, not component state: state on this
+  // component outlives the navigation, so recording once and later opening
+  // the form again would show the old confirmation on the way back. A
+  // history entry's state belongs to that entry alone, which is exactly the
+  // lifetime this message wants.
+  function handleRecorded(direction: 'in' | 'out') {
+    navigate('/', { state: { recorded: direction } satisfies HomeState })
+  }
 
   if (state.status === 'idle' || state.status === 'loading') {
     return (
@@ -162,10 +184,45 @@ function AuthedGate({ onLoggedOut }: { onLoggedOut: () => void }) {
     )
   }
 
+  const title = state.data?.name ?? copy.app.name
+  const recorded = (location.state as HomeState | null)?.recorded
+  const successMessage = recorded === 'in' ? copy.record.successIn : recorded === 'out' ? copy.record.successOut : null
+
   return (
-    <Shell title={state.data?.name ?? copy.app.name} onLoggedOut={onLoggedOut}>
-      <SmokePage />
-    </Shell>
+    <Routes>
+      <Route
+        path="/catat"
+        element={
+          <Shell title={title} onLoggedOut={onLoggedOut}>
+            <RecordTransaction onRecorded={handleRecorded} onCancel={() => navigate('/')} />
+          </Shell>
+        }
+      />
+      <Route
+        path="*"
+        element={
+          <Shell
+            title={title}
+            onLoggedOut={onLoggedOut}
+            action={
+              <Button asChild size="icon" className="size-14 rounded-full shadow-floating" aria-label={copy.record.addAction}>
+                <Link to="/catat">
+                  <Plus aria-hidden="true" className="size-6" />
+                </Link>
+              </Button>
+            }
+          >
+            {successMessage && (
+              <p role="status" className="mb-4 flex items-center gap-2 text-success">
+                <CircleCheck aria-hidden="true" />
+                {successMessage}
+              </p>
+            )}
+            <SmokePage />
+          </Shell>
+        }
+      />
+    </Routes>
   )
 }
 

@@ -120,4 +120,27 @@ export const copy = {
       finish: 'Selesai',
     },
   },
+  // The everyday "catat transaksi" form (M6.8, PRD §7.2): amount, in/out,
+  // location, purpose, date, optional note. Reachable from the add-FAB on
+  // home. successIn/successOut are shown on home after a successful post -
+  // worded per Design-System.md's own voice examples for each direction.
+  record: {
+    addAction: 'Catat transaksi',
+    heading: 'Catat transaksi',
+    directionLabel: 'Jenis',
+    directionIn: 'Uang masuk',
+    directionOut: 'Uang keluar',
+    amountLabel: 'Jumlah',
+    locationLabel: 'Lokasi',
+    purposeLabel: 'Peruntukan',
+    dateLabel: 'Tanggal',
+    noteLabel: 'Catatan (opsional)',
+    submit: 'Simpan',
+    submitting: 'Menyimpan…',
+    // Installed to a home screen there is no browser back button, so leaving
+    // the form without recording needs its own way out.
+    cancel: 'Batal',
+    successIn: 'Pemasukan berhasil dicatat.',
+    successOut: 'Pengeluaran berhasil dicatat.',
+  },
 } as const

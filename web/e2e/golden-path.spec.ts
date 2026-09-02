@@ -14,7 +14,7 @@ import { copy } from '../src/copy/id'
 //
 //   M6.4  register / login (this slice)
 //   M6.5  first-run setup (fund, accounts, dues tier) (this slice)
-//   M6.8  record a transaction
+//   M6.8  record a transaction (this slice)
 //   M6.9  home (balance hero + reconciliation status)
 //   M6.10 reconcile
 //
@@ -38,6 +38,15 @@ import { copy } from '../src/copy/id'
 // firing exactly once - are covered instead by the vitest suite
 // (web/src/screens/Setup/Setup.test.tsx and App.test.tsx), which can reach a
 // fresh, fund-less instance a shared e2e fixture cannot.
+//
+// M6.8's own test below records against the fixture's default location
+// without touching the account picker on purpose — proving the "location
+// remembers last used" default lands on the right account for a fresh
+// browser (nothing remembered yet, so the first active account) is the
+// vitest suite's job (RecordTransaction.test.tsx), which can control
+// localStorage and a retired account directly; the e2e fixture seeds only
+// active accounts (per #141's own ruling), so the exclusion itself has no
+// e2e coverage either.
 test.describe('golden path', () => {
   // The seeded treasurer account (cmd/uruni/seed_e2e.go) - literals, not an
   // import, because that file is Go and this spec can't reach into it; only
@@ -64,7 +73,27 @@ test.describe('golden path', () => {
     await expect(page.getByText(copy.smoke.heading)).toBeVisible()
   })
 
-  test.fixme('record a transaction (M6.8)', async () => {})
+  test('record a transaction (M6.8)', async ({ page }) => {
+    await page.goto('/')
+    await page.getByLabel(copy.auth.login.emailLabel).fill(seedEmail)
+    await page.getByLabel(copy.auth.login.passwordLabel).fill(seedPassword)
+    await page.getByRole('button', { name: copy.auth.login.submit }).click()
+    await expect(page.getByText(copy.smoke.heading)).toBeVisible()
+
+    await page.getByRole('link', { name: copy.record.addAction }).click()
+    await expect(page.getByRole('heading', { name: copy.record.heading })).toBeVisible()
+
+    // The fixture's cash account ("Tunai") is the first active account, so
+    // it is the default location - no need to touch the picker.
+    await page.getByRole('button', { name: copy.record.directionOut }).click()
+    await page.getByLabel(copy.record.amountLabel).fill('50000')
+    await page.getByRole('button', { name: copy.record.submit }).click()
+
+    // A successful post returns to home and shows the success message there
+    // - there is no recent-activity list yet (M6.9's job).
+    await expect(page.getByText(copy.smoke.heading)).toBeVisible()
+    await expect(page.getByText(copy.record.successOut)).toBeVisible()
+  })
   test.fixme('home: balance hero + reconciliation status (M6.9)', async () => {})
   test.fixme('reconcile (M6.10)', async () => {})
 })
