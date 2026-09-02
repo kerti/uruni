@@ -1,0 +1,37 @@
+{
+  /* The Playwright specs in web/e2e. A third project rather than widening
+     tsconfig.app.json's `include`, because the two have genuinely different
+     ambient types: the app compiles against `vite/client` and the DOM, the
+     specs against Node and @playwright/test. Without this, `tsc -b` (what
+     `make check` runs) never looks at web/e2e at all, and a type error in a
+     spec surfaces only under `make e2e` - the one command agents don't run.
+
+     `@/*` is mapped for symmetry with the app, but the specs deliberately
+     import via relative paths (see golden-path.spec.ts): the alias is a
+     Vite/tsconfig concern and Playwright's esbuild pass wouldn't resolve it. */
+  "compilerOptions": {
+    "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.e2e.tsbuildinfo",
+    "paths": {
+      "@/*": ["./src/*"]
+    },
+    "target": "es2023",
+    "lib": ["ES2023", "DOM"],
+    "module": "esnext",
+    "types": ["node"],
+    "skipLibCheck": true,
+
+    /* Bundler mode */
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "verbatimModuleSyntax": true,
+    "moduleDetection": "force",
+    "noEmit": true,
+
+    /* Linting */
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "erasableSyntaxOnly": true,
+    "noFallthroughCasesInSwitch": true
+  },
+  "include": ["e2e", "playwright.config.ts"]
+}
