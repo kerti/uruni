@@ -22,6 +22,27 @@ function sessionResponse(body: { authenticated: boolean; has_account: boolean })
   return new Response(JSON.stringify(body), { status: 200, headers: { 'Content-Type': 'application/json' } })
 }
 
+const fund = { id: 1, name: 'Kas RT 04', currency: 'IDR', report_slug: 'kas-rt-04', created_at: 1234 }
+
+function fundFoundResponse() {
+  return new Response(JSON.stringify(fund), { status: 200, headers: { 'Content-Type': 'application/json' } })
+}
+
+function fundNotFoundResponse() {
+  return new Response(JSON.stringify({ error: { code: 'not_found', message: 'no fund' } }), {
+    status: 404,
+    headers: { 'Content-Type': 'application/json' },
+  })
+}
+
+/** An authenticated session, wired to answer GET /api/fund with 200 (fund exists). */
+function authenticatedWithFund() {
+  return routedFetch({
+    '/api/session': () => Promise.resolve(sessionResponse({ authenticated: true, has_account: true })),
+    '/api/fund': () => Promise.resolve(fundFoundResponse()),
+  })
+}
+
 /** Routes a stubbed fetch by path, so a single mock can answer both /api/session and /healthz. */
 function routedFetch(handlers: Record<string, () => Promise<Response>>) {
   return vi.fn((input: RequestInfo | URL) => {
@@ -74,14 +95,35 @@ describe('App (session probe)', () => {
     expect(await screen.findByText(copy.auth.login.heading)).toBeInTheDocument()
   })
 
-  it('renders the authenticated placeholder (smoke page) once authenticated', async () => {
-    vi.stubGlobal(
-      'fetch',
-      vi.fn().mockResolvedValue(sessionResponse({ authenticated: true, has_account: true })),
-    )
+  it('renders the authenticated placeholder (smoke page) once authenticated and GET /api/fund answers 200', async () => {
+    vi.stubGlobal('fetch', authenticatedWithFund())
     render(<App />)
     expect(await screen.findByText(copy.smoke.heading)).toBeInTheDocument()
     expect(screen.getByRole('button', { name: copy.smoke.check })).toBeInTheDocument()
+  })
+})
+
+describe('App (fund probe)', () => {
+  // The wizard-skipped-on-reload behaviour (#138's own DoD): a GET /api/fund
+  // that answers 200 on any later load skips the wizard entirely, including
+  // a mid-wizard reload - there is no client-side "setup done" flag, the
+  // fund's own existence is the only source of truth.
+  it('skips the wizard and renders the placeholder home when GET /api/fund answers 200', async () => {
+    vi.stubGlobal('fetch', authenticatedWithFund())
+    render(<App />)
+    expect(await screen.findByText(copy.smoke.heading)).toBeInTheDocument()
+  })
+
+  it('renders the setup wizard when GET /api/fund answers 404 (not_found)', async () => {
+    vi.stubGlobal(
+      'fetch',
+      routedFetch({
+        '/api/session': () => Promise.resolve(sessionResponse({ authenticated: true, has_account: true })),
+        '/api/fund': () => Promise.resolve(fundNotFoundResponse()),
+      }),
+    )
+    render(<App />)
+    expect(await screen.findByText(copy.setup.fund.heading)).toBeInTheDocument()
   })
 })
 
@@ -91,6 +133,7 @@ describe('App (router shell)', () => {
       'fetch',
       routedFetch({
         '/api/session': () => Promise.resolve(sessionResponse({ authenticated: true, has_account: true })),
+        '/api/fund': () => Promise.resolve(fundFoundResponse()),
         '/healthz': () => Promise.resolve(new Response(null, { status: 200 })),
       }),
     )
@@ -104,6 +147,7 @@ describe('App (router shell)', () => {
       'fetch',
       routedFetch({
         '/api/session': () => Promise.resolve(sessionResponse({ authenticated: true, has_account: true })),
+        '/api/fund': () => Promise.resolve(fundFoundResponse()),
         '/healthz': () => Promise.reject(new Error('network down')),
       }),
     )
@@ -115,10 +159,7 @@ describe('App (router shell)', () => {
 
 describe('App (connectivity watcher)', () => {
   it('shows the offline banner when the browser goes offline, and clears it when connectivity returns', async () => {
-    vi.stubGlobal(
-      'fetch',
-      vi.fn().mockResolvedValue(sessionResponse({ authenticated: true, has_account: true })),
-    )
+    vi.stubGlobal('fetch', authenticatedWithFund())
     render(<App />)
     // Let the session probe's own successful response settle first - it
     // calls the same connectivity watcher (a 2xx counts as "online") and
