@@ -75,7 +75,7 @@ There is **no `HANDOFF.md`** and no standalone status doc. The live board is **G
 - **Standing decisions no issue or ADR owns** → [`Decisions.md`](./Decisions.md).
 - **You-are-here** → the one status line below (changes ~once per milestone; never holds shipped detail).
 
-**Status:** **M4 — core API** is complete and tagged `v0.4.0`; **M5 — auth** is next and its slices are not planned yet. The whole ledger is reachable over HTTP: transactions, dues, transfers, reimbursements, incidentals, reconciliation and a composed balances view. Nothing is authenticated yet — that is M5's entire job.
+**Status:** **M5 — auth** is complete and tagged `v0.5.0`; **M6 — everyday UI** is next and its slices are not planned yet. `/api` is closed behind a session cookie, with registration as the one-shot bootstrap and logout and the session probe the only doors left open. The ledger has an owner; it does not yet have a screen — that is M6's job, and M6 is the first build a treasurer can actually try.
 
 ## Open
 
