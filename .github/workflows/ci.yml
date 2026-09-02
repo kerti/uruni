@@ -19,7 +19,7 @@ env:
   # whatever `make lint` runs locally — that lockstep IS `make check`'s promise
   # that green-locally means green-in-CI (ADR-020). golangci-lint-action v8
   # drives golangci-lint v2; do not drop back to action v6 (v1 only).
-  GOLANGCI_VERSION: v2.12.2
+  GOLANGCI_VERSION: v2.13.2
 
 jobs:
   # The Makefile, hooks and workflows were deliberately written before the

@@ -43,10 +43,12 @@ E2E_DB   := /tmp/uruni-e2e.db
 E2E_PORT := 8099
 
 # The golangci-lint version ci.yml pins (env.GOLANGCI_VERSION there). `doctor`
-# compares your local one against it — a v1 binary silently ignores the v2
-# schema in .golangci.yml, which is exactly the local/CI drift `check` exists to
-# prevent. Bump both together.
-GOLANGCI_CI_VERSION := v2.12.2
+# compares your local one against it exactly — not just the major. A v1 binary
+# silently ignores the v2 schema in .golangci.yml, but two v2 releases also
+# disagree about real code (2.12 and 2.13 ship different staticcheck versions),
+# and either way `make check` stops meaning what ADR-020 says it means. Bump
+# both together.
+GOLANGCI_CI_VERSION := v2.13.2
 
 help:
 	@echo "uruni — make targets (run 'make <target>')"
@@ -169,8 +171,8 @@ doctor:
 	@printf '%-16s' 'jq';            command -v jq            >/dev/null 2>&1 && echo 'ok'                      || echo 'MISSING (Claude Code hooks need it)'
 	@printf '%-16s' 'golangci-lint'; if command -v golangci-lint >/dev/null 2>&1; then \
 	  v=$$(golangci-lint version 2>/dev/null | sed -n 's/.*has version \([0-9.]*\).*/\1/p'); \
-	  case "$$v" in 2.*) echo "v$$v";; \
-	    *) echo "v$$v — .golangci.yml is schema v2; CI pins $(GOLANGCI_CI_VERSION). Upgrade.";; esac; \
+	  if [ "v$$v" = "$(GOLANGCI_CI_VERSION)" ]; then echo "v$$v"; \
+	  else echo "v$$v — CI pins $(GOLANGCI_CI_VERSION). Different linter versions disagree about real code; install the pinned one."; fi; \
 	else echo 'MISSING (make lint / make check)'; fi
 	@printf '%-16s' 'sqlc';          command -v sqlc          >/dev/null 2>&1 && echo 'ok'                      || echo 'MISSING (make sqlc)'
 	@printf '%-16s' 'claude';        command -v claude        >/dev/null 2>&1 && echo 'ok'                      || echo 'not on PATH (install separately; the Makefile cannot)'
