@@ -587,3 +587,111 @@ func TestPostAccountOpeningBalanceRejectsInvalidOccurredOn(t *testing.T) {
 		t.Errorf("error code = %q, want %q", got.Code, "invalid_argument")
 	}
 }
+
+// postRawTo sends a body this package's typed helpers cannot express - a
+// malformed document, or a well-formed one whose field types are wrong.
+// Everything else goes through postAccount/postOpeningBalance.
+func postRawTo(t *testing.T, r http.Handler, path, body string) *httptest.ResponseRecorder {
+	t.Helper()
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, path, bytes.NewReader([]byte(body))))
+	return rec
+}
+
+func TestPostAccountsRejectsMalformedJSON(t *testing.T) {
+	r := testRouter(t)
+	setUpFund(t, r)
+
+	rec := postRawTo(t, r, "/api/accounts", "{oops")
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("POST /api/accounts with malformed JSON = %d, want %d (body: %s)", rec.Code, http.StatusBadRequest, rec.Body.String())
+	}
+	got := decodeError(t, rec)
+	if got.Code != "invalid_json" {
+		t.Errorf("error code = %q, want %q", got.Code, "invalid_json")
+	}
+}
+
+// A body that parses as an object but whose field holds the wrong type is a
+// different path through decodeUpdateAccountRequest than "{oops": the outer
+// Decode succeeds and the per-field json.Unmarshal is what fails. Both must
+// answer invalid_json rather than reaching the store with a zero value.
+func TestPatchAccountRejectsAFieldOfTheWrongType(t *testing.T) {
+	r := testRouter(t)
+	setup := setUpFund(t, r)
+	cashID := setup.CashAccountID(t)
+
+	for _, body := range []string{`{"name": 123}`, `{"inactive_on": true}`} {
+		rec := patchAccount(t, r, cashID, body)
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("PATCH %s = %d, want %d (body: %s)", body, rec.Code, http.StatusBadRequest, rec.Body.String())
+		}
+		got := decodeError(t, rec)
+		if got.Code != "invalid_json" {
+			t.Errorf("PATCH %s error code = %q, want %q", body, got.Code, "invalid_json")
+		}
+	}
+}
+
+func TestPostAccountOpeningBalanceRejectsMalformedJSON(t *testing.T) {
+	r := testRouter(t)
+	setup := setUpFund(t, r)
+	cashID := setup.CashAccountID(t)
+
+	rec := postRawTo(t, r, fmt.Sprintf("/api/accounts/%d/opening-balance", cashID), "{oops")
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("POST .../opening-balance with malformed JSON = %d, want %d (body: %s)", rec.Code, http.StatusBadRequest, rec.Body.String())
+	}
+	got := decodeError(t, rec)
+	if got.Code != "invalid_json" {
+		t.Errorf("error code = %q, want %q", got.Code, "invalid_json")
+	}
+}
+
+// resolveMainPurposeID's last branch: a fund that somehow has no kind='main'
+// purpose. purpose_single_main makes this unreachable through any route -
+// SetUpFund writes the row and nothing deletes it - so the row is removed
+// underneath the handler with raw SQL, which is the only honest way to reach
+// defensive code that exists precisely because the invariant could be
+// violated by something outside this package (a hand-edited database, a
+// botched restore). It must answer a clean 500 envelope, never panic on the
+// zero id and post an opening balance against purpose 0.
+func TestPostAccountOpeningBalanceWithNoMainPurposeIs500(t *testing.T) {
+	sqlDB := testStoreDB(t)
+	r := authedRouterFor(t, sqlDB)
+	setup := setUpFund(t, r)
+	cashID := setup.CashAccountID(t)
+
+	if _, err := sqlDB.Exec("DELETE FROM purpose WHERE kind = 'main'"); err != nil {
+		t.Fatalf("deleting the main purpose = %v, want no error", err)
+	}
+
+	rec := postOpeningBalance(t, r, cashID, postOpeningBalanceRequest{
+		Amount: 100_000, OccurredOn: "2026-08-01",
+	})
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("POST .../opening-balance with no main purpose = %d, want %d (body: %s)", rec.Code, http.StatusInternalServerError, rec.Body.String())
+	}
+	got := decodeError(t, rec)
+	if got.Code != "internal_error" {
+		t.Errorf("error code = %q, want %q", got.Code, "internal_error")
+	}
+
+	// And nothing was posted on the way out.
+	var transactions []transactionResponse
+	if err := json.NewDecoder(getTransactions(t, r).Body).Decode(&transactions); err != nil {
+		t.Fatalf("decoding GET /api/transactions response: %v", err)
+	}
+	if len(transactions) != 0 {
+		t.Errorf("GET /api/transactions = %d rows, want 0 - the 500 must not have posted anything", len(transactions))
+	}
+}
+
+// Deliberately not covered, following the precedent
+// TestGetBalancesOnADeadDatabaseIs500 sets out: the mapSQLiteError branches
+// in listAccounts, resolveMainPurposeID and postAccountOpeningBalance's own
+// resolveFund call fire only when a store read fails, and #116's session
+// gate reads the store first - so on a closed database the gate answers the
+// identical 500 envelope and the handler never runs. They stay as honest
+// defensive code rather than growing an injection seam for branches that can
+// only ever fire together.
