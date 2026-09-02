@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"testing/fstest"
 
@@ -15,12 +16,15 @@ import (
 
 func testAssets() fstest.MapFS {
 	return fstest.MapFS{
-		"index.html":      {Data: []byte("<!doctype html><title>Uruni</title>")},
-		"assets/app.js":   {Data: []byte("console.log('uruni')")},
-		"favicon.svg":     {Data: []byte("<svg/>")},
-		".gitkeep":        {Data: []byte("")},
-		"assets/app.css":  {Data: []byte("body{}")},
-		"manifest.webman": {Data: []byte("{}")},
+		"index.html":           {Data: []byte("<!doctype html><title>Uruni</title>")},
+		"assets/app.js":        {Data: []byte("console.log('uruni')")},
+		"favicon.svg":          {Data: []byte("<svg/>")},
+		".gitkeep":             {Data: []byte("")},
+		"assets/app.css":       {Data: []byte("body{}")},
+		"manifest.webmanifest": {Data: []byte("{}")},
+		// A real file, not a fallback to the shell: the Cache-Control test
+		// below means to exercise the service worker's own branch (ADR-008).
+		"sw.js": {Data: []byte("// service worker")},
 	}
 }
 
@@ -160,6 +164,35 @@ func TestClientRoutesFallBackToIndex(t *testing.T) {
 		if got := rec.Body.String(); got != "<!doctype html><title>Uruni</title>" {
 			t.Errorf("GET %s served %q, want index.html", path, got)
 		}
+	}
+}
+
+// The stale-app failure ADR-008's prompt-to-update strategy would otherwise
+// still lose to: index.html and sw.js keep their names across deploys, so a
+// browser that caches either serves an old app from a freshly updated server.
+// Every other asset is content-hashed and deliberately left alone here.
+func TestShellAndServiceWorkerAreNotBrowserCached(t *testing.T) {
+	for _, path := range []string{"/", "/index.html", "/sw.js", "/catat"} {
+		rec := get(t, path)
+		if got, want := rec.Header().Get("Cache-Control"), "no-cache"; got != want {
+			t.Errorf("GET %s Cache-Control = %q, want %q", path, got, want)
+		}
+	}
+
+	if got := get(t, "/assets/app.js").Header().Get("Cache-Control"); got != "" {
+		t.Errorf("GET /assets/app.js Cache-Control = %q, want it unset - hashed assets are cacheable", got)
+	}
+}
+
+// A manifest served as text/plain is one browsers may decline to install
+// from, and Go's mime table has no .webmanifest entry of its own.
+func TestManifestIsServedAsAWebManifest(t *testing.T) {
+	rec := get(t, "/manifest.webmanifest")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GET /manifest.webmanifest = %d, want %d", rec.Code, http.StatusOK)
+	}
+	if got, want := rec.Header().Get("Content-Type"), "application/manifest+json"; !strings.HasPrefix(got, want) {
+		t.Errorf("Content-Type = %q, want it to start with %q", got, want)
 	}
 }
 
