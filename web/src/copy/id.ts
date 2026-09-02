@@ -14,6 +14,13 @@ export const copy = {
     online: 'Server tersambung.',
     offline: 'Belum tersambung — Uruni butuh koneksi.',
   },
+  // The app shell every authenticated screen renders inside (M6.6). Only the
+  // logout control needs words today; the header's heading is the fund's own
+  // name, which comes from the server, not from here.
+  shell: {
+    logout: 'Keluar',
+    loggingOut: 'Sedang keluar…',
+  },
   common: {
     loading: 'Memuat…',
     offlineBanner: 'Belum tersambung — Uruni butuh koneksi.',
