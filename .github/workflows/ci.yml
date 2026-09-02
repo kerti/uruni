@@ -19,7 +19,7 @@ env:
   # whatever `make lint` runs locally — that lockstep IS `make check`'s promise
   # that green-locally means green-in-CI (ADR-020). golangci-lint-action v8
   # drives golangci-lint v2; do not drop back to action v6 (v1 only).
-  GOLANGCI_VERSION: v2.12.2
+  GOLANGCI_VERSION: v2.13.2
 
 jobs:
   # The Makefile, hooks and workflows were deliberately written before the
@@ -68,6 +68,20 @@ jobs:
         uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
         with:
           version: ${{ env.GOLANGCI_VERSION }}
+          # The action's cache key is `golangci-lint.cache-<os>-<day>-<go.sum
+          # hash>` — it carries neither the golangci-lint version nor the Go
+          # version, so a cache written by one toolchain is restored for
+          # another. Stale analysis facts then lose testing.Fatal's noreturn
+          # property, and staticcheck reports SA5011 "possible nil pointer
+          # dereference" against every correct `if x == nil { t.Fatal(...) }`
+          # guard in the package — in files a PR never touched (#134/#162: 5
+          # of 7 hits were in register_test.go, untouched since #118). It is
+          # deterministic while the poisoned entry lives and self-heals only
+          # when cache-invalidation-interval rotates it, which is exactly the
+          # "green locally, red in CI" failure ADR-020 says `make check` must
+          # never have. Lint runs in ~3s cold; the cache buys nothing worth
+          # this.
+          skip-cache: true
       - name: Test (race + coverage)
         run: go test ./... -race -covermode=atomic -coverprofile=coverage.out
       # The token is an input, not step env: the action builds its own CLI
