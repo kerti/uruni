@@ -30,7 +30,11 @@ var gatedRoutes = []struct {
 }{
 	{http.MethodPost, "/api/setup"},
 	{http.MethodGet, "/api/fund"},
+	{http.MethodPost, "/api/accounts"},
 	{http.MethodGet, "/api/accounts"},
+	{http.MethodPatch, "/api/accounts/1"},
+	{http.MethodDelete, "/api/accounts/1"},
+	{http.MethodPost, "/api/accounts/1/opening-balance"},
 	{http.MethodGet, "/api/purposes"},
 	{http.MethodPost, "/api/pass-through-purposes"},
 	{http.MethodPost, "/api/members"},
@@ -296,7 +300,10 @@ func TestFirstRunWalksRegisterSetupLogoutLoginThenAFundScopedRoute(t *testing.T)
 		t.Fatal("register set no session cookie")
 	}
 
-	setupBody, err := json.Marshal(setupRequest{Name: "Dana Warga RT 05"})
+	setupBody, err := json.Marshal(setupRequest{
+		Name:     "Dana Warga RT 05",
+		Accounts: []setupAccountRequest{{Kind: "cash", Name: "Tunai"}},
+	})
 	if err != nil {
 		t.Fatalf("marshaling setup request: %v", err)
 	}

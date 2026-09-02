@@ -525,14 +525,7 @@ func TestDeleteMemberWithNoTransactionsSucceeds(t *testing.T) {
 func TestDeleteMemberWithTransactionsReturns409(t *testing.T) {
 	r, l := testRouterAndLedger(t)
 
-	setupRec := postSetup(t, r, "Test Fund")
-	if setupRec.Code != http.StatusCreated {
-		t.Fatalf("POST /api/setup = %d, want %d", setupRec.Code, http.StatusCreated)
-	}
-	var setup setupResponse
-	if err := json.NewDecoder(setupRec.Body).Decode(&setup); err != nil {
-		t.Fatalf("decoding setup response: %v", err)
-	}
+	setup := setUpFund(t, r)
 
 	memberRec := postMember(t, r, memberRequest{Name: "Jane"})
 	if memberRec.Code != http.StatusCreated {
@@ -545,7 +538,7 @@ func TestDeleteMemberWithTransactionsReturns409(t *testing.T) {
 
 	ctx := context.Background()
 	if _, err := l.PostDuesPayments(ctx, ledger.PostDuesPaymentsParams{
-		FundID: setup.Fund.ID, AccountID: setup.CashAccountID, PurposeID: setup.MainPurposeID,
+		FundID: setup.Fund.ID, AccountID: setup.CashAccountID(t), PurposeID: setup.MainPurposeID,
 		MemberID: member.ID, OccurredOn: "2026-01-15",
 		Periods: []ledger.PeriodAmount{{DuesPeriod: "2026-01", Amount: 50_000}},
 	}); err != nil {

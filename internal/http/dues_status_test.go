@@ -30,7 +30,7 @@ func TestGetDuesStatusRequiresAFund(t *testing.T) {
 // for one period, across different members of the same tier.
 func TestGetDuesStatusReturnsPerMemberStatus(t *testing.T) {
 	r := testRouter(t)
-	setup := setUpFundForTransactions(t, r)
+	setup := setUpFund(t, r)
 
 	tierRec := postDuesTier(t, r, "Full")
 	if tierRec.Code != http.StatusCreated {
@@ -59,7 +59,7 @@ func TestGetDuesStatusReturnsPerMemberStatus(t *testing.T) {
 		t.Fatalf("decoding member response: %v", err)
 	}
 	if rec := postDuesPayment(t, r, duesPaymentRequest{
-		AccountID: setup.CashAccountID, PurposeID: setup.MainPurposeID,
+		AccountID: setup.CashAccountID(t), PurposeID: setup.MainPurposeID,
 		MemberID: partial.ID, OccurredOn: "2026-08-05",
 		Periods: []duesPaymentPeriod{{DuesPeriod: "2026-08", Amount: 10_000}},
 	}); rec.Code != http.StatusCreated {
@@ -72,7 +72,7 @@ func TestGetDuesStatusReturnsPerMemberStatus(t *testing.T) {
 		t.Fatalf("decoding member response: %v", err)
 	}
 	if rec := postDuesPayment(t, r, duesPaymentRequest{
-		AccountID: setup.CashAccountID, PurposeID: setup.MainPurposeID,
+		AccountID: setup.CashAccountID(t), PurposeID: setup.MainPurposeID,
 		MemberID: paid.ID, OccurredOn: "2026-08-05",
 		Periods: []duesPaymentPeriod{{DuesPeriod: "2026-08", Amount: 25_000}},
 	}); rec.Code != http.StatusCreated {
@@ -140,7 +140,7 @@ func TestGetDuesStatusReturnsPerMemberStatus(t *testing.T) {
 func TestGetDuesStatusRejectsAMalformedPeriod(t *testing.T) {
 	for _, period := range []string{"", "2026-13", "not-a-period"} {
 		r := testRouter(t)
-		setUpFundForTransactions(t, r)
+		setUpFund(t, r)
 
 		rec := getDuesStatus(t, r, period)
 		if rec.Code != http.StatusBadRequest {
@@ -159,7 +159,7 @@ func TestGetDuesStatusRejectsAMalformedPeriod(t *testing.T) {
 // roster boundary a member with tier_id == nil sits outside of.
 func TestGetDuesStatusExcludesAMemberWithNoTier(t *testing.T) {
 	r := testRouter(t)
-	setUpFundForTransactions(t, r)
+	setUpFund(t, r)
 
 	if rec := postMember(t, r, memberRequest{Name: "No Tier"}); rec.Code != http.StatusCreated {
 		t.Fatalf("POST /api/members = %d, want %d (body: %s)", rec.Code, http.StatusCreated, rec.Body.String())

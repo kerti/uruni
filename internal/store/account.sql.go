@@ -12,7 +12,7 @@ import (
 const createAccount = `-- name: CreateAccount :one
 INSERT INTO account (fund_id, kind, name, created_at)
 VALUES (?, ?, ?, ?)
-RETURNING id, fund_id, kind, name, created_at
+RETURNING id, fund_id, kind, name, created_at, inactive_on
 `
 
 type CreateAccountParams struct {
@@ -36,12 +36,27 @@ func (q *Queries) CreateAccount(ctx context.Context, arg CreateAccountParams) (A
 		&i.Kind,
 		&i.Name,
 		&i.CreatedAt,
+		&i.InactiveOn,
 	)
 	return i, err
 }
 
+const deleteAccount = `-- name: DeleteAccount :exec
+DELETE FROM account
+WHERE id = ?
+`
+
+// DeleteAccount leans on the composite foreign keys from "transaction" and
+// reconciliation_line to refuse it once real data references the account -
+// for a never-used duplicate only; a used-then-retired account gets
+// UpdateAccount's inactive_on instead.
+func (q *Queries) DeleteAccount(ctx context.Context, id int64) error {
+	_, err := q.db.ExecContext(ctx, deleteAccount, id)
+	return err
+}
+
 const getAccount = `-- name: GetAccount :one
-SELECT id, fund_id, kind, name, created_at
+SELECT id, fund_id, kind, name, created_at, inactive_on
 FROM account
 WHERE id = ?
 `
@@ -55,12 +70,13 @@ func (q *Queries) GetAccount(ctx context.Context, id int64) (Account, error) {
 		&i.Kind,
 		&i.Name,
 		&i.CreatedAt,
+		&i.InactiveOn,
 	)
 	return i, err
 }
 
 const listAccountsByFund = `-- name: ListAccountsByFund :many
-SELECT id, fund_id, kind, name, created_at
+SELECT id, fund_id, kind, name, created_at, inactive_on
 FROM account
 WHERE fund_id = ?
 ORDER BY id
@@ -81,6 +97,7 @@ func (q *Queries) ListAccountsByFund(ctx context.Context, fundID int64) ([]Accou
 			&i.Kind,
 			&i.Name,
 			&i.CreatedAt,
+			&i.InactiveOn,
 		); err != nil {
 			return nil, err
 		}
@@ -93,4 +110,44 @@ func (q *Queries) ListAccountsByFund(ctx context.Context, fundID int64) ([]Accou
 		return nil, err
 	}
 	return items, nil
+}
+
+const updateAccount = `-- name: UpdateAccount :one
+UPDATE account
+SET name        = COALESCE(?1, name),
+    inactive_on = CASE WHEN CAST(?2 AS INTEGER) = 1 THEN ?3 ELSE inactive_on END
+WHERE id = ?4
+RETURNING id, fund_id, kind, name, created_at, inactive_on
+`
+
+type UpdateAccountParams struct {
+	Name          *string
+	SetInactiveOn int64
+	InactiveOn    *string
+	ID            int64
+}
+
+// UpdateAccount is a correction to a location's own label, not a ledger
+// event: renaming or retiring an account changes nothing already posted
+// (account.name is a label, not a posted fact). name is NOT NULL, so
+// COALESCE covers it the same way UpdateMember's does; inactive_on needs the
+// set_inactive_on flag for the same reason UpdateMember's does - a null
+// argument is ambiguous between "leave alone" and "reinstate".
+func (q *Queries) UpdateAccount(ctx context.Context, arg UpdateAccountParams) (Account, error) {
+	row := q.db.QueryRowContext(ctx, updateAccount,
+		arg.Name,
+		arg.SetInactiveOn,
+		arg.InactiveOn,
+		arg.ID,
+	)
+	var i Account
+	err := row.Scan(
+		&i.ID,
+		&i.FundID,
+		&i.Kind,
+		&i.Name,
+		&i.CreatedAt,
+		&i.InactiveOn,
+	)
+	return i, err
 }

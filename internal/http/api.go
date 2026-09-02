@@ -111,10 +111,19 @@ func (a *api) routes(r chi.Router) {
 		r.Post("/setup", a.setupFund)
 		r.Get("/fund", a.getFund)
 
-		// The fund's structure. Read-only but for the one purpose a treasurer
-		// creates herself: accounts are the two locations setup made, and the
-		// other two purpose kinds are written by SetUpFund and OpenIncidental.
+		// The fund's structure. Accounts are whatever the treasurer named at
+		// setup (#78) plus anything added or corrected afterward - direct-CRUD
+		// (ADR-027), the same POST/PATCH/DELETE shape as members below. Purposes
+		// stay read-only here but for the one kind a treasurer creates herself
+		// (pass-through); the other two kinds are written by SetUpFund and
+		// OpenIncidental.
+		r.Post("/accounts", a.createAccount)
 		r.Get("/accounts", a.listAccounts)
+		r.Patch("/accounts/{id}", a.updateAccount)
+		r.Delete("/accounts/{id}", a.deleteAccount)
+		// An account's starting figure (PRD §7.1) - PostOpeningBalance has been
+		// built and tested since M3 but had no route until now (#134).
+		r.Post("/accounts/{id}/opening-balance", a.postAccountOpeningBalance)
 		r.Get("/purposes", a.listPurposes)
 		r.Post("/pass-through-purposes", a.createPassThroughPurpose)
 
@@ -146,7 +155,7 @@ func (a *api) routes(r chi.Router) {
 		// either.
 		r.Post("/transactions", a.createTransaction)
 		r.Get("/transactions", a.listTransactions)
-		// Moving money between the two accounts without changing what the fund
+		// Moving money between two accounts without changing what the fund
 		// holds in total (PRD §6). No GET: a transfer's two legs are ordinary
 		// transaction rows and already surface through GET /api/transactions.
 		r.Post("/transfers", a.createTransfer)

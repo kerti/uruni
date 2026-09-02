@@ -28,21 +28,6 @@ func getTransactions(t *testing.T, r http.Handler) *httptest.ResponseRecorder {
 	return rec
 }
 
-// setUpFundForTransactions is the fixture every plain transaction test
-// needs: a fund, with the two accounts and the main purpose setup creates.
-func setUpFundForTransactions(t *testing.T, r http.Handler) setupResponse {
-	t.Helper()
-	rec := postSetup(t, r, "Test Fund")
-	if rec.Code != http.StatusCreated {
-		t.Fatalf("POST /api/setup = %d, want %d (body: %s)", rec.Code, http.StatusCreated, rec.Body.String())
-	}
-	var setup setupResponse
-	if err := json.NewDecoder(rec.Body).Decode(&setup); err != nil {
-		t.Fatalf("decoding setup response: %v", err)
-	}
-	return setup
-}
-
 func TestPostTransactionsRequiresAFund(t *testing.T) {
 	rec := postTransaction(t, testRouter(t), transactionRequest{
 		AccountID: 1, PurposeID: 1, Direction: "in", Amount: 10_000, OccurredOn: "2026-08-12",
@@ -69,7 +54,7 @@ func TestGetTransactionsRequiresAFund(t *testing.T) {
 
 func TestGetTransactionsReturnsAnEmptyListBeforeAnyTransaction(t *testing.T) {
 	r := testRouter(t)
-	setUpFundForTransactions(t, r)
+	setUpFund(t, r)
 
 	rec := getTransactions(t, r)
 	if rec.Code != http.StatusOK {
@@ -86,11 +71,11 @@ func TestGetTransactionsReturnsAnEmptyListBeforeAnyTransaction(t *testing.T) {
 // amount - no more, no less.
 func TestPostTransactionsRoundTripsThroughGetAndMovesTheBalance(t *testing.T) {
 	r, l := testRouterAndLedger(t)
-	setup := setUpFundForTransactions(t, r)
+	setup := setUpFund(t, r)
 
 	note := "Kas awal kegiatan 17-an"
 	rec := postTransaction(t, r, transactionRequest{
-		AccountID: setup.CashAccountID, PurposeID: setup.MainPurposeID,
+		AccountID: setup.CashAccountID(t), PurposeID: setup.MainPurposeID,
 		Direction: "in", Amount: 150_000, OccurredOn: "2026-08-12", Note: &note,
 	})
 	if rec.Code != http.StatusCreated {
@@ -113,8 +98,8 @@ func TestPostTransactionsRoundTripsThroughGetAndMovesTheBalance(t *testing.T) {
 	if posted.Amount != 150_000 {
 		t.Errorf("transaction.amount = %d, want %d", posted.Amount, 150_000)
 	}
-	if posted.AccountID != setup.CashAccountID {
-		t.Errorf("transaction.account_id = %d, want %d", posted.AccountID, setup.CashAccountID)
+	if posted.AccountID != setup.CashAccountID(t) {
+		t.Errorf("transaction.account_id = %d, want %d", posted.AccountID, setup.CashAccountID(t))
 	}
 	if posted.Note == nil || *posted.Note != note {
 		t.Errorf("transaction.note = %v, want %q", posted.Note, note)
@@ -153,18 +138,18 @@ func TestPostTransactionsRoundTripsThroughGetAndMovesTheBalance(t *testing.T) {
 // something nonzero.
 func TestPostTransactionsOutDirectionMovesTheBalanceDown(t *testing.T) {
 	r, l := testRouterAndLedger(t)
-	setup := setUpFundForTransactions(t, r)
+	setup := setUpFund(t, r)
 	ctx := context.Background()
 
 	if rec := postTransaction(t, r, transactionRequest{
-		AccountID: setup.CashAccountID, PurposeID: setup.MainPurposeID,
+		AccountID: setup.CashAccountID(t), PurposeID: setup.MainPurposeID,
 		Direction: "in", Amount: 200_000, OccurredOn: "2026-08-01",
 	}); rec.Code != http.StatusCreated {
 		t.Fatalf("POST /api/transactions (in) = %d, want %d (body: %s)", rec.Code, http.StatusCreated, rec.Body.String())
 	}
 
 	if rec := postTransaction(t, r, transactionRequest{
-		AccountID: setup.CashAccountID, PurposeID: setup.MainPurposeID,
+		AccountID: setup.CashAccountID(t), PurposeID: setup.MainPurposeID,
 		Direction: "out", Amount: 60_000, OccurredOn: "2026-08-05",
 	}); rec.Code != http.StatusCreated {
 		t.Fatalf("POST /api/transactions (out) = %d, want %d (body: %s)", rec.Code, http.StatusCreated, rec.Body.String())
@@ -184,10 +169,10 @@ func TestPostTransactionsOutDirectionMovesTheBalanceDown(t *testing.T) {
 // than a raw kind field the caller could otherwise set to anything.
 func TestPostTransactionsIsAdjustmentPostsAnAdjustmentKind(t *testing.T) {
 	r := testRouter(t)
-	setup := setUpFundForTransactions(t, r)
+	setup := setUpFund(t, r)
 
 	rec := postTransaction(t, r, transactionRequest{
-		AccountID: setup.CashAccountID, PurposeID: setup.MainPurposeID,
+		AccountID: setup.CashAccountID(t), PurposeID: setup.MainPurposeID,
 		Direction: "in", Amount: 20_000, OccurredOn: "2026-08-12",
 		IsAdjustment: true,
 	})
@@ -210,10 +195,10 @@ func TestPostTransactionsIsAdjustmentPostsAnAdjustmentKind(t *testing.T) {
 func TestPostTransactionsRejectsNonPositiveAmount(t *testing.T) {
 	for _, amount := range []int64{0, -1, -50_000} {
 		r := testRouter(t)
-		setup := setUpFundForTransactions(t, r)
+		setup := setUpFund(t, r)
 
 		rec := postTransaction(t, r, transactionRequest{
-			AccountID: setup.CashAccountID, PurposeID: setup.MainPurposeID,
+			AccountID: setup.CashAccountID(t), PurposeID: setup.MainPurposeID,
 			Direction: "in", Amount: amount, OccurredOn: "2026-08-12",
 		})
 		if rec.Code != http.StatusBadRequest {
@@ -231,10 +216,10 @@ func TestPostTransactionsRejectsNonPositiveAmount(t *testing.T) {
 func TestPostTransactionsRejectsAMalformedOccurredOn(t *testing.T) {
 	for _, occurredOn := range []string{"2026-02-30", "not-a-date", "2026-8-12"} {
 		r := testRouter(t)
-		setup := setUpFundForTransactions(t, r)
+		setup := setUpFund(t, r)
 
 		rec := postTransaction(t, r, transactionRequest{
-			AccountID: setup.CashAccountID, PurposeID: setup.MainPurposeID,
+			AccountID: setup.CashAccountID(t), PurposeID: setup.MainPurposeID,
 			Direction: "in", Amount: 10_000, OccurredOn: occurredOn,
 		})
 		if rec.Code != http.StatusBadRequest {
@@ -249,7 +234,7 @@ func TestPostTransactionsRejectsAMalformedOccurredOn(t *testing.T) {
 
 func TestPostTransactionsRejectsMalformedJSON(t *testing.T) {
 	r := testRouter(t)
-	setUpFundForTransactions(t, r)
+	setUpFund(t, r)
 
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/api/transactions", strings.NewReader("{oops")))
@@ -268,10 +253,10 @@ func TestPostTransactionsRejectsMalformedJSON(t *testing.T) {
 // rather than pre-checking it against an allow-list of its own.
 func TestPostTransactionsRejectsAnUnrecognizedDirection(t *testing.T) {
 	r := testRouter(t)
-	setup := setUpFundForTransactions(t, r)
+	setup := setUpFund(t, r)
 
 	rec := postTransaction(t, r, transactionRequest{
-		AccountID: setup.CashAccountID, PurposeID: setup.MainPurposeID,
+		AccountID: setup.CashAccountID(t), PurposeID: setup.MainPurposeID,
 		Direction: "sideways", Amount: 10_000, OccurredOn: "2026-08-12",
 	})
 	if rec.Code != http.StatusBadRequest {

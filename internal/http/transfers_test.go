@@ -41,11 +41,11 @@ func TestPostTransfersRequiresAFund(t *testing.T) {
 // internal/ledger/transfer_test.go asserts the balances themselves.
 func TestPostTransfersPostsTwoOppositeLegsAgainstOneTransfer(t *testing.T) {
 	r := testRouter(t)
-	setup := setUpFundForTransactions(t, r)
+	setup := setUpFund(t, r)
 
 	// Cash has to exist before it can be banked.
 	depositRec := postTransaction(t, r, transactionRequest{
-		AccountID: setup.CashAccountID, PurposeID: setup.MainPurposeID,
+		AccountID: setup.CashAccountID(t), PurposeID: setup.MainPurposeID,
 		Direction: "in", Amount: 500_000, OccurredOn: "2026-08-10",
 	})
 	if depositRec.Code != http.StatusCreated {
@@ -54,8 +54,8 @@ func TestPostTransfersPostsTwoOppositeLegsAgainstOneTransfer(t *testing.T) {
 
 	rec := postTransfer(t, r, transferRequest{
 		PurposeID:     setup.MainPurposeID,
-		FromAccountID: setup.CashAccountID,
-		ToAccountID:   setup.BankAccountID,
+		FromAccountID: setup.CashAccountID(t),
+		ToAccountID:   setup.BankAccountID(t),
 		Amount:        300_000,
 		OccurredOn:    "2026-08-12",
 	})
@@ -97,11 +97,11 @@ func TestPostTransfersPostsTwoOppositeLegsAgainstOneTransfer(t *testing.T) {
 	if out.Amount != 300_000 || in.Amount != 300_000 {
 		t.Errorf("leg amounts = out %d / in %d, want 300000 for both", out.Amount, in.Amount)
 	}
-	if out.AccountID != setup.CashAccountID {
-		t.Errorf("out leg account = %d, want cash %d", out.AccountID, setup.CashAccountID)
+	if out.AccountID != setup.CashAccountID(t) {
+		t.Errorf("out leg account = %d, want cash %d", out.AccountID, setup.CashAccountID(t))
 	}
-	if in.AccountID != setup.BankAccountID {
-		t.Errorf("in leg account = %d, want bank %d", in.AccountID, setup.BankAccountID)
+	if in.AccountID != setup.BankAccountID(t) {
+		t.Errorf("in leg account = %d, want bank %d", in.AccountID, setup.BankAccountID(t))
 	}
 	if out.PurposeID != setup.MainPurposeID || in.PurposeID != setup.MainPurposeID {
 		t.Errorf("leg purposes = out %d / in %d, want %d for both - a transfer never changes what money is for",
@@ -122,12 +122,12 @@ func TestPostTransfersPostsTwoOppositeLegsAgainstOneTransfer(t *testing.T) {
 // every schema CHECK would happily accept.
 func TestPostTransfersRejectsIdenticalAccounts(t *testing.T) {
 	r := testRouter(t)
-	setup := setUpFundForTransactions(t, r)
+	setup := setUpFund(t, r)
 
 	rec := postTransfer(t, r, transferRequest{
 		PurposeID:     setup.MainPurposeID,
-		FromAccountID: setup.CashAccountID,
-		ToAccountID:   setup.CashAccountID,
+		FromAccountID: setup.CashAccountID(t),
+		ToAccountID:   setup.CashAccountID(t),
 		Amount:        100_000,
 		OccurredOn:    "2026-08-12",
 	})
@@ -143,12 +143,12 @@ func TestPostTransfersRejectsIdenticalAccounts(t *testing.T) {
 func TestPostTransfersRejectsNonPositiveAmount(t *testing.T) {
 	for _, amount := range []int64{0, -1, -50_000} {
 		r := testRouter(t)
-		setup := setUpFundForTransactions(t, r)
+		setup := setUpFund(t, r)
 
 		rec := postTransfer(t, r, transferRequest{
 			PurposeID:     setup.MainPurposeID,
-			FromAccountID: setup.CashAccountID,
-			ToAccountID:   setup.BankAccountID,
+			FromAccountID: setup.CashAccountID(t),
+			ToAccountID:   setup.BankAccountID(t),
 			Amount:        amount,
 			OccurredOn:    "2026-08-12",
 		})
@@ -165,12 +165,12 @@ func TestPostTransfersRejectsNonPositiveAmount(t *testing.T) {
 func TestPostTransfersRejectsAMalformedOccurredOn(t *testing.T) {
 	for _, occurredOn := range []string{"2026-02-30", "not-a-date", "2026-8-12"} {
 		r := testRouter(t)
-		setup := setUpFundForTransactions(t, r)
+		setup := setUpFund(t, r)
 
 		rec := postTransfer(t, r, transferRequest{
 			PurposeID:     setup.MainPurposeID,
-			FromAccountID: setup.CashAccountID,
-			ToAccountID:   setup.BankAccountID,
+			FromAccountID: setup.CashAccountID(t),
+			ToAccountID:   setup.BankAccountID(t),
 			Amount:        100_000,
 			OccurredOn:    occurredOn,
 		})
@@ -186,7 +186,7 @@ func TestPostTransfersRejectsAMalformedOccurredOn(t *testing.T) {
 
 func TestPostTransfersRejectsMalformedJSON(t *testing.T) {
 	r := testRouter(t)
-	setUpFundForTransactions(t, r)
+	setUpFund(t, r)
 
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/api/transfers", strings.NewReader("{oops")))

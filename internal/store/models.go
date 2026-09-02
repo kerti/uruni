@@ -5,11 +5,12 @@
 package store
 
 type Account struct {
-	ID        int64
-	FundID    int64
-	Kind      string
-	Name      string
-	CreatedAt int64
+	ID         int64
+	FundID     int64
+	Kind       string
+	Name       string
+	CreatedAt  int64
+	InactiveOn *string
 }
 
 type DuesRate struct {

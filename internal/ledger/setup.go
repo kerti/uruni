@@ -62,28 +62,45 @@ func generateReportSlug() (string, error) {
 	return string(b), nil
 }
 
+// AccountInput is one location the treasurer names at setup - #78's
+// resolution of "which accounts does a fund start with": the wizard lets her
+// choose and name each one, rather than SetUpFund fixing a cash/bank pair
+// for her.
+type AccountInput struct {
+	Kind string // "cash" or "bank" - the schema's own CHECK (kind IN (...)) is the single source of truth for the set
+	Name string // non-empty after trimming - the schema's own CHECK (length(trim(name)) > 0) refuses it, not pre-validated here (ADR-027)
+}
+
 // SetUpFundParams is every argument SetUpFund needs to bring a brand-new
 // fund into existence.
 type SetUpFundParams struct {
 	// FundName is the treasurer's own name for the fund (PRD §7.1: "name the
 	// fund"). Non-empty after trimming.
 	FundName string
+
+	// Accounts is every location the treasurer wants the fund to start with
+	// (#78). At least one is required - a fund with zero accounts could
+	// record nothing (every transaction needs an account_id), the same
+	// reasoning FundName's own empty check already applies, just aimed at a
+	// slice instead of a string.
+	Accounts []AccountInput
 }
 
-// SetUpFundResult names every id the caller needs immediately: the whole
+// SetUpFundResult names every row the caller needs immediately: the whole
 // fund row (it carries report_slug, which M7's public report needs and
-// nothing else in this response can substitute for), plus the three ids
-// slices #65-#67 post against right away.
+// nothing else in this response can substitute for), the main purpose id,
+// and every created account, full rows (not bare ids) so the caller doesn't
+// have to re-read them back out to learn kind/name - in the order Accounts
+// was given.
 type SetUpFundResult struct {
 	Fund          store.Fund
 	MainPurposeID int64
-	CashAccountID int64
-	BankAccountID int64
+	Accounts      []store.Account
 }
 
-// SetUpFund writes the four rows a fund cannot function without - the fund
-// itself, its one kind='main' purpose, and its cash and bank accounts -
-// inside one withTx, and returns their ids.
+// SetUpFund writes the rows a fund cannot function without - the fund
+// itself, its one kind='main' purpose, and every account the treasurer asked
+// for - inside one withTx, and returns their ids.
 //
 // The atomic core is deliberately this small and no smaller. A transaction
 // requires both an account_id and a purpose_id (schema FKs), so a fund with
@@ -91,7 +108,10 @@ type SetUpFundResult struct {
 // crash partway through would leave a fund that exists, appears in
 // ListFunds, and has nowhere to post anything, the same orphan shape #42's
 // OpenIncidental closed for a purpose with no incidental row behind it,
-// inverted onto a fund with nothing underneath it at all.
+// inverted onto a fund with nothing underneath it at all. #78 does not
+// change that argument, only its size: N accounts instead of a fixed two,
+// still written inside the same transaction as the fund and its main
+// purpose.
 //
 // Members, dues tiers, dues rates and the two opening balances are
 // deliberately NOT here. Members carry no cross-row invariant beyond what
@@ -112,6 +132,9 @@ func (l *Ledger) SetUpFund(ctx context.Context, p SetUpFundParams) (SetUpFundRes
 	name := strings.TrimSpace(p.FundName)
 	if name == "" {
 		return SetUpFundResult{}, fmt.Errorf("%w: fund name must not be empty", ErrInvalidArgument)
+	}
+	if len(p.Accounts) == 0 {
+		return SetUpFundResult{}, fmt.Errorf("%w: at least one account is required", ErrInvalidArgument)
 	}
 
 	var result SetUpFundResult
@@ -148,30 +171,27 @@ func (l *Ledger) SetUpFund(ctx context.Context, p SetUpFundParams) (SetUpFundRes
 			return fmt.Errorf("creating main purpose: %w", err)
 		}
 
-		// Cash and bank are the two locations PRD §6 fixes for v1 - not a
-		// treasurer choice, so their names are fixed too, in Indonesian per
-		// CLAUDE.md rule 8: unlike a member's typed name, these are
-		// system-supplied labels the treasurer reads on screen from the
-		// moment setup finishes.
-		cashAccount, err := q.CreateAccount(ctx, store.CreateAccountParams{
-			FundID: fund.ID, Kind: "cash", Name: "Tunai", CreatedAt: now,
-		})
-		if err != nil {
-			return fmt.Errorf("creating cash account: %w", err)
-		}
-
-		bankAccount, err := q.CreateAccount(ctx, store.CreateAccountParams{
-			FundID: fund.ID, Kind: "bank", Name: "Bank", CreatedAt: now,
-		})
-		if err != nil {
-			return fmt.Errorf("creating bank account: %w", err)
+		// #78: the treasurer chooses and names each account, no longer a
+		// fixed cash/bank pair - kind and name shape (CHECK (kind IN
+		// ('cash','bank')), CHECK (length(trim(name)) > 0)) are the schema's
+		// job alone to refuse, the same split every other direct-CRUD write
+		// in this codebase already uses (ADR-027); a bad row here aborts the
+		// whole withTx, same as the purpose-insert failure above.
+		accounts := make([]store.Account, 0, len(p.Accounts))
+		for _, a := range p.Accounts {
+			account, err := q.CreateAccount(ctx, store.CreateAccountParams{
+				FundID: fund.ID, Kind: a.Kind, Name: a.Name, CreatedAt: now,
+			})
+			if err != nil {
+				return fmt.Errorf("creating account %q: %w", a.Name, err)
+			}
+			accounts = append(accounts, account)
 		}
 
 		result = SetUpFundResult{
 			Fund:          fund,
 			MainPurposeID: mainPurpose.ID,
-			CashAccountID: cashAccount.ID,
-			BankAccountID: bankAccount.ID,
+			Accounts:      accounts,
 		}
 		return nil
 	})

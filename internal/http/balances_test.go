@@ -62,7 +62,7 @@ func TestGetBalancesRequiresAFund(t *testing.T) {
 // account and purpose setup created - all at 0, not an empty list.
 func TestGetBalancesBeforeAnyPostingIsAllZero(t *testing.T) {
 	r := testRouter(t)
-	setup := setUpFundForTransactions(t, r)
+	setup := setUpFund(t, r)
 
 	rec := getBalances(t, r)
 	if rec.Code != http.StatusOK {
@@ -76,11 +76,11 @@ func TestGetBalancesBeforeAnyPostingIsAllZero(t *testing.T) {
 	if len(got.Accounts) != 2 {
 		t.Fatalf("accounts = %+v, want exactly the 2 accounts setup created", got.Accounts)
 	}
-	cash := accountBalanceFor(t, got.Accounts, setup.CashAccountID)
+	cash := accountBalanceFor(t, got.Accounts, setup.CashAccountID(t))
 	if cash.Balance != 0 || cash.Kind != "cash" {
 		t.Errorf("cash account = %+v, want balance=0 kind=cash", cash)
 	}
-	bank := accountBalanceFor(t, got.Accounts, setup.BankAccountID)
+	bank := accountBalanceFor(t, got.Accounts, setup.BankAccountID(t))
 	if bank.Balance != 0 || bank.Kind != "bank" {
 		t.Errorf("bank account = %+v, want balance=0 kind=bank", bank)
 	}
@@ -117,17 +117,17 @@ func TestGetBalancesBeforeAnyPostingIsAllZero(t *testing.T) {
 //	incidental purpose:  +100,000 -40,000 -60,000 (roll out) = 0
 func TestGetBalancesReflectsEveryMilestoneSlice(t *testing.T) {
 	r := testRouter(t)
-	setup := setUpFundForTransactions(t, r)
+	setup := setUpFund(t, r)
 
 	// Ordinary transactions in and out.
 	if rec := postTransaction(t, r, transactionRequest{
-		AccountID: setup.CashAccountID, PurposeID: setup.MainPurposeID,
+		AccountID: setup.CashAccountID(t), PurposeID: setup.MainPurposeID,
 		Direction: "in", Amount: 500_000, OccurredOn: "2026-08-01",
 	}); rec.Code != http.StatusCreated {
 		t.Fatalf("seed in = %d, want %d (body: %s)", rec.Code, http.StatusCreated, rec.Body.String())
 	}
 	if rec := postTransaction(t, r, transactionRequest{
-		AccountID: setup.CashAccountID, PurposeID: setup.MainPurposeID,
+		AccountID: setup.CashAccountID(t), PurposeID: setup.MainPurposeID,
 		Direction: "out", Amount: 50_000, OccurredOn: "2026-08-02",
 	}); rec.Code != http.StatusCreated {
 		t.Fatalf("seed out = %d, want %d (body: %s)", rec.Code, http.StatusCreated, rec.Body.String())
@@ -143,7 +143,7 @@ func TestGetBalancesReflectsEveryMilestoneSlice(t *testing.T) {
 		t.Fatalf("decoding member response: %v", err)
 	}
 	if rec := postDuesPayment(t, r, duesPaymentRequest{
-		AccountID: setup.CashAccountID, PurposeID: setup.MainPurposeID, MemberID: member.ID,
+		AccountID: setup.CashAccountID(t), PurposeID: setup.MainPurposeID, MemberID: member.ID,
 		OccurredOn: "2026-08-03",
 		Periods:    []duesPaymentPeriod{{DuesPeriod: "2026-08", Amount: 25_000}},
 	}); rec.Code != http.StatusCreated {
@@ -152,7 +152,7 @@ func TestGetBalancesReflectsEveryMilestoneSlice(t *testing.T) {
 
 	// A transfer between cash and bank.
 	if rec := postTransfer(t, r, transferRequest{
-		PurposeID: setup.MainPurposeID, FromAccountID: setup.CashAccountID, ToAccountID: setup.BankAccountID,
+		PurposeID: setup.MainPurposeID, FromAccountID: setup.CashAccountID(t), ToAccountID: setup.BankAccountID(t),
 		Amount: 200_000, OccurredOn: "2026-08-04",
 	}); rec.Code != http.StatusCreated {
 		t.Fatalf("seed transfer = %d, want %d (body: %s)", rec.Code, http.StatusCreated, rec.Body.String())
@@ -170,7 +170,7 @@ func TestGetBalancesReflectsEveryMilestoneSlice(t *testing.T) {
 		t.Fatalf("decoding reimbursement response: %v", err)
 	}
 	if rec := postSettlement(t, r, claim.ID, settleReimbursementRequest{
-		AccountID: setup.BankAccountID, OccurredOn: "2026-08-05",
+		AccountID: setup.BankAccountID(t), OccurredOn: "2026-08-05",
 	}); rec.Code != http.StatusCreated {
 		t.Fatalf("settle reimbursement = %d, want %d (body: %s)", rec.Code, http.StatusCreated, rec.Body.String())
 	}
@@ -183,19 +183,19 @@ func TestGetBalancesReflectsEveryMilestoneSlice(t *testing.T) {
 	}
 	incidental := decodeIncidental(t, incRec)
 	if rec := postTransaction(t, r, transactionRequest{
-		AccountID: setup.CashAccountID, PurposeID: incidental.PurposeID,
+		AccountID: setup.CashAccountID(t), PurposeID: incidental.PurposeID,
 		Direction: "in", Amount: 100_000, OccurredOn: "2026-08-06",
 	}); rec.Code != http.StatusCreated {
 		t.Fatalf("incidental contribution = %d, want %d (body: %s)", rec.Code, http.StatusCreated, rec.Body.String())
 	}
 	if rec := postTransaction(t, r, transactionRequest{
-		AccountID: setup.CashAccountID, PurposeID: incidental.PurposeID,
+		AccountID: setup.CashAccountID(t), PurposeID: incidental.PurposeID,
 		Direction: "out", Amount: 40_000, OccurredOn: "2026-08-07",
 	}); rec.Code != http.StatusCreated {
 		t.Fatalf("incidental disbursement = %d, want %d (body: %s)", rec.Code, http.StatusCreated, rec.Body.String())
 	}
 	if rec := postCloseIncidental(t, r, incidental.PurposeID, closeIncidentalRequest{
-		AccountID: setup.CashAccountID, ClosedOn: "2026-08-08",
+		AccountID: setup.CashAccountID(t), ClosedOn: "2026-08-08",
 	}); rec.Code != http.StatusOK {
 		t.Fatalf("close incidental = %d, want %d (body: %s)", rec.Code, http.StatusOK, rec.Body.String())
 	}
@@ -211,11 +211,11 @@ func TestGetBalancesReflectsEveryMilestoneSlice(t *testing.T) {
 		t.Errorf("fund_total = %d, want 505000", got.FundTotal)
 	}
 
-	cash := accountBalanceFor(t, got.Accounts, setup.CashAccountID)
+	cash := accountBalanceFor(t, got.Accounts, setup.CashAccountID(t))
 	if cash.Balance != 335_000 {
 		t.Errorf("cash balance = %d, want 335000", cash.Balance)
 	}
-	bank := accountBalanceFor(t, got.Accounts, setup.BankAccountID)
+	bank := accountBalanceFor(t, got.Accounts, setup.BankAccountID(t))
 	if bank.Balance != 170_000 {
 		t.Errorf("bank balance = %d, want 170000", bank.Balance)
 	}
@@ -248,29 +248,29 @@ func TestGetBalancesReflectsEveryMilestoneSlice(t *testing.T) {
 // straight from FundBalance, never summed here - does not move at all.
 func TestGetBalancesTransferMovesAccountsLeavesFundTotalUnchanged(t *testing.T) {
 	r := testRouter(t)
-	setup := setUpFundForTransactions(t, r)
+	setup := setUpFund(t, r)
 
 	if rec := postTransaction(t, r, transactionRequest{
-		AccountID: setup.CashAccountID, PurposeID: setup.MainPurposeID,
+		AccountID: setup.CashAccountID(t), PurposeID: setup.MainPurposeID,
 		Direction: "in", Amount: 300_000, OccurredOn: "2026-08-01",
 	}); rec.Code != http.StatusCreated {
 		t.Fatalf("seed in = %d, want %d (body: %s)", rec.Code, http.StatusCreated, rec.Body.String())
 	}
 
 	before := decodeBalances(t, getBalances(t, r))
-	beforeCash := accountBalanceFor(t, before.Accounts, setup.CashAccountID).Balance
-	beforeBank := accountBalanceFor(t, before.Accounts, setup.BankAccountID).Balance
+	beforeCash := accountBalanceFor(t, before.Accounts, setup.CashAccountID(t)).Balance
+	beforeBank := accountBalanceFor(t, before.Accounts, setup.BankAccountID(t)).Balance
 
 	if rec := postTransfer(t, r, transferRequest{
-		PurposeID: setup.MainPurposeID, FromAccountID: setup.CashAccountID, ToAccountID: setup.BankAccountID,
+		PurposeID: setup.MainPurposeID, FromAccountID: setup.CashAccountID(t), ToAccountID: setup.BankAccountID(t),
 		Amount: 120_000, OccurredOn: "2026-08-02",
 	}); rec.Code != http.StatusCreated {
 		t.Fatalf("transfer = %d, want %d (body: %s)", rec.Code, http.StatusCreated, rec.Body.String())
 	}
 
 	after := decodeBalances(t, getBalances(t, r))
-	afterCash := accountBalanceFor(t, after.Accounts, setup.CashAccountID).Balance
-	afterBank := accountBalanceFor(t, after.Accounts, setup.BankAccountID).Balance
+	afterCash := accountBalanceFor(t, after.Accounts, setup.CashAccountID(t)).Balance
+	afterBank := accountBalanceFor(t, after.Accounts, setup.BankAccountID(t)).Balance
 
 	if afterCash != beforeCash-120_000 {
 		t.Errorf("cash after transfer = %d, want %d", afterCash, beforeCash-120_000)
