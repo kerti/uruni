@@ -22,15 +22,44 @@ export const copy = {
     // English by design (ADR-014: the API is a code surface) and never
     // reaches the treasurer; this map is what she sees instead.
     //
-    // Seeded only with codes the shared states can hit this slice
-    // (not_found, method_not_allowed, and a network failure). Each later
-    // slice adds its own route's codes here as it lands.
+    // Seeded with the codes the shared states and M6.4's auth routes can hit
+    // (not_found, method_not_allowed, a network failure, plus register/login's
+    // invalid_argument, already_registered, invalid_credentials and
+    // too_many_requests). Each later slice adds its own route's codes as it
+    // lands. invalid_credentials and too_many_requests also get their own,
+    // more specific auth.login copy below - the shared strings here are the
+    // ErrorState fallback for the same codes reached from elsewhere.
     errors: {
       not_found: 'Data yang dicari tidak ditemukan.',
       method_not_allowed: 'Aksi ini tidak didukung.',
       network_error: 'Belum tersambung — Uruni butuh koneksi.',
+      invalid_argument: 'Ada isian yang belum sesuai. Coba periksa lagi.',
+      already_registered: 'Akun bendahara untuk Uruni ini sudah pernah dibuat.',
+      invalid_credentials: 'Email atau kata sandi salah.',
+      too_many_requests: 'Terlalu banyak percobaan. Coba lagi beberapa menit lagi, ya.',
     },
     // Shown for a code not in the map above.
     unknownError: 'Ada yang tidak beres. Coba lagi sebentar lagi.',
+  },
+  auth: {
+    register: {
+      heading: 'Buat akun bendahara',
+      body: 'Ini akun pertama untuk Uruni — sekali dibuat, akun ini yang menjaga kas bersama.',
+      emailLabel: 'Email',
+      passwordLabel: 'Kata sandi',
+      submit: 'Buat akun',
+      submitting: 'Membuat akun…',
+      passwordTooShort: 'Kata sandi minimal 8 karakter, ya.',
+    },
+    login: {
+      heading: 'Masuk ke Uruni',
+      body: 'Masukkan email dan kata sandi bendahara untuk melanjutkan.',
+      emailLabel: 'Email',
+      passwordLabel: 'Kata sandi',
+      submit: 'Masuk',
+      submitting: 'Sedang masuk…',
+      invalidCredentials: 'Email atau kata sandi salah. Coba periksa lagi.',
+      tooManyRequests: 'Terlalu banyak percobaan masuk. Coba lagi beberapa menit lagi, ya.',
+    },
   },
 } as const
