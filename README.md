@@ -88,7 +88,9 @@ Contributions to copy and UI should keep this tone: warm, human, never corporate
 
 ## Status
 
-**Early scaffold.** The product thesis, requirements, and architecture are settled; the app is being built in supervised vertical slices. **M1 — scaffold (`v0.1.0`)** is in progress: one binary already serves the embedded React app and `/healthz`. There is no ledger yet.
+**Pre-release, built in supervised vertical slices.** The ledger works and is covered by tests, the JSON API is complete and sits behind a session cookie, and one binary serves it alongside the embedded React app. **M5 — auth** shipped as `v0.5.0`; **M6 — everyday UI** is in progress, and it is the first build a treasurer can actually try: record → home → reconcile, on a phone.
+
+There is no released version for self-hosters yet. What's in flight is the [M6 milestone](https://github.com/kerti/uruni/milestone/6) and its open issues — that board is the live cursor, not this file.
 
 ## Documentation
 

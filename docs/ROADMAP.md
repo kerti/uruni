@@ -13,7 +13,7 @@ How Uruni gets built and released. Milestones map 1:1 to the supervised build sl
 
 ## Cadence — when we cut
 
-Cut an **`alpha.N`** whenever a slice (or a coherent batch within one) lands green on `main` and is worth looking at. When a batch *also* meets the milestone's definition of done, tag it `vX.Y.0` final instead of another alpha — so **decide DoD before tagging the last batch**, or you pay a duplicate tag and a second multi-arch build on the same commit (`release.yml` rebuilds per tag; nothing promotes an existing image). No calendar dates yet — the rhythm is *slice → review → tag*, sized to a solo, AI-assisted, part-time pace. (We can add target dates once availability is known.)
+Cut an **`alpha.N`** whenever a slice (or a coherent batch within one) lands green on `main` and is worth looking at. When a batch *also* meets the milestone's definition of done, tag it `vX.Y.0` final instead of another alpha — so **decide DoD before tagging the last batch**, or you pay a duplicate tag and a second multi-arch build on the same commit (`release.yml` rebuilds per tag; nothing promotes an existing image). No calendar dates — the rhythm is *slice → review → tag*, sized to a solo, AI-assisted, part-time pace.
 
 ## Milestones
 
@@ -75,8 +75,4 @@ There is **no `HANDOFF.md`** and no standalone status doc. The live board is **G
 - **Standing decisions no issue or ADR owns** → [`Decisions.md`](./Decisions.md).
 - **You-are-here** → the one status line below (changes ~once per milestone; never holds shipped detail).
 
-**Status:** **M5 — auth** is complete and tagged `v0.5.0`; **M6 — everyday UI** is next and its slices are not planned yet. `/api` is closed behind a session cookie, with registration as the one-shot bootstrap and logout and the session probe the only doors left open. The ledger has an owner; it does not yet have a screen — that is M6's job, and M6 is the first build a treasurer can actually try.
-
-## Open
-
-- Add target dates once a working rhythm is known.
+**Status:** **M6 — everyday UI** is in progress, planned as twenty-two slices across five alphas and the final tag. `/api` has been complete and session-gated since `v0.5.0`; what M6 adds is the screen the ledger has never had — record → home → reconcile — plus the two backend gaps planning surfaced (configurable setup locations, and an opening-balance route that was built in M3 and never wired).
