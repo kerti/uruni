@@ -25,6 +25,11 @@ export const copy = {
     loading: 'Memuat…',
     offlineBanner: 'Belum tersambung — Uruni butuh koneksi.',
     retry: 'Coba lagi',
+    // Shown only when a new build is already downloaded and waiting (M6.7).
+    // Never phrased as an alarm - nothing is broken, and nothing reloads
+    // until she taps.
+    updateAvailable: 'Versi baru sudah siap.',
+    updateReload: 'Muat ulang',
     // Wire error codes -> Indonesian copy. The server's message field stays
     // English by design (ADR-014: the API is a code surface) and never
     // reaches the treasurer; this map is what she sees instead.

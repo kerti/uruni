@@ -32,7 +32,7 @@ Standing decisions that no ADR owns go in [`../Decisions.md`](../Decisions.md).
 | [005](./005-data-access-sqlc.md) | Data access: sqlc | implemented |
 | [006](./006-money-integer-minor-units.md) | Money is integer minor units (never floats) | implemented |
 | [007](./007-auth-local-email-password.md) | Auth: local email/password now, OIDC later | implemented |
-| [008](./008-pwa-no-offline-data.md) | PWA: installable shell, no offline data | `draft` |
+| [008](./008-pwa-no-offline-data.md) | PWA: installable shell, no offline data | implemented |
 | [009](./009-reverse-proxy-caddy.md) | Reverse proxy & TLS: Caddy | implemented |
 | [010](./010-packaging-and-deployment.md) | Packaging & deployment | implemented |
 | [011](./011-receipt-photos-local-volume.md) | Receipt photos: local volume | `draft` |

@@ -12,6 +12,7 @@ import (
 	"encoding/json"
 	"io/fs"
 	"log/slog"
+	"mime"
 	"net/http"
 	"path"
 	"strings"
@@ -31,6 +32,16 @@ import (
 type Build struct {
 	Version string
 	Commit  string
+}
+
+// Go's mime table has no .webmanifest entry, so http.FileServerFS sniffs the
+// PWA manifest as text/plain and browsers are entitled to refuse it (ADR-008,
+// M6.7). Registering it here rather than special-casing the path in spa()
+// keeps the file server the one thing that decides content types.
+func init() {
+	if err := mime.AddExtensionType(".webmanifest", "application/manifest+json"); err != nil {
+		panic("registering the .webmanifest mime type: " + err.Error())
+	}
 }
 
 // New builds the router over the embedded SPA assets. build is what /healthz
@@ -125,13 +136,27 @@ func spa(assets fs.FS) http.HandlerFunc {
 		}
 
 		name := strings.TrimPrefix(path.Clean(r.URL.Path), "/")
+
+		servesShell := name == "" || name == "index.html"
 		if name != "" {
 			if _, err := fs.Stat(assets, name); err != nil {
 				// Not a real asset — a client-side route. Serve the shell.
 				r = r.Clone(r.Context())
 				r.URL.Path = "/"
+				servesShell = true
 			}
 		}
+
+		// The two responses that must never come from a stale browser cache
+		// (ADR-008, M6.7). Every other asset is content-hashed and safe to
+		// cache indefinitely; these keep their names across deploys, so a
+		// cached copy is exactly how "I updated the server but my phone still
+		// shows the old app" happens. index.html names the current hashed
+		// assets, and sw.js is what notices there is a new build at all.
+		if servesShell || name == "sw.js" {
+			w.Header().Set("Cache-Control", "no-cache")
+		}
+
 		files.ServeHTTP(w, r)
 	}
 }

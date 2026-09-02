@@ -5,6 +5,7 @@ import { BrowserRouter, Route, Routes } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import OfflineBanner from '@/components/states/OfflineBanner'
+import UpdateBanner from '@/components/states/UpdateBanner'
 import Shell from '@/components/Shell'
 import Loading from '@/components/states/Loading'
 import ErrorState from '@/components/states/ErrorState'
@@ -68,6 +69,7 @@ export default function App() {
   return (
     <BrowserRouter>
       <OfflineBanner />
+      <UpdateBanner />
       <Routes>
         <Route
           path="*"
