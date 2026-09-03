@@ -41,6 +41,11 @@ DEV_DB := $(or $(URUNI_DB),./uruni.db)
 # ports, so the 8080/5173 dev servers are never disturbed.
 E2E_DB   := /tmp/uruni-e2e.db
 E2E_PORT := 8099
+# The request logger writes one info line per request (internal/http/
+# middleware.go), which buries Playwright's own results in a full run.
+# `make e2e` wants quiet; a human debugging `make e2e-server` can turn it
+# back up: `make e2e-server E2E_LOG_LEVEL=debug`.
+E2E_LOG_LEVEL ?= warn
 
 # The golangci-lint version ci.yml pins (env.GOLANGCI_VERSION there). `doctor`
 # compares your local one against it exactly — not just the major. A v1 binary
@@ -341,11 +346,11 @@ e2e: e2e-reset
 
 e2e-reset:
 	@rm -f $(E2E_DB) $(E2E_DB)-wal $(E2E_DB)-shm
-	@URUNI_DB="$(E2E_DB)" go run ./cmd/uruni seed-e2e
+	@URUNI_DB="$(E2E_DB)" URUNI_LOG_LEVEL=$(E2E_LOG_LEVEL) go run ./cmd/uruni seed-e2e
 	@echo "e2e db: $(E2E_DB) ready"
 
 e2e-server: e2e-reset
-	@URUNI_DB="$(E2E_DB)" PORT=$(E2E_PORT) go run ./cmd/uruni serve
+	@URUNI_DB="$(E2E_DB)" PORT=$(E2E_PORT) URUNI_LOG_LEVEL=$(E2E_LOG_LEVEL) go run ./cmd/uruni serve
 
 # ---- self-host stack -------------------------------------------------------
 # Exercises docker-compose.yml — the artifact operators actually run (ADR-010

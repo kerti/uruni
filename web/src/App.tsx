@@ -1,9 +1,8 @@
-import { useCallback, useEffect, useState } from 'react'
-import { CircleCheck, Plus, TriangleAlert } from 'lucide-react'
+import { useCallback, useEffect } from 'react'
+import { CircleCheck, Plus } from 'lucide-react'
 import { BrowserRouter, Link, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import OfflineBanner from '@/components/states/OfflineBanner'
 import UpdateBanner from '@/components/states/UpdateBanner'
 import Shell from '@/components/Shell'
@@ -13,6 +12,7 @@ import Register from '@/screens/Register'
 import Login from '@/screens/Login'
 import Setup from '@/screens/Setup/Setup'
 import RecordTransaction from '@/screens/RecordTransaction'
+import Home from '@/screens/Home'
 import { getSession } from '@/lib/auth'
 import { getFund } from '@/lib/setup'
 import { useApi } from '@/lib/useApi'
@@ -22,15 +22,14 @@ import { copy } from '@/copy/id'
 
 /**
  * Router root for the whole SPA (M6.2, extended by M6.4's session probe,
- * M6.5's fund probe and M6.8's everyday-loop routes). SmokePage is still a
- * placeholder M6.9 replaces once home lands.
+ * M6.5's fund probe and M6.8/M6.9's everyday-loop routes).
  *
  * On mount it probes GET /api/session once and routes off the result:
  * `has_account: false` renders Register, `has_account: true,
  * authenticated: false` renders Login, and `authenticated: true` hands off
  * to AuthedGate, which probes GET /api/fund the same way: 404 renders Setup
  * (M6.5), 200 renders the everyday-loop routes inside M6.6's Shell - home
- * (still SmokePage until M6.9) and "/catat". A successful register or login calls back into this
+ * (M6.9) and "/record". A successful register or login calls back into this
  * component and optimistically marks the session probe authenticated rather
  * than re-fetching /api/session, so the handoff needs no reload; Setup's
  * onDone re-probes GET /api/fund the same way once setup finishes.
@@ -133,9 +132,8 @@ interface HomeState {
  * Once GET /api/session says authenticated: true, this decides setup-vs-home
  * from GET /api/fund - the same probe-once shape as AuthGate's own session
  * probe above, just one layer in. A 404 (no fund yet) renders Setup; any
- * other success renders the everyday-loop routes (M6.8): "/" is home
- * (still SmokePage until M6.9), "/catat" is RecordTransaction, both inside
- * Shell.
+ * other success renders the everyday-loop routes: "/" is Home (M6.9),
+ * "/record" is RecordTransaction (M6.8), both inside Shell.
  *
  * The 200 branch is also where M6.6's Shell starts: everything past setup
  * renders inside it, titled with the fund's own name. Register, Login and
@@ -152,9 +150,10 @@ function AuthedGate({ onLoggedOut }: { onLoggedOut: () => void }) {
   }, [run])
 
   // The record form's own onRecorded contract (RecordTransaction.tsx): fired
-  // once after a successful POST /api/transactions. Home has no
-  // recent-activity list yet (M6.9's job), so a success banner is the whole
-  // of this slice's "the write landed".
+  // once after a successful POST /api/transactions. Home reads
+  // location.key (below) to refetch its data on this navigation, so the new
+  // entry is visible in recent activity without a manual refresh; the
+  // success message itself stays here, not duplicated inside Home.
   //
   // Carried as router location state, not component state: state on this
   // component outlives the navigation, so recording once and later opening
@@ -191,7 +190,7 @@ function AuthedGate({ onLoggedOut }: { onLoggedOut: () => void }) {
   return (
     <Routes>
       <Route
-        path="/catat"
+        path="/record"
         element={
           <Shell title={title} onLoggedOut={onLoggedOut}>
             <RecordTransaction onRecorded={handleRecorded} onCancel={() => navigate('/')} />
@@ -206,7 +205,7 @@ function AuthedGate({ onLoggedOut }: { onLoggedOut: () => void }) {
             onLoggedOut={onLoggedOut}
             action={
               <Button asChild size="icon" className="size-14 rounded-full shadow-floating" aria-label={copy.record.addAction}>
-                <Link to="/catat">
+                <Link to="/record">
                   <Plus aria-hidden="true" className="size-6" />
                 </Link>
               </Button>
@@ -218,63 +217,10 @@ function AuthedGate({ onLoggedOut }: { onLoggedOut: () => void }) {
                 {successMessage}
               </p>
             )}
-            <SmokePage />
+            <Home refetchKey={location.key} />
           </Shell>
         }
       />
     </Routes>
-  )
-}
-
-type Health = 'idle' | 'checking' | 'online' | 'offline'
-
-/**
- * The M1 smoke page, carried over unpolished as a connectivity check a human
- * can still run by hand. Nothing here is meant to survive the screens later
- * M6 slices add in its place.
- *
- * Renders a plain div, not its own <main>: since M6.6 it is a child of
- * Shell, which owns the page's single <main> landmark.
- */
-function SmokePage() {
-  const [health, setHealth] = useState<Health>('idle')
-
-  async function check() {
-    setHealth('checking')
-    try {
-      const res = await fetch('/healthz')
-      setHealth(res.ok ? 'online' : 'offline')
-    } catch {
-      setHealth('offline')
-    }
-  }
-
-  return (
-    <div className="flex justify-center">
-      <Card className="w-full max-w-sm shadow-card" size="default">
-        <CardHeader>
-          <img src="/favicon.svg" alt="" className="size-12" />
-          <CardTitle className="text-2xl font-semibold">{copy.smoke.heading}</CardTitle>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-4">
-          <p className="text-muted-foreground">{copy.smoke.body}</p>
-          <Button size="lg" onClick={check} disabled={health === 'checking'}>
-            {health === 'checking' ? copy.smoke.checking : copy.smoke.check}
-          </Button>
-          {health === 'online' && (
-            <p className="flex items-center gap-2 text-success">
-              <CircleCheck aria-hidden="true" />
-              {copy.smoke.online}
-            </p>
-          )}
-          {health === 'offline' && (
-            <p className="flex items-center gap-2 text-attention">
-              <TriangleAlert aria-hidden="true" />
-              {copy.smoke.offline}
-            </p>
-          )}
-        </CardContent>
-      </Card>
-    </div>
   )
 }

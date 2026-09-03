@@ -18,40 +18,65 @@ function deferred<T>() {
   return { promise, resolve }
 }
 
+function jsonResponse(body: unknown, status = 200) {
+  return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } })
+}
+
 function sessionResponse(body: { authenticated: boolean; has_account: boolean }) {
-  return new Response(JSON.stringify(body), { status: 200, headers: { 'Content-Type': 'application/json' } })
+  return jsonResponse(body)
 }
 
 const fund = { id: 1, name: 'Kas RT 04', currency: 'IDR', report_slug: 'kas-rt-04', created_at: 1234 }
 
 function fundFoundResponse() {
-  return new Response(JSON.stringify(fund), { status: 200, headers: { 'Content-Type': 'application/json' } })
+  return jsonResponse(fund)
 }
 
 function fundNotFoundResponse() {
-  return new Response(JSON.stringify({ error: { code: 'not_found', message: 'no fund' } }), {
-    status: 404,
-    headers: { 'Content-Type': 'application/json' },
-  })
+  return jsonResponse({ error: { code: 'not_found', message: 'no fund' } }, 404)
 }
 
-/** An authenticated session, wired to answer GET /api/fund with 200 (fund exists). */
-function authenticatedWithFund() {
-  return routedFetch({
-    '/api/session': () => Promise.resolve(sessionResponse({ authenticated: true, has_account: true })),
-    '/api/fund': () => Promise.resolve(fundFoundResponse()),
-  })
-}
+/** Home's own four GET routes (M6.9), stubbed to the emptiest shape each
+ * answers with: no accounts/purposes with a balance, nothing open, never
+ * reconciled (404 not_found - a normal first-run state), no transactions
+ * yet. Every test below that reaches past auth needs these, since Home is
+ * what renders there now. */
+const emptyHomeRoutes: { match: (method: string, url: string) => boolean; handle: () => Promise<Response> }[] = [
+  { match: (m, u) => m === 'GET' && u.includes('/api/balances'), handle: () => Promise.resolve(jsonResponse({ fund_total: 0, accounts: [], purposes: [] })) },
+  {
+    match: (m, u) => m === 'GET' && u.includes('/api/reconciliations/open-lines'),
+    handle: () => Promise.resolve(jsonResponse([])),
+  },
+  {
+    match: (m, u) => m === 'GET' && u.includes('/api/reconciliations/latest'),
+    handle: () => Promise.resolve(jsonResponse({ error: { code: 'not_found', message: 'no reconciliation' } }, 404)),
+  },
+  { match: (m, u) => m === 'GET' && u.includes('/api/transactions'), handle: () => Promise.resolve(jsonResponse([])) },
+]
 
-/** Routes a stubbed fetch by path, so a single mock can answer both /api/session and /healthz. */
-function routedFetch(handlers: Record<string, () => Promise<Response>>) {
-  return vi.fn((input: RequestInfo | URL) => {
+/** Routes a stubbed fetch by method + url match, same idiom as
+ * RecordTransaction.test.tsx's own routedFetch - a plain path substring
+ * can't tell GET /api/transactions (Home's list) apart from POST
+ * /api/transactions (the record form's create). */
+function routedFetch(handlers: { match: (method: string, url: string) => boolean; handle: () => Promise<Response> }[]) {
+  return vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
     const url = typeof input === 'string' ? input : input.toString()
-    for (const [path, handler] of Object.entries(handlers)) {
-      if (url.includes(path)) return handler()
-    }
-    return Promise.reject(new Error(`unstubbed fetch: ${url}`))
+    const method = (init?.method ?? 'GET').toUpperCase()
+    const handler = handlers.find((h) => h.match(method, url))
+    if (!handler) return Promise.reject(new Error(`unstubbed fetch: ${method} ${url}`))
+    return handler.handle()
   })
+}
+
+/** An authenticated session, wired to answer GET /api/fund with 200 (fund
+ * exists), plus Home's own routes so the everyday-loop home screen it lands
+ * on actually renders. */
+function authenticatedWithFund() {
+  return routedFetch([
+    { match: (m, u) => m === 'GET' && u.includes('/api/session'), handle: () => Promise.resolve(sessionResponse({ authenticated: true, has_account: true })) },
+    { match: (m, u) => m === 'GET' && u.includes('/api/fund'), handle: () => Promise.resolve(fundFoundResponse()) },
+    ...emptyHomeRoutes,
+  ])
 }
 
 describe('App (session probe)', () => {
@@ -95,11 +120,11 @@ describe('App (session probe)', () => {
     expect(await screen.findByText(copy.auth.login.heading)).toBeInTheDocument()
   })
 
-  it('renders the authenticated placeholder (smoke page) once authenticated and GET /api/fund answers 200', async () => {
+  it('renders home once authenticated and GET /api/fund answers 200', async () => {
     vi.stubGlobal('fetch', authenticatedWithFund())
     render(<App />)
-    expect(await screen.findByText(copy.smoke.heading)).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: copy.smoke.check })).toBeInTheDocument()
+    expect(await screen.findByText(copy.home.balanceHeading)).toBeInTheDocument()
+    expect(await screen.findByText(copy.home.recentActivityEmpty)).toBeInTheDocument()
   })
 })
 
@@ -108,19 +133,19 @@ describe('App (fund probe)', () => {
   // that answers 200 on any later load skips the wizard entirely, including
   // a mid-wizard reload - there is no client-side "setup done" flag, the
   // fund's own existence is the only source of truth.
-  it('skips the wizard and renders the placeholder home when GET /api/fund answers 200', async () => {
+  it('skips the wizard and renders home when GET /api/fund answers 200', async () => {
     vi.stubGlobal('fetch', authenticatedWithFund())
     render(<App />)
-    expect(await screen.findByText(copy.smoke.heading)).toBeInTheDocument()
+    expect(await screen.findByText(copy.home.balanceHeading)).toBeInTheDocument()
   })
 
   it('renders the setup wizard when GET /api/fund answers 404 (not_found)', async () => {
     vi.stubGlobal(
       'fetch',
-      routedFetch({
-        '/api/session': () => Promise.resolve(sessionResponse({ authenticated: true, has_account: true })),
-        '/api/fund': () => Promise.resolve(fundNotFoundResponse()),
-      }),
+      routedFetch([
+        { match: (m, u) => m === 'GET' && u.includes('/api/session'), handle: () => Promise.resolve(sessionResponse({ authenticated: true, has_account: true })) },
+        { match: (m, u) => m === 'GET' && u.includes('/api/fund'), handle: () => Promise.resolve(fundNotFoundResponse()) },
+      ]),
     )
     render(<App />)
     expect(await screen.findByText(copy.setup.fund.heading)).toBeInTheDocument()
@@ -133,20 +158,21 @@ describe('App (app shell chrome)', () => {
     render(<App />)
 
     expect(await screen.findByRole('heading', { name: fund.name })).toBeInTheDocument()
-    expect(screen.getByRole('main')).toHaveTextContent(copy.smoke.heading)
+    expect(await screen.findByText(copy.home.balanceHeading)).toBeInTheDocument()
   })
 
   it('logs out from the shell and lands back on Login, not Register', async () => {
     vi.stubGlobal(
       'fetch',
-      routedFetch({
-        '/api/session': () => Promise.resolve(sessionResponse({ authenticated: true, has_account: true })),
-        '/api/fund': () => Promise.resolve(fundFoundResponse()),
-        '/api/logout': () => Promise.resolve(new Response(null, { status: 204 })),
-      }),
+      routedFetch([
+        { match: (m, u) => m === 'GET' && u.includes('/api/session'), handle: () => Promise.resolve(sessionResponse({ authenticated: true, has_account: true })) },
+        { match: (m, u) => m === 'GET' && u.includes('/api/fund'), handle: () => Promise.resolve(fundFoundResponse()) },
+        { match: (m, u) => m === 'POST' && u.includes('/api/logout'), handle: () => Promise.resolve(new Response(null, { status: 204 })) },
+        ...emptyHomeRoutes,
+      ]),
     )
     render(<App />)
-    await screen.findByText(copy.smoke.heading)
+    await screen.findByText(copy.home.balanceHeading)
 
     await userEvent.click(screen.getByRole('button', { name: copy.shell.logout }))
 
@@ -161,9 +187,7 @@ describe('App (app shell chrome)', () => {
   it('does not render the shell around Login or the setup wizard', async () => {
     vi.stubGlobal(
       'fetch',
-      routedFetch({
-        '/api/session': () => Promise.resolve(sessionResponse({ authenticated: false, has_account: true })),
-      }),
+      routedFetch([{ match: (m, u) => m === 'GET' && u.includes('/api/session'), handle: () => Promise.resolve(sessionResponse({ authenticated: false, has_account: true })) }]),
     )
     const { unmount } = render(<App />)
     await screen.findByText(copy.auth.login.heading)
@@ -172,10 +196,10 @@ describe('App (app shell chrome)', () => {
 
     vi.stubGlobal(
       'fetch',
-      routedFetch({
-        '/api/session': () => Promise.resolve(sessionResponse({ authenticated: true, has_account: true })),
-        '/api/fund': () => Promise.resolve(fundNotFoundResponse()),
-      }),
+      routedFetch([
+        { match: (m, u) => m === 'GET' && u.includes('/api/session'), handle: () => Promise.resolve(sessionResponse({ authenticated: true, has_account: true })) },
+        { match: (m, u) => m === 'GET' && u.includes('/api/fund'), handle: () => Promise.resolve(fundNotFoundResponse()) },
+      ]),
     )
     render(<App />)
     await screen.findByText(copy.setup.fund.heading)
@@ -188,21 +212,20 @@ describe('App (record loop)', () => {
   const purposes = [{ id: 11, kind: 'main', name: 'Kas utama', created_at: 1 }]
 
   function authenticatedWithRecordRoutes() {
-    return routedFetch({
-      '/api/session': () => Promise.resolve(sessionResponse({ authenticated: true, has_account: true })),
-      '/api/fund': () => Promise.resolve(fundFoundResponse()),
-      '/api/accounts': () =>
-        Promise.resolve(new Response(JSON.stringify(accounts), { headers: { 'Content-Type': 'application/json' } })),
-      '/api/purposes': () =>
-        Promise.resolve(new Response(JSON.stringify(purposes), { headers: { 'Content-Type': 'application/json' } })),
-      '/api/transactions': () => Promise.resolve(new Response(JSON.stringify({ id: 1 }), { status: 201 })),
-    })
+    return routedFetch([
+      { match: (m, u) => m === 'GET' && u.includes('/api/session'), handle: () => Promise.resolve(sessionResponse({ authenticated: true, has_account: true })) },
+      { match: (m, u) => m === 'GET' && u.includes('/api/fund'), handle: () => Promise.resolve(fundFoundResponse()) },
+      { match: (m, u) => m === 'GET' && u.includes('/api/accounts'), handle: () => Promise.resolve(jsonResponse(accounts)) },
+      { match: (m, u) => m === 'GET' && u.includes('/api/purposes'), handle: () => Promise.resolve(jsonResponse(purposes)) },
+      { match: (m, u) => m === 'POST' && u.includes('/api/transactions'), handle: () => Promise.resolve(jsonResponse({ id: 1 }, 201)) },
+      ...emptyHomeRoutes,
+    ])
   }
 
   it('reaches the form from the add-FAB, posts, and confirms on home', async () => {
     vi.stubGlobal('fetch', authenticatedWithRecordRoutes())
     render(<App />)
-    await screen.findByText(copy.smoke.heading)
+    await screen.findByText(copy.home.balanceHeading)
 
     await userEvent.click(screen.getByRole('link', { name: copy.record.addAction }))
     await screen.findByRole('heading', { name: copy.record.heading })
@@ -211,7 +234,7 @@ describe('App (record loop)', () => {
     await userEvent.click(screen.getByRole('button', { name: copy.record.submit }))
 
     expect(await screen.findByText(copy.record.successOut)).toBeInTheDocument()
-    expect(screen.getByText(copy.smoke.heading)).toBeInTheDocument()
+    expect(await screen.findByText(copy.home.balanceHeading)).toBeInTheDocument()
   })
 
   // The confirmation belongs to the history entry the successful post
@@ -220,7 +243,7 @@ describe('App (record loop)', () => {
   it('does not re-show the confirmation on a later visit to home', async () => {
     vi.stubGlobal('fetch', authenticatedWithRecordRoutes())
     render(<App />)
-    await screen.findByText(copy.smoke.heading)
+    await screen.findByText(copy.home.balanceHeading)
 
     await userEvent.click(screen.getByRole('link', { name: copy.record.addAction }))
     await userEvent.type(await screen.findByLabelText(copy.record.amountLabel), '50000')
@@ -231,38 +254,8 @@ describe('App (record loop)', () => {
     await screen.findByRole('heading', { name: copy.record.heading })
     await userEvent.click(screen.getByRole('button', { name: copy.record.cancel }))
 
-    expect(await screen.findByText(copy.smoke.heading)).toBeInTheDocument()
+    expect(await screen.findByText(copy.home.balanceHeading)).toBeInTheDocument()
     expect(screen.queryByText(copy.record.successOut)).not.toBeInTheDocument()
-  })
-})
-
-describe('App (router shell)', () => {
-  it('still answers the /healthz smoke check through the router', async () => {
-    vi.stubGlobal(
-      'fetch',
-      routedFetch({
-        '/api/session': () => Promise.resolve(sessionResponse({ authenticated: true, has_account: true })),
-        '/api/fund': () => Promise.resolve(fundFoundResponse()),
-        '/healthz': () => Promise.resolve(new Response(null, { status: 200 })),
-      }),
-    )
-    render(<App />)
-    await userEvent.click(await screen.findByRole('button', { name: copy.smoke.check }))
-    expect(await screen.findByText(copy.smoke.online)).toBeInTheDocument()
-  })
-
-  it('says the app needs a connection when the server is unreachable', async () => {
-    vi.stubGlobal(
-      'fetch',
-      routedFetch({
-        '/api/session': () => Promise.resolve(sessionResponse({ authenticated: true, has_account: true })),
-        '/api/fund': () => Promise.resolve(fundFoundResponse()),
-        '/healthz': () => Promise.reject(new Error('network down')),
-      }),
-    )
-    render(<App />)
-    await userEvent.click(await screen.findByRole('button', { name: copy.smoke.check }))
-    expect(await screen.findByText(copy.smoke.offline)).toBeInTheDocument()
   })
 })
 
@@ -274,7 +267,7 @@ describe('App (connectivity watcher)', () => {
     // calls the same connectivity watcher (a 2xx counts as "online") and
     // would otherwise race the offline event dispatched below and win,
     // masking it.
-    await screen.findByText(copy.smoke.heading)
+    await screen.findByText(copy.home.balanceHeading)
     expect(screen.queryByText(copy.common.offlineBanner)).not.toBeInTheDocument()
 
     act(() => {
