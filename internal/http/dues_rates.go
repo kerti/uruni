@@ -42,7 +42,9 @@ func toDuesRateResponse(rate store.DuesRate) duesRateResponse {
 }
 
 // resolveDuesTier reads the {id} path segment both dues-rate routes share
-// and looks the tier up, or answers the request itself and reports false.
+// and looks the tier up within the fund, or answers the request itself and
+// reports false. The scope lives in the query (GetDuesTierForFund, #188),
+// so a tier belonging to another fund is a 404 here, not a found row.
 // A non-numeric id is a shape problem this layer alone can see (like
 // decodeJSON's malformed-JSON case), so it is 400 invalid_argument. A
 // well-formed id naming no row is not a shape problem - it is 404, the same
@@ -60,7 +62,15 @@ func (a *api) resolveDuesTier(w http.ResponseWriter, r *http.Request) (store.Due
 		return store.DuesTier{}, false
 	}
 
-	tier, err := a.queries.GetDuesTier(r.Context(), id)
+	fund, ok := a.resolveFund(w, r)
+	if !ok {
+		return store.DuesTier{}, false
+	}
+
+	tier, err := a.queries.GetDuesTierForFund(r.Context(), store.GetDuesTierForFundParams{
+		ID:     id,
+		FundID: fund.ID,
+	})
 	if err != nil {
 		mapSQLiteError(w, a.logger, err) // sql.ErrNoRows -> 404 not_found
 		return store.DuesTier{}, false
@@ -101,7 +111,8 @@ func (a *api) createDuesRate(w http.ResponseWriter, r *http.Request) {
 
 // resolveDuesRate is resolveDuesTier's counterpart over dues_rate, and a
 // pre-fetch for the same reason: a DELETE affecting zero rows never raises
-// sql.ErrNoRows.
+// sql.ErrNoRows. dues_rate has no fund_id column, so GetDuesRateForFund
+// reaches the fund through the rate's tier (#188).
 func (a *api) resolveDuesRate(w http.ResponseWriter, r *http.Request) (store.DuesRate, bool) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
@@ -109,7 +120,15 @@ func (a *api) resolveDuesRate(w http.ResponseWriter, r *http.Request) (store.Due
 		return store.DuesRate{}, false
 	}
 
-	rate, err := a.queries.GetDuesRate(r.Context(), id)
+	fund, ok := a.resolveFund(w, r)
+	if !ok {
+		return store.DuesRate{}, false
+	}
+
+	rate, err := a.queries.GetDuesRateForFund(r.Context(), store.GetDuesRateForFundParams{
+		ID:     id,
+		FundID: fund.ID,
+	})
 	if err != nil {
 		mapSQLiteError(w, a.logger, err) // sql.ErrNoRows -> 404 not_found
 		return store.DuesRate{}, false

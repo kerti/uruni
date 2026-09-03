@@ -3,13 +3,16 @@ INSERT INTO dues_rate (tier_id, amount, effective_from, created_at)
 VALUES (?, ?, ?, ?)
 RETURNING id, tier_id, amount, effective_from, created_at;
 
--- GetDuesRate is the lookup PATCH and DELETE both do ahead of the write: an
--- UPDATE's RETURNING would answer an unknown id with sql.ErrNoRows, but a
--- DELETE affecting zero rows raises nothing at all.
--- name: GetDuesRate :one
-SELECT id, tier_id, amount, effective_from, created_at
+-- GetDuesRateForFund is the lookup PATCH and DELETE both do ahead of the
+-- write: an UPDATE's RETURNING would answer an unknown id with
+-- sql.ErrNoRows, but a DELETE affecting zero rows raises nothing at all.
+-- dues_rate carries no fund_id of its own, so the scope comes through its
+-- tier - the same guarantee GetMemberForFund gives directly (#188).
+-- name: GetDuesRateForFund :one
+SELECT dues_rate.id, dues_rate.tier_id, dues_rate.amount, dues_rate.effective_from, dues_rate.created_at
 FROM dues_rate
-WHERE id = ?;
+JOIN dues_tier ON dues_tier.id = dues_rate.tier_id
+WHERE dues_rate.id = ? AND dues_tier.fund_id = ?;
 
 -- The rate in force for a period: the latest row whose effective_from is at or
 -- before it. One-sided intervals mean there is no end date to check, and no

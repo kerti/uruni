@@ -33,14 +33,21 @@ func (q *Queries) CreateDuesTier(ctx context.Context, arg CreateDuesTierParams) 
 	return i, err
 }
 
-const getDuesTier = `-- name: GetDuesTier :one
+const getDuesTierForFund = `-- name: GetDuesTierForFund :one
 SELECT id, fund_id, name, created_at
 FROM dues_tier
-WHERE id = ?
+WHERE id = ? AND fund_id = ?
 `
 
-func (q *Queries) GetDuesTier(ctx context.Context, id int64) (DuesTier, error) {
-	row := q.db.QueryRowContext(ctx, getDuesTier, id)
+type GetDuesTierForFundParams struct {
+	ID     int64
+	FundID int64
+}
+
+// GetDuesTierForFund is the only single-tier lookup, fund-scoped for the
+// reason GetMemberForFund is (#188).
+func (q *Queries) GetDuesTierForFund(ctx context.Context, arg GetDuesTierForFundParams) (DuesTier, error) {
+	row := q.db.QueryRowContext(ctx, getDuesTierForFund, arg.ID, arg.FundID)
 	var i DuesTier
 	err := row.Scan(
 		&i.ID,

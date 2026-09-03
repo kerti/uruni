@@ -3,10 +3,13 @@ INSERT INTO account (fund_id, kind, name, created_at)
 VALUES (?, ?, ?, ?)
 RETURNING id, fund_id, kind, name, created_at, inactive_on;
 
--- name: GetAccount :one
+-- GetAccountForFund is the only single-account lookup, fund-scoped for the
+-- reason GetMemberForFund is (#188): an account id belonging to another fund
+-- answers sql.ErrNoRows rather than being found and only then rejected.
+-- name: GetAccountForFund :one
 SELECT id, fund_id, kind, name, created_at, inactive_on
 FROM account
-WHERE id = ?;
+WHERE id = ? AND fund_id = ?;
 
 -- name: ListAccountsByFund :many
 SELECT id, fund_id, kind, name, created_at, inactive_on

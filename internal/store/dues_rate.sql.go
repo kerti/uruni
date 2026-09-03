@@ -52,17 +52,25 @@ func (q *Queries) DeleteDuesRate(ctx context.Context, id int64) error {
 	return err
 }
 
-const getDuesRate = `-- name: GetDuesRate :one
-SELECT id, tier_id, amount, effective_from, created_at
+const getDuesRateForFund = `-- name: GetDuesRateForFund :one
+SELECT dues_rate.id, dues_rate.tier_id, dues_rate.amount, dues_rate.effective_from, dues_rate.created_at
 FROM dues_rate
-WHERE id = ?
+JOIN dues_tier ON dues_tier.id = dues_rate.tier_id
+WHERE dues_rate.id = ? AND dues_tier.fund_id = ?
 `
 
-// GetDuesRate is the lookup PATCH and DELETE both do ahead of the write: an
-// UPDATE's RETURNING would answer an unknown id with sql.ErrNoRows, but a
-// DELETE affecting zero rows raises nothing at all.
-func (q *Queries) GetDuesRate(ctx context.Context, id int64) (DuesRate, error) {
-	row := q.db.QueryRowContext(ctx, getDuesRate, id)
+type GetDuesRateForFundParams struct {
+	ID     int64
+	FundID int64
+}
+
+// GetDuesRateForFund is the lookup PATCH and DELETE both do ahead of the
+// write: an UPDATE's RETURNING would answer an unknown id with
+// sql.ErrNoRows, but a DELETE affecting zero rows raises nothing at all.
+// dues_rate carries no fund_id of its own, so the scope comes through its
+// tier - the same guarantee GetMemberForFund gives directly (#188).
+func (q *Queries) GetDuesRateForFund(ctx context.Context, arg GetDuesRateForFundParams) (DuesRate, error) {
+	row := q.db.QueryRowContext(ctx, getDuesRateForFund, arg.ID, arg.FundID)
 	var i DuesRate
 	err := row.Scan(
 		&i.ID,

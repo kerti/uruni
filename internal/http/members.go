@@ -102,9 +102,14 @@ func (a *api) listMembers(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, resp)
 }
 
-// resolveMember looks up {id}, or answers the request and reports false. The
-// lookup is a pre-fetch rather than leaning on sql.ErrNoRows, which a DELETE
-// affecting zero rows never raises.
+// resolveMember looks up {id} within the fund, or answers the request and
+// reports false. The lookup is a pre-fetch rather than leaning on
+// sql.ErrNoRows, which a DELETE affecting zero rows never raises.
+//
+// It resolves the fund itself rather than taking one: every caller is a
+// fund-scoped route, and the scope belongs in the query (GetMemberForFund)
+// rather than in a check each handler has to remember - which is how this
+// helper came to be unscoped through #188.
 func (a *api) resolveMember(w http.ResponseWriter, r *http.Request) (store.Member, bool) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
@@ -112,7 +117,15 @@ func (a *api) resolveMember(w http.ResponseWriter, r *http.Request) (store.Membe
 		return store.Member{}, false
 	}
 
-	member, err := a.queries.GetMember(r.Context(), id)
+	fund, ok := a.resolveFund(w, r)
+	if !ok {
+		return store.Member{}, false
+	}
+
+	member, err := a.queries.GetMemberForFund(r.Context(), store.GetMemberForFundParams{
+		ID:     id,
+		FundID: fund.ID,
+	})
 	if err != nil {
 		mapSQLiteError(w, a.logger, err) // sql.ErrNoRows -> 404 not_found
 		return store.Member{}, false

@@ -58,27 +58,6 @@ func (q *Queries) DeleteMember(ctx context.Context, id int64) error {
 	return err
 }
 
-const getMember = `-- name: GetMember :one
-SELECT id, fund_id, name, tier_id, joined_on, inactive_on, created_at
-FROM member
-WHERE id = ?
-`
-
-func (q *Queries) GetMember(ctx context.Context, id int64) (Member, error) {
-	row := q.db.QueryRowContext(ctx, getMember, id)
-	var i Member
-	err := row.Scan(
-		&i.ID,
-		&i.FundID,
-		&i.Name,
-		&i.TierID,
-		&i.JoinedOn,
-		&i.InactiveOn,
-		&i.CreatedAt,
-	)
-	return i, err
-}
-
 const getMemberForFund = `-- name: GetMemberForFund :one
 SELECT id, fund_id, name, tier_id, joined_on, inactive_on, created_at
 FROM member
@@ -90,10 +69,12 @@ type GetMemberForFundParams struct {
 	FundID int64
 }
 
-// GetMemberForFund is GetMember fund-scoped (WHERE fund_id = ? AND id = ?),
-// the same shape GetTransactionForFund and GetReimbursement already use: a
-// member id that is real but belongs to another fund answers sql.ErrNoRows
-// here rather than being found and only then rejected for ownership.
+// GetMemberForFund is the only single-member lookup: WHERE id = ? AND
+// fund_id = ?, the same shape GetTransactionForFund and GetReimbursement
+// already use, so a member id that is real but belongs to another fund
+// answers sql.ErrNoRows here rather than being found and only then rejected
+// for ownership. Its unscoped predecessor GetMember is gone (#188) - keeping
+// one around is how resolveMember came to be unscoped in the first place.
 func (q *Queries) GetMemberForFund(ctx context.Context, arg GetMemberForFundParams) (Member, error) {
 	row := q.db.QueryRowContext(ctx, getMemberForFund, arg.ID, arg.FundID)
 	var i Member
