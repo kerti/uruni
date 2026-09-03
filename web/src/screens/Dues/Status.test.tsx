@@ -16,13 +16,6 @@ function jsonResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } })
 }
 
-/** See Home.test.tsx's own money() - formatIDR's NBSP-after-"Rp" survives a
- * raw string matcher untouched even though testing-library normalizes the
- * DOM text it is compared against. */
-function money(amount: number): string {
-  return formatIDR(amount).replace(/ /g, ' ')
-}
-
 function member(id: number, name: string) {
   return { id, name, tier_id: 1, joined_on: null, inactive_on: null, created_at: 1 }
 }
@@ -58,7 +51,11 @@ describe('DuesStatus', () => {
     expect(screen.getByText(text.statuses.paid)).toBeInTheDocument()
     expect(screen.getByText(text.statuses.paid_in_advance)).toBeInTheDocument()
 
-    expect(screen.getAllByText((_content, el) => el?.textContent === `${text.owedLabel}: ${money(50_000)}`).length).toBeGreaterThan(0)
+    // formatIDR puts a non-breaking space after "Rp". This matcher reads
+    // el.textContent, which is the raw DOM text, so that NBSP is compared
+    // as-is - unlike testing-library's own string matchers, which normalize
+    // it away (Home.test.tsx converts it for exactly that reason).
+    expect(screen.getAllByText((_content, el) => el?.textContent === `${text.owedLabel}: ${formatIDR(50_000)}`).length).toBeGreaterThan(0)
   })
 
   it('excludes a member with no dues tier - the API never returns a row for one', async () => {
