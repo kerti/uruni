@@ -77,6 +77,7 @@ Entitas utama:
 ### 7.1 Penyiapan & akses
 - Bendahara masuk ke server *komunitasnya sendiri* (satu peran bendahara di v1; peran "hanya-lihat" opsional menyusul). Tidak ada akun Uruni terpusat.
 - Penyiapan awal: memberi nama dana, menambahkan anggota beserta jenjangnya, mengatur tarif iuran, mengatur saldo awal untuk tiap lokasi.
+- **Riwayat Uruni dimulai saat mulai dipakai.** Saldo awal sudah memuat segala hal sebelumnya, sehingga tanggal bergabung dan tarif iuran mengikuti saat penyiapan dan tidak ada periode lampau yang dihitung sebagai tagihan. Pembayaran yang sudah lunas tidak dicatat ulang: uangnya sudah *ada di dalam* saldo awal, dan mencatatnya kedua kali akan membuat saldo tercatat menggelembung selamanya. Pengecualiannya adalah **tunggakan yang masih nyata** — iuran yang memang belum dibayar anggota tidak pernah masuk ke saldo awal, jadi memundurkan tanggal bergabung anggota itu (beserta bulan berlaku tarifnya) membuat periode-periode tersebut tampil sebagai belum terbayar, dan pembayarannya bertanggal hari uang itu benar-benar masuk.
 
 ### 7.2 Mencatat transaksi (tindakan sehari-hari)
 - Tombol "tambah" yang menonjol dan bisa dijangkau dengan satu ketukan dari layar utama.

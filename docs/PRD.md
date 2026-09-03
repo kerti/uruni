@@ -75,6 +75,7 @@ Key entities:
 ### 7.1 Setup & access
 - The treasurer signs in to *their community's* server (single treasurer role in v1; optional read-only viewer later). No central Uruni accounts.
 - First-run setup: name the fund, add members with tiers, set dues rates, set an opening balance per location.
+- **Uruni's history starts at adoption.** The opening balance carries everything that came before it, so join dates and dues rates default to the moment of setup and no earlier period is generated as owed. Payments already settled are never re-entered: that money is *inside* the opening balance, and recording it a second time would inflate the recorded balance permanently. The exception is **live arrears** — dues a member genuinely still owes never arrived, so backdating that one member's join date (and the rate's effective month) makes those periods show as outstanding, and the payment is dated the day it actually comes in.
 
 ### 7.2 Record a transaction (the everyday action)
 - A prominent "add" action reachable in one tap from the home screen.
