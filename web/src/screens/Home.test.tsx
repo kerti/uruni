@@ -166,6 +166,24 @@ describe('Home', () => {
     expect(screen.getByText('Beli galon')).toBeInTheDocument()
   })
 
+  it('refreshes when the app comes back to the foreground, without blanking the screen', async () => {
+    const fetchMock = stubHome()
+    vi.stubGlobal('fetch', fetchMock)
+    render(<Home refetchKey="1" />)
+    await screen.findByText(money(1_450_000))
+
+    const callsBefore = fetchMock.mock.calls.length
+    document.dispatchEvent(new Event('visibilitychange'))
+
+    // The refresh is silent: the balance stays on screen throughout rather
+    // than dropping to the loading state on every app switch (iOS may or
+    // may not have evicted the app - a warm resume shows stale numbers
+    // unless something re-reads them).
+    await waitFor(() => expect(fetchMock.mock.calls.length).toBeGreaterThan(callsBefore))
+    expect(screen.getByText(money(1_450_000))).toBeInTheDocument()
+    expect(screen.queryByText(copy.common.loading)).not.toBeInTheDocument()
+  })
+
   it('refetches when refetchKey changes, so a fresh record shows up without a manual refresh', async () => {
     const fetchMock = stubHome()
     vi.stubGlobal('fetch', fetchMock)

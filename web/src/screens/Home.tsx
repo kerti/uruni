@@ -86,6 +86,28 @@ export default function Home({ refetchKey }: { refetchKey: unknown }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [run, refetchKey])
 
+  // Re-read the fund whenever the app comes back to the foreground.
+  //
+  // On iOS an installed PWA is usually evicted while it is in the
+  // background, so returning to it is a cold relaunch and this screen
+  // remounts with fresh data anyway - but that is memory pressure, not a
+  // guarantee. Switch back quickly, or resume on Android or a desktop, and
+  // the app comes back warm: same React tree, same numbers, however old
+  // they are. A stale balance looks exactly like a current one, which is
+  // the one thing this screen must never do (PRD §7.7).
+  //
+  // Silent, so an app switch never blanks the screen to "Memuat…" and a
+  // moment without signal never replaces it with ErrorState - see
+  // RunOptions.silent.
+  useEffect(() => {
+    function refreshWhenVisible() {
+      if (document.visibilityState === 'visible') void run(loadHomeData, { silent: true })
+    }
+    document.addEventListener('visibilitychange', refreshWhenVisible)
+    return () => document.removeEventListener('visibilitychange', refreshWhenVisible)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [run])
+
   if (state.status === 'idle' || state.status === 'loading') {
     return <Loading />
   }
@@ -106,8 +128,32 @@ export default function Home({ refetchKey }: { refetchKey: unknown }) {
 
   return (
     <div className="flex flex-col gap-6">
-      <section aria-label={copy.home.balanceHeading} className="flex flex-col items-center gap-1 py-2 text-center">
-        <p className="text-sm text-muted-foreground">{copy.home.balanceHeading}</p>
+      {/* "Balance is the hero" (Design-System.md:91). The prominence comes
+          from surface, space and color - a card at the system's own radius
+          and card elevation, 24px of padding, the figure in Forest - not
+          from a bigger number: 36px/700 tabular IS the Balance/display role,
+          the top of the type scale, and inventing a larger size would put
+          this screen outside the system.
+          Deliberately not a filled Forest block either. Forest (#1F5D50) and
+          success (#2E7D5B) are neighbours, so a green slab sitting directly
+          above a green "cocok" banner would read as one green mass and blur
+          the reconciliation signal the design system calls its emotional
+          heart.
+          Filled with Forest (`--primary`) and white text, which passes AA -
+          Design-System.md's own contrast note is why the fill is Forest and
+          never Sage. The cost, accepted deliberately: Forest is also the
+          action color, so this surface and the add-FAB now share a hue and
+          the FAB is no longer the only saturated thing on the screen. It
+          keeps its edge by being the only *circular* Forest element, at
+          `shadow-floating` against this card's flatter `shadow-card`.
+          Not `--secondary` (#E7F1EA), the soft-sage highlight surface: it is
+          a shade away from success-soft (#E3F1E9) and would collide with
+          the reconciliation banner directly beneath it. */}
+      <section
+        aria-label={copy.home.balanceHeading}
+        className="flex flex-col items-center gap-2 rounded-2xl bg-primary px-6 py-6 text-center text-primary-foreground shadow-card"
+      >
+        <p className="text-[13px] font-medium text-primary-foreground/80">{copy.home.balanceHeading}</p>
         <p className="tabular text-[36px] font-bold leading-tight">{formatIDR(balances.fund_total)}</p>
       </section>
 

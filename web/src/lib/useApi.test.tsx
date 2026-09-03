@@ -89,6 +89,49 @@ describe('useApi', () => {
     expect(result.current[0].status).toBe('success')
   })
 
+  // RunOptions.silent: a background refresh keeps what is on screen. Both
+  // halves matter - Home calls this on every return to the foreground, so
+  // dropping to loading would blank the balance on every app switch, and
+  // failing loudly would erase it whenever the network blinked.
+  it('a silent run keeps the previous data instead of showing loading', async () => {
+    const { result } = renderHook(() => useApi<string>())
+
+    await act(async () => {
+      await result.current[1](() => Promise.resolve('first'))
+    })
+    expect(result.current[0].data).toBe('first')
+
+    const call = deferred<string>()
+    act(() => {
+      void result.current[1](() => call.promise, { silent: true })
+    })
+
+    expect(result.current[0].status).toBe('success')
+    expect(result.current[0].data).toBe('first')
+
+    await act(async () => {
+      call.resolve('second')
+      await call.promise
+    })
+    expect(result.current[0].data).toBe('second')
+  })
+
+  it('a failed silent run leaves the last good data on screen', async () => {
+    const { result } = renderHook(() => useApi<string>())
+
+    await act(async () => {
+      await result.current[1](() => Promise.resolve('first'))
+    })
+
+    await act(async () => {
+      await result.current[1](() => Promise.reject(new Error('network down')), { silent: true })
+    })
+
+    expect(result.current[0].status).toBe('success')
+    expect(result.current[0].data).toBe('first')
+    expect(result.current[0].error).toBeUndefined()
+  })
+
   // The hook's other guard - not committing after unmount - is deliberately
   // NOT asserted here, because no assertion in this environment can tell it
   // apart from its absence. React 19 makes a setState on an unmounted
