@@ -92,6 +92,30 @@ describe('DuesStatus', () => {
     expect(screen.getByLabelText(text.periodLabel)).toHaveValue(expected)
   })
 
+  it('opens one member\'s payment history in place (M6.14)', async () => {
+    const fetchMock = vi.fn((input: RequestInfo | URL) => {
+      const url = typeof input === 'string' ? input : input.toString()
+      if (url.includes('/api/dues-status')) return Promise.resolve(jsonResponse(rows))
+      if (url.includes('/api/transactions')) return Promise.resolve(jsonResponse([]))
+      return Promise.reject(new Error(`unstubbed fetch: ${url}`))
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    render(<DuesStatus onBack={vi.fn()} onRecordPayment={vi.fn()} />)
+
+    await screen.findByText('Warga Satu')
+    // One member at a time: every row offers the toggle, only the opened one
+    // reads its history.
+    const toggles = screen.getAllByRole('button', { name: copy.dues.history.title })
+    expect(toggles[0]).toHaveAttribute('aria-expanded', 'false')
+    await userEvent.click(toggles[0])
+
+    expect(await screen.findByText(copy.dues.history.empty)).toBeInTheDocument()
+    expect(toggles[0]).toHaveAttribute('aria-expanded', 'true')
+    // The disclosure names the panel it opens.
+    expect(toggles[0].getAttribute('aria-controls')).toBe(document.getElementById(toggles[0].getAttribute('aria-controls') ?? '')?.id)
+    expect(fetchMock.mock.calls.some(([input]) => input.toString().includes('/api/transactions'))).toBe(true)
+  })
+
   it('reaches the payment form from here, not from a second link on home', async () => {
     const onRecordPayment = vi.fn()
     vi.stubGlobal('fetch', stubDuesStatus())

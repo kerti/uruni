@@ -278,5 +278,30 @@ export const copy = {
       cancel: 'Batal',
       success: 'Pembayaran iuran tercatat.',
     },
+    // Undoing a dues payment recorded in error (M6.14, PRD §7.3). A
+    // payment is never edited away: the reversal is its own new entry, so
+    // this copy says "batalkan" (undo it with another entry), never
+    // "hapus".
+    history: {
+      // One stable label on a disclosure, not a show/hide copy swap: the
+      // open/closed state is carried by aria-expanded and the chevron, and
+      // a control whose name changes under the reader's cursor is the
+      // harder thing to follow.
+      title: 'Pembayaran',
+      empty: 'Belum ada pembayaran untuk periode ini.',
+      // The reversal row itself, listed alongside the payment it undoes.
+      reversalRow: 'Pembatalan',
+      reversedBadge: 'Sudah dibatalkan',
+      reverse: 'Batalkan',
+      dateLabel: 'Tanggal pembatalan',
+      noteLabel: 'Alasan (opsional)',
+      // Used when she leaves the reason blank - a row still has to say what
+      // it is, same rule as payment.note above.
+      note: (memberName: string) => `Pembatalan iuran — ${memberName}`,
+      confirm: 'Batalkan pembayaran ini',
+      submitting: 'Membatalkan…',
+      cancel: 'Jangan jadi',
+      success: 'Pembayaran dibatalkan.',
+    },
   },
 } as const

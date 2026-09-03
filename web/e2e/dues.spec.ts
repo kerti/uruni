@@ -83,8 +83,23 @@ test.describe('dues status', () => {
     // period's amount field starts with.
     const amountPrefix = copy.dues.payment.amountLabel('')
     const amounts = page.getByLabel(new RegExp(`^${amountPrefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`))
-    await amounts.nth(0).fill('12345')
-    await amounts.nth(1).fill('23456')
+
+    // Emptied before it is filled, never filled straight over the pre-filled
+    // rate: this field renders "Rp 50.000" when blurred and the bare digits
+    // when focused (AmountInput), and a single fill() over that lands as the
+    // two runs of digits concatenated - 50000 then 12345 posted as
+    // Rp 5.000.012.345. Clearing first puts the field in the same empty
+    // state golden-path.spec.ts fills, which is deterministic.
+    for (const [index, value] of [
+      [0, '12345'],
+      [1, '23456'],
+    ] as const) {
+      await amounts.nth(index).fill('')
+      await amounts.nth(index).fill(value)
+      // Still focused, so the field shows the bare digits it holds - proof
+      // the value is what this spec asked for and not a concatenation.
+      await expect(amounts.nth(index)).toHaveValue(value)
+    }
 
     await page.getByRole('button', { name: copy.dues.payment.submit }).click()
 
@@ -98,5 +113,37 @@ test.describe('dues status', () => {
     await page.getByRole('button', { name: copy.dues.back }).click()
     await expect(page.getByText(copy.home.balanceHeading)).toBeVisible()
     await expect(page.getByText(copy.dues.payment.note('Warga Satu')).first()).toBeVisible()
+  })
+
+  // M6.14: undoing one of the payments the spec above just posted. Serial
+  // mode (top of file) is what guarantees there is one to undo. The oldest
+  // outstanding period is 2024-01 for both seeded members - they join that
+  // month on a rate effective from it - so that is the period the payment
+  // spec's first checkbox pays, and the one this spec reverses.
+  test('reverses a dues payment', async ({ page }) => {
+    await page.goto('/')
+    await page.getByLabel(copy.auth.login.emailLabel).fill(seedEmail)
+    await page.getByLabel(copy.auth.login.passwordLabel).fill(seedPassword)
+    await page.getByRole('button', { name: copy.auth.login.submit }).click()
+    await expect(page.getByText(copy.home.balanceHeading)).toBeVisible()
+
+    await page.getByRole('button', { name: copy.dues.entryLink }).click()
+    await page.getByLabel(copy.dues.periodLabel).fill('2024-01')
+
+    // Warga Satu paid part of this month, so the roster shows the partial
+    // status and the history behind it holds the payment to reverse.
+    const card = page.locator('li').filter({ hasText: 'Warga Satu' })
+    await expect(card.getByText(copy.dues.statuses.partial)).toBeVisible()
+    await card.getByRole('button', { name: copy.dues.history.title }).click()
+
+    await card.getByRole('button', { name: copy.dues.history.reverse }).first().click()
+    await card.getByRole('button', { name: copy.dues.history.confirm }).click()
+
+    // The reversal is its own row - the payment is still listed, now marked
+    // as undone, and never offers the action a second time. The roster
+    // above refreshes itself: with nothing paid, the month reads unpaid.
+    await expect(card.getByText(copy.dues.history.reversedBadge)).toBeVisible()
+    await expect(card.getByRole('button', { name: copy.dues.history.reverse })).toBeHidden()
+    await expect(card.getByText(copy.dues.statuses.unpaid)).toBeVisible()
   })
 })

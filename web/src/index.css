@@ -45,6 +45,24 @@
   --shadow-sm: 0 1px 2px rgb(34 50 58 / 0.06);
   --shadow-card: 0 2px 8px rgb(34 50 58 / 0.06);
   --shadow-floating: 0 8px 24px rgb(34 50 58 / 0.1);
+
+  /* Design-System.md's motion rule — "calm and quick: 150-250ms ease-out,
+     nothing bouncy". One shared reveal for anything that appears in place
+     (the dues history panel today), so a second one is never invented with
+     its own timing. Opacity and transform only: both are composited, which
+     is what keeps it smooth on a phone rather than repainting each frame. */
+  --animate-reveal: reveal 180ms ease-out;
+
+  @keyframes reveal {
+    from {
+      opacity: 0;
+      transform: translate3d(0, -4px, 0);
+    }
+    to {
+      opacity: 1;
+      transform: translate3d(0, 0, 0);
+    }
+  }
 }
 
 /* The palette is Design-System.md verbatim — Forest as the action colour, Sage
@@ -95,5 +113,17 @@
   /* Money always aligns in columns (Design-System.md). */
   .tabular {
     font-variant-numeric: tabular-nums;
+  }
+  /* Design-System.md: "respect prefers-reduced-motion". One rule for the
+     whole app rather than a motion-reduce: variant remembered per call
+     site. */
+  @media (prefers-reduced-motion: reduce) {
+    *:not(.animate-spin),
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
   }
 }
