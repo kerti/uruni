@@ -30,7 +30,9 @@ test.describe('members', () => {
     await expect(page.getByText(copy.home.balanceHeading)).toBeVisible()
 
     await page.getByRole('link', { name: copy.shell.nav.members }).click()
-    await expect(page.getByRole('heading', { name: copy.members.heading })).toBeVisible()
+    // exact: true - Playwright matches an accessible name by substring, and
+    // "Anggota" is inside the "Daftar anggota" section heading below it.
+    await expect(page.getByRole('heading', { name: copy.members.heading, exact: true })).toBeVisible()
 
     // The fixture's own roster is already listed.
     await expect(page.getByText('Warga Satu')).toBeVisible()
@@ -59,7 +61,9 @@ test.describe('members', () => {
     await expect(page.getByText(copy.home.balanceHeading)).toBeVisible()
 
     await page.getByRole('link', { name: copy.shell.nav.members }).click()
-    await expect(page.getByRole('heading', { name: copy.members.heading })).toBeVisible()
+    // exact: true - Playwright matches an accessible name by substring, and
+    // "Anggota" is inside the "Daftar anggota" section heading below it.
+    await expect(page.getByRole('heading', { name: copy.members.heading, exact: true })).toBeVisible()
 
     await page.getByRole('banner').getByRole('link').click()
     await expect(page.getByText(copy.home.balanceHeading)).toBeVisible()
