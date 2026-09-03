@@ -57,7 +57,7 @@ interface HomeData {
  * happened), so a new entry is visible in recent activity without a manual
  * refresh, without this screen needing any router knowledge of its own.
  */
-export default function Home({ refetchKey }: { refetchKey: unknown }) {
+export default function Home({ refetchKey, onReconcile }: { refetchKey: unknown; onReconcile: () => void }) {
   const [state, run] = useApi<HomeData>()
 
   async function loadHomeData(): Promise<HomeData> {
@@ -174,7 +174,14 @@ export default function Home({ refetchKey }: { refetchKey: unknown }) {
             count has ever been taken - open-lines answers [] either way, so
             the banner cannot tell "nothing open" from "never looked" on its
             own. */}
-        <ReconciliationBanner openLines={openLines} everReconciled={latest !== null} />
+        {/* The reconcile screen's entry point (M6.10) - the banner itself is
+            the natural affordance, per the orchestrator's own ruling, so
+            there is no separate button anywhere else on this screen.
+            onReconcile is App.tsx's navigate('/reconcile'), the same
+            caller-owns-navigation contract RecordTransaction.tsx's
+            onRecorded/onCancel already use - Home stays router-agnostic,
+            same as every other screen in this app. */}
+        <ReconciliationBanner openLines={openLines} everReconciled={latest !== null} onClick={onReconcile} />
         {latest && <p className="text-sm text-muted-foreground">{copy.home.lastChecked(formatUnixSeconds(latest.performed_at))}</p>}
       </section>
 

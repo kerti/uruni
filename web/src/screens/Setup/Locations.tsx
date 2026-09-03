@@ -104,13 +104,13 @@ export default function Locations({
               </div>
             ))}
             {rows.length <= 1 && <p className="text-sm text-muted-foreground">{text.locations.minOneLocation}</p>}
-            <Button type="button" variant="outline" onClick={addRow}>
+            <Button type="button" variant="outline" size="lg" onClick={addRow}>
               <Plus aria-hidden="true" />
               {text.locations.addRow}
             </Button>
             {error && <ErrorState error={error} />}
             <div className="flex gap-2">
-              <Button type="button" variant="outline" onClick={onBack} disabled={submitting}>
+              <Button type="button" variant="outline" size="lg" onClick={onBack} disabled={submitting}>
                 {text.back}
               </Button>
               <Button type="submit" size="lg" className="flex-1" disabled={!canSubmit || submitting}>

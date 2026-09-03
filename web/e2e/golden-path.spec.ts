@@ -7,17 +7,17 @@ import { expect, test } from '@playwright/test'
 import { copy } from '../src/copy/id'
 import { formatIDR } from '../src/lib/money'
 
-// The golden path this spec will eventually walk end to end: log in →
-// first-run setup → record a transaction → home (balance hero +
-// reconciliation status) → reconcile. Each step below is a placeholder for
-// the milestone that gives it a real screen to assert against — filled in as
-// part of that milestone's own definition of done, not here:
+// The golden path this spec walks end to end, for the first time as of
+// M6.10: log in → first-run setup → record a transaction → home (balance
+// hero + reconciliation status) → reconcile. Each step below was a
+// placeholder for the milestone that gave it a real screen to assert
+// against — filled in as part of that milestone's own definition of done:
 //
-//   M6.4  register / login (this slice)
-//   M6.5  first-run setup (fund, accounts, dues tier) (this slice)
-//   M6.8  record a transaction (this slice)
+//   M6.4  register / login
+//   M6.5  first-run setup (fund, accounts, dues tier)
+//   M6.8  record a transaction
 //   M6.9  home (balance hero + reconciliation status)
-//   M6.10 reconcile
+//   M6.10 reconcile (this slice)
 //
 // M6.4 gives this spec its first screen to walk through:
 // `cmd/uruni/seed_e2e.go`'s fixture command seeds
@@ -48,6 +48,17 @@ import { formatIDR } from '../src/lib/money'
 // active accounts (per #141's own ruling), so the exclusion itself has no
 // e2e coverage either.
 test.describe('golden path', () => {
+  // Serial, not the project's default fullyParallel: true. Every spec below
+  // shares one seeded database (playwright.config.ts's webServer) and reads
+  // it as a continuous story - "record a transaction" posts a real entry
+  // the "home" spec then expects to find, and (new as of M6.10) "reconcile"
+  // is the first spec that changes whether a reconciliation has ever been
+  // taken at all, which the "home" spec above it depends on staying false
+  // until it has run. None of that is safe under out-of-order or concurrent
+  // execution, so this describe opts out of the project default for just
+  // this file.
+  test.describe.configure({ mode: 'serial' })
+
   // The seeded treasurer account (cmd/uruni/seed_e2e.go) - literals, not an
   // import, because that file is Go and this spec can't reach into it; only
   // copy crosses the language boundary via the import above.
@@ -119,5 +130,51 @@ test.describe('golden path', () => {
     await expect(page.getByText(copy.reconciliation.matched)).toBeHidden()
   })
 
-  test.fixme('reconcile (M6.10)', async () => {})
+  test('reconcile (M6.10)', async ({ page }) => {
+    await page.goto('/')
+    await page.getByLabel(copy.auth.login.emailLabel).fill(seedEmail)
+    await page.getByLabel(copy.auth.login.passwordLabel).fill(seedPassword)
+    await page.getByRole('button', { name: copy.auth.login.submit }).click()
+    await expect(page.getByText(copy.home.balanceHeading)).toBeVisible()
+
+    // The fixture has never been reconciled before this spec runs (fresh
+    // per `make e2e-reset`), so the banner is still in its neutral
+    // first-run state - and is the reconcile screen's entry point (M6.10's
+    // own ruling: "the reconciliation banner is the natural affordance").
+    await expect(page.getByText(copy.reconciliation.neverChecked)).toBeVisible()
+    await page.getByText(copy.reconciliation.neverChecked).click()
+    await expect(page.getByRole('heading', { name: copy.reconciliation.heading })).toBeVisible()
+
+    // Bank Uji Coba is never touched by any other spec in this file (only
+    // "record a transaction" posts anything, and always against Tunai, the
+    // default location) - it is reliably exactly 0, so counting it as 0 is
+    // a safe zero-gap "matched" line. Tunai's own recorded figure is *not*
+    // something this spec hardcodes: it is derived (opening balance minus
+    // whatever else has posted against it), and re-deriving that arithmetic
+    // here would just be restating M6.8's own seed/record math with extra
+    // steps. Typing "1" is certain to differ from Tunai's real balance and
+    // is resolved as left_open, which never re-checks the figure it was
+    // given against the ledger (TakeReconciliation posts nothing for
+    // left_open) - the one resolution that cannot be rejected regardless of
+    // what Tunai's true recorded amount is. The plain matched path and the
+    // other two resolutions are already proven directly, per line, by
+    // Reconcile.test.tsx's own vitest suite.
+    await page.getByLabel(copy.reconciliation.actualLabel('Bank Uji Coba')).fill('0')
+    await page.getByLabel(copy.reconciliation.actualLabel('Tunai')).fill('1')
+    await expect(page.getByText(copy.reconciliation.matched)).toBeVisible()
+
+    await page.getByRole('button', { name: copy.reconciliation.resolutionOptions.left_open }).click()
+    await page.getByRole('button', { name: copy.reconciliation.submit }).click()
+
+    // The confirmation renders from POST /api/reconciliations's own
+    // response, never from the pre-submit preview above.
+    await expect(page.getByRole('button', { name: copy.reconciliation.backToHome })).toBeVisible()
+    await page.getByRole('button', { name: copy.reconciliation.backToHome }).click()
+
+    // Back on home, without a manual refresh, the count that was just taken
+    // is reflected - the neutral first-run copy is gone for good once a
+    // count exists, whatever state the banner lands in.
+    await expect(page.getByText(copy.home.balanceHeading)).toBeVisible()
+    await expect(page.getByText(copy.reconciliation.neverChecked)).toBeHidden()
+  })
 })
