@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Circle, CircleCheck, CircleDashed } from 'lucide-react'
+import { Circle, CircleCheck, CircleDashed, Plus } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -78,8 +78,25 @@ function StatusBadge({ status }: { status: DuesStatusKind }) {
  *
  * Router-agnostic, same contract as every other screen App.tsx mounts:
  * onBack is the caller's navigate('/'), not a Link this component owns.
+ * onRecordPayment is the same contract for M6.13's payment form, which is
+ * reached from here rather than from a second link on home - the shape of
+ * navigation as a whole is settled once alpha.4's screens exist (#177).
+ *
+ * `refetchKey` changes whenever App.tsx navigates back here after a payment
+ * was posted, so the roster reflects it without a manual refresh - the same
+ * mechanism, and the same reasoning, as Home's own refetchKey.
  */
-export default function DuesStatus({ onBack }: { onBack: () => void }) {
+export default function DuesStatus({
+  onBack,
+  onRecordPayment,
+  refetchKey,
+  notice,
+}: {
+  onBack: () => void
+  onRecordPayment: () => void
+  refetchKey?: unknown
+  notice?: string | null
+}) {
   const [period, setPeriod] = useState(currentISOMonth)
   const [unpaidOnly, setUnpaidOnly] = useState(false)
   const [state, run] = useApi<DuesStatusRow[]>()
@@ -87,9 +104,10 @@ export default function DuesStatus({ onBack }: { onBack: () => void }) {
   useEffect(() => {
     void run(() => getDuesStatus(period))
     // run is a stable useCallback (useApi.ts); period is the deliberate
-    // dependency that refetches whenever the selector changes.
+    // dependency that refetches whenever the selector changes, refetchKey
+    // the one that reloads it after a payment was recorded.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [run, period])
+  }, [run, period, refetchKey])
 
   const rows = state.data ?? []
   const visibleRows = unpaidOnly ? rows.filter((row) => UNPAID_STATUSES.includes(row.status)) : rows
@@ -99,6 +117,13 @@ export default function DuesStatus({ onBack }: { onBack: () => void }) {
       <div className="flex flex-col gap-1">
         <h1 className="text-2xl font-semibold">{text.heading}</h1>
       </div>
+
+      {notice && (
+        <p role="status" className="flex items-center gap-2 text-success">
+          <CircleCheck aria-hidden="true" />
+          {notice}
+        </p>
+      )}
 
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="dues-period">{text.periodLabel}</Label>
@@ -156,6 +181,11 @@ export default function DuesStatus({ onBack }: { onBack: () => void }) {
           )}
         </>
       )}
+
+      <Button type="button" size="lg" onClick={onRecordPayment}>
+        <Plus aria-hidden="true" />
+        {text.recordLink}
+      </Button>
 
       <Button type="button" variant="outline" size="lg" onClick={onBack}>
         {text.back}

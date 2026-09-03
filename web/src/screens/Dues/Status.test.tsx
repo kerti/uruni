@@ -43,7 +43,7 @@ function stubDuesStatus(body: unknown = rows) {
 describe('DuesStatus', () => {
   it('renders each of the four statuses with its own badge', async () => {
     vi.stubGlobal('fetch', stubDuesStatus())
-    render(<DuesStatus onBack={vi.fn()} />)
+    render(<DuesStatus onBack={vi.fn()} onRecordPayment={vi.fn()} />)
 
     expect(await screen.findByText('Warga Satu')).toBeInTheDocument()
     expect(screen.getByText(text.statuses.unpaid)).toBeInTheDocument()
@@ -60,7 +60,7 @@ describe('DuesStatus', () => {
 
   it('excludes a member with no dues tier - the API never returns a row for one', async () => {
     vi.stubGlobal('fetch', stubDuesStatus())
-    render(<DuesStatus onBack={vi.fn()} />)
+    render(<DuesStatus onBack={vi.fn()} onRecordPayment={vi.fn()} />)
 
     await screen.findByText('Warga Satu')
     expect(screen.queryByText('Tanpa Golongan')).not.toBeInTheDocument()
@@ -68,7 +68,7 @@ describe('DuesStatus', () => {
 
   it('the "belum bayar" filter isolates unpaid + partial only, with no reminder affordance', async () => {
     vi.stubGlobal('fetch', stubDuesStatus())
-    render(<DuesStatus onBack={vi.fn()} />)
+    render(<DuesStatus onBack={vi.fn()} onRecordPayment={vi.fn()} />)
 
     await screen.findByText('Warga Satu')
     await userEvent.click(screen.getByLabelText(text.unpaidFilterLabel))
@@ -84,7 +84,7 @@ describe('DuesStatus', () => {
 
   it('defaults the period selector to the current month', async () => {
     vi.stubGlobal('fetch', stubDuesStatus())
-    render(<DuesStatus onBack={vi.fn()} />)
+    render(<DuesStatus onBack={vi.fn()} onRecordPayment={vi.fn()} />)
 
     await screen.findByText('Warga Satu')
     const now = new Date()
@@ -92,10 +92,34 @@ describe('DuesStatus', () => {
     expect(screen.getByLabelText(text.periodLabel)).toHaveValue(expected)
   })
 
+  it('reaches the payment form from here, not from a second link on home', async () => {
+    const onRecordPayment = vi.fn()
+    vi.stubGlobal('fetch', stubDuesStatus())
+    render(<DuesStatus onBack={vi.fn()} onRecordPayment={onRecordPayment} />)
+
+    await screen.findByText('Warga Satu')
+    await userEvent.click(screen.getByRole('button', { name: text.recordLink }))
+    expect(onRecordPayment).toHaveBeenCalledTimes(1)
+  })
+
+  it('refetches after a payment was recorded - refetchKey changed', async () => {
+    const fetchMock = stubDuesStatus()
+    vi.stubGlobal('fetch', fetchMock)
+    const { rerender } = render(<DuesStatus onBack={vi.fn()} onRecordPayment={vi.fn()} refetchKey="a" />)
+
+    await screen.findByText('Warga Satu')
+    const callsBefore = fetchMock.mock.calls.length
+
+    rerender(<DuesStatus onBack={vi.fn()} onRecordPayment={vi.fn()} refetchKey="b" notice={copy.dues.payment.success} />)
+
+    expect(fetchMock.mock.calls.length).toBeGreaterThan(callsBefore)
+    expect(await screen.findByText(copy.dues.payment.success)).toBeInTheDocument()
+  })
+
   it('refetches when the period selector changes', async () => {
     const fetchMock = stubDuesStatus()
     vi.stubGlobal('fetch', fetchMock)
-    render(<DuesStatus onBack={vi.fn()} />)
+    render(<DuesStatus onBack={vi.fn()} onRecordPayment={vi.fn()} />)
 
     await screen.findByText('Warga Satu')
     const callsBefore = fetchMock.mock.calls.length

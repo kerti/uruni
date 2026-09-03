@@ -131,6 +131,14 @@ export function createDuesRate(tierId: number, amount: number, effectiveFrom: st
   })
 }
 
+/** GET /api/members - the fund's whole roster, retired members included
+ * (`inactive_on` set). A caller recording new money filters those out the
+ * way AccountPicker does for a retired location; a caller reading history
+ * needs them. */
+export function listMembers(): Promise<Member[]> {
+  return apiFetch<Member[]>('/api/members')
+}
+
 export function createMember(name: string, tierId: number | null, joinedOn: string | null): Promise<Member> {
   return apiFetch<Member>('/api/members', {
     method: 'POST',

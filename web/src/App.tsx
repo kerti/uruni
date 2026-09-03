@@ -14,6 +14,7 @@ import Setup from '@/screens/Setup/Setup'
 import RecordTransaction from '@/screens/RecordTransaction'
 import Reconcile from '@/screens/Reconcile'
 import DuesStatus from '@/screens/Dues/Status'
+import RecordDuesPayment from '@/screens/Dues/RecordPayment'
 import Home from '@/screens/Home'
 import { getSession } from '@/lib/auth'
 import { getFund } from '@/lib/setup'
@@ -130,6 +131,12 @@ interface HomeState {
   recorded: 'in' | 'out'
 }
 
+/** The same idiom for a dues payment (M6.13): the confirmation belongs to
+ * the one history entry that navigation creates, not to this component. */
+interface DuesState {
+  duesRecorded: true
+}
+
 /**
  * Once GET /api/session says authenticated: true, this decides setup-vs-home
  * from GET /api/fund - the same probe-once shape as AuthGate's own session
@@ -187,6 +194,7 @@ function AuthedGate({ onLoggedOut }: { onLoggedOut: () => void }) {
 
   const title = state.data?.name ?? copy.app.name
   const recorded = (location.state as HomeState | null)?.recorded
+  const duesRecorded = (location.state as DuesState | null)?.duesRecorded === true
   const successMessage = recorded === 'in' ? copy.record.successIn : recorded === 'out' ? copy.record.successOut : null
 
   return (
@@ -211,7 +219,23 @@ function AuthedGate({ onLoggedOut }: { onLoggedOut: () => void }) {
         path="/dues"
         element={
           <Shell title={title} onLoggedOut={onLoggedOut}>
-            <DuesStatus onBack={() => navigate('/')} />
+            <DuesStatus
+              onBack={() => navigate('/')}
+              onRecordPayment={() => navigate('/dues/payment')}
+              refetchKey={location.key}
+              notice={duesRecorded ? copy.dues.payment.success : null}
+            />
+          </Shell>
+        }
+      />
+      <Route
+        path="/dues/payment"
+        element={
+          <Shell title={title} onLoggedOut={onLoggedOut}>
+            <RecordDuesPayment
+              onRecorded={() => navigate('/dues', { state: { duesRecorded: true } satisfies DuesState })}
+              onCancel={() => navigate('/dues')}
+            />
           </Shell>
         }
       />

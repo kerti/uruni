@@ -240,5 +240,43 @@ export const copy = {
       paid_in_advance: 'Lunas — sudah bayar di muka',
     },
     back: 'Kembali ke beranda',
+    // Recording a dues payment (M6.13, PRD §7.3). Reached from the status
+    // roster above, not from a second link on home - navigation as a whole
+    // is settled once alpha.4's screens exist (#177).
+    recordLink: 'Catat pembayaran',
+    payment: {
+      heading: 'Catat pembayaran iuran',
+      memberLabel: 'Anggota',
+      memberPlaceholder: 'Pilih anggota',
+      // The periods this member still owes for, oldest first, each with the
+      // rate that was in effect for that month already filled in.
+      periodsHeading: 'Periode yang dibayar',
+      noMemberYet: 'Pilih anggota dulu untuk melihat iuran yang belum dibayar.',
+      // A normal, good answer - never phrased as an error or an empty
+      // failure: this member is square.
+      noOutstanding: 'Tidak ada iuran tertunggak untuk anggota ini.',
+      // Shown on a period that has been paid in part, so the pre-filled
+      // amount is the sisa (the rest), not the whole month's rate.
+      remainingLabel: 'Sisa',
+      // One amount field per period, so each label names its own month -
+      // same shape as reconciliation.actualLabel per location.
+      amountLabel: (period: string) => `Jumlah — ${period}`,
+      totalLabel: 'Total dibayar',
+      locationLabel: 'Lokasi',
+      dateLabel: 'Tanggal',
+      // The note every posted row carries, so a dues payment reads as one
+      // in recent activity and in the report instead of as a bare amount -
+      // same shape and same reasoning as setup.openingBalance.note (#178).
+      // The month is not repeated here: each row already carries its own
+      // dues_period, and one request's note is shared by every period it
+      // pays.
+      note: (memberName: string) => `Iuran — ${memberName}`,
+      submit: 'Simpan pembayaran',
+      submitting: 'Menyimpan…',
+      // Same reasoning as record.cancel: installed standalone, there is no
+      // browser back button.
+      cancel: 'Batal',
+      success: 'Pembayaran iuran tercatat.',
+    },
   },
 } as const
