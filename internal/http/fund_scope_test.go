@@ -74,7 +74,61 @@ func setUpOtherFund(t *testing.T, sqlDB *sql.DB) otherFundFixture {
 // afterwards. This is the shape #70 established and ADR-030 leans on when it
 // defers multi-fund - "scoping stays defensive."
 func TestRoutesOnAnotherFundsRowAre404(t *testing.T) {
-	cases := []struct {
+	for _, tc := range fundScopedRouteCases() {
+		t.Run(tc.name, func(t *testing.T) {
+			sqlDB := testStoreDB(t)
+			r := authedRouterFor(t, sqlDB)
+			setUpFund(t, r)
+			other := setUpOtherFund(t, sqlDB)
+
+			rec := tc.call(t, r, other)
+			if rec.Code != http.StatusNotFound {
+				t.Fatalf("%s on another fund's row = %d, want %d (body: %s)",
+					tc.name, rec.Code, http.StatusNotFound, rec.Body.String())
+			}
+			got := decodeError(t, rec)
+			if got.Code != "not_found" {
+				t.Errorf("error code = %q, want %q", got.Code, "not_found")
+			}
+		})
+	}
+}
+
+// TestRoutesBeforeSetupAre404 is the other half of the scoping the resolve*
+// helpers now do: they resolve the fund themselves, so on an instance where
+// setup has not run there is no fund to scope to and every one of these
+// routes answers resolveFund's own "run setup" 404 rather than reaching a
+// row.
+func TestRoutesBeforeSetupAre404(t *testing.T) {
+	// Setup never runs here, so no row exists for any of these ids - which
+	// is the point: the fund check answers before the lookup is reached.
+	noFund := otherFundFixture{accountID: 1, memberID: 1, tierID: 1, rateID: 1}
+
+	for _, tc := range fundScopedRouteCases() {
+		t.Run(tc.name, func(t *testing.T) {
+			r := testRouter(t)
+
+			rec := tc.call(t, r, noFund)
+			if rec.Code != http.StatusNotFound {
+				t.Fatalf("%s before setup = %d, want %d (body: %s)",
+					tc.name, rec.Code, http.StatusNotFound, rec.Body.String())
+			}
+			got := decodeError(t, rec)
+			if got.Code != "not_found" {
+				t.Errorf("error code = %q, want %q", got.Code, "not_found")
+			}
+		})
+	}
+}
+
+// fundScopedRouteCases is every route that reaches a row through a resolve*
+// helper, shared by the two tests above so the list cannot drift between
+// them.
+func fundScopedRouteCases() []struct {
+	name string
+	call func(t *testing.T, r http.Handler, other otherFundFixture) *httptest.ResponseRecorder
+} {
+	return []struct {
 		name string
 		call func(t *testing.T, r http.Handler, other otherFundFixture) *httptest.ResponseRecorder
 	}{
@@ -110,24 +164,5 @@ func TestRoutesOnAnotherFundsRowAre404(t *testing.T) {
 		{"DELETE /api/dues-rates/{id}", func(t *testing.T, r http.Handler, o otherFundFixture) *httptest.ResponseRecorder {
 			return deleteDuesRate(t, r, o.rateID)
 		}},
-	}
-
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			sqlDB := testStoreDB(t)
-			r := authedRouterFor(t, sqlDB)
-			setUpFund(t, r)
-			other := setUpOtherFund(t, sqlDB)
-
-			rec := tc.call(t, r, other)
-			if rec.Code != http.StatusNotFound {
-				t.Fatalf("%s on another fund's row = %d, want %d (body: %s)",
-					tc.name, rec.Code, http.StatusNotFound, rec.Body.String())
-			}
-			got := decodeError(t, rec)
-			if got.Code != "not_found" {
-				t.Errorf("error code = %q, want %q", got.Code, "not_found")
-			}
-		})
 	}
 }
