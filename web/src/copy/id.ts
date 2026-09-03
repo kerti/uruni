@@ -112,7 +112,7 @@ export const copy = {
       finish: 'Selesai',
     },
   },
-  // The everyday "catat transaksi" form (M6.8, PRD §7.2): amount, in/out,
+  // The everyday record-transaction form (M6.8, PRD §7.2): amount, in/out,
   // location, purpose, date, optional note. Reachable from the add-FAB on
   // home. successIn/successOut are shown on home after a successful post -
   // worded per Design-System.md's own voice examples for each direction.

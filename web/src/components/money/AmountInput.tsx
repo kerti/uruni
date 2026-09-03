@@ -5,7 +5,7 @@ import { Label } from '@/components/ui/label'
 import { formatIDR, parseRupiah } from '@/lib/money'
 
 /**
- * The amount field every "catat transaksi" form needs (PRD §7.2,
+ * The amount field every record-transaction form needs (PRD §7.2,
  * Design-System.md's "Amount inputs use inputmode=numeric and format to Rp
  * on blur"). Wraps lib/money.ts rather than re-deriving its parsing -
  * parseRupiah reads only digits (CLAUDE.md rule 1: never a float on the way

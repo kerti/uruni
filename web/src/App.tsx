@@ -29,7 +29,7 @@ import { copy } from '@/copy/id'
  * authenticated: false` renders Login, and `authenticated: true` hands off
  * to AuthedGate, which probes GET /api/fund the same way: 404 renders Setup
  * (M6.5), 200 renders the everyday-loop routes inside M6.6's Shell - home
- * (M6.9) and "/catat". A successful register or login calls back into this
+ * (M6.9) and "/record". A successful register or login calls back into this
  * component and optimistically marks the session probe authenticated rather
  * than re-fetching /api/session, so the handoff needs no reload; Setup's
  * onDone re-probes GET /api/fund the same way once setup finishes.
@@ -133,7 +133,7 @@ interface HomeState {
  * from GET /api/fund - the same probe-once shape as AuthGate's own session
  * probe above, just one layer in. A 404 (no fund yet) renders Setup; any
  * other success renders the everyday-loop routes: "/" is Home (M6.9),
- * "/catat" is RecordTransaction (M6.8), both inside Shell.
+ * "/record" is RecordTransaction (M6.8), both inside Shell.
  *
  * The 200 branch is also where M6.6's Shell starts: everything past setup
  * renders inside it, titled with the fund's own name. Register, Login and
@@ -190,7 +190,7 @@ function AuthedGate({ onLoggedOut }: { onLoggedOut: () => void }) {
   return (
     <Routes>
       <Route
-        path="/catat"
+        path="/record"
         element={
           <Shell title={title} onLoggedOut={onLoggedOut}>
             <RecordTransaction onRecorded={handleRecorded} onCancel={() => navigate('/')} />
@@ -205,7 +205,7 @@ function AuthedGate({ onLoggedOut }: { onLoggedOut: () => void }) {
             onLoggedOut={onLoggedOut}
             action={
               <Button asChild size="icon" className="size-14 rounded-full shadow-floating" aria-label={copy.record.addAction}>
-                <Link to="/catat">
+                <Link to="/record">
                   <Plus aria-hidden="true" className="size-6" />
                 </Link>
               </Button>
