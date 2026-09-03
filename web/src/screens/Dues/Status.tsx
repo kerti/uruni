@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Circle, CircleCheck, CircleDashed, Plus } from 'lucide-react'
+import { ChevronDown, Circle, CircleCheck, CircleDashed, Plus } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -7,12 +7,14 @@ import { Label } from '@/components/ui/label'
 import Loading from '@/components/states/Loading'
 import ErrorState from '@/components/states/ErrorState'
 import { copy } from '@/copy/id'
+import MemberPayments from '@/screens/Dues/MemberPayments'
 import { getDuesStatus } from '@/lib/dues'
 import { formatIDR } from '@/lib/money'
 import { useApi } from '@/lib/useApi'
 import type { DuesStatusKind, DuesStatusRow } from '@/lib/dues'
 
 const text = copy.dues
+const historyText = copy.dues.history
 
 /** Local YYYY-MM - never toISOString(), which is UTC and can read a month
  * early in WIB. Same reasoning as Setup.tsx's own currentISOMonth and
@@ -99,6 +101,9 @@ export default function DuesStatus({
 }) {
   const [period, setPeriod] = useState(currentISOMonth)
   const [unpaidOnly, setUnpaidOnly] = useState(false)
+  // Which member's payment history is open (M6.14) - one at a time, and
+  // never open across a period change, since the history is period-scoped.
+  const [expandedMemberId, setExpandedMemberId] = useState<number | null>(null)
   const [state, run] = useApi<DuesStatusRow[]>()
 
   useEffect(() => {
@@ -132,7 +137,10 @@ export default function DuesStatus({
           type="month"
           className="h-11"
           value={period}
-          onChange={(event) => setPeriod(event.target.value)}
+          onChange={(event) => {
+            setPeriod(event.target.value)
+            setExpandedMemberId(null)
+          }}
         />
       </div>
 
@@ -175,6 +183,49 @@ export default function DuesStatus({
                       {text.paidLabel}: {formatIDR(row.paid_amount)}
                     </span>
                   </div>
+
+                  {/* A disclosure, not a link: the panel opens in place
+                      inside this card, so the control names the panel and
+                      carries its state (aria-expanded + aria-controls), and
+                      the chevron turns with it. Full-width and `lg` for the
+                      44px touch target Design-System.md sets. */}
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="lg"
+                    className="-mx-2 justify-between px-2"
+                    aria-expanded={expandedMemberId === row.member.id}
+                    aria-controls={`dues-history-${row.member.id}`}
+                    onClick={() => setExpandedMemberId(expandedMemberId === row.member.id ? null : row.member.id)}
+                  >
+                    {historyText.title}
+                    {/* The chevron turns on its own composited layer
+                        (transform-gpu + will-change), not as a transform on
+                        the SVG itself: iOS Safari rasterizes an SVG once at
+                        its pre-transform size, so rotating the element
+                        directly re-uses that bitmap and the strokes crawl.
+                        Wrapping it and promoting the wrapper is what keeps
+                        the turn smooth on a phone. */}
+                    <span className="flex size-4 transform-gpu items-center justify-center transition-transform duration-200 ease-out will-change-transform data-[open=true]:rotate-180"
+                      data-open={expandedMemberId === row.member.id}
+                    >
+                      <ChevronDown aria-hidden="true" />
+                    </span>
+                  </Button>
+
+                  {expandedMemberId === row.member.id && (
+                    <div
+                      id={`dues-history-${row.member.id}`}
+                      className="animate-reveal rounded-lg bg-muted/30 px-3 py-3"
+                    >
+                      <MemberPayments
+                        memberId={row.member.id}
+                        memberName={row.member.name}
+                        period={period}
+                        onReversed={() => void run(() => getDuesStatus(period))}
+                      />
+                    </div>
+                  )}
                 </li>
               ))}
             </ul>

@@ -5,7 +5,7 @@
 // as lib/accounts.ts's own Account re-export.
 
 import { apiFetch } from '@/lib/api'
-import type { Member } from '@/lib/setup'
+import type { Member, Transaction } from '@/lib/setup'
 
 export type { Member }
 
@@ -35,6 +35,28 @@ export interface DuesStatusRow {
  */
 export function getDuesStatus(period: string): Promise<DuesStatusRow[]> {
   return apiFetch<DuesStatusRow[]>(`/api/dues-status?period=${encodeURIComponent(period)}`)
+}
+
+/**
+ * POST /api/dues-payments/{id}/reversal - undo a dues payment recorded in
+ * error (PRD §7.3). {id} is the kind='dues' transaction being reversed.
+ *
+ * Deliberately narrow, per ADR-029: account, purpose, amount, member and
+ * period are never sent - Ledger.ReverseDuesPayment copies all five from the
+ * original row itself, so a reversal can never disagree with what it
+ * reverses. The payment is not edited or deleted; a new linked row is posted
+ * (CLAUDE.md rule 3).
+ *
+ * `note` is required here for the same reason it is on createDuesPayment: a
+ * row that reaches recent activity or the report with an empty note reads as
+ * a bare amount.
+ */
+export function reverseDuesPayment(transactionId: number, occurredOn: string, note: string): Promise<Transaction> {
+  return apiFetch<Transaction>(`/api/dues-payments/${transactionId}/reversal`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ occurred_on: occurredOn, note }),
+  })
 }
 
 /** One row of GET /api/members/{id}/outstanding-dues
