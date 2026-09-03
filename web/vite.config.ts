@@ -10,6 +10,22 @@ import { configDefaults, defineConfig, type Plugin } from 'vitest/config'
 // (JSON) and `/report` (SSR public report) — to Go on :8080 (ADR-020).
 const goServer = `http://localhost:${process.env.PORT ?? 8080}`
 
+// Vite rejects Host headers it doesn't recognise (DNS-rebinding protection), so
+// reaching the dev server through a tunnel or a LAN hostname needs that host
+// allowed. It is never a *new* value: it is the host of URUNI_BASE_URL, which
+// is already the origin this instance answers on (ADR-019) and reaches vite
+// from .env via the Makefile's `export`. Loopback is allowed by vite itself,
+// so the default `make setup` writes adds nothing.
+const allowedHosts = (() => {
+  const base = process.env.URUNI_BASE_URL?.trim()
+  if (!base) return []
+  try {
+    return [new URL(base).hostname]
+  } catch {
+    return []
+  }
+})()
+
 // A production build empties web/dist, which would delete the committed
 // .gitkeep that `//go:embed all:web/dist` needs on a fresh clone — and the
 // deletion would ride along in the next commit. Put the placeholder back.
@@ -95,6 +111,7 @@ export default defineConfig({
   },
   server: {
     port: 5173,
+    allowedHosts,
     proxy: {
       '/api': { target: goServer, changeOrigin: true },
       '/report': { target: goServer, changeOrigin: true },
