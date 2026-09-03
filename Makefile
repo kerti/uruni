@@ -2,7 +2,7 @@
         run serve-bin build test test-cover lint fmt tidy sqlc migrate-up migrate-down migrate-status db-reset \
         web-install web-dev web-build web-lint web-typecheck web-test \
         server-stop server-restart web-stop web-restart restart servers-status \
-        e2e e2e-reset e2e-server stack-up stack-down stack-logs stack-ps \
+        e2e e2e-install e2e-reset e2e-server stack-up stack-down stack-logs stack-ps \
         dev-user start-task check
 
 # `make` with no target prints help.
@@ -97,6 +97,7 @@ help:
 	@echo ""
 	@echo "E2E (Playwright; ADR-015):"
 	@echo "  e2e                     full run — reset the throwaway DB, run the suite"
+	@echo "  e2e-install             download the browser Playwright drives (once per machine)"
 	@echo "  e2e-reset               recreate + migrate + seed $(E2E_DB)"
 	@echo "  e2e-server              run the server against $(E2E_DB) (foreground, :$(E2E_PORT))"
 	@echo ""
@@ -186,6 +187,9 @@ doctor:
 	@printf '%-16s' 'claude hooks';  [ -x .claude/hooks/session-start.sh ] && echo 'executable'                 || echo 'NOT executable — run make claude-install'
 	@printf '%-16s' '.env';          [ -f .env ] && echo 'present'                                              || echo 'MISSING — run make setup'
 	@printf '%-16s' 'web deps';      [ -d web/node_modules ] && echo 'installed'                                || echo 'MISSING — run make web-install'
+	@printf '%-16s' 'pw browsers';   if [ ! -d web/node_modules/@playwright/test ]; then echo 'unknown — run make web-install first'; \
+	  elif ( cd web && node -e 'const{chromium}=require("@playwright/test");process.exit(require("fs").existsSync(chromium.executablePath())?0:1)' ) 2>/dev/null; then echo 'installed'; \
+	  else echo 'MISSING — run make e2e-install (make e2e needs it)'; fi
 
 # ---- Go server -------------------------------------------------------------
 
@@ -343,6 +347,15 @@ servers-status:
 
 e2e: e2e-reset
 	@( cd web && URUNI_DB="$(E2E_DB)" npm run -s test:e2e -- $(E2E_ARGS) )
+
+# `npm ci` installs the Playwright *runner*, never the browser it drives — that
+# is a separate few-hundred-MB download, once per machine. Keeping it out of
+# `make setup` keeps a fresh clone fast for the contributors who never run e2e;
+# `make doctor` carries the row that tells the rest of us to run this.
+# Chromium alone, because playwright.config.ts declares no `projects` and so
+# runs the default browser only.
+e2e-install:
+	@( cd web && npx playwright install chromium )
 
 e2e-reset:
 	@rm -f $(E2E_DB) $(E2E_DB)-wal $(E2E_DB)-shm

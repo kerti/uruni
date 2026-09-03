@@ -99,6 +99,12 @@ export const copy = {
       heading: 'Isi saldo awal (opsional)',
       body: 'Kosongkan kalau lokasi ini belum punya saldo untuk dicatat sekarang — bisa ditambah nanti lewat menu lokasi.',
       amountLabel: (accountName: string) => `Saldo awal — ${accountName}`,
+      // The note stored on the opening-balance transaction itself, not a form
+      // label — it outlives the wizard and shows up in home's recent activity
+      // and in the public report, where the location column may not be there
+      // to explain it. Same words as amountLabel today, kept separate because
+      // one is a screen string and the other is ledger data.
+      note: (accountName: string) => `Saldo awal — ${accountName}`,
     },
     roster: {
       heading: 'Tambah anggota dan iuran (opsional)',
