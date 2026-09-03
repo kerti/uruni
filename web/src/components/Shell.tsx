@@ -1,6 +1,6 @@
 import { useEffect, type ReactNode } from 'react'
-import { CirclePlus, Home, LogOut, Settings, Users } from 'lucide-react'
-import { NavLink } from 'react-router-dom'
+import { CalendarCheck, CirclePlus, Home, LogOut, Settings, Users } from 'lucide-react'
+import { Link, NavLink } from 'react-router-dom'
 
 import { Button } from '@/components/ui/button'
 import ErrorState from '@/components/states/ErrorState'
@@ -14,7 +14,10 @@ import { useApi } from '@/lib/useApi'
 const navItems = [
   { to: '/', icon: Home, label: copy.shell.nav.home, end: true },
   { to: '/record', icon: CirclePlus, label: copy.shell.nav.record, end: false },
-  { to: '/dues', icon: Users, label: copy.shell.nav.dues, end: false },
+  // Iuran is a monthly obligation, not a pile of coins: Design-System.md
+  // rules out money glyphs as imagery, and Users now belongs to Anggota.
+  { to: '/dues', icon: CalendarCheck, label: copy.shell.nav.dues, end: false },
+  { to: '/members', icon: Users, label: copy.shell.nav.members, end: false },
   { to: '/settings', icon: Settings, label: copy.shell.nav.settings, end: false },
 ] as const
 
@@ -28,8 +31,9 @@ const navItems = [
  * 2. Safe-area padding, so the header clears a notch and the footer clears a
  *    home indicator. index.html carries the matching `viewport-fit=cover`;
  *    without it the env() insets are all zero.
- * 3. A sticky footer carrying the app's four destinations - home, record,
- *    dues, settings.
+ * 3. A sticky footer carrying the app's five destinations - home, record,
+ *    dues, members, settings. Five is the platform's own cap for a tab bar,
+ *    not over it: at 375px that is 75px a tab, which fits an 11px label.
  *
  * That footer replaces two earlier shapes, both deliberately (M6.15, the
  * maintainer's call). It replaces this file's own "not a nav bar" ruling,
@@ -39,8 +43,13 @@ const navItems = [
  * carried to dues and settings go with it, for the same reason.
  *
  * Reconcile is deliberately not a tab: M6.10's ruling is that the
- * reconciliation banner on home IS its affordance, and a fifth tab would
- * give that screen a second door and this bar a cramped one.
+ * reconciliation banner on home IS its affordance, and a tab would give that
+ * screen a second door.
+ *
+ * The header's fund name is a link home as well (M6.16). That is a second
+ * way to the same place, never the only one - a top-corner control is the
+ * hardest thing on a phone to reach one-handed, which is exactly why the
+ * Beranda tab stays.
  */
 export default function Shell({
   title,
@@ -65,7 +74,16 @@ export default function Shell({
     <div className="flex min-h-dvh flex-col bg-background">
       <header className="sticky top-0 z-10 border-b border-border bg-background/95 pt-[env(safe-area-inset-top)] backdrop-blur">
         <div className="flex items-center justify-between gap-3 py-2 pl-[max(1rem,env(safe-area-inset-left))] pr-[max(1rem,env(safe-area-inset-right))]">
-          <h1 className="truncate text-lg font-semibold">{title}</h1>
+          <h1 className="min-w-0 truncate text-lg font-semibold">
+            {/* No aria-label: one here would become the *heading's*
+                accessible name too, so the h1 would announce as "Kas RT 04 -
+                kembali ke beranda" rather than the fund's name. A title link
+                named after the site is the pattern a screen reader already
+                knows. */}
+            <Link to="/" className="block truncate rounded-lg outline-none focus-visible:ring-3 focus-visible:ring-ring/50">
+              {title}
+            </Link>
+          </h1>
           {/* size-11 (44px), not the `icon` variant's 32px: Design-System.md
               sets a 44x44 minimum touch target and this is the header's only
               control. The label is on the button, not a tooltip - a tooltip

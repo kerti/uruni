@@ -2,7 +2,7 @@
 
 *A running record of what we've decided and why. Anything here can still change.*
 
-Last updated: 2026-09-03 (labels are correctable; selects are ours)
+Last updated: 2026-09-03 (the roster gets its own screen)
 
 ## What belongs in this file
 
@@ -296,3 +296,15 @@ Two things that cost real debugging and are worth writing down, because both are
 - **`SelectPrimitive.Value` renders the chosen label by portalling it out of the item**, and items live in a popup that does not exist until first opened. A field whose value arrives from a fetch therefore sits *blank* until touched. Our `SelectValue` takes the text from the caller instead.
 
 **And `Input` was `h-8`.** The shadcn default, 32px, under Design-System.md's own 44px minimum and visibly shorter than the select beside it. Now `h-11`, matching the trigger, which is what the maintainer noticed from the mismatch.
+
+## The roster is a screen, not a setting (decided 2026-09-03)
+
+[#149](https://github.com/kerti/uruni/issues/149) and [#150](https://github.com/kerti/uruni/issues/150) both said "a new section on M6.15's settings shell". Built that way, a fund's whole membership would have buried locations and titipan under a scroll of names — so they became **one screen of their own**, `/members`, reached by a fifth tab (Anggota). The maintainer's call, and the right one: a membership is a list, not a setting.
+
+**Roster and tiers belong together, and away from the dues status view.** A member's tier is set *on the member*, so the two are read and edited in one sitting. Dues status (M6.12) is a monthly reading; naming and pricing a tier is rare admin, and the roster is what it acts on.
+
+**Five tabs, and the Beranda tab stays.** The proposal on the table was to free a slot by moving home to a clickable header logo. Declined, and the reasoning is worth keeping: Beranda is the most-visited screen in the app, and a top-corner control is the hardest thing on a phone to reach one-handed — that trades the most-used destination for a less-used one to save a slot we do not need to save. Five is the platform's own cap, not over it. The header's fund name *did* become a link home, as a second way there.
+
+**One a11y trap, found by a test that was right to fail.** Giving that link an `aria-label` ("Kas RT 04 — kembali ke beranda") made it the **heading's** accessible name too, so the `h1` stopped announcing the fund's name. A title link named after the site is the pattern screen readers already know; the label is gone.
+
+No backend work: every route both issues name already existed and is fund-scoped after [#188](https://github.com/kerti/uruni/issues/188). #150 deliberately has no tier delete, and none was added.

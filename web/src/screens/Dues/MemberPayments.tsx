@@ -8,6 +8,7 @@ import Loading from '@/components/states/Loading'
 import ErrorState from '@/components/states/ErrorState'
 import { copy } from '@/copy/id'
 import { reverseDuesPayment } from '@/lib/dues'
+import { formatIsoDate } from '@/lib/dates'
 import { formatIDR } from '@/lib/money'
 import { listTransactions } from '@/lib/transactions'
 import { useApi } from '@/lib/useApi'
@@ -15,7 +16,6 @@ import type { Transaction } from '@/lib/transactions'
 
 const text = copy.dues.history
 
-const dateFormatter = new Intl.DateTimeFormat('id-ID', { dateStyle: 'medium' })
 
 /** Local YYYY-MM-DD - never toISOString(). Same helper as
  * RecordPayment.tsx's own. */
@@ -138,7 +138,7 @@ export default function MemberPayments({
               {/* The date leads the row, so it carries the same weight the
                   amount does at the other end of it. */}
               <span className="font-semibold text-muted-foreground">
-                {dateFormatter.format(new Date(`${row.occurred_on}T00:00:00`))}
+                {formatIsoDate(row.occurred_on)}
                 {isReversal && ` · ${text.reversalRow}`}
               </span>
               <span className="font-medium">{formatIDR(row.amount)}</span>

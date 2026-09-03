@@ -90,9 +90,16 @@ Selects are the design system's own control (`components/ui/select.tsx`, Radix `
 ## Mobile-first interaction
 
 - Minimum touch target **44×44px** — which is `h-11`, the height both `Input` and the select trigger use, so a text field and the picker beside it line up.
-- Navigation is a **sticky bottom nav** with four destinations — Beranda · Catat · Iuran · Pengaturan — active tab in Forest, the rest muted, `aria-current` alongside the color. It replaced the circular add-FAB at M6.15: "catat" is a tab now, and no screen has two entry points. Reconcile is deliberately not a tab — the reconciliation banner on home is its affordance.
+- Navigation is a **sticky bottom nav** with five destinations — Beranda · Catat · Iuran · Anggota · Pengaturan — active tab in Forest, the rest muted, `aria-current` alongside the color. Five is the platform's own cap for a tab bar: at 375px that is 75px a tab, which fits an 11px label. A sixth would mean a different pattern, not a narrower tab. The header's fund name is a second way home — never the only one, since a top-corner control is the hardest thing on a phone to reach one-handed. It replaced the circular add-FAB at M6.15: "catat" is a tab now, and no screen has two entry points. Reconcile is deliberately not a tab — the reconciliation banner on home is its affordance.
 - Amount inputs use `inputmode="numeric"` and format to `Rp` on blur.
+- **Date and month fields are full-width like every other field, plus `appearance-none`.** iOS renders them as a native control whose platform chrome and intrinsic sizing ignore the width rule — that, not the width, is what overran the viewport on a phone. Stripped of it, full width holds the longest case written out in full (*September 2026*; September is the longest Indonesian month name at 9 characters) with room to spare, so no month name is ever abbreviated. The picker that opens is the OS's: its layout and formatting are not reachable from here.
 - Home layout: **balance is the hero**, reconciliation status directly beneath, recent activity below.
+
+## Dates
+
+One module formats every date the treasurer reads (`lib/dates.ts`) — it lived as four copies in four screens, which is how one of them came to abbreviate the month while the rate list beside it spelled it out. `dateStyle: 'long'` in `id-ID`, so a date reads **3 September 2026**, never "3 Sep 2026": the voice is unhurried and the rows have the width. A dues period or a rate's effective month reads **September 2026**.
+
+Never hand a bare `'YYYY-MM-DD'` to the `Date` constructor — it parses as UTC midnight and renders a day early west of Greenwich. The helpers split the parts and build a local date.
 
 ## Numbers & currency
 

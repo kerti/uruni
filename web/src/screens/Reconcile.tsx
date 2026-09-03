@@ -12,6 +12,7 @@ import { copy } from '@/copy/id'
 import { ApiError } from '@/lib/api'
 import { listAccounts } from '@/lib/accounts'
 import { getBalances } from '@/lib/balances'
+import { formatIsoDate } from '@/lib/dates'
 import { formatIDR } from '@/lib/money'
 import { listPurposes } from '@/lib/purposes'
 import { takeReconciliation } from '@/lib/reconciliations'
@@ -32,16 +33,6 @@ const text = copy.reconciliation
  * what "recent" means. */
 const RECENT_ACTIVITY_COUNT = 5
 
-const dateFormatter = new Intl.DateTimeFormat('id-ID', { dateStyle: 'medium' })
-
-/** Formats an ISO `YYYY-MM-DD` date without going through the Date
- * constructor's UTC parsing of a bare date string, which can read a day
- * early in WIB - same helper Home.tsx and RecordTransaction.tsx each carry
- * for their own occurred_on. */
-function formatIsoDate(isoDate: string): string {
-  const [year, month, day] = isoDate.split('-').map(Number)
-  return dateFormatter.format(new Date(year, month - 1, day))
-}
 
 /** Local YYYY-MM-DD - never toISOString(), which is UTC and can read as
  * yesterday's date in WIB. Same helper as RecordTransaction.tsx's own. */

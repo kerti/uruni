@@ -21,6 +21,7 @@ export const copy = {
       home: 'Beranda',
       record: 'Catat',
       dues: 'Iuran',
+      members: 'Anggota',
       settings: 'Pengaturan',
     },
     logout: 'Keluar',
@@ -67,6 +68,10 @@ export const copy = {
       // Renaming a purpose that is not a titipan - the fund's own kas utama,
       // or an incidental, whose name is the occasion itself.
       purpose_not_renameable: 'Hanya nama titipan yang bisa diganti.',
+      // M6.17: two tiers with the same name (UNIQUE (fund_id, name)), or two
+      // rates for the same tier and month (UNIQUE (tier_id, effective_from)).
+      // errors.go maps every UNIQUE breach to this one code.
+      unique_violation: 'Sudah ada yang sama. Coba nama atau bulan yang lain.',
     },
     // Shown for a code not in the map above.
     unknownError: 'Ada yang tidak beres. Coba lagi sebentar lagi.',
@@ -323,6 +328,66 @@ export const copy = {
       submitting: 'Membatalkan…',
       cancel: 'Jangan jadi',
       success: 'Pembayaran dibatalkan.',
+    },
+  },
+  // The roster and the dues tiers (M6.16/M6.17), on their own screen rather
+  // than as two more sections of Pengaturan: a fund's whole membership is a
+  // list, not a setting, and it would have buried the locations and titipan
+  // below a scroll of names. A member's tier is set on the member, which is
+  // why the tiers live here and not with the dues status view.
+  members: {
+    heading: 'Anggota',
+    roster: {
+      heading: 'Daftar anggota',
+      body: 'Semua yang ikut iuran kas ini. Anggota yang sudah tidak ikut lagi cukup dinonaktifkan — catatan lamanya tetap utuh.',
+      empty: 'Belum ada anggota.',
+      nameLabel: 'Nama anggota',
+      tierLabel: 'Golongan',
+      // The "no tier" option: a member with no tier owes no dues, which is a
+      // real state (PRD §6), not a blank to be filled in later.
+      tierNone: 'Tanpa golongan',
+      joinedOnLabel: 'Mulai ikut',
+      add: 'Tambah anggota',
+      adding: 'Menambahkan…',
+      edit: 'Ubah',
+      save: 'Simpan',
+      saving: 'Menyimpan…',
+      cancel: 'Batal',
+      deactivate: 'Nonaktifkan',
+      deactivating: 'Menonaktifkan…',
+      reinstate: 'Aktifkan lagi',
+      reinstating: 'Mengaktifkan…',
+      inactiveBadge: 'Tidak aktif',
+      delete: 'Hapus',
+      deleting: 'Menghapus…',
+      // The 409 from a member who already has posted history. Same shape as
+      // the locations section's: a refusal that points at the right action.
+      deleteRefused: 'Anggota ini sudah punya catatan — nonaktifkan saja, jangan dihapus.',
+    },
+    tiers: {
+      heading: 'Golongan & tarif',
+      body: 'Besar iuran per bulan menurut golongan. Tarif baru ditambahkan mulai bulan tertentu, bukan menimpa yang lama — supaya bulan-bulan lampau tetap terbaca dengan tarif yang berlaku waktu itu.',
+      empty: 'Belum ada golongan.',
+      nameLabel: 'Nama golongan',
+      add: 'Tambah golongan',
+      adding: 'Menambahkan…',
+      edit: 'Ubah',
+      save: 'Simpan',
+      saving: 'Menyimpan…',
+      cancel: 'Batal',
+      // A tier with no rate yet is an ordinary state, not a problem.
+      noRates: 'Tarif belum ditentukan.',
+      ratesHeading: 'Tarif',
+      rateAmountLabel: 'Besar iuran per bulan',
+      effectiveFromLabel: 'Mulai bulan',
+      addRate: 'Tambah tarif',
+      addingRate: 'Menambahkan…',
+      editRate: 'Perbaiki nominal',
+      deleteRate: 'Hapus tarif',
+      deletingRate: 'Menghapus…',
+      // From effective_from onward, since a rate has no end date - the next
+      // one starting is what ends it.
+      effectiveFrom: (period: string) => `Mulai ${period}`,
     },
   },
   // One bundled settings screen (M6.15), not four top-level destinations:

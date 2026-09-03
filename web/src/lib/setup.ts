@@ -161,3 +161,85 @@ export function createMember(name: string, tierId: number | null, joinedOn: stri
     body: JSON.stringify({ name, tier_id: tierId, joined_on: joinedOn }),
   })
 }
+
+/**
+ * PATCH /api/members/{id}. The server distinguishes three cases per field
+ * and so must this: an **absent key** means "leave alone", an explicit
+ * **null** means "clear it" (no tier, or reinstated), and a value sets it.
+ * A partial object cannot express that on its own - `{ tierId: null }` and
+ * `{}` are indistinguishable once spread - so each field is passed as
+ * `undefined` for "leave alone" and the body is built key by key below.
+ *
+ * Clearing `tier_id` drops the member's dues obligation; clearing
+ * `inactive_on` reinstates them.
+ */
+export interface MemberPatch {
+  name?: string
+  tierId?: number | null
+  joinedOn?: string | null
+  inactiveOn?: string | null
+}
+
+export function updateMember(id: number, patch: MemberPatch): Promise<Member> {
+  const body: Record<string, unknown> = {}
+  if (patch.name !== undefined) body.name = patch.name
+  if (patch.tierId !== undefined) body.tier_id = patch.tierId
+  if (patch.joinedOn !== undefined) body.joined_on = patch.joinedOn
+  if (patch.inactiveOn !== undefined) body.inactive_on = patch.inactiveOn
+  return apiFetch<Member>(`/api/members/${id}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  })
+}
+
+/**
+ * DELETE /api/members/{id} - only for a duplicate with no posted history.
+ * A member any transaction references is refused by the foreign key as 409
+ * `referenced_by_other_records`, which the roster renders as "sudah punya
+ * riwayat - nonaktifkan, bukan hapus": deactivating is what she wants for
+ * someone who actually left.
+ */
+export function deleteMember(id: number): Promise<void> {
+  return apiFetch<void>(`/api/members/${id}`, { method: 'DELETE' })
+}
+
+/** GET /api/dues-tiers - the fund's tiers, for choosing a member's. */
+export function listDuesTiers(): Promise<DuesTier[]> {
+  return apiFetch<DuesTier[]>('/api/dues-tiers')
+}
+
+/** PATCH /api/dues-tiers/{id} - renames a tier. The name is a label; a
+ * member references the tier by id. A duplicate name for the fund hits the
+ * schema's UNIQUE (fund_id, name) and comes back 409. */
+export function renameDuesTier(id: number, name: string): Promise<DuesTier> {
+  return apiFetch<DuesTier>(`/api/dues-tiers/${id}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name }),
+  })
+}
+
+/** GET /api/dues-tiers/{id}/rates - a tier's rate history, oldest first. An
+ * empty list is a legal state: a tier whose price is not decided yet. */
+export function listDuesRates(tierId: number): Promise<DuesRate[]> {
+  return apiFetch<DuesRate[]>(`/api/dues-tiers/${tierId}/rates`)
+}
+
+/** PATCH /api/dues-rates/{id} - corrects a mistyped amount on a rate just
+ * entered. Never a price change: a new price is a new row for a new month
+ * (createDuesRate above), because the old one still explains old periods. */
+export function updateDuesRate(id: number, amount: number): Promise<DuesRate> {
+  return apiFetch<DuesRate>(`/api/dues-rates/${id}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ amount }),
+  })
+}
+
+/** DELETE /api/dues-rates/{id} - for a rate filed against the wrong month,
+ * which is what makes that correctable at all: UNIQUE (tier_id,
+ * effective_from) refuses the corrected row while the wrong one stands. */
+export function deleteDuesRate(id: number): Promise<void> {
+  return apiFetch<void>(`/api/dues-rates/${id}`, { method: 'DELETE' })
+}

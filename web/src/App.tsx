@@ -15,6 +15,7 @@ import Reconcile from '@/screens/Reconcile'
 import DuesStatus from '@/screens/Dues/Status'
 import RecordDuesPayment from '@/screens/Dues/RecordPayment'
 import Home from '@/screens/Home'
+import Members from '@/screens/Members'
 import Settings from '@/screens/Settings'
 import { getSession } from '@/lib/auth'
 import { getFund } from '@/lib/setup'
@@ -236,6 +237,14 @@ function AuthedGate({ onLoggedOut }: { onLoggedOut: () => void }) {
               onRecorded={() => navigate('/dues', { state: { duesRecorded: true } satisfies DuesState })}
               onCancel={() => navigate('/dues')}
             />
+          </Shell>
+        }
+      />
+      <Route
+        path="/members"
+        element={
+          <Shell title={title} onLoggedOut={onLoggedOut}>
+            <Members />
           </Shell>
         }
       />
