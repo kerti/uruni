@@ -31,9 +31,20 @@ export default defineConfig({
   webServer: {
     // The exact command `make e2e-server` wraps (Makefile: E2E_DB, E2E_PORT) —
     // copied, not derived, so the two never drift apart.
-    command: 'URUNI_DB=/tmp/uruni-e2e.db PORT=8099 go run ./cmd/uruni serve',
+    //
+    // URUNI_LOG_LEVEL=warn because the request logger (internal/http/
+    // middleware.go) writes one info line per request — every asset, every
+    // API call — and Playwright pipes this server's stderr into the same
+    // terminal as the test results, burying them. warn, not error: a
+    // server-side problem during a run is exactly what you need to see, and
+    // it still prints.
+    command: 'URUNI_DB=/tmp/uruni-e2e.db PORT=8099 URUNI_LOG_LEVEL=warn go run ./cmd/uruni serve',
     cwd: '..',
     url: 'http://localhost:8099/healthz',
     reuseExistingServer: !process.env.CI,
+    // Nothing this server writes to stdout is worth interleaving with the
+    // reporter; stderr stays piped so a crash or a warn is still visible.
+    stdout: 'ignore',
+    stderr: 'pipe',
   },
 })
