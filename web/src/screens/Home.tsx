@@ -57,7 +57,18 @@ interface HomeData {
  * happened), so a new entry is visible in recent activity without a manual
  * refresh, without this screen needing any router knowledge of its own.
  */
-export default function Home({ refetchKey, onReconcile }: { refetchKey: unknown; onReconcile: () => void }) {
+export default function Home({
+  refetchKey,
+  onReconcile,
+  onDues,
+}: {
+  refetchKey: unknown
+  onReconcile: () => void
+  /** Navigates to the dues status roster (M6.12, PRD §7.3) - App.tsx's
+   * navigate('/dues'), same caller-owns-navigation contract as onReconcile
+   * above. */
+  onDues: () => void
+}) {
   const [state, run] = useApi<HomeData>()
 
   async function loadHomeData(): Promise<HomeData> {
@@ -184,6 +195,14 @@ export default function Home({ refetchKey, onReconcile }: { refetchKey: unknown;
         <ReconciliationBanner openLines={openLines} everReconciled={latest !== null} onClick={onReconcile} />
         {latest && <p className="text-sm text-muted-foreground">{copy.home.lastChecked(formatUnixSeconds(latest.performed_at))}</p>}
       </section>
+
+      {/* The dues roster's entry point (M6.12) - one plain, quiet link, not
+          a second CTA competing with the balance hero or the reconciliation
+          banner above it. No icon row, no nav bar: exactly the one
+          destination this slice adds. */}
+      <button type="button" onClick={onDues} className="self-center text-sm font-medium text-primary underline-offset-4 hover:underline">
+        {copy.dues.entryLink}
+      </button>
 
       <section className="flex flex-col gap-2">
         <h2 className="text-sm font-semibold text-muted-foreground">{copy.home.recentActivityHeading}</h2>
