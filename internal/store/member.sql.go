@@ -79,6 +79,36 @@ func (q *Queries) GetMember(ctx context.Context, id int64) (Member, error) {
 	return i, err
 }
 
+const getMemberForFund = `-- name: GetMemberForFund :one
+SELECT id, fund_id, name, tier_id, joined_on, inactive_on, created_at
+FROM member
+WHERE id = ? AND fund_id = ?
+`
+
+type GetMemberForFundParams struct {
+	ID     int64
+	FundID int64
+}
+
+// GetMemberForFund is GetMember fund-scoped (WHERE fund_id = ? AND id = ?),
+// the same shape GetTransactionForFund and GetReimbursement already use: a
+// member id that is real but belongs to another fund answers sql.ErrNoRows
+// here rather than being found and only then rejected for ownership.
+func (q *Queries) GetMemberForFund(ctx context.Context, arg GetMemberForFundParams) (Member, error) {
+	row := q.db.QueryRowContext(ctx, getMemberForFund, arg.ID, arg.FundID)
+	var i Member
+	err := row.Scan(
+		&i.ID,
+		&i.FundID,
+		&i.Name,
+		&i.TierID,
+		&i.JoinedOn,
+		&i.InactiveOn,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
 const listMembersByFund = `-- name: ListMembersByFund :many
 SELECT id, fund_id, name, tier_id, joined_on, inactive_on, created_at
 FROM member

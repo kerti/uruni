@@ -58,6 +58,15 @@ type Querier interface {
 	// tables; the settled check is internal/ledger's, above.
 	DeleteReimbursement(ctx context.Context, id int64) error
 	DeleteSession(ctx context.Context, token string) error
+	// DuesPaidByMemberGroupedByPeriod is DuesPaidByPeriod's transpose: every
+	// period one member has paid anything toward, in one pass over that
+	// member's whole history rather than one query per period
+	// (OutstandingDuesForMember's range walk). Same reversed-row exclusion
+	// (ADR-029) and the same CAST(... AS TEXT) forcing dues_period non-null
+	// LatestDuesPeriodPaidByMember already relies on - kind = 'dues' rows always
+	// carry a dues_period (schema CHECK), so this is never actually NULL, only
+	// untyped without the cast.
+	DuesPaidByMemberGroupedByPeriod(ctx context.Context, arg DuesPaidByMemberGroupedByPeriodParams) ([]DuesPaidByMemberGroupedByPeriodRow, error)
 	// The roster query behind "who has paid / partially / not yet" for one
 	// dues_period, across every member in one pass rather than one query per
 	// member.
@@ -99,6 +108,11 @@ type Querier interface {
 	// cross-fund read the moment a second fund exists.
 	GetIncidental(ctx context.Context, arg GetIncidentalParams) (Incidental, error)
 	GetMember(ctx context.Context, id int64) (Member, error)
+	// GetMemberForFund is GetMember fund-scoped (WHERE fund_id = ? AND id = ?),
+	// the same shape GetTransactionForFund and GetReimbursement already use: a
+	// member id that is real but belongs to another fund answers sql.ErrNoRows
+	// here rather than being found and only then rejected for ownership.
+	GetMemberForFund(ctx context.Context, arg GetMemberForFundParams) (Member, error)
 	// The one-opening-per-account pre-check, same shape as
 	// GetReimbursementSettlement above: no aggregate, so a fund with no opening
 	// entry on this account yet returns a clean sql.ErrNoRows (the expected,

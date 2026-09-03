@@ -117,6 +117,55 @@ func (q *Queries) CreateTransaction(ctx context.Context, arg CreateTransactionPa
 	return i, err
 }
 
+const duesPaidByMemberGroupedByPeriod = `-- name: DuesPaidByMemberGroupedByPeriod :many
+SELECT CAST(dues_period AS TEXT) AS dues_period, CAST(COALESCE(SUM(amount), 0) AS INTEGER) AS paid_amount
+FROM "transaction" t
+WHERE t.fund_id = ? AND t.member_id = ? AND t.kind = 'dues'
+  AND NOT EXISTS (SELECT 1 FROM "transaction" r WHERE r.reverses_transaction_id = t.id)
+GROUP BY dues_period
+`
+
+type DuesPaidByMemberGroupedByPeriodParams struct {
+	FundID   int64
+	MemberID *int64
+}
+
+type DuesPaidByMemberGroupedByPeriodRow struct {
+	DuesPeriod string
+	PaidAmount int64
+}
+
+// DuesPaidByMemberGroupedByPeriod is DuesPaidByPeriod's transpose: every
+// period one member has paid anything toward, in one pass over that
+// member's whole history rather than one query per period
+// (OutstandingDuesForMember's range walk). Same reversed-row exclusion
+// (ADR-029) and the same CAST(... AS TEXT) forcing dues_period non-null
+// LatestDuesPeriodPaidByMember already relies on - kind = 'dues' rows always
+// carry a dues_period (schema CHECK), so this is never actually NULL, only
+// untyped without the cast.
+func (q *Queries) DuesPaidByMemberGroupedByPeriod(ctx context.Context, arg DuesPaidByMemberGroupedByPeriodParams) ([]DuesPaidByMemberGroupedByPeriodRow, error) {
+	rows, err := q.db.QueryContext(ctx, duesPaidByMemberGroupedByPeriod, arg.FundID, arg.MemberID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []DuesPaidByMemberGroupedByPeriodRow{}
+	for rows.Next() {
+		var i DuesPaidByMemberGroupedByPeriodRow
+		if err := rows.Scan(&i.DuesPeriod, &i.PaidAmount); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const duesPaidByPeriod = `-- name: DuesPaidByPeriod :many
 SELECT member_id, CAST(COALESCE(SUM(amount), 0) AS INTEGER) AS paid_amount
 FROM "transaction" t

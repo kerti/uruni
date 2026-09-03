@@ -8,6 +8,15 @@ SELECT id, fund_id, name, tier_id, joined_on, inactive_on, created_at
 FROM member
 WHERE id = ?;
 
+-- GetMemberForFund is GetMember fund-scoped (WHERE fund_id = ? AND id = ?),
+-- the same shape GetTransactionForFund and GetReimbursement already use: a
+-- member id that is real but belongs to another fund answers sql.ErrNoRows
+-- here rather than being found and only then rejected for ownership.
+-- name: GetMemberForFund :one
+SELECT id, fund_id, name, tier_id, joined_on, inactive_on, created_at
+FROM member
+WHERE id = ? AND fund_id = ?;
+
 -- name: ListMembersByFund :many
 SELECT id, fund_id, name, tier_id, joined_on, inactive_on, created_at
 FROM member
