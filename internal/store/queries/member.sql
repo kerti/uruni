@@ -3,15 +3,12 @@ INSERT INTO member (fund_id, name, tier_id, joined_on, inactive_on, created_at)
 VALUES (?, ?, ?, ?, ?, ?)
 RETURNING id, fund_id, name, tier_id, joined_on, inactive_on, created_at;
 
--- name: GetMember :one
-SELECT id, fund_id, name, tier_id, joined_on, inactive_on, created_at
-FROM member
-WHERE id = ?;
-
--- GetMemberForFund is GetMember fund-scoped (WHERE fund_id = ? AND id = ?),
--- the same shape GetTransactionForFund and GetReimbursement already use: a
--- member id that is real but belongs to another fund answers sql.ErrNoRows
--- here rather than being found and only then rejected for ownership.
+-- GetMemberForFund is the only single-member lookup: WHERE id = ? AND
+-- fund_id = ?, the same shape GetTransactionForFund and GetReimbursement
+-- already use, so a member id that is real but belongs to another fund
+-- answers sql.ErrNoRows here rather than being found and only then rejected
+-- for ownership. Its unscoped predecessor GetMember is gone (#188) - keeping
+-- one around is how resolveMember came to be unscoped in the first place.
 -- name: GetMemberForFund :one
 SELECT id, fund_id, name, tier_id, joined_on, inactive_on, created_at
 FROM member

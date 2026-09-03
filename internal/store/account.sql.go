@@ -55,14 +55,22 @@ func (q *Queries) DeleteAccount(ctx context.Context, id int64) error {
 	return err
 }
 
-const getAccount = `-- name: GetAccount :one
+const getAccountForFund = `-- name: GetAccountForFund :one
 SELECT id, fund_id, kind, name, created_at, inactive_on
 FROM account
-WHERE id = ?
+WHERE id = ? AND fund_id = ?
 `
 
-func (q *Queries) GetAccount(ctx context.Context, id int64) (Account, error) {
-	row := q.db.QueryRowContext(ctx, getAccount, id)
+type GetAccountForFundParams struct {
+	ID     int64
+	FundID int64
+}
+
+// GetAccountForFund is the only single-account lookup, fund-scoped for the
+// reason GetMemberForFund is (#188): an account id belonging to another fund
+// answers sql.ErrNoRows rather than being found and only then rejected.
+func (q *Queries) GetAccountForFund(ctx context.Context, arg GetAccountForFundParams) (Account, error) {
+	row := q.db.QueryRowContext(ctx, getAccountForFund, arg.ID, arg.FundID)
 	var i Account
 	err := row.Scan(
 		&i.ID,

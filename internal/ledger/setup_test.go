@@ -57,9 +57,9 @@ func TestSetUpFundCreatesFundMainPurposeAndAccounts(t *testing.T) {
 	if cashID == 0 {
 		t.Error("cash account id is zero")
 	}
-	cash, err := q.GetAccount(ctx, cashID)
+	cash, err := q.GetAccountForFund(ctx, store.GetAccountForFundParams{ID: cashID, FundID: result.Fund.ID})
 	if err != nil {
-		t.Fatalf("GetAccount(cash) = %v, want no error", err)
+		t.Fatalf("GetAccountForFund(cash) = %v, want no error", err)
 	}
 	if cash.Kind != "cash" {
 		t.Errorf("cash account Kind = %q, want %q", cash.Kind, "cash")
@@ -78,9 +78,9 @@ func TestSetUpFundCreatesFundMainPurposeAndAccounts(t *testing.T) {
 	if bankID == 0 {
 		t.Error("bank account id is zero")
 	}
-	bank, err := q.GetAccount(ctx, bankID)
+	bank, err := q.GetAccountForFund(ctx, store.GetAccountForFundParams{ID: bankID, FundID: result.Fund.ID})
 	if err != nil {
-		t.Fatalf("GetAccount(bank) = %v, want no error", err)
+		t.Fatalf("GetAccountForFund(bank) = %v, want no error", err)
 	}
 	if bank.Kind != "bank" {
 		t.Errorf("bank account Kind = %q, want %q", bank.Kind, "bank")

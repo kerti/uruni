@@ -97,9 +97,10 @@ func (a *api) listAccounts(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, resp)
 }
 
-// resolveAccount looks up {id}, or answers the request and reports false.
-// Mirrors resolveMember exactly - a pre-fetch rather than leaning on
-// sql.ErrNoRows, which a DELETE affecting zero rows never raises.
+// resolveAccount looks up {id} within the fund, or answers the request and
+// reports false. Mirrors resolveMember exactly - fund-scoped in the query,
+// and a pre-fetch rather than leaning on sql.ErrNoRows, which a DELETE
+// affecting zero rows never raises.
 func (a *api) resolveAccount(w http.ResponseWriter, r *http.Request) (store.Account, bool) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
@@ -107,7 +108,15 @@ func (a *api) resolveAccount(w http.ResponseWriter, r *http.Request) (store.Acco
 		return store.Account{}, false
 	}
 
-	account, err := a.queries.GetAccount(r.Context(), id)
+	fund, ok := a.resolveFund(w, r)
+	if !ok {
+		return store.Account{}, false
+	}
+
+	account, err := a.queries.GetAccountForFund(r.Context(), store.GetAccountForFundParams{
+		ID:     id,
+		FundID: fund.ID,
+	})
 	if err != nil {
 		mapSQLiteError(w, a.logger, err) // sql.ErrNoRows -> 404 not_found
 		return store.Account{}, false

@@ -82,7 +82,10 @@ type Querier interface {
 	// emits interface{} for the aggregate and the trust core loses its compiler
 	// exactly where it is needed most (ADR-024).
 	FundBalance(ctx context.Context, fundID int64) (int64, error)
-	GetAccount(ctx context.Context, id int64) (Account, error)
+	// GetAccountForFund is the only single-account lookup, fund-scoped for the
+	// reason GetMemberForFund is (#188): an account id belonging to another fund
+	// answers sql.ErrNoRows rather than being found and only then rejected.
+	GetAccountForFund(ctx context.Context, arg GetAccountForFundParams) (Account, error)
 	// The reversed-once pre-check, same shape as GetReimbursementSettlement and
 	// GetOpeningBalance above: sql.ErrNoRows means "not yet reversed, proceed"
 	// (the expected, non-error path); a row means it already has been. The
@@ -90,11 +93,15 @@ type Querier interface {
 	// this pre-check only turns a raw constraint violation into a clean, named
 	// error (ADR-029, mirroring ADR-027's ErrReimbursementAlreadySettled).
 	GetDuesPaymentReversal(ctx context.Context, arg GetDuesPaymentReversalParams) (Transaction, error)
-	// GetDuesRate is the lookup PATCH and DELETE both do ahead of the write: an
-	// UPDATE's RETURNING would answer an unknown id with sql.ErrNoRows, but a
-	// DELETE affecting zero rows raises nothing at all.
-	GetDuesRate(ctx context.Context, id int64) (DuesRate, error)
-	GetDuesTier(ctx context.Context, id int64) (DuesTier, error)
+	// GetDuesRateForFund is the lookup PATCH and DELETE both do ahead of the
+	// write: an UPDATE's RETURNING would answer an unknown id with
+	// sql.ErrNoRows, but a DELETE affecting zero rows raises nothing at all.
+	// dues_rate carries no fund_id of its own, so the scope comes through its
+	// tier - the same guarantee GetMemberForFund gives directly (#188).
+	GetDuesRateForFund(ctx context.Context, arg GetDuesRateForFundParams) (DuesRate, error)
+	// GetDuesTierForFund is the only single-tier lookup, fund-scoped for the
+	// reason GetMemberForFund is (#188).
+	GetDuesTierForFund(ctx context.Context, arg GetDuesTierForFundParams) (DuesTier, error)
 	// The rate in force for a period: the latest row whose effective_from is at or
 	// before it. One-sided intervals mean there is no end date to check, and no
 	// row at all is a legitimate answer: a tier whose rate is not yet decided.
@@ -107,11 +114,12 @@ type Querier interface {
 	// server to hold more than one fund, so a bare WHERE purpose_id = ? would be a
 	// cross-fund read the moment a second fund exists.
 	GetIncidental(ctx context.Context, arg GetIncidentalParams) (Incidental, error)
-	GetMember(ctx context.Context, id int64) (Member, error)
-	// GetMemberForFund is GetMember fund-scoped (WHERE fund_id = ? AND id = ?),
-	// the same shape GetTransactionForFund and GetReimbursement already use: a
-	// member id that is real but belongs to another fund answers sql.ErrNoRows
-	// here rather than being found and only then rejected for ownership.
+	// GetMemberForFund is the only single-member lookup: WHERE id = ? AND
+	// fund_id = ?, the same shape GetTransactionForFund and GetReimbursement
+	// already use, so a member id that is real but belongs to another fund
+	// answers sql.ErrNoRows here rather than being found and only then rejected
+	// for ownership. Its unscoped predecessor GetMember is gone (#188) - keeping
+	// one around is how resolveMember came to be unscoped in the first place.
 	GetMemberForFund(ctx context.Context, arg GetMemberForFundParams) (Member, error)
 	// The one-opening-per-account pre-check, same shape as
 	// GetReimbursementSettlement above: no aggregate, so a fund with no opening
