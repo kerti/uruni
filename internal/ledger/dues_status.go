@@ -184,9 +184,10 @@ type OutstandingDuesPeriod struct {
 // (issue #186).
 //
 // The range:
-//   - End: through, or the month containing inactive_on when that is
-//     earlier - a member who left owes nothing for a month after they left,
-//     however far `through` reaches.
+//   - End: through. A member who left owes nothing for a month after they
+//     left, but that bound is memberOwesPeriod's inside the loop rather than
+//     a second narrowing here - one window rule, one owner. What is bounded
+//     here is only how far the walk ever reaches.
 //   - Start: the month containing joined_on, exactly as memberOwesPeriod
 //     bounds it for DuesStatusForPeriod. joined_on == nil means "always was
 //     a member" (same meaning as everywhere else in this package), but this
@@ -244,12 +245,14 @@ func (l *Ledger) OutstandingDuesForMember(ctx context.Context, fundID, memberID 
 		return nil, nil // no dues obligation
 	}
 
+	// The end of the walk is `through` alone. inactive_on is deliberately NOT
+	// narrowed in here: memberOwesPeriod inside the loop already refuses every
+	// period after the month a member left, and having the bound in two places
+	// means two definitions of the same window rule that can drift apart. The
+	// cost is a few extra iterations of a string comparison for a member who
+	// has left - the comparison happens before the rate query, so no extra
+	// database work.
 	end := through
-	if member.InactiveOn != nil {
-		if inactiveMonth := (*member.InactiveOn)[:7]; inactiveMonth < end {
-			end = inactiveMonth
-		}
-	}
 
 	var start string
 	if member.JoinedOn != nil {

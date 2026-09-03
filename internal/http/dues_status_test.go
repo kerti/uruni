@@ -312,3 +312,37 @@ func TestGetOutstandingDuesRejectsAMalformedThrough(t *testing.T) {
 		}
 	}
 }
+
+// The member id in the path is parsed by this handler rather than by
+// resolveMember, so its own bad-input path needs covering: a non-numeric id
+// is the caller's mistake, not a missing member, and reads as 400 rather
+// than 404.
+func TestGetOutstandingDuesRejectsANonNumericMemberID(t *testing.T) {
+	r := testRouter(t)
+	setUpFund(t, r)
+
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/members/not-a-number/outstanding-dues", nil))
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("GET /api/members/not-a-number/outstanding-dues = %d, want %d (body: %s)", rec.Code, http.StatusBadRequest, rec.Body.String())
+	}
+	got := decodeError(t, rec)
+	if got.Code != "invalid_argument" {
+		t.Errorf("error code = %q, want %q", got.Code, "invalid_argument")
+	}
+}
+
+// Before setup there is no fund to scope the lookup to, so the route answers
+// the same "run setup first" 404 every other fund-scoped route does - not a
+// 200 with an empty list, which would read as "this member owes nothing".
+func TestGetOutstandingDuesRequiresAFund(t *testing.T) {
+	rec := getOutstandingDues(t, testRouter(t), 1, "")
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("GET .../outstanding-dues before setup = %d, want %d (body: %s)", rec.Code, http.StatusNotFound, rec.Body.String())
+	}
+	got := decodeError(t, rec)
+	if got.Code != "not_found" {
+		t.Errorf("error code = %q, want %q", got.Code, "not_found")
+	}
+}

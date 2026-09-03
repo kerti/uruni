@@ -739,6 +739,56 @@ func TestOutstandingDuesForMemberTierLessMemberReturnsEmpty(t *testing.T) {
 	}
 }
 
+// joined_on == nil means "always was a member", so the walk has no join
+// month to start from and falls back to the tier's earliest rate. A tier
+// that has never had a rate at all (the "madya TBD" case) therefore has no
+// start either - and nothing was ever owed against it, so the answer is
+// empty rather than an arbitrary starting month.
+func TestOutstandingDuesForMemberNilJoinedOnAndRatelessTierReturnsEmpty(t *testing.T) {
+	l := newTestLedger(t)
+	f := newFixture(t, l)
+	q := store.New(l.db)
+	ctx := context.Background()
+
+	tierID := createDuesTier(t, q, f.fundID, "Madya TBD") // deliberately no rate row
+	memberID := createDuesMember(t, q, f.fundID, duesMemberParams{
+		name: "Jane", tierID: &tierID, // joinedOn left nil
+	})
+
+	rows, err := l.OutstandingDuesForMember(ctx, f.fundID, memberID, "2026-06")
+	if err != nil {
+		t.Fatalf("OutstandingDuesForMember() = %v, want no error", err)
+	}
+	if len(rows) != 0 {
+		t.Errorf("OutstandingDuesForMember() = %+v, want [] for a tier that never had a rate", rows)
+	}
+}
+
+// A member who joins after `through` has no periods in range at all. The
+// walk must return empty rather than iterating backwards or returning a
+// period the member cannot owe yet - the arrears case in reverse.
+func TestOutstandingDuesForMemberJoinedAfterThroughReturnsEmpty(t *testing.T) {
+	l := newTestLedger(t)
+	f := newFixture(t, l)
+	q := store.New(l.db)
+	ctx := context.Background()
+
+	tierID := createDuesTier(t, q, f.fundID, "Tier A")
+	createDuesRate(t, q, tierID, 25_000, "2026-01")
+	joinedOn := "2026-08-01"
+	memberID := createDuesMember(t, q, f.fundID, duesMemberParams{
+		name: "Jane", tierID: &tierID, joinedOn: &joinedOn,
+	})
+
+	rows, err := l.OutstandingDuesForMember(ctx, f.fundID, memberID, "2026-06")
+	if err != nil {
+		t.Fatalf("OutstandingDuesForMember() = %v, want no error", err)
+	}
+	if len(rows) != 0 {
+		t.Errorf("OutstandingDuesForMember() = %+v, want [] when joined_on is after through", rows)
+	}
+}
+
 func TestOutstandingDuesForMemberJoinedOnBoundsTheStart(t *testing.T) {
 	l := newTestLedger(t)
 	f := newFixture(t, l)
