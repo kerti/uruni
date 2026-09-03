@@ -2,7 +2,7 @@
 
 *A running record of what we've decided and why. Anything here can still change.*
 
-Last updated: 2026-09-02 (M5.5 — the boot gate moves to `URUNI_BASE_URL`)
+Last updated: 2026-09-03 (Uruni's history starts at adoption)
 
 ## What belongs in this file
 
@@ -257,3 +257,13 @@ M6.2 ([#135](https://github.com/kerti/uruni/issues/135)) needed client-side rout
 **`react-router-dom`, over a hand-rolled `pushState` switch.** [ADR-003](./ADR/003-frontend-react-spa-backend-go.md) picked this stack on "highest AI-codegen accuracy, proven Balances patterns", and that criterion decides this too: M6 ends with roughly twenty screens across auth, setup, the everyday loop, dues, settings and reimbursements, so the alternative is owning back/forward, scroll restoration and focus management by hand across all of them. "Self-host simplicity wins ties" is about moving parts an operator runs; a bundled MIT library is not one. The lighter option (`wouter`, ~2KB) was considered and declined on the same codegen-fluency ground, plus the nested-layout story M6.6's app shell will want.
 
 **The error envelope became a copy surface, not a display surface.** The API client parses `{"error":{"code","message"}}` into a typed error, but the wire `message` never reaches a screen: it is English by [ADR-014](./ADR/014-localization-indonesian-first.md)'s own "the API is a code surface" reasoning, and rendering it would put English in front of the treasurer against rule 8. `code` maps to Indonesian in `web/src/copy/id.ts` with a warm fallback for a code the map has not learned yet; the raw message goes to `console.error` for the maintainer. Each later M6 slice seeds its own route's codes — the map is deliberately not pre-populated for routes no screen calls.
+
+## Uruni's history starts at adoption (decided 2026-09-03)
+
+[#187](https://github.com/kerti/uruni/issues/187): the treasurer arrives with months of dues history in a spreadsheet, and nothing in the docs answered "do I enter the last six months?" The convention was already implemented — the setup wizard dates every member's `joined_on` to today and the dues rate's `effective_from` to the current month, so a fresh fund generates no backdated obligation — it was simply never written down. `PRD.md` §7.1 now says it.
+
+**Backfilling settled payments is arithmetically impossible, not merely unsupported.** Past dues money is already inside the opening balance (§7.1's line-in-the-sand device: the money as of today, with no claim about where it came from). Posting those payments as transactions puts them in the ledger a second time, and reconciliation would then show a permanent selisih equal to everything backfilled — the one number the product exists to keep honest. There is no version of this that works short of a spreadsheet-import concept [ADR-012](./ADR/012-backup-and-export.md) does not have; its JSON import is restore-a-backup, not migrate-a-history.
+
+**Live arrears are the exception, and they are a different thing.** Dues a member genuinely still owes never arrived, so that money is *not* in the opening balance. Backdating that one member's `joined_on` makes the periods show as outstanding, and the payment is dated the day it actually comes in, so the balance stays correct. Stated explicitly so the rule does not get read as "never backdate anything."
+
+This also matches §9's success condition, which is that she adopts Uruni as her **sole** record — not that Uruni absorbs the spreadsheet.
