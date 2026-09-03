@@ -107,11 +107,11 @@ export function postSetup(name: string, accounts: SetupAccountInput[]): Promise<
  * this at all for an account the treasurer actually filled in, see
  * Setup.tsx.
  */
-export function postOpeningBalance(accountId: number, amount: number, occurredOn: string): Promise<OpeningBalanceResult> {
+export function postOpeningBalance(accountId: number, amount: number, occurredOn: string, note: string): Promise<OpeningBalanceResult> {
   return apiFetch<OpeningBalanceResult>(`/api/accounts/${accountId}/opening-balance`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ amount, occurred_on: occurredOn, note: null }),
+    body: JSON.stringify({ amount, occurred_on: occurredOn, note }),
   })
 }
 

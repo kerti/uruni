@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react'
 
+import { copy } from '@/copy/id'
 import { useApi } from '@/lib/useApi'
 import { parseRupiah } from '@/lib/money'
 import { createDuesRate, createDuesTier, createMember, postOpeningBalance, postSetup } from '@/lib/setup'
@@ -85,7 +86,7 @@ export default function Setup({ onDone }: { onDone: () => void }) {
         if (postedAccountIds.current.has(account.id)) continue
         const amount = parseRupiah(balanceAmounts[account.id] ?? '')
         if (amount === 0) continue
-        await postOpeningBalance(account.id, amount, occurredOn)
+        await postOpeningBalance(account.id, amount, occurredOn, copy.setup.balances.note(account.name))
         postedAccountIds.current.add(account.id)
       }
       setStep('roster')

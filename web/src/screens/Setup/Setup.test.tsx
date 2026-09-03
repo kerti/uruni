@@ -169,5 +169,12 @@ describe('Setup', () => {
     const balanceCalls = callsTo(fetchMock, '/opening-balance')
     expect(balanceCalls).toHaveLength(1)
     expect(balanceCalls[0][0]).toContain('/api/accounts/10/opening-balance')
+    // The note names its own location: this row is the first entry in the
+    // fund's ledger and it is read again months later, in home's recent
+    // activity and in the public report, without the wizard around it.
+    expect(JSON.parse(String(balanceCalls[0][1]?.body))).toMatchObject({
+      amount: 50000,
+      note: text.balances.note('Tunai'),
+    })
   })
 })
