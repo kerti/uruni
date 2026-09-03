@@ -5,6 +5,7 @@ import { expect, test } from '@playwright/test'
 // the drift that centralizing it exists to prevent. Relative, not the `@/`
 // alias — that alias is a Vite/tsconfig concern and web/e2e is neither.
 import { copy } from '../src/copy/id'
+import { formatIDR } from '../src/lib/money'
 
 // The golden path this spec will eventually walk end to end: log in →
 // first-run setup → record a transaction → home (balance hero +
@@ -18,9 +19,8 @@ import { copy } from '../src/copy/id'
 //   M6.9  home (balance hero + reconciliation status)
 //   M6.10 reconcile
 //
-// M6.2's router shell still exists (the smoke page is the placeholder every
-// screen but auth eventually replaces), but M6.4 gives this spec its first
-// screen to walk through: `cmd/uruni/seed_e2e.go`'s fixture command seeds
+// M6.4 gives this spec its first screen to walk through:
+// `cmd/uruni/seed_e2e.go`'s fixture command seeds
 // e2e's instance with a bendahara account already registered, so a seeded
 // server always answers GET /api/session with has_account: true and the
 // Register screen is never reachable here — the golden path starts at
@@ -65,12 +65,11 @@ test.describe('golden path', () => {
     await page.getByLabel(copy.auth.login.passwordLabel).fill(seedPassword)
     await page.getByRole('button', { name: copy.auth.login.submit }).click()
 
-    // Past auth is still M6.2's placeholder shell today (M6.9 replaces it
-    // with a real home) - reaching it proves both the login itself and the
-    // fund probe's 200 branch worked: the seeded fund means Setup is never
-    // rendered here, only SmokePage. See the file header comment for why the
-    // wizard's own steps have no e2e coverage.
-    await expect(page.getByText(copy.smoke.heading)).toBeVisible()
+    // Reaching home proves both the login itself and the fund probe's 200
+    // branch worked: the seeded fund means Setup is never rendered here.
+    // See the file header comment for why the wizard's own steps have no
+    // e2e coverage.
+    await expect(page.getByText(copy.home.balanceHeading)).toBeVisible()
   })
 
   test('record a transaction (M6.8)', async ({ page }) => {
@@ -78,7 +77,7 @@ test.describe('golden path', () => {
     await page.getByLabel(copy.auth.login.emailLabel).fill(seedEmail)
     await page.getByLabel(copy.auth.login.passwordLabel).fill(seedPassword)
     await page.getByRole('button', { name: copy.auth.login.submit }).click()
-    await expect(page.getByText(copy.smoke.heading)).toBeVisible()
+    await expect(page.getByText(copy.home.balanceHeading)).toBeVisible()
 
     await page.getByRole('link', { name: copy.record.addAction }).click()
     await expect(page.getByRole('heading', { name: copy.record.heading })).toBeVisible()
@@ -89,11 +88,36 @@ test.describe('golden path', () => {
     await page.getByLabel(copy.record.amountLabel).fill('50000')
     await page.getByRole('button', { name: copy.record.submit }).click()
 
-    // A successful post returns to home and shows the success message there
-    // - there is no recent-activity list yet (M6.9's job).
-    await expect(page.getByText(copy.smoke.heading)).toBeVisible()
+    // A successful post returns to home and shows the success message there,
+    // and the new entry is visible in recent activity without a manual
+    // refresh (Home refetches on the "recorded" navigation - App.tsx).
+    await expect(page.getByText(copy.home.balanceHeading)).toBeVisible()
     await expect(page.getByText(copy.record.successOut)).toBeVisible()
+    await expect(page.getByText(formatIDR(50_000))).toBeVisible()
   })
-  test.fixme('home: balance hero + reconciliation status (M6.9)', async () => {})
+
+  test('home: balance hero + reconciliation status (M6.9)', async ({ page }) => {
+    await page.goto('/')
+    await page.getByLabel(copy.auth.login.emailLabel).fill(seedEmail)
+    await page.getByLabel(copy.auth.login.passwordLabel).fill(seedPassword)
+    await page.getByRole('button', { name: copy.auth.login.submit }).click()
+
+    // The balance hero, from GET /api/balances's fund_total.
+    await expect(page.getByText(copy.home.balanceHeading)).toBeVisible()
+
+    // Per-location balances - the fixture's own two accounts
+    // (cmd/uruni/seed_e2e.go), whatever their current balance reads as.
+    await expect(page.getByText('Tunai')).toBeVisible()
+    await expect(page.getByText('Bank Uji Coba')).toBeVisible()
+
+    // The fixture never takes a reconciliation, so open-lines is always
+    // empty (only POST /api/reconciliations can ever open a line) and latest
+    // always answers 404 not_found. That is the banner's neutral first-run
+    // state - never the green "cocok", which only an actual count earns, and
+    // never an error.
+    await expect(page.getByText(copy.reconciliation.neverChecked)).toBeVisible()
+    await expect(page.getByText(copy.reconciliation.matched)).toBeHidden()
+  })
+
   test.fixme('reconcile (M6.10)', async () => {})
 })

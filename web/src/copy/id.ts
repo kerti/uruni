@@ -6,14 +6,6 @@ export const copy = {
     name: 'uruni',
     tagline: 'Kas bersama yang selalu cocok.',
   },
-  smoke: {
-    heading: 'Uruni sudah jalan',
-    body: 'Halaman ini cuma penanda bahwa aplikasi dan server sudah tersambung. Tampilan sebenarnya menyusul.',
-    check: 'Periksa koneksi server',
-    checking: 'Sedang memeriksa…',
-    online: 'Server tersambung.',
-    offline: 'Belum tersambung — Uruni butuh koneksi.',
-  },
   // The app shell every authenticated screen renders inside (M6.6). Only the
   // logout control needs words today; the header's heading is the fund's own
   // name, which comes from the server, not from here.
@@ -142,5 +134,33 @@ export const copy = {
     cancel: 'Batal',
     successIn: 'Pemasukan berhasil dicatat.',
     successOut: 'Pengeluaran berhasil dicatat.',
+  },
+  // The home screen (M6.9, PRD §7.7): balance hero, per-location balances,
+  // reconciliation status and recent activity - the everyday-loop landing
+  // page reached at "/" once a fund exists (App.tsx's AuthedGate).
+  home: {
+    balanceHeading: 'Saldo kas',
+    locationsHeading: 'Saldo per lokasi',
+    recentActivityHeading: 'Aktivitas terbaru',
+    recentActivityEmpty: 'Belum ada transaksi tercatat.',
+    // A purpose the balances response didn't name - it should not happen
+    // (both come from the same fund), so this is a placeholder that keeps a
+    // row readable rather than a state with meaning of its own.
+    purposeUnknown: 'Tanpa tujuan',
+    // date is already formatted (Intl.DateTimeFormat) by the caller.
+    lastChecked: (date: string) => `Terakhir dicek ${date}`,
+  },
+  // ReconciliationBanner's own copy (M6.9): "cocok" when GET
+  // /api/reconciliations/open-lines comes back empty, "selisih" otherwise.
+  // Modeled on Design-System.md:106-107's voice examples.
+  reconciliation: {
+    // The first-run state, before any count has ever been taken: neutral on
+    // purpose. Uruni has nothing to compare its ledger against yet, so it
+    // says so and invites the count instead of claiming a match.
+    neverChecked: 'Belum pernah dicek — hitung uangnya kapan saja.',
+    matched: 'Kas dan catatan sudah cocok.',
+    // amount is already formatted (formatIDR) by the caller - never a raw
+    // number crosses into copy.
+    discrepancy: (amount: string) => `Ada selisih ${amount} — mau dicek bareng?`,
   },
 } as const

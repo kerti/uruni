@@ -39,3 +39,15 @@ export function createTransaction(input: CreateTransactionInput): Promise<Transa
     }),
   })
 }
+
+/**
+ * GET /api/transactions (M6.9) - every transaction the fund has ever
+ * posted, oldest-first, unpaginated, no query params
+ * (internal/http/transactions.go's listTransactions). The home screen's
+ * recent-activity list reverses and slices this client-side rather than the
+ * server offering a limit/offset of its own - a call the orchestrator
+ * already made for this slice.
+ */
+export function listTransactions(): Promise<Transaction[]> {
+  return apiFetch<Transaction[]>('/api/transactions')
+}
