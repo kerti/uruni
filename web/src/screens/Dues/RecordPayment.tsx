@@ -11,6 +11,7 @@ import ErrorState from '@/components/states/ErrorState'
 import { copy } from '@/copy/id'
 import { listAccounts } from '@/lib/accounts'
 import { createDuesPayment, getOutstandingDues } from '@/lib/dues'
+import { formatPeriod } from '@/lib/dates'
 import { formatIDR } from '@/lib/money'
 import { listPurposes } from '@/lib/purposes'
 import { listMembers } from '@/lib/setup'
@@ -37,16 +38,6 @@ function currentISOMonth(): string {
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
 }
 
-const monthFormatter = new Intl.DateTimeFormat('id-ID', { month: 'long', year: 'numeric' })
-
-/** "2026-09" -> "September 2026". Built from the parsed parts rather than
- * `new Date('2026-09')`, which is parsed as UTC midnight and can render as
- * the previous month west of Greenwich. */
-function formatPeriod(period: string): string {
-  const [year, month] = period.split('-').map(Number)
-  if (!Number.isFinite(year) || !Number.isFinite(month)) return period
-  return monthFormatter.format(new Date(year, month - 1, 1))
-}
 
 /** What one outstanding period still needs to settle it: the tier's
  * effective rate for that month, less anything already paid toward it. For

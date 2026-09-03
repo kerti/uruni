@@ -7,6 +7,7 @@ import ErrorState from '@/components/states/ErrorState'
 import { copy } from '@/copy/id'
 import { ApiError } from '@/lib/api'
 import { getBalances } from '@/lib/balances'
+import { formatIsoDate, formatUnixSeconds } from '@/lib/dates'
 import { formatIDR } from '@/lib/money'
 import { getLatestReconciliation, listOpenReconciliationLines } from '@/lib/reconciliations'
 import { listTransactions } from '@/lib/transactions'
@@ -21,21 +22,6 @@ import type { Transaction } from '@/lib/transactions'
  * on the Go handler). */
 const RECENT_ACTIVITY_COUNT = 5
 
-const dateFormatter = new Intl.DateTimeFormat('id-ID', { dateStyle: 'medium' })
-
-/** Formats an ISO `YYYY-MM-DD` date (a transaction's occurred_on) without
- * going through the Date constructor's UTC parsing of a bare date string,
- * which can read a day early in WIB - same reasoning as
- * RecordTransaction.tsx's own todayISODate. */
-function formatIsoDate(isoDate: string): string {
-  const [year, month, day] = isoDate.split('-').map(Number)
-  return dateFormatter.format(new Date(year, month - 1, day))
-}
-
-/** Formats a unix-seconds timestamp (performed_at, created_at) for display. */
-function formatUnixSeconds(unixSeconds: number): string {
-  return dateFormatter.format(new Date(unixSeconds * 1000))
-}
 
 interface HomeData {
   balances: Balances
