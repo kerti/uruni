@@ -1,4 +1,5 @@
 import { render, screen, waitFor } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import Home from '@/screens/Home'
@@ -102,14 +103,14 @@ function stubHome({ openLines = [] as unknown[], latest = 'ok' as 'ok' | 'not_fo
 describe('Home', () => {
   it('renders the balance hero from fund_total, formatted with formatIDR', async () => {
     vi.stubGlobal('fetch', stubHome())
-    render(<Home refetchKey="1" />)
+    render(<Home refetchKey="1" onReconcile={vi.fn()} />)
 
     expect(await screen.findByText(money(1_450_000))).toBeInTheDocument()
   })
 
   it('renders every account balances.accounts returns, in the order returned', async () => {
     vi.stubGlobal('fetch', stubHome())
-    render(<Home refetchKey="1" />)
+    render(<Home refetchKey="1" onReconcile={vi.fn()} />)
 
     await screen.findByText('Tunai')
     expect(screen.getByText(money(950_000))).toBeInTheDocument()
@@ -119,10 +120,23 @@ describe('Home', () => {
 
   it('shows "last checked" from a reconciliation that has already been taken', async () => {
     vi.stubGlobal('fetch', stubHome({ latest: 'ok' }))
-    render(<Home refetchKey="1" />)
+    render(<Home refetchKey="1" onReconcile={vi.fn()} />)
 
     expect(await screen.findByText(copy.reconciliation.matched)).toBeInTheDocument()
     expect(screen.queryByText(copy.reconciliation.neverChecked)).not.toBeInTheDocument()
+  })
+
+  // The reconciliation banner is the reconcile screen's entry point
+  // (M6.10) - Home stays router-agnostic and hands the click straight to
+  // whatever App.tsx wired up as navigation, the same contract
+  // RecordTransaction.tsx's onRecorded/onCancel already use.
+  it('calls onReconcile when the reconciliation banner is activated', async () => {
+    vi.stubGlobal('fetch', stubHome())
+    const onReconcile = vi.fn()
+    render(<Home refetchKey="1" onReconcile={onReconcile} />)
+
+    await userEvent.click(await screen.findByText(copy.reconciliation.matched))
+    expect(onReconcile).toHaveBeenCalledTimes(1)
   })
 
   // GET /api/reconciliations/latest answering 404 not_found is a normal
@@ -130,7 +144,7 @@ describe('Home', () => {
   // it must render the first-run copy, never ErrorState.
   it('treats a 404 not_found from /api/reconciliations/latest as first-run, not an error', async () => {
     vi.stubGlobal('fetch', stubHome({ latest: 'not_found' }))
-    render(<Home refetchKey="1" />)
+    render(<Home refetchKey="1" onReconcile={vi.fn()} />)
 
     expect(await screen.findByText(copy.reconciliation.neverChecked)).toBeInTheDocument()
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
@@ -141,7 +155,7 @@ describe('Home', () => {
 
   it('renders the most recent transactions, newest first', async () => {
     vi.stubGlobal('fetch', stubHome())
-    render(<Home refetchKey="1" />)
+    render(<Home refetchKey="1" onReconcile={vi.fn()} />)
 
     const items = await screen.findAllByText(/Rp/)
     // The recent-activity list reverses the oldest-first API order - the
@@ -156,7 +170,7 @@ describe('Home', () => {
 
   it('labels each recent entry with its purpose and note, from the balances response', async () => {
     vi.stubGlobal('fetch', stubHome())
-    render(<Home refetchKey="1" />)
+    render(<Home refetchKey="1" onReconcile={vi.fn()} />)
 
     // purpose_id 11 is 'Kas Utama' in balances.purposes - both entries carry
     // it, so both rows are labelled without a fifth request.
@@ -169,7 +183,7 @@ describe('Home', () => {
   it('refreshes when the app comes back to the foreground, without blanking the screen', async () => {
     const fetchMock = stubHome()
     vi.stubGlobal('fetch', fetchMock)
-    render(<Home refetchKey="1" />)
+    render(<Home refetchKey="1" onReconcile={vi.fn()} />)
     await screen.findByText(money(1_450_000))
 
     const callsBefore = fetchMock.mock.calls.length
@@ -187,11 +201,11 @@ describe('Home', () => {
   it('refetches when refetchKey changes, so a fresh record shows up without a manual refresh', async () => {
     const fetchMock = stubHome()
     vi.stubGlobal('fetch', fetchMock)
-    const { rerender } = render(<Home refetchKey="1" />)
+    const { rerender } = render(<Home refetchKey="1" onReconcile={vi.fn()} />)
     await screen.findByText(money(1_450_000))
 
     const callsBefore = fetchMock.mock.calls.length
-    rerender(<Home refetchKey="2" />)
+    rerender(<Home refetchKey="2" onReconcile={vi.fn()} />)
 
     await waitFor(() => expect(fetchMock.mock.calls.length).toBeGreaterThan(callsBefore))
   })

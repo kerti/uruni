@@ -123,13 +123,13 @@ export default function Roster({
                 </Button>
               </div>
             ))}
-            <Button type="button" variant="outline" onClick={addMember} disabled={submitting}>
+            <Button type="button" variant="outline" size="lg" onClick={addMember} disabled={submitting}>
               <Plus aria-hidden="true" />
               {text.roster.addMember}
             </Button>
             {error && <ErrorState error={error} />}
             <div className="flex gap-2">
-              <Button type="button" variant="outline" onClick={onSkip} disabled={submitting}>
+              <Button type="button" variant="outline" size="lg" onClick={onSkip} disabled={submitting}>
                 {text.roster.skip}
               </Button>
               <Button type="submit" size="lg" className="flex-1" disabled={submitting}>

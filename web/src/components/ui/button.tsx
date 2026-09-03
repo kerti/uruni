@@ -25,7 +25,15 @@ const buttonVariants = cva(
           "h-8 gap-1.5 px-2.5 has-data-[icon=inline-end]:pr-2 has-data-[icon=inline-start]:pl-2",
         xs: "h-6 gap-1 rounded-[min(var(--radius-md),10px)] px-2 text-xs in-data-[slot=button-group]:rounded-lg has-data-[icon=inline-end]:pr-1.5 has-data-[icon=inline-start]:pl-1.5 [&_svg:not([class*='size-'])]:size-3",
         sm: "h-7 gap-1 rounded-[min(var(--radius-md),12px)] px-2.5 text-[0.8rem] in-data-[slot=button-group]:rounded-lg has-data-[icon=inline-end]:pr-1.5 has-data-[icon=inline-start]:pl-1.5 [&_svg:not([class*='size-'])]:size-3.5",
-        lg: "h-9 gap-1.5 px-2.5 has-data-[icon=inline-end]:pr-2 has-data-[icon=inline-start]:pl-2",
+        // `lg` is the size every full-width primary action on a screen uses
+        // (login, register, setup, record, reconcile), so it is the one this
+        // app is actually judged by on a phone. shadcn ships it at h-9 =
+        // 36px with the desktop text size, which is below Design-System.md's
+        // "minimum touch target 44x44px" and below its "buttons rounded-xl".
+        // h-11 is 44px exactly, text-base is the 16px body size the same doc
+        // sets as the minimum on mobile. The other sizes stay as shipped -
+        // they are for dense, secondary, pointer-driven controls.
+        lg: "h-11 gap-1.5 rounded-xl px-4 text-base has-data-[icon=inline-end]:pr-3 has-data-[icon=inline-start]:pl-3",
         icon: "size-8",
         "icon-xs":
           "size-6 rounded-[min(var(--radius-md),10px)] in-data-[slot=button-group]:rounded-lg [&_svg:not([class*='size-'])]:size-3",

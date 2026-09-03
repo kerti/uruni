@@ -243,7 +243,7 @@ export default function RecordTransaction({
       <Button type="submit" size="lg" disabled={!canSubmit}>
         {submitting ? text.submitting : text.submit}
       </Button>
-      <Button type="button" variant="ghost" size="lg" onClick={onCancel} disabled={submitting}>
+      <Button type="button" variant="outline" size="lg" onClick={onCancel} disabled={submitting}>
         {text.cancel}
       </Button>
     </form>

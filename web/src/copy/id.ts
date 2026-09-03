@@ -152,7 +152,12 @@ export const copy = {
   },
   // ReconciliationBanner's own copy (M6.9): "cocok" when GET
   // /api/reconciliations/open-lines comes back empty, "selisih" otherwise.
-  // Modeled on Design-System.md:106-107's voice examples.
+  // Modeled on Design-System.md:106-107's voice examples. Extended in place
+  // for M6.10's reconcile screen (PRD §7.8) - one namespace throughout, per
+  // the orchestrator's own ruling, not a second copy.reconcile block: this
+  // screen is the same reconciliation concept the banner already names,
+  // just doing something about it. matched/discrepancy above are reused
+  // verbatim on the confirmation screen, not restated here.
   reconciliation: {
     // The first-run state, before any count has ever been taken: neutral on
     // purpose. Uruni has nothing to compare its ledger against yet, so it
@@ -162,5 +167,43 @@ export const copy = {
     // amount is already formatted (formatIDR) by the caller - never a raw
     // number crosses into copy.
     discrepancy: (amount: string) => `Ada selisih ${amount} — mau dicek bareng?`,
+    heading: 'Cek kas',
+    intro: 'Hitung uang yang benar-benar ada di setiap lokasi, lalu bandingkan dengan catatan.',
+    recordedLabel: 'Menurut catatan',
+    // accountName is the location's own name (e.g. "Tunai") - same
+    // per-field labelling AmountInput's callers already do.
+    actualLabel: (accountName: string) => `Jumlah sebenarnya — ${accountName}`,
+    resolutionLabel: 'Bagaimana selisih ini diselesaikan?',
+    // Keyed by the schema's own resolution string (reconciliation.go's own
+    // four values) so both the choice buttons and the confirmation list's
+    // per-line label can read from one map. "matched" is never a button -
+    // a zero-gap line needs no choice - but still gets a label for the
+    // confirmation list.
+    resolutionOptions: {
+      matched: 'Cocok',
+      entry_added: 'Ada transaksi yang belum tercatat',
+      adjusted: 'Sesuaikan saldo (koreksi)',
+      left_open: 'Simpan dulu, selesaikan nanti',
+    },
+    // The fix fields (PRD §7.8's "add the missing transaction or post a
+    // noted adjustment"). Direction/amount reuse copy.record's own
+    // direction labels (Uang masuk/Uang keluar) - a generic in/out toggle,
+    // not specific to the record screen.
+    fixPurposeLabel: 'Peruntukan',
+    fixAmountLabel: 'Jumlah',
+    fixDateLabel: 'Tanggal',
+    fixNoteLabel: 'Catatan (opsional)',
+    submit: 'Simpan hasil cek',
+    submitting: 'Menyimpan…',
+    // Same reasoning as record.cancel: installed standalone, there is no
+    // browser back button.
+    cancel: 'Batal',
+    // Shown when POST /api/reconciliations rejects a "matched" line because
+    // its real difference is no longer zero - a transaction landed between
+    // the count and the submit (reconciliation.go:185-188). Never phrased
+    // as an error or a loss: the numbers were refreshed, nothing was
+    // discarded, she just needs to look again.
+    staleNotice: 'Ada transaksi baru sejak kamu mulai menghitung tadi. Angkanya sudah diperbarui — yuk, cek selisihnya sekali lagi.',
+    backToHome: 'Kembali ke beranda',
   },
 } as const
