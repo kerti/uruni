@@ -212,4 +212,33 @@ export const copy = {
     staleNotice: 'Ada transaksi baru sejak kamu mulai menghitung tadi. Angkanya sudah diperbarui — yuk, cek selisihnya sekali lagi.',
     backToHome: 'Kembali ke beranda',
   },
+  // The dues status roster (M6.12, PRD §7.3): "view members and, for the
+  // current period, who has paid / partially paid / paid in advance." A
+  // period-scoped read screen only - the "belum bayar" filter is a plain
+  // list, never a reminder or nudge (PRD §7.3's own explicit rule), so this
+  // namespace deliberately carries no send/notify/chase copy at all.
+  dues: {
+    entryLink: 'Lihat status iuran',
+    heading: 'Status iuran',
+    periodLabel: 'Periode',
+    // Isolates unpaid + partial rows. Partial is included on purpose: she
+    // paid something but still owes the rest, so "belum bayar" (not yet
+    // paid *in full*) is still true of that row - only "paid" and
+    // "paid_in_advance" are actually settled for the period.
+    unpaidFilterLabel: 'Tampilkan yang belum bayar saja',
+    owedLabel: 'Iuran',
+    paidLabel: 'Dibayar',
+    empty: 'Belum ada anggota dengan iuran untuk periode ini.',
+    emptyFiltered: 'Semua anggota sudah bayar untuk periode ini.',
+    // Keyed by the schema's own four status values (internal/ledger's
+    // MemberDuesStatus) so the badge and any other lookup share one map -
+    // same pattern as reconciliation.resolutionOptions above.
+    statuses: {
+      unpaid: 'Belum bayar',
+      partial: 'Bayar sebagian',
+      paid: 'Lunas',
+      paid_in_advance: 'Lunas — sudah bayar di muka',
+    },
+    back: 'Kembali ke beranda',
+  },
 } as const
