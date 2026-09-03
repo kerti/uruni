@@ -27,7 +27,7 @@ services:
       - "80:80"
       - "443:443"
     environment:
-      - URUNI_DOMAIN=${URUNI_DOMAIN}
+      - URUNI_BASE_URL=${URUNI_BASE_URL}
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy-data:/data
