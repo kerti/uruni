@@ -112,6 +112,21 @@ WHERE t.fund_id = ? AND t.kind = 'dues' AND t.dues_period = ?
   AND NOT EXISTS (SELECT 1 FROM "transaction" r WHERE r.reverses_transaction_id = t.id)
 GROUP BY member_id;
 
+-- DuesPaidByMemberGroupedByPeriod is DuesPaidByPeriod's transpose: every
+-- period one member has paid anything toward, in one pass over that
+-- member's whole history rather than one query per period
+-- (OutstandingDuesForMember's range walk). Same reversed-row exclusion
+-- (ADR-029) and the same CAST(... AS TEXT) forcing dues_period non-null
+-- LatestDuesPeriodPaidByMember already relies on - kind = 'dues' rows always
+-- carry a dues_period (schema CHECK), so this is never actually NULL, only
+-- untyped without the cast.
+-- name: DuesPaidByMemberGroupedByPeriod :many
+SELECT CAST(dues_period AS TEXT) AS dues_period, CAST(COALESCE(SUM(amount), 0) AS INTEGER) AS paid_amount
+FROM "transaction" t
+WHERE t.fund_id = ? AND t.member_id = ? AND t.kind = 'dues'
+  AND NOT EXISTS (SELECT 1 FROM "transaction" r WHERE r.reverses_transaction_id = t.id)
+GROUP BY dues_period;
+
 -- The "paid in advance" signal. dues_period is 'YYYY-MM', so a lexicographic
 -- MAX is also the chronological one. The CAST(... AS TEXT) is load-bearing,
 -- not decoration: uncast, MAX(dues_period) generates interface{} - the same

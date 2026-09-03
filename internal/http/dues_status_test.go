@@ -1,16 +1,34 @@
 package http
 
 import (
+	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"github.com/kerti/uruni/internal/store"
 )
 
 func getDuesStatus(t *testing.T, r http.Handler, period string) *httptest.ResponseRecorder {
 	t.Helper()
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/dues-status?period="+period, nil))
+	return rec
+}
+
+// getOutstandingDues issues GET /api/members/{id}/outstanding-dues. through
+// is appended as a query parameter only when non-empty, so a caller testing
+// the omitted-through default can pass "".
+func getOutstandingDues(t *testing.T, r http.Handler, memberID int64, through string) *httptest.ResponseRecorder {
+	t.Helper()
+	path := fmt.Sprintf("/api/members/%d/outstanding-dues", memberID)
+	if through != "" {
+		path += "?through=" + through
+	}
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, path, nil))
 	return rec
 }
 
@@ -171,5 +189,160 @@ func TestGetDuesStatusExcludesAMemberWithNoTier(t *testing.T) {
 	}
 	if got := rec.Body.String(); got != "[]\n" {
 		t.Errorf("GET /api/dues-status with only a no-tier member = %q, want %q", got, "[]\n")
+	}
+}
+
+// --- GET /api/members/{id}/outstanding-dues (#186) ---------------------------
+
+// TestGetOutstandingDuesReturnsUnpaidAndPartialPeriodsOldestFirst is this
+// route's own acceptance criterion, exercised through the real HTTP surface
+// rather than the ledger method directly: a member with one unpaid, one
+// partial and one paid period gets back exactly the two outstanding ones,
+// oldest first.
+func TestGetOutstandingDuesReturnsUnpaidAndPartialPeriodsOldestFirst(t *testing.T) {
+	r := testRouter(t)
+	setup := setUpFund(t, r)
+
+	tierRec := postDuesTier(t, r, "Full")
+	var tier duesTierResponse
+	if err := json.NewDecoder(tierRec.Body).Decode(&tier); err != nil {
+		t.Fatalf("decoding dues tier response: %v", err)
+	}
+	if rec := postDuesRate(t, r, tier.ID, duesRateRequest{Amount: 25_000, EffectiveFrom: "2026-01"}); rec.Code != http.StatusCreated {
+		t.Fatalf("POST .../rates = %d, want %d (body: %s)", rec.Code, http.StatusCreated, rec.Body.String())
+	}
+
+	joined := "2026-01-01"
+	memberRec := postMember(t, r, memberRequest{Name: "Jane", TierID: &tier.ID, JoinedOn: &joined})
+	var member memberResponse
+	if err := json.NewDecoder(memberRec.Body).Decode(&member); err != nil {
+		t.Fatalf("decoding member response: %v", err)
+	}
+
+	if rec := postDuesPayment(t, r, duesPaymentRequest{
+		AccountID: setup.CashAccountID(t), PurposeID: setup.MainPurposeID,
+		MemberID: member.ID, OccurredOn: "2026-03-15",
+		Periods: []duesPaymentPeriod{
+			{DuesPeriod: "2026-02", Amount: 10_000},
+			{DuesPeriod: "2026-03", Amount: 25_000},
+		},
+	}); rec.Code != http.StatusCreated {
+		t.Fatalf("POST /api/dues-payments = %d, want %d (body: %s)", rec.Code, http.StatusCreated, rec.Body.String())
+	}
+
+	rec := getOutstandingDues(t, r, member.ID, "2026-03")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GET /api/members/{id}/outstanding-dues = %d, want %d (body: %s)", rec.Code, http.StatusOK, rec.Body.String())
+	}
+	var got []outstandingDuesResponse
+	if err := json.NewDecoder(rec.Body).Decode(&got); err != nil {
+		t.Fatalf("decoding response: %v (body: %s)", err, rec.Body.String())
+	}
+	if len(got) != 2 {
+		t.Fatalf("GET /api/members/{id}/outstanding-dues returned %d rows, want 2 (body: %s)", len(got), rec.Body.String())
+	}
+	if got[0].Period != "2026-01" || got[0].Status != "unpaid" {
+		t.Errorf("row 0 = %+v, want period 2026-01, status unpaid", got[0])
+	}
+	if got[1].Period != "2026-02" || got[1].Status != "partial" || got[1].PaidAmount != 10_000 {
+		t.Errorf("row 1 = %+v, want period 2026-02, status partial, paid_amount 10000", got[1])
+	}
+}
+
+// TestGetOutstandingDuesOnAnotherFundsMemberIs404 mirrors
+// TestGetReconciliationDetailOnAnotherFundsSnapshotIs404: a real member id
+// belonging to a second fund must read as not-found through this app's
+// router, which only ever resolves to the first (and only, per v1) fund
+// setup created - it must never be found and only then rejected for
+// ownership.
+func TestGetOutstandingDuesOnAnotherFundsMemberIs404(t *testing.T) {
+	sqlDB := testStoreDB(t)
+	r := authedRouterFor(t, sqlDB)
+	setUpFund(t, r)
+
+	q := store.New(sqlDB)
+	ctx := context.Background()
+	otherFund, err := q.CreateFund(ctx, store.CreateFundParams{
+		Name: "Other Fund", Currency: "IDR", ReportSlug: "zyxwvutsrqponmlkjihgfe", CreatedAt: 1,
+	})
+	if err != nil {
+		t.Fatalf("CreateFund() = %v, want no error", err)
+	}
+	otherMember, err := q.CreateMember(ctx, store.CreateMemberParams{
+		FundID: otherFund.ID, Name: "John", CreatedAt: 1,
+	})
+	if err != nil {
+		t.Fatalf("CreateMember(other fund) = %v, want no error", err)
+	}
+
+	rec := getOutstandingDues(t, r, otherMember.ID, "2026-06")
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("GET /api/members/{other fund's id}/outstanding-dues = %d, want %d (body: %s)",
+			rec.Code, http.StatusNotFound, rec.Body.String())
+	}
+	got := decodeError(t, rec)
+	if got.Code != "not_found" {
+		t.Errorf("error code = %q, want %q", got.Code, "not_found")
+	}
+}
+
+// TestGetOutstandingDuesRejectsAMalformedThrough is this route's half of the
+// slice's malformed-input acceptance criterion: OutstandingDuesForMember's
+// own validateDuesPeriod check answers, the handler passes the raw ?through=
+// query parameter through unvalidated, same as getDuesStatus does for
+// ?period=.
+func TestGetOutstandingDuesRejectsAMalformedThrough(t *testing.T) {
+	r := testRouter(t)
+	setUpFund(t, r)
+
+	memberRec := postMember(t, r, memberRequest{Name: "Jane"})
+	var member memberResponse
+	if err := json.NewDecoder(memberRec.Body).Decode(&member); err != nil {
+		t.Fatalf("decoding member response: %v", err)
+	}
+
+	for _, through := range []string{"2026-13", "2026-1", "not-a-period"} {
+		rec := getOutstandingDues(t, r, member.ID, through)
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("GET .../outstanding-dues?through=%q = %d, want %d (body: %s)", through, rec.Code, http.StatusBadRequest, rec.Body.String())
+		}
+		got := decodeError(t, rec)
+		if got.Code != "invalid_argument" {
+			t.Errorf("through=%q: error code = %q, want %q", through, got.Code, "invalid_argument")
+		}
+	}
+}
+
+// The member id in the path is parsed by this handler rather than by
+// resolveMember, so its own bad-input path needs covering: a non-numeric id
+// is the caller's mistake, not a missing member, and reads as 400 rather
+// than 404.
+func TestGetOutstandingDuesRejectsANonNumericMemberID(t *testing.T) {
+	r := testRouter(t)
+	setUpFund(t, r)
+
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/members/not-a-number/outstanding-dues", nil))
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("GET /api/members/not-a-number/outstanding-dues = %d, want %d (body: %s)", rec.Code, http.StatusBadRequest, rec.Body.String())
+	}
+	got := decodeError(t, rec)
+	if got.Code != "invalid_argument" {
+		t.Errorf("error code = %q, want %q", got.Code, "invalid_argument")
+	}
+}
+
+// Before setup there is no fund to scope the lookup to, so the route answers
+// the same "run setup first" 404 every other fund-scoped route does - not a
+// 200 with an empty list, which would read as "this member owes nothing".
+func TestGetOutstandingDuesRequiresAFund(t *testing.T) {
+	rec := getOutstandingDues(t, testRouter(t), 1, "")
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("GET .../outstanding-dues before setup = %d, want %d (body: %s)", rec.Code, http.StatusNotFound, rec.Body.String())
+	}
+	got := decodeError(t, rec)
+	if got.Code != "not_found" {
+		t.Errorf("error code = %q, want %q", got.Code, "not_found")
 	}
 }

@@ -2,8 +2,10 @@ package ledger
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/kerti/uruni/internal/money"
 	"github.com/kerti/uruni/internal/store"
@@ -611,5 +613,390 @@ func TestDuesStatusForPeriodMidYearPromotionAppliesCurrentTierToPastPeriodsAccep
 			"not 10000 (Tier A, what was actually in force). This is ADR-024's accepted limitation, "+
 			"not a bug: fix it by editing member.tier_id's effective-dating decision in a superseding ADR, "+
 			"not by patching this code path.", got.OwedAmount)
+	}
+}
+
+// --- OutstandingDuesForMember (#186) -----------------------------------------
+
+// TestOutstandingDuesForMemberReturnsUnpaidAndPartialOldestFirstMatchingDuesStatusForPeriod
+// is the slice's core acceptance criterion: three periods in range, one
+// unpaid, one partial, one paid, come back as exactly the two outstanding
+// ones, oldest first, with amounts matching what DuesStatusForPeriod itself
+// reports for the same periods - this is the same derivation, not a second
+// opinion.
+func TestOutstandingDuesForMemberReturnsUnpaidAndPartialOldestFirstMatchingDuesStatusForPeriod(t *testing.T) {
+	l := newTestLedger(t)
+	f := newFixture(t, l)
+	q := store.New(l.db)
+	ctx := context.Background()
+
+	tierID := createDuesTier(t, q, f.fundID, "Tier A")
+	createDuesRate(t, q, tierID, 25_000, "2026-01")
+	joinedOn := "2026-01-01"
+	memberID := createDuesMember(t, q, f.fundID, duesMemberParams{name: "Jane", tierID: &tierID, joinedOn: &joinedOn})
+
+	// 2026-01 stays unpaid; 2026-02 gets a partial payment; 2026-03 gets paid
+	// in full and must not appear at all.
+	if _, err := l.PostDuesPayments(ctx, PostDuesPaymentsParams{
+		FundID: f.fundID, AccountID: f.cashID, PurposeID: f.mainID,
+		MemberID: memberID, OccurredOn: "2026-03-15",
+		Periods: []PeriodAmount{
+			{DuesPeriod: "2026-02", Amount: 10_000},
+			{DuesPeriod: "2026-03", Amount: 25_000},
+		},
+	}); err != nil {
+		t.Fatalf("PostDuesPayments() = %v, want no error", err)
+	}
+
+	rows, err := l.OutstandingDuesForMember(ctx, f.fundID, memberID, "2026-03")
+	if err != nil {
+		t.Fatalf("OutstandingDuesForMember() = %v, want no error", err)
+	}
+	if len(rows) != 2 {
+		t.Fatalf("OutstandingDuesForMember() returned %d rows, want 2 (got %+v)", len(rows), rows)
+	}
+
+	if rows[0].Period != "2026-01" || rows[1].Period != "2026-02" {
+		t.Fatalf("periods = [%s, %s], want oldest first: [2026-01, 2026-02]", rows[0].Period, rows[1].Period)
+	}
+
+	if rows[0].Status != DuesStatusUnpaid {
+		t.Errorf("2026-01 Status = %q, want %q", rows[0].Status, DuesStatusUnpaid)
+	}
+	if rows[0].OwedAmount != 25_000 || rows[0].PaidAmount != 0 {
+		t.Errorf("2026-01 owed/paid = %d/%d, want 25000/0", rows[0].OwedAmount, rows[0].PaidAmount)
+	}
+	if rows[1].Status != DuesStatusPartial {
+		t.Errorf("2026-02 Status = %q, want %q", rows[1].Status, DuesStatusPartial)
+	}
+	if rows[1].OwedAmount != 25_000 || rows[1].PaidAmount != 10_000 {
+		t.Errorf("2026-02 owed/paid = %d/%d, want 25000/10000", rows[1].OwedAmount, rows[1].PaidAmount)
+	}
+
+	// Cross-check against DuesStatusForPeriod for the same two periods - the
+	// same derivation, not a re-typed opinion of it.
+	for i, period := range []string{"2026-01", "2026-02"} {
+		want, err := l.DuesStatusForPeriod(ctx, f.fundID, period)
+		if err != nil {
+			t.Fatalf("DuesStatusForPeriod(%q) = %v, want no error", period, err)
+		}
+		wantRow, ok := statusFor(t, want, memberID)
+		if !ok {
+			t.Fatalf("DuesStatusForPeriod(%q) missing member %d", period, memberID)
+		}
+		if rows[i].OwedAmount != wantRow.OwedAmount || rows[i].PaidAmount != wantRow.PaidAmount {
+			t.Errorf("period %q: OutstandingDuesForMember owed/paid = %d/%d, DuesStatusForPeriod = %d/%d",
+				period, rows[i].OwedAmount, rows[i].PaidAmount, wantRow.OwedAmount, wantRow.PaidAmount)
+		}
+	}
+}
+
+func TestOutstandingDuesForMemberFullyPaidMemberReturnsEmpty(t *testing.T) {
+	l := newTestLedger(t)
+	f := newFixture(t, l)
+	q := store.New(l.db)
+	ctx := context.Background()
+
+	tierID := createDuesTier(t, q, f.fundID, "Tier A")
+	createDuesRate(t, q, tierID, 25_000, "2026-01")
+	joinedOn := "2026-01-01"
+	memberID := createDuesMember(t, q, f.fundID, duesMemberParams{name: "Jane", tierID: &tierID, joinedOn: &joinedOn})
+
+	if _, err := l.PostDuesPayments(ctx, PostDuesPaymentsParams{
+		FundID: f.fundID, AccountID: f.cashID, PurposeID: f.mainID,
+		MemberID: memberID, OccurredOn: "2026-02-01",
+		Periods: []PeriodAmount{
+			{DuesPeriod: "2026-01", Amount: 25_000},
+			{DuesPeriod: "2026-02", Amount: 25_000},
+		},
+	}); err != nil {
+		t.Fatalf("PostDuesPayments() = %v, want no error", err)
+	}
+
+	rows, err := l.OutstandingDuesForMember(ctx, f.fundID, memberID, "2026-02")
+	if err != nil {
+		t.Fatalf("OutstandingDuesForMember() = %v, want no error", err)
+	}
+	if len(rows) != 0 {
+		t.Errorf("OutstandingDuesForMember() = %+v, want [] for a member who is square", rows)
+	}
+}
+
+func TestOutstandingDuesForMemberTierLessMemberReturnsEmpty(t *testing.T) {
+	l := newTestLedger(t)
+	f := newFixture(t, l)
+	q := store.New(l.db)
+	ctx := context.Background()
+
+	memberID := createDuesMember(t, q, f.fundID, duesMemberParams{name: "Jane"}) // tierID left nil
+
+	rows, err := l.OutstandingDuesForMember(ctx, f.fundID, memberID, "2026-06")
+	if err != nil {
+		t.Fatalf("OutstandingDuesForMember() = %v, want no error", err)
+	}
+	if len(rows) != 0 {
+		t.Errorf("OutstandingDuesForMember() = %+v, want [] for a member with no dues obligation", rows)
+	}
+}
+
+// joined_on == nil means "always was a member", so the walk has no join
+// month to start from and falls back to the tier's earliest rate. A tier
+// that has never had a rate at all (the "madya TBD" case) therefore has no
+// start either - and nothing was ever owed against it, so the answer is
+// empty rather than an arbitrary starting month.
+func TestOutstandingDuesForMemberNilJoinedOnAndRatelessTierReturnsEmpty(t *testing.T) {
+	l := newTestLedger(t)
+	f := newFixture(t, l)
+	q := store.New(l.db)
+	ctx := context.Background()
+
+	tierID := createDuesTier(t, q, f.fundID, "Madya TBD") // deliberately no rate row
+	memberID := createDuesMember(t, q, f.fundID, duesMemberParams{
+		name: "Jane", tierID: &tierID, // joinedOn left nil
+	})
+
+	rows, err := l.OutstandingDuesForMember(ctx, f.fundID, memberID, "2026-06")
+	if err != nil {
+		t.Fatalf("OutstandingDuesForMember() = %v, want no error", err)
+	}
+	if len(rows) != 0 {
+		t.Errorf("OutstandingDuesForMember() = %+v, want [] for a tier that never had a rate", rows)
+	}
+}
+
+// A member who joins after `through` has no periods in range at all. The
+// walk must return empty rather than iterating backwards or returning a
+// period the member cannot owe yet - the arrears case in reverse.
+func TestOutstandingDuesForMemberJoinedAfterThroughReturnsEmpty(t *testing.T) {
+	l := newTestLedger(t)
+	f := newFixture(t, l)
+	q := store.New(l.db)
+	ctx := context.Background()
+
+	tierID := createDuesTier(t, q, f.fundID, "Tier A")
+	createDuesRate(t, q, tierID, 25_000, "2026-01")
+	joinedOn := "2026-08-01"
+	memberID := createDuesMember(t, q, f.fundID, duesMemberParams{
+		name: "Jane", tierID: &tierID, joinedOn: &joinedOn,
+	})
+
+	rows, err := l.OutstandingDuesForMember(ctx, f.fundID, memberID, "2026-06")
+	if err != nil {
+		t.Fatalf("OutstandingDuesForMember() = %v, want no error", err)
+	}
+	if len(rows) != 0 {
+		t.Errorf("OutstandingDuesForMember() = %+v, want [] when joined_on is after through", rows)
+	}
+}
+
+func TestOutstandingDuesForMemberJoinedOnBoundsTheStart(t *testing.T) {
+	l := newTestLedger(t)
+	f := newFixture(t, l)
+	q := store.New(l.db)
+	ctx := context.Background()
+
+	tierID := createDuesTier(t, q, f.fundID, "Tier A")
+	createDuesRate(t, q, tierID, 25_000, "2020-01") // long before joinedOn
+	joinedOn := "2026-03-20"                        // joined mid-month
+	memberID := createDuesMember(t, q, f.fundID, duesMemberParams{name: "Jane", tierID: &tierID, joinedOn: &joinedOn})
+
+	rows, err := l.OutstandingDuesForMember(ctx, f.fundID, memberID, "2026-04")
+	if err != nil {
+		t.Fatalf("OutstandingDuesForMember() = %v, want no error", err)
+	}
+
+	var periods []string
+	for _, r := range rows {
+		periods = append(periods, r.Period)
+	}
+	want := []string{"2026-03", "2026-04"}
+	if len(periods) != len(want) || periods[0] != want[0] || periods[1] != want[1] {
+		t.Fatalf("periods = %v, want %v - joined_on bounds the start, owed in full the month they joined", periods, want)
+	}
+}
+
+func TestOutstandingDuesForMemberInactiveOnBoundsTheEnd(t *testing.T) {
+	l := newTestLedger(t)
+	f := newFixture(t, l)
+	q := store.New(l.db)
+	ctx := context.Background()
+
+	tierID := createDuesTier(t, q, f.fundID, "Tier A")
+	createDuesRate(t, q, tierID, 25_000, "2026-01")
+	joinedOn := "2026-01-01"
+	inactiveOn := "2026-03-10" // went inactive mid-month
+	memberID := createDuesMember(t, q, f.fundID, duesMemberParams{
+		name: "Jane", tierID: &tierID, joinedOn: &joinedOn, inactiveOn: &inactiveOn,
+	})
+
+	// through reaches well past inactive_on's month - the answer must stop
+	// at 2026-03 regardless.
+	rows, err := l.OutstandingDuesForMember(ctx, f.fundID, memberID, "2026-06")
+	if err != nil {
+		t.Fatalf("OutstandingDuesForMember() = %v, want no error", err)
+	}
+	if len(rows) != 3 {
+		t.Fatalf("OutstandingDuesForMember() returned %d rows, want 3 (2026-01..2026-03) - got %+v", len(rows), rows)
+	}
+	if last := rows[len(rows)-1].Period; last != "2026-03" {
+		t.Errorf("last period = %q, want %q - inactive_on bounds the end even though through reaches further", last, "2026-03")
+	}
+}
+
+// A period whose tier has no effective rate is skipped, and the range keeps
+// walking past it rather than stopping there: periods before the tier's
+// first rate exist (because joined_on predates it) are silently omitted,
+// and periods once the rate exists still appear.
+func TestOutstandingDuesForMemberSkipsPeriodWithNoEffectiveRateWithoutTruncatingTheRange(t *testing.T) {
+	l := newTestLedger(t)
+	f := newFixture(t, l)
+	q := store.New(l.db)
+	ctx := context.Background()
+
+	tierID := createDuesTier(t, q, f.fundID, "Tier TBD")
+	createDuesRate(t, q, tierID, 25_000, "2026-04") // no rate at all before April
+	joinedOn := "2026-01-01"                        // joined well before the rate exists
+	memberID := createDuesMember(t, q, f.fundID, duesMemberParams{name: "Jane", tierID: &tierID, joinedOn: &joinedOn})
+
+	rows, err := l.OutstandingDuesForMember(ctx, f.fundID, memberID, "2026-05")
+	if err != nil {
+		t.Fatalf("OutstandingDuesForMember() = %v, want no error", err)
+	}
+
+	var periods []string
+	for _, r := range rows {
+		periods = append(periods, r.Period)
+	}
+	want := []string{"2026-04", "2026-05"}
+	if len(periods) != len(want) || periods[0] != want[0] || periods[1] != want[1] {
+		t.Fatalf("periods = %v, want %v - Jan..Mar have no effective rate and are skipped, "+
+			"not invented and not a reason to stop before April", periods, want)
+	}
+}
+
+func TestOutstandingDuesForMemberThroughBoundsTheEnd(t *testing.T) {
+	l := newTestLedger(t)
+	f := newFixture(t, l)
+	q := store.New(l.db)
+	ctx := context.Background()
+
+	tierID := createDuesTier(t, q, f.fundID, "Tier A")
+	createDuesRate(t, q, tierID, 25_000, "2026-01")
+	joinedOn := "2026-01-01"
+	memberID := createDuesMember(t, q, f.fundID, duesMemberParams{name: "Jane", tierID: &tierID, joinedOn: &joinedOn})
+
+	rows, err := l.OutstandingDuesForMember(ctx, f.fundID, memberID, "2026-02")
+	if err != nil {
+		t.Fatalf("OutstandingDuesForMember() = %v, want no error", err)
+	}
+	if len(rows) != 2 {
+		t.Fatalf("OutstandingDuesForMember(through=2026-02) returned %d rows, want 2 (got %+v)", len(rows), rows)
+	}
+	if last := rows[len(rows)-1].Period; last != "2026-02" {
+		t.Errorf("last period = %q, want %q - through bounds the end", last, "2026-02")
+	}
+}
+
+// An omitted through defaults to the server's current month - proved here by
+// comparing the omitted call against an explicit through set to
+// time.Now()'s own period, rather than asserting a hard-coded period the
+// test's own run date would eventually make wrong.
+func TestOutstandingDuesForMemberOmittedThroughDefaultsToCurrentMonth(t *testing.T) {
+	l := newTestLedger(t)
+	f := newFixture(t, l)
+	q := store.New(l.db)
+	ctx := context.Background()
+
+	tierID := createDuesTier(t, q, f.fundID, "Tier A")
+	createDuesRate(t, q, tierID, 25_000, "2020-01")
+	memberID := createDuesMember(t, q, f.fundID, duesMemberParams{name: "Jane", tierID: &tierID}) // joined_on nil: always was a member
+
+	omitted, err := l.OutstandingDuesForMember(ctx, f.fundID, memberID, "")
+	if err != nil {
+		t.Fatalf("OutstandingDuesForMember(through=\"\") = %v, want no error", err)
+	}
+
+	explicit, err := l.OutstandingDuesForMember(ctx, f.fundID, memberID, time.Now().Format(duesPeriodLayout))
+	if err != nil {
+		t.Fatalf("OutstandingDuesForMember(through=now) = %v, want no error", err)
+	}
+
+	if len(omitted) != len(explicit) {
+		t.Fatalf("omitted through returned %d rows, explicit current-month through returned %d - want equal",
+			len(omitted), len(explicit))
+	}
+	if len(omitted) == 0 {
+		t.Fatal("expected at least one outstanding period (member has never paid since 2020) to compare")
+	}
+	if last := omitted[len(omitted)-1].Period; last != explicit[len(explicit)-1].Period {
+		t.Errorf("omitted through's last period = %q, explicit current-month through's last period = %q, want equal",
+			last, explicit[len(explicit)-1].Period)
+	}
+}
+
+func TestOutstandingDuesForMemberRejectsMalformedThrough(t *testing.T) {
+	for _, through := range []string{"2026-13", "2026-1", "not-a-period"} {
+		t.Run(through, func(t *testing.T) {
+			l := newTestLedger(t)
+			f := newFixture(t, l)
+			q := store.New(l.db)
+			ctx := context.Background()
+
+			tierID := createDuesTier(t, q, f.fundID, "Tier A")
+			memberID := createDuesMember(t, q, f.fundID, duesMemberParams{name: "Jane", tierID: &tierID})
+
+			_, err := l.OutstandingDuesForMember(ctx, f.fundID, memberID, through)
+			if !errors.Is(err, ErrInvalidArgument) {
+				t.Errorf("OutstandingDuesForMember(through=%q) = %v, want an error wrapping ErrInvalidArgument", through, err)
+			}
+		})
+	}
+}
+
+// An unknown member id - including one belonging to another fund, since
+// GetMemberForFund's WHERE clause makes the two indistinguishable - answers
+// sql.ErrNoRows, which the HTTP layer's mapLedgerError already turns into
+// 404 (dues_status_test in package http covers that mapping; this proves
+// the ledger method itself does not swallow or misreport it).
+func TestOutstandingDuesForMemberUnknownMemberIsNotFound(t *testing.T) {
+	l := newTestLedger(t)
+	f := newFixture(t, l)
+	ctx := context.Background()
+
+	_, err := l.OutstandingDuesForMember(ctx, f.fundID, 999_999, "2026-06")
+	if !errors.Is(err, sql.ErrNoRows) {
+		t.Errorf("OutstandingDuesForMember(unknown member) = %v, want an error wrapping sql.ErrNoRows", err)
+	}
+}
+
+// The mid-year-promotion limitation (ADR-024) carries over unchanged: it is
+// GetEffectiveDuesRate's own call site, reused as-is, that produces it, not
+// something OutstandingDuesForMember could opt out of even if it tried.
+func TestOutstandingDuesForMemberMidYearPromotionAppliesCurrentTierToPastPeriodsAcceptedLimitation(t *testing.T) {
+	l := newTestLedger(t)
+	f := newFixture(t, l)
+	q := store.New(l.db)
+	ctx := context.Background()
+
+	tierA := createDuesTier(t, q, f.fundID, "Tier A")
+	createDuesRate(t, q, tierA, 10_000, "2026-01")
+
+	tierB := createDuesTier(t, q, f.fundID, "Tier B")
+	createDuesRate(t, q, tierB, 50_000, "2026-01")
+
+	joinedOn := "2026-01-01"
+	memberID := createDuesMember(t, q, f.fundID, duesMemberParams{name: "Jane", tierID: &tierB, joinedOn: &joinedOn})
+
+	rows, err := l.OutstandingDuesForMember(ctx, f.fundID, memberID, "2026-01")
+	if err != nil {
+		t.Fatalf("OutstandingDuesForMember() = %v, want no error", err)
+	}
+	if len(rows) != 1 {
+		t.Fatalf("OutstandingDuesForMember() returned %d rows, want 1", len(rows))
+	}
+	if rows[0].OwedAmount != 50_000 {
+		t.Errorf("OwedAmount = %d, want 50000 - the CURRENT (Tier B) rate wrongly applied to January, "+
+			"the same accepted limitation DuesStatusForPeriod carries (ADR-024), not a bug to fix here.",
+			rows[0].OwedAmount)
 	}
 }

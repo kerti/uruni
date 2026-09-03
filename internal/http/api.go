@@ -178,6 +178,11 @@ func (a *api) routes(r chi.Router) {
 		r.Post("/dues-payments", a.createDuesPayment)
 		r.Post("/dues-payments/{id}/reversal", a.reverseDuesPayment)
 		r.Get("/dues-status", a.getDuesStatus)
+		// Which periods one member still owes (#186), split out of #146 so
+		// the record-a-dues-payment screen has a server-side answer instead
+		// of guessing a window and firing one request per month against the
+		// fund-wide route above.
+		r.Get("/members/{id}/outstanding-dues", a.getOutstandingDues)
 
 		// A one-off collection for an occasion, tracked separately from the
 		// general fund and closed when it's over (PRD §7.5). Addressed by
