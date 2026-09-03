@@ -118,10 +118,18 @@ jobs:
       - run: npm run lint
       - run: npm run typecheck
       - run: npm run test -- --coverage
+      # Vitest writes lcov paths relative to its own project root (web/), so the
+      # report says `SF:src/App.tsx` — a path that does not exist at the repo
+      # root, leaving Codecov nothing to match and the whole upload resolving to
+      # zero files. That is why the `frontend` flag has never appeared at all,
+      # rather than appearing at 0%: the runner-side upload succeeds every time.
+      # network_prefix puts web/ back on the front of those paths. The backend
+      # job needs no equivalent — Go's coverage.out carries full module paths.
       - name: Upload coverage
         uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
         with:
           working-directory: web
+          network_prefix: web/
           flags: frontend
           token: ${{ secrets.CODECOV_TOKEN }}
       - run: npm run build
