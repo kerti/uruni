@@ -3,6 +3,7 @@ package http
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -170,5 +171,76 @@ func TestPostPassThroughPurposesRejectsABlankName(t *testing.T) {
 	}
 	if got := decodeError(t, rec); got.Code != "check_violation" {
 		t.Errorf("error code = %q, want %q", got.Code, "check_violation")
+	}
+}
+
+func patchPurpose(t *testing.T, r http.Handler, id int64, body string) *httptest.ResponseRecorder {
+	t.Helper()
+	rec := httptest.NewRecorder()
+	path := fmt.Sprintf("/api/purposes/%d", id)
+	r.ServeHTTP(rec, httptest.NewRequest(http.MethodPatch, path, bytes.NewReader([]byte(body))))
+	return rec
+}
+
+// A purpose's name is a label: a posted transaction references it by id and
+// nothing in the ledger reads the text, so a mistyped one is correctable
+// exactly like a location's name.
+func TestPatchPurposeRenamesAPassThrough(t *testing.T) {
+	r := testRouter(t)
+	setUpFund(t, r)
+
+	createRec := postPassThroughPurpose(t, r, "Kas Bidan")
+	var created purposeResponse
+	if err := json.NewDecoder(createRec.Body).Decode(&created); err != nil {
+		t.Fatalf("decoding create response: %v", err)
+	}
+
+	rec := patchPurpose(t, r, created.ID, `{"name":"Kas Bidang"}`)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("PATCH /api/purposes/{id} = %d, want %d (body: %s)", rec.Code, http.StatusOK, rec.Body.String())
+	}
+	var updated purposeResponse
+	if err := json.NewDecoder(rec.Body).Decode(&updated); err != nil {
+		t.Fatalf("decoding response: %v", err)
+	}
+	if updated.Name != "Kas Bidang" {
+		t.Errorf("Name = %q, want %q", updated.Name, "Kas Bidang")
+	}
+	// The kind is not on the wire and cannot move: a caller that could name
+	// it could ask for a second 'main'.
+	if updated.Kind != "pass_through" {
+		t.Errorf("Kind = %q, want %q", updated.Kind, "pass_through")
+	}
+}
+
+// 'main' is the fund's own system row (purpose_single_main), not a label the
+// treasurer typed. 409, not 404 - the row is there and she may be looking
+// right at it.
+func TestPatchPurposeRefusesTheMainPurpose(t *testing.T) {
+	r := testRouter(t)
+	setup := setUpFund(t, r)
+
+	rec := patchPurpose(t, r, setup.MainPurposeID, `{"name":"Kas Bidang"}`)
+	if rec.Code != http.StatusConflict {
+		t.Fatalf("PATCH /api/purposes/{main} = %d, want %d (body: %s)", rec.Code, http.StatusConflict, rec.Body.String())
+	}
+	if got := decodeError(t, rec); got.Code != "purpose_not_renameable" {
+		t.Errorf("error code = %q, want %q", got.Code, "purpose_not_renameable")
+	}
+}
+
+func TestPatchPurposeWithoutANameIsRejected(t *testing.T) {
+	r := testRouter(t)
+	setUpFund(t, r)
+
+	createRec := postPassThroughPurpose(t, r, "Kas Bidang")
+	var created purposeResponse
+	if err := json.NewDecoder(createRec.Body).Decode(&created); err != nil {
+		t.Fatalf("decoding create response: %v", err)
+	}
+
+	rec := patchPurpose(t, r, created.ID, `{}`)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("PATCH /api/purposes/{id} {} = %d, want %d", rec.Code, http.StatusBadRequest)
 	}
 }

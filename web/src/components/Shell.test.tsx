@@ -1,9 +1,16 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { MemoryRouter } from 'react-router-dom'
 
 import Shell from '@/components/Shell'
 import { copy } from '@/copy/id'
+
+/** Shell's footer nav uses NavLink, so every render needs a router. The
+ * initial entry is what decides which tab reads as current. */
+function renderShell(ui: React.ReactElement, initialPath = '/') {
+  return render(<MemoryRouter initialEntries={[initialPath]}>{ui}</MemoryRouter>)
+}
 
 afterEach(() => {
   vi.unstubAllGlobals()
@@ -15,7 +22,7 @@ function okResponse() {
 
 describe('Shell', () => {
   it('renders the fund name as the heading and the children inside the main landmark', () => {
-    render(
+    renderShell(
       <Shell title="Kas RT 04" onLoggedOut={() => {}}>
         <p>isi layar</p>
       </Shell>,
@@ -25,20 +32,36 @@ describe('Shell', () => {
     expect(screen.getByRole('main')).toHaveTextContent('isi layar')
   })
 
-  it('renders no bottom action slot when none is given, and renders one when it is', () => {
-    const { rerender } = render(
+  // The footer nav (M6.15) replaced the add-FAB: "Catat" is a tab now, and
+  // no screen has two entry points.
+  it('renders the four destinations in the footer nav', () => {
+    renderShell(
       <Shell title="Kas RT 04" onLoggedOut={() => {}}>
         <p>isi</p>
       </Shell>,
     )
-    expect(screen.queryByRole('button', { name: 'Catat' })).not.toBeInTheDocument()
 
-    rerender(
-      <Shell title="Kas RT 04" onLoggedOut={() => {}} action={<button type="button">Catat</button>}>
+    const nav = within(screen.getByRole('navigation', { name: copy.shell.nav.label }))
+    expect(nav.getByRole('link', { name: copy.shell.nav.home })).toHaveAttribute('href', '/')
+    expect(nav.getByRole('link', { name: copy.shell.nav.record })).toHaveAttribute('href', '/record')
+    expect(nav.getByRole('link', { name: copy.shell.nav.dues })).toHaveAttribute('href', '/dues')
+    expect(nav.getByRole('link', { name: copy.shell.nav.settings })).toHaveAttribute('href', '/settings')
+  })
+
+  // aria-current comes from the URL, not from anything Shell remembers, so
+  // a deep link and a back button both land on the right tab.
+  it('marks the tab matching the current route, and only that one', () => {
+    renderShell(
+      <Shell title="Kas RT 04" onLoggedOut={() => {}}>
         <p>isi</p>
       </Shell>,
+      '/dues/payment',
     )
-    expect(screen.getByRole('button', { name: 'Catat' })).toBeInTheDocument()
+
+    const nav = within(screen.getByRole('navigation', { name: copy.shell.nav.label }))
+    expect(nav.getByRole('link', { name: copy.shell.nav.dues })).toHaveAttribute('aria-current', 'page')
+    // `end` on "/" alone: home must not read as current on every route.
+    expect(nav.getByRole('link', { name: copy.shell.nav.home })).not.toHaveAttribute('aria-current')
   })
 
   it('posts to /api/logout and calls onLoggedOut once it succeeds', async () => {
@@ -46,7 +69,7 @@ describe('Shell', () => {
     vi.stubGlobal('fetch', fetchMock)
     const onLoggedOut = vi.fn()
 
-    render(
+    renderShell(
       <Shell title="Kas RT 04" onLoggedOut={onLoggedOut}>
         <p>isi</p>
       </Shell>,
@@ -65,7 +88,7 @@ describe('Shell', () => {
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('failed to fetch')))
     const onLoggedOut = vi.fn()
 
-    render(
+    renderShell(
       <Shell title="Kas RT 04" onLoggedOut={onLoggedOut}>
         <p>isi</p>
       </Shell>,

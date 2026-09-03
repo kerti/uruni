@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import RecordTransaction from '@/screens/RecordTransaction'
+import { selectOptionNames, selectedOptionName } from '@/test/select'
 import { copy } from '@/copy/id'
 
 const text = copy.record
@@ -64,23 +65,24 @@ function stubFormLoad() {
 }
 
 describe('RecordTransaction', () => {
+  // The themed Select shows the chosen item's name, not its id (M6.15), so
+  // these assert on what she actually sees in the closed field.
   it('defaults the purpose to the kind:"main" row, not whichever purpose sorts first', async () => {
     vi.stubGlobal('fetch', stubFormLoad())
     render(<RecordTransaction onRecorded={vi.fn()} onCancel={vi.fn()} />)
 
-    const purposeSelect = (await screen.findByLabelText(text.purposeLabel)) as HTMLSelectElement
-    await waitFor(() => expect(purposeSelect.value).toBe('11'))
+    // id 11 "Kas utama", not id 10 "Kas Bidang", which sorts first.
+    await waitFor(() => expect(selectedOptionName(text.purposeLabel)).toBe('Kas utama'))
   })
 
   it('excludes a retired account from the location picker and its default', async () => {
     vi.stubGlobal('fetch', stubFormLoad())
     render(<RecordTransaction onRecorded={vi.fn()} onCancel={vi.fn()} />)
 
-    const accountSelect = (await screen.findByLabelText(text.locationLabel)) as HTMLSelectElement
-    expect(screen.queryByRole('option', { name: 'Bank lama' })).not.toBeInTheDocument()
     // First active account (id 1, "Tunai") is the default when nothing was
     // remembered yet.
-    await waitFor(() => expect(accountSelect.value).toBe('1'))
+    await waitFor(() => expect(selectedOptionName(text.locationLabel)).toBe('Tunai'))
+    expect(await selectOptionNames(text.locationLabel)).toEqual(['Tunai', 'Bank Uji Coba'])
   })
 
   it('defaults the location to the last one remembered in localStorage, when it is still active', async () => {
@@ -88,8 +90,7 @@ describe('RecordTransaction', () => {
     vi.stubGlobal('fetch', stubFormLoad())
     render(<RecordTransaction onRecorded={vi.fn()} onCancel={vi.fn()} />)
 
-    const accountSelect = (await screen.findByLabelText(text.locationLabel)) as HTMLSelectElement
-    await waitFor(() => expect(accountSelect.value).toBe('3'))
+    await waitFor(() => expect(selectedOptionName(text.locationLabel)).toBe('Bank Uji Coba'))
   })
 
   it('falls back to the first active account when the remembered one was retired since', async () => {
@@ -97,8 +98,7 @@ describe('RecordTransaction', () => {
     vi.stubGlobal('fetch', stubFormLoad())
     render(<RecordTransaction onRecorded={vi.fn()} onCancel={vi.fn()} />)
 
-    const accountSelect = (await screen.findByLabelText(text.locationLabel)) as HTMLSelectElement
-    await waitFor(() => expect(accountSelect.value).toBe('1'))
+    await waitFor(() => expect(selectedOptionName(text.locationLabel)).toBe('Tunai'))
   })
 
   it('defaults the date to today', async () => {

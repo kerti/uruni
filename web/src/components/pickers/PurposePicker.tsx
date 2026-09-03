@@ -1,6 +1,7 @@
 import { useId } from 'react'
 
 import { Label } from '@/components/ui/label'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import type { Purpose } from '@/lib/purposes'
 
 /**
@@ -34,19 +35,31 @@ export default function PurposePicker({
   return (
     <div className="flex flex-col gap-1.5">
       <Label htmlFor={selectId}>{label}</Label>
-      <select
-        id={selectId}
-        className="h-11 w-full rounded-lg border border-input bg-transparent px-3 text-base outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50 md:text-sm"
-        value={value ?? ''}
-        onChange={(event) => onChange(Number(event.target.value))}
+      {/* Radix's Select, not the native one it replaced (M6.15): the
+          browser's own list was the one control in the app that never
+          looked like the app. Values cross the boundary as strings, so the
+          id is stringified going in and parsed coming back out - and the
+          empty string is filtered out on the way back, because Radix emits
+          one for "nothing selected" on mount and Number('') is 0, a
+          perfectly valid-looking id that is not any row. */}
+      <Select
+        value={value === null ? '' : String(value)}
+        onValueChange={(next) => {
+          if (next !== '') onChange(Number(next))
+        }}
         disabled={disabled || purposes.length === 0}
       >
-        {purposes.map((purpose) => (
-          <option key={purpose.id} value={purpose.id}>
-            {purpose.name}
-          </option>
-        ))}
-      </select>
+        <SelectTrigger id={selectId} aria-label={label}>
+          <SelectValue>{purposes.find((purpose) => purpose.id === value)?.name}</SelectValue>
+        </SelectTrigger>
+        <SelectContent>
+          {purposes.map((purpose) => (
+            <SelectItem key={purpose.id} value={String(purpose.id)}>
+              {purpose.name}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
     </div>
   )
 }

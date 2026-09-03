@@ -107,6 +107,48 @@ func (a *api) getFund(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, toFundResponse(fund))
 }
 
+// updateFundRequest is PATCH /api/fund's body: the fund's display name and
+// nothing else. No currency (an invariant through 0.x) and no report_slug -
+// that is the public report's unguessable address, and rotating it is its
+// own decision, not a side effect of fixing a typo.
+//
+// Name is a pointer so a body with no name - {}, or a misspelt key - is a
+// 400 rather than a silent rename to the empty string, the same reasoning
+// updateDuesRateRequest.Amount rests on. The schema's CHECK still refuses a
+// blank one (ADR-027).
+type updateFundRequest struct {
+	Name *string `json:"name"`
+}
+
+// updateFund is PATCH /api/fund: renames the kas. The name is a display
+// label - it heads every screen and the public report - and nothing posted
+// references it, so this rewrites no history, exactly like renaming a
+// location (accounts.go's updateAccount). The setup wizard's own copy
+// already promises it: "bisa diganti nanti kalau perlu."
+func (a *api) updateFund(w http.ResponseWriter, r *http.Request) {
+	fund, ok := a.resolveFund(w, r)
+	if !ok {
+		return
+	}
+
+	var req updateFundRequest
+	if !decodeJSON(w, r, &req) {
+		return
+	}
+	if req.Name == nil {
+		writeAPIError(w, http.StatusBadRequest, "invalid_argument", "A name is required.")
+		return
+	}
+
+	updated, err := a.queries.UpdateFund(r.Context(), store.UpdateFundParams{ID: fund.ID, Name: *req.Name})
+	if err != nil {
+		mapSQLiteError(w, a.logger, err)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, toFundResponse(updated))
+}
+
 // resolveFund returns the single fund every fund-scoped route in this
 // package operates against, or answers the request itself (404, "run
 // setup") and reports false. v1 is exactly one fund and no route takes a

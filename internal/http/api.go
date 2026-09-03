@@ -110,6 +110,7 @@ func (a *api) routes(r chi.Router) {
 		// registered first. Gating it here is what closes that window.
 		r.Post("/setup", a.setupFund)
 		r.Get("/fund", a.getFund)
+		r.Patch("/fund", a.updateFund)
 
 		// The fund's structure. Accounts are whatever the treasurer named at
 		// setup (#78) plus anything added or corrected afterward - direct-CRUD
@@ -126,6 +127,7 @@ func (a *api) routes(r chi.Router) {
 		r.Post("/accounts/{id}/opening-balance", a.postAccountOpeningBalance)
 		r.Get("/purposes", a.listPurposes)
 		r.Post("/pass-through-purposes", a.createPassThroughPurpose)
+		r.Patch("/purposes/{id}", a.updatePassThroughPurpose)
 
 		// The roster, one block per entity. Direct-CRUD (ADR-027) - no derived
 		// invariant, so these call a.queries rather than a.ledger, same split as

@@ -2,7 +2,10 @@ package http
 
 import (
 	"net/http"
+	"strconv"
 	"time"
+
+	"github.com/go-chi/chi/v5"
 
 	"github.com/kerti/uruni/internal/store"
 )
@@ -81,4 +84,81 @@ func (a *api) createPassThroughPurpose(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusCreated, toPurposeResponse(purpose))
+}
+
+// resolvePassThroughPurpose looks {id} up within the fund and insists it is
+// a pass-through row, or answers the request itself and reports false.
+//
+// The kind check is policy, not shape, so it lives here rather than in the
+// query (purpose.sql's own note): 'main' is the fund's own system row - the
+// one purpose_single_main guarantees - and an incidental carries its own
+// lifecycle (PRD §7.5), where the occasion is what the envelope IS rather
+// than a label on it. Only a pass-through is a plain name the treasurer
+// typed and may have mistyped.
+//
+// The refusal is 409, not 404: the row is there and she may be looking
+// right at it. Saying "not found" about something visible on screen is the
+// wrong answer twice over.
+func (a *api) resolvePassThroughPurpose(w http.ResponseWriter, r *http.Request) (store.Purpose, bool) {
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		writeAPIError(w, http.StatusBadRequest, "invalid_argument", "The purpose id is not a valid number.")
+		return store.Purpose{}, false
+	}
+
+	fund, ok := a.resolveFund(w, r)
+	if !ok {
+		return store.Purpose{}, false
+	}
+
+	purpose, err := a.queries.GetPurposeForFund(r.Context(), store.GetPurposeForFundParams{ID: id, FundID: fund.ID})
+	if err != nil {
+		mapSQLiteError(w, a.logger, err) // sql.ErrNoRows -> 404 not_found
+		return store.Purpose{}, false
+	}
+	if purpose.Kind != purposeKindPassThrough {
+		writeAPIError(w, http.StatusConflict, "purpose_not_renameable",
+			"Only a pass-through purpose can be renamed.")
+		return store.Purpose{}, false
+	}
+	return purpose, true
+}
+
+// updatePassThroughPurposeRequest is PATCH /api/purposes/{id}'s body: the
+// corrected name, and nothing else. No kind - that is pinned server-side on
+// creation for the reason passThroughPurposeRequest describes, and a route
+// that could change it afterward would reopen exactly that hole.
+//
+// Name is a pointer so a body with no name is a 400 rather than a silent
+// rename to the empty string, the same reasoning updateFundRequest rests on.
+type updatePassThroughPurposeRequest struct {
+	Name *string `json:"name"`
+}
+
+// updatePassThroughPurpose is PATCH /api/purposes/{id}: fixes the name of a
+// pass-through purpose. A posted transaction references a purpose by id and
+// nothing in the ledger reads the text, so this rewrites no history - the
+// same correction updateAccount makes for a location's name.
+func (a *api) updatePassThroughPurpose(w http.ResponseWriter, r *http.Request) {
+	purpose, ok := a.resolvePassThroughPurpose(w, r)
+	if !ok {
+		return
+	}
+
+	var req updatePassThroughPurposeRequest
+	if !decodeJSON(w, r, &req) {
+		return
+	}
+	if req.Name == nil {
+		writeAPIError(w, http.StatusBadRequest, "invalid_argument", "A name is required.")
+		return
+	}
+
+	updated, err := a.queries.UpdatePurposeName(r.Context(), store.UpdatePurposeNameParams{ID: purpose.ID, Name: *req.Name})
+	if err != nil {
+		mapSQLiteError(w, a.logger, err)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, toPurposeResponse(updated))
 }

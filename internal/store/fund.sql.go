@@ -93,3 +93,33 @@ func (q *Queries) ListFunds(ctx context.Context) ([]Fund, error) {
 	}
 	return items, nil
 }
+
+const updateFund = `-- name: UpdateFund :one
+UPDATE fund
+SET name = ?
+WHERE id = ?
+RETURNING id, name, currency, report_slug, created_at
+`
+
+type UpdateFundParams struct {
+	Name string
+	ID   int64
+}
+
+// UpdateFund renames the fund. name is a display label - it heads every
+// screen and the public report - and nothing posted references it, so this
+// changes no history (the same reasoning UpdateAccount's own rename rests
+// on). currency and report_slug are deliberately not settable here: one is
+// an invariant through 0.x, the other is the report's unguessable address.
+func (q *Queries) UpdateFund(ctx context.Context, arg UpdateFundParams) (Fund, error) {
+	row := q.db.QueryRowContext(ctx, updateFund, arg.Name, arg.ID)
+	var i Fund
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.Currency,
+		&i.ReportSlug,
+		&i.CreatedAt,
+	)
+	return i, err
+}

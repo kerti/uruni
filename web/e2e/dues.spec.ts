@@ -38,7 +38,7 @@ test.describe('dues status', () => {
     await page.getByRole('button', { name: copy.auth.login.submit }).click()
     await expect(page.getByText(copy.home.balanceHeading)).toBeVisible()
 
-    await page.getByRole('button', { name: copy.dues.entryLink }).click()
+    await page.getByRole('link', { name: copy.shell.nav.dues }).click()
     await expect(page.getByRole('heading', { name: copy.dues.heading })).toBeVisible()
 
     // Both seeded members owe this period's rate and neither has ever paid.
@@ -63,11 +63,16 @@ test.describe('dues status', () => {
     await page.getByRole('button', { name: copy.auth.login.submit }).click()
     await expect(page.getByText(copy.home.balanceHeading)).toBeVisible()
 
-    await page.getByRole('button', { name: copy.dues.entryLink }).click()
+    await page.getByRole('link', { name: copy.shell.nav.dues }).click()
     await page.getByRole('button', { name: copy.dues.recordLink }).click()
     await expect(page.getByRole('heading', { name: copy.dues.payment.heading })).toBeVisible()
 
-    await page.getByLabel(copy.dues.payment.memberLabel).selectOption({ label: 'Warga Satu' })
+    // The themed Select (M6.15) is a button plus a portalled listbox, not a
+    // native <select>, so picking is open-then-click.
+    await page.getByRole('combobox', { name: copy.dues.payment.memberLabel }).click()
+    // Scoped to the open listbox - Radix's hidden native select carries the
+    // same option text.
+    await page.getByRole('listbox').getByRole('option', { name: 'Warga Satu' }).click()
 
     const periods = page.getByRole('checkbox')
     await expect(periods.first()).toBeVisible()
@@ -127,7 +132,7 @@ test.describe('dues status', () => {
     await page.getByRole('button', { name: copy.auth.login.submit }).click()
     await expect(page.getByText(copy.home.balanceHeading)).toBeVisible()
 
-    await page.getByRole('button', { name: copy.dues.entryLink }).click()
+    await page.getByRole('link', { name: copy.shell.nav.dues }).click()
     await page.getByLabel(copy.dues.periodLabel).fill('2024-01')
 
     // Warga Satu paid part of this month, so the roster shows the partial

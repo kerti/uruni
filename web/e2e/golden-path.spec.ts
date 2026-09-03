@@ -90,7 +90,7 @@ test.describe('golden path', () => {
     await page.getByRole('button', { name: copy.auth.login.submit }).click()
     await expect(page.getByText(copy.home.balanceHeading)).toBeVisible()
 
-    await page.getByRole('link', { name: copy.record.addAction }).click()
+    await page.getByRole('link', { name: copy.shell.nav.record }).click()
     await expect(page.getByRole('heading', { name: copy.record.heading })).toBeVisible()
 
     // The fixture's cash account ("Tunai") is the first active account, so
