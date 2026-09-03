@@ -62,7 +62,7 @@ One community server holds one or more **Funds** (for the validated user, a sing
 Key entities:
 
 - **Fund** — the shared kas. Has a name and currency (IDR).
-- **Account/Location** — where money physically sits: `Cash` (wallet) and `Bank`. The recorded balance is tracked *per location* because that split is the source of her discrepancies. (v1 assumes the bank is possibly a personal account; Uruni tracks only the kas portion the treasurer reports.)
+- **Account/Location** — where money physically sits: a list the treasurer names, each entry either cash or bank. A fund may hold several of either kind, or only one; the display name is whatever she types, and the seeded default is "Tunai". Locations are added and renamed later, and one that has been used is retired rather than deleted. The recorded balance is tracked *per location* because that split is the source of her discrepancies. (v1 assumes the bank is possibly a personal account; Uruni tracks only the kas portion the treasurer reports.)
 - **Purpose tag** — every transaction is tagged: `Kas Utama` (routine), a named **Incidental** (e.g. "Duka Pak Budi"), or `Pass-through` (e.g. Kas Bidang). One pooled real balance, separated *in meaning*, not in separate pots.
 - **Member** — name + role/tier. No email/phone required (minimize data held).
 - **Dues rate** — amount per tier (e.g. pelaksana 50k, fungsional pertama 70k, muda 80k, madya TBD); editable; effective over time.
@@ -74,7 +74,7 @@ Key entities:
 
 ### 7.1 Setup & access
 - The treasurer signs in to *their community's* server (single treasurer role in v1; optional read-only viewer later). No central Uruni accounts.
-- First-run setup: name the fund, add members with tiers, set dues rates, set opening balances for Cash and Bank.
+- First-run setup: name the fund, add members with tiers, set dues rates, set an opening balance per location.
 
 ### 7.2 Record a transaction (the everyday action)
 - A prominent "add" action reachable in one tap from the home screen.
@@ -104,11 +104,11 @@ Key entities:
 - **The balance does not exclude it.** While the money sits in the wallet it really is in the wallet, so it counts — §6's "one pooled real balance, separated in meaning, not in separate pots" applies here too. Uruni does not track a levy as owed-but-unpaid and has no second "available" figure; a levy is an ordinary expense on the day it is paid. (Revised 2026-08-12: the original wording promised the balance would never be inflated by pass-through money, which required a second balance the treasurer would have to reconcile in her head — and would have been inconsistent anyway, since incidental collections are earmarked just as firmly and were never excluded. See [ADR-024](./ADR/024-schema-conventions.md).)
 
 ### 7.7 Balance & home screen
-- Home shows: current total balance, balance per location (Cash / Bank), and a **reconciliation status**: "cocok" or "selisih Rp X — cek?".
+- Home shows: current total balance, a balance for each location, and a **reconciliation status**: "cocok" or "selisih Rp X — cek?".
 - Optional breakdown by purpose tag.
 
 ### 7.8 Reconciliation (the heart of the product)
-- A "reconcile" flow the treasurer can run anytime: she enters the *actual* cash on hand and the *actual* kas balance in the bank; Uruni compares each to the recorded figure.
+- A "reconcile" flow the treasurer can run anytime: she enters the *actual* amount held in each active location — the cash she counted, the kas balance the bank shows her — and Uruni compares each to the recorded figure. A retired location is not asked about.
 - If they match: a small, satisfying confirmation.
 - If they differ: show the gap per location, list recent transactions to help her spot a missing/duplicated entry, and let her either add the missing transaction or post a noted **adjustment** to square it. Every reconciliation is saved as a snapshot.
 - (Future consideration, not v1: encouraging a dedicated non-personal kas account to remove the mixing at the source.)

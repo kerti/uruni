@@ -64,7 +64,7 @@ Satu server komunitas menampung satu atau lebih **Dana (Fund)** (untuk pengguna 
 Entitas utama:
 
 - **Dana (Fund)** — kas bersama. Memiliki nama dan mata uang (IDR).
-- **Akun/Lokasi** — tempat uang secara fisik berada: `Tunai` (dompet) dan `Bank`. Saldo tercatat dilacak *per lokasi* karena pemisahan inilah sumber selisihnya. (v1 mengasumsikan rekening bank bisa jadi rekening pribadi; Uruni hanya melacak bagian yang merupakan kas sesuai yang dilaporkan bendahara.)
+- **Akun/Lokasi** — tempat uang secara fisik berada: satu daftar yang dinamai sendiri oleh bendahara, masing-masing berjenis tunai atau bank. Satu dana boleh punya beberapa lokasi dari jenis mana pun, boleh juga hanya satu; nama yang tampil adalah nama yang ia ketik sendiri, dan bawaan awalnya "Tunai". Lokasi bisa ditambah dan diganti namanya kemudian, dan lokasi yang sudah terpakai dinonaktifkan, bukan dihapus. Saldo tercatat dilacak *per lokasi* karena pemisahan inilah sumber selisihnya. (v1 mengasumsikan rekening bank bisa jadi rekening pribadi; Uruni hanya melacak bagian yang merupakan kas sesuai yang dilaporkan bendahara.)
 - **Tag tujuan** — setiap transaksi diberi tag: `Kas Utama` (rutin), sebuah **Insidentil** bernama (mis. "Duka Pak Budi"), atau `Titipan/Pass-through` (mis. Kas Bidang). Satu saldo riil yang tergabung, dipisahkan *secara makna*, bukan dalam pos yang terpisah-pisah.
 - **Anggota** — nama + peran/jenjang. Tidak butuh email/nomor telepon (meminimalkan data yang disimpan).
 - **Tarif iuran** — nominal per jenjang (mis. pelaksana 50rb, fungsional pertama 70rb, muda 80rb, madya belum ditentukan); dapat diubah; berlaku menurut waktu.
@@ -76,7 +76,7 @@ Entitas utama:
 
 ### 7.1 Penyiapan & akses
 - Bendahara masuk ke server *komunitasnya sendiri* (satu peran bendahara di v1; peran "hanya-lihat" opsional menyusul). Tidak ada akun Uruni terpusat.
-- Penyiapan awal: memberi nama dana, menambahkan anggota beserta jenjangnya, mengatur tarif iuran, mengatur saldo awal untuk Tunai dan Bank.
+- Penyiapan awal: memberi nama dana, menambahkan anggota beserta jenjangnya, mengatur tarif iuran, mengatur saldo awal untuk tiap lokasi.
 
 ### 7.2 Mencatat transaksi (tindakan sehari-hari)
 - Tombol "tambah" yang menonjol dan bisa dijangkau dengan satu ketukan dari layar utama.
@@ -104,11 +104,11 @@ Entitas utama:
 - **Saldo tidak mengecualikannya.** Selama uangnya masih ada di dompet, uang itu memang ada di dompet, jadi ikut terhitung — prinsip §6 "satu saldo riil yang tergabung, dipisahkan secara makna, bukan dalam pos yang terpisah-pisah" berlaku di sini juga. Uruni tidak mencatat setoran ke atas sebagai utang yang belum dibayar dan tidak punya angka "tersedia" yang kedua; setoran itu jadi pengeluaran biasa pada hari ia dibayarkan. (Direvisi 2026-08-12; lihat [ADR-024](./ADR/024-schema-conventions.md).)
 
 ### 7.7 Saldo & layar utama
-- Layar utama menampilkan: total saldo saat ini, saldo per lokasi (Tunai / Bank), dan **status rekonsiliasi**: "cocok" atau "selisih Rp X — cek?".
+- Layar utama menampilkan: total saldo saat ini, saldo untuk tiap lokasi, dan **status rekonsiliasi**: "cocok" atau "selisih Rp X — cek?".
 - Rincian opsional menurut tag tujuan.
 
 ### 7.8 Rekonsiliasi (inti dari produk)
-- Alur "rekonsiliasi" yang bisa dijalankan bendahara kapan saja: ia memasukkan jumlah *tunai yang sebenarnya* ada dan *saldo kas yang sebenarnya* di bank; Uruni membandingkan masing-masing dengan angka yang tercatat.
+- Alur "rekonsiliasi" yang bisa dijalankan bendahara kapan saja: ia memasukkan jumlah uang *yang sebenarnya* ada di tiap lokasi yang masih aktif — tunai yang ia hitung sendiri, saldo kas yang ditunjukkan bank — lalu Uruni membandingkan masing-masing dengan angka yang tercatat. Lokasi yang sudah dinonaktifkan tidak ditanyakan.
 - Jika cocok: konfirmasi kecil yang memuaskan.
 - Jika berbeda: tampilkan selisih per lokasi, daftarkan transaksi terbaru untuk membantunya menemukan entri yang hilang/terganda, lalu izinkan ia menambahkan transaksi yang hilang atau memposting **penyesuaian** bercatatan untuk merapikannya. Setiap rekonsiliasi disimpan sebagai snapshot.
 - (Pertimbangan ke depan, bukan v1: mendorong penggunaan rekening kas khusus non-pribadi untuk menghilangkan percampuran dari sumbernya.)
