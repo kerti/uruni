@@ -40,14 +40,22 @@ func (q *Queries) CreatePurpose(ctx context.Context, arg CreatePurposeParams) (P
 	return i, err
 }
 
-const getPurpose = `-- name: GetPurpose :one
+const getPurposeForFund = `-- name: GetPurposeForFund :one
 SELECT id, fund_id, kind, name, created_at
 FROM purpose
-WHERE id = ?
+WHERE id = ? AND fund_id = ?
 `
 
-func (q *Queries) GetPurpose(ctx context.Context, id int64) (Purpose, error) {
-	row := q.db.QueryRowContext(ctx, getPurpose, id)
+type GetPurposeForFundParams struct {
+	ID     int64
+	FundID int64
+}
+
+// GetPurposeForFund is the only single-purpose lookup, fund-scoped for the
+// reason GetMemberForFund is (#188): an id belonging to another fund
+// answers sql.ErrNoRows rather than being found and only then rejected.
+func (q *Queries) GetPurposeForFund(ctx context.Context, arg GetPurposeForFundParams) (Purpose, error) {
+	row := q.db.QueryRowContext(ctx, getPurposeForFund, arg.ID, arg.FundID)
 	var i Purpose
 	err := row.Scan(
 		&i.ID,
@@ -93,4 +101,34 @@ func (q *Queries) ListPurposesByFund(ctx context.Context, fundID int64) ([]Purpo
 		return nil, err
 	}
 	return items, nil
+}
+
+const updatePurposeName = `-- name: UpdatePurposeName :one
+UPDATE purpose
+SET name = ?
+WHERE id = ?
+RETURNING id, fund_id, kind, name, created_at
+`
+
+type UpdatePurposeNameParams struct {
+	Name string
+	ID   int64
+}
+
+// UpdatePurposeName renames a purpose. The name is a label - a posted
+// transaction references the purpose by id, and nothing in the ledger reads
+// the text - so this is the same correction UpdateAccount makes for a
+// location. Which purposes may be renamed is the handler's call, not this
+// query's: kind is policy (only 'pass_through' today), not shape.
+func (q *Queries) UpdatePurposeName(ctx context.Context, arg UpdatePurposeNameParams) (Purpose, error) {
+	row := q.db.QueryRowContext(ctx, updatePurposeName, arg.Name, arg.ID)
+	var i Purpose
+	err := row.Scan(
+		&i.ID,
+		&i.FundID,
+		&i.Kind,
+		&i.Name,
+		&i.CreatedAt,
+	)
+	return i, err
 }

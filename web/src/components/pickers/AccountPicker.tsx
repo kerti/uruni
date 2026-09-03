@@ -1,6 +1,7 @@
 import { useId } from 'react'
 
 import { Label } from '@/components/ui/label'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import type { Account } from '@/lib/accounts'
 
 /**
@@ -13,9 +14,11 @@ import type { Account } from '@/lib/accounts'
  * same exclusion when choosing the *default* selection, since that default
  * also has to fall back past a remembered-but-now-retired choice.
  *
- * A native <select>, not a new shadcn component - Design-System has no
- * picker/select component of its own yet, and CLAUDE.md's scope discipline
- * says don't pull one in for this.
+ * Renders through the themed Select (M6.15). It was a native <select>
+ * until then, on the grounds that the design system had no select of its
+ * own and one should not be invented for a picker - what changed is that
+ * `radix-ui` was already a dependency, so the themed control costs styling
+ * rather than a new package.
  */
 export default function AccountPicker({
   id,
@@ -41,19 +44,26 @@ export default function AccountPicker({
   return (
     <div className="flex flex-col gap-1.5">
       <Label htmlFor={selectId}>{label}</Label>
-      <select
-        id={selectId}
-        className="h-11 w-full rounded-lg border border-input bg-transparent px-3 text-base outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50 md:text-sm"
-        value={value ?? ''}
-        onChange={(event) => onChange(Number(event.target.value))}
+      <Select
+        value={value === null ? '' : String(value)}
+        onValueChange={(next) => {
+          // Radix emits '' for "nothing selected" on mount; Number('') is 0,
+          // which looks like an id and is not one.
+          if (next !== '') onChange(Number(next))
+        }}
         disabled={disabled || activeAccounts.length === 0}
       >
-        {activeAccounts.map((account) => (
-          <option key={account.id} value={account.id}>
-            {account.name}
-          </option>
-        ))}
-      </select>
+        <SelectTrigger id={selectId} aria-label={label}>
+          <SelectValue>{activeAccounts.find((account) => account.id === value)?.name}</SelectValue>
+        </SelectTrigger>
+        <SelectContent>
+          {activeAccounts.map((account) => (
+            <SelectItem key={account.id} value={String(account.id)}>
+              {account.name}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
     </div>
   )
 }

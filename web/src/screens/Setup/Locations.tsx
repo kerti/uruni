@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import ErrorState from '@/components/states/ErrorState'
 import { copy } from '@/copy/id'
 import type { ApiError } from '@/lib/api'
@@ -69,15 +70,15 @@ export default function Locations({
               <div key={index} className="flex flex-col gap-1.5 rounded-lg border border-border p-3">
                 <div className="flex flex-col gap-1.5">
                   <Label htmlFor={`setup-location-kind-${index}`}>{text.locations.kindLabel}</Label>
-                  <select
-                    id={`setup-location-kind-${index}`}
-                    className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-base outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 md:text-sm"
-                    value={row.kind}
-                    onChange={(event) => updateRow(index, { kind: event.target.value as 'cash' | 'bank' })}
-                  >
-                    <option value="cash">{text.locations.kindCash}</option>
-                    <option value="bank">{text.locations.kindBank}</option>
-                  </select>
+                  <Select value={row.kind} onValueChange={(next) => updateRow(index, { kind: next as 'cash' | 'bank' })}>
+                    <SelectTrigger id={`setup-location-kind-${index}`} aria-label={text.locations.kindLabel}>
+                      <SelectValue>{row.kind === 'bank' ? text.locations.kindBank : text.locations.kindCash}</SelectValue>
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="cash">{text.locations.kindCash}</SelectItem>
+                      <SelectItem value="bank">{text.locations.kindBank}</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
                 <div className="flex flex-col gap-1.5">
                   <Label htmlFor={`setup-location-name-${index}`}>{text.locations.nameLabel}</Label>

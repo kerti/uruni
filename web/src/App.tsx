@@ -1,8 +1,7 @@
 import { useCallback, useEffect } from 'react'
-import { CircleCheck, Plus } from 'lucide-react'
-import { BrowserRouter, Link, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
+import { CircleCheck } from 'lucide-react'
+import { BrowserRouter, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 
-import { Button } from '@/components/ui/button'
 import OfflineBanner from '@/components/states/OfflineBanner'
 import UpdateBanner from '@/components/states/UpdateBanner'
 import Shell from '@/components/Shell'
@@ -16,6 +15,7 @@ import Reconcile from '@/screens/Reconcile'
 import DuesStatus from '@/screens/Dues/Status'
 import RecordDuesPayment from '@/screens/Dues/RecordPayment'
 import Home from '@/screens/Home'
+import Settings from '@/screens/Settings'
 import { getSession } from '@/lib/auth'
 import { getFund } from '@/lib/setup'
 import { useApi } from '@/lib/useApi'
@@ -240,26 +240,24 @@ function AuthedGate({ onLoggedOut }: { onLoggedOut: () => void }) {
         }
       />
       <Route
+        path="/settings"
+        element={
+          <Shell title={title} onLoggedOut={onLoggedOut}>
+            <Settings onFundRenamed={(fund) => void run(async () => fund)} />
+          </Shell>
+        }
+      />
+      <Route
         path="*"
         element={
-          <Shell
-            title={title}
-            onLoggedOut={onLoggedOut}
-            action={
-              <Button asChild size="icon" className="size-14 rounded-full shadow-floating" aria-label={copy.record.addAction}>
-                <Link to="/record">
-                  <Plus aria-hidden="true" className="size-6" />
-                </Link>
-              </Button>
-            }
-          >
+          <Shell title={title} onLoggedOut={onLoggedOut}>
             {successMessage && (
               <p role="status" className="mb-4 flex items-center gap-2 text-success">
                 <CircleCheck aria-hidden="true" />
                 {successMessage}
               </p>
             )}
-            <Home refetchKey={location.key} onReconcile={() => navigate('/reconcile')} onDues={() => navigate('/dues')} />
+            <Home refetchKey={location.key} onReconcile={() => navigate('/reconcile')} />
           </Shell>
         }
       />

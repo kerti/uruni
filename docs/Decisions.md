@@ -2,7 +2,7 @@
 
 *A running record of what we've decided and why. Anything here can still change.*
 
-Last updated: 2026-09-03 (Uruni's history starts at adoption)
+Last updated: 2026-09-03 (labels are correctable; selects are ours)
 
 ## What belongs in this file
 
@@ -267,3 +267,32 @@ M6.2 ([#135](https://github.com/kerti/uruni/issues/135)) needed client-side rout
 **Live arrears are the exception, and they are a different thing.** Dues a member genuinely still owes never arrived, so that money is *not* in the opening balance. Backdating that one member's `joined_on` makes the periods show as outstanding, and the payment is dated the day it actually comes in, so the balance stays correct. Stated explicitly so the rule does not get read as "never backdate anything."
 
 This also matches §9's success condition, which is that she adopts Uruni as her **sole** record — not that Uruni absorbs the spreadsheet.
+
+## The app gets a bottom nav, and the add-FAB goes (decided 2026-09-03)
+
+M6.15 ([#148](https://github.com/kerti/uruni/issues/148)) added a sixth screen, and the shell's own "not a nav bar" comment — written when there were two — stopped being true. The maintainer's call: a **sticky bottom nav** with four destinations, Beranda · Catat · Iuran · Pengaturan.
+
+**It costs the add-FAB, deliberately.** "Catat" is a tab now, so the circular floating button is gone rather than kept alongside it: a screen with two entry points is the thing the prime directive argues against, and the FAB was the weaker of the two once a bar existed to hold the other. `Design-System.md`'s mobile-interaction section is amended to match — it named the FAB specifically, so leaving it would have made the doc the wrong source of truth.
+
+**Reconcile is not a tab.** M6.10 ruled that the reconciliation banner on home *is* reconcile's affordance, and that still holds: a fifth tab would give one screen two doors and make the other four narrower. The quiet links home carried to dues and settings are gone for the same reason the FAB is.
+
+**Active state comes from the URL, never from what the shell remembers** — `NavLink` with `end` on "/" alone — so a deep link and a back button both land on the right tab, and the current tab is marked by `aria-current` as well as by color.
+
+**One e2e consequence, worth recording because it is not obvious.** `playwright.config.ts` ran `fullyParallel: true` over one shared database, which held only while no spec changed what another spec reads. The settings spec creates a location, and reconcile refuses to submit until every *active* account has been counted — so a location existing for a moment in another file could fail an unrelated run. The suite is `workers: 1` now, and the spec deletes what it creates.
+
+## Labels are correctable, and the select is ours now (decided 2026-09-03)
+
+Four maintainer revisions to M6.15 ([#148](https://github.com/kerti/uruni/issues/148)), and two of them are decisions rather than fixes.
+
+**A label is correctable; a posted fact is not.** The fund's name, a location's `kind` and a pass-through purpose's name all became editable (`PATCH /api/fund`, `kind` on `PATCH /api/accounts/{id}`), on the test the slice already applied to a location's name: does anything posted reference it? For the fund's name, nothing does — it heads every screen and the public report, and the setup wizard already promised it ("bisa diganti nanti kalau perlu"). For `kind`, the check was made against the code rather than assumed: **nothing in `internal/ledger` branches on it**, and the schema's `CHECK (kind IN ('cash','bank'))` is the only rule it carries, so an earlier comment claiming "cash and bank reconcile differently" was describing an intention the code never had. For a pass-through purpose's name, the same holds: a transaction references it by id and nothing in the ledger reads the text. What stays uneditable is `report_slug` — the address she may already have shared — and `currency`, an invariant through `0.x`.
+
+**Renaming a purpose stops at pass-through, and the refusal is a 409.** `main` is the fund's own system row (the one `purpose_single_main` guarantees) and an incidental's name is the *occasion* — what the envelope is, not a label on it, and its lifecycle is M6.19's. `PATCH /api/purposes/{id}` answers `purpose_not_renameable` for both, as 409 rather than 404: the row is there and she may be looking right at it, so "not found" would be wrong twice over. There is still no delete for a purpose anywhere — money that passed through is not unsaid.
+
+**The native `<select>` is gone.** M6.8 chose it deliberately ("the design system has no select component of its own, don't invent one for this"); what changed is that `radix-ui` was already a dependency for `Slot` and `Label`, so a themed select is styling something we already ship, not a new package. `Design-System.md` gains a Controls section saying so.
+
+Two things that cost real debugging and are worth writing down, because both are invisible until they bite:
+
+- **Radix emits `onValueChange('')` for "nothing selected" on mount.** `Number('')` is `0` — an id-shaped value that is not any row — which silently defeated RecordTransaction's default-purpose effect (`purposeId === null` was already false). Every picker now filters the empty string on the way back.
+- **`SelectPrimitive.Value` renders the chosen label by portalling it out of the item**, and items live in a popup that does not exist until first opened. A field whose value arrives from a fetch therefore sits *blank* until touched. Our `SelectValue` takes the text from the caller instead.
+
+**And `Input` was `h-8`.** The shadcn default, 32px, under Design-System.md's own 44px minimum and visibly shorter than the select beside it. Now `h-11`, matching the trigger, which is what the maintainer noticed from the mismatch.

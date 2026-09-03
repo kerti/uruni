@@ -30,6 +30,7 @@ var gatedRoutes = []struct {
 }{
 	{http.MethodPost, "/api/setup"},
 	{http.MethodGet, "/api/fund"},
+	{http.MethodPatch, "/api/fund"},
 	{http.MethodPost, "/api/accounts"},
 	{http.MethodGet, "/api/accounts"},
 	{http.MethodPatch, "/api/accounts/1"},
@@ -37,6 +38,7 @@ var gatedRoutes = []struct {
 	{http.MethodPost, "/api/accounts/1/opening-balance"},
 	{http.MethodGet, "/api/purposes"},
 	{http.MethodPost, "/api/pass-through-purposes"},
+	{http.MethodPatch, "/api/purposes/1"},
 	{http.MethodPost, "/api/members"},
 	{http.MethodGet, "/api/members"},
 	{http.MethodPatch, "/api/members/1"},

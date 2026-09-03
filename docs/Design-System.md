@@ -75,9 +75,13 @@ All monetary numbers use **tabular-nums** so columns align.
 
 ## Shape, elevation, spacing
 
-- **Radius:** `--radius: 0.875rem` (14px). Cards `rounded-2xl`, buttons `rounded-xl`, chips pill, the add-FAB circular.
+- **Radius:** `--radius: 0.875rem` (14px). Cards `rounded-2xl`, buttons `rounded-xl`, chips pill.
 - **Elevation (soft, warm):** sm `0 1px 2px rgba(34,50,58,.06)` · card `0 2px 8px rgba(34,50,58,.06)` · floating `0 8px 24px rgba(34,50,58,.10)`. No harsh shadows.
 - **Spacing scale:** 4 / 8 / 12 / 16 / 24 / 32 / 48 px. Generous padding inside cards (16–20px).
+
+## Controls
+
+Selects are the design system's own control (`components/ui/select.tsx`, Radix `Select` styled to these tokens), never the browser's native `<select>` — the platform list was the one surface in the app that ignored every token on this page. The trigger shows the chosen option's label, passed in by the caller.
 
 ## Iconography
 
@@ -85,10 +89,10 @@ All monetary numbers use **tabular-nums** so columns align.
 
 ## Mobile-first interaction
 
-- Minimum touch target **44×44px**.
-- Primary action bottom-anchored; a **circular add-FAB** for "catat transaksi".
+- Minimum touch target **44×44px** — which is `h-11`, the height both `Input` and the select trigger use, so a text field and the picker beside it line up.
+- Navigation is a **sticky bottom nav** with four destinations — Beranda · Catat · Iuran · Pengaturan — active tab in Forest, the rest muted, `aria-current` alongside the color. It replaced the circular add-FAB at M6.15: "catat" is a tab now, and no screen has two entry points. Reconcile is deliberately not a tab — the reconciliation banner on home is its affordance.
 - Amount inputs use `inputmode="numeric"` and format to `Rp` on blur.
-- Home layout: **balance is the hero**, reconciliation status directly beneath, recent activity below, add-FAB floating.
+- Home layout: **balance is the hero**, reconciliation status directly beneath, recent activity below.
 
 ## Numbers & currency
 

@@ -695,3 +695,39 @@ func TestPostAccountOpeningBalanceWithNoMainPurposeIs500(t *testing.T) {
 // identical 500 envelope and the handler never runs. They stay as honest
 // defensive code rather than growing an injection seam for branches that can
 // only ever fire together.
+
+// A location's kind is a label, not a rule about the money in it - nothing
+// in internal/ledger branches on it - so entering the wrong one is a typo
+// with a correction, exactly like a misspelt name.
+func TestPatchAccountChangesTheKind(t *testing.T) {
+	r := testRouter(t)
+	setup := setUpFund(t, r)
+
+	rec := patchAccount(t, r, setup.CashAccountID(t), `{"kind":"bank"}`)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("PATCH /api/accounts/{id} kind = %d, want %d (body: %s)", rec.Code, http.StatusOK, rec.Body.String())
+	}
+	var updated accountResponse
+	if err := json.NewDecoder(rec.Body).Decode(&updated); err != nil {
+		t.Fatalf("decoding response: %v", err)
+	}
+	if updated.Kind != "bank" {
+		t.Errorf("Kind = %q, want %q", updated.Kind, "bank")
+	}
+	// The name is untouched: an absent key still means "leave alone".
+	if updated.Name != "Tunai" {
+		t.Errorf("Name = %q, want it unchanged (%q)", updated.Name, "Tunai")
+	}
+}
+
+// The set of kinds is the schema's CHECK to police, not the handler's
+// (ADR-027) - it comes back as 400 through mapSQLiteError.
+func TestPatchAccountRejectsAnUnknownKind(t *testing.T) {
+	r := testRouter(t)
+	setup := setUpFund(t, r)
+
+	rec := patchAccount(t, r, setup.CashAccountID(t), `{"kind":"crypto"}`)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("PATCH /api/accounts/{id} kind=crypto = %d, want %d (body: %s)", rec.Code, http.StatusBadRequest, rec.Body.String())
+	}
+}

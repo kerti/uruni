@@ -57,9 +57,9 @@ func TestOpenIncidentalCreatesBothRows(t *testing.T) {
 		t.Errorf("ClosedOn = %v, want nil - a freshly opened envelope is not closed", created.ClosedOn)
 	}
 
-	purpose, err := q.GetPurpose(ctx, created.PurposeID)
+	purpose, err := q.GetPurposeForFund(ctx, store.GetPurposeForFundParams{ID: created.PurposeID, FundID: f.fundID})
 	if err != nil {
-		t.Fatalf("GetPurpose() = %v, want no error", err)
+		t.Fatalf("GetPurposeForFund() = %v, want no error", err)
 	}
 	if purpose.Kind != "incidental" {
 		t.Errorf("purpose.Kind = %q, want %q", purpose.Kind, "incidental")

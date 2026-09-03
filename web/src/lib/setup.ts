@@ -89,6 +89,21 @@ export function getFund(): Promise<Fund> {
 }
 
 /**
+ * PATCH /api/fund - renames the kas. The name is a display label: it heads
+ * every screen and the public report, and nothing posted references it, so
+ * this rewrites no history. currency and report_slug are not settable -
+ * one is an invariant through 0.x, the other is the report's unguessable
+ * address and rotating it is its own decision.
+ */
+export function renameFund(name: string): Promise<Fund> {
+  return apiFetch<Fund>('/api/fund', {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name }),
+  })
+}
+
+/**
  * POST /api/setup - the fund's name plus every account it starts with, in
  * one call. A second call for a fund that already exists is
  * 409 fund_already_exists.

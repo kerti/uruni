@@ -222,12 +222,12 @@ describe('App (record loop)', () => {
     ])
   }
 
-  it('reaches the form from the add-FAB, posts, and confirms on home', async () => {
+  it('reaches the form from the footer nav, posts, and confirms on home', async () => {
     vi.stubGlobal('fetch', authenticatedWithRecordRoutes())
     render(<App />)
     await screen.findByText(copy.home.balanceHeading)
 
-    await userEvent.click(screen.getByRole('link', { name: copy.record.addAction }))
+    await userEvent.click(screen.getByRole('link', { name: copy.shell.nav.record }))
     await screen.findByRole('heading', { name: copy.record.heading })
 
     await userEvent.type(screen.getByLabelText(copy.record.amountLabel), '50000')
@@ -245,12 +245,12 @@ describe('App (record loop)', () => {
     render(<App />)
     await screen.findByText(copy.home.balanceHeading)
 
-    await userEvent.click(screen.getByRole('link', { name: copy.record.addAction }))
+    await userEvent.click(screen.getByRole('link', { name: copy.shell.nav.record }))
     await userEvent.type(await screen.findByLabelText(copy.record.amountLabel), '50000')
     await userEvent.click(screen.getByRole('button', { name: copy.record.submit }))
     await screen.findByText(copy.record.successOut)
 
-    await userEvent.click(screen.getByRole('link', { name: copy.record.addAction }))
+    await userEvent.click(screen.getByRole('link', { name: copy.shell.nav.record }))
     await screen.findByRole('heading', { name: copy.record.heading })
     await userEvent.click(screen.getByRole('button', { name: copy.record.cancel }))
 

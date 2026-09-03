@@ -38,9 +38,9 @@ func TestSetUpFundCreatesFundMainPurposeAndAccounts(t *testing.T) {
 	if result.MainPurposeID == 0 {
 		t.Error("MainPurposeID is zero")
 	}
-	mainPurpose, err := q.GetPurpose(ctx, result.MainPurposeID)
+	mainPurpose, err := q.GetPurposeForFund(ctx, store.GetPurposeForFundParams{ID: result.MainPurposeID, FundID: result.Fund.ID})
 	if err != nil {
-		t.Fatalf("GetPurpose(main) = %v, want no error", err)
+		t.Fatalf("GetPurposeForFund(main) = %v, want no error", err)
 	}
 	if mainPurpose.Kind != "main" {
 		t.Errorf("main purpose Kind = %q, want %q", mainPurpose.Kind, "main")

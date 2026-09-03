@@ -301,3 +301,70 @@ func postSetupWithAccounts(t *testing.T, r http.Handler, name string, accounts [
 	r.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/api/setup", bytes.NewReader(body)))
 	return rec
 }
+
+func patchFund(t *testing.T, r http.Handler, body string) *httptest.ResponseRecorder {
+	t.Helper()
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, httptest.NewRequest(http.MethodPatch, "/api/fund", bytes.NewReader([]byte(body))))
+	return rec
+}
+
+// The fund's name is a display label, so correcting it is a rename, not a
+// ledger event - the setup wizard's own copy already promises "bisa diganti
+// nanti kalau perlu."
+func TestPatchFundRenamesTheFund(t *testing.T) {
+	r := testRouter(t)
+	setUpFund(t, r)
+
+	rec := patchFund(t, r, `{"name":"Kas Ruang 3B"}`)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("PATCH /api/fund = %d, want %d (body: %s)", rec.Code, http.StatusOK, rec.Body.String())
+	}
+	var updated fundResponse
+	if err := json.NewDecoder(rec.Body).Decode(&updated); err != nil {
+		t.Fatalf("decoding response: %v", err)
+	}
+	if updated.Name != "Kas Ruang 3B" {
+		t.Errorf("Name = %q, want %q", updated.Name, "Kas Ruang 3B")
+	}
+
+	// And the rename is what the next reader sees, not just what the write
+	// echoed back.
+	getRec := httptest.NewRecorder()
+	r.ServeHTTP(getRec, httptest.NewRequest(http.MethodGet, "/api/fund", nil))
+	var got fundResponse
+	if err := json.NewDecoder(getRec.Body).Decode(&got); err != nil {
+		t.Fatalf("decoding GET response: %v", err)
+	}
+	if got.Name != "Kas Ruang 3B" {
+		t.Errorf("GET /api/fund Name = %q, want %q", got.Name, "Kas Ruang 3B")
+	}
+	// The report's address is not collateral damage of a rename - it is the
+	// public link she may already have shared.
+	if got.ReportSlug != "" && updated.ReportSlug != got.ReportSlug {
+		t.Errorf("ReportSlug changed on rename: %q -> %q", updated.ReportSlug, got.ReportSlug)
+	}
+}
+
+// A body with no name is a 400, never a silent rename to the empty string -
+// the same reason updateDuesRateRequest.Amount is a pointer.
+func TestPatchFundWithoutANameIsRejected(t *testing.T) {
+	r := testRouter(t)
+	setUpFund(t, r)
+
+	rec := patchFund(t, r, `{}`)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("PATCH /api/fund {} = %d, want %d (body: %s)", rec.Code, http.StatusBadRequest, rec.Body.String())
+	}
+	if got := decodeError(t, rec); got.Code != "invalid_argument" {
+		t.Errorf("error code = %q, want %q", got.Code, "invalid_argument")
+	}
+}
+
+// Before setup there is no fund to rename, and resolveFund answers for it.
+func TestPatchFundBeforeSetupIs404(t *testing.T) {
+	rec := patchFund(t, testRouter(t), `{"name":"Kas"}`)
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("PATCH /api/fund before setup = %d, want %d", rec.Code, http.StatusNotFound)
+	}
+}

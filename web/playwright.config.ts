@@ -18,7 +18,18 @@ import { defineConfig } from '@playwright/test'
 // e2e-reset's seeding.
 export default defineConfig({
   testDir: './e2e',
-  fullyParallel: true,
+  // One database, one worker. Every spec here runs against the single seeded
+  // instance the webServer below boots, and each file already opts into
+  // serial mode internally for that reason - but files ran in parallel with
+  // each other, which held only while no spec changed anything another spec
+  // reads. M6.15's settings spec breaks that: it creates a location, and
+  // reconcile (golden-path.spec.ts) refuses to submit until every *active*
+  // account has been counted, so a location existing for a moment in another
+  // file is enough to fail a run that has nothing to do with it. Serialising
+  // the whole suite is the honest fix; the per-file `mode: 'serial'` calls
+  // stay, since they document each file's own internal ordering.
+  fullyParallel: false,
+  workers: 1,
   // A stray .only left in a spec must fail CI-shaped runs rather than
   // quietly skip the rest of the suite — moot today with one spec, but the
   // right default from the first file.

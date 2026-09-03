@@ -127,7 +127,10 @@ type Querier interface {
 	// non-error path) rather than a NULL forced through an aggregate. A row means
 	// one already exists.
 	GetOpeningBalance(ctx context.Context, arg GetOpeningBalanceParams) (GetOpeningBalanceRow, error)
-	GetPurpose(ctx context.Context, id int64) (Purpose, error)
+	// GetPurposeForFund is the only single-purpose lookup, fund-scoped for the
+	// reason GetMemberForFund is (#188): an id belonging to another fund
+	// answers sql.ErrNoRows rather than being found and only then rejected.
+	GetPurposeForFund(ctx context.Context, arg GetPurposeForFundParams) (Purpose, error)
 	// Fund-scoped: an id names a row, it does not prove the caller may see it.
 	// PRD section 6 allows a server to hold more than one fund, so a bare lookup
 	// by id alone would be a cross-fund read the moment a second fund exists.
@@ -231,9 +234,11 @@ type Querier interface {
 	// proves the session still valid pushes expires_at forward by the same fixed
 	// window, computed by the caller - there is no absolute cap to enforce here.
 	TouchSession(ctx context.Context, arg TouchSessionParams) (Session, error)
-	// UpdateAccount is a correction to a location's own label, not a ledger
-	// event: renaming or retiring an account changes nothing already posted
-	// (account.name is a label, not a posted fact). name is NOT NULL, so
+	// UpdateAccount is a correction to a location's own labels, not a ledger
+	// event: renaming, re-kinding or retiring an account changes nothing already
+	// posted (name and kind are both labels, not posted facts - nothing in
+	// internal/ledger branches on kind, and the schema's CHECK is the only rule
+	// it carries). name is NOT NULL, so
 	// COALESCE covers it the same way UpdateMember's does; inactive_on needs the
 	// set_inactive_on flag for the same reason UpdateMember's does - a null
 	// argument is ambiguous between "leave alone" and "reinstate".
@@ -243,12 +248,24 @@ type Querier interface {
 	UpdateDuesRate(ctx context.Context, arg UpdateDuesRateParams) (DuesRate, error)
 	// UpdateDuesTier renames a tier - reference data, not history.
 	UpdateDuesTier(ctx context.Context, arg UpdateDuesTierParams) (DuesTier, error)
+	// UpdateFund renames the fund. name is a display label - it heads every
+	// screen and the public report - and nothing posted references it, so this
+	// changes no history (the same reasoning UpdateAccount's own rename rests
+	// on). currency and report_slug are deliberately not settable here: one is
+	// an invariant through 0.x, the other is the report's unguessable address.
+	UpdateFund(ctx context.Context, arg UpdateFundParams) (Fund, error)
 	// UpdateMember is a correction to reference data, not a ledger event. name
 	// is NOT NULL, so COALESCE covers it: a nil argument can only mean "leave
 	// alone". The three nullable columns need the set_* flags, because there a
 	// null argument is ambiguous between "leave alone" and "clear it" - the CASE
 	// substitutes the new value, NULL included, only when the caller sent it.
 	UpdateMember(ctx context.Context, arg UpdateMemberParams) (Member, error)
+	// UpdatePurposeName renames a purpose. The name is a label - a posted
+	// transaction references the purpose by id, and nothing in the ledger reads
+	// the text - so this is the same correction UpdateAccount makes for a
+	// location. Which purposes may be renamed is the handler's call, not this
+	// query's: kind is policy (only 'pass_through' today), not shape.
+	UpdatePurposeName(ctx context.Context, arg UpdatePurposeNameParams) (Purpose, error)
 	// UpdateReimbursement corrects a claim that has not been settled yet - a
 	// wrong amount, the wrong member, or the day it was actually spent. The
 	// claim is off the ledger until it is settled (ADR-024), so this is an

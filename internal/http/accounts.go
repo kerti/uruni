@@ -132,6 +132,8 @@ func (a *api) resolveAccount(w http.ResponseWriter, r *http.Request) (store.Acco
 type updateAccountRequest struct {
 	Name          *string
 	NameSet       bool
+	Kind          *string
+	KindSet       bool
 	InactiveOn    *string
 	InactiveOnSet bool
 }
@@ -150,6 +152,7 @@ func decodeUpdateAccountRequest(w http.ResponseWriter, r *http.Request) (updateA
 		dst any
 	}{
 		{"name", &req.NameSet, &req.Name},
+		{"kind", &req.KindSet, &req.Kind},
 		{"inactive_on", &req.InactiveOnSet, &req.InactiveOn},
 	}
 	for _, f := range fields {
@@ -170,6 +173,11 @@ func decodeUpdateAccountRequest(w http.ResponseWriter, r *http.Request) (updateA
 // own label, not a ledger event - account.name is a label on a location, not
 // a posted fact, so rule 3's immutability does not reach it (renaming breaks
 // nothing already posted, which still references the account by id).
+// kind is correctable the same way and for the same reason: nothing in
+// internal/ledger branches on it, so 'cash' vs 'bank' is a label on the
+// location, not a rule about the money in it. A location entered as the
+// wrong one is a typo, and the schema's CHECK still refuses anything but
+// the two (ADR-027 - shape is the schema's to police, not this handler's).
 // inactive_on is the other half of #134's account-lifecycle ruling: the
 // retirement date for a used-then-retired location, or an explicit null to
 // reinstate it.
@@ -187,6 +195,9 @@ func (a *api) updateAccount(w http.ResponseWriter, r *http.Request) {
 	params := store.UpdateAccountParams{ID: account.ID}
 	if req.NameSet {
 		params.Name = req.Name
+	}
+	if req.KindSet {
+		params.Kind = req.Kind
 	}
 	if req.InactiveOnSet {
 		params.SetInactiveOn = 1

@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import RecordDuesPayment from '@/screens/Dues/RecordPayment'
 import { copy } from '@/copy/id'
+import { chooseOption } from '@/test/select'
 import { formatIDR } from '@/lib/money'
 
 const text = copy.dues.payment
@@ -44,7 +45,10 @@ function stubApi(periods: unknown = outstanding) {
 }
 
 async function pickFirstMember() {
-  await userEvent.selectOptions(await screen.findByLabelText(text.memberLabel), '1')
+  // The themed Select's options live in a portal (M6.15) - open it, then
+  // pick by the name she actually reads.
+  await screen.findByLabelText(text.memberLabel)
+  await chooseOption(text.memberLabel, 'Warga Satu')
 }
 
 /** The parsed body of the last POST /api/dues-payments the stub saw. */

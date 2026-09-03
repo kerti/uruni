@@ -6,10 +6,23 @@ export const copy = {
     name: 'uruni',
     tagline: 'Kas bersama yang selalu cocok.',
   },
-  // The app shell every authenticated screen renders inside (M6.6). Only the
-  // logout control needs words today; the header's heading is the fund's own
-  // name, which comes from the server, not from here.
+  // The app shell every authenticated screen renders inside (M6.6): the
+  // header's logout control and, as of M6.15, the sticky footer nav. The
+  // header's heading is the fund's own name, which comes from the server,
+  // not from here.
   shell: {
+    // The sticky footer's four destinations (M6.15). Single words, because
+    // a tab label that wraps on a small phone is a tab label that is too
+    // long - and because these are landmarks, not sentences.
+    nav: {
+      // Names the <nav> itself for a screen reader, which otherwise
+      // announces an unlabelled navigation landmark.
+      label: 'Navigasi utama',
+      home: 'Beranda',
+      record: 'Catat',
+      dues: 'Iuran',
+      settings: 'Pengaturan',
+    },
     logout: 'Keluar',
     loggingOut: 'Sedang keluar…',
   },
@@ -46,6 +59,14 @@ export const copy = {
       fund_already_exists: 'Kas ini sudah pernah disiapkan.',
       opening_balance_exists: 'Saldo awal untuk lokasi ini sudah pernah dicatat.',
       invalid_json: 'Ada yang tidak beres saat mengirim data. Coba lagi.',
+      // M6.15's settings screen: deleting a location (or later a member or
+      // tier) that something already points at. The locations section
+      // renders its own, more specific wording pointing at deactivate; this
+      // is the shared fallback for the same code reached elsewhere.
+      referenced_by_other_records: 'Data ini sudah dipakai di catatan lain, jadi tidak bisa dihapus.',
+      // Renaming a purpose that is not a titipan - the fund's own kas utama,
+      // or an incidental, whose name is the occasion itself.
+      purpose_not_renameable: 'Hanya nama titipan yang bisa diganti.',
     },
     // Shown for a code not in the map above.
     unknownError: 'Ada yang tidak beres. Coba lagi sebentar lagi.',
@@ -119,11 +140,11 @@ export const copy = {
     },
   },
   // The everyday record-transaction form (M6.8, PRD §7.2): amount, in/out,
-  // location, purpose, date, optional note. Reachable from the add-FAB on
-  // home. successIn/successOut are shown on home after a successful post -
+  // location, purpose, date, optional note. Reached from the footer nav's
+  // "Catat" tab, which replaced the add-FAB in M6.15.
+  // successIn/successOut are shown on home after a successful post -
   // worded per Design-System.md's own voice examples for each direction.
   record: {
-    addAction: 'Catat transaksi',
     heading: 'Catat transaksi',
     directionLabel: 'Jenis',
     directionIn: 'Uang masuk',
@@ -302,6 +323,66 @@ export const copy = {
       submitting: 'Membatalkan…',
       cancel: 'Jangan jadi',
       success: 'Pembayaran dibatalkan.',
+    },
+  },
+  // One bundled settings screen (M6.15), not four top-level destinations:
+  // naming a location, retiring one, and adding a pass-through purpose are
+  // all rare next to the everyday loop. M6.16 and M6.17 add their sections
+  // to this same screen.
+  settings: {
+    heading: 'Pengaturan',
+    // Renaming the kas (PRD §7.1's own promise: "bisa diganti nanti kalau
+    // perlu"). The name is a label - it heads every screen and the public
+    // report - so this changes nothing already recorded.
+    fund: {
+      heading: 'Nama kas',
+      body: 'Nama ini muncul di seluruh aplikasi dan di laporan publik. Menggantinya tidak mengubah catatan apa pun.',
+      nameLabel: 'Nama kas',
+      save: 'Simpan',
+      saving: 'Menyimpan…',
+      saved: 'Nama kas diperbarui.',
+    },
+    locations: {
+      heading: 'Lokasi penyimpanan',
+      body: 'Tempat uang kas disimpan — tunai atau rekening. Nama dan jenisnya bisa diubah kapan saja; lokasi yang sudah tidak dipakai bisa dinonaktifkan, catatannya tetap utuh.',
+      empty: 'Belum ada lokasi.',
+      kindLabel: 'Jenis',
+      kindCash: 'Tunai',
+      kindBank: 'Bank',
+      nameLabel: 'Nama lokasi',
+      add: 'Tambah lokasi',
+      adding: 'Menambahkan…',
+      // Name and jenis are both editable: she named these herself in the
+      // setup wizard, and neither label is a posted fact.
+      edit: 'Ubah',
+      save: 'Simpan',
+      saving: 'Menyimpan…',
+      cancel: 'Batal',
+      deactivate: 'Nonaktifkan',
+      deactivating: 'Menonaktifkan…',
+      reinstate: 'Aktifkan lagi',
+      reinstating: 'Mengaktifkan…',
+      inactiveBadge: 'Tidak aktif',
+      delete: 'Hapus',
+      deleting: 'Menghapus…',
+      // The 409 the server answers the moment anything references the
+      // location. Not phrased as a failure: deactivating is what she
+      // actually wants, and this points her at it.
+      deleteRefused: 'Lokasi ini sudah punya riwayat — nonaktifkan saja, jangan dihapus.',
+    },
+    passThrough: {
+      heading: 'Titipan',
+      body: 'Uang yang dikumpulkan untuk diteruskan ke pihak lain, misalnya kas bidang. Bukan milik kas ini, hanya lewat. Namanya bisa diperbaiki kapan saja.',
+      empty: 'Belum ada titipan.',
+      nameLabel: 'Nama titipan',
+      add: 'Tambah titipan',
+      adding: 'Menambahkan…',
+      // Same pair of words the locations section uses, and for the same
+      // reason: a name is a label, not catatan yang sudah tercatat.
+      edit: 'Ubah',
+      save: 'Simpan',
+      saving: 'Menyimpan…',
+      cancel: 'Batal',
     },
   },
 } as const

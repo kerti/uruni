@@ -5,6 +5,7 @@ import AccountPicker from '@/components/pickers/AccountPicker'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import Loading from '@/components/states/Loading'
 import ErrorState from '@/components/states/ErrorState'
 import { copy } from '@/copy/id'
@@ -220,22 +221,29 @@ export default function RecordDuesPayment({
 
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="dues-payment-member">{text.memberLabel}</Label>
-        <select
-          id="dues-payment-member"
-          className="h-11 w-full rounded-lg border border-input bg-transparent px-3 text-base outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50 md:text-sm"
-          value={memberId ?? ''}
-          onChange={(event) => setMemberId(Number(event.target.value))}
+        {/* The placeholder is the Select's own, not a disabled first
+            option: nothing is chosen until she chooses. */}
+        <Select
+          value={memberId === null ? '' : String(memberId)}
+          onValueChange={(next) => {
+            // '' is Radix's "nothing selected" on mount, and Number('') is 0.
+            if (next !== '') setMemberId(Number(next))
+          }}
           disabled={submitting || selectableMembers.length === 0}
         >
-          <option value="" disabled>
-            {text.memberPlaceholder}
-          </option>
-          {selectableMembers.map((member) => (
-            <option key={member.id} value={member.id}>
-              {member.name}
-            </option>
-          ))}
-        </select>
+          <SelectTrigger id="dues-payment-member" aria-label={text.memberLabel}>
+            <SelectValue placeholder={text.memberPlaceholder}>
+              {selectableMembers.find((member) => member.id === memberId)?.name}
+            </SelectValue>
+          </SelectTrigger>
+          <SelectContent>
+            {selectableMembers.map((member) => (
+              <SelectItem key={member.id} value={String(member.id)}>
+                {member.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
 
       <div className="flex flex-col gap-2">

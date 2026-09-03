@@ -48,27 +48,18 @@ interface HomeData {
  * The home screen (M6.9, PRD §7.7): the everyday-loop landing page reached
  * at "/" once a fund exists (App.tsx's AuthedGate). Order per
  * Design-System.md:91 - balance hero, per-location rows, reconciliation
- * banner + last-checked, recent activity. The add-FAB and the post-record
- * success banner are both App.tsx's job, not this screen's - see that
- * file's own comments.
+ * banner + last-checked, recent activity. Navigation is Shell's footer
+ * (M6.15) and the post-record success banner is App.tsx's, not this
+ * screen's - see those files' own comments. The reconciliation banner is
+ * the one destination home still owns, per M6.10's ruling that the banner
+ * IS reconcile's affordance.
  *
  * `refetchKey` changes whenever App.tsx's router state carries a fresh
  * "recorded" navigation (a successful POST /api/transactions just
  * happened), so a new entry is visible in recent activity without a manual
  * refresh, without this screen needing any router knowledge of its own.
  */
-export default function Home({
-  refetchKey,
-  onReconcile,
-  onDues,
-}: {
-  refetchKey: unknown
-  onReconcile: () => void
-  /** Navigates to the dues status roster (M6.12, PRD §7.3) - App.tsx's
-   * navigate('/dues'), same caller-owns-navigation contract as onReconcile
-   * above. */
-  onDues: () => void
-}) {
+export default function Home({ refetchKey, onReconcile }: { refetchKey: unknown; onReconcile: () => void }) {
   const [state, run] = useApi<HomeData>()
 
   async function loadHomeData(): Promise<HomeData> {
@@ -153,10 +144,9 @@ export default function Home({
           Filled with Forest (`--primary`) and white text, which passes AA -
           Design-System.md's own contrast note is why the fill is Forest and
           never Sage. The cost, accepted deliberately: Forest is also the
-          action color, so this surface and the add-FAB now share a hue and
-          the FAB is no longer the only saturated thing on the screen. It
-          keeps its edge by being the only *circular* Forest element, at
-          `shadow-floating` against this card's flatter `shadow-card`.
+          action color, so this surface shares a hue with the footer's
+          active tab. They do not compete - one is a filled block mid-screen,
+          the other an 11px label pinned to the bottom edge.
           Not `--secondary` (#E7F1EA), the soft-sage highlight surface: it is
           a shade away from success-soft (#E3F1E9) and would collide with
           the reconciliation banner directly beneath it. */}
@@ -195,14 +185,6 @@ export default function Home({
         <ReconciliationBanner openLines={openLines} everReconciled={latest !== null} onClick={onReconcile} />
         {latest && <p className="text-sm text-muted-foreground">{copy.home.lastChecked(formatUnixSeconds(latest.performed_at))}</p>}
       </section>
-
-      {/* The dues roster's entry point (M6.12) - one plain, quiet link, not
-          a second CTA competing with the balance hero or the reconciliation
-          banner above it. No icon row, no nav bar: exactly the one
-          destination this slice adds. */}
-      <button type="button" onClick={onDues} className="self-center text-sm font-medium text-primary underline-offset-4 hover:underline">
-        {copy.dues.entryLink}
-      </button>
 
       <section className="flex flex-col gap-2">
         <h2 className="text-sm font-semibold text-muted-foreground">{copy.home.recentActivityHeading}</h2>
