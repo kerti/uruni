@@ -51,7 +51,9 @@ A small, calm app that helps a reluctant, non-accountant **treasurer** keep a co
     http/        router, handlers, session auth, middleware
     store/       sqlc-generated Go (single-writer — regenerate, don't hand-edit)
     db/          goose migrations
-    auth/ config/ lock/   local auth, env config, single-writer DB lock
+    auth/        local auth
+    config/      env config
+    lock/        single-writer DB lock
   web/           React + Vite app (embedded into the binary at build); e2e/ holds Playwright specs
   docs/          PRD, Tech-Design, ADR/, Design-System, Positioning, Decisions, ROADMAP
 ```
