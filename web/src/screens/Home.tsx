@@ -4,6 +4,7 @@ import { ArrowDownLeft, ArrowUpRight } from 'lucide-react'
 import ReconciliationBanner from '@/components/ReconciliationBanner'
 import Loading from '@/components/states/Loading'
 import ErrorState from '@/components/states/ErrorState'
+import { Button } from '@/components/ui/button'
 import { copy } from '@/copy/id'
 import { ApiError } from '@/lib/api'
 import { getBalances } from '@/lib/balances'
@@ -45,7 +46,7 @@ interface HomeData {
  * happened), so a new entry is visible in recent activity without a manual
  * refresh, without this screen needing any router knowledge of its own.
  */
-export default function Home({ refetchKey, onReconcile }: { refetchKey: unknown; onReconcile: () => void }) {
+export default function Home({ refetchKey, onReconcile, onViewReimbursements }: { refetchKey: unknown; onReconcile: () => void; onViewReimbursements: () => void }) {
   const [state, run] = useApi<HomeData>()
 
   async function loadHomeData(): Promise<HomeData> {
@@ -171,6 +172,10 @@ export default function Home({ refetchKey, onReconcile }: { refetchKey: unknown;
         <ReconciliationBanner openLines={openLines} everReconciled={latest !== null} onClick={onReconcile} />
         {latest && <p className="text-sm text-muted-foreground">{copy.home.lastChecked(formatUnixSeconds(latest.performed_at))}</p>}
       </section>
+
+      <Button type="button" variant="outline" className="w-full" onClick={onViewReimbursements}>
+        {copy.home.reimbursementLink}
+      </Button>
 
       <section className="flex flex-col gap-2">
         <h2 className="text-sm font-semibold text-muted-foreground">{copy.home.recentActivityHeading}</h2>

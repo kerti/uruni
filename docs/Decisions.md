@@ -2,7 +2,7 @@
 
 *A running record of what we've decided and why. Anything here can still change.*
 
-Last updated: 2026-09-03 (the roster gets its own screen)
+Last updated: 2026-09-08 (reimbursements screen, M6.18)
 
 ## What belongs in this file
 
@@ -222,7 +222,7 @@ M4's planning pass had to answer [#61](https://github.com/kerti/uruni/issues/61)
 
 Two decisions came out of [#103](https://github.com/kerti/uruni/issues/103), and only one of them is about reimbursements.
 
-**Settlement was the only exit a claim had.** `waived_on` had been in the schema since M2 ([ADR-024](./ADR/024-schema-conventions.md)) and the ledger refused to settle a waived claim, but nothing could set it: no `UPDATE reimbursement` query existed anywhere. A claim the member forgave, or one the treasurer typed wrong, sat in "what the fund owes" forever. PRD §7.4 gains a waive and a correction, as `PATCH /api/reimbursements/{id}` and `DELETE /api/reimbursements/{id}` — **not** three verbs: waiving sets one column, so pairing it with the ordinary correction is what makes un-waiving free, and a claim someone waived by mistake would otherwise be as stuck as the one that started this.
+**Settlement was the only exit a claim had.** `waived_on` had been in the schema since M2 ([ADR-024](./ADR/024-schema-conventions.md)) and the ledger refused to settle a waived claim, but nothing could set it: no `UPDATE reimbursement` query existed anywhere. A claim the member forgave, or one the treasurer typed wrong, sat in "what the fund owes" forever. PRD §7.4 gains a waive and a correction, as `PATCH /api/reimbursements/{id}` and `DELETE /api/reimbursements/{id}` — **not** three verbs: waiving sets one column, so pairing it with the ordinary correction is what makes un-waiving free, and a claim someone waived by mistake would otherwise be as stuck as the one that started this. The UI label for waiving is **"Putihkan"**, not the conversational example in the PRD — chosen for the debt/forgiveness register, not as a direct translation of "waive" (M6.18).
 
 **Both stop at settlement.** An unsettled claim is off the ledger, which is why editing it is not a hole in `CLAUDE.md` rule 3 — the schema says the same thing by giving `reimbursement` no immutability trigger. Once settled, the payout copied the claim's amount and purpose onto an immutable transaction, and a later correction would let the two disagree while both look authoritative. After that the only correction is an ordinary adjusting entry.
 

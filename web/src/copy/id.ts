@@ -181,6 +181,10 @@ export const copy = {
     purposeUnknown: 'Tanpa tujuan',
     // date is already formatted (Intl.DateTimeFormat) by the caller.
     lastChecked: (date: string) => `Terakhir dicek ${date}`,
+    // The entry point to the reimbursements screen (M6.18), placed after
+    // the reconciliation banner. Short, one word, following the entryLink
+    // pattern in copy.dues.
+    reimbursementLink: 'Lihat penggantian',
   },
   // ReconciliationBanner's own copy (M6.9): "cocok" when GET
   // /api/reconciliations/open-lines comes back empty, "selisih" otherwise.
@@ -448,6 +452,69 @@ export const copy = {
       save: 'Simpan',
       saving: 'Menyimpan…',
       cancel: 'Batal',
+    },
+  },
+  // The reimbursements screen (M6.18, PRD §7.4): record that a member
+  // fronted money, settle when repaid, waive when the member forgives the
+  // debt ("putihkan"), or correct/remove a claim entered wrongly — only
+  // until settled, after which the payout is a posted ledger row.
+  //
+  // "Putihkan" was chosen over the PRD's conversational example ("sudah,
+  // saya yang tanggung") for the UI label: the example was prose flavour,
+  // not interface copy. The word sits in the debt/forgiveness register
+  // without the legal-verdict connotation of "ampuni".
+  reimbursements: {
+    heading: 'Penggantian',
+    body: 'Uang yang ditanggung anggota untuk kas, sudah tercatat.',
+    outstandingTab: 'Belum dibayar',
+    allTab: 'Semua',
+    emptyOutstanding: 'Tidak ada penggantian yang belum dibayar.',
+    emptyAll: 'Belum ada penggantian tercatat.',
+    record: {
+      heading: 'Catat penggantian',
+      memberLabel: 'Anggota',
+      memberPlaceholder: 'Pilih anggota',
+      purposeLabel: 'Peruntukan',
+      amountLabel: 'Jumlah',
+      dateLabel: 'Tanggal pengeluaran',
+      noteLabel: 'Catatan (opsional)',
+      submit: 'Simpan',
+      submitting: 'Menyimpan…',
+      cancel: 'Batal',
+      success: 'Penggantian berhasil dicatat.',
+    },
+    settle: {
+      heading: 'Bayar penggantian',
+      accountLabel: 'Bayar dari',
+      dateLabel: 'Tanggal pembayaran',
+      submit: 'Bayar',
+      submitting: 'Membayar…',
+      cancel: 'Batal',
+      success: 'Penggantian sudah dibayar.',
+    },
+    actions: {
+      settle: 'Bayar',
+      waive: 'Putihkan',
+      unwaive: 'Batalkan pemutihan',
+      correct: 'Perbaiki',
+      delete: 'Hapus',
+      deleting: 'Menghapus…',
+    },
+    status: {
+      outstanding: 'Belum dibayar',
+      waived: 'Diputihkan',
+      settled: 'Dibayar',
+    },
+    correct: {
+      heading: 'Perbaiki penggantian',
+      submit: 'Simpan',
+      submitting: 'Menyimpan…',
+      cancel: 'Batal',
+      success: 'Penggantian berhasil diperbaiki.',
+    },
+    errors: {
+      reimbursement_already_settled: 'Penggantian ini sudah dibayar.',
+      reimbursement_waived: 'Penggantian ini sudah diputihkan.',
     },
   },
 } as const
