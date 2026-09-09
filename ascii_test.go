@@ -19,7 +19,7 @@ import (
 // generation. This is that guard widened to every file a tool parses.
 //
 // A character that must reach a human is still allowed: write it as the
-// language's own escape (` ` in TypeScript, a double-quoted `"✨"` in
+// language's own escape (`\u00a0` in TypeScript, a double-quoted `"\u2728"` in
 // YAML), which keeps the bytes ASCII and the rendered output identical. See
 // CLAUDE.md, "Source files are ASCII".
 //

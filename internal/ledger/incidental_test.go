@@ -1010,7 +1010,7 @@ func TestReopenLateDisbursementThenRecloseCoversTheShortfallAndZerosTheBalance(t
 		t.Fatalf("ReopenIncidental() = %v, want no error", err)
 	}
 
-	// A late bill for the occasion - PRD §7.5's own scenario for why the
+	// A late bill for the occasion - PRD section 7.5's own scenario for why the
 	// guard is symmetric.
 	if _, err := l.PostTransaction(ctx, PostTransactionParams{
 		FundID: f.fundID, AccountID: f.cashID, PurposeID: envelope.PurposeID,
