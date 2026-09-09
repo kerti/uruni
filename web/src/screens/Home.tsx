@@ -46,7 +46,17 @@ interface HomeData {
  * happened), so a new entry is visible in recent activity without a manual
  * refresh, without this screen needing any router knowledge of its own.
  */
-export default function Home({ refetchKey, onReconcile, onViewReimbursements }: { refetchKey: unknown; onReconcile: () => void; onViewReimbursements: () => void }) {
+export default function Home({
+  refetchKey,
+  onReconcile,
+  onViewReimbursements,
+  onViewIncidentals,
+}: {
+  refetchKey: unknown
+  onReconcile: () => void
+  onViewReimbursements: () => void
+  onViewIncidentals: () => void
+}) {
   const [state, run] = useApi<HomeData>()
 
   async function loadHomeData(): Promise<HomeData> {
@@ -175,6 +185,10 @@ export default function Home({ refetchKey, onReconcile, onViewReimbursements }: 
 
       <Button type="button" variant="outline" size="lg" className="w-full" onClick={onViewReimbursements}>
         {copy.home.reimbursementLink}
+      </Button>
+
+      <Button type="button" variant="outline" size="lg" className="w-full" onClick={onViewIncidentals}>
+        {copy.home.incidentalLink}
       </Button>
 
       <section className="flex flex-col gap-2">

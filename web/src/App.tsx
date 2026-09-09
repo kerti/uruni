@@ -1,6 +1,6 @@
 import { useCallback, useEffect } from 'react'
 import { CircleCheck } from 'lucide-react'
-import { BrowserRouter, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
+import { BrowserRouter, Route, Routes, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 
 import OfflineBanner from '@/components/states/OfflineBanner'
 import UpdateBanner from '@/components/states/UpdateBanner'
@@ -13,6 +13,7 @@ import Setup from '@/screens/Setup/Setup'
 import RecordTransaction from '@/screens/RecordTransaction'
 import Reconcile from '@/screens/Reconcile'
 import Reimbursements from '@/screens/Reimbursements'
+import Incidentals from '@/screens/Incidentals'
 import DuesStatus from '@/screens/Dues/Status'
 import RecordDuesPayment from '@/screens/Dues/RecordPayment'
 import Home from '@/screens/Home'
@@ -155,6 +156,16 @@ function AuthedGate({ onLoggedOut }: { onLoggedOut: () => void }) {
   const [state, run] = useApi<Fund>()
   const navigate = useNavigate()
   const location = useLocation()
+  const [searchParams] = useSearchParams()
+
+  // /record?purpose=<id> - Incidentals.tsx's own contribute/disburse entry
+  // point, reusing this form entirely rather than a second copy of it
+  // (M6.19). A missing or non-numeric value falls back to
+  // RecordTransaction's own default (the `kind: "main"` row) exactly as if
+  // the param were absent.
+  const rawPurpose = searchParams.get('purpose')
+  const parsedPurpose = rawPurpose === null || rawPurpose.trim() === '' ? NaN : Number(rawPurpose)
+  const initialPurposeId = Number.isInteger(parsedPurpose) && parsedPurpose > 0 ? parsedPurpose : null
 
   useEffect(() => {
     void run(getFund)
@@ -205,7 +216,7 @@ function AuthedGate({ onLoggedOut }: { onLoggedOut: () => void }) {
         path="/record"
         element={
           <Shell title={title} onLoggedOut={onLoggedOut}>
-            <RecordTransaction onRecorded={handleRecorded} onCancel={() => navigate('/')} />
+            <RecordTransaction onRecorded={handleRecorded} onCancel={() => navigate('/')} initialPurposeId={initialPurposeId} />
           </Shell>
         }
       />
@@ -266,6 +277,14 @@ function AuthedGate({ onLoggedOut }: { onLoggedOut: () => void }) {
         }
       />
       <Route
+        path="/incidentals"
+        element={
+          <Shell title={title} onLoggedOut={onLoggedOut}>
+            <Incidentals onBack={() => navigate('/')} onRecordFor={(purposeId) => navigate(`/record?purpose=${purposeId}`)} />
+          </Shell>
+        }
+      />
+      <Route
         path="*"
         element={
           <Shell title={title} onLoggedOut={onLoggedOut}>
@@ -275,7 +294,12 @@ function AuthedGate({ onLoggedOut }: { onLoggedOut: () => void }) {
                 {successMessage}
               </p>
             )}
-            <Home refetchKey={location.key} onReconcile={() => navigate('/reconcile')} onViewReimbursements={() => navigate('/reimbursements')} />
+            <Home
+              refetchKey={location.key}
+              onReconcile={() => navigate('/reconcile')}
+              onViewReimbursements={() => navigate('/reimbursements')}
+              onViewIncidentals={() => navigate('/incidentals')}
+            />
           </Shell>
         }
       />

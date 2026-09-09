@@ -78,13 +78,22 @@ interface FormData {
  * for leaving without recording: installed to a home screen the app runs in
  * `display: standalone` (ADR-008, M6.7), where there is no browser back
  * button, so a form with only a submit is a room with no door.
+ *
+ * `initialPurposeId`, when given, seeds the purpose default with that id
+ * instead of the fund's `kind: "main"` row - M6.19's incidentals screen
+ * reuses this form entirely for contributions/disbursements by navigating
+ * here with the envelope's own purpose already chosen (App.tsx's `/record`
+ * route reads it from a `purpose` search param), rather than duplicating
+ * the field set. Absent, behaviour is unchanged.
  */
 export default function RecordTransaction({
   onRecorded,
   onCancel,
+  initialPurposeId,
 }: {
   onRecorded: (direction: 'in' | 'out') => void
   onCancel: () => void
+  initialPurposeId?: number | null
 }) {
   const [loadState, loadRun] = useApi<FormData>()
   const [submitState, submitRun] = useApi<unknown>()
@@ -123,8 +132,16 @@ export default function RecordTransaction({
     }
 
     if (purposeId === null) {
-      const main = loadState.data.purposes.find((p) => p.kind === 'main')
-      if (main) setPurposeId(main.id)
+      // Only honour a seed the fund actually has: a stale link to a purpose
+      // that no longer exists would otherwise leave the picker on an id
+      // nothing matches, and the form unsubmittable for no visible reason.
+      const seeded = initialPurposeId == null ? undefined : loadState.data.purposes.find((p) => p.id === initialPurposeId)
+      if (seeded) {
+        setPurposeId(seeded.id)
+      } else {
+        const main = loadState.data.purposes.find((p) => p.kind === 'main')
+        if (main) setPurposeId(main.id)
+      }
     }
     // Only re-run when the load itself changes - accountId/purposeId are
     // this effect's own output, including them would fight its one-time
