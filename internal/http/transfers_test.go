@@ -198,3 +198,94 @@ func TestPostTransfersRejectsMalformedJSON(t *testing.T) {
 		t.Errorf("error code = %q, want %q", got.Code, "invalid_json")
 	}
 }
+
+// The note reaches both legs over the wire, not just the ledger: this is
+// the route's half of the same guarantee internal/ledger/transfer_test.go
+// asserts on the rows themselves.
+func TestPostTransfersWritesTheNoteToBothLegs(t *testing.T) {
+	r := testRouter(t)
+	setup := setUpFund(t, r)
+
+	depositRec := postTransaction(t, r, transactionRequest{
+		AccountID: setup.CashAccountID(t), PurposeID: setup.MainPurposeID,
+		Direction: "in", Amount: 500_000, OccurredOn: "2026-08-10",
+	})
+	if depositRec.Code != http.StatusCreated {
+		t.Fatalf("POST /api/transactions = %d, want %d (body: %s)", depositRec.Code, http.StatusCreated, depositRec.Body.String())
+	}
+
+	note := "Setor tunai ke bank"
+	rec := postTransfer(t, r, transferRequest{
+		PurposeID:     setup.MainPurposeID,
+		FromAccountID: setup.CashAccountID(t),
+		ToAccountID:   setup.BankAccountID(t),
+		Amount:        300_000,
+		OccurredOn:    "2026-08-12",
+		Note:          &note,
+	})
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("POST /api/transfers = %d, want %d (body: %s)", rec.Code, http.StatusCreated, rec.Body.String())
+	}
+
+	var transfer transferResponse
+	if err := json.NewDecoder(rec.Body).Decode(&transfer); err != nil {
+		t.Fatalf("decoding transfer response: %v", err)
+	}
+
+	listRec := getTransactions(t, r)
+	var rows []transactionResponse
+	if err := json.NewDecoder(listRec.Body).Decode(&rows); err != nil {
+		t.Fatalf("decoding transactions: %v", err)
+	}
+
+	legs := 0
+	for _, row := range rows {
+		if row.TransferID == nil || *row.TransferID != transfer.ID {
+			continue
+		}
+		legs++
+		if row.Note == nil || *row.Note != note {
+			t.Errorf("leg %s note = %v, want %q", row.Direction, row.Note, note)
+		}
+	}
+	if legs != 2 {
+		t.Fatalf("legs referencing transfer %d = %d, want 2", transfer.ID, legs)
+	}
+}
+
+// An omitted note is NULL on both legs, not "" - the transaction list must
+// not render an empty note line where there is nothing to say.
+func TestPostTransfersWithoutANoteLeavesBothLegsNull(t *testing.T) {
+	r := testRouter(t)
+	setup := setUpFund(t, r)
+
+	depositRec := postTransaction(t, r, transactionRequest{
+		AccountID: setup.CashAccountID(t), PurposeID: setup.MainPurposeID,
+		Direction: "in", Amount: 500_000, OccurredOn: "2026-08-10",
+	})
+	if depositRec.Code != http.StatusCreated {
+		t.Fatalf("POST /api/transactions = %d, want %d (body: %s)", depositRec.Code, http.StatusCreated, depositRec.Body.String())
+	}
+
+	rec := postTransfer(t, r, transferRequest{
+		PurposeID:     setup.MainPurposeID,
+		FromAccountID: setup.CashAccountID(t),
+		ToAccountID:   setup.BankAccountID(t),
+		Amount:        300_000,
+		OccurredOn:    "2026-08-12",
+	})
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("POST /api/transfers = %d, want %d (body: %s)", rec.Code, http.StatusCreated, rec.Body.String())
+	}
+
+	listRec := getTransactions(t, r)
+	var rows []transactionResponse
+	if err := json.NewDecoder(listRec.Body).Decode(&rows); err != nil {
+		t.Fatalf("decoding transactions: %v", err)
+	}
+	for _, row := range rows {
+		if row.Kind == "transfer" && row.Note != nil {
+			t.Errorf("leg %s note = %q, want null", row.Direction, *row.Note)
+		}
+	}
+}

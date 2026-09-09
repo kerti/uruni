@@ -179,8 +179,9 @@ func (a *api) getIncidental(w http.ResponseWriter, r *http.Request) {
 // correctness, see CloseIncidentalAndRollParams's own comment) and the
 // close date.
 type closeIncidentalRequest struct {
-	AccountID int64  `json:"account_id"`
-	ClosedOn  string `json:"closed_on"`
+	AccountID int64   `json:"account_id"`
+	ClosedOn  string  `json:"closed_on"`
+	Note      *string `json:"note"`
 }
 
 // closeIncidentalResponse is POST /api/incidentals/{purposeID}/close's body:
@@ -221,6 +222,7 @@ func (a *api) closeIncidental(w http.ResponseWriter, r *http.Request) {
 		PurposeID: purposeID,
 		AccountID: req.AccountID,
 		ClosedOn:  req.ClosedOn,
+		Note:      req.Note,
 	})
 	if err != nil {
 		mapLedgerError(w, a.logger, err)
