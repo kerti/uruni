@@ -14,15 +14,19 @@ import (
 // money is for, only where it sits (ADR-024), and the reclass_purpose shape
 // that does change it belongs to CloseIncidentalAndRoll, not to a route.
 //
-// There is no note: the ledger's PostTransferBetweenAccountsParams carries
-// none, because a transfer's two legs already say everything a treasurer
-// would write - the amount, the date, and which way it went.
+// The optional note is written to both legs, or to neither. This reverses
+// an earlier reading of ADR-024 - that a pair's amount, date and direction
+// already say everything - which held only for the cash-to-bank case it was
+// written about. "Why did this move?" is exactly the question a transfer
+// leaves open, and answering it on one leg alone makes the other read, in
+// the transaction list, as an unexplained arrival.
 type transferRequest struct {
-	PurposeID     int64  `json:"purpose_id"`
-	FromAccountID int64  `json:"from_account_id"`
-	ToAccountID   int64  `json:"to_account_id"`
-	Amount        int64  `json:"amount"`
-	OccurredOn    string `json:"occurred_on"`
+	PurposeID     int64   `json:"purpose_id"`
+	FromAccountID int64   `json:"from_account_id"`
+	ToAccountID   int64   `json:"to_account_id"`
+	Amount        int64   `json:"amount"`
+	OccurredOn    string  `json:"occurred_on"`
+	Note          *string `json:"note"`
 }
 
 // transferResponse is the wire shape of the transfer row. No fund_id, same
@@ -68,6 +72,7 @@ func (a *api) createTransfer(w http.ResponseWriter, r *http.Request) {
 		ToAccountID:   req.ToAccountID,
 		Amount:        money.Amount(req.Amount),
 		OccurredOn:    req.OccurredOn,
+		Note:          req.Note,
 	})
 	if err != nil {
 		mapLedgerError(w, a.logger, err)
