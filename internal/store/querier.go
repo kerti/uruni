@@ -190,14 +190,17 @@ type Querier interface {
 	// What the fund still owes its members: neither settled by a payout nor
 	// waived. Both halves are conditions SQLite cannot express as a CHECK across
 	// tables, so the settle path filters on them here instead.
-	ListOutstandingReimbursementsByFund(ctx context.Context, fundID int64) ([]Reimbursement, error)
+	//
+	// settled is a literal 0: every row this list returns is unsettled by
+	// construction, and the wire shape must stay uniform with the full list.
+	ListOutstandingReimbursementsByFund(ctx context.Context, fundID int64) ([]ListOutstandingReimbursementsByFundRow, error)
 	ListPurposesByFund(ctx context.Context, fundID int64) ([]Purpose, error)
 	ListReceiptsByReimbursement(ctx context.Context, reimbursementID *int64) ([]Receipt, error)
 	ListReceiptsByTransaction(ctx context.Context, transactionID *int64) ([]Receipt, error)
 	ListReconciliationLines(ctx context.Context, reconciliationID int64) ([]ReconciliationLine, error)
 	// Newest first: the home screen wants the last count, not the first.
 	ListReconciliationsByFund(ctx context.Context, fundID int64) ([]Reconciliation, error)
-	ListReimbursementsByFund(ctx context.Context, fundID int64) ([]Reimbursement, error)
+	ListReimbursementsByFund(ctx context.Context, fundID int64) ([]ListReimbursementsByFundRow, error)
 	ListTransactionsByFund(ctx context.Context, fundID int64) ([]Transaction, error)
 	ListTransfersByFund(ctx context.Context, fundID int64) ([]Transfer, error)
 	// The reconciliation cutoff. Deliberately not an aggregate: SELECT

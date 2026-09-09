@@ -38,11 +38,11 @@ type reimbursementRequest struct {
 // back - the settlement posts on its own date and lives on the transaction
 // row, not here (ADR-024).
 //
-// No settled flag: whether a claim is settled is a fact about the ledger, not
-// about this row, and the one query that knows it is what
-// GET /api/reimbursements?outstanding=true runs. A client asking "who is
-// still owed money" asks that question directly rather than filtering a
-// field.
+// settled says whether a kind='reimbursement' transaction already references
+// the claim - a fact about the ledger, not about this row. It rides the list
+// queries (a computed column) so the client can render an "all" list honestly
+// without a second call: a row here is settled only when a payout row exists.
+// A claim that is not settled and not waived is still owed.
 //
 // waived_on is on the wire as of #103, when it became settable: a claim the
 // member forgave is not owed and not paid, and nothing else on this row says
@@ -56,10 +56,16 @@ type reimbursementResponse struct {
 	IncurredOn string  `json:"incurred_on"`
 	WaivedOn   *string `json:"waived_on"`
 	Note       *string `json:"note"`
+	Settled    bool    `json:"settled"`
 	CreatedAt  int64   `json:"created_at"`
 }
 
-func toReimbursementResponse(r store.Reimbursement) reimbursementResponse {
+// toReimbursementResponse maps a store row (and the settled fact that only
+// the list queries know) to the wire. createReimbursement and
+// updateReimbursement pass 0: a fresh claim is born owed, and the ledger
+// refuses every write to a settled claim, so a 0 is a guarantee, not an
+// assumption.
+func toReimbursementResponse(r store.Reimbursement, settled int64) reimbursementResponse {
 	return reimbursementResponse{
 		ID:         r.ID,
 		MemberID:   r.MemberID,
@@ -68,8 +74,25 @@ func toReimbursementResponse(r store.Reimbursement) reimbursementResponse {
 		IncurredOn: r.IncurredOn,
 		WaivedOn:   r.WaivedOn,
 		Note:       r.Note,
+		Settled:    settled != 0,
 		CreatedAt:  r.CreatedAt,
 	}
+}
+
+// toReimbursementResponseRow maps one list-query row (which carries the
+// settled column) to the wire shape.
+func toReimbursementResponseRow(r store.ListReimbursementsByFundRow) reimbursementResponse {
+	return toReimbursementResponse(store.Reimbursement{
+		ID:         r.ID,
+		FundID:     r.FundID,
+		MemberID:   r.MemberID,
+		PurposeID:  r.PurposeID,
+		Amount:     r.Amount,
+		IncurredOn: r.IncurredOn,
+		WaivedOn:   r.WaivedOn,
+		Note:       r.Note,
+		CreatedAt:  r.CreatedAt,
+	}, r.Settled)
 }
 
 // createReimbursement is POST /api/reimbursements: a direct-CRUD write
@@ -108,16 +131,17 @@ func (a *api) createReimbursement(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusCreated, toReimbursementResponse(claim))
+	writeJSON(w, http.StatusCreated, toReimbursementResponse(claim, 0))
 }
 
 // listReimbursements is GET /api/reimbursements, optionally
 // ?outstanding=true: every claim, or only those still owed - the list the
 // treasurer actually looks at, since a settled claim is history.
 //
-// The two are separate store queries rather than one query filtered in Go:
-// "outstanding" means no kind='reimbursement' transaction references the
-// claim, which is a fact in the transaction table, not a column here.
+// Both queries carry a computed `settled` column (the fact that a
+// kind='reimbursement' transaction references the claim), so the wire shape
+// is identical either way: an outstanding row is settled by construction,
+// and the full list says so truthfully for every row.
 //
 // An unparseable value is a 400 rather than a silent "all": ?outstanding=yes
 // most likely means the caller believes it is filtering, and answering with
@@ -138,21 +162,31 @@ func (a *api) listReimbursements(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var claims []store.Reimbursement
-	var err error
+	// Both sqlc row types are the claim fields plus the computed settled int;
+	// the outstanding variant is converted to the full-list type so the two
+	// share one loop even though they are separate generated structs.
+	var rows []store.ListReimbursementsByFundRow
 	if outstandingOnly {
-		claims, err = a.queries.ListOutstandingReimbursementsByFund(r.Context(), fund.ID)
+		claims, err := a.queries.ListOutstandingReimbursementsByFund(r.Context(), fund.ID)
+		if err != nil {
+			mapSQLiteError(w, a.logger, err)
+			return
+		}
+		for _, claim := range claims {
+			rows = append(rows, store.ListReimbursementsByFundRow(claim))
+		}
 	} else {
-		claims, err = a.queries.ListReimbursementsByFund(r.Context(), fund.ID)
-	}
-	if err != nil {
-		mapSQLiteError(w, a.logger, err)
-		return
+		var err error
+		rows, err = a.queries.ListReimbursementsByFund(r.Context(), fund.ID)
+		if err != nil {
+			mapSQLiteError(w, a.logger, err)
+			return
+		}
 	}
 
-	resp := make([]reimbursementResponse, 0, len(claims))
-	for _, claim := range claims {
-		resp = append(resp, toReimbursementResponse(claim))
+	resp := make([]reimbursementResponse, 0, len(rows))
+	for _, claim := range rows {
+		resp = append(resp, toReimbursementResponseRow(claim))
 	}
 	writeJSON(w, http.StatusOK, resp)
 }
@@ -322,7 +356,7 @@ func (a *api) updateReimbursement(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, toReimbursementResponse(updated))
+	writeJSON(w, http.StatusOK, toReimbursementResponse(updated, 0))
 }
 
 // deleteReimbursement is DELETE /api/reimbursements/{id}: for a claim that
