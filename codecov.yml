@@ -22,12 +22,19 @@ ignore:
   - "internal/store/querier.go"
   - "internal/store/db.go"
 
+# The project status asks one question: is the codebase still well covered?
+# `auto` asked a different one - is this PR's coverage at least the base
+# commit's - which fails a PR that adds a well-tested feature at 85% to a repo
+# sitting at 91%, and turns a green signal into noise the maintainer learns to
+# click past. A fixed floor is the actual standard: 80%, with no threshold, so
+# the check is exactly "still above 80%". Patch coverage stays on `auto`, where
+# comparing a diff against the base is the right question.
 coverage:
   status:
     project:
       default:
-        target: auto
-        threshold: 1%
+        target: 80%
+        threshold: 0%
     patch:
       default:
         target: auto
