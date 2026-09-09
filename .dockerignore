@@ -8,7 +8,7 @@ docs
 research
 *.md
 
-# Never ship the local PII denylist — the terms in it ARE the PII (ADR-020).
+# Never ship the local PII denylist - the terms in it ARE the PII (ADR-020).
 .pii-patterns
 .pii-patterns.example
 

@@ -143,7 +143,7 @@ func TestReverseDuesPaymentTwiceIsRefused(t *testing.T) {
 }
 
 // TestReverseDuesPaymentRefusesANonDuesTransaction: only a kind='dues' row
-// can be reversed through this method - PRD §4 keeps it exactly as wide as
+// can be reversed through this method - PRD section 4 keeps it exactly as wide as
 // dues, never a generic reverse-any-transaction primitive.
 func TestReverseDuesPaymentRefusesANonDuesTransaction(t *testing.T) {
 	l := newTestLedger(t)

@@ -17,12 +17,12 @@ web/node_modules/
 # The built SPA is ignored, but web/dist/.gitkeep is committed on purpose: the
 # `//go:embed web/dist` directive fails to compile if the directory is missing,
 # so a bare `go build`/`go vet` on a fresh clone needs it there (CONTRIBUTING.md).
-# This must stay in `dir/*` + negation form — a plain `web/dist/` rule stops git
+# This must stay in `dir/*` + negation form - a plain `web/dist/` rule stops git
 # descending into the directory at all, and the negation would never be reached.
 web/dist/*
 !web/dist/.gitkeep
 
-# Test artifacts (Vitest coverage, Playwright reports — ADR-015)
+# Test artifacts (Vitest coverage, Playwright reports - ADR-015)
 web/coverage/
 web/test-results/
 web/playwright-report/

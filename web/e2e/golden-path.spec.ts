@@ -3,15 +3,15 @@ import { expect, test } from '@playwright/test'
 // Imported rather than retyped as a literal: the copy lives in one place
 // (ADR-014) and this spec asserting on a stale copy of a string is exactly
 // the drift that centralizing it exists to prevent. Relative, not the `@/`
-// alias — that alias is a Vite/tsconfig concern and web/e2e is neither.
+// alias - that alias is a Vite/tsconfig concern and web/e2e is neither.
 import { copy } from '../src/copy/id'
 import { formatIDR } from '../src/lib/money'
 
 // The golden path this spec walks end to end, for the first time as of
-// M6.10: log in → first-run setup → record a transaction → home (balance
-// hero + reconciliation status) → reconcile. Each step below was a
+// M6.10: log in -> first-run setup -> record a transaction -> home (balance
+// hero + reconciliation status) -> reconcile. Each step below was a
 // placeholder for the milestone that gave it a real screen to assert
-// against — filled in as part of that milestone's own definition of done:
+// against - filled in as part of that milestone's own definition of done:
 //
 //   M6.4  register / login
 //   M6.5  first-run setup (fund, accounts, dues tier)
@@ -23,14 +23,14 @@ import { formatIDR } from '../src/lib/money'
 // `cmd/uruni/seed_e2e.go`'s fixture command seeds
 // e2e's instance with a bendahara account already registered, so a seeded
 // server always answers GET /api/session with has_account: true and the
-// Register screen is never reachable here — the golden path starts at
+// Register screen is never reachable here - the golden path starts at
 // Login. Register has no e2e coverage as a result; it is covered instead by
 // the vitest suite (web/src/screens/Register.test.tsx), which can reach a
 // fresh, unregistered instance a shared e2e fixture cannot.
 //
 // The same is true one layer in for M6.5's setup wizard: the same fixture
 // also seeds a fund (cmd/uruni/seed_e2e.go), so GET /api/fund always answers
-// 200 on a seeded instance and the wizard is never reachable here either —
+// 200 on a seeded instance and the wizard is never reachable here either -
 // logging in lands straight past it on the home placeholder, which is what
 // this slice's own test below proves (App.tsx's fund probe took the 200
 // branch). The wizard's own four steps - the minimum-one-location guard, the
@@ -40,7 +40,7 @@ import { formatIDR } from '../src/lib/money'
 // fresh, fund-less instance a shared e2e fixture cannot.
 //
 // M6.8's own test below records against the fixture's default location
-// without touching the account picker on purpose — proving the "location
+// without touching the account picker on purpose - proving the "location
 // remembers last used" default lands on the right account for a fresh
 // browser (nothing remembered yet, so the first active account) is the
 // vitest suite's job (RecordTransaction.test.tsx), which can control

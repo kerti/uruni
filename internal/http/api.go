@@ -49,7 +49,7 @@ type api struct {
 //
 // What it does register is the pair below. Without them an unknown /api path
 // answers with chi's plain-text "404 page not found" while every other failure
-// under /api is the JSON envelope — a client would have to parse two shapes to
+// under /api is the JSON envelope - a client would have to parse two shapes to
 // learn the same thing, and a mistyped path is exactly when it is least able
 // to. Registering them here rather than per-slice means the whole namespace
 // answers the same way from its first handler onward.
@@ -122,7 +122,7 @@ func (a *api) routes(r chi.Router) {
 		r.Get("/accounts", a.listAccounts)
 		r.Patch("/accounts/{id}", a.updateAccount)
 		r.Delete("/accounts/{id}", a.deleteAccount)
-		// An account's starting figure (PRD §7.1) - PostOpeningBalance has been
+		// An account's starting figure (PRD section 7.1) - PostOpeningBalance has been
 		// built and tested since M3 but had no route until now (#134).
 		r.Post("/accounts/{id}/opening-balance", a.postAccountOpeningBalance)
 		r.Get("/purposes", a.listPurposes)
@@ -150,22 +150,22 @@ func (a *api) routes(r chi.Router) {
 		r.Patch("/dues-rates/{id}", a.updateDuesRate)
 		r.Delete("/dues-rates/{id}", a.deleteDuesRate)
 
-		// The everyday loop's write path (PRD §7.2, §7.3, §7.6) and the
-		// reconcile flow's read path (PRD §7.8). A pass-through movement and a
+		// The everyday loop's write path (PRD section 7.2, section 7.3, section 7.6) and the
+		// reconcile flow's read path (PRD section 7.8). A pass-through movement and a
 		// correction are both ordinary POST /api/transactions calls - see
 		// transactionRequest's own comment - so there is no separate route for
 		// either.
 		r.Post("/transactions", a.createTransaction)
 		r.Get("/transactions", a.listTransactions)
 		// Moving money between two accounts without changing what the fund
-		// holds in total (PRD §6). No GET: a transfer's two legs are ordinary
+		// holds in total (PRD section 6). No GET: a transfer's two legs are ordinary
 		// transaction rows and already surface through GET /api/transactions.
 		r.Post("/transfers", a.createTransfer)
 
-		// A member fronting their own money (PRD §7.4). Recording the claim
+		// A member fronting their own money (PRD section 7.4). Recording the claim
 		// moves nothing - only settling posts a ledger row, which is why the
 		// recorded balance still matches the wallet while a claim is
-		// outstanding. There is deliberately no waive route: PRD §7.4 never
+		// outstanding. There is deliberately no waive route: PRD section 7.4 never
 		// asks for one.
 		// PATCH is both the correction and the waive (#103): waiving sets one
 		// column, so pairing it with the ordinary correction is what makes
@@ -187,7 +187,7 @@ func (a *api) routes(r chi.Router) {
 		r.Get("/members/{id}/outstanding-dues", a.getOutstandingDues)
 
 		// A one-off collection for an occasion, tracked separately from the
-		// general fund and closed when it's over (PRD §7.5). Addressed by
+		// general fund and closed when it's over (PRD section 7.5). Addressed by
 		// purpose id, matching how an incidental is addressed everywhere else
 		// in the domain. There is deliberately no contribute route: a
 		// contribution is an ordinary transaction tagged to the envelope's

@@ -80,7 +80,7 @@ func TestSubIsNotAddOfTheNegation(t *testing.T) {
 	t.Run("silently returns a wrong value where the true difference overflows", func(t *testing.T) {
 		// Add(-b) computes 0 + MinInt64 = MinInt64, and its sign check sees a
 		// sum that moved the expected way, so it returns MinInt64 with no
-		// error — a confidently wrong number, which is the failure mode this
+		// error - a confidently wrong number, which is the failure mode this
 		// package exists to refuse.
 		if got, err := money.Amount(0).Sub(math.MinInt64); !errors.Is(err, money.ErrOverflow) {
 			t.Errorf("Sub(0, math.MinInt64) = (%d, %v), want ErrOverflow", got, err)

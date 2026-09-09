@@ -50,7 +50,7 @@ function errorText(err: ApiError): string {
   return common ?? copy.common.unknownError
 }
 
-/** Local YYYY-MM-DD — same helper as RecordTransaction.tsx. */
+/** Local YYYY-MM-DD - same helper as RecordTransaction.tsx. */
 function todayISODate(): string {
   const now = new Date()
   const mm = String(now.getMonth() + 1).padStart(2, '0')
@@ -65,9 +65,9 @@ interface FormData {
 }
 
 /**
- * The reimbursements screen (M6.18, PRD §7.4): record that a member
+ * The reimbursements screen (M6.18, PRD section 7.4): record that a member
  * fronted money, settle when repaid, waive when the member forgives the
- * debt ("putihkan"), or correct/remove a claim entered wrongly — only
+ * debt ("putihkan"), or correct/remove a claim entered wrongly - only
  * until settled, after which the payout is a posted ledger row.
  *
  * Two-tab view: outstanding (default) vs all. A link on the home screen
@@ -281,8 +281,8 @@ export default function Reimbursements({ onBack }: { onBack: () => void }) {
             <li key={claim.id} className="flex flex-col gap-2 rounded-2xl bg-card p-4 ring-1 ring-foreground/10">
               <div className="flex items-start justify-between gap-3">
                 <span className="flex min-w-0 flex-col">
-                  <span className="truncate font-medium">{memberNames.get(claim.member_id) ?? '—'}</span>
-                  <span className="truncate text-sm text-muted-foreground">{purposeNames.get(claim.purpose_id) ?? '—'}</span>
+                  <span className="truncate font-medium">{memberNames.get(claim.member_id) ?? '-'}</span>
+                  <span className="truncate text-sm text-muted-foreground">{purposeNames.get(claim.purpose_id) ?? '-'}</span>
                 </span>
                 <span className="tabular shrink-0 font-medium">{formatIDR(claim.amount)}</span>
               </div>
@@ -294,7 +294,7 @@ export default function Reimbursements({ onBack }: { onBack: () => void }) {
 
               {claim.note && <p className="text-sm text-muted-foreground">{claim.note}</p>}
 
-              {/* Actions — only on the outstanding tab; settled claims show no actions */}
+              {/* Actions - only on the outstanding tab; settled claims show no actions */}
               {tab === 'outstanding' && !claim.waived_on && (
                 <div className="flex flex-wrap gap-2 pt-1">
                   {settleId !== claim.id && correctId !== claim.id && (
@@ -412,7 +412,7 @@ function RecordClaimForm({
   const [occurredOn, setOccurredOn] = useState(todayISODate)
   const [note, setNote] = useState('')
 
-  // Default purpose to kind:"main" — same as RecordTransaction.tsx.
+  // Default purpose to kind:"main" - same as RecordTransaction.tsx.
   useEffect(() => {
     if (purposeId === null) {
       const main = purposes.find((p) => p.kind === 'main')

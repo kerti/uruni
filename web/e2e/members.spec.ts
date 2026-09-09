@@ -4,7 +4,7 @@ import { copy } from '../src/copy/id'
 
 // M6.16 + M6.17: the roster and the dues tiers, on their own screen.
 //
-// One path in a real browser - home → Anggota → add a member → see it in
+// One path in a real browser - home -> Anggota -> add a member -> see it in
 // the list - and everything else left to the vitest suites, which can stub a
 // 409, a retired row and the partial-update semantics without touching the
 // shared database.

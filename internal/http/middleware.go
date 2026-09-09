@@ -38,7 +38,7 @@ func (a *api) sessionRequired(next http.Handler) http.Handler {
 	})
 }
 
-// requestLogger logs one line per request: method, path, status and duration —
+// requestLogger logs one line per request: method, path, status and duration -
 // exactly what ADR-022 promised would arrive as middleware at M4, no more.
 //
 // r.URL.Path only, never RawQuery or the body: a query string or a posted body
@@ -50,7 +50,7 @@ func requestLogger(logger *slog.Logger) func(http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			start := time.Now()
 
-			// chi's wrapper is what makes the status readable after the fact —
+			// chi's wrapper is what makes the status readable after the fact -
 			// a bare http.ResponseWriter never exposes what WriteHeader was
 			// called with.
 			ww := middleware.NewWrapResponseWriter(w, r.ProtoMajor)

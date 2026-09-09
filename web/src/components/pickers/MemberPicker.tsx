@@ -6,8 +6,8 @@ import type { Member } from '@/lib/setup'
 
 /**
  * Picks a member from the fund's roster. An inactive member (`inactive_on`
- * set) is excluded from the selectable list entirely — the same pattern
- * AccountPicker uses for retired locations: PRD §7.4's reimbursement
+ * set) is excluded from the selectable list entirely - the same pattern
+ * AccountPicker uses for retired locations: PRD section 7.4's reimbursement
  * record form is for active members, not for browsing history.
  *
  * Renders through the themed Select (M6.15), following AccountPicker's

@@ -110,7 +110,7 @@ async function loadReconcileData(): Promise<ReconcileData> {
 }
 
 /**
- * The reconcile screen (M6.10, PRD §7.8: "the heart of the product").
+ * The reconcile screen (M6.10, PRD section 7.8: "the heart of the product").
  * Enter what's actually in each active location, preview the gap against
  * the recorded balance, choose how to resolve it, submit every count in one
  * POST /api/reconciliations, then confirm from that response.
@@ -346,7 +346,7 @@ export default function Reconcile({ onDone, onCancel }: { onDone: () => void; on
         ))}
       </div>
 
-      {/* Collapsed by default. PRD §7.8 wants recent transactions here so
+      {/* Collapsed by default. PRD section 7.8 wants recent transactions here so
           she can spot a missing or duplicated entry - but that is the
           exception, not the everyday case, and expanded it pushed the save
           and cancel buttons far below the counts they act on. A native
@@ -636,7 +636,7 @@ function Confirmation({
           <li key={line.id} className="flex flex-col gap-1 rounded-lg bg-card p-4 ring-1 ring-foreground/10">
             <span className="font-medium">{accountNames.get(line.account_id) ?? copy.home.purposeUnknown}</span>
             <span className="tabular text-sm text-muted-foreground">
-              {text.recordedLabel}: {formatIDR(line.recorded_amount)} · {formatIDR(line.actual_amount)}
+              {text.recordedLabel}: {formatIDR(line.recorded_amount)} {'\u00b7'} {formatIDR(line.actual_amount)}
             </span>
             <span className="text-sm">
               {text.resolutionOptions[line.resolution as keyof typeof text.resolutionOptions] ?? line.resolution}

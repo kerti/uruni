@@ -27,7 +27,7 @@ export interface RunOptions {
    *
    * For a background refresh the user did not ask for - Home re-reading its
    * data when the app comes back to the foreground - the default behaviour
-   * is wrong twice over: it blanks a perfectly good screen to "Memuat…" on
+   * is wrong twice over: it blanks a perfectly good screen to "Memuat..." on
    * every app switch, and it replaces it with ErrorState if the network
    * happens to be down for that one moment. A silent refresh that fails
    * leaves the last good data visible; the app's own OfflineBanner is what

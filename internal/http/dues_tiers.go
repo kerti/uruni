@@ -8,7 +8,7 @@ import (
 )
 
 // duesTierRequest is POST /api/dues-tiers's body: just the name the
-// treasurer gives the tier (PRD §6 - "a table, not an enum").
+// treasurer gives the tier (PRD section 6 - "a table, not an enum").
 type duesTierRequest struct {
 	Name string `json:"name"`
 }

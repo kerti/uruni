@@ -24,7 +24,7 @@ function currentISOMonth(): string {
 
 
 /**
- * Dues tiers and their rates (M6.17, PRD §6: tiers are "a table, not an
+ * Dues tiers and their rates (M6.17, PRD section 6: tiers are "a table, not an
  * enum" - the treasurer names and prices them).
  *
  * The rule this screen exists to express: **a rate is added, never repriced

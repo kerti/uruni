@@ -21,7 +21,7 @@ function jsonResponse(body: unknown, status = 200) {
  * string with its NBSP intact never equals the normalized DOM text it is
  * compared against. */
 function money(amount: number): string {
-  return formatIDR(amount).replace(/ /g, ' ')
+  return formatIDR(amount).replace(/\u00a0/g, ' ')
 }
 
 const balances = {

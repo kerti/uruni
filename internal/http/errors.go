@@ -18,7 +18,7 @@ import (
 // errorEnvelope is the wire shape of every API error:
 // {"error":{"code":"snake_case_slug","message":"An English sentence."}}.
 //
-// Both fields are English. The API is ADR-014's "code" surface — Indonesian
+// Both fields are English. The API is ADR-014's "code" surface - Indonesian
 // never appears on the wire; the SPA maps code to the treasurer-facing copy.
 type errorEnvelope struct {
 	Error errorBody `json:"error"`
@@ -44,7 +44,7 @@ func writeAPIError(w http.ResponseWriter, status int, code, message string) {
 //
 // ErrOpeningBalanceExists maps to 409 alongside the two reimbursement
 // sentinels and ErrIncidentalAlreadyClosed even though ADR-027's own closing
-// sentence lists only the latter three — its doc comment gives the identical
+// sentence lists only the latter three - its doc comment gives the identical
 // reasoning (a pre-check ahead of a unique index the schema already enforces),
 // and that ADR is `implemented`, not `draft`, so the omission is corrected here
 // rather than by editing it.
@@ -59,8 +59,8 @@ func mapLedgerError(w http.ResponseWriter, logger *slog.Logger, err error) {
 	case errors.Is(err, ledger.ErrDuesPaymentNotFound):
 		writeAPIError(w, http.StatusNotFound, "not_found", "The requested resource was not found.")
 	case errors.Is(err, sql.ErrNoRows):
-		// A ledger method that fetches the row it is about before writing —
-		// SettleReimbursement's GetReimbursement — wraps the driver's own
+		// A ledger method that fetches the row it is about before writing -
+		// SettleReimbursement's GetReimbursement - wraps the driver's own
 		// sql.ErrNoRows rather than a sentinel of its own when the id names
 		// nothing. That is a 404 for the same reason ErrDuesPaymentNotFound
 		// above is: the id came from the path and names the resource being
@@ -79,8 +79,8 @@ func mapLedgerError(w http.ResponseWriter, logger *slog.Logger, err error) {
 	case errors.Is(err, ledger.ErrFundAlreadyExists):
 		writeAPIError(w, http.StatusConflict, "fund_already_exists", "A fund has already been set up.")
 	case errors.Is(err, money.ErrOverflow):
-		// err's own message embeds the operands that overflowed — the amounts
-		// themselves — which ADR-022 forbids logging. Every other unrecognized
+		// err's own message embeds the operands that overflowed - the amounts
+		// themselves - which ADR-022 forbids logging. Every other unrecognized
 		// error reaching the default case below wraps an id, not an amount
 		// (ADR-027: "surfaces wrapped generically... for M4 to map to a 500"),
 		// so only this one case needs to withhold the message.
@@ -95,7 +95,7 @@ func mapLedgerError(w http.ResponseWriter, logger *slog.Logger, err error) {
 		// purpose_id straight from the client into the write, so a FOREIGN
 		// KEY violation there is a typo, not a bug, and a 500 would blame
 		// the server for it. Classification is mapSQLiteError's, unchanged;
-		// only which errors reach it is new — see ADR-027's Amendments.
+		// only which errors reach it is new - see ADR-027's Amendments.
 		var sqliteErr *sqlite.Error
 		if errors.As(err, &sqliteErr) {
 			mapSQLiteError(w, logger, err)
@@ -132,7 +132,7 @@ func mapAuthError(w http.ResponseWriter, logger *slog.Logger, err error) {
 // the ledger, mirroring the mapSQLiteError / mapSQLiteDeleteError pair
 // exactly and for the same reason: SQLITE_CONSTRAINT_FOREIGNKEY means "you
 // named a row that doesn't exist" on a write and "real data still points at
-// this row" on a delete — 400 and 409, one result code.
+// this row" on a delete - 400 and 409, one result code.
 //
 // The ledger sentinels are checked first and identically, so a settled claim
 // is still its own named 409 rather than a foreign-key story.
@@ -146,7 +146,7 @@ func mapLedgerDeleteError(w http.ResponseWriter, logger *slog.Logger, err error)
 	mapLedgerError(w, logger, err)
 }
 
-// mapSQLiteError answers an error from a direct-CRUD route — one that calls
+// mapSQLiteError answers an error from a direct-CRUD route - one that calls
 // store.Queries itself rather than internal/ledger, so none of ADR-027's
 // sentinels apply. There is no existing taxonomy for this in the codebase; it
 // reads the driver's own result code rather than the ADR-027 sentinels above.

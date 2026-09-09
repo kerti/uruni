@@ -19,7 +19,7 @@ import (
 // dropping the whole ledger is the wrong shape for that.
 const migrateUsage = "try: uruni migrate up | down | status"
 
-// appliedAtFormat is local time, seconds resolution — `migrate status` is read by
+// appliedAtFormat is local time, seconds resolution - `migrate status` is read by
 // an operator comparing it against when they ran the upgrade, not parsed.
 const appliedAtFormat = "2006-01-02 15:04:05"
 
@@ -34,13 +34,13 @@ const migrateTimeout = 2 * time.Minute
 // no connection to inherit.
 func migrate(ctx context.Context, args []string, out io.Writer) error {
 	if len(args) == 0 {
-		return fmt.Errorf("%w — %s", ErrNoCommand, migrateUsage)
+		return fmt.Errorf("%w - %s", ErrNoCommand, migrateUsage)
 	}
 	verb := args[0]
 	// Checked before opening the database, so a typo doesn't create a file on the
 	// way to being rejected.
 	if verb != "up" && verb != "down" && verb != "status" {
-		return fmt.Errorf("%w: %q — %s", ErrUnknownCommand, verb, migrateUsage)
+		return fmt.Errorf("%w: %q - %s", ErrUnknownCommand, verb, migrateUsage)
 	}
 
 	cfg, err := config.Load()
@@ -66,7 +66,7 @@ func migrate(ctx context.Context, args []string, out io.Writer) error {
 }
 
 // migrateUp applies what is pending and says so either way. `serve` logs its
-// migrations and stays quiet when there are none; the CLI is the opposite — a
+// migrations and stays quiet when there are none; the CLI is the opposite - a
 // command that prints nothing leaves the operator unsure it ran.
 func migrateUp(ctx context.Context, sqlDB *sql.DB, logger *slog.Logger, out io.Writer, dbPath string) error {
 	applied, err := db.Up(ctx, sqlDB, logger)
@@ -88,7 +88,7 @@ func migrateUp(ctx context.Context, sqlDB *sql.DB, logger *slog.Logger, out io.W
 func migrateDown(ctx context.Context, sqlDB *sql.DB, logger *slog.Logger, out io.Writer) error {
 	version, err := db.Down(ctx, sqlDB, logger)
 	if errors.Is(err, db.ErrNothingToRollBack) {
-		_, err := fmt.Fprintln(out, "nothing to roll back — the database is at version 0")
+		_, err := fmt.Fprintln(out, "nothing to roll back - the database is at version 0")
 		return err
 	}
 	if err != nil {

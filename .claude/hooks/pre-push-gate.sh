@@ -1,5 +1,5 @@
 #!/bin/sh
-# PreToolUse(Bash) hook — refuse to push a red tree.
+# PreToolUse(Bash) hook - refuse to push a red tree.
 #
 # `make check` mirrors ci.yml step for step, so this turns "I pushed and CI went
 # red ten minutes later" into an immediate local failure. Only `git push` is
@@ -19,7 +19,7 @@ cmd=$(jq -r '.tool_input.command // ""' 2>/dev/null) || exit 0
 # `make check && git push` through, while a plain substring test fires on
 # `git commit -m "add push notification"` and on any command that merely mentions
 # the phrase. So: confirm the segment's first word is `git`, walk past git's own
-# options (`-c key=val`, `-C dir`, …), and require the subcommand itself to be
+# options (`-c key=val`, `-C dir`, ...), and require the subcommand itself to be
 # `push`.
 is_git_push() {
   set -f            # no globbing while we word-split
@@ -61,7 +61,7 @@ if output=$(make check 2>&1); then
   exit 0
 fi
 
-jq -n --arg r "make check failed — fix before pushing:
+jq -n --arg r "make check failed - fix before pushing:
 
 $output" \
   '{hookSpecificOutput:{hookEventName:"PreToolUse",permissionDecision:"deny",permissionDecisionReason:$r}}'

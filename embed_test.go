@@ -6,7 +6,7 @@ import (
 )
 
 // The bundle's contents depend on whether Vite has run, but the sub-filesystem
-// must resolve either way — that is what lets a fresh clone build before the
+// must resolve either way - that is what lets a fresh clone build before the
 // first `make web-build`.
 func TestWebAssetsRootsAtWebDist(t *testing.T) {
 	assets, err := WebAssets()

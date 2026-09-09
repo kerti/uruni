@@ -80,7 +80,7 @@ func (a *api) resolveDuesTier(w http.ResponseWriter, r *http.Request) (store.Due
 
 // createDuesRate is POST /api/dues-tiers/{id}/rates. A dues rate is edited
 // by adding a row for a new period, never by repricing an existing one (PRD
-// §6, "editable, effective over time"); #81's PATCH below is the narrower
+// section 6, "editable, effective over time"); #81's PATCH below is the narrower
 // case of a mistyped amount on the row you already have, not a price change.
 // A duplicate (tier_id, effective_from) hits dues_rate's own UNIQUE
 // constraint and comes back as 409 through mapSQLiteError.

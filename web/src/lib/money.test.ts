@@ -6,7 +6,7 @@ import { formatIDR, formatRupiahDigits, parseRupiah } from '@/lib/money'
 // against a normalized string so these tests describe the digits and grouping,
 // which is what the rule is about, rather than one ICU version's spacing.
 function normalize(value: string): string {
-  return value.replace(/ /g, ' ')
+  return value.replace(/\u00a0/g, ' ')
 }
 
 describe('formatIDR', () => {

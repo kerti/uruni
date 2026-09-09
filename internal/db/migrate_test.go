@@ -116,7 +116,7 @@ func TestOpenMigrateQueryThroughTheGeneratedStore(t *testing.T) {
 		t.Fatalf("Up() = %v, want no error", err)
 	}
 
-	// The whole point of M1.3: the database path works end to end — opened with
+	// The whole point of M1.3: the database path works end to end - opened with
 	// its pragmas, migrated, and queried through the sqlc-generated code
 	// (ADR-005) rather than through hand-written SQL in a test.
 	ok, err := store.New(sqlDB).Ping(ctx)

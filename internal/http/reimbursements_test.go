@@ -455,7 +455,7 @@ func TestPostSettlementRejectsMalformedJSON(t *testing.T) {
 }
 
 // TestNoWaiveRouteExists is the acceptance criterion stated as a test: PRD
-// §7.4 never asks to waive a claim, so the route is absent and stays absent.
+// section 7.4 never asks to waive a claim, so the route is absent and stays absent.
 func TestNoWaiveRouteExists(t *testing.T) {
 	r := testRouter(t)
 	setUpFund(t, r)

@@ -47,9 +47,9 @@ describe('DuesTiers', () => {
     render(<DuesTiers onTiersChanged={vi.fn()} />)
 
     expect(await screen.findByText('Pelaksana')).toBeInTheDocument()
-    // A tier whose price is not decided yet is a legal state (PRD §6).
+    // A tier whose price is not decided yet is a legal state (PRD section 6).
     // findByText, not getByText: a tier's rates load one request behind the
-    // tier list itself, so the section is still "Memuat…" at this point.
+    // tier list itself, so the section is still "Memuat..." at this point.
     expect(await screen.findByText(text.noRates)).toBeInTheDocument()
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
   })

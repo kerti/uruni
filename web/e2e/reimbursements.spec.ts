@@ -62,7 +62,7 @@ test.describe('reimbursements', () => {
     await page.getByRole('button', { name: copy.reimbursements.actions.settle, exact: true }).first().click()
     await expect(page.getByText(copy.reimbursements.settle.heading)).toBeVisible()
 
-    // Pick where the money is paid from — the account has no default.
+    // Pick where the money is paid from - the account has no default.
     await page.getByRole('combobox', { name: copy.reimbursements.settle.accountLabel }).click()
     await page.getByRole('option').first().click()
 
@@ -76,7 +76,7 @@ test.describe('reimbursements', () => {
     // The payout row carries a composed description (member + the claim's own
     // note), so recent activity reads the repayment instead of a bare amount.
     await page.getByRole('button', { name: copy.reimbursements.backToHome }).click()
-    await expect(page.getByText(/Penggantian — /)).toBeVisible()
+    await expect(page.getByText(/Penggantian - /)).toBeVisible()
   })
 
   test('waive a fresh claim, then un-waive it from the all tab', async ({ page }) => {
@@ -90,7 +90,7 @@ test.describe('reimbursements', () => {
     await page.getByRole('button', { name: copy.home.reimbursementLink }).click()
     await expect(page.getByRole('heading', { name: copy.reimbursements.heading })).toBeVisible()
 
-    // The earlier claim was settled, leaving the outstanding list empty —
+    // The earlier claim was settled, leaving the outstanding list empty -
     // record a fresh claim to waive. First member again, Rp 20.000.
     await page.getByRole('button', { name: copy.reimbursements.record.heading }).click()
     await page.getByRole('combobox', { name: copy.reimbursements.record.memberLabel }).click()

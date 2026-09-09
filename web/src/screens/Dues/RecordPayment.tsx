@@ -55,7 +55,7 @@ interface FormData {
 }
 
 /**
- * Recording a dues payment (M6.13, PRD §7.3): "mark a dues payment (amount
+ * Recording a dues payment (M6.13, PRD section 7.3): "mark a dues payment (amount
  * auto-filled from the member's tier, editable; location; cash/transfer),"
  * including the multi-period case.
  *
@@ -74,7 +74,7 @@ interface FormData {
  *
  * Purpose is not a field here: dues land on the fund's own `kind: "main"`
  * purpose, the same silent default RecordTransaction.tsx starts from, and
- * PRD §7.3's form is member / amount / location / date. Note is not a field
+ * PRD section 7.3's form is member / amount / location / date. Note is not a field
  * either - the row already says who paid and for which month.
  *
  * Router-agnostic, same contract as every other screen App.tsx mounts:
@@ -181,7 +181,7 @@ export default function RecordDuesPayment({
         occurredOn,
         // Every posted row says what it is and whose it is - a dues payment
         // that reaches recent activity or the report with an empty note
-        // reads as a bare amount. Derived, never typed: PRD §7.3's form is
+        // reads as a bare amount. Derived, never typed: PRD section 7.3's form is
         // member / amount / location / date, and the member is already
         // chosen above.
         note: text.note(member?.name ?? ''),
@@ -276,7 +276,7 @@ export default function RecordDuesPayment({
 
                     {period.status === 'partial' && (
                       <p className="tabular text-sm text-muted-foreground">
-                        {copy.dues.paidLabel}: {formatIDR(period.paid_amount)} · {text.remainingLabel}:{' '}
+                        {copy.dues.paidLabel}: {formatIDR(period.paid_amount)} {'\u00b7'} {text.remainingLabel}:{' '}
                         {formatIDR(remainingOf(period))}
                       </p>
                     )}

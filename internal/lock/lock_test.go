@@ -46,7 +46,7 @@ func TestAcquireRefusesASecondHolder(t *testing.T) {
 		t.Fatalf("second Acquire() = %v, want ErrLocked", err)
 	}
 	// The operator-facing message names the lock file and says plainly that
-	// another instance is running — that is the whole point of the error.
+	// another instance is running - that is the whole point of the error.
 	if !strings.Contains(err.Error(), path) {
 		t.Errorf("second Acquire() error = %q, want it to name %q", err, path)
 	}
@@ -56,7 +56,7 @@ func TestAcquireRefusesASecondHolder(t *testing.T) {
 }
 
 func TestAcquireReportsAnUnopenableLockPath(t *testing.T) {
-	// A lock file the operator's URUNI_DB implies but that cannot be created —
+	// A lock file the operator's URUNI_DB implies but that cannot be created -
 	// here because its parent directory does not exist, which is what a typo'd
 	// or unmounted data path looks like at boot.
 	path := filepath.Join(t.TempDir(), "no-such-directory", "uruni.db.lock")
@@ -66,7 +66,7 @@ func TestAcquireReportsAnUnopenableLockPath(t *testing.T) {
 		t.Fatal("Acquire() with an unopenable path = nil, want an error")
 	}
 	if errors.Is(err, ErrLocked) {
-		t.Errorf("Acquire() = %v, want a file error rather than ErrLocked — the lock is not held, it could not be opened", err)
+		t.Errorf("Acquire() = %v, want a file error rather than ErrLocked - the lock is not held, it could not be opened", err)
 	}
 	if !strings.Contains(err.Error(), path) {
 		t.Errorf("Acquire() error = %q, want it to name %q so the operator can see which path failed", err, path)
@@ -125,7 +125,7 @@ func TestReleaseTwiceIsANoOpAndNeverTouchesAReusedDescriptor(t *testing.T) {
 	// serve releases through a defer, so an explicit release followed by the
 	// deferred one is an ordinary shape, not an abuse. The second call must not
 	// reach the syscall at all: the descriptor is closed, and the kernel is free
-	// to have given that number to any file opened since — unlocking which would
+	// to have given that number to any file opened since - unlocking which would
 	// release a lock this process never took.
 	stubFlock(t, func(int, int) error {
 		t.Error("second Release() called flock on a closed descriptor")
@@ -172,13 +172,13 @@ func TestReleaseAllowsAnOrdinaryRestart(t *testing.T) {
 // the lock and blocks forever, kills that subprocess the same way
 // `make server-stop` escalates to once its grace period elapses, waits for
 // the kernel to actually reap it, and then asserts a fresh Acquire succeeds
-// immediately — no polling, no sleep, because cmd.Wait returning is itself
+// immediately - no polling, no sleep, because cmd.Wait returning is itself
 // the guarantee that the file descriptor holding the lock is gone.
 func TestStaleLockFromAKilledProcessDoesNotWedge(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "uruni.db.lock")
 
 	//nolint:gosec // os.Args[0] is this same test binary, re-executed with a
-	// flag that selects the helper test below — the standard Go idiom for
+	// flag that selects the helper test below - the standard Go idiom for
 	// running production code in a real subprocess, not user input.
 	cmd := exec.Command(os.Args[0], "-test.run=^TestHelperAcquireAndBlock$")
 	cmd.Env = append(os.Environ(), "URUNI_LOCK_TEST_HELPER=1", "URUNI_LOCK_TEST_PATH="+path)
@@ -190,7 +190,7 @@ func TestStaleLockFromAKilledProcessDoesNotWedge(t *testing.T) {
 		t.Fatalf("starting the helper process = %v, want nil", err)
 	}
 
-	// Blocks on the child's own stdout until it writes its ready line — a
+	// Blocks on the child's own stdout until it writes its ready line - a
 	// real synchronization point, not a sleep guessing how long Acquire takes.
 	line, err := bufio.NewReader(stdout).ReadString('\n')
 	if err != nil || strings.TrimSpace(line) != "locked" {

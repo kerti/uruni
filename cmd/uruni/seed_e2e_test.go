@@ -43,7 +43,7 @@ func TestSeedE2ERefusesTheDevDatabase(t *testing.T) {
 }
 
 // TestSeedE2ERefusesATempPathWithoutE2EInTheName: living under a temp
-// directory alone isn't enough — a stray "/tmp/uruni.db" a developer created
+// directory alone isn't enough - a stray "/tmp/uruni.db" a developer created
 // by hand while debugging something else must not look throwaway just
 // because of where it happens to sit.
 func TestSeedE2ERefusesATempPathWithoutE2EInTheName(t *testing.T) {
@@ -57,7 +57,7 @@ func TestSeedE2ERefusesATempPathWithoutE2EInTheName(t *testing.T) {
 
 // TestSeedE2ESeedsAThrowawayDatabase is the happy path: a path that satisfies
 // both halves of the guard (under a temp directory, "e2e" in the filename)
-// migrates and seeds cleanly against a database that does not exist yet —
+// migrates and seeds cleanly against a database that does not exist yet -
 // which is the only state `make e2e` ever calls it in, since `make e2e-reset`
 // deletes the file first.
 func TestSeedE2ESeedsAThrowawayDatabase(t *testing.T) {

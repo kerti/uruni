@@ -3,8 +3,8 @@
 // reconciliation snapshot. It sits between internal/store's generated queries
 // and M4's HTTP handlers, and holds every rule the schema cannot state.
 //
-// One package, not four. Every operation here shares one primitive — insert one
-// or more "transaction" rows inside one database transaction — and one
+// One package, not four. Every operation here shares one primitive - insert one
+// or more "transaction" rows inside one database transaction - and one
 // connection. Splitting into members/dues/incidental would draw boundaries
 // around table names rather than around the one real seam, which is read versus
 // write (ADR-027).
@@ -52,7 +52,7 @@ func (l *Ledger) withTx(ctx context.Context, fn func(store.Querier) error) error
 	}
 
 	// A no-op once Commit has run, and the safety net on every path that
-	// returns before it — including a panic.
+	// returns before it - including a panic.
 	defer func() { _ = tx.Rollback() }()
 
 	if err := fn(store.New(tx)); err != nil {

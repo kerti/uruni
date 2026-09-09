@@ -46,7 +46,7 @@ func toTransferResponse(t store.Transfer) transferResponse {
 
 // createTransfer is POST /api/transfers: wraps
 // Ledger.PostTransferBetweenAccounts, the treasurer depositing the wallet's
-// cash at the bank or drawing it back out (PRD §6's location tracking). The
+// cash at the bank or drawing it back out (PRD section 6's location tracking). The
 // fund's total is unchanged by construction - one amount, two opposite legs -
 // so the only thing that moves is where the money sits.
 //

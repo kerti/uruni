@@ -10,7 +10,7 @@ import (
 
 // The Makefile exports .env into every `make test` run, so a test that only set
 // the variable it cares about would read the developer's real PORT or base URL.
-// env clears the whole table first, then applies the case's overrides — which
+// env clears the whole table first, then applies the case's overrides - which
 // also makes "unset" a value a test can assert on.
 func env(t *testing.T, overrides map[string]string) {
 	t.Helper()
@@ -49,7 +49,7 @@ func TestLoadDefaultsEverythingItCan(t *testing.T) {
 	if cfg.LogFormat != LogFormatText {
 		t.Errorf("LogFormat = %q, want %q", cfg.LogFormat, LogFormatText)
 	}
-	// Optional, and unset here — emailed backups (M8) are the only thing that
+	// Optional, and unset here - emailed backups (M8) are the only thing that
 	// needs it.
 	if cfg.SMTPURL != "" {
 		t.Errorf("SMTPURL = %q, want empty", cfg.SMTPURL)
@@ -92,7 +92,7 @@ func TestLoadRejectsBadValues(t *testing.T) {
 	cases := []struct {
 		name      string
 		overrides map[string]string
-		// mentions is the variable name the message must name — the operator's
+		// mentions is the variable name the message must name - the operator's
 		// whole job on a boot failure is knowing which line of .env to fix.
 		mentions string
 	}{
@@ -144,7 +144,7 @@ func TestLoadRefusesAnUnconfiguredBaseURL(t *testing.T) {
 // SMTP_URL carries a password: if it reached an error message it would reach
 // the container logs, and from there an issue thread.
 func TestLoadNeverEchoesACredential(t *testing.T) {
-	// Invalid on its percent-escape, so it is rejected *as a URL* — the path
+	// Invalid on its percent-escape, so it is rejected *as a URL* - the path
 	// where echoing the value would be most tempting. Assembled from parts
 	// rather than written as one literal so the fixture does not itself read as
 	// a checked-in `scheme://user:pass@host` credential.
@@ -159,7 +159,7 @@ func TestLoadNeverEchoesACredential(t *testing.T) {
 }
 
 // ADR-004: SQLite is the only engine through 0.x, so DATABASE_URL must not be a
-// variable the binary reacts to at all — not honoured, not warned about.
+// variable the binary reacts to at all - not honoured, not warned about.
 func TestLoadIgnoresDatabaseURL(t *testing.T) {
 	env(t, map[string]string{"URUNI_BASE_URL": testBaseURL})
 	t.Setenv("DATABASE_URL", "postgres://user:pass@localhost:5432/uruni")

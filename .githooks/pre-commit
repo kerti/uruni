@@ -1,12 +1,12 @@
 #!/bin/sh
 # Pre-commit PII/secret guard.
 #
-# Uruni is developed against a real community's fund — real neighbours' names,
+# Uruni is developed against a real community's fund - real neighbours' names,
 # real amounts. That data must never reach a public AGPL repo. This hook blocks
 # a commit whose staged ADDITIONS match any rule in .pii-patterns (gitignored,
 # one POSIX extended-regex per line, case-insensitive; blank lines and
 # #-comments ignored). The denylist is local-only because the real terms are
-# themselves the PII — run `make hooks-install` to set it up.
+# themselves the PII - run `make hooks-install` to set it up.
 #
 # Reports only the offending filenames, never the matched content, so a blocked
 # commit doesn't echo the PII back into a terminal or an agent's context.
@@ -16,7 +16,7 @@ set -eu
 
 pf=".pii-patterns"
 if [ ! -f "$pf" ]; then
-  echo "pii-guard: no $pf — run 'make hooks-install' to enable; skipping." >&2
+  echo "pii-guard: no $pf - run 'make hooks-install' to enable; skipping." >&2
   exit 0
 fi
 
@@ -30,7 +30,7 @@ regex=$(grep -vE '^[[:space:]]*($|#)' "$pf" | paste -sd'|' -)
 #
 # NOTICE matters immediately: `make hooks-install` seeds .pii-patterns with your
 # own git identity, and AGPL-3.0's "how to apply" appendix wants exactly that
-# name as the copyright holder — so without this rule the guard blocks the
+# name as the copyright holder - so without this rule the guard blocks the
 # project from stating its own copyright. (THIRD-PARTY-NOTICES doesn't exist
 # yet; the rule is here so it doesn't have to be rediscovered when it does.)
 is_attribution() {
@@ -52,7 +52,7 @@ for f in $(git diff --cached --name-only --diff-filter=ACM); do
 done
 
 if [ -n "$bad" ]; then
-  echo "✗ pii-guard: staged additions match a .pii-patterns rule — commit blocked:" >&2
+  echo "FAIL pii-guard: staged additions match a .pii-patterns rule - commit blocked:" >&2
   for f in $bad; do echo "    $f" >&2; done
   echo "  Scrub to neutral fixtures + toy amounts, then re-stage. Do NOT use --no-verify." >&2
   exit 1

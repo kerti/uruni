@@ -62,7 +62,7 @@ var ErrReimbursementAlreadySettled = errors.New("ledger: reimbursement has alrea
 // Unlike ErrOpeningBalanceExists and ErrReimbursementAlreadySettled, this is
 // not a pre-check ahead of a unique index the schema already enforces: there
 // is deliberately no such index. "At most one fund" is application policy,
-// not a schema-level fact - PRD §6 keeps multiple funds open at the *model*
+// not a schema-level fact - PRD section 6 keeps multiple funds open at the *model*
 // level, and a CHECK or a partial unique index baked into `fund` would need a
 // migration to lift later if that policy ever changes. So this pre-check
 // inside SetUpFund's own withTx is the entire guarantee, the same shape as

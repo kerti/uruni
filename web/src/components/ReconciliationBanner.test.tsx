@@ -45,7 +45,7 @@ describe('ReconciliationBanner', () => {
     // near a rupiah figure. The U+00A0 formatIDR puts after "Rp" is
     // collapsed to a regular space here because getByText normalizes the
     // DOM text it searches but never the string matcher itself.
-    const expected = copy.reconciliation.discrepancy(formatIDR(20_000)).replace(/ /g, ' ')
+    const expected = copy.reconciliation.discrepancy(formatIDR(20_000)).replace(/\u00a0/g, ' ')
     expect(screen.getByText(expected)).toBeInTheDocument()
     expect(screen.queryByText(copy.reconciliation.matched)).not.toBeInTheDocument()
   })

@@ -50,7 +50,7 @@ func TestOpenSerializesOnOneConnection(t *testing.T) {
 
 	// ADR-004: one connection is what makes SQLITE_BUSY structurally impossible,
 	// so the ledger never needs retry logic. Raising this is a decision, not a
-	// tuning knob — it needs a superseding ADR.
+	// tuning knob - it needs a superseding ADR.
 	if got := sqlDB.Stats().MaxOpenConnections; got != 1 {
 		t.Errorf("MaxOpenConnections = %d, want 1", got)
 	}
@@ -72,7 +72,7 @@ func TestOpenFailsOnAnUnwritablePath(t *testing.T) {
 	}
 }
 
-// openTestDB opens a throwaway database on a real file — not :memory: — because
+// openTestDB opens a throwaway database on a real file - not :memory: - because
 // the pragmas under test (WAL especially) behave differently for an in-memory
 // database, which would make the test prove less than it appears to.
 func openTestDB(t *testing.T) *sql.DB {

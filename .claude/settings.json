@@ -1,10 +1,10 @@
 {
   "$comment": [
-    "Shared, committed Claude Code settings for Uruni — every clone gets the same",
+    "Shared, committed Claude Code settings for Uruni - every clone gets the same",
     "agent behaviour. Personal settings (your permission approvals, commit",
     "attribution) belong in .claude/settings.local.json, which is gitignored;",
     "`make claude-install` seeds it from .claude/settings.local.json.example.",
-    "Paths use ${CLAUDE_PROJECT_DIR} so this file is portable across clones —",
+    "Paths use ${CLAUDE_PROJECT_DIR} so this file is portable across clones -",
     "never hardcode an absolute path here.",
     "Note: allow-rules in a committed settings.json require the one-time",
     "workspace-trust prompt before they take effect.",

@@ -25,9 +25,9 @@ function currentISOMonth(): string {
 }
 
 /** Rows the "belum bayar" filter isolates - unpaid and partial both still
- * owe something for the period (PRD §7.3's "simple 'not yet paid' view").
+ * owe something for the period (PRD section 7.3's "simple 'not yet paid' view").
  * A plain filter, nothing else: no reminder, nudge, notification or chase
- * affordance is rendered anywhere near it, per PRD §7.3's own explicit
+ * affordance is rendered anywhere near it, per PRD section 7.3's own explicit
  * rule. */
 const UNPAID_STATUSES: readonly DuesStatusKind[] = ['unpaid', 'partial']
 
@@ -67,7 +67,7 @@ function StatusBadge({ status }: { status: DuesStatusKind }) {
 }
 
 /**
- * The dues status roster (M6.12, PRD §7.3): who has paid / partially paid /
+ * The dues status roster (M6.12, PRD section 7.3): who has paid / partially paid /
  * paid in advance for one period, read straight from GET
  * /api/dues-status?period=YYYY-MM - all four statuses are the server's own
  * derivation (DuesStatusForPeriod), this screen renders them and nothing

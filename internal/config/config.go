@@ -1,5 +1,5 @@
 // Package config reads the binary's runtime configuration from the
-// environment. Environment variables only — there is no config file, and no
+// environment. Environment variables only - there is no config file, and no
 // third-party config library (ADR-019).
 //
 // This package is the *only* place in the binary that calls os.Getenv. Every
@@ -50,7 +50,7 @@ const placeholderBaseURL = "https://uruni.example.com"
 var ErrInvalidConfig = errors.New("invalid configuration")
 
 // Config is the resolved runtime configuration. It is a value, passed down from
-// main — there is no package-level singleton to reach for.
+// main - there is no package-level singleton to reach for.
 type Config struct {
 	// DBPath is the SQLite file. SQLite is the only engine through 0.x, so
 	// there is no DATABASE_URL to parse (ADR-004).
@@ -59,7 +59,7 @@ type Config struct {
 	Port int
 	// BaseURL is this instance's public origin. It builds the shareable report
 	// link (M7), and its scheme decides whether the session cookie is Secure
-	// (ADR-007). Required — an instance with no origin is an unconfigured one.
+	// (ADR-007). Required - an instance with no origin is an unconfigured one.
 	BaseURL string
 	// SMTPURL is optional, for emailed backups. Validated here, used at M8
 	// (ADR-012). Contains a password, so it is never echoed in an error.
@@ -116,7 +116,7 @@ func loadBaseURL(cfg *Config) error {
 	switch cfg.BaseURL {
 	case "":
 		return invalid("URUNI_BASE_URL",
-			"not set — the public origin this instance is reached at, e.g. https://uruni.example.com; `make setup` writes a loopback one for local dev")
+			"not set - the public origin this instance is reached at, e.g. https://uruni.example.com; `make setup` writes a loopback one for local dev")
 	case placeholderBaseURL:
 		// Safe to echo: unlike the SMTP URL, an origin is not a credential, and
 		// seeing the template value quoted back is what makes the fault obvious.
@@ -169,7 +169,7 @@ func loadLogging(cfg *Config) error {
 	return nil
 }
 
-// invalid reports a bad variable without repeating its value — for URLs that
+// invalid reports a bad variable without repeating its value - for URLs that
 // carry credentials, and for the unset case, where there is no value to show.
 // Anything printed here can end up in a container log the operator pastes into
 // an issue.
@@ -181,5 +181,5 @@ func invalid(name, why string) error {
 // what was actually read is the difference between a one-minute fix and a
 // puzzle, so use it wherever the value cannot be a credential.
 func invalidValue(name, value, why string) error {
-	return fmt.Errorf("%w: %s=%q — %s", ErrInvalidConfig, name, value, why)
+	return fmt.Errorf("%w: %s=%q - %s", ErrInvalidConfig, name, value, why)
 }

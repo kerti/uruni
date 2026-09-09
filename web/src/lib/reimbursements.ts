@@ -32,7 +32,7 @@ export function listReimbursements(outstanding = false): Promise<Reimbursement[]
   return apiFetch<Reimbursement[]>(`/api/reimbursements${query}`)
 }
 
-/** POST /api/reimbursements — a direct-CRUD write that moves no money.
+/** POST /api/reimbursements - a direct-CRUD write that moves no money.
  * Recording a claim posts nothing to the ledger; the outstanding list shows
  * it immediately. */
 export function createReimbursement(input: {
@@ -50,7 +50,7 @@ export function createReimbursement(input: {
 }
 
 /**
- * PATCH /api/reimbursements/{id} — correcting a claim or waiving/un-waiving
+ * PATCH /api/reimbursements/{id} - correcting a claim or waiving/un-waiving
  * it. An absent key means "leave alone"; an explicit null on note or
  * waived_on means "clear it". The body is built key by key so the wire
  * never sees undefined values.
@@ -81,7 +81,7 @@ export function updateReimbursement(
 }
 
 /**
- * DELETE /api/reimbursements/{id} — for a claim that should never have
+ * DELETE /api/reimbursements/{id} - for a claim that should never have
  * existed. A settled claim is refused by the server as 409.
  */
 export function deleteReimbursement(id: number): Promise<void> {
@@ -89,7 +89,7 @@ export function deleteReimbursement(id: number): Promise<void> {
 }
 
 /**
- * POST /api/reimbursements/{id}/settle — pays out a claim. Amount and
+ * POST /api/reimbursements/{id}/settle - pays out a claim. Amount and
  * purpose come from the claim itself; the caller provides only which
  * account pays and when. Returns the posted transaction row.
  */

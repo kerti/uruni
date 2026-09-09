@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test'
 
 import { copy } from '../src/copy/id'
 
-// M6.12: the dues status roster (PRD §7.3). The seeded fixture
+// M6.12: the dues status roster (PRD section 7.3). The seeded fixture
 // (cmd/uruni/seed_e2e.go) creates two members - "Warga Satu" and "Warga
 // Dua" - on one dues tier whose rate runs from 2024-01, and they join in
 // the same month, so every month since is outstanding for both. That is

@@ -39,7 +39,7 @@ function tierName(tiers: DuesTier[], tierId: number | null): string {
 }
 
 /**
- * The roster (M6.16, PRD §6): the full version of what the setup wizard
+ * The roster (M6.16, PRD section 6): the full version of what the setup wizard
  * sketched as an optional, skippable step.
  *
  * Every member is listed, retired ones included - dues status and history

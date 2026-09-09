@@ -32,7 +32,7 @@ interface HomeData {
 }
 
 /**
- * The home screen (M6.9, PRD §7.7): the everyday-loop landing page reached
+ * The home screen (M6.9, PRD section 7.7): the everyday-loop landing page reached
  * at "/" once a fund exists (App.tsx's AuthedGate). Order per
  * Design-System.md:91 - balance hero, per-location rows, reconciliation
  * banner + last-checked, recent activity. Navigation is Shell's footer
@@ -93,9 +93,9 @@ export default function Home({
   // guarantee. Switch back quickly, or resume on Android or a desktop, and
   // the app comes back warm: same React tree, same numbers, however old
   // they are. A stale balance looks exactly like a current one, which is
-  // the one thing this screen must never do (PRD §7.7).
+  // the one thing this screen must never do (PRD section 7.7).
   //
-  // Silent, so an app switch never blanks the screen to "Memuat…" and a
+  // Silent, so an app switch never blanks the screen to "Memuat..." and a
   // moment without signal never replaces it with ErrorState - see
   // RunOptions.silent.
   useEffect(() => {
@@ -208,7 +208,7 @@ export default function Home({
                   <span className="flex min-w-0 flex-col">
                     {/* The purpose tag is what an entry *was*; the note is
                         whatever she typed to remember it by, and is optional
-                        (PRD §6). Date drops to the second line so the row
+                        (PRD section 6). Date drops to the second line so the row
                         still answers "what is this?" at a glance. */}
                     <span className="truncate">{purposeNames.get(transaction.purpose_id) ?? copy.home.purposeUnknown}</span>
                     {transaction.note && <span className="truncate text-sm text-muted-foreground">{transaction.note}</span>}

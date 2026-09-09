@@ -39,7 +39,7 @@ type setupAccountRequest struct {
 	Name string `json:"name"`
 }
 
-// setupRequest is POST /api/setup's body: the fund's name (PRD §7.1, "name
+// setupRequest is POST /api/setup's body: the fund's name (PRD section 7.1, "name
 // the fund") and every account the treasurer wants it to start with (#78) -
 // at least one, SetUpFund's own job to refuse if empty. The main purpose is
 // still not on the wire: "Kas Utama" is the domain's own fixed name

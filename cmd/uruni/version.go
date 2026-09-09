@@ -20,7 +20,7 @@ var (
 )
 
 // unknownCommit is what a build with neither a stamp nor a readable VCS record
-// reports — honest, rather than a plausible-looking blank.
+// reports - honest, rather than a plausible-looking blank.
 const unknownCommit = "unknown"
 
 // printVersion writes the one line an operator reads before deciding whether an
@@ -65,7 +65,7 @@ func buildCommit() string {
 	return shortCommit(revision)
 }
 
-// shortCommit abbreviates to git's usual seven characters — long enough to look
+// shortCommit abbreviates to git's usual seven characters - long enough to look
 // up, short enough to read out loud over a phone call.
 func shortCommit(sha string) string {
 	const short = 7

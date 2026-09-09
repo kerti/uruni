@@ -3,8 +3,8 @@
 // React SPA everywhere else (ADR-001).
 //
 // chi replaces stdlib http.ServeMux as of M4 (ADR-021): the API brings route
-// groups and middleware worth composing — one /api mount for M5's session
-// middleware to wrap, request logging, panic recovery — that stdlib routing
+// groups and middleware worth composing - one /api mount for M5's session
+// middleware to wrap, request logging, panic recovery - that stdlib routing
 // would otherwise hand-roll.
 package http
 
@@ -27,7 +27,7 @@ import (
 
 // Build identifies the running binary. It is a struct rather than two string
 // arguments because two adjacent strings are trivially passed in the wrong
-// order, and the version is an operator contract (ADR-018) — a silently swapped
+// order, and the version is an operator contract (ADR-018) - a silently swapped
 // one would be worse than none.
 type Build struct {
 	Version string
@@ -51,13 +51,13 @@ func init() {
 // l and q are both handed in rather than l alone: store.Queries is a stateless
 // wrapper over the shared *sql.DB (ADR-004's single connection), so a second,
 // independent store.New(sqlDB) alongside ledger.New(sqlDB) costs nothing and
-// avoids adding a Querier accessor to ADR-027's already-implemented boundary —
-// direct-CRUD routes (members, accounts, purposes — ADR-027's "no domain
+// avoids adding a Querier accessor to ADR-027's already-implemented boundary -
+// direct-CRUD routes (members, accounts, purposes - ADR-027's "no domain
 // wrapper" list) call q directly; routes with a derived invariant call l.
 //
 // au and baseURL are M5's addition (issue #114): au is the bootstrap-account
 // service POST /api/register calls, and baseURL is read once here, purely to
-// derive the session cookie's Secure flag from its scheme (session.go) —
+// derive the session cookie's Secure flag from its scheme (session.go) -
 // never stored or exposed beyond that.
 func New(assets fs.FS, build Build, l *ledger.Ledger, q store.Querier, logger *slog.Logger, au *auth.Auth, baseURL string) http.Handler {
 	r := chi.NewRouter()
@@ -89,7 +89,7 @@ func New(assets fs.FS, build Build, l *ledger.Ledger, q store.Querier, logger *s
 }
 
 // health is what /healthz returns. Operator-facing, so English, like the CLI and
-// the logs — Indonesian is the treasurer's surface (ADR-014).
+// the logs - Indonesian is the treasurer's surface (ADR-014).
 //
 // version identifies a tagged deploy; commit identifies an untagged one, where
 // version is only ever `dev` and the SHA is the sole thing naming what runs.
@@ -102,7 +102,7 @@ type health struct {
 // healthz is unauthenticated by design: the dev-server readiness poll and the
 // container HEALTHCHECK both call it before there is any session (ADR-019).
 //
-// This is a *liveness* check — it answers "is this process serving?", which is
+// This is a *liveness* check - it answers "is this process serving?", which is
 // all the container HEALTHCHECK needs. Considered and kept at M4, not amended:
 // M4 puts real load on the single shared connection (ADR-004), so a check that
 // also probed the store would misfire *more* often, not less, and a 503 turns a
@@ -123,7 +123,7 @@ func healthz(build Build) http.HandlerFunc {
 
 // spa serves the built bundle, falling back to index.html so client-side routes
 // survive a page reload. It is registered as chi's NotFound handler, so /api and
-// /report never reach it — a registered route always wins over NotFound, which
+// /report never reach it - a registered route always wins over NotFound, which
 // is what keeps those namespaces 404-ing instead of silently returning the SPA
 // shell.
 func spa(assets fs.FS) http.HandlerFunc {
@@ -140,7 +140,7 @@ func spa(assets fs.FS) http.HandlerFunc {
 		servesShell := name == "" || name == "index.html"
 		if name != "" {
 			if _, err := fs.Stat(assets, name); err != nil {
-				// Not a real asset — a client-side route. Serve the shell.
+				// Not a real asset - a client-side route. Serve the shell.
 				r = r.Clone(r.Context())
 				r.URL.Path = "/"
 				servesShell = true

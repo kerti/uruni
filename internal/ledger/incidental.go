@@ -181,7 +181,7 @@ func (l *Ledger) CloseIncidentalAndRoll(ctx context.Context, p CloseIncidentalAn
 	return rolled, nil
 }
 
-// IncidentalDetail is one envelope together with the totals PRD §7.5 shows
+// IncidentalDetail is one envelope together with the totals PRD section 7.5 shows
 // for it - what it has collected and disbursed so far, summed straight from
 // the ledger (CLAUDE.md rule 2) rather than tracked as a running balance on
 // the row itself.

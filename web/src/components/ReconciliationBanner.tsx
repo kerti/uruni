@@ -6,7 +6,7 @@ import { formatIDR } from '@/lib/money'
 import type { OpenReconciliationLine } from '@/lib/reconciliations'
 
 /**
- * The home screen's reconciliation status (M6.9, PRD §7.7). Three states,
+ * The home screen's reconciliation status (M6.9, PRD section 7.7). Three states,
  * not two:
  *
  *   never counted -> neutral. A fund nobody has ever reconciled has no open
@@ -14,7 +14,7 @@ import type { OpenReconciliationLine } from '@/lib/reconciliations'
  *     green and tell the treasurer her cash matches her records - which
  *     Uruni cannot know and has never checked. Uruni only ever sums its own
  *     ledger; the two figures meet exactly once, in the reconcile flow
- *     (M6.10, PRD §7.8), when she types what she actually counted. Green is
+ *     (M6.10, PRD section 7.8), when she types what she actually counted. Green is
  *     earned by a count, never by the absence of one.
  *   counted, nothing open -> "cocok", `--success`/`--success-soft`.
  *   gaps still open -> "selisih", `--attention`/`--attention-soft`, never

@@ -125,7 +125,7 @@ func TestPostDuesPaymentReversalNoSuchTransactionIs404(t *testing.T) {
 	}
 }
 
-// TestPostDuesPaymentReversalNonDuesTransactionIs400: PRD §4 keeps this
+// TestPostDuesPaymentReversalNonDuesTransactionIs400: PRD section 4 keeps this
 // route exactly as wide as dues - reversing an ordinary transaction is a
 // caller mistake, not a resource-state conflict, so it maps to 400 like
 // ErrInvalidArgument does everywhere else in this mapper.

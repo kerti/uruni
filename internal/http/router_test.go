@@ -32,7 +32,7 @@ func testAssets() fstest.MapFS {
 // that whatever was stamped comes back out.
 var testBuild = Build{Version: "v9.9.9-test", Commit: "abc1234"}
 
-// testRouter builds a router over a real, migrated in-memory database — the
+// testRouter builds a router over a real, migrated in-memory database - the
 // ledger and store arguments are threaded through New for later M4 slices to
 // use, so building it for real here (rather than passing nil) is what proves
 // the constructor's new signature actually wires together. It carries a
@@ -115,7 +115,7 @@ func TestHealthzIsUnauthenticatedAndOK(t *testing.T) {
 }
 
 // The stamp has to be the one the binary was built with, not a constant baked
-// into the router — that is the whole point of reading it off a deployment. An
+// into the router - that is the whole point of reading it off a deployment. An
 // untagged build is the case that needs the commit: version is only ever `dev`,
 // so the SHA is the sole thing naming what runs.
 func TestHealthzReportsTheBuildItWasStampedWith(t *testing.T) {

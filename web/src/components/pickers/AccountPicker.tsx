@@ -7,7 +7,7 @@ import type { Account } from '@/lib/accounts'
 /**
  * Picks the location ("lokasi") a transaction is recorded against. A
  * retired account (`inactive_on` set) is excluded from the selectable list
- * entirely - PRD §7.2's location field is for recording new money, not for
+ * entirely - PRD section 7.2's location field is for recording new money, not for
  * browsing history, and #141's own definition of done: a location retired
  * through account lifecycle (M6's account-lifecycle slice) must not be
  * pickable for a fresh entry. RecordTransaction.tsx is responsible for the
