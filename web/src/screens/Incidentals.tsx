@@ -149,12 +149,12 @@ export default function Incidentals({
     )
   }
 
-  function handleClose(purposeId: number, accountId: number, closedOn: string) {
+  function handleClose(purposeId: number, accountId: number, closedOn: string, note: string) {
     // The rolled amount lives only in the close response, not on the detail
     // row - captured into local state here, rendered even when it is 0 (see
     // DetailView's own rolledAmount block).
     runWrite(
-      () => closeIncidental(purposeId, { accountId, closedOn }),
+      () => closeIncidental(purposeId, { accountId, closedOn, note: note.trim() === '' ? null : note }),
       text.close.success,
       (result) => {
         setRolledAmount(result.rolledAmount)
@@ -178,7 +178,7 @@ export default function Incidentals({
         onRecord={() => onRecordFor(selectedPurposeId)}
         onShowClose={() => { setShowCloseForm(true); setFeedback(null) }}
         onCancelClose={() => setShowCloseForm(false)}
-        onClose={(accountId, closedOn) => handleClose(selectedPurposeId, accountId, closedOn)}
+        onClose={(accountId, closedOn, note) => handleClose(selectedPurposeId, accountId, closedOn, note)}
         onRetry={() => void detailRun(() => getIncidental(selectedPurposeId))}
         onBack={backToList}
       />
@@ -385,7 +385,7 @@ function DetailView({
   onRecord: () => void
   onShowClose: () => void
   onCancelClose: () => void
-  onClose: (accountId: number, closedOn: string) => void
+  onClose: (accountId: number, closedOn: string, note: string) => void
   onRetry: () => void
   onBack: () => void
 }) {
@@ -482,19 +482,20 @@ function CloseForm({
   submitting,
 }: {
   accounts: Account[]
-  onSubmit: (accountId: number, closedOn: string) => void
+  onSubmit: (accountId: number, closedOn: string, note: string) => void
   onCancel: () => void
   submitting: boolean
 }) {
   const [accountId, setAccountId] = useState<number | null>(null)
   const [closedOn, setClosedOn] = useState(todayISODate)
+  const [note, setNote] = useState('')
 
   const canSubmit = accountId !== null && closedOn !== '' && !submitting
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     if (!canSubmit || accountId === null) return
-    onSubmit(accountId, closedOn)
+    onSubmit(accountId, closedOn, note)
   }
 
   return (
@@ -520,6 +521,20 @@ function CloseForm({
           onChange={(event) => setClosedOn(event.target.value)}
           disabled={submitting}
           required
+        />
+      </div>
+
+      {/* The roll is a transfer the treasurer never asks for directly, so
+          without this it appears in the list as two unexplained rows (#210). */}
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor="incidental-close-note">{text.close.noteLabel}</Label>
+        <Input
+          id="incidental-close-note"
+          className="h-11"
+          placeholder={text.close.notePlaceholder}
+          value={note}
+          onChange={(event) => setNote(event.target.value)}
+          disabled={submitting}
         />
       </div>
 

@@ -95,6 +95,10 @@ test.describe('incidentals', () => {
     // Pick where the leftover rolls to, submit (date defaults to today)
     await page.getByRole('combobox', { name: copy.incidentals.close.accountLabel }).click()
     await page.getByRole('option').first().click()
+    // The roll is a transfer nobody asked for directly (#210) - the note is
+    // what stops it reading as two unexplained rows in the ledger.
+    await page.getByLabel(copy.incidentals.close.noteLabel).fill('Sisa halal bihalal')
+
     await page.getByRole('button', { name: copy.incidentals.close.submit }).click()
     await expect(page.getByText(copy.incidentals.close.success)).toBeVisible()
 

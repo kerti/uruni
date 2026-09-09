@@ -157,6 +157,75 @@ describe('Incidentals', () => {
     expect(screen.getByText(money(0))).toBeInTheDocument()
   })
 
+  it('sends the close note to the server, and null when the field was left alone', async () => {
+    // The roll is a transfer the treasurer never asks for directly (#210):
+    // without a note it lands in the transaction list as two unexplained
+    // rows. An untouched field is null, never "".
+    const detail = { ...openEnvelope, collected_amount: 120_000, disbursed_amount: 0, target_amount: null }
+    const closed = { ...openEnvelope, closed_on: '2026-09-10' }
+    let posted: unknown = null
+    const closeHandler = (init?: RequestInit) => {
+      posted = JSON.parse(String(init?.body))
+      return Promise.resolve(jsonResponse({ incidental: closed, rolled_amount: 120_000 }))
+    }
+    const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = typeof input === 'string' ? input : input.toString()
+      const method = (init?.method ?? 'GET').toUpperCase()
+      if (method === 'POST' && url.includes('/api/incidentals/1/close')) return closeHandler(init)
+      if (method === 'GET' && url.includes('/api/incidentals/1')) return Promise.resolve(jsonResponse(detail))
+      const handler = getHandlers().find((h) => h.match(method, url))
+      if (!handler) return Promise.reject(new Error(`unstubbed fetch: ${method} ${url}`))
+      return handler.handle()
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    render(<Incidentals onBack={vi.fn()} onRecordFor={vi.fn()} />)
+    await waitFor(() => expect(screen.getByText('Halal bihalal RT')).toBeInTheDocument())
+    await userEvent.click(screen.getByRole('button', { name: /Halal bihalal RT/ }))
+    await waitFor(() => expect(screen.getByText(text.detail.collectedLabel)).toBeInTheDocument())
+
+    await userEvent.click(screen.getByRole('button', { name: text.actions.close }))
+    await waitFor(() => expect(screen.getByText(text.close.heading)).toBeInTheDocument())
+    await chooseOption(text.close.accountLabel, 'Tunai')
+    await userEvent.type(screen.getByLabelText(text.close.noteLabel), 'Sisa halal bihalal')
+    await userEvent.click(screen.getByRole('button', { name: text.close.submit }))
+
+    await waitFor(() => expect(screen.getByText(text.close.success)).toBeInTheDocument())
+    expect(posted).toMatchObject({ note: 'Sisa halal bihalal' })
+  })
+
+  it('sends a null note when the close note was left empty', async () => {
+    const detail = { ...openEnvelope, collected_amount: 120_000, disbursed_amount: 0, target_amount: null }
+    const closed = { ...openEnvelope, closed_on: '2026-09-10' }
+    let posted: unknown = null
+    const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = typeof input === 'string' ? input : input.toString()
+      const method = (init?.method ?? 'GET').toUpperCase()
+      if (method === 'POST' && url.includes('/api/incidentals/1/close')) {
+        posted = JSON.parse(String(init?.body))
+        return Promise.resolve(jsonResponse({ incidental: closed, rolled_amount: 120_000 }))
+      }
+      if (method === 'GET' && url.includes('/api/incidentals/1')) return Promise.resolve(jsonResponse(detail))
+      const handler = getHandlers().find((h) => h.match(method, url))
+      if (!handler) return Promise.reject(new Error(`unstubbed fetch: ${method} ${url}`))
+      return handler.handle()
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    render(<Incidentals onBack={vi.fn()} onRecordFor={vi.fn()} />)
+    await waitFor(() => expect(screen.getByText('Halal bihalal RT')).toBeInTheDocument())
+    await userEvent.click(screen.getByRole('button', { name: /Halal bihalal RT/ }))
+    await waitFor(() => expect(screen.getByText(text.detail.collectedLabel)).toBeInTheDocument())
+
+    await userEvent.click(screen.getByRole('button', { name: text.actions.close }))
+    await waitFor(() => expect(screen.getByText(text.close.heading)).toBeInTheDocument())
+    await chooseOption(text.close.accountLabel, 'Tunai')
+    await userEvent.click(screen.getByRole('button', { name: text.close.submit }))
+
+    await waitFor(() => expect(screen.getByText(text.close.success)).toBeInTheDocument())
+    expect(posted).toMatchObject({ note: null })
+  })
+
   it('a second close attempt surfaces the named 409 refusal', async () => {
     const detail = { ...openEnvelope, collected_amount: 50_000, disbursed_amount: 0 }
     vi.stubGlobal('fetch', routedFetch([

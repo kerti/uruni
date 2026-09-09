@@ -75,7 +75,7 @@ export function getIncidental(purposeId: number): Promise<IncidentalDetail> {
  */
 export function closeIncidental(
   purposeId: number,
-  input: { accountId: number; closedOn: string },
+  input: { accountId: number; closedOn: string; note: string | null },
 ): Promise<{ incidental: Incidental; rolledAmount: number }> {
   return apiFetch<{ incidental: Incidental; rolled_amount: number }>(`/api/incidentals/${purposeId}/close`, {
     method: 'POST',
@@ -83,6 +83,9 @@ export function closeIncidental(
     body: JSON.stringify({
       account_id: input.accountId,
       closed_on: input.closedOn,
+      // The server writes it to both legs of the roll, or to neither
+      // (#210); an untouched field is null, never "".
+      note: input.note,
     }),
   }).then((res) => ({ incidental: res.incidental, rolledAmount: res.rolled_amount }))
 }

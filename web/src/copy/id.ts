@@ -557,6 +557,8 @@ export const copy = {
       heading: 'Tutup amplop',
       accountLabel: 'Sisa dana masuk ke',
       dateLabel: 'Tanggal ditutup',
+      noteLabel: 'Catatan (opsional)',
+      notePlaceholder: 'Mis. sisa dana halal bihalal',
       submit: 'Tutup',
       submitting: 'Menutup…',
       cancel: 'Batal',
