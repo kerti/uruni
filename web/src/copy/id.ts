@@ -185,6 +185,8 @@ export const copy = {
     // the reconciliation banner. Short, one word, following the entryLink
     // pattern in copy.dues.
     reimbursementLink: 'Lihat penggantian',
+    // The entry point to the incidentals screen (M6.19), same idiom.
+    incidentalLink: 'Lihat kegiatan insidental',
   },
   // ReconciliationBanner's own copy (M6.9): "cocok" when GET
   // /api/reconciliations/open-lines comes back empty, "selisih" otherwise.
@@ -524,6 +526,58 @@ export const copy = {
     errors: {
       reimbursement_already_settled: 'Penggantian ini sudah dibayar.',
       reimbursement_waived: 'Penggantian ini sudah diputihkan.',
+    },
+    backToHome: 'Kembali ke beranda',
+  },
+  incidentals: {
+    heading: 'Kegiatan insidental',
+    body: 'Amplop terpisah untuk acara sekali jalan — kumpulkan, pakai, lalu tutup.',
+    openTab: 'Berjalan',
+    allTab: 'Semua',
+    emptyOpen: 'Tidak ada amplop yang sedang berjalan.',
+    emptyAll: 'Belum ada amplop dibuka.',
+    open: {
+      heading: 'Buka amplop',
+      occasionLabel: 'Acara',
+      occasionPlaceholder: 'Mis. Halal bihalal RT',
+      targetLabel: 'Target dana (opsional)',
+      dateLabel: 'Tanggal dibuka',
+      submit: 'Buka',
+      submitting: 'Membuka…',
+      cancel: 'Batal',
+      success: 'Amplop berhasil dibuka.',
+    },
+    detail: {
+      collectedLabel: 'Terkumpul',
+      disbursedLabel: 'Terpakai',
+      targetLabel: 'Target',
+      backToList: 'Kembali ke daftar',
+    },
+    close: {
+      heading: 'Tutup amplop',
+      accountLabel: 'Sisa dana masuk ke',
+      dateLabel: 'Tanggal ditutup',
+      submit: 'Tutup',
+      submitting: 'Menutup…',
+      cancel: 'Batal',
+      success: 'Amplop sudah ditutup.',
+      // Shown after a close, honestly - a zero rollover ("tidak ada sisa
+      // dana") is rendered the same way a positive one is, never hidden.
+      rolledLabel: 'Sisa dana yang digulung ke kas utama',
+    },
+    actions: {
+      // Contributions and disbursements are one entry point into the real
+      // record form (M6.8's RecordTransaction.tsx) - direction is decided
+      // there, by its own in/out toggle, not by two separate buttons here.
+      record: 'Catat transaksi',
+      close: 'Tutup amplop',
+    },
+    status: {
+      open: 'Berjalan',
+      closed: 'Ditutup',
+    },
+    errors: {
+      incidental_already_closed: 'Amplop ini sudah ditutup.',
     },
     backToHome: 'Kembali ke beranda',
   },
