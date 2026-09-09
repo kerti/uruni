@@ -99,7 +99,8 @@ func (q *Queries) GetReimbursement(ctx context.Context, arg GetReimbursementPara
 }
 
 const listOutstandingReimbursementsByFund = `-- name: ListOutstandingReimbursementsByFund :many
-SELECT r.id, r.fund_id, r.member_id, r.purpose_id, r.amount, r.incurred_on, r.waived_on, r.note, r.created_at
+SELECT r.id, r.fund_id, r.member_id, r.purpose_id, r.amount, r.incurred_on, r.waived_on, r.note, r.created_at,
+  0 AS settled
 FROM reimbursement r
 WHERE r.fund_id = ?
   AND r.waived_on IS NULL
@@ -110,18 +111,34 @@ WHERE r.fund_id = ?
 ORDER BY r.id
 `
 
+type ListOutstandingReimbursementsByFundRow struct {
+	ID         int64
+	FundID     int64
+	MemberID   int64
+	PurposeID  int64
+	Amount     int64
+	IncurredOn string
+	WaivedOn   *string
+	Note       *string
+	CreatedAt  int64
+	Settled    int64
+}
+
 // What the fund still owes its members: neither settled by a payout nor
 // waived. Both halves are conditions SQLite cannot express as a CHECK across
 // tables, so the settle path filters on them here instead.
-func (q *Queries) ListOutstandingReimbursementsByFund(ctx context.Context, fundID int64) ([]Reimbursement, error) {
+//
+// settled is a literal 0: every row this list returns is unsettled by
+// construction, and the wire shape must stay uniform with the full list.
+func (q *Queries) ListOutstandingReimbursementsByFund(ctx context.Context, fundID int64) ([]ListOutstandingReimbursementsByFundRow, error) {
 	rows, err := q.db.QueryContext(ctx, listOutstandingReimbursementsByFund, fundID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []Reimbursement{}
+	items := []ListOutstandingReimbursementsByFundRow{}
 	for rows.Next() {
-		var i Reimbursement
+		var i ListOutstandingReimbursementsByFundRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.FundID,
@@ -132,6 +149,7 @@ func (q *Queries) ListOutstandingReimbursementsByFund(ctx context.Context, fundI
 			&i.WaivedOn,
 			&i.Note,
 			&i.CreatedAt,
+			&i.Settled,
 		); err != nil {
 			return nil, err
 		}
@@ -147,21 +165,38 @@ func (q *Queries) ListOutstandingReimbursementsByFund(ctx context.Context, fundI
 }
 
 const listReimbursementsByFund = `-- name: ListReimbursementsByFund :many
-SELECT id, fund_id, member_id, purpose_id, amount, incurred_on, waived_on, note, created_at
-FROM reimbursement
-WHERE fund_id = ?
-ORDER BY id
+SELECT r.id, r.fund_id, r.member_id, r.purpose_id, r.amount, r.incurred_on, r.waived_on, r.note, r.created_at,
+  CAST(EXISTS(
+    SELECT 1 FROM "transaction" t
+    WHERE t.reimbursement_id = r.id AND t.kind = 'reimbursement'
+  ) AS INTEGER) AS settled
+FROM reimbursement r
+WHERE r.fund_id = ?
+ORDER BY r.id
 `
 
-func (q *Queries) ListReimbursementsByFund(ctx context.Context, fundID int64) ([]Reimbursement, error) {
+type ListReimbursementsByFundRow struct {
+	ID         int64
+	FundID     int64
+	MemberID   int64
+	PurposeID  int64
+	Amount     int64
+	IncurredOn string
+	WaivedOn   *string
+	Note       *string
+	CreatedAt  int64
+	Settled    int64
+}
+
+func (q *Queries) ListReimbursementsByFund(ctx context.Context, fundID int64) ([]ListReimbursementsByFundRow, error) {
 	rows, err := q.db.QueryContext(ctx, listReimbursementsByFund, fundID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []Reimbursement{}
+	items := []ListReimbursementsByFundRow{}
 	for rows.Next() {
-		var i Reimbursement
+		var i ListReimbursementsByFundRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.FundID,
@@ -172,6 +207,7 @@ func (q *Queries) ListReimbursementsByFund(ctx context.Context, fundID int64) ([
 			&i.WaivedOn,
 			&i.Note,
 			&i.CreatedAt,
+			&i.Settled,
 		); err != nil {
 			return nil, err
 		}

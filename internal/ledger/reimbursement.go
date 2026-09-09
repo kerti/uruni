@@ -69,6 +69,26 @@ func (l *Ledger) SettleReimbursement(ctx context.Context, p SettleReimbursementP
 			return ErrReimbursementWaived
 		}
 
+		// Compose the payout's description from the claim itself, so the row
+		// reads as a penggantian in recent activity and the report instead of
+		// as a bare amount - the same derived-note shape as a dues payment's
+		// "Iuran — {member}" (copy/id.ts). The member is looked up here
+		// because only the ledger can see it: the settlement route carries
+		// account_id and occurred_on, and ADR-027 keeps fields this method
+		// can derive out of the params. If the member could not be found -
+		// unreachable today, the claim's FK guarantees the row, and
+		// deleteMember refuses a member its claims still reference - still
+		// settle, composing the note without the name rather than fail a
+		// payout over a description.
+		member, err := q.GetMemberForFund(ctx, store.GetMemberForFundParams{FundID: p.FundID, ID: claim.MemberID})
+		if err != nil && !errors.Is(err, sql.ErrNoRows) {
+			return fmt.Errorf("fetching the claim's member for the settlement note: %w", err)
+		}
+		note := claim.Note
+		if err == nil {
+			note = settlementNote(member.Name, claim.Note)
+		}
+
 		posted, err = q.CreateTransaction(ctx, store.CreateTransactionParams{
 			FundID:          p.FundID,
 			AccountID:       p.AccountID,
@@ -78,6 +98,7 @@ func (l *Ledger) SettleReimbursement(ctx context.Context, p SettleReimbursementP
 			OccurredOn:      p.OccurredOn,
 			Kind:            "reimbursement",
 			ReimbursementID: &p.ReimbursementID,
+			Note:            note,
 			CreatedAt:       time.Now().Unix(),
 		})
 		return err
@@ -86,6 +107,19 @@ func (l *Ledger) SettleReimbursement(ctx context.Context, p SettleReimbursementP
 		return store.Transaction{}, fmt.Errorf("settling reimbursement: %w", err)
 	}
 	return posted, nil
+}
+
+// settlementNote composes a reimbursement payout's transaction description:
+// who was reimbursed and what the claim itself was for (the member's own
+// note, when they wrote one). The em-dash segments match the derived-note
+// shape the dues flow already writes ("Iuran — {member}"), so one visual
+// grammar covers every kind of generated description.
+func settlementNote(memberName string, claimNote *string) *string {
+	note := "Penggantian — " + memberName
+	if claimNote != nil && *claimNote != "" {
+		note += " — " + *claimNote
+	}
+	return &note
 }
 
 // UpdateReimbursementParams is every argument UpdateReimbursement needs.

@@ -12,6 +12,7 @@ import Login from '@/screens/Login'
 import Setup from '@/screens/Setup/Setup'
 import RecordTransaction from '@/screens/RecordTransaction'
 import Reconcile from '@/screens/Reconcile'
+import Reimbursements from '@/screens/Reimbursements'
 import DuesStatus from '@/screens/Dues/Status'
 import RecordDuesPayment from '@/screens/Dues/RecordPayment'
 import Home from '@/screens/Home'
@@ -257,6 +258,14 @@ function AuthedGate({ onLoggedOut }: { onLoggedOut: () => void }) {
         }
       />
       <Route
+        path="/reimbursements"
+        element={
+          <Shell title={title} onLoggedOut={onLoggedOut}>
+            <Reimbursements onBack={() => navigate('/')} />
+          </Shell>
+        }
+      />
+      <Route
         path="*"
         element={
           <Shell title={title} onLoggedOut={onLoggedOut}>
@@ -266,7 +275,7 @@ function AuthedGate({ onLoggedOut }: { onLoggedOut: () => void }) {
                 {successMessage}
               </p>
             )}
-            <Home refetchKey={location.key} onReconcile={() => navigate('/reconcile')} />
+            <Home refetchKey={location.key} onReconcile={() => navigate('/reconcile')} onViewReimbursements={() => navigate('/reimbursements')} />
           </Shell>
         }
       />

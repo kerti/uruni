@@ -2,7 +2,7 @@
 
 *A running record of what we've decided and why. Anything here can still change.*
 
-Last updated: 2026-09-03 (the roster gets its own screen)
+Last updated: 2026-09-09 (reimbursements review fixes, M6.18)
 
 ## What belongs in this file
 
@@ -222,7 +222,7 @@ M4's planning pass had to answer [#61](https://github.com/kerti/uruni/issues/61)
 
 Two decisions came out of [#103](https://github.com/kerti/uruni/issues/103), and only one of them is about reimbursements.
 
-**Settlement was the only exit a claim had.** `waived_on` had been in the schema since M2 ([ADR-024](./ADR/024-schema-conventions.md)) and the ledger refused to settle a waived claim, but nothing could set it: no `UPDATE reimbursement` query existed anywhere. A claim the member forgave, or one the treasurer typed wrong, sat in "what the fund owes" forever. PRD §7.4 gains a waive and a correction, as `PATCH /api/reimbursements/{id}` and `DELETE /api/reimbursements/{id}` — **not** three verbs: waiving sets one column, so pairing it with the ordinary correction is what makes un-waiving free, and a claim someone waived by mistake would otherwise be as stuck as the one that started this.
+**Settlement was the only exit a claim had.** `waived_on` had been in the schema since M2 ([ADR-024](./ADR/024-schema-conventions.md)) and the ledger refused to settle a waived claim, but nothing could set it: no `UPDATE reimbursement` query existed anywhere. A claim the member forgave, or one the treasurer typed wrong, sat in "what the fund owes" forever. PRD §7.4 gains a waive and a correction, as `PATCH /api/reimbursements/{id}` and `DELETE /api/reimbursements/{id}` — **not** three verbs: waiving sets one column, so pairing it with the ordinary correction is what makes un-waiving free, and a claim someone waived by mistake would otherwise be as stuck as the one that started this. The UI label for waiving is **"Putihkan"**, not the conversational example in the PRD — chosen for the debt/forgiveness register, not as a direct translation of "waive" (M6.18).
 
 **Both stop at settlement.** An unsettled claim is off the ledger, which is why editing it is not a hole in `CLAUDE.md` rule 3 — the schema says the same thing by giving `reimbursement` no immutability trigger. Once settled, the payout copied the claim's amount and purpose onto an immutable transaction, and a later correction would let the two disagree while both look authoritative. After that the only correction is an ordinary adjusting entry.
 
@@ -308,3 +308,13 @@ Two things that cost real debugging and are worth writing down, because both are
 **One a11y trap, found by a test that was right to fail.** Giving that link an `aria-label` ("Kas RT 04 — kembali ke beranda") made it the **heading's** accessible name too, so the `h1` stopped announcing the fund's name. A title link named after the site is the pattern screen readers already know; the label is gone.
 
 No backend work: every route both issues name already existed and is fund-scoped after [#188](https://github.com/kerti/uruni/issues/188). #150 deliberately has no tier delete, and none was added.
+
+## The wire carries a settled flag, and a review earned it (decided 2026-09-09)
+
+M6.18's review ([#207](https://github.com/kerti/uruni/pull/207)) reverse-tested the "the wire deliberately carries no settled flag" stance shipped in the screen, and the stance was wrong. The outstanding tab could label its rows honestly for free — an outstanding list *is* the answer — but the all tab had no way to tell a settled claim from a still-owed one, so it labelled every claim "Dibayar". The flag was kept off the wire to force the receiving end to derive it, and the receiving end had nothing to derive it from.
+
+**Resolution: `settled` rides the wire as a boolean** computed by the list queries themselves — `EXISTS(SELECT 1 FROM "transaction" t WHERE t.reimbursement_id = r.id AND t.kind = 'reimbursement')`. Cast to `INTEGER` so sqlc keeps emitting `int64` and the JSON layer translates it to `bool` once, in the handler: both the "all" list and the "outstanding" list speak one wire shape (the outstanding query answers `0 AS settled` because an outstanding row *is* unsettled by definition). It stays **computed, never stored** — the payout transaction remains the single source of truth ([ADR-027](./ADR/027-ledger-domain-boundary.md)'s fact, not a second copy). The reverse-TDD test is kept: the all-tab badge is asserted against a fixture where the flag says settled for one row and not the other.
+
+The same review killed two other dead ends: un-waive sat behind `tab === 'outstanding' && claim.waived_on`, a pair that can never both be true — the outstanding query filters waived claims out, so waiving was irreversible in the UI. It now renders on `claim.waived_on` alone, which is exactly where a waived row can appear (the all tab), and the write-failure surfaced nothing, so a 409 said "Belum dibayar" forever.
+
+This reverses an earlier stance recorded in three places (a handler comment, the widget's fixture `#166`, and the StatusBadge comment). All three now say what is true instead.
