@@ -72,7 +72,7 @@ func (l *Ledger) SettleReimbursement(ctx context.Context, p SettleReimbursementP
 		// Compose the payout's description from the claim itself, so the row
 		// reads as a penggantian in recent activity and the report instead of
 		// as a bare amount - the same derived-note shape as a dues payment's
-		// "Iuran — {member}" (copy/id.ts). The member is looked up here
+		// "Iuran - {member}" (copy/id.ts). The member is looked up here
 		// because only the ledger can see it: the settlement route carries
 		// account_id and occurred_on, and ADR-027 keeps fields this method
 		// can derive out of the params. If the member could not be found -
@@ -112,12 +112,12 @@ func (l *Ledger) SettleReimbursement(ctx context.Context, p SettleReimbursementP
 // settlementNote composes a reimbursement payout's transaction description:
 // who was reimbursed and what the claim itself was for (the member's own
 // note, when they wrote one). The em-dash segments match the derived-note
-// shape the dues flow already writes ("Iuran — {member}"), so one visual
+// shape the dues flow already writes ("Iuran - {member}"), so one visual
 // grammar covers every kind of generated description.
 func settlementNote(memberName string, claimNote *string) *string {
-	note := "Penggantian — " + memberName
+	note := "Penggantian - " + memberName
 	if claimNote != nil && *claimNote != "" {
-		note += " — " + *claimNote
+		note += " - " + *claimNote
 	}
 	return &note
 }

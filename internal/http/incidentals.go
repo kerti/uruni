@@ -12,7 +12,7 @@ import (
 )
 
 // openIncidentalRequest is POST /api/incidentals's body: opening one
-// envelope for an occasion (PRD §7.5). There is no separate name field -
+// envelope for an occasion (PRD section 7.5). There is no separate name field -
 // Occasion doubles as the purpose's name, the same choice
 // OpenIncidentalParams's own doc comment explains.
 type openIncidentalRequest struct {
@@ -45,7 +45,7 @@ func toIncidentalResponse(i store.Incidental) incidentalResponse {
 }
 
 // incidentalDetailResponse is GET /api/incidentals/{purposeID}'s body: the
-// envelope plus the totals PRD §7.5 shows for it. Not embedded on
+// envelope plus the totals PRD section 7.5 shows for it. Not embedded on
 // incidentalResponse - the two totals only exist once a request asks for
 // them specifically, the same reasoning reimbursementResponse's own comment
 // gives for keeping a derived fact off the plain list shape.
@@ -153,7 +153,7 @@ func (a *api) listIncidentals(w http.ResponseWriter, r *http.Request) {
 
 // getIncidental is GET /api/incidentals/{purposeID}: wraps
 // Ledger.GetIncidentalDetail, which is the envelope's own row plus the
-// collected/disbursed totals PRD §7.5 shows for it.
+// collected/disbursed totals PRD section 7.5 shows for it.
 func (a *api) getIncidental(w http.ResponseWriter, r *http.Request) {
 	purposeID, ok := incidentalPurposeID(w, r)
 	if !ok {

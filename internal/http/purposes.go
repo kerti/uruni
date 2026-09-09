@@ -25,7 +25,7 @@ type passThroughPurposeRequest struct {
 
 // purposeResponse is the wire shape of a purpose row. kind is read-only
 // here, but it is what tells the caller which purposes are the fund's own
-// money and which are only passing through (PRD §7.6).
+// money and which are only passing through (PRD section 7.6).
 type purposeResponse struct {
 	ID        int64  `json:"id"`
 	Kind      string `json:"kind"`
@@ -84,7 +84,7 @@ func (a *api) listPurposes(w http.ResponseWriter, r *http.Request) {
 
 // createPassThroughPurpose is POST /api/pass-through-purposes: money the
 // fund holds but does not own, collected for something and paid straight out
-// (PRD §7.6). The kind is pinned server-side; see the request type.
+// (PRD section 7.6). The kind is pinned server-side; see the request type.
 func (a *api) createPassThroughPurpose(w http.ResponseWriter, r *http.Request) {
 	var req passThroughPurposeRequest
 	if !decodeJSON(w, r, &req) {
@@ -116,7 +116,7 @@ func (a *api) createPassThroughPurpose(w http.ResponseWriter, r *http.Request) {
 // The kind check is policy, not shape, so it lives here rather than in the
 // query (purpose.sql's own note): 'main' is the fund's own system row - the
 // one purpose_single_main guarantees - and an incidental carries its own
-// lifecycle (PRD §7.5), where the occasion is what the envelope IS rather
+// lifecycle (PRD section 7.5), where the occasion is what the envelope IS rather
 // than a label on it. Only a pass-through is a plain name the treasurer
 // typed and may have mistyped.
 //

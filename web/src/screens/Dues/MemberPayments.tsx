@@ -28,7 +28,7 @@ function todayISODate(): string {
 
 /**
  * One member's dues rows for one period, with a reversal action on each
- * payment that has not already been reversed (M6.14, PRD §7.3: "undo a dues
+ * payment that has not already been reversed (M6.14, PRD section 7.3: "undo a dues
  * payment recorded in error - the payment is reversed by a new entry, never
  * edited away").
  *
@@ -139,7 +139,7 @@ export default function MemberPayments({
                   amount does at the other end of it. */}
               <span className="font-semibold text-muted-foreground">
                 {formatIsoDate(row.occurred_on)}
-                {isReversal && ` · ${text.reversalRow}`}
+                {isReversal && ` \u00b7 ${text.reversalRow}`}
               </span>
               <span className="font-medium">{formatIDR(row.amount)}</span>
             </div>

@@ -20,7 +20,7 @@ import type { Purpose } from '@/lib/purposes'
 const text = copy.record
 
 /** localStorage key for the last location chosen - a per-viewer convenience
- * (PRD §7.2's "location remembers last used"), never server state. */
+ * (PRD section 7.2's "location remembers last used"), never server state. */
 const LAST_ACCOUNT_KEY = 'uruni:record:last-account-id'
 
 /** Reads the remembered account id, or null if there is none, it doesn't
@@ -61,12 +61,12 @@ interface FormData {
 }
 
 /**
- * The record-transaction screen (M6.8, PRD §7.2): amount, direction,
+ * The record-transaction screen (M6.8, PRD section 7.2): amount, direction,
  * location, purpose, date, optional note, posted through
  * POST /api/transactions. Photo is M6.21, not here; is_adjustment always
  * stays false on the wire - only M6.10's reconcile flow ever sets it.
  *
- * Smart defaults per PRD §7.2: location remembers the last choice
+ * Smart defaults per PRD section 7.2: location remembers the last choice
  * (localStorage, guarded - see readLastAccountId), purpose defaults to the
  * `kind: "main"` row, date defaults to today. Direction has no PRD-specified
  * default; this screen defaults to "out" (an expense) as the more frequent

@@ -6,8 +6,8 @@ import { VitePWA } from 'vite-plugin-pwa'
 import { configDefaults, defineConfig, type Plugin } from 'vitest/config'
 
 // In production the Go binary is the single origin (ADR-001). In dev the two
-// halves run apart for hot-reload, so vite proxies the server's routes — `/api`
-// (JSON) and `/report` (SSR public report) — to Go on :8080 (ADR-020).
+// halves run apart for hot-reload, so vite proxies the server's routes - `/api`
+// (JSON) and `/report` (SSR public report) - to Go on :8080 (ADR-020).
 const goServer = `http://localhost:${process.env.PORT ?? 8080}`
 
 // Vite rejects Host headers it doesn't recognise (DNS-rebinding protection), so
@@ -27,7 +27,7 @@ const allowedHosts = (() => {
 })()
 
 // A production build empties web/dist, which would delete the committed
-// .gitkeep that `//go:embed all:web/dist` needs on a fresh clone — and the
+// .gitkeep that `//go:embed all:web/dist` needs on a fresh clone - and the
 // deletion would ride along in the next commit. Put the placeholder back.
 function keepDistPlaceholder(): Plugin {
   return {
@@ -39,13 +39,13 @@ function keepDistPlaceholder(): Plugin {
   }
 }
 
-// ADR-008's installable half (M6.7). The connection-required half — the
-// "butuh koneksi" banner — is M6.2's and needs no service worker.
+// ADR-008's installable half (M6.7). The connection-required half - the
+// "butuh koneksi" banner - is M6.2's and needs no service worker.
 //
 // Two rules shape everything here: the service worker caches the built shell
 // and nothing else (no runtimeCaching, so no API response ever lands in a
 // cache where a stale screen could read as current data), and it never
-// updates the app out from under the treasurer — see registerType below.
+// updates the app out from under the treasurer - see registerType below.
 //
 // The icons in public/icons/ are generated once from the brand asset, not at
 // build time (CI has no rasterizer):
@@ -128,7 +128,7 @@ export default defineConfig({
       'virtual:pwa-register/react': path.resolve(import.meta.dirname, './src/test/pwa-register-stub.ts'),
     },
     setupFiles: ['./src/test/setup.ts'],
-    // web/e2e holds Playwright specs (ADR-015's browser leg, M6.3) — a
+    // web/e2e holds Playwright specs (ADR-015's browser leg, M6.3) - a
     // different test runner with its own config (playwright.config.ts), not
     // one of Vitest's `*.spec.ts` unit tests. Vitest's default include glob
     // would otherwise pick them up and fail importing '@playwright/test'.

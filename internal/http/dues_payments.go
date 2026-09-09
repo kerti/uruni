@@ -13,7 +13,7 @@ import (
 // duesPaymentPeriod is one period within a POST /api/dues-payments request:
 // the period paid and the amount paid toward it. The schema's kind='dues'
 // CHECK requires exactly one dues_period per row (ADR-024), and paying
-// several months in one sitting is the treasurer's real workflow (PRD §7.3) -
+// several months in one sitting is the treasurer's real workflow (PRD section 7.3) -
 // not one row that means three things - so periods is an array on the wire
 // and never flattened into a total.
 type duesPaymentPeriod struct {
@@ -114,7 +114,7 @@ type reverseDuesPaymentRequest struct {
 // reverseDuesPayment is POST /api/dues-payments/{id}/reversal: wraps
 // Ledger.ReverseDuesPayment. {id} names the kind='dues' transaction being
 // reversed, not a dues-payment resource of its own - there is no separate
-// dues-payment entity, only transaction rows (PRD §4's "stay exactly as
+// dues-payment entity, only transaction rows (PRD section 4's "stay exactly as
 // wide as dues": this route reverses a dues payment and nothing else, never
 // a generic "reverse any transaction" primitive).
 //

@@ -27,7 +27,7 @@ type accountRequest struct {
 
 // accountResponse is the wire shape of an account row. No fund_id, same
 // reasoning as memberResponse. kind is exposed because it is the whole point
-// of the row - cash and bank reconcile differently (PRD §7.7). inactive_on
+// of the row - cash and bank reconcile differently (PRD section 7.7). inactive_on
 // is #134's account-lifecycle half: null for a location still in use, a date
 // for one retired (mirrors memberResponse.InactiveOn exactly).
 type accountResponse struct {
@@ -75,8 +75,8 @@ func (a *api) createAccount(w http.ResponseWriter, r *http.Request) {
 // listAccounts is GET /api/accounts: every location the fund has - however
 // many the treasurer named at setup, plus anything added afterward through
 // POST /api/accounts above, retired ones (inactive_on set) included, since
-// history still needs to render them (PRD §7.8's reconcile flow and PRD
-// §7.9's report both read past entries against a location that no longer
+// history still needs to render them (PRD section 7.8's reconcile flow and PRD
+// section 7.9's report both read past entries against a location that no longer
 // takes new counts).
 func (a *api) listAccounts(w http.ResponseWriter, r *http.Request) {
 	fund, ok := a.resolveFund(w, r)
@@ -234,7 +234,7 @@ func (a *api) deleteAccount(w http.ResponseWriter, r *http.Request) {
 }
 
 // postOpeningBalanceRequest is POST /api/accounts/{id}/opening-balance's
-// body: an account's starting figure (PRD §7.1). No purpose_id - an opening
+// body: an account's starting figure (PRD section 7.1). No purpose_id - an opening
 // balance is always tagged to the fund's one kind='main' purpose, the same
 // way OpenIncidental fixes its own purpose's kind server-side rather than
 // taking it on the wire.

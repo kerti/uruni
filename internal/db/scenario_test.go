@@ -299,7 +299,7 @@ func TestPassThroughMoneyCountsWhileItIsHeld(t *testing.T) {
 	f := newScenarioFund(t, sqlDB, "Test Fund", validSlug)
 	passID := createPurpose(t, sqlDB, f.fundID, "pass_through", "Pass-through")
 
-	// PRD §7.6 as amended (ADR-024): pass-through is descriptive, and drives no
+	// PRD section 7.6 as amended (ADR-024): pass-through is descriptive, and drives no
 	// arithmetic. While the money sits in the tin it is in the tin, so it is in
 	// the balance - two headline figures that disagree is the wrong thing to put
 	// on the calmest screen in the app.

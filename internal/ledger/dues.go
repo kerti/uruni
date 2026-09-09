@@ -18,7 +18,7 @@ const duesPeriodLayout = "2006-01"
 // PeriodAmount is one period within a multi-period dues payment: the period
 // paid and the amount paid toward it. The schema's kind='dues' CHECK requires
 // exactly one dues_period per row (ADR-024), and paying several months at
-// once is the treasurer's real workflow (PRD §7.3) - not one row that means
+// once is the treasurer's real workflow (PRD section 7.3) - not one row that means
 // three things - so Periods is a slice on PostDuesPaymentsParams and every
 // entry becomes its own "transaction" row, never flattened into a total.
 type PeriodAmount struct {
@@ -96,7 +96,7 @@ func (l *Ledger) PostDuesPayments(ctx context.Context, p PostDuesPaymentsParams)
 }
 
 // postDuesPaymentTx inserts one period's "transaction" row using the
-// caller's already-open store.Querier (ADR-027's …Tx composition rule),
+// caller's already-open store.Querier (ADR-027's ...Tx composition rule),
 // doing no transaction management and no validation of its own - both are
 // PostDuesPayments' job, done once for the whole batch before this is ever
 // called.

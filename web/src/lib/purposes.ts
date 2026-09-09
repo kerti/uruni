@@ -6,7 +6,7 @@ import { apiFetch } from '@/lib/api'
 /** A purpose tag row (internal/http/purposes.go). `kind` is 'main',
  * 'pass_through' or 'incidental' - the fund always has exactly one 'main'
  * row (the schema's own purpose_single_main), which is what a new
- * transaction defaults to (PRD §7.2). */
+ * transaction defaults to (PRD section 7.2). */
 export interface Purpose {
   id: number
   kind: string
@@ -30,7 +30,7 @@ export function listPurposes(selectable = false): Promise<Purpose[]> {
 
 /**
  * POST /api/pass-through-purposes - money the fund holds but does not own,
- * collected for something and paid straight out (PRD §7.6). Name only: the
+ * collected for something and paid straight out (PRD section 7.6). Name only: the
  * kind is pinned server-side so no caller can ask for a second 'main'.
  *
  * There is no delete to pair with this: a posted transaction points at the

@@ -74,9 +74,9 @@ func TestSettleReimbursementPostsOneOutRowOfClaimAmount(t *testing.T) {
 
 // A settlement row without a description is a bare amount in recent activity
 // and the report, so the payout carries one composed from the claim itself:
-// who was reimbursed ("Penggantian — {member}") plus the claim's own note
+// who was reimbursed ("Penggantian - {member}") plus the claim's own note
 // when the member wrote one - the same derived-note shape as a dues
-// payment's "Iuran — {member}".
+// payment's "Iuran - {member}".
 func TestSettleReimbursementNoteNamesMemberAndClaimNote(t *testing.T) {
 	l := newTestLedger(t)
 	f := newFixture(t, l)
@@ -111,12 +111,12 @@ func TestSettleReimbursementNoteNamesMemberAndClaimNote(t *testing.T) {
 	}
 
 	postedWithNote := settle(t, withNote.ID, "2026-08-12")
-	if want := "Penggantian — Jane — Beli galon"; postedWithNote.Note == nil || *postedWithNote.Note != want {
+	if want := "Penggantian - Jane - Beli galon"; postedWithNote.Note == nil || *postedWithNote.Note != want {
 		t.Errorf("settlement note = %v, want %q - the member and the claim's own description", postedWithNote.Note, want)
 	}
 
 	postedBare := settle(t, bare.ID, "2026-08-13")
-	if want := "Penggantian — Jane"; postedBare.Note == nil || *postedBare.Note != want {
+	if want := "Penggantian - Jane"; postedBare.Note == nil || *postedBare.Note != want {
 		t.Errorf("settlement note without a claim note = %v, want %q", postedBare.Note, want)
 	}
 }

@@ -44,7 +44,7 @@ function todayISODate(): string {
 }
 
 /**
- * The incidental-envelopes screen (M6.19, PRD §7.5): a separate pot for a
+ * The incidental-envelopes screen (M6.19, PRD section 7.5): a separate pot for a
  * one-off occasion - open it, collect contributions and pay disbursements
  * against it, then close it once the occasion is over. Closing rolls any
  * leftover into the fund's main purpose and answers with `rolled_amount`,

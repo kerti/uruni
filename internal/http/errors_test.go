@@ -18,14 +18,14 @@ import (
 	"github.com/kerti/uruni/internal/store"
 )
 
-// testLogger discards output — these tests assert the HTTP response, not the
+// testLogger discards output - these tests assert the HTTP response, not the
 // log line (requestLogger's own test covers what gets logged).
 func testLogger() *slog.Logger {
 	return slog.New(slog.NewTextHandler(io.Discard, nil))
 }
 
 // testStoreDB returns a real, migrated in-memory database, the same recipe
-// internal/ledger's own fixture_test.go uses — a genuine driver is the whole
+// internal/ledger's own fixture_test.go uses - a genuine driver is the whole
 // point of this file: the mapper is verified against real SQLite result codes,
 // not a hand-made fake.
 func testStoreDB(t *testing.T) *sql.DB {
@@ -121,13 +121,13 @@ func TestMapAuthErrorMapsSentinelsToStatusAndCode(t *testing.T) {
 	}
 }
 
-// TestMapLedgerErrorWraps checks that %w-wrapped sentinels still match — every
+// TestMapLedgerErrorWraps checks that %w-wrapped sentinels still match - every
 // ADR-027 sentinel is returned wrapped with context in real callers.
 func TestMapLedgerErrorMatchesAWrappedSentinel(t *testing.T) {
 	wrapped := errors.New("posting transfer leg: " + ledger.ErrInvalidArgument.Error())
 	rec := httptest.NewRecorder()
 	mapLedgerError(rec, testLogger(), wrapped)
-	// A plain errors.New wrapping only the *text* does not satisfy errors.Is —
+	// A plain errors.New wrapping only the *text* does not satisfy errors.Is -
 	// this asserts the unrecognized path, not a false match, guarding against a
 	// mapper that accidentally string-matches instead of using errors.Is.
 	if rec.Code != 500 {
@@ -183,7 +183,7 @@ func TestMapSQLiteErrorMapsAGenuineCheckViolation(t *testing.T) {
 		t.Fatalf("CreateFund() = %v, want no error", err)
 	}
 
-	// account.kind CHECK IN ('cash','bank') — 'wallet' is neither.
+	// account.kind CHECK IN ('cash','bank') - 'wallet' is neither.
 	_, err = q.CreateAccount(ctx, store.CreateAccountParams{
 		FundID: fund.ID, Kind: "wallet", Name: "Bad Account", CreatedAt: 1,
 	})

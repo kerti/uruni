@@ -5,7 +5,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        Please don't paste real member names or real amounts — this is a public
+        Please don't paste real member names or real amounts - this is a public
         repo. Neutral fixtures and toy numbers reproduce bugs just as well.
   - type: textarea
     id: what
@@ -19,8 +19,8 @@ body:
     attributes:
       label: Steps to reproduce
       placeholder: |
-        1. …
-        2. …
+        1. ...
+        2. ...
     validations:
       required: true
   - type: input

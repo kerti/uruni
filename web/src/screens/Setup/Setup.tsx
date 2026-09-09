@@ -28,7 +28,7 @@ function currentISOMonth(): string {
 }
 
 /**
- * The first-run setup wizard (PRD §7.1, issue #138). Four steps; only the
+ * The first-run setup wizard (PRD section 7.1, issue #138). Four steps; only the
  * fund's name and at least one location are mandatory (the issue's own
  * settled ruling) - opening balances and the roster/tier step are openly
  * optional. This container owns the step state, the data collected so far,

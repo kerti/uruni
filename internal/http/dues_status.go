@@ -11,7 +11,7 @@ import (
 
 // duesStatusResponse is one row of GET /api/dues-status's roster: one member
 // who owes dues for the requested period, classified against
-// DuesStatusForPeriod (PRD §7.3). member is the full roster shape members.go
+// DuesStatusForPeriod (PRD section 7.3). member is the full roster shape members.go
 // already exposes, not a trimmed id+name pair - the reconcile flow reading
 // this list wants the same member fields the roster screen shows.
 type duesStatusResponse struct {

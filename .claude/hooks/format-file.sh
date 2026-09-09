@@ -1,9 +1,9 @@
 #!/bin/sh
-# PostToolUse(Edit|Write) hook — format the file that was just written, so
+# PostToolUse(Edit|Write) hook - format the file that was just written, so
 # formatting never shows up as review noise or as a `make check` failure.
 #
-# Go   → gofmt -w
-# TS/JS → prettier --write, then eslint --fix   (skipped until web deps exist)
+# Go   -> gofmt -w
+# TS/JS -> prettier --write, then eslint --fix   (skipped until web deps exist)
 #
 # Best-effort and silent: any missing tool is a no-op, never a failed edit.
 set -eu
@@ -25,7 +25,7 @@ case "$f" in
   *.ts|*.tsx|*.js|*.jsx|*.css)
     # Call the installed binaries directly. `npx --prefix web <tool>` does NOT
     # redirect npx's local-bin resolution, so on a miss npx falls through to
-    # fetching the package from the registry — a silent network install (and a
+    # fetching the package from the registry - a silent network install (and a
     # possible hang) inside an edit hook.
     [ -x web/node_modules/.bin/prettier ] &&
       web/node_modules/.bin/prettier --write "$f" >/dev/null 2>&1 || true

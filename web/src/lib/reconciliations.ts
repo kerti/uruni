@@ -1,6 +1,6 @@
 // Typed calls over apiFetch for the /api/reconciliations/* routes: the two
 // GETs the home screen reads (M6.9) and POST /api/reconciliations, the one
-// call M6.10's reconcile screen builds around (PRD §7.8) - same idiom as
+// call M6.10's reconcile screen builds around (PRD section 7.8) - same idiom as
 // lib/accounts.ts and lib/balances.ts throughout.
 
 import { apiFetch } from '@/lib/api'
@@ -112,7 +112,7 @@ export interface ReconciliationDetail {
 
 /**
  * POST /api/reconciliations - takes one snapshot across every counted
- * account in a single request (M6.10, PRD §7.8). No performed_at param:
+ * account in a single request (M6.10, PRD section 7.8). No performed_at param:
  * the server always stamps time.Now() (TakeReconciliationParams's own doc
  * comment - a reconciliation is something done right now, never backdated).
  * The server creates each fix's transaction itself from the raw fix data;

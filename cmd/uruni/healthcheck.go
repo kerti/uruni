@@ -13,8 +13,8 @@ import (
 // a hung server produces our error rather than Docker's kill.
 const healthcheckTimeout = 2 * time.Second
 
-// healthcheck exists *only* because the runtime image is distroless — no shell,
-// no curl — so the image's HEALTHCHECK has nothing else to call (ADR-019). It
+// healthcheck exists *only* because the runtime image is distroless - no shell,
+// no curl - so the image's HEALTHCHECK has nothing else to call (ADR-019). It
 // probes the server this same binary would serve, on the same PORT, and exits
 // 0 when it answers.
 func healthcheck() error {

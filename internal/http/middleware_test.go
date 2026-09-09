@@ -41,7 +41,7 @@ func TestRequestLoggingMiddlewareRoundTrips(t *testing.T) {
 	}
 
 	// ADR-022's logging rule: no member name, no amount. The request carries
-	// neither here, but the assertion pins the shape — only method, path,
+	// neither here, but the assertion pins the shape - only method, path,
 	// status and duration ever appear on this line.
 	for _, forbidden := range []string{"member", "amount", "rupiah"} {
 		if strings.Contains(strings.ToLower(line), forbidden) {

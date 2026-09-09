@@ -12,7 +12,7 @@
 export
 
 # Uruni is one Go binary at the repo root (ADR-001) with the React app in web/,
-# and SQLite as its only store (ADR-004) — so dev needs no containers at all. The
+# and SQLite as its only store (ADR-004) - so dev needs no containers at all. The
 # repo-root docker-compose.yml is the *operator* self-host stack; the stack-*
 # targets below exercise it locally, they are not the dev loop.
 COMPOSE := docker-compose.yml
@@ -23,7 +23,7 @@ WEB_LOG    := /tmp/uruni-web.log
 
 # Process match for *this clone's* vite. Anchored to $(CURDIR) on purpose: a bare
 # `pkill -f 'npm run dev'` would take down every other project's dev server on
-# the machine. It also matches vite's real argv — npm execs the resolved script
+# the machine. It also matches vite's real argv - npm execs the resolved script
 # (node .../web/node_modules/vite/bin/vite.js), not the .bin/ shim.
 WEB_PROC := $(CURDIR)/web/node_modules
 
@@ -48,7 +48,7 @@ E2E_PORT := 8099
 E2E_LOG_LEVEL ?= warn
 
 # The golangci-lint version ci.yml pins (env.GOLANGCI_VERSION there). `doctor`
-# compares your local one against it exactly — not just the major. A v1 binary
+# compares your local one against it exactly - not just the major. A v1 binary
 # silently ignores the v2 schema in .golangci.yml, but two v2 releases also
 # disagree about real code (2.12 and 2.13 ship different staticcheck versions),
 # and either way `make check` stops meaning what ADR-020 says it means. Bump
@@ -56,7 +56,7 @@ E2E_LOG_LEVEL ?= warn
 GOLANGCI_CI_VERSION := v2.13.2
 
 help:
-	@echo "uruni — make targets (run 'make <target>')"
+	@echo "uruni - make targets (run 'make <target>')"
 	@echo ""
 	@echo "First run:"
 	@echo "  setup                   fresh-clone entry point: hooks + Claude Code + deps + .env"
@@ -77,7 +77,7 @@ help:
 	@echo "  migrate-up              apply pending migrations"
 	@echo "  migrate-down            roll back the last migration"
 	@echo "  migrate-status          show migration status"
-	@echo "  db-reset                delete $(DEV_DB) and re-migrate — run this after a schema change"
+	@echo "  db-reset                delete $(DEV_DB) and re-migrate - run this after a schema change"
 	@echo ""
 	@echo "Web (Vite/React, in web/):"
 	@echo "  web-install             npm install"
@@ -96,12 +96,12 @@ help:
 	@echo "  servers-status          show which dev servers are running"
 	@echo ""
 	@echo "E2E (Playwright; ADR-015):"
-	@echo "  e2e                     full run — reset the throwaway DB, run the suite"
+	@echo "  e2e                     full run - reset the throwaway DB, run the suite"
 	@echo "  e2e-install             download the browser Playwright drives (once per machine)"
 	@echo "  e2e-reset               recreate + migrate + seed $(E2E_DB)"
 	@echo "  e2e-server              run the server against $(E2E_DB) (foreground, :$(E2E_PORT))"
 	@echo ""
-	@echo "Self-host stack (the operator's docker-compose.yml — not the dev loop):"
+	@echo "Self-host stack (the operator's docker-compose.yml - not the dev loop):"
 	@echo "  stack-up                start the compose stack in the background"
 	@echo "  stack-down              stop it"
 	@echo "  stack-logs              follow its logs"
@@ -113,22 +113,22 @@ help:
 	@echo "  dev-user EMAIL=... PASSWORD=...  create/reset a local login for smoke tests"
 
 # ---- first run -------------------------------------------------------------
-# One command from a fresh clone to a runnable, guarded dev loop. Idempotent —
+# One command from a fresh clone to a runnable, guarded dev loop. Idempotent -
 # safe to re-run, and worth re-running after a pull that touches .claude/ or
 # .githooks/ (both need a chmod that git alone won't reapply on some clones).
 #
 # Everything here is deterministic. What a Makefile *cannot* do is install or
-# authenticate Claude Code itself, or grant it permissions — `make doctor`
+# authenticate Claude Code itself, or grant it permissions - `make doctor`
 # reports on those instead of pretending to fix them.
 #
 # The generated .env rewrites one line of .env.example, because that file is the
 # self-host template and its values are production values. URUNI_BASE_URL is
 # rewritten to a loopback http origin for two reasons. The server refuses to
-# start on the template value — that refusal is the "did you configure this
-# instance at all?" gate (ADR-019) — and the cookie's Secure flag is derived
+# start on the template value - that refusal is the "did you configure this
+# instance at all?" gate (ADR-019) - and the cookie's Secure flag is derived
 # from the scheme (internal/http/session.go): shipping the https:// template
 # value into local dev sets a Secure cookie on a plain-HTTP origin, which the
-# browser then declines to keep on any dev origin that is not localhost —
+# browser then declines to keep on any dev origin that is not localhost -
 # testing on a phone over the LAN being the one that matters. Only the scheme
 # is read for that, so the port here need not match `make web-dev`'s 5173.
 setup: hooks-install claude-install web-install
@@ -137,7 +137,7 @@ setup: hooks-install claude-install web-install
 	    .env.example > .env; \
 	  echo "setup: created .env from .env.example (base URL set to loopback)"; \
 	fi
-	@echo "✓ setup complete — next: make migrate-up && make run"
+	@echo "ok setup complete - next: make migrate-up && make run"
 
 # Point git at the repo's own hooks directory and seed the local, gitignored
 # .pii-patterns denylist from the template + your git identity, so the
@@ -151,10 +151,10 @@ hooks-install:
 	    | sed 's/[][\\.^$$*+?(){}|]/\\&/g' >> .pii-patterns; \
 	  echo "hooks-install: seeded .pii-patterns (gitignored) from template + git identity"; \
 	fi
-	@echo "✓ git hooks installed (core.hooksPath=.githooks); pre-commit pii-guard active"
+	@echo "ok git hooks installed (core.hooksPath=.githooks); pre-commit pii-guard active"
 
 # Arm the Claude Code hooks. The behaviour itself is committed in
-# .claude/settings.json (portable — it addresses scripts via
+# .claude/settings.json (portable - it addresses scripts via
 # $$CLAUDE_PROJECT_DIR, never an absolute path), so all that's left per clone is
 # the executable bit and your personal settings file. Idempotent.
 claude-install:
@@ -164,13 +164,13 @@ claude-install:
 	  echo "claude-install: seeded .claude/settings.local.json (gitignored)"; \
 	fi
 	@if ! command -v jq >/dev/null 2>&1; then \
-	  echo "⚠ jq not found — the Claude Code hooks parse tool JSON with it and will" >&2; \
+	  echo "! jq not found - the Claude Code hooks parse tool JSON with it and will" >&2; \
 	  echo "  silently no-op until it's installed (brew install jq)." >&2; \
 	fi
-	@echo "✓ Claude Code hooks armed (session-start, pre-push gate, agent gate, format-on-write)"
+	@echo "ok Claude Code hooks armed (session-start, pre-push gate, agent gate, format-on-write)"
 
 # Report on the parts of the environment the Makefile can't install for you.
-# Never fails — it's a status readout, not a gate.
+# Never fails - it's a status readout, not a gate.
 doctor:
 	@printf '%-16s' 'go';            command -v go            >/dev/null 2>&1 && go version | awk '{print $$3}' || echo 'MISSING'
 	@printf '%-16s' 'node';          command -v node          >/dev/null 2>&1 && node --version                 || echo 'MISSING'
@@ -178,18 +178,18 @@ doctor:
 	@printf '%-16s' 'golangci-lint'; if command -v golangci-lint >/dev/null 2>&1; then \
 	  v=$$(golangci-lint version 2>/dev/null | sed -n 's/.*has version \([0-9.]*\).*/\1/p'); \
 	  if [ "v$$v" = "$(GOLANGCI_CI_VERSION)" ]; then echo "v$$v"; \
-	  else echo "v$$v — CI pins $(GOLANGCI_CI_VERSION). Different linter versions disagree about real code; install the pinned one."; fi; \
+	  else echo "v$$v - CI pins $(GOLANGCI_CI_VERSION). Different linter versions disagree about real code; install the pinned one."; fi; \
 	else echo 'MISSING (make lint / make check)'; fi
 	@printf '%-16s' 'sqlc';          command -v sqlc          >/dev/null 2>&1 && echo 'ok'                      || echo 'MISSING (make sqlc)'
 	@printf '%-16s' 'claude';        command -v claude        >/dev/null 2>&1 && echo 'ok'                      || echo 'not on PATH (install separately; the Makefile cannot)'
-	@printf '%-16s' 'git hooks';     [ "$$(git config core.hooksPath)" = ".githooks" ] && echo 'armed'          || echo 'NOT armed — run make hooks-install'
-	@printf '%-16s' 'pii-patterns';  [ -f .pii-patterns ] && echo 'present'                                     || echo 'MISSING — run make hooks-install'
-	@printf '%-16s' 'claude hooks';  [ -x .claude/hooks/session-start.sh ] && echo 'executable'                 || echo 'NOT executable — run make claude-install'
-	@printf '%-16s' '.env';          [ -f .env ] && echo 'present'                                              || echo 'MISSING — run make setup'
-	@printf '%-16s' 'web deps';      [ -d web/node_modules ] && echo 'installed'                                || echo 'MISSING — run make web-install'
-	@printf '%-16s' 'pw browsers';   if [ ! -d web/node_modules/@playwright/test ]; then echo 'unknown — run make web-install first'; \
+	@printf '%-16s' 'git hooks';     [ "$$(git config core.hooksPath)" = ".githooks" ] && echo 'armed'          || echo 'NOT armed - run make hooks-install'
+	@printf '%-16s' 'pii-patterns';  [ -f .pii-patterns ] && echo 'present'                                     || echo 'MISSING - run make hooks-install'
+	@printf '%-16s' 'claude hooks';  [ -x .claude/hooks/session-start.sh ] && echo 'executable'                 || echo 'NOT executable - run make claude-install'
+	@printf '%-16s' '.env';          [ -f .env ] && echo 'present'                                              || echo 'MISSING - run make setup'
+	@printf '%-16s' 'web deps';      [ -d web/node_modules ] && echo 'installed'                                || echo 'MISSING - run make web-install'
+	@printf '%-16s' 'pw browsers';   if [ ! -d web/node_modules/@playwright/test ]; then echo 'unknown - run make web-install first'; \
 	  elif ( cd web && node -e 'const{chromium}=require("@playwright/test");process.exit(require("fs").existsSync(chromium.executablePath())?0:1)' ) 2>/dev/null; then echo 'installed'; \
-	  else echo 'MISSING — run make e2e-install (make e2e needs it)'; fi
+	  else echo 'MISSING - run make e2e-install (make e2e needs it)'; fi
 
 # ---- Go server -------------------------------------------------------------
 
@@ -198,11 +198,11 @@ run:
 
 # The embed pipeline (ADR-001): the React bundle must exist before the Go build
 # so embed.FS picks it up. Never `go build` alone when you want a shippable
-# binary — you'll embed a stale (or empty) web/dist.
+# binary - you'll embed a stale (or empty) web/dist.
 build: web-build
 	go build -o bin/uruni ./cmd/uruni
 
-# Run the built artifact rather than `go run`, with .env exported for you — the
+# Run the built artifact rather than `go run`, with .env exported for you - the
 # gap that makes a bare `./bin/uruni serve` fail on URUNI_BASE_URL, since
 # .env is a Makefile convenience and the binary reads only real environment
 # variables (ADR-019: env vars only, no config file).
@@ -241,7 +241,7 @@ migrate-status:
 	go run ./cmd/uruni migrate status
 
 # Through 0.x the schema is one file edited in place (ADR-025), and goose
-# records applied migrations by *number* — so it cannot tell that 00001 changed
+# records applied migrations by *number* - so it cannot tell that 00001 changed
 # under it and will happily report "up to date" against a stale database. This
 # is the normal move after pulling a schema change, not a recovery step: there
 # is no data to lose before v1.0.0. -wal/-shm go too, or SQLite replays a
@@ -300,7 +300,7 @@ server-restart: server-stop
 	  if pgrep -f 'go run ./cmd/uruni serve' >/dev/null 2>&1 || pgrep -x uruni >/dev/null 2>&1; then seen=1; elif [ $$seen = 1 ]; then break; fi; \
 	  sleep 0.1; \
 	done; \
-	echo "✗ server failed to start (died or timed out) — tail of $(SERVER_LOG):" >&2; \
+	echo "FAIL server failed to start (died or timed out) - tail of $(SERVER_LOG):" >&2; \
 	tail -n 20 $(SERVER_LOG) >&2; \
 	exit 1
 
@@ -320,7 +320,7 @@ web-restart: web-stop
 	  if pgrep -f '$(WEB_PROC)' >/dev/null 2>&1; then seen=1; elif [ $$seen = 1 ]; then break; fi; \
 	  sleep 0.1; \
 	done; \
-	echo "✗ web failed to start (died or timed out) — tail of $(WEB_LOG):" >&2; \
+	echo "FAIL web failed to start (died or timed out) - tail of $(WEB_LOG):" >&2; \
 	tail -n 20 $(WEB_LOG) >&2; \
 	exit 1
 
@@ -348,7 +348,7 @@ servers-status:
 e2e: e2e-reset
 	@( cd web && URUNI_DB="$(E2E_DB)" npm run -s test:e2e -- $(E2E_ARGS) )
 
-# `npm ci` installs the Playwright *runner*, never the browser it drives — that
+# `npm ci` installs the Playwright *runner*, never the browser it drives - that
 # is a separate few-hundred-MB download, once per machine. Keeping it out of
 # `make setup` keeps a fresh clone fast for the contributors who never run e2e;
 # `make doctor` carries the row that tells the rest of us to run this.
@@ -366,7 +366,7 @@ e2e-server: e2e-reset
 	@URUNI_DB="$(E2E_DB)" PORT=$(E2E_PORT) URUNI_LOG_LEVEL=$(E2E_LOG_LEVEL) go run ./cmd/uruni serve
 
 # ---- self-host stack -------------------------------------------------------
-# Exercises docker-compose.yml — the artifact operators actually run (ADR-010
+# Exercises docker-compose.yml - the artifact operators actually run (ADR-010
 # calls it a first-class deliverable, so it deserves to be run locally before
 # every release, not only by strangers).
 
@@ -390,16 +390,16 @@ stack-ps:
 # fast-forward main. Run before starting any new work so you never branch off a
 # stale local main.
 start-task:
-	@test -z "$$(git status --porcelain)" || { echo "✗ working tree dirty — commit or stash first, then re-run"; exit 1; }
-	@git ls-remote origin HEAD >/dev/null 2>&1 || { echo "✗ no GitHub access — unlock the SSH key (ssh-add) or run 'gh auth login'"; exit 1; }
-	@git checkout main >/dev/null 2>&1 || { echo "✗ could not switch to main"; exit 1; }
-	@git pull --ff-only >/dev/null 2>&1 || { echo "✗ pull failed (diverged or no upstream) — resolve manually"; exit 1; }
-	@echo "✓ on main, up to date @ $$(git rev-parse --short HEAD)"
+	@test -z "$$(git status --porcelain)" || { echo "FAIL working tree dirty - commit or stash first, then re-run"; exit 1; }
+	@git ls-remote origin HEAD >/dev/null 2>&1 || { echo "FAIL no GitHub access - unlock the SSH key (ssh-add) or run 'gh auth login'"; exit 1; }
+	@git checkout main >/dev/null 2>&1 || { echo "FAIL could not switch to main"; exit 1; }
+	@git pull --ff-only >/dev/null 2>&1 || { echo "FAIL pull failed (diverged or no upstream) - resolve manually"; exit 1; }
+	@echo "ok on main, up to date @ $$(git rev-parse --short HEAD)"
 
 # Pre-push gate. Deliberately mirrors .github/workflows/ci.yml step for step, so
-# green locally ≈ green in CI (ADR-017). Keep the two in sync when either
-# changes — including the golangci-lint version (see GOLANGCI_CI_VERSION above;
-# `make doctor` flags a mismatch). e2e is excluded — run `make e2e` separately
+# green locally ~ green in CI (ADR-017). Keep the two in sync when either
+# changes - including the golangci-lint version (see GOLANGCI_CI_VERSION above;
+# `make doctor` flags a mismatch). e2e is excluded - run `make e2e` separately
 # (slow and verbose).
 #
 # The go.mod / web/package.json guards mirror ci.yml's `preflight` job: the
@@ -410,24 +410,24 @@ start-task:
 check:
 	@fail=0; \
 	if [ -f go.mod ]; then \
-	  printf '%-14s' 'golangci-lint'; golangci-lint run                >/tmp/uruni-check-go-lint.log 2>&1 && echo '✓' || { echo '✗ → /tmp/uruni-check-go-lint.log'; fail=1; }; \
-	  printf '%-14s' 'go test';       go test ./... -race              >/tmp/uruni-check-go-test.log 2>&1 && echo '✓' || { echo '✗ → /tmp/uruni-check-go-test.log'; fail=1; }; \
+	  printf '%-14s' 'golangci-lint'; golangci-lint run                >/tmp/uruni-check-go-lint.log 2>&1 && echo 'ok' || { echo 'FAIL -> /tmp/uruni-check-go-lint.log'; fail=1; }; \
+	  printf '%-14s' 'go test';       go test ./... -race              >/tmp/uruni-check-go-test.log 2>&1 && echo 'ok' || { echo 'FAIL -> /tmp/uruni-check-go-test.log'; fail=1; }; \
 	else \
-	  printf '%-14s' 'go'; echo '– skipped (no go.mod yet — ci.yml skips too)'; \
+	  printf '%-14s' 'go'; echo '- skipped (no go.mod yet - ci.yml skips too)'; \
 	fi; \
 	if [ -f web/package.json ]; then \
-	  printf '%-14s' 'oxlint';        (cd web && npm run -s lint)      >/tmp/uruni-check-web-lint.log 2>&1 && echo '✓' || { echo '✗ → /tmp/uruni-check-web-lint.log'; fail=1; }; \
-	  printf '%-14s' 'tsc';           (cd web && npm run -s typecheck) >/tmp/uruni-check-web-tsc.log  2>&1 && echo '✓' || { echo '✗ → /tmp/uruni-check-web-tsc.log';  fail=1; }; \
-	  printf '%-14s' 'vitest';        (cd web && npm run -s test)      >/tmp/uruni-check-web-test.log 2>&1 && echo '✓' || { echo '✗ → /tmp/uruni-check-web-test.log'; fail=1; }; \
-	  printf '%-14s' 'web build';     (cd web && npm run -s build)     >/tmp/uruni-check-web-build.log 2>&1 && echo '✓' || { echo '✗ → /tmp/uruni-check-web-build.log'; fail=1; }; \
+	  printf '%-14s' 'oxlint';        (cd web && npm run -s lint)      >/tmp/uruni-check-web-lint.log 2>&1 && echo 'ok' || { echo 'FAIL -> /tmp/uruni-check-web-lint.log'; fail=1; }; \
+	  printf '%-14s' 'tsc';           (cd web && npm run -s typecheck) >/tmp/uruni-check-web-tsc.log  2>&1 && echo 'ok' || { echo 'FAIL -> /tmp/uruni-check-web-tsc.log';  fail=1; }; \
+	  printf '%-14s' 'vitest';        (cd web && npm run -s test)      >/tmp/uruni-check-web-test.log 2>&1 && echo 'ok' || { echo 'FAIL -> /tmp/uruni-check-web-test.log'; fail=1; }; \
+	  printf '%-14s' 'web build';     (cd web && npm run -s build)     >/tmp/uruni-check-web-build.log 2>&1 && echo 'ok' || { echo 'FAIL -> /tmp/uruni-check-web-build.log'; fail=1; }; \
 	else \
-	  printf '%-14s' 'web'; echo '– skipped (no web/package.json yet — ci.yml skips too)'; \
+	  printf '%-14s' 'web'; echo '- skipped (no web/package.json yet - ci.yml skips too)'; \
 	fi; \
-	if [ $$fail -eq 0 ]; then echo 'all green'; else echo 'FAILED — read the ✗ log(s) above'; exit 1; fi
+	if [ $$fail -eq 0 ]; then echo 'all green'; else echo 'FAILED - read the FAIL log(s) above'; exit 1; fi
 
 # Create or reset a local login, for curl smoke tests against authenticated
 # endpoints. Auth is local email/password (ADR-007), so there is no token to
-# mint — you log in and get a session cookie:
+# mint - you log in and get a session cookie:
 #   make dev-user EMAIL=bendahara@example.com PASSWORD=rahasia123
 #   curl -c /tmp/uruni.jar -d '{"email":"...","password":"..."}' localhost:8080/api/login
 dev-user:

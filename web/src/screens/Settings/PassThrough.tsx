@@ -13,7 +13,7 @@ import type { Purpose } from '@/lib/purposes'
 const text = copy.settings.passThrough
 
 /**
- * The pass-through section of the settings screen (M6.15, PRD §7.6): "record
+ * The pass-through section of the settings screen (M6.15, PRD section 7.6): "record
  * money collected on behalf of the parent org (e.g. Kas Bidang)."
  *
  * Add and rename, no delete. The name is a label - a posted transaction

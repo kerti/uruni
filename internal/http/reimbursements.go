@@ -16,10 +16,10 @@ import (
 )
 
 // reimbursementRequest is POST /api/reimbursements's body: a member fronting
-// their own money for the fund (PRD §7.4), recorded now and paid back later.
+// their own money for the fund (PRD section 7.4), recorded now and paid back later.
 //
 // waived_on is deliberately absent, for the same reason memberRequest omits
-// inactive_on: PRD §7.4 never asks to waive a claim, so #69 adds no waive
+// inactive_on: PRD section 7.4 never asks to waive a claim, so #69 adds no waive
 // route - and accepting waived_on at creation would be that route by the back
 // door, a claim born unpayable with no way to undo it. It stays off the
 // create body now that PATCH can set it (#103) - a claim is born owed, and

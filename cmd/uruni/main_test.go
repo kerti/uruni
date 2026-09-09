@@ -35,8 +35,8 @@ func TestRunRejectsAnUnknownCommand(t *testing.T) {
 }
 
 // TestRunDispatchesSeedE2E: the subcommand table is a contract the Makefile is
-// written against (ADR-019), so the wiring itself — the name `make e2e-reset`
-// invokes reaching seedE2E — is worth a test, not just seedE2E's own behaviour.
+// written against (ADR-019), so the wiring itself - the name `make e2e-reset`
+// invokes reaching seedE2E - is worth a test, not just seedE2E's own behaviour.
 func TestRunDispatchesSeedE2E(t *testing.T) {
 	t.Setenv("URUNI_DB", filepath.Join(t.TempDir(), "uruni-e2e.db"))
 
@@ -52,7 +52,7 @@ func TestPrintVersion(t *testing.T) {
 	}
 
 	got := out.String()
-	// An unstamped build is a dev build and says so — the point of the line is
+	// An unstamped build is a dev build and says so - the point of the line is
 	// that a *tagged* image says something else (ADR-018).
 	if !strings.HasPrefix(got, "uruni "+version+" ") {
 		t.Errorf("printVersion() = %q, want it to lead with the version %q", got, version)
@@ -102,7 +102,7 @@ func TestProbeHealthRejectsAnUnhealthyServer(t *testing.T) {
 }
 
 func TestProbeHealthRejectsAServerThatIsNotThere(t *testing.T) {
-	// Bound then immediately closed, so the port is real and refusing — the
+	// Bound then immediately closed, so the port is real and refusing - the
 	// container's "the binary died but the container is up" case.
 	srv := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
 	url := srv.URL + "/healthz"

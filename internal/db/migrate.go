@@ -16,7 +16,7 @@ import (
 
 // The migrations travel inside the binary, so a self-hoster runs
 // `docker compose up` and never a migration step: `serve` applies whatever is
-// pending on boot (ADR-019). Embedding is what makes that possible — the
+// pending on boot (ADR-019). Embedding is what makes that possible - the
 // distroless image has no .sql files and no shell to run them with.
 //
 //go:embed migrations/*.sql
@@ -44,7 +44,7 @@ type Migration struct {
 
 // Up applies every pending migration, in order, logs one line per migration
 // applied, and reports how many that was. An already-current database logs
-// nothing and returns 0 — this runs on every boot, so silence is the normal case.
+// nothing and returns 0 - this runs on every boot, so silence is the normal case.
 func Up(ctx context.Context, sqlDB *sql.DB, logger *slog.Logger) (int, error) {
 	p, err := provider(sqlDB)
 	if err != nil {
@@ -62,7 +62,7 @@ func Up(ctx context.Context, sqlDB *sql.DB, logger *slog.Logger) (int, error) {
 	return len(results), nil
 }
 
-// Down rolls back exactly one migration — the most recently applied. One step,
+// Down rolls back exactly one migration - the most recently applied. One step,
 // because `migrate down` is what an operator reaches for after a bad upgrade and
 // a flag away from wiping the ledger is the wrong shape for that command
 // (ADR-019).
@@ -87,7 +87,7 @@ func Down(ctx context.Context, sqlDB *sql.DB, logger *slog.Logger) (int64, error
 }
 
 // Status reports every migration the binary carries, applied or not, oldest
-// first. It changes nothing — including not migrating the database it is asked
+// first. It changes nothing - including not migrating the database it is asked
 // about, which is the whole point of being able to run it.
 func Status(ctx context.Context, sqlDB *sql.DB) ([]Migration, error) {
 	p, err := provider(sqlDB)
@@ -117,8 +117,8 @@ func Status(ctx context.Context, sqlDB *sql.DB) ([]Migration, error) {
 // thing.
 //
 // The provider API is deliberate: goose's package-level functions carry global
-// state (a dialect, a registry), which makes two databases in one process — the
-// dev database and a test's temporary file — able to interfere.
+// state (a dialect, a registry), which makes two databases in one process - the
+// dev database and a test's temporary file - able to interfere.
 func provider(sqlDB *sql.DB) (*goose.Provider, error) {
 	fsys, err := fs.Sub(migrationsFS, "migrations")
 	if err != nil {

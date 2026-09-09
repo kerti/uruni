@@ -1,5 +1,5 @@
 #!/bin/sh
-# SessionStart hook — orient the agent, and sync main when (and only when) that
+# SessionStart hook - orient the agent, and sync main when (and only when) that
 # is safe.
 #
 # Deliberate difference from the Balances version this is adapted from: that one
@@ -10,7 +10,7 @@
 # are and touches nothing.
 #
 # Emits JSON on stdout: additionalContext goes into the agent's context,
-# systemMessage is shown to the human. Never fails the session — worst case it
+# systemMessage is shown to the human. Never fails the session - worst case it
 # prints nothing.
 set -eu
 
@@ -33,19 +33,19 @@ branch=$(git branch --show-current 2>/dev/null || echo "")
 dirty=$(git status --porcelain 2>/dev/null | grep -c . || true)
 
 if [ "$dirty" -gt 0 ]; then
-  sm="⚠️ Working tree dirty ($dirty change(s)) on '$branch' — commit, stash, or clean before syncing."
+  sm="! Working tree dirty ($dirty change(s)) on '$branch' - commit, stash, or clean before syncing."
   if ! git ls-remote origin HEAD >/dev/null 2>&1; then
-    sm="$sm  Also: no GitHub access — run: ssh-add --apple-load-keychain"
+    sm="$sm  Also: no GitHub access - run: ssh-add --apple-load-keychain"
   fi
-  emit "On branch '$branch', working tree dirty ($dirty change(s)) — start-task skipped." "$sm"
+  emit "On branch '$branch', working tree dirty ($dirty change(s)) - start-task skipped." "$sm"
 fi
 
 if [ "$branch" != "main" ]; then
-  emit "On feature branch '$branch', clean tree @ $(git rev-parse --short HEAD). Left alone — start-task only syncs when you are on main."
+  emit "On feature branch '$branch', clean tree @ $(git rev-parse --short HEAD). Left alone - start-task only syncs when you are on main."
 fi
 
 if output=$(make start-task 2>&1); then
   emit "start-task: $output"
 else
-  emit "start-task FAILED: $output" "⚠️ start-task failed — the repo needs attention before proceeding: $output"
+  emit "start-task FAILED: $output" "! start-task failed - the repo needs attention before proceeding: $output"
 fi

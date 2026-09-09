@@ -1,6 +1,6 @@
 {
   "$comment": [
-    "Template for .claude/settings.local.json — YOUR settings for this clone,",
+    "Template for .claude/settings.local.json - YOUR settings for this clone,",
     "gitignored. `make claude-install` copies this into place if it is missing.",
     "Shared team settings live in .claude/settings.json (committed).",
     "Claude Code also appends your permanent 'don't ask again' approvals here.",

@@ -9,7 +9,7 @@ import (
 )
 
 // transactionRequest is POST /api/transactions's body: one ordinary entry or
-// one correction (PRD §7.2, §7.6). A pass-through movement is not a special
+// one correction (PRD section 7.2, section 7.6). A pass-through movement is not a special
 // shape here - it is an ordinary transaction tagged to a pass-through
 // purpose (#66) - and a correction isn't either: IsAdjustment selects
 // kind='adjustment' over kind='normal', mirroring PostTransactionParams's own
@@ -106,7 +106,7 @@ func (a *api) createTransaction(w http.ResponseWriter, r *http.Request) {
 }
 
 // listTransactions is GET /api/transactions: the recent-transactions list
-// PRD §7.8's reconcile flow reads. A direct-CRUD read (ADR-027) - no derived
+// PRD section 7.8's reconcile flow reads. A direct-CRUD read (ADR-027) - no derived
 // invariant beyond the sum itself - so it calls a.queries directly, the same
 // split listAccounts and listPurposes already use. Ordered oldest-first,
 // ListTransactionsByFund's own ORDER BY occurred_on, id.

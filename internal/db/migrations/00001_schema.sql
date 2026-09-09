@@ -1,15 +1,15 @@
--- The PRD §6 data model. This is the only migration Uruni has, and the only one
--- it gets before v1.0.0 — every schema change edits this file in place, so it
+-- The PRD section 6 data model. This is the only migration Uruni has, and the only one
+-- it gets before v1.0.0 - every schema change edits this file in place, so it
 -- always reads as the complete current schema (ADR-025). After pulling a change
 -- to it, run `make db-reset`: goose tracks migrations by number and cannot see
 -- that this one moved. fund, the location money physically sits in
 -- (account), the tag every transaction carries (purpose), and who owes dues
--- (dues_tier, dues_rate, member), the ledger itself — transfer, reimbursement,
--- transaction, receipt — and the counts taken against it (reconciliation,
--- reconciliation_line) plus the incidental envelope. That is every PRD §6
+-- (dues_tier, dues_rate, member), the ledger itself - transfer, reimbursement,
+-- transaction, receipt - and the counts taken against it (reconciliation,
+-- reconciliation_line) plus the incidental envelope. That is every PRD section 6
 -- entity; the file is complete.
 --
--- user and session (M5 Auth, ADR-030) are not PRD §6 entities: they are the
+-- user and session (M5 Auth, ADR-030) are not PRD section 6 entities: they are the
 -- treasurer's login, the only rows in this schema not scoped to a fund
 -- (ADR-030 decision 2) - no fund_id, no membership table.
 --
@@ -72,7 +72,7 @@ CREATE TABLE purpose (                    -- the tag every transaction carries
 ) STRICT;
 
 -- One routine purpose ("Kas Utama") per fund. Partial so it only constrains
--- kind='main' rows — incidental and pass_through purposes are unrestricted.
+-- kind='main' rows - incidental and pass_through purposes are unrestricted.
 CREATE UNIQUE INDEX purpose_single_main ON purpose(fund_id) WHERE kind = 'main';
 
 CREATE TABLE dues_tier (                  -- a table, not an enum: the treasurer names these
@@ -88,7 +88,7 @@ CREATE TABLE dues_rate (                  -- effective-dated, one-sided interval
   -- No effective_to and no fund_id: the rate for a period is the latest row at
   -- or before it, and ownership comes through tier_id. Two-sided intervals
   -- would need gaps and overlaps policed; this shape cannot express either.
-  -- A tier whose rate is undecided (madya, PRD §6) simply has no row.
+  -- A tier whose rate is undecided (madya, PRD section 6) simply has no row.
   id             INTEGER PRIMARY KEY,
   tier_id        INTEGER NOT NULL REFERENCES dues_tier(id),
   amount         INTEGER NOT NULL CHECK (amount >= 0),

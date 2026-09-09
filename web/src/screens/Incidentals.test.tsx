@@ -14,7 +14,7 @@ afterEach(() => {
 })
 
 function money(amount: number): string {
-  return formatIDR(amount).replace(/ /g, ' ')
+  return formatIDR(amount).replace(/\u00a0/g, ' ')
 }
 
 const accounts = [{ id: 1, kind: 'cash', name: 'Tunai', inactive_on: null, created_at: 1 }]
@@ -314,7 +314,7 @@ describe('Incidentals', () => {
   })
 
   it('opens an envelope, sending a null target when none was typed, and returns to the open tab', async () => {
-    // The target is optional (PRD §7.5): an untouched AmountInput is 0, which
+    // The target is optional (PRD section 7.5): an untouched AmountInput is 0, which
     // means "no target" on the wire, not a target of nothing.
     const opened = { ...openEnvelope, purpose_id: 3, occasion: 'Kerja bakti', target_amount: null, opened_on: '2026-09-09' }
     let posted: unknown = null

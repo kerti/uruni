@@ -7,7 +7,7 @@
 // type, so +, -, unary minus and all six comparisons already work correctly
 // between two Amounts with no help from this package. The only thing the native
 // operators get wrong is silent wraparound at the int64 boundary, and that is
-// the one thing a trust core cannot tolerate — a wrapped balance is not an
+// the one thing a trust core cannot tolerate - a wrapped balance is not an
 // error, it is a confidently wrong number on the calmest screen in the app. So
 // Add, Sub and Mul are the checked versions of operators that already exist,
 // and nothing else is here.
@@ -16,7 +16,7 @@
 // either: the SPA formats client-side via Intl.NumberFormat (ADR-006), so the
 // first real caller for either is M7's server-rendered report and M8's Excel
 // export. When Format arrives it takes the currency from the fund and keeps the
-// scale in one named constant — see ADR-006's exit plan for why that matters
+// scale in one named constant - see ADR-006's exit plan for why that matters
 // more than it looks.
 package money
 
@@ -37,7 +37,7 @@ import (
 // enum the Go code is the only writer of.
 var ErrOverflow = errors.New("money: result overflows int64")
 
-// Amount is a quantity of integer rupiah. The zero value is Rp 0 — an ordinary
+// Amount is a quantity of integer rupiah. The zero value is Rp 0 - an ordinary
 // balance (an empty fund, an account that nets to zero), not a sentinel for
 // "unset". Nothing in the schema or the PRD needs to distinguish the two.
 type Amount int64

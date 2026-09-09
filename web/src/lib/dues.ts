@@ -1,4 +1,4 @@
-// Typed call over apiFetch for GET /api/dues-status (M6.12, PRD §7.3), same
+// Typed call over apiFetch for GET /api/dues-status (M6.12, PRD section 7.3), same
 // idiom as lib/balances.ts and lib/reconciliations.ts. The Member shape is
 // already defined in lib/setup.ts (the setup wizard's roster step created
 // these same rows) - re-exported here rather than redefined, same reasoning
@@ -39,7 +39,7 @@ export function getDuesStatus(period: string): Promise<DuesStatusRow[]> {
 
 /**
  * POST /api/dues-payments/{id}/reversal - undo a dues payment recorded in
- * error (PRD §7.3). {id} is the kind='dues' transaction being reversed.
+ * error (PRD section 7.3). {id} is the kind='dues' transaction being reversed.
  *
  * Deliberately narrow, per ADR-029: account, purpose, amount, member and
  * period are never sent - Ledger.ReverseDuesPayment copies all five from the

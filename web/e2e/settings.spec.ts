@@ -2,11 +2,11 @@ import { expect, test } from '@playwright/test'
 
 import { copy } from '../src/copy/id'
 
-// M6.15: the settings screen's locations section (PRD §7.1, #78's "can a
+// M6.15: the settings screen's locations section (PRD section 7.1, #78's "can a
 // location be added later" answered yes).
 //
-// This spec walks the one path that has to work in a real browser - home →
-// settings → add a location → see it in the list - and hands everything
+// This spec walks the one path that has to work in a real browser - home ->
+// settings -> add a location -> see it in the list - and hands everything
 // else to the vitest suite (Locations.test.tsx), which can stub a 409, a
 // retired row and a rename without touching the shared database.
 //

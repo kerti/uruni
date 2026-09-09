@@ -97,7 +97,7 @@ func TestPostDuesRatesRejectsADuplicatePeriodWith409(t *testing.T) {
 	}
 
 	// dues_rate's own UNIQUE (tier_id, effective_from) - a second rate for
-	// the same tier and period is a correction, and PRD §6 says the way to
+	// the same tier and period is a correction, and PRD section 6 says the way to
 	// correct it is a *different* effective_from, not this one repeated.
 	rec := postDuesRate(t, r, tier.ID, duesRateRequest{Amount: 75_000, EffectiveFrom: "2026-01"})
 	if rec.Code != http.StatusConflict {

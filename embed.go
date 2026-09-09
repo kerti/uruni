@@ -9,7 +9,7 @@ import (
 	"io/fs"
 )
 
-// web/dist is gitignored except for .gitkeep — the directory has to exist for
+// web/dist is gitignored except for .gitkeep - the directory has to exist for
 // this directive to compile, which is why that placeholder is committed. The
 // `all:` prefix is what makes .gitkeep itself embeddable, so a fresh clone
 // builds before Vite has ever run.

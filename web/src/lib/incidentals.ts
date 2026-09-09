@@ -11,7 +11,7 @@ import { apiFetch } from '@/lib/api'
 /** One incidental envelope on its own (internal/http/incidentals.go). No
  * fund_id, same reasoning as every other response type in that package.
  * `target_amount` and `closed_on` are nullable: a target is optional at
- * opening (PRD §7.5), and an envelope stays open until deliberately closed. */
+ * opening (PRD section 7.5), and an envelope stays open until deliberately closed. */
 export interface Incidental {
   purpose_id: number
   occasion: string
@@ -21,7 +21,7 @@ export interface Incidental {
   created_at: number
 }
 
-/** An envelope plus the totals PRD §7.5 shows for it - what
+/** An envelope plus the totals PRD section 7.5 shows for it - what
  * GET /api/incidentals/{purposeID} answers with. Both totals are server-
  * computed; nothing on this screen re-derives them from a transaction list. */
 export interface IncidentalDetail extends Incidental {

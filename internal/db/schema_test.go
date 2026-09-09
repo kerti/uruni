@@ -22,7 +22,7 @@ func migratedTestDB(t *testing.T) *sql.DB {
 	return sqlDB
 }
 
-// validSlug is 22 characters — the minimum report_slug length — so tests that
+// validSlug is 22 characters - the minimum report_slug length - so tests that
 // aren't exercising the slug constraint itself can just reuse it.
 const validSlug = "abcdefghijklmnopqrstuv"
 

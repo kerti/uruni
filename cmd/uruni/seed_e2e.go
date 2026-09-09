@@ -43,7 +43,7 @@ const seedE2EFundName = "Kas RT Uji Coba"
 // give the SPA screens to click through.
 //
 // Deliberately NOT config.Load: that loader hard-refuses to boot without a
-// valid URUNI_BASE_URL (ADR-019 — "did you configure this instance at all?"),
+// valid URUNI_BASE_URL (ADR-019 - "did you configure this instance at all?"),
 // which is the right gate for `serve` and wrong for a throwaway seeding
 // command that has no HTTP origin to build links from. seed-e2e reads
 // URUNI_DB directly instead, so `make e2e-reset` (and a bare `URUNI_DB=...
@@ -144,7 +144,7 @@ func seedE2E(ctx context.Context) error {
 // "./uruni.db" (or any path under the repo) does not.
 func requireThrowawayDBPath(dbPath string) error {
 	if dbPath == "" {
-		return fmt.Errorf("seed-e2e refuses to run: URUNI_DB is unset — point it at a throwaway path (e.g. %s) before seeding", e2eExampleDBPath)
+		return fmt.Errorf("seed-e2e refuses to run: URUNI_DB is unset - point it at a throwaway path (e.g. %s) before seeding", e2eExampleDBPath)
 	}
 
 	abs, err := filepath.Abs(dbPath)
@@ -153,7 +153,7 @@ func requireThrowawayDBPath(dbPath string) error {
 	}
 
 	if !underTempDir(abs) || !strings.Contains(strings.ToLower(filepath.Base(abs)), "e2e") {
-		return fmt.Errorf("seed-e2e refuses to run against %q — it does not look like a throwaway e2e database (expected a path like %s under a temp directory, with \"e2e\" in the filename)", dbPath, e2eExampleDBPath)
+		return fmt.Errorf("seed-e2e refuses to run against %q - it does not look like a throwaway e2e database (expected a path like %s under a temp directory, with \"e2e\" in the filename)", dbPath, e2eExampleDBPath)
 	}
 	return nil
 }

@@ -174,7 +174,7 @@ describe('Reconcile', () => {
     // an unrecorded inflow, so direction defaults to "in" and amount to the
     // gap's own magnitude - nothing left to type for the common case.
     expect(screen.getByRole('button', { name: copy.record.directionIn })).toHaveAttribute('aria-pressed', 'true')
-    expect(screen.getByLabelText(text.fixAmountLabel)).toHaveValue('Rp 50.000')
+    expect(screen.getByLabelText(text.fixAmountLabel)).toHaveValue('Rp\u00a050.000')
 
     expect(screen.getByRole('button', { name: text.submit })).not.toBeDisabled()
     await userEvent.click(screen.getByRole('button', { name: text.submit }))
@@ -329,7 +329,7 @@ describe('Reconcile', () => {
     // Not an error screen and not a blank one - her typed figures are still
     // there and she is asked to resolve again, resolution buttons intact.
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
-    expect(screen.getByLabelText(text.actualLabel('Tunai'))).toHaveValue('Rp 100.000')
+    expect(screen.getByLabelText(text.actualLabel('Tunai'))).toHaveValue('Rp\u00a0100.000')
     expect(screen.getByRole('button', { name: text.resolutionOptions.entry_added })).toBeInTheDocument()
   })
 

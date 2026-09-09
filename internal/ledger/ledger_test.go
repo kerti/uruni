@@ -39,7 +39,7 @@ func TestHarnessRoundTripsAnEntry(t *testing.T) {
 
 // The self-check that matters: foreign keys are off by default in SQLite, per
 // connection, so a harness that forgot them would let every later test pass
-// against a database enforcing nothing. A composite FK is the sharper probe —
+// against a database enforcing nothing. A composite FK is the sharper probe -
 // it fails only if the pragma is on *and* ADR-024's (fund_id, id) references
 // are doing their job.
 func TestHarnessEnforcesCompositeForeignKeys(t *testing.T) {
@@ -55,7 +55,7 @@ func TestHarnessEnforcesCompositeForeignKeys(t *testing.T) {
 	}
 
 	// The account belongs to the first fund; the transaction claims the second.
-	// Only the composite reference can catch this — a single-column
+	// Only the composite reference can catch this - a single-column
 	// REFERENCES account(id) would find the row and be satisfied.
 	_, err = store.New(l.db).CreateTransaction(ctx, store.CreateTransactionParams{
 		FundID: other.ID, AccountID: f.cashID, PurposeID: f.mainID,

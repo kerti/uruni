@@ -78,7 +78,7 @@ describe('DuesStatus', () => {
     expect(screen.queryByText('Warga Tiga')).not.toBeInTheDocument()
     expect(screen.queryByText('Warga Empat')).not.toBeInTheDocument()
 
-    // PRD §7.3's explicit rule: a list and nothing more.
+    // PRD section 7.3's explicit rule: a list and nothing more.
     expect(screen.queryByRole('button', { name: /ingat|kirim|notif/i })).not.toBeInTheDocument()
   })
 

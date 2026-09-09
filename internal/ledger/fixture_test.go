@@ -16,7 +16,7 @@ import (
 //
 // It reuses internal/db.Open rather than opening a connection itself, so the
 // tests run against production's configuration: SetMaxOpenConns(1) and all four
-// pragmas, foreign_keys=ON among them — SQLite leaves that off by default, per
+// pragmas, foreign_keys=ON among them - SQLite leaves that off by default, per
 // connection, and the DSN is what turns it on everywhere (ADR-028).
 //
 // ":memory:" is private to this connection, with no cache=shared. That is safe
@@ -26,7 +26,7 @@ import (
 //
 // This differs from internal/db's own helper, which uses a real temp file
 // deliberately: those tests assert the WAL pragma itself, and WAL degrades to a
-// memory journal in-memory. Nothing here asserts a pragma — these tests are
+// memory journal in-memory. Nothing here asserts a pragma - these tests are
 // about CHECKs, foreign keys and triggers, which behave identically.
 func newTestLedger(t *testing.T) *Ledger {
 	t.Helper()

@@ -322,7 +322,7 @@ func TestSetUpFundAbortsWhenTheSlugSourceFails(t *testing.T) {
 
 	// A failing random source is not a real operating condition, but the slug
 	// is the one value here that must never be quietly weakened: it is
-	// generated once, never rotates, and PRD §7.9 leans on it being
+	// generated once, never rotates, and PRD section 7.9 leans on it being
 	// unguessable. Setup must abort rather than fall back to anything.
 	original := randInt
 	randInt = func(io.Reader, *big.Int) (*big.Int, error) {

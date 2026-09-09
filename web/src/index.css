@@ -2,7 +2,7 @@
 @import '@fontsource-variable/plus-jakarta-sans';
 
 /* Dark mode is deferred (Design-System.md), so the `dark:` variant is bound to a
-   `.dark` ancestor that nothing sets — rather than Tailwind's default
+   `.dark` ancestor that nothing sets - rather than Tailwind's default
    prefers-color-scheme, which would fire shadcn's dark: utilities against the
    light palette on an OS in dark mode. */
 @custom-variant dark (&:is(.dark *));
@@ -46,7 +46,7 @@
   --shadow-card: 0 2px 8px rgb(34 50 58 / 0.06);
   --shadow-floating: 0 8px 24px rgb(34 50 58 / 0.1);
 
-  /* Design-System.md's motion rule — "calm and quick: 150-250ms ease-out,
+  /* Design-System.md's motion rule - "calm and quick: 150-250ms ease-out,
      nothing bouncy". One shared reveal for anything that appears in place
      (the dues history panel today), so a second one is never invented with
      its own timing. Opacity and transform only: both are composited, which
@@ -65,7 +65,7 @@
   }
 }
 
-/* The palette is Design-System.md verbatim — Forest as the action colour, Sage
+/* The palette is Design-System.md verbatim - Forest as the action colour, Sage
    as a tint only, and gentle semantics (terracotta for "selisih", never
    alarm-red). Change these there first, then here. */
 :root {

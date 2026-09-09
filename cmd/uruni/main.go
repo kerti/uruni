@@ -1,6 +1,6 @@
 // Command uruni is the whole product: one binary that serves the API, the
 // public report and the embedded SPA (ADR-001). Its subcommand surface is
-// pinned by ADR-019 — the Makefile and the container HEALTHCHECK are written
+// pinned by ADR-019 - the Makefile and the container HEALTHCHECK are written
 // against that table, so it is a contract, not a convenience.
 package main
 
@@ -35,7 +35,7 @@ func main() {
 
 // The CLI and the server logs are the *operator's* surface, so they are in
 // English like the rest of the self-hosting documentation. Indonesian is for
-// the treasurer's surface — the SPA and the public report (ADR-014).
+// the treasurer's surface - the SPA and the public report (ADR-014).
 var (
 	// ErrNoCommand and ErrUnknownCommand are sentinels so callers and tests can
 	// branch on identity rather than on message text.
@@ -45,13 +45,13 @@ var (
 
 // usage lists the subcommands that exist *today*. ADR-019's table also holds
 // `create-user`; it lands with the milestone that gives it something to do
-// (M5) and until then is not advertised here. `seed-e2e` landed at M6.3 — the
+// (M5) and until then is not advertised here. `seed-e2e` landed at M6.3 - the
 // first milestone with a domain (real screens, real data) to seed.
 const usage = "try: uruni serve | migrate up|down|status | version | healthcheck | seed-e2e"
 
 func run(args []string) error {
 	if len(args) == 0 {
-		return fmt.Errorf("%w — %s", ErrNoCommand, usage)
+		return fmt.Errorf("%w - %s", ErrNoCommand, usage)
 	}
 
 	switch args[0] {
@@ -68,7 +68,7 @@ func run(args []string) error {
 	case "seed-e2e":
 		return seedE2E(context.Background())
 	default:
-		return fmt.Errorf("%w: %q — %s", ErrUnknownCommand, args[0], usage)
+		return fmt.Errorf("%w: %q - %s", ErrUnknownCommand, args[0], usage)
 	}
 }
 
@@ -79,13 +79,13 @@ func serve() error {
 	}
 
 	// Only `serve` takes this lock. `migrate` is a short, operator-invoked,
-	// one-shot command — including `migrate status`, which an operator
-	// legitimately runs *while* a server is up to check what it has applied —
+	// one-shot command - including `migrate status`, which an operator
+	// legitimately runs *while* a server is up to check what it has applied -
 	// and SQLite's own single connection plus busy_timeout (internal/db/db.go)
 	// already serialize its DDL against whatever else touches the file. What
 	// this guards against is two long-lived `serve` processes both reaching
 	// the domain-level singleton guard M4 adds next (first-run setup refusing
-	// a second fund) at once — see internal/lock's package doc.
+	// a second fund) at once - see internal/lock's package doc.
 	lockPath := lock.PathFor(cfg.DBPath)
 	instanceLock, err := lock.Acquire(lockPath)
 	if err != nil {
@@ -98,12 +98,12 @@ func serve() error {
 		return fmt.Errorf("opening the embedded web assets: %w", err)
 	}
 
-	// One logger, built at startup and passed down — no package-level global
+	// One logger, built at startup and passed down - no package-level global
 	// (ADR-022). Threaded into internal/http below, where its request-logging
 	// middleware and error mappers use it (ADR-021).
 	logger := newLogger(cfg, os.Stderr)
 
-	// SIGINT/SIGTERM close in-flight requests cleanly — `make restart` and
+	// SIGINT/SIGTERM close in-flight requests cleanly - `make restart` and
 	// `docker compose down` both stop the process this way. Established before
 	// the store opens so a Ctrl-C during a long first migration is honoured.
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
@@ -169,7 +169,7 @@ func serve() error {
 // JSON when the operator ships logs somewhere that parses them (ADR-022).
 //
 // Whatever ends up here is operator-facing and public: never log a member name,
-// a note, or an amount. Log IDs (PRD §6, data minimization).
+// a note, or an amount. Log IDs (PRD section 6, data minimization).
 func newLogger(cfg config.Config, w io.Writer) *slog.Logger {
 	opts := &slog.HandlerOptions{Level: cfg.LogLevel}
 	if cfg.LogFormat == config.LogFormatJSON {

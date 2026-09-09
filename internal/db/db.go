@@ -2,7 +2,7 @@
 // It is the plumbing under the store: internal/store holds the sqlc-generated
 // queries (ADR-005), this package hands them something to run against.
 //
-// SQLite is the only engine through 0.x (ADR-004) — there is no DATABASE_URL, no
+// SQLite is the only engine through 0.x (ADR-004) - there is no DATABASE_URL, no
 // dialect abstraction, and nothing here is written to be portable.
 package db
 
@@ -21,18 +21,18 @@ import (
 // driverName is what modernc.org/sqlite registers itself as.
 const driverName = "sqlite"
 
-// pragmas are set on every connection, via the DSN — the driver replays them
+// pragmas are set on every connection, via the DSN - the driver replays them
 // each time it opens one, so a connection the pool retires and reopens is
 // configured identically. The set is ADR-004's, and each earns its place:
 //
-//   - journal_mode=WAL — readers don't block the writer, which is what lets the
+//   - journal_mode=WAL - readers don't block the writer, which is what lets the
 //     unauthenticated public report be served while the treasurer records.
-//   - busy_timeout=5000 — belt to SetMaxOpenConns(1)'s braces: a second process
+//   - busy_timeout=5000 - belt to SetMaxOpenConns(1)'s braces: a second process
 //     (a backup reading the file, goose in another terminal) waits rather than
 //     failing instantly.
-//   - foreign_keys=ON — SQLite leaves this *off* by default, per connection. The
+//   - foreign_keys=ON - SQLite leaves this *off* by default, per connection. The
 //     ledger's references are only real if it is on.
-//   - synchronous=NORMAL — safe under WAL: a crash cannot corrupt the database,
+//   - synchronous=NORMAL - safe under WAL: a crash cannot corrupt the database,
 //     at the cost of possibly losing the last commit to a full OS crash. FULL
 //     would fsync every commit for a fund that records a few entries a week.
 //
@@ -46,7 +46,7 @@ var pragmas = []string{
 }
 
 // Open opens the database at path, creating the file if it does not exist, and
-// verifies the connection before returning it. Nothing here migrates — callers
+// verifies the connection before returning it. Nothing here migrates - callers
 // run Up themselves, so `migrate status` can report on a database it has not
 // changed.
 func Open(ctx context.Context, path string) (*sql.DB, error) {
@@ -64,7 +64,7 @@ func Open(ctx context.Context, path string) (*sql.DB, error) {
 	sqlDB.SetMaxOpenConns(1)
 	sqlDB.SetMaxIdleConns(1)
 
-	// sql.Open is lazy — without this an unwritable path or a corrupt file
+	// sql.Open is lazy - without this an unwritable path or a corrupt file
 	// surfaces at the first query instead of at boot, where the operator is
 	// still reading the logs.
 	if err := sqlDB.PingContext(ctx); err != nil {

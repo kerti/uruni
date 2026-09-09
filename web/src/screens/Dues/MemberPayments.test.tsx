@@ -30,7 +30,7 @@ function transaction(overrides: Record<string, unknown>) {
     reimbursement_id: null,
     transfer_id: null,
     reverses_transaction_id: null,
-    note: 'Iuran — Warga Satu',
+    note: 'Iuran - Warga Satu',
     created_at: 1,
     ...overrides,
   }

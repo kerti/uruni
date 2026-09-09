@@ -18,7 +18,7 @@ const reportSlugAlphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz
 // reportSlugLength is 32. The schema's own CHECK (length(report_slug) >= 22)
 // already picked a floor - "roughly a UUID's worth of entropy in base62" - so
 // 22 would satisfy it, but this generator is the slug's only source, not a
-// re-derivation of something else, and PRD §7.9 treats it as a
+// re-derivation of something else, and PRD section 7.9 treats it as a
 // security-relevant unguessable token that a link, once shared, never
 // rotates. 32 base62 characters is about 190 bits, comfortably past the
 // schema's floor and past a UUID's 122 bits, at a cost (10 more characters in
@@ -26,7 +26,7 @@ const reportSlugAlphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz
 const reportSlugLength = 32
 
 // generateReportSlug returns a random base62 string for fund.report_slug,
-// drawn from crypto/rand, never math/rand: PRD §7.9 relies on this being
+// drawn from crypto/rand, never math/rand: PRD section 7.9 relies on this being
 // unguessable, and math/rand's default source is neither seeded for that nor
 // safe against an adversary who can observe other output from it.
 //
@@ -74,7 +74,7 @@ type AccountInput struct {
 // SetUpFundParams is every argument SetUpFund needs to bring a brand-new
 // fund into existence.
 type SetUpFundParams struct {
-	// FundName is the treasurer's own name for the fund (PRD §7.1: "name the
+	// FundName is the treasurer's own name for the fund (PRD section 7.1: "name the
 	// fund"). Non-empty after trimming.
 	FundName string
 
