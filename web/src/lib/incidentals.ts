@@ -67,9 +67,10 @@ export function getIncidental(purposeId: number): Promise<IncidentalDetail> {
 }
 
 /**
- * POST /api/incidentals/{purposeID}/close - closes the envelope and rolls
- * any leftover into the fund's main purpose. `rolled_amount` is 0 when the
- * leftover was zero or negative, since neither posts anything; a second
+ * POST /api/incidentals/{purposeID}/close - closes the envelope and squares
+ * its balance to exactly zero (ADR-031). `rolled_amount` is signed:
+ * positive rolled out to Kas Utama, negative covered a shortfall from Kas
+ * Utama, zero means the envelope landed square and nothing posted. A second
  * close on an already-closed envelope is the server's named 409
  * `incidental_already_closed`.
  */
@@ -88,4 +89,17 @@ export function closeIncidental(
       note: input.note,
     }),
   }).then((res) => ({ incidental: res.incidental, rolledAmount: res.rolled_amount }))
+}
+
+/**
+ * POST /api/incidentals/{purposeID}/reopen - the deliberate, visible way
+ * back from a closed envelope (ADR-031): closed_on returns to null so a
+ * late entry has somewhere to post, through the ordinary record form with
+ * no special path. No body - there is nothing to say beyond which envelope,
+ * matching GET /api/incidentals/{purposeID}'s own no-body shape. Reopening
+ * an envelope that is not closed is the server's named 409
+ * `incidental_not_closed`.
+ */
+export function reopenIncidental(purposeId: number): Promise<Incidental> {
+  return apiFetch<Incidental>(`/api/incidentals/${purposeId}/reopen`, { method: 'POST' })
 }

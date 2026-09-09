@@ -185,8 +185,9 @@ type closeIncidentalRequest struct {
 }
 
 // closeIncidentalResponse is POST /api/incidentals/{purposeID}/close's body:
-// the now-closed envelope, and the amount rolled into the main purpose - 0
-// when the leftover was zero or negative, since neither posts anything.
+// the now-closed envelope, and the amount rolled - signed (ADR-031):
+// positive rolled out to Kas Utama, negative covered a shortfall from Kas
+// Utama, zero means the envelope landed square and nothing posted.
 type closeIncidentalResponse struct {
 	Incidental   incidentalResponse `json:"incidental"`
 	RolledAmount int64              `json:"rolled_amount"`
@@ -245,6 +246,36 @@ func (a *api) closeIncidental(w http.ResponseWriter, r *http.Request) {
 		Incidental:   toIncidentalResponse(closed),
 		RolledAmount: rolled.Int64(),
 	})
+}
+
+// reopenIncidental is POST /api/incidentals/{purposeID}/reopen: wraps
+// Ledger.ReopenIncidental, the deliberate, visible way back ADR-031 gives a
+// closed envelope so a late entry has somewhere to post. No request body -
+// there is nothing to say about a reopen beyond which envelope, matching
+// GET /api/incidentals/{purposeID}'s own no-body idiom rather than close's
+// account/date/note.
+//
+// 200, not 201: the response addresses the envelope the caller already
+// named, now reopened, the same reasoning closeIncidental's own comment
+// gives for its status code.
+func (a *api) reopenIncidental(w http.ResponseWriter, r *http.Request) {
+	purposeID, ok := incidentalPurposeID(w, r)
+	if !ok {
+		return
+	}
+
+	fund, ok := a.resolveFund(w, r)
+	if !ok {
+		return
+	}
+
+	reopened, err := a.ledger.ReopenIncidental(r.Context(), fund.ID, purposeID)
+	if err != nil {
+		mapLedgerError(w, a.logger, err)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, toIncidentalResponse(reopened))
 }
 
 // incidentalPurposeID parses {purposeID}, or answers the request and reports

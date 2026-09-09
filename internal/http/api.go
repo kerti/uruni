@@ -196,6 +196,10 @@ func (a *api) routes(r chi.Router) {
 		r.Get("/incidentals", a.listIncidentals)
 		r.Get("/incidentals/{purposeID}", a.getIncidental)
 		r.Post("/incidentals/{purposeID}/close", a.closeIncidental)
+		// The way back from a closed envelope (ADR-031), matching the
+		// resource's own .../close idiom rather than reimbursement's
+		// PATCH-a-nullable-field shape.
+		r.Post("/incidentals/{purposeID}/reopen", a.reopenIncidental)
 
 		// Counting the real money and comparing it to the recorded balance (PRD
 		// section 7.7's home banner, section 7.8's reconcile flow). "latest" and

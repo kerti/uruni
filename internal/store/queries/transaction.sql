@@ -86,16 +86,44 @@ FROM "transaction"
 WHERE member_id = ? AND kind = 'dues'
 ORDER BY dues_period, id;
 
--- The two figures PRD 7.5 wants shown side by side for an incidental envelope.
--- Leftover is collected minus disbursed, computed in Go via money.Amount.Sub,
--- rather than a third column here - one aggregate pass over the ledger is
--- enough for both the display figures and the roll amount.
+-- The envelope's net, everything it has ever posted against its own
+-- purpose_id, rolls included. This is what CloseIncidentalAndRoll leans on
+-- (ADR-031): collected minus disbursed here is exactly PurposeBalance for
+-- this purpose, so a prior roll's own leg already nets the envelope to zero
+-- by construction, and reopening, posting a late entry, and closing again
+-- computes the *net delta* through this same unfiltered sum rather than new
+-- arithmetic. Leftover is collected minus disbursed, computed in Go via
+-- money.Amount.Sub, rather than a third column here.
+--
+-- Not what GET /api/incidentals/{purposeID} shows: that figure wants what
+-- the occasion itself collected and spent, with a prior roll's leg excluded
+-- - see IncidentalActivityTotals below. Conflating the two was #215; this
+-- comment is the seam between them.
 -- name: IncidentalTotals :one
 SELECT
   CAST(COALESCE(SUM(CASE WHEN direction = 'in' THEN amount ELSE 0 END), 0) AS INTEGER) AS collected_amount,
   CAST(COALESCE(SUM(CASE WHEN direction = 'out' THEN amount ELSE 0 END), 0) AS INTEGER) AS disbursed_amount
 FROM "transaction"
 WHERE fund_id = ? AND purpose_id = ?;
+
+-- What the occasion itself collected and disbursed (PRD section 7.5's
+-- detail screen), as opposed to IncidentalTotals above's net-including-rolls. The
+-- LEFT JOIN excludes only a reclass_purpose leg - the roll CloseIncidentalAndRoll
+-- posts, in either direction (ADR-031's leftover-in as much as the original
+-- leftover-out) - by transfer.kind, not by transaction.kind: every leg of
+-- every transfer is posted as transaction.kind='transfer' regardless of
+-- whether the transfer itself is 'between_accounts' or 'reclass_purpose', so
+-- transaction.kind alone cannot tell a roll's leg from an ordinary transfer
+-- between this envelope's own accounts, and this screen has no reason to
+-- exclude the latter. tr.id IS NULL keeps every row the join found no
+-- matching reclass_purpose transfer for - which is every kind but that one.
+-- name: IncidentalActivityTotals :one
+SELECT
+  CAST(COALESCE(SUM(CASE WHEN t.direction = 'in' THEN t.amount ELSE 0 END), 0) AS INTEGER) AS collected_amount,
+  CAST(COALESCE(SUM(CASE WHEN t.direction = 'out' THEN t.amount ELSE 0 END), 0) AS INTEGER) AS disbursed_amount
+FROM "transaction" t
+LEFT JOIN transfer tr ON tr.id = t.transfer_id AND tr.kind = 'reclass_purpose'
+WHERE t.fund_id = ? AND t.purpose_id = ? AND tr.id IS NULL;
 
 -- The roster query behind "who has paid / partially / not yet" for one
 -- dues_period, across every member in one pass rather than one query per

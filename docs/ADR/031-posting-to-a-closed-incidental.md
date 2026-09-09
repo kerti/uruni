@@ -1,6 +1,6 @@
 # ADR-031 — A closed envelope refuses postings, and reopening is the way back
 
-**Status:** Accepted · `draft` — supersedes [ADR-027](./027-ledger-domain-boundary.md) on two points, named below · [ADR index](./README.md)
+**Status:** Accepted · implemented at M6 — supersedes [ADR-027](./027-ledger-domain-boundary.md) on two points, named below · change only by adding a superseding ADR · [ADR index](./README.md)
 
 **Context.** [ADR-027](./027-ledger-domain-boundary.md) describes closing an incidental and, in the same paragraph, records the consequence it accepted: *"the purpose it closes stays open to new postings even afterward, so the check is the entire guarantee rather than a pre-check ahead of something the schema also enforces."* That was a knowing decision, not an oversight. [#152](https://github.com/kerti/uruni/issues/152) put an incidentals screen in the everyday loop and made the consequence reachable: the record form's purpose picker lists closed envelopes, because `purposeResponse` is `{id, kind, name}` with no lifecycle, and `PostTransaction` validates amount, direction and date and then inserts. Filed as [#214](https://github.com/kerti/uruni/issues/214), grilled 2026-09-09.
 

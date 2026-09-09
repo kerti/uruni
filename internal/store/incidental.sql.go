@@ -104,6 +104,27 @@ func (q *Queries) GetIncidental(ctx context.Context, arg GetIncidentalParams) (I
 	return i, err
 }
 
+const incidentalClosedOnForPurpose = `-- name: IncidentalClosedOnForPurpose :one
+SELECT closed_on
+FROM incidental
+WHERE purpose_id = ?
+`
+
+// The guard's one query (ADR-031): sql.ErrNoRows for a purpose_id that is
+// not an incidental at all (main, pass_through - PostTransaction's caller
+// reads that as "no guard applies", not as a schema violation), a row with
+// closed_on NULL for an open envelope, and a row with closed_on set for a
+// closed one. Deliberately not scoped by fund_id: PostTransaction already
+// holds a purpose_id it trusts (its own caller's fund-scoped picker, or the
+// schema's own composite FK once the write lands), and this check runs
+// before that write, not in place of it.
+func (q *Queries) IncidentalClosedOnForPurpose(ctx context.Context, purposeID int64) (*string, error) {
+	row := q.db.QueryRowContext(ctx, incidentalClosedOnForPurpose, purposeID)
+	var closed_on *string
+	err := row.Scan(&closed_on)
+	return closed_on, err
+}
+
 const listIncidentalsByFund = `-- name: ListIncidentalsByFund :many
 SELECT i.purpose_id, i.occasion, i.target_amount, i.opened_on, i.closed_on, i.created_at
 FROM incidental i
@@ -180,4 +201,32 @@ func (q *Queries) ListOpenIncidentalsByFund(ctx context.Context, fundID int64) (
 		return nil, err
 	}
 	return items, nil
+}
+
+const reopenIncidental = `-- name: ReopenIncidental :one
+UPDATE incidental
+SET closed_on = NULL
+WHERE purpose_id = ?
+RETURNING purpose_id, occasion, target_amount, opened_on, closed_on, created_at
+`
+
+// The way back (ADR-031): closed_on to NULL, the exact inverse of
+// CloseIncidental above and, like it, a plain UPDATE rather than a ledger
+// entry - reopening moves no money either. Ledger.ReopenIncidental fetches
+// the envelope through GetIncidental's fund-scoped join first, so by the
+// time this runs the purpose_id is already known to belong to the caller's
+// fund; this query itself stays unscoped, the same shape CloseIncidental
+// already uses.
+func (q *Queries) ReopenIncidental(ctx context.Context, purposeID int64) (Incidental, error) {
+	row := q.db.QueryRowContext(ctx, reopenIncidental, purposeID)
+	var i Incidental
+	err := row.Scan(
+		&i.PurposeID,
+		&i.Occasion,
+		&i.TargetAmount,
+		&i.OpenedOn,
+		&i.ClosedOn,
+		&i.CreatedAt,
+	)
+	return i, err
 }

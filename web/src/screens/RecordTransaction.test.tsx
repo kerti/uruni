@@ -66,6 +66,23 @@ function stubFormLoad() {
 }
 
 describe('RecordTransaction', () => {
+  // ADR-031: the picker asks for selectable=true so it never offers a
+  // closed envelope's purpose - PostTransaction's own guard would refuse
+  // posting to one anyway.
+  it('requests only selectable purposes for the picker', async () => {
+    const fetchMock = stubFormLoad()
+    vi.stubGlobal('fetch', fetchMock)
+    render(<RecordTransaction onRecorded={vi.fn()} onCancel={vi.fn()} />)
+
+    await waitFor(() => expect(selectedOptionName(text.purposeLabel)).toBe('Kas utama'))
+
+    const purposeCall = fetchMock.mock.calls.find(([input]) => {
+      const url = typeof input === 'string' ? input : input.toString()
+      return url.includes('/api/purposes')
+    })
+    expect(purposeCall?.[0]).toContain('selectable=true')
+  })
+
   // The themed Select shows the chosen item's name, not its id (M6.15), so
   // these assert on what she actually sees in the closed field.
   it('defaults the purpose to the kind:"main" row, not whichever purpose sorts first', async () => {
