@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import App from '@/App'
+import { selectedOptionName } from '@/test/select'
 import { copy } from '@/copy/id'
 
 afterEach(() => {
@@ -209,7 +210,10 @@ describe('App (app shell chrome)', () => {
 
 describe('App (record loop)', () => {
   const accounts = [{ id: 1, kind: 'cash', name: 'Tunai', inactive_on: null, created_at: 1 }]
-  const purposes = [{ id: 11, kind: 'main', name: 'Kas utama', created_at: 1 }]
+  const purposes = [
+    { id: 11, kind: 'main', name: 'Kas utama', created_at: 1 },
+    { id: 12, kind: 'incidental', name: 'Halal bihalal RT', created_at: 1 },
+  ]
 
   function authenticatedWithRecordRoutes() {
     return routedFetch([
@@ -221,6 +225,55 @@ describe('App (record loop)', () => {
       ...emptyHomeRoutes,
     ])
   }
+
+  // /record?purpose=<id> is how M6.19's incidentals screen reuses this form
+  // instead of carrying a second copy of its fields.
+  it('pre-chooses the purpose named by ?purpose= on the record route', async () => {
+    window.history.pushState({}, '', '/record?purpose=12')
+    vi.stubGlobal('fetch', authenticatedWithRecordRoutes())
+    render(<App />)
+
+    await screen.findByRole('heading', { name: copy.record.heading })
+    await waitFor(() => expect(selectedOptionName(copy.record.purposeLabel)).toBe('Halal bihalal RT'))
+    window.history.pushState({}, '', '/')
+  })
+
+  it('falls back to the main purpose when ?purpose= is malformed', async () => {
+    // Number('') is 0 and finite, so an empty param must not read as a
+    // purpose id; the default is the fund's own main row, as if it were absent.
+    window.history.pushState({}, '', '/record?purpose=')
+    vi.stubGlobal('fetch', authenticatedWithRecordRoutes())
+    render(<App />)
+
+    await screen.findByRole('heading', { name: copy.record.heading })
+    await waitFor(() => expect(selectedOptionName(copy.record.purposeLabel)).toBe('Kas utama'))
+    window.history.pushState({}, '', '/')
+  })
+
+  // The /incidentals route and its hand-off into the record form, together:
+  // tapping the envelope's record action must land on the real form with
+  // that envelope's purpose already chosen.
+  it('routes an envelope\'s record action into the record form with its purpose chosen', async () => {
+    const envelope = { purpose_id: 12, occasion: 'Halal bihalal RT', target_amount: null, opened_on: '2026-09-01', closed_on: null, created_at: 1 }
+    window.history.pushState({}, '', '/incidentals')
+    vi.stubGlobal('fetch', routedFetch([
+      { match: (m, u) => m === 'GET' && u.includes('/api/incidentals/12'), handle: () => Promise.resolve(jsonResponse({ ...envelope, collected_amount: 0, disbursed_amount: 0 })) },
+      { match: (m, u) => m === 'GET' && u.includes('/api/incidentals'), handle: () => Promise.resolve(jsonResponse([envelope])) },
+      { match: (m, u) => m === 'GET' && u.includes('/api/session'), handle: () => Promise.resolve(sessionResponse({ authenticated: true, has_account: true })) },
+      { match: (m, u) => m === 'GET' && u.includes('/api/fund'), handle: () => Promise.resolve(fundFoundResponse()) },
+      { match: (m, u) => m === 'GET' && u.includes('/api/accounts'), handle: () => Promise.resolve(jsonResponse(accounts)) },
+      { match: (m, u) => m === 'GET' && u.includes('/api/purposes'), handle: () => Promise.resolve(jsonResponse(purposes)) },
+      ...emptyHomeRoutes,
+    ]))
+    render(<App />)
+
+    await userEvent.click(await screen.findByRole('button', { name: /Halal bihalal RT/ }))
+    await userEvent.click(await screen.findByRole('button', { name: copy.incidentals.actions.record }))
+
+    await screen.findByRole('heading', { name: copy.record.heading })
+    await waitFor(() => expect(selectedOptionName(copy.record.purposeLabel)).toBe('Halal bihalal RT'))
+    window.history.pushState({}, '', '/')
+  })
 
   it('reaches the form from the footer nav, posts, and confirms on home', async () => {
     vi.stubGlobal('fetch', authenticatedWithRecordRoutes())

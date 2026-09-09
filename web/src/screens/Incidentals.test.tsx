@@ -186,6 +186,83 @@ describe('Incidentals', () => {
     expect(screen.getByText(text.close.heading)).toBeInTheDocument()
   })
 
+  it('opens an envelope, sending a null target when none was typed, and returns to the open tab', async () => {
+    // The target is optional (PRD §7.5): an untouched AmountInput is 0, which
+    // means "no target" on the wire, not a target of nothing.
+    const opened = { ...openEnvelope, purpose_id: 3, occasion: 'Kerja bakti', target_amount: null, opened_on: '2026-09-09' }
+    let posted: unknown = null
+    const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = typeof input === 'string' ? input : input.toString()
+      const method = (init?.method ?? 'GET').toUpperCase()
+      if (method === 'POST' && url.includes('/api/incidentals')) {
+        posted = JSON.parse(String(init?.body))
+        return Promise.resolve(jsonResponse(opened, 201))
+      }
+      const handler = getHandlers().find((h) => h.match(method, url))
+      if (!handler) return Promise.reject(new Error(`unstubbed fetch: ${method} ${url}`))
+      return handler.handle()
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    render(<Incidentals onBack={vi.fn()} onRecordFor={vi.fn()} />)
+    await waitFor(() => expect(screen.getByText('Halal bihalal RT')).toBeInTheDocument())
+
+    await userEvent.click(screen.getByRole('button', { name: text.open.heading }))
+    await userEvent.type(await screen.findByLabelText(text.open.occasionLabel), 'Kerja bakti')
+    await userEvent.click(screen.getByRole('button', { name: text.open.submit }))
+
+    await waitFor(() => expect(screen.getByText(text.open.success)).toBeInTheDocument())
+    expect(posted).toEqual({ occasion: 'Kerja bakti', target_amount: null, opened_on: expect.any(String) })
+
+    // The form closes and the list is back, so the new envelope is reachable.
+    expect(screen.queryByLabelText(text.open.occasionLabel)).not.toBeInTheDocument()
+  })
+
+  it('sends the typed target amount as a plain integer when one was given', async () => {
+    let posted: unknown = null
+    const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = typeof input === 'string' ? input : input.toString()
+      const method = (init?.method ?? 'GET').toUpperCase()
+      if (method === 'POST' && url.includes('/api/incidentals')) {
+        posted = JSON.parse(String(init?.body))
+        return Promise.resolve(jsonResponse(openEnvelope, 201))
+      }
+      const handler = getHandlers().find((h) => h.match(method, url))
+      if (!handler) return Promise.reject(new Error(`unstubbed fetch: ${method} ${url}`))
+      return handler.handle()
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    render(<Incidentals onBack={vi.fn()} onRecordFor={vi.fn()} />)
+    await waitFor(() => expect(screen.getByText('Halal bihalal RT')).toBeInTheDocument())
+
+    await userEvent.click(screen.getByRole('button', { name: text.open.heading }))
+    await userEvent.type(await screen.findByLabelText(text.open.occasionLabel), 'Kerja bakti')
+    await userEvent.type(screen.getByLabelText(text.open.targetLabel), '500000')
+    await userEvent.click(screen.getByRole('button', { name: text.open.submit }))
+
+    await waitFor(() => expect(screen.getByText(text.open.success)).toBeInTheDocument())
+    expect(posted).toMatchObject({ target_amount: 500_000 })
+  })
+
+  it('returns from a detail view to the list', async () => {
+    const detail = { ...openEnvelope, collected_amount: 0, disbursed_amount: 0 }
+    vi.stubGlobal('fetch', routedFetch([
+      { match: (m: string, u: string) => m === 'GET' && u.includes('/api/incidentals/1'), handle: () => Promise.resolve(jsonResponse(detail)) },
+      ...getHandlers(),
+    ]))
+
+    render(<Incidentals onBack={vi.fn()} onRecordFor={vi.fn()} />)
+    await waitFor(() => expect(screen.getByText('Halal bihalal RT')).toBeInTheDocument())
+
+    await userEvent.click(screen.getByRole('button', { name: /Halal bihalal RT/ }))
+    await waitFor(() => expect(screen.getByText(text.detail.collectedLabel)).toBeInTheDocument())
+
+    await userEvent.click(screen.getByRole('button', { name: text.detail.backToList }))
+    await waitFor(() => expect(screen.getByRole('button', { name: text.openTab })).toBeInTheDocument())
+    expect(screen.queryByText(text.detail.collectedLabel)).not.toBeInTheDocument()
+  })
+
   it('calls onBack when backToHome is clicked', async () => {
     vi.stubGlobal('fetch', routedFetch(getHandlers()))
     const onBack = vi.fn()

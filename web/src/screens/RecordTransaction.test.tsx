@@ -22,6 +22,7 @@ const accounts = [
 const purposes = [
   { id: 10, kind: 'pass_through', name: 'Kas Bidang', created_at: 1 },
   { id: 11, kind: 'main', name: 'Kas utama', created_at: 1 },
+  { id: 12, kind: 'incidental', name: 'Halal bihalal RT', created_at: 1 },
 ]
 
 const postedTransaction = {
@@ -72,6 +73,24 @@ describe('RecordTransaction', () => {
     render(<RecordTransaction onRecorded={vi.fn()} onCancel={vi.fn()} />)
 
     // id 11 "Kas utama", not id 10 "Kas Bidang", which sorts first.
+    await waitFor(() => expect(selectedOptionName(text.purposeLabel)).toBe('Kas utama'))
+  })
+
+  it('seeds the purpose from initialPurposeId, so M6.19 can reuse this form for an envelope', async () => {
+    // The incidentals screen navigates here as /record?purpose=12 rather
+    // than carrying a second copy of these fields (M6.19).
+    vi.stubGlobal('fetch', stubFormLoad())
+    render(<RecordTransaction onRecorded={vi.fn()} onCancel={vi.fn()} initialPurposeId={12} />)
+
+    await waitFor(() => expect(selectedOptionName(text.purposeLabel)).toBe('Halal bihalal RT'))
+  })
+
+  it('falls back to the main purpose when initialPurposeId names one the fund no longer has', async () => {
+    // A stale link would otherwise leave the picker on an id nothing
+    // matches, and the form unsubmittable for no visible reason.
+    vi.stubGlobal('fetch', stubFormLoad())
+    render(<RecordTransaction onRecorded={vi.fn()} onCancel={vi.fn()} initialPurposeId={999} />)
+
     await waitFor(() => expect(selectedOptionName(text.purposeLabel)).toBe('Kas utama'))
   })
 
