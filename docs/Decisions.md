@@ -318,3 +318,17 @@ M6.18's review ([#207](https://github.com/kerti/uruni/pull/207)) reverse-tested 
 The same review killed two other dead ends: un-waive sat behind `tab === 'outstanding' && claim.waived_on`, a pair that can never both be true — the outstanding query filters waived claims out, so waiving was irreversible in the UI. It now renders on `claim.waived_on` alone, which is exactly where a waived row can appear (the all tab), and the write-failure surfaced nothing, so a 409 said "Belum dibayar" forever.
 
 This reverses an earlier stance recorded in three places (a handler comment, the widget's fixture `#166`, and the StatusBadge comment). All three now say what is true instead.
+
+## A closed envelope refuses postings, and reopening is the way back (decided 2026-09-09)
+
+Found on a phone: the record form let a transaction be placed into, or sourced from, an envelope that was already closed. [ADR-027](./ADR/027-ledger-domain-boundary.md) had *documented* that consequence as acceptable — "the purpose it closes stays open to new postings even afterward" — and [#152](https://github.com/kerti/uruni/issues/152) made it reachable in the everyday loop. Filed as [#214](https://github.com/kerti/uruni/issues/214), grilled, and settled in [ADR-031](./ADR/031-posting-to-a-closed-incidental.md).
+
+**It was never double-spending, and the first framing of it here said so wrongly.** Every posting moves real money once; the fund total stays honest. The defect is attribution — a purpose balance left permanently non-zero, in a purpose no screen shows, that reconciliation cannot catch because it compares *accounts* against counted cash.
+
+**The maintainer ruled for flexibility** — a contribution that arrived before the close and was recorded after it is real, and the app's premise is least stress. The grill's finding was that the flexible rule cannot live inside `PostTransaction`: the orchestrator's prior (allow a late `in`, auto-roll it, refuse `out`) would force a second multi-row write shape into a method [ADR-027](./ADR/027-ledger-domain-boundary.md) deliberately keeps narrow, and would have no surface to be triggered from once the picker stops offering closed envelopes — the two halves of #214 contradicted each other. **Refuse symmetrically, and make reopening the deliberate act instead.** Reopening is what ADR-027 left `incidental` mutable for.
+
+**Closing now rolls in whichever direction squares the envelope**, superseding ADR-027's negative-leftover branch. One invariant, testable: a closed envelope's purpose balance is exactly zero, always. Without it, symmetry would leave over-disbursed envelopes permanently negative on M7's report.
+
+**Kas Utama may go negative, and Uruni states it and stops.** It will not guess who fronted the money — `reimbursement.member_id` is `NOT NULL`, so an inferred reimbursement would have to invent which member is owed, and the shortfall could be the treasurer's cash, a member paying a vendor directly, or a contribution arriving next week. She resolves it with a reimbursement she creates naming the actual person, or a transfer. Asserting a liability nobody claimed is the same error as generating a note nobody wrote.
+
+**The open dependency:** no purpose balance is rendered anywhere in the SPA today, so a negative Kas Utama is currently invisible. Where purpose balances belong is the IA question in [#212](https://github.com/kerti/uruni/issues/212).
