@@ -622,3 +622,51 @@ func TestNoContributeRouteExists(t *testing.T) {
 		t.Fatalf("POST %s = %d, want %d - no contribute route is in scope", path, rec.Code, http.StatusNotFound)
 	}
 }
+
+// The roll's note reaches both legs over the wire. Closing is the one
+// transfer the treasurer never asks for directly, so an unexplained pair in
+// the transaction list is exactly the confusion this field exists to fix.
+func TestCloseIncidentalWritesTheNoteToBothRollLegs(t *testing.T) {
+	r := testRouter(t)
+	setup := setUpFund(t, r)
+
+	incRec := postIncidental(t, r, openIncidentalRequest{Occasion: "Kerja bakti", OpenedOn: "2026-08-01"})
+	if incRec.Code != http.StatusCreated {
+		t.Fatalf("POST /api/incidentals = %d, want %d (body: %s)", incRec.Code, http.StatusCreated, incRec.Body.String())
+	}
+	incidental := decodeIncidental(t, incRec)
+
+	if rec := postTransaction(t, r, transactionRequest{
+		AccountID: setup.CashAccountID(t), PurposeID: incidental.PurposeID,
+		Direction: "in", Amount: 100_000, OccurredOn: "2026-08-02",
+	}); rec.Code != http.StatusCreated {
+		t.Fatalf("contribution = %d, want %d (body: %s)", rec.Code, http.StatusCreated, rec.Body.String())
+	}
+
+	note := "Sisa dana digulung ke kas utama"
+	closeRec := postCloseIncidental(t, r, incidental.PurposeID, closeIncidentalRequest{
+		AccountID: setup.CashAccountID(t), ClosedOn: "2026-08-20", Note: &note,
+	})
+	if closeRec.Code != http.StatusOK {
+		t.Fatalf("close = %d, want %d (body: %s)", closeRec.Code, http.StatusOK, closeRec.Body.String())
+	}
+
+	listRec := getTransactions(t, r)
+	var rows []transactionResponse
+	if err := json.NewDecoder(listRec.Body).Decode(&rows); err != nil {
+		t.Fatalf("decoding transactions: %v", err)
+	}
+	legs := 0
+	for _, row := range rows {
+		if row.Kind != "transfer" {
+			continue
+		}
+		legs++
+		if row.Note == nil || *row.Note != note {
+			t.Errorf("roll leg %s note = %v, want %q", row.Direction, row.Note, note)
+		}
+	}
+	if legs != 2 {
+		t.Fatalf("transfer legs = %d, want 2", legs)
+	}
+}

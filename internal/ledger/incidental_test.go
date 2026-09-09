@@ -638,3 +638,81 @@ func TestClosingASecondFundsIncidentalAcrossTheBoundaryIsRefused(t *testing.T) {
 		t.Errorf("ClosedOn = %v, want nil - a cross-fund close must not close the envelope", stillOpen.Incidental.ClosedOn)
 	}
 }
+
+// The roll is a transfer like any other, so its note lands on both legs -
+// and the ledger writes no note of its own when none is given: an
+// unexplained roll stays unexplained rather than acquiring a sentence
+// nobody wrote (ADR-014).
+func TestCloseIncidentalAndRollWritesTheNoteToBothRollLegs(t *testing.T) {
+	l := newTestLedger(t)
+	f := newFixture(t, l)
+	ctx := context.Background()
+	q := store.New(l.db)
+
+	envelope := openTestIncidental(t, l, f.fundID, "Jane's wedding", "2026-08-01")
+
+	if _, err := l.PostTransaction(ctx, PostTransactionParams{
+		FundID: f.fundID, AccountID: f.cashID, PurposeID: envelope.PurposeID,
+		Direction: "in", Amount: 100_000, OccurredOn: "2026-08-02",
+	}); err != nil {
+		t.Fatalf("PostTransaction(in) = %v, want no error", err)
+	}
+
+	note := "Sisa dana digulung ke kas utama"
+	if _, err := l.CloseIncidentalAndRoll(ctx, CloseIncidentalAndRollParams{
+		FundID: f.fundID, PurposeID: envelope.PurposeID, AccountID: f.cashID,
+		ClosedOn: "2026-08-20", Note: &note,
+	}); err != nil {
+		t.Fatalf("CloseIncidentalAndRoll() = %v, want no error", err)
+	}
+
+	rows, err := q.ListTransactionsByFund(ctx, f.fundID)
+	if err != nil {
+		t.Fatalf("ListTransactionsByFund() = %v, want no error", err)
+	}
+	legs := 0
+	for _, row := range rows {
+		if row.Kind != "transfer" {
+			continue
+		}
+		legs++
+		if row.Note == nil || *row.Note != note {
+			t.Errorf("roll leg(%s).Note = %v, want %q", row.Direction, row.Note, note)
+		}
+	}
+	if legs != 2 {
+		t.Fatalf("found %d transfer legs, want 2", legs)
+	}
+}
+
+func TestCloseIncidentalAndRollWritesNoNoteWhenNoneIsGiven(t *testing.T) {
+	l := newTestLedger(t)
+	f := newFixture(t, l)
+	ctx := context.Background()
+	q := store.New(l.db)
+
+	envelope := openTestIncidental(t, l, f.fundID, "Jane's wedding", "2026-08-01")
+
+	if _, err := l.PostTransaction(ctx, PostTransactionParams{
+		FundID: f.fundID, AccountID: f.cashID, PurposeID: envelope.PurposeID,
+		Direction: "in", Amount: 100_000, OccurredOn: "2026-08-02",
+	}); err != nil {
+		t.Fatalf("PostTransaction(in) = %v, want no error", err)
+	}
+
+	if _, err := l.CloseIncidentalAndRoll(ctx, CloseIncidentalAndRollParams{
+		FundID: f.fundID, PurposeID: envelope.PurposeID, AccountID: f.cashID, ClosedOn: "2026-08-20",
+	}); err != nil {
+		t.Fatalf("CloseIncidentalAndRoll() = %v, want no error", err)
+	}
+
+	rows, err := q.ListTransactionsByFund(ctx, f.fundID)
+	if err != nil {
+		t.Fatalf("ListTransactionsByFund() = %v, want no error", err)
+	}
+	for _, row := range rows {
+		if row.Kind == "transfer" && row.Note != nil {
+			t.Errorf("roll leg(%s).Note = %q, want NULL", row.Direction, *row.Note)
+		}
+	}
+}

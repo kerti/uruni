@@ -279,7 +279,7 @@ func TestPostTransferPairSupportsTheReclassPurposeShape(t *testing.T) {
 
 	from := leg{AccountID: f.cashID, PurposeID: f.incidenID}
 	to := leg{AccountID: f.cashID, PurposeID: f.mainID}
-	transfer, err := l.postTransferPair(ctx, f.fundID, "reclass_purpose", from, to, 60_000, "2026-08-12")
+	transfer, err := l.postTransferPair(ctx, f.fundID, "reclass_purpose", from, to, 60_000, "2026-08-12", nil)
 	if err != nil {
 		t.Fatalf("postTransferPair() = %v, want no error", err)
 	}
@@ -345,5 +345,97 @@ func TestPostTransferBetweenAccountsRejectsIdenticalLegs(t *testing.T) {
 	}
 	if len(rows) != 0 {
 		t.Errorf("ledger holds %d rows after a rejected no-op transfer, want 0", len(rows))
+	}
+}
+
+// The note is the treasurer's explanation of why money moved, and one
+// movement is one thing that happened - so it belongs on both legs. A note
+// on the "out" leg alone reads, in the transaction list, as an unexplained
+// arrival somewhere else.
+func TestPostTransferBetweenAccountsWritesTheNoteToBothLegs(t *testing.T) {
+	l := newTestLedger(t)
+	f := newFixture(t, l)
+	ctx := context.Background()
+	q := store.New(l.db)
+
+	note := "Setor tunai ke bank"
+	if _, err := l.PostTransferBetweenAccounts(ctx, PostTransferBetweenAccountsParams{
+		FundID: f.fundID, PurposeID: f.mainID,
+		FromAccountID: f.cashID, ToAccountID: f.bankID,
+		Amount: 40_000, OccurredOn: "2026-08-12", Note: &note,
+	}); err != nil {
+		t.Fatalf("PostTransferBetweenAccounts() = %v, want no error", err)
+	}
+
+	rows, err := q.ListTransactionsByFund(ctx, f.fundID)
+	if err != nil {
+		t.Fatalf("ListTransactionsByFund() = %v, want no error", err)
+	}
+	if len(rows) != 2 {
+		t.Fatalf("ListTransactionsByFund() returned %d rows, want 2 legs", len(rows))
+	}
+	for _, row := range rows {
+		if row.Note == nil || *row.Note != note {
+			t.Errorf("leg(%s).Note = %v, want %q", row.Direction, row.Note, note)
+		}
+	}
+}
+
+// A form field left untouched arrives as "" (or spaces). Storing that would
+// put an empty note line in the transaction list where there is nothing to
+// say, so absence has exactly one representation in the ledger: NULL.
+func TestPostTransferBetweenAccountsStoresNoNoteForABlankOne(t *testing.T) {
+	for _, blank := range []string{"", "   ", "\t\n"} {
+		l := newTestLedger(t)
+		f := newFixture(t, l)
+		ctx := context.Background()
+		q := store.New(l.db)
+
+		note := blank
+		if _, err := l.PostTransferBetweenAccounts(ctx, PostTransferBetweenAccountsParams{
+			FundID: f.fundID, PurposeID: f.mainID,
+			FromAccountID: f.cashID, ToAccountID: f.bankID,
+			Amount: 40_000, OccurredOn: "2026-08-12", Note: &note,
+		}); err != nil {
+			t.Fatalf("PostTransferBetweenAccounts(note=%q) = %v, want no error", blank, err)
+		}
+
+		rows, err := q.ListTransactionsByFund(ctx, f.fundID)
+		if err != nil {
+			t.Fatalf("ListTransactionsByFund() = %v, want no error", err)
+		}
+		for _, row := range rows {
+			if row.Note != nil {
+				t.Errorf("leg(%s).Note = %q for a blank note, want NULL", row.Direction, *row.Note)
+			}
+		}
+	}
+}
+
+// The note is trimmed, not stored as typed: a trailing space is not part of
+// what she wrote.
+func TestPostTransferBetweenAccountsTrimsTheNote(t *testing.T) {
+	l := newTestLedger(t)
+	f := newFixture(t, l)
+	ctx := context.Background()
+	q := store.New(l.db)
+
+	note := "  Setor tunai ke bank  "
+	if _, err := l.PostTransferBetweenAccounts(ctx, PostTransferBetweenAccountsParams{
+		FundID: f.fundID, PurposeID: f.mainID,
+		FromAccountID: f.cashID, ToAccountID: f.bankID,
+		Amount: 40_000, OccurredOn: "2026-08-12", Note: &note,
+	}); err != nil {
+		t.Fatalf("PostTransferBetweenAccounts() = %v, want no error", err)
+	}
+
+	rows, err := q.ListTransactionsByFund(ctx, f.fundID)
+	if err != nil {
+		t.Fatalf("ListTransactionsByFund() = %v, want no error", err)
+	}
+	for _, row := range rows {
+		if row.Note == nil || *row.Note != "Setor tunai ke bank" {
+			t.Errorf("leg(%s).Note = %v, want the trimmed text", row.Direction, row.Note)
+		}
 	}
 }

@@ -3,6 +3,7 @@ package ledger
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/kerti/uruni/internal/money"
@@ -24,6 +25,21 @@ type leg struct {
 // would satisfy every schema CHECK while moving nothing and meaning nothing.
 func legsIdentical(from, to leg) bool {
 	return from.AccountID == to.AccountID && from.PurposeID == to.PurposeID
+}
+
+// normalizeNote collapses "no note" to a single representation. A caller can
+// express absence as nil or as an empty (or whitespace-only) string - a form
+// field left untouched arrives as the latter - and storing "" would make the
+// transaction list render an empty note line where there is nothing to say.
+func normalizeNote(note *string) *string {
+	if note == nil {
+		return nil
+	}
+	trimmed := strings.TrimSpace(*note)
+	if trimmed == "" {
+		return nil
+	}
+	return &trimmed
 }
 
 // postTransferPairTx is the one primitive behind every value-neutral
@@ -54,7 +70,7 @@ func legsIdentical(from, to leg) bool {
 // ADR-004's SetMaxOpenConns(1) allows - a deadlock, not a safety net.
 // postTransferPair below is the thin, transaction-owning wrapper that
 // PostTransferBetweenAccounts and the existing tests still call.
-func (l *Ledger) postTransferPairTx(ctx context.Context, q store.Querier, fundID int64, kind string, from, to leg, amount money.Amount, occurredOn string) (store.Transfer, error) {
+func (l *Ledger) postTransferPairTx(ctx context.Context, q store.Querier, fundID int64, kind string, from, to leg, amount money.Amount, occurredOn string, note *string) (store.Transfer, error) {
 	now := time.Now().Unix()
 
 	transfer, err := q.CreateTransfer(ctx, store.CreateTransferParams{
@@ -71,7 +87,7 @@ func (l *Ledger) postTransferPairTx(ctx context.Context, q store.Querier, fundID
 		if _, err := q.CreateTransaction(ctx, store.CreateTransactionParams{
 			FundID: fundID, AccountID: p.leg.AccountID, PurposeID: p.leg.PurposeID,
 			Direction: p.direction, Amount: amount.Int64(), OccurredOn: occurredOn,
-			Kind: "transfer", TransferID: &transfer.ID, CreatedAt: now,
+			Kind: "transfer", TransferID: &transfer.ID, Note: note, CreatedAt: now,
 		}); err != nil {
 			return store.Transfer{}, fmt.Errorf("posting transfer leg (%s): %w", p.direction, err)
 		}
@@ -82,11 +98,11 @@ func (l *Ledger) postTransferPairTx(ctx context.Context, q store.Querier, fundID
 // postTransferPair wraps postTransferPairTx in its own withTx, for a caller
 // that has no outer transaction of its own to share - PostTransferBetweenAccounts,
 // and the reclass_purpose shape exercised directly in transfer_test.go.
-func (l *Ledger) postTransferPair(ctx context.Context, fundID int64, kind string, from, to leg, amount money.Amount, occurredOn string) (store.Transfer, error) {
+func (l *Ledger) postTransferPair(ctx context.Context, fundID int64, kind string, from, to leg, amount money.Amount, occurredOn string, note *string) (store.Transfer, error) {
 	var transfer store.Transfer
 	err := l.withTx(ctx, func(q store.Querier) error {
 		var err error
-		transfer, err = l.postTransferPairTx(ctx, q, fundID, kind, from, to, amount, occurredOn)
+		transfer, err = l.postTransferPairTx(ctx, q, fundID, kind, from, to, amount, occurredOn, note)
 		return err
 	})
 	if err != nil {
@@ -106,6 +122,13 @@ type PostTransferBetweenAccountsParams struct {
 	ToAccountID   int64
 	Amount        money.Amount // must be > 0
 	OccurredOn    string       // "YYYY-MM-DD", a real calendar date
+
+	// Note is written to both legs, or to neither. One movement is one
+	// thing that happened, so the sentence explaining it belongs on both
+	// halves of the pair - a note on the "out" leg alone reads, in the
+	// transaction list, as an unexplained arrival somewhere else. nil and
+	// an empty string both mean no note; see normalizeNote.
+	Note *string
 }
 
 // PostTransferBetweenAccounts moves money from one account to another within
@@ -126,7 +149,7 @@ func (l *Ledger) PostTransferBetweenAccounts(ctx context.Context, p PostTransfer
 		return store.Transfer{}, fmt.Errorf("%w: from_account_id and to_account_id must differ, got %d for both", ErrInvalidArgument, p.FromAccountID)
 	}
 
-	transfer, err := l.postTransferPair(ctx, p.FundID, "between_accounts", from, to, p.Amount, p.OccurredOn)
+	transfer, err := l.postTransferPair(ctx, p.FundID, "between_accounts", from, to, p.Amount, p.OccurredOn, normalizeNote(p.Note))
 	if err != nil {
 		return store.Transfer{}, fmt.Errorf("posting transfer between accounts: %w", err)
 	}

@@ -96,6 +96,13 @@ type CloseIncidentalAndRollParams struct {
 	AccountID int64
 
 	ClosedOn string // "YYYY-MM-DD", a real calendar date
+
+	// Note is written to both legs of the roll, or to neither - the same
+	// contract PostTransferBetweenAccountsParams.Note describes. It is the
+	// treasurer's own sentence, never generated here: the ledger writes no
+	// user-facing copy (ADR-014), so an unexplained roll stays unexplained
+	// rather than acquiring a sentence nobody wrote.
+	Note *string
 }
 
 // CloseIncidentalAndRoll closes one envelope and, if it collected more than
@@ -154,7 +161,7 @@ func (l *Ledger) CloseIncidentalAndRoll(ctx context.Context, p CloseIncidentalAn
 
 			from := leg{AccountID: p.AccountID, PurposeID: p.PurposeID}
 			to := leg{AccountID: p.AccountID, PurposeID: mainID}
-			if _, err := l.postTransferPairTx(ctx, q, p.FundID, "reclass_purpose", from, to, leftover, p.ClosedOn); err != nil {
+			if _, err := l.postTransferPairTx(ctx, q, p.FundID, "reclass_purpose", from, to, leftover, p.ClosedOn, normalizeNote(p.Note)); err != nil {
 				return fmt.Errorf("rolling incidental leftover: %w", err)
 			}
 			rolled = leftover
