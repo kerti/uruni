@@ -108,17 +108,39 @@ var ErrNotADuesPayment = errors.New("ledger: transaction is not a dues payment")
 // index does not already close.
 var ErrDuesPaymentAlreadyReversed = errors.New("ledger: dues payment has already been reversed")
 
+// ErrIncidentalClosed is returned by PostTransaction when PurposeID names an
+// incidental whose closed_on is set (ADR-031).
+//
+// This supersedes the consequence ADR-027 originally accepted - "the purpose
+// it closes stays open to new postings even afterward" - once this guard's
+// code lands. It is symmetric, both directions: a late bill deserves
+// attribution to the occasion exactly as much as a late contribution does,
+// and it is a read-before-write business-state check in the same shape as
+// ErrIncidentalAlreadyClosed's own, not a second write path - PostTransaction
+// still writes exactly one row either way. The way back is
+// Ledger.ReopenIncidental, not a bypass of this check.
+var ErrIncidentalClosed = errors.New("ledger: incidental is closed")
+
+// ErrIncidentalNotClosed is returned by ReopenIncidental when the envelope's
+// closed_on is already NULL - there is nothing to reopen.
+var ErrIncidentalNotClosed = errors.New("ledger: incidental is not closed")
+
 // ErrIncidentalAlreadyClosed is returned by CloseIncidentalAndRoll when the
 // envelope's closed_on is already set.
 //
 // Unlike ErrOpeningBalanceExists and ErrReimbursementAlreadySettled, this is
 // not a pre-check ahead of a unique index the schema already enforces:
-// incidental carries no immutability trigger, closing it is a plain UPDATE
-// (ADR-024), and the purpose it tags stays open to new postings even after
-// closed_on is set. Nothing in the schema stops a second UPDATE, and nothing
-// stops a contribution landing against a closed envelope's purpose_id later.
-// This check is therefore the entire guarantee, not a defense-in-depth
-// belt-and-braces on top of one: without it, a stray post-close contribution
-// would roll again on the next call, quietly moving money out of an envelope
-// the treasurer already considers settled and reported.
+// incidental carries no immutability trigger, and closing it is a plain
+// UPDATE (ADR-024). Nothing in the schema stops a second UPDATE. This check
+// is therefore the entire guarantee, not a defense-in-depth belt-and-braces
+// on top of one: without it, a second call would roll again, quietly moving
+// money out of an envelope the treasurer already considers settled and
+// reported.
+//
+// PostTransaction's own ErrIncidentalClosed (ADR-031) is what now keeps a
+// stray contribution from landing against a closed envelope's purpose_id in
+// the first place - the risk this comment used to name as a reason nothing
+// guards a second roll either. It no longer applies: ADR-027's "the purpose
+// it tags stays open to new postings even after closed_on is set" is one of
+// the two points ADR-031 supersedes.
 var ErrIncidentalAlreadyClosed = errors.New("ledger: incidental has already been closed")

@@ -103,6 +103,54 @@ func (q *Queries) ListPurposesByFund(ctx context.Context, fundID int64) ([]Purpo
 	return items, nil
 }
 
+const listSelectablePurposesByFund = `-- name: ListSelectablePurposesByFund :many
+SELECT p.id, p.fund_id, p.kind, p.name, p.created_at
+FROM purpose p
+LEFT JOIN incidental i ON i.purpose_id = p.id
+WHERE p.fund_id = ? AND i.closed_on IS NULL
+ORDER BY p.id
+`
+
+// ListSelectablePurposesByFund is ListPurposesByFund with a closed
+// incidental's purpose excluded (ADR-031): GET /api/purposes?selectable=true
+// backs the everyday record form's picker, which stops offering what
+// PostTransaction's own guard would now refuse. The LEFT JOIN is what makes
+// "not an incidental at all" and "an incidental that's still open" the same
+// case - main and pass_through purposes have no incidental row to join
+// against, so i.closed_on reads NULL for them exactly as it does for an open
+// envelope, and both pass the filter. A closed envelope's purpose_id is the
+// only row this excludes, never a field added to purposeResponse - the
+// lifecycle lives in the filter, not on the wire shape every other caller
+// reads too.
+func (q *Queries) ListSelectablePurposesByFund(ctx context.Context, fundID int64) ([]Purpose, error) {
+	rows, err := q.db.QueryContext(ctx, listSelectablePurposesByFund, fundID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Purpose{}
+	for rows.Next() {
+		var i Purpose
+		if err := rows.Scan(
+			&i.ID,
+			&i.FundID,
+			&i.Kind,
+			&i.Name,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const updatePurposeName = `-- name: UpdatePurposeName :one
 UPDATE purpose
 SET name = ?

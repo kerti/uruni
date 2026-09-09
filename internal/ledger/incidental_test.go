@@ -372,10 +372,14 @@ func TestCloseIncidentalAndRollZeroLeftoverClosesWithoutPosting(t *testing.T) {
 }
 
 // A negative leftover - the envelope disbursed more than it collected -
-// closes the envelope and posts nothing, exactly like the zero case. Neither
-// is an error: an error inside withTx would roll the close back, and nothing
-// asks for an over-disbursed envelope to stay open.
-func TestCloseIncidentalAndRollNegativeLeftoverClosesWithoutPosting(t *testing.T) {
+// closes the envelope AND covers the shortfall from the fund's main purpose
+// (ADR-031, superseding ADR-027's original "closes and posts nothing"
+// branch): FundBalance is unchanged (nothing moved, only what it is for),
+// the incidental purpose's balance still goes to exactly 0, and the main
+// purpose's balance falls by exactly the shortfall - the same invariant
+// TestCloseIncidentalAndRollPositiveLeftoverRollsAndCloses proves for the
+// opposite sign.
+func TestCloseIncidentalAndRollNegativeLeftoverCoversFromMainAndCloses(t *testing.T) {
 	l := newTestLedger(t)
 	f := newFixture(t, l)
 	ctx := context.Background()
@@ -396,9 +400,13 @@ func TestCloseIncidentalAndRollNegativeLeftoverClosesWithoutPosting(t *testing.T
 		t.Fatalf("PostTransaction(out) = %v, want no error", err)
 	}
 
-	txBefore, err := q.ListTransactionsByFund(ctx, f.fundID)
+	fundBefore, err := l.FundBalance(ctx, f.fundID)
 	if err != nil {
-		t.Fatalf("ListTransactionsByFund() before = %v, want no error", err)
+		t.Fatalf("FundBalance() before = %v, want no error", err)
+	}
+	mainBefore, err := l.PurposeBalance(ctx, f.fundID, f.mainID)
+	if err != nil {
+		t.Fatalf("PurposeBalance(main) before = %v, want no error", err)
 	}
 
 	rolled, err := l.CloseIncidentalAndRoll(ctx, CloseIncidentalAndRollParams{
@@ -407,16 +415,32 @@ func TestCloseIncidentalAndRollNegativeLeftoverClosesWithoutPosting(t *testing.T
 	if err != nil {
 		t.Fatalf("CloseIncidentalAndRoll() = %v, want no error", err)
 	}
-	if rolled != 0 {
-		t.Errorf("CloseIncidentalAndRoll() rolled = %d, want 0", rolled)
+	if rolled != -30_000 {
+		t.Errorf("CloseIncidentalAndRoll() rolled = %d, want -30000 (negative: covered from Kas Utama)", rolled)
 	}
 
-	txAfter, err := q.ListTransactionsByFund(ctx, f.fundID)
+	fundAfter, err := l.FundBalance(ctx, f.fundID)
 	if err != nil {
-		t.Fatalf("ListTransactionsByFund() after = %v, want no error", err)
+		t.Fatalf("FundBalance() after = %v, want no error", err)
 	}
-	if len(txAfter) != len(txBefore) {
-		t.Errorf("ListTransactionsByFund() returned %d rows after a negative-leftover close, want %d (unchanged) - nothing should have posted", len(txAfter), len(txBefore))
+	if fundAfter != fundBefore {
+		t.Errorf("FundBalance() before=%d after=%d, want identical - covering a shortfall moves money, it does not create or destroy it", fundBefore, fundAfter)
+	}
+
+	incidenBal, err := l.PurposeBalance(ctx, f.fundID, envelope.PurposeID)
+	if err != nil {
+		t.Fatalf("PurposeBalance(incidental) = %v, want no error", err)
+	}
+	if incidenBal != 0 {
+		t.Errorf("PurposeBalance(incidental) = %d, want 0 - the invariant is exactly zero, always, whichever direction squared it", incidenBal)
+	}
+
+	mainAfter, err := l.PurposeBalance(ctx, f.fundID, f.mainID)
+	if err != nil {
+		t.Fatalf("PurposeBalance(main) after = %v, want no error", err)
+	}
+	if mainAfter != mainBefore-30_000 {
+		t.Errorf("PurposeBalance(main) after = %d, want %d (before - the 30000 shortfall covered)", mainAfter, mainBefore-30_000)
 	}
 
 	closed, err := q.GetIncidental(ctx, store.GetIncidentalParams{PurposeID: envelope.PurposeID, FundID: f.fundID})
@@ -714,5 +738,373 @@ func TestCloseIncidentalAndRollWritesNoNoteWhenNoneIsGiven(t *testing.T) {
 		if row.Kind == "transfer" && row.Note != nil {
 			t.Errorf("roll leg(%s).Note = %q, want NULL", row.Direction, *row.Note)
 		}
+	}
+}
+
+// --- #215: GetIncidentalDetail must not report a roll's own leg as fresh
+// collection or disbursement -------------------------------------------
+
+// The regression #215 was filed for: collect 100.000, spend 30.000, close
+// (positive leftover, 70.000 rolls out). Before the fix, IncidentalTotals'
+// unfiltered sum counted the roll's own "out" leg toward disbursed_amount,
+// so the detail screen read "Terkumpul 100.000 / Terpakai 100.000" - a lie,
+// since 70.000 of that went back to Kas Utama, not to anything the occasion
+// spent. IncidentalActivityTotals must exclude that leg.
+func TestGetIncidentalDetailExcludesTheRolledOutLegAfterAPositiveClose(t *testing.T) {
+	l := newTestLedger(t)
+	f := newFixture(t, l)
+	ctx := context.Background()
+
+	envelope := openTestIncidental(t, l, f.fundID, "Jane's wedding", "2026-08-01")
+
+	if _, err := l.PostTransaction(ctx, PostTransactionParams{
+		FundID: f.fundID, AccountID: f.cashID, PurposeID: envelope.PurposeID,
+		Direction: "in", Amount: 100_000, OccurredOn: "2026-08-02",
+	}); err != nil {
+		t.Fatalf("PostTransaction(in) = %v, want no error", err)
+	}
+	if _, err := l.PostTransaction(ctx, PostTransactionParams{
+		FundID: f.fundID, AccountID: f.cashID, PurposeID: envelope.PurposeID,
+		Direction: "out", Amount: 30_000, OccurredOn: "2026-08-03",
+	}); err != nil {
+		t.Fatalf("PostTransaction(out) = %v, want no error", err)
+	}
+
+	rolled, err := l.CloseIncidentalAndRoll(ctx, CloseIncidentalAndRollParams{
+		FundID: f.fundID, PurposeID: envelope.PurposeID, AccountID: f.cashID, ClosedOn: "2026-08-20",
+	})
+	if err != nil {
+		t.Fatalf("CloseIncidentalAndRoll() = %v, want no error", err)
+	}
+	if rolled != 70_000 {
+		t.Fatalf("CloseIncidentalAndRoll() rolled = %d, want 70000", rolled)
+	}
+
+	detail, err := l.GetIncidentalDetail(ctx, f.fundID, envelope.PurposeID)
+	if err != nil {
+		t.Fatalf("GetIncidentalDetail() = %v, want no error", err)
+	}
+	if detail.Collected != 100_000 {
+		t.Errorf("Collected = %d, want 100000 - the roll's own legs must not inflate this", detail.Collected)
+	}
+	if detail.Disbursed != 30_000 {
+		t.Errorf("Disbursed = %d, want 30000, not 100000 (#215: the rolled-out leg is not money the occasion spent)", detail.Disbursed)
+	}
+}
+
+// The mirror case on the "in" side: an over-disbursed envelope's shortfall
+// is covered by an "in" leg at the incidental purpose (ADR-031). That leg
+// must not inflate collected_amount either, or a treasurer would read a
+// covering transfer from Kas Utama as if it were a fresh contribution.
+func TestGetIncidentalDetailExcludesTheCoveringInLegAfterANegativeClose(t *testing.T) {
+	l := newTestLedger(t)
+	f := newFixture(t, l)
+	ctx := context.Background()
+
+	envelope := openTestIncidental(t, l, f.fundID, "Jane's wedding", "2026-08-01")
+
+	if _, err := l.PostTransaction(ctx, PostTransactionParams{
+		FundID: f.fundID, AccountID: f.cashID, PurposeID: envelope.PurposeID,
+		Direction: "in", Amount: 20_000, OccurredOn: "2026-08-02",
+	}); err != nil {
+		t.Fatalf("PostTransaction(in) = %v, want no error", err)
+	}
+	if _, err := l.PostTransaction(ctx, PostTransactionParams{
+		FundID: f.fundID, AccountID: f.cashID, PurposeID: envelope.PurposeID,
+		Direction: "out", Amount: 50_000, OccurredOn: "2026-08-03",
+	}); err != nil {
+		t.Fatalf("PostTransaction(out) = %v, want no error", err)
+	}
+
+	rolled, err := l.CloseIncidentalAndRoll(ctx, CloseIncidentalAndRollParams{
+		FundID: f.fundID, PurposeID: envelope.PurposeID, AccountID: f.cashID, ClosedOn: "2026-08-20",
+	})
+	if err != nil {
+		t.Fatalf("CloseIncidentalAndRoll() = %v, want no error", err)
+	}
+	if rolled != -30_000 {
+		t.Fatalf("CloseIncidentalAndRoll() rolled = %d, want -30000", rolled)
+	}
+
+	detail, err := l.GetIncidentalDetail(ctx, f.fundID, envelope.PurposeID)
+	if err != nil {
+		t.Fatalf("GetIncidentalDetail() = %v, want no error", err)
+	}
+	if detail.Collected != 20_000 {
+		t.Errorf("Collected = %d, want 20000, not 50000 (the covering leg from Kas Utama is not a fresh contribution)", detail.Collected)
+	}
+	if detail.Disbursed != 50_000 {
+		t.Errorf("Disbursed = %d, want 50000 - unaffected by the cover", detail.Disbursed)
+	}
+}
+
+// --- Reopen (ADR-031, #214): the deliberate, visible way back ----------
+
+func TestReopenIncidentalClearsClosedOn(t *testing.T) {
+	l := newTestLedger(t)
+	f := newFixture(t, l)
+	ctx := context.Background()
+
+	envelope := openTestIncidental(t, l, f.fundID, "Jane's wedding", "2026-08-01")
+	if _, err := l.CloseIncidentalAndRoll(ctx, CloseIncidentalAndRollParams{
+		FundID: f.fundID, PurposeID: envelope.PurposeID, AccountID: f.cashID, ClosedOn: "2026-08-10",
+	}); err != nil {
+		t.Fatalf("CloseIncidentalAndRoll() = %v, want no error", err)
+	}
+
+	reopened, err := l.ReopenIncidental(ctx, f.fundID, envelope.PurposeID)
+	if err != nil {
+		t.Fatalf("ReopenIncidental() = %v, want no error", err)
+	}
+	if reopened.ClosedOn != nil {
+		t.Errorf("ClosedOn = %v, want nil after reopening", reopened.ClosedOn)
+	}
+
+	fetched, err := store.New(l.db).GetIncidental(ctx, store.GetIncidentalParams{PurposeID: envelope.PurposeID, FundID: f.fundID})
+	if err != nil {
+		t.Fatalf("GetIncidental() = %v, want no error", err)
+	}
+	if fetched.ClosedOn != nil {
+		t.Errorf("persisted ClosedOn = %v, want nil", fetched.ClosedOn)
+	}
+}
+
+// Reopening an envelope that is not closed is refused, not a silent no-op.
+func TestReopenIncidentalRejectsAnOpenEnvelope(t *testing.T) {
+	l := newTestLedger(t)
+	f := newFixture(t, l)
+	ctx := context.Background()
+
+	envelope := openTestIncidental(t, l, f.fundID, "Jane's wedding", "2026-08-01")
+
+	_, err := l.ReopenIncidental(ctx, f.fundID, envelope.PurposeID)
+	if !errors.Is(err, ErrIncidentalNotClosed) {
+		t.Fatalf("ReopenIncidental() on an open envelope = %v, want an error wrapping ErrIncidentalNotClosed", err)
+	}
+}
+
+// A second fund's closed envelope is invisible to the first fund, and
+// reopening it across the fund boundary is refused with the same
+// GetIncidental-backed sql.ErrNoRows every other single-envelope call in
+// this file answers with - an id names a row, not permission to see it.
+func TestReopenIncidentalIsFundScoped(t *testing.T) {
+	l := newTestLedger(t)
+	f := newFixture(t, l)
+	ctx := context.Background()
+	q := store.New(l.db)
+
+	other, err := q.CreateFund(ctx, store.CreateFundParams{
+		Name: "Other Fund", Currency: "IDR", ReportSlug: "zyxwvutsrqponmlkjihgfe", CreatedAt: 1,
+	})
+	if err != nil {
+		t.Fatalf("CreateFund() = %v, want no error", err)
+	}
+
+	envelope, err := l.OpenIncidental(ctx, OpenIncidentalParams{
+		FundID: other.ID, Occasion: "Fund 2's occasion", OpenedOn: "2026-08-12",
+	})
+	if err != nil {
+		t.Fatalf("OpenIncidental(fund 2) = %v, want no error", err)
+	}
+	otherAccount := createAccount(t, q, other.ID, "cash", "Other Fund's Cash")
+	if _, err := l.CloseIncidentalAndRoll(ctx, CloseIncidentalAndRollParams{
+		FundID: other.ID, PurposeID: envelope.PurposeID, AccountID: otherAccount, ClosedOn: "2026-08-13",
+	}); err != nil {
+		t.Fatalf("CloseIncidentalAndRoll(fund 2) = %v, want no error", err)
+	}
+
+	if _, err := l.ReopenIncidental(ctx, f.fundID, envelope.PurposeID); !errors.Is(err, sql.ErrNoRows) {
+		t.Errorf("ReopenIncidental(fund 1, fund 2's envelope) = %v, want an error wrapping sql.ErrNoRows", err)
+	}
+}
+
+// --- The invariant to test hardest: a closed envelope's purpose balance
+// is exactly zero, always - across reopen, a late entry in either
+// direction, and a second reopen. ---------------------------------------
+
+// A late contribution after reopening: close (rolls the original leftover
+// out), reopen, post a late "in", close again. The second close must roll
+// only the net delta - no new arithmetic, per ADR-031 - and the purpose
+// balance must land back at exactly zero.
+func TestReopenLateContributionThenRecloseRollsOnlyTheNetDeltaAndZerosTheBalance(t *testing.T) {
+	l := newTestLedger(t)
+	f := newFixture(t, l)
+	ctx := context.Background()
+
+	envelope := openTestIncidental(t, l, f.fundID, "Jane's wedding", "2026-08-01")
+
+	if _, err := l.PostTransaction(ctx, PostTransactionParams{
+		FundID: f.fundID, AccountID: f.cashID, PurposeID: envelope.PurposeID,
+		Direction: "in", Amount: 100_000, OccurredOn: "2026-08-02",
+	}); err != nil {
+		t.Fatalf("PostTransaction(in) = %v, want no error", err)
+	}
+	if rolled, err := l.CloseIncidentalAndRoll(ctx, CloseIncidentalAndRollParams{
+		FundID: f.fundID, PurposeID: envelope.PurposeID, AccountID: f.cashID, ClosedOn: "2026-08-10",
+	}); err != nil {
+		t.Fatalf("first CloseIncidentalAndRoll() = %v, want no error", err)
+	} else if rolled != 100_000 {
+		t.Fatalf("first CloseIncidentalAndRoll() rolled = %d, want 100000", rolled)
+	}
+
+	if _, err := l.ReopenIncidental(ctx, f.fundID, envelope.PurposeID); err != nil {
+		t.Fatalf("ReopenIncidental() = %v, want no error", err)
+	}
+
+	// A late contribution, dated after the original close - ADR-031 needs
+	// no backdating logic (ADR-024's id cutoff already covers it), and this
+	// is the ordinary case anyway: money that arrives after the envelope
+	// was thought done.
+	if _, err := l.PostTransaction(ctx, PostTransactionParams{
+		FundID: f.fundID, AccountID: f.cashID, PurposeID: envelope.PurposeID,
+		Direction: "in", Amount: 20_000, OccurredOn: "2026-08-25",
+	}); err != nil {
+		t.Fatalf("PostTransaction(late in) = %v, want no error", err)
+	}
+
+	rolled, err := l.CloseIncidentalAndRoll(ctx, CloseIncidentalAndRollParams{
+		FundID: f.fundID, PurposeID: envelope.PurposeID, AccountID: f.cashID, ClosedOn: "2026-08-26",
+	})
+	if err != nil {
+		t.Fatalf("second CloseIncidentalAndRoll() = %v, want no error", err)
+	}
+	if rolled != 20_000 {
+		t.Errorf("second CloseIncidentalAndRoll() rolled = %d, want 20000 (the net delta, not 120000)", rolled)
+	}
+
+	bal, err := l.PurposeBalance(ctx, f.fundID, envelope.PurposeID)
+	if err != nil {
+		t.Fatalf("PurposeBalance() = %v, want no error", err)
+	}
+	if bal != 0 {
+		t.Errorf("PurposeBalance(envelope) = %d, want 0 - the invariant is exactly zero, always", bal)
+	}
+}
+
+// A late bill after reopening: close (rolls the original leftover out),
+// reopen, post a late "out" larger than what remains, close again. The
+// shortfall must be covered from Kas Utama, and the balance must still land
+// at exactly zero.
+func TestReopenLateDisbursementThenRecloseCoversTheShortfallAndZerosTheBalance(t *testing.T) {
+	l := newTestLedger(t)
+	f := newFixture(t, l)
+	ctx := context.Background()
+
+	envelope := openTestIncidental(t, l, f.fundID, "Jane's wedding", "2026-08-01")
+
+	if _, err := l.PostTransaction(ctx, PostTransactionParams{
+		FundID: f.fundID, AccountID: f.cashID, PurposeID: envelope.PurposeID,
+		Direction: "in", Amount: 50_000, OccurredOn: "2026-08-02",
+	}); err != nil {
+		t.Fatalf("PostTransaction(in) = %v, want no error", err)
+	}
+	if rolled, err := l.CloseIncidentalAndRoll(ctx, CloseIncidentalAndRollParams{
+		FundID: f.fundID, PurposeID: envelope.PurposeID, AccountID: f.cashID, ClosedOn: "2026-08-10",
+	}); err != nil {
+		t.Fatalf("first CloseIncidentalAndRoll() = %v, want no error", err)
+	} else if rolled != 50_000 {
+		t.Fatalf("first CloseIncidentalAndRoll() rolled = %d, want 50000", rolled)
+	}
+
+	if _, err := l.ReopenIncidental(ctx, f.fundID, envelope.PurposeID); err != nil {
+		t.Fatalf("ReopenIncidental() = %v, want no error", err)
+	}
+
+	// A late bill for the occasion - PRD §7.5's own scenario for why the
+	// guard is symmetric.
+	if _, err := l.PostTransaction(ctx, PostTransactionParams{
+		FundID: f.fundID, AccountID: f.cashID, PurposeID: envelope.PurposeID,
+		Direction: "out", Amount: 20_000, OccurredOn: "2026-08-25",
+	}); err != nil {
+		t.Fatalf("PostTransaction(late out) = %v, want no error", err)
+	}
+
+	rolled, err := l.CloseIncidentalAndRoll(ctx, CloseIncidentalAndRollParams{
+		FundID: f.fundID, PurposeID: envelope.PurposeID, AccountID: f.cashID, ClosedOn: "2026-08-26",
+	})
+	if err != nil {
+		t.Fatalf("second CloseIncidentalAndRoll() = %v, want no error", err)
+	}
+	if rolled != -20_000 {
+		t.Errorf("second CloseIncidentalAndRoll() rolled = %d, want -20000 (the net delta, covered from Kas Utama)", rolled)
+	}
+
+	bal, err := l.PurposeBalance(ctx, f.fundID, envelope.PurposeID)
+	if err != nil {
+		t.Fatalf("PurposeBalance() = %v, want no error", err)
+	}
+	if bal != 0 {
+		t.Errorf("PurposeBalance(envelope) = %d, want 0 - the invariant is exactly zero, always", bal)
+	}
+}
+
+// Reopening twice: close, reopen, close again with nothing new to roll,
+// reopen again, post a late entry, close a third time. Every close leaves
+// the purpose balance at exactly zero - the invariant holds across more
+// than one reopen cycle, not just one.
+func TestReopenTwiceEachCloseZerosTheBalance(t *testing.T) {
+	l := newTestLedger(t)
+	f := newFixture(t, l)
+	ctx := context.Background()
+
+	envelope := openTestIncidental(t, l, f.fundID, "Jane's wedding", "2026-08-01")
+
+	if _, err := l.PostTransaction(ctx, PostTransactionParams{
+		FundID: f.fundID, AccountID: f.cashID, PurposeID: envelope.PurposeID,
+		Direction: "in", Amount: 50_000, OccurredOn: "2026-08-02",
+	}); err != nil {
+		t.Fatalf("PostTransaction(in) = %v, want no error", err)
+	}
+	if _, err := l.CloseIncidentalAndRoll(ctx, CloseIncidentalAndRollParams{
+		FundID: f.fundID, PurposeID: envelope.PurposeID, AccountID: f.cashID, ClosedOn: "2026-08-10",
+	}); err != nil {
+		t.Fatalf("first CloseIncidentalAndRoll() = %v, want no error", err)
+	}
+
+	// Reopen and close again with nothing new posted: the leftover is back
+	// to 0 (the first roll's own leg already nets it), so this close posts
+	// nothing.
+	if _, err := l.ReopenIncidental(ctx, f.fundID, envelope.PurposeID); err != nil {
+		t.Fatalf("first ReopenIncidental() = %v, want no error", err)
+	}
+	rolled, err := l.CloseIncidentalAndRoll(ctx, CloseIncidentalAndRollParams{
+		FundID: f.fundID, PurposeID: envelope.PurposeID, AccountID: f.cashID, ClosedOn: "2026-08-11",
+	})
+	if err != nil {
+		t.Fatalf("second CloseIncidentalAndRoll() = %v, want no error", err)
+	}
+	if rolled != 0 {
+		t.Errorf("second CloseIncidentalAndRoll() rolled = %d, want 0 (nothing new to roll)", rolled)
+	}
+	if bal, err := l.PurposeBalance(ctx, f.fundID, envelope.PurposeID); err != nil {
+		t.Fatalf("PurposeBalance() after second close = %v, want no error", err)
+	} else if bal != 0 {
+		t.Errorf("PurposeBalance() after second close = %d, want 0", bal)
+	}
+
+	// Reopen a second time and post a late contribution, then close a
+	// third time.
+	if _, err := l.ReopenIncidental(ctx, f.fundID, envelope.PurposeID); err != nil {
+		t.Fatalf("second ReopenIncidental() = %v, want no error", err)
+	}
+	if _, err := l.PostTransaction(ctx, PostTransactionParams{
+		FundID: f.fundID, AccountID: f.cashID, PurposeID: envelope.PurposeID,
+		Direction: "in", Amount: 10_000, OccurredOn: "2026-08-15",
+	}); err != nil {
+		t.Fatalf("PostTransaction(late in) = %v, want no error", err)
+	}
+	rolled, err = l.CloseIncidentalAndRoll(ctx, CloseIncidentalAndRollParams{
+		FundID: f.fundID, PurposeID: envelope.PurposeID, AccountID: f.cashID, ClosedOn: "2026-08-16",
+	})
+	if err != nil {
+		t.Fatalf("third CloseIncidentalAndRoll() = %v, want no error", err)
+	}
+	if rolled != 10_000 {
+		t.Errorf("third CloseIncidentalAndRoll() rolled = %d, want 10000", rolled)
+	}
+	if bal, err := l.PurposeBalance(ctx, f.fundID, envelope.PurposeID); err != nil {
+		t.Fatalf("PurposeBalance() after third close = %v, want no error", err)
+	} else if bal != 0 {
+		t.Errorf("PurposeBalance() after third close = %d, want 0", bal)
 	}
 }

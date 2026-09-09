@@ -66,6 +66,7 @@ var gatedRoutes = []struct {
 	{http.MethodGet, "/api/incidentals"},
 	{http.MethodGet, "/api/incidentals/1"},
 	{http.MethodPost, "/api/incidentals/1/close"},
+	{http.MethodPost, "/api/incidentals/1/reopen"},
 	{http.MethodPost, "/api/reconciliations"},
 	{http.MethodGet, "/api/reconciliations"},
 	{http.MethodGet, "/api/reconciliations/latest"},

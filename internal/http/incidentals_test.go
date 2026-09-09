@@ -49,6 +49,14 @@ func postCloseIncidental(t *testing.T, r http.Handler, purposeID int64, req clos
 	return rec
 }
 
+func postReopenIncidental(t *testing.T, r http.Handler, purposeID int64) *httptest.ResponseRecorder {
+	t.Helper()
+	rec := httptest.NewRecorder()
+	path := fmt.Sprintf("/api/incidentals/%d/reopen", purposeID)
+	r.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, path, nil))
+	return rec
+}
+
 func decodeIncidental(t *testing.T, rec *httptest.ResponseRecorder) incidentalResponse {
 	t.Helper()
 	var got incidentalResponse
@@ -460,7 +468,11 @@ func TestCloseIncidentalZeroLeftoverPostsNothing(t *testing.T) {
 	}
 }
 
-func TestCloseIncidentalNegativeLeftoverPostsNothing(t *testing.T) {
+// A negative leftover covers the shortfall from the fund's main purpose
+// instead of posting nothing (ADR-031, superseding ADR-027's original
+// negative-leftover branch): rolled_amount comes back negative, and the
+// envelope's own purpose balance still lands at exactly zero.
+func TestCloseIncidentalNegativeLeftoverCoversFromMain(t *testing.T) {
 	r, l := testRouterAndLedger(t)
 	setup := setUpFund(t, r)
 	envelope := openIncidentalFor(t, r, "Jane's wedding", "2026-08-01")
@@ -494,16 +506,24 @@ func TestCloseIncidentalNegativeLeftoverPostsNothing(t *testing.T) {
 	if err := json.NewDecoder(closeRec.Body).Decode(&closed); err != nil {
 		t.Fatalf("decoding close response: %v", err)
 	}
-	if closed.RolledAmount != 0 {
-		t.Errorf("rolled_amount = %d, want 0", closed.RolledAmount)
+	if closed.RolledAmount != -30_000 {
+		t.Errorf("rolled_amount = %d, want -30000 (negative: covered from Kas Utama)", closed.RolledAmount)
 	}
 
 	mainAfter, err := l.PurposeBalance(ctx, setup.Fund.ID, setup.MainPurposeID)
 	if err != nil {
 		t.Fatalf("PurposeBalance(main) after = %v, want no error", err)
 	}
-	if mainAfter != mainBefore {
-		t.Errorf("PurposeBalance(main) before=%d after=%d, want identical - an over-disbursed envelope posts nothing on close", mainBefore.Int64(), mainAfter.Int64())
+	if mainAfter != mainBefore-30_000 {
+		t.Errorf("PurposeBalance(main) before=%d after=%d, want before - 30000 - an over-disbursed envelope covers its shortfall from Kas Utama on close", mainBefore.Int64(), mainAfter.Int64())
+	}
+
+	envelopeBalance, err := l.PurposeBalance(ctx, setup.Fund.ID, envelope.PurposeID)
+	if err != nil {
+		t.Fatalf("PurposeBalance(envelope) = %v, want no error", err)
+	}
+	if envelopeBalance != 0 {
+		t.Errorf("PurposeBalance(envelope) = %d, want 0 - the invariant is exactly zero, always", envelopeBalance.Int64())
 	}
 }
 
@@ -668,5 +688,109 @@ func TestCloseIncidentalWritesTheNoteToBothRollLegs(t *testing.T) {
 	}
 	if legs != 2 {
 		t.Fatalf("transfer legs = %d, want 2", legs)
+	}
+}
+
+// The guard's HTTP surface (ADR-031, #214): POST /api/transactions against a
+// closed incidental's purpose is refused with the named 409, in both
+// directions, and posts nothing.
+func TestPostTransactionRefusesAClosedIncidentalBothDirections(t *testing.T) {
+	for _, direction := range []string{"in", "out"} {
+		t.Run(direction, func(t *testing.T) {
+			r := testRouter(t)
+			setup := setUpFund(t, r)
+			envelope := openIncidentalFor(t, r, "Jane's wedding", "2026-08-01")
+
+			if rec := postCloseIncidental(t, r, envelope.PurposeID, closeIncidentalRequest{
+				AccountID: setup.CashAccountID(t), ClosedOn: "2026-08-10",
+			}); rec.Code != http.StatusOK {
+				t.Fatalf("close = %d, want %d (body: %s)", rec.Code, http.StatusOK, rec.Body.String())
+			}
+
+			rec := postTransaction(t, r, transactionRequest{
+				AccountID: setup.CashAccountID(t), PurposeID: envelope.PurposeID,
+				Direction: direction, Amount: 10_000, OccurredOn: "2026-08-15",
+			})
+			if rec.Code != http.StatusConflict {
+				t.Fatalf("POST /api/transactions (%s) on a closed incidental = %d, want %d (body: %s)", direction, rec.Code, http.StatusConflict, rec.Body.String())
+			}
+			if got := decodeError(t, rec); got.Code != "incidental_closed" {
+				t.Errorf("error code = %q, want %q", got.Code, "incidental_closed")
+			}
+
+			list := getTransactions(t, r)
+			var rows []transactionResponse
+			if err := json.NewDecoder(list.Body).Decode(&rows); err != nil {
+				t.Fatalf("decoding transactions: %v", err)
+			}
+			for _, row := range rows {
+				if row.Direction == direction && row.Amount == 10_000 {
+					t.Errorf("found a posted row for the refused %s transaction: %+v", direction, row)
+				}
+			}
+		})
+	}
+}
+
+// POST /api/incidentals/{purposeID}/reopen clears closed_on and the
+// envelope rejoins the open list.
+func TestReopenIncidentalClearsClosedOnAndRejoinsTheOpenList(t *testing.T) {
+	r := testRouter(t)
+	setup := setUpFund(t, r)
+	envelope := openIncidentalFor(t, r, "Jane's wedding", "2026-08-01")
+
+	if rec := postCloseIncidental(t, r, envelope.PurposeID, closeIncidentalRequest{
+		AccountID: setup.CashAccountID(t), ClosedOn: "2026-08-10",
+	}); rec.Code != http.StatusOK {
+		t.Fatalf("close = %d, want %d (body: %s)", rec.Code, http.StatusOK, rec.Body.String())
+	}
+
+	rec := postReopenIncidental(t, r, envelope.PurposeID)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("POST .../reopen = %d, want %d (body: %s)", rec.Code, http.StatusOK, rec.Body.String())
+	}
+	reopened := decodeIncidental(t, rec)
+	if reopened.ClosedOn != nil {
+		t.Errorf("closed_on = %v, want nil after reopening", reopened.ClosedOn)
+	}
+
+	openList := decodeIncidentals(t, getIncidentals(t, r, "?open=true"))
+	found := false
+	for _, i := range openList {
+		if i.PurposeID == envelope.PurposeID {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("open incidentals list = %+v, want it to include the reopened envelope %d", openList, envelope.PurposeID)
+	}
+}
+
+// Reopening an envelope that is not closed is the named 409, not a silent
+// no-op or a generic 500.
+func TestReopenIncidentalOnAnOpenEnvelopeReturnsItsNamed409(t *testing.T) {
+	r := testRouter(t)
+	setUpFund(t, r)
+	envelope := openIncidentalFor(t, r, "Jane's wedding", "2026-08-01")
+
+	rec := postReopenIncidental(t, r, envelope.PurposeID)
+	if rec.Code != http.StatusConflict {
+		t.Fatalf("POST .../reopen on an open envelope = %d, want %d (body: %s)", rec.Code, http.StatusConflict, rec.Body.String())
+	}
+	if got := decodeError(t, rec); got.Code != "incidental_not_closed" {
+		t.Errorf("error code = %q, want %q", got.Code, "incidental_not_closed")
+	}
+}
+
+// An id naming no incidental at all (or another fund's) is 404, the same
+// GetIncidental-backed answer every other single-envelope route in this
+// package gives.
+func TestReopenIncidentalUnknownPurposeIsNotFound(t *testing.T) {
+	r := testRouter(t)
+	setUpFund(t, r)
+
+	rec := postReopenIncidental(t, r, 999_999)
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("POST .../reopen on an unknown purpose = %d, want %d (body: %s)", rec.Code, http.StatusNotFound, rec.Body.String())
 	}
 }

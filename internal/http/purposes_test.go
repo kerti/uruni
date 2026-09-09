@@ -244,3 +244,98 @@ func TestPatchPurposeWithoutANameIsRejected(t *testing.T) {
 		t.Fatalf("PATCH /api/purposes/{id} {} = %d, want %d", rec.Code, http.StatusBadRequest)
 	}
 }
+
+func getSelectablePurposes(t *testing.T, r http.Handler) *httptest.ResponseRecorder {
+	t.Helper()
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/purposes?selectable=true", nil))
+	return rec
+}
+
+// GET /api/purposes?selectable=true excludes a closed incidental's purpose
+// (ADR-031: the everyday record-transaction picker stops offering what
+// PostTransaction's own guard would now refuse), while the unfiltered
+// GET /api/purposes still returns it - a closed envelope is still history.
+// purposeResponse itself gains no closed_on field either way.
+func TestGetSelectablePurposesExcludesAClosedIncidental(t *testing.T) {
+	r := testRouter(t)
+	setup := setUpFund(t, r)
+	envelope := openIncidentalFor(t, r, "Jane's wedding", "2026-08-01")
+
+	// Open: present on the selectable list too.
+	if rec := getSelectablePurposes(t, r); rec.Code != http.StatusOK {
+		t.Fatalf("GET /api/purposes?selectable=true (open envelope) = %d, want %d (body: %s)", rec.Code, http.StatusOK, rec.Body.String())
+	} else {
+		var got []purposeResponse
+		if err := json.NewDecoder(rec.Body).Decode(&got); err != nil {
+			t.Fatalf("decoding response: %v", err)
+		}
+		if !containsPurposeID(got, envelope.PurposeID) {
+			t.Errorf("selectable purposes = %+v, want the open envelope's purpose %d included", got, envelope.PurposeID)
+		}
+	}
+
+	if rec := postCloseIncidental(t, r, envelope.PurposeID, closeIncidentalRequest{
+		AccountID: setup.CashAccountID(t), ClosedOn: "2026-08-10",
+	}); rec.Code != http.StatusOK {
+		t.Fatalf("close = %d, want %d (body: %s)", rec.Code, http.StatusOK, rec.Body.String())
+	}
+
+	selectableRec := getSelectablePurposes(t, r)
+	if selectableRec.Code != http.StatusOK {
+		t.Fatalf("GET /api/purposes?selectable=true = %d, want %d (body: %s)", selectableRec.Code, http.StatusOK, selectableRec.Body.String())
+	}
+	var selectable []purposeResponse
+	if err := json.NewDecoder(selectableRec.Body).Decode(&selectable); err != nil {
+		t.Fatalf("decoding response: %v", err)
+	}
+	if containsPurposeID(selectable, envelope.PurposeID) {
+		t.Errorf("selectable purposes = %+v, want the closed envelope's purpose %d excluded", selectable, envelope.PurposeID)
+	}
+	// main is still there - only the closed incidental is filtered.
+	hasMain := false
+	for _, p := range selectable {
+		if p.Kind == "main" {
+			hasMain = true
+		}
+	}
+	if !hasMain {
+		t.Errorf("selectable purposes = %+v, want the fund's main purpose included", selectable)
+	}
+
+	// The unfiltered list still returns everything, closed envelope included
+	// - a closed envelope is still history.
+	unfiltered := getPurposes(t, r)
+	var got []purposeResponse
+	if err := json.NewDecoder(unfiltered.Body).Decode(&got); err != nil {
+		t.Fatalf("decoding response: %v", err)
+	}
+	if !containsPurposeID(got, envelope.PurposeID) {
+		t.Errorf("GET /api/purposes (unfiltered) = %+v, want the closed envelope's purpose %d still included", got, envelope.PurposeID)
+	}
+}
+
+func containsPurposeID(purposes []purposeResponse, id int64) bool {
+	for _, p := range purposes {
+		if p.ID == id {
+			return true
+		}
+	}
+	return false
+}
+
+// An unparseable ?selectable value is a 400, matching listIncidentals'
+// identical guard on its own ?open filter.
+func TestGetPurposesRejectsAnUnparseableSelectableValue(t *testing.T) {
+	r := testRouter(t)
+	setUpFund(t, r)
+
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/purposes?selectable=maybe", nil))
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("GET /api/purposes?selectable=maybe = %d, want %d (body: %s)", rec.Code, http.StatusBadRequest, rec.Body.String())
+	}
+	if got := decodeError(t, rec); got.Code != "invalid_argument" {
+		t.Errorf("error code = %q, want %q", got.Code, "invalid_argument")
+	}
+}

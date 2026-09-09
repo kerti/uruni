@@ -157,10 +157,40 @@ type Querier interface {
 	GetTransactionForFund(ctx context.Context, arg GetTransactionForFundParams) (Transaction, error)
 	GetTransfer(ctx context.Context, id int64) (Transfer, error)
 	GetUserByEmail(ctx context.Context, email string) (User, error)
-	// The two figures PRD 7.5 wants shown side by side for an incidental envelope.
-	// Leftover is collected minus disbursed, computed in Go via money.Amount.Sub,
-	// rather than a third column here - one aggregate pass over the ledger is
-	// enough for both the display figures and the roll amount.
+	// What the occasion itself collected and disbursed (PRD section 7.5's
+	// detail screen), as opposed to IncidentalTotals above's net-including-rolls. The
+	// LEFT JOIN excludes only a reclass_purpose leg - the roll CloseIncidentalAndRoll
+	// posts, in either direction (ADR-031's leftover-in as much as the original
+	// leftover-out) - by transfer.kind, not by transaction.kind: every leg of
+	// every transfer is posted as transaction.kind='transfer' regardless of
+	// whether the transfer itself is 'between_accounts' or 'reclass_purpose', so
+	// transaction.kind alone cannot tell a roll's leg from an ordinary transfer
+	// between this envelope's own accounts, and this screen has no reason to
+	// exclude the latter. tr.id IS NULL keeps every row the join found no
+	// matching reclass_purpose transfer for - which is every kind but that one.
+	IncidentalActivityTotals(ctx context.Context, arg IncidentalActivityTotalsParams) (IncidentalActivityTotalsRow, error)
+	// The guard's one query (ADR-031): sql.ErrNoRows for a purpose_id that is
+	// not an incidental at all (main, pass_through - PostTransaction's caller
+	// reads that as "no guard applies", not as a schema violation), a row with
+	// closed_on NULL for an open envelope, and a row with closed_on set for a
+	// closed one. Deliberately not scoped by fund_id: PostTransaction already
+	// holds a purpose_id it trusts (its own caller's fund-scoped picker, or the
+	// schema's own composite FK once the write lands), and this check runs
+	// before that write, not in place of it.
+	IncidentalClosedOnForPurpose(ctx context.Context, purposeID int64) (*string, error)
+	// The envelope's net, everything it has ever posted against its own
+	// purpose_id, rolls included. This is what CloseIncidentalAndRoll leans on
+	// (ADR-031): collected minus disbursed here is exactly PurposeBalance for
+	// this purpose, so a prior roll's own leg already nets the envelope to zero
+	// by construction, and reopening, posting a late entry, and closing again
+	// computes the *net delta* through this same unfiltered sum rather than new
+	// arithmetic. Leftover is collected minus disbursed, computed in Go via
+	// money.Amount.Sub, rather than a third column here.
+	//
+	// Not what GET /api/incidentals/{purposeID} shows: that figure wants what
+	// the occasion itself collected and spent, with a prior roll's leg excluded
+	// - see IncidentalActivityTotals below. Conflating the two was #215; this
+	// comment is the seam between them.
 	IncidentalTotals(ctx context.Context, arg IncidentalTotalsParams) (IncidentalTotalsRow, error)
 	// The "paid in advance" signal. dues_period is 'YYYY-MM', so a lexicographic
 	// MAX is also the chronological one. The CAST(... AS TEXT) is load-bearing,
@@ -201,6 +231,18 @@ type Querier interface {
 	// Newest first: the home screen wants the last count, not the first.
 	ListReconciliationsByFund(ctx context.Context, fundID int64) ([]Reconciliation, error)
 	ListReimbursementsByFund(ctx context.Context, fundID int64) ([]ListReimbursementsByFundRow, error)
+	// ListSelectablePurposesByFund is ListPurposesByFund with a closed
+	// incidental's purpose excluded (ADR-031): GET /api/purposes?selectable=true
+	// backs the everyday record form's picker, which stops offering what
+	// PostTransaction's own guard would now refuse. The LEFT JOIN is what makes
+	// "not an incidental at all" and "an incidental that's still open" the same
+	// case - main and pass_through purposes have no incidental row to join
+	// against, so i.closed_on reads NULL for them exactly as it does for an open
+	// envelope, and both pass the filter. A closed envelope's purpose_id is the
+	// only row this excludes, never a field added to purposeResponse - the
+	// lifecycle lives in the filter, not on the wire shape every other caller
+	// reads too.
+	ListSelectablePurposesByFund(ctx context.Context, fundID int64) ([]Purpose, error)
 	ListTransactionsByFund(ctx context.Context, fundID int64) ([]Transaction, error)
 	ListTransfersByFund(ctx context.Context, fundID int64) ([]Transfer, error)
 	// The reconciliation cutoff. Deliberately not an aggregate: SELECT
@@ -233,6 +275,14 @@ type Querier interface {
 	// int64 rather than interface{} - sqlc's SQLite engine cannot infer the type of
 	// a summed expression (ADR-024).
 	ReconciliationDifferenceTotal(ctx context.Context, reconciliationID int64) (int64, error)
+	// The way back (ADR-031): closed_on to NULL, the exact inverse of
+	// CloseIncidental above and, like it, a plain UPDATE rather than a ledger
+	// entry - reopening moves no money either. Ledger.ReopenIncidental fetches
+	// the envelope through GetIncidental's fund-scoped join first, so by the
+	// time this runs the purpose_id is already known to belong to the caller's
+	// fund; this query itself stays unscoped, the same shape CloseIncidental
+	// already uses.
+	ReopenIncidental(ctx context.Context, purposeID int64) (Incidental, error)
 	// TouchSession is the sliding 30-day idle timeout (#113): every read that
 	// proves the session still valid pushes expires_at forward by the same fixed
 	// window, computed by the caller - there is no absolute cap to enforce here.
