@@ -12,7 +12,7 @@ import { ApiError } from '@/lib/api'
 import { listAccounts } from '@/lib/accounts'
 import { formatIsoDate } from '@/lib/dates'
 import { formatIDR } from '@/lib/money'
-import { closeIncidental, getIncidental, listIncidentals, openIncidental } from '@/lib/incidentals'
+import { closeIncidental, getIncidental, listIncidentals, openIncidental, reopenIncidental } from '@/lib/incidentals'
 import { useApi } from '@/lib/useApi'
 import type { Account } from '@/lib/accounts'
 import type { Incidental, IncidentalDetail } from '@/lib/incidentals'
@@ -164,6 +164,23 @@ export default function Incidentals({
     )
   }
 
+  // The way back from a closed envelope (ADR-031): reopening just clears
+  // closed_on and refetches the detail, which is enough on its own -
+  // DetailView's isOpen block already renders "Catat transaksi" and "Tutup
+  // amplop" for any open envelope, so a reopen leads straight into the same
+  // close form a late entry is meant to end at, not a bare toggle with
+  // nothing next.
+  function handleReopen(purposeId: number) {
+    runWrite(
+      () => reopenIncidental(purposeId),
+      text.reopen.success,
+      () => {
+        setRolledAmount(null)
+        void detailRun(() => getIncidental(purposeId))
+      },
+    )
+  }
+
   // --- Detail view -------------------------------------------------------
 
   if (selectedPurposeId !== null) {
@@ -179,6 +196,7 @@ export default function Incidentals({
         onShowClose={() => { setShowCloseForm(true); setFeedback(null) }}
         onCancelClose={() => setShowCloseForm(false)}
         onClose={(accountId, closedOn, note) => handleClose(selectedPurposeId, accountId, closedOn, note)}
+        onReopen={() => handleReopen(selectedPurposeId)}
         onRetry={() => void detailRun(() => getIncidental(selectedPurposeId))}
         onBack={backToList}
       />
@@ -373,6 +391,7 @@ function DetailView({
   onShowClose,
   onCancelClose,
   onClose,
+  onReopen,
   onRetry,
   onBack,
 }: {
@@ -386,6 +405,7 @@ function DetailView({
   onShowClose: () => void
   onCancelClose: () => void
   onClose: (accountId: number, closedOn: string, note: string) => void
+  onReopen: () => void
   onRetry: () => void
   onBack: () => void
 }) {
@@ -442,11 +462,13 @@ function DetailView({
       </div>
 
       {/* Rolled-amount readout after a close - shown even when it is 0: a
-          zero rollover is an honest answer, not a missing one. */}
+          zero rollover is an honest answer, not a missing one. rolled_amount
+          is signed (ADR-031), so the sentence itself says which way it
+          went; the amount stays one field, absolute either way. */}
       {rolledAmount !== null && (
         <div className="flex items-center justify-between rounded-lg bg-muted p-3 text-sm">
-          <span className="text-muted-foreground">{text.close.rolledLabel}</span>
-          <span className="tabular font-medium">{formatIDR(rolledAmount)}</span>
+          <span className="text-muted-foreground">{text.close.rolledLabel(rolledAmount)}</span>
+          <span className="tabular font-medium">{formatIDR(Math.abs(rolledAmount))}</span>
         </div>
       )}
 
@@ -470,6 +492,17 @@ function DetailView({
             <CloseForm accounts={accounts} onSubmit={onClose} onCancel={onCancelClose} submitting={submitting} />
           )}
         </>
+      )}
+
+      {/* The way back from a closed envelope (ADR-031): reopening rejoins
+          the open list and, immediately on this same screen, the isOpen
+          block above - "Catat transaksi" for the late entry and "Tutup
+          amplop" to close again - rather than leaving a bare toggle with
+          nothing next. */}
+      {!isOpen && (
+        <Button type="button" size="lg" variant="outline" onClick={onReopen} disabled={submitting}>
+          {text.actions.reopen}
+        </Button>
       )}
     </div>
   )

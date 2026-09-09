@@ -14,9 +14,18 @@ export interface Purpose {
   created_at: number
 }
 
-/** GET /api/purposes - every tag a transaction can carry. */
-export function listPurposes(): Promise<Purpose[]> {
-  return apiFetch<Purpose[]>('/api/purposes')
+/**
+ * GET /api/purposes - every tag a transaction can carry.
+ *
+ * `selectable`, when true, asks the server to exclude a closed incidental's
+ * purpose (ADR-031) - what the everyday record-transaction picker wants,
+ * since PostTransaction's own guard would now refuse a posting to one.
+ * Every other caller (renaming, reporting) still wants the unfiltered list:
+ * a closed envelope is still history.
+ */
+export function listPurposes(selectable = false): Promise<Purpose[]> {
+  const query = selectable ? '?selectable=true' : ''
+  return apiFetch<Purpose[]>(`/api/purposes${query}`)
 }
 
 /**

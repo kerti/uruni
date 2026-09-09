@@ -102,12 +102,14 @@ test.describe('incidentals', () => {
     await page.getByRole('button', { name: copy.incidentals.close.submit }).click()
     await expect(page.getByText(copy.incidentals.close.success)).toBeVisible()
 
-    // The rollover (Rp 60.000 collected, nothing disbursed) is rendered,
-    // never hidden even if it turns out to be zero. The double-close 409
+    // The rollover (Rp 60.000 collected, nothing disbursed - all of it rolls
+    // out) is rendered, never hidden even if it turns out to be zero.
+    // rolled_amount is signed (ADR-031): 60.000 here is positive, so the
+    // "rolled out" sentence is the one that must show. The double-close 409
     // refusal itself is covered at the unit level (Incidentals.test.tsx) -
-    // once closed, this screen hides "Catat transaksi"/"Tutup amplop" for
-    // the envelope entirely, so a second close is not reachable from the UI.
-    await expect(page.getByText(copy.incidentals.close.rolledLabel)).toBeVisible()
+    // once closed, this screen instead offers the reopen affordance, not a
+    // second close.
+    await expect(page.getByText(copy.incidentals.close.rolledLabel(60_000))).toBeVisible()
 
     // The envelope now shows closed on the all tab, and its open-only
     // actions are gone.

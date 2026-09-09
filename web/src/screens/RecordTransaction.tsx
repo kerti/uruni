@@ -106,7 +106,11 @@ export default function RecordTransaction({
   const [note, setNote] = useState('')
 
   async function loadFormData(): Promise<FormData> {
-    const [accounts, purposes] = await Promise.all([listAccounts(), listPurposes()])
+    // selectable=true (ADR-031): a closed envelope's purpose is excluded,
+    // since PostTransaction's own guard would now refuse a posting to it.
+    // A late entry against one goes through Incidentals.tsx's reopen
+    // affordance first, not this everyday picker.
+    const [accounts, purposes] = await Promise.all([listAccounts(), listPurposes(true)])
     return { accounts, purposes }
   }
 

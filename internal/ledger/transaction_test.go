@@ -199,3 +199,73 @@ func TestPostTransactionWrapsASchemaViolationGenerically(t *testing.T) {
 		t.Errorf("PostTransaction() = %v, want a generically wrapped error, not ErrInvalidArgument", err)
 	}
 }
+
+// The guard's whole point (ADR-031, #214): a closed envelope refuses every
+// posting, in both directions - a late bill deserves attribution to the
+// occasion exactly as much as a late contribution does. Proven by asserting
+// nothing was inserted, not only that an error came back, the same shape
+// TestPostTransactionRejectsNonPositiveAmountBeforeTheWrite uses.
+func TestPostTransactionRefusesAClosedIncidentalBothDirections(t *testing.T) {
+	for _, direction := range []string{"in", "out"} {
+		t.Run(direction, func(t *testing.T) {
+			l := newTestLedger(t)
+			f := newFixture(t, l)
+			ctx := context.Background()
+
+			envelope := openTestIncidental(t, l, f.fundID, "Jane's wedding", "2026-08-01")
+			if _, err := l.CloseIncidentalAndRoll(ctx, CloseIncidentalAndRollParams{
+				FundID: f.fundID, PurposeID: envelope.PurposeID, AccountID: f.cashID, ClosedOn: "2026-08-10",
+			}); err != nil {
+				t.Fatalf("CloseIncidentalAndRoll() = %v, want no error", err)
+			}
+
+			rowsBefore, err := store.New(l.db).ListTransactionsByFund(ctx, f.fundID)
+			if err != nil {
+				t.Fatalf("ListTransactionsByFund() before = %v, want no error", err)
+			}
+
+			_, err = l.PostTransaction(ctx, PostTransactionParams{
+				FundID: f.fundID, AccountID: f.cashID, PurposeID: envelope.PurposeID,
+				Direction: direction, Amount: 10_000, OccurredOn: "2026-08-15",
+			})
+			if !errors.Is(err, ErrIncidentalClosed) {
+				t.Fatalf("PostTransaction(%s) on a closed incidental = %v, want an error wrapping ErrIncidentalClosed", direction, err)
+			}
+
+			rowsAfter, err := store.New(l.db).ListTransactionsByFund(ctx, f.fundID)
+			if err != nil {
+				t.Fatalf("ListTransactionsByFund() after = %v, want no error", err)
+			}
+			if len(rowsAfter) != len(rowsBefore) {
+				t.Errorf("ledger holds %d rows after a refused post, want %d (unchanged)", len(rowsAfter), len(rowsBefore))
+			}
+		})
+	}
+}
+
+// An open incidental, main and pass-through purposes are all unaffected by
+// the guard: IncidentalClosedOnForPurpose returns zero rows for the latter
+// two, and closed_on is NULL for the first, so PostTransaction proceeds
+// exactly as it always has.
+func TestPostTransactionUnaffectedByTheGuardOnOpenOrNonIncidentalPurposes(t *testing.T) {
+	l := newTestLedger(t)
+	f := newFixture(t, l)
+	ctx := context.Background()
+
+	envelope := openTestIncidental(t, l, f.fundID, "Jane's wedding", "2026-08-01")
+
+	for name, purposeID := range map[string]int64{
+		"open incidental": envelope.PurposeID,
+		"main":            f.mainID,
+		"pass-through":    f.passID,
+	} {
+		t.Run(name, func(t *testing.T) {
+			if _, err := l.PostTransaction(ctx, PostTransactionParams{
+				FundID: f.fundID, AccountID: f.cashID, PurposeID: purposeID,
+				Direction: "in", Amount: 5_000, OccurredOn: "2026-08-12",
+			}); err != nil {
+				t.Fatalf("PostTransaction() = %v, want no error", err)
+			}
+		})
+	}
+}

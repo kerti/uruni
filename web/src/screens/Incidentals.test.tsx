@@ -153,7 +153,7 @@ describe('Incidentals', () => {
 
     // The zero rollover is rendered, not hidden.
     await waitFor(() => expect(screen.getByText(text.close.success)).toBeInTheDocument())
-    expect(screen.getByText(text.close.rolledLabel)).toBeInTheDocument()
+    expect(screen.getByText(text.close.rolledLabel(0))).toBeInTheDocument()
     expect(screen.getByText(money(0))).toBeInTheDocument()
   })
 
@@ -253,6 +253,64 @@ describe('Incidentals', () => {
     // the close form stays open so she can read why.
     await waitFor(() => expect(screen.getByRole('alert').textContent).toBe(text.errors.incidental_already_closed))
     expect(screen.getByText(text.close.heading)).toBeInTheDocument()
+  })
+
+  it('a closed envelope shows the reopen affordance instead of record/close', async () => {
+    const detail = { ...closedEnvelope, collected_amount: 50_000, disbursed_amount: 0 }
+    vi.stubGlobal('fetch', routedFetch([
+      { match: (m: string, u: string) => m === 'GET' && u.includes('/api/incidentals/2'), handle: () => Promise.resolve(jsonResponse(detail)) },
+      ...getHandlers(),
+    ]))
+
+    render(<Incidentals onBack={vi.fn()} onRecordFor={vi.fn()} />)
+    await waitFor(() => expect(screen.getByText('Halal bihalal RT')).toBeInTheDocument())
+    await userEvent.click(screen.getByRole('button', { name: text.allTab }))
+    await waitFor(() => expect(screen.getByText('17 Agustus')).toBeInTheDocument())
+
+    await userEvent.click(screen.getByRole('button', { name: /17 Agustus/ }))
+    await waitFor(() => expect(screen.getByText(text.detail.collectedLabel)).toBeInTheDocument())
+
+    expect(screen.getByRole('button', { name: text.actions.reopen })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: text.actions.record })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: text.actions.close })).not.toBeInTheDocument()
+  })
+
+  it('reopening a closed envelope leads straight into the record/close actions of an open one', async () => {
+    const closedDetail = { ...closedEnvelope, collected_amount: 50_000, disbursed_amount: 0 }
+    const reopened = { ...closedEnvelope, closed_on: null }
+    const reopenedDetail = { ...reopened, collected_amount: 50_000, disbursed_amount: 0 }
+    let detailCalls = 0
+    const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = typeof input === 'string' ? input : input.toString()
+      const method = (init?.method ?? 'GET').toUpperCase()
+      if (method === 'POST' && url.includes('/api/incidentals/2/reopen')) {
+        return Promise.resolve(jsonResponse(reopened))
+      }
+      if (method === 'GET' && url.includes('/api/incidentals/2')) {
+        detailCalls += 1
+        return Promise.resolve(jsonResponse(detailCalls === 1 ? closedDetail : reopenedDetail))
+      }
+      const handler = getHandlers().find((h) => h.match(method, url))
+      if (!handler) return Promise.reject(new Error(`unstubbed fetch: ${method} ${url}`))
+      return handler.handle()
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    render(<Incidentals onBack={vi.fn()} onRecordFor={vi.fn()} />)
+    await waitFor(() => expect(screen.getByText('Halal bihalal RT')).toBeInTheDocument())
+    await userEvent.click(screen.getByRole('button', { name: text.allTab }))
+    await waitFor(() => expect(screen.getByText('17 Agustus')).toBeInTheDocument())
+    await userEvent.click(screen.getByRole('button', { name: /17 Agustus/ }))
+    await waitFor(() => expect(screen.getByRole('button', { name: text.actions.reopen })).toBeInTheDocument())
+
+    await userEvent.click(screen.getByRole('button', { name: text.actions.reopen }))
+
+    await waitFor(() => expect(screen.getByText(text.reopen.success)).toBeInTheDocument())
+    // Reopened - the same record/close actions any open envelope shows, not
+    // a bare toggle with nothing next.
+    expect(screen.getByRole('button', { name: text.actions.record })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: text.actions.close })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: text.actions.reopen })).not.toBeInTheDocument()
   })
 
   it('opens an envelope, sending a null target when none was typed, and returns to the open tab', async () => {

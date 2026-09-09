@@ -39,13 +39,37 @@ func toPurposeResponse(p store.Purpose) purposeResponse {
 
 // listPurposes is GET /api/purposes: every tag a transaction can carry -
 // main, whatever pass-throughs exist, and any incidental already opened.
+//
+// ?selectable=true switches to ListSelectablePurposesByFund, excluding a
+// closed incidental's purpose (ADR-031): the everyday record-transaction
+// picker asks for this so it stops offering what PostTransaction's own
+// guard would now refuse, while GET /api/purposes unfiltered still answers
+// with everything - a closed envelope is still history, the same
+// unfiltered-vs-filtered split listIncidentals' own ?open uses. An
+// unparseable value is a 400, matching that same guard.
 func (a *api) listPurposes(w http.ResponseWriter, r *http.Request) {
+	selectable := false
+	if raw := r.URL.Query().Get("selectable"); raw != "" {
+		parsed, err := strconv.ParseBool(raw)
+		if err != nil {
+			writeAPIError(w, http.StatusBadRequest, "invalid_argument", "The selectable filter is not a valid boolean.")
+			return
+		}
+		selectable = parsed
+	}
+
 	fund, ok := a.resolveFund(w, r)
 	if !ok {
 		return
 	}
 
-	purposes, err := a.queries.ListPurposesByFund(r.Context(), fund.ID)
+	var purposes []store.Purpose
+	var err error
+	if selectable {
+		purposes, err = a.queries.ListSelectablePurposesByFund(r.Context(), fund.ID)
+	} else {
+		purposes, err = a.queries.ListPurposesByFund(r.Context(), fund.ID)
+	}
 	if err != nil {
 		mapSQLiteError(w, a.logger, err)
 		return

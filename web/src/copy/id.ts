@@ -72,6 +72,12 @@ export const copy = {
       // rates for the same tier and month (UNIQUE (tier_id, effective_from)).
       // errors.go maps every UNIQUE breach to this one code.
       unique_violation: 'Sudah ada yang sama. Coba nama atau bulan yang lain.',
+      // ADR-031: RecordTransaction.tsx's picker already excludes a closed
+      // envelope's purpose (?selectable=true), so this is the fallback for
+      // the rare case it was posted anyway - a stale form left open across
+      // a close, say. Incidentals.tsx's own screen-scoped errors map has no
+      // entry for this code: the guard fires on the record form, not there.
+      incidental_closed: 'Amplop ini sudah ditutup — buka lagi dulu untuk mencatat transaksi baru.',
     },
     // Shown for a code not in the map above.
     unknownError: 'Ada yang tidak beres. Coba lagi sebentar lagi.',
@@ -555,7 +561,11 @@ export const copy = {
     },
     close: {
       heading: 'Tutup amplop',
-      accountLabel: 'Sisa dana masuk ke',
+      // Direction-neutral (ADR-031): closing now moves money either way -
+      // leftover out to Kas Utama, or a shortfall covered from it - so a
+      // label naming only one direction ("Sisa dana masuk ke") would be
+      // true only half the time.
+      accountLabel: 'Akun untuk pemindahan dana',
       dateLabel: 'Tanggal ditutup',
       noteLabel: 'Catatan (opsional)',
       notePlaceholder: 'Mis. sisa dana halal bihalal',
@@ -563,9 +573,16 @@ export const copy = {
       submitting: 'Menutup…',
       cancel: 'Batal',
       success: 'Amplop sudah ditutup.',
-      // Shown after a close, honestly - a zero rollover ("tidak ada sisa
-      // dana") is rendered the same way a positive one is, never hidden.
-      rolledLabel: 'Sisa dana yang digulung ke kas utama',
+      // Shown after a close, honestly - the amount is rendered even at zero
+      // (ADR-031's "shown honestly, including zero"), and this sentence
+      // says which way it went: rolled_amount is signed - positive rolled
+      // out, negative covered from Kas Utama, zero landed square.
+      rolledLabel: (rolledAmount: number) =>
+        rolledAmount > 0
+          ? 'Sisa dana digulung ke Kas Utama'
+          : rolledAmount < 0
+            ? 'Kekurangan ditutup dari Kas Utama'
+            : 'Amplop pas, tidak ada sisa dana',
     },
     actions: {
       // Contributions and disbursements are one entry point into the real
@@ -573,6 +590,12 @@ export const copy = {
       // there, by its own in/out toggle, not by two separate buttons here.
       record: 'Catat transaksi',
       close: 'Tutup amplop',
+      // The way back from a closed envelope (ADR-031) - a late entry needs
+      // somewhere to post, through the ordinary record form above.
+      reopen: 'Buka lagi amplop ini',
+    },
+    reopen: {
+      success: 'Amplop dibuka kembali.',
     },
     status: {
       open: 'Berjalan',
@@ -580,6 +603,7 @@ export const copy = {
     },
     errors: {
       incidental_already_closed: 'Amplop ini sudah ditutup.',
+      incidental_not_closed: 'Amplop ini belum ditutup.',
     },
     backToHome: 'Kembali ke beranda',
   },

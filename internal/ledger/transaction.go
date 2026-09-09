@@ -52,6 +52,17 @@ type PostTransactionParams struct {
 // and naming the field (ADR-027). Everything else the write can fail on - an
 // account belonging to another fund, an id nothing created - is a domain bug,
 // not a caller mistake, and is wrapped generically for M4 to map to a 500.
+//
+// One business-state check runs first, inside the same transaction as the
+// write (ADR-031): if PurposeID names an incidental whose closed_on is set,
+// the post is refused with ErrIncidentalClosed, in both directions - a late
+// bill deserves attribution to the occasion exactly as much as a late
+// contribution does. IncidentalClosedOnForPurpose returns zero rows for a
+// 'main' or 'pass_through' PurposeID, so no purpose.kind branch is needed;
+// sql.ErrNoRows there just means the guard does not apply. This is a
+// read-before-write refusal in the same shape as ErrOpeningBalanceExists and
+// ErrReimbursementAlreadySettled, not a second write path - PostTransaction
+// still inserts exactly one row either way.
 func (l *Ledger) PostTransaction(ctx context.Context, p PostTransactionParams) (store.Transaction, error) {
 	if p.Amount <= 0 {
 		return store.Transaction{}, fmt.Errorf("%w: amount must be positive, got %d", ErrInvalidArgument, p.Amount.Int64())
@@ -70,7 +81,14 @@ func (l *Ledger) PostTransaction(ctx context.Context, p PostTransactionParams) (
 
 	var posted store.Transaction
 	err := l.withTx(ctx, func(q store.Querier) error {
-		var err error
+		closedOn, err := q.IncidentalClosedOnForPurpose(ctx, p.PurposeID)
+		if err != nil && !errors.Is(err, sql.ErrNoRows) {
+			return fmt.Errorf("checking incidental closed state: %w", err)
+		}
+		if err == nil && closedOn != nil {
+			return ErrIncidentalClosed
+		}
+
 		posted, err = q.CreateTransaction(ctx, store.CreateTransactionParams{
 			FundID:     p.FundID,
 			AccountID:  p.AccountID,
