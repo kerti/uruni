@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
@@ -38,6 +38,7 @@ interface Claim {
   amount: number
   incurred_on: string
   waived_on: string | null
+  settled: boolean
   note: string | null
   created_at: number
 }
@@ -50,6 +51,7 @@ function claim(id: number, overrides: Partial<Claim> = {}): Claim {
     amount: id === 2 ? 25_000 : 15_000,
     incurred_on: '2026-09-01',
     waived_on: null,
+    settled: false,
     note: id === 1 ? 'Parkir' : null,
     created_at: id,
     ...overrides,
@@ -58,7 +60,7 @@ function claim(id: number, overrides: Partial<Claim> = {}): Claim {
 
 const outstandingClaims: Claim[] = [claim(1)]
 
-const allClaims: Claim[] = [claim(1), claim(2)]
+const allClaims: Claim[] = [claim(1), claim(2, { settled: true })]
 
 const postedTransaction = {
   id: 1,
@@ -124,8 +126,9 @@ describe('Reimbursements', () => {
     await waitFor(() => expect(screen.getByText('Jane')).toBeInTheDocument())
     expect(screen.getByText('Parkir')).toBeInTheDocument()
     expect(screen.getByText(money(15_000))).toBeInTheDocument()
-    // The outstanding tab honestly labels a still-owed claim "Belum dibayar"
-    // rather than the settled label (#166: the wire carries no settled flag).
+    // The outstanding tab honestly labels a still-owed claim "Belum dibayar".
+    // `settled` rides the wire (the list queries compute the flag), so the
+    // badge is a fact, not a tab-dependent guess.
     expect(screen.getByText(text.status.outstanding, { selector: 'span' })).toBeInTheDocument()
   })
 
@@ -155,7 +158,7 @@ describe('Reimbursements', () => {
     await waitFor(() => expect(screen.getByText('Jane')).toBeInTheDocument())
 
     // Open the record form
-    await userEvent.click(screen.getByRole('button', { name: 'Catat penggantian' }))
+    await userEvent.click(screen.getByRole('button', { name: text.record.heading }))
     await waitFor(() => expect(screen.getByText(text.record.heading)).toBeInTheDocument())
 
     // Fill the form
@@ -191,21 +194,27 @@ describe('Reimbursements', () => {
     await waitFor(() => expect(screen.getByText(text.settle.success)).toBeInTheDocument())
   })
 
-  it('waive and un-waive work through the same PATCH', async () => {
-    // The list starts with the claim un-waived; waiving PATCHes and the
-    // reload returns it waived, so the un-waive affordance appears.
+  it('waive is reversible: un-waive is reachable from the all tab', async () => {
+    // The outstanding list never contains a waived claim, so after a waive
+    // the row leaves it; the all tab shows the waived row with "Batalkan
+    // pemutihan", which un-waives it straight back. The outstanding GET can
+    // therefore never present a row with a "Batalkan pemutihan" affordance.
     let waived = false
     const initial = [claim(1)]
     vi.stubGlobal('fetch', routedFetch([
       {
-        match: (m: string, u: string) => m === 'GET' && u.includes('/api/reimbursements'),
+        match: (m: string, u: string) => m === 'GET' && u.includes('/api/reimbursements') && u.includes('outstanding=true'),
+        handle: () => Promise.resolve(jsonResponse(waived ? [] : initial)),
+      },
+      {
+        match: (m: string, u: string) => m === 'GET' && u.includes('/api/reimbursements') && !u.includes('outstanding'),
         handle: () => Promise.resolve(jsonResponse(waived ? [claim(1, { waived_on: '2026-09-02' })] : initial)),
       },
       {
         match: (m: string, u: string) => m === 'PATCH' && u.includes('/api/reimbursements/1'),
         handle: () => {
-          waived = true
-          return Promise.resolve(jsonResponse(claim(1, { waived_on: '2026-09-02' })))
+          waived = !waived
+          return Promise.resolve(jsonResponse(waived ? claim(1, { waived_on: '2026-09-02' }) : claim(1)))
         },
       },
       { match: (m: string, u: string) => m === 'GET' && u.includes('/api/members'), handle: () => Promise.resolve(jsonResponse(members)) },
@@ -216,27 +225,38 @@ describe('Reimbursements', () => {
     render(<Reimbursements onBack={vi.fn()} />)
     await waitFor(() => expect(screen.getByRole('button', { name: text.actions.waive })).toBeInTheDocument())
 
-    // Waive
+    // Waive: the row leaves the outstanding list and a feedback says so.
     await userEvent.click(screen.getByRole('button', { name: text.actions.waive }))
+    await waitFor(() => expect(screen.getByText(text.waive.success)).toBeInTheDocument())
+    expect(screen.queryByRole('button', { name: text.actions.unwaive })).not.toBeInTheDocument()
 
-    // After waiving, the un-waive button should appear
+    // The all tab shows the waived row, where the un-waive affordance lives.
+    await userEvent.click(screen.getByRole('button', { name: text.allTab }))
     await waitFor(() => expect(screen.getByRole('button', { name: text.actions.unwaive })).toBeInTheDocument())
+    expect(screen.getByText(text.status.waived, { selector: 'span' })).toBeInTheDocument()
+
+    // Un-waive: the claim is owed again, badge flips back.
+    await userEvent.click(screen.getByRole('button', { name: text.actions.unwaive }))
+    await waitFor(() => expect(screen.getByText(text.status.outstanding, { selector: 'span' })).toBeInTheDocument())
+    expect(screen.getByText(text.unwaive.success)).toBeInTheDocument()
   })
 
-  it('settled claim shows no action buttons', async () => {
-    // On the "all" tab, settled claims show up but have no actions.
-    // Outstanding claims (default tab) are the ones with actions.
+  it('all tab is honest history: Dibayar only when the ledger settled it', async () => {
+    // The all tab mixes a settled row (id 2, flagged by the list queries) and
+    // a still-owed row (id 1). The badges must reflect the flag: never a
+    // "Dibayar" label on an unsettled claim, and no action buttons at all.
     vi.stubGlobal('fetch', routedFetch(getHandlers({ outstanding: [], all: allClaims })))
     render(<Reimbursements onBack={vi.fn()} />)
 
-    // Wait for the list to load, then switch to the "all" tab
     await waitFor(() => expect(screen.getByRole('button', { name: text.allTab })).toBeInTheDocument())
     await userEvent.click(screen.getByRole('button', { name: text.allTab }))
 
-    // The settled claim (id: 2) should be visible but no action buttons
     await waitFor(() => expect(screen.getByText(money(25_000))).toBeInTheDocument())
+    expect(screen.getByText(text.status.settled, { selector: 'span' })).toBeInTheDocument()
+    expect(screen.getByText(text.status.outstanding, { selector: 'span' })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: text.actions.settle })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: text.actions.correct })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: text.actions.waive })).not.toBeInTheDocument()
   })
 
   it('delete calls DELETE and re-fetches', async () => {
@@ -267,8 +287,10 @@ describe('Reimbursements', () => {
     // Confirm delete
     await userEvent.click(screen.getByRole('button', { name: text.actions.delete }))
 
-    // After deletion, the list refreshes (the claim disappears)
+    // After deletion, the list refreshes (the claim disappears) and feedback
+    // confirms the write landed.
     await waitFor(() => expect(screen.queryByText('Jane')).not.toBeInTheDocument())
+    expect(screen.getByText(text.delete.success)).toBeInTheDocument()
   })
 
   it('correct opens pre-filled edit form, PATCH fires', async () => {
@@ -299,18 +321,120 @@ describe('Reimbursements', () => {
     render(<Reimbursements onBack={vi.fn()} />)
 
     // Open record form
-    await userEvent.click(await screen.findByRole('button', { name: 'Catat penggantian' }))
+    await userEvent.click(await screen.findByRole('button', { name: text.record.heading }))
 
     // Submit should be disabled (no member, no amount)
     await waitFor(() => expect(screen.getByRole('button', { name: text.record.submit })).toBeDisabled())
   })
 
-  it('calls onBack when "Kembali ke beranda" is clicked', async () => {
+  it('calls onBack when backToHome is clicked', async () => {
     vi.stubGlobal('fetch', routedFetch(getHandlers()))
     const onBack = vi.fn()
     render(<Reimbursements onBack={onBack} />)
 
-    await userEvent.click(await screen.findByRole('button', { name: 'Kembali ke beranda' }))
+    await userEvent.click(await screen.findByRole('button', { name: text.backToHome }))
     expect(onBack).toHaveBeenCalledTimes(1)
+  })
+
+  it('a failed write says why and keeps the form open', async () => {
+    // A settle that races by (claim already settled) returns 409 with a
+    // named code. The message must come from copy, never the English wire
+    // message, the form must stay open, and the list must still reload.
+    let settleAttempted = false
+    let listRefreshes = 0
+    vi.stubGlobal('fetch', routedFetch([
+      {
+        match: (m: string, u: string) => m === 'POST' && u.includes('/api/reimbursements/1/settle'),
+        handle: () => {
+          settleAttempted = true
+          return Promise.resolve(
+            jsonResponse({ error: { code: 'reimbursement_already_settled', message: 'already settled' } }, 409),
+          )
+        },
+      },
+      {
+        match: (m: string, u: string) => m === 'GET' && u.includes('/api/reimbursements') && u.includes('outstanding=true'),
+        handle: () => {
+          listRefreshes += 1
+          return Promise.resolve(jsonResponse(outstandingClaims))
+        },
+      },
+      {
+        match: (m: string, u: string) => m === 'GET' && u.includes('/api/reimbursements') && !u.includes('outstanding'),
+        handle: () => Promise.resolve(jsonResponse(allClaims)),
+      },
+      { match: (m: string, u: string) => m === 'GET' && u.includes('/api/members'), handle: () => Promise.resolve(jsonResponse(members)) },
+      { match: (m: string, u: string) => m === 'GET' && u.includes('/api/purposes'), handle: () => Promise.resolve(jsonResponse(purposes)) },
+      { match: (m: string, u: string) => m === 'GET' && u.includes('/api/accounts'), handle: () => Promise.resolve(jsonResponse(accounts)) },
+    ]))
+
+    render(<Reimbursements onBack={vi.fn()} />)
+    await waitFor(() => expect(screen.getByText('Jane')).toBeInTheDocument())
+
+    await userEvent.click(screen.getByRole('button', { name: text.actions.settle }))
+    await waitFor(() => expect(screen.getByText(text.settle.heading)).toBeInTheDocument())
+    await chooseOption(text.settle.accountLabel, 'Tunai')
+    await userEvent.click(screen.getByRole('button', { name: text.settle.submit }))
+
+    // The copy.local error is shown as an alert; no wire message leaks.
+    await waitFor(() => expect(screen.getByRole('alert').textContent).toBe(text.errors.reimbursement_already_settled))
+    // The form is still open, and the failed write still reloaded the list.
+    expect(screen.getByText(text.settle.heading)).toBeInTheDocument()
+    expect(settleAttempted).toBe(true)
+    expect(listRefreshes).toBeGreaterThan(1)
+  })
+
+  it('switching tabs closes an open inline form', async () => {
+    vi.stubGlobal('fetch', routedFetch(getHandlers()))
+    render(<Reimbursements onBack={vi.fn()} />)
+    await waitFor(() => expect(screen.getByText('Jane')).toBeInTheDocument())
+
+    await userEvent.click(screen.getByRole('button', { name: text.actions.settle }))
+    await waitFor(() => expect(screen.getByText(text.settle.heading)).toBeInTheDocument())
+
+    await userEvent.click(screen.getByRole('button', { name: text.allTab }))
+    expect(screen.queryByText(text.settle.heading)).not.toBeInTheDocument()
+  })
+
+  it('a new action retires the previous success message', async () => {
+    // Settling claim A shows "Penggantian sudah dibayar."; the refresh drops A
+    // from the outstanding list and closes the inline form. Starting the next
+    // action on still-outstanding claim B must retire that stale success
+    // message rather than let it describe the wrong row.
+    let settled = false
+    const before = [claim(1), claim(2, { note: 'Beli kabel' })]
+    const after = [claim(2, { note: 'Beli kabel' })]
+    vi.stubGlobal('fetch', routedFetch([
+      {
+        match: (m: string, u: string) => m === 'POST' && u.includes('/api/reimbursements/1/settle'),
+        handle: () => {
+          settled = true
+          return Promise.resolve(jsonResponse(postedTransaction, 201))
+        },
+      },
+      {
+        match: (m: string, u: string) => m === 'GET' && u.includes('/api/reimbursements') && u.includes('outstanding=true'),
+        handle: () => Promise.resolve(jsonResponse(settled ? after : before)),
+      },
+      { match: (m: string, u: string) => m === 'GET' && u.includes('/api/members'), handle: () => Promise.resolve(jsonResponse(members)) },
+      { match: (m: string, u: string) => m === 'GET' && u.includes('/api/purposes'), handle: () => Promise.resolve(jsonResponse(purposes)) },
+      { match: (m: string, u: string) => m === 'GET' && u.includes('/api/accounts'), handle: () => Promise.resolve(jsonResponse(accounts)) },
+    ]))
+    render(<Reimbursements onBack={vi.fn()} />)
+    await waitFor(() => expect(screen.getByText('Jane')).toBeInTheDocument())
+
+    await userEvent.click(screen.getAllByRole('button', { name: text.actions.settle })[0])
+    await chooseOption(text.settle.accountLabel, 'Tunai')
+    const settleForm = screen.getByText(text.settle.heading).closest('form')
+    if (!settleForm) throw new Error('settle form not found')
+    await userEvent.click(within(settleForm).getByRole('button', { name: text.settle.submit }))
+    await waitFor(() => expect(screen.getByText(text.settle.success)).toBeInTheDocument())
+
+    // The refresh drops settled claim A (Jane) and closes its inline form;
+    // claim B remains, its action reachable. The delete action on B retires
+    // A's stale success message.
+    await waitFor(() => expect(screen.queryByText('Jane')).not.toBeInTheDocument())
+    await userEvent.click(screen.getByRole('button', { name: text.actions.delete }))
+    expect(screen.queryByText(text.settle.success)).not.toBeInTheDocument()
   })
 })

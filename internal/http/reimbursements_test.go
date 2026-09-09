@@ -99,6 +99,9 @@ func TestReimbursementRoundTripsFromClaimToSettlement(t *testing.T) {
 	if claim.Amount != 80_000 || claim.IncurredOn != "2026-08-10" || claim.MemberID != memberID {
 		t.Errorf("claim = %+v, want amount 80000 incurred 2026-08-10 for member %d", claim, memberID)
 	}
+	if claim.Settled {
+		t.Errorf("fresh claim settled = true, want false - a claim is born owed")
+	}
 
 	balanceBefore, err := l.FundBalance(context.Background(), setup.Fund.ID)
 	if err != nil {
@@ -254,6 +257,14 @@ func TestGetReimbursementsOutstandingFiltersToUnsettledClaims(t *testing.T) {
 	if len(all) != 2 {
 		t.Errorf("GET /api/reimbursements returned %d claims, want 2 - a settled claim is still history", len(all))
 	}
+	// The full list carries the settled fact: the payout posted for claims[0]
+	// but not for claims[1], and the wire says so without a second query.
+	for _, claim := range all {
+		want := claim.ID == claims[0].ID
+		if claim.Settled != want {
+			t.Errorf("GET /api/reimbursements claim %d settled = %v, want %v", claim.ID, claim.Settled, want)
+		}
+	}
 
 	outstanding := decodeReimbursements(t, getReimbursements(t, r, "?outstanding=true"))
 	if len(outstanding) != 1 {
@@ -261,6 +272,9 @@ func TestGetReimbursementsOutstandingFiltersToUnsettledClaims(t *testing.T) {
 	}
 	if outstanding[0].ID != claims[1].ID {
 		t.Errorf("outstanding claim = %d, want the unsettled %d", outstanding[0].ID, claims[1].ID)
+	}
+	if outstanding[0].Settled {
+		t.Errorf("outstanding claim settled = true, want false - the list is unsettled by construction")
 	}
 
 	if got := decodeReimbursements(t, getReimbursements(t, r, "?outstanding=false")); len(got) != 2 {

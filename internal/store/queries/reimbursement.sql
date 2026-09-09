@@ -13,16 +13,24 @@ FROM reimbursement
 WHERE id = ? AND fund_id = ?;
 
 -- name: ListReimbursementsByFund :many
-SELECT id, fund_id, member_id, purpose_id, amount, incurred_on, waived_on, note, created_at
-FROM reimbursement
-WHERE fund_id = ?
-ORDER BY id;
+SELECT r.id, r.fund_id, r.member_id, r.purpose_id, r.amount, r.incurred_on, r.waived_on, r.note, r.created_at,
+  CAST(EXISTS(
+    SELECT 1 FROM "transaction" t
+    WHERE t.reimbursement_id = r.id AND t.kind = 'reimbursement'
+  ) AS INTEGER) AS settled
+FROM reimbursement r
+WHERE r.fund_id = ?
+ORDER BY r.id;
 
 -- What the fund still owes its members: neither settled by a payout nor
 -- waived. Both halves are conditions SQLite cannot express as a CHECK across
 -- tables, so the settle path filters on them here instead.
+--
+-- settled is a literal 0: every row this list returns is unsettled by
+-- construction, and the wire shape must stay uniform with the full list.
 -- name: ListOutstandingReimbursementsByFund :many
-SELECT r.id, r.fund_id, r.member_id, r.purpose_id, r.amount, r.incurred_on, r.waived_on, r.note, r.created_at
+SELECT r.id, r.fund_id, r.member_id, r.purpose_id, r.amount, r.incurred_on, r.waived_on, r.note, r.created_at,
+  0 AS settled
 FROM reimbursement r
 WHERE r.fund_id = ?
   AND r.waived_on IS NULL

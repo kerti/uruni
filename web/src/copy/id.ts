@@ -505,6 +505,15 @@ export const copy = {
       waived: 'Diputihkan',
       settled: 'Dibayar',
     },
+    waive: {
+      success: 'Penggantian sudah diputihkan.',
+    },
+    unwaive: {
+      success: 'Pemutihan dibatalkan — penggantian kembali ditagih.',
+    },
+    delete: {
+      success: 'Penggantian dihapus.',
+    },
     correct: {
       heading: 'Perbaiki penggantian',
       submit: 'Simpan',
@@ -516,5 +525,6 @@ export const copy = {
       reimbursement_already_settled: 'Penggantian ini sudah dibayar.',
       reimbursement_waived: 'Penggantian ini sudah diputihkan.',
     },
+    backToHome: 'Kembali ke beranda',
   },
 } as const

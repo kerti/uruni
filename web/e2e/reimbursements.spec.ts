@@ -3,7 +3,9 @@ import { expect, test } from '@playwright/test'
 import { copy } from '../src/copy/id'
 
 // M6.18's own e2e spec: record a reimbursement claim, verify it appears in
-// the outstanding list, then settle it and verify it disappears.
+// the outstanding list, settle it and verify it disappears, then waive and
+// un-waive a fresh claim across the two tabs. All three are one continuous
+// story on a shared seeded database.
 //
 // Serial, like golden-path.spec.ts: this spec shares one seeded database
 // and reads it as a continuous story. The seeded instance has members and
@@ -26,7 +28,7 @@ test.describe('reimbursements', () => {
     await expect(page.getByRole('heading', { name: copy.reimbursements.heading })).toBeVisible()
 
     // Open record form
-    await page.getByRole('button', { name: 'Catat penggantian' }).click()
+    await page.getByRole('button', { name: copy.reimbursements.record.heading }).click()
     await expect(page.getByText(copy.reimbursements.record.heading)).toBeVisible()
 
     // Pick the first member and fill amount
@@ -73,7 +75,47 @@ test.describe('reimbursements', () => {
 
     // The payout row carries a composed description (member + the claim's own
     // note), so recent activity reads the repayment instead of a bare amount.
-    await page.getByRole('button', { name: 'Kembali ke beranda' }).click()
+    await page.getByRole('button', { name: copy.reimbursements.backToHome }).click()
     await expect(page.getByText(/Penggantian — /)).toBeVisible()
+  })
+
+  test('waive a fresh claim, then un-waive it from the all tab', async ({ page }) => {
+    await page.goto('/')
+    await page.getByLabel(copy.auth.login.emailLabel).fill(seedEmail)
+    await page.getByLabel(copy.auth.login.passwordLabel).fill(seedPassword)
+    await page.getByRole('button', { name: copy.auth.login.submit }).click()
+    await expect(page.getByText(copy.home.balanceHeading)).toBeVisible()
+
+    // Navigate to reimbursements
+    await page.getByRole('button', { name: copy.home.reimbursementLink }).click()
+    await expect(page.getByRole('heading', { name: copy.reimbursements.heading })).toBeVisible()
+
+    // The earlier claim was settled, leaving the outstanding list empty —
+    // record a fresh claim to waive. First member again, Rp 20.000.
+    await page.getByRole('button', { name: copy.reimbursements.record.heading }).click()
+    await page.getByRole('combobox', { name: copy.reimbursements.record.memberLabel }).click()
+    await page.getByRole('option').first().click()
+    await page.getByLabel(copy.reimbursements.record.amountLabel).fill('20000')
+    await page.getByRole('button', { name: copy.reimbursements.record.submit }).click()
+    await expect(page.getByText(copy.reimbursements.record.success)).toBeVisible()
+    await expect(page.getByText('Rp 20.000')).toBeVisible()
+
+    // Waive it: the row leaves the outstanding list and feedback confirms.
+    await page.getByRole('button', { name: copy.reimbursements.actions.waive, exact: true }).click()
+    await expect(page.getByText(copy.reimbursements.waive.success)).toBeVisible()
+    await expect(page.getByText('Rp 20.000')).not.toBeVisible()
+
+    // The all tab carries the waived row, with "Batalkan pemutihan" where
+    // the outstanding tab (which filters waived rows out) can never reach.
+    // The row-scoped badge locators avoid the tab button's identical label.
+    await page.getByRole('button', { name: copy.reimbursements.allTab }).click()
+    const row = page.locator('li', { hasText: 'Rp 20.000' })
+    await expect(row.getByText(copy.reimbursements.status.waived)).toBeVisible()
+    await expect(page.getByRole('button', { name: copy.reimbursements.actions.unwaive, exact: true })).toBeVisible()
+
+    // Un-waive: the claim is owed again and its own badge flips back.
+    await page.getByRole('button', { name: copy.reimbursements.actions.unwaive, exact: true }).click()
+    await expect(page.getByText(copy.reimbursements.unwaive.success)).toBeVisible()
+    await expect(row.getByText(copy.reimbursements.status.outstanding)).toBeVisible()
   })
 })

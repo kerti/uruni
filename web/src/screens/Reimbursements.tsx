@@ -10,6 +10,7 @@ import { Label } from '@/components/ui/label'
 import Loading from '@/components/states/Loading'
 import ErrorState from '@/components/states/ErrorState'
 import { copy } from '@/copy/id'
+import { ApiError } from '@/lib/api'
 import { listAccounts } from '@/lib/accounts'
 import { formatIsoDate } from '@/lib/dates'
 import { formatIDR } from '@/lib/money'
@@ -29,6 +30,25 @@ import type { Reimbursement } from '@/lib/reimbursements'
 import { listMembers } from '@/lib/setup'
 
 const text = copy.reimbursements
+
+/**
+ * One speaking-string feedback for a finished action: a success that closes
+ * the inline forms, or a failure that keeps them open with a reason. Stale
+ * either way is worse than none, so every action starts by clearing it.
+ */
+type Feedback = { kind: 'success' | 'error'; text: string }
+
+/** Wire error code -> Indonesian copy, scoped first to this screen's own
+ * codes (reimbursement_already_settled, reimbursement_waived) then to the
+ * shared map; never the English wire message (ADR-014: the API is a code
+ * surface). Mirrors ErrorState's fallback chain but keeps the reimbursements
+ * codes local, where their wording can stay specific. */
+function errorText(err: ApiError): string {
+  const specific = text.errors[err.code as keyof typeof text.errors]
+  if (specific) return specific
+  const common = copy.common.errors[err.code as keyof typeof copy.common.errors]
+  return common ?? copy.common.unknownError
+}
 
 /** Local YYYY-MM-DD — same helper as RecordTransaction.tsx. */
 function todayISODate(): string {
@@ -64,7 +84,7 @@ export default function Reimbursements({ onBack }: { onBack: () => void }) {
   const [correctId, setCorrectId] = useState<number | null>(null)
   const [deleteId, setDeleteId] = useState<number | null>(null)
 
-  const [notice, setNotice] = useState<string | null>(null)
+  const [feedback, setFeedback] = useState<Feedback | null>(null)
 
   function fetchList() {
     void listRun(() => listReimbursements(tab === 'outstanding'))
@@ -87,9 +107,10 @@ export default function Reimbursements({ onBack }: { onBack: () => void }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [formDataRun])
 
-  // Close inline forms when the list refreshes (after a successful action).
+  // Close inline forms when a successful action's list refresh lands; an
+  // error keeps the form open so she can read why before deciding again.
   useEffect(() => {
-    if (listState.status === 'success' && notice) {
+    if (listState.status === 'success' && feedback?.kind === 'success') {
       setSettleId(null)
       setCorrectId(null)
       setDeleteId(null)
@@ -100,56 +121,69 @@ export default function Reimbursements({ onBack }: { onBack: () => void }) {
 
   const submitting = submitState.status === 'loading'
 
-  function handleRecordClaim(memberId: number, purposeId: number, amount: number, occurredOn: string, note: string) {
+  /**
+   * Every write on this screen - record, settle, correct, waive, un-waive,
+   * delete - follows the same shape: clear any stale feedback, run the call,
+   * then say what happened. A named 409 (already settled, already waived)
+   * reaches the treasurer through copy.reimbursements.errors; anything else
+   * falls back to the shared map, never the English wire message (ADR-014).
+   * The list reloads after both outcomes: on success it shows the new state,
+   * on a 409 the claim row (and its open form) unmounts with the message
+   * explaining why.
+   */
+  function runWrite(api: () => Promise<unknown>, successText: string, onSuccess?: () => void) {
     void submitRun(async () => {
-      await createReimbursement({
-        member_id: memberId,
-        purpose_id: purposeId,
-        amount,
-        incurred_on: occurredOn,
-        note: note === '' ? null : note,
-      })
-      setNotice(text.record.success)
-      setTab('outstanding')
+      setFeedback(null)
+      try {
+        await api()
+        setFeedback({ kind: 'success', text: successText })
+        onSuccess?.()
+      } catch (err) {
+        const apiErr = err instanceof ApiError ? err : new ApiError('unknown_error', err instanceof Error ? err.message : String(err))
+        setFeedback({ kind: 'error', text: errorText(apiErr) })
+        // eslint-disable-next-line no-console
+        console.error('API error', apiErr.code, apiErr.message)
+      }
       fetchList()
     })
+  }
+
+  function handleRecordClaim(memberId: number, purposeId: number, amount: number, occurredOn: string, note: string) {
+    runWrite(
+      () =>
+        createReimbursement({
+          member_id: memberId,
+          purpose_id: purposeId,
+          amount,
+          incurred_on: occurredOn,
+          note: note === '' ? null : note,
+        }),
+      text.record.success,
+      () => setTab('outstanding'),
+    )
   }
 
   function handleSettle(id: number, accountId: number, occurredOn: string) {
-    void submitRun(async () => {
-      await settleReimbursement(id, { account_id: accountId, occurred_on: occurredOn })
-      setNotice(text.settle.success)
-      fetchList()
-    })
+    runWrite(
+      () => settleReimbursement(id, { account_id: accountId, occurred_on: occurredOn }),
+      text.settle.success,
+    )
   }
 
   function handleCorrect(id: number, patch: { member_id?: number; purpose_id?: number; amount?: number; incurred_on?: string; note?: string | null }) {
-    void submitRun(async () => {
-      await updateReimbursement(id, patch)
-      setNotice(text.correct.success)
-      fetchList()
-    })
+    runWrite(() => updateReimbursement(id, patch), text.correct.success)
   }
 
   function handleWaive(id: number) {
-    void submitRun(async () => {
-      await updateReimbursement(id, { waived_on: todayISODate() })
-      fetchList()
-    })
+    runWrite(() => updateReimbursement(id, { waived_on: todayISODate() }), text.waive.success)
   }
 
   function handleUnwaive(id: number) {
-    void submitRun(async () => {
-      await updateReimbursement(id, { waived_on: null })
-      fetchList()
-    })
+    runWrite(() => updateReimbursement(id, { waived_on: null }), text.unwaive.success)
   }
 
   function handleDelete(id: number) {
-    void submitRun(async () => {
-      await deleteReimbursement(id)
-      fetchList()
-    })
+    runWrite(() => deleteReimbursement(id), text.delete.success)
   }
 
   if (listState.status === 'idle' || listState.status === 'loading') {
@@ -171,9 +205,16 @@ export default function Reimbursements({ onBack }: { onBack: () => void }) {
       <h1 className="text-2xl font-semibold">{text.heading}</h1>
       <p className="text-sm text-muted-foreground">{text.body}</p>
 
-      {notice && (
-        <p role="status" className="rounded-lg bg-success-soft px-3 py-2 text-sm text-success">
-          {notice}
+      {feedback && (
+        <p
+          role={feedback.kind === 'error' ? 'alert' : 'status'}
+          className={
+            feedback.kind === 'error'
+              ? 'rounded-lg bg-attention-soft px-3 py-2 text-sm text-attention'
+              : 'rounded-lg bg-success-soft px-3 py-2 text-sm text-success'
+          }
+        >
+          {feedback.text}
         </p>
       )}
 
@@ -184,7 +225,13 @@ export default function Reimbursements({ onBack }: { onBack: () => void }) {
           variant={tab === 'outstanding' ? 'default' : 'outline'}
           aria-pressed={tab === 'outstanding'}
           className="h-11"
-          onClick={() => { setTab('outstanding'); setNotice(null) }}
+          onClick={() => {
+            setTab('outstanding')
+            setSettleId(null)
+            setCorrectId(null)
+            setDeleteId(null)
+            setFeedback(null)
+          }}
         >
           {text.outstandingTab}
         </Button>
@@ -193,7 +240,13 @@ export default function Reimbursements({ onBack }: { onBack: () => void }) {
           variant={tab === 'all' ? 'default' : 'outline'}
           aria-pressed={tab === 'all'}
           className="h-11"
-          onClick={() => { setTab('all'); setNotice(null) }}
+          onClick={() => {
+            setTab('all')
+            setSettleId(null)
+            setCorrectId(null)
+            setDeleteId(null)
+            setFeedback(null)
+          }}
         >
           {text.allTab}
         </Button>
@@ -201,8 +254,8 @@ export default function Reimbursements({ onBack }: { onBack: () => void }) {
 
       {/* Record claim button */}
       {!showRecordForm && (
-        <Button type="button" className="h-11" onClick={() => setShowRecordForm(true)}>
-          Catat penggantian
+        <Button type="button" size="lg" onClick={() => { setShowRecordForm(true); setFeedback(null) }}>
+          {text.record.heading}
         </Button>
       )}
 
@@ -236,7 +289,7 @@ export default function Reimbursements({ onBack }: { onBack: () => void }) {
 
               <div className="flex items-center justify-between text-sm text-muted-foreground">
                 <span>{formatIsoDate(claim.incurred_on)}</span>
-                <StatusBadge claim={claim} tab={tab} />
+                <StatusBadge claim={claim} />
               </div>
 
               {claim.note && <p className="text-sm text-muted-foreground">{claim.note}</p>}
@@ -246,17 +299,17 @@ export default function Reimbursements({ onBack }: { onBack: () => void }) {
                 <div className="flex flex-wrap gap-2 pt-1">
                   {settleId !== claim.id && correctId !== claim.id && (
                     <>
-                      <Button type="button" size="sm" onClick={() => { setSettleId(claim.id); setCorrectId(null); setDeleteId(null) }}>
+                      <Button type="button" size="lg" onClick={() => { setSettleId(claim.id); setCorrectId(null); setDeleteId(null); setFeedback(null) }}>
                         {text.actions.settle}
                       </Button>
-                      <Button type="button" size="sm" variant="outline" onClick={() => { setCorrectId(claim.id); setSettleId(null); setDeleteId(null) }}>
+                      <Button type="button" size="lg" variant="outline" onClick={() => { setCorrectId(claim.id); setSettleId(null); setDeleteId(null); setFeedback(null) }}>
                         {text.actions.correct}
                       </Button>
-                      <Button type="button" size="sm" variant="outline" onClick={() => handleWaive(claim.id)} disabled={submitting}>
+                      <Button type="button" size="lg" variant="outline" onClick={() => handleWaive(claim.id)} disabled={submitting}>
                         {text.actions.waive}
                       </Button>
                       {deleteId !== claim.id && (
-                        <Button type="button" size="sm" variant="ghost" className="text-destructive" onClick={() => setDeleteId(claim.id)}>
+                        <Button type="button" size="lg" variant="ghost" className="text-destructive" onClick={() => { setDeleteId(claim.id); setFeedback(null) }}>
                           {text.actions.delete}
                         </Button>
                       )}
@@ -265,10 +318,12 @@ export default function Reimbursements({ onBack }: { onBack: () => void }) {
                 </div>
               )}
 
-              {/* Un-waive action for waived claims */}
-              {tab === 'outstanding' && claim.waived_on && (
+              {/* Un-waive action for waived claims - reachable on the "all"
+                  tab only: the outstanding list filters waived claims out, so
+                  this branch exists precisely where the claim can appear. */}
+              {claim.waived_on && (
                 <div className="flex gap-2 pt-1">
-                  <Button type="button" size="sm" variant="outline" onClick={() => handleUnwaive(claim.id)} disabled={submitting}>
+                  <Button type="button" size="lg" variant="outline" onClick={() => handleUnwaive(claim.id)} disabled={submitting}>
                     {text.actions.unwaive}
                   </Button>
                 </div>
@@ -302,11 +357,11 @@ export default function Reimbursements({ onBack }: { onBack: () => void }) {
                 <div className="flex flex-col gap-2 rounded-lg bg-attention-soft p-3">
                   <p className="text-sm">{text.actions.delete}?</p>
                   <div className="flex gap-2">
-                    <Button type="button" size="sm" variant="destructive" onClick={() => handleDelete(claim.id)} disabled={submitting}>
+                    <Button type="button" size="lg" variant="destructive" onClick={() => handleDelete(claim.id)} disabled={submitting}>
                       {submitting ? text.actions.deleting : text.actions.delete}
                     </Button>
-                    <Button type="button" size="sm" variant="outline" onClick={() => setDeleteId(null)} disabled={submitting}>
-                      {copy.reimbursements.settle.cancel}
+                    <Button type="button" size="lg" variant="outline" onClick={() => setDeleteId(null)} disabled={submitting}>
+                      {text.settle.cancel}
                     </Button>
                   </div>
                 </div>
@@ -317,25 +372,25 @@ export default function Reimbursements({ onBack }: { onBack: () => void }) {
       )}
 
       <Button type="button" variant="outline" size="lg" onClick={onBack}>
-        Kembali ke beranda
+        {text.backToHome}
       </Button>
     </div>
   )
 }
 
-function StatusBadge({ claim, tab }: { claim: Reimbursement; tab: 'outstanding' | 'all' }) {
+function StatusBadge({ claim }: { claim: Reimbursement }) {
   if (claim.waived_on) {
     return <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">{text.status.waived}</span>
   }
-  // The wire deliberately carries no settled flag (internal/http/
-  // reimbursements.go): whether a claim is settled is a fact about the
-  // ledger, not the claim row. The outstanding tab knows its rows are all
-  // unanswered, so it can say so honestly; the "all" tab keeps the
-  // best-effort settled label for history.
-  if (tab === 'outstanding') {
-    return <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">{text.status.outstanding}</span>
+  // `settled` travels on the wire: the list queries compute whether a
+  // kind='reimbursement' payout references the claim, so this badge is
+  // honest on both tabs - an outstanding list only ever says "Belum
+  // dibayar", and the all list says "Dibayar" only for a row a payout
+  // actually settled.
+  if (claim.settled) {
+    return <span className="rounded-full bg-success-soft px-2 py-0.5 text-xs font-medium text-success">{text.status.settled}</span>
   }
-  return <span className="rounded-full bg-success-soft px-2 py-0.5 text-xs font-medium text-success">{text.status.settled}</span>
+  return <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">{text.status.outstanding}</span>
 }
 
 function RecordClaimForm({
@@ -381,6 +436,7 @@ function RecordClaimForm({
       <MemberPicker
         id="reimburse-member"
         label={text.record.memberLabel}
+        placeholder={text.record.memberPlaceholder}
         members={members}
         value={memberId}
         onChange={setMemberId}
@@ -491,10 +547,10 @@ function SettleForm({
       </div>
 
       <div className="flex gap-2">
-        <Button type="submit" size="sm" disabled={!canSubmit}>
+        <Button type="submit" size="lg" disabled={!canSubmit}>
           {submitting ? text.settle.submitting : text.settle.submit}
         </Button>
-        <Button type="button" size="sm" variant="outline" onClick={onCancel} disabled={submitting}>
+        <Button type="button" size="lg" variant="outline" onClick={onCancel} disabled={submitting}>
           {text.settle.cancel}
         </Button>
       </div>
@@ -544,6 +600,7 @@ function CorrectForm({
       <MemberPicker
         id="correct-member"
         label={text.record.memberLabel}
+        placeholder={text.record.memberPlaceholder}
         members={members}
         value={memberId}
         onChange={setMemberId}
@@ -587,10 +644,10 @@ function CorrectForm({
       </div>
 
       <div className="flex gap-2">
-        <Button type="submit" size="sm" disabled={!canSubmit}>
+        <Button type="submit" size="lg" disabled={!canSubmit}>
           {submitting ? text.correct.submitting : text.correct.submit}
         </Button>
-        <Button type="button" size="sm" variant="outline" onClick={onCancel} disabled={submitting}>
+        <Button type="button" size="lg" variant="outline" onClick={onCancel} disabled={submitting}>
           {text.correct.cancel}
         </Button>
       </div>

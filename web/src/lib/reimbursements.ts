@@ -7,7 +7,9 @@ import type { Transaction } from '@/lib/setup'
 
 /** A reimbursement claim row (internal/http/reimbursements.go). off-ledger
  * until settled: the balance still matches the wallet while a claim is
- * outstanding (ADR-024). */
+ * outstanding (ADR-024). `settled` says a kind='reimbursement' payout has
+ * posted for it - a fact the list queries compute, so an "all" list can
+ * render the same claim honestly that the outstanding list answers directly. */
 export interface Reimbursement {
   id: number
   member_id: number
@@ -15,6 +17,7 @@ export interface Reimbursement {
   amount: number
   incurred_on: string
   waived_on: string | null
+  settled: boolean
   note: string | null
   created_at: number
 }

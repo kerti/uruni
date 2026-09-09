@@ -19,6 +19,7 @@ export default function MemberPicker({
   members,
   value,
   onChange,
+  placeholder,
   disabled,
 }: {
   id?: string
@@ -26,6 +27,7 @@ export default function MemberPicker({
   members: Member[]
   value: number | null
   onChange: (memberId: number) => void
+  placeholder?: string
   disabled?: boolean
 }) {
   const autoId = useId()
@@ -43,7 +45,7 @@ export default function MemberPicker({
         disabled={disabled || activeMembers.length === 0}
       >
         <SelectTrigger id={selectId} aria-label={label}>
-          <SelectValue>{activeMembers.find((member) => member.id === value)?.name}</SelectValue>
+          <SelectValue>{activeMembers.find((member) => member.id === value)?.name ?? placeholder}</SelectValue>
         </SelectTrigger>
         <SelectContent>
           {activeMembers.map((member) => (

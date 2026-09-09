@@ -173,7 +173,7 @@ export default function Home({ refetchKey, onReconcile, onViewReimbursements }: 
         {latest && <p className="text-sm text-muted-foreground">{copy.home.lastChecked(formatUnixSeconds(latest.performed_at))}</p>}
       </section>
 
-      <Button type="button" variant="outline" className="w-full" onClick={onViewReimbursements}>
+      <Button type="button" variant="outline" size="lg" className="w-full" onClick={onViewReimbursements}>
         {copy.home.reimbursementLink}
       </Button>
 
