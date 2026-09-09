@@ -1,6 +1,11 @@
 # Auto-generated release-notes config - used by the GitHub "Generate release notes"
 # button and `gh release create --generate-notes`. Groups merged PRs by label into a
 # terse digest. See docs/ADR/018-release-and-versioning.md. Issues + PRs are the system of record.
+#
+# Emoji above BMP use YAML's 8-digit escape ("\U0001F41B"), not a JS-style
+# surrogate pair ("\uD83D\uDC1B") - YAML rejects lone surrogates outright, and
+# GitHub answers a broken config with HTTP 400 only when you try to generate
+# notes, i.e. at release time, on a tag you have already pushed.
 changelog:
   exclude:
     labels:
@@ -11,9 +16,9 @@ changelog:
   categories:
     - title: "\u2728 Added"
       labels: [enhancement]
-    - title: "\uD83D\uDC1B Fixed"
+    - title: "\U0001F41B Fixed"
       labels: [bug]
-    - title: "\uD83D\uDCDD Documentation"
+    - title: "\U0001F4DD Documentation"
       labels: [documentation]
     - title: "\u2B06\uFE0F Dependencies"
       labels: [dependencies]
