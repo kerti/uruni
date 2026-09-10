@@ -12,6 +12,7 @@ Where a concept's Indonesian name is the one the treasurer sees, the identifier 
 - **User** (`user`) — the treasurer's login: an email and an argon2id password hash. One per instance, created once at first run ([ADR-030](./docs/ADR/030-multi-fund-scoping.md)). Distinct from **Member** (a person in the group, who never logs in) and from **Account** (a place money sits). The only entity in the schema that is not scoped to a fund.
 - **Member** (anggota) — a person in the group. Name + role/tier only; no email/phone (data minimization).
 - **Dues rate** (iuran) — the recurring amount owed, which **varies by member tier** (e.g. pelaksana, fungsional pertama/muda/madya).
+- **Arrears** (tunggakan) — dues owed for periods **before the current one**. Distinct from the current period's own state (`Belum bayar` / `Bayar sebagian` / `Lunas` / `Lunas — sudah bayar di muka`, PRD §7.3), which is read one month at a time; arrears accumulate and are counted in whole months. The two vocabularies never share a word ([ADR-032](./docs/ADR/032-two-level-navigation.md)).
 
 ## Movements
 
