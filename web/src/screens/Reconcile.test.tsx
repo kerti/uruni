@@ -37,7 +37,7 @@ function balancesBody(tunai: number, bankUjiCoba: number) {
   }
 }
 
-const transactions: unknown[] = []
+const transactionsPage = { transactions: [] as unknown[], next_cursor: null }
 
 function jsonResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } })
@@ -61,7 +61,7 @@ function stubLoad(balances = balancesBody(100_000, 200_000)) {
     { match: (m: string, u: string) => m === 'GET' && u.includes('/api/accounts'), handle: () => Promise.resolve(jsonResponse(accounts)) },
     { match: (m: string, u: string) => m === 'GET' && u.includes('/api/purposes'), handle: () => Promise.resolve(jsonResponse(purposes)) },
     { match: (m: string, u: string) => m === 'GET' && u.includes('/api/balances'), handle: () => Promise.resolve(jsonResponse(balances)) },
-    { match: (m: string, u: string) => m === 'GET' && u.includes('/api/transactions'), handle: () => Promise.resolve(jsonResponse(transactions)) },
+    { match: (m: string, u: string) => m === 'GET' && u.includes('/api/transactions'), handle: () => Promise.resolve(jsonResponse(transactionsPage)) },
   ]
 }
 
@@ -293,7 +293,7 @@ describe('Reconcile', () => {
           return Promise.resolve(jsonResponse(balances))
         },
       },
-      { match: (m, u) => m === 'GET' && u.includes('/api/transactions'), handle: () => Promise.resolve(jsonResponse(transactions)) },
+      { match: (m, u) => m === 'GET' && u.includes('/api/transactions'), handle: () => Promise.resolve(jsonResponse(transactionsPage)) },
       {
         match: (m, u) => m === 'POST' && u.includes('/api/reconciliations'),
         handle: () =>
@@ -399,7 +399,7 @@ describe('Reconcile', () => {
             : Promise.reject(new TypeError('network down'))
         },
       },
-      { match: (m: string, u: string) => m === 'GET' && u.includes('/api/transactions'), handle: () => Promise.resolve(jsonResponse(transactions)) },
+      { match: (m: string, u: string) => m === 'GET' && u.includes('/api/transactions'), handle: () => Promise.resolve(jsonResponse(transactionsPage)) },
       {
         match: (m: string, u: string) => m === 'POST' && u.includes('/api/reconciliations'),
         handle: () => Promise.resolve(jsonResponse({ error: { code: 'invalid_argument', message: 'stale' } }, 400)),

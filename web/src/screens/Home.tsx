@@ -18,9 +18,8 @@ import type { LatestReconciliation, OpenReconciliationLine } from '@/lib/reconci
 import type { Transaction } from '@/lib/transactions'
 
 /** How many of the most recent transactions the recent-activity list shows -
- * a client-side slice of GET /api/transactions's full, oldest-first list
- * (the orchestrator's own scope call for this slice: no limit/offset param
- * on the Go handler). */
+ * a client-side slice of GET /api/transactions's first page, which is
+ * already newest-first (#225). */
 const RECENT_ACTIVITY_COUNT = 5
 
 
@@ -65,7 +64,7 @@ export default function Home({
   const [state, run] = useApi<HomeData>()
 
   async function loadHomeData(): Promise<HomeData> {
-    const [balances, openLines, transactions, latest] = await Promise.all([
+    const [balances, openLines, transactionsPage, latest] = await Promise.all([
       getBalances(),
       listOpenReconciliationLines(),
       listTransactions(),
@@ -79,7 +78,7 @@ export default function Home({
         throw err
       }),
     ])
-    return { balances, openLines, transactions, latest }
+    return { balances, openLines, transactions: transactionsPage.transactions, latest }
   }
 
   useEffect(() => {
@@ -121,7 +120,9 @@ export default function Home({
   }
 
   const { balances, openLines, latest, transactions } = state.data
-  const recentTransactions = transactions.slice(-RECENT_ACTIVITY_COUNT).reverse()
+  // GET /api/transactions's first page is already newest-first (#225) - no
+  // more reversing a client-side slice of an oldest-first list.
+  const recentTransactions = transactions.slice(0, RECENT_ACTIVITY_COUNT)
 
   // A transaction row carries purpose_id, not a purpose name - and
   // GET /api/balances already answers with every purpose and account the

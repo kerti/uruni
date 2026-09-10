@@ -38,6 +38,9 @@ function transaction(overrides: Record<string, unknown>) {
 
 // One payment for this member and period, one for another period, one for
 // another member, and a kind='normal' row - only the first belongs here.
+// #225 moved the member_id/dues_period filter server-side, so this fixture
+// is deliberately the *unfiltered* set the stub below filters from, the
+// same way the real GET /api/transactions?member_id=&dues_period= would.
 const rows = [
   transaction({ id: 10 }),
   transaction({ id: 11, dues_period: '2026-02' }),
@@ -45,13 +48,25 @@ const rows = [
   transaction({ id: 13, kind: 'normal', member_id: null, dues_period: null }),
 ]
 
-function stubTransactions(body: unknown = rows) {
+// stubTransactions filters `body` by the request's own member_id/dues_period
+// query params before answering, mirroring the server (#225) - a test
+// against this proves MemberPayments passes those params through, not that
+// it filters client-side (which #225 made illegal for a paged list).
+function stubTransactions(body: Record<string, unknown>[] = rows) {
   return vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
     const url = typeof input === 'string' ? input : input.toString()
     if (url.includes('/reversal') && init?.method === 'POST') {
       return Promise.resolve(jsonResponse(transaction({ id: 99, kind: 'adjustment' }), 201))
     }
-    if (url.includes('/api/transactions')) return Promise.resolve(jsonResponse(body))
+    if (url.includes('/api/transactions')) {
+      const params = new URL(url, 'http://localhost').searchParams
+      const memberId = params.get('member_id')
+      const duesPeriod = params.get('dues_period')
+      const filtered = body.filter(
+        (t) => (memberId === null || String(t.member_id) === memberId) && (duesPeriod === null || t.dues_period === duesPeriod),
+      )
+      return Promise.resolve(jsonResponse({ transactions: filtered, next_cursor: null }))
+    }
     return Promise.reject(new Error(`unstubbed fetch: ${url}`))
   })
 }

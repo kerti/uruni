@@ -107,10 +107,7 @@ func TestPostDuesPaymentsSeveralPeriodsYieldsOneRowPerPeriod(t *testing.T) {
 	}
 
 	list := getTransactions(t, r)
-	var allTx []transactionResponse
-	if err := json.NewDecoder(list.Body).Decode(&allTx); err != nil {
-		t.Fatalf("decoding GET /api/transactions response: %v", err)
-	}
+	allTx := decodeTransactionsPage(t, list).Transactions
 	if len(allTx) != len(periods) {
 		t.Fatalf("GET /api/transactions returned %d rows, want %d", len(allTx), len(periods))
 	}
@@ -140,10 +137,7 @@ func TestPostDuesPaymentsRejectsEmptyPeriods(t *testing.T) {
 	}
 
 	list := getTransactions(t, r)
-	var allTx []transactionResponse
-	if err := json.NewDecoder(list.Body).Decode(&allTx); err != nil {
-		t.Fatalf("decoding response: %v", err)
-	}
+	allTx := decodeTransactionsPage(t, list).Transactions
 	if len(allTx) != 0 {
 		t.Errorf("GET /api/transactions after a rejected empty-periods post = %d rows, want 0", len(allTx))
 	}
@@ -258,10 +252,7 @@ func TestPostDuesPaymentsAMidBatchFailureWritesNothing(t *testing.T) {
 	}
 
 	list := getTransactions(t, r)
-	var allTx []transactionResponse
-	if err := json.NewDecoder(list.Body).Decode(&allTx); err != nil {
-		t.Fatalf("decoding GET /api/transactions response: %v", err)
-	}
+	allTx := decodeTransactionsPage(t, list).Transactions
 	if len(allTx) != 0 {
 		t.Errorf("GET /api/transactions after a mid-batch failure returned %d rows, want 0", len(allTx))
 	}

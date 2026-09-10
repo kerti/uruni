@@ -690,6 +690,133 @@ func (q *Queries) ListTransactionsByFund(ctx context.Context, fundID int64) ([]T
 	return items, nil
 }
 
+const listTransactionsPage = `-- name: ListTransactionsPage :many
+SELECT t.id, t.fund_id, t.account_id, t.purpose_id, t.direction, t.amount, t.occurred_on, t.kind,
+       t.member_id, t.dues_period, t.reimbursement_id, t.transfer_id, t.reverses_transaction_id,
+       t.note, t.created_at
+FROM "transaction" t
+JOIN purpose p ON p.id = t.purpose_id
+LEFT JOIN member m ON m.id = t.member_id
+WHERE t.fund_id = ?1
+  AND (
+    ?2 IS NULL
+    OR (t.occurred_on, t.id) < (?2, CAST(?3 AS INTEGER))
+  )
+  AND (
+    ?4 IS NULL
+    OR INSTR(LOWER(t.note), LOWER(?4)) > 0
+    OR INSTR(LOWER(p.name), LOWER(?4)) > 0
+    OR INSTR(LOWER(m.name), LOWER(?4)) > 0
+    OR t.amount = ?5
+  )
+  AND (?6 IS NULL OR t.member_id = ?6)
+  AND (?7 IS NULL OR t.dues_period = ?7)
+ORDER BY t.occurred_on DESC, t.id DESC
+LIMIT ?8
+`
+
+type ListTransactionsPageParams struct {
+	FundID           int64
+	CursorOccurredOn interface{}
+	CursorID         *int64
+	Q                interface{}
+	QAmount          *int64
+	MemberID         interface{}
+	DuesPeriod       interface{}
+	PageLimit        int64
+}
+
+// GET /api/transactions's real listing (#225, ADR-032 "Lists: paging and
+// search") - newest-first and keyset-paged on the same pair it orders by.
+// LIMIT/OFFSET was rejected outright: occurred_on is backdatable (PRD
+// section 7.2 defaults to today, editable), so a row can land in the middle
+// of a newest-first list between two page fetches and an offset would
+// silently skip or duplicate it. The row-value comparison below cannot:
+// cursor_occurred_on/cursor_id NULL on the first page (the whole clause
+// short-circuits true and nothing is excluded), and a later page passes the
+// previous page's last row, keeping only strictly older pairs regardless of
+// what was inserted since. cursor_id is CAST to INTEGER inside the tuple -
+// without it sqlc infers its Go type from the row-value's other element
+// (cursor_occurred_on, TEXT) instead of the id column it is actually
+// compared against, and generates CursorID as *string for what is an int64
+// primary key.
+//
+// Search is every clause under q: a case-insensitive substring test over
+// note, purpose name and member name (LEFT JOIN - most rows carry no
+// member_id), plus an exact amount match. INSTR(LOWER(col), LOWER(q)) > 0
+// rather than "col COLLATE NOCASE LIKE q ESCAPE '$'" as ADR-032 literally
+// asks for: sqlc v1.31.1's SQLite query analyzer only registers the FIRST
+// "COLLATE ... LIKE <param> ESCAPE '<literal>'" clause in a query and
+// silently leaves every later occurrence of that exact construct as
+// un-rewritten literal text ("sqlc.narg('q_purpose')" etc, verbatim) in the
+// emitted SQL - a bare LIKE with no ESCAPE, or the same clause used only
+// once, both generate correctly, which is what makes this so easy to ship
+// unnoticed (confirmed by bisection: swapping ESCAPE for INSTR/LOWER below,
+// with nothing else changed, fixes it). No test in this file could have
+// caught it either - `go vet`/the compiler see a struct simply missing the
+// fields the broken clauses reference, `make sqlc`'s own generate step
+// exits 0, and the query is syntactically valid SQL that runs and returns
+// rows; it is only wrong once a purpose- or member-name search is exercised
+// against real data. INSTR does not interpret % or _ as wildcards at all
+// (it is a plain substring test), so this also drops the ESCAPE-and-wildcard-
+// escaping machinery ADR-032 assumed LIKE would need - "LIKE wildcards in q
+// are literal" is true here by construction, not by escaping.
+//
+// member_id/dues_period are exact-match filters for
+// Dues/MemberPayments.tsx's payment history panel, not a Riwayat UI filter
+// (ADR-032 holds filters to M7) - undocumented in copy/UI on purpose.
+//
+// page_limit is passed as page size + 1: the caller peeks at whether that
+// extra row came back to know whether a next page exists, then trims it
+// before building the response.
+func (q *Queries) ListTransactionsPage(ctx context.Context, arg ListTransactionsPageParams) ([]Transaction, error) {
+	rows, err := q.db.QueryContext(ctx, listTransactionsPage,
+		arg.FundID,
+		arg.CursorOccurredOn,
+		arg.CursorID,
+		arg.Q,
+		arg.QAmount,
+		arg.MemberID,
+		arg.DuesPeriod,
+		arg.PageLimit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Transaction{}
+	for rows.Next() {
+		var i Transaction
+		if err := rows.Scan(
+			&i.ID,
+			&i.FundID,
+			&i.AccountID,
+			&i.PurposeID,
+			&i.Direction,
+			&i.Amount,
+			&i.OccurredOn,
+			&i.Kind,
+			&i.MemberID,
+			&i.DuesPeriod,
+			&i.ReimbursementID,
+			&i.TransferID,
+			&i.ReversesTransactionID,
+			&i.Note,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const maxTransactionIDByFund = `-- name: MaxTransactionIDByFund :one
 SELECT id
 FROM "transaction"

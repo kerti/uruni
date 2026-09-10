@@ -244,6 +244,50 @@ type Querier interface {
 	// reads too.
 	ListSelectablePurposesByFund(ctx context.Context, fundID int64) ([]Purpose, error)
 	ListTransactionsByFund(ctx context.Context, fundID int64) ([]Transaction, error)
+	// GET /api/transactions's real listing (#225, ADR-032 "Lists: paging and
+	// search") - newest-first and keyset-paged on the same pair it orders by.
+	// LIMIT/OFFSET was rejected outright: occurred_on is backdatable (PRD
+	// section 7.2 defaults to today, editable), so a row can land in the middle
+	// of a newest-first list between two page fetches and an offset would
+	// silently skip or duplicate it. The row-value comparison below cannot:
+	// cursor_occurred_on/cursor_id NULL on the first page (the whole clause
+	// short-circuits true and nothing is excluded), and a later page passes the
+	// previous page's last row, keeping only strictly older pairs regardless of
+	// what was inserted since. cursor_id is CAST to INTEGER inside the tuple -
+	// without it sqlc infers its Go type from the row-value's other element
+	// (cursor_occurred_on, TEXT) instead of the id column it is actually
+	// compared against, and generates CursorID as *string for what is an int64
+	// primary key.
+	//
+	// Search is every clause under q: a case-insensitive substring test over
+	// note, purpose name and member name (LEFT JOIN - most rows carry no
+	// member_id), plus an exact amount match. INSTR(LOWER(col), LOWER(q)) > 0
+	// rather than "col COLLATE NOCASE LIKE q ESCAPE '$'" as ADR-032 literally
+	// asks for: sqlc v1.31.1's SQLite query analyzer only registers the FIRST
+	// "COLLATE ... LIKE <param> ESCAPE '<literal>'" clause in a query and
+	// silently leaves every later occurrence of that exact construct as
+	// un-rewritten literal text ("sqlc.narg('q_purpose')" etc, verbatim) in the
+	// emitted SQL - a bare LIKE with no ESCAPE, or the same clause used only
+	// once, both generate correctly, which is what makes this so easy to ship
+	// unnoticed (confirmed by bisection: swapping ESCAPE for INSTR/LOWER below,
+	// with nothing else changed, fixes it). No test in this file could have
+	// caught it either - `go vet`/the compiler see a struct simply missing the
+	// fields the broken clauses reference, `make sqlc`'s own generate step
+	// exits 0, and the query is syntactically valid SQL that runs and returns
+	// rows; it is only wrong once a purpose- or member-name search is exercised
+	// against real data. INSTR does not interpret % or _ as wildcards at all
+	// (it is a plain substring test), so this also drops the ESCAPE-and-wildcard-
+	// escaping machinery ADR-032 assumed LIKE would need - "LIKE wildcards in q
+	// are literal" is true here by construction, not by escaping.
+	//
+	// member_id/dues_period are exact-match filters for
+	// Dues/MemberPayments.tsx's payment history panel, not a Riwayat UI filter
+	// (ADR-032 holds filters to M7) - undocumented in copy/UI on purpose.
+	//
+	// page_limit is passed as page size + 1: the caller peeks at whether that
+	// extra row came back to know whether a next page exists, then trims it
+	// before building the response.
+	ListTransactionsPage(ctx context.Context, arg ListTransactionsPageParams) ([]Transaction, error)
 	ListTransfersByFund(ctx context.Context, fundID int64) ([]Transfer, error)
 	// The reconciliation cutoff. Deliberately not an aggregate: SELECT
 	// CAST(MAX(id) AS INTEGER) generates a non-nullable (int64, error), and a

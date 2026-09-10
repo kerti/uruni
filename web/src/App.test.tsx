@@ -52,7 +52,7 @@ const emptyHomeRoutes: { match: (method: string, url: string) => boolean; handle
     match: (m, u) => m === 'GET' && u.includes('/api/reconciliations/latest'),
     handle: () => Promise.resolve(jsonResponse({ error: { code: 'not_found', message: 'no reconciliation' } }, 404)),
   },
-  { match: (m, u) => m === 'GET' && u.includes('/api/transactions'), handle: () => Promise.resolve(jsonResponse([])) },
+  { match: (m, u) => m === 'GET' && u.includes('/api/transactions'), handle: () => Promise.resolve(jsonResponse({ transactions: [], next_cursor: null })) },
 ]
 
 /** Routes a stubbed fetch by method + url match, same idiom as
