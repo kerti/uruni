@@ -31,9 +31,9 @@ So this is not a tidying pass on one screen. It is the information architecture 
 
 **Iuran loses its slot** and becomes a tab under Riwayat, its status matrix at the top of that tab. This is the cost of coherence and it was taken deliberately: dues status is one reading of one month, and it was occupying a fifth of the app's navigation.
 
-**Catat renders as a raised centre action** — a Forest pill jutting above the bar, larger icon, label kept. This does not revive the add-FAB that M6.15 removed: that FAB was removed because *"a screen may not have two entry points"*, and a loud tab is still one door. Forest rather than the Sage accent, because Design-System.md makes Forest the action colour and white on Sage does not clear AA; it shares a hue with the balance hero, which `Home.tsx` already accepts and separates by shape and elevation.
+**Catat renders as a raised centre action** — a Forest circle jutting above the bar and carrying the icon, its label kept below on the same baseline as the other four. This does not revive the add-FAB that M6.15 removed: that FAB was removed because *"a screen may not have two entry points"*, and a loud tab is still one door. Forest rather than the Sage accent, because Design-System.md makes Forest the action colour and white on Sage does not clear AA; it shares a hue with the balance hero, which `Home.tsx` already accepts and separates by shape and elevation.
 
-**One consequence must be paid in the same PR.** The footer's active state is currently Forest-versus-muted, so a permanently-Forest Catat would read as "you are here" on every screen. Catat needs a distinct active treatment, or the other four need an active marker that is not colour alone.
+**One consequence must be paid in the same PR.** The footer's active state is currently Forest-versus-muted, so a permanently-Forest Catat would read as "you are here" on every screen. So the active marker is a line above the current slot, not colour alone and the same for all five: the circle never changes with the route.
 
 **Slot order is convention, not reach.** A right-handed thumb reaches the right of the bar most easily, which argues for putting Anggota and Pengaturan — opened monthly — on the left and Riwayat on the right. Rejected: Beranda not being first is more confusing than a marginal reach win is worth, and `Shell.tsx` already argues the header's fund-name link is not a substitute for a reachable Beranda tab. The raised centre Catat takes the single best spot for the action she performs most, which is where the reach budget is actually spent.
 
@@ -46,7 +46,7 @@ So this is not a tidying pass on one screen. It is the information architecture 
 - **Anggota** — no second level. The roster only.
 - **Pengaturan** — sections, as today.
 
-**Tabs are routes, never component state.** `/riwayat/iuran` through an `<Outlet/>`. `Shell.tsx` already states the reason for the footer and it holds one level down: *"a deep link and a back button must both land on the right tab."* This is also why shadcn's `tabs` component is not adopted — it would invite `useState` and quietly break both.
+**Tabs are routes, never component state.** `/history/dues` through an `<Outlet/>` — the path is English like every route, and only the tab's label reads *Iuran*. `Shell.tsx` already states the reason for the footer and it holds one level down: *"a deep link and a back button must both land on the right tab."* This is also why shadcn's `tabs` component is not adopted — it would invite `useState` and quietly break both.
 
 **Cek kas is read-only, and must stay so.** It lists past snapshots and opens them. It carries no "start a reconciliation" control: M6.10's ruling is that the banner on Beranda *is* that flow's affordance, and a button here would be the second door that ruling refused. Listing snapshots is a different verb against a different object, which is why the tab itself is not a violation.
 
@@ -97,7 +97,7 @@ A part-paid earlier period counts as one month of tunggakan, the same as an unpa
 
 Money forms stay screens because they carry five or more fields, a photo picker ([#154](https://github.com/kerti/uruni/issues/154)), smart defaults and a success handoff — and because a posting dismissible by a stray backdrop tap is the wrong shape for the one thing this app must not get wrong. The effect on the admin screens is the point: with inline forms gone, Anggota and Pengaturan become card lists, which is what keeps them short enough that sections beat tabs.
 
-**An open dialog is a search parameter** — `/pengaturan?ubah=lokasi:3`. Android's back gesture then closes the dialog instead of leaving the screen, the state is deep-linkable, and no component holds modal state. Same argument as tabs-are-routes, one level further down.
+**An open dialog is a search parameter** — `/settings?edit=location:3` (English path and key; Bahasa lives only in copy). Android's back gesture then closes the dialog instead of leaving the screen, the state is deep-linkable, and no component holds modal state. Same argument as tabs-are-routes, one level further down.
 
 **Bottom sheet, not centred modal**: `max-h-[85dvh]` (`dvh`, not `vh`, for iOS toolbars), internal scroll, `env(safe-area-inset-bottom)` padding. A centred modal with a phone keyboard open puts the field under the thumb row.
 

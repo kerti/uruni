@@ -11,21 +11,35 @@ export const copy = {
   // header's heading is the fund's own name, which comes from the server,
   // not from here.
   shell: {
-    // The sticky footer's four destinations (M6.15). Single words, because
-    // a tab label that wraps on a small phone is a tab label that is too
-    // long - and because these are landmarks, not sentences.
+    // The sticky footer's five destinations (M6.23, ADR-032). Single words,
+    // because a tab label that wraps on a small phone is a tab label that is
+    // too long - and because these are landmarks, not sentences. "Iuran"
+    // moved to a Riwayat tab (copy.history.tabs.dues below) rather than
+    // keeping its own footer slot.
     nav: {
       // Names the <nav> itself for a screen reader, which otherwise
       // announces an unlabelled navigation landmark.
       label: 'Navigasi utama',
       home: 'Beranda',
+      history: 'Riwayat',
       record: 'Catat',
-      dues: 'Iuran',
       members: 'Anggota',
       settings: 'Pengaturan',
     },
     logout: 'Keluar',
     loggingOut: 'Sedang keluar…',
+  },
+  // Riwayat's tab strip (M6.23, ADR-032's "second level"): each tab is a
+  // route under /history, never component state (History.tsx). Iuran's
+  // heading and every other string on that tab stay in copy.dues - this
+  // namespace holds only the tab labels themselves. Penggantian and Cek kas
+  // join once their own screens exist; this slice ships the two Riwayat
+  // could not launch without, since Iuran had nowhere else to go.
+  history: {
+    tabs: {
+      transactions: 'Transaksi',
+      dues: 'Iuran',
+    },
   },
   common: {
     loading: 'Memuat…',
@@ -181,6 +195,9 @@ export const copy = {
     locationsHeading: 'Saldo per lokasi',
     recentActivityHeading: 'Aktivitas terbaru',
     recentActivityEmpty: 'Belum ada transaksi tercatat.',
+    // The entry point into Riwayat's Transaksi tab (M6.23) - the recent-five
+    // peek stays exactly that, a peek, so it needs a way to the full list.
+    recentActivityViewAll: 'Lihat semua',
     // A purpose the balances response didn't name - it should not happen
     // (both come from the same fund), so this is a placeholder that keeps a
     // row readable rather than a state with meaning of its own.

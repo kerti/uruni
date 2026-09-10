@@ -1,14 +1,14 @@
 import { useEffect } from 'react'
-import { ArrowDownLeft, ArrowUpRight } from 'lucide-react'
 
 import ReconciliationBanner from '@/components/ReconciliationBanner'
+import TransactionList from '@/components/TransactionList'
 import Loading from '@/components/states/Loading'
 import ErrorState from '@/components/states/ErrorState'
 import { Button } from '@/components/ui/button'
 import { copy } from '@/copy/id'
 import { ApiError } from '@/lib/api'
 import { getBalances } from '@/lib/balances'
-import { formatIsoDate, formatUnixSeconds } from '@/lib/dates'
+import { formatUnixSeconds } from '@/lib/dates'
 import { formatIDR } from '@/lib/money'
 import { getLatestReconciliation, listOpenReconciliationLines } from '@/lib/reconciliations'
 import { listTransactions } from '@/lib/transactions'
@@ -51,11 +51,16 @@ export default function Home({
   onReconcile,
   onViewReimbursements,
   onViewIncidentals,
+  onViewHistory,
 }: {
   refetchKey: unknown
   onReconcile: () => void
   onViewReimbursements: () => void
   onViewIncidentals: () => void
+  /** Riwayat's Transaksi tab (M6.23) - the "lihat semua" link below. Same
+   * caller-owns-navigation contract as the two callbacks above: this screen
+   * stays router-agnostic and App.tsx supplies the actual navigate() call. */
+  onViewHistory: () => void
 }) {
   const [state, run] = useApi<HomeData>()
 
@@ -192,34 +197,16 @@ export default function Home({
       </Button>
 
       <section className="flex flex-col gap-2">
-        <h2 className="text-sm font-semibold text-muted-foreground">{copy.home.recentActivityHeading}</h2>
-        {recentTransactions.length === 0 ? (
-          <p className="text-muted-foreground">{copy.home.recentActivityEmpty}</p>
-        ) : (
-          <ul className="flex flex-col gap-2">
-            {recentTransactions.map((transaction) => (
-              <li key={transaction.id} className="flex items-start justify-between gap-3 rounded-lg bg-card px-4 py-3 ring-1 ring-foreground/10">
-                <span className="flex min-w-0 items-start gap-2">
-                  {transaction.direction === 'in' ? (
-                    <ArrowDownLeft aria-hidden="true" className="mt-0.5 shrink-0 text-success" />
-                  ) : (
-                    <ArrowUpRight aria-hidden="true" className="mt-0.5 shrink-0 text-attention" />
-                  )}
-                  <span className="flex min-w-0 flex-col">
-                    {/* The purpose tag is what an entry *was*; the note is
-                        whatever she typed to remember it by, and is optional
-                        (PRD section 6). Date drops to the second line so the row
-                        still answers "what is this?" at a glance. */}
-                    <span className="truncate">{purposeNames.get(transaction.purpose_id) ?? copy.home.purposeUnknown}</span>
-                    {transaction.note && <span className="truncate text-sm text-muted-foreground">{transaction.note}</span>}
-                    <span className="text-sm text-muted-foreground">{formatIsoDate(transaction.occurred_on)}</span>
-                  </span>
-                </span>
-                <span className="tabular shrink-0 font-medium">{formatIDR(transaction.amount)}</span>
-              </li>
-            ))}
-          </ul>
-        )}
+        <div className="flex items-center justify-between gap-3">
+          <h2 className="text-sm font-semibold text-muted-foreground">{copy.home.recentActivityHeading}</h2>
+          {/* min-h-11 overrides the `link` variant's own compact height
+              (Design-System.md's 44px minimum touch target) - the same
+              override the header's logout button already uses on `icon`. */}
+          <Button type="button" variant="link" className="h-auto min-h-11 p-0" onClick={onViewHistory}>
+            {copy.home.recentActivityViewAll}
+          </Button>
+        </div>
+        <TransactionList transactions={recentTransactions} purposeNames={purposeNames} emptyMessage={copy.home.recentActivityEmpty} />
       </section>
     </div>
   )
