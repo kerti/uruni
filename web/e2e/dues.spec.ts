@@ -38,7 +38,8 @@ test.describe('dues status', () => {
     await page.getByRole('button', { name: copy.auth.login.submit }).click()
     await expect(page.getByText(copy.home.balanceHeading)).toBeVisible()
 
-    await page.getByRole('link', { name: copy.shell.nav.dues }).click()
+    await page.getByRole('link', { name: copy.shell.nav.history }).click()
+    await page.getByRole('link', { name: copy.history.tabs.dues }).click()
     await expect(page.getByRole('heading', { name: copy.dues.heading })).toBeVisible()
 
     // Both seeded members owe this period's rate and neither has ever paid.
@@ -63,7 +64,8 @@ test.describe('dues status', () => {
     await page.getByRole('button', { name: copy.auth.login.submit }).click()
     await expect(page.getByText(copy.home.balanceHeading)).toBeVisible()
 
-    await page.getByRole('link', { name: copy.shell.nav.dues }).click()
+    await page.getByRole('link', { name: copy.shell.nav.history }).click()
+    await page.getByRole('link', { name: copy.history.tabs.dues }).click()
     await page.getByRole('button', { name: copy.dues.recordLink }).click()
     await expect(page.getByRole('heading', { name: copy.dues.payment.heading })).toBeVisible()
 
@@ -132,7 +134,8 @@ test.describe('dues status', () => {
     await page.getByRole('button', { name: copy.auth.login.submit }).click()
     await expect(page.getByText(copy.home.balanceHeading)).toBeVisible()
 
-    await page.getByRole('link', { name: copy.shell.nav.dues }).click()
+    await page.getByRole('link', { name: copy.shell.nav.history }).click()
+    await page.getByRole('link', { name: copy.history.tabs.dues }).click()
     await page.getByLabel(copy.dues.periodLabel).fill('2024-01')
 
     // Warga Satu paid part of this month, so the roster shows the partial

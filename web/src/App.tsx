@@ -1,6 +1,6 @@
 import { useCallback, useEffect } from 'react'
 import { CircleCheck } from 'lucide-react'
-import { BrowserRouter, Route, Routes, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
+import { BrowserRouter, Navigate, Route, Routes, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 
 import OfflineBanner from '@/components/states/OfflineBanner'
 import UpdateBanner from '@/components/states/UpdateBanner'
@@ -14,6 +14,8 @@ import RecordTransaction from '@/screens/RecordTransaction'
 import Reconcile from '@/screens/Reconcile'
 import Reimbursements from '@/screens/Reimbursements'
 import Incidentals from '@/screens/Incidentals'
+import History from '@/screens/History/History'
+import Transactions from '@/screens/History/Transactions'
 import DuesStatus from '@/screens/Dues/Status'
 import RecordDuesPayment from '@/screens/Dues/RecordPayment'
 import Home from '@/screens/Home'
@@ -228,26 +230,43 @@ function AuthedGate({ onLoggedOut }: { onLoggedOut: () => void }) {
           </Shell>
         }
       />
+      {/* Riwayat (M6.23, ADR-032): a tab strip over an Outlet, one Shell for
+          every tab. /dues kept its own route below, redirecting here rather
+          than vanishing - nothing that was reachable before this slice may
+          stop being reachable mid-milestone. */}
       <Route
-        path="/dues"
+        path="/history"
         element={
           <Shell title={title} onLoggedOut={onLoggedOut}>
+            <History />
+          </Shell>
+        }
+      >
+        <Route index element={<Navigate to="transactions" replace />} />
+        <Route path="transactions" element={<Transactions refetchKey={location.key} />} />
+        <Route
+          path="dues"
+          element={
             <DuesStatus
               onBack={() => navigate('/')}
               onRecordPayment={() => navigate('/dues/payment')}
               refetchKey={location.key}
               notice={duesRecorded ? copy.dues.payment.success : null}
             />
-          </Shell>
-        }
-      />
+          }
+        />
+      </Route>
+      {/* The dues status roster's own former address (through M6.22) -
+          Iuran now lives at /history/dues (ADR-032), and this redirect is
+          what keeps a bookmark or an old link working. */}
+      <Route path="/dues" element={<Navigate to="/history/dues" replace />} />
       <Route
         path="/dues/payment"
         element={
           <Shell title={title} onLoggedOut={onLoggedOut}>
             <RecordDuesPayment
-              onRecorded={() => navigate('/dues', { state: { duesRecorded: true } satisfies DuesState })}
-              onCancel={() => navigate('/dues')}
+              onRecorded={() => navigate('/history/dues', { state: { duesRecorded: true } satisfies DuesState })}
+              onCancel={() => navigate('/history/dues')}
             />
           </Shell>
         }
@@ -299,6 +318,7 @@ function AuthedGate({ onLoggedOut }: { onLoggedOut: () => void }) {
               onReconcile={() => navigate('/reconcile')}
               onViewReimbursements={() => navigate('/reimbursements')}
               onViewIncidentals={() => navigate('/incidentals')}
+              onViewHistory={() => navigate('/history/transactions')}
             />
           </Shell>
         }

@@ -312,6 +312,68 @@ describe('App (record loop)', () => {
   })
 })
 
+// M6.23 (ADR-032): Riwayat replaces Iuran's own footer slot with a tab
+// strip - these tests are the router-level half of that (Shell.test.tsx
+// covers the footer bar and its active markers on their own).
+describe('App (Riwayat)', () => {
+  function authenticatedWithHistoryRoutes() {
+    return routedFetch([
+      { match: (m, u) => m === 'GET' && u.includes('/api/session'), handle: () => Promise.resolve(sessionResponse({ authenticated: true, has_account: true })) },
+      { match: (m, u) => m === 'GET' && u.includes('/api/fund'), handle: () => Promise.resolve(fundFoundResponse()) },
+      { match: (m, u) => m === 'GET' && u.includes('/api/dues-status'), handle: () => Promise.resolve(jsonResponse([])) },
+      ...emptyHomeRoutes,
+    ])
+  }
+
+  it('has a link from home into Riwayat', async () => {
+    vi.stubGlobal('fetch', authenticatedWithHistoryRoutes())
+    render(<App />)
+    await screen.findByText(copy.home.balanceHeading)
+
+    await userEvent.click(screen.getByRole('button', { name: copy.home.recentActivityViewAll }))
+
+    const tab = await screen.findByRole('link', { name: copy.history.tabs.transactions })
+    await waitFor(() => expect(tab).toHaveAttribute('aria-current', 'page'))
+  })
+
+  // The index route's <Navigate> fires as an effect, so the tab exists in
+  // the DOM a tick before it reads current - waitFor is what a real
+  // redirect needs here, not a single findByRole snapshot.
+  it('redirects /history to the Transaksi tab', async () => {
+    window.history.pushState({}, '', '/history')
+    vi.stubGlobal('fetch', authenticatedWithHistoryRoutes())
+    render(<App />)
+
+    const tab = await screen.findByRole('link', { name: copy.history.tabs.transactions })
+    await waitFor(() => expect(tab).toHaveAttribute('aria-current', 'page'))
+    window.history.pushState({}, '', '/')
+  })
+
+  it('redirects the old /dues address into /history/dues', async () => {
+    window.history.pushState({}, '', '/dues')
+    vi.stubGlobal('fetch', authenticatedWithHistoryRoutes())
+    render(<App />)
+
+    const tab = await screen.findByRole('link', { name: copy.history.tabs.dues })
+    await waitFor(() => expect(tab).toHaveAttribute('aria-current', 'page'))
+    expect(await screen.findByRole('heading', { name: copy.dues.heading })).toBeInTheDocument()
+    window.history.pushState({}, '', '/')
+  })
+
+  // Deep link and reload both land on the right tab (Riwayat repeats the
+  // same rule Shell's own footer already states).
+  it('deep-links straight to /history/dues with that tab current', async () => {
+    window.history.pushState({}, '', '/history/dues')
+    vi.stubGlobal('fetch', authenticatedWithHistoryRoutes())
+    render(<App />)
+
+    const tab = await screen.findByRole('link', { name: copy.history.tabs.dues })
+    await waitFor(() => expect(tab).toHaveAttribute('aria-current', 'page'))
+    expect(await screen.findByRole('heading', { name: copy.dues.heading })).toBeInTheDocument()
+    window.history.pushState({}, '', '/')
+  })
+})
+
 describe('App (connectivity watcher)', () => {
   it('shows the offline banner when the browser goes offline, and clears it when connectivity returns', async () => {
     vi.stubGlobal('fetch', authenticatedWithFund())
