@@ -63,6 +63,56 @@
       transform: translate3d(0, 0, 0);
     }
   }
+
+  /* The dialog primitive (M6.28): a quick fade with a slight zoom, the same
+     motion Balances' dialog gets from tw-animate-css, without the
+     dependency. Opacity and scale only, so both are GPU-composited. `scale`
+     is its own property, so it composes with the `translate` Tailwind uses
+     to centre the dialog instead of overwriting it. */
+  --animate-dialog-in: dialog-in 100ms ease-out;
+  --animate-dialog-out: dialog-out 100ms ease-in;
+  --animate-overlay-in: overlay-in 100ms ease-out;
+  --animate-overlay-out: overlay-out 100ms ease-in;
+
+  @keyframes dialog-in {
+    from {
+      opacity: 0;
+      scale: 0.95;
+    }
+    to {
+      opacity: 1;
+      scale: 1;
+    }
+  }
+
+  @keyframes dialog-out {
+    from {
+      opacity: 1;
+      scale: 1;
+    }
+    to {
+      opacity: 0;
+      scale: 0.95;
+    }
+  }
+
+  @keyframes overlay-in {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+
+  @keyframes overlay-out {
+    from {
+      opacity: 1;
+    }
+    to {
+      opacity: 0;
+    }
+  }
 }
 
 /* The palette is Design-System.md verbatim - Forest as the action colour, Sage
