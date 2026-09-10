@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 
 import { Button } from '@/components/ui/button'
-import { Dialog, DialogContent } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -45,8 +45,8 @@ function parseEditTarget(value: string | null): EditTarget | null {
 /**
  * The locations section of the settings screen (M6.15, converted to the
  * dialog primitive in M6.28 - ADR-032 "Every non-posting edit is a
- * dialog"): a card list, with add and edit both opening a bottom sheet
- * addressed by `?edit=location:<id>` / `?edit=location:new`.
+ * dialog"): a card list, with add and edit both opening a dialog addressed
+ * by `?edit=location:<id>` / `?edit=location:new`.
  *
  * Every location the fund has is listed, retired ones included - a retired
  * location may still hold a balance, so home keeps showing it (M6.9) and
@@ -154,6 +154,34 @@ export default function Locations() {
   )
 }
 
+/** Jenis, as the same themed Select in both dialogs. */
+function KindField({
+  id,
+  kind,
+  disabled,
+  onChange,
+}: {
+  id: string
+  kind: 'cash' | 'bank'
+  disabled?: boolean
+  onChange: (kind: 'cash' | 'bank') => void
+}) {
+  return (
+    <div className="flex flex-col gap-1.5">
+      <Label htmlFor={id}>{text.kindLabel}</Label>
+      <Select value={kind} onValueChange={(next) => onChange(next as 'cash' | 'bank')} disabled={disabled}>
+        <SelectTrigger id={id} aria-label={text.kindLabel}>
+          <SelectValue>{kind === 'bank' ? text.kindBank : text.kindCash}</SelectValue>
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="cash">{text.kindCash}</SelectItem>
+          <SelectItem value="bank">{text.kindBank}</SelectItem>
+        </SelectContent>
+      </Select>
+    </div>
+  )
+}
+
 /** Adding a location after setup (#78: setup asks for the first batch, this
  * is what adds to them afterward). No opening balance field here - that is
  * #230's named exception to "dialogs never post", not this slice's. */
@@ -164,7 +192,7 @@ function AddLocationDialog({ open, onClose, onAdded }: { open: boolean; onClose:
 
   const busy = state.status === 'loading'
 
-  // A fresh form every time the sheet opens, so a location added a moment
+  // A fresh form every time the dialog opens, so a location added a moment
   // ago does not leave its name sitting in the field for the next one.
   useEffect(() => {
     if (open) {
@@ -191,28 +219,25 @@ function AddLocationDialog({ open, onClose, onAdded }: { open: boolean; onClose:
         if (!next) onClose()
       }}
     >
-      <DialogContent title={text.add} closeLabel={copy.common.close}>
+      <DialogContent closeLabel={copy.common.close}>
+        <DialogHeader>
+          <DialogTitle>{text.add}</DialogTitle>
+        </DialogHeader>
         <form className="flex flex-col gap-3" onSubmit={handleSubmit} noValidate>
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="new-location-kind">{text.kindLabel}</Label>
-            <Select value={kind} onValueChange={(next) => setKind(next as 'cash' | 'bank')}>
-              <SelectTrigger id="new-location-kind" aria-label={text.kindLabel}>
-                <SelectValue>{kind === 'bank' ? text.kindBank : text.kindCash}</SelectValue>
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="cash">{text.kindCash}</SelectItem>
-                <SelectItem value="bank">{text.kindBank}</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
+          <KindField id="new-location-kind" kind={kind} onChange={setKind} />
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="new-location-name">{text.nameLabel}</Label>
             <Input id="new-location-name" type="text" value={name} onChange={(event) => setName(event.target.value)} />
           </div>
-          <Button type="submit" className="h-11" disabled={busy || name.trim() === ''}>
-            {busy ? text.adding : text.add}
-          </Button>
           {state.status === 'error' && state.error && <ErrorState error={state.error} />}
+          <DialogFooter className="mt-1">
+            <Button type="button" variant="outline" className="h-11" disabled={busy} onClick={onClose}>
+              {text.cancel}
+            </Button>
+            <Button type="submit" className="h-11" disabled={busy || name.trim() === ''}>
+              {busy ? text.adding : text.add}
+            </Button>
+          </DialogFooter>
         </form>
       </DialogContent>
     </Dialog>
@@ -225,10 +250,14 @@ function AddLocationDialog({ open, onClose, onAdded }: { open: boolean; onClose:
 type ConfirmKind = 'deactivate' | 'delete' | null
 
 /**
- * Rename, retire and delete, all in one sheet. `account` is null only while
+ * Rename, retire and delete, all in one dialog. `account` is null only while
  * closing (the row that opened it may already be gone from `listState` by
  * the time the exit animation plays) - the last known account is kept on
  * screen for that window rather than blanking the form mid-close.
+ *
+ * The footer always holds the buttons for the decision on screen: Batal and
+ * Simpan while editing, Batal and the confirm action once Nonaktifkan or
+ * Hapus has been tapped - with the consequence named just above it.
  */
 function EditLocationDialog({
   account,
@@ -253,7 +282,7 @@ function EditLocationDialog({
   const busy = state.status === 'loading'
   const inactive = shown?.inactive_on !== null && shown?.inactive_on !== undefined
 
-  // A fresh copy of the account's own fields each time the sheet opens for
+  // A fresh copy of the account's own fields each time the dialog opens for
   // it, and the confirm footer starts closed - reopening a dialog never
   // shows a stale edit or a confirm left mid-flight from last time.
   useEffect(() => {
@@ -278,7 +307,7 @@ function EditLocationDialog({
 
   function handleSave(event: FormEvent) {
     event.preventDefault()
-    if (!shown) return
+    if (!shown || confirming !== null) return
     const trimmed = name.trim()
     // Nothing changed, or nothing left to change it to: close rather than
     // spend a request saying so.
@@ -303,102 +332,63 @@ function EditLocationDialog({
         if (!next) onClose()
       }}
     >
-      <DialogContent title={text.editTitle} closeLabel={copy.common.close}>
-        <div className="flex flex-col gap-4">
-          <form className="flex flex-col gap-3" onSubmit={handleSave} noValidate>
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="edit-location-name">{text.nameLabel}</Label>
-              <Input
-                id="edit-location-name"
-                type="text"
-                value={name}
-                disabled={confirming !== null}
-                onChange={(event) => setName(event.target.value)}
-              />
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="edit-location-kind">{text.kindLabel}</Label>
-              <Select value={kind} onValueChange={(next) => setKind(next as 'cash' | 'bank')} disabled={confirming !== null}>
-                <SelectTrigger id="edit-location-kind" aria-label={text.kindLabel}>
-                  <SelectValue>{kind === 'bank' ? text.kindBank : text.kindCash}</SelectValue>
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="cash">{text.kindCash}</SelectItem>
-                  <SelectItem value="bank">{text.kindBank}</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            {confirming === null && (
-              <div className="flex gap-2">
-                <Button type="submit" className="h-11" disabled={busy}>
-                  {busy ? text.saving : text.save}
-                </Button>
-                <Button type="button" variant="ghost" className="h-11" disabled={busy} onClick={onClose}>
-                  {text.cancel}
-                </Button>
-              </div>
-            )}
-          </form>
-
-          <div className="border-t border-border pt-4">
-            {confirming === null ? (
-              <div className="flex flex-wrap gap-2">
-                {inactive ? (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="h-11"
-                    disabled={busy}
-                    onClick={() => void submit(() => setAccountInactiveOn(shown.id, null))}
-                  >
-                    {busy ? text.reinstating : text.reinstate}
-                  </Button>
-                ) : (
-                  <Button type="button" variant="outline" className="h-11" onClick={() => setConfirming('deactivate')}>
-                    {text.deactivate}
-                  </Button>
-                )}
-                <Button type="button" variant="ghost" className="h-11 text-destructive" onClick={() => setConfirming('delete')}>
-                  {text.delete}
-                </Button>
-              </div>
-            ) : (
-              // The inline confirm, swapped into this same footer - never a
-              // second dialog and never window.confirm() (ADR-032). The
-              // consequence is named in terracotta, never alarm-red.
-              <div className="flex flex-col gap-3">
-                <p className="text-sm text-attention">
-                  {confirming === 'deactivate' ? text.deactivateConfirm : text.deleteConfirm}
-                </p>
-                <div className="flex gap-2">
-                  <Button
-                    type="button"
-                    variant={confirming === 'delete' ? 'destructive' : 'outline'}
-                    className="h-11"
-                    disabled={busy}
-                    onClick={() =>
-                      void submit(() =>
-                        confirming === 'deactivate'
-                          ? setAccountInactiveOn(shown.id, todayISODate())
-                          : deleteAccount(shown.id),
-                      )
-                    }
-                  >
-                    {confirming === 'deactivate'
-                      ? busy
-                        ? text.deactivating
-                        : text.deactivateConfirmAction
-                      : busy
-                        ? text.deleting
-                        : text.deleteConfirmAction}
-                  </Button>
-                  <Button type="button" variant="ghost" className="h-11" disabled={busy} onClick={() => setConfirming(null)}>
-                    {text.cancel}
-                  </Button>
-                </div>
-              </div>
-            )}
+      <DialogContent
+        closeLabel={copy.common.close}
+        // Radix would focus the name and select its text. Most visits here are
+        // to deactivate or delete, where a stray keystroke would replace the
+        // name and a phone would raise its keyboard unasked - so focus lands on
+        // the dialog itself (still trapped) until she taps a field. Cancelling
+        // also skips Radix's own fallback to the dialog, which would leave
+        // focus on the card behind the overlay, so it is done here.
+        onOpenAutoFocus={(event) => {
+          event.preventDefault()
+          ;(event.currentTarget as HTMLElement).focus()
+        }}
+      >
+        <DialogHeader>
+          <DialogTitle>{text.editTitle}</DialogTitle>
+        </DialogHeader>
+        <form className="flex flex-col gap-3" onSubmit={handleSave} noValidate>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="edit-location-name">{text.nameLabel}</Label>
+            <Input
+              id="edit-location-name"
+              type="text"
+              value={name}
+              disabled={confirming !== null}
+              onChange={(event) => setName(event.target.value)}
+            />
           </div>
+          <KindField id="edit-location-kind" kind={kind} disabled={confirming !== null} onChange={setKind} />
+
+          {confirming === null ? (
+            <div className="flex flex-wrap gap-2 border-t border-border pt-3">
+              {inactive ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="h-11"
+                  disabled={busy}
+                  onClick={() => void submit(() => setAccountInactiveOn(shown.id, null))}
+                >
+                  {busy ? text.reinstating : text.reinstate}
+                </Button>
+              ) : (
+                <Button type="button" variant="outline" className="h-11" onClick={() => setConfirming('deactivate')}>
+                  {text.deactivate}
+                </Button>
+              )}
+              <Button type="button" variant="ghost" className="h-11 text-destructive" onClick={() => setConfirming('delete')}>
+                {text.delete}
+              </Button>
+            </div>
+          ) : (
+            // The consequence, named in terracotta and never alarm-red, right
+            // above the footer that now asks for the confirm (ADR-032).
+            <p className="border-t border-border pt-3 text-sm text-attention">
+              {confirming === 'deactivate' ? text.deactivateConfirm : text.deleteConfirm}
+            </p>
+          )}
 
           {/* The 409 gets its own sentence rather than the shared error
               copy: "sudah punya riwayat - nonaktifkan, bukan hapus" tells
@@ -414,7 +404,45 @@ function EditLocationDialog({
             ) : (
               <ErrorState error={state.error} />
             ))}
-        </div>
+
+          <DialogFooter className="mt-1">
+            {confirming === null ? (
+              <>
+                <Button type="button" variant="outline" className="h-11" disabled={busy} onClick={onClose}>
+                  {text.cancel}
+                </Button>
+                <Button type="submit" className="h-11" disabled={busy}>
+                  {busy ? text.saving : text.save}
+                </Button>
+              </>
+            ) : (
+              <>
+                <Button type="button" variant="outline" className="h-11" disabled={busy} onClick={() => setConfirming(null)}>
+                  {text.cancel}
+                </Button>
+                <Button
+                  type="button"
+                  variant={confirming === 'delete' ? 'destructive' : 'default'}
+                  className="h-11"
+                  disabled={busy}
+                  onClick={() =>
+                    void submit(() =>
+                      confirming === 'deactivate' ? setAccountInactiveOn(shown.id, todayISODate()) : deleteAccount(shown.id),
+                    )
+                  }
+                >
+                  {confirming === 'deactivate'
+                    ? busy
+                      ? text.deactivating
+                      : text.deactivateConfirmAction
+                    : busy
+                      ? text.deleting
+                      : text.deleteConfirmAction}
+                </Button>
+              </>
+            )}
+          </DialogFooter>
+        </form>
       </DialogContent>
     </Dialog>
   )

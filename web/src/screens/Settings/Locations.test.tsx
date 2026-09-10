@@ -94,7 +94,12 @@ describe('Settings locations', () => {
 
     expect(currentSearch()).toBe('?edit=location%3A1')
     const dialog = screen.getByRole('dialog', { name: text.editTitle })
-    expect(within(dialog).getByLabelText(text.nameLabel)).toHaveValue('Kotak kas')
+    const name = within(dialog).getByLabelText(text.nameLabel)
+    expect(name).toHaveValue('Kotak kas')
+    // Opening to edit neither focuses nor selects the name: most visits are
+    // to deactivate or delete, and a stray keystroke would replace it.
+    await waitFor(() => expect(dialog).toHaveFocus())
+    expect(name).not.toHaveFocus()
   })
 
   it('adds a location via ?edit=location:new, sending the chosen kind', async () => {

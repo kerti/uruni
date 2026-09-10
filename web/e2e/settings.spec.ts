@@ -73,6 +73,15 @@ test.describe('settings', () => {
     const editDialog = page.getByRole('dialog', { name: copy.settings.locations.editTitle })
     await expect(editDialog).toBeVisible()
 
+    // Back closes the sheet and leaves her on Pengaturan, not on the screen
+    // before it. Android's back gesture is this same history step, so this
+    // is what stands in for a device.
+    await page.goBack()
+    await expect(editDialog).toBeHidden()
+    await expect(page).toHaveURL(/\/settings$/)
+    await row.click()
+    await expect(editDialog).toBeVisible()
+
     // Never used, so the server allows the delete (a location with history
     // answers 409 and the dialog shows "nonaktifkan, bukan hapus" instead -
     // covered in vitest, where a used location can be stubbed). Delete asks

@@ -64,32 +64,35 @@
     }
   }
 
-  /* The dialog primitive's bottom sheet (M6.28) - transform and opacity
-     only, so both are GPU-composited rather than repainted each frame. */
-  --animate-sheet-in: sheet-in 200ms ease-out;
-  --animate-sheet-out: sheet-out 150ms ease-in;
-  --animate-overlay-in: overlay-in 200ms ease-out;
-  --animate-overlay-out: overlay-out 150ms ease-in;
+  /* The dialog primitive (M6.28): a quick fade with a slight zoom, the same
+     motion Balances' dialog gets from tw-animate-css, without the
+     dependency. Opacity and scale only, so both are GPU-composited. `scale`
+     is its own property, so it composes with the `translate` Tailwind uses
+     to centre the dialog instead of overwriting it. */
+  --animate-dialog-in: dialog-in 100ms ease-out;
+  --animate-dialog-out: dialog-out 100ms ease-in;
+  --animate-overlay-in: overlay-in 100ms ease-out;
+  --animate-overlay-out: overlay-out 100ms ease-in;
 
-  @keyframes sheet-in {
+  @keyframes dialog-in {
     from {
       opacity: 0;
-      transform: translate3d(0, 16px, 0);
+      scale: 0.95;
     }
     to {
       opacity: 1;
-      transform: translate3d(0, 0, 0);
+      scale: 1;
     }
   }
 
-  @keyframes sheet-out {
+  @keyframes dialog-out {
     from {
       opacity: 1;
-      transform: translate3d(0, 0, 0);
+      scale: 1;
     }
     to {
       opacity: 0;
-      transform: translate3d(0, 16px, 0);
+      scale: 0.95;
     }
   }
 
