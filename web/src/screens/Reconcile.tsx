@@ -27,10 +27,10 @@ import type { Transaction } from '@/lib/transactions'
 const text = copy.reconciliation
 
 /** How many of the most recent transactions the recent-activity list shows -
- * the same client-side slice-and-reverse of GET /api/transactions's full,
- * oldest-first list Home.tsx already does (no limit/offset param on the Go
- * handler), reused here rather than re-derived so the two screens agree on
- * what "recent" means. */
+ * the same client-side slice of GET /api/transactions's first page
+ * Home.tsx already does (#225: already newest-first, no reversing needed),
+ * reused here rather than re-derived so the two screens agree on what
+ * "recent" means. */
 const RECENT_ACTIVITY_COUNT = 5
 
 
@@ -100,13 +100,13 @@ interface ReconcileData {
 }
 
 async function loadReconcileData(): Promise<ReconcileData> {
-  const [accounts, purposes, balances, transactions] = await Promise.all([
+  const [accounts, purposes, balances, transactionsPage] = await Promise.all([
     listAccounts(),
     listPurposes(),
     getBalances(),
     listTransactions(),
   ])
-  return { accounts, purposes, balances, transactions }
+  return { accounts, purposes, balances, transactions: transactionsPage.transactions }
 }
 
 /**
@@ -189,7 +189,9 @@ export default function Reconcile({ onDone, onCancel }: { onDone: () => void; on
   const activeAccounts = data.accounts.filter((a) => a.inactive_on === null)
   const recordedByAccount = new Map(data.balances.accounts.map((a) => [a.id, a.balance]))
   const mainPurposeId = data.purposes.find((p) => p.kind === 'main')?.id ?? null
-  const recentTransactions = data.transactions.slice(-RECENT_ACTIVITY_COUNT).reverse()
+  // GET /api/transactions's first page is already newest-first (#225) - no
+  // more reversing a client-side slice of an oldest-first list.
+  const recentTransactions = data.transactions.slice(0, RECENT_ACTIVITY_COUNT)
   const purposeNames = new Map(data.purposes.map((p) => [p.id, p.name]))
 
   function diffFor(accountId: number): number {

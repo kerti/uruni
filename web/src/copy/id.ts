@@ -40,6 +40,16 @@ export const copy = {
       transactions: 'Transaksi',
       dues: 'Iuran',
     },
+    // The Transaksi tab's search and paging (#225, ADR-032). The placeholder
+    // names what the server actually searches, in the record form's own
+    // words, so she knows a member's name or an amount will find a row.
+    // While a page is loading the button reuses common.loading.
+    transactions: {
+      searchLabel: 'Cari transaksi',
+      searchPlaceholder: 'Catatan, peruntukan, anggota, atau jumlah',
+      loadMore: 'Muat lebih banyak',
+      noResults: (q: string) => `Tidak ada transaksi yang cocok dengan “${q}”.`,
+    },
   },
   common: {
     loading: 'Memuat…',

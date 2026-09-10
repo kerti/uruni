@@ -78,10 +78,7 @@ func TestPostTransfersPostsTwoOppositeLegsAgainstOneTransfer(t *testing.T) {
 	if listRec.Code != http.StatusOK {
 		t.Fatalf("GET /api/transactions = %d, want %d (body: %s)", listRec.Code, http.StatusOK, listRec.Body.String())
 	}
-	var rows []transactionResponse
-	if err := json.NewDecoder(listRec.Body).Decode(&rows); err != nil {
-		t.Fatalf("decoding transactions: %v", err)
-	}
+	rows := decodeTransactionsPage(t, listRec).Transactions
 
 	legs := map[string]transactionResponse{}
 	for _, row := range rows {
@@ -233,10 +230,7 @@ func TestPostTransfersWritesTheNoteToBothLegs(t *testing.T) {
 	}
 
 	listRec := getTransactions(t, r)
-	var rows []transactionResponse
-	if err := json.NewDecoder(listRec.Body).Decode(&rows); err != nil {
-		t.Fatalf("decoding transactions: %v", err)
-	}
+	rows := decodeTransactionsPage(t, listRec).Transactions
 
 	legs := 0
 	for _, row := range rows {
@@ -279,10 +273,7 @@ func TestPostTransfersWithoutANoteLeavesBothLegsNull(t *testing.T) {
 	}
 
 	listRec := getTransactions(t, r)
-	var rows []transactionResponse
-	if err := json.NewDecoder(listRec.Body).Decode(&rows); err != nil {
-		t.Fatalf("decoding transactions: %v", err)
-	}
+	rows := decodeTransactionsPage(t, listRec).Transactions
 	for _, row := range rows {
 		if row.Kind == "transfer" && row.Note != nil {
 			t.Errorf("leg %s note = %q, want null", row.Direction, *row.Note)

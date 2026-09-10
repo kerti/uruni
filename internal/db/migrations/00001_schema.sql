@@ -286,7 +286,12 @@ CREATE TABLE incidental (                 -- the envelope's lifecycle, 1:1 with 
   created_at    INTEGER NOT NULL
 ) STRICT;
 
-CREATE INDEX transaction_by_date    ON "transaction"(fund_id, occurred_on);
+-- fund_id, occurred_on, id, in that order: the leftmost pair alone still
+-- covers every fund_id+occurred_on-range query this index served before
+-- (#225 added the third column, nothing removed it), and with id the index
+-- fully orders GET /api/transactions's own (occurred_on DESC, id DESC)
+-- keyset scan instead of leaving SQLite to sort after the fact.
+CREATE INDEX transaction_by_date    ON "transaction"(fund_id, occurred_on, id);
 CREATE INDEX transaction_by_account ON "transaction"(account_id, occurred_on);
 CREATE INDEX transaction_by_purpose ON "transaction"(purpose_id);
 CREATE INDEX transaction_by_dues    ON "transaction"(member_id, dues_period) WHERE kind = 'dues';

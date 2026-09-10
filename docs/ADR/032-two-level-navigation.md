@@ -115,7 +115,7 @@ Money forms stay screens because they carry five or more fields, a photo picker 
 - **Keyset over `LIMIT`/`OFFSET`.** Dates are backdatable (§7.2 defaults to today, editable), so a row can land in the middle of a newest-first list between two fetches; offset then silently skips or duplicates. `(occurred_on DESC, id DESC)` cannot. Equal difficulty in SQLite, and rule 7 asks for the best SQLite SQL rather than the portable subset.
 - **Newest-first is a change.** `GET /api/transactions` answers oldest-first today and `Home.tsx` compensates with `.slice(-5).reverse()`; server-side ordering retires that.
 
-**Search is a server parameter, `LIKE` with `NOCASE`, no FTS5.**
+**Search is a server parameter, a case-insensitive substring match, no FTS5.** Written as `INSTR(LOWER(col), LOWER(q)) > 0` rather than `LIKE ... ESCAPE`: sqlc 1.31.1 silently drops every repeated `sqlc.narg` inside a `COLLATE NOCASE LIKE ... ESCAPE` clause (no error, the query ships wrong), and `INSTR` has no wildcards to escape. `LOWER`, like `NOCASE`, folds ASCII only.
 
 **Client-side filtering of a paged list is prohibited outright.** Filtering the 25 rows that happen to be loaded looks like it works and quietly lies: she searches "Budi", sees two rows, and concludes there are two. If a list is paged, its search goes to the server.
 

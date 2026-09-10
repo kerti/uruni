@@ -89,10 +89,7 @@ func TestPostDuesPaymentReversalReturnsThePostedRow(t *testing.T) {
 
 	// And it survives the round trip into the recent-transactions list the
 	// reconcile flow reads, not only the response to the call that made it.
-	var listed []transactionResponse
-	if err := json.NewDecoder(getTransactions(t, r).Body).Decode(&listed); err != nil {
-		t.Fatalf("decoding GET /api/transactions response: %v", err)
-	}
+	listed := decodeTransactionsPage(t, getTransactions(t, r)).Transactions
 	var found *transactionResponse
 	for i := range listed {
 		if listed[i].ID == reversal.ID {

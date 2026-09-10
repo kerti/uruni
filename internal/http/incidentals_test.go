@@ -672,10 +672,7 @@ func TestCloseIncidentalWritesTheNoteToBothRollLegs(t *testing.T) {
 	}
 
 	listRec := getTransactions(t, r)
-	var rows []transactionResponse
-	if err := json.NewDecoder(listRec.Body).Decode(&rows); err != nil {
-		t.Fatalf("decoding transactions: %v", err)
-	}
+	rows := decodeTransactionsPage(t, listRec).Transactions
 	legs := 0
 	for _, row := range rows {
 		if row.Kind != "transfer" {
@@ -719,10 +716,7 @@ func TestPostTransactionRefusesAClosedIncidentalBothDirections(t *testing.T) {
 			}
 
 			list := getTransactions(t, r)
-			var rows []transactionResponse
-			if err := json.NewDecoder(list.Body).Decode(&rows); err != nil {
-				t.Fatalf("decoding transactions: %v", err)
-			}
+			rows := decodeTransactionsPage(t, list).Transactions
 			for _, row := range rows {
 				if row.Direction == direction && row.Amount == 10_000 {
 					t.Errorf("found a posted row for the refused %s transaction: %+v", direction, row)

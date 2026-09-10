@@ -33,13 +33,15 @@ function todayISODate(): string {
  * edited away").
  *
  * There is no payment-history route to read: a dues payment is an ordinary
- * transaction row, so this reads GET /api/transactions and filters by
- * member and period client-side. Both halves of a reversal live in that
- * list and both are shown - the kind='dues' payment, and the
- * kind='adjustment' row that reverses it (ADR-029 copies the member and
- * period onto the reversal, which is what makes it findable here). Showing
- * only the payment would hide the correction that is the whole point of
- * never editing a posted row.
+ * transaction row, so this reads GET /api/transactions?member_id=&dues_period=
+ * (#225 - filtered server-side, never client-side over a paged list). Both
+ * halves of a reversal come back under that filter - the kind='dues'
+ * payment, and the kind='adjustment' row that reverses it (ADR-029 copies
+ * the member and period onto the reversal, which is what makes the server
+ * filter find it too: the schema only ever lets an adjustment carry a
+ * member_id/dues_period when it is a reversal). Showing only the payment
+ * would hide the correction that is the whole point of never editing a
+ * posted row.
  *
  * Nothing here decides what a reversal contains: the request carries only a
  * date and a note, and the ledger copies account, purpose, amount, member
@@ -65,21 +67,26 @@ export default function MemberPayments({
   const [occurredOn, setOccurredOn] = useState(todayISODate)
   const [note, setNote] = useState('')
 
+  async function loadRows(): Promise<Transaction[]> {
+    const page = await listTransactions({ memberId, duesPeriod: period })
+    return page.transactions
+  }
+
   useEffect(() => {
-    void run(listTransactions)
+    void run(loadRows)
     // run is a stable useCallback (useApi.ts); this component is mounted by
     // an expanded member row, so the fetch belongs to that expansion.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [run, memberId, period])
 
-  const all = state.data ?? []
-  const rows = all.filter(
-    (t) => t.member_id === memberId && t.dues_period === period && (t.kind === 'dues' || t.reverses_transaction_id !== null),
-  )
-  // A payment is spent once any row in the fund reverses it - derived from
-  // the whole list, not from `rows`, so it stays true even if a reversal
-  // were ever filtered out above.
-  const reversedIds = new Set(all.map((t) => t.reverses_transaction_id).filter((id): id is number => id !== null))
+  // The server already filtered to this member+period (#225) - everything
+  // it returns for this filter is either the kind='dues' payment or a
+  // kind='adjustment' reversal of it, so no further client-side filtering
+  // (schema CHECK: only a reversal may carry member_id+dues_period on a
+  // non-'dues' row).
+  const rows = state.data ?? []
+  // A payment is spent once any row reverses it.
+  const reversedIds = new Set(rows.map((t) => t.reverses_transaction_id).filter((id): id is number => id !== null))
 
   const submitting = submitState.status === 'loading'
 
@@ -97,7 +104,7 @@ export default function MemberPayments({
       // Refetch this list *and* tell the roster above to refetch its own:
       // the member reads as unpaid for the period again, and neither
       // refresh is the treasurer's job.
-      await run(listTransactions)
+      await run(loadRows)
       onReversed()
       return result
     })
@@ -108,7 +115,7 @@ export default function MemberPayments({
   }
 
   if (state.status === 'error' && state.error) {
-    return <ErrorState error={state.error} onRetry={() => void run(listTransactions)} />
+    return <ErrorState error={state.error} onRetry={() => void run(loadRows)} />
   }
 
   if (rows.length === 0) {

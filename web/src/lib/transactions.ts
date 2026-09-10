@@ -40,14 +40,47 @@ export function createTransaction(input: CreateTransactionInput): Promise<Transa
   })
 }
 
+/** GET /api/transactions's optional query parameters (#225, ADR-032
+ * "Lists: paging and search"). cursor is the opaque string a previous
+ * page's nextCursor returned - omit it for the first page. memberId/
+ * duesPeriod are exact-match filters for Dues/MemberPayments.tsx alone,
+ * not a Riwayat UI filter (ADR-032 holds filters to M7) - there is
+ * deliberately no copy or UI surface naming them. */
+export interface ListTransactionsInput {
+  cursor?: string
+  q?: string
+  memberId?: number
+  duesPeriod?: string
+}
+
+/** One page of GET /api/transactions, camelCase on this side of the wire
+ * boundary (the server's own envelope is {transactions, next_cursor}).
+ * nextCursor is null once there is no further page. */
+export interface TransactionsPage {
+  transactions: Transaction[]
+  nextCursor: string | null
+}
+
 /**
- * GET /api/transactions (M6.9) - every transaction the fund has ever
- * posted, oldest-first, unpaginated, no query params
- * (internal/http/transactions.go's listTransactions). The home screen's
- * recent-activity list reverses and slices this client-side rather than the
- * server offering a limit/offset of its own - a call the orchestrator
- * already made for this slice.
+ * GET /api/transactions (M6.9, keyset-paged and searchable as of #225):
+ * newest-first, 25 rows a page (internal/http/transactions.go's
+ * listTransactions). Every caller in this codebase reads only the first
+ * page today - Home and Reconcile take their first five rows straight off
+ * it (no more `.slice(-5).reverse()`, the server's own order is already
+ * what they want), History/Transactions renders the page as-is, and
+ * MemberPayments passes memberId/duesPeriod instead of filtering
+ * client-side. Building a "load more" loop over nextCursor is the
+ * orchestrator's next slice, not this one's.
  */
-export function listTransactions(): Promise<Transaction[]> {
-  return apiFetch<Transaction[]>('/api/transactions')
+export function listTransactions(input: ListTransactionsInput = {}): Promise<TransactionsPage> {
+  const params = new URLSearchParams()
+  if (input.cursor) params.set('cursor', input.cursor)
+  if (input.q) params.set('q', input.q)
+  if (input.memberId !== undefined) params.set('member_id', String(input.memberId))
+  if (input.duesPeriod) params.set('dues_period', input.duesPeriod)
+  const query = params.toString()
+
+  return apiFetch<{ transactions: Transaction[]; next_cursor: string | null }>(`/api/transactions${query ? `?${query}` : ''}`).then(
+    (page) => ({ transactions: page.transactions, nextCursor: page.next_cursor }),
+  )
 }

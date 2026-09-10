@@ -36,40 +36,45 @@ const balances = {
   ],
 }
 
-const transactions = [
-  {
-    id: 1,
-    account_id: 1,
-    purpose_id: 11,
-    direction: 'out',
-    amount: 50_000,
-    occurred_on: '2026-09-01',
-    kind: 'normal',
-    member_id: null,
-    dues_period: null,
-    reimbursement_id: null,
-    transfer_id: null,
-    reverses_transaction_id: null,
-    note: 'Beli galon',
-    created_at: 1,
-  },
-  {
-    id: 2,
-    account_id: 1,
-    purpose_id: 11,
-    direction: 'in',
-    amount: 200_000,
-    occurred_on: '2026-09-02',
-    kind: 'normal',
-    member_id: null,
-    dues_period: null,
-    reimbursement_id: null,
-    transfer_id: null,
-    reverses_transaction_id: null,
-    note: null,
-    created_at: 2,
-  },
-]
+// Newest-first (#225's own order - GET /api/transactions no longer answers
+// oldest-first, and Home.tsx no longer reverses it).
+const transactionsPage = {
+  transactions: [
+    {
+      id: 2,
+      account_id: 1,
+      purpose_id: 11,
+      direction: 'in',
+      amount: 200_000,
+      occurred_on: '2026-09-02',
+      kind: 'normal',
+      member_id: null,
+      dues_period: null,
+      reimbursement_id: null,
+      transfer_id: null,
+      reverses_transaction_id: null,
+      note: null,
+      created_at: 2,
+    },
+    {
+      id: 1,
+      account_id: 1,
+      purpose_id: 11,
+      direction: 'out',
+      amount: 50_000,
+      occurred_on: '2026-09-01',
+      kind: 'normal',
+      member_id: null,
+      dues_period: null,
+      reimbursement_id: null,
+      transfer_id: null,
+      reverses_transaction_id: null,
+      note: 'Beli galon',
+      created_at: 1,
+    },
+  ],
+  next_cursor: null,
+}
 
 const latestReconciliation = { id: 1, performed_at: 1_756_000_000, through_transaction_id: 5, note: null, created_at: 1_756_000_000 }
 
@@ -96,7 +101,7 @@ function stubHome({ openLines = [] as unknown[], latest = 'ok' as 'ok' | 'not_fo
           latest === 'ok' ? jsonResponse(latestReconciliation) : jsonResponse({ error: { code: 'not_found', message: 'no reconciliation' } }, 404),
         ),
     },
-    { match: (m, u) => m === 'GET' && u.includes('/api/transactions'), handle: () => Promise.resolve(jsonResponse(transactions)) },
+    { match: (m, u) => m === 'GET' && u.includes('/api/transactions'), handle: () => Promise.resolve(jsonResponse(transactionsPage)) },
   ])
 }
 
@@ -158,7 +163,7 @@ describe('Home', () => {
     render(<Home refetchKey="1" onReconcile={vi.fn()} onViewReimbursements={vi.fn()} onViewIncidentals={vi.fn()} onViewHistory={vi.fn()} />)
 
     const items = await screen.findAllByText(/Rp/)
-    // The recent-activity list reverses the oldest-first API order - the
+    // GET /api/transactions answers newest-first itself now (#225) - the
     // 200_000 "in" entry (occurred 2026-09-02) is the newest, so it appears
     // before the 50_000 "out" entry (occurred 2026-09-01) in document order.
     const amounts = items.map((el) => el.textContent)

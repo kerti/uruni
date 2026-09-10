@@ -464,10 +464,7 @@ func TestPostAccountOpeningBalancePostsATransaction(t *testing.T) {
 	}
 
 	list := getTransactions(t, r)
-	var transactions []transactionResponse
-	if err := json.NewDecoder(list.Body).Decode(&transactions); err != nil {
-		t.Fatalf("decoding response: %v", err)
-	}
+	transactions := decodeTransactionsPage(t, list).Transactions
 	if len(transactions) != 1 {
 		t.Fatalf("GET /api/transactions = %d rows, want 1", len(transactions))
 	}
@@ -502,10 +499,7 @@ func TestPostAccountOpeningBalanceZeroAmountIsANoOp(t *testing.T) {
 	}
 
 	list := getTransactions(t, r)
-	var transactions []transactionResponse
-	if err := json.NewDecoder(list.Body).Decode(&transactions); err != nil {
-		t.Fatalf("decoding response: %v", err)
-	}
+	transactions := decodeTransactionsPage(t, list).Transactions
 	if len(transactions) != 0 {
 		t.Errorf("GET /api/transactions = %d rows, want 0 after a zero-amount opening balance", len(transactions))
 	}
@@ -546,10 +540,7 @@ func TestPostAccountOpeningBalanceSecondCallReturns409(t *testing.T) {
 	}
 
 	list := getTransactions(t, r)
-	var transactions []transactionResponse
-	if err := json.NewDecoder(list.Body).Decode(&transactions); err != nil {
-		t.Fatalf("decoding response: %v", err)
-	}
+	transactions := decodeTransactionsPage(t, list).Transactions
 	if len(transactions) != 1 {
 		t.Errorf("GET /api/transactions = %d rows after a refused second opening balance, want 1", len(transactions))
 	}
@@ -678,10 +669,7 @@ func TestPostAccountOpeningBalanceWithNoMainPurposeIs500(t *testing.T) {
 	}
 
 	// And nothing was posted on the way out.
-	var transactions []transactionResponse
-	if err := json.NewDecoder(getTransactions(t, r).Body).Decode(&transactions); err != nil {
-		t.Fatalf("decoding GET /api/transactions response: %v", err)
-	}
+	transactions := decodeTransactionsPage(t, getTransactions(t, r)).Transactions
 	if len(transactions) != 0 {
 		t.Errorf("GET /api/transactions = %d rows, want 0 - the 500 must not have posted anything", len(transactions))
 	}
