@@ -60,6 +60,9 @@ export const copy = {
     // until she taps.
     updateAvailable: 'Versi baru sudah siap.',
     updateReload: 'Muat ulang',
+    // The dialog primitive's close button (M6.28) - every sheet in the app
+    // uses this one label, never a screen-specific synonym.
+    close: 'Tutup',
     // Wire error codes -> Indonesian copy. The server's message field stays
     // English by design (ADR-014: the API is a code surface) and never
     // reaches the treasurer; this map is what she sees instead.
@@ -456,19 +459,30 @@ export const copy = {
       nameLabel: 'Nama lokasi',
       add: 'Tambah lokasi',
       adding: 'Menambahkan…',
-      // Name and jenis are both editable: she named these herself in the
-      // setup wizard, and neither label is a posted fact.
-      edit: 'Ubah',
+      // The whole card is the edit affordance now (M6.28) - no separate
+      // "Ubah" button, so its label lives on the dialog it opens instead.
+      editTitle: 'Ubah lokasi',
+      editAria: (name: string) => `Ubah ${name}`,
       save: 'Simpan',
       saving: 'Menyimpan…',
       cancel: 'Batal',
       deactivate: 'Nonaktifkan',
       deactivating: 'Menonaktifkan…',
+      // The inline confirm swapped into the edit dialog's footer (M6.28,
+      // ADR-032) - never window.confirm(), and the consequence is named in
+      // terracotta, not alarm-red: a retired location and a deleted one are
+      // different things.
+      deactivateConfirm:
+        'Lokasi ini tidak akan muncul lagi saat mencatat atau cek kas. Saldo dan riwayatnya tetap utuh, dan bisa diaktifkan lagi kapan saja.',
+      deactivateConfirmAction: 'Ya, nonaktifkan',
       reinstate: 'Aktifkan lagi',
       reinstating: 'Mengaktifkan…',
       inactiveBadge: 'Tidak aktif',
       delete: 'Hapus',
       deleting: 'Menghapus…',
+      deleteConfirm:
+        'Lokasi ini akan dihapus selamanya. Hanya bisa untuk lokasi yang belum pernah dipakai mencatat apa pun.',
+      deleteConfirmAction: 'Ya, hapus',
       // The 409 the server answers the moment anything references the
       // location. Not phrased as a failure: deactivating is what she
       // actually wants, and this points her at it.

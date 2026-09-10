@@ -45,25 +45,41 @@ test.describe('settings', () => {
     // as on the location itself.
     await expect(page.getByText('Bank Uji Coba')).toBeVisible()
 
-    const addForm = page.getByRole('form', { name: copy.settings.locations.add })
+    // Add is a dialog now (M6.28, ADR-032), addressed by ?edit=location:new.
+    await page.getByRole('button', { name: copy.settings.locations.add }).click()
+    await expect(page).toHaveURL(/[?&]edit=location%3Anew/)
+    const addDialog = page.getByRole('dialog', { name: copy.settings.locations.add })
+    await expect(addDialog).toBeVisible()
+
     // 'Tunai' is already the default kind, but choosing it explicitly is what
     // proves the themed Select works against a real browser - the vitest
     // suite can only prove it against jsdom.
-    await addForm.getByRole('combobox', { name: copy.settings.locations.kindLabel }).click()
+    await addDialog.getByRole('combobox', { name: copy.settings.locations.kindLabel }).click()
     // Scoped to the open listbox: Radix also renders a hidden native select
     // for form submission, whose <option> elements carry the same role and
     // the same text.
     await page.getByRole('listbox').getByRole('option', { name: copy.settings.locations.kindCash }).click()
-    await addForm.getByLabel(copy.settings.locations.nameLabel).fill(locationName)
-    await addForm.getByRole('button', { name: copy.settings.locations.add }).click()
+    await addDialog.getByLabel(copy.settings.locations.nameLabel).fill(locationName)
+    await addDialog.getByRole('button', { name: copy.settings.locations.add }).click()
 
-    const row = page.getByRole('listitem').filter({ hasText: locationName })
+    // A successful add closes the dialog and drops the param.
+    await expect(addDialog).toBeHidden()
+    const row = page.getByRole('button', { name: copy.settings.locations.editAria(locationName) })
     await expect(row).toBeVisible()
 
+    // Rename and retire/delete now live inside the edit dialog it opens.
+    await row.click()
+    await expect(page).toHaveURL(/[?&]edit=location%3A\d+/)
+    const editDialog = page.getByRole('dialog', { name: copy.settings.locations.editTitle })
+    await expect(editDialog).toBeVisible()
+
     // Never used, so the server allows the delete (a location with history
-    // answers 409 and the screen says "nonaktifkan, bukan hapus" instead -
-    // covered in vitest, where a used location can be stubbed).
-    await row.getByRole('button', { name: copy.settings.locations.delete }).click()
+    // answers 409 and the dialog shows "nonaktifkan, bukan hapus" instead -
+    // covered in vitest, where a used location can be stubbed). Delete asks
+    // for the inline confirm first - never window.confirm().
+    await editDialog.getByRole('button', { name: copy.settings.locations.delete }).click()
+    await editDialog.getByRole('button', { name: copy.settings.locations.deleteConfirmAction }).click()
+    await expect(editDialog).toBeHidden()
     await expect(page.getByText(locationName)).toHaveCount(0)
   })
 })
