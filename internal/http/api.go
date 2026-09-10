@@ -113,18 +113,17 @@ func (a *api) routes(r chi.Router) {
 		r.Patch("/fund", a.updateFund)
 
 		// The fund's structure. Accounts are whatever the treasurer named at
-		// setup (#78) plus anything added or corrected afterward - direct-CRUD
-		// (ADR-027), the same POST/PATCH/DELETE shape as members below. Purposes
-		// stay read-only here but for the one kind a treasurer creates herself
-		// (pass-through); the other two kinds are written by SetUpFund and
-		// OpenIncidental.
+		// setup (#78) plus anything added or corrected afterward. PATCH and
+		// DELETE stay direct-CRUD (ADR-027), the same shape as members below;
+		// POST goes through the ledger instead (#230) because it may carry an
+		// opening balance that must post inside the same transaction as the
+		// account. Purposes stay read-only here but for the one kind a
+		// treasurer creates herself (pass-through); the other two kinds are
+		// written by SetUpFund and OpenIncidental.
 		r.Post("/accounts", a.createAccount)
 		r.Get("/accounts", a.listAccounts)
 		r.Patch("/accounts/{id}", a.updateAccount)
 		r.Delete("/accounts/{id}", a.deleteAccount)
-		// An account's starting figure (PRD section 7.1) - PostOpeningBalance has been
-		// built and tested since M3 but had no route until now (#134).
-		r.Post("/accounts/{id}/opening-balance", a.postAccountOpeningBalance)
 		r.Get("/purposes", a.listPurposes)
 		r.Post("/pass-through-purposes", a.createPassThroughPurpose)
 		r.Patch("/purposes/{id}", a.updatePassThroughPurpose)

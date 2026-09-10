@@ -69,6 +69,12 @@ func generateReportSlug() (string, error) {
 type AccountInput struct {
 	Kind string // "cash" or "bank" - the schema's own CHECK (kind IN (...)) is the single source of truth for the set
 	Name string // non-empty after trimming - the schema's own CHECK (length(trim(name)) > 0) refuses it, not pre-validated here (ADR-027)
+
+	// OpeningBalance is this account's starting figure, optional - #230's
+	// uniform rule: a location and its opening balance are born together, in
+	// this same withTx, or not at all. nil is exactly the same as an
+	// OpeningBalance with Amount 0 - neither posts a row.
+	OpeningBalance *OpeningBalance
 }
 
 // SetUpFundParams is every argument SetUpFund needs to bring a brand-new
@@ -113,16 +119,23 @@ type SetUpFundResult struct {
 // still written inside the same transaction as the fund and its main
 // purpose.
 //
-// Members, dues tiers, dues rates and the two opening balances are
-// deliberately NOT here. Members carry no cross-row invariant beyond what
-// the schema already enforces (ADR-027's own carve-out - no domain wrapper
-// for them at all). Tiers and rates have only ordinary unique constraints a
-// create-then-retry handles with a 409. PostOpeningBalance already has
-// exactly the resumable shape #51 built: a clean ErrOpeningBalanceExists on
-// retry, a zero amount posts nothing. Folding any of these in would mean one
-// mistyped tier reference aborts a perfectly good fund and its accounts -
-// the opposite of what a "first-run setup" flow should risk. They are
-// composed afterward by the caller as ordinary retriable calls.
+// Opening balances ARE folded in, one per account, each inside this same
+// withTx (#230's uniform rule: a location and its opening balance are born
+// together, or not at all). That is safe to fold in where members, dues
+// tiers and dues rates are not, because an opening balance's only failure
+// modes are refused up front, before withTx even opens -
+// validateOpeningBalance rejects a negative amount or a malformed date on
+// every account in the batch before the first row is written - and a
+// location born with no opening balance has no later standalone way to gain
+// one, so there is nothing "resumable" about it to preserve. Members, dues
+// tiers and dues rates are still deliberately NOT here: members carry no
+// cross-row invariant beyond what the schema already enforces (ADR-027's own
+// carve-out - no domain wrapper for them at all), and tiers/rates have only
+// ordinary unique constraints a create-then-retry handles with a 409. Folding
+// any of those in would mean one mistyped tier reference aborts a perfectly
+// good fund and its accounts - the opposite of what a "first-run setup" flow
+// should risk. They are composed afterward by the caller as ordinary
+// retriable calls.
 //
 // A second run is refused. The pre-check runs inside this same withTx and
 // returns ErrFundAlreadyExists the moment a fund is found - see that
@@ -135,6 +148,16 @@ func (l *Ledger) SetUpFund(ctx context.Context, p SetUpFundParams) (SetUpFundRes
 	}
 	if len(p.Accounts) == 0 {
 		return SetUpFundResult{}, fmt.Errorf("%w: at least one account is required", ErrInvalidArgument)
+	}
+	// Every opening balance is validated before withTx opens - a refused one
+	// (anywhere in the batch) must leave no fund and no account behind, not
+	// just the account it belonged to.
+	for _, a := range p.Accounts {
+		if a.OpeningBalance != nil {
+			if err := validateOpeningBalance(*a.OpeningBalance); err != nil {
+				return SetUpFundResult{}, err
+			}
+		}
 	}
 
 	var result SetUpFundResult
@@ -185,6 +208,13 @@ func (l *Ledger) SetUpFund(ctx context.Context, p SetUpFundParams) (SetUpFundRes
 			if err != nil {
 				return fmt.Errorf("creating account %q: %w", a.Name, err)
 			}
+
+			if a.OpeningBalance != nil && a.OpeningBalance.Amount > 0 {
+				if _, err := postOpeningBalanceRow(ctx, q, fund.ID, account.ID, mainPurpose.ID, *a.OpeningBalance, now); err != nil {
+					return fmt.Errorf("posting opening balance for account %q: %w", a.Name, err)
+				}
+			}
+
 			accounts = append(accounts, account)
 		}
 

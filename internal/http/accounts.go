@@ -6,7 +6,6 @@ import (
 	"io"
 	"net/http"
 	"strconv"
-	"time"
 
 	"github.com/go-chi/chi/v5"
 
@@ -20,9 +19,39 @@ import (
 // POST /api/accounts is what adds to them afterward). Shape only - a
 // malformed kind and a blank name are the schema's own CHECKs to refuse, not
 // re-checked here (ADR-027).
+//
+// OpeningBalance is optional and, per #230's uniform rule, the only way left
+// to give a location added after setup a starting figure: a location and its
+// opening balance are born together, in the same database transaction, or
+// not at all. Absent is the same as an amount of 0 - neither posts a row.
 type accountRequest struct {
-	Kind string `json:"kind"`
-	Name string `json:"name"`
+	Kind           string                 `json:"kind"`
+	Name           string                 `json:"name"`
+	OpeningBalance *openingBalanceRequest `json:"opening_balance"`
+}
+
+// openingBalanceRequest is accountRequest's and setupRequest's shared
+// opening-balance shape: an amount, the calendar date it is dated, and an
+// optional note. No purpose_id - an opening balance is always tagged to the
+// fund's one kind='main' purpose, resolved server-side.
+type openingBalanceRequest struct {
+	Amount     int64   `json:"amount"`
+	OccurredOn string  `json:"occurred_on"`
+	Note       *string `json:"note"`
+}
+
+// toOpeningBalance converts the wire shape to the ledger's own value type, or
+// nil when req itself is nil - the same "absent means no opening balance"
+// rule accountRequest's own doc comment states.
+func (req *openingBalanceRequest) toOpeningBalance() *ledger.OpeningBalance {
+	if req == nil {
+		return nil
+	}
+	return &ledger.OpeningBalance{
+		Amount:     money.Amount(req.Amount),
+		OccurredOn: req.OccurredOn,
+		Note:       req.Note,
+	}
 }
 
 // accountResponse is the wire shape of an account row. No fund_id, same
@@ -42,11 +71,16 @@ func toAccountResponse(a store.Account) accountResponse {
 	return accountResponse{ID: a.ID, Kind: a.Kind, Name: a.Name, InactiveOn: a.InactiveOn, CreatedAt: a.CreatedAt}
 }
 
-// createAccount is POST /api/accounts: a direct-CRUD write (ADR-027), the
-// same shape createMember and createDuesTier already use. #78 overturned the
-// assumption that only SetUpFund ever creates an account - a treasurer who
-// opens a second bank account, or realizes setup under-counted, needs this
-// afterward too.
+// createAccount is POST /api/accounts. #78 overturned the assumption that
+// only SetUpFund ever creates an account - a treasurer who opens a second
+// bank account, or realizes setup under-counted, needs this afterward too.
+//
+// #230 moved this off the direct-CRUD path createMember and createDuesTier
+// still use: an optional opening balance now rides the same request, and
+// Ledger.CreateAccount is what posts it inside the same transaction as the
+// account itself - a location and its opening balance are born together, or
+// not at all, so mapLedgerError (not mapSQLiteError) is what answers a
+// refusal here, the same as every other ledger-backed write.
 func (a *api) createAccount(w http.ResponseWriter, r *http.Request) {
 	var req accountRequest
 	if !decodeJSON(w, r, &req) {
@@ -58,14 +92,14 @@ func (a *api) createAccount(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	account, err := a.queries.CreateAccount(r.Context(), store.CreateAccountParams{
-		FundID:    fund.ID,
-		Kind:      req.Kind,
-		Name:      req.Name,
-		CreatedAt: time.Now().Unix(),
+	account, err := a.ledger.CreateAccount(r.Context(), ledger.CreateAccountParams{
+		FundID:         fund.ID,
+		Kind:           req.Kind,
+		Name:           req.Name,
+		OpeningBalance: req.OpeningBalance.toOpeningBalance(),
 	})
 	if err != nil {
-		mapSQLiteError(w, a.logger, err)
+		mapLedgerError(w, a.logger, err)
 		return
 	}
 
@@ -231,105 +265,4 @@ func (a *api) deleteAccount(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.WriteHeader(http.StatusNoContent)
-}
-
-// postOpeningBalanceRequest is POST /api/accounts/{id}/opening-balance's
-// body: an account's starting figure (PRD section 7.1). No purpose_id - an opening
-// balance is always tagged to the fund's one kind='main' purpose, the same
-// way OpenIncidental fixes its own purpose's kind server-side rather than
-// taking it on the wire.
-type postOpeningBalanceRequest struct {
-	Amount     int64   `json:"amount"`
-	OccurredOn string  `json:"occurred_on"`
-	Note       *string `json:"note"`
-}
-
-// postOpeningBalanceResponse is POST /api/accounts/{id}/opening-balance's
-// body. PostedAmount distinguishes "posted" from "nothing to post" the same
-// way closeIncidentalResponse.RolledAmount already does for a zero roll: 0
-// on the zero-amount path PostOpeningBalance's own doc comment describes,
-// since a zero amount posts no row. Transaction is the posted row itself,
-// nil on that same path - there is nothing yet to describe. The status code
-// says the same thing a second way: 201 when a row was created, 200 when
-// none was.
-type postOpeningBalanceResponse struct {
-	Transaction  *transactionResponse `json:"transaction"`
-	PostedAmount int64                `json:"posted_amount"`
-}
-
-// postAccountOpeningBalance is POST /api/accounts/{id}/opening-balance:
-// wraps Ledger.PostOpeningBalance, built and tested since M3 but never
-// routed until now. A second call for the same account is
-// ErrOpeningBalanceExists, already mapped to 409 (errors.go).
-func (a *api) postAccountOpeningBalance(w http.ResponseWriter, r *http.Request) {
-	account, ok := a.resolveAccount(w, r)
-	if !ok {
-		return
-	}
-
-	var req postOpeningBalanceRequest
-	if !decodeJSON(w, r, &req) {
-		return
-	}
-
-	fund, ok := a.resolveFund(w, r)
-	if !ok {
-		return
-	}
-
-	mainPurposeID, ok := a.resolveMainPurposeID(w, r, fund.ID)
-	if !ok {
-		return
-	}
-
-	posted, err := a.ledger.PostOpeningBalance(r.Context(), ledger.PostOpeningBalanceParams{
-		FundID:     fund.ID,
-		AccountID:  account.ID,
-		PurposeID:  mainPurposeID,
-		Amount:     money.Amount(req.Amount),
-		OccurredOn: req.OccurredOn,
-		Note:       req.Note,
-	})
-	if err != nil {
-		mapLedgerError(w, a.logger, err)
-		return
-	}
-
-	// 201 only when a row was actually created; the zero-amount path creates
-	// nothing and has no Location to name, so it answers 200. The body's
-	// posted_amount is still the signal a client reads - the status just
-	// stops claiming a creation that did not happen.
-	if posted.ID == 0 {
-		writeJSON(w, http.StatusOK, postOpeningBalanceResponse{})
-		return
-	}
-
-	tr := toTransactionResponse(posted)
-	writeJSON(w, http.StatusCreated, postOpeningBalanceResponse{
-		Transaction:  &tr,
-		PostedAmount: posted.Amount,
-	})
-}
-
-// resolveMainPurposeID finds the fund's one kind='main' purpose, or answers
-// the request itself (500 - this should be unreachable once SetUpFund has
-// run, since purpose_single_main guarantees exactly one) and reports false.
-// Mirrors internal/ledger's own unexported mainPurposeID, duplicated rather
-// than exported across the package boundary for one small lookup no other
-// http handler needs yet (openIncidental and createPassThroughPurpose both
-// write purposes, never read "the" main one).
-func (a *api) resolveMainPurposeID(w http.ResponseWriter, r *http.Request, fundID int64) (int64, bool) {
-	purposes, err := a.queries.ListPurposesByFund(r.Context(), fundID)
-	if err != nil {
-		mapSQLiteError(w, a.logger, err)
-		return 0, false
-	}
-	for _, p := range purposes {
-		if p.Kind == "main" {
-			return p.ID, true
-		}
-	}
-	a.logger.Error("fund has no main purpose", "fund_id", fundID)
-	writeAPIError(w, http.StatusInternalServerError, "internal_error", "Something went wrong.")
-	return 0, false
 }

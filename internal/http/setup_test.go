@@ -97,6 +97,63 @@ func TestPostSetupAcceptsASingleAccount(t *testing.T) {
 	}
 }
 
+// #230's uniform rule applied to setup: an account may carry its opening
+// balance in the same request, posted inside SetUpFund's own transaction. A
+// mixed batch - one account with a balance, one without - posts exactly the
+// rows that were asked for.
+func TestPostSetupWithOpeningBalancePostsExactlyTheAccountsThatHaveOne(t *testing.T) {
+	r := testRouter(t)
+
+	rec := postSetupWithAccounts(t, r, "Test Fund", []setupAccountRequest{
+		{Kind: "cash", Name: "Tunai"},
+		{Kind: "bank", Name: "Bank", OpeningBalance: &openingBalanceRequest{Amount: 500_000, OccurredOn: "2026-08-01"}},
+	})
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("POST /api/setup = %d, want %d (body: %s)", rec.Code, http.StatusCreated, rec.Body.String())
+	}
+	var got setupResponse
+	if err := json.NewDecoder(rec.Body).Decode(&got); err != nil {
+		t.Fatalf("decoding response: %v (body: %s)", err, rec.Body.String())
+	}
+
+	transactions := decodeTransactionsPage(t, getTransactions(t, r)).Transactions
+	if len(transactions) != 1 {
+		t.Fatalf("GET /api/transactions = %d rows, want exactly 1 (only the bank account had a balance)", len(transactions))
+	}
+	if transactions[0].AccountID != got.BankAccountID(t) {
+		t.Errorf("transaction.account_id = %d, want the bank account (%d)", transactions[0].AccountID, got.BankAccountID(t))
+	}
+	if transactions[0].Kind != "opening" || transactions[0].Direction != "in" || transactions[0].Amount != 500_000 {
+		t.Errorf("transaction = %+v, want kind=opening direction=in amount=500000", transactions[0])
+	}
+	if transactions[0].PurposeID != got.MainPurposeID {
+		t.Errorf("transaction.purpose_id = %d, want the main purpose %d", transactions[0].PurposeID, got.MainPurposeID)
+	}
+}
+
+// A negative opening balance anywhere in the batch refuses the whole setup
+// call, and leaves no fund behind - a retry with a corrected amount must not
+// collide with ErrFundAlreadyExists.
+func TestPostSetupRejectsNegativeOpeningBalanceLeavesNoFundBehind(t *testing.T) {
+	r := testRouter(t)
+
+	rec := postSetupWithAccounts(t, r, "Test Fund", []setupAccountRequest{
+		{Kind: "cash", Name: "Tunai", OpeningBalance: &openingBalanceRequest{Amount: -1, OccurredOn: "2026-08-01"}},
+	})
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("POST /api/setup with a negative opening balance = %d, want %d (body: %s)", rec.Code, http.StatusBadRequest, rec.Body.String())
+	}
+	got := decodeError(t, rec)
+	if got.Code != "invalid_argument" {
+		t.Errorf("error code = %q, want %q", got.Code, "invalid_argument")
+	}
+
+	retry := postSetupWithAccounts(t, r, "Test Fund", []setupAccountRequest{{Kind: "cash", Name: "Tunai"}})
+	if retry.Code != http.StatusCreated {
+		t.Fatalf("POST /api/setup retry after a rejected opening balance = %d, want %d (body: %s)", retry.Code, http.StatusCreated, retry.Body.String())
+	}
+}
+
 // Zero accounts is refused with the ledger's own ErrInvalidArgument, mapped
 // to a clean 400 - not a 500, and no fund left standing for the wizard to
 // collide with on retry.

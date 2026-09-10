@@ -246,8 +246,8 @@ type GetDuesPaymentReversalParams struct {
 	ReversesTransactionID *int64
 }
 
-// The reversed-once pre-check, same shape as GetReimbursementSettlement and
-// GetOpeningBalance above: sql.ErrNoRows means "not yet reversed, proceed"
+// The reversed-once pre-check, same shape as GetReimbursementSettlement
+// above: sql.ErrNoRows means "not yet reversed, proceed"
 // (the expected, non-error path); a row means it already has been. The
 // dues_payment_reversed_once partial unique index is the actual guarantee -
 // this pre-check only turns a raw constraint violation into a clean, named
@@ -269,62 +269,6 @@ func (q *Queries) GetDuesPaymentReversal(ctx context.Context, arg GetDuesPayment
 		&i.ReimbursementID,
 		&i.TransferID,
 		&i.ReversesTransactionID,
-		&i.Note,
-		&i.CreatedAt,
-	)
-	return i, err
-}
-
-const getOpeningBalance = `-- name: GetOpeningBalance :one
-SELECT id, fund_id, account_id, purpose_id, direction, amount, occurred_on, kind,
-       member_id, dues_period, reimbursement_id, transfer_id, note, created_at
-FROM "transaction"
-WHERE fund_id = ? AND account_id = ? AND kind = 'opening'
-`
-
-type GetOpeningBalanceParams struct {
-	FundID    int64
-	AccountID int64
-}
-
-type GetOpeningBalanceRow struct {
-	ID              int64
-	FundID          int64
-	AccountID       int64
-	PurposeID       int64
-	Direction       string
-	Amount          int64
-	OccurredOn      string
-	Kind            string
-	MemberID        *int64
-	DuesPeriod      *string
-	ReimbursementID *int64
-	TransferID      *int64
-	Note            *string
-	CreatedAt       int64
-}
-
-// The one-opening-per-account pre-check, same shape as
-// GetReimbursementSettlement above: no aggregate, so a fund with no opening
-// entry on this account yet returns a clean sql.ErrNoRows (the expected,
-// non-error path) rather than a NULL forced through an aggregate. A row means
-// one already exists.
-func (q *Queries) GetOpeningBalance(ctx context.Context, arg GetOpeningBalanceParams) (GetOpeningBalanceRow, error) {
-	row := q.db.QueryRowContext(ctx, getOpeningBalance, arg.FundID, arg.AccountID)
-	var i GetOpeningBalanceRow
-	err := row.Scan(
-		&i.ID,
-		&i.FundID,
-		&i.AccountID,
-		&i.PurposeID,
-		&i.Direction,
-		&i.Amount,
-		&i.OccurredOn,
-		&i.Kind,
-		&i.MemberID,
-		&i.DuesPeriod,
-		&i.ReimbursementID,
-		&i.TransferID,
 		&i.Note,
 		&i.CreatedAt,
 	)

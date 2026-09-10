@@ -118,8 +118,73 @@ describe('Settings locations', () => {
 
     await waitFor(() => expect(calls).toHaveLength(1))
     expect(calls[0]).toMatchObject({ method: 'POST', body: { kind: 'bank', name: 'Bank Jago' } })
+    expect(calls[0].body).not.toHaveProperty('opening_balance')
     // A successful add closes the dialog and drops the param.
     await waitFor(() => expect(currentSearch()).toBe(''))
+  })
+
+  it('adds a location with an opening balance, posted in the same request', async () => {
+    const { fetchMock, calls } = stubAccounts([account(1, 'Kotak kas')])
+    vi.stubGlobal('fetch', fetchMock)
+    renderAt()
+    await screen.findByRole('list')
+
+    await userEvent.click(screen.getByRole('button', { name: text.add }))
+    const dialog = screen.getByRole('dialog', { name: text.add })
+    await userEvent.type(within(dialog).getByLabelText(text.nameLabel), 'Bank Jago')
+    await userEvent.type(within(dialog).getByLabelText(text.openingBalanceLabel), '50000')
+    await userEvent.click(within(dialog).getByRole('button', { name: text.add }))
+
+    await waitFor(() => expect(calls).toHaveLength(1))
+    expect(calls[0].method).toBe('POST')
+    const body = calls[0].body as { opening_balance?: { amount: number; occurred_on: string; note: string } }
+    expect(body.opening_balance?.amount).toBe(50000)
+    expect(body.opening_balance?.occurred_on).toMatch(/^\d{4}-\d{2}-\d{2}$/)
+    expect(body.opening_balance?.note).toBe(copy.setup.balances.note('Bank Jago'))
+  })
+
+  it('adding with the balance field left empty sends no opening_balance key', async () => {
+    const { fetchMock, calls } = stubAccounts([account(1, 'Kotak kas')])
+    vi.stubGlobal('fetch', fetchMock)
+    renderAt()
+    await screen.findByRole('list')
+
+    await userEvent.click(screen.getByRole('button', { name: text.add }))
+    const dialog = screen.getByRole('dialog', { name: text.add })
+    await userEvent.type(within(dialog).getByLabelText(text.nameLabel), 'Bank Jago')
+    await userEvent.click(within(dialog).getByRole('button', { name: text.add }))
+
+    await waitFor(() => expect(calls).toHaveLength(1))
+    expect(calls[0].body).not.toHaveProperty('opening_balance')
+  })
+
+  it('a failed add keeps the dialog open with the error shown and ?edit=location:new in the URL', async () => {
+    const { fetchMock } = stubAccounts([account(1, 'Kotak kas')], () =>
+      jsonResponse({ error: { code: 'invalid_argument', message: 'bad' } }, 400),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+    renderAt()
+    await screen.findByRole('list')
+
+    await userEvent.click(screen.getByRole('button', { name: text.add }))
+    const dialog = screen.getByRole('dialog', { name: text.add })
+    await userEvent.type(within(dialog).getByLabelText(text.nameLabel), 'Bank Jago')
+    await userEvent.click(within(dialog).getByRole('button', { name: text.add }))
+
+    expect(await within(dialog).findByRole('alert')).toBeInTheDocument()
+    expect(currentSearch()).toBe('?edit=location%3Anew')
+    expect(screen.getByRole('dialog', { name: text.add })).toBeInTheDocument()
+  })
+
+  it('the edit dialog has no opening-balance field', async () => {
+    const { fetchMock } = stubAccounts([account(1, 'Kotak kas')])
+    vi.stubGlobal('fetch', fetchMock)
+    renderAt()
+    await screen.findByRole('list')
+
+    await userEvent.click(screen.getByRole('button', { name: text.editAria('Kotak kas') }))
+    const dialog = screen.getByRole('dialog', { name: text.editTitle })
+    expect(within(dialog).queryByLabelText(text.openingBalanceLabel)).not.toBeInTheDocument()
   })
 
   it('renames a location, sending only the field that changed', async () => {

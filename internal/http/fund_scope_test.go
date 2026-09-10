@@ -144,11 +144,6 @@ func fundScopedRouteCases() []struct {
 		{"DELETE /api/accounts/{id}", func(t *testing.T, r http.Handler, o otherFundFixture) *httptest.ResponseRecorder {
 			return deleteAccount(t, r, o.accountID)
 		}},
-		{"POST /api/accounts/{id}/opening-balance", func(t *testing.T, r http.Handler, o otherFundFixture) *httptest.ResponseRecorder {
-			return postOpeningBalance(t, r, o.accountID, postOpeningBalanceRequest{
-				Amount: 100_000, OccurredOn: "2026-01-05",
-			})
-		}},
 		{"PATCH /api/dues-tiers/{id}", func(t *testing.T, r http.Handler, o otherFundFixture) *httptest.ResponseRecorder {
 			return patchDuesTier(t, r, o.tierID, "Renamed")
 		}},

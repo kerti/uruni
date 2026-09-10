@@ -6,8 +6,10 @@ import (
 	"io"
 	"log/slog"
 	"testing"
+	"time"
 
 	"github.com/kerti/uruni/internal/db"
+	"github.com/kerti/uruni/internal/money"
 	"github.com/kerti/uruni/internal/store"
 )
 
@@ -144,6 +146,34 @@ func accountIDByKind(t *testing.T, accounts []store.Account, kind string) int64 
 	}
 	t.Fatalf("no account of kind %q among %+v", kind, accounts)
 	return 0
+}
+
+// postOpeningBalance is the fixture reconciliation_test.go and
+// reimbursement_test.go reach for to give an already-existing account a
+// starting figure: #230 removed PostOpeningBalance and the standalone route
+// it backed, so an opening balance now only ever posts alongside the account
+// it belongs to (SetUpFund, Ledger.CreateAccount) - neither of which fits a
+// test whose account came from this file's own createAccount. It goes
+// straight to the package's own unexported insert path rather than
+// reintroducing a third production entry point just for tests.
+func postOpeningBalance(t *testing.T, l *Ledger, fundID, accountID, purposeID int64, amount money.Amount, occurredOn string) store.Transaction {
+	t.Helper()
+	ob := OpeningBalance{Amount: amount, OccurredOn: occurredOn}
+	if err := validateOpeningBalance(ob); err != nil {
+		t.Fatalf("validateOpeningBalance() = %v, want no error", err)
+	}
+
+	ctx := context.Background()
+	var posted store.Transaction
+	err := l.withTx(ctx, func(q store.Querier) error {
+		var err error
+		posted, err = postOpeningBalanceRow(ctx, q, fundID, accountID, purposeID, ob, time.Now().Unix())
+		return err
+	})
+	if err != nil {
+		t.Fatalf("postOpeningBalanceRow() = %v, want no error", err)
+	}
+	return posted
 }
 
 func createPurpose(t *testing.T, q *store.Queries, fundID int64, kind, name string) int64 {

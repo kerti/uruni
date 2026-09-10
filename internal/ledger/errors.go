@@ -24,20 +24,6 @@ import "errors"
 // (ADR-027).
 var ErrInvalidArgument = errors.New("ledger: invalid argument")
 
-// ErrOpeningBalanceExists is returned by PostOpeningBalance when the account
-// already carries a kind='opening' row.
-//
-// The schema's opening_balance_once_per_account partial unique index is the
-// actual guarantee - a second opening row cannot exist once the write reaches
-// it, under any caller, including one that bypasses this package entirely.
-// PostOpeningBalance's pre-check exists only to turn that into a clean, named
-// error instead of a raw "UNIQUE constraint failed" string, exactly as
-// ADR-027 describes for SettleReimbursement's settled-once check: under
-// ADR-004's SetMaxOpenConns(1), a race between the pre-check and the insert
-// is structurally impossible, so this is not a lock and closes no window the
-// index does not already close.
-var ErrOpeningBalanceExists = errors.New("ledger: opening balance already exists for this account")
-
 // ErrReimbursementWaived is returned by SettleReimbursement when the claim's
 // waived_on is set: a claim the treasurer has already written off as never
 // going to be repaid cannot also be settled.
@@ -59,7 +45,7 @@ var ErrReimbursementAlreadySettled = errors.New("ledger: reimbursement has alrea
 
 // ErrFundAlreadyExists is returned by SetUpFund when a fund already exists.
 //
-// Unlike ErrOpeningBalanceExists and ErrReimbursementAlreadySettled, this is
+// Unlike ErrReimbursementAlreadySettled and ErrDuesPaymentAlreadyReversed, this is
 // not a pre-check ahead of a unique index the schema already enforces: there
 // is deliberately no such index. "At most one fund" is application policy,
 // not a schema-level fact - PRD section 6 keeps multiple funds open at the *model*
@@ -128,7 +114,7 @@ var ErrIncidentalNotClosed = errors.New("ledger: incidental is not closed")
 // ErrIncidentalAlreadyClosed is returned by CloseIncidentalAndRoll when the
 // envelope's closed_on is already set.
 //
-// Unlike ErrOpeningBalanceExists and ErrReimbursementAlreadySettled, this is
+// Unlike ErrReimbursementAlreadySettled and ErrDuesPaymentAlreadyReversed, this is
 // not a pre-check ahead of a unique index the schema already enforces:
 // incidental carries no immutability trigger, and closing it is a plain
 // UPDATE (ADR-024). Nothing in the schema stops a second UPDATE. This check

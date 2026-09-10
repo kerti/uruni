@@ -5,25 +5,18 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import AmountInput from '@/components/money/AmountInput'
 import Loading from '@/components/states/Loading'
 import ErrorState from '@/components/states/ErrorState'
 import { copy } from '@/copy/id'
 import { ApiError } from '@/lib/api'
 import { createAccount, deleteAccount, listAccounts, setAccountInactiveOn, updateAccount } from '@/lib/accounts'
+import { todayISODate } from '@/lib/dates'
 import { useApi } from '@/lib/useApi'
 import { useDialogParam } from '@/lib/useDialogParam'
 import type { Account } from '@/lib/accounts'
 
 const text = copy.settings.locations
-
-/** Local YYYY-MM-DD - never toISOString(), which is UTC and can read a day
- * early in WIB. Same helper as RecordTransaction.tsx's todayISODate. */
-function todayISODate(): string {
-  const now = new Date()
-  const mm = String(now.getMonth() + 1).padStart(2, '0')
-  const dd = String(now.getDate()).padStart(2, '0')
-  return `${now.getFullYear()}-${mm}-${dd}`
-}
 
 /** What `?edit=` names on this screen - a new location, or an existing one
  * by id. Anything else (a different prefix, a non-numeric id) is not this
@@ -183,21 +176,27 @@ function KindField({
 }
 
 /** Adding a location after setup (#78: setup asks for the first batch, this
- * is what adds to them afterward). No opening balance field here - that is
- * #230's named exception to "dialogs never post", not this slice's. */
+ * is what adds to them afterward). #230's named exception to "dialogs never
+ * post" carries an opening balance field here that EditLocationDialog does
+ * not get - a location and its opening balance are born together, in the
+ * same database transaction, or not at all, and that is only possible the
+ * moment the location itself is created. */
 function AddLocationDialog({ open, onClose, onAdded }: { open: boolean; onClose: () => void; onAdded: () => void }) {
   const [state, run] = useApi<Account>()
   const [kind, setKind] = useState<'cash' | 'bank'>('cash')
   const [name, setName] = useState('')
+  const [openingBalance, setOpeningBalance] = useState(0)
 
   const busy = state.status === 'loading'
 
   // A fresh form every time the dialog opens, so a location added a moment
-  // ago does not leave its name sitting in the field for the next one.
+  // ago does not leave its name (or balance) sitting in the fields for the
+  // next one.
   useEffect(() => {
     if (open) {
       setKind('cash')
       setName('')
+      setOpeningBalance(0)
     }
   }, [open])
 
@@ -206,7 +205,13 @@ function AddLocationDialog({ open, onClose, onAdded }: { open: boolean; onClose:
     const trimmed = name.trim()
     if (trimmed === '') return
     void run(async () => {
-      const created = await createAccount(kind, trimmed)
+      const created = await createAccount(
+        kind,
+        trimmed,
+        openingBalance > 0
+          ? { amount: openingBalance, occurredOn: todayISODate(), note: copy.setup.balances.note(trimmed) }
+          : undefined,
+      )
       onAdded()
       return created
     })
@@ -228,6 +233,16 @@ function AddLocationDialog({ open, onClose, onAdded }: { open: boolean; onClose:
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="new-location-name">{text.nameLabel}</Label>
             <Input id="new-location-name" type="text" value={name} onChange={(event) => setName(event.target.value)} />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <AmountInput
+              id="new-location-opening-balance"
+              label={text.openingBalanceLabel}
+              value={openingBalance}
+              onChange={setOpeningBalance}
+              disabled={busy}
+            />
+            <p className="text-sm text-muted-foreground">{text.openingBalanceHint}</p>
           </div>
           {state.status === 'error' && state.error && <ErrorState error={state.error} />}
           <DialogFooter className="mt-1">

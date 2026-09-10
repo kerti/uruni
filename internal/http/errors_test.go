@@ -68,7 +68,6 @@ func TestMapLedgerErrorMapsSentinelsToStatusAndCode(t *testing.T) {
 		{"reimbursement waived", ledger.ErrReimbursementWaived, 409, "reimbursement_waived"},
 		{"reimbursement already settled", ledger.ErrReimbursementAlreadySettled, 409, "reimbursement_already_settled"},
 		{"incidental already closed", ledger.ErrIncidentalAlreadyClosed, 409, "incidental_already_closed"},
-		{"opening balance exists", ledger.ErrOpeningBalanceExists, 409, "opening_balance_exists"},
 		{"money overflow", money.ErrOverflow, 500, "internal_error"},
 		{"unrecognized", errors.New("some domain-internal failure"), 500, "internal_error"},
 	}

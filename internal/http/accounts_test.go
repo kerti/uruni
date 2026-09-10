@@ -36,18 +36,6 @@ func deleteAccount(t *testing.T, r http.Handler, id int64) *httptest.ResponseRec
 	return rec
 }
 
-func postOpeningBalance(t *testing.T, r http.Handler, accountID int64, req postOpeningBalanceRequest) *httptest.ResponseRecorder {
-	t.Helper()
-	body, err := json.Marshal(req)
-	if err != nil {
-		t.Fatalf("marshaling opening balance request: %v", err)
-	}
-	rec := httptest.NewRecorder()
-	path := fmt.Sprintf("/api/accounts/%d/opening-balance", accountID)
-	r.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, path, bytes.NewReader(body)))
-	return rec
-}
-
 func TestPostAccountsRequiresAFund(t *testing.T) {
 	rec := postAccount(t, testRouter(t), accountRequest{Kind: "bank", Name: "BCA"})
 
@@ -423,44 +411,48 @@ func TestDeleteAccountReturns404ForAnUnknownID(t *testing.T) {
 	}
 }
 
-// PostOpeningBalance has been built and tested since M3 (internal/ledger)
-// but had no HTTP route until #134. This is the ordinary path: a positive
-// amount posts one kind='opening' transaction and the response carries it.
-func TestPostAccountOpeningBalancePostsATransaction(t *testing.T) {
+// #230's uniform rule applied to POST /api/accounts: an optional
+// opening_balance rides the same request and posts inside the same
+// transaction as the account. This is the ordinary path: a positive amount
+// creates the account and the balance shows up wherever balances are read.
+func TestPostAccountsWithOpeningBalanceCreatesAndBalancesReflectIt(t *testing.T) {
 	r := testRouter(t)
 	setup := setUpFund(t, r)
-	cashID := setup.CashAccountID(t)
 
-	rec := postOpeningBalance(t, r, cashID, postOpeningBalanceRequest{
-		Amount: 100_000, OccurredOn: "2026-08-01",
+	rec := postAccount(t, r, accountRequest{
+		Kind: "cash", Name: "Kas RT 05",
+		OpeningBalance: &openingBalanceRequest{Amount: 100_000, OccurredOn: "2026-08-01"},
 	})
 	if rec.Code != http.StatusCreated {
-		t.Fatalf("POST /api/accounts/%d/opening-balance = %d, want %d (body: %s)", cashID, rec.Code, http.StatusCreated, rec.Body.String())
+		t.Fatalf("POST /api/accounts = %d, want %d (body: %s)", rec.Code, http.StatusCreated, rec.Body.String())
 	}
-	var got postOpeningBalanceResponse
-	if err := json.NewDecoder(rec.Body).Decode(&got); err != nil {
+	var created accountResponse
+	if err := json.NewDecoder(rec.Body).Decode(&created); err != nil {
 		t.Fatalf("decoding response: %v (body: %s)", err, rec.Body.String())
 	}
-	if got.PostedAmount != 100_000 {
-		t.Errorf("posted_amount = %d, want %d", got.PostedAmount, 100_000)
+
+	balances := getBalances(t, r)
+	if balances.Code != http.StatusOK {
+		t.Fatalf("GET /api/balances = %d, want %d (body: %s)", balances.Code, http.StatusOK, balances.Body.String())
 	}
-	if got.Transaction == nil {
-		t.Fatal("transaction is nil, want the posted row")
+	var got balancesResponse
+	if err := json.NewDecoder(balances.Body).Decode(&got); err != nil {
+		t.Fatalf("decoding response: %v (body: %s)", err, balances.Body.String())
 	}
-	if got.Transaction.Kind != "opening" {
-		t.Errorf("transaction.kind = %q, want %q", got.Transaction.Kind, "opening")
+	if got.FundTotal != 100_000 {
+		t.Errorf("fund_total = %d, want %d", got.FundTotal, 100_000)
 	}
-	if got.Transaction.AccountID != cashID {
-		t.Errorf("transaction.account_id = %d, want %d", got.Transaction.AccountID, cashID)
+	found := false
+	for _, acc := range got.Accounts {
+		if acc.ID == created.ID {
+			found = true
+			if acc.Balance != 100_000 {
+				t.Errorf("account balance = %d, want %d", acc.Balance, 100_000)
+			}
+		}
 	}
-	if got.Transaction.PurposeID != setup.MainPurposeID {
-		t.Errorf("transaction.purpose_id = %d, want the main purpose %d", got.Transaction.PurposeID, setup.MainPurposeID)
-	}
-	if got.Transaction.Direction != "in" {
-		t.Errorf("transaction.direction = %q, want %q", got.Transaction.Direction, "in")
-	}
-	if got.Transaction.Amount != 100_000 {
-		t.Errorf("transaction.amount = %d, want %d", got.Transaction.Amount, 100_000)
+	if !found {
+		t.Errorf("GET /api/balances accounts = %+v, want the created account %d among them", got.Accounts, created.ID)
 	}
 
 	list := getTransactions(t, r)
@@ -468,120 +460,140 @@ func TestPostAccountOpeningBalancePostsATransaction(t *testing.T) {
 	if len(transactions) != 1 {
 		t.Fatalf("GET /api/transactions = %d rows, want 1", len(transactions))
 	}
-}
-
-// A zero amount posts no row and no error - PostOpeningBalance's own no-op
-// rule, surfaced the same way closeIncidentalResponse.RolledAmount already
-// distinguishes "posted" from "nothing to post" for a zero roll:
-// posted_amount is 0 and transaction is nil, not a 4xx.
-func TestPostAccountOpeningBalanceZeroAmountIsANoOp(t *testing.T) {
-	r := testRouter(t)
-	setup := setUpFund(t, r)
-	cashID := setup.CashAccountID(t)
-
-	rec := postOpeningBalance(t, r, cashID, postOpeningBalanceRequest{
-		Amount: 0, OccurredOn: "2026-08-01",
-	})
-	// 200, not 201: a zero amount posts no row, so there is no creation to
-	// claim. The 201 path is TestPostAccountOpeningBalancePostsATransaction.
-	if rec.Code != http.StatusOK {
-		t.Fatalf("POST /api/accounts/%d/opening-balance with amount 0 = %d, want %d (body: %s)", cashID, rec.Code, http.StatusOK, rec.Body.String())
-	}
-	var got postOpeningBalanceResponse
-	if err := json.NewDecoder(rec.Body).Decode(&got); err != nil {
-		t.Fatalf("decoding response: %v", err)
-	}
-	if got.PostedAmount != 0 {
-		t.Errorf("posted_amount = %d, want 0", got.PostedAmount)
-	}
-	if got.Transaction != nil {
-		t.Errorf("transaction = %+v, want nil - a zero amount posts no row", got.Transaction)
-	}
-
-	list := getTransactions(t, r)
-	transactions := decodeTransactionsPage(t, list).Transactions
-	if len(transactions) != 0 {
-		t.Errorf("GET /api/transactions = %d rows, want 0 after a zero-amount opening balance", len(transactions))
-	}
-
-	// A zero call does not consume the account's one-opening slot: a genuine
-	// later opening balance may still be posted.
-	again := postOpeningBalance(t, r, cashID, postOpeningBalanceRequest{
-		Amount: 50_000, OccurredOn: "2026-08-02",
-	})
-	if again.Code != http.StatusCreated {
-		t.Fatalf("POST .../opening-balance after a zero call = %d, want %d (body: %s)", again.Code, http.StatusCreated, again.Body.String())
+	if transactions[0].Kind != "opening" || transactions[0].AccountID != created.ID || transactions[0].PurposeID != setup.MainPurposeID {
+		t.Errorf("transaction = %+v, want kind=opening account_id=%d purpose_id=%d", transactions[0], created.ID, setup.MainPurposeID)
 	}
 }
 
-// A second call for the same account is refused with the named 409 -
-// ErrOpeningBalanceExists, already mapped in errors.go.
-func TestPostAccountOpeningBalanceSecondCallReturns409(t *testing.T) {
-	r := testRouter(t)
-	setup := setUpFund(t, r)
-	cashID := setup.CashAccountID(t)
-
-	first := postOpeningBalance(t, r, cashID, postOpeningBalanceRequest{
-		Amount: 100_000, OccurredOn: "2026-08-01",
-	})
-	if first.Code != http.StatusCreated {
-		t.Fatalf("first POST .../opening-balance = %d, want %d (body: %s)", first.Code, http.StatusCreated, first.Body.String())
-	}
-
-	second := postOpeningBalance(t, r, cashID, postOpeningBalanceRequest{
-		Amount: 50_000, OccurredOn: "2026-08-02",
-	})
-	if second.Code != http.StatusConflict {
-		t.Fatalf("second POST .../opening-balance = %d, want %d (body: %s)", second.Code, http.StatusConflict, second.Body.String())
-	}
-	got := decodeError(t, second)
-	if got.Code != "opening_balance_exists" {
-		t.Errorf("error code = %q, want %q", got.Code, "opening_balance_exists")
-	}
-
-	list := getTransactions(t, r)
-	transactions := decodeTransactionsPage(t, list).Transactions
-	if len(transactions) != 1 {
-		t.Errorf("GET /api/transactions = %d rows after a refused second opening balance, want 1", len(transactions))
-	}
-}
-
-func TestPostAccountOpeningBalanceReturns404ForAnUnknownAccount(t *testing.T) {
+// A zero-amount opening balance creates the account and posts no row -
+// absent and zero are the same thing.
+func TestPostAccountsWithZeroOpeningBalanceCreatesAccountNoTransaction(t *testing.T) {
 	r := testRouter(t)
 	setUpFund(t, r)
 
-	rec := postOpeningBalance(t, r, 9_999, postOpeningBalanceRequest{
-		Amount: 100_000, OccurredOn: "2026-08-01",
+	rec := postAccount(t, r, accountRequest{
+		Kind: "bank", Name: "BCA",
+		OpeningBalance: &openingBalanceRequest{Amount: 0, OccurredOn: "2026-08-01"},
 	})
-	if rec.Code != http.StatusNotFound {
-		t.Fatalf("POST /api/accounts/9999/opening-balance = %d, want %d (body: %s)", rec.Code, http.StatusNotFound, rec.Body.String())
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("POST /api/accounts = %d, want %d (body: %s)", rec.Code, http.StatusCreated, rec.Body.String())
 	}
-	got := decodeError(t, rec)
-	if got.Code != "not_found" {
-		t.Errorf("error code = %q, want %q", got.Code, "not_found")
+
+	transactions := decodeTransactionsPage(t, getTransactions(t, r)).Transactions
+	if len(transactions) != 0 {
+		t.Errorf("GET /api/transactions = %d rows after a zero-amount opening balance, want 0", len(transactions))
 	}
 }
 
-func TestPostAccountOpeningBalanceRejectsInvalidOccurredOn(t *testing.T) {
+// A negative opening balance refuses the whole request - no account is
+// created either, because the two are born together or not at all (#230).
+func TestPostAccountsRejectsNegativeOpeningBalanceCreatesNoAccount(t *testing.T) {
 	r := testRouter(t)
-	setup := setUpFund(t, r)
-	cashID := setup.CashAccountID(t)
+	setUpFund(t, r)
 
-	rec := postOpeningBalance(t, r, cashID, postOpeningBalanceRequest{
-		Amount: 100_000, OccurredOn: "not-a-date",
+	before := decodeAccountsList(t, r)
+
+	rec := postAccount(t, r, accountRequest{
+		Kind: "cash", Name: "Tunai Baru",
+		OpeningBalance: &openingBalanceRequest{Amount: -1, OccurredOn: "2026-08-01"},
 	})
 	if rec.Code != http.StatusBadRequest {
-		t.Fatalf("POST .../opening-balance with a malformed date = %d, want %d (body: %s)", rec.Code, http.StatusBadRequest, rec.Body.String())
+		t.Fatalf("POST /api/accounts with a negative opening balance = %d, want %d (body: %s)", rec.Code, http.StatusBadRequest, rec.Body.String())
 	}
 	got := decodeError(t, rec)
 	if got.Code != "invalid_argument" {
 		t.Errorf("error code = %q, want %q", got.Code, "invalid_argument")
 	}
+
+	after := decodeAccountsList(t, r)
+	if len(after) != len(before) {
+		t.Errorf("GET /api/accounts = %d accounts after a refused create, want %d (unchanged)", len(after), len(before))
+	}
+}
+
+// A malformed occurred_on in the opening balance refuses the whole request
+// the same way.
+func TestPostAccountsRejectsInvalidOpeningBalanceOccurredOnCreatesNoAccount(t *testing.T) {
+	r := testRouter(t)
+	setUpFund(t, r)
+
+	before := decodeAccountsList(t, r)
+
+	rec := postAccount(t, r, accountRequest{
+		Kind: "cash", Name: "Tunai Baru",
+		OpeningBalance: &openingBalanceRequest{Amount: 100_000, OccurredOn: "not-a-date"},
+	})
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("POST /api/accounts with a malformed opening balance date = %d, want %d (body: %s)", rec.Code, http.StatusBadRequest, rec.Body.String())
+	}
+	got := decodeError(t, rec)
+	if got.Code != "invalid_argument" {
+		t.Errorf("error code = %q, want %q", got.Code, "invalid_argument")
+	}
+
+	after := decodeAccountsList(t, r)
+	if len(after) != len(before) {
+		t.Errorf("GET /api/accounts = %d accounts after a refused create, want %d (unchanged)", len(after), len(before))
+	}
+}
+
+// decodeAccountsList is GET /api/accounts, decoded - shared by the refusal
+// tests above to prove a rejected create left the roster untouched.
+func decodeAccountsList(t *testing.T, r http.Handler) []accountResponse {
+	t.Helper()
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/accounts", nil))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GET /api/accounts = %d, want %d (body: %s)", rec.Code, http.StatusOK, rec.Body.String())
+	}
+	var accounts []accountResponse
+	if err := json.NewDecoder(rec.Body).Decode(&accounts); err != nil {
+		t.Fatalf("decoding response: %v", err)
+	}
+	return accounts
+}
+
+// mainPurposeID's last branch (internal/ledger): a fund that somehow has no
+// kind='main' purpose. purpose_single_main makes this unreachable through any
+// route - SetUpFund writes the row and nothing deletes it - so the row is
+// removed underneath the handler with raw SQL, the only honest way to reach
+// defensive code that exists precisely because the invariant could be
+// violated by something outside this package (a hand-edited database, a
+// botched restore). It must answer a clean 500 envelope, never panic on the
+// zero id, and must not create the account either - CreateAccount's own
+// withTx still rolls back.
+func TestPostAccountsWithOpeningBalanceAndNoMainPurposeIs500(t *testing.T) {
+	sqlDB := testStoreDB(t)
+	r := authedRouterFor(t, sqlDB)
+	setUpFund(t, r)
+
+	if _, err := sqlDB.Exec("DELETE FROM purpose WHERE kind = 'main'"); err != nil {
+		t.Fatalf("deleting the main purpose = %v, want no error", err)
+	}
+
+	before := decodeAccountsList(t, r)
+
+	rec := postAccount(t, r, accountRequest{
+		Kind: "cash", Name: "Tunai Baru",
+		OpeningBalance: &openingBalanceRequest{Amount: 100_000, OccurredOn: "2026-08-01"},
+	})
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("POST /api/accounts with no main purpose = %d, want %d (body: %s)", rec.Code, http.StatusInternalServerError, rec.Body.String())
+	}
+	got := decodeError(t, rec)
+	if got.Code != "internal_error" {
+		t.Errorf("error code = %q, want %q", got.Code, "internal_error")
+	}
+
+	after := decodeAccountsList(t, r)
+	if len(after) != len(before) {
+		t.Errorf("GET /api/accounts = %d accounts after the 500, want %d - nothing should have been created", len(after), len(before))
+	}
 }
 
 // postRawTo sends a body this package's typed helpers cannot express - a
 // malformed document, or a well-formed one whose field types are wrong.
-// Everything else goes through postAccount/postOpeningBalance.
+// Everything else goes through postAccount.
 func postRawTo(t *testing.T, r http.Handler, path, body string) *httptest.ResponseRecorder {
 	t.Helper()
 	rec := httptest.NewRecorder()
@@ -624,65 +636,14 @@ func TestPatchAccountRejectsAFieldOfTheWrongType(t *testing.T) {
 	}
 }
 
-func TestPostAccountOpeningBalanceRejectsMalformedJSON(t *testing.T) {
-	r := testRouter(t)
-	setup := setUpFund(t, r)
-	cashID := setup.CashAccountID(t)
-
-	rec := postRawTo(t, r, fmt.Sprintf("/api/accounts/%d/opening-balance", cashID), "{oops")
-	if rec.Code != http.StatusBadRequest {
-		t.Fatalf("POST .../opening-balance with malformed JSON = %d, want %d (body: %s)", rec.Code, http.StatusBadRequest, rec.Body.String())
-	}
-	got := decodeError(t, rec)
-	if got.Code != "invalid_json" {
-		t.Errorf("error code = %q, want %q", got.Code, "invalid_json")
-	}
-}
-
-// resolveMainPurposeID's last branch: a fund that somehow has no kind='main'
-// purpose. purpose_single_main makes this unreachable through any route -
-// SetUpFund writes the row and nothing deletes it - so the row is removed
-// underneath the handler with raw SQL, which is the only honest way to reach
-// defensive code that exists precisely because the invariant could be
-// violated by something outside this package (a hand-edited database, a
-// botched restore). It must answer a clean 500 envelope, never panic on the
-// zero id and post an opening balance against purpose 0.
-func TestPostAccountOpeningBalanceWithNoMainPurposeIs500(t *testing.T) {
-	sqlDB := testStoreDB(t)
-	r := authedRouterFor(t, sqlDB)
-	setup := setUpFund(t, r)
-	cashID := setup.CashAccountID(t)
-
-	if _, err := sqlDB.Exec("DELETE FROM purpose WHERE kind = 'main'"); err != nil {
-		t.Fatalf("deleting the main purpose = %v, want no error", err)
-	}
-
-	rec := postOpeningBalance(t, r, cashID, postOpeningBalanceRequest{
-		Amount: 100_000, OccurredOn: "2026-08-01",
-	})
-	if rec.Code != http.StatusInternalServerError {
-		t.Fatalf("POST .../opening-balance with no main purpose = %d, want %d (body: %s)", rec.Code, http.StatusInternalServerError, rec.Body.String())
-	}
-	got := decodeError(t, rec)
-	if got.Code != "internal_error" {
-		t.Errorf("error code = %q, want %q", got.Code, "internal_error")
-	}
-
-	// And nothing was posted on the way out.
-	transactions := decodeTransactionsPage(t, getTransactions(t, r)).Transactions
-	if len(transactions) != 0 {
-		t.Errorf("GET /api/transactions = %d rows, want 0 - the 500 must not have posted anything", len(transactions))
-	}
-}
-
 // Deliberately not covered, following the precedent
-// TestGetBalancesOnADeadDatabaseIs500 sets out: the mapSQLiteError branches
-// in listAccounts, resolveMainPurposeID and postAccountOpeningBalance's own
-// resolveFund call fire only when a store read fails, and #116's session
-// gate reads the store first - so on a closed database the gate answers the
-// identical 500 envelope and the handler never runs. They stay as honest
-// defensive code rather than growing an injection seam for branches that can
-// only ever fire together.
+// TestGetBalancesOnADeadDatabaseIs500 sets out: the mapSQLiteError/
+// mapLedgerError branches in listAccounts and createAccount's own resolveFund
+// call fire only when a store read fails, and #116's session gate reads the
+// store first - so on a closed database the gate answers the identical 500
+// envelope and the handler never runs. They stay as honest defensive code
+// rather than growing an injection seam for branches that can only ever fire
+// together.
 
 // A location's kind is a label, not a rule about the money in it - nothing
 // in internal/ledger branches on it - so entering the wrong one is a typo

@@ -86,8 +86,8 @@ type Querier interface {
 	// reason GetMemberForFund is (#188): an account id belonging to another fund
 	// answers sql.ErrNoRows rather than being found and only then rejected.
 	GetAccountForFund(ctx context.Context, arg GetAccountForFundParams) (Account, error)
-	// The reversed-once pre-check, same shape as GetReimbursementSettlement and
-	// GetOpeningBalance above: sql.ErrNoRows means "not yet reversed, proceed"
+	// The reversed-once pre-check, same shape as GetReimbursementSettlement
+	// above: sql.ErrNoRows means "not yet reversed, proceed"
 	// (the expected, non-error path); a row means it already has been. The
 	// dues_payment_reversed_once partial unique index is the actual guarantee -
 	// this pre-check only turns a raw constraint violation into a clean, named
@@ -121,12 +121,6 @@ type Querier interface {
 	// for ownership. Its unscoped predecessor GetMember is gone (#188) - keeping
 	// one around is how resolveMember came to be unscoped in the first place.
 	GetMemberForFund(ctx context.Context, arg GetMemberForFundParams) (Member, error)
-	// The one-opening-per-account pre-check, same shape as
-	// GetReimbursementSettlement above: no aggregate, so a fund with no opening
-	// entry on this account yet returns a clean sql.ErrNoRows (the expected,
-	// non-error path) rather than a NULL forced through an aggregate. A row means
-	// one already exists.
-	GetOpeningBalance(ctx context.Context, arg GetOpeningBalanceParams) (GetOpeningBalanceRow, error)
 	// GetPurposeForFund is the only single-purpose lookup, fund-scoped for the
 	// reason GetMemberForFund is (#188): an id belonging to another fund
 	// answers sql.ErrNoRows rather than being found and only then rejected.

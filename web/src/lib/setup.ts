@@ -30,10 +30,14 @@ export interface SetupResult {
   accounts: Account[]
 }
 
-/** One row of POST /api/setup's `accounts` array. */
+/** One row of POST /api/setup's `accounts` array. `opening_balance` is
+ * optional and, when given, is posted in the same database transaction that
+ * creates the fund and its accounts (#230: a location and its opening
+ * balance are born together, or not at all) - never a separate request. */
 export interface SetupAccountInput {
   kind: 'cash' | 'bank'
   name: string
+  opening_balance?: { amount: number; occurred_on: string; note: string }
 }
 
 /** The posted transaction row a successful opening balance answers with. */
@@ -52,12 +56,6 @@ export interface Transaction {
   reverses_transaction_id: number | null
   note: string | null
   created_at: number
-}
-
-/** POST /api/accounts/{id}/opening-balance's body. */
-export interface OpeningBalanceResult {
-  transaction: Transaction | null
-  posted_amount: number
 }
 
 export interface DuesTier {
@@ -104,29 +102,17 @@ export function renameFund(name: string): Promise<Fund> {
 }
 
 /**
- * POST /api/setup - the fund's name plus every account it starts with, in
- * one call. A second call for a fund that already exists is
- * 409 fund_already_exists.
+ * POST /api/setup - the fund's name plus every account it starts with, and
+ * each account's opening balance if it has one, in one call (#230: the fund,
+ * its accounts and their opening balances are born together, in one database
+ * transaction, or not at all). A second call for a fund that already exists
+ * is 409 fund_already_exists.
  */
 export function postSetup(name: string, accounts: SetupAccountInput[]): Promise<SetupResult> {
   return apiFetch<SetupResult>('/api/setup', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ name, accounts }),
-  })
-}
-
-/**
- * POST /api/accounts/{id}/opening-balance. A zero amount still posts no row
- * server-side (PostOpeningBalance's own contract) - callers here only reach
- * this at all for an account the treasurer actually filled in, see
- * Setup.tsx.
- */
-export function postOpeningBalance(accountId: number, amount: number, occurredOn: string, note: string): Promise<OpeningBalanceResult> {
-  return apiFetch<OpeningBalanceResult>(`/api/accounts/${accountId}/opening-balance`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ amount, occurred_on: occurredOn, note }),
   })
 }
 

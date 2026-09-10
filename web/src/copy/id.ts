@@ -82,10 +82,9 @@ export const copy = {
       already_registered: 'Akun bendahara untuk Uruni ini sudah pernah dibuat.',
       invalid_credentials: 'Email atau kata sandi salah.',
       too_many_requests: 'Terlalu banyak percobaan. Coba lagi beberapa menit lagi, ya.',
-      // M6.5's setup wizard: a second POST /api/setup, a second opening
-      // balance for the same location, and a malformed request body.
+      // M6.5's setup wizard: a second POST /api/setup, and a malformed
+      // request body.
       fund_already_exists: 'Kas ini sudah pernah disiapkan.',
-      opening_balance_exists: 'Saldo awal untuk lokasi ini sudah pernah dicatat.',
       invalid_json: 'Ada yang tidak beres saat mengirim data. Coba lagi.',
       // M6.15's settings screen: deleting a location (or later a member or
       // tier) that something already points at. The locations section
@@ -156,7 +155,7 @@ export const copy = {
     },
     balances: {
       heading: 'Isi saldo awal (opsional)',
-      body: 'Kosongkan kalau lokasi ini belum punya saldo untuk dicatat sekarang — bisa ditambah nanti lewat menu lokasi.',
+      body: 'Kosongkan kalau lokasi ini belum ada uangnya.',
       amountLabel: (accountName: string) => `Saldo awal — ${accountName}`,
       // The note stored on the opening-balance transaction itself, not a form
       // label — it outlives the wizard and shows up in home's recent activity
@@ -457,6 +456,12 @@ export const copy = {
       kindCash: 'Tunai',
       kindBank: 'Bank',
       nameLabel: 'Nama lokasi',
+      // #230: an opening balance can only be set the moment a location is
+      // born (add dialog only, never the edit dialog) - the field's hint
+      // says so explicitly rather than leaving her to wonder where it went
+      // once the location already exists.
+      openingBalanceLabel: 'Saldo awal (opsional)',
+      openingBalanceHint: 'Uang yang sudah ada di lokasi ini sekarang. Hanya bisa diisi saat menambah lokasi.',
       add: 'Tambah lokasi',
       adding: 'Menambahkan…',
       // The whole card is the edit affordance now (M6.28) - no separate

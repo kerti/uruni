@@ -41,8 +41,8 @@ type SettleReimbursementParams struct {
 // ADR-004's SetMaxOpenConns(1), no second connection can interleave a write
 // between either check and this method's own insert, so neither check is a
 // lock and neither closes a window the schema does not already close on its
-// own (mirroring PostOpeningBalance's identical comment for the
-// opening-balance-once check).
+// own (the same reasoning ErrDuesPaymentAlreadyReversed's own comment gives
+// for ReverseDuesPayment's identical shape).
 //
 //   - If the claim has WaivedOn set, ErrReimbursementWaived: a claim that will
 //     never be repaid cannot be settled.
