@@ -16,6 +16,7 @@ import Incidentals from '@/screens/Incidentals'
 import History from '@/screens/History/History'
 import Transactions from '@/screens/History/Transactions'
 import Reimbursements from '@/screens/History/Reimbursements'
+import Reconciliations from '@/screens/History/Reconciliations'
 import DuesStatus from '@/screens/Dues/Status'
 import RecordDuesPayment from '@/screens/Dues/RecordPayment'
 import Home from '@/screens/Home'
@@ -256,13 +257,14 @@ function AuthedGate({ onLoggedOut }: { onLoggedOut: () => void }) {
           }
         />
         <Route path="reimbursements" element={<Reimbursements refetchKey={location.key} />} />
+        <Route path="reconciliations" element={<Reconciliations refetchKey={location.key} />} />
       </Route>
       {/* The dues status roster's own former address (through M6.22) -
           Iuran now lives at /history/dues (ADR-032), and this redirect is
           what keeps a bookmark or an old link working. */}
       <Route path="/dues" element={<Navigate to="/history/dues" replace />} />
       {/* The reimbursements screen's own former address (through M6.24) -
-          Penggantian now lives at /history/reimbursements (#226, ADR-032),
+          Talangan now lives at /history/reimbursements (#226, ADR-032),
           same redirect precedent as /dues above. */}
       <Route path="/reimbursements" element={<Navigate to="/history/reimbursements" replace />} />
       <Route

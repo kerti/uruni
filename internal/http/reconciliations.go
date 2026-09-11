@@ -1,8 +1,10 @@
 package http
 
 import (
+	"encoding/base64"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 
@@ -190,26 +192,124 @@ func (a *api) takeReconciliation(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, toReconciliationDetailResponse(detail))
 }
 
-// listReconciliations is GET /api/reconciliations: every snapshot ever taken,
-// newest first (ListReconciliationsByFund's own ordering) - the history PRD
-// section 7.8 shows, not filtered to anything.
+// reconciliationsPageSize is GET /api/reconciliations's fixed page size
+// (#227, ADR-032 "Lists: paging and search"): 25 a page, same as
+// GET /api/transactions and GET /api/reimbursements.
+const reconciliationsPageSize = 25
+
+// reconciliationListItemResponse is one row of GET /api/reconciliations's
+// page: the snapshot plus open_difference_amount, the sum of
+// ABS(difference_amount) across that snapshot's still-open lines
+// (ListReconciliationsPage's own comment has the reasoning). Cek kas's list
+// needs this to show cocok versus selisih per row without a detail fetch.
+type reconciliationListItemResponse struct {
+	reconciliationResponse
+	OpenDifferenceAmount int64 `json:"open_difference_amount"`
+}
+
+// reconciliationsPageResponse is GET /api/reconciliations's envelope (#227),
+// the same {rows, next_cursor} shape transactionsPageResponse and
+// reimbursementsPageResponse already use.
+type reconciliationsPageResponse struct {
+	Reconciliations []reconciliationListItemResponse `json:"reconciliations"`
+	NextCursor      *string                          `json:"next_cursor"`
+}
+
+// encodeReconciliationsCursor/decodeReconciliationsCursor are
+// encodeTransactionsCursor/decodeTransactionsCursor's own shape (base64 of
+// "performed_at|id", the pair ListReconciliationsPage's keyset WHERE clause
+// compares against), except performed_at is itself an integer (a Unix
+// timestamp, not a calendar date - CreateReconciliation's own comment has
+// why), so both halves are validated as positive integers rather than one
+// being parsed as a date.
+func encodeReconciliationsCursor(performedAt, id int64) string {
+	return base64.RawURLEncoding.EncodeToString([]byte(strconv.FormatInt(performedAt, 10) + "|" + strconv.FormatInt(id, 10)))
+}
+
+// decodeReconciliationsCursor rejects anything that doesn't round-trip to
+// two positive integers - the shape listReconciliations below answers 400
+// invalid_argument for.
+func decodeReconciliationsCursor(raw string) (performedAt, id int64, ok bool) {
+	decoded, err := base64.RawURLEncoding.DecodeString(raw)
+	if err != nil {
+		return 0, 0, false
+	}
+	performedAtPart, idPart, found := strings.Cut(string(decoded), "|")
+	if !found {
+		return 0, 0, false
+	}
+	performedAt, err = strconv.ParseInt(performedAtPart, 10, 64)
+	if err != nil || performedAt <= 0 {
+		return 0, 0, false
+	}
+	id, err = strconv.ParseInt(idPart, 10, 64)
+	if err != nil || id <= 0 {
+		return 0, 0, false
+	}
+	return performedAt, id, true
+}
+
+// listReconciliations is GET /api/reconciliations (#227, ADR-032 "Lists:
+// paging and search"): newest-first, keyset-paged on
+// (performed_at DESC, id DESC), 25 a page - the same shape
+// GET /api/transactions and GET /api/reimbursements already answer, and for
+// the same reason (ListReconciliationsPage's own comment has the
+// row-value-keyset reasoning). No search - a handful of dated snapshots a
+// year, per the issue.
+//
+// ListReconciliationsPage is asked for one row more than the page size so
+// this handler can tell "the next page is empty" apart from "there is a
+// next page" without a second round trip, the same trick listTransactions
+// and listReimbursements use.
 func (a *api) listReconciliations(w http.ResponseWriter, r *http.Request) {
 	fund, ok := a.resolveFund(w, r)
 	if !ok {
 		return
 	}
 
-	recs, err := a.queries.ListReconciliationsByFund(r.Context(), fund.ID)
+	params := store.ListReconciliationsPageParams{
+		FundID:    fund.ID,
+		PageLimit: reconciliationsPageSize + 1,
+	}
+
+	if cursor := r.URL.Query().Get("cursor"); cursor != "" {
+		performedAt, id, ok := decodeReconciliationsCursor(cursor)
+		if !ok {
+			writeAPIError(w, http.StatusBadRequest, "invalid_argument", "The cursor is not valid.")
+			return
+		}
+		params.CursorPerformedAt = performedAt
+		params.CursorID = &id
+	}
+
+	rows, err := a.queries.ListReconciliationsPage(r.Context(), params)
 	if err != nil {
 		mapSQLiteError(w, a.logger, err)
 		return
 	}
 
-	resp := make([]reconciliationResponse, 0, len(recs))
-	for _, rec := range recs {
-		resp = append(resp, toReconciliationResponse(rec))
+	var nextCursor *string
+	if len(rows) > reconciliationsPageSize {
+		rows = rows[:reconciliationsPageSize]
+		last := rows[len(rows)-1]
+		encoded := encodeReconciliationsCursor(last.PerformedAt, last.ID)
+		nextCursor = &encoded
 	}
-	writeJSON(w, http.StatusOK, resp)
+
+	resp := make([]reconciliationListItemResponse, 0, len(rows))
+	for _, rec := range rows {
+		resp = append(resp, reconciliationListItemResponse{
+			reconciliationResponse: reconciliationResponse{
+				ID:                   rec.ID,
+				PerformedAt:          rec.PerformedAt,
+				ThroughTransactionID: rec.ThroughTransactionID,
+				Note:                 rec.Note,
+				CreatedAt:            rec.CreatedAt,
+			},
+			OpenDifferenceAmount: rec.OpenDifferenceAmount,
+		})
+	}
+	writeJSON(w, http.StatusOK, reconciliationsPageResponse{Reconciliations: resp, NextCursor: nextCursor})
 }
 
 // latestReconciliation is GET /api/reconciliations/latest: the one snapshot

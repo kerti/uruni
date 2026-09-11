@@ -2,10 +2,13 @@ package http
 
 import (
 	"bytes"
+	"context"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 
@@ -28,6 +31,48 @@ func getReconciliations(t *testing.T, r http.Handler) *httptest.ResponseRecorder
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/reconciliations", nil))
 	return rec
+}
+
+// getReconciliationsWithQuery is getReconciliations plus a raw query string
+// (e.g. "?cursor=..."), for the paging tests below.
+func getReconciliationsWithQuery(t *testing.T, r http.Handler, rawQuery string) *httptest.ResponseRecorder {
+	t.Helper()
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/reconciliations"+rawQuery, nil))
+	return rec
+}
+
+func decodeReconciliationsPage(t *testing.T, rec *httptest.ResponseRecorder) reconciliationsPageResponse {
+	t.Helper()
+	var got reconciliationsPageResponse
+	if err := json.NewDecoder(rec.Body).Decode(&got); err != nil {
+		t.Fatalf("decoding reconciliations page: %v (body: %s)", err, rec.Body.String())
+	}
+	return got
+}
+
+// seedReconciliations inserts n bare snapshots (no lines) directly through
+// the store, oldest first, each performed_at 1 second apart starting at
+// startPerformedAt - the same "seed directly, bypass the ledger" shape
+// seedReimbursements uses, since these paging tests care about ordering and
+// count, not about what TakeReconciliation itself validates.
+func seedReconciliations(t *testing.T, sqlDB *sql.DB, fundID int64, n int, startPerformedAt int64) []store.Reconciliation {
+	t.Helper()
+	q := store.New(sqlDB)
+	ctx := context.Background()
+	rows := make([]store.Reconciliation, 0, n)
+	for i := 0; i < n; i++ {
+		row, err := q.CreateReconciliation(ctx, store.CreateReconciliationParams{
+			FundID:      fundID,
+			PerformedAt: startPerformedAt + int64(i),
+			CreatedAt:   startPerformedAt + int64(i),
+		})
+		if err != nil {
+			t.Fatalf("seeding reconciliation %d: %v", i, err)
+		}
+		rows = append(rows, row)
+	}
+	return rows
 }
 
 func getLatestReconciliation(t *testing.T, r http.Handler) *httptest.ResponseRecorder {
@@ -236,12 +281,18 @@ func TestTakeReconciliationMatchedRoundTripsThroughListAndDetail(t *testing.T) {
 	if list.Code != http.StatusOK {
 		t.Fatalf("GET /api/reconciliations = %d, want %d (body: %s)", list.Code, http.StatusOK, list.Body.String())
 	}
-	var recs []reconciliationResponse
-	if err := json.NewDecoder(list.Body).Decode(&recs); err != nil {
+	var page reconciliationsPageResponse
+	if err := json.NewDecoder(list.Body).Decode(&page); err != nil {
 		t.Fatalf("decoding list: %v", err)
 	}
-	if len(recs) != 1 || recs[0].ID != created.ID {
-		t.Fatalf("list = %+v, want exactly the one snapshot just taken", recs)
+	if len(page.Reconciliations) != 1 || page.Reconciliations[0].ID != created.ID {
+		t.Fatalf("list = %+v, want exactly the one snapshot just taken", page.Reconciliations)
+	}
+	if page.Reconciliations[0].OpenDifferenceAmount != 0 {
+		t.Errorf("open_difference_amount = %d, want 0 (matched)", page.Reconciliations[0].OpenDifferenceAmount)
+	}
+	if page.NextCursor != nil {
+		t.Errorf("next_cursor = %v, want nil (one snapshot, one page)", *page.NextCursor)
 	}
 
 	// ...and through GET /api/reconciliations/{id}.
@@ -561,12 +612,15 @@ func TestTakeReconciliationRejectsInvalidArgumentsBeforeAnyWrite(t *testing.T) {
 
 			// Nothing was written: the list is still empty.
 			list := getReconciliations(t, r)
-			var recs []reconciliationResponse
-			if err := json.NewDecoder(list.Body).Decode(&recs); err != nil {
+			var page reconciliationsPageResponse
+			if err := json.NewDecoder(list.Body).Decode(&page); err != nil {
 				t.Fatalf("decoding list: %v", err)
 			}
-			if len(recs) != 0 {
-				t.Errorf("GET /api/reconciliations after a rejected call = %+v, want empty - nothing should have been written", recs)
+			if len(page.Reconciliations) != 0 {
+				t.Errorf("GET /api/reconciliations after a rejected call = %+v, want empty - nothing should have been written", page.Reconciliations)
+			}
+			if page.NextCursor != nil {
+				t.Errorf("next_cursor = %v, want nil (empty fund)", *page.NextCursor)
 			}
 		})
 	}
@@ -671,5 +725,272 @@ func TestGetReconciliationOpenLinesReturnsLeftOpenLinesWithTheirSnapshot(t *test
 	}
 	if got.DifferenceAmount != -15_000 {
 		t.Errorf("DifferenceAmount = %d, want -15000 (285000 counted against 300000 recorded)", got.DifferenceAmount)
+	}
+}
+
+// TestGetReconciliationsOrdersNewestFirstTiesBrokenByIDDesc mirrors the same
+// test on GET /api/transactions and GET /api/reimbursements: two snapshots
+// performed at the same instant are ordered by id, descending.
+func TestGetReconciliationsOrdersNewestFirstTiesBrokenByIDDesc(t *testing.T) {
+	sqlDB := testStoreDB(t)
+	r := authedRouterFor(t, sqlDB)
+	setup := setUpFund(t, r)
+
+	q := store.New(sqlDB)
+	ctx := context.Background()
+	older, err := q.CreateReconciliation(ctx, store.CreateReconciliationParams{
+		FundID: setup.Fund.ID, PerformedAt: 1000, CreatedAt: 1,
+	})
+	if err != nil {
+		t.Fatalf("seeding older: %v", err)
+	}
+	sameInstant, err := q.CreateReconciliation(ctx, store.CreateReconciliationParams{
+		FundID: setup.Fund.ID, PerformedAt: 1000, CreatedAt: 2,
+	})
+	if err != nil {
+		t.Fatalf("seeding sameInstant: %v", err)
+	}
+	newest, err := q.CreateReconciliation(ctx, store.CreateReconciliationParams{
+		FundID: setup.Fund.ID, PerformedAt: 2000, CreatedAt: 3,
+	})
+	if err != nil {
+		t.Fatalf("seeding newest: %v", err)
+	}
+
+	page := decodeReconciliationsPage(t, getReconciliations(t, r))
+	wantOrder := []int64{newest.ID, sameInstant.ID, older.ID}
+	if len(page.Reconciliations) != len(wantOrder) {
+		t.Fatalf("GET /api/reconciliations returned %d rows, want %d", len(page.Reconciliations), len(wantOrder))
+	}
+	for i, want := range wantOrder {
+		if page.Reconciliations[i].ID != want {
+			t.Errorf("row %d = id %d, want %d (order %v)", i, page.Reconciliations[i].ID, want, wantOrder)
+		}
+	}
+}
+
+// TestGetReconciliationsPagingWalksTheWholeSetWithNoSkipOrDuplicate is
+// #227's "paging walks the whole set with no skip and no duplicate"
+// acceptance criterion, over 60 snapshots (more than two 25-row pages).
+func TestGetReconciliationsPagingWalksTheWholeSetWithNoSkipOrDuplicate(t *testing.T) {
+	sqlDB := testStoreDB(t)
+	r := authedRouterFor(t, sqlDB)
+	setup := setUpFund(t, r)
+	seeded := seedReconciliations(t, sqlDB, setup.Fund.ID, 60, 1_000_000)
+
+	seen := map[int64]int{}
+	var order []int64
+	cursor := ""
+	for pages := 0; ; pages++ {
+		if pages > 10 {
+			t.Fatal("more than 10 pages fetched - paging did not terminate")
+		}
+		rawQuery := ""
+		if cursor != "" {
+			rawQuery = "?cursor=" + url.QueryEscape(cursor)
+		}
+		rec := getReconciliationsWithQuery(t, r, rawQuery)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("GET /api/reconciliations%s = %d, want %d (body: %s)", rawQuery, rec.Code, http.StatusOK, rec.Body.String())
+		}
+		page := decodeReconciliationsPage(t, rec)
+		if pages < 2 && len(page.Reconciliations) != reconciliationsPageSize {
+			t.Errorf("page %d = %d rows, want %d (60 rows over 25-row pages)", pages, len(page.Reconciliations), reconciliationsPageSize)
+		}
+		for _, row := range page.Reconciliations {
+			seen[row.ID]++
+			order = append(order, row.ID)
+		}
+		if page.NextCursor == nil {
+			break
+		}
+		cursor = *page.NextCursor
+	}
+
+	if len(seen) != len(seeded) {
+		t.Fatalf("paged through %d distinct ids, want %d", len(seen), len(seeded))
+	}
+	for id, count := range seen {
+		if count != 1 {
+			t.Errorf("id %d appeared %d times across pages, want exactly 1", id, count)
+		}
+	}
+	for i, gotID := range order {
+		want := seeded[len(seeded)-1-i].ID // seeded is oldest-first; the walk must be newest-first
+		if gotID != want {
+			t.Fatalf("row %d across the whole paged walk = id %d, want %d (newest-first order broken across a page boundary)", i, gotID, want)
+		}
+	}
+}
+
+// TestGetReconciliationsPagingHandlesABackdatedInsertBetweenPageFetches
+// mirrors transactions_test.go's and reimbursements_test.go's own test of
+// the same name: a snapshot inserted after page 1 is fetched, performed
+// earlier than everything on page 1 but inside page 2's range, must appear
+// on page 2 exactly once - proving the keyset cursor (performed_at, id) is
+// what actually runs rather than LIMIT/OFFSET.
+func TestGetReconciliationsPagingHandlesABackdatedInsertBetweenPageFetches(t *testing.T) {
+	sqlDB := testStoreDB(t)
+	r := authedRouterFor(t, sqlDB)
+	setup := setUpFund(t, r)
+	// 30 snapshots performed_at 1000..1029 (oldest, seeded[0], through
+	// newest, seeded[29]).
+	seeded := seedReconciliations(t, sqlDB, setup.Fund.ID, 30, 1000)
+
+	page1 := decodeReconciliationsPage(t, getReconciliations(t, r))
+	if len(page1.Reconciliations) != reconciliationsPageSize {
+		t.Fatalf("page 1 = %d rows, want %d", len(page1.Reconciliations), reconciliationsPageSize)
+	}
+	if page1.NextCursor == nil {
+		t.Fatal("page 1 next_cursor = nil, want a cursor - 30 rows is more than one page")
+	}
+
+	// Lands strictly inside page 2's range (performed_at 1000..1004, the 5
+	// rows page 1 did not cover) - earlier than every row already handed
+	// out on page 1, and it did not exist when page 1 was fetched.
+	q := store.New(sqlDB)
+	backdated, err := q.CreateReconciliation(context.Background(), store.CreateReconciliationParams{
+		FundID: setup.Fund.ID, PerformedAt: 1002, CreatedAt: 99_999,
+	})
+	if err != nil {
+		t.Fatalf("inserting the backdated row: %v", err)
+	}
+
+	page2 := decodeReconciliationsPage(t, getReconciliationsWithQuery(t, r, "?cursor="+url.QueryEscape(*page1.NextCursor)))
+
+	occurrences, seenIDs := 0, map[int64]bool{}
+	for _, row := range page2.Reconciliations {
+		if seenIDs[row.ID] {
+			t.Errorf("id %d appears more than once on page 2", row.ID)
+		}
+		seenIDs[row.ID] = true
+		if row.ID == backdated.ID {
+			occurrences++
+		}
+	}
+	if occurrences != 1 {
+		t.Errorf("the backdated row appeared %d times on page 2, want exactly 1", occurrences)
+	}
+	for _, want := range seeded[:5] {
+		if !seenIDs[want.ID] {
+			t.Errorf("row %d (performed_at %d), originally on page 2, is missing after the backdated insert", want.ID, want.PerformedAt)
+		}
+	}
+	if len(page2.Reconciliations) != 6 {
+		t.Errorf("page 2 = %d rows, want 6 (the 5 original rows plus the backdated insert)", len(page2.Reconciliations))
+	}
+	if page2.NextCursor != nil {
+		t.Errorf("page 2 next_cursor = %v, want nil - that was the last page", *page2.NextCursor)
+	}
+}
+
+// TestGetReconciliationsRejectsAMalformedCursor is #227's "malformed cursor
+// -> 400" acceptance criterion.
+func TestGetReconciliationsRejectsAMalformedCursor(t *testing.T) {
+	r := testRouter(t)
+	setUpFund(t, r)
+
+	for _, cursor := range []string{"not-base64!!", "0|abc", "-5|1"} {
+		rec := getReconciliationsWithQuery(t, r, "?cursor="+url.QueryEscape(cursor))
+		if rec.Code != http.StatusBadRequest {
+			t.Errorf("GET /api/reconciliations?cursor=%q = %d, want %d (body: %s)", cursor, rec.Code, http.StatusBadRequest, rec.Body.String())
+			continue
+		}
+		got := decodeError(t, rec)
+		if got.Code != "invalid_argument" {
+			t.Errorf("cursor %q: error code = %q, want %q", cursor, got.Code, "invalid_argument")
+		}
+	}
+}
+
+// TestGetReconciliationsOnAnEmptyFundIsAnEmptyPage covers #227's "a fund
+// that has never been reconciled" case at the API layer - the empty state
+// Cek kas's own copy handles is driven by this shape, not an error.
+func TestGetReconciliationsOnAnEmptyFundIsAnEmptyPage(t *testing.T) {
+	r := testRouter(t)
+	setUpFund(t, r)
+
+	page := decodeReconciliationsPage(t, getReconciliations(t, r))
+	if len(page.Reconciliations) != 0 {
+		t.Errorf("reconciliations = %+v, want empty - nothing has been counted yet", page.Reconciliations)
+	}
+	if page.NextCursor != nil {
+		t.Errorf("next_cursor = %v, want nil", *page.NextCursor)
+	}
+}
+
+// TestGetReconciliationsOpenDifferenceAmount covers #227's per-row
+// open_difference_amount: 0 for a fully matched snapshot, 0 for one whose
+// gap was fully resolved (entry_added/adjusted), and the absolute sum of
+// every left_open line's difference for a mixed snapshot - including a
+// negative difference, to prove the sum is over ABS() and not the signed
+// total.
+func TestGetReconciliationsOpenDifferenceAmount(t *testing.T) {
+	sqlDB := testStoreDB(t)
+	r := authedRouterFor(t, sqlDB)
+	setup := setUpFund(t, r)
+	q := store.New(sqlDB)
+	ctx := context.Background()
+
+	matched, err := q.CreateReconciliation(ctx, store.CreateReconciliationParams{FundID: setup.Fund.ID, PerformedAt: 1000, CreatedAt: 1000})
+	if err != nil {
+		t.Fatalf("seeding matched: %v", err)
+	}
+	if _, err := q.CreateReconciliationLine(ctx, store.CreateReconciliationLineParams{
+		FundID: setup.Fund.ID, ReconciliationID: matched.ID, AccountID: setup.CashAccountID(t),
+		RecordedAmount: 100_000, ActualAmount: 100_000, DifferenceAmount: 0, Resolution: "matched",
+	}); err != nil {
+		t.Fatalf("seeding matched line: %v", err)
+	}
+
+	resolved, err := q.CreateReconciliation(ctx, store.CreateReconciliationParams{FundID: setup.Fund.ID, PerformedAt: 2000, CreatedAt: 2000})
+	if err != nil {
+		t.Fatalf("seeding resolved: %v", err)
+	}
+	fixTx, err := q.CreateTransaction(ctx, store.CreateTransactionParams{
+		FundID: setup.Fund.ID, AccountID: setup.CashAccountID(t), PurposeID: setup.MainPurposeID,
+		Direction: "in", Amount: 5_000, OccurredOn: "2026-08-01", Kind: "adjustment", CreatedAt: 2000,
+	})
+	if err != nil {
+		t.Fatalf("seeding the fix transaction: %v", err)
+	}
+	if _, err := q.CreateReconciliationLine(ctx, store.CreateReconciliationLineParams{
+		FundID: setup.Fund.ID, ReconciliationID: resolved.ID, AccountID: setup.CashAccountID(t),
+		RecordedAmount: 95_000, ActualAmount: 100_000, DifferenceAmount: 5_000,
+		Resolution: "adjusted", AdjustmentTransactionID: &fixTx.ID,
+	}); err != nil {
+		t.Fatalf("seeding adjusted line: %v", err)
+	}
+
+	mixed, err := q.CreateReconciliation(ctx, store.CreateReconciliationParams{FundID: setup.Fund.ID, PerformedAt: 3000, CreatedAt: 3000})
+	if err != nil {
+		t.Fatalf("seeding mixed: %v", err)
+	}
+	if _, err := q.CreateReconciliationLine(ctx, store.CreateReconciliationLineParams{
+		FundID: setup.Fund.ID, ReconciliationID: mixed.ID, AccountID: setup.CashAccountID(t),
+		RecordedAmount: 100_000, ActualAmount: 85_000, DifferenceAmount: -15_000, Resolution: "left_open",
+	}); err != nil {
+		t.Fatalf("seeding mixed left_open line (negative difference): %v", err)
+	}
+	if _, err := q.CreateReconciliationLine(ctx, store.CreateReconciliationLineParams{
+		FundID: setup.Fund.ID, ReconciliationID: mixed.ID, AccountID: setup.BankAccountID(t),
+		RecordedAmount: 50_000, ActualAmount: 56_000, DifferenceAmount: 6_000, Resolution: "left_open",
+	}); err != nil {
+		t.Fatalf("seeding mixed left_open line (positive difference): %v", err)
+	}
+
+	page := decodeReconciliationsPage(t, getReconciliations(t, r))
+	byID := map[int64]int64{}
+	for _, row := range page.Reconciliations {
+		byID[row.ID] = row.OpenDifferenceAmount
+	}
+	if got := byID[matched.ID]; got != 0 {
+		t.Errorf("matched.OpenDifferenceAmount = %d, want 0", got)
+	}
+	if got := byID[resolved.ID]; got != 0 {
+		t.Errorf("resolved (adjusted).OpenDifferenceAmount = %d, want 0", got)
+	}
+	if got := byID[mixed.ID]; got != 21_000 {
+		t.Errorf("mixed.OpenDifferenceAmount = %d, want 21000 (abs(-15000) + abs(6000))", got)
 	}
 }

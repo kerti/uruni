@@ -3,6 +3,7 @@ import { ArrowDownLeft, ArrowUpRight, ChevronDown, CircleCheck, TriangleAlert } 
 
 import AmountInput from '@/components/money/AmountInput'
 import PurposePicker from '@/components/pickers/PurposePicker'
+import ReconciliationLines from '@/components/ReconciliationLines'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -633,19 +634,7 @@ function Confirmation({
         {hasOpenGap ? text.discrepancy(formatIDR(openTotal)) : text.matched}
       </div>
 
-      <ul className="flex flex-col gap-2">
-        {detail.lines.map((line) => (
-          <li key={line.id} className="flex flex-col gap-1 rounded-lg bg-card p-4 ring-1 ring-foreground/10">
-            <span className="font-medium">{accountNames.get(line.account_id) ?? copy.home.purposeUnknown}</span>
-            <span className="tabular text-sm text-muted-foreground">
-              {text.recordedLabel}: {formatIDR(line.recorded_amount)} {'\u00b7'} {formatIDR(line.actual_amount)}
-            </span>
-            <span className="text-sm">
-              {text.resolutionOptions[line.resolution as keyof typeof text.resolutionOptions] ?? line.resolution}
-            </span>
-          </li>
-        ))}
-      </ul>
+      <ReconciliationLines lines={detail.lines} accountNames={accountNames} />
 
       <Button size="lg" onClick={onDone}>
         {text.backToHome}

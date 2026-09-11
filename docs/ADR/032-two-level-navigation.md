@@ -41,7 +41,7 @@ So this is not a tidying pass on one screen. It is the information architecture 
 
 **Tabs when every panel is an unbounded list. Sections when the panels are short and read together.** Applied, that puts tabs in exactly one place:
 
-- **Riwayat** — tabs: `Transaksi · Iuran · Penggantian · Cek kas`. Four unbounded lists, one visible at a time, each paged and searchable on its own.
+- **Riwayat** — tabs: `Transaksi · Iuran · Talangan · Cek kas`. Four unbounded lists, one visible at a time, each paged and searchable on its own.
 - **Beranda** — no second level. It is the calm screen; it gets nothing to choose.
 - **Anggota** — no second level. The roster only.
 - **Pengaturan** — sections, as today.
@@ -128,7 +128,7 @@ FTS5 is rejected for scale, not ignorance: a virtual table, sync triggers and a 
 | Anggota | member name |
 | Transaksi | note, purpose name, member name, and exact amount when the input is all digits |
 | Iuran | member name |
-| Penggantian | member name, note |
+| Talangan | member name, note |
 | Cek kas | none — a handful of dated snapshots a year |
 
 `?q=` lives in the URL for the same reason tabs do. Input is debounced, and a keystroke without signal shows the offline state honestly rather than reading as "no results" — §7.2, connection required.

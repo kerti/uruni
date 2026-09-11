@@ -23,7 +23,7 @@ test.describe('reimbursements', () => {
     await page.getByRole('button', { name: copy.auth.login.submit }).click()
     await expect(page.getByText(copy.home.balanceHeading)).toBeVisible()
 
-    // Navigate to Riwayat's Penggantian tab (#226, ADR-032) - the reimbursements
+    // Navigate to Riwayat's Talangan tab (#226, ADR-032) - the reimbursements
     // screen's own former home-screen entry point moved here.
     await page.getByRole('link', { name: copy.shell.nav.history }).click()
     await page.getByRole('link', { name: copy.history.tabs.reimbursements }).click()
@@ -53,7 +53,7 @@ test.describe('reimbursements', () => {
     await page.getByRole('button', { name: copy.auth.login.submit }).click()
     await expect(page.getByText(copy.home.balanceHeading)).toBeVisible()
 
-    // Navigate to Riwayat's Penggantian tab (#226, ADR-032).
+    // Navigate to Riwayat's Talangan tab (#226, ADR-032).
     await page.getByRole('link', { name: copy.shell.nav.history }).click()
     await page.getByRole('link', { name: copy.history.tabs.reimbursements }).click()
     await expect(page.getByRole('button', { name: copy.reimbursements.outstandingTab })).toBeVisible()
@@ -79,7 +79,7 @@ test.describe('reimbursements', () => {
     // The payout row carries a composed description (member + the claim's own
     // note), so recent activity reads the repayment instead of a bare amount.
     await page.getByRole('link', { name: copy.shell.nav.home }).click()
-    await expect(page.getByText(/Penggantian - /)).toBeVisible()
+    await expect(page.getByText(/Talangan - /)).toBeVisible()
   })
 
   test('waive a fresh claim, then un-waive it from the all tab', async ({ page }) => {
@@ -89,7 +89,7 @@ test.describe('reimbursements', () => {
     await page.getByRole('button', { name: copy.auth.login.submit }).click()
     await expect(page.getByText(copy.home.balanceHeading)).toBeVisible()
 
-    // Navigate to Riwayat's Penggantian tab (#226, ADR-032).
+    // Navigate to Riwayat's Talangan tab (#226, ADR-032).
     await page.getByRole('link', { name: copy.shell.nav.history }).click()
     await page.getByRole('link', { name: copy.history.tabs.reimbursements }).click()
     await expect(page.getByRole('button', { name: copy.reimbursements.outstandingTab })).toBeVisible()

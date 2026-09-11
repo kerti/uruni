@@ -372,6 +372,28 @@ describe('App (Riwayat)', () => {
     expect(await screen.findByLabelText(copy.dues.periodLabel)).toBeInTheDocument()
     window.history.pushState({}, '', '/')
   })
+
+  // Same rule again, for Cek kas (#227): a fourth tab route,
+  // /history/reconciliations, must be reachable by deep link with its own
+  // tab reading current.
+  it('deep-links straight to /history/reconciliations with that tab current', async () => {
+    window.history.pushState({}, '', '/history/reconciliations')
+    vi.stubGlobal(
+      'fetch',
+      routedFetch([
+        { match: (m, u) => m === 'GET' && u.includes('/api/session'), handle: () => Promise.resolve(sessionResponse({ authenticated: true, has_account: true })) },
+        { match: (m, u) => m === 'GET' && u.includes('/api/fund'), handle: () => Promise.resolve(fundFoundResponse()) },
+        { match: (m, u) => m === 'GET' && u.includes('/api/accounts'), handle: () => Promise.resolve(jsonResponse([])) },
+        { match: (m, u) => m === 'GET' && u.includes('/api/reconciliations'), handle: () => Promise.resolve(jsonResponse({ reconciliations: [], next_cursor: null })) },
+        ...emptyHomeRoutes,
+      ]),
+    )
+    render(<App />)
+
+    const tab = await screen.findByRole('link', { name: copy.reconciliation.heading })
+    await waitFor(() => expect(tab).toHaveAttribute('aria-current', 'page'))
+    window.history.pushState({}, '', '/')
+  })
 })
 
 describe('App (connectivity watcher)', () => {

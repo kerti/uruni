@@ -300,6 +300,10 @@ CREATE INDEX transaction_by_dues    ON "transaction"(member_id, dues_period) WHE
 -- /api/reimbursements's own (incurred_on DESC, id DESC) keyset scan.
 CREATE INDEX reimbursement_by_date  ON reimbursement(fund_id, incurred_on, id);
 
+-- Same shape again (#227): fully orders GET /api/reconciliations's own
+-- (performed_at DESC, id DESC) keyset scan.
+CREATE INDEX reconciliation_by_date ON reconciliation(fund_id, performed_at, id);
+
 -- Immutability is a trigger, not a convention (ADR-024, CLAUDE.md rule 3).
 -- INSERT stays open, which is what lets ADR-012's import restore a database.
 -- A snapshot is a claim about a moment, so it is as immutable as the ledger:
@@ -364,6 +368,7 @@ DROP TRIGGER transfer_immutable_delete;
 DROP TRIGGER transfer_immutable_update;
 DROP TRIGGER transaction_immutable_delete;
 DROP TRIGGER transaction_immutable_update;
+DROP INDEX reconciliation_by_date;
 DROP INDEX reimbursement_by_date;
 DROP INDEX transaction_by_dues;
 DROP INDEX transaction_by_purpose;

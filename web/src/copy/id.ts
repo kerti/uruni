@@ -32,14 +32,14 @@ export const copy = {
   // Riwayat's tab strip (M6.23/#226, ADR-032's "second level"): each tab is
   // a route under /history, never component state (History.tsx). Iuran's
   // heading and every other string on that tab stay in copy.dues, and
-  // Penggantian's own screen strings stay in copy.reimbursements - this
-  // namespace holds only the tab labels themselves. Cek kas joins once its
-  // own screen exists.
+  // Talangan's own screen strings stay in copy.reimbursements - this
+  // namespace holds only the tab labels themselves. Cek kas's heading
+  // reuses copy.reconcile.heading rather than adding a fourth label here.
   history: {
     tabs: {
       transactions: 'Transaksi',
       dues: 'Iuran',
-      reimbursements: 'Penggantian',
+      reimbursements: 'Talangan',
     },
     // The Transaksi tab's search and paging (#225, ADR-032). The placeholder
     // names what the server actually searches, in the record form's own
@@ -51,15 +51,27 @@ export const copy = {
       loadMore: 'Muat lebih banyak',
       noResults: (q: string) => `Tidak ada transaksi yang cocok dengan “${q}”.`,
     },
-    // The Penggantian tab's own search and paging (#226, ADR-032). A
+    // The Talangan tab's own search and paging (#226, ADR-032). A
     // narrower placeholder than Transaksi's own: this list's search covers
     // only member name and note, not peruntukan or jumlah, so the
     // placeholder does not claim otherwise.
     reimbursements: {
-      searchLabel: 'Cari penggantian',
+      searchLabel: 'Cari talangan',
       searchPlaceholder: 'Nama anggota atau catatan',
       loadMore: 'Muat lebih banyak',
-      noResults: (q: string) => `Tidak ada penggantian yang cocok dengan “${q}”.`,
+      noResults: (q: string) => `Tidak ada talangan yang cocok dengan “${q}”.`,
+    },
+    // Cek kas's own tab (#227): a paged, read-only list of past snapshots -
+    // no search (ADR-032: "a handful of dated snapshots a year"). The tab
+    // label itself reuses copy.reconciliation.heading rather than a fourth
+    // key here, so the word "Cek kas" has exactly one source.
+    reconciliations: {
+      emptyState: 'Belum pernah cek kas. Riwayatnya muncul di sini setelah cek kas pertama.',
+      loadMore: 'Muat lebih banyak',
+      // The snapshot's own note, shown in the detail sheet - no existing
+      // bare "Catatan" label to reuse (every other one is "Catatan
+      // (opsional)", a form field's own placeholder-adjacent label).
+      noteLabel: 'Catatan',
     },
   },
   common: {
@@ -285,6 +297,16 @@ export const copy = {
     // discarded, she just needs to look again.
     staleNotice: 'Ada transaksi baru sejak kamu mulai menghitung tadi. Angkanya sudah diperbarui — yuk, cek selisihnya sekali lagi.',
     backToHome: 'Kembali ke beranda',
+    // Per-line difference (#227): the shared line list (ReconciliationLines,
+    // used by Confirmation and Cek kas's detail sheet) shows this whenever a
+    // line's own difference_amount is nonzero - amount is already formatted
+    // (formatIDR) by the caller, same convention as discrepancy above.
+    differenceLabel: 'Selisih',
+    // Cek kas's list-row badge (#227): a short chip label, not the banner's
+    // full sentence (discrepancy above reads as a question, wrong register
+    // for a list row). "Cocok" alone reuses resolutionOptions.matched
+    // instead of repeating the word here.
+    selisihBadge: (amount: string) => `Selisih ${amount}`,
   },
   // The dues status roster (M6.12, PRD §7.3): "view members and, for the
   // current period, who has paid / partially paid / paid in advance." A
@@ -514,28 +536,31 @@ export const copy = {
       cancel: 'Batal',
     },
   },
-  // Riwayat's Penggantian tab (M6.18, PRD §7.4; moved under Riwayat by
-  // #226): record that a member fronted money, settle when repaid, waive
-  // when the member forgives the debt ("putihkan"), or correct/remove a
-  // claim entered wrongly — only until settled, after which the payout is a
-  // posted ledger row. heading also names the tab's own tablist
-  // (aria-label) — the tab has no on-screen `<h1>` of its own, Riwayat's
-  // does. backToHome no longer applies here: the tab strip and footer nav
-  // are the way back, same as Transaksi and Iuran.
+  // Riwayat's Talangan tab (M6.18, PRD §7.4; moved under Riwayat by
+  // #226; renamed from "Penggantian" to "Talangan" for the user-facing word
+  // by #227's maintainer ruling - identifiers and the reimbursement table
+  // stay English, only this copy surface's word changed): record that a
+  // member fronted money, settle when repaid, waive when the member forgives
+  // the debt ("putihkan"), or correct/remove a claim entered wrongly - only
+  // until settled, after which the payout is a posted ledger row. heading
+  // also names the tab's own tablist (aria-label) - the tab has no
+  // on-screen `<h1>` of its own, Riwayat's does. backToHome no longer
+  // applies here: the tab strip and footer nav are the way back, same as
+  // Transaksi and Iuran.
   //
   // "Putihkan" was chosen over the PRD's conversational example ("sudah,
   // saya yang tanggung") for the UI label: the example was prose flavour,
   // not interface copy. The word sits in the debt/forgiveness register
   // without the legal-verdict connotation of "ampuni".
   reimbursements: {
-    heading: 'Penggantian',
+    heading: 'Talangan',
     body: 'Uang yang ditanggung anggota untuk kas, sudah tercatat.',
     outstandingTab: 'Belum dibayar',
     allTab: 'Semua',
-    emptyOutstanding: 'Tidak ada penggantian yang belum dibayar.',
-    emptyAll: 'Belum ada penggantian tercatat.',
+    emptyOutstanding: 'Tidak ada talangan yang belum dibayar.',
+    emptyAll: 'Belum ada talangan tercatat.',
     record: {
-      heading: 'Catat penggantian',
+      heading: 'Catat talangan',
       memberLabel: 'Anggota',
       memberPlaceholder: 'Pilih anggota',
       purposeLabel: 'Peruntukan',
@@ -545,16 +570,16 @@ export const copy = {
       submit: 'Simpan',
       submitting: 'Menyimpan…',
       cancel: 'Batal',
-      success: 'Penggantian berhasil dicatat.',
+      success: 'Talangan berhasil dicatat.',
     },
     settle: {
-      heading: 'Bayar penggantian',
+      heading: 'Bayar talangan',
       accountLabel: 'Bayar dari',
       dateLabel: 'Tanggal pembayaran',
       submit: 'Bayar',
       submitting: 'Membayar…',
       cancel: 'Batal',
-      success: 'Penggantian sudah dibayar.',
+      success: 'Talangan sudah dibayar.',
     },
     actions: {
       settle: 'Bayar',
@@ -570,24 +595,24 @@ export const copy = {
       settled: 'Dibayar',
     },
     waive: {
-      success: 'Penggantian sudah diputihkan.',
+      success: 'Talangan sudah diputihkan.',
     },
     unwaive: {
-      success: 'Pemutihan dibatalkan — penggantian kembali ditagih.',
+      success: 'Pemutihan dibatalkan — talangan kembali ditagih.',
     },
     delete: {
-      success: 'Penggantian dihapus.',
+      success: 'Talangan dihapus.',
     },
     correct: {
-      heading: 'Perbaiki penggantian',
+      heading: 'Perbaiki talangan',
       submit: 'Simpan',
       submitting: 'Menyimpan…',
       cancel: 'Batal',
-      success: 'Penggantian berhasil diperbaiki.',
+      success: 'Talangan berhasil diperbaiki.',
     },
     errors: {
-      reimbursement_already_settled: 'Penggantian ini sudah dibayar.',
-      reimbursement_waived: 'Penggantian ini sudah diputihkan.',
+      reimbursement_already_settled: 'Talangan ini sudah dibayar.',
+      reimbursement_waived: 'Talangan ini sudah diputihkan.',
     },
   },
   incidentals: {

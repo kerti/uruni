@@ -417,7 +417,7 @@ describe('Reimbursements tab', () => {
   })
 
   it('a new action retires the previous success message', async () => {
-    // Settling claim A shows "Penggantian sudah dibayar."; the refresh drops A
+    // Settling claim A shows "Talangan sudah dibayar."; the refresh drops A
     // from the outstanding list and closes the inline form. Starting the next
     // action on still-outstanding claim B must retire that stale success
     // message rather than let it describe the wrong row.

@@ -130,3 +130,88 @@ func (q *Queries) ListReconciliationsByFund(ctx context.Context, fundID int64) (
 	}
 	return items, nil
 }
+
+const listReconciliationsPage = `-- name: ListReconciliationsPage :many
+SELECT r.id, r.fund_id, r.performed_at, r.through_transaction_id, r.note, r.created_at,
+  CAST(COALESCE((
+    SELECT SUM(ABS(rl.difference_amount))
+    FROM reconciliation_line rl
+    WHERE rl.reconciliation_id = r.id AND rl.resolution = 'left_open'
+  ), 0) AS INTEGER) AS open_difference_amount
+FROM reconciliation r
+WHERE r.fund_id = ?1
+  AND (
+    ?2 IS NULL
+    OR (r.performed_at, r.id) < (?2, CAST(?3 AS INTEGER))
+  )
+ORDER BY r.performed_at DESC, r.id DESC
+LIMIT ?4
+`
+
+type ListReconciliationsPageParams struct {
+	FundID            int64
+	CursorPerformedAt interface{}
+	CursorID          *int64
+	PageLimit         int64
+}
+
+type ListReconciliationsPageRow struct {
+	ID                   int64
+	FundID               int64
+	PerformedAt          int64
+	ThroughTransactionID *int64
+	Note                 *string
+	CreatedAt            int64
+	OpenDifferenceAmount int64
+}
+
+// GET /api/reconciliations's real listing (#227, ADR-032 "Lists: paging and
+// search") - newest-first and keyset-paged on (performed_at, id), the same
+// row-value-keyset shape ListReimbursementsPage/ListTransactionsPage use
+// (their own comments have the full reasoning). No search - a handful of
+// dated snapshots a year, per the issue.
+//
+// open_difference_amount is the sum of ABS(difference_amount) across that
+// snapshot's still-open lines - the same figure Confirmation on /reconcile
+// computes client-side from a detail fetch, computed here so a list row can
+// show cocok (0) vs selisih without one. Cast so it lands as int64 rather
+// than interface{} - sqlc's SQLite engine cannot infer the type of a summed
+// expression (ADR-024).
+//
+// page_limit is page size + 1, the same "peek at one extra row" trick the
+// other two paged lists use.
+func (q *Queries) ListReconciliationsPage(ctx context.Context, arg ListReconciliationsPageParams) ([]ListReconciliationsPageRow, error) {
+	rows, err := q.db.QueryContext(ctx, listReconciliationsPage,
+		arg.FundID,
+		arg.CursorPerformedAt,
+		arg.CursorID,
+		arg.PageLimit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListReconciliationsPageRow{}
+	for rows.Next() {
+		var i ListReconciliationsPageRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.FundID,
+			&i.PerformedAt,
+			&i.ThroughTransactionID,
+			&i.Note,
+			&i.CreatedAt,
+			&i.OpenDifferenceAmount,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
