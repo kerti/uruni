@@ -4,6 +4,7 @@ import { ArrowDownLeft, ArrowUpRight } from 'lucide-react'
 import AmountInput from '@/components/money/AmountInput'
 import AccountPicker from '@/components/pickers/AccountPicker'
 import PurposePicker from '@/components/pickers/PurposePicker'
+import { segmentedItemClass, segmentedTrackClass } from '@/components/segmented'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -190,12 +191,12 @@ export default function RecordTransaction({
 
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="record-direction">{text.directionLabel}</Label>
-        <div id="record-direction" role="group" aria-label={text.directionLabel} className="grid grid-cols-2 gap-2">
+        <div id="record-direction" role="group" aria-label={text.directionLabel} className={segmentedTrackClass(2)}>
           <Button
             type="button"
-            variant={direction === 'out' ? 'default' : 'outline'}
+            variant={direction === 'out' ? 'default' : 'ghost'}
             aria-pressed={direction === 'out'}
-            className="h-11"
+            className={segmentedItemClass(direction === 'out')}
             onClick={() => setDirection('out')}
           >
             <ArrowUpRight aria-hidden="true" />
@@ -203,9 +204,9 @@ export default function RecordTransaction({
           </Button>
           <Button
             type="button"
-            variant={direction === 'in' ? 'default' : 'outline'}
+            variant={direction === 'in' ? 'default' : 'ghost'}
             aria-pressed={direction === 'in'}
-            className="h-11"
+            className={segmentedItemClass(direction === 'in')}
             onClick={() => setDirection('in')}
           >
             <ArrowDownLeft aria-hidden="true" />

@@ -6,6 +6,7 @@ import AmountInput from '@/components/money/AmountInput'
 import AccountPicker from '@/components/pickers/AccountPicker'
 import MemberPicker from '@/components/pickers/MemberPicker'
 import PurposePicker from '@/components/pickers/PurposePicker'
+import { segmentedItemClass, segmentedTrackClass } from '@/components/segmented'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -410,12 +411,12 @@ export default function Reimbursements({ refetchKey }: { refetchKey?: unknown })
       )}
 
       {/* Tab bar */}
-      <div role="tablist" aria-label={text.heading} className="grid grid-cols-2 gap-2">
+      <div role="tablist" aria-label={text.heading} className={segmentedTrackClass(2)}>
         <Button
           type="button"
-          variant={tab === 'outstanding' ? 'default' : 'outline'}
+          variant={tab === 'outstanding' ? 'default' : 'ghost'}
           aria-pressed={tab === 'outstanding'}
-          className="h-11"
+          className={segmentedItemClass(tab === 'outstanding')}
           onClick={() => {
             setTab('outstanding')
             setSettleId(null)
@@ -428,9 +429,9 @@ export default function Reimbursements({ refetchKey }: { refetchKey?: unknown })
         </Button>
         <Button
           type="button"
-          variant={tab === 'all' ? 'default' : 'outline'}
+          variant={tab === 'all' ? 'default' : 'ghost'}
           aria-pressed={tab === 'all'}
-          className="h-11"
+          className={segmentedItemClass(tab === 'all')}
           onClick={() => {
             setTab('all')
             setSettleId(null)

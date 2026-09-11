@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from 'react'
 
 import AmountInput from '@/components/money/AmountInput'
 import AccountPicker from '@/components/pickers/AccountPicker'
+import { segmentedItemClass, segmentedTrackClass } from '@/components/segmented'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -234,21 +235,21 @@ export default function Incidentals({
       )}
 
       {/* Tab bar */}
-      <div role="tablist" aria-label={text.heading} className="grid grid-cols-2 gap-2">
+      <div role="tablist" aria-label={text.heading} className={segmentedTrackClass(2)}>
         <Button
           type="button"
-          variant={tab === 'open' ? 'default' : 'outline'}
+          variant={tab === 'open' ? 'default' : 'ghost'}
           aria-pressed={tab === 'open'}
-          className="h-11"
+          className={segmentedItemClass(tab === 'open')}
           onClick={() => { setTab('open'); setFeedback(null) }}
         >
           {text.openTab}
         </Button>
         <Button
           type="button"
-          variant={tab === 'all' ? 'default' : 'outline'}
+          variant={tab === 'all' ? 'default' : 'ghost'}
           aria-pressed={tab === 'all'}
-          className="h-11"
+          className={segmentedItemClass(tab === 'all')}
           onClick={() => { setTab('all'); setFeedback(null) }}
         >
           {text.allTab}

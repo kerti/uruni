@@ -4,6 +4,7 @@ import { ArrowDownLeft, ArrowUpRight, ChevronDown, CircleCheck, TriangleAlert } 
 import AmountInput from '@/components/money/AmountInput'
 import PurposePicker from '@/components/pickers/PurposePicker'
 import ReconciliationLines from '@/components/ReconciliationLines'
+import { segmentedItemClass, segmentedTrackClass } from '@/components/segmented'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -506,13 +507,15 @@ function AccountCountRow({
                     id={`reconcile-fix-direction-${account.id}`}
                     role="group"
                     aria-label={copy.record.directionLabel}
-                    className="grid grid-cols-2 gap-2"
+                    // bg-background: this sits inside the fix panel's own
+                    // bg-muted, where the track's default bg-muted would vanish.
+                    className={segmentedTrackClass(2, 'bg-background')}
                   >
                     <Button
                       type="button"
-                      variant={line.fixDirection === 'out' ? 'default' : 'outline'}
+                      variant={line.fixDirection === 'out' ? 'default' : 'ghost'}
                       aria-pressed={line.fixDirection === 'out'}
-                      className="h-11"
+                      className={segmentedItemClass(line.fixDirection === 'out')}
                       onClick={() => onChange({ fixDirection: 'out' })}
                       disabled={disabled}
                     >
@@ -521,9 +524,9 @@ function AccountCountRow({
                     </Button>
                     <Button
                       type="button"
-                      variant={line.fixDirection === 'in' ? 'default' : 'outline'}
+                      variant={line.fixDirection === 'in' ? 'default' : 'ghost'}
                       aria-pressed={line.fixDirection === 'in'}
-                      className="h-11"
+                      className={segmentedItemClass(line.fixDirection === 'in')}
                       onClick={() => onChange({ fixDirection: 'in' })}
                       disabled={disabled}
                     >
