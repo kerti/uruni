@@ -29,16 +29,17 @@ export const copy = {
     logout: 'Keluar',
     loggingOut: 'Sedang keluar…',
   },
-  // Riwayat's tab strip (M6.23, ADR-032's "second level"): each tab is a
-  // route under /history, never component state (History.tsx). Iuran's
-  // heading and every other string on that tab stay in copy.dues - this
-  // namespace holds only the tab labels themselves. Penggantian and Cek kas
-  // join once their own screens exist; this slice ships the two Riwayat
-  // could not launch without, since Iuran had nowhere else to go.
+  // Riwayat's tab strip (M6.23/#226, ADR-032's "second level"): each tab is
+  // a route under /history, never component state (History.tsx). Iuran's
+  // heading and every other string on that tab stay in copy.dues, and
+  // Penggantian's own screen strings stay in copy.reimbursements - this
+  // namespace holds only the tab labels themselves. Cek kas joins once its
+  // own screen exists.
   history: {
     tabs: {
       transactions: 'Transaksi',
       dues: 'Iuran',
+      reimbursements: 'Penggantian',
     },
     // The Transaksi tab's search and paging (#225, ADR-032). The placeholder
     // names what the server actually searches, in the record form's own
@@ -49,6 +50,16 @@ export const copy = {
       searchPlaceholder: 'Catatan, peruntukan, anggota, atau jumlah',
       loadMore: 'Muat lebih banyak',
       noResults: (q: string) => `Tidak ada transaksi yang cocok dengan “${q}”.`,
+    },
+    // The Penggantian tab's own search and paging (#226, ADR-032). A
+    // narrower placeholder than Transaksi's own: this list's search covers
+    // only member name and note, not peruntukan or jumlah, so the
+    // placeholder does not claim otherwise.
+    reimbursements: {
+      searchLabel: 'Cari penggantian',
+      searchPlaceholder: 'Nama anggota atau catatan',
+      loadMore: 'Muat lebih banyak',
+      noResults: (q: string) => `Tidak ada penggantian yang cocok dengan “${q}”.`,
     },
   },
   common: {
@@ -216,10 +227,6 @@ export const copy = {
     purposeUnknown: 'Tanpa tujuan',
     // date is already formatted (Intl.DateTimeFormat) by the caller.
     lastChecked: (date: string) => `Terakhir dicek ${date}`,
-    // The entry point to the reimbursements screen (M6.18), placed after
-    // the reconciliation banner. Short, one word, following the entryLink
-    // pattern in copy.dues.
-    reimbursementLink: 'Lihat penggantian',
     // The entry point to the incidentals screen (M6.19), same idiom.
     incidentalLink: 'Lihat kegiatan insidental',
   },
@@ -286,7 +293,6 @@ export const copy = {
   // namespace deliberately carries no send/notify/chase copy at all.
   dues: {
     entryLink: 'Lihat status iuran',
-    heading: 'Status iuran',
     periodLabel: 'Periode',
     // Isolates unpaid + partial rows. Partial is included on purpose: she
     // paid something but still owes the rest, so "belum bayar" (not yet
@@ -508,10 +514,14 @@ export const copy = {
       cancel: 'Batal',
     },
   },
-  // The reimbursements screen (M6.18, PRD §7.4): record that a member
-  // fronted money, settle when repaid, waive when the member forgives the
-  // debt ("putihkan"), or correct/remove a claim entered wrongly — only
-  // until settled, after which the payout is a posted ledger row.
+  // Riwayat's Penggantian tab (M6.18, PRD §7.4; moved under Riwayat by
+  // #226): record that a member fronted money, settle when repaid, waive
+  // when the member forgives the debt ("putihkan"), or correct/remove a
+  // claim entered wrongly — only until settled, after which the payout is a
+  // posted ledger row. heading also names the tab's own tablist
+  // (aria-label) — the tab has no on-screen `<h1>` of its own, Riwayat's
+  // does. backToHome no longer applies here: the tab strip and footer nav
+  // are the way back, same as Transaksi and Iuran.
   //
   // "Putihkan" was chosen over the PRD's conversational example ("sudah,
   // saya yang tanggung") for the UI label: the example was prose flavour,
@@ -579,7 +589,6 @@ export const copy = {
       reimbursement_already_settled: 'Penggantian ini sudah dibayar.',
       reimbursement_waived: 'Penggantian ini sudah diputihkan.',
     },
-    backToHome: 'Kembali ke beranda',
   },
   incidentals: {
     heading: 'Kegiatan insidental',

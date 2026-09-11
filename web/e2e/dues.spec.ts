@@ -40,7 +40,7 @@ test.describe('dues status', () => {
 
     await page.getByRole('link', { name: copy.shell.nav.history }).click()
     await page.getByRole('link', { name: copy.history.tabs.dues }).click()
-    await expect(page.getByRole('heading', { name: copy.dues.heading })).toBeVisible()
+    await expect(page.getByLabel(copy.dues.periodLabel)).toBeVisible()
 
     // Both seeded members owe this period's rate and neither has ever paid.
     await expect(page.getByText('Warga Satu')).toBeVisible()
@@ -112,7 +112,7 @@ test.describe('dues status', () => {
 
     // Back on the roster, refreshed, with the confirmation for this one
     // navigation.
-    await expect(page.getByRole('heading', { name: copy.dues.heading })).toBeVisible()
+    await expect(page.getByLabel(copy.dues.periodLabel)).toBeVisible()
     await expect(page.getByText(copy.dues.payment.success)).toBeVisible()
 
     // Every posted row says whose dues it was: home's recent activity shows

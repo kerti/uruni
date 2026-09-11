@@ -222,6 +222,123 @@ func (q *Queries) ListReimbursementsByFund(ctx context.Context, fundID int64) ([
 	return items, nil
 }
 
+const listReimbursementsPage = `-- name: ListReimbursementsPage :many
+SELECT r.id, r.fund_id, r.member_id, r.purpose_id, r.amount, r.incurred_on, r.waived_on, r.note, r.created_at,
+  CASE WHEN CAST(?1 AS INTEGER) = 1 THEN 0 ELSE
+    CAST(EXISTS(
+      SELECT 1 FROM "transaction" t
+      WHERE t.reimbursement_id = r.id AND t.kind = 'reimbursement'
+    ) AS INTEGER)
+  END AS settled
+FROM reimbursement r
+LEFT JOIN member m ON m.id = r.member_id
+WHERE r.fund_id = ?2
+  AND (
+    ?3 IS NULL
+    OR (r.incurred_on, r.id) < (?3, CAST(?4 AS INTEGER))
+  )
+  AND (
+    ?5 IS NULL
+    OR INSTR(LOWER(r.note), LOWER(?5)) > 0
+    OR INSTR(LOWER(m.name), LOWER(?5)) > 0
+  )
+  AND (
+    CAST(?1 AS INTEGER) = 0
+    OR (
+      r.waived_on IS NULL
+      AND NOT EXISTS (
+        SELECT 1 FROM "transaction" t
+        WHERE t.reimbursement_id = r.id AND t.kind = 'reimbursement'
+      )
+    )
+  )
+ORDER BY r.incurred_on DESC, r.id DESC
+LIMIT ?6
+`
+
+type ListReimbursementsPageParams struct {
+	OutstandingOnly  int64
+	FundID           int64
+	CursorIncurredOn interface{}
+	CursorID         *int64
+	Q                interface{}
+	PageLimit        int64
+}
+
+type ListReimbursementsPageRow struct {
+	ID         int64
+	FundID     int64
+	MemberID   int64
+	PurposeID  int64
+	Amount     int64
+	IncurredOn string
+	WaivedOn   *string
+	Note       *string
+	CreatedAt  int64
+	Settled    int64
+}
+
+// GET /api/reimbursements's real listing (#226, ADR-032 "Lists: paging and
+// search") - newest-first and keyset-paged on (incurred_on, id), the same
+// shape as ListTransactionsPage (transaction.sql has the full reasoning for
+// row-value keyset over LIMIT/OFFSET, the CAST on cursor_id, and INSTR/LOWER
+// over "COLLATE NOCASE LIKE ... ESCAPE" - sqlc 1.31.1's bug with a repeated
+// ESCAPE clause applies here too, since q searches two columns).
+//
+// Search (?q=) covers member name and note only - PRD section 7.4 gives a
+// claim no purpose-name search surface the way a transaction has one, and
+// ADR-032 named "member name and note" for this list specifically.
+//
+// sqlc.narg('outstanding_only') gates the same pair of conditions
+// ListOutstandingReimbursementsByFund applies (waived_on IS NULL and no
+// settling transaction) so `settled` stays correctly computed in both
+// modes: literal 0 when outstanding_only narrows the WHERE clause itself
+// (every row satisfying it is unsettled by construction, same as that
+// query), the real EXISTS check otherwise.
+//
+// page_limit is page size + 1, the same "peek at one extra row" trick
+// ListTransactionsPage uses to know whether a next page exists.
+func (q *Queries) ListReimbursementsPage(ctx context.Context, arg ListReimbursementsPageParams) ([]ListReimbursementsPageRow, error) {
+	rows, err := q.db.QueryContext(ctx, listReimbursementsPage,
+		arg.OutstandingOnly,
+		arg.FundID,
+		arg.CursorIncurredOn,
+		arg.CursorID,
+		arg.Q,
+		arg.PageLimit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListReimbursementsPageRow{}
+	for rows.Next() {
+		var i ListReimbursementsPageRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.FundID,
+			&i.MemberID,
+			&i.PurposeID,
+			&i.Amount,
+			&i.IncurredOn,
+			&i.WaivedOn,
+			&i.Note,
+			&i.CreatedAt,
+			&i.Settled,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const outstandingReimbursementTotal = `-- name: OutstandingReimbursementTotal :one
 SELECT CAST(COALESCE(SUM(r.amount), 0) AS INTEGER) AS total_amount
 FROM reimbursement r

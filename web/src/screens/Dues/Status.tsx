@@ -119,10 +119,6 @@ export default function DuesStatus({
 
   return (
     <div className="mx-auto flex w-full max-w-sm flex-col gap-6">
-      <div className="flex flex-col gap-1">
-        <h1 className="text-2xl font-semibold">{text.heading}</h1>
-      </div>
-
       {notice && (
         <p role="status" className="flex items-center gap-2 text-success">
           <CircleCheck aria-hidden="true" />

@@ -356,7 +356,7 @@ describe('App (Riwayat)', () => {
 
     const tab = await screen.findByRole('link', { name: copy.history.tabs.dues })
     await waitFor(() => expect(tab).toHaveAttribute('aria-current', 'page'))
-    expect(await screen.findByRole('heading', { name: copy.dues.heading })).toBeInTheDocument()
+    expect(await screen.findByLabelText(copy.dues.periodLabel)).toBeInTheDocument()
     window.history.pushState({}, '', '/')
   })
 
@@ -369,7 +369,7 @@ describe('App (Riwayat)', () => {
 
     const tab = await screen.findByRole('link', { name: copy.history.tabs.dues })
     await waitFor(() => expect(tab).toHaveAttribute('aria-current', 'page'))
-    expect(await screen.findByRole('heading', { name: copy.dues.heading })).toBeInTheDocument()
+    expect(await screen.findByLabelText(copy.dues.periodLabel)).toBeInTheDocument()
     window.history.pushState({}, '', '/')
   })
 })

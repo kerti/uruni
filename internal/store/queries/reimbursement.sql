@@ -40,6 +40,59 @@ WHERE r.fund_id = ?
   )
 ORDER BY r.id;
 
+-- GET /api/reimbursements's real listing (#226, ADR-032 "Lists: paging and
+-- search") - newest-first and keyset-paged on (incurred_on, id), the same
+-- shape as ListTransactionsPage (transaction.sql has the full reasoning for
+-- row-value keyset over LIMIT/OFFSET, the CAST on cursor_id, and INSTR/LOWER
+-- over "COLLATE NOCASE LIKE ... ESCAPE" - sqlc 1.31.1's bug with a repeated
+-- ESCAPE clause applies here too, since q searches two columns).
+--
+-- Search (?q=) covers member name and note only - PRD section 7.4 gives a
+-- claim no purpose-name search surface the way a transaction has one, and
+-- ADR-032 named "member name and note" for this list specifically.
+--
+-- sqlc.narg('outstanding_only') gates the same pair of conditions
+-- ListOutstandingReimbursementsByFund applies (waived_on IS NULL and no
+-- settling transaction) so `settled` stays correctly computed in both
+-- modes: literal 0 when outstanding_only narrows the WHERE clause itself
+-- (every row satisfying it is unsettled by construction, same as that
+-- query), the real EXISTS check otherwise.
+--
+-- page_limit is page size + 1, the same "peek at one extra row" trick
+-- ListTransactionsPage uses to know whether a next page exists.
+-- name: ListReimbursementsPage :many
+SELECT r.id, r.fund_id, r.member_id, r.purpose_id, r.amount, r.incurred_on, r.waived_on, r.note, r.created_at,
+  CASE WHEN CAST(sqlc.arg('outstanding_only') AS INTEGER) = 1 THEN 0 ELSE
+    CAST(EXISTS(
+      SELECT 1 FROM "transaction" t
+      WHERE t.reimbursement_id = r.id AND t.kind = 'reimbursement'
+    ) AS INTEGER)
+  END AS settled
+FROM reimbursement r
+LEFT JOIN member m ON m.id = r.member_id
+WHERE r.fund_id = sqlc.arg('fund_id')
+  AND (
+    sqlc.narg('cursor_incurred_on') IS NULL
+    OR (r.incurred_on, r.id) < (sqlc.narg('cursor_incurred_on'), CAST(sqlc.narg('cursor_id') AS INTEGER))
+  )
+  AND (
+    sqlc.narg('q') IS NULL
+    OR INSTR(LOWER(r.note), LOWER(sqlc.narg('q'))) > 0
+    OR INSTR(LOWER(m.name), LOWER(sqlc.narg('q'))) > 0
+  )
+  AND (
+    CAST(sqlc.arg('outstanding_only') AS INTEGER) = 0
+    OR (
+      r.waived_on IS NULL
+      AND NOT EXISTS (
+        SELECT 1 FROM "transaction" t
+        WHERE t.reimbursement_id = r.id AND t.kind = 'reimbursement'
+      )
+    )
+  )
+ORDER BY r.incurred_on DESC, r.id DESC
+LIMIT sqlc.arg('page_limit');
+
 -- The outstanding total, cast so it lands as int64 rather than interface{}:
 -- sqlc's SQLite engine cannot infer the type of a summed expression, and an
 -- uncast aggregate is a silent failure that only surfaces at M3 (ADR-024).

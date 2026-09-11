@@ -22,14 +22,40 @@ export interface Reimbursement {
   created_at: number
 }
 
+/** GET /api/reimbursements's optional query parameters (#226, ADR-032
+ * "Lists: paging and search"). cursor is the opaque string a previous
+ * page's nextCursor returned - omit it for the first page. q searches
+ * member name and note only, narrower than GET /api/transactions's search
+ * surface because a claim has no purpose-name column worth searching. */
+export interface ListReimbursementsInput {
+  outstanding?: boolean
+  q?: string
+  cursor?: string
+}
+
+/** One page of GET /api/reimbursements, camelCase on this side of the wire
+ * boundary (the server's own envelope is {reimbursements, next_cursor}).
+ * nextCursor is null once there is no further page. */
+export interface ReimbursementsPage {
+  reimbursements: Reimbursement[]
+  nextCursor: string | null
+}
+
 /**
- * GET /api/reimbursements, optionally ?outstanding=true for only those
- * still owed. An unparseable value is a 400 on the server; this module
- * never sends one.
+ * GET /api/reimbursements (#226, keyset-paged and searchable): newest-first,
+ * 25 rows a page. An unparseable ?outstanding= value is a 400 on the
+ * server; this module never sends one.
  */
-export function listReimbursements(outstanding = false): Promise<Reimbursement[]> {
-  const query = outstanding ? '?outstanding=true' : ''
-  return apiFetch<Reimbursement[]>(`/api/reimbursements${query}`)
+export function listReimbursements(input: ListReimbursementsInput = {}): Promise<ReimbursementsPage> {
+  const params = new URLSearchParams()
+  if (input.outstanding) params.set('outstanding', 'true')
+  if (input.q) params.set('q', input.q)
+  if (input.cursor) params.set('cursor', input.cursor)
+  const query = params.toString()
+
+  return apiFetch<{ reimbursements: Reimbursement[]; next_cursor: string | null }>(
+    `/api/reimbursements${query ? `?${query}` : ''}`,
+  ).then((page) => ({ reimbursements: page.reimbursements, nextCursor: page.next_cursor }))
 }
 
 /** POST /api/reimbursements - a direct-CRUD write that moves no money.
