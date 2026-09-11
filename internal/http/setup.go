@@ -34,9 +34,15 @@ func toFundResponse(f store.Fund) fundResponse {
 // name the treasurer gives one location at setup (#78). Shape only - whether
 // kind names a real kind and name is non-blank after trimming are the
 // schema's own CHECKs to refuse, not re-checked here (ADR-027).
+//
+// OpeningBalance is optional, the same shape accountRequest carries for a
+// location added later (#230's uniform rule: a location and its opening
+// balance are born together, or not at all). Absent is the same as an amount
+// of 0 - neither posts a row.
 type setupAccountRequest struct {
-	Kind string `json:"kind"`
-	Name string `json:"name"`
+	Kind           string                 `json:"kind"`
+	Name           string                 `json:"name"`
+	OpeningBalance *openingBalanceRequest `json:"opening_balance"`
 }
 
 // setupRequest is POST /api/setup's body: the fund's name (PRD section 7.1, "name
@@ -70,7 +76,11 @@ func (a *api) setupFund(w http.ResponseWriter, r *http.Request) {
 
 	accounts := make([]ledger.AccountInput, 0, len(req.Accounts))
 	for _, acc := range req.Accounts {
-		accounts = append(accounts, ledger.AccountInput{Kind: acc.Kind, Name: acc.Name})
+		accounts = append(accounts, ledger.AccountInput{
+			Kind:           acc.Kind,
+			Name:           acc.Name,
+			OpeningBalance: acc.OpeningBalance.toOpeningBalance(),
+		})
 	}
 
 	result, err := a.ledger.SetUpFund(r.Context(), ledger.SetUpFundParams{

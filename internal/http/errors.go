@@ -41,13 +41,6 @@ func writeAPIError(w http.ResponseWriter, status int, code, message string) {
 // mapLedgerError answers an error returned by an internal/ledger call, per
 // ADR-027's sentinel taxonomy. Every later M4 slice that calls into the ledger
 // shares this one switch rather than re-deriving the mapping at each route.
-//
-// ErrOpeningBalanceExists maps to 409 alongside the two reimbursement
-// sentinels and ErrIncidentalAlreadyClosed even though ADR-027's own closing
-// sentence lists only the latter three - its doc comment gives the identical
-// reasoning (a pre-check ahead of a unique index the schema already enforces),
-// and that ADR is `implemented`, not `draft`, so the omission is corrected here
-// rather than by editing it.
 func mapLedgerError(w http.ResponseWriter, logger *slog.Logger, err error) {
 	switch {
 	case errors.Is(err, ledger.ErrInvalidArgument):
@@ -78,8 +71,6 @@ func mapLedgerError(w http.ResponseWriter, logger *slog.Logger, err error) {
 		writeAPIError(w, http.StatusConflict, "incidental_closed", "This incidental is closed and cannot accept new transactions.")
 	case errors.Is(err, ledger.ErrIncidentalNotClosed):
 		writeAPIError(w, http.StatusConflict, "incidental_not_closed", "This incidental is not closed.")
-	case errors.Is(err, ledger.ErrOpeningBalanceExists):
-		writeAPIError(w, http.StatusConflict, "opening_balance_exists", "An opening balance already exists for this account.")
 	case errors.Is(err, ledger.ErrFundAlreadyExists):
 		writeAPIError(w, http.StatusConflict, "fund_already_exists", "A fund has already been set up.")
 	case errors.Is(err, money.ErrOverflow):

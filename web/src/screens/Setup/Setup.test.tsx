@@ -50,6 +50,10 @@ async function goPastFundName(name = 'Kas RT 04') {
   await userEvent.click(screen.getByRole('button', { name: text.next }))
 }
 
+async function goPastLocations() {
+  await userEvent.click(screen.getByRole('button', { name: text.next }))
+}
+
 describe('Setup', () => {
   it('renders the fund name step first', () => {
     render(<Setup onDone={vi.fn()} />)
@@ -74,9 +78,21 @@ describe('Setup', () => {
     expect(screen.getByText(text.locations.minOneLocation)).toBeInTheDocument()
   })
 
-  it('posts POST /api/setup exactly once, with a renamed default location under its new name', async () => {
+  it('sends no request on the locations step - only the balances step fires POST /api/setup', async () => {
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+    render(<Setup onDone={vi.fn()} />)
+    await goPastFundName()
+    await goPastLocations()
+
+    expect(await screen.findByText(text.balances.heading)).toBeInTheDocument()
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('posts POST /api/setup exactly once from the balances step, with a renamed default location under its new name', async () => {
     const fetchMock = routedFetch([
       { match: (m, u) => m === 'POST' && u.includes('/api/setup'), handle: () => Promise.resolve(jsonResponse(setupResult, 201)) },
+      { match: (m, u) => m === 'POST' && (u.includes('/api/dues-tiers') || u.includes('/api/members')), handle: () => Promise.resolve(jsonResponse({})) },
     ])
     vi.stubGlobal('fetch', fetchMock)
     render(<Setup onDone={vi.fn()} />)
@@ -87,10 +103,12 @@ describe('Setup', () => {
     const nameInputs = screen.getAllByLabelText(text.locations.nameLabel)
     await userEvent.clear(nameInputs[0])
     await userEvent.type(nameInputs[0], 'Kas Ketua RT')
-
-    await userEvent.click(screen.getByRole('button', { name: text.next }))
+    await goPastLocations()
 
     await screen.findByText(text.balances.heading)
+    await userEvent.click(screen.getByRole('button', { name: text.next }))
+
+    await screen.findByText(text.roster.heading)
 
     const setupCalls = callsTo(fetchMock, '/api/setup')
     expect(setupCalls).toHaveLength(1)
@@ -99,64 +117,43 @@ describe('Setup', () => {
     expect(body.accounts.map((a) => a.name)).toEqual(['Kas Ketua RT', 'Bank'])
   })
 
-  it('sends no opening-balance request for a blank field, and skips the roster with no roster requests', async () => {
+  it('sends no opening_balance for a blank field, and skips the roster with no roster requests', async () => {
     const onDone = vi.fn()
     const fetchMock = routedFetch([
       { match: (m, u) => m === 'POST' && u.includes('/api/setup'), handle: () => Promise.resolve(jsonResponse(setupResult, 201)) },
-      { match: (m, u) => m === 'POST' && u.includes('/opening-balance'), handle: () => Promise.resolve(jsonResponse({ transaction: null, posted_amount: 0 })) },
       { match: (m, u) => m === 'POST' && (u.includes('/api/dues-tiers') || u.includes('/api/members')), handle: () => Promise.resolve(jsonResponse({})) },
     ])
     vi.stubGlobal('fetch', fetchMock)
     render(<Setup onDone={onDone} />)
     await goPastFundName()
-    await userEvent.click(screen.getByRole('button', { name: text.next }))
+    await goPastLocations()
 
     // Now on the balances step, every field left blank.
     expect(await screen.findByText(text.balances.heading)).toBeInTheDocument()
     await userEvent.click(screen.getByRole('button', { name: text.next }))
 
+    const setupCalls = callsTo(fetchMock, '/api/setup')
+    expect(setupCalls).toHaveLength(1)
+    const body = JSON.parse(setupCalls[0][1]?.body as string) as { accounts: { opening_balance?: unknown }[] }
+    expect(body.accounts.every((a) => a.opening_balance === undefined)).toBe(true)
+
     // On to the roster step - skip it entirely.
     expect(await screen.findByText(text.roster.heading)).toBeInTheDocument()
     await userEvent.click(screen.getByRole('button', { name: text.roster.skip }))
 
-    expect(callsTo(fetchMock, '/opening-balance')).toHaveLength(0)
     expect(callsTo(fetchMock, '/api/dues-tiers')).toHaveLength(0)
     expect(callsTo(fetchMock, '/api/members')).toHaveLength(0)
     await waitFor(() => expect(onDone).toHaveBeenCalledTimes(1))
   })
 
-  it('stays on the locations step when POST /api/setup fails, and does not repeat the call on a retry that fails again', async () => {
-    const fetchMock = routedFetch([
-      {
-        match: (m, u) => m === 'POST' && u.includes('/api/setup'),
-        handle: () =>
-          Promise.resolve(
-            jsonResponse({ error: { code: 'invalid_argument', message: 'bad' } }, 400),
-          ),
-      },
-    ])
-    vi.stubGlobal('fetch', fetchMock)
-    render(<Setup onDone={vi.fn()} />)
-    await goPastFundName()
-
-    await userEvent.click(screen.getByRole('button', { name: text.next }))
-
-    // Still on locations, with the failure rendered - never advanced to the
-    // balances step on a call that did not succeed.
-    expect(await screen.findByRole('alert')).toHaveTextContent(copy.common.errors.invalid_argument)
-    expect(screen.getByText(text.locations.heading)).toBeInTheDocument()
-    expect(screen.queryByText(text.balances.heading)).not.toBeInTheDocument()
-  })
-
-  it('posts an opening balance only for the account whose field was filled in', async () => {
+  it('sends an opening_balance only for the row whose field was filled in, on the single POST /api/setup', async () => {
     const fetchMock = routedFetch([
       { match: (m, u) => m === 'POST' && u.includes('/api/setup'), handle: () => Promise.resolve(jsonResponse(setupResult, 201)) },
-      { match: (m, u) => m === 'POST' && u.includes('/opening-balance'), handle: () => Promise.resolve(jsonResponse({ transaction: null, posted_amount: 0 })) },
     ])
     vi.stubGlobal('fetch', fetchMock)
     render(<Setup onDone={vi.fn()} />)
     await goPastFundName()
-    await userEvent.click(screen.getByRole('button', { name: text.next }))
+    await goPastLocations()
 
     expect(await screen.findByText(text.balances.heading)).toBeInTheDocument()
     const amountField = screen.getByLabelText(text.balances.amountLabel('Tunai'))
@@ -166,15 +163,116 @@ describe('Setup', () => {
 
     await screen.findByText(text.roster.heading)
 
-    const balanceCalls = callsTo(fetchMock, '/opening-balance')
-    expect(balanceCalls).toHaveLength(1)
-    expect(balanceCalls[0][0]).toContain('/api/accounts/10/opening-balance')
+    const setupCalls = callsTo(fetchMock, '/api/setup')
+    expect(setupCalls).toHaveLength(1)
+    const body = JSON.parse(setupCalls[0][1]?.body as string) as {
+      accounts: { name: string; opening_balance?: { amount: number; note: string } }[]
+    }
+    const tunai = body.accounts.find((a) => a.name === 'Tunai')
+    const bank = body.accounts.find((a) => a.name === 'Bank')
     // The note names its own location: this row is the first entry in the
     // fund's ledger and it is read again months later, in home's recent
     // activity and in the public report, without the wizard around it.
-    expect(JSON.parse(String(balanceCalls[0][1]?.body))).toMatchObject({
-      amount: 50000,
-      note: text.balances.note('Tunai'),
-    })
+    expect(tunai?.opening_balance).toMatchObject({ amount: 50000, note: text.balances.note('Tunai') })
+    expect(bank?.opening_balance).toBeUndefined()
+  })
+
+  it('going back from balances to locations and returning keeps names and amounts', async () => {
+    vi.stubGlobal('fetch', vi.fn())
+    render(<Setup onDone={vi.fn()} />)
+    await goPastFundName()
+
+    const nameInputs = screen.getAllByLabelText(text.locations.nameLabel)
+    await userEvent.clear(nameInputs[0])
+    await userEvent.type(nameInputs[0], 'Kas Ketua RT')
+    await goPastLocations()
+
+    await screen.findByText(text.balances.heading)
+    const tunaiAmount = screen.getByLabelText(text.balances.amountLabel('Kas Ketua RT'))
+    await userEvent.type(tunaiAmount, '75000')
+
+    await userEvent.click(screen.getByRole('button', { name: text.back }))
+    expect(await screen.findByText(text.locations.heading)).toBeInTheDocument()
+    expect(screen.getAllByLabelText(text.locations.nameLabel)[0]).toHaveValue('Kas Ketua RT')
+
+    await goPastLocations()
+    expect(await screen.findByText(text.balances.heading)).toBeInTheDocument()
+    expect(screen.getByLabelText(text.balances.amountLabel('Kas Ketua RT'))).toHaveValue('75.000')
+  })
+
+  it('removing a location after going back drops only its own amount - the rest stay on their own rows', async () => {
+    vi.stubGlobal('fetch', vi.fn())
+    render(<Setup onDone={vi.fn()} />)
+    await goPastFundName()
+    await goPastLocations()
+
+    await screen.findByText(text.balances.heading)
+    await userEvent.type(screen.getByLabelText(text.balances.amountLabel('Tunai')), '10000')
+    await userEvent.type(screen.getByLabelText(text.balances.amountLabel('Bank')), '20000')
+
+    await userEvent.click(screen.getByRole('button', { name: text.back }))
+    expect(await screen.findByText(text.locations.heading)).toBeInTheDocument()
+
+    // Remove the first row (Tunai) - Bank's own amount must survive.
+    await userEvent.click(screen.getAllByRole('button', { name: text.locations.removeRow })[0])
+    await goPastLocations()
+
+    expect(await screen.findByText(text.balances.heading)).toBeInTheDocument()
+    expect(screen.queryByLabelText(text.balances.amountLabel('Tunai'))).not.toBeInTheDocument()
+    expect(screen.getByLabelText(text.balances.amountLabel('Bank'))).toHaveValue('20.000')
+  })
+
+  it('stays on the balances step when POST /api/setup fails, and a resubmit sends one complete request', async () => {
+    let calls = 0
+    const fetchMock = routedFetch([
+      {
+        match: (m, u) => m === 'POST' && u.includes('/api/setup'),
+        handle: () => {
+          calls += 1
+          if (calls === 1) return Promise.resolve(jsonResponse({ error: { code: 'invalid_argument', message: 'bad' } }, 400))
+          return Promise.resolve(jsonResponse(setupResult, 201))
+        },
+      },
+    ])
+    vi.stubGlobal('fetch', fetchMock)
+    render(<Setup onDone={vi.fn()} />)
+    await goPastFundName()
+    await goPastLocations()
+
+    await screen.findByText(text.balances.heading)
+    await userEvent.type(screen.getByLabelText(text.balances.amountLabel('Tunai')), '50000')
+    await userEvent.click(screen.getByRole('button', { name: text.next }))
+
+    // Still on balances, with the failure rendered - never advanced past a
+    // call that did not succeed.
+    expect(await screen.findByRole('alert')).toHaveTextContent(copy.common.errors.invalid_argument)
+    expect(screen.getByText(text.balances.heading)).toBeInTheDocument()
+    expect(screen.queryByText(text.roster.heading)).not.toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole('button', { name: text.next }))
+    await screen.findByText(text.roster.heading)
+
+    const setupCalls = callsTo(fetchMock, '/api/setup')
+    expect(setupCalls).toHaveLength(2)
+    const body = JSON.parse(setupCalls[1][1]?.body as string) as {
+      accounts: { name: string; opening_balance?: { amount: number } }[]
+    }
+    expect(body.accounts.find((a) => a.name === 'Tunai')?.opening_balance).toMatchObject({ amount: 50000 })
+  })
+
+  it('never calls the deleted per-account opening-balance route', async () => {
+    const fetchMock = routedFetch([
+      { match: (m, u) => m === 'POST' && u.includes('/api/setup'), handle: () => Promise.resolve(jsonResponse(setupResult, 201)) },
+    ])
+    vi.stubGlobal('fetch', fetchMock)
+    render(<Setup onDone={vi.fn()} />)
+    await goPastFundName()
+    await goPastLocations()
+    await screen.findByText(text.balances.heading)
+    await userEvent.type(screen.getByLabelText(text.balances.amountLabel('Tunai')), '50000')
+    await userEvent.click(screen.getByRole('button', { name: text.next }))
+    await screen.findByText(text.roster.heading)
+
+    expect(callsTo(fetchMock, '/opening-balance')).toHaveLength(0)
   })
 })

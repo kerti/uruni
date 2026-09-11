@@ -26,12 +26,28 @@ export function listAccounts(): Promise<Account[]> {
  * is fixed at creation; there is no route that changes it, deliberately -
  * cash and bank reconcile differently, so a location that changed kind is a
  * different location.
+ *
+ * `openingBalance`, when given, is posted in the same database transaction
+ * that creates the account (#230: a location and its opening balance are
+ * born together, or not at all - there is no separate opening-balance
+ * route any more). Omit it, or leave the amount at 0, for a location that
+ * starts empty.
  */
-export function createAccount(kind: string, name: string): Promise<Account> {
+export function createAccount(
+  kind: string,
+  name: string,
+  openingBalance?: { amount: number; occurredOn: string; note: string },
+): Promise<Account> {
   return apiFetch<Account>('/api/accounts', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ kind, name }),
+    body: JSON.stringify({
+      kind,
+      name,
+      ...(openingBalance && openingBalance.amount > 0
+        ? { opening_balance: { amount: openingBalance.amount, occurred_on: openingBalance.occurredOn, note: openingBalance.note } }
+        : {}),
+    }),
   })
 }
 

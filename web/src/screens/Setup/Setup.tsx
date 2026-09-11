@@ -1,27 +1,21 @@
-import { useRef, useState } from 'react'
+import { useState } from 'react'
 
 import { copy } from '@/copy/id'
+import { todayISODate } from '@/lib/dates'
 import { useApi } from '@/lib/useApi'
 import { parseRupiah } from '@/lib/money'
-import { createDuesRate, createDuesTier, createMember, postOpeningBalance, postSetup } from '@/lib/setup'
-import type { SetupAccountInput, SetupResult } from '@/lib/setup'
+import { createDuesRate, createDuesTier, createMember, postSetup } from '@/lib/setup'
+import type { SetupAccountInput } from '@/lib/setup'
 import FundName from '@/screens/Setup/FundName'
 import Locations from '@/screens/Setup/Locations'
+import { newLocationRow } from '@/screens/Setup/locationRow'
+import type { LocationRow } from '@/screens/Setup/locationRow'
 import OpeningBalances from '@/screens/Setup/OpeningBalances'
 import Roster from '@/screens/Setup/Roster'
 
 type Step = 'fund' | 'locations' | 'balances' | 'roster'
 
-/** Local YYYY-MM-DD - never toISOString(), which is UTC and can read as
- * yesterday's date in WIB. */
-function todayISODate(): string {
-  const now = new Date()
-  const mm = String(now.getMonth() + 1).padStart(2, '0')
-  const dd = String(now.getDate()).padStart(2, '0')
-  return `${now.getFullYear()}-${mm}-${dd}`
-}
-
-/** Local YYYY-MM, same reasoning as todayISODate. */
+/** Local YYYY-MM, same reasoning as lib/dates.ts's todayISODate. */
 function currentISOMonth(): string {
   const now = new Date()
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
@@ -35,10 +29,14 @@ function currentISOMonth(): string {
  * and every request; the four step components under this directory are
  * presentational, plus their own local field state.
  *
- * Exactly one request can create the fund (POST /api/setup, in the
- * locations step) - a failed request anywhere keeps her on the step she is
- * on with the error rendered, and once that call has succeeded there is no
- * way back to a step that would repeat it (fund_already_exists is a 409).
+ * Exactly one request can create the fund (POST /api/setup, fired from the
+ * balances step) - #230: a location and its opening balance are born
+ * together, in one database transaction, or not at all, so the fund, its
+ * accounts and their opening balances all go up in that single call. A
+ * failed request keeps her on the balances step with the error rendered, and
+ * going back from balances to locations is safe (nothing has posted yet);
+ * once the call has succeeded there is no way back to a step that would
+ * repeat it (fund_already_exists is a 409) - the roster step has no back.
  *
  * onDone is called once, after the last step (finished or skipped) - App.tsx
  * uses it to re-probe GET /api/fund and move on to home without a reload.
@@ -46,17 +44,12 @@ function currentISOMonth(): string {
 export default function Setup({ onDone }: { onDone: () => void }) {
   const [step, setStep] = useState<Step>('fund')
   const [fundName, setFundName] = useState('')
-  const [locationRows, setLocationRows] = useState<SetupAccountInput[]>([
-    { kind: 'cash', name: 'Tunai' },
-    { kind: 'bank', name: 'Bank' },
+  // Lazy: newLocationRow mints a client id, so the seed rows are built once,
+  // not on every render.
+  const [locationRows, setLocationRows] = useState<LocationRow[]>(() => [
+    newLocationRow('cash', 'Tunai'),
+    newLocationRow('bank', 'Bank'),
   ])
-  const [setupResult, setSetupResult] = useState<SetupResult | undefined>(undefined)
-  const [balanceAmounts, setBalanceAmounts] = useState<Record<number, string>>({})
-  // Accounts an opening balance has already been posted for - a ref, not
-  // state: it only ever guards a retry after a partial failure, never drives
-  // a render, and must survive across submitBalances calls without racing
-  // its own setState.
-  const postedAccountIds = useRef<Set<number>>(new Set())
   const [tierName, setTierName] = useState('')
   const [rateAmount, setRateAmount] = useState('')
   const [members, setMembers] = useState<string[]>([])
@@ -65,31 +58,21 @@ export default function Setup({ onDone }: { onDone: () => void }) {
   const submitting = state.status === 'loading'
   const error = state.status === 'error' ? state.error : undefined
 
-  function submitLocations() {
-    void run(async () => {
-      const result = await postSetup(
-        fundName.trim(),
-        locationRows.map((row) => ({ kind: row.kind, name: row.name.trim() })),
-      )
-      setSetupResult(result)
-      setStep('balances')
-      return result
-    })
-  }
-
   function submitBalances() {
     void run(async () => {
-      const result = setupResult
-      if (!result) return
       const occurredOn = todayISODate()
-      for (const account of result.accounts) {
-        if (postedAccountIds.current.has(account.id)) continue
-        const amount = parseRupiah(balanceAmounts[account.id] ?? '')
-        if (amount === 0) continue
-        await postOpeningBalance(account.id, amount, occurredOn, copy.setup.balances.note(account.name))
-        postedAccountIds.current.add(account.id)
-      }
+      const accounts: SetupAccountInput[] = locationRows.map((row) => {
+        const name = row.name.trim()
+        const amount = parseRupiah(row.openingBalance)
+        const input: SetupAccountInput = { kind: row.kind, name }
+        if (amount > 0) {
+          input.opening_balance = { amount, occurred_on: occurredOn, note: copy.setup.balances.note(name) }
+        }
+        return input
+      })
+      const result = await postSetup(fundName.trim(), accounts)
       setStep('roster')
+      return result
     })
   }
 
@@ -126,21 +109,21 @@ export default function Setup({ onDone }: { onDone: () => void }) {
       <Locations
         rows={locationRows}
         onChange={setLocationRows}
-        onNext={submitLocations}
+        onNext={() => setStep('balances')}
         onBack={() => setStep('fund')}
-        submitting={submitting}
-        error={error}
       />
     )
   }
 
-  if (step === 'balances' && setupResult) {
+  if (step === 'balances') {
     return (
       <OpeningBalances
-        accounts={setupResult.accounts}
-        amounts={balanceAmounts}
-        onChange={(accountId, value) => setBalanceAmounts((prev) => ({ ...prev, [accountId]: value }))}
+        rows={locationRows}
+        onChange={(clientId, value) =>
+          setLocationRows((prev) => prev.map((row) => (row.clientId === clientId ? { ...row, openingBalance: value } : row)))
+        }
         onNext={submitBalances}
+        onBack={() => setStep('locations')}
         submitting={submitting}
         error={error}
       />

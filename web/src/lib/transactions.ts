@@ -1,7 +1,6 @@
 // Typed call over apiFetch for POST /api/transactions (M6.8), same idiom as
-// lib/setup.ts's postOpeningBalance. The Transaction response shape is
-// already defined in lib/setup.ts (the wizard's opening-balance call answers
-// with the same row shape) - re-exported here rather than redefined.
+// lib/setup.ts's postSetup. The Transaction response shape is already
+// defined in lib/setup.ts - re-exported here rather than redefined.
 
 import { apiFetch } from '@/lib/api'
 import type { Transaction } from '@/lib/setup'

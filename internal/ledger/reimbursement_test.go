@@ -131,12 +131,7 @@ func TestSettleReimbursementFundBalanceUnchangedUntilSettled(t *testing.T) {
 	ctx := context.Background()
 	q := store.New(l.db)
 
-	if _, err := l.PostOpeningBalance(ctx, PostOpeningBalanceParams{
-		FundID: f.fundID, AccountID: f.cashID, PurposeID: f.mainID,
-		Amount: 200_000, OccurredOn: "2026-07-01",
-	}); err != nil {
-		t.Fatalf("PostOpeningBalance() = %v, want no error", err)
-	}
+	postOpeningBalance(t, l, f.fundID, f.cashID, f.mainID, 200_000, "2026-07-01")
 
 	baseline, err := l.FundBalance(ctx, f.fundID)
 	if err != nil {
@@ -317,7 +312,7 @@ func TestSettleReimbursementLedgerDateIsTheSettleDateNotIncurredOn(t *testing.T)
 }
 
 // A malformed occurred_on is rejected before any write reaches the schema,
-// exactly like PostTransaction's and PostOpeningBalance's own check.
+// exactly like PostTransaction's and validateOpeningBalance's own check.
 func TestSettleReimbursementRejectsInvalidOccurredOn(t *testing.T) {
 	tests := []struct {
 		name       string

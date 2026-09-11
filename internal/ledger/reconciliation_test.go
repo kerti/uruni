@@ -76,12 +76,7 @@ func TestTakeReconciliationRegressionAdjustedStoresTheGapFoundNotZero(t *testing
 	ctx := context.Background()
 	q := store.New(l.db)
 
-	if _, err := l.PostOpeningBalance(ctx, PostOpeningBalanceParams{
-		FundID: f.fundID, AccountID: f.cashID, PurposeID: f.mainID,
-		Amount: 100_000, OccurredOn: "2026-08-01",
-	}); err != nil {
-		t.Fatalf("PostOpeningBalance() = %v, want no error", err)
-	}
+	postOpeningBalance(t, l, f.fundID, f.cashID, f.mainID, 100_000, "2026-08-01")
 
 	note := "tin was short"
 	rec, err := l.TakeReconciliation(ctx, TakeReconciliationParams{
@@ -136,12 +131,7 @@ func TestTakeReconciliationRegressionEntryAddedStoresTheGapFoundNotZero(t *testi
 	ctx := context.Background()
 	q := store.New(l.db)
 
-	if _, err := l.PostOpeningBalance(ctx, PostOpeningBalanceParams{
-		FundID: f.fundID, AccountID: f.cashID, PurposeID: f.mainID,
-		Amount: 80_000, OccurredOn: "2026-08-01",
-	}); err != nil {
-		t.Fatalf("PostOpeningBalance() = %v, want no error", err)
-	}
+	postOpeningBalance(t, l, f.fundID, f.cashID, f.mainID, 80_000, "2026-08-01")
 
 	rec, err := l.TakeReconciliation(ctx, TakeReconciliationParams{
 		FundID: f.fundID,
@@ -207,12 +197,7 @@ func TestTakeReconciliationAllFourResolutionsInOneSnapshot(t *testing.T) {
 		extra1:   200_000, // adjusted
 		extra2:   80_000,  // entry_added
 	} {
-		if _, err := l.PostOpeningBalance(ctx, PostOpeningBalanceParams{
-			FundID: f.fundID, AccountID: accountID, PurposeID: f.mainID,
-			Amount: amount, OccurredOn: "2026-08-01",
-		}); err != nil {
-			t.Fatalf("PostOpeningBalance(%d) = %v, want no error", accountID, err)
-		}
+		postOpeningBalance(t, l, f.fundID, accountID, f.mainID, amount, "2026-08-01")
 	}
 
 	rec, err := l.TakeReconciliation(ctx, TakeReconciliationParams{
@@ -278,18 +263,8 @@ func TestTakeReconciliationReproducesM2AdjustedAndLeftOpenScenarios(t *testing.T
 	ctx := context.Background()
 	q := store.New(l.db)
 
-	if _, err := l.PostOpeningBalance(ctx, PostOpeningBalanceParams{
-		FundID: f.fundID, AccountID: f.cashID, PurposeID: f.mainID,
-		Amount: 500_000, OccurredOn: "2026-08-01",
-	}); err != nil {
-		t.Fatalf("PostOpeningBalance(cash) = %v, want no error", err)
-	}
-	if _, err := l.PostOpeningBalance(ctx, PostOpeningBalanceParams{
-		FundID: f.fundID, AccountID: f.bankID, PurposeID: f.mainID,
-		Amount: 2_000_000, OccurredOn: "2026-08-01",
-	}); err != nil {
-		t.Fatalf("PostOpeningBalance(bank) = %v, want no error", err)
-	}
+	postOpeningBalance(t, l, f.fundID, f.cashID, f.mainID, 500_000, "2026-08-01")
+	postOpeningBalance(t, l, f.fundID, f.bankID, f.mainID, 2_000_000, "2026-08-01")
 
 	// The bank statement agrees to the rupiah; the tin is 20000 short and gets
 	// an adjusting entry.
@@ -325,12 +300,7 @@ func TestTakeReconciliationReproducesM2AdjustedAndLeftOpenScenarios(t *testing.T
 
 	// A second fund, where the treasurer decides to sleep on a difference.
 	g := newFixtureWithSlug(t, l, "Other Fund", "zyxwvutsrqponmlkjihgfe")
-	if _, err := l.PostOpeningBalance(ctx, PostOpeningBalanceParams{
-		FundID: g.fundID, AccountID: g.cashID, PurposeID: g.mainID,
-		Amount: 100_000, OccurredOn: "2026-08-01",
-	}); err != nil {
-		t.Fatalf("PostOpeningBalance(g.cash) = %v, want no error", err)
-	}
+	postOpeningBalance(t, l, g.fundID, g.cashID, g.mainID, 100_000, "2026-08-01")
 	if _, err := l.TakeReconciliation(ctx, TakeReconciliationParams{
 		FundID: g.fundID,
 		Counts: []AccountCount{
@@ -361,12 +331,7 @@ func TestTakeReconciliationLeftOpenIsRevisitedAsASecondSnapshotFirstUntouched(t 
 	ctx := context.Background()
 	q := store.New(l.db)
 
-	if _, err := l.PostOpeningBalance(ctx, PostOpeningBalanceParams{
-		FundID: f.fundID, AccountID: f.cashID, PurposeID: f.mainID,
-		Amount: 300_000, OccurredOn: "2026-08-01",
-	}); err != nil {
-		t.Fatalf("PostOpeningBalance() = %v, want no error", err)
-	}
+	postOpeningBalance(t, l, f.fundID, f.cashID, f.mainID, 300_000, "2026-08-01")
 	if _, err := l.PostTransaction(ctx, PostTransactionParams{
 		FundID: f.fundID, AccountID: f.cashID, PurposeID: f.mainID,
 		Direction: "out", Amount: 50_000, OccurredOn: "2026-08-05",
@@ -465,12 +430,7 @@ func TestTakeReconciliationFixMovesLiveBalanceButNotThisSnapshotsRecordedAmount(
 	ctx := context.Background()
 	q := store.New(l.db)
 
-	if _, err := l.PostOpeningBalance(ctx, PostOpeningBalanceParams{
-		FundID: f.fundID, AccountID: f.cashID, PurposeID: f.mainID,
-		Amount: 100_000, OccurredOn: "2026-08-01",
-	}); err != nil {
-		t.Fatalf("PostOpeningBalance() = %v, want no error", err)
-	}
+	postOpeningBalance(t, l, f.fundID, f.cashID, f.mainID, 100_000, "2026-08-01")
 
 	rec, err := l.TakeReconciliation(ctx, TakeReconciliationParams{
 		FundID: f.fundID,
@@ -509,12 +469,7 @@ func TestTakeReconciliationBackdatedFixLandsInTheNextSnapshotNotThisOne(t *testi
 	ctx := context.Background()
 	q := store.New(l.db)
 
-	if _, err := l.PostOpeningBalance(ctx, PostOpeningBalanceParams{
-		FundID: f.fundID, AccountID: f.cashID, PurposeID: f.mainID,
-		Amount: 100_000, OccurredOn: "2026-08-01",
-	}); err != nil {
-		t.Fatalf("PostOpeningBalance() = %v, want no error", err)
-	}
+	postOpeningBalance(t, l, f.fundID, f.cashID, f.mainID, 100_000, "2026-08-01")
 	if _, err := l.PostTransaction(ctx, PostTransactionParams{
 		FundID: f.fundID, AccountID: f.cashID, PurposeID: f.mainID,
 		Direction: "out", Amount: 20_000, OccurredOn: "2026-08-05",

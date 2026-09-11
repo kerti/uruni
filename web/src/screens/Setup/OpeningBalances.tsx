@@ -8,40 +8,45 @@ import ErrorState from '@/components/states/ErrorState'
 import { copy } from '@/copy/id'
 import { formatRupiahDigits, parseRupiah } from '@/lib/money'
 import type { ApiError } from '@/lib/api'
-import type { Account } from '@/lib/setup'
+import type { LocationRow } from '@/screens/Setup/locationRow'
 
 const text = copy.setup
 
 /**
- * Setup step 3 of 4: an optional opening balance per location POST /api/setup
- * just created. Left blank, that account's field never leaves the browser -
- * Setup.tsx only fires a request for a field that parses to a non-zero
- * amount, matching PostOpeningBalance's own "a zero amount posts no row"
- * contract rather than sending a zero-amount request just to have the route
- * tolerate it.
+ * Setup step 3 of 4: an optional opening balance per location named on step
+ * 2. Left blank, that row's amount never leaves the browser - submitting
+ * fires the wizard's one POST /api/setup (#230: the fund, its accounts and
+ * their opening balances are created together, in one database transaction,
+ * or not at all), and only a row that parsed to a non-zero amount carries an
+ * `opening_balance` in that request, matching the server's own "a zero
+ * amount posts no row" contract rather than sending a zero-amount balance
+ * just to have the route tolerate it.
  *
  * Fields hold the grouped display string (formatRupiahDigits), re-derived on
  * every keystroke from parseRupiah so a typed "1000000" always reads back as
  * "1.000.000" - the same edge money.ts documents for any amount input.
+ *
+ * Going back to step 2 is always safe: nothing has posted yet, and rows are
+ * matched by `clientId` so their names and amounts survive the round trip.
  */
 export default function OpeningBalances({
-  accounts,
-  amounts,
+  rows,
   onChange,
   onNext,
+  onBack,
   submitting,
   error,
 }: {
-  accounts: Account[]
-  amounts: Record<number, string>
-  onChange: (accountId: number, value: string) => void
+  rows: LocationRow[]
+  onChange: (clientId: string, value: string) => void
   onNext: () => void
+  onBack: () => void
   submitting: boolean
   error: ApiError | undefined
 }) {
-  function handleAmountChange(accountId: number, raw: string) {
+  function handleAmountChange(clientId: string, raw: string) {
     const digits = parseRupiah(raw)
-    onChange(accountId, digits === 0 ? '' : formatRupiahDigits(digits))
+    onChange(clientId, digits === 0 ? '' : formatRupiahDigits(digits))
   }
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -59,23 +64,28 @@ export default function OpeningBalances({
         </CardHeader>
         <CardContent>
           <form className="flex flex-col gap-4" onSubmit={handleSubmit} noValidate>
-            {accounts.map((account) => (
-              <div key={account.id} className="flex flex-col gap-1.5">
-                <Label htmlFor={`setup-balance-${account.id}`}>{text.balances.amountLabel(account.name)}</Label>
+            {rows.map((row) => (
+              <div key={row.clientId} className="flex flex-col gap-1.5">
+                <Label htmlFor={`setup-balance-${row.clientId}`}>{text.balances.amountLabel(row.name)}</Label>
                 <Input
-                  id={`setup-balance-${account.id}`}
+                  id={`setup-balance-${row.clientId}`}
                   type="text"
                   inputMode="numeric"
-                  value={amounts[account.id] ?? ''}
-                  onChange={(event) => handleAmountChange(account.id, event.target.value)}
+                  value={row.openingBalance}
+                  onChange={(event) => handleAmountChange(row.clientId, event.target.value)}
                   disabled={submitting}
                 />
               </div>
             ))}
             {error && <ErrorState error={error} />}
-            <Button type="submit" size="lg" disabled={submitting}>
-              {submitting ? text.submitting : text.next}
-            </Button>
+            <div className="flex gap-2">
+              <Button type="button" variant="outline" size="lg" onClick={onBack} disabled={submitting}>
+                {text.back}
+              </Button>
+              <Button type="submit" size="lg" className="flex-1" disabled={submitting}>
+                {submitting ? text.submitting : text.next}
+              </Button>
+            </div>
           </form>
         </CardContent>
       </Card>

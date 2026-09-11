@@ -21,6 +21,16 @@
 const dateFormatter = new Intl.DateTimeFormat('id-ID', { dateStyle: 'long' })
 const monthFormatter = new Intl.DateTimeFormat('id-ID', { month: 'long', year: 'numeric' })
 
+/** Today, as a local YYYY-MM-DD - never `toISOString()`, which is UTC and
+ * can read as yesterday's date in WIB. The default `occurred_on`/`joined_on`
+ * a form seeds itself with. */
+export function todayISODate(): string {
+  const now = new Date()
+  const mm = String(now.getMonth() + 1).padStart(2, '0')
+  const dd = String(now.getDate()).padStart(2, '0')
+  return `${now.getFullYear()}-${mm}-${dd}`
+}
+
 /** "2026-09-03" -> "3 September 2026". A transaction's `occurred_on`, a
  * member's `joined_on`, an account's `inactive_on`. */
 export function formatIsoDate(isoDate: string): string {

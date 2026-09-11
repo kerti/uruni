@@ -11,7 +11,7 @@
 | PRD | Missing surface | Server side |
 |---|---|---|
 | §6 Account/Location | transfer between locations | `POST /api/transfers` exists ([#213](https://github.com/kerti/uruni/issues/213)) |
-| §7.1 | opening balance for a location added after setup | `POST /api/accounts/{id}/opening-balance` exists |
+| §7.1 | opening balance for a location added after setup | `POST /api/accounts` accepts an optional `opening_balance`, posted inside the same transaction as the account ([#230](https://github.com/kerti/uruni/issues/230)) |
 | §7.7 | breakdown by purpose tag | `GET /api/balances` already returns `purposes[]`; `Home.tsx` uses it only as a name lookup |
 | §7.8 | reconciliation snapshot history | `GET /api/reconciliations`, `/{id}` exist; no client function at all |
 | §7.3 | dues payment history | **nothing** — only `/api/dues-status` |
@@ -106,6 +106,8 @@ Money forms stay screens because they carry five or more fields, a photo picker 
 **No nested dialogs, ever.** Deleting a member from inside an edit dialog confirms inline within that dialog; a second layer over the first is unescapable on a phone. Never `window.confirm()`. Destructive copy names the consequence, in terracotta and never alarm-red — a retired location and a deleted one are different things (PRD §6). Every card's edit affordance clears 44px; the `sm` button variant does not.
 
 **One named exception, stated rather than hidden.** The add-location dialog carries an **optional opening balance**, which is a ledger posting inside a dialog. PRD §7.1 gives every location an opening balance but the setup wizard only reaches the ones existing at setup, so a bank account added in March currently has no way to state what is in it. An opening balance is a property of a location's birth, not a transaction she would ever go looking for; it happens once per location and never again, and the field is hidden entirely when editing an existing location. The alternative — a `Saldo awal` route visited once and never found again — is worse.
+
+A location and its opening balance are saved in the same database transaction — a refused balance leaves no location behind, and there is no longer any way to add one afterward for a location that was created without it. Setup does the same for every account it starts a fund with: a bad amount or date anywhere in the batch aborts the whole setup call rather than one account. This is #230's uniform rule, not a dialog-specific one ([#230](https://github.com/kerti/uruni/issues/230)).
 
 ### Lists: paging and search
 

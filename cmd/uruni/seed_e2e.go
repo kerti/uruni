@@ -78,17 +78,23 @@ func seedE2E(ctx context.Context) error {
 		return fmt.Errorf("registering the e2e treasurer login: %w", err)
 	}
 
+	// #230's uniform rule: the cash account's opening balance is born with it,
+	// inside SetUpFund's own transaction, rather than posted afterward through
+	// a standalone call that no longer exists.
+	occurredOn := time.Now().Format("2006-01-02")
 	setup, err := l.SetUpFund(ctx, ledger.SetUpFundParams{
 		FundName: seedE2EFundName,
 		Accounts: []ledger.AccountInput{
-			{Kind: "cash", Name: "Tunai"},
+			{
+				Kind: "cash", Name: "Tunai",
+				OpeningBalance: &ledger.OpeningBalance{Amount: money.Amount(1_000_000), OccurredOn: occurredOn},
+			},
 			{Kind: "bank", Name: "Bank Uji Coba"},
 		},
 	})
 	if err != nil {
 		return fmt.Errorf("setting up the e2e fund: %w", err)
 	}
-	cashAccount := setup.Accounts[0]
 
 	now := time.Now().Unix()
 	tier, err := q.CreateDuesTier(ctx, store.CreateDuesTierParams{
@@ -111,14 +117,6 @@ func seedE2E(ctx context.Context) error {
 		}); err != nil {
 			return fmt.Errorf("creating e2e member %q: %w", name, err)
 		}
-	}
-
-	occurredOn := time.Now().Format("2006-01-02")
-	if _, err := l.PostOpeningBalance(ctx, ledger.PostOpeningBalanceParams{
-		FundID: setup.Fund.ID, AccountID: cashAccount.ID, PurposeID: setup.MainPurposeID,
-		Amount: money.Amount(1_000_000), OccurredOn: occurredOn,
-	}); err != nil {
-		return fmt.Errorf("posting the e2e opening balance: %w", err)
 	}
 
 	return nil

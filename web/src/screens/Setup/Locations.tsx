@@ -6,10 +6,9 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import ErrorState from '@/components/states/ErrorState'
 import { copy } from '@/copy/id'
-import type { ApiError } from '@/lib/api'
-import type { SetupAccountInput } from '@/lib/setup'
+import { newLocationRow } from '@/screens/Setup/locationRow'
+import type { LocationRow } from '@/screens/Setup/locationRow'
 
 const text = copy.setup
 
@@ -17,35 +16,34 @@ const text = copy.setup
  * Setup step 2 of 4: choose and name every location the fund starts with.
  * Seeded with one cash and one bank row (#78's resolution) - both editable
  * and removable down to a floor of one, and a row can be added. Submitting
- * fires the wizard's one POST /api/setup (Setup.tsx owns the request; this
- * component only collects the rows).
+ * fires no request of its own (#230) - it only advances to step 3, where the
+ * opening balance for each of these rows is collected before the wizard's
+ * one POST /api/setup fires with everything at once. Rows are keyed by their
+ * own `clientId`, never by array index, so removing an earlier row here
+ * cannot shift which row's opening balance a later step is editing.
  */
 export default function Locations({
   rows,
   onChange,
   onNext,
   onBack,
-  submitting,
-  error,
 }: {
-  rows: SetupAccountInput[]
-  onChange: (rows: SetupAccountInput[]) => void
+  rows: LocationRow[]
+  onChange: (rows: LocationRow[]) => void
   onNext: () => void
   onBack: () => void
-  submitting: boolean
-  error: ApiError | undefined
 }) {
-  function updateRow(index: number, patch: Partial<SetupAccountInput>) {
-    onChange(rows.map((row, i) => (i === index ? { ...row, ...patch } : row)))
+  function updateRow(clientId: string, patch: Partial<LocationRow>) {
+    onChange(rows.map((row) => (row.clientId === clientId ? { ...row, ...patch } : row)))
   }
 
   function addRow() {
-    onChange([...rows, { kind: 'cash', name: '' }])
+    onChange([...rows, newLocationRow()])
   }
 
-  function removeRow(index: number) {
+  function removeRow(clientId: string) {
     if (rows.length <= 1) return
-    onChange(rows.filter((_, i) => i !== index))
+    onChange(rows.filter((row) => row.clientId !== clientId))
   }
 
   const canSubmit = rows.every((row) => row.name.trim() !== '')
@@ -66,12 +64,12 @@ export default function Locations({
         </CardHeader>
         <CardContent>
           <form className="flex flex-col gap-4" onSubmit={handleSubmit} noValidate>
-            {rows.map((row, index) => (
-              <div key={index} className="flex flex-col gap-1.5 rounded-lg border border-border p-3">
+            {rows.map((row) => (
+              <div key={row.clientId} className="flex flex-col gap-1.5 rounded-lg border border-border p-3">
                 <div className="flex flex-col gap-1.5">
-                  <Label htmlFor={`setup-location-kind-${index}`}>{text.locations.kindLabel}</Label>
-                  <Select value={row.kind} onValueChange={(next) => updateRow(index, { kind: next as 'cash' | 'bank' })}>
-                    <SelectTrigger id={`setup-location-kind-${index}`} aria-label={text.locations.kindLabel}>
+                  <Label htmlFor={`setup-location-kind-${row.clientId}`}>{text.locations.kindLabel}</Label>
+                  <Select value={row.kind} onValueChange={(next) => updateRow(row.clientId, { kind: next as 'cash' | 'bank' })}>
+                    <SelectTrigger id={`setup-location-kind-${row.clientId}`} aria-label={text.locations.kindLabel}>
                       <SelectValue>{row.kind === 'bank' ? text.locations.kindBank : text.locations.kindCash}</SelectValue>
                     </SelectTrigger>
                     <SelectContent>
@@ -81,13 +79,13 @@ export default function Locations({
                   </Select>
                 </div>
                 <div className="flex flex-col gap-1.5">
-                  <Label htmlFor={`setup-location-name-${index}`}>{text.locations.nameLabel}</Label>
+                  <Label htmlFor={`setup-location-name-${row.clientId}`}>{text.locations.nameLabel}</Label>
                   <Input
-                    id={`setup-location-name-${index}`}
+                    id={`setup-location-name-${row.clientId}`}
                     type="text"
                     required
                     value={row.name}
-                    onChange={(event) => updateRow(index, { name: event.target.value })}
+                    onChange={(event) => updateRow(row.clientId, { name: event.target.value })}
                   />
                 </div>
                 <Button
@@ -95,7 +93,7 @@ export default function Locations({
                   variant="ghost"
                   size="sm"
                   className="self-end text-muted-foreground disabled:opacity-30"
-                  onClick={() => removeRow(index)}
+                  onClick={() => removeRow(row.clientId)}
                   disabled={rows.length <= 1}
                   aria-label={text.locations.removeRow}
                 >
@@ -109,13 +107,12 @@ export default function Locations({
               <Plus aria-hidden="true" />
               {text.locations.addRow}
             </Button>
-            {error && <ErrorState error={error} />}
             <div className="flex gap-2">
-              <Button type="button" variant="outline" size="lg" onClick={onBack} disabled={submitting}>
+              <Button type="button" variant="outline" size="lg" onClick={onBack}>
                 {text.back}
               </Button>
-              <Button type="submit" size="lg" className="flex-1" disabled={!canSubmit || submitting}>
-                {submitting ? text.submitting : text.next}
+              <Button type="submit" size="lg" className="flex-1" disabled={!canSubmit}>
+                {text.next}
               </Button>
             </div>
           </form>

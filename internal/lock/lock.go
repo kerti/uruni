@@ -5,7 +5,7 @@
 // refuses to create a second fund. That guard is deliberately *not*
 // schema-backed - PRD section 6 allows more than one fund in the model, so there is
 // no UNIQUE index a second CREATE could collide with, unlike
-// ErrOpeningBalanceExists or ErrReimbursementAlreadySettled
+// ErrReimbursementAlreadySettled or ErrDuesPaymentAlreadyReversed
 // (internal/ledger/errors.go), whose Go pre-checks sit on top of one. That
 // makes the in-process check the entire guarantee, and ADR-004's
 // SetMaxOpenConns(1) protects one *sql.DB, not one database file - nothing
