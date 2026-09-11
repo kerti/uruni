@@ -110,6 +110,53 @@ export interface ReconciliationDetail {
   lines: ReconciliationLine[]
 }
 
+/** One row of GET /api/reconciliations's page
+ * (internal/http/reconciliations.go's reconciliationListItemResponse): the
+ * snapshot plus open_difference_amount, the sum of ABS(difference_amount)
+ * over that snapshot's still-open lines - enough for Cek kas's list to show
+ * cocok (0) vs selisih without a detail fetch. */
+export interface ReconciliationListItem {
+  id: number
+  performed_at: number
+  through_transaction_id: number | null
+  note: string | null
+  created_at: number
+  open_difference_amount: number
+}
+
+/** One page of GET /api/reconciliations, camelCase on this side of the wire
+ * boundary (the server's own envelope is {reconciliations, next_cursor}) -
+ * same shape ReimbursementsPage/TransactionsPage already use. nextCursor is
+ * null once there is no further page. */
+export interface ReconciliationsPage {
+  reconciliations: ReconciliationListItem[]
+  nextCursor: string | null
+}
+
+/**
+ * GET /api/reconciliations (#227, keyset-paged): newest-first, 25 rows a
+ * page. No search - a handful of dated snapshots a year (ADR-032).
+ */
+export function listReconciliations(input: { cursor?: string } = {}): Promise<ReconciliationsPage> {
+  const params = new URLSearchParams()
+  if (input.cursor) params.set('cursor', input.cursor)
+  const query = params.toString()
+
+  return apiFetch<{ reconciliations: ReconciliationListItem[]; next_cursor: string | null }>(
+    `/api/reconciliations${query ? `?${query}` : ''}`,
+  ).then((page) => ({ reconciliations: page.reconciliations, nextCursor: page.next_cursor }))
+}
+
+/**
+ * GET /api/reconciliations/{id} (#227) - one snapshot's full detail, the
+ * same shape POST /api/reconciliations's own 201 body already answers.
+ * Cek kas's detail sheet reads from this, never writes to it: the tab is
+ * read-only by the issue's own hard rule.
+ */
+export function getReconciliation(id: number): Promise<ReconciliationDetail> {
+  return apiFetch<ReconciliationDetail>(`/api/reconciliations/${id}`)
+}
+
 /**
  * POST /api/reconciliations - takes one snapshot across every counted
  * account in a single request (M6.10, PRD section 7.8). No performed_at param:

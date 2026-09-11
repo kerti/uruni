@@ -17,7 +17,7 @@ Where a concept's Indonesian name is the one the treasurer sees, the identifier 
 ## Movements
 
 - **Transaction** — an immutable posted entry: income or expense; amount (`int64` rupiah); date; location; purpose tag; optional member link, note, receipt photo. **Never edited or deleted** — corrections are new **adjusting entries**.
-- **Reimbursement** — a member fronted money; it becomes owed to them and is settled when repaid. Receipt optional, never required.
+- **Reimbursement** (talangan, `reimbursement`) — a member fronted money; it becomes owed to them and is settled when repaid. Receipt optional, never required.
 - **Incidental collection** — a one-off pool for an occasion (sickness, death, sunatan, pension): contributions in, a disbursement out, and a **leftover** that rolls into Kas Utama.
 - **Pass-through** — money collected on behalf of a parent body (e.g. **Kas Bidang**) and forwarded. A purpose tag, so the report can group it; it does **not** come out of any balance, because while it sits in the wallet it really is in the wallet (revised 2026-08-12, [ADR-024](./docs/ADR/024-schema-conventions.md)).
 - **Transfer** — the pair of transactions behind a value-neutral movement: cash deposited at the bank, or an incidental's leftover rolled into Kas Utama. Equal amounts, opposite directions, one `transfer` row binding them, fund total unchanged. Not a synonym for "movement" or "reclassification" — this is the word.

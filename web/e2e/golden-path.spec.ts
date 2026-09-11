@@ -176,5 +176,16 @@ test.describe('golden path', () => {
     // count exists, whatever state the banner lands in.
     await expect(page.getByText(copy.home.balanceHeading)).toBeVisible()
     await expect(page.getByText(copy.reconciliation.neverChecked)).toBeHidden()
+
+    // Riwayat -> Cek kas (#227): the snapshot just taken shows up newest
+    // first, with a selisih badge (the left_open line above never closes),
+    // and its detail sheet opens read-only with that same line.
+    await page.getByRole('link', { name: copy.shell.nav.history }).click()
+    await page.getByRole('link', { name: copy.reconciliation.heading }).click()
+    const row = page.getByRole('button').filter({ hasText: /Selisih/ }).first()
+    await expect(row).toBeVisible()
+    await row.click()
+    await expect(page.getByText('Tunai', { exact: true })).toBeVisible()
+    await expect(page.getByText(copy.reconciliation.resolutionOptions.left_open)).toBeVisible()
   })
 })

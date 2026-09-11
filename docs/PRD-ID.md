@@ -34,7 +34,7 @@ Dari wawancara #1 (bendahara unit kantor, 8 orang, ~Rp 1–2 juta/bulan):
 
 1. Mencatat transaksi apa pun dari ponsel dalam beberapa ketukan, di mana saja.
 2. Selalu menampilkan saldo berjalan yang jujur, dan membuat rekonsiliasi (catatan vs. uang tunai + bank yang sebenarnya) menjadi mudah.
-3. Memodelkan bentuk uang kelompok yang sebenarnya: dua lokasi, tag tujuan, iuran berjenjang, dan penggantian (reimbursement).
+3. Memodelkan bentuk uang kelompok yang sebenarnya: dua lokasi, tag tujuan, iuran berjenjang, dan talangan (reimbursement).
 4. Cukup andal untuk menjadi satu-satunya catatan — aman meski ponsel hilang.
 5. Lebih sederhana daripada spreadsheet yang digantikannya.
 
@@ -68,7 +68,7 @@ Entitas utama:
 - **Tag tujuan** — setiap transaksi diberi tag: `Kas Utama` (rutin), sebuah **Insidentil** bernama (mis. "Duka Pak Budi"), atau `Titipan/Pass-through` (mis. Kas Bidang). Satu saldo riil yang tergabung, dipisahkan *secara makna*, bukan dalam pos yang terpisah-pisah.
 - **Anggota** — nama + peran/jenjang. Tidak butuh email/nomor telepon (meminimalkan data yang disimpan).
 - **Tarif iuran** — nominal per jenjang (mis. pelaksana 50rb, fungsional pertama 70rb, muda 80rb, madya belum ditentukan); dapat diubah; berlaku menurut waktu.
-- **Transaksi** — pemasukan atau pengeluaran; nominal; tanggal; lokasi; tag tujuan; kaitan anggota opsional (untuk iuran/penggantian); catatan opsional; foto nota opsional. Bersifat permanen setelah diposting (koreksi dibuat sebagai entri penyesuaian baru) agar catatan tetap tepercaya.
+- **Transaksi** — pemasukan atau pengeluaran; nominal; tanggal; lokasi; tag tujuan; kaitan anggota opsional (untuk iuran/talangan); catatan opsional; foto nota opsional. Bersifat permanen setelah diposting (koreksi dibuat sebagai entri penyesuaian baru) agar catatan tetap tepercaya.
 - **Pengumpulan insidentil** — amplop ringan: peruntukan/peristiwa, kontribusi masuk, penyaluran keluar, dan **sisa** yang bisa dialihkan ke Kas Utama dengan satu ketukan.
 - **Snapshot rekonsiliasi** — rekaman pada satu titik waktu tentang saldo yang diharapkan vs. yang sebenarnya per lokasi, selisih yang ada, dan cara penyelesaiannya.
 
@@ -91,9 +91,9 @@ Entitas utama:
 - Membatalkan pembayaran iuran yang salah dicatat (salah anggota, tercatat dua kali) — pembayaran itu dibalik dengan entri baru, bukan dihapus, dan anggota kembali terbaca belum bayar untuk periode tersebut.
 - Tampilan sederhana "belum bayar". **Tanpa pengingat, tanpa penagihan otomatis.**
 
-### 7.4 Penggantian (reimbursement)
+### 7.4 Talangan (reimbursement)
 - Mencatat bahwa seorang anggota menalangi lebih dulu → menjadi utang kepadanya.
-- Menyelesaikan penggantian saat dibayar kembali. Nota opsional dan tidak pernah wajib (parkir Rp 2.000 tak perlu nota). Baris buku besar pembayarannya terdeskripsi otomatis — anggota yang diganti dan catatan klaimnya sendiri — sehingga aktivitas terbaru dan laporan terbaca sebagai penggantian, bukan nominal telanjang. (Ditambahkan 2026-09-08.)
+- Menyelesaikan talangan saat dibayar kembali. Nota opsional dan tidak pernah wajib (parkir Rp 2.000 tak perlu nota). Baris buku besar pembayarannya terdeskripsi otomatis — anggota yang diganti dan catatan klaimnya sendiri — sehingga aktivitas terbaru dan laporan terbaca sebagai talangan, bukan nominal telanjang. (Ditambahkan 2026-09-08.)
 - **Putihkan** saat anggota memaafkan utangnya — label di antarmuka adalah "Putihkan". Klaim tetap tercatat dalam riwayat; ia hanya berhenti menjadi utang. Dapat dibatalkan, karena pemutihan juga bisa salah dicatat.
 - **Perbaiki atau hapus klaim yang salah dicatat** — nominal salah, anggota salah, atau seharusnya tidak ada. Hanya sebelum diselesaikan: setelah itu pembayaran sudah menjadi baris buku besar yang diposting, dan koreksinya adalah entri penyesuaian biasa.
 

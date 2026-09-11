@@ -73,7 +73,7 @@ interface FormData {
 }
 
 /**
- * Riwayat's Penggantian tab (M6.18, moved under Riwayat and made paged and
+ * Riwayat's Talangan tab (M6.18, moved under Riwayat and made paged and
  * searchable by #226, ADR-032): record that a member fronted money, settle
  * when repaid, waive when the member forgives the debt ("putihkan"), or
  * correct/remove a claim entered wrongly - only until settled, after which

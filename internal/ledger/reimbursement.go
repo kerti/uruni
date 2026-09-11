@@ -70,7 +70,7 @@ func (l *Ledger) SettleReimbursement(ctx context.Context, p SettleReimbursementP
 		}
 
 		// Compose the payout's description from the claim itself, so the row
-		// reads as a penggantian in recent activity and the report instead of
+		// reads as a talangan in recent activity and the report instead of
 		// as a bare amount - the same derived-note shape as a dues payment's
 		// "Iuran - {member}" (copy/id.ts). The member is looked up here
 		// because only the ledger can see it: the settlement route carries
@@ -115,7 +115,7 @@ func (l *Ledger) SettleReimbursement(ctx context.Context, p SettleReimbursementP
 // shape the dues flow already writes ("Iuran - {member}"), so one visual
 // grammar covers every kind of generated description.
 func settlementNote(memberName string, claimNote *string) *string {
-	note := "Penggantian - " + memberName
+	note := "Talangan - " + memberName
 	if claimNote != nil && *claimNote != "" {
 		note += " - " + *claimNote
 	}

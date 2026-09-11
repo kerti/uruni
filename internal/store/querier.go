@@ -224,6 +224,22 @@ type Querier interface {
 	ListReconciliationLines(ctx context.Context, reconciliationID int64) ([]ReconciliationLine, error)
 	// Newest first: the home screen wants the last count, not the first.
 	ListReconciliationsByFund(ctx context.Context, fundID int64) ([]Reconciliation, error)
+	// GET /api/reconciliations's real listing (#227, ADR-032 "Lists: paging and
+	// search") - newest-first and keyset-paged on (performed_at, id), the same
+	// row-value-keyset shape ListReimbursementsPage/ListTransactionsPage use
+	// (their own comments have the full reasoning). No search - a handful of
+	// dated snapshots a year, per the issue.
+	//
+	// open_difference_amount is the sum of ABS(difference_amount) across that
+	// snapshot's still-open lines - the same figure Confirmation on /reconcile
+	// computes client-side from a detail fetch, computed here so a list row can
+	// show cocok (0) vs selisih without one. Cast so it lands as int64 rather
+	// than interface{} - sqlc's SQLite engine cannot infer the type of a summed
+	// expression (ADR-024).
+	//
+	// page_limit is page size + 1, the same "peek at one extra row" trick the
+	// other two paged lists use.
+	ListReconciliationsPage(ctx context.Context, arg ListReconciliationsPageParams) ([]ListReconciliationsPageRow, error)
 	ListReimbursementsByFund(ctx context.Context, fundID int64) ([]ListReimbursementsByFundRow, error)
 	// GET /api/reimbursements's real listing (#226, ADR-032 "Lists: paging and
 	// search") - newest-first and keyset-paged on (incurred_on, id), the same

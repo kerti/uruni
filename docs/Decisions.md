@@ -332,3 +332,7 @@ Found on a phone: the record form let a transaction be placed into, or sourced f
 **Kas Utama may go negative, and Uruni states it and stops.** It will not guess who fronted the money — `reimbursement.member_id` is `NOT NULL`, so an inferred reimbursement would have to invent which member is owed, and the shortfall could be the treasurer's cash, a member paying a vendor directly, or a contribution arriving next week. She resolves it with a reimbursement she creates naming the actual person, or a transfer. Asserting a liability nobody claimed is the same error as generating a note nobody wrote.
 
 **The open dependency:** no purpose balance is rendered anywhere in the SPA today, so a negative Kas Utama is currently invisible. Where purpose balances belong is the IA question in [#212](https://github.com/kerti/uruni/issues/212).
+
+## Penggantian becomes Talangan (decided 2026-09-11)
+
+When Riwayat grew a fourth tab ([#227](https://github.com/kerti/uruni/issues/227)), "Penggantian" no longer fit a quarter of a phone screen. The maintainer renamed the in-app word to **Talangan**. It is shorter, and it is closer to what a treasurer actually says: a member *menalangi* first, and the fund repays it. The rename covers copy only. Identifiers, routes and the schema stay `reimbursement` ([ADR-014](./ADR/014-localization-indonesian-first.md)), and CONTEXT.md, PRD-ID §7.4 and ADR-032 now use the new word.
