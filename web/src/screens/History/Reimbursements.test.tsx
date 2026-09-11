@@ -1,13 +1,15 @@
 import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import Reimbursements from '@/screens/Reimbursements'
+import Reimbursements from '@/screens/History/Reimbursements'
 import { chooseOption } from '@/test/select'
 import { copy } from '@/copy/id'
 import { formatIDR } from '@/lib/money'
 
 const text = copy.reimbursements
+const searchText = copy.history.reimbursements
 
 afterEach(() => {
   vi.unstubAllGlobals()
@@ -58,6 +60,11 @@ function claim(id: number, overrides: Partial<Claim> = {}): Claim {
   }
 }
 
+/** Wraps rows in GET /api/reimbursements's own envelope (#226). */
+function page(rows: Claim[], nextCursor: string | null = null) {
+  return { reimbursements: rows, next_cursor: nextCursor }
+}
+
 const outstandingClaims: Claim[] = [claim(1)]
 
 const allClaims: Claim[] = [claim(1), claim(2, { settled: true })]
@@ -105,11 +112,11 @@ function getHandlers(opts: { outstanding?: Claim[]; all?: Claim[] } = {}) {
   return [
     {
       match: (m: string, u: string) => m === 'GET' && u.includes('/api/reimbursements') && u.includes('outstanding=true'),
-      handle: () => Promise.resolve(jsonResponse(outstanding)),
+      handle: () => Promise.resolve(jsonResponse(page(outstanding))),
     },
     {
       match: (m: string, u: string) => m === 'GET' && u.includes('/api/reimbursements') && !u.includes('outstanding'),
-      handle: () => Promise.resolve(jsonResponse(all)),
+      handle: () => Promise.resolve(jsonResponse(page(all))),
     },
     { match: (m: string, u: string) => m === 'GET' && u.includes('/api/members'), handle: () => Promise.resolve(jsonResponse(members)) },
     { match: (m: string, u: string) => m === 'GET' && u.includes('/api/purposes'), handle: () => Promise.resolve(jsonResponse(purposes)) },
@@ -117,11 +124,33 @@ function getHandlers(opts: { outstanding?: Claim[]; all?: Claim[] } = {}) {
   ]
 }
 
+function LocationProbe() {
+  const location = useLocation()
+  return <output data-testid="location">{location.search}</output>
+}
 
-describe('Reimbursements', () => {
+function renderAt(entry = '/history/reimbursements') {
+  return render(
+    <MemoryRouter initialEntries={[entry]}>
+      <Routes>
+        <Route
+          path="/history/reimbursements"
+          element={
+            <>
+              <Reimbursements />
+              <LocationProbe />
+            </>
+          }
+        />
+      </Routes>
+    </MemoryRouter>,
+  )
+}
+
+describe('Reimbursements tab', () => {
   it('shows outstanding claims by default', async () => {
     vi.stubGlobal('fetch', routedFetch(getHandlers()))
-    render(<Reimbursements onBack={vi.fn()} />)
+    renderAt()
 
     await waitFor(() => expect(screen.getByText('Jane')).toBeInTheDocument())
     expect(screen.getByText('Parkir')).toBeInTheDocument()
@@ -140,7 +169,7 @@ describe('Reimbursements', () => {
     vi.stubGlobal('fetch', routedFetch([
       {
         match: (m: string, u: string) => m === 'GET' && u.includes('/api/reimbursements'),
-        handle: () => Promise.resolve(jsonResponse(recorded ? [...initial, claim(3, { amount: 10_000, note: null })] : initial)),
+        handle: () => Promise.resolve(jsonResponse(page(recorded ? [...initial, claim(3, { amount: 10_000, note: null })] : initial))),
       },
       {
         match: (m: string, u: string) => m === 'POST' && u.includes('/api/reimbursements'),
@@ -154,7 +183,7 @@ describe('Reimbursements', () => {
       { match: (m: string, u: string) => m === 'GET' && u.includes('/api/accounts'), handle: () => Promise.resolve(jsonResponse(accounts)) },
     ]))
 
-    render(<Reimbursements onBack={vi.fn()} />)
+    renderAt()
     await waitFor(() => expect(screen.getByText('Jane')).toBeInTheDocument())
 
     // Open the record form
@@ -179,7 +208,7 @@ describe('Reimbursements', () => {
       ...getHandlers(),
     ]))
 
-    render(<Reimbursements onBack={vi.fn()} />)
+    renderAt()
     await waitFor(() => expect(screen.getByText('Jane')).toBeInTheDocument())
 
     // Open settle form
@@ -204,11 +233,11 @@ describe('Reimbursements', () => {
     vi.stubGlobal('fetch', routedFetch([
       {
         match: (m: string, u: string) => m === 'GET' && u.includes('/api/reimbursements') && u.includes('outstanding=true'),
-        handle: () => Promise.resolve(jsonResponse(waived ? [] : initial)),
+        handle: () => Promise.resolve(jsonResponse(page(waived ? [] : initial))),
       },
       {
         match: (m: string, u: string) => m === 'GET' && u.includes('/api/reimbursements') && !u.includes('outstanding'),
-        handle: () => Promise.resolve(jsonResponse(waived ? [claim(1, { waived_on: '2026-09-02' })] : initial)),
+        handle: () => Promise.resolve(jsonResponse(page(waived ? [claim(1, { waived_on: '2026-09-02' })] : initial))),
       },
       {
         match: (m: string, u: string) => m === 'PATCH' && u.includes('/api/reimbursements/1'),
@@ -222,7 +251,7 @@ describe('Reimbursements', () => {
       { match: (m: string, u: string) => m === 'GET' && u.includes('/api/accounts'), handle: () => Promise.resolve(jsonResponse(accounts)) },
     ]))
 
-    render(<Reimbursements onBack={vi.fn()} />)
+    renderAt()
     await waitFor(() => expect(screen.getByRole('button', { name: text.actions.waive })).toBeInTheDocument())
 
     // Waive: the row leaves the outstanding list and a feedback says so.
@@ -246,7 +275,7 @@ describe('Reimbursements', () => {
     // a still-owed row (id 1). The badges must reflect the flag: never a
     // "Dibayar" label on an unsettled claim, and no action buttons at all.
     vi.stubGlobal('fetch', routedFetch(getHandlers({ outstanding: [], all: allClaims })))
-    render(<Reimbursements onBack={vi.fn()} />)
+    renderAt()
 
     await waitFor(() => expect(screen.getByRole('button', { name: text.allTab })).toBeInTheDocument())
     await userEvent.click(screen.getByRole('button', { name: text.allTab }))
@@ -265,7 +294,7 @@ describe('Reimbursements', () => {
     vi.stubGlobal('fetch', routedFetch([
       {
         match: (m: string, u: string) => m === 'GET' && u.includes('/api/reimbursements'),
-        handle: () => Promise.resolve(jsonResponse(deleted ? [] : [claim(1)])),
+        handle: () => Promise.resolve(jsonResponse(page(deleted ? [] : [claim(1)]))),
       },
       {
         match: (m: string, u: string) => m === 'DELETE' && u.includes('/api/reimbursements/1'),
@@ -279,7 +308,7 @@ describe('Reimbursements', () => {
       { match: (m: string, u: string) => m === 'GET' && u.includes('/api/accounts'), handle: () => Promise.resolve(jsonResponse(accounts)) },
     ]))
 
-    render(<Reimbursements onBack={vi.fn()} />)
+    renderAt()
     await waitFor(() => expect(screen.getByText('Jane')).toBeInTheDocument())
 
     // Click delete to show confirmation
@@ -302,7 +331,7 @@ describe('Reimbursements', () => {
       ...getHandlers(),
     ]))
 
-    render(<Reimbursements onBack={vi.fn()} />)
+    renderAt()
     await waitFor(() => expect(screen.getByText('Jane')).toBeInTheDocument())
 
     // Open correct form
@@ -318,22 +347,13 @@ describe('Reimbursements', () => {
 
   it('keeps submit disabled until required fields are filled', async () => {
     vi.stubGlobal('fetch', routedFetch(getHandlers()))
-    render(<Reimbursements onBack={vi.fn()} />)
+    renderAt()
 
     // Open record form
     await userEvent.click(await screen.findByRole('button', { name: text.record.heading }))
 
     // Submit should be disabled (no member, no amount)
     await waitFor(() => expect(screen.getByRole('button', { name: text.record.submit })).toBeDisabled())
-  })
-
-  it('calls onBack when backToHome is clicked', async () => {
-    vi.stubGlobal('fetch', routedFetch(getHandlers()))
-    const onBack = vi.fn()
-    render(<Reimbursements onBack={onBack} />)
-
-    await userEvent.click(await screen.findByRole('button', { name: text.backToHome }))
-    expect(onBack).toHaveBeenCalledTimes(1)
   })
 
   it('a failed write says why and keeps the form open', async () => {
@@ -356,19 +376,19 @@ describe('Reimbursements', () => {
         match: (m: string, u: string) => m === 'GET' && u.includes('/api/reimbursements') && u.includes('outstanding=true'),
         handle: () => {
           listRefreshes += 1
-          return Promise.resolve(jsonResponse(outstandingClaims))
+          return Promise.resolve(jsonResponse(page(outstandingClaims)))
         },
       },
       {
         match: (m: string, u: string) => m === 'GET' && u.includes('/api/reimbursements') && !u.includes('outstanding'),
-        handle: () => Promise.resolve(jsonResponse(allClaims)),
+        handle: () => Promise.resolve(jsonResponse(page(allClaims))),
       },
       { match: (m: string, u: string) => m === 'GET' && u.includes('/api/members'), handle: () => Promise.resolve(jsonResponse(members)) },
       { match: (m: string, u: string) => m === 'GET' && u.includes('/api/purposes'), handle: () => Promise.resolve(jsonResponse(purposes)) },
       { match: (m: string, u: string) => m === 'GET' && u.includes('/api/accounts'), handle: () => Promise.resolve(jsonResponse(accounts)) },
     ]))
 
-    render(<Reimbursements onBack={vi.fn()} />)
+    renderAt()
     await waitFor(() => expect(screen.getByText('Jane')).toBeInTheDocument())
 
     await userEvent.click(screen.getByRole('button', { name: text.actions.settle }))
@@ -386,7 +406,7 @@ describe('Reimbursements', () => {
 
   it('switching tabs closes an open inline form', async () => {
     vi.stubGlobal('fetch', routedFetch(getHandlers()))
-    render(<Reimbursements onBack={vi.fn()} />)
+    renderAt()
     await waitFor(() => expect(screen.getByText('Jane')).toBeInTheDocument())
 
     await userEvent.click(screen.getByRole('button', { name: text.actions.settle }))
@@ -414,13 +434,13 @@ describe('Reimbursements', () => {
       },
       {
         match: (m: string, u: string) => m === 'GET' && u.includes('/api/reimbursements') && u.includes('outstanding=true'),
-        handle: () => Promise.resolve(jsonResponse(settled ? after : before)),
+        handle: () => Promise.resolve(jsonResponse(page(settled ? after : before))),
       },
       { match: (m: string, u: string) => m === 'GET' && u.includes('/api/members'), handle: () => Promise.resolve(jsonResponse(members)) },
       { match: (m: string, u: string) => m === 'GET' && u.includes('/api/purposes'), handle: () => Promise.resolve(jsonResponse(purposes)) },
       { match: (m: string, u: string) => m === 'GET' && u.includes('/api/accounts'), handle: () => Promise.resolve(jsonResponse(accounts)) },
     ]))
-    render(<Reimbursements onBack={vi.fn()} />)
+    renderAt()
     await waitFor(() => expect(screen.getByText('Jane')).toBeInTheDocument())
 
     await userEvent.click(screen.getAllByRole('button', { name: text.actions.settle })[0])
@@ -436,5 +456,114 @@ describe('Reimbursements', () => {
     await waitFor(() => expect(screen.queryByText('Jane')).not.toBeInTheDocument())
     await userEvent.click(screen.getByRole('button', { name: text.actions.delete }))
     expect(screen.queryByText(text.settle.success)).not.toBeInTheDocument()
+  })
+
+  it('reads ?q= from the URL into the field and sends it to the server', async () => {
+    vi.stubGlobal('fetch', routedFetch([
+      {
+        match: (m: string, u: string) => m === 'GET' && u.includes('/api/reimbursements') && u.includes('q=Budi'),
+        handle: () => Promise.resolve(jsonResponse(page([claim(1, { note: 'Budi bayar parkir' })]))),
+      },
+      { match: (m: string, u: string) => m === 'GET' && u.includes('/api/members'), handle: () => Promise.resolve(jsonResponse(members)) },
+      { match: (m: string, u: string) => m === 'GET' && u.includes('/api/purposes'), handle: () => Promise.resolve(jsonResponse(purposes)) },
+      { match: (m: string, u: string) => m === 'GET' && u.includes('/api/accounts'), handle: () => Promise.resolve(jsonResponse(accounts)) },
+    ]))
+    renderAt('/history/reimbursements?q=Budi')
+
+    expect(await screen.findByText('Budi bayar parkir')).toBeInTheDocument()
+    expect(screen.getByLabelText(searchText.searchLabel)).toHaveValue('Budi')
+  })
+
+  it('writes a typed search to the URL once, after the pause, and refetches with it', async () => {
+    const requests: URL[] = []
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = new URL(String(input), 'http://localhost')
+        if (url.pathname === '/api/members') return jsonResponse(members)
+        if (url.pathname === '/api/purposes') return jsonResponse(purposes)
+        if (url.pathname === '/api/accounts') return jsonResponse(accounts)
+        if (url.pathname === '/api/reimbursements') {
+          requests.push(url)
+          return jsonResponse(
+            url.searchParams.get('q') === 'parkir'
+              ? page([claim(1, { note: 'Parkir' })])
+              : page([claim(2, { note: 'Beli kabel' })]),
+          )
+        }
+        return jsonResponse({ error: { code: 'not_found', message: 'not found' } }, 404)
+      }),
+    )
+    const user = userEvent.setup()
+    renderAt()
+
+    expect(await screen.findByText('Beli kabel')).toBeInTheDocument()
+    await user.type(screen.getByLabelText(searchText.searchLabel), 'parkir')
+
+    await waitFor(() => expect(screen.getByTestId('location')).toHaveTextContent('?q=parkir'))
+    expect(await screen.findByText('Parkir')).toBeInTheDocument()
+    // Debounced: no request for "p", "pa", ... - only the finished word.
+    expect(requests.filter((url) => url.searchParams.has('q')).map((url) => url.searchParams.get('q'))).toEqual(['parkir'])
+  })
+
+  it('says nothing matched when a search comes back empty', async () => {
+    vi.stubGlobal('fetch', routedFetch([
+      { match: (m: string, u: string) => m === 'GET' && u.includes('/api/reimbursements'), handle: () => Promise.resolve(jsonResponse(page([]))) },
+      { match: (m: string, u: string) => m === 'GET' && u.includes('/api/members'), handle: () => Promise.resolve(jsonResponse(members)) },
+      { match: (m: string, u: string) => m === 'GET' && u.includes('/api/purposes'), handle: () => Promise.resolve(jsonResponse(purposes)) },
+      { match: (m: string, u: string) => m === 'GET' && u.includes('/api/accounts'), handle: () => Promise.resolve(jsonResponse(accounts)) },
+    ]))
+    renderAt('/history/reimbursements?q=xyz')
+
+    expect(await screen.findByText(searchText.noResults('xyz'))).toBeInTheDocument()
+  })
+
+  it('loads the next page from the cursor and drops the button on the last page', async () => {
+    vi.stubGlobal('fetch', routedFetch([
+      {
+        match: (m: string, u: string) => m === 'GET' && u.includes('/api/reimbursements') && u.includes('cursor=c1'),
+        handle: () => Promise.resolve(jsonResponse(page([claim(1)]))),
+      },
+      {
+        match: (m: string, u: string) => m === 'GET' && u.includes('/api/reimbursements') && !u.includes('cursor'),
+        handle: () => Promise.resolve(jsonResponse(page([claim(2)], 'c1'))),
+      },
+      { match: (m: string, u: string) => m === 'GET' && u.includes('/api/members'), handle: () => Promise.resolve(jsonResponse(members)) },
+      { match: (m: string, u: string) => m === 'GET' && u.includes('/api/purposes'), handle: () => Promise.resolve(jsonResponse(purposes)) },
+      { match: (m: string, u: string) => m === 'GET' && u.includes('/api/accounts'), handle: () => Promise.resolve(jsonResponse(accounts)) },
+    ]))
+    const user = userEvent.setup()
+    renderAt()
+
+    await screen.findByText('John')
+    await user.click(screen.getByRole('button', { name: searchText.loadMore }))
+
+    await waitFor(() => expect(screen.getByText('Jane')).toBeInTheDocument())
+    expect(screen.getByText('John')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: searchText.loadMore })).not.toBeInTheDocument()
+  })
+
+  it('combines the outstanding filter and search in the same request', async () => {
+    const requests: URL[] = []
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = new URL(String(input), 'http://localhost')
+        if (url.pathname === '/api/members') return jsonResponse(members)
+        if (url.pathname === '/api/purposes') return jsonResponse(purposes)
+        if (url.pathname === '/api/accounts') return jsonResponse(accounts)
+        if (url.pathname === '/api/reimbursements') {
+          requests.push(url)
+          return jsonResponse(page([claim(1)]))
+        }
+        return jsonResponse({ error: { code: 'not_found', message: 'not found' } }, 404)
+      }),
+    )
+    renderAt('/history/reimbursements?q=parkir')
+    await screen.findByText('Jane')
+
+    const last = requests.at(-1)
+    expect(last?.searchParams.get('outstanding')).toBe('true')
+    expect(last?.searchParams.get('q')).toBe('parkir')
   })
 })

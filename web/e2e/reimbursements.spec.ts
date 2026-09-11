@@ -23,9 +23,11 @@ test.describe('reimbursements', () => {
     await page.getByRole('button', { name: copy.auth.login.submit }).click()
     await expect(page.getByText(copy.home.balanceHeading)).toBeVisible()
 
-    // Navigate to reimbursements from home
-    await page.getByRole('button', { name: copy.home.reimbursementLink }).click()
-    await expect(page.getByRole('heading', { name: copy.reimbursements.heading })).toBeVisible()
+    // Navigate to Riwayat's Penggantian tab (#226, ADR-032) - the reimbursements
+    // screen's own former home-screen entry point moved here.
+    await page.getByRole('link', { name: copy.shell.nav.history }).click()
+    await page.getByRole('link', { name: copy.history.tabs.reimbursements }).click()
+    await expect(page.getByRole('button', { name: copy.reimbursements.outstandingTab })).toBeVisible()
 
     // Open record form
     await page.getByRole('button', { name: copy.reimbursements.record.heading }).click()
@@ -51,9 +53,10 @@ test.describe('reimbursements', () => {
     await page.getByRole('button', { name: copy.auth.login.submit }).click()
     await expect(page.getByText(copy.home.balanceHeading)).toBeVisible()
 
-    // Navigate to reimbursements
-    await page.getByRole('button', { name: copy.home.reimbursementLink }).click()
-    await expect(page.getByRole('heading', { name: copy.reimbursements.heading })).toBeVisible()
+    // Navigate to Riwayat's Penggantian tab (#226, ADR-032).
+    await page.getByRole('link', { name: copy.shell.nav.history }).click()
+    await page.getByRole('link', { name: copy.history.tabs.reimbursements }).click()
+    await expect(page.getByRole('button', { name: copy.reimbursements.outstandingTab })).toBeVisible()
 
     // There should be at least one outstanding claim from the previous test
     // (serial mode). Open settle form. `exact: true` is required: name
@@ -75,7 +78,7 @@ test.describe('reimbursements', () => {
 
     // The payout row carries a composed description (member + the claim's own
     // note), so recent activity reads the repayment instead of a bare amount.
-    await page.getByRole('button', { name: copy.reimbursements.backToHome }).click()
+    await page.getByRole('link', { name: copy.shell.nav.home }).click()
     await expect(page.getByText(/Penggantian - /)).toBeVisible()
   })
 
@@ -86,9 +89,10 @@ test.describe('reimbursements', () => {
     await page.getByRole('button', { name: copy.auth.login.submit }).click()
     await expect(page.getByText(copy.home.balanceHeading)).toBeVisible()
 
-    // Navigate to reimbursements
-    await page.getByRole('button', { name: copy.home.reimbursementLink }).click()
-    await expect(page.getByRole('heading', { name: copy.reimbursements.heading })).toBeVisible()
+    // Navigate to Riwayat's Penggantian tab (#226, ADR-032).
+    await page.getByRole('link', { name: copy.shell.nav.history }).click()
+    await page.getByRole('link', { name: copy.history.tabs.reimbursements }).click()
+    await expect(page.getByRole('button', { name: copy.reimbursements.outstandingTab })).toBeVisible()
 
     // The earlier claim was settled, leaving the outstanding list empty -
     // record a fresh claim to waive. First member again, Rp 20.000.

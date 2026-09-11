@@ -48,13 +48,11 @@ interface HomeData {
 export default function Home({
   refetchKey,
   onReconcile,
-  onViewReimbursements,
   onViewIncidentals,
   onViewHistory,
 }: {
   refetchKey: unknown
   onReconcile: () => void
-  onViewReimbursements: () => void
   onViewIncidentals: () => void
   /** Riwayat's Transaksi tab (M6.23) - the "lihat semua" link below. Same
    * caller-owns-navigation contract as the two callbacks above: this screen
@@ -188,10 +186,6 @@ export default function Home({
         <ReconciliationBanner openLines={openLines} everReconciled={latest !== null} onClick={onReconcile} />
         {latest && <p className="text-sm text-muted-foreground">{copy.home.lastChecked(formatUnixSeconds(latest.performed_at))}</p>}
       </section>
-
-      <Button type="button" variant="outline" size="lg" className="w-full" onClick={onViewReimbursements}>
-        {copy.home.reimbursementLink}
-      </Button>
 
       <Button type="button" variant="outline" size="lg" className="w-full" onClick={onViewIncidentals}>
         {copy.home.incidentalLink}

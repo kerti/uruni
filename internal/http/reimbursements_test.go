@@ -3,10 +3,12 @@ package http
 import (
 	"bytes"
 	"context"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 	"time"
@@ -30,6 +32,33 @@ func getReimbursements(t *testing.T, r http.Handler, query string) *httptest.Res
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/reimbursements"+query, nil))
 	return rec
+}
+
+// seedReimbursements creates n unsettled claims for the same member and
+// purpose, dated one calendar day apart starting at startDate - the same
+// idiom seedTransactions (transactions_test.go) uses for its own paging
+// tests, over CreateReimbursement instead of CreateTransaction.
+func seedReimbursements(t *testing.T, sqlDB *sql.DB, fundID, memberID, purposeID int64, n int, startDate string) []store.Reimbursement {
+	t.Helper()
+	start, err := time.Parse("2006-01-02", startDate)
+	if err != nil {
+		t.Fatalf("parsing start date %q: %v", startDate, err)
+	}
+	q := store.New(sqlDB)
+	ctx := context.Background()
+	rows := make([]store.Reimbursement, 0, n)
+	for i := 0; i < n; i++ {
+		row, err := q.CreateReimbursement(ctx, store.CreateReimbursementParams{
+			FundID: fundID, MemberID: memberID, PurposeID: purposeID,
+			Amount: int64(10_000 + i), IncurredOn: start.AddDate(0, 0, i).Format("2006-01-02"),
+			CreatedAt: int64(i + 1),
+		})
+		if err != nil {
+			t.Fatalf("seeding reimbursement %d: %v", i, err)
+		}
+		rows = append(rows, row)
+	}
+	return rows
 }
 
 func postSettlement(t *testing.T, r http.Handler, id int64, req settleReimbursementRequest) *httptest.ResponseRecorder {
@@ -296,6 +325,338 @@ func TestGetReimbursementsRejectsAnUnparseableOutstandingFilter(t *testing.T) {
 	}
 }
 
+// TestGetReimbursementsOrdersNewestFirstTiesBrokenByIDDesc is #226's
+// ordering half of "newest-first, keyset-paged" - the same acceptance
+// criterion GET /api/transactions already carries: two rows sharing an
+// incurred_on must come back (incurred_on DESC, id DESC), the later of the
+// two same-dated rows first.
+func TestGetReimbursementsOrdersNewestFirstTiesBrokenByIDDesc(t *testing.T) {
+	sqlDB := testStoreDB(t)
+	r := authedRouterFor(t, sqlDB)
+	setup := setUpFund(t, r)
+	memberID := memberFor(t, r, "Jane")
+	q := store.New(sqlDB)
+	ctx := context.Background()
+
+	older, err := q.CreateReimbursement(ctx, store.CreateReimbursementParams{
+		FundID: setup.Fund.ID, MemberID: memberID, PurposeID: setup.MainPurposeID,
+		Amount: 10_000, IncurredOn: "2026-08-05", CreatedAt: 1,
+	})
+	if err != nil {
+		t.Fatalf("seeding older: %v", err)
+	}
+	sameDate, err := q.CreateReimbursement(ctx, store.CreateReimbursementParams{
+		FundID: setup.Fund.ID, MemberID: memberID, PurposeID: setup.MainPurposeID,
+		Amount: 20_000, IncurredOn: "2026-08-05", CreatedAt: 2,
+	})
+	if err != nil {
+		t.Fatalf("seeding sameDate: %v", err)
+	}
+	newest, err := q.CreateReimbursement(ctx, store.CreateReimbursementParams{
+		FundID: setup.Fund.ID, MemberID: memberID, PurposeID: setup.MainPurposeID,
+		Amount: 30_000, IncurredOn: "2026-08-06", CreatedAt: 3,
+	})
+	if err != nil {
+		t.Fatalf("seeding newest: %v", err)
+	}
+
+	got := decodeReimbursements(t, getReimbursements(t, r, ""))
+	wantOrder := []int64{newest.ID, sameDate.ID, older.ID}
+	if len(got) != len(wantOrder) {
+		t.Fatalf("GET /api/reimbursements returned %d rows, want %d", len(got), len(wantOrder))
+	}
+	for i, want := range wantOrder {
+		if got[i].ID != want {
+			t.Errorf("row %d = id %d, want %d (order %v)", i, got[i].ID, want, wantOrder)
+		}
+	}
+}
+
+// TestGetReimbursementsPagingWalksTheWholeSetWithNoSkipOrDuplicate is #226's
+// "paging walks the whole set with no skip and no duplicate" acceptance
+// criterion, over 60 claims (more than two 25-row pages).
+func TestGetReimbursementsPagingWalksTheWholeSetWithNoSkipOrDuplicate(t *testing.T) {
+	sqlDB := testStoreDB(t)
+	r := authedRouterFor(t, sqlDB)
+	setup := setUpFund(t, r)
+	memberID := memberFor(t, r, "Jane")
+	seeded := seedReimbursements(t, sqlDB, setup.Fund.ID, memberID, setup.MainPurposeID, 60, "2026-01-01")
+
+	seen := map[int64]int{}
+	var order []int64
+	cursor := ""
+	for pages := 0; ; pages++ {
+		if pages > 10 {
+			t.Fatal("more than 10 pages fetched - paging did not terminate")
+		}
+		rawQuery := ""
+		if cursor != "" {
+			rawQuery = "?cursor=" + url.QueryEscape(cursor)
+		}
+		rec := getReimbursements(t, r, rawQuery)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("GET /api/reimbursements%s = %d, want %d (body: %s)", rawQuery, rec.Code, http.StatusOK, rec.Body.String())
+		}
+		page := decodeReimbursementsPage(t, rec)
+		if pages < 2 && len(page.Reimbursements) != reimbursementsPageSize {
+			t.Errorf("page %d = %d rows, want %d (60 rows over 25-row pages)", pages, len(page.Reimbursements), reimbursementsPageSize)
+		}
+		for _, row := range page.Reimbursements {
+			seen[row.ID]++
+			order = append(order, row.ID)
+		}
+		if page.NextCursor == nil {
+			break
+		}
+		cursor = *page.NextCursor
+	}
+
+	if len(seen) != len(seeded) {
+		t.Fatalf("paged through %d distinct ids, want %d", len(seen), len(seeded))
+	}
+	for id, count := range seen {
+		if count != 1 {
+			t.Errorf("id %d appeared %d times across pages, want exactly 1", id, count)
+		}
+	}
+	for i, gotID := range order {
+		want := seeded[len(seeded)-1-i].ID // seeded is oldest-first; the walk must be newest-first
+		if gotID != want {
+			t.Fatalf("row %d across the whole paged walk = id %d, want %d (newest-first order broken across a page boundary)", i, gotID, want)
+		}
+	}
+}
+
+// TestGetReimbursementsPagingHandlesABackdatedInsertBetweenPageFetches
+// mirrors transactions_test.go's own test of the same name: a claim
+// inserted after page 1 is fetched, dated older than everything on page 1
+// but inside page 2's date range, must appear on page 2 exactly once -
+// proving the keyset cursor (incurred_on, id) is what actually runs rather
+// than LIMIT/OFFSET.
+func TestGetReimbursementsPagingHandlesABackdatedInsertBetweenPageFetches(t *testing.T) {
+	sqlDB := testStoreDB(t)
+	r := authedRouterFor(t, sqlDB)
+	setup := setUpFund(t, r)
+	memberID := memberFor(t, r, "Jane")
+	// 30 claims dated 2026-01-01 (oldest, seeded[0]) through 2026-01-30
+	// (newest, seeded[29]).
+	seeded := seedReimbursements(t, sqlDB, setup.Fund.ID, memberID, setup.MainPurposeID, 30, "2026-01-01")
+
+	page1 := decodeReimbursementsPage(t, getReimbursements(t, r, ""))
+	if len(page1.Reimbursements) != reimbursementsPageSize {
+		t.Fatalf("page 1 = %d rows, want %d", len(page1.Reimbursements), reimbursementsPageSize)
+	}
+	if page1.NextCursor == nil {
+		t.Fatal("page 1 next_cursor = nil, want a cursor - 30 rows is more than one page")
+	}
+
+	// Lands strictly inside page 2's date range (2026-01-01..2026-01-05, the
+	// 5 rows page 1 did not cover) - older than every row already handed
+	// out on page 1, and it did not exist when page 1 was fetched.
+	q := store.New(sqlDB)
+	backdated, err := q.CreateReimbursement(context.Background(), store.CreateReimbursementParams{
+		FundID: setup.Fund.ID, MemberID: memberID, PurposeID: setup.MainPurposeID,
+		Amount: 99_000, IncurredOn: "2026-01-03", CreatedAt: 1000,
+	})
+	if err != nil {
+		t.Fatalf("inserting the backdated row: %v", err)
+	}
+
+	page2 := decodeReimbursementsPage(t, getReimbursements(t, r, "?cursor="+url.QueryEscape(*page1.NextCursor)))
+
+	occurrences, seenIDs := 0, map[int64]bool{}
+	for _, row := range page2.Reimbursements {
+		if seenIDs[row.ID] {
+			t.Errorf("id %d appears more than once on page 2", row.ID)
+		}
+		seenIDs[row.ID] = true
+		if row.ID == backdated.ID {
+			occurrences++
+		}
+	}
+	if occurrences != 1 {
+		t.Errorf("the backdated row appeared %d times on page 2, want exactly 1", occurrences)
+	}
+	for _, want := range seeded[:5] {
+		if !seenIDs[want.ID] {
+			t.Errorf("row %d (incurred_on %s), originally on page 2, is missing after the backdated insert", want.ID, want.IncurredOn)
+		}
+	}
+	if len(page2.Reimbursements) != 6 {
+		t.Errorf("page 2 = %d rows, want 6 (the 5 original rows plus the backdated insert)", len(page2.Reimbursements))
+	}
+	if page2.NextCursor != nil {
+		t.Errorf("page 2 next_cursor = %v, want nil - that was the last page", *page2.NextCursor)
+	}
+}
+
+// TestGetReimbursementsRejectsAMalformedCursor is #226's "malformed cursor
+// -> 400" acceptance criterion.
+func TestGetReimbursementsRejectsAMalformedCursor(t *testing.T) {
+	r := testRouter(t)
+	setUpFund(t, r)
+
+	for _, cursor := range []string{"not-base64!!", "", "2026-13-40|1"} {
+		rec := getReimbursements(t, r, "?cursor="+url.QueryEscape(cursor))
+		if cursor == "" {
+			// An empty cursor param is the same as omitting it - the first page.
+			if rec.Code != http.StatusOK {
+				t.Errorf("GET /api/reimbursements?cursor= = %d, want %d", rec.Code, http.StatusOK)
+			}
+			continue
+		}
+		if rec.Code != http.StatusBadRequest {
+			t.Errorf("GET /api/reimbursements?cursor=%q = %d, want %d (body: %s)", cursor, rec.Code, http.StatusBadRequest, rec.Body.String())
+			continue
+		}
+		got := decodeError(t, rec)
+		if got.Code != "invalid_argument" {
+			t.Errorf("cursor %q error code = %q, want %q", cursor, got.Code, "invalid_argument")
+		}
+	}
+}
+
+// TestGetReimbursementsSearchHitsMemberNameCaseInsensitive covers this
+// list's "member name" half of ADR-032's search surface (#226).
+func TestGetReimbursementsSearchHitsMemberNameCaseInsensitive(t *testing.T) {
+	r := testRouter(t)
+	setup := setUpFund(t, r)
+	memberID := memberFor(t, r, "Budi Santoso")
+	otherMemberID := memberFor(t, r, "Siti")
+
+	if rec := postReimbursement(t, r, reimbursementRequest{
+		MemberID: memberID, PurposeID: setup.MainPurposeID, Amount: 20_000, IncurredOn: "2026-08-01",
+	}); rec.Code != http.StatusCreated {
+		t.Fatalf("POST /api/reimbursements = %d, want %d (body: %s)", rec.Code, http.StatusCreated, rec.Body.String())
+	}
+	if rec := postReimbursement(t, r, reimbursementRequest{
+		MemberID: otherMemberID, PurposeID: setup.MainPurposeID, Amount: 5_000, IncurredOn: "2026-08-02",
+	}); rec.Code != http.StatusCreated {
+		t.Fatalf("POST /api/reimbursements = %d, want %d (body: %s)", rec.Code, http.StatusCreated, rec.Body.String())
+	}
+
+	page := decodeReimbursementsPage(t, getReimbursements(t, r, "?q=budi"))
+	if len(page.Reimbursements) != 1 {
+		t.Fatalf("q=budi returned %d rows, want 1: %+v", len(page.Reimbursements), page.Reimbursements)
+	}
+	if page.Reimbursements[0].MemberID != memberID {
+		t.Errorf("matched row member_id = %d, want %d", page.Reimbursements[0].MemberID, memberID)
+	}
+}
+
+// TestGetReimbursementsSearchHitsNoteCaseInsensitive covers this list's
+// "note" half of ADR-032's search surface (#226).
+func TestGetReimbursementsSearchHitsNoteCaseInsensitive(t *testing.T) {
+	r := testRouter(t)
+	setup := setUpFund(t, r)
+	memberID := memberFor(t, r, "Jane")
+
+	note := "Beli Galon Aqua"
+	if rec := postReimbursement(t, r, reimbursementRequest{
+		MemberID: memberID, PurposeID: setup.MainPurposeID, Amount: 20_000, IncurredOn: "2026-08-01", Note: &note,
+	}); rec.Code != http.StatusCreated {
+		t.Fatalf("POST /api/reimbursements = %d, want %d (body: %s)", rec.Code, http.StatusCreated, rec.Body.String())
+	}
+	other := "Something else entirely"
+	if rec := postReimbursement(t, r, reimbursementRequest{
+		MemberID: memberID, PurposeID: setup.MainPurposeID, Amount: 5_000, IncurredOn: "2026-08-02", Note: &other,
+	}); rec.Code != http.StatusCreated {
+		t.Fatalf("POST /api/reimbursements = %d, want %d (body: %s)", rec.Code, http.StatusCreated, rec.Body.String())
+	}
+
+	page := decodeReimbursementsPage(t, getReimbursements(t, r, "?q=galon"))
+	if len(page.Reimbursements) != 1 {
+		t.Fatalf("q=galon returned %d rows, want 1: %+v", len(page.Reimbursements), page.Reimbursements)
+	}
+	if page.Reimbursements[0].Note == nil || *page.Reimbursements[0].Note != note {
+		t.Errorf("matched row note = %v, want %q", page.Reimbursements[0].Note, note)
+	}
+}
+
+// TestGetReimbursementsOutstandingAndSearchCombine proves the two filters
+// AND together rather than one silently overriding the other: of two
+// outstanding claims with matching notes, only the one that also matches
+// ?q= comes back, and a settled claim matching ?q= never does even though
+// its note alone would match.
+func TestGetReimbursementsOutstandingAndSearchCombine(t *testing.T) {
+	r := testRouter(t)
+	setup := setUpFund(t, r)
+	memberID := memberFor(t, r, "Jane")
+
+	note := "Konsumsi rapat"
+	wanted := claimForWithNote(t, r, setup, memberID, note)
+	other := "Konsumsi lain"
+	unwanted := claimForWithNote(t, r, setup, memberID, other)
+	_ = unwanted
+
+	settledNote := "Konsumsi rapat lama"
+	settled := claimForWithNote(t, r, setup, memberID, settledNote)
+	if rec := postSettlement(t, r, settled.ID, settleReimbursementRequest{
+		AccountID: setup.CashAccountID(t), OccurredOn: "2026-08-15",
+	}); rec.Code != http.StatusCreated {
+		t.Fatalf("settle = %d, want %d (body: %s)", rec.Code, http.StatusCreated, rec.Body.String())
+	}
+
+	page := decodeReimbursementsPage(t, getReimbursements(t, r, "?outstanding=true&q=konsumsi+rapat"))
+	if len(page.Reimbursements) != 1 {
+		t.Fatalf("outstanding+q returned %d rows, want 1: %+v", len(page.Reimbursements), page.Reimbursements)
+	}
+	if page.Reimbursements[0].ID != wanted.ID {
+		t.Errorf("matched row id = %d, want %d", page.Reimbursements[0].ID, wanted.ID)
+	}
+}
+
+// TestGetReimbursementsOutstandingExcludesSettledAndWaived is #226's own
+// check that ListReimbursementsPage's outstanding_only branch keeps
+// excluding both a settled and a waived claim, the same pair
+// ListOutstandingReimbursementsByFund already excluded.
+func TestGetReimbursementsOutstandingExcludesSettledAndWaived(t *testing.T) {
+	r := testRouter(t)
+	setup := setUpFund(t, r)
+	memberID := memberFor(t, r, "Jane")
+
+	settled := claimFor(t, r, setup, memberID)
+	if rec := postSettlement(t, r, settled.ID, settleReimbursementRequest{
+		AccountID: setup.CashAccountID(t), OccurredOn: "2026-08-15",
+	}); rec.Code != http.StatusCreated {
+		t.Fatalf("settle = %d, want %d (body: %s)", rec.Code, http.StatusCreated, rec.Body.String())
+	}
+
+	waived := claimFor(t, r, setup, memberID)
+	waivedOn := "2026-08-16"
+	patchBody := fmt.Sprintf(`{"waived_on":%q}`, waivedOn)
+	if rec := patchReimbursement(t, r, waived.ID, patchBody); rec.Code != http.StatusOK {
+		t.Fatalf("waiving = %d, want %d (body: %s)", rec.Code, http.StatusOK, rec.Body.String())
+	}
+
+	outstanding := claimFor(t, r, setup, memberID)
+
+	page := decodeReimbursementsPage(t, getReimbursements(t, r, "?outstanding=true"))
+	if len(page.Reimbursements) != 1 {
+		t.Fatalf("outstanding returned %d rows, want 1: %+v", len(page.Reimbursements), page.Reimbursements)
+	}
+	if page.Reimbursements[0].ID != outstanding.ID {
+		t.Errorf("outstanding row id = %d, want %d", page.Reimbursements[0].ID, outstanding.ID)
+	}
+	if page.Reimbursements[0].Settled {
+		t.Errorf("outstanding row settled = true, want false")
+	}
+}
+
+// claimForWithNote is claimFor with a caller-supplied note, for the search
+// tests above that need to tell claims apart by more than amount.
+func claimForWithNote(t *testing.T, r http.Handler, setup setupResponse, memberID int64, note string) reimbursementResponse {
+	t.Helper()
+	rec := postReimbursement(t, r, reimbursementRequest{
+		MemberID: memberID, PurposeID: setup.MainPurposeID,
+		Amount: 80_000, IncurredOn: "2026-08-10", Note: &note,
+	})
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("POST /api/reimbursements = %d, want %d (body: %s)", rec.Code, http.StatusCreated, rec.Body.String())
+	}
+	return decodeReimbursement(t, rec)
+}
+
 // TestPostReimbursementsRejectsWhatTheSchemaRefuses proves this handler
 // validates nothing itself: a non-positive amount, a calendar-invalid date
 // and a member_id naming no row all come back through mapSQLiteError.
@@ -467,16 +828,28 @@ func TestNoWaiveRouteExists(t *testing.T) {
 	}
 }
 
+// decodeReimbursements decodes GET /api/reimbursements's envelope
+// ({"reimbursements":[...],"next_cursor":...}, #226) and returns just the
+// rows - every caller that predates paging only ever wanted the page's
+// contents, never the cursor.
 func decodeReimbursements(t *testing.T, rec *httptest.ResponseRecorder) []reimbursementResponse {
+	t.Helper()
+	return decodeReimbursementsPage(t, rec).Reimbursements
+}
+
+// decodeReimbursementsPage decodes GET /api/reimbursements's envelope in
+// full, for the paging tests below that need next_cursor - the same idiom
+// decodeTransactionsPage (transactions_test.go) uses for #225.
+func decodeReimbursementsPage(t *testing.T, rec *httptest.ResponseRecorder) reimbursementsPageResponse {
 	t.Helper()
 	if rec.Code != http.StatusOK {
 		t.Fatalf("GET /api/reimbursements = %d, want %d (body: %s)", rec.Code, http.StatusOK, rec.Body.String())
 	}
-	var claims []reimbursementResponse
-	if err := json.NewDecoder(rec.Body).Decode(&claims); err != nil {
-		t.Fatalf("decoding reimbursements: %v", err)
+	var page reimbursementsPageResponse
+	if err := json.NewDecoder(rec.Body).Decode(&page); err != nil {
+		t.Fatalf("decoding reimbursements page: %v", err)
 	}
-	return claims
+	return page
 }
 
 func patchReimbursement(t *testing.T, r http.Handler, id int64, body string) *httptest.ResponseRecorder {

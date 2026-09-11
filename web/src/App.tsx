@@ -12,10 +12,10 @@ import Login from '@/screens/Login'
 import Setup from '@/screens/Setup/Setup'
 import RecordTransaction from '@/screens/RecordTransaction'
 import Reconcile from '@/screens/Reconcile'
-import Reimbursements from '@/screens/Reimbursements'
 import Incidentals from '@/screens/Incidentals'
 import History from '@/screens/History/History'
 import Transactions from '@/screens/History/Transactions'
+import Reimbursements from '@/screens/History/Reimbursements'
 import DuesStatus from '@/screens/Dues/Status'
 import RecordDuesPayment from '@/screens/Dues/RecordPayment'
 import Home from '@/screens/Home'
@@ -255,11 +255,16 @@ function AuthedGate({ onLoggedOut }: { onLoggedOut: () => void }) {
             />
           }
         />
+        <Route path="reimbursements" element={<Reimbursements refetchKey={location.key} />} />
       </Route>
       {/* The dues status roster's own former address (through M6.22) -
           Iuran now lives at /history/dues (ADR-032), and this redirect is
           what keeps a bookmark or an old link working. */}
       <Route path="/dues" element={<Navigate to="/history/dues" replace />} />
+      {/* The reimbursements screen's own former address (through M6.24) -
+          Penggantian now lives at /history/reimbursements (#226, ADR-032),
+          same redirect precedent as /dues above. */}
+      <Route path="/reimbursements" element={<Navigate to="/history/reimbursements" replace />} />
       <Route
         path="/dues/payment"
         element={
@@ -288,14 +293,6 @@ function AuthedGate({ onLoggedOut }: { onLoggedOut: () => void }) {
         }
       />
       <Route
-        path="/reimbursements"
-        element={
-          <Shell title={title} onLoggedOut={onLoggedOut}>
-            <Reimbursements onBack={() => navigate('/')} />
-          </Shell>
-        }
-      />
-      <Route
         path="/incidentals"
         element={
           <Shell title={title} onLoggedOut={onLoggedOut}>
@@ -316,7 +313,6 @@ function AuthedGate({ onLoggedOut }: { onLoggedOut: () => void }) {
             <Home
               refetchKey={location.key}
               onReconcile={() => navigate('/reconcile')}
-              onViewReimbursements={() => navigate('/reimbursements')}
               onViewIncidentals={() => navigate('/incidentals')}
               onViewHistory={() => navigate('/history/transactions')}
             />

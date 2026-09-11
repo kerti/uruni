@@ -225,6 +225,27 @@ type Querier interface {
 	// Newest first: the home screen wants the last count, not the first.
 	ListReconciliationsByFund(ctx context.Context, fundID int64) ([]Reconciliation, error)
 	ListReimbursementsByFund(ctx context.Context, fundID int64) ([]ListReimbursementsByFundRow, error)
+	// GET /api/reimbursements's real listing (#226, ADR-032 "Lists: paging and
+	// search") - newest-first and keyset-paged on (incurred_on, id), the same
+	// shape as ListTransactionsPage (transaction.sql has the full reasoning for
+	// row-value keyset over LIMIT/OFFSET, the CAST on cursor_id, and INSTR/LOWER
+	// over "COLLATE NOCASE LIKE ... ESCAPE" - sqlc 1.31.1's bug with a repeated
+	// ESCAPE clause applies here too, since q searches two columns).
+	//
+	// Search (?q=) covers member name and note only - PRD section 7.4 gives a
+	// claim no purpose-name search surface the way a transaction has one, and
+	// ADR-032 named "member name and note" for this list specifically.
+	//
+	// sqlc.narg('outstanding_only') gates the same pair of conditions
+	// ListOutstandingReimbursementsByFund applies (waived_on IS NULL and no
+	// settling transaction) so `settled` stays correctly computed in both
+	// modes: literal 0 when outstanding_only narrows the WHERE clause itself
+	// (every row satisfying it is unsettled by construction, same as that
+	// query), the real EXISTS check otherwise.
+	//
+	// page_limit is page size + 1, the same "peek at one extra row" trick
+	// ListTransactionsPage uses to know whether a next page exists.
+	ListReimbursementsPage(ctx context.Context, arg ListReimbursementsPageParams) ([]ListReimbursementsPageRow, error)
 	// ListSelectablePurposesByFund is ListPurposesByFund with a closed
 	// incidental's purpose excluded (ADR-031): GET /api/purposes?selectable=true
 	// backs the everyday record form's picker, which stops offering what

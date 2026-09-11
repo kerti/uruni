@@ -1,11 +1,13 @@
 package http
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -79,9 +81,9 @@ func toReimbursementResponse(r store.Reimbursement, settled int64) reimbursement
 	}
 }
 
-// toReimbursementResponseRow maps one list-query row (which carries the
-// settled column) to the wire shape.
-func toReimbursementResponseRow(r store.ListReimbursementsByFundRow) reimbursementResponse {
+// toReimbursementResponseRow maps one ListReimbursementsPage row (which
+// carries the settled column) to the wire shape.
+func toReimbursementResponseRow(r store.ListReimbursementsPageRow) reimbursementResponse {
 	return toReimbursementResponse(store.Reimbursement{
 		ID:         r.ID,
 		FundID:     r.FundID,
@@ -134,18 +136,77 @@ func (a *api) createReimbursement(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, toReimbursementResponse(claim, 0))
 }
 
-// listReimbursements is GET /api/reimbursements, optionally
-// ?outstanding=true: every claim, or only those still owed - the list the
-// treasurer actually looks at, since a settled claim is history.
+// reimbursementsPageSize is GET /api/reimbursements's fixed page size
+// (#226, ADR-032 "Lists: paging and search"): 25 a page, same as
+// GET /api/transactions.
+const reimbursementsPageSize = 25
+
+// reimbursementsPageResponse is GET /api/reimbursements's envelope (#226),
+// the same {rows, next_cursor} shape transactionsPageResponse introduced -
+// see that type's own comment for why this route stopped answering a bare
+// array.
+type reimbursementsPageResponse struct {
+	Reimbursements []reimbursementResponse `json:"reimbursements"`
+	NextCursor     *string                 `json:"next_cursor"`
+}
+
+// encodeReimbursementsCursor/decodeReimbursementsCursor are
+// encodeTransactionsCursor/decodeTransactionsCursor's own shape (base64 of
+// "incurred_on|id", the pair ListReimbursementsPage's keyset WHERE clause
+// compares against) kept local rather than shared: the two routes' cursors
+// are opaque wire formats over different tables and different date
+// columns, and generalizing them would only add an indirection neither
+// route's own callers need.
+func encodeReimbursementsCursor(incurredOn string, id int64) string {
+	return base64.RawURLEncoding.EncodeToString([]byte(incurredOn + "|" + strconv.FormatInt(id, 10)))
+}
+
+// decodeReimbursementsCursor rejects anything that doesn't round-trip to a
+// real calendar date plus a positive id, the shape listReimbursements below
+// answers 400 invalid_argument for.
+func decodeReimbursementsCursor(raw string) (incurredOn string, id int64, ok bool) {
+	decoded, err := base64.RawURLEncoding.DecodeString(raw)
+	if err != nil {
+		return "", 0, false
+	}
+	incurredOn, idPart, found := strings.Cut(string(decoded), "|")
+	if !found {
+		return "", 0, false
+	}
+	t, err := time.Parse(occurredOnLayout, incurredOn)
+	if err != nil || t.Format(occurredOnLayout) != incurredOn {
+		return "", 0, false
+	}
+	id, err = strconv.ParseInt(idPart, 10, 64)
+	if err != nil || id <= 0 {
+		return "", 0, false
+	}
+	return incurredOn, id, true
+}
+
+// listReimbursements is GET /api/reimbursements (#226, ADR-032 "Lists:
+// paging and search"): newest-first, keyset-paged on
+// (incurred_on DESC, id DESC), 25 a page - the same shape
+// GET /api/transactions already answers, and for the same reason
+// (ListReimbursementsPage's own comment has the row-value-keyset
+// reasoning).
 //
-// Both queries carry a computed `settled` column (the fact that a
-// kind='reimbursement' transaction references the claim), so the wire shape
-// is identical either way: an outstanding row is settled by construction,
-// and the full list says so truthfully for every row.
+// ?outstanding=true narrows to claims still owed (neither settled nor
+// waived) - the list the treasurer actually looks at, since a settled claim
+// is history. An unparseable value is a 400 rather than a silent "all":
+// ?outstanding=yes most likely means the caller believes it is filtering,
+// and answering with the full list would quietly show settled claims as
+// though they were owed.
 //
-// An unparseable value is a 400 rather than a silent "all": ?outstanding=yes
-// most likely means the caller believes it is filtering, and answering with
-// the full list would quietly show settled claims as though they were owed.
+// ?q= searches member name and note (case-insensitive substring) - ADR-032
+// named this list's search surface explicitly, narrower than
+// GET /api/transactions's because a claim has no purpose-name column worth
+// searching the way a transaction does.
+//
+// ListReimbursementsPage is asked for one row more than the page size so
+// this handler can tell "the next page is empty" apart from "there is a
+// next page" without a second round trip, the same trick listTransactions
+// uses.
 func (a *api) listReimbursements(w http.ResponseWriter, r *http.Request) {
 	outstandingOnly := false
 	if raw := r.URL.Query().Get("outstanding"); raw != "" {
@@ -162,33 +223,47 @@ func (a *api) listReimbursements(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Both sqlc row types are the claim fields plus the computed settled int;
-	// the outstanding variant is converted to the full-list type so the two
-	// share one loop even though they are separate generated structs.
-	var rows []store.ListReimbursementsByFundRow
+	params := store.ListReimbursementsPageParams{
+		FundID:    fund.ID,
+		PageLimit: reimbursementsPageSize + 1,
+	}
 	if outstandingOnly {
-		claims, err := a.queries.ListOutstandingReimbursementsByFund(r.Context(), fund.ID)
-		if err != nil {
-			mapSQLiteError(w, a.logger, err)
+		params.OutstandingOnly = 1
+	}
+
+	if cursor := r.URL.Query().Get("cursor"); cursor != "" {
+		incurredOn, id, ok := decodeReimbursementsCursor(cursor)
+		if !ok {
+			writeAPIError(w, http.StatusBadRequest, "invalid_argument", "The cursor is not valid.")
 			return
 		}
-		for _, claim := range claims {
-			rows = append(rows, store.ListReimbursementsByFundRow(claim))
-		}
-	} else {
-		var err error
-		rows, err = a.queries.ListReimbursementsByFund(r.Context(), fund.ID)
-		if err != nil {
-			mapSQLiteError(w, a.logger, err)
-			return
-		}
+		params.CursorIncurredOn = incurredOn
+		params.CursorID = &id
+	}
+
+	if q := strings.TrimSpace(r.URL.Query().Get("q")); q != "" {
+		params.Q = q
+	}
+
+	rows, err := a.queries.ListReimbursementsPage(r.Context(), params)
+	if err != nil {
+		mapSQLiteError(w, a.logger, err)
+		return
+	}
+
+	var nextCursor *string
+	if len(rows) > reimbursementsPageSize {
+		rows = rows[:reimbursementsPageSize]
+		last := rows[len(rows)-1]
+		encoded := encodeReimbursementsCursor(last.IncurredOn, last.ID)
+		nextCursor = &encoded
 	}
 
 	resp := make([]reimbursementResponse, 0, len(rows))
 	for _, claim := range rows {
 		resp = append(resp, toReimbursementResponseRow(claim))
 	}
-	writeJSON(w, http.StatusOK, resp)
+	writeJSON(w, http.StatusOK, reimbursementsPageResponse{Reimbursements: resp, NextCursor: nextCursor})
 }
 
 // settleReimbursementRequest is POST /api/reimbursements/{id}/settle's body:
