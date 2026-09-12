@@ -460,15 +460,17 @@ func TestTakeReconciliationBackdatedFixLandsInNextSnapshotNotThisOne(t *testing.
 		t.Errorf("second snapshot = %+v, want recorded=240000 difference=0 - the late entry now counts", secondLine)
 	}
 
-	// The first snapshot's gap is still on record as open - the second
-	// snapshot did not rewrite history, it only added a new one.
+	// The first snapshot's row is still on record - the second snapshot did
+	// not rewrite history, it only added a new one - but the second snapshot
+	// counted this same account and it matched, so the gap itself is no
+	// longer open.
 	open := getOpenReconciliationLines(t, r)
 	var openLines []reconciliationLineResponse
 	if err := json.NewDecoder(open.Body).Decode(&openLines); err != nil {
 		t.Fatalf("decoding open lines: %v", err)
 	}
-	if len(openLines) != 1 || openLines[0].DifferenceAmount != -10_000 {
-		t.Errorf("open lines = %+v, want exactly the first snapshot's -10000 gap, still open", openLines)
+	if len(openLines) != 0 {
+		t.Errorf("open lines = %+v, want none - the second count superseded the first", openLines)
 	}
 }
 

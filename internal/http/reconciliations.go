@@ -361,8 +361,13 @@ func (a *api) getReconciliation(w http.ResponseWriter, r *http.Request) {
 }
 
 // listOpenReconciliationLines is GET /api/reconciliations/open-lines: every
-// line across every snapshot still sitting at resolution "left_open" - a gap
-// the treasurer chose to sleep on rather than square immediately (ADR-024).
+// location whose most recent count is still sitting at resolution
+// "left_open" - a gap the treasurer chose to sleep on rather than square
+// immediately (ADR-024). "Most recent" is per account_id, not per snapshot:
+// once any later snapshot has a line for that account (whatever its own
+// resolution), the earlier left_open line stops being open, but a later
+// snapshot that skips an account leaves that account's gap open. Later means
+// the owning reconciliation's (performed_at, id).
 //
 // Included on the maintainer's ruling that kept transfers in M4: left_open is
 // a schema-committed state and the capability to read it back already exists,

@@ -394,12 +394,15 @@ func TestTakeReconciliationLeftOpenIsRevisitedAsASecondSnapshotFirstUntouched(t 
 		t.Fatalf("TakeReconciliation(second) = %v, want no error", err)
 	}
 
+	// The second snapshot counted this same account (and it matched), so the
+	// first snapshot's left_open line is superseded: the gap is no longer
+	// open, even though the first row itself was never touched.
 	stillOpen, err := q.ListOpenReconciliationLinesByFund(ctx, f.fundID)
 	if err != nil {
 		t.Fatalf("ListOpenReconciliationLinesByFund() = %v, want no error", err)
 	}
-	if len(stillOpen) != 1 || stillOpen[0].ReconciliationID != first.ID {
-		t.Errorf("open lines = %+v, want only the first snapshot's - history is not rewritten", stillOpen)
+	if len(stillOpen) != 0 {
+		t.Errorf("open lines = %+v, want none - the second count superseded the first", stillOpen)
 	}
 
 	latest, err := q.LatestReconciliation(ctx, f.fundID)

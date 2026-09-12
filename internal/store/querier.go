@@ -208,8 +208,17 @@ type Querier interface {
 	ListIncidentalsByFund(ctx context.Context, fundID int64) ([]Incidental, error)
 	ListMembersByFund(ctx context.Context, fundID int64) ([]Member, error)
 	ListOpenIncidentalsByFund(ctx context.Context, fundID int64) ([]Incidental, error)
-	// Differences the treasurer chose to sleep on. They are not errors, and the
-	// next snapshot is where they get picked up again - a line is never edited.
+	// Differences the treasurer chose to sleep on, but only while nothing later
+	// has weighed in on the same location. A left_open line stops counting as
+	// open the moment a later snapshot has any line at all for that account_id -
+	// matched, entry_added, adjusted, or left_open again all supersede it, since
+	// the question is only "has this location been counted since", not how that
+	// count came out. This is per location, not per snapshot: a later count that
+	// skips an account leaves that account's gap open regardless of what else the
+	// later snapshot resolved. "Later" means the owning reconciliation's
+	// (performed_at, id), performed_at first - a snapshot is never edited
+	// (ADR-024), so a superseded line stays in the table exactly as recorded; it
+	// just stops being "open".
 	ListOpenReconciliationLinesByFund(ctx context.Context, fundID int64) ([]ReconciliationLine, error)
 	// What the fund still owes its members: neither settled by a payout nor
 	// waived. Both halves are conditions SQLite cannot express as a CHECK across
