@@ -535,12 +535,15 @@ func TestALeftOpenDifferenceIsRevisitedAsASecondSnapshot(t *testing.T) {
 		t.Fatalf("the second snapshot's line = %v, want no error", err)
 	}
 
+	// The second snapshot counted this same account (and it matched), so the
+	// first snapshot's left_open line is superseded: the gap is no longer
+	// open, even though the first row itself was never touched.
 	stillOpen, err := q.ListOpenReconciliationLinesByFund(ctx, f.fundID)
 	if err != nil {
 		t.Fatalf("ListOpenReconciliationLinesByFund = %v, want no error", err)
 	}
-	if len(stillOpen) != 1 || stillOpen[0].ReconciliationID != first.ID {
-		t.Errorf("open lines = %+v, want only the first snapshot's - history is not rewritten", stillOpen)
+	if len(stillOpen) != 0 {
+		t.Errorf("open lines = %+v, want none - the second count superseded the first", stillOpen)
 	}
 	latest, err := q.LatestReconciliation(ctx, f.fundID)
 	if err != nil {
@@ -549,6 +552,293 @@ func TestALeftOpenDifferenceIsRevisitedAsASecondSnapshot(t *testing.T) {
 	if latest.ID != second.ID {
 		t.Errorf("latest snapshot = %d, want %d", latest.ID, second.ID)
 	}
+}
+
+// createReconciliation is the bare snapshot header the open-lines tests below
+// build on: no cutoff, no note - only what ordering ("latest per location")
+// actually depends on, performed_at and id.
+func createReconciliation(t *testing.T, sqlDB *sql.DB, fundID, performedAt int64) store.Reconciliation {
+	t.Helper()
+	rec, err := store.New(sqlDB).CreateReconciliation(context.Background(), store.CreateReconciliationParams{
+		FundID: fundID, PerformedAt: performedAt, CreatedAt: performedAt,
+	})
+	if err != nil {
+		t.Fatalf("CreateReconciliation(performed_at=%d) = %v, want no error", performedAt, err)
+	}
+	return rec
+}
+
+// TestOpenReconciliationLineSupersededByAnyLaterResolution is acceptance
+// criterion 1: a left_open line stops being open once a later snapshot has a
+// line for the same location, whatever that later line's own resolution.
+// "Superseded" is not "resolved" - the point is that the query stops
+// answering for the location the moment someone has looked at it again,
+// regardless of what they found.
+func TestOpenReconciliationLineSupersededByAnyLaterResolution(t *testing.T) {
+	for _, resolution := range []string{"matched", "entry_added", "adjusted", "left_open"} {
+		t.Run(resolution, func(t *testing.T) {
+			sqlDB := migratedTestDB(t)
+			ctx := context.Background()
+			q := store.New(sqlDB)
+			f := newScenarioFund(t, sqlDB, "Test Fund", validSlug)
+
+			first := createReconciliation(t, sqlDB, f.fundID, 1_000)
+			if _, err := q.CreateReconciliationLine(ctx, store.CreateReconciliationLineParams{
+				FundID: f.fundID, ReconciliationID: first.ID, AccountID: f.cashID,
+				RecordedAmount: 100_000, ActualAmount: 90_000, DifferenceAmount: -10_000,
+				Resolution: "left_open",
+			}); err != nil {
+				t.Fatalf("first left_open line = %v, want no error", err)
+			}
+
+			second := createReconciliation(t, sqlDB, f.fundID, 2_000)
+			line := store.CreateReconciliationLineParams{
+				FundID: f.fundID, ReconciliationID: second.ID, AccountID: f.cashID,
+				Resolution: resolution,
+			}
+			switch resolution {
+			case "matched":
+				line.RecordedAmount, line.ActualAmount, line.DifferenceAmount = 90_000, 90_000, 0
+			case "entry_added", "left_open":
+				line.RecordedAmount, line.ActualAmount, line.DifferenceAmount = 90_000, 88_000, -2_000
+			case "adjusted":
+				fixID := f.entry(t, sqlDB, store.CreateTransactionParams{
+					AccountID: f.cashID, PurposeID: f.mainID, Direction: "out", Amount: 2_000,
+					OccurredOn: "2026-08-20", Kind: "adjustment",
+				})
+				line.RecordedAmount, line.ActualAmount, line.DifferenceAmount = 90_000, 88_000, -2_000
+				line.AdjustmentTransactionID = &fixID
+			}
+			if _, err := q.CreateReconciliationLine(ctx, line); err != nil {
+				t.Fatalf("second %s line = %v, want no error", resolution, err)
+			}
+
+			open, err := q.ListOpenReconciliationLinesByFund(ctx, f.fundID)
+			if err != nil {
+				t.Fatalf("ListOpenReconciliationLinesByFund = %v, want no error", err)
+			}
+			if resolution == "left_open" {
+				// The second line is itself left_open, so it is the open one -
+				// the first is superseded, not the list emptied.
+				if len(open) != 1 || open[0].ReconciliationID != second.ID {
+					t.Errorf("open lines = %+v, want only the second snapshot's", open)
+				}
+				return
+			}
+			if len(open) != 0 {
+				t.Errorf("open lines = %+v, want none - a later %s line supersedes the gap", open, resolution)
+			}
+		})
+	}
+}
+
+// TestOpenReconciliationLineStaysOpenWhenALaterSnapshotSkipsTheLocation is
+// acceptance criterion 2: superseding is per location, not per snapshot. A
+// later count that never mentions an account leaves that account's gap open,
+// even though a later snapshot exists and resolved something else.
+func TestOpenReconciliationLineStaysOpenWhenALaterSnapshotSkipsTheLocation(t *testing.T) {
+	sqlDB := migratedTestDB(t)
+	ctx := context.Background()
+	q := store.New(sqlDB)
+	f := newScenarioFund(t, sqlDB, "Test Fund", validSlug)
+
+	first := createReconciliation(t, sqlDB, f.fundID, 1_000)
+	if _, err := q.CreateReconciliationLine(ctx, store.CreateReconciliationLineParams{
+		FundID: f.fundID, ReconciliationID: first.ID, AccountID: f.cashID,
+		RecordedAmount: 100_000, ActualAmount: 90_000, DifferenceAmount: -10_000,
+		Resolution: "left_open",
+	}); err != nil {
+		t.Fatalf("cash left_open line = %v, want no error", err)
+	}
+	if _, err := q.CreateReconciliationLine(ctx, store.CreateReconciliationLineParams{
+		FundID: f.fundID, ReconciliationID: first.ID, AccountID: f.bankID,
+		RecordedAmount: 200_000, ActualAmount: 200_000, DifferenceAmount: 0,
+		Resolution: "matched",
+	}); err != nil {
+		t.Fatalf("bank matched line = %v, want no error", err)
+	}
+
+	// A later snapshot, but it only counts the bank - cash is not revisited.
+	second := createReconciliation(t, sqlDB, f.fundID, 2_000)
+	if _, err := q.CreateReconciliationLine(ctx, store.CreateReconciliationLineParams{
+		FundID: f.fundID, ReconciliationID: second.ID, AccountID: f.bankID,
+		RecordedAmount: 200_000, ActualAmount: 200_000, DifferenceAmount: 0,
+		Resolution: "matched",
+	}); err != nil {
+		t.Fatalf("second bank line = %v, want no error", err)
+	}
+
+	open, err := q.ListOpenReconciliationLinesByFund(ctx, f.fundID)
+	if err != nil {
+		t.Fatalf("ListOpenReconciliationLinesByFund = %v, want no error", err)
+	}
+	if len(open) != 1 || open[0].AccountID != f.cashID || open[0].ReconciliationID != first.ID {
+		t.Errorf("open lines = %+v, want only cash's first-snapshot line - a skipped location stays open", open)
+	}
+}
+
+// TestOpenReconciliationLinesTrackTwoLocationsIndependently is acceptance
+// criterion 3: two locations left open, one recounted clean - only the
+// untouched one remains.
+func TestOpenReconciliationLinesTrackTwoLocationsIndependently(t *testing.T) {
+	sqlDB := migratedTestDB(t)
+	ctx := context.Background()
+	q := store.New(sqlDB)
+	f := newScenarioFund(t, sqlDB, "Test Fund", validSlug)
+
+	first := createReconciliation(t, sqlDB, f.fundID, 1_000)
+	if _, err := q.CreateReconciliationLine(ctx, store.CreateReconciliationLineParams{
+		FundID: f.fundID, ReconciliationID: first.ID, AccountID: f.cashID,
+		RecordedAmount: 100_000, ActualAmount: 90_000, DifferenceAmount: -10_000,
+		Resolution: "left_open",
+	}); err != nil {
+		t.Fatalf("cash left_open line = %v, want no error", err)
+	}
+	if _, err := q.CreateReconciliationLine(ctx, store.CreateReconciliationLineParams{
+		FundID: f.fundID, ReconciliationID: first.ID, AccountID: f.bankID,
+		RecordedAmount: 200_000, ActualAmount: 195_000, DifferenceAmount: -5_000,
+		Resolution: "left_open",
+	}); err != nil {
+		t.Fatalf("bank left_open line = %v, want no error", err)
+	}
+
+	// Only cash is recounted, and it now agrees.
+	second := createReconciliation(t, sqlDB, f.fundID, 2_000)
+	if _, err := q.CreateReconciliationLine(ctx, store.CreateReconciliationLineParams{
+		FundID: f.fundID, ReconciliationID: second.ID, AccountID: f.cashID,
+		RecordedAmount: 90_000, ActualAmount: 90_000, DifferenceAmount: 0,
+		Resolution: "matched",
+	}); err != nil {
+		t.Fatalf("second cash line = %v, want no error", err)
+	}
+
+	open, err := q.ListOpenReconciliationLinesByFund(ctx, f.fundID)
+	if err != nil {
+		t.Fatalf("ListOpenReconciliationLinesByFund = %v, want no error", err)
+	}
+	if len(open) != 1 || open[0].AccountID != f.bankID {
+		t.Errorf("open lines = %+v, want only the bank's still-untouched gap", open)
+	}
+}
+
+// TestOpenReconciliationLineRecountStillOffReturnsOnlyTheNewest is acceptance
+// criterion 4: a location recounted and still off returns just the newest
+// left_open line, never both - no double counting the same gap.
+func TestOpenReconciliationLineRecountStillOffReturnsOnlyTheNewest(t *testing.T) {
+	sqlDB := migratedTestDB(t)
+	ctx := context.Background()
+	q := store.New(sqlDB)
+	f := newScenarioFund(t, sqlDB, "Test Fund", validSlug)
+
+	first := createReconciliation(t, sqlDB, f.fundID, 1_000)
+	if _, err := q.CreateReconciliationLine(ctx, store.CreateReconciliationLineParams{
+		FundID: f.fundID, ReconciliationID: first.ID, AccountID: f.cashID,
+		RecordedAmount: 100_000, ActualAmount: 90_000, DifferenceAmount: -10_000,
+		Resolution: "left_open",
+	}); err != nil {
+		t.Fatalf("first left_open line = %v, want no error", err)
+	}
+
+	// Recounted, and still off - by a different amount.
+	second := createReconciliation(t, sqlDB, f.fundID, 2_000)
+	secondLine, err := q.CreateReconciliationLine(ctx, store.CreateReconciliationLineParams{
+		FundID: f.fundID, ReconciliationID: second.ID, AccountID: f.cashID,
+		RecordedAmount: 90_000, ActualAmount: 87_000, DifferenceAmount: -3_000,
+		Resolution: "left_open",
+	})
+	if err != nil {
+		t.Fatalf("second left_open line = %v, want no error", err)
+	}
+
+	open, err := q.ListOpenReconciliationLinesByFund(ctx, f.fundID)
+	if err != nil {
+		t.Fatalf("ListOpenReconciliationLinesByFund = %v, want no error", err)
+	}
+	if len(open) != 1 {
+		t.Fatalf("open lines = %d, want 1 - the first is superseded, not stacked", len(open))
+	}
+	if open[0].ID != secondLine.ID || open[0].DifferenceAmount != -3_000 {
+		t.Errorf("open line = %+v, want the newest (id %d, difference -3000)", open[0], secondLine.ID)
+	}
+}
+
+// TestOpenReconciliationLineOrderingIsPerformedAtThenID is acceptance
+// criterion 5: "latest" is the owning snapshot's (performed_at, id), with
+// performed_at the primary key. A snapshot inserted later (a higher id) but
+// backdated to an earlier performed_at does not supersede one performed
+// chronologically after it - and, symmetrically, when performed_at ties, id
+// breaks it.
+func TestOpenReconciliationLineOrderingIsPerformedAtThenID(t *testing.T) {
+	sqlDB := migratedTestDB(t)
+	ctx := context.Background()
+	q := store.New(sqlDB)
+
+	t.Run("higher id but earlier performed_at does not supersede", func(t *testing.T) {
+		f := newScenarioFund(t, sqlDB, "Test Fund A", validSlug)
+
+		// Inserted first (lower id), but performed_at puts it chronologically
+		// after the row inserted next.
+		chronologicallyLater := createReconciliation(t, sqlDB, f.fundID, 5_000)
+		if _, err := q.CreateReconciliationLine(ctx, store.CreateReconciliationLineParams{
+			FundID: f.fundID, ReconciliationID: chronologicallyLater.ID, AccountID: f.cashID,
+			RecordedAmount: 100_000, ActualAmount: 90_000, DifferenceAmount: -10_000,
+			Resolution: "left_open",
+		}); err != nil {
+			t.Fatalf("chronologically-later left_open line = %v, want no error", err)
+		}
+
+		// Inserted second (higher id), but backdated to an earlier performed_at.
+		higherIDEarlierPerformedAt := createReconciliation(t, sqlDB, f.fundID, 1_000)
+		if higherIDEarlierPerformedAt.ID <= chronologicallyLater.ID {
+			t.Fatalf("second reconciliation id = %d, want it above %d", higherIDEarlierPerformedAt.ID, chronologicallyLater.ID)
+		}
+		if _, err := q.CreateReconciliationLine(ctx, store.CreateReconciliationLineParams{
+			FundID: f.fundID, ReconciliationID: higherIDEarlierPerformedAt.ID, AccountID: f.cashID,
+			RecordedAmount: 90_000, ActualAmount: 90_000, DifferenceAmount: 0,
+			Resolution: "matched",
+		}); err != nil {
+			t.Fatalf("higher-id, earlier-performed_at matched line = %v, want no error", err)
+		}
+
+		open, err := q.ListOpenReconciliationLinesByFund(ctx, f.fundID)
+		if err != nil {
+			t.Fatalf("ListOpenReconciliationLinesByFund = %v, want no error", err)
+		}
+		if len(open) != 1 || open[0].ReconciliationID != chronologicallyLater.ID {
+			t.Errorf("open lines = %+v, want the performed_at=5000 snapshot's line still open - "+
+				"a higher id with an earlier performed_at is not \"later\"", open)
+		}
+	})
+
+	t.Run("tied performed_at breaks by id", func(t *testing.T) {
+		f := newScenarioFund(t, sqlDB, "Test Fund B", "bcdefghijklmnopqrstuvw")
+
+		earlierID := createReconciliation(t, sqlDB, f.fundID, 3_000)
+		if _, err := q.CreateReconciliationLine(ctx, store.CreateReconciliationLineParams{
+			FundID: f.fundID, ReconciliationID: earlierID.ID, AccountID: f.cashID,
+			RecordedAmount: 100_000, ActualAmount: 90_000, DifferenceAmount: -10_000,
+			Resolution: "left_open",
+		}); err != nil {
+			t.Fatalf("earlier-id left_open line = %v, want no error", err)
+		}
+
+		laterID := createReconciliation(t, sqlDB, f.fundID, 3_000)
+		if _, err := q.CreateReconciliationLine(ctx, store.CreateReconciliationLineParams{
+			FundID: f.fundID, ReconciliationID: laterID.ID, AccountID: f.cashID,
+			RecordedAmount: 90_000, ActualAmount: 90_000, DifferenceAmount: 0,
+			Resolution: "matched",
+		}); err != nil {
+			t.Fatalf("later-id matched line = %v, want no error", err)
+		}
+
+		open, err := q.ListOpenReconciliationLinesByFund(ctx, f.fundID)
+		if err != nil {
+			t.Fatalf("ListOpenReconciliationLinesByFund = %v, want no error", err)
+		}
+		if len(open) != 0 {
+			t.Errorf("open lines = %+v, want none - the tie breaks to the higher id, which supersedes", open)
+		}
+	})
 }
 
 // frozenBalance is what a snapshot stores in recorded_amount: the ledger summed
