@@ -126,3 +126,63 @@ export function createDuesPayment(params: {
     }),
   })
 }
+
+/** One row of GET /api/dues-payments (#228,
+ * internal/http/dues_payments.go's duesPaymentHistoryResponse): a dues
+ * payment, or the kind='adjustment' row that reverses one (ADR-029) - the
+ * same list. `is_reversal` replaces a bare kind string on this wire, since
+ * the client only ever needs to tell these two shapes apart.
+ *
+ * `reverses_transaction_id` is set only on a reversal row;
+ * `reversed_by_transaction_id` only on a payment something else reverses
+ * (never both). `reverses_occurred_on` rides only on a reversal row - the
+ * original payment's own date, so the link reads correctly even when that
+ * original sits on a page this list has not fetched yet. */
+export interface DuesPaymentHistoryRow {
+  id: number
+  is_reversal: boolean
+  member_id: number
+  member_name: string
+  dues_period: string
+  amount: number
+  occurred_on: string
+  account_name: string
+  note: string | null
+  reverses_transaction_id: number | null
+  reversed_by_transaction_id: number | null
+  reverses_occurred_on: string | null
+}
+
+/** GET /api/dues-payments's optional query parameters (#228, ADR-032
+ * "Lists: paging and search"). cursor is the opaque string a previous
+ * page's nextCursor returned - omit it for the first page. q searches
+ * member name only. */
+export interface ListDuesPaymentsInput {
+  q?: string
+  cursor?: string
+}
+
+/** One page of GET /api/dues-payments, camelCase on this side of the wire
+ * boundary (the server's own envelope is {dues_payments, next_cursor}).
+ * nextCursor is null once there is no further page. */
+export interface DuesPaymentsPage {
+  duesPayments: DuesPaymentHistoryRow[]
+  nextCursor: string | null
+}
+
+/**
+ * GET /api/dues-payments (#228, keyset-paged and searchable by member
+ * name): newest-first, 25 rows a page. Never period-scoped - the period
+ * selector on the Iuran tab drives only the status matrix above this list,
+ * never this call.
+ */
+export function listDuesPayments(input: ListDuesPaymentsInput = {}): Promise<DuesPaymentsPage> {
+  const params = new URLSearchParams()
+  if (input.q) params.set('q', input.q)
+  if (input.cursor) params.set('cursor', input.cursor)
+  const query = params.toString()
+
+  return apiFetch<{ dues_payments: DuesPaymentHistoryRow[]; next_cursor: string | null }>(
+    `/api/dues-payments${query ? `?${query}` : ''}`,
+  ).then((page) => ({ duesPayments: page.dues_payments, nextCursor: page.next_cursor }))
+}

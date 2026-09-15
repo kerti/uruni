@@ -40,6 +40,10 @@ test.describe('dues status', () => {
 
     await page.getByRole('link', { name: copy.shell.nav.history }).click()
     await page.getByRole('link', { name: copy.history.tabs.dues }).click()
+    // The tab is the payment history; the matrix is its own screen, one
+    // row away (#228).
+    await expect(page.getByRole('heading', { name: copy.history.dues.heading })).toBeVisible()
+    await page.getByRole('button', { name: copy.dues.entryLink }).click()
     await expect(page.getByLabel(copy.dues.periodLabel)).toBeVisible()
 
     // Both seeded members owe this period's rate and neither has ever paid.
@@ -48,7 +52,7 @@ test.describe('dues status', () => {
     await expect(page.getByText(copy.dues.statuses.unpaid).first()).toBeVisible()
 
     await page.getByRole('button', { name: copy.dues.back }).click()
-    await expect(page.getByText(copy.home.balanceHeading)).toBeVisible()
+    await expect(page.getByRole('heading', { name: copy.history.dues.heading })).toBeVisible()
   })
 
   // M6.13: one member paying two months in the same sitting. The seeded
@@ -66,6 +70,7 @@ test.describe('dues status', () => {
 
     await page.getByRole('link', { name: copy.shell.nav.history }).click()
     await page.getByRole('link', { name: copy.history.tabs.dues }).click()
+    await page.getByRole('button', { name: copy.dues.entryLink }).click()
     await page.getByRole('button', { name: copy.dues.recordLink }).click()
     await expect(page.getByRole('heading', { name: copy.dues.payment.heading })).toBeVisible()
 
@@ -115,9 +120,13 @@ test.describe('dues status', () => {
     await expect(page.getByLabel(copy.dues.periodLabel)).toBeVisible()
     await expect(page.getByText(copy.dues.payment.success)).toBeVisible()
 
+    // Back returns to Riwayat's Iuran tab (#228), not home.
+    await page.getByRole('button', { name: copy.dues.back }).click()
+    await expect(page.getByRole('heading', { name: copy.history.dues.heading })).toBeVisible()
+
     // Every posted row says whose dues it was: home's recent activity shows
     // the note, so a dues payment never reads there as a bare amount.
-    await page.getByRole('button', { name: copy.dues.back }).click()
+    await page.getByRole('link', { name: copy.shell.nav.home }).click()
     await expect(page.getByText(copy.home.balanceHeading)).toBeVisible()
     await expect(page.getByText(copy.dues.payment.note('Warga Satu')).first()).toBeVisible()
   })
@@ -136,6 +145,7 @@ test.describe('dues status', () => {
 
     await page.getByRole('link', { name: copy.shell.nav.history }).click()
     await page.getByRole('link', { name: copy.history.tabs.dues }).click()
+    await page.getByRole('button', { name: copy.dues.entryLink }).click()
     await page.getByLabel(copy.dues.periodLabel).fill('2024-01')
 
     // Warga Satu paid part of this month, so the roster shows the partial

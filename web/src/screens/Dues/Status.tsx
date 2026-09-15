@@ -79,7 +79,8 @@ function StatusBadge({ status }: { status: DuesStatusKind }) {
  * missing; it renders exactly what the server returns.
  *
  * Router-agnostic, same contract as every other screen App.tsx mounts:
- * onBack is the caller's navigate('/'), not a Link this component owns.
+ * onBack is the caller's navigate back to Riwayat's Iuran tab (#228), not a
+ * Link this component owns.
  * onRecordPayment is the same contract for M6.13's payment form, which is
  * reached from here rather than from a second link on home - the shape of
  * navigation as a whole is settled once alpha.4's screens exist (#177).

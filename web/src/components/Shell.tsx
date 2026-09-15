@@ -47,7 +47,8 @@ const navItems = [
  * and a screen may not have two entry points. M6.23 then moved Iuran off
  * this bar and into a tab under Riwayat (History.tsx, /history/dues) - dues
  * status is one reading of one month, and it was occupying a fifth of the
- * app's navigation on its own.
+ * app's navigation on its own. Since #228 that tab is the payment history,
+ * and the status matrix is its own screen at /dues, opened from the tab.
  *
  * Reconcile is deliberately not a tab: M6.10's ruling is that the
  * reconciliation banner on home IS its affordance, and a tab would give that

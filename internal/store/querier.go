@@ -200,6 +200,35 @@ type Querier interface {
 	LatestReconciliation(ctx context.Context, fundID int64) (Reconciliation, error)
 	ListAccountsByFund(ctx context.Context, fundID int64) ([]Account, error)
 	ListDuesPaymentsByMember(ctx context.Context, memberID *int64) ([]ListDuesPaymentsByMemberRow, error)
+	// GET /api/dues-payments's real listing (#228, ADR-032 "Lists: paging and
+	// search"): newest-first and keyset-paged on (occurred_on DESC, id DESC),
+	// the same shape ListTransactionsPage/ListReimbursementsPage already use
+	// (their own doc comments have the row-value-keyset reasoning, the
+	// CAST(sqlc.narg('cursor_id') AS INTEGER) fix, and why this query uses
+	// INSTR/LOWER rather than "COLLATE NOCASE LIKE ... ESCAPE" - sqlc 1.31.1's
+	// repeated-ESCAPE bug, documented in full on ListTransactionsPage above).
+	//
+	// Both halves of a reversal share this one list (PRD section 7.3, ADR-029):
+	// every kind='dues' payment, and every kind='adjustment' row that reverses
+	// one - never a bare "every transaction", since an ordinary correction with
+	// no reverses_transaction_id has nothing to do with dues.
+	//
+	// rv is the reversal that undoes THIS row, when this row is itself a
+	// payment - reversed_by_transaction_id, null on every row that is not a
+	// reversed payment (a reversal is never itself reversed, so it is always
+	// null on a reversal row too).
+	//
+	// orig is the payment THIS row reverses, when this row is itself a
+	// reversal - carried forward as reverses_occurred_on so a reversal states
+	// the original's date even when that original payment sits on a later
+	// page than the reversal itself.
+	//
+	// ?q= searches member name only (the response's own decided shape has no
+	// purpose or note column worth searching for this list).
+	//
+	// page_limit is page size + 1, the same peek-one-extra-row trick every
+	// other paged list in this package uses.
+	ListDuesPaymentsPage(ctx context.Context, arg ListDuesPaymentsPageParams) ([]ListDuesPaymentsPageRow, error)
 	ListDuesRatesByTier(ctx context.Context, tierID int64) ([]DuesRate, error)
 	ListDuesTiersByFund(ctx context.Context, fundID int64) ([]DuesTier, error)
 	ListFunds(ctx context.Context) ([]Fund, error)
