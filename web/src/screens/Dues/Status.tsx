@@ -8,7 +8,6 @@ import Loading from '@/components/states/Loading'
 import ErrorState from '@/components/states/ErrorState'
 import { copy } from '@/copy/id'
 import MemberPayments from '@/screens/Dues/MemberPayments'
-import PaymentHistory from '@/screens/Dues/PaymentHistory'
 import { getDuesStatus } from '@/lib/dues'
 import { formatIDR } from '@/lib/money'
 import { useApi } from '@/lib/useApi'
@@ -80,7 +79,8 @@ function StatusBadge({ status }: { status: DuesStatusKind }) {
  * missing; it renders exactly what the server returns.
  *
  * Router-agnostic, same contract as every other screen App.tsx mounts:
- * onBack is the caller's navigate('/'), not a Link this component owns.
+ * onBack is the caller's navigate back to Riwayat's Iuran tab (#228), not a
+ * Link this component owns.
  * onRecordPayment is the same contract for M6.13's payment form, which is
  * reached from here rather than from a second link on home - the shape of
  * navigation as a whole is settled once alpha.4's screens exist (#177).
@@ -106,10 +106,6 @@ export default function DuesStatus({
   // never open across a period change, since the history is period-scoped.
   const [expandedMemberId, setExpandedMemberId] = useState<number | null>(null)
   const [state, run] = useApi<DuesStatusRow[]>()
-  // Bumped by a reversal posted from the matrix's own panel (MemberPayments),
-  // which refetchKey never sees: that write stays on this screen, so the
-  // payment history below has to be told directly (#228).
-  const [reversalCount, setReversalCount] = useState(0)
 
   useEffect(() => {
     void run(() => getDuesStatus(period))
@@ -166,13 +162,7 @@ export default function DuesStatus({
           {visibleRows.length === 0 ? (
             <p className="text-muted-foreground">{unpaidOnly ? text.emptyFiltered : text.empty}</p>
           ) : (
-            // data-testid names the matrix for e2e only (#228): the payment
-            // history below (PaymentHistory.tsx) can list the same member
-            // and the same "reversed" wording for a real posted row, so a
-            // bare page-wide text lookup in dues.spec.ts is no longer
-            // guaranteed to land on the matrix row it means - this id is
-            // what that spec scopes to instead.
-            <ul data-testid="dues-status-list" className="flex flex-col gap-2">
+            <ul className="flex flex-col gap-2">
               {visibleRows.map((row) => (
                 <li
                   key={row.member.id}
@@ -229,10 +219,7 @@ export default function DuesStatus({
                         memberId={row.member.id}
                         memberName={row.member.name}
                         period={period}
-                        onReversed={() => {
-                          void run(() => getDuesStatus(period))
-                          setReversalCount((n) => n + 1)
-                        }}
+                        onReversed={() => void run(() => getDuesStatus(period))}
                       />
                     </div>
                   )}
@@ -242,11 +229,6 @@ export default function DuesStatus({
           )}
         </>
       )}
-
-      {/* The period status matrix ends here; the payment history below it
-          is period-agnostic by design (#228) - its own component, its own
-          fetch, never driven by the period selector above. */}
-      <PaymentHistory refetchKey={refetchKey} reversalCount={reversalCount} />
 
       <Button type="button" size="lg" onClick={onRecordPayment}>
         <Plus aria-hidden="true" />

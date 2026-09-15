@@ -73,8 +73,9 @@ export const copy = {
       // (opsional)", a form field's own placeholder-adjacent label).
       noteLabel: 'Catatan',
     },
-    // The Iuran tab's payment history, under the status matrix (#228,
-    // ADR-032). Its own search and paging, same shape as reimbursements
+    // The Iuran tab itself: the dues payment history (#228, ADR-032), with
+    // the status matrix on its own screen, opened by copy.dues.entryLink at
+    // the top of the tab. Its own search and paging, same shape as reimbursements
     // above - narrower than that one too, since this list searches member
     // name only. The reversal row's own label and the reversed badge stay
     // in copy.dues.history (reversalRow/reversedBadge), reused here rather
@@ -351,7 +352,9 @@ export const copy = {
       paid: 'Lunas',
       paid_in_advance: 'Lunas — sudah bayar di muka',
     },
-    back: 'Kembali ke beranda',
+    // The matrix is its own screen, opened from Riwayat's Iuran tab (#228),
+    // so back returns to that tab rather than home.
+    back: 'Kembali ke riwayat iuran',
     // Recording a dues payment (M6.13, PRD §7.3). Reached from the status
     // roster above, not from a second link on home - navigation as a whole
     // is settled once alpha.4's screens exist (#177).

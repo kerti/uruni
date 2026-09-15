@@ -19,6 +19,7 @@ import Reimbursements from '@/screens/History/Reimbursements'
 import Reconciliations from '@/screens/History/Reconciliations'
 import DuesStatus from '@/screens/Dues/Status'
 import RecordDuesPayment from '@/screens/Dues/RecordPayment'
+import PaymentHistory from '@/screens/Dues/PaymentHistory'
 import Home from '@/screens/Home'
 import Members from '@/screens/Members'
 import Settings from '@/screens/Settings'
@@ -232,9 +233,8 @@ function AuthedGate({ onLoggedOut }: { onLoggedOut: () => void }) {
         }
       />
       {/* Riwayat (M6.23, ADR-032): a tab strip over an Outlet, one Shell for
-          every tab. /dues kept its own route below, redirecting here rather
-          than vanishing - nothing that was reachable before this slice may
-          stop being reachable mid-milestone. */}
+          every tab. Iuran's tab is the payment history alone (#228); the
+          status matrix is its own screen at /dues, below. */}
       <Route
         path="/history"
         element={
@@ -245,24 +245,27 @@ function AuthedGate({ onLoggedOut }: { onLoggedOut: () => void }) {
       >
         <Route index element={<Navigate to="transactions" replace />} />
         <Route path="transactions" element={<Transactions refetchKey={location.key} />} />
-        <Route
-          path="dues"
-          element={
+        <Route path="dues" element={<PaymentHistory onOpenStatus={() => navigate('/dues')} refetchKey={location.key} />} />
+        <Route path="reimbursements" element={<Reimbursements refetchKey={location.key} />} />
+        <Route path="reconciliations" element={<Reconciliations refetchKey={location.key} />} />
+      </Route>
+      {/* The dues status roster, its own screen again (#228): one month's
+          reading does not share a page with an unbounded list, so it sits
+          one row away from Riwayat's Iuran tab rather than on top of it
+          (ADR-032). Back returns to that tab, not home. */}
+      <Route
+        path="/dues"
+        element={
+          <Shell title={title} onLoggedOut={onLoggedOut}>
             <DuesStatus
-              onBack={() => navigate('/')}
+              onBack={() => navigate('/history/dues')}
               onRecordPayment={() => navigate('/dues/payment')}
               refetchKey={location.key}
               notice={duesRecorded ? copy.dues.payment.success : null}
             />
-          }
-        />
-        <Route path="reimbursements" element={<Reimbursements refetchKey={location.key} />} />
-        <Route path="reconciliations" element={<Reconciliations refetchKey={location.key} />} />
-      </Route>
-      {/* The dues status roster's own former address (through M6.22) -
-          Iuran now lives at /history/dues (ADR-032), and this redirect is
-          what keeps a bookmark or an old link working. */}
-      <Route path="/dues" element={<Navigate to="/history/dues" replace />} />
+          </Shell>
+        }
+      />
       {/* The reimbursements screen's own former address (through M6.24) -
           Talangan now lives at /history/reimbursements (#226, ADR-032),
           same redirect precedent as /dues above. */}
@@ -272,8 +275,8 @@ function AuthedGate({ onLoggedOut }: { onLoggedOut: () => void }) {
         element={
           <Shell title={title} onLoggedOut={onLoggedOut}>
             <RecordDuesPayment
-              onRecorded={() => navigate('/history/dues', { state: { duesRecorded: true } satisfies DuesState })}
-              onCancel={() => navigate('/history/dues')}
+              onRecorded={() => navigate('/dues', { state: { duesRecorded: true } satisfies DuesState })}
+              onCancel={() => navigate('/dues')}
             />
           </Shell>
         }

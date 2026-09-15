@@ -29,24 +29,25 @@ const SEARCH_DEBOUNCE_MS = 300
 /**
  * The Iuran tab's payment history (#228, PRD section 7.3): every posted dues
  * payment and every reversal (ADR-029), newest-first, 25 a page, searchable
- * by member name - what actually happened, as opposed to the status matrix
- * above it, which only ever answers "who owes what for one period". A
- * reversal is never edited away: both halves of the pair stay listed, and a
- * reversal names the original payment's own date so the link reads even
- * when that payment has fallen off an earlier page.
+ * by member name - what actually happened, as opposed to the status matrix,
+ * which only ever answers "who owes what for one period". A reversal is
+ * never edited away: both halves of the pair stay listed, and a reversal
+ * names the original payment's own date so the link reads even when that
+ * payment has fallen off an earlier page.
  *
- * Deliberately its own fetch, independent of Status.tsx's period selector:
- * the period drives the matrix above, never this list (the issue's own
- * explicit rule) - so this component takes no period prop at all, only
+ * This is the whole Iuran tab. The status matrix is its own screen at /dues
+ * (Status.tsx), opened by the row at the top (onOpenStatus) and never
+ * stacked on this list (ADR-032: tabs hold lists). The period drives only
+ * that screen - this component takes no period prop at all, only
  * `refetchKey`, the same "a write happened elsewhere, reload" signal every
- * other tab already reads (Status.tsx's own doc comment).
+ * other tab already reads.
  *
  * Search is local state, not the URL: unlike History/Transactions.tsx and
  * History/Reimbursements.tsx, this section is not itself a routed tab (it
  * lives inside the Iuran tab, under the matrix), so there is no deep link
  * into a search here for the URL to carry.
  */
-export default function PaymentHistory({ refetchKey, reversalCount }: { refetchKey?: unknown; reversalCount?: number }) {
+export default function PaymentHistory({ onOpenStatus, refetchKey }: { onOpenStatus: () => void; refetchKey?: unknown }) {
   const [draft, setDraft] = useState('')
   const [q, setQ] = useState('')
 
@@ -67,7 +68,7 @@ export default function PaymentHistory({ refetchKey, reversalCount }: { refetchK
     setMoreError(null)
     void run(loadFirstPage)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [run, q, refetchKey, reversalCount])
+  }, [run, q, refetchKey])
 
   useEffect(() => {
     const next = draft.trim()
@@ -131,6 +132,12 @@ export default function PaymentHistory({ refetchKey, reversalCount }: { refetchK
 
   return (
     <div className="flex flex-col gap-4">
+      {/* The way into the status matrix, which is its own screen (#228):
+          one month's reading, one row away, never stacked on this list. */}
+      <Button type="button" variant="outline" size="lg" className="w-full" onClick={onOpenStatus}>
+        {copy.dues.entryLink}
+      </Button>
+
       <h2 className="text-lg font-semibold">{text.heading}</h2>
 
       <div className="relative">

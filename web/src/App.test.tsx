@@ -321,6 +321,7 @@ describe('App (Riwayat)', () => {
       { match: (m, u) => m === 'GET' && u.includes('/api/session'), handle: () => Promise.resolve(sessionResponse({ authenticated: true, has_account: true })) },
       { match: (m, u) => m === 'GET' && u.includes('/api/fund'), handle: () => Promise.resolve(fundFoundResponse()) },
       { match: (m, u) => m === 'GET' && u.includes('/api/dues-status'), handle: () => Promise.resolve(jsonResponse([])) },
+      { match: (m, u) => m === 'GET' && u.includes('/api/dues-payments'), handle: () => Promise.resolve(jsonResponse({ dues_payments: [], next_cursor: null })) },
       ...emptyHomeRoutes,
     ])
   }
@@ -349,19 +350,22 @@ describe('App (Riwayat)', () => {
     window.history.pushState({}, '', '/')
   })
 
-  it('redirects the old /dues address into /history/dues', async () => {
+  // #228: the status matrix is its own screen at /dues, outside Riwayat's
+  // tab strip - it never shares a page with the payment history.
+  it('renders the dues status matrix on its own screen at /dues', async () => {
     window.history.pushState({}, '', '/dues')
     vi.stubGlobal('fetch', authenticatedWithHistoryRoutes())
     render(<App />)
 
-    const tab = await screen.findByRole('link', { name: copy.history.tabs.dues })
-    await waitFor(() => expect(tab).toHaveAttribute('aria-current', 'page'))
     expect(await screen.findByLabelText(copy.dues.periodLabel)).toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: copy.history.tabs.dues })).not.toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: copy.history.dues.heading })).not.toBeInTheDocument()
     window.history.pushState({}, '', '/')
   })
 
   // Deep link and reload both land on the right tab (Riwayat repeats the
-  // same rule Shell's own footer already states).
+  // same rule Shell's own footer already states). The tab is the payment
+  // history alone, with the way into the matrix at its top (#228).
   it('deep-links straight to /history/dues with that tab current', async () => {
     window.history.pushState({}, '', '/history/dues')
     vi.stubGlobal('fetch', authenticatedWithHistoryRoutes())
@@ -369,6 +373,10 @@ describe('App (Riwayat)', () => {
 
     const tab = await screen.findByRole('link', { name: copy.history.tabs.dues })
     await waitFor(() => expect(tab).toHaveAttribute('aria-current', 'page'))
+    expect(await screen.findByRole('heading', { name: copy.history.dues.heading })).toBeInTheDocument()
+    expect(screen.queryByLabelText(copy.dues.periodLabel)).not.toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole('button', { name: copy.dues.entryLink }))
     expect(await screen.findByLabelText(copy.dues.periodLabel)).toBeInTheDocument()
     window.history.pushState({}, '', '/')
   })

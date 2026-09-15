@@ -64,7 +64,7 @@ function stubApi(pageFor: (url: URL) => Page) {
 describe('PaymentHistory', () => {
   it('renders a page of payments under its own heading', async () => {
     stubApi(() => ({ dues_payments: [payment(1, 'Warga Satu')], next_cursor: null }))
-    render(<PaymentHistory />)
+    render(<PaymentHistory onOpenStatus={vi.fn()} />)
 
     expect(await screen.findByRole('heading', { name: text.heading })).toBeInTheDocument()
     expect(screen.getByText('Warga Satu')).toBeInTheDocument()
@@ -73,7 +73,7 @@ describe('PaymentHistory', () => {
 
   it('says nothing recorded yet when the fund has no dues payments', async () => {
     stubApi(() => ({ dues_payments: [], next_cursor: null }))
-    render(<PaymentHistory />)
+    render(<PaymentHistory onOpenStatus={vi.fn()} />)
 
     expect(await screen.findByText(text.empty)).toBeInTheDocument()
   })
@@ -85,7 +85,7 @@ describe('PaymentHistory', () => {
         : { dues_payments: [payment(2, 'Warga Dua')], next_cursor: 'c1' },
     )
     const user = userEvent.setup()
-    render(<PaymentHistory />)
+    render(<PaymentHistory onOpenStatus={vi.fn()} />)
 
     expect(await screen.findByText('Warga Dua')).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: text.loadMore }))
@@ -103,7 +103,7 @@ describe('PaymentHistory', () => {
         : { dues_payments: [payment(2, 'Warga Dua')], next_cursor: null },
     )
     const user = userEvent.setup()
-    render(<PaymentHistory />)
+    render(<PaymentHistory onOpenStatus={vi.fn()} />)
 
     expect(await screen.findByText('Warga Dua')).toBeInTheDocument()
     await user.type(screen.getByLabelText(text.searchLabel), 'budi')
@@ -116,7 +116,7 @@ describe('PaymentHistory', () => {
   it('says nothing matched when a search comes back empty', async () => {
     stubApi(() => ({ dues_payments: [], next_cursor: null }))
     const user = userEvent.setup()
-    render(<PaymentHistory />)
+    render(<PaymentHistory onOpenStatus={vi.fn()} />)
 
     await waitFor(() => expect(screen.getByText(text.empty)).toBeInTheDocument())
     await user.type(screen.getByLabelText(text.searchLabel), 'xyz')
@@ -138,7 +138,7 @@ describe('PaymentHistory', () => {
       ],
       next_cursor: null,
     }))
-    render(<PaymentHistory />)
+    render(<PaymentHistory onOpenStatus={vi.fn()} />)
 
     await screen.findAllByText('Warga Satu')
     // The reversed payment carries the badge.
@@ -151,27 +151,25 @@ describe('PaymentHistory', () => {
 
   it('changing refetchKey reloads the list; nothing about the period drives it, because it takes no period prop', async () => {
     const requests = stubApi(() => ({ dues_payments: [payment(1, 'Warga Satu')], next_cursor: null }))
-    const { rerender } = render(<PaymentHistory refetchKey="a" />)
+    const { rerender } = render(<PaymentHistory onOpenStatus={vi.fn()} refetchKey="a" />)
 
     await screen.findByText('Warga Satu')
     const callsBefore = requests.length
 
-    rerender(<PaymentHistory refetchKey="b" />)
+    rerender(<PaymentHistory onOpenStatus={vi.fn()} refetchKey="b" />)
 
     await waitFor(() => expect(requests.length).toBeGreaterThan(callsBefore))
   })
 
-  // A reversal posted from the matrix's own panel stays on this screen, so
-  // refetchKey never changes - Status.tsx bumps reversalCount instead.
-  it('changing reversalCount reloads the list after a reversal posted on the matrix', async () => {
-    const requests = stubApi(() => ({ dues_payments: [payment(1, 'Warga Satu')], next_cursor: null }))
-    const { rerender } = render(<PaymentHistory refetchKey="a" reversalCount={0} />)
+  // #228: the status matrix is its own screen, reached from the top of this
+  // tab rather than stacked above the list.
+  it('opens the status matrix from the row at the top of the tab', async () => {
+    stubApi(() => ({ dues_payments: [], next_cursor: null }))
+    const onOpenStatus = vi.fn()
+    const user = userEvent.setup()
+    render(<PaymentHistory onOpenStatus={onOpenStatus} />)
 
-    await screen.findByText('Warga Satu')
-    const callsBefore = requests.length
-
-    rerender(<PaymentHistory refetchKey="a" reversalCount={1} />)
-
-    await waitFor(() => expect(requests.length).toBeGreaterThan(callsBefore))
+    await user.click(screen.getByRole('button', { name: copy.dues.entryLink }))
+    expect(onOpenStatus).toHaveBeenCalledTimes(1)
   })
 })
