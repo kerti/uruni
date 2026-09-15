@@ -32,10 +32,15 @@ const rows = [
   { member: member(4, 'Warga Empat'), owed_amount: 50_000, paid_amount: 100_000, status: 'paid_in_advance' },
 ]
 
+// The payment history section (#228) fetches GET /api/dues-payments on its
+// own, independently of the status matrix above it - every stub in this
+// file answers it with an empty page so that fetch never becomes the
+// "unstubbed fetch" rejection the matrix's own assertions are not about.
 function stubDuesStatus(body: unknown = rows) {
   return vi.fn((input: RequestInfo | URL) => {
     const url = typeof input === 'string' ? input : input.toString()
     if (url.includes('/api/dues-status')) return Promise.resolve(jsonResponse(body))
+    if (url.includes('/api/dues-payments')) return Promise.resolve(jsonResponse({ dues_payments: [], next_cursor: null }))
     return Promise.reject(new Error(`unstubbed fetch: ${url}`))
   })
 }
@@ -97,6 +102,7 @@ describe('DuesStatus', () => {
       const url = typeof input === 'string' ? input : input.toString()
       if (url.includes('/api/dues-status')) return Promise.resolve(jsonResponse(rows))
       if (url.includes('/api/transactions')) return Promise.resolve(jsonResponse([]))
+      if (url.includes('/api/dues-payments')) return Promise.resolve(jsonResponse({ dues_payments: [], next_cursor: null }))
       return Promise.reject(new Error(`unstubbed fetch: ${url}`))
     })
     vi.stubGlobal('fetch', fetchMock)
@@ -153,5 +159,23 @@ describe('DuesStatus', () => {
     expect(fetchMock.mock.calls.length).toBeGreaterThan(callsBefore)
     const lastUrl = fetchMock.mock.calls.at(-1)?.[0]?.toString() ?? ''
     expect(lastUrl).toContain('period=2026-01')
+  })
+
+  // #228's own explicit rule: the period selector drives only the matrix,
+  // never the payment history below it.
+  it('never refetches the payment history when the period selector changes', async () => {
+    const fetchMock = stubDuesStatus()
+    vi.stubGlobal('fetch', fetchMock)
+    render(<DuesStatus onBack={vi.fn()} onRecordPayment={vi.fn()} />)
+
+    await screen.findByText('Warga Satu')
+    const duesPaymentsCallsBefore = fetchMock.mock.calls.filter(([input]) => input.toString().includes('/api/dues-payments')).length
+
+    fireEvent.change(screen.getByLabelText(text.periodLabel), { target: { value: '2026-01' } })
+    // Give the matrix's own refetch (asserted above) a tick to land.
+    await screen.findByLabelText(text.periodLabel)
+
+    const duesPaymentsCallsAfter = fetchMock.mock.calls.filter(([input]) => input.toString().includes('/api/dues-payments')).length
+    expect(duesPaymentsCallsAfter).toBe(duesPaymentsCallsBefore)
   })
 })

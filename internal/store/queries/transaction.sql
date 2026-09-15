@@ -153,6 +153,58 @@ FROM "transaction"
 WHERE member_id = ? AND kind = 'dues'
 ORDER BY dues_period, id;
 
+-- GET /api/dues-payments's real listing (#228, ADR-032 "Lists: paging and
+-- search"): newest-first and keyset-paged on (occurred_on DESC, id DESC),
+-- the same shape ListTransactionsPage/ListReimbursementsPage already use
+-- (their own doc comments have the row-value-keyset reasoning, the
+-- CAST(sqlc.narg('cursor_id') AS INTEGER) fix, and why this query uses
+-- INSTR/LOWER rather than "COLLATE NOCASE LIKE ... ESCAPE" - sqlc 1.31.1's
+-- repeated-ESCAPE bug, documented in full on ListTransactionsPage above).
+--
+-- Both halves of a reversal share this one list (PRD section 7.3, ADR-029):
+-- every kind='dues' payment, and every kind='adjustment' row that reverses
+-- one - never a bare "every transaction", since an ordinary correction with
+-- no reverses_transaction_id has nothing to do with dues.
+--
+-- rv is the reversal that undoes THIS row, when this row is itself a
+-- payment - reversed_by_transaction_id, null on every row that is not a
+-- reversed payment (a reversal is never itself reversed, so it is always
+-- null on a reversal row too).
+--
+-- orig is the payment THIS row reverses, when this row is itself a
+-- reversal - carried forward as reverses_occurred_on so a reversal states
+-- the original's date even when that original payment sits on a later
+-- page than the reversal itself.
+--
+-- ?q= searches member name only (the response's own decided shape has no
+-- purpose or note column worth searching for this list).
+--
+-- page_limit is page size + 1, the same peek-one-extra-row trick every
+-- other paged list in this package uses.
+-- name: ListDuesPaymentsPage :many
+SELECT
+  t.id, t.kind, t.member_id, m.name AS member_name, t.dues_period, t.amount,
+  t.occurred_on, a.name AS account_name, t.note, t.reverses_transaction_id,
+  rv.id AS reversed_by_transaction_id,
+  orig.occurred_on AS reverses_occurred_on
+FROM "transaction" t
+JOIN member m ON m.id = t.member_id
+JOIN account a ON a.id = t.account_id
+LEFT JOIN "transaction" rv ON rv.reverses_transaction_id = t.id
+LEFT JOIN "transaction" orig ON orig.id = t.reverses_transaction_id
+WHERE t.fund_id = sqlc.arg('fund_id')
+  AND (t.kind = 'dues' OR (t.kind = 'adjustment' AND t.reverses_transaction_id IS NOT NULL))
+  AND (
+    sqlc.narg('cursor_occurred_on') IS NULL
+    OR (t.occurred_on, t.id) < (sqlc.narg('cursor_occurred_on'), CAST(sqlc.narg('cursor_id') AS INTEGER))
+  )
+  AND (
+    sqlc.narg('q') IS NULL
+    OR INSTR(LOWER(m.name), LOWER(sqlc.narg('q'))) > 0
+  )
+ORDER BY t.occurred_on DESC, t.id DESC
+LIMIT sqlc.arg('page_limit');
+
 -- The envelope's net, everything it has ever posted against its own
 -- purpose_id, rolls included. This is what CloseIncidentalAndRoll leans on
 -- (ADR-031): collected minus disbursed here is exactly PurposeBalance for

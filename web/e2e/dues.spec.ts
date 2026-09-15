@@ -43,9 +43,14 @@ test.describe('dues status', () => {
     await expect(page.getByLabel(copy.dues.periodLabel)).toBeVisible()
 
     // Both seeded members owe this period's rate and neither has ever paid.
-    await expect(page.getByText('Warga Satu')).toBeVisible()
-    await expect(page.getByText('Warga Dua')).toBeVisible()
-    await expect(page.getByText(copy.dues.statuses.unpaid).first()).toBeVisible()
+    // Scoped to the status matrix (data-testid, #228): the payment history
+    // below it (PaymentHistory.tsx) can name the same two members once a
+    // re-run's earlier payments are still in the database, which would
+    // otherwise make a bare page-wide text lookup ambiguous.
+    const matrix = page.getByTestId('dues-status-list')
+    await expect(matrix.getByText('Warga Satu')).toBeVisible()
+    await expect(matrix.getByText('Warga Dua')).toBeVisible()
+    await expect(matrix.getByText(copy.dues.statuses.unpaid).first()).toBeVisible()
 
     await page.getByRole('button', { name: copy.dues.back }).click()
     await expect(page.getByText(copy.home.balanceHeading)).toBeVisible()
@@ -140,7 +145,12 @@ test.describe('dues status', () => {
 
     // Warga Satu paid part of this month, so the roster shows the partial
     // status and the history behind it holds the payment to reverse.
-    const card = page.locator('li').filter({ hasText: 'Warga Satu' })
+    // Scoped to the status matrix (data-testid, #228): the payment history
+    // below it (PaymentHistory.tsx) lists this same payment - and, once
+    // reversed, the same "Sudah dibatalkan" wording - so an unscoped `li`
+    // lookup for "Warga Satu" is no longer guaranteed to mean the matrix
+    // row alone.
+    const card = page.getByTestId('dues-status-list').locator('li').filter({ hasText: 'Warga Satu' })
     await expect(card.getByText(copy.dues.statuses.partial)).toBeVisible()
     await card.getByRole('button', { name: copy.dues.history.title }).click()
 

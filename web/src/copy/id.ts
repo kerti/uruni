@@ -73,6 +73,23 @@ export const copy = {
       // (opsional)", a form field's own placeholder-adjacent label).
       noteLabel: 'Catatan',
     },
+    // The Iuran tab's payment history, under the status matrix (#228,
+    // ADR-032). Its own search and paging, same shape as reimbursements
+    // above - narrower than that one too, since this list searches member
+    // name only. The reversal row's own label and the reversed badge stay
+    // in copy.dues.history (reversalRow/reversedBadge), reused here rather
+    // than restated: the same two words mean the same thing whether they
+    // sit in the period-scoped panel or in this fund-wide list.
+    dues: {
+      heading: 'Riwayat pembayaran',
+      searchLabel: 'Cari pembayaran',
+      searchPlaceholder: 'Nama anggota',
+      loadMore: 'Muat lebih banyak',
+      noResults: (q: string) => `Tidak ada pembayaran yang cocok dengan “${q}”.`,
+      empty: 'Belum ada pembayaran iuran.',
+      // date is already formatted (formatIsoDate) by the caller.
+      reversesLabel: (date: string) => `Membatalkan pembayaran ${date}`,
+    },
   },
   common: {
     loading: 'Memuat…',

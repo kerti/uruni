@@ -586,6 +586,124 @@ func (q *Queries) ListDuesPaymentsByMember(ctx context.Context, memberID *int64)
 	return items, nil
 }
 
+const listDuesPaymentsPage = `-- name: ListDuesPaymentsPage :many
+SELECT
+  t.id, t.kind, t.member_id, m.name AS member_name, t.dues_period, t.amount,
+  t.occurred_on, a.name AS account_name, t.note, t.reverses_transaction_id,
+  rv.id AS reversed_by_transaction_id,
+  orig.occurred_on AS reverses_occurred_on
+FROM "transaction" t
+JOIN member m ON m.id = t.member_id
+JOIN account a ON a.id = t.account_id
+LEFT JOIN "transaction" rv ON rv.reverses_transaction_id = t.id
+LEFT JOIN "transaction" orig ON orig.id = t.reverses_transaction_id
+WHERE t.fund_id = ?1
+  AND (t.kind = 'dues' OR (t.kind = 'adjustment' AND t.reverses_transaction_id IS NOT NULL))
+  AND (
+    ?2 IS NULL
+    OR (t.occurred_on, t.id) < (?2, CAST(?3 AS INTEGER))
+  )
+  AND (
+    ?4 IS NULL
+    OR INSTR(LOWER(m.name), LOWER(?4)) > 0
+  )
+ORDER BY t.occurred_on DESC, t.id DESC
+LIMIT ?5
+`
+
+type ListDuesPaymentsPageParams struct {
+	FundID           int64
+	CursorOccurredOn interface{}
+	CursorID         *int64
+	Q                interface{}
+	PageLimit        int64
+}
+
+type ListDuesPaymentsPageRow struct {
+	ID                      int64
+	Kind                    string
+	MemberID                *int64
+	MemberName              string
+	DuesPeriod              *string
+	Amount                  int64
+	OccurredOn              string
+	AccountName             string
+	Note                    *string
+	ReversesTransactionID   *int64
+	ReversedByTransactionID *int64
+	ReversesOccurredOn      *string
+}
+
+// GET /api/dues-payments's real listing (#228, ADR-032 "Lists: paging and
+// search"): newest-first and keyset-paged on (occurred_on DESC, id DESC),
+// the same shape ListTransactionsPage/ListReimbursementsPage already use
+// (their own doc comments have the row-value-keyset reasoning, the
+// CAST(sqlc.narg('cursor_id') AS INTEGER) fix, and why this query uses
+// INSTR/LOWER rather than "COLLATE NOCASE LIKE ... ESCAPE" - sqlc 1.31.1's
+// repeated-ESCAPE bug, documented in full on ListTransactionsPage above).
+//
+// Both halves of a reversal share this one list (PRD section 7.3, ADR-029):
+// every kind='dues' payment, and every kind='adjustment' row that reverses
+// one - never a bare "every transaction", since an ordinary correction with
+// no reverses_transaction_id has nothing to do with dues.
+//
+// rv is the reversal that undoes THIS row, when this row is itself a
+// payment - reversed_by_transaction_id, null on every row that is not a
+// reversed payment (a reversal is never itself reversed, so it is always
+// null on a reversal row too).
+//
+// orig is the payment THIS row reverses, when this row is itself a
+// reversal - carried forward as reverses_occurred_on so a reversal states
+// the original's date even when that original payment sits on a later
+// page than the reversal itself.
+//
+// ?q= searches member name only (the response's own decided shape has no
+// purpose or note column worth searching for this list).
+//
+// page_limit is page size + 1, the same peek-one-extra-row trick every
+// other paged list in this package uses.
+func (q *Queries) ListDuesPaymentsPage(ctx context.Context, arg ListDuesPaymentsPageParams) ([]ListDuesPaymentsPageRow, error) {
+	rows, err := q.db.QueryContext(ctx, listDuesPaymentsPage,
+		arg.FundID,
+		arg.CursorOccurredOn,
+		arg.CursorID,
+		arg.Q,
+		arg.PageLimit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListDuesPaymentsPageRow{}
+	for rows.Next() {
+		var i ListDuesPaymentsPageRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Kind,
+			&i.MemberID,
+			&i.MemberName,
+			&i.DuesPeriod,
+			&i.Amount,
+			&i.OccurredOn,
+			&i.AccountName,
+			&i.Note,
+			&i.ReversesTransactionID,
+			&i.ReversedByTransactionID,
+			&i.ReversesOccurredOn,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listTransactionsByFund = `-- name: ListTransactionsByFund :many
 SELECT id, fund_id, account_id, purpose_id, direction, amount, occurred_on, kind,
        member_id, dues_period, reimbursement_id, transfer_id, reverses_transaction_id,

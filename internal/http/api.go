@@ -178,6 +178,11 @@ func (a *api) routes(r chi.Router) {
 
 		r.Post("/dues-payments", a.createDuesPayment)
 		r.Post("/dues-payments/{id}/reversal", a.reverseDuesPayment)
+		// Dues payment history (#228, PRD section 7.3): every posted
+		// payment and reversal, newest-first, searchable by member name -
+		// GET /dues-status only ever answers one period at a time, and
+		// never lists what was actually posted.
+		r.Get("/dues-payments", a.listDuesPayments)
 		r.Get("/dues-status", a.getDuesStatus)
 		// Which periods one member still owes (#186), split out of #146 so
 		// the record-a-dues-payment screen has a server-side answer instead
