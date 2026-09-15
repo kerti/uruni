@@ -118,8 +118,10 @@ test.describe('golden path', () => {
 
     // Per-location balances - the fixture's own two accounts
     // (cmd/uruni/seed_e2e.go), whatever their current balance reads as.
-    await expect(page.getByText('Tunai')).toBeVisible()
-    await expect(page.getByText('Bank Uji Coba')).toBeVisible()
+    // exact: recent activity can name the same locations inside a row label
+    // ("Saldo awal \u00b7 Tunai", #257), so a substring lookup is ambiguous.
+    await expect(page.getByText('Tunai', { exact: true })).toBeVisible()
+    await expect(page.getByText('Bank Uji Coba', { exact: true })).toBeVisible()
 
     // The fixture never takes a reconciliation, so open-lines is always
     // empty (only POST /api/reconciliations can ever open a line) and latest

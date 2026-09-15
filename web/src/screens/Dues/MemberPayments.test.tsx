@@ -79,7 +79,7 @@ function amountMatcher(amount: number) {
 }
 
 function renderPayments(onReversed = vi.fn()) {
-  render(<MemberPayments memberId={1} memberName="Warga Satu" period="2026-01" onReversed={onReversed} />)
+  render(<MemberPayments memberId={1} period="2026-01" onReversed={onReversed} />)
   return onReversed
 }
 
@@ -94,7 +94,7 @@ describe('MemberPayments', () => {
     expect(screen.getAllByText(amountMatcher(50_000))).toHaveLength(1)
   })
 
-  it('reverses a payment with a date and a derived note, then tells the roster', async () => {
+  it('reverses a payment with a date, sending null when she leaves the reason blank', async () => {
     const fetchMock = stubTransactions()
     vi.stubGlobal('fetch', fetchMock)
     const onReversed = renderPayments()
@@ -108,9 +108,10 @@ describe('MemberPayments', () => {
     const body = JSON.parse(String((post?.[1] as RequestInit).body))
     // ADR-029: only a date and a note ever cross the wire.
     expect(Object.keys(body).sort()).toEqual(['note', 'occurred_on'])
-    // Never empty - the treasurer left the reason blank, so the row still
-    // says what it is.
-    expect(body.note).toBe(text.note('Warga Satu'))
+    // #257: nothing generated is ever stored - a blank reason sends null,
+    // never a derived default. The row explains itself through
+    // TransactionList's own display label instead.
+    expect(body.note).toBeNull()
   })
 
   it('sends the treasurer\'s own reason when she gives one', async () => {

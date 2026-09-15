@@ -169,7 +169,7 @@ func postOpeningBalanceRow(ctx context.Context, q store.Querier, fundID, account
 		Amount:     ob.Amount.Int64(),
 		OccurredOn: ob.OccurredOn,
 		Kind:       "opening",
-		Note:       ob.Note,
+		Note:       normalizeNote(ob.Note),
 		CreatedAt:  now,
 	})
 }

@@ -74,8 +74,10 @@ interface FormData {
  *
  * Purpose is not a field here: dues land on the fund's own `kind: "main"`
  * purpose, the same silent default RecordTransaction.tsx starts from, and
- * PRD section 7.3's form is member / amount / location / date. Note is not a field
- * either - the row already says who paid and for which month.
+ * PRD section 7.3's form is member / amount / location / date. Note is not a
+ * field either - the row already says who paid and for which month, through
+ * TransactionList's own display label (#257) rather than anything typed
+ * here or generated onto the wire.
  *
  * Router-agnostic, same contract as every other screen App.tsx mounts:
  * onRecorded and onCancel are the caller's navigation, not links this
@@ -171,20 +173,16 @@ export default function RecordDuesPayment({
     event.preventDefault()
     if (!canSubmit || memberId === null || accountId === null || mainPurpose === null) return
 
-    const member = loadState.data?.members.find((m) => m.id === memberId)
-
     void submitRun(async () => {
       const result = await createDuesPayment({
         memberId,
         accountId,
         purposeId: mainPurpose.id,
         occurredOn,
-        // Every posted row says what it is and whose it is - a dues payment
-        // that reaches recent activity or the report with an empty note
-        // reads as a bare amount. Derived, never typed: PRD section 7.3's form is
-        // member / amount / location / date, and the member is already
-        // chosen above.
-        note: text.note(member?.name ?? ''),
+        // No note is typed on this form (PRD section 7.3) - the row explains
+        // itself through TransactionList's own display label (#257), never
+        // through stored text.
+        note: null,
         // In the order the server offered them - oldest first - so a
         // multi-period payment reads the way it was collected.
         periods: periods

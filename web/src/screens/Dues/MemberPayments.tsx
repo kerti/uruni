@@ -45,16 +45,17 @@ function todayISODate(): string {
  *
  * Nothing here decides what a reversal contains: the request carries only a
  * date and a note, and the ledger copies account, purpose, amount, member
- * and period from the row being reversed.
+ * and period from the row being reversed. A blank reason sends null, never
+ * a generated default (#257) - the row explains itself through
+ * TransactionList's own display label instead, so there is no longer a
+ * memberName prop here to build one from.
  */
 export default function MemberPayments({
   memberId,
-  memberName,
   period,
   onReversed,
 }: {
   memberId: number
-  memberName: string
   period: string
   onReversed: () => void
 }) {
@@ -99,7 +100,10 @@ export default function MemberPayments({
   function submitReversal(transactionId: number) {
     void submitRun(async () => {
       const trimmed = note.trim()
-      const result = await reverseDuesPayment(transactionId, occurredOn, trimmed === '' ? text.note(memberName) : trimmed)
+      // A blank reason sends null, never a generated default (#257): the
+      // reversal explains itself through TransactionList's own display
+      // label ("Pembatalan - {period} - {anggota}") instead.
+      const result = await reverseDuesPayment(transactionId, occurredOn, trimmed === '' ? null : trimmed)
       setReversingId(null)
       // Refetch this list *and* tell the roster above to refetch its own:
       // the member reads as unpaid for the period again, and neither

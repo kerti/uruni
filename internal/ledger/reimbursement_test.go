@@ -72,12 +72,11 @@ func TestSettleReimbursementPostsOneOutRowOfClaimAmount(t *testing.T) {
 	}
 }
 
-// A settlement row without a description is a bare amount in recent activity
-// and the report, so the payout carries one composed from the claim itself:
-// who was reimbursed ("Talangan - {member}") plus the claim's own note
-// when the member wrote one - the same derived-note shape as a dues
-// payment's "Iuran - {member}".
-func TestSettleReimbursementNoteNamesMemberAndClaimNote(t *testing.T) {
+// The settlement row itself stores no note, with or without a claim note
+// behind it (#257: nothing generated is ever stored in transaction.note - a
+// settlement explains itself through a display label built from the claim
+// it settles, at read time, never through stored text).
+func TestSettleReimbursementStoresNoNote(t *testing.T) {
 	l := newTestLedger(t)
 	f := newFixture(t, l)
 	ctx := context.Background()
@@ -111,13 +110,13 @@ func TestSettleReimbursementNoteNamesMemberAndClaimNote(t *testing.T) {
 	}
 
 	postedWithNote := settle(t, withNote.ID, "2026-08-12")
-	if want := "Talangan - Jane - Beli galon"; postedWithNote.Note == nil || *postedWithNote.Note != want {
-		t.Errorf("settlement note = %v, want %q - the member and the claim's own description", postedWithNote.Note, want)
+	if postedWithNote.Note != nil {
+		t.Errorf("settlement note = %v, want nil even though the claim itself carries one", *postedWithNote.Note)
 	}
 
 	postedBare := settle(t, bare.ID, "2026-08-13")
-	if want := "Talangan - Jane"; postedBare.Note == nil || *postedBare.Note != want {
-		t.Errorf("settlement note without a claim note = %v, want %q", postedBare.Note, want)
+	if postedBare.Note != nil {
+		t.Errorf("settlement note = %v, want nil", *postedBare.Note)
 	}
 }
 

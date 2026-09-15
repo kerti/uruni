@@ -1,6 +1,5 @@
 import { useState } from 'react'
 
-import { copy } from '@/copy/id'
 import { todayISODate } from '@/lib/dates'
 import { useApi } from '@/lib/useApi'
 import { parseRupiah } from '@/lib/money'
@@ -66,7 +65,11 @@ export default function Setup({ onDone }: { onDone: () => void }) {
         const amount = parseRupiah(row.openingBalance)
         const input: SetupAccountInput = { kind: row.kind, name }
         if (amount > 0) {
-          input.opening_balance = { amount, occurred_on: occurredOn, note: copy.setup.balances.note(name) }
+          // No note is typed here (the wizard has no field for one) - the
+          // row explains itself through TransactionList's own display
+          // label ("Saldo awal - {lokasi}", #257), never through stored
+          // text.
+          input.opening_balance = { amount, occurred_on: occurredOn }
         }
         return input
       })

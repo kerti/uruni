@@ -83,3 +83,17 @@ export function listTransactions(input: ListTransactionsInput = {}): Promise<Tra
     (page) => ({ transactions: page.transactions, nextCursor: page.next_cursor }),
   )
 }
+
+/**
+ * The text a row's note line shows, for TransactionList.tsx (#257). A
+ * settlement's (kind='reimbursement') own Note is always nil server-side -
+ * nothing generated is ever stored - so its "note" is the settled claim's
+ * own note instead; every other row shows what she actually typed on the
+ * row itself.
+ */
+export function noteForDisplay(transaction: Transaction): string | null {
+  if (transaction.kind === 'reimbursement') {
+    return transaction.claim_note ?? null
+  }
+  return transaction.note
+}

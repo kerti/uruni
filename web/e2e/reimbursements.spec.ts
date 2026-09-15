@@ -16,6 +16,13 @@ test.describe('reimbursements', () => {
   const seedEmail = 'bendahara@e2e.uruni.test'
   const seedPassword = 'e2e-fixture-password'
 
+  // Set by the first test below and read by the second (serial mode, same
+  // shared database): the label a settlement now carries (#257) is just
+  // the claim's own member name, so the settle spec needs to know which
+  // member the claim spec actually picked - "the first option" is not a
+  // fixed name.
+  let firstMemberName = ''
+
   test('record a claim and verify it appears in the outstanding list', async ({ page }) => {
     await page.goto('/')
     await page.getByLabel(copy.auth.login.emailLabel).fill(seedEmail)
@@ -35,7 +42,9 @@ test.describe('reimbursements', () => {
 
     // Pick the first member and fill amount
     await page.getByRole('combobox', { name: copy.reimbursements.record.memberLabel }).click()
-    await page.getByRole('option').first().click()
+    const firstOption = page.getByRole('option').first()
+    firstMemberName = (await firstOption.textContent())?.trim() ?? ''
+    await firstOption.click()
     await page.getByLabel(copy.reimbursements.record.amountLabel).fill('10000')
 
     // Submit
@@ -76,10 +85,12 @@ test.describe('reimbursements', () => {
     // The settled claim is no longer owed, so it leaves the outstanding list
     await expect(page.getByText('Rp 10.000')).not.toBeVisible()
 
-    // The payout row carries a composed description (member + the claim's own
-    // note), so recent activity reads the repayment instead of a bare amount.
+    // The payout row carries a label built from the claim it settled (#257:
+    // a display label, never stored text) - the member's own name, with the
+    // HandHelping icon making it read as a Talangan repayment rather than a
+    // bare amount.
     await page.getByRole('link', { name: copy.shell.nav.home }).click()
-    await expect(page.getByText(/Talangan - /)).toBeVisible()
+    await expect(page.getByText(copy.rowLabels.settlement.text(firstMemberName)).first()).toBeVisible()
   })
 
   test('waive a fresh claim, then un-waive it from the all tab', async ({ page }) => {

@@ -217,7 +217,6 @@ export default function DuesStatus({
                     >
                       <MemberPayments
                         memberId={row.member.id}
-                        memberName={row.member.name}
                         period={period}
                         onReversed={() => void run(() => getDuesStatus(period))}
                       />

@@ -882,3 +882,474 @@ func TestGetTransactionsNeverReturnsAnotherFundsRow(t *testing.T) {
 		}
 	}
 }
+
+// findTransactionRow locates one row of a decoded transactions page by id,
+// failing the test if it is not there - every test below asserts on the
+// specific row a system path just posted, not "some row in the page".
+func findTransactionRow(t *testing.T, page transactionsPageResponse, id int64) transactionResponse {
+	t.Helper()
+	for _, row := range page.Transactions {
+		if row.ID == id {
+			return row
+		}
+	}
+	t.Fatalf("no row with id %d among %+v", id, page.Transactions)
+	return transactionResponse{}
+}
+
+// #257: a dues payment's row carries the member it was paid for and its own
+// account's name, so TransactionList.tsx can build "{period} - {member}"
+// without a second request.
+func TestGetTransactionsDuesPaymentCarriesMemberAndAccountName(t *testing.T) {
+	r := testRouter(t)
+	setup := setUpFund(t, r)
+	memberID := memberFor(t, r, "Budi")
+
+	payRec := postDuesPayment(t, r, duesPaymentRequest{
+		AccountID: setup.CashAccountID(t), PurposeID: setup.MainPurposeID, MemberID: memberID,
+		OccurredOn: "2026-08-12", Periods: []duesPaymentPeriod{{DuesPeriod: "2026-08", Amount: 25_000}},
+	})
+	if payRec.Code != http.StatusCreated {
+		t.Fatalf("POST /api/dues-payments = %d, want %d (body: %s)", payRec.Code, http.StatusCreated, payRec.Body.String())
+	}
+	var posted []transactionResponse
+	if err := json.NewDecoder(payRec.Body).Decode(&posted); err != nil {
+		t.Fatalf("decoding dues payment response: %v", err)
+	}
+
+	page := decodeTransactionsPage(t, getTransactions(t, r))
+	row := findTransactionRow(t, page, posted[0].ID)
+
+	if row.MemberName == nil || *row.MemberName != "Budi" {
+		t.Errorf("member_name = %v, want %q", row.MemberName, "Budi")
+	}
+	if row.AccountName != "Tunai" {
+		t.Errorf("account_name = %q, want %q", row.AccountName, "Tunai")
+	}
+	if row.IsReconciliationFix {
+		t.Error("is_reconciliation_fix = true for a dues payment, want false")
+	}
+}
+
+// A dues reversal (kind='adjustment', reverses_transaction_id set) carries
+// the same member name as the payment it reverses - the label's "Pembatalan
+// - {period} - {member}" needs it on the reversal row itself, not only on
+// the original payment.
+func TestGetTransactionsDuesReversalCarriesMemberName(t *testing.T) {
+	r := testRouter(t)
+	setup := setUpFund(t, r)
+	memberID := memberFor(t, r, "Warga Satu")
+
+	payRec := postDuesPayment(t, r, duesPaymentRequest{
+		AccountID: setup.CashAccountID(t), PurposeID: setup.MainPurposeID, MemberID: memberID,
+		OccurredOn: "2026-08-12", Periods: []duesPaymentPeriod{{DuesPeriod: "2026-08", Amount: 25_000}},
+	})
+	var posted []transactionResponse
+	if err := json.NewDecoder(payRec.Body).Decode(&posted); err != nil {
+		t.Fatalf("decoding dues payment response: %v", err)
+	}
+
+	revRec := postDuesPaymentReversal(t, r, posted[0].ID, reverseDuesPaymentRequest{OccurredOn: "2026-08-13"})
+	if revRec.Code != http.StatusCreated {
+		t.Fatalf("POST reversal = %d, want %d (body: %s)", revRec.Code, http.StatusCreated, revRec.Body.String())
+	}
+	var reversal transactionResponse
+	if err := json.NewDecoder(revRec.Body).Decode(&reversal); err != nil {
+		t.Fatalf("decoding reversal response: %v", err)
+	}
+
+	page := decodeTransactionsPage(t, getTransactions(t, r))
+	row := findTransactionRow(t, page, reversal.ID)
+
+	if row.Kind != "adjustment" || row.ReversesTransactionID == nil || *row.ReversesTransactionID != posted[0].ID {
+		t.Fatalf("reversal row = %+v, want kind=adjustment reversing %d", row, posted[0].ID)
+	}
+	if row.MemberName == nil || *row.MemberName != "Warga Satu" {
+		t.Errorf("member_name = %v, want %q", row.MemberName, "Warga Satu")
+	}
+	if row.IsReconciliationFix {
+		t.Error("is_reconciliation_fix = true for a dues reversal, want false")
+	}
+}
+
+// The opening balance row carries its own account's name - the "Saldo awal
+// - {lokasi}" label's only fact besides its kind.
+func TestGetTransactionsOpeningBalanceCarriesAccountName(t *testing.T) {
+	r := testRouter(t)
+	rec := postSetupWithAccounts(t, r, "Test Fund", []setupAccountRequest{
+		{Kind: "cash", Name: "Tunai", OpeningBalance: &openingBalanceRequest{Amount: 100_000, OccurredOn: "2026-08-01"}},
+	})
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("POST /api/setup = %d, want %d (body: %s)", rec.Code, http.StatusCreated, rec.Body.String())
+	}
+
+	page := decodeTransactionsPage(t, getTransactions(t, r))
+	if len(page.Transactions) != 1 {
+		t.Fatalf("transactions = %d, want exactly 1 (the opening row)", len(page.Transactions))
+	}
+	row := page.Transactions[0]
+	if row.Kind != "opening" {
+		t.Fatalf("kind = %q, want %q", row.Kind, "opening")
+	}
+	if row.AccountName != "Tunai" {
+		t.Errorf("account_name = %q, want %q", row.AccountName, "Tunai")
+	}
+}
+
+// A settlement row (kind='reimbursement') carries the claim's own member and
+// note - its own Note stays nil (#257: nothing generated is ever stored) -
+// so the Talangan label can show "{member}" with the claim's note on the
+// note line.
+func TestGetTransactionsSettlementCarriesClaimMemberAndNote(t *testing.T) {
+	r := testRouter(t)
+	setup := setUpFund(t, r)
+	memberID := memberFor(t, r, "Jane")
+
+	claimNote := "Beli galon"
+	claimRec := postReimbursement(t, r, reimbursementRequest{
+		MemberID: memberID, PurposeID: setup.MainPurposeID,
+		Amount: 50_000, IncurredOn: "2026-08-01", Note: &claimNote,
+	})
+	if claimRec.Code != http.StatusCreated {
+		t.Fatalf("POST /api/reimbursements = %d, want %d (body: %s)", claimRec.Code, http.StatusCreated, claimRec.Body.String())
+	}
+	var claim reimbursementResponse
+	if err := json.NewDecoder(claimRec.Body).Decode(&claim); err != nil {
+		t.Fatalf("decoding reimbursement response: %v", err)
+	}
+
+	settleRec := postSettlement(t, r, claim.ID, settleReimbursementRequest{
+		AccountID: setup.CashAccountID(t), OccurredOn: "2026-08-12",
+	})
+	if settleRec.Code != http.StatusCreated {
+		t.Fatalf("POST settle = %d, want %d (body: %s)", settleRec.Code, http.StatusCreated, settleRec.Body.String())
+	}
+	var posted transactionResponse
+	if err := json.NewDecoder(settleRec.Body).Decode(&posted); err != nil {
+		t.Fatalf("decoding settlement response: %v", err)
+	}
+
+	page := decodeTransactionsPage(t, getTransactions(t, r))
+	row := findTransactionRow(t, page, posted.ID)
+
+	if row.Note != nil {
+		t.Errorf("settlement Note = %q, want nil - nothing generated is ever stored", *row.Note)
+	}
+	if row.MemberName == nil || *row.MemberName != "Jane" {
+		t.Errorf("member_name = %v, want the claim's member %q", row.MemberName, "Jane")
+	}
+	if row.ClaimNote == nil || *row.ClaimNote != claimNote {
+		t.Errorf("claim_note = %v, want the claim's own note %q", row.ClaimNote, claimNote)
+	}
+}
+
+// A location transfer's two legs carry the SAME from/to account names, in
+// the transfer's own out->in order - never the leg's own direction flipping
+// which name is "from" (ListTransactionsPage's own comment has the
+// reasoning).
+func TestGetTransactionsLocationTransferBothLegsNameTheSameFromTo(t *testing.T) {
+	r := testRouter(t)
+	setup := setUpFund(t, r)
+
+	if rec := postTransaction(t, r, transactionRequest{
+		AccountID: setup.CashAccountID(t), PurposeID: setup.MainPurposeID,
+		Direction: "in", Amount: 500_000, OccurredOn: "2026-08-10",
+	}); rec.Code != http.StatusCreated {
+		t.Fatalf("seed deposit = %d, want %d (body: %s)", rec.Code, http.StatusCreated, rec.Body.String())
+	}
+
+	rec := postTransfer(t, r, transferRequest{
+		PurposeID: setup.MainPurposeID, FromAccountID: setup.CashAccountID(t), ToAccountID: setup.BankAccountID(t),
+		Amount: 300_000, OccurredOn: "2026-08-12",
+	})
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("POST /api/transfers = %d, want %d (body: %s)", rec.Code, http.StatusCreated, rec.Body.String())
+	}
+	var transfer transferResponse
+	if err := json.NewDecoder(rec.Body).Decode(&transfer); err != nil {
+		t.Fatalf("decoding transfer response: %v", err)
+	}
+
+	page := decodeTransactionsPage(t, getTransactions(t, r))
+	var legs []transactionResponse
+	for _, row := range page.Transactions {
+		if row.TransferID != nil && *row.TransferID == transfer.ID {
+			legs = append(legs, row)
+		}
+	}
+	if len(legs) != 2 {
+		t.Fatalf("legs = %d, want 2", len(legs))
+	}
+	for _, leg := range legs {
+		if leg.TransferKind == nil || *leg.TransferKind != "between_accounts" {
+			t.Errorf("leg %s transfer_kind = %v, want %q", leg.Direction, leg.TransferKind, "between_accounts")
+		}
+		if leg.TransferFromName == nil || *leg.TransferFromName != "Tunai" {
+			t.Errorf("leg %s transfer_from_name = %v, want %q", leg.Direction, leg.TransferFromName, "Tunai")
+		}
+		if leg.TransferToName == nil || *leg.TransferToName != "Bank" {
+			t.Errorf("leg %s transfer_to_name = %v, want %q", leg.Direction, leg.TransferToName, "Bank")
+		}
+	}
+}
+
+// An incidental roll's leftover leg (reclass_purpose, envelope -> Kas
+// Utama) carries the two PURPOSE names, not account names - "{amplop} ->
+// Kas Utama" needs the envelope's own occasion and the fund's main purpose
+// name, on both legs identically.
+func TestGetTransactionsIncidentalRollLeftoverCarriesEnvelopeToMainPurposeNames(t *testing.T) {
+	r := testRouter(t)
+	setup := setUpFund(t, r)
+	envelope := openIncidentalFor(t, r, "Jane's wedding", "2026-08-01")
+
+	if rec := postTransaction(t, r, transactionRequest{
+		AccountID: setup.CashAccountID(t), PurposeID: envelope.PurposeID,
+		Direction: "in", Amount: 100_000, OccurredOn: "2026-08-02",
+	}); rec.Code != http.StatusCreated {
+		t.Fatalf("contribution = %d, want %d (body: %s)", rec.Code, http.StatusCreated, rec.Body.String())
+	}
+
+	closeRec := postCloseIncidental(t, r, envelope.PurposeID, closeIncidentalRequest{
+		AccountID: setup.CashAccountID(t), ClosedOn: "2026-08-20",
+	})
+	if closeRec.Code != http.StatusOK {
+		t.Fatalf("close = %d, want %d (body: %s)", closeRec.Code, http.StatusOK, closeRec.Body.String())
+	}
+
+	page := decodeTransactionsPage(t, getTransactions(t, r))
+	found := 0
+	for _, row := range page.Transactions {
+		if row.Kind != "transfer" {
+			continue
+		}
+		found++
+		if row.TransferKind == nil || *row.TransferKind != "reclass_purpose" {
+			t.Errorf("transfer_kind = %v, want %q", row.TransferKind, "reclass_purpose")
+		}
+		if row.TransferFromName == nil || *row.TransferFromName != "Jane's wedding" {
+			t.Errorf("transfer_from_name = %v, want the envelope's own occasion %q", row.TransferFromName, "Jane's wedding")
+		}
+		if row.TransferToName == nil || *row.TransferToName != "Kas Utama" {
+			t.Errorf("transfer_to_name = %v, want %q", row.TransferToName, "Kas Utama")
+		}
+	}
+	if found != 2 {
+		t.Fatalf("kind='transfer' rows = %d, want 2 (both roll legs)", found)
+	}
+}
+
+// The shortfall direction rolls the other way - Kas Utama covers the
+// envelope - and the from/to names follow that direction exactly, never the
+// leftover case's fixed order.
+func TestGetTransactionsIncidentalRollShortfallCarriesMainToEnvelopePurposeNames(t *testing.T) {
+	r := testRouter(t)
+	setup := setUpFund(t, r)
+	if rec := postTransaction(t, r, transactionRequest{
+		AccountID: setup.CashAccountID(t), PurposeID: setup.MainPurposeID,
+		Direction: "in", Amount: 500_000, OccurredOn: "2026-08-01",
+	}); rec.Code != http.StatusCreated {
+		t.Fatalf("seed main balance = %d, want %d (body: %s)", rec.Code, http.StatusCreated, rec.Body.String())
+	}
+	envelope := openIncidentalFor(t, r, "Flood relief", "2026-08-01")
+
+	if rec := postTransaction(t, r, transactionRequest{
+		AccountID: setup.CashAccountID(t), PurposeID: envelope.PurposeID,
+		Direction: "out", Amount: 30_000, OccurredOn: "2026-08-02",
+	}); rec.Code != http.StatusCreated {
+		t.Fatalf("disbursement = %d, want %d (body: %s)", rec.Code, http.StatusCreated, rec.Body.String())
+	}
+
+	closeRec := postCloseIncidental(t, r, envelope.PurposeID, closeIncidentalRequest{
+		AccountID: setup.CashAccountID(t), ClosedOn: "2026-08-20",
+	})
+	if closeRec.Code != http.StatusOK {
+		t.Fatalf("close = %d, want %d (body: %s)", closeRec.Code, http.StatusOK, closeRec.Body.String())
+	}
+
+	page := decodeTransactionsPage(t, getTransactions(t, r))
+	found := 0
+	for _, row := range page.Transactions {
+		if row.Kind != "transfer" {
+			continue
+		}
+		found++
+		if row.TransferFromName == nil || *row.TransferFromName != "Kas Utama" {
+			t.Errorf("transfer_from_name = %v, want %q", row.TransferFromName, "Kas Utama")
+		}
+		if row.TransferToName == nil || *row.TransferToName != "Flood relief" {
+			t.Errorf("transfer_to_name = %v, want the envelope's own occasion %q", row.TransferToName, "Flood relief")
+		}
+	}
+	if found != 2 {
+		t.Fatalf("kind='transfer' rows = %d, want 2 (both roll legs)", found)
+	}
+}
+
+// A reconciliation "adjusted" fix is flagged; an "entry_added" fix on the
+// same snapshot is not - the schema-level distinction (adjustment_
+// transaction_id, only ever set for "adjusted") surfaced on the wire.
+func TestGetTransactionsReconciliationFixFlagDistinguishesAdjustedFromEntryAdded(t *testing.T) {
+	r := testRouter(t)
+	setup := setUpFund(t, r)
+	if rec := postTransaction(t, r, transactionRequest{
+		AccountID: setup.CashAccountID(t), PurposeID: setup.MainPurposeID,
+		Direction: "in", Amount: 100_000, OccurredOn: "2026-08-01",
+	}); rec.Code != http.StatusCreated {
+		t.Fatalf("seed = %d, want %d (body: %s)", rec.Code, http.StatusCreated, rec.Body.String())
+	}
+
+	takeRec := postReconciliation(t, r, takeReconciliationRequest{
+		Counts: []accountCountRequest{
+			{
+				AccountID: setup.CashAccountID(t), ActualAmount: 80_000, Resolution: "adjusted",
+				Fix: &fixRequest{PurposeID: setup.MainPurposeID, Direction: "out", Amount: 20_000, OccurredOn: "2026-08-31"},
+			},
+			{
+				AccountID: setup.BankAccountID(t), ActualAmount: 5_000, Resolution: "entry_added",
+				Fix: &fixRequest{PurposeID: setup.MainPurposeID, Direction: "in", Amount: 5_000, OccurredOn: "2026-08-15"},
+			},
+		},
+	})
+	if takeRec.Code != http.StatusCreated {
+		t.Fatalf("POST /api/reconciliations = %d, want %d (body: %s)", takeRec.Code, http.StatusCreated, takeRec.Body.String())
+	}
+	detail := decodeReconciliationDetail(t, takeRec)
+	adjustedLine := lineFor(t, detail.Lines, setup.CashAccountID(t))
+	entryAddedLine := lineFor(t, detail.Lines, setup.BankAccountID(t))
+	if adjustedLine.AdjustmentTransactionID == nil {
+		t.Fatal("adjusted line's adjustment_transaction_id = nil, want the fix's id")
+	}
+	if entryAddedLine.AdjustmentTransactionID != nil {
+		t.Fatal("entry_added line's adjustment_transaction_id set, want nil (ADR-024: that entry is self-explanatory)")
+	}
+
+	page := decodeTransactionsPage(t, getTransactions(t, r))
+	adjustedRow := findTransactionRow(t, page, *adjustedLine.AdjustmentTransactionID)
+	if !adjustedRow.IsReconciliationFix {
+		t.Error("is_reconciliation_fix = false for the adjusted fix, want true")
+	}
+	if adjustedRow.Kind != "adjustment" {
+		t.Errorf("adjusted fix kind = %q, want %q", adjustedRow.Kind, "adjustment")
+	}
+
+	// The entry_added fix is a kind='normal' row on the bank account with no
+	// reconciliation flag - found by elimination (it's the only other
+	// kind='normal' row this test posted on that account besides the fix
+	// itself and the seed deposit, which is on cash).
+	entryAddedFound := false
+	for _, row := range page.Transactions {
+		if row.AccountID == setup.BankAccountID(t) && row.Kind == "normal" {
+			entryAddedFound = true
+			if row.IsReconciliationFix {
+				t.Error("is_reconciliation_fix = true for an entry_added fix, want false")
+			}
+		}
+	}
+	if !entryAddedFound {
+		t.Fatal("no kind='normal' row found on the bank account for the entry_added fix")
+	}
+}
+
+// An ordinary adjustment (ADR-024: a correction raised on any Tuesday, not
+// through a reconciliation) is never flagged - it is her own row, explained
+// by her own note, exactly as today.
+func TestGetTransactionsOrdinaryAdjustmentIsNotFlagged(t *testing.T) {
+	r := testRouter(t)
+	setup := setUpFund(t, r)
+
+	rec := postTransaction(t, r, transactionRequest{
+		AccountID: setup.CashAccountID(t), PurposeID: setup.MainPurposeID,
+		Direction: "in", Amount: 10_000, OccurredOn: "2026-08-12", IsAdjustment: true,
+	})
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("POST /api/transactions = %d, want %d (body: %s)", rec.Code, http.StatusCreated, rec.Body.String())
+	}
+	var posted transactionResponse
+	if err := json.NewDecoder(rec.Body).Decode(&posted); err != nil {
+		t.Fatalf("decoding transaction response: %v", err)
+	}
+
+	page := decodeTransactionsPage(t, getTransactions(t, r))
+	row := findTransactionRow(t, page, posted.ID)
+	if row.Kind != "adjustment" {
+		t.Fatalf("kind = %q, want %q", row.Kind, "adjustment")
+	}
+	if row.IsReconciliationFix {
+		t.Error("is_reconciliation_fix = true for an ordinary adjustment, want false")
+	}
+	if row.ReversesTransactionID != nil {
+		t.Errorf("reverses_transaction_id = %v, want nil for an ordinary adjustment", row.ReversesTransactionID)
+	}
+}
+
+// Fund isolation for every new field (#257): a second fund's member,
+// account and purpose names must never appear on our fund's own rows, even
+// though the underlying ids can collide across funds (each table's own
+// primary key is a per-fund-scoped identity in this schema's composite FKs,
+// but nothing stops two funds naming their own account "Tunai" or their own
+// member "Budi" - same text, different rows).
+func TestGetTransactionsNewFieldsNeverLeakAnotherFundsNames(t *testing.T) {
+	sqlDB := testStoreDB(t)
+	r := authedRouterFor(t, sqlDB)
+	setup := setUpFund(t, r)
+	memberID := memberFor(t, r, "Budi")
+
+	payRec := postDuesPayment(t, r, duesPaymentRequest{
+		AccountID: setup.CashAccountID(t), PurposeID: setup.MainPurposeID, MemberID: memberID,
+		OccurredOn: "2026-08-12", Periods: []duesPaymentPeriod{{DuesPeriod: "2026-08", Amount: 25_000}},
+	})
+	if payRec.Code != http.StatusCreated {
+		t.Fatalf("POST /api/dues-payments = %d, want %d (body: %s)", payRec.Code, http.StatusCreated, payRec.Body.String())
+	}
+
+	// A second fund, written straight through the store (the API refuses a
+	// second fund by design) - same account/member/purpose names as ours, so
+	// a leak would read as a plausible row rather than an obviously wrong
+	// one.
+	q := store.New(sqlDB)
+	ctx := context.Background()
+	otherFund, err := q.CreateFund(ctx, store.CreateFundParams{
+		Name: "Other Fund", Currency: "IDR", ReportSlug: "zyxwvutsrqponmlkjihgfe", CreatedAt: 1,
+	})
+	if err != nil {
+		t.Fatalf("CreateFund(other) = %v, want no error", err)
+	}
+	otherAccount, err := q.CreateAccount(ctx, store.CreateAccountParams{
+		FundID: otherFund.ID, Kind: "cash", Name: "Tunai", CreatedAt: 1,
+	})
+	if err != nil {
+		t.Fatalf("CreateAccount(other) = %v, want no error", err)
+	}
+	otherPurpose, err := q.CreatePurpose(ctx, store.CreatePurposeParams{
+		FundID: otherFund.ID, Kind: "main", Name: "Kas Utama", CreatedAt: 1,
+	})
+	if err != nil {
+		t.Fatalf("CreatePurpose(other) = %v, want no error", err)
+	}
+	otherMember, err := q.CreateMember(ctx, store.CreateMemberParams{
+		FundID: otherFund.ID, Name: "Budi", CreatedAt: 1,
+	})
+	if err != nil {
+		t.Fatalf("CreateMember(other) = %v, want no error", err)
+	}
+	otherDuesPeriod := "2026-08"
+	if _, err := q.CreateTransaction(ctx, store.CreateTransactionParams{
+		FundID: otherFund.ID, AccountID: otherAccount.ID, PurposeID: otherPurpose.ID,
+		Direction: "in", Amount: 999_000, OccurredOn: "2026-08-01", Kind: "dues",
+		MemberID: &otherMember.ID, DuesPeriod: &otherDuesPeriod, CreatedAt: 1,
+	}); err != nil {
+		t.Fatalf("CreateTransaction(other) = %v, want no error", err)
+	}
+
+	page := decodeTransactionsPage(t, getTransactions(t, r))
+	if len(page.Transactions) != 1 {
+		t.Fatalf("transactions = %d, want exactly 1 (only our own fund's dues payment)", len(page.Transactions))
+	}
+	row := page.Transactions[0]
+	if row.MemberName == nil || *row.MemberName != "Budi" {
+		t.Fatalf("member_name = %v, want our own member %q (not leaked, coincidentally the same name)", row.MemberName, "Budi")
+	}
+	if row.AccountID != setup.CashAccountID(t) {
+		t.Errorf("account_id = %d, want our own fund's cash account %d, never the other fund's row", row.AccountID, setup.CashAccountID(t))
+	}
+}

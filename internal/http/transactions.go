@@ -34,6 +34,15 @@ type transactionRequest struct {
 // reimbursement), since GET /api/transactions lists all of them and this type
 // is what both routes in this file share. No fund_id, same reasoning as the
 // other response types in this package.
+//
+// The fields after CreatedAt (#257) are the facts TransactionList.tsx needs
+// to build a system row's display label, without a second request per row -
+// they are set only by toTransactionsPageResponse (GET /api/transactions'
+// listing), not by toTransactionResponse (POST's own single-row reply): a
+// freshly-posted row has no reconciliation line naming it yet and, for a
+// transfer, no guaranteed sibling leg inside the same request/response
+// round trip, so a caller reading straight off POST's reply gets these as
+// their zero values rather than a misleadingly confident answer.
 type transactionResponse struct {
 	ID              int64   `json:"id"`
 	AccountID       int64   `json:"account_id"`
@@ -53,6 +62,37 @@ type transactionResponse struct {
 	ReversesTransactionID *int64  `json:"reverses_transaction_id"`
 	Note                  *string `json:"note"`
 	CreatedAt             int64   `json:"created_at"`
+
+	// AccountName is this row's own account (location) - the opening
+	// balance and reconciliation-fix labels are built from it. Always
+	// present on a listed row (account_id is NOT NULL and an account with
+	// any transaction against it can never be deleted).
+	AccountName string `json:"account_name"`
+	// MemberName is the dues member for a dues payment or reversal, or the
+	// settled claim's member for a reimbursement payout - never both, and
+	// nil for every other kind. See toTransactionsPageResponse for why the
+	// merge happens here rather than in SQL.
+	MemberName *string `json:"member_name"`
+	// ClaimNote is the settled claim's own note (reimbursement.note) - set
+	// only on a kind='reimbursement' row, so the Talangan settlement label
+	// can show what the claim itself was for even though the settlement's
+	// own Note is always nil (#257: nothing generated is ever stored).
+	ClaimNote *string `json:"claim_note"`
+	// TransferKind is the pair's own kind ('between_accounts' or
+	// 'reclass_purpose'), nil outside kind='transfer'. TransferFromName/
+	// TransferToName are that kind's two location or two purpose names, in
+	// the transfer's own from->to order regardless of whether this row is
+	// the 'out' or the 'in' leg (ListTransactionsPage's own comment has the
+	// full reasoning), nil outside kind='transfer'.
+	TransferKind     *string `json:"transfer_kind"`
+	TransferFromName *string `json:"transfer_from_name"`
+	TransferToName   *string `json:"transfer_to_name"`
+	// IsReconciliationFix is true exactly when a reconciliation_line names
+	// this row as the entry that squared its gap (resolution 'adjusted') -
+	// never true for an 'entry_added' fix (ADR-024: that entry is
+	// self-explanatory, posted with the treasurer's own purpose and note)
+	// or for an ordinary adjustment (ADR-024).
+	IsReconciliationFix bool `json:"is_reconciliation_fix"`
 }
 
 func toTransactionResponse(t store.Transaction) transactionResponse {
@@ -74,6 +114,56 @@ func toTransactionResponse(t store.Transaction) transactionResponse {
 		Note:      t.Note,
 		CreatedAt: t.CreatedAt,
 	}
+}
+
+// toTransactionsPageResponse is GET /api/transactions's own row mapper - the
+// listing that carries a label's facts, on top of everything
+// toTransactionResponse already answers for a single posted row (#257).
+//
+// MemberName merges row.MemberName and row.SettlementMemberName in Go, not
+// SQL: ListTransactionsPage's own comment documents sqlc 1.31.1 mistyping a
+// SQL-side COALESCE of the same two columns as NOT NULL. The two are
+// mutually exclusive by construction (a dues row's member_id is never set
+// on a kind='reimbursement' row, and only that kind ever settles a claim),
+// so this if/else never has to choose between two real names.
+//
+// TransferFromName/TransferToName pick the account pair or the purpose pair
+// by row.TransferKind, for the same sqlc-typing reason: ListTransactionsPage
+// exposes all four names as plain nullable columns rather than a SQL CASE
+// between them.
+func toTransactionsPageResponse(t store.ListTransactionsPageRow) transactionResponse {
+	resp := toTransactionResponse(store.Transaction{
+		ID: t.ID, FundID: t.FundID, AccountID: t.AccountID, PurposeID: t.PurposeID,
+		Direction: t.Direction, Amount: t.Amount, OccurredOn: t.OccurredOn, Kind: t.Kind,
+		MemberID: t.MemberID, DuesPeriod: t.DuesPeriod, ReimbursementID: t.ReimbursementID,
+		TransferID: t.TransferID, ReversesTransactionID: t.ReversesTransactionID,
+		Note: t.Note, CreatedAt: t.CreatedAt,
+	})
+
+	resp.AccountName = t.AccountName
+	resp.ClaimNote = t.ClaimNote
+	resp.TransferKind = t.TransferKind
+	resp.IsReconciliationFix = t.IsReconciliationFix != 0
+
+	switch {
+	case t.MemberName != nil:
+		resp.MemberName = t.MemberName
+	case t.SettlementMemberName != nil:
+		resp.MemberName = t.SettlementMemberName
+	}
+
+	if t.TransferKind != nil {
+		switch *t.TransferKind {
+		case "between_accounts":
+			resp.TransferFromName = t.TransferFromAccountName
+			resp.TransferToName = t.TransferToAccountName
+		case "reclass_purpose":
+			resp.TransferFromName = t.TransferFromPurposeName
+			resp.TransferToName = t.TransferToPurposeName
+		}
+	}
+
+	return resp
 }
 
 // createTransaction is POST /api/transactions: wraps Ledger.PostTransaction.
@@ -278,7 +368,7 @@ func (a *api) listTransactions(w http.ResponseWriter, r *http.Request) {
 
 	resp := make([]transactionResponse, 0, len(rows))
 	for _, t := range rows {
-		resp = append(resp, toTransactionResponse(t))
+		resp = append(resp, toTransactionsPageResponse(t))
 	}
 	writeJSON(w, http.StatusOK, transactionsPageResponse{Transactions: resp, NextCursor: nextCursor})
 }

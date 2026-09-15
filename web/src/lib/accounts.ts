@@ -31,12 +31,15 @@ export function listAccounts(): Promise<Account[]> {
  * that creates the account (#230: a location and its opening balance are
  * born together, or not at all - there is no separate opening-balance
  * route any more). Omit it, or leave the amount at 0, for a location that
- * starts empty.
+ * starts empty. Its `note` holds only what the treasurer typed - the
+ * add-location dialog has no field for one today, so it is always omitted
+ * in practice; the row explains itself through a display label instead
+ * (#257).
  */
 export function createAccount(
   kind: string,
   name: string,
-  openingBalance?: { amount: number; occurredOn: string; note: string },
+  openingBalance?: { amount: number; occurredOn: string; note?: string | null },
 ): Promise<Account> {
   return apiFetch<Account>('/api/accounts', {
     method: 'POST',
@@ -45,7 +48,7 @@ export function createAccount(
       kind,
       name,
       ...(openingBalance && openingBalance.amount > 0
-        ? { opening_balance: { amount: openingBalance.amount, occurred_on: openingBalance.occurredOn, note: openingBalance.note } }
+        ? { opening_balance: { amount: openingBalance.amount, occurred_on: openingBalance.occurredOn, note: openingBalance.note ?? null } }
         : {}),
     }),
   })

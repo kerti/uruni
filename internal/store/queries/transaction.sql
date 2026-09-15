@@ -93,13 +93,83 @@ ORDER BY occurred_on, id;
 -- page_limit is passed as page size + 1: the caller peeks at whether that
 -- extra row came back to know whether a next page exists, then trims it
 -- before building the response.
+--
+-- The columns after created_at (#257) carry every fact a system-created
+-- row's display label needs, so the client never issues a second request to
+-- build one - see TransactionList.tsx. Every join below is fund-scoped by
+-- construction, not by an extra "AND fund_id = ..." clause: each id it joins
+-- on (member_id, reimbursement_id, transfer_id, a fix's own row id) reaches
+-- this table only through a composite FK back to "transaction"(fund_id, id)
+-- or an equivalent composite FK on the table that named it, so a row from
+-- another fund can never be the thing joined to.
+--
+--   - account_name: this row's own account (location) - opening balance
+--     and a reconciliation fix both label themselves by it. INNER, not
+--     LEFT: account_id is NOT NULL and DeleteAccount refuses an account any
+--     transaction still references, so the row always exists.
+--   - member_name/settlement_member_name: the dues member for a dues
+--     payment or reversal (t.member_id), or, separately, the settled
+--     claim's member for a reimbursement payout (t.member_id is NULL on
+--     kind='reimbursement' - ADR-024 - so that row's member comes from the
+--     reimbursement row it settles instead). Two columns, not one merged
+--     by SQL COALESCE: sqlc 1.31.1's SQLite analyzer infers COALESCE(a, b)
+--     of two LEFT-JOINed, equally-nullable columns as NOT NULL here - the
+--     same shape of static-analysis miss ListTransactionsPage's own q
+--     clause already documents for a repeated ESCAPE - so the merge (at
+--     most one of the two is ever non-NULL for a given row) happens in Go,
+--     in toTransactionResponse, where the compiler still sees a pointer.
+--   - claim_note: the settled claim's own note (reimbursement.note),
+--     always NULL except on a kind='reimbursement' row.
+--   - transfer_kind plus four transfer_from/to_account/purpose_name
+--     columns: only meaningful for kind='transfer' rows. tf/tt are this
+--     transfer's two legs, found by direction ('out' is always the pair's
+--     from leg, 'in' its to leg - postTransferPairTx's own construction,
+--     internal/ledger/transfer.go) - never by which of the two *this* row
+--     happens to be, so both legs of one transfer carry identical from/to
+--     facts. Four plain columns rather than one SQL CASE selecting between
+--     an account and a purpose column by transfer.kind: sqlc 1.31.1 cannot
+--     type such a CASE here at all (it lands on the Go side as an untyped
+--     interface{}, losing the compile-time check ADR-024 relies on), and
+--     forcing a type with CAST is this codebase's own documented way to
+--     tell sqlc a value is never NULL (LatestDuesPeriodPaidByMember's own
+--     comment) - the opposite of what these four columns are, the rest of
+--     the time. Picking the account pair or the purpose pair by
+--     transfer_kind is toTransactionResponse's job instead, in Go, where
+--     the compiler still sees four ordinary pointers.
+--   - is_reconciliation_fix: whether this row is the entry that squared a
+--     reconciliation gap (resolution 'adjusted', reconciliation_line's own
+--     adjustment_transaction_id) - a plain 0/1 the same way ListReimbursementsPage's
+--     own settled column is: 1 exactly when some line names this row, never
+--     an inferred flag. Always 0 for resolution 'entry_added' (that
+--     resolution never sets adjustment_transaction_id, ADR-024) and for
+--     every non-adjustment kind.
 -- name: ListTransactionsPage :many
 SELECT t.id, t.fund_id, t.account_id, t.purpose_id, t.direction, t.amount, t.occurred_on, t.kind,
        t.member_id, t.dues_period, t.reimbursement_id, t.transfer_id, t.reverses_transaction_id,
-       t.note, t.created_at
+       t.note, t.created_at,
+       a.name AS account_name,
+       m.name AS member_name,
+       rm.name AS settlement_member_name,
+       rb.note AS claim_note,
+       tr.kind AS transfer_kind,
+       fa.name AS transfer_from_account_name,
+       ta.name AS transfer_to_account_name,
+       fp.name AS transfer_from_purpose_name,
+       tp.name AS transfer_to_purpose_name,
+       CAST(EXISTS(SELECT 1 FROM reconciliation_line rl WHERE rl.adjustment_transaction_id = t.id) AS INTEGER) AS is_reconciliation_fix
 FROM "transaction" t
 JOIN purpose p ON p.id = t.purpose_id
+JOIN account a ON a.id = t.account_id
 LEFT JOIN member m ON m.id = t.member_id
+LEFT JOIN reimbursement rb ON rb.id = t.reimbursement_id
+LEFT JOIN member rm ON rm.id = rb.member_id
+LEFT JOIN transfer tr ON tr.id = t.transfer_id
+LEFT JOIN "transaction" tf ON tf.transfer_id = t.transfer_id AND tf.direction = 'out'
+LEFT JOIN "transaction" tt ON tt.transfer_id = t.transfer_id AND tt.direction = 'in'
+LEFT JOIN account fa ON fa.id = tf.account_id
+LEFT JOIN account ta ON ta.id = tt.account_id
+LEFT JOIN purpose fp ON fp.id = tf.purpose_id
+LEFT JOIN purpose tp ON tp.id = tt.purpose_id
 WHERE t.fund_id = sqlc.arg('fund_id')
   AND (
     sqlc.narg('cursor_occurred_on') IS NULL

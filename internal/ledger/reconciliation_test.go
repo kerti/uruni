@@ -872,3 +872,60 @@ func TestASecondFundsReconciliationIsInvisibleToTheFirstFund(t *testing.T) {
 		t.Errorf("GetReconciliationDetail(fund 2, fund 2's snapshot) = %+v, want the snapshot with its 1 line", detail)
 	}
 }
+
+// #257: nothing is generated into transaction.note - "Penyesuaian -
+// {lokasi}" is a display label built at read time, never stored text - so
+// an "adjusted" fix's Note follows the same nil/blank/typed contract as
+// every other system path.
+func TestTakeReconciliationAdjustedFixNoteFollowsNormalizeNoteContract(t *testing.T) {
+	take := func(t *testing.T, note *string) *string {
+		t.Helper()
+		l := newTestLedger(t)
+		f := newFixture(t, l)
+		ctx := context.Background()
+		q := store.New(l.db)
+
+		postOpeningBalance(t, l, f.fundID, f.cashID, f.mainID, 100_000, "2026-08-01")
+
+		rec, err := l.TakeReconciliation(ctx, TakeReconciliationParams{
+			FundID: f.fundID,
+			Counts: []AccountCount{{
+				AccountID: f.cashID, ActualAmount: 80_000, Resolution: "adjusted",
+				Fix: &Fix{
+					PurposeID: f.mainID, Direction: "out", Amount: 20_000,
+					OccurredOn: "2026-08-31", Note: note,
+				},
+			}},
+		})
+		if err != nil {
+			t.Fatalf("TakeReconciliation() = %v, want no error", err)
+		}
+
+		lines, err := q.ListReconciliationLines(ctx, rec.ID)
+		if err != nil {
+			t.Fatalf("ListReconciliationLines() = %v, want no error", err)
+		}
+		line := lineFor(t, lines, f.cashID)
+		if line.AdjustmentTransactionID == nil {
+			t.Fatalf("AdjustmentTransactionID = nil, want the posted fix's id")
+		}
+
+		fix, err := q.GetTransaction(ctx, *line.AdjustmentTransactionID)
+		if err != nil {
+			t.Fatalf("GetTransaction(fix) = %v, want no error", err)
+		}
+		return fix.Note
+	}
+
+	if got := take(t, nil); got != nil {
+		t.Errorf("Note (nil given) = %q, want nil", *got)
+	}
+	blank := "   "
+	if got := take(t, &blank); got != nil {
+		t.Errorf("Note (whitespace-only given) = %q, want nil", *got)
+	}
+	typed := "  Kas fisik kurang  "
+	if got := take(t, &typed); got == nil || *got != "Kas fisik kurang" {
+		t.Errorf("Note (typed) = %v, want the trimmed text", got)
+	}
+}

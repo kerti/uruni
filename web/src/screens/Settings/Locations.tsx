@@ -208,9 +208,10 @@ function AddLocationDialog({ open, onClose, onAdded }: { open: boolean; onClose:
       const created = await createAccount(
         kind,
         trimmed,
-        openingBalance > 0
-          ? { amount: openingBalance, occurredOn: todayISODate(), note: copy.setup.balances.note(trimmed) }
-          : undefined,
+        // No note is typed here (this dialog has no field for one) - the
+        // row explains itself through TransactionList's own display label
+        // ("Saldo awal - {lokasi}", #257), never through stored text.
+        openingBalance > 0 ? { amount: openingBalance, occurredOn: todayISODate() } : undefined,
       )
       onAdded()
       return created
