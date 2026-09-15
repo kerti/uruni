@@ -100,8 +100,10 @@ type CloseIncidentalAndRollParams struct {
 	// Note is written to both legs of the roll, or to neither - the same
 	// contract PostTransferBetweenAccountsParams.Note describes. It is the
 	// treasurer's own sentence, never generated here: the ledger writes no
-	// user-facing copy (ADR-014), so an unexplained roll stays unexplained
-	// rather than acquiring a sentence nobody wrote.
+	// note of its own. A roll with no typed note is not left unexplained
+	// any more, though - it gets a display label built at read time from
+	// the transfer's own facts (#257), same as every other system-created
+	// row.
 	Note *string
 }
 

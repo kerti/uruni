@@ -106,8 +106,10 @@ describe('RecordDuesPayment', () => {
       member_id: 1,
       account_id: 7,
       purpose_id: 3,
-      // Never null: a dues row has to read as one wherever it surfaces.
-      note: text.note('Warga Satu'),
+      // #257: no note is typed on this form, and nothing is generated onto
+      // the wire - the row explains itself through TransactionList's own
+      // display label instead.
+      note: null,
       periods: [
         { dues_period: '2026-01', amount: 50_000 },
         { dues_period: '2026-02', amount: 30_000 },

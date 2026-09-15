@@ -107,7 +107,7 @@ func (l *Ledger) postDuesPaymentTx(ctx context.Context, q store.Querier, p PostD
 		Kind:       "dues",
 		MemberID:   &p.MemberID,
 		DuesPeriod: &period.DuesPeriod,
-		Note:       p.Note,
+		Note:       normalizeNote(p.Note),
 		CreatedAt:  time.Now().Unix(),
 	})
 }
@@ -204,7 +204,7 @@ func (l *Ledger) ReverseDuesPayment(ctx context.Context, p ReverseDuesPaymentPar
 			MemberID:              original.MemberID,
 			DuesPeriod:            original.DuesPeriod,
 			ReversesTransactionID: &p.TransactionID,
-			Note:                  p.Note,
+			Note:                  normalizeNote(p.Note),
 			CreatedAt:             time.Now().Unix(),
 		})
 		return err

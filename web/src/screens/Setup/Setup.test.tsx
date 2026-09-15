@@ -166,14 +166,16 @@ describe('Setup', () => {
     const setupCalls = callsTo(fetchMock, '/api/setup')
     expect(setupCalls).toHaveLength(1)
     const body = JSON.parse(setupCalls[0][1]?.body as string) as {
-      accounts: { name: string; opening_balance?: { amount: number; note: string } }[]
+      accounts: { name: string; opening_balance?: { amount: number; note?: string | null } }[]
     }
     const tunai = body.accounts.find((a) => a.name === 'Tunai')
     const bank = body.accounts.find((a) => a.name === 'Bank')
-    // The note names its own location: this row is the first entry in the
-    // fund's ledger and it is read again months later, in home's recent
-    // activity and in the public report, without the wizard around it.
-    expect(tunai?.opening_balance).toMatchObject({ amount: 50000, note: text.balances.note('Tunai') })
+    // #257: no note is typed in this wizard, and nothing is generated onto
+    // the wire - this row is read again months later, in home's recent
+    // activity and in the public report, through TransactionList's own
+    // display label ("Saldo awal - {lokasi}") rather than stored text.
+    expect(tunai?.opening_balance).toMatchObject({ amount: 50000 })
+    expect(tunai?.opening_balance?.note).toBeUndefined()
     expect(bank?.opening_balance).toBeUndefined()
   })
 

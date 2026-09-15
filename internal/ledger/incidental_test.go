@@ -664,9 +664,10 @@ func TestClosingASecondFundsIncidentalAcrossTheBoundaryIsRefused(t *testing.T) {
 }
 
 // The roll is a transfer like any other, so its note lands on both legs -
-// and the ledger writes no note of its own when none is given: an
-// unexplained roll stays unexplained rather than acquiring a sentence
-// nobody wrote (ADR-014).
+// and the ledger writes no note of its own when none is given. A roll with
+// no typed note is not left unexplained, though: the list labels it from
+// the transfer's own facts at read time (#257), never by storing generated
+// text.
 func TestCloseIncidentalAndRollWritesTheNoteToBothRollLegs(t *testing.T) {
 	l := newTestLedger(t)
 	f := newFixture(t, l)

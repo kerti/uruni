@@ -416,3 +416,44 @@ func TestReverseDuesPaymentReversedPeriodDoesNotReadAsPaidInAdvance(t *testing.T
 		t.Errorf("June status after its own reversal = %q, want %q", gotJune.Status, DuesStatusUnpaid)
 	}
 }
+
+// #257: a reversal's own Note follows the same nil/blank/typed contract as
+// every other system path - nothing generated is ever stored, the list
+// labels the row instead (Undo2, "Pembatalan - {period} - {anggota}").
+func TestReverseDuesPaymentNoteFollowsNormalizeNoteContract(t *testing.T) {
+	postAndReverse := func(t *testing.T, note *string) *string {
+		t.Helper()
+		l := newTestLedger(t)
+		f := newFixture(t, l)
+		ctx := context.Background()
+
+		posted, err := l.PostDuesPayments(ctx, PostDuesPaymentsParams{
+			FundID: f.fundID, AccountID: f.cashID, PurposeID: f.mainID,
+			MemberID: f.memberID, OccurredOn: "2026-08-12",
+			Periods: []PeriodAmount{{DuesPeriod: "2026-08", Amount: 25_000}},
+		})
+		if err != nil {
+			t.Fatalf("PostDuesPayments() = %v, want no error", err)
+		}
+
+		reversal, err := l.ReverseDuesPayment(ctx, ReverseDuesPaymentParams{
+			FundID: f.fundID, TransactionID: posted[0].ID, OccurredOn: "2026-08-13", Note: note,
+		})
+		if err != nil {
+			t.Fatalf("ReverseDuesPayment() = %v, want no error", err)
+		}
+		return reversal.Note
+	}
+
+	if got := postAndReverse(t, nil); got != nil {
+		t.Errorf("Note (nil given) = %q, want nil", *got)
+	}
+	blank := "   "
+	if got := postAndReverse(t, &blank); got != nil {
+		t.Errorf("Note (whitespace-only given) = %q, want nil", *got)
+	}
+	typed := "  Salah input  "
+	if got := postAndReverse(t, &typed); got == nil || *got != "Salah input" {
+		t.Errorf("Note (typed) = %v, want the trimmed text", got)
+	}
+}

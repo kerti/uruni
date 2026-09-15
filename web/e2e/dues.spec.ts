@@ -83,6 +83,11 @@ test.describe('dues status', () => {
 
     const periods = page.getByRole('checkbox')
     await expect(periods.first()).toBeVisible()
+    // Captured before checking, for the label assertion below (#257): the
+    // oldest outstanding period is never a fixed month (see the file
+    // header), so the label text this spec expects on home has to be read
+    // off the same form it just paid, not hardcoded.
+    const firstPeriodText = (await periods.nth(0).evaluate((el) => el.closest('label')?.textContent ?? '')).trim()
     await periods.nth(0).check()
     await periods.nth(1).check()
 
@@ -125,10 +130,11 @@ test.describe('dues status', () => {
     await expect(page.getByRole('heading', { name: copy.history.dues.heading })).toBeVisible()
 
     // Every posted row says whose dues it was: home's recent activity shows
-    // the note, so a dues payment never reads there as a bare amount.
+    // the label, so a dues payment never reads there as a bare amount
+    // (#257 - built at display time, never stored text).
     await page.getByRole('link', { name: copy.shell.nav.home }).click()
     await expect(page.getByText(copy.home.balanceHeading)).toBeVisible()
-    await expect(page.getByText(copy.dues.payment.note('Warga Satu')).first()).toBeVisible()
+    await expect(page.getByText(copy.rowLabels.dues.text(firstPeriodText, 'Warga Satu')).first()).toBeVisible()
   })
 
   // M6.14: undoing one of the payments the spec above just posted. Serial

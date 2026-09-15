@@ -198,12 +198,6 @@ export const copy = {
       heading: 'Isi saldo awal (opsional)',
       body: 'Kosongkan kalau lokasi ini belum ada uangnya.',
       amountLabel: (accountName: string) => `Saldo awal — ${accountName}`,
-      // The note stored on the opening-balance transaction itself, not a form
-      // label — it outlives the wizard and shows up in home's recent activity
-      // and in the public report, where the location column may not be there
-      // to explain it. Same words as amountLabel today, kept separate because
-      // one is a screen string and the other is ledger data.
-      note: (accountName: string) => `Saldo awal — ${accountName}`,
     },
     roster: {
       heading: 'Tambah anggota dan iuran (opsional)',
@@ -259,6 +253,50 @@ export const copy = {
     lastChecked: (date: string) => `Terakhir dicek ${date}`,
     // The entry point to the incidentals screen (M6.19), same idiom.
     incidentalLink: 'Lihat kegiatan insidental',
+  },
+  // The label line TransactionList.tsx renders on a row the app itself
+  // created - never a row she recorded herself (#257, Decisions.md). Built
+  // at display time from facts already on the row (GET /api/transactions'
+  // own fields), so a rename (like #242's Talangan one) reaches every row
+  // instantly instead of freezing old rows with old wording, and nothing
+  // generated is ever mistaken for what she typed. Each entry pairs the
+  // sr-only kind word every screen reader needs (the icon alone is
+  // decorative, aria-hidden) with the visible-text formatter - keyed by
+  // the row shape, not the raw schema `kind` column, since one schema kind
+  // covers more than one label here (`transfer` is either transferLocation
+  // or transferPurpose; `adjustment` is either duesReversal or
+  // reconciliationFix). The " · " separator and " -> " arrow are written
+  // out here, never as a literal non-ASCII character in a .tsx file (rule
+  // 10 - this file is the one designated exception).
+  rowLabels: {
+    dues: {
+      kind: 'Iuran',
+      text: (period: string, memberName: string) => `${period} · ${memberName}`,
+    },
+    duesReversal: {
+      text: (period: string, memberName: string) => `Pembatalan · ${period} · ${memberName}`,
+    },
+    opening: {
+      text: (accountName: string) => `Saldo awal · ${accountName}`,
+    },
+    // The settlement's own visible text is just the member's name - the
+    // claim's typed note (if any) already renders on the row's note line,
+    // so the label does not repeat it.
+    settlement: {
+      kind: 'Talangan',
+      text: (memberName: string) => memberName,
+    },
+    transferLocation: {
+      kind: 'Pindah lokasi',
+      text: (fromName: string, toName: string) => `${fromName} → ${toName}`,
+    },
+    transferPurpose: {
+      kind: 'Tutup amplop',
+      text: (fromName: string, toName: string) => `${fromName} → ${toName}`,
+    },
+    reconciliationFix: {
+      text: (accountName: string) => `Penyesuaian · ${accountName}`,
+    },
   },
   // ReconciliationBanner's own copy (M6.9): "cocok" when GET
   // /api/reconciliations/open-lines comes back empty, "selisih" otherwise.
@@ -379,13 +417,6 @@ export const copy = {
       totalLabel: 'Total dibayar',
       locationLabel: 'Lokasi',
       dateLabel: 'Tanggal',
-      // The note every posted row carries, so a dues payment reads as one
-      // in recent activity and in the report instead of as a bare amount -
-      // same shape and same reasoning as setup.openingBalance.note (#178).
-      // The month is not repeated here: each row already carries its own
-      // dues_period, and one request's note is shared by every period it
-      // pays.
-      note: (memberName: string) => `Iuran — ${memberName}`,
       submit: 'Simpan pembayaran',
       submitting: 'Menyimpan…',
       // Same reasoning as record.cancel: installed standalone, there is no
@@ -410,9 +441,6 @@ export const copy = {
       reverse: 'Batalkan',
       dateLabel: 'Tanggal pembatalan',
       noteLabel: 'Alasan (opsional)',
-      // Used when she leaves the reason blank - a row still has to say what
-      // it is, same rule as payment.note above.
-      note: (memberName: string) => `Pembatalan iuran — ${memberName}`,
       confirm: 'Batalkan pembayaran ini',
       submitting: 'Membatalkan…',
       cancel: 'Jangan jadi',

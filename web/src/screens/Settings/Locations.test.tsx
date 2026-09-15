@@ -137,10 +137,13 @@ describe('Settings locations', () => {
 
     await waitFor(() => expect(calls).toHaveLength(1))
     expect(calls[0].method).toBe('POST')
-    const body = calls[0].body as { opening_balance?: { amount: number; occurred_on: string; note: string } }
+    const body = calls[0].body as { opening_balance?: { amount: number; occurred_on: string; note?: string | null } }
     expect(body.opening_balance?.amount).toBe(50000)
     expect(body.opening_balance?.occurred_on).toMatch(/^\d{4}-\d{2}-\d{2}$/)
-    expect(body.opening_balance?.note).toBe(copy.setup.balances.note('Bank Jago'))
+    // #257: no note is typed here (this dialog has no field for one), and
+    // nothing is generated onto the wire - the row explains itself through
+    // TransactionList's own display label instead.
+    expect(body.opening_balance?.note ?? null).toBeNull()
   })
 
   it('adding with the balance field left empty sends no opening_balance key', async () => {

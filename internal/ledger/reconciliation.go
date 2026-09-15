@@ -201,7 +201,7 @@ func (l *Ledger) TakeReconciliation(ctx context.Context, p TakeReconciliationPar
 					Amount:     c.Fix.Amount.Int64(),
 					OccurredOn: c.Fix.OccurredOn,
 					Kind:       kind,
-					Note:       c.Fix.Note,
+					Note:       normalizeNote(c.Fix.Note),
 					CreatedAt:  now,
 				})
 				if err != nil {

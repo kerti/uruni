@@ -256,3 +256,70 @@ func TestPostDuesPaymentsRejectsInvalidDuesPeriod(t *testing.T) {
 		})
 	}
 }
+
+// #257: transaction.note holds only what the treasurer typed. Nothing is
+// derived into it any more - recent activity and the report show a label
+// instead, built at display time - so a nil Note stores NULL, the same
+// PostDuesPaymentsParams contract PostTransferBetweenAccounts already
+// documents via normalizeNote.
+func TestPostDuesPaymentsWithoutANoteStoresNull(t *testing.T) {
+	l := newTestLedger(t)
+	f := newFixture(t, l)
+	ctx := context.Background()
+
+	posted, err := l.PostDuesPayments(ctx, PostDuesPaymentsParams{
+		FundID: f.fundID, AccountID: f.cashID, PurposeID: f.mainID,
+		MemberID: f.memberID, OccurredOn: "2026-08-12",
+		Periods: []PeriodAmount{{DuesPeriod: "2026-08", Amount: 25_000}},
+	})
+	if err != nil {
+		t.Fatalf("PostDuesPayments() = %v, want no error", err)
+	}
+	if posted[0].Note != nil {
+		t.Errorf("Note = %q, want nil", *posted[0].Note)
+	}
+}
+
+// A blank or whitespace-only note is exactly the same as no note - a form
+// field left untouched - so it stores NULL too, never the empty string.
+func TestPostDuesPaymentsBlankNoteStoresNull(t *testing.T) {
+	for _, blank := range []string{"", "   ", "\t\n"} {
+		l := newTestLedger(t)
+		f := newFixture(t, l)
+		ctx := context.Background()
+
+		note := blank
+		posted, err := l.PostDuesPayments(ctx, PostDuesPaymentsParams{
+			FundID: f.fundID, AccountID: f.cashID, PurposeID: f.mainID,
+			MemberID: f.memberID, OccurredOn: "2026-08-12", Note: &note,
+			Periods: []PeriodAmount{{DuesPeriod: "2026-08", Amount: 25_000}},
+		})
+		if err != nil {
+			t.Fatalf("PostDuesPayments(note=%q) = %v, want no error", blank, err)
+		}
+		if posted[0].Note != nil {
+			t.Errorf("Note(blank=%q) = %q, want nil", blank, *posted[0].Note)
+		}
+	}
+}
+
+// A typed note is trimmed, not stored as-is: surrounding whitespace is not
+// part of what she wrote.
+func TestPostDuesPaymentsTrimsTheNote(t *testing.T) {
+	l := newTestLedger(t)
+	f := newFixture(t, l)
+	ctx := context.Background()
+
+	note := "  Bayar tunai  "
+	posted, err := l.PostDuesPayments(ctx, PostDuesPaymentsParams{
+		FundID: f.fundID, AccountID: f.cashID, PurposeID: f.mainID,
+		MemberID: f.memberID, OccurredOn: "2026-08-12", Note: &note,
+		Periods: []PeriodAmount{{DuesPeriod: "2026-08", Amount: 25_000}},
+	})
+	if err != nil {
+		t.Fatalf("PostDuesPayments() = %v, want no error", err)
+	}
+	if posted[0].Note == nil || *posted[0].Note != "Bayar tunai" {
+		t.Errorf("Note = %v, want the trimmed text", posted[0].Note)
+	}
+}

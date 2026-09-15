@@ -336,3 +336,11 @@ Found on a phone: the record form let a transaction be placed into, or sourced f
 ## Penggantian becomes Talangan (decided 2026-09-11)
 
 When Riwayat grew a fourth tab ([#227](https://github.com/kerti/uruni/issues/227)), "Penggantian" no longer fit a quarter of a phone screen. The maintainer renamed the in-app word to **Talangan**. It is shorter, and it is closer to what a treasurer actually says: a member *menalangi* first, and the fund repays it. The rename covers copy only. Identifiers, routes and the schema stay `reimbursement` ([ADR-014](./ADR/014-localization-indonesian-first.md)), and CONTEXT.md, PRD-ID §7.4 and ADR-032 now use the new word.
+
+## Generated descriptions are labels, not notes (decided 2026-09-15)
+
+A row the app posts on the treasurer's behalf — a dues payment or reversal, an opening balance, a Talangan settlement, a transfer, the incidental roll, a reconciliation adjustment — must never read as unexplained. That is the maintainer's ruling from the M6.13/M6.14 phone review. Until [#257](https://github.com/kerti/uruni/issues/257) it was met by **storing** generated text in `transaction.note`: the server did it for settlements (`settlementNote`), the SPA for three other paths, and nothing did it for the rest.
+
+**Resolution: `note` holds only what she typed, and the description is a label rendered at display** from facts the row already carries — kind, member, period, the transfer's two ends. It shows as a small kind icon and short text, with the kind word kept for screen readers. Stored text froze wording (the Talangan rename left old settlements still saying Penggantian), could not be translated ([ADR-014](./ADR/014-localization-indonesian-first.md)), and once written was indistinguishable from her own words.
+
+The first proposal was server-filled stored notes, argued against a "nothing is generated" line from [#210](https://github.com/kerti/uruni/issues/210) that turned out never to have been a decision. Under this design that line simply stays true. The approved words and icons are on #257.

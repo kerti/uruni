@@ -47,11 +47,12 @@ export function getDuesStatus(period: string): Promise<DuesStatusRow[]> {
  * reverses. The payment is not edited or deleted; a new linked row is posted
  * (CLAUDE.md rule 3).
  *
- * `note` is required here for the same reason it is on createDuesPayment: a
- * row that reaches recent activity or the report with an empty note reads as
- * a bare amount.
+ * `note` holds only what the treasurer typed in the reversal form's own
+ * optional reason field - blank sends null, never a generated default
+ * (#257): the row explains itself through TransactionList's own display
+ * label ("Pembatalan - {period} - {anggota}") instead.
  */
-export function reverseDuesPayment(transactionId: number, occurredOn: string, note: string): Promise<Transaction> {
+export function reverseDuesPayment(transactionId: number, occurredOn: string, note: string | null): Promise<Transaction> {
   return apiFetch<Transaction>(`/api/dues-payments/${transactionId}/reversal`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -101,16 +102,17 @@ export interface DuesPaymentPeriod {
  * per period inside a single database transaction, so a failure on any
  * period leaves nothing posted (#96).
  *
- * `note` is required here even though the wire field is nullable: a dues row
- * that reaches recent activity or the public report with an empty note reads
- * as a bare amount. The caller derives it from copy, never types it.
+ * `note` holds only what the treasurer typed - RecordPayment.tsx has no
+ * field for it, so it is always null there today. Nothing is derived onto
+ * the wire any more (#257): a dues payment explains itself through
+ * TransactionList's own display label, built from facts already on the row.
  */
 export function createDuesPayment(params: {
   memberId: number
   accountId: number
   purposeId: number
   occurredOn: string
-  note: string
+  note: string | null
   periods: DuesPaymentPeriod[]
 }): Promise<unknown> {
   return apiFetch<unknown>('/api/dues-payments', {

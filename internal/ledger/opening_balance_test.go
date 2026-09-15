@@ -377,3 +377,48 @@ func TestOpeningBalanceIndexRefusesASecondRowInsertedDirectly(t *testing.T) {
 		t.Errorf("ledger holds %d rows after a refused direct insert, want exactly 1", len(rows))
 	}
 }
+
+// #257: nothing is generated into transaction.note any more - "Saldo awal -
+// {lokasi}" is now a display label, not stored text - so an opening
+// balance's Note follows the same nil/blank/typed contract as every other
+// system path.
+func TestCreateAccountOpeningBalanceNoteFollowsNormalizeNoteContract(t *testing.T) {
+	create := func(t *testing.T, note *string) *string {
+		t.Helper()
+		l := newTestLedger(t)
+		f := newFixture(t, l)
+		ctx := context.Background()
+
+		account, err := l.CreateAccount(ctx, CreateAccountParams{
+			FundID: f.fundID, Kind: "cash", Name: "Kas RT 05",
+			OpeningBalance: &OpeningBalance{Amount: 100_000, OccurredOn: "2026-08-12", Note: note},
+		})
+		if err != nil {
+			t.Fatalf("CreateAccount() = %v, want no error", err)
+		}
+
+		rows, err := store.New(l.db).ListTransactionsByFund(ctx, f.fundID)
+		if err != nil {
+			t.Fatalf("ListTransactionsByFund() = %v, want no error", err)
+		}
+		for _, row := range rows {
+			if row.AccountID == account.ID && row.Kind == "opening" {
+				return row.Note
+			}
+		}
+		t.Fatal("no opening row found for the created account")
+		return nil
+	}
+
+	if got := create(t, nil); got != nil {
+		t.Errorf("Note (nil given) = %q, want nil", *got)
+	}
+	blank := "  \t "
+	if got := create(t, &blank); got != nil {
+		t.Errorf("Note (whitespace-only given) = %q, want nil", *got)
+	}
+	typed := "  Modal awal RT  "
+	if got := create(t, &typed); got == nil || *got != "Modal awal RT" {
+		t.Errorf("Note (typed) = %v, want the trimmed text", got)
+	}
+}

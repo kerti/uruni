@@ -33,14 +33,24 @@ export interface SetupResult {
 /** One row of POST /api/setup's `accounts` array. `opening_balance` is
  * optional and, when given, is posted in the same database transaction that
  * creates the fund and its accounts (#230: a location and its opening
- * balance are born together, or not at all) - never a separate request. */
+ * balance are born together, or not at all) - never a separate request.
+ * `note` holds only what the treasurer typed - the wizard has no field for
+ * one, so it is always omitted in practice; the row explains itself
+ * through a display label instead (#257). */
 export interface SetupAccountInput {
   kind: 'cash' | 'bank'
   name: string
-  opening_balance?: { amount: number; occurred_on: string; note: string }
+  opening_balance?: { amount: number; occurred_on: string; note?: string | null }
 }
 
-/** The posted transaction row a successful opening balance answers with. */
+/** The posted transaction row a successful opening balance answers with -
+ * also GET /api/transactions' own row shape (lib/transactions.ts's
+ * re-export), which is where the fields after created_at actually come
+ * populated: they carry the facts a system-created row's display label
+ * needs (#257, internal/http/transactions.go's own toTransactionsPageResponse
+ * doc comment), and are optional here because a route that posts one row
+ * (POST /api/transactions, /api/dues-payments, a settlement, a transfer
+ * leg) never sets them - only the list route does. */
 export interface Transaction {
   id: number
   account_id: number
@@ -56,6 +66,15 @@ export interface Transaction {
   reverses_transaction_id: number | null
   note: string | null
   created_at: number
+
+  // List-only fields (#257) - see this interface's own doc comment above.
+  account_name?: string
+  member_name?: string | null
+  claim_note?: string | null
+  transfer_kind?: 'between_accounts' | 'reclass_purpose' | null
+  transfer_from_name?: string | null
+  transfer_to_name?: string | null
+  is_reconciliation_fix?: boolean
 }
 
 export interface DuesTier {
