@@ -167,9 +167,10 @@ function AuthedGate({ onLoggedOut }: { onLoggedOut: () => void }) {
   // form entirely rather than a second copy of it (M6.19); a missing or
   // non-numeric value falls back to RecordTransaction's own default (the
   // `kind: "main"` row) exactly as if the param were absent.
-  // /incidentals?purpose=<id> is Home's purpose-breakdown row (M6.33):
-  // Incidentals.tsx opens straight to that envelope's detail view instead
-  // of its list.
+  // /incidentals?purpose=<id> is Home's purpose-breakdown row (M6.33) and
+  // Pengaturan's incidentals cards (#263): the only way that route ever
+  // renders a detail view now that its list is retired - see the route
+  // below.
   const rawPurpose = searchParams.get('purpose')
   const parsedPurpose = rawPurpose === null || rawPurpose.trim() === '' ? NaN : Number(rawPurpose)
   const initialPurposeId = Number.isInteger(parsedPurpose) && parsedPurpose > 0 ? parsedPurpose : null
@@ -300,16 +301,25 @@ function AuthedGate({ onLoggedOut }: { onLoggedOut: () => void }) {
           </Shell>
         }
       />
+      {/* #263/ADR-032: the list view is retired, so /incidentals is only
+          ever a detail view reached with ?purpose=<id> (a Beranda row, or a
+          card in Pengaturan's own section). Without one - a bare visit, or
+          an unparseable value - there is nothing here to show, so this
+          redirects to Pengaturan, the screen that now owns that list. */}
       <Route
         path="/incidentals"
         element={
-          <Shell title={title} onLoggedOut={onLoggedOut}>
-            <Incidentals
-              onBack={() => navigate('/')}
-              onRecordFor={(purposeId) => navigate(`/record?purpose=${purposeId}`)}
-              initialPurposeId={initialPurposeId}
-            />
-          </Shell>
+          initialPurposeId === null ? (
+            <Navigate to="/settings" replace />
+          ) : (
+            <Shell title={title} onLoggedOut={onLoggedOut}>
+              <Incidentals
+                onBack={() => navigate('/settings')}
+                onRecordFor={(purposeId) => navigate(`/record?purpose=${purposeId}`)}
+                purposeId={initialPurposeId}
+              />
+            </Shell>
+          )
         }
       />
       <Route

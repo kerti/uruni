@@ -63,43 +63,24 @@ function routedFetch(handlers: Handler[]) {
   })
 }
 
-/** The default GET handlers backing every test: the envelope list
- * (open vs all variants) plus accounts, fetched once on mount. */
-function getHandlers(opts: { open?: Envelope[]; all?: Envelope[] } = {}) {
-  const open = opts.open ?? [openEnvelope]
-  const all = opts.all ?? [openEnvelope, closedEnvelope]
-  return [
-    {
-      match: (m: string, u: string) => m === 'GET' && u.includes('/api/incidentals') && u.includes('open=true'),
-      handle: () => Promise.resolve(jsonResponse(open)),
-    },
-    {
-      match: (m: string, u: string) => m === 'GET' && u.includes('/api/incidentals') && !u.includes('open=') && !u.includes('/api/incidentals/'),
-      handle: () => Promise.resolve(jsonResponse(all)),
-    },
-    { match: (m: string, u: string) => m === 'GET' && u.includes('/api/accounts'), handle: () => Promise.resolve(jsonResponse(accounts)) },
-  ]
+/** The default GET handler backing every test: the accounts list, fetched
+ * once on mount. Envelope list routes are gone with the list view (#263) -
+ * this screen is detail-only now, always given a purposeId. */
+function getHandlers() {
+  return [{ match: (m: string, u: string) => m === 'GET' && u.includes('/api/accounts'), handle: () => Promise.resolve(jsonResponse(accounts)) }]
 }
 
 describe('Incidentals', () => {
-  it('shows open envelopes by default', async () => {
-    vi.stubGlobal('fetch', routedFetch(getHandlers()))
-    render(<Incidentals onBack={vi.fn()} onRecordFor={vi.fn()} />)
+  it('shows an open envelope\'s detail for the given purposeId', async () => {
+    const detail = { ...openEnvelope, collected_amount: 0, disbursed_amount: 0 }
+    vi.stubGlobal('fetch', routedFetch([
+      { match: (m: string, u: string) => m === 'GET' && u.includes('/api/incidentals/1'), handle: () => Promise.resolve(jsonResponse(detail)) },
+      ...getHandlers(),
+    ]))
+    render(<Incidentals onBack={vi.fn()} onRecordFor={vi.fn()} purposeId={1} />)
 
     await waitFor(() => expect(screen.getByText('Halal bihalal RT')).toBeInTheDocument())
-    expect(screen.queryByText('17 Agustus')).not.toBeInTheDocument()
-  })
-
-  it('the all tab shows a closed envelope the open tab filters out', async () => {
-    vi.stubGlobal('fetch', routedFetch(getHandlers()))
-    render(<Incidentals onBack={vi.fn()} onRecordFor={vi.fn()} />)
-
-    await waitFor(() => expect(screen.getByText('Halal bihalal RT')).toBeInTheDocument())
-    await userEvent.click(screen.getByRole('button', { name: text.allTab }))
-
-    await waitFor(() => expect(screen.getByText('17 Agustus')).toBeInTheDocument())
-    expect(screen.getByText('Halal bihalal RT')).toBeInTheDocument()
-    expect(screen.getByText(text.status.closed, { selector: 'span' })).toBeInTheDocument()
+    expect(screen.getByText(text.detail.collectedLabel)).toBeInTheDocument()
   })
 
   it('hands contribution/disbursement off to the real record form, pre-chosen to this envelope', async () => {
@@ -114,10 +95,7 @@ describe('Incidentals', () => {
     ]))
 
     const onRecordFor = vi.fn()
-    render(<Incidentals onBack={vi.fn()} onRecordFor={onRecordFor} />)
-    await waitFor(() => expect(screen.getByText('Halal bihalal RT')).toBeInTheDocument())
-
-    await userEvent.click(screen.getByRole('button', { name: /Halal bihalal RT/ }))
+    render(<Incidentals onBack={vi.fn()} onRecordFor={onRecordFor} purposeId={1} />)
     await waitFor(() => expect(screen.getByText(text.detail.collectedLabel)).toBeInTheDocument())
 
     await userEvent.click(screen.getByRole('button', { name: text.actions.record }))
@@ -136,11 +114,7 @@ describe('Incidentals', () => {
       ...getHandlers(),
     ]))
 
-    render(<Incidentals onBack={vi.fn()} onRecordFor={vi.fn()} />)
-    await waitFor(() => expect(screen.getByText('Halal bihalal RT')).toBeInTheDocument())
-
-    // Open the envelope's detail
-    await userEvent.click(screen.getByRole('button', { name: /Halal bihalal RT/ }))
+    render(<Incidentals onBack={vi.fn()} onRecordFor={vi.fn()} purposeId={1} />)
     await waitFor(() => expect(screen.getByText(text.detail.collectedLabel)).toBeInTheDocument())
     expect(screen.getByText(money(120_000))).toBeInTheDocument()
     expect(screen.getByText(money(100_000))).toBeInTheDocument()
@@ -179,9 +153,7 @@ describe('Incidentals', () => {
     })
     vi.stubGlobal('fetch', fetchMock)
 
-    render(<Incidentals onBack={vi.fn()} onRecordFor={vi.fn()} />)
-    await waitFor(() => expect(screen.getByText('Halal bihalal RT')).toBeInTheDocument())
-    await userEvent.click(screen.getByRole('button', { name: /Halal bihalal RT/ }))
+    render(<Incidentals onBack={vi.fn()} onRecordFor={vi.fn()} purposeId={1} />)
     await waitFor(() => expect(screen.getByText(text.detail.collectedLabel)).toBeInTheDocument())
 
     await userEvent.click(screen.getByRole('button', { name: text.actions.close }))
@@ -212,9 +184,7 @@ describe('Incidentals', () => {
     })
     vi.stubGlobal('fetch', fetchMock)
 
-    render(<Incidentals onBack={vi.fn()} onRecordFor={vi.fn()} />)
-    await waitFor(() => expect(screen.getByText('Halal bihalal RT')).toBeInTheDocument())
-    await userEvent.click(screen.getByRole('button', { name: /Halal bihalal RT/ }))
+    render(<Incidentals onBack={vi.fn()} onRecordFor={vi.fn()} purposeId={1} />)
     await waitFor(() => expect(screen.getByText(text.detail.collectedLabel)).toBeInTheDocument())
 
     await userEvent.click(screen.getByRole('button', { name: text.actions.close }))
@@ -238,10 +208,7 @@ describe('Incidentals', () => {
       ...getHandlers(),
     ]))
 
-    render(<Incidentals onBack={vi.fn()} onRecordFor={vi.fn()} />)
-    await waitFor(() => expect(screen.getByText('Halal bihalal RT')).toBeInTheDocument())
-
-    await userEvent.click(screen.getByRole('button', { name: /Halal bihalal RT/ }))
+    render(<Incidentals onBack={vi.fn()} onRecordFor={vi.fn()} purposeId={1} />)
     await waitFor(() => expect(screen.getByText(text.detail.collectedLabel)).toBeInTheDocument())
 
     await userEvent.click(screen.getByRole('button', { name: text.actions.close }))
@@ -262,12 +229,7 @@ describe('Incidentals', () => {
       ...getHandlers(),
     ]))
 
-    render(<Incidentals onBack={vi.fn()} onRecordFor={vi.fn()} />)
-    await waitFor(() => expect(screen.getByText('Halal bihalal RT')).toBeInTheDocument())
-    await userEvent.click(screen.getByRole('button', { name: text.allTab }))
-    await waitFor(() => expect(screen.getByText('17 Agustus')).toBeInTheDocument())
-
-    await userEvent.click(screen.getByRole('button', { name: /17 Agustus/ }))
+    render(<Incidentals onBack={vi.fn()} onRecordFor={vi.fn()} purposeId={2} />)
     await waitFor(() => expect(screen.getByText(text.detail.collectedLabel)).toBeInTheDocument())
 
     expect(screen.getByRole('button', { name: text.actions.reopen })).toBeInTheDocument()
@@ -296,11 +258,7 @@ describe('Incidentals', () => {
     })
     vi.stubGlobal('fetch', fetchMock)
 
-    render(<Incidentals onBack={vi.fn()} onRecordFor={vi.fn()} />)
-    await waitFor(() => expect(screen.getByText('Halal bihalal RT')).toBeInTheDocument())
-    await userEvent.click(screen.getByRole('button', { name: text.allTab }))
-    await waitFor(() => expect(screen.getByText('17 Agustus')).toBeInTheDocument())
-    await userEvent.click(screen.getByRole('button', { name: /17 Agustus/ }))
+    render(<Incidentals onBack={vi.fn()} onRecordFor={vi.fn()} purposeId={2} />)
     await waitFor(() => expect(screen.getByRole('button', { name: text.actions.reopen })).toBeInTheDocument())
 
     await userEvent.click(screen.getByRole('button', { name: text.actions.reopen }))
@@ -313,89 +271,16 @@ describe('Incidentals', () => {
     expect(screen.queryByRole('button', { name: text.actions.reopen })).not.toBeInTheDocument()
   })
 
-  it('opens an envelope, sending a null target when none was typed, and returns to the open tab', async () => {
-    // The target is optional (PRD section 7.5): an untouched AmountInput is 0, which
-    // means "no target" on the wire, not a target of nothing.
-    const opened = { ...openEnvelope, purpose_id: 3, occasion: 'Kerja bakti', target_amount: null, opened_on: '2026-09-09' }
-    let posted: unknown = null
-    const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
-      const url = typeof input === 'string' ? input : input.toString()
-      const method = (init?.method ?? 'GET').toUpperCase()
-      if (method === 'POST' && url.includes('/api/incidentals')) {
-        posted = JSON.parse(String(init?.body))
-        return Promise.resolve(jsonResponse(opened, 201))
-      }
-      const handler = getHandlers().find((h) => h.match(method, url))
-      if (!handler) return Promise.reject(new Error(`unstubbed fetch: ${method} ${url}`))
-      return handler.handle()
-    })
-    vi.stubGlobal('fetch', fetchMock)
-
-    render(<Incidentals onBack={vi.fn()} onRecordFor={vi.fn()} />)
-    await waitFor(() => expect(screen.getByText('Halal bihalal RT')).toBeInTheDocument())
-
-    await userEvent.click(screen.getByRole('button', { name: text.open.heading }))
-    await userEvent.type(await screen.findByLabelText(text.open.occasionLabel), 'Kerja bakti')
-    await userEvent.click(screen.getByRole('button', { name: text.open.submit }))
-
-    await waitFor(() => expect(screen.getByText(text.open.success)).toBeInTheDocument())
-    expect(posted).toEqual({ occasion: 'Kerja bakti', target_amount: null, opened_on: expect.any(String) })
-
-    // The form closes and the list is back, so the new envelope is reachable.
-    expect(screen.queryByLabelText(text.open.occasionLabel)).not.toBeInTheDocument()
-  })
-
-  it('sends the typed target amount as a plain integer when one was given', async () => {
-    let posted: unknown = null
-    const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
-      const url = typeof input === 'string' ? input : input.toString()
-      const method = (init?.method ?? 'GET').toUpperCase()
-      if (method === 'POST' && url.includes('/api/incidentals')) {
-        posted = JSON.parse(String(init?.body))
-        return Promise.resolve(jsonResponse(openEnvelope, 201))
-      }
-      const handler = getHandlers().find((h) => h.match(method, url))
-      if (!handler) return Promise.reject(new Error(`unstubbed fetch: ${method} ${url}`))
-      return handler.handle()
-    })
-    vi.stubGlobal('fetch', fetchMock)
-
-    render(<Incidentals onBack={vi.fn()} onRecordFor={vi.fn()} />)
-    await waitFor(() => expect(screen.getByText('Halal bihalal RT')).toBeInTheDocument())
-
-    await userEvent.click(screen.getByRole('button', { name: text.open.heading }))
-    await userEvent.type(await screen.findByLabelText(text.open.occasionLabel), 'Kerja bakti')
-    await userEvent.type(screen.getByLabelText(text.open.targetLabel), '500000')
-    await userEvent.click(screen.getByRole('button', { name: text.open.submit }))
-
-    await waitFor(() => expect(screen.getByText(text.open.success)).toBeInTheDocument())
-    expect(posted).toMatchObject({ target_amount: 500_000 })
-  })
-
-  it('returns from a detail view to the list', async () => {
+  it('calls onBack, now leading to Pengaturan, when backToSettings is clicked', async () => {
     const detail = { ...openEnvelope, collected_amount: 0, disbursed_amount: 0 }
     vi.stubGlobal('fetch', routedFetch([
       { match: (m: string, u: string) => m === 'GET' && u.includes('/api/incidentals/1'), handle: () => Promise.resolve(jsonResponse(detail)) },
       ...getHandlers(),
     ]))
-
-    render(<Incidentals onBack={vi.fn()} onRecordFor={vi.fn()} />)
-    await waitFor(() => expect(screen.getByText('Halal bihalal RT')).toBeInTheDocument())
-
-    await userEvent.click(screen.getByRole('button', { name: /Halal bihalal RT/ }))
-    await waitFor(() => expect(screen.getByText(text.detail.collectedLabel)).toBeInTheDocument())
-
-    await userEvent.click(screen.getByRole('button', { name: text.detail.backToList }))
-    await waitFor(() => expect(screen.getByRole('button', { name: text.openTab })).toBeInTheDocument())
-    expect(screen.queryByText(text.detail.collectedLabel)).not.toBeInTheDocument()
-  })
-
-  it('calls onBack when backToHome is clicked', async () => {
-    vi.stubGlobal('fetch', routedFetch(getHandlers()))
     const onBack = vi.fn()
-    render(<Incidentals onBack={onBack} onRecordFor={vi.fn()} />)
+    render(<Incidentals onBack={onBack} onRecordFor={vi.fn()} purposeId={1} />)
 
-    await userEvent.click(await screen.findByRole('button', { name: text.backToHome }))
+    await userEvent.click(await screen.findByRole('button', { name: text.detail.backToSettings }))
     expect(onBack).toHaveBeenCalledTimes(1)
   })
 })
