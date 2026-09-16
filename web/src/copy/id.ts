@@ -240,6 +240,14 @@ export const copy = {
   home: {
     balanceHeading: 'Saldo kas',
     locationsHeading: 'Saldo per lokasi',
+    // The purpose breakdown (M6.33, PRD section 7.7, ADR-032): each open
+    // incidental and each Titipan purpose gets its own row here, so an
+    // envelope's balance - including a negative one covered from Kas Utama
+    // per ADR-031 - is somewhere the treasurer actually looks. Kas Utama
+    // itself never appears here; it is the hero above. A fund with neither
+    // an open incidental nor a Titipan shows no section at all, so this
+    // heading has no accompanying empty-state string.
+    purposeBreakdownHeading: 'Saldo per peruntukan',
     recentActivityHeading: 'Aktivitas terbaru',
     recentActivityEmpty: 'Belum ada transaksi tercatat.',
     // The entry point into Riwayat's Transaksi tab (M6.23) - the recent-five
@@ -251,8 +259,6 @@ export const copy = {
     purposeUnknown: 'Tanpa tujuan',
     // date is already formatted (Intl.DateTimeFormat) by the caller.
     lastChecked: (date: string) => `Terakhir dicek ${date}`,
-    // The entry point to the incidentals screen (M6.19), same idiom.
-    incidentalLink: 'Lihat kegiatan insidental',
   },
   // The label line TransactionList.tsx renders on a row the app itself
   // created - never a row she recorded herself (#257, Decisions.md). Built

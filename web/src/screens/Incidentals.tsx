@@ -62,15 +62,22 @@ function todayISODate(): string {
  *
  * List (open-vs-all tabs, same idiom as Reimbursements.tsx) -> tap an
  * envelope -> detail, which renders `collected_amount`/`disbursed_amount`
- * straight from the server; nothing here re-sums a transaction list. A link
- * on the home screen navigates here; onBack returns to home.
+ * straight from the server; nothing here re-sums a transaction list. onBack
+ * returns to home.
+ *
+ * `initialPurposeId` is Home's purpose-breakdown row (M6.33): a tap on an
+ * open incidental there navigates to `/incidentals?purpose=<id>`, the same
+ * `?purpose=` idiom RecordTransaction's own initialPurposeId uses, and this
+ * screen opens straight to that envelope's detail view instead of the list.
  */
 export default function Incidentals({
   onBack,
   onRecordFor,
+  initialPurposeId = null,
 }: {
   onBack: () => void
   onRecordFor: (purposeId: number) => void
+  initialPurposeId?: number | null
 }) {
   const [listState, listRun] = useApi<Incidental[]>()
   const [accountsState, accountsRun] = useApi<Account[]>()
@@ -79,7 +86,7 @@ export default function Incidentals({
 
   const [tab, setTab] = useState<'open' | 'all'>('open')
   const [showOpenForm, setShowOpenForm] = useState(false)
-  const [selectedPurposeId, setSelectedPurposeId] = useState<number | null>(null)
+  const [selectedPurposeId, setSelectedPurposeId] = useState<number | null>(initialPurposeId)
 
   const [showCloseForm, setShowCloseForm] = useState(false)
   const [rolledAmount, setRolledAmount] = useState<number | null>(null)
@@ -99,6 +106,17 @@ export default function Incidentals({
     void accountsRun(listAccounts)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [accountsRun])
+
+  // Preselect the detail view when navigated here with ?purpose=<id>
+  // (Home's purpose-breakdown rows) - runs once, mirroring initialPurposeId
+  // itself never changing after this screen mounts (a fresh navigation
+  // remounts it with a fresh query string).
+  useEffect(() => {
+    if (initialPurposeId !== null) {
+      void detailRun(() => getIncidental(initialPurposeId))
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   function openDetail(purposeId: number) {
     setSelectedPurposeId(purposeId)

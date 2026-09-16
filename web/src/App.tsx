@@ -162,11 +162,14 @@ function AuthedGate({ onLoggedOut }: { onLoggedOut: () => void }) {
   const location = useLocation()
   const [searchParams] = useSearchParams()
 
-  // /record?purpose=<id> - Incidentals.tsx's own contribute/disburse entry
-  // point, reusing this form entirely rather than a second copy of it
-  // (M6.19). A missing or non-numeric value falls back to
-  // RecordTransaction's own default (the `kind: "main"` row) exactly as if
-  // the param were absent.
+  // ?purpose=<id> - shared by two routes. /record?purpose=<id> is
+  // Incidentals.tsx's own contribute/disburse entry point, reusing this
+  // form entirely rather than a second copy of it (M6.19); a missing or
+  // non-numeric value falls back to RecordTransaction's own default (the
+  // `kind: "main"` row) exactly as if the param were absent.
+  // /incidentals?purpose=<id> is Home's purpose-breakdown row (M6.33):
+  // Incidentals.tsx opens straight to that envelope's detail view instead
+  // of its list.
   const rawPurpose = searchParams.get('purpose')
   const parsedPurpose = rawPurpose === null || rawPurpose.trim() === '' ? NaN : Number(rawPurpose)
   const initialPurposeId = Number.isInteger(parsedPurpose) && parsedPurpose > 0 ? parsedPurpose : null
@@ -301,7 +304,11 @@ function AuthedGate({ onLoggedOut }: { onLoggedOut: () => void }) {
         path="/incidentals"
         element={
           <Shell title={title} onLoggedOut={onLoggedOut}>
-            <Incidentals onBack={() => navigate('/')} onRecordFor={(purposeId) => navigate(`/record?purpose=${purposeId}`)} />
+            <Incidentals
+              onBack={() => navigate('/')}
+              onRecordFor={(purposeId) => navigate(`/record?purpose=${purposeId}`)}
+              initialPurposeId={initialPurposeId}
+            />
           </Shell>
         }
       />
@@ -318,7 +325,7 @@ function AuthedGate({ onLoggedOut }: { onLoggedOut: () => void }) {
             <Home
               refetchKey={location.key}
               onReconcile={() => navigate('/reconcile')}
-              onViewIncidentals={() => navigate('/incidentals')}
+              onOpenIncidental={(purposeId) => navigate(`/incidentals?purpose=${purposeId}`)}
               onViewHistory={() => navigate('/history/transactions')}
             />
           </Shell>
