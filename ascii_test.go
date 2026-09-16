@@ -55,29 +55,69 @@ var skipDirs = map[string]bool{
 	"playwright-report": true, "test-results": true, "docs": true,
 }
 
-// trackedFiles lists what git knows about. Enumerating the working tree
-// instead would police files that are not the repo's - a gitignored
-// settings.local.json, a scratch script - and fail on someone's machine for a
-// file no one else has.
-func trackedFiles(t *testing.T) []string {
+// repoFiles lists the files git would add: everything tracked, plus everything
+// untracked that is not gitignored. Enumerating the working tree instead would
+// police files that are not the repo's - a gitignored settings.local.json, a
+// scratch script - and fail on someone's machine for a file no one else has.
+//
+// The untracked half is deliberate, and the reason it is here is the whole
+// point of the guard. "Not committed yet" is not the same as "not ours": a
+// file just created is exactly the file most likely to carry a stray character
+// and the one a local gate exists to catch. Enumerating only `git ls-files`
+// let a new PaymentHistory.tsx carry a raw middle dot through a green
+// `make check` twice and redden CI on the commit instead (#260).
+// `--others --exclude-standard` is precisely "files git would add" - it adds
+// that file and still excludes anything gitignored. Do not narrow this back to
+// tracked files only.
+func repoFiles(t *testing.T) []string {
 	t.Helper()
-	out, err := exec.Command("git", "ls-files", "-z").Output()
-	if err != nil {
-		t.Skipf("git ls-files unavailable (%v); nothing to enumerate", err)
-	}
 	var paths []string
-	for _, p := range strings.Split(string(out), "\x00") {
-		if p != "" {
-			paths = append(paths, p)
+	for _, args := range [][]string{
+		{"ls-files", "-z"},
+		{"ls-files", "-z", "--others", "--exclude-standard"},
+	} {
+		// #nosec G204 - args is one of the two literal slices above, not user
+		// input; the loop exists only so both enumerations share this body.
+		out, err := exec.Command("git", args...).Output()
+		if err != nil {
+			t.Skipf("git %s unavailable (%v); nothing to enumerate", strings.Join(args, " "), err)
+		}
+		for _, p := range strings.Split(string(out), "\x00") {
+			if p != "" {
+				paths = append(paths, p)
+			}
 		}
 	}
 	return paths
 }
 
+// TestRepoFilesIncludesUntracked pins the half of the enumeration that is
+// easiest to lose to a tidy-up: a file that exists but has never been
+// committed must still be listed, or a new file skips the ASCII guard until
+// the moment it is too late. See repoFiles.
+func TestRepoFilesIncludesUntracked(t *testing.T) {
+	const probe = "ascii_guard_untracked_probe.go"
+	if err := os.WriteFile(probe, []byte("package uruni\n"), 0o600); err != nil {
+		t.Fatalf("WriteFile(%s) = %v, want no error", probe, err)
+	}
+	t.Cleanup(func() {
+		if err := os.Remove(probe); err != nil {
+			t.Errorf("removing %s: %v", probe, err)
+		}
+	})
+
+	for _, p := range repoFiles(t) {
+		if filepath.Clean(p) == probe {
+			return
+		}
+	}
+	t.Errorf("repoFiles() does not list the untracked %s; a newly created file would skip the ASCII guard", probe)
+}
+
 func TestSourceFilesAreASCII(t *testing.T) {
 	scanned := 0
 
-	for _, path := range trackedFiles(t) {
+	for _, path := range repoFiles(t) {
 		name := filepath.Base(path)
 		if !scannedExts[filepath.Ext(name)] && !scannedNames[name] {
 			continue
@@ -90,7 +130,7 @@ func TestSourceFilesAreASCII(t *testing.T) {
 		}
 
 		// #nosec G304 - the path comes from `git ls-files` in this repo, not
-		// from user input; reading the repo's own tracked files is the point.
+		// from user input; reading the repo's own files is the point.
 		src, err := os.ReadFile(path)
 		if err != nil {
 			t.Fatalf("reading %s: %v", path, err)
