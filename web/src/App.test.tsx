@@ -44,6 +44,9 @@ function fundNotFoundResponse() {
  * what renders there now. */
 const emptyHomeRoutes: { match: (method: string, url: string) => boolean; handle: () => Promise<Response> }[] = [
   { match: (m, u) => m === 'GET' && u.includes('/api/balances'), handle: () => Promise.resolve(jsonResponse({ fund_total: 0, accounts: [], purposes: [] })) },
+  // Home's purpose breakdown (M6.33) fetches the open envelopes list too -
+  // empty, same as everything else in this fixture.
+  { match: (m, u) => m === 'GET' && u.includes('/api/incidentals'), handle: () => Promise.resolve(jsonResponse([])) },
   {
     match: (m, u) => m === 'GET' && u.includes('/api/reconciliations/open-lines'),
     handle: () => Promise.resolve(jsonResponse([])),

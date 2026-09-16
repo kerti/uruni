@@ -24,8 +24,12 @@ test.describe('incidentals', () => {
     await page.getByRole('button', { name: copy.auth.login.submit }).click()
     await expect(page.getByText(copy.home.balanceHeading)).toBeVisible()
 
-    // Navigate to incidentals from home
-    await page.getByRole('button', { name: copy.home.incidentalLink }).click()
+    // Opening a brand-new envelope has no button on Beranda any more
+    // (M6.33, ADR-032): incidentals are entry points there, not a
+    // destination behind a button. The /incidentals route itself still
+    // exists (the open form, the all-envelopes list), just unreached from
+    // Beranda until it holds an open envelope of its own.
+    await page.goto('/incidentals')
     await expect(page.getByRole('heading', { name: copy.incidentals.heading })).toBeVisible()
 
     // Open the "open envelope" form
@@ -51,8 +55,10 @@ test.describe('incidentals', () => {
     await page.getByRole('button', { name: copy.auth.login.submit }).click()
     await expect(page.getByText(copy.home.balanceHeading)).toBeVisible()
 
-    // Navigate to incidentals and open the envelope's detail
-    await page.getByRole('button', { name: copy.home.incidentalLink }).click()
+    // The envelope opened in the previous test is still open, so it now
+    // renders as its own row in Beranda's purpose breakdown (M6.33) -
+    // tapping it opens that envelope's detail, no separate list screen
+    // visited first.
     await page.getByRole('button', { name: new RegExp(occasion) }).click()
     await expect(page.getByText(copy.incidentals.detail.collectedLabel)).toBeVisible()
 
@@ -70,10 +76,18 @@ test.describe('incidentals', () => {
     await page.getByRole('button', { name: copy.record.submit }).click()
     await expect(page.getByText(copy.record.successIn)).toBeVisible()
 
-    // Back on incidentals, the collected total now reflects the contribution.
-    await page.getByRole('button', { name: copy.home.incidentalLink }).click()
+    // Back on home, the row's own balance reflects the contribution, and
+    // tapping it again shows the same total on the detail view.
     await page.getByRole('button', { name: new RegExp(occasion) }).click()
-    await expect(page.getByText('Rp 60.000')).toBeVisible()
+    // Anchored to the collected row rather than the page: since M6.33 this
+    // amount appears three times over - Beranda's own breakdown row, the
+    // recent-five entry for the contribution just recorded, and the detail
+    // view this assertion means. A bare getByText matched whichever of them
+    // the navigation had not yet torn down, which is also why it was racy
+    // before it was ambiguous. toContainText retries, so this waits for the
+    // detail view instead of assuming the click has landed.
+    const collectedRow = page.getByText(copy.incidentals.detail.collectedLabel).locator('..')
+    await expect(collectedRow).toContainText('Rp 60.000')
   })
 
   test('close the envelope and verify the rollover is shown honestly', async ({ page }) => {
@@ -83,8 +97,8 @@ test.describe('incidentals', () => {
     await page.getByRole('button', { name: copy.auth.login.submit }).click()
     await expect(page.getByText(copy.home.balanceHeading)).toBeVisible()
 
-    // Navigate to incidentals and open the envelope's detail
-    await page.getByRole('button', { name: copy.home.incidentalLink }).click()
+    // Still open, still its own row on Beranda (M6.33) - tap it straight
+    // into the envelope's detail.
     await page.getByRole('button', { name: new RegExp(occasion) }).click()
     await expect(page.getByText(copy.incidentals.detail.collectedLabel)).toBeVisible()
 
