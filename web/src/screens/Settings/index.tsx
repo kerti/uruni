@@ -1,4 +1,5 @@
 import FundName from '@/screens/Settings/FundName'
+import Incidentals from '@/screens/Settings/Incidentals'
 import Locations from '@/screens/Settings/Locations'
 import PassThrough from '@/screens/Settings/PassThrough'
 import { copy } from '@/copy/id'
@@ -15,6 +16,10 @@ import type { Fund } from '@/lib/setup'
  * Each section owns its own data and its own writes; this file is the frame
  * and the order, nothing else. M6.16 and M6.17 add their sections here.
  *
+ * Incidentals (#263, ADR-032): opening a new envelope lost its home when
+ * Beranda's purpose breakdown became entry points only, and it lands here,
+ * beside Titipan - the two are kinds of one `purpose` (CONTEXT.md).
+ *
  * No back control: Shell's footer is how every screen is left now, and a
  * second way out would be one affordance too many.
  */
@@ -26,6 +31,7 @@ export default function Settings({ onFundRenamed }: { onFundRenamed: (fund: Fund
       <FundName onRenamed={onFundRenamed} />
       <Locations />
       <PassThrough />
+      <Incidentals />
     </div>
   )
 }

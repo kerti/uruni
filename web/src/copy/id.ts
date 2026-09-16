@@ -589,6 +589,27 @@ export const copy = {
       saving: 'Menyimpan…',
       cancel: 'Batal',
     },
+    // Where a new envelope is opened (#263, ADR-032 "an incidental is a
+    // purpose, so it is opened in Pengaturan"): incidental and pass-through
+    // are two kinds of one purpose (CONTEXT.md), so this section sits beside
+    // Titipan rather than duplicating the retired /incidentals list screen.
+    // The word is "amplop", here and everywhere (CONTEXT.md, one word per
+    // concept). Every other string in the app already said it - "Buka
+    // amplop", "Tutup amplop", "Amplop ini sudah ditutup" - while the
+    // heading alone said "Kegiatan insidental", which is the Indonesian
+    // rendering of the English identifier `incidental`, not a word the
+    // treasurer uses. The metaphor is the envelope; the app now speaks it
+    // throughout. Identifiers, routes and the schema stay `incidental`
+    // (ADR-014).
+    incidentals: {
+      heading: 'Amplop',
+      body: 'Amplop terpisah untuk acara sekali jalan — kumpulkan, pakai, lalu tutup. Amplop yang sudah ditutup tetap tercatat di sini, dan bisa dibuka lagi.',
+      empty: 'Belum ada amplop dibuka.',
+      // Same word the dialog's own heading uses (copy.incidentals.open.heading)
+      // - one word for "start a new envelope", not two.
+      add: 'Buka amplop',
+      cardAria: (occasion: string) => `Lihat ${occasion}`,
+    },
   },
   // Riwayat's Talangan tab (M6.18, PRD §7.4; moved under Riwayat by
   // #226; renamed from "Penggantian" to "Talangan" for the user-facing word
@@ -669,13 +690,10 @@ export const copy = {
       reimbursement_waived: 'Talangan ini sudah diputihkan.',
     },
   },
+  // The envelope's own detail screen (#263 retired the list this namespace
+  // used to head: its heading and body moved to copy.settings.incidentals,
+  // and the detail view titles itself with the occasion instead).
   incidentals: {
-    heading: 'Kegiatan insidental',
-    body: 'Amplop terpisah untuk acara sekali jalan — kumpulkan, pakai, lalu tutup.',
-    openTab: 'Berjalan',
-    allTab: 'Semua',
-    emptyOpen: 'Tidak ada amplop yang sedang berjalan.',
-    emptyAll: 'Belum ada amplop dibuka.',
     open: {
       heading: 'Buka amplop',
       occasionLabel: 'Acara',
@@ -685,13 +703,14 @@ export const copy = {
       submit: 'Buka',
       submitting: 'Membuka…',
       cancel: 'Batal',
-      success: 'Amplop berhasil dibuka.',
     },
     detail: {
       collectedLabel: 'Terkumpul',
       disbursedLabel: 'Terpakai',
       targetLabel: 'Target',
-      backToList: 'Kembali ke daftar',
+      // Was "Kembali ke daftar" - the list it named is retired (#263); an
+      // envelope's card list now lives in Pengaturan, so this leads there.
+      backToSettings: 'Kembali ke pengaturan',
     },
     close: {
       heading: 'Tutup amplop',
@@ -739,6 +758,5 @@ export const copy = {
       incidental_already_closed: 'Amplop ini sudah ditutup.',
       incidental_not_closed: 'Amplop ini belum ditutup.',
     },
-    backToHome: 'Kembali ke beranda',
   },
 } as const

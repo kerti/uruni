@@ -1,8 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react'
 
-import AmountInput from '@/components/money/AmountInput'
 import AccountPicker from '@/components/pickers/AccountPicker'
-import { segmentedItemClass, segmentedTrackClass } from '@/components/segmented'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -11,9 +9,8 @@ import ErrorState from '@/components/states/ErrorState'
 import { copy } from '@/copy/id'
 import { ApiError } from '@/lib/api'
 import { listAccounts } from '@/lib/accounts'
-import { formatIsoDate } from '@/lib/dates'
 import { formatIDR } from '@/lib/money'
-import { closeIncidental, getIncidental, listIncidentals, openIncidental, reopenIncidental } from '@/lib/incidentals'
+import { closeIncidental, getIncidental, reopenIncidental } from '@/lib/incidentals'
 import { useApi } from '@/lib/useApi'
 import type { Account } from '@/lib/accounts'
 import type { Incidental, IncidentalDetail } from '@/lib/incidentals'
@@ -45,12 +42,12 @@ function todayISODate(): string {
 }
 
 /**
- * The incidental-envelopes screen (M6.19, PRD section 7.5): a separate pot for a
- * one-off occasion - open it, collect contributions and pay disbursements
- * against it, then close it once the occasion is over. Closing rolls any
- * leftover into the fund's main purpose and answers with `rolled_amount`,
- * shown here honestly even when it is zero - a zero rollover is not the
- * same as no answer.
+ * The incidental-envelope detail screen (M6.19, PRD section 7.5; reduced to
+ * detail-only by #263/ADR-032): a separate pot for a one-off occasion -
+ * collect contributions and pay disbursements against it, then close it
+ * once the occasion is over. Closing rolls any leftover into the fund's
+ * main purpose and answers with `rolled_amount`, shown here honestly even
+ * when it is zero - a zero rollover is not the same as no answer.
  *
  * Contributions and disbursements are not this screen's own form: they are
  * ordinary POST /api/transactions calls tagged to the envelope's purpose,
@@ -60,86 +57,54 @@ function todayISODate(): string {
  * rather than this screen duplicating that form. Closing IS specific to an
  * envelope, so it keeps its own inline form here.
  *
- * List (open-vs-all tabs, same idiom as Reimbursements.tsx) -> tap an
- * envelope -> detail, which renders `collected_amount`/`disbursed_amount`
- * straight from the server; nothing here re-sums a transaction list. onBack
- * returns to home.
- *
- * `initialPurposeId` is Home's purpose-breakdown row (M6.33): a tap on an
- * open incidental there navigates to `/incidentals?purpose=<id>`, the same
- * `?purpose=` idiom RecordTransaction's own initialPurposeId uses, and this
- * screen opens straight to that envelope's detail view instead of the list.
+ * Opening a new envelope, and the card list of every envelope the fund has
+ * (open and closed), both moved to Pengaturan's own section
+ * (screens/Settings/Incidentals.tsx, #263) - they are the same object as
+ * Titipan there. What survives at this route is the detail view alone,
+ * always reached with `?purpose=<id>` (App.tsx redirects `/incidentals`
+ * without one, or with an unparseable one, to `/settings`): from a Beranda
+ * purpose-breakdown row, or from a card in that section.
  */
 export default function Incidentals({
   onBack,
   onRecordFor,
-  initialPurposeId = null,
+  purposeId,
 }: {
   onBack: () => void
   onRecordFor: (purposeId: number) => void
-  initialPurposeId?: number | null
+  purposeId: number
 }) {
-  const [listState, listRun] = useApi<Incidental[]>()
   const [accountsState, accountsRun] = useApi<Account[]>()
   const [detailState, detailRun] = useApi<IncidentalDetail>()
   const [submitState, submitRun] = useApi<unknown>()
-
-  const [tab, setTab] = useState<'open' | 'all'>('open')
-  const [showOpenForm, setShowOpenForm] = useState(false)
-  const [selectedPurposeId, setSelectedPurposeId] = useState<number | null>(initialPurposeId)
 
   const [showCloseForm, setShowCloseForm] = useState(false)
   const [rolledAmount, setRolledAmount] = useState<number | null>(null)
 
   const [feedback, setFeedback] = useState<Feedback | null>(null)
 
-  function fetchList() {
-    void listRun(() => listIncidentals(tab === 'open'))
-  }
-
-  useEffect(() => {
-    void fetchList()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tab])
-
   useEffect(() => {
     void accountsRun(listAccounts)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [accountsRun])
 
-  // Preselect the detail view when navigated here with ?purpose=<id>
-  // (Home's purpose-breakdown rows) - runs once, mirroring initialPurposeId
-  // itself never changing after this screen mounts (a fresh navigation
-  // remounts it with a fresh query string).
+  // Fetches once for the purpose this screen was navigated with - a fresh
+  // navigation to a different envelope remounts this component with a fresh
+  // purposeId, same as initialPurposeId used to work before the list view
+  // that once let her switch envelopes in place.
   useEffect(() => {
-    if (initialPurposeId !== null) {
-      void detailRun(() => getIncidental(initialPurposeId))
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
-
-  function openDetail(purposeId: number) {
-    setSelectedPurposeId(purposeId)
-    setFeedback(null)
-    setRolledAmount(null)
-    setShowCloseForm(false)
     void detailRun(() => getIncidental(purposeId))
-  }
-
-  function backToList() {
-    setSelectedPurposeId(null)
-    setFeedback(null)
-    fetchList()
-  }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [purposeId])
 
   const submitting = submitState.status === 'loading'
 
-  /** Every write on this screen - open, close - clears stale feedback, runs
-   * the call, then says what happened. A named 409
-   * (incidental_already_closed) reaches the treasurer through
-   * copy.incidentals.errors; anything else falls back to the shared map,
-   * never the English wire message (ADR-014). Mirrors Reimbursements.tsx's
-   * runWrite. */
+  /** Every write on this screen - close, reopen - clears stale feedback,
+   * runs the call, then says what happened. A named 409
+   * (incidental_already_closed / incidental_not_closed) reaches the
+   * treasurer through copy.incidentals.errors; anything else falls back to
+   * the shared map, never the English wire message (ADR-014). Mirrors
+   * Reimbursements.tsx's runWrite. */
   function runWrite<T>(api: () => Promise<T>, successText: string, onSuccess?: (result: T) => void) {
     void submitRun(async () => {
       setFeedback(null)
@@ -156,19 +121,7 @@ export default function Incidentals({
     })
   }
 
-  function handleOpen(occasion: string, targetAmount: number, openedOn: string) {
-    runWrite(
-      () => openIncidental({ occasion, targetAmount: targetAmount > 0 ? targetAmount : null, openedOn }),
-      text.open.success,
-      () => {
-        setShowOpenForm(false)
-        setTab('open')
-        fetchList()
-      },
-    )
-  }
-
-  function handleClose(purposeId: number, accountId: number, closedOn: string, note: string) {
+  function handleClose(accountId: number, closedOn: string, note: string) {
     // The rolled amount lives only in the close response, not on the detail
     // row - captured into local state here, rendered even when it is 0 (see
     // DetailView's own rolledAmount block).
@@ -189,7 +142,7 @@ export default function Incidentals({
   // amplop" for any open envelope, so a reopen leads straight into the same
   // close form a late entry is meant to end at, not a bare toggle with
   // nothing next.
-  function handleReopen(purposeId: number) {
+  function handleReopen() {
     runWrite(
       () => reopenIncidental(purposeId),
       text.reopen.success,
@@ -200,126 +153,22 @@ export default function Incidentals({
     )
   }
 
-  // --- Detail view -------------------------------------------------------
-
-  if (selectedPurposeId !== null) {
-    return (
-      <DetailView
-        detailState={detailState}
-        accounts={accountsState.data ?? []}
-        feedback={feedback}
-        submitting={submitting}
-        showCloseForm={showCloseForm}
-        rolledAmount={rolledAmount}
-        onRecord={() => onRecordFor(selectedPurposeId)}
-        onShowClose={() => { setShowCloseForm(true); setFeedback(null) }}
-        onCancelClose={() => setShowCloseForm(false)}
-        onClose={(accountId, closedOn, note) => handleClose(selectedPurposeId, accountId, closedOn, note)}
-        onReopen={() => handleReopen(selectedPurposeId)}
-        onRetry={() => void detailRun(() => getIncidental(selectedPurposeId))}
-        onBack={backToList}
-      />
-    )
-  }
-
-  // --- List view -----------------------------------------------------------
-
-  if (listState.status === 'idle' || listState.status === 'loading') {
-    return <Loading />
-  }
-
-  if (listState.status === 'error' || !listState.data) {
-    return listState.error ? <ErrorState error={listState.error} onRetry={() => void listRun(() => listIncidentals(tab === 'open'))} /> : null
-  }
-
-  const envelopes = listState.data
-
   return (
-    <div className="mx-auto flex w-full max-w-sm flex-col gap-4">
-      <h1 className="text-2xl font-semibold">{text.heading}</h1>
-      <p className="text-sm text-muted-foreground">{text.body}</p>
-
-      {feedback && (
-        <p
-          role={feedback.kind === 'error' ? 'alert' : 'status'}
-          className={
-            feedback.kind === 'error'
-              ? 'rounded-lg bg-attention-soft px-3 py-2 text-sm text-attention'
-              : 'rounded-lg bg-success-soft px-3 py-2 text-sm text-success'
-          }
-        >
-          {feedback.text}
-        </p>
-      )}
-
-      {/* Tab bar */}
-      <div role="tablist" aria-label={text.heading} className={segmentedTrackClass(2)}>
-        <Button
-          type="button"
-          variant={tab === 'open' ? 'default' : 'ghost'}
-          aria-pressed={tab === 'open'}
-          className={segmentedItemClass(tab === 'open')}
-          onClick={() => { setTab('open'); setFeedback(null) }}
-        >
-          {text.openTab}
-        </Button>
-        <Button
-          type="button"
-          variant={tab === 'all' ? 'default' : 'ghost'}
-          aria-pressed={tab === 'all'}
-          className={segmentedItemClass(tab === 'all')}
-          onClick={() => { setTab('all'); setFeedback(null) }}
-        >
-          {text.allTab}
-        </Button>
-      </div>
-
-      {/* Open envelope button */}
-      {!showOpenForm && (
-        <Button type="button" size="lg" onClick={() => { setShowOpenForm(true); setFeedback(null) }}>
-          {text.open.heading}
-        </Button>
-      )}
-
-      {/* Open envelope form */}
-      {showOpenForm && (
-        <OpenForm onSubmit={handleOpen} onCancel={() => setShowOpenForm(false)} submitting={submitting} />
-      )}
-
-      {/* Envelope list */}
-      {envelopes.length === 0 ? (
-        <p className="text-muted-foreground">{tab === 'open' ? text.emptyOpen : text.emptyAll}</p>
-      ) : (
-        <ul className="flex flex-col gap-3">
-          {envelopes.map((envelope) => (
-            <li key={envelope.purpose_id}>
-              <button
-                type="button"
-                onClick={() => openDetail(envelope.purpose_id)}
-                className="flex w-full flex-col gap-2 rounded-2xl bg-card p-4 text-left ring-1 ring-foreground/10"
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <span className="truncate font-medium">{envelope.occasion}</span>
-                  <StatusBadge envelope={envelope} />
-                </div>
-                <div className="flex items-center justify-between text-sm text-muted-foreground">
-                  <span>{formatIsoDate(envelope.opened_on)}</span>
-                  {envelope.target_amount !== null && (
-                    <span className="tabular">
-                      {text.detail.targetLabel}: {formatIDR(envelope.target_amount)}
-                    </span>
-                  )}
-                </div>
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
-
-      <Button type="button" variant="outline" size="lg" onClick={onBack}>
-        {text.backToHome}
-      </Button>
-    </div>
+    <DetailView
+      detailState={detailState}
+      accounts={accountsState.data ?? []}
+      feedback={feedback}
+      submitting={submitting}
+      showCloseForm={showCloseForm}
+      rolledAmount={rolledAmount}
+      onRecord={() => onRecordFor(purposeId)}
+      onShowClose={() => { setShowCloseForm(true); setFeedback(null) }}
+      onCancelClose={() => setShowCloseForm(false)}
+      onClose={handleClose}
+      onReopen={handleReopen}
+      onRetry={() => void detailRun(() => getIncidental(purposeId))}
+      onBack={onBack}
+    />
   )
 }
 
@@ -330,75 +179,10 @@ function StatusBadge({ envelope }: { envelope: Incidental }) {
   return <span className="rounded-full bg-success-soft px-2 py-0.5 text-xs font-medium text-success">{text.status.open}</span>
 }
 
-function OpenForm({
-  onSubmit,
-  onCancel,
-  submitting,
-}: {
-  onSubmit: (occasion: string, targetAmount: number, openedOn: string) => void
-  onCancel: () => void
-  submitting: boolean
-}) {
-  const [occasion, setOccasion] = useState('')
-  const [targetAmount, setTargetAmount] = useState(0)
-  const [openedOn, setOpenedOn] = useState(todayISODate)
-
-  const canSubmit = occasion.trim() !== '' && openedOn !== '' && !submitting
-
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault()
-    if (!canSubmit) return
-    onSubmit(occasion.trim(), targetAmount, openedOn)
-  }
-
-  return (
-    <form className="flex flex-col gap-4 rounded-2xl bg-card p-4 ring-1 ring-foreground/10" onSubmit={handleSubmit} noValidate>
-      <h2 className="text-lg font-semibold">{text.open.heading}</h2>
-
-      <div className="flex flex-col gap-1.5">
-        <Label htmlFor="incidental-occasion">{text.open.occasionLabel}</Label>
-        <Input
-          id="incidental-occasion"
-          className="h-11"
-          placeholder={text.open.occasionPlaceholder}
-          value={occasion}
-          onChange={(event) => setOccasion(event.target.value)}
-          disabled={submitting}
-          required
-        />
-      </div>
-
-      <AmountInput id="incidental-target" label={text.open.targetLabel} value={targetAmount} onChange={setTargetAmount} disabled={submitting} />
-
-      <div className="flex flex-col gap-1.5">
-        <Label htmlFor="incidental-opened">{text.open.dateLabel}</Label>
-        <Input
-          id="incidental-opened"
-          type="date"
-          className="h-11"
-          value={openedOn}
-          onChange={(event) => setOpenedOn(event.target.value)}
-          disabled={submitting}
-          required
-        />
-      </div>
-
-      <div className="flex gap-2">
-        <Button type="submit" size="lg" disabled={!canSubmit}>
-          {submitting ? text.open.submitting : text.open.submit}
-        </Button>
-        <Button type="button" variant="outline" size="lg" onClick={onCancel} disabled={submitting}>
-          {text.open.cancel}
-        </Button>
-      </div>
-    </form>
-  )
-}
-
 /** The detail view: one envelope's totals, a link into the real record form
  * for contributions/disbursements, and close once it is still open. Kept as
- * its own component (rather than an inline branch) so the close form
- * doesn't crowd the list view's own JSX. */
+ * its own component (rather than inlined into Incidentals) so the close
+ * form doesn't crowd the rest of the JSX. */
 function DetailView({
   detailState,
   accounts,
@@ -442,7 +226,7 @@ function DetailView({
   return (
     <div className="mx-auto flex w-full max-w-sm flex-col gap-4">
       <Button type="button" variant="outline" size="lg" onClick={onBack}>
-        {text.detail.backToList}
+        {text.detail.backToSettings}
       </Button>
 
       <div className="flex items-start justify-between gap-3">
@@ -514,10 +298,9 @@ function DetailView({
       )}
 
       {/* The way back from a closed envelope (ADR-031): reopening rejoins
-          the open list and, immediately on this same screen, the isOpen
-          block above - "Catat transaksi" for the late entry and "Tutup
-          amplop" to close again - rather than leaving a bare toggle with
-          nothing next. */}
+          the isOpen block above - "Catat transaksi" for the late entry and
+          "Tutup amplop" to close again - rather than leaving a bare toggle
+          with nothing next. */}
       {!isOpen && (
         <Button type="button" size="lg" variant="outline" onClick={onReopen} disabled={submitting}>
           {text.actions.reopen}
@@ -576,8 +359,8 @@ function CloseForm({
         />
       </div>
 
-      {/* The roll is a transfer the treasurer never asks for directly, so
-          without this it appears in the list as two unexplained rows (#210). */}
+      {/* The roll is a transfer the treasurer never asks for directly (#210),
+          so without this it appears in the list as two unexplained rows. */}
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="incidental-close-note">{text.close.noteLabel}</Label>
         <Input

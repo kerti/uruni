@@ -18,21 +18,31 @@ import type { Account } from '@/lib/accounts'
 
 const text = copy.settings.locations
 
-/** What `?edit=` names on this screen - a new location, or an existing one
- * by id. Anything else (a different prefix, a non-numeric id) is not this
- * screen's dialog to open. */
+/**
+ * What `?edit=` names on this screen - a new location, or an existing one by
+ * id.
+ *
+ * `foreign` is separate from `invalid` on purpose, and it matters as soon as
+ * Pengaturan holds a second section with a dialog of its own (#263's
+ * Incidentals): these sections all read one URL, so a section that cleared
+ * every value it could not parse would strip the param its neighbour's open
+ * dialog is living on and close it mid-edit. A different prefix - or no
+ * prefix at all - is `foreign` and is left alone; only a `location:` value
+ * this screen cannot use is `invalid`, and only that is cleared.
+ */
 type EditTarget = { kind: 'new' } | { kind: 'edit'; id: number }
+type ParsedTarget = EditTarget | { kind: 'foreign' } | { kind: 'invalid' }
 
-function parseEditTarget(value: string | null): EditTarget | null {
-  if (value === null) return null
+function parseEditTarget(value: string | null): ParsedTarget {
+  if (value === null) return { kind: 'foreign' }
   const separator = value.indexOf(':')
-  if (separator < 0) return null
+  if (separator < 0) return { kind: 'foreign' }
   const prefix = value.slice(0, separator)
   const rest = value.slice(separator + 1)
-  if (prefix !== 'location') return null
+  if (prefix !== 'location') return { kind: 'foreign' }
   if (rest === 'new') return { kind: 'new' }
   const id = Number(rest)
-  return Number.isInteger(id) && id > 0 ? { kind: 'edit', id } : null
+  return Number.isInteger(id) && id > 0 ? { kind: 'edit', id } : { kind: 'invalid' }
 }
 
 /**
@@ -68,21 +78,22 @@ export default function Locations() {
   }
 
   const target = parseEditTarget(value)
-  const editingAccount = target?.kind === 'edit' ? (listState.data?.find((a) => a.id === target.id) ?? null) : null
+  const editingAccount = target.kind === 'edit' ? (listState.data?.find((a) => a.id === target.id) ?? null) : null
 
-  // ?edit= with an unknown id, a malformed value, or a different prefix:
-  // strip it once the list has loaded, rather than flash an empty dialog.
+  // A `location:` value with an unknown id or a malformed one: strip it once
+  // the list has loaded, rather than flash an empty dialog. Never a `foreign`
+  // value - that belongs to a sibling section on this same screen (#263).
   // `replace` because a dead link is not a real navigation to undo - and
   // clear(), never close(): right after a delete the reloaded list can land
   // before close()'s own back navigation does, and a second back would
   // leave the settings screen.
   useEffect(() => {
-    if (value === null || target?.kind === 'new') return
+    if (target.kind === 'foreign' || target.kind === 'new') return
     if (listState.status !== 'success') return
-    if (target?.kind === 'edit' && editingAccount !== null) return
+    if (target.kind === 'edit' && editingAccount !== null) return
     clear()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [value, target?.kind, listState.status, editingAccount])
+  }, [value, target.kind, listState.status, editingAccount])
 
   return (
     <section className="flex flex-col gap-3">
@@ -127,7 +138,7 @@ export default function Locations() {
       </Button>
 
       <AddLocationDialog
-        open={target?.kind === 'new'}
+        open={target.kind === 'new'}
         onClose={close}
         onAdded={() => {
           close()
@@ -136,7 +147,7 @@ export default function Locations() {
       />
       <EditLocationDialog
         account={editingAccount}
-        open={target?.kind === 'edit' && editingAccount !== null}
+        open={target.kind === 'edit' && editingAccount !== null}
         onClose={close}
         onChanged={() => {
           close()

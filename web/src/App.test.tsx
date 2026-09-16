@@ -255,13 +255,14 @@ describe('App (record loop)', () => {
 
   // The /incidentals route and its hand-off into the record form, together:
   // tapping the envelope's record action must land on the real form with
-  // that envelope's purpose already chosen.
+  // that envelope's purpose already chosen. The route is detail-only since
+  // #263 (its list moved to Pengaturan), so it is reached directly with
+  // ?purpose=<id> here rather than through a list click.
   it('routes an envelope\'s record action into the record form with its purpose chosen', async () => {
     const envelope = { purpose_id: 12, occasion: 'Halal bihalal RT', target_amount: null, opened_on: '2026-09-01', closed_on: null, created_at: 1 }
-    window.history.pushState({}, '', '/incidentals')
+    window.history.pushState({}, '', '/incidentals?purpose=12')
     vi.stubGlobal('fetch', routedFetch([
       { match: (m, u) => m === 'GET' && u.includes('/api/incidentals/12'), handle: () => Promise.resolve(jsonResponse({ ...envelope, collected_amount: 0, disbursed_amount: 0 })) },
-      { match: (m, u) => m === 'GET' && u.includes('/api/incidentals'), handle: () => Promise.resolve(jsonResponse([envelope])) },
       { match: (m, u) => m === 'GET' && u.includes('/api/session'), handle: () => Promise.resolve(sessionResponse({ authenticated: true, has_account: true })) },
       { match: (m, u) => m === 'GET' && u.includes('/api/fund'), handle: () => Promise.resolve(fundFoundResponse()) },
       { match: (m, u) => m === 'GET' && u.includes('/api/accounts'), handle: () => Promise.resolve(jsonResponse(accounts)) },
@@ -270,11 +271,23 @@ describe('App (record loop)', () => {
     ]))
     render(<App />)
 
-    await userEvent.click(await screen.findByRole('button', { name: /Halal bihalal RT/ }))
+    await screen.findByText(copy.incidentals.detail.collectedLabel)
     await userEvent.click(await screen.findByRole('button', { name: copy.incidentals.actions.record }))
 
     await screen.findByRole('heading', { name: copy.record.heading })
     await waitFor(() => expect(selectedOptionName(copy.record.purposeLabel)).toBe('Halal bihalal RT'))
+    window.history.pushState({}, '', '/')
+  })
+
+  // /incidentals with no ?purpose= (or an unparseable one) has nothing of
+  // its own to show now that its list is retired (#263) - it redirects to
+  // Pengaturan, which owns that list instead.
+  it('redirects a bare /incidentals visit to settings', async () => {
+    window.history.pushState({}, '', '/incidentals')
+    vi.stubGlobal('fetch', authenticatedWithRecordRoutes())
+    render(<App />)
+
+    await screen.findByRole('heading', { name: copy.settings.heading })
     window.history.pushState({}, '', '/')
   })
 

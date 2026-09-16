@@ -17,35 +17,46 @@ test.describe('incidentals', () => {
   const seedPassword = 'e2e-fixture-password'
   const occasion = 'Halal bihalal RT E2E'
 
-  test('open an envelope and verify it appears in the open list', async ({ page }) => {
+  test('open an envelope from Pengaturan and verify it appears on Beranda', async ({ page }) => {
     await page.goto('/')
     await page.getByLabel(copy.auth.login.emailLabel).fill(seedEmail)
     await page.getByLabel(copy.auth.login.passwordLabel).fill(seedPassword)
     await page.getByRole('button', { name: copy.auth.login.submit }).click()
     await expect(page.getByText(copy.home.balanceHeading)).toBeVisible()
 
-    // Opening a brand-new envelope has no button on Beranda any more
-    // (M6.33, ADR-032): incidentals are entry points there, not a
-    // destination behind a button. The /incidentals route itself still
-    // exists (the open form, the all-envelopes list), just unreached from
-    // Beranda until it holds an open envelope of its own.
-    await page.goto('/incidentals')
-    await expect(page.getByRole('heading', { name: copy.incidentals.heading })).toBeVisible()
+    // Opening a brand-new envelope has no button on Beranda (M6.33,
+    // ADR-032): incidentals are entry points there, not a destination
+    // behind a button. Opening one is Pengaturan's, beside Titipan (#263) -
+    // reached through the footer nav, the same way every screen is now.
+    await page.getByRole('link', { name: copy.shell.nav.settings }).click()
+    await expect(page.getByRole('heading', { name: copy.settings.heading })).toBeVisible()
 
-    // Open the "open envelope" form
-    await page.getByRole('button', { name: copy.incidentals.open.heading }).click()
-    await expect(page.getByText(copy.incidentals.open.heading)).toBeVisible()
+    // Add is a dialog (ADR-032), addressed by ?edit=incidental:new.
+    await page.getByRole('button', { name: copy.settings.incidentals.add }).click()
+    await expect(page).toHaveURL(/[?&]edit=incidental%3Anew/)
+    const openDialog = page.getByRole('dialog', { name: copy.incidentals.open.heading })
+    await expect(openDialog).toBeVisible()
 
     // Fill occasion and target amount, leave date at today's default
-    await page.getByLabel(copy.incidentals.open.occasionLabel).fill(occasion)
-    await page.getByLabel(copy.incidentals.open.targetLabel).fill('100000')
+    await openDialog.getByLabel(copy.incidentals.open.occasionLabel).fill(occasion)
+    await openDialog.getByLabel(copy.incidentals.open.targetLabel).fill('100000')
 
-    // Submit
-    await page.getByRole('button', { name: copy.incidentals.open.submit }).click()
-    await expect(page.getByText(copy.incidentals.open.success)).toBeVisible()
+    await openDialog.getByRole('button', { name: copy.incidentals.open.submit }).click()
+    await expect(openDialog).not.toBeVisible()
 
-    // The envelope should now be in the open list
-    await expect(page.getByText(occasion)).toBeVisible()
+    // The new envelope is now a card in this section, open status shown on
+    // it - this section lists closed envelopes too (reopening, ADR-031,
+    // needs that door), so the status is what tells them apart. Anchored to
+    // the card rather than a bare getByText, since "Berjalan" is not unique
+    // once a second envelope opens.
+    const card = page.getByRole('button', { name: new RegExp(occasion) })
+    await expect(card).toBeVisible()
+    await expect(card).toContainText(copy.incidentals.status.open)
+
+    // Beranda keeps its own entry point too (the ADR's actual point): a
+    // fresh visit to home renders the same envelope as its own row.
+    await page.getByRole('link', { name: copy.shell.nav.home }).click()
+    await expect(page.getByRole('button', { name: new RegExp(occasion) })).toBeVisible()
   })
 
   test('contribute to the envelope through the real record form, and verify the collected total updates', async ({ page }) => {
@@ -125,11 +136,12 @@ test.describe('incidentals', () => {
     // second close.
     await expect(page.getByText(copy.incidentals.close.rolledLabel(60_000))).toBeVisible()
 
-    // The envelope now shows closed on the all tab, and its open-only
-    // actions are gone.
-    await page.getByRole('button', { name: copy.incidentals.detail.backToList }).click()
-    await page.getByRole('button', { name: copy.incidentals.allTab }).click()
-    const row = page.locator('li', { hasText: occasion })
-    await expect(row.getByText(copy.incidentals.status.closed)).toBeVisible()
+    // The envelope now shows closed in Pengaturan's own list (#263 - the
+    // all/open tabs are gone with it), and its open-only actions are gone
+    // from the detail view above.
+    await page.getByRole('button', { name: copy.incidentals.detail.backToSettings }).click()
+    await expect(page.getByRole('heading', { name: copy.settings.heading })).toBeVisible()
+    const card = page.getByRole('button', { name: new RegExp(occasion) })
+    await expect(card).toContainText(copy.incidentals.status.closed)
   })
 })
