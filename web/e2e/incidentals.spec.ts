@@ -79,7 +79,15 @@ test.describe('incidentals', () => {
     // Back on home, the row's own balance reflects the contribution, and
     // tapping it again shows the same total on the detail view.
     await page.getByRole('button', { name: new RegExp(occasion) }).click()
-    await expect(page.getByText('Rp 60.000')).toBeVisible()
+    // Anchored to the collected row rather than the page: since M6.33 this
+    // amount appears three times over - Beranda's own breakdown row, the
+    // recent-five entry for the contribution just recorded, and the detail
+    // view this assertion means. A bare getByText matched whichever of them
+    // the navigation had not yet torn down, which is also why it was racy
+    // before it was ambiguous. toContainText retries, so this waits for the
+    // detail view instead of assuming the click has landed.
+    const collectedRow = page.getByText(copy.incidentals.detail.collectedLabel).locator('..')
+    await expect(collectedRow).toContainText('Rp 60.000')
   })
 
   test('close the envelope and verify the rollover is shown honestly', async ({ page }) => {
