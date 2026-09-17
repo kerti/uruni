@@ -230,7 +230,7 @@ export default function Home({
                   <button
                     type="button"
                     onClick={() => onOpenIncidental(purpose.id)}
-                    className="flex min-h-11 w-full items-center justify-between gap-3 rounded-lg bg-card px-4 py-3 text-left ring-1 ring-foreground/10"
+                    className="flex min-h-11 w-full items-center justify-between gap-3 rounded-lg bg-card px-4 py-3 text-left ring-1 ring-foreground/10 select-none"
                   >
                     <span>{purpose.name}</span>
                     {/* The chevron is the only thing distinguishing this row

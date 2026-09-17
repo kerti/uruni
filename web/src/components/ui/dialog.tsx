@@ -56,6 +56,45 @@ function DialogOverlay({ className, ...props }: React.ComponentProps<typeof Dial
   )
 }
 
+/** Everything Radix itself would consider for the opening focus, in DOM
+ * order. Deliberately the same set and the same order - this is not a
+ * different focus policy, only the same one without the selecting. */
+const FOCUSABLE =
+  'input:not([type="hidden"]):not([disabled]), select:not([disabled]), textarea:not([disabled]), button:not([disabled]), [href], [tabindex]:not([tabindex="-1"])'
+
+/**
+ * Focus the first field the way Radix would, minus the select-all.
+ *
+ * Radix's FocusScope focuses the first tabbable element with `select: true`,
+ * and its own `focus()` helper calls `element.select()` when that element is
+ * a text input (@radix-ui/react-focus-scope). Every dialog before M6.30
+ * opened either on a Select trigger (Lokasi's Jenis) or on an empty field, so
+ * there was never anything highlighted to notice. A dialog that opens on a
+ * PRE-FILLED field - renaming the kas, renaming a titipan - greets her with
+ * the whole value selected and one keystroke away from gone, which is the
+ * opposite of what "ubah" promises: she came to fix a typo, not retype it.
+ *
+ * So take the focus step over: same element Radix would have picked, caret at
+ * the end, nothing selected. `setSelectionRange` is guarded by
+ * `selectionStart` being a number - it is null, and the call throws, on the
+ * input types that do not carry a text selection (date, number).
+ */
+function focusFirstFieldWithoutSelecting(event: Event) {
+  const content = event.currentTarget
+  if (!(content instanceof HTMLElement)) return
+
+  const first = content.querySelector<HTMLElement>(FOCUSABLE)
+  if (first === null) return
+
+  event.preventDefault()
+  first.focus({ preventScroll: true })
+
+  if (first instanceof HTMLInputElement && typeof first.selectionStart === "number") {
+    const end = first.value.length
+    first.setSelectionRange(end, end)
+  }
+}
+
 interface DialogContentProps extends React.ComponentProps<typeof DialogPrimitive.Content> {
   /** copy.common.close - passed in rather than imported here, the same
    * idiom as select.tsx's SelectValue placeholder: this file stays a
@@ -63,7 +102,7 @@ interface DialogContentProps extends React.ComponentProps<typeof DialogPrimitive
   closeLabel: string
 }
 
-function DialogContent({ className, children, closeLabel, style, ...props }: DialogContentProps) {
+function DialogContent({ className, children, closeLabel, style, onOpenAutoFocus, ...props }: DialogContentProps) {
   const { inset, height } = useKeyboardInset()
   // The visible area's bottom edge sits `inset` above the layout viewport's;
   // its centre is half the visible height above that. Only mounted while
@@ -84,6 +123,11 @@ function DialogContent({ className, children, closeLabel, style, ...props }: Dia
           className,
         )}
         style={keyboardStyle ? { ...style, ...keyboardStyle } : style}
+        onOpenAutoFocus={(event) => {
+          onOpenAutoFocus?.(event)
+          if (event.defaultPrevented) return
+          focusFirstFieldWithoutSelecting(event)
+        }}
         {...props}
       >
         {children}

@@ -1,5 +1,6 @@
 import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import PassThrough from '@/screens/Settings/PassThrough'
@@ -38,6 +39,35 @@ function stubPurposes(initial: ReturnType<typeof purpose>[]) {
   return { fetchMock, calls }
 }
 
+/** Exposes the router's search string: this section's dialogs ARE the URL
+ * (ADR-032), so `?edit=` is state worth asserting on directly. */
+function LocationProbe() {
+  const location = useLocation()
+  return <output data-testid="location-search">{location.search}</output>
+}
+
+function renderAt(entry = '/settings') {
+  return render(
+    <MemoryRouter initialEntries={[entry]}>
+      <Routes>
+        <Route
+          path="/settings"
+          element={
+            <>
+              <PassThrough />
+              <LocationProbe />
+            </>
+          }
+        />
+      </Routes>
+    </MemoryRouter>,
+  )
+}
+
+function currentSearch() {
+  return screen.getByTestId('location-search').textContent
+}
+
 describe('Settings pass-through', () => {
   it('lists only pass-through purposes', async () => {
     const { fetchMock } = stubPurposes([
@@ -46,7 +76,7 @@ describe('Settings pass-through', () => {
       purpose(3, 'incidental', 'Kurban 2026'),
     ])
     vi.stubGlobal('fetch', fetchMock)
-    render(<PassThrough />)
+    renderAt()
 
     expect(await screen.findByText('Kas Bidang')).toBeInTheDocument()
     // GET /api/purposes answers every tag the fund has; the fund's own money
@@ -58,25 +88,39 @@ describe('Settings pass-through', () => {
   it('shows the empty state when the fund has no pass-through purposes', async () => {
     const { fetchMock } = stubPurposes([purpose(1, 'main', 'Kas utama')])
     vi.stubGlobal('fetch', fetchMock)
-    render(<PassThrough />)
+    renderAt()
 
     expect(await screen.findByText(text.empty)).toBeInTheDocument()
+  })
+
+  // M6.30: nothing on this section is a form until she asks for one.
+  it('has no inline form on the section itself', async () => {
+    const { fetchMock } = stubPurposes([purpose(2, 'pass_through', 'Kas Bidang')])
+    vi.stubGlobal('fetch', fetchMock)
+    renderAt()
+    await screen.findByText('Kas Bidang')
+
+    expect(screen.queryByLabelText(text.nameLabel)).not.toBeInTheDocument()
   })
 
   it('creates a pass-through purpose with a name only', async () => {
     const { fetchMock, calls } = stubPurposes([purpose(1, 'main', 'Kas utama')])
     vi.stubGlobal('fetch', fetchMock)
-    render(<PassThrough />)
+    renderAt()
     await screen.findByText(text.empty)
 
-    await userEvent.type(screen.getByLabelText(text.nameLabel), 'Kas Bidang')
     await userEvent.click(screen.getByRole('button', { name: text.add }))
+    expect(currentSearch()).toBe('?edit=pass-through%3Anew')
+
+    await userEvent.type(await screen.findByLabelText(text.nameLabel), 'Kas Bidang')
+    await userEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: text.add }))
 
     await waitFor(() => expect(calls).toHaveLength(1))
     // Name only - the kind is pinned server-side, and a caller that can name
     // the kind can ask for a second 'main'.
     expect(calls[0]).toMatchObject({ method: 'POST', body: { name: 'Kas Bidang' } })
     expect(calls[0].body).not.toHaveProperty('kind')
+    await waitFor(() => expect(currentSearch()).toBe(''))
   })
 
   // The name is a label, so a typo is correctable - the row itself is not,
@@ -84,27 +128,56 @@ describe('Settings pass-through', () => {
   it('renames a pass-through purpose', async () => {
     const { fetchMock, calls } = stubPurposes([purpose(2, 'pass_through', 'Kas Bidan')])
     vi.stubGlobal('fetch', fetchMock)
-    render(<PassThrough />)
+    renderAt()
     await screen.findByText('Kas Bidan')
 
-    await userEvent.click(screen.getByRole('button', { name: text.edit }))
-    const row = within(screen.getByRole('listitem'))
-    const input = row.getByLabelText(text.nameLabel)
+    await userEvent.click(screen.getByRole('button', { name: text.editAria('Kas Bidan') }))
+    expect(currentSearch()).toBe('?edit=pass-through%3A2')
+
+    const input = await screen.findByLabelText(text.nameLabel)
     await userEvent.clear(input)
     await userEvent.type(input, 'Kas Bidang')
-    await userEvent.click(screen.getByRole('button', { name: text.save }))
+    await userEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: text.save }))
 
     await waitFor(() => expect(calls).toHaveLength(1))
     expect(calls[0]).toMatchObject({ method: 'PATCH', url: expect.stringContaining('/api/purposes/2'), body: { name: 'Kas Bidang' } })
+  })
+
+  it('opens the rename dialog straight from a deep link', async () => {
+    const { fetchMock } = stubPurposes([purpose(2, 'pass_through', 'Kas Bidang')])
+    vi.stubGlobal('fetch', fetchMock)
+    renderAt('/settings?edit=pass-through:2')
+
+    expect(await screen.findByLabelText(text.nameLabel)).toHaveValue('Kas Bidang')
+  })
+
+  it('strips a pass-through: id that names nothing, once the list has loaded', async () => {
+    const { fetchMock } = stubPurposes([purpose(2, 'pass_through', 'Kas Bidang')])
+    vi.stubGlobal('fetch', fetchMock)
+    renderAt('/settings?edit=pass-through:999')
+
+    await waitFor(() => expect(currentSearch()).toBe(''))
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  })
+
+  // The case that keeps sibling sections from closing each other's dialogs.
+  it('leaves another section\'s ?edit= alone', async () => {
+    const { fetchMock } = stubPurposes([purpose(2, 'pass_through', 'Kas Bidang')])
+    vi.stubGlobal('fetch', fetchMock)
+    renderAt('/settings?edit=location:3')
+
+    await screen.findByText('Kas Bidang')
+    expect(currentSearch()).toBe('?edit=location:3')
   })
 
   // No delete anywhere in this section, and none on the server either.
   it('offers no way to remove a pass-through purpose', async () => {
     const { fetchMock } = stubPurposes([purpose(2, 'pass_through', 'Kas Bidang')])
     vi.stubGlobal('fetch', fetchMock)
-    render(<PassThrough />)
-    await screen.findByText('Kas Bidang')
+    renderAt('/settings?edit=pass-through:2')
 
-    expect(within(screen.getByRole('listitem')).getAllByRole('button')).toHaveLength(1)
+    const dialog = within(await screen.findByRole('dialog'))
+    expect(dialog.queryByRole('button', { name: copy.settings.locations.delete })).not.toBeInTheDocument()
+    expect(dialog.queryByRole('button', { name: copy.settings.locations.deactivate })).not.toBeInTheDocument()
   })
 })

@@ -12,6 +12,7 @@ import { copy } from '@/copy/id'
 import { todayISODate } from '@/lib/dates'
 import { listIncidentals, openIncidental } from '@/lib/incidentals'
 import { useApi } from '@/lib/useApi'
+import { parseDialogTarget } from '@/lib/dialogTarget'
 import { useDialogParam } from '@/lib/useDialogParam'
 import type { Incidental } from '@/lib/incidentals'
 
@@ -19,27 +20,17 @@ const text = copy.settings.incidentals
 const openText = copy.incidentals.open
 
 /**
- * What `?edit=` names, from this section's point of view - only ever a new
- * envelope. There is no edit-existing dialog here: a card navigates straight
- * to the envelope's own detail view (`/incidentals?purpose=<id>`), so
- * `incidental:<id>` is never a value this section itself produces.
- *
- * `foreign` is the load-bearing case. Pengaturan renders its sections against
- * one URL and two of them own an `?edit=` dialog, so "not mine" and "mine but
- * broken" must be told apart: a section that cleared everything it could not
- * parse would strip the param its neighbour's open dialog is living on and
- * close it mid-edit. Anything this section does not own - Locations'
- * `location:...`, or a value with no prefix at all - is therefore `foreign`
- * and is left exactly where it is.
+ * This section owns `?edit=incidental:new` and nothing else: there is no
+ * edit-existing dialog here, because a card navigates straight to the
+ * envelope's own detail view (`/incidentals?purpose=<id>`). So an
+ * `incidental:<id>` that arrives by hand is `invalid` - a value with this
+ * section's prefix and no dialog to show for it. See dialogTarget.ts for why
+ * `foreign` is the case that matters on a screen whose sections share a URL.
  */
-type ParsedTarget = 'new' | 'foreign' | 'invalid'
-
-function parseEditTarget(value: string | null): ParsedTarget {
-  if (value === null) return 'foreign'
-  const separator = value.indexOf(':')
-  if (separator < 0) return 'foreign'
-  if (value.slice(0, separator) !== 'incidental') return 'foreign'
-  return value.slice(separator + 1) === 'new' ? 'new' : 'invalid'
+function parseEditTarget(value: string | null): 'new' | 'foreign' | 'invalid' {
+  const target = parseDialogTarget('incidental', value)
+  if (target.kind === 'edit') return 'invalid'
+  return target.kind
 }
 
 /**
@@ -112,7 +103,7 @@ export default function SettingsIncidentals() {
                 type="button"
                 aria-label={text.cardAria(envelope.occasion)}
                 onClick={() => navigate(`/incidentals?purpose=${envelope.purpose_id}`)}
-                className="flex min-h-11 w-full items-center justify-between gap-3 rounded-lg bg-card px-4 py-3 text-left ring-1 ring-foreground/10 transition-colors hover:bg-muted/40"
+                className="flex min-h-11 w-full items-center justify-between gap-3 rounded-lg bg-card px-4 py-3 text-left ring-1 ring-foreground/10 select-none transition-colors hover:bg-muted/40"
               >
                 <span className="min-w-0 truncate font-medium">{envelope.occasion}</span>
                 <StatusBadge envelope={envelope} />

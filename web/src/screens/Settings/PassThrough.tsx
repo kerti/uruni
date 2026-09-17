@@ -1,33 +1,41 @@
 import { useEffect, useState, type FormEvent } from 'react'
 
 import { Button } from '@/components/ui/button'
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import Loading from '@/components/states/Loading'
 import ErrorState from '@/components/states/ErrorState'
 import { copy } from '@/copy/id'
+import { parseDialogTarget } from '@/lib/dialogTarget'
 import { createPassThroughPurpose, listPurposes, renamePassThroughPurpose } from '@/lib/purposes'
 import { useApi } from '@/lib/useApi'
+import { useDialogParam } from '@/lib/useDialogParam'
 import type { Purpose } from '@/lib/purposes'
 
 const text = copy.settings.passThrough
 
 /**
- * The pass-through section of the settings screen (M6.15, PRD section 7.6): "record
- * money collected on behalf of the parent org (e.g. Kas Bidang)."
+ * The pass-through section of the settings screen (M6.15, PRD section 7.6:
+ * "record money collected on behalf of the parent org (e.g. Kas Bidang)";
+ * converted to the card-plus-dialog shape in M6.30 - ADR-032 "Every
+ * non-posting edit is a dialog"): a card list, with add and edit both
+ * opening a dialog addressed by `?edit=pass-through:<id>` /
+ * `?edit=pass-through:new`.
  *
  * Add and rename, no delete. The name is a label - a posted transaction
- * references the purpose by id and nothing in the ledger reads the text -
- * so a typo is correctable exactly like a location's name; but money that
- * passed through is not unsaid, so the row itself stays. The kind is pinned
+ * references the purpose by id and nothing in the ledger reads the text - so
+ * a typo is correctable exactly like a location's name; but money that passed
+ * through is not unsaid, so the row itself stays. The kind is pinned
  * server-side and appears on no form here.
  *
  * GET /api/purposes answers every tag the fund has, so the list is filtered
- * to `pass_through` here: the fund's own 'main' purpose and any incidental
- * already opened are not this section's business (incidentals are M6.19's).
+ * to `pass_through` here: the fund's own 'main' purpose is not this section's
+ * business, and an incidental belongs to the section below (#263).
  */
 export default function PassThrough() {
   const [listState, listRun] = useApi<Purpose[]>()
+  const { value, open, close, clear } = useDialogParam()
 
   useEffect(() => {
     void listRun(listPurposes)
@@ -38,6 +46,25 @@ export default function PassThrough() {
   }
 
   const passThrough = listState.data?.filter((purpose) => purpose.kind === 'pass_through') ?? []
+
+  // 'pass-through' is this section's own prefix (dialogTarget.ts) - the
+  // identifier's own words, hyphenated for the URL, never the Indonesian
+  // label. Anything else on `?edit=` belongs to a sibling section here and
+  // comes back `foreign`, to be left exactly where it is.
+  const target = parseDialogTarget('pass-through', value)
+  const editingPurpose = target.kind === 'edit' ? (passThrough.find((p) => p.id === target.id) ?? null) : null
+
+  // A `pass-through:` value with an unknown or malformed id: strip it once
+  // the list has loaded, rather than flash an empty dialog. Never a `foreign`
+  // value, and `clear` rather than `close` - both for the reasons Locations
+  // documents at the same effect.
+  useEffect(() => {
+    if (target.kind === 'foreign' || target.kind === 'new') return
+    if (listState.status !== 'success') return
+    if (target.kind === 'edit' && editingPurpose !== null) return
+    clear()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [value, target.kind, listState.status, editingPurpose])
 
   return (
     <section className="flex flex-col gap-3">
@@ -55,117 +82,169 @@ export default function PassThrough() {
       ) : (
         <ul className="flex flex-col gap-2">
           {passThrough.map((purpose) => (
-            <PassThroughRow key={purpose.id} purpose={purpose} onChanged={reload} />
+            <li key={purpose.id}>
+              <button
+                type="button"
+                aria-label={text.editAria(purpose.name)}
+                onClick={() => open(`pass-through:${purpose.id}`)}
+                className="flex min-h-11 w-full items-center rounded-lg bg-card px-4 py-3 text-left ring-1 ring-foreground/10 select-none transition-colors hover:bg-muted/40"
+              >
+                <span className="min-w-0 truncate font-medium">{purpose.name}</span>
+              </button>
+            </li>
           ))}
         </ul>
       )}
 
-      <AddPassThrough onAdded={reload} />
+      <Button type="button" variant="outline" className="h-11 self-start" onClick={() => open('pass-through:new')}>
+        {text.add}
+      </Button>
+
+      <AddPassThroughDialog
+        open={target.kind === 'new'}
+        onClose={close}
+        onAdded={() => {
+          close()
+          reload()
+        }}
+      />
+      <EditPassThroughDialog
+        purpose={editingPurpose}
+        open={target.kind === 'edit' && editingPurpose !== null}
+        onClose={close}
+        onChanged={() => {
+          close()
+          reload()
+        }}
+      />
     </section>
   )
 }
 
-/** One pass-through purpose, with its rename. Owns its own request state
- * so a failure on one row never blanks the others - the same shape
- * LocationRow uses. */
-function PassThroughRow({ purpose, onChanged }: { purpose: Purpose; onChanged: () => void }) {
-  const [state, run] = useApi<Purpose>()
-  const [editing, setEditing] = useState(false)
-  const [name, setName] = useState(purpose.name)
-
-  const busy = state.status === 'loading'
-
-  function handleSubmit(event: FormEvent) {
-    event.preventDefault()
-    const trimmed = name.trim()
-    if (trimmed === '' || trimmed === purpose.name) {
-      setEditing(false)
-      return
-    }
-    void run(async () => {
-      const updated = await renamePassThroughPurpose(purpose.id, trimmed)
-      setEditing(false)
-      onChanged()
-      return updated
-    })
-  }
-
-  return (
-    <li className="flex flex-col gap-2 rounded-lg bg-card px-4 py-3 ring-1 ring-foreground/10">
-      {editing ? (
-        <form className="flex flex-col gap-2" onSubmit={handleSubmit} noValidate>
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor={`pass-through-name-${purpose.id}`}>{text.nameLabel}</Label>
-            <Input
-              id={`pass-through-name-${purpose.id}`}
-              type="text"
-              value={name}
-              autoFocus
-              onChange={(event) => setName(event.target.value)}
-            />
-          </div>
-          <div className="flex gap-2">
-            <Button type="submit" className="h-11" disabled={busy}>
-              {busy ? text.saving : text.save}
-            </Button>
-            <Button
-              type="button"
-              variant="ghost"
-              className="h-11"
-              disabled={busy}
-              onClick={() => {
-                setName(purpose.name)
-                setEditing(false)
-              }}
-            >
-              {text.cancel}
-            </Button>
-          </div>
-        </form>
-      ) : (
-        <div className="flex items-center justify-between gap-3">
-          <span className="min-w-0 truncate">{purpose.name}</span>
-          <Button type="button" variant="outline" className="h-11 shrink-0" disabled={busy} onClick={() => setEditing(true)}>
-            {text.edit}
-          </Button>
-        </div>
-      )}
-
-      {state.status === 'error' && state.error && <ErrorState error={state.error} />}
-    </li>
-  )
-}
-
-function AddPassThrough({ onAdded }: { onAdded: () => void }) {
+function AddPassThroughDialog({ open, onClose, onAdded }: { open: boolean; onClose: () => void; onAdded: () => void }) {
   const [state, run] = useApi<Purpose>()
   const [name, setName] = useState('')
 
+  // A fresh field every time the dialog opens, so a titipan added a moment
+  // ago does not leave its name sitting there for the next one.
+  useEffect(() => {
+    if (open) setName('')
+  }, [open])
+
   const busy = state.status === 'loading'
+  const trimmed = name.trim()
 
   function handleSubmit(event: FormEvent) {
     event.preventDefault()
-    const trimmed = name.trim()
     if (trimmed === '') return
     void run(async () => {
       const created = await createPassThroughPurpose(trimmed)
-      setName('')
       onAdded()
       return created
     })
   }
 
   return (
-    /* Named as a region for the reason the locations add-form is: its
-       "Nama titipan" label is the same one every row being renamed shows. */
-    <form aria-label={text.add} className="flex flex-col gap-3 rounded-lg border border-border p-3" onSubmit={handleSubmit} noValidate>
-      <div className="flex flex-col gap-1.5">
-        <Label htmlFor="new-pass-through-name">{text.nameLabel}</Label>
-        <Input id="new-pass-through-name" type="text" value={name} onChange={(event) => setName(event.target.value)} />
-      </div>
-      <Button type="submit" className="h-11 self-start" disabled={busy || name.trim() === ''}>
-        {busy ? text.adding : text.add}
-      </Button>
-      {state.status === 'error' && state.error && <ErrorState error={state.error} />}
-    </form>
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        if (!next) onClose()
+      }}
+    >
+      <DialogContent closeLabel={copy.common.close}>
+        <DialogHeader>
+          <DialogTitle>{text.add}</DialogTitle>
+        </DialogHeader>
+        <form className="flex flex-col gap-3" onSubmit={handleSubmit} noValidate>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="new-pass-through-name">{text.nameLabel}</Label>
+            <Input id="new-pass-through-name" type="text" value={name} onChange={(event) => setName(event.target.value)} />
+          </div>
+          {state.status === 'error' && state.error && <ErrorState error={state.error} />}
+          <DialogFooter className="mt-1">
+            <Button type="button" variant="outline" className="h-11" disabled={busy} onClick={onClose}>
+              {text.cancel}
+            </Button>
+            <Button type="submit" className="h-11" disabled={busy || trimmed === ''}>
+              {busy ? text.adding : text.add}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+/**
+ * Rename, and nothing else - there is no delete here, deliberately: money
+ * that passed through is not unsaid. `purpose` is null only while closing,
+ * the same window EditLocationDialog documents.
+ */
+function EditPassThroughDialog({
+  purpose,
+  open,
+  onClose,
+  onChanged,
+}: {
+  purpose: Purpose | null
+  open: boolean
+  onClose: () => void
+  onChanged: () => void
+}) {
+  const [state, run] = useApi<Purpose>()
+  const [name, setName] = useState('')
+
+  useEffect(() => {
+    if (open && purpose !== null) setName(purpose.name)
+  }, [open, purpose])
+
+  const busy = state.status === 'loading'
+  const trimmed = name.trim()
+  const unchanged = purpose !== null && trimmed === purpose.name
+
+  function handleSubmit(event: FormEvent) {
+    event.preventDefault()
+    if (purpose === null || trimmed === '' || unchanged) return
+    void run(async () => {
+      const updated = await renamePassThroughPurpose(purpose.id, trimmed)
+      onChanged()
+      return updated
+    })
+  }
+
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        if (!next) onClose()
+      }}
+    >
+      <DialogContent closeLabel={copy.common.close}>
+        <DialogHeader>
+          <DialogTitle>{text.editTitle}</DialogTitle>
+        </DialogHeader>
+        <form className="flex flex-col gap-3" onSubmit={handleSubmit} noValidate>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="pass-through-name">{text.nameLabel}</Label>
+            <Input
+              id="pass-through-name"
+              type="text"
+              value={name}
+              onChange={(event) => setName(event.target.value)}
+              disabled={busy}
+            />
+          </div>
+          {state.status === 'error' && state.error && <ErrorState error={state.error} />}
+          <DialogFooter className="mt-1">
+            <Button type="button" variant="outline" className="h-11" disabled={busy} onClick={onClose}>
+              {text.cancel}
+            </Button>
+            <Button type="submit" className="h-11" disabled={busy || trimmed === '' || unchanged}>
+              {busy ? text.saving : text.save}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
   )
 }
