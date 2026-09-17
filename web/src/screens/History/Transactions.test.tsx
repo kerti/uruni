@@ -5,9 +5,11 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { copy } from '@/copy/id'
 import Transactions from '@/screens/History/Transactions'
+import { chooseOption } from '@/test/select'
 
 afterEach(() => {
   vi.unstubAllGlobals()
+  posted.length = 0
 })
 
 const text = copy.history.transactions
@@ -43,17 +45,32 @@ function row(id: number, note: string) {
 
 type Page = { transactions: unknown[]; next_cursor: string | null }
 
-/** Stubs fetch: balances always answer, GET /api/transactions answers
- * whatever pageFor returns for the request's own URL (throwing from pageFor
- * simulates fetch itself failing). Returns every transactions URL requested,
- * in order, so a test can assert on what reached the server. */
+/** Every purpose the correction picker may offer (#276). `?selectable=true`
+ * is what the screen asks for, so a closed envelope is already excluded
+ * server-side - correcting INTO one is a named refusal (ADR-033). */
+const purposes = [
+  { id: 11, kind: 'main', name: 'Kas Utama', created_at: 1 },
+  { id: 12, kind: 'pass_through', name: 'Titipan', created_at: 1 },
+]
+
+/** Stubs fetch: balances and purposes always answer, GET /api/transactions
+ * answers whatever pageFor returns for the request's own URL (throwing from
+ * pageFor simulates fetch itself failing). Returns every transactions URL
+ * requested, in order, so a test can assert on what reached the server.
+ * `posts` collects any correction POST, for #276's own tests. */
 function stubApi(pageFor: (url: URL) => Page) {
   const requests: URL[] = []
   vi.stubGlobal(
     'fetch',
-    vi.fn(async (input: RequestInfo | URL) => {
+    vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = new URL(String(input), 'http://localhost')
+      const method = (init?.method ?? 'GET').toUpperCase()
       if (url.pathname === '/api/balances') return jsonResponse(balances)
+      if (url.pathname === '/api/purposes') return jsonResponse(purposes)
+      if (method === 'POST' && url.pathname.endsWith('/purpose-correction')) {
+        posted.push({ url: url.pathname, body: JSON.parse(String(init?.body)) })
+        return jsonResponse({ id: 1, kind: 'reclass_purpose', created_at: 1 })
+      }
       if (url.pathname === '/api/transactions') {
         requests.push(url)
         return jsonResponse(pageFor(url))
@@ -63,6 +80,9 @@ function stubApi(pageFor: (url: URL) => Page) {
   )
   return requests
 }
+
+/** Correction POSTs seen by the stub, reset before each test. */
+const posted: { url: string; body: unknown }[] = []
 
 function LocationProbe() {
   const location = useLocation()
@@ -226,5 +246,63 @@ describe('Transactions tab', () => {
     renderAt('/history/transactions?purpose=11')
 
     expect(await screen.findByText(text.purposeFilterEmpty)).toBeInTheDocument()
+  })
+})
+
+describe('Transactions tab: correcting a peruntukan (#276, ADR-033)', () => {
+  it('opens the dialog from the row\'s peruntukan and writes it to the URL', async () => {
+    stubApi(() => ({ transactions: [row(5, 'Setoran Kas Bidang')], next_cursor: null }))
+    const user = userEvent.setup()
+    renderAt('/history/transactions')
+
+    await screen.findByText('Setoran Kas Bidang')
+    await user.click(screen.getByRole('button', { name: copy.purposeCorrection.controlAria('Kas Utama') }))
+
+    // The dialog is a search parameter, never component state (ADR-032), so
+    // back and a deep link both agree with what is on screen.
+    expect(await screen.findByText(copy.purposeCorrection.heading)).toBeInTheDocument()
+    expect(screen.getByTestId('location').textContent).toContain('edit=purpose-correction%3A5')
+  })
+
+  it('posts the correction for the row named in the URL and reloads the list', async () => {
+    const requests = stubApi(() => ({ transactions: [row(6, 'Setoran Kas Bidang')], next_cursor: null }))
+    const user = userEvent.setup()
+    renderAt('/history/transactions?edit=purpose-correction:6')
+
+    await screen.findByText(copy.purposeCorrection.heading)
+    const before = requests.length
+
+    await chooseOption(copy.purposeCorrection.pickerLabel, 'Titipan')
+    await user.click(screen.getByRole('button', { name: copy.purposeCorrection.save }))
+
+    await waitFor(() => expect(posted).toHaveLength(1))
+    expect(posted[0]).toMatchObject({ url: '/api/transactions/6/purpose-correction', body: { purpose_id: 12 } })
+
+    // The list is refetched, because the row it just corrected now carries a
+    // marker and two new legs sit above it.
+    await waitFor(() => expect(requests.length).toBeGreaterThan(before))
+    expect(await screen.findByText(copy.purposeCorrection.success)).toBeInTheDocument()
+  })
+
+  it('says where the money actually is when the row has already been corrected', async () => {
+    // The row underneath still shows its STORED tag - the ledger sums stored
+    // tags (ADR-033) - so without this line the dialog and the row would
+    // appear to disagree about the same entry.
+    stubApi(() => ({
+      transactions: [{ ...row(7, 'Setoran Kas Bidang'), purpose_id: 12, effective_purpose_id: 11 }],
+      next_cursor: null,
+    }))
+    renderAt('/history/transactions?edit=purpose-correction:7')
+
+    expect(await screen.findByText(copy.purposeCorrection.currentLabel('Kas Utama'))).toBeInTheDocument()
+  })
+
+  it('strips a dialog param naming a row this page does not hold', async () => {
+    stubApi(() => ({ transactions: [row(8, 'Galon')], next_cursor: null }))
+    renderAt('/history/transactions?edit=purpose-correction:999')
+
+    await screen.findByText('Galon')
+    await waitFor(() => expect(screen.getByTestId('location').textContent).not.toContain('edit='))
+    expect(screen.queryByText(copy.purposeCorrection.heading)).not.toBeInTheDocument()
   })
 })

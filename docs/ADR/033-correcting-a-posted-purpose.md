@@ -1,6 +1,6 @@
 # ADR-033 — A posted row's peruntukan can be corrected
 
-**Status:** Accepted · `draft` · [ADR index](./README.md)
+**Status:** Accepted · implemented at M6 ([#267](https://github.com/kerti/uruni/issues/267) engine, [#276](https://github.com/kerti/uruni/issues/276) surface) · change only by adding a superseding ADR · [ADR index](./README.md)
 
 **Context.** Transactions are immutable, and that is not in question here. What immutability is supposed to buy is corrections that are *cheap*: `CONTEXT.md` states it as a rule — *"Never edited or deleted — corrections are new adjusting entries."* For one correction the app does not keep that promise. A transaction tagged with the wrong **peruntukan** cannot be re-tagged at all.
 

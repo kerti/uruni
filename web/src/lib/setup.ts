@@ -75,6 +75,19 @@ export interface Transaction {
   transfer_from_name?: string | null
   transfer_to_name?: string | null
   is_reconciliation_fix?: boolean
+  /** Non-null only on a purpose correction's two legs (ADR-033, #267) -
+   * nil on every other transfer leg, a roll's included, which is what
+   * tells the two apart: both are kind='transfer' with
+   * transfer_kind='reclass_purpose'. */
+  transfer_corrects_transaction_id?: number | null
+  /** The tag this row's money is under now: its own purpose_id until a
+   * correction moves it, then the latest correction's target. The list
+   * still renders purpose_id - the ledger sums stored tags, so a row
+   * showing its effective one would put the screen out of step with the
+   * balances (ADR-033). This drives the "sudah diperbaiki" marker
+   * (effective !== stored) and the correction dialog, which must build
+   * its pair from where the money actually is. */
+  effective_purpose_id?: number
 }
 
 export interface DuesTier {

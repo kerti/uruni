@@ -97,8 +97,9 @@ func TestPostPurposeCorrectionReturnsThePostedTransfer(t *testing.T) {
 	if original.PurposeID != titipan.ID {
 		t.Errorf("original PurposeID = %d, want %d (the stored tag, unchanged)", original.PurposeID, titipan.ID)
 	}
-	if !original.IsCorrected {
-		t.Error("original.IsCorrected = false, want true")
+	if original.EffectivePurposeID == original.PurposeID {
+		t.Errorf("original.EffectivePurposeID = %d, want the correction's target, not the stored tag %d",
+			original.EffectivePurposeID, original.PurposeID)
 	}
 
 	var correctionLegs int

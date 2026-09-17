@@ -11,9 +11,14 @@ import { Label } from '@/components/ui/label'
 import { copy } from '@/copy/id'
 import { ApiError } from '@/lib/api'
 import { getBalances } from '@/lib/balances'
+import { parseDialogTarget } from '@/lib/dialogTarget'
+import { listPurposes } from '@/lib/purposes'
 import { listTransactions } from '@/lib/transactions'
 import { useApi } from '@/lib/useApi'
+import { useDialogParam } from '@/lib/useDialogParam'
+import CorrectPurposeDialog from '@/screens/History/CorrectPurposeDialog'
 import type { Balances } from '@/lib/balances'
+import type { Purpose } from '@/lib/purposes'
 import type { TransactionsPage } from '@/lib/transactions'
 
 const text = copy.history.transactions
@@ -25,6 +30,12 @@ const SEARCH_DEBOUNCE_MS = 300
 interface FirstPage {
   balances: Balances
   page: TransactionsPage
+  /** For the correction dialog's picker (#276). `selectable` excludes a
+   * closed envelope's purpose, which is exactly what this picker must not
+   * offer: correcting INTO a closed amplop is one of ADR-033's two named
+   * refusals. Fetched with the page rather than when the dialog opens, so
+   * tapping a peruntukan shows a filled picker instead of a spinner. */
+  purposes: Purpose[]
 }
 
 /**
@@ -65,6 +76,15 @@ export default function Transactions({ refetchKey }: { refetchKey?: unknown }) {
   const rawPurpose = Number(searchParams.get('purpose'))
   const purposeId = Number.isInteger(rawPurpose) && rawPurpose > 0 ? rawPurpose : null
 
+  // The correction dialog (#276) is a search parameter, never component
+  // state (ADR-032), so back and Esc close it the same way and a deep link
+  // opens it. It shares `?edit=` with nothing else on this screen, but
+  // parseDialogTarget is still what reads it - a bare Number() here would
+  // treat a foreign value as this screen's own.
+  const { value: dialogValue, open: openDialog, close: closeDialog, clear: clearDialog } = useDialogParam()
+  const correctionTarget = parseDialogTarget('purpose-correction', dialogValue)
+  const [corrected, setCorrected] = useState(false)
+
   const [state, run] = useApi<FirstPage>()
   // Pages after the first, appended in order. Reset whenever the first page
   // is refetched, and `generation` stops a slow "load more" for the previous
@@ -75,11 +95,12 @@ export default function Transactions({ refetchKey }: { refetchKey?: unknown }) {
   const generation = useRef(0)
 
   async function loadFirstPage(): Promise<FirstPage> {
-    const [balances, page] = await Promise.all([
+    const [balances, page, purposes] = await Promise.all([
       getBalances(),
       listTransactions({ q: q || undefined, purposeId: purposeId ?? undefined }),
+      listPurposes(true),
     ])
-    return { balances, page }
+    return { balances, page, purposes }
   }
 
   useEffect(() => {
@@ -117,6 +138,20 @@ export default function Transactions({ refetchKey }: { refetchKey?: unknown }) {
     }, SEARCH_DEBOUNCE_MS)
     return () => window.clearTimeout(timer)
   }, [draft, q, setSearchParams])
+
+  // A `purpose-correction:` value naming a row this page does not hold, or
+  // a malformed one: strip it once the page has loaded rather than leave an
+  // inert param sitting in the URL. clear(), never close() - a dead link is
+  // not a navigation to undo, the same reasoning Locations.tsx documents. A
+  // `foreign` value belongs to nothing on this screen and is left alone.
+  useEffect(() => {
+    if (correctionTarget.kind === 'foreign' || correctionTarget.kind === 'new') return
+    if (state.status !== 'success' || !state.data) return
+    const rows = more ? [...state.data.page.transactions, ...more.transactions] : state.data.page.transactions
+    if (correctionTarget.kind === 'edit' && rows.some((t) => t.id === correctionTarget.id)) return
+    clearDialog()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dialogValue, correctionTarget.kind, state.status, more])
 
   /** Clears the purpose filter and keeps whatever she has searched. Not
    * `replace`: arriving here from an envelope was a navigation, so the back
@@ -159,6 +194,12 @@ export default function Transactions({ refetchKey }: { refetchKey?: unknown }) {
     const transactions = more ? [...page.transactions, ...more.transactions] : page.transactions
     const nextCursor = more ? more.nextCursor : page.nextCursor
 
+    // The row the dialog is about, found among the rows actually loaded. A
+    // `purpose-correction:` value naming a row on a page she has not loaded
+    // (a deep link, a stale link) therefore opens nothing - and the effect
+    // below strips it rather than leaving an inert param behind.
+    const correcting = transactions.find((t) => correctionTarget.kind === 'edit' && t.id === correctionTarget.id) ?? null
+
     // An empty filtered list is not a failed search: it says the envelope
     // has no rows, not that nothing matched something she typed. A search
     // inside the filter is still a search, so `q` wins when both are set.
@@ -182,7 +223,32 @@ export default function Transactions({ refetchKey }: { refetchKey?: unknown }) {
             </button>
           </div>
         )}
-        <TransactionList transactions={transactions} purposeNames={purposeNames} emptyMessage={emptyMessage} />
+        {corrected && (
+          <p role="status" className="rounded-lg bg-success-soft px-3 py-2 text-sm text-success">
+            {copy.purposeCorrection.success}
+          </p>
+        )}
+        <TransactionList
+          transactions={transactions}
+          purposeNames={purposeNames}
+          emptyMessage={emptyMessage}
+          onCorrectPurpose={(transaction) => {
+            setCorrected(false)
+            openDialog(`purpose-correction:${transaction.id}`)
+          }}
+        />
+        <CorrectPurposeDialog
+          transaction={correcting}
+          purposes={state.data.purposes}
+          purposeNames={purposeNames}
+          open={correcting !== null}
+          onClose={closeDialog}
+          onCorrected={() => {
+            closeDialog()
+            setCorrected(true)
+            void run(loadFirstPage)
+          }}
+        />
         {nextCursor && moreError && <ErrorState error={moreError} onRetry={() => void loadMore(nextCursor)} />}
         {nextCursor && !moreError && (
           <Button type="button" variant="outline" size="lg" className="w-full" disabled={moreLoading} onClick={() => void loadMore(nextCursor)}>

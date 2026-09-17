@@ -1,4 +1,4 @@
-import { ArrowLeftRight, CalendarCheck, Flag, HandHelping, Mail, Scale, Undo2 } from 'lucide-react'
+import { ArrowLeftRight, CalendarCheck, Flag, HandHelping, Mail, Scale, Tags, Undo2 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 
 import { copy } from '@/copy/id'
@@ -46,10 +46,19 @@ function rowLabelFor(transaction: Transaction): { Icon: LucideIcon; srWord: stri
       }
     case 'transfer':
       if (transaction.transfer_kind === 'reclass_purpose') {
+        // Two shapes share this wire shape, and only corrects_transaction_id
+        // tells them apart (ADR-033): a roll posted by closing an envelope
+        // (null) and a purpose correction (set). Before #276 this branch
+        // said "Tutup amplop" unconditionally, which was right while
+        // closing was the only thing that could post a reclass_purpose pair
+        // - and would have labelled every correction as an envelope closing
+        // that never happened.
+        const corrected = transaction.transfer_corrects_transaction_id != null
+        const label = corrected ? copy.rowLabels.transferPurposeCorrection : copy.rowLabels.transferPurpose
         return {
-          Icon: Mail,
-          srWord: copy.rowLabels.transferPurpose.kind,
-          text: copy.rowLabels.transferPurpose.text(transaction.transfer_from_name ?? '', transaction.transfer_to_name ?? ''),
+          Icon: corrected ? Tags : Mail,
+          srWord: label.kind,
+          text: label.text(transaction.transfer_from_name ?? '', transaction.transfer_to_name ?? ''),
         }
       }
       if (transaction.transfer_kind === 'between_accounts') {

@@ -100,12 +100,19 @@ type transactionResponse struct {
 	// which are otherwise the same kind='transfer', transfer_kind='reclass_purpose'
 	// shape.
 	TransferCorrectsTransactionID *int64 `json:"transfer_corrects_transaction_id"`
-	// IsCorrected is true exactly when some transfer's
-	// corrects_transaction_id names THIS row - #267's "sudah diperbaiki"
-	// marker on the row that was fixed, never on the pair that fixed it. A
-	// row can be corrected more than once (ADR-033's second-correction
-	// case), so this answers "at least one", not "exactly one".
-	IsCorrected bool `json:"is_corrected"`
+	// EffectivePurposeID is the tag this row's money is under now: its own
+	// PurposeID until a correction moves it (ADR-033), then the latest
+	// correction's target. Equal to PurposeID on every uncorrected row, so
+	// "has this been corrected?" is EffectivePurposeID != PurposeID rather
+	// than a second boolean saying the same thing - which is what this
+	// field replaced before either ever shipped.
+	//
+	// The list still RENDERS PurposeID (ADR-033): the ledger sums stored
+	// tags, so a row showing its effective one would put the screen out of
+	// step with the balances. This is for #276's correction dialog, which
+	// must build its pair from where the money actually is, and for the
+	// marker that says a correction exists.
+	EffectivePurposeID int64 `json:"effective_purpose_id"`
 }
 
 func toTransactionResponse(t store.Transaction) transactionResponse {
@@ -158,7 +165,7 @@ func toTransactionsPageResponse(t store.ListTransactionsPageRow) transactionResp
 	resp.TransferKind = t.TransferKind
 	resp.IsReconciliationFix = t.IsReconciliationFix != 0
 	resp.TransferCorrectsTransactionID = t.TransferCorrectsTransactionID
-	resp.IsCorrected = t.IsCorrected != 0
+	resp.EffectivePurposeID = t.EffectivePurposeID
 
 	switch {
 	case t.MemberName != nil:

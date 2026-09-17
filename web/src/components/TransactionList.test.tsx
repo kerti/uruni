@@ -1,4 +1,6 @@
 import { render, screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
+import { vi } from 'vitest'
 import { describe, expect, it } from 'vitest'
 
 import TransactionList from '@/components/TransactionList'
@@ -40,6 +42,21 @@ function transaction(overrides: Partial<Transaction> = {}): Transaction {
 
 function renderRows(rows: Transaction[]) {
   return render(<TransactionList transactions={rows} purposeNames={purposeNames} emptyMessage="Belum ada." />)
+}
+
+/** The same list Riwayat renders: with a correction handler, so an eligible
+ * row's peruntukan is a control (#276). Home passes no handler, which is
+ * what renderRows above still covers. */
+function renderCorrectableRows(rows: Transaction[], onCorrectPurpose = vi.fn()) {
+  const result = render(
+    <TransactionList
+      transactions={rows}
+      purposeNames={purposeNames}
+      emptyMessage="Belum ada."
+      onCorrectPurpose={onCorrectPurpose}
+    />,
+  )
+  return { ...result, onCorrectPurpose }
 }
 
 describe('TransactionList row labels (#257)', () => {
@@ -166,5 +183,88 @@ describe('TransactionList row labels (#257)', () => {
     expect(container.querySelector('.lucide-undo-2')).not.toBeInTheDocument()
     expect(container.querySelector('.lucide-scale')).not.toBeInTheDocument()
     expect(screen.getByText('Koreksi salah catat')).toBeInTheDocument()
+  })
+})
+
+describe('TransactionList purpose correction (#276, ADR-033)', () => {
+  it('labels a correction leg with Tags and Perbaikan peruntukan, never Tutup amplop', () => {
+    // A roll and a correction are the same shape on the wire - kind='transfer',
+    // transfer_kind='reclass_purpose' - and only corrects_transaction_id
+    // tells them apart. Before this, every correction read as an envelope
+    // closing that never happened.
+    const { container } = renderRows([
+      transaction({
+        kind: 'transfer', transfer_id: 9, transfer_kind: 'reclass_purpose',
+        transfer_corrects_transaction_id: 4,
+        transfer_from_name: 'Titipan', transfer_to_name: 'Kas Utama',
+      }),
+    ])
+
+    expect(container.querySelector('.lucide-tags')).toBeInTheDocument()
+    expect(container.querySelector('.lucide-mail')).not.toBeInTheDocument()
+    expect(screen.getByText(copy.rowLabels.transferPurposeCorrection.kind)).toBeInTheDocument()
+    expect(screen.queryByText(copy.rowLabels.transferPurpose.kind)).not.toBeInTheDocument()
+  })
+
+  it('makes an eligible row\'s peruntukan the control, and hands the row back on tap', async () => {
+    const { onCorrectPurpose } = renderCorrectableRows([transaction({ id: 12, purpose_id: 1 })])
+
+    const control = screen.getByRole('button', { name: copy.purposeCorrection.controlAria('Kas Utama') })
+    await userEvent.click(control)
+
+    expect(onCorrectPurpose).toHaveBeenCalledTimes(1)
+    expect(onCorrectPurpose.mock.calls[0][0].id).toBe(12)
+  })
+
+  it('leaves an ineligible row\'s peruntukan as plain text - a dead tap is worse than none', () => {
+    // Eligibility varies row by row (ADR-033), which is exactly why the
+    // whole row is not tappable: a dues row and the expense beneath it
+    // would look identical and behave differently.
+    renderCorrectableRows([
+      transaction({ id: 13, kind: 'dues', member_id: 1, dues_period: '2026-08', member_name: 'Budi' }),
+    ])
+
+    expect(screen.queryByRole('button', { name: copy.purposeCorrection.controlAria('Kas Utama') })).not.toBeInTheDocument()
+    expect(screen.getByText('Kas Utama')).toBeInTheDocument()
+  })
+
+  it('leaves a dues reversal ineligible, though it is an adjustment', () => {
+    renderCorrectableRows([
+      transaction({
+        id: 14, kind: 'adjustment', direction: 'out', reverses_transaction_id: 13,
+        member_id: 1, dues_period: '2026-08', member_name: 'Budi',
+      }),
+    ])
+
+    expect(screen.queryByRole('button', { name: copy.purposeCorrection.controlAria('Kas Utama') })).not.toBeInTheDocument()
+  })
+
+  it('offers no control at all where no handler is passed - Beranda stays inert', () => {
+    renderRows([transaction({ id: 15 })])
+
+    expect(screen.queryByRole('button')).not.toBeInTheDocument()
+    expect(screen.getByText('Kas Utama')).toBeInTheDocument()
+  })
+
+  it('marks a corrected row with the glyph and an sr-only sentence, still showing its STORED tag', () => {
+    // The stored tag is what renders even though the money is elsewhere:
+    // the ledger sums stored tags, so a row showing its effective one would
+    // put the screen out of step with the balances (ADR-033).
+    const { container } = renderCorrectableRows([
+      transaction({ id: 16, purpose_id: 2, effective_purpose_id: 1 }),
+    ])
+
+    expect(screen.getByText("Jane's wedding")).toBeInTheDocument()
+    expect(container.querySelector('.lucide-tags')).toBeInTheDocument()
+    expect(screen.getByText(copy.purposeCorrection.corrected)).toBeInTheDocument()
+  })
+
+  it('marks nothing on a row whose effective tag is its own', () => {
+    const { container } = renderCorrectableRows([
+      transaction({ id: 17, purpose_id: 1, effective_purpose_id: 1 }),
+    ])
+
+    expect(container.querySelector('.lucide-tags')).not.toBeInTheDocument()
+    expect(screen.queryByText(copy.purposeCorrection.corrected)).not.toBeInTheDocument()
   })
 })
