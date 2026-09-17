@@ -225,6 +225,15 @@ export function renameDuesTier(id: number, name: string): Promise<DuesTier> {
   })
 }
 
+/** DELETE /api/dues-tiers/{id} (#232) - for a tier the fund never put anyone
+ * in: a setup typo, a golongan named twice. The tier's own rates go with it
+ * in the same transaction (they priced nobody), but a tier a member
+ * references is refused 409 referenced_by_other_records by that member's own
+ * foreign key, and nothing is deleted. */
+export function deleteDuesTier(id: number): Promise<void> {
+  return apiFetch<void>(`/api/dues-tiers/${id}`, { method: 'DELETE' })
+}
+
 /** GET /api/dues-tiers/{id}/rates - a tier's rate history, oldest first. An
  * empty list is a legal state: a tier whose price is not decided yet. */
 export function listDuesRates(tierId: number): Promise<DuesRate[]> {

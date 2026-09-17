@@ -33,6 +33,43 @@ func (q *Queries) CreateDuesTier(ctx context.Context, arg CreateDuesTierParams) 
 	return i, err
 }
 
+const deleteDuesRatesByTier = `-- name: DeleteDuesRatesByTier :exec
+DELETE FROM dues_rate WHERE tier_id = ?
+`
+
+// Every rate belonging to one tier. Its own children, not history anyone was
+// charged under: a tier no member is in priced nothing, so its rates go with
+// it rather than standing in the way of deleting it.
+func (q *Queries) DeleteDuesRatesByTier(ctx context.Context, tierID int64) error {
+	_, err := q.db.ExecContext(ctx, deleteDuesRatesByTier, tierID)
+	return err
+}
+
+const deleteDuesTier = `-- name: DeleteDuesTier :exec
+DELETE FROM dues_tier WHERE id = ? AND fund_id = ?
+`
+
+type DeleteDuesTierParams struct {
+	ID     int64
+	FundID int64
+}
+
+// DeleteDuesTier removes a tier the fund never put anyone in (#232) - the
+// setup typo, the golongan renamed into existence twice, never a tier with
+// history behind it. No pre-check for members: member's composite FK
+// (fund_id, tier_id) refuses it on its own, and a COUNT(*) first would only
+// race it - the same reasoning DeleteAccount's own handler documents.
+//
+// The caller runs this inside one transaction with DeleteDuesRatesByTier
+// below, rates first. Both orders of that pair matter: rates have their own
+// FK onto the tier, so the tier cannot go first, and if a member then
+// refuses the tier the whole transaction rolls back and the rates it had
+// already deleted come back with it.
+func (q *Queries) DeleteDuesTier(ctx context.Context, arg DeleteDuesTierParams) error {
+	_, err := q.db.ExecContext(ctx, deleteDuesTier, arg.ID, arg.FundID)
+	return err
+}
+
 const getDuesTierForFund = `-- name: GetDuesTierForFund :one
 SELECT id, fund_id, name, created_at
 FROM dues_tier

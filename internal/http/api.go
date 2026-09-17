@@ -140,6 +140,7 @@ func (a *api) routes(r chi.Router) {
 		r.Post("/dues-tiers", a.createDuesTier)
 		r.Get("/dues-tiers", a.listDuesTiers)
 		r.Patch("/dues-tiers/{id}", a.updateDuesTier)
+		r.Delete("/dues-tiers/{id}", a.deleteDuesTier)
 
 		// Rates are created and listed under their tier, but corrected by their
 		// own id: a rate is only ever reached through one tier, and {id} in the

@@ -15,10 +15,9 @@ function jsonResponse(body: unknown, status = 200) {
 }
 
 /**
- * A stub that behaves like the server: renaming a tier changes what the
- * *next* GET /api/dues-tiers answers. That is what makes the test below a
- * real regression rather than a re-statement of the component's props - the
- * roster only shows the new name if it actually re-reads.
+ * A stub that behaves like the server, with a handle on the tier's name so a
+ * test can change it the way Pengaturan would - out of band, while this
+ * screen is not looking.
  */
 function stubMembersScreen() {
   let tierName = 'Pelaksana'
@@ -37,40 +36,46 @@ function stubMembersScreen() {
     if (url.includes('/api/members')) return Promise.resolve(jsonResponse(members))
     return Promise.reject(new Error(`unstubbed fetch: ${url}`))
   })
-  return fetchMock
+  return { fetchMock, renameTierElsewhere: (name: string) => { tierName = name } }
 }
 
 describe('Members screen', () => {
-  // The bug this covers: the roster's tier picker and the tiers section load
-  // the same rows separately, so renaming a tier below left the picker above
-  // showing the old name until the screen was left and re-entered.
-  it('refreshes the roster tier picker when a tier is renamed below it', async () => {
-    vi.stubGlobal('fetch', stubMembersScreen())
+  // #232 moved the tiers section to Pengaturan, and `tiersVersion` went with
+  // it: the counter existed only because the two shared one screen. What
+  // replaces it is this - the roster reads members AND tiers on mount, and
+  // reaching Anggota from Pengaturan is a navigation, so the picker cannot
+  // show a name the tier no longer has.
+  it('re-reads the tiers on mount, so a tier renamed in Pengaturan is current here', async () => {
+    const { fetchMock, renameTierElsewhere } = stubMembersScreen()
+    vi.stubGlobal('fetch', fetchMock)
+
+    const first = render(<Members />)
+    await waitFor(() => expect(screen.getAllByText('Pelaksana').length).toBeGreaterThan(0))
+
+    // Renamed in Pengaturan, which this screen never saw happen.
+    first.unmount()
+    renameTierElsewhere('Pelaksana Muda')
+
     render(<Members />)
 
-    // Both sections have loaded, and both render the tier's name - the
-    // roster row shows its member's tier, the tiers section lists the tier
-    // itself. Counted loosely on purpose: the exact number depends on how
-    // many places render the label, which is not what this test is about.
-    await waitFor(() => expect(screen.getAllByText('Pelaksana').length).toBeGreaterThan(1))
+    await waitFor(() => expect(screen.getAllByText('Pelaksana Muda').length).toBeGreaterThan(0))
+    expect(screen.queryByText('Pelaksana')).not.toBeInTheDocument()
 
-    // Rename it in the section below - the tier's row is the one carrying
-    // the rates sub-list.
-    const tierRow = within(screen.getAllByRole('listitem').find((item) => item.textContent?.includes(copy.members.tiers.ratesHeading))!)
-    await userEvent.click(tierRow.getByRole('button', { name: copy.members.tiers.edit }))
-    const input = tierRow.getByLabelText(copy.members.tiers.nameLabel)
-    await userEvent.clear(input)
-    await userEvent.type(input, 'Pelaksana Muda')
-    await userEvent.click(tierRow.getByRole('button', { name: copy.members.tiers.save }))
-
-    // The roster re-read: its member row now shows the new name, without the
-    // screen having been left and re-entered.
-    await waitFor(() => expect(screen.getAllByText('Pelaksana Muda').length).toBeGreaterThan(1))
-
-    // And the picker itself offers it.
+    // And the picker offers the new name, not the old one.
     const memberRow = within(screen.getAllByRole('listitem')[0])
     await userEvent.click(memberRow.getByRole('button', { name: copy.members.roster.edit }))
     const options = await openSelect(copy.members.roster.tierLabel, memberRow)
     expect(within(options).getByRole('option', { name: 'Pelaksana Muda' })).toBeInTheDocument()
+  })
+
+  // The screen is the roster alone now - the tiers section is not on it.
+  it('does not render the tiers section', async () => {
+    const { fetchMock } = stubMembersScreen()
+    vi.stubGlobal('fetch', fetchMock)
+    render(<Members />)
+
+    await waitFor(() => expect(screen.getAllByText('Pelaksana').length).toBeGreaterThan(0))
+    expect(screen.queryByText(copy.settings.tiers.heading)).not.toBeInTheDocument()
+    expect(screen.queryByText(copy.settings.tiers.ratesHeading)).not.toBeInTheDocument()
   })
 })

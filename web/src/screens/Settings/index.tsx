@@ -1,3 +1,4 @@
+import DuesTiers from '@/screens/Settings/DuesTiers'
 import FundName from '@/screens/Settings/FundName'
 import Incidentals from '@/screens/Settings/Incidentals'
 import Locations from '@/screens/Settings/Locations'
@@ -27,6 +28,11 @@ import type { Fund } from '@/lib/setup'
  * one parses that param against its own prefix and leaves every other value
  * alone - see lib/dialogTarget.ts for why that is load-bearing.
  *
+ * Golongan & tarif (#232, M6.31): moved here from Anggota, superseding
+ * M6.16/M6.17's placement - see screens/Members/index.tsx for why that
+ * argument stopped holding. It sits last: it is the rarest admin on a screen
+ * of rare admin.
+ *
  * Incidentals (#263, ADR-032): opening a new envelope lost its home when
  * Beranda's purpose breakdown became entry points only, and it lands here,
  * beside Titipan - the two are kinds of one `purpose` (CONTEXT.md).
@@ -43,6 +49,7 @@ export default function Settings({ onFundRenamed }: { onFundRenamed: (fund: Fund
       <Locations />
       <PassThrough />
       <Incidentals />
+      <DuesTiers />
     </div>
   )
 }
