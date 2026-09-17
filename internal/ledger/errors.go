@@ -130,3 +130,61 @@ var ErrIncidentalNotClosed = errors.New("ledger: incidental is not closed")
 // it tags stays open to new postings even after closed_on is set" is one of
 // the two points ADR-031 supersedes.
 var ErrIncidentalAlreadyClosed = errors.New("ledger: incidental has already been closed")
+
+// ErrPurposeCorrectionNotFound is returned by PostPurposeCorrection when
+// GetTransactionForFund finds no row for the given fund and transaction id -
+// including a real id that belongs to another fund, the same fund-scoped
+// shape ErrDuesPaymentNotFound's own comment argues for (ADR-029, applied
+// here to ADR-033).
+var ErrPurposeCorrectionNotFound = errors.New("ledger: no such transaction")
+
+// ErrPurposeCorrectionOpening is returned by PostPurposeCorrection when the
+// row being corrected is kind='opening'. Its peruntukan is Kas Utama by
+// construction (mainPurposeID, ADR-024) - there is no wrong tag to fix.
+var ErrPurposeCorrectionOpening = errors.New("ledger: cannot correct the peruntukan of an opening balance")
+
+// ErrPurposeCorrectionDues is returned by PostPurposeCorrection when the row
+// being corrected is kind='dues'. A tag bound to the dues concept is not a
+// mis-tag to fix but a different entry (ADR-033).
+var ErrPurposeCorrectionDues = errors.New("ledger: cannot correct the peruntukan of a dues payment")
+
+// ErrPurposeCorrectionReimbursement is returned by PostPurposeCorrection
+// when the row being corrected is kind='reimbursement'. Its payout inherits
+// the claim's peruntukan, and its correction already exists as
+// SettleReimbursement's own claim edit (UpdateReimbursement, Talangan's
+// "Perbaiki") - ADR-033 names that as where to go rather than refusing
+// flatly.
+var ErrPurposeCorrectionReimbursement = errors.New("ledger: cannot correct the peruntukan of a reimbursement payout - use Talangan's Perbaiki instead")
+
+// ErrPurposeCorrectionTransfer is returned by PostPurposeCorrection when the
+// row being corrected is itself kind='transfer'. A leg is half a movement,
+// and correcting one alone would break the pair's value-neutrality
+// (ADR-033) - and since a correction's own two legs are posted as
+// kind='transfer', this is also what makes a correction of a correction
+// structurally impossible, with no depth limit or cycle rule needed.
+var ErrPurposeCorrectionTransfer = errors.New("ledger: cannot correct the peruntukan of a transfer leg")
+
+// ErrPurposeCorrectionDuesReversal is returned by PostPurposeCorrection when
+// the row being corrected is kind='adjustment' with reverses_transaction_id
+// set - a dues reversal (ADR-029), not the reconciliation-fix shape of
+// adjustment ADR-033 opens this route for. Its own correction path is
+// ReverseDuesPayment, not this one.
+var ErrPurposeCorrectionDuesReversal = errors.New("ledger: cannot correct the peruntukan of a dues reversal")
+
+// ErrPurposeCorrectionNoop is returned by PostPurposeCorrection when the
+// requested purpose_id is exactly the row's current effective peruntukan -
+// nothing would move, so nothing is posted (ADR-033).
+var ErrPurposeCorrectionNoop = errors.New("ledger: the requested purpose_id is already this row's peruntukan")
+
+// ErrPurposeCorrectionTargetClosed is returned by PostPurposeCorrection when
+// the requested purpose_id names a closed incidental. Correcting into a
+// closed envelope would post to a purpose ADR-031 refuses new postings
+// against; the way back is Ledger.ReopenIncidental (ADR-033).
+var ErrPurposeCorrectionTargetClosed = errors.New("ledger: cannot correct into a closed incidental - reopen it first")
+
+// ErrPurposeCorrectionSourceClosed is returned by PostPurposeCorrection when
+// the row's effective peruntukan names a closed incidental. Correcting out
+// of a closed envelope would leave its balance non-zero, breaking the
+// rollover invariant ADR-031 established and #270's derived rollover reads;
+// the way back is Ledger.ReopenIncidental (ADR-033).
+var ErrPurposeCorrectionSourceClosed = errors.New("ledger: cannot correct out of a closed incidental - reopen it first")

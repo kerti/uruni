@@ -73,6 +73,24 @@ func mapLedgerError(w http.ResponseWriter, logger *slog.Logger, err error) {
 		writeAPIError(w, http.StatusConflict, "incidental_not_closed", "This incidental is not closed.")
 	case errors.Is(err, ledger.ErrFundAlreadyExists):
 		writeAPIError(w, http.StatusConflict, "fund_already_exists", "A fund has already been set up.")
+	case errors.Is(err, ledger.ErrPurposeCorrectionNotFound):
+		writeAPIError(w, http.StatusNotFound, "not_found", "The requested resource was not found.")
+	case errors.Is(err, ledger.ErrPurposeCorrectionOpening):
+		writeAPIError(w, http.StatusConflict, "purpose_correction_opening", "An opening balance's purpose cannot be corrected.")
+	case errors.Is(err, ledger.ErrPurposeCorrectionDues):
+		writeAPIError(w, http.StatusConflict, "purpose_correction_dues", "A dues payment's purpose cannot be corrected.")
+	case errors.Is(err, ledger.ErrPurposeCorrectionReimbursement):
+		writeAPIError(w, http.StatusConflict, "purpose_correction_reimbursement", "A reimbursement payout's purpose cannot be corrected here - correct the claim itself instead.")
+	case errors.Is(err, ledger.ErrPurposeCorrectionTransfer):
+		writeAPIError(w, http.StatusConflict, "purpose_correction_transfer", "A transfer leg's purpose cannot be corrected.")
+	case errors.Is(err, ledger.ErrPurposeCorrectionDuesReversal):
+		writeAPIError(w, http.StatusConflict, "purpose_correction_dues_reversal", "A dues reversal's purpose cannot be corrected.")
+	case errors.Is(err, ledger.ErrPurposeCorrectionTargetClosed):
+		writeAPIError(w, http.StatusConflict, "purpose_correction_target_closed", "This incidental is closed - reopen it before correcting into it.")
+	case errors.Is(err, ledger.ErrPurposeCorrectionSourceClosed):
+		writeAPIError(w, http.StatusConflict, "purpose_correction_source_closed", "This incidental is closed - reopen it before correcting out of it.")
+	case errors.Is(err, ledger.ErrPurposeCorrectionNoop):
+		writeAPIError(w, http.StatusConflict, "purpose_correction_noop", "This row is already tagged to that purpose.")
 	case errors.Is(err, money.ErrOverflow):
 		// err's own message embeds the operands that overflowed - the amounts
 		// themselves - which ADR-022 forbids logging. Every other unrecognized

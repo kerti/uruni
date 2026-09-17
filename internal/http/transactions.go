@@ -93,6 +93,19 @@ type transactionResponse struct {
 	// self-explanatory, posted with the treasurer's own purpose and note)
 	// or for an ordinary adjustment (ADR-024).
 	IsReconciliationFix bool `json:"is_reconciliation_fix"`
+	// TransferCorrectsTransactionID is this row's own transfer's link
+	// (ADR-033, #267) - non-nil exactly on a purpose correction's two legs,
+	// nil on every other transfer leg including a roll's. It is what lets
+	// #276's row label tell a correction leg apart from a roll, both of
+	// which are otherwise the same kind='transfer', transfer_kind='reclass_purpose'
+	// shape.
+	TransferCorrectsTransactionID *int64 `json:"transfer_corrects_transaction_id"`
+	// IsCorrected is true exactly when some transfer's
+	// corrects_transaction_id names THIS row - #267's "sudah diperbaiki"
+	// marker on the row that was fixed, never on the pair that fixed it. A
+	// row can be corrected more than once (ADR-033's second-correction
+	// case), so this answers "at least one", not "exactly one".
+	IsCorrected bool `json:"is_corrected"`
 }
 
 func toTransactionResponse(t store.Transaction) transactionResponse {
@@ -144,6 +157,8 @@ func toTransactionsPageResponse(t store.ListTransactionsPageRow) transactionResp
 	resp.ClaimNote = t.ClaimNote
 	resp.TransferKind = t.TransferKind
 	resp.IsReconciliationFix = t.IsReconciliationFix != 0
+	resp.TransferCorrectsTransactionID = t.TransferCorrectsTransactionID
+	resp.IsCorrected = t.IsCorrected != 0
 
 	switch {
 	case t.MemberName != nil:

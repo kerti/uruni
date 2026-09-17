@@ -120,8 +120,26 @@ CREATE TABLE transfer (                   -- pair-holder: cash<->bank, or purpos
   id         INTEGER PRIMARY KEY,
   fund_id    INTEGER NOT NULL REFERENCES fund(id),
   kind       TEXT    NOT NULL CHECK (kind IN ('between_accounts','reclass_purpose')),
+  -- Null is a roll (CloseIncidentalAndRoll); set names the row this pair
+  -- corrects (ADR-033) - a treasurer fixing a mis-tagged row's peruntukan
+  -- rather than hand-building the pair herself. It sits on the pair, not on
+  -- either leg, because the correction is the pair. Forward FK to
+  -- "transaction" below, resolved at insert time, not at CREATE TABLE - the
+  -- same deferred-check shape "transaction" itself relies on for its own
+  -- FOREIGN KEY (fund_id, transfer_id) back onto this table, the other way.
+  corrects_transaction_id INTEGER,
   created_at INTEGER NOT NULL,
-  UNIQUE (fund_id, id)                    -- see account.id above: enables composite FKs from children
+  UNIQUE (fund_id, id),                   -- see account.id above: enables composite FKs from children
+  FOREIGN KEY (fund_id, corrects_transaction_id) REFERENCES "transaction"(fund_id, id),
+  -- Asymmetric on purpose (ADR-033): nothing but a purpose move may claim to
+  -- correct anything, but a purpose move need not. The mirror - a correction
+  -- must set the link - is not enforced, which would need a third
+  -- transfer.kind answering "why it moved" beside the two answering "what
+  -- moved" (between_accounts, reclass_purpose); that split was refused.
+  -- Unenforced, the worst a wrongly-linked roll can do is mislabel one row
+  -- in Riwayat - unlike the dues-reversal CHECK below, which guards a query
+  -- (DuesPaidByPeriod) and had to be absolute.
+  CHECK (corrects_transaction_id IS NULL OR kind = 'reclass_purpose')
 ) STRICT;
 
 CREATE TABLE reimbursement (              -- off-ledger until settled

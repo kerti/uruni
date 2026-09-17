@@ -158,6 +158,19 @@ export const copy = {
       // a close, say. Incidentals.tsx's own screen-scoped errors map has no
       // entry for this code: the guard fires on the record form, not there.
       incidental_closed: 'Amplop ini sudah ditutup — buka lagi dulu untuk mencatat transaksi baru.',
+      // ADR-033 (#267): POST /api/transactions/{id}/purpose-correction's own
+      // named refusals. The engine ships in this slice; the chip, dialog
+      // and row labels that would normally keep these unreachable are
+      // #276's job, so these strings exist ahead of their own UI - added
+      // here so the codes are not orphaned.
+      purpose_correction_opening: 'Peruntukan saldo awal tidak bisa diperbaiki.',
+      purpose_correction_dues: 'Peruntukan pembayaran iuran tidak bisa diperbaiki di sini.',
+      purpose_correction_reimbursement: 'Peruntukan talangan tidak bisa diperbaiki di sini — perbaiki lewat catatan talangannya.',
+      purpose_correction_transfer: 'Peruntukan hasil pindah tidak bisa diperbaiki lagi.',
+      purpose_correction_dues_reversal: 'Peruntukan pembatalan iuran tidak bisa diperbaiki.',
+      purpose_correction_target_closed: 'Amplop ini sudah ditutup — buka lagi dulu sebelum memindahkan peruntukan ke sini.',
+      purpose_correction_source_closed: 'Amplop ini sudah ditutup — buka lagi dulu sebelum memindahkan peruntukan dari sini.',
+      purpose_correction_noop: 'Baris ini sudah memakai peruntukan itu.',
     },
     // Shown for a code not in the map above.
     unknownError: 'Ada yang tidak beres. Coba lagi sebentar lagi.',

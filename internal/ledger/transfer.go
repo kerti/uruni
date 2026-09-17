@@ -57,6 +57,12 @@ func normalizeNote(note *string) *string {
 // CloseIncidentalAndRoll (#42) needs no second code path, only different
 // legs and kind='reclass_purpose'.
 //
+// correctsTransactionID is nil for every pair but a purpose correction
+// (ADR-033, #267): PostPurposeCorrection is this primitive's third caller,
+// reusing it rather than opening a second write path (ADR-027) - the schema's
+// own CHECK is what stops a between_accounts pair or a roll from setting it,
+// not a branch in here.
+//
 // No argument-shape validation happens here (ADR-027): that is each exported
 // caller's job, because the message a caller wants ("from_account_id and
 // to_account_id must differ") reads differently depending on which two
@@ -70,11 +76,11 @@ func normalizeNote(note *string) *string {
 // ADR-004's SetMaxOpenConns(1) allows - a deadlock, not a safety net.
 // postTransferPair below is the thin, transaction-owning wrapper that
 // PostTransferBetweenAccounts and the existing tests still call.
-func (l *Ledger) postTransferPairTx(ctx context.Context, q store.Querier, fundID int64, kind string, from, to leg, amount money.Amount, occurredOn string, note *string) (store.Transfer, error) {
+func (l *Ledger) postTransferPairTx(ctx context.Context, q store.Querier, fundID int64, kind string, from, to leg, amount money.Amount, occurredOn string, note *string, correctsTransactionID *int64) (store.Transfer, error) {
 	now := time.Now().Unix()
 
 	transfer, err := q.CreateTransfer(ctx, store.CreateTransferParams{
-		FundID: fundID, Kind: kind, CreatedAt: now,
+		FundID: fundID, Kind: kind, CorrectsTransactionID: correctsTransactionID, CreatedAt: now,
 	})
 	if err != nil {
 		return store.Transfer{}, fmt.Errorf("creating transfer: %w", err)
@@ -102,7 +108,7 @@ func (l *Ledger) postTransferPair(ctx context.Context, fundID int64, kind string
 	var transfer store.Transfer
 	err := l.withTx(ctx, func(q store.Querier) error {
 		var err error
-		transfer, err = l.postTransferPairTx(ctx, q, fundID, kind, from, to, amount, occurredOn, note)
+		transfer, err = l.postTransferPairTx(ctx, q, fundID, kind, from, to, amount, occurredOn, note, nil)
 		return err
 	})
 	if err != nil {

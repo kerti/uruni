@@ -765,7 +765,9 @@ SELECT t.id, t.fund_id, t.account_id, t.purpose_id, t.direction, t.amount, t.occ
        ta.name AS transfer_to_account_name,
        fp.name AS transfer_from_purpose_name,
        tp.name AS transfer_to_purpose_name,
-       CAST(EXISTS(SELECT 1 FROM reconciliation_line rl WHERE rl.adjustment_transaction_id = t.id) AS INTEGER) AS is_reconciliation_fix
+       CAST(EXISTS(SELECT 1 FROM reconciliation_line rl WHERE rl.adjustment_transaction_id = t.id) AS INTEGER) AS is_reconciliation_fix,
+       tr.corrects_transaction_id AS transfer_corrects_transaction_id,
+       CAST(EXISTS(SELECT 1 FROM transfer c WHERE c.corrects_transaction_id = t.id) AS INTEGER) AS is_corrected
 FROM "transaction" t
 JOIN purpose p ON p.id = t.purpose_id
 JOIN account a ON a.id = t.account_id
@@ -811,31 +813,33 @@ type ListTransactionsPageParams struct {
 }
 
 type ListTransactionsPageRow struct {
-	ID                      int64
-	FundID                  int64
-	AccountID               int64
-	PurposeID               int64
-	Direction               string
-	Amount                  int64
-	OccurredOn              string
-	Kind                    string
-	MemberID                *int64
-	DuesPeriod              *string
-	ReimbursementID         *int64
-	TransferID              *int64
-	ReversesTransactionID   *int64
-	Note                    *string
-	CreatedAt               int64
-	AccountName             string
-	MemberName              *string
-	SettlementMemberName    *string
-	ClaimNote               *string
-	TransferKind            *string
-	TransferFromAccountName *string
-	TransferToAccountName   *string
-	TransferFromPurposeName *string
-	TransferToPurposeName   *string
-	IsReconciliationFix     int64
+	ID                            int64
+	FundID                        int64
+	AccountID                     int64
+	PurposeID                     int64
+	Direction                     string
+	Amount                        int64
+	OccurredOn                    string
+	Kind                          string
+	MemberID                      *int64
+	DuesPeriod                    *string
+	ReimbursementID               *int64
+	TransferID                    *int64
+	ReversesTransactionID         *int64
+	Note                          *string
+	CreatedAt                     int64
+	AccountName                   string
+	MemberName                    *string
+	SettlementMemberName          *string
+	ClaimNote                     *string
+	TransferKind                  *string
+	TransferFromAccountName       *string
+	TransferToAccountName         *string
+	TransferFromPurposeName       *string
+	TransferToPurposeName         *string
+	IsReconciliationFix           int64
+	TransferCorrectsTransactionID *int64
+	IsCorrected                   int64
 }
 
 // GET /api/transactions's real listing (#225, ADR-032 "Lists: paging and
@@ -937,6 +941,17 @@ type ListTransactionsPageRow struct {
 //     an inferred flag. Always 0 for resolution 'entry_added' (that
 //     resolution never sets adjustment_transaction_id, ADR-024) and for
 //     every non-adjustment kind.
+//   - transfer_corrects_transaction_id: this row's own transfer's link
+//     (ADR-033, #267), non-NULL exactly on a correction pair's two legs -
+//     what tells a correction leg apart from a roll's, both of which are
+//     otherwise the same kind='transfer', kind='reclass_purpose' shape.
+//     Read off tr, the same join transfer_kind already uses, not a second
+//     one.
+//   - is_corrected: whether some transfer's corrects_transaction_id names
+//     THIS row - #267's "sudah diperbaiki" marker on the row that was
+//     fixed, never the pair that fixed it. A row can be corrected more than
+//     once (ADR-033's own second-correction case), so this is EXISTS, not a
+//     count.
 func (q *Queries) ListTransactionsPage(ctx context.Context, arg ListTransactionsPageParams) ([]ListTransactionsPageRow, error) {
 	rows, err := q.db.QueryContext(ctx, listTransactionsPage,
 		arg.FundID,
@@ -982,6 +997,8 @@ func (q *Queries) ListTransactionsPage(ctx context.Context, arg ListTransactions
 			&i.TransferFromPurposeName,
 			&i.TransferToPurposeName,
 			&i.IsReconciliationFix,
+			&i.TransferCorrectsTransactionID,
+			&i.IsCorrected,
 		); err != nil {
 			return nil, err
 		}

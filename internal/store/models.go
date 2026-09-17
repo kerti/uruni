@@ -130,10 +130,11 @@ type Transaction struct {
 }
 
 type Transfer struct {
-	ID        int64
-	FundID    int64
-	Kind      string
-	CreatedAt int64
+	ID                    int64
+	FundID                int64
+	Kind                  string
+	CorrectsTransactionID *int64
+	CreatedAt             int64
 }
 
 type User struct {
