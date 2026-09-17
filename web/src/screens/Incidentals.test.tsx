@@ -137,10 +137,21 @@ describe('Incidentals', () => {
   })
 
   it('closes an envelope with a zero rollover, shown honestly rather than hidden', async () => {
-    const detail = { ...openEnvelope, collected_amount: 120_000, disbursed_amount: 100_000, target_amount: null }
+    // Collected equals disbursed, so the close rolls nothing - and the
+    // readout is derived from exactly those two figures (#270), which is why
+    // the refetched detail carries the same pair with closed_on set rather
+    // than the close response's rolled_amount being remembered.
+    const detail = { ...openEnvelope, collected_amount: 120_000, disbursed_amount: 120_000, target_amount: null }
     const closed = { ...openEnvelope, closed_on: '2026-09-10' }
+    let detailCalls = 0
     vi.stubGlobal('fetch', routedFetch([
-      { match: (m: string, u: string) => m === 'GET' && u.includes('/api/incidentals/1'), handle: () => Promise.resolve(jsonResponse(detail)) },
+      {
+        match: (m: string, u: string) => m === 'GET' && u.includes('/api/incidentals/1'),
+        handle: () => {
+          detailCalls += 1
+          return Promise.resolve(jsonResponse(detailCalls === 1 ? detail : { ...detail, closed_on: '2026-09-10' }))
+        },
+      },
       {
         match: (m: string, u: string) => m === 'POST' && u.includes('/api/incidentals/1/close'),
         handle: () => Promise.resolve(jsonResponse({ incidental: closed, rolled_amount: 0 })),
@@ -150,8 +161,7 @@ describe('Incidentals', () => {
 
     renderIncidentals(<Incidentals onBack={vi.fn()} onRecordFor={vi.fn()} onViewTransactionsFor={vi.fn()} purposeId={1} />)
     await waitFor(() => expect(screen.getByText(text.detail.collectedLabel)).toBeInTheDocument())
-    expect(screen.getByText(money(120_000))).toBeInTheDocument()
-    expect(screen.getByText(money(100_000))).toBeInTheDocument()
+    expect(screen.getAllByText(money(120_000))).toHaveLength(2)
 
     // Open the close form and submit it
     await userEvent.click(screen.getByRole('button', { name: text.actions.close }))
@@ -335,6 +345,103 @@ describe('Incidentals', () => {
 
     await userEvent.click(screen.getByRole('button', { name: text.actions.viewTransactions }))
     expect(onViewTransactionsFor).toHaveBeenCalledWith(2)
+  })
+
+  // --- The rollover, on every visit (#270) --------------------------------
+  //
+  // The readout used to live in component state set by the close response,
+  // so it survived exactly one screen-lifetime: a treasurer returning to a
+  // closed envelope saw Terkumpul and Terpakai against a zero balance and
+  // no sentence reconciling them. It is derived from those same two figures
+  // now, so every one of these opens the screen cold - no close is
+  // performed anywhere below.
+
+  it('states a closed envelope\'s rollover on a cold visit, with no close in sight', async () => {
+    const detail = { ...closedEnvelope, collected_amount: 10_000, disbursed_amount: 0 }
+    vi.stubGlobal('fetch', routedFetch([
+      { match: (m: string, u: string) => m === 'GET' && u.includes('/api/incidentals/2'), handle: () => Promise.resolve(jsonResponse(detail)) },
+      ...getHandlers(),
+    ]))
+
+    renderIncidentals(<Incidentals onBack={vi.fn()} onRecordFor={vi.fn()} onViewTransactionsFor={vi.fn()} purposeId={2} />)
+    await waitFor(() => expect(screen.getByText(text.detail.collectedLabel)).toBeInTheDocument())
+
+    // The exact walk #270 reported: 10.000 collected, nothing spent, and an
+    // envelope holding nothing - now with the sentence that explains it.
+    expect(screen.getByText(text.close.rolledLabel(10_000))).toBeInTheDocument()
+    expect(screen.getAllByText(money(10_000))).toHaveLength(2)
+  })
+
+  it('states a shortfall covered from Kas Utama, in its own direction', async () => {
+    const detail = { ...closedEnvelope, collected_amount: 50_000, disbursed_amount: 80_000 }
+    vi.stubGlobal('fetch', routedFetch([
+      { match: (m: string, u: string) => m === 'GET' && u.includes('/api/incidentals/2'), handle: () => Promise.resolve(jsonResponse(detail)) },
+      ...getHandlers(),
+    ]))
+
+    renderIncidentals(<Incidentals onBack={vi.fn()} onRecordFor={vi.fn()} onViewTransactionsFor={vi.fn()} purposeId={2} />)
+    await waitFor(() => expect(screen.getByText(text.detail.collectedLabel)).toBeInTheDocument())
+
+    // Signed, so the sentence changes rather than the amount's sign showing
+    // (ADR-031); the figure itself stays absolute.
+    expect(screen.getByText(text.close.rolledLabel(-30_000))).toBeInTheDocument()
+    expect(screen.getByText(money(30_000))).toBeInTheDocument()
+  })
+
+  it('states a square envelope as square, rather than saying nothing', async () => {
+    const detail = { ...closedEnvelope, collected_amount: 75_000, disbursed_amount: 75_000 }
+    vi.stubGlobal('fetch', routedFetch([
+      { match: (m: string, u: string) => m === 'GET' && u.includes('/api/incidentals/2'), handle: () => Promise.resolve(jsonResponse(detail)) },
+      ...getHandlers(),
+    ]))
+
+    renderIncidentals(<Incidentals onBack={vi.fn()} onRecordFor={vi.fn()} onViewTransactionsFor={vi.fn()} purposeId={2} />)
+    await waitFor(() => expect(screen.getByText(text.detail.collectedLabel)).toBeInTheDocument())
+
+    expect(screen.getByText(text.close.rolledLabel(0))).toBeInTheDocument()
+    expect(screen.getByText(money(0))).toBeInTheDocument()
+  })
+
+  it('says nothing about a rollover on an envelope that is still open', async () => {
+    const detail = { ...openEnvelope, collected_amount: 120_000, disbursed_amount: 20_000 }
+    vi.stubGlobal('fetch', routedFetch([
+      { match: (m: string, u: string) => m === 'GET' && u.includes('/api/incidentals/1'), handle: () => Promise.resolve(jsonResponse(detail)) },
+      ...getHandlers(),
+    ]))
+
+    renderIncidentals(<Incidentals onBack={vi.fn()} onRecordFor={vi.fn()} onViewTransactionsFor={vi.fn()} purposeId={1} />)
+    await waitFor(() => expect(screen.getByText(text.detail.collectedLabel)).toBeInTheDocument())
+
+    // An open envelope has rolled nothing; 100.000 is simply what it holds.
+    expect(screen.queryByText(text.close.rolledLabel(100_000))).not.toBeInTheDocument()
+  })
+
+  it('a reopened envelope with a past roll does not claim to have rolled', async () => {
+    // Reopening does not reverse the roll, so the ledger still carries it -
+    // but the envelope is open again and must not read as finished.
+    const closedDetail = { ...closedEnvelope, collected_amount: 50_000, disbursed_amount: 0 }
+    const reopened = { ...closedEnvelope, closed_on: null }
+    const reopenedDetail = { ...reopened, collected_amount: 50_000, disbursed_amount: 0 }
+    let detailCalls = 0
+    vi.stubGlobal('fetch', routedFetch([
+      { match: (m: string, u: string) => m === 'POST' && u.includes('/api/incidentals/2/reopen'), handle: () => Promise.resolve(jsonResponse(reopened)) },
+      {
+        match: (m: string, u: string) => m === 'GET' && u.includes('/api/incidentals/2'),
+        handle: () => {
+          detailCalls += 1
+          return Promise.resolve(jsonResponse(detailCalls === 1 ? closedDetail : reopenedDetail))
+        },
+      },
+      ...getHandlers(),
+    ]))
+
+    renderIncidentals(<Incidentals onBack={vi.fn()} onRecordFor={vi.fn()} onViewTransactionsFor={vi.fn()} purposeId={2} />)
+    await waitFor(() => expect(screen.getByText(text.close.rolledLabel(50_000))).toBeInTheDocument())
+
+    await userEvent.click(screen.getByRole('button', { name: text.actions.reopen }))
+
+    await waitFor(() => expect(screen.getByText(text.reopen.success)).toBeInTheDocument())
+    expect(screen.queryByText(text.close.rolledLabel(50_000))).not.toBeInTheDocument()
   })
 
   // --- Rename (#264): correcting a mistyped occasion ---------------------

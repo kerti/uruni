@@ -90,7 +90,6 @@ export default function Incidentals({
   const [submitState, submitRun] = useApi<unknown>()
 
   const [showCloseForm, setShowCloseForm] = useState(false)
-  const [rolledAmount, setRolledAmount] = useState<number | null>(null)
 
   const [feedback, setFeedback] = useState<Feedback | null>(null)
 
@@ -156,15 +155,16 @@ export default function Incidentals({
     })
   }
 
+  // The close response's own rolled_amount is deliberately not kept here
+  // (#270): the refetched detail already states the rollover, and a second
+  // copy in component state is the bug this issue reported - it survived
+  // exactly one screen-lifetime. See DetailView's rolledAmount for the
+  // derivation.
   function handleClose(accountId: number, closedOn: string, note: string) {
-    // The rolled amount lives only in the close response, not on the detail
-    // row - captured into local state here, rendered even when it is 0 (see
-    // DetailView's own rolledAmount block).
     runWrite(
       () => closeIncidental(purposeId, { accountId, closedOn, note: note.trim() === '' ? null : note }),
       text.close.success,
-      (result) => {
-        setRolledAmount(result.rolledAmount)
+      () => {
         setShowCloseForm(false)
         void detailRun(() => getIncidental(purposeId))
       },
@@ -182,7 +182,6 @@ export default function Incidentals({
       () => reopenIncidental(purposeId),
       text.reopen.success,
       () => {
-        setRolledAmount(null)
         void detailRun(() => getIncidental(purposeId))
       },
     )
@@ -206,7 +205,6 @@ export default function Incidentals({
         feedback={feedback}
         submitting={submitting}
         showCloseForm={showCloseForm}
-        rolledAmount={rolledAmount}
         onRecord={() => onRecordFor(purposeId)}
         onViewTransactions={() => onViewTransactionsFor(purposeId)}
         onShowClose={() => { setShowCloseForm(true); setFeedback(null) }}
@@ -244,7 +242,6 @@ function DetailView({
   feedback,
   submitting,
   showCloseForm,
-  rolledAmount,
   onRecord,
   onViewTransactions,
   onShowClose,
@@ -260,7 +257,6 @@ function DetailView({
   feedback: Feedback | null
   submitting: boolean
   showCloseForm: boolean
-  rolledAmount: number | null
   onRecord: () => void
   onViewTransactions: () => void
   onShowClose: () => void
@@ -281,6 +277,27 @@ function DetailView({
 
   const envelope = detailState.data
   const isOpen = envelope.closed_on === null
+
+  // What the close rolled, derived rather than remembered (#270).
+  //
+  // ADR-031's invariant is that closing leaves this purpose's balance at
+  // exactly zero, in whichever direction that takes. The balance is the
+  // unfiltered net of everything posted against the purpose; collected and
+  // disbursed here are the same net with the roll's own leg excluded
+  // (IncidentalActivityTotals, the seam #215 drew). Zero net including the
+  // roll therefore means the roll is exactly the net excluding it - so the
+  // rollover is the gap between the two figures already on screen, which is
+  // the very gap that made this screen unreadable: Terkumpul 10.000 against
+  // Terpakai 0 on an envelope holding nothing.
+  //
+  // It holds across a close, a reopen, a late entry and a second close: each
+  // close re-establishes the same zero. It is signed like the close
+  // response's rolled_amount - positive rolled out, negative covered from
+  // Kas Utama - so close.rolledLabel says which way it went, unchanged.
+  //
+  // Only for a closed envelope. An open one has not rolled anything, and a
+  // reopened one must not claim to have.
+  const rolledAmount = isOpen ? null : envelope.collected_amount - envelope.disbursed_amount
 
   return (
     <div className="mx-auto flex w-full max-w-sm flex-col gap-4">
@@ -323,10 +340,11 @@ function DetailView({
         )}
       </div>
 
-      {/* Rolled-amount readout after a close - shown even when it is 0: a
-          zero rollover is an honest answer, not a missing one. rolled_amount
-          is signed (ADR-031), so the sentence itself says which way it
-          went; the amount stays one field, absolute either way. */}
+      {/* The rollover, on every visit to a closed envelope rather than only
+          in the moment it was closed (#270) - shown even when it is 0: a
+          zero rollover is an honest answer, not a missing one. It is signed
+          (ADR-031), so the sentence itself says which way it went; the
+          amount stays one field, absolute either way. */}
       {rolledAmount !== null && (
         <div className="flex items-center justify-between rounded-lg bg-muted p-3 text-sm">
           <span className="text-muted-foreground">{text.close.rolledLabel(rolledAmount)}</span>
