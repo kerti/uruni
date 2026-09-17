@@ -13,37 +13,11 @@ import { ApiError } from '@/lib/api'
 import { createAccount, deleteAccount, listAccounts, setAccountInactiveOn, updateAccount } from '@/lib/accounts'
 import { todayISODate } from '@/lib/dates'
 import { useApi } from '@/lib/useApi'
+import { parseDialogTarget } from '@/lib/dialogTarget'
 import { useDialogParam } from '@/lib/useDialogParam'
 import type { Account } from '@/lib/accounts'
 
 const text = copy.settings.locations
-
-/**
- * What `?edit=` names on this screen - a new location, or an existing one by
- * id.
- *
- * `foreign` is separate from `invalid` on purpose, and it matters as soon as
- * Pengaturan holds a second section with a dialog of its own (#263's
- * Incidentals): these sections all read one URL, so a section that cleared
- * every value it could not parse would strip the param its neighbour's open
- * dialog is living on and close it mid-edit. A different prefix - or no
- * prefix at all - is `foreign` and is left alone; only a `location:` value
- * this screen cannot use is `invalid`, and only that is cleared.
- */
-type EditTarget = { kind: 'new' } | { kind: 'edit'; id: number }
-type ParsedTarget = EditTarget | { kind: 'foreign' } | { kind: 'invalid' }
-
-function parseEditTarget(value: string | null): ParsedTarget {
-  if (value === null) return { kind: 'foreign' }
-  const separator = value.indexOf(':')
-  if (separator < 0) return { kind: 'foreign' }
-  const prefix = value.slice(0, separator)
-  const rest = value.slice(separator + 1)
-  if (prefix !== 'location') return { kind: 'foreign' }
-  if (rest === 'new') return { kind: 'new' }
-  const id = Number(rest)
-  return Number.isInteger(id) && id > 0 ? { kind: 'edit', id } : { kind: 'invalid' }
-}
 
 /**
  * The locations section of the settings screen (M6.15, converted to the
@@ -77,7 +51,9 @@ export default function Locations() {
     void listRun(listAccounts)
   }
 
-  const target = parseEditTarget(value)
+  // 'location' is this section's own prefix; anything else on `?edit=`
+  // belongs to a sibling section and comes back `foreign` (dialogTarget.ts).
+  const target = parseDialogTarget('location', value)
   const editingAccount = target.kind === 'edit' ? (listState.data?.find((a) => a.id === target.id) ?? null) : null
 
   // A `location:` value with an unknown id or a malformed one: strip it once
@@ -116,7 +92,7 @@ export default function Locations() {
                 type="button"
                 aria-label={text.editAria(account.name)}
                 onClick={() => open(`location:${account.id}`)}
-                className="flex min-h-11 w-full flex-col gap-1 rounded-lg bg-card px-4 py-3 text-left ring-1 ring-foreground/10 transition-colors hover:bg-muted/40"
+                className="flex min-h-11 w-full flex-col gap-1 rounded-lg bg-card px-4 py-3 text-left ring-1 ring-foreground/10 select-none transition-colors hover:bg-muted/40"
               >
                 <span className="flex w-full items-baseline justify-between gap-3">
                   <span className="min-w-0 truncate font-medium">{account.name}</span>

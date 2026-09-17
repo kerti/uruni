@@ -540,7 +540,12 @@ export const copy = {
       nameLabel: 'Nama kas',
       save: 'Simpan',
       saving: 'Menyimpan…',
-      saved: 'Nama kas diperbarui.',
+      cancel: 'Batal',
+      // The whole card is the edit affordance (M6.30, the shape #229 set on
+      // Lokasi), so the word for the action lives on the dialog it opens.
+      // There is one kas, so the card never needs to say which one.
+      editTitle: 'Ubah nama kas',
+      editAria: (name: string) => `Ubah ${name}`,
     },
     locations: {
       heading: 'Lokasi penyimpanan',
@@ -595,8 +600,11 @@ export const copy = {
       add: 'Tambah titipan',
       adding: 'Menambahkan…',
       // Same pair of words the locations section uses, and for the same
-      // reason: a name is a label, not catatan yang sudah tercatat.
-      edit: 'Ubah',
+      // reason: a name is a label, not catatan yang sudah tercatat. The whole
+      // card is the edit affordance (M6.30), so "Ubah" is the dialog's title
+      // and the card's own accessible name, not a button beside it.
+      editTitle: 'Ubah titipan',
+      editAria: (name: string) => `Ubah ${name}`,
       save: 'Simpan',
       saving: 'Menyimpan…',
       cancel: 'Batal',

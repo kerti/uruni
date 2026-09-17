@@ -16,6 +16,17 @@ import type { Fund } from '@/lib/setup'
  * Each section owns its own data and its own writes; this file is the frame
  * and the order, nothing else. M6.16 and M6.17 add their sections here.
  *
+ * Every section is a card list whose editing happens in a dialog (M6.28 for
+ * Lokasi, M6.30 for the rest - ADR-032 "Every non-posting edit is a
+ * dialog"). With the inline forms gone, the screen is short enough that
+ * stacked sections beat tabs, which is what ADR-032's refusal of tabs on the
+ * admin screens rests on: tabs would hide half of a screen she visits rarely,
+ * where she has no muscle memory for what is behind the second panel.
+ *
+ * The sections share one URL and four of them own an `?edit=` dialog, so each
+ * one parses that param against its own prefix and leaves every other value
+ * alone - see lib/dialogTarget.ts for why that is load-bearing.
+ *
  * Incidentals (#263, ADR-032): opening a new envelope lost its home when
  * Beranda's purpose breakdown became entry points only, and it lands here,
  * beside Titipan - the two are kinds of one `purpose` (CONTEXT.md).
