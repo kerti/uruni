@@ -49,7 +49,7 @@ describe('Roster', () => {
   it('lists every member with their tier, retired ones included', async () => {
     const { fetchMock } = stubRoster([member(1, 'Warga Satu'), member(2, 'Warga Dua', null, '2026-08-01')])
     vi.stubGlobal('fetch', fetchMock)
-    render(<Roster tiersVersion={0} />)
+    render(<Roster />)
 
     expect(await screen.findByText('Warga Satu')).toBeInTheDocument()
     expect(screen.getByText('Warga Dua')).toBeInTheDocument()
@@ -62,7 +62,7 @@ describe('Roster', () => {
   it('adds a member with a tier and a joined-on date', async () => {
     const { fetchMock, calls } = stubRoster([])
     vi.stubGlobal('fetch', fetchMock)
-    render(<Roster tiersVersion={0} />)
+    render(<Roster />)
     await screen.findByText(text.empty)
 
     const form = within(screen.getByRole('form', { name: text.add }))
@@ -82,7 +82,7 @@ describe('Roster', () => {
   it('sends only the fields that changed when editing', async () => {
     const { fetchMock, calls } = stubRoster([member(1, 'Warga Satu')])
     vi.stubGlobal('fetch', fetchMock)
-    render(<Roster tiersVersion={0} />)
+    render(<Roster />)
     await screen.findByText('Warga Satu')
 
     await userEvent.click(screen.getByRole('button', { name: text.edit }))
@@ -102,7 +102,7 @@ describe('Roster', () => {
   it('clears the tier with an explicit null when "tanpa golongan" is chosen', async () => {
     const { fetchMock, calls } = stubRoster([member(1, 'Warga Satu', 1)])
     vi.stubGlobal('fetch', fetchMock)
-    render(<Roster tiersVersion={0} />)
+    render(<Roster />)
     await screen.findByText('Warga Satu')
 
     await userEvent.click(screen.getByRole('button', { name: text.edit }))
@@ -118,7 +118,7 @@ describe('Roster', () => {
   it('deactivates with today, and reinstates with an explicit null', async () => {
     const active = stubRoster([member(1, 'Warga Satu')])
     vi.stubGlobal('fetch', active.fetchMock)
-    const { unmount } = render(<Roster tiersVersion={0} />)
+    const { unmount } = render(<Roster />)
     await screen.findByText('Warga Satu')
 
     await userEvent.click(screen.getByRole('button', { name: text.deactivate }))
@@ -128,7 +128,7 @@ describe('Roster', () => {
 
     const retired = stubRoster([member(1, 'Warga Satu', 1, '2026-08-01')])
     vi.stubGlobal('fetch', retired.fetchMock)
-    render(<Roster tiersVersion={0} />)
+    render(<Roster />)
     await screen.findByText('Warga Satu')
 
     await userEvent.click(screen.getByRole('button', { name: text.reinstate }))
@@ -139,7 +139,7 @@ describe('Roster', () => {
   it('deletes a duplicate with no history', async () => {
     const { fetchMock, calls } = stubRoster([member(1, 'Duplikat')], () => new Response(null, { status: 204 }))
     vi.stubGlobal('fetch', fetchMock)
-    render(<Roster tiersVersion={0} />)
+    render(<Roster />)
     await screen.findByText('Duplikat')
 
     await userEvent.click(screen.getByRole('button', { name: text.delete }))
@@ -153,7 +153,7 @@ describe('Roster', () => {
       jsonResponse({ error: { code: 'referenced_by_other_records', message: 'referenced' } }, 409),
     )
     vi.stubGlobal('fetch', fetchMock)
-    render(<Roster tiersVersion={0} />)
+    render(<Roster />)
     await screen.findByText('Warga Satu')
 
     await userEvent.click(screen.getByRole('button', { name: text.delete }))

@@ -364,3 +364,13 @@ Rejected: a "+ buka amplop baru" affordance inside Catat's purpose picker. It is
 **The shape is the scope discipline**: `?purpose=<id>` on `/history/transactions` is a **deep link Transaksi renders and can clear, never a chooser it offers**. The link comes from an envelope's detail screen and from nowhere else. Month, member, income/expense and dues status, and any UI for picking a filter, stay M7's.
 
 Rejected: a purpose dropdown on the Transaksi tab. It is more useful standalone, and it is M7's filter set arriving one filter early, which is the creep the prime directive names.
+
+## Deleting a golongan takes its tarif with it (decided 2026-09-17)
+
+[#232](https://github.com/kerti/uruni/issues/232) moved tiers to Pengaturan and, in its acceptance criteria only, asked that "deleting a tier still in use is refused with copy naming why". There was no tier delete at all — `/api/dues-tiers` had POST, GET and PATCH — so the slice needed an endpoint, not just a UI move.
+
+**The ruling: deleting a golongan deletes its rates with it, in one transaction.** A tier no member is in priced nobody, so its rate rows explain no settled month and are its own children rather than history. A tier a member references is refused by that member's composite foreign key — 409 `referenced_by_other_records`, the same answer a used lokasi or anggota already gives — and the rollback restores the rates the same transaction had already deleted.
+
+Rejected: refusing any tier that still has rates, leaving her to delete each one by hand first. It is simpler on the server and reads as busywork for a golongan nobody was ever charged under.
+
+`Ledger.DeleteDuesTier` owns it, which is the one place in the dues-tier routes that is not direct CRUD ([ADR-027](./ADR/027-ledger-domain-boundary.md)): the two statements have to share a transaction, and the ledger is what has one. No pre-check for members — the foreign key is the check, and a `COUNT(*)` first would only race it.

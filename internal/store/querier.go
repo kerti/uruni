@@ -45,6 +45,22 @@ type Querier interface {
 	// DeleteDuesRate is what makes a wrong-month rate correctable at all, since
 	// UNIQUE (tier_id, effective_from) refuses the corrected row otherwise.
 	DeleteDuesRate(ctx context.Context, id int64) error
+	// Every rate belonging to one tier. Its own children, not history anyone was
+	// charged under: a tier no member is in priced nothing, so its rates go with
+	// it rather than standing in the way of deleting it.
+	DeleteDuesRatesByTier(ctx context.Context, tierID int64) error
+	// DeleteDuesTier removes a tier the fund never put anyone in (#232) - the
+	// setup typo, the golongan renamed into existence twice, never a tier with
+	// history behind it. No pre-check for members: member's composite FK
+	// (fund_id, tier_id) refuses it on its own, and a COUNT(*) first would only
+	// race it - the same reasoning DeleteAccount's own handler documents.
+	//
+	// The caller runs this inside one transaction with DeleteDuesRatesByTier
+	// below, rates first. Both orders of that pair matter: rates have their own
+	// FK onto the tier, so the tier cannot go first, and if a member then
+	// refuses the tier the whole transaction rolls back and the rates it had
+	// already deleted come back with it.
+	DeleteDuesTier(ctx context.Context, arg DeleteDuesTierParams) error
 	// DeleteExpiredSessions is the lazy sweep: called as a side effect of a
 	// session write, never by a background ticker (ADR-013's scope stays
 	// untouched by this slice).

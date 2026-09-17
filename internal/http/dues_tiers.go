@@ -98,3 +98,29 @@ func (a *api) listDuesTiers(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, http.StatusOK, resp)
 }
+
+// deleteDuesTier is DELETE /api/dues-tiers/{id} (#232): for a tier the fund
+// never put anyone in - a setup typo, a golongan named twice - never for one
+// with members behind it.
+//
+// Ledger.DeleteDuesTier rather than a.queries directly, which is the one
+// place in this file that is not plain direct CRUD (ADR-027): the tier and
+// the rates that priced it have to go in one transaction, and the ledger is
+// what owns a transaction. Its own comment has the ordering reasoning.
+//
+// A tier a member still references comes back from SQLite as a foreign-key
+// violation and leaves as 409 referenced_by_other_records, the same answer
+// deleting a used location or member already gives.
+func (a *api) deleteDuesTier(w http.ResponseWriter, r *http.Request) {
+	tier, ok := a.resolveDuesTier(w, r)
+	if !ok {
+		return
+	}
+
+	if err := a.ledger.DeleteDuesTier(r.Context(), tier.FundID, tier.ID); err != nil {
+		mapSQLiteDeleteError(w, a.logger, err)
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}

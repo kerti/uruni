@@ -54,7 +54,7 @@ function tierName(tiers: DuesTier[], tierId: number | null): string {
  * tier means no dues obligation, which is why the select carries an explicit
  * "Tanpa golongan" rather than an empty option.
  */
-export default function Roster({ tiersVersion }: { tiersVersion: number }) {
+export default function Roster() {
   const [state, run] = useApi<RosterData>()
 
   async function load(): Promise<RosterData> {
@@ -63,13 +63,15 @@ export default function Roster({ tiersVersion }: { tiersVersion: number }) {
   }
 
   useEffect(() => {
+    // run is a stable useCallback (useApi.ts), so this fires once per mount.
+    // That is the whole synchronisation the tier picker needs now (#232):
+    // tiers are edited in Pengaturan, and reaching this screen from there is
+    // a navigation, which mounts this component and re-reads both lists. The
+    // `tiersVersion` counter that used to do it existed only because the two
+    // shared one screen.
     void run(load)
-    // run is a stable useCallback (useApi.ts); tiersVersion is the
-    // deliberate extra dependency - the section below this one writes the
-    // tiers this screen's picker reads, and without it a rename shows here
-    // only after leaving the screen and coming back.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [run, tiersVersion])
+  }, [run])
 
   function reload() {
     void run(load)

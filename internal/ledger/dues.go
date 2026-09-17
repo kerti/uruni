@@ -230,3 +230,31 @@ func validateDuesPeriod(s string) error {
 	}
 	return nil
 }
+
+// DeleteDuesTier removes a tier and the rates that priced it, in one
+// transaction (#232).
+//
+// Not money, so not really this package's business - but it is the only
+// place with a transaction, and the two statements have to share one. A
+// tier's rates carry their own FK onto it, so the tier cannot be deleted
+// first; and if a member then refuses the tier through member's composite
+// (fund_id, tier_id) FK, the rollback takes the rate deletion with it. Split
+// across two calls, a refused tier would leave its rates already gone.
+//
+// No pre-check for members. The foreign key is the check, and a COUNT(*)
+// first would only race it - DeleteAccount's own handler documents the same
+// reasoning. The caller maps the resulting constraint error to 409.
+//
+// fundID scopes the delete for the reason GetDuesTierForFund exists (#188):
+// an id names a row, it does not prove the caller may touch it.
+func (l *Ledger) DeleteDuesTier(ctx context.Context, fundID, tierID int64) error {
+	return l.withTx(ctx, func(q store.Querier) error {
+		if err := q.DeleteDuesRatesByTier(ctx, tierID); err != nil {
+			return fmt.Errorf("deleting the tier's rates: %w", err)
+		}
+		if err := q.DeleteDuesTier(ctx, store.DeleteDuesTierParams{ID: tierID, FundID: fundID}); err != nil {
+			return fmt.Errorf("deleting the tier: %w", err)
+		}
+		return nil
+	})
+}

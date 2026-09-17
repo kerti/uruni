@@ -499,31 +499,6 @@ export const copy = {
       // the locations section's: a refusal that points at the right action.
       deleteRefused: 'Anggota ini sudah punya catatan — nonaktifkan saja, jangan dihapus.',
     },
-    tiers: {
-      heading: 'Golongan & tarif',
-      body: 'Besar iuran per bulan menurut golongan. Tarif baru ditambahkan mulai bulan tertentu, bukan menimpa yang lama — supaya bulan-bulan lampau tetap terbaca dengan tarif yang berlaku waktu itu.',
-      empty: 'Belum ada golongan.',
-      nameLabel: 'Nama golongan',
-      add: 'Tambah golongan',
-      adding: 'Menambahkan…',
-      edit: 'Ubah',
-      save: 'Simpan',
-      saving: 'Menyimpan…',
-      cancel: 'Batal',
-      // A tier with no rate yet is an ordinary state, not a problem.
-      noRates: 'Tarif belum ditentukan.',
-      ratesHeading: 'Tarif',
-      rateAmountLabel: 'Besar iuran per bulan',
-      effectiveFromLabel: 'Mulai bulan',
-      addRate: 'Tambah tarif',
-      addingRate: 'Menambahkan…',
-      editRate: 'Perbaiki nominal',
-      deleteRate: 'Hapus tarif',
-      deletingRate: 'Menghapus…',
-      // From effective_from onward, since a rate has no end date - the next
-      // one starting is what ends it.
-      effectiveFrom: (period: string) => `Mulai ${period}`,
-    },
   },
   // One bundled settings screen (M6.15), not four top-level destinations:
   // naming a location, retiring one, and adding a pass-through purpose are
@@ -608,6 +583,46 @@ export const copy = {
       save: 'Simpan',
       saving: 'Menyimpan…',
       cancel: 'Batal',
+    },
+    tiers: {
+      heading: 'Golongan & tarif',
+      body: 'Besar iuran per bulan menurut golongan. Tarif baru ditambahkan mulai bulan tertentu, bukan menimpa yang lama — supaya bulan-bulan lampau tetap terbaca dengan tarif yang berlaku waktu itu.',
+      empty: 'Belum ada golongan.',
+      nameLabel: 'Nama golongan',
+      add: 'Tambah golongan',
+      adding: 'Menambahkan…',
+      // The whole card is the edit affordance (M6.31), so "Ubah" is the
+      // dialog's title and the card's accessible name, not a button beside
+      // it. The card itself shows what the golongan costs this month.
+      editTitle: 'Ubah golongan',
+      editAria: (name: string) => `Ubah ${name}`,
+      save: 'Simpan',
+      saving: 'Menyimpan…',
+      cancel: 'Batal',
+      // Deleting a golongan (#232). Only for one nobody was ever put in - a
+      // typo at setup, a golongan named twice - so the confirm says what
+      // goes with it, and the refusal points at the reason rather than
+      // restating the wire message (ADR-014). Same pair of words the
+      // locations section uses.
+      delete: 'Hapus golongan',
+      deleting: 'Menghapus…',
+      deleteConfirm:
+        'Golongan ini akan dihapus selamanya, beserta daftar tarifnya. Hanya bisa untuk golongan yang belum dipakai anggota mana pun.',
+      deleteConfirmAction: 'Ya, hapus',
+      deleteRefused: 'Golongan ini masih dipakai anggota — ganti golongan mereka dulu kalau memang mau dihapus.',
+      // A tier with no rate yet is an ordinary state, not a problem.
+      noRates: 'Tarif belum ditentukan.',
+      ratesHeading: 'Tarif',
+      rateAmountLabel: 'Besar iuran per bulan',
+      effectiveFromLabel: 'Mulai bulan',
+      addRate: 'Tambah tarif',
+      addingRate: 'Menambahkan…',
+      editRate: 'Perbaiki nominal',
+      deleteRate: 'Hapus tarif',
+      deletingRate: 'Menghapus…',
+      // From effective_from onward, since a rate has no end date - the next
+      // one starting is what ends it.
+      effectiveFrom: (period: string) => `Mulai ${period}`,
     },
     // Where a new envelope is opened (#263, ADR-032 "an incidental is a
     // purpose, so it is opened in Pengaturan"): incidental and pass-through
