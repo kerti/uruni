@@ -105,3 +105,41 @@ export function noteForDisplay(transaction: Transaction): string | null {
   }
   return transaction.note
 }
+
+/**
+ * POST /api/transactions/{id}/purpose-correction (ADR-033, #267) - moves a
+ * posted row's peruntukan to the tag it should always have had, by posting
+ * a value-neutral reclass_purpose pair on the row's own account and date.
+ *
+ * One field, deliberately: the amount, the account and the date are read
+ * off the row server-side and cannot be sent, which is what keeps this a
+ * correction of that row rather than an edit of an immutable entry. The
+ * server also decides the pair's legs from the row's EFFECTIVE peruntukan,
+ * so correcting a row that was already corrected moves money out of the
+ * tag that actually holds it.
+ *
+ * Answers the transfer row. Every refusal is a named 409 the caller maps
+ * through copy.common.errors (purpose_correction_*).
+ */
+export function correctPurpose(transactionId: number, purposeId: number): Promise<{ id: number; kind: string; created_at: number }> {
+  return apiFetch(`/api/transactions/${transactionId}/purpose-correction`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ purpose_id: purposeId }),
+  })
+}
+
+/**
+ * Whether this row's peruntukan may be corrected at all (ADR-033's
+ * eligibility list). The server refuses the rest with a named 409 either
+ * way; this is what decides whether the row offers the control, so an
+ * ineligible row renders its peruntukan as plain text rather than a dead
+ * tap.
+ *
+ * kind='adjustment' is eligible EXCEPT a dues reversal, whose peruntukan
+ * must track the dues row it reverses (ADR-029).
+ */
+export function canCorrectPurpose(transaction: Transaction): boolean {
+  if (transaction.kind === 'normal') return true
+  return transaction.kind === 'adjustment' && transaction.reverses_transaction_id === null
+}

@@ -326,6 +326,15 @@ export const copy = {
       kind: 'Tutup amplop',
       text: (fromName: string, toName: string) => `${fromName} → ${toName}`,
     },
+    // A purpose correction's own two legs (ADR-033, #267). Same from → to
+    // text as a roll, and the same shape on the wire - both are
+    // kind='transfer' with transfer_kind='reclass_purpose' - so only the
+    // icon and this word tell them apart. Without it every correction
+    // would read "Tutup amplop": an envelope closing that never happened.
+    transferPurposeCorrection: {
+      kind: 'Perbaikan peruntukan',
+      text: (fromName: string, toName: string) => `${fromName} → ${toName}`,
+    },
     reconciliationFix: {
       text: (accountName: string) => `Penyesuaian · ${accountName}`,
     },
@@ -659,6 +668,37 @@ export const copy = {
       add: 'Buka amplop',
       cardAria: (occasion: string) => `Lihat ${occasion}`,
     },
+  },
+  // Correcting a posted row's peruntukan (#276, ADR-033): the marker on a
+  // row that has already been corrected, and the one-field dialog that does
+  // the correcting. The word is "peruntukan" throughout - CONTEXT.md's one
+  // word per concept - and never "reklasifikasi", which is journal
+  // vocabulary the treasurer does not use.
+  purposeCorrection: {
+    // The control the peruntukan itself becomes on an eligible row. Names
+    // the row it would correct, because a screen reader meets it as one of
+    // twenty-five identical-sounding controls otherwise.
+    controlAria: (purposeName: string) => `Perbaiki peruntukan: ${purposeName}`,
+    // Read out beside the muted icon on a row a correction already points
+    // at. Never rendered visibly - the glyph is the visible half (#257's
+    // own icon/srWord split).
+    corrected: 'Sudah diperbaiki',
+    heading: 'Perbaiki peruntukan',
+    // Shown above the picker when the row has already been corrected once:
+    // the tag the money is under NOW, which is not the tag the row itself
+    // still shows. Without it the dialog and the row underneath appear to
+    // disagree (ADR-033).
+    currentLabel: (purposeName: string) => `Peruntukan saat ini: ${purposeName}`,
+    pickerLabel: 'Peruntukan yang benar',
+    // Says plainly what the correction does and does not do, because
+    // "memindahkan peruntukan" is the one action in this app that posts
+    // rows without moving money, and a treasurer who is anxious about the
+    // numbers deserves to be told so before she taps.
+    explainer: 'Saldo kas tidak berubah - hanya peruntukannya yang dipindahkan. Transaksi aslinya tetap tercatat apa adanya.',
+    save: 'Perbaiki',
+    saving: 'Memperbaiki…',
+    cancel: 'Batal',
+    success: 'Peruntukan sudah diperbaiki.',
   },
   // Riwayat's Talangan tab (M6.18, PRD §7.4; moved under Riwayat by
   // #226; renamed from "Penggantian" to "Talangan" for the user-facing word

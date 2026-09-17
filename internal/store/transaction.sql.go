@@ -767,7 +767,12 @@ SELECT t.id, t.fund_id, t.account_id, t.purpose_id, t.direction, t.amount, t.occ
        tp.name AS transfer_to_purpose_name,
        CAST(EXISTS(SELECT 1 FROM reconciliation_line rl WHERE rl.adjustment_transaction_id = t.id) AS INTEGER) AS is_reconciliation_fix,
        tr.corrects_transaction_id AS transfer_corrects_transaction_id,
-       CAST(EXISTS(SELECT 1 FROM transfer c WHERE c.corrects_transaction_id = t.id) AS INTEGER) AS is_corrected
+       CAST(COALESCE((SELECT ct.purpose_id
+                      FROM transfer c
+                      JOIN "transaction" ct ON ct.transfer_id = c.id AND ct.direction = t.direction
+                      WHERE c.corrects_transaction_id = t.id
+                      ORDER BY c.id DESC
+                      LIMIT 1), t.purpose_id) AS INTEGER) AS effective_purpose_id
 FROM "transaction" t
 JOIN purpose p ON p.id = t.purpose_id
 JOIN account a ON a.id = t.account_id
@@ -839,7 +844,7 @@ type ListTransactionsPageRow struct {
 	TransferToPurposeName         *string
 	IsReconciliationFix           int64
 	TransferCorrectsTransactionID *int64
-	IsCorrected                   int64
+	EffectivePurposeID            int64
 }
 
 // GET /api/transactions's real listing (#225, ADR-032 "Lists: paging and
@@ -905,6 +910,7 @@ type ListTransactionsPageRow struct {
 //     and a reconciliation fix both label themselves by it. INNER, not
 //     LEFT: account_id is NOT NULL and DeleteAccount refuses an account any
 //     transaction still references, so the row always exists.
+//
 //   - member_name/settlement_member_name: the dues member for a dues
 //     payment or reversal (t.member_id), or, separately, the settled
 //     claim's member for a reimbursement payout (t.member_id is NULL on
@@ -916,8 +922,10 @@ type ListTransactionsPageRow struct {
 //     clause already documents for a repeated ESCAPE - so the merge (at
 //     most one of the two is ever non-NULL for a given row) happens in Go,
 //     in toTransactionResponse, where the compiler still sees a pointer.
+//
 //   - claim_note: the settled claim's own note (reimbursement.note),
 //     always NULL except on a kind='reimbursement' row.
+//
 //   - transfer_kind plus four transfer_from/to_account/purpose_name
 //     columns: only meaningful for kind='transfer' rows. tf/tt are this
 //     transfer's two legs, found by direction ('out' is always the pair's
@@ -934,6 +942,7 @@ type ListTransactionsPageRow struct {
 //     the time. Picking the account pair or the purpose pair by
 //     transfer_kind is toTransactionResponse's job instead, in Go, where
 //     the compiler still sees four ordinary pointers.
+//
 //   - is_reconciliation_fix: whether this row is the entry that squared a
 //     reconciliation gap (resolution 'adjusted', reconciliation_line's own
 //     adjustment_transaction_id) - a plain 0/1 the same way ListReimbursementsPage's
@@ -941,17 +950,30 @@ type ListTransactionsPageRow struct {
 //     an inferred flag. Always 0 for resolution 'entry_added' (that
 //     resolution never sets adjustment_transaction_id, ADR-024) and for
 //     every non-adjustment kind.
+//
 //   - transfer_corrects_transaction_id: this row's own transfer's link
 //     (ADR-033, #267), non-NULL exactly on a correction pair's two legs -
 //     what tells a correction leg apart from a roll's, both of which are
 //     otherwise the same kind='transfer', kind='reclass_purpose' shape.
 //     Read off tr, the same join transfer_kind already uses, not a second
 //     one.
-//   - is_corrected: whether some transfer's corrects_transaction_id names
-//     THIS row - #267's "sudah diperbaiki" marker on the row that was
-//     fixed, never the pair that fixed it. A row can be corrected more than
-//     once (ADR-033's own second-correction case), so this is EXISTS, not a
-//     count.
+//
+//   - effective_purpose_id: the tag this row's money is under NOW - its own
+//     purpose_id until a correction (ADR-033) moves it, then the latest
+//     correction's target. Which of that correction's two legs IS the
+//     target depends on this row's own direction, not on the leg's: an
+//     'out' mis-tagged needs the target to take the pair's 'out' leg, an
+//     'in' the 'in' leg (PostPurposeCorrection builds it that way), so
+//     ct.direction = t.direction reads back exactly what was written.
+//     COALESCE to t.purpose_id, so an uncorrected row answers itself and
+//     "has this been corrected?" is effective <> stored rather than a
+//     second boolean column saying the same thing twice.
+//
+//     The list keeps rendering the STORED tag (ADR-033): the ledger sums
+//     stored tags, so a row showing its effective one would put the screen
+//     out of step with the balances. This column is for the correction
+//     dialog, which must build its pair from where the money actually is,
+//     and for the marker that says a correction exists.
 func (q *Queries) ListTransactionsPage(ctx context.Context, arg ListTransactionsPageParams) ([]ListTransactionsPageRow, error) {
 	rows, err := q.db.QueryContext(ctx, listTransactionsPage,
 		arg.FundID,
@@ -998,7 +1020,7 @@ func (q *Queries) ListTransactionsPage(ctx context.Context, arg ListTransactions
 			&i.TransferToPurposeName,
 			&i.IsReconciliationFix,
 			&i.TransferCorrectsTransactionID,
-			&i.IsCorrected,
+			&i.EffectivePurposeID,
 		); err != nil {
 			return nil, err
 		}
