@@ -233,7 +233,7 @@ func (l *Ledger) CloseIncidentalAndRoll(ctx context.Context, p CloseIncidentalAn
 			}
 			from := leg{AccountID: p.AccountID, PurposeID: p.PurposeID}
 			to := leg{AccountID: p.AccountID, PurposeID: mainID}
-			if _, err := l.postTransferPairTx(ctx, q, p.FundID, "reclass_purpose", from, to, leftover, p.ClosedOn, normalizeNote(p.Note)); err != nil {
+			if _, err := l.postTransferPairTx(ctx, q, p.FundID, "reclass_purpose", from, to, leftover, p.ClosedOn, normalizeNote(p.Note), nil); err != nil {
 				return fmt.Errorf("rolling incidental leftover: %w", err)
 			}
 			rolled = leftover
@@ -253,7 +253,7 @@ func (l *Ledger) CloseIncidentalAndRoll(ctx context.Context, p CloseIncidentalAn
 			}
 			from := leg{AccountID: p.AccountID, PurposeID: mainID}
 			to := leg{AccountID: p.AccountID, PurposeID: p.PurposeID}
-			if _, err := l.postTransferPairTx(ctx, q, p.FundID, "reclass_purpose", from, to, covering, p.ClosedOn, normalizeNote(p.Note)); err != nil {
+			if _, err := l.postTransferPairTx(ctx, q, p.FundID, "reclass_purpose", from, to, covering, p.ClosedOn, normalizeNote(p.Note), nil); err != nil {
 				return fmt.Errorf("covering incidental shortfall: %w", err)
 			}
 			rolled = leftover // stays negative: covered from Kas Utama.

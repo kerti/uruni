@@ -35,6 +35,10 @@ type Querier interface {
 	CreateReimbursement(ctx context.Context, arg CreateReimbursementParams) (Reimbursement, error)
 	CreateSession(ctx context.Context, arg CreateSessionParams) (Session, error)
 	CreateTransaction(ctx context.Context, arg CreateTransactionParams) (Transaction, error)
+	// corrects_transaction_id is nil for every transfer but a purpose
+	// correction (ADR-033) - between_accounts and CloseIncidentalAndRoll's own
+	// reclass_purpose rolls both pass nil, the same NULL the schema's CHECK
+	// requires of anything that is not kind='reclass_purpose'.
 	CreateTransfer(ctx context.Context, arg CreateTransferParams) (Transfer, error)
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
 	// DeleteAccount leans on the composite foreign keys from "transaction" and
@@ -213,6 +217,22 @@ type Querier interface {
 	// chronological MAX(dues_period) for its member, reading as "paid in
 	// advance" through a period that was reversed and is no longer paid at all.
 	LatestDuesPeriodPaidByMember(ctx context.Context, fundID int64) ([]LatestDuesPeriodPaidByMemberRow, error)
+	// The effective peruntukan lookup (ADR-033): the LATEST correction pointing
+	// at transaction_id, both its legs' purpose ids, or sql.ErrNoRows when none
+	// exists - the caller then falls back to the original row's own stored
+	// purpose_id. "Latest" is transfer.id DESC: a correction's two legs share
+	// one transfer row inserted once, so transfer.id already orders corrections
+	// the same way occurred_on cannot (ADR-033's own date-is-not-a-field rule
+	// means every correction of the same row can share a date).
+	//
+	// Both legs, not just one: which leg is "the new tag" depends on the
+	// ORIGINAL row's own direction, not on 'out' vs 'in' here - PostPurposeCorrection's
+	// own doc comment works out why an 'out' original needs the target at its
+	// 'out' leg while an 'in' original needs it at its 'in' leg. Deciding that
+	// in SQL would mean joining back to the original row a second time for a
+	// fact the caller already has in hand from its own first fetch; the caller
+	// (effectivePeruntukan) picks the correct one instead.
+	LatestPurposeCorrectionForTransaction(ctx context.Context, arg LatestPurposeCorrectionForTransactionParams) (LatestPurposeCorrectionForTransactionRow, error)
 	LatestReconciliation(ctx context.Context, fundID int64) (Reconciliation, error)
 	ListAccountsByFund(ctx context.Context, fundID int64) ([]Account, error)
 	ListDuesPaymentsByMember(ctx context.Context, memberID *int64) ([]ListDuesPaymentsByMemberRow, error)
@@ -428,6 +448,17 @@ type Querier interface {
 	//     an inferred flag. Always 0 for resolution 'entry_added' (that
 	//     resolution never sets adjustment_transaction_id, ADR-024) and for
 	//     every non-adjustment kind.
+	//   - transfer_corrects_transaction_id: this row's own transfer's link
+	//     (ADR-033, #267), non-NULL exactly on a correction pair's two legs -
+	//     what tells a correction leg apart from a roll's, both of which are
+	//     otherwise the same kind='transfer', kind='reclass_purpose' shape.
+	//     Read off tr, the same join transfer_kind already uses, not a second
+	//     one.
+	//   - is_corrected: whether some transfer's corrects_transaction_id names
+	//     THIS row - #267's "sudah diperbaiki" marker on the row that was
+	//     fixed, never the pair that fixed it. A row can be corrected more than
+	//     once (ADR-033's own second-correction case), so this is EXISTS, not a
+	//     count.
 	ListTransactionsPage(ctx context.Context, arg ListTransactionsPageParams) ([]ListTransactionsPageRow, error)
 	ListTransfersByFund(ctx context.Context, fundID int64) ([]Transfer, error)
 	// The reconciliation cutoff. Deliberately not an aggregate: SELECT

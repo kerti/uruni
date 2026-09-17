@@ -158,6 +158,14 @@ func (a *api) routes(r chi.Router) {
 		// either.
 		r.Post("/transactions", a.createTransaction)
 		r.Get("/transactions", a.listTransactions)
+		// Fixing a posted row's peruntukan (ADR-033, #267): a
+		// reclass_purpose pair naming the row it corrects, addressed by
+		// that row's own id, matching the nested-verb idiom
+		// /api/incidentals/{purposeID}/close already uses. Not a second
+		// write path into PostTransaction (ADR-027) - it wraps
+		// Ledger.PostPurposeCorrection, which itself reuses transfer.go's
+		// postTransferPairTx.
+		r.Post("/transactions/{id}/purpose-correction", a.postPurposeCorrection)
 		// Moving money between two accounts without changing what the fund
 		// holds in total (PRD section 6). No GET: a transfer's two legs are ordinary
 		// transaction rows and already surface through GET /api/transactions.
