@@ -1,4 +1,4 @@
-import { Search } from 'lucide-react'
+import { Search, X } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 
@@ -43,6 +43,14 @@ interface FirstPage {
  * that cannot reach the server shows ErrorState's connection copy, never
  * the no-results line.
  *
+ * `?purpose=<id>` (#262) narrows the same list to one peruntukan, and is
+ * how ADR-032's only route to a CLOSED envelope's record works: an
+ * envelope's detail screen links here. It lives in the URL for the same
+ * reason `q` does, and composes with it rather than replacing it - both go
+ * to the server, both reset the paging. There is deliberately no chooser
+ * for it: the filter can only arrive as a link and can always be cleared,
+ * which keeps M7's filter set (ADR-032) from being built here early.
+ *
  * `refetchKey` is App.tsx's `location.key`, the same mechanism Home already
  * uses to pick up a transaction just recorded elsewhere.
  */
@@ -50,6 +58,12 @@ export default function Transactions({ refetchKey }: { refetchKey?: unknown }) {
   const [searchParams, setSearchParams] = useSearchParams()
   const q = (searchParams.get('q') ?? '').trim()
   const [draft, setDraft] = useState(q)
+
+  // A `?purpose=` that is not a positive integer is treated as absent
+  // rather than sent on to be rejected: the same forgiving read App.tsx
+  // already gives the param on `/record` and `/incidentals`.
+  const rawPurpose = Number(searchParams.get('purpose'))
+  const purposeId = Number.isInteger(rawPurpose) && rawPurpose > 0 ? rawPurpose : null
 
   const [state, run] = useApi<FirstPage>()
   // Pages after the first, appended in order. Reset whenever the first page
@@ -61,7 +75,10 @@ export default function Transactions({ refetchKey }: { refetchKey?: unknown }) {
   const generation = useRef(0)
 
   async function loadFirstPage(): Promise<FirstPage> {
-    const [balances, page] = await Promise.all([getBalances(), listTransactions({ q: q || undefined })])
+    const [balances, page] = await Promise.all([
+      getBalances(),
+      listTransactions({ q: q || undefined, purposeId: purposeId ?? undefined }),
+    ])
     return { balances, page }
   }
 
@@ -72,7 +89,7 @@ export default function Transactions({ refetchKey }: { refetchKey?: unknown }) {
     setMoreError(null)
     void run(loadFirstPage)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [run, q, refetchKey])
+  }, [run, q, purposeId, refetchKey])
 
   // The URL changed under the field (back, forward, a link): follow it. A
   // draft that already trims to the same search is left alone, so a trailing
@@ -85,17 +102,39 @@ export default function Transactions({ refetchKey }: { refetchKey?: unknown }) {
     const next = draft.trim()
     if (next === q) return
     const timer = window.setTimeout(() => {
-      setSearchParams(next ? { q: next } : {}, { replace: true })
+      // Rewrites `q` alone - `setSearchParams` replaces the whole query, so
+      // building the next one off the current params is what keeps a
+      // `?purpose=` filter alive through a search she types inside it.
+      setSearchParams(
+        (current) => {
+          const params = new URLSearchParams(current)
+          if (next) params.set('q', next)
+          else params.delete('q')
+          return params
+        },
+        { replace: true },
+      )
     }, SEARCH_DEBOUNCE_MS)
     return () => window.clearTimeout(timer)
   }, [draft, q, setSearchParams])
+
+  /** Clears the purpose filter and keeps whatever she has searched. Not
+   * `replace`: arriving here from an envelope was a navigation, so the back
+   * button should still lead back to that envelope. */
+  function clearPurposeFilter() {
+    setSearchParams((current) => {
+      const params = new URLSearchParams(current)
+      params.delete('purpose')
+      return params
+    })
+  }
 
   async function loadMore(cursor: string) {
     const startedIn = generation.current
     setMoreLoading(true)
     setMoreError(null)
     try {
-      const page = await listTransactions({ q: q || undefined, cursor })
+      const page = await listTransactions({ q: q || undefined, purposeId: purposeId ?? undefined, cursor })
       if (startedIn !== generation.current) return
       setMore((prev) => ({ transactions: [...(prev?.transactions ?? []), ...page.transactions], nextCursor: page.nextCursor }))
     } catch (err) {
@@ -120,13 +159,30 @@ export default function Transactions({ refetchKey }: { refetchKey?: unknown }) {
     const transactions = more ? [...page.transactions, ...more.transactions] : page.transactions
     const nextCursor = more ? more.nextCursor : page.nextCursor
 
+    // An empty filtered list is not a failed search: it says the envelope
+    // has no rows, not that nothing matched something she typed. A search
+    // inside the filter is still a search, so `q` wins when both are set.
+    const emptyMessage = q ? text.noResults(q) : purposeId !== null ? text.purposeFilterEmpty : copy.home.recentActivityEmpty
+
     return (
       <>
-        <TransactionList
-          transactions={transactions}
-          purposeNames={purposeNames}
-          emptyMessage={q ? text.noResults(q) : copy.home.recentActivityEmpty}
-        />
+        {/* The filter names itself and can always be cleared - the name
+            comes off the balances this screen already fetches, so a filtered
+            list never costs an extra request to label. */}
+        {purposeId !== null && (
+          <div className="flex items-center gap-2 self-start rounded-full bg-muted py-1 pr-1 pl-3 text-sm">
+            <span className="font-medium">{text.purposeFilterLabel(purposeNames.get(purposeId) ?? '')}</span>
+            <button
+              type="button"
+              aria-label={text.purposeFilterClear}
+              onClick={clearPurposeFilter}
+              className="grid size-7 place-items-center rounded-full text-muted-foreground hover:bg-foreground/10 hover:text-foreground"
+            >
+              <X aria-hidden="true" className="size-4" />
+            </button>
+          </div>
+        )}
+        <TransactionList transactions={transactions} purposeNames={purposeNames} emptyMessage={emptyMessage} />
         {nextCursor && moreError && <ErrorState error={moreError} onRetry={() => void loadMore(nextCursor)} />}
         {nextCursor && !moreError && (
           <Button type="button" variant="outline" size="lg" className="w-full" disabled={moreLoading} onClick={() => void loadMore(nextCursor)}>

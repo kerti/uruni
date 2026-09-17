@@ -297,6 +297,12 @@ func validDuesPeriod(s string) bool {
 // Dues/MemberPayments.tsx's payment history panel - not a Riwayat UI
 // filter, undocumented in copy/UI on purpose (ADR-032 holds filters to M7).
 //
+// ?purpose_id= is the one filter that does reach the UI (#262): ADR-032
+// names Riwayat -> Transaksi filtered to a purpose as the only route to a
+// closed envelope, so History/Transactions.tsx renders it as a deep link it
+// can clear - never as a chooser it offers, which would be M7's filter set
+// arriving early. All three compose with q and with the cursor.
+//
 // ListTransactionsPage is asked for one row more than the page size so this
 // handler can tell "the next page is empty" apart from "there is a next
 // page" without a second round trip - the extra row, if it came back, is
@@ -350,6 +356,18 @@ func (a *api) listTransactions(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		params.DuesPeriod = duesPeriod
+	}
+
+	// An id that is not a positive integer is a malformed request, not an
+	// empty result: a filter the treasurer cannot see is one she cannot
+	// correct, so this says so rather than quietly listing everything.
+	if raw := r.URL.Query().Get("purpose_id"); raw != "" {
+		purposeID, err := strconv.ParseInt(raw, 10, 64)
+		if err != nil || purposeID <= 0 {
+			writeAPIError(w, http.StatusBadRequest, "invalid_argument", "The purpose_id filter is not a valid number.")
+			return
+		}
+		params.PurposeID = purposeID
 	}
 
 	rows, err := a.queries.ListTransactionsPage(r.Context(), params)

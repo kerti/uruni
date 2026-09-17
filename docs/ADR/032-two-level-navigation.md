@@ -143,7 +143,9 @@ FTS5 is rejected for scale, not ignorance: a virtual table, sync triggers and a 
 
 `?q=` lives in the URL for the same reason tabs do. Input is debounced, and a keystroke without signal shows the offline state honestly rather than reading as "no results" — §7.2, connection required.
 
-**Filters are held back to M7.** PRD §7.9 specifies month, purpose, member, income/expense and dues status **for the public report**. Riwayat gets search and a period filter, nothing more. Porting the full filter set into the private app builds M7's screen twice, which is exactly the creep `CLAUDE.md`'s prime directive names.
+**Filters are held back to M7, with one carve-out.** PRD §7.9 specifies month, purpose, member, income/expense and dues status **for the public report**. Riwayat gets search and a period filter, nothing more. Porting the full filter set into the private app builds M7's screen twice, which is exactly the creep `CLAUDE.md`'s prime directive names.
+
+The carve-out is **purpose**, and it is this ADR paying its own debt rather than an exception granted on the side: the incidentals decision above drops a closed envelope off Beranda and names *"Riwayat → Transaksi filtered to its purpose"* as the record that replaces it. A filter this ADR relies on for the only route to a whole class of object cannot also be the filter it defers. [#262](https://github.com/kerti/uruni/issues/262) builds it, and the shape is what keeps it from becoming M7 early: **a deep link Transaksi renders and can clear, never a chooser it offers**. `?purpose=<id>` on `/history/transactions`, set by a link from an envelope's detail screen and by nothing else, named on screen with the word the record form already uses, and composing with `?q=` and the keyset cursor rather than replacing either. The remaining four filters, and any UI for choosing one, stay M7's.
 
 ## Consequences
 

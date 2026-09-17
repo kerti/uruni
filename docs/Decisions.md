@@ -356,3 +356,11 @@ The first proposal was server-filled stored notes, argued against a "nothing is 
 **The word in Indonesian is `amplop`** (decided in the same sitting). The app was saying both: every button and message already used the envelope the metaphor is built on - *Buka amplop*, *Tutup amplop*, *Amplop ini sudah ditutup* - while headings said *Kegiatan insidental*, which is the identifier `incidental` translated back into Indonesian rather than a word the treasurer says. PRD-ID section 6 had already written *"amplop ringan"*. CONTEXT.md now pins **amplop** as the label, and the synonym is gone from copy. Identifiers, routes and the schema stay `incidental` ([ADR-014](./ADR/014-localization-indonesian-first.md)) - the same split the Talangan rename used.
 
 Rejected: a "+ buka amplop baru" affordance inside Catat's purpose picker. It is where she usually is when the first contribution arrives, and that ergonomic point is real, but it puts a non-posting dialog inside the one posting route and complicates the money form. If it comes back it needs its own ADR, not a sentence here.
+
+## Riwayat gets one filter, and only as a link (decided 2026-09-17)
+
+[ADR-032](./ADR/032-two-level-navigation.md) said both of these: a closed envelope is reachable "through Riwayat → Transaksi filtered to its purpose", and "filters are held back to M7". The first was the counterweight that let incidentals leave Beranda; the second never carved it out. [#262](https://github.com/kerti/uruni/issues/262) resolves it in favour of the first — a filter the ADR leans on for the only route to a whole class of object cannot also be the filter it defers — and the ADR now says so in the same paragraph.
+
+**The shape is the scope discipline**: `?purpose=<id>` on `/history/transactions` is a **deep link Transaksi renders and can clear, never a chooser it offers**. The link comes from an envelope's detail screen and from nowhere else. Month, member, income/expense and dues status, and any UI for picking a filter, stay M7's.
+
+Rejected: a purpose dropdown on the Transaksi tab. It is more useful standalone, and it is M7's filter set arriving one filter early, which is the creep the prime directive names.

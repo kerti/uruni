@@ -77,7 +77,7 @@ describe('Incidentals', () => {
       { match: (m: string, u: string) => m === 'GET' && u.includes('/api/incidentals/1'), handle: () => Promise.resolve(jsonResponse(detail)) },
       ...getHandlers(),
     ]))
-    render(<Incidentals onBack={vi.fn()} onRecordFor={vi.fn()} purposeId={1} />)
+    render(<Incidentals onBack={vi.fn()} onRecordFor={vi.fn()} onViewTransactionsFor={vi.fn()} purposeId={1} />)
 
     await waitFor(() => expect(screen.getByText('Halal bihalal RT')).toBeInTheDocument())
     expect(screen.getByText(text.detail.collectedLabel)).toBeInTheDocument()
@@ -95,7 +95,7 @@ describe('Incidentals', () => {
     ]))
 
     const onRecordFor = vi.fn()
-    render(<Incidentals onBack={vi.fn()} onRecordFor={onRecordFor} purposeId={1} />)
+    render(<Incidentals onBack={vi.fn()} onRecordFor={onRecordFor} onViewTransactionsFor={vi.fn()} purposeId={1} />)
     await waitFor(() => expect(screen.getByText(text.detail.collectedLabel)).toBeInTheDocument())
 
     await userEvent.click(screen.getByRole('button', { name: text.actions.record }))
@@ -114,7 +114,7 @@ describe('Incidentals', () => {
       ...getHandlers(),
     ]))
 
-    render(<Incidentals onBack={vi.fn()} onRecordFor={vi.fn()} purposeId={1} />)
+    render(<Incidentals onBack={vi.fn()} onRecordFor={vi.fn()} onViewTransactionsFor={vi.fn()} purposeId={1} />)
     await waitFor(() => expect(screen.getByText(text.detail.collectedLabel)).toBeInTheDocument())
     expect(screen.getByText(money(120_000))).toBeInTheDocument()
     expect(screen.getByText(money(100_000))).toBeInTheDocument()
@@ -153,7 +153,7 @@ describe('Incidentals', () => {
     })
     vi.stubGlobal('fetch', fetchMock)
 
-    render(<Incidentals onBack={vi.fn()} onRecordFor={vi.fn()} purposeId={1} />)
+    render(<Incidentals onBack={vi.fn()} onRecordFor={vi.fn()} onViewTransactionsFor={vi.fn()} purposeId={1} />)
     await waitFor(() => expect(screen.getByText(text.detail.collectedLabel)).toBeInTheDocument())
 
     await userEvent.click(screen.getByRole('button', { name: text.actions.close }))
@@ -184,7 +184,7 @@ describe('Incidentals', () => {
     })
     vi.stubGlobal('fetch', fetchMock)
 
-    render(<Incidentals onBack={vi.fn()} onRecordFor={vi.fn()} purposeId={1} />)
+    render(<Incidentals onBack={vi.fn()} onRecordFor={vi.fn()} onViewTransactionsFor={vi.fn()} purposeId={1} />)
     await waitFor(() => expect(screen.getByText(text.detail.collectedLabel)).toBeInTheDocument())
 
     await userEvent.click(screen.getByRole('button', { name: text.actions.close }))
@@ -208,7 +208,7 @@ describe('Incidentals', () => {
       ...getHandlers(),
     ]))
 
-    render(<Incidentals onBack={vi.fn()} onRecordFor={vi.fn()} purposeId={1} />)
+    render(<Incidentals onBack={vi.fn()} onRecordFor={vi.fn()} onViewTransactionsFor={vi.fn()} purposeId={1} />)
     await waitFor(() => expect(screen.getByText(text.detail.collectedLabel)).toBeInTheDocument())
 
     await userEvent.click(screen.getByRole('button', { name: text.actions.close }))
@@ -229,7 +229,7 @@ describe('Incidentals', () => {
       ...getHandlers(),
     ]))
 
-    render(<Incidentals onBack={vi.fn()} onRecordFor={vi.fn()} purposeId={2} />)
+    render(<Incidentals onBack={vi.fn()} onRecordFor={vi.fn()} onViewTransactionsFor={vi.fn()} purposeId={2} />)
     await waitFor(() => expect(screen.getByText(text.detail.collectedLabel)).toBeInTheDocument())
 
     expect(screen.getByRole('button', { name: text.actions.reopen })).toBeInTheDocument()
@@ -258,7 +258,7 @@ describe('Incidentals', () => {
     })
     vi.stubGlobal('fetch', fetchMock)
 
-    render(<Incidentals onBack={vi.fn()} onRecordFor={vi.fn()} purposeId={2} />)
+    render(<Incidentals onBack={vi.fn()} onRecordFor={vi.fn()} onViewTransactionsFor={vi.fn()} purposeId={2} />)
     await waitFor(() => expect(screen.getByRole('button', { name: text.actions.reopen })).toBeInTheDocument())
 
     await userEvent.click(screen.getByRole('button', { name: text.actions.reopen }))
@@ -278,9 +278,28 @@ describe('Incidentals', () => {
       ...getHandlers(),
     ]))
     const onBack = vi.fn()
-    render(<Incidentals onBack={onBack} onRecordFor={vi.fn()} purposeId={1} />)
+    render(<Incidentals onBack={onBack} onRecordFor={vi.fn()} onViewTransactionsFor={vi.fn()} purposeId={1} />)
 
     await userEvent.click(await screen.findByRole('button', { name: text.detail.backToSettings }))
     expect(onBack).toHaveBeenCalledTimes(1)
+  })
+
+
+  // #262: a closed envelope is off Beranda (ADR-032), so this link is the
+  // only route it has to its own record - which is why the button is here
+  // for a closed envelope, not only an open one.
+  it('links a closed envelope to its own transactions, the only route it has', async () => {
+    const detail = { ...closedEnvelope, collected_amount: 200_000, disbursed_amount: 200_000 }
+    vi.stubGlobal('fetch', routedFetch([
+      { match: (m: string, u: string) => m === 'GET' && u.includes('/api/incidentals/2'), handle: () => Promise.resolve(jsonResponse(detail)) },
+      ...getHandlers(),
+    ]))
+
+    const onViewTransactionsFor = vi.fn()
+    render(<Incidentals onBack={vi.fn()} onRecordFor={vi.fn()} onViewTransactionsFor={onViewTransactionsFor} purposeId={2} />)
+    await waitFor(() => expect(screen.getByText(text.detail.collectedLabel)).toBeInTheDocument())
+
+    await userEvent.click(screen.getByRole('button', { name: text.actions.viewTransactions }))
+    expect(onViewTransactionsFor).toHaveBeenCalledWith(2)
   })
 })
