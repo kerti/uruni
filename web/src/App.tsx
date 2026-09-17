@@ -162,7 +162,8 @@ function AuthedGate({ onLoggedOut }: { onLoggedOut: () => void }) {
   const location = useLocation()
   const [searchParams] = useSearchParams()
 
-  // ?purpose=<id> - shared by two routes. /record?purpose=<id> is
+  // ?purpose=<id> - shared by three routes, and read here for two of them
+  // (History/Transactions.tsx reads its own). /record?purpose=<id> is
   // Incidentals.tsx's own contribute/disburse entry point, reusing this
   // form entirely rather than a second copy of it (M6.19); a missing or
   // non-numeric value falls back to RecordTransaction's own default (the
@@ -170,7 +171,9 @@ function AuthedGate({ onLoggedOut }: { onLoggedOut: () => void }) {
   // /incidentals?purpose=<id> is Home's purpose-breakdown row (M6.33) and
   // Pengaturan's incidentals cards (#263): the only way that route ever
   // renders a detail view now that its list is retired - see the route
-  // below.
+  // below. /history/transactions?purpose=<id> is the third (#262) - the
+  // filter ADR-032 makes a closed envelope's only route to its own record,
+  // linked from the detail screen this one renders.
   const rawPurpose = searchParams.get('purpose')
   const parsedPurpose = rawPurpose === null || rawPurpose.trim() === '' ? NaN : Number(rawPurpose)
   const initialPurposeId = Number.isInteger(parsedPurpose) && parsedPurpose > 0 ? parsedPurpose : null
@@ -316,6 +319,7 @@ function AuthedGate({ onLoggedOut }: { onLoggedOut: () => void }) {
               <Incidentals
                 onBack={() => navigate('/settings')}
                 onRecordFor={(purposeId) => navigate(`/record?purpose=${purposeId}`)}
+                onViewTransactionsFor={(purposeId) => navigate(`/history/transactions?purpose=${purposeId}`)}
                 purposeId={initialPurposeId}
               />
             </Shell>

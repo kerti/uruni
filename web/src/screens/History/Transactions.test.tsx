@@ -153,4 +153,78 @@ describe('Transactions tab', () => {
     expect(screen.queryByText(text.noResults('xyz'))).not.toBeInTheDocument()
     expect(screen.getByLabelText(text.searchLabel)).toHaveValue('xyz')
   })
+
+  // #262: the purpose filter, ADR-032's only route to a closed envelope's
+  // record. It arrives as a link, never as a chooser this screen offers.
+  it('reads ?purpose= from the URL, names the filter and sends it to the server', async () => {
+    const requests = stubApi(() => ({ transactions: [row(1, 'Setoran')], next_cursor: null }))
+    renderAt('/history/transactions?purpose=11')
+
+    expect(await screen.findByText(text.purposeFilterLabel('Kas Utama'))).toBeInTheDocument()
+    expect(requests[0].searchParams.get('purpose_id')).toBe('11')
+  })
+
+  it('ignores a ?purpose= that is not a real id rather than filtering on it', async () => {
+    const requests = stubApi(() => ({ transactions: [row(1, 'Setoran')], next_cursor: null }))
+    renderAt('/history/transactions?purpose=not-an-id')
+
+    expect(await screen.findByText('Setoran')).toBeInTheDocument()
+    expect(requests[0].searchParams.has('purpose_id')).toBe(false)
+    expect(screen.queryByLabelText(text.purposeFilterClear)).not.toBeInTheDocument()
+  })
+
+  it('keeps the purpose filter when she searches inside it, and sends both', async () => {
+    const user = userEvent.setup()
+    const requests = stubApi(() => ({ transactions: [row(1, 'Setoran')], next_cursor: null }))
+    renderAt('/history/transactions?purpose=11')
+    await screen.findByText('Setoran')
+
+    await user.type(screen.getByLabelText(text.searchLabel), 'kambing')
+
+    // q is what the debounce writes, so it is the one worth waiting on;
+    // purpose was already in the URL and is what must survive that write.
+    await waitFor(() => expect(screen.getByTestId('location')).toHaveTextContent('q=kambing'))
+    expect(screen.getByTestId('location')).toHaveTextContent('purpose=11')
+    await waitFor(() => expect(requests.length).toBe(2))
+    expect(requests[1].searchParams.get('purpose_id')).toBe('11')
+    expect(requests[1].searchParams.get('q')).toBe('kambing')
+  })
+
+  it('clears the filter from the URL without losing the search', async () => {
+    const user = userEvent.setup()
+    const requests = stubApi(() => ({ transactions: [row(1, 'Setoran')], next_cursor: null }))
+    renderAt('/history/transactions?purpose=11&q=kambing')
+    await screen.findByText(text.purposeFilterLabel('Kas Utama'))
+
+    await user.click(screen.getByLabelText(text.purposeFilterClear))
+
+    await waitFor(() => expect(screen.getByTestId('location')).not.toHaveTextContent('purpose='))
+    expect(screen.getByTestId('location')).toHaveTextContent('q=kambing')
+    await waitFor(() => expect(requests.length).toBe(2))
+    expect(requests[1].searchParams.has('purpose_id')).toBe(false)
+    expect(requests[1].searchParams.get('q')).toBe('kambing')
+  })
+
+  it('carries the filter into the next page', async () => {
+    const user = userEvent.setup()
+    const requests = stubApi((url) =>
+      url.searchParams.has('cursor')
+        ? { transactions: [row(2, 'Kedua')], next_cursor: null }
+        : { transactions: [row(1, 'Pertama')], next_cursor: 'abc' },
+    )
+    renderAt('/history/transactions?purpose=11')
+    await screen.findByText('Pertama')
+
+    await user.click(screen.getByRole('button', { name: text.loadMore }))
+
+    expect(await screen.findByText('Kedua')).toBeInTheDocument()
+    expect(requests[1].searchParams.get('purpose_id')).toBe('11')
+  })
+
+  it('says the envelope is empty, not that nothing matched, when the filter alone comes back empty', async () => {
+    stubApi(() => ({ transactions: [], next_cursor: null }))
+    renderAt('/history/transactions?purpose=11')
+
+    expect(await screen.findByText(text.purposeFilterEmpty)).toBeInTheDocument()
+  })
 })

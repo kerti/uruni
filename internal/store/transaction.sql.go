@@ -793,8 +793,9 @@ WHERE t.fund_id = ?1
   )
   AND (?6 IS NULL OR t.member_id = ?6)
   AND (?7 IS NULL OR t.dues_period = ?7)
+  AND (?8 IS NULL OR t.purpose_id = ?8)
 ORDER BY t.occurred_on DESC, t.id DESC
-LIMIT ?8
+LIMIT ?9
 `
 
 type ListTransactionsPageParams struct {
@@ -805,6 +806,7 @@ type ListTransactionsPageParams struct {
 	QAmount          *int64
 	MemberID         interface{}
 	DuesPeriod       interface{}
+	PurposeID        interface{}
 	PageLimit        int64
 }
 
@@ -876,6 +878,12 @@ type ListTransactionsPageRow struct {
 // Dues/MemberPayments.tsx's payment history panel, not a Riwayat UI filter
 // (ADR-032 holds filters to M7) - undocumented in copy/UI on purpose.
 //
+// purpose_id is the one exception to that (#262): ADR-032 names Riwayat ->
+// Transaksi filtered to a purpose as the only route to a CLOSED envelope,
+// so this filter does reach the UI - but as a deep link Transaksi renders
+// and can clear, never as a chooser it offers. All three compose with q and
+// with the keyset cursor rather than replacing either.
+//
 // page_limit is passed as page size + 1: the caller peeks at whether that
 // extra row came back to know whether a next page exists, then trims it
 // before building the response.
@@ -938,6 +946,7 @@ func (q *Queries) ListTransactionsPage(ctx context.Context, arg ListTransactions
 		arg.QAmount,
 		arg.MemberID,
 		arg.DuesPeriod,
+		arg.PurposeID,
 		arg.PageLimit,
 	)
 	if err != nil {

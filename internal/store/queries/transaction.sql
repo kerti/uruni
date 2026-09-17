@@ -90,6 +90,12 @@ ORDER BY occurred_on, id;
 -- Dues/MemberPayments.tsx's payment history panel, not a Riwayat UI filter
 -- (ADR-032 holds filters to M7) - undocumented in copy/UI on purpose.
 --
+-- purpose_id is the one exception to that (#262): ADR-032 names Riwayat ->
+-- Transaksi filtered to a purpose as the only route to a CLOSED envelope,
+-- so this filter does reach the UI - but as a deep link Transaksi renders
+-- and can clear, never as a chooser it offers. All three compose with q and
+-- with the keyset cursor rather than replacing either.
+--
 -- page_limit is passed as page size + 1: the caller peeks at whether that
 -- extra row came back to know whether a next page exists, then trims it
 -- before building the response.
@@ -184,6 +190,7 @@ WHERE t.fund_id = sqlc.arg('fund_id')
   )
   AND (sqlc.narg('member_id') IS NULL OR t.member_id = sqlc.narg('member_id'))
   AND (sqlc.narg('dues_period') IS NULL OR t.dues_period = sqlc.narg('dues_period'))
+  AND (sqlc.narg('purpose_id') IS NULL OR t.purpose_id = sqlc.narg('purpose_id'))
 ORDER BY t.occurred_on DESC, t.id DESC
 LIMIT sqlc.arg('page_limit');
 

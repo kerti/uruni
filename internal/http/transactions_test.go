@@ -1353,3 +1353,106 @@ func TestGetTransactionsNewFieldsNeverLeakAnotherFundsNames(t *testing.T) {
 		t.Errorf("account_id = %d, want our own fund's cash account %d, never the other fund's row", row.AccountID, setup.CashAccountID(t))
 	}
 }
+
+// TestGetTransactionsPurposeIDFilterReachesAClosedEnvelope is #262's whole
+// point, and the reason this filter is the one that reaches the UI at all:
+// ADR-032 makes Riwayat -> Transaksi filtered to a purpose the only route
+// to a CLOSED envelope's record, so the filter must keep answering after
+// the envelope is closed - including for the roll-out leg closing posts
+// against that same purpose.
+func TestGetTransactionsPurposeIDFilterReachesAClosedEnvelope(t *testing.T) {
+	r := testRouter(t)
+	setup := setUpFund(t, r)
+	cash := setup.CashAccountID(t)
+
+	envelope := decodeIncidental(t, postIncidental(t, r, openIncidentalRequest{Occasion: "Kurban", OpenedOn: "2026-08-01"}))
+
+	// One contribution into the envelope, and one row against Kas Utama on
+	// the same day that the filter must exclude.
+	if rec := postTransaction(t, r, transactionRequest{
+		AccountID: cash, PurposeID: envelope.PurposeID, Direction: "in", Amount: 300_000, OccurredOn: "2026-08-02",
+	}); rec.Code != http.StatusCreated {
+		t.Fatalf("POST /api/transactions (contribution) = %d, want %d (body: %s)", rec.Code, http.StatusCreated, rec.Body.String())
+	}
+	if rec := postTransaction(t, r, transactionRequest{
+		AccountID: cash, PurposeID: setup.MainPurposeID, Direction: "in", Amount: 50_000, OccurredOn: "2026-08-02",
+	}); rec.Code != http.StatusCreated {
+		t.Fatalf("POST /api/transactions (main purpose) = %d, want %d (body: %s)", rec.Code, http.StatusCreated, rec.Body.String())
+	}
+
+	if rec := postCloseIncidental(t, r, envelope.PurposeID, closeIncidentalRequest{AccountID: cash, ClosedOn: "2026-08-10"}); rec.Code != http.StatusOK {
+		t.Fatalf("POST /api/incidentals/{id}/close = %d, want %d (body: %s)", rec.Code, http.StatusOK, rec.Body.String())
+	}
+
+	page := decodeTransactionsPage(t, getTransactionsQuery(t, r, fmt.Sprintf("purpose_id=%d", envelope.PurposeID)))
+	if len(page.Transactions) == 0 {
+		t.Fatalf("purpose_id filter on a closed envelope returned nothing - the only route to its record")
+	}
+	for _, row := range page.Transactions {
+		if row.PurposeID != envelope.PurposeID {
+			t.Errorf("filtered list has a row for purpose %d, want only %d: %+v", row.PurposeID, envelope.PurposeID, row)
+		}
+	}
+	// The contribution, plus the roll-out leg the close posted against this
+	// same purpose (ADR-031) - never the Kas Utama row above.
+	if len(page.Transactions) != 2 {
+		t.Errorf("purpose_id filter returned %d rows, want 2 (the contribution and the roll-out leg): %+v", len(page.Transactions), page.Transactions)
+	}
+}
+
+// TestGetTransactionsPurposeIDFilterComposesWithSearch is the acceptance
+// criterion that the filter narrows the same list q searches rather than
+// replacing it: both clauses must hold at once, so a note matching q under
+// another purpose stays out.
+func TestGetTransactionsPurposeIDFilterComposesWithSearch(t *testing.T) {
+	r := testRouter(t)
+	setup := setUpFund(t, r)
+	cash := setup.CashAccountID(t)
+
+	envelope := decodeIncidental(t, postIncidental(t, r, openIncidentalRequest{Occasion: "Kurban", OpenedOn: "2026-08-01"}))
+
+	kambing := "kambing"
+	sapi := "sapi"
+	rows := []transactionRequest{
+		{AccountID: cash, PurposeID: envelope.PurposeID, Direction: "in", Amount: 300_000, OccurredOn: "2026-08-02", Note: &kambing},
+		{AccountID: cash, PurposeID: envelope.PurposeID, Direction: "in", Amount: 100_000, OccurredOn: "2026-08-03", Note: &sapi},
+		{AccountID: cash, PurposeID: setup.MainPurposeID, Direction: "in", Amount: 50_000, OccurredOn: "2026-08-04", Note: &kambing},
+	}
+	for i, req := range rows {
+		if rec := postTransaction(t, r, req); rec.Code != http.StatusCreated {
+			t.Fatalf("POST /api/transactions (row %d) = %d, want %d (body: %s)", i, rec.Code, http.StatusCreated, rec.Body.String())
+		}
+	}
+
+	page := decodeTransactionsPage(t, getTransactionsQuery(t, r, fmt.Sprintf("purpose_id=%d&q=%s", envelope.PurposeID, kambing)))
+	if len(page.Transactions) != 1 {
+		t.Fatalf("purpose_id+q returned %d rows, want 1 (only the envelope's kambing row): %+v", len(page.Transactions), page.Transactions)
+	}
+	if page.Transactions[0].Note == nil || *page.Transactions[0].Note != kambing {
+		t.Errorf("matched row note = %v, want %q", page.Transactions[0].Note, kambing)
+	}
+	if page.Transactions[0].PurposeID != envelope.PurposeID {
+		t.Errorf("matched row purpose_id = %d, want %d", page.Transactions[0].PurposeID, envelope.PurposeID)
+	}
+}
+
+// TestGetTransactionsRejectsAMalformedPurposeID holds purpose_id to the
+// same "validate types -> 400 on garbage" rule as member_id, including a
+// non-positive id: a filter she cannot see is one she cannot correct, so a
+// broken link says so rather than silently listing the whole ledger.
+func TestGetTransactionsRejectsAMalformedPurposeID(t *testing.T) {
+	r := testRouter(t)
+	setUpFund(t, r)
+
+	for _, purposeID := range []string{"not-a-number", "0", "-1", "1.5"} {
+		rec := getTransactionsQuery(t, r, "purpose_id="+url.QueryEscape(purposeID))
+		if rec.Code != http.StatusBadRequest {
+			t.Errorf("GET /api/transactions?purpose_id=%q = %d, want %d (body: %s)", purposeID, rec.Code, http.StatusBadRequest, rec.Body.String())
+			continue
+		}
+		got := decodeError(t, rec)
+		if got.Code != "invalid_argument" {
+			t.Errorf("purpose_id %q: error code = %q, want %q", purposeID, got.Code, "invalid_argument")
+		}
+	}
+}

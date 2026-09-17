@@ -44,12 +44,19 @@ export function createTransaction(input: CreateTransactionInput): Promise<Transa
  * page's nextCursor returned - omit it for the first page. memberId/
  * duesPeriod are exact-match filters for Dues/MemberPayments.tsx alone,
  * not a Riwayat UI filter (ADR-032 holds filters to M7) - there is
- * deliberately no copy or UI surface naming them. */
+ * deliberately no copy or UI surface naming them.
+ *
+ * purposeId is the one that does have a UI surface (#262): ADR-032 makes
+ * Riwayat -> Transaksi filtered to a purpose the only route to a closed
+ * envelope, so History/Transactions.tsx renders it from `?purpose=<id>` as
+ * a filter it can clear. Still not a chooser it offers - that is M7's
+ * filter set. All of these narrow the same list `q` searches. */
 export interface ListTransactionsInput {
   cursor?: string
   q?: string
   memberId?: number
   duesPeriod?: string
+  purposeId?: number
 }
 
 /** One page of GET /api/transactions, camelCase on this side of the wire
@@ -77,6 +84,7 @@ export function listTransactions(input: ListTransactionsInput = {}): Promise<Tra
   if (input.q) params.set('q', input.q)
   if (input.memberId !== undefined) params.set('member_id', String(input.memberId))
   if (input.duesPeriod) params.set('dues_period', input.duesPeriod)
+  if (input.purposeId !== undefined) params.set('purpose_id', String(input.purposeId))
   const query = params.toString()
 
   return apiFetch<{ transactions: Transaction[]; next_cursor: string | null }>(`/api/transactions${query ? `?${query}` : ''}`).then(

@@ -50,6 +50,18 @@ export const copy = {
       searchPlaceholder: 'Catatan, peruntukan, anggota, atau jumlah',
       loadMore: 'Muat lebih banyak',
       noResults: (q: string) => `Tidak ada transaksi yang cocok dengan “${q}”.`,
+      // The purpose filter (#262), reached only as a deep link - from an
+      // envelope's detail screen, which is the one route ADR-032 gives a
+      // closed envelope's record. It names itself with the same word the
+      // record form uses ("Peruntukan", CONTEXT.md: one word per concept)
+      // and can always be cleared, so she is never stuck inside a filtered
+      // list wondering where the rest went. The empty line is separate from
+      // noResults above: an empty filter is not a failed search, and saying
+      // "tidak ada yang cocok" about a filter she did not type would be
+      // answering a question she never asked.
+      purposeFilterLabel: (name: string) => `Peruntukan: ${name}`,
+      purposeFilterClear: 'Hapus filter peruntukan',
+      purposeFilterEmpty: 'Belum ada transaksi untuk peruntukan ini.',
     },
     // The Talangan tab's own search and paging (#226, ADR-032). A
     // narrower placeholder than Transaksi's own: this list's search covers
@@ -743,6 +755,12 @@ export const copy = {
       // there, by its own in/out toggle, not by two separate buttons here.
       record: 'Catat transaksi',
       close: 'Tutup amplop',
+      // Into Riwayat -> Transaksi filtered to this envelope's peruntukan
+      // (#262). Shown for an open envelope as well as a closed one - the
+      // asymmetry ADR-032 draws is about where an envelope APPEARS, not
+      // about which one has a record worth reading - but for a closed one
+      // this is the only route to it there is.
+      viewTransactions: 'Lihat transaksi',
       // The way back from a closed envelope (ADR-031) - a late entry needs
       // somewhere to post, through the ordinary record form above.
       reopen: 'Buka lagi amplop ini',

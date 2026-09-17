@@ -64,14 +64,21 @@ function todayISODate(): string {
  * always reached with `?purpose=<id>` (App.tsx redirects `/incidentals`
  * without one, or with an unparseable one, to `/settings`): from a Beranda
  * purpose-breakdown row, or from a card in that section.
+ *
+ * `onViewTransactionsFor` (#262) leads the other way, into Riwayat ->
+ * Transaksi filtered to this envelope's purpose. ADR-032 drops a closed
+ * envelope off Beranda and names that filtered list as its record, so for a
+ * closed envelope this screen is the only place that route begins.
  */
 export default function Incidentals({
   onBack,
   onRecordFor,
+  onViewTransactionsFor,
   purposeId,
 }: {
   onBack: () => void
   onRecordFor: (purposeId: number) => void
+  onViewTransactionsFor: (purposeId: number) => void
   purposeId: number
 }) {
   const [accountsState, accountsRun] = useApi<Account[]>()
@@ -162,6 +169,7 @@ export default function Incidentals({
       showCloseForm={showCloseForm}
       rolledAmount={rolledAmount}
       onRecord={() => onRecordFor(purposeId)}
+      onViewTransactions={() => onViewTransactionsFor(purposeId)}
       onShowClose={() => { setShowCloseForm(true); setFeedback(null) }}
       onCancelClose={() => setShowCloseForm(false)}
       onClose={handleClose}
@@ -191,6 +199,7 @@ function DetailView({
   showCloseForm,
   rolledAmount,
   onRecord,
+  onViewTransactions,
   onShowClose,
   onCancelClose,
   onClose,
@@ -205,6 +214,7 @@ function DetailView({
   showCloseForm: boolean
   rolledAmount: number | null
   onRecord: () => void
+  onViewTransactions: () => void
   onShowClose: () => void
   onCancelClose: () => void
   onClose: (accountId: number, closedOn: string, note: string) => void
@@ -275,10 +285,12 @@ function DetailView({
         </div>
       )}
 
-      {isOpen && (
-        <>
-          {!showCloseForm && (
-            <div className="flex flex-col gap-2">
+      {/* One button column for both states, so the close form replaces the
+          whole of it rather than half. */}
+      {!showCloseForm && (
+        <div className="flex flex-col gap-2">
+          {isOpen && (
+            <>
               {/* Contributions and disbursements both go through the real
                   record form (M6.8), pre-chosen to this envelope's purpose -
                   direction is decided there, by its own toggle. */}
@@ -288,23 +300,31 @@ function DetailView({
               <Button type="button" size="lg" variant="outline" onClick={onShowClose}>
                 {text.actions.close}
               </Button>
-            </div>
+            </>
           )}
 
-          {showCloseForm && (
-            <CloseForm accounts={accounts} onSubmit={onClose} onCancel={onCancelClose} submitting={submitting} />
+          {/* Riwayat -> Transaksi filtered to this envelope's peruntukan
+              (#262). Offered whichever state the envelope is in, but it is
+              a CLOSED one's only route to its own record - ADR-032 drops it
+              off Beranda and names this filter in its place. */}
+          <Button type="button" size="lg" variant="outline" onClick={onViewTransactions}>
+            {text.actions.viewTransactions}
+          </Button>
+
+          {/* The way back from a closed envelope (ADR-031): reopening
+              rejoins the isOpen block above - "Catat transaksi" for the late
+              entry and "Tutup amplop" to close again - rather than leaving a
+              bare toggle with nothing next. */}
+          {!isOpen && (
+            <Button type="button" size="lg" variant="outline" onClick={onReopen} disabled={submitting}>
+              {text.actions.reopen}
+            </Button>
           )}
-        </>
+        </div>
       )}
 
-      {/* The way back from a closed envelope (ADR-031): reopening rejoins
-          the isOpen block above - "Catat transaksi" for the late entry and
-          "Tutup amplop" to close again - rather than leaving a bare toggle
-          with nothing next. */}
-      {!isOpen && (
-        <Button type="button" size="lg" variant="outline" onClick={onReopen} disabled={submitting}>
-          {text.actions.reopen}
-        </Button>
+      {isOpen && showCloseForm && (
+        <CloseForm accounts={accounts} onSubmit={onClose} onCancel={onCancelClose} submitting={submitting} />
       )}
     </div>
   )
