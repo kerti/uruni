@@ -99,6 +99,7 @@ Key entities:
 - Create an incidental for an occasion (sickness, death, sunatan, pension).
 - Collect one-off contributions and record the disbursement.
 - On close, show the leftover and offer a one-tap **roll into Kas Utama**.
+- The occasion can be corrected at any time, open or closed - renaming moves no money and posts no entry.
 
 ### 7.6 Pass-through (Kas Bidang)
 - Record money collected on behalf of the parent org (e.g. Kas Bidang) and its forwarding, each as an ordinary transaction tagged `Pass-through`, so the report shows plainly what came in for the parent body and what went out to it.

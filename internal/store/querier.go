@@ -492,6 +492,16 @@ type Querier interface {
 	// on). currency and report_slug are deliberately not settable here: one is
 	// an invariant through 0.x, the other is the report's unguessable address.
 	UpdateFund(ctx context.Context, arg UpdateFundParams) (Fund, error)
+	// A mistyped occasion, corrected in place (#264). Unscoped by fund_id for
+	// the same reason CloseIncidental and ReopenIncidental are: Ledger.RenameIncidental
+	// fetches nothing first here because it has no need to - it already ran
+	// UpdatePurposeName inside the same withTx, which is itself fund-scoped
+	// (GetPurposeForFund via the http layer's resolveRenameablePurpose), so by
+	// the time this runs the purpose_id is already known to belong to the
+	// caller's fund. Renaming moves no money and posts no ledger entry - the
+	// same UPDATE shape CloseIncidental and ReopenIncidental already use for
+	// exactly that reason.
+	UpdateIncidentalOccasion(ctx context.Context, arg UpdateIncidentalOccasionParams) (Incidental, error)
 	// UpdateMember is a correction to reference data, not a ledger event. name
 	// is NOT NULL, so COALESCE covers it: a nil argument can only mean "leave
 	// alone". The three nullable columns need the set_* flags, because there a
@@ -502,7 +512,10 @@ type Querier interface {
 	// transaction references the purpose by id, and nothing in the ledger reads
 	// the text - so this is the same correction UpdateAccount makes for a
 	// location. Which purposes may be renamed is the handler's call, not this
-	// query's: kind is policy (only 'pass_through' today), not shape.
+	// query's: kind is policy (everything but the fund's own 'main' row today),
+	// not shape. For an incidental this is one half of the pair
+	// Ledger.RenameIncidental runs together with UpdateIncidentalOccasion, since
+	// an incidental's occasion is stored on both rows (#264).
 	UpdatePurposeName(ctx context.Context, arg UpdatePurposeNameParams) (Purpose, error)
 	// UpdateReimbursement corrects a claim that has not been settled yet - a
 	// wrong amount, the wrong member, or the day it was actually spent. The

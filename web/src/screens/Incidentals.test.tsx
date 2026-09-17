@@ -1,5 +1,6 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import Incidentals from '@/screens/Incidentals'
@@ -70,6 +71,39 @@ function getHandlers() {
   return [{ match: (m: string, u: string) => m === 'GET' && u.includes('/api/accounts'), handle: () => Promise.resolve(jsonResponse(accounts)) }]
 }
 
+/** Exposes the router's search string: the rename dialog is addressed by
+ * `?edit=incidental:<id>` (ADR-032), the same pattern PassThrough.test.tsx
+ * asserts on directly. */
+function LocationProbe() {
+  const location = useLocation()
+  return <output data-testid="location-search">{location.search}</output>
+}
+
+/** Incidentals.tsx now reads the URL itself (useDialogParam, #264), so every
+ * render needs a Router around it - the same requirement PassThrough.tsx's
+ * own renderAt satisfies for its screen. */
+function renderIncidentals(node: Parameters<typeof render>[0], entry = '/incidentals') {
+  return render(
+    <MemoryRouter initialEntries={[entry]}>
+      <Routes>
+        <Route
+          path="/incidentals"
+          element={
+            <>
+              {node}
+              <LocationProbe />
+            </>
+          }
+        />
+      </Routes>
+    </MemoryRouter>,
+  )
+}
+
+function currentSearch() {
+  return screen.getByTestId('location-search').textContent
+}
+
 describe('Incidentals', () => {
   it('shows an open envelope\'s detail for the given purposeId', async () => {
     const detail = { ...openEnvelope, collected_amount: 0, disbursed_amount: 0 }
@@ -77,7 +111,7 @@ describe('Incidentals', () => {
       { match: (m: string, u: string) => m === 'GET' && u.includes('/api/incidentals/1'), handle: () => Promise.resolve(jsonResponse(detail)) },
       ...getHandlers(),
     ]))
-    render(<Incidentals onBack={vi.fn()} onRecordFor={vi.fn()} onViewTransactionsFor={vi.fn()} purposeId={1} />)
+    renderIncidentals(<Incidentals onBack={vi.fn()} onRecordFor={vi.fn()} onViewTransactionsFor={vi.fn()} purposeId={1} />)
 
     await waitFor(() => expect(screen.getByText('Halal bihalal RT')).toBeInTheDocument())
     expect(screen.getByText(text.detail.collectedLabel)).toBeInTheDocument()
@@ -95,7 +129,7 @@ describe('Incidentals', () => {
     ]))
 
     const onRecordFor = vi.fn()
-    render(<Incidentals onBack={vi.fn()} onRecordFor={onRecordFor} onViewTransactionsFor={vi.fn()} purposeId={1} />)
+    renderIncidentals(<Incidentals onBack={vi.fn()} onRecordFor={onRecordFor} onViewTransactionsFor={vi.fn()} purposeId={1} />)
     await waitFor(() => expect(screen.getByText(text.detail.collectedLabel)).toBeInTheDocument())
 
     await userEvent.click(screen.getByRole('button', { name: text.actions.record }))
@@ -114,7 +148,7 @@ describe('Incidentals', () => {
       ...getHandlers(),
     ]))
 
-    render(<Incidentals onBack={vi.fn()} onRecordFor={vi.fn()} onViewTransactionsFor={vi.fn()} purposeId={1} />)
+    renderIncidentals(<Incidentals onBack={vi.fn()} onRecordFor={vi.fn()} onViewTransactionsFor={vi.fn()} purposeId={1} />)
     await waitFor(() => expect(screen.getByText(text.detail.collectedLabel)).toBeInTheDocument())
     expect(screen.getByText(money(120_000))).toBeInTheDocument()
     expect(screen.getByText(money(100_000))).toBeInTheDocument()
@@ -153,7 +187,7 @@ describe('Incidentals', () => {
     })
     vi.stubGlobal('fetch', fetchMock)
 
-    render(<Incidentals onBack={vi.fn()} onRecordFor={vi.fn()} onViewTransactionsFor={vi.fn()} purposeId={1} />)
+    renderIncidentals(<Incidentals onBack={vi.fn()} onRecordFor={vi.fn()} onViewTransactionsFor={vi.fn()} purposeId={1} />)
     await waitFor(() => expect(screen.getByText(text.detail.collectedLabel)).toBeInTheDocument())
 
     await userEvent.click(screen.getByRole('button', { name: text.actions.close }))
@@ -184,7 +218,7 @@ describe('Incidentals', () => {
     })
     vi.stubGlobal('fetch', fetchMock)
 
-    render(<Incidentals onBack={vi.fn()} onRecordFor={vi.fn()} onViewTransactionsFor={vi.fn()} purposeId={1} />)
+    renderIncidentals(<Incidentals onBack={vi.fn()} onRecordFor={vi.fn()} onViewTransactionsFor={vi.fn()} purposeId={1} />)
     await waitFor(() => expect(screen.getByText(text.detail.collectedLabel)).toBeInTheDocument())
 
     await userEvent.click(screen.getByRole('button', { name: text.actions.close }))
@@ -208,7 +242,7 @@ describe('Incidentals', () => {
       ...getHandlers(),
     ]))
 
-    render(<Incidentals onBack={vi.fn()} onRecordFor={vi.fn()} onViewTransactionsFor={vi.fn()} purposeId={1} />)
+    renderIncidentals(<Incidentals onBack={vi.fn()} onRecordFor={vi.fn()} onViewTransactionsFor={vi.fn()} purposeId={1} />)
     await waitFor(() => expect(screen.getByText(text.detail.collectedLabel)).toBeInTheDocument())
 
     await userEvent.click(screen.getByRole('button', { name: text.actions.close }))
@@ -229,7 +263,7 @@ describe('Incidentals', () => {
       ...getHandlers(),
     ]))
 
-    render(<Incidentals onBack={vi.fn()} onRecordFor={vi.fn()} onViewTransactionsFor={vi.fn()} purposeId={2} />)
+    renderIncidentals(<Incidentals onBack={vi.fn()} onRecordFor={vi.fn()} onViewTransactionsFor={vi.fn()} purposeId={2} />)
     await waitFor(() => expect(screen.getByText(text.detail.collectedLabel)).toBeInTheDocument())
 
     expect(screen.getByRole('button', { name: text.actions.reopen })).toBeInTheDocument()
@@ -258,7 +292,7 @@ describe('Incidentals', () => {
     })
     vi.stubGlobal('fetch', fetchMock)
 
-    render(<Incidentals onBack={vi.fn()} onRecordFor={vi.fn()} onViewTransactionsFor={vi.fn()} purposeId={2} />)
+    renderIncidentals(<Incidentals onBack={vi.fn()} onRecordFor={vi.fn()} onViewTransactionsFor={vi.fn()} purposeId={2} />)
     await waitFor(() => expect(screen.getByRole('button', { name: text.actions.reopen })).toBeInTheDocument())
 
     await userEvent.click(screen.getByRole('button', { name: text.actions.reopen }))
@@ -278,7 +312,7 @@ describe('Incidentals', () => {
       ...getHandlers(),
     ]))
     const onBack = vi.fn()
-    render(<Incidentals onBack={onBack} onRecordFor={vi.fn()} onViewTransactionsFor={vi.fn()} purposeId={1} />)
+    renderIncidentals(<Incidentals onBack={onBack} onRecordFor={vi.fn()} onViewTransactionsFor={vi.fn()} purposeId={1} />)
 
     await userEvent.click(await screen.findByRole('button', { name: text.detail.backToSettings }))
     expect(onBack).toHaveBeenCalledTimes(1)
@@ -296,10 +330,91 @@ describe('Incidentals', () => {
     ]))
 
     const onViewTransactionsFor = vi.fn()
-    render(<Incidentals onBack={vi.fn()} onRecordFor={vi.fn()} onViewTransactionsFor={onViewTransactionsFor} purposeId={2} />)
+    renderIncidentals(<Incidentals onBack={vi.fn()} onRecordFor={vi.fn()} onViewTransactionsFor={onViewTransactionsFor} purposeId={2} />)
     await waitFor(() => expect(screen.getByText(text.detail.collectedLabel)).toBeInTheDocument())
 
     await userEvent.click(screen.getByRole('button', { name: text.actions.viewTransactions }))
     expect(onViewTransactionsFor).toHaveBeenCalledWith(2)
+  })
+
+  // --- Rename (#264): correcting a mistyped occasion ---------------------
+
+  it('opens the rename dialog, addressed by ?edit=incidental:<id>, when Ubah nama is clicked', async () => {
+    const detail = { ...openEnvelope, collected_amount: 0, disbursed_amount: 0 }
+    vi.stubGlobal('fetch', routedFetch([
+      { match: (m: string, u: string) => m === 'GET' && u.includes('/api/incidentals/1'), handle: () => Promise.resolve(jsonResponse(detail)) },
+      ...getHandlers(),
+    ]))
+    renderIncidentals(<Incidentals onBack={vi.fn()} onRecordFor={vi.fn()} onViewTransactionsFor={vi.fn()} purposeId={1} />)
+    await waitFor(() => expect(screen.getByText('Halal bihalal RT')).toBeInTheDocument())
+
+    await userEvent.click(screen.getByRole('button', { name: text.actions.rename }))
+    expect(currentSearch()).toBe('?edit=incidental%3A1')
+
+    const dialog = await screen.findByRole('dialog', { name: text.rename.heading })
+    expect(within(dialog).getByLabelText(text.rename.nameLabel)).toHaveValue('Halal bihalal RT')
+  })
+
+  it('submits a rename, refetches the detail, and shows the corrected occasion through the screen\'s own feedback banner', async () => {
+    const detail = { ...openEnvelope, collected_amount: 0, disbursed_amount: 0 }
+    const renamedPurpose = { id: 1, kind: 'incidental', name: 'Halal bihalal RT 2026', created_at: 1 }
+    const renamedDetail = { ...detail, occasion: 'Halal bihalal RT 2026' }
+    let detailCalls = 0
+    let patched: { method: string; url: string; body: unknown } | null = null
+    const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = typeof input === 'string' ? input : input.toString()
+      const method = (init?.method ?? 'GET').toUpperCase()
+      if (method === 'PATCH' && url.includes('/api/purposes/1')) {
+        patched = { method, url, body: init?.body ? JSON.parse(String(init.body)) : undefined }
+        return Promise.resolve(jsonResponse(renamedPurpose))
+      }
+      if (method === 'GET' && url.includes('/api/incidentals/1')) {
+        detailCalls += 1
+        return Promise.resolve(jsonResponse(detailCalls === 1 ? detail : renamedDetail))
+      }
+      const handler = getHandlers().find((h) => h.match(method, url))
+      if (!handler) return Promise.reject(new Error(`unstubbed fetch: ${method} ${url}`))
+      return handler.handle()
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    renderIncidentals(<Incidentals onBack={vi.fn()} onRecordFor={vi.fn()} onViewTransactionsFor={vi.fn()} purposeId={1} />)
+    await waitFor(() => expect(screen.getByText('Halal bihalal RT')).toBeInTheDocument())
+
+    await userEvent.click(screen.getByRole('button', { name: text.actions.rename }))
+    const dialog = await screen.findByRole('dialog', { name: text.rename.heading })
+    const input = within(dialog).getByLabelText(text.rename.nameLabel)
+    await userEvent.clear(input)
+    await userEvent.type(input, 'Halal bihalal RT 2026')
+    await userEvent.click(within(dialog).getByRole('button', { name: text.rename.save }))
+
+    await waitFor(() => expect(patched).not.toBeNull())
+    expect(patched).toMatchObject({
+      method: 'PATCH',
+      url: expect.stringContaining('/api/purposes/1'),
+      body: { name: 'Halal bihalal RT 2026' },
+    })
+
+    // The dialog closes, the <h1> shows the corrected occasion fetched fresh
+    // off the server (never the dialog's own local state), and the success
+    // message reaches the treasurer through the screen's existing Feedback
+    // banner - the same one close/reopen already use, not a second one.
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    expect(screen.getByRole('heading', { name: 'Halal bihalal RT 2026' })).toBeInTheDocument()
+    expect(screen.getByText(text.rename.success)).toBeInTheDocument()
+  })
+
+  // The whole point of #264: the typo is usually noticed after the occasion
+  // is over, so a closed envelope must offer the same correction.
+  it('offers the rename button for a closed envelope too', async () => {
+    const detail = { ...closedEnvelope, collected_amount: 50_000, disbursed_amount: 0 }
+    vi.stubGlobal('fetch', routedFetch([
+      { match: (m: string, u: string) => m === 'GET' && u.includes('/api/incidentals/2'), handle: () => Promise.resolve(jsonResponse(detail)) },
+      ...getHandlers(),
+    ]))
+    renderIncidentals(<Incidentals onBack={vi.fn()} onRecordFor={vi.fn()} onViewTransactionsFor={vi.fn()} purposeId={2} />)
+    await waitFor(() => expect(screen.getByText(text.detail.collectedLabel)).toBeInTheDocument())
+
+    expect(screen.getByRole('button', { name: text.actions.rename })).toBeInTheDocument()
   })
 })

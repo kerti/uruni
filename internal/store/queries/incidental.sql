@@ -35,6 +35,21 @@ SELECT closed_on
 FROM incidental
 WHERE purpose_id = ?;
 
+-- A mistyped occasion, corrected in place (#264). Unscoped by fund_id for
+-- the same reason CloseIncidental and ReopenIncidental are: Ledger.RenameIncidental
+-- fetches nothing first here because it has no need to - it already ran
+-- UpdatePurposeName inside the same withTx, which is itself fund-scoped
+-- (GetPurposeForFund via the http layer's resolveRenameablePurpose), so by
+-- the time this runs the purpose_id is already known to belong to the
+-- caller's fund. Renaming moves no money and posts no ledger entry - the
+-- same UPDATE shape CloseIncidental and ReopenIncidental already use for
+-- exactly that reason.
+-- name: UpdateIncidentalOccasion :one
+UPDATE incidental
+SET occasion = ?
+WHERE purpose_id = ?
+RETURNING purpose_id, occasion, target_amount, opened_on, closed_on, created_at;
+
 -- The way back (ADR-031): closed_on to NULL, the exact inverse of
 -- CloseIncidental above and, like it, a plain UPDATE rather than a ledger
 -- entry - reopening moves no money either. Ledger.ReopenIncidental fetches
