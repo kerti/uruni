@@ -2,6 +2,7 @@ package http
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -215,7 +216,9 @@ func TestPatchPurposeRenamesAPassThrough(t *testing.T) {
 
 // 'main' is the fund's own system row (purpose_single_main), not a label the
 // treasurer typed. 409, not 404 - the row is there and she may be looking
-// right at it.
+// right at it. This is now the ONLY kind PATCH refuses (#264) - an
+// incidental's occasion moved into the renameable column alongside a
+// pass-through's name.
 func TestPatchPurposeRefusesTheMainPurpose(t *testing.T) {
 	r := testRouter(t)
 	setup := setUpFund(t, r)
@@ -226,6 +229,127 @@ func TestPatchPurposeRefusesTheMainPurpose(t *testing.T) {
 	}
 	if got := decodeError(t, rec); got.Code != "purpose_not_renameable" {
 		t.Errorf("error code = %q, want %q", got.Code, "purpose_not_renameable")
+	}
+}
+
+// #264: a mistyped occasion is correctable exactly like a location's name -
+// renaming an incidental moves both purpose.name and incidental.occasion
+// together, posts no transaction and changes no balance. The balance and
+// transaction-count checks are read fresh off the ledger, never taken on
+// faith from the PATCH response alone - the same discipline
+// TestCloseIncidentalRollsLeftoverVerifiedThroughBalances uses.
+func TestPatchPurposeRenamesAnIncidentalsOccasionAndMovesNoMoney(t *testing.T) {
+	r, l := testRouterAndLedger(t)
+	setup := setUpFund(t, r)
+	envelope := openIncidentalFor(t, r, "Halal bihalal RT", "2026-08-01")
+
+	// A contribution, so there is a real fund balance and a real transaction
+	// row to prove untouched.
+	if rec := postTransaction(t, r, transactionRequest{
+		AccountID: setup.CashAccountID(t), PurposeID: envelope.PurposeID,
+		Direction: "in", Amount: 50_000, OccurredOn: "2026-08-02",
+	}); rec.Code != http.StatusCreated {
+		t.Fatalf("contribution = %d, want %d (body: %s)", rec.Code, http.StatusCreated, rec.Body.String())
+	}
+
+	ctx := context.Background()
+	fundBefore, err := l.FundBalance(ctx, setup.Fund.ID)
+	if err != nil {
+		t.Fatalf("FundBalance() before = %v, want no error", err)
+	}
+	envelopeBalBefore, err := l.PurposeBalance(ctx, setup.Fund.ID, envelope.PurposeID)
+	if err != nil {
+		t.Fatalf("PurposeBalance(envelope) before = %v, want no error", err)
+	}
+	txBefore := decodeTransactionsPage(t, getTransactions(t, r))
+
+	rec := patchPurpose(t, r, envelope.PurposeID, `{"name":"Halal bihalal RT 2026"}`)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("PATCH /api/purposes/{incidental} = %d, want %d (body: %s)", rec.Code, http.StatusOK, rec.Body.String())
+	}
+	var updated purposeResponse
+	if err := json.NewDecoder(rec.Body).Decode(&updated); err != nil {
+		t.Fatalf("decoding response: %v", err)
+	}
+	if updated.Name != "Halal bihalal RT 2026" {
+		t.Errorf("Name = %q, want %q", updated.Name, "Halal bihalal RT 2026")
+	}
+	if updated.Kind != "incidental" {
+		t.Errorf("Kind = %q, want %q", updated.Kind, "incidental")
+	}
+
+	// incidental.occasion moved together with purpose.name - the detail
+	// route reads it back from the incidental row, not the purpose row.
+	detailRec := getIncidentalDetail(t, r, envelope.PurposeID)
+	if detailRec.Code != http.StatusOK {
+		t.Fatalf("GET /api/incidentals/{id} after rename = %d, want %d (body: %s)", detailRec.Code, http.StatusOK, detailRec.Body.String())
+	}
+	detail := decodeIncidental(t, detailRec)
+	if detail.Occasion != "Halal bihalal RT 2026" {
+		t.Errorf("incidental.Occasion = %q, want %q - both rows must move together", detail.Occasion, "Halal bihalal RT 2026")
+	}
+
+	// The trust-core assertion: renaming posts no transaction and changes no
+	// balance. Integers compared exactly - no tolerance, no float anywhere on
+	// this path (ADR-015).
+	txAfter := decodeTransactionsPage(t, getTransactions(t, r))
+	if len(txAfter.Transactions) != len(txBefore.Transactions) {
+		t.Errorf("transaction count after rename = %d, want %d (unchanged) - a rename must post nothing", len(txAfter.Transactions), len(txBefore.Transactions))
+	}
+	fundAfter, err := l.FundBalance(ctx, setup.Fund.ID)
+	if err != nil {
+		t.Fatalf("FundBalance() after = %v, want no error", err)
+	}
+	if fundAfter != fundBefore {
+		t.Errorf("FundBalance() before=%d after=%d, want identical - a rename moves no money", fundBefore, fundAfter)
+	}
+	envelopeBalAfter, err := l.PurposeBalance(ctx, setup.Fund.ID, envelope.PurposeID)
+	if err != nil {
+		t.Fatalf("PurposeBalance(envelope) after = %v, want no error", err)
+	}
+	if envelopeBalAfter != envelopeBalBefore {
+		t.Errorf("PurposeBalance(envelope) before=%d after=%d, want identical - a rename moves no money", envelopeBalBefore, envelopeBalAfter)
+	}
+}
+
+// A CLOSED envelope is renameable too (#264's whole point: the typo is
+// usually found after the occasion is over).
+func TestPatchPurposeRenamesAClosedIncidental(t *testing.T) {
+	r := testRouter(t)
+	setup := setUpFund(t, r)
+	envelope := openIncidentalFor(t, r, "Halal bihalal RT", "2026-08-01")
+
+	if rec := postCloseIncidental(t, r, envelope.PurposeID, closeIncidentalRequest{
+		AccountID: setup.CashAccountID(t), ClosedOn: "2026-08-10",
+	}); rec.Code != http.StatusOK {
+		t.Fatalf("close = %d, want %d (body: %s)", rec.Code, http.StatusOK, rec.Body.String())
+	}
+
+	rec := patchPurpose(t, r, envelope.PurposeID, `{"name":"Halal bihalal RT (typo fixed)"}`)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("PATCH /api/purposes/{closed incidental} = %d, want %d (body: %s)", rec.Code, http.StatusOK, rec.Body.String())
+	}
+	var updated purposeResponse
+	if err := json.NewDecoder(rec.Body).Decode(&updated); err != nil {
+		t.Fatalf("decoding response: %v", err)
+	}
+	if updated.Name != "Halal bihalal RT (typo fixed)" {
+		t.Errorf("Name = %q, want %q", updated.Name, "Halal bihalal RT (typo fixed)")
+	}
+}
+
+// An empty or whitespace-only occasion is refused, the same as opening one.
+func TestPatchPurposeRejectsAnEmptyIncidentalOccasion(t *testing.T) {
+	r := testRouter(t)
+	setUpFund(t, r)
+	envelope := openIncidentalFor(t, r, "Halal bihalal RT", "2026-08-01")
+
+	rec := patchPurpose(t, r, envelope.PurposeID, `{"name":"   "}`)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("PATCH /api/purposes/{incidental} with a blank name = %d, want %d (body: %s)", rec.Code, http.StatusBadRequest, rec.Body.String())
+	}
+	if got := decodeError(t, rec); got.Code != "invalid_argument" {
+		t.Errorf("error code = %q, want %q", got.Code, "invalid_argument")
 	}
 }
 

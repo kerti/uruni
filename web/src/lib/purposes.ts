@@ -35,7 +35,7 @@ export function listPurposes(selectable = false): Promise<Purpose[]> {
  *
  * There is no delete to pair with this: a posted transaction points at the
  * purpose, and money that passed through is not unsaid. Renaming is another
- * matter - see renamePassThroughPurpose.
+ * matter - see renamePurpose.
  */
 export function createPassThroughPurpose(name: string): Promise<Purpose> {
   return apiFetch<Purpose>('/api/pass-through-purposes', {
@@ -51,12 +51,14 @@ export function createPassThroughPurpose(name: string): Promise<Purpose> {
  * reads the text, so this rewrites no history, exactly like renaming a
  * location.
  *
- * Only a pass-through row may be renamed. The fund's own 'main' purpose is
- * a system row and an incidental's occasion is what the envelope IS rather
- * than a label on it, so the server answers 409 `purpose_not_renameable`
- * for both.
+ * Any purpose but the fund's own kas utama may be renamed (#264) - the
+ * fund's own 'main' row is a system row with no treasurer-typed name to
+ * have mistyped, so the server answers 409 `purpose_not_renameable` for
+ * that one kind alone. For an incidental, the server moves both the
+ * purpose's name and the envelope's own occasion together in one
+ * transaction; this call looks identical either way.
  */
-export function renamePassThroughPurpose(id: number, name: string): Promise<Purpose> {
+export function renamePurpose(id: number, name: string): Promise<Purpose> {
   return apiFetch<Purpose>(`/api/purposes/${id}`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },

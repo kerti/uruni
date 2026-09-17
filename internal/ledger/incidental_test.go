@@ -239,6 +239,182 @@ func TestOpenIncidentalRejectsInvalidOpenedOn(t *testing.T) {
 	}
 }
 
+// --- Rename (#264): correcting a mistyped occasion moves both rows and no
+// money -------------------------------------------------------------------
+
+// RenameIncidental moves both purpose.name and incidental.occasion together,
+// and posts no transaction and changes no balance - the trust-core
+// assertion, checked with exact integer comparisons (ADR-015, CLAUDE.md
+// rule 2), never trusted from the return value alone.
+func TestRenameIncidentalMovesBothRowsAndNoMoney(t *testing.T) {
+	l := newTestLedger(t)
+	f := newFixture(t, l)
+	ctx := context.Background()
+	q := store.New(l.db)
+
+	envelope := openTestIncidental(t, l, f.fundID, "Halal bihalal RT", "2026-08-01")
+	if _, err := l.PostTransaction(ctx, PostTransactionParams{
+		FundID: f.fundID, AccountID: f.cashID, PurposeID: envelope.PurposeID,
+		Direction: "in", Amount: 50_000, OccurredOn: "2026-08-02",
+	}); err != nil {
+		t.Fatalf("PostTransaction(in) = %v, want no error", err)
+	}
+
+	fundBefore, err := l.FundBalance(ctx, f.fundID)
+	if err != nil {
+		t.Fatalf("FundBalance() before = %v, want no error", err)
+	}
+	envelopeBalBefore, err := l.PurposeBalance(ctx, f.fundID, envelope.PurposeID)
+	if err != nil {
+		t.Fatalf("PurposeBalance(envelope) before = %v, want no error", err)
+	}
+	txBefore, err := q.ListTransactionsByFund(ctx, f.fundID)
+	if err != nil {
+		t.Fatalf("ListTransactionsByFund() before = %v, want no error", err)
+	}
+
+	renamed, err := l.RenameIncidental(ctx, RenameIncidentalParams{
+		FundID: f.fundID, PurposeID: envelope.PurposeID, Occasion: "Halal bihalal RT 2026",
+	})
+	if err != nil {
+		t.Fatalf("RenameIncidental() = %v, want no error", err)
+	}
+	if renamed.Occasion != "Halal bihalal RT 2026" {
+		t.Errorf("Occasion = %q, want %q", renamed.Occasion, "Halal bihalal RT 2026")
+	}
+
+	purpose, err := q.GetPurposeForFund(ctx, store.GetPurposeForFundParams{ID: envelope.PurposeID, FundID: f.fundID})
+	if err != nil {
+		t.Fatalf("GetPurposeForFund() = %v, want no error", err)
+	}
+	if purpose.Name != "Halal bihalal RT 2026" {
+		t.Errorf("purpose.Name = %q, want %q - both rows must move together", purpose.Name, "Halal bihalal RT 2026")
+	}
+
+	fetched, err := q.GetIncidental(ctx, store.GetIncidentalParams{PurposeID: envelope.PurposeID, FundID: f.fundID})
+	if err != nil {
+		t.Fatalf("GetIncidental() = %v, want no error", err)
+	}
+	if fetched.Occasion != "Halal bihalal RT 2026" {
+		t.Errorf("incidental.Occasion = %q, want %q", fetched.Occasion, "Halal bihalal RT 2026")
+	}
+
+	// The trust-core assertion: no transaction posted, no balance moved.
+	txAfter, err := q.ListTransactionsByFund(ctx, f.fundID)
+	if err != nil {
+		t.Fatalf("ListTransactionsByFund() after = %v, want no error", err)
+	}
+	if len(txAfter) != len(txBefore) {
+		t.Errorf("ListTransactionsByFund() returned %d rows after a rename, want %d (unchanged) - a rename must post nothing", len(txAfter), len(txBefore))
+	}
+	fundAfter, err := l.FundBalance(ctx, f.fundID)
+	if err != nil {
+		t.Fatalf("FundBalance() after = %v, want no error", err)
+	}
+	if fundAfter != fundBefore {
+		t.Errorf("FundBalance() before=%d after=%d, want identical - a rename moves no money", fundBefore, fundAfter)
+	}
+	envelopeBalAfter, err := l.PurposeBalance(ctx, f.fundID, envelope.PurposeID)
+	if err != nil {
+		t.Fatalf("PurposeBalance(envelope) after = %v, want no error", err)
+	}
+	if envelopeBalAfter != envelopeBalBefore {
+		t.Errorf("PurposeBalance(envelope) before=%d after=%d, want identical - a rename moves no money", envelopeBalBefore, envelopeBalAfter)
+	}
+}
+
+// A CLOSED envelope renames successfully - the typo is usually found after
+// the occasion is over, and renaming does not need the envelope reopened.
+func TestRenameIncidentalOnAClosedEnvelope(t *testing.T) {
+	l := newTestLedger(t)
+	f := newFixture(t, l)
+	ctx := context.Background()
+
+	envelope := openTestIncidental(t, l, f.fundID, "Halal bihalal RT", "2026-08-01")
+	if _, err := l.CloseIncidentalAndRoll(ctx, CloseIncidentalAndRollParams{
+		FundID: f.fundID, PurposeID: envelope.PurposeID, AccountID: f.cashID, ClosedOn: "2026-08-10",
+	}); err != nil {
+		t.Fatalf("CloseIncidentalAndRoll() = %v, want no error", err)
+	}
+
+	renamed, err := l.RenameIncidental(ctx, RenameIncidentalParams{
+		FundID: f.fundID, PurposeID: envelope.PurposeID, Occasion: "Halal bihalal RT (typo fixed)",
+	})
+	if err != nil {
+		t.Fatalf("RenameIncidental() on a closed envelope = %v, want no error", err)
+	}
+	if renamed.Occasion != "Halal bihalal RT (typo fixed)" {
+		t.Errorf("Occasion = %q, want %q", renamed.Occasion, "Halal bihalal RT (typo fixed)")
+	}
+	if renamed.ClosedOn == nil {
+		t.Error("ClosedOn = nil, want still closed - renaming must not reopen the envelope")
+	}
+}
+
+// Empty or whitespace-only occasion is refused, the same idiom
+// OpenIncidental uses, and the row is left untouched.
+func TestRenameIncidentalRejectsEmptyOccasion(t *testing.T) {
+	l := newTestLedger(t)
+	f := newFixture(t, l)
+	ctx := context.Background()
+	q := store.New(l.db)
+
+	envelope := openTestIncidental(t, l, f.fundID, "Halal bihalal RT", "2026-08-01")
+
+	_, err := l.RenameIncidental(ctx, RenameIncidentalParams{
+		FundID: f.fundID, PurposeID: envelope.PurposeID, Occasion: "   ",
+	})
+	if !errors.Is(err, ErrInvalidArgument) {
+		t.Fatalf("RenameIncidental() = %v, want an error wrapping ErrInvalidArgument", err)
+	}
+
+	unchanged, err := q.GetIncidental(ctx, store.GetIncidentalParams{PurposeID: envelope.PurposeID, FundID: f.fundID})
+	if err != nil {
+		t.Fatalf("GetIncidental() = %v, want no error", err)
+	}
+	if unchanged.Occasion != "Halal bihalal RT" {
+		t.Errorf("Occasion = %q, want %q (unchanged) - a rejected rename must not touch the row", unchanged.Occasion, "Halal bihalal RT")
+	}
+}
+
+// A second fund's envelope is invisible to the first fund, mirroring every
+// other single-envelope write in this file - an id names a row, it does not
+// prove the caller may see it.
+func TestRenameIncidentalIsFundScoped(t *testing.T) {
+	l := newTestLedger(t)
+	f := newFixture(t, l)
+	ctx := context.Background()
+
+	q := store.New(l.db)
+	other, err := q.CreateFund(ctx, store.CreateFundParams{
+		Name: "Other Fund", Currency: "IDR", ReportSlug: "zyxwvutsrqponmlkjihgfe", CreatedAt: 1,
+	})
+	if err != nil {
+		t.Fatalf("CreateFund() = %v, want no error", err)
+	}
+
+	envelope, err := l.OpenIncidental(ctx, OpenIncidentalParams{
+		FundID: other.ID, Occasion: "Fund 2's occasion", OpenedOn: "2026-08-12",
+	})
+	if err != nil {
+		t.Fatalf("OpenIncidental(fund 2) = %v, want no error", err)
+	}
+
+	if _, err := l.RenameIncidental(ctx, RenameIncidentalParams{
+		FundID: f.fundID, PurposeID: envelope.PurposeID, Occasion: "Hijacked",
+	}); !errors.Is(err, sql.ErrNoRows) {
+		t.Errorf("RenameIncidental(fund 1, fund 2's envelope) = %v, want an error wrapping sql.ErrNoRows", err)
+	}
+
+	stillNamed, err := q.GetIncidental(ctx, store.GetIncidentalParams{PurposeID: envelope.PurposeID, FundID: other.ID})
+	if err != nil {
+		t.Fatalf("GetIncidental() = %v, want no error", err)
+	}
+	if stillNamed.Occasion != "Fund 2's occasion" {
+		t.Errorf("Occasion = %q, want %q - a cross-fund rename must not have touched it", stillNamed.Occasion, "Fund 2's occasion")
+	}
+}
+
 // A positive leftover rolls into the main purpose, and closed_on is set in
 // the same call: FundBalance is unchanged (nothing moved, only what it is
 // for), the incidental purpose's balance goes to exactly 0, and the main

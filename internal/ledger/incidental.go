@@ -80,6 +80,64 @@ func (l *Ledger) OpenIncidental(ctx context.Context, p OpenIncidentalParams) (st
 	return created, nil
 }
 
+// RenameIncidentalParams is every argument RenameIncidental needs to correct
+// one envelope's occasion.
+type RenameIncidentalParams struct {
+	FundID    int64
+	PurposeID int64
+	Occasion  string // non-empty; becomes purpose.name and incidental.occasion, same as OpenIncidentalParams.Occasion
+}
+
+// RenameIncidental corrects a mistyped occasion (#264). The occasion is
+// stored twice - as purpose.name and as incidental.occasion - for the same
+// reason OpenIncidentalParams' own comment gives: PRD 7.5 treats the two as
+// one label, so a rename that moved only one of them would leave the pair
+// half-corrected, the exact half-renamed-row shape OpenIncidental's own
+// atomicity argument exists to prevent at creation time. Both updates run
+// inside one withTx so a crash between them cannot strand that
+// disagreement.
+//
+// This posts no ledger entry and moves no money: a posted transaction
+// references a purpose by id, and nothing in the ledger reads the text, so
+// correcting it rewrites no history - the same correction UpdatePurposeName's
+// own comment already makes for a location or a titipan, extended here to
+// the one other place the label happens to live twice.
+//
+// Fund-scoped through the same GetIncidental fetch every other single-
+// envelope write in this file opens with (ReopenIncidental, CloseIncidentalAndRoll):
+// an id names a row, it does not prove the caller may see it, so the fetch
+// runs first and the two unscoped updates that follow only ever touch a
+// purpose_id already proven to belong to FundID.
+func (l *Ledger) RenameIncidental(ctx context.Context, p RenameIncidentalParams) (store.Incidental, error) {
+	if strings.TrimSpace(p.Occasion) == "" {
+		return store.Incidental{}, fmt.Errorf("%w: occasion must not be empty", ErrInvalidArgument)
+	}
+
+	var renamed store.Incidental
+	err := l.withTx(ctx, func(q store.Querier) error {
+		if _, err := q.GetIncidental(ctx, store.GetIncidentalParams{PurposeID: p.PurposeID, FundID: p.FundID}); err != nil {
+			return fmt.Errorf("fetching incidental: %w", err)
+		}
+
+		if _, err := q.UpdatePurposeName(ctx, store.UpdatePurposeNameParams{ID: p.PurposeID, Name: p.Occasion}); err != nil {
+			return fmt.Errorf("renaming purpose: %w", err)
+		}
+
+		var err error
+		renamed, err = q.UpdateIncidentalOccasion(ctx, store.UpdateIncidentalOccasionParams{
+			PurposeID: p.PurposeID, Occasion: p.Occasion,
+		})
+		if err != nil {
+			return fmt.Errorf("renaming incidental occasion: %w", err)
+		}
+		return nil
+	})
+	if err != nil {
+		return store.Incidental{}, fmt.Errorf("renaming incidental: %w", err)
+	}
+	return renamed, nil
+}
+
 // CloseIncidentalAndRollParams is every argument CloseIncidentalAndRoll
 // needs to close one envelope and roll its leftover into the fund's main
 // purpose.

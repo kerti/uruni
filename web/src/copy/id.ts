@@ -144,9 +144,10 @@ export const copy = {
       // renders its own, more specific wording pointing at deactivate; this
       // is the shared fallback for the same code reached elsewhere.
       referenced_by_other_records: 'Data ini sudah dipakai di catatan lain, jadi tidak bisa dihapus.',
-      // Renaming a purpose that is not a titipan - the fund's own kas utama,
-      // or an incidental, whose name is the occasion itself.
-      purpose_not_renameable: 'Hanya nama titipan yang bisa diganti.',
+      // Renaming the fund's own kas utama through this route - the one
+      // purpose it refuses (#264). A titipan and an amplop are both
+      // renameable, so this message no longer claims otherwise.
+      purpose_not_renameable: 'Nama kas utama tidak bisa diganti.',
       // M6.17: two tiers with the same name (UNIQUE (fund_id, name)), or two
       // rates for the same tier and month (UNIQUE (tier_id, effective_from)).
       // errors.go maps every UNIQUE breach to this one code.
@@ -787,9 +788,24 @@ export const copy = {
       // The way back from a closed envelope (ADR-031) - a late entry needs
       // somewhere to post, through the ordinary record form above.
       reopen: 'Buka lagi amplop ini',
+      // Correcting a mistyped occasion (#264) - offered for an open AND a
+      // closed envelope, since the typo is usually found after the occasion
+      // is over.
+      rename: 'Ubah nama',
     },
     reopen: {
       success: 'Amplop dibuka kembali.',
+    },
+    // The rename dialog (#264): one field, seeded from the current occasion.
+    // nameLabel reuses open.occasionLabel's own word ("Acara") - one label
+    // for the same field, opening or correcting.
+    rename: {
+      heading: 'Ubah amplop',
+      nameLabel: 'Acara',
+      save: 'Simpan',
+      saving: 'Menyimpan…',
+      cancel: 'Batal',
+      success: 'Nama amplop sudah diubah.',
     },
     status: {
       open: 'Berjalan',

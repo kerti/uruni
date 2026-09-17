@@ -119,14 +119,15 @@ func (a *api) routes(r chi.Router) {
 		// opening balance that must post inside the same transaction as the
 		// account. Purposes stay read-only here but for the one kind a
 		// treasurer creates herself (pass-through); the other two kinds are
-		// written by SetUpFund and OpenIncidental.
+		// written by SetUpFund and OpenIncidental. PATCH renames whichever
+		// kind the id names except the fund's own 'main' row (#264).
 		r.Post("/accounts", a.createAccount)
 		r.Get("/accounts", a.listAccounts)
 		r.Patch("/accounts/{id}", a.updateAccount)
 		r.Delete("/accounts/{id}", a.deleteAccount)
 		r.Get("/purposes", a.listPurposes)
 		r.Post("/pass-through-purposes", a.createPassThroughPurpose)
-		r.Patch("/purposes/{id}", a.updatePassThroughPurpose)
+		r.Patch("/purposes/{id}", a.updatePurposeName)
 
 		// The roster, one block per entity. Direct-CRUD (ADR-027) - no derived
 		// invariant, so these call a.queries rather than a.ledger, same split as

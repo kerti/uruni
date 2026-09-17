@@ -99,9 +99,13 @@ A part-paid earlier period counts as one month of tunggakan, the same as an unpa
 
 | Dialog | Route |
 |---|---|
-| rename fund · add/rename/retire location · add/edit pass-through purpose · add/edit member · add/edit tier · add/edit rate · open an incidental | record transaction · transfer · dues payment · reimbursement claim · reconcile count |
+| rename fund · add/rename/retire location · add/edit pass-through purpose · add/edit member · add/edit tier · add/edit rate · open an incidental · **rename an incidental** | record transaction · transfer · dues payment · reimbursement claim · reconcile count |
 
 Every dialog in that column is hosted by the noun it belongs to, which for **open an incidental** is the Pengaturan section added in [#263](https://github.com/kerti/uruni/issues/263) — see "Where the homeless features land" above for why an incidental is a purpose and so lands beside Titipan rather than on Beranda.
+
+**Rename an incidental** ([#264](https://github.com/kerti/uruni/issues/264)) passes the same test as every row above it - it edits one row and posts no ledger entry - but it is hosted on the envelope's own detail screen rather than the Pengaturan card list it shares a table row with. The "hosted by the noun it belongs to" rule holds; it is the noun that moved. That card already navigates to the detail screen, and a second affordance on it would crowd a list built card-shaped to stay short.
+
+A **closed** envelope gets the button too, alone in this column in editing something already done. The typo in an occasion is usually caught only once the occasion is over and someone reads the report, and reopening an envelope to fix a spelling mistake is the same rewrite-history-for-a-typo that #264 exists to remove. The objection #264 raises itself is that the occasion appears on the public report, so a rename does change what a past reader saw. The answer is the precedent the fund's own name already sets - it heads that same report and is renameable (`updateFund`) - because the ledger is untouched either way: a label reads differently after a correction, the money it labels does not.
 
 Money forms stay screens because they carry five or more fields, a photo picker ([#154](https://github.com/kerti/uruni/issues/154)), smart defaults and a success handoff — and because a posting dismissible by a stray backdrop tap is the wrong shape for the one thing this app must not get wrong. The effect on the admin screens is the point: with inline forms gone, Anggota and Pengaturan become card lists, which is what keeps them short enough that sections beat tabs.
 

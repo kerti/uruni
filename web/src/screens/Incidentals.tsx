@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from 'react'
 
 import AccountPicker from '@/components/pickers/AccountPicker'
 import { Button } from '@/components/ui/button'
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import Loading from '@/components/states/Loading'
@@ -9,9 +10,12 @@ import ErrorState from '@/components/states/ErrorState'
 import { copy } from '@/copy/id'
 import { ApiError } from '@/lib/api'
 import { listAccounts } from '@/lib/accounts'
+import { parseDialogTarget } from '@/lib/dialogTarget'
 import { formatIDR } from '@/lib/money'
 import { closeIncidental, getIncidental, reopenIncidental } from '@/lib/incidentals'
+import { renamePurpose } from '@/lib/purposes'
 import { useApi } from '@/lib/useApi'
+import { useDialogParam } from '@/lib/useDialogParam'
 import type { Account } from '@/lib/accounts'
 import type { Incidental, IncidentalDetail } from '@/lib/incidentals'
 
@@ -90,6 +94,15 @@ export default function Incidentals({
 
   const [feedback, setFeedback] = useState<Feedback | null>(null)
 
+  // The rename dialog (#264), addressed by the URL rather than component
+  // state (ADR-032) - `?edit=incidental:<id>`, the same search-param pattern
+  // PassThrough.tsx's EditPassThroughDialog uses, hosted here rather than in
+  // Pengaturan's own card list because this detail screen is where the
+  // occasion is actually read and where a typo is actually noticed.
+  const { value: dialogValue, open: openDialog, close: closeDialog, clear: clearDialog } = useDialogParam()
+  const dialogTarget = parseDialogTarget('incidental', dialogValue)
+  const isRenaming = dialogTarget.kind === 'edit' && dialogTarget.id === purposeId
+
   useEffect(() => {
     void accountsRun(listAccounts)
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -103,6 +116,21 @@ export default function Incidentals({
     void detailRun(() => getIncidental(purposeId))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [purposeId])
+
+  // An `incidental:` value naming a different or malformed id: strip it
+  // once the detail has loaded, rather than flash an empty dialog - never
+  // closeDialog(), for the same reason PassThrough.tsx's own effect gives
+  // (a closeDialog() here could run after a closeDialog() already in
+  // flight has gone back, taking her off the screen entirely). A `foreign`
+  // value is left exactly where it is - it belongs to something this
+  // screen does not own.
+  useEffect(() => {
+    if (dialogTarget.kind === 'foreign' || dialogTarget.kind === 'new') return
+    if (detailState.status !== 'success') return
+    if (isRenaming) return
+    clearDialog()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dialogValue, dialogTarget.kind, detailState.status, isRenaming])
 
   const submitting = submitState.status === 'loading'
 
@@ -160,23 +188,42 @@ export default function Incidentals({
     )
   }
 
+  // On success the dialog itself has already made the PATCH call (see
+  // RenameIncidentalDialog) - this just closes it, refetches the detail so
+  // the <h1> shows the corrected occasion, and reuses the screen's own
+  // Feedback banner rather than a second, parallel success mechanism.
+  function handleRenamed() {
+    closeDialog()
+    setFeedback({ kind: 'success', text: text.rename.success })
+    void detailRun(() => getIncidental(purposeId))
+  }
+
   return (
-    <DetailView
-      detailState={detailState}
-      accounts={accountsState.data ?? []}
-      feedback={feedback}
-      submitting={submitting}
-      showCloseForm={showCloseForm}
-      rolledAmount={rolledAmount}
-      onRecord={() => onRecordFor(purposeId)}
-      onViewTransactions={() => onViewTransactionsFor(purposeId)}
-      onShowClose={() => { setShowCloseForm(true); setFeedback(null) }}
-      onCancelClose={() => setShowCloseForm(false)}
-      onClose={handleClose}
-      onReopen={handleReopen}
-      onRetry={() => void detailRun(() => getIncidental(purposeId))}
-      onBack={onBack}
-    />
+    <>
+      <DetailView
+        detailState={detailState}
+        accounts={accountsState.data ?? []}
+        feedback={feedback}
+        submitting={submitting}
+        showCloseForm={showCloseForm}
+        rolledAmount={rolledAmount}
+        onRecord={() => onRecordFor(purposeId)}
+        onViewTransactions={() => onViewTransactionsFor(purposeId)}
+        onShowClose={() => { setShowCloseForm(true); setFeedback(null) }}
+        onCancelClose={() => setShowCloseForm(false)}
+        onClose={handleClose}
+        onReopen={handleReopen}
+        onRename={() => openDialog(`incidental:${purposeId}`)}
+        onRetry={() => void detailRun(() => getIncidental(purposeId))}
+        onBack={onBack}
+      />
+      <RenameIncidentalDialog
+        envelope={detailState.data ?? null}
+        open={isRenaming}
+        onClose={closeDialog}
+        onRenamed={handleRenamed}
+      />
+    </>
   )
 }
 
@@ -204,6 +251,7 @@ function DetailView({
   onCancelClose,
   onClose,
   onReopen,
+  onRename,
   onRetry,
   onBack,
 }: {
@@ -219,6 +267,7 @@ function DetailView({
   onCancelClose: () => void
   onClose: (accountId: number, closedOn: string, note: string) => void
   onReopen: () => void
+  onRename: () => void
   onRetry: () => void
   onBack: () => void
 }) {
@@ -309,6 +358,13 @@ function DetailView({
               off Beranda and names this filter in its place. */}
           <Button type="button" size="lg" variant="outline" onClick={onViewTransactions}>
             {text.actions.viewTransactions}
+          </Button>
+
+          {/* Correcting a mistyped occasion (#264) - offered open or closed,
+              beside Lihat transaksi, since the typo is usually noticed only
+              after the occasion is over. */}
+          <Button type="button" size="lg" variant="outline" onClick={onRename}>
+            {text.actions.rename}
           </Button>
 
           {/* The way back from a closed envelope (ADR-031): reopening
@@ -402,5 +458,87 @@ function CloseForm({
         </Button>
       </div>
     </form>
+  )
+}
+
+/**
+ * The rename dialog (#264), modelled on PassThrough.tsx's own
+ * EditPassThroughDialog: one text field, seeded from the current occasion,
+ * submit disabled while busy or when empty or unchanged, ErrorState on
+ * failure. It makes the PATCH call itself (renamePurpose moves both
+ * purpose.name and incidental.occasion together server-side) and, on
+ * success, hands off to `onRenamed` - Incidentals' own handleRenamed, which
+ * closes the dialog, refetches the detail, and posts the success message
+ * through the screen's existing Feedback banner rather than a second,
+ * dialog-local one.
+ *
+ * `envelope` is null only while closing, the same window
+ * EditPassThroughDialog documents for its own `purpose` prop.
+ */
+function RenameIncidentalDialog({
+  envelope,
+  open,
+  onClose,
+  onRenamed,
+}: {
+  envelope: Incidental | null
+  open: boolean
+  onClose: () => void
+  onRenamed: () => void
+}) {
+  const [state, run] = useApi<unknown>()
+  const [occasion, setOccasion] = useState('')
+
+  useEffect(() => {
+    if (open && envelope !== null) setOccasion(envelope.occasion)
+  }, [open, envelope])
+
+  const busy = state.status === 'loading'
+  const trimmed = occasion.trim()
+  const unchanged = envelope !== null && trimmed === envelope.occasion
+
+  function handleSubmit(event: FormEvent) {
+    event.preventDefault()
+    if (envelope === null || trimmed === '' || unchanged) return
+    void run(async () => {
+      await renamePurpose(envelope.purpose_id, trimmed)
+      onRenamed()
+    })
+  }
+
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        if (!next) onClose()
+      }}
+    >
+      <DialogContent closeLabel={copy.common.close}>
+        <DialogHeader>
+          <DialogTitle>{text.rename.heading}</DialogTitle>
+        </DialogHeader>
+        <form className="flex flex-col gap-3" onSubmit={handleSubmit} noValidate>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="incidental-rename-occasion">{text.rename.nameLabel}</Label>
+            <Input
+              id="incidental-rename-occasion"
+              type="text"
+              value={occasion}
+              onChange={(event) => setOccasion(event.target.value)}
+              disabled={busy}
+            />
+          </div>
+          {state.status === 'error' && state.error && <ErrorState error={state.error} />}
+          <DialogFooter className="mt-1">
+            <Button type="button" variant="outline" className="h-11" disabled={busy} onClick={onClose}>
+              {text.rename.cancel}
+            </Button>
+            <Button type="submit" className="h-11" disabled={busy || trimmed === '' || unchanged}>
+              {busy ? text.rename.saving : text.rename.save}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
   )
 }

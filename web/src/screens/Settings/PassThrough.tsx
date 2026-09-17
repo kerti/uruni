@@ -8,7 +8,7 @@ import Loading from '@/components/states/Loading'
 import ErrorState from '@/components/states/ErrorState'
 import { copy } from '@/copy/id'
 import { parseDialogTarget } from '@/lib/dialogTarget'
-import { createPassThroughPurpose, listPurposes, renamePassThroughPurpose } from '@/lib/purposes'
+import { createPassThroughPurpose, listPurposes, renamePurpose } from '@/lib/purposes'
 import { useApi } from '@/lib/useApi'
 import { useDialogParam } from '@/lib/useDialogParam'
 import type { Purpose } from '@/lib/purposes'
@@ -206,7 +206,7 @@ function EditPassThroughDialog({
     event.preventDefault()
     if (purpose === null || trimmed === '' || unchanged) return
     void run(async () => {
-      const updated = await renamePassThroughPurpose(purpose.id, trimmed)
+      const updated = await renamePurpose(purpose.id, trimmed)
       onChanged()
       return updated
     })

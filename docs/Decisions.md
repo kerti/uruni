@@ -374,3 +374,11 @@ Rejected: a purpose dropdown on the Transaksi tab. It is more useful standalone,
 Rejected: refusing any tier that still has rates, leaving her to delete each one by hand first. It is simpler on the server and reads as busywork for a golongan nobody was ever charged under.
 
 `Ledger.DeleteDuesTier` owns it, which is the one place in the dues-tier routes that is not direct CRUD ([ADR-027](./ADR/027-ledger-domain-boundary.md)): the two statements have to share a transaction, and the ledger is what has one. No pre-check for members — the foreign key is the check, and a `COUNT(*)` first would only race it.
+
+## An amplop's name is a label, not the envelope itself (decided 2026-09-17)
+
+`PATCH /api/purposes/{id}` refused everything but a titipan, and the reasoning it carried was that an incidental's occasion "is what the envelope IS rather than a label on it". [#264](https://github.com/kerti/uruni/issues/264) overturns it: her only recourse for a typo was to close the envelope and open a new one, which rewrites the ledger's history to fix a spelling mistake — the opposite of the trade this app makes everywhere else, where money is immutable precisely so everything around it can stay forgiving.
+
+**The ruling: every purpose but the fund's own kas utama is renameable**, through the one route, open or closed. 'main' keeps the 409 and keeps `purpose_not_renameable`; the code is now narrower rather than retired, and its copy no longer claims titipan is the only renameable thing. The occasion is stored twice — `purpose.name` and `incidental.occasion` — so the rename is `Ledger.RenameIncidental`, both updates in one transaction, for the same reason `OpenIncidental` writes the pair together. It posts nothing.
+
+Rejected: a second route, `PATCH /api/incidentals/{purposeID}`. CONTEXT.md makes incidental and pass-through two kinds of one `purpose`, and "fix a mistyped peruntukan" is one concept; the branch belongs server-side, not in the URL.

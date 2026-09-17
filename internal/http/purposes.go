@@ -7,12 +7,19 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/kerti/uruni/internal/ledger"
 	"github.com/kerti/uruni/internal/store"
 )
 
-// purposeKindPassThrough is the only kind this package writes. The other two
-// are set elsewhere: 'main' by SetUpFund, 'incidental' by OpenIncidental.
-const purposeKindPassThrough = "pass_through"
+// purposeKindPassThrough is the only kind this package writes; 'main' is set
+// by SetUpFund and 'incidental' by OpenIncidental. The other two are named
+// here anyway because renaming reads all three: it refuses 'main' and sends
+// 'incidental' down a different path (updatePurposeName).
+const (
+	purposeKindPassThrough = "pass_through"
+	purposeKindMain        = "main"
+	purposeKindIncidental  = "incidental"
+)
 
 // passThroughPurposeRequest is POST /api/pass-through-purposes's body. Name
 // only, no kind: a caller that can name the kind can ask for a second 'main'
@@ -110,20 +117,25 @@ func (a *api) createPassThroughPurpose(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, toPurposeResponse(purpose))
 }
 
-// resolvePassThroughPurpose looks {id} up within the fund and insists it is
-// a pass-through row, or answers the request itself and reports false.
+// resolveRenameablePurpose looks {id} up within the fund and refuses only
+// the fund's own 'main' row, or answers the request itself and reports
+// false.
 //
 // The kind check is policy, not shape, so it lives here rather than in the
-// query (purpose.sql's own note): 'main' is the fund's own system row - the
-// one purpose_single_main guarantees - and an incidental carries its own
-// lifecycle (PRD section 7.5), where the occasion is what the envelope IS rather
-// than a label on it. Only a pass-through is a plain name the treasurer
-// typed and may have mistyped.
+// query (purpose.sql's own note). 'main' is the only row this refuses: it is
+// the fund's own system row, the one purpose_single_main guarantees exactly
+// one of, and it has no treasurer-typed name to have mistyped in the first
+// place. Everything else - a pass-through and an incidental alike - is
+// renameable, because renaming moves no money, posts no ledger entry, and
+// touches no transaction row: a posted transaction references a purpose by
+// id, and nothing in the ledger reads the text, so a mistyped occasion is
+// correctable exactly like a location's name or a titipan's. The app is
+// strict about money precisely so everything around it can stay forgiving.
 //
 // The refusal is 409, not 404: the row is there and she may be looking
 // right at it. Saying "not found" about something visible on screen is the
 // wrong answer twice over.
-func (a *api) resolvePassThroughPurpose(w http.ResponseWriter, r *http.Request) (store.Purpose, bool) {
+func (a *api) resolveRenameablePurpose(w http.ResponseWriter, r *http.Request) (store.Purpose, bool) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
 		writeAPIError(w, http.StatusBadRequest, "invalid_argument", "The purpose id is not a valid number.")
@@ -140,41 +152,66 @@ func (a *api) resolvePassThroughPurpose(w http.ResponseWriter, r *http.Request) 
 		mapSQLiteError(w, a.logger, err) // sql.ErrNoRows -> 404 not_found
 		return store.Purpose{}, false
 	}
-	if purpose.Kind != purposeKindPassThrough {
+	if purpose.Kind == purposeKindMain {
 		writeAPIError(w, http.StatusConflict, "purpose_not_renameable",
-			"Only a pass-through purpose can be renamed.")
+			"The fund's Kas Utama purpose cannot be renamed.")
 		return store.Purpose{}, false
 	}
 	return purpose, true
 }
 
-// updatePassThroughPurposeRequest is PATCH /api/purposes/{id}'s body: the
-// corrected name, and nothing else. No kind - that is pinned server-side on
-// creation for the reason passThroughPurposeRequest describes, and a route
-// that could change it afterward would reopen exactly that hole.
+// updatePurposeNameRequest is PATCH /api/purposes/{id}'s body: the corrected
+// name, and nothing else. No kind - that is pinned server-side on creation
+// for the reason passThroughPurposeRequest describes, and a route that could
+// change it afterward would reopen exactly that hole.
 //
 // Name is a pointer so a body with no name is a 400 rather than a silent
 // rename to the empty string, the same reasoning updateFundRequest rests on.
-type updatePassThroughPurposeRequest struct {
+type updatePurposeNameRequest struct {
 	Name *string `json:"name"`
 }
 
-// updatePassThroughPurpose is PATCH /api/purposes/{id}: fixes the name of a
-// pass-through purpose. A posted transaction references a purpose by id and
-// nothing in the ledger reads the text, so this rewrites no history - the
-// same correction updateAccount makes for a location's name.
-func (a *api) updatePassThroughPurpose(w http.ResponseWriter, r *http.Request) {
-	purpose, ok := a.resolvePassThroughPurpose(w, r)
+// updatePurposeName is PATCH /api/purposes/{id}: fixes a mistyped name. A
+// posted transaction references a purpose by id and nothing in the ledger
+// reads the text, so this rewrites no history - the same correction
+// updateAccount makes for a location's name.
+//
+// An incidental's name lives on two rows (purpose.name and
+// incidental.occasion, per OpenIncidental's own comment), so that branch
+// goes through ledger.RenameIncidental to move both together inside one
+// transaction; everything else this route can reach - a pass-through - is a
+// plain UPDATE on purpose alone.
+func (a *api) updatePurposeName(w http.ResponseWriter, r *http.Request) {
+	purpose, ok := a.resolveRenameablePurpose(w, r)
 	if !ok {
 		return
 	}
 
-	var req updatePassThroughPurposeRequest
+	var req updatePurposeNameRequest
 	if !decodeJSON(w, r, &req) {
 		return
 	}
 	if req.Name == nil {
 		writeAPIError(w, http.StatusBadRequest, "invalid_argument", "A name is required.")
+		return
+	}
+
+	if purpose.Kind == purposeKindIncidental {
+		fund, ok := a.resolveFund(w, r)
+		if !ok {
+			return
+		}
+		renamed, err := a.ledger.RenameIncidental(r.Context(), ledger.RenameIncidentalParams{
+			FundID: fund.ID, PurposeID: purpose.ID, Occasion: *req.Name,
+		})
+		if err != nil {
+			mapLedgerError(w, a.logger, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, toPurposeResponse(store.Purpose{
+			ID: purpose.ID, FundID: purpose.FundID, Kind: purpose.Kind,
+			Name: renamed.Occasion, CreatedAt: purpose.CreatedAt,
+		}))
 		return
 	}
 
