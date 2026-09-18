@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react'
+import { useNavigate } from 'react-router-dom'
 
-import AmountInput from '@/components/money/AmountInput'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
@@ -8,19 +8,9 @@ import { Label } from '@/components/ui/label'
 import Loading from '@/components/states/Loading'
 import ErrorState from '@/components/states/ErrorState'
 import { copy } from '@/copy/id'
-import { formatPeriod } from '@/lib/dates'
 import { parseDialogTarget } from '@/lib/dialogTarget'
 import { formatIDR } from '@/lib/money'
-import {
-  createDuesRate,
-  createDuesTier,
-  deleteDuesRate,
-  deleteDuesTier,
-  listDuesRates,
-  listDuesTiers,
-  renameDuesTier,
-  updateDuesRate,
-} from '@/lib/setup'
+import { createDuesTier, listDuesRates, listDuesTiers } from '@/lib/setup'
 import { useApi } from '@/lib/useApi'
 import { useDialogParam } from '@/lib/useDialogParam'
 import type { DuesRate, DuesTier } from '@/lib/setup'
@@ -83,6 +73,7 @@ function effectiveRate(rates: DuesRate[], month: string): DuesRate | null {
  */
 export default function DuesTiers() {
   const [state, run] = useApi<TiersData>()
+  const navigate = useNavigate()
   const { value, open, close, clear } = useDialogParam()
 
   async function load(): Promise<TiersData> {
@@ -102,19 +93,19 @@ export default function DuesTiers() {
 
   const tiers = state.data?.tiers ?? []
   const target = parseDialogTarget('tier', value)
-  const editingTier = target.kind === 'edit' ? (tiers.find((tier) => tier.id === target.id) ?? null) : null
 
-  // A `tier:` id naming nothing: strip it once the list has loaded, rather
-  // than flash an empty dialog. Never a `foreign` value - that belongs to a
-  // sibling section on this same screen - and `clear` rather than `close`,
-  // both for the reasons Locations documents at the same effect.
+  // This section owns exactly one dialog now - `tier:new` (#285 moved
+  // editing to the golongan's own screen) - so any other `tier:` value is
+  // a stale link to a dialog that no longer exists here. Strip it rather
+  // than leave a parameter naming nothing: `clear` and never `close`, and
+  // never a `foreign` value, both for the reasons Locations documents at
+  // the same effect.
   useEffect(() => {
     if (target.kind === 'foreign' || target.kind === 'new') return
     if (state.status !== 'success') return
-    if (target.kind === 'edit' && editingTier !== null) return
     clear()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [value, target.kind, state.status, editingTier])
+  }, [value, target.kind, state.status])
 
   const thisMonth = currentISOMonth()
 
@@ -139,8 +130,8 @@ export default function DuesTiers() {
               <li key={tier.id}>
                 <button
                   type="button"
-                  aria-label={text.editAria(tier.name)}
-                  onClick={() => open(`tier:${tier.id}`)}
+                  aria-label={text.cardAria(tier.name)}
+                  onClick={() => navigate(`/dues-tiers?tier=${tier.id}`)}
                   className="flex min-h-11 w-full items-center justify-between gap-3 rounded-lg bg-card px-4 py-3 text-left ring-1 ring-foreground/10 select-none transition-colors hover:bg-muted/40"
                 >
                   <span className="min-w-0 truncate font-medium">{tier.name}</span>
@@ -165,17 +156,6 @@ export default function DuesTiers() {
         open={target.kind === 'new'}
         onClose={close}
         onAdded={() => {
-          close()
-          reload()
-        }}
-      />
-      <EditTierDialog
-        tier={editingTier}
-        rates={editingTier === null ? [] : (state.data?.rates.get(editingTier.id) ?? [])}
-        open={target.kind === 'edit' && editingTier !== null}
-        onClose={close}
-        onChanged={reload}
-        onDeleted={() => {
           close()
           reload()
         }}
@@ -235,284 +215,5 @@ function AddTierDialog({ open, onClose, onAdded }: { open: boolean; onClose: () 
         </form>
       </DialogContent>
     </Dialog>
-  )
-}
-
-/**
- * One tier's whole life in one dialog: its name, its rate history, a new
- * rate, and deleting the tier itself.
- *
- * Deleting confirms inline in this dialog's own footer, never a second
- * dialog and never window.confirm() - the same shape EditLocationDialog
- * uses, and the reason dialog.tsx forbids nesting. A tier a member is in
- * comes back 409 referenced_by_other_records from that member's own foreign
- * key, and the copy names why rather than restating the wire message
- * (ADR-014).
- */
-function EditTierDialog({
-  tier,
-  rates,
-  open,
-  onClose,
-  onChanged,
-  onDeleted,
-}: {
-  tier: DuesTier | null
-  rates: DuesRate[]
-  open: boolean
-  onClose: () => void
-  onChanged: () => void
-  onDeleted: () => void
-}) {
-  const [nameState, nameRun] = useApi<DuesTier>()
-  const [deleteState, deleteRun] = useApi<void>()
-  const [name, setName] = useState('')
-  const [confirmingDelete, setConfirmingDelete] = useState(false)
-
-  useEffect(() => {
-    if (open && tier !== null) {
-      setName(tier.name)
-      setConfirmingDelete(false)
-    }
-  }, [open, tier])
-
-  const busy = nameState.status === 'loading' || deleteState.status === 'loading'
-  const trimmed = name.trim()
-  const unchanged = tier !== null && trimmed === tier.name
-
-  function handleRename(event: FormEvent) {
-    event.preventDefault()
-    if (tier === null || trimmed === '' || unchanged) return
-    void nameRun(async () => {
-      const updated = await renameDuesTier(tier.id, trimmed)
-      onChanged()
-      return updated
-    })
-  }
-
-  function handleDelete() {
-    if (tier === null) return
-    void deleteRun(async () => {
-      await deleteDuesTier(tier.id)
-      onDeleted()
-    })
-  }
-
-  // useApi's error is optional even in the 'error' state, so this narrows to
-  // a value both branches below can read.
-  const deleteError = deleteState.status === 'error' ? (deleteState.error ?? null) : null
-
-  /** The 409 the server answers when a member still references this tier -
-   * named in Indonesian, never the English wire message (ADR-014). */
-  function deleteErrorText(code: string): string {
-    if (code === 'referenced_by_other_records') return text.deleteRefused
-    return copy.common.errors[code as keyof typeof copy.common.errors] ?? copy.common.unknownError
-  }
-
-  return (
-    <Dialog
-      open={open}
-      onOpenChange={(next) => {
-        if (!next) onClose()
-      }}
-    >
-      <DialogContent closeLabel={copy.common.close}>
-        <DialogHeader>
-          <DialogTitle>{text.editTitle}</DialogTitle>
-        </DialogHeader>
-
-        <form className="flex flex-col gap-3" onSubmit={handleRename} noValidate>
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="tier-name">{text.nameLabel}</Label>
-            <Input id="tier-name" type="text" value={name} onChange={(event) => setName(event.target.value)} disabled={busy} />
-          </div>
-          {nameState.status === 'error' && nameState.error && <ErrorState error={nameState.error} />}
-          {!unchanged && trimmed !== '' && (
-            <Button type="submit" className="h-11 self-start" disabled={busy}>
-              {nameState.status === 'loading' ? text.saving : text.save}
-            </Button>
-          )}
-        </form>
-
-        <div className="flex flex-col gap-2">
-          <h3 className="text-sm font-medium text-muted-foreground">{text.ratesHeading}</h3>
-          {rates.length === 0 ? (
-            <p className="text-sm text-muted-foreground">{text.noRates}</p>
-          ) : (
-            <ul className="flex flex-col gap-2">
-              {rates.map((rate) => (
-                <RateRow key={rate.id} rate={rate} onChanged={onChanged} />
-              ))}
-            </ul>
-          )}
-          {tier !== null && <AddRate tierId={tier.id} onAdded={onChanged} />}
-        </div>
-
-        {/* The consequence, named just above the button that does it -
-            terracotta, not alarm-red, the same as Lokasi's own confirms. */}
-        {confirmingDelete && <p className="text-sm text-attention">{text.deleteConfirm}</p>}
-        {deleteError !== null && (
-          <p role="alert" className="text-sm text-attention">
-            {deleteErrorText(deleteError.code)}
-          </p>
-        )}
-
-        <DialogFooter className="mt-1">
-          {confirmingDelete ? (
-            <>
-              <Button type="button" variant="outline" className="h-11" disabled={busy} onClick={() => setConfirmingDelete(false)}>
-                {text.cancel}
-              </Button>
-              <Button type="button" className="h-11 bg-attention text-attention-foreground hover:bg-attention/90" disabled={busy} onClick={handleDelete}>
-                {deleteState.status === 'loading' ? text.deleting : text.deleteConfirmAction}
-              </Button>
-            </>
-          ) : (
-            <>
-              <Button type="button" variant="outline" className="h-11" disabled={busy} onClick={onClose}>
-                {copy.common.close}
-              </Button>
-              <Button
-                type="button"
-                variant="ghost"
-                className="h-11 text-attention"
-                disabled={busy}
-                onClick={() => setConfirmingDelete(true)}
-              >
-                {text.delete}
-              </Button>
-            </>
-          )}
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  )
-}
-
-/** One rate: the amount, the month it starts, and the two corrections the
- * API allows. No effective_from edit - a rate filed against the wrong month
- * is deleted and re-posted, never moved. */
-function RateRow({ rate, onChanged }: { rate: DuesRate; onChanged: () => void }) {
-  const [state, run] = useApi<unknown>()
-  const [editing, setEditing] = useState(false)
-  const [amount, setAmount] = useState(rate.amount)
-
-  const busy = state.status === 'loading'
-
-  async function submit(fn: () => Promise<unknown>) {
-    await run(fn)
-    onChanged()
-  }
-
-  function handleEdit(event: FormEvent) {
-    event.preventDefault()
-    if (amount === rate.amount || amount <= 0) {
-      setEditing(false)
-      return
-    }
-    void submit(async () => {
-      const updated = await updateDuesRate(rate.id, amount)
-      setEditing(false)
-      return updated
-    })
-  }
-
-  return (
-    <li className="flex flex-col gap-2 rounded-lg bg-background px-3 py-2 ring-1 ring-foreground/10">
-      {editing ? (
-        <form className="flex flex-col gap-2" onSubmit={handleEdit} noValidate>
-          <AmountInput id={`rate-amount-${rate.id}`} label={text.rateAmountLabel} value={amount} onChange={setAmount} disabled={busy} />
-          <div className="flex gap-2">
-            <Button type="submit" className="h-11" disabled={busy}>
-              {busy ? text.saving : text.save}
-            </Button>
-            <Button
-              type="button"
-              variant="ghost"
-              className="h-11"
-              disabled={busy}
-              onClick={() => {
-                setAmount(rate.amount)
-                setEditing(false)
-              }}
-            >
-              {text.cancel}
-            </Button>
-          </div>
-        </form>
-      ) : (
-        <>
-          <div className="flex items-baseline justify-between gap-3">
-            <span className="tabular font-medium">{formatIDR(rate.amount)}</span>
-            <span className="shrink-0 text-sm text-muted-foreground">{text.effectiveFrom(formatPeriod(rate.effective_from))}</span>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <Button type="button" variant="outline" className="h-11" disabled={busy} onClick={() => setEditing(true)}>
-              {text.editRate}
-            </Button>
-            <Button
-              type="button"
-              variant="ghost"
-              className="h-11 text-destructive"
-              disabled={busy}
-              onClick={() => void submit(() => deleteDuesRate(rate.id))}
-            >
-              {busy ? text.deletingRate : text.deleteRate}
-            </Button>
-          </div>
-        </>
-      )}
-      {state.status === 'error' && state.error && <ErrorState error={state.error} />}
-    </li>
-  )
-}
-
-/** A new price, effective from a month. Defaults to the current month: a
- * rate decided today normally starts today's month, and backdating one is a
- * deliberate act (#187 - a fund's history starts at adoption), which is why
- * the month stays a free field rather than being pinned to today. PRD
- * section 7.1's live-arrears escape hatch depends on being able to set it in
- * the past. */
-function AddRate({ tierId, onAdded }: { tierId: number; onAdded: () => void }) {
-  const [state, run] = useApi<DuesRate>()
-  const [amount, setAmount] = useState(0)
-  const [effectiveFrom, setEffectiveFrom] = useState(currentISOMonth)
-
-  const busy = state.status === 'loading'
-
-  function handleSubmit(event: FormEvent) {
-    event.preventDefault()
-    if (amount <= 0 || effectiveFrom === '') return
-    void run(async () => {
-      const created = await createDuesRate(tierId, amount, effectiveFrom)
-      setAmount(0)
-      setEffectiveFrom(currentISOMonth())
-      onAdded()
-      return created
-    })
-  }
-
-  return (
-    <form aria-label={text.addRate} className="flex flex-col gap-2 rounded-lg border border-border p-3" onSubmit={handleSubmit} noValidate>
-      <AmountInput id={`new-rate-amount-${tierId}`} label={text.rateAmountLabel} value={amount} onChange={setAmount} disabled={busy} />
-      <div className="flex flex-col gap-1.5">
-        <Label htmlFor={`new-rate-from-${tierId}`}>{text.effectiveFromLabel}</Label>
-        {/* type="month" - the wire format is YYYY-MM and so is this input's
-            value, so there is nothing to convert either way. */}
-        <Input
-          id={`new-rate-from-${tierId}`}
-          type="month"
-          value={effectiveFrom}
-          onChange={(event) => setEffectiveFrom(event.target.value)}
-        />
-      </div>
-      <Button type="submit" className="h-11 self-start" disabled={busy || amount <= 0}>
-        {busy ? text.addingRate : text.addRate}
-      </Button>
-      {/* A second rate for the same tier and month hits UNIQUE (tier_id,
-          effective_from) and comes back 409 unique_violation, which the
-          shared error copy already answers. */}
-      {state.status === 'error' && state.error && <ErrorState error={state.error} />}
-    </form>
   )
 }
