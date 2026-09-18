@@ -13,6 +13,7 @@ import Setup from '@/screens/Setup/Setup'
 import RecordTransaction from '@/screens/RecordTransaction'
 import type { Direction } from '@/screens/RecordTransaction'
 import Reconcile from '@/screens/Reconcile'
+import DuesTierScreen from '@/screens/DuesTier'
 import Incidentals from '@/screens/Incidentals'
 import History from '@/screens/History/History'
 import Transactions from '@/screens/History/Transactions'
@@ -179,6 +180,13 @@ function AuthedGate({ onLoggedOut }: { onLoggedOut: () => void }) {
   const parsedPurpose = rawPurpose === null || rawPurpose.trim() === '' ? NaN : Number(rawPurpose)
   const initialPurposeId = Number.isInteger(parsedPurpose) && parsedPurpose > 0 ? parsedPurpose : null
 
+  // #285: /dues-tiers?tier=<id> is a golongan's own screen, reached from the
+  // Golongan card in Pengaturan and from nowhere else - the same shape as
+  // /incidentals?purpose=<id> above, and parsed the same way.
+  const rawTier = searchParams.get('tier')
+  const parsedTier = rawTier === null || rawTier.trim() === '' ? NaN : Number(rawTier)
+  const tierId = Number.isInteger(parsedTier) && parsedTier > 0 ? parsedTier : null
+
   useEffect(() => {
     void run(getFund)
   }, [run])
@@ -330,6 +338,23 @@ function AuthedGate({ onLoggedOut }: { onLoggedOut: () => void }) {
                 onViewTransactionsFor={(purposeId) => navigate(`/history/transactions?purpose=${purposeId}`)}
                 purposeId={initialPurposeId}
               />
+            </Shell>
+          )
+        }
+      />
+      {/* #285: a golongan holds a name and a price history, which a dialog
+          has neither the height for nor one unambiguous way out of. Like
+          /incidentals, this route is only ever a detail view: without a
+          usable ?tier=<id> there is nothing to show, so it redirects to
+          Pengaturan, the screen that owns the list. */}
+      <Route
+        path="/dues-tiers"
+        element={
+          tierId === null ? (
+            <Navigate to="/settings" replace />
+          ) : (
+            <Shell title={title} onLoggedOut={onLoggedOut}>
+              <DuesTierScreen tierId={tierId} onBack={() => navigate('/settings')} />
             </Shell>
           )
         }

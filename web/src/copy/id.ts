@@ -698,14 +698,30 @@ export const copy = {
       nameLabel: 'Nama golongan',
       add: 'Tambah golongan',
       adding: 'Menambahkan…',
-      // The whole card is the edit affordance (M6.31), so "Ubah" is the
-      // dialog's title and the card's accessible name, not a button beside
-      // it. The card itself shows what the golongan costs this month.
-      editTitle: 'Ubah golongan',
-      editAria: (name: string) => `Ubah ${name}`,
+      // The card opens the golongan's own screen (#285), the same way an
+      // Amplop card opens its envelope: a golongan holds a name AND a
+      // price history, and a dialog has neither the height for the second
+      // nor one unambiguous way out of correcting a row inside it. The
+      // card still answers what it costs this month without going in.
+      cardAria: (name: string) => `Atur ${name}`,
+      // The screen's way back. Pengaturan is where it was opened from, and
+      // the only place it is reached from - same shape as the envelope
+      // detail screen's own back control.
+      backToSettings: 'Kembali ke pengaturan',
+      // The heading over the name field on that screen. The screen's own
+      // h1 is the golongan's name, so this names the field's purpose
+      // rather than repeating it.
+      nameHeading: 'Nama',
       save: 'Simpan',
       saving: 'Menyimpan…',
       cancel: 'Batal',
+      // On the golongan's own screen the name and a tarif correction are
+      // both saveable at once, so a bare "Simpan" twice would leave two
+      // identical buttons on one screen - ambiguous read aloud, and
+      // ambiguous to a test query for the same reason. Each names what it
+      // saves (#285).
+      saveName: 'Simpan nama',
+      saveRate: 'Simpan tarif',
       // Deleting a golongan (#232). Only for one nobody was ever put in - a
       // typo at setup, a golongan named twice - so the confirm says what
       // goes with it, and the refusal points at the reason rather than
@@ -724,6 +740,9 @@ export const copy = {
       effectiveFromLabel: 'Mulai bulan',
       addRate: 'Tambah tarif',
       addingRate: 'Menambahkan…',
+      // The heading over the new-tarif fields, so the history above and the
+      // thing being added below are told apart without a bordered box.
+      addRateHeading: 'Tarif baru',
       editRate: 'Perbaiki nominal',
       deleteRate: 'Hapus tarif',
       deletingRate: 'Menghapus…',
