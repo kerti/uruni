@@ -11,6 +11,7 @@ import Register from '@/screens/Register'
 import Login from '@/screens/Login'
 import Setup from '@/screens/Setup/Setup'
 import RecordTransaction from '@/screens/RecordTransaction'
+import type { Direction } from '@/screens/RecordTransaction'
 import Reconcile from '@/screens/Reconcile'
 import Incidentals from '@/screens/Incidentals'
 import History from '@/screens/History/History'
@@ -135,7 +136,7 @@ function AuthGate({
 
 /** What a successful record hands to home through the history entry it creates. */
 interface HomeState {
-  recorded: 'in' | 'out'
+  recorded: Direction
 }
 
 /** The same idiom for a dues payment (M6.13): the confirmation belongs to
@@ -193,7 +194,7 @@ function AuthedGate({ onLoggedOut }: { onLoggedOut: () => void }) {
   // the form again would show the old confirmation on the way back. A
   // history entry's state belongs to that entry alone, which is exactly the
   // lifetime this message wants.
-  function handleRecorded(direction: 'in' | 'out') {
+  function handleRecorded(direction: Direction) {
     navigate('/', { state: { recorded: direction } satisfies HomeState })
   }
 
@@ -219,7 +220,14 @@ function AuthedGate({ onLoggedOut }: { onLoggedOut: () => void }) {
   const title = state.data?.name ?? copy.app.name
   const recorded = (location.state as HomeState | null)?.recorded
   const duesRecorded = (location.state as DuesState | null)?.duesRecorded === true
-  const successMessage = recorded === 'in' ? copy.record.successIn : recorded === 'out' ? copy.record.successOut : null
+  const successMessage =
+    recorded === 'in'
+      ? copy.record.successIn
+      : recorded === 'out'
+        ? copy.record.successOut
+        : recorded === 'transfer'
+          ? copy.record.successTransfer
+          : null
 
   return (
     <Routes>

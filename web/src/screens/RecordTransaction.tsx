@@ -1,10 +1,10 @@
 import { useEffect, useState, type FormEvent } from 'react'
-import { ArrowDownLeft, ArrowUpRight } from 'lucide-react'
+import { ArrowDownLeft, ArrowLeftRight, ArrowUpDown, ArrowUpRight } from 'lucide-react'
 
 import AmountInput from '@/components/money/AmountInput'
 import AccountPicker from '@/components/pickers/AccountPicker'
 import PurposePicker from '@/components/pickers/PurposePicker'
-import { segmentedItemClass, segmentedTrackClass } from '@/components/segmented'
+import { segmentedStackedItemClass, segmentedTrackClass } from '@/components/segmented'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -13,6 +13,8 @@ import ErrorState from '@/components/states/ErrorState'
 import { copy } from '@/copy/id'
 import { listAccounts } from '@/lib/accounts'
 import { getBalances } from '@/lib/balances'
+import { formatIDR } from '@/lib/money'
+import { postTransfer } from '@/lib/transfers'
 import { listPurposes } from '@/lib/purposes'
 import { createTransaction } from '@/lib/transactions'
 import { useApi } from '@/lib/useApi'
@@ -58,6 +60,14 @@ function todayISODate(): string {
   return `${now.getFullYear()}-${mm}-${dd}`
 }
 
+/**
+ * What the form is recording. 'in' and 'out' post a transaction; 'transfer'
+ * posts a pair through POST /api/transfers (#235) - money that is neither
+ * entering nor leaving the fund, only changing place, which is why it gets
+ * its own direction rather than being an out with a special purpose.
+ */
+export type Direction = 'in' | 'out' | 'transfer'
+
 interface FormData {
   accounts: Account[]
   purposes: Purpose[]
@@ -98,15 +108,20 @@ export default function RecordTransaction({
   onCancel,
   initialPurposeId,
 }: {
-  onRecorded: (direction: 'in' | 'out') => void
+  onRecorded: (direction: Direction) => void
   onCancel: () => void
   initialPurposeId?: number | null
 }) {
   const [loadState, loadRun] = useApi<FormData>()
   const [submitState, submitRun] = useApi<unknown>()
 
-  const [direction, setDirection] = useState<'in' | 'out'>('out')
+  const [direction, setDirection] = useState<Direction>('out')
   const [accountId, setAccountId] = useState<number | null>(null)
+  // Only used by 'transfer': where the money lands. The single accountId
+  // above is where it leaves from, which is what it already means for an
+  // ordinary out - so the field she has been using keeps its meaning and
+  // only the second one is new.
+  const [toAccountId, setToAccountId] = useState<number | null>(null)
   const [purposeId, setPurposeId] = useState<number | null>(null)
   const [amount, setAmount] = useState(0)
   const [occurredOn, setOccurredOn] = useState(todayISODate)
@@ -161,7 +176,20 @@ export default function RecordTransaction({
   }, [loadState.status, loadState.data])
 
   const submitting = submitState.status === 'loading'
-  const canSubmit = amount > 0 && accountId !== null && purposeId !== null && occurredOn !== '' && !submitting
+  const isTransfer = direction === 'transfer'
+
+  // The same location on both sides moves nothing, and the ledger refuses it
+  // anyway (ErrInvalidArgument). Caught here so she reads why in her own
+  // language instead of a rejected submit, and the button stays disabled
+  // rather than the form failing after the fact.
+  const sameLocation = isTransfer && accountId !== null && accountId === toAccountId
+
+  const canSubmit =
+    amount > 0 &&
+    accountId !== null &&
+    occurredOn !== '' &&
+    !submitting &&
+    (isTransfer ? toAccountId !== null && !sameLocation : purposeId !== null)
 
   // Paying the parent body is two economically different things wearing one
   // shape here (#266, PRD section 7.6): money the fund COLLECTED for the
@@ -180,6 +208,27 @@ export default function RecordTransaction({
   // ADR-031 blessed the same shape for an incidental's shortfall - so a
   // treasurer who means it goes ahead, and #276 makes it correctable
   // afterwards either way.
+  // The purpose a transfer carries. Never chosen by her: both legs carry it,
+  // so it nets to zero on every purpose balance, and a field asking which
+  // one would be a question with no consequence (#235, ADR-024).
+  // What each side of a transfer holds right now, and what the source is
+  // left with (#235 revision). Shown under both pickers - the glimpse is
+  // also what makes the swap button's effect legible - but only the source
+  // can be driven negative: receiving money never pushes a balance down, so
+  // a destination already below zero only moves closer to it.
+  const accountBalance = (id: number | null) =>
+    id === null ? null : (loadState.data?.balances.accounts.find((a) => a.id === id)?.balance ?? null)
+  const fromBalance = accountBalance(accountId)
+  const toBalance = accountBalance(toAccountId)
+
+  // Warns, never blocks - the same call #266 made, and for the same reason:
+  // every other posting path in this app already permits an out larger than
+  // any balance, and a treasurer recording a real deposit out of a wallet
+  // the app believes is empty must be able to say so. The refusal would be
+  // a new overdraft rule applied in exactly one place.
+  const transferGoesNegative = isTransfer && amount > 0 && fromBalance !== null && fromBalance - amount < 0
+
+  const mainPurposeId = loadState.data?.purposes.find((p) => p.kind === 'main')?.id ?? null
   const chosenPurpose = loadState.data?.purposes.find((p) => p.id === purposeId) ?? null
   const chosenPurposeBalance = loadState.data?.balances.purposes.find((p) => p.id === purposeId)?.balance ?? 0
   const warnsPassThroughNegative =
@@ -187,17 +236,44 @@ export default function RecordTransaction({
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    if (!canSubmit || accountId === null || purposeId === null) return
+    if (!canSubmit || accountId === null) return
 
     void submitRun(async () => {
       const trimmedNote = note.trim()
+      const noteOrNull = trimmedNote === '' ? null : trimmedNote
+
+      // A transfer is a different route, not a third kind of transaction
+      // (ADR-024, ADR-027): POST /api/transfers posts the pair and the fund
+      // total cannot move, because one amount goes out and the same amount
+      // comes in. purpose_id is required by that route but immaterial to
+      // every balance - both legs carry it, so it nets to zero - which is
+      // why the form sends Kas Utama rather than asking (#235).
+      // `direction === 'transfer'` rather than the isTransfer boolean: this
+      // is the branch that narrows the type for createTransaction below,
+      // which takes 'in' | 'out' and nothing else.
+      if (direction === 'transfer') {
+        if (toAccountId === null) return null
+        const transfer = await postTransfer({
+          purposeId: mainPurposeId ?? 0,
+          fromAccountId: accountId,
+          toAccountId,
+          amount,
+          occurredOn,
+          note: noteOrNull,
+        })
+        rememberAccountId(accountId)
+        onRecorded(direction)
+        return transfer
+      }
+
+      if (purposeId === null) return null
       const result = await createTransaction({
         accountId,
         purposeId,
         direction,
         amount,
         occurredOn,
-        note: trimmedNote === '' ? null : trimmedNote,
+        note: noteOrNull,
       })
       rememberAccountId(accountId)
       onRecorded(direction)
@@ -218,13 +294,19 @@ export default function RecordTransaction({
       <h1 className="text-2xl font-semibold">{text.heading}</h1>
 
       <div className="flex flex-col gap-1.5">
-        <Label htmlFor="record-direction">{text.directionLabel}</Label>
-        <div id="record-direction" role="group" aria-label={text.directionLabel} className={segmentedTrackClass(2)}>
+        {/* sr-only: the three captions below say what this is, so a visible
+            "Jenis" above them labels a control that already labelled itself.
+            It stays in the DOM because the group still needs a name for a
+            screen reader, which reads the caption of one option, not the set. */}
+        <Label htmlFor="record-direction" className="sr-only">
+          {text.directionLabel}
+        </Label>
+        <div id="record-direction" role="group" aria-label={text.directionLabel} className={segmentedTrackClass(3)}>
           <Button
             type="button"
             variant={direction === 'out' ? 'default' : 'ghost'}
             aria-pressed={direction === 'out'}
-            className={segmentedItemClass(direction === 'out')}
+            className={segmentedStackedItemClass(direction === 'out')}
             onClick={() => setDirection('out')}
           >
             <ArrowUpRight aria-hidden="true" />
@@ -234,26 +316,98 @@ export default function RecordTransaction({
             type="button"
             variant={direction === 'in' ? 'default' : 'ghost'}
             aria-pressed={direction === 'in'}
-            className={segmentedItemClass(direction === 'in')}
+            className={segmentedStackedItemClass(direction === 'in')}
             onClick={() => setDirection('in')}
           >
             <ArrowDownLeft aria-hidden="true" />
             {text.directionIn}
+          </Button>
+          {/* Money that is neither entering nor leaving, only changing place
+              (#235). Its own direction rather than an out with a special
+              purpose: the fund total does not move, and PRD section 6 tracks
+              balances per location precisely so this movement is recordable. */}
+          <Button
+            type="button"
+            variant={direction === 'transfer' ? 'default' : 'ghost'}
+            aria-pressed={direction === 'transfer'}
+            className={segmentedStackedItemClass(direction === 'transfer')}
+            onClick={() => setDirection('transfer')}
+          >
+            <ArrowLeftRight aria-hidden="true" />
+            {text.directionTransfer}
           </Button>
         </div>
       </div>
 
       <AmountInput id="record-amount" label={text.amountLabel} value={amount} onChange={setAmount} disabled={submitting} />
 
-      <AccountPicker
-        id="record-account"
-        label={text.locationLabel}
-        accounts={loadState.data.accounts}
-        value={accountId}
-        onChange={setAccountId}
-        disabled={submitting}
-      />
+      {/* One location for an ordinary entry, two for a transfer - and the
+          field she already knows keeps its meaning either way: accountId is
+          where the money is, or where it leaves from. A transfer hides the
+          peruntukan entirely, because it does not have one to choose: both
+          legs carry the same tag and it nets to zero (ADR-024). */}
+      {/* The picker and its balance preview share one gap-1.5 column, exactly
+          as the destination pair below does - otherwise the source's preview
+          inherits the form's own gap-4 and the two read as differently
+          spaced (they were). */}
+      <div className="flex flex-col gap-1.5">
+        <AccountPicker
+          id="record-account"
+          label={isTransfer ? text.fromLocationLabel : text.locationLabel}
+          accounts={loadState.data.accounts}
+          value={accountId}
+          onChange={setAccountId}
+          disabled={submitting}
+        />
+        {isTransfer && fromBalance !== null && (
+          <p className="text-sm text-muted-foreground">{text.locationBalance(formatIDR(fromBalance))}</p>
+        )}
+      </div>
 
+      {isTransfer && (
+        <div className="flex flex-col gap-1.5">
+          {/* Depositing cash and drawing it back out are the same two
+              locations in opposite order, so the pair is worth one tap
+              rather than four. Self-start so the control is only as wide as
+              it needs to be, and size-11 so it clears 44px on its own. */}
+          <Button
+            type="button"
+            variant="outline"
+            className="h-11 self-center px-4"
+            disabled={submitting}
+            onClick={() => {
+              setAccountId(toAccountId)
+              setToAccountId(accountId)
+            }}
+          >
+            <ArrowUpDown aria-hidden="true" />
+            {text.swapLocations}
+          </Button>
+
+          <AccountPicker
+            id="record-to-account"
+            label={text.toLocationLabel}
+            accounts={loadState.data.accounts}
+            value={toAccountId}
+            onChange={setToAccountId}
+            disabled={submitting}
+          />
+          {toBalance !== null && <p className="text-sm text-muted-foreground">{text.locationBalance(formatIDR(toBalance))}</p>}
+
+          {sameLocation && (
+            <p role="status" className="rounded-lg bg-attention-soft px-3 py-2 text-sm text-attention">
+              {text.sameLocationHint}
+            </p>
+          )}
+          {!sameLocation && transferGoesNegative && fromBalance !== null && (
+            <p role="status" className="rounded-lg bg-attention-soft px-3 py-2 text-sm text-attention">
+              {text.locationGoesNegative(formatIDR(Math.abs(fromBalance - amount)))}
+            </p>
+          )}
+        </div>
+      )}
+
+      {!isTransfer && (
       <div className="flex flex-col gap-1.5">
         <PurposePicker
           id="record-purpose"
@@ -273,6 +427,7 @@ export default function RecordTransaction({
           </p>
         )}
       </div>
+      )}
 
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="record-date">{text.dateLabel}</Label>
@@ -301,12 +456,17 @@ export default function RecordTransaction({
 
       {submitState.status === 'error' && submitState.error && <ErrorState error={submitState.error} />}
 
-      <Button type="submit" size="lg" disabled={!canSubmit}>
-        {submitting ? text.submitting : text.submit}
-      </Button>
-      <Button type="button" variant="outline" size="lg" onClick={onCancel} disabled={submitting}>
-        {text.cancel}
-      </Button>
+      {/* One row for both, primary on the right (Design-System, "Action
+          rows"): two full-width stacked buttons made a two-choice decision
+          look like a list of things to do. */}
+      <div className="grid grid-cols-2 gap-2">
+        <Button type="button" variant="outline" size="lg" onClick={onCancel} disabled={submitting}>
+          {text.cancel}
+        </Button>
+        <Button type="submit" size="lg" disabled={!canSubmit}>
+          {submitting ? text.submitting : text.submit}
+        </Button>
+      </div>
     </form>
   )
 }
