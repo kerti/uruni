@@ -14,7 +14,7 @@ import { createDuesPayment, getOutstandingDues } from '@/lib/dues'
 import { formatPeriod } from '@/lib/dates'
 import { formatIDR } from '@/lib/money'
 import { listPurposes } from '@/lib/purposes'
-import { listMembers } from '@/lib/setup'
+import { listAllMembers } from '@/lib/setup'
 import { useApi } from '@/lib/useApi'
 import type { Account } from '@/lib/accounts'
 import type { OutstandingDuesPeriod } from '@/lib/dues'
@@ -104,7 +104,7 @@ export default function RecordDuesPayment({
   const [selected, setSelected] = useState<string[]>([])
 
   async function loadFormData(): Promise<FormData> {
-    const [members, accounts, purposes] = await Promise.all([listMembers(), listAccounts(), listPurposes()])
+    const [members, accounts, purposes] = await Promise.all([listAllMembers(), listAccounts(), listPurposes()])
     return { members, accounts, purposes }
   }
 

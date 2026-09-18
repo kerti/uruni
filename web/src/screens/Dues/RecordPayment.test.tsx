@@ -36,7 +36,7 @@ function stubApi(periods: unknown = outstanding) {
   return vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
     const url = typeof input === 'string' ? input : input.toString()
     if (url.includes('/outstanding-dues')) return Promise.resolve(jsonResponse(periods))
-    if (url.includes('/api/members')) return Promise.resolve(jsonResponse(members))
+    if (url.includes('/api/members')) return Promise.resolve(jsonResponse({ members, next_cursor: null }))
     if (url.includes('/api/accounts')) return Promise.resolve(jsonResponse(accounts))
     if (url.includes('/api/purposes')) return Promise.resolve(jsonResponse(purposes))
     if (url.includes('/api/dues-payments') && init?.method === 'POST') return Promise.resolve(jsonResponse([], 201))

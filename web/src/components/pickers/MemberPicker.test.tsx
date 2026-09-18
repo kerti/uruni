@@ -6,9 +6,39 @@ import { selectOptionNames } from '@/test/select'
 import type { Member } from '@/lib/setup'
 
 const members: Member[] = [
-  { id: 1, name: 'Jane', tier_id: 1, joined_on: '2026-01-01', inactive_on: null, created_at: 1 },
-  { id: 2, name: 'John', tier_id: 2, joined_on: '2026-01-01', inactive_on: '2026-06-01', created_at: 1 },
-  { id: 3, name: 'Sri', tier_id: 1, joined_on: '2026-02-01', inactive_on: null, created_at: 1 },
+  {
+    id: 1,
+    name: 'Jane',
+    tier_id: 1,
+    joined_on: '2026-01-01',
+    inactive_on: null,
+    created_at: 1,
+    tier_name: null,
+    current_rate: null,
+    arrears_months: 0,
+  },
+  {
+    id: 2,
+    name: 'John',
+    tier_id: 2,
+    joined_on: '2026-01-01',
+    inactive_on: '2026-06-01',
+    created_at: 1,
+    tier_name: null,
+    current_rate: null,
+    arrears_months: 0,
+  },
+  {
+    id: 3,
+    name: 'Sri',
+    tier_id: 1,
+    joined_on: '2026-02-01',
+    inactive_on: null,
+    created_at: 1,
+    tier_name: null,
+    current_rate: null,
+    arrears_months: 0,
+  },
 ]
 
 describe('MemberPicker', () => {

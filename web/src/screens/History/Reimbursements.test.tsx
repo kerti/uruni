@@ -118,7 +118,7 @@ function getHandlers(opts: { outstanding?: Claim[]; all?: Claim[] } = {}) {
       match: (m: string, u: string) => m === 'GET' && u.includes('/api/reimbursements') && !u.includes('outstanding'),
       handle: () => Promise.resolve(jsonResponse(page(all))),
     },
-    { match: (m: string, u: string) => m === 'GET' && u.includes('/api/members'), handle: () => Promise.resolve(jsonResponse(members)) },
+    { match: (m: string, u: string) => m === 'GET' && u.includes('/api/members'), handle: () => Promise.resolve(jsonResponse({ members, next_cursor: null })) },
     { match: (m: string, u: string) => m === 'GET' && u.includes('/api/purposes'), handle: () => Promise.resolve(jsonResponse(purposes)) },
     { match: (m: string, u: string) => m === 'GET' && u.includes('/api/accounts'), handle: () => Promise.resolve(jsonResponse(accounts)) },
   ]
@@ -178,7 +178,7 @@ describe('Reimbursements tab', () => {
           return Promise.resolve(jsonResponse(claim(3, { amount: 10_000, note: null }), 201))
         },
       },
-      { match: (m: string, u: string) => m === 'GET' && u.includes('/api/members'), handle: () => Promise.resolve(jsonResponse(members)) },
+      { match: (m: string, u: string) => m === 'GET' && u.includes('/api/members'), handle: () => Promise.resolve(jsonResponse({ members, next_cursor: null })) },
       { match: (m: string, u: string) => m === 'GET' && u.includes('/api/purposes'), handle: () => Promise.resolve(jsonResponse(purposes)) },
       { match: (m: string, u: string) => m === 'GET' && u.includes('/api/accounts'), handle: () => Promise.resolve(jsonResponse(accounts)) },
     ]))
@@ -246,7 +246,7 @@ describe('Reimbursements tab', () => {
           return Promise.resolve(jsonResponse(waived ? claim(1, { waived_on: '2026-09-02' }) : claim(1)))
         },
       },
-      { match: (m: string, u: string) => m === 'GET' && u.includes('/api/members'), handle: () => Promise.resolve(jsonResponse(members)) },
+      { match: (m: string, u: string) => m === 'GET' && u.includes('/api/members'), handle: () => Promise.resolve(jsonResponse({ members, next_cursor: null })) },
       { match: (m: string, u: string) => m === 'GET' && u.includes('/api/purposes'), handle: () => Promise.resolve(jsonResponse(purposes)) },
       { match: (m: string, u: string) => m === 'GET' && u.includes('/api/accounts'), handle: () => Promise.resolve(jsonResponse(accounts)) },
     ]))
@@ -303,7 +303,7 @@ describe('Reimbursements tab', () => {
           return Promise.resolve(new Response(null, { status: 204 }))
         },
       },
-      { match: (m: string, u: string) => m === 'GET' && u.includes('/api/members'), handle: () => Promise.resolve(jsonResponse(members)) },
+      { match: (m: string, u: string) => m === 'GET' && u.includes('/api/members'), handle: () => Promise.resolve(jsonResponse({ members, next_cursor: null })) },
       { match: (m: string, u: string) => m === 'GET' && u.includes('/api/purposes'), handle: () => Promise.resolve(jsonResponse(purposes)) },
       { match: (m: string, u: string) => m === 'GET' && u.includes('/api/accounts'), handle: () => Promise.resolve(jsonResponse(accounts)) },
     ]))
@@ -383,7 +383,7 @@ describe('Reimbursements tab', () => {
         match: (m: string, u: string) => m === 'GET' && u.includes('/api/reimbursements') && !u.includes('outstanding'),
         handle: () => Promise.resolve(jsonResponse(page(allClaims))),
       },
-      { match: (m: string, u: string) => m === 'GET' && u.includes('/api/members'), handle: () => Promise.resolve(jsonResponse(members)) },
+      { match: (m: string, u: string) => m === 'GET' && u.includes('/api/members'), handle: () => Promise.resolve(jsonResponse({ members, next_cursor: null })) },
       { match: (m: string, u: string) => m === 'GET' && u.includes('/api/purposes'), handle: () => Promise.resolve(jsonResponse(purposes)) },
       { match: (m: string, u: string) => m === 'GET' && u.includes('/api/accounts'), handle: () => Promise.resolve(jsonResponse(accounts)) },
     ]))
@@ -436,7 +436,7 @@ describe('Reimbursements tab', () => {
         match: (m: string, u: string) => m === 'GET' && u.includes('/api/reimbursements') && u.includes('outstanding=true'),
         handle: () => Promise.resolve(jsonResponse(page(settled ? after : before))),
       },
-      { match: (m: string, u: string) => m === 'GET' && u.includes('/api/members'), handle: () => Promise.resolve(jsonResponse(members)) },
+      { match: (m: string, u: string) => m === 'GET' && u.includes('/api/members'), handle: () => Promise.resolve(jsonResponse({ members, next_cursor: null })) },
       { match: (m: string, u: string) => m === 'GET' && u.includes('/api/purposes'), handle: () => Promise.resolve(jsonResponse(purposes)) },
       { match: (m: string, u: string) => m === 'GET' && u.includes('/api/accounts'), handle: () => Promise.resolve(jsonResponse(accounts)) },
     ]))
@@ -464,7 +464,7 @@ describe('Reimbursements tab', () => {
         match: (m: string, u: string) => m === 'GET' && u.includes('/api/reimbursements') && u.includes('q=Budi'),
         handle: () => Promise.resolve(jsonResponse(page([claim(1, { note: 'Budi bayar parkir' })]))),
       },
-      { match: (m: string, u: string) => m === 'GET' && u.includes('/api/members'), handle: () => Promise.resolve(jsonResponse(members)) },
+      { match: (m: string, u: string) => m === 'GET' && u.includes('/api/members'), handle: () => Promise.resolve(jsonResponse({ members, next_cursor: null })) },
       { match: (m: string, u: string) => m === 'GET' && u.includes('/api/purposes'), handle: () => Promise.resolve(jsonResponse(purposes)) },
       { match: (m: string, u: string) => m === 'GET' && u.includes('/api/accounts'), handle: () => Promise.resolve(jsonResponse(accounts)) },
     ]))
@@ -480,7 +480,7 @@ describe('Reimbursements tab', () => {
       'fetch',
       vi.fn(async (input: RequestInfo | URL) => {
         const url = new URL(String(input), 'http://localhost')
-        if (url.pathname === '/api/members') return jsonResponse(members)
+        if (url.pathname === '/api/members') return jsonResponse({ members, next_cursor: null })
         if (url.pathname === '/api/purposes') return jsonResponse(purposes)
         if (url.pathname === '/api/accounts') return jsonResponse(accounts)
         if (url.pathname === '/api/reimbursements') {
@@ -509,7 +509,7 @@ describe('Reimbursements tab', () => {
   it('says nothing matched when a search comes back empty', async () => {
     vi.stubGlobal('fetch', routedFetch([
       { match: (m: string, u: string) => m === 'GET' && u.includes('/api/reimbursements'), handle: () => Promise.resolve(jsonResponse(page([]))) },
-      { match: (m: string, u: string) => m === 'GET' && u.includes('/api/members'), handle: () => Promise.resolve(jsonResponse(members)) },
+      { match: (m: string, u: string) => m === 'GET' && u.includes('/api/members'), handle: () => Promise.resolve(jsonResponse({ members, next_cursor: null })) },
       { match: (m: string, u: string) => m === 'GET' && u.includes('/api/purposes'), handle: () => Promise.resolve(jsonResponse(purposes)) },
       { match: (m: string, u: string) => m === 'GET' && u.includes('/api/accounts'), handle: () => Promise.resolve(jsonResponse(accounts)) },
     ]))
@@ -528,7 +528,7 @@ describe('Reimbursements tab', () => {
         match: (m: string, u: string) => m === 'GET' && u.includes('/api/reimbursements') && !u.includes('cursor'),
         handle: () => Promise.resolve(jsonResponse(page([claim(2)], 'c1'))),
       },
-      { match: (m: string, u: string) => m === 'GET' && u.includes('/api/members'), handle: () => Promise.resolve(jsonResponse(members)) },
+      { match: (m: string, u: string) => m === 'GET' && u.includes('/api/members'), handle: () => Promise.resolve(jsonResponse({ members, next_cursor: null })) },
       { match: (m: string, u: string) => m === 'GET' && u.includes('/api/purposes'), handle: () => Promise.resolve(jsonResponse(purposes)) },
       { match: (m: string, u: string) => m === 'GET' && u.includes('/api/accounts'), handle: () => Promise.resolve(jsonResponse(accounts)) },
     ]))
@@ -549,7 +549,7 @@ describe('Reimbursements tab', () => {
       'fetch',
       vi.fn(async (input: RequestInfo | URL) => {
         const url = new URL(String(input), 'http://localhost')
-        if (url.pathname === '/api/members') return jsonResponse(members)
+        if (url.pathname === '/api/members') return jsonResponse({ members, next_cursor: null })
         if (url.pathname === '/api/purposes') return jsonResponse(purposes)
         if (url.pathname === '/api/accounts') return jsonResponse(accounts)
         if (url.pathname === '/api/reimbursements') {

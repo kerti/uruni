@@ -30,7 +30,7 @@ import type { Account } from '@/lib/accounts'
 import type { Member } from '@/lib/setup'
 import type { Purpose } from '@/lib/purposes'
 import type { Reimbursement, ReimbursementsPage } from '@/lib/reimbursements'
-import { listMembers } from '@/lib/setup'
+import { listAllMembers } from '@/lib/setup'
 
 const text = copy.reimbursements
 const searchText = copy.history.reimbursements
@@ -176,7 +176,7 @@ export default function Reimbursements({ refetchKey }: { refetchKey?: unknown })
 
   function fetchFormData() {
     return formDataRun(async () => {
-      const [members, purposes, accounts] = await Promise.all([listMembers(), listPurposes(), listAccounts()])
+      const [members, purposes, accounts] = await Promise.all([listAllMembers(), listPurposes(), listAccounts()])
       return { members, purposes, accounts }
     })
   }

@@ -2,11 +2,13 @@ import { expect, test } from '@playwright/test'
 
 import { copy } from '../src/copy/id'
 
-// M6.16 + M6.17: the roster and the dues tiers, on their own screen.
+// M6.16 + M6.17 + M6.32 (#233, ADR-032): the roster as a card list with
+// dialog editing, server-side search and keyset paging.
 //
-// One path in a real browser - home -> Anggota -> add a member -> see it in
-// the list - and everything else left to the vitest suites, which can stub a
-// 409, a retired row and the partial-update semantics without touching the
+// One path in a real browser - home -> Anggota -> add a member through the
+// dialog -> see it in the list -> remove it again - and everything else
+// left to the vitest suites, which can stub a 409, a retired row, the
+// Tunggakan badge and the partial-update semantics without touching the
 // shared database.
 //
 // Like settings.spec.ts, this file cleans up after itself. A member left
@@ -35,20 +37,24 @@ test.describe('members', () => {
     await expect(page.getByRole('heading', { name: copy.members.heading, exact: true })).toBeVisible()
 
     // The fixture's own roster is already listed.
-    await expect(page.getByText('Warga Satu')).toBeVisible()
+    await expect(page.getByRole('button', { name: copy.members.roster.editAria('Warga Satu') })).toBeVisible()
 
-    const addForm = page.getByRole('form', { name: copy.members.roster.add })
-    await addForm.getByLabel(copy.members.roster.nameLabel).fill(memberName)
-    await addForm.getByRole('button', { name: copy.members.roster.add }).click()
+    await page.getByRole('button', { name: copy.members.roster.add }).click()
+    const addDialog = page.getByRole('dialog', { name: copy.members.roster.add })
+    await addDialog.getByLabel(copy.members.roster.nameLabel).fill(memberName)
+    await addDialog.getByRole('button', { name: copy.members.roster.add }).click()
 
-    const row = page.getByRole('listitem').filter({ hasText: memberName })
-    await expect(row).toBeVisible()
+    const card = page.getByRole('button', { name: copy.members.roster.editAria(memberName) })
+    await expect(card).toBeVisible()
 
     // Never referenced by a transaction, so the delete is allowed - a member
-    // with history answers 409 and the screen says "nonaktifkan, bukan
+    // with history answers 409 and the edit dialog says "nonaktifkan, bukan
     // hapus" instead, which is covered in vitest.
-    await row.getByRole('button', { name: copy.members.roster.delete }).click()
-    await expect(page.getByText(memberName)).toHaveCount(0)
+    await card.click()
+    const editDialog = page.getByRole('dialog', { name: copy.members.roster.editTitle })
+    await editDialog.getByRole('button', { name: copy.members.roster.delete }).click()
+    await editDialog.getByRole('button', { name: copy.members.roster.deleteConfirmAction }).click()
+    await expect(page.getByRole('button', { name: copy.members.roster.editAria(memberName) })).toHaveCount(0)
   })
 
   // The header's fund name is the app's second way home (M6.16). Proven
