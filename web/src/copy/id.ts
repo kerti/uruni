@@ -247,8 +247,39 @@ export const copy = {
     directionLabel: 'Jenis',
     directionIn: 'Uang masuk',
     directionOut: 'Uang keluar',
+    // Money that is neither entering nor leaving the kas, only changing
+    // place (#235) - cash deposited at the bank, or drawn back out. Not
+    // "Uang pindah", which reads broken beside the two above, and not
+    // "Transfer", which CONTEXT.md reserves as the English identifier for
+    // the row pair rather than a label. The same two words already name
+    // these rows in Riwayat (rowLabels.transferLocation).
+    directionTransfer: 'Pindah lokasi',
     amountLabel: 'Jumlah',
     locationLabel: 'Lokasi',
+    // A transfer splits the one location field in two. "Dari" and "ke" are
+    // the plainest words for it, and they keep the field she already knows
+    // meaning what it meant: where the money is, or where it leaves from.
+    fromLocationLabel: 'Dari lokasi',
+    toLocationLabel: 'Ke lokasi',
+    // The same location on both sides moves nothing. The ledger refuses it
+    // too, but she should read why here rather than meet a rejected submit.
+    sameLocationHint: 'Pilih dua lokasi yang berbeda - uang pindah dari satu tempat ke tempat lain.',
+    // Shown under each location while moving money, so she can see what is
+    // about to move against what is actually there - and so the swap button
+    // has a visible effect. amount is already formatted by the caller.
+    locationBalance: (amount: string) => `Saldo sekarang ${amount}`,
+    // Only ever about the source: receiving money never pushes a balance
+    // down. Warns without blocking, the same call the titipan hint makes -
+    // every other posting path already allows an out larger than the
+    // balance, and a real deposit from a wallet the app thinks is empty has
+    // to be recordable.
+    locationGoesNegative: (amount: string) => `Setelah pindah, saldo lokasi asal jadi minus ${amount}.`,
+    // One tap for the pair: depositing cash and drawing it back out are the
+    // same two locations in opposite order. Visible beside the icon rather
+    // than an aria-label on a bare glyph - an icon alone between two pickers
+    // read as decoration, and the caption is also what gives the control its
+    // accessible name now.
+    swapLocations: 'Tukar lokasi',
     purposeLabel: 'Peruntukan',
     dateLabel: 'Tanggal',
     noteLabel: 'Catatan (opsional)',
@@ -259,6 +290,10 @@ export const copy = {
     cancel: 'Batal',
     successIn: 'Pemasukan berhasil dicatat.',
     successOut: 'Pengeluaran berhasil dicatat.',
+    // Says what did NOT happen as much as what did: the total is the number
+    // she watches, and a confirmation that left it unmentioned would invite
+    // her to check it.
+    successTransfer: 'Uang sudah dipindahkan. Total kas tidak berubah.',
     // Shown when an "uang keluar" tagged to a titipan would take that
     // titipan below zero (#266, PRD §7.6). Names the likelier reading and
     // the tag that fits it, in her own words: a titipan holds money that
