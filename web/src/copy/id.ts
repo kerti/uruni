@@ -539,29 +539,69 @@ export const copy = {
   // why the tiers live here and not with the dues status view.
   members: {
     heading: 'Anggota',
+    // Card list, dialog editing, keyset-paged, server-side search (#233,
+    // ADR-032 "Lists: paging and search" - Anggota was the last screen on
+    // the pre-ADR-032 pattern). Same shape settings.locations already uses:
+    // the whole card opens the edit dialog, which carries rename, the
+    // deactivate/reinstate pair and delete, confirmed inline in the same
+    // footer rather than a second dialog.
     roster: {
       heading: 'Daftar anggota',
       body: 'Semua yang ikut iuran kas ini. Anggota yang sudah tidak ikut lagi cukup dinonaktifkan — catatan lamanya tetap utuh.',
       empty: 'Belum ada anggota.',
+      // Search finds nothing - a real answer, not a failure (same wording
+      // idiom as history.transactions.noResults).
+      noResults: (q: string) => `Tidak ada anggota yang cocok dengan "${q}".`,
+      searchLabel: 'Cari anggota',
+      searchPlaceholder: 'Nama anggota',
+      loadMore: 'Muat lebih banyak',
       nameLabel: 'Nama anggota',
       tierLabel: 'Golongan',
       // The "no tier" option: a member with no tier owes no dues, which is a
       // real state (PRD §6), not a blank to be filled in later.
       tierNone: 'Tanpa golongan',
+      // A tier that exists but has no rate effective yet (PRD §6's "madya
+      // TBD") - never an invented amount.
+      noRateYet: 'Tarif belum ditentukan',
+      // The row's second line: tier name and what it costs this month,
+      // joined by a middle dot - copy/id.ts is the one file this repo's
+      // ASCII rule exempts (CLAUDE.md rule 10), so the dot is written
+      // directly rather than escaped.
+      tierRateLine: (tierLabel: string, rateLabel: string) => `${tierLabel} · ${rateLabel}`,
+      // The Tunggakan badge (ADR-032's "The roster row, and a word that
+      // does not exist yet"): absent when arrears_months is 0, otherwise
+      // this - a count, never the current period's own vocabulary
+      // (dues.statuses above). "Tunggakan" is PRD-ID's own word, not a
+      // coinage.
+      arrearsBadge: (months: number) => `Tunggakan ${months} bulan`,
       joinedOnLabel: 'Mulai ikut',
       add: 'Tambah anggota',
       adding: 'Menambahkan…',
-      edit: 'Ubah',
+      // The whole card is the edit affordance (same shape as
+      // settings.locations), so "Ubah" lives on the dialog it opens rather
+      // than on a button beside the card.
+      editTitle: 'Ubah anggota',
+      editAria: (name: string) => `Ubah ${name}`,
       save: 'Simpan',
       saving: 'Menyimpan…',
       cancel: 'Batal',
       deactivate: 'Nonaktifkan',
       deactivating: 'Menonaktifkan…',
+      // The consequence, named in terracotta and never alarm-red, right
+      // above the dialog footer that asks for the confirm - a retired
+      // member and a deleted one are different things, same reasoning
+      // settings.locations.deactivateConfirm gives.
+      deactivateConfirm:
+        'Anggota ini tidak akan muncul lagi saat mencatat iuran baru. Riwayatnya tetap utuh, dan bisa diaktifkan lagi kapan saja.',
+      deactivateConfirmAction: 'Ya, nonaktifkan',
       reinstate: 'Aktifkan lagi',
       reinstating: 'Mengaktifkan…',
       inactiveBadge: 'Tidak aktif',
       delete: 'Hapus',
       deleting: 'Menghapus…',
+      deleteConfirm:
+        'Anggota ini akan dihapus selamanya. Hanya bisa untuk anggota yang belum pernah punya catatan apa pun.',
+      deleteConfirmAction: 'Ya, hapus',
       // The 409 from a member who already has posted history. Same shape as
       // the locations section's: a refusal that points at the right action.
       deleteRefused: 'Anggota ini sudah punya catatan — nonaktifkan saja, jangan dihapus.',

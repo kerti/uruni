@@ -1000,3 +1000,320 @@ func TestOutstandingDuesForMemberMidYearPromotionAppliesCurrentTierToPastPeriods
 			rows[0].OwedAmount)
 	}
 }
+
+// --- ArrearsMonthsForMember (#233, ADR-032) --------------------------------
+//
+// These build periods relative to time.Now() rather than hard-coded
+// calendar months, the same reasoning
+// TestOutstandingDuesForMemberOmittedThroughDefaultsToCurrentMonth already
+// gives: a fixture pinned to "2026-06" eventually becomes a fixture about
+// the past, and this function's whole job is "relative to whatever period
+// is current right now".
+
+// arrearsPeriods bundles the four periods every test below needs relative
+// to the moment it runs: two months before the current one, the month
+// before it, the current one itself, and the month after it. Naming them
+// once here keeps each test's own arithmetic readable.
+type arrearsPeriods struct {
+	twoBack, oneBack, current, ahead string
+}
+
+func newArrearsPeriods(t *testing.T) arrearsPeriods {
+	t.Helper()
+	now := time.Now()
+	return arrearsPeriods{
+		twoBack: now.AddDate(0, -2, 0).Format(duesPeriodLayout),
+		oneBack: now.AddDate(0, -1, 0).Format(duesPeriodLayout),
+		current: now.Format(duesPeriodLayout),
+		ahead:   now.AddDate(0, 1, 0).Format(duesPeriodLayout),
+	}
+}
+
+// A member who joined the current period owns no period strictly before
+// it - ADR-032's own "including... a member who joined this period" case.
+func TestArrearsMonthsForMemberJoinedThisPeriodReadsZero(t *testing.T) {
+	l := newTestLedger(t)
+	f := newFixture(t, l)
+	q := store.New(l.db)
+	ctx := context.Background()
+	p := newArrearsPeriods(t)
+
+	tierID := createDuesTier(t, q, f.fundID, "Tier A")
+	createDuesRate(t, q, tierID, 25_000, "2020-01")
+	joinedOn := p.current + "-01"
+	memberID := createDuesMember(t, q, f.fundID, duesMemberParams{name: "Jane", tierID: &tierID, joinedOn: &joinedOn})
+
+	got, err := l.ArrearsMonthsForMember(ctx, f.fundID, memberID, p.current)
+	if err != nil {
+		t.Fatalf("ArrearsMonthsForMember() = %v, want no error", err)
+	}
+	if got != 0 {
+		t.Errorf("ArrearsMonthsForMember() = %d, want 0 (joined the current period, nothing owed before it)", got)
+	}
+}
+
+// A member who has fully paid every period through one ahead of the current
+// one - DuesStatusForPeriod's own "paid in advance" shape - has nothing
+// outstanding for any period before the current one either, so the badge
+// reads zero.
+func TestArrearsMonthsForMemberPaidAheadReadsZero(t *testing.T) {
+	l := newTestLedger(t)
+	f := newFixture(t, l)
+	q := store.New(l.db)
+	ctx := context.Background()
+	p := newArrearsPeriods(t)
+
+	tierID := createDuesTier(t, q, f.fundID, "Tier A")
+	createDuesRate(t, q, tierID, 25_000, "2020-01")
+	joinedOn := p.twoBack + "-01"
+	memberID := createDuesMember(t, q, f.fundID, duesMemberParams{name: "Jane", tierID: &tierID, joinedOn: &joinedOn})
+
+	if _, err := l.PostDuesPayments(ctx, PostDuesPaymentsParams{
+		FundID: f.fundID, AccountID: f.cashID, PurposeID: f.mainID,
+		MemberID: memberID, OccurredOn: "2026-01-15",
+		Periods: []PeriodAmount{
+			{DuesPeriod: p.twoBack, Amount: 25_000},
+			{DuesPeriod: p.oneBack, Amount: 25_000},
+			{DuesPeriod: p.current, Amount: 25_000},
+			{DuesPeriod: p.ahead, Amount: 25_000},
+		},
+	}); err != nil {
+		t.Fatalf("PostDuesPayments() = %v, want no error", err)
+	}
+
+	got, err := l.ArrearsMonthsForMember(ctx, f.fundID, memberID, p.current)
+	if err != nil {
+		t.Fatalf("ArrearsMonthsForMember() = %v, want no error", err)
+	}
+	if got != 0 {
+		t.Errorf("ArrearsMonthsForMember() = %d, want 0 (every period before the current one is fully paid)", got)
+	}
+}
+
+// A part-paid earlier period counts as one month, the same as an unpaid
+// one (ADR-032's own table) - this is the acceptance criterion's own
+// "Tunggakan 1 bulan" case.
+func TestArrearsMonthsForMemberPartPaidEarlierPeriodReadsOne(t *testing.T) {
+	l := newTestLedger(t)
+	f := newFixture(t, l)
+	q := store.New(l.db)
+	ctx := context.Background()
+	p := newArrearsPeriods(t)
+
+	tierID := createDuesTier(t, q, f.fundID, "Tier A")
+	createDuesRate(t, q, tierID, 25_000, "2020-01")
+	joinedOn := p.oneBack + "-01"
+	memberID := createDuesMember(t, q, f.fundID, duesMemberParams{name: "Jane", tierID: &tierID, joinedOn: &joinedOn})
+
+	if _, err := l.PostDuesPayments(ctx, PostDuesPaymentsParams{
+		FundID: f.fundID, AccountID: f.cashID, PurposeID: f.mainID,
+		MemberID: memberID, OccurredOn: "2026-01-15",
+		Periods: []PeriodAmount{
+			{DuesPeriod: p.oneBack, Amount: 10_000}, // less than the 25000 owed: partial
+		},
+	}); err != nil {
+		t.Fatalf("PostDuesPayments() = %v, want no error", err)
+	}
+
+	got, err := l.ArrearsMonthsForMember(ctx, f.fundID, memberID, p.current)
+	if err != nil {
+		t.Fatalf("ArrearsMonthsForMember() = %v, want no error", err)
+	}
+	if got != 1 {
+		t.Errorf("ArrearsMonthsForMember() = %d, want 1 (one part-paid period before the current one)", got)
+	}
+}
+
+// Two periods before the current one, one unpaid and one partial, both
+// count - the whole-months count treats them identically, exactly as
+// OutstandingDuesForMember itself returns both as outstanding with no
+// further classification.
+func TestArrearsMonthsForMemberCountsUnpaidAndPartialTheSame(t *testing.T) {
+	l := newTestLedger(t)
+	f := newFixture(t, l)
+	q := store.New(l.db)
+	ctx := context.Background()
+	p := newArrearsPeriods(t)
+
+	tierID := createDuesTier(t, q, f.fundID, "Tier A")
+	createDuesRate(t, q, tierID, 25_000, "2020-01")
+	joinedOn := p.twoBack + "-01"
+	memberID := createDuesMember(t, q, f.fundID, duesMemberParams{name: "Jane", tierID: &tierID, joinedOn: &joinedOn})
+
+	if _, err := l.PostDuesPayments(ctx, PostDuesPaymentsParams{
+		FundID: f.fundID, AccountID: f.cashID, PurposeID: f.mainID,
+		MemberID: memberID, OccurredOn: "2026-01-15",
+		Periods: []PeriodAmount{
+			{DuesPeriod: p.oneBack, Amount: 10_000}, // partial
+			// twoBack: left entirely unpaid
+		},
+	}); err != nil {
+		t.Fatalf("PostDuesPayments() = %v, want no error", err)
+	}
+
+	got, err := l.ArrearsMonthsForMember(ctx, f.fundID, memberID, p.current)
+	if err != nil {
+		t.Fatalf("ArrearsMonthsForMember() = %v, want no error", err)
+	}
+	if got != 2 {
+		t.Errorf("ArrearsMonthsForMember() = %d, want 2 (one unpaid + one partial period before the current one)", got)
+	}
+}
+
+// The current period is excluded entirely, by construction (ADR-032): a
+// member who owes only the current period, and has paid nothing toward it,
+// still reads zero arrears - the badge must never flip the whole roster to
+// "owing" on the first of the month.
+func TestArrearsMonthsForMemberCurrentPeriodAloneIsExcluded(t *testing.T) {
+	l := newTestLedger(t)
+	f := newFixture(t, l)
+	q := store.New(l.db)
+	ctx := context.Background()
+	p := newArrearsPeriods(t)
+
+	tierID := createDuesTier(t, q, f.fundID, "Tier A")
+	createDuesRate(t, q, tierID, 25_000, "2020-01")
+	joinedOn := p.current + "-01"
+	memberID := createDuesMember(t, q, f.fundID, duesMemberParams{name: "Jane", tierID: &tierID, joinedOn: &joinedOn})
+	// Nothing paid at all - the member owes exactly the current period and
+	// nothing else, since they joined it.
+
+	got, err := l.ArrearsMonthsForMember(ctx, f.fundID, memberID, p.current)
+	if err != nil {
+		t.Fatalf("ArrearsMonthsForMember() = %v, want no error", err)
+	}
+	if got != 0 {
+		t.Errorf("ArrearsMonthsForMember() = %d, want 0 (only the current period is owed, and it is excluded)", got)
+	}
+}
+
+// A tier-less member has no dues obligation at all (mirrors
+// TestOutstandingDuesForMemberTierLessMemberReturnsEmpty).
+func TestArrearsMonthsForMemberTierLessMemberReadsZero(t *testing.T) {
+	l := newTestLedger(t)
+	f := newFixture(t, l)
+	q := store.New(l.db)
+	ctx := context.Background()
+	p := newArrearsPeriods(t)
+
+	memberID := createDuesMember(t, q, f.fundID, duesMemberParams{name: "Jane"})
+
+	got, err := l.ArrearsMonthsForMember(ctx, f.fundID, memberID, p.current)
+	if err != nil {
+		t.Fatalf("ArrearsMonthsForMember() = %v, want no error", err)
+	}
+	if got != 0 {
+		t.Errorf("ArrearsMonthsForMember() = %d, want 0 (no tier, no dues obligation)", got)
+	}
+}
+
+// PRD section 7.1: backdating a join date exposes arrears that were not
+// there before, because it widens OutstandingDuesForMember's own walk back
+// to an earlier start - proved directly against UpdateMember rather than
+// through the HTTP layer, since this is the ledger derivation's own
+// property, not the route's.
+func TestArrearsMonthsForMemberBackdatingJoinedOnMakesArrearsAppear(t *testing.T) {
+	l := newTestLedger(t)
+	f := newFixture(t, l)
+	q := store.New(l.db)
+	ctx := context.Background()
+	p := newArrearsPeriods(t)
+
+	tierID := createDuesTier(t, q, f.fundID, "Tier A")
+	createDuesRate(t, q, tierID, 25_000, "2020-01")
+	joinedOn := p.current + "-01"
+	memberID := createDuesMember(t, q, f.fundID, duesMemberParams{name: "Jane", tierID: &tierID, joinedOn: &joinedOn})
+
+	before, err := l.ArrearsMonthsForMember(ctx, f.fundID, memberID, p.current)
+	if err != nil {
+		t.Fatalf("ArrearsMonthsForMember() before backdating = %v, want no error", err)
+	}
+	if before != 0 {
+		t.Fatalf("ArrearsMonthsForMember() before backdating = %d, want 0", before)
+	}
+
+	backdated := p.twoBack + "-01"
+	setTierID := int64(1)
+	if _, err := q.UpdateMember(ctx, store.UpdateMemberParams{
+		ID: memberID, SetJoinedOn: 1, JoinedOn: &backdated, SetTierID: setTierID, TierID: &tierID,
+	}); err != nil {
+		t.Fatalf("UpdateMember(backdate joined_on) = %v, want no error", err)
+	}
+
+	after, err := l.ArrearsMonthsForMember(ctx, f.fundID, memberID, p.current)
+	if err != nil {
+		t.Fatalf("ArrearsMonthsForMember() after backdating = %v, want no error", err)
+	}
+	if after != 2 {
+		t.Errorf("ArrearsMonthsForMember() after backdating joined_on to %q = %d, want 2 "+
+			"(twoBack and oneBack both now fall inside the member's window and are unpaid)", backdated, after)
+	}
+}
+
+// Malformed currentPeriod is rejected the same way OutstandingDuesForMember
+// rejects a malformed through.
+func TestArrearsMonthsForMemberRejectsMalformedCurrentPeriod(t *testing.T) {
+	for _, currentPeriod := range []string{"2026-13", "2026-1", "not-a-period", ""} {
+		t.Run(currentPeriod, func(t *testing.T) {
+			l := newTestLedger(t)
+			f := newFixture(t, l)
+			q := store.New(l.db)
+			ctx := context.Background()
+
+			tierID := createDuesTier(t, q, f.fundID, "Tier A")
+			memberID := createDuesMember(t, q, f.fundID, duesMemberParams{name: "Jane", tierID: &tierID})
+
+			_, err := l.ArrearsMonthsForMember(ctx, f.fundID, memberID, currentPeriod)
+			if !errors.Is(err, ErrInvalidArgument) {
+				t.Errorf("ArrearsMonthsForMember(currentPeriod=%q) = %v, want an error wrapping ErrInvalidArgument", currentPeriod, err)
+			}
+		})
+	}
+}
+
+// An unknown member id answers sql.ErrNoRows, mirroring
+// TestOutstandingDuesForMemberUnknownMemberIsNotFound - this function calls
+// OutstandingDuesForMember directly, so the same GetMemberForFund lookup
+// backs it.
+func TestArrearsMonthsForMemberUnknownMemberIsNotFound(t *testing.T) {
+	l := newTestLedger(t)
+	f := newFixture(t, l)
+	ctx := context.Background()
+	p := newArrearsPeriods(t)
+
+	_, err := l.ArrearsMonthsForMember(ctx, f.fundID, 999_999, p.current)
+	if !errors.Is(err, sql.ErrNoRows) {
+		t.Errorf("ArrearsMonthsForMember(unknown member) = %v, want an error wrapping sql.ErrNoRows", err)
+	}
+}
+
+// The current-period exclusion is month arithmetic, and the one input that
+// can break month arithmetic is January: "2026-01" minus a month has to
+// reach December of the PREVIOUS year, not December of the same one, or the
+// badge silently reports a year's worth of arrears every January. Every
+// other arrears test derives its periods from time.Now() through
+// newArrearsPeriods, so none of them exercises this unless the suite
+// happens to run in January - hence a fixed-period test rather than a
+// relative one.
+func TestArrearsMonthsForMemberCrossesTheYearBoundary(t *testing.T) {
+	l := newTestLedger(t)
+	f := newFixture(t, l)
+	q := store.New(l.db)
+	ctx := context.Background()
+
+	tierID := createDuesTier(t, q, f.fundID, "Tier A")
+	createDuesRate(t, q, tierID, 25_000, "2025-01")
+	joinedOn := "2025-11-01"
+	memberID := createDuesMember(t, q, f.fundID, duesMemberParams{name: "Jane", tierID: &tierID, joinedOn: &joinedOn})
+
+	// currentPeriod is January, so the walk must end at 2025-12: November and
+	// December 2025 are owed and unpaid, January 2026 itself is excluded.
+	got, err := l.ArrearsMonthsForMember(ctx, f.fundID, memberID, "2026-01")
+	if err != nil {
+		t.Fatalf("ArrearsMonthsForMember(2026-01) = %v, want no error", err)
+	}
+	if got != 2 {
+		t.Errorf("ArrearsMonthsForMember(2026-01) for a member who joined 2025-11 = %d, want 2 "+
+			"(2025-11 and 2025-12 owed; 2026-01 is the current period and excluded)", got)
+	}
+}

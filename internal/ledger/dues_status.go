@@ -327,6 +327,67 @@ func (l *Ledger) OutstandingDuesForMember(ctx context.Context, fundID, memberID 
 	return outstanding, nil
 }
 
+// ArrearsMonthsForMember is Anggota's roster badge (#233, ADR-032 "The
+// roster row, and a word that does not exist yet"): N, in whole months, of
+// periods strictly BEFORE currentPeriod that fundID's member memberID still
+// owes something for. It is a thin count over OutstandingDuesForMember, not
+// a second derivation of what is owed - every rule that decides who owes
+// what (the joined_on/inactive_on window, the skip-a-period-with-no-rate
+// case, the mid-year-promotion limitation) lives exactly once, on that
+// method and on DuesStatusForPeriod beneath it, and this function adds
+// nothing to that list. See OutstandingDuesForMember's own doc comment for
+// all of it.
+//
+// currentPeriod is excluded entirely, by construction: this asks
+// OutstandingDuesForMember for everything through the month immediately
+// before currentPeriod, so currentPeriod's own status - unpaid, partial,
+// paid, or paid in advance - never enters the count. ADR-032 spells out why
+// the badge must not reach into the current period at all: on the first of
+// every month the whole roster would flip to "owing" at once, and for the
+// first weeks of a month the badge could not tell a member who simply
+// has not paid yet (normal, benign) from one six months behind (the only
+// case the badge exists to surface). A member who joined this period, or
+// who paid ahead of it, therefore both read zero arrears here - not because
+// either is special-cased, but because neither has anything before
+// currentPeriod for OutstandingDuesForMember to return.
+//
+// currentPeriod is the caller's own answer to "what period is this right
+// now", passed in rather than computed here with a second time.Now() call.
+// GET /api/members carries no ?through= or ?period= for a caller to
+// override (ADR-032 keeps a period selector out of Anggota entirely, which
+// is the whole reason this route needed a badge instead), so there is
+// nothing "the treasurer's timezone" (#186) could mean here that isn't
+// already the server's current month - the same default
+// OutstandingDuesForMember itself falls back to when through is omitted.
+// The handler computes that one value once per request and hands it to
+// every member's call on the page, plus to ListMembersPage's own
+// current_rate column, so a clock tick between two members - or between a
+// row's current_rate and its arrears count - can never disagree about what
+// "now" was for this one response.
+//
+// A part-paid earlier period counts as one month, exactly like an unpaid
+// one (ADR-032's own table): OutstandingDuesForMember already makes no
+// distinction between Unpaid and Partial in what it returns, so len() of
+// its result is already the right count with no further classification
+// needed here.
+func (l *Ledger) ArrearsMonthsForMember(ctx context.Context, fundID, memberID int64, currentPeriod string) (int, error) {
+	if err := validateDuesPeriod(currentPeriod); err != nil {
+		return 0, err
+	}
+
+	t, err := time.Parse(duesPeriodLayout, currentPeriod)
+	if err != nil {
+		return 0, fmt.Errorf("parsing current period %q: %w", currentPeriod, err)
+	}
+	through := t.AddDate(0, -1, 0).Format(duesPeriodLayout)
+
+	outstanding, err := l.OutstandingDuesForMember(ctx, fundID, memberID, through)
+	if err != nil {
+		return 0, err
+	}
+	return len(outstanding), nil
+}
+
 // classifyDuesStatus derives unpaid / partial / paid from owed vs paid alone,
 // for one member and one period - the three-way comparison both
 // DuesStatusForPeriod (there, followed by its own paid-in-advance upgrade)

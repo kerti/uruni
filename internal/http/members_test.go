@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/kerti/uruni/internal/ledger"
 )
@@ -78,16 +79,23 @@ func TestPostMembersCreatesAndListReturnsIt(t *testing.T) {
 		t.Fatalf("GET /api/members = %d, want %d (body: %s)", list.Code, http.StatusOK, list.Body.String())
 	}
 
-	var members []memberResponse
-	if err := json.NewDecoder(list.Body).Decode(&members); err != nil {
+	var page membersPageResponse
+	if err := json.NewDecoder(list.Body).Decode(&page); err != nil {
 		t.Fatalf("decoding response: %v (body: %s)", err, list.Body.String())
 	}
 	// *string fields compare by address, not value, so this can't use != on
-	// the struct - compare the JSON each side encodes to instead.
-	gotJSON, _ := json.Marshal(members)
+	// the struct - compare the JSON each side encodes to instead. created
+	// itself has zero-value tier_name/current_rate/arrears_months (no
+	// tier), and so does this member's own list row (no tier means no dues
+	// obligation, hence no arrears either) - the two are expected to match
+	// field for field.
+	gotJSON, _ := json.Marshal(page.Members)
 	wantJSON, _ := json.Marshal([]memberResponse{created})
-	if len(members) != 1 || string(gotJSON) != string(wantJSON) {
-		t.Errorf("GET /api/members = %s, want %s", gotJSON, wantJSON)
+	if len(page.Members) != 1 || string(gotJSON) != string(wantJSON) {
+		t.Errorf("GET /api/members members = %s, want %s", gotJSON, wantJSON)
+	}
+	if page.NextCursor != nil {
+		t.Errorf("GET /api/members next_cursor = %v, want nil (one member fits on one page)", page.NextCursor)
 	}
 }
 
@@ -102,9 +110,12 @@ func TestGetMembersReturnsAnEmptyListBeforeAnyMemberExists(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("GET /api/members = %d, want %d", rec.Code, http.StatusOK)
 	}
-	// [] on the wire, never null, so a client need not nil-check before ranging.
-	if got := rec.Body.String(); got != "[]\n" {
-		t.Errorf("GET /api/members body = %q, want %q", got, "[]\n")
+	// members: [] on the wire, never null, so a client need not nil-check
+	// before ranging - and next_cursor: null, the envelope #233 always
+	// answers with now, never the bare array #65 originally shipped.
+	want := `{"members":[],"next_cursor":null}` + "\n"
+	if got := rec.Body.String(); got != want {
+		t.Errorf("GET /api/members body = %q, want %q", got, want)
 	}
 }
 
@@ -512,8 +523,9 @@ func TestDeleteMemberWithNoTransactionsSucceeds(t *testing.T) {
 
 	list := httptest.NewRecorder()
 	r.ServeHTTP(list, httptest.NewRequest(http.MethodGet, "/api/members", nil))
-	if got := list.Body.String(); got != "[]\n" {
-		t.Errorf("GET /api/members after delete = %q, want %q", got, "[]\n")
+	want := `{"members":[],"next_cursor":null}` + "\n"
+	if got := list.Body.String(); got != want {
+		t.Errorf("GET /api/members after delete = %q, want %q", got, want)
 	}
 }
 
@@ -557,12 +569,12 @@ func TestDeleteMemberWithTransactionsReturns409(t *testing.T) {
 	// The member and its transaction both survive - nothing was cascaded.
 	list := httptest.NewRecorder()
 	r.ServeHTTP(list, httptest.NewRequest(http.MethodGet, "/api/members", nil))
-	var members []memberResponse
-	if err := json.NewDecoder(list.Body).Decode(&members); err != nil {
+	var page membersPageResponse
+	if err := json.NewDecoder(list.Body).Decode(&page); err != nil {
 		t.Fatalf("decoding response: %v", err)
 	}
-	if len(members) != 1 {
-		t.Errorf("GET /api/members after a refused delete = %d members, want 1", len(members))
+	if len(page.Members) != 1 {
+		t.Errorf("GET /api/members after a refused delete = %d members, want 1", len(page.Members))
 	}
 }
 
@@ -596,5 +608,346 @@ func TestDeleteMemberReturns400ForANonNumericID(t *testing.T) {
 	got := decodeError(t, rec)
 	if got.Code != "invalid_argument" {
 		t.Errorf("error code = %q, want %q", got.Code, "invalid_argument")
+	}
+}
+
+// --- GET /api/members: paging, search, tier fields, arrears (#233, ADR-032) ---
+
+func getMembers(t *testing.T, r http.Handler, query string) *httptest.ResponseRecorder {
+	t.Helper()
+	path := "/api/members"
+	if query != "" {
+		path += "?" + query
+	}
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, path, nil))
+	return rec
+}
+
+func decodeMembersPage(t *testing.T, rec *httptest.ResponseRecorder) membersPageResponse {
+	t.Helper()
+	var page membersPageResponse
+	if err := json.NewDecoder(rec.Body).Decode(&page); err != nil {
+		t.Fatalf("decoding members page response: %v (body: %s)", err, rec.Body.String())
+	}
+	return page
+}
+
+// A roster bigger than one page (membersPageSize=25) is walked to the end
+// via next_cursor with no member skipped and none duplicated - #233's own
+// "one request per page regardless of member count" and ADR-032's keyset
+// contract together. Names are zero-padded so lexicographic order (what the
+// server actually sorts by) matches creation order, keeping the assertions
+// readable without depending on that order for correctness - the test
+// collects every id it saw into a set regardless of what order pages
+// arrive in.
+func TestGetMembersPagesLargerRosterWithoutSkippingOrDuplicating(t *testing.T) {
+	r := testRouter(t)
+	if rec := postSetup(t, r, "Test Fund"); rec.Code != http.StatusCreated {
+		t.Fatalf("POST /api/setup = %d, want %d", rec.Code, http.StatusCreated)
+	}
+
+	const total = 30 // > membersPageSize (25), so at least two pages are forced
+	created := make(map[int64]bool, total)
+	for i := 0; i < total; i++ {
+		rec := postMember(t, r, memberRequest{Name: fmt.Sprintf("Member %02d", i)})
+		if rec.Code != http.StatusCreated {
+			t.Fatalf("POST /api/members #%d = %d, want %d (body: %s)", i, rec.Code, http.StatusCreated, rec.Body.String())
+		}
+		var m memberResponse
+		if err := json.NewDecoder(rec.Body).Decode(&m); err != nil {
+			t.Fatalf("decoding member response: %v", err)
+		}
+		created[m.ID] = true
+	}
+
+	seen := make(map[int64]bool, total)
+	cursor := ""
+	pages := 0
+	for {
+		pages++
+		if pages > total { // guard against an infinite loop if paging is broken
+			t.Fatalf("paged %d times without reaching the end - next_cursor never went nil", pages)
+		}
+		page := decodeMembersPage(t, getMembers(t, r, "cursor="+cursor))
+		if len(page.Members) > membersPageSize {
+			t.Fatalf("page %d returned %d members, want at most %d", pages, len(page.Members), membersPageSize)
+		}
+		for _, m := range page.Members {
+			if seen[m.ID] {
+				t.Errorf("member %d (%s) appeared on more than one page - duplicate", m.ID, m.Name)
+			}
+			seen[m.ID] = true
+		}
+		if page.NextCursor == nil {
+			break
+		}
+		cursor = *page.NextCursor
+	}
+
+	if len(seen) != total {
+		t.Errorf("paged through %d members, want %d", len(seen), total)
+	}
+	for id := range created {
+		if !seen[id] {
+			t.Errorf("member %d was created but never seen while paging", id)
+		}
+	}
+	// The second page must have existed at all - a single oversized page
+	// would make the skip/duplicate assertions above vacuous.
+	if pages < 2 {
+		t.Fatalf("paged only %d time(s) for %d members and a page size of %d, want at least 2 pages", pages, total, membersPageSize)
+	}
+}
+
+// ?q= is a case-insensitive substring match on name, computed on the
+// server (ADR-032: "Client-side filtering of a paged list is prohibited
+// outright") - a lowercase query must find an uppercase name and vice
+// versa, and must not find a name that does not contain it at all.
+func TestGetMembersQMatchesCaseInsensitiveSubstringServerSide(t *testing.T) {
+	r := testRouter(t)
+	if rec := postSetup(t, r, "Test Fund"); rec.Code != http.StatusCreated {
+		t.Fatalf("POST /api/setup = %d, want %d", rec.Code, http.StatusCreated)
+	}
+
+	for _, name := range []string{"Budi Santoso", "BUDIman Wijaya", "Siti Aminah"} {
+		if rec := postMember(t, r, memberRequest{Name: name}); rec.Code != http.StatusCreated {
+			t.Fatalf("POST /api/members(%q) = %d, want %d (body: %s)", name, rec.Code, http.StatusCreated, rec.Body.String())
+		}
+	}
+
+	page := decodeMembersPage(t, getMembers(t, r, "q=budi"))
+	if len(page.Members) != 2 {
+		t.Fatalf("GET /api/members?q=budi = %d members, want 2 (got %+v)", len(page.Members), page.Members)
+	}
+	for _, m := range page.Members {
+		if m.Name != "Budi Santoso" && m.Name != "BUDIman Wijaya" {
+			t.Errorf("GET /api/members?q=budi matched %q, want only the two names containing \"budi\"", m.Name)
+		}
+	}
+
+	none := decodeMembersPage(t, getMembers(t, r, "q=zzz-no-such-substring"))
+	if len(none.Members) != 0 {
+		t.Errorf("GET /api/members?q=zzz-no-such-substring = %d members, want 0", len(none.Members))
+	}
+}
+
+// A malformed cursor is 400 invalid_argument, the same answer
+// decodeTransactionsCursor gives GET /api/transactions (#225).
+func TestGetMembersMalformedCursorReturns400InvalidArgument(t *testing.T) {
+	r := testRouter(t)
+	if rec := postSetup(t, r, "Test Fund"); rec.Code != http.StatusCreated {
+		t.Fatalf("POST /api/setup = %d, want %d", rec.Code, http.StatusCreated)
+	}
+
+	for _, cursor := range []string{"not-valid-base64!!!", "aGVsbG8"} { // second: valid base64, no "|" separator
+		t.Run(cursor, func(t *testing.T) {
+			rec := getMembers(t, r, "cursor="+cursor)
+			if rec.Code != http.StatusBadRequest {
+				t.Fatalf("GET /api/members?cursor=%s = %d, want %d (body: %s)", cursor, rec.Code, http.StatusBadRequest, rec.Body.String())
+			}
+			got := decodeError(t, rec)
+			if got.Code != "invalid_argument" {
+				t.Errorf("error code = %q, want %q", got.Code, "invalid_argument")
+			}
+		})
+	}
+}
+
+// next_cursor is null on the last (here, only) page - a client must be able
+// to tell "no more pages" apart from "here is another cursor" without
+// special-casing an empty members array.
+func TestGetMembersNextCursorIsNilOnLastPage(t *testing.T) {
+	r := testRouter(t)
+	if rec := postSetup(t, r, "Test Fund"); rec.Code != http.StatusCreated {
+		t.Fatalf("POST /api/setup = %d, want %d", rec.Code, http.StatusCreated)
+	}
+	if rec := postMember(t, r, memberRequest{Name: "Jane"}); rec.Code != http.StatusCreated {
+		t.Fatalf("POST /api/members = %d, want %d (body: %s)", rec.Code, http.StatusCreated, rec.Body.String())
+	}
+
+	page := decodeMembersPage(t, getMembers(t, r, ""))
+	if page.NextCursor != nil {
+		t.Errorf("next_cursor = %v, want nil (one member fits on one page)", page.NextCursor)
+	}
+}
+
+// A member's row carries its tier's name and the rate effective for the
+// current month - and both read nil for a tier with no rate yet decided
+// (the "madya TBD" case, PRD section 6), never an invented amount.
+func TestGetMembersRowShowsTierNameAndCurrentRateNilWhenUndecided(t *testing.T) {
+	r := testRouter(t)
+	tier := setUpTier(t, r, "Madya")
+	// No rate posted for this tier at all - "TBD".
+
+	rec := postMember(t, r, memberRequest{Name: "Jane", TierID: &tier.ID})
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("POST /api/members = %d, want %d (body: %s)", rec.Code, http.StatusCreated, rec.Body.String())
+	}
+
+	page := decodeMembersPage(t, getMembers(t, r, ""))
+	if len(page.Members) != 1 {
+		t.Fatalf("GET /api/members = %d members, want 1", len(page.Members))
+	}
+	got := page.Members[0]
+	if got.TierName == nil || *got.TierName != "Madya" {
+		t.Errorf("tier_name = %v, want %q", got.TierName, "Madya")
+	}
+	if got.CurrentRate != nil {
+		t.Errorf("current_rate = %v, want nil (tier has no rate effective yet)", got.CurrentRate)
+	}
+}
+
+func TestGetMembersRowShowsCurrentRateWhenOneIsEffective(t *testing.T) {
+	r := testRouter(t)
+	tier := setUpTier(t, r, "Full")
+	if rec := postDuesRate(t, r, tier.ID, duesRateRequest{Amount: 50_000, EffectiveFrom: "2020-01"}); rec.Code != http.StatusCreated {
+		t.Fatalf("POST .../rates = %d, want %d (body: %s)", rec.Code, http.StatusCreated, rec.Body.String())
+	}
+
+	rec := postMember(t, r, memberRequest{Name: "Jane", TierID: &tier.ID})
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("POST /api/members = %d, want %d (body: %s)", rec.Code, http.StatusCreated, rec.Body.String())
+	}
+
+	page := decodeMembersPage(t, getMembers(t, r, ""))
+	if len(page.Members) != 1 {
+		t.Fatalf("GET /api/members = %d members, want 1", len(page.Members))
+	}
+	got := page.Members[0]
+	if got.CurrentRate == nil || *got.CurrentRate != 50_000 {
+		t.Errorf("current_rate = %v, want 50000", got.CurrentRate)
+	}
+}
+
+// arrearsMonthPeriods gives this file's own HTTP-level arrears tests the
+// same relative-to-now periods internal/ledger's own
+// TestArrearsMonthsForMember* tests use, for the same reason: a fixture
+// pinned to a hard-coded calendar month eventually becomes a fixture about
+// the past.
+func arrearsMonthPeriods() (twoBack, oneBack, current string) {
+	now := time.Now()
+	return now.AddDate(0, -2, 0).Format("2006-01"), now.AddDate(0, -1, 0).Format("2006-01"), now.Format("2006-01")
+}
+
+// The full round trip for #233's own headline acceptance criterion: a
+// member with a part-paid earlier period reads arrears_months=1 on the
+// roster row, through the real route rather than the ledger method
+// directly (dues_status_test.go in internal/ledger covers the derivation
+// itself in isolation).
+func TestGetMembersRowArrearsMonthsReflectsPartPaidEarlierPeriod(t *testing.T) {
+	r := testRouter(t)
+	setup := setUpFund(t, r)
+
+	tierRec := postDuesTier(t, r, "Full")
+	if tierRec.Code != http.StatusCreated {
+		t.Fatalf("POST /api/dues-tiers = %d, want %d (body: %s)", tierRec.Code, http.StatusCreated, tierRec.Body.String())
+	}
+	var tier duesTierResponse
+	if err := json.NewDecoder(tierRec.Body).Decode(&tier); err != nil {
+		t.Fatalf("decoding dues tier response: %v", err)
+	}
+	if rec := postDuesRate(t, r, tier.ID, duesRateRequest{Amount: 25_000, EffectiveFrom: "2020-01"}); rec.Code != http.StatusCreated {
+		t.Fatalf("POST .../rates = %d, want %d (body: %s)", rec.Code, http.StatusCreated, rec.Body.String())
+	}
+
+	_, oneBack, _ := arrearsMonthPeriods()
+	joinedOn := oneBack + "-01"
+	memberRec := postMember(t, r, memberRequest{Name: "Jane", TierID: &tier.ID, JoinedOn: &joinedOn})
+	if memberRec.Code != http.StatusCreated {
+		t.Fatalf("POST /api/members = %d, want %d (body: %s)", memberRec.Code, http.StatusCreated, memberRec.Body.String())
+	}
+	var member memberResponse
+	if err := json.NewDecoder(memberRec.Body).Decode(&member); err != nil {
+		t.Fatalf("decoding member response: %v", err)
+	}
+
+	today := time.Now().Format("2006-01-02")
+	if rec := postDuesPayment(t, r, duesPaymentRequest{
+		AccountID: setup.CashAccountID(t), PurposeID: setup.MainPurposeID, MemberID: member.ID,
+		OccurredOn: today,
+		Periods:    []duesPaymentPeriod{{DuesPeriod: oneBack, Amount: 10_000}}, // less than the 25000 owed
+	}); rec.Code != http.StatusCreated {
+		t.Fatalf("POST /api/dues-payments = %d, want %d (body: %s)", rec.Code, http.StatusCreated, rec.Body.String())
+	}
+
+	page := decodeMembersPage(t, getMembers(t, r, ""))
+	if len(page.Members) != 1 {
+		t.Fatalf("GET /api/members = %d members, want 1", len(page.Members))
+	}
+	if got := page.Members[0].ArrearsMonths; got != 1 {
+		t.Errorf("arrears_months = %d, want 1 (one part-paid period before the current one)", got)
+	}
+}
+
+// PRD section 7.1: backdating a join date makes arrears appear on the
+// roster row that were not there before - the full HTTP round trip for the
+// property internal/ledger's own
+// TestArrearsMonthsForMemberBackdatingJoinedOnMakesArrearsAppear proves at
+// the derivation level.
+func TestGetMembersRowArrearsMonthsAppearsAfterBackdatingJoinedOn(t *testing.T) {
+	r := testRouter(t)
+	tier := setUpTier(t, r, "Full")
+	if rec := postDuesRate(t, r, tier.ID, duesRateRequest{Amount: 25_000, EffectiveFrom: "2020-01"}); rec.Code != http.StatusCreated {
+		t.Fatalf("POST .../rates = %d, want %d (body: %s)", rec.Code, http.StatusCreated, rec.Body.String())
+	}
+
+	twoBack, _, current := arrearsMonthPeriods()
+	joinedOn := current + "-01" // joined the current period: nothing owed before it
+	memberRec := postMember(t, r, memberRequest{Name: "Jane", TierID: &tier.ID, JoinedOn: &joinedOn})
+	if memberRec.Code != http.StatusCreated {
+		t.Fatalf("POST /api/members = %d, want %d (body: %s)", memberRec.Code, http.StatusCreated, memberRec.Body.String())
+	}
+	var member memberResponse
+	if err := json.NewDecoder(memberRec.Body).Decode(&member); err != nil {
+		t.Fatalf("decoding member response: %v", err)
+	}
+
+	before := decodeMembersPage(t, getMembers(t, r, ""))
+	if len(before.Members) != 1 || before.Members[0].ArrearsMonths != 0 {
+		t.Fatalf("arrears_months before backdating = %+v, want exactly one member with 0", before.Members)
+	}
+
+	backdated := twoBack + "-01"
+	patchRec := patchMember(t, r, member.ID, fmt.Sprintf(`{"joined_on":%q}`, backdated))
+	if patchRec.Code != http.StatusOK {
+		t.Fatalf("PATCH /api/members/%d = %d, want %d (body: %s)", member.ID, patchRec.Code, http.StatusOK, patchRec.Body.String())
+	}
+
+	after := decodeMembersPage(t, getMembers(t, r, ""))
+	if len(after.Members) != 1 {
+		t.Fatalf("GET /api/members after backdating = %d members, want 1", len(after.Members))
+	}
+	if got := after.Members[0].ArrearsMonths; got != 2 {
+		t.Errorf("arrears_months after backdating joined_on to %q = %d, want 2 (two unpaid periods now fall in the window)", backdated, got)
+	}
+}
+
+// The page-boundary case the 30-member test cannot reach: a roster of
+// exactly membersPageSize. The handler peeks at one extra row to decide
+// whether there is a next page, so exactly 25 must come back as one full
+// page with next_cursor nil - never a cursor pointing at an empty 26th-row
+// page, which would give the treasurer a "muat lebih banyak" button that
+// loads nothing.
+func TestGetMembersExactlyOnePageFullReturnsNoCursor(t *testing.T) {
+	r := testRouter(t)
+	if rec := postSetup(t, r, "Test Fund"); rec.Code != http.StatusCreated {
+		t.Fatalf("POST /api/setup = %d, want %d", rec.Code, http.StatusCreated)
+	}
+
+	for i := 0; i < membersPageSize; i++ {
+		rec := postMember(t, r, memberRequest{Name: fmt.Sprintf("Member %02d", i)})
+		if rec.Code != http.StatusCreated {
+			t.Fatalf("POST /api/members #%d = %d, want %d (body: %s)", i, rec.Code, http.StatusCreated, rec.Body.String())
+		}
+	}
+
+	page := decodeMembersPage(t, getMembers(t, r, ""))
+	if len(page.Members) != membersPageSize {
+		t.Errorf("GET /api/members returned %d members, want %d", len(page.Members), membersPageSize)
+	}
+	if page.NextCursor != nil {
+		t.Errorf("GET /api/members next_cursor = %q, want nil - a roster of exactly %d is one full page, not two",
+			*page.NextCursor, membersPageSize)
 	}
 }

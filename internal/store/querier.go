@@ -272,6 +272,47 @@ type Querier interface {
 	// has no fund_id of its own (it is 1:1 with a purpose row).
 	ListIncidentalsByFund(ctx context.Context, fundID int64) ([]Incidental, error)
 	ListMembersByFund(ctx context.Context, fundID int64) ([]Member, error)
+	// GET /api/members's real listing (#233, ADR-032 "Lists: paging and
+	// search"): the roster read alphabetically, not a newest-first feed, so
+	// this keyset-pages ascending on (name, id) rather than the (occurred_on
+	// DESC, id DESC)/(performed_at DESC, id DESC) shape every other paged list
+	// in this package uses - a roster has no date to sort by, and ADR-032 is
+	// explicit this list is "by member name, then id, as the tiebreak". The
+	// comparison is still row-value keyset, same reasoning as
+	// ListTransactionsPage's own comment: an OFFSET would silently skip or
+	// duplicate a member whenever two names compare equal at the page boundary
+	// and a third with the same name is inserted between two fetches.
+	//
+	// tier_name is dues_tier.name, NULL for a member with no tier_id - a plain
+	// LEFT JOIN, never invented.
+	//
+	// current_rate is the rate effective for sqlc.arg('current_period')
+	// ("YYYY-MM", the caller's one snapshot of "now" - see
+	// Ledger.ArrearsMonthsForMember's doc comment for why the same value drives
+	// both this column and the arrears figure computed in Go), found the exact
+	// row GetEffectiveDuesRate would find: the latest dues_rate row for the
+	// member's tier at or before that period. A plain LEFT JOIN rather than a
+	// correlated scalar subquery, on purpose - a scalar subquery's result needs
+	// a CAST to read as a concrete Go type at all, and this codebase's own CAST
+	// idiom (ListTransactionsPage's comment has it) is documented to mean "this
+	// value is never NULL", the opposite of what current_rate must be able to
+	// say: a tier with no rate yet effective (the "madya TBD" case, PRD section
+	// 6) reads NULL here, never an invented 0 or a stale figure. The dr2
+	// NOT EXISTS half of the join condition is what picks exactly the one row
+	// with the latest effective_from <= current_period per tier - an ordinary
+	// LEFT JOIN column, so sqlc types dr.amount as *int64 the same way it
+	// already types tier_name as *string from the dt join below. A member with
+	// no tier_id never matches dr.tier_id = m.tier_id (NULL = NULL is never
+	// true in SQL) and also reads NULL, which is what "no tier" should show
+	// either way.
+	//
+	// ?q= is a case-insensitive substring match on name alone (ADR-032 line
+	// 138: INSTR/LOWER, never "COLLATE NOCASE LIKE ... ESCAPE" - sqlc 1.31.1
+	// silently drops a repeated sqlc.narg inside that clause).
+	//
+	// page_limit is page size + 1, the same "peek at one extra row" trick every
+	// other paged list in this package uses.
+	ListMembersPage(ctx context.Context, arg ListMembersPageParams) ([]ListMembersPageRow, error)
 	ListOpenIncidentalsByFund(ctx context.Context, fundID int64) ([]Incidental, error)
 	// Differences the treasurer chose to sleep on, but only while nothing later
 	// has weighed in on the same location. A left_open line stops counting as

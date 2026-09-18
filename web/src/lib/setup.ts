@@ -104,6 +104,18 @@ export interface DuesRate {
   created_at: number
 }
 
+/** A member row, as every route in this module returns it.
+ *
+ * tier_name and current_rate (#233, ADR-032) are period-independent -
+ * tier_name is dues_tier.name for tier_id, current_rate is the dues_rate in
+ * force this month for it - and both are nil for a member with no tier, or
+ * (current_rate alone) a tier whose rate has not started yet (the "madya
+ * TBD" case, PRD section 6). arrears_months is the Tunggakan badge's own
+ * figure: whole months of periods strictly before the current one that are
+ * still owed, 0 meaning no badge. All three are zero-valued on a
+ * POST/PATCH reply (internal/http/members.go's memberResponse doc comment)
+ * - present on the type because the wire shape carries them, but not
+ * meaningful off a write's response; read them only from listMembersPage. */
 export interface Member {
   id: number
   name: string
@@ -111,6 +123,18 @@ export interface Member {
   joined_on: string | null
   inactive_on: string | null
   created_at: number
+  tier_name: string | null
+  current_rate: number | null
+  arrears_months: number
+}
+
+/** One page of GET /api/members (#233, ADR-032 "Lists: paging and search"):
+ * 25 rows, ascending by name with id as the tiebreak. next_cursor is null
+ * once there is no further page - camelCase on this side of the wire
+ * boundary, same idiom lib/transactions.ts's TransactionsPage uses. */
+export interface MembersPage {
+  members: Member[]
+  nextCursor: string | null
 }
 
 /** GET /api/fund - 404 not_found means "run setup". */
@@ -164,12 +188,51 @@ export function createDuesRate(tierId: number, amount: number, effectiveFrom: st
   })
 }
 
-/** GET /api/members - the fund's whole roster, retired members included
- * (`inactive_on` set). A caller recording new money filters those out the
- * way AccountPicker does for a retired location; a caller reading history
- * needs them. */
-export function listMembers(): Promise<Member[]> {
-  return apiFetch<Member[]>('/api/members')
+/**
+ * GET /api/members (#233, ADR-032 "Lists: paging and search") - one page of
+ * the roster, keyset-paged and optionally searched by name. This is
+ * Anggota's own call: server-side paging and search are this list's
+ * contract (ADR-032 prohibits filtering a paged list client-side), so a
+ * caller that needs the whole roster does not walk this function itself -
+ * it calls listAllMembers below instead.
+ *
+ * `q`, when given, is a case-insensitive substring match on name, done
+ * server-side. `cursor` is a previous page's `nextCursor` - omit it for the
+ * first page.
+ */
+export function listMembersPage(q?: string, cursor?: string): Promise<MembersPage> {
+  const params = new URLSearchParams()
+  if (q) params.set('q', q)
+  if (cursor) params.set('cursor', cursor)
+  const query = params.toString()
+
+  return apiFetch<{ members: Member[]; next_cursor: string | null }>(`/api/members${query ? `?${query}` : ''}`).then(
+    (page) => ({ members: page.members, nextCursor: page.next_cursor }),
+  )
+}
+
+/**
+ * The fund's whole roster, retired members included (`inactive_on` set),
+ * for a picker (RecordPayment's and Reimbursements' member `<Select>`,
+ * MemberPicker) rather than for Anggota itself.
+ *
+ * A `<Select>` needs every member to resolve whatever it is showing, so it
+ * cannot page - but paging is Anggota's own contract (ADR-032), not a
+ * picker's, so this walks listMembersPage's `nextCursor` until it comes back
+ * null and hands back the flat list, preserving the whole-roster contract
+ * this function's callers already depend on. A caller recording new money
+ * filters retired rows out itself, the way AccountPicker does for a retired
+ * location; a caller reading history needs them.
+ */
+export async function listAllMembers(): Promise<Member[]> {
+  const all: Member[] = []
+  let cursor: string | undefined
+  for (;;) {
+    const page = await listMembersPage(undefined, cursor)
+    all.push(...page.members)
+    if (page.nextCursor === null) return all
+    cursor = page.nextCursor
+  }
 }
 
 export function createMember(name: string, tierId: number | null, joinedOn: string | null): Promise<Member> {
