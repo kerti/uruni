@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import RecordTransaction from '@/screens/RecordTransaction'
-import { selectOptionNames, selectedOptionName } from '@/test/select'
+import { chooseOption, selectOptionNames, selectedOptionName } from '@/test/select'
 import { copy } from '@/copy/id'
 
 const text = copy.record
@@ -58,9 +58,25 @@ function routedFetch(handlers: { match: (method: string, url: string) => boolean
   })
 }
 
-function stubFormLoad() {
+/** Purpose balances, which the form fetches so the Titipan warning (#266)
+ * can answer as she types. Kas Bidang holds 30.000 of somebody else's
+ * money; an out larger than that is the mis-tag the warning is about. */
+function balancesWith(passThroughBalance: number) {
+  return {
+    fund_total: 1_000_000,
+    accounts: [{ id: 1, kind: 'cash', name: 'Tunai', balance: 1_000_000 }],
+    purposes: [
+      { id: 10, kind: 'pass_through', name: 'Kas Bidang', balance: passThroughBalance },
+      { id: 11, kind: 'main', name: 'Kas utama', balance: 1_000_000 },
+      { id: 12, kind: 'incidental', name: 'Halal bihalal RT', balance: 0 },
+    ],
+  }
+}
+
+function stubFormLoad(passThroughBalance = 30_000) {
   return routedFetch([
     { match: (m, u) => m === 'GET' && u.includes('/api/accounts'), handle: () => Promise.resolve(jsonResponse(accounts)) },
+    { match: (m, u) => m === 'GET' && u.includes('/api/balances'), handle: () => Promise.resolve(jsonResponse(balancesWith(passThroughBalance))) },
     { match: (m, u) => m === 'GET' && u.includes('/api/purposes'), handle: () => Promise.resolve(jsonResponse(purposes)) },
   ])
 }
@@ -150,6 +166,7 @@ describe('RecordTransaction', () => {
   it('posts the plain integer amount typed, remembers the location, and calls onRecorded', async () => {
     const fetchMock = routedFetch([
       { match: (m, u) => m === 'GET' && u.includes('/api/accounts'), handle: () => Promise.resolve(jsonResponse(accounts)) },
+      { match: (m, u) => m === 'GET' && u.includes('/api/balances'), handle: () => Promise.resolve(jsonResponse(balancesWith(30_000))) },
       { match: (m, u) => m === 'GET' && u.includes('/api/purposes'), handle: () => Promise.resolve(jsonResponse(purposes)) },
       {
         match: (m, u) => m === 'POST' && u.includes('/api/transactions'),
@@ -203,5 +220,75 @@ describe('RecordTransaction', () => {
 
     await userEvent.type(screen.getByLabelText(text.amountLabel), '1000')
     expect(screen.getByRole('button', { name: text.submit })).not.toBeDisabled()
+  })
+})
+
+describe('RecordTransaction: the Titipan warning (#266)', () => {
+  // Paying the parent body is two different things wearing one shape (PRD
+  // section 7.6). The warning fires on the one that is wrong and stays
+  // silent on the one that is right, which is possible because a genuine
+  // forward can never take a titipan below zero - the fund collected the
+  // money before it forwarded it.
+  async function fillOut(amount: string, purposeName: string) {
+    const user = userEvent.setup()
+    await user.type(screen.getByLabelText(text.amountLabel), amount)
+    await chooseOption(text.purposeLabel, purposeName)
+    return user
+  }
+
+  it('warns when an out tagged to a titipan would take it below zero, naming Kas Utama', async () => {
+    vi.stubGlobal('fetch', stubFormLoad(30_000))
+    render(<RecordTransaction onRecorded={vi.fn()} onCancel={vi.fn()} />)
+    await waitFor(() => expect(screen.getByLabelText(text.locationLabel)).toBeInTheDocument())
+
+    await fillOut('50000', 'Kas Bidang')
+
+    expect(await screen.findByText(text.passThroughNegativeHint('Kas Bidang'))).toBeInTheDocument()
+  })
+
+  it('stays silent on a forward the titipan actually holds the money for', async () => {
+    vi.stubGlobal('fetch', stubFormLoad(80_000))
+    render(<RecordTransaction onRecorded={vi.fn()} onCancel={vi.fn()} />)
+    await waitFor(() => expect(screen.getByLabelText(text.locationLabel)).toBeInTheDocument())
+
+    await fillOut('50000', 'Kas Bidang')
+
+    expect(screen.queryByText(text.passThroughNegativeHint('Kas Bidang'))).not.toBeInTheDocument()
+  })
+
+  it('stays silent on money coming in, whatever the titipan holds', async () => {
+    vi.stubGlobal('fetch', stubFormLoad(0))
+    const user = userEvent.setup()
+    render(<RecordTransaction onRecorded={vi.fn()} onCancel={vi.fn()} />)
+    await waitFor(() => expect(screen.getByLabelText(text.locationLabel)).toBeInTheDocument())
+
+    await user.click(screen.getByRole('button', { name: text.directionIn }))
+    await fillOut('50000', 'Kas Bidang')
+
+    expect(screen.queryByText(text.passThroughNegativeHint('Kas Bidang'))).not.toBeInTheDocument()
+  })
+
+  it('stays silent for Kas Utama and for an amplop, which may go negative on their own terms', async () => {
+    // ADR-031 blessed an incidental's shortfall; nothing here second-guesses
+    // the fund's own routine money either.
+    vi.stubGlobal('fetch', stubFormLoad(0))
+    render(<RecordTransaction onRecorded={vi.fn()} onCancel={vi.fn()} />)
+    await waitFor(() => expect(screen.getByLabelText(text.locationLabel)).toBeInTheDocument())
+
+    await fillOut('5000000', 'Halal bihalal RT')
+
+    expect(screen.queryByText(text.passThroughNegativeHint('Kas Bidang'))).not.toBeInTheDocument()
+    expect(screen.queryByText(text.passThroughNegativeHint('Halal bihalal RT'))).not.toBeInTheDocument()
+  })
+
+  it('warns without blocking - she may mean it, and #276 makes it correctable either way', async () => {
+    vi.stubGlobal('fetch', stubFormLoad(0))
+    render(<RecordTransaction onRecorded={vi.fn()} onCancel={vi.fn()} />)
+    await waitFor(() => expect(screen.getByLabelText(text.locationLabel)).toBeInTheDocument())
+
+    await fillOut('50000', 'Kas Bidang')
+
+    await screen.findByText(text.passThroughNegativeHint('Kas Bidang'))
+    expect(screen.getByRole('button', { name: text.submit })).toBeEnabled()
   })
 })

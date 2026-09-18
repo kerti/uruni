@@ -259,6 +259,15 @@ export const copy = {
     cancel: 'Batal',
     successIn: 'Pemasukan berhasil dicatat.',
     successOut: 'Pengeluaran berhasil dicatat.',
+    // Shown when an "uang keluar" tagged to a titipan would take that
+    // titipan below zero (#266, PRD §7.6). Names the likelier reading and
+    // the tag that fits it, in her own words: a titipan holds money that
+    // came in for someone else, so spending more than came in usually means
+    // the kas paid this itself. It never blocks - a titipan may legitimately
+    // sit negative - so the sentence suggests rather than corrects, and
+    // stops at one line.
+    passThroughNegativeHint: (name: string) =>
+      `Pengeluaran ini lebih besar dari uang ${name} yang pernah masuk. Kalau ini dibayar pakai uang kas sendiri, pilih Kas Utama.`,
   },
   // The home screen (M6.9, PRD §7.7): balance hero, per-location balances,
   // reconciliation status and recent activity - the everyday-loop landing

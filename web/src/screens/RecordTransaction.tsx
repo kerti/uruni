@@ -12,10 +12,12 @@ import Loading from '@/components/states/Loading'
 import ErrorState from '@/components/states/ErrorState'
 import { copy } from '@/copy/id'
 import { listAccounts } from '@/lib/accounts'
+import { getBalances } from '@/lib/balances'
 import { listPurposes } from '@/lib/purposes'
 import { createTransaction } from '@/lib/transactions'
 import { useApi } from '@/lib/useApi'
 import type { Account } from '@/lib/accounts'
+import type { Balances } from '@/lib/balances'
 import type { Purpose } from '@/lib/purposes'
 
 const text = copy.record
@@ -59,6 +61,10 @@ function todayISODate(): string {
 interface FormData {
   accounts: Account[]
   purposes: Purpose[]
+  /** Every purpose's current balance (#266). Fetched with the form rather
+   * than on demand so the Titipan warning below can appear as she types,
+   * without a request per keystroke. */
+  balances: Balances
 }
 
 /**
@@ -111,8 +117,8 @@ export default function RecordTransaction({
     // since PostTransaction's own guard would now refuse a posting to it.
     // A late entry against one goes through Incidentals.tsx's reopen
     // affordance first, not this everyday picker.
-    const [accounts, purposes] = await Promise.all([listAccounts(), listPurposes(true)])
-    return { accounts, purposes }
+    const [accounts, purposes, balances] = await Promise.all([listAccounts(), listPurposes(true), getBalances()])
+    return { accounts, purposes, balances }
   }
 
   useEffect(() => {
@@ -156,6 +162,28 @@ export default function RecordTransaction({
 
   const submitting = submitState.status === 'loading'
   const canSubmit = amount > 0 && accountId !== null && purposeId !== null && occurredOn !== '' && !submitting
+
+  // Paying the parent body is two economically different things wearing one
+  // shape here (#266, PRD section 7.6): money the fund COLLECTED for the
+  // parent and now forwards is Titipan, and a levy the unit pays out of its
+  // own routine money is an ordinary expense on Kas Utama. The picker lists
+  // both tags flat, and picking Titipan for the second drives its balance
+  // negative - which reads as forwarding money nobody ever gave her.
+  //
+  // The warning fires on exactly that, and on nothing else: a genuine
+  // custodial forward can never take Titipan below zero, because the fund
+  // collected the money before it forwarded it. So this is the definition of
+  // the mistake rather than a heuristic about it, which is why the form can
+  // stay silent through every correct recording.
+  //
+  // It warns and never blocks. A Titipan may legitimately sit negative -
+  // ADR-031 blessed the same shape for an incidental's shortfall - so a
+  // treasurer who means it goes ahead, and #276 makes it correctable
+  // afterwards either way.
+  const chosenPurpose = loadState.data?.purposes.find((p) => p.id === purposeId) ?? null
+  const chosenPurposeBalance = loadState.data?.balances.purposes.find((p) => p.id === purposeId)?.balance ?? 0
+  const warnsPassThroughNegative =
+    direction === 'out' && chosenPurpose?.kind === 'pass_through' && amount > 0 && chosenPurposeBalance - amount < 0
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -226,14 +254,25 @@ export default function RecordTransaction({
         disabled={submitting}
       />
 
-      <PurposePicker
-        id="record-purpose"
-        label={text.purposeLabel}
-        purposes={loadState.data.purposes}
-        value={purposeId}
-        onChange={setPurposeId}
-        disabled={submitting}
-      />
+      <div className="flex flex-col gap-1.5">
+        <PurposePicker
+          id="record-purpose"
+          label={text.purposeLabel}
+          purposes={loadState.data.purposes}
+          value={purposeId}
+          onChange={setPurposeId}
+          disabled={submitting}
+        />
+        {/* Terracotta, never alarm-red (Design-System): nothing is broken
+            and she may well mean it - this names the likelier reading and
+            the tag that fits it, then gets out of the way. role="status"
+            rather than "alert" for the same reason. */}
+        {warnsPassThroughNegative && (
+          <p role="status" className="rounded-lg bg-attention-soft px-3 py-2 text-sm text-attention">
+            {text.passThroughNegativeHint(chosenPurpose?.name ?? '')}
+          </p>
+        )}
+      </div>
 
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="record-date">{text.dateLabel}</Label>
