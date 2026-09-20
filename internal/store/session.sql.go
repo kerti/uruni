@@ -28,6 +28,19 @@ func (q *Queries) CreateSession(ctx context.Context, arg CreateSessionParams) (S
 	return i, err
 }
 
+const deleteAllSessions = `-- name: DeleteAllSessions :exec
+DELETE FROM session
+`
+
+// DeleteAllSessions signs every device out. A password reset (#287) calls it:
+// the instance holds one login (ADR-030), so "every session" is exactly "every
+// session of the account whose password just changed", and a reset that left
+// an old cookie working would not be a reset.
+func (q *Queries) DeleteAllSessions(ctx context.Context) error {
+	_, err := q.db.ExecContext(ctx, deleteAllSessions)
+	return err
+}
+
 const deleteExpiredSessions = `-- name: DeleteExpiredSessions :exec
 DELETE FROM session
 WHERE expires_at <= ?

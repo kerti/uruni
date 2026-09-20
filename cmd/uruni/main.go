@@ -43,11 +43,9 @@ var (
 	ErrUnknownCommand = errors.New("unknown command")
 )
 
-// usage lists the subcommands that exist *today*. ADR-019's table also holds
-// `create-user`; it lands with the milestone that gives it something to do
-// (M5) and until then is not advertised here. `seed-e2e` landed at M6.3 - the
-// first milestone with a domain (real screens, real data) to seed.
-const usage = "try: uruni serve | migrate up|down|status | version | healthcheck | seed-e2e"
+// usage lists every subcommand in ADR-019's table. `seed-e2e` landed at M6.3,
+// `create-user` at #287 - the last row of the table to get an implementation.
+const usage = "try: uruni serve | migrate up|down|status | create-user <email> <password> | version | healthcheck | seed-e2e"
 
 func run(args []string) error {
 	if len(args) == 0 {
@@ -65,6 +63,8 @@ func run(args []string) error {
 		return printVersion(os.Stdout)
 	case "healthcheck":
 		return healthcheck()
+	case "create-user":
+		return createUser(context.Background(), args[1:], os.Stdout)
 	case "seed-e2e":
 		return seedE2E(context.Background())
 	default:

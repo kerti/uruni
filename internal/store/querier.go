@@ -46,6 +46,11 @@ type Querier interface {
 	// for a never-used duplicate only; a used-then-retired account gets
 	// UpdateAccount's inactive_on instead.
 	DeleteAccount(ctx context.Context, id int64) error
+	// DeleteAllSessions signs every device out. A password reset (#287) calls it:
+	// the instance holds one login (ADR-030), so "every session" is exactly "every
+	// session of the account whose password just changed", and a reset that left
+	// an old cookie working would not be a reset.
+	DeleteAllSessions(ctx context.Context) error
 	// DeleteDuesRate is what makes a wrong-month rate correctable at all, since
 	// UNIQUE (tier_id, effective_from) refuses the corrected row otherwise.
 	DeleteDuesRate(ctx context.Context, id int64) error
@@ -612,6 +617,9 @@ type Querier interface {
 	// the four NOT NULL columns cannot mean "clear it", the two nullable ones
 	// can, and only a set_* flag can tell that from "leave alone".
 	UpdateReimbursement(ctx context.Context, arg UpdateReimbursementParams) (Reimbursement, error)
+	// UpdateUserPassword is create-user's reset half (#287): the email is the
+	// key, and the hash is computed by internal/auth before the call.
+	UpdateUserPassword(ctx context.Context, arg UpdateUserPasswordParams) (User, error)
 	// UpsertSession is what a session store commits through: one atomic
 	// statement, because a commit rewrites a token that may or may not already
 	// exist. A delete-then-insert pair cannot stand in for it - ADR-004's

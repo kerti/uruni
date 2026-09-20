@@ -15,3 +15,9 @@ var ErrInvalidArgument = errors.New("auth: invalid argument")
 // the count, not to a duplicate email: see Register's own doc comment for
 // why a uniqueness collision alone is not the guarantee this needs.
 var ErrAlreadyRegistered = errors.New("auth: an account has already been registered")
+
+// ErrOtherAccountExists is returned by SetLogin when the instance already
+// holds a login under a different email. The instance has one login
+// (ADR-030 decision 2), so SetLogin resets that login or creates the first -
+// it never mints a second one beside it.
+var ErrOtherAccountExists = errors.New("auth: this instance already has a login under a different email")
