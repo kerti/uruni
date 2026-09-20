@@ -65,3 +65,29 @@ func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error
 	)
 	return i, err
 }
+
+const updateUserPassword = `-- name: UpdateUserPassword :one
+UPDATE "user"
+SET password_hash = ?
+WHERE email = ?
+RETURNING id, email, password_hash, created_at
+`
+
+type UpdateUserPasswordParams struct {
+	PasswordHash string
+	Email        string
+}
+
+// UpdateUserPassword is create-user's reset half (#287): the email is the
+// key, and the hash is computed by internal/auth before the call.
+func (q *Queries) UpdateUserPassword(ctx context.Context, arg UpdateUserPasswordParams) (User, error) {
+	row := q.db.QueryRowContext(ctx, updateUserPassword, arg.PasswordHash, arg.Email)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.Email,
+		&i.PasswordHash,
+		&i.CreatedAt,
+	)
+	return i, err
+}

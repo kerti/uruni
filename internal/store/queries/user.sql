@@ -14,3 +14,11 @@ WHERE email = ?;
 -- name: CountUsers :one
 SELECT CAST(COUNT(*) AS INTEGER) AS user_count
 FROM "user";
+
+-- UpdateUserPassword is create-user's reset half (#287): the email is the
+-- key, and the hash is computed by internal/auth before the call.
+-- name: UpdateUserPassword :one
+UPDATE "user"
+SET password_hash = ?
+WHERE email = ?
+RETURNING id, email, password_hash, created_at;

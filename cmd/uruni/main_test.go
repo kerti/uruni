@@ -27,7 +27,7 @@ func TestRunRejectsAnUnknownCommand(t *testing.T) {
 	}
 	// The subcommands are a contract the Makefile and the Dockerfile are
 	// written against (ADR-019); a typo should say what the alternatives are.
-	for _, cmd := range []string{"serve", "migrate", "version", "healthcheck", "seed-e2e"} {
+	for _, cmd := range []string{"serve", "migrate", "create-user", "version", "healthcheck", "seed-e2e"} {
 		if !strings.Contains(err.Error(), cmd) {
 			t.Errorf("run([migrate-everything]) = %q, want it to mention %q", err, cmd)
 		}

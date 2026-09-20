@@ -44,3 +44,10 @@ WHERE token = ?;
 -- name: DeleteExpiredSessions :exec
 DELETE FROM session
 WHERE expires_at <= ?;
+
+-- DeleteAllSessions signs every device out. A password reset (#287) calls it:
+-- the instance holds one login (ADR-030), so "every session" is exactly "every
+-- session of the account whose password just changed", and a reset that left
+-- an old cookie working would not be a reset.
+-- name: DeleteAllSessions :exec
+DELETE FROM session;
