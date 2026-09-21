@@ -89,7 +89,7 @@ jobs:
       # every upload tokenless. Codecov rejects those even from a public repo, and
       # the action does not fail the build on an upload error - so this was silent.
       - name: Upload coverage
-        uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
+        uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
         with:
           files: coverage.out
           flags: backend
@@ -126,7 +126,7 @@ jobs:
       # network_prefix puts web/ back on the front of those paths. The backend
       # job needs no equivalent - Go's coverage.out carries full module paths.
       - name: Upload coverage
-        uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
+        uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
         with:
           working-directory: web
           network_prefix: web/
