@@ -35,10 +35,10 @@ test.describe('receipt photos', () => {
     await page.getByRole('button', { name: copy.record.directionOut }).click()
     await page.getByLabel(copy.record.amountLabel).fill('12000')
 
-    // The optional photo field (#154) - a hidden <input type="file">, named
-    // by ReceiptPicker.tsx's own label, same as every other field on this
-    // form.
-    await page.getByLabel(copy.receipts.fieldLabel).setInputFiles({
+    // The optional photo field (#154) - a hidden <input type="file"> named
+    // "Tambah foto nota" by aria-label. Row buttons share that name, so
+    // the match is narrowed to the file input itself.
+    await page.getByLabel(copy.receipts.addFromRow).and(page.locator('input[type="file"]')).setInputFiles({
       name: 'nota.jpg',
       mimeType: 'image/jpeg',
       buffer: ONE_PIXEL_JPEG,
@@ -61,9 +61,21 @@ test.describe('receipt photos', () => {
     await page.getByRole('link', { name: copy.shell.nav.history }).click()
     await expect(page.getByRole('button', { name: copy.receipts.viewReceipt }).first()).toBeVisible()
 
-    // Opens the viewer and shows a real photo read back from GET
+    // Opens the dialog and shows a real photo read back from GET
     // /api/receipts/{id} - proving the round trip, not only the upload.
+    // Ganti foto/Hapus foto now live behind the per-photo "more" menu on
+    // the photo itself (#154 follow-up), not a button row under it, so
+    // opening that menu is what proves the photo - and its actions -
+    // are really there.
     await page.getByRole('button', { name: copy.receipts.viewReceipt }).first().click()
-    await expect(page.getByRole('dialog').getByRole('button', { name: copy.receipts.change })).toBeVisible()
+    const dialog = page.getByRole('dialog')
+    await dialog.getByRole('button', { name: copy.receipts.photoMenuAria }).click()
+    await expect(page.getByRole('menuitem', { name: copy.receipts.change })).toBeVisible()
+
+    // Tapping the photo itself opens the full-screen viewer layered above
+    // this dialog.
+    await page.keyboard.press('Escape')
+    await dialog.getByRole('button', { name: copy.receipts.zoomAria }).click()
+    await expect(page.getByRole('button', { name: copy.common.close }).last()).toBeVisible()
   })
 })

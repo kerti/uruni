@@ -114,12 +114,15 @@ export const copy = {
     // The record-time field's own label (RecordTransaction.tsx, the
     // reimbursement claim form) - also reused as ReceiptPicker's own
     // "choose a file" button caption, since picking a photo IS this field.
-    fieldLabel: 'Foto nota (opsional)',
     // The after-the-fact affordance on a row that has no photo yet
     // (TransactionList.tsx, the reimbursement row) - and reused inside the
     // viewer as the "attach another" action, since adding a first photo and
     // adding a second are the same action.
     addFromRow: 'Tambah foto nota',
+    // The dialog's blank state, per parent kind - a claim is a talangan,
+    // not a transaksi.
+    emptyTransaction: 'Transaksi ini belum punya foto nota. Tambahkan dengan tombol di bawah.',
+    emptyReimbursement: 'Talangan ini belum punya foto nota. Tambahkan dengan tombol di bawah.',
     // The row indicator once receipt_ids is non-empty - opens the viewer.
     viewReceipt: 'Lihat nota',
     // The viewer dialog's own heading (unapproved - see report).
@@ -139,6 +142,14 @@ export const copy = {
     // sighted viewReceipt/addFromRow caption beside it, since the icon is
     // the whole control on a dense row.
     rowControlAria: (hasReceipt: boolean) => (hasReceipt ? 'Lihat nota' : 'Tambah foto nota'),
+    // The per-photo "more" menu's own aria-label (ReceiptDialog.tsx) - the
+    // menu button sits on the photo itself, so it needs an accessible name
+    // distinct from Ganti foto/Hapus foto, the two items inside it.
+    photoMenuAria: 'Pilihan foto',
+    // The photo itself, tapped to open the full-screen viewer
+    // (ReceiptViewer.tsx) - distinct from photoMenuAria above, since both
+    // sit on the same image.
+    zoomAria: 'Perbesar foto',
     // Shown once a transaction or a reimbursement claim posted successfully
     // but the photo that went with it did not - the record itself is never
     // rolled back (RecordTransaction.tsx/Reimbursements.tsx's own comment).

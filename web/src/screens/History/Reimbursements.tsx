@@ -2,14 +2,13 @@ import { Search } from 'lucide-react'
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { useSearchParams } from 'react-router-dom'
 
-import { Camera } from 'lucide-react'
-
 import AmountInput from '@/components/money/AmountInput'
 import AccountPicker from '@/components/pickers/AccountPicker'
 import MemberPicker from '@/components/pickers/MemberPicker'
 import PurposePicker from '@/components/pickers/PurposePicker'
 import ReceiptDialog from '@/components/ReceiptDialog'
 import ReceiptPicker from '@/components/ReceiptPicker'
+import ReceiptRowButton from '@/components/ReceiptRowButton'
 import { segmentedItemClass, segmentedTrackClass } from '@/components/segmented'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -337,19 +336,17 @@ export default function Reimbursements({ refetchKey }: { refetchKey?: unknown })
 
                 {claim.note && <p className="text-sm text-muted-foreground">{claim.note}</p>}
 
-                {/* The photo affordance (#154) - one icon doing double duty,
-                    same shape as TransactionList.tsx's own row control:
-                    "Tambah foto nota" with no photo yet, "Lihat nota" once
-                    one exists. Shown on every tab, not only outstanding -
-                    a settled claim's nota is exactly as worth keeping. */}
-                <button
-                  type="button"
-                  aria-label={copy.receipts.rowControlAria((claim.receipt_ids ?? []).length > 0)}
+                {/* The photo affordance (#154) - the same shared control as
+                    TransactionList.tsx's own row control: quiet "Tambah
+                    foto nota" with no photo yet, a Forest camera with the
+                    count once one exists. Shown on every tab, not only
+                    outstanding - a settled claim's nota is exactly as
+                    worth keeping. */}
+                <ReceiptRowButton
+                  receiptIds={claim.receipt_ids ?? []}
                   onClick={() => setReceiptsForId(claim.id)}
-                  className="flex size-11 -my-1 items-center justify-center self-start rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground"
-                >
-                  <Camera aria-hidden="true" />
-                </button>
+                  className="self-start"
+                />
 
                 {/* Actions - only on the outstanding tab; settled claims show no actions */}
                 {tab === 'outstanding' && !claim.waived_on && (

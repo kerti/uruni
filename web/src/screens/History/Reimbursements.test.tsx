@@ -592,7 +592,7 @@ describe('Reimbursements tab', () => {
       await chooseOption(text.record.memberLabel, 'Jane')
       await userEvent.type(screen.getByLabelText(text.record.amountLabel), '10000')
       await userEvent.upload(
-        screen.getByLabelText(receiptsText.fieldLabel),
+        screen.getByLabelText(receiptsText.addFromRow, { selector: 'input[type="file"]' }),
         new File(['fake-bytes'], 'nota.jpg', { type: 'image/jpeg' }),
       )
       await userEvent.click(screen.getByRole('button', { name: text.record.submit }))
@@ -620,7 +620,7 @@ describe('Reimbursements tab', () => {
       await chooseOption(text.record.memberLabel, 'Jane')
       await userEvent.type(screen.getByLabelText(text.record.amountLabel), '10000')
       await userEvent.upload(
-        screen.getByLabelText(receiptsText.fieldLabel),
+        screen.getByLabelText(receiptsText.addFromRow, { selector: 'input[type="file"]' }),
         new File(['fake-bytes'], 'nota.jpg', { type: 'image/jpeg' }),
       )
       await userEvent.click(screen.getByRole('button', { name: text.record.submit }))
@@ -654,18 +654,19 @@ describe('Reimbursements tab', () => {
       await userEvent.click(screen.getByRole('button', { name: receiptsText.addFromRow }))
       const dialog = await screen.findByRole('dialog')
       await userEvent.upload(
-        within(dialog).getByLabelText(receiptsText.fieldLabel),
+        within(dialog).getByLabelText(receiptsText.addFromRow, { selector: 'input[type="file"]' }),
         new File(['fake-bytes'], 'nota.jpg', { type: 'image/jpeg' }),
       )
       await userEvent.click(within(dialog).getByRole('button', { name: receiptsText.addFromRow }))
 
       // The dialog itself shows the new photo once the refetch resolves -
-      // "Ganti foto" only renders once a receipt exists (the photo itself
-      // is alt="" - decorative, so it carries no accessible "img" role to
-      // query by). Radix also hides the row underneath from the
-      // accessibility tree while the dialog stays open, so the row's own
-      // renamed control is only checked after closing it.
-      await waitFor(() => expect(within(dialog).getByRole('button', { name: receiptsText.change })).toBeInTheDocument())
+      // the per-photo "more" menu (Ganti foto/Hapus foto) only renders once
+      // a receipt exists (the photo itself is alt="" - decorative, so it
+      // carries no accessible "img" role to query by). Radix also hides the
+      // row underneath from the accessibility tree while the dialog stays
+      // open, so the row's own renamed control is only checked after
+      // closing it.
+      await waitFor(() => expect(within(dialog).getByRole('button', { name: receiptsText.photoMenuAria })).toBeInTheDocument())
       await userEvent.click(within(dialog).getAllByRole('button', { name: copy.common.close })[0])
 
       // The list refetch now answers with a receipt attached, so the row's
@@ -696,15 +697,19 @@ describe('Reimbursements tab', () => {
 
       await userEvent.click(screen.getByRole('button', { name: receiptsText.viewReceipt }))
       const dialog = await screen.findByRole('dialog')
-      await userEvent.click(within(dialog).getByRole('button', { name: receiptsText.delete }))
+
+      // Hapus foto lives inside the per-photo "more" menu now, not a
+      // footer button under the image.
+      await userEvent.click(within(dialog).getByRole('button', { name: receiptsText.photoMenuAria }))
+      await userEvent.click(within(await screen.findByRole('menu')).getByRole('menuitem', { name: receiptsText.delete }))
       expect(within(dialog).getByText(receiptsText.deleteConfirm)).toBeInTheDocument()
       await userEvent.click(within(dialog).getByRole('button', { name: receiptsText.delete }))
 
       // Same reasoning as the attach test above: check the dialog's own
-      // state (no photo left to show - "Ganti foto" only renders per
+      // state (no photo left to show - the "more" menu only renders per
       // receipt) before closing it and reading the row's control, since
       // the row is hidden from the tree while the dialog is open.
-      await waitFor(() => expect(within(dialog).queryByRole('button', { name: receiptsText.change })).not.toBeInTheDocument())
+      await waitFor(() => expect(within(dialog).queryByRole('button', { name: receiptsText.photoMenuAria })).not.toBeInTheDocument())
       await userEvent.click(within(dialog).getAllByRole('button', { name: copy.common.close })[0])
 
       await waitFor(() => expect(screen.getByRole('button', { name: receiptsText.addFromRow })).toBeInTheDocument())

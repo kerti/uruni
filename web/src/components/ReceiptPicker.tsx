@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from 'react'
 import { Camera, X } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
-import { Label } from '@/components/ui/label'
 import { copy } from '@/copy/id'
 
 const text = copy.receipts
@@ -64,9 +63,7 @@ export default function ReceiptPicker({
   }
 
   return (
-    <div className="flex flex-col gap-1.5">
-      <Label htmlFor={id}>{text.fieldLabel}</Label>
-
+    <div className="flex min-w-0 flex-col gap-1.5">
       {!value && (
         <Button
           type="button"
@@ -77,7 +74,7 @@ export default function ReceiptPicker({
           onClick={() => inputRef.current?.click()}
         >
           <Camera aria-hidden="true" />
-          {text.fieldLabel}
+          {text.addFromRow}
         </Button>
       )}
 
@@ -109,6 +106,11 @@ export default function ReceiptPicker({
         id={id}
         type="file"
         accept={ACCEPTED_TYPES}
+        // The button above is the visible control; the input only carries
+        // the name for assistive tech and tests, and stays out of the tab
+        // order so keyboard users meet one control, not two.
+        aria-label={text.addFromRow}
+        tabIndex={-1}
         className="sr-only"
         disabled={disabled}
         onChange={handlePick}

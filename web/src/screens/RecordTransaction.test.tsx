@@ -537,7 +537,7 @@ describe('RecordTransaction: moving money, with its balances in view (#235 revis
     async function fillAndPickPhoto(file: File) {
       await screen.findByLabelText(text.locationLabel)
       await userEvent.type(screen.getByLabelText(text.amountLabel), '50000')
-      await userEvent.upload(screen.getByLabelText(receiptsText.fieldLabel), file)
+      await userEvent.upload(screen.getByLabelText(receiptsText.addFromRow, { selector: 'input[type="file"]' }), file)
     }
 
     it('uploads the picked photo after the transaction posts, and calls onRecorded with photoFailed: false', async () => {

@@ -1,7 +1,8 @@
-import { ArrowDownLeft, ArrowUpRight, Camera, Tags } from 'lucide-react'
+import { ArrowDownLeft, ArrowUpRight, Tags } from 'lucide-react'
 import { useState } from 'react'
 
 import ReceiptDialog from '@/components/ReceiptDialog'
+import ReceiptRowButton from '@/components/ReceiptRowButton'
 import TransactionRowLabel from '@/components/TransactionRowLabel'
 import { copy } from '@/copy/id'
 import { formatIsoDate } from '@/lib/dates'
@@ -87,23 +88,23 @@ export default function TransactionList({
                 <span className="text-sm text-muted-foreground">{formatIsoDate(transaction.occurred_on)}</span>
               </span>
             </span>
-            <span className="flex shrink-0 items-center gap-1">
+            {/* Amount first and alone on its line, so every row's figure
+                sits flush right whether or not it carries a photo control;
+                the control stacks underneath, right-aligned. */}
+            <span className="flex shrink-0 flex-col items-end gap-1.5">
               <span className="tabular font-medium">{formatIDR(transaction.amount)}</span>
-              {/* One icon doing double duty (#154): "Tambah foto nota" with
-                  no photo yet, "Lihat nota" once one exists - never a
-                  second column of buttons on this list's densest row.
-                  Optional, same as onCorrectPurpose above: omitting
-                  onReceiptsChanged (no caller does today) drops the
-                  control entirely rather than rendering a dead tap. */}
+              {/* One control doing double duty (#154): a quiet "Tambah foto
+                  nota" with no photo yet, a Forest camera carrying the count
+                  once one exists - never a second column of buttons on
+                  this list's densest row. Optional, same as
+                  onCorrectPurpose above: omitting onReceiptsChanged (no
+                  caller does today) drops the control entirely rather than
+                  rendering a dead tap. */}
               {onReceiptsChanged && (
-                <button
-                  type="button"
-                  aria-label={copy.receipts.rowControlAria((transaction.receipt_ids ?? []).length > 0)}
+                <ReceiptRowButton
+                  receiptIds={transaction.receipt_ids ?? []}
                   onClick={() => setReceiptsForId(transaction.id)}
-                  className="-my-2.5 flex size-11 shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground"
-                >
-                  <Camera aria-hidden="true" className="size-4" />
-                </button>
+                />
               )}
             </span>
           </li>
