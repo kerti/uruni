@@ -56,7 +56,7 @@ func testRouter(t *testing.T) http.Handler {
 // postLogin or postLogout directly, never this.
 func authedRouterFor(t *testing.T, sqlDB *sql.DB) http.Handler {
 	t.Helper()
-	r := New(testAssets(), testBuild, ledger.New(sqlDB), store.New(sqlDB), testLogger(), auth.New(sqlDB), "")
+	r := New(testAssets(), testBuild, ledger.New(sqlDB), store.New(sqlDB), testLogger(), auth.New(sqlDB), "", t.TempDir())
 
 	reg := postRegister(t, r, "treasurer@example.org", "correct-horse-battery")
 	if reg.Code != http.StatusCreated {
@@ -122,7 +122,7 @@ func TestHealthzReportsTheBuildItWasStampedWith(t *testing.T) {
 	untagged := Build{Version: "dev", Commit: "deadbee"}
 	sqlDB := testStoreDB(t)
 	rec := httptest.NewRecorder()
-	New(testAssets(), untagged, ledger.New(sqlDB), store.New(sqlDB), testLogger(), auth.New(sqlDB), "").
+	New(testAssets(), untagged, ledger.New(sqlDB), store.New(sqlDB), testLogger(), auth.New(sqlDB), "", t.TempDir()).
 		ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/healthz", nil))
 
 	var got health

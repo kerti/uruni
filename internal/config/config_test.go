@@ -4,6 +4,8 @@ import (
 	"errors"
 	"log/slog"
 	"maps"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -15,7 +17,7 @@ import (
 func env(t *testing.T, overrides map[string]string) {
 	t.Helper()
 	for _, name := range []string{
-		"URUNI_DB", "PORT", "URUNI_BASE_URL",
+		"URUNI_DB", "PORT", "URUNI_BASE_URL", "URUNI_UPLOADS_DIR",
 		"SMTP_URL", "URUNI_LOG_LEVEL", "URUNI_LOG_FORMAT",
 	} {
 		t.Setenv(name, "")
@@ -43,6 +45,9 @@ func TestLoadDefaultsEverythingItCan(t *testing.T) {
 	if cfg.Port != DefaultPort {
 		t.Errorf("Port = %d, want %d", cfg.Port, DefaultPort)
 	}
+	if cfg.UploadsDir != DefaultUploadsDir {
+		t.Errorf("UploadsDir = %q, want %q", cfg.UploadsDir, DefaultUploadsDir)
+	}
 	if cfg.LogLevel != slog.LevelInfo {
 		t.Errorf("LogLevel = %v, want info", cfg.LogLevel)
 	}
@@ -58,9 +63,10 @@ func TestLoadDefaultsEverythingItCan(t *testing.T) {
 
 func TestLoadReadsEveryVariable(t *testing.T) {
 	env(t, map[string]string{
-		"URUNI_DB":       "/data/uruni.db",
-		"PORT":           "8099",
-		"URUNI_BASE_URL": testBaseURL + "/",
+		"URUNI_DB":          "/data/uruni.db",
+		"PORT":              "8099",
+		"URUNI_UPLOADS_DIR": "/uploads",
+		"URUNI_BASE_URL":    testBaseURL + "/",
 		// Credential-free on purpose: this test is about every variable being
 		// read through, and an SMTP URL needs no auth to prove that.
 		"SMTP_URL":         "smtp://smtp.example.com:587",
@@ -74,8 +80,9 @@ func TestLoadReadsEveryVariable(t *testing.T) {
 	}
 
 	want := Config{
-		DBPath: "/data/uruni.db",
-		Port:   8099,
+		DBPath:     "/data/uruni.db",
+		Port:       8099,
+		UploadsDir: "/uploads",
 		// The trailing slash is trimmed so callers can join paths without
 		// producing "https://host//report/xyz".
 		BaseURL:   testBaseURL,
@@ -170,5 +177,78 @@ func TestLoadIgnoresDatabaseURL(t *testing.T) {
 	}
 	if cfg.DBPath != DefaultDBPath {
 		t.Errorf("DBPath = %q, want the SQLite default %q", cfg.DBPath, DefaultDBPath)
+	}
+}
+
+// #153: the compose stack overrides URUNI_UPLOADS_DIR to the volume-mounted
+// /uploads explicitly, the same way it does URUNI_DB - this is that override
+// read through, on its own rather than folded into
+// TestLoadReadsEveryVariable, since the default itself (a relative dev path)
+// is worth its own defaults test above.
+func TestLoadReadsUploadsDirOverride(t *testing.T) {
+	env(t, map[string]string{"URUNI_BASE_URL": testBaseURL, "URUNI_UPLOADS_DIR": "/uploads"})
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() = %v, want nil", err)
+	}
+	if cfg.UploadsDir != "/uploads" {
+		t.Errorf("UploadsDir = %q, want %q", cfg.UploadsDir, "/uploads")
+	}
+}
+
+func TestEnsureUploadsDirWritableAcceptsAWritableDir(t *testing.T) {
+	if err := EnsureUploadsDirWritable(t.TempDir()); err != nil {
+		t.Errorf("EnsureUploadsDirWritable(writable temp dir) = %v, want nil", err)
+	}
+}
+
+func TestEnsureUploadsDirWritableRefusesAMissingDir(t *testing.T) {
+	missing := filepath.Join(t.TempDir(), "does-not-exist")
+
+	err := EnsureUploadsDirWritable(missing)
+	if !errors.Is(err, ErrInvalidConfig) {
+		t.Fatalf("EnsureUploadsDirWritable(missing) = %v, want ErrInvalidConfig", err)
+	}
+	if !strings.Contains(err.Error(), "URUNI_UPLOADS_DIR") {
+		t.Errorf("EnsureUploadsDirWritable(missing) = %q, want it to name URUNI_UPLOADS_DIR", err)
+	}
+}
+
+func TestEnsureUploadsDirWritableRefusesAFileNotADir(t *testing.T) {
+	file := filepath.Join(t.TempDir(), "a-file")
+	if err := os.WriteFile(file, []byte("not a directory"), 0o600); err != nil {
+		t.Fatalf("writing fixture file: %v", err)
+	}
+
+	err := EnsureUploadsDirWritable(file)
+	if !errors.Is(err, ErrInvalidConfig) {
+		t.Fatalf("EnsureUploadsDirWritable(a file) = %v, want ErrInvalidConfig", err)
+	}
+	if !strings.Contains(err.Error(), "URUNI_UPLOADS_DIR") {
+		t.Errorf("EnsureUploadsDirWritable(a file) = %q, want it to name URUNI_UPLOADS_DIR", err)
+	}
+}
+
+// A directory with no write permission is the "seeded root:root" failure
+// ADR-019's Dockerfile comment describes - skipped as root, since root
+// ignores the permission bits this test relies on to fail the write.
+func TestEnsureUploadsDirWritableRefusesAReadOnlyDir(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("running as root - permission bits do not apply")
+	}
+
+	dir := t.TempDir()
+	if err := os.Chmod(dir, 0o500); err != nil { //nolint:gosec // a directory needs its execute bit to be traversable at all; 0600 (gosec's default ceiling) would not be a directory mode
+		t.Fatalf("chmod fixture dir read-only: %v", err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(dir, 0o700) }) //nolint:gosec // restoring t.TempDir()'s own directory mode so it can clean up after itself
+
+	err := EnsureUploadsDirWritable(dir)
+	if !errors.Is(err, ErrInvalidConfig) {
+		t.Fatalf("EnsureUploadsDirWritable(read-only dir) = %v, want ErrInvalidConfig", err)
+	}
+	if !strings.Contains(err.Error(), "URUNI_UPLOADS_DIR") {
+		t.Errorf("EnsureUploadsDirWritable(read-only dir) = %q, want it to name URUNI_UPLOADS_DIR", err)
 	}
 }

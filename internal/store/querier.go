@@ -77,6 +77,15 @@ type Querier interface {
 	// DeleteMember leans on the composite foreign keys from "transaction" and
 	// reimbursement to refuse it once a real row references the member.
 	DeleteMember(ctx context.Context, id int64) error
+	// DeleteReceipt removes a wrong or duplicate photo - ADR-011 states plainly
+	// that "a wrong photo is replaceable" and `receipt` rows are insertable and
+	// deletable, unlike a ledger row. Scoped by id alone, the same shape as
+	// DeleteAccount and DeleteReimbursement: the caller already fund-scoped the
+	// row through GetReceiptForFund above before reaching this. It removes only
+	// the database row - the file on disk is left in place; see
+	// internal/http/receipts.go's own comment for why (ADR-011 already accepts
+	// the orphan as cheaper than a transactional delete).
+	DeleteReceipt(ctx context.Context, id int64) error
 	// DeleteReimbursement removes a claim that should never have existed. It
 	// leans on receipt's composite foreign key to refuse a claim that still has
 	// a photo attached, the same way DeleteMember leans on its referencing
@@ -150,6 +159,11 @@ type Querier interface {
 	// reason GetMemberForFund is (#188): an id belonging to another fund
 	// answers sql.ErrNoRows rather than being found and only then rejected.
 	GetPurposeForFund(ctx context.Context, arg GetPurposeForFundParams) (Purpose, error)
+	// Fund-scoped fetch, the same shape as GetAccountForFund/GetReimbursement:
+	// an id names a row, not permission to see it - and a receipt is the one
+	// resource this API serves as raw bytes, so this is the only gate between a
+	// session and someone else's photo (#153).
+	GetReceiptForFund(ctx context.Context, arg GetReceiptForFundParams) (Receipt, error)
 	// Fund-scoped: an id names a row, it does not prove the caller may see it.
 	// PRD section 6 allows a server to hold more than one fund, so a bare lookup
 	// by id alone would be a cross-fund read the moment a second fund exists.

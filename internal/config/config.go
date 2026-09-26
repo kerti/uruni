@@ -28,6 +28,12 @@ const (
 	DefaultPort      = 8080
 	DefaultLogLevel  = slog.LevelInfo
 	DefaultLogFormat = LogFormatText
+	// DefaultUploadsDir mirrors DefaultDBPath's own split: a dev-friendly
+	// relative default that the production image and docker-compose.yml
+	// override to the volume-mounted /uploads explicitly (ADR-019, ADR-011),
+	// the same way URUNI_DB defaults to ./uruni.db locally and is overridden
+	// to /data/uruni.db in the compose stack.
+	DefaultUploadsDir = "./uploads"
 )
 
 // Log output formats. Text is the default because the operator reads container
@@ -64,6 +70,11 @@ type Config struct {
 	// SMTPURL is optional, for emailed backups. Validated here, used at M8
 	// (ADR-012). Contains a password, so it is never echoed in an error.
 	SMTPURL string
+	// UploadsDir is the local volume receipt photos are written to (ADR-011).
+	// Existence and writability are not checked here - Load stays a pure
+	// parse of the environment table, with no filesystem I/O of its own - see
+	// EnsureUploadsDirWritable, which `serve` alone calls at boot.
+	UploadsDir string
 	// LogLevel and LogFormat configure the slog handler main builds (ADR-022).
 	LogLevel  slog.Level
 	LogFormat string
@@ -74,13 +85,18 @@ type Config struct {
 // and re-runs, and a wall of errors on boot reads worse than one line.
 func Load() (Config, error) {
 	cfg := Config{
-		DBPath:  DefaultDBPath,
-		Port:    DefaultPort,
-		BaseURL: strings.TrimRight(strings.TrimSpace(os.Getenv("URUNI_BASE_URL")), "/"),
+		DBPath:     DefaultDBPath,
+		Port:       DefaultPort,
+		UploadsDir: DefaultUploadsDir,
+		BaseURL:    strings.TrimRight(strings.TrimSpace(os.Getenv("URUNI_BASE_URL")), "/"),
 	}
 
 	if v := strings.TrimSpace(os.Getenv("URUNI_DB")); v != "" {
 		cfg.DBPath = v
+	}
+
+	if v := strings.TrimSpace(os.Getenv("URUNI_UPLOADS_DIR")); v != "" {
+		cfg.UploadsDir = v
 	}
 
 	if err := loadPort(&cfg); err != nil {
@@ -166,6 +182,39 @@ func loadLogging(cfg *Config) error {
 		cfg.LogFormat = format
 	}
 
+	return nil
+}
+
+// EnsureUploadsDirWritable checks that dir (Config.UploadsDir) exists, is a
+// directory, and accepts a new file - the boot-time check `serve` alone runs
+// (issue #153), never `migrate`, `create-user`, `healthcheck` or `seed-e2e`:
+// none of those write a receipt, so none of them need the volume to be
+// there. Kept out of Load itself, which stays a pure parse of the
+// environment with no filesystem I/O of its own.
+//
+// A missing or unwritable directory is exactly the "root:root named volume"
+// failure ADR-019's Dockerfile comment already describes for /data and
+// /uploads - this turns that into a clear boot error instead of the first
+// upload failing silently deep in a handler.
+func EnsureUploadsDirWritable(dir string) error {
+	info, err := os.Stat(dir)
+	switch {
+	case errors.Is(err, os.ErrNotExist):
+		return invalidValue("URUNI_UPLOADS_DIR", dir,
+			"does not exist - create it (or point at an existing writable directory) before starting the server")
+	case err != nil:
+		return invalidValue("URUNI_UPLOADS_DIR", dir, "could not be read: "+err.Error())
+	case !info.IsDir():
+		return invalidValue("URUNI_UPLOADS_DIR", dir, "is not a directory")
+	}
+
+	probe, err := os.CreateTemp(dir, ".uruni-write-check-*")
+	if err != nil {
+		return invalidValue("URUNI_UPLOADS_DIR", dir, "is not writable: "+err.Error())
+	}
+	name := probe.Name()
+	_ = probe.Close()
+	_ = os.Remove(name)
 	return nil
 }
 

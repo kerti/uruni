@@ -59,7 +59,12 @@ func init() {
 // service POST /api/register calls, and baseURL is read once here, purely to
 // derive the session cookie's Secure flag from its scheme (session.go) -
 // never stored or exposed beyond that.
-func New(assets fs.FS, build Build, l *ledger.Ledger, q store.Querier, logger *slog.Logger, au *auth.Auth, baseURL string) http.Handler {
+//
+// uploadsDir is #153's addition: the local volume receipt photos are read
+// from and written to (ADR-011). Config.EnsureUploadsDirWritable already
+// proved it exists and is writable before `serve` ever builds a router; nothing
+// here re-checks that.
+func New(assets fs.FS, build Build, l *ledger.Ledger, q store.Querier, logger *slog.Logger, au *auth.Auth, baseURL string, uploadsDir string) http.Handler {
 	r := chi.NewRouter()
 	r.Use(middleware.Recoverer)
 	r.Use(requestLogger(logger))
@@ -78,6 +83,7 @@ func New(assets fs.FS, build Build, l *ledger.Ledger, q store.Querier, logger *s
 		auth:           au,
 		sessionManager: sm,
 		loginLimiter:   newRateLimiter(loginRateLimitMaxAttempts, loginRateLimitWindow),
+		uploadsDir:     uploadsDir,
 	}).routes)
 
 	// The SPA fallback is chi's NotFound handler (ADR-021): chi checks every

@@ -1,6 +1,6 @@
 # ADR-011 — Receipt photos: local volume
 
-**Status:** Accepted · `draft` — no code implements this yet, so it may still be edited in place · [ADR index](./README.md)
+**Status:** Accepted · implemented at M6 — change only by adding a superseding ADR · [ADR index](./README.md)
 
 **Decision.** Store optional uploaded images on a mounted **local volume**, path referenced in the DB; enforce a size cap and downscale on upload. Avoids an object-storage dependency.
 
@@ -9,3 +9,5 @@
 Two things follow, both free: **several receipts per transaction** (the nota plus the transfer screenshot), and a wrong photo is **replaceable** — `receipt` rows are insertable and deletable, because deleting an image changes no number. A receipt can also hang off a `reimbursement`, which is not a ledger row at all.
 
 **Consequences.** Backups must cover (or the docs must call out) the uploads volume; the JSON export references photo files rather than embedding them. A deleted `receipt` row leaves an orphaned file on the volume until something sweeps it — acceptable, and cheaper than making image deletion transactional.
+
+**The size cap and downscale, made concrete (M6, #153).** 10 MB of raw request body, enforced server-side (`http.MaxBytesReader`) before a byte of the upload is parsed. Accepted formats are JPEG, PNG and WebP (`golang.org/x/image`, decode-only — there is no Go WebP encoder in this module, and every accepted image is always re-encoded as JPEG regardless of what came in); HEIC/HEIF is refused with its own distinct error rather than attempted, detected by sniffing the file's own `ftyp` box rather than trusting the filename or the multipart `Content-Type`, either of which the client fully controls. The header's declared dimensions are checked before any full decode, capped at 50 megapixels — the 10 MB cap bounds compressed bytes only, and a ~100-byte PNG can declare 65000×65000 and make the decoder allocate gigabytes. A JPEG's EXIF orientation tag is read and applied before resizing — a phone records "held sideways" as a tag, not as rotated pixels, and every decoder here (including this one) drops that tag on decode. The image is then downscaled so its long edge is at most 1600px, never upscaled, and always re-encoded as JPEG at roughly quality 80 — which is also what strips EXIF/GPS metadata a phone embeds by default (data minimization, CLAUDE.md rule 6). The stored filename is always server-generated (`crypto/rand`), never derived from anything the client sent, written via a temp file plus rename inside the same volume. The path referenced in this ADR's own decision is `URUNI_UPLOADS_DIR` ([ADR-019](./019-cli-surface-and-runtime-config.md)'s runtime-config table), checked at boot for `serve` only.
