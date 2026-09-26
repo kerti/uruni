@@ -2,10 +2,14 @@ import { Search } from 'lucide-react'
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { useSearchParams } from 'react-router-dom'
 
+import { Camera } from 'lucide-react'
+
 import AmountInput from '@/components/money/AmountInput'
 import AccountPicker from '@/components/pickers/AccountPicker'
 import MemberPicker from '@/components/pickers/MemberPicker'
 import PurposePicker from '@/components/pickers/PurposePicker'
+import ReceiptDialog from '@/components/ReceiptDialog'
+import ReceiptPicker from '@/components/ReceiptPicker'
 import { segmentedItemClass, segmentedTrackClass } from '@/components/segmented'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -18,6 +22,7 @@ import { formatIsoDate } from '@/lib/dates'
 import { formatIDR } from '@/lib/money'
 import { listAccounts } from '@/lib/accounts'
 import { listPurposes } from '@/lib/purposes'
+import { uploadReceipt } from '@/lib/receipts'
 import {
   listReimbursements,
   createReimbursement,
@@ -119,6 +124,10 @@ export default function Reimbursements({ refetchKey }: { refetchKey?: unknown })
   const [settleId, setSettleId] = useState<number | null>(null)
   const [correctId, setCorrectId] = useState<number | null>(null)
   const [deleteId, setDeleteId] = useState<number | null>(null)
+  // The claim id whose photo dialog is open (#154) - never a search param
+  // (unlike CorrectPurposeDialog's own `?edit=`): this tab already owns `q`
+  // and no other dialog here is a deep link, so component state is enough.
+  const [receiptsForId, setReceiptsForId] = useState<number | null>(null)
 
   const [feedback, setFeedback] = useState<Feedback | null>(null)
 
@@ -210,12 +219,12 @@ export default function Reimbursements({ refetchKey }: { refetchKey?: unknown })
    * shows the new state, on a 409 the claim row (and its open form) unmounts
    * with the message explaining why.
    */
-  function runWrite(api: () => Promise<unknown>, successText: string, onSuccess?: () => void) {
+  function runWrite(api: () => Promise<unknown>, successText: string | (() => string), onSuccess?: () => void) {
     void submitRun(async () => {
       setFeedback(null)
       try {
         await api()
-        setFeedback({ kind: 'success', text: successText })
+        setFeedback({ kind: 'success', text: typeof successText === 'function' ? successText() : successText })
         onSuccess?.()
       } catch (err) {
         const apiErr = err instanceof ApiError ? err : new ApiError('unknown_error', err instanceof Error ? err.message : String(err))
@@ -227,17 +236,38 @@ export default function Reimbursements({ refetchKey }: { refetchKey?: unknown })
     })
   }
 
-  function handleRecordClaim(memberId: number, purposeId: number, amount: number, occurredOn: string, note: string) {
+  function handleRecordClaim(
+    memberId: number,
+    purposeId: number,
+    amount: number,
+    occurredOn: string,
+    note: string,
+    photoFile: File | null,
+  ) {
+    // photoFailed is read by the successText thunk below only after api()
+    // has resolved, so it always reflects the upload this exact call made -
+    // see RecordTransaction.tsx's own comment for why a failed upload here
+    // never rolls the claim back and never becomes an ErrorState.
+    let photoFailed = false
     runWrite(
-      () =>
-        createReimbursement({
+      async () => {
+        const claim = await createReimbursement({
           member_id: memberId,
           purpose_id: purposeId,
           amount,
           incurred_on: occurredOn,
           note: note === '' ? null : note,
-        }),
-      text.record.success,
+        })
+        if (photoFile) {
+          try {
+            await uploadReceipt('reimbursements', claim.id, photoFile)
+          } catch {
+            photoFailed = true
+          }
+        }
+        return claim
+      },
+      () => (photoFailed ? copy.receipts.reimbursementPhotoFailed : text.record.success),
       () => setTab('outstanding'),
     )
   }
@@ -306,6 +336,20 @@ export default function Reimbursements({ refetchKey }: { refetchKey?: unknown })
                 </div>
 
                 {claim.note && <p className="text-sm text-muted-foreground">{claim.note}</p>}
+
+                {/* The photo affordance (#154) - one icon doing double duty,
+                    same shape as TransactionList.tsx's own row control:
+                    "Tambah foto nota" with no photo yet, "Lihat nota" once
+                    one exists. Shown on every tab, not only outstanding -
+                    a settled claim's nota is exactly as worth keeping. */}
+                <button
+                  type="button"
+                  aria-label={copy.receipts.rowControlAria((claim.receipt_ids ?? []).length > 0)}
+                  onClick={() => setReceiptsForId(claim.id)}
+                  className="flex size-11 -my-1 items-center justify-center self-start rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground"
+                >
+                  <Camera aria-hidden="true" />
+                </button>
 
                 {/* Actions - only on the outstanding tab; settled claims show no actions */}
                 {tab === 'outstanding' && !claim.waived_on && (
@@ -383,6 +427,14 @@ export default function Reimbursements({ refetchKey }: { refetchKey?: unknown })
             ))}
           </ul>
         )}
+        <ReceiptDialog
+          kind="reimbursements"
+          parentId={receiptsForId}
+          receiptIds={claims.find((c) => c.id === receiptsForId)?.receipt_ids ?? []}
+          open={receiptsForId !== null}
+          onClose={() => setReceiptsForId(null)}
+          onChanged={refetchFirstPage}
+        />
         {nextCursor && moreError && <ErrorState error={moreError} onRetry={() => void loadMore(nextCursor)} />}
         {nextCursor && !moreError && (
           <Button type="button" variant="outline" size="lg" className="w-full" disabled={moreLoading} onClick={() => void loadMore(nextCursor)}>
@@ -507,7 +559,7 @@ function RecordClaimForm({
 }: {
   members: Member[]
   purposes: Purpose[]
-  onSubmit: (memberId: number, purposeId: number, amount: number, occurredOn: string, note: string) => void
+  onSubmit: (memberId: number, purposeId: number, amount: number, occurredOn: string, note: string, photoFile: File | null) => void
   onCancel: () => void
   submitting: boolean
 }) {
@@ -516,6 +568,7 @@ function RecordClaimForm({
   const [amount, setAmount] = useState(0)
   const [occurredOn, setOccurredOn] = useState(todayISODate)
   const [note, setNote] = useState('')
+  const [photoFile, setPhotoFile] = useState<File | null>(null)
 
   // Default purpose to kind:"main" - same as RecordTransaction.tsx.
   useEffect(() => {
@@ -531,7 +584,7 @@ function RecordClaimForm({
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     if (!canSubmit || memberId === null || purposeId === null) return
-    onSubmit(memberId, purposeId, amount, occurredOn, note.trim())
+    onSubmit(memberId, purposeId, amount, occurredOn, note.trim(), photoFile)
   }
 
   return (
@@ -583,6 +636,8 @@ function RecordClaimForm({
           disabled={submitting}
         />
       </div>
+
+      <ReceiptPicker id="reimburse-receipt" value={photoFile} onChange={setPhotoFile} disabled={submitting} />
 
       <div className="flex gap-2">
         <Button type="submit" size="lg" disabled={!canSubmit}>

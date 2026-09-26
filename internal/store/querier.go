@@ -353,6 +353,17 @@ type Querier interface {
 	// construction, and the wire shape must stay uniform with the full list.
 	ListOutstandingReimbursementsByFund(ctx context.Context, fundID int64) ([]ListOutstandingReimbursementsByFundRow, error)
 	ListPurposesByFund(ctx context.Context, fundID int64) ([]Purpose, error)
+	// Same shape as ListReceiptIDsByTransactionIDs above, for GET
+	// /api/reimbursements's page.
+	ListReceiptIDsByReimbursementIDs(ctx context.Context, arg ListReceiptIDsByReimbursementIDsParams) ([]ListReceiptIDsByReimbursementIDsRow, error)
+	// Batched, fund-scoped lookup for a whole page of rows at once (#154) - one
+	// query per list response, never one per row (N+1). fund_id is checked
+	// alongside the id list rather than trusted alone: an id belonging to
+	// another fund must never surface here, the same rule GetReceiptForFund
+	// enforces for a single row. Ordered by id ascending so a caller that
+	// appends rows in the order they arrive keeps that same order per parent
+	// id, matching receipt_ids' own "ordered by id ascending" contract.
+	ListReceiptIDsByTransactionIDs(ctx context.Context, arg ListReceiptIDsByTransactionIDsParams) ([]ListReceiptIDsByTransactionIDsRow, error)
 	ListReceiptsByReimbursement(ctx context.Context, reimbursementID *int64) ([]Receipt, error)
 	ListReceiptsByTransaction(ctx context.Context, transactionID *int64) ([]Receipt, error)
 	ListReconciliationLines(ctx context.Context, reconciliationID int64) ([]ReconciliationLine, error)

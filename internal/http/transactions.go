@@ -113,6 +113,19 @@ type transactionResponse struct {
 	// must build its pair from where the money actually is, and for the
 	// marker that says a correction exists.
 	EffectivePurposeID int64 `json:"effective_purpose_id"`
+
+	// ReceiptIDs is every receipt attached to this row, oldest first (#154):
+	// always present, [] rather than null when there are none. A freshly
+	// posted row (every toTransactionResponse caller but
+	// toTransactionsPageResponse below) always gets []: a receipt names an
+	// existing transaction id, so nothing could have attached to a row
+	// before this response's own request created it. GET /api/transactions
+	// is the one caller that overwrites this with a real, batched lookup
+	// (listTransactions), because that row may already be old. A transfer's
+	// two legs are ordinary rows here too, each with its own id, so each
+	// leg's ReceiptIDs reflects only what was uploaded against that specific
+	// leg - never the pair as a whole.
+	ReceiptIDs []int64 `json:"receipt_ids"`
 }
 
 func toTransactionResponse(t store.Transaction) transactionResponse {
@@ -133,6 +146,8 @@ func toTransactionResponse(t store.Transaction) transactionResponse {
 
 		Note:      t.Note,
 		CreatedAt: t.CreatedAt,
+
+		ReceiptIDs: []int64{},
 	}
 }
 
@@ -406,9 +421,23 @@ func (a *api) listTransactions(w http.ResponseWriter, r *http.Request) {
 		nextCursor = &encoded
 	}
 
+	// One batched, fund-scoped receipt lookup for the whole page (#154),
+	// never one query per row - see receiptIDsForTransactions' own comment.
+	ids := make([]int64, len(rows))
+	for i, t := range rows {
+		ids[i] = t.ID
+	}
+	receiptIDs, err := a.receiptIDsForTransactions(r.Context(), fund.ID, ids)
+	if err != nil {
+		mapSQLiteError(w, a.logger, err)
+		return
+	}
+
 	resp := make([]transactionResponse, 0, len(rows))
 	for _, t := range rows {
-		resp = append(resp, toTransactionsPageResponse(t))
+		row := toTransactionsPageResponse(t)
+		row.ReceiptIDs = orEmptyReceiptIDs(receiptIDs[t.ID])
+		resp = append(resp, row)
 	}
 	writeJSON(w, http.StatusOK, transactionsPageResponse{Transactions: resp, NextCursor: nextCursor})
 }

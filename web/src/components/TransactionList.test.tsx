@@ -1,7 +1,7 @@
-import { render, screen } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { vi } from 'vitest'
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 
 import TransactionList from '@/components/TransactionList'
 import { copy } from '@/copy/id'
@@ -266,5 +266,96 @@ describe('TransactionList purpose correction (#276, ADR-033)', () => {
 
     expect(container.querySelector('.lucide-tags')).not.toBeInTheDocument()
     expect(screen.queryByText(copy.purposeCorrection.corrected)).not.toBeInTheDocument()
+  })
+})
+
+describe('TransactionList receipt photos (#154)', () => {
+  const text = copy.receipts
+
+  function jsonResponse(body: unknown, status = 200) {
+    return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } })
+  }
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  function renderWithReceipts(rows: Transaction[], onReceiptsChanged = vi.fn()) {
+    const result = render(
+      <TransactionList transactions={rows} purposeNames={purposeNames} emptyMessage="Belum ada." onReceiptsChanged={onReceiptsChanged} />,
+    )
+    return { ...result, onReceiptsChanged }
+  }
+
+  it('offers "Tambah foto nota" on a row with no photo, and uploads through the transactions route', async () => {
+    const fetchMock = vi.fn((_input: RequestInfo | URL) => Promise.resolve(jsonResponse({ id: 9, uploaded_at: 1 }, 201)))
+    vi.stubGlobal('fetch', fetchMock)
+
+    const { onReceiptsChanged } = renderWithReceipts([transaction({ id: 20, receipt_ids: [] })])
+
+    await userEvent.click(screen.getByRole('button', { name: text.addFromRow }))
+    const dialog = await screen.findByRole('dialog')
+    await userEvent.upload(
+      within(dialog).getByLabelText(text.fieldLabel),
+      new File(['fake-bytes'], 'nota.jpg', { type: 'image/jpeg' }),
+    )
+    await userEvent.click(within(dialog).getByRole('button', { name: text.addFromRow }))
+
+    await waitFor(() => expect(onReceiptsChanged).toHaveBeenCalled())
+    const uploadCall = fetchMock.mock.calls.find(([input]) => (input as string).toString().includes('/receipts'))
+    expect(uploadCall).toBeDefined()
+    expect((uploadCall![0] as string).toString()).toContain('/api/transactions/20/receipts')
+  })
+
+  it('offers "Lihat nota" on a row with a photo, and deletes it after the confirm', async () => {
+    const fetchMock = vi.fn(() => Promise.resolve(new Response(null, { status: 204 })))
+    vi.stubGlobal('fetch', fetchMock)
+
+    const { onReceiptsChanged } = renderWithReceipts([transaction({ id: 21, receipt_ids: [42] })])
+
+    await userEvent.click(screen.getByRole('button', { name: text.viewReceipt }))
+    const dialog = await screen.findByRole('dialog')
+    expect(within(dialog).getByRole('button', { name: text.change })).toBeInTheDocument()
+
+    await userEvent.click(within(dialog).getByRole('button', { name: text.delete }))
+    expect(within(dialog).getByText(text.deleteConfirm)).toBeInTheDocument()
+    await userEvent.click(within(dialog).getByRole('button', { name: text.delete }))
+
+    await waitFor(() => expect(onReceiptsChanged).toHaveBeenCalled())
+    expect(fetchMock).toHaveBeenCalledWith('/api/receipts/42', expect.objectContaining({ method: 'DELETE' }))
+  })
+
+  it('replaces a photo: delete-then-upload, both through the receipt routes', async () => {
+    const calls: string[] = []
+    const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      calls.push(`${(init?.method ?? 'GET').toUpperCase()} ${input.toString()}`)
+      if ((init?.method ?? 'GET').toUpperCase() === 'DELETE') return Promise.resolve(new Response(null, { status: 204 }))
+      return Promise.resolve(jsonResponse({ id: 43, uploaded_at: 2 }, 201))
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const { onReceiptsChanged } = renderWithReceipts([transaction({ id: 23, receipt_ids: [42] })])
+
+    await userEvent.click(screen.getByRole('button', { name: text.viewReceipt }))
+    const dialog = await screen.findByRole('dialog')
+    await userEvent.click(within(dialog).getByRole('button', { name: text.change }))
+    await userEvent.upload(
+      within(dialog).getByLabelText(text.fieldLabel),
+      new File(['fake-bytes'], 'nota-baru.jpg', { type: 'image/jpeg' }),
+    )
+    await userEvent.click(within(dialog).getByRole('button', { name: text.change }))
+
+    await waitFor(() => expect(onReceiptsChanged).toHaveBeenCalled())
+    // Delete-then-upload, in that order (no combined replace route) -
+    // see ReceiptDialog.tsx's own comment on why that order is the safer
+    // of the two ways a replace can go half-done.
+    expect(calls[0]).toBe('DELETE /api/receipts/42')
+    expect(calls[1]).toBe('POST /api/transactions/23/receipts')
+  })
+
+  it('renders no receipt control at all where onReceiptsChanged is not passed', () => {
+    renderRows([transaction({ id: 22, receipt_ids: [] })])
+
+    expect(screen.queryByRole('button', { name: text.addFromRow })).not.toBeInTheDocument()
   })
 })

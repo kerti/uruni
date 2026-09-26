@@ -8,6 +8,7 @@ package http
 // that exclusivity itself instead of leaning on the schema for it.
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
@@ -292,6 +293,77 @@ func randomReceiptFilename() (string, error) {
 		return "", err
 	}
 	return hex.EncodeToString(buf) + ".jpg", nil
+}
+
+// receiptIDsForTransactions batch-loads receipt_ids for a fund-scoped page of
+// transaction rows (#154), one query per page rather than one per row
+// (N+1). The returned map holds an entry only for a transaction id that
+// actually has at least one receipt attached - toTransactionResponse already
+// defaults every row's ReceiptIDs to []int64{}, so a caller only needs to
+// overwrite the ids this map actually names, via orEmptyReceiptIDs below.
+func (a *api) receiptIDsForTransactions(ctx context.Context, fundID int64, ids []int64) (map[int64][]int64, error) {
+	if len(ids) == 0 {
+		return nil, nil
+	}
+	sliceIDs := make([]*int64, len(ids))
+	for i := range ids {
+		sliceIDs[i] = &ids[i]
+	}
+	rows, err := a.queries.ListReceiptIDsByTransactionIDs(ctx, store.ListReceiptIDsByTransactionIDsParams{
+		FundID:         fundID,
+		TransactionIds: sliceIDs,
+	})
+	if err != nil {
+		return nil, err
+	}
+	byParent := make(map[int64][]int64, len(rows))
+	for _, row := range rows {
+		if row.TransactionID == nil {
+			continue // can't happen: the query's own WHERE already excludes a NULL transaction_id
+		}
+		byParent[*row.TransactionID] = append(byParent[*row.TransactionID], row.ID)
+	}
+	return byParent, nil
+}
+
+// receiptIDsForReimbursements is receiptIDsForTransactions' twin over
+// reimbursement claims, for GET /api/reimbursements's page and for
+// PATCH /api/reimbursements/{id}'s single-row response (a claim corrected
+// after a photo was already attached to it must not report an empty
+// receipt_ids just because this response is not, itself, the create route).
+func (a *api) receiptIDsForReimbursements(ctx context.Context, fundID int64, ids []int64) (map[int64][]int64, error) {
+	if len(ids) == 0 {
+		return nil, nil
+	}
+	sliceIDs := make([]*int64, len(ids))
+	for i := range ids {
+		sliceIDs[i] = &ids[i]
+	}
+	rows, err := a.queries.ListReceiptIDsByReimbursementIDs(ctx, store.ListReceiptIDsByReimbursementIDsParams{
+		FundID:           fundID,
+		ReimbursementIds: sliceIDs,
+	})
+	if err != nil {
+		return nil, err
+	}
+	byParent := make(map[int64][]int64, len(rows))
+	for _, row := range rows {
+		if row.ReimbursementID == nil {
+			continue // can't happen: the query's own WHERE already excludes a NULL reimbursement_id
+		}
+		byParent[*row.ReimbursementID] = append(byParent[*row.ReimbursementID], row.ID)
+	}
+	return byParent, nil
+}
+
+// orEmptyReceiptIDs turns receiptIDsForTransactions/receiptIDsForReimbursements'
+// "absent means none" map lookup into receipt_ids' own "always [], never
+// null" wire contract (the maintainer's ruling on #154).
+func orEmptyReceiptIDs(ids []int64) []int64 {
+	if ids == nil {
+		return []int64{}
+	}
+	return ids
 }
 
 // getReceipt is GET /api/receipts/{id}: the first route in this whole

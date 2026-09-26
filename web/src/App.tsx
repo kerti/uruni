@@ -135,9 +135,13 @@ function AuthGate({
   return <AuthedGate onLoggedOut={onLoggedOut} />
 }
 
-/** What a successful record hands to home through the history entry it creates. */
+/** What a successful record hands to home through the history entry it
+ * creates. photoFailed (#154) is true only when a photo was picked and the
+ * transaction itself posted but the receipt upload failed - never set for
+ * a transfer, which has no photo field. */
 interface HomeState {
   recorded: Direction
+  photoFailed?: boolean
 }
 
 /** The same idiom for a dues payment (M6.13): the confirmation belongs to
@@ -202,8 +206,8 @@ function AuthedGate({ onLoggedOut }: { onLoggedOut: () => void }) {
   // the form again would show the old confirmation on the way back. A
   // history entry's state belongs to that entry alone, which is exactly the
   // lifetime this message wants.
-  function handleRecorded(direction: Direction) {
-    navigate('/', { state: { recorded: direction } satisfies HomeState })
+  function handleRecorded(direction: Direction, photoFailed?: boolean) {
+    navigate('/', { state: { recorded: direction, photoFailed } satisfies HomeState })
   }
 
   if (state.status === 'idle' || state.status === 'loading') {
@@ -227,9 +231,15 @@ function AuthedGate({ onLoggedOut }: { onLoggedOut: () => void }) {
 
   const title = state.data?.name ?? copy.app.name
   const recorded = (location.state as HomeState | null)?.recorded
+  const photoFailed = (location.state as HomeState | null)?.photoFailed === true
   const duesRecorded = (location.state as DuesState | null)?.duesRecorded === true
-  const successMessage =
-    recorded === 'in'
+  // A failed photo upload (#154) replaces the ordinary success line rather
+  // than joining it - the sentence already says the transaction is saved,
+  // so repeating successIn/successOut beside it would say the same thing
+  // twice in two different tones.
+  const successMessage = photoFailed
+    ? copy.receipts.transactionPhotoFailed
+    : recorded === 'in'
       ? copy.record.successIn
       : recorded === 'out'
         ? copy.record.successOut
@@ -363,7 +373,16 @@ function AuthedGate({ onLoggedOut }: { onLoggedOut: () => void }) {
         path="*"
         element={
           <Shell title={title} onLoggedOut={onLoggedOut}>
-            {successMessage && (
+            {successMessage && photoFailed && (
+              // Terracotta --attention, not the success green above: the
+              // transaction itself is fine, but the sentence flags
+              // something that did not go through, the same restraint
+              // RecordTransaction.tsx's own passThroughNegativeHint uses.
+              <p role="status" className="mb-4 rounded-lg bg-attention-soft px-3 py-2 text-sm text-attention">
+                {successMessage}
+              </p>
+            )}
+            {successMessage && !photoFailed && (
               <p role="status" className="mb-4 flex items-center gap-2 text-success">
                 <CircleCheck aria-hidden="true" />
                 {successMessage}

@@ -104,6 +104,47 @@ export const copy = {
       reversesLabel: (date: string) => `Membatalkan pembayaran ${date}`,
     },
   },
+  // Receipt photos (M6.21/#154, ADR-011, PRD section 7.4): an optional
+  // photo of the nota, attached at record time or after the fact, on a
+  // transaction row or a reimbursement claim. Shared by ReceiptPicker.tsx
+  // (the field/attach control) and ReceiptDialog.tsx (the viewer). Error
+  // codes an upload can answer with live in common.errors below, next to
+  // every other wire code this app maps - not duplicated here.
+  receipts: {
+    // The record-time field's own label (RecordTransaction.tsx, the
+    // reimbursement claim form) - also reused as ReceiptPicker's own
+    // "choose a file" button caption, since picking a photo IS this field.
+    fieldLabel: 'Foto nota (opsional)',
+    // The after-the-fact affordance on a row that has no photo yet
+    // (TransactionList.tsx, the reimbursement row) - and reused inside the
+    // viewer as the "attach another" action, since adding a first photo and
+    // adding a second are the same action.
+    addFromRow: 'Tambah foto nota',
+    // The row indicator once receipt_ids is non-empty - opens the viewer.
+    viewReceipt: 'Lihat nota',
+    // The viewer dialog's own heading (unapproved - see report).
+    dialogHeading: 'Nota',
+    change: 'Ganti foto',
+    delete: 'Hapus foto',
+    deleteConfirm: 'Hapus foto nota ini?',
+    uploading: 'Mengunggah…',
+    deleting: 'Menghapus…',
+    cancel: 'Batal',
+    // aria-label for ReceiptPicker's own clear-selection control, distinct
+    // from `cancel` (unapproved - see report): "Batal" reads as abandoning
+    // the whole form, not as clearing one field within it.
+    clearSelected: 'Hapus foto yang dipilih',
+    // aria-label for the row icon, built from its own name (unapproved -
+    // see report): a bare glyph needs an accessible name distinct from the
+    // sighted viewReceipt/addFromRow caption beside it, since the icon is
+    // the whole control on a dense row.
+    rowControlAria: (hasReceipt: boolean) => (hasReceipt ? 'Lihat nota' : 'Tambah foto nota'),
+    // Shown once a transaction or a reimbursement claim posted successfully
+    // but the photo that went with it did not - the record itself is never
+    // rolled back (RecordTransaction.tsx/Reimbursements.tsx's own comment).
+    transactionPhotoFailed: 'Transaksi tersimpan, tapi fotonya belum terunggah. Foto bisa ditambahkan dari Riwayat.',
+    reimbursementPhotoFailed: 'Talangan tersimpan, tapi fotonya belum terunggah. Foto bisa ditambahkan dari Riwayat.',
+  },
   common: {
     loading: 'Memuat…',
     offlineBanner: 'Belum tersambung — Uruni butuh koneksi.',
@@ -171,6 +212,13 @@ export const copy = {
       purpose_correction_target_closed: 'Amplop ini sudah ditutup — buka lagi dulu sebelum memindahkan peruntukan ke sini.',
       purpose_correction_source_closed: 'Amplop ini sudah ditutup — buka lagi dulu sebelum memindahkan peruntukan dari sini.',
       purpose_correction_noop: 'Baris ini sudah memakai peruntukan itu.',
+      // M6.21/#154's receipt upload routes (internal/http/receipts.go's
+      // processAndStoreReceipt) - a phone shooting HEIC by default gets its
+      // own wording, same reasoning as the Go comment beside that code.
+      heic_unsupported: 'Foto HEIC belum bisa dipakai. Bagikan atau ekspor fotonya sebagai JPEG, lalu coba lagi.',
+      payload_too_large: 'Ukuran foto lebih dari 10 MB. Coba foto yang lebih kecil.',
+      image_too_large: 'Resolusi foto terlalu besar. Coba foto yang lebih kecil.',
+      unsupported_media_type: 'File ini bukan foto. Gunakan JPEG, PNG, atau WebP.',
     },
     // Shown for a code not in the map above.
     unknownError: 'Ada yang tidak beres. Coba lagi sebentar lagi.',
@@ -880,6 +928,11 @@ export const copy = {
     errors: {
       reimbursement_already_settled: 'Talangan ini sudah dibayar.',
       reimbursement_waived: 'Talangan ini sudah diputihkan.',
+      // DELETE /api/reimbursements/{id} refuses a claim that still has a
+      // receipt attached (#154) - the shared common.errors wording for this
+      // code ("dipakai di catatan lain") is true but not actionable here;
+      // this names the actual fix.
+      referenced_by_other_records: 'Hapus foto notanya dulu sebelum menghapus talangan ini.',
     },
   },
   // The envelope's own detail screen (#263 retired the list this namespace
