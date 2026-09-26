@@ -1,3 +1,4 @@
+import AppVersion from '@/screens/Settings/AppVersion'
 import DuesTiers from '@/screens/Settings/DuesTiers'
 import FundName from '@/screens/Settings/FundName'
 import Incidentals from '@/screens/Settings/Incidentals'
@@ -50,6 +51,7 @@ export default function Settings({ onFundRenamed }: { onFundRenamed: (fund: Fund
       <PassThrough />
       <Incidentals />
       <DuesTiers />
+      <AppVersion />
     </div>
   )
 }

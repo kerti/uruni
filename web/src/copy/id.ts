@@ -672,6 +672,9 @@ export const copy = {
   // to this same screen.
   settings: {
     heading: 'Pengaturan',
+    // Pengaturan's last line: the running build (AppVersion.tsx). A product
+    // name and a version string, so nothing here needs translating.
+    versionLine: (version: string) => `Uruni ${version}`,
     // Renaming the kas (PRD §7.1's own promise: "bisa diganti nanti kalau
     // perlu"). The name is a label - it heads every screen and the public
     // report - so this changes nothing already recorded.
