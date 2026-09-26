@@ -1,5 +1,8 @@
 import { ArrowDownLeft, ArrowUpRight, Tags } from 'lucide-react'
+import { useState } from 'react'
 
+import ReceiptDialog from '@/components/ReceiptDialog'
+import ReceiptRowButton from '@/components/ReceiptRowButton'
 import TransactionRowLabel from '@/components/TransactionRowLabel'
 import { copy } from '@/copy/id'
 import { formatIsoDate } from '@/lib/dates'
@@ -20,6 +23,7 @@ export default function TransactionList({
   purposeNames,
   emptyMessage,
   onCorrectPurpose,
+  onReceiptsChanged,
 }: {
   transactions: Transaction[]
   /** transaction.purpose_id -> its name - a row carries only the id, and
@@ -35,10 +39,24 @@ export default function TransactionList({
    * canCorrectPurpose decides that per row, so an ineligible one renders
    * its peruntukan as text rather than a tap that would only be refused. */
   onCorrectPurpose?: (transaction: Transaction) => void
+  /** Refetches whatever list this component's own `transactions` prop came
+   * from, after a photo is added, replaced or deleted (#154) - this
+   * component holds no list state of its own. Unlike onCorrectPurpose, both
+   * callers pass this one: attaching a nota after the fact is offered on
+   * Beranda's recent activity too, not only inside Riwayat. */
+  onReceiptsChanged?: () => void
 }) {
+  // The row whose photo dialog is open, by id rather than by object - so
+  // the dialog reads fresh receipt_ids off the current `transactions` prop
+  // the moment the caller's onReceiptsChanged refetch resolves, the same
+  // by-id lookup History/Transactions.tsx's own correction dialog uses.
+  const [receiptsForId, setReceiptsForId] = useState<number | null>(null)
+
   if (transactions.length === 0) {
     return <p className="text-muted-foreground">{emptyMessage}</p>
   }
+
+  const receiptsForTransaction = transactions.find((t) => t.id === receiptsForId) ?? null
 
   return (
     <ul className="flex flex-col gap-2">
@@ -70,10 +88,38 @@ export default function TransactionList({
                 <span className="text-sm text-muted-foreground">{formatIsoDate(transaction.occurred_on)}</span>
               </span>
             </span>
-            <span className="tabular shrink-0 font-medium">{formatIDR(transaction.amount)}</span>
+            {/* Amount first and alone on its line, so every row's figure
+                sits flush right whether or not it carries a photo control;
+                the control stacks underneath, right-aligned. */}
+            <span className="flex shrink-0 flex-col items-end gap-1.5">
+              <span className="tabular font-medium">{formatIDR(transaction.amount)}</span>
+              {/* One control doing double duty (#154): a quiet "Tambah foto
+                  nota" with no photo yet, a Forest camera carrying the count
+                  once one exists - never a second column of buttons on
+                  this list's densest row. Optional, same as
+                  onCorrectPurpose above: omitting onReceiptsChanged (no
+                  caller does today) drops the control entirely rather than
+                  rendering a dead tap. */}
+              {onReceiptsChanged && (
+                <ReceiptRowButton
+                  receiptIds={transaction.receipt_ids ?? []}
+                  onClick={() => setReceiptsForId(transaction.id)}
+                />
+              )}
+            </span>
           </li>
         )
       })}
+      {onReceiptsChanged && (
+        <ReceiptDialog
+          kind="transactions"
+          parentId={receiptsForTransaction?.id ?? null}
+          receiptIds={receiptsForTransaction?.receipt_ids ?? []}
+          open={receiptsForTransaction !== null}
+          onClose={() => setReceiptsForId(null)}
+          onChanged={onReceiptsChanged}
+        />
+      )}
     </ul>
   )
 }

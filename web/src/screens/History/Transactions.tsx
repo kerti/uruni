@@ -236,6 +236,7 @@ export default function Transactions({ refetchKey }: { refetchKey?: unknown }) {
             setCorrected(false)
             openDialog(`purpose-correction:${transaction.id}`)
           }}
+          onReceiptsChanged={() => void run(loadFirstPage, { silent: true })}
         />
         <CorrectPurposeDialog
           transaction={correcting}

@@ -192,7 +192,9 @@ describe('RecordTransaction', () => {
     await userEvent.type(screen.getByLabelText(text.amountLabel), '50000')
     await userEvent.click(screen.getByRole('button', { name: text.submit }))
 
-    await waitFor(() => expect(onRecorded).toHaveBeenCalledWith('out'))
+    // No photo picked, so photoFailed is always false - see this
+    // screen's own doc comment on onRecorded's second argument (#154).
+    await waitFor(() => expect(onRecorded).toHaveBeenCalledWith('out', false))
 
     const postCall = fetchMock.mock.calls.find(([input]) => (input as string).toString().includes('/api/transactions'))
     expect(postCall).toBeDefined()
@@ -509,5 +511,82 @@ describe('RecordTransaction: moving money, with its balances in view (#235 revis
 
     expect(selectedOptionName(text.fromLocationLabel)).toBe('Bank Uji Coba')
     expect(selectedOptionName(text.toLocationLabel)).toBe('Tunai')
+  })
+
+  // #154: the optional photo field, posted as a second request once the
+  // transaction itself exists.
+  describe('the optional receipt photo', () => {
+    const receiptsText = copy.receipts
+
+    function stubWithReceiptRoute(uploadHandler: () => Promise<Response>) {
+      return routedFetch([
+        { match: (m, u) => m === 'GET' && u.includes('/api/accounts'), handle: () => Promise.resolve(jsonResponse(accounts)) },
+        { match: (m, u) => m === 'GET' && u.includes('/api/balances'), handle: () => Promise.resolve(jsonResponse(balancesWith(30_000))) },
+        { match: (m, u) => m === 'GET' && u.includes('/api/purposes'), handle: () => Promise.resolve(jsonResponse(purposes)) },
+        {
+          match: (m, u) => m === 'POST' && u.includes('/api/transactions') && !u.includes('/receipts'),
+          handle: () => Promise.resolve(jsonResponse(postedTransaction, 201)),
+        },
+        {
+          match: (m, u) => m === 'POST' && u.includes(`/api/transactions/${postedTransaction.id}/receipts`),
+          handle: uploadHandler,
+        },
+      ])
+    }
+
+    async function fillAndPickPhoto(file: File) {
+      await screen.findByLabelText(text.locationLabel)
+      await userEvent.type(screen.getByLabelText(text.amountLabel), '50000')
+      await userEvent.upload(screen.getByLabelText(receiptsText.addFromRow, { selector: 'input[type="file"]' }), file)
+    }
+
+    it('uploads the picked photo after the transaction posts, and calls onRecorded with photoFailed: false', async () => {
+      const fetchMock = stubWithReceiptRoute(() => Promise.resolve(jsonResponse({ id: 5, uploaded_at: 1 }, 201)))
+      vi.stubGlobal('fetch', fetchMock)
+
+      const onRecorded = vi.fn()
+      render(<RecordTransaction onRecorded={onRecorded} onCancel={vi.fn()} />)
+      const file = new File(['fake-bytes'], 'nota.jpg', { type: 'image/jpeg' })
+      await fillAndPickPhoto(file)
+
+      await userEvent.click(screen.getByRole('button', { name: text.submit }))
+
+      await waitFor(() => expect(onRecorded).toHaveBeenCalledWith('out', false))
+
+      const uploadCall = fetchMock.mock.calls.find(([input]) => (input as string).toString().includes('/receipts'))
+      expect(uploadCall).toBeDefined()
+      const uploadBody = (uploadCall![1] as RequestInit).body as FormData
+      expect(uploadBody.get('file')).toBe(file)
+    })
+
+    it('still calls onRecorded, with photoFailed: true, when the transaction posts but the photo upload fails', async () => {
+      const fetchMock = stubWithReceiptRoute(() =>
+        Promise.resolve(new Response(JSON.stringify({ error: { code: 'unsupported_media_type', message: 'nope' } }), { status: 415 })),
+      )
+      vi.stubGlobal('fetch', fetchMock)
+
+      const onRecorded = vi.fn()
+      render(<RecordTransaction onRecorded={onRecorded} onCancel={vi.fn()} />)
+      await fillAndPickPhoto(new File(['fake-bytes'], 'nota.jpg', { type: 'image/jpeg' }))
+
+      await userEvent.click(screen.getByRole('button', { name: text.submit }))
+
+      await waitFor(() => expect(onRecorded).toHaveBeenCalledWith('out', true))
+    })
+
+    it('skipping the photo is the normal path: no receipts request is ever made', async () => {
+      const fetchMock = stubWithReceiptRoute(() => Promise.resolve(jsonResponse({ id: 5, uploaded_at: 1 }, 201)))
+      vi.stubGlobal('fetch', fetchMock)
+
+      const onRecorded = vi.fn()
+      render(<RecordTransaction onRecorded={onRecorded} onCancel={vi.fn()} />)
+      await screen.findByLabelText(text.locationLabel)
+      await userEvent.type(screen.getByLabelText(text.amountLabel), '50000')
+
+      await userEvent.click(screen.getByRole('button', { name: text.submit }))
+
+      await waitFor(() => expect(onRecorded).toHaveBeenCalledWith('out', false))
+      expect(fetchMock.mock.calls.some(([input]) => (input as string).toString().includes('/receipts'))).toBe(false)
+    })
   })
 })

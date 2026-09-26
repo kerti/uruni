@@ -60,6 +60,16 @@ type reimbursementResponse struct {
 	Note       *string `json:"note"`
 	Settled    bool    `json:"settled"`
 	CreatedAt  int64   `json:"created_at"`
+
+	// ReceiptIDs is every receipt attached to this claim, oldest first
+	// (#154): always present, [] rather than null when there are none.
+	// toReimbursementResponse defaults it to [] - correct for
+	// createReimbursement, whose claim id is brand new and could not
+	// already have a receipt - and listReimbursements/updateReimbursement
+	// each overwrite it with a real, batched or single-row lookup, since
+	// both read an existing claim a photo may already have been attached
+	// to.
+	ReceiptIDs []int64 `json:"receipt_ids"`
 }
 
 // toReimbursementResponse maps a store row (and the settled fact that only
@@ -78,6 +88,8 @@ func toReimbursementResponse(r store.Reimbursement, settled int64) reimbursement
 		Note:       r.Note,
 		Settled:    settled != 0,
 		CreatedAt:  r.CreatedAt,
+
+		ReceiptIDs: []int64{},
 	}
 }
 
@@ -259,9 +271,23 @@ func (a *api) listReimbursements(w http.ResponseWriter, r *http.Request) {
 		nextCursor = &encoded
 	}
 
+	// One batched, fund-scoped receipt lookup for the whole page (#154), the
+	// same shape listTransactions uses - never one query per row.
+	ids := make([]int64, len(rows))
+	for i, claim := range rows {
+		ids[i] = claim.ID
+	}
+	receiptIDs, err := a.receiptIDsForReimbursements(r.Context(), fund.ID, ids)
+	if err != nil {
+		mapSQLiteError(w, a.logger, err)
+		return
+	}
+
 	resp := make([]reimbursementResponse, 0, len(rows))
 	for _, claim := range rows {
-		resp = append(resp, toReimbursementResponseRow(claim))
+		row := toReimbursementResponseRow(claim)
+		row.ReceiptIDs = orEmptyReceiptIDs(receiptIDs[claim.ID])
+		resp = append(resp, row)
 	}
 	writeJSON(w, http.StatusOK, reimbursementsPageResponse{Reimbursements: resp, NextCursor: nextCursor})
 }
@@ -431,7 +457,19 @@ func (a *api) updateReimbursement(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, toReimbursementResponse(updated, 0))
+	resp := toReimbursementResponse(updated, 0)
+	// Unlike createReimbursement's brand-new claim, the row being corrected
+	// here already existed and may already carry a receipt uploaded before
+	// this PATCH - so receipt_ids gets a real, single-row lookup rather than
+	// the [] default, per #154's "always accurate" contract.
+	receiptIDs, err := a.receiptIDsForReimbursements(r.Context(), fund.ID, []int64{updated.ID})
+	if err != nil {
+		mapSQLiteError(w, a.logger, err)
+		return
+	}
+	resp.ReceiptIDs = orEmptyReceiptIDs(receiptIDs[updated.ID])
+
+	writeJSON(w, http.StatusOK, resp)
 }
 
 // deleteReimbursement is DELETE /api/reimbursements/{id}: for a claim that

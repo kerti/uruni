@@ -7,6 +7,7 @@ package store
 
 import (
 	"context"
+	"strings"
 )
 
 const createReceipt = `-- name: CreateReceipt :one
@@ -88,6 +89,117 @@ func (q *Queries) GetReceiptForFund(ctx context.Context, arg GetReceiptForFundPa
 		&i.UploadedAt,
 	)
 	return i, err
+}
+
+const listReceiptIDsByReimbursementIDs = `-- name: ListReceiptIDsByReimbursementIDs :many
+SELECT reimbursement_id, id
+FROM receipt
+WHERE fund_id = ? AND reimbursement_id IN (/*SLICE:reimbursement_ids*/?)
+ORDER BY id
+`
+
+type ListReceiptIDsByReimbursementIDsParams struct {
+	FundID           int64
+	ReimbursementIds []*int64
+}
+
+type ListReceiptIDsByReimbursementIDsRow struct {
+	ReimbursementID *int64
+	ID              int64
+}
+
+// Same shape as ListReceiptIDsByTransactionIDs above, for GET
+// /api/reimbursements's page.
+func (q *Queries) ListReceiptIDsByReimbursementIDs(ctx context.Context, arg ListReceiptIDsByReimbursementIDsParams) ([]ListReceiptIDsByReimbursementIDsRow, error) {
+	query := listReceiptIDsByReimbursementIDs
+	var queryParams []interface{}
+	queryParams = append(queryParams, arg.FundID)
+	if len(arg.ReimbursementIds) > 0 {
+		for _, v := range arg.ReimbursementIds {
+			queryParams = append(queryParams, v)
+		}
+		query = strings.Replace(query, "/*SLICE:reimbursement_ids*/?", strings.Repeat(",?", len(arg.ReimbursementIds))[1:], 1)
+	} else {
+		query = strings.Replace(query, "/*SLICE:reimbursement_ids*/?", "NULL", 1)
+	}
+	rows, err := q.db.QueryContext(ctx, query, queryParams...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListReceiptIDsByReimbursementIDsRow{}
+	for rows.Next() {
+		var i ListReceiptIDsByReimbursementIDsRow
+		if err := rows.Scan(&i.ReimbursementID, &i.ID); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listReceiptIDsByTransactionIDs = `-- name: ListReceiptIDsByTransactionIDs :many
+SELECT transaction_id, id
+FROM receipt
+WHERE fund_id = ? AND transaction_id IN (/*SLICE:transaction_ids*/?)
+ORDER BY id
+`
+
+type ListReceiptIDsByTransactionIDsParams struct {
+	FundID         int64
+	TransactionIds []*int64
+}
+
+type ListReceiptIDsByTransactionIDsRow struct {
+	TransactionID *int64
+	ID            int64
+}
+
+// Batched, fund-scoped lookup for a whole page of rows at once (#154) - one
+// query per list response, never one per row (N+1). fund_id is checked
+// alongside the id list rather than trusted alone: an id belonging to
+// another fund must never surface here, the same rule GetReceiptForFund
+// enforces for a single row. Ordered by id ascending so a caller that
+// appends rows in the order they arrive keeps that same order per parent
+// id, matching receipt_ids' own "ordered by id ascending" contract.
+func (q *Queries) ListReceiptIDsByTransactionIDs(ctx context.Context, arg ListReceiptIDsByTransactionIDsParams) ([]ListReceiptIDsByTransactionIDsRow, error) {
+	query := listReceiptIDsByTransactionIDs
+	var queryParams []interface{}
+	queryParams = append(queryParams, arg.FundID)
+	if len(arg.TransactionIds) > 0 {
+		for _, v := range arg.TransactionIds {
+			queryParams = append(queryParams, v)
+		}
+		query = strings.Replace(query, "/*SLICE:transaction_ids*/?", strings.Repeat(",?", len(arg.TransactionIds))[1:], 1)
+	} else {
+		query = strings.Replace(query, "/*SLICE:transaction_ids*/?", "NULL", 1)
+	}
+	rows, err := q.db.QueryContext(ctx, query, queryParams...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListReceiptIDsByTransactionIDsRow{}
+	for rows.Next() {
+		var i ListReceiptIDsByTransactionIDsRow
+		if err := rows.Scan(&i.TransactionID, &i.ID); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const listReceiptsByReimbursement = `-- name: ListReceiptsByReimbursement :many

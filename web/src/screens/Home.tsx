@@ -281,7 +281,12 @@ export default function Home({
             {copy.home.recentActivityViewAll}
           </Button>
         </div>
-        <TransactionList transactions={recentTransactions} purposeNames={purposeNames} emptyMessage={copy.home.recentActivityEmpty} />
+        <TransactionList
+          transactions={recentTransactions}
+          purposeNames={purposeNames}
+          emptyMessage={copy.home.recentActivityEmpty}
+          onReceiptsChanged={() => void run(loadHomeData, { silent: true })}
+        />
       </section>
     </div>
   )

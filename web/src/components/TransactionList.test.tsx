@@ -1,7 +1,7 @@
-import { render, screen } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { vi } from 'vitest'
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 
 import TransactionList from '@/components/TransactionList'
 import { copy } from '@/copy/id'
@@ -266,5 +266,135 @@ describe('TransactionList purpose correction (#276, ADR-033)', () => {
 
     expect(container.querySelector('.lucide-tags')).not.toBeInTheDocument()
     expect(screen.queryByText(copy.purposeCorrection.corrected)).not.toBeInTheDocument()
+  })
+})
+
+describe('TransactionList receipt photos (#154)', () => {
+  const text = copy.receipts
+
+  function jsonResponse(body: unknown, status = 200) {
+    return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } })
+  }
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  function renderWithReceipts(rows: Transaction[], onReceiptsChanged = vi.fn()) {
+    const result = render(
+      <TransactionList transactions={rows} purposeNames={purposeNames} emptyMessage="Belum ada." onReceiptsChanged={onReceiptsChanged} />,
+    )
+    return { ...result, onReceiptsChanged }
+  }
+
+  it('offers "Tambah foto nota" on a row with no photo, and uploads through the transactions route', async () => {
+    const fetchMock = vi.fn((_input: RequestInfo | URL) => Promise.resolve(jsonResponse({ id: 9, uploaded_at: 1 }, 201)))
+    vi.stubGlobal('fetch', fetchMock)
+
+    const { onReceiptsChanged } = renderWithReceipts([transaction({ id: 20, receipt_ids: [] })])
+
+    await userEvent.click(screen.getByRole('button', { name: text.addFromRow }))
+    const dialog = await screen.findByRole('dialog')
+    // Blank state: no photo yet, so the dialog says so before the picker.
+    expect(within(dialog).getByText(text.emptyTransaction)).toBeInTheDocument()
+    await userEvent.upload(
+      within(dialog).getByLabelText(text.addFromRow, { selector: 'input[type="file"]' }),
+      new File(['fake-bytes'], 'nota.jpg', { type: 'image/jpeg' }),
+    )
+    await userEvent.click(within(dialog).getByRole('button', { name: text.addFromRow }))
+
+    await waitFor(() => expect(onReceiptsChanged).toHaveBeenCalled())
+    const uploadCall = fetchMock.mock.calls.find(([input]) => (input as string).toString().includes('/receipts'))
+    expect(uploadCall).toBeDefined()
+    expect((uploadCall![0] as string).toString()).toContain('/api/transactions/20/receipts')
+  })
+
+  it('opens the per-photo menu with both Ganti foto and Hapus foto', async () => {
+    vi.stubGlobal('fetch', vi.fn())
+
+    renderWithReceipts([transaction({ id: 24, receipt_ids: [42] })])
+
+    await userEvent.click(screen.getByRole('button', { name: text.viewReceipt }))
+    const dialog = await screen.findByRole('dialog')
+
+    await userEvent.click(within(dialog).getByRole('button', { name: text.photoMenuAria }))
+    const menu = await screen.findByRole('menu')
+    expect(within(menu).getByRole('menuitem', { name: text.change })).toBeInTheDocument()
+    expect(within(menu).getByRole('menuitem', { name: text.delete })).toBeInTheDocument()
+  })
+
+  it('offers "Lihat nota" on a row with a photo, and deletes it through the menu after the confirm', async () => {
+    const fetchMock = vi.fn(() => Promise.resolve(new Response(null, { status: 204 })))
+    vi.stubGlobal('fetch', fetchMock)
+
+    const { onReceiptsChanged } = renderWithReceipts([transaction({ id: 21, receipt_ids: [42] })])
+
+    await userEvent.click(screen.getByRole('button', { name: text.viewReceipt }))
+    const dialog = await screen.findByRole('dialog')
+
+    // Hapus foto lives inside the "more" menu on the photo itself, never
+    // in a footer under it - opening it is what surfaces the inline
+    // confirm bar, not the delete API call directly.
+    await userEvent.click(within(dialog).getByRole('button', { name: text.photoMenuAria }))
+    await userEvent.click(within(await screen.findByRole('menu')).getByRole('menuitem', { name: text.delete }))
+    expect(within(dialog).getByText(text.deleteConfirm)).toBeInTheDocument()
+    await userEvent.click(within(dialog).getByRole('button', { name: text.delete }))
+
+    await waitFor(() => expect(onReceiptsChanged).toHaveBeenCalled())
+    expect(fetchMock).toHaveBeenCalledWith('/api/receipts/42', expect.objectContaining({ method: 'DELETE' }))
+  })
+
+  it('replaces a photo through the menu: delete-then-upload, both through the receipt routes', async () => {
+    const calls: string[] = []
+    const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      calls.push(`${(init?.method ?? 'GET').toUpperCase()} ${input.toString()}`)
+      if ((init?.method ?? 'GET').toUpperCase() === 'DELETE') return Promise.resolve(new Response(null, { status: 204 }))
+      return Promise.resolve(jsonResponse({ id: 43, uploaded_at: 2 }, 201))
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const { onReceiptsChanged } = renderWithReceipts([transaction({ id: 23, receipt_ids: [42] })])
+
+    await userEvent.click(screen.getByRole('button', { name: text.viewReceipt }))
+    const dialog = await screen.findByRole('dialog')
+
+    await userEvent.click(within(dialog).getByRole('button', { name: text.photoMenuAria }))
+    await userEvent.click(within(await screen.findByRole('menu')).getByRole('menuitem', { name: text.change }))
+    await userEvent.upload(
+      within(dialog).getByLabelText(text.addFromRow, { selector: 'input[type="file"]' }),
+      new File(['fake-bytes'], 'nota-baru.jpg', { type: 'image/jpeg' }),
+    )
+    await userEvent.click(within(dialog).getByRole('button', { name: text.change }))
+
+    await waitFor(() => expect(onReceiptsChanged).toHaveBeenCalled())
+    // Delete-then-upload, in that order (no combined replace route) -
+    // see ReceiptDialog.tsx's own comment on why that order is the safer
+    // of the two ways a replace can go half-done.
+    expect(calls[0]).toBe('DELETE /api/receipts/42')
+    expect(calls[1]).toBe('POST /api/transactions/23/receipts')
+  })
+
+  it('opens the full-screen viewer when the photo itself is tapped', async () => {
+    vi.stubGlobal('fetch', vi.fn())
+
+    renderWithReceipts([transaction({ id: 25, receipt_ids: [42] })])
+
+    await userEvent.click(screen.getByRole('button', { name: text.viewReceipt }))
+    const dialog = await screen.findByRole('dialog')
+
+    await userEvent.click(within(dialog).getByRole('button', { name: text.zoomAria }))
+
+    // Two dialogs are now open: ReceiptDialog itself and the viewer layered
+    // above it. `hidden: true` because Radix marks the first inert (and so
+    // hidden from the accessibility tree) while the second sits on top of
+    // it, the same "hides the row underneath" behaviour Reimbursements'
+    // own receipt tests already rely on.
+    await waitFor(() => expect(screen.getAllByRole('dialog', { hidden: true })).toHaveLength(2))
+  })
+
+  it('renders no receipt control at all where onReceiptsChanged is not passed', () => {
+    renderRows([transaction({ id: 22, receipt_ids: [] })])
+
+    expect(screen.queryByRole('button', { name: text.addFromRow })).not.toBeInTheDocument()
   })
 })

@@ -88,6 +88,14 @@ export interface Transaction {
    * (effective !== stored) and the correction dialog, which must build
    * its pair from where the money actually is. */
   effective_purpose_id?: number
+  /** Every receipt attached to this row, oldest first (#154's backend,
+   * internal/http/transactions.go). Optional here alongside the other
+   * list-only fields above: every route in this app's own backend now
+   * answers it, but treating it as always-present would force every
+   * existing test fixture in this file's callers to grow the field too - a
+   * caller that never checks it just never renders the photo affordance.
+   * TransactionList.tsx reads it as `transaction.receipt_ids ?? []`. */
+  receipt_ids?: number[]
 }
 
 export interface DuesTier {

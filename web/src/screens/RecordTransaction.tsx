@@ -4,6 +4,7 @@ import { ArrowDownLeft, ArrowLeftRight, ArrowUpDown, ArrowUpRight } from 'lucide
 import AmountInput from '@/components/money/AmountInput'
 import AccountPicker from '@/components/pickers/AccountPicker'
 import PurposePicker from '@/components/pickers/PurposePicker'
+import ReceiptPicker from '@/components/ReceiptPicker'
 import { segmentedStackedItemClass, segmentedTrackClass } from '@/components/segmented'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -14,6 +15,7 @@ import { copy } from '@/copy/id'
 import { listAccounts } from '@/lib/accounts'
 import { getBalances } from '@/lib/balances'
 import { formatIDR } from '@/lib/money'
+import { uploadReceipt } from '@/lib/receipts'
 import { postTransfer } from '@/lib/transfers'
 import { listPurposes } from '@/lib/purposes'
 import { createTransaction } from '@/lib/transactions'
@@ -79,9 +81,22 @@ interface FormData {
 
 /**
  * The record-transaction screen (M6.8, PRD section 7.2): amount, direction,
- * location, purpose, date, optional note, posted through
- * POST /api/transactions. Photo is M6.21, not here; is_adjustment always
- * stays false on the wire - only M6.10's reconcile flow ever sets it.
+ * location, purpose, date, optional note, and - as of M6.21/#154 - an
+ * optional photo of the nota, posted through POST /api/transactions.
+ * is_adjustment always stays false on the wire - only M6.10's reconcile
+ * flow ever sets it.
+ *
+ * The photo travels a second request behind the transaction itself: the
+ * upload route needs the posted row's own id (POST
+ * /api/transactions/{id}/receipts), so it can only go out once
+ * createTransaction's response comes back. A transfer has no photo field -
+ * it moves money between the fund's own locations, with no nota to
+ * document, unlike an ordinary in/out. If that second request fails, the
+ * transaction itself is NOT rolled back (ADR-011: a receipt lives in its
+ * own table precisely so it can be attached, or fail to attach, without
+ * touching the immutable row it names) - onRecorded's second argument says
+ * so, and App.tsx shows the "tersimpan, tapi belum terunggah" message
+ * instead of the ordinary success line.
  *
  * Smart defaults per PRD section 7.2: location remembers the last choice
  * (localStorage, guarded - see readLastAccountId), purpose defaults to the
@@ -108,7 +123,10 @@ export default function RecordTransaction({
   onCancel,
   initialPurposeId,
 }: {
-  onRecorded: (direction: Direction) => void
+  /** photoFailed is true only when a photo was picked and the parent
+   * transaction posted successfully but the receipt upload itself failed
+   * (#154) - never set for a transfer, which offers no photo field. */
+  onRecorded: (direction: Direction, photoFailed?: boolean) => void
   onCancel: () => void
   initialPurposeId?: number | null
 }) {
@@ -126,6 +144,7 @@ export default function RecordTransaction({
   const [amount, setAmount] = useState(0)
   const [occurredOn, setOccurredOn] = useState(todayISODate)
   const [note, setNote] = useState('')
+  const [receiptFile, setReceiptFile] = useState<File | null>(null)
 
   async function loadFormData(): Promise<FormData> {
     // selectable=true (ADR-031): a closed envelope's purpose is excluded,
@@ -276,7 +295,22 @@ export default function RecordTransaction({
         note: noteOrNull,
       })
       rememberAccountId(accountId)
-      onRecorded(direction)
+
+      // A second request, only once the row above exists (see this
+      // component's own doc comment). A failure here never rolls the
+      // transaction back and never surfaces through submitState's own
+      // error path - it is caught here, not rethrown, so the form still
+      // reports success and only says photoFailed.
+      let photoFailed = false
+      if (receiptFile) {
+        try {
+          await uploadReceipt('transactions', result.id, receiptFile)
+        } catch {
+          photoFailed = true
+        }
+      }
+
+      onRecorded(direction, photoFailed)
       return result
     })
   }
@@ -453,6 +487,11 @@ export default function RecordTransaction({
           disabled={submitting}
         />
       </div>
+
+      {/* No photo field for a transfer (see this component's own doc
+          comment) - money moving between the fund's own locations has no
+          nota to document. */}
+      {!isTransfer && <ReceiptPicker id="record-receipt" value={receiptFile} onChange={setReceiptFile} disabled={submitting} />}
 
       {submitState.status === 'error' && submitState.error && <ErrorState error={submitState.error} />}
 

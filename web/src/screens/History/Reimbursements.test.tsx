@@ -43,6 +43,7 @@ interface Claim {
   settled: boolean
   note: string | null
   created_at: number
+  receipt_ids?: number[]
 }
 
 function claim(id: number, overrides: Partial<Claim> = {}): Claim {
@@ -565,5 +566,176 @@ describe('Reimbursements tab', () => {
     const last = requests.at(-1)
     expect(last?.searchParams.get('outstanding')).toBe('true')
     expect(last?.searchParams.get('q')).toBe('parkir')
+  })
+
+  // #154: the optional photo, at record time and after the fact.
+  describe('receipt photos', () => {
+    const receiptsText = copy.receipts
+
+    it('uploads the picked photo after the claim posts, and shows the ordinary success message', async () => {
+      vi.stubGlobal('fetch', routedFetch([
+        {
+          match: (m: string, u: string) => m === 'POST' && u.includes('/api/reimbursements') && !u.includes('/receipts'),
+          handle: () => Promise.resolve(jsonResponse(claim(3, { amount: 10_000, note: null }), 201)),
+        },
+        {
+          match: (m: string, u: string) => m === 'POST' && u.includes('/api/reimbursements/3/receipts'),
+          handle: () => Promise.resolve(jsonResponse({ id: 9, uploaded_at: 1 }, 201)),
+        },
+        ...getHandlers(),
+      ]))
+      renderAt()
+      await waitFor(() => expect(screen.getByText('Jane')).toBeInTheDocument())
+
+      await userEvent.click(screen.getByRole('button', { name: text.record.heading }))
+      await waitFor(() => expect(screen.getByText(text.record.heading)).toBeInTheDocument())
+      await chooseOption(text.record.memberLabel, 'Jane')
+      await userEvent.type(screen.getByLabelText(text.record.amountLabel), '10000')
+      await userEvent.upload(
+        screen.getByLabelText(receiptsText.addFromRow, { selector: 'input[type="file"]' }),
+        new File(['fake-bytes'], 'nota.jpg', { type: 'image/jpeg' }),
+      )
+      await userEvent.click(screen.getByRole('button', { name: text.record.submit }))
+
+      await waitFor(() => expect(screen.getByText(text.record.success)).toBeInTheDocument())
+    })
+
+    it('the claim still saves when the photo upload fails - the message says so instead of the ordinary success line', async () => {
+      vi.stubGlobal('fetch', routedFetch([
+        {
+          match: (m: string, u: string) => m === 'POST' && u.includes('/api/reimbursements') && !u.includes('/receipts'),
+          handle: () => Promise.resolve(jsonResponse(claim(3, { amount: 10_000, note: null }), 201)),
+        },
+        {
+          match: (m: string, u: string) => m === 'POST' && u.includes('/api/reimbursements/3/receipts'),
+          handle: () => Promise.resolve(jsonResponse({ error: { code: 'unsupported_media_type', message: 'nope' } }, 415)),
+        },
+        ...getHandlers(),
+      ]))
+      renderAt()
+      await waitFor(() => expect(screen.getByText('Jane')).toBeInTheDocument())
+
+      await userEvent.click(screen.getByRole('button', { name: text.record.heading }))
+      await waitFor(() => expect(screen.getByText(text.record.heading)).toBeInTheDocument())
+      await chooseOption(text.record.memberLabel, 'Jane')
+      await userEvent.type(screen.getByLabelText(text.record.amountLabel), '10000')
+      await userEvent.upload(
+        screen.getByLabelText(receiptsText.addFromRow, { selector: 'input[type="file"]' }),
+        new File(['fake-bytes'], 'nota.jpg', { type: 'image/jpeg' }),
+      )
+      await userEvent.click(screen.getByRole('button', { name: text.record.submit }))
+
+      await waitFor(() => expect(screen.getByText(receiptsText.reimbursementPhotoFailed)).toBeInTheDocument())
+      expect(screen.queryByText(text.record.success)).not.toBeInTheDocument()
+    })
+
+    it('attaches a photo after the fact from the claim row, and the row control then opens the viewer', async () => {
+      let attached = false
+      vi.stubGlobal('fetch', routedFetch([
+        {
+          match: (m: string, u: string) => m === 'GET' && u.includes('/api/reimbursements') && u.includes('outstanding=true'),
+          handle: () => Promise.resolve(jsonResponse(page([claim(1, { receipt_ids: attached ? [9] : [] })]))),
+        },
+        {
+          match: (m: string, u: string) => m === 'POST' && u.includes('/api/reimbursements/1/receipts'),
+          handle: () => {
+            attached = true
+            return Promise.resolve(jsonResponse({ id: 9, uploaded_at: 1 }, 201))
+          },
+        },
+        { match: (m: string, u: string) => m === 'GET' && u.includes('/api/members'), handle: () => Promise.resolve(jsonResponse({ members, next_cursor: null })) },
+        { match: (m: string, u: string) => m === 'GET' && u.includes('/api/purposes'), handle: () => Promise.resolve(jsonResponse(purposes)) },
+        { match: (m: string, u: string) => m === 'GET' && u.includes('/api/accounts'), handle: () => Promise.resolve(jsonResponse(accounts)) },
+      ]))
+      renderAt()
+      await waitFor(() => expect(screen.getByText('Jane')).toBeInTheDocument())
+
+      // No photo yet: the row control's own accessible name is "Tambah foto nota".
+      await userEvent.click(screen.getByRole('button', { name: receiptsText.addFromRow }))
+      const dialog = await screen.findByRole('dialog')
+      await userEvent.upload(
+        within(dialog).getByLabelText(receiptsText.addFromRow, { selector: 'input[type="file"]' }),
+        new File(['fake-bytes'], 'nota.jpg', { type: 'image/jpeg' }),
+      )
+      await userEvent.click(within(dialog).getByRole('button', { name: receiptsText.addFromRow }))
+
+      // The dialog itself shows the new photo once the refetch resolves -
+      // the per-photo "more" menu (Ganti foto/Hapus foto) only renders once
+      // a receipt exists (the photo itself is alt="" - decorative, so it
+      // carries no accessible "img" role to query by). Radix also hides the
+      // row underneath from the accessibility tree while the dialog stays
+      // open, so the row's own renamed control is only checked after
+      // closing it.
+      await waitFor(() => expect(within(dialog).getByRole('button', { name: receiptsText.photoMenuAria })).toBeInTheDocument())
+      await userEvent.click(within(dialog).getAllByRole('button', { name: copy.common.close })[0])
+
+      // The list refetch now answers with a receipt attached, so the row's
+      // own control renames itself to "Lihat nota".
+      await waitFor(() => expect(screen.getByRole('button', { name: receiptsText.viewReceipt })).toBeInTheDocument())
+    })
+
+    it('deletes a photo from the viewer, after the confirm', async () => {
+      let deleted = false
+      vi.stubGlobal('fetch', routedFetch([
+        {
+          match: (m: string, u: string) => m === 'GET' && u.includes('/api/reimbursements') && u.includes('outstanding=true'),
+          handle: () => Promise.resolve(jsonResponse(page([claim(1, { receipt_ids: deleted ? [] : [9] })]))),
+        },
+        {
+          match: (m: string, u: string) => m === 'DELETE' && u.includes('/api/receipts/9'),
+          handle: () => {
+            deleted = true
+            return Promise.resolve(new Response(null, { status: 204 }))
+          },
+        },
+        { match: (m: string, u: string) => m === 'GET' && u.includes('/api/members'), handle: () => Promise.resolve(jsonResponse({ members, next_cursor: null })) },
+        { match: (m: string, u: string) => m === 'GET' && u.includes('/api/purposes'), handle: () => Promise.resolve(jsonResponse(purposes)) },
+        { match: (m: string, u: string) => m === 'GET' && u.includes('/api/accounts'), handle: () => Promise.resolve(jsonResponse(accounts)) },
+      ]))
+      renderAt()
+      await waitFor(() => expect(screen.getByRole('button', { name: receiptsText.viewReceipt })).toBeInTheDocument())
+
+      await userEvent.click(screen.getByRole('button', { name: receiptsText.viewReceipt }))
+      const dialog = await screen.findByRole('dialog')
+
+      // Hapus foto lives inside the per-photo "more" menu now, not a
+      // footer button under the image.
+      await userEvent.click(within(dialog).getByRole('button', { name: receiptsText.photoMenuAria }))
+      await userEvent.click(within(await screen.findByRole('menu')).getByRole('menuitem', { name: receiptsText.delete }))
+      expect(within(dialog).getByText(receiptsText.deleteConfirm)).toBeInTheDocument()
+      await userEvent.click(within(dialog).getByRole('button', { name: receiptsText.delete }))
+
+      // Same reasoning as the attach test above: check the dialog's own
+      // state (no photo left to show - the "more" menu only renders per
+      // receipt) before closing it and reading the row's control, since
+      // the row is hidden from the tree while the dialog is open.
+      await waitFor(() => expect(within(dialog).queryByRole('button', { name: receiptsText.photoMenuAria })).not.toBeInTheDocument())
+      await userEvent.click(within(dialog).getAllByRole('button', { name: copy.common.close })[0])
+
+      await waitFor(() => expect(screen.getByRole('button', { name: receiptsText.addFromRow })).toBeInTheDocument())
+    })
+
+    it('refuses to delete a claim that still has a receipt, with the specific copy', async () => {
+      vi.stubGlobal('fetch', routedFetch([
+        {
+          match: (m: string, u: string) => m === 'GET' && u.includes('/api/reimbursements'),
+          handle: () => Promise.resolve(jsonResponse(page([claim(1, { receipt_ids: [9] })]))),
+        },
+        {
+          match: (m: string, u: string) => m === 'DELETE' && u.includes('/api/reimbursements/1'),
+          handle: () => Promise.resolve(jsonResponse({ error: { code: 'referenced_by_other_records', message: 'nope' } }, 409)),
+        },
+        { match: (m: string, u: string) => m === 'GET' && u.includes('/api/members'), handle: () => Promise.resolve(jsonResponse({ members, next_cursor: null })) },
+        { match: (m: string, u: string) => m === 'GET' && u.includes('/api/purposes'), handle: () => Promise.resolve(jsonResponse(purposes)) },
+        { match: (m: string, u: string) => m === 'GET' && u.includes('/api/accounts'), handle: () => Promise.resolve(jsonResponse(accounts)) },
+      ]))
+      renderAt()
+      await waitFor(() => expect(screen.getByText('Jane')).toBeInTheDocument())
+
+      await userEvent.click(screen.getByRole('button', { name: text.actions.delete }))
+      await userEvent.click(screen.getByRole('button', { name: text.actions.delete }))
+
+      await waitFor(() => expect(screen.getByRole('alert').textContent).toBe(text.errors.referenced_by_other_records))
+    })
   })
 })

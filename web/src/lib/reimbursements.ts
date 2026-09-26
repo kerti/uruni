@@ -20,6 +20,11 @@ export interface Reimbursement {
   settled: boolean
   note: string | null
   created_at: number
+  /** Every receipt attached to this claim, oldest first (#154's backend,
+   * internal/http/reimbursements.go). Optional for the same reason
+   * lib/setup.ts's Transaction.receipt_ids is - see that field's own
+   * comment. Reimbursements.tsx reads it as `claim.receipt_ids ?? []`. */
+  receipt_ids?: number[]
 }
 
 /** GET /api/reimbursements's optional query parameters (#226, ADR-032
