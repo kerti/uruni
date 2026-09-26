@@ -78,6 +78,14 @@ func serve() error {
 		return err
 	}
 
+	// The one boot-time filesystem check config.Load itself does not make
+	// (that function stays a pure environment parse) - only `serve` writes a
+	// receipt, so only `serve` needs the volume to already be there and
+	// writable (#153).
+	if err := config.EnsureUploadsDirWritable(cfg.UploadsDir); err != nil {
+		return err
+	}
+
 	// Only `serve` takes this lock. `migrate` is a short, operator-invoked,
 	// one-shot command - including `migrate status`, which an operator
 	// legitimately runs *while* a server is up to check what it has applied -
@@ -137,7 +145,7 @@ func serve() error {
 	srv := &http.Server{
 		Addr: fmt.Sprintf(":%d", cfg.Port),
 		Handler: uruniHTTP.New(assets, uruniHTTP.Build{Version: version, Commit: buildCommit()}, l, q, logger,
-			au, cfg.BaseURL),
+			au, cfg.BaseURL, cfg.UploadsDir),
 		// Set explicitly: a server with no header timeout can be held open by a
 		// slow client indefinitely.
 		ReadHeaderTimeout: 10 * time.Second,

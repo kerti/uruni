@@ -23,7 +23,7 @@ import (
 func testRouterAndDB(t *testing.T) (http.Handler, *sql.DB) {
 	t.Helper()
 	sqlDB := testStoreDB(t)
-	return New(testAssets(), testBuild, ledger.New(sqlDB), store.New(sqlDB), testLogger(), auth.New(sqlDB), ""), sqlDB
+	return New(testAssets(), testBuild, ledger.New(sqlDB), store.New(sqlDB), testLogger(), auth.New(sqlDB), "", t.TempDir()), sqlDB
 }
 
 func postRegister(t *testing.T, r http.Handler, email, password string) *httptest.ResponseRecorder {
@@ -144,7 +144,7 @@ func TestSessionCookieSecureFollowsBaseURLScheme(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			sqlDB := testStoreDB(t)
-			r := New(testAssets(), testBuild, ledger.New(sqlDB), store.New(sqlDB), testLogger(), auth.New(sqlDB), tc.baseURL)
+			r := New(testAssets(), testBuild, ledger.New(sqlDB), store.New(sqlDB), testLogger(), auth.New(sqlDB), tc.baseURL, t.TempDir())
 
 			rec := postRegister(t, r, "treasurer@example.org", "correct-horse-battery")
 			if rec.Code != http.StatusCreated {

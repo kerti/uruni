@@ -40,6 +40,12 @@ type api struct {
 	// the process (and, in a test, for the life of the one router that
 	// test built) rather than resetting per call.
 	loginLimiter *rateLimiter
+
+	// uploadsDir is #153's addition: where receipt photos are written to and
+	// read from (ADR-011). `serve` has already proved it exists and is
+	// writable (config.EnsureUploadsDirWritable) before this struct is ever
+	// built.
+	uploadsDir string
 }
 
 // routes registers the /api surface on the mount New creates. No handlers at
@@ -233,6 +239,20 @@ func (a *api) routes(r chi.Router) {
 		// in M4 built by composing ledger reads rather than wrapping a single
 		// ledger call.
 		r.Get("/balances", a.getBalances)
+
+		// Receipt photos (PRD section 7.4, ADR-011): an attachment, not a
+		// ledger fact, so it hangs off a transaction or a reimbursement
+		// through its own table rather than a column on either (receipt's
+		// exactly-one-parent CHECK) - two upload routes rather than one that
+		// accepts either id, matching that CHECK. GET is the first route in
+		// this whole surface that answers with image bytes instead of JSON;
+		// it stays behind this session gate rather than joining the four
+		// public routes above - a receipt "shows what the fund bought," and
+		// nothing in PRD section 7.9 asks for it on the public report.
+		r.Post("/transactions/{id}/receipts", a.uploadTransactionReceipt)
+		r.Post("/reimbursements/{id}/receipts", a.uploadReimbursementReceipt)
+		r.Get("/receipts/{id}", a.getReceipt)
+		r.Delete("/receipts/{id}", a.deleteReceipt)
 	})
 }
 

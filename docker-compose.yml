@@ -7,6 +7,7 @@ services:
     environment:
       - URUNI_BASE_URL=${URUNI_BASE_URL}
       - URUNI_DB=/data/uruni.db
+      - URUNI_UPLOADS_DIR=/uploads
       # - SMTP_URL=${SMTP_URL}           # optional, for emailed backups
     volumes:
       - uruni-data:/data

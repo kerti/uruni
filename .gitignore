@@ -10,6 +10,10 @@ coverage.*
 *.db-shm
 *.db.lock
 
+# Dev-local receipt uploads volume (ADR-011, URUNI_UPLOADS_DIR's default) -
+# `make setup` creates this directory; its contents are never checked in.
+/uploads/
+
 # Node / Vite
 node_modules/
 web/node_modules/

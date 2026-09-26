@@ -43,6 +43,53 @@ func (q *Queries) CreateReceipt(ctx context.Context, arg CreateReceiptParams) (R
 	return i, err
 }
 
+const deleteReceipt = `-- name: DeleteReceipt :exec
+DELETE FROM receipt
+WHERE id = ?
+`
+
+// DeleteReceipt removes a wrong or duplicate photo - ADR-011 states plainly
+// that "a wrong photo is replaceable" and `receipt` rows are insertable and
+// deletable, unlike a ledger row. Scoped by id alone, the same shape as
+// DeleteAccount and DeleteReimbursement: the caller already fund-scoped the
+// row through GetReceiptForFund above before reaching this. It removes only
+// the database row - the file on disk is left in place; see
+// internal/http/receipts.go's own comment for why (ADR-011 already accepts
+// the orphan as cheaper than a transactional delete).
+func (q *Queries) DeleteReceipt(ctx context.Context, id int64) error {
+	_, err := q.db.ExecContext(ctx, deleteReceipt, id)
+	return err
+}
+
+const getReceiptForFund = `-- name: GetReceiptForFund :one
+SELECT id, fund_id, transaction_id, reimbursement_id, path, uploaded_at
+FROM receipt
+WHERE id = ? AND fund_id = ?
+`
+
+type GetReceiptForFundParams struct {
+	ID     int64
+	FundID int64
+}
+
+// Fund-scoped fetch, the same shape as GetAccountForFund/GetReimbursement:
+// an id names a row, not permission to see it - and a receipt is the one
+// resource this API serves as raw bytes, so this is the only gate between a
+// session and someone else's photo (#153).
+func (q *Queries) GetReceiptForFund(ctx context.Context, arg GetReceiptForFundParams) (Receipt, error) {
+	row := q.db.QueryRowContext(ctx, getReceiptForFund, arg.ID, arg.FundID)
+	var i Receipt
+	err := row.Scan(
+		&i.ID,
+		&i.FundID,
+		&i.TransactionID,
+		&i.ReimbursementID,
+		&i.Path,
+		&i.UploadedAt,
+	)
+	return i, err
+}
+
 const listReceiptsByReimbursement = `-- name: ListReceiptsByReimbursement :many
 SELECT id, fund_id, transaction_id, reimbursement_id, path, uploaded_at
 FROM receipt
