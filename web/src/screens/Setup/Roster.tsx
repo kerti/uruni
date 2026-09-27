@@ -100,7 +100,7 @@ export default function Roster({
               />
             </div>
             {members.map((name, index) => (
-              <div key={index} className="flex items-end gap-2">
+              <div key={index} className="flex items-end gap-3">
                 <div className="flex flex-1 flex-col gap-1.5">
                   <Label htmlFor={`setup-roster-member-${index}`}>{text.roster.memberNameLabel}</Label>
                   <Input
@@ -115,6 +115,7 @@ export default function Roster({
                   type="button"
                   variant="ghost"
                   size="icon"
+                  className="size-11"
                   aria-label={text.roster.removeMember}
                   onClick={() => removeMember(index)}
                   disabled={submitting}
@@ -128,11 +129,11 @@ export default function Roster({
               {text.roster.addMember}
             </Button>
             {error && <ErrorState error={error} />}
-            <div className="flex gap-2">
+            <div className="grid grid-cols-2 gap-2">
               <Button type="button" variant="outline" size="lg" onClick={onSkip} disabled={submitting}>
                 {text.roster.skip}
               </Button>
-              <Button type="submit" size="lg" className="flex-1" disabled={submitting}>
+              <Button type="submit" size="lg" disabled={submitting}>
                 {submitting ? text.submitting : text.roster.finish}
               </Button>
             </div>

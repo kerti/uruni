@@ -261,6 +261,32 @@ describe('App (record loop)', () => {
     window.history.pushState({}, '', '/')
   })
 
+  // #315: the status matrix's Catat pembayaran opens Catat with Iuran
+  // already chosen - one dues form, at one address - and Batal goes back
+  // through the door she came in by, not to Beranda.
+  it('opens Catat on Iuran from the dues matrix, and Batal returns there', async () => {
+    window.history.pushState({}, '', '/dues')
+    const base = authenticatedWithRecordRoutes()
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+        const url = typeof input === 'string' ? input : input.toString()
+        if (url.includes('/api/dues-status')) return Promise.resolve(jsonResponse([]))
+        if (url.includes('/api/members')) return Promise.resolve(jsonResponse({ members: [], next_cursor: null }))
+        return base(input, init)
+      }),
+    )
+    render(<App />)
+
+    await userEvent.click(await screen.findByRole('button', { name: copy.dues.recordLink }))
+    expect(await screen.findByRole('heading', { name: copy.dues.payment.heading })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: copy.record.directionDues })).toHaveAttribute('aria-pressed', 'true')
+
+    await userEvent.click(await screen.findByRole('button', { name: copy.dues.payment.cancel }))
+    expect(await screen.findByLabelText(copy.dues.periodLabel)).toBeInTheDocument()
+    window.history.pushState({}, '', '/')
+  })
+
   it('falls back to the main purpose when ?purpose= is malformed', async () => {
     // Number('') is 0 and finite, so an empty param must not read as a
     // purpose id; the default is the fund's own main row, as if it were absent.

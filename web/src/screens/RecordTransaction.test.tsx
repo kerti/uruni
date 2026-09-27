@@ -101,7 +101,7 @@ describe('RecordTransaction', () => {
   it('requests only selectable purposes for the picker', async () => {
     const fetchMock = stubFormLoad()
     vi.stubGlobal('fetch', fetchMock)
-    render(<RecordTransaction onRecorded={vi.fn()} onCancel={vi.fn()} />)
+    render(<RecordTransaction onRecorded={vi.fn()} onCancel={vi.fn()} onDuesRecorded={vi.fn()} />)
 
     await waitFor(() => expect(selectedOptionName(text.purposeLabel)).toBe('Kas utama'))
 
@@ -116,7 +116,7 @@ describe('RecordTransaction', () => {
   // these assert on what she actually sees in the closed field.
   it('defaults the purpose to the kind:"main" row, not whichever purpose sorts first', async () => {
     vi.stubGlobal('fetch', stubFormLoad())
-    render(<RecordTransaction onRecorded={vi.fn()} onCancel={vi.fn()} />)
+    render(<RecordTransaction onRecorded={vi.fn()} onCancel={vi.fn()} onDuesRecorded={vi.fn()} />)
 
     // id 11 "Kas utama", not id 10 "Kas Bidang", which sorts first.
     await waitFor(() => expect(selectedOptionName(text.purposeLabel)).toBe('Kas utama'))
@@ -126,7 +126,7 @@ describe('RecordTransaction', () => {
     // The incidentals screen navigates here as /record?purpose=12 rather
     // than carrying a second copy of these fields (M6.19).
     vi.stubGlobal('fetch', stubFormLoad())
-    render(<RecordTransaction onRecorded={vi.fn()} onCancel={vi.fn()} initialPurposeId={12} />)
+    render(<RecordTransaction onRecorded={vi.fn()} onCancel={vi.fn()} onDuesRecorded={vi.fn()} initialPurposeId={12} />)
 
     await waitFor(() => expect(selectedOptionName(text.purposeLabel)).toBe('Halal bihalal RT'))
   })
@@ -135,14 +135,14 @@ describe('RecordTransaction', () => {
     // A stale link would otherwise leave the picker on an id nothing
     // matches, and the form unsubmittable for no visible reason.
     vi.stubGlobal('fetch', stubFormLoad())
-    render(<RecordTransaction onRecorded={vi.fn()} onCancel={vi.fn()} initialPurposeId={999} />)
+    render(<RecordTransaction onRecorded={vi.fn()} onCancel={vi.fn()} onDuesRecorded={vi.fn()} initialPurposeId={999} />)
 
     await waitFor(() => expect(selectedOptionName(text.purposeLabel)).toBe('Kas utama'))
   })
 
   it('excludes a retired account from the location picker and its default', async () => {
     vi.stubGlobal('fetch', stubFormLoad())
-    render(<RecordTransaction onRecorded={vi.fn()} onCancel={vi.fn()} />)
+    render(<RecordTransaction onRecorded={vi.fn()} onCancel={vi.fn()} onDuesRecorded={vi.fn()} />)
 
     // First active account (id 1, "Tunai") is the default when nothing was
     // remembered yet.
@@ -153,7 +153,7 @@ describe('RecordTransaction', () => {
   it('defaults the location to the last one remembered in localStorage, when it is still active', async () => {
     window.localStorage.setItem('uruni:record:last-account-id', '3')
     vi.stubGlobal('fetch', stubFormLoad())
-    render(<RecordTransaction onRecorded={vi.fn()} onCancel={vi.fn()} />)
+    render(<RecordTransaction onRecorded={vi.fn()} onCancel={vi.fn()} onDuesRecorded={vi.fn()} />)
 
     await waitFor(() => expect(selectedOptionName(text.locationLabel)).toBe('Bank Uji Coba'))
   })
@@ -161,14 +161,14 @@ describe('RecordTransaction', () => {
   it('falls back to the first active account when the remembered one was retired since', async () => {
     window.localStorage.setItem('uruni:record:last-account-id', '2')
     vi.stubGlobal('fetch', stubFormLoad())
-    render(<RecordTransaction onRecorded={vi.fn()} onCancel={vi.fn()} />)
+    render(<RecordTransaction onRecorded={vi.fn()} onCancel={vi.fn()} onDuesRecorded={vi.fn()} />)
 
     await waitFor(() => expect(selectedOptionName(text.locationLabel)).toBe('Tunai'))
   })
 
   it('defaults the date to today', async () => {
     vi.stubGlobal('fetch', stubFormLoad())
-    render(<RecordTransaction onRecorded={vi.fn()} onCancel={vi.fn()} />)
+    render(<RecordTransaction onRecorded={vi.fn()} onCancel={vi.fn()} onDuesRecorded={vi.fn()} />)
 
     const dateInput = (await screen.findByLabelText(text.dateLabel)) as HTMLInputElement
     const now = new Date()
@@ -189,7 +189,7 @@ describe('RecordTransaction', () => {
     vi.stubGlobal('fetch', fetchMock)
 
     const onRecorded = vi.fn()
-    render(<RecordTransaction onRecorded={onRecorded} onCancel={vi.fn()} />)
+    render(<RecordTransaction onRecorded={onRecorded} onCancel={vi.fn()} onDuesRecorded={vi.fn()} />)
 
     await screen.findByLabelText(text.locationLabel)
     await userEvent.type(screen.getByLabelText(text.amountLabel), '50000')
@@ -220,15 +220,34 @@ describe('RecordTransaction', () => {
   it('leaves without posting anything when cancelled', async () => {
     const onCancel = vi.fn()
     vi.stubGlobal('fetch', stubFormLoad())
-    render(<RecordTransaction onRecorded={vi.fn()} onCancel={onCancel} />)
+    render(<RecordTransaction onRecorded={vi.fn()} onCancel={onCancel} onDuesRecorded={vi.fn()} />)
 
     await userEvent.click(await screen.findByRole('button', { name: text.cancel }))
     expect(onCancel).toHaveBeenCalledTimes(1)
   })
 
+  // #315: Iuran is the toggle's fourth item - a dues payment moves money,
+  // so Catat records it (ADR-032). Choosing it swaps in the dues form under
+  // its own heading; choosing a direction again brings the transaction form
+  // back as she left it.
+  it('swaps to the dues payment form under Iuran, and back', async () => {
+    vi.stubGlobal('fetch', stubFormLoad())
+    render(<RecordTransaction onRecorded={vi.fn()} onCancel={vi.fn()} onDuesRecorded={vi.fn()} />)
+
+    await userEvent.type(await screen.findByLabelText(text.amountLabel), '5000')
+    await userEvent.click(screen.getByRole('button', { name: text.directionDues }))
+    expect(screen.getByRole('heading', { name: copy.dues.payment.heading })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: text.directionDues })).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.queryByLabelText(text.amountLabel)).not.toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole('button', { name: text.directionOut }))
+    expect(screen.getByRole('heading', { name: text.heading })).toBeInTheDocument()
+    expect(screen.getByLabelText(text.amountLabel)).toHaveValue(formatIDR(5_000))
+  })
+
   it('keeps the submit button disabled until an amount is entered', async () => {
     vi.stubGlobal('fetch', stubFormLoad())
-    render(<RecordTransaction onRecorded={vi.fn()} onCancel={vi.fn()} />)
+    render(<RecordTransaction onRecorded={vi.fn()} onCancel={vi.fn()} onDuesRecorded={vi.fn()} />)
 
     await screen.findByLabelText(text.locationLabel)
     expect(screen.getByRole('button', { name: text.submit })).toBeDisabled()
@@ -253,7 +272,7 @@ describe('RecordTransaction: the Titipan warning (#266)', () => {
 
   it('warns when an out tagged to a titipan would take it below zero, naming Kas Utama', async () => {
     vi.stubGlobal('fetch', stubFormLoad(30_000))
-    render(<RecordTransaction onRecorded={vi.fn()} onCancel={vi.fn()} />)
+    render(<RecordTransaction onRecorded={vi.fn()} onCancel={vi.fn()} onDuesRecorded={vi.fn()} />)
     await waitFor(() => expect(screen.getByLabelText(text.locationLabel)).toBeInTheDocument())
 
     await fillOut('50000', 'Kas Bidang')
@@ -263,7 +282,7 @@ describe('RecordTransaction: the Titipan warning (#266)', () => {
 
   it('stays silent on a forward the titipan actually holds the money for', async () => {
     vi.stubGlobal('fetch', stubFormLoad(80_000))
-    render(<RecordTransaction onRecorded={vi.fn()} onCancel={vi.fn()} />)
+    render(<RecordTransaction onRecorded={vi.fn()} onCancel={vi.fn()} onDuesRecorded={vi.fn()} />)
     await waitFor(() => expect(screen.getByLabelText(text.locationLabel)).toBeInTheDocument())
 
     await fillOut('50000', 'Kas Bidang')
@@ -274,7 +293,7 @@ describe('RecordTransaction: the Titipan warning (#266)', () => {
   it('stays silent on money coming in, whatever the titipan holds', async () => {
     vi.stubGlobal('fetch', stubFormLoad(0))
     const user = userEvent.setup()
-    render(<RecordTransaction onRecorded={vi.fn()} onCancel={vi.fn()} />)
+    render(<RecordTransaction onRecorded={vi.fn()} onCancel={vi.fn()} onDuesRecorded={vi.fn()} />)
     await waitFor(() => expect(screen.getByLabelText(text.locationLabel)).toBeInTheDocument())
 
     await user.click(screen.getByRole('button', { name: text.directionIn }))
@@ -287,7 +306,7 @@ describe('RecordTransaction: the Titipan warning (#266)', () => {
     // ADR-031 blessed an incidental's shortfall; nothing here second-guesses
     // the fund's own routine money either.
     vi.stubGlobal('fetch', stubFormLoad(0))
-    render(<RecordTransaction onRecorded={vi.fn()} onCancel={vi.fn()} />)
+    render(<RecordTransaction onRecorded={vi.fn()} onCancel={vi.fn()} onDuesRecorded={vi.fn()} />)
     await waitFor(() => expect(screen.getByLabelText(text.locationLabel)).toBeInTheDocument())
 
     await fillOut('5000000', 'Halal bihalal RT')
@@ -298,7 +317,7 @@ describe('RecordTransaction: the Titipan warning (#266)', () => {
 
   it('warns without blocking - she may mean it, and #276 makes it correctable either way', async () => {
     vi.stubGlobal('fetch', stubFormLoad(0))
-    render(<RecordTransaction onRecorded={vi.fn()} onCancel={vi.fn()} />)
+    render(<RecordTransaction onRecorded={vi.fn()} onCancel={vi.fn()} onDuesRecorded={vi.fn()} />)
     await waitFor(() => expect(screen.getByLabelText(text.locationLabel)).toBeInTheDocument())
 
     await fillOut('50000', 'Kas Bidang')
@@ -339,7 +358,7 @@ describe('RecordTransaction: Pindah lokasi (#235)', () => {
 
   it('swaps the one location field for from/to and hides the peruntukan', async () => {
     stubTransferPost()
-    render(<RecordTransaction onRecorded={vi.fn()} onCancel={vi.fn()} />)
+    render(<RecordTransaction onRecorded={vi.fn()} onCancel={vi.fn()} onDuesRecorded={vi.fn()} />)
     await chooseTransfer()
 
     expect(screen.getByLabelText(text.fromLocationLabel)).toBeInTheDocument()
@@ -351,7 +370,7 @@ describe('RecordTransaction: Pindah lokasi (#235)', () => {
 
   it('refuses the same location on both sides, saying why, and keeps submit disabled', async () => {
     stubTransferPost()
-    render(<RecordTransaction onRecorded={vi.fn()} onCancel={vi.fn()} />)
+    render(<RecordTransaction onRecorded={vi.fn()} onCancel={vi.fn()} onDuesRecorded={vi.fn()} />)
     const user = await chooseTransfer()
 
     await user.type(screen.getByLabelText(text.amountLabel), '50000')
@@ -383,7 +402,7 @@ describe('RecordTransaction: Pindah lokasi (#235)', () => {
     void fetchMock
 
     const onRecorded = vi.fn()
-    render(<RecordTransaction onRecorded={onRecorded} onCancel={vi.fn()} />)
+    render(<RecordTransaction onRecorded={onRecorded} onCancel={vi.fn()} onDuesRecorded={vi.fn()} />)
     const user = await chooseTransfer()
 
     await user.type(screen.getByLabelText(text.amountLabel), '50000')
@@ -412,7 +431,7 @@ describe('RecordTransaction: Pindah lokasi (#235)', () => {
     // (ADR-024, ADR-027). One row would change the fund total; nothing moved,
     // so nothing may.
     stubTransferPost()
-    render(<RecordTransaction onRecorded={vi.fn()} onCancel={vi.fn()} />)
+    render(<RecordTransaction onRecorded={vi.fn()} onCancel={vi.fn()} onDuesRecorded={vi.fn()} />)
     const user = await chooseTransfer()
 
     await user.type(screen.getByLabelText(text.amountLabel), '50000')
@@ -428,7 +447,7 @@ describe('RecordTransaction: Pindah lokasi (#235)', () => {
 
   it('leaves the two ordinary directions alone', async () => {
     stubTransferPost()
-    render(<RecordTransaction onRecorded={vi.fn()} onCancel={vi.fn()} />)
+    render(<RecordTransaction onRecorded={vi.fn()} onCancel={vi.fn()} onDuesRecorded={vi.fn()} />)
     await waitFor(() => expect(screen.getByLabelText(text.locationLabel)).toBeInTheDocument())
 
     expect(screen.getByLabelText(text.purposeLabel)).toBeInTheDocument()
@@ -464,7 +483,7 @@ describe('RecordTransaction: moving money, with its balances in view (#235 revis
 
   it('shows what each location holds, so the move can be read against it', async () => {
     stubWith(135_000, 250_000)
-    render(<RecordTransaction onRecorded={vi.fn()} onCancel={vi.fn()} />)
+    render(<RecordTransaction onRecorded={vi.fn()} onCancel={vi.fn()} onDuesRecorded={vi.fn()} />)
     const user = await startTransfer()
 
     await chooseOption(text.fromLocationLabel, 'Tunai')
@@ -477,7 +496,7 @@ describe('RecordTransaction: moving money, with its balances in view (#235 revis
 
   it('warns when the move would take the SOURCE below zero, without blocking it', async () => {
     stubWith(30_000, 250_000)
-    render(<RecordTransaction onRecorded={vi.fn()} onCancel={vi.fn()} />)
+    render(<RecordTransaction onRecorded={vi.fn()} onCancel={vi.fn()} onDuesRecorded={vi.fn()} />)
     const user = await startTransfer()
 
     await user.type(screen.getByLabelText(text.amountLabel), '50000')
@@ -495,7 +514,7 @@ describe('RecordTransaction: moving money, with its balances in view (#235 revis
     // The destination starts negative and stays negative - but it is moving
     // toward zero, not away from it, so there is nothing to say.
     stubWith(1_000_000, -80_000)
-    render(<RecordTransaction onRecorded={vi.fn()} onCancel={vi.fn()} />)
+    render(<RecordTransaction onRecorded={vi.fn()} onCancel={vi.fn()} onDuesRecorded={vi.fn()} />)
     const user = await startTransfer()
 
     await user.type(screen.getByLabelText(text.amountLabel), '50000')
@@ -508,7 +527,7 @@ describe('RecordTransaction: moving money, with its balances in view (#235 revis
 
   it('swaps the two locations in one tap - the deposit/withdraw pair reversed', async () => {
     stubWith(135_000, 250_000)
-    render(<RecordTransaction onRecorded={vi.fn()} onCancel={vi.fn()} />)
+    render(<RecordTransaction onRecorded={vi.fn()} onCancel={vi.fn()} onDuesRecorded={vi.fn()} />)
     const user = await startTransfer()
 
     await chooseOption(text.fromLocationLabel, 'Tunai')
@@ -551,7 +570,7 @@ describe('RecordTransaction: moving money, with its balances in view (#235 revis
       vi.stubGlobal('fetch', fetchMock)
 
       const onRecorded = vi.fn()
-      render(<RecordTransaction onRecorded={onRecorded} onCancel={vi.fn()} />)
+      render(<RecordTransaction onRecorded={onRecorded} onCancel={vi.fn()} onDuesRecorded={vi.fn()} />)
       const file = new File(['fake-bytes'], 'nota.jpg', { type: 'image/jpeg' })
       await fillAndPickPhoto(file)
 
@@ -572,7 +591,7 @@ describe('RecordTransaction: moving money, with its balances in view (#235 revis
       vi.stubGlobal('fetch', fetchMock)
 
       const onRecorded = vi.fn()
-      render(<RecordTransaction onRecorded={onRecorded} onCancel={vi.fn()} />)
+      render(<RecordTransaction onRecorded={onRecorded} onCancel={vi.fn()} onDuesRecorded={vi.fn()} />)
       await fillAndPickPhoto(new File(['fake-bytes'], 'nota.jpg', { type: 'image/jpeg' }))
 
       await userEvent.click(screen.getByRole('button', { name: text.submit }))
@@ -585,7 +604,7 @@ describe('RecordTransaction: moving money, with its balances in view (#235 revis
       vi.stubGlobal('fetch', fetchMock)
 
       const onRecorded = vi.fn()
-      render(<RecordTransaction onRecorded={onRecorded} onCancel={vi.fn()} />)
+      render(<RecordTransaction onRecorded={onRecorded} onCancel={vi.fn()} onDuesRecorded={vi.fn()} />)
       await screen.findByLabelText(text.locationLabel)
       await userEvent.type(screen.getByLabelText(text.amountLabel), '50000')
 

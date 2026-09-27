@@ -82,7 +82,17 @@ interface FormData {
  * onRecorded and onCancel are the caller's navigation, not links this
  * component owns.
  */
-export default function RecordDuesPayment({ onRecorded, onCancel }: { onRecorded: () => void; onCancel: () => void }) {
+export default function RecordDuesPayment({
+  onRecorded,
+  onCancel,
+  embedded = false,
+}: {
+  onRecorded: () => void
+  onCancel: () => void
+  /** Rendered inside Catat (#315), under its heading and Jenis toggle - so
+   * no heading or page frame of its own. */
+  embedded?: boolean
+}) {
   const [loadState, loadRun] = useApi<FormData>()
   const [outstandingState, outstandingRun] = useApi<OutstandingDuesPeriod[]>()
   const [submitState, submitRun] = useApi<unknown>()
@@ -196,8 +206,8 @@ export default function RecordDuesPayment({ onRecorded, onCancel }: { onRecorded
   const selectableMembers = loadState.data.members.filter((m) => m.inactive_on === null)
 
   return (
-    <form className="mx-auto flex w-full max-w-sm flex-col gap-4" onSubmit={handleSubmit} noValidate>
-      <h1 className="text-2xl font-semibold">{text.heading}</h1>
+    <form className={embedded ? 'flex flex-col gap-4' : 'mx-auto flex w-full max-w-sm flex-col gap-4'} onSubmit={handleSubmit} noValidate>
+      {!embedded && <h1 className="text-2xl font-semibold">{text.heading}</h1>}
 
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="dues-payment-member">{text.memberLabel}</Label>
@@ -312,12 +322,14 @@ export default function RecordDuesPayment({ onRecorded, onCancel }: { onRecorded
 
       {submitState.status === 'error' && submitState.error && <ErrorState error={submitState.error} />}
 
-      <Button type="submit" size="lg" disabled={!canSubmit}>
-        {submitting ? text.submitting : text.submit}
-      </Button>
-      <Button type="button" variant="outline" size="lg" onClick={onCancel} disabled={submitting}>
-        {text.cancel}
-      </Button>
+      <div className="grid grid-cols-2 gap-2">
+        <Button type="button" variant="outline" size="lg" onClick={onCancel} disabled={submitting}>
+          {text.cancel}
+        </Button>
+        <Button type="submit" size="lg" disabled={!canSubmit}>
+          {submitting ? text.submitting : text.submit}
+        </Button>
+      </div>
     </form>
   )
 }

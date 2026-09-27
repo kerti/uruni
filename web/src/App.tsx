@@ -20,7 +20,6 @@ import Transactions from '@/screens/History/Transactions'
 import Reimbursements from '@/screens/History/Reimbursements'
 import Reconciliations from '@/screens/History/Reconciliations'
 import DuesStatus from '@/screens/Dues/Status'
-import RecordDuesPayment from '@/screens/Dues/RecordPayment'
 import PaymentHistory from '@/screens/Dues/PaymentHistory'
 import Home from '@/screens/Home'
 import Members from '@/screens/Members'
@@ -140,7 +139,8 @@ function AuthGate({
  * transaction itself posted but the receipt upload failed - never set for
  * a transfer, which has no photo field. */
 interface HomeState {
-  recorded: Direction
+  // 'dues': a dues payment recorded through Catat's Iuran (#315).
+  recorded: Direction | 'dues'
   photoFailed?: boolean
 }
 
@@ -148,6 +148,13 @@ interface HomeState {
  * the one history entry that navigation creates, not to this component. */
 interface DuesState {
   duesRecorded: true
+}
+
+/** A dues payment opened from the status matrix (#315) rather than from
+ * Catat's own Iuran: saving and Batal both go back to the matrix, the door
+ * she came in by. */
+interface RecordFromDuesState {
+  fromDues: true
 }
 
 /**
@@ -233,6 +240,8 @@ function AuthedGate({ onLoggedOut }: { onLoggedOut: () => void }) {
   const recorded = (location.state as HomeState | null)?.recorded
   const photoFailed = (location.state as HomeState | null)?.photoFailed === true
   const duesRecorded = (location.state as DuesState | null)?.duesRecorded === true
+  const recordFromDues = (location.state as RecordFromDuesState | null)?.fromDues === true
+  const recordDues = searchParams.get('type') === 'dues'
   // A failed photo upload (#154) replaces the ordinary success line rather
   // than joining it - the sentence already says the transaction is saved,
   // so repeating successIn/successOut beside it would say the same thing
@@ -245,7 +254,9 @@ function AuthedGate({ onLoggedOut }: { onLoggedOut: () => void }) {
         ? copy.record.successOut
         : recorded === 'transfer'
           ? copy.record.successTransfer
-          : null
+          : recorded === 'dues'
+            ? copy.dues.payment.success
+            : null
 
   return (
     <Routes>
@@ -253,7 +264,18 @@ function AuthedGate({ onLoggedOut }: { onLoggedOut: () => void }) {
         path="/record"
         element={
           <Shell title={title} onLoggedOut={onLoggedOut}>
-            <RecordTransaction onRecorded={handleRecorded} onCancel={() => navigate('/')} initialPurposeId={initialPurposeId} />
+            <RecordTransaction
+              onRecorded={handleRecorded}
+              onCancel={() => navigate('/')}
+              initialPurposeId={initialPurposeId}
+              initialDues={recordDues}
+              onDuesRecorded={() =>
+                recordFromDues
+                  ? navigate('/dues', { state: { duesRecorded: true } satisfies DuesState })
+                  : navigate('/', { state: { recorded: 'dues' } satisfies HomeState })
+              }
+              onDuesCancel={recordFromDues ? () => navigate('/dues') : undefined}
+            />
           </Shell>
         }
       />
@@ -292,7 +314,7 @@ function AuthedGate({ onLoggedOut }: { onLoggedOut: () => void }) {
           <Shell title={title} onLoggedOut={onLoggedOut}>
             <DuesStatus
               onBack={() => navigate('/history/dues')}
-              onRecordPayment={() => navigate('/dues/payment')}
+              onRecordPayment={() => navigate('/record?type=dues', { state: { fromDues: true } satisfies RecordFromDuesState })}
               refetchKey={location.key}
               notice={duesRecorded ? copy.dues.payment.success : null}
             />
@@ -303,16 +325,12 @@ function AuthedGate({ onLoggedOut }: { onLoggedOut: () => void }) {
           Talangan now lives at /history/reimbursements (#226, ADR-032),
           same redirect precedent as /dues above. */}
       <Route path="/reimbursements" element={<Navigate to="/history/reimbursements" replace />} />
+      {/* The dues payment form's own former address (M6.13) - it is Catat's
+          fourth Jenis now (#315), opened with Iuran chosen and the matrix as
+          the door to return through. */}
       <Route
         path="/dues/payment"
-        element={
-          <Shell title={title} onLoggedOut={onLoggedOut}>
-            <RecordDuesPayment
-              onRecorded={() => navigate('/dues', { state: { duesRecorded: true } satisfies DuesState })}
-              onCancel={() => navigate('/dues')}
-            />
-          </Shell>
-        }
+        element={<Navigate to="/record?type=dues" state={{ fromDues: true } satisfies RecordFromDuesState} replace />}
       />
       <Route
         path="/members"

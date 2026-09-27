@@ -59,8 +59,11 @@ function routedFetch(handlers: Handler[]) {
     const url = typeof input === 'string' ? input : input.toString()
     const method = (init?.method ?? 'GET').toUpperCase()
     const handler = handlers.find((h) => h.match(method, url))
-    if (!handler) return Promise.reject(new Error(`unstubbed fetch: ${method} ${url}`))
-    return handler.handle()
+    if (handler) return handler.handle()
+    // The envelope's recent activity (#314) fetches on every render of the
+    // detail; tests about something else get an empty list for it.
+    if (method === 'GET' && url.includes('/api/transactions')) return Promise.resolve(jsonResponse({ transactions: [], next_cursor: null }))
+    return Promise.reject(new Error(`unstubbed fetch: ${method} ${url}`))
   })
 }
 
@@ -206,6 +209,8 @@ describe('Incidentals', () => {
     const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
       const url = typeof input === 'string' ? input : input.toString()
       const method = (init?.method ?? 'GET').toUpperCase()
+      if (method === 'GET' && url.includes('/api/transactions'))
+        return Promise.resolve(jsonResponse({ transactions: [], next_cursor: null }))
       if (method === 'POST' && url.includes('/api/incidentals/1/close')) return closeHandler(init)
       if (method === 'GET' && url.includes('/api/incidentals/1')) return Promise.resolve(jsonResponse(detail))
       const handler = getHandlers().find((h) => h.match(method, url))
@@ -234,6 +239,8 @@ describe('Incidentals', () => {
     const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
       const url = typeof input === 'string' ? input : input.toString()
       const method = (init?.method ?? 'GET').toUpperCase()
+      if (method === 'GET' && url.includes('/api/transactions'))
+        return Promise.resolve(jsonResponse({ transactions: [], next_cursor: null }))
       if (method === 'POST' && url.includes('/api/incidentals/1/close')) {
         posted = JSON.parse(String(init?.body))
         return Promise.resolve(jsonResponse({ incidental: closed, rolled_amount: 120_000 }))
@@ -317,6 +324,8 @@ describe('Incidentals', () => {
     const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
       const url = typeof input === 'string' ? input : input.toString()
       const method = (init?.method ?? 'GET').toUpperCase()
+      if (method === 'GET' && url.includes('/api/transactions'))
+        return Promise.resolve(jsonResponse({ transactions: [], next_cursor: null }))
       if (method === 'POST' && url.includes('/api/incidentals/2/reopen')) {
         return Promise.resolve(jsonResponse(reopened))
       }
@@ -382,8 +391,49 @@ describe('Incidentals', () => {
     renderIncidentals(<Incidentals onBack={vi.fn()} onRecordFor={vi.fn()} onViewTransactionsFor={onViewTransactionsFor} purposeId={2} />)
     await waitFor(() => expect(screen.getByText(text.detail.collectedLabel)).toBeInTheDocument())
 
-    await userEvent.click(screen.getByRole('button', { name: text.actions.viewTransactions }))
+    await userEvent.click(screen.getByRole('button', { name: copy.home.recentActivityViewAll }))
     expect(onViewTransactionsFor).toHaveBeenCalledWith(2)
+  })
+
+  // #314: the envelope's own recent activity, asked for by purpose - the
+  // same filter "Lihat semua" leads to - so the rows below the actions are
+  // this envelope's and nobody else's.
+  it("lists the envelope's recent transactions, fetched by its purpose", async () => {
+    const row = {
+      id: 7,
+      account_id: 1,
+      purpose_id: 2,
+      direction: 'in',
+      amount: 75_000,
+      occurred_on: '2026-09-02',
+      kind: 'normal',
+      member_id: null,
+      dues_period: null,
+      reimbursement_id: null,
+      transfer_id: null,
+      reverses_transaction_id: null,
+      note: 'Iuran halal bihalal',
+      created_at: 7,
+    }
+    const fetchMock = routedFetch([
+      {
+        match: (m: string, u: string) => m === 'GET' && u.includes('/api/incidentals/2'),
+        handle: () => Promise.resolve(jsonResponse(closedEnvelope)),
+      },
+      {
+        match: (m: string, u: string) => m === 'GET' && u.includes('/api/transactions'),
+        handle: () => Promise.resolve(jsonResponse({ transactions: [row], next_cursor: null })),
+      },
+      ...getHandlers(),
+    ])
+    vi.stubGlobal('fetch', fetchMock)
+
+    renderIncidentals(<Incidentals onBack={vi.fn()} onRecordFor={vi.fn()} onViewTransactionsFor={vi.fn()} purposeId={2} />)
+
+    expect(await screen.findByText('Iuran halal bihalal')).toBeInTheDocument()
+    expect(screen.getByText(copy.home.recentActivityHeading)).toBeInTheDocument()
+    const urls = fetchMock.mock.calls.map(([input]) => String(input))
+    expect(urls.some((u) => u.includes('/api/transactions') && u.includes('purpose_id=2'))).toBe(true)
   })
 
   // --- The rollover, on every visit (#270) --------------------------------
@@ -546,6 +596,8 @@ describe('Incidentals', () => {
     const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
       const url = typeof input === 'string' ? input : input.toString()
       const method = (init?.method ?? 'GET').toUpperCase()
+      if (method === 'GET' && url.includes('/api/transactions'))
+        return Promise.resolve(jsonResponse({ transactions: [], next_cursor: null }))
       if (method === 'PATCH' && url.includes('/api/purposes/1')) {
         patched = { method, url, body: init?.body ? JSON.parse(String(init.body)) : undefined }
         return Promise.resolve(jsonResponse(renamedPurpose))
