@@ -1,9 +1,9 @@
-import * as React from "react"
-import { Dialog as DialogPrimitive } from "radix-ui"
-import { X } from "lucide-react"
+import * as React from 'react'
+import { Dialog as DialogPrimitive } from 'radix-ui'
+import { X } from 'lucide-react'
 
-import { useKeyboardInset } from "@/lib/useKeyboardInset"
-import { cn } from "@/lib/utils"
+import { useKeyboardInset } from '@/lib/useKeyboardInset'
+import { cn } from '@/lib/utils'
 
 // The dialog primitive every non-posting edit in this milestone uses
 // (M6.28, ADR-032 "Every non-posting edit is a dialog"), proven on the
@@ -48,7 +48,7 @@ function DialogOverlay({ className, ...props }: React.ComponentProps<typeof Dial
     <DialogPrimitive.Overlay
       data-slot="dialog-overlay"
       className={cn(
-        "fixed inset-0 isolate z-50 bg-black/10 supports-backdrop-filter:backdrop-blur-xs data-[state=open]:animate-overlay-in data-[state=closed]:animate-overlay-out",
+        'fixed inset-0 isolate z-50 bg-black/10 supports-backdrop-filter:backdrop-blur-xs data-[state=open]:animate-overlay-in data-[state=closed]:animate-overlay-out',
         className,
       )}
       {...props}
@@ -89,7 +89,7 @@ function focusFirstFieldWithoutSelecting(event: Event) {
   event.preventDefault()
   first.focus({ preventScroll: true })
 
-  if (first instanceof HTMLInputElement && typeof first.selectionStart === "number") {
+  if (first instanceof HTMLInputElement && typeof first.selectionStart === 'number') {
     const end = first.value.length
     first.setSelectionRange(end, end)
   }
@@ -119,7 +119,7 @@ function DialogContent({ className, children, closeLabel, style, onOpenAutoFocus
         // opt out of Radix's describedby warning explicitly.
         aria-describedby={undefined}
         className={cn(
-          "fixed top-1/2 left-1/2 z-50 grid max-h-[90dvh] w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 gap-4 overflow-y-auto rounded-xl bg-popover p-4 text-popover-foreground ring-1 ring-foreground/10 outline-none sm:max-w-sm data-[state=open]:animate-dialog-in data-[state=closed]:animate-dialog-out",
+          'fixed top-1/2 left-1/2 z-50 grid max-h-[90dvh] w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 gap-4 overflow-y-auto rounded-xl bg-popover p-4 text-popover-foreground ring-1 ring-foreground/10 outline-none sm:max-w-sm data-[state=open]:animate-dialog-in data-[state=closed]:animate-dialog-out',
           className,
         )}
         style={keyboardStyle ? { ...style, ...keyboardStyle } : style}
@@ -143,15 +143,15 @@ function DialogContent({ className, children, closeLabel, style, onOpenAutoFocus
 }
 
 /** Title block. Right padding keeps a long title clear of the close button. */
-function DialogHeader({ className, ...props }: React.ComponentProps<"div">) {
-  return <div data-slot="dialog-header" className={cn("flex flex-col gap-2 pr-10", className)} {...props} />
+function DialogHeader({ className, ...props }: React.ComponentProps<'div'>) {
+  return <div data-slot="dialog-header" className={cn('flex flex-col gap-2 pr-10', className)} {...props} />
 }
 
 function DialogTitle({ className, ...props }: React.ComponentProps<typeof DialogPrimitive.Title>) {
   return (
     <DialogPrimitive.Title
       data-slot="dialog-title"
-      className={cn("font-heading text-base leading-none font-medium", className)}
+      className={cn('font-heading text-base leading-none font-medium', className)}
       {...props}
     />
   )
@@ -164,14 +164,11 @@ function DialogTitle({ className, ...props }: React.ComponentProps<typeof Dialog
  * buttons, and on a phone each is a thumb target, so each gets as much
  * width as the row has. The primary is told apart by its fill, not its
  * size. */
-function DialogFooter({ className, ...props }: React.ComponentProps<"div">) {
+function DialogFooter({ className, ...props }: React.ComponentProps<'div'>) {
   return (
     <div
       data-slot="dialog-footer"
-      className={cn(
-        "-mx-4 -mb-4 flex gap-2 rounded-b-xl border-t border-border bg-muted/50 p-4 *:flex-1",
-        className,
-      )}
+      className={cn('-mx-4 -mb-4 flex gap-2 rounded-b-xl border-t border-border bg-muted/50 p-4 *:flex-1', className)}
       {...props}
     />
   )

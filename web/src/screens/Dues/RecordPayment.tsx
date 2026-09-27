@@ -38,7 +38,6 @@ function currentISOMonth(): string {
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
 }
 
-
 /** What one outstanding period still needs to settle it: the tier's
  * effective rate for that month, less anything already paid toward it. For
  * an `unpaid` period that is the whole rate; for a `partial` one it is the
@@ -83,13 +82,7 @@ interface FormData {
  * onRecorded and onCancel are the caller's navigation, not links this
  * component owns.
  */
-export default function RecordDuesPayment({
-  onRecorded,
-  onCancel,
-}: {
-  onRecorded: () => void
-  onCancel: () => void
-}) {
+export default function RecordDuesPayment({ onRecorded, onCancel }: { onRecorded: () => void; onCancel: () => void }) {
   const [loadState, loadRun] = useApi<FormData>()
   const [outstandingState, outstandingRun] = useApi<OutstandingDuesPeriod[]>()
   const [submitState, submitRun] = useApi<unknown>()
@@ -185,9 +178,7 @@ export default function RecordDuesPayment({
         note: null,
         // In the order the server offered them - oldest first - so a
         // multi-period payment reads the way it was collected.
-        periods: periods
-          .filter((p) => selected.includes(p.period))
-          .map((p) => ({ dues_period: p.period, amount: amounts[p.period] ?? 0 })),
+        periods: periods.filter((p) => selected.includes(p.period)).map((p) => ({ dues_period: p.period, amount: amounts[p.period] ?? 0 })),
       })
       onRecorded()
       return result
@@ -257,10 +248,7 @@ export default function RecordDuesPayment({
               {periods.map((period) => {
                 const checked = selected.includes(period.period)
                 return (
-                  <li
-                    key={period.period}
-                    className="flex flex-col gap-2 rounded-lg bg-card px-4 py-3 ring-1 ring-foreground/10"
-                  >
+                  <li key={period.period} className="flex flex-col gap-2 rounded-lg bg-card px-4 py-3 ring-1 ring-foreground/10">
                     <label className="flex items-center gap-2 font-medium">
                       <input
                         type="checkbox"

@@ -250,7 +250,7 @@ describe('Transactions tab', () => {
 })
 
 describe('Transactions tab: correcting a peruntukan (#276, ADR-033)', () => {
-  it('opens the dialog from the row\'s peruntukan and writes it to the URL', async () => {
+  it("opens the dialog from the row's peruntukan and writes it to the URL", async () => {
     stubApi(() => ({ transactions: [row(5, 'Setoran Kas Bidang')], next_cursor: null }))
     const user = userEvent.setup()
     renderAt('/history/transactions')

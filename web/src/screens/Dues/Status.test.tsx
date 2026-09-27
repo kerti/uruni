@@ -92,7 +92,7 @@ describe('DuesStatus', () => {
     expect(screen.getByLabelText(text.periodLabel)).toHaveValue(expected)
   })
 
-  it('opens one member\'s payment history in place (M6.14)', async () => {
+  it("opens one member's payment history in place (M6.14)", async () => {
     const fetchMock = vi.fn((input: RequestInfo | URL) => {
       const url = typeof input === 'string' ? input : input.toString()
       if (url.includes('/api/dues-status')) return Promise.resolve(jsonResponse(rows))

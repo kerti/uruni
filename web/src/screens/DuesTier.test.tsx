@@ -48,10 +48,7 @@ function renderScreen(tierId = 1) {
 
 describe('A golongan screen', () => {
   it("shows the golongan's name and its whole rate history", async () => {
-    const { fetchMock } = stubTier(
-      [tier(1, 'Pelaksana')],
-      [rate(1, 1, 50_000, '2026-01'), rate(2, 1, 60_000, '2026-07')],
-    )
+    const { fetchMock } = stubTier([tier(1, 'Pelaksana')], [rate(1, 1, 50_000, '2026-01'), rate(2, 1, 60_000, '2026-07')])
     vi.stubGlobal('fetch', fetchMock)
     renderScreen()
 
@@ -180,8 +177,10 @@ describe('A golongan screen', () => {
   // Deleting is what makes a wrong-month rate fixable at all: UNIQUE
   // (tier_id, effective_from) refuses the corrected row while it stands.
   it('deletes a rate filed against the wrong month', async () => {
-    const { fetchMock, calls } = stubTier([tier(1, 'Pelaksana')], [rate(1, 1, 50_000, '2026-01')], () =>
-      new Response(null, { status: 204 }),
+    const { fetchMock, calls } = stubTier(
+      [tier(1, 'Pelaksana')],
+      [rate(1, 1, 50_000, '2026-01')],
+      () => new Response(null, { status: 204 }),
     )
     vi.stubGlobal('fetch', fetchMock)
     renderScreen()
@@ -197,9 +196,7 @@ describe('A golongan screen', () => {
   // Deleting takes the golongan's rates with it, and confirms in place -
   // never window.confirm(), and on a screen there is no dialog to nest.
   it('deletes the golongan after confirming in place', async () => {
-    const { fetchMock, calls } = stubTier([tier(1, 'Madya')], [rate(1, 1, 25_000, '2026-01')], () =>
-      new Response(null, { status: 204 }),
-    )
+    const { fetchMock, calls } = stubTier([tier(1, 'Madya')], [rate(1, 1, 25_000, '2026-01')], () => new Response(null, { status: 204 }))
     vi.stubGlobal('fetch', fetchMock)
     const { onBack } = renderScreen()
 

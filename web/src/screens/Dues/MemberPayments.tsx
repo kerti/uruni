@@ -16,7 +16,6 @@ import type { Transaction } from '@/lib/transactions'
 
 const text = copy.dues.history
 
-
 /** Local YYYY-MM-DD - never toISOString(). Same helper as
  * RecordPayment.tsx's own. */
 function todayISODate(): string {
@@ -50,15 +49,7 @@ function todayISODate(): string {
  * TransactionList's own display label instead, so there is no longer a
  * memberName prop here to build one from.
  */
-export default function MemberPayments({
-  memberId,
-  period,
-  onReversed,
-}: {
-  memberId: number
-  period: string
-  onReversed: () => void
-}) {
+export default function MemberPayments({ memberId, period, onReversed }: { memberId: number; period: string; onReversed: () => void }) {
   const [state, run] = useApi<Transaction[]>()
   const [submitState, submitRun] = useApi<unknown>()
 
@@ -198,12 +189,7 @@ export default function MemberPayments({
 
                 {submitState.status === 'error' && submitState.error && <ErrorState error={submitState.error} />}
 
-                <Button
-                  type="button"
-                  size="lg"
-                  disabled={submitting || occurredOn === ''}
-                  onClick={() => submitReversal(row.id)}
-                >
+                <Button type="button" size="lg" disabled={submitting || occurredOn === ''} onClick={() => submitReversal(row.id)}>
                   {submitting ? text.submitting : text.confirm}
                 </Button>
                 <Button type="button" variant="outline" size="lg" disabled={submitting} onClick={() => setReversingId(null)}>

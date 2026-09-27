@@ -138,15 +138,6 @@ describe('Settings dues tiers', () => {
     expect(calls[0]).toMatchObject({ method: 'POST', url: expect.stringContaining('/api/dues-tiers'), body: { name: 'Fungsional' } })
   })
 
-
-
-
-
-
-
-
-
-
   it('renders a duplicate tier name as the 409 it is', async () => {
     const { fetchMock } = stubTiers([tier(1, 'Pelaksana')], [], () =>
       jsonResponse({ error: { code: 'unique_violation', message: 'conflict' } }, 409),
@@ -160,7 +151,6 @@ describe('Settings dues tiers', () => {
 
     expect(await screen.findByRole('alert')).toHaveTextContent(copy.common.errors.unique_violation)
   })
-
 
   // #285: the card is the way into the golongan's own screen now, not into
   // a dialog holding its whole life.

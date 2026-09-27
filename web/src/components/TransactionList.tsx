@@ -63,7 +63,10 @@ export default function TransactionList({
       {transactions.map((transaction) => {
         const note = noteForDisplay(transaction)
         return (
-          <li key={transaction.id} className="flex items-start justify-between gap-3 rounded-lg bg-card px-4 py-3 ring-1 ring-foreground/10">
+          <li
+            key={transaction.id}
+            className="flex items-start justify-between gap-3 rounded-lg bg-card px-4 py-3 ring-1 ring-foreground/10"
+          >
             <span className="flex min-w-0 items-start gap-2">
               {transaction.direction === 'in' ? (
                 <ArrowDownLeft aria-hidden="true" className="mt-0.5 shrink-0 text-success" />
@@ -78,11 +81,7 @@ export default function TransactionList({
                     that (for a settlement, the settled claim's own note -
                     see noteForDisplay). Date is always last, so the row
                     still answers "what is this?" at a glance. */}
-                <PurposeLine
-                  transaction={transaction}
-                  purposeNames={purposeNames}
-                  onCorrectPurpose={onCorrectPurpose}
-                />
+                <PurposeLine transaction={transaction} purposeNames={purposeNames} onCorrectPurpose={onCorrectPurpose} />
                 <TransactionRowLabel transaction={transaction} />
                 {note && <span className="truncate text-sm text-muted-foreground">{note}</span>}
                 <span className="text-sm text-muted-foreground">{formatIsoDate(transaction.occurred_on)}</span>
@@ -101,10 +100,7 @@ export default function TransactionList({
                   caller does today) drops the control entirely rather than
                   rendering a dead tap. */}
               {onReceiptsChanged && (
-                <ReceiptRowButton
-                  receiptIds={transaction.receipt_ids ?? []}
-                  onClick={() => setReceiptsForId(transaction.id)}
-                />
+                <ReceiptRowButton receiptIds={transaction.receipt_ids ?? []} onClick={() => setReceiptsForId(transaction.id)} />
               )}
             </span>
           </li>
@@ -162,8 +158,7 @@ function PurposeLine({
   onCorrectPurpose?: (transaction: Transaction) => void
 }) {
   const name = purposeNames.get(transaction.purpose_id) ?? copy.home.purposeUnknown
-  const corrected =
-    transaction.effective_purpose_id !== undefined && transaction.effective_purpose_id !== transaction.purpose_id
+  const corrected = transaction.effective_purpose_id !== undefined && transaction.effective_purpose_id !== transaction.purpose_id
 
   const marker = corrected ? (
     <>

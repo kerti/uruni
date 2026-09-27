@@ -75,7 +75,7 @@ describe('RecordDuesPayment', () => {
     expect(screen.getByLabelText(text.amountLabel('Februari 2026'))).toHaveValue(formatIDR(30_000))
   })
 
-  it('sends the client\'s own local month as ?through', async () => {
+  it("sends the client's own local month as ?through", async () => {
     const fetchMock = stubApi()
     vi.stubGlobal('fetch', fetchMock)
     render(<RecordDuesPayment onRecorded={vi.fn()} onCancel={vi.fn()} />)

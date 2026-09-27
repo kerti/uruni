@@ -45,10 +45,7 @@ export default function Setup({ onDone }: { onDone: () => void }) {
   const [fundName, setFundName] = useState('')
   // Lazy: newLocationRow mints a client id, so the seed rows are built once,
   // not on every render.
-  const [locationRows, setLocationRows] = useState<LocationRow[]>(() => [
-    newLocationRow('cash', 'Tunai'),
-    newLocationRow('bank', 'Bank'),
-  ])
+  const [locationRows, setLocationRows] = useState<LocationRow[]>(() => [newLocationRow('cash', 'Tunai'), newLocationRow('bank', 'Bank')])
   const [tierName, setTierName] = useState('')
   const [rateAmount, setRateAmount] = useState('')
   const [members, setMembers] = useState<string[]>([])
@@ -108,14 +105,7 @@ export default function Setup({ onDone }: { onDone: () => void }) {
   }
 
   if (step === 'locations') {
-    return (
-      <Locations
-        rows={locationRows}
-        onChange={setLocationRows}
-        onNext={() => setStep('balances')}
-        onBack={() => setStep('fund')}
-      />
-    )
+    return <Locations rows={locationRows} onChange={setLocationRows} onNext={() => setStep('balances')} onBack={() => setStep('fund')} />
   }
 
   if (step === 'balances') {

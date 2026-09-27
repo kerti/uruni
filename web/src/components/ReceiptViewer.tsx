@@ -61,7 +61,12 @@ export default function ReceiptViewer({
   }, [open, src])
 
   return (
-    <DialogPrimitive.Root open={open} onOpenChange={(next) => { if (!next) onClose() }}>
+    <DialogPrimitive.Root
+      open={open}
+      onOpenChange={(next) => {
+        if (!next) onClose()
+      }}
+    >
       <DialogPrimitive.Portal>
         <DialogPrimitive.Overlay className="fixed inset-0 z-[70] bg-black data-[state=open]:animate-overlay-in data-[state=closed]:animate-overlay-out" />
         <DialogPrimitive.Content

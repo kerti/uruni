@@ -35,7 +35,6 @@ const text = copy.reconciliation
  * "recent" means. */
 const RECENT_ACTIVITY_COUNT = 5
 
-
 /** Local YYYY-MM-DD - never toISOString(), which is UTC and can read as
  * yesterday's date in WIB. Same helper as RecordTransaction.tsx's own. */
 function todayISODate(): string {
@@ -361,7 +360,10 @@ export default function Reconcile({ onDone, onCancel }: { onDone: () => void; on
       <details className="group flex flex-col gap-2 rounded-lg bg-card px-4 py-3 ring-1 ring-foreground/10">
         <summary className="flex cursor-pointer list-none items-center justify-between gap-2 text-sm font-semibold text-muted-foreground marker:content-none">
           {copy.home.recentActivityHeading}
-          <ChevronDown aria-hidden="true" className="size-4 transition-transform duration-200 group-open:rotate-180 motion-reduce:transition-none" />
+          <ChevronDown
+            aria-hidden="true"
+            className="size-4 transition-transform duration-200 group-open:rotate-180 motion-reduce:transition-none"
+          />
         </summary>
         {recentTransactions.length === 0 ? (
           <p className="pt-3 text-muted-foreground">{copy.home.recentActivityEmpty}</p>

@@ -88,10 +88,9 @@ export default function Login({ onLoggedIn }: { onLoggedIn: (user: AuthUser) => 
                 {text.tooManyRequests}
               </p>
             )}
-            {state.status === 'error' &&
-              state.error &&
-              code !== 'invalid_credentials' &&
-              code !== 'too_many_requests' && <ErrorState error={state.error} />}
+            {state.status === 'error' && state.error && code !== 'invalid_credentials' && code !== 'too_many_requests' && (
+              <ErrorState error={state.error} />
+            )}
             <Button type="submit" size="lg" disabled={submitting}>
               {submitting ? text.submitting : text.submit}
             </Button>

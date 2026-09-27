@@ -122,7 +122,14 @@ export default function PaymentHistory({ onOpenStatus, refetchKey }: { onOpenSta
         </ul>
         {nextCursor && moreError && <ErrorState error={moreError} onRetry={() => void loadMore(nextCursor)} />}
         {nextCursor && !moreError && (
-          <Button type="button" variant="outline" size="lg" className="w-full" disabled={moreLoading} onClick={() => void loadMore(nextCursor)}>
+          <Button
+            type="button"
+            variant="outline"
+            size="lg"
+            className="w-full"
+            disabled={moreLoading}
+            onClick={() => void loadMore(nextCursor)}
+          >
             {moreLoading ? copy.common.loading : text.loadMore}
           </Button>
         )}

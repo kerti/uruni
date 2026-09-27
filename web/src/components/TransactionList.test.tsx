@@ -49,21 +49,14 @@ function renderRows(rows: Transaction[]) {
  * what renderRows above still covers. */
 function renderCorrectableRows(rows: Transaction[], onCorrectPurpose = vi.fn()) {
   const result = render(
-    <TransactionList
-      transactions={rows}
-      purposeNames={purposeNames}
-      emptyMessage="Belum ada."
-      onCorrectPurpose={onCorrectPurpose}
-    />,
+    <TransactionList transactions={rows} purposeNames={purposeNames} emptyMessage="Belum ada." onCorrectPurpose={onCorrectPurpose} />,
   )
   return { ...result, onCorrectPurpose }
 }
 
 describe('TransactionList row labels (#257)', () => {
   it('labels a dues payment: CalendarCheck, "{period} - {anggota}", and Iuran for screen readers', () => {
-    const { container } = renderRows([
-      transaction({ kind: 'dues', dues_period: '2026-08', member_id: 5, member_name: 'Budi' }),
-    ])
+    const { container } = renderRows([transaction({ kind: 'dues', dues_period: '2026-08', member_id: 5, member_name: 'Budi' })])
 
     expect(container.querySelector('.lucide-calendar-check')).toBeInTheDocument()
     expect(screen.getByText(copy.rowLabels.dues.text(formatPeriod('2026-08'), 'Budi'))).toBeInTheDocument()
@@ -73,8 +66,12 @@ describe('TransactionList row labels (#257)', () => {
   it('labels a dues reversal: Undo2, "Pembatalan - {period} - {anggota}", with no duplicate screen-reader word', () => {
     const { container } = renderRows([
       transaction({
-        kind: 'adjustment', direction: 'out', dues_period: '2026-08',
-        member_id: 5, member_name: 'Budi', reverses_transaction_id: 10,
+        kind: 'adjustment',
+        direction: 'out',
+        dues_period: '2026-08',
+        member_id: 5,
+        member_name: 'Budi',
+        reverses_transaction_id: 10,
       }),
     ])
 
@@ -95,11 +92,15 @@ describe('TransactionList row labels (#257)', () => {
     expect(document.querySelector('.sr-only')).toBeNull()
   })
 
-  it('labels a Talangan settlement with HandHelping and the member\'s own name, and renders the claim\'s note on the note line', () => {
+  it("labels a Talangan settlement with HandHelping and the member's own name, and renders the claim's note on the note line", () => {
     const { container } = renderRows([
       transaction({
-        kind: 'reimbursement', direction: 'out', reimbursement_id: 3,
-        member_name: 'Jane', claim_note: 'Beli galon', note: null,
+        kind: 'reimbursement',
+        direction: 'out',
+        reimbursement_id: 3,
+        member_name: 'Jane',
+        claim_note: 'Beli galon',
+        note: null,
       }),
     ])
 
@@ -116,8 +117,11 @@ describe('TransactionList row labels (#257)', () => {
   it('labels a location transfer leg with ArrowLeftRight and "{dari} -> {ke}", and Pindah lokasi for screen readers', () => {
     const { container } = renderRows([
       transaction({
-        kind: 'transfer', transfer_id: 7, transfer_kind: 'between_accounts',
-        transfer_from_name: 'Tunai', transfer_to_name: 'Bank',
+        kind: 'transfer',
+        transfer_id: 7,
+        transfer_kind: 'between_accounts',
+        transfer_from_name: 'Tunai',
+        transfer_to_name: 'Bank',
       }),
     ])
 
@@ -129,8 +133,11 @@ describe('TransactionList row labels (#257)', () => {
   it('labels an incidental roll leg with Mail and "{amplop} -> Kas Utama", and Tutup amplop for screen readers', () => {
     const { container } = renderRows([
       transaction({
-        kind: 'transfer', transfer_id: 8, transfer_kind: 'reclass_purpose',
-        transfer_from_name: "Jane's wedding", transfer_to_name: 'Kas Utama',
+        kind: 'transfer',
+        transfer_id: 8,
+        transfer_kind: 'reclass_purpose',
+        transfer_from_name: "Jane's wedding",
+        transfer_to_name: 'Kas Utama',
       }),
     ])
 
@@ -154,8 +161,12 @@ describe('TransactionList row labels (#257)', () => {
   it('renders her typed note alongside the label, on its own line', () => {
     renderRows([
       transaction({
-        kind: 'adjustment', direction: 'out', dues_period: '2026-08',
-        member_id: 5, member_name: 'Budi', reverses_transaction_id: 10,
+        kind: 'adjustment',
+        direction: 'out',
+        dues_period: '2026-08',
+        member_id: 5,
+        member_name: 'Budi',
+        reverses_transaction_id: 10,
         note: 'Salah input jumlahnya',
       }),
     ])
@@ -168,7 +179,15 @@ describe('TransactionList row labels (#257)', () => {
     const { container } = renderRows([transaction({ kind: 'normal', note: 'Beli konsumsi rapat' })])
 
     // None of the label icons this row could not possibly have rendered.
-    for (const cls of ['.lucide-calendar-check', '.lucide-undo-2', '.lucide-flag', '.lucide-hand-helping', '.lucide-arrow-left-right', '.lucide-mail', '.lucide-scale']) {
+    for (const cls of [
+      '.lucide-calendar-check',
+      '.lucide-undo-2',
+      '.lucide-flag',
+      '.lucide-hand-helping',
+      '.lucide-arrow-left-right',
+      '.lucide-mail',
+      '.lucide-scale',
+    ]) {
       expect(container.querySelector(cls)).not.toBeInTheDocument()
     }
     expect(screen.getByText('Beli konsumsi rapat')).toBeInTheDocument()
@@ -176,9 +195,7 @@ describe('TransactionList row labels (#257)', () => {
   })
 
   it('renders no label for an ordinary adjustment that is neither a reversal nor a reconciliation fix', () => {
-    const { container } = renderRows([
-      transaction({ kind: 'adjustment', direction: 'out', note: 'Koreksi salah catat' }),
-    ])
+    const { container } = renderRows([transaction({ kind: 'adjustment', direction: 'out', note: 'Koreksi salah catat' })])
 
     expect(container.querySelector('.lucide-undo-2')).not.toBeInTheDocument()
     expect(container.querySelector('.lucide-scale')).not.toBeInTheDocument()
@@ -194,9 +211,12 @@ describe('TransactionList purpose correction (#276, ADR-033)', () => {
     // closing that never happened.
     const { container } = renderRows([
       transaction({
-        kind: 'transfer', transfer_id: 9, transfer_kind: 'reclass_purpose',
+        kind: 'transfer',
+        transfer_id: 9,
+        transfer_kind: 'reclass_purpose',
         transfer_corrects_transaction_id: 4,
-        transfer_from_name: 'Titipan', transfer_to_name: 'Kas Utama',
+        transfer_from_name: 'Titipan',
+        transfer_to_name: 'Kas Utama',
       }),
     ])
 
@@ -206,7 +226,7 @@ describe('TransactionList purpose correction (#276, ADR-033)', () => {
     expect(screen.queryByText(copy.rowLabels.transferPurpose.kind)).not.toBeInTheDocument()
   })
 
-  it('makes an eligible row\'s peruntukan the control, and hands the row back on tap', async () => {
+  it("makes an eligible row's peruntukan the control, and hands the row back on tap", async () => {
     const { onCorrectPurpose } = renderCorrectableRows([transaction({ id: 12, purpose_id: 1 })])
 
     const control = screen.getByRole('button', { name: copy.purposeCorrection.controlAria('Kas Utama') })
@@ -216,13 +236,11 @@ describe('TransactionList purpose correction (#276, ADR-033)', () => {
     expect(onCorrectPurpose.mock.calls[0][0].id).toBe(12)
   })
 
-  it('leaves an ineligible row\'s peruntukan as plain text - a dead tap is worse than none', () => {
+  it("leaves an ineligible row's peruntukan as plain text - a dead tap is worse than none", () => {
     // Eligibility varies row by row (ADR-033), which is exactly why the
     // whole row is not tappable: a dues row and the expense beneath it
     // would look identical and behave differently.
-    renderCorrectableRows([
-      transaction({ id: 13, kind: 'dues', member_id: 1, dues_period: '2026-08', member_name: 'Budi' }),
-    ])
+    renderCorrectableRows([transaction({ id: 13, kind: 'dues', member_id: 1, dues_period: '2026-08', member_name: 'Budi' })])
 
     expect(screen.queryByRole('button', { name: copy.purposeCorrection.controlAria('Kas Utama') })).not.toBeInTheDocument()
     expect(screen.getByText('Kas Utama')).toBeInTheDocument()
@@ -231,8 +249,13 @@ describe('TransactionList purpose correction (#276, ADR-033)', () => {
   it('leaves a dues reversal ineligible, though it is an adjustment', () => {
     renderCorrectableRows([
       transaction({
-        id: 14, kind: 'adjustment', direction: 'out', reverses_transaction_id: 13,
-        member_id: 1, dues_period: '2026-08', member_name: 'Budi',
+        id: 14,
+        kind: 'adjustment',
+        direction: 'out',
+        reverses_transaction_id: 13,
+        member_id: 1,
+        dues_period: '2026-08',
+        member_name: 'Budi',
       }),
     ])
 
@@ -250,9 +273,7 @@ describe('TransactionList purpose correction (#276, ADR-033)', () => {
     // The stored tag is what renders even though the money is elsewhere:
     // the ledger sums stored tags, so a row showing its effective one would
     // put the screen out of step with the balances (ADR-033).
-    const { container } = renderCorrectableRows([
-      transaction({ id: 16, purpose_id: 2, effective_purpose_id: 1 }),
-    ])
+    const { container } = renderCorrectableRows([transaction({ id: 16, purpose_id: 2, effective_purpose_id: 1 })])
 
     expect(screen.getByText("Jane's wedding")).toBeInTheDocument()
     expect(container.querySelector('.lucide-tags')).toBeInTheDocument()
@@ -260,9 +281,7 @@ describe('TransactionList purpose correction (#276, ADR-033)', () => {
   })
 
   it('marks nothing on a row whose effective tag is its own', () => {
-    const { container } = renderCorrectableRows([
-      transaction({ id: 17, purpose_id: 1, effective_purpose_id: 1 }),
-    ])
+    const { container } = renderCorrectableRows([transaction({ id: 17, purpose_id: 1, effective_purpose_id: 1 })])
 
     expect(container.querySelector('.lucide-tags')).not.toBeInTheDocument()
     expect(screen.queryByText(copy.purposeCorrection.corrected)).not.toBeInTheDocument()

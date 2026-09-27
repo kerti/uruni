@@ -177,17 +177,7 @@ function SnapshotBadge({ row }: { row: ReconciliationListItem }) {
  * no action - per #227's hard rule, this tab and this sheet never start a
  * reconciliation.
  */
-function SnapshotDialog({
-  id,
-  open,
-  onClose,
-  accounts,
-}: {
-  id: number | null
-  open: boolean
-  onClose: () => void
-  accounts: Account[]
-}) {
+function SnapshotDialog({ id, open, onClose, accounts }: { id: number | null; open: boolean; onClose: () => void; accounts: Account[] }) {
   const [state, run] = useApi<ReconciliationDetail>()
 
   useEffect(() => {

@@ -84,7 +84,7 @@ function renderPayments(onReversed = vi.fn()) {
 }
 
 describe('MemberPayments', () => {
-  it('shows only this member\'s rows for this period', async () => {
+  it("shows only this member's rows for this period", async () => {
     vi.stubGlobal('fetch', stubTransactions())
     renderPayments()
 
@@ -114,7 +114,7 @@ describe('MemberPayments', () => {
     expect(body.note).toBeNull()
   })
 
-  it('sends the treasurer\'s own reason when she gives one', async () => {
+  it("sends the treasurer's own reason when she gives one", async () => {
     const fetchMock = stubTransactions()
     vi.stubGlobal('fetch', fetchMock)
     renderPayments()

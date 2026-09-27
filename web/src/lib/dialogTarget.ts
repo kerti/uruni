@@ -11,11 +11,7 @@
  * with this section's own prefix and an unusable rest is `invalid`, and only
  * that is ever cleared.
  */
-export type DialogTarget =
-  | { kind: 'new' }
-  | { kind: 'edit'; id: number }
-  | { kind: 'foreign' }
-  | { kind: 'invalid' }
+export type DialogTarget = { kind: 'new' } | { kind: 'edit'; id: number } | { kind: 'foreign' } | { kind: 'invalid' }
 
 /**
  * Parses `?edit=<prefix>:<rest>` for the section owning `prefix`.

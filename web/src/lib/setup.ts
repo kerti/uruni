@@ -214,9 +214,10 @@ export function listMembersPage(q?: string, cursor?: string): Promise<MembersPag
   if (cursor) params.set('cursor', cursor)
   const query = params.toString()
 
-  return apiFetch<{ members: Member[]; next_cursor: string | null }>(`/api/members${query ? `?${query}` : ''}`).then(
-    (page) => ({ members: page.members, nextCursor: page.next_cursor }),
-  )
+  return apiFetch<{ members: Member[]; next_cursor: string | null }>(`/api/members${query ? `?${query}` : ''}`).then((page) => ({
+    members: page.members,
+    nextCursor: page.next_cursor,
+  }))
 }
 
 /**

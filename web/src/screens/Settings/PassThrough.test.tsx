@@ -161,7 +161,7 @@ describe('Settings pass-through', () => {
   })
 
   // The case that keeps sibling sections from closing each other's dialogs.
-  it('leaves another section\'s ?edit= alone', async () => {
+  it("leaves another section's ?edit= alone", async () => {
     const { fetchMock } = stubPurposes([purpose(2, 'pass_through', 'Kas Bidang')])
     vi.stubGlobal('fetch', fetchMock)
     renderAt('/settings?edit=location:3')

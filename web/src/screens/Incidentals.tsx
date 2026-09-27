@@ -207,7 +207,10 @@ export default function Incidentals({
         showCloseForm={showCloseForm}
         onRecord={() => onRecordFor(purposeId)}
         onViewTransactions={() => onViewTransactionsFor(purposeId)}
-        onShowClose={() => { setShowCloseForm(true); setFeedback(null) }}
+        onShowClose={() => {
+          setShowCloseForm(true)
+          setFeedback(null)
+        }}
         onCancelClose={() => setShowCloseForm(false)}
         onClose={handleClose}
         onReopen={handleReopen}
@@ -215,12 +218,7 @@ export default function Incidentals({
         onRetry={() => void detailRun(() => getIncidental(purposeId))}
         onBack={onBack}
       />
-      <RenameIncidentalDialog
-        envelope={detailState.data ?? null}
-        open={isRenaming}
-        onClose={closeDialog}
-        onRenamed={handleRenamed}
-      />
+      <RenameIncidentalDialog envelope={detailState.data ?? null} open={isRenaming} onClose={closeDialog} onRenamed={handleRenamed} />
     </>
   )
 }
@@ -397,9 +395,7 @@ function DetailView({
         </div>
       )}
 
-      {isOpen && showCloseForm && (
-        <CloseForm accounts={accounts} onSubmit={onClose} onCancel={onCancelClose} submitting={submitting} />
-      )}
+      {isOpen && showCloseForm && <CloseForm accounts={accounts} onSubmit={onClose} onCancel={onCancelClose} submitting={submitting} />}
     </div>
   )
 }

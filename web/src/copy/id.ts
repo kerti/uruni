@@ -658,8 +658,7 @@ export const copy = {
       inactiveBadge: 'Tidak aktif',
       delete: 'Hapus',
       deleting: 'Menghapus…',
-      deleteConfirm:
-        'Anggota ini akan dihapus selamanya. Hanya bisa untuk anggota yang belum pernah punya catatan apa pun.',
+      deleteConfirm: 'Anggota ini akan dihapus selamanya. Hanya bisa untuk anggota yang belum pernah punya catatan apa pun.',
       deleteConfirmAction: 'Ya, hapus',
       // The 409 from a member who already has posted history. Same shape as
       // the locations section's: a refusal that points at the right action.
@@ -728,8 +727,7 @@ export const copy = {
       inactiveBadge: 'Tidak aktif',
       delete: 'Hapus',
       deleting: 'Menghapus…',
-      deleteConfirm:
-        'Lokasi ini akan dihapus selamanya. Hanya bisa untuk lokasi yang belum pernah dipakai mencatat apa pun.',
+      deleteConfirm: 'Lokasi ini akan dihapus selamanya. Hanya bisa untuk lokasi yang belum pernah dipakai mencatat apa pun.',
       deleteConfirmAction: 'Ya, hapus',
       // The 409 the server answers the moment anything references the
       // location. Not phrased as a failure: deactivating is what she

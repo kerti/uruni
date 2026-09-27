@@ -12,13 +12,7 @@ const text = copy.reconciliation
  * and the resolution's own label. Tabular figures throughout (`tabular`),
  * formatIDR at the display edge only (CLAUDE.md rule 1).
  */
-export default function ReconciliationLines({
-  lines,
-  accountNames,
-}: {
-  lines: ReconciliationLine[]
-  accountNames: Map<number, string>
-}) {
+export default function ReconciliationLines({ lines, accountNames }: { lines: ReconciliationLine[]; accountNames: Map<number, string> }) {
   return (
     <ul className="flex flex-col gap-2">
       {lines.map((line) => (

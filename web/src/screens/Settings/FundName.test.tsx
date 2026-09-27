@@ -63,7 +63,7 @@ function currentSearch() {
 }
 
 describe('Settings fund name', () => {
-  it('shows the fund\'s name as a card, with no form until the dialog opens', async () => {
+  it("shows the fund's name as a card, with no form until the dialog opens", async () => {
     const { fetchMock } = stubFund()
     vi.stubGlobal('fetch', fetchMock)
     renderAt()
@@ -138,7 +138,7 @@ describe('Settings fund name', () => {
 
   // The case that keeps sibling sections from closing each other's dialogs:
   // another section's param is foreign and must be left exactly where it is.
-  it('leaves another section\'s ?edit= alone', async () => {
+  it("leaves another section's ?edit= alone", async () => {
     const { fetchMock } = stubFund()
     vi.stubGlobal('fetch', fetchMock)
     renderAt('/settings?edit=location:3')

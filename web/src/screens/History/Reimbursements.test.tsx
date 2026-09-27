@@ -29,9 +29,7 @@ const purposes = [
   { id: 11, kind: 'main', name: 'Kas Utama', created_at: 1 },
 ]
 
-const accounts = [
-  { id: 1, kind: 'cash', name: 'Tunai', inactive_on: null, created_at: 1 },
-]
+const accounts = [{ id: 1, kind: 'cash', name: 'Tunai', inactive_on: null, created_at: 1 }]
 
 interface Claim {
   id: number
@@ -119,7 +117,10 @@ function getHandlers(opts: { outstanding?: Claim[]; all?: Claim[] } = {}) {
       match: (m: string, u: string) => m === 'GET' && u.includes('/api/reimbursements') && !u.includes('outstanding'),
       handle: () => Promise.resolve(jsonResponse(page(all))),
     },
-    { match: (m: string, u: string) => m === 'GET' && u.includes('/api/members'), handle: () => Promise.resolve(jsonResponse({ members, next_cursor: null })) },
+    {
+      match: (m: string, u: string) => m === 'GET' && u.includes('/api/members'),
+      handle: () => Promise.resolve(jsonResponse({ members, next_cursor: null })),
+    },
     { match: (m: string, u: string) => m === 'GET' && u.includes('/api/purposes'), handle: () => Promise.resolve(jsonResponse(purposes)) },
     { match: (m: string, u: string) => m === 'GET' && u.includes('/api/accounts'), handle: () => Promise.resolve(jsonResponse(accounts)) },
   ]
@@ -167,22 +168,34 @@ describe('Reimbursements tab', () => {
     // original outstanding claim.
     let recorded = false
     const initial = [claim(1)]
-    vi.stubGlobal('fetch', routedFetch([
-      {
-        match: (m: string, u: string) => m === 'GET' && u.includes('/api/reimbursements'),
-        handle: () => Promise.resolve(jsonResponse(page(recorded ? [...initial, claim(3, { amount: 10_000, note: null })] : initial))),
-      },
-      {
-        match: (m: string, u: string) => m === 'POST' && u.includes('/api/reimbursements'),
-        handle: () => {
-          recorded = true
-          return Promise.resolve(jsonResponse(claim(3, { amount: 10_000, note: null }), 201))
+    vi.stubGlobal(
+      'fetch',
+      routedFetch([
+        {
+          match: (m: string, u: string) => m === 'GET' && u.includes('/api/reimbursements'),
+          handle: () => Promise.resolve(jsonResponse(page(recorded ? [...initial, claim(3, { amount: 10_000, note: null })] : initial))),
         },
-      },
-      { match: (m: string, u: string) => m === 'GET' && u.includes('/api/members'), handle: () => Promise.resolve(jsonResponse({ members, next_cursor: null })) },
-      { match: (m: string, u: string) => m === 'GET' && u.includes('/api/purposes'), handle: () => Promise.resolve(jsonResponse(purposes)) },
-      { match: (m: string, u: string) => m === 'GET' && u.includes('/api/accounts'), handle: () => Promise.resolve(jsonResponse(accounts)) },
-    ]))
+        {
+          match: (m: string, u: string) => m === 'POST' && u.includes('/api/reimbursements'),
+          handle: () => {
+            recorded = true
+            return Promise.resolve(jsonResponse(claim(3, { amount: 10_000, note: null }), 201))
+          },
+        },
+        {
+          match: (m: string, u: string) => m === 'GET' && u.includes('/api/members'),
+          handle: () => Promise.resolve(jsonResponse({ members, next_cursor: null })),
+        },
+        {
+          match: (m: string, u: string) => m === 'GET' && u.includes('/api/purposes'),
+          handle: () => Promise.resolve(jsonResponse(purposes)),
+        },
+        {
+          match: (m: string, u: string) => m === 'GET' && u.includes('/api/accounts'),
+          handle: () => Promise.resolve(jsonResponse(accounts)),
+        },
+      ]),
+    )
 
     renderAt()
     await waitFor(() => expect(screen.getByText('Jane')).toBeInTheDocument())
@@ -201,13 +214,16 @@ describe('Reimbursements tab', () => {
   })
 
   it('settle moves a claim out of the outstanding list', async () => {
-    vi.stubGlobal('fetch', routedFetch([
-      {
-        match: (m: string, u: string) => m === 'POST' && u.includes('/api/reimbursements/1/settle'),
-        handle: () => Promise.resolve(jsonResponse(postedTransaction, 201)),
-      },
-      ...getHandlers(),
-    ]))
+    vi.stubGlobal(
+      'fetch',
+      routedFetch([
+        {
+          match: (m: string, u: string) => m === 'POST' && u.includes('/api/reimbursements/1/settle'),
+          handle: () => Promise.resolve(jsonResponse(postedTransaction, 201)),
+        },
+        ...getHandlers(),
+      ]),
+    )
 
     renderAt()
     await waitFor(() => expect(screen.getByText('Jane')).toBeInTheDocument())
@@ -231,26 +247,38 @@ describe('Reimbursements tab', () => {
     // therefore never present a row with a "Batalkan pemutihan" affordance.
     let waived = false
     const initial = [claim(1)]
-    vi.stubGlobal('fetch', routedFetch([
-      {
-        match: (m: string, u: string) => m === 'GET' && u.includes('/api/reimbursements') && u.includes('outstanding=true'),
-        handle: () => Promise.resolve(jsonResponse(page(waived ? [] : initial))),
-      },
-      {
-        match: (m: string, u: string) => m === 'GET' && u.includes('/api/reimbursements') && !u.includes('outstanding'),
-        handle: () => Promise.resolve(jsonResponse(page(waived ? [claim(1, { waived_on: '2026-09-02' })] : initial))),
-      },
-      {
-        match: (m: string, u: string) => m === 'PATCH' && u.includes('/api/reimbursements/1'),
-        handle: () => {
-          waived = !waived
-          return Promise.resolve(jsonResponse(waived ? claim(1, { waived_on: '2026-09-02' }) : claim(1)))
+    vi.stubGlobal(
+      'fetch',
+      routedFetch([
+        {
+          match: (m: string, u: string) => m === 'GET' && u.includes('/api/reimbursements') && u.includes('outstanding=true'),
+          handle: () => Promise.resolve(jsonResponse(page(waived ? [] : initial))),
         },
-      },
-      { match: (m: string, u: string) => m === 'GET' && u.includes('/api/members'), handle: () => Promise.resolve(jsonResponse({ members, next_cursor: null })) },
-      { match: (m: string, u: string) => m === 'GET' && u.includes('/api/purposes'), handle: () => Promise.resolve(jsonResponse(purposes)) },
-      { match: (m: string, u: string) => m === 'GET' && u.includes('/api/accounts'), handle: () => Promise.resolve(jsonResponse(accounts)) },
-    ]))
+        {
+          match: (m: string, u: string) => m === 'GET' && u.includes('/api/reimbursements') && !u.includes('outstanding'),
+          handle: () => Promise.resolve(jsonResponse(page(waived ? [claim(1, { waived_on: '2026-09-02' })] : initial))),
+        },
+        {
+          match: (m: string, u: string) => m === 'PATCH' && u.includes('/api/reimbursements/1'),
+          handle: () => {
+            waived = !waived
+            return Promise.resolve(jsonResponse(waived ? claim(1, { waived_on: '2026-09-02' }) : claim(1)))
+          },
+        },
+        {
+          match: (m: string, u: string) => m === 'GET' && u.includes('/api/members'),
+          handle: () => Promise.resolve(jsonResponse({ members, next_cursor: null })),
+        },
+        {
+          match: (m: string, u: string) => m === 'GET' && u.includes('/api/purposes'),
+          handle: () => Promise.resolve(jsonResponse(purposes)),
+        },
+        {
+          match: (m: string, u: string) => m === 'GET' && u.includes('/api/accounts'),
+          handle: () => Promise.resolve(jsonResponse(accounts)),
+        },
+      ]),
+    )
 
     renderAt()
     await waitFor(() => expect(screen.getByRole('button', { name: text.actions.waive })).toBeInTheDocument())
@@ -292,22 +320,34 @@ describe('Reimbursements tab', () => {
   it('delete calls DELETE and re-fetches', async () => {
     // The outstanding tab shows Jane (id 1); deleting her empties it.
     let deleted = false
-    vi.stubGlobal('fetch', routedFetch([
-      {
-        match: (m: string, u: string) => m === 'GET' && u.includes('/api/reimbursements'),
-        handle: () => Promise.resolve(jsonResponse(page(deleted ? [] : [claim(1)]))),
-      },
-      {
-        match: (m: string, u: string) => m === 'DELETE' && u.includes('/api/reimbursements/1'),
-        handle: () => {
-          deleted = true
-          return Promise.resolve(new Response(null, { status: 204 }))
+    vi.stubGlobal(
+      'fetch',
+      routedFetch([
+        {
+          match: (m: string, u: string) => m === 'GET' && u.includes('/api/reimbursements'),
+          handle: () => Promise.resolve(jsonResponse(page(deleted ? [] : [claim(1)]))),
         },
-      },
-      { match: (m: string, u: string) => m === 'GET' && u.includes('/api/members'), handle: () => Promise.resolve(jsonResponse({ members, next_cursor: null })) },
-      { match: (m: string, u: string) => m === 'GET' && u.includes('/api/purposes'), handle: () => Promise.resolve(jsonResponse(purposes)) },
-      { match: (m: string, u: string) => m === 'GET' && u.includes('/api/accounts'), handle: () => Promise.resolve(jsonResponse(accounts)) },
-    ]))
+        {
+          match: (m: string, u: string) => m === 'DELETE' && u.includes('/api/reimbursements/1'),
+          handle: () => {
+            deleted = true
+            return Promise.resolve(new Response(null, { status: 204 }))
+          },
+        },
+        {
+          match: (m: string, u: string) => m === 'GET' && u.includes('/api/members'),
+          handle: () => Promise.resolve(jsonResponse({ members, next_cursor: null })),
+        },
+        {
+          match: (m: string, u: string) => m === 'GET' && u.includes('/api/purposes'),
+          handle: () => Promise.resolve(jsonResponse(purposes)),
+        },
+        {
+          match: (m: string, u: string) => m === 'GET' && u.includes('/api/accounts'),
+          handle: () => Promise.resolve(jsonResponse(accounts)),
+        },
+      ]),
+    )
 
     renderAt()
     await waitFor(() => expect(screen.getByText('Jane')).toBeInTheDocument())
@@ -324,13 +364,16 @@ describe('Reimbursements tab', () => {
   })
 
   it('correct opens pre-filled edit form, PATCH fires', async () => {
-    vi.stubGlobal('fetch', routedFetch([
-      {
-        match: (m: string, u: string) => m === 'PATCH' && u.includes('/api/reimbursements/1'),
-        handle: () => Promise.resolve(jsonResponse(claim(1, { amount: 20_000 }))),
-      },
-      ...getHandlers(),
-    ]))
+    vi.stubGlobal(
+      'fetch',
+      routedFetch([
+        {
+          match: (m: string, u: string) => m === 'PATCH' && u.includes('/api/reimbursements/1'),
+          handle: () => Promise.resolve(jsonResponse(claim(1, { amount: 20_000 }))),
+        },
+        ...getHandlers(),
+      ]),
+    )
 
     renderAt()
     await waitFor(() => expect(screen.getByText('Jane')).toBeInTheDocument())
@@ -363,31 +406,41 @@ describe('Reimbursements tab', () => {
     // message, the form must stay open, and the list must still reload.
     let settleAttempted = false
     let listRefreshes = 0
-    vi.stubGlobal('fetch', routedFetch([
-      {
-        match: (m: string, u: string) => m === 'POST' && u.includes('/api/reimbursements/1/settle'),
-        handle: () => {
-          settleAttempted = true
-          return Promise.resolve(
-            jsonResponse({ error: { code: 'reimbursement_already_settled', message: 'already settled' } }, 409),
-          )
+    vi.stubGlobal(
+      'fetch',
+      routedFetch([
+        {
+          match: (m: string, u: string) => m === 'POST' && u.includes('/api/reimbursements/1/settle'),
+          handle: () => {
+            settleAttempted = true
+            return Promise.resolve(jsonResponse({ error: { code: 'reimbursement_already_settled', message: 'already settled' } }, 409))
+          },
         },
-      },
-      {
-        match: (m: string, u: string) => m === 'GET' && u.includes('/api/reimbursements') && u.includes('outstanding=true'),
-        handle: () => {
-          listRefreshes += 1
-          return Promise.resolve(jsonResponse(page(outstandingClaims)))
+        {
+          match: (m: string, u: string) => m === 'GET' && u.includes('/api/reimbursements') && u.includes('outstanding=true'),
+          handle: () => {
+            listRefreshes += 1
+            return Promise.resolve(jsonResponse(page(outstandingClaims)))
+          },
         },
-      },
-      {
-        match: (m: string, u: string) => m === 'GET' && u.includes('/api/reimbursements') && !u.includes('outstanding'),
-        handle: () => Promise.resolve(jsonResponse(page(allClaims))),
-      },
-      { match: (m: string, u: string) => m === 'GET' && u.includes('/api/members'), handle: () => Promise.resolve(jsonResponse({ members, next_cursor: null })) },
-      { match: (m: string, u: string) => m === 'GET' && u.includes('/api/purposes'), handle: () => Promise.resolve(jsonResponse(purposes)) },
-      { match: (m: string, u: string) => m === 'GET' && u.includes('/api/accounts'), handle: () => Promise.resolve(jsonResponse(accounts)) },
-    ]))
+        {
+          match: (m: string, u: string) => m === 'GET' && u.includes('/api/reimbursements') && !u.includes('outstanding'),
+          handle: () => Promise.resolve(jsonResponse(page(allClaims))),
+        },
+        {
+          match: (m: string, u: string) => m === 'GET' && u.includes('/api/members'),
+          handle: () => Promise.resolve(jsonResponse({ members, next_cursor: null })),
+        },
+        {
+          match: (m: string, u: string) => m === 'GET' && u.includes('/api/purposes'),
+          handle: () => Promise.resolve(jsonResponse(purposes)),
+        },
+        {
+          match: (m: string, u: string) => m === 'GET' && u.includes('/api/accounts'),
+          handle: () => Promise.resolve(jsonResponse(accounts)),
+        },
+      ]),
+    )
 
     renderAt()
     await waitFor(() => expect(screen.getByText('Jane')).toBeInTheDocument())
@@ -425,22 +478,34 @@ describe('Reimbursements tab', () => {
     let settled = false
     const before = [claim(1), claim(2, { note: 'Beli kabel' })]
     const after = [claim(2, { note: 'Beli kabel' })]
-    vi.stubGlobal('fetch', routedFetch([
-      {
-        match: (m: string, u: string) => m === 'POST' && u.includes('/api/reimbursements/1/settle'),
-        handle: () => {
-          settled = true
-          return Promise.resolve(jsonResponse(postedTransaction, 201))
+    vi.stubGlobal(
+      'fetch',
+      routedFetch([
+        {
+          match: (m: string, u: string) => m === 'POST' && u.includes('/api/reimbursements/1/settle'),
+          handle: () => {
+            settled = true
+            return Promise.resolve(jsonResponse(postedTransaction, 201))
+          },
         },
-      },
-      {
-        match: (m: string, u: string) => m === 'GET' && u.includes('/api/reimbursements') && u.includes('outstanding=true'),
-        handle: () => Promise.resolve(jsonResponse(page(settled ? after : before))),
-      },
-      { match: (m: string, u: string) => m === 'GET' && u.includes('/api/members'), handle: () => Promise.resolve(jsonResponse({ members, next_cursor: null })) },
-      { match: (m: string, u: string) => m === 'GET' && u.includes('/api/purposes'), handle: () => Promise.resolve(jsonResponse(purposes)) },
-      { match: (m: string, u: string) => m === 'GET' && u.includes('/api/accounts'), handle: () => Promise.resolve(jsonResponse(accounts)) },
-    ]))
+        {
+          match: (m: string, u: string) => m === 'GET' && u.includes('/api/reimbursements') && u.includes('outstanding=true'),
+          handle: () => Promise.resolve(jsonResponse(page(settled ? after : before))),
+        },
+        {
+          match: (m: string, u: string) => m === 'GET' && u.includes('/api/members'),
+          handle: () => Promise.resolve(jsonResponse({ members, next_cursor: null })),
+        },
+        {
+          match: (m: string, u: string) => m === 'GET' && u.includes('/api/purposes'),
+          handle: () => Promise.resolve(jsonResponse(purposes)),
+        },
+        {
+          match: (m: string, u: string) => m === 'GET' && u.includes('/api/accounts'),
+          handle: () => Promise.resolve(jsonResponse(accounts)),
+        },
+      ]),
+    )
     renderAt()
     await waitFor(() => expect(screen.getByText('Jane')).toBeInTheDocument())
 
@@ -460,15 +525,27 @@ describe('Reimbursements tab', () => {
   })
 
   it('reads ?q= from the URL into the field and sends it to the server', async () => {
-    vi.stubGlobal('fetch', routedFetch([
-      {
-        match: (m: string, u: string) => m === 'GET' && u.includes('/api/reimbursements') && u.includes('q=Budi'),
-        handle: () => Promise.resolve(jsonResponse(page([claim(1, { note: 'Budi bayar parkir' })]))),
-      },
-      { match: (m: string, u: string) => m === 'GET' && u.includes('/api/members'), handle: () => Promise.resolve(jsonResponse({ members, next_cursor: null })) },
-      { match: (m: string, u: string) => m === 'GET' && u.includes('/api/purposes'), handle: () => Promise.resolve(jsonResponse(purposes)) },
-      { match: (m: string, u: string) => m === 'GET' && u.includes('/api/accounts'), handle: () => Promise.resolve(jsonResponse(accounts)) },
-    ]))
+    vi.stubGlobal(
+      'fetch',
+      routedFetch([
+        {
+          match: (m: string, u: string) => m === 'GET' && u.includes('/api/reimbursements') && u.includes('q=Budi'),
+          handle: () => Promise.resolve(jsonResponse(page([claim(1, { note: 'Budi bayar parkir' })]))),
+        },
+        {
+          match: (m: string, u: string) => m === 'GET' && u.includes('/api/members'),
+          handle: () => Promise.resolve(jsonResponse({ members, next_cursor: null })),
+        },
+        {
+          match: (m: string, u: string) => m === 'GET' && u.includes('/api/purposes'),
+          handle: () => Promise.resolve(jsonResponse(purposes)),
+        },
+        {
+          match: (m: string, u: string) => m === 'GET' && u.includes('/api/accounts'),
+          handle: () => Promise.resolve(jsonResponse(accounts)),
+        },
+      ]),
+    )
     renderAt('/history/reimbursements?q=Budi')
 
     expect(await screen.findByText('Budi bayar parkir')).toBeInTheDocument()
@@ -487,9 +564,7 @@ describe('Reimbursements tab', () => {
         if (url.pathname === '/api/reimbursements') {
           requests.push(url)
           return jsonResponse(
-            url.searchParams.get('q') === 'parkir'
-              ? page([claim(1, { note: 'Parkir' })])
-              : page([claim(2, { note: 'Beli kabel' })]),
+            url.searchParams.get('q') === 'parkir' ? page([claim(1, { note: 'Parkir' })]) : page([claim(2, { note: 'Beli kabel' })]),
           )
         }
         return jsonResponse({ error: { code: 'not_found', message: 'not found' } }, 404)
@@ -508,31 +583,58 @@ describe('Reimbursements tab', () => {
   })
 
   it('says nothing matched when a search comes back empty', async () => {
-    vi.stubGlobal('fetch', routedFetch([
-      { match: (m: string, u: string) => m === 'GET' && u.includes('/api/reimbursements'), handle: () => Promise.resolve(jsonResponse(page([]))) },
-      { match: (m: string, u: string) => m === 'GET' && u.includes('/api/members'), handle: () => Promise.resolve(jsonResponse({ members, next_cursor: null })) },
-      { match: (m: string, u: string) => m === 'GET' && u.includes('/api/purposes'), handle: () => Promise.resolve(jsonResponse(purposes)) },
-      { match: (m: string, u: string) => m === 'GET' && u.includes('/api/accounts'), handle: () => Promise.resolve(jsonResponse(accounts)) },
-    ]))
+    vi.stubGlobal(
+      'fetch',
+      routedFetch([
+        {
+          match: (m: string, u: string) => m === 'GET' && u.includes('/api/reimbursements'),
+          handle: () => Promise.resolve(jsonResponse(page([]))),
+        },
+        {
+          match: (m: string, u: string) => m === 'GET' && u.includes('/api/members'),
+          handle: () => Promise.resolve(jsonResponse({ members, next_cursor: null })),
+        },
+        {
+          match: (m: string, u: string) => m === 'GET' && u.includes('/api/purposes'),
+          handle: () => Promise.resolve(jsonResponse(purposes)),
+        },
+        {
+          match: (m: string, u: string) => m === 'GET' && u.includes('/api/accounts'),
+          handle: () => Promise.resolve(jsonResponse(accounts)),
+        },
+      ]),
+    )
     renderAt('/history/reimbursements?q=xyz')
 
     expect(await screen.findByText(searchText.noResults('xyz'))).toBeInTheDocument()
   })
 
   it('loads the next page from the cursor and drops the button on the last page', async () => {
-    vi.stubGlobal('fetch', routedFetch([
-      {
-        match: (m: string, u: string) => m === 'GET' && u.includes('/api/reimbursements') && u.includes('cursor=c1'),
-        handle: () => Promise.resolve(jsonResponse(page([claim(1)]))),
-      },
-      {
-        match: (m: string, u: string) => m === 'GET' && u.includes('/api/reimbursements') && !u.includes('cursor'),
-        handle: () => Promise.resolve(jsonResponse(page([claim(2)], 'c1'))),
-      },
-      { match: (m: string, u: string) => m === 'GET' && u.includes('/api/members'), handle: () => Promise.resolve(jsonResponse({ members, next_cursor: null })) },
-      { match: (m: string, u: string) => m === 'GET' && u.includes('/api/purposes'), handle: () => Promise.resolve(jsonResponse(purposes)) },
-      { match: (m: string, u: string) => m === 'GET' && u.includes('/api/accounts'), handle: () => Promise.resolve(jsonResponse(accounts)) },
-    ]))
+    vi.stubGlobal(
+      'fetch',
+      routedFetch([
+        {
+          match: (m: string, u: string) => m === 'GET' && u.includes('/api/reimbursements') && u.includes('cursor=c1'),
+          handle: () => Promise.resolve(jsonResponse(page([claim(1)]))),
+        },
+        {
+          match: (m: string, u: string) => m === 'GET' && u.includes('/api/reimbursements') && !u.includes('cursor'),
+          handle: () => Promise.resolve(jsonResponse(page([claim(2)], 'c1'))),
+        },
+        {
+          match: (m: string, u: string) => m === 'GET' && u.includes('/api/members'),
+          handle: () => Promise.resolve(jsonResponse({ members, next_cursor: null })),
+        },
+        {
+          match: (m: string, u: string) => m === 'GET' && u.includes('/api/purposes'),
+          handle: () => Promise.resolve(jsonResponse(purposes)),
+        },
+        {
+          match: (m: string, u: string) => m === 'GET' && u.includes('/api/accounts'),
+          handle: () => Promise.resolve(jsonResponse(accounts)),
+        },
+      ]),
+    )
     const user = userEvent.setup()
     renderAt()
 
@@ -573,17 +675,20 @@ describe('Reimbursements tab', () => {
     const receiptsText = copy.receipts
 
     it('uploads the picked photo after the claim posts, and shows the ordinary success message', async () => {
-      vi.stubGlobal('fetch', routedFetch([
-        {
-          match: (m: string, u: string) => m === 'POST' && u.includes('/api/reimbursements') && !u.includes('/receipts'),
-          handle: () => Promise.resolve(jsonResponse(claim(3, { amount: 10_000, note: null }), 201)),
-        },
-        {
-          match: (m: string, u: string) => m === 'POST' && u.includes('/api/reimbursements/3/receipts'),
-          handle: () => Promise.resolve(jsonResponse({ id: 9, uploaded_at: 1 }, 201)),
-        },
-        ...getHandlers(),
-      ]))
+      vi.stubGlobal(
+        'fetch',
+        routedFetch([
+          {
+            match: (m: string, u: string) => m === 'POST' && u.includes('/api/reimbursements') && !u.includes('/receipts'),
+            handle: () => Promise.resolve(jsonResponse(claim(3, { amount: 10_000, note: null }), 201)),
+          },
+          {
+            match: (m: string, u: string) => m === 'POST' && u.includes('/api/reimbursements/3/receipts'),
+            handle: () => Promise.resolve(jsonResponse({ id: 9, uploaded_at: 1 }, 201)),
+          },
+          ...getHandlers(),
+        ]),
+      )
       renderAt()
       await waitFor(() => expect(screen.getByText('Jane')).toBeInTheDocument())
 
@@ -601,17 +706,20 @@ describe('Reimbursements tab', () => {
     })
 
     it('the claim still saves when the photo upload fails - the message says so instead of the ordinary success line', async () => {
-      vi.stubGlobal('fetch', routedFetch([
-        {
-          match: (m: string, u: string) => m === 'POST' && u.includes('/api/reimbursements') && !u.includes('/receipts'),
-          handle: () => Promise.resolve(jsonResponse(claim(3, { amount: 10_000, note: null }), 201)),
-        },
-        {
-          match: (m: string, u: string) => m === 'POST' && u.includes('/api/reimbursements/3/receipts'),
-          handle: () => Promise.resolve(jsonResponse({ error: { code: 'unsupported_media_type', message: 'nope' } }, 415)),
-        },
-        ...getHandlers(),
-      ]))
+      vi.stubGlobal(
+        'fetch',
+        routedFetch([
+          {
+            match: (m: string, u: string) => m === 'POST' && u.includes('/api/reimbursements') && !u.includes('/receipts'),
+            handle: () => Promise.resolve(jsonResponse(claim(3, { amount: 10_000, note: null }), 201)),
+          },
+          {
+            match: (m: string, u: string) => m === 'POST' && u.includes('/api/reimbursements/3/receipts'),
+            handle: () => Promise.resolve(jsonResponse({ error: { code: 'unsupported_media_type', message: 'nope' } }, 415)),
+          },
+          ...getHandlers(),
+        ]),
+      )
       renderAt()
       await waitFor(() => expect(screen.getByText('Jane')).toBeInTheDocument())
 
@@ -631,22 +739,34 @@ describe('Reimbursements tab', () => {
 
     it('attaches a photo after the fact from the claim row, and the row control then opens the viewer', async () => {
       let attached = false
-      vi.stubGlobal('fetch', routedFetch([
-        {
-          match: (m: string, u: string) => m === 'GET' && u.includes('/api/reimbursements') && u.includes('outstanding=true'),
-          handle: () => Promise.resolve(jsonResponse(page([claim(1, { receipt_ids: attached ? [9] : [] })]))),
-        },
-        {
-          match: (m: string, u: string) => m === 'POST' && u.includes('/api/reimbursements/1/receipts'),
-          handle: () => {
-            attached = true
-            return Promise.resolve(jsonResponse({ id: 9, uploaded_at: 1 }, 201))
+      vi.stubGlobal(
+        'fetch',
+        routedFetch([
+          {
+            match: (m: string, u: string) => m === 'GET' && u.includes('/api/reimbursements') && u.includes('outstanding=true'),
+            handle: () => Promise.resolve(jsonResponse(page([claim(1, { receipt_ids: attached ? [9] : [] })]))),
           },
-        },
-        { match: (m: string, u: string) => m === 'GET' && u.includes('/api/members'), handle: () => Promise.resolve(jsonResponse({ members, next_cursor: null })) },
-        { match: (m: string, u: string) => m === 'GET' && u.includes('/api/purposes'), handle: () => Promise.resolve(jsonResponse(purposes)) },
-        { match: (m: string, u: string) => m === 'GET' && u.includes('/api/accounts'), handle: () => Promise.resolve(jsonResponse(accounts)) },
-      ]))
+          {
+            match: (m: string, u: string) => m === 'POST' && u.includes('/api/reimbursements/1/receipts'),
+            handle: () => {
+              attached = true
+              return Promise.resolve(jsonResponse({ id: 9, uploaded_at: 1 }, 201))
+            },
+          },
+          {
+            match: (m: string, u: string) => m === 'GET' && u.includes('/api/members'),
+            handle: () => Promise.resolve(jsonResponse({ members, next_cursor: null })),
+          },
+          {
+            match: (m: string, u: string) => m === 'GET' && u.includes('/api/purposes'),
+            handle: () => Promise.resolve(jsonResponse(purposes)),
+          },
+          {
+            match: (m: string, u: string) => m === 'GET' && u.includes('/api/accounts'),
+            handle: () => Promise.resolve(jsonResponse(accounts)),
+          },
+        ]),
+      )
       renderAt()
       await waitFor(() => expect(screen.getByText('Jane')).toBeInTheDocument())
 
@@ -676,22 +796,34 @@ describe('Reimbursements tab', () => {
 
     it('deletes a photo from the viewer, after the confirm', async () => {
       let deleted = false
-      vi.stubGlobal('fetch', routedFetch([
-        {
-          match: (m: string, u: string) => m === 'GET' && u.includes('/api/reimbursements') && u.includes('outstanding=true'),
-          handle: () => Promise.resolve(jsonResponse(page([claim(1, { receipt_ids: deleted ? [] : [9] })]))),
-        },
-        {
-          match: (m: string, u: string) => m === 'DELETE' && u.includes('/api/receipts/9'),
-          handle: () => {
-            deleted = true
-            return Promise.resolve(new Response(null, { status: 204 }))
+      vi.stubGlobal(
+        'fetch',
+        routedFetch([
+          {
+            match: (m: string, u: string) => m === 'GET' && u.includes('/api/reimbursements') && u.includes('outstanding=true'),
+            handle: () => Promise.resolve(jsonResponse(page([claim(1, { receipt_ids: deleted ? [] : [9] })]))),
           },
-        },
-        { match: (m: string, u: string) => m === 'GET' && u.includes('/api/members'), handle: () => Promise.resolve(jsonResponse({ members, next_cursor: null })) },
-        { match: (m: string, u: string) => m === 'GET' && u.includes('/api/purposes'), handle: () => Promise.resolve(jsonResponse(purposes)) },
-        { match: (m: string, u: string) => m === 'GET' && u.includes('/api/accounts'), handle: () => Promise.resolve(jsonResponse(accounts)) },
-      ]))
+          {
+            match: (m: string, u: string) => m === 'DELETE' && u.includes('/api/receipts/9'),
+            handle: () => {
+              deleted = true
+              return Promise.resolve(new Response(null, { status: 204 }))
+            },
+          },
+          {
+            match: (m: string, u: string) => m === 'GET' && u.includes('/api/members'),
+            handle: () => Promise.resolve(jsonResponse({ members, next_cursor: null })),
+          },
+          {
+            match: (m: string, u: string) => m === 'GET' && u.includes('/api/purposes'),
+            handle: () => Promise.resolve(jsonResponse(purposes)),
+          },
+          {
+            match: (m: string, u: string) => m === 'GET' && u.includes('/api/accounts'),
+            handle: () => Promise.resolve(jsonResponse(accounts)),
+          },
+        ]),
+      )
       renderAt()
       await waitFor(() => expect(screen.getByRole('button', { name: receiptsText.viewReceipt })).toBeInTheDocument())
 
@@ -716,19 +848,31 @@ describe('Reimbursements tab', () => {
     })
 
     it('refuses to delete a claim that still has a receipt, with the specific copy', async () => {
-      vi.stubGlobal('fetch', routedFetch([
-        {
-          match: (m: string, u: string) => m === 'GET' && u.includes('/api/reimbursements'),
-          handle: () => Promise.resolve(jsonResponse(page([claim(1, { receipt_ids: [9] })]))),
-        },
-        {
-          match: (m: string, u: string) => m === 'DELETE' && u.includes('/api/reimbursements/1'),
-          handle: () => Promise.resolve(jsonResponse({ error: { code: 'referenced_by_other_records', message: 'nope' } }, 409)),
-        },
-        { match: (m: string, u: string) => m === 'GET' && u.includes('/api/members'), handle: () => Promise.resolve(jsonResponse({ members, next_cursor: null })) },
-        { match: (m: string, u: string) => m === 'GET' && u.includes('/api/purposes'), handle: () => Promise.resolve(jsonResponse(purposes)) },
-        { match: (m: string, u: string) => m === 'GET' && u.includes('/api/accounts'), handle: () => Promise.resolve(jsonResponse(accounts)) },
-      ]))
+      vi.stubGlobal(
+        'fetch',
+        routedFetch([
+          {
+            match: (m: string, u: string) => m === 'GET' && u.includes('/api/reimbursements'),
+            handle: () => Promise.resolve(jsonResponse(page([claim(1, { receipt_ids: [9] })]))),
+          },
+          {
+            match: (m: string, u: string) => m === 'DELETE' && u.includes('/api/reimbursements/1'),
+            handle: () => Promise.resolve(jsonResponse({ error: { code: 'referenced_by_other_records', message: 'nope' } }, 409)),
+          },
+          {
+            match: (m: string, u: string) => m === 'GET' && u.includes('/api/members'),
+            handle: () => Promise.resolve(jsonResponse({ members, next_cursor: null })),
+          },
+          {
+            match: (m: string, u: string) => m === 'GET' && u.includes('/api/purposes'),
+            handle: () => Promise.resolve(jsonResponse(purposes)),
+          },
+          {
+            match: (m: string, u: string) => m === 'GET' && u.includes('/api/accounts'),
+            handle: () => Promise.resolve(jsonResponse(accounts)),
+          },
+        ]),
+      )
       renderAt()
       await waitFor(() => expect(screen.getByText('Jane')).toBeInTheDocument())
 
