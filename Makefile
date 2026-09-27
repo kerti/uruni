@@ -1,6 +1,6 @@
 .PHONY: help setup hooks-install claude-install doctor \
         run serve-bin build test test-cover lint fmt tidy sqlc migrate-up migrate-down migrate-status db-reset \
-        web-install web-dev web-build web-lint web-typecheck web-test \
+        web-install web-dev web-build web-lint web-fmt web-fmt-check web-typecheck web-test \
         server-stop server-restart web-stop web-restart restart servers-status \
         e2e e2e-install e2e-reset e2e-server stack-up stack-down stack-logs stack-ps \
         dev-user start-task check
@@ -91,6 +91,8 @@ help:
 	@echo "  web-dev                 run the vite dev server in the foreground (:5173)"
 	@echo "  web-build               production build to web/dist (embedded by 'build')"
 	@echo "  web-lint                oxlint"
+	@echo "  web-fmt                 prettier --write over src/, e2e/ and *.config.ts"
+	@echo "  web-fmt-check           prettier --check (what make check and CI run)"
 	@echo "  web-typecheck           tsc"
 	@echo "  web-test                vitest"
 	@echo ""
@@ -275,6 +277,12 @@ web-build:
 web-lint:
 	( cd web && npm run -s lint )
 
+web-fmt:
+	( cd web && npm run -s fmt )
+
+web-fmt-check:
+	( cd web && npm run -s fmt:check )
+
 web-typecheck:
 	( cd web && npm run -s typecheck )
 
@@ -429,6 +437,7 @@ check:
 	fi; \
 	if [ -f web/package.json ]; then \
 	  printf '%-14s' 'oxlint';        (cd web && npm run -s lint)      >/tmp/uruni-check-web-lint.log 2>&1 && echo 'ok' || { echo 'FAIL -> /tmp/uruni-check-web-lint.log'; fail=1; }; \
+	  printf '%-14s' 'prettier';      (cd web && npm run -s fmt:check) >/tmp/uruni-check-web-fmt.log  2>&1 && echo 'ok' || { echo 'FAIL -> /tmp/uruni-check-web-fmt.log (make web-fmt)';  fail=1; }; \
 	  printf '%-14s' 'tsc';           (cd web && npm run -s typecheck) >/tmp/uruni-check-web-tsc.log  2>&1 && echo 'ok' || { echo 'FAIL -> /tmp/uruni-check-web-tsc.log';  fail=1; }; \
 	  printf '%-14s' 'vitest';        (cd web && npm run -s test)      >/tmp/uruni-check-web-test.log 2>&1 && echo 'ok' || { echo 'FAIL -> /tmp/uruni-check-web-test.log'; fail=1; }; \
 	  printf '%-14s' 'web build';     (cd web && npm run -s build)     >/tmp/uruni-check-web-build.log 2>&1 && echo 'ok' || { echo 'FAIL -> /tmp/uruni-check-web-build.log'; fail=1; }; \
