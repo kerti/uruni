@@ -10,8 +10,27 @@ updates:
     schedule:
       interval: weekly
     labels: [dependencies]
+    groups:
+      # Families that must move in lockstep, so a bump arrives as one PR
+      # rather than several that each fail CI alone. Names are explicit, not
+      # "react*": that would sweep in react-router-dom and plugin-react.
+      vitest:
+        # @vitest/coverage-v8 must match vitest exactly.
+        patterns: ["vitest", "@vitest/*"]
+      tailwind:
+        # The Vite plugin and the core ship as a pair.
+        patterns: ["tailwindcss", "@tailwindcss/*"]
+      react:
+        # react-dom requires the exact same react; the types follow them.
+        patterns: ["react", "react-dom", "@types/react", "@types/react-dom"]
   - package-ecosystem: github-actions
     directory: "/"
     schedule:
       interval: weekly
     labels: [dependencies]
+    groups:
+      # init, autobuild and analyze are one action at one version: CodeQL
+      # refuses to run with them split ("Loaded a configuration file for
+      # version X, but running version Y"), so they must bump in one PR.
+      codeql-action:
+        patterns: ["github/codeql-action*"]
