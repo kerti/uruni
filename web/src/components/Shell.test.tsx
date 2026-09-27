@@ -156,7 +156,8 @@ describe('Shell', () => {
 
     await waitFor(() => expect(onLoggedOut).toHaveBeenCalledTimes(1))
 
-    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit]
+    // Not calls[0]: the header's version line (#319) reads /healthz on mount.
+    const [url, init] = fetchMock.mock.calls.find(([u]) => u === '/api/logout') as [string, RequestInit]
     expect(url).toBe('/api/logout')
     expect(init.method).toBe('POST')
   })

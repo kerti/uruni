@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import SettingsIncidentals from '@/screens/Settings/Incidentals'
+import SettingsIncidentals, { ClosedIncidentals } from '@/screens/Settings/Incidentals'
 import { copy } from '@/copy/id'
 
 const text = copy.settings.incidentals
@@ -68,6 +68,7 @@ function renderAt(entry = '/settings') {
             the navigation has somewhere to land; this suite does not assert
             anything about what renders past it. */}
         <Route path="/incidentals" element={<LocationProbe />} />
+        <Route path="/incidentals/closed" element={<LocationProbe />} />
       </Routes>
     </MemoryRouter>,
   )
@@ -78,19 +79,34 @@ function currentLocation() {
 }
 
 describe('Settings incidentals', () => {
-  it('lists every envelope, open and closed alike, with its status', async () => {
-    const { fetchMock } = stubIncidentals([envelope(1, 'Halal bihalal RT'), envelope(2, '17 Agustus', '2026-08-20')])
+  // #319: closed envelopes pile up over the years, so Pengaturan lists the
+  // open ones and gathers the closed behind one row that says how many.
+  it('lists open envelopes, and gathers closed ones behind a row with their count', async () => {
+    const { fetchMock } = stubIncidentals([
+      envelope(1, 'Halal bihalal RT'),
+      envelope(2, '17 Agustus', '2026-08-20'),
+      envelope(3, 'Kerja bakti', '2026-07-05'),
+    ])
     vi.stubGlobal('fetch', fetchMock)
     renderAt()
 
-    expect(await screen.findByRole('list')).toBeInTheDocument()
-    const openCard = screen.getByRole('button', { name: text.cardAria('Halal bihalal RT') })
-    expect(openCard).toBeInTheDocument()
+    expect(await screen.findByRole('button', { name: text.cardAria('Halal bihalal RT') })).toBeInTheDocument()
     expect(screen.getByText(copy.incidentals.status.open)).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: text.cardAria('17 Agustus') })).not.toBeInTheDocument()
 
-    const closedCard = screen.getByRole('button', { name: text.cardAria('17 Agustus') })
-    expect(closedCard).toBeInTheDocument()
-    expect(screen.getByText(copy.incidentals.status.closed)).toBeInTheDocument()
+    const closedRow = screen.getByRole('button', { name: new RegExp(text.closedRow) })
+    expect(within(closedRow).getByText('2')).toBeInTheDocument()
+    await userEvent.click(closedRow)
+    expect(currentLocation()).toBe('/incidentals/closed')
+  })
+
+  it('shows no closed row while every envelope is still open', async () => {
+    const { fetchMock } = stubIncidentals([envelope(1, 'Halal bihalal RT')])
+    vi.stubGlobal('fetch', fetchMock)
+    renderAt()
+
+    expect(await screen.findByRole('button', { name: text.cardAria('Halal bihalal RT') })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: new RegExp(text.closedRow) })).not.toBeInTheDocument()
   })
 
   it('shows the empty state with no envelopes yet', async () => {
@@ -149,5 +165,33 @@ describe('Settings incidentals', () => {
 
     await waitFor(() => expect(currentLocation()).toBe('/settings'))
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  })
+})
+
+// #319: the screen behind Pengaturan's closed row - closed envelopes only,
+// most recently closed first, each opening its detail.
+describe('Closed incidentals', () => {
+  it('lists only closed envelopes, most recently closed first, and opens one', async () => {
+    const { fetchMock } = stubIncidentals([
+      envelope(1, 'Halal bihalal RT'),
+      envelope(2, 'Kerja bakti', '2026-07-05'),
+      envelope(3, '17 Agustus', '2026-08-20'),
+    ])
+    vi.stubGlobal('fetch', fetchMock)
+    const onOpen = vi.fn()
+    render(<ClosedIncidentals onBack={vi.fn()} onOpen={onOpen} />)
+
+    const cards = await screen.findAllByRole('button', { name: /^Lihat / })
+    expect(cards.map((card) => card.getAttribute('aria-label'))).toEqual([text.cardAria('17 Agustus'), text.cardAria('Kerja bakti')])
+    await userEvent.click(cards[0])
+    expect(onOpen).toHaveBeenCalledWith(3)
+  })
+
+  it('says so when nothing has been closed yet', async () => {
+    const { fetchMock } = stubIncidentals([envelope(1, 'Halal bihalal RT')])
+    vi.stubGlobal('fetch', fetchMock)
+    render(<ClosedIncidentals onBack={vi.fn()} onOpen={vi.fn()} />)
+
+    expect(await screen.findByText(text.closedEmpty)).toBeInTheDocument()
   })
 })

@@ -1,7 +1,7 @@
 import { render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import AppVersion from '@/screens/Settings/AppVersion'
+import AppVersion from '@/components/AppVersion'
 import { copy } from '@/copy/id'
 
 afterEach(() => {

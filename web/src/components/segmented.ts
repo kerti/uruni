@@ -19,15 +19,36 @@ import { cn } from '@/lib/utils'
 // class names it can find literally in source.
 const columnClass = { 2: 'grid-cols-2', 3: 'grid-cols-3', 4: 'grid-cols-4' } as const
 
-/** The track - a grid, so every option gets an equal share of the row. */
+/** The track - a grid, so every option gets an equal share of the row.
+ *
+ * Flush since #319: no inner padding and no gaps, so the options take every
+ * pixel of the row and the active fill meets the border. overflow-hidden
+ * backs up the outer options' own corner radii (flushItem, below). */
 export function segmentedTrackClass(columns: keyof typeof columnClass, className?: string): string {
-  return cn('grid gap-1 rounded-xl border border-border bg-muted p-1', columnClass[columns], className)
+  return cn('grid overflow-hidden rounded-xl border border-border bg-muted', columnClass[columns], className)
 }
 
+/** What every option shares inside a flush track: square inner corners, and
+ * the two outer options rounded to the track's inner radius - radius-xl less
+ * its 1px border - so the active fill follows the border's curve instead of
+ * poking a square corner into it. Explicit radii rather than trusting the
+ * track's overflow-hidden to clip: WebKit does not clip a child that has its
+ * own compositing layer (Button's transition and press transform), which is
+ * exactly what showed on an iPhone (#319). The focus ring is drawn inside,
+ * since the track would clip one drawn outside.
+ *
+ * border-0 first: Button's base carries a transparent 1px border, which left
+ * the active fill a pixel short of the track's edge and painted over any
+ * divider. The hairline between options is the item's own left border
+ * instead - without the old gaps, two unselected neighbours would otherwise
+ * read as one. */
+const flushItem =
+  'rounded-none border-0 not-first:border-l not-first:border-l-border first:rounded-l-[calc(var(--radius-xl)-1px)] last:rounded-r-[calc(var(--radius-xl)-1px)] focus-visible:ring-inset'
+
 /** One option inside the track. Pair it with `variant={active ? 'default' :
- * 'ghost'}`. h-11 keeps the 44px touch target inside the track's padding. */
+ * 'ghost'}`. h-11 is the 44px touch target. */
 export function segmentedItemClass(active: boolean, className?: string): string {
-  return cn('h-11 w-full min-w-0 text-sm', !active && 'text-muted-foreground', className)
+  return cn('h-11 w-full min-w-0 text-sm', flushItem, !active && 'text-muted-foreground', className)
 }
 
 /**
@@ -42,11 +63,16 @@ export function segmentedItemClass(active: boolean, className?: string): string 
  * synonym CONTEXT.md exists to prevent.
  *
  * min-h-11 rather than h-11: two rows are taller than 44px, and the point of
- * the original was a floor, not a fixed height.
+ * the original was a floor, not a fixed height. h-auto overrides
+ * Button's default h-8, which min-h-11 had been pinning every option to
+ * exactly 44px whatever its padding said - so py-2.5 (#319) is the first
+ * padding that actually shows: an icon and a caption no longer sit tight
+ * against the track's edges now that it has no padding of its own.
  */
 export function segmentedStackedItemClass(active: boolean, className?: string): string {
   return cn(
-    'flex min-h-11 w-full min-w-0 flex-col items-center justify-center gap-0.5 px-1 py-1.5 text-xs leading-tight [&_svg]:shrink-0',
+    'flex h-auto min-h-11 w-full min-w-0 flex-col items-center justify-center gap-0.5 px-1 py-2.5 text-xs leading-tight [&_svg]:shrink-0',
+    flushItem,
     !active && 'text-muted-foreground',
     className,
   )

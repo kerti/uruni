@@ -65,8 +65,8 @@ The reconciliation states are the emotional heart: **reconciled = success green 
 | Role | Size | Weight | Notes |
 |---|---|---|---|
 | Balance / display | 2.25rem (36px) | 700 | `font-variant-numeric: tabular-nums` |
-| H1 | 1.5rem (24px) | 600 | screen titles |
-| H2 | 1.25rem (20px) | 600 | section headers |
+| H1 | 1.25rem (20px) | 600 | screen titles, every screen alike — sign-in and setup included ([#319](https://github.com/kerti/uruni/issues/319); was 24px on some screens and 20px on others) |
+| H2 | 1.125rem (18px) | 600 | section headers |
 | Body | 1rem (16px) | 400 | min body size on mobile; line-height ~1.5 |
 | Small | 0.875rem (14px) | 400 | secondary info |
 | Label | 0.8125rem (13px) | 500 | field labels, chips (avoid heavy uppercase) |
@@ -75,9 +75,10 @@ All monetary numbers use **tabular-nums** so columns align.
 
 ## Shape, elevation, spacing
 
-- **Radius:** `--radius: 0.875rem` (14px). Cards `rounded-2xl`, buttons `rounded-xl`, chips pill.
+- **Radius:** `--radius: 0.5rem` (8px) — cards `rounded-2xl` (~14px), buttons `rounded-xl` (~11px), inputs `rounded-lg` (8px), chips pill. Reduced from 14px in [#319](https://github.com/kerti/uruni/issues/319): the larger value made cards ~25px round, which read bubbly rather than soft on a phone.
 - **Elevation (soft, warm):** sm `0 1px 2px rgba(34,50,58,.06)` · card `0 2px 8px rgba(34,50,58,.06)` · floating `0 8px 24px rgba(34,50,58,.10)`. No harsh shadows.
 - **Spacing scale:** 4 / 8 / 12 / 16 / 24 / 32 / 48 px. Generous padding inside cards (16–20px).
+- **Section dividers:** a `--border` hairline between a screen's independent sections — Pengaturan's settings, Beranda's current state from its recent activity ([#319](https://github.com/kerti/uruni/issues/319)). Never inside a section and never inside a form, so the line keeps meaning "a new subject starts here".
 
 ## Controls
 

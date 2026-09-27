@@ -1,9 +1,9 @@
-import AppVersion from '@/screens/Settings/AppVersion'
 import DuesTiers from '@/screens/Settings/DuesTiers'
 import FundName from '@/screens/Settings/FundName'
 import Incidentals from '@/screens/Settings/Incidentals'
 import Locations from '@/screens/Settings/Locations'
 import PassThrough from '@/screens/Settings/PassThrough'
+import SectionDivider from '@/components/SectionDivider'
 import { copy } from '@/copy/id'
 import type { Fund } from '@/lib/setup'
 
@@ -43,15 +43,20 @@ import type { Fund } from '@/lib/setup'
  */
 export default function Settings({ onFundRenamed }: { onFundRenamed: (fund: Fund) => void }) {
   return (
-    <div className="flex flex-col gap-8">
+    <div className="flex flex-col gap-6">
       <h1 className="text-xl font-semibold">{copy.settings.heading}</h1>
 
+      {/* A hairline between each independent section (#319); gap-6 rather
+          than gap-8, since the line now does part of the separating. */}
       <FundName onRenamed={onFundRenamed} />
+      <SectionDivider />
       <Locations />
+      <SectionDivider />
       <PassThrough />
+      <SectionDivider />
       <Incidentals />
+      <SectionDivider />
       <DuesTiers />
-      <AppVersion />
     </div>
   )
 }

@@ -24,6 +24,7 @@ import PaymentHistory from '@/screens/Dues/PaymentHistory'
 import Home from '@/screens/Home'
 import Members from '@/screens/Members'
 import Settings from '@/screens/Settings'
+import { ClosedIncidentals } from '@/screens/Settings/Incidentals'
 import { getSession } from '@/lib/auth'
 import { getFund } from '@/lib/setup'
 import { useApi } from '@/lib/useApi'
@@ -353,6 +354,15 @@ function AuthedGate({ onLoggedOut }: { onLoggedOut: () => void }) {
           card in Pengaturan's own section). Without one - a bare visit, or
           an unparseable value - there is nothing here to show, so this
           redirects to Pengaturan, the screen that now owns that list. */}
+      {/* Closed envelopes, gathered off Pengaturan (#319). */}
+      <Route
+        path="/incidentals/closed"
+        element={
+          <Shell title={title} onLoggedOut={onLoggedOut}>
+            <ClosedIncidentals onBack={() => navigate('/settings')} onOpen={(purposeId) => navigate(`/incidentals?purpose=${purposeId}`)} />
+          </Shell>
+        }
+      />
       <Route
         path="/incidentals"
         element={

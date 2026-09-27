@@ -2,6 +2,7 @@ import { ChevronRight } from 'lucide-react'
 import { useEffect } from 'react'
 
 import ReconciliationBanner from '@/components/ReconciliationBanner'
+import SectionDivider from '@/components/SectionDivider'
 import TransactionList from '@/components/TransactionList'
 import Loading from '@/components/states/Loading'
 import ErrorState from '@/components/states/ErrorState'
@@ -270,13 +271,24 @@ export default function Home({
         </section>
       )}
 
+      {/* Everything above is the fund as it stands - balance, where it is,
+          whether it matches, what is earmarked; below is what happened. One
+          hairline between the two (#319). */}
+      <SectionDivider />
+
       <section className="flex flex-col gap-2">
         <div className="flex items-center justify-between gap-3">
           <h2 className="text-sm font-semibold text-muted-foreground">{copy.home.recentActivityHeading}</h2>
-          {/* min-h-11 overrides the `link` variant's own compact height
-              (Design-System.md's 44px minimum touch target) - the same
-              override the header's logout button already uses on `icon`. */}
-          <Button type="button" variant="link" className="h-auto min-h-11 p-0" onClick={onViewHistory}>
+          {/* 44px to the thumb, not to the layout (#319): an invisible hit area
+              centred on the link - ReceiptRowButton's technique - so the row
+              is only as tall as its small heading, rather than min-h-11
+              pushing the heading 12px further from what is above it. */}
+          <Button
+            type="button"
+            variant="link"
+            className="h-auto p-0 relative after:absolute after:inset-x-0 after:top-1/2 after:h-11 after:-translate-y-1/2 after:content-['']"
+            onClick={onViewHistory}
+          >
             {copy.home.recentActivityViewAll}
           </Button>
         </div>
