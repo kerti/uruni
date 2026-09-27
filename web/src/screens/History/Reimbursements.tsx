@@ -1,4 +1,4 @@
-import { Search } from 'lucide-react'
+import { MoreHorizontal, Search } from 'lucide-react'
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { useSearchParams } from 'react-router-dom'
 
@@ -11,6 +11,7 @@ import ReceiptPicker from '@/components/ReceiptPicker'
 import ReceiptRowButton from '@/components/ReceiptRowButton'
 import { segmentedItemClass, segmentedTrackClass } from '@/components/segmented'
 import { Button } from '@/components/ui/button'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import Loading from '@/components/states/Loading'
@@ -19,6 +20,7 @@ import { copy } from '@/copy/id'
 import { ApiError } from '@/lib/api'
 import { formatIsoDate } from '@/lib/dates'
 import { formatIDR } from '@/lib/money'
+import { cn } from '@/lib/utils'
 import { listAccounts } from '@/lib/accounts'
 import { listPurposes } from '@/lib/purposes'
 import { uploadReceipt } from '@/lib/receipts'
@@ -342,70 +344,81 @@ export default function Reimbursements({ refetchKey }: { refetchKey?: unknown })
                     count once one exists. Shown on every tab, not only
                     outstanding - a settled claim's nota is exactly as
                     worth keeping. */}
-                <ReceiptRowButton receiptIds={claim.receipt_ids ?? []} onClick={() => setReceiptsForId(claim.id)} className="self-start" />
-
-                {/* Actions - only on the outstanding tab; settled claims show no actions */}
-                {tab === 'outstanding' && !claim.waived_on && (
-                  <div className="flex flex-wrap gap-2 pt-1">
-                    {settleId !== claim.id && correctId !== claim.id && (
-                      <>
-                        <Button
-                          type="button"
-                          size="lg"
-                          onClick={() => {
-                            setSettleId(claim.id)
-                            setCorrectId(null)
-                            setDeleteId(null)
-                            setFeedback(null)
-                          }}
-                        >
-                          {text.actions.settle}
-                        </Button>
-                        <Button
-                          type="button"
-                          size="lg"
-                          variant="outline"
-                          onClick={() => {
-                            setCorrectId(claim.id)
-                            setSettleId(null)
-                            setDeleteId(null)
-                            setFeedback(null)
-                          }}
-                        >
-                          {text.actions.correct}
-                        </Button>
-                        <Button type="button" size="lg" variant="outline" onClick={() => handleWaive(claim.id)} disabled={submitting}>
-                          {text.actions.waive}
-                        </Button>
-                        {deleteId !== claim.id && (
-                          <Button
+                {/* One line of row controls, never a row of buttons (#314):
+                    four full-size buttons made each claim read like a form.
+                    The photo affordance (#154) on the left - the same shared
+                    control as TransactionList.tsx's, shown on every tab,
+                    since a settled claim's nota is exactly as worth keeping.
+                    On the right, only on the outstanding tab: Bayar in plain
+                    ink, the everyday action, one tap; the rarer three behind
+                    a "more" menu, two. */}
+                <div className="flex items-center justify-between gap-3">
+                  <ReceiptRowButton receiptIds={claim.receipt_ids ?? []} onClick={() => setReceiptsForId(claim.id)} />
+                  {tab === 'outstanding' && !claim.waived_on && settleId !== claim.id && correctId !== claim.id && (
+                    <div className="flex items-center gap-5">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSettleId(claim.id)
+                          setCorrectId(null)
+                          setDeleteId(null)
+                          setFeedback(null)
+                        }}
+                        className={rowControlClass('text-sm font-medium text-primary hover:text-primary/80')}
+                      >
+                        {text.actions.settle}
+                      </button>
+                      <DropdownMenu modal={false}>
+                        <DropdownMenuTrigger asChild>
+                          <button
                             type="button"
-                            size="lg"
-                            variant="ghost"
-                            className="text-destructive"
-                            onClick={() => {
+                            aria-label={text.actions.menuAria}
+                            disabled={submitting}
+                            className={rowControlClass('text-muted-foreground/70 hover:text-foreground disabled:opacity-50')}
+                          >
+                            <MoreHorizontal aria-hidden="true" className="size-5" />
+                          </button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem
+                            onSelect={() => {
+                              setCorrectId(claim.id)
+                              setSettleId(null)
+                              setDeleteId(null)
+                              setFeedback(null)
+                            }}
+                          >
+                            {text.actions.correct}
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onSelect={() => handleWaive(claim.id)}>{text.actions.waive}</DropdownMenuItem>
+                          <DropdownMenuItem
+                            variant="destructive"
+                            onSelect={() => {
                               setDeleteId(claim.id)
                               setFeedback(null)
                             }}
                           >
                             {text.actions.delete}
-                          </Button>
-                        )}
-                      </>
-                    )}
-                  </div>
-                )}
-
-                {/* Un-waive action for waived claims - reachable on the "all"
-                    tab only: the outstanding list filters waived claims out, so
-                    this branch exists precisely where the claim can appear. */}
-                {claim.waived_on && (
-                  <div className="flex gap-2 pt-1">
-                    <Button type="button" size="lg" variant="outline" onClick={() => handleUnwaive(claim.id)} disabled={submitting}>
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </div>
+                  )}
+                  {/* Un-waive for a waived claim - reachable on the "all" tab
+                      only: the outstanding list filters waived claims out, so
+                      this branch exists precisely where the claim can appear.
+                      The same plain ink as Bayar, on the same line. */}
+                  {claim.waived_on && (
+                    <button
+                      type="button"
+                      onClick={() => handleUnwaive(claim.id)}
+                      disabled={submitting}
+                      className={rowControlClass('text-sm font-medium text-primary hover:text-primary/80 disabled:opacity-50')}
+                    >
                       {text.actions.unwaive}
-                    </Button>
-                  </div>
-                )}
+                    </button>
+                  )}
+                </div>
 
                 {/* Inline settle form */}
                 {settleId === claim.id && fd && (
@@ -434,12 +447,12 @@ export default function Reimbursements({ refetchKey }: { refetchKey?: unknown })
                 {deleteId === claim.id && (
                   <div className="flex flex-col gap-2 rounded-lg bg-attention-soft p-3">
                     <p className="text-sm">{text.actions.delete}?</p>
-                    <div className="flex gap-2">
-                      <Button type="button" size="lg" variant="destructive" onClick={() => handleDelete(claim.id)} disabled={submitting}>
-                        {submitting ? text.actions.deleting : text.actions.delete}
-                      </Button>
+                    <div className="grid grid-cols-2 gap-2">
                       <Button type="button" size="lg" variant="outline" onClick={() => setDeleteId(null)} disabled={submitting}>
                         {text.settle.cancel}
+                      </Button>
+                      <Button type="button" size="lg" variant="destructive" onClick={() => handleDelete(claim.id)} disabled={submitting}>
+                        {submitting ? text.actions.deleting : text.actions.delete}
                       </Button>
                     </div>
                   </div>
@@ -674,12 +687,12 @@ function RecordClaimForm({
 
       <ReceiptPicker id="reimburse-receipt" value={photoFile} onChange={setPhotoFile} disabled={submitting} />
 
-      <div className="flex gap-2">
-        <Button type="submit" size="lg" disabled={!canSubmit}>
-          {submitting ? text.record.submitting : text.record.submit}
-        </Button>
+      <div className="grid grid-cols-2 gap-2">
         <Button type="button" variant="outline" size="lg" onClick={onCancel} disabled={submitting}>
           {text.record.cancel}
+        </Button>
+        <Button type="submit" size="lg" disabled={!canSubmit}>
+          {submitting ? text.record.submitting : text.record.submit}
         </Button>
       </div>
     </form>
@@ -741,12 +754,12 @@ function SettleForm({
         />
       </div>
 
-      <div className="flex gap-2">
-        <Button type="submit" size="lg" disabled={!canSubmit}>
-          {submitting ? text.settle.submitting : text.settle.submit}
-        </Button>
+      <div className="grid grid-cols-2 gap-2">
         <Button type="button" size="lg" variant="outline" onClick={onCancel} disabled={submitting}>
           {text.settle.cancel}
+        </Button>
+        <Button type="submit" size="lg" disabled={!canSubmit}>
+          {submitting ? text.settle.submitting : text.settle.submit}
         </Button>
       </div>
     </form>
@@ -838,14 +851,25 @@ function CorrectForm({
         />
       </div>
 
-      <div className="flex gap-2">
-        <Button type="submit" size="lg" disabled={!canSubmit}>
-          {submitting ? text.correct.submitting : text.correct.submit}
-        </Button>
+      <div className="grid grid-cols-2 gap-2">
         <Button type="button" size="lg" variant="outline" onClick={onCancel} disabled={submitting}>
           {text.correct.cancel}
         </Button>
+        <Button type="submit" size="lg" disabled={!canSubmit}>
+          {submitting ? text.correct.submitting : text.correct.submit}
+        </Button>
       </div>
     </form>
+  )
+}
+
+/** A row control's box (#314): sized to its content so the row stays one
+ * quiet line, with an invisible 44px hit area centred on it - the same
+ * technique ReceiptRowButton uses - so the target still meets
+ * Design-System.md's minimum. */
+function rowControlClass(className: string): string {
+  return cn(
+    "relative flex shrink-0 items-center transition-colors after:absolute after:top-1/2 after:left-1/2 after:size-11 after:-translate-x-1/2 after:-translate-y-1/2 after:content-['']",
+    className,
   )
 }

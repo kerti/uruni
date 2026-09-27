@@ -116,7 +116,9 @@ test.describe('reimbursements', () => {
     await expect(page.getByText('Rp 20.000')).toBeVisible()
 
     // Waive it: the row leaves the outstanding list and feedback confirms.
-    await page.getByRole('button', { name: copy.reimbursements.actions.waive, exact: true }).click()
+    // Putihkan sits in the row's "more" menu (#314), behind the one plain Bayar.
+    await page.locator('li', { hasText: 'Rp 20.000' }).getByRole('button', { name: copy.reimbursements.actions.menuAria }).click()
+    await page.getByRole('menuitem', { name: copy.reimbursements.actions.waive, exact: true }).click()
     await expect(page.getByText(copy.reimbursements.waive.success)).toBeVisible()
     await expect(page.getByText('Rp 20.000')).not.toBeVisible()
 

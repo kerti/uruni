@@ -189,12 +189,14 @@ export default function MemberPayments({ memberId, period, onReversed }: { membe
 
                 {submitState.status === 'error' && submitState.error && <ErrorState error={submitState.error} />}
 
-                <Button type="button" size="lg" disabled={submitting || occurredOn === ''} onClick={() => submitReversal(row.id)}>
-                  {submitting ? text.submitting : text.confirm}
-                </Button>
-                <Button type="button" variant="outline" size="lg" disabled={submitting} onClick={() => setReversingId(null)}>
-                  {text.cancel}
-                </Button>
+                <div className="grid grid-cols-2 gap-2">
+                  <Button type="button" variant="outline" size="lg" disabled={submitting} onClick={() => setReversingId(null)}>
+                    {text.cancel}
+                  </Button>
+                  <Button type="button" size="lg" disabled={submitting || occurredOn === ''} onClick={() => submitReversal(row.id)}>
+                    {submitting ? text.submitting : text.confirm}
+                  </Button>
+                </div>
               </div>
             )}
           </li>

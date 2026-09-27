@@ -91,6 +91,14 @@ function jsonResponse(body: unknown, status = 200) {
 
 type Handler = { match: (method: string, url: string) => boolean; handle: () => Promise<Response> }
 
+/** Opens the first claim row's "more" menu and picks an item from it (#314):
+ * Perbaiki, Putihkan and Hapus live there now, behind the row's one plain
+ * Bayar control. */
+async function chooseFromRowMenu(name: string) {
+  await userEvent.click(screen.getAllByRole('button', { name: text.actions.menuAria })[0])
+  await userEvent.click(within(await screen.findByRole('menu')).getByRole('menuitem', { name }))
+}
+
 /** Routes a stubbed fetch by method + path substring, recording every call */
 function routedFetch(handlers: Handler[]) {
   return vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
@@ -281,10 +289,10 @@ describe('Reimbursements tab', () => {
     )
 
     renderAt()
-    await waitFor(() => expect(screen.getByRole('button', { name: text.actions.waive })).toBeInTheDocument())
+    await waitFor(() => expect(screen.getAllByRole('button', { name: text.actions.menuAria })[0]).toBeInTheDocument())
 
     // Waive: the row leaves the outstanding list and a feedback says so.
-    await userEvent.click(screen.getByRole('button', { name: text.actions.waive }))
+    await chooseFromRowMenu(text.actions.waive)
     await waitFor(() => expect(screen.getByText(text.waive.success)).toBeInTheDocument())
     expect(screen.queryByRole('button', { name: text.actions.unwaive })).not.toBeInTheDocument()
 
@@ -313,8 +321,7 @@ describe('Reimbursements tab', () => {
     expect(screen.getByText(text.status.settled, { selector: 'span' })).toBeInTheDocument()
     expect(screen.getByText(text.status.outstanding, { selector: 'span' })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: text.actions.settle })).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: text.actions.correct })).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: text.actions.waive })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: text.actions.menuAria })).not.toBeInTheDocument()
   })
 
   it('delete calls DELETE and re-fetches', async () => {
@@ -353,7 +360,7 @@ describe('Reimbursements tab', () => {
     await waitFor(() => expect(screen.getByText('Jane')).toBeInTheDocument())
 
     // Click delete to show confirmation
-    await userEvent.click(screen.getByRole('button', { name: text.actions.delete }))
+    await chooseFromRowMenu(text.actions.delete)
     // Confirm delete
     await userEvent.click(screen.getByRole('button', { name: text.actions.delete }))
 
@@ -379,7 +386,7 @@ describe('Reimbursements tab', () => {
     await waitFor(() => expect(screen.getByText('Jane')).toBeInTheDocument())
 
     // Open correct form
-    await userEvent.click(screen.getByRole('button', { name: text.actions.correct }))
+    await chooseFromRowMenu(text.actions.correct)
     await waitFor(() => expect(screen.getByText(text.correct.heading)).toBeInTheDocument())
 
     // Submit the correction
@@ -520,7 +527,7 @@ describe('Reimbursements tab', () => {
     // claim B remains, its action reachable. The delete action on B retires
     // A's stale success message.
     await waitFor(() => expect(screen.queryByText('Jane')).not.toBeInTheDocument())
-    await userEvent.click(screen.getByRole('button', { name: text.actions.delete }))
+    await chooseFromRowMenu(text.actions.delete)
     expect(screen.queryByText(text.settle.success)).not.toBeInTheDocument()
   })
 
@@ -876,7 +883,7 @@ describe('Reimbursements tab', () => {
       renderAt()
       await waitFor(() => expect(screen.getByText('Jane')).toBeInTheDocument())
 
-      await userEvent.click(screen.getByRole('button', { name: text.actions.delete }))
+      await chooseFromRowMenu(text.actions.delete)
       await userEvent.click(screen.getByRole('button', { name: text.actions.delete }))
 
       await waitFor(() => expect(screen.getByRole('alert').textContent).toBe(text.errors.referenced_by_other_records))

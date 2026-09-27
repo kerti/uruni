@@ -34,8 +34,11 @@ export default function ErrorState({ error, onRetry }: { error: ApiError; onRetr
         <CircleAlert aria-hidden="true" />
         {text}
       </p>
+      {/* Forest and full width (#313): retrying is the only way forward from
+          here and harmless to tap, so it is the primary action - the
+          terracotta line above carries the error, not the button. */}
       {onRetry && (
-        <Button variant="outline" size="sm" onClick={onRetry}>
+        <Button size="lg" className="self-stretch" onClick={onRetry}>
           {copy.common.retry}
         </Button>
       )}

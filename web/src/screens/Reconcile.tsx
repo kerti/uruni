@@ -395,12 +395,14 @@ export default function Reconcile({ onDone, onCancel }: { onDone: () => void; on
 
       {submitError && <ErrorState error={submitError} />}
 
-      <Button type="submit" size="lg" disabled={!canSubmit}>
-        {submitting ? text.submitting : text.submit}
-      </Button>
-      <Button type="button" variant="outline" size="lg" onClick={onCancel} disabled={submitting}>
-        {text.cancel}
-      </Button>
+      <div className="grid grid-cols-2 gap-2">
+        <Button type="button" variant="outline" size="lg" onClick={onCancel} disabled={submitting}>
+          {text.cancel}
+        </Button>
+        <Button type="submit" size="lg" disabled={!canSubmit}>
+          {submitting ? text.submitting : text.submit}
+        </Button>
+      </div>
     </form>
   )
 }

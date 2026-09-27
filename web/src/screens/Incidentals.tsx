@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react'
 
 import AccountPicker from '@/components/pickers/AccountPicker'
+import TransactionList from '@/components/TransactionList'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
@@ -14,10 +15,12 @@ import { parseDialogTarget } from '@/lib/dialogTarget'
 import { formatIDR } from '@/lib/money'
 import { closeIncidental, getIncidental, reopenIncidental } from '@/lib/incidentals'
 import { renamePurpose } from '@/lib/purposes'
+import { listTransactions } from '@/lib/transactions'
 import { useApi } from '@/lib/useApi'
 import { useDialogParam } from '@/lib/useDialogParam'
 import type { Account } from '@/lib/accounts'
 import type { Incidental, IncidentalDetail } from '@/lib/incidentals'
+import type { Transaction } from '@/lib/transactions'
 
 const text = copy.incidentals
 
@@ -350,44 +353,33 @@ function DetailView({
         </div>
       )}
 
-      {/* One button column for both states, so the close form replaces the
-          whole of it rather than half. */}
+      {/* One action row for both states, so the close form replaces the
+          whole of it rather than half; primary on the right (Design-System,
+          "Action rows"). Ubah nama corrects a mistyped occasion (#264), open
+          or closed, since the typo is usually noticed only after the
+          occasion is over. */}
       {!showCloseForm && (
-        <div className="flex flex-col gap-2">
-          {isOpen && (
+        <div className={isOpen ? 'grid grid-cols-3 gap-2' : 'grid grid-cols-2 gap-2'}>
+          <Button type="button" size="lg" variant="outline" onClick={onRename}>
+            {text.actions.rename}
+          </Button>
+          {isOpen ? (
             <>
+              <Button type="button" size="lg" variant="outline" onClick={onShowClose}>
+                {text.actions.close}
+              </Button>
               {/* Contributions and disbursements both go through the real
                   record form (M6.8), pre-chosen to this envelope's purpose -
                   direction is decided there, by its own toggle. */}
               <Button type="button" size="lg" onClick={onRecord}>
                 {text.actions.record}
               </Button>
-              <Button type="button" size="lg" variant="outline" onClick={onShowClose}>
-                {text.actions.close}
-              </Button>
             </>
-          )}
-
-          {/* Riwayat -> Transaksi filtered to this envelope's peruntukan
-              (#262). Offered whichever state the envelope is in, but it is
-              a CLOSED one's only route to its own record - ADR-032 drops it
-              off Beranda and names this filter in its place. */}
-          <Button type="button" size="lg" variant="outline" onClick={onViewTransactions}>
-            {text.actions.viewTransactions}
-          </Button>
-
-          {/* Correcting a mistyped occasion (#264) - offered open or closed,
-              beside Lihat transaksi, since the typo is usually noticed only
-              after the occasion is over. */}
-          <Button type="button" size="lg" variant="outline" onClick={onRename}>
-            {text.actions.rename}
-          </Button>
-
-          {/* The way back from a closed envelope (ADR-031): reopening
-              rejoins the isOpen block above - "Catat transaksi" for the late
-              entry and "Tutup amplop" to close again - rather than leaving a
-              bare toggle with nothing next. */}
-          {!isOpen && (
+          ) : (
+            /* The way back from a closed envelope (ADR-031): reopening
+               rejoins the open row - Catat for the late entry and Tutup to
+               close again - rather than leaving a bare toggle with nothing
+               next. */
             <Button type="button" size="lg" variant="outline" onClick={onReopen} disabled={submitting}>
               {text.actions.reopen}
             </Button>
@@ -396,6 +388,8 @@ function DetailView({
       )}
 
       {isOpen && showCloseForm && <CloseForm accounts={accounts} onSubmit={onClose} onCancel={onCancelClose} submitting={submitting} />}
+
+      <EnvelopeActivity envelope={envelope} onViewAll={onViewTransactions} />
     </div>
   )
 }
@@ -463,12 +457,12 @@ function CloseForm({
         />
       </div>
 
-      <div className="flex gap-2">
-        <Button type="submit" size="lg" disabled={!canSubmit}>
-          {submitting ? text.close.submitting : text.close.submit}
-        </Button>
+      <div className="grid grid-cols-2 gap-2">
         <Button type="button" size="lg" variant="outline" onClick={onCancel} disabled={submitting}>
           {text.close.cancel}
+        </Button>
+        <Button type="submit" size="lg" disabled={!canSubmit}>
+          {submitting ? text.close.submitting : text.close.submit}
         </Button>
       </div>
     </form>
@@ -554,5 +548,59 @@ function RenameIncidentalDialog({
         </form>
       </DialogContent>
     </Dialog>
+  )
+}
+
+/** How many of the envelope's latest transactions its detail screen shows -
+ * the same five Beranda's recent activity shows (Home.tsx). */
+const ENVELOPE_ACTIVITY_COUNT = 5
+
+/**
+ * The envelope's own recent activity, shaped like Beranda's "Aktivitas
+ * terbaru" and spoken in its words: the latest few rows posted against this
+ * purpose, and "Lihat semua" into Riwayat -> Transaksi filtered to it (#262)
+ * - which for a closed envelope is the only route to its record, since
+ * ADR-032 drops it off Beranda.
+ *
+ * Fetches for itself rather than widening the detail load: it is a reading
+ * aid below the actions, so a failure here must not blank the envelope.
+ * Refetches whenever the envelope object is replaced - a close, a reopen or
+ * a rename reloads the detail, and a close posts the rollover row.
+ */
+function EnvelopeActivity({ envelope, onViewAll }: { envelope: Incidental; onViewAll: () => void }) {
+  const [state, run] = useApi<Transaction[]>()
+
+  useEffect(() => {
+    void run(() => listTransactions({ purposeId: envelope.purpose_id }).then((page) => page.transactions.slice(0, ENVELOPE_ACTIVITY_COUNT)))
+  }, [run, envelope])
+
+  // Every row here carries this envelope's purpose, so its name is the one
+  // lookup TransactionList needs.
+  const purposeNames = new Map([[envelope.purpose_id, envelope.occasion]])
+
+  return (
+    <section className="flex flex-col gap-2">
+      <div className="flex items-center justify-between gap-3">
+        <h2 className="text-sm font-semibold text-muted-foreground">{copy.home.recentActivityHeading}</h2>
+        {/* min-h-11: the link variant's own height is under 44px. */}
+        <Button type="button" variant="link" className="h-auto min-h-11 p-0" onClick={onViewAll}>
+          {copy.home.recentActivityViewAll}
+        </Button>
+      </div>
+      {state.status === 'error' && state.error ? (
+        <ErrorState
+          error={state.error}
+          onRetry={() =>
+            void run(() =>
+              listTransactions({ purposeId: envelope.purpose_id }).then((page) => page.transactions.slice(0, ENVELOPE_ACTIVITY_COUNT)),
+            )
+          }
+        />
+      ) : state.data ? (
+        <TransactionList transactions={state.data} purposeNames={purposeNames} emptyMessage={copy.home.recentActivityEmpty} />
+      ) : (
+        <Loading />
+      )}
+    </section>
   )
 }

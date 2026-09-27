@@ -78,11 +78,11 @@ export default function OpeningBalances({
               </div>
             ))}
             {error && <ErrorState error={error} />}
-            <div className="flex gap-2">
+            <div className="grid grid-cols-2 gap-2">
               <Button type="button" variant="outline" size="lg" onClick={onBack} disabled={submitting}>
                 {text.back}
               </Button>
-              <Button type="submit" size="lg" className="flex-1" disabled={submitting}>
+              <Button type="submit" size="lg" disabled={submitting}>
                 {submitting ? text.submitting : text.next}
               </Button>
             </div>

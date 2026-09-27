@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react'
-import { ArrowDownLeft, ArrowLeftRight, ArrowUpDown, ArrowUpRight } from 'lucide-react'
+import { ArrowDownLeft, ArrowLeftRight, ArrowUpDown, ArrowUpRight, CalendarCheck } from 'lucide-react'
 
 import AmountInput from '@/components/money/AmountInput'
 import AccountPicker from '@/components/pickers/AccountPicker'
@@ -12,6 +12,7 @@ import { Label } from '@/components/ui/label'
 import Loading from '@/components/states/Loading'
 import ErrorState from '@/components/states/ErrorState'
 import { copy } from '@/copy/id'
+import RecordDuesPayment from '@/screens/Dues/RecordPayment'
 import { listAccounts } from '@/lib/accounts'
 import { getBalances } from '@/lib/balances'
 import { formatIDR } from '@/lib/money'
@@ -122,6 +123,9 @@ export default function RecordTransaction({
   onRecorded,
   onCancel,
   initialPurposeId,
+  initialDues = false,
+  onDuesRecorded,
+  onDuesCancel,
 }: {
   /** photoFailed is true only when a photo was picked and the parent
    * transaction posted successfully but the receipt upload itself failed
@@ -129,11 +133,23 @@ export default function RecordTransaction({
   onRecorded: (direction: Direction, photoFailed?: boolean) => void
   onCancel: () => void
   initialPurposeId?: number | null
+  /** Iuran, the toggle's fourth item (#315): a dues payment moves money,
+   * so it is recorded here like every other kind (ADR-032). Choosing it
+   * swaps the form below for RecordDuesPayment's own; its own callbacks,
+   * since where she lands after a dues payment depends on the door she came
+   * in by. initialDues opens with it chosen. */
+  initialDues?: boolean
+  onDuesRecorded: () => void
+  onDuesCancel?: () => void
 }) {
   const [loadState, loadRun] = useApi<FormData>()
   const [submitState, submitRun] = useApi<unknown>()
 
   const [direction, setDirection] = useState<Direction>('out')
+  // Kept apart from direction rather than widening Direction: every other
+  // line of this form means a transaction's direction by it, and switching
+  // to Iuran and back leaves the transaction form exactly as she left it.
+  const [duesChosen, setDuesChosen] = useState(initialDues)
   const [accountId, setAccountId] = useState<number | null>(null)
   // Only used by 'transfer': where the money lands. The single accountId
   // above is where it leaves from, which is what it already means for an
@@ -319,39 +335,46 @@ export default function RecordTransaction({
     return <Loading />
   }
 
+  function chooseDirection(next: Direction) {
+    setDirection(next)
+    setDuesChosen(false)
+  }
+
   if (loadState.status === 'error' || !loadState.data) {
     return loadState.error ? <ErrorState error={loadState.error} onRetry={() => void loadRun(loadFormData)} /> : null
   }
 
   return (
-    <form className="mx-auto flex w-full max-w-sm flex-col gap-4" onSubmit={handleSubmit} noValidate>
-      <h1 className="text-2xl font-semibold">{text.heading}</h1>
+    <div className="mx-auto flex w-full max-w-sm flex-col gap-4">
+      {/* The heading names what is being recorded: a dues payment keeps the
+          title its own screen always had. */}
+      <h1 className="text-2xl font-semibold">{duesChosen ? copy.dues.payment.heading : text.heading}</h1>
 
       <div className="flex flex-col gap-1.5">
-        {/* sr-only: the three captions below say what this is, so a visible
+        {/* sr-only: the four captions below say what this is, so a visible
             "Jenis" above them labels a control that already labelled itself.
             It stays in the DOM because the group still needs a name for a
             screen reader, which reads the caption of one option, not the set. */}
         <Label htmlFor="record-direction" className="sr-only">
           {text.directionLabel}
         </Label>
-        <div id="record-direction" role="group" aria-label={text.directionLabel} className={segmentedTrackClass(3)}>
+        <div id="record-direction" role="group" aria-label={text.directionLabel} className={segmentedTrackClass(4)}>
           <Button
             type="button"
-            variant={direction === 'out' ? 'default' : 'ghost'}
-            aria-pressed={direction === 'out'}
-            className={segmentedStackedItemClass(direction === 'out')}
-            onClick={() => setDirection('out')}
+            variant={!duesChosen && direction === 'out' ? 'default' : 'ghost'}
+            aria-pressed={!duesChosen && direction === 'out'}
+            className={segmentedStackedItemClass(!duesChosen && direction === 'out')}
+            onClick={() => chooseDirection('out')}
           >
             <ArrowUpRight aria-hidden="true" />
             {text.directionOut}
           </Button>
           <Button
             type="button"
-            variant={direction === 'in' ? 'default' : 'ghost'}
-            aria-pressed={direction === 'in'}
-            className={segmentedStackedItemClass(direction === 'in')}
-            onClick={() => setDirection('in')}
+            variant={!duesChosen && direction === 'in' ? 'default' : 'ghost'}
+            aria-pressed={!duesChosen && direction === 'in'}
+            className={segmentedStackedItemClass(!duesChosen && direction === 'in')}
+            onClick={() => chooseDirection('in')}
           >
             <ArrowDownLeft aria-hidden="true" />
             {text.directionIn}
@@ -362,150 +385,169 @@ export default function RecordTransaction({
               balances per location precisely so this movement is recordable. */}
           <Button
             type="button"
-            variant={direction === 'transfer' ? 'default' : 'ghost'}
-            aria-pressed={direction === 'transfer'}
-            className={segmentedStackedItemClass(direction === 'transfer')}
-            onClick={() => setDirection('transfer')}
+            variant={!duesChosen && direction === 'transfer' ? 'default' : 'ghost'}
+            aria-pressed={!duesChosen && direction === 'transfer'}
+            className={segmentedStackedItemClass(!duesChosen && direction === 'transfer')}
+            onClick={() => chooseDirection('transfer')}
           >
             <ArrowLeftRight aria-hidden="true" />
             {text.directionTransfer}
           </Button>
+          {/* A dues payment (#315): the fourth kind of money moving, so the
+              fourth item here rather than a link or a second screen - Catat
+              stays one screen, one tap from the footer (PRD section 7.2). */}
+          <Button
+            type="button"
+            variant={duesChosen ? 'default' : 'ghost'}
+            aria-pressed={duesChosen}
+            className={segmentedStackedItemClass(duesChosen)}
+            onClick={() => setDuesChosen(true)}
+          >
+            <CalendarCheck aria-hidden="true" />
+            {text.directionDues}
+          </Button>
         </div>
       </div>
 
-      <AmountInput id="record-amount" label={text.amountLabel} value={amount} onChange={setAmount} disabled={submitting} />
+      {duesChosen ? (
+        <RecordDuesPayment embedded onRecorded={onDuesRecorded} onCancel={onDuesCancel ?? onCancel} />
+      ) : (
+        <form className="flex flex-col gap-4" onSubmit={handleSubmit} noValidate>
+          <AmountInput id="record-amount" label={text.amountLabel} value={amount} onChange={setAmount} disabled={submitting} />
 
-      {/* One location for an ordinary entry, two for a transfer - and the
+          {/* One location for an ordinary entry, two for a transfer - and the
           field she already knows keeps its meaning either way: accountId is
           where the money is, or where it leaves from. A transfer hides the
           peruntukan entirely, because it does not have one to choose: both
           legs carry the same tag and it nets to zero (ADR-024). */}
-      {/* The picker and its balance preview share one gap-1.5 column, exactly
+          {/* The picker and its balance preview share one gap-1.5 column, exactly
           as the destination pair below does - otherwise the source's preview
           inherits the form's own gap-4 and the two read as differently
           spaced (they were). */}
-      <div className="flex flex-col gap-1.5">
-        <AccountPicker
-          id="record-account"
-          label={isTransfer ? text.fromLocationLabel : text.locationLabel}
-          accounts={loadState.data.accounts}
-          value={accountId}
-          onChange={setAccountId}
-          disabled={submitting}
-        />
-        {isTransfer && fromBalance !== null && (
-          <p className="text-sm text-muted-foreground">{text.locationBalance(formatIDR(fromBalance))}</p>
-        )}
-      </div>
+          <div className="flex flex-col gap-1.5">
+            <AccountPicker
+              id="record-account"
+              label={isTransfer ? text.fromLocationLabel : text.locationLabel}
+              accounts={loadState.data.accounts}
+              value={accountId}
+              onChange={setAccountId}
+              disabled={submitting}
+            />
+            {isTransfer && fromBalance !== null && (
+              <p className="text-sm text-muted-foreground">{text.locationBalance(formatIDR(fromBalance))}</p>
+            )}
+          </div>
 
-      {isTransfer && (
-        <div className="flex flex-col gap-1.5">
-          {/* Depositing cash and drawing it back out are the same two
+          {isTransfer && (
+            <div className="flex flex-col gap-1.5">
+              {/* Depositing cash and drawing it back out are the same two
               locations in opposite order, so the pair is worth one tap
               rather than four. Self-start so the control is only as wide as
               it needs to be, and size-11 so it clears 44px on its own. */}
-          <Button
-            type="button"
-            variant="outline"
-            className="h-11 self-center px-4"
-            disabled={submitting}
-            onClick={() => {
-              setAccountId(toAccountId)
-              setToAccountId(accountId)
-            }}
-          >
-            <ArrowUpDown aria-hidden="true" />
-            {text.swapLocations}
-          </Button>
+              <Button
+                type="button"
+                variant="outline"
+                className="h-11 self-center px-4"
+                disabled={submitting}
+                onClick={() => {
+                  setAccountId(toAccountId)
+                  setToAccountId(accountId)
+                }}
+              >
+                <ArrowUpDown aria-hidden="true" />
+                {text.swapLocations}
+              </Button>
 
-          <AccountPicker
-            id="record-to-account"
-            label={text.toLocationLabel}
-            accounts={loadState.data.accounts}
-            value={toAccountId}
-            onChange={setToAccountId}
-            disabled={submitting}
-          />
-          {toBalance !== null && <p className="text-sm text-muted-foreground">{text.locationBalance(formatIDR(toBalance))}</p>}
+              <AccountPicker
+                id="record-to-account"
+                label={text.toLocationLabel}
+                accounts={loadState.data.accounts}
+                value={toAccountId}
+                onChange={setToAccountId}
+                disabled={submitting}
+              />
+              {toBalance !== null && <p className="text-sm text-muted-foreground">{text.locationBalance(formatIDR(toBalance))}</p>}
 
-          {sameLocation && (
-            <p role="status" className="rounded-lg bg-attention-soft px-3 py-2 text-sm text-attention">
-              {text.sameLocationHint}
-            </p>
+              {sameLocation && (
+                <p role="status" className="rounded-lg bg-attention-soft px-3 py-2 text-sm text-attention">
+                  {text.sameLocationHint}
+                </p>
+              )}
+              {!sameLocation && transferGoesNegative && fromBalance !== null && (
+                <p role="status" className="rounded-lg bg-attention-soft px-3 py-2 text-sm text-attention">
+                  {text.locationGoesNegative(formatIDR(Math.abs(fromBalance - amount)))}
+                </p>
+              )}
+            </div>
           )}
-          {!sameLocation && transferGoesNegative && fromBalance !== null && (
-            <p role="status" className="rounded-lg bg-attention-soft px-3 py-2 text-sm text-attention">
-              {text.locationGoesNegative(formatIDR(Math.abs(fromBalance - amount)))}
-            </p>
-          )}
-        </div>
-      )}
 
-      {!isTransfer && (
-        <div className="flex flex-col gap-1.5">
-          <PurposePicker
-            id="record-purpose"
-            label={text.purposeLabel}
-            purposes={loadState.data.purposes}
-            value={purposeId}
-            onChange={setPurposeId}
-            disabled={submitting}
-          />
-          {/* Terracotta, never alarm-red (Design-System): nothing is broken
+          {!isTransfer && (
+            <div className="flex flex-col gap-1.5">
+              <PurposePicker
+                id="record-purpose"
+                label={text.purposeLabel}
+                purposes={loadState.data.purposes}
+                value={purposeId}
+                onChange={setPurposeId}
+                disabled={submitting}
+              />
+              {/* Terracotta, never alarm-red (Design-System): nothing is broken
             and she may well mean it - this names the likelier reading and
             the tag that fits it, then gets out of the way. role="status"
             rather than "alert" for the same reason. */}
-          {warnsPassThroughNegative && (
-            <p role="status" className="rounded-lg bg-attention-soft px-3 py-2 text-sm text-attention">
-              {text.passThroughNegativeHint(chosenPurpose?.name ?? '')}
-            </p>
+              {warnsPassThroughNegative && (
+                <p role="status" className="rounded-lg bg-attention-soft px-3 py-2 text-sm text-attention">
+                  {text.passThroughNegativeHint(chosenPurpose?.name ?? '')}
+                </p>
+              )}
+            </div>
           )}
-        </div>
-      )}
 
-      <div className="flex flex-col gap-1.5">
-        <Label htmlFor="record-date">{text.dateLabel}</Label>
-        <Input
-          id="record-date"
-          type="date"
-          className="h-11"
-          value={occurredOn}
-          onChange={(event) => setOccurredOn(event.target.value)}
-          disabled={submitting}
-          required
-        />
-      </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="record-date">{text.dateLabel}</Label>
+            <Input
+              id="record-date"
+              type="date"
+              className="h-11"
+              value={occurredOn}
+              onChange={(event) => setOccurredOn(event.target.value)}
+              disabled={submitting}
+              required
+            />
+          </div>
 
-      <div className="flex flex-col gap-1.5">
-        <Label htmlFor="record-note">{text.noteLabel}</Label>
-        <textarea
-          id="record-note"
-          rows={2}
-          className="w-full rounded-lg border border-input bg-transparent px-2.5 py-1.5 text-base outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-50 md:text-sm"
-          value={note}
-          onChange={(event) => setNote(event.target.value)}
-          disabled={submitting}
-        />
-      </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="record-note">{text.noteLabel}</Label>
+            <textarea
+              id="record-note"
+              rows={2}
+              className="w-full rounded-lg border border-input bg-transparent px-2.5 py-1.5 text-base outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-50 md:text-sm"
+              value={note}
+              onChange={(event) => setNote(event.target.value)}
+              disabled={submitting}
+            />
+          </div>
 
-      {/* No photo field for a transfer (see this component's own doc
+          {/* No photo field for a transfer (see this component's own doc
           comment) - money moving between the fund's own locations has no
           nota to document. */}
-      {!isTransfer && <ReceiptPicker id="record-receipt" value={receiptFile} onChange={setReceiptFile} disabled={submitting} />}
+          {!isTransfer && <ReceiptPicker id="record-receipt" value={receiptFile} onChange={setReceiptFile} disabled={submitting} />}
 
-      {submitState.status === 'error' && submitState.error && <ErrorState error={submitState.error} />}
+          {submitState.status === 'error' && submitState.error && <ErrorState error={submitState.error} />}
 
-      {/* One row for both, primary on the right (Design-System, "Action
+          {/* One row for both, primary on the right (Design-System, "Action
           rows"): two full-width stacked buttons made a two-choice decision
           look like a list of things to do. */}
-      <div className="grid grid-cols-2 gap-2">
-        <Button type="button" variant="outline" size="lg" onClick={onCancel} disabled={submitting}>
-          {text.cancel}
-        </Button>
-        <Button type="submit" size="lg" disabled={!canSubmit}>
-          {submitting ? text.submitting : text.submit}
-        </Button>
-      </div>
-    </form>
+          <div className="grid grid-cols-2 gap-2">
+            <Button type="button" variant="outline" size="lg" onClick={onCancel} disabled={submitting}>
+              {text.cancel}
+            </Button>
+            <Button type="submit" size="lg" disabled={!canSubmit}>
+              {submitting ? text.submitting : text.submit}
+            </Button>
+          </div>
+        </form>
+      )}
+    </div>
   )
 }

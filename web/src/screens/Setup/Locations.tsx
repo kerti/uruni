@@ -91,8 +91,8 @@ export default function Locations({
                 <Button
                   type="button"
                   variant="ghost"
-                  size="sm"
-                  className="self-end text-muted-foreground disabled:opacity-30"
+                  size="lg"
+                  className="mt-1.5 self-end text-muted-foreground disabled:opacity-30"
                   onClick={() => removeRow(row.clientId)}
                   disabled={rows.length <= 1}
                   aria-label={text.locations.removeRow}
@@ -107,11 +107,11 @@ export default function Locations({
               <Plus aria-hidden="true" />
               {text.locations.addRow}
             </Button>
-            <div className="flex gap-2">
+            <div className="grid grid-cols-2 gap-2">
               <Button type="button" variant="outline" size="lg" onClick={onBack}>
                 {text.back}
               </Button>
-              <Button type="submit" size="lg" className="flex-1" disabled={!canSubmit}>
+              <Button type="submit" size="lg" disabled={!canSubmit}>
                 {text.next}
               </Button>
             </div>

@@ -33,7 +33,7 @@ export default function UpdateBanner() {
         <RefreshCw aria-hidden="true" className="size-4 shrink-0" />
         {copy.common.updateAvailable}
       </span>
-      <Button variant="secondary" size="sm" onClick={() => void updateServiceWorker(true)}>
+      <Button variant="secondary" size="lg" onClick={() => void updateServiceWorker(true)}>
         {copy.common.updateReload}
       </Button>
     </div>

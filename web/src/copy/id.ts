@@ -313,6 +313,9 @@ export const copy = {
     // the row pair rather than a label. The same two words already name
     // these rows in Riwayat (rowLabels.transferLocation).
     directionTransfer: 'Pindah lokasi',
+    // The fourth kind (#315): a dues payment. The same word as Riwayat's
+    // Iuran tab, where the payment then appears.
+    directionDues: 'Iuran',
     amountLabel: 'Jumlah',
     locationLabel: 'Lokasi',
     // A transfer splits the one location field in two. "Dari" and "ke" are
@@ -536,10 +539,13 @@ export const copy = {
     },
     // The matrix is its own screen, opened from Riwayat's Iuran tab (#228),
     // so back returns to that tab rather than home.
-    back: 'Kembali ke riwayat iuran',
-    // Recording a dues payment (M6.13, PRD §7.3). Reached from the status
-    // roster above, not from a second link on home - navigation as a whole
-    // is settled once alpha.4's screens exist (#177).
+    // Just "Kembali": the screen's own heading already names where it
+    // leads, and the longer label did not fit half of a 375px action row.
+    back: 'Kembali',
+    // Recording a dues payment (M6.13, PRD §7.3). Two ways in: Catat's
+    // fourth Jenis, Iuran (#315) - a dues payment moves money, and Catat is
+    // where money moving is recorded (ADR-032) - and this button on the
+    // status matrix, since paying often starts from "who hasn't paid".
     recordLink: 'Catat pembayaran',
     payment: {
       heading: 'Catat pembayaran iuran',
@@ -561,7 +567,7 @@ export const copy = {
       totalLabel: 'Total dibayar',
       locationLabel: 'Lokasi',
       dateLabel: 'Tanggal',
-      submit: 'Simpan pembayaran',
+      submit: 'Simpan',
       submitting: 'Menyimpan…',
       // Same reasoning as record.cancel: installed standalone, there is no
       // browser back button.
@@ -585,7 +591,9 @@ export const copy = {
       reverse: 'Batalkan',
       dateLabel: 'Tanggal pembatalan',
       noteLabel: 'Alasan (opsional)',
-      confirm: 'Batalkan pembayaran ini',
+      // A yes to the question the open card is already asking - short enough
+      // to share one action row with Batal at 375px.
+      confirm: 'Ya, batalkan',
       submitting: 'Membatalkan…',
       cancel: 'Jangan jadi',
       success: 'Pembayaran dibatalkan.',
@@ -910,6 +918,9 @@ export const copy = {
     },
     actions: {
       settle: 'Bayar',
+      // The row's "more" menu (#314) holding Perbaiki, Putihkan and Hapus -
+      // named like the receipt viewer's own menu (receipts.photoMenuAria).
+      menuAria: 'Pilihan talangan',
       waive: 'Putihkan',
       unwaive: 'Batalkan pemutihan',
       correct: 'Perbaiki',
@@ -998,17 +1009,15 @@ export const copy = {
       // Contributions and disbursements are one entry point into the real
       // record form (M6.8's RecordTransaction.tsx) - direction is decided
       // there, by its own in/out toggle, not by two separate buttons here.
-      record: 'Catat transaksi',
-      close: 'Tutup amplop',
-      // Into Riwayat -> Transaksi filtered to this envelope's peruntukan
-      // (#262). Shown for an open envelope as well as a closed one - the
-      // asymmetry ADR-032 draws is about where an envelope APPEARS, not
-      // about which one has a record worth reading - but for a closed one
-      // this is the only route to it there is.
-      viewTransactions: 'Lihat transaksi',
+      // One word each, like the footer's own "Catat": on the envelope's own
+      // screen the object is implied, and three buttons share 375px (#314).
+      // The way into Riwayat is the activity section's "Lihat semua" now.
+      record: 'Catat',
+      close: 'Tutup',
       // The way back from a closed envelope (ADR-031) - a late entry needs
-      // somewhere to post, through the ordinary record form above.
-      reopen: 'Buka lagi amplop ini',
+      // somewhere to post, through the ordinary record form above. Two words,
+      // like its neighbours in the row: the envelope is the screen's subject.
+      reopen: 'Buka lagi',
       // Correcting a mistyped occasion (#264) - offered for an open AND a
       // closed envelope, since the typo is usually found after the occasion
       // is over.

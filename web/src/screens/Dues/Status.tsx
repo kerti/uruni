@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { ChevronDown, Circle, CircleCheck, CircleDashed, Plus } from 'lucide-react'
+import { ChevronDown, Circle, CircleCheck, CircleDashed } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -218,14 +218,14 @@ export default function DuesStatus({
         </>
       )}
 
-      <Button type="button" size="lg" onClick={onRecordPayment}>
-        <Plus aria-hidden="true" />
-        {text.recordLink}
-      </Button>
-
-      <Button type="button" variant="outline" size="lg" onClick={onBack}>
-        {text.back}
-      </Button>
+      <div className="grid grid-cols-2 gap-2">
+        <Button type="button" variant="outline" size="lg" onClick={onBack}>
+          {text.back}
+        </Button>
+        <Button type="button" size="lg" onClick={onRecordPayment}>
+          {text.recordLink}
+        </Button>
+      </div>
     </div>
   )
 }
