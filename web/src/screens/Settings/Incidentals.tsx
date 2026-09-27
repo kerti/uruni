@@ -134,9 +134,17 @@ export default function SettingsIncidentals() {
  * call sites, is not yet worth a shared file. */
 function StatusBadge({ envelope }: { envelope: Incidental }) {
   if (envelope.closed_on) {
-    return <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">{copy.incidentals.status.closed}</span>
+    return (
+      <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
+        {copy.incidentals.status.closed}
+      </span>
+    )
   }
-  return <span className="shrink-0 rounded-full bg-success-soft px-2 py-0.5 text-xs font-medium text-success">{copy.incidentals.status.open}</span>
+  return (
+    <span className="shrink-0 rounded-full bg-success-soft px-2 py-0.5 text-xs font-medium text-success">
+      {copy.incidentals.status.open}
+    </span>
+  )
 }
 
 /** Opening a new envelope, in the dialog primitive (ADR-032). The fields

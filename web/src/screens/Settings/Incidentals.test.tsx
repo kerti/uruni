@@ -131,7 +131,7 @@ describe('Settings incidentals', () => {
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
   })
 
-  it('a card navigates to the envelope\'s detail route', async () => {
+  it("a card navigates to the envelope's detail route", async () => {
     const { fetchMock } = stubIncidentals([envelope(1, 'Halal bihalal RT')])
     vi.stubGlobal('fetch', fetchMock)
     renderAt()

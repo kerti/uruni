@@ -37,7 +37,7 @@ describe('ReconciliationBanner', () => {
     expect(screen.queryByText(copy.reconciliation.matched)).not.toBeInTheDocument()
   })
 
-  it('sums every open line\'s difference_amount and renders the selisih message', () => {
+  it("sums every open line's difference_amount and renders the selisih message", () => {
     const openLines = [line({ id: 1, difference_amount: 15_000 }), line({ id: 2, difference_amount: 5_000 })]
     render(<ReconciliationBanner openLines={openLines} everReconciled />)
 

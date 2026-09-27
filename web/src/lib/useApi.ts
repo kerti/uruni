@@ -71,8 +71,7 @@ export function useApi<T>(): [ApiState<T>, (fn: () => Promise<T>, options?: RunO
       // A silent refresh that fails changes nothing on screen - see
       // RunOptions.silent. A visible one still surfaces the error.
       if (silent) return
-      const apiError =
-        err instanceof ApiError ? err : new ApiError('unknown_error', err instanceof Error ? err.message : String(err))
+      const apiError = err instanceof ApiError ? err : new ApiError('unknown_error', err instanceof Error ? err.message : String(err))
       setState({ status: 'error', data: undefined, error: apiError })
     }
   }, [])

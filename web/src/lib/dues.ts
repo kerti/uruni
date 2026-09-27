@@ -83,9 +83,7 @@ export interface OutstandingDuesPeriod {
  * (#186's own reasoning for the parameter existing).
  */
 export function getOutstandingDues(memberId: number, through: string): Promise<OutstandingDuesPeriod[]> {
-  return apiFetch<OutstandingDuesPeriod[]>(
-    `/api/members/${memberId}/outstanding-dues?through=${encodeURIComponent(through)}`,
-  )
+  return apiFetch<OutstandingDuesPeriod[]>(`/api/members/${memberId}/outstanding-dues?through=${encodeURIComponent(through)}`)
 }
 
 /** One period being paid in a POST /api/dues-payments body

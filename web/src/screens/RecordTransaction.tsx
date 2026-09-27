@@ -442,25 +442,25 @@ export default function RecordTransaction({
       )}
 
       {!isTransfer && (
-      <div className="flex flex-col gap-1.5">
-        <PurposePicker
-          id="record-purpose"
-          label={text.purposeLabel}
-          purposes={loadState.data.purposes}
-          value={purposeId}
-          onChange={setPurposeId}
-          disabled={submitting}
-        />
-        {/* Terracotta, never alarm-red (Design-System): nothing is broken
+        <div className="flex flex-col gap-1.5">
+          <PurposePicker
+            id="record-purpose"
+            label={text.purposeLabel}
+            purposes={loadState.data.purposes}
+            value={purposeId}
+            onChange={setPurposeId}
+            disabled={submitting}
+          />
+          {/* Terracotta, never alarm-red (Design-System): nothing is broken
             and she may well mean it - this names the likelier reading and
             the tag that fits it, then gets out of the way. role="status"
             rather than "alert" for the same reason. */}
-        {warnsPassThroughNegative && (
-          <p role="status" className="rounded-lg bg-attention-soft px-3 py-2 text-sm text-attention">
-            {text.passThroughNegativeHint(chosenPurpose?.name ?? '')}
-          </p>
-        )}
-      </div>
+          {warnsPassThroughNegative && (
+            <p role="status" className="rounded-lg bg-attention-soft px-3 py-2 text-sm text-attention">
+              {text.passThroughNegativeHint(chosenPurpose?.name ?? '')}
+            </p>
+          )}
+        </div>
       )}
 
       <div className="flex flex-col gap-1.5">

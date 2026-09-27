@@ -58,9 +58,9 @@ export function listReimbursements(input: ListReimbursementsInput = {}): Promise
   if (input.cursor) params.set('cursor', input.cursor)
   const query = params.toString()
 
-  return apiFetch<{ reimbursements: Reimbursement[]; next_cursor: string | null }>(
-    `/api/reimbursements${query ? `?${query}` : ''}`,
-  ).then((page) => ({ reimbursements: page.reimbursements, nextCursor: page.next_cursor }))
+  return apiFetch<{ reimbursements: Reimbursement[]; next_cursor: string | null }>(`/api/reimbursements${query ? `?${query}` : ''}`).then(
+    (page) => ({ reimbursements: page.reimbursements, nextCursor: page.next_cursor }),
+  )
 }
 
 /** POST /api/reimbursements - a direct-CRUD write that moves no money.
@@ -124,10 +124,7 @@ export function deleteReimbursement(id: number): Promise<void> {
  * purpose come from the claim itself; the caller provides only which
  * account pays and when. Returns the posted transaction row.
  */
-export function settleReimbursement(
-  id: number,
-  input: { account_id: number; occurred_on: string },
-): Promise<Transaction> {
+export function settleReimbursement(id: number, input: { account_id: number; occurred_on: string }): Promise<Transaction> {
   return apiFetch<Transaction>(`/api/reimbursements/${id}/settle`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },

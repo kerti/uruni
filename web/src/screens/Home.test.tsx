@@ -114,12 +114,17 @@ function stubHome({
   return routedFetch([
     { match: (m, u) => m === 'GET' && u.includes('/api/balances'), handle: () => Promise.resolve(jsonResponse(balancesOverride)) },
     { match: (m, u) => m === 'GET' && u.includes('/api/incidentals'), handle: () => Promise.resolve(jsonResponse(openIncidentals)) },
-    { match: (m, u) => m === 'GET' && u.includes('/api/reconciliations/open-lines'), handle: () => Promise.resolve(jsonResponse(openLines)) },
+    {
+      match: (m, u) => m === 'GET' && u.includes('/api/reconciliations/open-lines'),
+      handle: () => Promise.resolve(jsonResponse(openLines)),
+    },
     {
       match: (m, u) => m === 'GET' && u.includes('/api/reconciliations/latest'),
       handle: () =>
         Promise.resolve(
-          latest === 'ok' ? jsonResponse(latestReconciliation) : jsonResponse({ error: { code: 'not_found', message: 'no reconciliation' } }, 404),
+          latest === 'ok'
+            ? jsonResponse(latestReconciliation)
+            : jsonResponse({ error: { code: 'not_found', message: 'no reconciliation' } }, 404),
         ),
     },
     { match: (m, u) => m === 'GET' && u.includes('/api/transactions'), handle: () => Promise.resolve(jsonResponse(transactionsPage)) },
@@ -300,11 +305,7 @@ describe('Home', () => {
     it('renders a negative purpose balance in the attention (terracotta) treatment', async () => {
       const negativeBalances = {
         ...balances,
-        purposes: [
-          balances.purposes[0],
-          { id: 12, kind: 'pass_through', name: 'Kas Bidang', balance: -75_000 },
-          balances.purposes[2],
-        ],
+        purposes: [balances.purposes[0], { id: 12, kind: 'pass_through', name: 'Kas Bidang', balance: -75_000 }, balances.purposes[2]],
       }
       vi.stubGlobal('fetch', stubHome({ balancesOverride: negativeBalances }))
       render(<Home refetchKey="1" onReconcile={vi.fn()} onOpenIncidental={vi.fn()} onViewHistory={vi.fn()} />)

@@ -43,7 +43,10 @@ function fundNotFoundResponse() {
  * yet. Every test below that reaches past auth needs these, since Home is
  * what renders there now. */
 const emptyHomeRoutes: { match: (method: string, url: string) => boolean; handle: () => Promise<Response> }[] = [
-  { match: (m, u) => m === 'GET' && u.includes('/api/balances'), handle: () => Promise.resolve(jsonResponse({ fund_total: 0, accounts: [], purposes: [] })) },
+  {
+    match: (m, u) => m === 'GET' && u.includes('/api/balances'),
+    handle: () => Promise.resolve(jsonResponse({ fund_total: 0, accounts: [], purposes: [] })),
+  },
   // Home's purpose breakdown (M6.33) fetches the open envelopes list too -
   // empty, same as everything else in this fixture.
   { match: (m, u) => m === 'GET' && u.includes('/api/incidentals'), handle: () => Promise.resolve(jsonResponse([])) },
@@ -55,7 +58,10 @@ const emptyHomeRoutes: { match: (method: string, url: string) => boolean; handle
     match: (m, u) => m === 'GET' && u.includes('/api/reconciliations/latest'),
     handle: () => Promise.resolve(jsonResponse({ error: { code: 'not_found', message: 'no reconciliation' } }, 404)),
   },
-  { match: (m, u) => m === 'GET' && u.includes('/api/transactions'), handle: () => Promise.resolve(jsonResponse({ transactions: [], next_cursor: null })) },
+  {
+    match: (m, u) => m === 'GET' && u.includes('/api/transactions'),
+    handle: () => Promise.resolve(jsonResponse({ transactions: [], next_cursor: null })),
+  },
 ]
 
 /** Routes a stubbed fetch by method + url match, same idiom as
@@ -77,7 +83,10 @@ function routedFetch(handlers: { match: (method: string, url: string) => boolean
  * on actually renders. */
 function authenticatedWithFund() {
   return routedFetch([
-    { match: (m, u) => m === 'GET' && u.includes('/api/session'), handle: () => Promise.resolve(sessionResponse({ authenticated: true, has_account: true })) },
+    {
+      match: (m, u) => m === 'GET' && u.includes('/api/session'),
+      handle: () => Promise.resolve(sessionResponse({ authenticated: true, has_account: true })),
+    },
     { match: (m, u) => m === 'GET' && u.includes('/api/fund'), handle: () => Promise.resolve(fundFoundResponse()) },
     ...emptyHomeRoutes,
   ])
@@ -107,19 +116,13 @@ describe('App (session probe)', () => {
   })
 
   it('renders Register when the instance has no account yet', async () => {
-    vi.stubGlobal(
-      'fetch',
-      vi.fn().mockResolvedValue(sessionResponse({ authenticated: false, has_account: false })),
-    )
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(sessionResponse({ authenticated: false, has_account: false })))
     render(<App />)
     expect(await screen.findByText(copy.auth.register.heading)).toBeInTheDocument()
   })
 
   it('renders Login when an account exists but the caller has no session', async () => {
-    vi.stubGlobal(
-      'fetch',
-      vi.fn().mockResolvedValue(sessionResponse({ authenticated: false, has_account: true })),
-    )
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(sessionResponse({ authenticated: false, has_account: true })))
     render(<App />)
     expect(await screen.findByText(copy.auth.login.heading)).toBeInTheDocument()
   })
@@ -147,7 +150,10 @@ describe('App (fund probe)', () => {
     vi.stubGlobal(
       'fetch',
       routedFetch([
-        { match: (m, u) => m === 'GET' && u.includes('/api/session'), handle: () => Promise.resolve(sessionResponse({ authenticated: true, has_account: true })) },
+        {
+          match: (m, u) => m === 'GET' && u.includes('/api/session'),
+          handle: () => Promise.resolve(sessionResponse({ authenticated: true, has_account: true })),
+        },
         { match: (m, u) => m === 'GET' && u.includes('/api/fund'), handle: () => Promise.resolve(fundNotFoundResponse()) },
       ]),
     )
@@ -169,7 +175,10 @@ describe('App (app shell chrome)', () => {
     vi.stubGlobal(
       'fetch',
       routedFetch([
-        { match: (m, u) => m === 'GET' && u.includes('/api/session'), handle: () => Promise.resolve(sessionResponse({ authenticated: true, has_account: true })) },
+        {
+          match: (m, u) => m === 'GET' && u.includes('/api/session'),
+          handle: () => Promise.resolve(sessionResponse({ authenticated: true, has_account: true })),
+        },
         { match: (m, u) => m === 'GET' && u.includes('/api/fund'), handle: () => Promise.resolve(fundFoundResponse()) },
         { match: (m, u) => m === 'POST' && u.includes('/api/logout'), handle: () => Promise.resolve(new Response(null, { status: 204 })) },
         ...emptyHomeRoutes,
@@ -191,7 +200,12 @@ describe('App (app shell chrome)', () => {
   it('does not render the shell around Login or the setup wizard', async () => {
     vi.stubGlobal(
       'fetch',
-      routedFetch([{ match: (m, u) => m === 'GET' && u.includes('/api/session'), handle: () => Promise.resolve(sessionResponse({ authenticated: false, has_account: true })) }]),
+      routedFetch([
+        {
+          match: (m, u) => m === 'GET' && u.includes('/api/session'),
+          handle: () => Promise.resolve(sessionResponse({ authenticated: false, has_account: true })),
+        },
+      ]),
     )
     const { unmount } = render(<App />)
     await screen.findByText(copy.auth.login.heading)
@@ -201,7 +215,10 @@ describe('App (app shell chrome)', () => {
     vi.stubGlobal(
       'fetch',
       routedFetch([
-        { match: (m, u) => m === 'GET' && u.includes('/api/session'), handle: () => Promise.resolve(sessionResponse({ authenticated: true, has_account: true })) },
+        {
+          match: (m, u) => m === 'GET' && u.includes('/api/session'),
+          handle: () => Promise.resolve(sessionResponse({ authenticated: true, has_account: true })),
+        },
         { match: (m, u) => m === 'GET' && u.includes('/api/fund'), handle: () => Promise.resolve(fundNotFoundResponse()) },
       ]),
     )
@@ -220,7 +237,10 @@ describe('App (record loop)', () => {
 
   function authenticatedWithRecordRoutes() {
     return routedFetch([
-      { match: (m, u) => m === 'GET' && u.includes('/api/session'), handle: () => Promise.resolve(sessionResponse({ authenticated: true, has_account: true })) },
+      {
+        match: (m, u) => m === 'GET' && u.includes('/api/session'),
+        handle: () => Promise.resolve(sessionResponse({ authenticated: true, has_account: true })),
+      },
       { match: (m, u) => m === 'GET' && u.includes('/api/fund'), handle: () => Promise.resolve(fundFoundResponse()) },
       { match: (m, u) => m === 'GET' && u.includes('/api/accounts'), handle: () => Promise.resolve(jsonResponse(accounts)) },
       { match: (m, u) => m === 'GET' && u.includes('/api/purposes'), handle: () => Promise.resolve(jsonResponse(purposes)) },
@@ -258,17 +278,33 @@ describe('App (record loop)', () => {
   // that envelope's purpose already chosen. The route is detail-only since
   // #263 (its list moved to Pengaturan), so it is reached directly with
   // ?purpose=<id> here rather than through a list click.
-  it('routes an envelope\'s record action into the record form with its purpose chosen', async () => {
-    const envelope = { purpose_id: 12, occasion: 'Halal bihalal RT', target_amount: null, opened_on: '2026-09-01', closed_on: null, created_at: 1 }
+  it("routes an envelope's record action into the record form with its purpose chosen", async () => {
+    const envelope = {
+      purpose_id: 12,
+      occasion: 'Halal bihalal RT',
+      target_amount: null,
+      opened_on: '2026-09-01',
+      closed_on: null,
+      created_at: 1,
+    }
     window.history.pushState({}, '', '/incidentals?purpose=12')
-    vi.stubGlobal('fetch', routedFetch([
-      { match: (m, u) => m === 'GET' && u.includes('/api/incidentals/12'), handle: () => Promise.resolve(jsonResponse({ ...envelope, collected_amount: 0, disbursed_amount: 0 })) },
-      { match: (m, u) => m === 'GET' && u.includes('/api/session'), handle: () => Promise.resolve(sessionResponse({ authenticated: true, has_account: true })) },
-      { match: (m, u) => m === 'GET' && u.includes('/api/fund'), handle: () => Promise.resolve(fundFoundResponse()) },
-      { match: (m, u) => m === 'GET' && u.includes('/api/accounts'), handle: () => Promise.resolve(jsonResponse(accounts)) },
-      { match: (m, u) => m === 'GET' && u.includes('/api/purposes'), handle: () => Promise.resolve(jsonResponse(purposes)) },
-      ...emptyHomeRoutes,
-    ]))
+    vi.stubGlobal(
+      'fetch',
+      routedFetch([
+        {
+          match: (m, u) => m === 'GET' && u.includes('/api/incidentals/12'),
+          handle: () => Promise.resolve(jsonResponse({ ...envelope, collected_amount: 0, disbursed_amount: 0 })),
+        },
+        {
+          match: (m, u) => m === 'GET' && u.includes('/api/session'),
+          handle: () => Promise.resolve(sessionResponse({ authenticated: true, has_account: true })),
+        },
+        { match: (m, u) => m === 'GET' && u.includes('/api/fund'), handle: () => Promise.resolve(fundFoundResponse()) },
+        { match: (m, u) => m === 'GET' && u.includes('/api/accounts'), handle: () => Promise.resolve(jsonResponse(accounts)) },
+        { match: (m, u) => m === 'GET' && u.includes('/api/purposes'), handle: () => Promise.resolve(jsonResponse(purposes)) },
+        ...emptyHomeRoutes,
+      ]),
+    )
     render(<App />)
 
     await screen.findByText(copy.incidentals.detail.collectedLabel)
@@ -334,10 +370,16 @@ describe('App (record loop)', () => {
 describe('App (Riwayat)', () => {
   function authenticatedWithHistoryRoutes() {
     return routedFetch([
-      { match: (m, u) => m === 'GET' && u.includes('/api/session'), handle: () => Promise.resolve(sessionResponse({ authenticated: true, has_account: true })) },
+      {
+        match: (m, u) => m === 'GET' && u.includes('/api/session'),
+        handle: () => Promise.resolve(sessionResponse({ authenticated: true, has_account: true })),
+      },
       { match: (m, u) => m === 'GET' && u.includes('/api/fund'), handle: () => Promise.resolve(fundFoundResponse()) },
       { match: (m, u) => m === 'GET' && u.includes('/api/dues-status'), handle: () => Promise.resolve(jsonResponse([])) },
-      { match: (m, u) => m === 'GET' && u.includes('/api/dues-payments'), handle: () => Promise.resolve(jsonResponse({ dues_payments: [], next_cursor: null })) },
+      {
+        match: (m, u) => m === 'GET' && u.includes('/api/dues-payments'),
+        handle: () => Promise.resolve(jsonResponse({ dues_payments: [], next_cursor: null })),
+      },
       ...emptyHomeRoutes,
     ])
   }
@@ -405,10 +447,16 @@ describe('App (Riwayat)', () => {
     vi.stubGlobal(
       'fetch',
       routedFetch([
-        { match: (m, u) => m === 'GET' && u.includes('/api/session'), handle: () => Promise.resolve(sessionResponse({ authenticated: true, has_account: true })) },
+        {
+          match: (m, u) => m === 'GET' && u.includes('/api/session'),
+          handle: () => Promise.resolve(sessionResponse({ authenticated: true, has_account: true })),
+        },
         { match: (m, u) => m === 'GET' && u.includes('/api/fund'), handle: () => Promise.resolve(fundFoundResponse()) },
         { match: (m, u) => m === 'GET' && u.includes('/api/accounts'), handle: () => Promise.resolve(jsonResponse([])) },
-        { match: (m, u) => m === 'GET' && u.includes('/api/reconciliations'), handle: () => Promise.resolve(jsonResponse({ reconciliations: [], next_cursor: null })) },
+        {
+          match: (m, u) => m === 'GET' && u.includes('/api/reconciliations'),
+          handle: () => Promise.resolve(jsonResponse({ reconciliations: [], next_cursor: null })),
+        },
         ...emptyHomeRoutes,
       ]),
     )

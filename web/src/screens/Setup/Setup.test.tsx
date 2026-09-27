@@ -92,7 +92,10 @@ describe('Setup', () => {
   it('posts POST /api/setup exactly once from the balances step, with a renamed default location under its new name', async () => {
     const fetchMock = routedFetch([
       { match: (m, u) => m === 'POST' && u.includes('/api/setup'), handle: () => Promise.resolve(jsonResponse(setupResult, 201)) },
-      { match: (m, u) => m === 'POST' && (u.includes('/api/dues-tiers') || u.includes('/api/members')), handle: () => Promise.resolve(jsonResponse({})) },
+      {
+        match: (m, u) => m === 'POST' && (u.includes('/api/dues-tiers') || u.includes('/api/members')),
+        handle: () => Promise.resolve(jsonResponse({})),
+      },
     ])
     vi.stubGlobal('fetch', fetchMock)
     render(<Setup onDone={vi.fn()} />)
@@ -121,7 +124,10 @@ describe('Setup', () => {
     const onDone = vi.fn()
     const fetchMock = routedFetch([
       { match: (m, u) => m === 'POST' && u.includes('/api/setup'), handle: () => Promise.resolve(jsonResponse(setupResult, 201)) },
-      { match: (m, u) => m === 'POST' && (u.includes('/api/dues-tiers') || u.includes('/api/members')), handle: () => Promise.resolve(jsonResponse({})) },
+      {
+        match: (m, u) => m === 'POST' && (u.includes('/api/dues-tiers') || u.includes('/api/members')),
+        handle: () => Promise.resolve(jsonResponse({})),
+      },
     ])
     vi.stubGlobal('fetch', fetchMock)
     render(<Setup onDone={onDone} />)

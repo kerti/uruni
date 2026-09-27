@@ -1,8 +1,8 @@
-import * as React from "react"
-import { Select as SelectPrimitive } from "radix-ui"
-import { Check, ChevronDown } from "lucide-react"
+import * as React from 'react'
+import { Select as SelectPrimitive } from 'radix-ui'
+import { Check, ChevronDown } from 'lucide-react'
 
-import { cn } from "@/lib/utils"
+import { cn } from '@/lib/utils'
 
 // A themed select, in the design system's own shapes instead of the
 // browser's. The native <select> the pickers used until now rendered the
@@ -45,7 +45,7 @@ function Select({ ...props }: React.ComponentProps<typeof SelectPrimitive.Root>)
 function SelectValue({ placeholder, children }: { placeholder?: string; children?: React.ReactNode }) {
   const empty = children === undefined || children === null || children === ''
   return (
-    <span data-slot="select-value" className={cn("truncate", empty && "text-muted-foreground")}>
+    <span data-slot="select-value" className={cn('truncate', empty && 'text-muted-foreground')}>
       {empty ? placeholder : children}
     </span>
   )
@@ -56,7 +56,7 @@ function SelectTrigger({ className, children, ...props }: React.ComponentProps<t
     <SelectPrimitive.Trigger
       data-slot="select-trigger"
       className={cn(
-        "flex h-11 w-full items-center justify-between gap-2 rounded-lg border border-input bg-transparent px-3 text-base outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50 data-[placeholder]:text-muted-foreground md:text-sm [&_svg]:pointer-events-none [&_svg]:shrink-0",
+        'flex h-11 w-full items-center justify-between gap-2 rounded-lg border border-input bg-transparent px-3 text-base outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50 data-[placeholder]:text-muted-foreground md:text-sm [&_svg]:pointer-events-none [&_svg]:shrink-0',
         className,
       )}
       {...props}
@@ -69,15 +69,15 @@ function SelectTrigger({ className, children, ...props }: React.ComponentProps<t
   )
 }
 
-function SelectContent({ className, children, position = "popper", ...props }: React.ComponentProps<typeof SelectPrimitive.Content>) {
+function SelectContent({ className, children, position = 'popper', ...props }: React.ComponentProps<typeof SelectPrimitive.Content>) {
   return (
     <SelectPrimitive.Portal>
       <SelectPrimitive.Content
         data-slot="select-content"
         position={position}
         className={cn(
-          "relative z-50 max-h-(--radix-select-content-available-height) min-w-[8rem] overflow-y-auto rounded-xl border border-border bg-card text-foreground shadow-floating",
-          position === "popper" && "w-full min-w-(--radix-select-trigger-width) translate-y-1",
+          'relative z-50 max-h-(--radix-select-content-available-height) min-w-[8rem] overflow-y-auto rounded-xl border border-border bg-card text-foreground shadow-floating',
+          position === 'popper' && 'w-full min-w-(--radix-select-trigger-width) translate-y-1',
           className,
         )}
         {...props}
@@ -95,7 +95,7 @@ function SelectItem({ className, children, ...props }: React.ComponentProps<type
       className={cn(
         // min-h-11 here too: a 44px target in the list, not only on the
         // trigger that opens it.
-        "relative flex min-h-11 w-full cursor-default items-center gap-2 rounded-lg py-2 pr-8 pl-3 text-base outline-none select-none focus:bg-secondary data-[disabled]:pointer-events-none data-[disabled]:opacity-50 md:text-sm",
+        'relative flex min-h-11 w-full cursor-default items-center gap-2 rounded-lg py-2 pr-8 pl-3 text-base outline-none select-none focus:bg-secondary data-[disabled]:pointer-events-none data-[disabled]:opacity-50 md:text-sm',
         className,
       )}
       {...props}

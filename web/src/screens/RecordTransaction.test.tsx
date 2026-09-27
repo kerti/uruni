@@ -86,7 +86,10 @@ function balancesWith(passThroughBalance: number, tunaiBalance = 1_000_000, bank
 function stubFormLoad(passThroughBalance = 30_000) {
   return routedFetch([
     { match: (m, u) => m === 'GET' && u.includes('/api/accounts'), handle: () => Promise.resolve(jsonResponse(accounts)) },
-    { match: (m, u) => m === 'GET' && u.includes('/api/balances'), handle: () => Promise.resolve(jsonResponse(balancesWith(passThroughBalance))) },
+    {
+      match: (m, u) => m === 'GET' && u.includes('/api/balances'),
+      handle: () => Promise.resolve(jsonResponse(balancesWith(passThroughBalance))),
+    },
     { match: (m, u) => m === 'GET' && u.includes('/api/purposes'), handle: () => Promise.resolve(jsonResponse(purposes)) },
   ])
 }
@@ -439,7 +442,10 @@ describe('RecordTransaction: moving money, with its balances in view (#235 revis
       'fetch',
       routedFetch([
         { match: (m, u) => m === 'GET' && u.includes('/api/accounts'), handle: () => Promise.resolve(jsonResponse(accounts)) },
-        { match: (m, u) => m === 'GET' && u.includes('/api/balances'), handle: () => Promise.resolve(jsonResponse(balancesWith(30_000, tunai, bank))) },
+        {
+          match: (m, u) => m === 'GET' && u.includes('/api/balances'),
+          handle: () => Promise.resolve(jsonResponse(balancesWith(30_000, tunai, bank))),
+        },
         { match: (m, u) => m === 'GET' && u.includes('/api/purposes'), handle: () => Promise.resolve(jsonResponse(purposes)) },
         {
           match: (m, u) => m === 'POST' && u.includes('/api/transfers'),

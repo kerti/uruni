@@ -44,11 +44,7 @@ export function listIncidentals(openOnly = false): Promise<Incidental[]> {
  * separate name field: occasion doubles as the purpose's own name, the same
  * choice openIncidentalRequest's own comment explains.
  */
-export function openIncidental(input: {
-  occasion: string
-  targetAmount: number | null
-  openedOn: string
-}): Promise<Incidental> {
+export function openIncidental(input: { occasion: string; targetAmount: number | null; openedOn: string }): Promise<Incidental> {
   return apiFetch<Incidental>('/api/incidentals', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },

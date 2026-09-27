@@ -184,7 +184,10 @@ test.describe('golden path', () => {
     // and its detail sheet opens read-only with that same line.
     await page.getByRole('link', { name: copy.shell.nav.history }).click()
     await page.getByRole('link', { name: copy.reconciliation.heading }).click()
-    const row = page.getByRole('button').filter({ hasText: /Selisih/ }).first()
+    const row = page
+      .getByRole('button')
+      .filter({ hasText: /Selisih/ })
+      .first()
     await expect(row).toBeVisible()
     await row.click()
     await expect(page.getByText('Tunai', { exact: true })).toBeVisible()

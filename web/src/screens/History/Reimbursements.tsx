@@ -272,13 +272,13 @@ export default function Reimbursements({ refetchKey }: { refetchKey?: unknown })
   }
 
   function handleSettle(id: number, accountId: number, occurredOn: string) {
-    runWrite(
-      () => settleReimbursement(id, { account_id: accountId, occurred_on: occurredOn }),
-      text.settle.success,
-    )
+    runWrite(() => settleReimbursement(id, { account_id: accountId, occurred_on: occurredOn }), text.settle.success)
   }
 
-  function handleCorrect(id: number, patch: { member_id?: number; purpose_id?: number; amount?: number; incurred_on?: string; note?: string | null }) {
+  function handleCorrect(
+    id: number,
+    patch: { member_id?: number; purpose_id?: number; amount?: number; incurred_on?: string; note?: string | null },
+  ) {
     runWrite(() => updateReimbursement(id, patch), text.correct.success)
   }
 
@@ -342,28 +342,52 @@ export default function Reimbursements({ refetchKey }: { refetchKey?: unknown })
                     count once one exists. Shown on every tab, not only
                     outstanding - a settled claim's nota is exactly as
                     worth keeping. */}
-                <ReceiptRowButton
-                  receiptIds={claim.receipt_ids ?? []}
-                  onClick={() => setReceiptsForId(claim.id)}
-                  className="self-start"
-                />
+                <ReceiptRowButton receiptIds={claim.receipt_ids ?? []} onClick={() => setReceiptsForId(claim.id)} className="self-start" />
 
                 {/* Actions - only on the outstanding tab; settled claims show no actions */}
                 {tab === 'outstanding' && !claim.waived_on && (
                   <div className="flex flex-wrap gap-2 pt-1">
                     {settleId !== claim.id && correctId !== claim.id && (
                       <>
-                        <Button type="button" size="lg" onClick={() => { setSettleId(claim.id); setCorrectId(null); setDeleteId(null); setFeedback(null) }}>
+                        <Button
+                          type="button"
+                          size="lg"
+                          onClick={() => {
+                            setSettleId(claim.id)
+                            setCorrectId(null)
+                            setDeleteId(null)
+                            setFeedback(null)
+                          }}
+                        >
                           {text.actions.settle}
                         </Button>
-                        <Button type="button" size="lg" variant="outline" onClick={() => { setCorrectId(claim.id); setSettleId(null); setDeleteId(null); setFeedback(null) }}>
+                        <Button
+                          type="button"
+                          size="lg"
+                          variant="outline"
+                          onClick={() => {
+                            setCorrectId(claim.id)
+                            setSettleId(null)
+                            setDeleteId(null)
+                            setFeedback(null)
+                          }}
+                        >
                           {text.actions.correct}
                         </Button>
                         <Button type="button" size="lg" variant="outline" onClick={() => handleWaive(claim.id)} disabled={submitting}>
                           {text.actions.waive}
                         </Button>
                         {deleteId !== claim.id && (
-                          <Button type="button" size="lg" variant="ghost" className="text-destructive" onClick={() => { setDeleteId(claim.id); setFeedback(null) }}>
+                          <Button
+                            type="button"
+                            size="lg"
+                            variant="ghost"
+                            className="text-destructive"
+                            onClick={() => {
+                              setDeleteId(claim.id)
+                              setFeedback(null)
+                            }}
+                          >
                             {text.actions.delete}
                           </Button>
                         )}
@@ -434,7 +458,14 @@ export default function Reimbursements({ refetchKey }: { refetchKey?: unknown })
         />
         {nextCursor && moreError && <ErrorState error={moreError} onRetry={() => void loadMore(nextCursor)} />}
         {nextCursor && !moreError && (
-          <Button type="button" variant="outline" size="lg" className="w-full" disabled={moreLoading} onClick={() => void loadMore(nextCursor)}>
+          <Button
+            type="button"
+            variant="outline"
+            size="lg"
+            className="w-full"
+            disabled={moreLoading}
+            onClick={() => void loadMore(nextCursor)}
+          >
             {moreLoading ? copy.common.loading : searchText.loadMore}
           </Button>
         )}
@@ -511,7 +542,14 @@ export default function Reimbursements({ refetchKey }: { refetchKey?: unknown })
 
       {/* Record claim button */}
       {!showRecordForm && (
-        <Button type="button" size="lg" onClick={() => { setShowRecordForm(true); setFeedback(null) }}>
+        <Button
+          type="button"
+          size="lg"
+          onClick={() => {
+            setShowRecordForm(true)
+            setFeedback(null)
+          }}
+        >
           {text.record.heading}
         </Button>
       )}

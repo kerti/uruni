@@ -149,10 +149,7 @@ describe('Roster', () => {
   })
 
   it('shows the Tunggakan badge only on a member with arrears', async () => {
-    const { fetchMock } = stubRoster([
-      member(1, 'Ada Tunggakan', { arrears_months: 2 }),
-      member(2, 'Lunas Semua', { arrears_months: 0 }),
-    ])
+    const { fetchMock } = stubRoster([member(1, 'Ada Tunggakan', { arrears_months: 2 }), member(2, 'Lunas Semua', { arrears_months: 0 })])
     vi.stubGlobal('fetch', fetchMock)
     renderAt()
 

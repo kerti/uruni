@@ -119,7 +119,9 @@ describe('Shell', () => {
     expect(screen.getByRole('heading', { name: 'Kas RT 04' })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Kas RT 04' })).toHaveAttribute('href', '/')
     // And the Beranda tab is still there.
-    expect(within(screen.getByRole('navigation', { name: copy.shell.nav.label })).getByRole('link', { name: copy.shell.nav.home })).toBeInTheDocument()
+    expect(
+      within(screen.getByRole('navigation', { name: copy.shell.nav.label })).getByRole('link', { name: copy.shell.nav.home }),
+    ).toBeInTheDocument()
   })
 
   // aria-current comes from the URL, not from anything Shell remembers, so

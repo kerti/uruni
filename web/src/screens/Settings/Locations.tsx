@@ -96,13 +96,9 @@ export default function Locations() {
               >
                 <span className="flex w-full items-baseline justify-between gap-3">
                   <span className="min-w-0 truncate font-medium">{account.name}</span>
-                  <span className="shrink-0 text-sm text-muted-foreground">
-                    {account.kind === 'bank' ? text.kindBank : text.kindCash}
-                  </span>
+                  <span className="shrink-0 text-sm text-muted-foreground">{account.kind === 'bank' ? text.kindBank : text.kindCash}</span>
                 </span>
-                {account.inactive_on !== null && (
-                  <span className="text-sm text-muted-foreground">{text.inactiveBadge}</span>
-                )}
+                {account.inactive_on !== null && <span className="text-sm text-muted-foreground">{text.inactiveBadge}</span>}
               </button>
             </li>
           ))}

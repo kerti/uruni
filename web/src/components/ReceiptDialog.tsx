@@ -145,9 +145,7 @@ export default function ReceiptDialog({
             picker's own `truncate` could ellipsize it. */}
         <div className="flex min-w-0 flex-col gap-3">
           {receiptIds.length === 0 && (
-            <p className="text-muted-foreground">
-              {kind === 'reimbursements' ? text.emptyReimbursement : text.emptyTransaction}
-            </p>
+            <p className="text-muted-foreground">{kind === 'reimbursements' ? text.emptyReimbursement : text.emptyTransaction}</p>
           )}
           {receiptIds.map((id) => (
             <div key={id} className="flex flex-col gap-2 rounded-lg bg-muted p-2">

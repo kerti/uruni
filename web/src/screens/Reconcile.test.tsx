@@ -61,7 +61,10 @@ function stubLoad(balances = balancesBody(100_000, 200_000)) {
     { match: (m: string, u: string) => m === 'GET' && u.includes('/api/accounts'), handle: () => Promise.resolve(jsonResponse(accounts)) },
     { match: (m: string, u: string) => m === 'GET' && u.includes('/api/purposes'), handle: () => Promise.resolve(jsonResponse(purposes)) },
     { match: (m: string, u: string) => m === 'GET' && u.includes('/api/balances'), handle: () => Promise.resolve(jsonResponse(balances)) },
-    { match: (m: string, u: string) => m === 'GET' && u.includes('/api/transactions'), handle: () => Promise.resolve(jsonResponse(transactionsPage)) },
+    {
+      match: (m: string, u: string) => m === 'GET' && u.includes('/api/transactions'),
+      handle: () => Promise.resolve(jsonResponse(transactionsPage)),
+    },
   ]
 }
 
@@ -100,8 +103,24 @@ describe('Reconcile', () => {
           Promise.resolve(
             jsonResponse(
               reconciliationDetail([
-                { id: 1, account_id: 1, recorded_amount: 100_000, actual_amount: 100_000, difference_amount: 0, resolution: 'matched', adjustment_transaction_id: null },
-                { id: 2, account_id: 3, recorded_amount: 200_000, actual_amount: 200_000, difference_amount: 0, resolution: 'matched', adjustment_transaction_id: null },
+                {
+                  id: 1,
+                  account_id: 1,
+                  recorded_amount: 100_000,
+                  actual_amount: 100_000,
+                  difference_amount: 0,
+                  resolution: 'matched',
+                  adjustment_transaction_id: null,
+                },
+                {
+                  id: 2,
+                  account_id: 3,
+                  recorded_amount: 200_000,
+                  actual_amount: 200_000,
+                  difference_amount: 0,
+                  resolution: 'matched',
+                  adjustment_transaction_id: null,
+                },
               ]),
               201,
             ),
@@ -123,7 +142,7 @@ describe('Reconcile', () => {
 
     await userEvent.click(screen.getByRole('button', { name: text.submit }))
 
-    const postCall = fetchMock.mock.calls.find(([input]) => (input as string).toString().includes('/api/reconciliations') )
+    const postCall = fetchMock.mock.calls.find(([input]) => (input as string).toString().includes('/api/reconciliations'))
     expect(postCall).toBeDefined()
     const body = JSON.parse((postCall![1] as RequestInit).body as string) as { counts: Array<Record<string, unknown>> }
     expect(body.counts).toHaveLength(2)
@@ -145,8 +164,24 @@ describe('Reconcile', () => {
           Promise.resolve(
             jsonResponse(
               reconciliationDetail([
-                { id: 1, account_id: 1, recorded_amount: 100_000, actual_amount: 150_000, difference_amount: 50_000, resolution: 'entry_added', adjustment_transaction_id: null },
-                { id: 2, account_id: 3, recorded_amount: 200_000, actual_amount: 200_000, difference_amount: 0, resolution: 'matched', adjustment_transaction_id: null },
+                {
+                  id: 1,
+                  account_id: 1,
+                  recorded_amount: 100_000,
+                  actual_amount: 150_000,
+                  difference_amount: 50_000,
+                  resolution: 'entry_added',
+                  adjustment_transaction_id: null,
+                },
+                {
+                  id: 2,
+                  account_id: 3,
+                  recorded_amount: 200_000,
+                  actual_amount: 200_000,
+                  difference_amount: 0,
+                  resolution: 'matched',
+                  adjustment_transaction_id: null,
+                },
               ]),
               201,
             ),
@@ -198,8 +233,24 @@ describe('Reconcile', () => {
           Promise.resolve(
             jsonResponse(
               reconciliationDetail([
-                { id: 1, account_id: 1, recorded_amount: 100_000, actual_amount: 80_000, difference_amount: -20_000, resolution: 'adjusted', adjustment_transaction_id: 55 },
-                { id: 2, account_id: 3, recorded_amount: 200_000, actual_amount: 200_000, difference_amount: 0, resolution: 'matched', adjustment_transaction_id: null },
+                {
+                  id: 1,
+                  account_id: 1,
+                  recorded_amount: 100_000,
+                  actual_amount: 80_000,
+                  difference_amount: -20_000,
+                  resolution: 'adjusted',
+                  adjustment_transaction_id: 55,
+                },
+                {
+                  id: 2,
+                  account_id: 3,
+                  recorded_amount: 200_000,
+                  actual_amount: 200_000,
+                  difference_amount: 0,
+                  resolution: 'matched',
+                  adjustment_transaction_id: null,
+                },
               ]),
               201,
             ),
@@ -238,8 +289,24 @@ describe('Reconcile', () => {
           Promise.resolve(
             jsonResponse(
               reconciliationDetail([
-                { id: 1, account_id: 1, recorded_amount: 100_000, actual_amount: 80_000, difference_amount: -20_000, resolution: 'left_open', adjustment_transaction_id: null },
-                { id: 2, account_id: 3, recorded_amount: 200_000, actual_amount: 200_000, difference_amount: 0, resolution: 'matched', adjustment_transaction_id: null },
+                {
+                  id: 1,
+                  account_id: 1,
+                  recorded_amount: 100_000,
+                  actual_amount: 80_000,
+                  difference_amount: -20_000,
+                  resolution: 'left_open',
+                  adjustment_transaction_id: null,
+                },
+                {
+                  id: 2,
+                  account_id: 3,
+                  recorded_amount: 200_000,
+                  actual_amount: 200_000,
+                  difference_amount: 0,
+                  resolution: 'matched',
+                  adjustment_transaction_id: null,
+                },
               ]),
               201,
             ),
@@ -262,7 +329,9 @@ describe('Reconcile', () => {
     await userEvent.click(screen.getByRole('button', { name: text.submit }))
 
     const postCall = fetchMock.mock.calls.find(([input]) => (input as string).toString().includes('/api/reconciliations'))
-    const body = JSON.parse((postCall![1] as RequestInit).body as string) as { counts: Array<{ account_id: number; resolution: string; fix?: unknown }> }
+    const body = JSON.parse((postCall![1] as RequestInit).body as string) as {
+      counts: Array<{ account_id: number; resolution: string; fix?: unknown }>
+    }
     const tunaiCount = body.counts.find((c) => c.account_id === 1)
     expect(tunaiCount?.resolution).toBe('left_open')
     expect(tunaiCount).not.toHaveProperty('fix')
@@ -298,7 +367,10 @@ describe('Reconcile', () => {
         match: (m, u) => m === 'POST' && u.includes('/api/reconciliations'),
         handle: () =>
           Promise.resolve(
-            jsonResponse({ error: { code: 'invalid_argument', message: 'resolution "matched" for account 1 has a difference of 30000' } }, 400),
+            jsonResponse(
+              { error: { code: 'invalid_argument', message: 'resolution "matched" for account 1 has a difference of 30000' } },
+              400,
+            ),
           ),
       },
     ])
@@ -342,8 +414,7 @@ describe('Reconcile', () => {
       ...stubLoad(),
       {
         match: (m, u) => m === 'POST' && u.includes('/api/reconciliations'),
-        handle: () =>
-          Promise.resolve(jsonResponse({ error: { code: 'invalid_argument', message: 'invalid fix' } }, 400)),
+        handle: () => Promise.resolve(jsonResponse({ error: { code: 'invalid_argument', message: 'invalid fix' } }, 400)),
       },
     ])
     vi.stubGlobal('fetch', fetchMock)
@@ -388,8 +459,14 @@ describe('Reconcile', () => {
   it('reports the failed submit when the balances re-read also fails', async () => {
     let balancesCalls = 0
     const fetchMock = routedFetch([
-      { match: (m: string, u: string) => m === 'GET' && u.includes('/api/accounts'), handle: () => Promise.resolve(jsonResponse(accounts)) },
-      { match: (m: string, u: string) => m === 'GET' && u.includes('/api/purposes'), handle: () => Promise.resolve(jsonResponse(purposes)) },
+      {
+        match: (m: string, u: string) => m === 'GET' && u.includes('/api/accounts'),
+        handle: () => Promise.resolve(jsonResponse(accounts)),
+      },
+      {
+        match: (m: string, u: string) => m === 'GET' && u.includes('/api/purposes'),
+        handle: () => Promise.resolve(jsonResponse(purposes)),
+      },
       {
         match: (m: string, u: string) => m === 'GET' && u.includes('/api/balances'),
         handle: () => {
@@ -399,7 +476,10 @@ describe('Reconcile', () => {
             : Promise.reject(new TypeError('network down'))
         },
       },
-      { match: (m: string, u: string) => m === 'GET' && u.includes('/api/transactions'), handle: () => Promise.resolve(jsonResponse(transactionsPage)) },
+      {
+        match: (m: string, u: string) => m === 'GET' && u.includes('/api/transactions'),
+        handle: () => Promise.resolve(jsonResponse(transactionsPage)),
+      },
       {
         match: (m: string, u: string) => m === 'POST' && u.includes('/api/reconciliations'),
         handle: () => Promise.resolve(jsonResponse({ error: { code: 'invalid_argument', message: 'stale' } }, 400)),

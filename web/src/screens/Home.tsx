@@ -25,7 +25,6 @@ import type { Transaction } from '@/lib/transactions'
  * already newest-first (#225). */
 const RECENT_ACTIVITY_COUNT = 5
 
-
 interface HomeData {
   balances: Balances
   // Only the purpose_ids of still-open envelopes (GET /api/incidentals -

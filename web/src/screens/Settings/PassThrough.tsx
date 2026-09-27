@@ -226,13 +226,7 @@ function EditPassThroughDialog({
         <form className="flex flex-col gap-3" onSubmit={handleSubmit} noValidate>
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="pass-through-name">{text.nameLabel}</Label>
-            <Input
-              id="pass-through-name"
-              type="text"
-              value={name}
-              onChange={(event) => setName(event.target.value)}
-              disabled={busy}
-            />
+            <Input id="pass-through-name" type="text" value={name} onChange={(event) => setName(event.target.value)} disabled={busy} />
           </div>
           {state.status === 'error' && state.error && <ErrorState error={state.error} />}
           <DialogFooter className="mt-1">

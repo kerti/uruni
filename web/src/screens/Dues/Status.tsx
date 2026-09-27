@@ -153,9 +153,7 @@ export default function DuesStatus({
 
       {(state.status === 'idle' || state.status === 'loading') && <Loading />}
 
-      {state.status === 'error' && state.error && (
-        <ErrorState error={state.error} onRetry={() => void run(() => getDuesStatus(period))} />
-      )}
+      {state.status === 'error' && state.error && <ErrorState error={state.error} onRetry={() => void run(() => getDuesStatus(period))} />}
 
       {state.status === 'success' && (
         <>
@@ -164,10 +162,7 @@ export default function DuesStatus({
           ) : (
             <ul className="flex flex-col gap-2">
               {visibleRows.map((row) => (
-                <li
-                  key={row.member.id}
-                  className="flex flex-col gap-2 rounded-lg bg-card px-4 py-3 ring-1 ring-foreground/10"
-                >
+                <li key={row.member.id} className="flex flex-col gap-2 rounded-lg bg-card px-4 py-3 ring-1 ring-foreground/10">
                   <div className="flex items-center justify-between gap-3">
                     <span className="font-medium">{row.member.name}</span>
                     <StatusBadge status={row.status} />
@@ -203,7 +198,8 @@ export default function DuesStatus({
                         directly re-uses that bitmap and the strokes crawl.
                         Wrapping it and promoting the wrapper is what keeps
                         the turn smooth on a phone. */}
-                    <span className="flex size-4 transform-gpu items-center justify-center transition-transform duration-200 ease-out will-change-transform data-[open=true]:rotate-180"
+                    <span
+                      className="flex size-4 transform-gpu items-center justify-center transition-transform duration-200 ease-out will-change-transform data-[open=true]:rotate-180"
                       data-open={expandedMemberId === row.member.id}
                     >
                       <ChevronDown aria-hidden="true" />
@@ -211,15 +207,8 @@ export default function DuesStatus({
                   </Button>
 
                   {expandedMemberId === row.member.id && (
-                    <div
-                      id={`dues-history-${row.member.id}`}
-                      className="animate-reveal rounded-lg bg-muted/30 px-3 py-3"
-                    >
-                      <MemberPayments
-                        memberId={row.member.id}
-                        period={period}
-                        onReversed={() => void run(() => getDuesStatus(period))}
-                      />
+                    <div id={`dues-history-${row.member.id}`} className="animate-reveal rounded-lg bg-muted/30 px-3 py-3">
+                      <MemberPayments memberId={row.member.id} period={period} onReversed={() => void run(() => getDuesStatus(period))} />
                     </div>
                   )}
                 </li>

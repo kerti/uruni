@@ -68,7 +68,9 @@ function routedFetch(handlers: Handler[]) {
  * once on mount. Envelope list routes are gone with the list view (#263) -
  * this screen is detail-only now, always given a purposeId. */
 function getHandlers() {
-  return [{ match: (m: string, u: string) => m === 'GET' && u.includes('/api/accounts'), handle: () => Promise.resolve(jsonResponse(accounts)) }]
+  return [
+    { match: (m: string, u: string) => m === 'GET' && u.includes('/api/accounts'), handle: () => Promise.resolve(jsonResponse(accounts)) },
+  ]
 }
 
 /** Exposes the router's search string: the rename dialog is addressed by
@@ -105,12 +107,18 @@ function currentSearch() {
 }
 
 describe('Incidentals', () => {
-  it('shows an open envelope\'s detail for the given purposeId', async () => {
+  it("shows an open envelope's detail for the given purposeId", async () => {
     const detail = { ...openEnvelope, collected_amount: 0, disbursed_amount: 0 }
-    vi.stubGlobal('fetch', routedFetch([
-      { match: (m: string, u: string) => m === 'GET' && u.includes('/api/incidentals/1'), handle: () => Promise.resolve(jsonResponse(detail)) },
-      ...getHandlers(),
-    ]))
+    vi.stubGlobal(
+      'fetch',
+      routedFetch([
+        {
+          match: (m: string, u: string) => m === 'GET' && u.includes('/api/incidentals/1'),
+          handle: () => Promise.resolve(jsonResponse(detail)),
+        },
+        ...getHandlers(),
+      ]),
+    )
     renderIncidentals(<Incidentals onBack={vi.fn()} onRecordFor={vi.fn()} onViewTransactionsFor={vi.fn()} purposeId={1} />)
 
     await waitFor(() => expect(screen.getByText('Halal bihalal RT')).toBeInTheDocument())
@@ -123,10 +131,16 @@ describe('Incidentals', () => {
     // purpose already picked (App.tsx wires onRecordFor to
     // /record?purpose=<id>); direction is that form's own toggle.
     const detail = { ...openEnvelope, collected_amount: 0, disbursed_amount: 0 }
-    vi.stubGlobal('fetch', routedFetch([
-      { match: (m: string, u: string) => m === 'GET' && u.includes('/api/incidentals/1'), handle: () => Promise.resolve(jsonResponse(detail)) },
-      ...getHandlers(),
-    ]))
+    vi.stubGlobal(
+      'fetch',
+      routedFetch([
+        {
+          match: (m: string, u: string) => m === 'GET' && u.includes('/api/incidentals/1'),
+          handle: () => Promise.resolve(jsonResponse(detail)),
+        },
+        ...getHandlers(),
+      ]),
+    )
 
     const onRecordFor = vi.fn()
     renderIncidentals(<Incidentals onBack={vi.fn()} onRecordFor={onRecordFor} onViewTransactionsFor={vi.fn()} purposeId={1} />)
@@ -144,20 +158,23 @@ describe('Incidentals', () => {
     const detail = { ...openEnvelope, collected_amount: 120_000, disbursed_amount: 120_000, target_amount: null }
     const closed = { ...openEnvelope, closed_on: '2026-09-10' }
     let detailCalls = 0
-    vi.stubGlobal('fetch', routedFetch([
-      {
-        match: (m: string, u: string) => m === 'GET' && u.includes('/api/incidentals/1'),
-        handle: () => {
-          detailCalls += 1
-          return Promise.resolve(jsonResponse(detailCalls === 1 ? detail : { ...detail, closed_on: '2026-09-10' }))
+    vi.stubGlobal(
+      'fetch',
+      routedFetch([
+        {
+          match: (m: string, u: string) => m === 'GET' && u.includes('/api/incidentals/1'),
+          handle: () => {
+            detailCalls += 1
+            return Promise.resolve(jsonResponse(detailCalls === 1 ? detail : { ...detail, closed_on: '2026-09-10' }))
+          },
         },
-      },
-      {
-        match: (m: string, u: string) => m === 'POST' && u.includes('/api/incidentals/1/close'),
-        handle: () => Promise.resolve(jsonResponse({ incidental: closed, rolled_amount: 0 })),
-      },
-      ...getHandlers(),
-    ]))
+        {
+          match: (m: string, u: string) => m === 'POST' && u.includes('/api/incidentals/1/close'),
+          handle: () => Promise.resolve(jsonResponse({ incidental: closed, rolled_amount: 0 })),
+        },
+        ...getHandlers(),
+      ]),
+    )
 
     renderIncidentals(<Incidentals onBack={vi.fn()} onRecordFor={vi.fn()} onViewTransactionsFor={vi.fn()} purposeId={1} />)
     await waitFor(() => expect(screen.getByText(text.detail.collectedLabel)).toBeInTheDocument())
@@ -242,15 +259,20 @@ describe('Incidentals', () => {
 
   it('a second close attempt surfaces the named 409 refusal', async () => {
     const detail = { ...openEnvelope, collected_amount: 50_000, disbursed_amount: 0 }
-    vi.stubGlobal('fetch', routedFetch([
-      { match: (m: string, u: string) => m === 'GET' && u.includes('/api/incidentals/1'), handle: () => Promise.resolve(jsonResponse(detail)) },
-      {
-        match: (m: string, u: string) => m === 'POST' && u.includes('/api/incidentals/1/close'),
-        handle: () =>
-          Promise.resolve(jsonResponse({ error: { code: 'incidental_already_closed', message: 'already closed' } }, 409)),
-      },
-      ...getHandlers(),
-    ]))
+    vi.stubGlobal(
+      'fetch',
+      routedFetch([
+        {
+          match: (m: string, u: string) => m === 'GET' && u.includes('/api/incidentals/1'),
+          handle: () => Promise.resolve(jsonResponse(detail)),
+        },
+        {
+          match: (m: string, u: string) => m === 'POST' && u.includes('/api/incidentals/1/close'),
+          handle: () => Promise.resolve(jsonResponse({ error: { code: 'incidental_already_closed', message: 'already closed' } }, 409)),
+        },
+        ...getHandlers(),
+      ]),
+    )
 
     renderIncidentals(<Incidentals onBack={vi.fn()} onRecordFor={vi.fn()} onViewTransactionsFor={vi.fn()} purposeId={1} />)
     await waitFor(() => expect(screen.getByText(text.detail.collectedLabel)).toBeInTheDocument())
@@ -268,10 +290,16 @@ describe('Incidentals', () => {
 
   it('a closed envelope shows the reopen affordance instead of record/close', async () => {
     const detail = { ...closedEnvelope, collected_amount: 50_000, disbursed_amount: 0 }
-    vi.stubGlobal('fetch', routedFetch([
-      { match: (m: string, u: string) => m === 'GET' && u.includes('/api/incidentals/2'), handle: () => Promise.resolve(jsonResponse(detail)) },
-      ...getHandlers(),
-    ]))
+    vi.stubGlobal(
+      'fetch',
+      routedFetch([
+        {
+          match: (m: string, u: string) => m === 'GET' && u.includes('/api/incidentals/2'),
+          handle: () => Promise.resolve(jsonResponse(detail)),
+        },
+        ...getHandlers(),
+      ]),
+    )
 
     renderIncidentals(<Incidentals onBack={vi.fn()} onRecordFor={vi.fn()} onViewTransactionsFor={vi.fn()} purposeId={2} />)
     await waitFor(() => expect(screen.getByText(text.detail.collectedLabel)).toBeInTheDocument())
@@ -317,10 +345,16 @@ describe('Incidentals', () => {
 
   it('calls onBack, now leading to Pengaturan, when backToSettings is clicked', async () => {
     const detail = { ...openEnvelope, collected_amount: 0, disbursed_amount: 0 }
-    vi.stubGlobal('fetch', routedFetch([
-      { match: (m: string, u: string) => m === 'GET' && u.includes('/api/incidentals/1'), handle: () => Promise.resolve(jsonResponse(detail)) },
-      ...getHandlers(),
-    ]))
+    vi.stubGlobal(
+      'fetch',
+      routedFetch([
+        {
+          match: (m: string, u: string) => m === 'GET' && u.includes('/api/incidentals/1'),
+          handle: () => Promise.resolve(jsonResponse(detail)),
+        },
+        ...getHandlers(),
+      ]),
+    )
     const onBack = vi.fn()
     renderIncidentals(<Incidentals onBack={onBack} onRecordFor={vi.fn()} onViewTransactionsFor={vi.fn()} purposeId={1} />)
 
@@ -328,16 +362,21 @@ describe('Incidentals', () => {
     expect(onBack).toHaveBeenCalledTimes(1)
   })
 
-
   // #262: a closed envelope is off Beranda (ADR-032), so this link is the
   // only route it has to its own record - which is why the button is here
   // for a closed envelope, not only an open one.
   it('links a closed envelope to its own transactions, the only route it has', async () => {
     const detail = { ...closedEnvelope, collected_amount: 200_000, disbursed_amount: 200_000 }
-    vi.stubGlobal('fetch', routedFetch([
-      { match: (m: string, u: string) => m === 'GET' && u.includes('/api/incidentals/2'), handle: () => Promise.resolve(jsonResponse(detail)) },
-      ...getHandlers(),
-    ]))
+    vi.stubGlobal(
+      'fetch',
+      routedFetch([
+        {
+          match: (m: string, u: string) => m === 'GET' && u.includes('/api/incidentals/2'),
+          handle: () => Promise.resolve(jsonResponse(detail)),
+        },
+        ...getHandlers(),
+      ]),
+    )
 
     const onViewTransactionsFor = vi.fn()
     renderIncidentals(<Incidentals onBack={vi.fn()} onRecordFor={vi.fn()} onViewTransactionsFor={onViewTransactionsFor} purposeId={2} />)
@@ -356,12 +395,18 @@ describe('Incidentals', () => {
   // now, so every one of these opens the screen cold - no close is
   // performed anywhere below.
 
-  it('states a closed envelope\'s rollover on a cold visit, with no close in sight', async () => {
+  it("states a closed envelope's rollover on a cold visit, with no close in sight", async () => {
     const detail = { ...closedEnvelope, collected_amount: 10_000, disbursed_amount: 0 }
-    vi.stubGlobal('fetch', routedFetch([
-      { match: (m: string, u: string) => m === 'GET' && u.includes('/api/incidentals/2'), handle: () => Promise.resolve(jsonResponse(detail)) },
-      ...getHandlers(),
-    ]))
+    vi.stubGlobal(
+      'fetch',
+      routedFetch([
+        {
+          match: (m: string, u: string) => m === 'GET' && u.includes('/api/incidentals/2'),
+          handle: () => Promise.resolve(jsonResponse(detail)),
+        },
+        ...getHandlers(),
+      ]),
+    )
 
     renderIncidentals(<Incidentals onBack={vi.fn()} onRecordFor={vi.fn()} onViewTransactionsFor={vi.fn()} purposeId={2} />)
     await waitFor(() => expect(screen.getByText(text.detail.collectedLabel)).toBeInTheDocument())
@@ -374,10 +419,16 @@ describe('Incidentals', () => {
 
   it('states a shortfall covered from Kas Utama, in its own direction', async () => {
     const detail = { ...closedEnvelope, collected_amount: 50_000, disbursed_amount: 80_000 }
-    vi.stubGlobal('fetch', routedFetch([
-      { match: (m: string, u: string) => m === 'GET' && u.includes('/api/incidentals/2'), handle: () => Promise.resolve(jsonResponse(detail)) },
-      ...getHandlers(),
-    ]))
+    vi.stubGlobal(
+      'fetch',
+      routedFetch([
+        {
+          match: (m: string, u: string) => m === 'GET' && u.includes('/api/incidentals/2'),
+          handle: () => Promise.resolve(jsonResponse(detail)),
+        },
+        ...getHandlers(),
+      ]),
+    )
 
     renderIncidentals(<Incidentals onBack={vi.fn()} onRecordFor={vi.fn()} onViewTransactionsFor={vi.fn()} purposeId={2} />)
     await waitFor(() => expect(screen.getByText(text.detail.collectedLabel)).toBeInTheDocument())
@@ -390,10 +441,16 @@ describe('Incidentals', () => {
 
   it('states a square envelope as square, rather than saying nothing', async () => {
     const detail = { ...closedEnvelope, collected_amount: 75_000, disbursed_amount: 75_000 }
-    vi.stubGlobal('fetch', routedFetch([
-      { match: (m: string, u: string) => m === 'GET' && u.includes('/api/incidentals/2'), handle: () => Promise.resolve(jsonResponse(detail)) },
-      ...getHandlers(),
-    ]))
+    vi.stubGlobal(
+      'fetch',
+      routedFetch([
+        {
+          match: (m: string, u: string) => m === 'GET' && u.includes('/api/incidentals/2'),
+          handle: () => Promise.resolve(jsonResponse(detail)),
+        },
+        ...getHandlers(),
+      ]),
+    )
 
     renderIncidentals(<Incidentals onBack={vi.fn()} onRecordFor={vi.fn()} onViewTransactionsFor={vi.fn()} purposeId={2} />)
     await waitFor(() => expect(screen.getByText(text.detail.collectedLabel)).toBeInTheDocument())
@@ -404,10 +461,16 @@ describe('Incidentals', () => {
 
   it('says nothing about a rollover on an envelope that is still open', async () => {
     const detail = { ...openEnvelope, collected_amount: 120_000, disbursed_amount: 20_000 }
-    vi.stubGlobal('fetch', routedFetch([
-      { match: (m: string, u: string) => m === 'GET' && u.includes('/api/incidentals/1'), handle: () => Promise.resolve(jsonResponse(detail)) },
-      ...getHandlers(),
-    ]))
+    vi.stubGlobal(
+      'fetch',
+      routedFetch([
+        {
+          match: (m: string, u: string) => m === 'GET' && u.includes('/api/incidentals/1'),
+          handle: () => Promise.resolve(jsonResponse(detail)),
+        },
+        ...getHandlers(),
+      ]),
+    )
 
     renderIncidentals(<Incidentals onBack={vi.fn()} onRecordFor={vi.fn()} onViewTransactionsFor={vi.fn()} purposeId={1} />)
     await waitFor(() => expect(screen.getByText(text.detail.collectedLabel)).toBeInTheDocument())
@@ -423,17 +486,23 @@ describe('Incidentals', () => {
     const reopened = { ...closedEnvelope, closed_on: null }
     const reopenedDetail = { ...reopened, collected_amount: 50_000, disbursed_amount: 0 }
     let detailCalls = 0
-    vi.stubGlobal('fetch', routedFetch([
-      { match: (m: string, u: string) => m === 'POST' && u.includes('/api/incidentals/2/reopen'), handle: () => Promise.resolve(jsonResponse(reopened)) },
-      {
-        match: (m: string, u: string) => m === 'GET' && u.includes('/api/incidentals/2'),
-        handle: () => {
-          detailCalls += 1
-          return Promise.resolve(jsonResponse(detailCalls === 1 ? closedDetail : reopenedDetail))
+    vi.stubGlobal(
+      'fetch',
+      routedFetch([
+        {
+          match: (m: string, u: string) => m === 'POST' && u.includes('/api/incidentals/2/reopen'),
+          handle: () => Promise.resolve(jsonResponse(reopened)),
         },
-      },
-      ...getHandlers(),
-    ]))
+        {
+          match: (m: string, u: string) => m === 'GET' && u.includes('/api/incidentals/2'),
+          handle: () => {
+            detailCalls += 1
+            return Promise.resolve(jsonResponse(detailCalls === 1 ? closedDetail : reopenedDetail))
+          },
+        },
+        ...getHandlers(),
+      ]),
+    )
 
     renderIncidentals(<Incidentals onBack={vi.fn()} onRecordFor={vi.fn()} onViewTransactionsFor={vi.fn()} purposeId={2} />)
     await waitFor(() => expect(screen.getByText(text.close.rolledLabel(50_000))).toBeInTheDocument())
@@ -448,10 +517,16 @@ describe('Incidentals', () => {
 
   it('opens the rename dialog, addressed by ?edit=incidental:<id>, when Ubah nama is clicked', async () => {
     const detail = { ...openEnvelope, collected_amount: 0, disbursed_amount: 0 }
-    vi.stubGlobal('fetch', routedFetch([
-      { match: (m: string, u: string) => m === 'GET' && u.includes('/api/incidentals/1'), handle: () => Promise.resolve(jsonResponse(detail)) },
-      ...getHandlers(),
-    ]))
+    vi.stubGlobal(
+      'fetch',
+      routedFetch([
+        {
+          match: (m: string, u: string) => m === 'GET' && u.includes('/api/incidentals/1'),
+          handle: () => Promise.resolve(jsonResponse(detail)),
+        },
+        ...getHandlers(),
+      ]),
+    )
     renderIncidentals(<Incidentals onBack={vi.fn()} onRecordFor={vi.fn()} onViewTransactionsFor={vi.fn()} purposeId={1} />)
     await waitFor(() => expect(screen.getByText('Halal bihalal RT')).toBeInTheDocument())
 
@@ -462,7 +537,7 @@ describe('Incidentals', () => {
     expect(within(dialog).getByLabelText(text.rename.nameLabel)).toHaveValue('Halal bihalal RT')
   })
 
-  it('submits a rename, refetches the detail, and shows the corrected occasion through the screen\'s own feedback banner', async () => {
+  it("submits a rename, refetches the detail, and shows the corrected occasion through the screen's own feedback banner", async () => {
     const detail = { ...openEnvelope, collected_amount: 0, disbursed_amount: 0 }
     const renamedPurpose = { id: 1, kind: 'incidental', name: 'Halal bihalal RT 2026', created_at: 1 }
     const renamedDetail = { ...detail, occasion: 'Halal bihalal RT 2026' }
@@ -515,10 +590,16 @@ describe('Incidentals', () => {
   // is over, so a closed envelope must offer the same correction.
   it('offers the rename button for a closed envelope too', async () => {
     const detail = { ...closedEnvelope, collected_amount: 50_000, disbursed_amount: 0 }
-    vi.stubGlobal('fetch', routedFetch([
-      { match: (m: string, u: string) => m === 'GET' && u.includes('/api/incidentals/2'), handle: () => Promise.resolve(jsonResponse(detail)) },
-      ...getHandlers(),
-    ]))
+    vi.stubGlobal(
+      'fetch',
+      routedFetch([
+        {
+          match: (m: string, u: string) => m === 'GET' && u.includes('/api/incidentals/2'),
+          handle: () => Promise.resolve(jsonResponse(detail)),
+        },
+        ...getHandlers(),
+      ]),
+    )
     renderIncidentals(<Incidentals onBack={vi.fn()} onRecordFor={vi.fn()} onViewTransactionsFor={vi.fn()} purposeId={2} />)
     await waitFor(() => expect(screen.getByText(text.detail.collectedLabel)).toBeInTheDocument())
 

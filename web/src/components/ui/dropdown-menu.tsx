@@ -1,7 +1,7 @@
-import * as React from "react"
-import { DropdownMenu as DropdownMenuPrimitive } from "radix-ui"
+import * as React from 'react'
+import { DropdownMenu as DropdownMenuPrimitive } from 'radix-ui'
 
-import { cn } from "@/lib/utils"
+import { cn } from '@/lib/utils'
 
 // A themed dropdown menu, same shape as select.tsx and dialog.tsx: Radix
 // gives the popup positioning, focus management and typeahead, this file
@@ -18,18 +18,14 @@ import { cn } from "@/lib/utils"
 const DropdownMenu = DropdownMenuPrimitive.Root
 const DropdownMenuTrigger = DropdownMenuPrimitive.Trigger
 
-function DropdownMenuContent({
-  className,
-  sideOffset = 4,
-  ...props
-}: React.ComponentProps<typeof DropdownMenuPrimitive.Content>) {
+function DropdownMenuContent({ className, sideOffset = 4, ...props }: React.ComponentProps<typeof DropdownMenuPrimitive.Content>) {
   return (
     <DropdownMenuPrimitive.Portal>
       <DropdownMenuPrimitive.Content
         data-slot="dropdown-menu-content"
         sideOffset={sideOffset}
         className={cn(
-          "z-[60] min-w-[9rem] overflow-hidden rounded-xl border border-border bg-card p-1 text-foreground shadow-floating outline-none data-[state=open]:animate-dialog-in data-[state=closed]:animate-dialog-out",
+          'z-[60] min-w-[9rem] overflow-hidden rounded-xl border border-border bg-card p-1 text-foreground shadow-floating outline-none data-[state=open]:animate-dialog-in data-[state=closed]:animate-dialog-out',
           className,
         )}
         {...props}
@@ -47,18 +43,18 @@ function DropdownMenuContent({
  */
 function DropdownMenuItem({
   className,
-  variant = "default",
+  variant = 'default',
   ...props
 }: React.ComponentProps<typeof DropdownMenuPrimitive.Item> & {
-  variant?: "default" | "destructive"
+  variant?: 'default' | 'destructive'
 }) {
   return (
     <DropdownMenuPrimitive.Item
       data-slot="dropdown-menu-item"
       data-variant={variant}
       className={cn(
-        "relative flex min-h-11 w-full cursor-default items-center gap-2 rounded-lg px-3 text-base outline-none select-none focus:bg-secondary data-[disabled]:pointer-events-none data-[disabled]:opacity-50 md:text-sm",
-        variant === "destructive" && "text-destructive focus:bg-destructive/10",
+        'relative flex min-h-11 w-full cursor-default items-center gap-2 rounded-lg px-3 text-base outline-none select-none focus:bg-secondary data-[disabled]:pointer-events-none data-[disabled]:opacity-50 md:text-sm',
+        variant === 'destructive' && 'text-destructive focus:bg-destructive/10',
         className,
       )}
       {...props}

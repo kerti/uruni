@@ -9,15 +9,7 @@ import ErrorState from '@/components/states/ErrorState'
 import { copy } from '@/copy/id'
 import { formatPeriod } from '@/lib/dates'
 import { formatIDR } from '@/lib/money'
-import {
-  createDuesRate,
-  deleteDuesRate,
-  deleteDuesTier,
-  listDuesRates,
-  listDuesTiers,
-  renameDuesTier,
-  updateDuesRate,
-} from '@/lib/setup'
+import { createDuesRate, deleteDuesRate, deleteDuesTier, listDuesRates, listDuesTiers, renameDuesTier, updateDuesRate } from '@/lib/setup'
 import { useApi } from '@/lib/useApi'
 import type { DuesRate, DuesTier } from '@/lib/setup'
 
@@ -156,13 +148,7 @@ function TierName({ tier, onRenamed }: { tier: DuesTier; onRenamed: () => void }
       <h2 className="text-base font-semibold">{text.nameHeading}</h2>
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="tier-name">{text.nameLabel}</Label>
-        <Input
-          id="tier-name"
-          type="text"
-          value={name}
-          onChange={(event) => setName(event.target.value)}
-          disabled={busy}
-        />
+        <Input id="tier-name" type="text" value={name} onChange={(event) => setName(event.target.value)} disabled={busy} />
       </div>
       {/* A duplicate name for the fund hits UNIQUE (fund_id, name) - 409
           unique_violation, answered by the shared copy. */}
@@ -222,13 +208,7 @@ function RateRow({ rate, onChanged }: { rate: DuesRate; onChanged: () => void })
     <li className="flex flex-col gap-2 rounded-lg bg-card px-4 py-3 ring-1 ring-foreground/10">
       {editing ? (
         <form className="flex flex-col gap-2" onSubmit={handleSubmit} noValidate>
-          <AmountInput
-            id={`rate-amount-${rate.id}`}
-            label={text.rateAmountLabel}
-            value={amount}
-            onChange={setAmount}
-            disabled={busy}
-          />
+          <AmountInput id={`rate-amount-${rate.id}`} label={text.rateAmountLabel} value={amount} onChange={setAmount} disabled={busy} />
           {/* One row, primary right (#235). Deleting lives here rather than
               on the reading row: a rate is removed to re-file it against
               the right month, which is a correction, not a glance. */}
@@ -238,11 +218,13 @@ function RateRow({ rate, onChanged }: { rate: DuesRate; onChanged: () => void })
               variant="ghost"
               className="h-11 text-attention"
               disabled={busy}
-              onClick={() => void run(async () => {
-                await deleteDuesRate(rate.id)
-                setEditing(false)
-                onChanged()
-              })}
+              onClick={() =>
+                void run(async () => {
+                  await deleteDuesRate(rate.id)
+                  setEditing(false)
+                  onChanged()
+                })
+              }
             >
               {busy ? text.deletingRate : text.deleteRate}
             </Button>
@@ -269,13 +251,7 @@ function RateRow({ rate, onChanged }: { rate: DuesRate; onChanged: () => void })
             <span className="tabular font-medium">{formatIDR(rate.amount)}</span>
             <span className="text-sm text-muted-foreground">{text.effectiveFrom(formatPeriod(rate.effective_from))}</span>
           </span>
-          <Button
-            type="button"
-            variant="outline"
-            className="h-11 shrink-0"
-            disabled={busy}
-            onClick={() => setEditing(true)}
-          >
+          <Button type="button" variant="outline" className="h-11 shrink-0" disabled={busy} onClick={() => setEditing(true)}>
             {text.editRate}
           </Button>
         </div>
@@ -313,13 +289,7 @@ function AddRate({ tierId, onAdded }: { tierId: number; onAdded: () => void }) {
   return (
     <form aria-label={text.addRate} className="flex flex-col gap-2" onSubmit={handleSubmit} noValidate>
       <h3 className="text-sm font-medium text-muted-foreground">{text.addRateHeading}</h3>
-      <AmountInput
-        id={`new-rate-amount-${tierId}`}
-        label={text.rateAmountLabel}
-        value={amount}
-        onChange={setAmount}
-        disabled={busy}
-      />
+      <AmountInput id={`new-rate-amount-${tierId}`} label={text.rateAmountLabel} value={amount} onChange={setAmount} disabled={busy} />
       <div className="flex flex-col gap-1.5">
         <Label htmlFor={`new-rate-from-${tierId}`}>{text.effectiveFromLabel}</Label>
         {/* type="month" - the wire format is YYYY-MM and so is this input's
