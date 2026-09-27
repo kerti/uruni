@@ -25,7 +25,7 @@ export default function FundName({ name, onChange, onNext }: { name: string; onC
       <Card className="w-full max-w-sm shadow-card" size="default">
         <CardHeader>
           <p className="text-sm text-muted-foreground">{text.stepLabel(1)}</p>
-          <CardTitle className="text-2xl font-semibold">{text.fund.heading}</CardTitle>
+          <CardTitle className="text-xl font-semibold">{text.fund.heading}</CardTitle>
           <p className="text-muted-foreground">{text.fund.body}</p>
         </CardHeader>
         <CardContent>

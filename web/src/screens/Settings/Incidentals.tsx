@@ -1,3 +1,4 @@
+import { ArrowLeft, ChevronRight } from 'lucide-react'
 import { useEffect, useState, type FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 
@@ -9,7 +10,7 @@ import AmountInput from '@/components/money/AmountInput'
 import Loading from '@/components/states/Loading'
 import ErrorState from '@/components/states/ErrorState'
 import { copy } from '@/copy/id'
-import { todayISODate } from '@/lib/dates'
+import { formatIsoDate, todayISODate } from '@/lib/dates'
 import { listIncidentals, openIncidental } from '@/lib/incidentals'
 import { useApi } from '@/lib/useApi'
 import { parseDialogTarget } from '@/lib/dialogTarget'
@@ -41,10 +42,12 @@ function parseEditTarget(value: string | null): 'new' | 'foreign' | 'invalid' {
  * instead, beside Titipan, because CONTEXT.md makes incidental and
  * pass-through two kinds of one `purpose`.
  *
- * Every envelope the fund has opened is listed here, closed ones included -
- * the same "retired isn't hidden" choice Locations makes, and the reason is
- * the same too: reopening (ADR-031) needs a door that does not wait on a
- * purpose filter (#262). Tapping a card navigates to its detail view; only
+ * Open envelopes are listed here; closed ones are gathered behind a single
+ * row into their own screen (ClosedIncidentals below, #319), because they pile
+ * up over the years and would turn Pengaturan into a wall of them. They are
+ * never hidden, only moved one tap away - reopening (ADR-031) still needs a
+ * door that does not wait on a purpose filter (#262). Tapping a card
+ * navigates to its detail view; only
  * "open a new envelope" is a dialog here, addressed by
  * `?edit=incidental:new`, same idiom as Locations' `?edit=location:new`.
  *
@@ -93,24 +96,12 @@ export default function SettingsIncidentals() {
         <Loading />
       ) : listState.status === 'error' || !listState.data ? (
         listState.error && <ErrorState error={listState.error} onRetry={reload} />
-      ) : listState.data.length === 0 ? (
-        <p className="text-muted-foreground">{text.empty}</p>
       ) : (
-        <ul className="flex flex-col gap-2">
-          {listState.data.map((envelope) => (
-            <li key={envelope.purpose_id}>
-              <button
-                type="button"
-                aria-label={text.cardAria(envelope.occasion)}
-                onClick={() => navigate(`/incidentals?purpose=${envelope.purpose_id}`)}
-                className="flex min-h-11 w-full items-center justify-between gap-3 rounded-lg bg-card px-4 py-3 text-left ring-1 ring-foreground/10 select-none transition-colors hover:bg-muted/40"
-              >
-                <span className="min-w-0 truncate font-medium">{envelope.occasion}</span>
-                <StatusBadge envelope={envelope} />
-              </button>
-            </li>
-          ))}
-        </ul>
+        <EnvelopeCards
+          envelopes={listState.data}
+          onOpen={(purposeId) => navigate(`/incidentals?purpose=${purposeId}`)}
+          onOpenClosed={() => navigate('/incidentals/closed')}
+        />
       )}
 
       <Button type="button" variant="outline" className="h-11 self-start" onClick={() => open('incidental:new')}>
@@ -128,6 +119,56 @@ export default function SettingsIncidentals() {
     </section>
   )
 }
+
+/** The open envelopes as cards, then - once any exist - one card-shaped row
+ * into the closed ones, carrying their count so she knows what is behind it.
+ * The empty line only when there is nothing at all, open or closed. */
+function EnvelopeCards({
+  envelopes,
+  onOpen,
+  onOpenClosed,
+}: {
+  envelopes: Incidental[]
+  onOpen: (purposeId: number) => void
+  onOpenClosed: () => void
+}) {
+  const openOnes = envelopes.filter((envelope) => !envelope.closed_on)
+  const closedCount = envelopes.length - openOnes.length
+  if (envelopes.length === 0) return <p className="text-muted-foreground">{text.empty}</p>
+  return (
+    <ul className="flex flex-col gap-2">
+      {openOnes.map((envelope) => (
+        <li key={envelope.purpose_id}>
+          <button
+            type="button"
+            aria-label={text.cardAria(envelope.occasion)}
+            onClick={() => onOpen(envelope.purpose_id)}
+            className={cardClass}
+          >
+            <span className="min-w-0 truncate font-medium">{envelope.occasion}</span>
+            <StatusBadge envelope={envelope} />
+          </button>
+        </li>
+      ))}
+      {closedCount > 0 && (
+        <li>
+          <button type="button" onClick={onOpenClosed} className={cardClass}>
+            <span className="min-w-0 truncate font-medium">{text.closedRow}</span>
+            <span className="flex shrink-0 items-center gap-1 text-muted-foreground">
+              <span className="tabular text-sm">{closedCount}</span>
+              <ChevronRight aria-hidden="true" className="size-4" />
+            </span>
+          </button>
+        </li>
+      )}
+    </ul>
+  )
+}
+
+/** An envelope card's box - Pengaturan's list and the closed-envelopes
+ * screen below share it. */
+const cardClass =
+  'flex min-h-11 w-full items-center justify-between gap-3 rounded-lg bg-card px-4 py-3 text-left ring-1 ring-foreground/10 select-none transition-colors hover:bg-muted/40'
 
 /** Same open/closed badge Incidentals.tsx's own StatusBadge renders. Kept
  * as a small local copy rather than a shared export - one component, two
@@ -241,5 +282,63 @@ function OpenIncidentalDialog({ open, onClose, onOpened }: { open: boolean; onCl
         </form>
       </DialogContent>
     </Dialog>
+  )
+}
+
+/**
+ * Every closed envelope, most recently closed first (#319) - the screen
+ * behind Pengaturan's "Amplop yang sudah ditutup" row. A screen rather than
+ * a dialog because the list is unbounded, and one list rather than tabs:
+ * ADR-032 retired the old open/all tab screen, and open envelopes still live
+ * on Pengaturan itself. Each card opens the envelope's detail, where reading
+ * its record and Buka lagi both are; the detail's own way back is still to
+ * Pengaturan, one tap from here.
+ */
+export function ClosedIncidentals({ onBack, onOpen }: { onBack: () => void; onOpen: (purposeId: number) => void }) {
+  const [state, run] = useApi<Incidental[]>()
+
+  useEffect(() => {
+    void run(() => listIncidentals(false))
+  }, [run])
+
+  const closed = (state.data ?? [])
+    .filter((envelope): envelope is Incidental & { closed_on: string } => envelope.closed_on !== null)
+    .sort((a, b) => (a.closed_on < b.closed_on ? 1 : a.closed_on > b.closed_on ? -1 : b.created_at - a.created_at))
+
+  return (
+    <div className="mx-auto flex w-full max-w-sm flex-col gap-4">
+      <Button type="button" variant="link" className="h-auto min-h-11 self-start p-0 text-muted-foreground" onClick={onBack}>
+        <ArrowLeft aria-hidden="true" />
+        {copy.incidentals.detail.backToSettings}
+      </Button>
+      <h1 className="text-xl font-semibold">{text.closedRow}</h1>
+
+      {state.status === 'idle' || state.status === 'loading' ? (
+        <Loading />
+      ) : state.status === 'error' || !state.data ? (
+        state.error && <ErrorState error={state.error} onRetry={() => void run(() => listIncidentals(false))} />
+      ) : closed.length === 0 ? (
+        <p className="text-muted-foreground">{text.closedEmpty}</p>
+      ) : (
+        <ul className="flex flex-col gap-2">
+          {closed.map((envelope) => (
+            <li key={envelope.purpose_id}>
+              <button
+                type="button"
+                aria-label={text.cardAria(envelope.occasion)}
+                onClick={() => onOpen(envelope.purpose_id)}
+                className={cardClass}
+              >
+                <span className="flex min-w-0 flex-col">
+                  <span className="truncate font-medium">{envelope.occasion}</span>
+                  <span className="text-sm text-muted-foreground">{text.closedOn(formatIsoDate(envelope.closed_on))}</span>
+                </span>
+                <ChevronRight aria-hidden="true" className="size-4 shrink-0 text-muted-foreground" />
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
   )
 }

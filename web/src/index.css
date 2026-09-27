@@ -147,7 +147,9 @@
   --destructive: #b4453c;
   --destructive-foreground: #ffffff;
 
-  --radius: 0.875rem;
+  /* 8px (#319): 14px made cards ~25px and buttons ~20px round, which read as
+     soft-to-bubbly on a phone. Every rounded-* scales from this one token. */
+  --radius: 0.5rem;
 }
 
 @layer base {

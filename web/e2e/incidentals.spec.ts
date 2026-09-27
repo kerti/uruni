@@ -45,10 +45,8 @@ test.describe('incidentals', () => {
     await expect(openDialog).not.toBeVisible()
 
     // The new envelope is now a card in this section, open status shown on
-    // it - this section lists closed envelopes too (reopening, ADR-031,
-    // needs that door), so the status is what tells them apart. Anchored to
-    // the card rather than a bare getByText, since "Berjalan" is not unique
-    // once a second envelope opens.
+    // it. Anchored to the card rather than a bare getByText, since
+    // "Berjalan" is not unique once a second envelope opens.
     const card = page.getByRole('button', { name: new RegExp(occasion) })
     await expect(card).toBeVisible()
     await expect(card).toContainText(copy.incidentals.status.open)
@@ -136,12 +134,15 @@ test.describe('incidentals', () => {
     // second close.
     await expect(page.getByText(copy.incidentals.close.rolledLabel(60_000))).toBeVisible()
 
-    // The envelope now shows closed in Pengaturan's own list (#263 - the
-    // all/open tabs are gone with it), and its open-only actions are gone
-    // from the detail view above.
+    // Once closed, the envelope leaves Pengaturan's own list for the
+    // closed-envelopes screen behind its one row (#319) - never hidden, one
+    // tap away - and its card there opens the detail again.
     await page.getByRole('button', { name: copy.incidentals.detail.backToSettings }).click()
     await expect(page.getByRole('heading', { name: copy.settings.heading })).toBeVisible()
-    const card = page.getByRole('button', { name: new RegExp(occasion) })
-    await expect(card).toContainText(copy.incidentals.status.closed)
+    await expect(page.getByRole('button', { name: new RegExp(occasion) })).toBeHidden()
+    await page.getByRole('button', { name: new RegExp(copy.settings.incidentals.closedRow) }).click()
+    await expect(page.getByRole('heading', { name: copy.settings.incidentals.closedRow })).toBeVisible()
+    await page.getByRole('button', { name: new RegExp(occasion) }).click()
+    await expect(page.getByRole('button', { name: copy.incidentals.actions.reopen })).toBeVisible()
   })
 })

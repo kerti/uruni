@@ -207,7 +207,7 @@ export default function RecordDuesPayment({
 
   return (
     <form className={embedded ? 'flex flex-col gap-4' : 'mx-auto flex w-full max-w-sm flex-col gap-4'} onSubmit={handleSubmit} noValidate>
-      {!embedded && <h1 className="text-2xl font-semibold">{text.heading}</h1>}
+      {!embedded && <h1 className="text-xl font-semibold">{text.heading}</h1>}
 
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="dues-payment-member">{text.memberLabel}</Label>

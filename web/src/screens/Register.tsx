@@ -62,7 +62,7 @@ export default function Register({ onRegistered }: { onRegistered: (user: AuthUs
     <main className="flex min-h-dvh items-center justify-center p-6">
       <Card className="w-full max-w-sm shadow-card" size="default">
         <CardHeader>
-          <CardTitle className="text-2xl font-semibold">{text.heading}</CardTitle>
+          <CardTitle className="text-xl font-semibold">{text.heading}</CardTitle>
           <p className="text-muted-foreground">{text.body}</p>
         </CardHeader>
         <CardContent>

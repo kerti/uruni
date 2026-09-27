@@ -1,6 +1,8 @@
+import { ArrowLeft } from 'lucide-react'
 import { useEffect, useState, type FormEvent } from 'react'
 
 import AmountInput from '@/components/money/AmountInput'
+import SectionDivider from '@/components/SectionDivider'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -107,14 +109,20 @@ export default function DuesTierScreen({ tierId, onBack }: { tierId: number; onB
 
   return (
     <div className="flex flex-col gap-6">
-      <Button type="button" variant="outline" size="lg" className="self-start" onClick={onBack}>
+      {/* A way back, not an action (#319) - the same quiet link as an
+          envelope's own detail screen. */}
+      <Button type="button" variant="link" className="h-auto min-h-11 self-start p-0 text-muted-foreground" onClick={onBack}>
+        <ArrowLeft aria-hidden="true" />
         {text.backToSettings}
       </Button>
 
-      <h1 className="text-2xl font-semibold">{tier.name}</h1>
+      <h1 className="text-xl font-semibold">{tier.name}</h1>
 
+      {/* Three independent sections, a hairline between each (#319). */}
       <TierName tier={tier} onRenamed={reload} />
+      <SectionDivider />
       <TierRates tier={tier} rates={state.data.rates} onChanged={reload} />
+      <SectionDivider />
       <DeleteTier tier={tier} onDeleted={onBack} />
     </div>
   )
@@ -331,7 +339,7 @@ function DeleteTier({ tier, onDeleted }: { tier: DuesTier; onDeleted: () => void
   }
 
   return (
-    <section className="flex flex-col gap-2 border-t border-border pt-4">
+    <section className="flex flex-col gap-2">
       {/* The consequence, named just above the button that does it -
           terracotta, not alarm-red, the same as Lokasi's own confirms. */}
       {confirming && <p className="text-sm text-attention">{text.deleteConfirm}</p>}

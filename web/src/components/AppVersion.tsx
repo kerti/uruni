@@ -3,9 +3,11 @@ import { useEffect, useState } from 'react'
 import { copy } from '@/copy/id'
 
 /**
- * The running build's version, last thing on Pengaturan - so an operator
- * can tell which release a server is on from a phone, without a shell on
- * the VPS. It reads /healthz, the same unauthenticated {version, commit}
+ * The running build's version, a muted line under the fund name in Shell's
+ * header since #319 (it used to be buried at the foot of Pengaturan) - so an
+ * operator can tell which release a server is on from any screen of a phone,
+ * without a shell on the VPS. It fits beside the header's 44px logout
+ * button, so the header grows no taller for it. It reads /healthz, the same unauthenticated {version, commit}
  * the readiness checks use (ADR-018's operator contract), rather than a
  * new route: the SPA is built before the binary is stamped, so the version
  * can only be learned at runtime.
@@ -34,5 +36,5 @@ export default function AppVersion() {
   }, [])
 
   if (!label) return null
-  return <p className="tabular text-center text-sm text-muted-foreground">{label}</p>
+  return <p className="tabular truncate text-xs leading-4 text-muted-foreground">{label}</p>
 }

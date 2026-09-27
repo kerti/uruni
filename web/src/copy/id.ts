@@ -679,8 +679,9 @@ export const copy = {
   // to this same screen.
   settings: {
     heading: 'Pengaturan',
-    // Pengaturan's last line: the running build (AppVersion.tsx). A product
-    // name and a version string, so nothing here needs translating.
+    // The running build, under the fund name in the header (AppVersion.tsx,
+    // #319). A product name and a version string, so nothing here needs
+    // translating.
     versionLine: (version: string) => `Uruni ${version}`,
     // Renaming the kas (PRD §7.1's own promise: "bisa diganti nanti kalau
     // perlu"). The name is a label - it heads every screen and the public
@@ -832,8 +833,16 @@ export const copy = {
     // (ADR-014).
     incidentals: {
       heading: 'Amplop',
-      body: 'Amplop terpisah untuk acara sekali jalan — kumpulkan, pakai, lalu tutup. Amplop yang sudah ditutup tetap tercatat di sini, dan bisa dibuka lagi.',
+      body: 'Amplop terpisah untuk acara sekali jalan — kumpulkan, pakai, lalu tutup. Amplop yang sudah ditutup tetap tercatat, dan bisa dibuka lagi.',
       empty: 'Belum ada amplop dibuka.',
+      // Closed envelopes pile up over the years, so Pengaturan lists only the
+      // open ones and gathers the rest behind this one row (#319) - which is
+      // also the heading of the screen it opens, so the two read the same.
+      closedRow: 'Amplop yang sudah ditutup',
+      closedEmpty: 'Belum ada amplop yang ditutup.',
+      // Each closed envelope's line on that screen: when it was closed, the
+      // one fact that orders the list. date is already formatted.
+      closedOn: (date: string) => `Ditutup ${date}`,
       // Same word the dialog's own heading uses (copy.incidentals.open.heading)
       // - one word for "start a new envelope", not two.
       add: 'Buka amplop',

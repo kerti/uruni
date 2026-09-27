@@ -28,7 +28,7 @@ const tabs = [
 export default function History() {
   return (
     <div className="flex flex-col gap-4">
-      <h1 className="text-2xl font-semibold">{copy.shell.nav.history}</h1>
+      <h1 className="text-xl font-semibold">{copy.shell.nav.history}</h1>
       {/* A segmented control (components/segmented.ts). px-1 is what lets
           four labels ("Cek kas" among them, #227) fit a quarter of a 375px
           screen each without overflowing. */}

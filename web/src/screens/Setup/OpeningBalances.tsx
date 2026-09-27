@@ -59,7 +59,7 @@ export default function OpeningBalances({
       <Card className="w-full max-w-sm shadow-card" size="default">
         <CardHeader>
           <p className="text-sm text-muted-foreground">{text.stepLabel(3)}</p>
-          <CardTitle className="text-2xl font-semibold">{text.balances.heading}</CardTitle>
+          <CardTitle className="text-xl font-semibold">{text.balances.heading}</CardTitle>
           <p className="text-muted-foreground">{text.balances.body}</p>
         </CardHeader>
         <CardContent>

@@ -1,6 +1,8 @@
+import { ArrowLeft } from 'lucide-react'
 import { useEffect, useState, type FormEvent } from 'react'
 
 import AccountPicker from '@/components/pickers/AccountPicker'
+import SectionDivider from '@/components/SectionDivider'
 import TransactionList from '@/components/TransactionList'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -302,12 +304,15 @@ function DetailView({
 
   return (
     <div className="mx-auto flex w-full max-w-sm flex-col gap-4">
-      <Button type="button" variant="outline" size="lg" onClick={onBack}>
+      {/* A way back, not an action (#319): a quiet link, like a browser's own
+          back, rather than a full-width button competing with the real ones. */}
+      <Button type="button" variant="link" className="h-auto min-h-11 self-start p-0 text-muted-foreground" onClick={onBack}>
+        <ArrowLeft aria-hidden="true" />
         {text.detail.backToSettings}
       </Button>
 
       <div className="flex items-start justify-between gap-3">
-        <h1 className="text-2xl font-semibold">{envelope.occasion}</h1>
+        <h1 className="text-xl font-semibold">{envelope.occasion}</h1>
         <StatusBadge envelope={envelope} />
       </div>
 
@@ -389,6 +394,9 @@ function DetailView({
 
       {isOpen && showCloseForm && <CloseForm accounts={accounts} onSubmit={onClose} onCancel={onCancelClose} submitting={submitting} />}
 
+      {/* The envelope and what can be done with it above; what has moved
+          through it below - two sections, one hairline (#319). */}
+      <SectionDivider />
       <EnvelopeActivity envelope={envelope} onViewAll={onViewTransactions} />
     </div>
   )
@@ -582,8 +590,14 @@ function EnvelopeActivity({ envelope, onViewAll }: { envelope: Incidental; onVie
     <section className="flex flex-col gap-2">
       <div className="flex items-center justify-between gap-3">
         <h2 className="text-sm font-semibold text-muted-foreground">{copy.home.recentActivityHeading}</h2>
-        {/* min-h-11: the link variant's own height is under 44px. */}
-        <Button type="button" variant="link" className="h-auto min-h-11 p-0" onClick={onViewAll}>
+        {/* The same invisible 44px hit area as Beranda's own "Lihat semua"
+            (#319), so the row stays as tall as its small heading. */}
+        <Button
+          type="button"
+          variant="link"
+          className="h-auto p-0 relative after:absolute after:inset-x-0 after:top-1/2 after:h-11 after:-translate-y-1/2 after:content-['']"
+          onClick={onViewAll}
+        >
           {copy.home.recentActivityViewAll}
         </Button>
       </div>

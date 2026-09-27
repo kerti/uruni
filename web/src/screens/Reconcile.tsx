@@ -323,7 +323,7 @@ export default function Reconcile({ onDone, onCancel }: { onDone: () => void; on
   return (
     <form className="mx-auto flex w-full max-w-sm flex-col gap-6" onSubmit={(e) => void handleSubmit(e)} noValidate>
       <div className="flex flex-col gap-1">
-        <h1 className="text-2xl font-semibold">{text.heading}</h1>
+        <h1 className="text-xl font-semibold">{text.heading}</h1>
         <p className="text-sm text-muted-foreground">{text.intro}</p>
       </div>
 

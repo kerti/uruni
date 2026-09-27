@@ -2,6 +2,7 @@ import { useEffect, type ReactNode } from 'react'
 import { History, Home, LogOut, Plus, Settings, Users } from 'lucide-react'
 import { Link, NavLink } from 'react-router-dom'
 
+import AppVersion from '@/components/AppVersion'
 import { Button } from '@/components/ui/button'
 import ErrorState from '@/components/states/ErrorState'
 import { copy } from '@/copy/id'
@@ -96,16 +97,19 @@ export default function Shell({
     <div className="flex min-h-dvh flex-col bg-background">
       <header className="sticky top-0 z-10 border-b border-border bg-background/95 pt-[env(safe-area-inset-top)] backdrop-blur">
         <div className="flex items-center justify-between gap-3 py-2 pl-[max(1rem,env(safe-area-inset-left))] pr-[max(1rem,env(safe-area-inset-right))]">
-          <h1 className="min-w-0 truncate text-lg font-semibold">
-            {/* No aria-label: one here would become the *heading's*
+          <div className="flex min-w-0 flex-col">
+            <h1 className="min-w-0 truncate text-lg font-semibold">
+              {/* No aria-label: one here would become the *heading's*
                 accessible name too, so the h1 would announce as "Kas RT 04 -
                 kembali ke beranda" rather than the fund's name. A title link
                 named after the site is the pattern a screen reader already
                 knows. */}
-            <Link to="/" className="block truncate rounded-lg outline-none focus-visible:ring-3 focus-visible:ring-ring/50">
-              {title}
-            </Link>
-          </h1>
+              <Link to="/" className="block truncate rounded-lg outline-none focus-visible:ring-3 focus-visible:ring-ring/50">
+                {title}
+              </Link>
+            </h1>
+            <AppVersion />
+          </div>
           {/* size-11 (44px), not the `icon` variant's 32px: Design-System.md
               sets a 44x44 minimum touch target and this is the header's only
               control. The label is on the button, not a tooltip - a tooltip
