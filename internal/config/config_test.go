@@ -18,7 +18,7 @@ func env(t *testing.T, overrides map[string]string) {
 	t.Helper()
 	for _, name := range []string{
 		"URUNI_DB", "PORT", "URUNI_BASE_URL", "URUNI_UPLOADS_DIR", "URUNI_BACKUP_DIR",
-		"SMTP_URL", "URUNI_LOG_LEVEL", "URUNI_LOG_FORMAT",
+		"URUNI_LOG_LEVEL", "URUNI_LOG_FORMAT",
 	} {
 		t.Setenv(name, "")
 	}
@@ -57,11 +57,6 @@ func TestLoadDefaultsEverythingItCan(t *testing.T) {
 	if cfg.LogFormat != LogFormatText {
 		t.Errorf("LogFormat = %q, want %q", cfg.LogFormat, LogFormatText)
 	}
-	// Optional, and unset here - emailed backups (M8) are the only thing that
-	// needs it.
-	if cfg.SMTPURL != "" {
-		t.Errorf("SMTPURL = %q, want empty", cfg.SMTPURL)
-	}
 }
 
 func TestLoadReadsEveryVariable(t *testing.T) {
@@ -71,11 +66,8 @@ func TestLoadReadsEveryVariable(t *testing.T) {
 		"URUNI_UPLOADS_DIR": "/uploads",
 		"URUNI_BACKUP_DIR":  "/backups",
 		"URUNI_BASE_URL":    testBaseURL + "/",
-		// Credential-free on purpose: this test is about every variable being
-		// read through, and an SMTP URL needs no auth to prove that.
-		"SMTP_URL":         "smtp://smtp.example.com:587",
-		"URUNI_LOG_LEVEL":  "debug",
-		"URUNI_LOG_FORMAT": "json",
+		"URUNI_LOG_LEVEL":   "debug",
+		"URUNI_LOG_FORMAT":  "json",
 	})
 
 	cfg, err := Load()
@@ -91,7 +83,6 @@ func TestLoadReadsEveryVariable(t *testing.T) {
 		// The trailing slash is trimmed so callers can join paths without
 		// producing "https://host//report/xyz".
 		BaseURL:   testBaseURL,
-		SMTPURL:   "smtp://smtp.example.com:587",
 		LogLevel:  slog.LevelDebug,
 		LogFormat: LogFormatJSON,
 	}
@@ -113,8 +104,6 @@ func TestLoadRejectsBadValues(t *testing.T) {
 		{"port above range", map[string]string{"PORT": "70000"}, "PORT"},
 		{"base url relative", map[string]string{"URUNI_BASE_URL": "/report"}, "URUNI_BASE_URL"},
 		{"base url no scheme", map[string]string{"URUNI_BASE_URL": "uruni.example.com"}, "URUNI_BASE_URL"},
-		{"smtp url wrong scheme", map[string]string{"SMTP_URL": "https://smtp.example.com"}, "SMTP_URL"},
-		{"smtp url no host", map[string]string{"SMTP_URL": "smtp://"}, "SMTP_URL"},
 		{"log level unknown", map[string]string{"URUNI_LOG_LEVEL": "chatty"}, "URUNI_LOG_LEVEL"},
 		{"log format unknown", map[string]string{"URUNI_LOG_FORMAT": "xml"}, "URUNI_LOG_FORMAT"},
 	}
@@ -153,20 +142,15 @@ func TestLoadRefusesAnUnconfiguredBaseURL(t *testing.T) {
 	}
 }
 
-// SMTP_URL carries a password: if it reached an error message it would reach
-// the container logs, and from there an issue thread.
-func TestLoadNeverEchoesACredential(t *testing.T) {
-	// Invalid on its percent-escape, so it is rejected *as a URL* - the path
-	// where echoing the value would be most tempting. Assembled from parts
-	// rather than written as one literal so the fixture does not itself read as
-	// a checked-in `scheme://user:pass@host` credential.
-	const canary = "hunter2"
-	smtp := "smtps://bendahara:" + canary + "@smtp.example.com:587/%zz"
-	env(t, map[string]string{"URUNI_BASE_URL": testBaseURL, "SMTP_URL": smtp})
-	if _, err := Load(); err == nil {
-		t.Fatal("Load() with a malformed SMTP_URL = nil, want an error")
-	} else if strings.Contains(err.Error(), canary) {
-		t.Errorf("Load() leaked the SMTP password: %q", err)
+// #327: emailed backups were cut (ADR-012), so SMTP_URL is no longer a
+// variable. An operator who still sets one - even a malformed one - boots
+// normally rather than failing on a line that configures nothing.
+func TestLoadIgnoresSMTPURL(t *testing.T) {
+	env(t, map[string]string{"URUNI_BASE_URL": testBaseURL})
+	t.Setenv("SMTP_URL", "not a url %zz")
+
+	if _, err := Load(); err != nil {
+		t.Fatalf("Load() = %v, want nil", err)
 	}
 }
 

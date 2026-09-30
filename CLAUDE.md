@@ -132,7 +132,7 @@ Build one slice at a time and **stop for review** before the next. Do not run ah
 5. **Auth** — local sessions.
 6. **PWA UI** — the everyday loop: record → home (balance hero + reconciliation status) → reconcile flow.
 7. **Public report** — SSR, filters (month/purpose/member/in-out/dues), stable unguessable slug, `noindex`, optional regenerate.
-8. **Backup/export** — JSON (canonical + import), Excel, scheduled dumps, optional SMTP email.
+8. **Backup/export** — JSON (canonical + import), Excel, scheduled dumps.
 9. **Deploy** — Dockerfile, compose, Caddy, and a short self-host README.
 
 ## Definition of done (per slice)
