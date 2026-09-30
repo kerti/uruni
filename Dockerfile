@@ -6,7 +6,7 @@
 # the `npm ci` stage under QEMU instead would cost tens of minutes per release.
 
 # 1) Build the React PWA -> web/dist
-FROM --platform=$BUILDPLATFORM node:22-alpine AS web
+FROM --platform=$BUILDPLATFORM node:24-alpine AS web
 WORKDIR /web
 COPY web/package*.json ./
 RUN npm ci
