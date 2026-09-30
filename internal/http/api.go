@@ -296,10 +296,12 @@ func (a *api) routes(r chi.Router) {
 		r.Get("/backups", a.listBackups)
 		r.Get("/backups/{name}", a.downloadStoredBackup)
 
-		// Restore from an uploaded backup (M6.39, #325, ADR-012):
-		// inspect/preview, then confirm with a password re-entry -
-		// restore.go's own doc comment has the two-step shape and why.
+		// Restore from an uploaded backup (M6.39, #325, ADR-012), or from one
+		// of the server's own stored dumps (M6.40, #326): inspect/preview
+		// (from either source), then confirm with a password re-entry -
+		// restore.go's own doc comment has the three-route shape and why.
 		r.Post("/restore/inspect", a.inspectRestoreUpload)
+		r.Post("/restore/inspect-stored/{name}", a.inspectStoredBackup)
 		r.Post("/restore/confirm", a.confirmRestore)
 	})
 }

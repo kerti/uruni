@@ -1,9 +1,11 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { createRef } from 'react'
+import { act, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import RestoreDialog from '@/screens/Settings/RestoreDialog'
 import { copy } from '@/copy/id'
+import type { RestoreDialogHandle } from '@/screens/Settings/RestoreDialog'
 
 const text = copy.settings.backup
 const confirmText = copy.restoreConfirm
@@ -32,10 +34,12 @@ const stagedPreview = {
   },
 }
 
-function stubFetch(overrides: { inspect?: () => Response; confirm?: () => Response }) {
+function stubFetch(overrides: { inspect?: () => Response; inspectStored?: () => Response; confirm?: () => Response }) {
   const fetchMock = vi.fn((input: RequestInfo | URL) => {
     const url = requestURL(input)
     if (url === '/api/restore/inspect') return Promise.resolve((overrides.inspect ?? (() => jsonResponse(stagedPreview)))())
+    if (url.startsWith('/api/restore/inspect-stored/'))
+      return Promise.resolve((overrides.inspectStored ?? (() => jsonResponse(stagedPreview)))())
     if (url === '/api/restore/confirm') return Promise.resolve((overrides.confirm ?? (() => jsonResponse({})))())
     throw new Error(`stubFetch: unexpected fetch to ${url}`)
   })
@@ -124,5 +128,62 @@ describe('RestoreDialog', () => {
 
     await waitFor(() => expect(screen.queryByLabelText(confirmText.passwordLabel)).not.toBeInTheDocument())
     expect(fetchMock).not.toHaveBeenCalledWith('/api/restore/confirm', expect.anything())
+  })
+
+  // #326: the Cadangan card's per-row "pulihkan" control skips the file
+  // picker entirely and reaches this same dialog through its ref handle -
+  // everything past the inspect call (the preview, the password field, the
+  // confirm button above) is the identical markup the file-picked cases
+  // above already cover, so this test only needs to prove the entry point
+  // itself reaches the right server route.
+  it('opens the confirm dialog with the preview when started from a stored backup, via the ref handle', async () => {
+    const fetchMock = stubFetch({})
+    const ref = createRef<RestoreDialogHandle>()
+    render(<RestoreDialog ref={ref} />)
+
+    ref.current?.openForStoredBackup('uruni-20260930-010000-daily-fv1-aaaaaaaaaaaa.zip')
+
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenCalledWith(
+        '/api/restore/inspect-stored/uruni-20260930-010000-daily-fv1-aaaaaaaaaaaa.zip',
+        expect.objectContaining({ method: 'POST' }),
+      ),
+    )
+    expect(await screen.findByText(confirmText.dateLabel('2026-09-28'))).toBeInTheDocument()
+  })
+
+  // A stored backup can be pruned by retention between the list loading and
+  // the tap: the failure has to show inside the dialog, not behind its overlay.
+  it('shows an inspect failure inside the open dialog', async () => {
+    stubFetch({ inspectStored: () => jsonResponse({ error: { code: 'not_found', message: 'Not found.' } }, 404) })
+    const ref = createRef<RestoreDialogHandle>()
+    render(<RestoreDialog ref={ref} />)
+
+    act(() => ref.current?.openForStoredBackup('uruni-20260930-010000-daily-fv1-aaaaaaaaaaaa.zip'))
+
+    const dialog = await screen.findByRole('dialog')
+    expect(await within(dialog).findByText(common.errors.not_found)).toBeInTheDocument()
+    expect(within(dialog).queryByLabelText(confirmText.passwordLabel)).not.toBeInTheDocument()
+  })
+
+  it("does not carry a cancelled attempt's wrong-password error into the next restore", async () => {
+    const fetchMock = stubFetch({
+      confirm: () => jsonResponse({ error: { code: 'invalid_credentials', message: 'Invalid email or password.' } }, 401),
+    })
+    const user = userEvent.setup()
+    const ref = createRef<RestoreDialogHandle>()
+    render(<RestoreDialog ref={ref} />)
+
+    await chooseFile(fetchMock)
+    await user.type(await screen.findByLabelText(confirmText.passwordLabel), 'wrong-password')
+    await user.click(screen.getByRole('button', { name: confirmText.confirm }))
+    await screen.findByText(common.errors.invalid_credentials)
+    await user.click(screen.getByRole('button', { name: confirmText.cancel }))
+    await waitFor(() => expect(screen.queryByLabelText(confirmText.passwordLabel)).not.toBeInTheDocument())
+
+    act(() => ref.current?.openForStoredBackup('uruni-20260930-010000-daily-fv1-aaaaaaaaaaaa.zip'))
+
+    await screen.findByLabelText(confirmText.passwordLabel)
+    expect(screen.queryByText(common.errors.invalid_credentials)).not.toBeInTheDocument()
   })
 })

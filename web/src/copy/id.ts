@@ -950,6 +950,10 @@ export const copy = {
       // aria-label naming which dump it downloads, the same reasoning
       // Incidentals' own cardAria already carries for its own dense list.
       downloadRowAria: (kind: string, date: string) => `Unduh cadangan ${kind} ${date}`,
+      // #326's own addition: the row's own "pulihkan" control, plain ink
+      // beside the download one, present only on a current-format row -
+      // same aria-naming pattern as downloadRowAria just above.
+      restoreRowAria: (kind: string, date: string) => `Pulihkan cadangan ${kind} ${date}`,
       // #325's own addition: the button that starts the upload+restore
       // flow. A plain outline button, the same visual weight as "Unduh
       // cadangan" above it - restoring is not the everyday action this

@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react'
-import { Download } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import { Download, RotateCcw } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import ErrorState from '@/components/states/ErrorState'
@@ -10,6 +10,7 @@ import { downloadBackup, downloadStoredBackup, listStoredBackups } from '@/lib/b
 import { formatIsoDate } from '@/lib/dates'
 import { useApi } from '@/lib/useApi'
 import RestoreDialog from '@/screens/Settings/RestoreDialog'
+import type { RestoreDialogHandle } from '@/screens/Settings/RestoreDialog'
 import type { StoredBackup } from '@/lib/backup'
 
 const text = copy.settings.backup
@@ -29,6 +30,11 @@ const text = copy.settings.backup
 export default function Backup() {
   const [state, run] = useApi<void>()
   const busy = state.status === 'loading'
+  // Shared with AutoBackupList's own per-row "pulihkan" control (#326): one
+  // RestoreDialog instance runs the whole preview/confirm flow regardless
+  // of whether it started from a picked file or a stored dump's name -
+  // RestoreDialog.tsx's own comment has the reasoning.
+  const restoreDialogRef = useRef<RestoreDialogHandle>(null)
 
   return (
     <section className="flex flex-col gap-3">
@@ -50,9 +56,9 @@ export default function Backup() {
 
       {state.status === 'error' && state.error && <ErrorState error={state.error} onRetry={() => void run(downloadBackup)} />}
 
-      <RestoreDialog />
+      <RestoreDialog ref={restoreDialogRef} />
 
-      <AutoBackupList />
+      <AutoBackupList onRestore={(name) => restoreDialogRef.current?.openForStoredBackup(name)} />
     </section>
   )
 }
@@ -74,16 +80,17 @@ function kindLabel(kind: StoredBackup['kind']): string {
  * The list of server-side dumps ADR-013's own scheduler (and the boot-time
  * format-version check) already wrote to URUNI_BACKUP_DIR - dense rows, no
  * dialog, nothing here to edit: every row is history, not a record this
- * screen can change. Each row's own download sits as plain ink beside the
- * row's text (#257/ui-review: no big outlined button per row), a 44px
- * target the same way every other tappable control on this screen is one.
+ * screen can change (restoring one is a whole separate dialog, RestoreDialog,
+ * this list only ever starts). Each row's own download and restore controls
+ * sit as plain ink beside the row's text (#257/ui-review: no big outlined
+ * button per row), each a 44px target the same way every other tappable
+ * control on this screen is one.
  *
  * An older-format row (is_current_format false) gets the "older version"
- * label in place of anything restore-shaped - there is no restore
- * affordance anywhere in this card yet, current-format or not; #326 is what
- * adds one, and only ever for a current-format row.
+ * label in place of the restore control (#326) - still listed, still
+ * downloadable, never offered for restore.
  */
-function AutoBackupList() {
+function AutoBackupList({ onRestore }: { onRestore: (name: string) => void }) {
   const [listState, listRun] = useApi<StoredBackup[]>()
   const [downloadError, setDownloadError] = useState<ApiError | undefined>(undefined)
   const [downloadingName, setDownloadingName] = useState<string | null>(null)
@@ -133,15 +140,27 @@ function AutoBackupList() {
                   {!item.is_current_format && ` - ${text.olderFormat}`}
                 </span>
               </div>
-              <button
-                type="button"
-                aria-label={text.downloadRowAria(kindLabel(item.kind), formatIsoDate(item.date))}
-                disabled={downloadingName === item.name}
-                onClick={() => void handleDownload(item.name)}
-                className="flex size-11 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground disabled:opacity-50"
-              >
-                <Download aria-hidden="true" className="size-4" />
-              </button>
+              <div className="flex shrink-0 items-center">
+                {item.is_current_format && (
+                  <button
+                    type="button"
+                    aria-label={text.restoreRowAria(kindLabel(item.kind), formatIsoDate(item.date))}
+                    onClick={() => onRestore(item.name)}
+                    className="flex size-11 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground disabled:opacity-50"
+                  >
+                    <RotateCcw aria-hidden="true" className="size-4" />
+                  </button>
+                )}
+                <button
+                  type="button"
+                  aria-label={text.downloadRowAria(kindLabel(item.kind), formatIsoDate(item.date))}
+                  disabled={downloadingName === item.name}
+                  onClick={() => void handleDownload(item.name)}
+                  className="flex size-11 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground disabled:opacity-50"
+                >
+                  <Download aria-hidden="true" className="size-4" />
+                </button>
+              </div>
             </li>
           ))}
         </ul>

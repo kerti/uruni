@@ -27,6 +27,31 @@ import (
 	"github.com/kerti/uruni/internal/backup"
 )
 
+// resolveStoredBackupPath validates name against backup.ValidDumpName and
+// resolves it to a path inside a.backupDir - the one place a client-
+// supplied backup name is turned into a filesystem path, shared by
+// downloadStoredBackup above and restore.go's inspectStoredBackup (#326),
+// which both address a server-side dump by exactly this identifier, never a
+// client-supplied path.
+//
+// Two checks, deliberately both: ValidDumpName alone would already refuse
+// every path-traversal shape (dumpNamePattern's character classes contain
+// no "/" and no ".."), but resolving the joined path and requiring it stay
+// inside a.backupDir is the same belt-and-suspenders internal/http already
+// applies wherever a path is built from request input elsewhere in this
+// package - cheap, and it costs nothing to keep the two packages' habits
+// matched.
+func (a *api) resolveStoredBackupPath(name string) (string, bool) {
+	if !backup.ValidDumpName(name) {
+		return "", false
+	}
+	full := filepath.Join(a.backupDir, name)
+	if rel, err := filepath.Rel(a.backupDir, full); err != nil || strings.HasPrefix(rel, "..") {
+		return "", false
+	}
+	return full, true
+}
+
 // backupListItem is one dump's own wire shape (GET /api/backups): enough
 // for the Cadangan card to render a row - date, kind, whether it can still
 // be restored - and enough for the download route below to be handed back
@@ -83,32 +108,15 @@ func (a *api) listBackups(w http.ResponseWriter, _ *http.Request) {
 // downloadStoredBackup is GET /api/backups/{name}: streams one already-
 // written dump back out, byte for byte. name must be exactly a filename
 // backup.ListDumps just returned to this same caller - never trusted as a
-// bare path segment, however chi routed it here.
-//
-// Two checks, deliberately both: ValidDumpName alone would already refuse
-// every path-traversal shape (dumpNamePattern's character classes contain
-// no "/" and no ".."), but resolving the joined path and requiring it stay
-// inside a.backupDir is the same belt-and-suspenders internal/http already
-// applies wherever a path is built from request input elsewhere in this
-// package - cheap, and it costs nothing to keep the two packages' habits
-// matched. The listing check (does a dump by exactly this name exist right
-// now) is what turns "a syntactically valid but unknown name" into a plain
-// 404 instead of an attempted read of a file that was never written, or
-// was since pruned by retention.
+// bare path segment, however chi routed it here. resolveStoredBackupPath
+// above is the validation; the os.ReadFile error below (fs.ErrNotExist) is
+// what turns "a syntactically valid but unknown name" into a plain 404
+// instead of a 500, for a name that was never written or was since pruned
+// by retention.
 func (a *api) downloadStoredBackup(w http.ResponseWriter, r *http.Request) {
 	name := chi.URLParam(r, "name")
-	if !backup.ValidDumpName(name) {
-		writeAPIError(w, http.StatusBadRequest, "invalid_argument", "That is not a valid backup name.")
-		return
-	}
-
-	// Belt-and-suspenders on top of ValidDumpName's own pattern match
-	// (which already contains no "/" or ".." in its character classes, so
-	// this can never actually fire against a name that passed it): resolve
-	// the joined path and require it still sit inside a.backupDir before
-	// ever calling os.ReadFile on it.
-	full := filepath.Join(a.backupDir, name)
-	if rel, err := filepath.Rel(a.backupDir, full); err != nil || strings.HasPrefix(rel, "..") {
+	full, ok := a.resolveStoredBackupPath(name)
+	if !ok {
 		writeAPIError(w, http.StatusBadRequest, "invalid_argument", "That is not a valid backup name.")
 		return
 	}
