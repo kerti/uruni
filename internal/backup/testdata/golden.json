@@ -1,0 +1,369 @@
+{
+  "format_version": 1,
+  "users": [
+    {
+      "id": 1,
+      "email": "treasurer@example.org",
+      "password_hash": "argon2id$fake$hash",
+      "created_at": 1700000000
+    }
+  ],
+  "funds": [
+    {
+      "id": 1,
+      "name": "Test Fund",
+      "currency": "IDR",
+      "report_slug": "0000000000000000000fixture",
+      "created_at": 1700000000
+    }
+  ],
+  "accounts": [
+    {
+      "id": 1,
+      "fund_id": 1,
+      "kind": "cash",
+      "name": "Tunai",
+      "created_at": 1700000000,
+      "inactive_on": null
+    },
+    {
+      "id": 2,
+      "fund_id": 1,
+      "kind": "bank",
+      "name": "Bank",
+      "created_at": 1700000000,
+      "inactive_on": null
+    }
+  ],
+  "purposes": [
+    {
+      "id": 1,
+      "fund_id": 1,
+      "kind": "main",
+      "name": "Kas Utama",
+      "created_at": 1700000000
+    },
+    {
+      "id": 2,
+      "fund_id": 1,
+      "kind": "pass_through",
+      "name": "Kas Bidang",
+      "created_at": 1700000000
+    },
+    {
+      "id": 3,
+      "fund_id": 1,
+      "kind": "incidental",
+      "name": "Amplop Contoh",
+      "created_at": 1700000000
+    }
+  ],
+  "dues_tiers": [
+    {
+      "id": 1,
+      "fund_id": 1,
+      "name": "Pelaksana",
+      "created_at": 1700000000
+    }
+  ],
+  "dues_rates": [
+    {
+      "id": 1,
+      "tier_id": 1,
+      "amount": 50000,
+      "effective_from": "2026-01",
+      "created_at": 1700000000
+    }
+  ],
+  "members": [
+    {
+      "id": 1,
+      "fund_id": 1,
+      "name": "Andi",
+      "tier_id": 1,
+      "joined_on": "2026-01-01",
+      "inactive_on": null,
+      "created_at": 1700000000
+    },
+    {
+      "id": 2,
+      "fund_id": 1,
+      "name": "Budi",
+      "tier_id": null,
+      "joined_on": "2026-01-01",
+      "inactive_on": "2026-06-01",
+      "created_at": 1700000000
+    }
+  ],
+  "transfers": [
+    {
+      "id": 1,
+      "fund_id": 1,
+      "kind": "between_accounts",
+      "corrects_transaction_id": null,
+      "created_at": 1700000300
+    }
+  ],
+  "reimbursements": [
+    {
+      "id": 1,
+      "fund_id": 1,
+      "member_id": 1,
+      "purpose_id": 1,
+      "amount": 20000,
+      "incurred_on": "2026-01-05",
+      "waived_on": null,
+      "note": "Parkir",
+      "created_at": 1700000400
+    }
+  ],
+  "transactions": [
+    {
+      "id": 1,
+      "fund_id": 1,
+      "account_id": 1,
+      "purpose_id": 1,
+      "direction": "in",
+      "amount": 500000,
+      "occurred_on": "2026-01-01",
+      "kind": "opening",
+      "member_id": null,
+      "dues_period": null,
+      "reimbursement_id": null,
+      "transfer_id": null,
+      "reverses_transaction_id": null,
+      "note": null,
+      "created_at": 1700000000
+    },
+    {
+      "id": 2,
+      "fund_id": 1,
+      "account_id": 2,
+      "purpose_id": 1,
+      "direction": "in",
+      "amount": 1000000,
+      "occurred_on": "2026-01-01",
+      "kind": "opening",
+      "member_id": null,
+      "dues_period": null,
+      "reimbursement_id": null,
+      "transfer_id": null,
+      "reverses_transaction_id": null,
+      "note": null,
+      "created_at": 1700000001
+    },
+    {
+      "id": 9,
+      "fund_id": 1,
+      "account_id": 1,
+      "purpose_id": 1,
+      "direction": "out",
+      "amount": 20000,
+      "occurred_on": "2026-01-06",
+      "kind": "reimbursement",
+      "member_id": null,
+      "dues_period": null,
+      "reimbursement_id": 1,
+      "transfer_id": null,
+      "reverses_transaction_id": null,
+      "note": null,
+      "created_at": 1700000401
+    },
+    {
+      "id": 3,
+      "fund_id": 1,
+      "account_id": 1,
+      "purpose_id": 1,
+      "direction": "in",
+      "amount": 50000,
+      "occurred_on": "2026-01-10",
+      "kind": "dues",
+      "member_id": 1,
+      "dues_period": "2026-01",
+      "reimbursement_id": null,
+      "transfer_id": null,
+      "reverses_transaction_id": null,
+      "note": null,
+      "created_at": 1700000100
+    },
+    {
+      "id": 4,
+      "fund_id": 1,
+      "account_id": 1,
+      "purpose_id": 1,
+      "direction": "out",
+      "amount": 50000,
+      "occurred_on": "2026-01-11",
+      "kind": "adjustment",
+      "member_id": 1,
+      "dues_period": "2026-01",
+      "reimbursement_id": null,
+      "transfer_id": null,
+      "reverses_transaction_id": 3,
+      "note": null,
+      "created_at": 1700000101
+    },
+    {
+      "id": 5,
+      "fund_id": 1,
+      "account_id": 1,
+      "purpose_id": 3,
+      "direction": "in",
+      "amount": 30000,
+      "occurred_on": "2026-02-01",
+      "kind": "normal",
+      "member_id": 1,
+      "dues_period": null,
+      "reimbursement_id": null,
+      "transfer_id": null,
+      "reverses_transaction_id": null,
+      "note": null,
+      "created_at": 1700000200
+    },
+    {
+      "id": 6,
+      "fund_id": 1,
+      "account_id": 2,
+      "purpose_id": 2,
+      "direction": "in",
+      "amount": 75000,
+      "occurred_on": "2026-02-02",
+      "kind": "normal",
+      "member_id": null,
+      "dues_period": null,
+      "reimbursement_id": null,
+      "transfer_id": null,
+      "reverses_transaction_id": null,
+      "note": null,
+      "created_at": 1700000201
+    },
+    {
+      "id": 7,
+      "fund_id": 1,
+      "account_id": 1,
+      "purpose_id": 1,
+      "direction": "out",
+      "amount": 100000,
+      "occurred_on": "2026-02-03",
+      "kind": "transfer",
+      "member_id": null,
+      "dues_period": null,
+      "reimbursement_id": null,
+      "transfer_id": 1,
+      "reverses_transaction_id": null,
+      "note": null,
+      "created_at": 1700000301
+    },
+    {
+      "id": 8,
+      "fund_id": 1,
+      "account_id": 2,
+      "purpose_id": 1,
+      "direction": "in",
+      "amount": 100000,
+      "occurred_on": "2026-02-03",
+      "kind": "transfer",
+      "member_id": null,
+      "dues_period": null,
+      "reimbursement_id": null,
+      "transfer_id": 1,
+      "reverses_transaction_id": null,
+      "note": null,
+      "created_at": 1700000302
+    }
+  ],
+  "receipts": [
+    {
+      "id": 1,
+      "fund_id": 1,
+      "transaction_id": null,
+      "reimbursement_id": 1,
+      "path": "0000000000000000000000000000ff.jpg",
+      "uploaded_at": 1700000500
+    }
+  ],
+  "reconciliations": [
+    {
+      "id": 1,
+      "fund_id": 1,
+      "performed_at": 1700001000,
+      "through_transaction_id": null,
+      "note": null,
+      "created_at": 1700001000
+    }
+  ],
+  "reconciliation_lines": [
+    {
+      "id": 1,
+      "fund_id": 1,
+      "reconciliation_id": 1,
+      "account_id": 1,
+      "recorded_amount": 410000,
+      "actual_amount": 410000,
+      "difference_amount": 0,
+      "resolution": "matched",
+      "adjustment_transaction_id": null
+    },
+    {
+      "id": 2,
+      "fund_id": 1,
+      "reconciliation_id": 1,
+      "account_id": 2,
+      "recorded_amount": 1175000,
+      "actual_amount": 1180000,
+      "difference_amount": 5000,
+      "resolution": "left_open",
+      "adjustment_transaction_id": null
+    }
+  ],
+  "incidentals": [
+    {
+      "purpose_id": 3,
+      "occasion": "Contoh amplop",
+      "target_amount": 100000,
+      "opened_on": "2026-02-01",
+      "closed_on": null,
+      "minimum_per_member": 10000,
+      "created_at": 1700000150
+    }
+  ],
+  "incidental_recipients": [
+    {
+      "fund_id": 1,
+      "purpose_id": 3,
+      "member_id": 2
+    }
+  ],
+  "totals": {
+    "funds": [
+      {
+        "fund_id": 1,
+        "balance": 1585000
+      }
+    ],
+    "accounts": [
+      {
+        "account_id": 1,
+        "balance": 410000
+      },
+      {
+        "account_id": 2,
+        "balance": 1175000
+      }
+    ],
+    "purposes": [
+      {
+        "purpose_id": 1,
+        "balance": 1480000
+      },
+      {
+        "purpose_id": 2,
+        "balance": 75000
+      },
+      {
+        "purpose_id": 3,
+        "balance": 30000
+      }
+    ]
+  }
+}

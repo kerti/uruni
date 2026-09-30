@@ -44,3 +44,17 @@ RETURNING id, tier_id, amount, effective_from, created_at;
 -- name: DeleteDuesRate :exec
 DELETE FROM dues_rate
 WHERE id = ?;
+
+-- ListDuesRatesByFund is the backup export's own read (ADR-012, #323): every
+-- rate across every tier the fund owns. dues_rate carries no fund_id of its
+-- own, so the join through dues_tier is the only way to scope it - the same
+-- reasoning GetDuesRateForFund's own comment gives. Ordered by id purely for
+-- the export's own deterministic byte order, not a claim about the rate's
+-- effective date (ListDuesRatesByTier above already owns that ordering for
+-- its own caller).
+-- name: ListDuesRatesByFund :many
+SELECT dues_rate.id, dues_rate.tier_id, dues_rate.amount, dues_rate.effective_from, dues_rate.created_at
+FROM dues_rate
+JOIN dues_tier ON dues_tier.id = dues_rate.tier_id
+WHERE dues_tier.fund_id = ?
+ORDER BY dues_rate.id;

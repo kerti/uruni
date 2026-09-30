@@ -897,6 +897,21 @@ export const copy = {
       add: 'Buka amplop',
       cardAria: (occasion: string) => `Lihat ${occasion}`,
     },
+    // The whole fund as one file (M6.37, #323, ADR-012). No dialog and no
+    // list here, unlike every section above it - one button, one action,
+    // the same shape reasoning FundName's own comment gives for a section
+    // with nothing to browse.
+    backup: {
+      heading: 'Cadangan',
+      // The one warm line the issue asks for: what the file holds, and
+      // why that means keeping it somewhere safe. "info login" rather than
+      // spelling out "kata sandi" - the file carries the password hash,
+      // not the password itself, and this line is a caution, not a
+      // technical inventory of the zip's contents.
+      body: 'Satu file berisi seluruh catatan kas — termasuk info login. Simpan di tempat yang aman.',
+      download: 'Unduh cadangan',
+      downloading: 'Menyiapkan…',
+    },
   },
   // Correcting a posted row's peruntukan (#276, ADR-033): the marker on a
   // row that has already been corrected, and the one-field dialog that does

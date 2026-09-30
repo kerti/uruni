@@ -45,6 +45,17 @@ FROM receipt
 WHERE fund_id = ? AND reimbursement_id IN (sqlc.slice('reimbursement_ids'))
 ORDER BY id;
 
+-- ListReceiptsByFund is the backup export's own read (ADR-012, #323): every
+-- receipt row the fund owns, so the zip's receipts/ folder and uruni.json's
+-- receipt rows name the same files (path is the on-disk filename under
+-- URUNI_UPLOADS_DIR, ADR-011). Ordered by id purely for the export's own
+-- deterministic byte order.
+-- name: ListReceiptsByFund :many
+SELECT id, fund_id, transaction_id, reimbursement_id, path, uploaded_at
+FROM receipt
+WHERE fund_id = ?
+ORDER BY id;
+
 -- DeleteReceipt removes a wrong or duplicate photo - ADR-011 states plainly
 -- that "a wrong photo is replaceable" and `receipt` rows are insertable and
 -- deletable, unlike a ledger row. Scoped by id alone, the same shape as

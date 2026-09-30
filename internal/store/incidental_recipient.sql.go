@@ -87,3 +87,41 @@ func (q *Queries) ListIncidentalRecipients(ctx context.Context, purposeID int64)
 	}
 	return items, nil
 }
+
+const listIncidentalRecipientsByFund = `-- name: ListIncidentalRecipientsByFund :many
+SELECT fund_id, purpose_id, member_id
+FROM incidental_recipient
+WHERE fund_id = ?
+ORDER BY purpose_id, member_id
+`
+
+// ListIncidentalRecipientsByFund is the backup export's own read (ADR-012,
+// #323): every recipient row across every envelope the fund owns, in its
+// own raw columns (fund_id, purpose_id, member_id) rather than
+// ListIncidentalRecipients' joined member_name - the export names the
+// table's own columns, and a restore reads member_id, not a name. The table
+// has no single-column id (its primary key is the (fund_id, purpose_id,
+// member_id) triple), so this orders by that triple directly - purely for
+// the export's own deterministic byte order.
+func (q *Queries) ListIncidentalRecipientsByFund(ctx context.Context, fundID int64) ([]IncidentalRecipient, error) {
+	rows, err := q.db.QueryContext(ctx, listIncidentalRecipientsByFund, fundID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []IncidentalRecipient{}
+	for rows.Next() {
+		var i IncidentalRecipient
+		if err := rows.Scan(&i.FundID, &i.PurposeID, &i.MemberID); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}

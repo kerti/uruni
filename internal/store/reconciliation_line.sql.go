@@ -160,6 +160,53 @@ func (q *Queries) ListReconciliationLines(ctx context.Context, reconciliationID 
 	return items, nil
 }
 
+const listReconciliationLinesByFund = `-- name: ListReconciliationLinesByFund :many
+SELECT id, fund_id, reconciliation_id, account_id, recorded_amount, actual_amount,
+       difference_amount, resolution, adjustment_transaction_id
+FROM reconciliation_line
+WHERE fund_id = ?
+ORDER BY id
+`
+
+// ListReconciliationLinesByFund is the backup export's own read (ADR-012,
+// #323): every line across every snapshot, matched or not - unlike
+// ListOpenReconciliationLinesByFund above, nothing here is filtered by
+// resolution or superseded by a later count, since a restore needs the
+// whole frozen history back, not just what is still open today. Ordered by
+// id purely for the export's own deterministic byte order.
+func (q *Queries) ListReconciliationLinesByFund(ctx context.Context, fundID int64) ([]ReconciliationLine, error) {
+	rows, err := q.db.QueryContext(ctx, listReconciliationLinesByFund, fundID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ReconciliationLine{}
+	for rows.Next() {
+		var i ReconciliationLine
+		if err := rows.Scan(
+			&i.ID,
+			&i.FundID,
+			&i.ReconciliationID,
+			&i.AccountID,
+			&i.RecordedAmount,
+			&i.ActualAmount,
+			&i.DifferenceAmount,
+			&i.Resolution,
+			&i.AdjustmentTransactionID,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const reconciliationDifferenceTotal = `-- name: ReconciliationDifferenceTotal :one
 SELECT CAST(COALESCE(SUM(difference_amount), 0) AS INTEGER) AS difference_amount
 FROM reconciliation_line

@@ -14,6 +14,19 @@ FROM reconciliation_line
 WHERE reconciliation_id = ?
 ORDER BY account_id;
 
+-- ListReconciliationLinesByFund is the backup export's own read (ADR-012,
+-- #323): every line across every snapshot, matched or not - unlike
+-- ListOpenReconciliationLinesByFund above, nothing here is filtered by
+-- resolution or superseded by a later count, since a restore needs the
+-- whole frozen history back, not just what is still open today. Ordered by
+-- id purely for the export's own deterministic byte order.
+-- name: ListReconciliationLinesByFund :many
+SELECT id, fund_id, reconciliation_id, account_id, recorded_amount, actual_amount,
+       difference_amount, resolution, adjustment_transaction_id
+FROM reconciliation_line
+WHERE fund_id = ?
+ORDER BY id;
+
 -- Whether the fund as a whole came out even. Cast so the trust core gets an
 -- int64 rather than interface{} - sqlc's SQLite engine cannot infer the type of
 -- a summed expression (ADR-024).
