@@ -1,4 +1,4 @@
-import { useRef, useState, type FormEvent } from 'react'
+import { forwardRef, useImperativeHandle, useRef, useState, type FormEvent } from 'react'
 
 import ErrorState from '@/components/states/ErrorState'
 import { Button } from '@/components/ui/button'
@@ -7,12 +7,21 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { copy } from '@/copy/id'
 import { formatIDR } from '@/lib/money'
-import { confirmRestore, inspectRestoreUpload } from '@/lib/restore'
+import { confirmRestore, inspectRestoreUpload, inspectStoredRestore } from '@/lib/restore'
 import { useApi } from '@/lib/useApi'
 import type { FundRestorePreview, RestorePreview } from '@/lib/restore'
 
 const text = copy.settings.backup
 const confirmText = copy.restoreConfirm
+
+/** RestoreDialog's own imperative surface (#326): the Cadangan card's
+ * per-row "pulihkan" control has no file to pick, so it reaches past the
+ * file-picker trigger this component renders and starts the identical
+ * inspect-then-confirm flow directly, against a stored backup's own
+ * server-side name instead of an uploaded file. */
+export interface RestoreDialogHandle {
+  openForStoredBackup: (name: string) => void
+}
 
 /**
  * The whole upload-then-restore flow (M6.39, #325, ADR-012), as one
@@ -23,21 +32,44 @@ const confirmText = copy.restoreConfirm
  * (inspectRestoreUpload, confirmRestore), never the raw zip sent twice -
  * lib/restore.ts's own comment has the reasoning.
  *
+ * #326 adds a second way into the same dialog: the auto-backup list's own
+ * "pulihkan" row action, one per current-format stored dump, calls
+ * openForStoredBackup (exposed via ref) instead of picking a file - the
+ * preview/confirm step that follows is exactly this component's existing
+ * one, unchanged, so there is no second restore implementation for a
+ * stored backup to run through.
+ *
  * open/preview/token all live here rather than in Backup.tsx: the trigger
  * button is the only piece the card itself needs to render, so this
  * component's own exported surface is just the button plus the dialog it
- * owns.
+ * owns (plus, now, the ref handle above).
  */
-export default function RestoreDialog() {
+const RestoreDialog = forwardRef<RestoreDialogHandle>(function RestoreDialog(_props, ref) {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [inspectState, runInspect] = useApi<{ token: string; preview: RestorePreview }>()
   const [confirmState, runConfirm] = useApi<void>()
   const [password, setPassword] = useState('')
   const [open, setOpen] = useState(false)
+  // useApi has no reset, and this one dialog instance outlives every restore
+  // it runs: without this flag a wrong-password error from a cancelled
+  // attempt would still sit under the next preview's password field.
+  const [confirmAttempted, setConfirmAttempted] = useState(false)
 
   const inspecting = inspectState.status === 'loading'
   const confirming = confirmState.status === 'loading'
   const staged = inspectState.status === 'success' ? inspectState.data : undefined
+
+  useImperativeHandle(ref, () => ({
+    openForStoredBackup(name: string) {
+      setPassword('')
+      setConfirmAttempted(false)
+      setOpen(true)
+      void runInspect(async () => {
+        const result = await inspectStoredRestore(name)
+        return { token: result.token, preview: result.preview }
+      })
+    },
+  }))
 
   function handleFileChosen(event: React.ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0]
@@ -48,6 +80,7 @@ export default function RestoreDialog() {
     if (!file) return
 
     setPassword('')
+    setConfirmAttempted(false)
     setOpen(true)
     void runInspect(async () => {
       const result = await inspectRestoreUpload(file)
@@ -64,6 +97,7 @@ export default function RestoreDialog() {
   function handleSubmit(event: FormEvent) {
     event.preventDefault()
     if (!staged || password === '') return
+    setConfirmAttempted(true)
     void runConfirm(async () => {
       await confirmRestore(staged.token, password)
       // Every session is gone now, including this one - the only correct
@@ -99,13 +133,18 @@ export default function RestoreDialog() {
         {inspecting ? text.inspecting : text.restoreLabel}
       </Button>
 
-      {inspectState.status === 'error' && inspectState.error && <ErrorState error={inspectState.error} />}
-
       <Dialog open={open} onOpenChange={(next) => !next && handleClose()}>
         <DialogContent closeLabel={copy.common.close}>
           <DialogHeader>
             <DialogTitle>{confirmText.heading}</DialogTitle>
           </DialogHeader>
+
+          {/* Inspect runs with the dialog already open (either entry point),
+              so its progress and its failure - e.g. a stored backup pruned
+              by retention since the list loaded - belong in here, not
+              behind the overlay. */}
+          {inspecting && <p className="text-sm text-muted-foreground">{text.inspecting}</p>}
+          {inspectState.status === 'error' && inspectState.error && <ErrorState error={inspectState.error} />}
 
           {staged && (
             <form className="flex flex-col gap-3" onSubmit={handleSubmit} noValidate>
@@ -135,7 +174,7 @@ export default function RestoreDialog() {
                 />
               </div>
 
-              {confirmState.status === 'error' && confirmState.error && <ErrorState error={confirmState.error} />}
+              {confirmAttempted && confirmState.status === 'error' && confirmState.error && <ErrorState error={confirmState.error} />}
 
               <DialogFooter className="mt-1">
                 <Button type="button" variant="outline" className="h-11" disabled={confirming} onClick={handleClose}>
@@ -151,7 +190,9 @@ export default function RestoreDialog() {
       </Dialog>
     </>
   )
-}
+})
+
+export default RestoreDialog
 
 /** One preview line's own wording, chosen by status and - for a kept fund -
  * whether the file carries a cutoff date for it at all (fundLine's own

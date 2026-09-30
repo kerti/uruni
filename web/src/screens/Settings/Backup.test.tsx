@@ -8,7 +8,13 @@ import { formatIsoDate } from '@/lib/dates'
 import { todayISODate } from '@/lib/dates'
 
 const text = copy.settings.backup
+const confirmText = copy.restoreConfirm
 const common = copy.common
+
+const stagedPreview = {
+  token: 'a-fresh-token',
+  preview: { date: '2026-09-30', total: 1_000_000, funds: [{ fund_id: 1, name: 'Kas RT 05', status: 'kept', transactions_lost: 0 }] },
+}
 
 afterEach(() => {
   vi.unstubAllGlobals()
@@ -53,11 +59,14 @@ function requestURL(input: RequestInfo | URL): string {
  * fail loudly on an unexpected path rather than silently returning
  * undefined (which would surface as a confusing "res.ok of undefined").
  */
-function stubFetch(overrides: { download?: () => Response; list?: () => Response }) {
+function stubFetch(overrides: { download?: () => Response; list?: () => Response; restoreInspectStored?: () => Response }) {
   const fetchMock = vi.fn((input: RequestInfo | URL) => {
     const url = requestURL(input)
     if (url === '/api/backup') return Promise.resolve((overrides.download ?? zipResponse)())
     if (url === '/api/backups') return Promise.resolve((overrides.list ?? emptyListResponse)())
+    if (url.startsWith('/api/restore/inspect-stored/')) {
+      return Promise.resolve((overrides.restoreInspectStored ?? (() => jsonResponse(stagedPreview)))())
+    }
     if (url.startsWith('/api/backups/')) {
       // The row-download route: not used unless a test names one.
       throw new Error(`stubFetch: unexpected download of ${url} - pass it its own response`)
@@ -247,6 +256,58 @@ describe('Settings backup card - automatic backup list', () => {
     const user = userEvent.setup()
     await user.click(screen.getByRole('button', { name: common.retry }))
     await waitFor(() => expect(callsToList()).toHaveLength(2))
+  })
+
+  it('shows a pulihkan control only on a current-format row', async () => {
+    stubFetch({
+      list: () =>
+        jsonResponse([
+          {
+            name: 'uruni-20260930-010000-daily-fv1-aaaaaaaaaaaa.zip',
+            date: '2026-09-30',
+            kind: 'daily',
+            format_version: 1,
+            is_current_format: true,
+            size_bytes: 1024,
+          },
+          {
+            name: 'uruni-20260101-010000-daily-fv0-cccccccccccc.zip',
+            date: '2026-01-01',
+            kind: 'daily',
+            format_version: 0,
+            is_current_format: false,
+            size_bytes: 1024,
+          },
+        ]),
+    })
+    render(<Backup />)
+
+    const rows = await screen.findAllByRole('listitem')
+    expect(
+      within(rows[0]).getByRole('button', { name: text.restoreRowAria(text.kindDaily, formatIsoDate('2026-09-30')) }),
+    ).toBeInTheDocument()
+    expect(within(rows[1]).queryByRole('button', { name: /pulih/i })).not.toBeInTheDocument()
+  })
+
+  it('starts the restore flow from a stored backup when its row control is tapped', async () => {
+    const name = 'uruni-20260930-010000-daily-fv1-aaaaaaaaaaaa.zip'
+    const fetchMock = stubFetch({
+      list: () => jsonResponse([{ name, date: '2026-09-30', kind: 'daily', format_version: 1, is_current_format: true, size_bytes: 1024 }]),
+    })
+
+    const user = userEvent.setup()
+    render(<Backup />)
+
+    const restoreButton = await screen.findByRole('button', { name: text.restoreRowAria(text.kindDaily, formatIsoDate('2026-09-30')) })
+    await user.click(restoreButton)
+
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenCalledWith(`/api/restore/inspect-stored/${name}`, expect.objectContaining({ method: 'POST' })),
+    )
+    // Past this point it is the identical confirm dialog RestoreDialog.test.tsx
+    // already covers in depth - only the entry point differs, so this is the
+    // one fact worth proving here.
+    expect(await screen.findByText(confirmText.dateLabel('2026-09-30'))).toBeInTheDocument()
   })
 
   it('gives every row download control a touch target at least 44px', async () => {

@@ -2,7 +2,12 @@
 // #325, ADR-012): POST /api/restore/inspect (multipart, answers with a
 // preview and a short-lived token) and POST /api/restore/confirm (the
 // token plus the treasurer's current password - the only call that
-// actually changes anything).
+// actually changes anything). inspectStoredRestore (M6.40, #326) is the
+// same first step for one of the server's own stored dumps: no file, no
+// multipart body - just the name GET /api/backups already listed - and it
+// answers with the identical RestoreInspectResult shape, so confirmRestore
+// below never needs to know which of the two inspect calls staged what it
+// is about to confirm.
 
 import { apiFetch } from '@/lib/api'
 
@@ -49,6 +54,20 @@ export function inspectRestoreUpload(file: File): Promise<RestoreInspectResult> 
   return apiFetch<RestoreInspectResult>('/api/restore/inspect', {
     method: 'POST',
     body: form,
+  })
+}
+
+/**
+ * POST /api/restore/inspect-stored/{name} - the stored-backup twin of
+ * inspectRestoreUpload above: name is a StoredBackup's own `name` (lib/
+ * backup.ts), the exact server-side identifier GET /api/backups already
+ * handed the client, never a path. Changes nothing server-side either -
+ * an older-format dump is refused here the same way an older-format upload
+ * would be (internal/backup's ParseUpload, the one place that check lives).
+ */
+export function inspectStoredRestore(name: string): Promise<RestoreInspectResult> {
+  return apiFetch<RestoreInspectResult>(`/api/restore/inspect-stored/${encodeURIComponent(name)}`, {
+    method: 'POST',
   })
 }
 

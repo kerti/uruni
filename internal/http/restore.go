@@ -1,12 +1,16 @@
 package http
 
-// Restore from an uploaded backup (M6.39, #325, ADR-012): two routes over
-// internal/backup's ParseUpload/BuildPreview/Restore trio. POST
-// /api/restore/inspect decodes and validates the upload and answers with a
-// preview - date, funds, total, a per-fund kept/removed/added line - well
-// before the treasurer has typed anything. POST /api/restore/confirm takes
-// her password back and the token the inspect step handed her, and is the
-// only route that actually changes anything.
+// Restore from an uploaded backup (M6.39, #325, ADR-012), or from one of the
+// server's own stored dumps (M6.40, #326): three routes over internal/backup's
+// ParseUpload/BuildPreview/Restore trio. POST /api/restore/inspect decodes an
+// upload; POST /api/restore/inspect-stored/{name} reads a dump already
+// sitting in backupDir instead - both validate their input, then share one
+// tail (stageAndRespondWithPreview) that builds the same preview - date,
+// funds, total, a per-fund kept/removed/added line - well before the
+// treasurer has typed anything. POST /api/restore/confirm takes her
+// password back and the token whichever inspect step handed her, and is the
+// only route that actually changes anything - it does not care which
+// inspect route staged what it is about to confirm.
 //
 // Two steps rather than one upload-and-restore call, and a server-side
 // stash rather than asking the client to hold the parsed upload and send
@@ -28,9 +32,13 @@ import (
 	"encoding/hex"
 	"errors"
 	"io"
+	"io/fs"
 	"net/http"
+	"os"
 	"sync"
 	"time"
+
+	"github.com/go-chi/chi/v5"
 
 	"github.com/kerti/uruni/internal/backup"
 )
@@ -144,6 +152,66 @@ func (a *api) inspectRestoreUpload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	a.stageAndRespondWithPreview(w, r, parsed)
+}
+
+// inspectStoredBackup is POST /api/restore/inspect-stored/{name}: the same
+// inspect step as inspectRestoreUpload above, except the zip comes from a
+// dump already sitting in backupDir rather than a multipart upload - the
+// "run #325's restore path end to end... with the file read from the
+// backup directory instead of uploaded" issue #326 asks for. name is
+// resolved through resolveStoredBackupPath (backup.go), the exact same
+// server-side-identifier validation GET /api/backups/{name} already uses:
+// the client names a dump by the string listBackups gave it, never a path,
+// and a name that is syntactically valid but not actually on disk (unknown,
+// or pruned by retention since the list was fetched) is a plain 404.
+//
+// Everything past that point is backup.ParseUpload itself - the same
+// function, the same sentinel errors, the same
+// writeRestoreParseError mapping inspectRestoreUpload's own malformed-upload
+// case uses. An older-format dump refuses here exactly as a hand-uploaded
+// older-format zip would (ErrFormatVersionOlder), which is what keeps "only
+// current-format backups offer restore" true without this handler having to
+// duplicate that check against backupListItem's own IsCurrentFormat flag -
+// there is exactly one place a format version is ever judged, and this
+// route goes through it like every other path into ParseUpload.
+func (a *api) inspectStoredBackup(w http.ResponseWriter, r *http.Request) {
+	name := chi.URLParam(r, "name")
+	full, ok := a.resolveStoredBackupPath(name)
+	if !ok {
+		writeAPIError(w, http.StatusBadRequest, "invalid_argument", "That is not a valid backup name.")
+		return
+	}
+
+	zipBytes, err := os.ReadFile(full) //nolint:gosec // full is validated by resolveStoredBackupPath exactly as downloadStoredBackup's own read is
+	if err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			writeAPIError(w, http.StatusNotFound, "not_found", "The requested resource was not found.")
+			return
+		}
+		a.logger.Error("reading stored backup for restore", "name", name, "error", err)
+		writeAPIError(w, http.StatusInternalServerError, "internal_error", "Something went wrong.")
+		return
+	}
+
+	parsed, err := backup.ParseUpload(zipBytes)
+	if err != nil {
+		writeRestoreParseError(w, a.logger, err)
+		return
+	}
+
+	a.stageAndRespondWithPreview(w, r, parsed)
+}
+
+// stageAndRespondWithPreview is inspectRestoreUpload's and
+// inspectStoredBackup's shared tail: build the preview against the live
+// database, stash the parsed document under a fresh token, answer with
+// both. Neither caller writes anything before this point, and this
+// function itself writes nothing to the database either - only
+// restoreStage's in-process map, the same one-slot stash either inspect
+// route replaces wholesale (a second inspect, from either route, always
+// wins - there is only one confirm dialog on screen at a time).
+func (a *api) stageAndRespondWithPreview(w http.ResponseWriter, r *http.Request, parsed backup.ParsedUpload) {
 	preview, err := backup.BuildPreview(r.Context(), a.queries, parsed.Document)
 	if err != nil {
 		a.logger.Error("building restore preview", "error", err)
