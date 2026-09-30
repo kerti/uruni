@@ -9,6 +9,7 @@
 package http
 
 import (
+	"database/sql"
 	"encoding/json"
 	"io/fs"
 	"log/slog"
@@ -64,7 +65,15 @@ func init() {
 // from and written to (ADR-011). Config.EnsureUploadsDirWritable already
 // proved it exists and is writable before `serve` ever builds a router; nothing
 // here re-checks that.
-func New(assets fs.FS, build Build, l *ledger.Ledger, q store.Querier, logger *slog.Logger, au *auth.Auth, baseURL string, uploadsDir string, backupDir string) http.Handler {
+//
+// sqlDB is #325's addition, alongside l and q: restore.go's own confirm
+// route calls internal/backup.Restore, which needs to open its own write
+// transaction spanning virtually every table - something neither a
+// *ledger.Ledger nor a store.Querier alone can do (see backup.Restore's own
+// doc comment for why it is not routed through the Ledger). It is the same
+// *sql.DB l and q already wrap; passing it a third time costs nothing
+// (ADR-004's single connection).
+func New(assets fs.FS, build Build, l *ledger.Ledger, q store.Querier, sqlDB *sql.DB, logger *slog.Logger, au *auth.Auth, baseURL string, uploadsDir string, backupDir string) http.Handler {
 	r := chi.NewRouter()
 	r.Use(middleware.Recoverer)
 	r.Use(requestLogger(logger))
@@ -79,12 +88,14 @@ func New(assets fs.FS, build Build, l *ledger.Ledger, q store.Querier, logger *s
 	r.Route("/api", (&api{
 		ledger:         l,
 		queries:        q,
+		sqlDB:          sqlDB,
 		logger:         logger,
 		auth:           au,
 		sessionManager: sm,
 		loginLimiter:   newRateLimiter(loginRateLimitMaxAttempts, loginRateLimitWindow),
 		uploadsDir:     uploadsDir,
 		backupDir:      backupDir,
+		restoreStage:   newRestoreStage(),
 	}).routes)
 
 	// The SPA fallback is chi's NotFound handler (ADR-021): chi checks every

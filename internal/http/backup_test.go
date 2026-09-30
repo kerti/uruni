@@ -33,7 +33,7 @@ func getBackup(t *testing.T, r http.Handler) *httptest.ResponseRecorder {
 // can also cover the success path below without a second router.
 func TestDownloadBackupRequiresASession(t *testing.T) {
 	sqlDB := testStoreDB(t)
-	r := New(testAssets(), testBuild, ledger.New(sqlDB), store.New(sqlDB), testLogger(), auth.New(sqlDB), "", t.TempDir(), t.TempDir())
+	r := New(testAssets(), testBuild, ledger.New(sqlDB), store.New(sqlDB), sqlDB, testLogger(), auth.New(sqlDB), "", t.TempDir(), t.TempDir())
 
 	rec := getBackup(t, r)
 	if rec.Code != http.StatusUnauthorized {
@@ -114,7 +114,7 @@ func authedRouterWithBackupDir(t *testing.T) (http.Handler, string) {
 	t.Helper()
 	sqlDB := testStoreDB(t)
 	backupDir := t.TempDir()
-	r := New(testAssets(), testBuild, ledger.New(sqlDB), store.New(sqlDB), testLogger(), auth.New(sqlDB), "", t.TempDir(), backupDir)
+	r := New(testAssets(), testBuild, ledger.New(sqlDB), store.New(sqlDB), sqlDB, testLogger(), auth.New(sqlDB), "", t.TempDir(), backupDir)
 
 	reg := postRegister(t, r, "treasurer@example.org", "correct-horse-battery")
 	if reg.Code != http.StatusCreated {

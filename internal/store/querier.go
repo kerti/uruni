@@ -68,11 +68,39 @@ type Querier interface {
 	// for a never-used duplicate only; a used-then-retired account gets
 	// UpdateAccount's inactive_on instead.
 	DeleteAccount(ctx context.Context, id int64) error
+	DeleteAllAccounts(ctx context.Context) error
+	DeleteAllDuesRates(ctx context.Context) error
+	DeleteAllDuesTiers(ctx context.Context) error
+	// Restore's own queries (M6.39, #325, ADR-012): every table this package's
+	// normal Create* queries also cover, plus two restore only needs. A normal
+	// Create* never takes id - the schema assigns it - so restore, which must
+	// preserve every id verbatim (ADR-012's obligation 2), needs its own insert
+	// naming id explicitly instead of reusing them. The DeleteAll* queries are
+	// restore's other own need: clearing a table in full before re-inserting
+	// exactly what the file holds, the same "delete all sessions" shape
+	// DeleteAllSessions (session.sql) already established for a password reset.
+	//
+	// Table order below follows Document's own field order (internal/backup/
+	// backup.go), itself the migration file's dependency order - not because
+	// these statements must run in that order (internal/backup/restore.go's own
+	// comment says why they need not), but so this file reads the same way the
+	// schema and the export already do.
+	DeleteAllFunds(ctx context.Context) error
+	DeleteAllIncidentalRecipients(ctx context.Context) error
+	DeleteAllIncidentals(ctx context.Context) error
+	DeleteAllMembers(ctx context.Context) error
+	DeleteAllPurposes(ctx context.Context) error
+	DeleteAllReceipts(ctx context.Context) error
+	DeleteAllReconciliationLines(ctx context.Context) error
+	DeleteAllReconciliations(ctx context.Context) error
+	DeleteAllReimbursements(ctx context.Context) error
 	// DeleteAllSessions signs every device out. A password reset (#287) calls it:
 	// the instance holds one login (ADR-030), so "every session" is exactly "every
 	// session of the account whose password just changed", and a reset that left
 	// an old cookie working would not be a reset.
 	DeleteAllSessions(ctx context.Context) error
+	DeleteAllTransactions(ctx context.Context) error
+	DeleteAllTransfers(ctx context.Context) error
 	// DeleteDuesRate is what makes a wrong-month rate correctable at all, since
 	// UNIQUE (tier_id, effective_from) refuses the corrected row otherwise.
 	DeleteDuesRate(ctx context.Context, id int64) error
@@ -660,6 +688,25 @@ type Querier interface {
 	// fund; this query itself stays unscoped, the same shape CloseIncidental
 	// already uses.
 	ReopenIncidental(ctx context.Context, purposeID int64) (Incidental, error)
+	RestoreAccount(ctx context.Context, arg RestoreAccountParams) error
+	RestoreDuesRate(ctx context.Context, arg RestoreDuesRateParams) error
+	RestoreDuesTier(ctx context.Context, arg RestoreDuesTierParams) error
+	RestoreFund(ctx context.Context, arg RestoreFundParams) error
+	RestoreIncidental(ctx context.Context, arg RestoreIncidentalParams) error
+	RestoreIncidentalRecipient(ctx context.Context, arg RestoreIncidentalRecipientParams) error
+	RestoreMember(ctx context.Context, arg RestoreMemberParams) error
+	RestorePurpose(ctx context.Context, arg RestorePurposeParams) error
+	RestoreReceipt(ctx context.Context, arg RestoreReceiptParams) error
+	RestoreReconciliation(ctx context.Context, arg RestoreReconciliationParams) error
+	RestoreReconciliationLine(ctx context.Context, arg RestoreReconciliationLineParams) error
+	RestoreReimbursement(ctx context.Context, arg RestoreReimbursementParams) error
+	// RestoreTransaction is the one insert restore.go must sequence with care
+	// (ADR-012's obligation 1): "transaction" keeps its transaction_named_row_shape
+	// BEFORE INSERT trigger live through a restore - on purpose, it is what
+	// refuses a hand-edited or corrupted backup - so every row naming a
+	// reverses_transaction_id must still be inserted after the row it names.
+	RestoreTransaction(ctx context.Context, arg RestoreTransactionParams) error
+	RestoreTransfer(ctx context.Context, arg RestoreTransferParams) error
 	// TouchSession is the sliding 30-day idle timeout (#113): every read that
 	// proves the session still valid pushes expires_at forward by the same fixed
 	// window, computed by the caller - there is no absolute cap to enforce here.
