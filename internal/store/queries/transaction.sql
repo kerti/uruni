@@ -342,13 +342,23 @@ WHERE fund_id = ? AND purpose_id = ?;
 -- between this envelope's own accounts, and this screen has no reason to
 -- exclude the latter. tr.id IS NULL keeps every row the join found no
 -- matching reclass_purpose transfer for - which is every kind but that one.
+--
+-- A cancelled contribution (ADR-034's widened ADR-029 reversal) is dropped
+-- whole: the reversal row itself (reverses_transaction_id set) and the row
+-- it reverses, the same NOT EXISTS ContributedByIncidentalMember uses.
+-- Otherwise a cancellation reads as money the occasion spent - "Terpakai"
+-- - and the cancelled row as money it collected. Both halves go, so
+-- collected minus disbursed still equals the envelope's balance.
+-- IncidentalTotals above stays unfiltered: the pair nets to zero there.
 -- name: IncidentalActivityTotals :one
 SELECT
   CAST(COALESCE(SUM(CASE WHEN t.direction = 'in' THEN t.amount ELSE 0 END), 0) AS INTEGER) AS collected_amount,
   CAST(COALESCE(SUM(CASE WHEN t.direction = 'out' THEN t.amount ELSE 0 END), 0) AS INTEGER) AS disbursed_amount
 FROM "transaction" t
 LEFT JOIN transfer tr ON tr.id = t.transfer_id AND tr.kind = 'reclass_purpose'
-WHERE t.fund_id = ? AND t.purpose_id = ? AND tr.id IS NULL;
+WHERE t.fund_id = ? AND t.purpose_id = ? AND tr.id IS NULL
+  AND t.reverses_transaction_id IS NULL
+  AND NOT EXISTS (SELECT 1 FROM "transaction" r WHERE r.reverses_transaction_id = t.id);
 
 -- The roster query behind "who has paid / partially / not yet" for one
 -- dues_period, across every member in one pass rather than one query per

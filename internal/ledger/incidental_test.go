@@ -969,6 +969,65 @@ func TestGetIncidentalDetailExcludesTheRolledOutLegAfterAPositiveClose(t *testin
 	}
 }
 
+// A cancelled contribution (ADR-034) is neither collected nor spent: the
+// maintainer's own dev envelope read "Terkumpul 345.000 / Terpakai
+// 210.000" with nothing paid out, because the two reversals counted as
+// disbursements and the rows they cancelled as collections. Both halves
+// drop; collected minus disbursed still equals the envelope's balance.
+func TestGetIncidentalDetailDropsBothHalvesOfACancelledContribution(t *testing.T) {
+	l := newTestLedger(t)
+	f := newFixture(t, l)
+	ctx := context.Background()
+	q := store.New(l.db)
+
+	envelope := openTestIncidental(t, l, f.fundID, "Amplop Kosong", "2026-08-01")
+	bayu := createDuesMember(t, q, f.fundID, duesMemberParams{name: "Bayu"})
+	ijah := createDuesMember(t, q, f.fundID, duesMemberParams{name: "Ijah"})
+	trias := createDuesMember(t, q, f.fundID, duesMemberParams{name: "Trias"})
+
+	post := func(amount money.Amount, memberID *int64) int64 {
+		t.Helper()
+		row, err := l.PostTransaction(ctx, PostTransactionParams{
+			FundID: f.fundID, AccountID: f.cashID, PurposeID: envelope.PurposeID,
+			Direction: "in", Amount: amount, OccurredOn: "2026-08-02", MemberID: memberID,
+		})
+		if err != nil {
+			t.Fatalf("PostTransaction(%d) = %v, want no error", amount, err)
+		}
+		return row.ID
+	}
+	post(20_000, &bayu)
+	post(15_000, &ijah)
+	ijahSecond := post(10_000, &ijah)
+	post(100_000, nil)
+	triasRow := post(200_000, &trias)
+
+	for _, id := range []int64{triasRow, ijahSecond} {
+		if _, err := l.ReverseDuesPayment(ctx, ReverseDuesPaymentParams{FundID: f.fundID, TransactionID: id, OccurredOn: "2026-08-03"}); err != nil {
+			t.Fatalf("ReverseDuesPayment(%d) = %v, want no error", id, err)
+		}
+	}
+
+	detail, err := l.GetIncidentalDetail(ctx, f.fundID, envelope.PurposeID)
+	if err != nil {
+		t.Fatalf("GetIncidentalDetail() = %v, want no error", err)
+	}
+	if detail.Collected != 135_000 {
+		t.Errorf("Collected = %d, want 135000 - a cancelled contribution was never collected", detail.Collected)
+	}
+	if detail.Disbursed != 0 {
+		t.Errorf("Disbursed = %d, want 0 - a cancellation is not money the occasion spent", detail.Disbursed)
+	}
+
+	balance, err := l.PurposeBalance(ctx, f.fundID, envelope.PurposeID)
+	if err != nil {
+		t.Fatalf("PurposeBalance() = %v, want no error", err)
+	}
+	if balance != 135_000 {
+		t.Errorf("PurposeBalance() = %d, want 135000 (the ledger itself is unchanged)", balance)
+	}
+}
+
 // The mirror case on the "in" side: an over-disbursed envelope's shortfall
 // is covered by an "in" leg at the incidental purpose (ADR-031). That leg
 // must not inflate collected_amount either, or a treasurer would read a
