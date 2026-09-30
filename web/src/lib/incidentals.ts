@@ -7,11 +7,14 @@
 // already covers that.
 
 import { apiFetch } from '@/lib/api'
+import type { Member } from '@/lib/setup'
 
 /** One incidental envelope on its own (internal/http/incidentals.go). No
  * fund_id, same reasoning as every other response type in that package.
  * `target_amount` and `closed_on` are nullable: a target is optional at
- * opening (PRD section 7.5), and an envelope stays open until deliberately closed. */
+ * opening (PRD section 7.5), and an envelope stays open until deliberately closed.
+ * `minimum_per_member` is ADR-034's addition (#211) - one figure every
+ * expected member is asked to give, nullable the same way target_amount is. */
 export interface Incidental {
   purpose_id: number
   occasion: string
@@ -19,14 +22,25 @@ export interface Incidental {
   opened_on: string
   closed_on: string | null
   created_at: number
+  minimum_per_member: number | null
+}
+
+/** One member an envelope is for (ADR-034) - id and name together, the
+ * shape GET /api/incidentals/{purposeID}'s own recipients array carries. */
+export interface IncidentalRecipient {
+  member_id: number
+  member_name: string
 }
 
 /** An envelope plus the totals PRD section 7.5 shows for it - what
  * GET /api/incidentals/{purposeID} answers with. Both totals are server-
- * computed; nothing on this screen re-derives them from a transaction list. */
+ * computed; nothing on this screen re-derives them from a transaction list.
+ * `recipients` rides only on this detail response, not the plain list
+ * (ADR-034) - the members this envelope is for. */
 export interface IncidentalDetail extends Incidental {
   collected_amount: number
   disbursed_amount: number
+  recipients: IncidentalRecipient[]
 }
 
 /**
@@ -44,7 +58,13 @@ export function listIncidentals(openOnly = false): Promise<Incidental[]> {
  * separate name field: occasion doubles as the purpose's own name, the same
  * choice openIncidentalRequest's own comment explains.
  */
-export function openIncidental(input: { occasion: string; targetAmount: number | null; openedOn: string }): Promise<Incidental> {
+export function openIncidental(input: {
+  occasion: string
+  targetAmount: number | null
+  openedOn: string
+  minimumPerMember?: number | null
+  recipientMemberIds?: number[]
+}): Promise<Incidental> {
   return apiFetch<Incidental>('/api/incidentals', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -52,6 +72,29 @@ export function openIncidental(input: { occasion: string; targetAmount: number |
       occasion: input.occasion,
       target_amount: input.targetAmount,
       opened_on: input.openedOn,
+      minimum_per_member: input.minimumPerMember ?? null,
+      recipient_member_ids: input.recipientMemberIds ?? [],
+    }),
+  })
+}
+
+/**
+ * PATCH /api/incidentals/{purposeID} - the envelope's minimum and its
+ * recipients (ADR-034), the two facets its own occasion-rename route
+ * (renamePurpose) does not reach. Both fields fully replace their own
+ * facet, never an add/remove delta: a nullable minimum clears with null, and
+ * recipientMemberIds (empty or not) replaces the whole set.
+ */
+export function updateIncidentalParticipation(
+  purposeId: number,
+  input: { minimumPerMember: number | null; recipientMemberIds: number[] },
+): Promise<Incidental> {
+  return apiFetch<Incidental>(`/api/incidentals/${purposeId}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      minimum_per_member: input.minimumPerMember,
+      recipient_member_ids: input.recipientMemberIds,
     }),
   })
 }
@@ -98,4 +141,46 @@ export function closeIncidental(
  */
 export function reopenIncidental(purposeId: number): Promise<Incidental> {
   return apiFetch<Incidental>(`/api/incidentals/${purposeId}/reopen`, { method: 'POST' })
+}
+
+/** The schema's own three participation states (ADR-034, internal/ledger's
+ * MemberParticipationState): English on the wire, Indonesian only on
+ * screen (ADR-014) - see copy.incidentals.participation.states. */
+export type ParticipationStateKind = 'sudah' | 'belum' | 'kurang'
+
+/** One expected member's row on GET /api/incidentals/{purposeID}/participation
+ * (ADR-034): who was expected, how much they have given, and the state that
+ * answers from it. */
+export interface ParticipationState {
+  member: Member
+  contributed_amount: number
+  state: ParticipationStateKind
+}
+
+/** One row of the "Sumbangan lain" list (ADR-034): a contribution from
+ * someone the envelope did not expect. No state - unexpected is not itself
+ * a status, only an amount. */
+export interface UnexpectedContribution {
+  member: Member
+  contributed_amount: number
+}
+
+/** GET /api/incidentals/{purposeID}/participation's whole body (ADR-034):
+ * the envelope's participation table in one round trip, derived from the
+ * ledger at read time - never stored. */
+export interface IncidentalParticipation {
+  expected: ParticipationState[]
+  unexpected: UnexpectedContribution[]
+}
+
+/**
+ * GET /api/incidentals/{purposeID}/participation - PRD section 7.5's "who
+ * has contributed and how much", against this envelope's own expectation
+ * (ADR-034). Fetched alongside the detail, not folded into it: the
+ * incidentalDetailResponse's own comment on Recipients gives the same
+ * reasoning - a derived table costs nothing extra only where it is actually
+ * asked for.
+ */
+export function getIncidentalParticipation(purposeId: number): Promise<IncidentalParticipation> {
+  return apiFetch<IncidentalParticipation>(`/api/incidentals/${purposeId}/participation`)
 }

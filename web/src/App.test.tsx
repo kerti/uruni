@@ -72,9 +72,21 @@ function routedFetch(handlers: { match: (method: string, url: string) => boolean
   return vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
     const url = typeof input === 'string' ? input : input.toString()
     const method = (init?.method ?? 'GET').toUpperCase()
+    // A GET .../participation is a suffix of the same path a test's own
+    // '/api/incidentals/<id>' matcher already satisfies (ADR-034, #333), so
+    // it is resolved before the handler list - never through it - the same
+    // reasoning Incidentals.test.tsx's own routedFetch documents.
+    if (method === 'GET' && url.includes('/participation')) return Promise.resolve(jsonResponse({ expected: [], unexpected: [] }))
     const handler = handlers.find((h) => h.match(method, url))
-    if (!handler) return Promise.reject(new Error(`unstubbed fetch: ${method} ${url}`))
-    return handler.handle()
+    if (handler) return handler.handle()
+    // The "Dari siapa?" picker's own roster (ADR-034, #211, #333) - fetched
+    // on every mount of RecordTransaction; a test not about that field gets
+    // an empty roster rather than an unstubbed rejection, which would
+    // otherwise trip the connectivity watcher and show the offline banner
+    // for the whole app (apiFetch's own catch calls notifyConnectivity(false)
+    // on ANY thrown fetch, not just the one route that failed).
+    if (method === 'GET' && url.includes('/api/members')) return Promise.resolve(jsonResponse({ members: [], next_cursor: null }))
+    return Promise.reject(new Error(`unstubbed fetch: ${method} ${url}`))
   })
 }
 

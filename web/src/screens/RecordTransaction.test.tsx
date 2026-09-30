@@ -60,8 +60,13 @@ function routedFetch(handlers: { match: (method: string, url: string) => boolean
     const url = typeof input === 'string' ? input : input.toString()
     const method = (init?.method ?? 'GET').toUpperCase()
     const handler = handlers.find((h) => h.match(method, url))
-    if (!handler) return Promise.reject(new Error(`unstubbed fetch: ${method} ${url}`))
-    return handler.handle()
+    if (handler) return handler.handle()
+    // The "Dari siapa?" picker's own roster (ADR-034, #211, #333) - fetched
+    // with the rest of the form's data on every mount, so a test not about
+    // that field gets an empty roster rather than reaching for its own
+    // fixture.
+    if (method === 'GET' && url.includes('/api/members')) return Promise.resolve(jsonResponse({ members: [], next_cursor: null }))
+    return Promise.reject(new Error(`unstubbed fetch: ${method} ${url}`))
   })
 }
 
@@ -396,6 +401,7 @@ describe('RecordTransaction: Pindah lokasi (#235)', () => {
         if (url.includes('/api/accounts')) return Promise.resolve(jsonResponse(accounts))
         if (url.includes('/api/balances')) return Promise.resolve(jsonResponse(balancesWith(30_000)))
         if (url.includes('/api/purposes')) return Promise.resolve(jsonResponse(purposes))
+        if (url.includes('/api/members')) return Promise.resolve(jsonResponse({ members: [], next_cursor: null }))
         return Promise.reject(new Error(`unstubbed fetch: ${method} ${url}`))
       }),
     )
@@ -613,5 +619,87 @@ describe('RecordTransaction: moving money, with its balances in view (#235 revis
       await waitFor(() => expect(onRecorded).toHaveBeenCalledWith('out', false))
       expect(fetchMock.mock.calls.some(([input]) => (input as string).toString().includes('/receipts'))).toBe(false)
     })
+  })
+})
+
+describe('RecordTransaction: "Dari siapa? (opsional)" (ADR-034, #211)', () => {
+  const members = [
+    {
+      id: 7,
+      name: 'Budi',
+      tier_id: null,
+      joined_on: null,
+      inactive_on: null,
+      created_at: 1,
+      tier_name: null,
+      current_rate: null,
+      arrears_months: 0,
+    },
+  ]
+
+  function stubWithMembers(passThroughBalance = 30_000) {
+    return routedFetch([
+      { match: (m, u) => m === 'GET' && u.includes('/api/accounts'), handle: () => Promise.resolve(jsonResponse(accounts)) },
+      {
+        match: (m, u) => m === 'GET' && u.includes('/api/balances'),
+        handle: () => Promise.resolve(jsonResponse(balancesWith(passThroughBalance))),
+      },
+      { match: (m, u) => m === 'GET' && u.includes('/api/purposes'), handle: () => Promise.resolve(jsonResponse(purposes)) },
+      {
+        match: (m, u) => m === 'GET' && u.includes('/api/members'),
+        handle: () => Promise.resolve(jsonResponse({ members, next_cursor: null })),
+      },
+    ])
+  }
+
+  it('shows the field only for money coming in, tagged to an open envelope', async () => {
+    vi.stubGlobal('fetch', stubWithMembers())
+    render(<RecordTransaction onRecorded={vi.fn()} onCancel={vi.fn()} onDuesRecorded={vi.fn()} />)
+    await screen.findByLabelText(text.locationLabel)
+
+    // Default direction is "out", on Kas utama - no field.
+    expect(screen.queryByLabelText(text.contributorLabel)).not.toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole('button', { name: text.directionIn }))
+    // Still Kas utama, not an envelope - no field.
+    expect(screen.queryByLabelText(text.contributorLabel)).not.toBeInTheDocument()
+
+    await chooseOption(text.purposeLabel, 'Halal bihalal RT')
+    expect(await screen.findByLabelText(text.contributorLabel)).toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole('button', { name: text.directionOut }))
+    expect(screen.queryByLabelText(text.contributorLabel)).not.toBeInTheDocument()
+  })
+
+  it('sends the chosen member on the wire, and null when left at "Tidak disebutkan"', async () => {
+    const fetchMock = stubWithMembers()
+    vi.stubGlobal('fetch', fetchMock)
+    render(<RecordTransaction onRecorded={vi.fn()} onCancel={vi.fn()} onDuesRecorded={vi.fn()} />)
+    await screen.findByLabelText(text.locationLabel)
+
+    await userEvent.click(screen.getByRole('button', { name: text.directionIn }))
+    await chooseOption(text.purposeLabel, 'Halal bihalal RT')
+    await chooseOption(text.contributorLabel, 'Budi')
+    await userEvent.type(screen.getByLabelText(text.amountLabel), '50000')
+    await userEvent.click(screen.getByRole('button', { name: text.submit }))
+
+    await waitFor(() => {
+      const post = fetchMock.mock.calls.find(
+        ([input, init]) => (init as RequestInit)?.method === 'POST' && String(input).includes('/api/transactions'),
+      )
+      expect(post).toBeDefined()
+      expect(JSON.parse(String((post![1] as RequestInit).body))).toMatchObject({ member_id: 7 })
+    })
+  })
+
+  it('seeds the field from initialMemberId, honouring only a real active member', async () => {
+    // The seed is Incidentals.tsx's own row action (App.tsx's /record?purpose=&member=),
+    // which always means a contribution - so the form opens on "Uang masuk"
+    // by itself, with the field showing: nothing for her to switch first.
+    vi.stubGlobal('fetch', stubWithMembers())
+    render(<RecordTransaction onRecorded={vi.fn()} onCancel={vi.fn()} onDuesRecorded={vi.fn()} initialPurposeId={12} initialMemberId={7} />)
+    await screen.findByLabelText(text.locationLabel)
+
+    await waitFor(() => expect(selectedOptionName(text.contributorLabel)).toBe('Budi'))
   })
 })

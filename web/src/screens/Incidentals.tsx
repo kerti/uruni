@@ -2,6 +2,8 @@ import { ArrowLeft } from 'lucide-react'
 import { useEffect, useState, type FormEvent } from 'react'
 
 import AccountPicker from '@/components/pickers/AccountPicker'
+import { MemberMultiPicker } from '@/components/pickers/MemberPicker'
+import AmountInput from '@/components/money/AmountInput'
 import SectionDivider from '@/components/SectionDivider'
 import TransactionList from '@/components/TransactionList'
 import { Button } from '@/components/ui/button'
@@ -15,13 +17,21 @@ import { ApiError } from '@/lib/api'
 import { listAccounts } from '@/lib/accounts'
 import { parseDialogTarget } from '@/lib/dialogTarget'
 import { formatIDR } from '@/lib/money'
-import { closeIncidental, getIncidental, reopenIncidental } from '@/lib/incidentals'
+import {
+  closeIncidental,
+  getIncidental,
+  getIncidentalParticipation,
+  reopenIncidental,
+  updateIncidentalParticipation,
+} from '@/lib/incidentals'
 import { renamePurpose } from '@/lib/purposes'
+import { listAllMembers } from '@/lib/setup'
 import { listTransactions } from '@/lib/transactions'
 import { useApi } from '@/lib/useApi'
 import { useDialogParam } from '@/lib/useDialogParam'
 import type { Account } from '@/lib/accounts'
-import type { Incidental, IncidentalDetail } from '@/lib/incidentals'
+import type { Incidental, IncidentalDetail, IncidentalParticipation, ParticipationStateKind } from '@/lib/incidentals'
+import type { Member } from '@/lib/setup'
 import type { Transaction } from '@/lib/transactions'
 
 const text = copy.incidentals
@@ -86,12 +96,17 @@ export default function Incidentals({
   purposeId,
 }: {
   onBack: () => void
-  onRecordFor: (purposeId: number) => void
+  /** Navigates to Catat, this envelope's purpose pre-chosen - and, when
+   * given, a member pre-chosen too (ADR-034's "one action per row: record a
+   * contribution with the member already filled in"). */
+  onRecordFor: (purposeId: number, memberId?: number) => void
   onViewTransactionsFor: (purposeId: number) => void
   purposeId: number
 }) {
   const [accountsState, accountsRun] = useApi<Account[]>()
+  const [membersState, membersRun] = useApi<Member[]>()
   const [detailState, detailRun] = useApi<IncidentalDetail>()
+  const [participationState, participationRun] = useApi<IncidentalParticipation>()
   const [submitState, submitRun] = useApi<unknown>()
 
   const [showCloseForm, setShowCloseForm] = useState(false)
@@ -109,8 +124,9 @@ export default function Incidentals({
 
   useEffect(() => {
     void accountsRun(listAccounts)
+    void membersRun(listAllMembers)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [accountsRun])
+  }, [accountsRun, membersRun])
 
   // Fetches once for the purpose this screen was navigated with - a fresh
   // navigation to a different envelope remounts this component with a fresh
@@ -118,6 +134,7 @@ export default function Incidentals({
   // that once let her switch envelopes in place.
   useEffect(() => {
     void detailRun(() => getIncidental(purposeId))
+    void participationRun(() => getIncidentalParticipation(purposeId))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [purposeId])
 
@@ -192,25 +209,30 @@ export default function Incidentals({
     )
   }
 
-  // On success the dialog itself has already made the PATCH call (see
+  // On success the dialog itself has already made the PATCH/PUT calls (see
   // RenameIncidentalDialog) - this just closes it, refetches the detail so
-  // the <h1> shows the corrected occasion, and reuses the screen's own
-  // Feedback banner rather than a second, parallel success mechanism.
+  // the <h1> and the recipients line show whatever changed, refetches the
+  // participation table too (a new minimum or a changed recipient set moves
+  // rows between "belum"/"kurang" and the recipients exclusion), and reuses
+  // the screen's own Feedback banner rather than a second, parallel success
+  // mechanism.
   function handleRenamed() {
     closeDialog()
     setFeedback({ kind: 'success', text: text.rename.success })
     void detailRun(() => getIncidental(purposeId))
+    void participationRun(() => getIncidentalParticipation(purposeId))
   }
 
   return (
     <>
       <DetailView
         detailState={detailState}
+        participationState={participationState}
         accounts={accountsState.data ?? []}
         feedback={feedback}
         submitting={submitting}
         showCloseForm={showCloseForm}
-        onRecord={() => onRecordFor(purposeId)}
+        onRecord={(memberId) => onRecordFor(purposeId, memberId)}
         onViewTransactions={() => onViewTransactionsFor(purposeId)}
         onShowClose={() => {
           setShowCloseForm(true)
@@ -223,7 +245,13 @@ export default function Incidentals({
         onRetry={() => void detailRun(() => getIncidental(purposeId))}
         onBack={onBack}
       />
-      <RenameIncidentalDialog envelope={detailState.data ?? null} open={isRenaming} onClose={closeDialog} onRenamed={handleRenamed} />
+      <RenameIncidentalDialog
+        envelope={detailState.data ?? null}
+        members={membersState.data ?? []}
+        open={isRenaming}
+        onClose={closeDialog}
+        onRenamed={handleRenamed}
+      />
     </>
   )
 }
@@ -241,6 +269,7 @@ function StatusBadge({ envelope }: { envelope: Incidental }) {
  * form doesn't crowd the rest of the JSX. */
 function DetailView({
   detailState,
+  participationState,
   accounts,
   feedback,
   submitting,
@@ -256,11 +285,12 @@ function DetailView({
   onBack,
 }: {
   detailState: ReturnType<typeof useApi<IncidentalDetail>>[0]
+  participationState: ReturnType<typeof useApi<IncidentalParticipation>>[0]
   accounts: Account[]
   feedback: Feedback | null
   submitting: boolean
   showCloseForm: boolean
-  onRecord: () => void
+  onRecord: (memberId?: number) => void
   onViewTransactions: () => void
   onShowClose: () => void
   onCancelClose: () => void
@@ -376,7 +406,7 @@ function DetailView({
               {/* Contributions and disbursements both go through the real
                   record form (M6.8), pre-chosen to this envelope's purpose -
                   direction is decided there, by its own toggle. */}
-              <Button type="button" size="lg" onClick={onRecord}>
+              <Button type="button" size="lg" onClick={() => onRecord()}>
                 {text.actions.record}
               </Button>
             </>
@@ -393,6 +423,11 @@ function DetailView({
       )}
 
       {isOpen && showCloseForm && <CloseForm accounts={accounts} onSubmit={onClose} onCancel={onCancelClose} submitting={submitting} />}
+
+      {/* Who has given and how much (ADR-034, #211) - its own section,
+          separated by a hairline the same way the activity list below it is. */}
+      <SectionDivider />
+      <ParticipationSection recipients={envelope.recipients ?? []} state={participationState} onRecord={onRecord} onRetry={onRetry} />
 
       {/* The envelope and what can be done with it above; what has moved
           through it below - two sections, one hairline (#319). */}
@@ -477,47 +512,197 @@ function CloseForm({
   )
 }
 
+/** One expected member's state -> its label and whether the amount shows
+ * beside it (ADR-034): "Belum menyumbang" says nothing has come in, so
+ * showing "Rp 0" beside it would repeat the sentence in numbers; the other
+ * two states show what has come in so far. */
+function participationStateText(state: ParticipationStateKind): { label: string; showAmount: boolean } {
+  switch (state) {
+    case 'sudah':
+      return { label: copy.incidentals.participation.states.given, showAmount: true }
+    case 'kurang':
+      return { label: copy.incidentals.participation.states.underMinimum, showAmount: true }
+    case 'belum':
+      return { label: copy.incidentals.participation.states.notGiven, showAmount: false }
+  }
+}
+
 /**
- * The rename dialog (#264), modelled on PassThrough.tsx's own
- * EditPassThroughDialog: one text field, seeded from the current occasion,
- * submit disabled while busy or when empty or unchanged, ErrorState on
- * failure. It makes the PATCH call itself (renamePurpose moves both
- * purpose.name and incidental.occasion together server-side) and, on
- * success, hands off to `onRenamed` - Incidentals' own handleRenamed, which
- * closes the dialog, refetches the detail, and posts the success message
- * through the screen's existing Feedback banner rather than a second,
- * dialog-local one.
+ * The participation table (ADR-034, #211, #333): who has contributed and how
+ * much, derived from the ledger against this envelope's own expectation -
+ * never stored, so this section fetches for itself and simply reflects
+ * whatever the server currently answers, the same reasoning EnvelopeActivity
+ * below it already follows for its own read-only list.
+ *
+ * "Kurang dari minimal" renders in muted ink, never terracotta
+ * (Design-System.md, the issue's own acceptance criterion): being under a
+ * minimum is not the discrepancy a reconciliation gap is, and this app's one
+ * warm color for "something needs a look" stays reserved for that.
+ *
+ * One action per expected row (ADR-034's own "Where it shows"): record a
+ * contribution with the member already filled in. "Sumbangan lain" carries
+ * no action - those givers were never expected, so there is nothing here to
+ * prompt them to finish. No reminder, share or message action anywhere on
+ * this screen (PRD section 4/7.5) - the row action is the only thing a
+ * treasurer can do about "belum", and it is the one she already had.
+ */
+function ParticipationSection({
+  recipients,
+  state,
+  onRecord,
+  onRetry,
+}: {
+  recipients: IncidentalDetail['recipients']
+  state: ReturnType<typeof useApi<IncidentalParticipation>>[0]
+  onRecord: (memberId?: number) => void
+  onRetry: () => void
+}) {
+  const text = copy.incidentals.participation
+
+  return (
+    <section className="flex flex-col gap-2">
+      <h2 className="text-sm font-semibold text-muted-foreground">{text.heading}</h2>
+
+      {recipients.length > 0 && (
+        <p className="text-sm text-muted-foreground">{text.recipientsLine(recipients.map((r) => r.member_name).join(', '))}</p>
+      )}
+
+      {state.status === 'idle' || state.status === 'loading' ? (
+        <Loading />
+      ) : state.status === 'error' || !state.data ? (
+        state.error && <ErrorState error={state.error} onRetry={onRetry} />
+      ) : (
+        <>
+          {state.data.expected.length === 0 ? (
+            <p className="text-muted-foreground">{text.noneExpected}</p>
+          ) : (
+            <ul className="flex flex-col gap-2">
+              {state.data.expected.map((row) => {
+                const { label, showAmount } = participationStateText(row.state)
+                return (
+                  <li key={row.member.id} className="flex flex-col gap-1 rounded-lg bg-card px-4 py-3 ring-1 ring-foreground/10">
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="min-w-0 truncate font-medium">{row.member.name}</span>
+                      {showAmount && <span className="tabular shrink-0 text-sm font-medium">{formatIDR(row.contributed_amount)}</span>}
+                    </div>
+                    {/* Plain ink under the amount (#154), not a button per
+                        row: a 30-member roster stays a list, not a column
+                        of buttons. The invisible after: box is the 44px
+                        target Design-System.md sets. */}
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="text-sm text-muted-foreground">{label}</span>
+                      <button
+                        type="button"
+                        className="relative shrink-0 text-sm font-medium text-foreground underline-offset-4 hover:underline after:absolute after:inset-x-0 after:top-1/2 after:h-11 after:-translate-y-1/2 after:content-['']"
+                        aria-label={text.recordAria(row.member.name)}
+                        onClick={() => onRecord(row.member.id)}
+                      >
+                        {text.record}
+                      </button>
+                    </div>
+                  </li>
+                )
+              })}
+            </ul>
+          )}
+
+          {state.data.unexpected.length > 0 && (
+            <div className="flex flex-col gap-2">
+              <h3 className="text-sm font-semibold text-muted-foreground">{text.otherHeading}</h3>
+              <ul className="flex flex-col gap-2">
+                {state.data.unexpected.map((row) => (
+                  <li
+                    key={row.member.id}
+                    className="flex items-center justify-between gap-3 rounded-lg bg-card px-4 py-3 ring-1 ring-foreground/10"
+                  >
+                    <span className="min-w-0 truncate font-medium">{row.member.name}</span>
+                    <span className="tabular shrink-0 text-sm font-medium">{formatIDR(row.contributed_amount)}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </>
+      )}
+    </section>
+  )
+}
+
+/** Two arrays are the same set of ids, order ignored - the "did recipients
+ * actually change?" check the edit dialog's own unchanged/disabled state
+ * needs, since MemberMultiPicker's onChange always hands back a fresh array
+ * even when the resulting set is identical. */
+function sameMemberSet(a: number[], b: number[]): boolean {
+  if (a.length !== b.length) return false
+  const sorted = [...b].sort((x, y) => x - y)
+  return [...a].sort((x, y) => x - y).every((id, i) => id === sorted[i])
+}
+
+/**
+ * The edit dialog (#264, widened by #333/ADR-034), modelled on
+ * PassThrough.tsx's own EditPassThroughDialog: occasion, minimum and
+ * recipients together, seeded from the envelope's current values, submit
+ * disabled while busy or when nothing has actually changed. It makes the
+ * write calls itself - renamePurpose only when the occasion changed
+ * (moves both purpose.name and incidental.occasion together server-side),
+ * updateIncidentalParticipation only when the minimum or the recipient set
+ * changed - and, on success, hands off to `onRenamed`: Incidentals' own
+ * handleRenamed, which closes the dialog, refetches the detail and the
+ * participation table, and posts the success message through the screen's
+ * existing Feedback banner rather than a second, dialog-local one.
  *
  * `envelope` is null only while closing, the same window
  * EditPassThroughDialog documents for its own `purpose` prop.
  */
 function RenameIncidentalDialog({
   envelope,
+  members,
   open,
   onClose,
   onRenamed,
 }: {
-  envelope: Incidental | null
+  envelope: IncidentalDetail | null
+  members: Member[]
   open: boolean
   onClose: () => void
   onRenamed: () => void
 }) {
   const [state, run] = useApi<unknown>()
   const [occasion, setOccasion] = useState('')
+  const [minimumPerMember, setMinimumPerMember] = useState(0)
+  const [recipientMemberIds, setRecipientMemberIds] = useState<number[]>([])
 
   useEffect(() => {
-    if (open && envelope !== null) setOccasion(envelope.occasion)
+    if (open && envelope !== null) {
+      setOccasion(envelope.occasion)
+      setMinimumPerMember(envelope.minimum_per_member ?? 0)
+      setRecipientMemberIds((envelope.recipients ?? []).map((r) => r.member_id))
+    }
   }, [open, envelope])
 
   const busy = state.status === 'loading'
   const trimmed = occasion.trim()
-  const unchanged = envelope !== null && trimmed === envelope.occasion
+  const occasionChanged = envelope !== null && trimmed !== envelope.occasion
+  const minimumChanged = envelope !== null && minimumPerMember !== (envelope.minimum_per_member ?? 0)
+  const recipientsChanged =
+    envelope !== null &&
+    !sameMemberSet(
+      recipientMemberIds,
+      (envelope.recipients ?? []).map((r) => r.member_id),
+    )
+  const changed = occasionChanged || minimumChanged || recipientsChanged
 
   function handleSubmit(event: FormEvent) {
     event.preventDefault()
-    if (envelope === null || trimmed === '' || unchanged) return
+    if (envelope === null || trimmed === '' || !changed) return
     void run(async () => {
-      await renamePurpose(envelope.purpose_id, trimmed)
+      if (occasionChanged) await renamePurpose(envelope.purpose_id, trimmed)
+      if (minimumChanged || recipientsChanged) {
+        await updateIncidentalParticipation(envelope.purpose_id, {
+          minimumPerMember: minimumPerMember > 0 ? minimumPerMember : null,
+          recipientMemberIds,
+        })
+      }
       onRenamed()
     })
   }
@@ -544,12 +729,34 @@ function RenameIncidentalDialog({
               disabled={busy}
             />
           </div>
+
+          {/* ADR-034 (#211): the same two fields the open dialog carries,
+              editable here for exactly the same reason a mistyped occasion
+              is - a minimum set too high or a recipient added late is
+              usually noticed only once the occasion is under way. */}
+          <AmountInput
+            id="incidental-rename-minimum"
+            label={copy.incidentals.open.minimumLabel}
+            value={minimumPerMember}
+            onChange={setMinimumPerMember}
+            disabled={busy}
+          />
+
+          <MemberMultiPicker
+            label={copy.incidentals.open.recipientsLabel}
+            members={members}
+            value={recipientMemberIds}
+            onChange={setRecipientMemberIds}
+            emptyMessage={copy.incidentals.open.recipientsEmpty}
+            disabled={busy}
+          />
+
           {state.status === 'error' && state.error && <ErrorState error={state.error} />}
           <DialogFooter className="mt-1">
             <Button type="button" variant="outline" className="h-11" disabled={busy} onClick={onClose}>
               {text.rename.cancel}
             </Button>
-            <Button type="submit" className="h-11" disabled={busy || trimmed === '' || unchanged}>
+            <Button type="submit" className="h-11" disabled={busy || trimmed === '' || !changed}>
               {busy ? text.rename.saving : text.rename.save}
             </Button>
           </DialogFooter>

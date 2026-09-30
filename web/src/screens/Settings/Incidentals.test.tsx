@@ -22,12 +22,15 @@ function envelope(purposeId: number, occasion: string, closedOn: string | null =
 
 /** One stub for the whole section: GET /api/incidentals?open=false answers
  * the current list (open and closed together), and POST /api/incidentals is
- * recorded so a test can assert what was actually sent. */
-function stubIncidentals(initial: ReturnType<typeof envelope>[], writeResponse?: () => Response) {
+ * recorded so a test can assert what was actually sent. `members` answers
+ * the recipients picker's own roster (ADR-034, #333) - empty by default,
+ * since most of this suite is not about that field. */
+function stubIncidentals(initial: ReturnType<typeof envelope>[], writeResponse?: () => Response, members: unknown[] = []) {
   const calls: { method: string; url: string; body: unknown }[] = []
   const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
     const url = typeof input === 'string' ? input : input.toString()
     const method = init?.method ?? 'GET'
+    if (url.includes('/api/members')) return Promise.resolve(jsonResponse({ members, next_cursor: null }))
     if (url.includes('/api/incidentals')) {
       if (method === 'GET') return Promise.resolve(jsonResponse(initial))
       calls.push({ method, url, body: init?.body ? JSON.parse(String(init.body)) : undefined })
@@ -36,6 +39,21 @@ function stubIncidentals(initial: ReturnType<typeof envelope>[], writeResponse?:
     return Promise.reject(new Error(`unstubbed fetch: ${url}`))
   })
   return { fetchMock, calls }
+}
+
+function member(overrides: Partial<{ id: number; name: string }> = {}) {
+  return {
+    id: 1,
+    name: 'Budi',
+    tier_id: null,
+    joined_on: null,
+    inactive_on: null,
+    created_at: 1,
+    tier_name: null,
+    current_rate: null,
+    arrears_months: 0,
+    ...overrides,
+  }
 }
 
 /** Exposes the router's current search string and pathname, the same way
@@ -145,6 +163,43 @@ describe('Settings incidentals', () => {
     // A successful open closes the dialog and drops the param.
     await waitFor(() => expect(currentLocation()).toBe('/settings'))
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  })
+
+  // ADR-034 (#211): the open dialog also carries the envelope's minimum and
+  // its recipients - both optional, and posted only what she actually fills.
+  it('opens an envelope with a minimum and a recipient, both optional fields', async () => {
+    const { fetchMock, calls } = stubIncidentals([], () => jsonResponse(envelope(3, 'Kerja bakti'), 201), [member({ id: 7, name: 'Budi' })])
+    vi.stubGlobal('fetch', fetchMock)
+    renderAt()
+    await screen.findByText(text.empty)
+
+    await userEvent.click(screen.getByRole('button', { name: text.add }))
+    const dialog = screen.getByRole('dialog', { name: copy.incidentals.open.heading })
+    await userEvent.type(within(dialog).getByLabelText(copy.incidentals.open.occasionLabel), 'Kerja bakti')
+    await userEvent.type(within(dialog).getByLabelText(copy.incidentals.open.minimumLabel), '25000')
+    await userEvent.click(await within(dialog).findByRole('checkbox', { name: 'Budi' }))
+    await userEvent.click(within(dialog).getByRole('button', { name: copy.incidentals.open.submit }))
+
+    await waitFor(() => expect(calls).toHaveLength(1))
+    expect(calls[0]).toMatchObject({
+      method: 'POST',
+      body: { occasion: 'Kerja bakti', minimum_per_member: 25_000, recipient_member_ids: [7] },
+    })
+  })
+
+  it('opens an envelope with no minimum and no recipients when neither is touched', async () => {
+    const { fetchMock, calls } = stubIncidentals([], () => jsonResponse(envelope(3, 'Kerja bakti'), 201), [member({ id: 7, name: 'Budi' })])
+    vi.stubGlobal('fetch', fetchMock)
+    renderAt()
+    await screen.findByText(text.empty)
+
+    await userEvent.click(screen.getByRole('button', { name: text.add }))
+    const dialog = screen.getByRole('dialog', { name: copy.incidentals.open.heading })
+    await userEvent.type(within(dialog).getByLabelText(copy.incidentals.open.occasionLabel), 'Kerja bakti')
+    await userEvent.click(within(dialog).getByRole('button', { name: copy.incidentals.open.submit }))
+
+    await waitFor(() => expect(calls).toHaveLength(1))
+    expect(calls[0]).toMatchObject({ body: { minimum_per_member: null, recipient_member_ids: [] } })
   })
 
   it("a card navigates to the envelope's detail route", async () => {
