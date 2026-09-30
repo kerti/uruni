@@ -1,6 +1,7 @@
 package http
 
 import (
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"io"
@@ -52,6 +53,17 @@ type api struct {
 	// `serve` has already proved it exists and is writable
 	// (config.EnsureBackupDirWritable) before this struct is ever built.
 	backupDir string
+
+	// sqlDB is #325's addition: the raw connection restore.go's confirmRestore
+	// hands to internal/backup.Restore, which opens its own write
+	// transaction spanning virtually every table. See router.go's New for
+	// why this cannot be reached through ledger or queries alone.
+	sqlDB *sql.DB
+
+	// restoreStage is #325's own one-slot stash between the upload/inspect
+	// step and the confirm step - restore.go's own doc comment explains the
+	// shape.
+	restoreStage *restoreStage
 }
 
 // routes registers the /api surface on the mount New creates. No handlers at
@@ -283,6 +295,12 @@ func (a *api) routes(r chi.Router) {
 		// URUNI_BACKUP_DIR, never build anything themselves.
 		r.Get("/backups", a.listBackups)
 		r.Get("/backups/{name}", a.downloadStoredBackup)
+
+		// Restore from an uploaded backup (M6.39, #325, ADR-012):
+		// inspect/preview, then confirm with a password re-entry -
+		// restore.go's own doc comment has the two-step shape and why.
+		r.Post("/restore/inspect", a.inspectRestoreUpload)
+		r.Post("/restore/confirm", a.confirmRestore)
 	})
 }
 

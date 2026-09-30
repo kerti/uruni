@@ -9,6 +9,7 @@ import { ApiError } from '@/lib/api'
 import { downloadBackup, downloadStoredBackup, listStoredBackups } from '@/lib/backup'
 import { formatIsoDate } from '@/lib/dates'
 import { useApi } from '@/lib/useApi'
+import RestoreDialog from '@/screens/Settings/RestoreDialog'
 import type { StoredBackup } from '@/lib/backup'
 
 const text = copy.settings.backup
@@ -48,6 +49,8 @@ export default function Backup() {
       </Button>
 
       {state.status === 'error' && state.error && <ErrorState error={state.error} onRetry={() => void run(downloadBackup)} />}
+
+      <RestoreDialog />
 
       <AutoBackupList />
     </section>

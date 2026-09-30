@@ -264,6 +264,22 @@ export const copy = {
       payload_too_large: 'Ukuran foto lebih dari 10 MB. Coba foto yang lebih kecil.',
       image_too_large: 'Resolusi foto terlalu besar. Coba foto yang lebih kecil.',
       unsupported_media_type: 'File ini bukan foto. Gunakan JPEG, PNG, atau WebP.',
+      // M6.39 (#325, ADR-012): restoring from an uploaded backup. Each one
+      // its own code (internal/http/restore.go) rather than a shared
+      // "invalid file" message, because what the treasurer should actually
+      // do next differs by case - update the server, or pick a different
+      // file, or nothing at all (a rolled-back restore already changed
+      // nothing).
+      restore_format_too_new: 'File ini dibuat oleh versi Uruni yang lebih baru. Perbarui dulu aplikasinya, lalu coba lagi.',
+      restore_format_too_old: 'File ini dibuat oleh versi Uruni yang terlalu lama dan sudah tidak bisa dibaca.',
+      restore_invalid_file: 'File ini bukan cadangan Uruni yang sah.',
+      restore_bad_image: 'Salah satu foto nota di dalam cadangan tidak bisa dibaca.',
+      restore_file_too_large: 'File ini lebih besar daripada cadangan Uruni pada umumnya.',
+      // A rolled-back restore (ADR-012's own numbers check) - nothing in
+      // the kas berubah, so the wording says so rather than leaving her to
+      // guess whether anything happened.
+      restore_totals_mismatch: 'Ada yang tidak cocok saat memeriksa hasil pemulihan, jadi tidak ada yang diubah.',
+      restore_upload_expired: 'Unggahan ini sudah kedaluwarsa. Unggah lagi file cadangannya.',
     },
     // Shown for a code not in the map above.
     unknownError: 'Ada yang tidak beres. Coba lagi sebentar lagi.',
@@ -934,7 +950,48 @@ export const copy = {
       // aria-label naming which dump it downloads, the same reasoning
       // Incidentals' own cardAria already carries for its own dense list.
       downloadRowAria: (kind: string, date: string) => `Unduh cadangan ${kind} ${date}`,
+      // #325's own addition: the button that starts the upload+restore
+      // flow. A plain outline button, the same visual weight as "Unduh
+      // cadangan" above it - restoring is not the everyday action this
+      // card exists for, but it is not a destructive-red one either, since
+      // the safety net and the totals check (ADR-012) are what make it
+      // safe to offer plainly.
+      restoreLabel: 'Pulihkan dari cadangan',
+      inspecting: 'Memeriksa file…',
     },
+  },
+  // The confirm dialog restoring from an uploaded backup opens into (M6.39,
+  // #325, ADR-012), once the upload has been checked and the server has
+  // answered with a preview. Every fact shown here is read straight off
+  // that preview - this dialog never recomputes or guesses at what the
+  // file holds.
+  //
+  // Per-fund lines follow the maintainer's own grill ruling (2026-09-30,
+  // captured in ADR-012's amendment): a fund present on both sides either
+  // keeps everything (fundKeptSafe) or names what would be lost past the
+  // file's own cutoff date for it (fundKeptWithCutoff) - or, in the rare
+  // case the file carries no transaction for it at all yet, without a date
+  // to name (fundKeptNoCutoffDate); a live-only fund is removed outright;
+  // a file-only fund is added.
+  restoreConfirm: {
+    heading: 'Pulihkan dari cadangan',
+    dateLabel: (date: string) => `Cadangan dari ${date}`,
+    totalLabel: (total: string) => `Total seluruh dana: ${total}`,
+    fundKeptSafe: (name: string) => `${name}: semua transaksi tetap ada`,
+    fundKeptWithCutoff: (name: string, count: number, date: string) => `${name}: ${count} transaksi setelah ${date} akan hilang`,
+    fundKeptNoCutoffDate: (name: string, count: number) => `${name}: ${count} transaksi akan hilang`,
+    fundRemoved: (name: string) => `${name}: akan dihapus`,
+    fundAdded: (name: string) => `${name}: akan ditambahkan`,
+    // Said once, plainly, before the password field - the one thing every
+    // treasurer confirming this needs to already know, not tucked into a
+    // tooltip. "keluar otomatis" over "logout" - CONTEXT.md has no
+    // separate term for this, and it is what actually happens, in plain
+    // words.
+    warning: 'Memulihkan akan mengganti seluruh catatan kas dengan isi file ini. Semua orang yang sedang masuk akan keluar otomatis.',
+    passwordLabel: 'Kata sandi saat ini',
+    confirm: 'Pulihkan',
+    confirming: 'Memulihkan…',
+    cancel: 'Batal',
   },
   // Correcting a posted row's peruntukan (#276, ADR-033): the marker on a
   // row that has already been corrected, and the one-field dialog that does
