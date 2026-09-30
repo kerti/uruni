@@ -42,6 +42,12 @@ DEV_DB := $(or $(URUNI_DB),./uruni.db)
 # that starts the server creates it first.
 DEV_UPLOADS_DIR := $(or $(URUNI_UPLOADS_DIR),./uploads)
 
+# Where dev backup dumps land (#324). Matches the binary's own default
+# (config.DefaultBackupDir); URUNI_BACKUP_DIR in .env wins, same split as
+# DEV_UPLOADS_DIR above - `serve` refuses to boot if this directory does
+# not already exist (config.EnsureBackupDirWritable) either.
+DEV_BACKUP_DIR := $(or $(URUNI_BACKUP_DIR),./backups)
+
 # E2E (ADR-015). SQLite makes this cheap: a throwaway database *file*, deleted
 # and re-migrated each run, so the dev DB is never touched and there is no
 # container to exec into. Playwright owns the e2e server + vite on dedicated
@@ -147,6 +153,7 @@ setup: hooks-install claude-install web-install
 	  echo "setup: created .env from .env.example (base URL set to loopback)"; \
 	fi
 	@mkdir -p "$(DEV_UPLOADS_DIR)"
+	@mkdir -p "$(DEV_BACKUP_DIR)"
 	@echo "ok setup complete - next: make migrate-up && make run"
 
 # Point git at the repo's own hooks directory and seed the local, gitignored
@@ -205,6 +212,7 @@ doctor:
 
 run:
 	@mkdir -p "$(DEV_UPLOADS_DIR)"
+	@mkdir -p "$(DEV_BACKUP_DIR)"
 	go run ./cmd/uruni serve
 
 # The embed pipeline (ADR-001): the React bundle must exist before the Go build
@@ -223,6 +231,7 @@ build: web-build
 # reports the real SHA, which is what the image does.
 serve-bin: build
 	@mkdir -p "$(DEV_UPLOADS_DIR)"
+	@mkdir -p "$(DEV_BACKUP_DIR)"
 	./bin/uruni serve
 
 test:
@@ -313,6 +322,7 @@ server-stop:
 
 server-restart: server-stop
 	@mkdir -p "$(DEV_UPLOADS_DIR)"
+	@mkdir -p "$(DEV_BACKUP_DIR)"
 	@( exec nohup go run ./cmd/uruni serve ) > $(SERVER_LOG) 2>&1 < /dev/null &
 	@seen=0; for i in $$(seq 1 100); do \
 	  curl -fsS http://localhost:$(SERVER_PORT)/healthz >/dev/null 2>&1 && { echo "server: started (log: $(SERVER_LOG))"; exit 0; }; \
@@ -383,6 +393,7 @@ e2e-reset:
 
 e2e-server: e2e-reset
 	@mkdir -p "$(DEV_UPLOADS_DIR)"
+	@mkdir -p "$(DEV_BACKUP_DIR)"
 	@URUNI_DB="$(E2E_DB)" PORT=$(E2E_PORT) URUNI_LOG_LEVEL=$(E2E_LOG_LEVEL) go run ./cmd/uruni serve
 
 # ---- self-host stack -------------------------------------------------------

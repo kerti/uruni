@@ -37,7 +37,7 @@ Standing decisions that no ADR owns go in [`../Decisions.md`](../Decisions.md).
 | [010](./010-packaging-and-deployment.md) | Packaging & deployment | implemented |
 | [011](./011-receipt-photos-local-volume.md) | Receipt photos: local volume | `draft` |
 | [012](./012-backup-and-export.md) | Backup & export implementation | `draft` |
-| [013](./013-scheduling-in-process.md) | Scheduling: in-process | `draft` |
+| [013](./013-scheduling-in-process.md) | Scheduling: in-process | implemented |
 | [014](./014-localization-indonesian-first.md) | Localization: Indonesian-first, strings centralized | `draft` |
 | [015](./015-testing-money-math.md) | Testing: prioritize the money math | `draft` |
 | [016](./016-deployment-targets-reference-infra.md) | Deployment targets & reference infra | implemented |
