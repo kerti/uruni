@@ -21,8 +21,8 @@ import (
 	"strings"
 )
 
-// Defaults for the variables that have one. The rest are either optional
-// (SMTP_URL) or required outright (URUNI_BASE_URL).
+// Defaults for the variables that have one. The rest are required outright
+// (URUNI_BASE_URL).
 const (
 	DefaultDBPath    = "./uruni.db"
 	DefaultPort      = 8080
@@ -72,9 +72,6 @@ type Config struct {
 	// link (M7), and its scheme decides whether the session cookie is Secure
 	// (ADR-007). Required - an instance with no origin is an unconfigured one.
 	BaseURL string
-	// SMTPURL is optional, for emailed backups. Validated here, used at M8
-	// (ADR-012). Contains a password, so it is never echoed in an error.
-	SMTPURL string
 	// UploadsDir is the local volume receipt photos are written to (ADR-011).
 	// Existence and writability are not checked here - Load stays a pure
 	// parse of the environment table, with no filesystem I/O of its own - see
@@ -119,9 +116,6 @@ func Load() (Config, error) {
 	if err := loadBaseURL(&cfg); err != nil {
 		return Config{}, err
 	}
-	if err := loadSMTPURL(&cfg); err != nil {
-		return Config{}, err
-	}
 	if err := loadLogging(&cfg); err != nil {
 		return Config{}, err
 	}
@@ -148,8 +142,8 @@ func loadBaseURL(cfg *Config) error {
 		return invalid("URUNI_BASE_URL",
 			"not set - the public origin this instance is reached at, e.g. https://uruni.example.com; `make setup` writes a loopback one for local dev")
 	case placeholderBaseURL:
-		// Safe to echo: unlike the SMTP URL, an origin is not a credential, and
-		// seeing the template value quoted back is what makes the fault obvious.
+		// Safe to echo: an origin is not a credential, and seeing the
+		// template value quoted back is what makes the fault obvious.
 		return invalidValue("URUNI_BASE_URL", cfg.BaseURL,
 			"still the placeholder from .env.example; set the origin this instance is actually reached at")
 	}
@@ -161,20 +155,6 @@ func loadBaseURL(cfg *Config) error {
 		return invalidValue("URUNI_BASE_URL", cfg.BaseURL,
 			"want an absolute origin, e.g. https://uruni.example.com")
 	}
-	return nil
-}
-
-func loadSMTPURL(cfg *Config) error {
-	raw := strings.TrimSpace(os.Getenv("SMTP_URL"))
-	if raw == "" {
-		return nil
-	}
-	u, err := url.Parse(raw)
-	if err != nil || (u.Scheme != "smtp" && u.Scheme != "smtps") || u.Host == "" {
-		// Deliberately does not echo the value: it carries the SMTP password.
-		return invalid("SMTP_URL", "want smtp://user:pass@host:port (or smtps://)")
-	}
-	cfg.SMTPURL = raw
 	return nil
 }
 
@@ -259,10 +239,10 @@ func EnsureBackupDirWritable(dir string) error {
 	return nil
 }
 
-// invalid reports a bad variable without repeating its value - for URLs that
-// carry credentials, and for the unset case, where there is no value to show.
-// Anything printed here can end up in a container log the operator pastes into
-// an issue.
+// invalid reports a bad variable without repeating its value - for the unset
+// case, where there is no value to show, and for any future variable that
+// carries a credential. Anything printed here can end up in a container log
+// the operator pastes into an issue.
 func invalid(name, why string) error {
 	return fmt.Errorf("%w: %s %s", ErrInvalidConfig, name, why)
 }

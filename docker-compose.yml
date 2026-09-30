@@ -9,7 +9,6 @@ services:
       - URUNI_DB=/data/uruni.db
       - URUNI_UPLOADS_DIR=/uploads
       - URUNI_BACKUP_DIR=/backups
-      # - SMTP_URL=${SMTP_URL}           # optional, for emailed backups
     volumes:
       - uruni-data:/data
       - uruni-uploads:/uploads
