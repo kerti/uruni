@@ -1,3 +1,4 @@
+import Backup from '@/screens/Settings/Backup'
 import DuesTiers from '@/screens/Settings/DuesTiers'
 import FundName from '@/screens/Settings/FundName'
 import Incidentals from '@/screens/Settings/Incidentals'
@@ -31,12 +32,16 @@ import type { Fund } from '@/lib/setup'
  *
  * Golongan & tarif (#232, M6.31): moved here from Anggota, superseding
  * M6.16/M6.17's placement - see screens/Members/index.tsx for why that
- * argument stopped holding. It sits last: it is the rarest admin on a screen
- * of rare admin.
+ * argument stopped holding.
  *
  * Incidentals (#263, ADR-032): opening a new envelope lost its home when
  * Beranda's purpose breakdown became entry points only, and it lands here,
  * beside Titipan - the two are kinds of one `purpose` (CONTEXT.md).
+ *
+ * Cadangan (#323, ADR-012) sits last: downloading the whole fund is rarer
+ * still than any admin above it, and it is the one section with no dialog
+ * and nothing to browse - one button, placed after everything a treasurer
+ * might actually come here to change.
  *
  * No back control: Shell's footer is how every screen is left now, and a
  * second way out would be one affordance too many.
@@ -57,6 +62,8 @@ export default function Settings({ onFundRenamed }: { onFundRenamed: (fund: Fund
       <Incidentals />
       <SectionDivider />
       <DuesTiers />
+      <SectionDivider />
+      <Backup />
     </div>
   )
 }

@@ -112,6 +112,50 @@ func (q *Queries) GetEffectiveDuesRate(ctx context.Context, arg GetEffectiveDues
 	return i, err
 }
 
+const listDuesRatesByFund = `-- name: ListDuesRatesByFund :many
+SELECT dues_rate.id, dues_rate.tier_id, dues_rate.amount, dues_rate.effective_from, dues_rate.created_at
+FROM dues_rate
+JOIN dues_tier ON dues_tier.id = dues_rate.tier_id
+WHERE dues_tier.fund_id = ?
+ORDER BY dues_rate.id
+`
+
+// ListDuesRatesByFund is the backup export's own read (ADR-012, #323): every
+// rate across every tier the fund owns. dues_rate carries no fund_id of its
+// own, so the join through dues_tier is the only way to scope it - the same
+// reasoning GetDuesRateForFund's own comment gives. Ordered by id purely for
+// the export's own deterministic byte order, not a claim about the rate's
+// effective date (ListDuesRatesByTier above already owns that ordering for
+// its own caller).
+func (q *Queries) ListDuesRatesByFund(ctx context.Context, fundID int64) ([]DuesRate, error) {
+	rows, err := q.db.QueryContext(ctx, listDuesRatesByFund, fundID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []DuesRate{}
+	for rows.Next() {
+		var i DuesRate
+		if err := rows.Scan(
+			&i.ID,
+			&i.TierID,
+			&i.Amount,
+			&i.EffectiveFrom,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listDuesRatesByTier = `-- name: ListDuesRatesByTier :many
 SELECT id, tier_id, amount, effective_from, created_at
 FROM dues_rate

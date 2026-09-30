@@ -29,3 +29,17 @@ FROM incidental_recipient ir
 JOIN member m ON m.id = ir.member_id
 WHERE ir.purpose_id = ?
 ORDER BY m.name, m.id;
+
+-- ListIncidentalRecipientsByFund is the backup export's own read (ADR-012,
+-- #323): every recipient row across every envelope the fund owns, in its
+-- own raw columns (fund_id, purpose_id, member_id) rather than
+-- ListIncidentalRecipients' joined member_name - the export names the
+-- table's own columns, and a restore reads member_id, not a name. The table
+-- has no single-column id (its primary key is the (fund_id, purpose_id,
+-- member_id) triple), so this orders by that triple directly - purely for
+-- the export's own deterministic byte order.
+-- name: ListIncidentalRecipientsByFund :many
+SELECT fund_id, purpose_id, member_id
+FROM incidental_recipient
+WHERE fund_id = ?
+ORDER BY purpose_id, member_id;

@@ -262,6 +262,12 @@ func (a *api) routes(r chi.Router) {
 		r.Post("/reimbursements/{id}/receipts", a.uploadReimbursementReceipt)
 		r.Get("/receipts/{id}", a.getReceipt)
 		r.Delete("/receipts/{id}", a.deleteReceipt)
+
+		// The whole fund as one zip (M6.37, #323, ADR-012): uruni.json plus
+		// every receipt image. Session-gated for the same reason every
+		// route in this group is - it carries the password hash alongside
+		// everything else.
+		r.Get("/backup", a.downloadBackup)
 	})
 }
 

@@ -81,6 +81,7 @@ var gatedRoutes = []struct {
 	{http.MethodPost, "/api/reimbursements/1/receipts"},
 	{http.MethodGet, "/api/receipts/1"},
 	{http.MethodDelete, "/api/receipts/1"},
+	{http.MethodGet, "/api/backup"},
 }
 
 // TestEveryGatedRouteReturns401WithNoSession is the DoD's first line: every
