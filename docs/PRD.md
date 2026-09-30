@@ -98,6 +98,9 @@ Key entities:
 ### 7.5 Incidental collections
 - Create an incidental for an occasion (sickness, death, sunatan, pension).
 - Collect one-off contributions and record the disbursement.
+- A contribution may name the member who gave it (optional - a guest or an anonymous giver stays unnamed). An envelope may set a **minimum per member** and name the members it is **for**, who are never expected to give.
+- Show who has contributed and how much against the members active on the day the envelope opened, on the envelope's screen and on the public report. A simple "not yet contributed" view. **No reminders, no nagging automation.** ([ADR-034](./ADR/034-envelope-participation.md))
+- A contribution named against the wrong member is reversed by a new entry and posted again, as a dues payment is (§7.3).
 - On close, show the leftover and offer a one-tap **roll into Kas Utama**.
 - The occasion can be corrected at any time, open or closed - renaming moves no money and posts no entry.
 
