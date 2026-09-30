@@ -107,6 +107,17 @@ var ErrDuesPaymentAlreadyReversed = errors.New("ledger: dues payment has already
 // Ledger.ReopenIncidental, not a bypass of this check.
 var ErrIncidentalClosed = errors.New("ledger: incidental is closed")
 
+// ErrContributionRequiresIncidentalPurpose is returned by PostTransaction
+// when MemberID is set on a kind='normal' posting whose PurposeID does not
+// name an incidental (ADR-034). It exists purely to give the caller a
+// clean, named error instead of the BEFORE INSERT trigger's raw SQLite
+// message - the trigger is what makes a named row unrepresentable for
+// anything that writes around the ledger, this pre-check is what keeps the
+// treasurer's own mistake reading as copy rather than a constraint string
+// (the same "check first, let the schema be the real guarantee" shape
+// ErrIncidentalClosed already uses).
+var ErrContributionRequiresIncidentalPurpose = errors.New("ledger: a named contribution must be tagged to an incidental purpose")
+
 // ErrIncidentalNotClosed is returned by ReopenIncidental when the envelope's
 // closed_on is already NULL - there is nothing to reopen.
 var ErrIncidentalNotClosed = errors.New("ledger: incidental is not closed")
@@ -175,6 +186,15 @@ var ErrPurposeCorrectionDuesReversal = errors.New("ledger: cannot correct the pe
 // requested purpose_id is exactly the row's current effective peruntukan -
 // nothing would move, so nothing is posted (ADR-033).
 var ErrPurposeCorrectionNoop = errors.New("ledger: the requested purpose_id is already this row's peruntukan")
+
+// ErrPurposeCorrectionNamedContribution is returned by PostPurposeCorrection
+// when the row being corrected is kind='normal' and carries a member_id - a
+// named contribution (ADR-034). Moving it to another peruntukan would leave
+// participation counting the member against an envelope the money has left,
+// so it is refused the way a dues payment already is; the fix is reverse and
+// post again. An unnamed contribution (member_id NULL) keeps ADR-033 exactly
+// as it is.
+var ErrPurposeCorrectionNamedContribution = errors.New("ledger: cannot correct the peruntukan of a named contribution - reverse and post again instead")
 
 // ErrPurposeCorrectionTargetClosed is returned by PostPurposeCorrection when
 // the requested purpose_id names a closed incidental. Correcting into a

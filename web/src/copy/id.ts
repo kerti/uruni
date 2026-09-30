@@ -223,6 +223,13 @@ export const copy = {
       purpose_correction_target_closed: 'Amplop ini sudah ditutup — buka lagi dulu sebelum memindahkan peruntukan ke sini.',
       purpose_correction_source_closed: 'Amplop ini sudah ditutup — buka lagi dulu sebelum memindahkan peruntukan dari sini.',
       purpose_correction_noop: 'Baris ini sudah memakai peruntukan itu.',
+      // ADR-034 (#211): a sumbangan bernama can't be re-tagged the way an
+      // ordinary row can - moving it would leave participation counting the
+      // member against an envelope the money has left. Same "added ahead of
+      // its own UI" reasoning as the purpose_correction_* codes above -
+      // screens land in #333.
+      purpose_correction_named_contribution:
+        'Peruntukan sumbangan yang sudah bernama tidak bisa diperbaiki di sini — batalkan sumbangannya, lalu catat lagi.',
       // M6.21/#154's receipt upload routes (internal/http/receipts.go's
       // processAndStoreReceipt) - a phone shooting HEIC by default gets its
       // own wording, same reasoning as the Go comment beside that code.

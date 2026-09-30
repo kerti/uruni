@@ -1,7 +1,7 @@
 -- name: CreateIncidental :one
-INSERT INTO incidental (purpose_id, occasion, target_amount, opened_on, closed_on, created_at)
-VALUES (?, ?, ?, ?, ?, ?)
-RETURNING purpose_id, occasion, target_amount, opened_on, closed_on, created_at;
+INSERT INTO incidental (purpose_id, occasion, target_amount, opened_on, closed_on, minimum_per_member, created_at)
+VALUES (?, ?, ?, ?, ?, ?, ?)
+RETURNING purpose_id, occasion, target_amount, opened_on, closed_on, minimum_per_member, created_at;
 
 -- Fund-scoped through purpose, which is where the envelope's fund_id lives
 -- (incidental is 1:1 with its purpose row and carries no fund_id of its own).
@@ -9,7 +9,7 @@ RETURNING purpose_id, occasion, target_amount, opened_on, closed_on, created_at;
 -- server to hold more than one fund, so a bare WHERE purpose_id = ? would be a
 -- cross-fund read the moment a second fund exists.
 -- name: GetIncidental :one
-SELECT i.purpose_id, i.occasion, i.target_amount, i.opened_on, i.closed_on, i.created_at
+SELECT i.purpose_id, i.occasion, i.target_amount, i.opened_on, i.closed_on, i.minimum_per_member, i.created_at
 FROM incidental i
 JOIN purpose p ON p.id = i.purpose_id
 WHERE i.purpose_id = ? AND p.fund_id = ?;
@@ -20,7 +20,7 @@ WHERE i.purpose_id = ? AND p.fund_id = ?;
 UPDATE incidental
 SET closed_on = ?
 WHERE purpose_id = ?
-RETURNING purpose_id, occasion, target_amount, opened_on, closed_on, created_at;
+RETURNING purpose_id, occasion, target_amount, opened_on, closed_on, minimum_per_member, created_at;
 
 -- The guard's one query (ADR-031): sql.ErrNoRows for a purpose_id that is
 -- not an incidental at all (main, pass_through - PostTransaction's caller
@@ -48,7 +48,7 @@ WHERE purpose_id = ?;
 UPDATE incidental
 SET occasion = ?
 WHERE purpose_id = ?
-RETURNING purpose_id, occasion, target_amount, opened_on, closed_on, created_at;
+RETURNING purpose_id, occasion, target_amount, opened_on, closed_on, minimum_per_member, created_at;
 
 -- The way back (ADR-031): closed_on to NULL, the exact inverse of
 -- CloseIncidental above and, like it, a plain UPDATE rather than a ledger
@@ -61,19 +61,31 @@ RETURNING purpose_id, occasion, target_amount, opened_on, closed_on, created_at;
 UPDATE incidental
 SET closed_on = NULL
 WHERE purpose_id = ?
-RETURNING purpose_id, occasion, target_amount, opened_on, closed_on, created_at;
+RETURNING purpose_id, occasion, target_amount, opened_on, closed_on, minimum_per_member, created_at;
+
+-- Setting or clearing the minimum every expected member is asked to give
+-- (ADR-034) - mutable like occasion, never a posted fact, so this is a plain
+-- UPDATE, the same shape UpdateIncidentalOccasion already uses. Unscoped by
+-- fund_id for the same reason: Ledger.SetIncidentalParticipation fetches the
+-- envelope through GetIncidental's fund-scoped join first, so by the time
+-- this runs the purpose_id is already known to belong to the caller's fund.
+-- name: UpdateIncidentalMinimum :one
+UPDATE incidental
+SET minimum_per_member = ?
+WHERE purpose_id = ?
+RETURNING purpose_id, occasion, target_amount, opened_on, closed_on, minimum_per_member, created_at;
 
 -- Joined through purpose because that is where fund ownership lives; incidental
 -- has no fund_id of its own (it is 1:1 with a purpose row).
 -- name: ListIncidentalsByFund :many
-SELECT i.purpose_id, i.occasion, i.target_amount, i.opened_on, i.closed_on, i.created_at
+SELECT i.purpose_id, i.occasion, i.target_amount, i.opened_on, i.closed_on, i.minimum_per_member, i.created_at
 FROM incidental i
 JOIN purpose p ON p.id = i.purpose_id
 WHERE p.fund_id = ?
 ORDER BY i.opened_on, i.purpose_id;
 
 -- name: ListOpenIncidentalsByFund :many
-SELECT i.purpose_id, i.occasion, i.target_amount, i.opened_on, i.closed_on, i.created_at
+SELECT i.purpose_id, i.occasion, i.target_amount, i.opened_on, i.closed_on, i.minimum_per_member, i.created_at
 FROM incidental i
 JOIN purpose p ON p.id = i.purpose_id
 WHERE p.fund_id = ? AND i.closed_on IS NULL

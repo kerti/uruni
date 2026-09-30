@@ -215,11 +215,20 @@ func (a *api) routes(r chi.Router) {
 		r.Post("/incidentals", a.openIncidental)
 		r.Get("/incidentals", a.listIncidentals)
 		r.Get("/incidentals/{purposeID}", a.getIncidental)
+		// The minimum and the recipients (ADR-034, #211) - both editable
+		// like occasion, never a posted fact, so a plain PATCH on the
+		// resource itself rather than a nested-verb action route.
+		r.Patch("/incidentals/{purposeID}", a.updateIncidentalParticipation)
 		r.Post("/incidentals/{purposeID}/close", a.closeIncidental)
 		// The way back from a closed envelope (ADR-031), matching the
 		// resource's own .../close idiom rather than reimbursement's
 		// PATCH-a-nullable-field shape.
 		r.Post("/incidentals/{purposeID}/reopen", a.reopenIncidental)
+		// The envelope's participation table (ADR-034, #211): who has
+		// contributed and how much, derived from the ledger against who
+		// was expected - never stored, so this is a GET, not a resource of
+		// its own.
+		r.Get("/incidentals/{purposeID}/participation", a.getIncidentalParticipation)
 
 		// Counting the real money and comparing it to the recorded balance (PRD
 		// section 7.7's home banner, section 7.8's reconcile flow). "latest" and

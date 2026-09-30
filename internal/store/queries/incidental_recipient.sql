@@ -1,0 +1,31 @@
+-- The members an envelope is for (ADR-034), never expected to contribute
+-- themselves. Inserted one row at a time inside Ledger.OpenIncidental's and
+-- Ledger.SetIncidentalParticipation's own withTx - unscoped validation here,
+-- the same shape UpdateIncidentalOccasion's own comment argues for: both
+-- callers already hold a purpose_id (and, for SetIncidentalParticipation, a
+-- fund_id) proven to belong to the caller's fund by an earlier fund-scoped
+-- fetch in the same transaction.
+-- name: CreateIncidentalRecipient :exec
+INSERT INTO incidental_recipient (fund_id, purpose_id, member_id)
+VALUES (?, ?, ?);
+
+-- The full-replace half of SetIncidentalParticipation (ADR-034): recipients
+-- are edited like occasion, not accumulated, so setting a new list clears the
+-- old one first. Unscoped by fund_id for the reason CreateIncidentalRecipient's
+-- own comment gives - purpose_id already belongs to the caller's fund by the
+-- time this runs.
+-- name: DeleteIncidentalRecipientsByPurpose :exec
+DELETE FROM incidental_recipient
+WHERE purpose_id = ?;
+
+-- One envelope's recipients, member name alongside the id so a caller (the
+-- participation view, the envelope's own detail screen) never has to look
+-- each one up separately. Ordered by name then id - the same tiebreak
+-- ListMembersPage uses - rather than insertion order, which carries no
+-- meaning here (CLAUDE.md's "no primary-key order" rule).
+-- name: ListIncidentalRecipients :many
+SELECT ir.member_id, m.name AS member_name
+FROM incidental_recipient ir
+JOIN member m ON m.id = ir.member_id
+WHERE ir.purpose_id = ?
+ORDER BY m.name, m.id;

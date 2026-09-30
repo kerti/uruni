@@ -13,7 +13,7 @@ const closeIncidental = `-- name: CloseIncidental :one
 UPDATE incidental
 SET closed_on = ?
 WHERE purpose_id = ?
-RETURNING purpose_id, occasion, target_amount, opened_on, closed_on, created_at
+RETURNING purpose_id, occasion, target_amount, opened_on, closed_on, minimum_per_member, created_at
 `
 
 type CloseIncidentalParams struct {
@@ -32,24 +32,26 @@ func (q *Queries) CloseIncidental(ctx context.Context, arg CloseIncidentalParams
 		&i.TargetAmount,
 		&i.OpenedOn,
 		&i.ClosedOn,
+		&i.MinimumPerMember,
 		&i.CreatedAt,
 	)
 	return i, err
 }
 
 const createIncidental = `-- name: CreateIncidental :one
-INSERT INTO incidental (purpose_id, occasion, target_amount, opened_on, closed_on, created_at)
-VALUES (?, ?, ?, ?, ?, ?)
-RETURNING purpose_id, occasion, target_amount, opened_on, closed_on, created_at
+INSERT INTO incidental (purpose_id, occasion, target_amount, opened_on, closed_on, minimum_per_member, created_at)
+VALUES (?, ?, ?, ?, ?, ?, ?)
+RETURNING purpose_id, occasion, target_amount, opened_on, closed_on, minimum_per_member, created_at
 `
 
 type CreateIncidentalParams struct {
-	PurposeID    int64
-	Occasion     string
-	TargetAmount *int64
-	OpenedOn     string
-	ClosedOn     *string
-	CreatedAt    int64
+	PurposeID        int64
+	Occasion         string
+	TargetAmount     *int64
+	OpenedOn         string
+	ClosedOn         *string
+	MinimumPerMember *int64
+	CreatedAt        int64
 }
 
 func (q *Queries) CreateIncidental(ctx context.Context, arg CreateIncidentalParams) (Incidental, error) {
@@ -59,6 +61,7 @@ func (q *Queries) CreateIncidental(ctx context.Context, arg CreateIncidentalPara
 		arg.TargetAmount,
 		arg.OpenedOn,
 		arg.ClosedOn,
+		arg.MinimumPerMember,
 		arg.CreatedAt,
 	)
 	var i Incidental
@@ -68,13 +71,14 @@ func (q *Queries) CreateIncidental(ctx context.Context, arg CreateIncidentalPara
 		&i.TargetAmount,
 		&i.OpenedOn,
 		&i.ClosedOn,
+		&i.MinimumPerMember,
 		&i.CreatedAt,
 	)
 	return i, err
 }
 
 const getIncidental = `-- name: GetIncidental :one
-SELECT i.purpose_id, i.occasion, i.target_amount, i.opened_on, i.closed_on, i.created_at
+SELECT i.purpose_id, i.occasion, i.target_amount, i.opened_on, i.closed_on, i.minimum_per_member, i.created_at
 FROM incidental i
 JOIN purpose p ON p.id = i.purpose_id
 WHERE i.purpose_id = ? AND p.fund_id = ?
@@ -99,6 +103,7 @@ func (q *Queries) GetIncidental(ctx context.Context, arg GetIncidentalParams) (I
 		&i.TargetAmount,
 		&i.OpenedOn,
 		&i.ClosedOn,
+		&i.MinimumPerMember,
 		&i.CreatedAt,
 	)
 	return i, err
@@ -126,7 +131,7 @@ func (q *Queries) IncidentalClosedOnForPurpose(ctx context.Context, purposeID in
 }
 
 const listIncidentalsByFund = `-- name: ListIncidentalsByFund :many
-SELECT i.purpose_id, i.occasion, i.target_amount, i.opened_on, i.closed_on, i.created_at
+SELECT i.purpose_id, i.occasion, i.target_amount, i.opened_on, i.closed_on, i.minimum_per_member, i.created_at
 FROM incidental i
 JOIN purpose p ON p.id = i.purpose_id
 WHERE p.fund_id = ?
@@ -150,6 +155,7 @@ func (q *Queries) ListIncidentalsByFund(ctx context.Context, fundID int64) ([]In
 			&i.TargetAmount,
 			&i.OpenedOn,
 			&i.ClosedOn,
+			&i.MinimumPerMember,
 			&i.CreatedAt,
 		); err != nil {
 			return nil, err
@@ -166,7 +172,7 @@ func (q *Queries) ListIncidentalsByFund(ctx context.Context, fundID int64) ([]In
 }
 
 const listOpenIncidentalsByFund = `-- name: ListOpenIncidentalsByFund :many
-SELECT i.purpose_id, i.occasion, i.target_amount, i.opened_on, i.closed_on, i.created_at
+SELECT i.purpose_id, i.occasion, i.target_amount, i.opened_on, i.closed_on, i.minimum_per_member, i.created_at
 FROM incidental i
 JOIN purpose p ON p.id = i.purpose_id
 WHERE p.fund_id = ? AND i.closed_on IS NULL
@@ -188,6 +194,7 @@ func (q *Queries) ListOpenIncidentalsByFund(ctx context.Context, fundID int64) (
 			&i.TargetAmount,
 			&i.OpenedOn,
 			&i.ClosedOn,
+			&i.MinimumPerMember,
 			&i.CreatedAt,
 		); err != nil {
 			return nil, err
@@ -207,7 +214,7 @@ const reopenIncidental = `-- name: ReopenIncidental :one
 UPDATE incidental
 SET closed_on = NULL
 WHERE purpose_id = ?
-RETURNING purpose_id, occasion, target_amount, opened_on, closed_on, created_at
+RETURNING purpose_id, occasion, target_amount, opened_on, closed_on, minimum_per_member, created_at
 `
 
 // The way back (ADR-031): closed_on to NULL, the exact inverse of
@@ -226,6 +233,40 @@ func (q *Queries) ReopenIncidental(ctx context.Context, purposeID int64) (Incide
 		&i.TargetAmount,
 		&i.OpenedOn,
 		&i.ClosedOn,
+		&i.MinimumPerMember,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
+const updateIncidentalMinimum = `-- name: UpdateIncidentalMinimum :one
+UPDATE incidental
+SET minimum_per_member = ?
+WHERE purpose_id = ?
+RETURNING purpose_id, occasion, target_amount, opened_on, closed_on, minimum_per_member, created_at
+`
+
+type UpdateIncidentalMinimumParams struct {
+	MinimumPerMember *int64
+	PurposeID        int64
+}
+
+// Setting or clearing the minimum every expected member is asked to give
+// (ADR-034) - mutable like occasion, never a posted fact, so this is a plain
+// UPDATE, the same shape UpdateIncidentalOccasion already uses. Unscoped by
+// fund_id for the same reason: Ledger.SetIncidentalParticipation fetches the
+// envelope through GetIncidental's fund-scoped join first, so by the time
+// this runs the purpose_id is already known to belong to the caller's fund.
+func (q *Queries) UpdateIncidentalMinimum(ctx context.Context, arg UpdateIncidentalMinimumParams) (Incidental, error) {
+	row := q.db.QueryRowContext(ctx, updateIncidentalMinimum, arg.MinimumPerMember, arg.PurposeID)
+	var i Incidental
+	err := row.Scan(
+		&i.PurposeID,
+		&i.Occasion,
+		&i.TargetAmount,
+		&i.OpenedOn,
+		&i.ClosedOn,
+		&i.MinimumPerMember,
 		&i.CreatedAt,
 	)
 	return i, err
@@ -235,7 +276,7 @@ const updateIncidentalOccasion = `-- name: UpdateIncidentalOccasion :one
 UPDATE incidental
 SET occasion = ?
 WHERE purpose_id = ?
-RETURNING purpose_id, occasion, target_amount, opened_on, closed_on, created_at
+RETURNING purpose_id, occasion, target_amount, opened_on, closed_on, minimum_per_member, created_at
 `
 
 type UpdateIncidentalOccasionParams struct {
@@ -261,6 +302,7 @@ func (q *Queries) UpdateIncidentalOccasion(ctx context.Context, arg UpdateIncide
 		&i.TargetAmount,
 		&i.OpenedOn,
 		&i.ClosedOn,
+		&i.MinimumPerMember,
 		&i.CreatedAt,
 	)
 	return i, err

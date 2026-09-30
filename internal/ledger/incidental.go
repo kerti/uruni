@@ -22,6 +22,16 @@ type OpenIncidentalParams struct {
 	Occasion     string        // non-empty; becomes purpose.name and incidental.occasion
 	TargetAmount *money.Amount // nil = no target (the schema allows NULL); must be > 0 if set
 	OpenedOn     string        // "YYYY-MM-DD", a real calendar date
+
+	// MinimumPerMember is the one figure every expected member is asked to
+	// give (ADR-034) - nil = no minimum; must be > 0 if set, the same shape
+	// TargetAmount holds itself to.
+	MinimumPerMember *money.Amount
+
+	// RecipientMemberIDs are the members this envelope is for (ADR-034) -
+	// never expected to contribute themselves. Zero or more; nil and an
+	// empty slice both mean none.
+	RecipientMemberIDs []int64
 }
 
 // OpenIncidental writes one purpose row (kind='incidental') and the
@@ -44,6 +54,9 @@ func (l *Ledger) OpenIncidental(ctx context.Context, p OpenIncidentalParams) (st
 	if p.TargetAmount != nil && *p.TargetAmount <= 0 {
 		return store.Incidental{}, fmt.Errorf("%w: target_amount must be positive when set, got %d", ErrInvalidArgument, p.TargetAmount.Int64())
 	}
+	if p.MinimumPerMember != nil && *p.MinimumPerMember <= 0 {
+		return store.Incidental{}, fmt.Errorf("%w: minimum_per_member must be positive when set, got %d", ErrInvalidArgument, p.MinimumPerMember.Int64())
+	}
 	if err := validateOccurredOn(p.OpenedOn); err != nil {
 		return store.Incidental{}, err
 	}
@@ -64,13 +77,22 @@ func (l *Ledger) OpenIncidental(ctx context.Context, p OpenIncidentalParams) (st
 			v := p.TargetAmount.Int64()
 			targetAmount = &v
 		}
+		var minimumPerMember *int64
+		if p.MinimumPerMember != nil {
+			v := p.MinimumPerMember.Int64()
+			minimumPerMember = &v
+		}
 
 		created, err = q.CreateIncidental(ctx, store.CreateIncidentalParams{
 			PurposeID: purpose.ID, Occasion: p.Occasion, TargetAmount: targetAmount,
-			OpenedOn: p.OpenedOn, CreatedAt: now,
+			OpenedOn: p.OpenedOn, MinimumPerMember: minimumPerMember, CreatedAt: now,
 		})
 		if err != nil {
 			return fmt.Errorf("creating incidental: %w", err)
+		}
+
+		if err := putIncidentalRecipientsTx(ctx, q, p.FundID, purpose.ID, p.RecipientMemberIDs); err != nil {
+			return err
 		}
 		return nil
 	})
@@ -78,6 +100,34 @@ func (l *Ledger) OpenIncidental(ctx context.Context, p OpenIncidentalParams) (st
 		return store.Incidental{}, fmt.Errorf("opening incidental: %w", err)
 	}
 	return created, nil
+}
+
+// putIncidentalRecipientsTx replaces purposeID's recipient set with
+// memberIDs, inside the caller's already-open store.Querier (ADR-027's ...Tx
+// composition rule). It never checks the envelope's own state - recipients
+// are mutable like occasion, never a posted fact (ADR-034), so both
+// OpenIncidental (nothing to delete yet) and SetIncidentalParticipation
+// (replacing a prior set) share this one primitive rather than a second copy
+// of the insert loop.
+//
+// No dedup and no pre-check against member: a repeated id or one belonging
+// to another fund is a caller mistake, not a domain bug, and surfaces as an
+// ordinary constraint violation the same way UpdateReimbursement's
+// caller-supplied ids already do (ADR-027's Amendments) - the primary key on
+// (fund_id, purpose_id, member_id) and the composite FK are the actual
+// guarantees, not a re-derivation of either here.
+func putIncidentalRecipientsTx(ctx context.Context, q store.Querier, fundID, purposeID int64, memberIDs []int64) error {
+	if err := q.DeleteIncidentalRecipientsByPurpose(ctx, purposeID); err != nil {
+		return fmt.Errorf("clearing incidental recipients: %w", err)
+	}
+	for _, memberID := range memberIDs {
+		if err := q.CreateIncidentalRecipient(ctx, store.CreateIncidentalRecipientParams{
+			FundID: fundID, PurposeID: purposeID, MemberID: memberID,
+		}); err != nil {
+			return fmt.Errorf("adding incidental recipient: %w", err)
+		}
+	}
+	return nil
 }
 
 // RenameIncidentalParams is every argument RenameIncidental needs to correct
@@ -136,6 +186,68 @@ func (l *Ledger) RenameIncidental(ctx context.Context, p RenameIncidentalParams)
 		return store.Incidental{}, fmt.Errorf("renaming incidental: %w", err)
 	}
 	return renamed, nil
+}
+
+// SetIncidentalParticipationParams is every argument SetIncidentalParticipation
+// needs to replace one envelope's minimum and its recipients (ADR-034).
+type SetIncidentalParticipationParams struct {
+	FundID    int64
+	PurposeID int64
+
+	// MinimumPerMember nil clears the minimum; a set value must be > 0,
+	// the same shape OpenIncidentalParams.MinimumPerMember holds itself to.
+	MinimumPerMember *money.Amount
+
+	// RecipientMemberIDs fully replaces the envelope's recipient set - not
+	// an add/remove delta - the same "editable like occasion" shape
+	// RenameIncidental gives the occasion itself. nil and an empty slice
+	// both mean "no recipients".
+	RecipientMemberIDs []int64
+}
+
+// SetIncidentalParticipation replaces one envelope's minimum_per_member and
+// its incidental_recipient rows in one withTx (ADR-034). Both are mutable
+// like occasion - nothing here is a posted fact, so neither half checks the
+// envelope's own closed_on: a closed envelope's expectation can still be
+// corrected the same way its occasion can (RenameIncidental carries no such
+// check either), and only a *posting* is what ADR-031 refuses.
+//
+// Fund-scoped through the same GetIncidental fetch every other single-
+// envelope write in this file opens with: an id names a row, it does not
+// prove the caller may change it.
+func (l *Ledger) SetIncidentalParticipation(ctx context.Context, p SetIncidentalParticipationParams) (store.Incidental, error) {
+	if p.MinimumPerMember != nil && *p.MinimumPerMember <= 0 {
+		return store.Incidental{}, fmt.Errorf("%w: minimum_per_member must be positive when set, got %d", ErrInvalidArgument, p.MinimumPerMember.Int64())
+	}
+
+	var updated store.Incidental
+	err := l.withTx(ctx, func(q store.Querier) error {
+		if _, err := q.GetIncidental(ctx, store.GetIncidentalParams{PurposeID: p.PurposeID, FundID: p.FundID}); err != nil {
+			return fmt.Errorf("fetching incidental: %w", err)
+		}
+
+		var minimumPerMember *int64
+		if p.MinimumPerMember != nil {
+			v := p.MinimumPerMember.Int64()
+			minimumPerMember = &v
+		}
+		var err error
+		updated, err = q.UpdateIncidentalMinimum(ctx, store.UpdateIncidentalMinimumParams{
+			MinimumPerMember: minimumPerMember, PurposeID: p.PurposeID,
+		})
+		if err != nil {
+			return fmt.Errorf("updating incidental minimum: %w", err)
+		}
+
+		if err := putIncidentalRecipientsTx(ctx, q, p.FundID, p.PurposeID, p.RecipientMemberIDs); err != nil {
+			return err
+		}
+		return nil
+	})
+	if err != nil {
+		return store.Incidental{}, fmt.Errorf("setting incidental participation: %w", err)
+	}
+	return updated, nil
 }
 
 // CloseIncidentalAndRollParams is every argument CloseIncidentalAndRoll
@@ -273,14 +385,22 @@ func (l *Ledger) CloseIncidentalAndRoll(ctx context.Context, p CloseIncidentalAn
 	return rolled, nil
 }
 
+// IncidentalRecipient names one member an envelope is for (ADR-034) -
+// never expected to contribute themselves (see GetIncidentalParticipation).
+type IncidentalRecipient struct {
+	MemberID   int64
+	MemberName string
+}
+
 // IncidentalDetail is one envelope together with the totals PRD section 7.5 shows
 // for it - what it has collected and disbursed so far, summed straight from
 // the ledger (CLAUDE.md rule 2) rather than tracked as a running balance on
-// the row itself.
+// the row itself - and the recipients it names (ADR-034).
 type IncidentalDetail struct {
 	Incidental store.Incidental
 	Collected  money.Amount
 	Disbursed  money.Amount
+	Recipients []IncidentalRecipient
 }
 
 // GetIncidentalDetail fetches one envelope and its collected/disbursed
@@ -313,10 +433,20 @@ func (l *Ledger) GetIncidentalDetail(ctx context.Context, fundID, purposeID int6
 		return IncidentalDetail{}, fmt.Errorf("computing incidental activity totals: %w", err)
 	}
 
+	recipientRows, err := l.q.ListIncidentalRecipients(ctx, purposeID)
+	if err != nil {
+		return IncidentalDetail{}, fmt.Errorf("listing incidental recipients: %w", err)
+	}
+	recipients := make([]IncidentalRecipient, 0, len(recipientRows))
+	for _, r := range recipientRows {
+		recipients = append(recipients, IncidentalRecipient{MemberID: r.MemberID, MemberName: r.MemberName})
+	}
+
 	return IncidentalDetail{
 		Incidental: envelope,
 		Collected:  money.FromDB(totals.CollectedAmount),
 		Disbursed:  money.FromDB(totals.DisbursedAmount),
+		Recipients: recipients,
 	}, nil
 }
 
