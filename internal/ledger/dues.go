@@ -124,21 +124,24 @@ func (l *Ledger) postDuesPaymentTx(ctx context.Context, q store.Querier, p PostD
 // would not be a reversal of that payment (ADR-029).
 type ReverseDuesPaymentParams struct {
 	FundID        int64
-	TransactionID int64  // the kind='dues' row being reversed
+	TransactionID int64  // the kind='dues' row, or a named contribution, being reversed (ADR-034)
 	OccurredOn    string // "YYYY-MM-DD", the reversal's own date - not the original payment's
 	Note          *string
 }
 
 // ReverseDuesPayment posts one kind='adjustment', direction='out' row that
-// reverses a previously-posted kind='dues' payment, carrying a new
-// reverses_transaction_id naming the row it reverses (ADR-029). It returns
-// the posted reversal row.
+// reverses a previously-posted kind='dues' payment or a named contribution
+// (ADR-029, widened by ADR-034), carrying a new reverses_transaction_id
+// naming the row it reverses. It returns the posted reversal row.
 //
 // account_id, purpose_id, amount, member_id and dues_period are copied from
-// the original payment, inside the same withTx that posts the reversal -
-// never re-typed by the caller (see ReverseDuesPaymentParams). Only
-// occurred_on and note are the caller's to choose: the date the correction
-// is actually made, and why.
+// the original row, inside the same withTx that posts the reversal - never
+// re-typed by the caller (see ReverseDuesPaymentParams). Only occurred_on
+// and note are the caller's to choose: the date the correction is actually
+// made, and why. Copying dues_period unchanged is what makes a dues
+// reversal carry its period and a contribution reversal carry none (a
+// contribution's own dues_period is always NULL) - the same fact the
+// schema's own BEFORE INSERT trigger verifies independently.
 //
 // The original row is fetched fund-scoped (GetTransactionForFund: WHERE
 // fund_id = ? AND id = ?), not by id alone. That is what makes
@@ -148,18 +151,25 @@ type ReverseDuesPaymentParams struct {
 // schema level, but the fund-scoped fetch is what stops this method from
 // ever constructing the cross-fund insert in the first place.
 //
-// Three named errors, each a pre-check ahead of a guarantee the schema
+// Four named errors, each a pre-check ahead of a guarantee the schema
 // already enforces on its own - here purely to give the caller a clean,
 // named error instead of a raw constraint string (ADR-027's
 // ErrReimbursementAlreadySettled shape):
 //
 //   - ErrDuesPaymentNotFound: no row with this id exists in this fund.
-//   - ErrNotADuesPayment: the row exists but its Kind is not "dues" - which
-//     also rules out reversing a reversal, since a reversal is itself
-//     posted as kind='adjustment', never kind='dues'.
+//   - ErrNotADuesPayment: the row exists but is neither kind='dues' nor a
+//     named contribution (kind='normal' with member_id set) - which also
+//     rules out reversing a reversal, since a reversal is itself posted as
+//     kind='adjustment', never kind='dues' or a member-carrying 'normal'.
 //   - ErrDuesPaymentAlreadyReversed: GetDuesPaymentReversal already finds a
 //     reversal row for this payment - the dues_payment_reversed_once
 //     partial unique index is the actual guarantee, at most once ever.
+//   - ErrIncidentalClosed: the original row's own purpose is a closed
+//     incidental (ADR-031) - a reversal posts to that same purpose, so the
+//     envelope must be reopened first, exactly as PostTransaction's own
+//     guard requires for an ordinary posting. A dues payment's purpose is
+//     always 'main', so this never applies to a dues reversal in practice;
+//     only a named contribution's envelope can ever be closed.
 func (l *Ledger) ReverseDuesPayment(ctx context.Context, p ReverseDuesPaymentParams) (store.Transaction, error) {
 	if err := validateOccurredOn(p.OccurredOn); err != nil {
 		return store.Transaction{}, err
@@ -178,7 +188,8 @@ func (l *Ledger) ReverseDuesPayment(ctx context.Context, p ReverseDuesPaymentPar
 			return fmt.Errorf("fetching transaction to reverse: %w", err)
 		}
 
-		if original.Kind != "dues" {
+		isNamedContribution := original.Kind == "normal" && original.MemberID != nil
+		if original.Kind != "dues" && !isNamedContribution {
 			return ErrNotADuesPayment
 		}
 
@@ -191,6 +202,14 @@ func (l *Ledger) ReverseDuesPayment(ctx context.Context, p ReverseDuesPaymentPar
 		}
 		if !errors.Is(err, sql.ErrNoRows) {
 			return fmt.Errorf("checking for an existing reversal: %w", err)
+		}
+
+		closedOn, err := q.IncidentalClosedOnForPurpose(ctx, original.PurposeID)
+		if err != nil && !errors.Is(err, sql.ErrNoRows) {
+			return fmt.Errorf("checking incidental closed state: %w", err)
+		}
+		if err == nil && closedOn != nil {
+			return ErrIncidentalClosed
 		}
 
 		reversal, err = q.CreateTransaction(ctx, store.CreateTransactionParams{

@@ -62,6 +62,27 @@ export const copy = {
       purposeFilterLabel: (name: string) => `Peruntukan: ${name}`,
       purposeFilterClear: 'Hapus filter peruntukan',
       purposeFilterEmpty: 'Belum ada transaksi untuk peruntukan ini.',
+      // Undoing a named contribution recorded against the wrong member
+      // (ADR-034, #211, #333) - the same "reverse, then post again" shape
+      // dues.history gives a dues payment, reused here rather than a second
+      // wording for the same action: a sumbangan is not edited away, a new
+      // entry undoes it. reversalRow/reversedBadge are dues.history's own
+      // words, reused verbatim (CONTEXT.md: one word per concept) since
+      // both lists show the same two shapes of row.
+      reverse: 'Batalkan sumbangan',
+      reverseDateLabel: 'Tanggal pembatalan',
+      reverseNoteLabel: 'Alasan (opsional)',
+      reverseConfirm: 'Ya, batalkan',
+      reverseCancel: 'Jangan jadi',
+      reverseSubmitting: 'Membatalkan…',
+      reverseSuccess: 'Sumbangan dibatalkan.',
+      // Scoped ahead of copy.common.errors' own dues_payment_already_reversed
+      // (ErrorState.tsx's ordinary fallback chain): the server answers the
+      // same 409 for a repeat reversal on either path, and this list is the
+      // sumbangan one - "iuran" would be the wrong noun here.
+      errors: {
+        dues_payment_already_reversed: 'Sumbangan ini sudah dibatalkan.',
+      },
     },
     // The Talangan tab's own search and paging (#226, ADR-032). A
     // narrower placeholder than Transaksi's own: this list's search covers
@@ -223,6 +244,19 @@ export const copy = {
       purpose_correction_target_closed: 'Amplop ini sudah ditutup — buka lagi dulu sebelum memindahkan peruntukan ke sini.',
       purpose_correction_source_closed: 'Amplop ini sudah ditutup — buka lagi dulu sebelum memindahkan peruntukan dari sini.',
       purpose_correction_noop: 'Baris ini sudah memakai peruntukan itu.',
+      // ADR-034 (#211): a sumbangan bernama can't be re-tagged the way an
+      // ordinary row can - moving it would leave participation counting the
+      // member against an envelope the money has left. Same "added ahead of
+      // its own UI" reasoning as the purpose_correction_* codes above -
+      // screens land in #333.
+      purpose_correction_named_contribution:
+        'Peruntukan sumbangan yang sudah bernama tidak bisa diperbaiki di sini — batalkan sumbangannya, lalu catat lagi.',
+      // POST /api/dues-payments/{id}/reversal's own named 409 for a second
+      // reversal of the same payment (ADR-029) - the shared fallback for the
+      // dues path. The contribution path (ADR-034, #211) speaks of a
+      // sumbangan instead: copy.history.transactions.errors' own scoped
+      // entry, checked first by that screen's own error mapper.
+      dues_payment_already_reversed: 'Pembayaran iuran ini sudah dibatalkan.',
       // M6.21/#154's receipt upload routes (internal/http/receipts.go's
       // processAndStoreReceipt) - a phone shooting HEIC by default gets its
       // own wording, same reasoning as the Go comment beside that code.
@@ -365,6 +399,12 @@ export const copy = {
     // stops at one line.
     passThroughNegativeHint: (name: string) =>
       `Pengeluaran ini lebih besar dari uang ${name} yang pernah masuk. Kalau ini dibayar pakai uang kas sendiri, pilih Kas Utama.`,
+    // ADR-034 (#211): who a contribution is from, shown only when the money
+    // is coming in and the chosen peruntukan is an open amplop - a guest or
+    // an anonymous giver leaves it as contributorNone, which is the field's
+    // own default and never a validation error.
+    contributorLabel: 'Dari siapa? (opsional)',
+    contributorNone: 'Tidak disebutkan',
   },
   // The home screen (M6.9, PRD §7.7): balance hero, per-location balances,
   // reconciliation status and recent activity - the everyday-loop landing
@@ -413,6 +453,15 @@ export const copy = {
     },
     duesReversal: {
       text: (period: string, memberName: string) => `Pembatalan · ${period} · ${memberName}`,
+    },
+    // A named contribution to an envelope (ADR-034): the member's name, as
+    // a settlement shows it; its reversal carries no period, unlike dues.
+    contribution: {
+      kind: 'Sumbangan',
+      text: (memberName: string) => memberName,
+    },
+    contributionReversal: {
+      text: (memberName: string) => `Pembatalan · ${memberName}`,
     },
     opening: {
       text: (accountName: string) => `Saldo awal · ${accountName}`,
@@ -977,6 +1026,18 @@ export const copy = {
       occasionPlaceholder: 'Mis. Halal bihalal RT',
       targetLabel: 'Target dana (opsional)',
       dateLabel: 'Tanggal dibuka',
+      // ADR-034 (#211): one figure every expected member is asked to give -
+      // not a dues rate, no tiers, no effective dates, the same nullable
+      // shape targetLabel already carries. Shared by the open dialog and the
+      // edit dialog below (copy.incidentals.rename reuses these three keys
+      // rather than restating them - one wording for the same two fields,
+      // opening or correcting).
+      minimumLabel: 'Sumbangan minimal per anggota (opsional)',
+      // Who the envelope is for (ADR-034) - the sick, the bereaved family,
+      // the birthday pair - never expected to contribute themselves. Zero or
+      // more, always members.
+      recipientsLabel: 'Untuk siapa amplop ini? (opsional)',
+      recipientsEmpty: 'Belum ada anggota aktif.',
       submit: 'Buka',
       submitting: 'Membuka…',
       cancel: 'Batal',
@@ -1027,24 +1088,61 @@ export const copy = {
       // somewhere to post, through the ordinary record form above. Two words,
       // like its neighbours in the row: the envelope is the screen's subject.
       reopen: 'Buka lagi',
-      // Correcting a mistyped occasion (#264) - offered for an open AND a
-      // closed envelope, since the typo is usually found after the occasion
-      // is over.
-      rename: 'Ubah nama',
+      // Correcting a mistyped occasion (#264), and - since #333 - the
+      // envelope's minimum and recipients (ADR-034): one dialog for
+      // everything on the envelope that is editable like the occasion,
+      // never a posted fact. Offered for an open AND a closed envelope,
+      // since a typo is usually found after the occasion is over and the
+      // same is true of a minimum set too high or a recipient added late.
+      rename: 'Ubah amplop',
     },
     reopen: {
       success: 'Amplop dibuka kembali.',
     },
-    // The rename dialog (#264): one field, seeded from the current occasion.
-    // nameLabel reuses open.occasionLabel's own word ("Acara") - one label
-    // for the same field, opening or correcting.
+    // The edit dialog (#264, widened by #333/ADR-034): occasion, minimum and
+    // recipients together - nameLabel reuses open.occasionLabel's own word
+    // ("Acara"), minimumLabel/recipientsLabel/recipientsEmpty reuse the open
+    // dialog's own three keys verbatim rather than restating them, since
+    // both dialogs edit the same fields at different points in the
+    // envelope's life.
     rename: {
       heading: 'Ubah amplop',
       nameLabel: 'Acara',
       save: 'Simpan',
       saving: 'Menyimpan…',
       cancel: 'Batal',
-      success: 'Nama amplop sudah diubah.',
+      success: 'Amplop sudah diperbarui.',
+    },
+    // The participation table (ADR-034, #211, #333): who has contributed and
+    // how much, derived from the ledger against the envelope's own
+    // expectation - never stored. "Kurang dari minimal" is deliberately
+    // neutral (muted, never terracotta, Design-System.md) - being under a
+    // minimum is not a discrepancy the way a reconciliation gap is.
+    participation: {
+      heading: 'Partisipasi',
+      // Recipients are never expected to contribute themselves - shown once,
+      // near the top of the table they are excluded from. names is already
+      // joined by the caller (", " between them).
+      recipientsLine: (names: string) => `Untuk: ${names}`,
+      states: {
+        given: 'Sudah menyumbang',
+        notGiven: 'Belum menyumbang',
+        underMinimum: 'Kurang dari minimal',
+      },
+      // Expected members with nobody who has contributed yet still need the
+      // heading to explain the empty rows beneath it - this is not that
+      // empty state (there are no expected members at all, e.g. every
+      // active member is a recipient).
+      noneExpected: 'Tidak ada anggota yang diharapkan menyumbang untuk amplop ini.',
+      // A contribution from someone the envelope did not expect (a later
+      // joiner, a recipient who gave anyway) - listed with their amount,
+      // never as "belum".
+      otherHeading: 'Sumbangan lain',
+      // The row action (ADR-034's "one action: record a contribution with
+      // the member already filled in") - navigates to Catat with both the
+      // envelope's purpose and this member pre-chosen.
+      record: 'Catat sumbangan',
+      recordAria: (memberName: string) => `Catat sumbangan dari ${memberName}`,
     },
     status: {
       open: 'Berjalan',

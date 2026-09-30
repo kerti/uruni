@@ -50,6 +50,61 @@ func (q *Queries) AccountBalanceThrough(ctx context.Context, arg AccountBalanceT
 	return balance_amount, err
 }
 
+const contributedByIncidentalMember = `-- name: ContributedByIncidentalMember :many
+SELECT member_id, CAST(COALESCE(SUM(amount), 0) AS INTEGER) AS contributed_amount
+FROM "transaction" t
+WHERE t.fund_id = ? AND t.purpose_id = ? AND t.kind = 'normal' AND t.direction = 'in'
+  AND t.member_id IS NOT NULL
+  AND NOT EXISTS (SELECT 1 FROM "transaction" r WHERE r.reverses_transaction_id = t.id)
+GROUP BY member_id
+`
+
+type ContributedByIncidentalMemberParams struct {
+	FundID    int64
+	PurposeID int64
+}
+
+type ContributedByIncidentalMemberRow struct {
+	MemberID          *int64
+	ContributedAmount int64
+}
+
+// The named half of an envelope's participation (ADR-034): every named
+// contribution posted against one purpose_id, summed per member - excluding
+// a row some reversal points at, the same NOT EXISTS shape DuesPaidByPeriod
+// already uses (ADR-029) so a reversed contribution disappears from "gave"
+// rather than counting twice. member_id IS NOT NULL is redundant with the
+// schema's own CHECK (kind='normal' AND direction='in' never carries a
+// member outside a named contribution) but kept explicit rather than
+// leaned on silently.
+//
+// This says nothing about who was EXPECTED to give - that half is
+// ListMembersByFund plus the envelope's opened_on and recipients, read and
+// combined in Go (Ledger.GetIncidentalParticipation), never a second query
+// trying to derive the same roster twice.
+func (q *Queries) ContributedByIncidentalMember(ctx context.Context, arg ContributedByIncidentalMemberParams) ([]ContributedByIncidentalMemberRow, error) {
+	rows, err := q.db.QueryContext(ctx, contributedByIncidentalMember, arg.FundID, arg.PurposeID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ContributedByIncidentalMemberRow{}
+	for rows.Next() {
+		var i ContributedByIncidentalMemberRow
+		if err := rows.Scan(&i.MemberID, &i.ContributedAmount); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const createTransaction = `-- name: CreateTransaction :one
 INSERT INTO "transaction" (
   fund_id, account_id, purpose_id, direction, amount, occurred_on, kind,
@@ -409,6 +464,8 @@ SELECT
 FROM "transaction" t
 LEFT JOIN transfer tr ON tr.id = t.transfer_id AND tr.kind = 'reclass_purpose'
 WHERE t.fund_id = ? AND t.purpose_id = ? AND tr.id IS NULL
+  AND t.reverses_transaction_id IS NULL
+  AND NOT EXISTS (SELECT 1 FROM "transaction" r WHERE r.reverses_transaction_id = t.id)
 `
 
 type IncidentalActivityTotalsParams struct {
@@ -432,6 +489,14 @@ type IncidentalActivityTotalsRow struct {
 // between this envelope's own accounts, and this screen has no reason to
 // exclude the latter. tr.id IS NULL keeps every row the join found no
 // matching reclass_purpose transfer for - which is every kind but that one.
+//
+// A cancelled contribution (ADR-034's widened ADR-029 reversal) is dropped
+// whole: the reversal row itself (reverses_transaction_id set) and the row
+// it reverses, the same NOT EXISTS ContributedByIncidentalMember uses.
+// Otherwise a cancellation reads as money the occasion spent - "Terpakai"
+// - and the cancelled row as money it collected. Both halves go, so
+// collected minus disbursed still equals the envelope's balance.
+// IncidentalTotals above stays unfiltered: the pair nets to zero there.
 func (q *Queries) IncidentalActivityTotals(ctx context.Context, arg IncidentalActivityTotalsParams) (IncidentalActivityTotalsRow, error) {
 	row := q.db.QueryRowContext(ctx, incidentalActivityTotals, arg.FundID, arg.PurposeID)
 	var i IncidentalActivityTotalsRow

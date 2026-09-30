@@ -19,6 +19,14 @@ type openIncidentalRequest struct {
 	Occasion     string `json:"occasion"`
 	TargetAmount *int64 `json:"target_amount"`
 	OpenedOn     string `json:"opened_on"`
+
+	// MinimumPerMember and RecipientMemberIDs are ADR-034's addition
+	// (#211): the one figure every expected member is asked to give, and
+	// the members this envelope is for. Both are optional - nil/empty
+	// means no minimum and no recipients, same as leaving TargetAmount
+	// unset.
+	MinimumPerMember   *int64  `json:"minimum_per_member"`
+	RecipientMemberIDs []int64 `json:"recipient_member_ids"`
 }
 
 // incidentalResponse is the wire shape of one envelope on its own - what
@@ -31,16 +39,20 @@ type incidentalResponse struct {
 	OpenedOn     string  `json:"opened_on"`
 	ClosedOn     *string `json:"closed_on"`
 	CreatedAt    int64   `json:"created_at"`
+	// MinimumPerMember is ADR-034's addition - nil means no minimum, the
+	// same nullability TargetAmount carries.
+	MinimumPerMember *int64 `json:"minimum_per_member"`
 }
 
 func toIncidentalResponse(i store.Incidental) incidentalResponse {
 	return incidentalResponse{
-		PurposeID:    i.PurposeID,
-		Occasion:     i.Occasion,
-		TargetAmount: i.TargetAmount,
-		OpenedOn:     i.OpenedOn,
-		ClosedOn:     i.ClosedOn,
-		CreatedAt:    i.CreatedAt,
+		PurposeID:        i.PurposeID,
+		Occasion:         i.Occasion,
+		TargetAmount:     i.TargetAmount,
+		OpenedOn:         i.OpenedOn,
+		ClosedOn:         i.ClosedOn,
+		CreatedAt:        i.CreatedAt,
+		MinimumPerMember: i.MinimumPerMember,
 	}
 }
 
@@ -58,18 +70,40 @@ type incidentalDetailResponse struct {
 	CreatedAt       int64   `json:"created_at"`
 	CollectedAmount int64   `json:"collected_amount"`
 	DisbursedAmount int64   `json:"disbursed_amount"`
+	// MinimumPerMember and Recipients are ADR-034's addition. Recipients
+	// rides only on the detail response, not the plain list - the same
+	// "a derived figure costs nothing extra only where it is actually
+	// asked for" split TargetAmount/CollectedAmount already draws, here
+	// avoiding an extra query per row on GET /api/incidentals.
+	MinimumPerMember *int64                        `json:"minimum_per_member"`
+	Recipients       []incidentalRecipientResponse `json:"recipients"`
+}
+
+// incidentalRecipientResponse is one member an envelope is for (ADR-034) -
+// id and name together, the same reasoning ListIncidentalRecipients' own
+// comment gives for joining member in SQL rather than asking the caller to
+// look each one up.
+type incidentalRecipientResponse struct {
+	MemberID   int64  `json:"member_id"`
+	MemberName string `json:"member_name"`
 }
 
 func toIncidentalDetailResponse(d ledger.IncidentalDetail) incidentalDetailResponse {
+	recipients := make([]incidentalRecipientResponse, 0, len(d.Recipients))
+	for _, r := range d.Recipients {
+		recipients = append(recipients, incidentalRecipientResponse{MemberID: r.MemberID, MemberName: r.MemberName})
+	}
 	return incidentalDetailResponse{
-		PurposeID:       d.Incidental.PurposeID,
-		Occasion:        d.Incidental.Occasion,
-		TargetAmount:    d.Incidental.TargetAmount,
-		OpenedOn:        d.Incidental.OpenedOn,
-		ClosedOn:        d.Incidental.ClosedOn,
-		CreatedAt:       d.Incidental.CreatedAt,
-		CollectedAmount: d.Collected.Int64(),
-		DisbursedAmount: d.Disbursed.Int64(),
+		PurposeID:        d.Incidental.PurposeID,
+		Occasion:         d.Incidental.Occasion,
+		TargetAmount:     d.Incidental.TargetAmount,
+		OpenedOn:         d.Incidental.OpenedOn,
+		ClosedOn:         d.Incidental.ClosedOn,
+		CreatedAt:        d.Incidental.CreatedAt,
+		CollectedAmount:  d.Collected.Int64(),
+		DisbursedAmount:  d.Disbursed.Int64(),
+		MinimumPerMember: d.Incidental.MinimumPerMember,
+		Recipients:       recipients,
 	}
 }
 
@@ -94,12 +128,19 @@ func (a *api) openIncidental(w http.ResponseWriter, r *http.Request) {
 		v := money.Amount(*req.TargetAmount)
 		target = &v
 	}
+	var minimum *money.Amount
+	if req.MinimumPerMember != nil {
+		v := money.Amount(*req.MinimumPerMember)
+		minimum = &v
+	}
 
 	created, err := a.ledger.OpenIncidental(r.Context(), ledger.OpenIncidentalParams{
-		FundID:       fund.ID,
-		Occasion:     req.Occasion,
-		TargetAmount: target,
-		OpenedOn:     req.OpenedOn,
+		FundID:             fund.ID,
+		Occasion:           req.Occasion,
+		TargetAmount:       target,
+		OpenedOn:           req.OpenedOn,
+		MinimumPerMember:   minimum,
+		RecipientMemberIDs: req.RecipientMemberIDs,
 	})
 	if err != nil {
 		mapLedgerError(w, a.logger, err)
@@ -276,6 +317,132 @@ func (a *api) reopenIncidental(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, toIncidentalResponse(reopened))
+}
+
+// updateIncidentalParticipationRequest is PATCH /api/incidentals/{purposeID}'s
+// body: the envelope's minimum and its recipients (ADR-034), the two facets
+// PATCH /api/purposes/{id} does not reach - that route corrects occasion
+// alone, through RenameIncidental, and stays that way rather than growing a
+// second, overlapping way to edit the same envelope.
+//
+// Both fields fully replace their own facet, the same "editable like
+// occasion" shape SetIncidentalParticipation itself carries: nil
+// MinimumPerMember clears it, and RecipientMemberIDs (nil or empty alike)
+// replaces the whole recipient set, never an add/remove delta.
+type updateIncidentalParticipationRequest struct {
+	MinimumPerMember   *int64  `json:"minimum_per_member"`
+	RecipientMemberIDs []int64 `json:"recipient_member_ids"`
+}
+
+// updateIncidentalParticipation is PATCH /api/incidentals/{purposeID}: wraps
+// Ledger.SetIncidentalParticipation. Handlers decode and pass through -
+// minimum_per_member's shape check is that method's job alone (ADR-027).
+func (a *api) updateIncidentalParticipation(w http.ResponseWriter, r *http.Request) {
+	purposeID, ok := incidentalPurposeID(w, r)
+	if !ok {
+		return
+	}
+
+	var req updateIncidentalParticipationRequest
+	if !decodeJSON(w, r, &req) {
+		return
+	}
+
+	fund, ok := a.resolveFund(w, r)
+	if !ok {
+		return
+	}
+
+	var minimum *money.Amount
+	if req.MinimumPerMember != nil {
+		v := money.Amount(*req.MinimumPerMember)
+		minimum = &v
+	}
+
+	updated, err := a.ledger.SetIncidentalParticipation(r.Context(), ledger.SetIncidentalParticipationParams{
+		FundID:             fund.ID,
+		PurposeID:          purposeID,
+		MinimumPerMember:   minimum,
+		RecipientMemberIDs: req.RecipientMemberIDs,
+	})
+	if err != nil {
+		mapLedgerError(w, a.logger, err)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, toIncidentalResponse(updated))
+}
+
+// participationStateResponse is one expected member's row on GET
+// /api/incidentals/{purposeID}/participation (ADR-034). member is the full
+// roster shape members.go already exposes, the same choice
+// duesStatusResponse's own comment makes for the reconcile flow's roster.
+type participationStateResponse struct {
+	Member            memberResponse `json:"member"`
+	ContributedAmount int64          `json:"contributed_amount"`
+	State             string         `json:"state"`
+}
+
+func toParticipationStateResponse(p ledger.MemberParticipation) participationStateResponse {
+	return participationStateResponse{
+		Member:            toMemberResponse(p.Member),
+		ContributedAmount: p.ContributedAmount.Int64(),
+		State:             string(p.State),
+	}
+}
+
+// unexpectedContributionResponse is one row of the "Sumbangan lain" list
+// (ADR-034): a contribution from someone the envelope did not expect. No
+// state - unexpected is not itself a status, only an amount.
+type unexpectedContributionResponse struct {
+	Member            memberResponse `json:"member"`
+	ContributedAmount int64          `json:"contributed_amount"`
+}
+
+func toUnexpectedContributionResponse(u ledger.UnexpectedContribution) unexpectedContributionResponse {
+	return unexpectedContributionResponse{
+		Member:            toMemberResponse(u.Member),
+		ContributedAmount: u.ContributedAmount.Int64(),
+	}
+}
+
+// incidentalParticipationResponse is GET /api/incidentals/{purposeID}/participation's
+// body: the envelope's whole participation table in one round trip.
+type incidentalParticipationResponse struct {
+	Expected   []participationStateResponse     `json:"expected"`
+	Unexpected []unexpectedContributionResponse `json:"unexpected"`
+}
+
+// getIncidentalParticipation is GET /api/incidentals/{purposeID}/participation:
+// wraps Ledger.GetIncidentalParticipation - PRD section 7.5's "who has
+// contributed and how much", derived from the ledger, never stored.
+func (a *api) getIncidentalParticipation(w http.ResponseWriter, r *http.Request) {
+	purposeID, ok := incidentalPurposeID(w, r)
+	if !ok {
+		return
+	}
+
+	fund, ok := a.resolveFund(w, r)
+	if !ok {
+		return
+	}
+
+	participation, err := a.ledger.GetIncidentalParticipation(r.Context(), fund.ID, purposeID)
+	if err != nil {
+		mapLedgerError(w, a.logger, err)
+		return
+	}
+
+	expected := make([]participationStateResponse, 0, len(participation.Expected))
+	for _, p := range participation.Expected {
+		expected = append(expected, toParticipationStateResponse(p))
+	}
+	unexpected := make([]unexpectedContributionResponse, 0, len(participation.Unexpected))
+	for _, u := range participation.Unexpected {
+		unexpected = append(unexpected, toUnexpectedContributionResponse(u))
+	}
+
+	writeJSON(w, http.StatusOK, incidentalParticipationResponse{Expected: expected, Unexpected: unexpected})
 }
 
 // incidentalPurposeID parses {purposeID}, or answers the request and reports

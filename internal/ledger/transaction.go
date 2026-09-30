@@ -41,6 +41,15 @@ type PostTransactionParams struct {
 	// may be posted on any Tuesday, not only during a reconciliation
 	// (ADR-024), so this needs no other input to distinguish it.
 	IsAdjustment bool
+
+	// MemberID optionally names the member a kind='normal', direction='in'
+	// row is a contribution from (ADR-034, #211) - a guest or an anonymous
+	// giver leaves this nil. It is only ever valid on that one shape: naming
+	// a member on an adjustment, or on an outgoing row, is refused below
+	// before the write is attempted, and naming one on a purpose that is not
+	// an incidental is refused inside the same withTx as the write, once
+	// PurposeID's own kind is known (ErrContributionRequiresIncidentalPurpose).
+	MemberID *int64
 }
 
 // PostTransaction writes one kind='normal' or kind='adjustment' entry and
@@ -73,6 +82,14 @@ func (l *Ledger) PostTransaction(ctx context.Context, p PostTransactionParams) (
 	if err := validateOccurredOn(p.OccurredOn); err != nil {
 		return store.Transaction{}, err
 	}
+	if p.MemberID != nil {
+		if p.IsAdjustment {
+			return store.Transaction{}, fmt.Errorf("%w: member_id is only valid on a contribution, not an adjustment", ErrInvalidArgument)
+		}
+		if p.Direction != "in" {
+			return store.Transaction{}, fmt.Errorf("%w: member_id is only valid on an incoming contribution", ErrInvalidArgument)
+		}
+	}
 
 	kind := "normal"
 	if p.IsAdjustment {
@@ -82,11 +99,24 @@ func (l *Ledger) PostTransaction(ctx context.Context, p PostTransactionParams) (
 	var posted store.Transaction
 	err := l.withTx(ctx, func(q store.Querier) error {
 		closedOn, err := q.IncidentalClosedOnForPurpose(ctx, p.PurposeID)
-		if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		switch {
+		case err == nil:
+			if closedOn != nil {
+				return ErrIncidentalClosed
+			}
+		case errors.Is(err, sql.ErrNoRows):
+			// PurposeID does not name an incidental at all - the shape
+			// PostTransaction's own doc comment reads as "no guard
+			// applies" for a closed envelope. A contribution's own
+			// member_id needs the opposite reading here (ADR-034): naming
+			// a member on any other purpose is refused with a clean error
+			// now, rather than reaching the BEFORE INSERT trigger's raw
+			// message below.
+			if p.MemberID != nil {
+				return ErrContributionRequiresIncidentalPurpose
+			}
+		default:
 			return fmt.Errorf("checking incidental closed state: %w", err)
-		}
-		if err == nil && closedOn != nil {
-			return ErrIncidentalClosed
 		}
 
 		posted, err = q.CreateTransaction(ctx, store.CreateTransactionParams{
@@ -97,6 +127,7 @@ func (l *Ledger) PostTransaction(ctx context.Context, p PostTransactionParams) (
 			Amount:     p.Amount.Int64(),
 			OccurredOn: p.OccurredOn,
 			Kind:       kind,
+			MemberID:   p.MemberID,
 			Note:       p.Note,
 			CreatedAt:  time.Now().Unix(),
 		})

@@ -82,6 +82,24 @@ describe('TransactionList row labels (#257)', () => {
     expect(document.querySelector('.sr-only')).toBeNull()
   })
 
+  it("labels a named contribution with HandCoins and the member's name, and Sumbangan for screen readers", () => {
+    const { container } = renderRows([transaction({ purpose_id: 2, member_id: 5, member_name: 'Budi' })])
+
+    expect(container.querySelector('.lucide-hand-coins')).toBeInTheDocument()
+    expect(screen.getByText(copy.rowLabels.contribution.text('Budi'))).toBeInTheDocument()
+    expect(screen.getByText(copy.rowLabels.contribution.kind)).toHaveClass('sr-only')
+  })
+
+  it('labels a contribution reversal "Pembatalan - {anggota}", with no empty period', () => {
+    const { container } = renderRows([
+      transaction({ kind: 'adjustment', direction: 'out', purpose_id: 2, member_id: 5, member_name: 'Budi', reverses_transaction_id: 10 }),
+    ])
+
+    expect(container.querySelector('.lucide-undo-2')).toBeInTheDocument()
+    expect(screen.getByText(copy.rowLabels.contributionReversal.text('Budi'))).toBeInTheDocument()
+    expect(document.querySelector('.sr-only')).toBeNull()
+  })
+
   it('labels an opening balance: Flag, "Saldo awal - {lokasi}", with no duplicate screen-reader word', () => {
     const { container } = renderRows([transaction({ kind: 'opening', account_name: 'Bank Jago' })])
 
@@ -285,6 +303,94 @@ describe('TransactionList purpose correction (#276, ADR-033)', () => {
 
     expect(container.querySelector('.lucide-tags')).not.toBeInTheDocument()
     expect(screen.queryByText(copy.purposeCorrection.corrected)).not.toBeInTheDocument()
+  })
+
+  it('leaves a named contribution ineligible (ADR-034): moving it would strand participation', () => {
+    renderCorrectableRows([transaction({ id: 18, purpose_id: 2, member_id: 9, member_name: 'Budi' })])
+
+    expect(screen.queryByRole('button', { name: copy.purposeCorrection.controlAria("Jane's wedding") })).not.toBeInTheDocument()
+    expect(screen.getByText("Jane's wedding")).toBeInTheDocument()
+  })
+})
+
+describe('TransactionList contribution reversal (ADR-034, #211, #333)', () => {
+  const text = copy.history.transactions
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  function jsonResponse(body: unknown, status = 200) {
+    return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } })
+  }
+
+  function renderReversible(rows: Transaction[], onContributionReversed = vi.fn()) {
+    const result = render(
+      <TransactionList
+        transactions={rows}
+        purposeNames={purposeNames}
+        emptyMessage="Belum ada."
+        onContributionReversed={onContributionReversed}
+      />,
+    )
+    return { ...result, onContributionReversed }
+  }
+
+  it('offers "Batalkan sumbangan" on a named contribution, and posts the reversal on confirm', async () => {
+    const fetchMock = vi.fn(() => Promise.resolve(jsonResponse(transaction({ id: 99, kind: 'adjustment', direction: 'out' }), 201)))
+    vi.stubGlobal('fetch', fetchMock)
+
+    const { onContributionReversed } = renderReversible([transaction({ id: 30, purpose_id: 2, member_id: 9, member_name: 'Budi' })])
+
+    await userEvent.click(screen.getByRole('button', { name: text.reverse }))
+    await userEvent.click(screen.getByRole('button', { name: text.reverseConfirm }))
+
+    await waitFor(() => expect(onContributionReversed).toHaveBeenCalledTimes(1))
+    expect(fetchMock).toHaveBeenCalledWith('/api/dues-payments/30/reversal', expect.objectContaining({ method: 'POST' }))
+  })
+
+  it('renders no reversal control on an ordinary row with no member', () => {
+    renderReversible([transaction({ id: 31 })])
+
+    expect(screen.queryByRole('button', { name: text.reverse })).not.toBeInTheDocument()
+  })
+
+  it('renders no reversal control on a contribution already reversed by another loaded row', () => {
+    renderReversible([
+      transaction({ id: 32, purpose_id: 2, member_id: 9, member_name: 'Budi' }),
+      transaction({
+        id: 33,
+        kind: 'adjustment',
+        direction: 'out',
+        purpose_id: 2,
+        member_id: 9,
+        member_name: 'Budi',
+        reverses_transaction_id: 32,
+      }),
+    ])
+
+    expect(screen.queryByRole('button', { name: text.reverse })).not.toBeInTheDocument()
+  })
+
+  it('shows the sumbangan wording, not the iuran one, for a repeat reversal', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => Promise.resolve(jsonResponse({ error: { code: 'dues_payment_already_reversed', message: 'x' } }, 409))),
+    )
+
+    renderReversible([transaction({ id: 34, purpose_id: 2, member_id: 9, member_name: 'Budi' })])
+
+    await userEvent.click(screen.getByRole('button', { name: text.reverse }))
+    await userEvent.click(screen.getByRole('button', { name: text.reverseConfirm }))
+
+    expect(await screen.findByText(text.errors.dues_payment_already_reversed)).toBeInTheDocument()
+    expect(screen.queryByText(copy.common.errors.dues_payment_already_reversed)).not.toBeInTheDocument()
+  })
+
+  it('renders no reversal control at all where no handler is passed', () => {
+    renderRows([transaction({ id: 35, purpose_id: 2, member_id: 9, member_name: 'Budi' })])
+
+    expect(screen.queryByRole('button', { name: text.reverse })).not.toBeInTheDocument()
   })
 })
 

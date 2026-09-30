@@ -99,7 +99,10 @@ Entitas utama:
 
 ### 7.5 Pengumpulan insidentil
 - Membuat insidentil untuk sebuah peristiwa (sakit, kematian, sunatan, pensiun).
-- Mengumpulkan kontribusi sekali jalan dan mencatat penyalurannya.
+- Mengumpulkan sumbangan sekali jalan dan mencatat penyalurannya.
+- Sumbangan boleh mencantumkan anggota yang memberi (opsional — tamu atau penyumbang tanpa nama tetap tanpa nama). Amplop boleh menetapkan **sumbangan minimal per anggota** dan menyebut anggota yang **dituju**, yang tidak diharapkan menyumbang.
+- Menampilkan siapa yang sudah menyumbang dan berapa, dibandingkan anggota yang aktif pada hari amplop dibuka, di layar amplop dan di laporan publik. Tampilan sederhana "belum menyumbang". **Tanpa pengingat, tanpa penagihan otomatis.** ([ADR-034](./ADR/034-envelope-participation.md))
+- Sumbangan yang tercatat atas nama anggota yang salah dibalik dengan entri baru lalu dicatat ulang, seperti pembayaran iuran (§7.3).
 - Saat ditutup, tampilkan sisanya dan tawarkan **alihkan ke Kas Utama** dengan satu ketukan.
 
 ### 7.6 Titipan (Kas Bidang)

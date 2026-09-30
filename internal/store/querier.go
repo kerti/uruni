@@ -18,6 +18,20 @@ type Querier interface {
 	// Closing an envelope moves no money, so this is an UPDATE rather than a ledger
 	// entry - incidental carries no immutability trigger for exactly this reason.
 	CloseIncidental(ctx context.Context, arg CloseIncidentalParams) (Incidental, error)
+	// The named half of an envelope's participation (ADR-034): every named
+	// contribution posted against one purpose_id, summed per member - excluding
+	// a row some reversal points at, the same NOT EXISTS shape DuesPaidByPeriod
+	// already uses (ADR-029) so a reversed contribution disappears from "gave"
+	// rather than counting twice. member_id IS NOT NULL is redundant with the
+	// schema's own CHECK (kind='normal' AND direction='in' never carries a
+	// member outside a named contribution) but kept explicit rather than
+	// leaned on silently.
+	//
+	// This says nothing about who was EXPECTED to give - that half is
+	// ListMembersByFund plus the envelope's opened_on and recipients, read and
+	// combined in Go (Ledger.GetIncidentalParticipation), never a second query
+	// trying to derive the same roster twice.
+	ContributedByIncidentalMember(ctx context.Context, arg ContributedByIncidentalMemberParams) ([]ContributedByIncidentalMemberRow, error)
 	// CountUsers is how register (#114) knows whether the one-shot bootstrap
 	// account already exists (ADR-030 decision 2): the gate is the count, not a
 	// duplicate-email collision.
@@ -27,6 +41,14 @@ type Querier interface {
 	CreateDuesTier(ctx context.Context, arg CreateDuesTierParams) (DuesTier, error)
 	CreateFund(ctx context.Context, arg CreateFundParams) (Fund, error)
 	CreateIncidental(ctx context.Context, arg CreateIncidentalParams) (Incidental, error)
+	// The members an envelope is for (ADR-034), never expected to contribute
+	// themselves. Inserted one row at a time inside Ledger.OpenIncidental's and
+	// Ledger.SetIncidentalParticipation's own withTx - unscoped validation here,
+	// the same shape UpdateIncidentalOccasion's own comment argues for: both
+	// callers already hold a purpose_id (and, for SetIncidentalParticipation, a
+	// fund_id) proven to belong to the caller's fund by an earlier fund-scoped
+	// fetch in the same transaction.
+	CreateIncidentalRecipient(ctx context.Context, arg CreateIncidentalRecipientParams) error
 	CreateMember(ctx context.Context, arg CreateMemberParams) (Member, error)
 	CreatePurpose(ctx context.Context, arg CreatePurposeParams) (Purpose, error)
 	CreateReceipt(ctx context.Context, arg CreateReceiptParams) (Receipt, error)
@@ -74,6 +96,12 @@ type Querier interface {
 	// session write, never by a background ticker (ADR-013's scope stays
 	// untouched by this slice).
 	DeleteExpiredSessions(ctx context.Context, expiresAt int64) error
+	// The full-replace half of SetIncidentalParticipation (ADR-034): recipients
+	// are edited like occasion, not accumulated, so setting a new list clears the
+	// old one first. Unscoped by fund_id for the reason CreateIncidentalRecipient's
+	// own comment gives - purpose_id already belongs to the caller's fund by the
+	// time this runs.
+	DeleteIncidentalRecipientsByPurpose(ctx context.Context, purposeID int64) error
 	// DeleteMember leans on the composite foreign keys from "transaction" and
 	// reimbursement to refuse it once a real row references the member.
 	DeleteMember(ctx context.Context, id int64) error
@@ -201,6 +229,14 @@ type Querier interface {
 	// between this envelope's own accounts, and this screen has no reason to
 	// exclude the latter. tr.id IS NULL keeps every row the join found no
 	// matching reclass_purpose transfer for - which is every kind but that one.
+	//
+	// A cancelled contribution (ADR-034's widened ADR-029 reversal) is dropped
+	// whole: the reversal row itself (reverses_transaction_id set) and the row
+	// it reverses, the same NOT EXISTS ContributedByIncidentalMember uses.
+	// Otherwise a cancellation reads as money the occasion spent - "Terpakai"
+	// - and the cancelled row as money it collected. Both halves go, so
+	// collected minus disbursed still equals the envelope's balance.
+	// IncidentalTotals above stays unfiltered: the pair nets to zero there.
 	IncidentalActivityTotals(ctx context.Context, arg IncidentalActivityTotalsParams) (IncidentalActivityTotalsRow, error)
 	// The guard's one query (ADR-031): sql.ErrNoRows for a purpose_id that is
 	// not an incidental at all (main, pass_through - PostTransaction's caller
@@ -287,6 +323,12 @@ type Querier interface {
 	ListDuesRatesByTier(ctx context.Context, tierID int64) ([]DuesRate, error)
 	ListDuesTiersByFund(ctx context.Context, fundID int64) ([]DuesTier, error)
 	ListFunds(ctx context.Context) ([]Fund, error)
+	// One envelope's recipients, member name alongside the id so a caller (the
+	// participation view, the envelope's own detail screen) never has to look
+	// each one up separately. Ordered by name then id - the same tiebreak
+	// ListMembersPage uses - rather than insertion order, which carries no
+	// meaning here (CLAUDE.md's "no primary-key order" rule).
+	ListIncidentalRecipients(ctx context.Context, purposeID int64) ([]ListIncidentalRecipientsRow, error)
 	// Joined through purpose because that is where fund ownership lives; incidental
 	// has no fund_id of its own (it is 1:1 with a purpose row).
 	ListIncidentalsByFund(ctx context.Context, fundID int64) ([]Incidental, error)
@@ -605,6 +647,13 @@ type Querier interface {
 	// on). currency and report_slug are deliberately not settable here: one is
 	// an invariant through 0.x, the other is the report's unguessable address.
 	UpdateFund(ctx context.Context, arg UpdateFundParams) (Fund, error)
+	// Setting or clearing the minimum every expected member is asked to give
+	// (ADR-034) - mutable like occasion, never a posted fact, so this is a plain
+	// UPDATE, the same shape UpdateIncidentalOccasion already uses. Unscoped by
+	// fund_id for the same reason: Ledger.SetIncidentalParticipation fetches the
+	// envelope through GetIncidental's fund-scoped join first, so by the time
+	// this runs the purpose_id is already known to belong to the caller's fund.
+	UpdateIncidentalMinimum(ctx context.Context, arg UpdateIncidentalMinimumParams) (Incidental, error)
 	// A mistyped occasion, corrected in place (#264). Unscoped by fund_id for
 	// the same reason CloseIncidental and ReopenIncidental are: Ledger.RenameIncidental
 	// fetches nothing first here because it has no need to - it already ran

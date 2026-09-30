@@ -192,6 +192,15 @@ function AuthedGate({ onLoggedOut }: { onLoggedOut: () => void }) {
   const parsedPurpose = rawPurpose === null || rawPurpose.trim() === '' ? NaN : Number(rawPurpose)
   const initialPurposeId = Number.isInteger(parsedPurpose) && parsedPurpose > 0 ? parsedPurpose : null
 
+  // /record?member=<id> (ADR-034, #211, #333): Incidentals.tsx's own
+  // participation row action pre-chooses the contributor the same way
+  // ?purpose= pre-chooses the envelope - a missing or unparseable value
+  // falls back to RecordTransaction's own default (nobody named), exactly
+  // as if the param were absent.
+  const rawMember = searchParams.get('member')
+  const parsedMember = rawMember === null || rawMember.trim() === '' ? NaN : Number(rawMember)
+  const initialMemberId = Number.isInteger(parsedMember) && parsedMember > 0 ? parsedMember : null
+
   // #285: /dues-tiers?tier=<id> is a golongan's own screen, reached from the
   // Golongan card in Pengaturan and from nowhere else - the same shape as
   // /incidentals?purpose=<id> above, and parsed the same way.
@@ -269,6 +278,7 @@ function AuthedGate({ onLoggedOut }: { onLoggedOut: () => void }) {
               onRecorded={handleRecorded}
               onCancel={() => navigate('/')}
               initialPurposeId={initialPurposeId}
+              initialMemberId={initialMemberId}
               initialDues={recordDues}
               onDuesRecorded={() =>
                 recordFromDues
@@ -372,7 +382,9 @@ function AuthedGate({ onLoggedOut }: { onLoggedOut: () => void }) {
             <Shell title={title} onLoggedOut={onLoggedOut}>
               <Incidentals
                 onBack={() => navigate('/settings')}
-                onRecordFor={(purposeId) => navigate(`/record?purpose=${purposeId}`)}
+                onRecordFor={(purposeId, memberId) =>
+                  navigate(`/record?purpose=${purposeId}${memberId !== undefined ? `&member=${memberId}` : ''}`)
+                }
                 onViewTransactionsFor={(purposeId) => navigate(`/history/transactions?purpose=${purposeId}`)}
                 purposeId={initialPurposeId}
               />

@@ -84,6 +84,10 @@ export default function Transactions({ refetchKey }: { refetchKey?: unknown }) {
   const { value: dialogValue, open: openDialog, close: closeDialog, clear: clearDialog } = useDialogParam()
   const correctionTarget = parseDialogTarget('purpose-correction', dialogValue)
   const [corrected, setCorrected] = useState(false)
+  // A named contribution's own reversal (ADR-034, #211, #333) - same shape
+  // as `corrected` above, a one-shot banner rather than component state that
+  // would survive a search or a page change.
+  const [contributionReversed, setContributionReversed] = useState(false)
 
   const [state, run] = useApi<FirstPage>()
   // Pages after the first, appended in order. Reset whenever the first page
@@ -228,6 +232,11 @@ export default function Transactions({ refetchKey }: { refetchKey?: unknown }) {
             {copy.purposeCorrection.success}
           </p>
         )}
+        {contributionReversed && (
+          <p role="status" className="rounded-lg bg-success-soft px-3 py-2 text-sm text-success">
+            {text.reverseSuccess}
+          </p>
+        )}
         <TransactionList
           transactions={transactions}
           purposeNames={purposeNames}
@@ -237,6 +246,14 @@ export default function Transactions({ refetchKey }: { refetchKey?: unknown }) {
             openDialog(`purpose-correction:${transaction.id}`)
           }}
           onReceiptsChanged={() => void run(loadFirstPage, { silent: true })}
+          // A named contribution's own undo (ADR-034, #211, #333) - reachable
+          // the way a dues payment's already is. Refetches the first page,
+          // same as a correction: the reversal's own row (kind='adjustment')
+          // belongs at the top of a newest-first list.
+          onContributionReversed={() => {
+            setContributionReversed(true)
+            void run(loadFirstPage)
+          }}
         />
         <CorrectPurposeDialog
           transaction={correcting}

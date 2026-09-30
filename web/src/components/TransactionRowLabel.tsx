@@ -1,4 +1,4 @@
-import { ArrowLeftRight, CalendarCheck, Flag, HandHelping, Mail, Scale, Tags, Undo2 } from 'lucide-react'
+import { ArrowLeftRight, CalendarCheck, Flag, HandCoins, HandHelping, Mail, Scale, Tags, Undo2 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 
 import { copy } from '@/copy/id'
@@ -71,10 +71,16 @@ function rowLabelFor(transaction: Transaction): { Icon: LucideIcon; srWord: stri
       return null
     case 'adjustment':
       if (transaction.reverses_transaction_id !== null) {
+        // A reversal copies its original's dues_period (ADR-029, widened by
+        // ADR-034): a dues reversal carries one, a contribution reversal
+        // never does - so the period's presence is what tells them apart.
         return {
           Icon: Undo2,
           srWord: null,
-          text: copy.rowLabels.duesReversal.text(formatPeriod(transaction.dues_period ?? ''), transaction.member_name ?? ''),
+          text:
+            transaction.dues_period !== null
+              ? copy.rowLabels.duesReversal.text(formatPeriod(transaction.dues_period), transaction.member_name ?? '')
+              : copy.rowLabels.contributionReversal.text(transaction.member_name ?? ''),
         }
       }
       if (transaction.is_reconciliation_fix) {
@@ -86,9 +92,19 @@ function rowLabelFor(transaction: Transaction): { Icon: LucideIcon; srWord: stri
       }
       // An ordinary adjustment (ADR-024) - her own row, her own note.
       return null
+    case 'normal':
+      // A named contribution (ADR-034) says who gave, the way a dues row
+      // does; any other 'normal' row - including a reconciliation
+      // entry_added fix - is hers, with her own purpose and note.
+      if (transaction.member_id !== null) {
+        return {
+          Icon: HandCoins,
+          srWord: copy.rowLabels.contribution.kind,
+          text: copy.rowLabels.contribution.text(transaction.member_name ?? ''),
+        }
+      }
+      return null
     default:
-      // 'normal', including a reconciliation entry_added fix - the entry
-      // she forgot, entered by her, with her own purpose and note.
       return null
   }
 }

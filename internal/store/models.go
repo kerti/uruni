@@ -37,12 +37,19 @@ type Fund struct {
 }
 
 type Incidental struct {
-	PurposeID    int64
-	Occasion     string
-	TargetAmount *int64
-	OpenedOn     string
-	ClosedOn     *string
-	CreatedAt    int64
+	PurposeID        int64
+	Occasion         string
+	TargetAmount     *int64
+	OpenedOn         string
+	ClosedOn         *string
+	MinimumPerMember *int64
+	CreatedAt        int64
+}
+
+type IncidentalRecipient struct {
+	FundID    int64
+	PurposeID int64
+	MemberID  int64
 }
 
 type Member struct {

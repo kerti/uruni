@@ -1,14 +1,42 @@
-import { ArrowDownLeft, ArrowUpRight, Tags } from 'lucide-react'
+import { ArrowDownLeft, ArrowUpRight, Tags, Undo2 } from 'lucide-react'
 import { useState } from 'react'
 
 import ReceiptDialog from '@/components/ReceiptDialog'
 import ReceiptRowButton from '@/components/ReceiptRowButton'
 import TransactionRowLabel from '@/components/TransactionRowLabel'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import { copy } from '@/copy/id'
+import { ApiError } from '@/lib/api'
+import { reverseDuesPayment } from '@/lib/dues'
 import { formatIsoDate } from '@/lib/dates'
 import { formatIDR } from '@/lib/money'
-import { canCorrectPurpose, noteForDisplay } from '@/lib/transactions'
+import { canCorrectPurpose, canReverseContribution, noteForDisplay } from '@/lib/transactions'
+import { useApi } from '@/lib/useApi'
 import type { Transaction } from '@/lib/transactions'
+
+const reverseText = copy.history.transactions
+
+/** Wire error code -> Indonesian copy, scoped first to this list's own
+ * sumbangan wording (dues_payment_already_reversed reads as "iuran" in the
+ * shared map, ADR-034/#333) then falling back to it - the same chain
+ * Incidentals.tsx's own errorText already follows. */
+function reversalErrorText(err: ApiError): string {
+  const specific = reverseText.errors[err.code as keyof typeof reverseText.errors]
+  if (specific) return specific
+  const common = copy.common.errors[err.code as keyof typeof copy.common.errors]
+  return common ?? copy.common.unknownError
+}
+
+/** Local YYYY-MM-DD - never toISOString(). Same helper as
+ * Dues/MemberPayments.tsx's own. */
+function todayISODate(): string {
+  const now = new Date()
+  const mm = String(now.getMonth() + 1).padStart(2, '0')
+  const dd = String(now.getDate()).padStart(2, '0')
+  return `${now.getFullYear()}-${mm}-${dd}`
+}
 
 /**
  * One transaction row's markup (M6.23) - extracted out of Home.tsx so
@@ -24,6 +52,7 @@ export default function TransactionList({
   emptyMessage,
   onCorrectPurpose,
   onReceiptsChanged,
+  onContributionReversed,
 }: {
   transactions: Transaction[]
   /** transaction.purpose_id -> its name - a row carries only the id, and
@@ -45,6 +74,13 @@ export default function TransactionList({
    * callers pass this one: attaching a nota after the fact is offered on
    * Beranda's recent activity too, not only inside Riwayat. */
   onReceiptsChanged?: () => void
+  /** Reverses a named contribution the way a dues payment already can
+   * (ADR-034, #211, #333): optional, same reasoning as onCorrectPurpose -
+   * only Riwayat's Transaksi tab passes it, so Beranda's recent activity
+   * stays inert. Called after a successful reversal so the caller refetches
+   * its own list; canReverseContribution decides per row whether the
+   * control shows at all. */
+  onContributionReversed?: () => void
 }) {
   // The row whose photo dialog is open, by id rather than by object - so
   // the dialog reads fresh receipt_ids off the current `transactions` prop
@@ -58,51 +94,66 @@ export default function TransactionList({
 
   const receiptsForTransaction = transactions.find((t) => t.id === receiptsForId) ?? null
 
+  // Which rows some OTHER row in this same list already reverses (ADR-034) -
+  // computed once for the whole page, the same technique
+  // Dues/MemberPayments.tsx's own reversedIds uses. A reversal that landed on
+  // a page this list has not fetched still offers the control; the server's
+  // own named 409 is the backstop (canReverseContribution's own comment).
+  const reversedIds = new Set(transactions.map((t) => t.reverses_transaction_id).filter((id): id is number => id !== null))
+
   return (
     <ul className="flex flex-col gap-2">
       {transactions.map((transaction) => {
         const note = noteForDisplay(transaction)
+        const reversible = Boolean(onContributionReversed) && canReverseContribution(transaction, reversedIds)
         return (
-          <li
-            key={transaction.id}
-            className="flex items-start justify-between gap-3 rounded-lg bg-card px-4 py-3 ring-1 ring-foreground/10"
-          >
-            <span className="flex min-w-0 items-start gap-2">
-              {transaction.direction === 'in' ? (
-                <ArrowDownLeft aria-hidden="true" className="mt-0.5 shrink-0 text-success" />
-              ) : (
-                <ArrowUpRight aria-hidden="true" className="mt-0.5 shrink-0 text-attention" />
-              )}
-              <span className="flex min-w-0 flex-col">
-                {/* The purpose tag is what an entry *was*; a row the app
-                    created explains itself on the next line (#257 - a
-                    label, built from the row's own facts, never stored
-                    text); her own note, when she typed one, comes after
-                    that (for a settlement, the settled claim's own note -
-                    see noteForDisplay). Date is always last, so the row
-                    still answers "what is this?" at a glance. */}
-                <PurposeLine transaction={transaction} purposeNames={purposeNames} onCorrectPurpose={onCorrectPurpose} />
-                <TransactionRowLabel transaction={transaction} />
-                {note && <span className="truncate text-sm text-muted-foreground">{note}</span>}
-                <span className="text-sm text-muted-foreground">{formatIsoDate(transaction.occurred_on)}</span>
+          <li key={transaction.id} className="flex flex-col gap-2 rounded-lg bg-card px-4 py-3 ring-1 ring-foreground/10">
+            <div className="flex items-start justify-between gap-3">
+              <span className="flex min-w-0 items-start gap-2">
+                {transaction.direction === 'in' ? (
+                  <ArrowDownLeft aria-hidden="true" className="mt-0.5 shrink-0 text-success" />
+                ) : (
+                  <ArrowUpRight aria-hidden="true" className="mt-0.5 shrink-0 text-attention" />
+                )}
+                <span className="flex min-w-0 flex-col">
+                  {/* The purpose tag is what an entry *was*; a row the app
+                      created explains itself on the next line (#257 - a
+                      label, built from the row's own facts, never stored
+                      text); her own note, when she typed one, comes after
+                      that (for a settlement, the settled claim's own note -
+                      see noteForDisplay). Date is always last, so the row
+                      still answers "what is this?" at a glance. */}
+                  <PurposeLine transaction={transaction} purposeNames={purposeNames} onCorrectPurpose={onCorrectPurpose} />
+                  <TransactionRowLabel transaction={transaction} />
+                  {note && <span className="truncate text-sm text-muted-foreground">{note}</span>}
+                  <span className="text-sm text-muted-foreground">{formatIsoDate(transaction.occurred_on)}</span>
+                </span>
               </span>
-            </span>
-            {/* Amount first and alone on its line, so every row's figure
-                sits flush right whether or not it carries a photo control;
-                the control stacks underneath, right-aligned. */}
-            <span className="flex shrink-0 flex-col items-end gap-1.5">
-              <span className="tabular font-medium">{formatIDR(transaction.amount)}</span>
-              {/* One control doing double duty (#154): a quiet "Tambah foto
-                  nota" with no photo yet, a Forest camera carrying the count
-                  once one exists - never a second column of buttons on
-                  this list's densest row. Optional, same as
-                  onCorrectPurpose above: omitting onReceiptsChanged (no
-                  caller does today) drops the control entirely rather than
-                  rendering a dead tap. */}
-              {onReceiptsChanged && (
-                <ReceiptRowButton receiptIds={transaction.receipt_ids ?? []} onClick={() => setReceiptsForId(transaction.id)} />
-              )}
-            </span>
+              {/* Amount first and alone on its line, so every row's figure
+                  sits flush right whether or not it carries a photo control;
+                  the control stacks underneath, right-aligned. */}
+              <span className="flex shrink-0 flex-col items-end gap-1.5">
+                <span className="tabular font-medium">{formatIDR(transaction.amount)}</span>
+                {/* One control doing double duty (#154): a quiet "Tambah foto
+                    nota" with no photo yet, a Forest camera carrying the count
+                    once one exists - never a second column of buttons on
+                    this list's densest row. Optional, same as
+                    onCorrectPurpose above: omitting onReceiptsChanged (no
+                    caller does today) drops the control entirely rather than
+                    rendering a dead tap. */}
+                {onReceiptsChanged && (
+                  <ReceiptRowButton receiptIds={transaction.receipt_ids ?? []} onClick={() => setReceiptsForId(transaction.id)} />
+                )}
+              </span>
+            </div>
+            {/* A named contribution's own undo (ADR-034, #211, #333) - plain
+                ink under the amount, the row's own second line, same as
+                every other row control here. Reversible is already false
+                when the caller omits onContributionReversed, so this never
+                renders on Beranda. */}
+            {reversible && onContributionReversed && (
+              <ContributionReversalControl transaction={transaction} onReversed={onContributionReversed} />
+            )}
           </li>
         )
       })}
@@ -186,5 +237,97 @@ function PurposeLine({
       <span className="truncate underline decoration-dotted underline-offset-4">{name}</span>
       {marker}
     </button>
+  )
+}
+
+/**
+ * A named contribution's own undo, reachable the way a dues payment's
+ * already is (ADR-034, #211, #333's own acceptance criterion): the same
+ * button-then-inline-form shape Dues/MemberPayments.tsx uses for its own
+ * reversal, reusing that screen's own POST /api/dues-payments/{id}/reversal
+ * call (reverseDuesPayment) - the route reverses any kind='normal' or
+ * kind='dues' row alike, per that route's own doc comment.
+ *
+ * Its own component, not lifted state on the list above, because each row's
+ * expand/collapse is independent and this is the one row shape in the whole
+ * list that needs any state at all.
+ */
+function ContributionReversalControl({ transaction, onReversed }: { transaction: Transaction; onReversed: () => void }) {
+  const [open, setOpen] = useState(false)
+  const [occurredOn, setOccurredOn] = useState(todayISODate)
+  const [note, setNote] = useState('')
+  const [state, run] = useApi<Transaction>()
+
+  const busy = state.status === 'loading'
+
+  function handleSubmit() {
+    void run(async () => {
+      const trimmed = note.trim()
+      const result = await reverseDuesPayment(transaction.id, occurredOn, trimmed === '' ? null : trimmed)
+      setOpen(false)
+      onReversed()
+      return result
+    })
+  }
+
+  if (!open) {
+    return (
+      <button
+        type="button"
+        className="relative flex items-center gap-1 self-end text-sm font-medium text-foreground underline-offset-4 hover:underline after:absolute after:inset-x-0 after:top-1/2 after:h-11 after:-translate-y-1/2 after:content-['']"
+        onClick={() => setOpen(true)}
+      >
+        <Undo2 aria-hidden="true" className="size-4" />
+        {reverseText.reverse}
+      </button>
+    )
+  }
+
+  return (
+    <div className="animate-reveal flex flex-col gap-2 rounded-lg bg-muted/40 p-3">
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor={`contribution-reversal-date-${transaction.id}`}>{reverseText.reverseDateLabel}</Label>
+        <Input
+          id={`contribution-reversal-date-${transaction.id}`}
+          type="date"
+          className="h-11"
+          value={occurredOn}
+          onChange={(event) => setOccurredOn(event.target.value)}
+          disabled={busy}
+          required
+        />
+      </div>
+
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor={`contribution-reversal-note-${transaction.id}`}>{reverseText.reverseNoteLabel}</Label>
+        <Input
+          id={`contribution-reversal-note-${transaction.id}`}
+          type="text"
+          className="h-11"
+          value={note}
+          onChange={(event) => setNote(event.target.value)}
+          disabled={busy}
+        />
+      </div>
+
+      {/* reversalErrorText, not ErrorState.tsx directly (#333): the shared
+          fallback chain reads dues_payment_already_reversed as "iuran",
+          which is the wrong noun on this list - see this file's own
+          reversalErrorText. */}
+      {state.status === 'error' && state.error && (
+        <p role="alert" className="text-sm text-attention">
+          {reversalErrorText(state.error)}
+        </p>
+      )}
+
+      <div className="grid grid-cols-2 gap-2">
+        <Button type="button" variant="outline" size="lg" disabled={busy} onClick={() => setOpen(false)}>
+          {reverseText.reverseCancel}
+        </Button>
+        <Button type="button" size="lg" disabled={busy || occurredOn === ''} onClick={handleSubmit}>
+          {busy ? reverseText.reverseSubmitting : reverseText.reverseConfirm}
+        </Button>
+      </div>
+    </div>
   )
 }

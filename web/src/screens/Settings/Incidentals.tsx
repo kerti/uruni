@@ -7,15 +7,18 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import AmountInput from '@/components/money/AmountInput'
+import { MemberMultiPicker } from '@/components/pickers/MemberPicker'
 import Loading from '@/components/states/Loading'
 import ErrorState from '@/components/states/ErrorState'
 import { copy } from '@/copy/id'
 import { formatIsoDate, todayISODate } from '@/lib/dates'
 import { listIncidentals, openIncidental } from '@/lib/incidentals'
+import { listAllMembers } from '@/lib/setup'
 import { useApi } from '@/lib/useApi'
 import { parseDialogTarget } from '@/lib/dialogTarget'
 import { useDialogParam } from '@/lib/useDialogParam'
 import type { Incidental } from '@/lib/incidentals'
+import type { Member } from '@/lib/setup'
 
 const text = copy.settings.incidentals
 const openText = copy.incidentals.open
@@ -59,12 +62,19 @@ function parseEditTarget(value: string | null): 'new' | 'foreign' | 'invalid' {
 export default function SettingsIncidentals() {
   const navigate = useNavigate()
   const [listState, listRun] = useApi<Incidental[]>()
+  // The recipients picker's own roster (ADR-034) - fetched alongside the
+  // envelope list rather than only when the dialog opens, the same reasoning
+  // History/Transactions.tsx's own FirstPage gives for its purposes fetch:
+  // opening the dialog shows a filled picker instead of a spinner.
+  const [membersState, membersRun] = useApi<Member[]>()
   const { value, open, close, clear } = useDialogParam()
 
   useEffect(() => {
-    // listRun is a stable useCallback (useApi.ts), so this fires once.
+    // listRun/membersRun are stable useCallbacks (useApi.ts), so this fires
+    // once.
     void listRun(() => listIncidentals(false))
-  }, [listRun])
+    void membersRun(listAllMembers)
+  }, [listRun, membersRun])
 
   function reload() {
     void listRun(() => listIncidentals(false))
@@ -110,6 +120,7 @@ export default function SettingsIncidentals() {
 
       <OpenIncidentalDialog
         open={target === 'new'}
+        members={membersState.data ?? []}
         onClose={close}
         onOpened={() => {
           close()
@@ -192,11 +203,23 @@ function StatusBadge({ envelope }: { envelope: Incidental }) {
  * and their copy carry over unchanged from Incidentals.tsx's former
  * OpenForm - occasion doubles as the purpose's own name, target is
  * optional, and the date defaults to today. */
-function OpenIncidentalDialog({ open, onClose, onOpened }: { open: boolean; onClose: () => void; onOpened: () => void }) {
+function OpenIncidentalDialog({
+  open,
+  members,
+  onClose,
+  onOpened,
+}: {
+  open: boolean
+  members: Member[]
+  onClose: () => void
+  onOpened: () => void
+}) {
   const [state, run] = useApi<Incidental>()
   const [occasion, setOccasion] = useState('')
   const [targetAmount, setTargetAmount] = useState(0)
   const [openedOn, setOpenedOn] = useState(todayISODate())
+  const [minimumPerMember, setMinimumPerMember] = useState(0)
+  const [recipientMemberIds, setRecipientMemberIds] = useState<number[]>([])
 
   const busy = state.status === 'loading'
   const canSubmit = occasion.trim() !== '' && openedOn !== '' && !busy
@@ -209,6 +232,8 @@ function OpenIncidentalDialog({ open, onClose, onOpened }: { open: boolean; onCl
       setOccasion('')
       setTargetAmount(0)
       setOpenedOn(todayISODate())
+      setMinimumPerMember(0)
+      setRecipientMemberIds([])
     }
   }, [open])
 
@@ -220,6 +245,8 @@ function OpenIncidentalDialog({ open, onClose, onOpened }: { open: boolean; onCl
         occasion: occasion.trim(),
         targetAmount: targetAmount > 0 ? targetAmount : null,
         openedOn,
+        minimumPerMember: minimumPerMember > 0 ? minimumPerMember : null,
+        recipientMemberIds,
       })
       onOpened()
       return opened
@@ -268,6 +295,27 @@ function OpenIncidentalDialog({ open, onClose, onOpened }: { open: boolean; onCl
               disabled={busy}
             />
           </div>
+
+          {/* ADR-034 (#211): one figure every expected member is asked to
+              give, and who the envelope is for - both optional, both
+              editable later through the same fields on the edit dialog
+              (Incidentals.tsx's own RenameIncidentalDialog). */}
+          <AmountInput
+            id="new-incidental-minimum"
+            label={openText.minimumLabel}
+            value={minimumPerMember}
+            onChange={setMinimumPerMember}
+            disabled={busy}
+          />
+
+          <MemberMultiPicker
+            label={openText.recipientsLabel}
+            members={members}
+            value={recipientMemberIds}
+            onChange={setRecipientMemberIds}
+            emptyMessage={openText.recipientsEmpty}
+            disabled={busy}
+          />
 
           {state.status === 'error' && state.error && <ErrorState error={state.error} />}
 

@@ -411,6 +411,59 @@ func TestPostPurposeCorrectionRejectsDuesPayment(t *testing.T) {
 	}
 }
 
+// TestPostPurposeCorrectionRejectsNamedContribution: a named contribution
+// (ADR-034) is refused the same way a dues payment already is - moving it
+// would leave participation counting the member against an envelope the
+// money has left. An unnamed contribution on the very same envelope is
+// untouched by this refusal (see TestPostPurposeCorrectionAcceptsUnnamedContribution).
+func TestPostPurposeCorrectionRejectsNamedContribution(t *testing.T) {
+	l := newTestLedger(t)
+	f := newFixture(t, l)
+	ctx := context.Background()
+
+	envelope := openTestIncidental(t, l, f.fundID, "Sunatan", "2026-08-01")
+
+	posted, err := l.PostTransaction(ctx, PostTransactionParams{
+		FundID: f.fundID, AccountID: f.cashID, PurposeID: envelope.PurposeID,
+		Direction: "in", Amount: 25_000, OccurredOn: "2026-08-12", MemberID: &f.memberID,
+	})
+	if err != nil {
+		t.Fatalf("PostTransaction(named contribution) = %v, want no error", err)
+	}
+
+	_, err = l.PostPurposeCorrection(ctx, PostPurposeCorrectionParams{
+		FundID: f.fundID, TransactionID: posted.ID, PurposeID: f.passID,
+	})
+	if !errors.Is(err, ErrPurposeCorrectionNamedContribution) {
+		t.Errorf("PostPurposeCorrection(named contribution) = %v, want ErrPurposeCorrectionNamedContribution", err)
+	}
+}
+
+// TestPostPurposeCorrectionAcceptsUnnamedContribution: ADR-033 is
+// untouched for a contribution nobody named - member_id NULL is the same
+// kind='normal' shape any other correction-eligible row already has.
+func TestPostPurposeCorrectionAcceptsUnnamedContribution(t *testing.T) {
+	l := newTestLedger(t)
+	f := newFixture(t, l)
+	ctx := context.Background()
+
+	envelope := openTestIncidental(t, l, f.fundID, "Sunatan", "2026-08-01")
+
+	posted, err := l.PostTransaction(ctx, PostTransactionParams{
+		FundID: f.fundID, AccountID: f.cashID, PurposeID: envelope.PurposeID,
+		Direction: "in", Amount: 25_000, OccurredOn: "2026-08-12",
+	})
+	if err != nil {
+		t.Fatalf("PostTransaction(unnamed contribution) = %v, want no error", err)
+	}
+
+	if _, err := l.PostPurposeCorrection(ctx, PostPurposeCorrectionParams{
+		FundID: f.fundID, TransactionID: posted.ID, PurposeID: f.passID,
+	}); err != nil {
+		t.Errorf("PostPurposeCorrection(unnamed contribution) = %v, want no error", err)
+	}
+}
+
 func TestPostPurposeCorrectionRejectsReimbursementPayout(t *testing.T) {
 	l := newTestLedger(t)
 	f := newFixture(t, l)

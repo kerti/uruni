@@ -173,7 +173,7 @@ CREATE TABLE "transaction" (              -- the ledger. insert-only.
   occurred_on TEXT    NOT NULL CHECK (date(occurred_on) IS NOT NULL AND occurred_on = date(occurred_on)),
   kind        TEXT    NOT NULL CHECK (kind IN
                 ('opening','normal','dues','reimbursement','adjustment','transfer')),
-  member_id        INTEGER,               -- dues
+  member_id        INTEGER,               -- dues, or a named contribution (ADR-034)
   dues_period      TEXT,                  -- 'YYYY-MM'; several months paid at once = several rows
   reimbursement_id INTEGER,               -- the settling payout
   transfer_id      INTEGER,
@@ -194,30 +194,78 @@ CREATE TABLE "transaction" (              -- the ledger. insert-only.
   CHECK (dues_period IS NULL OR (dues_period GLOB '[0-9][0-9][0-9][0-9]-[0-1][0-9]'
                                  AND date(dues_period||'-01') IS NOT NULL)),
   CHECK (kind <> 'dues'          OR (member_id IS NOT NULL AND dues_period IS NOT NULL AND direction = 'in')),
-  -- A dues reversal (ADR-029) is the one shape of kind='adjustment' allowed to
-  -- carry a member and a period - and it must carry both, plus the row it
-  -- reverses, and flow 'out'. Every other kind still needs neither.
+  -- A dues reversal (ADR-029) and a named contribution (ADR-034, widening
+  -- ADR-029's reversal) are the two shapes of a non-dues row allowed to
+  -- carry a member: a dues reversal is the one shape of kind='adjustment'
+  -- allowed to carry one, and a contribution is the one shape of an
+  -- ordinary kind='normal' row allowed to - CHECK alone cannot see
+  -- purpose.kind, so which purpose a contribution's member may be tagged
+  -- to is the BEFORE INSERT trigger's job below, not this CHECK's. Neither
+  -- shape carries dues_period: a dues reversal's own period is verified
+  -- against the payment it reverses by that same trigger, since a CHECK
+  -- cannot read another row either; every other kind still needs neither
+  -- field.
   CHECK (kind =  'dues'          OR (member_id IS NULL AND dues_period IS NULL)
+                                 OR (kind = 'normal' AND direction = 'in'
+                                     AND reverses_transaction_id IS NULL AND dues_period IS NULL)
                                  OR (kind = 'adjustment' AND reverses_transaction_id IS NOT NULL
-                                     AND member_id IS NOT NULL AND dues_period IS NOT NULL
-                                     AND direction = 'out')),
+                                     AND member_id IS NOT NULL AND direction = 'out')),
   -- ...and the column guards itself in the other direction: nothing that is
-  -- not a dues reversal may claim to reverse anything. Without this, a
+  -- not a reversal may claim to reverse anything. Without this, a
   -- kind='normal' row carrying no member and no period satisfies the CHECK
   -- above and still sets reverses_transaction_id - which would both hide the
   -- original dues payment from DuesPaidByPeriod (the NOT EXISTS only asks
   -- whether *something* points at the row) and consume the reversed-once
   -- slot, so the genuine reversal could never be posted. The ledger never
   -- writes that row; the schema is what makes it unrepresentable (ADR-029).
+  -- dues_period is deliberately not required here any more (ADR-034): a
+  -- reversal of a named contribution carries none, a reversal of a dues
+  -- payment still must - and that difference is exactly what the trigger
+  -- below checks against the row being reversed, which this own-row CHECK
+  -- cannot read.
   CHECK (reverses_transaction_id IS NULL
          OR (kind = 'adjustment' AND direction = 'out'
-             AND member_id IS NOT NULL AND dues_period IS NOT NULL)),
+             AND member_id IS NOT NULL)),
   CHECK (kind <> 'reimbursement' OR (reimbursement_id IS NOT NULL AND direction = 'out')),
   CHECK (kind <> 'transfer'      OR transfer_id IS NOT NULL)
   -- kind='adjustment' otherwise requires nothing extra: an ordinary
   -- correction may be raised on any Tuesday, not only during a
   -- reconciliation (ADR-024).
 ) STRICT;
+
+-- A CHECK reads only its own row, so the two cross-table halves of ADR-034's
+-- named-contribution design - which purpose a member may be tagged to, and
+-- what a reversal may target and must copy - are a BEFORE INSERT trigger
+-- instead. The ledger checks first so the treasurer gets copy, not a
+-- constraint error (ADR-034); this is what makes both shapes unrepresentable
+-- for anything that writes around the ledger.
+-- +goose StatementBegin
+CREATE TRIGGER transaction_named_row_shape BEFORE INSERT ON "transaction" BEGIN
+  -- A kind='normal' row naming a member is a contribution (ADR-034) and may
+  -- only be tagged to an incidental purpose - a dues payment already owns
+  -- member_id on a 'main' purpose, and nothing else has a reason to.
+  SELECT RAISE(ABORT, 'a named transaction must be tagged to an incidental purpose')
+  WHERE NEW.kind = 'normal' AND NEW.member_id IS NOT NULL
+    AND NOT EXISTS (SELECT 1 FROM purpose WHERE id = NEW.purpose_id AND kind = 'incidental');
+
+  -- A reversal (ADR-029, widened by ADR-034) must target a dues payment or
+  -- a named contribution, and must carry that row's own member_id and
+  -- dues_period exactly - never re-typed by the caller. This is what keeps
+  -- a dues reversal carrying its period and a contribution reversal
+  -- carrying none: the CHECK above cannot read the original row, only this
+  -- trigger can. "o.dues_period IS NEW.dues_period" is NULL-safe equality -
+  -- a contribution's own dues_period is always NULL, so the reversal's must
+  -- be too.
+  SELECT RAISE(ABORT, 'a reversal must target a dues payment or a named contribution, carrying its member and period')
+  WHERE NEW.reverses_transaction_id IS NOT NULL
+    AND NOT EXISTS (
+      SELECT 1 FROM "transaction" o
+      WHERE o.id = NEW.reverses_transaction_id
+        AND o.member_id = NEW.member_id AND o.dues_period IS NEW.dues_period
+        AND (o.kind = 'dues' OR (o.kind = 'normal' AND o.member_id IS NOT NULL))
+    );
+END;
+-- +goose StatementEnd
 
 -- "Settle once" was otherwise only prose. Partial, so the NULLs on every other
 -- kind are unconstrained.
@@ -301,7 +349,35 @@ CREATE TABLE incidental (                 -- the envelope's lifecycle, 1:1 with 
   target_amount INTEGER CHECK (target_amount IS NULL OR target_amount > 0),
   opened_on     TEXT    NOT NULL CHECK (date(opened_on) IS NOT NULL AND opened_on = date(opened_on)),
   closed_on     TEXT             CHECK (closed_on IS NULL OR (date(closed_on) IS NOT NULL AND closed_on = date(closed_on))),
+  -- One figure every expected member is asked to give (ADR-034) - same shape
+  -- and nullability as target_amount, not a dues rate: no tiers, no
+  -- effective dates, editable like occasion, never a posted fact.
+  minimum_per_member INTEGER CHECK (minimum_per_member IS NULL OR minimum_per_member > 0),
   created_at    INTEGER NOT NULL
+) STRICT;
+
+-- The members an envelope is *for* (ADR-034): the sick, the bereaved family,
+-- the birthday pair - never expected to contribute themselves. Zero or more,
+-- always members, editable like occasion - a choice, not a record, which is
+-- what ON DELETE CASCADE from member says below.
+--
+-- fund_id is not a column incidental itself carries (it is 1:1 with a
+-- purpose row and has none), so this table's own composite FKs read fund
+-- ownership through purpose - (fund_id, purpose_id) REFERENCES
+-- purpose(fund_id, id), ADR-024's usual fund-scoping shape - and the plain
+-- purpose_id REFERENCES incidental(purpose_id) is what additionally proves
+-- the purpose named is actually an envelope, not main or pass_through.
+CREATE TABLE incidental_recipient (
+  fund_id    INTEGER NOT NULL,
+  purpose_id INTEGER NOT NULL,
+  member_id  INTEGER NOT NULL,
+  PRIMARY KEY (fund_id, purpose_id, member_id),
+  FOREIGN KEY (purpose_id)          REFERENCES incidental(purpose_id),
+  FOREIGN KEY (fund_id, purpose_id) REFERENCES purpose(fund_id, id),
+  -- A recipient is a choice, not a record: deleting a member (setup
+  -- duplicates only, ADR-024) takes their recipient rows with them rather
+  -- than refusing the delete the way a posted transaction would.
+  FOREIGN KEY (fund_id, member_id)  REFERENCES member(fund_id, id) ON DELETE CASCADE
 ) STRICT;
 
 -- fund_id, occurred_on, id, in that order: the leftmost pair alone still
@@ -392,6 +468,7 @@ DROP INDEX transaction_by_dues;
 DROP INDEX transaction_by_purpose;
 DROP INDEX transaction_by_account;
 DROP INDEX transaction_by_date;
+DROP TABLE incidental_recipient;
 DROP TABLE incidental;
 DROP TABLE reconciliation_line;
 DROP TABLE reconciliation;
@@ -399,6 +476,7 @@ DROP TABLE receipt;
 DROP INDEX opening_balance_once_per_account;
 DROP INDEX dues_payment_reversed_once;
 DROP INDEX reimbursement_settled_once;
+DROP TRIGGER transaction_named_row_shape;
 DROP TABLE "transaction";
 DROP TABLE reimbursement;
 DROP TABLE transfer;

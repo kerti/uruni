@@ -91,6 +91,10 @@ func mapLedgerError(w http.ResponseWriter, logger *slog.Logger, err error) {
 		writeAPIError(w, http.StatusConflict, "purpose_correction_source_closed", "This incidental is closed - reopen it before correcting out of it.")
 	case errors.Is(err, ledger.ErrPurposeCorrectionNoop):
 		writeAPIError(w, http.StatusConflict, "purpose_correction_noop", "This row is already tagged to that purpose.")
+	case errors.Is(err, ledger.ErrPurposeCorrectionNamedContribution):
+		writeAPIError(w, http.StatusConflict, "purpose_correction_named_contribution", "A named contribution's purpose cannot be corrected - reverse it and post again instead.")
+	case errors.Is(err, ledger.ErrContributionRequiresIncidentalPurpose):
+		writeAPIError(w, http.StatusBadRequest, "invalid_argument", "A named contribution must be tagged to an incidental (envelope) purpose.")
 	case errors.Is(err, money.ErrOverflow):
 		// err's own message embeds the operands that overflowed - the amounts
 		// themselves - which ADR-022 forbids logging. Every other unrecognized

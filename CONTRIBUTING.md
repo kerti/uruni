@@ -17,7 +17,7 @@ Thanks for your interest. Uruni is a **small, opinionated** project — a calm t
 
 ## Local setup
 
-Prerequisites: Go (see `go.mod`), Node 22 (`.nvmrc`), `jq`. Docker is only needed to exercise the self-host stack — the dev loop uses SQLite and runs without containers.
+Prerequisites: Go (see `go.mod`), Node 24 (`.nvmrc`), `jq`. Docker is only needed to exercise the self-host stack — the dev loop uses SQLite and runs without containers.
 
 ```sh
 make setup     # hooks + Claude Code hooks + web deps + .env (idempotent)

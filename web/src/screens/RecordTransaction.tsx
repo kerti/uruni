@@ -3,6 +3,7 @@ import { ArrowDownLeft, ArrowLeftRight, ArrowUpDown, ArrowUpRight, CalendarCheck
 
 import AmountInput from '@/components/money/AmountInput'
 import AccountPicker from '@/components/pickers/AccountPicker'
+import { OptionalMemberPicker } from '@/components/pickers/MemberPicker'
 import PurposePicker from '@/components/pickers/PurposePicker'
 import ReceiptPicker from '@/components/ReceiptPicker'
 import { segmentedStackedItemClass, segmentedTrackClass } from '@/components/segmented'
@@ -19,11 +20,13 @@ import { formatIDR } from '@/lib/money'
 import { uploadReceipt } from '@/lib/receipts'
 import { postTransfer } from '@/lib/transfers'
 import { listPurposes } from '@/lib/purposes'
+import { listAllMembers } from '@/lib/setup'
 import { createTransaction } from '@/lib/transactions'
 import { useApi } from '@/lib/useApi'
 import type { Account } from '@/lib/accounts'
 import type { Balances } from '@/lib/balances'
 import type { Purpose } from '@/lib/purposes'
+import type { Member } from '@/lib/setup'
 
 const text = copy.record
 
@@ -78,6 +81,11 @@ interface FormData {
    * than on demand so the Titipan warning below can appear as she types,
    * without a request per keystroke. */
   balances: Balances
+  /** The "Dari siapa? (opsional)" picker's own roster (ADR-034, #211) -
+   * fetched with the rest of the form's data rather than only once the
+   * field itself becomes visible, so choosing "Uang masuk" on an envelope
+   * shows a filled picker instead of a spinner. */
+  members: Member[]
 }
 
 /**
@@ -123,6 +131,7 @@ export default function RecordTransaction({
   onRecorded,
   onCancel,
   initialPurposeId,
+  initialMemberId,
   initialDues = false,
   onDuesRecorded,
   onDuesCancel,
@@ -133,6 +142,13 @@ export default function RecordTransaction({
   onRecorded: (direction: Direction, photoFailed?: boolean) => void
   onCancel: () => void
   initialPurposeId?: number | null
+  /** Seeds the "Dari siapa?" field (ADR-034, #211): Incidentals.tsx's own
+   * participation row navigates here with both the envelope's purpose and
+   * this member already chosen, the same `/record` route reading a second
+   * search param (App.tsx's `member`) the way it already reads `purpose`.
+   * Absent, the field starts unset - a guest or an anonymous giver, or any
+   * form that isn't a contribution at all. */
+  initialMemberId?: number | null
   /** Iuran, the toggle's fourth item (#315): a dues payment moves money,
    * so it is recorded here like every other kind (ADR-032). Choosing it
    * swaps the form below for RecordDuesPayment's own; its own callbacks,
@@ -145,7 +161,10 @@ export default function RecordTransaction({
   const [loadState, loadRun] = useApi<FormData>()
   const [submitState, submitRun] = useApi<unknown>()
 
-  const [direction, setDirection] = useState<Direction>('out')
+  // A link naming a contributor (/record?member=, the envelope's own
+  // "Catat sumbangan") is money coming in by definition - opening on 'out'
+  // would hide "Dari siapa?" and the member it carries (ADR-034).
+  const [direction, setDirection] = useState<Direction>(initialMemberId != null ? 'in' : 'out')
   // Kept apart from direction rather than widening Direction: every other
   // line of this form means a transaction's direction by it, and switching
   // to Iuran and back leaves the transaction form exactly as she left it.
@@ -161,14 +180,17 @@ export default function RecordTransaction({
   const [occurredOn, setOccurredOn] = useState(todayISODate)
   const [note, setNote] = useState('')
   const [receiptFile, setReceiptFile] = useState<File | null>(null)
+  // "Dari siapa? (opsional)" (ADR-034, #211) - seeded once below, alongside
+  // the account/purpose defaults.
+  const [memberId, setMemberId] = useState<number | null>(null)
 
   async function loadFormData(): Promise<FormData> {
     // selectable=true (ADR-031): a closed envelope's purpose is excluded,
     // since PostTransaction's own guard would now refuse a posting to it.
     // A late entry against one goes through Incidentals.tsx's reopen
     // affordance first, not this everyday picker.
-    const [accounts, purposes, balances] = await Promise.all([listAccounts(), listPurposes(true), getBalances()])
-    return { accounts, purposes, balances }
+    const [accounts, purposes, balances, members] = await Promise.all([listAccounts(), listPurposes(true), getBalances(), listAllMembers()])
+    return { accounts, purposes, balances, members }
   }
 
   useEffect(() => {
@@ -204,8 +226,17 @@ export default function RecordTransaction({
         if (main) setPurposeId(main.id)
       }
     }
-    // Only re-run when the load itself changes - accountId/purposeId are
-    // this effect's own output, including them would fight its one-time
+
+    // "Dari siapa?" (ADR-034, #211) - same "only honour a real one" guard as
+    // purposeId's own seed above: a stale link naming a member the fund no
+    // longer has (or has since deactivated) leaves the field at its default
+    // rather than a picker showing nobody for an id that matches nothing.
+    if (memberId === null && initialMemberId != null) {
+      const seeded = loadState.data.members.find((m) => m.id === initialMemberId && m.inactive_on === null)
+      if (seeded) setMemberId(seeded.id)
+    }
+    // Only re-run when the load itself changes - accountId/purposeId/memberId
+    // are this effect's own output, including them would fight its one-time
     // default assignment on every keystroke that changes them.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loadState.status, loadState.data])
@@ -269,6 +300,14 @@ export default function RecordTransaction({
   const warnsPassThroughNegative =
     direction === 'out' && chosenPurpose?.kind === 'pass_through' && amount > 0 && chosenPurposeBalance - amount < 0
 
+  // "Dari siapa? (opsional)" (ADR-034, #211): only for money coming into an
+  // open envelope - a contribution is the one shape the schema lets a
+  // member_id ride on. Not gated on the envelope being open specifically:
+  // PostTransaction's own guard already refuses a posting to a closed one
+  // (ADR-031), and the picker excludes it from purposeId's own choices
+  // (selectable=true) before this field would ever have a chance to show.
+  const showContributorField = direction === 'in' && chosenPurpose?.kind === 'incidental'
+
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     if (!canSubmit || accountId === null) return
@@ -309,6 +348,10 @@ export default function RecordTransaction({
         amount,
         occurredOn,
         note: noteOrNull,
+        // Only ever sent when the field itself is showing (ADR-034) - a
+        // stale memberId left over from a purpose or direction she has since
+        // changed away from never reaches the wire.
+        memberId: showContributorField ? memberId : null,
       })
       rememberAccountId(accountId)
 
@@ -501,6 +544,20 @@ export default function RecordTransaction({
                 </p>
               )}
             </div>
+          )}
+
+          {/* "Dari siapa? (opsional)" (ADR-034, #211) - only for money coming
+              into an open envelope, never a required field: a guest or an
+              anonymous giver leaves it unset. */}
+          {showContributorField && (
+            <OptionalMemberPicker
+              id="record-contributor"
+              label={text.contributorLabel}
+              members={loadState.data.members}
+              value={memberId}
+              onChange={setMemberId}
+              disabled={submitting}
+            />
           )}
 
           <div className="flex flex-col gap-1.5">
