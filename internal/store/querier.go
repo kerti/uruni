@@ -229,6 +229,14 @@ type Querier interface {
 	// between this envelope's own accounts, and this screen has no reason to
 	// exclude the latter. tr.id IS NULL keeps every row the join found no
 	// matching reclass_purpose transfer for - which is every kind but that one.
+	//
+	// A cancelled contribution (ADR-034's widened ADR-029 reversal) is dropped
+	// whole: the reversal row itself (reverses_transaction_id set) and the row
+	// it reverses, the same NOT EXISTS ContributedByIncidentalMember uses.
+	// Otherwise a cancellation reads as money the occasion spent - "Terpakai"
+	// - and the cancelled row as money it collected. Both halves go, so
+	// collected minus disbursed still equals the envelope's balance.
+	// IncidentalTotals above stays unfiltered: the pair nets to zero there.
 	IncidentalActivityTotals(ctx context.Context, arg IncidentalActivityTotalsParams) (IncidentalActivityTotalsRow, error)
 	// The guard's one query (ADR-031): sql.ErrNoRows for a purpose_id that is
 	// not an incidental at all (main, pass_through - PostTransaction's caller

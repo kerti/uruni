@@ -16,6 +16,11 @@ export interface CreateTransactionInput {
   amount: number
   occurredOn: string
   note: string | null
+  /** Who a contribution into an open envelope is from (ADR-034, #211) -
+   * Catat's "Dari siapa? (opsional)". Omitted or null for every other
+   * posting - a guest, an anonymous giver, or money that isn't a
+   * contribution at all. */
+  memberId?: number | null
 }
 
 /**
@@ -35,6 +40,7 @@ export function createTransaction(input: CreateTransactionInput): Promise<Transa
       occurred_on: input.occurredOn,
       note: input.note,
       is_adjustment: false,
+      member_id: input.memberId ?? null,
     }),
   })
 }
@@ -138,8 +144,37 @@ export function correctPurpose(transactionId: number, purposeId: number): Promis
  *
  * kind='adjustment' is eligible EXCEPT a dues reversal, whose peruntukan
  * must track the dues row it reverses (ADR-029).
+ *
+ * A named contribution (kind='normal' with member_id set) is excluded too
+ * (ADR-034): moving it would leave participation counting the member
+ * against an envelope the money has left, so the server refuses it with its
+ * own named 409 (purpose_correction_named_contribution) - this is what
+ * keeps the control from ever offering a tap that would only be refused,
+ * the same reasoning this function already gives for a dues reversal.
  */
 export function canCorrectPurpose(transaction: Transaction): boolean {
-  if (transaction.kind === 'normal') return true
+  if (transaction.kind === 'normal') return transaction.member_id === null
   return transaction.kind === 'adjustment' && transaction.reverses_transaction_id === null
+}
+
+/**
+ * Whether this row may be reversed the way a dues payment can (ADR-034,
+ * #211, per the reversal endpoint's own comment): a named contribution -
+ * kind='normal', direction='in', member_id set - that is not itself a
+ * reversal. `reversedIds` is the set of transaction ids some OTHER loaded
+ * row already reverses (`reverses_transaction_id`), the same technique
+ * Dues/MemberPayments.tsx uses for its own reversedIds - a row whose
+ * reversal sits on a page this list has not fetched yet still offers the
+ * control, and the server's own named 409
+ * (dues_payment_already_reversed) is the backstop for that gap, never a
+ * silent double-reversal.
+ */
+export function canReverseContribution(transaction: Transaction, reversedIds: ReadonlySet<number>): boolean {
+  return (
+    transaction.kind === 'normal' &&
+    transaction.direction === 'in' &&
+    transaction.member_id !== null &&
+    transaction.reverses_transaction_id === null &&
+    !reversedIds.has(transaction.id)
+  )
 }

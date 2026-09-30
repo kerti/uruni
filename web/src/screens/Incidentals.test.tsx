@@ -54,15 +54,32 @@ function jsonResponse(body: unknown, status = 200) {
 type Handler = { match: (method: string, url: string) => boolean; handle: () => Promise<Response> }
 
 /** Routes a stubbed fetch by method + path substring, recording every call */
-function routedFetch(handlers: Handler[]) {
+/**
+ * `participation`, when given, answers every GET .../participation request -
+ * checked before `handlers`, never through it: a GET .../participation is a
+ * suffix of the same path most tests' own detail handler matches by
+ * `u.includes('/api/incidentals/<id>')`, so a plain handler list can never
+ * tell the two apart. Omitted, participation answers empty - no expected
+ * members, no unexpected ones - which is what every test not about the
+ * participation table itself wants.
+ */
+function routedFetch(handlers: Handler[], participation?: () => Promise<Response>) {
   return vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
     const url = typeof input === 'string' ? input : input.toString()
     const method = (init?.method ?? 'GET').toUpperCase()
+
+    if (method === 'GET' && url.includes('/participation')) {
+      return participation ? participation() : Promise.resolve(jsonResponse({ expected: [], unexpected: [] }))
+    }
+
     const handler = handlers.find((h) => h.match(method, url))
     if (handler) return handler.handle()
     // The envelope's recent activity (#314) fetches on every render of the
     // detail; tests about something else get an empty list for it.
     if (method === 'GET' && url.includes('/api/transactions')) return Promise.resolve(jsonResponse({ transactions: [], next_cursor: null }))
+    // The roster (#333: the edit dialog's recipients picker) - tests about
+    // something else get an empty roster.
+    if (method === 'GET' && url.includes('/api/members')) return Promise.resolve(jsonResponse({ members: [], next_cursor: null }))
     return Promise.reject(new Error(`unstubbed fetch: ${method} ${url}`))
   })
 }
@@ -150,7 +167,10 @@ describe('Incidentals', () => {
     await waitFor(() => expect(screen.getByText(text.detail.collectedLabel)).toBeInTheDocument())
 
     await userEvent.click(screen.getByRole('button', { name: text.actions.record }))
-    expect(onRecordFor).toHaveBeenCalledWith(1)
+    // Called with no member (#333: the top action row records without one
+    // prefilled - only the participation table's own per-row action names a
+    // member).
+    expect(onRecordFor).toHaveBeenCalledWith(1, undefined)
   })
 
   it('closes an envelope with a zero rollover, shown honestly rather than hidden', async () => {
@@ -209,8 +229,12 @@ describe('Incidentals', () => {
     const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
       const url = typeof input === 'string' ? input : input.toString()
       const method = (init?.method ?? 'GET').toUpperCase()
+      // Checked before the generic '/api/incidentals/1' branch below - a
+      // participation GET is a suffix of that same path (#333).
+      if (method === 'GET' && url.includes('/participation')) return Promise.resolve(jsonResponse({ expected: [], unexpected: [] }))
       if (method === 'GET' && url.includes('/api/transactions'))
         return Promise.resolve(jsonResponse({ transactions: [], next_cursor: null }))
+      if (method === 'GET' && url.includes('/api/members')) return Promise.resolve(jsonResponse({ members: [], next_cursor: null }))
       if (method === 'POST' && url.includes('/api/incidentals/1/close')) return closeHandler(init)
       if (method === 'GET' && url.includes('/api/incidentals/1')) return Promise.resolve(jsonResponse(detail))
       const handler = getHandlers().find((h) => h.match(method, url))
@@ -239,8 +263,12 @@ describe('Incidentals', () => {
     const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
       const url = typeof input === 'string' ? input : input.toString()
       const method = (init?.method ?? 'GET').toUpperCase()
+      // Checked before the generic '/api/incidentals/1' branch below - a
+      // participation GET is a suffix of that same path (#333).
+      if (method === 'GET' && url.includes('/participation')) return Promise.resolve(jsonResponse({ expected: [], unexpected: [] }))
       if (method === 'GET' && url.includes('/api/transactions'))
         return Promise.resolve(jsonResponse({ transactions: [], next_cursor: null }))
+      if (method === 'GET' && url.includes('/api/members')) return Promise.resolve(jsonResponse({ members: [], next_cursor: null }))
       if (method === 'POST' && url.includes('/api/incidentals/1/close')) {
         posted = JSON.parse(String(init?.body))
         return Promise.resolve(jsonResponse({ incidental: closed, rolled_amount: 120_000 }))
@@ -324,8 +352,12 @@ describe('Incidentals', () => {
     const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
       const url = typeof input === 'string' ? input : input.toString()
       const method = (init?.method ?? 'GET').toUpperCase()
+      // Checked before the generic '/api/incidentals/2' branch below - a
+      // participation GET is a suffix of that same path (#333).
+      if (method === 'GET' && url.includes('/participation')) return Promise.resolve(jsonResponse({ expected: [], unexpected: [] }))
       if (method === 'GET' && url.includes('/api/transactions'))
         return Promise.resolve(jsonResponse({ transactions: [], next_cursor: null }))
+      if (method === 'GET' && url.includes('/api/members')) return Promise.resolve(jsonResponse({ members: [], next_cursor: null }))
       if (method === 'POST' && url.includes('/api/incidentals/2/reopen')) {
         return Promise.resolve(jsonResponse(reopened))
       }
@@ -596,8 +628,12 @@ describe('Incidentals', () => {
     const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
       const url = typeof input === 'string' ? input : input.toString()
       const method = (init?.method ?? 'GET').toUpperCase()
+      // Checked before the generic '/api/incidentals/1' branch below - a
+      // participation GET is a suffix of that same path (#333).
+      if (method === 'GET' && url.includes('/participation')) return Promise.resolve(jsonResponse({ expected: [], unexpected: [] }))
       if (method === 'GET' && url.includes('/api/transactions'))
         return Promise.resolve(jsonResponse({ transactions: [], next_cursor: null }))
+      if (method === 'GET' && url.includes('/api/members')) return Promise.resolve(jsonResponse({ members: [], next_cursor: null }))
       if (method === 'PATCH' && url.includes('/api/purposes/1')) {
         patched = { method, url, body: init?.body ? JSON.parse(String(init.body)) : undefined }
         return Promise.resolve(jsonResponse(renamedPurpose))
@@ -638,6 +674,52 @@ describe('Incidentals', () => {
     expect(screen.getByText(text.rename.success)).toBeInTheDocument()
   })
 
+  // Widened by #333/ADR-034: the same edit dialog carries the minimum and
+  // the recipients, seeded from the envelope and PATCHed to
+  // /api/incidentals/{id} when either changes - occasion untouched, so
+  // renamePurpose is never called.
+  it('edits the minimum and recipients through the same dialog, without touching the occasion', async () => {
+    const detail = { ...openEnvelope, collected_amount: 0, disbursed_amount: 0, minimum_per_member: null, recipients: [] }
+    const updated = { ...openEnvelope, minimum_per_member: 25_000 }
+    let detailCalls = 0
+    let patched: { body: unknown } | null = null
+    const budi = member({ id: 7, name: 'Budi' })
+    const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = typeof input === 'string' ? input : input.toString()
+      const method = (init?.method ?? 'GET').toUpperCase()
+      if (method === 'GET' && url.includes('/participation')) return Promise.resolve(jsonResponse({ expected: [], unexpected: [] }))
+      if (method === 'GET' && url.includes('/api/transactions'))
+        return Promise.resolve(jsonResponse({ transactions: [], next_cursor: null }))
+      if (method === 'GET' && url.includes('/api/members')) return Promise.resolve(jsonResponse({ members: [budi], next_cursor: null }))
+      if (method === 'PATCH' && url.includes('/api/incidentals/1')) {
+        patched = { body: init?.body ? JSON.parse(String(init.body)) : undefined }
+        return Promise.resolve(jsonResponse(updated))
+      }
+      if (method === 'GET' && url.includes('/api/incidentals/1')) {
+        detailCalls += 1
+        return Promise.resolve(jsonResponse(detailCalls === 1 ? detail : { ...detail, minimum_per_member: 25_000 }))
+      }
+      const handler = getHandlers().find((h) => h.match(method, url))
+      if (!handler) return Promise.reject(new Error(`unstubbed fetch: ${method} ${url}`))
+      return handler.handle()
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    renderIncidentals(<Incidentals onBack={vi.fn()} onRecordFor={vi.fn()} onViewTransactionsFor={vi.fn()} purposeId={1} />)
+    await waitFor(() => expect(screen.getByText('Halal bihalal RT')).toBeInTheDocument())
+
+    await userEvent.click(screen.getByRole('button', { name: text.actions.rename }))
+    const dialog = await screen.findByRole('dialog', { name: text.rename.heading })
+    await userEvent.type(within(dialog).getByLabelText(copy.incidentals.open.minimumLabel), '25000')
+    await userEvent.click(within(dialog).getByRole('checkbox', { name: 'Budi' }))
+    await userEvent.click(within(dialog).getByRole('button', { name: text.rename.save }))
+
+    await waitFor(() => expect(patched).not.toBeNull())
+    expect(patched).toMatchObject({ body: { minimum_per_member: 25_000, recipient_member_ids: [7] } })
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    expect(screen.getByText(text.rename.success)).toBeInTheDocument()
+  })
+
   // The whole point of #264: the typo is usually noticed after the occasion
   // is over, so a closed envelope must offer the same correction.
   it('offers the rename button for a closed envelope too', async () => {
@@ -656,5 +738,130 @@ describe('Incidentals', () => {
     await waitFor(() => expect(screen.getByText(text.detail.collectedLabel)).toBeInTheDocument())
 
     expect(screen.getByRole('button', { name: text.actions.rename })).toBeInTheDocument()
+  })
+})
+
+function member(overrides: Partial<{ id: number; name: string; inactive_on: string | null }> = {}) {
+  return {
+    id: 1,
+    name: 'Budi',
+    tier_id: null,
+    joined_on: null,
+    inactive_on: null,
+    created_at: 1,
+    tier_name: null,
+    current_rate: null,
+    arrears_months: 0,
+    ...overrides,
+  }
+}
+
+describe('Incidentals participation table (ADR-034, #211, #333)', () => {
+  const participationText = copy.incidentals.participation
+
+  function stub(
+    detail: Envelope & { collected_amount: number; disbursed_amount: number; recipients?: unknown[]; minimum_per_member?: number | null },
+    participation: unknown,
+  ) {
+    vi.stubGlobal(
+      'fetch',
+      routedFetch(
+        [
+          {
+            match: (m: string, u: string) => m === 'GET' && u.includes(`/api/incidentals/${detail.purpose_id}`),
+            handle: () => Promise.resolve(jsonResponse(detail)),
+          },
+          ...getHandlers(),
+        ],
+        () => Promise.resolve(jsonResponse(participation)),
+      ),
+    )
+  }
+
+  it('shows Sudah menyumbang with the amount, Belum menyumbang with none, and Kurang dari minimal for a partial gift', async () => {
+    const detail = { ...openEnvelope, collected_amount: 150_000, disbursed_amount: 0, minimum_per_member: 50_000, recipients: [] }
+    stub(detail, {
+      expected: [
+        { member: member({ id: 1, name: 'Budi' }), contributed_amount: 100_000, state: 'sudah' },
+        { member: member({ id: 2, name: 'Sri' }), contributed_amount: 0, state: 'belum' },
+        { member: member({ id: 3, name: 'Ani' }), contributed_amount: 20_000, state: 'kurang' },
+      ],
+      unexpected: [],
+    })
+
+    renderIncidentals(<Incidentals onBack={vi.fn()} onRecordFor={vi.fn()} onViewTransactionsFor={vi.fn()} purposeId={1} />)
+
+    expect(await screen.findByText('Budi')).toBeInTheDocument()
+    expect(screen.getByText(participationText.states.given)).toBeInTheDocument()
+    expect(screen.getByText(money(100_000))).toBeInTheDocument()
+
+    expect(screen.getByText('Sri')).toBeInTheDocument()
+    expect(screen.getByText(participationText.states.notGiven)).toBeInTheDocument()
+
+    expect(screen.getByText('Ani')).toBeInTheDocument()
+    expect(screen.getByText(participationText.states.underMinimum)).toBeInTheDocument()
+    expect(screen.getByText(money(20_000))).toBeInTheDocument()
+  })
+
+  it('renders "Kurang dari minimal" in neutral ink, never terracotta (Design-System.md)', async () => {
+    const detail = { ...openEnvelope, collected_amount: 20_000, disbursed_amount: 0, minimum_per_member: 50_000, recipients: [] }
+    stub(detail, { expected: [{ member: member(), contributed_amount: 20_000, state: 'kurang' }], unexpected: [] })
+
+    renderIncidentals(<Incidentals onBack={vi.fn()} onRecordFor={vi.fn()} onViewTransactionsFor={vi.fn()} purposeId={1} />)
+
+    const label = await screen.findByText(participationText.states.underMinimum)
+    expect(label.className).not.toContain('attention')
+  })
+
+  it('lists an unexpected giver under Sumbangan lain, with their amount and no state', async () => {
+    const detail = { ...openEnvelope, collected_amount: 999_000, disbursed_amount: 0, recipients: [] }
+    stub(detail, { expected: [], unexpected: [{ member: member({ id: 5, name: 'Tante Wati' }), contributed_amount: 30_000 }] })
+
+    renderIncidentals(<Incidentals onBack={vi.fn()} onRecordFor={vi.fn()} onViewTransactionsFor={vi.fn()} purposeId={1} />)
+
+    expect(await screen.findByText(participationText.otherHeading)).toBeInTheDocument()
+    expect(screen.getByText('Tante Wati')).toBeInTheDocument()
+    expect(screen.getByText(money(30_000))).toBeInTheDocument()
+  })
+
+  it('shows the recipients as "Untuk: ..."', async () => {
+    const detail = {
+      ...openEnvelope,
+      collected_amount: 0,
+      disbursed_amount: 0,
+      recipients: [
+        { member_id: 9, member_name: 'Keluarga Pak Joko' },
+        { member_id: 10, member_name: 'Bu Joko' },
+      ],
+    }
+    stub(detail, { expected: [], unexpected: [] })
+
+    renderIncidentals(<Incidentals onBack={vi.fn()} onRecordFor={vi.fn()} onViewTransactionsFor={vi.fn()} purposeId={1} />)
+
+    expect(await screen.findByText(participationText.recipientsLine('Keluarga Pak Joko, Bu Joko'))).toBeInTheDocument()
+  })
+
+  it('records a contribution with the member prefilled - one action per expected row', async () => {
+    const detail = { ...openEnvelope, collected_amount: 0, disbursed_amount: 0, recipients: [] }
+    stub(detail, { expected: [{ member: member({ id: 7, name: 'Budi' }), contributed_amount: 0, state: 'belum' }], unexpected: [] })
+
+    const onRecordFor = vi.fn()
+    renderIncidentals(<Incidentals onBack={vi.fn()} onRecordFor={onRecordFor} onViewTransactionsFor={vi.fn()} purposeId={1} />)
+
+    await userEvent.click(await screen.findByRole('button', { name: participationText.recordAria('Budi') }))
+
+    expect(onRecordFor).toHaveBeenCalledWith(1, 7)
+  })
+
+  it('offers no reminder, share or message action anywhere on this screen (PRD sections 4 and 7.5)', async () => {
+    const detail = { ...openEnvelope, collected_amount: 0, disbursed_amount: 0, recipients: [] }
+    stub(detail, { expected: [{ member: member({ id: 7, name: 'Budi' }), contributed_amount: 0, state: 'belum' }], unexpected: [] })
+
+    renderIncidentals(<Incidentals onBack={vi.fn()} onRecordFor={vi.fn()} onViewTransactionsFor={vi.fn()} purposeId={1} />)
+    await screen.findByText('Budi')
+
+    for (const button of screen.getAllByRole('button')) {
+      expect(button.textContent?.toLowerCase()).not.toMatch(/ingat|kirim|pesan|reminder|share/)
+    }
   })
 })
