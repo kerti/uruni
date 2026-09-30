@@ -269,3 +269,101 @@ func TestPostTransactionUnaffectedByTheGuardOnOpenOrNonIncidentalPurposes(t *tes
 		})
 	}
 }
+
+// TestPostTransactionAcceptsAnOptionalMemberOnAContribution (ADR-034,
+// #211): a kind='normal', direction='in' row tagged to an envelope may name
+// its member, and the posted row carries it straight through.
+func TestPostTransactionAcceptsAnOptionalMemberOnAContribution(t *testing.T) {
+	l := newTestLedger(t)
+	f := newFixture(t, l)
+	ctx := context.Background()
+
+	envelope := openTestIncidental(t, l, f.fundID, "Sunatan", "2026-08-01")
+
+	posted, err := l.PostTransaction(ctx, PostTransactionParams{
+		FundID: f.fundID, AccountID: f.cashID, PurposeID: envelope.PurposeID,
+		Direction: "in", Amount: 25_000, OccurredOn: "2026-08-12", MemberID: &f.memberID,
+	})
+	if err != nil {
+		t.Fatalf("PostTransaction(named contribution) = %v, want no error", err)
+	}
+	if posted.MemberID == nil || *posted.MemberID != f.memberID {
+		t.Errorf("posted.MemberID = %v, want %d", posted.MemberID, f.memberID)
+	}
+	if posted.Kind != "normal" {
+		t.Errorf("posted.Kind = %q, want %q - naming a member adds no new kind", posted.Kind, "normal")
+	}
+}
+
+// TestPostTransactionRefusesAMemberOutsideAnIncidentalPurpose: a friendly,
+// named error ahead of the BEFORE INSERT trigger's raw message (ADR-034) -
+// f.mainID is 'main', not 'incidental'.
+func TestPostTransactionRefusesAMemberOutsideAnIncidentalPurpose(t *testing.T) {
+	l := newTestLedger(t)
+	f := newFixture(t, l)
+	ctx := context.Background()
+
+	_, err := l.PostTransaction(ctx, PostTransactionParams{
+		FundID: f.fundID, AccountID: f.cashID, PurposeID: f.mainID,
+		Direction: "in", Amount: 25_000, OccurredOn: "2026-08-12", MemberID: &f.memberID,
+	})
+	if !errors.Is(err, ErrContributionRequiresIncidentalPurpose) {
+		t.Errorf("PostTransaction(member, main purpose) = %v, want an error wrapping ErrContributionRequiresIncidentalPurpose", err)
+	}
+}
+
+// TestPostTransactionRefusesAMemberOnAnOutgoingOrAdjustingRow: naming a
+// member is only ever valid on a contribution - a kind='normal',
+// direction='in' row - refused before the write is even attempted, whatever
+// the purpose (ADR-034).
+func TestPostTransactionRefusesAMemberOnAnOutgoingOrAdjustingRow(t *testing.T) {
+	l := newTestLedger(t)
+	f := newFixture(t, l)
+	ctx := context.Background()
+	envelope := openTestIncidental(t, l, f.fundID, "Sunatan", "2026-08-01")
+
+	t.Run("outgoing", func(t *testing.T) {
+		_, err := l.PostTransaction(ctx, PostTransactionParams{
+			FundID: f.fundID, AccountID: f.cashID, PurposeID: envelope.PurposeID,
+			Direction: "out", Amount: 25_000, OccurredOn: "2026-08-12", MemberID: &f.memberID,
+		})
+		if !errors.Is(err, ErrInvalidArgument) {
+			t.Errorf("PostTransaction(member, direction=out) = %v, want an error wrapping ErrInvalidArgument", err)
+		}
+	})
+
+	t.Run("adjustment", func(t *testing.T) {
+		_, err := l.PostTransaction(ctx, PostTransactionParams{
+			FundID: f.fundID, AccountID: f.cashID, PurposeID: envelope.PurposeID,
+			Direction: "in", Amount: 25_000, OccurredOn: "2026-08-12", MemberID: &f.memberID,
+			IsAdjustment: true,
+		})
+		if !errors.Is(err, ErrInvalidArgument) {
+			t.Errorf("PostTransaction(member, is_adjustment) = %v, want an error wrapping ErrInvalidArgument", err)
+		}
+	})
+}
+
+// TestPostTransactionRefusesANamedContributionToAClosedEnvelope: the
+// closed-incidental guard (ADR-031) still applies once a row can carry a
+// member - naming a giver does not exempt the posting from it.
+func TestPostTransactionRefusesANamedContributionToAClosedEnvelope(t *testing.T) {
+	l := newTestLedger(t)
+	f := newFixture(t, l)
+	ctx := context.Background()
+
+	envelope := openTestIncidental(t, l, f.fundID, "Sunatan", "2026-08-01")
+	if _, err := l.CloseIncidentalAndRoll(ctx, CloseIncidentalAndRollParams{
+		FundID: f.fundID, PurposeID: envelope.PurposeID, AccountID: f.cashID, ClosedOn: "2026-08-10",
+	}); err != nil {
+		t.Fatalf("CloseIncidentalAndRoll() = %v, want no error", err)
+	}
+
+	_, err := l.PostTransaction(ctx, PostTransactionParams{
+		FundID: f.fundID, AccountID: f.cashID, PurposeID: envelope.PurposeID,
+		Direction: "in", Amount: 25_000, OccurredOn: "2026-08-15", MemberID: &f.memberID,
+	})
+	if !errors.Is(err, ErrIncidentalClosed) {
+		t.Fatalf("PostTransaction(named contribution) on a closed envelope = %v, want an error wrapping ErrIncidentalClosed", err)
+	}
+}

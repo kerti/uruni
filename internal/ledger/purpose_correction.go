@@ -90,8 +90,13 @@ type PostPurposeCorrectionParams struct {
 //   - kind='adjustment' with reverses_transaction_id set (a dues reversal,
 //     ADR-029): ErrPurposeCorrectionDuesReversal - its own correction path
 //     is ReverseDuesPayment, not this one.
-//   - kind='normal', or kind='adjustment' with reverses_transaction_id NULL
-//     (an ordinary correction or a ADR-024 reconciliation fix): eligible.
+//   - kind='normal' with member_id set (a named contribution, ADR-034):
+//     ErrPurposeCorrectionNamedContribution - moving it would leave
+//     participation counting the member against an envelope the money has
+//     left; the fix is reverse and post again, the same as a dues payment.
+//   - kind='normal' with no member_id, or kind='adjustment' with
+//     reverses_transaction_id NULL (an ordinary correction or a ADR-024
+//     reconciliation fix): eligible.
 //
 // Two more refusals run after eligibility, against the closed-incidental
 // state ADR-031 guarantees (ADR-033):
@@ -133,10 +138,19 @@ func (l *Ledger) PostPurposeCorrection(ctx context.Context, p PostPurposeCorrect
 			if original.ReversesTransactionID != nil {
 				return ErrPurposeCorrectionDuesReversal
 			}
+		case "normal":
+			// A named contribution (ADR-034): moving it to another
+			// peruntukan would leave participation counting the member
+			// against an envelope the money has left. Refused the way a
+			// dues payment already is; an unnamed contribution
+			// (member_id NULL) falls through eligible unchanged.
+			if original.MemberID != nil {
+				return ErrPurposeCorrectionNamedContribution
+			}
 		}
-		// "normal", and "adjustment" with no reverses_transaction_id, fall
-		// through eligible - the last case the switch above leaves
-		// unhandled on purpose.
+		// "normal" with no member_id, and "adjustment" with no
+		// reverses_transaction_id, fall through eligible - the two cases
+		// the switch above leaves unhandled on purpose.
 
 		effectivePurposeID, err := effectivePeruntukan(ctx, q, p.FundID, original)
 		if err != nil {

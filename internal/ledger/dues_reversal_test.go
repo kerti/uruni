@@ -457,3 +457,145 @@ func TestReverseDuesPaymentNoteFollowsNormalizeNoteContract(t *testing.T) {
 		t.Errorf("Note (typed) = %v, want the trimmed text", got)
 	}
 }
+
+// --- ADR-034: the reversal widens to a named contribution -----------------
+
+// TestReverseDuesPaymentReversesANamedContribution: the fields ADR-029
+// already copies from a dues payment - account_id, purpose_id, amount,
+// member_id, dues_period - are copied identically from a named contribution,
+// with dues_period staying nil (a contribution never carries one). The fund
+// balance round-trips exactly, the same integer-comparison guarantee
+// TestReverseDuesPaymentRoundTripsBalanceAndPaidStatus already proves for
+// dues.
+func TestReverseDuesPaymentReversesANamedContribution(t *testing.T) {
+	l := newTestLedger(t)
+	f := newFixture(t, l)
+	ctx := context.Background()
+
+	envelope := openTestIncidental(t, l, f.fundID, "Sunatan", "2026-08-01")
+
+	balanceBefore, err := l.FundBalance(ctx, f.fundID)
+	if err != nil {
+		t.Fatalf("FundBalance() before contribution = %v, want no error", err)
+	}
+
+	contribution, err := l.PostTransaction(ctx, PostTransactionParams{
+		FundID: f.fundID, AccountID: f.cashID, PurposeID: envelope.PurposeID,
+		Direction: "in", Amount: 25_000, OccurredOn: "2026-08-12", MemberID: &f.memberID,
+	})
+	if err != nil {
+		t.Fatalf("PostTransaction(named contribution) = %v, want no error", err)
+	}
+
+	reversal, err := l.ReverseDuesPayment(ctx, ReverseDuesPaymentParams{
+		FundID: f.fundID, TransactionID: contribution.ID, OccurredOn: "2026-08-15",
+	})
+	if err != nil {
+		t.Fatalf("ReverseDuesPayment(named contribution) = %v, want no error", err)
+	}
+	if reversal.Kind != "adjustment" {
+		t.Errorf("reversal Kind = %q, want %q", reversal.Kind, "adjustment")
+	}
+	if reversal.Direction != "out" {
+		t.Errorf("reversal Direction = %q, want %q", reversal.Direction, "out")
+	}
+	if reversal.AccountID != f.cashID {
+		t.Errorf("reversal AccountID = %d, want %d (copied from the original)", reversal.AccountID, f.cashID)
+	}
+	if reversal.PurposeID != envelope.PurposeID {
+		t.Errorf("reversal PurposeID = %d, want %d (copied from the original)", reversal.PurposeID, envelope.PurposeID)
+	}
+	if reversal.Amount != 25_000 {
+		t.Errorf("reversal Amount = %d, want 25000 (copied from the original)", reversal.Amount)
+	}
+	if reversal.MemberID == nil || *reversal.MemberID != f.memberID {
+		t.Errorf("reversal MemberID = %v, want %d (copied from the original)", reversal.MemberID, f.memberID)
+	}
+	if reversal.DuesPeriod != nil {
+		t.Errorf("reversal DuesPeriod = %v, want nil - a contribution never carries one", reversal.DuesPeriod)
+	}
+
+	balanceAfter, err := l.FundBalance(ctx, f.fundID)
+	if err != nil {
+		t.Fatalf("FundBalance() after reversal = %v, want no error", err)
+	}
+	if balanceAfter != balanceBefore {
+		t.Fatalf("FundBalance() after reversal = %d, want %d (exactly the pre-contribution balance)", balanceAfter, balanceBefore)
+	}
+
+	// The reversed contribution no longer counts toward participation
+	// (ADR-034): the member reads Belum, not Sudah, and the reversed row's
+	// own amount is excluded from the sum entirely - not merely below a
+	// minimum.
+	participation, err := l.GetIncidentalParticipation(ctx, f.fundID, envelope.PurposeID)
+	if err != nil {
+		t.Fatalf("GetIncidentalParticipation() = %v, want no error", err)
+	}
+	got, ok := participationFor(t, participation.Expected, f.memberID)
+	if !ok {
+		t.Fatalf("member %d missing from the expected roster", f.memberID)
+	}
+	if got.ContributedAmount != 0 {
+		t.Errorf("ContributedAmount after reversal = %d, want 0", got.ContributedAmount)
+	}
+	if got.State != ParticipationBelum {
+		t.Errorf("State after reversal = %q, want %q", got.State, ParticipationBelum)
+	}
+}
+
+// TestReverseDuesPaymentRefusesAnUnnamedContribution: an unnamed
+// contribution is not reversible through this method - it is neither dues
+// nor a named contribution, exactly the same ErrNotADuesPayment refusal an
+// ordinary transaction already gets (TestReverseDuesPaymentRefusesANonDuesTransaction).
+func TestReverseDuesPaymentRefusesAnUnnamedContribution(t *testing.T) {
+	l := newTestLedger(t)
+	f := newFixture(t, l)
+	ctx := context.Background()
+
+	envelope := openTestIncidental(t, l, f.fundID, "Sunatan", "2026-08-01")
+	unnamed, err := l.PostTransaction(ctx, PostTransactionParams{
+		FundID: f.fundID, AccountID: f.cashID, PurposeID: envelope.PurposeID,
+		Direction: "in", Amount: 25_000, OccurredOn: "2026-08-12",
+	})
+	if err != nil {
+		t.Fatalf("PostTransaction(unnamed contribution) = %v, want no error", err)
+	}
+
+	_, err = l.ReverseDuesPayment(ctx, ReverseDuesPaymentParams{
+		FundID: f.fundID, TransactionID: unnamed.ID, OccurredOn: "2026-08-15",
+	})
+	if !errors.Is(err, ErrNotADuesPayment) {
+		t.Fatalf("ReverseDuesPayment(unnamed contribution) = %v, want an error wrapping ErrNotADuesPayment", err)
+	}
+}
+
+// TestReverseDuesPaymentRefusesAClosedEnvelope: a reversal posts to the
+// original row's own purpose, so ADR-031's guard applies to it exactly as
+// it does to an ordinary posting - reopen first (ADR-034).
+func TestReverseDuesPaymentRefusesAClosedEnvelope(t *testing.T) {
+	l := newTestLedger(t)
+	f := newFixture(t, l)
+	ctx := context.Background()
+
+	envelope := openTestIncidental(t, l, f.fundID, "Sunatan", "2026-08-01")
+	contribution, err := l.PostTransaction(ctx, PostTransactionParams{
+		FundID: f.fundID, AccountID: f.cashID, PurposeID: envelope.PurposeID,
+		Direction: "in", Amount: 25_000, OccurredOn: "2026-08-12", MemberID: &f.memberID,
+	})
+	if err != nil {
+		t.Fatalf("PostTransaction(named contribution) = %v, want no error", err)
+	}
+
+	if _, err := l.CloseIncidentalAndRoll(ctx, CloseIncidentalAndRollParams{
+		FundID: f.fundID, PurposeID: envelope.PurposeID, AccountID: f.cashID, ClosedOn: "2026-08-20",
+	}); err != nil {
+		t.Fatalf("CloseIncidentalAndRoll() = %v, want no error", err)
+	}
+
+	_, err = l.ReverseDuesPayment(ctx, ReverseDuesPaymentParams{
+		FundID: f.fundID, TransactionID: contribution.ID, OccurredOn: "2026-08-21",
+	})
+	if !errors.Is(err, ErrIncidentalClosed) {
+		t.Fatalf("ReverseDuesPayment() on a closed envelope = %v, want an error wrapping ErrIncidentalClosed", err)
+	}
+}

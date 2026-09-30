@@ -27,6 +27,15 @@ type transactionRequest struct {
 	OccurredOn   string  `json:"occurred_on"`
 	Note         *string `json:"note"`
 	IsAdjustment bool    `json:"is_adjustment"`
+
+	// MemberID optionally names who a contribution into an open envelope is
+	// from (ADR-034, #211) - Catat's "Dari siapa? (opsional)", only ever
+	// meaningful on a kind='normal' row going 'in'. Left unset (nil) for a
+	// guest or an anonymous giver, and for every other transaction shape -
+	// PostTransaction's own shape and business-state checks are what turn a
+	// misuse of this field into a named error, never this handler's job to
+	// pre-validate (ADR-027).
+	MemberID *int64 `json:"member_id"`
 }
 
 // transactionResponse is the wire shape of a transaction row - every kind the
@@ -227,6 +236,7 @@ func (a *api) createTransaction(w http.ResponseWriter, r *http.Request) {
 		OccurredOn:   req.OccurredOn,
 		Note:         req.Note,
 		IsAdjustment: req.IsAdjustment,
+		MemberID:     req.MemberID,
 	})
 	if err != nil {
 		mapLedgerError(w, a.logger, err)
