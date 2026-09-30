@@ -46,6 +46,12 @@ type api struct {
 	// writable (config.EnsureUploadsDirWritable) before this struct is ever
 	// built.
 	uploadsDir string
+
+	// backupDir is #324's addition: where the daily server-side backup dumps
+	// (ADR-012/ADR-013) are written to and listed from. Like uploadsDir,
+	// `serve` has already proved it exists and is writable
+	// (config.EnsureBackupDirWritable) before this struct is ever built.
+	backupDir string
 }
 
 // routes registers the /api surface on the mount New creates. No handlers at
@@ -268,6 +274,15 @@ func (a *api) routes(r chi.Router) {
 		// route in this group is - it carries the password hash alongside
 		// everything else.
 		r.Get("/backup", a.downloadBackup)
+
+		// The Cadangan card's own two routes (M6.38, #324, ADR-012/013):
+		// what server-side dumps already exist, and downloading one of
+		// them by name. Plural and distinct from the singular /backup
+		// above on purpose - that route builds a fresh zip on demand and
+		// answers with it directly; these two only ever read
+		// URUNI_BACKUP_DIR, never build anything themselves.
+		r.Get("/backups", a.listBackups)
+		r.Get("/backups/{name}", a.downloadStoredBackup)
 	})
 }
 

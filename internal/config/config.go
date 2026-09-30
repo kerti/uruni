@@ -34,6 +34,11 @@ const (
 	// the same way URUNI_DB defaults to ./uruni.db locally and is overridden
 	// to /data/uruni.db in the compose stack.
 	DefaultUploadsDir = "./uploads"
+	// DefaultBackupDir is the same split again, for the daily server-side
+	// dumps ADR-012/ADR-013 describe (M6.38, #324): a dev-friendly relative
+	// default, overridden to the volume-mounted /backups in the compose
+	// stack and the production image.
+	DefaultBackupDir = "./backups"
 )
 
 // Log output formats. Text is the default because the operator reads container
@@ -75,6 +80,10 @@ type Config struct {
 	// parse of the environment table, with no filesystem I/O of its own - see
 	// EnsureUploadsDirWritable, which `serve` alone calls at boot.
 	UploadsDir string
+	// BackupDir is the local volume the daily server-side dumps are written
+	// to (ADR-012/ADR-013, M6.38 #324) - the same existence-and-writability
+	// story as UploadsDir: not checked here, see EnsureBackupDirWritable.
+	BackupDir string
 	// LogLevel and LogFormat configure the slog handler main builds (ADR-022).
 	LogLevel  slog.Level
 	LogFormat string
@@ -88,6 +97,7 @@ func Load() (Config, error) {
 		DBPath:     DefaultDBPath,
 		Port:       DefaultPort,
 		UploadsDir: DefaultUploadsDir,
+		BackupDir:  DefaultBackupDir,
 		BaseURL:    strings.TrimRight(strings.TrimSpace(os.Getenv("URUNI_BASE_URL")), "/"),
 	}
 
@@ -97,6 +107,10 @@ func Load() (Config, error) {
 
 	if v := strings.TrimSpace(os.Getenv("URUNI_UPLOADS_DIR")); v != "" {
 		cfg.UploadsDir = v
+	}
+
+	if v := strings.TrimSpace(os.Getenv("URUNI_BACKUP_DIR")); v != "" {
+		cfg.BackupDir = v
 	}
 
 	if err := loadPort(&cfg); err != nil {
@@ -211,6 +225,33 @@ func EnsureUploadsDirWritable(dir string) error {
 	probe, err := os.CreateTemp(dir, ".uruni-write-check-*")
 	if err != nil {
 		return invalidValue("URUNI_UPLOADS_DIR", dir, "is not writable: "+err.Error())
+	}
+	name := probe.Name()
+	_ = probe.Close()
+	_ = os.Remove(name)
+	return nil
+}
+
+// EnsureBackupDirWritable is EnsureUploadsDirWritable's own twin for
+// URUNI_BACKUP_DIR (M6.38, #324): checked at boot, for `serve` only - the
+// same "root:root named volume" failure this ADR-019 pattern already
+// exists to turn into a clear boot error, this time for the daily dump
+// directory instead of the uploads volume.
+func EnsureBackupDirWritable(dir string) error {
+	info, err := os.Stat(dir)
+	switch {
+	case errors.Is(err, os.ErrNotExist):
+		return invalidValue("URUNI_BACKUP_DIR", dir,
+			"does not exist - create it (or point at an existing writable directory) before starting the server")
+	case err != nil:
+		return invalidValue("URUNI_BACKUP_DIR", dir, "could not be read: "+err.Error())
+	case !info.IsDir():
+		return invalidValue("URUNI_BACKUP_DIR", dir, "is not a directory")
+	}
+
+	probe, err := os.CreateTemp(dir, ".uruni-write-check-*")
+	if err != nil {
+		return invalidValue("URUNI_BACKUP_DIR", dir, "is not writable: "+err.Error())
 	}
 	name := probe.Name()
 	_ = probe.Close()

@@ -897,10 +897,11 @@ export const copy = {
       add: 'Buka amplop',
       cardAria: (occasion: string) => `Lihat ${occasion}`,
     },
-    // The whole fund as one file (M6.37, #323, ADR-012). No dialog and no
-    // list here, unlike every section above it - one button, one action,
-    // the same shape reasoning FundName's own comment gives for a section
-    // with nothing to browse.
+    // The whole fund as one file (M6.37, #323, ADR-012), plus - M6.38, #324,
+    // ADR-013 - the list of copies the server already keeps on its own,
+    // once a day. Two different things this card offers: download now
+    // (heading/body/download/downloading, unchanged since #323) below, and
+    // browse what already exists (autoHeading onward) beneath it.
     backup: {
       heading: 'Cadangan',
       // The one warm line the issue asks for: what the file holds, and
@@ -911,6 +912,28 @@ export const copy = {
       body: 'Satu file berisi seluruh catatan kas — termasuk info login. Simpan di tempat yang aman.',
       download: 'Unduh cadangan',
       downloading: 'Menyiapkan…',
+      // The auto-list's own small heading, distinct enough from "Cadangan"
+      // above it that the two rows of action (download now vs. browse what
+      // already exists) read as separate, not as one confused button group.
+      autoHeading: 'Cadangan otomatis',
+      autoBody: 'Uruni menyimpan cadangan baru setiap hari, kalau ada perubahan.',
+      // Every dump's own kind (internal/http/backup.go's backupListItem) -
+      // "harian" for the daily scheduled copy, "sebelum pemulihan" for the
+      // safety net #325 takes right before a restore.
+      kindDaily: 'Harian',
+      kindPreRestore: 'Sebelum pemulihan',
+      // An older-format dump (ADR-012's compatibility rule): still listed,
+      // still downloadable, just never offered for restore - #326 builds
+      // the restore button itself, so this slice only needs the label that
+      // explains why one row has no such button beside it.
+      olderFormat: 'Dibuat versi lama',
+      empty: 'Belum ada cadangan otomatis.',
+      // The row's own download control - plain ink, not a button per row
+      // (#257's own "no row may read as unexplained" plus the review
+      // standard against an outlined button on every row) - so it needs an
+      // aria-label naming which dump it downloads, the same reasoning
+      // Incidentals' own cardAria already carries for its own dense list.
+      downloadRowAria: (kind: string, date: string) => `Unduh cadangan ${kind} ${date}`,
     },
   },
   // Correcting a posted row's peruntukan (#276, ADR-033): the marker on a

@@ -56,10 +56,25 @@ func Export(ctx context.Context, q store.Querier, l *ledger.Ledger, uploadsDir s
 	if err != nil {
 		return nil, nil, err
 	}
+	zipBytes, _, missing, err = BuildZip(doc, receipts, uploadsDir)
+	return zipBytes, missing, err
+}
 
-	docBytes, err := json.MarshalIndent(doc, "", "  ")
+// BuildZip marshals doc to uruni.json and assembles the finished zip -
+// split out of Export so dumps.go's WriteDump can reach the same bytes
+// Export would produce, for the scheduled and boot-time dumps, without a
+// second export path (ADR-012's "the logic lives in one package so that
+// stays cheap" - this is the one place that turns a Document into zip
+// bytes; Export and WriteDump both call it, neither reimplements it).
+//
+// docBytes is returned alongside zipBytes because WriteDump hashes exactly
+// those bytes for the change-only check (dumps.go's ChangeHash) - hashing
+// this return value rather than re-marshaling doc guarantees the hash is
+// computed over the same bytes that actually went into the zip.
+func BuildZip(doc Document, receipts []store.Receipt, uploadsDir string) (zipBytes []byte, docBytes []byte, missing []string, err error) {
+	docBytes, err = json.MarshalIndent(doc, "", "  ")
 	if err != nil {
-		return nil, nil, fmt.Errorf("backup: marshaling uruni.json: %w", err)
+		return nil, nil, nil, fmt.Errorf("backup: marshaling uruni.json: %w", err)
 	}
 
 	var buf bytes.Buffer
@@ -67,16 +82,16 @@ func Export(ctx context.Context, q store.Querier, l *ledger.Ledger, uploadsDir s
 
 	jsonWriter, err := zw.Create(jsonFilename)
 	if err != nil {
-		return nil, nil, fmt.Errorf("backup: creating %s in zip: %w", jsonFilename, err)
+		return nil, nil, nil, fmt.Errorf("backup: creating %s in zip: %w", jsonFilename, err)
 	}
 	if _, err := jsonWriter.Write(docBytes); err != nil {
-		return nil, nil, fmt.Errorf("backup: writing %s: %w", jsonFilename, err)
+		return nil, nil, nil, fmt.Errorf("backup: writing %s: %w", jsonFilename, err)
 	}
 
 	for _, r := range receipts {
 		found, err := addReceiptToZip(zw, uploadsDir, r.Path)
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, nil, err
 		}
 		if !found {
 			missing = append(missing, r.Path)
@@ -84,9 +99,9 @@ func Export(ctx context.Context, q store.Querier, l *ledger.Ledger, uploadsDir s
 	}
 
 	if err := zw.Close(); err != nil {
-		return nil, nil, fmt.Errorf("backup: closing zip: %w", err)
+		return nil, nil, nil, fmt.Errorf("backup: closing zip: %w", err)
 	}
-	return buf.Bytes(), missing, nil
+	return buf.Bytes(), docBytes, missing, nil
 }
 
 // addReceiptToZip copies one receipt image from the uploads volume into the
