@@ -540,7 +540,9 @@ describe('TransactionList entry detail (#359)', () => {
   const longNote = 'Beli semen 3 sak, pasir 1 pikap, dan upah tukang dua hari untuk perbaikan saluran air di gang belakang pos ronda'
 
   it('opens the entry in full on a tap of the card, with the whole note and when it was recorded', async () => {
-    renderRows([transaction({ direction: 'out', note: longNote, created_at: Date.UTC(2026, 9, 1, 6, 42) / 1000 })])
+    // Built in local time, not Date.UTC: the dialog formats in the runner's
+    // own timezone, which is WIB on a laptop and UTC in CI.
+    renderRows([transaction({ direction: 'out', note: longNote, created_at: new Date(2026, 9, 1, 13, 42).getTime() / 1000 })])
 
     await userEvent.click(screen.getByRole('button', { name: /^Lihat rincian:/ }))
 
