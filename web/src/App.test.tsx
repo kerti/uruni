@@ -113,10 +113,16 @@ describe('App (session probe)', () => {
   })
 
   it('renders an error with retry when the session probe fails, and retry re-probes', async () => {
-    const fetchMock = vi
+    // The first session probe fails, the retry succeeds. Register's footer
+    // reads /healthz too (#364), so that is answered separately rather than
+    // letting it take one of the two session responses.
+    const session = vi
       .fn()
       .mockRejectedValueOnce(new Error('network down'))
       .mockResolvedValueOnce(sessionResponse({ authenticated: false, has_account: false }))
+    const fetchMock = vi.fn((input: RequestInfo | URL) =>
+      String(input).includes('/healthz') ? Promise.resolve(new Response(null, { status: 404 })) : session(input),
+    )
     vi.stubGlobal('fetch', fetchMock)
 
     render(<App />)

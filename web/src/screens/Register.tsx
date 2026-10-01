@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import type { FormEvent } from 'react'
 
+import AuthChrome from '@/components/AuthChrome'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import PasswordInput from '@/components/PasswordInput'
@@ -60,7 +61,7 @@ export default function Register({ onRegistered }: { onRegistered: (user: AuthUs
   }
 
   return (
-    <main className="flex min-h-dvh items-center justify-center p-6">
+    <AuthChrome>
       <Card className="w-full max-w-sm shadow-card" size="default">
         <CardHeader>
           <CardTitle className="text-xl font-semibold">{text.heading}</CardTitle>
@@ -104,6 +105,6 @@ export default function Register({ onRegistered }: { onRegistered: (user: AuthUs
           </form>
         </CardContent>
       </Card>
-    </main>
+    </AuthChrome>
   )
 }

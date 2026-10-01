@@ -288,6 +288,23 @@ export const copy = {
     // The peek button on every password field (PasswordInput, #356). One
     // fixed label; aria-pressed says whether it is on.
     showPassword: 'Tampilkan kata sandi',
+    // The frame around both signed-out screens, Login and Register
+    // (#356, #364 - components/AuthChrome.tsx).
+    chrome: {
+      // Under the logo, not in the card (#356): what Uruni is and what it
+      // promises, word for word from Positioning.md and the README - the
+      // tagline, then the treasurer's own peace of mind.
+      tagline: 'Kelola dana kebersamaan.',
+      promise: 'Tenang, karena catatan selalu cocok dengan uang yang ada.',
+      // The footer under the card (#356): where the source and the
+      // licence live, for the operator and for AGPL-3.0 section 13 - a
+      // network user is offered the source of the version they are using.
+      sourceCode: 'Kode sumber',
+      license: 'Lisensi AGPL-3.0',
+      // Links the maintainer's own site. "Pemelihara" is the word Indonesian
+      // open-source translations use for a project's maintainer.
+      maintainer: 'Pemelihara',
+    },
     register: {
       heading: 'Buat akun bendahara',
       body: 'Ini akun pertama untuk Uruni — sekali dibuat, akun ini yang menjaga kas bersama.',
@@ -299,25 +316,12 @@ export const copy = {
     },
     login: {
       heading: 'Masuk ke Uruni',
-      // Under the logo, not in the card (#356): what Uruni is and what it
-      // promises, word for word from Positioning.md and the README - the
-      // tagline, then the treasurer's own peace of mind.
-      tagline: 'Kelola dana kebersamaan.',
-      promise: 'Tenang, karena catatan selalu cocok dengan uang yang ada.',
       emailLabel: 'Email',
       passwordLabel: 'Kata sandi',
       submit: 'Masuk',
       submitting: 'Sedang masuk…',
       invalidCredentials: 'Email atau kata sandi salah. Coba periksa lagi.',
       tooManyRequests: 'Terlalu banyak percobaan masuk. Coba lagi beberapa menit lagi, ya.',
-      // The footer under the login card (#356): where the source and the
-      // licence live, for the operator and for AGPL-3.0 section 13 - a
-      // network user is offered the source of the version they are using.
-      sourceCode: 'Kode sumber',
-      license: 'Lisensi AGPL-3.0',
-      // Links the maintainer's own site. "Pemelihara" is the word Indonesian
-      // open-source translations use for a project's maintainer.
-      maintainer: 'Pemelihara',
     },
   },
   // The first-run setup wizard (M6.5, PRD §7.1): four steps, only the first
