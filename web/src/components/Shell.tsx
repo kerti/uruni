@@ -175,7 +175,7 @@ export default function Shell({
                         // lifts it clearly above the bar's own shadow-bar.
                         <span
                           data-nav-raised
-                          className="absolute -top-7 left-1/2 flex size-14 -translate-x-1/2 items-center justify-center rounded-full bg-primary text-primary-foreground fab-glass"
+                          className="absolute -top-7 left-1/2 flex size-14 -translate-x-1/2 items-center justify-center rounded-full bg-primary text-primary-foreground fab-glass glass-rim"
                         >
                           <Icon aria-hidden="true" className="size-7" />
                         </span>

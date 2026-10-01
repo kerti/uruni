@@ -83,7 +83,7 @@ export default function FundName({ onRenamed }: { onRenamed: (fund: Fund) => voi
           type="button"
           aria-label={text.editAria(fund.name)}
           onClick={() => open('fund:name')}
-          className="flex min-h-11 w-full items-center rounded-lg bg-card px-4 py-3 text-left ring-1 ring-foreground/10 select-none transition-colors hover:bg-muted/40"
+          className="flex min-h-11 w-full items-center rounded-lg bg-card px-4 py-3 text-left shadow-card ring-1 ring-foreground/10 select-none transition-colors hover:bg-muted/40"
         >
           <span className="min-w-0 truncate font-medium">{fund.name}</span>
         </button>

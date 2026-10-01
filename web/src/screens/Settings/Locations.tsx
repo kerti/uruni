@@ -92,7 +92,7 @@ export default function Locations() {
                 type="button"
                 aria-label={text.editAria(account.name)}
                 onClick={() => open(`location:${account.id}`)}
-                className="flex min-h-11 w-full flex-col gap-1 rounded-lg bg-card px-4 py-3 text-left ring-1 ring-foreground/10 select-none transition-colors hover:bg-muted/40"
+                className="flex min-h-11 w-full flex-col gap-1 rounded-lg bg-card px-4 py-3 text-left shadow-card ring-1 ring-foreground/10 select-none transition-colors hover:bg-muted/40"
               >
                 <span className="flex w-full items-baseline justify-between gap-3">
                   <span className="min-w-0 truncate font-medium">{account.name}</span>

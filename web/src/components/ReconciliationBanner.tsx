@@ -97,7 +97,7 @@ function Wrapper({ onClick, className, children }: { onClick?: () => void; class
     return (
       <button
         type="button"
-        className={`${combined} min-h-11 justify-between shadow-sm ring-1 ring-foreground/10 transition-all outline-none hover:brightness-[0.98] focus-visible:ring-3 focus-visible:ring-ring/50 active:translate-y-px motion-reduce:transition-none`}
+        className={`${combined} min-h-11 justify-between shadow-card ring-1 ring-foreground/10 transition-all outline-none hover:brightness-[0.98] focus-visible:ring-3 focus-visible:ring-ring/50 active:translate-y-px motion-reduce:transition-none`}
         onClick={onClick}
       >
         <span className="flex items-center gap-2">{children}</span>

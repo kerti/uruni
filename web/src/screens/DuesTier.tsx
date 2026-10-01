@@ -213,7 +213,7 @@ function RateRow({ rate, onChanged }: { rate: DuesRate; onChanged: () => void })
   }
 
   return (
-    <li className="flex flex-col gap-2 rounded-lg bg-card px-4 py-3 ring-1 ring-foreground/10">
+    <li className="flex flex-col gap-2 rounded-lg bg-card px-4 py-3 shadow-card ring-1 ring-foreground/10">
       {editing ? (
         <form className="flex flex-col gap-2" onSubmit={handleSubmit} noValidate>
           <AmountInput id={`rate-amount-${rate.id}`} label={text.rateAmountLabel} value={amount} onChange={setAmount} disabled={busy} />

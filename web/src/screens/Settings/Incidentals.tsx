@@ -179,7 +179,7 @@ function EnvelopeCards({
 /** An envelope card's box - Pengaturan's list and the closed-envelopes
  * screen below share it. */
 const cardClass =
-  'flex min-h-11 w-full items-center justify-between gap-3 rounded-lg bg-card px-4 py-3 text-left ring-1 ring-foreground/10 select-none transition-colors hover:bg-muted/40'
+  'flex min-h-11 w-full items-center justify-between gap-3 rounded-lg bg-card px-4 py-3 text-left shadow-card ring-1 ring-foreground/10 select-none transition-colors hover:bg-muted/40'
 
 /** Same open/closed badge Incidentals.tsx's own StatusBadge renders. Kept
  * as a small local copy rather than a shared export - one component, two

@@ -162,7 +162,7 @@ export default function DuesStatus({
           ) : (
             <ul className="flex flex-col gap-2">
               {visibleRows.map((row) => (
-                <li key={row.member.id} className="flex flex-col gap-2 rounded-lg bg-card px-4 py-3 ring-1 ring-foreground/10">
+                <li key={row.member.id} className="flex flex-col gap-2 rounded-lg bg-card px-4 py-3 shadow-card ring-1 ring-foreground/10">
                   <div className="flex items-center justify-between gap-3">
                     <span className="font-medium">{row.member.name}</span>
                     <StatusBadge status={row.status} />

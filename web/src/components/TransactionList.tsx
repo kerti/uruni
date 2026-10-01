@@ -107,7 +107,7 @@ export default function TransactionList({
         const note = noteForDisplay(transaction)
         const reversible = Boolean(onContributionReversed) && canReverseContribution(transaction, reversedIds)
         return (
-          <li key={transaction.id} className="flex flex-col gap-2 rounded-lg bg-card px-4 py-3 ring-1 ring-foreground/10">
+          <li key={transaction.id} className="flex flex-col gap-2 rounded-lg bg-card px-4 py-3 shadow-card ring-1 ring-foreground/10">
             <div className="flex items-start justify-between gap-3">
               <span className="flex min-w-0 items-start gap-2">
                 {transaction.direction === 'in' ? (
