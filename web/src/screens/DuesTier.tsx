@@ -161,7 +161,7 @@ function TierName({ tier, onRenamed }: { tier: DuesTier; onRenamed: () => void }
       {/* A duplicate name for the fund hits UNIQUE (fund_id, name) - 409
           unique_violation, answered by the shared copy. */}
       {state.status === 'error' && state.error && <ErrorState error={state.error} />}
-      <Button type="submit" className="h-11 self-end" disabled={busy || trimmed === '' || unchanged}>
+      <Button type="submit" size="lg" className="self-end" disabled={busy || trimmed === '' || unchanged}>
         {busy ? text.saving : text.saveName}
       </Button>
     </form>
@@ -213,7 +213,7 @@ function RateRow({ rate, onChanged }: { rate: DuesRate; onChanged: () => void })
   }
 
   return (
-    <li className="flex flex-col gap-2 rounded-lg bg-card px-4 py-3 ring-1 ring-foreground/10">
+    <li className="flex flex-col gap-2 rounded-lg bg-card px-4 py-3 shadow-card ring-1 ring-foreground/10">
       {editing ? (
         <form className="flex flex-col gap-2" onSubmit={handleSubmit} noValidate>
           <AmountInput id={`rate-amount-${rate.id}`} label={text.rateAmountLabel} value={amount} onChange={setAmount} disabled={busy} />
@@ -224,7 +224,8 @@ function RateRow({ rate, onChanged }: { rate: DuesRate; onChanged: () => void })
             <Button
               type="button"
               variant="ghost"
-              className="h-11 text-attention"
+              size="lg"
+              className="text-attention"
               disabled={busy}
               onClick={() =>
                 void run(async () => {
@@ -239,7 +240,8 @@ function RateRow({ rate, onChanged }: { rate: DuesRate; onChanged: () => void })
             <Button
               type="button"
               variant="outline"
-              className="ml-auto h-11"
+              size="lg"
+              className="ml-auto"
               disabled={busy}
               onClick={() => {
                 setAmount(rate.amount)
@@ -248,7 +250,7 @@ function RateRow({ rate, onChanged }: { rate: DuesRate; onChanged: () => void })
             >
               {text.cancel}
             </Button>
-            <Button type="submit" className="h-11" disabled={busy}>
+            <Button type="submit" size="lg" disabled={busy}>
               {busy ? text.saving : text.saveRate}
             </Button>
           </div>
@@ -259,7 +261,7 @@ function RateRow({ rate, onChanged }: { rate: DuesRate; onChanged: () => void })
             <span className="tabular font-medium">{formatIDR(rate.amount)}</span>
             <span className="text-sm text-muted-foreground">{text.effectiveFrom(formatPeriod(rate.effective_from))}</span>
           </span>
-          <Button type="button" variant="outline" className="h-11 shrink-0" disabled={busy} onClick={() => setEditing(true)}>
+          <Button type="button" variant="outline" size="lg" className="shrink-0" disabled={busy} onClick={() => setEditing(true)}>
             {text.editRate}
           </Button>
         </div>
@@ -314,7 +316,7 @@ function AddRate({ tierId, onAdded }: { tierId: number; onAdded: () => void }) {
           effective_from) and comes back 409 unique_violation, which the
           shared error copy already answers. */}
       {state.status === 'error' && state.error && <ErrorState error={state.error} />}
-      <Button type="submit" className="h-11 self-end" disabled={busy || amount <= 0}>
+      <Button type="submit" size="lg" className="self-end" disabled={busy || amount <= 0}>
         {busy ? text.addingRate : text.addRate}
       </Button>
     </form>
@@ -350,12 +352,13 @@ function DeleteTier({ tier, onDeleted }: { tier: DuesTier; onDeleted: () => void
       )}
       {confirming ? (
         <div className="flex items-center gap-2">
-          <Button type="button" variant="outline" className="ml-auto h-11" disabled={busy} onClick={() => setConfirming(false)}>
+          <Button type="button" variant="outline" size="lg" className="ml-auto" disabled={busy} onClick={() => setConfirming(false)}>
             {text.cancel}
           </Button>
           <Button
             type="button"
-            className="h-11 bg-attention text-attention-foreground hover:bg-attention/90"
+            size="lg"
+            className="bg-attention text-attention-foreground hover:bg-attention/90"
             disabled={busy}
             onClick={() =>
               void run(async () => {
@@ -368,7 +371,7 @@ function DeleteTier({ tier, onDeleted }: { tier: DuesTier; onDeleted: () => void
           </Button>
         </div>
       ) : (
-        <Button type="button" variant="ghost" className="h-11 self-start text-attention" onClick={() => setConfirming(true)}>
+        <Button type="button" variant="ghost" size="lg" className="self-start text-attention" onClick={() => setConfirming(true)}>
           {text.delete}
         </Button>
       )}

@@ -359,7 +359,7 @@ function DetailView({
         </p>
       )}
 
-      <div className="flex flex-col gap-2 rounded-2xl bg-card p-4 ring-1 ring-foreground/10">
+      <div className="flex flex-col gap-2 rounded-2xl bg-card p-4 shadow-card ring-1 ring-foreground/10">
         <div className="flex items-center justify-between text-sm">
           <span className="text-muted-foreground">{text.detail.collectedLabel}</span>
           <span className="tabular font-medium">{formatIDR(envelope.collected_amount)}</span>
@@ -580,7 +580,10 @@ function ParticipationSection({
               {state.data.expected.map((row) => {
                 const { label, showAmount } = participationStateText(row.state)
                 return (
-                  <li key={row.member.id} className="flex flex-col gap-1 rounded-lg bg-card px-4 py-3 ring-1 ring-foreground/10">
+                  <li
+                    key={row.member.id}
+                    className="flex flex-col gap-1 rounded-lg bg-card px-4 py-3 shadow-card ring-1 ring-foreground/10"
+                  >
                     <div className="flex items-center justify-between gap-3">
                       <span className="min-w-0 truncate font-medium">{row.member.name}</span>
                       {showAmount && <span className="tabular shrink-0 text-sm font-medium">{formatIDR(row.contributed_amount)}</span>}
@@ -613,7 +616,7 @@ function ParticipationSection({
                 {state.data.unexpected.map((row) => (
                   <li
                     key={row.member.id}
-                    className="flex items-center justify-between gap-3 rounded-lg bg-card px-4 py-3 ring-1 ring-foreground/10"
+                    className="flex items-center justify-between gap-3 rounded-lg bg-card px-4 py-3 shadow-card ring-1 ring-foreground/10"
                   >
                     <span className="min-w-0 truncate font-medium">{row.member.name}</span>
                     <span className="tabular shrink-0 text-sm font-medium">{formatIDR(row.contributed_amount)}</span>
@@ -753,10 +756,10 @@ function RenameIncidentalDialog({
 
           {state.status === 'error' && state.error && <ErrorState error={state.error} />}
           <DialogFooter className="mt-1">
-            <Button type="button" variant="outline" className="h-11" disabled={busy} onClick={onClose}>
+            <Button type="button" variant="outline" size="lg" disabled={busy} onClick={onClose}>
               {text.rename.cancel}
             </Button>
-            <Button type="submit" className="h-11" disabled={busy || trimmed === '' || !changed}>
+            <Button type="submit" size="lg" disabled={busy || trimmed === '' || !changed}>
               {busy ? text.rename.saving : text.rename.save}
             </Button>
           </DialogFooter>

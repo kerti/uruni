@@ -23,7 +23,9 @@ import { copy } from '@/copy/id'
  */
 export default function Members() {
   return (
-    <div className="flex flex-col gap-8">
+    // gap-6, Pengaturan's own title-to-first-section spacing (#319), so
+    // the two tab screens open the same way (#356).
+    <div className="flex flex-col gap-6">
       <h1 className="text-xl font-semibold">{copy.members.heading}</h1>
 
       <Roster />

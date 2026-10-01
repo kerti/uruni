@@ -92,7 +92,7 @@ export default function Locations() {
                 type="button"
                 aria-label={text.editAria(account.name)}
                 onClick={() => open(`location:${account.id}`)}
-                className="flex min-h-11 w-full flex-col gap-1 rounded-lg bg-card px-4 py-3 text-left ring-1 ring-foreground/10 select-none transition-colors hover:bg-muted/40"
+                className="flex min-h-11 w-full flex-col gap-1 rounded-lg bg-card px-4 py-3 text-left shadow-card ring-1 ring-foreground/10 select-none transition-colors hover:bg-muted/40"
               >
                 <span className="flex w-full items-baseline justify-between gap-3">
                   <span className="min-w-0 truncate font-medium">{account.name}</span>
@@ -105,7 +105,7 @@ export default function Locations() {
         </ul>
       )}
 
-      <Button type="button" variant="outline" className="h-11 self-start" onClick={() => open('location:new')}>
+      <Button type="button" variant="outline" size="lg" className="self-start" onClick={() => open('location:new')}>
         {text.add}
       </Button>
 
@@ -230,10 +230,10 @@ function AddLocationDialog({ open, onClose, onAdded }: { open: boolean; onClose:
           </div>
           {state.status === 'error' && state.error && <ErrorState error={state.error} />}
           <DialogFooter className="mt-1">
-            <Button type="button" variant="outline" className="h-11" disabled={busy} onClick={onClose}>
+            <Button type="button" variant="outline" size="lg" disabled={busy} onClick={onClose}>
               {text.cancel}
             </Button>
-            <Button type="submit" className="h-11" disabled={busy || name.trim() === ''}>
+            <Button type="submit" size="lg" disabled={busy || name.trim() === ''}>
               {busy ? text.adding : text.add}
             </Button>
           </DialogFooter>
@@ -366,18 +366,18 @@ function EditLocationDialog({
                 <Button
                   type="button"
                   variant="outline"
-                  className="h-11"
+                  size="lg"
                   disabled={busy}
                   onClick={() => void submit(() => setAccountInactiveOn(shown.id, null))}
                 >
                   {busy ? text.reinstating : text.reinstate}
                 </Button>
               ) : (
-                <Button type="button" variant="outline" className="h-11" onClick={() => setConfirming('deactivate')}>
+                <Button type="button" variant="outline" size="lg" onClick={() => setConfirming('deactivate')}>
                   {text.deactivate}
                 </Button>
               )}
-              <Button type="button" variant="ghost" className="h-11 text-destructive" onClick={() => setConfirming('delete')}>
+              <Button type="button" variant="ghost" size="lg" className="text-destructive" onClick={() => setConfirming('delete')}>
                 {text.delete}
               </Button>
             </div>
@@ -407,22 +407,22 @@ function EditLocationDialog({
           <DialogFooter className="mt-1">
             {confirming === null ? (
               <>
-                <Button type="button" variant="outline" className="h-11" disabled={busy} onClick={onClose}>
+                <Button type="button" variant="outline" size="lg" disabled={busy} onClick={onClose}>
                   {text.cancel}
                 </Button>
-                <Button type="submit" className="h-11" disabled={busy}>
+                <Button type="submit" size="lg" disabled={busy}>
                   {busy ? text.saving : text.save}
                 </Button>
               </>
             ) : (
               <>
-                <Button type="button" variant="outline" className="h-11" disabled={busy} onClick={() => setConfirming(null)}>
+                <Button type="button" variant="outline" size="lg" disabled={busy} onClick={() => setConfirming(null)}>
                   {text.cancel}
                 </Button>
                 <Button
                   type="button"
                   variant={confirming === 'delete' ? 'destructive' : 'default'}
-                  className="h-11"
+                  size="lg"
                   disabled={busy}
                   onClick={() =>
                     void submit(() =>

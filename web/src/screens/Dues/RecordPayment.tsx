@@ -258,7 +258,10 @@ export default function RecordDuesPayment({
               {periods.map((period) => {
                 const checked = selected.includes(period.period)
                 return (
-                  <li key={period.period} className="flex flex-col gap-2 rounded-lg bg-card px-4 py-3 ring-1 ring-foreground/10">
+                  <li
+                    key={period.period}
+                    className="flex flex-col gap-2 rounded-lg bg-card px-4 py-3 shadow-card ring-1 ring-foreground/10"
+                  >
                     <label className="flex items-center gap-2 font-medium">
                       <input
                         type="checkbox"

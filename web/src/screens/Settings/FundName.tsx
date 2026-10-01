@@ -83,7 +83,7 @@ export default function FundName({ onRenamed }: { onRenamed: (fund: Fund) => voi
           type="button"
           aria-label={text.editAria(fund.name)}
           onClick={() => open('fund:name')}
-          className="flex min-h-11 w-full items-center rounded-lg bg-card px-4 py-3 text-left ring-1 ring-foreground/10 select-none transition-colors hover:bg-muted/40"
+          className="flex min-h-11 w-full items-center rounded-lg bg-card px-4 py-3 text-left shadow-card ring-1 ring-foreground/10 select-none transition-colors hover:bg-muted/40"
         >
           <span className="min-w-0 truncate font-medium">{fund.name}</span>
         </button>
@@ -160,10 +160,10 @@ function EditFundNameDialog({
           </div>
           {state.status === 'error' && state.error && <ErrorState error={state.error} />}
           <DialogFooter className="mt-1">
-            <Button type="button" variant="outline" className="h-11" disabled={busy} onClick={onClose}>
+            <Button type="button" variant="outline" size="lg" disabled={busy} onClick={onClose}>
               {text.cancel}
             </Button>
-            <Button type="submit" className="h-11" disabled={busy || trimmed === '' || unchanged}>
+            <Button type="submit" size="lg" disabled={busy || trimmed === '' || unchanged}>
               {busy ? text.saving : text.save}
             </Button>
           </DialogFooter>

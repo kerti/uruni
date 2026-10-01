@@ -25,7 +25,7 @@ const columnClass = { 2: 'grid-cols-2', 3: 'grid-cols-3', 4: 'grid-cols-4' } as 
  * pixel of the row and the active fill meets the border. overflow-hidden
  * backs up the outer options' own corner radii (flushItem, below). */
 export function segmentedTrackClass(columns: keyof typeof columnClass, className?: string): string {
-  return cn('grid overflow-hidden rounded-xl border border-border bg-muted', columnClass[columns], className)
+  return cn('grid overflow-hidden rounded-xl border border-border bg-muted shadow-well', columnClass[columns], className)
 }
 
 /** What every option shares inside a flush track: square inner corners, and
@@ -45,10 +45,17 @@ export function segmentedTrackClass(columns: keyof typeof columnClass, className
 const flushItem =
   'rounded-none border-0 not-first:border-l not-first:border-l-border first:rounded-l-[calc(var(--radius-xl)-1px)] last:rounded-r-[calc(var(--radius-xl)-1px)] focus-visible:ring-inset'
 
+/** The active option's lift (#356): it rises out of the track's well with a
+ * light sheen, a top highlight and a bottom inner shade. Important, because
+ * Button's own shadow-button sits on the same element and the order two
+ * custom shadow utilities land in the stylesheet is not something to rely
+ * on. */
+const raisedItem = 'bg-[linear-gradient(180deg,rgb(255_255_255/0.14),transparent_60%)] shadow-segment!'
+
 /** One option inside the track. Pair it with `variant={active ? 'default' :
  * 'ghost'}`. h-11 is the 44px touch target. */
 export function segmentedItemClass(active: boolean, className?: string): string {
-  return cn('h-11 w-full min-w-0 text-sm', flushItem, !active && 'text-muted-foreground', className)
+  return cn('h-11 w-full min-w-0 text-sm', flushItem, active ? raisedItem : 'text-muted-foreground', className)
 }
 
 /**
@@ -73,7 +80,7 @@ export function segmentedStackedItemClass(active: boolean, className?: string): 
   return cn(
     'flex h-auto min-h-11 w-full min-w-0 flex-col items-center justify-center gap-0.5 px-1 py-2.5 text-xs leading-tight [&_svg]:shrink-0',
     flushItem,
-    !active && 'text-muted-foreground',
+    active ? raisedItem : 'text-muted-foreground',
     className,
   )
 }

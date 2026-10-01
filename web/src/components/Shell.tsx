@@ -3,6 +3,7 @@ import { History, Home, LogOut, Plus, Settings, Users } from 'lucide-react'
 import { Link, NavLink } from 'react-router-dom'
 
 import AppVersion from '@/components/AppVersion'
+import { LogoMark } from '@/components/Logo'
 import { Button } from '@/components/ui/button'
 import ErrorState from '@/components/states/ErrorState'
 import { copy } from '@/copy/id'
@@ -95,20 +96,29 @@ export default function Shell({
 
   return (
     <div className="flex min-h-dvh flex-col bg-background">
-      <header className="sticky top-0 z-10 border-b border-border bg-background/95 pt-[env(safe-area-inset-top)] backdrop-blur">
+      <header className="sticky top-0 z-10 border-b border-border pt-[env(safe-area-inset-top)] header-glass">
         <div className="flex items-center justify-between gap-3 py-2 pl-[max(1rem,env(safe-area-inset-left))] pr-[max(1rem,env(safe-area-inset-right))]">
-          <div className="flex min-w-0 flex-col">
-            <h1 className="min-w-0 truncate text-lg font-semibold">
-              {/* No aria-label: one here would become the *heading's*
+          <div className="flex min-w-0 items-center gap-2.5">
+            {/* The mark, left of the fund's name (#356). A second way home
+                for a thumb, but not for a keyboard or a screen reader: the
+                title link below already is that, and announcing the same
+                destination twice is noise. */}
+            <Link to="/" tabIndex={-1} aria-hidden="true" className="shrink-0">
+              <LogoMark className="size-7" />
+            </Link>
+            <div className="flex min-w-0 flex-col">
+              <h1 className="min-w-0 truncate text-lg font-semibold">
+                {/* No aria-label: one here would become the *heading's*
                 accessible name too, so the h1 would announce as "Kas RT 04 -
                 kembali ke beranda" rather than the fund's name. A title link
                 named after the site is the pattern a screen reader already
                 knows. */}
-              <Link to="/" className="block truncate rounded-lg outline-none focus-visible:ring-3 focus-visible:ring-ring/50">
-                {title}
-              </Link>
-            </h1>
-            <AppVersion />
+                <Link to="/" className="block truncate rounded-lg outline-none focus-visible:ring-3 focus-visible:ring-ring/50">
+                  {title}
+                </Link>
+              </h1>
+              <AppVersion />
+            </div>
           </div>
           {/* size-11 (44px), not the `icon` variant's 32px: Design-System.md
               sets a 44x44 minimum touch target and this is the header's only
@@ -141,7 +151,7 @@ export default function Shell({
 
       <nav
         aria-label={copy.shell.nav.label}
-        className="fixed inset-x-0 bottom-0 z-20 border-t border-border bg-background/95 pb-[env(safe-area-inset-bottom)] backdrop-blur"
+        className="fixed inset-x-0 bottom-0 z-20 border-t border-border pb-[env(safe-area-inset-bottom)] bar-glass"
       >
         <ul className="flex items-stretch">
           {navItems.map(({ to, icon: Icon, label, end, primary }) => (
@@ -171,10 +181,11 @@ export default function Shell({
                     <span className="flex h-6 items-center justify-center">
                       {primary ? (
                         // Inside the link, so the part above the bar is
-                        // still Catat's touch target.
+                        // still Catat's touch target. fab-glass (index.css)
+                        // lifts it clearly above the bar's own shadow-bar.
                         <span
                           data-nav-raised
-                          className="absolute -top-7 left-1/2 flex size-14 -translate-x-1/2 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-card"
+                          className="absolute -top-7 left-1/2 flex size-14 -translate-x-1/2 items-center justify-center rounded-full bg-primary text-primary-foreground fab-glass glass-rim"
                         >
                           <Icon aria-hidden="true" className="size-7" />
                         </span>

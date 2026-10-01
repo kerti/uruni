@@ -58,9 +58,11 @@ describe('Login', () => {
 
   it('logs in and hands the user back to the caller', async () => {
     const user = { id: 1, email: 'bendahara@example.test', created_at: 1234 }
+    // A fresh Response per call: the footer's /healthz read (AppVersion,
+    // #356) would otherwise consume the one body the login call needs.
     vi.stubGlobal(
       'fetch',
-      vi.fn().mockResolvedValue(new Response(JSON.stringify(user), { status: 200, headers: { 'Content-Type': 'application/json' } })),
+      vi.fn(() => Promise.resolve(new Response(JSON.stringify(user), { status: 200, headers: { 'Content-Type': 'application/json' } }))),
     )
     const onLoggedIn = vi.fn()
     render(<Login onLoggedIn={onLoggedIn} />)
@@ -68,5 +70,33 @@ describe('Login', () => {
     await fillAndSubmit('bendahara@example.test', 'super-secret-1')
 
     await vi.waitFor(() => expect(onLoggedIn).toHaveBeenCalledWith(user))
+  })
+})
+
+describe('Login footer', () => {
+  it('shows the version and links the source and licence of the running build', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() =>
+        Promise.resolve(
+          new Response(JSON.stringify({ status: 'ok', version: 'v0.6.0-alpha.9', commit: 'abcdef1234567' }), {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          }),
+        ),
+      ),
+    )
+    render(<Login onLoggedIn={vi.fn()} />)
+
+    expect(await screen.findByText(copy.settings.versionLine('v0.6.0-alpha.9'))).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: copy.auth.login.sourceCode })).toHaveAttribute(
+      'href',
+      'https://github.com/kerti/uruni/tree/v0.6.0-alpha.9',
+    )
+    expect(screen.getByRole('link', { name: copy.auth.login.license })).toHaveAttribute(
+      'href',
+      'https://github.com/kerti/uruni/blob/v0.6.0-alpha.9/LICENSE',
+    )
+    expect(screen.getByRole('link', { name: copy.auth.login.maintainer })).toHaveAttribute('href', 'https://radityakertiyasa.com')
   })
 })

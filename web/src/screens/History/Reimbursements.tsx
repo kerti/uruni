@@ -322,7 +322,7 @@ export default function Reimbursements({ refetchKey }: { refetchKey?: unknown })
         ) : (
           <ul className="flex flex-col gap-3">
             {claims.map((claim) => (
-              <li key={claim.id} className="flex flex-col gap-2 rounded-2xl bg-card p-4 ring-1 ring-foreground/10">
+              <li key={claim.id} className="flex flex-col gap-2 rounded-2xl bg-card p-4 shadow-card ring-1 ring-foreground/10">
                 <div className="flex items-start justify-between gap-3">
                   <span className="flex min-w-0 flex-col">
                     <span className="truncate font-medium">{memberNames.get(claim.member_id) ?? '-'}</span>
@@ -636,7 +636,7 @@ function RecordClaimForm({
   }
 
   return (
-    <form className="flex flex-col gap-4 rounded-2xl bg-card p-4 ring-1 ring-foreground/10" onSubmit={handleSubmit} noValidate>
+    <form className="flex flex-col gap-4 rounded-2xl bg-card p-4 shadow-card ring-1 ring-foreground/10" onSubmit={handleSubmit} noValidate>
       <h2 className="text-lg font-semibold">{text.record.heading}</h2>
 
       <MemberPicker

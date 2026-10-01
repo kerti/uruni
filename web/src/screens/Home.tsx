@@ -176,9 +176,9 @@ export default function Home({
           the reconciliation banner directly beneath it. */}
       <section
         aria-label={copy.home.balanceHeading}
-        className="flex flex-col items-center gap-2 rounded-2xl bg-primary px-6 py-6 text-center text-primary-foreground shadow-card"
+        className="relative flex flex-col items-center gap-2 rounded-2xl bg-primary px-6 py-6 text-center text-primary-foreground hero-glass glass-rim"
       >
-        <p className="text-[13px] font-medium text-primary-foreground/80">{copy.home.balanceHeading}</p>
+        <p className="text-base font-medium text-primary-foreground/85">{copy.home.balanceHeading}</p>
         <p className="tabular text-[36px] font-bold leading-tight">{formatIDR(balances.fund_total)}</p>
       </section>
 
@@ -186,7 +186,10 @@ export default function Home({
         <h2 className="text-sm font-semibold text-muted-foreground">{copy.home.locationsHeading}</h2>
         <ul className="flex flex-col gap-2">
           {balances.accounts.map((account: AccountBalance) => (
-            <li key={account.id} className="flex items-center justify-between rounded-lg bg-card px-4 py-3 ring-1 ring-foreground/10">
+            <li
+              key={account.id}
+              className="flex items-center justify-between rounded-lg bg-card px-4 py-3 shadow-card ring-1 ring-foreground/10"
+            >
               <span>{account.name}</span>
               <span className="tabular font-medium">{formatIDR(account.balance)}</span>
             </li>
@@ -230,7 +233,7 @@ export default function Home({
                   <button
                     type="button"
                     onClick={() => onOpenIncidental(purpose.id)}
-                    className="flex min-h-11 w-full items-center justify-between gap-3 rounded-lg bg-card px-4 py-3 text-left ring-1 ring-foreground/10 select-none"
+                    className="flex min-h-11 w-full items-center justify-between gap-3 rounded-lg bg-card px-4 py-3 text-left shadow-card ring-1 ring-foreground/10 select-none"
                   >
                     <span>{purpose.name}</span>
                     {/* The chevron is the only thing distinguishing this row
@@ -254,7 +257,7 @@ export default function Home({
                 // and no open/closed concept - a plain row, not a button.
                 <li
                   key={purpose.id}
-                  className="flex min-h-11 items-center justify-between gap-3 rounded-lg bg-card px-4 py-3 ring-1 ring-foreground/10"
+                  className="flex min-h-11 items-center justify-between gap-3 rounded-lg bg-card px-4 py-3 shadow-card ring-1 ring-foreground/10"
                 >
                   <span>{purpose.name}</span>
                   <span className="flex items-center gap-2">

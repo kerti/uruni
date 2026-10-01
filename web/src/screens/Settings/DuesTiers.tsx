@@ -132,7 +132,7 @@ export default function DuesTiers() {
                   type="button"
                   aria-label={text.cardAria(tier.name)}
                   onClick={() => navigate(`/dues-tiers?tier=${tier.id}`)}
-                  className="flex min-h-11 w-full items-center justify-between gap-3 rounded-lg bg-card px-4 py-3 text-left ring-1 ring-foreground/10 select-none transition-colors hover:bg-muted/40"
+                  className="flex min-h-11 w-full items-center justify-between gap-3 rounded-lg bg-card px-4 py-3 text-left shadow-card ring-1 ring-foreground/10 select-none transition-colors hover:bg-muted/40"
                 >
                   <span className="min-w-0 truncate font-medium">{tier.name}</span>
                   {/* What it costs this month, which is the one number she
@@ -148,7 +148,7 @@ export default function DuesTiers() {
         </ul>
       )}
 
-      <Button type="button" variant="outline" className="h-11 self-start" onClick={() => open('tier:new')}>
+      <Button type="button" variant="outline" size="lg" className="self-start" onClick={() => open('tier:new')}>
         {text.add}
       </Button>
 
@@ -205,10 +205,10 @@ function AddTierDialog({ open, onClose, onAdded }: { open: boolean; onClose: () 
               unique_violation, answered by the shared copy. */}
           {state.status === 'error' && state.error && <ErrorState error={state.error} />}
           <DialogFooter className="mt-1">
-            <Button type="button" variant="outline" className="h-11" disabled={busy} onClick={onClose}>
+            <Button type="button" variant="outline" size="lg" disabled={busy} onClick={onClose}>
               {text.cancel}
             </Button>
-            <Button type="submit" className="h-11" disabled={busy || trimmed === ''}>
+            <Button type="submit" size="lg" disabled={busy || trimmed === ''}>
               {busy ? text.adding : text.add}
             </Button>
           </DialogFooter>

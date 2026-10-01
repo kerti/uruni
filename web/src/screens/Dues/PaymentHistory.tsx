@@ -172,7 +172,7 @@ function PaymentHistoryRow({ row }: { row: DuesPaymentHistoryRow }) {
   const reversed = row.reversed_by_transaction_id !== null
 
   return (
-    <li className="flex items-start justify-between gap-3 rounded-lg bg-card px-4 py-3 ring-1 ring-foreground/10">
+    <li className="flex items-start justify-between gap-3 rounded-lg bg-card px-4 py-3 shadow-card ring-1 ring-foreground/10">
       <span className="flex min-w-0 items-start gap-2">
         {row.is_reversal ? (
           <ArrowUpRight aria-hidden="true" className="mt-0.5 shrink-0 text-attention" />

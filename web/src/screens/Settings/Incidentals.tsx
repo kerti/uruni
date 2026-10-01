@@ -114,7 +114,7 @@ export default function SettingsIncidentals() {
         />
       )}
 
-      <Button type="button" variant="outline" className="h-11 self-start" onClick={() => open('incidental:new')}>
+      <Button type="button" variant="outline" size="lg" className="self-start" onClick={() => open('incidental:new')}>
         {text.add}
       </Button>
 
@@ -179,7 +179,7 @@ function EnvelopeCards({
 /** An envelope card's box - Pengaturan's list and the closed-envelopes
  * screen below share it. */
 const cardClass =
-  'flex min-h-11 w-full items-center justify-between gap-3 rounded-lg bg-card px-4 py-3 text-left ring-1 ring-foreground/10 select-none transition-colors hover:bg-muted/40'
+  'flex min-h-11 w-full items-center justify-between gap-3 rounded-lg bg-card px-4 py-3 text-left shadow-card ring-1 ring-foreground/10 select-none transition-colors hover:bg-muted/40'
 
 /** Same open/closed badge Incidentals.tsx's own StatusBadge renders. Kept
  * as a small local copy rather than a shared export - one component, two
@@ -320,10 +320,10 @@ function OpenIncidentalDialog({
           {state.status === 'error' && state.error && <ErrorState error={state.error} />}
 
           <DialogFooter className="mt-1">
-            <Button type="button" variant="outline" className="h-11" disabled={busy} onClick={onClose}>
+            <Button type="button" variant="outline" size="lg" disabled={busy} onClick={onClose}>
               {openText.cancel}
             </Button>
-            <Button type="submit" className="h-11" disabled={!canSubmit}>
+            <Button type="submit" size="lg" disabled={!canSubmit}>
               {busy ? openText.submitting : openText.submit}
             </Button>
           </DialogFooter>
