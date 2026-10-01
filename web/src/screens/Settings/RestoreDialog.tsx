@@ -3,7 +3,7 @@ import { forwardRef, useImperativeHandle, useRef, useState, type FormEvent } fro
 import ErrorState from '@/components/states/ErrorState'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { Input } from '@/components/ui/input'
+import PasswordInput from '@/components/PasswordInput'
 import { Label } from '@/components/ui/label'
 import { copy } from '@/copy/id'
 import { formatIDR } from '@/lib/money'
@@ -163,9 +163,8 @@ const RestoreDialog = forwardRef<RestoreDialogHandle>(function RestoreDialog(_pr
 
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="restore-password">{confirmText.passwordLabel}</Label>
-                <Input
+                <PasswordInput
                   id="restore-password"
-                  type="password"
                   autoComplete="current-password"
                   required
                   value={password}
