@@ -484,6 +484,58 @@ func TestRestoreTotalsMismatchRollsBack(t *testing.T) {
 	}
 }
 
+// TestRestoreFailureRemovesOnlyTheReceiptsItCreated forces a totals
+// mismatch after receipt extraction has run: the image this restore wrote
+// must be gone again, so "nothing was changed" stays true - but an image
+// that was already on disk under the same name (the same file, ADR-011's
+// random names) must survive, since this restore never created it.
+func TestRestoreFailureRemovesOnlyTheReceiptsItCreated(t *testing.T) {
+	srcDB := newTestDB(t)
+	srcUploads := t.TempDir()
+	buildFixture(t, srcDB, srcUploads)
+	realReceipt := realJPEGBytes(t)
+	if err := os.WriteFile(filepath.Join(srcUploads, receiptFilename), realReceipt, 0o600); err != nil {
+		t.Fatalf("replacing fixture receipt with a real image: %v", err)
+	}
+	zipBytes, _ := exportFixture(t, srcDB, srcUploads)
+
+	for _, alreadyThere := range []bool{false, true} {
+		name := "receipt not on disk before"
+		if alreadyThere {
+			name = "receipt already on disk"
+		}
+		t.Run(name, func(t *testing.T) {
+			parsed, err := parseUploadBytes(t, zipBytes)
+			if err != nil {
+				t.Fatalf("ParseUpload() = %v, want no error", err)
+			}
+			parsed.Document.Totals.Funds[0].Balance++
+
+			destDB := newTestDB(t)
+			destUploads := t.TempDir()
+			dest := filepath.Join(destUploads, receiptFilename)
+			if alreadyThere {
+				if err := os.WriteFile(dest, realReceipt, 0o600); err != nil {
+					t.Fatalf("pre-seeding the receipt: %v", err)
+				}
+			}
+
+			err = Restore(context.Background(), destDB, store.New(destDB), ledger.New(destDB), destUploads, t.TempDir(), parsed, time.Unix(1800000000, 0))
+			if !errors.Is(err, ErrTotalsMismatch) {
+				t.Fatalf("Restore() error = %v, want ErrTotalsMismatch", err)
+			}
+
+			_, statErr := os.Stat(dest)
+			if alreadyThere && statErr != nil {
+				t.Errorf("a receipt that was on disk before the restore is gone: %v", statErr)
+			}
+			if !alreadyThere && !errors.Is(statErr, os.ErrNotExist) {
+				t.Errorf("a receipt this failed restore wrote is still on disk (stat err = %v)", statErr)
+			}
+		})
+	}
+}
+
 // TestRestoreSafetyNetDumpFailureAborts makes WritePreRestoreDump fail (an
 // unwritable backup directory) and checks Restore aborts before touching
 // the database at all.
