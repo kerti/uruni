@@ -786,3 +786,47 @@ func TestBuildPreviewReportsKeptRemovedAndAddedFunds(t *testing.T) {
 		t.Errorf("added fund preview = %+v, want Status=added Name=Added Fund", got)
 	}
 }
+
+// TestNewestMomentPicksTheLatestRowOfAnyTable is the confirm dialog's
+// "Cadangan dari <date>": the newest created_at (or a receipt's uploaded_at)
+// across every table, as a Jakarta calendar date - whichever table holds
+// it - and no date at all for a document with no rows.
+func TestNewestMomentPicksTheLatestRowOfAnyTable(t *testing.T) {
+	if got := newestMoment(Document{}); got != "" {
+		t.Errorf("newestMoment(empty) = %q, want empty", got)
+	}
+
+	// 2026-09-30 23:30 UTC is already 1 October in Jakarta (UTC+7).
+	latest := time.Date(2026, 9, 30, 23, 30, 0, 0, time.UTC).Unix()
+	earlier := latest - 86400*10
+	tables := map[string]func(*Document, int64){
+		"funds":          func(d *Document, ts int64) { d.Funds = append(d.Funds, Fund{CreatedAt: ts}) },
+		"accounts":       func(d *Document, ts int64) { d.Accounts = append(d.Accounts, Account{CreatedAt: ts}) },
+		"purposes":       func(d *Document, ts int64) { d.Purposes = append(d.Purposes, Purpose{CreatedAt: ts}) },
+		"dues tiers":     func(d *Document, ts int64) { d.DuesTiers = append(d.DuesTiers, DuesTier{CreatedAt: ts}) },
+		"dues rates":     func(d *Document, ts int64) { d.DuesRates = append(d.DuesRates, DuesRate{CreatedAt: ts}) },
+		"members":        func(d *Document, ts int64) { d.Members = append(d.Members, Member{CreatedAt: ts}) },
+		"transfers":      func(d *Document, ts int64) { d.Transfers = append(d.Transfers, Transfer{CreatedAt: ts}) },
+		"reimbursements": func(d *Document, ts int64) { d.Reimbursements = append(d.Reimbursements, Reimbursement{CreatedAt: ts}) },
+		"transactions":   func(d *Document, ts int64) { d.Transactions = append(d.Transactions, Transaction{CreatedAt: ts}) },
+		"receipts":       func(d *Document, ts int64) { d.Receipts = append(d.Receipts, Receipt{UploadedAt: ts}) },
+		"reconciliations": func(d *Document, ts int64) {
+			d.Reconciliations = append(d.Reconciliations, Reconciliation{CreatedAt: ts})
+		},
+		"incidentals": func(d *Document, ts int64) { d.Incidentals = append(d.Incidentals, Incidental{CreatedAt: ts}) },
+	}
+	for newest, addNewest := range tables {
+		t.Run(newest, func(t *testing.T) {
+			var doc Document
+			for name, add := range tables {
+				if name != newest {
+					add(&doc, earlier)
+				}
+			}
+			addNewest(&doc, latest)
+			if got := newestMoment(doc); got != "2026-10-01" {
+				t.Errorf("newestMoment() = %q, want %q", got, "2026-10-01")
+			}
+		})
+	}
+}

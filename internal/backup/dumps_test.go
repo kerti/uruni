@@ -660,3 +660,46 @@ func TestEnsureBootDumpWritesAgainWhenFormatVersionChanged(t *testing.T) {
 		t.Errorf("newest dump's FormatVersion = %d, want %d", dumps[0].FormatVersion, FormatVersion)
 	}
 }
+
+// TestDumpNameEdgeCases covers the shapes the pattern alone lets through but
+// the parse still has to refuse, and the hash and sort details a real
+// directory rarely exercises.
+func TestDumpNameEdgeCases(t *testing.T) {
+	// The pattern only checks digit counts: a month 13 or a format version
+	// too large for int64 still matches it, and must not parse.
+	for _, name := range []string{
+		"uruni-20261340-140501-daily-fv1-3f9a2c8e10b4.zip",
+		"uruni-20260930-140501-daily-fv99999999999999999999-3f9a2c8e10b4.zip",
+	} {
+		if _, ok := ParseDumpName(name); ok {
+			t.Errorf("ParseDumpName(%q) = ok, want refused", name)
+		}
+	}
+
+	// A hash shorter than the prefix length is used whole.
+	if got := shortHash("abc"); got != "abc" {
+		t.Errorf("shortHash(%q) = %q, want it unchanged", "abc", got)
+	}
+
+	// Two dumps in the same second (a daily and a pre-restore can collide)
+	// still sort deterministically, by name; a subdirectory is never a dump.
+	dir := t.TempDir()
+	when := time.Date(2026, 9, 30, 14, 5, 1, 0, time.UTC)
+	a := BuildDumpName(when, KindDaily, FormatVersion, "aaaaaaaaaaaa")
+	b := BuildDumpName(when, KindPreRestore, FormatVersion, "bbbbbbbbbbbb")
+	for _, name := range []string{a, b} {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte("x"), 0o600); err != nil {
+			t.Fatalf("writing %s: %v", name, err)
+		}
+	}
+	if err := os.Mkdir(filepath.Join(dir, "uruni-20260930-140501-daily-fv1-cccccccccccc.zip"), 0o700); err != nil {
+		t.Fatalf("creating a directory named like a dump: %v", err)
+	}
+	dumps, err := ListDumps(dir)
+	if err != nil {
+		t.Fatalf("ListDumps() = %v, want no error", err)
+	}
+	if len(dumps) != 2 || dumps[0].Name != max(a, b) || dumps[1].Name != min(a, b) {
+		t.Errorf("ListDumps() = %v, want [%s %s]", dumps, max(a, b), min(a, b))
+	}
+}
