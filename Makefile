@@ -54,6 +54,11 @@ DEV_BACKUP_DIR := $(or $(URUNI_BACKUP_DIR),./backups)
 # ports, so the 8080/5173 dev servers are never disturbed.
 E2E_DB   := /tmp/uruni-e2e.db
 E2E_PORT := 8099
+# Its own backup directory, not the dev one: the restore spec writes
+# pre-restore dumps and lists them, so sharing ./backups would mix the dev
+# server's dumps into the e2e list and e2e dumps into the dev one. Reset with
+# the database, so every run's list starts from that run's own boot dump.
+E2E_BACKUP_DIR := /tmp/uruni-e2e-backups
 # The request logger writes one info line per request (internal/http/
 # middleware.go), which buries Playwright's own results in a full run.
 # `make e2e` wants quiet; a human debugging `make e2e-server` can turn it
@@ -388,13 +393,13 @@ e2e-install:
 
 e2e-reset:
 	@rm -f $(E2E_DB) $(E2E_DB)-wal $(E2E_DB)-shm
+	@rm -rf $(E2E_BACKUP_DIR) && mkdir -p $(E2E_BACKUP_DIR)
 	@URUNI_DB="$(E2E_DB)" URUNI_LOG_LEVEL=$(E2E_LOG_LEVEL) go run ./cmd/uruni seed-e2e
 	@echo "e2e db: $(E2E_DB) ready"
 
 e2e-server: e2e-reset
 	@mkdir -p "$(DEV_UPLOADS_DIR)"
-	@mkdir -p "$(DEV_BACKUP_DIR)"
-	@URUNI_DB="$(E2E_DB)" PORT=$(E2E_PORT) URUNI_LOG_LEVEL=$(E2E_LOG_LEVEL) go run ./cmd/uruni serve
+	@URUNI_DB="$(E2E_DB)" URUNI_BACKUP_DIR="$(E2E_BACKUP_DIR)" PORT=$(E2E_PORT) URUNI_LOG_LEVEL=$(E2E_LOG_LEVEL) go run ./cmd/uruni serve
 
 # ---- self-host stack -------------------------------------------------------
 # Exercises docker-compose.yml - the artifact operators actually run (ADR-010

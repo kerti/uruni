@@ -74,7 +74,9 @@ test.describe('incidentals', () => {
     // "Catat transaksi" hands off to the real record form (M6.8), with this
     // envelope's purpose already chosen via /record?purpose=<id> - no
     // separate contribution form of this screen's own.
-    await page.getByRole('button', { name: copy.incidentals.actions.record }).click()
+    // exact: the participation list (#339) gives every member row a "Catat
+    // sumbangan dari <name>" control, which a substring match also hits.
+    await page.getByRole('button', { name: copy.incidentals.actions.record, exact: true }).click()
     await expect(page.getByRole('heading', { name: copy.record.heading })).toBeVisible()
 
     // A contribution is money in - the record form's own direction toggle,

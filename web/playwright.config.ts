@@ -7,6 +7,7 @@ import { defineConfig } from '@playwright/test'
 //
 //   - E2E_DB   (Makefile) -> the URUNI_DB the webServer command below sets.
 //   - E2E_PORT (Makefile) -> both the webServer's PORT and baseURL below.
+//   - E2E_BACKUP_DIR (Makefile) -> the URUNI_BACKUP_DIR the command sets.
 //
 // `make e2e` itself never reaches this webServer block: it runs `e2e-reset`
 // (delete + migrate + seed) *before* `npm run -s test:e2e`, so by the time
@@ -49,7 +50,13 @@ export default defineConfig({
     // terminal as the test results, burying them. warn, not error: a
     // server-side problem during a run is exactly what you need to see, and
     // it still prints.
-    command: 'URUNI_DB=/tmp/uruni-e2e.db PORT=8099 URUNI_LOG_LEVEL=warn go run ./cmd/uruni serve',
+    //
+    // URUNI_BACKUP_DIR is E2E_BACKUP_DIR (Makefile): the restore spec lists
+    // and writes dumps, so it must not share the dev server's ./backups.
+    // mkdir -p because serve refuses to boot without the directory, and a
+    // bare `npx playwright test` never ran e2e-reset to create it.
+    command:
+      'mkdir -p /tmp/uruni-e2e-backups && URUNI_DB=/tmp/uruni-e2e.db URUNI_BACKUP_DIR=/tmp/uruni-e2e-backups PORT=8099 URUNI_LOG_LEVEL=warn go run ./cmd/uruni serve',
     cwd: '..',
     url: 'http://localhost:8099/healthz',
     reuseExistingServer: !process.env.CI,
