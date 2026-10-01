@@ -76,7 +76,8 @@ All monetary numbers use **tabular-nums** so columns align.
 ## Shape, elevation, spacing
 
 - **Radius:** `--radius: 0.5rem` (8px) — cards `rounded-2xl` (~14px), buttons `rounded-xl` (~11px), inputs `rounded-lg` (8px), chips pill. Reduced from 14px in [#319](https://github.com/kerti/uruni/issues/319): the larger value made cards ~25px round, which read bubbly rather than soft on a phone.
-- **Elevation (soft, warm):** sm `0 1px 2px rgba(34,50,58,.06)` · card `0 2px 8px rgba(34,50,58,.06)` · floating `0 8px 24px rgba(34,50,58,.10)`. No harsh shadows.
+- **Elevation (soft, warm):** sm `0 1px 2px rgba(34,50,58,.06)` · card `0 2px 8px rgba(34,50,58,.06)` · floating `0 8px 24px rgba(34,50,58,.10)` · bar `0 -4px 16px rgba(34,50,58,.08)` (the fixed bottom nav, cast upward so content reads as passing beneath it) · fab `0 3px 6px rgba(34,50,58,.22), 0 10px 24px rgba(34,50,58,.24)` (Catat's circle only, the one control above the bar). No harsh shadows.
+- **Glass (the bars and Catat):** the sticky header and bottom nav are the page's cream at 60% over a `blur(20px) saturate(1.6)` backdrop, with a bright 1px rim just inside the hairline on the edge facing the content and a soft glow falling from it (`header-glass`, `bar-glass` in `index.css`). Catat keeps its solid Forest fill and gets only the light-play: a top-down sheen, an inner glow under the top edge, a faint inner shade at the bottom, and a gradient rim (`fab-glass`). White and ink only - no coloured glow.
 - **Spacing scale:** 4 / 8 / 12 / 16 / 24 / 32 / 48 px. Generous padding inside cards (16–20px).
 - **Section dividers:** a `--border` hairline between a screen's independent sections — Pengaturan's settings, Beranda's current state from its recent activity ([#319](https://github.com/kerti/uruni/issues/319)). Never inside a section and never inside a form, so the line keeps meaning "a new subject starts here".
 

@@ -45,6 +45,16 @@
   --shadow-sm: 0 1px 2px rgb(34 50 58 / 0.06);
   --shadow-card: 0 2px 8px rgb(34 50 58 / 0.06);
   --shadow-floating: 0 8px 24px rgb(34 50 58 / 0.1);
+  /* The fixed bottom nav's own lift: card-strength, cast upward, so rows
+     scrolling under the bar read as passing beneath it rather than meeting
+     a cream strip of the same colour as the page. */
+  --shadow-bar: 0 -4px 16px rgb(34 50 58 / 0.08);
+  /* Catat's circle: the one control that sits on top of the bar, so it
+     needs more lift than any token above. floating at 10% was invisible on
+     an iPhone - most of it hides behind the dark circle. Two layers instead:
+     a tight contact shadow and a soft ambient one, still neutral ink, never
+     a coloured glow. */
+  --shadow-fab: 0 3px 6px rgb(34 50 58 / 0.22), 0 10px 24px rgb(34 50 58 / 0.24);
 
   /* Design-System.md's motion rule - "calm and quick: 150-250ms ease-out,
      nothing bouncy". One shared reveal for anything that appears in place
@@ -178,4 +188,63 @@
       transition-duration: 0.01ms !important;
     }
   }
+}
+
+/* Catat's glass finish - a nod to iOS's liquid glass on the one control that
+   sits above the bar. Four parts, all ink and white, no new colour: a light
+   sheen fading down from the top, a soft inner glow under the top edge, a
+   faint inner shade at the bottom, and a rim that is bright at the top and
+   nearly gone at the sides. The rim is a 1px gradient ring masked out of a
+   ::before, since a border cannot take a gradient and keep the radius. The
+   outer lift is still --shadow-fab. */
+@utility fab-glass {
+  background-image: linear-gradient(180deg, rgb(255 255 255 / 0.16) 0%, rgb(255 255 255 / 0) 55%);
+  box-shadow:
+    inset 0 6px 10px -4px rgb(255 255 255 / 0.3),
+    inset 0 -3px 6px rgb(0 0 0 / 0.16),
+    var(--shadow-fab);
+
+  &::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    padding: 1px;
+    background: linear-gradient(180deg, rgb(255 255 255 / 0.7) 0%, rgb(255 255 255 / 0.08) 45%, rgb(255 255 255 / 0.2) 100%);
+    -webkit-mask:
+      linear-gradient(#000 0 0) content-box,
+      linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+    mask:
+      linear-gradient(#000 0 0) content-box exclude,
+      linear-gradient(#000 0 0);
+    pointer-events: none;
+  }
+}
+
+/* The two bars' glass, the same light-play as fab-glass on a wide
+   translucent surface: more see-through than the page (60%) with a strong
+   blur and a little saturation, so rows passing beneath tint the bar
+   instead of vanishing, and a bright 1px line just inside the hairline
+   border on the edge that faces the content, with a soft glow falling from
+   it. Each casts its lift toward the content too: up for the bottom nav
+   (--shadow-bar), down for the sticky header. */
+@utility bar-glass {
+  background-color: color-mix(in srgb, var(--background) 60%, transparent);
+  -webkit-backdrop-filter: blur(20px) saturate(1.6);
+  backdrop-filter: blur(20px) saturate(1.6);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.85),
+    inset 0 10px 14px -10px rgb(255 255 255 / 0.7),
+    var(--shadow-bar);
+}
+
+@utility header-glass {
+  background-color: color-mix(in srgb, var(--background) 60%, transparent);
+  -webkit-backdrop-filter: blur(20px) saturate(1.6);
+  backdrop-filter: blur(20px) saturate(1.6);
+  box-shadow:
+    inset 0 -1px 0 rgb(255 255 255 / 0.85),
+    inset 0 -10px 14px -10px rgb(255 255 255 / 0.7),
+    0 4px 16px rgb(34 50 58 / 0.08);
 }

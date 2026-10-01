@@ -95,7 +95,7 @@ export default function Shell({
 
   return (
     <div className="flex min-h-dvh flex-col bg-background">
-      <header className="sticky top-0 z-10 border-b border-border bg-background/95 pt-[env(safe-area-inset-top)] backdrop-blur">
+      <header className="sticky top-0 z-10 border-b border-border pt-[env(safe-area-inset-top)] header-glass">
         <div className="flex items-center justify-between gap-3 py-2 pl-[max(1rem,env(safe-area-inset-left))] pr-[max(1rem,env(safe-area-inset-right))]">
           <div className="flex min-w-0 flex-col">
             <h1 className="min-w-0 truncate text-lg font-semibold">
@@ -141,7 +141,7 @@ export default function Shell({
 
       <nav
         aria-label={copy.shell.nav.label}
-        className="fixed inset-x-0 bottom-0 z-20 border-t border-border bg-background/95 pb-[env(safe-area-inset-bottom)] backdrop-blur"
+        className="fixed inset-x-0 bottom-0 z-20 border-t border-border pb-[env(safe-area-inset-bottom)] bar-glass"
       >
         <ul className="flex items-stretch">
           {navItems.map(({ to, icon: Icon, label, end, primary }) => (
@@ -171,10 +171,11 @@ export default function Shell({
                     <span className="flex h-6 items-center justify-center">
                       {primary ? (
                         // Inside the link, so the part above the bar is
-                        // still Catat's touch target.
+                        // still Catat's touch target. fab-glass (index.css)
+                        // lifts it clearly above the bar's own shadow-bar.
                         <span
                           data-nav-raised
-                          className="absolute -top-7 left-1/2 flex size-14 -translate-x-1/2 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-card"
+                          className="absolute -top-7 left-1/2 flex size-14 -translate-x-1/2 items-center justify-center rounded-full bg-primary text-primary-foreground fab-glass"
                         >
                           <Icon aria-hidden="true" className="size-7" />
                         </span>
