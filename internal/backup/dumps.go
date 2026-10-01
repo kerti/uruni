@@ -447,6 +447,11 @@ func ApplyRetention(backupDir string, dailyKeep, preRestoreKeep int) error {
 // boot: a backup write failing must never keep the treasurer from
 // recording a transaction, which is the app's actual job.
 func EnsureBootDump(ctx context.Context, q store.Querier, l *ledger.Ledger, uploadsDir, backupDir string, now time.Time, logger *slog.Logger) error {
+	// Also sweeps any restore-staging file a restart between an inspect and
+	// its confirm left behind (issue #344): CreateRestoreStagingTemp names
+	// every one of those files with this same tempPrefix, so there is
+	// nothing separate for boot to sweep - a leftover stage is, to this
+	// function, just another interrupted write.
 	if removed, err := RemoveStaleTemps(backupDir); err != nil {
 		logger.Warn("backup: could not clear stale temp files", "error", err)
 	} else if removed > 0 {

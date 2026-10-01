@@ -154,7 +154,7 @@ func TestRestoreRoundTripGoldenFixture(t *testing.T) {
 	}
 	zipBytes, wantDoc := exportFixture(t, srcDB, srcUploads)
 
-	parsed, err := ParseUpload(zipBytes)
+	parsed, err := parseUploadBytes(t, zipBytes)
 	if err != nil {
 		t.Fatalf("ParseUpload() = %v, want no error", err)
 	}
@@ -216,7 +216,7 @@ func TestRestoreRoundTripWithClosedEnvelope(t *testing.T) {
 		t.Fatalf("fixture incidental was not actually closed before export")
 	}
 
-	parsed, err := ParseUpload(zipBytes)
+	parsed, err := parseUploadBytes(t, zipBytes)
 	if err != nil {
 		t.Fatalf("ParseUpload() = %v, want no error", err)
 	}
@@ -271,6 +271,21 @@ func minimalDocJSON(t *testing.T, formatVersion int64) []byte {
 // produces, built by hand so a refusal-case test can hand it something
 // BuildZip itself would never write (an unknown field, a bad image, a
 // mismatched format_version, extra junk entries).
+// parseUploadBytes is every test's own stand-in for the staging file
+// stageAndInspect (internal/http/restore.go) writes before ever calling
+// ParseUpload - this package's own tests build a zip in memory (zipOf,
+// exportFixture) for convenience, but ParseUpload itself only ever reads
+// from disk (issue #344), so every call site writes that zip to a fresh
+// temp file first.
+func parseUploadBytes(t *testing.T, data []byte) (ParsedUpload, error) {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "upload.zip")
+	if err := os.WriteFile(path, data, 0o600); err != nil {
+		t.Fatalf("writing zip fixture to disk: %v", err)
+	}
+	return ParseUpload(path)
+}
+
 func zipOf(t *testing.T, jsonBytes []byte, receipts map[string][]byte) []byte {
 	t.Helper()
 	var buf bytes.Buffer
@@ -308,14 +323,14 @@ func TestParseUploadRefusesUnknownFields(t *testing.T) {
 		t.Fatalf("marshal tampered doc: %v", err)
 	}
 
-	_, err = ParseUpload(zipOf(t, tampered, nil))
+	_, err = parseUploadBytes(t, zipOf(t, tampered, nil))
 	if !errors.Is(err, ErrMalformedBackup) {
 		t.Errorf("ParseUpload() error = %v, want ErrMalformedBackup", err)
 	}
 }
 
 func TestParseUploadRefusesNewerFormatVersionDistinctly(t *testing.T) {
-	_, err := ParseUpload(zipOf(t, minimalDocJSON(t, FormatVersion+1), nil))
+	_, err := parseUploadBytes(t, zipOf(t, minimalDocJSON(t, FormatVersion+1), nil))
 	if !errors.Is(err, ErrFormatVersionNewer) {
 		t.Errorf("ParseUpload() error = %v, want ErrFormatVersionNewer", err)
 	}
@@ -325,7 +340,7 @@ func TestParseUploadRefusesNewerFormatVersionDistinctly(t *testing.T) {
 }
 
 func TestParseUploadRefusesOlderFormatVersionDistinctly(t *testing.T) {
-	_, err := ParseUpload(zipOf(t, minimalDocJSON(t, FormatVersion-1), nil))
+	_, err := parseUploadBytes(t, zipOf(t, minimalDocJSON(t, FormatVersion-1), nil))
 	if !errors.Is(err, ErrFormatVersionOlder) {
 		t.Errorf("ParseUpload() error = %v, want ErrFormatVersionOlder", err)
 	}
@@ -340,7 +355,7 @@ func TestParseUploadRefusesTooManyEntries(t *testing.T) {
 	t.Cleanup(func() { MaxZipEntries = orig })
 
 	z := zipOf(t, minimalDocJSON(t, FormatVersion), map[string][]byte{"a.jpg": {1}, "b.jpg": {2}})
-	_, err := ParseUpload(z)
+	_, err := parseUploadBytes(t, z)
 	if !errors.Is(err, ErrTooManyEntries) {
 		t.Errorf("ParseUpload() error = %v, want ErrTooManyEntries", err)
 	}
@@ -351,7 +366,7 @@ func TestParseUploadRefusesUnzippedTooLarge(t *testing.T) {
 	MaxUnzippedBytes = 4 // smaller than uruni.json's own minimal bytes
 	t.Cleanup(func() { MaxUnzippedBytes = orig })
 
-	_, err := ParseUpload(zipOf(t, minimalDocJSON(t, FormatVersion), nil))
+	_, err := parseUploadBytes(t, zipOf(t, minimalDocJSON(t, FormatVersion), nil))
 	if !errors.Is(err, ErrUnzippedTooLarge) {
 		t.Errorf("ParseUpload() error = %v, want ErrUnzippedTooLarge", err)
 	}
@@ -376,7 +391,7 @@ func TestParseUploadRefusesBadReceiptImage(t *testing.T) {
 	}
 
 	z := zipOf(t, b, map[string][]byte{"bad.jpg": []byte("not actually an image")})
-	_, err = ParseUpload(z)
+	_, err = parseUploadBytes(t, z)
 	if !errors.Is(err, ErrBadReceiptImage) {
 		t.Errorf("ParseUpload() error = %v, want ErrBadReceiptImage", err)
 	}
@@ -400,7 +415,7 @@ func TestParseUploadRefusesReceiptPathThatIsNotABareFilename(t *testing.T) {
 		t.Fatalf("marshal: %v", err)
 	}
 
-	_, err = ParseUpload(zipOf(t, b, nil))
+	_, err = parseUploadBytes(t, zipOf(t, b, nil))
 	if !errors.Is(err, ErrMalformedBackup) {
 		t.Errorf("ParseUpload() error = %v, want ErrMalformedBackup", err)
 	}
@@ -425,7 +440,7 @@ func TestParseUploadToleratesAMissingReceiptImage(t *testing.T) {
 	}
 
 	// No receipts/ entry at all for missing.jpg - ruling 5.
-	parsed, err := ParseUpload(zipOf(t, b, nil))
+	parsed, err := parseUploadBytes(t, zipOf(t, b, nil))
 	if err != nil {
 		t.Fatalf("ParseUpload() = %v, want no error (a missing image never blocks a restore)", err)
 	}
@@ -555,7 +570,7 @@ func TestRestoreRecreatesImmutableTriggers(t *testing.T) {
 		t.Fatalf("replacing fixture receipt with a real image: %v", err)
 	}
 	zipBytes, _ := exportFixture(t, srcDB, srcUploads)
-	parsed, err := ParseUpload(zipBytes)
+	parsed, err := parseUploadBytes(t, zipBytes)
 	if err != nil {
 		t.Fatalf("ParseUpload() = %v, want no error", err)
 	}

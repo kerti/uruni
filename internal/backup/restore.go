@@ -64,6 +64,37 @@ var (
 	MaxZipEntries          = 5000
 )
 
+// CreateRestoreStagingTemp opens a fresh, uniquely-named temp file inside
+// backupDir for an inspect route to stream an upload (or a copied stored
+// dump) into, before either route knows yet whether what it is streaming
+// is even a valid backup - ParseUpload runs against this temp file's own
+// path. Every inspect gets its own file under its own os.CreateTemp-minted
+// name, never a shared fixed name: two concurrent inspects (two tabs) must
+// never be able to race over which one's bytes a third party's rename
+// leaves behind (issue #344's own follow-up - a fixed slot two inspects
+// could both rename onto was exactly that race). restoreStage
+// (internal/http/restore.go) owns this file from the moment a successful
+// inspect stages it - removing it when superseded, expired, or confirmed -
+// and a failed inspect removes only this file itself, never touching
+// whatever restoreStage currently holds.
+//
+// Named with dumps.go's own tempPrefix, so a crash before restoreStage ever
+// takes ownership - or before this file is otherwise cleaned up - leaves
+// exactly the kind of stale temp file RemoveStaleTemps already sweeps at
+// boot. That prefix starts with "." and never with "uruni-", so it can
+// never match dumpNamePattern either: ListDumps, ValidDumpName,
+// ApplyRetention and the daily-dump change hash (dumps.go) all key off that
+// pattern alone, and so never see a staged file - it never appears in a
+// backup listing, is never pruned by retention, and never perturbs "did the
+// fund change since the last dump".
+func CreateRestoreStagingTemp(backupDir string) (*os.File, error) {
+	f, err := os.CreateTemp(backupDir, tempPrefix+"restore-*")
+	if err != nil {
+		return nil, fmt.Errorf("backup: creating a restore staging temp file in %s: %w", backupDir, err)
+	}
+	return f, nil
+}
+
 // maxReceiptPixelsForRestore mirrors internal/http/receipt_image.go's own
 // maxReceiptPixels (ADR-011's decode-check cap) - duplicated, not shared,
 // because internal/http already imports internal/backup (the download and
@@ -112,20 +143,29 @@ var (
 )
 
 // ParsedUpload is ParseUpload's result: the decoded, validated document and
-// the receipt image bytes the zip actually carried, keyed by the bare
-// filename their own Receipt.Path names. BuildPreview and Restore both take
-// this, never a raw zip again - the CLI import ADR-012 defers calls
-// ParseUpload once and hands the same value to whichever of the two it
-// needs.
+// the on-disk path of the staged zip Restore re-opens to extract receipts
+// from - never the receipt bytes themselves (issue #344: holding every
+// decompressed receipt, up to 1 GB, in this struct for the life of the
+// 10-minute stage is exactly the "restore holds the whole upload in RAM"
+// bug). BuildPreview and Restore both take this, never a raw zip again -
+// the CLI import ADR-012 defers calls ParseUpload once and hands the same
+// value to whichever of the two it needs.
+//
+// StagingPath is empty only when a caller (a test) hand-builds a
+// ParsedUpload with a Document that carries no Receipts at all - Restore
+// never opens a zip it has nothing to extract from.
 type ParsedUpload struct {
-	Document Document
-	Receipts map[string][]byte
+	Document    Document
+	StagingPath string
 }
 
-// ParseUpload decodes and validates an uploaded backup zip - entirely in
-// memory, entirely read-only (no database call, no filesystem write) - so
-// it can run as the HTTP handler's own "inspect" step, well before the
-// treasurer has typed her password to confirm anything.
+// ParseUpload decodes and validates a backup zip already sitting on disk at
+// path - the inspect handler's own staging file (internal/http/restore.go),
+// streamed there from an upload or copied there from a stored dump before
+// this function ever runs, so no caller of this function ever hands it a
+// whole zip's bytes in memory. Read-only (no database call, no filesystem
+// write of its own) - safe to run as the HTTP handler's "inspect" step, well
+// before the treasurer has typed her password to confirm anything.
 //
 // Order matters: the two caps (entries, unzipped bytes) are enforced while
 // reading, before either is trusted; format_version is checked next,
@@ -133,16 +173,32 @@ type ParsedUpload struct {
 // error before DisallowUnknownFields ever runs against a shape this
 // server's Document might not even recognise; the strict decode runs only
 // once format_version already matches; and every receipt image the zip
-// actually carries is decode-checked last; ADR-012's "a restore proves its
-// numbers" (the totals check) is not this function's job - Restore verifies
-// those after inserting, since it needs a live transaction to recompute
-// them against.
-func ParseUpload(zipBytes []byte) (ParsedUpload, error) {
-	if int64(len(zipBytes)) > MaxUploadBytes {
-		return ParsedUpload{}, fmt.Errorf("%w: %d bytes, more than the %d byte cap", ErrTooManyEntries, len(zipBytes), MaxUploadBytes)
+// actually carries is decode-checked last, one at a time, its bytes
+// discarded the moment its own check finishes rather than held alongside
+// every other receipt's - ADR-012's "a restore proves its numbers" (the
+// totals check) is not this function's job - Restore verifies those after
+// inserting, since it needs a live transaction to recompute them against.
+func ParseUpload(path string) (ParsedUpload, error) {
+	//nolint:gosec // path is always this package's own staging file
+	// (internal/http/restore.go streams the upload or the stored dump into
+	// it before calling this) or a test's own fixture file, never a path
+	// built from request input directly.
+	f, err := os.Open(path)
+	if err != nil {
+		return ParsedUpload{}, fmt.Errorf("%w: opening the staged upload: %v", ErrMalformedBackup, err) //nolint:errorlint
+	}
+	defer func() { _ = f.Close() }()
+
+	info, err := f.Stat()
+	if err != nil {
+		return ParsedUpload{}, fmt.Errorf("%w: statting the staged upload: %v", ErrMalformedBackup, err) //nolint:errorlint
+	}
+	size := info.Size()
+	if size > MaxUploadBytes {
+		return ParsedUpload{}, fmt.Errorf("%w: %d bytes, more than the %d byte cap", ErrTooManyEntries, size, MaxUploadBytes)
 	}
 
-	zr, err := zip.NewReader(bytes.NewReader(zipBytes), int64(len(zipBytes)))
+	zr, err := zip.NewReader(f, size)
 	if err != nil {
 		return ParsedUpload{}, fmt.Errorf("%w: not a zip file: %v", ErrMalformedBackup, err) //nolint:errorlint // wrapping two errors in one Errorf is intentional here; ErrMalformedBackup is the one callers match against
 	}
@@ -150,31 +206,26 @@ func ParseUpload(zipBytes []byte) (ParsedUpload, error) {
 		return ParsedUpload{}, fmt.Errorf("%w: %d entries, more than the %d a backup ever holds", ErrTooManyEntries, len(zr.File), MaxZipEntries)
 	}
 
-	var jsonBytes []byte
-	receipts := map[string][]byte{}
 	remaining := MaxUnzippedBytes
 
-	for _, f := range zr.File {
-		data, n, err := readCappedEntry(f, remaining)
+	// Pass 1: find uruni.json (wherever it sits in the zip's own entry
+	// order - never assumed to be first) and decode it. Every matching
+	// entry is read and capped, not just the first, so a crafted zip with
+	// two entries of the same name cannot dodge the unzipped-bytes cap by
+	// hiding extra bytes behind a name this loop has already stopped
+	// reading.
+	var jsonBytes []byte
+	for _, zf := range zr.File {
+		if zf.Name != jsonFilename {
+			continue
+		}
+		data, n, err := readCappedEntry(zf, remaining)
 		if err != nil {
 			return ParsedUpload{}, err
 		}
 		remaining -= n
-
-		switch {
-		case f.Name == jsonFilename:
-			jsonBytes = data
-		case strings.HasPrefix(f.Name, receiptsDir):
-			receipts[strings.TrimPrefix(f.Name, receiptsDir)] = data
-		default:
-			// An entry this package never wrote. Not itself a reason to
-			// refuse the whole file - the two caps above already bound
-			// what reading it can cost - so it is silently ignored, the
-			// same tolerance ListDumps extends to a foreign file sitting
-			// in the backup directory.
-		}
+		jsonBytes = data
 	}
-
 	if jsonBytes == nil {
 		return ParsedUpload{}, fmt.Errorf("%w: no %s entry", ErrMalformedBackup, jsonFilename)
 	}
@@ -190,25 +241,52 @@ func ParseUpload(zipBytes []byte) (ParsedUpload, error) {
 		return ParsedUpload{}, fmt.Errorf("%w: decoding %s: %v", ErrMalformedBackup, jsonFilename, err) //nolint:errorlint
 	}
 
+	// Every receipt path must already be a bare filename before any zip
+	// entry is ever trusted to match it - r.Path came out of an uploaded,
+	// untrusted file, unlike a live receipt row's Path, which
+	// internal/http/receipts.go only ever sets from randomReceiptFilename.
+	// This check does not depend on what the zip actually carries, so it
+	// runs against doc.Receipts alone, independent of pass 2 below.
+	referenced := make(map[string]bool, len(doc.Receipts))
 	for _, r := range doc.Receipts {
-		// r.Path came out of an uploaded, untrusted file - unlike a live
-		// receipt row's Path, which internal/http/receipts.go only ever
-		// sets from randomReceiptFilename. A bare-filename check here is
-		// what stops a crafted backup naming "../../etc/passwd" and
-		// reaching writeReceiptFileNamed's os.Rename below with it.
 		if r.Path != filepath.Base(r.Path) {
 			return ParsedUpload{}, fmt.Errorf("%w: receipt path %q is not a bare filename", ErrMalformedBackup, r.Path)
 		}
-		data, ok := receipts[r.Path]
-		if !ok {
-			continue // ADR-012 ruling 5: a missing image never blocks a restore
+		referenced[r.Path] = true
+	}
+
+	// Pass 2: every other entry - every receipt, whether or not doc.Receipts
+	// actually references it, and anything else the zip carries - read and
+	// capped exactly once, one at a time, never held past its own iteration
+	// and never alongside any other entry's bytes: this is issue #344's own
+	// fix. An entry doc.Receipts references gets its image decode-checked
+	// immediately, on the same bytes, before they are discarded; an entry
+	// nothing references is still read (so the unzipped-bytes cap still
+	// bounds it - the same tolerance ListDumps extends to a foreign file
+	// sitting in the backup directory) but never validated or kept.
+	for _, zf := range zr.File {
+		if zf.Name == jsonFilename {
+			continue
+		}
+		data, n, err := readCappedEntry(zf, remaining)
+		if err != nil {
+			return ParsedUpload{}, err
+		}
+		remaining -= n
+
+		if !strings.HasPrefix(zf.Name, receiptsDir) {
+			continue
+		}
+		name := strings.TrimPrefix(zf.Name, receiptsDir)
+		if !referenced[name] {
+			continue // ADR-012 ruling 5 works the other way too: a zip entry no row names is never used for anything
 		}
 		if err := validateReceiptImageBytes(data); err != nil {
 			return ParsedUpload{}, err
 		}
 	}
 
-	return ParsedUpload{Document: doc, Receipts: receipts}, nil
+	return ParsedUpload{Document: doc, StagingPath: path}, nil
 }
 
 // readCappedEntry opens and fully reads one zip entry, refusing to read
@@ -496,14 +574,8 @@ func Restore(ctx context.Context, sqlDB *sql.DB, q store.Querier, l *ledger.Ledg
 		return fmt.Errorf("backup: writing the safety-net dump: %w", err)
 	}
 
-	for _, r := range parsed.Document.Receipts {
-		data, ok := parsed.Receipts[r.Path]
-		if !ok {
-			continue // ruling 5: a missing image never blocks a restore
-		}
-		if err := writeReceiptFileNamed(uploadsDir, r.Path, data); err != nil {
-			return fmt.Errorf("backup: extracting receipt %s: %w", r.Path, err)
-		}
+	if err := extractReceipts(uploadsDir, parsed.Document, parsed.StagingPath); err != nil {
+		return err
 	}
 
 	tx, err := sqlDB.BeginTx(ctx, nil)
@@ -817,20 +889,80 @@ func verifyTotals(ctx context.Context, q store.Querier, doc Document) error {
 	return nil
 }
 
-// writeReceiptFileNamed writes data at uploadsDir/name, temp-file-then-
-// rename like receipts.go's own writeReceiptFile - except under a name
-// this package is handed, never one it mints itself: a restore's receipt
-// keeps the exact filename its Receipt row already names (ADR-011's
-// stored, server-generated name, preserved verbatim like every other id
-// this package restores). "Additive" (ADR-012): an existing file already
-// at that name is overwritten with what should be identical bytes -
-// two receipts colliding on a crypto/rand name is not a case this
-// package tries to detect.
+// extractReceipts is Restore's own receipt-extraction step: re-opens the
+// staged zip at stagingPath exactly once and streams each receipt doc
+// actually names into uploadsDir, one at a time - never loading a whole
+// receipt's bytes into a map first (issue #344's own fix, mirroring
+// ParseUpload's own "validate one at a time, retain nothing" shape). A
+// Document with no Receipts at all never opens stagingPath, which is what
+// lets a hand-built ParsedUpload (most of this package's own Restore tests)
+// pass an empty StagingPath safely.
+func extractReceipts(uploadsDir string, doc Document, stagingPath string) error {
+	if len(doc.Receipts) == 0 {
+		return nil
+	}
+
+	//nolint:gosec // stagingPath is either this package's own staging file
+	// (internal/http/restore.go) or a test's own fixture file, never
+	// request input directly.
+	f, err := os.Open(stagingPath)
+	if err != nil {
+		return fmt.Errorf("backup: re-opening the staged upload to extract receipts: %w", err)
+	}
+	defer func() { _ = f.Close() }()
+
+	info, err := f.Stat()
+	if err != nil {
+		return fmt.Errorf("backup: statting the staged upload: %w", err)
+	}
+	zr, err := zip.NewReader(f, info.Size())
+	if err != nil {
+		return fmt.Errorf("backup: re-opening the staged upload as a zip: %w", err)
+	}
+	byName := make(map[string]*zip.File, len(zr.File))
+	for _, zf := range zr.File {
+		byName[zf.Name] = zf
+	}
+
+	for _, r := range doc.Receipts {
+		zf, ok := byName[receiptsDir+r.Path]
+		if !ok {
+			continue // ruling 5: a missing image never blocks a restore
+		}
+		if err := writeReceiptFileFromZip(uploadsDir, r.Path, zf); err != nil {
+			return fmt.Errorf("backup: extracting receipt %s: %w", r.Path, err)
+		}
+	}
+	return nil
+}
+
+// writeReceiptFileFromZip streams one receipt's zip entry into
+// uploadsDir/name, temp-file-then-rename like receipts.go's own
+// writeReceiptFile - except under a name this package is handed, never one
+// it mints itself: a restore's receipt keeps the exact filename its
+// Receipt row already names (ADR-011's stored, server-generated name,
+// preserved verbatim like every other id this package restores).
+// "Additive" (ADR-012): an existing file already at that name is
+// overwritten with what should be identical bytes - two receipts colliding
+// on a crypto/rand name is not a case this package tries to detect.
+//
+// The copy re-applies MaxUnzippedBytes as a per-entry ceiling while
+// reading, never trusting zf's own declared UncompressedSize64 a second
+// time either - the same reasoning readCappedEntry's own comment gives for
+// ParseUpload's identical check on this exact entry. ParseUpload already
+// proved this entry decodes as a valid image; this function only ever
+// copies bytes, it does not decode them again.
 //
 // Callers must have already proven name is a bare filename (ParseUpload's
 // own check) - this function does not re-check, the same trust boundary
 // addReceiptToZip already documents for a live receipt row's path.
-func writeReceiptFileNamed(uploadsDir, name string, data []byte) error {
+func writeReceiptFileFromZip(uploadsDir, name string, zf *zip.File) error {
+	rc, err := zf.Open()
+	if err != nil {
+		return fmt.Errorf("opening %s in the staged zip: %w", zf.Name, err)
+	}
+	defer func() { _ = rc.Close() }()
+
 	tmp, err := os.CreateTemp(uploadsDir, ".receipt-restore-*.tmp")
 	if err != nil {
 		return err
@@ -843,9 +975,14 @@ func writeReceiptFileNamed(uploadsDir, name string, data []byte) error {
 		}
 	}()
 
-	if _, err := tmp.Write(data); err != nil {
+	n, err := io.Copy(tmp, io.LimitReader(rc, MaxUnzippedBytes+1))
+	if err != nil {
 		_ = tmp.Close()
 		return err
+	}
+	if n > MaxUnzippedBytes {
+		_ = tmp.Close()
+		return fmt.Errorf("%w: more than %d bytes unzipped", ErrUnzippedTooLarge, MaxUnzippedBytes)
 	}
 	if err := tmp.Close(); err != nil {
 		return err
