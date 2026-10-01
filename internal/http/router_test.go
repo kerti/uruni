@@ -3,6 +3,7 @@ package http
 import (
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -56,7 +57,7 @@ func testRouter(t *testing.T) http.Handler {
 // postLogin or postLogout directly, never this.
 func authedRouterFor(t *testing.T, sqlDB *sql.DB) http.Handler {
 	t.Helper()
-	r := New(testAssets(), testBuild, ledger.New(sqlDB), store.New(sqlDB), sqlDB, testLogger(), auth.New(sqlDB), "", t.TempDir(), t.TempDir())
+	r := New(testAssets(), testBuild, ledger.New(sqlDB), store.New(sqlDB), sqlDB, nil, testLogger(), auth.New(sqlDB), "", t.TempDir(), t.TempDir())
 
 	reg := postRegister(t, r, "treasurer@example.org", "correct-horse-battery")
 	if reg.Code != http.StatusCreated {
@@ -122,7 +123,7 @@ func TestHealthzReportsTheBuildItWasStampedWith(t *testing.T) {
 	untagged := Build{Version: "dev", Commit: "deadbee"}
 	sqlDB := testStoreDB(t)
 	rec := httptest.NewRecorder()
-	New(testAssets(), untagged, ledger.New(sqlDB), store.New(sqlDB), sqlDB, testLogger(), auth.New(sqlDB), "", t.TempDir(), t.TempDir()).
+	New(testAssets(), untagged, ledger.New(sqlDB), store.New(sqlDB), sqlDB, nil, testLogger(), auth.New(sqlDB), "", t.TempDir(), t.TempDir()).
 		ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/healthz", nil))
 
 	var got health
@@ -132,6 +133,30 @@ func TestHealthzReportsTheBuildItWasStampedWith(t *testing.T) {
 	if got.Version != untagged.Version || got.Commit != untagged.Commit {
 		t.Errorf("GET /healthz = %+v, want version %q and commit %q",
 			got, untagged.Version, untagged.Commit)
+	}
+}
+
+// #278: a database path that no longer names the file this process opened
+// turns /healthz red, so the container HEALTHCHECK raises the alarm.
+func TestHealthzFailsWhenTheDatabaseFileCheckFails(t *testing.T) {
+	sqlDB := testStoreDB(t)
+	replaced := func() error { return errors.New("the database file was replaced") }
+	rec := httptest.NewRecorder()
+	New(testAssets(), testBuild, ledger.New(sqlDB), store.New(sqlDB), sqlDB, replaced, testLogger(), auth.New(sqlDB), "", t.TempDir(), t.TempDir()).
+		ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/healthz", nil))
+
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Fatalf("GET /healthz = %d, want %d", rec.Code, http.StatusServiceUnavailable)
+	}
+	var got health
+	if err := json.NewDecoder(rec.Body).Decode(&got); err != nil {
+		t.Fatalf("decoding /healthz body: %v", err)
+	}
+	if got.Status != "error" || got.Error != "the database file was replaced" {
+		t.Errorf("GET /healthz = %+v, want status error carrying the check's message", got)
+	}
+	if got.Version != testBuild.Version {
+		t.Errorf("GET /healthz version = %q, want %q - the build stays readable when unhealthy", got.Version, testBuild.Version)
 	}
 }
 

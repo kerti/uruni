@@ -131,6 +131,13 @@ func serve() error {
 	}
 	defer func() { _ = sqlDB.Close() }()
 
+	// Which file the path names now, so /healthz can tell if it is later
+	// deleted or replaced under this process (#278).
+	dbFile, err := db.IdentifyFile(cfg.DBPath)
+	if err != nil {
+		return err
+	}
+
 	// Migrations run on boot, so self-hosting stays `docker compose up` with no
 	// migration step for the operator (ADR-019). The cost is a slower first boot
 	// after an upgrade, which is the right side of that trade for one small
@@ -169,7 +176,7 @@ func serve() error {
 
 	srv := &http.Server{
 		Addr: fmt.Sprintf(":%d", cfg.Port),
-		Handler: uruniHTTP.New(assets, uruniHTTP.Build{Version: version, Commit: buildCommit()}, l, q, sqlDB, logger,
+		Handler: uruniHTTP.New(assets, uruniHTTP.Build{Version: version, Commit: buildCommit()}, l, q, sqlDB, dbFile.Check, logger,
 			au, cfg.BaseURL, cfg.UploadsDir, cfg.BackupDir),
 		// Set explicitly: a server with no header timeout can be held open by a
 		// slow client indefinitely.

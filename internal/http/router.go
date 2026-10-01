@@ -73,12 +73,17 @@ func init() {
 // doc comment for why it is not routed through the Ledger). It is the same
 // *sql.DB l and q already wrap; passing it a third time costs nothing
 // (ADR-004's single connection).
-func New(assets fs.FS, build Build, l *ledger.Ledger, q store.Querier, sqlDB *sql.DB, logger *slog.Logger, au *auth.Auth, baseURL string, uploadsDir string, backupDir string) http.Handler {
+//
+// dbFileCheck is #278's addition: /healthz calls it to confirm the
+// configured database path still names the file this process opened (see
+// db.FileIdentity). nil skips the check, which is what tests that do not
+// exercise it pass.
+func New(assets fs.FS, build Build, l *ledger.Ledger, q store.Querier, sqlDB *sql.DB, dbFileCheck func() error, logger *slog.Logger, au *auth.Auth, baseURL string, uploadsDir string, backupDir string) http.Handler {
 	r := chi.NewRouter()
 	r.Use(middleware.Recoverer)
 	r.Use(requestLogger(logger))
 
-	r.Get("/healthz", healthz(build))
+	r.Get("/healthz", healthz(build, dbFileCheck, logger))
 
 	// Every /api route lives under this one mount, so M5's session middleware
 	// (LoadAndSave, then sessionRequired for every route but the four public
@@ -115,6 +120,7 @@ type health struct {
 	Status  string `json:"status"`
 	Version string `json:"version"`
 	Commit  string `json:"commit"`
+	Error   string `json:"error,omitempty"`
 }
 
 // healthz is unauthenticated by design: the dev-server readiness poll and the
@@ -127,15 +133,29 @@ type health struct {
 // momentarily-busy or unwritable file into a restart loop instead of a passing
 // liveness check with a slow request behind it. If a dependency is ever worth
 // reporting, it belongs here as a non-ok status, not as a second endpoint.
-func healthz(build Build) http.HandlerFunc {
+//
+// One is (#278): the database path no longer naming the file this process
+// opened. That is not a busy store - it is a stat of a path, which cannot
+// queue behind a write - and a process in that state is serving data that
+// vanishes at its next restart, so it answers 503 and logs at error level.
+// The container HEALTHCHECK turning red is the alarm; nothing here refuses
+// writes, since the fix is a restart onto the file the operator meant.
+func healthz(build Build, dbFileCheck func() error, logger *slog.Logger) http.HandlerFunc {
 	return func(w http.ResponseWriter, _ *http.Request) {
+		body := health{Status: "ok", Version: build.Version, Commit: build.Commit}
+		code := http.StatusOK
+		if dbFileCheck != nil {
+			if err := dbFileCheck(); err != nil {
+				logger.Error("database file check failed", "error", err)
+				body.Status = "error"
+				body.Error = err.Error()
+				code = http.StatusServiceUnavailable
+			}
+		}
+
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
-		w.WriteHeader(http.StatusOK)
-		_ = json.NewEncoder(w).Encode(health{
-			Status:  "ok",
-			Version: build.Version,
-			Commit:  build.Commit,
-		})
+		w.WriteHeader(code)
+		_ = json.NewEncoder(w).Encode(body)
 	}
 }
 
