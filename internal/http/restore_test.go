@@ -4,10 +4,14 @@ import (
 	"archive/zip"
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -16,6 +20,47 @@ import (
 	"github.com/kerti/uruni/internal/ledger"
 	"github.com/kerti/uruni/internal/store"
 )
+
+// restoreStagingTempPrefix mirrors backup.CreateRestoreStagingTemp's own
+// os.CreateTemp pattern (dumps.go's tempPrefix+"restore-*") - dumps.go's
+// tempPrefix is unexported, so this test package spells the literal out
+// directly rather than reaching across the package boundary for a string
+// only tests need. There is no fixed staging name any more (issue #344's
+// own follow-up: a shared name is exactly what let two concurrent inspects
+// race), so every staging test finds its file(s) by this prefix instead of
+// a single known path.
+const restoreStagingTempPrefix = ".uruni-backup-tmp-restore-"
+
+// restoreStagingFilesIn lists every file currently staged in backupDir, by
+// name only - never a real dump (backup.ValidDumpName's own pattern shares
+// nothing with this prefix) and never a plain RemoveStaleTemps leftover
+// from a dump write (dumps.go's own temp files carry no "restore-" of
+// their own).
+func restoreStagingFilesIn(t *testing.T, backupDir string) []string {
+	t.Helper()
+	entries, err := os.ReadDir(backupDir)
+	if err != nil {
+		t.Fatalf("ReadDir(%s) = %v, want no error", backupDir, err)
+	}
+	var names []string
+	for _, e := range entries {
+		if strings.HasPrefix(e.Name(), restoreStagingTempPrefix) {
+			names = append(names, e.Name())
+		}
+	}
+	return names
+}
+
+// assertRestoreStagingFileExists checks only whether *some* staging file is
+// present - the tests that care about exactly which one, or how many, call
+// restoreStagingFilesIn directly instead.
+func assertRestoreStagingFileExists(t *testing.T, backupDir string, want bool) {
+	t.Helper()
+	got := len(restoreStagingFilesIn(t, backupDir)) > 0
+	if got != want {
+		t.Errorf("a restore staging file is present in %s = %v, want %v", backupDir, got, want)
+	}
+}
 
 // fixturePassword is testRouter's own registered password
 // (authedRouterFor, router_test.go) - the confirm step checks against
@@ -417,4 +462,287 @@ func TestRestoreFromStoredSafetyNetBackupEndToEnd(t *testing.T) {
 	if rec.Code != http.StatusUnauthorized {
 		t.Errorf("GET /api/fund after the second restore = %d, want %d (every session must be cleared)", rec.Code, http.StatusUnauthorized)
 	}
+}
+
+// decodeInspectToken is every staging test's own shorthand for pulling the
+// token out of a successful inspect response.
+func decodeInspectToken(t *testing.T, rec *httptest.ResponseRecorder) string {
+	t.Helper()
+	var inspected restoreInspectResponse
+	if err := json.NewDecoder(rec.Body).Decode(&inspected); err != nil {
+		t.Fatalf("decoding inspect response: %v", err)
+	}
+	if inspected.Token == "" {
+		t.Fatal("inspect response carries no token")
+	}
+	return inspected.Token
+}
+
+// TestRestoreInspectStagesOnDiskAndConfirmRemovesIt is issue #344's own
+// headline property: the upload lands on disk, under backupDir's one
+// restore-staging slot, the moment inspect answers - and a successful
+// confirm leaves nothing behind.
+func TestRestoreInspectStagesOnDiskAndConfirmRemovesIt(t *testing.T) {
+	r, backupDir := authedRouterWithBackupDir(t)
+	setUpFund(t, r)
+	zipBytes := downloadRealBackupZip(t, r)
+
+	assertRestoreStagingFileExists(t, backupDir, false)
+
+	inspectRec := postRestoreInspect(t, r, zipBytes)
+	if inspectRec.Code != http.StatusOK {
+		t.Fatalf("POST /api/restore/inspect = %d, want %d (body: %s)", inspectRec.Code, http.StatusOK, inspectRec.Body.String())
+	}
+	token := decodeInspectToken(t, inspectRec)
+	assertRestoreStagingFileExists(t, backupDir, true)
+
+	confirmRec := postRestoreConfirm(t, r, token, fixturePassword)
+	if confirmRec.Code != http.StatusOK {
+		t.Fatalf("POST /api/restore/confirm = %d, want %d (body: %s)", confirmRec.Code, http.StatusOK, confirmRec.Body.String())
+	}
+	assertRestoreStagingFileExists(t, backupDir, false)
+}
+
+// TestRestoreConfirmWrongPasswordKeepsStagedFile: a wrong password never
+// reaches restoreStage.take() (confirmRestore checks the password first),
+// so the stage - and the file behind it - survives exactly as it does
+// today, letting the treasurer retype her password and try again without
+// re-uploading.
+func TestRestoreConfirmWrongPasswordKeepsStagedFile(t *testing.T) {
+	r, backupDir := authedRouterWithBackupDir(t)
+	setUpFund(t, r)
+	zipBytes := downloadRealBackupZip(t, r)
+
+	inspectRec := postRestoreInspect(t, r, zipBytes)
+	token := decodeInspectToken(t, inspectRec)
+	assertRestoreStagingFileExists(t, backupDir, true)
+
+	wrongRec := postRestoreConfirm(t, r, token, "definitely-the-wrong-password")
+	if wrongRec.Code != http.StatusUnauthorized {
+		t.Fatalf("POST /api/restore/confirm (wrong password) = %d, want %d (body: %s)", wrongRec.Code, http.StatusUnauthorized, wrongRec.Body.String())
+	}
+	assertRestoreStagingFileExists(t, backupDir, true)
+
+	// The treasurer can still retry with the same token, proving the stage
+	// - not only the file - genuinely survived the wrong guess.
+	confirmRec := postRestoreConfirm(t, r, token, fixturePassword)
+	if confirmRec.Code != http.StatusOK {
+		t.Fatalf("POST /api/restore/confirm (retry) = %d, want %d (body: %s)", confirmRec.Code, http.StatusOK, confirmRec.Body.String())
+	}
+	assertRestoreStagingFileExists(t, backupDir, false)
+}
+
+// TestRestoreFailedInspectLeavesNoStagingFile: a malformed upload never
+// gets past ParseUpload, so stageAndInspect never commits its temp file
+// onto the slot - nothing is left staged for the next request to trip
+// over.
+func TestRestoreFailedInspectLeavesNoStagingFile(t *testing.T) {
+	r, backupDir := authedRouterWithBackupDir(t)
+	setUpFund(t, r)
+
+	rec := postRestoreInspect(t, r, []byte("not a zip file at all"))
+	if rec.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("POST /api/restore/inspect (garbage body) = %d, want %d (body: %s)", rec.Code, http.StatusUnprocessableEntity, rec.Body.String())
+	}
+	assertRestoreStagingFileExists(t, backupDir, false)
+}
+
+// TestRestoreSecondInspectReplacesStagedFile: one slot, like the stash
+// itself - a second successful inspect always wins. The first inspect's
+// token is left naming nothing (a 410 on confirm), and the file behind the
+// second inspect's token is what actually restores.
+func TestRestoreSecondInspectReplacesStagedFile(t *testing.T) {
+	r, backupDir := authedRouterWithBackupDir(t)
+	setUpFund(t, r)
+	zipBytes := downloadRealBackupZip(t, r)
+
+	firstRec := postRestoreInspect(t, r, zipBytes)
+	firstToken := decodeInspectToken(t, firstRec)
+
+	secondRec := postRestoreInspect(t, r, zipBytes)
+	secondToken := decodeInspectToken(t, secondRec)
+
+	if firstToken == secondToken {
+		t.Fatal("two separate inspects produced the same token")
+	}
+	assertRestoreStagingFileExists(t, backupDir, true)
+
+	staleConfirm := postRestoreConfirm(t, r, firstToken, fixturePassword)
+	if staleConfirm.Code != http.StatusGone {
+		t.Fatalf("POST /api/restore/confirm (superseded token) = %d, want %d (body: %s)", staleConfirm.Code, http.StatusGone, staleConfirm.Body.String())
+	}
+	// The second inspect's own stage must still be intact - a stale
+	// confirm must not have disturbed it.
+	assertRestoreStagingFileExists(t, backupDir, true)
+
+	confirmRec := postRestoreConfirm(t, r, secondToken, fixturePassword)
+	if confirmRec.Code != http.StatusOK {
+		t.Fatalf("POST /api/restore/confirm (current token) = %d, want %d (body: %s)", confirmRec.Code, http.StatusOK, confirmRec.Body.String())
+	}
+	assertRestoreStagingFileExists(t, backupDir, false)
+}
+
+// TestRestoreStagingFileNeverAppearsInBackupsList: a staging file's own
+// name (backup.CreateRestoreStagingTemp) never matches dumpNamePattern, so
+// GET /api/backups - which only ever lists what ListDumps recognises -
+// must never surface it, whether or not anything is actually staged.
+func TestRestoreStagingFileNeverAppearsInBackupsList(t *testing.T) {
+	r, backupDir := authedRouterWithBackupDir(t)
+	setUpFund(t, r)
+	zipBytes := downloadRealBackupZip(t, r)
+
+	inspectRec := postRestoreInspect(t, r, zipBytes)
+	if inspectRec.Code != http.StatusOK {
+		t.Fatalf("POST /api/restore/inspect = %d, want %d (body: %s)", inspectRec.Code, http.StatusOK, inspectRec.Body.String())
+	}
+	assertRestoreStagingFileExists(t, backupDir, true)
+
+	rec := getBackups(t, r)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GET /api/backups = %d, want %d (body: %s)", rec.Code, http.StatusOK, rec.Body.String())
+	}
+	var items []backupListItem
+	if err := json.NewDecoder(rec.Body).Decode(&items); err != nil {
+		t.Fatalf("decoding response: %v", err)
+	}
+	if len(items) != 0 {
+		t.Errorf("GET /api/backups = %v, want [] - the staged upload is not a dump", items)
+	}
+}
+
+// TestRestoreInspectStoredThenOriginalDeletedStillConfirms is issue #344's
+// own correctness half: inspecting a stored dump copies it into the
+// staging slot immediately, so confirm - which only ever reads that
+// copy - still succeeds even if the original dump file is deleted (by an
+// operator, or by retention pruning an older pre-restore dump) between
+// inspect and confirm.
+func TestRestoreInspectStoredThenOriginalDeletedStillConfirms(t *testing.T) {
+	r, backupDir := authedRouterWithBackupDir(t)
+	setup := setUpFund(t, r)
+	zipBytes := downloadRealBackupZip(t, r)
+
+	name := backup.BuildDumpName(time.Now(), backup.KindDaily, backup.FormatVersion, "0123456789ab")
+	dumpPath := filepath.Join(backupDir, name)
+	writeTestDumpFile(t, backupDir, name, zipBytes)
+
+	inspectRec := postRestoreInspectStored(t, r, name)
+	if inspectRec.Code != http.StatusOK {
+		t.Fatalf("POST /api/restore/inspect-stored/%s = %d, want %d (body: %s)", name, inspectRec.Code, http.StatusOK, inspectRec.Body.String())
+	}
+	var inspected restoreInspectResponse
+	if err := json.NewDecoder(inspectRec.Body).Decode(&inspected); err != nil {
+		t.Fatalf("decoding inspect response: %v", err)
+	}
+	if len(inspected.Preview.Funds) != 1 || inspected.Preview.Funds[0].FundID != setup.Fund.ID {
+		t.Fatalf("preview.Funds = %v, want exactly the one live fund %d", inspected.Preview.Funds, setup.Fund.ID)
+	}
+	assertRestoreStagingFileExists(t, backupDir, true)
+
+	if err := os.Remove(dumpPath); err != nil {
+		t.Fatalf("removing the original stored dump: %v", err)
+	}
+
+	confirmRec := postRestoreConfirm(t, r, inspected.Token, fixturePassword)
+	if confirmRec.Code != http.StatusOK {
+		t.Fatalf("POST /api/restore/confirm (original dump deleted) = %d, want %d (body: %s)", confirmRec.Code, http.StatusOK, confirmRec.Body.String())
+	}
+	assertRestoreStagingFileExists(t, backupDir, false)
+
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/fund", nil))
+	if rec.Code != http.StatusUnauthorized {
+		t.Errorf("GET /api/fund after restore = %d, want %d (every session must be cleared)", rec.Code, http.StatusUnauthorized)
+	}
+}
+
+// TestRestoreStageReplacingEarlierStageDeletesEarlierFile is a white-box
+// proof of restoreStage.stage's own concurrency fix (issue #344's
+// follow-up): staging a second upload removes exactly the file the first
+// one owned, under the same mutex that installs the second - never a
+// shared, renamed-onto name either could race over.
+func TestRestoreStageReplacingEarlierStageDeletesEarlierFile(t *testing.T) {
+	dir := t.TempDir()
+	s := newRestoreStage()
+
+	path1 := createRestoreStagingTempOrFatal(t, dir)
+	if _, err := s.stage(backup.ParsedUpload{StagingPath: path1}); err != nil {
+		t.Fatalf("stage() (first) = %v, want no error", err)
+	}
+
+	path2 := createRestoreStagingTempOrFatal(t, dir)
+	if _, err := s.stage(backup.ParsedUpload{StagingPath: path2}); err != nil {
+		t.Fatalf("stage() (second) = %v, want no error", err)
+	}
+
+	if _, err := os.Stat(path1); !errors.Is(err, os.ErrNotExist) {
+		t.Errorf("stat(first staged file) = %v, want os.ErrNotExist - stage() must remove the file it superseded", err)
+	}
+	if _, err := os.Stat(path2); err != nil {
+		t.Errorf("stat(second staged file) = %v, want it to survive", err)
+	}
+}
+
+// TestRestoreConfirmRemovalLeavesALaterInspectsFileAlone is the other half
+// of the same fix: once take() has handed a file to a (simulated) confirm,
+// restoreStage no longer references it at all - a later inspect's own
+// stage() call, landing before that confirm gets around to removing its
+// own file, must neither touch it nor be affected by it. No goroutines: a
+// direct call sequence (take, then stage) is enough to prove take() really
+// clears its own bookkeeping before stage() ever runs again.
+func TestRestoreConfirmRemovalLeavesALaterInspectsFileAlone(t *testing.T) {
+	dir := t.TempDir()
+	s := newRestoreStage()
+
+	path1 := createRestoreStagingTempOrFatal(t, dir)
+	token1, err := s.stage(backup.ParsedUpload{StagingPath: path1})
+	if err != nil {
+		t.Fatalf("stage() (first) = %v, want no error", err)
+	}
+
+	taken, ok := s.take(token1)
+	if !ok || taken.StagingPath != path1 {
+		t.Fatalf("take(%q) = (%+v, %v), want the first stage's own file", token1, taken, ok)
+	}
+
+	// A second inspect lands next - before this test's own stand-in for
+	// confirmRestore ever removes taken.StagingPath.
+	path2 := createRestoreStagingTempOrFatal(t, dir)
+	if _, err := s.stage(backup.ParsedUpload{StagingPath: path2}); err != nil {
+		t.Fatalf("stage() (second, after take) = %v, want no error", err)
+	}
+
+	if _, err := os.Stat(path1); err != nil {
+		t.Errorf("stat(first file) after a later stage() = %v, want it to survive - confirm, not stage, owns it now", err)
+	}
+	if _, err := os.Stat(path2); err != nil {
+		t.Errorf("stat(second staged file) = %v, want it present", err)
+	}
+
+	// confirmRestore's own cleanup, stood in for directly: removing the
+	// file take() handed it must never reach for anything restoreStage
+	// currently holds.
+	if err := os.Remove(taken.StagingPath); err != nil {
+		t.Fatalf("removing the taken file: %v", err)
+	}
+	if _, err := os.Stat(path2); err != nil {
+		t.Errorf("stat(second staged file) after confirm's own cleanup = %v, want it to survive", err)
+	}
+}
+
+// createRestoreStagingTempOrFatal is these two white-box tests' own
+// shorthand for a real file at a real, uniquely-named staging path -
+// backup.CreateRestoreStagingTemp itself, closed immediately since these
+// tests only care about the path's presence or absence, never its
+// contents.
+func createRestoreStagingTempOrFatal(t *testing.T, dir string) string {
+	t.Helper()
+	f, err := backup.CreateRestoreStagingTemp(dir)
+	if err != nil {
+		t.Fatalf("CreateRestoreStagingTemp() = %v, want no error", err)
+	}
+	path := f.Name()
+	if err := f.Close(); err != nil {
+		t.Fatalf("closing staging file: %v", err)
+	}
+	return path
 }

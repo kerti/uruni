@@ -2,6 +2,7 @@ package backup
 
 import (
 	"context"
+	"errors"
 	"io"
 	"log/slog"
 	"os"
@@ -133,6 +134,49 @@ func TestListDumpsSortsNewestFirstAndIgnoresForeignFiles(t *testing.T) {
 	}
 	if dumps[2].Name != "uruni-20260928-000000-daily-fv1-aaaaaaaaaaaa.zip" {
 		t.Errorf("dumps[2] = %s, want the oldest dump last", dumps[2].Name)
+	}
+}
+
+// TestRestoreStagingFileIsInvisibleToListDumpsAndRetention is issue #344's
+// own "verify each of those" requirement: a restore-staging file
+// (internal/http/restore.go, via CreateRestoreStagingTemp) sits in the very
+// same backupDir every dump lives in, and dumpNamePattern is the single
+// gate that keeps ListDumps, ValidDumpName and therefore ApplyRetention
+// from ever mistaking it for one.
+func TestRestoreStagingFileIsInvisibleToListDumpsAndRetention(t *testing.T) {
+	dir := t.TempDir()
+	writeDumpFile(t, dir, "uruni-20260930-000000-daily-fv1-bbbbbbbbbbbb.zip")
+
+	staged, err := CreateRestoreStagingTemp(dir)
+	if err != nil {
+		t.Fatalf("CreateRestoreStagingTemp() = %v, want no error", err)
+	}
+	stagingPath := staged.Name()
+	if err := staged.Close(); err != nil {
+		t.Fatalf("closing the staged file: %v", err)
+	}
+	stagingName := filepath.Base(stagingPath)
+
+	if ValidDumpName(stagingName) {
+		t.Errorf("ValidDumpName(%q) = true, want false", stagingName)
+	}
+
+	dumps, err := ListDumps(dir)
+	if err != nil {
+		t.Fatalf("ListDumps() = %v, want no error", err)
+	}
+	if len(dumps) != 1 {
+		t.Fatalf("len(dumps) = %d, want 1 (the staging file must not be listed): %+v", len(dumps), dumps)
+	}
+
+	// A retention pass small enough to prune everything else must still
+	// leave the staging file untouched - it was never in ListDumps' own
+	// result to begin with.
+	if err := ApplyRetention(dir, 0, 0); err != nil {
+		t.Fatalf("ApplyRetention() = %v, want no error", err)
+	}
+	if _, err := os.Stat(stagingPath); err != nil {
+		t.Errorf("stat(staging file) after ApplyRetention = %v, want it to survive", err)
 	}
 }
 
@@ -548,6 +592,44 @@ func TestEnsureBootDumpWritesWhenNoneExistAndSkipsOnceCurrent(t *testing.T) {
 	}
 	if len(second) != 1 {
 		t.Fatalf("len(dumps) = %d after second boot, want still 1 (format version unchanged)", len(second))
+	}
+}
+
+// TestEnsureBootDumpRemovesLeftoverRestoreStaging is issue #344's own boot
+// sweep: a restart between an inspect and its confirm leaves a
+// restore-staging file with no one left to confirm it. There is no
+// separate sweep for this - CreateRestoreStagingTemp names every staged
+// file with RemoveStaleTemps' own tempPrefix, so EnsureBootDump's existing
+// RemoveStaleTemps call is what notices it, the same as any other
+// interrupted write.
+func TestEnsureBootDumpRemovesLeftoverRestoreStaging(t *testing.T) {
+	sqlDB := newTestDB(t)
+	uploadsDir := t.TempDir()
+	buildFixture(t, sqlDB, uploadsDir)
+	backupDir := t.TempDir()
+	ctx := context.Background()
+	q := store.New(sqlDB)
+	l := ledger.New(sqlDB)
+	logger := testDiscardLogger()
+
+	staged, err := CreateRestoreStagingTemp(backupDir)
+	if err != nil {
+		t.Fatalf("CreateRestoreStagingTemp() = %v, want no error", err)
+	}
+	stagingPath := staged.Name()
+	if _, err := staged.WriteString("a leftover staged upload"); err != nil {
+		t.Fatalf("writing the leftover staging file: %v", err)
+	}
+	if err := staged.Close(); err != nil {
+		t.Fatalf("closing the leftover staging file: %v", err)
+	}
+
+	if err := EnsureBootDump(ctx, q, l, uploadsDir, backupDir, jakartaTime(2026, 9, 30, 0, 5, 0), logger); err != nil {
+		t.Fatalf("EnsureBootDump() = %v, want no error", err)
+	}
+
+	if _, err := os.Stat(stagingPath); !errors.Is(err, os.ErrNotExist) {
+		t.Errorf("os.Stat(staging file) after boot = %v, want it removed", err)
 	}
 }
 
