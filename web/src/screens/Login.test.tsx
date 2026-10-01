@@ -89,14 +89,14 @@ describe('Login footer', () => {
     render(<Login onLoggedIn={vi.fn()} />)
 
     expect(await screen.findByText(copy.settings.versionLine('v0.6.0-alpha.9'))).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: copy.auth.login.sourceCode })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: copy.auth.chrome.sourceCode })).toHaveAttribute(
       'href',
       'https://github.com/kerti/uruni/tree/v0.6.0-alpha.9',
     )
-    expect(screen.getByRole('link', { name: copy.auth.login.license })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: copy.auth.chrome.license })).toHaveAttribute(
       'href',
       'https://github.com/kerti/uruni/blob/v0.6.0-alpha.9/LICENSE',
     )
-    expect(screen.getByRole('link', { name: copy.auth.login.maintainer })).toHaveAttribute('href', 'https://radityakertiyasa.com')
+    expect(screen.getByRole('link', { name: copy.auth.chrome.maintainer })).toHaveAttribute('href', 'https://radityakertiyasa.com')
   })
 })

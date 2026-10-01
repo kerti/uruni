@@ -2,8 +2,7 @@ import { useState } from 'react'
 import type { FormEvent } from 'react'
 import { CircleAlert } from 'lucide-react'
 
-import AppVersion from '@/components/AppVersion'
-import Logo from '@/components/Logo'
+import AuthChrome from '@/components/AuthChrome'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import PasswordInput from '@/components/PasswordInput'
@@ -11,16 +10,11 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import ErrorState from '@/components/states/ErrorState'
 import { login } from '@/lib/auth'
-import { useBuild } from '@/lib/build'
-import { licenseURL, maintainerURL, sourceURL } from '@/lib/project'
 import { useApi } from '@/lib/useApi'
 import { copy } from '@/copy/id'
 import type { AuthUser } from '@/lib/auth'
 
 const text = copy.auth.login
-
-const footerLink =
-  'inline-flex min-h-11 items-center underline-offset-4 hover:text-foreground hover:underline rounded-sm outline-none focus-visible:ring-3 focus-visible:ring-ring/50'
 
 /**
  * The everyday door (POST /api/login). Rendered by App.tsx when
@@ -39,7 +33,6 @@ export default function Login({ onLoggedIn }: { onLoggedIn: (user: AuthUser) => 
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [state, run] = useApi<AuthUser>()
-  const build = useBuild()
 
   const submitting = state.status === 'loading'
 
@@ -55,14 +48,7 @@ export default function Login({ onLoggedIn }: { onLoggedIn: (user: AuthUser) => 
   const code = state.status === 'error' ? state.error?.code : undefined
 
   return (
-    <main className="flex min-h-dvh flex-col items-center justify-center gap-6 p-6">
-      <div className="flex flex-col items-center gap-3 text-center">
-        <Logo />
-        <div className="flex flex-col gap-1">
-          <p className="font-semibold">{text.tagline}</p>
-          <p className="text-sm text-balance text-muted-foreground">{text.promise}</p>
-        </div>
-      </div>
+    <AuthChrome>
       <Card className="w-full max-w-sm shadow-card" size="default">
         <CardHeader>
           <CardTitle className="text-xl font-semibold">{text.heading}</CardTitle>
@@ -111,29 +97,6 @@ export default function Login({ onLoggedIn }: { onLoggedIn: (user: AuthUser) => 
           </form>
         </CardContent>
       </Card>
-      {/* Under the card, not in it: none of this is part of signing in. Each
-          link is min-h-11 for the 44px touch target, and opens in a new tab
-          so a half-typed login is not lost. */}
-      <footer className="flex w-full max-w-sm flex-col items-center gap-1 text-xs text-muted-foreground">
-        <AppVersion />
-        <ul className="flex flex-wrap items-center justify-center gap-x-4">
-          <li>
-            <a className={footerLink} href={sourceURL(build)} target="_blank" rel="noreferrer">
-              {text.sourceCode}
-            </a>
-          </li>
-          <li>
-            <a className={footerLink} href={licenseURL(build)} target="_blank" rel="noreferrer">
-              {text.license}
-            </a>
-          </li>
-          <li>
-            <a className={footerLink} href={maintainerURL} target="_blank" rel="noreferrer">
-              {text.maintainer}
-            </a>
-          </li>
-        </ul>
-      </footer>
-    </main>
+    </AuthChrome>
   )
 }
