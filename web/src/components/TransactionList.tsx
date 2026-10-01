@@ -3,6 +3,7 @@ import { useState } from 'react'
 
 import ReceiptDialog from '@/components/ReceiptDialog'
 import ReceiptRowButton from '@/components/ReceiptRowButton'
+import TransactionDetailDialog from '@/components/TransactionDetailDialog'
 import TransactionRowLabel from '@/components/TransactionRowLabel'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -14,6 +15,7 @@ import { formatIsoDate } from '@/lib/dates'
 import { formatIDR } from '@/lib/money'
 import { canCorrectPurpose, canReverseContribution, noteForDisplay } from '@/lib/transactions'
 import { useApi } from '@/lib/useApi'
+import { useDialogParam } from '@/lib/useDialogParam'
 import type { Transaction } from '@/lib/transactions'
 
 const reverseText = copy.history.transactions
@@ -87,12 +89,17 @@ export default function TransactionList({
   // the moment the caller's onReceiptsChanged refetch resolves, the same
   // by-id lookup History/Transactions.tsx's own correction dialog uses.
   const [receiptsForId, setReceiptsForId] = useState<number | null>(null)
+  // The entry read in full (#359), by id in the URL (ADR-032: an open
+  // dialog is a search parameter), so back closes it. An id not on this
+  // page - a stale deep link - simply opens nothing.
+  const entry = useDialogParam('entry')
 
   if (transactions.length === 0) {
     return <p className="text-muted-foreground">{emptyMessage}</p>
   }
 
   const receiptsForTransaction = transactions.find((t) => t.id === receiptsForId) ?? null
+  const detailTransaction = entry.value === null ? null : (transactions.find((t) => String(t.id) === entry.value) ?? null)
 
   // Which rows some OTHER row in this same list already reverses (ADR-034) -
   // computed once for the whole page, the same technique
@@ -107,8 +114,29 @@ export default function TransactionList({
         const note = noteForDisplay(transaction)
         const reversible = Boolean(onContributionReversed) && canReverseContribution(transaction, reversedIds)
         return (
-          <li key={transaction.id} className="flex flex-col gap-2 rounded-lg bg-card px-4 py-3 shadow-card ring-1 ring-foreground/10">
-            <div className="flex items-start justify-between gap-3">
+          <li
+            key={transaction.id}
+            className="relative flex flex-col gap-2 rounded-lg bg-card px-4 py-3 shadow-card ring-1 ring-foreground/10"
+          >
+            {/* The whole card opens the entry in full (#359) - as a
+                full-card button *underneath* the content, never one wrapped
+                around it: the row already holds up to three controls of its
+                own, and a button inside a button is invalid and swallows
+                their taps. The content above ignores pointer events except
+                on its own controls, so a tap on empty card space falls
+                through to this button and a tap on a control stays the
+                control's. */}
+            <button
+              type="button"
+              aria-label={copy.transactionDetail.openAria(
+                purposeNames.get(transaction.purpose_id) ?? copy.home.purposeUnknown,
+                formatIDR(transaction.amount),
+                formatIsoDate(transaction.occurred_on),
+              )}
+              onClick={() => entry.open(String(transaction.id))}
+              className="absolute inset-0 rounded-lg transition-colors outline-none hover:bg-muted/40 focus-visible:ring-3 focus-visible:ring-ring/50"
+            />
+            <div className="pointer-events-none relative flex items-start justify-between gap-3 [&_button]:pointer-events-auto">
               <span className="flex min-w-0 items-start gap-2">
                 {transaction.direction === 'in' ? (
                   <ArrowDownLeft aria-hidden="true" className="mt-0.5 shrink-0 text-success" />
@@ -152,11 +180,14 @@ export default function TransactionList({
                 when the caller omits onContributionReversed, so this never
                 renders on Beranda. */}
             {reversible && onContributionReversed && (
-              <ContributionReversalControl transaction={transaction} onReversed={onContributionReversed} />
+              <div className="pointer-events-none relative [&_button]:pointer-events-auto [&_input]:pointer-events-auto [&_label]:pointer-events-auto">
+                <ContributionReversalControl transaction={transaction} onReversed={onContributionReversed} />
+              </div>
             )}
           </li>
         )
       })}
+      <TransactionDetailDialog transaction={detailTransaction} purposeNames={purposeNames} onClose={entry.close} />
       {onReceiptsChanged && (
         <ReceiptDialog
           kind="transactions"
@@ -177,9 +208,10 @@ export default function TransactionList({
  * (#276, ADR-033).
  *
  * The peruntukan IS the control, rather than a button beside it. The whole
- * row is not tappable because eligibility varies, so a tappable row would
+ * row is not the correction control because eligibility varies, so it would
  * be a dead tap on a dues row and a live one on the expense beneath it with
- * nothing visible to tell them apart; and a button of its own would either
+ * nothing visible to tell them apart (the row's own tap opens the entry
+ * detail instead, #359, which every row has); and a button of its own would either
  * break the amount column's right alignment - the column she scans down -
  * or add 44px to every eligible row on the app's densest unbounded list.
  * Tapping the noun that is wrong is also simply what she means.

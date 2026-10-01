@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import { describe, expect, it } from 'vitest'
 
-import { useDialogParam } from '@/lib/useDialogParam'
+import { useDialogParam, useRefetchKey } from '@/lib/useDialogParam'
 
 /** Renders the hook plus enough chrome to drive and observe it: the current
  * search string, an open/close pair, and a manual "go back once more"
@@ -104,5 +104,62 @@ describe('useDialogParam', () => {
     // here goes straight to /start, not back to the (now-gone) ?edit=foo.
     await userEvent.click(screen.getByRole('button', { name: 'back-again' }))
     expect(await screen.findByTestId('landed-on')).toHaveTextContent('/start')
+  })
+})
+
+/** The refetch signal plus a dialog and an ordinary same-route navigation,
+ * so the test can see which of them move it (#359). */
+function RefetchProbe() {
+  const refetchKey = useRefetchKey()
+  const { open, close, clear } = useDialogParam('entry')
+  const navigate = useNavigate()
+  return (
+    <div>
+      <output data-testid="refetch-key">{refetchKey}</output>
+      <button onClick={() => open('7')}>open</button>
+      <button onClick={close}>close</button>
+      <button onClick={clear}>clear</button>
+      <button onClick={() => navigate('/list')}>renavigate</button>
+    </div>
+  )
+}
+
+function renderRefetchProbe(initial = '/list') {
+  render(
+    <MemoryRouter initialEntries={[initial]}>
+      <Routes>
+        <Route path="/list" element={<RefetchProbe />} />
+      </Routes>
+    </MemoryRouter>,
+  )
+  return () => screen.getByTestId('refetch-key').textContent
+}
+
+describe('useRefetchKey (#359)', () => {
+  it('stays put while a dialog opens and closes, so the list under it is not reloaded', async () => {
+    const key = renderRefetchProbe()
+    const before = key()
+
+    await userEvent.click(screen.getByRole('button', { name: 'open' }))
+    expect(key()).toBe(before)
+
+    await userEvent.click(screen.getByRole('button', { name: 'close' }))
+    expect(key()).toBe(before)
+  })
+
+  it('stays put when a deep-linked dialog is cleared in place', async () => {
+    const key = renderRefetchProbe('/list?entry=7')
+    const before = key()
+
+    await userEvent.click(screen.getByRole('button', { name: 'clear' }))
+    expect(key()).toBe(before)
+  })
+
+  it('still moves on an ordinary navigation, which is what reloads a screen after a write elsewhere', async () => {
+    const key = renderRefetchProbe()
+    const before = key()
+
+    await userEvent.click(screen.getByRole('button', { name: 'renavigate' }))
+    expect(key()).not.toBe(before)
   })
 })

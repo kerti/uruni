@@ -115,16 +115,24 @@ function rowLabelFor(transaction: Transaction): { Icon: LucideIcon; srWord: stri
  * the visible text does not already say it. Renders nothing for a row she
  * recorded herself.
  */
-export default function TransactionRowLabel({ transaction }: { transaction: Transaction }) {
+export default function TransactionRowLabel({
+  transaction,
+  wrap = false,
+}: {
+  transaction: Transaction
+  /** Wraps instead of truncating - the entry detail (#359), where the
+   * whole label is the point. */
+  wrap?: boolean
+}) {
   const label = rowLabelFor(transaction)
   if (!label) return null
 
   const { Icon, srWord, text } = label
   return (
-    <span className="flex min-w-0 items-center gap-1 text-sm text-muted-foreground">
-      <Icon aria-hidden="true" className="size-4 shrink-0" />
+    <span className={`flex min-w-0 gap-1 text-sm text-muted-foreground ${wrap ? 'items-start' : 'items-center'}`}>
+      <Icon aria-hidden="true" className={`size-4 shrink-0 ${wrap ? 'mt-0.5' : ''}`} />
       {srWord && <span className="sr-only">{srWord}</span>}
-      <span className="truncate">{text}</span>
+      <span className={wrap ? 'break-words' : 'truncate'}>{text}</span>
     </span>
   )
 }

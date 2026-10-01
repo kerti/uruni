@@ -1,10 +1,18 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { render as rtlRender, screen, waitFor } from '@testing-library/react'
+import type { ReactElement } from 'react'
+import { MemoryRouter } from 'react-router-dom'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import Home from '@/screens/Home'
 import { copy } from '@/copy/id'
 import { formatIDR } from '@/lib/money'
+
+// The recent-activity list keeps its entry-detail dialog in the URL (#359),
+// so Home needs a router around it.
+function render(ui: ReactElement) {
+  return rtlRender(ui, { wrapper: MemoryRouter })
+}
 
 afterEach(() => {
   vi.unstubAllGlobals()

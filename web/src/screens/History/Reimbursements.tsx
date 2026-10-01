@@ -98,7 +98,7 @@ interface FormData {
  * or Iuran, and Transactions.tsx (the in-tab precedent) carries none of the
  * three either.
  *
- * `refetchKey` is App.tsx's `location.key`, the same mechanism the other
+ * `refetchKey` is App.tsx's `useRefetchKey()` (location.key, minus dialog entries), the same mechanism the other
  * two tabs already use to pick up a write just made elsewhere.
  */
 export default function Reimbursements({ refetchKey }: { refetchKey?: unknown }) {

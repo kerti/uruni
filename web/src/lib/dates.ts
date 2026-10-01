@@ -19,6 +19,7 @@
  */
 
 const dateFormatter = new Intl.DateTimeFormat('id-ID', { dateStyle: 'long' })
+const dateTimeFormatter = new Intl.DateTimeFormat('id-ID', { dateStyle: 'long', timeStyle: 'short' })
 const monthFormatter = new Intl.DateTimeFormat('id-ID', { month: 'long', year: 'numeric' })
 
 /** Today, as a local YYYY-MM-DD - never `toISOString()`, which is UTC and
@@ -43,6 +44,13 @@ export function formatIsoDate(isoDate: string): string {
  * `performed_at`, any row's `created_at`. */
 export function formatUnixSeconds(unixSeconds: number): string {
   return dateFormatter.format(new Date(unixSeconds * 1000))
+}
+
+/** A unix-seconds timestamp with its time of day -> "1 Oktober 2026 pukul
+ * 13.42". A row's `created_at` in the entry detail (#359), where when it was
+ * actually recorded is the point. */
+export function formatUnixSecondsWithTime(unixSeconds: number): string {
+  return dateTimeFormatter.format(new Date(unixSeconds * 1000))
 }
 
 /** "2026-09" -> "September 2026". A dues period, a rate's `effective_from`. */
