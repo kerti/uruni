@@ -148,7 +148,7 @@ export default function DuesTiers() {
         </ul>
       )}
 
-      <Button type="button" variant="outline" className="h-11 self-start" onClick={() => open('tier:new')}>
+      <Button type="button" variant="outline" size="lg" className="self-start" onClick={() => open('tier:new')}>
         {text.add}
       </Button>
 
@@ -205,10 +205,10 @@ function AddTierDialog({ open, onClose, onAdded }: { open: boolean; onClose: () 
               unique_violation, answered by the shared copy. */}
           {state.status === 'error' && state.error && <ErrorState error={state.error} />}
           <DialogFooter className="mt-1">
-            <Button type="button" variant="outline" className="h-11" disabled={busy} onClick={onClose}>
+            <Button type="button" variant="outline" size="lg" disabled={busy} onClick={onClose}>
               {text.cancel}
             </Button>
-            <Button type="submit" className="h-11" disabled={busy || trimmed === ''}>
+            <Button type="submit" size="lg" disabled={busy || trimmed === ''}>
               {busy ? text.adding : text.add}
             </Button>
           </DialogFooter>

@@ -46,7 +46,8 @@ export default function Backup() {
       <Button
         type="button"
         variant="outline"
-        className="h-11 w-full justify-center gap-2"
+        size="lg"
+        className="w-full justify-center gap-2"
         disabled={busy}
         onClick={() => void run(downloadBackup)}
       >

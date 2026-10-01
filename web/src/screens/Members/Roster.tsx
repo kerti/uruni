@@ -261,7 +261,7 @@ export default function Roster() {
 
       {renderList()}
 
-      <Button type="button" variant="outline" className="h-11 self-start" onClick={() => open('member:new')}>
+      <Button type="button" variant="outline" size="lg" className="self-start" onClick={() => open('member:new')}>
         {text.add}
       </Button>
 
@@ -397,10 +397,10 @@ function AddMemberDialog({
           </div>
           {state.status === 'error' && state.error && <ErrorState error={state.error} />}
           <DialogFooter className="mt-1">
-            <Button type="button" variant="outline" className="h-11" disabled={busy} onClick={onClose}>
+            <Button type="button" variant="outline" size="lg" disabled={busy} onClick={onClose}>
               {text.cancel}
             </Button>
-            <Button type="submit" className="h-11" disabled={busy || name.trim() === ''}>
+            <Button type="submit" size="lg" disabled={busy || name.trim() === ''}>
               {busy ? text.adding : text.add}
             </Button>
           </DialogFooter>
@@ -550,18 +550,18 @@ function EditMemberDialog({
                 <Button
                   type="button"
                   variant="outline"
-                  className="h-11"
+                  size="lg"
                   disabled={busy}
                   onClick={() => void submit(() => updateMember(shown.id, { inactiveOn: null }))}
                 >
                   {busy ? text.reinstating : text.reinstate}
                 </Button>
               ) : (
-                <Button type="button" variant="outline" className="h-11" onClick={() => setConfirming('deactivate')}>
+                <Button type="button" variant="outline" size="lg" onClick={() => setConfirming('deactivate')}>
                   {text.deactivate}
                 </Button>
               )}
-              <Button type="button" variant="ghost" className="h-11 text-destructive" onClick={() => setConfirming('delete')}>
+              <Button type="button" variant="ghost" size="lg" className="text-destructive" onClick={() => setConfirming('delete')}>
                 {text.delete}
               </Button>
             </div>
@@ -588,22 +588,22 @@ function EditMemberDialog({
           <DialogFooter className="mt-1">
             {confirming === null ? (
               <>
-                <Button type="button" variant="outline" className="h-11" disabled={busy} onClick={onClose}>
+                <Button type="button" variant="outline" size="lg" disabled={busy} onClick={onClose}>
                   {text.cancel}
                 </Button>
-                <Button type="submit" className="h-11" disabled={busy}>
+                <Button type="submit" size="lg" disabled={busy}>
                   {busy ? text.saving : text.save}
                 </Button>
               </>
             ) : (
               <>
-                <Button type="button" variant="outline" className="h-11" disabled={busy} onClick={() => setConfirming(null)}>
+                <Button type="button" variant="outline" size="lg" disabled={busy} onClick={() => setConfirming(null)}>
                   {text.cancel}
                 </Button>
                 <Button
                   type="button"
                   variant={confirming === 'delete' ? 'destructive' : 'default'}
-                  className="h-11"
+                  size="lg"
                   disabled={busy}
                   onClick={() =>
                     void submit(() =>

@@ -756,10 +756,10 @@ function RenameIncidentalDialog({
 
           {state.status === 'error' && state.error && <ErrorState error={state.error} />}
           <DialogFooter className="mt-1">
-            <Button type="button" variant="outline" className="h-11" disabled={busy} onClick={onClose}>
+            <Button type="button" variant="outline" size="lg" disabled={busy} onClick={onClose}>
               {text.rename.cancel}
             </Button>
-            <Button type="submit" className="h-11" disabled={busy || trimmed === '' || !changed}>
+            <Button type="submit" size="lg" disabled={busy || trimmed === '' || !changed}>
               {busy ? text.rename.saving : text.rename.save}
             </Button>
           </DialogFooter>

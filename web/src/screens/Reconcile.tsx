@@ -486,7 +486,8 @@ function AccountCountRow({
                   type="button"
                   variant={line.resolution === option ? 'default' : 'outline'}
                   aria-pressed={line.resolution === option}
-                  className="h-11 justify-start"
+                  size="lg"
+                  className="justify-start"
                   // Re-tapping the option already chosen does nothing.
                   // resolutionDefaults() resets the fix fields to the
                   // gap-derived defaults, so without this guard a stray second

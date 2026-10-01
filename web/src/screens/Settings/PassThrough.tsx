@@ -96,7 +96,7 @@ export default function PassThrough() {
         </ul>
       )}
 
-      <Button type="button" variant="outline" className="h-11 self-start" onClick={() => open('pass-through:new')}>
+      <Button type="button" variant="outline" size="lg" className="self-start" onClick={() => open('pass-through:new')}>
         {text.add}
       </Button>
 
@@ -162,10 +162,10 @@ function AddPassThroughDialog({ open, onClose, onAdded }: { open: boolean; onClo
           </div>
           {state.status === 'error' && state.error && <ErrorState error={state.error} />}
           <DialogFooter className="mt-1">
-            <Button type="button" variant="outline" className="h-11" disabled={busy} onClick={onClose}>
+            <Button type="button" variant="outline" size="lg" disabled={busy} onClick={onClose}>
               {text.cancel}
             </Button>
-            <Button type="submit" className="h-11" disabled={busy || trimmed === ''}>
+            <Button type="submit" size="lg" disabled={busy || trimmed === ''}>
               {busy ? text.adding : text.add}
             </Button>
           </DialogFooter>
@@ -230,10 +230,10 @@ function EditPassThroughDialog({
           </div>
           {state.status === 'error' && state.error && <ErrorState error={state.error} />}
           <DialogFooter className="mt-1">
-            <Button type="button" variant="outline" className="h-11" disabled={busy} onClick={onClose}>
+            <Button type="button" variant="outline" size="lg" disabled={busy} onClick={onClose}>
               {text.cancel}
             </Button>
-            <Button type="submit" className="h-11" disabled={busy || trimmed === '' || unchanged}>
+            <Button type="submit" size="lg" disabled={busy || trimmed === '' || unchanged}>
               {busy ? text.saving : text.save}
             </Button>
           </DialogFooter>

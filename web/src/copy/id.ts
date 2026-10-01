@@ -1208,7 +1208,10 @@ export const copy = {
       // never a posted fact. Offered for an open AND a closed envelope,
       // since a typo is usually found after the occasion is over and the
       // same is true of a minimum set too high or a recipient added late.
-      rename: 'Ubah amplop',
+      // Just the verb (#356): it shares a row with Tutup and Catat, and
+      // "Ubah amplop" left it 6px of padding a side. The dialog it opens
+      // keeps the full name.
+      rename: 'Ubah',
     },
     reopen: {
       success: 'Amplop dibuka kembali.',

@@ -490,7 +490,8 @@ export default function RecordTransaction({
               <Button
                 type="button"
                 variant="outline"
-                className="h-11 self-center px-4"
+                size="lg"
+                className="self-center px-4"
                 disabled={submitting}
                 onClick={() => {
                   setAccountId(toAccountId)

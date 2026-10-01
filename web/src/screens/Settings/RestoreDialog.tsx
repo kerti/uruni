@@ -126,7 +126,8 @@ const RestoreDialog = forwardRef<RestoreDialogHandle>(function RestoreDialog(_pr
       <Button
         type="button"
         variant="outline"
-        className="h-11 w-full justify-center gap-2"
+        size="lg"
+        className="w-full justify-center gap-2"
         disabled={inspecting}
         onClick={() => fileInputRef.current?.click()}
       >
@@ -176,10 +177,10 @@ const RestoreDialog = forwardRef<RestoreDialogHandle>(function RestoreDialog(_pr
               {confirmAttempted && confirmState.status === 'error' && confirmState.error && <ErrorState error={confirmState.error} />}
 
               <DialogFooter className="mt-1">
-                <Button type="button" variant="outline" className="h-11" disabled={confirming} onClick={handleClose}>
+                <Button type="button" variant="outline" size="lg" disabled={confirming} onClick={handleClose}>
                   {confirmText.cancel}
                 </Button>
-                <Button type="submit" className="h-11" disabled={confirming || password === ''}>
+                <Button type="submit" size="lg" disabled={confirming || password === ''}>
                   {confirming ? confirmText.confirming : confirmText.confirm}
                 </Button>
               </DialogFooter>
