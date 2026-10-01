@@ -35,7 +35,7 @@ Standing decisions that no ADR owns go in [`../Decisions.md`](../Decisions.md).
 | [008](./008-pwa-no-offline-data.md) | PWA: installable shell, no offline data | implemented |
 | [009](./009-reverse-proxy-caddy.md) | Reverse proxy & TLS: Caddy | implemented |
 | [010](./010-packaging-and-deployment.md) | Packaging & deployment | implemented |
-| [011](./011-receipt-photos-local-volume.md) | Receipt photos: local volume | `draft` |
+| [011](./011-receipt-photos-local-volume.md) | Receipt photos: local volume | implemented |
 | [012](./012-backup-and-export.md) | Backup & export implementation | `draft` |
 | [013](./013-scheduling-in-process.md) | Scheduling: in-process | implemented |
 | [014](./014-localization-indonesian-first.md) | Localization: Indonesian-first, strings centralized | `draft` |

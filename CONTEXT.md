@@ -8,10 +8,10 @@ Where a concept's Indonesian name is the one the treasurer sees, the identifier 
 
 - **Fund** (kas) — a community's shared pool of money. One instance may hold one or more; one is enough for the validated user.
 - **Account / Location** — *where money physically sits*: Cash (Tunai) or Bank — a fund may have several accounts of either kind, named by the treasurer. Balances are tracked per location because that split is where discrepancies come from.
-- **Purpose tag** (`purpose`) — what a transaction is *for*, over one pooled balance: **Kas Utama** (routine, `main`), a named **Incidental** (`incidental`), or **Pass-through** (`pass_through`). Exactly one Kas Utama per fund.
+- **Purpose tag** (peruntukan, `purpose`) — what a transaction is *for*, over one pooled balance: **Kas Utama** (routine, `main`), a named **Incidental** (`incidental`), or **Pass-through** (`pass_through`). Exactly one Kas Utama per fund.
 - **User** (`user`) — the treasurer's login: an email and an argon2id password hash. One per instance, created once at first run ([ADR-030](./docs/ADR/030-multi-fund-scoping.md)). Distinct from **Member** (a person in the group, who never logs in) and from **Account** (a place money sits). The only entity in the schema that is not scoped to a fund.
 - **Member** (anggota) — a person in the group. Name + role/tier only; no email/phone (data minimization).
-- **Dues rate** (iuran) — the recurring amount owed, which **varies by member tier** (e.g. pelaksana, fungsional pertama/muda/madya).
+- **Dues rate** (tarif iuran) — the recurring amount owed, which **varies by member tier** (golongan; e.g. pelaksana, fungsional pertama/muda/madya).
 - **Arrears** (tunggakan) — dues owed for periods **before the current one**. Distinct from the current period's own state (`Belum bayar` / `Bayar sebagian` / `Lunas` / `Lunas — sudah bayar di muka`, PRD §7.3), which is read one month at a time; arrears accumulate and are counted in whole months. The two vocabularies never share a word ([ADR-032](./docs/ADR/032-two-level-navigation.md)).
 
 ## Movements
@@ -22,14 +22,14 @@ Where a concept's Indonesian name is the one the treasurer sees, the identifier 
 - **Contribution** — money put into an envelope: an ordinary incoming transaction tagged to the envelope, which **may name the member** who gave it (#211). Naming is optional — a guest or an anonymous giver stays an unnamed contribution. Only a contribution or a dues payment carries a member. Indonesian: **sumbangan** (*menyumbang*) — never *iuran*, which is dues.
 - **Minimum per member** (sumbangan minimal per anggota, `minimum_per_member`) — an optional figure on an envelope that every expected member is asked to give; one amount for everyone, editable like the occasion, never a posted fact. Not a dues rate: no tiers, no effective dates.
 - **Participation** — the per-envelope view of who has contributed and how much, **derived from the ledger** against the envelope's expectation, never stored. The envelope's counterpart of dues status: the ledger says who paid, the envelope (or the dues rates) says who was expected. **Expected** means every member active on the day the envelope opened, tier or no tier; anyone who contributes without being expected still appears, with their amount, but is never shown as "not yet". **Recipients** — the members an envelope is *for* (the sick, the bereaved family, the birthday pair) — are never expected; an envelope names zero or more, always members, editable like the occasion. States: *Sudah menyumbang*, *Belum menyumbang*, *Kurang dari minimal* — deliberately not dues' *Belum bayar* ([ADR-034](./docs/ADR/034-envelope-participation.md)).
-- **Pass-through** — money collected on behalf of a parent body (e.g. **Kas Bidang**) and forwarded. A purpose tag, so the report can group it; it does **not** come out of any balance, because while it sits in the wallet it really is in the wallet (revised 2026-08-12, [ADR-024](./docs/ADR/024-schema-conventions.md)).
+- **Pass-through** (titipan) — money collected on behalf of a parent body (e.g. **Kas Bidang**) and forwarded. A purpose tag, so the report can group it; it does **not** come out of any balance, because while it sits in the wallet it really is in the wallet (revised 2026-08-12, [ADR-024](./docs/ADR/024-schema-conventions.md)).
 - **Transfer** — the pair of transactions behind a value-neutral movement: cash deposited at the bank, or an incidental's leftover rolled into Kas Utama. Equal amounts, opposite directions, one `transfer` row binding them, fund total unchanged. Not a synonym for "movement" or "reclassification" — this is the word.
 - **Purpose correction** (perbaikan peruntukan, `reclass_purpose` with `corrects_transaction_id` set) — moving a posted transaction's **peruntukan** to the tag it should always have had. A transfer pair on the original's own account and date, so no balance in any month moves; only the attribution does. The treasurer never *reclassifies* — `reclass_purpose` is the identifier and stays in the engine; she corrects a row's peruntukan ([#267](https://github.com/kerti/uruni/issues/267)).
 
 ## Trust core
 
 - **Balance** — derived by **summing the integer ledger**, never stored as a float.
-- **Reconciliation** — comparing the recorded balance to the *actual* cash + bank, per location. States: **cocok** (matches — reconciled) and **selisih** (a difference — shown calmly in terracotta, never alarm-red).
+- **Reconciliation** (cek kas) — comparing the recorded balance to the *actual* cash + bank, per location. States: **cocok** (matches — reconciled) and **selisih** (a difference — shown calmly in terracotta, never alarm-red).
 - **Reconciliation snapshot** — a saved point-in-time record of expected vs. actual and how any difference was resolved.
 
 ## Sharing
