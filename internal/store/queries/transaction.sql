@@ -341,7 +341,8 @@ WHERE fund_id = ? AND purpose_id = ?;
 -- transaction.kind alone cannot tell a roll's leg from an ordinary transfer
 -- between this envelope's own accounts, and this screen has no reason to
 -- exclude the latter. tr.id IS NULL keeps every row the join found no
--- matching reclass_purpose transfer for - which is every kind but that one.
+-- matching reclass_purpose transfer for - which is every kind but that one;
+-- a correction's legs come back in below.
 --
 -- A cancelled contribution (ADR-034's widened ADR-029 reversal) is dropped
 -- whole: the reversal row itself (reverses_transaction_id set) and the row
@@ -350,13 +351,32 @@ WHERE fund_id = ? AND purpose_id = ?;
 -- - and the cancelled row as money it collected. Both halves go, so
 -- collected minus disbursed still equals the envelope's balance.
 -- IncidentalTotals above stays unfiltered: the pair nets to zero there.
+--
+-- A peruntukan correction (ADR-033) is not dropped but re-attributed
+-- (#342). Its legs carry tr.corrects_transaction_id, which a roll's never
+-- do, so the join keeps them and reads each one against the bucket of the
+-- row it corrects (o.direction): a leg moving the same way as that row adds
+-- to the bucket, a leg moving the other way takes it back out. So an
+-- unnamed contribution corrected out of this envelope nets to zero
+-- collected here; one corrected in - from Kas Utama, or back after an
+-- earlier correction out - reads as collected; an expense corrected away
+-- un-spends. Each leg still moves collected minus disbursed by exactly its
+-- own effect on the balance, so the two stay equal. The corrected row
+-- itself is never a reversal (ADR-033 refuses those), so the cancellation
+-- filters above never meet it.
 -- name: IncidentalActivityTotals :one
 SELECT
-  CAST(COALESCE(SUM(CASE WHEN t.direction = 'in' THEN t.amount ELSE 0 END), 0) AS INTEGER) AS collected_amount,
-  CAST(COALESCE(SUM(CASE WHEN t.direction = 'out' THEN t.amount ELSE 0 END), 0) AS INTEGER) AS disbursed_amount
+  CAST(COALESCE(SUM(CASE WHEN COALESCE(o.direction, t.direction) = 'in'
+    THEN CASE WHEN o.id IS NULL OR t.direction = o.direction THEN t.amount ELSE -t.amount END
+    ELSE 0 END), 0) AS INTEGER) AS collected_amount,
+  CAST(COALESCE(SUM(CASE WHEN COALESCE(o.direction, t.direction) = 'out'
+    THEN CASE WHEN o.id IS NULL OR t.direction = o.direction THEN t.amount ELSE -t.amount END
+    ELSE 0 END), 0) AS INTEGER) AS disbursed_amount
 FROM "transaction" t
 LEFT JOIN transfer tr ON tr.id = t.transfer_id AND tr.kind = 'reclass_purpose'
-WHERE t.fund_id = ? AND t.purpose_id = ? AND tr.id IS NULL
+LEFT JOIN "transaction" o ON o.fund_id = tr.fund_id AND o.id = tr.corrects_transaction_id
+WHERE t.fund_id = ? AND t.purpose_id = ?
+  AND (tr.id IS NULL OR tr.corrects_transaction_id IS NOT NULL)
   AND t.reverses_transaction_id IS NULL
   AND NOT EXISTS (SELECT 1 FROM "transaction" r WHERE r.reverses_transaction_id = t.id);
 

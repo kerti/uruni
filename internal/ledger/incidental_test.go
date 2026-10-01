@@ -1074,6 +1074,126 @@ func TestGetIncidentalDetailExcludesTheCoveringInLegAfterANegativeClose(t *testi
 	}
 }
 
+// #342: the corrections that bring money INTO an envelope - back after an
+// earlier correction out, or from Kas Utama - read as collected there, and
+// an expense corrected away un-spends. Collected minus disbursed equals the
+// balance at every step.
+func TestGetIncidentalDetailReadsCorrectionsIntoAndOutOfTheEnvelope(t *testing.T) {
+	l := newTestLedger(t)
+	f := newFixture(t, l)
+	ctx := context.Background()
+
+	envelope := openTestIncidental(t, l, f.fundID, "Amplop Bolak-balik", "2026-08-01")
+
+	assertDetail := func(step string, wantCollected, wantDisbursed money.Amount) {
+		t.Helper()
+		detail, err := l.GetIncidentalDetail(ctx, f.fundID, envelope.PurposeID)
+		if err != nil {
+			t.Fatalf("%s: GetIncidentalDetail() = %v, want no error", step, err)
+		}
+		balance, err := l.PurposeBalance(ctx, f.fundID, envelope.PurposeID)
+		if err != nil {
+			t.Fatalf("%s: PurposeBalance() = %v, want no error", step, err)
+		}
+		if detail.Collected != wantCollected || detail.Disbursed != wantDisbursed {
+			t.Errorf("%s: Collected, Disbursed = %d, %d, want %d, %d", step, detail.Collected, detail.Disbursed, wantCollected, wantDisbursed)
+		}
+		if detail.Collected-detail.Disbursed != balance {
+			t.Errorf("%s: Collected - Disbursed = %d, want it to equal PurposeBalance() = %d", step, detail.Collected-detail.Disbursed, balance)
+		}
+	}
+	post := func(purposeID int64, direction string, amount money.Amount) int64 {
+		t.Helper()
+		posted, err := l.PostTransaction(ctx, PostTransactionParams{
+			FundID: f.fundID, AccountID: f.cashID, PurposeID: purposeID,
+			Direction: direction, Amount: amount, OccurredOn: "2026-08-12",
+		})
+		if err != nil {
+			t.Fatalf("PostTransaction(%s %d) = %v, want no error", direction, amount, err)
+		}
+		return posted.ID
+	}
+	correct := func(transactionID, purposeID int64) {
+		t.Helper()
+		if _, err := l.PostPurposeCorrection(ctx, PostPurposeCorrectionParams{
+			FundID: f.fundID, TransactionID: transactionID, PurposeID: purposeID,
+		}); err != nil {
+			t.Fatalf("PostPurposeCorrection() = %v, want no error", err)
+		}
+	}
+
+	contribution := post(envelope.PurposeID, "in", 25_000)
+	correct(contribution, f.mainID)
+	assertDetail("corrected out", 0, 0)
+	correct(contribution, envelope.PurposeID)
+	assertDetail("corrected back in", 25_000, 0)
+
+	fromMain := post(f.mainID, "in", 10_000)
+	correct(fromMain, envelope.PurposeID)
+	assertDetail("Kas Utama contribution corrected in", 35_000, 0)
+
+	expense := post(envelope.PurposeID, "out", 4_000)
+	assertDetail("expense posted", 35_000, 4_000)
+	correct(expense, f.mainID)
+	assertDetail("expense corrected away", 35_000, 0)
+}
+
+// #342: an unnamed contribution posted to an envelope, then moved out of
+// it with a peruntukan correction (ADR-033), is money that left the
+// envelope - not money it collected. Before the fix, IncidentalActivityTotals
+// excluded the correction pair's own legs (the same tr.kind = 'reclass_purpose'
+// filter #215 added for a roll) but left the ORIGINAL contribution row
+// standing, so the envelope's Terkumpul kept counting money that was no
+// longer there. The correct read is the same shape ADR-034's cancellation
+// drop uses: both halves of the correction - the original row and its
+// matching reclass_purpose legs - disappear from this envelope's activity
+// together, and collected minus disbursed still equals the balance (which
+// is zero: the pair is value-neutral and nets to zero in the unfiltered
+// IncidentalTotals the balance itself comes from).
+func TestGetIncidentalDetailExcludesAContributionCorrectedOutOfTheEnvelope(t *testing.T) {
+	l := newTestLedger(t)
+	f := newFixture(t, l)
+	ctx := context.Background()
+
+	envelope := openTestIncidental(t, l, f.fundID, "Amplop Kosong", "2026-08-01")
+
+	posted, err := l.PostTransaction(ctx, PostTransactionParams{
+		FundID: f.fundID, AccountID: f.cashID, PurposeID: envelope.PurposeID,
+		Direction: "in", Amount: 25_000, OccurredOn: "2026-08-12",
+	})
+	if err != nil {
+		t.Fatalf("PostTransaction(unnamed contribution) = %v, want no error", err)
+	}
+
+	if _, err := l.PostPurposeCorrection(ctx, PostPurposeCorrectionParams{
+		FundID: f.fundID, TransactionID: posted.ID, PurposeID: f.mainID,
+	}); err != nil {
+		t.Fatalf("PostPurposeCorrection() = %v, want no error", err)
+	}
+
+	detail, err := l.GetIncidentalDetail(ctx, f.fundID, envelope.PurposeID)
+	if err != nil {
+		t.Fatalf("GetIncidentalDetail() = %v, want no error", err)
+	}
+	if detail.Collected != 0 {
+		t.Errorf("Collected = %d, want 0 - the contribution moved to Kas Utama, the envelope never kept it", detail.Collected)
+	}
+	if detail.Disbursed != 0 {
+		t.Errorf("Disbursed = %d, want 0 - a purpose correction is not money the envelope spent", detail.Disbursed)
+	}
+
+	balance, err := l.PurposeBalance(ctx, f.fundID, envelope.PurposeID)
+	if err != nil {
+		t.Fatalf("PurposeBalance() = %v, want no error", err)
+	}
+	if balance != 0 {
+		t.Fatalf("PurposeBalance() = %d, want 0", balance)
+	}
+	if detail.Collected-detail.Disbursed != balance {
+		t.Errorf("Collected - Disbursed = %d, want it to equal PurposeBalance() = %d", detail.Collected-detail.Disbursed, balance)
+	}
+}
+
 // --- Reopen (ADR-031, #214): the deliberate, visible way back ----------
 
 func TestReopenIncidentalClearsClosedOn(t *testing.T) {
