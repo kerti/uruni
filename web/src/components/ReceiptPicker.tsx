@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import { Camera, X } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
@@ -38,21 +38,16 @@ export default function ReceiptPicker({
   disabled?: boolean
 }) {
   const inputRef = useRef<HTMLInputElement>(null)
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null)
-
   // The preview is an object URL over the file already sitting in memory -
-  // never uploaded just to be shown back. Revoked on every change and on
-  // unmount, so a form opened and abandoned repeatedly does not leak one
-  // per photo picked.
+  // never uploaded just to be shown back. Derived from the file itself
+  // (#361) rather than copied into state by an effect; the effect below
+  // only revokes it, on every change and on unmount, so a form opened and
+  // abandoned repeatedly does not leak one per photo picked.
+  const previewUrl = useMemo(() => (value ? URL.createObjectURL(value) : null), [value])
   useEffect(() => {
-    if (!value) {
-      setPreviewUrl(null)
-      return
-    }
-    const url = URL.createObjectURL(value)
-    setPreviewUrl(url)
-    return () => URL.revokeObjectURL(url)
-  }, [value])
+    if (!previewUrl) return
+    return () => URL.revokeObjectURL(previewUrl)
+  }, [previewUrl])
 
   function handlePick(event: React.ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0] ?? null

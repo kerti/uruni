@@ -17,6 +17,7 @@ import { listAllMembers } from '@/lib/setup'
 import { useApi } from '@/lib/useApi'
 import { parseDialogTarget } from '@/lib/dialogTarget'
 import { useDialogParam } from '@/lib/useDialogParam'
+import { useResetWhen } from '@/lib/useResetWhen'
 import type { Incidental } from '@/lib/incidentals'
 import type { Member } from '@/lib/setup'
 
@@ -227,7 +228,7 @@ function OpenIncidentalDialog({
   // A fresh form every time the dialog opens, so an envelope opened a
   // moment ago does not leave its occasion sitting in the fields for the
   // next one.
-  useEffect(() => {
+  useResetWhen(open, () => {
     if (open) {
       setOccasion('')
       setTargetAmount(0)
@@ -235,7 +236,7 @@ function OpenIncidentalDialog({
       setMinimumPerMember(0)
       setRecipientMemberIds([])
     }
-  }, [open])
+  })
 
   function handleSubmit(event: FormEvent) {
     event.preventDefault()

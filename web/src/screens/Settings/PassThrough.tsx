@@ -11,6 +11,7 @@ import { parseDialogTarget } from '@/lib/dialogTarget'
 import { createPassThroughPurpose, listPurposes, renamePurpose } from '@/lib/purposes'
 import { useApi } from '@/lib/useApi'
 import { useDialogParam } from '@/lib/useDialogParam'
+import { useResetWhen } from '@/lib/useResetWhen'
 import type { Purpose } from '@/lib/purposes'
 
 const text = copy.settings.passThrough
@@ -127,9 +128,9 @@ function AddPassThroughDialog({ open, onClose, onAdded }: { open: boolean; onClo
 
   // A fresh field every time the dialog opens, so a titipan added a moment
   // ago does not leave its name sitting there for the next one.
-  useEffect(() => {
+  useResetWhen(open, () => {
     if (open) setName('')
-  }, [open])
+  })
 
   const busy = state.status === 'loading'
   const trimmed = name.trim()
@@ -194,9 +195,9 @@ function EditPassThroughDialog({
   const [state, run] = useApi<Purpose>()
   const [name, setName] = useState('')
 
-  useEffect(() => {
+  useResetWhen(open ? purpose : null, () => {
     if (open && purpose !== null) setName(purpose.name)
-  }, [open, purpose])
+  })
 
   const busy = state.status === 'loading'
   const trimmed = name.trim()

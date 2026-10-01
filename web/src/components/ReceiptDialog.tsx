@@ -1,5 +1,5 @@
 import { MoreVertical } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 
 import ReceiptPicker from '@/components/ReceiptPicker'
 import ReceiptViewer from '@/components/ReceiptViewer'
@@ -10,6 +10,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { copy } from '@/copy/id'
 import { deleteReceipt, receiptUrl, uploadReceipt } from '@/lib/receipts'
 import { useApi } from '@/lib/useApi'
+import { useResetWhen } from '@/lib/useResetWhen'
 import type { ReceiptParentKind } from '@/lib/receipts'
 
 const text = copy.receipts
@@ -72,7 +73,7 @@ export default function ReceiptDialog({
 
   // A fresh dialog every time it opens: no form left over from the last
   // photo it showed.
-  useEffect(() => {
+  useResetWhen(open ? parentId : null, () => {
     if (!open) return
     setNewFile(null)
     setMenuOpen(false)
@@ -80,7 +81,7 @@ export default function ReceiptDialog({
     setReplacementFile(null)
     setConfirmingDeleteId(null)
     setViewingId(null)
-  }, [open, parentId])
+  })
 
   const busy = state.status === 'loading'
 

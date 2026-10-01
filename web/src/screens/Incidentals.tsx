@@ -29,6 +29,7 @@ import { listAllMembers } from '@/lib/setup'
 import { listTransactions } from '@/lib/transactions'
 import { useApi } from '@/lib/useApi'
 import { useDialogParam } from '@/lib/useDialogParam'
+import { useResetWhen } from '@/lib/useResetWhen'
 import type { Account } from '@/lib/accounts'
 import type { Incidental, IncidentalDetail, IncidentalParticipation, ParticipationStateKind } from '@/lib/incidentals'
 import type { Member } from '@/lib/setup'
@@ -675,13 +676,13 @@ function RenameIncidentalDialog({
   const [minimumPerMember, setMinimumPerMember] = useState(0)
   const [recipientMemberIds, setRecipientMemberIds] = useState<number[]>([])
 
-  useEffect(() => {
+  useResetWhen(open ? envelope : null, () => {
     if (open && envelope !== null) {
       setOccasion(envelope.occasion)
       setMinimumPerMember(envelope.minimum_per_member ?? 0)
       setRecipientMemberIds((envelope.recipients ?? []).map((r) => r.member_id))
     }
-  }, [open, envelope])
+  })
 
   const busy = state.status === 'loading'
   const trimmed = occasion.trim()
