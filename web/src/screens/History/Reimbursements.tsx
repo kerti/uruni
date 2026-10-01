@@ -2,6 +2,7 @@ import { MoreHorizontal, Search } from 'lucide-react'
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { useSearchParams } from 'react-router-dom'
 
+import DateField from '@/components/DateField'
 import AmountInput from '@/components/money/AmountInput'
 import AccountPicker from '@/components/pickers/AccountPicker'
 import MemberPicker from '@/components/pickers/MemberPicker'
@@ -18,7 +19,7 @@ import Loading from '@/components/states/Loading'
 import ErrorState from '@/components/states/ErrorState'
 import { copy } from '@/copy/id'
 import { ApiError } from '@/lib/api'
-import { formatIsoDate } from '@/lib/dates'
+import { formatIsoDate, dateBounds } from '@/lib/dates'
 import { formatIDR } from '@/lib/money'
 import { cn } from '@/lib/utils'
 import { listAccounts } from '@/lib/accounts'
@@ -662,15 +663,7 @@ function RecordClaimForm({
 
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="reimburse-date">{text.record.dateLabel}</Label>
-        <Input
-          id="reimburse-date"
-          type="date"
-          className="h-11"
-          value={occurredOn}
-          onChange={(event) => setOccurredOn(event.target.value)}
-          disabled={submitting}
-          required
-        />
+        <DateField id="reimburse-date" value={occurredOn} onChange={setOccurredOn} bounds={dateBounds.entry()} disabled={submitting} />
       </div>
 
       <div className="flex flex-col gap-1.5">
@@ -743,15 +736,7 @@ function SettleForm({
 
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="settle-date">{text.settle.dateLabel}</Label>
-        <Input
-          id="settle-date"
-          type="date"
-          className="h-11"
-          value={occurredOn}
-          onChange={(event) => setOccurredOn(event.target.value)}
-          disabled={submitting}
-          required
-        />
+        <DateField id="settle-date" value={occurredOn} onChange={setOccurredOn} bounds={dateBounds.entry()} disabled={submitting} />
       </div>
 
       <div className="grid grid-cols-2 gap-2">
@@ -828,15 +813,7 @@ function CorrectForm({
 
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="correct-date">{text.record.dateLabel}</Label>
-        <Input
-          id="correct-date"
-          type="date"
-          className="h-11"
-          value={occurredOn}
-          onChange={(event) => setOccurredOn(event.target.value)}
-          disabled={submitting}
-          required
-        />
+        <DateField id="correct-date" value={occurredOn} onChange={setOccurredOn} bounds={dateBounds.entry()} disabled={submitting} />
       </div>
 
       <div className="flex flex-col gap-1.5">

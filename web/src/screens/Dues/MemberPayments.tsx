@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Undo2 } from 'lucide-react'
 
+import DateField from '@/components/DateField'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -8,7 +9,7 @@ import Loading from '@/components/states/Loading'
 import ErrorState from '@/components/states/ErrorState'
 import { copy } from '@/copy/id'
 import { reverseDuesPayment } from '@/lib/dues'
-import { formatIsoDate } from '@/lib/dates'
+import { formatIsoDate, dateBounds } from '@/lib/dates'
 import { formatIDR } from '@/lib/money'
 import { listTransactions } from '@/lib/transactions'
 import { useApi } from '@/lib/useApi'
@@ -164,14 +165,12 @@ export default function MemberPayments({ memberId, period, onReversed }: { membe
               <div className="animate-reveal flex flex-col gap-2 rounded-lg bg-muted/40 p-3">
                 <div className="flex flex-col gap-1.5">
                   <Label htmlFor={`dues-reversal-date-${row.id}`}>{text.dateLabel}</Label>
-                  <Input
+                  <DateField
                     id={`dues-reversal-date-${row.id}`}
-                    type="date"
-                    className="h-11"
                     value={occurredOn}
-                    onChange={(event) => setOccurredOn(event.target.value)}
+                    onChange={setOccurredOn}
+                    bounds={dateBounds.entry()}
                     disabled={submitting}
-                    required
                   />
                 </div>
 

@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import DuesTierScreen from '@/screens/DuesTier'
 import { copy } from '@/copy/id'
+import { pickMonth } from '@/test/datePicker'
 
 const text = copy.settings.tiers
 
@@ -129,9 +130,7 @@ describe('A golongan screen', () => {
     renderScreen()
 
     await userEvent.type(await screen.findByLabelText(text.rateAmountLabel), '50000')
-    const month = screen.getByLabelText(text.effectiveFromLabel)
-    await userEvent.clear(month)
-    await userEvent.type(month, '2024-03')
+    await pickMonth(text.effectiveFromLabel, '2024-03')
     await userEvent.click(screen.getByRole('button', { name: text.addRate }))
 
     await waitFor(() => expect(calls).toHaveLength(1))

@@ -1,12 +1,12 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { ArrowDownLeft, ArrowUpRight, ChevronDown, CircleCheck, TriangleAlert } from 'lucide-react'
 
+import DateField from '@/components/DateField'
 import AmountInput from '@/components/money/AmountInput'
 import PurposePicker from '@/components/pickers/PurposePicker'
 import ReconciliationLines from '@/components/ReconciliationLines'
 import { segmentedItemClass, segmentedTrackClass } from '@/components/segmented'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import Loading from '@/components/states/Loading'
 import ErrorState from '@/components/states/ErrorState'
@@ -14,7 +14,7 @@ import { copy } from '@/copy/id'
 import { ApiError } from '@/lib/api'
 import { listAccounts } from '@/lib/accounts'
 import { getBalances } from '@/lib/balances'
-import { formatIsoDate } from '@/lib/dates'
+import { formatIsoDate, dateBounds } from '@/lib/dates'
 import { formatIDR } from '@/lib/money'
 import { listPurposes } from '@/lib/purposes'
 import { takeReconciliation } from '@/lib/reconciliations'
@@ -560,14 +560,12 @@ function AccountCountRow({
 
                 <div className="flex flex-col gap-1.5">
                   <Label htmlFor={`reconcile-fix-date-${account.id}`}>{text.fixDateLabel}</Label>
-                  <Input
+                  <DateField
                     id={`reconcile-fix-date-${account.id}`}
-                    type="date"
-                    className="h-11"
                     value={line.fixOccurredOn}
-                    onChange={(event) => onChange({ fixOccurredOn: event.target.value })}
+                    onChange={(iso) => onChange({ fixOccurredOn: iso })}
+                    bounds={dateBounds.entry()}
                     disabled={disabled}
-                    required
                   />
                 </div>
 

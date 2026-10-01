@@ -51,7 +51,10 @@ test.describe('incidentals', () => {
     await openDialog.getByLabel(copy.incidentals.open.occasionLabel).fill(occasion)
     await openDialog.getByLabel(copy.incidentals.open.targetLabel).fill('100000')
 
-    await openDialog.getByRole('button', { name: copy.incidentals.open.submit }).click()
+    // Exact: the date field is a button too since #197, named by its label
+    // "Tanggal dibuka" - which contains "buka" for a substring match. The
+    // close form's "Tutup" below has the same trap in "Tanggal ditutup".
+    await openDialog.getByRole('button', { name: copy.incidentals.open.submit, exact: true }).click()
     await expect(openDialog).not.toBeVisible()
 
     // The new envelope is now a card in this section, open status shown on
@@ -124,7 +127,7 @@ test.describe('incidentals', () => {
     await expect(page.getByText(copy.incidentals.detail.collectedLabel)).toBeVisible()
 
     // Open the close form
-    await page.getByRole('button', { name: copy.incidentals.actions.close }).click()
+    await page.getByRole('button', { name: copy.incidentals.actions.close, exact: true }).click()
     await expect(page.getByText(copy.incidentals.close.heading)).toBeVisible()
 
     // Pick where the leftover rolls to, submit (date defaults to today)
@@ -134,7 +137,7 @@ test.describe('incidentals', () => {
     // what stops it reading as two unexplained rows in the ledger.
     await page.getByLabel(copy.incidentals.close.noteLabel).fill('Sisa halal bihalal')
 
-    await page.getByRole('button', { name: copy.incidentals.close.submit }).click()
+    await page.getByRole('button', { name: copy.incidentals.close.submit, exact: true }).click()
     await expect(page.getByText(copy.incidentals.close.success)).toBeVisible()
 
     // The rollover (Rp 60.000 collected, nothing disbursed - all of it rolls

@@ -2,7 +2,7 @@
 
 *A running record of what we've decided and why. Anything here can still change.*
 
-Last updated: 2026-09-09 (reimbursements review fixes, M6.18)
+Last updated: 2026-10-01 (date pickers, #197)
 
 ## What belongs in this file
 
@@ -401,3 +401,10 @@ Grill A, pulled into M6. The rulings live in [ADR-012](./ADR/012-backup-and-expo
 - **Email is cut**, backups and reports both. Photos outgrow attachments, members hold no address, and scheduled mail is reminder machinery (PRD section 4). The public report link is the monthly-report channel.
 - **Excel stays, as `.xlsx`, in M8** - CSV breaks on Indonesian-locale Excel.
 - **The importer's format upgrade chain gates `v1.0.0`.**
+
+## Dates are picked in the app's own calendar (decided 2026-10-01)
+
+[#197](https://github.com/kerti/uruni/issues/197). The native `<input type="date">` writes its own text, "3 Sep 2026" on iOS, "09/03/2026" on Android and "yyyy-mm-dd" on desktop Firefox, and no CSS reaches it. Every date field is now `DateField` (react-day-picker in a popover, month and year lists in its header) or, for the two month-only fields, `MonthField` (a year with a 4x3 month grid, the shape Balances' `MonthPickerPopover` settled on).
+
+- **react-day-picker is a deliberate new dependency** (about 24 KB gzipped with date-fns). Mocked against three dropdowns and native-plus-text, it won on taps-per-change and on showing the day of the week, which is how a treasurer remembers when something happened.
+- **Every picker is bounded**, in `lib/dates`: money dates run from two calendar years back to today; a join date from 2000 to a year ahead; a rate's start month from 2000 to two years ahead; the status period from 2000 to a year ahead. The server still accepts any real date. The bounds are the UI's guard against a slipped thumb, not a ledger rule.

@@ -2,6 +2,7 @@ import { Search } from 'lucide-react'
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { useSearchParams } from 'react-router-dom'
 
+import DateField from '@/components/DateField'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
@@ -11,7 +12,7 @@ import Loading from '@/components/states/Loading'
 import ErrorState from '@/components/states/ErrorState'
 import { copy } from '@/copy/id'
 import { ApiError } from '@/lib/api'
-import { todayISODate } from '@/lib/dates'
+import { todayISODate, dateBounds } from '@/lib/dates'
 import { parseDialogTarget } from '@/lib/dialogTarget'
 import { formatIDR } from '@/lib/money'
 import { createMember, deleteMember, listDuesTiers, listMembersPage, updateMember } from '@/lib/setup'
@@ -394,7 +395,7 @@ function AddMemberDialog({
           <TierField id="new-member-tier" tiers={tiers} tierId={tierId} onChange={setTierId} />
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="new-member-joined">{text.joinedOnLabel}</Label>
-            <Input id="new-member-joined" type="date" value={joinedOn} onChange={(event) => setJoinedOn(event.target.value)} />
+            <DateField id="new-member-joined" value={joinedOn} onChange={setJoinedOn} bounds={dateBounds.membership()} />
           </div>
           {state.status === 'error' && state.error && <ErrorState error={state.error} />}
           <DialogFooter className="mt-1">
@@ -536,12 +537,12 @@ function EditMemberDialog({
           <TierField id="edit-member-tier" tiers={tiers} tierId={tierId} disabled={confirming !== null} onChange={setTierId} />
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="edit-member-joined">{text.joinedOnLabel}</Label>
-            <Input
+            <DateField
               id="edit-member-joined"
-              type="date"
               value={joinedOn}
+              onChange={setJoinedOn}
+              bounds={dateBounds.membership()}
               disabled={confirming !== null}
-              onChange={(event) => setJoinedOn(event.target.value)}
             />
           </div>
 

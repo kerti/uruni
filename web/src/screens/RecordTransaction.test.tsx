@@ -6,6 +6,7 @@ import RecordTransaction from '@/screens/RecordTransaction'
 import { chooseOption, selectOptionNames, selectedOptionName } from '@/test/select'
 import { copy } from '@/copy/id'
 import { formatIDR } from '@/lib/money'
+import { formatIsoDate, todayISODate } from '@/lib/dates'
 
 const text = copy.record
 
@@ -175,10 +176,9 @@ describe('RecordTransaction', () => {
     vi.stubGlobal('fetch', stubFormLoad())
     render(<RecordTransaction onRecorded={vi.fn()} onCancel={vi.fn()} onDuesRecorded={vi.fn()} />)
 
-    const dateInput = (await screen.findByLabelText(text.dateLabel)) as HTMLInputElement
-    const now = new Date()
-    const expected = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
-    expect(dateInput.value).toBe(expected)
+    // DateField (#197) shows the date the way the app writes it, not the
+    // wire value a native input held.
+    expect(await screen.findByLabelText(text.dateLabel)).toHaveTextContent(formatIsoDate(todayISODate()))
   })
 
   it('posts the plain integer amount typed, remembers the location, and calls onRecorded', async () => {

@@ -1,10 +1,12 @@
-import { fireEvent, render, screen } from '@testing-library/react'
+import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import DuesStatus from '@/screens/Dues/Status'
 import { copy } from '@/copy/id'
 import { formatIDR } from '@/lib/money'
+import { pickMonth } from '@/test/datePicker'
+import { currentPeriod, formatPeriod } from '@/lib/dates'
 
 const text = copy.dues
 
@@ -99,9 +101,7 @@ describe('DuesStatus', () => {
     render(<DuesStatus onBack={vi.fn()} onRecordPayment={vi.fn()} />)
 
     await screen.findByText('Warga Satu')
-    const now = new Date()
-    const expected = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
-    expect(screen.getByLabelText(text.periodLabel)).toHaveValue(expected)
+    expect(screen.getByLabelText(text.periodLabel)).toHaveTextContent(formatPeriod(currentPeriod()))
   })
 
   it("opens one member's payment history in place (M6.14)", async () => {
@@ -160,7 +160,7 @@ describe('DuesStatus', () => {
     await screen.findByText('Warga Satu')
     const callsBefore = fetchMock.mock.calls.length
 
-    fireEvent.change(screen.getByLabelText(text.periodLabel), { target: { value: '2026-01' } })
+    await pickMonth(text.periodLabel, '2026-01')
 
     expect(fetchMock.mock.calls.length).toBeGreaterThan(callsBefore)
     const lastUrl = fetchMock.mock.calls.at(-1)?.[0]?.toString() ?? ''
