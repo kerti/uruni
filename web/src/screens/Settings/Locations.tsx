@@ -15,6 +15,7 @@ import { todayISODate } from '@/lib/dates'
 import { useApi } from '@/lib/useApi'
 import { parseDialogTarget } from '@/lib/dialogTarget'
 import { useDialogParam } from '@/lib/useDialogParam'
+import { useResetWhen } from '@/lib/useResetWhen'
 import type { Account } from '@/lib/accounts'
 
 const text = copy.settings.locations
@@ -175,13 +176,13 @@ function AddLocationDialog({ open, onClose, onAdded }: { open: boolean; onClose:
   // A fresh form every time the dialog opens, so a location added a moment
   // ago does not leave its name (or balance) sitting in the fields for the
   // next one.
-  useEffect(() => {
+  useResetWhen(open, () => {
     if (open) {
       setKind('cash')
       setName('')
       setOpeningBalance(0)
     }
-  }, [open])
+  })
 
   function handleSubmit(event: FormEvent) {
     event.preventDefault()

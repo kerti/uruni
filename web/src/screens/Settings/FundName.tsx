@@ -11,6 +11,7 @@ import { parseDialogTarget } from '@/lib/dialogTarget'
 import { getFund, renameFund } from '@/lib/setup'
 import { useApi } from '@/lib/useApi'
 import { useDialogParam } from '@/lib/useDialogParam'
+import { useResetWhen } from '@/lib/useResetWhen'
 import type { Fund } from '@/lib/setup'
 
 const text = copy.settings.fund
@@ -124,9 +125,9 @@ function EditFundNameDialog({
 
   // Reset to the fund's current name each time the dialog opens, so a
   // cancelled edit never leaves its text waiting for the next one.
-  useEffect(() => {
+  useResetWhen(open ? fund : null, () => {
     if (open && fund !== null) setName(fund.name)
-  }, [open, fund])
+  })
 
   const busy = state.status === 'loading'
   const trimmed = name.trim()

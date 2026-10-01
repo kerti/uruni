@@ -17,6 +17,7 @@ import { formatIDR } from '@/lib/money'
 import { createMember, deleteMember, listDuesTiers, listMembersPage, updateMember } from '@/lib/setup'
 import { useApi } from '@/lib/useApi'
 import { useDialogParam } from '@/lib/useDialogParam'
+import { useResetWhen } from '@/lib/useResetWhen'
 import type { DuesTier, Member, MembersPage } from '@/lib/setup'
 
 const text = copy.members.roster
@@ -355,13 +356,13 @@ function AddMemberDialog({
 
   // A fresh form every time the dialog opens, so a member added a moment
   // ago does not leave their name sitting in the fields for the next one.
-  useEffect(() => {
+  useResetWhen(open, () => {
     if (open) {
       setName('')
       setTierId(null)
       setJoinedOn(todayISODate())
     }
-  }, [open])
+  })
 
   function handleSubmit(event: FormEvent) {
     event.preventDefault()

@@ -13,6 +13,7 @@ import { formatIDR } from '@/lib/money'
 import { createDuesTier, listDuesRates, listDuesTiers } from '@/lib/setup'
 import { useApi } from '@/lib/useApi'
 import { useDialogParam } from '@/lib/useDialogParam'
+import { useResetWhen } from '@/lib/useResetWhen'
 import type { DuesRate, DuesTier } from '@/lib/setup'
 
 const text = copy.settings.tiers
@@ -168,9 +169,9 @@ function AddTierDialog({ open, onClose, onAdded }: { open: boolean; onClose: () 
   const [state, run] = useApi<DuesTier>()
   const [name, setName] = useState('')
 
-  useEffect(() => {
+  useResetWhen(open, () => {
     if (open) setName('')
-  }, [open])
+  })
 
   const busy = state.status === 'loading'
   const trimmed = name.trim()
