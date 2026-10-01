@@ -64,11 +64,11 @@ func TestParseDumpNameRejectsForeignAndTraversalNames(t *testing.T) {
 		"uruni-2026-09-30.zip", // the ad hoc /api/backup name (ZipFilename) - a different shape entirely
 		".uruni-backup-tmp-123456.zip",
 		"../etc/passwd",
-		"uruni-20260930-140501-daily-fv1-3f9a2c8e10b4.zip/../../etc/passwd",
-		"uruni-20260930-140501-weird-fv1-3f9a2c8e10b4.zip", // not a known kind
-		"uruni-20260930-140501-daily-fvX-3f9a2c8e10b4.zip", // non-numeric format version
-		"uruni-20260930-140501-daily-fv1-SHORT.zip",        // hash too short / not hex
-		"uruni-2026093-140501-daily-fv1-3f9a2c8e10b4.zip",  // date wrong length
+		"uruni-20260930-140501-daily-fv1-3f9a2c8e10b4.zip/../../etc/passwd", // gitleaks:allow - a traversal fixture, not a key
+		"uruni-20260930-140501-weird-fv1-3f9a2c8e10b4.zip",                  // not a known kind
+		"uruni-20260930-140501-daily-fvX-3f9a2c8e10b4.zip",                  // non-numeric format version
+		"uruni-20260930-140501-daily-fv1-SHORT.zip",                         // hash too short / not hex
+		"uruni-2026093-140501-daily-fv1-3f9a2c8e10b4.zip",                   // date wrong length
 		"uruni-20260930-140501-daily-fv1-3f9a2c8e10b4.zip.bak",
 	}
 	for _, name := range cases {
