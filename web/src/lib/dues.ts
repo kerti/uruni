@@ -24,6 +24,9 @@ export interface DuesStatusRow {
   owed_amount: number
   paid_amount: number
   status: DuesStatusKind
+  /** "YYYY-MM": the last month of the unbroken run of paid months for a
+   * member paid ahead (#357); null otherwise. */
+  paid_through: string | null
 }
 
 /**

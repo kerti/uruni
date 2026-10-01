@@ -41,6 +41,11 @@ type MemberDuesStatus struct {
 	OwedAmount money.Amount
 	PaidAmount money.Amount
 	Status     DuesStatus
+	// PaidThrough is the last period of the unbroken run of fully paid
+	// periods that starts at the requested one (#357) - "lunas sampai" - set
+	// only when Status is DuesStatusPaidInAdvance and the run actually
+	// reaches past the requested period; empty otherwise. See paidThrough.
+	PaidThrough string
 }
 
 // DuesStatusForPeriod returns one row per member who owes dues for period
@@ -141,14 +146,19 @@ func (l *Ledger) DuesStatusForPeriod(ctx context.Context, fundID int64, period s
 		paid := paidByMember[m.ID] // zero value if the member paid nothing this period
 
 		status := classifyDuesStatus(owed, paid)
+		var through string
 		if status == DuesStatusPaid {
 			if latest, ok := latestByMember[m.ID]; ok && latest > period {
 				status = DuesStatusPaidInAdvance
+				through, err = l.paidThrough(ctx, fundID, m, period, latest)
+				if err != nil {
+					return nil, err
+				}
 			}
 		}
 
 		statuses = append(statuses, MemberDuesStatus{
-			Member: m, OwedAmount: owed, PaidAmount: paid, Status: status,
+			Member: m, OwedAmount: owed, PaidAmount: paid, Status: status, PaidThrough: through,
 		})
 	}
 
@@ -403,6 +413,59 @@ func classifyDuesStatus(owed, paid money.Amount) DuesStatus {
 		return DuesStatusPartial
 	default:
 		return DuesStatusUnpaid
+	}
+}
+
+// paidThrough walks forward from the period after `period` and returns the
+// last one of the unbroken run of fully paid periods (#357), or "" when the
+// very next owed period is not fully paid - a member who paid October and
+// December but skipped November is paid through October, not December.
+// `latest` is LatestDuesPeriodPaidByMember's value for the member and bounds
+// the walk: nothing past it was paid at all.
+//
+// Each step applies exactly DuesStatusForPeriod's own rules: a period
+// outside the member's active window ends the run (nothing past the month
+// they left is "paid ahead"); a period whose tier has no effective rate owes
+// nothing, so it is skipped without breaking the run (OutstandingDuesForMember's
+// rule); and a period paid below its own effective rate breaks it, so a rate
+// rise in a prepaid month reads honestly as not paid through.
+func (l *Ledger) paidThrough(ctx context.Context, fundID int64, m store.Member, period, latest string) (string, error) {
+	paidRows, err := l.q.DuesPaidByMemberGroupedByPeriod(ctx, store.DuesPaidByMemberGroupedByPeriodParams{
+		FundID: fundID, MemberID: &m.ID,
+	})
+	if err != nil {
+		return "", fmt.Errorf("dues paid by member: %w", err)
+	}
+	paidByPeriod := make(map[string]money.Amount, len(paidRows))
+	for _, row := range paidRows {
+		paidByPeriod[row.DuesPeriod] = money.FromDB(row.PaidAmount)
+	}
+
+	t, err := time.Parse(duesPeriodLayout, period)
+	if err != nil {
+		return "", fmt.Errorf("parsing period %q: %w", period, err)
+	}
+
+	var through string
+	for {
+		t = t.AddDate(0, 1, 0)
+		next := t.Format(duesPeriodLayout)
+		if next > latest || !memberOwesPeriod(m, next) {
+			return through, nil
+		}
+		rate, err := l.q.GetEffectiveDuesRate(ctx, store.GetEffectiveDuesRateParams{
+			TierID: *m.TierID, EffectiveFrom: next,
+		})
+		if errors.Is(err, sql.ErrNoRows) {
+			continue // nothing owed this period - skipped, not a break
+		}
+		if err != nil {
+			return "", fmt.Errorf("effective dues rate for tier %d: %w", *m.TierID, err)
+		}
+		if classifyDuesStatus(money.FromDB(rate.Amount), paidByPeriod[next]) != DuesStatusPaid {
+			return through, nil
+		}
+		through = next
 	}
 }
 

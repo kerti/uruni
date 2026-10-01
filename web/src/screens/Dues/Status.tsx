@@ -9,6 +9,7 @@ import ErrorState from '@/components/states/ErrorState'
 import { copy } from '@/copy/id'
 import MemberPayments from '@/screens/Dues/MemberPayments'
 import { getDuesStatus } from '@/lib/dues'
+import { formatPeriod } from '@/lib/dates'
 import { formatIDR } from '@/lib/money'
 import { useApi } from '@/lib/useApi'
 import type { DuesStatusKind, DuesStatusRow } from '@/lib/dues'
@@ -165,7 +166,10 @@ export default function DuesStatus({
                 <li key={row.member.id} className="flex flex-col gap-2 rounded-lg bg-card px-4 py-3 shadow-card ring-1 ring-foreground/10">
                   <div className="flex items-center justify-between gap-3">
                     <span className="font-medium">{row.member.name}</span>
-                    <StatusBadge status={row.status} />
+                    {/* Paid ahead with a known end (#357): the badge stays a
+                        plain "Lunas" and the month moves to its own line
+                        below, so neither the name nor the badge wraps. */}
+                    <StatusBadge status={row.status === 'paid_in_advance' && row.paid_through ? 'paid' : row.status} />
                   </div>
                   <div className="tabular flex items-center justify-between text-sm text-muted-foreground">
                     <span>
@@ -175,6 +179,9 @@ export default function DuesStatus({
                       {text.paidLabel}: {formatIDR(row.paid_amount)}
                     </span>
                   </div>
+                  {row.status === 'paid_in_advance' && row.paid_through && (
+                    <p className="text-right text-sm text-success">{text.paidThrough(formatPeriod(row.paid_through))}</p>
+                  )}
 
                   {/* A disclosure, not a link: the panel opens in place
                       inside this card, so the control names the panel and

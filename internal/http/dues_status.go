@@ -19,15 +19,22 @@ type duesStatusResponse struct {
 	OwedAmount int64          `json:"owed_amount"`
 	PaidAmount int64          `json:"paid_amount"`
 	Status     string         `json:"status"`
+	// PaidThrough is "YYYY-MM" for a paid-in-advance member whose unbroken
+	// run of paid periods reaches past this one (#357), null otherwise.
+	PaidThrough *string `json:"paid_through"`
 }
 
 func toDuesStatusResponse(s ledger.MemberDuesStatus) duesStatusResponse {
-	return duesStatusResponse{
+	resp := duesStatusResponse{
 		Member:     toMemberResponse(s.Member),
 		OwedAmount: s.OwedAmount.Int64(),
 		PaidAmount: s.PaidAmount.Int64(),
 		Status:     string(s.Status),
 	}
+	if s.PaidThrough != "" {
+		resp.PaidThrough = &s.PaidThrough
+	}
+	return resp
 }
 
 // getDuesStatus is GET /api/dues-status?period=YYYY-MM: wraps
