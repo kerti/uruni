@@ -152,7 +152,14 @@ test.describe('dues status', () => {
     await page.getByRole('link', { name: copy.shell.nav.history }).click()
     await page.getByRole('link', { name: copy.history.tabs.dues }).click()
     await page.getByRole('button', { name: copy.dues.entryLink }).click()
-    await page.getByLabel(copy.dues.periodLabel).fill('2024-01')
+    // The period is a MonthField (#197): open it, step back to 2024, tap
+    // January - the same taps she makes.
+    await page.getByLabel(copy.dues.periodLabel).click()
+    const picker = page.getByRole('dialog')
+    while ((await picker.getByText(/^\d{4}$/).textContent()) !== '2024') {
+      await picker.getByRole('button', { name: copy.dateField.previousYear }).click()
+    }
+    await picker.getByRole('button', { name: 'Januari 2024' }).click()
 
     // Warga Satu paid part of this month, so the roster shows the partial
     // status and the history behind it holds the payment to reverse.

@@ -1,15 +1,15 @@
 import { useEffect, useState } from 'react'
 import { ChevronDown, Circle, CircleCheck, CircleDashed } from 'lucide-react'
 
+import MonthField from '@/components/MonthField'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import Loading from '@/components/states/Loading'
 import ErrorState from '@/components/states/ErrorState'
 import { copy } from '@/copy/id'
 import MemberPayments from '@/screens/Dues/MemberPayments'
 import { getDuesStatus } from '@/lib/dues'
-import { formatPeriod } from '@/lib/dates'
+import { formatPeriod, periodBounds } from '@/lib/dates'
 import { formatIDR } from '@/lib/money'
 import { useApi } from '@/lib/useApi'
 import type { DuesStatusKind, DuesStatusRow } from '@/lib/dues'
@@ -130,15 +130,14 @@ export default function DuesStatus({
 
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="dues-period">{text.periodLabel}</Label>
-        <Input
+        <MonthField
           id="dues-period"
-          type="month"
-          className="h-11"
           value={period}
-          onChange={(event) => {
-            setPeriod(event.target.value)
+          onChange={(next) => {
+            setPeriod(next)
             setExpandedMemberId(null)
           }}
+          bounds={periodBounds.status()}
         />
       </div>
 

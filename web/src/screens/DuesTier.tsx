@@ -1,6 +1,7 @@
 import { ArrowLeft } from 'lucide-react'
 import { useEffect, useState, type FormEvent } from 'react'
 
+import MonthField from '@/components/MonthField'
 import AmountInput from '@/components/money/AmountInput'
 import SectionDivider from '@/components/SectionDivider'
 import { Button } from '@/components/ui/button'
@@ -9,7 +10,7 @@ import { Label } from '@/components/ui/label'
 import Loading from '@/components/states/Loading'
 import ErrorState from '@/components/states/ErrorState'
 import { copy } from '@/copy/id'
-import { formatPeriod } from '@/lib/dates'
+import { formatPeriod, periodBounds } from '@/lib/dates'
 import { formatIDR } from '@/lib/money'
 import { createDuesRate, deleteDuesRate, deleteDuesTier, listDuesRates, listDuesTiers, renameDuesTier, updateDuesRate } from '@/lib/setup'
 import { useApi } from '@/lib/useApi'
@@ -303,13 +304,13 @@ function AddRate({ tierId, onAdded }: { tierId: number; onAdded: () => void }) {
       <AmountInput id={`new-rate-amount-${tierId}`} label={text.rateAmountLabel} value={amount} onChange={setAmount} disabled={busy} />
       <div className="flex flex-col gap-1.5">
         <Label htmlFor={`new-rate-from-${tierId}`}>{text.effectiveFromLabel}</Label>
-        {/* type="month" - the wire format is YYYY-MM and so is this input's
-            value, so there is nothing to convert either way. */}
-        <Input
+        {/* MonthField speaks YYYY-MM, the wire format, so there is nothing
+            to convert either way (#197). */}
+        <MonthField
           id={`new-rate-from-${tierId}`}
-          type="month"
           value={effectiveFrom}
-          onChange={(event) => setEffectiveFrom(event.target.value)}
+          onChange={setEffectiveFrom}
+          bounds={periodBounds.rate()}
           disabled={busy}
         />
       </div>

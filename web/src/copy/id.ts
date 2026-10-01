@@ -1029,6 +1029,15 @@ export const copy = {
   // the correcting. The word is "peruntukan" throughout - CONTEXT.md's one
   // word per concept - and never "reklasifikasi", which is journal
   // vocabulary the treasurer does not use.
+  // The shared date pickers (#197, components/DateField + MonthField). The
+  // chosen date itself always renders through lib/dates, so these are only
+  // the empty states and the month picker's year arrows.
+  dateField: {
+    empty: 'Pilih tanggal',
+    emptyMonth: 'Pilih bulan',
+    previousYear: 'Tahun sebelumnya',
+    nextYear: 'Tahun berikutnya',
+  },
   // One ledger entry read in full (#359) - opened by tapping a card in any
   // transaction list. Field labels reuse the record form's own nouns
   // (CONTEXT.md: one word per concept); "Dicatat pada" is the one new one,

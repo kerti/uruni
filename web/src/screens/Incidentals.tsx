@@ -1,6 +1,8 @@
 import { ArrowLeft } from 'lucide-react'
 import { useEffect, useState, type FormEvent } from 'react'
 
+import DateField from '@/components/DateField'
+import { dateBounds } from '@/lib/dates'
 import AccountPicker from '@/components/pickers/AccountPicker'
 import { MemberMultiPicker } from '@/components/pickers/MemberPicker'
 import AmountInput from '@/components/money/AmountInput'
@@ -476,15 +478,7 @@ function CloseForm({
 
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="incidental-close-date">{text.close.dateLabel}</Label>
-        <Input
-          id="incidental-close-date"
-          type="date"
-          className="h-11"
-          value={closedOn}
-          onChange={(event) => setClosedOn(event.target.value)}
-          disabled={submitting}
-          required
-        />
+        <DateField id="incidental-close-date" value={closedOn} onChange={setClosedOn} bounds={dateBounds.entry()} disabled={submitting} />
       </div>
 
       {/* The roll is a transfer the treasurer never asks for directly (#210),

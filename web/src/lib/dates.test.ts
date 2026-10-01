@@ -1,6 +1,15 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { formatIsoDate, formatPeriod, formatUnixSeconds } from '@/lib/dates'
+import {
+  addMonthsToPeriod,
+  dateBounds,
+  formatIsoDate,
+  formatPeriod,
+  formatUnixSeconds,
+  parseIsoDate,
+  periodBounds,
+  toIsoDate,
+} from '@/lib/dates'
 
 describe('formatIsoDate', () => {
   // The month is written out, never abbreviated: id-ID's `medium` style
@@ -38,5 +47,50 @@ describe('formatPeriod', () => {
 
   it('hands back a malformed period unchanged', () => {
     expect(formatPeriod('2026')).toBe('2026')
+  })
+})
+
+describe('parseIsoDate / toIsoDate (#197)', () => {
+  it('round-trips a real date at local midnight', () => {
+    const date = parseIsoDate('2026-02-28')
+    expect(date?.getHours()).toBe(0)
+    expect(toIsoDate(date as Date)).toBe('2026-02-28')
+  })
+
+  it('refuses a date that does not exist rather than rolling it over', () => {
+    expect(parseIsoDate('2026-02-30')).toBeNull()
+    expect(parseIsoDate('2026-9-3')).toBeNull()
+    expect(parseIsoDate('')).toBeNull()
+  })
+})
+
+describe('addMonthsToPeriod', () => {
+  it('crosses year ends both ways', () => {
+    expect(addMonthsToPeriod('2026-11', 3)).toBe('2027-02')
+    expect(addMonthsToPeriod('2026-01', -1)).toBe('2025-12')
+  })
+})
+
+describe('date picker bounds (#197)', () => {
+  // Only Date is faked; the bounds read the local clock.
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(new Date(2026, 9, 1))
+  })
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('caps money dates at today and two calendar years back', () => {
+    expect(dateBounds.entry()).toEqual({ min: '2024-01-01', max: '2026-10-01' })
+  })
+
+  it('lets a join date reach back to 2000 and a year ahead', () => {
+    expect(dateBounds.membership()).toEqual({ min: '2000-01-01', max: '2027-10-01' })
+  })
+
+  it('lets a rate start two years ahead, and the status period look a year ahead', () => {
+    expect(periodBounds.rate()).toEqual({ min: '2000-01', max: '2028-10' })
+    expect(periodBounds.status()).toEqual({ min: '2000-01', max: '2027-10' })
   })
 })

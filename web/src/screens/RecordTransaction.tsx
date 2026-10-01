@@ -1,6 +1,8 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { ArrowDownLeft, ArrowLeftRight, ArrowUpDown, ArrowUpRight, CalendarCheck } from 'lucide-react'
 
+import DateField from '@/components/DateField'
+import { dateBounds } from '@/lib/dates'
 import AmountInput from '@/components/money/AmountInput'
 import AccountPicker from '@/components/pickers/AccountPicker'
 import { OptionalMemberPicker } from '@/components/pickers/MemberPicker'
@@ -8,7 +10,6 @@ import PurposePicker from '@/components/pickers/PurposePicker'
 import ReceiptPicker from '@/components/ReceiptPicker'
 import { segmentedStackedItemClass, segmentedTrackClass } from '@/components/segmented'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import Loading from '@/components/states/Loading'
 import ErrorState from '@/components/states/ErrorState'
@@ -563,15 +564,7 @@ export default function RecordTransaction({
 
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="record-date">{text.dateLabel}</Label>
-            <Input
-              id="record-date"
-              type="date"
-              className="h-11"
-              value={occurredOn}
-              onChange={(event) => setOccurredOn(event.target.value)}
-              disabled={submitting}
-              required
-            />
+            <DateField id="record-date" value={occurredOn} onChange={setOccurredOn} bounds={dateBounds.entry()} disabled={submitting} />
           </div>
 
           <div className="flex flex-col gap-1.5">

@@ -1,6 +1,7 @@
 import { ArrowDownLeft, ArrowUpRight, Tags, Undo2 } from 'lucide-react'
 import { useState } from 'react'
 
+import DateField from '@/components/DateField'
 import ReceiptDialog from '@/components/ReceiptDialog'
 import ReceiptRowButton from '@/components/ReceiptRowButton'
 import TransactionDetailDialog from '@/components/TransactionDetailDialog'
@@ -11,7 +12,7 @@ import { Label } from '@/components/ui/label'
 import { copy } from '@/copy/id'
 import { ApiError } from '@/lib/api'
 import { reverseDuesPayment } from '@/lib/dues'
-import { formatIsoDate } from '@/lib/dates'
+import { formatIsoDate, dateBounds } from '@/lib/dates'
 import { formatIDR } from '@/lib/money'
 import { canCorrectPurpose, canReverseContribution, noteForDisplay } from '@/lib/transactions'
 import { useApi } from '@/lib/useApi'
@@ -319,14 +320,12 @@ function ContributionReversalControl({ transaction, onReversed }: { transaction:
     <div className="animate-reveal flex flex-col gap-2 rounded-lg bg-muted/40 p-3">
       <div className="flex flex-col gap-1.5">
         <Label htmlFor={`contribution-reversal-date-${transaction.id}`}>{reverseText.reverseDateLabel}</Label>
-        <Input
+        <DateField
           id={`contribution-reversal-date-${transaction.id}`}
-          type="date"
-          className="h-11"
           value={occurredOn}
-          onChange={(event) => setOccurredOn(event.target.value)}
+          onChange={setOccurredOn}
+          bounds={dateBounds.entry()}
           disabled={busy}
-          required
         />
       </div>
 

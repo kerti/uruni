@@ -2,6 +2,7 @@ import { ArrowLeft, ChevronRight } from 'lucide-react'
 import { useEffect, useState, type FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 
+import DateField from '@/components/DateField'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
@@ -11,7 +12,7 @@ import { MemberMultiPicker } from '@/components/pickers/MemberPicker'
 import Loading from '@/components/states/Loading'
 import ErrorState from '@/components/states/ErrorState'
 import { copy } from '@/copy/id'
-import { formatIsoDate, todayISODate } from '@/lib/dates'
+import { formatIsoDate, todayISODate, dateBounds } from '@/lib/dates'
 import { listIncidentals, openIncidental } from '@/lib/incidentals'
 import { listAllMembers } from '@/lib/setup'
 import { useApi } from '@/lib/useApi'
@@ -288,13 +289,7 @@ function OpenIncidentalDialog({
 
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="new-incidental-opened">{openText.dateLabel}</Label>
-            <Input
-              id="new-incidental-opened"
-              type="date"
-              value={openedOn}
-              onChange={(event) => setOpenedOn(event.target.value)}
-              disabled={busy}
-            />
+            <DateField id="new-incidental-opened" value={openedOn} onChange={setOpenedOn} bounds={dateBounds.entry()} disabled={busy} />
           </div>
 
           {/* ADR-034 (#211): one figure every expected member is asked to

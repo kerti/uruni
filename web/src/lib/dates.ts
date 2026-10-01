@@ -59,3 +59,77 @@ export function formatPeriod(period: string): string {
   if (!Number.isFinite(year) || !Number.isFinite(month)) return period
   return monthFormatter.format(new Date(year, month - 1, 1))
 }
+
+/** "YYYY-MM-DD" -> a local-midnight Date, or null for anything else. The
+ * date pickers' own parse (#197) - never `new Date(iso)`, see above. */
+export function parseIsoDate(iso: string): Date | null {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso)
+  if (!match) return null
+  const [, y, m, d] = match.map(Number)
+  const date = new Date(y, m - 1, d)
+  return date.getFullYear() === y && date.getMonth() === m - 1 && date.getDate() === d ? date : null
+}
+
+/** A local Date -> "YYYY-MM-DD". */
+export function toIsoDate(date: Date): string {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+}
+
+/** "YYYY-MM" `months` later (negative for earlier) - integer arithmetic,
+ * no Date, so no timezone can shift it. */
+export function addMonthsToPeriod(period: string, months: number): string {
+  const [year, month] = period.split('-').map(Number)
+  const index = year * 12 + (month - 1) + months
+  return `${Math.floor(index / 12)}-${String((index % 12) + 1).padStart(2, '0')}`
+}
+
+/** The current local month, "YYYY-MM". */
+export function currentPeriod(): string {
+  return todayISODate().slice(0, 7)
+}
+
+/** The inclusive range a date picker offers (#197). The server accepts any
+ * real calendar date; these exist so the treasurer cannot land on a date
+ * that makes no sense for the field by a slip of the thumb - a payment
+ * dated next year, or a year of 20026 - and so the calendar's year list
+ * stays short. */
+export interface DateBounds {
+  min: string
+  max: string
+}
+
+/** The earliest year any picker offers. A fund adopting Uruni carries its
+ * history in the opening balance (PRD: history starts at adoption); only a
+ * member's join date or a rate's start month ever reaches back further, for
+ * live arrears, and not past this. */
+const EARLIEST_YEAR = 2000
+
+export const dateBounds = {
+  /** Money that has moved - a transaction, a dues payment, a claim, a
+   * settlement, a reversal, a reconciliation fix, an envelope opening or
+   * closing. Never in the future (it already happened), and at most two
+   * calendar years back: older than that belongs in the opening balance. */
+  entry(): DateBounds {
+    const today = todayISODate()
+    return { min: `${Number(today.slice(0, 4)) - 2}-01-01`, max: today }
+  },
+  /** A member's join date: back to EARLIEST_YEAR for live arrears, and up to
+   * a year ahead for someone who has said they are joining. */
+  membership(): DateBounds {
+    const today = todayISODate()
+    return { min: `${EARLIEST_YEAR}-01-01`, max: `${Number(today.slice(0, 4)) + 1}${today.slice(4)}` }
+  },
+}
+
+export const periodBounds = {
+  /** A rate's start month: back to EARLIEST_YEAR (a rate that already
+   * applied), up to two years ahead (a rise agreed in advance). */
+  rate(): DateBounds {
+    return { min: `${EARLIEST_YEAR}-01`, max: addMonthsToPeriod(currentPeriod(), 24) }
+  },
+  /** The dues status period: back to EARLIEST_YEAR, and a year ahead, far
+   * enough to read a member paid in advance (#357). */
+  status(): DateBounds {
+    return { min: `${EARLIEST_YEAR}-01`, max: addMonthsToPeriod(currentPeriod(), 12) }
+  },
+}

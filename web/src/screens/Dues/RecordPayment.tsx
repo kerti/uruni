@@ -1,9 +1,9 @@
 import { useEffect, useState, type FormEvent } from 'react'
 
+import DateField from '@/components/DateField'
 import AmountInput from '@/components/money/AmountInput'
 import AccountPicker from '@/components/pickers/AccountPicker'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import Loading from '@/components/states/Loading'
@@ -11,7 +11,7 @@ import ErrorState from '@/components/states/ErrorState'
 import { copy } from '@/copy/id'
 import { listAccounts } from '@/lib/accounts'
 import { createDuesPayment, getOutstandingDues } from '@/lib/dues'
-import { formatPeriod } from '@/lib/dates'
+import { formatPeriod, dateBounds } from '@/lib/dates'
 import { formatIDR } from '@/lib/money'
 import { listPurposes } from '@/lib/purposes'
 import { listAllMembers } from '@/lib/setup'
@@ -346,15 +346,7 @@ export default function RecordDuesPayment({
 
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="dues-payment-date">{text.dateLabel}</Label>
-        <Input
-          id="dues-payment-date"
-          type="date"
-          className="h-11"
-          value={occurredOn}
-          onChange={(event) => setOccurredOn(event.target.value)}
-          disabled={submitting}
-          required
-        />
+        <DateField id="dues-payment-date" value={occurredOn} onChange={setOccurredOn} bounds={dateBounds.entry()} disabled={submitting} />
       </div>
 
       {submitState.status === 'error' && submitState.error && <ErrorState error={submitState.error} />}
