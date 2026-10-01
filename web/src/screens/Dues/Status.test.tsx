@@ -26,10 +26,10 @@ function member(id: number, name: string) {
 // simply never including "Tanpa golongan" in the stubbed response and
 // asserting it never renders.
 const rows = [
-  { member: member(1, 'Warga Satu'), owed_amount: 50_000, paid_amount: 0, status: 'unpaid' },
-  { member: member(2, 'Warga Dua'), owed_amount: 50_000, paid_amount: 20_000, status: 'partial' },
-  { member: member(3, 'Warga Tiga'), owed_amount: 50_000, paid_amount: 50_000, status: 'paid' },
-  { member: member(4, 'Warga Empat'), owed_amount: 50_000, paid_amount: 100_000, status: 'paid_in_advance' },
+  { member: member(1, 'Warga Satu'), owed_amount: 50_000, paid_amount: 0, status: 'unpaid', paid_through: null },
+  { member: member(2, 'Warga Dua'), owed_amount: 50_000, paid_amount: 20_000, status: 'partial', paid_through: null },
+  { member: member(3, 'Warga Tiga'), owed_amount: 50_000, paid_amount: 50_000, status: 'paid', paid_through: null },
+  { member: member(4, 'Warga Empat'), owed_amount: 50_000, paid_amount: 100_000, status: 'paid_in_advance', paid_through: null },
 ]
 
 function stubDuesStatus(body: unknown = rows) {
@@ -41,6 +41,18 @@ function stubDuesStatus(body: unknown = rows) {
 }
 
 describe('DuesStatus', () => {
+  it('names the last paid month for a member paid ahead (#357)', async () => {
+    const ahead = [
+      { member: member(5, 'Warga Lima'), owed_amount: 50_000, paid_amount: 50_000, status: 'paid_in_advance', paid_through: '2027-02' },
+    ]
+    vi.stubGlobal('fetch', stubDuesStatus(ahead))
+    render(<DuesStatus onBack={vi.fn()} onRecordPayment={vi.fn()} />)
+
+    expect(await screen.findByText(text.paidThrough('Februari 2027'))).toBeInTheDocument()
+    expect(screen.getByText(text.statuses.paid)).toBeInTheDocument()
+    expect(screen.queryByText(text.statuses.paid_in_advance)).not.toBeInTheDocument()
+  })
+
   it('renders each of the four statuses with its own badge', async () => {
     vi.stubGlobal('fetch', stubDuesStatus())
     render(<DuesStatus onBack={vi.fn()} onRecordPayment={vi.fn()} />)

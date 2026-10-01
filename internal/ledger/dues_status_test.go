@@ -1317,3 +1317,114 @@ func TestArrearsMonthsForMemberCrossesTheYearBoundary(t *testing.T) {
 			"(2025-11 and 2025-12 owed; 2026-01 is the current period and excluded)", got)
 	}
 }
+
+// --- paid through (#357) ------------------------------------------------------
+
+// paidThroughFixture is one member on a 25k tier with the given periods paid
+// in full, read back for October 2026.
+type paidThroughFixture struct {
+	l        *Ledger
+	f        fixture
+	q        *store.Queries
+	tierID   int64
+	memberID int64
+	posted   []store.Transaction
+}
+
+func newPaidThroughFixture(t *testing.T, p duesMemberParams, paid ...string) paidThroughFixture {
+	t.Helper()
+	l := newTestLedger(t)
+	f := newFixture(t, l)
+	q := store.New(l.db)
+	tierID := createDuesTier(t, q, f.fundID, "Tier A")
+	createDuesRate(t, q, tierID, 25_000, "2026-01")
+	p.name, p.tierID = "Jane", &tierID
+	memberID := createDuesMember(t, q, f.fundID, p)
+	periods := make([]PeriodAmount, 0, len(paid))
+	for _, period := range paid {
+		periods = append(periods, PeriodAmount{DuesPeriod: period, Amount: 25_000})
+	}
+	posted, err := l.PostDuesPayments(context.Background(), PostDuesPaymentsParams{
+		FundID: f.fundID, AccountID: f.cashID, PurposeID: f.mainID,
+		MemberID: memberID, OccurredOn: "2026-10-01", Periods: periods,
+	})
+	if err != nil {
+		t.Fatalf("PostDuesPayments = %v, want no error", err)
+	}
+	return paidThroughFixture{l: l, f: f, q: q, tierID: tierID, memberID: memberID, posted: posted}
+}
+
+func (p paidThroughFixture) october(t *testing.T) MemberDuesStatus {
+	t.Helper()
+	rows, err := p.l.DuesStatusForPeriod(context.Background(), p.f.fundID, "2026-10")
+	if err != nil {
+		t.Fatalf("DuesStatusForPeriod = %v, want no error", err)
+	}
+	got, ok := statusFor(t, rows, p.memberID)
+	if !ok {
+		t.Fatalf("member %d missing from roster", p.memberID)
+	}
+	return got
+}
+
+func TestDuesStatusForPeriodPaidThroughIsTheLastPeriodOfAnUnbrokenRun(t *testing.T) {
+	p := newPaidThroughFixture(t, duesMemberParams{}, "2026-10", "2026-11", "2026-12", "2027-01", "2027-02")
+
+	got := p.october(t)
+	if got.Status != DuesStatusPaidInAdvance || got.PaidThrough != "2027-02" {
+		t.Errorf("Status, PaidThrough = %q, %q; want %q, \"2027-02\" - five months paid at once, across a year end", got.Status, got.PaidThrough, DuesStatusPaidInAdvance)
+	}
+}
+
+func TestDuesStatusForPeriodPaidThroughStopsAtASkippedPeriod(t *testing.T) {
+	p := newPaidThroughFixture(t, duesMemberParams{}, "2026-10", "2026-11", "2027-01")
+
+	got := p.october(t)
+	if got.PaidThrough != "2026-11" {
+		t.Errorf("PaidThrough = %q, want \"2026-11\" - December is unpaid, so January does not count", got.PaidThrough)
+	}
+}
+
+func TestDuesStatusForPeriodPaidThroughIsEmptyWhenTheNextPeriodIsTheHole(t *testing.T) {
+	p := newPaidThroughFixture(t, duesMemberParams{}, "2026-10", "2026-12")
+
+	got := p.october(t)
+	if got.Status != DuesStatusPaidInAdvance || got.PaidThrough != "" {
+		t.Errorf("Status, PaidThrough = %q, %q; want %q, \"\" - ahead, but not through any later month", got.Status, got.PaidThrough, DuesStatusPaidInAdvance)
+	}
+}
+
+func TestDuesStatusForPeriodPaidThroughStopsWhereARateRiseLeavesAPeriodShort(t *testing.T) {
+	p := newPaidThroughFixture(t, duesMemberParams{}, "2026-10", "2026-11", "2026-12")
+	createDuesRate(t, p.q, p.tierID, 30_000, "2026-12")
+
+	got := p.october(t)
+	if got.PaidThrough != "2026-11" {
+		t.Errorf("PaidThrough = %q, want \"2026-11\" - December was paid at 25k against a 30k rate", got.PaidThrough)
+	}
+}
+
+func TestDuesStatusForPeriodPaidThroughIgnoresAReversedPayment(t *testing.T) {
+	p := newPaidThroughFixture(t, duesMemberParams{}, "2026-10", "2026-11", "2026-12")
+	ctx := context.Background()
+
+	december := p.posted[2] // posted in Periods order
+	if _, err := p.l.ReverseDuesPayment(ctx, ReverseDuesPaymentParams{FundID: p.f.fundID, TransactionID: december.ID, OccurredOn: "2026-10-02"}); err != nil {
+		t.Fatalf("ReverseDuesPayment = %v, want no error", err)
+	}
+
+	got := p.october(t)
+	if got.PaidThrough != "2026-11" {
+		t.Errorf("PaidThrough = %q, want \"2026-11\" - December's payment was reversed", got.PaidThrough)
+	}
+}
+
+func TestDuesStatusForPeriodPaidThroughEndsAtTheMonthTheMemberLeft(t *testing.T) {
+	inactive := "2026-11-15"
+	p := newPaidThroughFixture(t, duesMemberParams{inactiveOn: &inactive}, "2026-10", "2026-11", "2026-12")
+
+	got := p.october(t)
+	if got.PaidThrough != "2026-11" {
+		t.Errorf("PaidThrough = %q, want \"2026-11\" - nothing is owed after the month she left", got.PaidThrough)
+	}
+}

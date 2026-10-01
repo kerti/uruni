@@ -151,6 +151,54 @@ func TestGetDuesStatusReturnsPerMemberStatus(t *testing.T) {
 	}
 }
 
+// TestGetDuesStatusCarriesPaidThroughForAMemberPaidAhead checks the wire
+// shape of #357: paid_through names the last month of the run for a member
+// paid ahead, and is null for one who has only paid this month.
+func TestGetDuesStatusCarriesPaidThroughForAMemberPaidAhead(t *testing.T) {
+	r := testRouter(t)
+	setup := setUpFund(t, r)
+
+	var tier duesTierResponse
+	if err := json.NewDecoder(postDuesTier(t, r, "Full").Body).Decode(&tier); err != nil {
+		t.Fatalf("decoding dues tier response: %v", err)
+	}
+	postDuesRate(t, r, tier.ID, duesRateRequest{Amount: 25_000, EffectiveFrom: "2026-01"})
+
+	pay := func(name string, periods ...string) int64 {
+		var m memberResponse
+		if err := json.NewDecoder(postMember(t, r, memberRequest{Name: name, TierID: &tier.ID}).Body).Decode(&m); err != nil {
+			t.Fatalf("decoding member response: %v", err)
+		}
+		req := duesPaymentRequest{AccountID: setup.CashAccountID(t), PurposeID: setup.MainPurposeID, MemberID: m.ID, OccurredOn: "2026-10-01"}
+		for _, period := range periods {
+			req.Periods = append(req.Periods, duesPaymentPeriod{DuesPeriod: period, Amount: 25_000})
+		}
+		if rec := postDuesPayment(t, r, req); rec.Code != http.StatusCreated {
+			t.Fatalf("POST /api/dues-payments (%s) = %d, want %d (body: %s)", name, rec.Code, http.StatusCreated, rec.Body.String())
+		}
+		return m.ID
+	}
+	ahead := pay("Ahead", "2026-10", "2026-11", "2026-12")
+	current := pay("Current", "2026-10")
+
+	var got []duesStatusResponse
+	if err := json.NewDecoder(getDuesStatus(t, r, "2026-10").Body).Decode(&got); err != nil {
+		t.Fatalf("decoding response: %v", err)
+	}
+	for _, s := range got {
+		switch s.Member.ID {
+		case ahead:
+			if s.Status != "paid_in_advance" || s.PaidThrough == nil || *s.PaidThrough != "2026-12" {
+				t.Errorf("ahead: status, paid_through = %q, %v; want paid_in_advance, 2026-12", s.Status, s.PaidThrough)
+			}
+		case current:
+			if s.Status != "paid" || s.PaidThrough != nil {
+				t.Errorf("current: status, paid_through = %q, %v; want paid, null", s.Status, s.PaidThrough)
+			}
+		}
+	}
+}
+
 // TestGetDuesStatusRejectsAMalformedPeriod is this route's half of the
 // slice's malformed-input acceptance criterion: DuesStatusForPeriod's own
 // validateDuesPeriod check answers, the handler passes the raw query

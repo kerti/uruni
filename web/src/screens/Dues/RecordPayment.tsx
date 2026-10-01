@@ -38,6 +38,19 @@ function currentISOMonth(): string {
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
 }
 
+/** The YYYY-MM `months` after `period` - plain integer month arithmetic,
+ * never a Date, so no timezone can shift it. */
+function addMonths(period: string, months: number): string {
+  const [year, month] = period.split('-').map(Number)
+  const index = year * 12 + (month - 1) + months
+  return `${Math.floor(index / 12)}-${String((index % 12) + 1).padStart(2, '0')}`
+}
+
+/** How far past the current month the form will offer periods (#357): a
+ * year is the longest anyone pays ahead, and a bound keeps the button from
+ * walking forever. */
+const MAX_MONTHS_AHEAD = 12
+
 /** What one outstanding period still needs to settle it: the tier's
  * effective rate for that month, less anything already paid toward it. For
  * an `unpaid` period that is the whole rate; for a `partial` one it is the
@@ -105,6 +118,10 @@ export default function RecordDuesPayment({
   // submit actually carries.
   const [amounts, setAmounts] = useState<Record<string, number>>({})
   const [selected, setSelected] = useState<string[]>([])
+  // How many months past the current one the period list reaches (#357) -
+  // 0 is "what is owed up to now", each tap of the add-month button one more.
+  const [monthsAhead, setMonthsAhead] = useState(0)
+  const through = addMonths(currentISOMonth(), monthsAhead)
 
   async function loadFormData(): Promise<FormData> {
     const [members, accounts, purposes] = await Promise.all([listAllMembers(), listAccounts(), listPurposes()])
@@ -133,25 +150,25 @@ export default function RecordDuesPayment({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loadState.status, loadState.data])
 
-  // Whenever the member changes, re-read what that member owes. `through` is
-  // this client's local month, always sent: the server does not share the
-  // treasurer's timezone (#186).
+  // Re-read what the member owes whenever the member or the window changes.
+  // `through` is this client's local month, always sent: the server does not
+  // share the treasurer's timezone (#186). A month ahead is simply a later
+  // `through` - the server already prices future months (#357).
   useEffect(() => {
     if (memberId === null) return
-    setSelected([])
-    setAmounts({})
-    void outstandingRun(() => getOutstandingDues(memberId, currentISOMonth()))
-    // outstandingRun is a stable useCallback; memberId is the deliberate
-    // dependency.
+    void outstandingRun(() => getOutstandingDues(memberId, through))
+    // outstandingRun is a stable useCallback; memberId and through are the
+    // deliberate dependencies.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [outstandingRun, memberId])
+  }, [outstandingRun, memberId, through])
 
-  // Pre-fill every offered period with what it would take to settle it. Each
-  // one stays independently editable from here on - this only runs when a
-  // fresh outstanding response lands.
+  // Pre-fill every newly offered period with what it would take to settle
+  // it. A period already on screen keeps whatever she typed: extending the
+  // window by a month must not undo an edit she made to an earlier one.
   useEffect(() => {
     if (outstandingState.status !== 'success' || !outstandingState.data) return
-    setAmounts(Object.fromEntries(outstandingState.data.map((p) => [p.period, remainingOf(p)])))
+    const fresh = Object.fromEntries(outstandingState.data.map((p) => [p.period, remainingOf(p)]))
+    setAmounts((current) => ({ ...fresh, ...current }))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [outstandingState.status, outstandingState.data])
 
@@ -216,8 +233,17 @@ export default function RecordDuesPayment({
         <Select
           value={memberId === null ? '' : String(memberId)}
           onValueChange={(next) => {
-            // '' is Radix's "nothing selected" on mount, and Number('') is 0.
-            if (next !== '') setMemberId(Number(next))
+            // '' is Radix's "nothing selected" on mount, and Number('') is 0;
+            // re-picking the same member must not wipe what she ticked.
+            if (next === '' || Number(next) === memberId) return
+            // A different member starts from a clean slate: nothing
+            // selected, nothing edited, and the list back to what is owed
+            // up to now - reset here, in one render with the new id, so the
+            // fetch never runs once with the old member's window.
+            setSelected([])
+            setAmounts({})
+            setMonthsAhead(0)
+            setMemberId(Number(next))
           }}
           disabled={submitting || selectableMembers.length === 0}
         >
@@ -246,7 +272,7 @@ export default function RecordDuesPayment({
         {outstandingState.status === 'error' && outstandingState.error && (
           <ErrorState
             error={outstandingState.error}
-            onRetry={() => void outstandingRun(() => getOutstandingDues(memberId as number, currentISOMonth()))}
+            onRetry={() => void outstandingRun(() => getOutstandingDues(memberId as number, through))}
           />
         )}
 
@@ -292,6 +318,14 @@ export default function RecordDuesPayment({
               })}
             </ul>
           ))}
+
+        {/* Paying ahead (#357): offered even when nothing is owed yet,
+            because a square member is exactly the one who pays ahead. */}
+        {outstandingState.status === 'success' && monthsAhead < MAX_MONTHS_AHEAD && (
+          <Button type="button" variant="outline" size="lg" onClick={() => setMonthsAhead((n) => n + 1)} disabled={submitting}>
+            {text.addMonth(formatPeriod(addMonths(through, 1)))}
+          </Button>
+        )}
       </div>
 
       {selected.length > 0 && (

@@ -617,6 +617,11 @@ export const copy = {
       paid: 'Lunas',
       paid_in_advance: 'Lunas — sudah bayar di muka',
     },
+    // Paid ahead with a known end (#357): its own line under the amounts,
+    // naming the last paid month, while the badge reads a plain "Lunas".
+    // The paid_in_advance label above stays for the rare member who is
+    // ahead with a gap right after this month.
+    paidThrough: (period: string) => `Sudah dibayar sampai ${period}`,
     // The matrix is its own screen, opened from Riwayat's Iuran tab (#228),
     // so back returns to that tab rather than home.
     // Just "Kembali": the screen's own heading already names where it
@@ -638,6 +643,9 @@ export const copy = {
       // A normal, good answer - never phrased as an error or an empty
       // failure: this member is square.
       noOutstanding: 'Tidak ada iuran tertunggak untuk anggota ini.',
+      // Paying ahead (#357): each tap adds the next month to the list,
+      // named outright so she knows which month she is adding.
+      addMonth: (period: string) => `Tambah ${period}`,
       // Shown on a period that has been paid in part, so the pre-filled
       // amount is the sisa (the rest), not the whole month's rate.
       remainingLabel: 'Sisa',
