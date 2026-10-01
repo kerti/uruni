@@ -3,6 +3,7 @@ import { History, Home, LogOut, Plus, Settings, Users } from 'lucide-react'
 import { Link, NavLink } from 'react-router-dom'
 
 import AppVersion from '@/components/AppVersion'
+import { LogoMark } from '@/components/Logo'
 import { Button } from '@/components/ui/button'
 import ErrorState from '@/components/states/ErrorState'
 import { copy } from '@/copy/id'
@@ -97,18 +98,27 @@ export default function Shell({
     <div className="flex min-h-dvh flex-col bg-background">
       <header className="sticky top-0 z-10 border-b border-border pt-[env(safe-area-inset-top)] header-glass">
         <div className="flex items-center justify-between gap-3 py-2 pl-[max(1rem,env(safe-area-inset-left))] pr-[max(1rem,env(safe-area-inset-right))]">
-          <div className="flex min-w-0 flex-col">
-            <h1 className="min-w-0 truncate text-lg font-semibold">
-              {/* No aria-label: one here would become the *heading's*
+          <div className="flex min-w-0 items-center gap-2.5">
+            {/* The mark, left of the fund's name (#356). A second way home
+                for a thumb, but not for a keyboard or a screen reader: the
+                title link below already is that, and announcing the same
+                destination twice is noise. */}
+            <Link to="/" tabIndex={-1} aria-hidden="true" className="shrink-0">
+              <LogoMark className="size-7" />
+            </Link>
+            <div className="flex min-w-0 flex-col">
+              <h1 className="min-w-0 truncate text-lg font-semibold">
+                {/* No aria-label: one here would become the *heading's*
                 accessible name too, so the h1 would announce as "Kas RT 04 -
                 kembali ke beranda" rather than the fund's name. A title link
                 named after the site is the pattern a screen reader already
                 knows. */}
-              <Link to="/" className="block truncate rounded-lg outline-none focus-visible:ring-3 focus-visible:ring-ring/50">
-                {title}
-              </Link>
-            </h1>
-            <AppVersion />
+                <Link to="/" className="block truncate rounded-lg outline-none focus-visible:ring-3 focus-visible:ring-ring/50">
+                  {title}
+                </Link>
+              </h1>
+              <AppVersion />
+            </div>
           </div>
           {/* size-11 (44px), not the `icon` variant's 32px: Design-System.md
               sets a 44x44 minimum touch target and this is the header's only
