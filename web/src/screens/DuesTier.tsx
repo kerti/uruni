@@ -132,10 +132,15 @@ export default function DuesTierScreen({ tierId, onBack }: { tierId: number; onB
 function TierName({ tier, onRenamed }: { tier: DuesTier; onRenamed: () => void }) {
   const [state, run] = useApi<DuesTier>()
   const [name, setName] = useState(tier.name)
-
-  useEffect(() => {
+  // Follows a rename that lands from the server (the reload after saving),
+  // synced during render rather than in an effect: an effect runs after the
+  // field is already on screen, so on a slow device it could fire after her
+  // first keystroke and put the old name back underneath her typing.
+  const [syncedName, setSyncedName] = useState(tier.name)
+  if (tier.name !== syncedName) {
+    setSyncedName(tier.name)
     setName(tier.name)
-  }, [tier.name])
+  }
 
   const busy = state.status === 'loading'
   const trimmed = name.trim()
