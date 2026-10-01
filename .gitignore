@@ -14,6 +14,11 @@ coverage.*
 # `make setup` creates this directory; its contents are never checked in.
 /uploads/
 
+# Dev-local server-side backup dumps (ADR-012, URUNI_BACKUP_DIR's default).
+# Each zip holds every table - the login's password hash included - and every
+# receipt photo, and the pii guard only reads text diffs, never a zip.
+/backups/
+
 # Node / Vite
 node_modules/
 web/node_modules/

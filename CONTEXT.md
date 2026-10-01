@@ -35,4 +35,4 @@ Where a concept's Indonesian name is the one the treasurer sees, the identifier 
 ## Sharing
 
 - **Public report** — an unauthenticated, filterable, read-only page at a stable unguessable link the treasurer shares once. Shows everything, with filters. Not a member portal (no accounts).
-- **Backup / export** — full-data **JSON** (canonical, restorable) + optional **Excel**; optional scheduled dumps and emailed backups.
+- **Backup / export** — one full-data backup file (canonical, restorable: the ledger as JSON plus every receipt photo) + optional **Excel**; automatic daily server-side backups, restorable in the app. No emailed backups.

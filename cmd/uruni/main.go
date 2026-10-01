@@ -18,6 +18,7 @@ import (
 
 	"github.com/kerti/uruni"
 	"github.com/kerti/uruni/internal/auth"
+	"github.com/kerti/uruni/internal/backup"
 	"github.com/kerti/uruni/internal/config"
 	"github.com/kerti/uruni/internal/db"
 	uruniHTTP "github.com/kerti/uruni/internal/http"
@@ -85,6 +86,10 @@ func serve() error {
 	if err := config.EnsureUploadsDirWritable(cfg.UploadsDir); err != nil {
 		return err
 	}
+	// Same check, for the daily backup dumps' own directory (#324).
+	if err := config.EnsureBackupDirWritable(cfg.BackupDir); err != nil {
+		return err
+	}
 
 	// Only `serve` takes this lock. `migrate` is a short, operator-invoked,
 	// one-shot command - including `migrate status`, which an operator
@@ -142,10 +147,30 @@ func serve() error {
 	l := ledger.New(sqlDB)
 	au := auth.New(sqlDB)
 
+	// The boot-time dump ADR-012 promises: a restorable backup in the
+	// running binary's own format always exists once serve has finished
+	// booting, even the very first time this version runs against an
+	// instance whose newest (or only) dump is older. Deliberately
+	// non-fatal - logged, not returned - because a backup write failing
+	// must never keep the treasurer from recording a transaction, which is
+	// what this whole server exists to let her do; EnsureBootDump's own doc
+	// comment carries this reasoning too.
+	if err := backup.EnsureBootDump(ctx, q, l, cfg.UploadsDir, cfg.BackupDir, time.Now(), logger); err != nil {
+		logger.Error("boot backup dump failed", "error", err)
+	}
+
+	// The daily scheduler (ADR-013): one goroutine, started only after the
+	// boot dump above has already finished writing (or failed and logged) -
+	// this ordering, not a lock, is what keeps the scheduler and the boot
+	// dump from ever racing on the same file (internal/backup/scheduler.go's
+	// own doc comment). Stopped by the same ctx signal.NotifyContext
+	// cancels below for the HTTP server's own graceful shutdown.
+	go backup.RunScheduler(ctx, q, l, cfg.UploadsDir, cfg.BackupDir, logger)
+
 	srv := &http.Server{
 		Addr: fmt.Sprintf(":%d", cfg.Port),
-		Handler: uruniHTTP.New(assets, uruniHTTP.Build{Version: version, Commit: buildCommit()}, l, q, logger,
-			au, cfg.BaseURL, cfg.UploadsDir),
+		Handler: uruniHTTP.New(assets, uruniHTTP.Build{Version: version, Commit: buildCommit()}, l, q, sqlDB, logger,
+			au, cfg.BaseURL, cfg.UploadsDir, cfg.BackupDir),
 		// Set explicitly: a server with no header timeout can be held open by a
 		// slow client indefinitely.
 		ReadHeaderTimeout: 10 * time.Second,

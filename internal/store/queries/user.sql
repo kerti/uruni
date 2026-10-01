@@ -22,3 +22,14 @@ UPDATE "user"
 SET password_hash = ?
 WHERE email = ?
 RETURNING id, email, password_hash, created_at;
+
+-- ListUsers is the backup export's own read (ADR-012, #323): the whole
+-- table, password hash included - the backup download itself is what
+-- warns the treasurer this file holds the login. user carries no fund_id
+-- (ADR-030), so there is nothing to scope this by; ordered by id purely for
+-- the export's own deterministic byte order (CLAUDE.md's "no primary-key
+-- order" binds a semantic guarantee, not a serialization tiebreak).
+-- name: ListUsers :many
+SELECT id, email, password_hash, created_at
+FROM "user"
+ORDER BY id;

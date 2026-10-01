@@ -1,0 +1,8 @@
+# Fingerprints of gitleaks findings that are false positives in history
+# already pushed, so the line can no longer carry an inline gitleaks:allow.
+# Each entry names why. Fix the current file too; a fingerprint is per commit.
+#
+# A path-traversal test fixture (a dump name with "/../../etc/passwd"
+# appended), read as generic-api-key. Not a credential. The current line
+# carries gitleaks:allow.
+7e36d9b3d31e06cab43ca0c71580d815df26fccd:internal/backup/dumps_test.go:generic-api-key:66

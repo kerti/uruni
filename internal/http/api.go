@@ -1,6 +1,7 @@
 package http
 
 import (
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"io"
@@ -46,6 +47,23 @@ type api struct {
 	// writable (config.EnsureUploadsDirWritable) before this struct is ever
 	// built.
 	uploadsDir string
+
+	// backupDir is #324's addition: where the daily server-side backup dumps
+	// (ADR-012/ADR-013) are written to and listed from. Like uploadsDir,
+	// `serve` has already proved it exists and is writable
+	// (config.EnsureBackupDirWritable) before this struct is ever built.
+	backupDir string
+
+	// sqlDB is #325's addition: the raw connection restore.go's confirmRestore
+	// hands to internal/backup.Restore, which opens its own write
+	// transaction spanning virtually every table. See router.go's New for
+	// why this cannot be reached through ledger or queries alone.
+	sqlDB *sql.DB
+
+	// restoreStage is #325's own one-slot stash between the upload/inspect
+	// step and the confirm step - restore.go's own doc comment explains the
+	// shape.
+	restoreStage *restoreStage
 }
 
 // routes registers the /api surface on the mount New creates. No handlers at
@@ -262,6 +280,29 @@ func (a *api) routes(r chi.Router) {
 		r.Post("/reimbursements/{id}/receipts", a.uploadReimbursementReceipt)
 		r.Get("/receipts/{id}", a.getReceipt)
 		r.Delete("/receipts/{id}", a.deleteReceipt)
+
+		// The whole fund as one zip (M6.37, #323, ADR-012): uruni.json plus
+		// every receipt image. Session-gated for the same reason every
+		// route in this group is - it carries the password hash alongside
+		// everything else.
+		r.Get("/backup", a.downloadBackup)
+
+		// The Cadangan card's own two routes (M6.38, #324, ADR-012/013):
+		// what server-side dumps already exist, and downloading one of
+		// them by name. Plural and distinct from the singular /backup
+		// above on purpose - that route builds a fresh zip on demand and
+		// answers with it directly; these two only ever read
+		// URUNI_BACKUP_DIR, never build anything themselves.
+		r.Get("/backups", a.listBackups)
+		r.Get("/backups/{name}", a.downloadStoredBackup)
+
+		// Restore from an uploaded backup (M6.39, #325, ADR-012), or from one
+		// of the server's own stored dumps (M6.40, #326): inspect/preview
+		// (from either source), then confirm with a password re-entry -
+		// restore.go's own doc comment has the three-route shape and why.
+		r.Post("/restore/inspect", a.inspectRestoreUpload)
+		r.Post("/restore/inspect-stored/{name}", a.inspectStoredBackup)
+		r.Post("/restore/confirm", a.confirmRestore)
 	})
 }
 

@@ -202,6 +202,48 @@ func (q *Queries) ListReceiptIDsByTransactionIDs(ctx context.Context, arg ListRe
 	return items, nil
 }
 
+const listReceiptsByFund = `-- name: ListReceiptsByFund :many
+SELECT id, fund_id, transaction_id, reimbursement_id, path, uploaded_at
+FROM receipt
+WHERE fund_id = ?
+ORDER BY id
+`
+
+// ListReceiptsByFund is the backup export's own read (ADR-012, #323): every
+// receipt row the fund owns, so the zip's receipts/ folder and uruni.json's
+// receipt rows name the same files (path is the on-disk filename under
+// URUNI_UPLOADS_DIR, ADR-011). Ordered by id purely for the export's own
+// deterministic byte order.
+func (q *Queries) ListReceiptsByFund(ctx context.Context, fundID int64) ([]Receipt, error) {
+	rows, err := q.db.QueryContext(ctx, listReceiptsByFund, fundID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Receipt{}
+	for rows.Next() {
+		var i Receipt
+		if err := rows.Scan(
+			&i.ID,
+			&i.FundID,
+			&i.TransactionID,
+			&i.ReimbursementID,
+			&i.Path,
+			&i.UploadedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listReceiptsByReimbursement = `-- name: ListReceiptsByReimbursement :many
 SELECT id, fund_id, transaction_id, reimbursement_id, path, uploaded_at
 FROM receipt

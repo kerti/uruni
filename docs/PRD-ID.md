@@ -127,13 +127,14 @@ Entitas utama:
 - Ini halaman bersama, bukan portal anggota — tanpa akun, tanpa login anggota.
 
 ### 7.10 Cadangan / ekspor
-- **Ekspor seluruh data ke JSON** (kanonik, bisa dipulihkan melalui impor) yang dapat diunduh bendahara kapan saja. **Workbook Excel** ditawarkan sebagai format sekunder yang mudah dibaca manusia (belum tentu bisa diimpor kembali).
-- **Cadangan terjadwal di sisi server** yang dapat diaktifkan host (cadangan otomatis berkala yang ditulis di server).
-- **Pengiriman lewat email opsional** untuk cadangan berkala (host perlu mengonfigurasi SMTP).
+- **Berkas cadangan seluruh data** (kanonik: data sebagai JSON beserta semua foto nota) yang dapat diunduh bendahara kapan saja, dan **dipulihkan dari dalam aplikasi** — tanpa perlu akses ke server. **Workbook Excel** ditawarkan sebagai format sekunder yang mudah dibaca manusia (belum tentu bisa diimpor kembali).
+- **Cadangan harian otomatis di server**, menyimpan beberapa perubahan terakhir, tampil di aplikasi dan bisa dipulihkan dari sana. Pemulihan selalu menyimpan keadaan saat ini lebih dulu, jadi pemulihan itu sendiri bisa dibatalkan.
+- Salinan di luar server adalah urusan host (mis. menyinkronkan folder cadangan ke object storage), dianjurkan di panduan self-host — bukan fitur aplikasi.
+- **Tanpa pengiriman email** (dihapus 2026-09-28): cadangan berisi foto terlalu besar untuk dilampirkan, dan surel terjadwal adalah mesin yang dipakai untuk pengingat (§4).
 
 ## 8. Kebutuhan non-fungsional
 
-- **Keandalan & cadangan:** server adalah satu-satunya sumber kebenaran; kehilangan ponsel tidak menghilangkan apa pun. Cadangan berupa **ekspor JSON seluruh data** (kanonik, bisa dipulihkan lewat impor), dengan **workbook Excel** opsional sebagai format sekunder, ditambah **cadangan terjadwal di sisi server** dan **pengiriman lewat email** opsional yang bisa diaktifkan host (lihat 7.10).
+- **Keandalan & cadangan:** server adalah satu-satunya sumber kebenaran; kehilangan ponsel tidak menghilangkan apa pun. Cadangan berupa **ekspor JSON seluruh data** (kanonik, bisa dipulihkan lewat impor), dengan **workbook Excel** opsional sebagai format sekunder, ditambah **cadangan harian otomatis di sisi server** yang bisa dipulihkan di aplikasi (lihat 7.10).
 - **Bisa di-self-host:** **image Docker siap pakai + templat `docker compose`** dengan konfigurasi minimal; host cukup menarik image, tidak perlu meng-compile. Sertakan TLS/reverse-proxy (mis. Caddy) karena tautan laporan publik butuh HTTPS. Kemudahan pemasangan (deployment UX) inilah penentu hidup-mati bagi siapa pun yang tak punya pendamping teknis.
 - **Autentikasi:** **autentikasi lokal** untuk satu bendahara di v1 — mandiri, tanpa penyedia identitas eksternal yang perlu dikonfigurasi per instans. OIDC/OAuth opsional bisa menyusul. Halaman laporan publik (7.9) sengaja tanpa autentikasi.
 - **Minimalkan data:** kumpulkan hanya yang dibutuhkan tugas (nama, nominal, tanggal, catatan). Tidak perlu info kontak anggota.
@@ -150,7 +151,7 @@ Entitas utama:
 
 ## 10. Pertanyaan terbuka
 
-**Diputuskan 2026-08-08:** deployment = image Docker siap pakai + `docker compose` (dengan TLS) · cadangan = ekspor JSON manual (+ Excel opsional), ditambah cadangan terjadwal di sisi server dan pengiriman email opsional · autentikasi = autentikasi lokal (OIDC menyusul) · platform = PWA · offline = aplikasi tidak tersedia saat terputus (tanpa antrean) · laporan publik = menampilkan semuanya dengan filter (menerima penampakan nama/status pembayaran) · rekening kas khusus = ditunda · cakupan persona = n=1 diterima.
+**Diputuskan 2026-08-08:** deployment = image Docker siap pakai + `docker compose` (dengan TLS) · cadangan = ekspor JSON manual (+ Excel opsional), ditambah cadangan terjadwal di sisi server dan pengiriman email opsional (*email dihapus dan cadangan harian jadi bawaan 2026-09-28, lihat 7.10*) · autentikasi = autentikasi lokal (OIDC menyusul) · platform = PWA · offline = aplikasi tidak tersedia saat terputus (tanpa antrean) · laporan publik = menampilkan semuanya dengan filter (menerima penampakan nama/status pembayaran) · rekening kas khusus = ditunda · cakupan persona = n=1 diterima.
 
 Tidak ada lagi pertanyaan terbuka di tingkat produk. Keputusan tingkat implementasi (stack, basis data, framework) dilacak terpisah — lihat `Tech-Design.md` (akan dibuat).
 

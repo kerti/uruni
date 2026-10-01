@@ -94,7 +94,7 @@ A **public, unauthenticated report page** at a stable, unguessable link. Treasur
 ## Resolved (2026-08-08, second pass)
 
 - **Public report defaults:** show **everything**, with filters (month, purpose, member, in/out, dues status) so a public viewer can sift easily. Accepted trade-off: names + payment status are publicly visible.
-- **Backup cadence:** manual JSON download **plus** optional host-enabled scheduled server-side dumps **plus** optional email delivery of periodic backups (needs SMTP).
+- **Backup cadence:** manual JSON download **plus** optional host-enabled scheduled server-side dumps **plus** optional email delivery of periodic backups (needs SMTP). *Superseded 2026-09-28 - see "Backups are one zip, restored in the app" below.*
 
 No product-level open questions remain.
 
@@ -390,3 +390,14 @@ The rollover lived only in the close response, held in component state, so it wa
 **The ruling: derive it at display time from the two figures already on the screen.** [ADR-031](./ADR/031-closed-envelope-refuses-postings.md)'s invariant is that closing leaves the purpose balance at exactly zero. That balance is the unfiltered net; `collected_amount` and `disbursed_amount` are the same net with the roll's own leg excluded (`IncidentalActivityTotals`, the seam [#215](https://github.com/kerti/uruni/issues/215) drew). Zero including the roll therefore means the roll equals the net excluding it — so the rollover *is* the gap between Terkumpul and Terpakai, which is the very gap that made the screen unreadable. It re-establishes at each close, so a reopen, a late entry and a second close need no special case, and gating on `closed_on` is what keeps a reopened envelope from claiming to have rolled.
 
 Rejected: carrying `rolled_amount` on the detail response. It is a second source for a fact the response already determines, it needs the reopen path taught separately, and #257's rule is that nothing generated is ever stored. No server change, no schema change, no new copy string — `close.rolledLabel` says which way it went, as it already did.
+
+## Backups are one zip, restored in the app (decided 2026-09-28)
+
+Grill A, pulled into M6. The rulings live in [ADR-012](./ADR/012-backup-and-export.md); this entry records the scope calls against the PRD.
+
+- **The backup is one `.zip`** (`uruni.json` + `receipts/`), because a JSON-only file restores receipt rows pointing at nothing.
+- **Restore is in the app**, atomic in one transaction, a safety-net backup first, and proved by recomputed totals. Not CLI-only: recovery should not need SSH. No maintenance mode: the single connection already gives it.
+- **Daily server-side dumps are on by default**, change-only, last 7 plus 3 safety nets, listed and restorable in the app. PRD section 7.10 said "host can enable"; the calm default is on. Off-site copies are an operator recommendation, never an app feature.
+- **Email is cut**, backups and reports both. Photos outgrow attachments, members hold no address, and scheduled mail is reminder machinery (PRD section 4). The public report link is the monthly-report channel.
+- **Excel stays, as `.xlsx`, in M8** - CSV breaks on Indonesian-locale Excel.
+- **The importer's format upgrade chain gates `v1.0.0`.**

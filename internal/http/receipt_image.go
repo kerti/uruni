@@ -11,6 +11,8 @@ import (
 
 	"golang.org/x/image/draw"
 	_ "golang.org/x/image/webp" // registers the WebP decoder with image.Decode (blank import, decode-only - there is no Go WebP encoder in this module, and receipts are always re-encoded as JPEG below)
+
+	"github.com/kerti/uruni/internal/backup"
 )
 
 // maxReceiptLongEdge and receiptJPEGQuality are the maintainer's own ruling
@@ -23,13 +25,6 @@ const (
 	maxReceiptLongEdge = 1600
 	receiptJPEGQuality = 80
 )
-
-// maxReceiptPixels bounds what a decoder may allocate. The 10 MB body cap
-// bounds the *compressed* bytes only: a ~100-byte PNG can declare 65000x65000
-// in its header and make image/png allocate gigabytes before it notices the
-// pixel data is missing (x/image/webp has the same gap). 50 MP clears a 48 MP
-// phone sensor with room to spare and keeps one decode to a few hundred MB.
-const maxReceiptPixels = 50_000_000
 
 // errReceiptUnsupportedMediaType and errReceiptHEICUnsupported are the two
 // distinct rejections the maintainer's ruling asks for: any format this
@@ -67,7 +62,7 @@ func processReceiptImage(raw []byte) ([]byte, error) {
 	if err != nil {
 		return nil, errReceiptUnsupportedMediaType
 	}
-	if int64(cfg.Width)*int64(cfg.Height) > maxReceiptPixels {
+	if int64(cfg.Width)*int64(cfg.Height) > backup.MaxReceiptPixels {
 		return nil, errReceiptTooManyPixels
 	}
 

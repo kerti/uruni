@@ -21,8 +21,8 @@ import (
 	"strings"
 )
 
-// Defaults for the variables that have one. The rest are either optional
-// (SMTP_URL) or required outright (URUNI_BASE_URL).
+// Defaults for the variables that have one. The rest are required outright
+// (URUNI_BASE_URL).
 const (
 	DefaultDBPath    = "./uruni.db"
 	DefaultPort      = 8080
@@ -34,6 +34,11 @@ const (
 	// the same way URUNI_DB defaults to ./uruni.db locally and is overridden
 	// to /data/uruni.db in the compose stack.
 	DefaultUploadsDir = "./uploads"
+	// DefaultBackupDir is the same split again, for the daily server-side
+	// dumps ADR-012/ADR-013 describe (M6.38, #324): a dev-friendly relative
+	// default, overridden to the volume-mounted /backups in the compose
+	// stack and the production image.
+	DefaultBackupDir = "./backups"
 )
 
 // Log output formats. Text is the default because the operator reads container
@@ -67,14 +72,15 @@ type Config struct {
 	// link (M7), and its scheme decides whether the session cookie is Secure
 	// (ADR-007). Required - an instance with no origin is an unconfigured one.
 	BaseURL string
-	// SMTPURL is optional, for emailed backups. Validated here, used at M8
-	// (ADR-012). Contains a password, so it is never echoed in an error.
-	SMTPURL string
 	// UploadsDir is the local volume receipt photos are written to (ADR-011).
 	// Existence and writability are not checked here - Load stays a pure
 	// parse of the environment table, with no filesystem I/O of its own - see
 	// EnsureUploadsDirWritable, which `serve` alone calls at boot.
 	UploadsDir string
+	// BackupDir is the local volume the daily server-side dumps are written
+	// to (ADR-012/ADR-013, M6.38 #324) - the same existence-and-writability
+	// story as UploadsDir: not checked here, see EnsureBackupDirWritable.
+	BackupDir string
 	// LogLevel and LogFormat configure the slog handler main builds (ADR-022).
 	LogLevel  slog.Level
 	LogFormat string
@@ -88,6 +94,7 @@ func Load() (Config, error) {
 		DBPath:     DefaultDBPath,
 		Port:       DefaultPort,
 		UploadsDir: DefaultUploadsDir,
+		BackupDir:  DefaultBackupDir,
 		BaseURL:    strings.TrimRight(strings.TrimSpace(os.Getenv("URUNI_BASE_URL")), "/"),
 	}
 
@@ -99,13 +106,14 @@ func Load() (Config, error) {
 		cfg.UploadsDir = v
 	}
 
+	if v := strings.TrimSpace(os.Getenv("URUNI_BACKUP_DIR")); v != "" {
+		cfg.BackupDir = v
+	}
+
 	if err := loadPort(&cfg); err != nil {
 		return Config{}, err
 	}
 	if err := loadBaseURL(&cfg); err != nil {
-		return Config{}, err
-	}
-	if err := loadSMTPURL(&cfg); err != nil {
 		return Config{}, err
 	}
 	if err := loadLogging(&cfg); err != nil {
@@ -134,8 +142,8 @@ func loadBaseURL(cfg *Config) error {
 		return invalid("URUNI_BASE_URL",
 			"not set - the public origin this instance is reached at, e.g. https://uruni.example.com; `make setup` writes a loopback one for local dev")
 	case placeholderBaseURL:
-		// Safe to echo: unlike the SMTP URL, an origin is not a credential, and
-		// seeing the template value quoted back is what makes the fault obvious.
+		// Safe to echo: an origin is not a credential, and seeing the
+		// template value quoted back is what makes the fault obvious.
 		return invalidValue("URUNI_BASE_URL", cfg.BaseURL,
 			"still the placeholder from .env.example; set the origin this instance is actually reached at")
 	}
@@ -147,20 +155,6 @@ func loadBaseURL(cfg *Config) error {
 		return invalidValue("URUNI_BASE_URL", cfg.BaseURL,
 			"want an absolute origin, e.g. https://uruni.example.com")
 	}
-	return nil
-}
-
-func loadSMTPURL(cfg *Config) error {
-	raw := strings.TrimSpace(os.Getenv("SMTP_URL"))
-	if raw == "" {
-		return nil
-	}
-	u, err := url.Parse(raw)
-	if err != nil || (u.Scheme != "smtp" && u.Scheme != "smtps") || u.Host == "" {
-		// Deliberately does not echo the value: it carries the SMTP password.
-		return invalid("SMTP_URL", "want smtp://user:pass@host:port (or smtps://)")
-	}
-	cfg.SMTPURL = raw
 	return nil
 }
 
@@ -218,10 +212,37 @@ func EnsureUploadsDirWritable(dir string) error {
 	return nil
 }
 
-// invalid reports a bad variable without repeating its value - for URLs that
-// carry credentials, and for the unset case, where there is no value to show.
-// Anything printed here can end up in a container log the operator pastes into
-// an issue.
+// EnsureBackupDirWritable is EnsureUploadsDirWritable's own twin for
+// URUNI_BACKUP_DIR (M6.38, #324): checked at boot, for `serve` only - the
+// same "root:root named volume" failure this ADR-019 pattern already
+// exists to turn into a clear boot error, this time for the daily dump
+// directory instead of the uploads volume.
+func EnsureBackupDirWritable(dir string) error {
+	info, err := os.Stat(dir)
+	switch {
+	case errors.Is(err, os.ErrNotExist):
+		return invalidValue("URUNI_BACKUP_DIR", dir,
+			"does not exist - create it (or point at an existing writable directory) before starting the server")
+	case err != nil:
+		return invalidValue("URUNI_BACKUP_DIR", dir, "could not be read: "+err.Error())
+	case !info.IsDir():
+		return invalidValue("URUNI_BACKUP_DIR", dir, "is not a directory")
+	}
+
+	probe, err := os.CreateTemp(dir, ".uruni-write-check-*")
+	if err != nil {
+		return invalidValue("URUNI_BACKUP_DIR", dir, "is not writable: "+err.Error())
+	}
+	name := probe.Name()
+	_ = probe.Close()
+	_ = os.Remove(name)
+	return nil
+}
+
+// invalid reports a bad variable without repeating its value - for the unset
+// case, where there is no value to show, and for any future variable that
+// carries a credential. Anything printed here can end up in a container log
+// the operator pastes into an issue.
 func invalid(name, why string) error {
 	return fmt.Errorf("%w: %s %s", ErrInvalidConfig, name, why)
 }

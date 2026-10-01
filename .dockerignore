@@ -23,6 +23,10 @@ web/playwright-report
 *.db-wal
 *.db-shm
 .env
+
+# Dev-local receipts and backup dumps: real data, and never part of a build.
+/uploads
+/backups
 *.out
 coverage.*
 .DS_Store

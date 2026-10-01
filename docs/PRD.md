@@ -126,13 +126,14 @@ Key entities:
 - This is a shared page, not a member portal — no accounts, no member logins.
 
 ### 7.10 Backup / export
-- A full-data **export to JSON** (canonical, restorable via import) that the treasurer can download anytime. An **Excel workbook** is offered as an optional, human-readable secondary format (not necessarily re-importable).
-- **Scheduled server-side dumps** the host can enable (periodic automatic backups written on the server).
-- **Optional email delivery** of periodic backups (requires the host to configure SMTP).
+- A full-data **backup file** (canonical: the data as JSON plus every receipt photo) that the treasurer can download anytime, and **restore from inside the app** — no server access needed. An **Excel workbook** is offered as an optional, human-readable secondary format (not necessarily re-importable).
+- **Automatic daily backups on the server**, kept for the last several changes, listed in the app and restorable from there. A restore first saves the current state, so it can itself be undone.
+- Off-site copies are the host's job (e.g. syncing the backup folder to object storage), recommended in the self-host guide — not an app feature.
+- **No email delivery** (cut 2026-09-28): a backup with photos is too large to attach, and scheduled mail is the machinery reminders are built from (§4).
 
 ## 8. Non-functional requirements
 
-- **Reliability & backup:** the server is the single source of truth; losing the phone loses nothing. Backup is a full-data **JSON export** (canonical, restorable via import), with an optional **Excel workbook** secondary format, plus optional **scheduled server-side dumps** and **email delivery** the host can enable (see 7.10).
+- **Reliability & backup:** the server is the single source of truth; losing the phone loses nothing. Backup is a full-data **JSON export** (canonical, restorable via import), with an optional **Excel workbook** secondary format, plus **automatic daily server-side backups** restorable in the app (see 7.10).
 - **Self-hostable:** **prebuilt Docker images + a `docker compose` template** with minimal config; hosts pull images rather than compile. Bundle TLS/reverse-proxy (e.g. Caddy) since the public report link needs HTTPS. This deployment UX is make-or-break for anyone without a technical helper.
 - **Authentication:** **local auth** for the single treasurer in v1 — self-contained, no external identity provider to configure per instance. Optional OIDC/OAuth may come later. The public report page (7.9) is unauthenticated by design.
 - **Data minimization:** collect only what the job needs (names, amounts, dates, notes). No member contact info required.
@@ -149,7 +150,7 @@ Key entities:
 
 ## 10. Open questions
 
-**Resolved 2026-08-08:** deployment = prebuilt Docker images + `docker compose` (with TLS) · backup = manual JSON export (+ optional Excel), plus optional scheduled server-side dumps and optional email delivery · auth = local auth (OIDC later) · platform = PWA · offline = app unavailable when disconnected (no queue) · public report = shows everything with filters (accepts exposing names/payment status) · dedicated kas account = deferred · persona coverage = n=1 accepted.
+**Resolved 2026-08-08:** deployment = prebuilt Docker images + `docker compose` (with TLS) · backup = manual JSON export (+ optional Excel), plus optional scheduled server-side dumps and optional email delivery (*email cut and dumps made default 2026-09-28, see 7.10*) · auth = local auth (OIDC later) · platform = PWA · offline = app unavailable when disconnected (no queue) · public report = shows everything with filters (accepts exposing names/payment status) · dedicated kas account = deferred · persona coverage = n=1 accepted.
 
 No product-level open questions remain. Implementation-level decisions (stack, database, framework) are tracked separately — see `Tech-Design.md` (to be created).
 

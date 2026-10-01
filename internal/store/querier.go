@@ -68,11 +68,39 @@ type Querier interface {
 	// for a never-used duplicate only; a used-then-retired account gets
 	// UpdateAccount's inactive_on instead.
 	DeleteAccount(ctx context.Context, id int64) error
+	DeleteAllAccounts(ctx context.Context) error
+	DeleteAllDuesRates(ctx context.Context) error
+	DeleteAllDuesTiers(ctx context.Context) error
+	// Restore's own queries (M6.39, #325, ADR-012): every table this package's
+	// normal Create* queries also cover, plus two restore only needs. A normal
+	// Create* never takes id - the schema assigns it - so restore, which must
+	// preserve every id verbatim (ADR-012's obligation 2), needs its own insert
+	// naming id explicitly instead of reusing them. The DeleteAll* queries are
+	// restore's other own need: clearing a table in full before re-inserting
+	// exactly what the file holds, the same "delete all sessions" shape
+	// DeleteAllSessions (session.sql) already established for a password reset.
+	//
+	// Table order below follows Document's own field order (internal/backup/
+	// backup.go), itself the migration file's dependency order - not because
+	// these statements must run in that order (internal/backup/restore.go's own
+	// comment says why they need not), but so this file reads the same way the
+	// schema and the export already do.
+	DeleteAllFunds(ctx context.Context) error
+	DeleteAllIncidentalRecipients(ctx context.Context) error
+	DeleteAllIncidentals(ctx context.Context) error
+	DeleteAllMembers(ctx context.Context) error
+	DeleteAllPurposes(ctx context.Context) error
+	DeleteAllReceipts(ctx context.Context) error
+	DeleteAllReconciliationLines(ctx context.Context) error
+	DeleteAllReconciliations(ctx context.Context) error
+	DeleteAllReimbursements(ctx context.Context) error
 	// DeleteAllSessions signs every device out. A password reset (#287) calls it:
 	// the instance holds one login (ADR-030), so "every session" is exactly "every
 	// session of the account whose password just changed", and a reset that left
 	// an old cookie working would not be a reset.
 	DeleteAllSessions(ctx context.Context) error
+	DeleteAllTransactions(ctx context.Context) error
+	DeleteAllTransfers(ctx context.Context) error
 	// DeleteDuesRate is what makes a wrong-month rate correctable at all, since
 	// UNIQUE (tier_id, effective_from) refuses the corrected row otherwise.
 	DeleteDuesRate(ctx context.Context, id int64) error
@@ -320,6 +348,14 @@ type Querier interface {
 	// page_limit is page size + 1, the same peek-one-extra-row trick every
 	// other paged list in this package uses.
 	ListDuesPaymentsPage(ctx context.Context, arg ListDuesPaymentsPageParams) ([]ListDuesPaymentsPageRow, error)
+	// ListDuesRatesByFund is the backup export's own read (ADR-012, #323): every
+	// rate across every tier the fund owns. dues_rate carries no fund_id of its
+	// own, so the join through dues_tier is the only way to scope it - the same
+	// reasoning GetDuesRateForFund's own comment gives. Ordered by id purely for
+	// the export's own deterministic byte order, not a claim about the rate's
+	// effective date (ListDuesRatesByTier above already owns that ordering for
+	// its own caller).
+	ListDuesRatesByFund(ctx context.Context, fundID int64) ([]DuesRate, error)
 	ListDuesRatesByTier(ctx context.Context, tierID int64) ([]DuesRate, error)
 	ListDuesTiersByFund(ctx context.Context, fundID int64) ([]DuesTier, error)
 	ListFunds(ctx context.Context) ([]Fund, error)
@@ -329,6 +365,15 @@ type Querier interface {
 	// ListMembersPage uses - rather than insertion order, which carries no
 	// meaning here (CLAUDE.md's "no primary-key order" rule).
 	ListIncidentalRecipients(ctx context.Context, purposeID int64) ([]ListIncidentalRecipientsRow, error)
+	// ListIncidentalRecipientsByFund is the backup export's own read (ADR-012,
+	// #323): every recipient row across every envelope the fund owns, in its
+	// own raw columns (fund_id, purpose_id, member_id) rather than
+	// ListIncidentalRecipients' joined member_name - the export names the
+	// table's own columns, and a restore reads member_id, not a name. The table
+	// has no single-column id (its primary key is the (fund_id, purpose_id,
+	// member_id) triple), so this orders by that triple directly - purely for
+	// the export's own deterministic byte order.
+	ListIncidentalRecipientsByFund(ctx context.Context, fundID int64) ([]IncidentalRecipient, error)
 	// Joined through purpose because that is where fund ownership lives; incidental
 	// has no fund_id of its own (it is 1:1 with a purpose row).
 	ListIncidentalsByFund(ctx context.Context, fundID int64) ([]Incidental, error)
@@ -406,9 +451,22 @@ type Querier interface {
 	// appends rows in the order they arrive keeps that same order per parent
 	// id, matching receipt_ids' own "ordered by id ascending" contract.
 	ListReceiptIDsByTransactionIDs(ctx context.Context, arg ListReceiptIDsByTransactionIDsParams) ([]ListReceiptIDsByTransactionIDsRow, error)
+	// ListReceiptsByFund is the backup export's own read (ADR-012, #323): every
+	// receipt row the fund owns, so the zip's receipts/ folder and uruni.json's
+	// receipt rows name the same files (path is the on-disk filename under
+	// URUNI_UPLOADS_DIR, ADR-011). Ordered by id purely for the export's own
+	// deterministic byte order.
+	ListReceiptsByFund(ctx context.Context, fundID int64) ([]Receipt, error)
 	ListReceiptsByReimbursement(ctx context.Context, reimbursementID *int64) ([]Receipt, error)
 	ListReceiptsByTransaction(ctx context.Context, transactionID *int64) ([]Receipt, error)
 	ListReconciliationLines(ctx context.Context, reconciliationID int64) ([]ReconciliationLine, error)
+	// ListReconciliationLinesByFund is the backup export's own read (ADR-012,
+	// #323): every line across every snapshot, matched or not - unlike
+	// ListOpenReconciliationLinesByFund above, nothing here is filtered by
+	// resolution or superseded by a later count, since a restore needs the
+	// whole frozen history back, not just what is still open today. Ordered by
+	// id purely for the export's own deterministic byte order.
+	ListReconciliationLinesByFund(ctx context.Context, fundID int64) ([]ReconciliationLine, error)
 	// Newest first: the home screen wants the last count, not the first.
 	ListReconciliationsByFund(ctx context.Context, fundID int64) ([]Reconciliation, error)
 	// GET /api/reconciliations's real listing (#227, ADR-032 "Lists: paging and
@@ -585,6 +643,13 @@ type Querier interface {
 	//     and for the marker that says a correction exists.
 	ListTransactionsPage(ctx context.Context, arg ListTransactionsPageParams) ([]ListTransactionsPageRow, error)
 	ListTransfersByFund(ctx context.Context, fundID int64) ([]Transfer, error)
+	// ListUsers is the backup export's own read (ADR-012, #323): the whole
+	// table, password hash included - the backup download itself is what
+	// warns the treasurer this file holds the login. user carries no fund_id
+	// (ADR-030), so there is nothing to scope this by; ordered by id purely for
+	// the export's own deterministic byte order (CLAUDE.md's "no primary-key
+	// order" binds a semantic guarantee, not a serialization tiebreak).
+	ListUsers(ctx context.Context) ([]User, error)
 	// The reconciliation cutoff. Deliberately not an aggregate: SELECT
 	// CAST(MAX(id) AS INTEGER) generates a non-nullable (int64, error), and a
 	// bare aggregate with no GROUP BY still returns one row on an empty table
@@ -623,6 +688,25 @@ type Querier interface {
 	// fund; this query itself stays unscoped, the same shape CloseIncidental
 	// already uses.
 	ReopenIncidental(ctx context.Context, purposeID int64) (Incidental, error)
+	RestoreAccount(ctx context.Context, arg RestoreAccountParams) error
+	RestoreDuesRate(ctx context.Context, arg RestoreDuesRateParams) error
+	RestoreDuesTier(ctx context.Context, arg RestoreDuesTierParams) error
+	RestoreFund(ctx context.Context, arg RestoreFundParams) error
+	RestoreIncidental(ctx context.Context, arg RestoreIncidentalParams) error
+	RestoreIncidentalRecipient(ctx context.Context, arg RestoreIncidentalRecipientParams) error
+	RestoreMember(ctx context.Context, arg RestoreMemberParams) error
+	RestorePurpose(ctx context.Context, arg RestorePurposeParams) error
+	RestoreReceipt(ctx context.Context, arg RestoreReceiptParams) error
+	RestoreReconciliation(ctx context.Context, arg RestoreReconciliationParams) error
+	RestoreReconciliationLine(ctx context.Context, arg RestoreReconciliationLineParams) error
+	RestoreReimbursement(ctx context.Context, arg RestoreReimbursementParams) error
+	// RestoreTransaction is the one insert restore.go must sequence with care
+	// (ADR-012's obligation 1): "transaction" keeps its transaction_named_row_shape
+	// BEFORE INSERT trigger live through a restore - on purpose, it is what
+	// refuses a hand-edited or corrupted backup - so every row naming a
+	// reverses_transaction_id must still be inserted after the row it names.
+	RestoreTransaction(ctx context.Context, arg RestoreTransactionParams) error
+	RestoreTransfer(ctx context.Context, arg RestoreTransferParams) error
 	// TouchSession is the sliding 30-day idle timeout (#113): every read that
 	// proves the session still valid pushes expires_at forward by the same fixed
 	// window, computed by the caller - there is no absolute cap to enforce here.

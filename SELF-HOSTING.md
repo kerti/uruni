@@ -25,7 +25,6 @@ Then open your domain and sign in as the treasurer.
 |---|---|
 | `URUNI_TAG` | Pinned image version to run. |
 | `URUNI_BASE_URL` | Public base URL — Caddy serves this host and fetches TLS for it — the shareable report link is built from it, and its scheme decides whether the session cookie is `Secure`. **Required: the app refuses to start unset or on the `https://uruni.example.com` placeholder.** |
-| `SMTP_URL` | Optional — enable emailed periodic backups. |
 | `URUNI_LOG_LEVEL` | Optional — `debug`, `info` (default), `warn`, `error`. |
 | `URUNI_LOG_FORMAT` | Optional — `text` (default) or `json`. |
 

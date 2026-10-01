@@ -17,8 +17,8 @@ import (
 func env(t *testing.T, overrides map[string]string) {
 	t.Helper()
 	for _, name := range []string{
-		"URUNI_DB", "PORT", "URUNI_BASE_URL", "URUNI_UPLOADS_DIR",
-		"SMTP_URL", "URUNI_LOG_LEVEL", "URUNI_LOG_FORMAT",
+		"URUNI_DB", "PORT", "URUNI_BASE_URL", "URUNI_UPLOADS_DIR", "URUNI_BACKUP_DIR",
+		"URUNI_LOG_LEVEL", "URUNI_LOG_FORMAT",
 	} {
 		t.Setenv(name, "")
 	}
@@ -48,16 +48,14 @@ func TestLoadDefaultsEverythingItCan(t *testing.T) {
 	if cfg.UploadsDir != DefaultUploadsDir {
 		t.Errorf("UploadsDir = %q, want %q", cfg.UploadsDir, DefaultUploadsDir)
 	}
+	if cfg.BackupDir != DefaultBackupDir {
+		t.Errorf("BackupDir = %q, want %q", cfg.BackupDir, DefaultBackupDir)
+	}
 	if cfg.LogLevel != slog.LevelInfo {
 		t.Errorf("LogLevel = %v, want info", cfg.LogLevel)
 	}
 	if cfg.LogFormat != LogFormatText {
 		t.Errorf("LogFormat = %q, want %q", cfg.LogFormat, LogFormatText)
-	}
-	// Optional, and unset here - emailed backups (M8) are the only thing that
-	// needs it.
-	if cfg.SMTPURL != "" {
-		t.Errorf("SMTPURL = %q, want empty", cfg.SMTPURL)
 	}
 }
 
@@ -66,12 +64,10 @@ func TestLoadReadsEveryVariable(t *testing.T) {
 		"URUNI_DB":          "/data/uruni.db",
 		"PORT":              "8099",
 		"URUNI_UPLOADS_DIR": "/uploads",
+		"URUNI_BACKUP_DIR":  "/backups",
 		"URUNI_BASE_URL":    testBaseURL + "/",
-		// Credential-free on purpose: this test is about every variable being
-		// read through, and an SMTP URL needs no auth to prove that.
-		"SMTP_URL":         "smtp://smtp.example.com:587",
-		"URUNI_LOG_LEVEL":  "debug",
-		"URUNI_LOG_FORMAT": "json",
+		"URUNI_LOG_LEVEL":   "debug",
+		"URUNI_LOG_FORMAT":  "json",
 	})
 
 	cfg, err := Load()
@@ -83,10 +79,10 @@ func TestLoadReadsEveryVariable(t *testing.T) {
 		DBPath:     "/data/uruni.db",
 		Port:       8099,
 		UploadsDir: "/uploads",
+		BackupDir:  "/backups",
 		// The trailing slash is trimmed so callers can join paths without
 		// producing "https://host//report/xyz".
 		BaseURL:   testBaseURL,
-		SMTPURL:   "smtp://smtp.example.com:587",
 		LogLevel:  slog.LevelDebug,
 		LogFormat: LogFormatJSON,
 	}
@@ -108,8 +104,6 @@ func TestLoadRejectsBadValues(t *testing.T) {
 		{"port above range", map[string]string{"PORT": "70000"}, "PORT"},
 		{"base url relative", map[string]string{"URUNI_BASE_URL": "/report"}, "URUNI_BASE_URL"},
 		{"base url no scheme", map[string]string{"URUNI_BASE_URL": "uruni.example.com"}, "URUNI_BASE_URL"},
-		{"smtp url wrong scheme", map[string]string{"SMTP_URL": "https://smtp.example.com"}, "SMTP_URL"},
-		{"smtp url no host", map[string]string{"SMTP_URL": "smtp://"}, "SMTP_URL"},
 		{"log level unknown", map[string]string{"URUNI_LOG_LEVEL": "chatty"}, "URUNI_LOG_LEVEL"},
 		{"log format unknown", map[string]string{"URUNI_LOG_FORMAT": "xml"}, "URUNI_LOG_FORMAT"},
 	}
@@ -148,20 +142,15 @@ func TestLoadRefusesAnUnconfiguredBaseURL(t *testing.T) {
 	}
 }
 
-// SMTP_URL carries a password: if it reached an error message it would reach
-// the container logs, and from there an issue thread.
-func TestLoadNeverEchoesACredential(t *testing.T) {
-	// Invalid on its percent-escape, so it is rejected *as a URL* - the path
-	// where echoing the value would be most tempting. Assembled from parts
-	// rather than written as one literal so the fixture does not itself read as
-	// a checked-in `scheme://user:pass@host` credential.
-	const canary = "hunter2"
-	smtp := "smtps://bendahara:" + canary + "@smtp.example.com:587/%zz"
-	env(t, map[string]string{"URUNI_BASE_URL": testBaseURL, "SMTP_URL": smtp})
-	if _, err := Load(); err == nil {
-		t.Fatal("Load() with a malformed SMTP_URL = nil, want an error")
-	} else if strings.Contains(err.Error(), canary) {
-		t.Errorf("Load() leaked the SMTP password: %q", err)
+// #327: emailed backups were cut (ADR-012), so SMTP_URL is no longer a
+// variable. An operator who still sets one - even a malformed one - boots
+// normally rather than failing on a line that configures nothing.
+func TestLoadIgnoresSMTPURL(t *testing.T) {
+	env(t, map[string]string{"URUNI_BASE_URL": testBaseURL})
+	t.Setenv("SMTP_URL", "not a url %zz")
+
+	if _, err := Load(); err != nil {
+		t.Fatalf("Load() = %v, want nil", err)
 	}
 }
 
@@ -194,6 +183,20 @@ func TestLoadReadsUploadsDirOverride(t *testing.T) {
 	}
 	if cfg.UploadsDir != "/uploads" {
 		t.Errorf("UploadsDir = %q, want %q", cfg.UploadsDir, "/uploads")
+	}
+}
+
+// #324: the compose stack overrides URUNI_BACKUP_DIR to the volume-mounted
+// /backups explicitly, the same pattern as URUNI_UPLOADS_DIR above.
+func TestLoadReadsBackupDirOverride(t *testing.T) {
+	env(t, map[string]string{"URUNI_BASE_URL": testBaseURL, "URUNI_BACKUP_DIR": "/backups"})
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() = %v, want nil", err)
+	}
+	if cfg.BackupDir != "/backups" {
+		t.Errorf("BackupDir = %q, want %q", cfg.BackupDir, "/backups")
 	}
 }
 
@@ -250,5 +253,61 @@ func TestEnsureUploadsDirWritableRefusesAReadOnlyDir(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "URUNI_UPLOADS_DIR") {
 		t.Errorf("EnsureUploadsDirWritable(read-only dir) = %q, want it to name URUNI_UPLOADS_DIR", err)
+	}
+}
+
+// EnsureBackupDirWritable (#324) is EnsureUploadsDirWritable's own twin -
+// the four cases below mirror its four tests above exactly, one per branch.
+
+func TestEnsureBackupDirWritableAcceptsAWritableDir(t *testing.T) {
+	if err := EnsureBackupDirWritable(t.TempDir()); err != nil {
+		t.Errorf("EnsureBackupDirWritable(writable temp dir) = %v, want nil", err)
+	}
+}
+
+func TestEnsureBackupDirWritableRefusesAMissingDir(t *testing.T) {
+	missing := filepath.Join(t.TempDir(), "does-not-exist")
+
+	err := EnsureBackupDirWritable(missing)
+	if !errors.Is(err, ErrInvalidConfig) {
+		t.Fatalf("EnsureBackupDirWritable(missing) = %v, want ErrInvalidConfig", err)
+	}
+	if !strings.Contains(err.Error(), "URUNI_BACKUP_DIR") {
+		t.Errorf("EnsureBackupDirWritable(missing) = %q, want it to name URUNI_BACKUP_DIR", err)
+	}
+}
+
+func TestEnsureBackupDirWritableRefusesAFileNotADir(t *testing.T) {
+	file := filepath.Join(t.TempDir(), "a-file")
+	if err := os.WriteFile(file, []byte("not a directory"), 0o600); err != nil {
+		t.Fatalf("writing fixture file: %v", err)
+	}
+
+	err := EnsureBackupDirWritable(file)
+	if !errors.Is(err, ErrInvalidConfig) {
+		t.Fatalf("EnsureBackupDirWritable(a file) = %v, want ErrInvalidConfig", err)
+	}
+	if !strings.Contains(err.Error(), "URUNI_BACKUP_DIR") {
+		t.Errorf("EnsureBackupDirWritable(a file) = %q, want it to name URUNI_BACKUP_DIR", err)
+	}
+}
+
+func TestEnsureBackupDirWritableRefusesAReadOnlyDir(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("running as root - permission bits do not apply")
+	}
+
+	dir := t.TempDir()
+	if err := os.Chmod(dir, 0o500); err != nil { //nolint:gosec // a directory needs its execute bit to be traversable at all; 0600 (gosec's default ceiling) would not be a directory mode
+		t.Fatalf("chmod fixture dir read-only: %v", err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(dir, 0o700) }) //nolint:gosec // restoring t.TempDir()'s own directory mode so it can clean up after itself
+
+	err := EnsureBackupDirWritable(dir)
+	if !errors.Is(err, ErrInvalidConfig) {
+		t.Fatalf("EnsureBackupDirWritable(read-only dir) = %v, want ErrInvalidConfig", err)
+	}
+	if !strings.Contains(err.Error(), "URUNI_BACKUP_DIR") {
+		t.Errorf("EnsureBackupDirWritable(read-only dir) = %q, want it to name URUNI_BACKUP_DIR", err)
 	}
 }

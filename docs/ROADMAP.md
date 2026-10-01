@@ -26,9 +26,9 @@ Cut an **`alpha.N`** whenever a slice (or a coherent batch within one) lands gre
 | **M5 Auth** | `v0.5.0` | 5 | Local email/password + sessions. |
 | **M6 Everyday UI** ★ | `v0.6.0` | 6 | The loop: record → home (balance hero + reconciliation status) → reconcile. **First pilotable build** — deployable for the treasurer to actually try. |
 | **M7 Public report** | `v0.7.0` | 7 | SSR report page, filters, stable unguessable slug, `noindex`, optional regenerate. |
-| **M8 Backup/export** | `v0.8.0` | 8 | JSON (canonical + import), Excel, scheduled dumps, optional SMTP email. |
+| **M8 Excel export** | `v0.8.0` | 8 | The human-readable `.xlsx` workbook ([ADR-012](./ADR/012-backup-and-export.md)). Backup, restore and daily dumps moved into M6 on 2026-09-28; SMTP was cut. |
 | **M9 Self-host & deploy** | `v0.9.0` | 9 | Dockerfile, compose, Caddy, `SELF-HOSTING.md`, pinned `URUNI_TAG`. Hardening for a real operator. |
-| **Production** | `v1.0.0` | — | First real, maintained deployment for a live treasurer. Migration immutability begins; upgrade contract goes live. |
+| **Production** | `v1.0.0` | — | First real, maintained deployment for a live treasurer. Migration immutability begins; upgrade contract goes live. **Gate:** the backup importer's format upgrade chain ships in or before this release ([ADR-012](./ADR/012-backup-and-export.md)). |
 
 ★ **M6 is the real milestone to aim for** — everything before it is scaffolding toward the moment the treasurer can record → see balance → reconcile on her phone. Ship a private pilot at `v0.6.x` before polishing M7–M9.
 

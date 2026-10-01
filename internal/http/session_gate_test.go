@@ -81,6 +81,12 @@ var gatedRoutes = []struct {
 	{http.MethodPost, "/api/reimbursements/1/receipts"},
 	{http.MethodGet, "/api/receipts/1"},
 	{http.MethodDelete, "/api/receipts/1"},
+	{http.MethodGet, "/api/backup"},
+	{http.MethodGet, "/api/backups"},
+	{http.MethodGet, "/api/backups/uruni-20260930-140501-daily-fv1-3f9a2c8e10b4.zip"},
+	{http.MethodPost, "/api/restore/inspect"},
+	{http.MethodPost, "/api/restore/inspect-stored/uruni-20260930-140501-daily-fv1-3f9a2c8e10b4.zip"},
+	{http.MethodPost, "/api/restore/confirm"},
 }
 
 // TestEveryGatedRouteReturns401WithNoSession is the DoD's first line: every
