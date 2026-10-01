@@ -1,4 +1,6 @@
-import { render, screen, waitFor, within } from '@testing-library/react'
+import { render as rtlRender, screen, waitFor, within } from '@testing-library/react'
+import type { ReactElement } from 'react'
+import { MemoryRouter } from 'react-router-dom'
 import userEvent from '@testing-library/user-event'
 import { vi } from 'vitest'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -6,7 +8,14 @@ import { afterEach, describe, expect, it } from 'vitest'
 import TransactionList from '@/components/TransactionList'
 import { copy } from '@/copy/id'
 import { formatPeriod } from '@/lib/dates'
+import { formatIDR } from '@/lib/money'
 import type { Transaction } from '@/lib/transactions'
+
+// TransactionList keeps its entry-detail dialog in the URL (#359,
+// ADR-032), so every render needs a router.
+function render(ui: ReactElement) {
+  return rtlRender(ui, { wrapper: MemoryRouter })
+}
 
 const purposeNames = new Map([
   [1, 'Kas Utama'],
@@ -283,7 +292,10 @@ describe('TransactionList purpose correction (#276, ADR-033)', () => {
   it('offers no control at all where no handler is passed - Beranda stays inert', () => {
     renderRows([transaction({ id: 15 })])
 
-    expect(screen.queryByRole('button')).not.toBeInTheDocument()
+    // The only button left is the card's own read-only detail tap (#359).
+    expect(screen.getAllByRole('button').map((b) => b.getAttribute('aria-label'))).toEqual([
+      copy.transactionDetail.openAria('Kas Utama', formatIDR(25_000), '12 Agustus 2026'),
+    ])
     expect(screen.getByText('Kas Utama')).toBeInTheDocument()
   })
 
@@ -521,5 +533,50 @@ describe('TransactionList receipt photos (#154)', () => {
     renderRows([transaction({ id: 22, receipt_ids: [] })])
 
     expect(screen.queryByRole('button', { name: text.addFromRow })).not.toBeInTheDocument()
+  })
+})
+
+describe('TransactionList entry detail (#359)', () => {
+  const longNote = 'Beli semen 3 sak, pasir 1 pikap, dan upah tukang dua hari untuk perbaikan saluran air di gang belakang pos ronda'
+
+  it('opens the entry in full on a tap of the card, with the whole note and when it was recorded', async () => {
+    renderRows([transaction({ direction: 'out', note: longNote, created_at: Date.UTC(2026, 9, 1, 6, 42) / 1000 })])
+
+    await userEvent.click(screen.getByRole('button', { name: /^Lihat rincian:/ }))
+
+    const dialog = await screen.findByRole('dialog', { name: copy.transactionDetail.heading })
+    expect(within(dialog).getByText(longNote)).toBeInTheDocument()
+    expect(within(dialog).getByText(copy.transactionDetail.directionOut)).toBeInTheDocument()
+    expect(within(dialog).getByText('Tunai')).toBeInTheDocument()
+    expect(within(dialog).getByText(copy.transactionDetail.recordedAtLabel)).toBeInTheDocument()
+    expect(within(dialog).getByText(/1 Oktober 2026.*13[.:]42/)).toBeInTheDocument()
+  })
+
+  it('shows the peruntukan the money is under now on a corrected row', async () => {
+    renderRows([transaction({ purpose_id: 1, effective_purpose_id: 2 })])
+
+    await userEvent.click(screen.getByRole('button', { name: /^Lihat rincian:/ }))
+
+    const dialog = await screen.findByRole('dialog')
+    expect(within(dialog).getByText('Kas Utama')).toBeInTheDocument()
+    expect(within(dialog).getByText(copy.purposeCorrection.currentLabel("Jane's wedding"))).toBeInTheDocument()
+  })
+
+  it('carries the app-built label in full, e.g. a reconciliation adjustment', async () => {
+    renderRows([transaction({ kind: 'adjustment', direction: 'out', is_reconciliation_fix: true })])
+
+    await userEvent.click(screen.getByRole('button', { name: /^Lihat rincian:/ }))
+
+    const dialog = await screen.findByRole('dialog')
+    expect(within(dialog).getByText(copy.rowLabels.reconciliationFix.text('Tunai'))).toBeInTheDocument()
+  })
+
+  it('leaves a row control to do its own job, without opening the detail', async () => {
+    const { onCorrectPurpose } = renderCorrectableRows([transaction({ direction: 'out' })])
+
+    await userEvent.click(screen.getByRole('button', { name: copy.purposeCorrection.controlAria('Kas Utama') }))
+
+    expect(onCorrectPurpose).toHaveBeenCalledTimes(1)
+    expect(screen.queryByRole('dialog', { name: copy.transactionDetail.heading })).not.toBeInTheDocument()
   })
 })

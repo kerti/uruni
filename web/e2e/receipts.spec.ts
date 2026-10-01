@@ -28,7 +28,7 @@ test.describe('receipt photos', () => {
   test('records a transaction with an optional photo, uploaded after the row posts', async ({ page }) => {
     await page.goto('/')
     await page.getByLabel(copy.auth.login.emailLabel).fill(seedEmail)
-    await page.getByLabel(copy.auth.login.passwordLabel).fill(seedPassword)
+    await page.getByLabel(copy.auth.login.passwordLabel, { exact: true }).fill(seedPassword)
     await page.getByRole('button', { name: copy.auth.login.submit }).click()
     await expect(page.getByText(copy.home.balanceHeading)).toBeVisible()
 

@@ -1025,6 +1025,26 @@ export const copy = {
   // the correcting. The word is "peruntukan" throughout - CONTEXT.md's one
   // word per concept - and never "reklasifikasi", which is journal
   // vocabulary the treasurer does not use.
+  // One ledger entry read in full (#359) - opened by tapping a card in any
+  // transaction list. Field labels reuse the record form's own nouns
+  // (CONTEXT.md: one word per concept); "Dicatat pada" is the one new one,
+  // for when the entry was actually recorded, as opposed to its Tanggal.
+  transactionDetail: {
+    heading: 'Rincian transaksi',
+    // Names the card's own full-width tap target for a screen reader - with
+    // the row's own facts, since a list of twenty-five identical "lihat
+    // rincian" controls tells her nothing (purposeCorrection.controlAria's
+    // own reasoning).
+    openAria: (purposeName: string, amount: string, date: string) => `Lihat rincian: ${purposeName}, ${amount}, ${date}`,
+    directionIn: 'Uang masuk',
+    directionOut: 'Uang keluar',
+    purposeLabel: 'Peruntukan',
+    noteLabel: 'Catatan',
+    locationLabel: 'Lokasi',
+    dateLabel: 'Tanggal',
+    recordedAtLabel: 'Dicatat pada',
+    receiptsLabel: 'Foto nota',
+  },
   purposeCorrection: {
     // The control the peruntukan itself becomes on an eligible row. Names
     // the row it would correct, because a screen reader meets it as one of

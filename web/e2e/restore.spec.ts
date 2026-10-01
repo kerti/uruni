@@ -31,7 +31,7 @@ test.describe('restore', () => {
 
   async function logIn(page: Page) {
     await page.getByLabel(copy.auth.login.emailLabel).fill(seedEmail)
-    await page.getByLabel(copy.auth.login.passwordLabel).fill(seedPassword)
+    await page.getByLabel(copy.auth.login.passwordLabel, { exact: true }).fill(seedPassword)
     await page.getByRole('button', { name: copy.auth.login.submit }).click()
     await expect(page.getByText(copy.home.balanceHeading)).toBeVisible()
   }

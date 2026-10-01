@@ -28,6 +28,7 @@ import { ClosedIncidentals } from '@/screens/Settings/Incidentals'
 import { getSession } from '@/lib/auth'
 import { getFund } from '@/lib/setup'
 import { useApi } from '@/lib/useApi'
+import { useRefetchKey } from '@/lib/useDialogParam'
 import type { SessionStatus, AuthUser } from '@/lib/auth'
 import type { Fund } from '@/lib/setup'
 import { copy } from '@/copy/id'
@@ -174,6 +175,9 @@ function AuthedGate({ onLoggedOut }: { onLoggedOut: () => void }) {
   const [state, run] = useApi<Fund>()
   const navigate = useNavigate()
   const location = useLocation()
+  // location.key, minus the entries a dialog pushes or clears - so opening
+  // a dialog never reloads the list under it (#359, useRefetchKey).
+  const refetchKey = useRefetchKey()
   const [searchParams] = useSearchParams()
 
   // ?purpose=<id> - shared by three routes, and read here for two of them
@@ -214,7 +218,7 @@ function AuthedGate({ onLoggedOut }: { onLoggedOut: () => void }) {
 
   // The record form's own onRecorded contract (RecordTransaction.tsx): fired
   // once after a successful POST /api/transactions. Home reads
-  // location.key (below) to refetch its data on this navigation, so the new
+  // refetchKey (useRefetchKey) to refetch its data on this navigation, so the new
   // entry is visible in recent activity without a manual refresh; the
   // success message itself stays here, not duplicated inside Home.
   //
@@ -310,10 +314,10 @@ function AuthedGate({ onLoggedOut }: { onLoggedOut: () => void }) {
         }
       >
         <Route index element={<Navigate to="transactions" replace />} />
-        <Route path="transactions" element={<Transactions refetchKey={location.key} />} />
-        <Route path="dues" element={<PaymentHistory onOpenStatus={() => navigate('/dues')} refetchKey={location.key} />} />
-        <Route path="reimbursements" element={<Reimbursements refetchKey={location.key} />} />
-        <Route path="reconciliations" element={<Reconciliations refetchKey={location.key} />} />
+        <Route path="transactions" element={<Transactions refetchKey={refetchKey} />} />
+        <Route path="dues" element={<PaymentHistory onOpenStatus={() => navigate('/dues')} refetchKey={refetchKey} />} />
+        <Route path="reimbursements" element={<Reimbursements refetchKey={refetchKey} />} />
+        <Route path="reconciliations" element={<Reconciliations refetchKey={refetchKey} />} />
       </Route>
       {/* The dues status roster, its own screen again (#228): one month's
           reading does not share a page with an unbounded list, so it sits
@@ -326,7 +330,7 @@ function AuthedGate({ onLoggedOut }: { onLoggedOut: () => void }) {
             <DuesStatus
               onBack={() => navigate('/history/dues')}
               onRecordPayment={() => navigate('/record?type=dues', { state: { fromDues: true } satisfies RecordFromDuesState })}
-              refetchKey={location.key}
+              refetchKey={refetchKey}
               notice={duesRecorded ? copy.dues.payment.success : null}
             />
           </Shell>
@@ -429,7 +433,7 @@ function AuthedGate({ onLoggedOut }: { onLoggedOut: () => void }) {
               </p>
             )}
             <Home
-              refetchKey={location.key}
+              refetchKey={refetchKey}
               onReconcile={() => navigate('/reconcile')}
               onOpenIncidental={(purposeId) => navigate(`/incidentals?purpose=${purposeId}`)}
               onViewHistory={() => navigate('/history/transactions')}

@@ -62,7 +62,7 @@ interface FirstPage {
  * for it: the filter can only arrive as a link and can always be cleared,
  * which keeps M7's filter set (ADR-032) from being built here early.
  *
- * `refetchKey` is App.tsx's `location.key`, the same mechanism Home already
+ * `refetchKey` is App.tsx's `useRefetchKey()` (location.key, minus dialog entries), the same mechanism Home already
  * uses to pick up a transaction just recorded elsewhere.
  */
 export default function Transactions({ refetchKey }: { refetchKey?: unknown }) {

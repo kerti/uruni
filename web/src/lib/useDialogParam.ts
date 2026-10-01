@@ -1,4 +1,4 @@
-import { useCallback } from 'react'
+import { useCallback, useState } from 'react'
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 
 /** The private tag this hook writes to `location.state` on the entry it
@@ -8,6 +8,41 @@ import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
  * bookmark). */
 interface DialogLocationState {
   dialog?: boolean
+  /** Set by `clear()`: this entry differs from the one before it only by a
+   * dialog param removed in place - see useRefetchKey. */
+  dialogCleared?: boolean
+}
+
+/** Whether this history entry exists only because a dialog opened or
+ * closed in place - nothing about the screen's data changed. */
+function isDialogEntry(state: unknown): boolean {
+  const s = state as DialogLocationState | null
+  return s?.dialog === true || s?.dialogCleared === true
+}
+
+/**
+ * The "reload your data" signal App.tsx hands every screen that refetches on
+ * navigation: `location.key`, except across entries a dialog pushed or
+ * cleared (#359).
+ *
+ * Every navigation mints a new `location.key`, and an open dialog is a
+ * navigation (ADR-032). Fed straight to a screen's refetch, opening any
+ * dialog reloaded the list underneath it - dropped it to Loading, threw away
+ * the pages she had loaded with "Muat lebih banyak", and left her back at
+ * the top. Opening and closing a dialog changes nothing a list shows; a
+ * write made inside one already refreshes its own screen explicitly. So the
+ * key only moves on an entry that is not a dialog's, and going back from a
+ * dialog lands on the very entry - same key - she opened it from.
+ */
+export function useRefetchKey(): string {
+  const location = useLocation()
+  const [key, setKey] = useState(location.key)
+  // Derived state, set during render (React's own pattern for it) so the
+  // screen never renders once with a stale key and once with the new one.
+  if (!isDialogEntry(location.state) && location.key !== key) {
+    setKey(location.key)
+  }
+  return isDialogEntry(location.state) ? key : location.key
 }
 
 /**
@@ -59,7 +94,7 @@ export function useDialogParam(param = 'edit') {
         params.delete(param)
         return params
       },
-      { replace: true },
+      { replace: true, state: { dialogCleared: true } satisfies DialogLocationState },
     )
   }, [param, setSearchParams])
 

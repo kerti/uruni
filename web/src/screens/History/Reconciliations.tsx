@@ -35,7 +35,7 @@ const tabText = copy.history.reconciliations
  * `<h1>` already names the page, and the tab strip is the way back, same as
  * the other three tabs.
  *
- * `refetchKey` is App.tsx's `location.key`, the same mechanism the other
+ * `refetchKey` is App.tsx's `useRefetchKey()` (location.key, minus dialog entries), the same mechanism the other
  * tabs use to pick up a write made elsewhere - a fresh reconciliation just
  * taken on /reconcile, say.
  */

@@ -27,7 +27,7 @@ test.describe('members', () => {
   test('adds a member from the roster screen, then removes them again', async ({ page }) => {
     await page.goto('/')
     await page.getByLabel(copy.auth.login.emailLabel).fill(seedEmail)
-    await page.getByLabel(copy.auth.login.passwordLabel).fill(seedPassword)
+    await page.getByLabel(copy.auth.login.passwordLabel, { exact: true }).fill(seedPassword)
     await page.getByRole('button', { name: copy.auth.login.submit }).click()
     await expect(page.getByText(copy.home.balanceHeading)).toBeVisible()
 
@@ -62,7 +62,7 @@ test.describe('members', () => {
   test('the fund name in the header navigates home', async ({ page }) => {
     await page.goto('/')
     await page.getByLabel(copy.auth.login.emailLabel).fill(seedEmail)
-    await page.getByLabel(copy.auth.login.passwordLabel).fill(seedPassword)
+    await page.getByLabel(copy.auth.login.passwordLabel, { exact: true }).fill(seedPassword)
     await page.getByRole('button', { name: copy.auth.login.submit }).click()
     await expect(page.getByText(copy.home.balanceHeading)).toBeVisible()
 

@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test'
+import { expect, test, type Page } from '@playwright/test'
 
 import { copy } from '../src/copy/id'
 
@@ -10,6 +10,7 @@ import { copy } from '../src/copy/id'
 // Serial, like golden-path.spec.ts and reimbursements.spec.ts: this spec
 // shares one seeded database and reads it as a continuous story. The seeded
 // instance has an account from the e2e fixture (cmd/uruni/seed_e2e.go).
+
 test.describe('incidentals', () => {
   test.describe.configure({ mode: 'serial' })
 
@@ -17,10 +18,19 @@ test.describe('incidentals', () => {
   const seedPassword = 'e2e-fixture-password'
   const occasion = 'Halal bihalal RT E2E'
 
+  // The envelope's own row in Beranda's purpose breakdown, anchored to the
+  // start of its name: Beranda's recent activity also lists this envelope's
+  // entries, and each card's detail button names its peruntukan
+  // ("Lihat rincian: <occasion>, ...", #359), so an unanchored match finds
+  // those too.
+  function berandaRow(page: Page) {
+    return page.getByRole('button', { name: new RegExp(`^${occasion}`) })
+  }
+
   test('open an envelope from Pengaturan and verify it appears on Beranda', async ({ page }) => {
     await page.goto('/')
     await page.getByLabel(copy.auth.login.emailLabel).fill(seedEmail)
-    await page.getByLabel(copy.auth.login.passwordLabel).fill(seedPassword)
+    await page.getByLabel(copy.auth.login.passwordLabel, { exact: true }).fill(seedPassword)
     await page.getByRole('button', { name: copy.auth.login.submit }).click()
     await expect(page.getByText(copy.home.balanceHeading)).toBeVisible()
 
@@ -54,13 +64,13 @@ test.describe('incidentals', () => {
     // Beranda keeps its own entry point too (the ADR's actual point): a
     // fresh visit to home renders the same envelope as its own row.
     await page.getByRole('link', { name: copy.shell.nav.home }).click()
-    await expect(page.getByRole('button', { name: new RegExp(occasion) })).toBeVisible()
+    await expect(berandaRow(page)).toBeVisible()
   })
 
   test('contribute to the envelope through the real record form, and verify the collected total updates', async ({ page }) => {
     await page.goto('/')
     await page.getByLabel(copy.auth.login.emailLabel).fill(seedEmail)
-    await page.getByLabel(copy.auth.login.passwordLabel).fill(seedPassword)
+    await page.getByLabel(copy.auth.login.passwordLabel, { exact: true }).fill(seedPassword)
     await page.getByRole('button', { name: copy.auth.login.submit }).click()
     await expect(page.getByText(copy.home.balanceHeading)).toBeVisible()
 
@@ -68,7 +78,7 @@ test.describe('incidentals', () => {
     // renders as its own row in Beranda's purpose breakdown (M6.33) -
     // tapping it opens that envelope's detail, no separate list screen
     // visited first.
-    await page.getByRole('button', { name: new RegExp(occasion) }).click()
+    await berandaRow(page).click()
     await expect(page.getByText(copy.incidentals.detail.collectedLabel)).toBeVisible()
 
     // "Catat transaksi" hands off to the real record form (M6.8), with this
@@ -89,7 +99,7 @@ test.describe('incidentals', () => {
 
     // Back on home, the row's own balance reflects the contribution, and
     // tapping it again shows the same total on the detail view.
-    await page.getByRole('button', { name: new RegExp(occasion) }).click()
+    await berandaRow(page).click()
     // Anchored to the collected row rather than the page: since M6.33 this
     // amount appears three times over - Beranda's own breakdown row, the
     // recent-five entry for the contribution just recorded, and the detail
@@ -104,13 +114,13 @@ test.describe('incidentals', () => {
   test('close the envelope and verify the rollover is shown honestly', async ({ page }) => {
     await page.goto('/')
     await page.getByLabel(copy.auth.login.emailLabel).fill(seedEmail)
-    await page.getByLabel(copy.auth.login.passwordLabel).fill(seedPassword)
+    await page.getByLabel(copy.auth.login.passwordLabel, { exact: true }).fill(seedPassword)
     await page.getByRole('button', { name: copy.auth.login.submit }).click()
     await expect(page.getByText(copy.home.balanceHeading)).toBeVisible()
 
     // Still open, still its own row on Beranda (M6.33) - tap it straight
     // into the envelope's detail.
-    await page.getByRole('button', { name: new RegExp(occasion) }).click()
+    await berandaRow(page).click()
     await expect(page.getByText(copy.incidentals.detail.collectedLabel)).toBeVisible()
 
     // Open the close form
