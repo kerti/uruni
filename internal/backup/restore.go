@@ -95,14 +95,15 @@ func CreateRestoreStagingTemp(backupDir string) (*os.File, error) {
 	return f, nil
 }
 
-// maxReceiptPixelsForRestore mirrors internal/http/receipt_image.go's own
-// maxReceiptPixels (ADR-011's decode-check cap) - duplicated, not shared,
-// because internal/http already imports internal/backup (the download and
-// list routes) and the reverse import would cycle. If receipt_image.go's
-// own cap ever moves, this one has to move with it; there is no test that
-// catches that drift today; the human-authored comment carries the load a
-// test can't.
-const maxReceiptPixelsForRestore = 50_000_000
+// MaxReceiptPixels bounds what a decoder may allocate (ADR-011's decode
+// check). A body or unzipped-size cap bounds only *compressed* bytes: a
+// ~100-byte PNG can declare 65000x65000 in its header and make image/png
+// allocate gigabytes before it notices the pixel data is missing
+// (x/image/webp has the same gap). 50 MP clears a 48 MP phone sensor with
+// room to spare and keeps one decode to a few hundred MB. Defined here, not
+// in internal/http, because http already imports this package: the receipt
+// upload route and restore share this one constant, so they cannot drift.
+const MaxReceiptPixels = 50_000_000
 
 // Sentinel errors ParseUpload, BuildPreview and Restore return, wrapped
 // with the specific detail (a byte count, a table name, an id) that made
@@ -343,7 +344,7 @@ func validateReceiptImageBytes(data []byte) error {
 	if err != nil {
 		return fmt.Errorf("%w: %v", ErrBadReceiptImage, err) //nolint:errorlint
 	}
-	if int64(cfg.Width)*int64(cfg.Height) > maxReceiptPixelsForRestore {
+	if int64(cfg.Width)*int64(cfg.Height) > MaxReceiptPixels {
 		return fmt.Errorf("%w: %dx%d exceeds the pixel cap", ErrBadReceiptImage, cfg.Width, cfg.Height)
 	}
 	if _, _, err := image.Decode(bytes.NewReader(data)); err != nil {
@@ -574,7 +575,18 @@ func Restore(ctx context.Context, sqlDB *sql.DB, q store.Querier, l *ledger.Ledg
 		return fmt.Errorf("backup: writing the safety-net dump: %w", err)
 	}
 
-	if err := extractReceipts(uploadsDir, parsed.Document, parsed.StagingPath); err != nil {
+	// Receipt files this restore created (not ones already on disk under the
+	// same name, which are the same image) are removed again if anything
+	// below fails before the commit - so a refused restore really does
+	// change nothing but the safety-net dump, as its error copy says.
+	written, err := extractReceipts(uploadsDir, parsed.Document, parsed.StagingPath)
+	committed := false
+	defer func() {
+		if !committed {
+			removeFiles(written)
+		}
+	}()
+	if err != nil {
 		return err
 	}
 
@@ -628,6 +640,7 @@ func Restore(ctx context.Context, sqlDB *sql.DB, q store.Querier, l *ledger.Ledg
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("backup: committing the restore: %w", err)
 	}
+	committed = true
 	return nil
 }
 
@@ -897,9 +910,9 @@ func verifyTotals(ctx context.Context, q store.Querier, doc Document) error {
 // Document with no Receipts at all never opens stagingPath, which is what
 // lets a hand-built ParsedUpload (most of this package's own Restore tests)
 // pass an empty StagingPath safely.
-func extractReceipts(uploadsDir string, doc Document, stagingPath string) error {
+func extractReceipts(uploadsDir string, doc Document, stagingPath string) (written []string, err error) {
 	if len(doc.Receipts) == 0 {
-		return nil
+		return nil, nil
 	}
 
 	//nolint:gosec // stagingPath is either this package's own staging file
@@ -907,17 +920,17 @@ func extractReceipts(uploadsDir string, doc Document, stagingPath string) error 
 	// request input directly.
 	f, err := os.Open(stagingPath)
 	if err != nil {
-		return fmt.Errorf("backup: re-opening the staged upload to extract receipts: %w", err)
+		return nil, fmt.Errorf("backup: re-opening the staged upload to extract receipts: %w", err)
 	}
 	defer func() { _ = f.Close() }()
 
 	info, err := f.Stat()
 	if err != nil {
-		return fmt.Errorf("backup: statting the staged upload: %w", err)
+		return nil, fmt.Errorf("backup: statting the staged upload: %w", err)
 	}
 	zr, err := zip.NewReader(f, info.Size())
 	if err != nil {
-		return fmt.Errorf("backup: re-opening the staged upload as a zip: %w", err)
+		return nil, fmt.Errorf("backup: re-opening the staged upload as a zip: %w", err)
 	}
 	byName := make(map[string]*zip.File, len(zr.File))
 	for _, zf := range zr.File {
@@ -929,11 +942,24 @@ func extractReceipts(uploadsDir string, doc Document, stagingPath string) error 
 		if !ok {
 			continue // ruling 5: a missing image never blocks a restore
 		}
-		if err := writeReceiptFileFromZip(uploadsDir, r.Path, zf); err != nil {
-			return fmt.Errorf("backup: extracting receipt %s: %w", r.Path, err)
+		created, err := writeReceiptFileFromZip(uploadsDir, r.Path, zf)
+		if err != nil {
+			return written, fmt.Errorf("backup: extracting receipt %s: %w", r.Path, err)
+		}
+		if created {
+			written = append(written, filepath.Join(uploadsDir, r.Path))
 		}
 	}
-	return nil
+	return written, nil
+}
+
+// removeFiles deletes each path, best effort: it runs only on a restore that
+// has already failed, and a file it cannot remove is an orphan ADR-011
+// already tolerates, not a reason to mask the original error.
+func removeFiles(paths []string) {
+	for _, p := range paths {
+		_ = os.Remove(p)
+	}
 }
 
 // writeReceiptFileFromZip streams one receipt's zip entry into
@@ -956,16 +982,16 @@ func extractReceipts(uploadsDir string, doc Document, stagingPath string) error 
 // Callers must have already proven name is a bare filename (ParseUpload's
 // own check) - this function does not re-check, the same trust boundary
 // addReceiptToZip already documents for a live receipt row's path.
-func writeReceiptFileFromZip(uploadsDir, name string, zf *zip.File) error {
+func writeReceiptFileFromZip(uploadsDir, name string, zf *zip.File) (created bool, err error) {
 	rc, err := zf.Open()
 	if err != nil {
-		return fmt.Errorf("opening %s in the staged zip: %w", zf.Name, err)
+		return false, fmt.Errorf("opening %s in the staged zip: %w", zf.Name, err)
 	}
 	defer func() { _ = rc.Close() }()
 
 	tmp, err := os.CreateTemp(uploadsDir, ".receipt-restore-*.tmp")
 	if err != nil {
-		return err
+		return false, err
 	}
 	tmpPath := tmp.Name()
 	removeTemp := true
@@ -978,18 +1004,20 @@ func writeReceiptFileFromZip(uploadsDir, name string, zf *zip.File) error {
 	n, err := io.Copy(tmp, io.LimitReader(rc, MaxUnzippedBytes+1))
 	if err != nil {
 		_ = tmp.Close()
-		return err
+		return false, err
 	}
 	if n > MaxUnzippedBytes {
 		_ = tmp.Close()
-		return fmt.Errorf("%w: more than %d bytes unzipped", ErrUnzippedTooLarge, MaxUnzippedBytes)
+		return false, fmt.Errorf("%w: more than %d bytes unzipped", ErrUnzippedTooLarge, MaxUnzippedBytes)
 	}
 	if err := tmp.Close(); err != nil {
-		return err
+		return false, err
 	}
-	if err := os.Rename(tmpPath, filepath.Join(uploadsDir, name)); err != nil {
-		return err
+	dest := filepath.Join(uploadsDir, name)
+	_, statErr := os.Stat(dest)
+	if err := os.Rename(tmpPath, dest); err != nil {
+		return false, err
 	}
 	removeTemp = false
-	return nil
+	return statErr != nil, nil
 }
