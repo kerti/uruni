@@ -65,6 +65,7 @@
 
   <form class="filters" method="get" action="#transactions">
     <input type="hidden" name="month" value="{{.Month}}">
+    {{with .Filter.Active.Get "dues"}}<input type="hidden" name="dues" value="{{.}}">{{end}}
     <label>{{.Text.FilterPurpose}}
       <select name="purpose">
         <option value="">{{.Text.FilterAll}}</option>
@@ -110,6 +111,37 @@
   </ul>
   {{end}}
 </section>
+{{if .HasDues}}
+<section id="dues" aria-labelledby="dues-heading">
+  <h2 id="dues-heading">{{.Text.DuesLabel}}</h2>
+  <form class="filters" method="get" action="#dues">
+    <input type="hidden" name="month" value="{{.Month}}">
+    {{range $name, $values := .Filter.Active}}{{if ne $name "dues"}}{{range $values}}<input type="hidden" name="{{$name}}" value="{{.}}">{{end}}{{end}}{{end}}
+    <label><span class="sr-only">{{.Text.DuesFilter}}</span>
+      <select name="dues">
+        <option value="">{{.Text.FilterAll}}</option>
+        {{range .Filter.Dues}}<option value="{{.Value}}"{{if .Selected}} selected{{end}}>{{.Label}}</option>
+        {{end}}
+      </select>
+    </label>
+    <button type="submit">{{.Text.FilterSubmit}}</button>
+  </form>
+  {{if .Dues}}
+  <ul class="rows dues">
+    {{range .Dues}}
+    <li>
+      <div class="head">
+        <span class="what"><span class="name">{{.Name}}</span><span class="tier">{{$.Text.DuesTier}} {{.Tier}}</span></span>
+        <span class="badge {{.Class}}">{{.Status}}</span>
+      </div>
+      <div class="amounts tabular"><span>{{$.Text.DuesOwed}}: {{.Owed}}</span><span>{{$.Text.DuesPaid}}: {{.Paid}}</span></div>
+      {{if .PaidThrough}}<p class="through">{{.PaidThrough}}</p>{{end}}
+    </li>
+    {{end}}
+  </ul>
+  {{else}}<p class="empty">{{.Text.DuesNoRows}}</p>{{end}}
+</section>
+{{end}}
 {{end}}
 <script>
 // Progressive enhancement: a select submits its form on change, so the

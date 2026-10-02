@@ -3,6 +3,8 @@ package http
 import (
 	"strconv"
 	"time"
+
+	"github.com/kerti/uruni/internal/ledger"
 )
 
 // reportCopy is every Indonesian string the public report prints - the Go
@@ -48,6 +50,22 @@ type reportCopy struct {
 	TotalNet          string
 	HasReceipt        string
 	NoRows            string
+
+	// The dues section (#375). The four statuses are web/src/copy/id.ts's
+	// dues.statuses verbatim, so the report and the app read the same words;
+	// the filter offers three of them, "Lunas" covering paid in advance too.
+	// There is deliberately no arrears wording here (ADR-035).
+	DuesLabel         string
+	DuesFilter        string
+	DuesTier          string
+	DuesOwed          string
+	DuesPaid          string
+	DuesNoRows        string
+	DuesPaidThrough   func(period string) string
+	DuesUnpaid        string
+	DuesPartial       string
+	DuesPaidStatus    string
+	DuesPaidInAdvance string
 
 	// Row labels: the Go half of web/src/copy/id.ts's rowLabels (#257), see
 	// report_labels.go. A location is never named, so Saldo awal and
@@ -99,6 +117,18 @@ var reportText = reportCopy{
 	HasReceipt:        "Ada nota",
 	NoRows:            "Tidak ada transaksi yang cocok bulan ini.",
 
+	DuesLabel:         "Status iuran",
+	DuesFilter:        "Status iuran",
+	DuesTier:          "Golongan",
+	DuesOwed:          "Iuran",
+	DuesPaid:          "Dibayar",
+	DuesNoRows:        "Tidak ada anggota yang cocok bulan ini.",
+	DuesPaidThrough:   func(period string) string { return "Sudah dibayar sampai " + period },
+	DuesUnpaid:        "Belum bayar",
+	DuesPartial:       "Bayar sebagian",
+	DuesPaidStatus:    "Lunas",
+	DuesPaidInAdvance: "Lunas \u2014 sudah bayar di muka",
+
 	RowDues:                 func(period, member string) string { return period + " \u00b7 " + member },
 	RowDuesReversal:         func(period, member string) string { return "Pembatalan \u00b7 " + period + " \u00b7 " + member },
 	RowContributionReversal: func(member string) string { return "Pembatalan \u00b7 " + member },
@@ -137,4 +167,18 @@ func (c reportCopy) monthName(month string) string {
 		return month
 	}
 	return c.Months[t.Month()-1] + " " + strconv.Itoa(t.Year())
+}
+
+// duesStatus is the app's own word for a dues status.
+func (c reportCopy) duesStatus(s ledger.DuesStatus) string {
+	switch s {
+	case ledger.DuesStatusPartial:
+		return c.DuesPartial
+	case ledger.DuesStatusPaid:
+		return c.DuesPaidStatus
+	case ledger.DuesStatusPaidInAdvance:
+		return c.DuesPaidInAdvance
+	default:
+		return c.DuesUnpaid
+	}
 }

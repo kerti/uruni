@@ -63,6 +63,12 @@ type reportPage struct {
 	Month  string
 	NoRows bool
 
+	// The dues section (#375). HasDues is whether any member owes for the
+	// month at all, before the dues filter: it shows the section and the
+	// filter, so a filter that matches nobody still reads as one.
+	HasDues bool
+	Dues    []reportDuesRow
+
 	// Empty is a fund with nothing recorded at all - not merely a quiet
 	// month - which gets the warm line instead of a bare Rp 0.
 	Empty bool
@@ -108,10 +114,23 @@ type reportFilter struct {
 	Purposes   []reportOption
 	Members    []reportOption
 	Directions []reportOption
+	Dues       []reportOption
 
 	// Active is the filters in force, carried by the month steps and the
 	// month form so changing month keeps what the visitor sifted for.
 	Active url.Values
+}
+
+// reportDuesRow is one member's standing. Class is the ledger's status
+// value, which the stylesheet colours; Status is the app's own wording.
+type reportDuesRow struct {
+	Name        string
+	Tier        string
+	Owed        string
+	Paid        string
+	Class       string
+	Status      string
+	PaidThrough string
 }
 
 type reportOption struct {
@@ -179,6 +198,16 @@ func assembleReportPage(ctx context.Context, l *ledger.Ledger, q store.Querier, 
 	}
 	page := buildReportPage(report, empty)
 	page.Filter = filter
+	// A dues filter that matches nobody leaves no rows, which must not read
+	// as "nobody owes": ask the unfiltered question only then.
+	page.HasDues = len(page.Dues) > 0
+	if !page.HasDues && params.DuesStatus != "" {
+		all, err := l.DuesStatusForPeriod(ctx, fundID, report.Month)
+		if err != nil {
+			return reportPage{}, err
+		}
+		page.HasDues = len(all) > 0
+	}
 	if page.PrevMonth != "" {
 		page.PrevHref = monthHref(page.PrevMonth, filter.Active)
 	}
@@ -256,6 +285,18 @@ func readReportFilter(query url.Values, fundID int64, purposes []store.Purpose, 
 	filter.Directions = []reportOption{
 		{Value: ledger.ReportDirectionIn, Label: reportText.DirectionIn, Selected: params.Direction == ledger.ReportDirectionIn},
 		{Value: ledger.ReportDirectionOut, Label: reportText.DirectionOut, Selected: params.Direction == ledger.ReportDirectionOut},
+	}
+
+	wantDues := query.Get("dues")
+	switch wantDues {
+	case ledger.ReportDuesUnpaid, ledger.ReportDuesPartial, ledger.ReportDuesPaid:
+		params.DuesStatus = wantDues
+		filter.Active.Set("dues", wantDues)
+	}
+	filter.Dues = []reportOption{
+		{Value: ledger.ReportDuesUnpaid, Label: reportText.DuesUnpaid, Selected: params.DuesStatus == ledger.ReportDuesUnpaid},
+		{Value: ledger.ReportDuesPartial, Label: reportText.DuesPartial, Selected: params.DuesStatus == ledger.ReportDuesPartial},
+		{Value: ledger.ReportDuesPaid, Label: reportText.DuesPaidStatus, Selected: params.DuesStatus == ledger.ReportDuesPaid},
 	}
 	return params, filter
 }
@@ -337,6 +378,21 @@ func buildReportPage(r ledger.Report, empty bool) reportPage {
 		}
 	}
 	page.NoRows = len(page.Rows) == 0
+
+	for _, d := range r.Dues {
+		row := reportDuesRow{
+			Name: d.MemberName, Tier: d.TierName, Owed: money.FormatIDR(d.Owed), Paid: money.FormatIDR(d.Paid),
+			Class: string(d.Status), Status: reportText.duesStatus(d.Status),
+		}
+		// As the app does: a known end reads as a plain "Lunas" with the
+		// month on its own line.
+		if d.Status == ledger.DuesStatusPaidInAdvance && d.PaidThrough != "" {
+			row.Class = string(ledger.DuesStatusPaid)
+			row.Status = reportText.DuesPaidStatus
+			row.PaidThrough = reportText.DuesPaidThrough(reportText.monthName(d.PaidThrough))
+		}
+		page.Dues = append(page.Dues, row)
+	}
 
 	i := slices.Index(r.Months, r.Month)
 	if i > 0 {
