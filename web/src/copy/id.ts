@@ -842,6 +842,26 @@ export const copy = {
       editTitle: 'Ubah nama kas',
       editAria: (name: string) => `Ubah ${name}`,
     },
+    // The public report's link card (#376, ADR-035). The heading, Salin,
+    // Bagikan and the confirm sentence are the issue's own words; the rest is
+    // the smallest wording the card needs.
+    report: {
+      heading: 'Laporan publik',
+      body: 'Siapa pun yang memegang tautan ini bisa membaca laporan kas tanpa perlu masuk.',
+      linkLabel: 'Tautan laporan publik',
+      copy: 'Salin',
+      copied: 'Tersalin',
+      share: 'Bagikan',
+      // The title Bagikan hands the phone's share sheet.
+      shareTitle: 'Laporan kas',
+      open: 'Buka laporan',
+      renew: 'Buat tautan baru',
+      renewing: 'Membuat…',
+      // The consequence, in terracotta (ADR-032), straight from the issue.
+      renewConfirm: 'Tautan lama berhenti bekerja. Siapa pun yang memegangnya harus diberi tautan baru.',
+      renewConfirmAction: 'Ya, buat tautan baru',
+      cancel: 'Batal',
+    },
     locations: {
       heading: 'Lokasi penyimpanan',
       body: 'Tempat uang kas disimpan — tunai atau rekening. Nama dan jenisnya bisa diubah kapan saja; lokasi yang sudah tidak dipakai bisa dinonaktifkan, catatannya tetap utuh.',

@@ -101,6 +101,7 @@ func New(assets fs.FS, build Build, l *ledger.Ledger, q store.Querier, sqlDB *sq
 		loginLimiter:   newRateLimiter(loginRateLimitMaxAttempts, loginRateLimitWindow),
 		uploadsDir:     uploadsDir,
 		backupDir:      backupDir,
+		baseURL:        strings.TrimRight(baseURL, "/"),
 		restoreStage:   newRestoreStage(),
 	}).routes)
 

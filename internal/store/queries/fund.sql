@@ -25,9 +25,19 @@ ORDER BY id;
 -- screen and the public report - and nothing posted references it, so this
 -- changes no history (the same reasoning UpdateAccount's own rename rests
 -- on). currency and report_slug are deliberately not settable here: one is
--- an invariant through 0.x, the other is the report's unguessable address.
+-- an invariant through 0.x, the other is the report's unguessable address
+-- (which only UpdateFundReportSlug changes).
 -- name: UpdateFund :one
 UPDATE fund
 SET name = ?
+WHERE id = ?
+RETURNING id, name, currency, report_slug, created_at;
+
+-- UpdateFundReportSlug replaces the report's address (ADR-035's leak escape
+-- hatch). The old slug is simply gone: no history, no redirect, so it is an
+-- ordinary unknown slug to GetFundByReportSlug from the next read on.
+-- name: UpdateFundReportSlug :one
+UPDATE fund
+SET report_slug = ?
 WHERE id = ?
 RETURNING id, name, currency, report_slug, created_at;

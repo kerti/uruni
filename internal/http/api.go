@@ -54,6 +54,10 @@ type api struct {
 	// (config.EnsureBackupDirWritable) before this struct is ever built.
 	backupDir string
 
+	// baseURL is URUNI_BASE_URL (no trailing slash; empty in local dev). It
+	// builds the report's shareable link, fundResponse.ReportURL.
+	baseURL string
+
 	// sqlDB is #325's addition: the raw connection restore.go's confirmRestore
 	// hands to internal/backup.Restore, which opens its own write
 	// transaction spanning virtually every table. See router.go's New for
@@ -135,6 +139,7 @@ func (a *api) routes(r chi.Router) {
 		r.Post("/setup", a.setupFund)
 		r.Get("/fund", a.getFund)
 		r.Patch("/fund", a.updateFund)
+		r.Post("/fund/report-slug", a.replaceReportSlug)
 
 		// The fund's structure. Accounts are whatever the treasurer named at
 		// setup (#78) plus anything added or corrected afterward. PATCH and

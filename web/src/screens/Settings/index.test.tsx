@@ -50,7 +50,7 @@ function stubSettings() {
       return Promise.resolve(jsonResponse([{ id: 2, kind: 'pass_through', name: 'Kas Bidang' }]))
     }
     if (url.includes('/api/fund')) {
-      return Promise.resolve(jsonResponse({ id: 1, name: 'Kas RT 05' }))
+      return Promise.resolve(jsonResponse({ id: 1, name: 'Kas RT 05', report_url: 'https://kas.example.org/report/abc' }))
     }
     return Promise.reject(new Error(`unstubbed fetch: ${url}`))
   })

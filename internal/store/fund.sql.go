@@ -132,9 +132,38 @@ type UpdateFundParams struct {
 // screen and the public report - and nothing posted references it, so this
 // changes no history (the same reasoning UpdateAccount's own rename rests
 // on). currency and report_slug are deliberately not settable here: one is
-// an invariant through 0.x, the other is the report's unguessable address.
+// an invariant through 0.x, the other is the report's unguessable address
+// (which only UpdateFundReportSlug changes).
 func (q *Queries) UpdateFund(ctx context.Context, arg UpdateFundParams) (Fund, error) {
 	row := q.db.QueryRowContext(ctx, updateFund, arg.Name, arg.ID)
+	var i Fund
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.Currency,
+		&i.ReportSlug,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
+const updateFundReportSlug = `-- name: UpdateFundReportSlug :one
+UPDATE fund
+SET report_slug = ?
+WHERE id = ?
+RETURNING id, name, currency, report_slug, created_at
+`
+
+type UpdateFundReportSlugParams struct {
+	ReportSlug string
+	ID         int64
+}
+
+// UpdateFundReportSlug replaces the report's address (ADR-035's leak escape
+// hatch). The old slug is simply gone: no history, no redirect, so it is an
+// ordinary unknown slug to GetFundByReportSlug from the next read on.
+func (q *Queries) UpdateFundReportSlug(ctx context.Context, arg UpdateFundReportSlugParams) (Fund, error) {
+	row := q.db.QueryRowContext(ctx, updateFundReportSlug, arg.ReportSlug, arg.ID)
 	var i Fund
 	err := row.Scan(
 		&i.ID,

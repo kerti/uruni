@@ -12,7 +12,7 @@ afterEach(() => {
 const text = copy.setup
 
 const setupResult = {
-  fund: { id: 1, name: 'Kas RT 04', currency: 'IDR', report_slug: 'kas-rt-04', created_at: 1 },
+  fund: { id: 1, name: 'Kas RT 04', currency: 'IDR', report_slug: 'kas-rt-04', report_url: '/report/kas-rt-04', created_at: 1 },
   main_purpose_id: 1,
   accounts: [
     { id: 10, kind: 'cash', name: 'Tunai', inactive_on: null, created_at: 1 },

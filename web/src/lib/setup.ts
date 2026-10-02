@@ -20,6 +20,9 @@ export interface Fund {
   name: string
   currency: string
   report_slug: string
+  /** The shareable link, built server-side from URUNI_BASE_URL. A bare
+   * `/report/<slug>` path when no base URL is configured (local dev). */
+  report_url: string
   created_at: number
 }
 
@@ -160,7 +163,7 @@ export function getFund(): Promise<Fund> {
  * every screen and the public report, and nothing posted references it, so
  * this rewrites no history. currency and report_slug are not settable -
  * one is an invariant through 0.x, the other is the report's unguessable
- * address and rotating it is its own decision.
+ * address, which only replaceReportSlug changes.
  */
 export function renameFund(name: string): Promise<Fund> {
   return apiFetch<Fund>('/api/fund', {
@@ -168,6 +171,15 @@ export function renameFund(name: string): Promise<Fund> {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ name }),
   })
+}
+
+/**
+ * POST /api/fund/report-slug - replaces the public report's link (ADR-035).
+ * The old slug stops resolving at once: no history, no redirect. Answers
+ * with the whole fund, so the caller swaps in the new report_url.
+ */
+export function replaceReportSlug(): Promise<Fund> {
+  return apiFetch<Fund>('/api/fund/report-slug', { method: 'POST' })
 }
 
 /**

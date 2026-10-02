@@ -2,6 +2,7 @@ package ledger
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"io"
 	"math/big"
@@ -322,7 +323,7 @@ func TestSetUpFundAbortsWhenTheSlugSourceFails(t *testing.T) {
 
 	// A failing random source is not a real operating condition, but the slug
 	// is the one value here that must never be quietly weakened: it is
-	// generated once, never rotates, and PRD section 7.9 leans on it being
+	// generated once, changes only on purpose, and PRD section 7.9 leans on it being
 	// unguessable. Setup must abort rather than fall back to anything.
 	original := randInt
 	randInt = func(io.Reader, *big.Int) (*big.Int, error) {
@@ -341,5 +342,53 @@ func TestSetUpFundAbortsWhenTheSlugSourceFails(t *testing.T) {
 	}
 	if len(funds) != 0 {
 		t.Errorf("ListFunds() = %d rows, want 0 - a fund must not exist with an unverified slug", len(funds))
+	}
+}
+
+func TestReplaceReportSlugChangesTheSlugAndKeepsTheSchemaFloor(t *testing.T) {
+	l := newTestLedger(t)
+	ctx := context.Background()
+	res, err := l.SetUpFund(ctx, SetUpFundParams{FundName: "Test Fund", Accounts: defaultSetupAccounts})
+	if err != nil {
+		t.Fatalf("SetUpFund() = %v, want no error", err)
+	}
+
+	got, err := l.ReplaceReportSlug(ctx, res.Fund.ID)
+	if err != nil {
+		t.Fatalf("ReplaceReportSlug() = %v, want no error", err)
+	}
+	if got.ReportSlug == res.Fund.ReportSlug {
+		t.Errorf("slug = %q, want it to differ from the old one", got.ReportSlug)
+	}
+	if len(got.ReportSlug) != reportSlugLength {
+		t.Errorf("len(slug) = %d, want %d", len(got.ReportSlug), reportSlugLength)
+	}
+	if _, err := l.q.GetFundByReportSlug(ctx, res.Fund.ReportSlug); !errors.Is(err, sql.ErrNoRows) {
+		t.Errorf("GetFundByReportSlug(old) = %v, want sql.ErrNoRows", err)
+	}
+	stored, err := l.q.GetFundByReportSlug(ctx, got.ReportSlug)
+	if err != nil || stored.ID != res.Fund.ID {
+		t.Errorf("GetFundByReportSlug(new) = %+v, %v, want the same fund", stored, err)
+	}
+}
+
+func TestReplaceReportSlugAbortsWhenTheSlugSourceFails(t *testing.T) {
+	l := newTestLedger(t)
+	ctx := context.Background()
+	res, err := l.SetUpFund(ctx, SetUpFundParams{FundName: "Test Fund", Accounts: defaultSetupAccounts})
+	if err != nil {
+		t.Fatalf("SetUpFund() = %v, want no error", err)
+	}
+
+	original := randInt
+	randInt = func(io.Reader, *big.Int) (*big.Int, error) { return nil, errors.New("no entropy available") }
+	t.Cleanup(func() { randInt = original })
+
+	if _, err := l.ReplaceReportSlug(ctx, res.Fund.ID); err == nil {
+		t.Fatal("ReplaceReportSlug() = nil error, want the slug failure to abort")
+	}
+	stored, err := l.q.GetFund(ctx, res.Fund.ID)
+	if err != nil || stored.ReportSlug != res.Fund.ReportSlug {
+		t.Errorf("slug after a failed replace = %q (%v), want it unchanged", stored.ReportSlug, err)
 	}
 }
