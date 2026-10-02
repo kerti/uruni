@@ -1,0 +1,73 @@
+-- The public report's reads (ADR-035, #372). Both are read-only and
+-- fund-scoped, and neither orders by primary key: a month is read by date, and
+-- ties on a date are left unordered on purpose (a display list, not an
+-- assertion about insertion order).
+
+-- The first month the report offers. Not an aggregate, for the reason
+-- MaxTransactionIDByFund gives: MIN() on an empty fund is one row of NULL
+-- where this form is zero rows, a clean sql.ErrNoRows the domain reads as "no
+-- ledger yet".
+-- name: FirstTransactionDateByFund :one
+SELECT occurred_on
+FROM "transaction"
+WHERE fund_id = ?
+ORDER BY occurred_on
+LIMIT 1;
+
+-- Every ledger row of one fund dated in [from_date, to_date), with the facts a
+-- display-time label needs (#257) and nothing the page must not carry: no
+-- receipt path or id (has_receipt is a 0/1), no account (a location is the
+-- treasurer's working detail, ADR-035), no row ids. Filters are applied in Go,
+-- not here: a transfer pair must be folded into one row before a purpose
+-- filter can say whether either side matches, and a month is a bounded list.
+--
+-- from_date/to_date are plain 'YYYY-MM-DD' strings, compared as text, which is
+-- exactly how occurred_on already sorts (a CHECK holds it to date()'s own
+-- format). to_date is the FIRST day of the next month, exclusive.
+--
+-- The member columns mirror ListTransactionsPage: member_* is the dues or
+-- contribution member, settlement_member_* the paid-back member of a
+-- settled reimbursement (t.member_id is NULL on that kind). Merged in Go for
+-- the sqlc COALESCE typing reason ListTransactionsPage documents.
+--
+-- The transfer columns are only meaningful on kind='transfer' rows, found the
+-- way ListTransactionsPage finds them: 'out' is the pair's from leg and 'in' its
+-- to leg. Both legs of one pair carry identical from/to facts, so the Go fold
+-- keeps either.
+--
+-- has_receipt is true for a receipt on the row itself, or - on a
+-- reimbursement payout - on the claim it settles: the claim's nota is the proof
+-- of that payout (ADR-011), and the row carries no other.
+-- name: ListReportTransactions :many
+SELECT t.occurred_on, t.created_at, t.direction, t.amount, t.kind,
+       t.purpose_id, p.name AS purpose_name,
+       t.member_id, m.name AS member_name,
+       rb.member_id AS settlement_member_id, rm.name AS settlement_member_name,
+       rb.note AS claim_note,
+       t.dues_period, t.reverses_transaction_id, t.note,
+       t.transfer_id,
+       tr.kind AS transfer_kind,
+       tr.corrects_transaction_id AS transfer_corrects_transaction_id,
+       tf.purpose_id AS transfer_from_purpose_id,
+       tt.purpose_id AS transfer_to_purpose_id,
+       fp.name AS transfer_from_purpose_name,
+       tp.name AS transfer_to_purpose_name,
+       CAST(EXISTS(SELECT 1 FROM reconciliation_line rl WHERE rl.adjustment_transaction_id = t.id) AS INTEGER) AS is_reconciliation_fix,
+       CAST(EXISTS(SELECT 1 FROM receipt rc
+                   WHERE rc.fund_id = t.fund_id
+                     AND (rc.transaction_id = t.id
+                          OR (t.reimbursement_id IS NOT NULL AND rc.reimbursement_id = t.reimbursement_id))) AS INTEGER) AS has_receipt
+FROM "transaction" t
+JOIN purpose p ON p.id = t.purpose_id
+LEFT JOIN member m ON m.id = t.member_id
+LEFT JOIN reimbursement rb ON rb.id = t.reimbursement_id
+LEFT JOIN member rm ON rm.id = rb.member_id
+LEFT JOIN transfer tr ON tr.id = t.transfer_id
+LEFT JOIN "transaction" tf ON tf.transfer_id = t.transfer_id AND tf.direction = 'out'
+LEFT JOIN "transaction" tt ON tt.transfer_id = t.transfer_id AND tt.direction = 'in'
+LEFT JOIN purpose fp ON fp.id = tf.purpose_id
+LEFT JOIN purpose tp ON tp.id = tt.purpose_id
+WHERE t.fund_id = sqlc.arg('fund_id')
+  AND t.occurred_on >= sqlc.arg('from_date')
+  AND t.occurred_on < sqlc.arg('to_date')
+ORDER BY t.occurred_on DESC, t.created_at DESC;

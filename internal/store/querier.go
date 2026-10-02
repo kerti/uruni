@@ -166,6 +166,15 @@ type Querier interface {
 	// row from the sum once something reverses it - which is what makes a
 	// reversed payment disappear from "paid" rather than simply counting twice.
 	DuesPaidByPeriod(ctx context.Context, arg DuesPaidByPeriodParams) ([]DuesPaidByPeriodRow, error)
+	// The public report's reads (ADR-035, #372). Both are read-only and
+	// fund-scoped, and neither orders by primary key: a month is read by date, and
+	// ties on a date are left unordered on purpose (a display list, not an
+	// assertion about insertion order).
+	// The first month the report offers. Not an aggregate, for the reason
+	// MaxTransactionIDByFund gives: MIN() on an empty fund is one row of NULL
+	// where this form is zero rows, a clean sql.ErrNoRows the domain reads as "no
+	// ledger yet".
+	FirstTransactionDateByFund(ctx context.Context, fundID int64) (string, error)
 	// Every balance in Uruni is this shape: sum the ledger, never read a stored
 	// total (CLAUDE.md rule 2). direction carries the sign, so the CASE is the
 	// only place a minus appears. The CAST is not decoration - without it sqlc
@@ -521,6 +530,31 @@ type Querier interface {
 	// page_limit is page size + 1, the same "peek at one extra row" trick
 	// ListTransactionsPage uses to know whether a next page exists.
 	ListReimbursementsPage(ctx context.Context, arg ListReimbursementsPageParams) ([]ListReimbursementsPageRow, error)
+	// Every ledger row of one fund dated in [from_date, to_date), with the facts a
+	// display-time label needs (#257) and nothing the page must not carry: no
+	// receipt path or id (has_receipt is a 0/1), no account (a location is the
+	// treasurer's working detail, ADR-035), no row ids. Filters are applied in Go,
+	// not here: a transfer pair must be folded into one row before a purpose
+	// filter can say whether either side matches, and a month is a bounded list.
+	//
+	// from_date/to_date are plain 'YYYY-MM-DD' strings, compared as text, which is
+	// exactly how occurred_on already sorts (a CHECK holds it to date()'s own
+	// format). to_date is the FIRST day of the next month, exclusive.
+	//
+	// The member columns mirror ListTransactionsPage: member_* is the dues or
+	// contribution member, settlement_member_* the paid-back member of a
+	// settled reimbursement (t.member_id is NULL on that kind). Merged in Go for
+	// the sqlc COALESCE typing reason ListTransactionsPage documents.
+	//
+	// The transfer columns are only meaningful on kind='transfer' rows, found the
+	// way ListTransactionsPage finds them: 'out' is the pair's from leg and 'in' its
+	// to leg. Both legs of one pair carry identical from/to facts, so the Go fold
+	// keeps either.
+	//
+	// has_receipt is true for a receipt on the row itself, or - on a
+	// reimbursement payout - on the claim it settles: the claim's nota is the proof
+	// of that payout (ADR-011), and the row carries no other.
+	ListReportTransactions(ctx context.Context, arg ListReportTransactionsParams) ([]ListReportTransactionsRow, error)
 	// ListSelectablePurposesByFund is ListPurposesByFund with a closed
 	// incidental's purpose excluded (ADR-031): GET /api/purposes?selectable=true
 	// backs the everyday record form's picker, which stops offering what

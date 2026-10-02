@@ -3,21 +3,20 @@
 // is integer rupiah, never a float, never a count of something else (ADR-006,
 // ADR-026).
 //
-// The surface is deliberately three methods wide. Amount is a defined integer
-// type, so +, -, unary minus and all six comparisons already work correctly
-// between two Amounts with no help from this package. The only thing the native
-// operators get wrong is silent wraparound at the int64 boundary, and that is
-// the one thing a trust core cannot tolerate - a wrapped balance is not an
-// error, it is a confidently wrong number on the calmest screen in the app. So
-// Add, Sub and Mul are the checked versions of operators that already exist,
-// and nothing else is here.
+// The surface is deliberately small. Amount is a defined integer type, so +,
+// -, unary minus and all six comparisons already work correctly between two
+// Amounts with no help from this package. The only thing the native operators
+// get wrong is silent wraparound at the int64 boundary, and that is the one
+// thing a trust core cannot tolerate - a wrapped balance is not an error, it is
+// a confidently wrong number on the calmest screen in the app. So Add, Sub and
+// Mul are the checked versions of operators that already exist, and
+// FormatIDR (format.go) is the server-side twin of the SPA's own formatter,
+// for the one renderer that has no JavaScript: the public report (ADR-035).
 //
-// There is no Float64, and there will not be one. There is no Parse or Format
-// either: the SPA formats client-side via Intl.NumberFormat (ADR-006), so the
-// first real caller for either is M7's server-rendered report and M8's Excel
-// export. When Format arrives it takes the currency from the fund and keeps the
-// scale in one named constant - see ADR-006's exit plan for why that matters
-// more than it looks.
+// There is no Float64, and there will not be one. There is no Parse: the only
+// place a human types a figure is the SPA. FormatIDR keeps the scale in one
+// named place - see ADR-006's exit plan for why that matters more than it
+// looks.
 package money
 
 import (
