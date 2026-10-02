@@ -59,6 +59,28 @@ func (q *Queries) GetFund(ctx context.Context, id int64) (Fund, error) {
 	return i, err
 }
 
+const getFundByReportSlug = `-- name: GetFundByReportSlug :one
+SELECT id, name, currency, report_slug, created_at
+FROM fund
+WHERE report_slug = ?
+`
+
+// GetFundByReportSlug is the public report's only way in (ADR-030's
+// carve-out, ADR-035): the slug names its fund, with no session involved.
+// report_slug is UNIQUE, so this is one row or sql.ErrNoRows.
+func (q *Queries) GetFundByReportSlug(ctx context.Context, reportSlug string) (Fund, error) {
+	row := q.db.QueryRowContext(ctx, getFundByReportSlug, reportSlug)
+	var i Fund
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.Currency,
+		&i.ReportSlug,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
 const listFunds = `-- name: ListFunds :many
 SELECT id, name, currency, report_slug, created_at
 FROM fund

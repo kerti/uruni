@@ -1,0 +1,69 @@
+{{define "head"}}<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<meta name="referrer" content="no-referrer">
+<title>{{.Title}}</title>
+<style>{{.Style}}</style>
+</head>
+<body>
+<main>{{end}}
+
+{{define "foot"}}</main>
+</body>
+</html>
+{{end}}
+
+{{define "report"}}{{template "head" .}}
+<header>
+  <p class="eyebrow">{{.Text.Eyebrow}}</p>
+  <h1>{{.FundName}}</h1>
+  <p class="muted">{{.AsOf}}</p>
+</header>
+
+<section class="hero" aria-label="{{.Text.BalanceLabel}}">
+  <p class="label">{{.Text.BalanceLabel}}</p>
+  <p class="amount tabular">{{.Balance}}</p>
+</section>
+
+{{with .Check}}
+<p class="status {{.Class}}" role="status">{{.Message}}{{if .When}}<span class="when">{{.When}}</span>{{end}}</p>
+{{end}}
+
+{{if .Purposes}}
+<section>
+  <h2>{{.Text.PurposesLabel}}</h2>
+  <ul class="rows">
+    {{range .Purposes}}
+    <li><span>{{.Name}}</span><span class="tabular{{if .Negative}} negative{{end}}">{{.Balance}}</span></li>
+    {{end}}
+  </ul>
+</section>
+{{end}}
+
+<nav class="months" aria-label="{{.Text.MonthLabel}}">
+  <div class="step">
+    {{if .PrevMonth}}<a href="?month={{.PrevMonth}}" rel="nofollow">{{.Text.MonthPrev}}</a>{{else}}<span></span>{{end}}
+    {{if .NextMonth}}<a href="?month={{.NextMonth}}" rel="nofollow">{{.Text.MonthNext}}</a>{{end}}
+  </div>
+  <form method="get">
+    <label for="month">{{.Text.MonthLabel}}</label>
+    <select id="month" name="month">
+      {{range .MonthOptions}}<option value="{{.Value}}"{{if .Selected}} selected{{end}}>{{.Label}}</option>
+      {{end}}
+    </select>
+    <button type="submit">{{.Text.MonthSubmit}}</button>
+  </form>
+</nav>
+
+{{if .Empty}}<p class="empty">{{.Text.Empty}}</p>{{end}}
+{{template "foot" .}}{{end}}
+
+{{define "notfound"}}{{template "head" .}}
+<header>
+  <h1>{{.Text.NotFoundTitle}}</h1>
+</header>
+<p>{{.Text.NotFoundBody}}</p>
+{{template "foot" .}}{{end}}

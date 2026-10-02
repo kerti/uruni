@@ -210,6 +210,10 @@ type Querier interface {
 	// effective_from is 'YYYY-MM', so a string comparison is a chronological one.
 	GetEffectiveDuesRate(ctx context.Context, arg GetEffectiveDuesRateParams) (DuesRate, error)
 	GetFund(ctx context.Context, id int64) (Fund, error)
+	// GetFundByReportSlug is the public report's only way in (ADR-030's
+	// carve-out, ADR-035): the slug names its fund, with no session involved.
+	// report_slug is UNIQUE, so this is one row or sql.ErrNoRows.
+	GetFundByReportSlug(ctx context.Context, reportSlug string) (Fund, error)
 	// Fund-scoped through purpose, which is where the envelope's fund_id lives
 	// (incidental is 1:1 with its purpose row and carries no fund_id of its own).
 	// An id names a row, it does not prove the caller may see it: PRD section 6 allows a
