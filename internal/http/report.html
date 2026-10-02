@@ -142,6 +142,54 @@
   {{else}}<p class="empty">{{.Text.DuesNoRows}}</p>{{end}}
 </section>
 {{end}}
+{{if .Envelopes}}
+<section id="envelopes" aria-labelledby="envelopes-heading">
+  <h2 id="envelopes-heading">{{.Text.EnvelopesLabel}}</h2>
+  <div class="envelopes">
+    {{range .Envelopes}}
+    <details class="envelope">
+      <summary>
+        <span class="env-head">
+          <span class="name">{{.Name}}</span>
+          <span class="badge {{if .Closed}}closed{{else}}open{{end}}">{{.Status}}</span>
+        </span>
+        <span class="env-facts tabular">
+          <span>{{$.Text.EnvelopeCollected}}: {{.Collected}}</span>
+          {{if .Given}}<span>{{.Given}}</span>{{end}}
+        </span>
+      </summary>
+      {{if .Recipients}}<p class="muted">{{.Recipients}}</p>{{end}}
+      {{if .NoneExpect}}<p class="muted">{{$.Text.EnvelopeNoneExpect}}</p>{{else}}
+      <ul class="rows people">
+        {{range .Expected}}
+        <li>
+          <div class="head">
+            <span class="name">{{.Name}}</span>
+            {{if .Amount}}<span class="tabular amount">{{.Amount}}</span>{{end}}
+          </div>
+          <span class="state {{.Class}}">{{.Status}}</span>
+        </li>
+        {{end}}
+      </ul>
+      {{end}}
+      {{if .Others}}
+      <h3>{{$.Text.EnvelopeOthers}}</h3>
+      <ul class="rows people">
+        {{range .Others}}
+        <li>
+          <div class="head">
+            <span class="name">{{.Name}}</span>
+            <span class="tabular amount">{{.Amount}}</span>
+          </div>
+        </li>
+        {{end}}
+      </ul>
+      {{end}}
+    </details>
+    {{end}}
+  </div>
+</section>
+{{end}}
 {{end}}
 <script>
 // Progressive enhancement: a select submits its form on change, so the

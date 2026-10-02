@@ -107,5 +107,26 @@ ul.dues li{flex-direction:column;gap:6px}
 .badge.partial{background:var(--attention-soft);color:var(--attention)}
 .badge.paid{background:var(--success-soft);color:var(--success)}
 .badge.paid_in_advance{background:var(--success-soft);color:var(--success);box-shadow:inset 0 0 0 1px var(--success)}
+.envelopes{display:flex;flex-direction:column;gap:8px}
+details.envelope{background:var(--card);border-radius:8px;padding:12px 16px;
+  box-shadow:0 1px 2px rgb(34 50 58 / .06),0 4px 12px rgb(34 50 58 / .08)}
+details.envelope[open]{display:flex;flex-direction:column;gap:12px}
+details.envelope summary{cursor:pointer;display:flex;flex-direction:column;gap:6px;min-height:44px;justify-content:center}
+details.envelope summary{list-style:none;position:relative}
+details.envelope .env-facts{padding-right:28px}
+details.envelope summary::-webkit-details-marker{display:none}
+details.envelope summary::after{content:"";position:absolute;right:6px;bottom:10px;width:8px;height:8px;border-right:2px solid var(--muted-foreground);border-bottom:2px solid var(--muted-foreground);transform:rotate(45deg)}
+details.envelope[open] summary::after{transform:rotate(-135deg);bottom:6px}
+.env-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}
+.env-head .name,.people .name{font-weight:500;overflow-wrap:anywhere;min-width:0}
+.env-facts{display:flex;justify-content:space-between;flex-wrap:wrap;gap:4px 12px;font-size:14px;color:var(--muted-foreground)}
+.badge.open{background:var(--success-soft);color:var(--success)}
+.badge.closed{background:var(--muted);color:var(--muted-foreground)}
+details.envelope h3{margin:0;font-size:14px;font-weight:600;color:var(--muted-foreground)}
+ul.people li{flex-direction:column;gap:2px;box-shadow:none;background:var(--background)}
+.people .head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}
+.people .amount{font-weight:500;white-space:nowrap;flex-shrink:0}
+.state{font-size:14px;color:var(--muted-foreground)}
+.state.sudah{color:var(--success)}
 .empty{background:var(--card);border-radius:8px;padding:16px;color:var(--muted-foreground);text-align:center}
 `

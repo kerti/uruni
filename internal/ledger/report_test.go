@@ -844,6 +844,9 @@ func TestMonthlyReportEnvelopeCarriesItsParticipation(t *testing.T) {
 	if e.Balance != 30_000 || e.ClosedOn != nil || e.OpenedOn != "2026-09-01" {
 		t.Errorf("envelope = %+v, want balance 30000, open, opened 2026-09-01", e)
 	}
+	if e.Collected != 30_000 {
+		t.Errorf("Collected = %d, want 30000 (what the occasion took in)", e.Collected)
+	}
 	if e.MinimumPerMember == nil || *e.MinimumPerMember != 20_000 || e.TargetAmount != nil {
 		t.Errorf("envelope minimum = %v, target = %v, want 20000 and none", e.MinimumPerMember, e.TargetAmount)
 	}

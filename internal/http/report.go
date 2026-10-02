@@ -69,6 +69,10 @@ type reportPage struct {
 	HasDues bool
 	Dues    []reportDuesRow
 
+	// The envelopes section (#338): every envelope the ledger listed for the
+	// month, narrowed by the purpose filter. The section is hidden when empty.
+	Envelopes []reportEnvelope
+
 	// Empty is a fund with nothing recorded at all - not merely a quiet
 	// month - which gets the warm line instead of a bare Rp 0.
 	Empty bool
@@ -131,6 +135,28 @@ type reportDuesRow struct {
 	Class       string
 	Status      string
 	PaidThrough string
+}
+
+// reportEnvelope is one envelope's <details>: the summary's facts, who it is
+// for, and the participation table. Class on a person is the ledger's state
+// ("sudah", "belum", "kurang"), which the stylesheet colours.
+type reportEnvelope struct {
+	Name       string
+	Collected  string
+	Given      string // "8 dari 12 sudah menyumbang"; "" when nobody is expected
+	Status     string
+	Closed     bool
+	Recipients string // "Untuk: A, B"; "" when none
+	Expected   []reportPerson
+	Others     []reportPerson
+	NoneExpect bool
+}
+
+type reportPerson struct {
+	Name   string
+	Amount string // "" when the member has given nothing
+	Class  string
+	Status string
 }
 
 type reportOption struct {
@@ -196,6 +222,7 @@ func assembleReportPage(ctx context.Context, l *ledger.Ledger, q store.Querier, 
 	if err != nil {
 		return reportPage{}, err
 	}
+	report.Envelopes = envelopesForPurpose(report.Envelopes, params.PurposeID)
 	page := buildReportPage(report, empty)
 	page.Filter = filter
 	// A dues filter that matches nobody leaves no rows, which must not read
@@ -215,6 +242,24 @@ func assembleReportPage(ctx context.Context, l *ledger.Ledger, q store.Querier, 
 		page.NextHref = monthHref(page.NextMonth, filter.Active)
 	}
 	return page, nil
+}
+
+// envelopesForPurpose narrows the month's envelopes to the purpose filter's:
+// no filter keeps them all; an envelope purpose keeps that one (none, if it
+// was not open that month); any other purpose - Kas Utama, a pass-through -
+// keeps none, since the filter asks for that purpose alone and no envelope is
+// it. The ledger assembles the month unfiltered, so this only picks from it.
+func envelopesForPurpose(envs []ledger.ReportEnvelope, purposeID *int64) []ledger.ReportEnvelope {
+	if purposeID == nil {
+		return envs
+	}
+	var out []ledger.ReportEnvelope
+	for _, e := range envs {
+		if e.PurposeID == *purposeID {
+			out = append(out, e)
+		}
+	}
+	return out
 }
 
 // monthHref steps to another month with the same filters, landing on the
@@ -392,6 +437,36 @@ func buildReportPage(r ledger.Report, empty bool) reportPage {
 			row.PaidThrough = reportText.DuesPaidThrough(reportText.monthName(d.PaidThrough))
 		}
 		page.Dues = append(page.Dues, row)
+	}
+
+	for _, e := range r.Envelopes {
+		env := reportEnvelope{
+			Name: e.Name, Collected: money.FormatIDR(e.Collected),
+			Status: reportText.EnvelopeOpen, Closed: e.ClosedOn != nil,
+			NoneExpect: len(e.Expected) == 0,
+		}
+		if env.Closed {
+			env.Status = reportText.EnvelopeClosed
+		}
+		if len(e.Recipients) > 0 {
+			env.Recipients = reportText.EnvelopeRecipients(strings.Join(e.Recipients, ", "))
+		}
+		given := 0
+		for _, p := range e.Expected {
+			person := reportPerson{Name: p.MemberName, Class: string(p.State), Status: reportText.participationStatus(p.State)}
+			if p.State != ledger.ParticipationBelum {
+				given++
+				person.Amount = money.FormatIDR(p.Amount)
+			}
+			env.Expected = append(env.Expected, person)
+		}
+		if len(e.Expected) > 0 {
+			env.Given = reportText.EnvelopeGiven(given, len(e.Expected))
+		}
+		for _, u := range e.Unexpected {
+			env.Others = append(env.Others, reportPerson{Name: u.MemberName, Amount: money.FormatIDR(u.Amount)})
+		}
+		page.Envelopes = append(page.Envelopes, env)
 	}
 
 	i := slices.Index(r.Months, r.Month)
