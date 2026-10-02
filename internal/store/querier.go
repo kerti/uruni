@@ -797,8 +797,13 @@ type Querier interface {
 	// screen and the public report - and nothing posted references it, so this
 	// changes no history (the same reasoning UpdateAccount's own rename rests
 	// on). currency and report_slug are deliberately not settable here: one is
-	// an invariant through 0.x, the other is the report's unguessable address.
+	// an invariant through 0.x, the other is the report's unguessable address
+	// (which only UpdateFundReportSlug changes).
 	UpdateFund(ctx context.Context, arg UpdateFundParams) (Fund, error)
+	// UpdateFundReportSlug replaces the report's address (ADR-035's leak escape
+	// hatch). The old slug is simply gone: no history, no redirect, so it is an
+	// ordinary unknown slug to GetFundByReportSlug from the next read on.
+	UpdateFundReportSlug(ctx context.Context, arg UpdateFundReportSlugParams) (Fund, error)
 	// Setting or clearing the envelope's two expectations - its target and the
 	// minimum every expected member is asked to give (ADR-034, #381) - mutable
 	// like occasion, never a posted fact, so this is a plain UPDATE, the same

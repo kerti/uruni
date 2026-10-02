@@ -27,8 +27,8 @@ const text = copy.settings.fund
  * The name is a display label: it heads every screen and the public report,
  * and nothing posted references it, so a rename rewrites no history. What it
  * does not touch is the report's slug, which is the address she may already
- * have shared; rotating that is its own decision, not a side effect of fixing
- * a typo.
+ * have shared; replacing that is its own decision (Laporan publik's
+ * "Buat tautan baru"), not a side effect of fixing a typo.
  *
  * `onRenamed` exists because the fund's name is also Shell's header, which
  * App.tsx read once on mount - without it the header would keep showing the

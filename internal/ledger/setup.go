@@ -19,10 +19,11 @@ const reportSlugAlphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz
 // already picked a floor - "roughly a UUID's worth of entropy in base62" - so
 // 22 would satisfy it, but this generator is the slug's only source, not a
 // re-derivation of something else, and PRD section 7.9 treats it as a
-// security-relevant unguessable token that a link, once shared, never
-// rotates. 32 base62 characters is about 190 bits, comfortably past the
-// schema's floor and past a UUID's 122 bits, at a cost (10 more characters in
-// a URL nobody types by hand) that is free to pay once at setup.
+// security-relevant unguessable token that a link, once shared, only ever
+// changes through ReplaceReportSlug - the treasurer's deliberate act. 32
+// base62 characters is about 190 bits, comfortably past the schema's floor
+// and past a UUID's 122 bits, at a cost (10 more characters in a URL nobody
+// types by hand) that is free to pay once at setup.
 const reportSlugLength = 32
 
 // generateReportSlug returns a random base62 string for fund.report_slug,
@@ -44,9 +45,9 @@ const reportSlugLength = 32
 // randInt is crypto/rand.Int, indirected so the tests can drive the failure
 // below. A random source that errors is not a real operating condition, but
 // this is the one call in setup whose silent failure would matter: a fund is
-// created once, its slug never rotates, and the link is only unguessable if
-// this call actually produced what it claims to have. The test that stubs
-// this proves setup aborts rather than falling back to something weaker.
+// created once, its slug changes only through ReplaceReportSlug, and the link
+// is only unguessable if this call actually produced what it claims to have.
+// The test that stubs this proves setup aborts rather than falling back to something weaker.
 var randInt = rand.Int
 
 func generateReportSlug() (string, error) {
@@ -229,4 +230,27 @@ func (l *Ledger) SetUpFund(ctx context.Context, p SetUpFundParams) (SetUpFundRes
 		return SetUpFundResult{}, fmt.Errorf("setting up fund: %w", err)
 	}
 	return result, nil
+}
+
+// ReplaceReportSlug gives the fund a fresh report slug from the same
+// generator SetUpFund uses and returns the updated fund row (ADR-035's "Buat
+// tautan baru"). This is the only way a slug changes after setup: the old one
+// is overwritten, so it 404s on /report from then on - no history, no
+// redirect, because a redirect would defeat the point of replacing a leaked
+// link. A failed random source aborts rather than writing anything weaker.
+func (l *Ledger) ReplaceReportSlug(ctx context.Context, fundID int64) (store.Fund, error) {
+	slug, err := generateReportSlug()
+	if err != nil {
+		return store.Fund{}, err
+	}
+	var fund store.Fund
+	err = l.withTx(ctx, func(q store.Querier) error {
+		var err error
+		fund, err = q.UpdateFundReportSlug(ctx, store.UpdateFundReportSlugParams{ReportSlug: slug, ID: fundID})
+		return err
+	})
+	if err != nil {
+		return store.Fund{}, fmt.Errorf("replacing the report slug: %w", err)
+	}
+	return fund, nil
 }

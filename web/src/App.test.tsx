@@ -27,7 +27,7 @@ function sessionResponse(body: { authenticated: boolean; has_account: boolean })
   return jsonResponse(body)
 }
 
-const fund = { id: 1, name: 'Kas RT 04', currency: 'IDR', report_slug: 'kas-rt-04', created_at: 1234 }
+const fund = { id: 1, name: 'Kas RT 04', currency: 'IDR', report_slug: 'kas-rt-04', report_url: '/report/kas-rt-04', created_at: 1234 }
 
 function fundFoundResponse() {
   return jsonResponse(fund)

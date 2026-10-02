@@ -4,6 +4,7 @@ import FundName from '@/screens/Settings/FundName'
 import Incidentals from '@/screens/Settings/Incidentals'
 import Locations from '@/screens/Settings/Locations'
 import PassThrough from '@/screens/Settings/PassThrough'
+import ReportLink from '@/screens/Settings/ReportLink'
 import SectionDivider from '@/components/SectionDivider'
 import { copy } from '@/copy/id'
 import type { Fund } from '@/lib/setup'
@@ -38,6 +39,10 @@ import type { Fund } from '@/lib/setup'
  * Beranda's purpose breakdown became entry points only, and it lands here,
  * beside Titipan - the two are kinds of one `purpose` (CONTEXT.md).
  *
+ * Laporan publik (#376, ADR-035): the report's link, with copy, share and a
+ * confirmed "make a new one". After the admin sections and before Cadangan,
+ * which stays last.
+ *
  * Cadangan (#323, ADR-012) sits last: downloading the whole fund is rarer
  * still than any admin above it, and it is the one section with no dialog
  * and nothing to browse - one button, placed after everything a treasurer
@@ -62,6 +67,8 @@ export default function Settings({ onFundRenamed }: { onFundRenamed: (fund: Fund
       <Incidentals />
       <SectionDivider />
       <DuesTiers />
+      <SectionDivider />
+      <ReportLink />
       <SectionDivider />
       <Backup />
     </div>

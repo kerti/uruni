@@ -17,11 +17,19 @@ type fundResponse struct {
 	Name       string `json:"name"`
 	Currency   string `json:"currency"`
 	ReportSlug string `json:"report_slug"`
-	CreatedAt  int64  `json:"created_at"`
+	// ReportURL is the shareable link: URUNI_BASE_URL + /report/ + slug. Only
+	// the server knows the base URL, so the SPA is handed the finished link
+	// rather than assembling one from window.location (which would be the
+	// dev server's, or a proxy's, not the public origin). With no base URL
+	// configured (local dev) it is the bare path, which the SPA resolves
+	// against its own origin.
+	ReportURL string `json:"report_url"`
+	CreatedAt int64  `json:"created_at"`
 }
 
-func toFundResponse(f store.Fund) fundResponse {
+func toFundResponse(f store.Fund, baseURL string) fundResponse {
 	return fundResponse{
+		ReportURL:  baseURL + "/report/" + f.ReportSlug,
 		ID:         f.ID,
 		Name:       f.Name,
 		Currency:   f.Currency,
@@ -98,7 +106,7 @@ func (a *api) setupFund(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusCreated, setupResponse{
-		Fund:          toFundResponse(result.Fund),
+		Fund:          toFundResponse(result.Fund, a.baseURL),
 		MainPurposeID: result.MainPurposeID,
 		Accounts:      accountsResp,
 	})
@@ -114,13 +122,14 @@ func (a *api) getFund(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	writeJSON(w, http.StatusOK, toFundResponse(fund))
+	writeJSON(w, http.StatusOK, toFundResponse(fund, a.baseURL))
 }
 
 // updateFundRequest is PATCH /api/fund's body: the fund's display name and
 // nothing else. No currency (an invariant through 0.x) and no report_slug -
-// that is the public report's unguessable address, and rotating it is its
-// own decision, not a side effect of fixing a typo.
+// that is the public report's unguessable address, and changing it is its
+// own decision (POST /api/fund/report-slug), not a side effect of fixing a
+// typo.
 //
 // Name is a pointer so a body with no name - {}, or a misspelt key - is a
 // 400 rather than a silent rename to the empty string, the same reasoning
@@ -156,7 +165,23 @@ func (a *api) updateFund(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, toFundResponse(updated))
+	writeJSON(w, http.StatusOK, toFundResponse(updated, a.baseURL))
+}
+
+// replaceReportSlug is POST /api/fund/report-slug: the leak escape hatch
+// (ADR-035). It answers with the whole fund, so the SPA swaps its link for
+// the new report_url in one step. The old slug stops resolving at once.
+func (a *api) replaceReportSlug(w http.ResponseWriter, r *http.Request) {
+	fund, ok := a.resolveFund(w, r)
+	if !ok {
+		return
+	}
+	updated, err := a.ledger.ReplaceReportSlug(r.Context(), fund.ID)
+	if err != nil {
+		mapLedgerError(w, a.logger, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, toFundResponse(updated, a.baseURL))
 }
 
 // resolveFund returns the single fund every fund-scoped route in this

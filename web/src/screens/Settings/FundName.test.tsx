@@ -16,7 +16,14 @@ function jsonResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } })
 }
 
-const fund = { id: 1, name: 'Kas Ruang 3A', currency: 'IDR', report_slug: 'abcdefghijklmnopqrstuv', created_at: 1 }
+const fund = {
+  id: 1,
+  name: 'Kas Ruang 3A',
+  currency: 'IDR',
+  report_slug: 'abcdefghijklmnopqrstuv',
+  report_url: '/report/abcdefghijklmnopqrstuv',
+  created_at: 1,
+}
 
 function stubFund() {
   const calls: { method: string; body: unknown }[] = []
