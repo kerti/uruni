@@ -779,13 +779,14 @@ type Querier interface {
 	// on). currency and report_slug are deliberately not settable here: one is
 	// an invariant through 0.x, the other is the report's unguessable address.
 	UpdateFund(ctx context.Context, arg UpdateFundParams) (Fund, error)
-	// Setting or clearing the minimum every expected member is asked to give
-	// (ADR-034) - mutable like occasion, never a posted fact, so this is a plain
-	// UPDATE, the same shape UpdateIncidentalOccasion already uses. Unscoped by
-	// fund_id for the same reason: Ledger.SetIncidentalParticipation fetches the
-	// envelope through GetIncidental's fund-scoped join first, so by the time
-	// this runs the purpose_id is already known to belong to the caller's fund.
-	UpdateIncidentalMinimum(ctx context.Context, arg UpdateIncidentalMinimumParams) (Incidental, error)
+	// Setting or clearing the envelope's two expectations - its target and the
+	// minimum every expected member is asked to give (ADR-034, #381) - mutable
+	// like occasion, never a posted fact, so this is a plain UPDATE, the same
+	// shape UpdateIncidentalOccasion already uses. Unscoped by fund_id for the
+	// same reason: Ledger.SetIncidentalParticipation fetches the envelope through
+	// GetIncidental's fund-scoped join first, so by the time this runs the
+	// purpose_id is already known to belong to the caller's fund.
+	UpdateIncidentalExpectations(ctx context.Context, arg UpdateIncidentalExpectationsParams) (Incidental, error)
 	// A mistyped occasion, corrected in place (#264). Unscoped by fund_id for
 	// the same reason CloseIncidental and ReopenIncidental are: Ledger.RenameIncidental
 	// fetches nothing first here because it has no need to - it already ran

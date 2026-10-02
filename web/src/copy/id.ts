@@ -1198,9 +1198,12 @@ export const copy = {
       cancel: 'Batal',
     },
     detail: {
+      targetLabel: 'Target',
       collectedLabel: 'Terkumpul',
       disbursedLabel: 'Terpakai',
-      targetLabel: 'Target',
+      // What the envelope holds now - PRD-ID's own "sisa" for an envelope's
+      // leftover (section 7.5). Rp 0 once closed: the leftover rolled out.
+      remainingLabel: 'Sisa',
       // Was "Kembali ke daftar" - the list it named is retired (#263); an
       // envelope's card list now lives in Pengaturan, so this leads there.
       backToSettings: 'Kembali ke pengaturan',

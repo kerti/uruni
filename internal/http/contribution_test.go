@@ -165,6 +165,38 @@ func TestPatchIncidentalParticipationReplacesMinimumAndRecipients(t *testing.T) 
 	}
 }
 
+// TestPatchIncidentalParticipationSetsAndClearsTheTarget (#381): the target
+// rides the same PATCH as the minimum, and omitting it clears it - the field
+// fully replaces its facet like the others.
+func TestPatchIncidentalParticipationSetsAndClearsTheTarget(t *testing.T) {
+	r := testRouter(t)
+	setUpFund(t, r)
+	envelope := openIncidentalFor(t, r, "Sunatan", "2026-08-01")
+
+	target := int64(750_000)
+	rec := patchIncidentalParticipation(t, r, envelope.PurposeID, updateIncidentalParticipationRequest{TargetAmount: &target})
+	if rec.Code != http.StatusOK {
+		t.Fatalf("PATCH target = %d, want %d (body: %s)", rec.Code, http.StatusOK, rec.Body.String())
+	}
+	if got := decodeIncidental(t, rec); got.TargetAmount == nil || *got.TargetAmount != 750_000 {
+		t.Errorf("target_amount = %v, want 750000", got.TargetAmount)
+	}
+
+	rec = patchIncidentalParticipation(t, r, envelope.PurposeID, updateIncidentalParticipationRequest{})
+	if rec.Code != http.StatusOK {
+		t.Fatalf("PATCH without target = %d, want %d", rec.Code, http.StatusOK)
+	}
+	if got := decodeIncidental(t, rec); got.TargetAmount != nil {
+		t.Errorf("target_amount after omitting it = %v, want null", got.TargetAmount)
+	}
+
+	zero := int64(0)
+	rec = patchIncidentalParticipation(t, r, envelope.PurposeID, updateIncidentalParticipationRequest{TargetAmount: &zero})
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("PATCH target 0 = %d, want %d", rec.Code, http.StatusBadRequest)
+	}
+}
+
 // TestGetIncidentalParticipationReturnsExpectedAndUnexpected is the read
 // route's own success path: an expected member reads Belum with nothing
 // given, and a later joiner's own gift surfaces under Unexpected.

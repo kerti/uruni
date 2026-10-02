@@ -362,7 +362,19 @@ function DetailView({
         </p>
       )}
 
+      {/* The envelope's story in reading order: what it hoped for, what came
+          in, what went out, what is left. The target is optional and absent
+          when unset. Sisa is the purpose's balance from the server, never
+          collected minus used here - the two differ once a closed envelope
+          is reopened, because the earlier roll is in the balance only. A
+          divider sets it apart as the line the rest adds up to. */}
       <div className="flex flex-col gap-2 rounded-2xl bg-card p-4 shadow-card ring-1 ring-foreground/10">
+        {envelope.target_amount !== null && (
+          <div className="flex items-center justify-between text-sm">
+            <span className="text-muted-foreground">{text.detail.targetLabel}</span>
+            <span className="tabular font-medium">{formatIDR(envelope.target_amount)}</span>
+          </div>
+        )}
         <div className="flex items-center justify-between text-sm">
           <span className="text-muted-foreground">{text.detail.collectedLabel}</span>
           <span className="tabular font-medium">{formatIDR(envelope.collected_amount)}</span>
@@ -371,12 +383,10 @@ function DetailView({
           <span className="text-muted-foreground">{text.detail.disbursedLabel}</span>
           <span className="tabular font-medium">{formatIDR(envelope.disbursed_amount)}</span>
         </div>
-        {envelope.target_amount !== null && (
-          <div className="flex items-center justify-between text-sm">
-            <span className="text-muted-foreground">{text.detail.targetLabel}</span>
-            <span className="tabular font-medium">{formatIDR(envelope.target_amount)}</span>
-          </div>
-        )}
+        <div className="flex items-center justify-between border-t border-border pt-2 text-sm">
+          <span className="font-medium">{text.detail.remainingLabel}</span>
+          <span className="tabular font-semibold">{formatIDR(envelope.balance_amount)}</span>
+        </div>
       </div>
 
       {/* The rollover, on every visit to a closed envelope rather than only
@@ -638,13 +648,13 @@ function sameMemberSet(a: number[], b: number[]): boolean {
 
 /**
  * The edit dialog (#264, widened by #333/ADR-034), modelled on
- * PassThrough.tsx's own EditPassThroughDialog: occasion, minimum and
- * recipients together, seeded from the envelope's current values, submit
+ * PassThrough.tsx's own EditPassThroughDialog: occasion, target, minimum and
+ * recipients together (#381 added the target), seeded from the envelope's current values, submit
  * disabled while busy or when nothing has actually changed. It makes the
  * write calls itself - renamePurpose only when the occasion changed
  * (moves both purpose.name and incidental.occasion together server-side),
- * updateIncidentalParticipation only when the minimum or the recipient set
- * changed - and, on success, hands off to `onRenamed`: Incidentals' own
+ * updateIncidentalParticipation only when the target, the minimum or the
+ * recipient set changed - and, on success, hands off to `onRenamed`: Incidentals' own
  * handleRenamed, which closes the dialog, refetches the detail and the
  * participation table, and posts the success message through the screen's
  * existing Feedback banner rather than a second, dialog-local one.
@@ -667,12 +677,14 @@ function RenameIncidentalDialog({
 }) {
   const [state, run] = useApi<unknown>()
   const [occasion, setOccasion] = useState('')
+  const [targetAmount, setTargetAmount] = useState(0)
   const [minimumPerMember, setMinimumPerMember] = useState(0)
   const [recipientMemberIds, setRecipientMemberIds] = useState<number[]>([])
 
   useResetWhen(open ? envelope : null, () => {
     if (open && envelope !== null) {
       setOccasion(envelope.occasion)
+      setTargetAmount(envelope.target_amount ?? 0)
       setMinimumPerMember(envelope.minimum_per_member ?? 0)
       setRecipientMemberIds((envelope.recipients ?? []).map((r) => r.member_id))
     }
@@ -681,6 +693,7 @@ function RenameIncidentalDialog({
   const busy = state.status === 'loading'
   const trimmed = occasion.trim()
   const occasionChanged = envelope !== null && trimmed !== envelope.occasion
+  const targetChanged = envelope !== null && targetAmount !== (envelope.target_amount ?? 0)
   const minimumChanged = envelope !== null && minimumPerMember !== (envelope.minimum_per_member ?? 0)
   const recipientsChanged =
     envelope !== null &&
@@ -688,15 +701,16 @@ function RenameIncidentalDialog({
       recipientMemberIds,
       (envelope.recipients ?? []).map((r) => r.member_id),
     )
-  const changed = occasionChanged || minimumChanged || recipientsChanged
+  const changed = occasionChanged || targetChanged || minimumChanged || recipientsChanged
 
   function handleSubmit(event: FormEvent) {
     event.preventDefault()
     if (envelope === null || trimmed === '' || !changed) return
     void run(async () => {
       if (occasionChanged) await renamePurpose(envelope.purpose_id, trimmed)
-      if (minimumChanged || recipientsChanged) {
+      if (targetChanged || minimumChanged || recipientsChanged) {
         await updateIncidentalParticipation(envelope.purpose_id, {
+          targetAmount: targetAmount > 0 ? targetAmount : null,
           minimumPerMember: minimumPerMember > 0 ? minimumPerMember : null,
           recipientMemberIds,
         })
@@ -732,6 +746,16 @@ function RenameIncidentalDialog({
               editable here for exactly the same reason a mistyped occasion
               is - a minimum set too high or a recipient added late is
               usually noticed only once the occasion is under way. */}
+          {/* #381: a target is an expectation like the minimum, not a
+              posted fact, so it is corrected here too - open or closed. */}
+          <AmountInput
+            id="incidental-rename-target"
+            label={copy.incidentals.open.targetLabel}
+            value={targetAmount}
+            onChange={setTargetAmount}
+            disabled={busy}
+          />
+
           <AmountInput
             id="incidental-rename-minimum"
             label={copy.incidentals.open.minimumLabel}

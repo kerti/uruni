@@ -239,26 +239,28 @@ func (q *Queries) ReopenIncidental(ctx context.Context, purposeID int64) (Incide
 	return i, err
 }
 
-const updateIncidentalMinimum = `-- name: UpdateIncidentalMinimum :one
+const updateIncidentalExpectations = `-- name: UpdateIncidentalExpectations :one
 UPDATE incidental
-SET minimum_per_member = ?
+SET target_amount = ?, minimum_per_member = ?
 WHERE purpose_id = ?
 RETURNING purpose_id, occasion, target_amount, opened_on, closed_on, minimum_per_member, created_at
 `
 
-type UpdateIncidentalMinimumParams struct {
+type UpdateIncidentalExpectationsParams struct {
+	TargetAmount     *int64
 	MinimumPerMember *int64
 	PurposeID        int64
 }
 
-// Setting or clearing the minimum every expected member is asked to give
-// (ADR-034) - mutable like occasion, never a posted fact, so this is a plain
-// UPDATE, the same shape UpdateIncidentalOccasion already uses. Unscoped by
-// fund_id for the same reason: Ledger.SetIncidentalParticipation fetches the
-// envelope through GetIncidental's fund-scoped join first, so by the time
-// this runs the purpose_id is already known to belong to the caller's fund.
-func (q *Queries) UpdateIncidentalMinimum(ctx context.Context, arg UpdateIncidentalMinimumParams) (Incidental, error) {
-	row := q.db.QueryRowContext(ctx, updateIncidentalMinimum, arg.MinimumPerMember, arg.PurposeID)
+// Setting or clearing the envelope's two expectations - its target and the
+// minimum every expected member is asked to give (ADR-034, #381) - mutable
+// like occasion, never a posted fact, so this is a plain UPDATE, the same
+// shape UpdateIncidentalOccasion already uses. Unscoped by fund_id for the
+// same reason: Ledger.SetIncidentalParticipation fetches the envelope through
+// GetIncidental's fund-scoped join first, so by the time this runs the
+// purpose_id is already known to belong to the caller's fund.
+func (q *Queries) UpdateIncidentalExpectations(ctx context.Context, arg UpdateIncidentalExpectationsParams) (Incidental, error) {
+	row := q.db.QueryRowContext(ctx, updateIncidentalExpectations, arg.TargetAmount, arg.MinimumPerMember, arg.PurposeID)
 	var i Incidental
 	err := row.Scan(
 		&i.PurposeID,

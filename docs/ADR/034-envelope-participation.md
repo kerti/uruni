@@ -21,7 +21,7 @@ A CHECK cannot see `purpose.kind` — it reads only its own row — so the rule 
 - `minimum_per_member INTEGER CHECK (minimum_per_member IS NULL OR minimum_per_member > 0)` — one figure for every expected member, same shape and nullability as `target_amount`. Not a dues rate: no tiers, no effective dates, no per-member amounts (that would be dues again, for one occasion).
 - `incidental_recipient (fund_id, purpose_id, member_id)`, primary key on all three. `incidental` carries no `fund_id` (it is 1:1 with its purpose row), so fund scoping runs through `purpose`: a composite `(fund_id, purpose_id) REFERENCES purpose(fund_id, id)` and `(fund_id, member_id) REFERENCES member(fund_id, id)` ([ADR-024](./024-schema-conventions.md)), plus a plain `purpose_id REFERENCES incidental(purpose_id)` that proves the purpose is an envelope — the members the envelope is **for**. Zero or more, always members; an occasion for someone outside the roster names the member whose family it is, or no one. `ON DELETE CASCADE` from `member`: member delete exists only for setup duplicates, and a recipient is a choice, not a record.
 
-Both are mutable like `occasion` — nothing on `incidental` is a posted fact.
+Both are mutable like `occasion` — nothing on `incidental` is a posted fact. So is `target_amount`, through the same PATCH, open or closed ([#381](https://github.com/kerti/uruni/issues/381)): it was set once at open and never correctable, which this rule never intended.
 
 **Participation is derived at read time.** For one envelope:
 

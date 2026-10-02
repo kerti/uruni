@@ -1464,3 +1464,52 @@ func TestReopenTwiceEachCloseZerosTheBalance(t *testing.T) {
 		t.Errorf("PurposeBalance() after third close = %d, want 0", bal)
 	}
 }
+
+// TestGetIncidentalDetailBalanceIsThePurposeBalanceNotCollectedMinusDisbursed:
+// once a closed envelope is reopened, collected minus disbursed (rolls left
+// out, #215) no longer says what it holds. Balance does: open 100k in, 40k
+// out; close (60k rolls out, balance 0); reopen; 30k more in. Collected is
+// 130k, disbursed 40k - and the envelope holds 30k, not 90k.
+func TestGetIncidentalDetailBalanceIsThePurposeBalanceNotCollectedMinusDisbursed(t *testing.T) {
+	ctx := context.Background()
+	l := newTestLedger(t)
+	f := newFixture(t, l)
+	envelope := openTestIncidental(t, l, f.fundID, "Test Collection", "2026-08-01")
+	postEntry(t, l, f.fundID, f.cashID, envelope.PurposeID, "in", 100_000, "2026-08-02", nil)
+	postEntry(t, l, f.fundID, f.cashID, envelope.PurposeID, "out", 40_000, "2026-08-03", nil)
+
+	detail, err := l.GetIncidentalDetail(ctx, f.fundID, envelope.PurposeID)
+	if err != nil {
+		t.Fatalf("GetIncidentalDetail() = %v, want no error", err)
+	}
+	if detail.Balance != 60_000 {
+		t.Errorf("open Balance = %d, want 60000", detail.Balance)
+	}
+
+	if _, err := l.CloseIncidentalAndRoll(ctx, CloseIncidentalAndRollParams{
+		FundID: f.fundID, PurposeID: envelope.PurposeID, AccountID: f.cashID, ClosedOn: "2026-08-10",
+	}); err != nil {
+		t.Fatalf("CloseIncidentalAndRoll() = %v, want no error", err)
+	}
+	if detail, err = l.GetIncidentalDetail(ctx, f.fundID, envelope.PurposeID); err != nil {
+		t.Fatalf("GetIncidentalDetail() = %v, want no error", err)
+	}
+	if detail.Balance != 0 {
+		t.Errorf("closed Balance = %d, want 0 (ADR-031)", detail.Balance)
+	}
+
+	if _, err := l.ReopenIncidental(ctx, f.fundID, envelope.PurposeID); err != nil {
+		t.Fatalf("ReopenIncidental() = %v, want no error", err)
+	}
+	postEntry(t, l, f.fundID, f.cashID, envelope.PurposeID, "in", 30_000, "2026-08-12", nil)
+
+	if detail, err = l.GetIncidentalDetail(ctx, f.fundID, envelope.PurposeID); err != nil {
+		t.Fatalf("GetIncidentalDetail() = %v, want no error", err)
+	}
+	if detail.Collected != 130_000 || detail.Disbursed != 40_000 {
+		t.Errorf("Collected/Disbursed = %d/%d, want 130000/40000", detail.Collected, detail.Disbursed)
+	}
+	if detail.Balance != 30_000 {
+		t.Errorf("reopened Balance = %d, want 30000 - not Collected minus Disbursed (90000)", detail.Balance)
+	}
+}

@@ -332,6 +332,9 @@ func TestGetIncidentalDetailReturnsTotals(t *testing.T) {
 	if detail.DisbursedAmount != 30_000 {
 		t.Errorf("disbursed_amount = %d, want 30000", detail.DisbursedAmount)
 	}
+	if detail.BalanceAmount != 70_000 {
+		t.Errorf("balance_amount = %d, want 70000", detail.BalanceAmount)
+	}
 	if detail.ClosedOn != nil {
 		t.Errorf("closed_on = %v, want nil - still open", detail.ClosedOn)
 	}

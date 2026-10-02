@@ -63,15 +63,16 @@ SET closed_on = NULL
 WHERE purpose_id = ?
 RETURNING purpose_id, occasion, target_amount, opened_on, closed_on, minimum_per_member, created_at;
 
--- Setting or clearing the minimum every expected member is asked to give
--- (ADR-034) - mutable like occasion, never a posted fact, so this is a plain
--- UPDATE, the same shape UpdateIncidentalOccasion already uses. Unscoped by
--- fund_id for the same reason: Ledger.SetIncidentalParticipation fetches the
--- envelope through GetIncidental's fund-scoped join first, so by the time
--- this runs the purpose_id is already known to belong to the caller's fund.
--- name: UpdateIncidentalMinimum :one
+-- Setting or clearing the envelope's two expectations - its target and the
+-- minimum every expected member is asked to give (ADR-034, #381) - mutable
+-- like occasion, never a posted fact, so this is a plain UPDATE, the same
+-- shape UpdateIncidentalOccasion already uses. Unscoped by fund_id for the
+-- same reason: Ledger.SetIncidentalParticipation fetches the envelope through
+-- GetIncidental's fund-scoped join first, so by the time this runs the
+-- purpose_id is already known to belong to the caller's fund.
+-- name: UpdateIncidentalExpectations :one
 UPDATE incidental
-SET minimum_per_member = ?
+SET target_amount = ?, minimum_per_member = ?
 WHERE purpose_id = ?
 RETURNING purpose_id, occasion, target_amount, opened_on, closed_on, minimum_per_member, created_at;
 
