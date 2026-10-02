@@ -582,3 +582,50 @@ describe('TransactionList entry detail (#359)', () => {
     expect(screen.queryByRole('dialog', { name: copy.transactionDetail.heading })).not.toBeInTheDocument()
   })
 })
+
+describe('TransactionList purpose-pair labels (ADR-036, #383)', () => {
+  const pair: Partial<Transaction> = {
+    kind: 'transfer',
+    transfer_id: 9,
+    transfer_kind: 'reclass_purpose',
+    transfer_from_name: 'Kas Utama',
+    transfer_to_name: 'Amplop Duka',
+  }
+
+  it('labels an allocation "Pindah peruntukan" with both purposes, and Shuffle, never Tutup amplop', () => {
+    const { container } = renderRows([transaction({ ...pair, transfer_reason: 'allocation' })])
+
+    expect(screen.getByText(copy.rowLabels.transferPurposeMove.text('Kas Utama', 'Amplop Duka'))).toBeInTheDocument()
+    expect(container.querySelector('.lucide-shuffle')).toBeInTheDocument()
+    expect(container.querySelector('.lucide-mail')).not.toBeInTheDocument()
+    expect(screen.queryByText(copy.rowLabels.transferPurpose.kind)).not.toBeInTheDocument()
+    expect(screen.queryByText(copy.rowLabels.transferPurposeCorrection.kind)).not.toBeInTheDocument()
+  })
+
+  it('keeps a roll as Tutup amplop', () => {
+    const { container } = renderRows([transaction({ ...pair, transfer_reason: 'roll' })])
+
+    expect(screen.getByText(copy.rowLabels.transferPurpose.kind)).toBeInTheDocument()
+    expect(screen.getByText(copy.rowLabels.transferPurpose.text('Kas Utama', 'Amplop Duka'))).toBeInTheDocument()
+    expect(container.querySelector('.lucide-mail')).toBeInTheDocument()
+    expect(container.querySelector('.lucide-shuffle')).not.toBeInTheDocument()
+  })
+
+  it('reads a null reason as a roll: the row predates the column', () => {
+    const { container } = renderRows([transaction({ ...pair, transfer_reason: null })])
+    expect(screen.getByText(copy.rowLabels.transferPurpose.kind)).toBeInTheDocument()
+    expect(container.querySelector('.lucide-mail')).toBeInTheDocument()
+
+    // And a row from an older server, with no field at all, reads the same.
+    const { container: older } = renderRows([transaction({ ...pair })])
+    expect(older.querySelector('.lucide-mail')).toBeInTheDocument()
+  })
+
+  it('keeps a correction as Perbaikan peruntukan', () => {
+    const { container } = renderRows([transaction({ ...pair, transfer_corrects_transaction_id: 4, transfer_reason: null })])
+
+    expect(screen.getByText(copy.rowLabels.transferPurposeCorrection.kind)).toBeInTheDocument()
+    expect(container.querySelector('.lucide-tags')).toBeInTheDocument()
+    expect(container.querySelector('.lucide-shuffle')).not.toBeInTheDocument()
+  })
+})

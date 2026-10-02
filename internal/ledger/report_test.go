@@ -431,8 +431,8 @@ func TestMonthlyReportEnvelopeRollIsOneMoveRowOutsideTheTotals(t *testing.T) {
 	if len(mv) != 1 {
 		t.Fatalf("moves = %d, want 1", len(mv))
 	}
-	if m := mv[0]; m.Amount != 70_000 || m.FromPurposeName != "Test Collection" || m.ToPurposeName != "Primary Cash" || m.IsCorrection {
-		t.Errorf("move = %+v, want 70000 from Test Collection to Primary Cash, not a correction", m)
+	if m := mv[0]; m.Amount != 70_000 || m.FromPurposeName != "Test Collection" || m.ToPurposeName != "Primary Cash" || m.IsCorrection || m.IsAllocation {
+		t.Errorf("move = %+v, want 70000 from Test Collection to Primary Cash, neither a correction nor an allocation", m)
 	}
 	// The roll's 70_000 is in neither total: the envelope's own 100_000 in and
 	// 30_000 out are all the month moved.
@@ -1147,5 +1147,37 @@ func TestMonthlyReportWithNoClockReadsTodayInJakarta(t *testing.T) {
 	}
 	if r.Month != r.AsOf[:7] {
 		t.Errorf("Month = %q, want the current Jakarta month %q", r.Month, r.AsOf[:7])
+	}
+}
+
+// A treasurer's purpose move (ADR-036) folds into one move row like a roll,
+// but carries its reason so the public page can say "Pindah peruntukan"
+// instead of "Tutup amplop". Outside both totals, no balance moves.
+func TestMonthlyReportAllocationIsOneMoveRowCarryingItsReason(t *testing.T) {
+	ctx := context.Background()
+	l := newTestLedger(t)
+	f := newFixture(t, l)
+
+	envelope := openTestIncidental(t, l, f.fundID, "Bereavement", "2026-09-01")
+	postEntry(t, l, f.fundID, f.cashID, f.mainID, "in", 300_000, "2026-09-02", nil)
+	if _, err := l.PostPurposeMove(ctx, PostPurposeMoveParams{
+		FundID: f.fundID, FromPurposeID: f.mainID, ToPurposeID: envelope.PurposeID, AccountID: f.cashID,
+		Amount: 120_000, OccurredOn: "2026-09-12",
+	}); err != nil {
+		t.Fatalf("PostPurposeMove() = %v, want no error", err)
+	}
+
+	r := monthlyReport(t, l, ReportParams{FundID: f.fundID, Month: "2026-09"})
+
+	mv := moves(r.Rows)
+	if len(mv) != 1 {
+		t.Fatalf("moves = %d, want 1", len(mv))
+	}
+	if m := mv[0]; m.Amount != 120_000 || m.FromPurposeName != "Primary Cash" || m.ToPurposeName != "Bereavement" || m.IsCorrection || !m.IsAllocation {
+		t.Errorf("move = %+v, want an allocation of 120000 from Primary Cash to Bereavement", m)
+	}
+	assertTotals(t, r.Totals, 300_000, 0, 300_000)
+	if r.Balance != 300_000 {
+		t.Errorf("Balance = %d, want 300000: a move changes no balance", r.Balance)
 	}
 }

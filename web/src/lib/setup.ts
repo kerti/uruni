@@ -80,6 +80,11 @@ export interface Transaction {
    * tells the two apart: both are kind='transfer' with
    * transfer_kind='reclass_purpose'. */
   transfer_corrects_transaction_id?: number | null
+  /** Why a purpose pair that corrects nothing moved (ADR-036): 'allocation'
+   * is the treasurer's own "Pindah peruntukan", 'roll' an envelope closing.
+   * Null on a correction, a location transfer, and a roll from before the
+   * column existed - which reads as a roll. */
+  transfer_reason?: 'roll' | 'allocation' | null
   /** The tag this row's money is under now: its own purpose_id until a
    * correction moves it, then the latest correction's target. The list
    * still renders purpose_id - the ledger sums stored tags, so a row

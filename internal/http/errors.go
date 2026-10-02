@@ -93,6 +93,20 @@ func mapLedgerError(w http.ResponseWriter, logger *slog.Logger, err error) {
 		writeAPIError(w, http.StatusConflict, "purpose_correction_noop", "This row is already tagged to that purpose.")
 	case errors.Is(err, ledger.ErrPurposeCorrectionNamedContribution):
 		writeAPIError(w, http.StatusConflict, "purpose_correction_named_contribution", "A named contribution's purpose cannot be corrected - reverse it and post again instead.")
+	case errors.Is(err, ledger.ErrPurposeMoveSamePurpose):
+		writeAPIError(w, http.StatusBadRequest, "purpose_move_same_purpose", "A purpose move needs two different purposes.")
+	case errors.Is(err, ledger.ErrPurposeMoveUnknownPurpose):
+		writeAPIError(w, http.StatusBadRequest, "invalid_argument", "The request references a purpose that does not exist.")
+	case errors.Is(err, ledger.ErrPurposeMoveUnknownAccount):
+		writeAPIError(w, http.StatusBadRequest, "invalid_argument", "The request references an account that does not exist.")
+	case errors.Is(err, ledger.ErrPurposeMovePassThrough):
+		writeAPIError(w, http.StatusConflict, "purpose_move_pass_through", "Pass-through money cannot be moved between purposes.")
+	case errors.Is(err, ledger.ErrPurposeMoveClosed):
+		writeAPIError(w, http.StatusConflict, "purpose_move_closed", "This incidental is closed - reopen it before moving money into or out of it.")
+	case errors.Is(err, ledger.ErrPurposeMoveInsufficient):
+		writeAPIError(w, http.StatusConflict, "purpose_move_insufficient", "The source purpose holds less than that amount.")
+	case errors.Is(err, ledger.ErrPurposeMoveAccountInactive):
+		writeAPIError(w, http.StatusConflict, "purpose_move_account_inactive", "This account is inactive.")
 	case errors.Is(err, ledger.ErrContributionRequiresIncidentalPurpose):
 		writeAPIError(w, http.StatusBadRequest, "invalid_argument", "A named contribution must be tagged to an incidental (envelope) purpose.")
 	case errors.Is(err, money.ErrOverflow):

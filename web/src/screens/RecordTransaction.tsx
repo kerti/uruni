@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react'
-import { ArrowDownLeft, ArrowLeftRight, ArrowUpDown, ArrowUpRight, CalendarCheck } from 'lucide-react'
+import { ArrowDownLeft, ArrowLeftRight, ArrowUpDown, ArrowUpRight, CalendarCheck, Shuffle } from 'lucide-react'
 
 import DateField from '@/components/DateField'
 import { dateBounds } from '@/lib/dates'
@@ -19,6 +19,7 @@ import { listAccounts } from '@/lib/accounts'
 import { getBalances } from '@/lib/balances'
 import { formatIDR } from '@/lib/money'
 import { uploadReceipt } from '@/lib/receipts'
+import { postPurposeMove } from '@/lib/purposeMoves'
 import { postTransfer } from '@/lib/transfers'
 import { listPurposes } from '@/lib/purposes'
 import { listAllMembers } from '@/lib/setup'
@@ -72,8 +73,10 @@ function todayISODate(): string {
  * posts a pair through POST /api/transfers (#235) - money that is neither
  * entering nor leaving the fund, only changing place, which is why it gets
  * its own direction rather than being an out with a special purpose.
+ * 'purpose' is its counterpart (ADR-036, #383): money that stays where it
+ * is and changes what it is for, posted through POST /api/purpose-moves.
  */
-export type Direction = 'in' | 'out' | 'transfer'
+export type Direction = 'in' | 'out' | 'transfer' | 'purpose'
 
 interface FormData {
   accounts: Account[]
@@ -177,6 +180,11 @@ export default function RecordTransaction({
   // only the second one is new.
   const [toAccountId, setToAccountId] = useState<number | null>(null)
   const [purposeId, setPurposeId] = useState<number | null>(null)
+  // Only used by 'purpose' (ADR-036): where the money is for now, and where
+  // it should be for. purposeId above is the ordinary entry's one tag and
+  // keeps its meaning.
+  const [fromPurposeId, setFromPurposeId] = useState<number | null>(null)
+  const [toPurposeId, setToPurposeId] = useState<number | null>(null)
   const [amount, setAmount] = useState(0)
   const [occurredOn, setOccurredOn] = useState(todayISODate)
   const [note, setNote] = useState('')
@@ -228,6 +236,20 @@ export default function RecordTransaction({
       }
     }
 
+    // Pindah peruntukan opens on the common case - giving from Kas Utama to
+    // an envelope (ADR-036) - with the first open envelope already chosen,
+    // so the usual move is an amount and a tap. Never a Titipan: it is not
+    // offered at all (movablePurposes below).
+    if (fromPurposeId === null && toPurposeId === null) {
+      const movable = loadState.data.purposes.filter((p) => p.kind !== 'pass_through')
+      const main = movable.find((p) => p.kind === 'main')
+      if (main) {
+        setFromPurposeId(main.id)
+        const firstOther = movable.find((p) => p.id !== main.id)
+        if (firstOther) setToPurposeId(firstOther.id)
+      }
+    }
+
     // "Dari siapa?" (ADR-034, #211) - same "only honour a real one" guard as
     // purposeId's own seed above: a stale link naming a member the fund no
     // longer has (or has since deactivated) leaves the field at its default
@@ -244,6 +266,7 @@ export default function RecordTransaction({
 
   const submitting = submitState.status === 'loading'
   const isTransfer = direction === 'transfer'
+  const isPurposeMove = direction === 'purpose'
 
   // The same location on both sides moves nothing, and the ledger refuses it
   // anyway (ErrInvalidArgument). Caught here so she reads why in her own
@@ -251,12 +274,30 @@ export default function RecordTransaction({
   // rather than the form failing after the fact.
   const sameLocation = isTransfer && accountId !== null && accountId === toAccountId
 
+  // A purpose move (ADR-036) never offers Titipan: that money belongs to the
+  // parent body and leaves only by being forwarded. selectable=true already
+  // withheld the closed envelopes, which the ledger refuses on either side.
+  const movablePurposes = (loadState.data?.purposes ?? []).filter((p) => p.kind !== 'pass_through')
+  const samePurpose = isPurposeMove && fromPurposeId !== null && fromPurposeId === toPurposeId
+  // The source cannot give more than it holds, read from the balance fetched
+  // with the form (the ledger re-checks at posting time, so a stale figure
+  // costs one refused submit, never a wrong post). Unlike a location
+  // transfer this blocks: the ledger refuses it, so letting her try would
+  // only move the message.
+  const fromPurposeBalance =
+    fromPurposeId === null ? null : (loadState.data?.balances.purposes.find((p) => p.id === fromPurposeId)?.balance ?? null)
+  const purposeMoveTooLarge = isPurposeMove && amount > 0 && fromPurposeBalance !== null && amount > fromPurposeBalance
+
   const canSubmit =
     amount > 0 &&
     accountId !== null &&
     occurredOn !== '' &&
     !submitting &&
-    (isTransfer ? toAccountId !== null && !sameLocation : purposeId !== null)
+    (isTransfer
+      ? toAccountId !== null && !sameLocation
+      : isPurposeMove
+        ? fromPurposeId !== null && toPurposeId !== null && !samePurpose && !purposeMoveTooLarge
+        : purposeId !== null)
 
   // Paying the parent body is two economically different things wearing one
   // shape here (#266, PRD section 7.6): money the fund COLLECTED for the
@@ -341,6 +382,24 @@ export default function RecordTransaction({
         return transfer
       }
 
+      // The same shape one level over (ADR-036): POST /api/purpose-moves posts
+      // the pair on the one chosen location, so the fund total and that
+      // location's balance cannot move - only the two purposes' balances do.
+      if (direction === 'purpose') {
+        if (fromPurposeId === null || toPurposeId === null) return null
+        const move = await postPurposeMove({
+          fromPurposeId,
+          toPurposeId,
+          accountId,
+          amount,
+          occurredOn,
+          note: noteOrNull,
+        })
+        rememberAccountId(accountId)
+        onRecorded(direction)
+        return move
+      }
+
       if (purposeId === null) return null
       const result = await createTransaction({
         accountId,
@@ -395,33 +454,37 @@ export default function RecordTransaction({
       <h1 className="text-xl font-semibold">{duesChosen ? copy.dues.payment.heading : text.heading}</h1>
 
       <div className="flex flex-col gap-1.5">
-        {/* sr-only: the four captions below say what this is, so a visible
+        {/* sr-only: the five captions below say what this is, so a visible
             "Jenis" above them labels a control that already labelled itself.
             It stays in the DOM because the group still needs a name for a
             screen reader, which reads the caption of one option, not the set. */}
         <Label htmlFor="record-direction" className="sr-only">
           {text.directionLabel}
         </Label>
-        <div id="record-direction" role="group" aria-label={text.directionLabel} className={segmentedTrackClass(4)}>
+        <div id="record-direction" role="group" aria-label={text.directionLabel} className={segmentedTrackClass(5)}>
+          {/* Five options across a phone: one-word captions, with the full name
+              in the aria-label (segmented.ts). The icon carries the verb. */}
           <Button
             type="button"
             variant={!duesChosen && direction === 'out' ? 'default' : 'ghost'}
             aria-pressed={!duesChosen && direction === 'out'}
+            aria-label={text.directionOut}
             className={segmentedStackedItemClass(!duesChosen && direction === 'out')}
             onClick={() => chooseDirection('out')}
           >
             <ArrowUpRight aria-hidden="true" />
-            {text.directionOut}
+            {text.captionOut}
           </Button>
           <Button
             type="button"
             variant={!duesChosen && direction === 'in' ? 'default' : 'ghost'}
             aria-pressed={!duesChosen && direction === 'in'}
+            aria-label={text.directionIn}
             className={segmentedStackedItemClass(!duesChosen && direction === 'in')}
             onClick={() => chooseDirection('in')}
           >
             <ArrowDownLeft aria-hidden="true" />
-            {text.directionIn}
+            {text.captionIn}
           </Button>
           {/* Money that is neither entering nor leaving, only changing place
               (#235). Its own direction rather than an out with a special
@@ -431,14 +494,29 @@ export default function RecordTransaction({
             type="button"
             variant={!duesChosen && direction === 'transfer' ? 'default' : 'ghost'}
             aria-pressed={!duesChosen && direction === 'transfer'}
+            aria-label={text.directionTransfer}
             className={segmentedStackedItemClass(!duesChosen && direction === 'transfer')}
             onClick={() => chooseDirection('transfer')}
           >
             <ArrowLeftRight aria-hidden="true" />
-            {text.directionTransfer}
+            {text.captionLocation}
           </Button>
-          {/* A dues payment (#315): the fourth kind of money moving, so the
-              fourth item here rather than a link or a second screen - Catat
+          {/* Its counterpart (ADR-036, #383): money that stays where it is
+              and changes what it is for - Kas Utama to an envelope, back, or
+              between two envelopes. */}
+          <Button
+            type="button"
+            variant={!duesChosen && direction === 'purpose' ? 'default' : 'ghost'}
+            aria-pressed={!duesChosen && direction === 'purpose'}
+            aria-label={text.directionPurpose}
+            className={segmentedStackedItemClass(!duesChosen && direction === 'purpose')}
+            onClick={() => chooseDirection('purpose')}
+          >
+            <Shuffle aria-hidden="true" />
+            {text.captionPurpose}
+          </Button>
+          {/* A dues payment (#315): the fifth kind of money moving, so the
+              fifth item here rather than a link or a second screen - Catat
               stays one screen, one tap from the footer (PRD section 7.2). */}
           <Button
             type="button"
@@ -458,6 +536,49 @@ export default function RecordTransaction({
       ) : (
         <form className="flex flex-col gap-4" onSubmit={handleSubmit} noValidate>
           <AmountInput id="record-amount" label={text.amountLabel} value={amount} onChange={setAmount} disabled={submitting} />
+
+          {/* Pindah peruntukan (ADR-036): where the money is for now, and where
+              it should be for - right after the amount, because they are the
+              point of the move; the location is the least of it and follows.
+              Two columns like the transfer's pair, so each picker keeps its
+              own preview or hint beneath it. */}
+          {isPurposeMove && (
+            <>
+              <div className="flex flex-col gap-1.5">
+                <PurposePicker
+                  id="record-from-purpose"
+                  label={text.fromPurposeLabel}
+                  purposes={movablePurposes}
+                  value={fromPurposeId}
+                  onChange={setFromPurposeId}
+                  disabled={submitting}
+                />
+                {fromPurposeBalance !== null && (
+                  <p className="text-sm text-muted-foreground">{text.locationBalance(formatIDR(fromPurposeBalance))}</p>
+                )}
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <PurposePicker
+                  id="record-to-purpose"
+                  label={text.toPurposeLabel}
+                  purposes={movablePurposes}
+                  value={toPurposeId}
+                  onChange={setToPurposeId}
+                  disabled={submitting}
+                />
+                {samePurpose && (
+                  <p role="status" className="rounded-lg bg-attention-soft px-3 py-2 text-sm text-attention">
+                    {text.samePurposeHint}
+                  </p>
+                )}
+                {!samePurpose && purposeMoveTooLarge && fromPurposeBalance !== null && (
+                  <p role="status" className="rounded-lg bg-attention-soft px-3 py-2 text-sm text-attention">
+                    {text.purposeInsufficientHint(formatIDR(fromPurposeBalance))}
+                  </p>
+                )}
+              </div>
+            </>
+          )}
 
           {/* One location for an ordinary entry, two for a transfer - and the
           field she already knows keeps its meaning either way: accountId is
@@ -526,7 +647,7 @@ export default function RecordTransaction({
             </div>
           )}
 
-          {!isTransfer && (
+          {!isTransfer && !isPurposeMove && (
             <div className="flex flex-col gap-1.5">
               <PurposePicker
                 id="record-purpose"
@@ -582,7 +703,9 @@ export default function RecordTransaction({
           {/* No photo field for a transfer (see this component's own doc
           comment) - money moving between the fund's own locations has no
           nota to document. */}
-          {!isTransfer && <ReceiptPicker id="record-receipt" value={receiptFile} onChange={setReceiptFile} disabled={submitting} />}
+          {!isTransfer && !isPurposeMove && (
+            <ReceiptPicker id="record-receipt" value={receiptFile} onChange={setReceiptFile} disabled={submitting} />
+          )}
 
           {submitState.status === 'error' && submitState.error && <ErrorState error={submitState.error} />}
 

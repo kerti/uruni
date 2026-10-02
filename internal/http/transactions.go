@@ -109,6 +109,12 @@ type transactionResponse struct {
 	// which are otherwise the same kind='transfer', transfer_kind='reclass_purpose'
 	// shape.
 	TransferCorrectsTransactionID *int64 `json:"transfer_corrects_transaction_id"`
+	// TransferReason is this row's own transfer's reason (ADR-036): 'roll'
+	// or 'allocation' on a purpose pair that corrects nothing, nil on a
+	// correction, a between_accounts pair, every non-transfer row - and on a
+	// pair that predates the column, which is a roll. The row label reads
+	// nil as a roll, so only 'allocation' changes what Riwayat says.
+	TransferReason *string `json:"transfer_reason"`
 	// EffectivePurposeID is the tag this row's money is under now: its own
 	// PurposeID until a correction moves it (ADR-033), then the latest
 	// correction's target. Equal to PurposeID on every uncorrected row, so
@@ -189,6 +195,7 @@ func toTransactionsPageResponse(t store.ListTransactionsPageRow) transactionResp
 	resp.TransferKind = t.TransferKind
 	resp.IsReconciliationFix = t.IsReconciliationFix != 0
 	resp.TransferCorrectsTransactionID = t.TransferCorrectsTransactionID
+	resp.TransferReason = t.TransferReason
 	resp.EffectivePurposeID = t.EffectivePurposeID
 
 	switch {

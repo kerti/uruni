@@ -194,6 +194,12 @@ func (a *api) routes(r chi.Router) {
 		// holds in total (PRD section 6). No GET: a transfer's two legs are ordinary
 		// transaction rows and already surface through GET /api/transactions.
 		r.Post("/transfers", a.createTransfer)
+		// Moving money between purposes - Kas Utama to an envelope and back,
+		// or envelope to envelope - without moving any money (ADR-036,
+		// #383). The third caller of postTransferPairTx, through
+		// Ledger.PostPurposeMove; its legs surface through GET
+		// /api/transactions like a transfer's do.
+		r.Post("/purpose-moves", a.createPurposeMove)
 
 		// A member fronting their own money (PRD section 7.4). Recording the claim
 		// moves nothing - only settling posts a ledger row, which is why the

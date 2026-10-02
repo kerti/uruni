@@ -43,6 +43,7 @@ SELECT t.occurred_on, t.created_at, t.direction, t.amount, t.kind,
        t.transfer_id,
        tr.kind AS transfer_kind,
        tr.corrects_transaction_id AS transfer_corrects_transaction_id,
+       tr.reason AS transfer_reason,
        tf.purpose_id AS transfer_from_purpose_id,
        tt.purpose_id AS transfer_to_purpose_id,
        fp.name AS transfer_from_purpose_name,
@@ -93,6 +94,7 @@ type ListReportTransactionsRow struct {
 	TransferID                    *int64
 	TransferKind                  *string
 	TransferCorrectsTransactionID *int64
+	TransferReason                *string
 	TransferFromPurposeID         *int64
 	TransferToPurposeID           *int64
 	TransferFromPurposeName       *string
@@ -153,6 +155,7 @@ func (q *Queries) ListReportTransactions(ctx context.Context, arg ListReportTran
 			&i.TransferID,
 			&i.TransferKind,
 			&i.TransferCorrectsTransactionID,
+			&i.TransferReason,
 			&i.TransferFromPurposeID,
 			&i.TransferToPurposeID,
 			&i.TransferFromPurposeName,

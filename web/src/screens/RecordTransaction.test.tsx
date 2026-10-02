@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
@@ -701,5 +701,158 @@ describe('RecordTransaction: "Dari siapa? (opsional)" (ADR-034, #211)', () => {
     await screen.findByLabelText(text.locationLabel)
 
     await waitFor(() => expect(selectedOptionName(text.contributorLabel)).toBe('Budi'))
+  })
+})
+
+describe('RecordTransaction: the kind selector (#383)', () => {
+  it('shows one-word captions and keeps the full names as accessible names', async () => {
+    vi.stubGlobal('fetch', stubFormLoad())
+    render(<RecordTransaction onRecorded={vi.fn()} onCancel={vi.fn()} onDuesRecorded={vi.fn()} />)
+    await waitFor(() => expect(screen.getByLabelText(text.locationLabel)).toBeInTheDocument())
+
+    const group = screen.getByRole('group', { name: text.directionLabel })
+    const buttons = within(group).getAllByRole('button')
+    // Visible text: the five captions, in order. The icon carries the verb.
+    expect(buttons.map((b) => b.textContent)).toEqual(['Keluar', 'Masuk', 'Lokasi', 'Peruntukan', 'Iuran'])
+    // Accessible names: the full ones every other surface uses; Iuran needs none.
+    expect(buttons.map((b) => b.getAttribute('aria-label'))).toEqual([
+      'Uang keluar',
+      'Uang masuk',
+      'Pindah lokasi',
+      'Pindah peruntukan',
+      null,
+    ])
+    for (const name of ['Uang keluar', 'Uang masuk', 'Pindah lokasi', 'Pindah peruntukan', 'Iuran']) {
+      expect(within(group).getByRole('button', { name })).toBeInTheDocument()
+    }
+    // One track, five columns.
+    expect(group.className).toContain('grid-cols-5')
+  })
+})
+
+describe('RecordTransaction: Pindah peruntukan (ADR-036, #383)', () => {
+  function stubPurposeMove(kasUtamaBalance = 1_000_000, envelopeBalance = 0) {
+    const posts: { url: string; body: Record<string, unknown> }[] = []
+    const balances = balancesWith(30_000)
+    balances.purposes = balances.purposes.map((p) =>
+      p.id === 11 ? { ...p, balance: kasUtamaBalance } : p.id === 12 ? { ...p, balance: envelopeBalance } : p,
+    )
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input)
+        const method = (init?.method ?? 'GET').toUpperCase()
+        if (method === 'POST' && url.includes('/api/purpose-moves')) {
+          posts.push({ url, body: JSON.parse(String(init?.body)) })
+          return Promise.resolve(jsonResponse({ id: 1, kind: 'reclass_purpose', created_at: 1 }, 201))
+        }
+        if (url.includes('/api/accounts')) return Promise.resolve(jsonResponse(accounts))
+        if (url.includes('/api/balances')) return Promise.resolve(jsonResponse(balances))
+        if (url.includes('/api/purposes')) return Promise.resolve(jsonResponse(purposes))
+        if (url.includes('/api/members')) return Promise.resolve(jsonResponse({ members: [], next_cursor: null }))
+        return Promise.reject(new Error(`unstubbed fetch: ${method} ${url}`))
+      }),
+    )
+    return posts
+  }
+
+  async function choosePurposeMove(onRecorded = vi.fn()) {
+    render(<RecordTransaction onRecorded={onRecorded} onCancel={vi.fn()} onDuesRecorded={vi.fn()} />)
+    const user = userEvent.setup()
+    await waitFor(() => expect(screen.getByLabelText(text.locationLabel)).toBeInTheDocument())
+    await user.click(screen.getByRole('button', { name: text.directionPurpose }))
+    return { user, onRecorded }
+  }
+
+  it('asks Dari, Ke, Jumlah, Tanggal, Lokasi and Catatan - and no receipt, no single peruntukan', async () => {
+    stubPurposeMove()
+    await choosePurposeMove()
+
+    for (const label of [
+      text.fromPurposeLabel,
+      text.toPurposeLabel,
+      text.amountLabel,
+      text.dateLabel,
+      text.locationLabel,
+      text.noteLabel,
+    ]) {
+      expect(screen.getByLabelText(label)).toBeInTheDocument()
+    }
+    expect(screen.queryByLabelText(text.purposeLabel)).not.toBeInTheDocument()
+    expect(screen.queryByLabelText(text.fromLocationLabel)).not.toBeInTheDocument()
+    // No nota to photograph: money that only changes purpose has none.
+    expect(document.getElementById('record-receipt')).toBeNull()
+  })
+
+  it('opens on Kas Utama to the first envelope, and never offers Titipan on either side', async () => {
+    stubPurposeMove()
+    await choosePurposeMove()
+
+    expect(selectedOptionName(text.fromPurposeLabel)).toBe('Kas utama')
+    expect(selectedOptionName(text.toPurposeLabel)).toBe('Halal bihalal RT')
+    expect(await selectOptionNames(text.fromPurposeLabel)).toEqual(['Kas utama', 'Halal bihalal RT'])
+    await userEvent.keyboard('{Escape}')
+    expect(await selectOptionNames(text.toPurposeLabel)).toEqual(['Kas utama', 'Halal bihalal RT'])
+  })
+
+  it('shows what the source holds', async () => {
+    stubPurposeMove(750_000)
+    await choosePurposeMove()
+
+    expect(await screen.findByText(text.locationBalance(money(750_000)))).toBeInTheDocument()
+  })
+
+  it('refuses the same peruntukan on both sides, saying why, and keeps submit disabled', async () => {
+    stubPurposeMove()
+    const { user } = await choosePurposeMove()
+
+    await user.type(screen.getByLabelText(text.amountLabel), '50000')
+    await chooseOption(text.toPurposeLabel, 'Kas utama')
+
+    expect(await screen.findByText(text.samePurposeHint)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: text.submit })).toBeDisabled()
+  })
+
+  it('blocks an amount above what the source holds, naming the balance', async () => {
+    stubPurposeMove(1_000_000, 200_000)
+    const { user } = await choosePurposeMove()
+    await chooseOption(text.fromPurposeLabel, 'Halal bihalal RT')
+    await chooseOption(text.toPurposeLabel, 'Kas utama')
+
+    await user.type(screen.getByLabelText(text.amountLabel), '200001')
+    expect(await screen.findByText(text.purposeInsufficientHint(money(200_000)))).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: text.submit })).toBeDisabled()
+
+    // Exactly the balance is allowed: the ledger's boundary, integer-exact.
+    await user.clear(screen.getByLabelText(text.amountLabel))
+    await user.type(screen.getByLabelText(text.amountLabel), '200000')
+    await waitFor(() => expect(screen.getByRole('button', { name: text.submit })).toBeEnabled())
+  })
+
+  it('posts through /api/purpose-moves with the chosen location and the note, never /api/transactions', async () => {
+    const posts = stubPurposeMove()
+    const { user, onRecorded } = await choosePurposeMove()
+
+    await user.type(screen.getByLabelText(text.amountLabel), '120000')
+    await chooseOption(text.locationLabel, 'Bank Uji Coba')
+    await user.type(screen.getByLabelText(text.noteLabel), 'Duka cita')
+    await user.click(screen.getByRole('button', { name: text.submit }))
+
+    await waitFor(() => expect(posts).toHaveLength(1))
+    expect(posts[0].body).toEqual({
+      from_purpose_id: 11,
+      to_purpose_id: 12,
+      account_id: 3,
+      amount: 120_000,
+      occurred_on: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
+      note: 'Duka cita',
+    })
+    // Told which kind it was, so Beranda names the total staying put.
+    expect(onRecorded).toHaveBeenCalledWith('purpose')
+
+    const calls = (globalThis.fetch as unknown as { mock: { calls: [RequestInfo | URL, RequestInit?][] } }).mock.calls
+    const posted = calls.filter(([, init]) => (init?.method ?? 'GET').toUpperCase() === 'POST').map(([input]) => String(input))
+    expect(posted.some((u) => u.includes('/api/transactions'))).toBe(false)
+    expect(posted.some((u) => u.includes('/api/transfers'))).toBe(false)
   })
 })

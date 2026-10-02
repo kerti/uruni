@@ -6,8 +6,8 @@ import { cn } from '@/lib/utils'
  * `default` variant), the rest `ghost` in muted text - the shape itself says
  * "exactly one of these", which a row of separate outline buttons did not.
  * Riwayat's tab strip (M6.23) set the look; the two-option list filters and
- * the record form's direction choices follow it - three of them since #235
- * added Pindah lokasi beside Uang masuk and Uang keluar.
+ * the record form's kind choices follow it - five of them since #383 added
+ * Peruntukan beside Keluar, Masuk, Lokasi and Iuran.
  *
  * Classes rather than a component on purpose: Riwayat's options are
  * `NavLink`s (tabs are routes, History.tsx), the rest are `Button`s with
@@ -17,7 +17,7 @@ import { cn } from '@/lib/utils'
 
 // Written out in full, never built from a number: Tailwind only generates
 // class names it can find literally in source.
-const columnClass = { 2: 'grid-cols-2', 3: 'grid-cols-3', 4: 'grid-cols-4' } as const
+const columnClass = { 2: 'grid-cols-2', 3: 'grid-cols-3', 4: 'grid-cols-4', 5: 'grid-cols-5' } as const
 
 /** The track - a grid, so every option gets an equal share of the row.
  *
@@ -62,12 +62,17 @@ export function segmentedItemClass(active: boolean, className?: string): string 
  * A stacked option: the icon above the caption rather than beside it, which
  * is what the footer nav already does with five slots at 375px.
  *
- * Three options across a phone leave each about 110px, and an icon plus a
- * gap plus a two-word caption does not fit on one line there (#235 shipped
- * it that way and it read cramped). Stacking gives the caption the whole
- * width, so the words stay intact - the alternative was abbreviating
- * "Pindah lokasi", and a second shorter surface form for one concept is the
- * synonym CONTEXT.md exists to prevent.
+ * Five options across a phone leave each about 75px, which is why the
+ * captions are one short word (Keluar, Masuk, Lokasi, Peruntukan, Iuran) and
+ * why the icon is stacked above the caption instead of beside it: an icon
+ * plus a gap plus a word does not fit on one line at that width, and
+ * stacking gives the word the whole column. The icon carries the verb - the
+ * arrows say out, in, and moved - so the caption does not need to repeat
+ * "Uang" or "Pindah". The full name ("Uang keluar", "Pindah lokasi") lives in
+ * each option's aria-label, so a screen reader, and anything that finds the
+ * button by its accessible name, still meets the same words every other
+ * surface uses; a shortened caption is a visible abbreviation, not a second
+ * name for the concept (CONTEXT.md).
  *
  * min-h-11 rather than h-11: two rows are taller than 44px, and the point of
  * the original was a floor, not a fixed height. h-auto overrides

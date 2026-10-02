@@ -244,6 +244,15 @@ export const copy = {
       purpose_correction_target_closed: 'Amplop ini sudah ditutup — buka lagi dulu sebelum memindahkan peruntukan ke sini.',
       purpose_correction_source_closed: 'Amplop ini sudah ditutup — buka lagi dulu sebelum memindahkan peruntukan dari sini.',
       purpose_correction_noop: 'Baris ini sudah memakai peruntukan itu.',
+      // ADR-036 (#383): POST /api/purpose-moves' own named refusals. The form
+      // already withholds Titipan, a closed envelope and an amount above the
+      // balance, so these are the fallback for a stale form - a close or a
+      // posting that landed after it loaded.
+      purpose_move_same_purpose: 'Pilih dua peruntukan yang berbeda.',
+      purpose_move_pass_through: 'Uang titipan tidak bisa dipindahkan antar peruntukan - titipan hanya bisa diteruskan.',
+      purpose_move_closed: 'Amplop ini sudah ditutup — buka lagi dulu sebelum memindahkan uang ke sini atau dari sini.',
+      purpose_move_insufficient: 'Saldo peruntukan asal tidak cukup untuk jumlah ini.',
+      purpose_move_account_inactive: 'Lokasi ini sudah tidak dipakai. Pilih lokasi yang lain.',
       // ADR-034 (#211): a sumbangan bernama can't be re-tagged the way an
       // ordinary row can - moving it would leave participation counting the
       // member against an envelope the money has left. Same "added ahead of
@@ -382,9 +391,24 @@ export const copy = {
     // the row pair rather than a label. The same two words already name
     // these rows in Riwayat (rowLabels.transferLocation).
     directionTransfer: 'Pindah lokasi',
+    // The fifth kind (ADR-036, #383): money that stays where it is but
+    // changes what it is for - the counterpart of Pindah lokasi, one word
+    // apart. The same two words name these rows in Riwayat
+    // (rowLabels.transferPurposeMove).
+    directionPurpose: 'Pindah peruntukan',
     // The fourth kind (#315): a dues payment. The same word as Riwayat's
     // Iuran tab, where the payment then appears.
     directionDues: 'Iuran',
+    // The visible captions on the kind selector's five-column track (#383).
+    // One word each because five options across a phone leave about 75px
+    // apiece, and the icon above each caption carries the verb - the arrows
+    // say out, in and moved - so "Uang" and "Pindah" are not repeated under
+    // it. The full names above stay the aria-labels, and what every other
+    // surface (Reconcile, the entry detail, Riwayat) shows.
+    captionOut: 'Keluar',
+    captionIn: 'Masuk',
+    captionLocation: 'Lokasi',
+    captionPurpose: 'Peruntukan',
     amountLabel: 'Jumlah',
     locationLabel: 'Lokasi',
     // A transfer splits the one location field in two. "Dari" and "ke" are
@@ -412,6 +436,19 @@ export const copy = {
     // accessible name now.
     swapLocations: 'Tukar lokasi',
     purposeLabel: 'Peruntukan',
+    // Pindah peruntukan splits the one peruntukan field in two, the way a
+    // location transfer splits Lokasi: where the money is for now, and where
+    // it should be for. Bare "Dari" and "Ke" because the selected kind
+    // already says what is being moved.
+    fromPurposeLabel: 'Dari',
+    toPurposeLabel: 'Ke',
+    // Same peruntukan on both sides moves nothing, and the ledger refuses it
+    // too - she reads why here instead of meeting a rejected submit.
+    samePurposeHint: 'Pilih dua peruntukan yang berbeda - uang pindah dari satu peruntukan ke yang lain.',
+    // The source cannot give more than it holds (ADR-036). Unlike a location
+    // transfer this blocks, because the ledger refuses it: amount is the
+    // balance already formatted by the caller.
+    purposeInsufficientHint: (amount: string) => `Saldo peruntukan asal hanya ${amount}, tidak cukup untuk jumlah ini.`,
     dateLabel: 'Tanggal',
     noteLabel: 'Catatan (opsional)',
     submit: 'Simpan',
@@ -425,6 +462,9 @@ export const copy = {
     // she watches, and a confirmation that left it unmentioned would invite
     // her to check it.
     successTransfer: 'Uang sudah dipindahkan. Total kas tidak berubah.',
+    // A purpose move changes no total either, and the sentence says so for
+    // the same reason successTransfer does.
+    successPurposeMove: 'Peruntukan sudah dipindahkan. Total kas tidak berubah.',
     // Shown when an "uang keluar" tagged to a titipan would take that
     // titipan below zero (#266, PRD §7.6). Names the likelier reading and
     // the tag that fits it, in her own words: a titipan holds money that
@@ -524,6 +564,12 @@ export const copy = {
     transferPurposeCorrection: {
       kind: 'Perbaikan peruntukan',
       text: (fromName: string, toName: string) => `${fromName} → ${toName}`,
+    },
+    // The treasurer moving money between purposes on purpose (ADR-036,
+    // transfer.reason 'allocation'). The visible text opens with the kind
+    // word, so unlike the two above it needs no sr-only kind of its own.
+    transferPurposeMove: {
+      text: (fromName: string, toName: string) => `Pindah peruntukan · ${fromName} → ${toName}`,
     },
     reconciliationFix: {
       text: (accountName: string) => `Penyesuaian · ${accountName}`,

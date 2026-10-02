@@ -177,8 +177,9 @@ type ReportEntry struct {
 }
 
 // ReportMove is a reclass_purpose pair folded into one row: an envelope's
-// leftover rolled into Kas Utama, or a purpose correction. It moves nothing
-// in or out of the fund, so it is outside the totals.
+// leftover rolled into Kas Utama, a purpose correction, or money the
+// treasurer moved between purposes (ADR-036). It moves nothing in or out of
+// the fund, so it is outside the totals.
 type ReportMove struct {
 	Amount          money.Amount
 	FromPurposeName string
@@ -189,6 +190,12 @@ type ReportMove struct {
 	// IsCorrection tells a purpose correction from an envelope's roll: only a
 	// correction names the row it corrects (ADR-033).
 	IsCorrection bool
+
+	// IsAllocation tells money the treasurer moved between purposes
+	// ("Pindah peruntukan", transfer.reason 'allocation', ADR-036) from an
+	// envelope's roll. Neither IsCorrection nor IsAllocation: a roll, which
+	// is also what a pair from before the column reads as.
+	IsAllocation bool
 	Note         *string
 }
 
@@ -570,6 +577,7 @@ func reportMoveFrom(row store.ListReportTransactionsRow) (ReportMove, error) {
 		FromPurposeID:   *row.TransferFromPurposeID,
 		ToPurposeID:     *row.TransferToPurposeID,
 		IsCorrection:    row.TransferCorrectsTransactionID != nil,
+		IsAllocation:    row.TransferReason != nil && *row.TransferReason == reasonAllocation,
 		Note:            row.Note,
 	}, nil
 }

@@ -79,7 +79,7 @@ func toTransfers(rows []store.Transfer) []Transfer {
 	for _, r := range rows {
 		out = append(out, Transfer{
 			ID: r.ID, FundID: r.FundID, Kind: r.Kind,
-			CorrectsTransactionID: r.CorrectsTransactionID, CreatedAt: r.CreatedAt,
+			CorrectsTransactionID: r.CorrectsTransactionID, Reason: r.Reason, CreatedAt: r.CreatedAt,
 		})
 	}
 	return out

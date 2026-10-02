@@ -733,7 +733,7 @@ func insertDocument(ctx context.Context, q store.Querier, doc Document) error {
 	}
 	for _, tr := range doc.Transfers {
 		if err := q.RestoreTransfer(ctx, store.RestoreTransferParams{
-			ID: tr.ID, FundID: tr.FundID, Kind: tr.Kind, CorrectsTransactionID: tr.CorrectsTransactionID, CreatedAt: tr.CreatedAt,
+			ID: tr.ID, FundID: tr.FundID, Kind: tr.Kind, CorrectsTransactionID: tr.CorrectsTransactionID, Reason: tr.Reason, CreatedAt: tr.CreatedAt,
 		}); err != nil {
 			return fmt.Errorf("backup: restoring transfer %d: %w", tr.ID, err)
 		}

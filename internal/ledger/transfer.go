@@ -63,6 +63,11 @@ func normalizeNote(note *string) *string {
 // own CHECK is what stops a between_accounts pair or a roll from setting it,
 // not a branch in here.
 //
+// reason is nil for every pair but the two that say why a purpose pair
+// moved (ADR-036): reasonRoll from CloseIncidentalAndRoll, reasonAllocation
+// from PostPurposeMove. Corrections and between_accounts pairs pass nil; the
+// schema's CHECK refuses a reason anywhere else.
+//
 // No argument-shape validation happens here (ADR-027): that is each exported
 // caller's job, because the message a caller wants ("from_account_id and
 // to_account_id must differ") reads differently depending on which two
@@ -76,11 +81,11 @@ func normalizeNote(note *string) *string {
 // ADR-004's SetMaxOpenConns(1) allows - a deadlock, not a safety net.
 // postTransferPair below is the thin, transaction-owning wrapper that
 // PostTransferBetweenAccounts and the existing tests still call.
-func (l *Ledger) postTransferPairTx(ctx context.Context, q store.Querier, fundID int64, kind string, from, to leg, amount money.Amount, occurredOn string, note *string, correctsTransactionID *int64) (store.Transfer, error) {
+func (l *Ledger) postTransferPairTx(ctx context.Context, q store.Querier, fundID int64, kind string, from, to leg, amount money.Amount, occurredOn string, note *string, correctsTransactionID *int64, reason *string) (store.Transfer, error) {
 	now := time.Now().Unix()
 
 	transfer, err := q.CreateTransfer(ctx, store.CreateTransferParams{
-		FundID: fundID, Kind: kind, CorrectsTransactionID: correctsTransactionID, CreatedAt: now,
+		FundID: fundID, Kind: kind, CorrectsTransactionID: correctsTransactionID, Reason: reason, CreatedAt: now,
 	})
 	if err != nil {
 		return store.Transfer{}, fmt.Errorf("creating transfer: %w", err)
@@ -108,7 +113,7 @@ func (l *Ledger) postTransferPair(ctx context.Context, fundID int64, kind string
 	var transfer store.Transfer
 	err := l.withTx(ctx, func(q store.Querier) error {
 		var err error
-		transfer, err = l.postTransferPairTx(ctx, q, fundID, kind, from, to, amount, occurredOn, note, nil)
+		transfer, err = l.postTransferPairTx(ctx, q, fundID, kind, from, to, amount, occurredOn, note, nil, nil)
 		return err
 	})
 	if err != nil {
@@ -161,3 +166,11 @@ func (l *Ledger) PostTransferBetweenAccounts(ctx context.Context, p PostTransfer
 	}
 	return transfer, nil
 }
+
+// The two reasons a purpose pair that corrects nothing can carry
+// (ADR-036). They are the schema's own CHECK values, named once here so the
+// two callers and the tests spell them the same way.
+const (
+	reasonRoll       = "roll"
+	reasonAllocation = "allocation"
+)

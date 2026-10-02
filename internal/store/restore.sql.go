@@ -514,8 +514,8 @@ func (q *Queries) RestoreTransaction(ctx context.Context, arg RestoreTransaction
 }
 
 const restoreTransfer = `-- name: RestoreTransfer :exec
-INSERT INTO transfer (id, fund_id, kind, corrects_transaction_id, created_at)
-VALUES (?, ?, ?, ?, ?)
+INSERT INTO transfer (id, fund_id, kind, corrects_transaction_id, reason, created_at)
+VALUES (?, ?, ?, ?, ?, ?)
 `
 
 type RestoreTransferParams struct {
@@ -523,6 +523,7 @@ type RestoreTransferParams struct {
 	FundID                int64
 	Kind                  string
 	CorrectsTransactionID *int64
+	Reason                *string
 	CreatedAt             int64
 }
 
@@ -532,6 +533,7 @@ func (q *Queries) RestoreTransfer(ctx context.Context, arg RestoreTransferParams
 		arg.FundID,
 		arg.Kind,
 		arg.CorrectsTransactionID,
+		arg.Reason,
 		arg.CreatedAt,
 	)
 	return err

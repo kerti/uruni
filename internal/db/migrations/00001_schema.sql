@@ -128,6 +128,14 @@ CREATE TABLE transfer (                   -- pair-holder: cash<->bank, or purpos
   -- same deferred-check shape "transaction" itself relies on for its own
   -- FOREIGN KEY (fund_id, transfer_id) back onto this table, the other way.
   corrects_transaction_id INTEGER,
+  -- Why a purpose pair that corrects nothing moved (ADR-036): 'roll' is an
+  -- envelope closing into or out of Kas Utama (ADR-031), 'allocation' is the
+  -- treasurer moving money between purposes on purpose ("Pindah peruntukan").
+  -- NULL means the row predates the column; every such uncorrected pair is a
+  -- roll, because nothing else could post one, so readers treat NULL as roll.
+  -- A separate column, not a third kind: kind keeps answering only what shape
+  -- of move this is (ADR-033).
+  reason TEXT,
   created_at INTEGER NOT NULL,
   UNIQUE (fund_id, id),                   -- see account.id above: enables composite FKs from children
   FOREIGN KEY (fund_id, corrects_transaction_id) REFERENCES "transaction"(fund_id, id),
@@ -139,7 +147,10 @@ CREATE TABLE transfer (                   -- pair-holder: cash<->bank, or purpos
   -- Unenforced, the worst a wrongly-linked roll can do is mislabel one row
   -- in Riwayat - unlike the dues-reversal CHECK below, which guards a query
   -- (DuesPaidByPeriod) and had to be absolute.
-  CHECK (corrects_transaction_id IS NULL OR kind = 'reclass_purpose')
+  CHECK (corrects_transaction_id IS NULL OR kind = 'reclass_purpose'),
+  -- A reason belongs to a purpose pair that corrects nothing: a correction is
+  -- labelled by its link, and a between_accounts pair has no reason to give.
+  CHECK (reason IS NULL OR (kind = 'reclass_purpose' AND corrects_transaction_id IS NULL AND reason IN ('roll','allocation')))
 ) STRICT;
 
 CREATE TABLE reimbursement (              -- off-ledger until settled

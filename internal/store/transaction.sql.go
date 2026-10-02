@@ -852,6 +852,7 @@ SELECT t.id, t.fund_id, t.account_id, t.purpose_id, t.direction, t.amount, t.occ
        tp.name AS transfer_to_purpose_name,
        CAST(EXISTS(SELECT 1 FROM reconciliation_line rl WHERE rl.adjustment_transaction_id = t.id) AS INTEGER) AS is_reconciliation_fix,
        tr.corrects_transaction_id AS transfer_corrects_transaction_id,
+       tr.reason AS transfer_reason,
        CAST(COALESCE((SELECT ct.purpose_id
                       FROM transfer c
                       JOIN "transaction" ct ON ct.transfer_id = c.id AND ct.direction = t.direction
@@ -929,6 +930,7 @@ type ListTransactionsPageRow struct {
 	TransferToPurposeName         *string
 	IsReconciliationFix           int64
 	TransferCorrectsTransactionID *int64
+	TransferReason                *string
 	EffectivePurposeID            int64
 }
 
@@ -1043,6 +1045,12 @@ type ListTransactionsPageRow struct {
 //     Read off tr, the same join transfer_kind already uses, not a second
 //     one.
 //
+//   - transfer_reason: this row's own transfer's reason (ADR-036) - 'roll',
+//     'allocation', or NULL (a correction, a between_accounts pair, or a
+//     pair that predates the column, which reads as a roll). Riwayat labels
+//     an allocation "Pindah peruntukan" from it; only a pair that corrects
+//     nothing carries one.
+//
 //   - effective_purpose_id: the tag this row's money is under NOW - its own
 //     purpose_id until a correction (ADR-033) moves it, then the latest
 //     correction's target. Which of that correction's two legs IS the
@@ -1105,6 +1113,7 @@ func (q *Queries) ListTransactionsPage(ctx context.Context, arg ListTransactions
 			&i.TransferToPurposeName,
 			&i.IsReconciliationFix,
 			&i.TransferCorrectsTransactionID,
+			&i.TransferReason,
 			&i.EffectivePurposeID,
 		); err != nil {
 			return nil, err

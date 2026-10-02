@@ -1,4 +1,4 @@
-import { ArrowLeftRight, CalendarCheck, Flag, HandCoins, HandHelping, Mail, Scale, Tags, Undo2 } from 'lucide-react'
+import { ArrowLeftRight, CalendarCheck, Flag, HandCoins, HandHelping, Mail, Scale, Shuffle, Tags, Undo2 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 
 import { copy } from '@/copy/id'
@@ -46,20 +46,27 @@ function rowLabelFor(transaction: Transaction): { Icon: LucideIcon; srWord: stri
       }
     case 'transfer':
       if (transaction.transfer_kind === 'reclass_purpose') {
-        // Two shapes share this wire shape, and only corrects_transaction_id
-        // tells them apart (ADR-033): a roll posted by closing an envelope
-        // (null) and a purpose correction (set). Before #276 this branch
-        // said "Tutup amplop" unconditionally, which was right while
-        // closing was the only thing that could post a reclass_purpose pair
-        // - and would have labelled every correction as an envelope closing
-        // that never happened.
-        const corrected = transaction.transfer_corrects_transaction_id != null
-        const label = corrected ? copy.rowLabels.transferPurposeCorrection : copy.rowLabels.transferPurpose
-        return {
-          Icon: corrected ? Tags : Mail,
-          srWord: label.kind,
-          text: label.text(transaction.transfer_from_name ?? '', transaction.transfer_to_name ?? ''),
+        // Three shapes share this wire shape (ADR-033, ADR-036). A purpose
+        // correction is the one that sets corrects_transaction_id. Of the
+        // rest, transfer_reason tells the treasurer's own "Pindah
+        // peruntukan" ('allocation') from an envelope closing ('roll'), and
+        // a null reason is a roll too: the row predates the column, and
+        // closing was then the only thing that could post an uncorrected
+        // reclass pair. Before #276 this branch said "Tutup amplop"
+        // unconditionally - right while closing was the only thing that
+        // could post a reclass_purpose pair, and wrong the moment anything
+        // else did.
+        const from = transaction.transfer_from_name ?? ''
+        const to = transaction.transfer_to_name ?? ''
+        if (transaction.transfer_corrects_transaction_id != null) {
+          const label = copy.rowLabels.transferPurposeCorrection
+          return { Icon: Tags, srWord: label.kind, text: label.text(from, to) }
         }
+        if (transaction.transfer_reason === 'allocation') {
+          return { Icon: Shuffle, srWord: null, text: copy.rowLabels.transferPurposeMove.text(from, to) }
+        }
+        const label = copy.rowLabels.transferPurpose
+        return { Icon: Mail, srWord: label.kind, text: label.text(from, to) }
       }
       if (transaction.transfer_kind === 'between_accounts') {
         return {
