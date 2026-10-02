@@ -278,6 +278,10 @@ export default function RecordTransaction({
   // parent body and leaves only by being forwarded. selectable=true already
   // withheld the closed envelopes, which the ledger refuses on either side.
   const movablePurposes = (loadState.data?.purposes ?? []).filter((p) => p.kind !== 'pass_through')
+  // Kas Utama is the only peruntukan that always exists; without an open
+  // envelope there is nowhere for it to move to, so say so instead of
+  // leaving "Ke" empty.
+  const hasOpenEnvelope = movablePurposes.some((p) => p.kind === 'incidental')
   const samePurpose = isPurposeMove && fromPurposeId !== null && fromPurposeId === toPurposeId
   // The source cannot give more than it holds, read from the balance fetched
   // with the form (the ledger re-checks at posting time, so a stale figure
@@ -566,6 +570,7 @@ export default function RecordTransaction({
                   onChange={setToPurposeId}
                   disabled={submitting}
                 />
+                {!hasOpenEnvelope && <p className="text-sm text-muted-foreground">{text.noOpenEnvelopeHint}</p>}
                 {samePurpose && (
                   <p role="status" className="rounded-lg bg-attention-soft px-3 py-2 text-sm text-attention">
                     {text.samePurposeHint}

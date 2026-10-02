@@ -597,3 +597,44 @@ func TestTransferReasonCheckConstraint(t *testing.T) {
 		})
 	}
 }
+
+// An allocation counts toward the envelope's Terkumpul - in adds, out takes
+// back - and never toward Terpakai, so collected minus disbursed keeps
+// equalling the balance. The roll that closes the envelope still counts as
+// neither (#215).
+func TestPurposeMoveCountsAsCollectedNeverDisbursed(t *testing.T) {
+	l := newTestLedger(t)
+	w := newMoveWorld(t, l)
+	ctx := context.Background()
+
+	check := func(stage string, wantCollected, wantDisbursed money.Amount) {
+		t.Helper()
+		d, err := l.GetIncidentalDetail(ctx, w.fundID, w.envelopeID)
+		if err != nil {
+			t.Fatalf("%s: GetIncidentalDetail() = %v, want no error", stage, err)
+		}
+		if d.Collected != wantCollected || d.Disbursed != wantDisbursed {
+			t.Errorf("%s: collected/disbursed = %d/%d, want %d/%d", stage, d.Collected, d.Disbursed, wantCollected, wantDisbursed)
+		}
+	}
+
+	if _, err := l.PostPurposeMove(ctx, w.move(w.mainID, w.envelopeID, 100_000)); err != nil {
+		t.Fatalf("PostPurposeMove(main -> envelope) = %v, want no error", err)
+	}
+	check("after allocating in", 300_000, 0)
+
+	if _, err := l.PostPurposeMove(ctx, w.move(w.envelopeID, w.mainID, 50_000)); err != nil {
+		t.Fatalf("PostPurposeMove(envelope -> main) = %v, want no error", err)
+	}
+	check("after allocating out", 250_000, 0)
+	if got, _ := l.PurposeBalance(ctx, w.fundID, w.envelopeID); got != 250_000 {
+		t.Errorf("envelope balance = %d, want 250000 (collected minus disbursed)", got)
+	}
+
+	if _, err := l.CloseIncidentalAndRoll(ctx, CloseIncidentalAndRollParams{
+		FundID: w.fundID, PurposeID: w.envelopeID, AccountID: w.cashID, ClosedOn: "2026-09-20",
+	}); err != nil {
+		t.Fatalf("CloseIncidentalAndRoll() = %v, want no error", err)
+	}
+	check("after closing", 250_000, 0)
+}

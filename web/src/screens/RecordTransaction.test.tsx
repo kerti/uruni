@@ -731,7 +731,7 @@ describe('RecordTransaction: the kind selector (#383)', () => {
 })
 
 describe('RecordTransaction: Pindah peruntukan (ADR-036, #383)', () => {
-  function stubPurposeMove(kasUtamaBalance = 1_000_000, envelopeBalance = 0) {
+  function stubPurposeMove(kasUtamaBalance = 1_000_000, envelopeBalance = 0, purposeList = purposes) {
     const posts: { url: string; body: Record<string, unknown> }[] = []
     const balances = balancesWith(30_000)
     balances.purposes = balances.purposes.map((p) =>
@@ -748,7 +748,7 @@ describe('RecordTransaction: Pindah peruntukan (ADR-036, #383)', () => {
         }
         if (url.includes('/api/accounts')) return Promise.resolve(jsonResponse(accounts))
         if (url.includes('/api/balances')) return Promise.resolve(jsonResponse(balances))
-        if (url.includes('/api/purposes')) return Promise.resolve(jsonResponse(purposes))
+        if (url.includes('/api/purposes')) return Promise.resolve(jsonResponse(purposeList))
         if (url.includes('/api/members')) return Promise.resolve(jsonResponse({ members: [], next_cursor: null }))
         return Promise.reject(new Error(`unstubbed fetch: ${method} ${url}`))
       }),
@@ -793,6 +793,24 @@ describe('RecordTransaction: Pindah peruntukan (ADR-036, #383)', () => {
     expect(await selectOptionNames(text.fromPurposeLabel)).toEqual(['Kas utama', 'Halal bihalal RT'])
     await userEvent.keyboard('{Escape}')
     expect(await selectOptionNames(text.toPurposeLabel)).toEqual(['Kas utama', 'Halal bihalal RT'])
+  })
+
+  it('says there is no open envelope rather than leaving Ke empty', async () => {
+    stubPurposeMove(
+      1_000_000,
+      0,
+      purposes.filter((p) => p.kind !== 'incidental'),
+    )
+    await choosePurposeMove()
+
+    expect(await screen.findByText(text.noOpenEnvelopeHint)).toBeInTheDocument()
+  })
+
+  it('offers no such hint while an envelope is open', async () => {
+    stubPurposeMove()
+    await choosePurposeMove()
+
+    expect(screen.queryByText(text.noOpenEnvelopeHint)).not.toBeInTheDocument()
   })
 
   it('shows what the source holds', async () => {

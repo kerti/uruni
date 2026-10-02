@@ -444,6 +444,7 @@ export const copy = {
     toPurposeLabel: 'Ke',
     // Same peruntukan on both sides moves nothing, and the ledger refuses it
     // too - she reads why here instead of meeting a rejected submit.
+    noOpenEnvelopeHint: 'Belum ada amplop terbuka.',
     samePurposeHint: 'Pilih dua peruntukan yang berbeda - uang pindah dari satu peruntukan ke yang lain.',
     // The source cannot give more than it holds (ADR-036). Unlike a location
     // transfer this blocks, because the ledger refuses it: amount is the

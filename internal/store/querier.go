@@ -291,6 +291,14 @@ type Querier interface {
 	// own effect on the balance, so the two stay equal. The corrected row
 	// itself is never a reversal (ADR-033 refuses those), so the cancellation
 	// filters above never meet it.
+	//
+	// A purpose move (ADR-036, tr.reason = 'allocation') is kept too, and only
+	// ever counts as collected: money allocated in is money the envelope now
+	// has to work with, and money allocated out was never spent on the
+	// occasion, so it takes back what was collected rather than reading as
+	// disbursed. Collected minus disbursed still moves by exactly the leg's
+	// effect on the balance. A roll - 'roll', or NULL on a row written before
+	// the column existed - stays excluded as above.
 	IncidentalActivityTotals(ctx context.Context, arg IncidentalActivityTotalsParams) (IncidentalActivityTotalsRow, error)
 	// The guard's one query (ADR-031): sql.ErrNoRows for a purpose_id that is
 	// not an incidental at all (main, pass_through - PostTransaction's caller

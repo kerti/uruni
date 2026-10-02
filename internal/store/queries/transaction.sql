@@ -370,19 +370,31 @@ WHERE fund_id = ? AND purpose_id = ?;
 -- own effect on the balance, so the two stay equal. The corrected row
 -- itself is never a reversal (ADR-033 refuses those), so the cancellation
 -- filters above never meet it.
+--
+-- A purpose move (ADR-036, tr.reason = 'allocation') is kept too, and only
+-- ever counts as collected: money allocated in is money the envelope now
+-- has to work with, and money allocated out was never spent on the
+-- occasion, so it takes back what was collected rather than reading as
+-- disbursed. Collected minus disbursed still moves by exactly the leg's
+-- effect on the balance. A roll - 'roll', or NULL on a row written before
+-- the column existed - stays excluded as above.
 -- name: IncidentalActivityTotals :one
 SELECT
-  CAST(COALESCE(SUM(CASE WHEN COALESCE(o.direction, t.direction) = 'in'
+  CAST(COALESCE(SUM(CASE
+    WHEN tr.reason = 'allocation' THEN CASE WHEN t.direction = 'in' THEN t.amount ELSE -t.amount END
+    WHEN COALESCE(o.direction, t.direction) = 'in'
     THEN CASE WHEN o.id IS NULL OR t.direction = o.direction THEN t.amount ELSE -t.amount END
     ELSE 0 END), 0) AS INTEGER) AS collected_amount,
-  CAST(COALESCE(SUM(CASE WHEN COALESCE(o.direction, t.direction) = 'out'
+  CAST(COALESCE(SUM(CASE
+    WHEN tr.reason = 'allocation' THEN 0
+    WHEN COALESCE(o.direction, t.direction) = 'out'
     THEN CASE WHEN o.id IS NULL OR t.direction = o.direction THEN t.amount ELSE -t.amount END
     ELSE 0 END), 0) AS INTEGER) AS disbursed_amount
 FROM "transaction" t
 LEFT JOIN transfer tr ON tr.id = t.transfer_id AND tr.kind = 'reclass_purpose'
 LEFT JOIN "transaction" o ON o.fund_id = tr.fund_id AND o.id = tr.corrects_transaction_id
 WHERE t.fund_id = ? AND t.purpose_id = ?
-  AND (tr.id IS NULL OR tr.corrects_transaction_id IS NOT NULL)
+  AND (tr.id IS NULL OR tr.corrects_transaction_id IS NOT NULL OR tr.reason = 'allocation')
   AND t.reverses_transaction_id IS NULL
   AND NOT EXISTS (SELECT 1 FROM "transaction" r WHERE r.reverses_transaction_id = t.id);
 
