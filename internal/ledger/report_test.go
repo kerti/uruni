@@ -1151,7 +1151,7 @@ func TestMonthlyReportWithNoClockReadsTodayInJakarta(t *testing.T) {
 }
 
 // A treasurer's purpose move (ADR-036) folds into one move row like a roll,
-// but carries its reason so the public page can say "Pindah peruntukan"
+// but carries its reason so the public page can say "Pindah pos"
 // instead of "Tutup amplop". Outside both totals, no balance moves.
 func TestMonthlyReportAllocationIsOneMoveRowCarryingItsReason(t *testing.T) {
 	ctx := context.Background()

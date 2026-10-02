@@ -81,7 +81,7 @@ export interface Transaction {
    * transfer_kind='reclass_purpose'. */
   transfer_corrects_transaction_id?: number | null
   /** Why a purpose pair that corrects nothing moved (ADR-036): 'allocation'
-   * is the treasurer's own "Pindah peruntukan", 'roll' an envelope closing.
+   * is the treasurer's own "Pindah pos", 'roll' an envelope closing.
    * Null on a correction, a location transfer, and a roll from before the
    * column existed - which reads as a roll. */
   transfer_reason?: 'roll' | 'allocation' | null

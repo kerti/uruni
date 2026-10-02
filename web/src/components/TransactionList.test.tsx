@@ -54,7 +54,7 @@ function renderRows(rows: Transaction[]) {
 }
 
 /** The same list Riwayat renders: with a correction handler, so an eligible
- * row's peruntukan is a control (#276). Home passes no handler, which is
+ * row's pos is a control (#276). Home passes no handler, which is
  * what renderRows above still covers. */
 function renderCorrectableRows(rows: Transaction[], onCorrectPurpose = vi.fn()) {
   const result = render(
@@ -231,7 +231,7 @@ describe('TransactionList row labels (#257)', () => {
 })
 
 describe('TransactionList purpose correction (#276, ADR-033)', () => {
-  it('labels a correction leg with Tags and Perbaikan peruntukan, never Tutup amplop', () => {
+  it('labels a correction leg with Tags and Perbaikan pos, never Tutup amplop', () => {
     // A roll and a correction are the same shape on the wire - kind='transfer',
     // transfer_kind='reclass_purpose' - and only corrects_transaction_id
     // tells them apart. Before this, every correction read as an envelope
@@ -253,7 +253,7 @@ describe('TransactionList purpose correction (#276, ADR-033)', () => {
     expect(screen.queryByText(copy.rowLabels.transferPurpose.kind)).not.toBeInTheDocument()
   })
 
-  it("makes an eligible row's peruntukan the control, and hands the row back on tap", async () => {
+  it("makes an eligible row's pos the control, and hands the row back on tap", async () => {
     const { onCorrectPurpose } = renderCorrectableRows([transaction({ id: 12, purpose_id: 1 })])
 
     const control = screen.getByRole('button', { name: copy.purposeCorrection.controlAria('Kas Utama') })
@@ -263,7 +263,7 @@ describe('TransactionList purpose correction (#276, ADR-033)', () => {
     expect(onCorrectPurpose.mock.calls[0][0].id).toBe(12)
   })
 
-  it("leaves an ineligible row's peruntukan as plain text - a dead tap is worse than none", () => {
+  it("leaves an ineligible row's pos as plain text - a dead tap is worse than none", () => {
     // Eligibility varies row by row (ADR-033), which is exactly why the
     // whole row is not tappable: a dues row and the expense beneath it
     // would look identical and behave differently.
@@ -554,7 +554,7 @@ describe('TransactionList entry detail (#359)', () => {
     expect(within(dialog).getByText(/1 Oktober 2026.*13[.:]42/)).toBeInTheDocument()
   })
 
-  it('shows the peruntukan the money is under now on a corrected row', async () => {
+  it('shows the pos the money is under now on a corrected row', async () => {
     renderRows([transaction({ purpose_id: 1, effective_purpose_id: 2 })])
 
     await userEvent.click(screen.getByRole('button', { name: /^Lihat rincian:/ }))
@@ -592,7 +592,7 @@ describe('TransactionList purpose-pair labels (ADR-036, #383)', () => {
     transfer_to_name: 'Amplop Duka',
   }
 
-  it('labels an allocation "Pindah peruntukan" with both purposes, and Shuffle, never Tutup amplop', () => {
+  it('labels an allocation "Pindah pos" with both purposes, and Shuffle, never Tutup amplop', () => {
     const { container } = renderRows([transaction({ ...pair, transfer_reason: 'allocation' })])
 
     expect(screen.getByText(copy.rowLabels.transferPurposeMove.text('Kas Utama', 'Amplop Duka'))).toBeInTheDocument()
@@ -621,7 +621,7 @@ describe('TransactionList purpose-pair labels (ADR-036, #383)', () => {
     expect(older.querySelector('.lucide-mail')).toBeInTheDocument()
   })
 
-  it('keeps a correction as Perbaikan peruntukan', () => {
+  it('keeps a correction as Perbaikan pos', () => {
     const { container } = renderRows([transaction({ ...pair, transfer_corrects_transaction_id: 4, transfer_reason: null })])
 
     expect(screen.getByText(copy.rowLabels.transferPurposeCorrection.kind)).toBeInTheDocument()

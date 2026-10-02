@@ -7,7 +7,7 @@ import { cn } from '@/lib/utils'
  * "exactly one of these", which a row of separate outline buttons did not.
  * Riwayat's tab strip (M6.23) set the look; the two-option list filters and
  * the record form's kind choices follow it - five of them since #383 added
- * Peruntukan beside Keluar, Masuk, Lokasi and Iuran.
+ * Pos beside Keluar, Masuk, Lokasi and Iuran.
  *
  * Classes rather than a component on purpose: Riwayat's options are
  * `NavLink`s (tabs are routes, History.tsx), the rest are `Button`s with
@@ -63,7 +63,7 @@ export function segmentedItemClass(active: boolean, className?: string): string 
  * is what the footer nav already does with five slots at 375px.
  *
  * Five options across a phone leave each about 75px, which is why the
- * captions are one short word (Keluar, Masuk, Lokasi, Peruntukan, Iuran) and
+ * captions are one short word (Keluar, Masuk, Lokasi, Pos, Iuran) and
  * why the icon is stacked above the caption instead of beside it: an icon
  * plus a gap plus a word does not fit on one line at that width, and
  * stacking gives the word the whole column. The icon carries the verb - the

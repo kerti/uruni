@@ -20,7 +20,7 @@ test.describe('incidentals', () => {
 
   // The envelope's own row in Beranda's purpose breakdown, anchored to the
   // start of its name: Beranda's recent activity also lists this envelope's
-  // entries, and each card's detail button names its peruntukan
+  // entries, and each card's detail button names its pos
   // ("Lihat rincian: <occasion>, ...", #359), so an unanchored match finds
   // those too.
   function berandaRow(page: Page) {

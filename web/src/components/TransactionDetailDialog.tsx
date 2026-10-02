@@ -15,13 +15,13 @@ const text = copy.transactionDetail
 /**
  * One ledger entry read in full (#359): everything the row already carries,
  * nothing truncated. Read-only on purpose - the row's own controls
- * (peruntukan correction, photos, contribution undo) stay on the row, so
+ * (pos correction, photos, contribution undo) stay on the row, so
  * this dialog never becomes a second place to change money.
  *
  * No fetch: the Transaction the list already holds is the whole of what is
- * shown. The stored peruntukan leads, as on the row (ADR-033); a corrected
+ * shown. The stored pos leads, as on the row (ADR-033); a corrected
  * row adds the tag the money is under now, with the correction dialog's own
- * "Peruntukan saat ini" wording so the two never disagree.
+ * "Pos saat ini" wording so the two never disagree.
  */
 export default function TransactionDetailDialog({
   transaction,

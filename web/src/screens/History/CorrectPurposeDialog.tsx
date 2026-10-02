@@ -13,7 +13,7 @@ import type { Transaction } from '@/lib/setup'
 const text = copy.purposeCorrection
 
 /**
- * Correcting one posted row's peruntukan (#276, ADR-033).
+ * Correcting one posted row's pos (#276, ADR-033).
  *
  * One field, because everything else is read off the row server-side and
  * cannot be sent: the amount, the account and the date are the original's,
@@ -53,7 +53,7 @@ export default function CorrectPurposeDialog({
   const [purposeId, setPurposeId] = useState<number | null>(null)
 
   // The effective tag - where the money actually is - which is the row's own
-  // peruntukan until a correction has moved it.
+  // pos until a correction has moved it.
   const effectivePurposeId = transaction ? (transaction.effective_purpose_id ?? transaction.purpose_id) : null
   const alreadyCorrected = transaction !== null && effectivePurposeId !== transaction.purpose_id
 

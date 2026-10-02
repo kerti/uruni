@@ -361,14 +361,14 @@ describe('RecordTransaction: Pindah lokasi (#235)', () => {
     return user
   }
 
-  it('swaps the one location field for from/to and hides the peruntukan', async () => {
+  it('swaps the one location field for from/to and hides the pos', async () => {
     stubTransferPost()
     render(<RecordTransaction onRecorded={vi.fn()} onCancel={vi.fn()} onDuesRecorded={vi.fn()} />)
     await chooseTransfer()
 
     expect(screen.getByLabelText(text.fromLocationLabel)).toBeInTheDocument()
     expect(screen.getByLabelText(text.toLocationLabel)).toBeInTheDocument()
-    // A transfer has no peruntukan to choose: both legs carry the same one
+    // A transfer has no pos to choose: both legs carry the same one
     // and it nets to zero (ADR-024).
     expect(screen.queryByLabelText(text.purposeLabel)).not.toBeInTheDocument()
   })
@@ -713,16 +713,10 @@ describe('RecordTransaction: the kind selector (#383)', () => {
     const group = screen.getByRole('group', { name: text.directionLabel })
     const buttons = within(group).getAllByRole('button')
     // Visible text: the five captions, in order. The icon carries the verb.
-    expect(buttons.map((b) => b.textContent)).toEqual(['Keluar', 'Masuk', 'Lokasi', 'Peruntukan', 'Iuran'])
+    expect(buttons.map((b) => b.textContent)).toEqual(['Keluar', 'Masuk', 'Lokasi', 'Pos', 'Iuran'])
     // Accessible names: the full ones every other surface uses; Iuran needs none.
-    expect(buttons.map((b) => b.getAttribute('aria-label'))).toEqual([
-      'Uang keluar',
-      'Uang masuk',
-      'Pindah lokasi',
-      'Pindah peruntukan',
-      null,
-    ])
-    for (const name of ['Uang keluar', 'Uang masuk', 'Pindah lokasi', 'Pindah peruntukan', 'Iuran']) {
+    expect(buttons.map((b) => b.getAttribute('aria-label'))).toEqual(['Uang keluar', 'Uang masuk', 'Pindah lokasi', 'Pindah pos', null])
+    for (const name of ['Uang keluar', 'Uang masuk', 'Pindah lokasi', 'Pindah pos', 'Iuran']) {
       expect(within(group).getByRole('button', { name })).toBeInTheDocument()
     }
     // One track, five columns.
@@ -730,7 +724,7 @@ describe('RecordTransaction: the kind selector (#383)', () => {
   })
 })
 
-describe('RecordTransaction: Pindah peruntukan (ADR-036, #383)', () => {
+describe('RecordTransaction: Pindah pos (ADR-036, #383)', () => {
   function stubPurposeMove(kasUtamaBalance = 1_000_000, envelopeBalance = 0, purposeList = purposes) {
     const posts: { url: string; body: Record<string, unknown> }[] = []
     const balances = balancesWith(30_000)
@@ -764,7 +758,7 @@ describe('RecordTransaction: Pindah peruntukan (ADR-036, #383)', () => {
     return { user, onRecorded }
   }
 
-  it('asks Dari, Ke, Jumlah, Tanggal, Lokasi and Catatan - and no receipt, no single peruntukan', async () => {
+  it('asks Dari, Ke, Jumlah, Tanggal, Lokasi and Catatan - and no receipt, no single pos', async () => {
     stubPurposeMove()
     await choosePurposeMove()
 
@@ -817,8 +811,8 @@ describe('RecordTransaction: Pindah peruntukan (ADR-036, #383)', () => {
     stubPurposeMove(750_000, 120_000)
     const { user } = await choosePurposeMove()
 
-    expect(await screen.findByText(text.locationBalance(money(750_000)))).toBeInTheDocument()
-    expect(screen.getByText(text.locationBalance(money(120_000)))).toBeInTheDocument()
+    expect(await screen.findByText(text.purposeBalance(money(750_000)))).toBeInTheDocument()
+    expect(screen.getByText(text.purposeBalance(money(120_000)))).toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: text.swapPurposes }))
     expect(selectedOptionName(text.fromPurposeLabel)).toBe('Halal bihalal RT')
@@ -840,10 +834,10 @@ describe('RecordTransaction: Pindah peruntukan (ADR-036, #383)', () => {
     stubPurposeMove(750_000)
     await choosePurposeMove()
 
-    expect(await screen.findByText(text.locationBalance(money(750_000)))).toBeInTheDocument()
+    expect(await screen.findByText(text.purposeBalance(money(750_000)))).toBeInTheDocument()
   })
 
-  it('refuses the same peruntukan on both sides, saying why, and keeps submit disabled', async () => {
+  it('refuses the same pos on both sides, saying why, and keeps submit disabled', async () => {
     stubPurposeMove()
     const { user } = await choosePurposeMove()
 

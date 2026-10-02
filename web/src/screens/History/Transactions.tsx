@@ -34,7 +34,7 @@ interface FirstPage {
    * closed envelope's purpose, which is exactly what this picker must not
    * offer: correcting INTO a closed amplop is one of ADR-033's two named
    * refusals. Fetched with the page rather than when the dialog opens, so
-   * tapping a peruntukan shows a filled picker instead of a spinner. */
+   * tapping a pos shows a filled picker instead of a spinner. */
   purposes: Purpose[]
 }
 
@@ -54,7 +54,7 @@ interface FirstPage {
  * that cannot reach the server shows ErrorState's connection copy, never
  * the no-results line.
  *
- * `?purpose=<id>` (#262) narrows the same list to one peruntukan, and is
+ * `?purpose=<id>` (#262) narrows the same list to one pos, and is
  * how ADR-032's only route to a CLOSED envelope's record works: an
  * envelope's detail screen links here. It lives in the URL for the same
  * reason `q` does, and composes with it rather than replacing it - both go

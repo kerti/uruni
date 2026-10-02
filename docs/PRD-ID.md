@@ -34,7 +34,7 @@ Dari wawancara #1 (bendahara unit kantor, 8 orang, ~Rp 1–2 juta/bulan):
 
 1. Mencatat transaksi apa pun dari ponsel dalam beberapa ketukan, di mana saja.
 2. Selalu menampilkan saldo berjalan yang jujur, dan membuat rekonsiliasi (catatan vs. uang tunai + bank yang sebenarnya) menjadi mudah.
-3. Memodelkan bentuk uang kelompok yang sebenarnya: dua lokasi, tag tujuan, iuran berjenjang, dan talangan (reimbursement).
+3. Memodelkan bentuk uang kelompok yang sebenarnya: dua lokasi, pos, iuran berjenjang, dan talangan (reimbursement).
 4. Cukup andal untuk menjadi satu-satunya catatan — aman meski ponsel hilang.
 5. Lebih sederhana daripada spreadsheet yang digantikannya.
 
@@ -65,11 +65,11 @@ Entitas utama:
 
 - **Dana (Fund)** — kas bersama. Memiliki nama dan mata uang (IDR).
 - **Akun/Lokasi** — tempat uang secara fisik berada: satu daftar yang dinamai sendiri oleh bendahara, masing-masing berjenis tunai atau bank. Satu dana boleh punya beberapa lokasi dari jenis mana pun, boleh juga hanya satu; nama yang tampil adalah nama yang ia ketik sendiri, dan bawaan awalnya "Tunai". Lokasi bisa ditambah dan diganti namanya kemudian, dan lokasi yang sudah terpakai dinonaktifkan, bukan dihapus. Saldo tercatat dilacak *per lokasi* karena pemisahan inilah sumber selisihnya. (v1 mengasumsikan rekening bank bisa jadi rekening pribadi; Uruni hanya melacak bagian yang merupakan kas sesuai yang dilaporkan bendahara.)
-- **Tag tujuan** — setiap transaksi diberi tag: `Kas Utama` (rutin), sebuah **Insidentil** bernama (mis. "Duka Pak Budi"), atau `Titipan/Pass-through` (mis. Kas Bidang). Satu saldo riil yang tergabung, dipisahkan *secara makna*, bukan dalam pos yang terpisah-pisah.
+- **Pos** — setiap transaksi diberi pos: `Kas Utama` (rutin), sebuah **Insidentil** bernama (mis. "Duka Pak Budi"), atau `Titipan/Pass-through` (mis. Kas Bidang). Satu saldo riil yang tergabung, dipisahkan *secara makna*, bukan uang yang dipisah-pisah secara fisik.
 - **Anggota** — nama + peran/jenjang. Tidak butuh email/nomor telepon (meminimalkan data yang disimpan).
 - **Tarif iuran** — nominal per jenjang (mis. pelaksana 50rb, fungsional pertama 70rb, muda 80rb, madya belum ditentukan); dapat diubah; berlaku menurut waktu.
-- **Transaksi** — pemasukan atau pengeluaran; nominal; tanggal; lokasi; tag tujuan; kaitan anggota opsional (untuk iuran/talangan); catatan opsional; foto nota opsional. Bersifat permanen setelah diposting (koreksi dibuat sebagai entri penyesuaian baru) agar catatan tetap tepercaya.
-- **Pengumpulan insidentil** — amplop ringan: peruntukan/peristiwa, kontribusi masuk, penyaluran keluar, dan **sisa** yang bisa dialihkan ke Kas Utama dengan satu ketukan.
+- **Transaksi** — pemasukan atau pengeluaran; nominal; tanggal; lokasi; pos; kaitan anggota opsional (untuk iuran/talangan); catatan opsional; foto nota opsional. Bersifat permanen setelah diposting (koreksi dibuat sebagai entri penyesuaian baru) agar catatan tetap tepercaya.
+- **Pengumpulan insidentil** — amplop ringan: keperluan/peristiwa, kontribusi masuk, penyaluran keluar, dan **sisa** yang bisa dialihkan ke Kas Utama dengan satu ketukan.
 - **Snapshot rekonsiliasi** — rekaman pada satu titik waktu tentang saldo yang diharapkan vs. yang sebenarnya per lokasi, selisih yang ada, dan cara penyelesaiannya.
 
 ## 7. Kebutuhan fungsional
@@ -81,7 +81,7 @@ Entitas utama:
 
 ### 7.2 Mencatat transaksi (tindakan sehari-hari)
 - Tombol "tambah" yang menonjol dan bisa dijangkau dengan satu ketukan dari layar utama.
-- Kolom minimal dengan nilai bawaan yang cerdas: nominal, masuk/keluar, lokasi (mengingat yang terakhir), tujuan (bawaan Kas Utama), tanggal (bawaan hari ini). Catatan dan foto opsional.
+- Kolom minimal dengan nilai bawaan yang cerdas: nominal, masuk/keluar, lokasi (mengingat yang terakhir), pos (bawaan Kas Utama), tanggal (bawaan hari ini). Catatan dan foto opsional.
 - Pencatatan harus terasa responsif; server adalah satu-satunya sumber kebenaran dan mengonfirmasi penulisan dengan cepat.
 - Konektivitas: **aplikasi membutuhkan koneksi aktif.** Saat offline, aplikasi sengaja tidak tersedia — dengan status "butuh koneksi" yang jelas, tanpa data lokal dan tanpa antrean. Ini pilihan pengguna: ia lebih memilih tidak ada kerancuan "salinan mana yang benar?" ketimbang kemampuan offline apa pun.
 
@@ -111,7 +111,7 @@ Entitas utama:
 
 ### 7.7 Saldo & layar utama
 - Layar utama menampilkan: total saldo saat ini, saldo untuk tiap lokasi, dan **status rekonsiliasi**: "cocok" atau "selisih Rp X — cek?".
-- Rincian opsional menurut tag tujuan.
+- Rincian opsional menurut pos.
 
 ### 7.8 Rekonsiliasi (inti dari produk)
 - Alur "rekonsiliasi" yang bisa dijalankan bendahara kapan saja: ia memasukkan jumlah uang *yang sebenarnya* ada di tiap lokasi yang masih aktif — tunai yang ia hitung sendiri, saldo kas yang ditunjukkan bank — lalu Uruni membandingkan masing-masing dengan angka yang tercatat. Lokasi yang sudah dinonaktifkan tidak ditanyakan.
@@ -122,10 +122,10 @@ Entitas utama:
 ### 7.9 Laporan publik yang bisa dibagikan
 - Server menyediakan **halaman laporan publik hanya-baca** pada tautan yang stabil dan sulit ditebak. Bendahara membagikan tautannya sekali saja; tautan tetap berlaku selama umur aplikasi (tanpa perlu diganti).
 - Siapa pun yang punya tautan bisa membukanya tanpa login.
-- Halaman menampilkan **semuanya secara bawaan** dan menyediakan **filter** (bulan, tujuan/tag, anggota, pemasukan/pengeluaran, status iuran) agar pemirsa publik mudah menelusuri data.
+- Halaman menampilkan **semuanya secara bawaan** dan menyediakan **filter** (bulan, pos, anggota, pemasukan/pengeluaran, status iuran) agar pemirsa publik mudah menelusuri data.
 - Pengaman: slug acak yang panjang + `noindex` agar tidak terindeks mesin pencari; ada opsi **"buat ulang tautan"** sebagai jalan darurat bila tautan bocor (tidak diperlukan dalam pemakaian normal). Konsekuensi yang diterima: karena semuanya ditampilkan, URL publik menampakkan nama anggota dan status pembayaran — dapat diterima mengingat niat transparansi bendahara dan rendahnya sensitivitas data.
 - Ini halaman bersama, bukan portal anggota — tanpa akun, tanpa login anggota.
-- Satu bulan per tampilan: bagian atas memuat saldo, cek kas terakhir, dan saldo per peruntukan (tidak per lokasi), lalu transaksi bulan itu, status iurannya (tanpa hitungan tunggakan), dan amplopnya. Foto nota hanya ditandai, tidak ditampilkan. Tautan ditampilkan, disalin, dan dibuat ulang dari Pengaturan. ([ADR-035](./ADR/035-public-report.md))
+- Satu bulan per tampilan: bagian atas memuat saldo, cek kas terakhir, dan saldo per pos (tidak per lokasi), lalu transaksi bulan itu, status iurannya (tanpa hitungan tunggakan), dan amplopnya. Foto nota hanya ditandai, tidak ditampilkan. Tautan ditampilkan, disalin, dan dibuat ulang dari Pengaturan. ([ADR-035](./ADR/035-public-report.md))
 - **PDF bulanan** dari laporan yang sama, bisa diunduh dari halaman, untuk dicetak atau dikirim ke grup. (Ditambahkan 2026-10-02.)
 
 ### 7.10 Cadangan / ekspor

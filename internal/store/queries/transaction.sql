@@ -158,7 +158,7 @@ ORDER BY occurred_on, id;
 --   - transfer_reason: this row's own transfer's reason (ADR-036) - 'roll',
 --     'allocation', or NULL (a correction, a between_accounts pair, or a
 --     pair that predates the column, which reads as a roll). Riwayat labels
---     an allocation "Pindah peruntukan" from it; only a pair that corrects
+--     an allocation "Pindah pos" from it; only a pair that corrects
 --     nothing carries one.
 --   - effective_purpose_id: the tag this row's money is under NOW - its own
 --     purpose_id until a correction (ADR-033) moves it, then the latest

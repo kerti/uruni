@@ -47,21 +47,21 @@ export const copy = {
     // While a page is loading the button reuses common.loading.
     transactions: {
       searchLabel: 'Cari transaksi',
-      searchPlaceholder: 'Catatan, peruntukan, anggota, atau jumlah',
+      searchPlaceholder: 'Catatan, pos, anggota, atau jumlah',
       loadMore: 'Muat lebih banyak',
       noResults: (q: string) => `Tidak ada transaksi yang cocok dengan “${q}”.`,
       // The purpose filter (#262), reached only as a deep link - from an
       // envelope's detail screen, which is the one route ADR-032 gives a
       // closed envelope's record. It names itself with the same word the
-      // record form uses ("Peruntukan", CONTEXT.md: one word per concept)
+      // record form uses ("Pos", CONTEXT.md: one word per concept)
       // and can always be cleared, so she is never stuck inside a filtered
       // list wondering where the rest went. The empty line is separate from
       // noResults above: an empty filter is not a failed search, and saying
       // "tidak ada yang cocok" about a filter she did not type would be
       // answering a question she never asked.
-      purposeFilterLabel: (name: string) => `Peruntukan: ${name}`,
-      purposeFilterClear: 'Hapus filter peruntukan',
-      purposeFilterEmpty: 'Belum ada transaksi untuk peruntukan ini.',
+      purposeFilterLabel: (name: string) => `Pos: ${name}`,
+      purposeFilterClear: 'Hapus filter pos',
+      purposeFilterEmpty: 'Belum ada transaksi untuk pos ini.',
       // Undoing a named contribution recorded against the wrong member
       // (ADR-034, #211, #333) - the same "reverse, then post again" shape
       // dues.history gives a dues payment, reused here rather than a second
@@ -86,7 +86,7 @@ export const copy = {
     },
     // The Talangan tab's own search and paging (#226, ADR-032). A
     // narrower placeholder than Transaksi's own: this list's search covers
-    // only member name and note, not peruntukan or jumlah, so the
+    // only member name and note, not pos or jumlah, so the
     // placeholder does not claim otherwise.
     reimbursements: {
       searchLabel: 'Cari talangan',
@@ -236,22 +236,22 @@ export const copy = {
       // and row labels that would normally keep these unreachable are
       // #276's job, so these strings exist ahead of their own UI - added
       // here so the codes are not orphaned.
-      purpose_correction_opening: 'Peruntukan saldo awal tidak bisa diperbaiki.',
-      purpose_correction_dues: 'Peruntukan pembayaran iuran tidak bisa diperbaiki di sini.',
-      purpose_correction_reimbursement: 'Peruntukan talangan tidak bisa diperbaiki di sini — perbaiki lewat catatan talangannya.',
-      purpose_correction_transfer: 'Peruntukan hasil pindah tidak bisa diperbaiki lagi.',
-      purpose_correction_dues_reversal: 'Peruntukan pembatalan iuran tidak bisa diperbaiki.',
-      purpose_correction_target_closed: 'Amplop ini sudah ditutup — buka lagi dulu sebelum memindahkan peruntukan ke sini.',
-      purpose_correction_source_closed: 'Amplop ini sudah ditutup — buka lagi dulu sebelum memindahkan peruntukan dari sini.',
-      purpose_correction_noop: 'Baris ini sudah memakai peruntukan itu.',
+      purpose_correction_opening: 'Pos saldo awal tidak bisa diperbaiki.',
+      purpose_correction_dues: 'Pos pembayaran iuran tidak bisa diperbaiki di sini.',
+      purpose_correction_reimbursement: 'Pos talangan tidak bisa diperbaiki di sini — perbaiki lewat catatan talangannya.',
+      purpose_correction_transfer: 'Pos hasil pindah tidak bisa diperbaiki lagi.',
+      purpose_correction_dues_reversal: 'Pos pembatalan iuran tidak bisa diperbaiki.',
+      purpose_correction_target_closed: 'Amplop ini sudah ditutup — buka lagi dulu sebelum memindahkan transaksi ke sini.',
+      purpose_correction_source_closed: 'Amplop ini sudah ditutup — buka lagi dulu sebelum memindahkan transaksi dari sini.',
+      purpose_correction_noop: 'Baris ini sudah memakai pos itu.',
       // ADR-036 (#383): POST /api/purpose-moves' own named refusals. The form
       // already withholds Titipan, a closed envelope and an amount above the
       // balance, so these are the fallback for a stale form - a close or a
       // posting that landed after it loaded.
-      purpose_move_same_purpose: 'Pilih dua peruntukan yang berbeda.',
-      purpose_move_pass_through: 'Uang titipan tidak bisa dipindahkan antar peruntukan - titipan hanya bisa diteruskan.',
+      purpose_move_same_purpose: 'Pilih dua pos yang berbeda.',
+      purpose_move_pass_through: 'Uang titipan tidak bisa dipindahkan antar pos - titipan hanya bisa diteruskan.',
       purpose_move_closed: 'Amplop ini sudah ditutup — buka lagi dulu sebelum memindahkan uang ke sini atau dari sini.',
-      purpose_move_insufficient: 'Saldo peruntukan asal tidak cukup untuk jumlah ini.',
+      purpose_move_insufficient: 'Saldo pos asal tidak cukup untuk jumlah ini.',
       purpose_move_account_inactive: 'Lokasi ini sudah tidak dipakai. Pilih lokasi yang lain.',
       // ADR-034 (#211): a sumbangan bernama can't be re-tagged the way an
       // ordinary row can - moving it would leave participation counting the
@@ -259,7 +259,7 @@ export const copy = {
       // its own UI" reasoning as the purpose_correction_* codes above -
       // screens land in #333.
       purpose_correction_named_contribution:
-        'Peruntukan sumbangan yang sudah bernama tidak bisa diperbaiki di sini — batalkan sumbangannya, lalu catat lagi.',
+        'Pos sumbangan yang sudah bernama tidak bisa diperbaiki di sini — batalkan sumbangannya, lalu catat lagi.',
       // POST /api/dues-payments/{id}/reversal's own named 409 for a second
       // reversal of the same payment (ADR-029) - the shared fallback for the
       // dues path. The contribution path (ADR-034, #211) speaks of a
@@ -395,7 +395,7 @@ export const copy = {
     // changes what it is for - the counterpart of Pindah lokasi, one word
     // apart. The same two words name these rows in Riwayat
     // (rowLabels.transferPurposeMove).
-    directionPurpose: 'Pindah peruntukan',
+    directionPurpose: 'Pindah pos',
     // The fourth kind (#315): a dues payment. The same word as Riwayat's
     // Iuran tab, where the payment then appears.
     directionDues: 'Iuran',
@@ -408,7 +408,7 @@ export const copy = {
     captionOut: 'Keluar',
     captionIn: 'Masuk',
     captionLocation: 'Lokasi',
-    captionPurpose: 'Peruntukan',
+    captionPurpose: 'Pos',
     amountLabel: 'Jumlah',
     locationLabel: 'Lokasi',
     // A transfer splits the one location field in two. "Dari" and "ke" are
@@ -423,6 +423,9 @@ export const copy = {
     // about to move against what is actually there - and so the swap button
     // has a visible effect. amount is already formatted by the caller.
     locationBalance: (amount: string) => `Saldo sekarang ${amount}`,
+    // Under each pos picker in Pindah pos: names what the figure is the
+    // balance of, so it never reads as the fund total or a location's.
+    purposeBalance: (amount: string) => `Saldo pos sekarang ${amount}`,
     // Only ever about the source: receiving money never pushes a balance
     // down. Warns without blocking, the same call the titipan hint makes -
     // every other posting path already allows an out larger than the
@@ -435,22 +438,22 @@ export const copy = {
     // read as decoration, and the caption is also what gives the control its
     // accessible name now.
     swapLocations: 'Tukar lokasi',
-    swapPurposes: 'Tukar peruntukan',
-    purposeLabel: 'Peruntukan',
-    // Pindah peruntukan splits the one peruntukan field in two, the way a
+    swapPurposes: 'Tukar pos',
+    purposeLabel: 'Pos',
+    // Pindah pos splits the one pos field in two, the way a
     // location transfer splits Lokasi: where the money is for now, and where
     // it should be for. Bare "Dari" and "Ke" because the selected kind
     // already says what is being moved.
-    fromPurposeLabel: 'Dari peruntukan',
-    toPurposeLabel: 'Ke peruntukan',
-    // Same peruntukan on both sides moves nothing, and the ledger refuses it
+    fromPurposeLabel: 'Dari pos',
+    toPurposeLabel: 'Ke pos',
+    // Same pos on both sides moves nothing, and the ledger refuses it
     // too - she reads why here instead of meeting a rejected submit.
     noOpenEnvelopeHint: 'Belum ada amplop terbuka.',
-    samePurposeHint: 'Pilih dua peruntukan yang berbeda - uang pindah dari satu peruntukan ke yang lain.',
+    samePurposeHint: 'Pilih dua pos yang berbeda - uang pindah dari satu pos ke pos lain.',
     // The source cannot give more than it holds (ADR-036). Unlike a location
     // transfer this blocks, because the ledger refuses it: amount is the
     // balance already formatted by the caller.
-    purposeInsufficientHint: (amount: string) => `Saldo peruntukan asal hanya ${amount}, tidak cukup untuk jumlah ini.`,
+    purposeInsufficientHint: (amount: string) => `Saldo pos asal hanya ${amount}, tidak cukup untuk jumlah ini.`,
     dateLabel: 'Tanggal',
     noteLabel: 'Catatan (opsional)',
     submit: 'Simpan',
@@ -466,7 +469,7 @@ export const copy = {
     successTransfer: 'Uang sudah dipindahkan. Total kas tidak berubah.',
     // A purpose move changes no total either, and the sentence says so for
     // the same reason successTransfer does.
-    successPurposeMove: 'Peruntukan sudah dipindahkan. Total kas tidak berubah.',
+    successPurposeMove: 'Uang sudah dipindahkan antar pos. Total kas tidak berubah.',
     // Shown when an "uang keluar" tagged to a titipan would take that
     // titipan below zero (#266, PRD §7.6). Names the likelier reading and
     // the tag that fits it, in her own words: a titipan holds money that
@@ -477,7 +480,7 @@ export const copy = {
     passThroughNegativeHint: (name: string) =>
       `Pengeluaran ini lebih besar dari uang ${name} yang pernah masuk. Kalau ini dibayar pakai uang kas sendiri, pilih Kas Utama.`,
     // ADR-034 (#211): who a contribution is from, shown only when the money
-    // is coming in and the chosen peruntukan is an open amplop - a guest or
+    // is coming in and the chosen pos is an open amplop - a guest or
     // an anonymous giver leaves it as contributorNone, which is the field's
     // own default and never a validation error.
     contributorLabel: 'Dari siapa? (opsional)',
@@ -496,7 +499,7 @@ export const copy = {
     // itself never appears here; it is the hero above. A fund with neither
     // an open incidental nor a Titipan shows no section at all, so this
     // heading has no accompanying empty-state string.
-    purposeBreakdownHeading: 'Saldo per peruntukan',
+    purposeBreakdownHeading: 'Saldo per pos',
     recentActivityHeading: 'Aktivitas terbaru',
     recentActivityEmpty: 'Belum ada transaksi tercatat.',
     // The entry point into Riwayat's Transaksi tab (M6.23) - the recent-five
@@ -505,7 +508,7 @@ export const copy = {
     // A purpose the balances response didn't name - it should not happen
     // (both come from the same fund), so this is a placeholder that keeps a
     // row readable rather than a state with meaning of its own.
-    purposeUnknown: 'Tanpa tujuan',
+    purposeUnknown: 'Tanpa pos',
     // date is already formatted (Intl.DateTimeFormat) by the caller.
     lastChecked: (date: string) => `Terakhir dicek ${date}`,
   },
@@ -564,14 +567,14 @@ export const copy = {
     // icon and this word tell them apart. Without it every correction
     // would read "Tutup amplop": an envelope closing that never happened.
     transferPurposeCorrection: {
-      kind: 'Perbaikan peruntukan',
+      kind: 'Perbaikan pos',
       text: (fromName: string, toName: string) => `${fromName} → ${toName}`,
     },
     // The treasurer moving money between purposes on purpose (ADR-036,
     // transfer.reason 'allocation'). The visible text opens with the kind
     // word, so unlike the two above it needs no sr-only kind of its own.
     transferPurposeMove: {
-      text: (fromName: string, toName: string) => `Pindah peruntukan · ${fromName} → ${toName}`,
+      text: (fromName: string, toName: string) => `Pindah pos · ${fromName} → ${toName}`,
     },
     reconciliationFix: {
       text: (accountName: string) => `Penyesuaian · ${accountName}`,
@@ -616,7 +619,7 @@ export const copy = {
     // noted adjustment"). Direction/amount reuse copy.record's own
     // direction labels (Uang masuk/Uang keluar) - a generic in/out toggle,
     // not specific to the record screen.
-    fixPurposeLabel: 'Peruntukan',
+    fixPurposeLabel: 'Pos',
     fixAmountLabel: 'Jumlah',
     fixDateLabel: 'Tanggal',
     fixNoteLabel: 'Catatan (opsional)',
@@ -1067,14 +1070,14 @@ export const copy = {
     // separate term for this, and it is what actually happens, in plain
     // words.
     warning: 'Memulihkan akan mengganti seluruh catatan kas dengan isi file ini. Semua orang yang sedang masuk akan keluar otomatis.',
-    passwordLabel: 'Kata sandi saat ini',
+    passwordLabel: 'Kata sandi akun di server ini',
     confirm: 'Pulihkan',
     confirming: 'Memulihkan…',
     cancel: 'Batal',
   },
-  // Correcting a posted row's peruntukan (#276, ADR-033): the marker on a
+  // Correcting a posted row's pos (#276, ADR-033): the marker on a
   // row that has already been corrected, and the one-field dialog that does
-  // the correcting. The word is "peruntukan" throughout - CONTEXT.md's one
+  // the correcting. The word is "pos" throughout - CONTEXT.md's one
   // word per concept - and never "reklasifikasi", which is journal
   // vocabulary the treasurer does not use.
   // The shared date pickers (#197, components/DateField + MonthField). The
@@ -1099,7 +1102,7 @@ export const copy = {
     openAria: (purposeName: string, amount: string, date: string) => `Lihat rincian: ${purposeName}, ${amount}, ${date}`,
     directionIn: 'Uang masuk',
     directionOut: 'Uang keluar',
-    purposeLabel: 'Peruntukan',
+    purposeLabel: 'Pos',
     noteLabel: 'Catatan',
     locationLabel: 'Lokasi',
     dateLabel: 'Tanggal',
@@ -1107,30 +1110,30 @@ export const copy = {
     receiptsLabel: 'Foto nota',
   },
   purposeCorrection: {
-    // The control the peruntukan itself becomes on an eligible row. Names
+    // The control the pos itself becomes on an eligible row. Names
     // the row it would correct, because a screen reader meets it as one of
     // twenty-five identical-sounding controls otherwise.
-    controlAria: (purposeName: string) => `Perbaiki peruntukan: ${purposeName}`,
+    controlAria: (purposeName: string) => `Perbaiki pos: ${purposeName}`,
     // Read out beside the muted icon on a row a correction already points
     // at. Never rendered visibly - the glyph is the visible half (#257's
     // own icon/srWord split).
     corrected: 'Sudah diperbaiki',
-    heading: 'Perbaiki peruntukan',
+    heading: 'Perbaiki pos',
     // Shown above the picker when the row has already been corrected once:
     // the tag the money is under NOW, which is not the tag the row itself
     // still shows. Without it the dialog and the row underneath appear to
     // disagree (ADR-033).
-    currentLabel: (purposeName: string) => `Peruntukan saat ini: ${purposeName}`,
-    pickerLabel: 'Peruntukan yang benar',
+    currentLabel: (purposeName: string) => `Pos saat ini: ${purposeName}`,
+    pickerLabel: 'Pos yang benar',
     // Says plainly what the correction does and does not do, because
-    // "memindahkan peruntukan" is the one action in this app that posts
+    // "memindahkan pos" is the one action in this app that posts
     // rows without moving money, and a treasurer who is anxious about the
     // numbers deserves to be told so before she taps.
-    explainer: 'Saldo kas tidak berubah - hanya peruntukannya yang dipindahkan. Transaksi aslinya tetap tercatat apa adanya.',
+    explainer: 'Saldo kas tidak berubah - hanya posnya yang dipindahkan. Transaksi aslinya tetap tercatat apa adanya.',
     save: 'Perbaiki',
     saving: 'Memperbaiki…',
     cancel: 'Batal',
-    success: 'Peruntukan sudah diperbaiki.',
+    success: 'Pos sudah diperbaiki.',
   },
   // Riwayat's Talangan tab (M6.18, PRD §7.4; moved under Riwayat by
   // #226; renamed from "Penggantian" to "Talangan" for the user-facing word
@@ -1159,7 +1162,7 @@ export const copy = {
       heading: 'Catat talangan',
       memberLabel: 'Anggota',
       memberPlaceholder: 'Pilih anggota',
-      purposeLabel: 'Peruntukan',
+      purposeLabel: 'Pos',
       amountLabel: 'Jumlah',
       dateLabel: 'Tanggal pengeluaran',
       noteLabel: 'Catatan (opsional)',
