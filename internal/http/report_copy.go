@@ -67,6 +67,22 @@ type reportCopy struct {
 	DuesPaidStatus    string
 	DuesPaidInAdvance string
 
+	// The envelopes section (#338). Everything but EnvelopeGiven is the
+	// envelope screen's own wording from web/src/copy/id.ts (incidentals.
+	// heading, detail.collectedLabel, status, participation), verbatim.
+	// EnvelopeGiven is the report's own: the screen shows no count.
+	EnvelopesLabel     string
+	EnvelopeCollected  string
+	EnvelopeOpen       string
+	EnvelopeClosed     string
+	EnvelopeGiven      func(given, expected int) string
+	EnvelopeRecipients func(names string) string
+	EnvelopeNoneExpect string
+	EnvelopeOthers     string
+	ParticipationGiven string
+	ParticipationNot   string
+	ParticipationUnder string
+
 	// Row labels: the Go half of web/src/copy/id.ts's rowLabels (#257), see
 	// report_labels.go. A location is never named, so Saldo awal and
 	// Penyesuaian stand alone.
@@ -129,6 +145,20 @@ var reportText = reportCopy{
 	DuesPaidStatus:    "Lunas",
 	DuesPaidInAdvance: "Lunas \u2014 sudah bayar di muka",
 
+	EnvelopesLabel:    "Amplop",
+	EnvelopeCollected: "Terkumpul",
+	EnvelopeOpen:      "Berjalan",
+	EnvelopeClosed:    "Ditutup",
+	EnvelopeGiven: func(given, expected int) string {
+		return strconv.Itoa(given) + " dari " + strconv.Itoa(expected) + " sudah menyumbang"
+	},
+	EnvelopeRecipients: func(names string) string { return "Untuk: " + names },
+	EnvelopeNoneExpect: "Tidak ada anggota yang diharapkan menyumbang untuk amplop ini.",
+	EnvelopeOthers:     "Sumbangan lain",
+	ParticipationGiven: "Sudah menyumbang",
+	ParticipationNot:   "Belum menyumbang",
+	ParticipationUnder: "Kurang dari minimal",
+
 	RowDues:                 func(period, member string) string { return period + " \u00b7 " + member },
 	RowDuesReversal:         func(period, member string) string { return "Pembatalan \u00b7 " + period + " \u00b7 " + member },
 	RowContributionReversal: func(member string) string { return "Pembatalan \u00b7 " + member },
@@ -180,5 +210,17 @@ func (c reportCopy) duesStatus(s ledger.DuesStatus) string {
 		return c.DuesPaidInAdvance
 	default:
 		return c.DuesUnpaid
+	}
+}
+
+// participationStatus is the app's own word for an expected member's standing.
+func (c reportCopy) participationStatus(s ledger.ParticipationState) string {
+	switch s {
+	case ledger.ParticipationSudah:
+		return c.ParticipationGiven
+	case ledger.ParticipationKurang:
+		return c.ParticipationUnder
+	default:
+		return c.ParticipationNot
 	}
 }

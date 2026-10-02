@@ -76,7 +76,7 @@ type ReportParams struct {
 //
 // What it deliberately does not carry: a location's name or balance, a
 // receipt's path or id, a transaction id, a dues arrears count, or a member's
-// join or leave date. The treasurer collected those for her own use (rule 6).
+// join or leave date. The treasurer collected those for their own records (rule 6).
 type Report struct {
 	FundName string
 
@@ -228,6 +228,11 @@ type ReportEnvelope struct {
 	OpenedOn         string
 	ClosedOn         *string // nil while open
 	Balance          money.Amount
+
+	// Collected is what the occasion itself took in, as the envelope screen's
+	// "Terkumpul" reads it (GetIncidentalDetail) - not Balance, which is zero
+	// on a closed envelope once its leftover has rolled out.
+	Collected money.Amount
 
 	// Recipients are the members the envelope is for, by name; never expected
 	// to give (ADR-034).
@@ -687,10 +692,15 @@ func (l *Ledger) reportEnvelopes(ctx context.Context, fundID int64, month string
 		if err != nil {
 			return nil, err
 		}
+		totals, err := l.q.IncidentalActivityTotals(ctx, store.IncidentalActivityTotalsParams{FundID: fundID, PurposeID: e.PurposeID})
+		if err != nil {
+			return nil, fmt.Errorf("computing incidental activity totals: %w", err)
+		}
 
 		env := ReportEnvelope{
 			PurposeID: e.PurposeID, Name: nameByPurpose[e.PurposeID],
 			OpenedOn: e.OpenedOn, ClosedOn: e.ClosedOn, Balance: balance,
+			Collected: money.FromDB(totals.CollectedAmount),
 		}
 		if e.TargetAmount != nil {
 			v := money.FromDB(*e.TargetAmount)
