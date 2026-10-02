@@ -1060,3 +1060,92 @@ func TestMonthlyReportUnknownFundIsAnError(t *testing.T) {
 		t.Error("MonthlyReport(unknown fund) = nil error, want one")
 	}
 }
+
+func TestMonthlyReportEnvelopeCarriesItsTargetAndUnexpectedGivers(t *testing.T) {
+	ctx := context.Background()
+	l := newTestLedger(t)
+	q := store.New(l.db)
+	f := newFixture(t, l)
+
+	target := money.Amount(500_000)
+	envelope, err := l.OpenIncidental(ctx, OpenIncidentalParams{
+		FundID: f.fundID, Occasion: "Test Collection", OpenedOn: "2026-09-01", TargetAmount: &target,
+	})
+	if err != nil {
+		t.Fatalf("OpenIncidental() = %v, want no error", err)
+	}
+	// Joined after the envelope opened, so never expected - but a gift still shows.
+	joined := "2026-09-10"
+	late := createDuesMember(t, q, f.fundID, duesMemberParams{name: "Late Joiner", joinedOn: &joined})
+	if _, err := l.PostTransaction(ctx, PostTransactionParams{
+		FundID: f.fundID, AccountID: f.cashID, PurposeID: envelope.PurposeID, Direction: "in",
+		Amount: 12_000, OccurredOn: "2026-09-12", MemberID: &late,
+	}); err != nil {
+		t.Fatalf("PostTransaction() = %v, want no error", err)
+	}
+
+	r := monthlyReport(t, l, ReportParams{FundID: f.fundID, Month: "2026-09", Now: reportNow})
+	if len(r.Envelopes) != 1 {
+		t.Fatalf("Envelopes = %d, want 1", len(r.Envelopes))
+	}
+	e := r.Envelopes[0]
+	if e.TargetAmount == nil || *e.TargetAmount != 500_000 {
+		t.Errorf("TargetAmount = %v, want 500000", e.TargetAmount)
+	}
+	want := []ReportContributor{{MemberName: "Late Joiner", Amount: 12_000}}
+	if !slices.Equal(e.Unexpected, want) {
+		t.Errorf("Unexpected = %+v, want %+v", e.Unexpected, want)
+	}
+	for _, p := range e.Expected {
+		if p.MemberName == "Late Joiner" {
+			t.Errorf("Expected includes %q, who joined after the envelope opened", p.MemberName)
+		}
+	}
+}
+
+func TestMonthlyReportEnvelopesOpenedTheSameDayAreOrderedByName(t *testing.T) {
+	l := newTestLedger(t)
+	f := newFixture(t, l)
+	openTestIncidental(t, l, f.fundID, "Zeta Collection", "2026-09-01")
+	openTestIncidental(t, l, f.fundID, "Alpha Collection", "2026-09-01")
+
+	r := monthlyReport(t, l, ReportParams{FundID: f.fundID, Month: "2026-09", Now: reportNow})
+
+	var envelopes, header []string
+	for _, e := range r.Envelopes {
+		envelopes = append(envelopes, e.Name)
+	}
+	for _, b := range r.PurposeBalances {
+		// The fixture carries an incidental purpose of its own; only the two
+		// opened here are compared.
+		if b.Name == "Alpha Collection" || b.Name == "Zeta Collection" {
+			header = append(header, b.Name)
+		}
+	}
+	want := []string{"Alpha Collection", "Zeta Collection"}
+	if !slices.Equal(envelopes, want) {
+		t.Errorf("Envelopes = %v, want %v (same day, then by name - never by id)", envelopes, want)
+	}
+	if !slices.Equal(header, want) {
+		t.Errorf("header envelopes = %v, want %v", header, want)
+	}
+}
+
+func TestMonthlyReportWithNoClockReadsTodayInJakarta(t *testing.T) {
+	l := newTestLedger(t)
+	f := newFixture(t, l)
+
+	r, err := l.MonthlyReport(context.Background(), ReportParams{FundID: f.fundID})
+	if err != nil {
+		t.Fatalf("MonthlyReport() = %v, want no error", err)
+	}
+	today := time.Now().In(tz.Jakarta)
+	// Straddling midnight in Jakarta between the two reads is the only way this
+	// differs; accept either side of it.
+	if r.AsOf != today.Format("2006-01-02") && r.AsOf != today.Add(-time.Minute).Format("2006-01-02") {
+		t.Errorf("AsOf = %q, want today in Jakarta (%s)", r.AsOf, today.Format("2006-01-02"))
+	}
+	if r.Month != r.AsOf[:7] {
+		t.Errorf("Month = %q, want the current Jakarta month %q", r.Month, r.AsOf[:7])
+	}
+}

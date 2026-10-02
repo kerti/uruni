@@ -18,3 +18,14 @@ func TestJakartaIsUTCPlusSeven(t *testing.T) {
 		}
 	}
 }
+
+// A name absent from the IANA database means a broken toolchain, and the
+// loader panics rather than silently dating everything in UTC.
+func TestMustLoadLocationPanicsOnAnUnknownZone(t *testing.T) {
+	defer func() {
+		if recover() == nil {
+			t.Fatal("mustLoadLocation(unknown zone) did not panic")
+		}
+	}()
+	mustLoadLocation("Not/A_Zone")
+}

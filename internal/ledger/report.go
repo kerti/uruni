@@ -307,7 +307,7 @@ func (l *Ledger) monthlyReport(ctx context.Context, p ReportParams) (Report, err
 		Month:    month,
 	}
 
-	if r.Months, err = l.reportMonths(ctx, p.FundID, currentMonth); err != nil {
+	if r.Months, err = l.reportMonths(ctx, p.FundID, today); err != nil {
 		return Report{}, err
 	}
 	if r.Balance, err = l.FundBalance(ctx, p.FundID); err != nil {
@@ -321,7 +321,11 @@ func (l *Ledger) monthlyReport(ctx context.Context, p ReportParams) (Report, err
 	if err != nil {
 		return Report{}, fmt.Errorf("listing incidentals: %w", err)
 	}
-	if r.PurposeBalances, err = l.reportPurposeBalances(ctx, p.FundID, envelopes); err != nil {
+	purposes, err := l.q.ListPurposesByFund(ctx, p.FundID)
+	if err != nil {
+		return Report{}, fmt.Errorf("listing purposes: %w", err)
+	}
+	if r.PurposeBalances, err = l.reportPurposeBalances(ctx, p.FundID, purposes, envelopes); err != nil {
 		return Report{}, err
 	}
 
@@ -332,7 +336,7 @@ func (l *Ledger) monthlyReport(ctx context.Context, p ReportParams) (Report, err
 	if r.Dues, err = l.reportDues(ctx, p.FundID, month, p.DuesStatus); err != nil {
 		return Report{}, err
 	}
-	if r.Envelopes, err = l.reportEnvelopes(ctx, p.FundID, month, envelopes); err != nil {
+	if r.Envelopes, err = l.reportEnvelopes(ctx, p.FundID, month, purposes, envelopes); err != nil {
 		return Report{}, err
 	}
 
@@ -352,11 +356,8 @@ func parseReportMonth(month string) (time.Time, error) {
 // reportMonths lists the months the report offers, oldest first: the first
 // transaction's month through the current Jakarta month. An empty fund, or one
 // whose first row is dated after today, offers the current month alone.
-func (l *Ledger) reportMonths(ctx context.Context, fundID int64, currentMonth string) ([]string, error) {
-	current, err := time.Parse(reportMonthLayout, currentMonth)
-	if err != nil {
-		return nil, fmt.Errorf("parsing current month %q: %w", currentMonth, err)
-	}
+func (l *Ledger) reportMonths(ctx context.Context, fundID int64, today time.Time) ([]string, error) {
+	current := time.Date(today.Year(), today.Month(), 1, 0, 0, 0, 0, time.UTC)
 
 	first := current
 	firstDate, err := l.q.FirstTransactionDateByFund(ctx, fundID)
@@ -420,11 +421,7 @@ func (l *Ledger) reportReconciliation(ctx context.Context, fundID int64) (*Repor
 // reportPurposeBalances is the header's per-purpose figures: Kas Utama, each
 // open envelope, each pass-through. Ordered by kind, then by opened_on or name,
 // never by id.
-func (l *Ledger) reportPurposeBalances(ctx context.Context, fundID int64, envelopes []store.Incidental) ([]ReportPurposeBalance, error) {
-	purposes, err := l.q.ListPurposesByFund(ctx, fundID)
-	if err != nil {
-		return nil, fmt.Errorf("listing purposes: %w", err)
-	}
+func (l *Ledger) reportPurposeBalances(ctx context.Context, fundID int64, purposes []store.Purpose, envelopes []store.Incidental) ([]ReportPurposeBalance, error) {
 	envelopeByPurpose := make(map[int64]store.Incidental, len(envelopes))
 	for _, e := range envelopes {
 		envelopeByPurpose[e.PurposeID] = e
@@ -656,11 +653,7 @@ func duesStatusMatches(filter string, s DuesStatus) bool {
 // open envelope plus any closed in it (ADR-035); for a past month it is the
 // envelopes as they stood then, so an occasion is readable in every month it
 // ran, not only the one it closed in. Oldest first, then by name.
-func (l *Ledger) reportEnvelopes(ctx context.Context, fundID int64, month string, envelopes []store.Incidental) ([]ReportEnvelope, error) {
-	purposes, err := l.q.ListPurposesByFund(ctx, fundID)
-	if err != nil {
-		return nil, fmt.Errorf("listing purposes: %w", err)
-	}
+func (l *Ledger) reportEnvelopes(ctx context.Context, fundID int64, month string, purposes []store.Purpose, envelopes []store.Incidental) ([]ReportEnvelope, error) {
 	nameByPurpose := make(map[int64]string, len(purposes))
 	for _, pu := range purposes {
 		nameByPurpose[pu.ID] = pu.Name
