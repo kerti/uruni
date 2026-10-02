@@ -148,9 +148,16 @@ export default function Home({
   // it. Titipan has no open/closed concept at all, so every pass_through
   // purpose always qualifies.
   const openIncidentalIds = new Set(openIncidentals.map((incidental) => incidental.purpose_id))
-  const purposeRows = balances.purposes.filter(
-    (purpose) => purpose.kind === 'pass_through' || (purpose.kind === 'incidental' && openIncidentalIds.has(purpose.id)),
-  )
+  // Kas Utama first (#387): the hero is the fund total, envelopes and
+  // Titipan included, so once money is allocated into envelopes (ADR-036)
+  // this row is the only place she sees what Kas Utama itself has left -
+  // and the only place its ADR-031 negative shows.
+  const purposeRows = [
+    ...balances.purposes.filter((purpose) => purpose.kind === 'main'),
+    ...balances.purposes.filter(
+      (purpose) => purpose.kind === 'pass_through' || (purpose.kind === 'incidental' && openIncidentalIds.has(purpose.id)),
+    ),
+  ]
 
   return (
     <div className="flex flex-col gap-6">
@@ -215,10 +222,8 @@ export default function Home({
 
       {/* Incidentals are not history, they are a live balance sitting in the
           fund right now (ADR-032) - so this is entry points, not a button
-          into a list. Rendered only when there is something to show: no
-          open incidental and no Titipan means no section and no heading,
-          not an empty-state line (ADR-032's "removes a button ... rather
-          than adding one"). */}
+          into a list. Kas Utama always exists, so in practice the section
+          always renders; the guard only covers a fund mid-setup. */}
       {purposeRows.length > 0 && (
         <section className="flex flex-col gap-2">
           <h2 className="text-sm font-semibold text-muted-foreground">{copy.home.purposeBreakdownHeading}</h2>
@@ -253,7 +258,7 @@ export default function Home({
                   </button>
                 </li>
               ) : (
-                // Titipan (pass_through): always shown, no envelope to open
+                // Kas Utama and Titipan: always shown, no envelope to open
                 // and no open/closed concept - a plain row, not a button.
                 <li
                   key={purpose.id}
