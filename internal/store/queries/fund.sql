@@ -8,6 +8,14 @@ SELECT id, name, currency, report_slug, created_at
 FROM fund
 WHERE id = ?;
 
+-- GetFundByReportSlug is the public report's only way in (ADR-030's
+-- carve-out, ADR-035): the slug names its fund, with no session involved.
+-- report_slug is UNIQUE, so this is one row or sql.ErrNoRows.
+-- name: GetFundByReportSlug :one
+SELECT id, name, currency, report_slug, created_at
+FROM fund
+WHERE report_slug = ?;
+
 -- name: ListFunds :many
 SELECT id, name, currency, report_slug, created_at
 FROM fund
