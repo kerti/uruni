@@ -201,6 +201,39 @@ func buildFixture(t *testing.T, sqlDB *sql.DB, uploadsDir string) {
 		t.Fatalf("CreateTransaction(transfer in): %v", err)
 	}
 
+	// Two purpose pairs on one account, each carrying its reason (ADR-036):
+	// the treasurer moving 20000 from Kas Utama into the envelope, and the
+	// envelope rolling 10000 back. Both are value-neutral on cash, so the
+	// reconciliation figures below do not move.
+	for i, pair := range [...]struct {
+		reason   string
+		from, to int64
+		amount   int64
+	}{
+		{"allocation", main.ID, envelope.ID, 20000},
+		{"roll", envelope.ID, main.ID, 10000},
+	} {
+		reason := pair.reason
+		created := int64(1700000310 + 10*i)
+		moved, err := q.CreateTransfer(ctx, store.CreateTransferParams{
+			FundID: fund.ID, Kind: "reclass_purpose", Reason: &reason, CreatedAt: created,
+		})
+		if err != nil {
+			t.Fatalf("CreateTransfer(%s): %v", pair.reason, err)
+		}
+		for j, leg := range [...]struct {
+			purposeID int64
+			direction string
+		}{{pair.from, "out"}, {pair.to, "in"}} {
+			if _, err := q.CreateTransaction(ctx, store.CreateTransactionParams{
+				FundID: fund.ID, AccountID: cash.ID, PurposeID: leg.purposeID, Direction: leg.direction, Amount: pair.amount,
+				OccurredOn: "2026-02-04", Kind: "transfer", TransferID: &moved.ID, CreatedAt: created + 1 + int64(j),
+			}); err != nil {
+				t.Fatalf("CreateTransaction(%s %s): %v", pair.reason, leg.direction, err)
+			}
+		}
+	}
+
 	// A reimbursement, settled, with a receipt attached to the claim.
 	note := "Parkir"
 	claim, err := q.CreateReimbursement(ctx, store.CreateReimbursementParams{

@@ -60,7 +60,10 @@ type Querier interface {
 	// corrects_transaction_id is nil for every transfer but a purpose
 	// correction (ADR-033) - between_accounts and CloseIncidentalAndRoll's own
 	// reclass_purpose rolls both pass nil, the same NULL the schema's CHECK
-	// requires of anything that is not kind='reclass_purpose'.
+	// requires of anything that is not kind='reclass_purpose'. reason (ADR-036)
+	// is 'roll' for CloseIncidentalAndRoll, 'allocation' for a purpose move, and
+	// nil for every other pair - the same CHECK holds it to a reclass_purpose
+	// pair that corrects nothing.
 	CreateTransfer(ctx context.Context, arg CreateTransferParams) (Transfer, error)
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
 	// DeleteAccount leans on the composite foreign keys from "transaction" and
@@ -288,6 +291,14 @@ type Querier interface {
 	// own effect on the balance, so the two stay equal. The corrected row
 	// itself is never a reversal (ADR-033 refuses those), so the cancellation
 	// filters above never meet it.
+	//
+	// A purpose move (ADR-036, tr.reason = 'allocation') is kept too, and only
+	// ever counts as collected: money allocated in is money the envelope now
+	// has to work with, and money allocated out was never spent on the
+	// occasion, so it takes back what was collected rather than reading as
+	// disbursed. Collected minus disbursed still moves by exactly the leg's
+	// effect on the balance. A roll - 'roll', or NULL on a row written before
+	// the column existed - stays excluded as above.
 	IncidentalActivityTotals(ctx context.Context, arg IncidentalActivityTotalsParams) (IncidentalActivityTotalsRow, error)
 	// The guard's one query (ADR-031): sql.ErrNoRows for a purpose_id that is
 	// not an incidental at all (main, pass_through - PostTransaction's caller
@@ -673,6 +684,11 @@ type Querier interface {
 	//     otherwise the same kind='transfer', kind='reclass_purpose' shape.
 	//     Read off tr, the same join transfer_kind already uses, not a second
 	//     one.
+	//   - transfer_reason: this row's own transfer's reason (ADR-036) - 'roll',
+	//     'allocation', or NULL (a correction, a between_accounts pair, or a
+	//     pair that predates the column, which reads as a roll). Riwayat labels
+	//     an allocation "Pindah peruntukan" from it; only a pair that corrects
+	//     nothing carries one.
 	//   - effective_purpose_id: the tag this row's money is under NOW - its own
 	//     purpose_id until a correction (ADR-033) moves it, then the latest
 	//     correction's target. Which of that correction's two legs IS the

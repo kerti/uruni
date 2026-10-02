@@ -2,18 +2,21 @@
 -- corrects_transaction_id is nil for every transfer but a purpose
 -- correction (ADR-033) - between_accounts and CloseIncidentalAndRoll's own
 -- reclass_purpose rolls both pass nil, the same NULL the schema's CHECK
--- requires of anything that is not kind='reclass_purpose'.
-INSERT INTO transfer (fund_id, kind, corrects_transaction_id, created_at)
-VALUES (?, ?, ?, ?)
-RETURNING id, fund_id, kind, corrects_transaction_id, created_at;
+-- requires of anything that is not kind='reclass_purpose'. reason (ADR-036)
+-- is 'roll' for CloseIncidentalAndRoll, 'allocation' for a purpose move, and
+-- nil for every other pair - the same CHECK holds it to a reclass_purpose
+-- pair that corrects nothing.
+INSERT INTO transfer (fund_id, kind, corrects_transaction_id, reason, created_at)
+VALUES (?, ?, ?, ?, ?)
+RETURNING id, fund_id, kind, corrects_transaction_id, reason, created_at;
 
 -- name: GetTransfer :one
-SELECT id, fund_id, kind, corrects_transaction_id, created_at
+SELECT id, fund_id, kind, corrects_transaction_id, reason, created_at
 FROM transfer
 WHERE id = ?;
 
 -- name: ListTransfersByFund :many
-SELECT id, fund_id, kind, corrects_transaction_id, created_at
+SELECT id, fund_id, kind, corrects_transaction_id, reason, created_at
 FROM transfer
 WHERE fund_id = ?
 ORDER BY id;

@@ -156,7 +156,11 @@ type Transfer struct {
 	FundID                int64  `json:"fund_id"`
 	Kind                  string `json:"kind"`
 	CorrectsTransactionID *int64 `json:"corrects_transaction_id"`
-	CreatedAt             int64  `json:"created_at"`
+	// Reason is 'roll', 'allocation' or null (ADR-036). A file written
+	// before the column has no such key, which decodes to nil - which is
+	// what a pre-column roll is - so no format_version bump.
+	Reason    *string `json:"reason"`
+	CreatedAt int64   `json:"created_at"`
 }
 
 // Reimbursement mirrors the "reimbursement" table verbatim: a member's

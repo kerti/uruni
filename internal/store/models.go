@@ -141,6 +141,7 @@ type Transfer struct {
 	FundID                int64
 	Kind                  string
 	CorrectsTransactionID *int64
+	Reason                *string
 	CreatedAt             int64
 }
 

@@ -268,9 +268,11 @@ function AuthedGate({ onLoggedOut }: { onLoggedOut: () => void }) {
         ? copy.record.successOut
         : recorded === 'transfer'
           ? copy.record.successTransfer
-          : recorded === 'dues'
-            ? copy.dues.payment.success
-            : null
+          : recorded === 'purpose'
+            ? copy.record.successPurposeMove
+            : recorded === 'dues'
+              ? copy.dues.payment.success
+              : null
 
   return (
     <Routes>

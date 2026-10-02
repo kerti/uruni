@@ -101,7 +101,24 @@
       "fund_id": 1,
       "kind": "between_accounts",
       "corrects_transaction_id": null,
+      "reason": null,
       "created_at": 1700000300
+    },
+    {
+      "id": 2,
+      "fund_id": 1,
+      "kind": "reclass_purpose",
+      "corrects_transaction_id": null,
+      "reason": "allocation",
+      "created_at": 1700000310
+    },
+    {
+      "id": 3,
+      "fund_id": 1,
+      "kind": "reclass_purpose",
+      "corrects_transaction_id": null,
+      "reason": "roll",
+      "created_at": 1700000320
     }
   ],
   "reimbursements": [
@@ -153,7 +170,7 @@
       "created_at": 1700000001
     },
     {
-      "id": 9,
+      "id": 13,
       "fund_id": 1,
       "account_id": 1,
       "purpose_id": 1,
@@ -270,6 +287,74 @@
       "reverses_transaction_id": null,
       "note": null,
       "created_at": 1700000302
+    },
+    {
+      "id": 9,
+      "fund_id": 1,
+      "account_id": 1,
+      "purpose_id": 1,
+      "direction": "out",
+      "amount": 20000,
+      "occurred_on": "2026-02-04",
+      "kind": "transfer",
+      "member_id": null,
+      "dues_period": null,
+      "reimbursement_id": null,
+      "transfer_id": 2,
+      "reverses_transaction_id": null,
+      "note": null,
+      "created_at": 1700000311
+    },
+    {
+      "id": 10,
+      "fund_id": 1,
+      "account_id": 1,
+      "purpose_id": 3,
+      "direction": "in",
+      "amount": 20000,
+      "occurred_on": "2026-02-04",
+      "kind": "transfer",
+      "member_id": null,
+      "dues_period": null,
+      "reimbursement_id": null,
+      "transfer_id": 2,
+      "reverses_transaction_id": null,
+      "note": null,
+      "created_at": 1700000312
+    },
+    {
+      "id": 11,
+      "fund_id": 1,
+      "account_id": 1,
+      "purpose_id": 3,
+      "direction": "out",
+      "amount": 10000,
+      "occurred_on": "2026-02-04",
+      "kind": "transfer",
+      "member_id": null,
+      "dues_period": null,
+      "reimbursement_id": null,
+      "transfer_id": 3,
+      "reverses_transaction_id": null,
+      "note": null,
+      "created_at": 1700000321
+    },
+    {
+      "id": 12,
+      "fund_id": 1,
+      "account_id": 1,
+      "purpose_id": 1,
+      "direction": "in",
+      "amount": 10000,
+      "occurred_on": "2026-02-04",
+      "kind": "transfer",
+      "member_id": null,
+      "dues_period": null,
+      "reimbursement_id": null,
+      "transfer_id": 3,
+      "reverses_transaction_id": null,
+      "note": null,
+      "created_at": 1700000322
     }
   ],
   "receipts": [
@@ -354,7 +439,7 @@
     "purposes": [
       {
         "purpose_id": 1,
-        "balance": 1480000
+        "balance": 1470000
       },
       {
         "purpose_id": 2,
@@ -362,7 +447,7 @@
       },
       {
         "purpose_id": 3,
-        "balance": 30000
+        "balance": 40000
       }
     ]
   }

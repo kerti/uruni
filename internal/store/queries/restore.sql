@@ -59,8 +59,8 @@ VALUES (?, ?, ?, ?, ?, ?, ?);
 DELETE FROM transfer;
 
 -- name: RestoreTransfer :exec
-INSERT INTO transfer (id, fund_id, kind, corrects_transaction_id, created_at)
-VALUES (?, ?, ?, ?, ?);
+INSERT INTO transfer (id, fund_id, kind, corrects_transaction_id, reason, created_at)
+VALUES (?, ?, ?, ?, ?, ?);
 
 -- name: DeleteAllReimbursements :exec
 DELETE FROM reimbursement;

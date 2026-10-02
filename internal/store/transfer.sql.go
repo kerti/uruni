@@ -10,27 +10,32 @@ import (
 )
 
 const createTransfer = `-- name: CreateTransfer :one
-INSERT INTO transfer (fund_id, kind, corrects_transaction_id, created_at)
-VALUES (?, ?, ?, ?)
-RETURNING id, fund_id, kind, corrects_transaction_id, created_at
+INSERT INTO transfer (fund_id, kind, corrects_transaction_id, reason, created_at)
+VALUES (?, ?, ?, ?, ?)
+RETURNING id, fund_id, kind, corrects_transaction_id, reason, created_at
 `
 
 type CreateTransferParams struct {
 	FundID                int64
 	Kind                  string
 	CorrectsTransactionID *int64
+	Reason                *string
 	CreatedAt             int64
 }
 
 // corrects_transaction_id is nil for every transfer but a purpose
 // correction (ADR-033) - between_accounts and CloseIncidentalAndRoll's own
 // reclass_purpose rolls both pass nil, the same NULL the schema's CHECK
-// requires of anything that is not kind='reclass_purpose'.
+// requires of anything that is not kind='reclass_purpose'. reason (ADR-036)
+// is 'roll' for CloseIncidentalAndRoll, 'allocation' for a purpose move, and
+// nil for every other pair - the same CHECK holds it to a reclass_purpose
+// pair that corrects nothing.
 func (q *Queries) CreateTransfer(ctx context.Context, arg CreateTransferParams) (Transfer, error) {
 	row := q.db.QueryRowContext(ctx, createTransfer,
 		arg.FundID,
 		arg.Kind,
 		arg.CorrectsTransactionID,
+		arg.Reason,
 		arg.CreatedAt,
 	)
 	var i Transfer
@@ -39,13 +44,14 @@ func (q *Queries) CreateTransfer(ctx context.Context, arg CreateTransferParams) 
 		&i.FundID,
 		&i.Kind,
 		&i.CorrectsTransactionID,
+		&i.Reason,
 		&i.CreatedAt,
 	)
 	return i, err
 }
 
 const getTransfer = `-- name: GetTransfer :one
-SELECT id, fund_id, kind, corrects_transaction_id, created_at
+SELECT id, fund_id, kind, corrects_transaction_id, reason, created_at
 FROM transfer
 WHERE id = ?
 `
@@ -58,6 +64,7 @@ func (q *Queries) GetTransfer(ctx context.Context, id int64) (Transfer, error) {
 		&i.FundID,
 		&i.Kind,
 		&i.CorrectsTransactionID,
+		&i.Reason,
 		&i.CreatedAt,
 	)
 	return i, err
@@ -106,7 +113,7 @@ func (q *Queries) LatestPurposeCorrectionForTransaction(ctx context.Context, arg
 }
 
 const listTransfersByFund = `-- name: ListTransfersByFund :many
-SELECT id, fund_id, kind, corrects_transaction_id, created_at
+SELECT id, fund_id, kind, corrects_transaction_id, reason, created_at
 FROM transfer
 WHERE fund_id = ?
 ORDER BY id
@@ -126,6 +133,7 @@ func (q *Queries) ListTransfersByFund(ctx context.Context, fundID int64) ([]Tran
 			&i.FundID,
 			&i.Kind,
 			&i.CorrectsTransactionID,
+			&i.Reason,
 			&i.CreatedAt,
 		); err != nil {
 			return nil, err

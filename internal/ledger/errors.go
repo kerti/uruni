@@ -208,3 +208,39 @@ var ErrPurposeCorrectionTargetClosed = errors.New("ledger: cannot correct into a
 // rollover invariant ADR-031 established and #270's derived rollover reads;
 // the way back is Ledger.ReopenIncidental (ADR-033).
 var ErrPurposeCorrectionSourceClosed = errors.New("ledger: cannot correct out of a closed incidental - reopen it first")
+
+// ErrPurposeMoveSamePurpose is returned by PostPurposeMove when the source
+// and the target are the same purpose: nothing would move (ADR-036).
+var ErrPurposeMoveSamePurpose = errors.New("ledger: a purpose move needs two different purposes")
+
+// ErrPurposeMoveUnknownPurpose is returned by PostPurposeMove when either
+// purpose is not one of this fund's - an id that names nothing, or another
+// fund's purpose. The lookup is fund-scoped, so the two answer the same way
+// (ADR-029's shape).
+var ErrPurposeMoveUnknownPurpose = errors.New("ledger: no such purpose in this fund")
+
+// ErrPurposeMovePassThrough is returned by PostPurposeMove when either side
+// is a pass-through purpose (Titipan). That money belongs to the parent body
+// and leaves only by being forwarded; moving it into Kas Utama or an
+// envelope would spend money that is not the fund's (ADR-036).
+var ErrPurposeMovePassThrough = errors.New("ledger: pass-through money cannot be moved between purposes")
+
+// ErrPurposeMoveClosed is returned by PostPurposeMove when either side is a
+// closed incidental. The way back is Ledger.ReopenIncidental (ADR-031,
+// ADR-036).
+var ErrPurposeMoveClosed = errors.New("ledger: cannot move money into or out of a closed incidental - reopen it first")
+
+// ErrPurposeMoveInsufficient is returned by PostPurposeMove when the amount
+// exceeds the source purpose's balance at the moment of posting: a purpose
+// cannot give more than it holds (ADR-036).
+var ErrPurposeMoveInsufficient = errors.New("ledger: the source purpose holds less than the amount")
+
+// ErrPurposeMoveUnknownAccount is returned by PostPurposeMove when the
+// account is not one of this fund's - an id that names nothing, or another
+// fund's account.
+var ErrPurposeMoveUnknownAccount = errors.New("ledger: no such account in this fund")
+
+// ErrPurposeMoveAccountInactive is returned by PostPurposeMove when the
+// account has been retired (inactive_on set), the same rule the record forms
+// apply by not offering it.
+var ErrPurposeMoveAccountInactive = errors.New("ledger: the account is inactive")

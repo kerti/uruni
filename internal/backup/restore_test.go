@@ -12,6 +12,7 @@ import (
 	"image/jpeg"
 	"os"
 	"path/filepath"
+	"reflect"
 	"testing"
 	"time"
 
@@ -828,5 +829,122 @@ func TestNewestMomentPicksTheLatestRowOfAnyTable(t *testing.T) {
 				t.Errorf("newestMoment() = %q, want %q", got, "2026-10-01")
 			}
 		})
+	}
+}
+
+// TestRestoreRoundTripCarriesTransferReason pins ADR-036's two directions on
+// the golden fixture, which carries one allocation, one roll and one pair
+// with no reason: a new export names each pair's reason, and a restore
+// writes exactly those back.
+func TestRestoreRoundTripCarriesTransferReason(t *testing.T) {
+	srcDB := newTestDB(t)
+	srcUploads := t.TempDir()
+	buildFixture(t, srcDB, srcUploads)
+	if err := os.WriteFile(filepath.Join(srcUploads, receiptFilename), realJPEGBytes(t), 0o600); err != nil {
+		t.Fatalf("replacing fixture receipt with a real image: %v", err)
+	}
+	zipBytes, wantDoc := exportFixture(t, srcDB, srcUploads)
+
+	exported := map[int64]string{} // transfer id -> reason, "" for null
+	for _, tr := range wantDoc.Transfers {
+		if tr.Reason != nil {
+			exported[tr.ID] = *tr.Reason
+		} else {
+			exported[tr.ID] = ""
+		}
+	}
+	if want := (map[int64]string{1: "", 2: "allocation", 3: "roll"}); !reflect.DeepEqual(exported, want) {
+		t.Fatalf("exported transfer reasons = %v, want %v", exported, want)
+	}
+
+	parsed, err := parseUploadBytes(t, zipBytes)
+	if err != nil {
+		t.Fatalf("ParseUpload() = %v, want no error", err)
+	}
+	destDB := newTestDB(t)
+	restoreOrFatal(t, destDB, t.TempDir(), t.TempDir(), parsed)
+
+	restored, err := store.New(destDB).ListTransfersByFund(context.Background(), 1)
+	if err != nil {
+		t.Fatalf("ListTransfersByFund() = %v, want no error", err)
+	}
+	got := map[int64]string{}
+	for _, tr := range restored {
+		if tr.Reason != nil {
+			got[tr.ID] = *tr.Reason
+		} else {
+			got[tr.ID] = ""
+		}
+	}
+	if !reflect.DeepEqual(got, exported) {
+		t.Errorf("restored transfer reasons = %v, want %v", got, exported)
+	}
+}
+
+// TestRestoreOfAFileWithoutReasonReadsNull is ADR-036's no-bump promise: a
+// backup made before the column existed has no "reason" key on any transfer,
+// the importer reads that as empty rather than refusing the file, and every
+// restored transfer is NULL - which, for a reclass pair that corrects
+// nothing, is what a roll is. Balances still match, because reason moves no
+// money.
+func TestRestoreOfAFileWithoutReasonReadsNull(t *testing.T) {
+	srcDB := newTestDB(t)
+	srcUploads := t.TempDir()
+	buildFixture(t, srcDB, srcUploads)
+	if err := os.WriteFile(filepath.Join(srcUploads, receiptFilename), realJPEGBytes(t), 0o600); err != nil {
+		t.Fatalf("replacing fixture receipt with a real image: %v", err)
+	}
+	_, wantDoc := exportFixture(t, srcDB, srcUploads)
+
+	// Re-encode the document the way an older server wrote it: transfers
+	// without the key at all.
+	raw, err := json.Marshal(wantDoc)
+	if err != nil {
+		t.Fatalf("marshaling document: %v", err)
+	}
+	var generic map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &generic); err != nil {
+		t.Fatalf("unmarshaling document: %v", err)
+	}
+	var transfers []map[string]json.RawMessage
+	if err := json.Unmarshal(generic["transfers"], &transfers); err != nil {
+		t.Fatalf("unmarshaling transfers: %v", err)
+	}
+	if len(transfers) != 3 {
+		t.Fatalf("fixture has %d transfers, want 3", len(transfers))
+	}
+	for _, tr := range transfers {
+		if _, ok := tr["reason"]; !ok {
+			t.Fatalf("export has no reason key to strip: %v", tr)
+		}
+		delete(tr, "reason")
+	}
+	if generic["transfers"], err = json.Marshal(transfers); err != nil {
+		t.Fatalf("marshaling transfers: %v", err)
+	}
+	old, err := json.Marshal(generic)
+	if err != nil {
+		t.Fatalf("marshaling old-shaped document: %v", err)
+	}
+
+	parsed, err := parseUploadBytes(t, zipOf(t, old, map[string][]byte{receiptFilename: realJPEGBytes(t)}))
+	if err != nil {
+		t.Fatalf("ParseUpload(file without reason) = %v, want no error", err)
+	}
+	destDB := newTestDB(t)
+	restoreOrFatal(t, destDB, t.TempDir(), t.TempDir(), parsed)
+
+	assertBalancesMatch(t, destDB, wantDoc)
+	restored, err := store.New(destDB).ListTransfersByFund(context.Background(), 1)
+	if err != nil {
+		t.Fatalf("ListTransfersByFund() = %v, want no error", err)
+	}
+	if len(restored) != 3 {
+		t.Fatalf("restored %d transfers, want 3", len(restored))
+	}
+	for _, tr := range restored {
+		if tr.Reason != nil {
+			t.Errorf("transfer %d restored with reason %q, want NULL", tr.ID, *tr.Reason)
+		}
 	}
 }

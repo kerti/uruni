@@ -459,17 +459,21 @@ func (q *Queries) GetTransactionForFund(ctx context.Context, arg GetTransactionF
 
 const incidentalActivityTotals = `-- name: IncidentalActivityTotals :one
 SELECT
-  CAST(COALESCE(SUM(CASE WHEN COALESCE(o.direction, t.direction) = 'in'
+  CAST(COALESCE(SUM(CASE
+    WHEN tr.reason = 'allocation' THEN CASE WHEN t.direction = 'in' THEN t.amount ELSE -t.amount END
+    WHEN COALESCE(o.direction, t.direction) = 'in'
     THEN CASE WHEN o.id IS NULL OR t.direction = o.direction THEN t.amount ELSE -t.amount END
     ELSE 0 END), 0) AS INTEGER) AS collected_amount,
-  CAST(COALESCE(SUM(CASE WHEN COALESCE(o.direction, t.direction) = 'out'
+  CAST(COALESCE(SUM(CASE
+    WHEN tr.reason = 'allocation' THEN 0
+    WHEN COALESCE(o.direction, t.direction) = 'out'
     THEN CASE WHEN o.id IS NULL OR t.direction = o.direction THEN t.amount ELSE -t.amount END
     ELSE 0 END), 0) AS INTEGER) AS disbursed_amount
 FROM "transaction" t
 LEFT JOIN transfer tr ON tr.id = t.transfer_id AND tr.kind = 'reclass_purpose'
 LEFT JOIN "transaction" o ON o.fund_id = tr.fund_id AND o.id = tr.corrects_transaction_id
 WHERE t.fund_id = ? AND t.purpose_id = ?
-  AND (tr.id IS NULL OR tr.corrects_transaction_id IS NOT NULL)
+  AND (tr.id IS NULL OR tr.corrects_transaction_id IS NOT NULL OR tr.reason = 'allocation')
   AND t.reverses_transaction_id IS NULL
   AND NOT EXISTS (SELECT 1 FROM "transaction" r WHERE r.reverses_transaction_id = t.id)
 `
@@ -517,6 +521,14 @@ type IncidentalActivityTotalsRow struct {
 // own effect on the balance, so the two stay equal. The corrected row
 // itself is never a reversal (ADR-033 refuses those), so the cancellation
 // filters above never meet it.
+//
+// A purpose move (ADR-036, tr.reason = 'allocation') is kept too, and only
+// ever counts as collected: money allocated in is money the envelope now
+// has to work with, and money allocated out was never spent on the
+// occasion, so it takes back what was collected rather than reading as
+// disbursed. Collected minus disbursed still moves by exactly the leg's
+// effect on the balance. A roll - 'roll', or NULL on a row written before
+// the column existed - stays excluded as above.
 func (q *Queries) IncidentalActivityTotals(ctx context.Context, arg IncidentalActivityTotalsParams) (IncidentalActivityTotalsRow, error) {
 	row := q.db.QueryRowContext(ctx, incidentalActivityTotals, arg.FundID, arg.PurposeID)
 	var i IncidentalActivityTotalsRow
@@ -852,6 +864,7 @@ SELECT t.id, t.fund_id, t.account_id, t.purpose_id, t.direction, t.amount, t.occ
        tp.name AS transfer_to_purpose_name,
        CAST(EXISTS(SELECT 1 FROM reconciliation_line rl WHERE rl.adjustment_transaction_id = t.id) AS INTEGER) AS is_reconciliation_fix,
        tr.corrects_transaction_id AS transfer_corrects_transaction_id,
+       tr.reason AS transfer_reason,
        CAST(COALESCE((SELECT ct.purpose_id
                       FROM transfer c
                       JOIN "transaction" ct ON ct.transfer_id = c.id AND ct.direction = t.direction
@@ -929,6 +942,7 @@ type ListTransactionsPageRow struct {
 	TransferToPurposeName         *string
 	IsReconciliationFix           int64
 	TransferCorrectsTransactionID *int64
+	TransferReason                *string
 	EffectivePurposeID            int64
 }
 
@@ -1043,6 +1057,12 @@ type ListTransactionsPageRow struct {
 //     Read off tr, the same join transfer_kind already uses, not a second
 //     one.
 //
+//   - transfer_reason: this row's own transfer's reason (ADR-036) - 'roll',
+//     'allocation', or NULL (a correction, a between_accounts pair, or a
+//     pair that predates the column, which reads as a roll). Riwayat labels
+//     an allocation "Pindah peruntukan" from it; only a pair that corrects
+//     nothing carries one.
+//
 //   - effective_purpose_id: the tag this row's money is under NOW - its own
 //     purpose_id until a correction (ADR-033) moves it, then the latest
 //     correction's target. Which of that correction's two legs IS the
@@ -1105,6 +1125,7 @@ func (q *Queries) ListTransactionsPage(ctx context.Context, arg ListTransactions
 			&i.TransferToPurposeName,
 			&i.IsReconciliationFix,
 			&i.TransferCorrectsTransactionID,
+			&i.TransferReason,
 			&i.EffectivePurposeID,
 		); err != nil {
 			return nil, err
