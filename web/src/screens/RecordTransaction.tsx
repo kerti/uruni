@@ -236,7 +236,7 @@ export default function RecordTransaction({
       }
     }
 
-    // Pindah peruntukan opens on the common case - giving from Kas Utama to
+    // Pindah pos opens on the common case - giving from Kas Utama to
     // an envelope (ADR-036) - with the first open envelope already chosen,
     // so the usual move is an amount and a tap. Never a Titipan: it is not
     // offered at all (movablePurposes below).
@@ -278,7 +278,7 @@ export default function RecordTransaction({
   // parent body and leaves only by being forwarded. selectable=true already
   // withheld the closed envelopes, which the ledger refuses on either side.
   const movablePurposes = (loadState.data?.purposes ?? []).filter((p) => p.kind !== 'pass_through')
-  // Kas Utama is the only peruntukan that always exists; without an open
+  // Kas Utama is the only pos that always exists; without an open
   // envelope there is nowhere for it to move to, so say so instead of
   // leaving "Ke" empty.
   const hasOpenEnvelope = movablePurposes.some((p) => p.kind === 'incidental')
@@ -543,7 +543,7 @@ export default function RecordTransaction({
         <form className="flex flex-col gap-4" onSubmit={handleSubmit} noValidate>
           <AmountInput id="record-amount" label={text.amountLabel} value={amount} onChange={setAmount} disabled={submitting} />
 
-          {/* Pindah peruntukan (ADR-036): where the money is for now, and where
+          {/* Pindah pos (ADR-036): where the money is for now, and where
               it should be for - right after the amount, because they are the
               point of the move; the location is the least of it and follows.
               Two columns like the transfer's pair, so each picker keeps its
@@ -560,7 +560,7 @@ export default function RecordTransaction({
                   disabled={submitting}
                 />
                 {fromPurposeBalance !== null && (
-                  <p className="text-sm text-muted-foreground">{text.locationBalance(formatIDR(fromPurposeBalance))}</p>
+                  <p className="text-sm text-muted-foreground">{text.purposeBalance(formatIDR(fromPurposeBalance))}</p>
                 )}
               </div>
               <div className="flex flex-col gap-1.5">
@@ -590,7 +590,7 @@ export default function RecordTransaction({
                   disabled={submitting}
                 />
                 {toPurposeBalance !== null && (
-                  <p className="text-sm text-muted-foreground">{text.locationBalance(formatIDR(toPurposeBalance))}</p>
+                  <p className="text-sm text-muted-foreground">{text.purposeBalance(formatIDR(toPurposeBalance))}</p>
                 )}
                 {!hasOpenEnvelope && <p className="text-sm text-muted-foreground">{text.noOpenEnvelopeHint}</p>}
                 {samePurpose && (
@@ -610,7 +610,7 @@ export default function RecordTransaction({
           {/* One location for an ordinary entry, two for a transfer - and the
           field she already knows keeps its meaning either way: accountId is
           where the money is, or where it leaves from. A transfer hides the
-          peruntukan entirely, because it does not have one to choose: both
+          pos entirely, because it does not have one to choose: both
           legs carry the same tag and it nets to zero (ADR-024). */}
           {/* The picker and its balance preview share one gap-1.5 column, exactly
           as the destination pair below does - otherwise the source's preview

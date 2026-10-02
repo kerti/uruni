@@ -69,7 +69,7 @@ export default function TransactionList({
    * the list she came to work in and plain text in the summary she came to
    * read. A row this handler is passed for may still be ineligible -
    * canCorrectPurpose decides that per row, so an ineligible one renders
-   * its peruntukan as text rather than a tap that would only be refused. */
+   * its pos as text rather than a tap that would only be refused. */
   onCorrectPurpose?: (transaction: Transaction) => void
   /** Refetches whatever list this component's own `transactions` prop came
    * from, after a photo is added, replaced or deleted (#154) - this
@@ -205,10 +205,10 @@ export default function TransactionList({
 
 /**
  * The row's first line: what this entry was for, and - on a row whose
- * peruntukan may still be corrected - the control that corrects it
+ * pos may still be corrected - the control that corrects it
  * (#276, ADR-033).
  *
- * The peruntukan IS the control, rather than a button beside it. The whole
+ * The pos IS the control, rather than a button beside it. The whole
  * row is not the correction control because eligibility varies, so it would
  * be a dead tap on a dues row and a live one on the expense beneath it with
  * nothing visible to tell them apart (the row's own tap opens the entry
@@ -223,7 +223,7 @@ export default function TransactionList({
  * at all, since text that taps and text that does not are otherwise
  * identical.
  *
- * The stored peruntukan is what renders, never the effective one, even
+ * The stored pos is what renders, never the effective one, even
  * after a correction has moved the money elsewhere: the ledger sums stored
  * tags, so a row showing its effective tag would leave the screen out of
  * step with the balances (ADR-033). The Tags glyph is what says a

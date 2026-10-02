@@ -192,7 +192,7 @@ type ReportMove struct {
 	IsCorrection bool
 
 	// IsAllocation tells money the treasurer moved between purposes
-	// ("Pindah peruntukan", transfer.reason 'allocation', ADR-036) from an
+	// ("Pindah pos", transfer.reason 'allocation', ADR-036) from an
 	// envelope's roll. Neither IsCorrection nor IsAllocation: a roll, which
 	// is also what a pair from before the column reads as.
 	IsAllocation bool

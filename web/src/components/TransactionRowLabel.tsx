@@ -49,7 +49,7 @@ function rowLabelFor(transaction: Transaction): { Icon: LucideIcon; srWord: stri
         // Three shapes share this wire shape (ADR-033, ADR-036). A purpose
         // correction is the one that sets corrects_transaction_id. Of the
         // rest, transfer_reason tells the treasurer's own "Pindah
-        // peruntukan" ('allocation') from an envelope closing ('roll'), and
+        // pos" ('allocation') from an envelope closing ('roll'), and
         // a null reason is a roll too: the row predates the column, and
         // closing was then the only thing that could post an uncorrected
         // reclass pair. Before #276 this branch said "Tutup amplop"

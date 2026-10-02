@@ -14,8 +14,8 @@ describe('PurposePicker', () => {
   // Unlike AccountPicker there is nothing to exclude - a purpose is never
   // retired - so this is the whole list, read out of the open popup.
   it('lists every purpose the fund has', async () => {
-    render(<PurposePicker id="purpose" label="Peruntukan" purposes={purposes} value={1} onChange={vi.fn()} />)
+    render(<PurposePicker id="purpose" label="Pos" purposes={purposes} value={1} onChange={vi.fn()} />)
 
-    expect(await selectOptionNames('Peruntukan')).toEqual(['Kas utama', 'Kas Bidang'])
+    expect(await selectOptionNames('Pos')).toEqual(['Kas utama', 'Kas Bidang'])
   })
 })

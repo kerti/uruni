@@ -5,7 +5,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import type { Purpose } from '@/lib/purposes'
 
 /**
- * Picks the purpose tag ("peruntukan") a transaction carries - every row
+ * Picks the purpose tag ("pos") a transaction carries - every row
  * GET /api/purposes returns (main, any pass-through, any open incidental),
  * unlike AccountPicker there is no retirement to exclude: a purpose is never
  * deactivated. RecordTransaction.tsx picks the default (the `kind: "main"`
