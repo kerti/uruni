@@ -1,4 +1,4 @@
-import { render as rtlRender, screen, waitFor } from '@testing-library/react'
+import { render as rtlRender, screen, waitFor, within } from '@testing-library/react'
 import type { ReactElement } from 'react'
 import { MemoryRouter } from 'react-router-dom'
 import userEvent from '@testing-library/user-event'
@@ -43,7 +43,7 @@ const balances = {
     { id: 2, kind: 'bank', name: 'Bank lama (nonaktif)', balance: 500_000 },
   ],
   purposes: [
-    { id: 11, kind: 'general', name: 'Kas Utama', balance: 1_450_000 },
+    { id: 11, kind: 'main', name: 'Kas Utama', balance: 1_000_000 },
     { id: 12, kind: 'pass_through', name: 'Kas Bidang', balance: 150_000 },
     { id: 13, kind: 'incidental', name: 'Halal bihalal RT', balance: 300_000 },
     { id: 14, kind: 'incidental', name: '17 Agustus', balance: 0 },
@@ -212,8 +212,9 @@ describe('Home', () => {
     render(<Home refetchKey="1" onReconcile={vi.fn()} onOpenIncidental={vi.fn()} onViewHistory={vi.fn()} />)
 
     // purpose_id 11 is 'Kas Utama' in balances.purposes - both entries carry
-    // it, so both rows are labelled without a fifth request.
-    expect(await screen.findAllByText('Kas Utama')).toHaveLength(2)
+    // it, so both rows are labelled without a fifth request (the third is
+    // the breakdown's own Kas Utama row).
+    expect(await screen.findAllByText('Kas Utama')).toHaveLength(3)
     // The optional note (PRD 6) shows when there is one, and nothing stands
     // in for it when there isn't.
     expect(screen.getByText('Beli galon')).toBeInTheDocument()
@@ -292,19 +293,32 @@ describe('Home', () => {
       expect(screen.queryByText('17 Agustus')).not.toBeInTheDocument()
     })
 
-    // A fund with no open incidental and no Titipan renders no section at
-    // all - not a heading with an empty-state line.
-    it('renders no section and no heading when there is neither an open incidental nor a Titipan', async () => {
+    // Kas Utama is the first row (#387): the hero is the fund total, so
+    // this is the only place its own balance shows - and it shows even when
+    // there is no open incidental and no Titipan.
+    it('renders Kas Utama first, with its own balance rather than the fund total', async () => {
+      vi.stubGlobal('fetch', stubHome())
+      render(<Home refetchKey="1" onReconcile={vi.fn()} onOpenIncidental={vi.fn()} onViewHistory={vi.fn()} />)
+
+      const heading = await screen.findByText(copy.home.purposeBreakdownHeading)
+      const rows = within(heading.closest('section') as HTMLElement).getAllByRole('listitem')
+      expect(rows[0]).toHaveTextContent('Kas Utama')
+      expect(rows[0]).toHaveTextContent(money(1_000_000))
+      // A plain row, like Titipan: there is no envelope to open.
+      expect(within(rows[0]).queryByRole('button')).not.toBeInTheDocument()
+    })
+
+    it('renders the Kas Utama row alone when there is neither an open incidental nor a Titipan', async () => {
       const bareBalances = {
         fund_total: 1_450_000,
         accounts: balances.accounts,
-        purposes: [{ id: 11, kind: 'general', name: 'Kas Utama', balance: 1_450_000 }],
+        purposes: [{ id: 11, kind: 'main', name: 'Kas Utama', balance: 1_450_000 }],
       }
       vi.stubGlobal('fetch', stubHome({ balancesOverride: bareBalances, openIncidentals: [] }))
       render(<Home refetchKey="1" onReconcile={vi.fn()} onOpenIncidental={vi.fn()} onViewHistory={vi.fn()} />)
 
-      await screen.findByText(money(1_450_000))
-      expect(screen.queryByText(copy.home.purposeBreakdownHeading)).not.toBeInTheDocument()
+      const heading = await screen.findByText(copy.home.purposeBreakdownHeading)
+      expect(within(heading.closest('section') as HTMLElement).getAllByRole('listitem')).toHaveLength(1)
     })
 
     // A negative purpose balance (ADR-031's covered shortfall) is legible
