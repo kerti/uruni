@@ -34,6 +34,31 @@ type reportCopy struct {
 
 	Empty string
 
+	// The transactions section (#374).
+	TransactionsLabel string
+	FilterPurpose     string
+	FilterMember      string
+	FilterDirection   string
+	FilterAll         string
+	DirectionIn       string
+	DirectionOut      string
+	FilterSubmit      string
+	TotalIn           string
+	TotalOut          string
+	TotalNet          string
+	HasReceipt        string
+	NoRows            string
+
+	// Row labels: the Go half of web/src/copy/id.ts's rowLabels (#257), see
+	// report_labels.go. A location is never named, so Saldo awal and
+	// Penyesuaian stand alone.
+	RowDues                 func(period, member string) string
+	RowDuesReversal         func(period, member string) string
+	RowContributionReversal func(member string) string
+	RowOpening              string
+	RowReconciliationFix    string
+	RowMoved                func(from, to string) string
+
 	NotFoundTitle string
 	NotFoundBody  string
 
@@ -59,6 +84,27 @@ var reportText = reportCopy{
 	MonthNext:   "Bulan berikutnya \u203a",
 
 	Empty: "Belum ada transaksi yang dicatat di kas ini.",
+
+	TransactionsLabel: "Transaksi",
+	FilterPurpose:     "Pos",
+	FilterMember:      "Anggota",
+	FilterDirection:   "Jenis",
+	FilterAll:         "Semua",
+	DirectionIn:       "Uang masuk",
+	DirectionOut:      "Uang keluar",
+	FilterSubmit:      "Tampilkan",
+	TotalIn:           "Total masuk",
+	TotalOut:          "Total keluar",
+	TotalNet:          "Bersih",
+	HasReceipt:        "Ada nota",
+	NoRows:            "Tidak ada transaksi yang cocok bulan ini.",
+
+	RowDues:                 func(period, member string) string { return period + " \u00b7 " + member },
+	RowDuesReversal:         func(period, member string) string { return "Pembatalan \u00b7 " + period + " \u00b7 " + member },
+	RowContributionReversal: func(member string) string { return "Pembatalan \u00b7 " + member },
+	RowOpening:              "Saldo awal",
+	RowReconciliationFix:    "Penyesuaian",
+	RowMoved:                func(from, to string) string { return "Dipindah: " + from + " \u2192 " + to },
 
 	NotFoundTitle: "Laporan tidak ditemukan",
 	NotFoundBody:  "Tautan laporan ini tidak berlaku. Minta tautan terbaru ke bendahara.",

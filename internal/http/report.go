@@ -16,7 +16,10 @@ import (
 	"html/template"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"slices"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -47,7 +50,18 @@ type reportPage struct {
 
 	PrevMonth    string
 	NextMonth    string
+	PrevHref     string
+	NextHref     string
 	MonthOptions []reportMonthOption
+
+	// The transactions section (#374): the filter form, the totals for the
+	// filtered set, and the rows. Filter is set by the handler, which alone
+	// knows the fund's members and purposes.
+	Filter reportFilter
+	Totals reportTotals
+	Rows   []reportRow
+	Month  string
+	NoRows bool
 
 	// Empty is a fund with nothing recorded at all - not merely a quiet
 	// month - which gets the warm line instead of a bare Rp 0.
@@ -66,6 +80,44 @@ type reportPurpose struct {
 	Name     string
 	Balance  string
 	Negative bool
+}
+
+// reportTotals are the filtered set's money in, money out and net, already
+// formatted. Moves and between-accounts transfers are in none of them.
+type reportTotals struct {
+	In  string
+	Out string
+	Net string
+}
+
+// reportRow is one line of the month. Class is "in", "out" or "move"; Label is
+// "" for a plain row the treasurer recorded. HasReceipt renders a plain
+// marker - nothing about the receipt itself reaches the page.
+type reportRow struct {
+	Date       string
+	Label      string
+	Purpose    string
+	Amount     string
+	Class      string
+	HasReceipt bool
+}
+
+// reportFilter is the GET form: every option of every select, with the
+// current choice marked, so a filtered view reads back as what it is.
+type reportFilter struct {
+	Purposes   []reportOption
+	Members    []reportOption
+	Directions []reportOption
+
+	// Active is the filters in force, carried by the month steps and the
+	// month form so changing month keeps what the visitor sifted for.
+	Active url.Values
+}
+
+type reportOption struct {
+	Value    string
+	Label    string
+	Selected bool
 }
 
 type reportMonthOption struct {
@@ -95,23 +147,117 @@ func reportHandler(l *ledger.Ledger, q store.Querier, logger *slog.Logger, now f
 			return
 		}
 
-		report, err := monthlyReportOrCurrent(r.Context(), l, fund.ID, r.URL.Query().Get("month"), now())
+		page, err := assembleReportPage(r.Context(), l, q, fund.ID, r.URL.Query(), now())
 		if err != nil {
 			logger.Error("report: assembling the month", "fund_id", fund.ID, "error", err)
 			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 			return
 		}
-
-		_, err = q.FirstTransactionDateByFund(r.Context(), fund.ID)
-		empty := errors.Is(err, sql.ErrNoRows)
-		if err != nil && !empty {
-			logger.Error("report: checking for any transaction", "fund_id", fund.ID, "error", err)
-			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
-			return
-		}
-
-		renderReport(w, logger, http.StatusOK, "report", buildReportPage(report, empty))
+		renderReport(w, logger, http.StatusOK, "report", page)
 	}
+}
+
+// assembleReportPage reads the filter, the month and the fund's emptiness,
+// and builds the page from them.
+func assembleReportPage(ctx context.Context, l *ledger.Ledger, q store.Querier, fundID int64, query url.Values, now time.Time) (reportPage, error) {
+	purposes, err := q.ListPurposesByFund(ctx, fundID)
+	if err != nil {
+		return reportPage{}, err
+	}
+	members, err := q.ListMembersByFund(ctx, fundID)
+	if err != nil {
+		return reportPage{}, err
+	}
+	params, filter := readReportFilter(query, fundID, purposes, members)
+	report, err := monthlyReportOrCurrent(ctx, l, params, now)
+	if err != nil {
+		return reportPage{}, err
+	}
+	empty, err := fundIsEmpty(ctx, q, fundID)
+	if err != nil {
+		return reportPage{}, err
+	}
+	page := buildReportPage(report, empty)
+	page.Filter = filter
+	if page.PrevMonth != "" {
+		page.PrevHref = monthHref(page.PrevMonth, filter.Active)
+	}
+	if page.NextMonth != "" {
+		page.NextHref = monthHref(page.NextMonth, filter.Active)
+	}
+	return page, nil
+}
+
+// monthHref steps to another month with the same filters, landing on the
+// month nav rather than the top of the page.
+func monthHref(month string, active url.Values) string {
+	href := "?month=" + url.QueryEscape(month)
+	if len(active) > 0 {
+		href += "&" + active.Encode()
+	}
+	return href + "#months"
+}
+
+// fundIsEmpty is a fund with no transaction at all.
+func fundIsEmpty(ctx context.Context, q store.Querier, fundID int64) (bool, error) {
+	_, err := q.FirstTransactionDateByFund(ctx, fundID)
+	if errors.Is(err, sql.ErrNoRows) {
+		return true, nil
+	}
+	return false, err
+}
+
+// readReportFilter turns the query string into ledger params and the form's
+// options. A purpose or member that is not this fund's, and a direction that
+// is neither "in" nor "out", is no filter at all: a stale or hand-edited URL
+// shows the whole month rather than an error page. Options are ordered by
+// name, never by id; Kas Utama leads the purposes, as everywhere else.
+func readReportFilter(query url.Values, fundID int64, purposes []store.Purpose, members []store.Member) (ledger.ReportParams, reportFilter) {
+	params := ledger.ReportParams{FundID: fundID, Month: query.Get("month")}
+	filter := reportFilter{Active: url.Values{}}
+
+	slices.SortFunc(purposes, func(a, b store.Purpose) int {
+		if (a.Kind == "main") != (b.Kind == "main") {
+			if a.Kind == "main" {
+				return -1
+			}
+			return 1
+		}
+		return strings.Compare(a.Name, b.Name)
+	})
+	wantPurpose := query.Get("purpose")
+	for _, p := range purposes {
+		id := strconv.FormatInt(p.ID, 10)
+		selected := id == wantPurpose
+		if selected {
+			params.PurposeID = &p.ID
+			filter.Active.Set("purpose", id)
+		}
+		filter.Purposes = append(filter.Purposes, reportOption{Value: id, Label: p.Name, Selected: selected})
+	}
+
+	slices.SortFunc(members, func(a, b store.Member) int { return strings.Compare(a.Name, b.Name) })
+	wantMember := query.Get("member")
+	for _, m := range members {
+		id := strconv.FormatInt(m.ID, 10)
+		selected := id == wantMember
+		if selected {
+			params.MemberID = &m.ID
+			filter.Active.Set("member", id)
+		}
+		filter.Members = append(filter.Members, reportOption{Value: id, Label: m.Name, Selected: selected})
+	}
+
+	dir := query.Get("dir")
+	if dir == ledger.ReportDirectionIn || dir == ledger.ReportDirectionOut {
+		params.Direction = dir
+		filter.Active.Set("dir", dir)
+	}
+	filter.Directions = []reportOption{
+		{Value: ledger.ReportDirectionIn, Label: reportText.DirectionIn, Selected: params.Direction == ledger.ReportDirectionIn},
+		{Value: ledger.ReportDirectionOut, Label: reportText.DirectionOut, Selected: params.Direction == ledger.ReportDirectionOut},
+	}
+	return params, filter
 }
 
 // monthlyReportOrCurrent reads ?month= as ADR-035 says to: a missing,
@@ -119,15 +265,17 @@ func reportHandler(l *ledger.Ledger, q store.Querier, logger *slog.Logger, now f
 // A malformed month is the ledger's ErrInvalidArgument; an out-of-range one
 // assembles fine but names a month the selector does not offer, so it is
 // re-read as the current month too.
-func monthlyReportOrCurrent(ctx context.Context, l *ledger.Ledger, fundID int64, month string, now time.Time) (ledger.Report, error) {
-	report, err := l.MonthlyReport(ctx, ledger.ReportParams{FundID: fundID, Month: month, Now: now})
+func monthlyReportOrCurrent(ctx context.Context, l *ledger.Ledger, params ledger.ReportParams, now time.Time) (ledger.Report, error) {
+	params.Now = now
+	report, err := l.MonthlyReport(ctx, params)
 	if err == nil && slices.Contains(report.Months, report.Month) {
 		return report, nil
 	}
 	if err != nil && !errors.Is(err, ledger.ErrInvalidArgument) {
 		return ledger.Report{}, err
 	}
-	return l.MonthlyReport(ctx, ledger.ReportParams{FundID: fundID, Now: now})
+	params.Month = ""
+	return l.MonthlyReport(ctx, params)
 }
 
 func buildReportPage(r ledger.Report, empty bool) reportPage {
@@ -161,6 +309,34 @@ func buildReportPage(r ledger.Report, empty bool) reportPage {
 			Negative: p.Balance < 0,
 		})
 	}
+
+	page.Month = r.Month
+	page.Totals = reportTotals{
+		In:  money.FormatIDR(r.Totals.In),
+		Out: money.FormatIDR(r.Totals.Out),
+		Net: money.FormatIDR(r.Totals.Net),
+	}
+	for _, row := range r.Rows {
+		date := reportText.longDate(row.Date)
+		switch {
+		case row.Entry != nil:
+			e := row.Entry
+			sign := "+"
+			if e.Direction == ledger.ReportDirectionOut {
+				sign = "-"
+			}
+			page.Rows = append(page.Rows, reportRow{
+				Date: date, Label: reportText.entryLabel(*e), Purpose: e.PurposeName,
+				Amount: sign + money.FormatIDR(e.Amount), Class: e.Direction, HasReceipt: e.HasReceipt,
+			})
+		case row.Move != nil:
+			page.Rows = append(page.Rows, reportRow{
+				Date: date, Label: reportText.moveLabel(*row.Move),
+				Amount: money.FormatIDR(row.Move.Amount), Class: "move",
+			})
+		}
+	}
+	page.NoRows = len(page.Rows) == 0
 
 	i := slices.Index(r.Months, r.Month)
 	if i > 0 {
