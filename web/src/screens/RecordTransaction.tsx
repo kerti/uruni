@@ -288,8 +288,10 @@ export default function RecordTransaction({
   // costs one refused submit, never a wrong post). Unlike a location
   // transfer this blocks: the ledger refuses it, so letting her try would
   // only move the message.
-  const fromPurposeBalance =
-    fromPurposeId === null ? null : (loadState.data?.balances.purposes.find((p) => p.id === fromPurposeId)?.balance ?? null)
+  const purposeBalance = (id: number | null) =>
+    id === null ? null : (loadState.data?.balances.purposes.find((p) => p.id === id)?.balance ?? null)
+  const fromPurposeBalance = purposeBalance(fromPurposeId)
+  const toPurposeBalance = purposeBalance(toPurposeId)
   const purposeMoveTooLarge = isPurposeMove && amount > 0 && fromPurposeBalance !== null && amount > fromPurposeBalance
 
   const canSubmit =
@@ -562,6 +564,23 @@ export default function RecordTransaction({
                 )}
               </div>
               <div className="flex flex-col gap-1.5">
+                {/* Kas Utama to an envelope and back again are the same pair
+                in opposite order - the swap Pindah lokasi already offers. */}
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="lg"
+                  className="self-center px-4"
+                  disabled={submitting || toPurposeId === null}
+                  onClick={() => {
+                    setFromPurposeId(toPurposeId)
+                    setToPurposeId(fromPurposeId)
+                  }}
+                >
+                  <ArrowUpDown aria-hidden="true" />
+                  {text.swapPurposes}
+                </Button>
+
                 <PurposePicker
                   id="record-to-purpose"
                   label={text.toPurposeLabel}
@@ -570,6 +589,9 @@ export default function RecordTransaction({
                   onChange={setToPurposeId}
                   disabled={submitting}
                 />
+                {toPurposeBalance !== null && (
+                  <p className="text-sm text-muted-foreground">{text.locationBalance(formatIDR(toPurposeBalance))}</p>
+                )}
                 {!hasOpenEnvelope && <p className="text-sm text-muted-foreground">{text.noOpenEnvelopeHint}</p>}
                 {samePurpose && (
                   <p role="status" className="rounded-lg bg-attention-soft px-3 py-2 text-sm text-attention">

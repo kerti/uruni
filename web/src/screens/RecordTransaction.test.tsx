@@ -813,6 +813,29 @@ describe('RecordTransaction: Pindah peruntukan (ADR-036, #383)', () => {
     expect(screen.queryByText(text.noOpenEnvelopeHint)).not.toBeInTheDocument()
   })
 
+  it('swaps Dari and Ke in one tap, and shows what each side holds', async () => {
+    stubPurposeMove(750_000, 120_000)
+    const { user } = await choosePurposeMove()
+
+    expect(await screen.findByText(text.locationBalance(money(750_000)))).toBeInTheDocument()
+    expect(screen.getByText(text.locationBalance(money(120_000)))).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: text.swapPurposes }))
+    expect(selectedOptionName(text.fromPurposeLabel)).toBe('Halal bihalal RT')
+    expect(selectedOptionName(text.toPurposeLabel)).toBe('Kas utama')
+  })
+
+  it('has nothing to swap with no open envelope', async () => {
+    stubPurposeMove(
+      1_000_000,
+      0,
+      purposes.filter((p) => p.kind !== 'incidental'),
+    )
+    await choosePurposeMove()
+
+    expect(await screen.findByRole('button', { name: text.swapPurposes })).toBeDisabled()
+  })
+
   it('shows what the source holds', async () => {
     stubPurposeMove(750_000)
     await choosePurposeMove()

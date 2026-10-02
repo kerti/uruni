@@ -435,13 +435,14 @@ export const copy = {
     // read as decoration, and the caption is also what gives the control its
     // accessible name now.
     swapLocations: 'Tukar lokasi',
+    swapPurposes: 'Tukar peruntukan',
     purposeLabel: 'Peruntukan',
     // Pindah peruntukan splits the one peruntukan field in two, the way a
     // location transfer splits Lokasi: where the money is for now, and where
     // it should be for. Bare "Dari" and "Ke" because the selected kind
     // already says what is being moved.
-    fromPurposeLabel: 'Dari',
-    toPurposeLabel: 'Ke',
+    fromPurposeLabel: 'Dari peruntukan',
+    toPurposeLabel: 'Ke peruntukan',
     // Same peruntukan on both sides moves nothing, and the ledger refuses it
     // too - she reads why here instead of meeting a rejected submit.
     noOpenEnvelopeHint: 'Belum ada amplop terbuka.',
