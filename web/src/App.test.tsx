@@ -337,7 +337,7 @@ describe('App (record loop)', () => {
       routedFetch([
         {
           match: (m, u) => m === 'GET' && u.includes('/api/incidentals/12'),
-          handle: () => Promise.resolve(jsonResponse({ ...envelope, collected_amount: 0, disbursed_amount: 0 })),
+          handle: () => Promise.resolve(jsonResponse({ ...envelope, collected_amount: 0, disbursed_amount: 0, balance_amount: 0 })),
         },
         {
           match: (m, u) => m === 'GET' && u.includes('/api/session'),

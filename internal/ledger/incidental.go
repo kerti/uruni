@@ -194,6 +194,10 @@ type SetIncidentalParticipationParams struct {
 	FundID    int64
 	PurposeID int64
 
+	// TargetAmount nil clears the target; a set value must be > 0, the same
+	// shape OpenIncidentalParams.TargetAmount holds itself to (#381).
+	TargetAmount *money.Amount
+
 	// MinimumPerMember nil clears the minimum; a set value must be > 0,
 	// the same shape OpenIncidentalParams.MinimumPerMember holds itself to.
 	MinimumPerMember *money.Amount
@@ -205,9 +209,10 @@ type SetIncidentalParticipationParams struct {
 	RecipientMemberIDs []int64
 }
 
-// SetIncidentalParticipation replaces one envelope's minimum_per_member and
-// its incidental_recipient rows in one withTx (ADR-034). Both are mutable
-// like occasion - nothing here is a posted fact, so neither half checks the
+// SetIncidentalParticipation replaces one envelope's target_amount,
+// minimum_per_member and incidental_recipient rows in one withTx (ADR-034,
+// #381). All three are mutable like occasion - nothing here is a posted fact
+// (strict about money, lax about naming), so none of them checks the
 // envelope's own closed_on: a closed envelope's expectation can still be
 // corrected the same way its occasion can (RenameIncidental carries no such
 // check either), and only a *posting* is what ADR-031 refuses.
@@ -216,6 +221,9 @@ type SetIncidentalParticipationParams struct {
 // envelope write in this file opens with: an id names a row, it does not
 // prove the caller may change it.
 func (l *Ledger) SetIncidentalParticipation(ctx context.Context, p SetIncidentalParticipationParams) (store.Incidental, error) {
+	if p.TargetAmount != nil && *p.TargetAmount <= 0 {
+		return store.Incidental{}, fmt.Errorf("%w: target_amount must be positive when set, got %d", ErrInvalidArgument, p.TargetAmount.Int64())
+	}
 	if p.MinimumPerMember != nil && *p.MinimumPerMember <= 0 {
 		return store.Incidental{}, fmt.Errorf("%w: minimum_per_member must be positive when set, got %d", ErrInvalidArgument, p.MinimumPerMember.Int64())
 	}
@@ -226,17 +234,12 @@ func (l *Ledger) SetIncidentalParticipation(ctx context.Context, p SetIncidental
 			return fmt.Errorf("fetching incidental: %w", err)
 		}
 
-		var minimumPerMember *int64
-		if p.MinimumPerMember != nil {
-			v := p.MinimumPerMember.Int64()
-			minimumPerMember = &v
-		}
 		var err error
-		updated, err = q.UpdateIncidentalMinimum(ctx, store.UpdateIncidentalMinimumParams{
-			MinimumPerMember: minimumPerMember, PurposeID: p.PurposeID,
+		updated, err = q.UpdateIncidentalExpectations(ctx, store.UpdateIncidentalExpectationsParams{
+			TargetAmount: amountToDB(p.TargetAmount), MinimumPerMember: amountToDB(p.MinimumPerMember), PurposeID: p.PurposeID,
 		})
 		if err != nil {
-			return fmt.Errorf("updating incidental minimum: %w", err)
+			return fmt.Errorf("updating incidental expectations: %w", err)
 		}
 
 		if err := putIncidentalRecipientsTx(ctx, q, p.FundID, p.PurposeID, p.RecipientMemberIDs); err != nil {
@@ -400,6 +403,13 @@ type IncidentalDetail struct {
 	Incidental store.Incidental
 	Collected  money.Amount
 	Disbursed  money.Amount
+
+	// Balance is what the envelope holds right now - PurposeBalance, rolls
+	// included - which is not Collected minus Disbursed once an envelope has
+	// been closed and reopened: those two leave a prior roll's leg out (#215),
+	// the balance cannot. Zero on a closed envelope, by ADR-031's invariant.
+	Balance money.Amount
+
 	Recipients []IncidentalRecipient
 }
 
@@ -433,6 +443,11 @@ func (l *Ledger) GetIncidentalDetail(ctx context.Context, fundID, purposeID int6
 		return IncidentalDetail{}, fmt.Errorf("computing incidental activity totals: %w", err)
 	}
 
+	balance, err := l.PurposeBalance(ctx, fundID, purposeID)
+	if err != nil {
+		return IncidentalDetail{}, err
+	}
+
 	recipientRows, err := l.q.ListIncidentalRecipients(ctx, purposeID)
 	if err != nil {
 		return IncidentalDetail{}, fmt.Errorf("listing incidental recipients: %w", err)
@@ -446,6 +461,7 @@ func (l *Ledger) GetIncidentalDetail(ctx context.Context, fundID, purposeID int6
 		Incidental: envelope,
 		Collected:  money.FromDB(totals.CollectedAmount),
 		Disbursed:  money.FromDB(totals.DisbursedAmount),
+		Balance:    balance,
 		Recipients: recipients,
 	}, nil
 }
@@ -503,4 +519,14 @@ func mainPurposeID(ctx context.Context, q store.Querier, fundID int64) (int64, e
 		}
 	}
 	return 0, fmt.Errorf("fund %d has no main purpose", fundID)
+}
+
+// amountToDB is the nullable money column's write side: nil stays NULL, a
+// set amount is its integer rupiah.
+func amountToDB(a *money.Amount) *int64 {
+	if a == nil {
+		return nil
+	}
+	v := a.Int64()
+	return &v
 }

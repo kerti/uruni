@@ -2,6 +2,7 @@ package ledger
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"github.com/kerti/uruni/internal/money"
@@ -303,5 +304,119 @@ func TestSetIncidentalParticipationReplacesMinimumAndRecipients(t *testing.T) {
 	}
 	if cleared.MinimumPerMember != nil {
 		t.Errorf("MinimumPerMember after clearing = %v, want nil", cleared.MinimumPerMember)
+	}
+}
+
+// TestSetIncidentalParticipationCorrectsTheTarget (#381): a target is an
+// expectation, not a posted fact, so it can be set, changed and cleared - on
+// a closed envelope too - without posting anything or moving a balance.
+func TestSetIncidentalParticipationCorrectsTheTarget(t *testing.T) {
+	l := newTestLedger(t)
+	f := newFixture(t, l)
+	ctx := context.Background()
+
+	target := money.Amount(500_000)
+	envelope, err := l.OpenIncidental(ctx, OpenIncidentalParams{
+		FundID: f.fundID, Occasion: "Sunatan", OpenedOn: "2026-08-01", TargetAmount: &target,
+	})
+	if err != nil {
+		t.Fatalf("OpenIncidental() = %v, want no error", err)
+	}
+	postEntry(t, l, f.fundID, f.cashID, envelope.PurposeID, "in", 40_000, "2026-08-02", nil)
+
+	countRows := func() int {
+		t.Helper()
+		var n int
+		if err := l.db.QueryRow(`SELECT count(*) FROM "transaction" WHERE fund_id = ?`, f.fundID).Scan(&n); err != nil {
+			t.Fatalf("counting transactions: %v", err)
+		}
+		return n
+	}
+	rowsBefore := countRows()
+	balanceBefore, err := l.FundBalance(ctx, f.fundID)
+	if err != nil {
+		t.Fatalf("FundBalance() = %v, want no error", err)
+	}
+
+	set := func(target *money.Amount) store.Incidental {
+		t.Helper()
+		updated, err := l.SetIncidentalParticipation(ctx, SetIncidentalParticipationParams{
+			FundID: f.fundID, PurposeID: envelope.PurposeID, TargetAmount: target,
+		})
+		if err != nil {
+			t.Fatalf("SetIncidentalParticipation(target %v) = %v, want no error", target, err)
+		}
+		return updated
+	}
+
+	raised := money.Amount(750_000)
+	if got := set(&raised); got.TargetAmount == nil || *got.TargetAmount != 750_000 {
+		t.Errorf("TargetAmount on an open envelope = %v, want 750000", got.TargetAmount)
+	}
+	if after := countRows(); after != rowsBefore {
+		t.Errorf("transactions = %d after raising the target, want %d - a target posts nothing", after, rowsBefore)
+	}
+
+	if _, err := l.CloseIncidentalAndRoll(ctx, CloseIncidentalAndRollParams{
+		FundID: f.fundID, PurposeID: envelope.PurposeID, AccountID: f.cashID, ClosedOn: "2026-08-20",
+	}); err != nil {
+		t.Fatalf("CloseIncidentalAndRoll() = %v, want no error", err)
+	}
+	rowsBefore = countRows() // the roll posts its own pair; nothing after it may
+
+	lowered := money.Amount(300_000)
+	if got := set(&lowered); got.TargetAmount == nil || *got.TargetAmount != 300_000 {
+		t.Errorf("TargetAmount on a closed envelope = %v, want 300000", got.TargetAmount)
+	}
+	if got := set(nil); got.TargetAmount != nil {
+		t.Errorf("TargetAmount after clearing = %v, want nil", got.TargetAmount)
+	}
+
+	if after := countRows(); after != rowsBefore {
+		t.Errorf("transactions = %d after correcting the target, want %d - a target posts nothing", after, rowsBefore)
+	}
+	balanceAfter, err := l.FundBalance(ctx, f.fundID)
+	if err != nil {
+		t.Fatalf("FundBalance() = %v, want no error", err)
+	}
+	if balanceAfter != balanceBefore {
+		t.Errorf("FundBalance = %d after correcting the target, want %d", balanceAfter, balanceBefore)
+	}
+}
+
+func TestSetIncidentalParticipationRefusesANonPositiveTarget(t *testing.T) {
+	l := newTestLedger(t)
+	f := newFixture(t, l)
+	envelope := openTestIncidental(t, l, f.fundID, "Sunatan", "2026-08-01")
+
+	for _, v := range []money.Amount{0, -1_000} {
+		_, err := l.SetIncidentalParticipation(context.Background(), SetIncidentalParticipationParams{
+			FundID: f.fundID, PurposeID: envelope.PurposeID, TargetAmount: &v,
+		})
+		if !errors.Is(err, ErrInvalidArgument) {
+			t.Errorf("SetIncidentalParticipation(target %d) = %v, want ErrInvalidArgument", v, err)
+		}
+	}
+}
+
+func TestSetIncidentalParticipationRefusesAnotherFundsEnvelope(t *testing.T) {
+	l := newTestLedger(t)
+	f := newFixture(t, l)
+	other := newSecondFund(t, l)
+	theirs := openTestIncidental(t, l, other.fundID, "Other Collection", "2026-08-01")
+
+	target := money.Amount(100_000)
+	_, err := l.SetIncidentalParticipation(context.Background(), SetIncidentalParticipationParams{
+		FundID: f.fundID, PurposeID: theirs.PurposeID, TargetAmount: &target,
+	})
+	if err == nil {
+		t.Fatal("SetIncidentalParticipation(another fund's envelope) = nil, want an error")
+	}
+	got, err := store.New(l.db).GetIncidental(context.Background(), store.GetIncidentalParams{PurposeID: theirs.PurposeID, FundID: other.fundID})
+	if err != nil {
+		t.Fatalf("GetIncidental() = %v, want no error", err)
+	}
+	if got.TargetAmount != nil {
+		t.Errorf("other fund's TargetAmount = %v, want untouched (nil)", got.TargetAmount)
 	}
 }

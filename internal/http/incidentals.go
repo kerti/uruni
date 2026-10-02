@@ -70,6 +70,10 @@ type incidentalDetailResponse struct {
 	CreatedAt       int64   `json:"created_at"`
 	CollectedAmount int64   `json:"collected_amount"`
 	DisbursedAmount int64   `json:"disbursed_amount"`
+	// BalanceAmount is what the envelope holds now (PurposeBalance), the
+	// figure collected minus disbursed stops being once a closed envelope is
+	// reopened - so the screen reads it rather than subtracting.
+	BalanceAmount int64 `json:"balance_amount"`
 	// MinimumPerMember and Recipients are ADR-034's addition. Recipients
 	// rides only on the detail response, not the plain list - the same
 	// "a derived figure costs nothing extra only where it is actually
@@ -102,6 +106,7 @@ func toIncidentalDetailResponse(d ledger.IncidentalDetail) incidentalDetailRespo
 		CreatedAt:        d.Incidental.CreatedAt,
 		CollectedAmount:  d.Collected.Int64(),
 		DisbursedAmount:  d.Disbursed.Int64(),
+		BalanceAmount:    d.Balance.Int64(),
 		MinimumPerMember: d.Incidental.MinimumPerMember,
 		Recipients:       recipients,
 	}
@@ -320,16 +325,19 @@ func (a *api) reopenIncidental(w http.ResponseWriter, r *http.Request) {
 }
 
 // updateIncidentalParticipationRequest is PATCH /api/incidentals/{purposeID}'s
-// body: the envelope's minimum and its recipients (ADR-034), the two facets
+// body: the envelope's target, minimum and recipients (ADR-034, #381), the facets
 // PATCH /api/purposes/{id} does not reach - that route corrects occasion
 // alone, through RenameIncidental, and stays that way rather than growing a
 // second, overlapping way to edit the same envelope.
 //
-// Both fields fully replace their own facet, the same "editable like
+// Every field fully replaces its own facet, the same "editable like
 // occasion" shape SetIncidentalParticipation itself carries: nil
-// MinimumPerMember clears it, and RecipientMemberIDs (nil or empty alike)
-// replaces the whole recipient set, never an add/remove delta.
+// TargetAmount or MinimumPerMember clears it (#381 added the target), and
+// RecipientMemberIDs (nil or empty alike) replaces the whole recipient set,
+// never an add/remove delta. A caller that omits target_amount therefore
+// clears it - the SPA always sends all three.
 type updateIncidentalParticipationRequest struct {
+	TargetAmount       *int64  `json:"target_amount"`
 	MinimumPerMember   *int64  `json:"minimum_per_member"`
 	RecipientMemberIDs []int64 `json:"recipient_member_ids"`
 }
@@ -353,7 +361,11 @@ func (a *api) updateIncidentalParticipation(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	var minimum *money.Amount
+	var target, minimum *money.Amount
+	if req.TargetAmount != nil {
+		v := money.Amount(*req.TargetAmount)
+		target = &v
+	}
 	if req.MinimumPerMember != nil {
 		v := money.Amount(*req.MinimumPerMember)
 		minimum = &v
@@ -362,6 +374,7 @@ func (a *api) updateIncidentalParticipation(w http.ResponseWriter, r *http.Reque
 	updated, err := a.ledger.SetIncidentalParticipation(r.Context(), ledger.SetIncidentalParticipationParams{
 		FundID:             fund.ID,
 		PurposeID:          purposeID,
+		TargetAmount:       target,
 		MinimumPerMember:   minimum,
 		RecipientMemberIDs: req.RecipientMemberIDs,
 	})

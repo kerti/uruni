@@ -40,6 +40,9 @@ export interface IncidentalRecipient {
 export interface IncidentalDetail extends Incidental {
   collected_amount: number
   disbursed_amount: number
+  /** What the envelope holds now (the purpose's balance, rolls included) -
+   * not collected minus disbursed once a closed envelope is reopened. */
+  balance_amount: number
   recipients: IncidentalRecipient[]
 }
 
@@ -79,20 +82,22 @@ export function openIncidental(input: {
 }
 
 /**
- * PATCH /api/incidentals/{purposeID} - the envelope's minimum and its
- * recipients (ADR-034), the two facets its own occasion-rename route
- * (renamePurpose) does not reach. Both fields fully replace their own
- * facet, never an add/remove delta: a nullable minimum clears with null, and
- * recipientMemberIds (empty or not) replaces the whole set.
+ * PATCH /api/incidentals/{purposeID} - the envelope's target, minimum and
+ * recipients (ADR-034, #381), the facets its own occasion-rename route
+ * (renamePurpose) does not reach. Every field fully replaces its own facet,
+ * never an add/remove delta: a nullable target or minimum clears with null,
+ * and recipientMemberIds (empty or not) replaces the whole set - so a caller
+ * always sends all three, or it clears what it left out.
  */
 export function updateIncidentalParticipation(
   purposeId: number,
-  input: { minimumPerMember: number | null; recipientMemberIds: number[] },
+  input: { targetAmount: number | null; minimumPerMember: number | null; recipientMemberIds: number[] },
 ): Promise<Incidental> {
   return apiFetch<Incidental>(`/api/incidentals/${purposeId}`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
+      target_amount: input.targetAmount,
       minimum_per_member: input.minimumPerMember,
       recipient_member_ids: input.recipientMemberIds,
     }),
