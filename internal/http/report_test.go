@@ -2,6 +2,7 @@ package http
 
 import (
 	"context"
+	"database/sql"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -22,6 +23,7 @@ import (
 var reportNow = time.Date(2026, 10, 2, 3, 0, 0, 0, time.UTC)
 
 type reportFixture struct {
+	db     *sql.DB
 	router http.Handler
 	l      *ledger.Ledger
 	fund   store.Fund
@@ -42,7 +44,7 @@ func newReportFixture(t *testing.T, fundName string) reportFixture {
 	}
 	r := chi.NewRouter()
 	r.Get("/report/{slug}", reportHandler(l, store.New(sqlDB), testLogger(), func() time.Time { return reportNow }))
-	return reportFixture{router: r, l: l, fund: res.Fund, cashID: res.Accounts[0].ID, mainID: res.MainPurposeID}
+	return reportFixture{db: sqlDB, router: r, l: l, fund: res.Fund, cashID: res.Accounts[0].ID, mainID: res.MainPurposeID}
 }
 
 func (f reportFixture) post(t *testing.T, direction string, amount money.Amount, on string) {
@@ -162,15 +164,15 @@ func TestReportMonthStepLinks(t *testing.T) {
 	slug := "/report/" + f.fund.ReportSlug
 
 	body := f.get(t, slug+"?month=2026-09").Body.String()
-	if !strings.Contains(body, `href="?month=2026-08"`) || !strings.Contains(body, `href="?month=2026-10"`) {
+	if !strings.Contains(body, `href="?month=2026-08#months"`) || !strings.Contains(body, `href="?month=2026-10#months"`) {
 		t.Errorf("September should link to August and October:\n%s", body)
 	}
 	body = f.get(t, slug).Body.String()
-	if strings.Contains(body, `href="?month=2026-11"`) {
+	if strings.Contains(body, `href="?month=2026-11#months"`) {
 		t.Error("the current month links forward to a month that has not happened")
 	}
 	body = f.get(t, slug+"?month=2026-08").Body.String()
-	if strings.Contains(body, `href="?month=2026-07"`) {
+	if strings.Contains(body, `href="?month=2026-07#months"`) {
 		t.Error("the first month links back to a month before any transaction")
 	}
 }

@@ -83,5 +83,17 @@ nav.months label{font-size:14px;color:var(--muted-foreground)}
 select,button{font:inherit;font-size:16px;min-height:44px;border-radius:8px}
 select{flex:1;border:1px solid var(--input);background:var(--card);color:var(--foreground);padding:0 12px}
 button{border:0;background:var(--primary);color:var(--primary-foreground);padding:0 20px;font-weight:600}
+.filters{display:flex;flex-direction:column;gap:12px;margin-bottom:16px}
+.filters label{display:flex;flex-direction:column;gap:4px;font-size:14px;color:var(--muted-foreground)}
+.totals{margin:0 0 16px;background:var(--card);border-radius:8px;padding:4px 16px;box-shadow:0 1px 2px rgb(34 50 58 / .06)}
+.totals div{display:flex;justify-content:space-between;gap:12px;padding:8px 0}
+.totals dt{color:var(--muted-foreground)}
+.totals dd{margin:0;font-weight:600}
+ul.txns li{align-items:flex-start}
+.what{display:flex;flex-direction:column;min-width:0}
+.label-line{font-weight:500;overflow-wrap:anywhere}
+.amt{font-weight:600;white-space:nowrap}
+.amt.in{color:var(--success)}
+.amt.move{color:var(--muted-foreground)}
 .empty{background:var(--card);border-radius:8px;padding:16px;color:var(--muted-foreground);text-align:center}
 `

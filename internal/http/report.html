@@ -43,12 +43,13 @@
 </section>
 {{end}}
 
-<nav class="months" aria-label="{{.Text.MonthLabel}}">
+<nav class="months" id="months" aria-label="{{.Text.MonthLabel}}">
   <div class="step">
-    {{if .PrevMonth}}<a href="?month={{.PrevMonth}}" rel="nofollow">{{.Text.MonthPrev}}</a>{{else}}<span></span>{{end}}
-    {{if .NextMonth}}<a href="?month={{.NextMonth}}" rel="nofollow">{{.Text.MonthNext}}</a>{{end}}
+    {{if .PrevHref}}<a href="{{.PrevHref}}" rel="nofollow">{{.Text.MonthPrev}}</a>{{else}}<span></span>{{end}}
+    {{if .NextHref}}<a href="{{.NextHref}}" rel="nofollow">{{.Text.MonthNext}}</a>{{end}}
   </div>
-  <form method="get">
+  <form method="get" action="#months">
+    {{range $name, $values := .Filter.Active}}{{range $values}}<input type="hidden" name="{{$name}}" value="{{.}}">{{end}}{{end}}
     <label for="month">{{.Text.MonthLabel}}</label>
     <select id="month" name="month">
       {{range .MonthOptions}}<option value="{{.Value}}"{{if .Selected}} selected{{end}}>{{.Label}}</option>
@@ -58,7 +59,76 @@
   </form>
 </nav>
 
-{{if .Empty}}<p class="empty">{{.Text.Empty}}</p>{{end}}
+{{if .Empty}}<p class="empty">{{.Text.Empty}}</p>{{else}}
+<section id="transactions" aria-labelledby="transactions-heading">
+  <h2 id="transactions-heading">{{.Text.TransactionsLabel}}</h2>
+
+  <form class="filters" method="get" action="#transactions">
+    <input type="hidden" name="month" value="{{.Month}}">
+    <label>{{.Text.FilterPurpose}}
+      <select name="purpose">
+        <option value="">{{.Text.FilterAll}}</option>
+        {{range .Filter.Purposes}}<option value="{{.Value}}"{{if .Selected}} selected{{end}}>{{.Label}}</option>
+        {{end}}
+      </select>
+    </label>
+    <label>{{.Text.FilterMember}}
+      <select name="member">
+        <option value="">{{.Text.FilterAll}}</option>
+        {{range .Filter.Members}}<option value="{{.Value}}"{{if .Selected}} selected{{end}}>{{.Label}}</option>
+        {{end}}
+      </select>
+    </label>
+    <label>{{.Text.FilterDirection}}
+      <select name="dir">
+        <option value="">{{.Text.FilterAll}}</option>
+        {{range .Filter.Directions}}<option value="{{.Value}}"{{if .Selected}} selected{{end}}>{{.Label}}</option>
+        {{end}}
+      </select>
+    </label>
+    <button type="submit">{{.Text.FilterSubmit}}</button>
+  </form>
+
+  <dl class="totals">
+    <div><dt>{{.Text.TotalIn}}</dt><dd class="tabular">{{.Totals.In}}</dd></div>
+    <div><dt>{{.Text.TotalOut}}</dt><dd class="tabular">{{.Totals.Out}}</dd></div>
+    <div><dt>{{.Text.TotalNet}}</dt><dd class="tabular">{{.Totals.Net}}</dd></div>
+  </dl>
+
+  {{if .NoRows}}<p class="empty">{{.Text.NoRows}}</p>{{else}}
+  <ul class="rows txns">
+    {{range .Rows}}
+    <li>
+      <span class="what">
+        <span class="muted">{{.Date}}</span>
+        {{if .Label}}<span class="label-line">{{.Label}}</span>{{end}}
+        <span class="muted">{{if .Purpose}}{{.Purpose}}{{end}}{{if .HasReceipt}}{{if .Purpose}} &middot; {{end}}{{$.Text.HasReceipt}}{{end}}</span>
+      </span>
+      <span class="tabular amt {{.Class}}">{{.Amount}}</span>
+    </li>
+    {{end}}
+  </ul>
+  {{end}}
+</section>
+{{end}}
+<script>
+// Progressive enhancement: a select submits its form on change, so the
+// buttons go. An empty "Semua" choice is left out of the URL, keeping a
+// shared link short. Without JavaScript the page is the same plain GET forms.
+const fields = document.querySelectorAll('form select, form input')
+for (const s of document.querySelectorAll('form select'))
+  s.addEventListener('change', () => {
+    for (const f of s.form.elements) if (f.name && !f.value) f.disabled = true
+    s.form.submit()
+  })
+// A page restored by Back keeps the choices made before leaving it; reset
+// the forms to what this URL rendered, and undo the disabling.
+addEventListener('pageshow', () => {
+  for (const f of fields) f.disabled = false
+  for (const f of document.forms) f.reset()
+})
+for (const b of document.querySelectorAll('form button')) b.hidden = true
+</script>
 {{template "foot" .}}{{end}}
 
 {{define "notfound"}}{{template "head" .}}
