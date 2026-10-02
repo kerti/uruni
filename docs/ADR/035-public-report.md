@@ -1,0 +1,38 @@
+# ADR-035 — Public report: one month, server-rendered, nothing the treasurer didn't mean to publish
+
+**Status:** Accepted · `draft` · [ADR index](./README.md)
+
+**Context.** PRD §7.9 says what the report is for and which filters it carries. It does not say what the page shows first, how a list with no paging stays bounded, whether receipts are public, how a Go template gets the app's look, or what "regenerate link" does to a slug that `setup.go` and `Decisions.md` both call permanent. [ADR-030](./030-multi-fund-scoping.md) already settled the address: `/report/{slug}` names its fund, and the slug is a read capability, never an authorization. Grilled 2026-10-02, at the start of M7.
+
+The framing that decides most of it: **the report is where a neighbour checks the promise that the recorded balance matches the real money.** It shows the trust signal plainly, shows what the PRD accepted making public (names, amounts, payment status), and nothing the treasurer collected for her own use.
+
+## Decision
+
+**What a visitor sees, top to bottom.** One page per month.
+
+1. **Header:** fund name, "per <date>", the total balance, the latest *cek kas* (date and *cocok*, or *selisih* with its amount, in terracotta), and the balance per purpose (Kas Utama, each open envelope, Titipan). **Not** the balance per location: how much cash sits in the treasurer's house is her working detail, not the neighbourhood's.
+2. **Transactions** for the selected month, with money-in, money-out and net totals for whatever is filtered. Rows carry the same display-time labels as Riwayat ([#257](https://github.com/kerti/uruni/issues/257)), never stored text.
+3. **Dues** for the same month: every member's status (`Belum bayar` / `Bayar sebagian` / `Lunas` / `Lunas - sudah bayar di muka`) with owed and paid amounts, straight from `DuesStatusForPeriod`. **No arrears count.** A running "Tunggakan N bulan" on a public page reads as a debtor list - close enough to nagging (PRD §4, §7.5) to stay in the app.
+4. **Envelopes:** every open envelope, plus any closed in the selected month, each as a `<details>` with the participation table [ADR-034](./034-envelope-participation.md) already defines ([#338](https://github.com/kerti/uruni/issues/338)). Older closed envelopes are reached by month.
+
+**The month is the unit; there is no paging and no all-time view.** A month is a bounded list, so the page needs no paging contract. Filters are one plain GET form - `?month=YYYY-MM&purpose=&member=&dir=in|out&dues=unpaid|partial|paid` - so a filtered view is a shareable URL and the page needs no JavaScript. `dues` filters the dues table only; the rest filter the transactions. Months offered run from the first transaction to the current month; an invalid or missing `month` reads as the current one. "Current" is reckoned in **Asia/Jakarta**, as the backups already are, never the server's clock.
+
+**Transfers.** A `between_accounts` pair is not shown and counts in no total - with locations hidden, it moves nothing a reader can see, and both legs would double the totals. A `reclass_purpose` pair (an envelope's leftover rolled into Kas Utama, a purpose correction) is **one row**, "Dipindah: <from> -> <to>", outside the in/out totals and matched by a purpose filter on either side. Folding a correction of a correction ([#280](https://github.com/kerti/uruni/issues/280)) is not part of this.
+
+**Receipts are a marker, never a file.** A row with a photo carries a small "ada nota" mark; the photo is never served from `/report`. A receipt can hold a shop's phone number, a transfer slip's account numbers or a face, and the treasurer took it for her own records - rule 6 bounds what the public sees to names, amounts, dates and notes.
+
+**Look and copy.** `html/template`, with the palette as Go constants copied from `web/src/index.css` and inlined as one `<style>` block - one request, no asset path, no Vite coupling, system fonts. Balances v2 does the same for its email and PDF and keeps the two copies aligned by comment only; here **a Go test reads `index.css` and fails on a differing value**. Rupiah formatting gets a Go `money` formatter pinned by a **golden test against strings captured from the SPA's `Intl.NumberFormat('id-ID')`**, non-breaking space included, so the report and the app can never print one amount two ways. Report copy is one Go file - the Go half of [ADR-014](./014-localization-indonesian-first.md).
+
+**Request edge.** `X-Robots-Tag: noindex, nofollow` plus the matching `<meta>`; `Referrer-Policy: no-referrer`; `Cache-Control: no-store`; no cookie set. An unknown slug is a 404 with a short Indonesian page that names no fund. No rate limit: a 32-character base62 slug is ~190 bits. A fund with nothing recorded shows its header at Rp 0 and a warm empty line.
+
+**The link lives in Pengaturan, and it can be replaced on purpose.** A "Laporan publik" card shows the link with copy and share. **"Buat tautan baru"** sits behind a confirm that says the old link stops working, and is `POST /api/fund/report-slug`: a fresh slug from the same generator, the old one an ordinary 404 - no history, no redirect, because a redirect would defeat the point. "Never rotates" was always about *casual* change; this is the leak escape hatch PRD §7.9 asked for, and the comments that said otherwise are corrected with it.
+
+**A monthly PDF follows in a later alpha.** `/report/{slug}/pdf?month=YYYY-MM`, public on the same slug and headers, linked from the page's footer: the full month with no filters, for the treasurer to print or drop in the group chat for neighbours who never open links. Pure Go (`go-pdf/fpdf`, as Balances v2's ADR-0045), fed by the same assembly as the page, so it adds a renderer and no new reads. It is beyond PRD §7.9 as first written, and the PRD now says so.
+
+## Consequences
+
+- One read-only assembly in `internal/ledger` builds the month's report (header, rows, dues, envelopes) and both renderers consume it; nothing is recomputed in a template.
+- The report queues behind writes on the single connection (`Decisions.md`, SQLite only) - accepted at this scale.
+- Two hand-kept copies now exist and each has a test guarding it: the palette (against `index.css`) and the rupiah format (against `Intl`). The row labels are a third copy, of `copy/id.ts`'s label builders, guarded only by review - the price of a page with no JavaScript.
+- `fpdf` and an embedded font are the first dependency the report adds, and arrive with the PDF slice, not before.
+- ADR-014 and [ADR-015](./015-testing-money-math.md) drop their `draft` tags when the report's strings and its Playwright spec land; this ADR's drops with the PDF slice.

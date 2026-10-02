@@ -124,6 +124,8 @@ Key entities:
 - The page shows **everything by default** and provides **filters** (month, purpose/tag, member, income/expense, dues status) so a public viewer can sift the data easily.
 - Safeguards: long random slug + `noindex` so it isn't discoverable via search; an optional **"regenerate link"** escape hatch if it ever leaks (not required in normal use). Trade-off accepted: because everything is shown, the public URL exposes member names and payment status — fine given the treasurer's transparency intent and the low sensitivity of the data.
 - This is a shared page, not a member portal — no accounts, no member logins.
+- One month at a time: a header with the balance, the latest cash check and the balance per purpose (never per location), that month's transactions, its dues status (no arrears count), and its envelopes. Receipts show as a marker only; the photos stay private. The link is shown, copied and replaced from Pengaturan. ([ADR-035](./ADR/035-public-report.md))
+- A **monthly PDF** of the same report, downloadable from the page, for printing or posting in the group chat. (Added 2026-10-02.)
 
 ### 7.10 Backup / export
 - A full-data **backup file** (canonical: the data as JSON plus every receipt photo) that the treasurer can download anytime, and **restore from inside the app** — no server access needed. An **Excel workbook** is offered as an optional, human-readable secondary format (not necessarily re-importable).
