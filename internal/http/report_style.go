@@ -95,5 +95,17 @@ ul.txns li{align-items:flex-start}
 .amt{font-weight:600;white-space:nowrap}
 .amt.in{color:var(--success)}
 .amt.move{color:var(--muted-foreground)}
+ul.dues li{flex-direction:column;gap:6px}
+.dues .head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}
+.dues .name{font-weight:500;overflow-wrap:anywhere;min-width:0}
+.dues .tier{font-size:14px;color:var(--muted-foreground);overflow-wrap:anywhere}
+.dues .amounts{display:flex;justify-content:space-between;gap:12px;font-size:14px;color:var(--muted-foreground)}
+.dues .through{text-align:right;font-size:14px;color:var(--success)}
+.badge{border-radius:999px;padding:4px 10px;font-size:14px;font-weight:500;white-space:nowrap;flex-shrink:0}
+.sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.badge.unpaid{background:var(--muted);color:var(--muted-foreground)}
+.badge.partial{background:var(--attention-soft);color:var(--attention)}
+.badge.paid{background:var(--success-soft);color:var(--success)}
+.badge.paid_in_advance{background:var(--success-soft);color:var(--success);box-shadow:inset 0 0 0 1px var(--success)}
 .empty{background:var(--card);border-radius:8px;padding:16px;color:var(--muted-foreground);text-align:center}
 `
