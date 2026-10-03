@@ -80,6 +80,13 @@ func init() {
 // db.FileIdentity). nil skips the check, which is what tests that do not
 // exercise it pass.
 func New(assets fs.FS, build Build, l *ledger.Ledger, q store.Querier, sqlDB *sql.DB, dbFileCheck func() error, logger *slog.Logger, au *auth.Auth, baseURL string, uploadsDir string, backupDir string) http.Handler {
+	return newWithClock(assets, build, l, q, sqlDB, dbFileCheck, logger, au, baseURL, uploadsDir, backupDir, time.Now)
+}
+
+// newWithClock is New with the wall clock injectable (#379): the report and
+// every route that reckons a calendar day or month read now, so a test can
+// pick the instant. New passes time.Now.
+func newWithClock(assets fs.FS, build Build, l *ledger.Ledger, q store.Querier, sqlDB *sql.DB, dbFileCheck func() error, logger *slog.Logger, au *auth.Auth, baseURL string, uploadsDir string, backupDir string, now func() time.Time) http.Handler {
 	r := chi.NewRouter()
 	r.Use(middleware.Recoverer)
 	r.Use(requestLogger(logger))
@@ -102,13 +109,14 @@ func New(assets fs.FS, build Build, l *ledger.Ledger, q store.Querier, sqlDB *sq
 		uploadsDir:     uploadsDir,
 		backupDir:      backupDir,
 		baseURL:        strings.TrimRight(baseURL, "/"),
+		now:            now,
 		restoreStage:   newRestoreStage(),
 	}).routes)
 
 	// The public report (ADR-035): outside /api, so no session manager ever
 	// wraps it - no cookie is read or set - and the slug alone names the fund
 	// (ADR-030's carve-out).
-	r.Get("/report/{slug}", reportHandler(l, q, logger, time.Now))
+	r.Get("/report/{slug}", reportHandler(l, q, logger, now))
 
 	// The SPA fallback is chi's NotFound handler (ADR-021): chi checks every
 	// registered route first, so /api and /report still 404 instead of falling

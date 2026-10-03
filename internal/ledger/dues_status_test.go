@@ -9,6 +9,7 @@ import (
 
 	"github.com/kerti/uruni/internal/money"
 	"github.com/kerti/uruni/internal/store"
+	"github.com/kerti/uruni/internal/tz"
 )
 
 // --- fixture helpers local to this file -----------------------------------
@@ -648,7 +649,7 @@ func TestOutstandingDuesForMemberReturnsUnpaidAndPartialOldestFirstMatchingDuesS
 		t.Fatalf("PostDuesPayments() = %v, want no error", err)
 	}
 
-	rows, err := l.OutstandingDuesForMember(ctx, f.fundID, memberID, "2026-03")
+	rows, err := l.OutstandingDuesForMember(ctx, f.fundID, memberID, "2026-03", time.Time{})
 	if err != nil {
 		t.Fatalf("OutstandingDuesForMember() = %v, want no error", err)
 	}
@@ -713,7 +714,7 @@ func TestOutstandingDuesForMemberFullyPaidMemberReturnsEmpty(t *testing.T) {
 		t.Fatalf("PostDuesPayments() = %v, want no error", err)
 	}
 
-	rows, err := l.OutstandingDuesForMember(ctx, f.fundID, memberID, "2026-02")
+	rows, err := l.OutstandingDuesForMember(ctx, f.fundID, memberID, "2026-02", time.Time{})
 	if err != nil {
 		t.Fatalf("OutstandingDuesForMember() = %v, want no error", err)
 	}
@@ -730,7 +731,7 @@ func TestOutstandingDuesForMemberTierLessMemberReturnsEmpty(t *testing.T) {
 
 	memberID := createDuesMember(t, q, f.fundID, duesMemberParams{name: "Jane"}) // tierID left nil
 
-	rows, err := l.OutstandingDuesForMember(ctx, f.fundID, memberID, "2026-06")
+	rows, err := l.OutstandingDuesForMember(ctx, f.fundID, memberID, "2026-06", time.Time{})
 	if err != nil {
 		t.Fatalf("OutstandingDuesForMember() = %v, want no error", err)
 	}
@@ -755,7 +756,7 @@ func TestOutstandingDuesForMemberNilJoinedOnAndRatelessTierReturnsEmpty(t *testi
 		name: "Jane", tierID: &tierID, // joinedOn left nil
 	})
 
-	rows, err := l.OutstandingDuesForMember(ctx, f.fundID, memberID, "2026-06")
+	rows, err := l.OutstandingDuesForMember(ctx, f.fundID, memberID, "2026-06", time.Time{})
 	if err != nil {
 		t.Fatalf("OutstandingDuesForMember() = %v, want no error", err)
 	}
@@ -780,7 +781,7 @@ func TestOutstandingDuesForMemberJoinedAfterThroughReturnsEmpty(t *testing.T) {
 		name: "Jane", tierID: &tierID, joinedOn: &joinedOn,
 	})
 
-	rows, err := l.OutstandingDuesForMember(ctx, f.fundID, memberID, "2026-06")
+	rows, err := l.OutstandingDuesForMember(ctx, f.fundID, memberID, "2026-06", time.Time{})
 	if err != nil {
 		t.Fatalf("OutstandingDuesForMember() = %v, want no error", err)
 	}
@@ -800,7 +801,7 @@ func TestOutstandingDuesForMemberJoinedOnBoundsTheStart(t *testing.T) {
 	joinedOn := "2026-03-20"                        // joined mid-month
 	memberID := createDuesMember(t, q, f.fundID, duesMemberParams{name: "Jane", tierID: &tierID, joinedOn: &joinedOn})
 
-	rows, err := l.OutstandingDuesForMember(ctx, f.fundID, memberID, "2026-04")
+	rows, err := l.OutstandingDuesForMember(ctx, f.fundID, memberID, "2026-04", time.Time{})
 	if err != nil {
 		t.Fatalf("OutstandingDuesForMember() = %v, want no error", err)
 	}
@@ -831,7 +832,7 @@ func TestOutstandingDuesForMemberInactiveOnBoundsTheEnd(t *testing.T) {
 
 	// through reaches well past inactive_on's month - the answer must stop
 	// at 2026-03 regardless.
-	rows, err := l.OutstandingDuesForMember(ctx, f.fundID, memberID, "2026-06")
+	rows, err := l.OutstandingDuesForMember(ctx, f.fundID, memberID, "2026-06", time.Time{})
 	if err != nil {
 		t.Fatalf("OutstandingDuesForMember() = %v, want no error", err)
 	}
@@ -858,7 +859,7 @@ func TestOutstandingDuesForMemberSkipsPeriodWithNoEffectiveRateWithoutTruncating
 	joinedOn := "2026-01-01"                        // joined well before the rate exists
 	memberID := createDuesMember(t, q, f.fundID, duesMemberParams{name: "Jane", tierID: &tierID, joinedOn: &joinedOn})
 
-	rows, err := l.OutstandingDuesForMember(ctx, f.fundID, memberID, "2026-05")
+	rows, err := l.OutstandingDuesForMember(ctx, f.fundID, memberID, "2026-05", time.Time{})
 	if err != nil {
 		t.Fatalf("OutstandingDuesForMember() = %v, want no error", err)
 	}
@@ -885,7 +886,7 @@ func TestOutstandingDuesForMemberThroughBoundsTheEnd(t *testing.T) {
 	joinedOn := "2026-01-01"
 	memberID := createDuesMember(t, q, f.fundID, duesMemberParams{name: "Jane", tierID: &tierID, joinedOn: &joinedOn})
 
-	rows, err := l.OutstandingDuesForMember(ctx, f.fundID, memberID, "2026-02")
+	rows, err := l.OutstandingDuesForMember(ctx, f.fundID, memberID, "2026-02", time.Time{})
 	if err != nil {
 		t.Fatalf("OutstandingDuesForMember() = %v, want no error", err)
 	}
@@ -897,40 +898,47 @@ func TestOutstandingDuesForMemberThroughBoundsTheEnd(t *testing.T) {
 	}
 }
 
-// An omitted through defaults to the server's current month - proved here by
-// comparing the omitted call against an explicit through set to
-// time.Now()'s own period, rather than asserting a hard-coded period the
-// test's own run date would eventually make wrong.
-func TestOutstandingDuesForMemberOmittedThroughDefaultsToCurrentMonth(t *testing.T) {
-	l := newTestLedger(t)
-	f := newFixture(t, l)
-	q := store.New(l.db)
-	ctx := context.Background()
-
-	tierID := createDuesTier(t, q, f.fundID, "Tier A")
-	createDuesRate(t, q, tierID, 25_000, "2020-01")
-	memberID := createDuesMember(t, q, f.fundID, duesMemberParams{name: "Jane", tierID: &tierID}) // joined_on nil: always was a member
-
-	omitted, err := l.OutstandingDuesForMember(ctx, f.fundID, memberID, "")
-	if err != nil {
-		t.Fatalf("OutstandingDuesForMember(through=\"\") = %v, want no error", err)
+// An omitted through defaults to the current month in Jakarta, not the
+// host's zone (#379): production runs UTC, so on a month's last day from
+// 17:00:00Z the treasurer is already in the next month. The instants below
+// straddle that boundary by one second, and a year boundary too; the walk's
+// last period is the period "now" fell in.
+func TestOutstandingDuesForMemberOmittedThroughDefaultsToTheJakartaMonth(t *testing.T) {
+	cases := []struct {
+		name string
+		now  time.Time
+		want string
+	}{
+		{"last second of the month in Jakarta", time.Date(2026, 8, 31, 16, 59, 59, 0, time.UTC), "2026-08"},
+		{"first second of the next month in Jakarta", time.Date(2026, 8, 31, 17, 0, 0, 0, time.UTC), "2026-09"},
+		{"year boundary, before", time.Date(2026, 12, 31, 16, 59, 59, 0, time.UTC), "2026-12"},
+		{"year boundary, after", time.Date(2026, 12, 31, 17, 0, 0, 0, time.UTC), "2027-01"},
+		{"same instant written in another zone", time.Date(2026, 9, 1, 0, 0, 0, 0, time.FixedZone("UTC+7", 7*3600)), "2026-09"},
 	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			l := newTestLedger(t)
+			f := newFixture(t, l)
+			q := store.New(l.db)
 
-	explicit, err := l.OutstandingDuesForMember(ctx, f.fundID, memberID, time.Now().Format(duesPeriodLayout))
-	if err != nil {
-		t.Fatalf("OutstandingDuesForMember(through=now) = %v, want no error", err)
-	}
+			tierID := createDuesTier(t, q, f.fundID, "Tier A")
+			createDuesRate(t, q, tierID, 25_000, "2020-01")
+			memberID := createDuesMember(t, q, f.fundID, duesMemberParams{name: "Jane", tierID: &tierID}) // joined_on nil: always was a member
 
-	if len(omitted) != len(explicit) {
-		t.Fatalf("omitted through returned %d rows, explicit current-month through returned %d - want equal",
-			len(omitted), len(explicit))
-	}
-	if len(omitted) == 0 {
-		t.Fatal("expected at least one outstanding period (member has never paid since 2020) to compare")
-	}
-	if last := omitted[len(omitted)-1].Period; last != explicit[len(explicit)-1].Period {
-		t.Errorf("omitted through's last period = %q, explicit current-month through's last period = %q, want equal",
-			last, explicit[len(explicit)-1].Period)
+			rows, err := l.OutstandingDuesForMember(context.Background(), f.fundID, memberID, "", tc.now)
+			if err != nil {
+				t.Fatalf("OutstandingDuesForMember(through=\"\", now=%s) = %v, want no error", tc.now.Format(time.RFC3339), err)
+			}
+			if len(rows) == 0 {
+				t.Fatal("expected outstanding periods (member has never paid since 2020), got none")
+			}
+			if got := rows[len(rows)-1].Period; got != tc.want {
+				t.Errorf("last outstanding period at %s = %q, want %q", tc.now.Format(time.RFC3339), got, tc.want)
+			}
+			if got := CurrentDuesPeriod(tc.now); got != tc.want {
+				t.Errorf("CurrentDuesPeriod(%s) = %q, want %q", tc.now.Format(time.RFC3339), got, tc.want)
+			}
+		})
 	}
 }
 
@@ -945,7 +953,7 @@ func TestOutstandingDuesForMemberRejectsMalformedThrough(t *testing.T) {
 			tierID := createDuesTier(t, q, f.fundID, "Tier A")
 			memberID := createDuesMember(t, q, f.fundID, duesMemberParams{name: "Jane", tierID: &tierID})
 
-			_, err := l.OutstandingDuesForMember(ctx, f.fundID, memberID, through)
+			_, err := l.OutstandingDuesForMember(ctx, f.fundID, memberID, through, time.Time{})
 			if !errors.Is(err, ErrInvalidArgument) {
 				t.Errorf("OutstandingDuesForMember(through=%q) = %v, want an error wrapping ErrInvalidArgument", through, err)
 			}
@@ -963,7 +971,7 @@ func TestOutstandingDuesForMemberUnknownMemberIsNotFound(t *testing.T) {
 	f := newFixture(t, l)
 	ctx := context.Background()
 
-	_, err := l.OutstandingDuesForMember(ctx, f.fundID, 999_999, "2026-06")
+	_, err := l.OutstandingDuesForMember(ctx, f.fundID, 999_999, "2026-06", time.Time{})
 	if !errors.Is(err, sql.ErrNoRows) {
 		t.Errorf("OutstandingDuesForMember(unknown member) = %v, want an error wrapping sql.ErrNoRows", err)
 	}
@@ -987,7 +995,7 @@ func TestOutstandingDuesForMemberMidYearPromotionAppliesCurrentTierToPastPeriods
 	joinedOn := "2026-01-01"
 	memberID := createDuesMember(t, q, f.fundID, duesMemberParams{name: "Jane", tierID: &tierB, joinedOn: &joinedOn})
 
-	rows, err := l.OutstandingDuesForMember(ctx, f.fundID, memberID, "2026-01")
+	rows, err := l.OutstandingDuesForMember(ctx, f.fundID, memberID, "2026-01", time.Time{})
 	if err != nil {
 		t.Fatalf("OutstandingDuesForMember() = %v, want no error", err)
 	}
@@ -1020,12 +1028,15 @@ type arrearsPeriods struct {
 
 func newArrearsPeriods(t *testing.T) arrearsPeriods {
 	t.Helper()
-	now := time.Now()
+	// First of the month in Jakarta (#379): no host-zone dependence, and no
+	// AddDate day overflow from the 31st.
+	now := time.Now().In(tz.Jakarta)
+	first := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, tz.Jakarta)
 	return arrearsPeriods{
-		twoBack: now.AddDate(0, -2, 0).Format(duesPeriodLayout),
-		oneBack: now.AddDate(0, -1, 0).Format(duesPeriodLayout),
-		current: now.Format(duesPeriodLayout),
-		ahead:   now.AddDate(0, 1, 0).Format(duesPeriodLayout),
+		twoBack: first.AddDate(0, -2, 0).Format(duesPeriodLayout),
+		oneBack: first.AddDate(0, -1, 0).Format(duesPeriodLayout),
+		current: first.Format(duesPeriodLayout),
+		ahead:   first.AddDate(0, 1, 0).Format(duesPeriodLayout),
 	}
 }
 

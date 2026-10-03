@@ -9,6 +9,7 @@ import (
 
 	"github.com/kerti/uruni/internal/money"
 	"github.com/kerti/uruni/internal/store"
+	"github.com/kerti/uruni/internal/tz"
 )
 
 // DuesStatus classifies one member's standing for one dues period, derived
@@ -179,6 +180,15 @@ type OutstandingDuesPeriod struct {
 	Status     DuesStatus
 }
 
+// CurrentDuesPeriod is the dues period ("YYYY-MM") that now falls in, reckoned
+// in Asia/Jakarta (tz.Jakarta), never the server's own zone: production runs
+// UTC, so between 17:00 and 24:00 UTC on a month's last day the host clock
+// still reads the old month while the treasurer is already in the next one
+// (#379). The report's "current month" is reckoned the same way (ADR-035).
+func CurrentDuesPeriod(now time.Time) string {
+	return now.In(tz.Jakarta).Format(duesPeriodLayout)
+}
+
 // OutstandingDuesForMember returns, oldest first, every period fundID's
 // member memberID still owes something for - the same per-member,
 // per-period derivation DuesStatusForPeriod applies to its whole roster,
@@ -188,10 +198,9 @@ type OutstandingDuesPeriod struct {
 // failure to find something.
 //
 // through bounds the end of the range ("YYYY-MM"); an empty string defaults
-// to the server's current month. The caller, not this method, decides
-// whether that default is right for its request - the HTTP handler is what
-// actually cares that the server does not share the treasurer's timezone
-// (issue #186).
+// to CurrentDuesPeriod(now), the current month in Jakarta. now is the current
+// instant, passed in so a test can stand on either side of a Jakarta month
+// boundary (as ReportParams.Now does); it is read only when through is empty.
 //
 // The range:
 //   - End: through. A member who left owes nothing for a month after they
@@ -239,9 +248,9 @@ type OutstandingDuesPeriod struct {
 // This is a read: it uses l.q directly rather than withTx, for the same
 // reason DuesStatusForPeriod does (ADR-027) - a handful of consistent
 // SELECTs with no write in between.
-func (l *Ledger) OutstandingDuesForMember(ctx context.Context, fundID, memberID int64, through string) ([]OutstandingDuesPeriod, error) {
+func (l *Ledger) OutstandingDuesForMember(ctx context.Context, fundID, memberID int64, through string, now time.Time) ([]OutstandingDuesPeriod, error) {
 	if through == "" {
-		through = time.Now().Format(duesPeriodLayout)
+		through = CurrentDuesPeriod(now)
 	} else if err := validateDuesPeriod(through); err != nil {
 		return nil, err
 	}
@@ -362,12 +371,11 @@ func (l *Ledger) OutstandingDuesForMember(ctx context.Context, fundID, memberID 
 // currentPeriod for OutstandingDuesForMember to return.
 //
 // currentPeriod is the caller's own answer to "what period is this right
-// now", passed in rather than computed here with a second time.Now() call.
+// now", passed in rather than computed here with a second clock read.
 // GET /api/members carries no ?through= or ?period= for a caller to
 // override (ADR-032 keeps a period selector out of Anggota entirely, which
-// is the whole reason this route needed a badge instead), so there is
-// nothing "the treasurer's timezone" (#186) could mean here that isn't
-// already the server's current month - the same default
+// is the whole reason this route needed a badge instead), so the caller
+// computes it with CurrentDuesPeriod - the Jakarta month, the same default
 // OutstandingDuesForMember itself falls back to when through is omitted.
 // The handler computes that one value once per request and hands it to
 // every member's call on the page, plus to ListMembersPage's own
@@ -391,7 +399,7 @@ func (l *Ledger) ArrearsMonthsForMember(ctx context.Context, fundID, memberID in
 	}
 	through := t.AddDate(0, -1, 0).Format(duesPeriodLayout)
 
-	outstanding, err := l.OutstandingDuesForMember(ctx, fundID, memberID, through)
+	outstanding, err := l.OutstandingDuesForMember(ctx, fundID, memberID, through, time.Time{}) // through is non-empty: now is never read
 	if err != nil {
 		return 0, err
 	}

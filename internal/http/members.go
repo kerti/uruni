@@ -12,6 +12,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/kerti/uruni/internal/ledger"
 	"github.com/kerti/uruni/internal/store"
 )
 
@@ -206,7 +207,7 @@ func (a *api) listMembers(w http.ResponseWriter, r *http.Request) {
 
 	params := store.ListMembersPageParams{
 		FundID:        fund.ID,
-		CurrentPeriod: time.Now().Format(duesPeriodLayout),
+		CurrentPeriod: ledger.CurrentDuesPeriod(a.now()),
 		PageLimit:     membersPageSize + 1,
 	}
 
