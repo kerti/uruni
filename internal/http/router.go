@@ -117,6 +117,7 @@ func newWithClock(assets fs.FS, build Build, l *ledger.Ledger, q store.Querier, 
 	// wraps it - no cookie is read or set - and the slug alone names the fund
 	// (ADR-030's carve-out).
 	r.Get("/report/{slug}", reportHandler(l, q, logger, now))
+	r.Get("/report/{slug}/pdf", reportPDFHandler(l, q, logger, now))
 
 	// The SPA fallback is chi's NotFound handler (ADR-021): chi checks every
 	// registered route first, so /api and /report still 404 instead of falling

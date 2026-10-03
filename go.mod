@@ -5,6 +5,7 @@ go 1.26.5
 require (
 	github.com/alexedwards/scs/v2 v2.9.0
 	github.com/go-chi/chi/v5 v5.3.2
+	github.com/go-pdf/fpdf v0.9.0
 	github.com/pressly/goose/v3 v3.28.0
 	golang.org/x/crypto v0.57.0
 	golang.org/x/image v0.46.0

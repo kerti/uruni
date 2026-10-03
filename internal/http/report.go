@@ -48,6 +48,8 @@ type reportPage struct {
 	Check    *reportCheck
 	Purposes []reportPurpose
 
+	PDFHref string
+
 	PrevMonth    string
 	NextMonth    string
 	PrevHref     string
@@ -177,18 +179,8 @@ func reportHandler(l *ledger.Ledger, q store.Querier, logger *slog.Logger, now f
 	return func(w http.ResponseWriter, r *http.Request) {
 		setReportHeaders(w)
 
-		fund, err := q.GetFundByReportSlug(r.Context(), chi.URLParam(r, "slug"))
-		if errors.Is(err, sql.ErrNoRows) {
-			renderReport(w, logger, http.StatusNotFound, "notfound", reportPage{
-				Title: reportText.NotFoundTitle,
-				Style: reportStyle(),
-				Text:  reportText,
-			})
-			return
-		}
-		if err != nil {
-			logger.Error("report: looking up the slug", "error", err)
-			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		fund, ok := reportFundOr404(w, r, q, logger)
+		if !ok {
 			return
 		}
 
@@ -198,8 +190,31 @@ func reportHandler(l *ledger.Ledger, q store.Querier, logger *slog.Logger, now f
 			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 			return
 		}
+		// The link is to the month the page shows, which is the ledger's own
+		// validated "YYYY-MM", never the raw query value.
+		page.PDFHref = "/report/" + url.PathEscape(fund.ReportSlug) + "/pdf?month=" + url.QueryEscape(page.Month)
 		renderReport(w, logger, http.StatusOK, "report", page)
 	}
+}
+
+// reportFundOr404 is the lookup both report routes open with: the fund the
+// slug names, or the page's own short 404 (naming no fund) and ok == false.
+func reportFundOr404(w http.ResponseWriter, r *http.Request, q store.Querier, logger *slog.Logger) (store.Fund, bool) {
+	fund, err := q.GetFundByReportSlug(r.Context(), chi.URLParam(r, "slug"))
+	switch {
+	case err == nil:
+		return fund, true
+	case errors.Is(err, sql.ErrNoRows):
+		renderReport(w, logger, http.StatusNotFound, "notfound", reportPage{
+			Title: reportText.NotFoundTitle,
+			Style: reportStyle(),
+			Text:  reportText,
+		})
+	default:
+		logger.Error("report: looking up the slug", "error", err)
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+	}
+	return store.Fund{}, false
 }
 
 // assembleReportPage reads the filter, the month and the fund's emptiness,

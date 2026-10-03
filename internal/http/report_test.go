@@ -44,6 +44,7 @@ func newReportFixture(t *testing.T, fundName string) reportFixture {
 	}
 	r := chi.NewRouter()
 	r.Get("/report/{slug}", reportHandler(l, store.New(sqlDB), testLogger(), func() time.Time { return reportNow }))
+	r.Get("/report/{slug}/pdf", reportPDFHandler(l, store.New(sqlDB), testLogger(), func() time.Time { return reportNow }))
 	return reportFixture{db: sqlDB, router: r, l: l, fund: res.Fund, cashID: res.Accounts[0].ID, mainID: res.MainPurposeID}
 }
 

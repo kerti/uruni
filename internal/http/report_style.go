@@ -128,5 +128,7 @@ ul.people li{flex-direction:column;gap:2px;box-shadow:none;background:var(--back
 .people .amount{font-weight:500;white-space:nowrap;flex-shrink:0}
 .state{font-size:14px;color:var(--muted-foreground)}
 .state.sudah{color:var(--success)}
+.pdf{text-align:center}
+.pdf a{color:var(--primary);font-weight:500;text-decoration:none;display:inline-block;padding:10px 0}
 .empty{background:var(--card);border-radius:8px;padding:16px;color:var(--muted-foreground);text-align:center}
 `

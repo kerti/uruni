@@ -11,7 +11,8 @@
 <body>
 <main>{{end}}
 
-{{define "foot"}}</main>
+{{define "foot"}}{{if .PDFHref}}<p class="muted pdf"><a href="{{.PDFHref}}" rel="nofollow" download>{{.Text.PDFDownload}}</a></p>
+{{end}}</main>
 </body>
 </html>
 {{end}}
