@@ -11,8 +11,15 @@
     "model + effortLevel pin the orchestrator (ADR-023). They are a default, not",
     "enforcement: /effort, --effort and CLAUDE_CODE_EFFORT_LEVEL all win, and the",
     "env var wins over everything. Role agents pin their own effort in",
-    ".claude/agents/*.md frontmatter, which overrides the session level."
+    ".claude/agents/*.md frontmatter, which overrides the session level.",
+    "CLAUDE_CODE_FORK_SUBAGENT=0 turns off the built-in 'fork' agent type. While",
+    "forks are on, Claude Code drops run_in_background from the Agent tool and",
+    "runs every subagent in the background, so CLAUDE.md's foreground rule could",
+    "not be followed. Uruni delegates only to its role agents, never to forks."
   ],
+  "env": {
+    "CLAUDE_CODE_FORK_SUBAGENT": "0"
+  },
   "model": "opus",
   "effortLevel": "medium",
   "permissions": {
