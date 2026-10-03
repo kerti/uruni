@@ -56,16 +56,22 @@ export default function Home({
   refetchKey,
   onReconcile,
   onOpenIncidental,
+  onViewTransactionsFor,
   onViewHistory,
 }: {
   refetchKey: unknown
   onReconcile: () => void
   /** A tap on one of the purpose-breakdown's incidental rows (M6.33) -
    * carries that envelope's purpose id, mirroring the record form's own
-   * `onRecordFor` contract (Incidentals.tsx). Titipan rows have no envelope
-   * to open, so they never call this. Router-agnostic, same
-   * caller-owns-navigation contract as the two callbacks below. */
+   * `onRecordFor` contract (Incidentals.tsx). Kas Utama and Titipan rows
+   * have no envelope to open, so they call onViewTransactionsFor instead.
+   * Router-agnostic, same caller-owns-navigation contract as the
+   * callbacks below. */
   onOpenIncidental: (purposeId: number) => void
+  /** A tap on the Kas Utama or a Titipan row: Riwayat's Transaksi tab
+   * filtered to that purpose (#262's `?purpose=<id>`). Same
+   * caller-owns-navigation contract as the callbacks around it. */
+  onViewTransactionsFor: (purposeId: number) => void
   /** Riwayat's Transaksi tab (M6.23) - the "lihat semua" link below. Same
    * caller-owns-navigation contract as the two callbacks above: this screen
    * stays router-agnostic and App.tsx supplies the actual navigate() call. */
@@ -191,14 +197,14 @@ export default function Home({
 
       <section className="flex flex-col gap-2">
         <h2 className="text-sm font-semibold text-muted-foreground">{copy.home.locationsHeading}</h2>
-        <ul className="flex flex-col gap-2">
+        {/* A plain list of names and figures, not cards (2026-10-03): a
+            card reads as a button, and a location row opens nothing -
+            Riwayat has no location filter to send it to. */}
+        <ul className="flex flex-col divide-y divide-border">
           {balances.accounts.map((account: AccountBalance) => (
-            <li
-              key={account.id}
-              className="flex items-center justify-between rounded-lg bg-card px-4 py-3 shadow-card ring-1 ring-foreground/10"
-            >
-              <span>{account.name}</span>
-              <span className="tabular font-medium">{formatIDR(account.balance)}</span>
+            <li key={account.id} className="flex min-h-11 items-center justify-between gap-3 py-2">
+              <span className="min-w-0 truncate">{account.name}</span>
+              <span className="tabular shrink-0 font-medium">{formatIDR(account.balance)}</span>
             </li>
           ))}
         </ul>
@@ -228,53 +234,27 @@ export default function Home({
         <section className="flex flex-col gap-2">
           <h2 className="text-sm font-semibold text-muted-foreground">{copy.home.purposeBreakdownHeading}</h2>
           <ul className="flex flex-col gap-2">
-            {purposeRows.map((purpose: PurposeBalance) =>
-              purpose.kind === 'incidental' ? (
-                // Tapping an incidental row opens that envelope
-                // (Incidentals.tsx's detail view, preselected via
-                // ?purpose=<id> - the same pattern /record?purpose=<id>
-                // already uses).
-                <li key={purpose.id}>
-                  <button
-                    type="button"
-                    onClick={() => onOpenIncidental(purpose.id)}
-                    className="flex min-h-11 w-full items-center justify-between gap-3 rounded-lg bg-card px-4 py-3 text-left shadow-card ring-1 ring-foreground/10 select-none"
-                  >
-                    <span>{purpose.name}</span>
-                    {/* The chevron is the only thing distinguishing this row
-                        from the Titipan row beside it, which is otherwise
-                        identical and does not open. Colour would collide
-                        with the palette's semantics (green cocok, terracotta
-                        selisih - and this section already spends terracotta
-                        on a negative balance), and a badge would read as
-                        "needs attention" next to Anggota's Tunggakan badge.
-                        The chevron says the one thing that is actually
-                        different: this opens. Same element, same sizing as
-                        ReconciliationBanner.tsx directly above. */}
-                    <span className="flex items-center gap-2">
-                      <PurposeAmount balance={purpose.balance} />
-                      <ChevronRight aria-hidden="true" className="size-5 shrink-0 opacity-70" />
-                    </span>
-                  </button>
-                </li>
-              ) : (
-                // Kas Utama and Titipan: always shown, no envelope to open
-                // and no open/closed concept - a plain row, not a button.
-                <li
-                  key={purpose.id}
-                  className="flex min-h-11 items-center justify-between gap-3 rounded-lg bg-card px-4 py-3 shadow-card ring-1 ring-foreground/10"
+            {purposeRows.map((purpose: PurposeBalance) => (
+              // Every row opens something, so every row is a button with a
+              // chevron: an open envelope opens that envelope (Incidentals.tsx's
+              // detail view, ?purpose=<id>); Kas Utama and Titipan have no
+              // envelope, so they open their own history in Riwayat.
+              <li key={purpose.id}>
+                <button
+                  type="button"
+                  onClick={() => (purpose.kind === 'incidental' ? onOpenIncidental(purpose.id) : onViewTransactionsFor(purpose.id))}
+                  className="flex min-h-11 w-full items-center justify-between gap-3 rounded-lg bg-card px-4 py-3 text-left shadow-card ring-1 ring-foreground/10 select-none"
                 >
                   <span>{purpose.name}</span>
+                  {/* Same element, same sizing as ReconciliationBanner.tsx
+                      directly above. */}
                   <span className="flex items-center gap-2">
                     <PurposeAmount balance={purpose.balance} />
-                    {/* Holds the chevron's width so every amount in the
-                        list shares one right edge - a column that steps in
-                        and out by row kind reads as a mistake. */}
-                    <span aria-hidden="true" className="size-5 shrink-0" />
+                    <ChevronRight aria-hidden="true" className="size-5 shrink-0 opacity-70" />
                   </span>
-                </li>
-              ),
-            )}
+                </button>
+              </li>
+            ))}
           </ul>
         </section>
       )}

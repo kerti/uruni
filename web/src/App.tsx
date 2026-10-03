@@ -438,6 +438,7 @@ function AuthedGate({ onLoggedOut }: { onLoggedOut: () => void }) {
               refetchKey={refetchKey}
               onReconcile={() => navigate('/reconcile')}
               onOpenIncidental={(purposeId) => navigate(`/incidentals?purpose=${purposeId}`)}
+              onViewTransactionsFor={(purposeId) => navigate(`/history/transactions?purpose=${purposeId}`)}
               onViewHistory={() => navigate('/history/transactions')}
             />
           </Shell>
