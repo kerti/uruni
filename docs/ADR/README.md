@@ -38,8 +38,8 @@ Standing decisions that no ADR owns go in [`../Decisions.md`](../Decisions.md).
 | [011](./011-receipt-photos-local-volume.md) | Receipt photos: local volume | implemented |
 | [012](./012-backup-and-export.md) | Backup & export implementation | `draft` |
 | [013](./013-scheduling-in-process.md) | Scheduling: in-process | implemented |
-| [014](./014-localization-indonesian-first.md) | Localization: Indonesian-first, strings centralized | `draft` |
-| [015](./015-testing-money-math.md) | Testing: prioritize the money math | `draft` |
+| [014](./014-localization-indonesian-first.md) | Localization: Indonesian-first, strings centralized | implemented |
+| [015](./015-testing-money-math.md) | Testing: prioritize the money math | implemented |
 | [016](./016-deployment-targets-reference-infra.md) | Deployment targets & reference infra | implemented |
 | [017](./017-cicd-github-actions.md) | CI/CD: GitHub Actions | implemented |
 | [018](./018-release-and-versioning.md) | Release & versioning: tag-driven SemVer, operator upgrade contract | implemented |
@@ -58,7 +58,7 @@ Standing decisions that no ADR owns go in [`../Decisions.md`](../Decisions.md).
 | [031](./031-posting-to-a-closed-incidental.md) | A closed envelope refuses postings, and reopening is the way back | implemented |
 | [032](./032-two-level-navigation.md) | Two-level navigation: five noun slots, one privileged verb | `draft` |
 | [033](./033-correcting-a-posted-purpose.md) | A posted row's peruntukan can be corrected | implemented |
-| [034](./034-envelope-participation.md) | Envelope participation: named contributions, derived from the ledger | `draft` |
+| [034](./034-envelope-participation.md) | Envelope participation: named contributions, derived from the ledger | implemented |
 | [035](./035-public-report.md) | Public report: one month, server-rendered, nothing the treasurer didn't mean to publish | `draft` |
 | [036](./036-moving-money-between-purposes.md) | Moving money between purposes, and saying why it moved | `draft` |
 

@@ -1,6 +1,6 @@
 # ADR-034 — Envelope participation: named contributions, derived from the ledger
 
-**Status:** Accepted · `draft` · partly supersedes [ADR-029](./029-reversing-a-dues-payment.md) (the reversal's width) · [ADR index](./README.md)
+**Status:** Accepted · implemented at M7 ([#338](https://github.com/kerti/uruni/issues/338)) · partly supersedes [ADR-029](./029-reversing-a-dues-payment.md) (the reversal's width) · change only by adding a superseding ADR · [ADR index](./README.md)
 
 **Context.** An envelope often asks every member for the same figure — a sunatan, a death in the neighbourhood — and the treasurer needs to see who has given and who has not ([#211](https://github.com/kerti/uruni/issues/211)). The schema made that unrepresentable on purpose: `"transaction"`'s CHECKs let only a dues payment (and its ADR-029 reversal) carry `member_id`, and `incidental.target_amount` is a total for the envelope, not an expectation of anyone. Grilled 2026-09-30 and pulled from M7 into M6 ahead of the backups epic, so the export's golden fixture ([#323](https://github.com/kerti/uruni/issues/323)) pins the schema after this change rather than bumping `format_version` straight after it.
 

@@ -35,6 +35,10 @@ const (
 // surface.
 const seedE2EFundName = "Kas RT Uji Coba"
 
+// seedE2EEnvelope is the one envelope the fixture opens; report.spec.ts reads
+// it on the public report.
+const seedE2EEnvelope = "Amplop Uji Laporan"
+
 // seedE2E resets, migrates and seeds the database at URUNI_DB with a small,
 // fixed fixture: one fund, a cash and a bank account, a registered treasurer
 // login, two members on one dues tier with a current rate, and an opening
@@ -117,6 +121,15 @@ func seedE2E(ctx context.Context) error {
 		}); err != nil {
 			return fmt.Errorf("creating e2e member %q: %w", name, err)
 		}
+	}
+
+	// One open envelope with nothing in it, for report.spec.ts: the public
+	// report lists open envelopes in their opening month. Empty on purpose -
+	// no money moves, so no other spec's balances or amounts change.
+	if _, err := l.OpenIncidental(ctx, ledger.OpenIncidentalParams{
+		FundID: setup.Fund.ID, Occasion: seedE2EEnvelope, OpenedOn: occurredOn,
+	}); err != nil {
+		return fmt.Errorf("opening the e2e envelope: %w", err)
 	}
 
 	return nil
