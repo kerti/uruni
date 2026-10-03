@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 	"testing/fstest"
+	"time"
 
 	"github.com/kerti/uruni/internal/auth"
 	"github.com/kerti/uruni/internal/ledger"
@@ -57,7 +58,14 @@ func testRouter(t *testing.T) http.Handler {
 // postLogin or postLogout directly, never this.
 func authedRouterFor(t *testing.T, sqlDB *sql.DB) http.Handler {
 	t.Helper()
-	r := New(testAssets(), testBuild, ledger.New(sqlDB), store.New(sqlDB), sqlDB, nil, testLogger(), auth.New(sqlDB), "", t.TempDir(), t.TempDir())
+	return authedRouterAt(t, sqlDB, time.Now)
+}
+
+// authedRouterAt is authedRouterFor with the router's clock pinned (#379), so
+// a test can stand on either side of a Jakarta month boundary.
+func authedRouterAt(t *testing.T, sqlDB *sql.DB, now func() time.Time) http.Handler {
+	t.Helper()
+	r := newWithClock(testAssets(), testBuild, ledger.New(sqlDB), store.New(sqlDB), sqlDB, nil, testLogger(), auth.New(sqlDB), "", t.TempDir(), t.TempDir(), now)
 
 	reg := postRegister(t, r, "treasurer@example.org", "correct-horse-battery")
 	if reg.Code != http.StatusCreated {

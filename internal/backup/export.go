@@ -19,8 +19,10 @@ import (
 // ZipFilename is the download's own name (GET /api/backup, ADR-012), dated
 // so a second download never lands as "uruni(1).zip" beside the first. The
 // app's own download names the file with the treasurer's local date instead
-// (web/src/lib/backup.ts) - the server's clock may be UTC, a day behind in
-// WIB before 07:00 - so this is the name a direct request gets.
+// (web/src/lib/backup.ts); this is the name a direct request gets. exportedOn
+// is formatted in whatever zone it carries, so the caller converts it first:
+// the handler passes the instant in tz.Jakarta (#379), since the server's
+// clock may be UTC, a day behind in WIB before 07:00.
 func ZipFilename(exportedOn time.Time) string {
 	return "uruni-" + exportedOn.Format("2006-01-02") + ".zip"
 }

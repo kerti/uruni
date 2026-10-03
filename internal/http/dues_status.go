@@ -110,7 +110,7 @@ func (a *api) getOutstandingDues(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	periods, err := a.ledger.OutstandingDuesForMember(r.Context(), fund.ID, memberID, r.URL.Query().Get("through"))
+	periods, err := a.ledger.OutstandingDuesForMember(r.Context(), fund.ID, memberID, r.URL.Query().Get("through"), a.now())
 	if err != nil {
 		mapLedgerError(w, a.logger, err)
 		return

@@ -7,6 +7,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"time"
 
 	"github.com/alexedwards/scs/v2"
 	"github.com/go-chi/chi/v5"
@@ -63,6 +64,14 @@ type api struct {
 	// transaction spanning virtually every table. See router.go's New for
 	// why this cannot be reached through ledger or queries alone.
 	sqlDB *sql.DB
+
+	// now is the clock every handler that reckons a calendar day or month
+	// reads (#379), injectable so a test can stand on either side of a
+	// Jakarta month boundary. Production is time.Now; the handler converts
+	// to tz.Jakarta itself, as the report does. Instants (created_at,
+	// session expiry) keep calling time.Now directly - no calendar day
+	// hangs on them.
+	now func() time.Time
 
 	// restoreStage is #325's own one-slot stash between the upload/inspect
 	// step and the confirm step - restore.go's own doc comment explains the
