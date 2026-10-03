@@ -140,7 +140,7 @@ The docs/tooling/CI skeleton was reviewed before its first commit. Most of it st
 
 ### Third-party attribution — open, due at M1 (2026-08-09)
 
-Uruni goes **out** under AGPL-3.0; the question is what comes **in**. Everything the stack calls for is permissive — Go stdlib (BSD-3), `modernc.org/sqlite` (BSD-3), goose (MIT), React / Vite / Tailwind / Radix / shadcn-ui / lucide (MIT) — so there is no inbound-vs-outbound licence conflict to resolve, and no copyleft dependency forcing anything. **Confirm this at M1 rather than assuming it**, since it is the moment `go.mod` and `package-lock.json` first exist.
+Uruni goes **out** under AGPL-3.0; the question is what comes **in**. Everything the stack calls for is permissive — Go stdlib (BSD-3), `modernc.org/sqlite` (BSD-3), goose (MIT), React / Vite / Tailwind / Radix / shadcn-ui / lucide (MIT) — so there is no inbound-vs-outbound licence conflict to resolve, and no copyleft dependency forcing anything. M7 adds `go-pdf/fpdf` (MIT) and a subset of Noto Sans (OFL-1.1) embedded for the report PDF ([#378](https://github.com/kerti/uruni/issues/378)); OFL travels as `internal/http/fonts/OFL.txt` beside the font, inside the binary. **Confirm this at M1 rather than assuming it**, since it is the moment `go.mod` and `package-lock.json` first exist.
 
 What *is* an unmet obligation: MIT and BSD both require their copyright notice to travel with redistributions, and the release artifact is a single binary that **embeds the built SPA** — so shipping the image redistributes bundled MIT-licensed JavaScript with no notice attached. This is unresolved, not decided:
 

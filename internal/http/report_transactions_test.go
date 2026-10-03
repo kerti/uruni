@@ -259,9 +259,10 @@ func TestReportReceiptIsAMarkerNeverALink(t *testing.T) {
 			t.Errorf("body contains %q; no receipt URL, id or path may reach the report", leak)
 		}
 	}
-	// The only links on the page are the month steps.
+	// The only links on the page are the month steps and the PDF download
+	// (#378), which is the month's file and nothing about a receipt.
 	for _, m := range regexp.MustCompile(`<a [^>]*href="([^"]*)"`).FindAllStringSubmatch(body, -1) {
-		if !strings.HasPrefix(m[1], "?month=") {
+		if !strings.HasPrefix(m[1], "?month=") && !regexp.MustCompile(`^/report/[^/]+/pdf\?month=\d{4}-\d{2}$`).MatchString(m[1]) {
 			t.Errorf("unexpected link %q", m[1])
 		}
 	}

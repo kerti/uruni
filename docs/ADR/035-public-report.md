@@ -1,6 +1,6 @@
 # ADR-035 — Public report: one month, server-rendered, nothing the treasurer didn't mean to publish
 
-**Status:** Accepted · `draft` · [ADR index](./README.md)
+**Status:** Accepted · implemented at M7 ([#378](https://github.com/kerti/uruni/issues/378)) · change only by adding a superseding ADR · [ADR index](./README.md)
 
 **Context.** PRD §7.9 says what the report is for and which filters it carries. It does not say what the page shows first, how a list with no paging stays bounded, whether receipts are public, how a Go template gets the app's look, or what "regenerate link" does to a slug that `setup.go` and `Decisions.md` both call permanent. [ADR-030](./030-multi-fund-scoping.md) already settled the address: `/report/{slug}` names its fund, and the slug is a read capability, never an authorization. Grilled 2026-10-02, at the start of M7.
 
