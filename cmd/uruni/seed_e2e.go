@@ -14,6 +14,7 @@ import (
 	"github.com/kerti/uruni/internal/ledger"
 	"github.com/kerti/uruni/internal/money"
 	"github.com/kerti/uruni/internal/store"
+	"github.com/kerti/uruni/internal/tz"
 )
 
 // seedE2EEmail and seedE2EPassword are the treasurer login every e2e spec
@@ -85,7 +86,7 @@ func seedE2E(ctx context.Context) error {
 	// #230's uniform rule: the cash account's opening balance is born with it,
 	// inside SetUpFund's own transaction, rather than posted afterward through
 	// a standalone call that no longer exists.
-	occurredOn := time.Now().Format("2006-01-02")
+	occurredOn := time.Now().In(tz.Jakarta).Format("2006-01-02") // the treasurer's day, not the host's (#379)
 	setup, err := l.SetUpFund(ctx, ledger.SetUpFundParams{
 		FundName: seedE2EFundName,
 		Accounts: []ledger.AccountInput{

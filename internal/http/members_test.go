@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/kerti/uruni/internal/ledger"
+	"github.com/kerti/uruni/internal/tz"
 )
 
 func postMember(t *testing.T, r http.Handler, req memberRequest) *httptest.ResponseRecorder {
@@ -826,8 +827,12 @@ func TestGetMembersRowShowsCurrentRateWhenOneIsEffective(t *testing.T) {
 // pinned to a hard-coded calendar month eventually becomes a fixture about
 // the past.
 func arrearsMonthPeriods() (twoBack, oneBack, current string) {
-	now := time.Now()
-	return now.AddDate(0, -2, 0).Format("2006-01"), now.AddDate(0, -1, 0).Format("2006-01"), now.Format("2006-01")
+	// First of the month in Jakarta, the zone the server reckons the current
+	// period in (#379): no host-zone dependence, and no AddDate day overflow
+	// from the 31st.
+	now := time.Now().In(tz.Jakarta)
+	first := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, tz.Jakarta)
+	return first.AddDate(0, -2, 0).Format("2006-01"), first.AddDate(0, -1, 0).Format("2006-01"), first.Format("2006-01")
 }
 
 // The full round trip for #233's own headline acceptance criterion: a
@@ -862,7 +867,7 @@ func TestGetMembersRowArrearsMonthsReflectsPartPaidEarlierPeriod(t *testing.T) {
 		t.Fatalf("decoding member response: %v", err)
 	}
 
-	today := time.Now().Format("2006-01-02")
+	today := time.Now().In(tz.Jakarta).Format("2006-01-02")
 	if rec := postDuesPayment(t, r, duesPaymentRequest{
 		AccountID: setup.CashAccountID(t), PurposeID: setup.MainPurposeID, MemberID: member.ID,
 		OccurredOn: today,

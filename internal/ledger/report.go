@@ -62,9 +62,9 @@ type ReportParams struct {
 
 	// Now is the current instant, injectable so a test can stand on either
 	// side of a Jakarta month boundary; the zero value means time.Now(). It is
-	// a field rather than a Ledger setting because the report is the only
-	// ledger read that reckons a calendar day, and backup already passes its
-	// clock as an argument the same way (WriteDump, EnsureBootDump).
+	// a field rather than a Ledger setting so the clock is an argument, the
+	// way backup passes its own (WriteDump, EnsureBootDump) and
+	// OutstandingDuesForMember takes its now.
 	Now time.Time
 }
 

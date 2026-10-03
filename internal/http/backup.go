@@ -20,11 +20,11 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"time"
 
 	"github.com/go-chi/chi/v5"
 
 	"github.com/kerti/uruni/internal/backup"
+	"github.com/kerti/uruni/internal/tz"
 )
 
 // resolveStoredBackupPath validates name against backup.ValidDumpName and
@@ -174,7 +174,7 @@ func (a *api) downloadBackup(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/zip")
-	w.Header().Set("Content-Disposition", `attachment; filename="`+backup.ZipFilename(time.Now())+`"`)
+	w.Header().Set("Content-Disposition", `attachment; filename="`+backup.ZipFilename(a.now().In(tz.Jakarta))+`"`)
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write(zipBytes)
 }
