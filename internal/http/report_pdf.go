@@ -115,16 +115,29 @@ type pdfDoc struct {
 }
 
 // pdfSafe drops what fpdf cannot carry: its UTF-8 font map ends at U+FFFF, so
-// a rune above it - an emoji in a fund name or a note - panics inside Output.
-// The emoji presentation selector and the zero-width joiner go with it, being
-// only the remains of such an emoji; the embedded font draws neither.
+// a rune above it - an emoji in a fund, member or envelope name - panics
+// inside Output. The emoji presentation selector and the zero-width joiner go
+// with it, being only the remains of such an emoji; the embedded font draws
+// neither. Where something was dropped, the spaces that sat around it close
+// up - "Kas RT 05 X - Laporan" reads "Kas RT 05 - Laporan", not with two
+// spaces - and none is left at either end. Text with nothing to drop comes
+// back untouched.
 func pdfSafe(s string) string {
-	return strings.Map(func(r rune) rune {
+	dropped := false
+	out := strings.Map(func(r rune) rune {
 		if r > 0xFFFF || r == 0xFE0F || r == 0x200D {
+			dropped = true
 			return -1
 		}
 		return r
 	}, s)
+	if !dropped {
+		return s
+	}
+	for strings.Contains(out, "  ") {
+		out = strings.ReplaceAll(out, "  ", " ")
+	}
+	return strings.Trim(out, " ")
 }
 
 // CellFormat, SplitText and SetTitle are every way text reaches fpdf here;

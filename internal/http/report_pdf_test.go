@@ -369,9 +369,37 @@ func TestReportPDFSurvivesRunesBeyondTheBMP(t *testing.T) {
 	}
 	writeSamplePDF(t, rec.Body.Bytes())
 	text := strings.Join(pdfText(t, rec.Body.Bytes()), "\n")
+	runs := pdfText(t, rec.Body.Bytes())
 	for _, want := range []string{"Kas RT 05", "Halal bihalal"} {
-		if !strings.Contains(text, want) {
-			t.Errorf("PDF text has no %q; runs:\n%s", want, text)
+		if !pdfHas(runs, want) {
+			t.Errorf("PDF text has no run %q; runs:\n%s", want, text)
+		}
+	}
+	// The space before a dropped emoji closes up with the one after it.
+	if !strings.Contains(text, "Kas RT 05 \u00b7 ") {
+		t.Errorf("footer does not read %q; runs:\n%s", "Kas RT 05 \u00b7 ", text)
+	}
+	if strings.Contains(text, "  ") {
+		t.Errorf("a dropped emoji left a double space; runs:\n%s", text)
+	}
+}
+
+func TestPDFSafe(t *testing.T) {
+	for _, tc := range []struct{ in, want string }{
+		{"Kas RT 05", "Kas RT 05"},
+		{"Kas RT 05 \U0001F3E0", "Kas RT 05"},
+		{"\U0001F3E0 Kas RT 05", "Kas RT 05"},
+		{"Kas \U0001F3E0 RT 05", "Kas RT 05"},
+		{"Kas \U0001F3E0\U0001F333 RT 05", "Kas RT 05"},
+		{"Halal bihalal \U0001F319\uFE0F", "Halal bihalal"},
+		{"Keluarga \U0001F468\u200D\U0001F469\u200D\U0001F467 Budi", "Keluarga Budi"},
+		{"\U0001F3E0", ""},
+		// Nothing dropped: the text comes back exactly, spaces and all.
+		{"Rp\u00a050.000  tunai ", "Rp\u00a050.000  tunai "},
+		{"Caf\u00e9 \u2615", "Caf\u00e9 \u2615"},
+	} {
+		if got := pdfSafe(tc.in); got != tc.want {
+			t.Errorf("pdfSafe(%q) = %q, want %q", tc.in, got, tc.want)
 		}
 	}
 }
