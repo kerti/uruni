@@ -44,6 +44,14 @@
 </section>
 {{end}}
 
+{{if .Owed}}
+<section aria-label="{{.Text.OwedLabel}}">
+  <ul class="rows">
+    <li><span>{{.Text.OwedLabel}}</span><span class="tabular">{{.Owed}}</span></li>
+  </ul>
+</section>
+{{end}}
+
 <nav class="months" id="months" aria-label="{{.Text.MonthLabel}}">
   <div class="step">
     {{if .PrevHref}}<a href="{{.PrevHref}}" rel="nofollow">{{.Text.MonthPrev}}</a>{{else}}<span></span>{{end}}

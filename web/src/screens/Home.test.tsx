@@ -38,6 +38,7 @@ function money(amount: number): string {
 // closed) does not.
 const balances = {
   fund_total: 1_450_000,
+  owed_to_members: 0,
   accounts: [
     { id: 1, kind: 'cash', name: 'Tunai', balance: 950_000 },
     { id: 2, kind: 'bank', name: 'Bank lama (nonaktif)', balance: 500_000 },
@@ -142,14 +143,32 @@ function stubHome({
 describe('Home', () => {
   it('renders the balance hero from fund_total, formatted with formatIDR', async () => {
     vi.stubGlobal('fetch', stubHome())
-    render(<Home refetchKey="1" onReconcile={vi.fn()} onOpenIncidental={vi.fn()} onViewTransactionsFor={vi.fn()} onViewHistory={vi.fn()} />)
+    render(
+      <Home
+        refetchKey="1"
+        onReconcile={vi.fn()}
+        onOpenIncidental={vi.fn()}
+        onViewTransactionsFor={vi.fn()}
+        onViewHistory={vi.fn()}
+        onViewOwed={vi.fn()}
+      />,
+    )
 
     expect(await screen.findByText(money(1_450_000))).toBeInTheDocument()
   })
 
   it('renders every account balances.accounts returns, in the order returned', async () => {
     vi.stubGlobal('fetch', stubHome())
-    render(<Home refetchKey="1" onReconcile={vi.fn()} onOpenIncidental={vi.fn()} onViewTransactionsFor={vi.fn()} onViewHistory={vi.fn()} />)
+    render(
+      <Home
+        refetchKey="1"
+        onReconcile={vi.fn()}
+        onOpenIncidental={vi.fn()}
+        onViewTransactionsFor={vi.fn()}
+        onViewHistory={vi.fn()}
+        onViewOwed={vi.fn()}
+      />,
+    )
 
     await screen.findByText('Tunai')
     expect(screen.getByText(money(950_000))).toBeInTheDocument()
@@ -159,7 +178,16 @@ describe('Home', () => {
 
   it('shows "last checked" from a reconciliation that has already been taken', async () => {
     vi.stubGlobal('fetch', stubHome({ latest: 'ok' }))
-    render(<Home refetchKey="1" onReconcile={vi.fn()} onOpenIncidental={vi.fn()} onViewTransactionsFor={vi.fn()} onViewHistory={vi.fn()} />)
+    render(
+      <Home
+        refetchKey="1"
+        onReconcile={vi.fn()}
+        onOpenIncidental={vi.fn()}
+        onViewTransactionsFor={vi.fn()}
+        onViewHistory={vi.fn()}
+        onViewOwed={vi.fn()}
+      />,
+    )
 
     expect(await screen.findByText(copy.reconciliation.matched)).toBeInTheDocument()
     expect(screen.queryByText(copy.reconciliation.neverChecked)).not.toBeInTheDocument()
@@ -173,7 +201,14 @@ describe('Home', () => {
     vi.stubGlobal('fetch', stubHome())
     const onReconcile = vi.fn()
     render(
-      <Home refetchKey="1" onReconcile={onReconcile} onOpenIncidental={vi.fn()} onViewTransactionsFor={vi.fn()} onViewHistory={vi.fn()} />,
+      <Home
+        refetchKey="1"
+        onReconcile={onReconcile}
+        onOpenIncidental={vi.fn()}
+        onViewTransactionsFor={vi.fn()}
+        onViewHistory={vi.fn()}
+        onViewOwed={vi.fn()}
+      />,
     )
 
     await userEvent.click(await screen.findByText(copy.reconciliation.matched))
@@ -185,7 +220,16 @@ describe('Home', () => {
   // it must render the first-run copy, never ErrorState.
   it('treats a 404 not_found from /api/reconciliations/latest as first-run, not an error', async () => {
     vi.stubGlobal('fetch', stubHome({ latest: 'not_found' }))
-    render(<Home refetchKey="1" onReconcile={vi.fn()} onOpenIncidental={vi.fn()} onViewTransactionsFor={vi.fn()} onViewHistory={vi.fn()} />)
+    render(
+      <Home
+        refetchKey="1"
+        onReconcile={vi.fn()}
+        onOpenIncidental={vi.fn()}
+        onViewTransactionsFor={vi.fn()}
+        onViewHistory={vi.fn()}
+        onViewOwed={vi.fn()}
+      />,
+    )
 
     expect(await screen.findByText(copy.reconciliation.neverChecked)).toBeInTheDocument()
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
@@ -196,7 +240,16 @@ describe('Home', () => {
 
   it('renders the most recent transactions, newest first', async () => {
     vi.stubGlobal('fetch', stubHome())
-    render(<Home refetchKey="1" onReconcile={vi.fn()} onOpenIncidental={vi.fn()} onViewTransactionsFor={vi.fn()} onViewHistory={vi.fn()} />)
+    render(
+      <Home
+        refetchKey="1"
+        onReconcile={vi.fn()}
+        onOpenIncidental={vi.fn()}
+        onViewTransactionsFor={vi.fn()}
+        onViewHistory={vi.fn()}
+        onViewOwed={vi.fn()}
+      />,
+    )
 
     const items = await screen.findAllByText(/Rp/)
     // GET /api/transactions answers newest-first itself now (#225) - the
@@ -211,7 +264,16 @@ describe('Home', () => {
 
   it('labels each recent entry with its purpose and note, from the balances response', async () => {
     vi.stubGlobal('fetch', stubHome())
-    render(<Home refetchKey="1" onReconcile={vi.fn()} onOpenIncidental={vi.fn()} onViewTransactionsFor={vi.fn()} onViewHistory={vi.fn()} />)
+    render(
+      <Home
+        refetchKey="1"
+        onReconcile={vi.fn()}
+        onOpenIncidental={vi.fn()}
+        onViewTransactionsFor={vi.fn()}
+        onViewHistory={vi.fn()}
+        onViewOwed={vi.fn()}
+      />,
+    )
 
     // purpose_id 11 is 'Kas Utama' in balances.purposes - both entries carry
     // it, so both rows are labelled without a fifth request (the third is
@@ -225,7 +287,16 @@ describe('Home', () => {
   it('refreshes when the app comes back to the foreground, without blanking the screen', async () => {
     const fetchMock = stubHome()
     vi.stubGlobal('fetch', fetchMock)
-    render(<Home refetchKey="1" onReconcile={vi.fn()} onOpenIncidental={vi.fn()} onViewTransactionsFor={vi.fn()} onViewHistory={vi.fn()} />)
+    render(
+      <Home
+        refetchKey="1"
+        onReconcile={vi.fn()}
+        onOpenIncidental={vi.fn()}
+        onViewTransactionsFor={vi.fn()}
+        onViewHistory={vi.fn()}
+        onViewOwed={vi.fn()}
+      />,
+    )
     await screen.findByText(money(1_450_000))
 
     const callsBefore = fetchMock.mock.calls.length
@@ -253,6 +324,7 @@ describe('Home', () => {
         onOpenIncidental={vi.fn()}
         onViewTransactionsFor={vi.fn()}
         onViewHistory={onViewHistory}
+        onViewOwed={vi.fn()}
       />,
     )
 
@@ -264,13 +336,27 @@ describe('Home', () => {
     const fetchMock = stubHome()
     vi.stubGlobal('fetch', fetchMock)
     const { rerender } = render(
-      <Home refetchKey="1" onReconcile={vi.fn()} onOpenIncidental={vi.fn()} onViewTransactionsFor={vi.fn()} onViewHistory={vi.fn()} />,
+      <Home
+        refetchKey="1"
+        onReconcile={vi.fn()}
+        onOpenIncidental={vi.fn()}
+        onViewTransactionsFor={vi.fn()}
+        onViewHistory={vi.fn()}
+        onViewOwed={vi.fn()}
+      />,
     )
     await screen.findByText(money(1_450_000))
 
     const callsBefore = fetchMock.mock.calls.length
     rerender(
-      <Home refetchKey="2" onReconcile={vi.fn()} onOpenIncidental={vi.fn()} onViewTransactionsFor={vi.fn()} onViewHistory={vi.fn()} />,
+      <Home
+        refetchKey="2"
+        onReconcile={vi.fn()}
+        onOpenIncidental={vi.fn()}
+        onViewTransactionsFor={vi.fn()}
+        onViewHistory={vi.fn()}
+        onViewOwed={vi.fn()}
+      />,
     )
 
     await waitFor(() => expect(fetchMock.mock.calls.length).toBeGreaterThan(callsBefore))
@@ -281,7 +367,14 @@ describe('Home', () => {
     it('renders a Titipan (pass_through) purpose row with its balance', async () => {
       vi.stubGlobal('fetch', stubHome())
       render(
-        <Home refetchKey="1" onReconcile={vi.fn()} onOpenIncidental={vi.fn()} onViewTransactionsFor={vi.fn()} onViewHistory={vi.fn()} />,
+        <Home
+          refetchKey="1"
+          onReconcile={vi.fn()}
+          onOpenIncidental={vi.fn()}
+          onViewTransactionsFor={vi.fn()}
+          onViewHistory={vi.fn()}
+          onViewOwed={vi.fn()}
+        />,
       )
 
       await screen.findByText(copy.home.purposeBreakdownHeading)
@@ -292,7 +385,14 @@ describe('Home', () => {
     it('renders an open incidental purpose row with its balance', async () => {
       vi.stubGlobal('fetch', stubHome())
       render(
-        <Home refetchKey="1" onReconcile={vi.fn()} onOpenIncidental={vi.fn()} onViewTransactionsFor={vi.fn()} onViewHistory={vi.fn()} />,
+        <Home
+          refetchKey="1"
+          onReconcile={vi.fn()}
+          onOpenIncidental={vi.fn()}
+          onViewTransactionsFor={vi.fn()}
+          onViewHistory={vi.fn()}
+          onViewOwed={vi.fn()}
+        />,
       )
 
       await screen.findByText(copy.home.purposeBreakdownHeading)
@@ -306,7 +406,14 @@ describe('Home', () => {
     it('does not render a closed incidental', async () => {
       vi.stubGlobal('fetch', stubHome())
       render(
-        <Home refetchKey="1" onReconcile={vi.fn()} onOpenIncidental={vi.fn()} onViewTransactionsFor={vi.fn()} onViewHistory={vi.fn()} />,
+        <Home
+          refetchKey="1"
+          onReconcile={vi.fn()}
+          onOpenIncidental={vi.fn()}
+          onViewTransactionsFor={vi.fn()}
+          onViewHistory={vi.fn()}
+          onViewOwed={vi.fn()}
+        />,
       )
 
       await screen.findByText(copy.home.purposeBreakdownHeading)
@@ -319,7 +426,14 @@ describe('Home', () => {
     it('renders Kas Utama first, with its own balance rather than the fund total', async () => {
       vi.stubGlobal('fetch', stubHome())
       render(
-        <Home refetchKey="1" onReconcile={vi.fn()} onOpenIncidental={vi.fn()} onViewTransactionsFor={vi.fn()} onViewHistory={vi.fn()} />,
+        <Home
+          refetchKey="1"
+          onReconcile={vi.fn()}
+          onOpenIncidental={vi.fn()}
+          onViewTransactionsFor={vi.fn()}
+          onViewHistory={vi.fn()}
+          onViewOwed={vi.fn()}
+        />,
       )
 
       const heading = await screen.findByText(copy.home.purposeBreakdownHeading)
@@ -334,12 +448,20 @@ describe('Home', () => {
     it('renders the Kas Utama row alone when there is neither an open incidental nor a Titipan', async () => {
       const bareBalances = {
         fund_total: 1_450_000,
+        owed_to_members: 0,
         accounts: balances.accounts,
         purposes: [{ id: 11, kind: 'main', name: 'Kas Utama', balance: 1_450_000 }],
       }
       vi.stubGlobal('fetch', stubHome({ balancesOverride: bareBalances, openIncidentals: [] }))
       render(
-        <Home refetchKey="1" onReconcile={vi.fn()} onOpenIncidental={vi.fn()} onViewTransactionsFor={vi.fn()} onViewHistory={vi.fn()} />,
+        <Home
+          refetchKey="1"
+          onReconcile={vi.fn()}
+          onOpenIncidental={vi.fn()}
+          onViewTransactionsFor={vi.fn()}
+          onViewHistory={vi.fn()}
+          onViewOwed={vi.fn()}
+        />,
       )
 
       const heading = await screen.findByText(copy.home.purposeBreakdownHeading)
@@ -356,7 +478,14 @@ describe('Home', () => {
       }
       vi.stubGlobal('fetch', stubHome({ balancesOverride: negativeBalances }))
       render(
-        <Home refetchKey="1" onReconcile={vi.fn()} onOpenIncidental={vi.fn()} onViewTransactionsFor={vi.fn()} onViewHistory={vi.fn()} />,
+        <Home
+          refetchKey="1"
+          onReconcile={vi.fn()}
+          onOpenIncidental={vi.fn()}
+          onViewTransactionsFor={vi.fn()}
+          onViewHistory={vi.fn()}
+          onViewOwed={vi.fn()}
+        />,
       )
 
       const amount = await screen.findByText(money(-75_000))
@@ -376,6 +505,7 @@ describe('Home', () => {
           onOpenIncidental={onOpenIncidental}
           onViewTransactionsFor={vi.fn()}
           onViewHistory={vi.fn()}
+          onViewOwed={vi.fn()}
         />,
       )
 
@@ -394,6 +524,7 @@ describe('Home', () => {
           onOpenIncidental={onOpenIncidental}
           onViewTransactionsFor={onViewTransactionsFor}
           onViewHistory={vi.fn()}
+          onViewOwed={vi.fn()}
         />,
       )
 
@@ -410,9 +541,59 @@ describe('Home', () => {
   // destination behind a button.
   it('no longer shows a button into a standalone incidentals list', async () => {
     vi.stubGlobal('fetch', stubHome())
-    render(<Home refetchKey="1" onReconcile={vi.fn()} onOpenIncidental={vi.fn()} onViewTransactionsFor={vi.fn()} onViewHistory={vi.fn()} />)
+    render(
+      <Home
+        refetchKey="1"
+        onReconcile={vi.fn()}
+        onOpenIncidental={vi.fn()}
+        onViewTransactionsFor={vi.fn()}
+        onViewHistory={vi.fn()}
+        onViewOwed={vi.fn()}
+      />,
+    )
 
     await screen.findByText(money(1_450_000))
     expect(screen.queryByText('Lihat kegiatan insidental')).not.toBeInTheDocument()
+  })
+
+  // #406: the total owed to members who fronted an expense - a row after the
+  // purpose breakdown that opens Talangan, and nothing at all at zero.
+  describe('owed to members', () => {
+    it('shows no row while nothing is owed', async () => {
+      vi.stubGlobal('fetch', stubHome())
+      render(
+        <Home
+          refetchKey="1"
+          onReconcile={vi.fn()}
+          onOpenIncidental={vi.fn()}
+          onViewTransactionsFor={vi.fn()}
+          onViewHistory={vi.fn()}
+          onViewOwed={vi.fn()}
+        />,
+      )
+
+      await screen.findByText(money(1_450_000))
+      expect(screen.queryByText(copy.home.owedToMembers)).not.toBeInTheDocument()
+    })
+
+    it('shows the server total and opens Talangan on a tap', async () => {
+      const onViewOwed = vi.fn()
+      vi.stubGlobal('fetch', stubHome({ balancesOverride: { ...balances, owed_to_members: 75_000 } }))
+      render(
+        <Home
+          refetchKey="1"
+          onReconcile={vi.fn()}
+          onOpenIncidental={vi.fn()}
+          onViewTransactionsFor={vi.fn()}
+          onViewHistory={vi.fn()}
+          onViewOwed={onViewOwed}
+        />,
+      )
+
+      const row = await screen.findByRole('button', { name: new RegExp(copy.home.owedToMembers) })
+      expect(row).toHaveTextContent(money(75_000))
+      await userEvent.click(row)
+      expect(onViewOwed).toHaveBeenCalledTimes(1)
+    })
   })
 })

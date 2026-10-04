@@ -48,6 +48,10 @@ type reportPage struct {
 	Check    *reportCheck
 	Purposes []reportPurpose
 
+	// Owed is the total owed to members who fronted an expense, as of today
+	// like Balance; "" when nothing is owed, which hides the line (#406).
+	Owed string
+
 	PDFHref string
 
 	PrevMonth    string
@@ -413,6 +417,10 @@ func buildReportPage(r ledger.Report, empty bool) reportPage {
 			Message: reportText.Discrepancy(money.FormatIDR(rec.Difference)),
 			When:    reportText.LastChecked(reportText.longDate(rec.Date)),
 		}
+	}
+
+	if r.OwedToMembers > 0 {
+		page.Owed = money.FormatIDR(r.OwedToMembers)
 	}
 
 	for _, p := range r.PurposeBalances {

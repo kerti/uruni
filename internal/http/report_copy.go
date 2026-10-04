@@ -28,6 +28,7 @@ type reportCopy struct {
 	Discrepancy   func(amount string) string
 	NeverChecked  string
 	PurposesLabel string
+	OwedLabel     string
 
 	MonthLabel  string
 	MonthSubmit string
@@ -126,6 +127,7 @@ var reportText = reportCopy{
 	Matched:       "Kas dan catatan sudah cocok.",
 	Discrepancy:   func(amount string) string { return "Ada selisih " + amount + "." },
 	NeverChecked:  "Belum pernah dicek.",
+	OwedLabel:     "Talangan belum dibayar",
 	PurposesLabel: "Saldo per pos",
 
 	MonthLabel:  "Bulan",

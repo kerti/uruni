@@ -398,8 +398,9 @@ func (d *pdfDoc) mark(x, y, size float64) {
 // --- sections -------------------------------------------------------------
 
 // header is the page's own: fund and month, today's balance, the latest cek
-// kas and the per-pos balances. The balance and the check are as of today
-// whichever month follows (Report.AsOf), exactly as the page says.
+// kas, the per-pos balances and what is owed to members. The balance, the
+// check and the owed total are as of today whichever month follows
+// (Report.AsOf), exactly as the page says.
 func (d *pdfDoc) header(p reportPage) {
 	d.text(pdfLine{text: p.FundName, bold: true, size: 22, color: "primary"}, pdfContentW, "L")
 	d.text(pdfLine{text: reportText.PDFStatement(reportText.monthName(p.Month)), bold: true, size: 13, color: "foreground"}, pdfContentW, "L")
@@ -446,6 +447,16 @@ func (d *pdfDoc) header(p reportPage) {
 				{w: pdfContentW * 0.4, align: "R", lines: []pdfLine{{text: pu.Balance, size: pdfBodySize, color: color}}},
 			}, true)
 		}
+	}
+
+	// What the fund owes members who fronted an expense, beneath the pos it
+	// already sits inside; absent when nothing is owed, as on the page (#406).
+	if p.Owed != "" {
+		d.SetY(d.GetY() + 3)
+		d.row([]pdfCell{
+			{w: pdfContentW * 0.6, align: "L", lines: []pdfLine{{text: reportText.OwedLabel, size: pdfBodySize, color: "foreground"}}},
+			{w: pdfContentW * 0.4, align: "R", lines: []pdfLine{{text: p.Owed, size: pdfBodySize, color: "foreground"}}},
+		}, true)
 	}
 }
 

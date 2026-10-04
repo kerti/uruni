@@ -58,6 +58,7 @@ export default function Home({
   onOpenIncidental,
   onViewTransactionsFor,
   onViewHistory,
+  onViewOwed,
 }: {
   refetchKey: unknown
   onReconcile: () => void
@@ -76,6 +77,9 @@ export default function Home({
    * caller-owns-navigation contract as the two callbacks above: this screen
    * stays router-agnostic and App.tsx supplies the actual navigate() call. */
   onViewHistory: () => void
+  /** The owed-to-members row (#406): Riwayat's Talangan tab, outstanding
+   * view. Same caller-owns-navigation contract. */
+  onViewOwed: () => void
 }) {
   const [state, run] = useApi<HomeData>()
 
@@ -257,6 +261,23 @@ export default function Home({
             ))}
           </ul>
         </section>
+      )}
+
+      {/* What the fund owes members who fronted an expense (#406). The money
+          is still inside the balance above, so this is a plain row beside
+          it, never a subtraction and never an alarm - and absent at zero. */}
+      {balances.owed_to_members > 0 && (
+        <button
+          type="button"
+          onClick={onViewOwed}
+          className="flex min-h-11 w-full items-center justify-between gap-3 rounded-lg bg-card px-4 py-3 text-left shadow-card ring-1 ring-foreground/10 select-none"
+        >
+          <span>{copy.home.owedToMembers}</span>
+          <span className="flex items-center gap-2">
+            <span className="tabular font-medium">{formatIDR(balances.owed_to_members)}</span>
+            <ChevronRight aria-hidden="true" className="size-5 shrink-0 opacity-70" />
+          </span>
+        </button>
       )}
 
       {/* Everything above is the fund as it stands - balance, where it is,

@@ -10,7 +10,7 @@ The framing that decides most of it: **the report is where a neighbour checks th
 
 **What a visitor sees, top to bottom.** One page per month.
 
-1. **Header:** fund name, "per <date>", the total balance, the latest *cek kas* (date and *cocok*, or *selisih* with its amount, in terracotta), and the balance per purpose (Kas Utama, each open envelope, Titipan). **Not** the balance per location: how much cash sits in the treasurer's house is her working detail, not the neighbourhood's.
+1. **Header:** fund name, "per <date>", the total balance, the latest *cek kas* (date and *cocok*, or *selisih* with its amount, in terracotta), the balance per purpose (Kas Utama, each open envelope, Titipan), and the total owed to members for unsettled, unwaived talangan when above zero - as of today like the balance, whatever month is shown, and in the PDF's Ringkasan too (#406). **Not** the balance per location: how much cash sits in the treasurer's house is her working detail, not the neighbourhood's.
 2. **Transactions** for the selected month, with money-in, money-out and net totals for whatever is filtered. Rows carry the same display-time labels as Riwayat ([#257](https://github.com/kerti/uruni/issues/257)), never stored text, and under the label the treasurer's own note when she typed one (a settled claim's payout carries the claim's note; a "Dipindah" row, the note on its legs), as Riwayat shows it.
 3. **Dues** for the same month: every member's name, tier and status (`Belum bayar` / `Bayar sebagian` / `Lunas` / `Lunas - sudah bayar di muka`) with owed and paid amounts, straight from `DuesStatusForPeriod`. **No arrears count.** A running "Tunggakan N bulan" on a public page reads as a debtor list - close enough to nagging (PRD §4, §7.5) to stay in the app.
 4. **Envelopes:** every envelope open at some point in the selected month - for the current month, every open envelope plus any closed in it; for a past month, the envelopes as they stood then - each with its recipients, as a `<details>` with the participation table [ADR-034](./034-envelope-participation.md) already defines ([#338](https://github.com/kerti/uruni/issues/338)).
@@ -36,3 +36,9 @@ The framing that decides most of it: **the report is where a neighbour checks th
 - Two hand-kept copies now exist and each has a test guarding it: the palette (against `index.css`) and the rupiah format (against `Intl`). The row labels are a third copy, of `copy/id.ts`'s label builders, pinned by a test against strings the SPA produces - the price of a page that does not need the SPA.
 - `fpdf` and an embedded font are the first dependency the report adds, and arrive with the PDF slice, not before.
 - ADR-014 and [ADR-015](./015-testing-money-math.md) drop their `draft` tags when the report's strings and its Playwright spec land; this ADR's drops with the PDF slice.
+
+## Amendments
+
+An amendment corrects a statement of fact about the code that has since become false. It never changes a decision, a trade-off or an accepted cost — that is still a superseding ADR. See the [ADR index](./README.md) for the rule.
+
+**2026-10-05 ([#406](https://github.com/kerti/uruni/issues/406))** — the header (the PDF's *Ringkasan*) gained the total owed to members for talangan neither settled nor waived, shown only above zero and as of today like the balance. The header item read: "fund name, "per <date>", the total balance, the latest *cek kas* (date and *cocok*, or *selisih* with its amount, in terracotta), and the balance per purpose (Kas Utama, each open envelope, Titipan)." Nothing else about the header changed: it is still current whatever month is selected, and still never shows the balance per location.

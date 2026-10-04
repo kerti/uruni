@@ -111,6 +111,7 @@ Key entities:
 ### 7.7 Balance & home screen
 - Home shows: current total balance, a balance for each location, and a **reconciliation status**: "cocok" or "selisih Rp X — cek?".
 - Optional breakdown by purpose tag.
+- **What the fund owes members** who fronted an expense (talangan not yet settled or waived), as one total, only when above zero. That money is still inside the balance; showing it beside the balance keeps the balance from reading as more spendable than it is. It opens the outstanding talangan list.
 
 ### 7.8 Reconciliation (the heart of the product)
 - A "reconcile" flow the treasurer can run anytime: she enters the *actual* amount held in each active location — the cash she counted, the kas balance the bank shows her — and Uruni compares each to the recorded figure. A retired location is not asked about.
