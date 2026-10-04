@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from 'react'
-import { Check, Copy, ExternalLink, Share2 } from 'lucide-react'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { Check, Copy, Download, ExternalLink, Share2 } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -7,7 +7,9 @@ import ErrorState from '@/components/states/ErrorState'
 import Loading from '@/components/states/Loading'
 import { copy } from '@/copy/id'
 import { parseDialogTarget } from '@/lib/dialogTarget'
-import { getFund, replaceReportSlug } from '@/lib/setup'
+import { saveBlob } from '@/lib/api'
+import type { ApiError } from '@/lib/api'
+import { fetchReportPdf, getFund, replaceReportSlug } from '@/lib/setup'
 import { useApi } from '@/lib/useApi'
 import { useDialogParam } from '@/lib/useDialogParam'
 import type { Fund } from '@/lib/setup'
@@ -28,8 +30,8 @@ function absoluteUrl(reportUrl: string): string {
 
 /**
  * The Laporan publik card (#376, ADR-035; ADR-032 allotted it to Pengaturan
- * in advance): the report's link with Salin, Bagikan and a way to open it,
- * and "Buat tautan baru" behind a confirm, the escape hatch for a link that
+ * in advance): the report's link with Salin, Bagikan, a way to open it and
+ * the current month's PDF (#378), and "Buat tautan baru" behind a confirm, the escape hatch for a link that
  * leaked.
  *
  * The confirm is a dialog addressed by `?edit=report:new` like every other
@@ -75,7 +77,7 @@ export default function ReportLink() {
       ) : loadState.status === 'error' || fund === null ? (
         loadState.error && <ErrorState error={loadState.error} onRetry={() => void loadRun(getFund)} />
       ) : (
-        <LinkActions url={absoluteUrl(fund.report_url)} onRenew={() => open('report:new')} />
+        <LinkActions url={absoluteUrl(fund.report_url)} reportUrl={fund.report_url} onRenew={() => open('report:new')} />
       )}
 
       <RenewDialog
@@ -92,7 +94,7 @@ export default function ReportLink() {
   )
 }
 
-function LinkActions({ url, onRenew }: { url: string; onRenew: () => void }) {
+function LinkActions({ url, reportUrl, onRenew }: { url: string; reportUrl: string; onRenew: () => void }) {
   const [copied, setCopied] = useState(false)
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   // Feature-detected per render, not at module load: it is a property of the
@@ -155,9 +157,90 @@ function LinkActions({ url, onRenew }: { url: string; onRenew: () => void }) {
         </a>
       </Button>
 
+      <PdfButton reportUrl={reportUrl} />
+
       <Button type="button" variant="ghost" size="lg" className="w-full justify-center" onClick={onRenew}>
         {text.renew}
       </Button>
+    </div>
+  )
+}
+
+/**
+ * Unduh PDF (#378). Never a link: an installed PWA's scope is `/`, so iOS
+ * opens /report/.../pdf inside the app's own window - `download` and
+ * `target` both ignored - and the PDF replaces the shell with no way back.
+ * The app fetches the file itself and hands it to the share sheet (Save to
+ * Files, Print, WhatsApp), or saves it where files cannot be shared.
+ *
+ * Fetched when the card mounts, not on tap: iOS allows navigator.share only
+ * close to the tap, and a fetch can outlast that. If the tap does have to
+ * wait and iOS refuses, the file is ready by then and the next tap shares it.
+ */
+function PdfButton({ reportUrl }: { reportUrl: string }) {
+  const [file, setFile] = useState<File | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<ApiError | null>(null)
+
+  const load = useCallback(() => fetchReportPdf(reportUrl), [reportUrl])
+
+  useEffect(() => {
+    let live = true
+    setFile(null)
+    load().then(
+      (f) => live && setFile(f),
+      () => {
+        // A failed prefetch says nothing yet: the tap fetches again and
+        // reports what it gets.
+      },
+    )
+    return () => {
+      live = false
+    }
+  }, [load])
+
+  async function handleTap() {
+    setError(null)
+    let pdf = file
+    if (pdf === null) {
+      setBusy(true)
+      try {
+        pdf = await load()
+        setFile(pdf)
+      } catch (err) {
+        setError(err as ApiError)
+        return
+      } finally {
+        setBusy(false)
+      }
+    }
+    if (typeof navigator.canShare === 'function' && navigator.canShare({ files: [pdf] })) {
+      try {
+        await navigator.share({ files: [pdf], title: pdf.name })
+      } catch {
+        // AbortError is the treasurer closing the sheet; NotAllowedError is
+        // iOS deciding the tap was too long ago - the file is kept, so the
+        // next tap shares it at once. Neither is a failure to report.
+      }
+      return
+    }
+    saveBlob(pdf, pdf.name)
+  }
+
+  return (
+    <div className="flex flex-col gap-3">
+      <Button
+        type="button"
+        variant="outline"
+        size="lg"
+        className="w-full justify-center gap-2"
+        disabled={busy}
+        onClick={() => void handleTap()}
+      >
+        <Download aria-hidden="true" className="size-4" />
+        {text.downloadPdf}
+      </Button>
+      {error && <ErrorState error={error} />}
     </div>
   )
 }

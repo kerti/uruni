@@ -855,6 +855,9 @@ export const copy = {
       // The title Bagikan hands the phone's share sheet.
       shareTitle: 'Laporan kas',
       open: 'Buka laporan',
+      // The monthly PDF (#378): the current month, the same words as the
+      // link in the report's own footer.
+      downloadPdf: 'Unduh PDF',
       renew: 'Buat tautan baru',
       renewing: 'Membuat…',
       // The consequence, in terracotta (ADR-032), straight from the issue.

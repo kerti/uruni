@@ -14,6 +14,7 @@ var reportPalette = map[string]string{
 	"card":               "#ffffff",
 	"primary":            "#1f5d50",
 	"primary-foreground": "#ffffff",
+	"accent":             "#7bae8d",
 	"muted":              "#eeebe3",
 	"muted-foreground":   "#67757c",
 	"border":             "#e4e0d7",
@@ -44,7 +45,7 @@ func reportStyle() template.CSS {
 // reportPaletteOrder fixes the emitted order, so the page's bytes do not
 // change between requests the way ranging over a map would make them.
 var reportPaletteOrder = []string{
-	"background", "foreground", "card", "primary", "primary-foreground",
+	"background", "foreground", "card", "primary", "primary-foreground", "accent",
 	"muted", "muted-foreground", "border", "input",
 	"success", "success-soft", "attention", "attention-soft",
 }
@@ -92,6 +93,7 @@ button{border:0;background:var(--primary);color:var(--primary-foreground);paddin
 ul.txns li{align-items:flex-start}
 .what{display:flex;flex-direction:column;min-width:0}
 .label-line{font-weight:500;overflow-wrap:anywhere}
+.note{font-size:14px;overflow-wrap:anywhere;white-space:pre-line}
 .amt{font-weight:600;white-space:nowrap}
 .amt.in{color:var(--success)}
 .amt.move{color:var(--muted-foreground)}
@@ -128,5 +130,7 @@ ul.people li{flex-direction:column;gap:2px;box-shadow:none;background:var(--back
 .people .amount{font-weight:500;white-space:nowrap;flex-shrink:0}
 .state{font-size:14px;color:var(--muted-foreground)}
 .state.sudah{color:var(--success)}
+.pdf{text-align:center}
+.pdf a{color:var(--primary);font-weight:500;text-decoration:none;display:inline-block;padding:10px 0}
 .empty{background:var(--card);border-radius:8px;padding:16px;color:var(--muted-foreground);text-align:center}
 `

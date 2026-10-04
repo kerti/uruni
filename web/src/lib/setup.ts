@@ -3,7 +3,7 @@
 // see setup.go, accounts.go, dues_tiers.go, dues_rates.go and members.go for
 // the Go side of each one.
 
-import { apiFetch } from '@/lib/api'
+import { apiFetch, fetchBlob } from '@/lib/api'
 
 /** An account (location) row - cash or bank - as every route here returns it. */
 export interface Account {
@@ -358,4 +358,21 @@ export function updateDuesRate(id: number, amount: number): Promise<DuesRate> {
  * effective_from) refuses the corrected row while the wrong one stands. */
 export function deleteDuesRate(id: number): Promise<void> {
   return apiFetch<void>(`/api/dues-rates/${id}`, { method: 'DELETE' })
+}
+
+/** What the PDF is saved as when the server's Content-Disposition names nothing. */
+const REPORT_PDF_FALLBACK_NAME = 'laporan-kas.pdf'
+
+/**
+ * GET /report/{slug}/pdf - the current month's statement (#378), as a File
+ * ready for navigator.share or saveBlob, named by the server's
+ * Content-Disposition. Fetched by path, never by the absolute report_url:
+ * URUNI_BASE_URL may name another origin than the one the app is open on
+ * (a tunnel in dev), and the request must stay same-origin.
+ */
+export async function fetchReportPdf(reportUrl: string): Promise<File> {
+  const path = reportUrl.startsWith('/') ? reportUrl : new URL(reportUrl).pathname
+  const { blob, res } = await fetchBlob(`${path}/pdf`)
+  const named = /filename="([^"]+)"/.exec(res.headers.get('Content-Disposition') ?? '')
+  return new File([blob], named?.[1] ?? REPORT_PDF_FALLBACK_NAME, { type: 'application/pdf' })
 }
