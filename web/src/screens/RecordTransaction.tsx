@@ -5,7 +5,7 @@ import DateField from '@/components/DateField'
 import { dateBounds } from '@/lib/dates'
 import AmountInput from '@/components/money/AmountInput'
 import AccountPicker from '@/components/pickers/AccountPicker'
-import { OptionalMemberPicker } from '@/components/pickers/MemberPicker'
+import MemberPicker, { OptionalMemberPicker } from '@/components/pickers/MemberPicker'
 import PurposePicker from '@/components/pickers/PurposePicker'
 import ReceiptPicker from '@/components/ReceiptPicker'
 import { segmentedStackedItemClass, segmentedTrackClass } from '@/components/segmented'
@@ -23,6 +23,7 @@ import { postPurposeMove } from '@/lib/purposeMoves'
 import { postTransfer } from '@/lib/transfers'
 import { listPurposes } from '@/lib/purposes'
 import { listAllMembers } from '@/lib/setup'
+import { createReimbursement } from '@/lib/reimbursements'
 import { createTransaction } from '@/lib/transactions'
 import { useApi } from '@/lib/useApi'
 import type { Account } from '@/lib/accounts'
@@ -77,6 +78,11 @@ function todayISODate(): string {
  * is and changes what it is for, posted through POST /api/purpose-moves.
  */
 export type Direction = 'in' | 'out' | 'transfer' | 'purpose'
+
+/** What onRecorded names: a Direction, or 'reimbursement' for a Keluar that
+ * was ticked "Pengeluaran ini ditalangi" (#368) - a claim, which posts
+ * nothing to the ledger, so it has no Direction of its own. */
+export type Recorded = Direction | 'reimbursement'
 
 interface FormData {
   accounts: Account[]
@@ -137,13 +143,15 @@ export default function RecordTransaction({
   initialPurposeId,
   initialMemberId,
   initialDues = false,
+  fronted = false,
+  onFrontedChange,
   onDuesRecorded,
   onDuesCancel,
 }: {
   /** photoFailed is true only when a photo was picked and the parent
    * transaction posted successfully but the receipt upload itself failed
    * (#154) - never set for a transfer, which offers no photo field. */
-  onRecorded: (direction: Direction, photoFailed?: boolean) => void
+  onRecorded: (recorded: Recorded, photoFailed?: boolean) => void
   onCancel: () => void
   initialPurposeId?: number | null
   /** Seeds the "Dari siapa?" field (ADR-034, #211): Incidentals.tsx's own
@@ -159,6 +167,12 @@ export default function RecordTransaction({
    * since where she lands after a dues payment depends on the door she came
    * in by. initialDues opens with it chosen. */
   initialDues?: boolean
+  /** "Pengeluaran ini ditalangi" is ticked (#368): a member paid out of
+   * pocket, so this Keluar is a Talangan claim. Form mode is a route
+   * (ADR-032), so it arrives from `/record?fronted=1` and every change goes
+   * back out through onFrontedChange for the caller to write to the URL. */
+  fronted?: boolean
+  onFrontedChange?: (fronted: boolean) => void
   onDuesRecorded: () => void
   onDuesCancel?: () => void
 }) {
@@ -192,12 +206,17 @@ export default function RecordTransaction({
   // "Dari siapa? (opsional)" (ADR-034, #211) - seeded once below, alongside
   // the account/purpose defaults.
   const [memberId, setMemberId] = useState<number | null>(null)
+  // Who paid, for a claim. Apart from memberId: that one is the optional
+  // contributor of an incoming envelope entry and must never leak across.
+  const [claimMemberId, setClaimMemberId] = useState<number | null>(null)
 
   async function loadFormData(): Promise<FormData> {
     // selectable=true (ADR-031): a closed envelope's purpose is excluded,
     // since PostTransaction's own guard would now refuse a posting to it.
     // A late entry against one goes through Incidentals.tsx's reopen
     // affordance first, not this everyday picker.
+    // A claim uses the same list: settling it posts to its pos, which the
+    // same guard would refuse on a closed envelope.
     const [accounts, purposes, balances, members] = await Promise.all([listAccounts(), listPurposes(true), getBalances(), listAllMembers()])
     return { accounts, purposes, balances, members }
   }
@@ -267,6 +286,8 @@ export default function RecordTransaction({
   const submitting = submitState.status === 'loading'
   const isTransfer = direction === 'transfer'
   const isPurposeMove = direction === 'purpose'
+  // A claim moves no fund money: no location, no balance to watch.
+  const isClaim = fronted && direction === 'out' && !duesChosen
 
   // The same location on both sides moves nothing, and the ledger refuses it
   // anyway (ErrInvalidArgument). Caught here so she reads why in her own
@@ -296,14 +317,16 @@ export default function RecordTransaction({
 
   const canSubmit =
     amount > 0 &&
-    accountId !== null &&
+    (isClaim || accountId !== null) &&
     occurredOn !== '' &&
     !submitting &&
-    (isTransfer
-      ? toAccountId !== null && !sameLocation
-      : isPurposeMove
-        ? fromPurposeId !== null && toPurposeId !== null && !samePurpose && !purposeMoveTooLarge
-        : purposeId !== null)
+    (isClaim
+      ? claimMemberId !== null && purposeId !== null
+      : isTransfer
+        ? toAccountId !== null && !sameLocation
+        : isPurposeMove
+          ? fromPurposeId !== null && toPurposeId !== null && !samePurpose && !purposeMoveTooLarge
+          : purposeId !== null)
 
   // Paying the parent body is two economically different things wearing one
   // shape here (#266, PRD section 7.6): money the fund COLLECTED for the
@@ -346,7 +369,7 @@ export default function RecordTransaction({
   const chosenPurpose = loadState.data?.purposes.find((p) => p.id === purposeId) ?? null
   const chosenPurposeBalance = loadState.data?.balances.purposes.find((p) => p.id === purposeId)?.balance ?? 0
   const warnsPassThroughNegative =
-    direction === 'out' && chosenPurpose?.kind === 'pass_through' && amount > 0 && chosenPurposeBalance - amount < 0
+    direction === 'out' && !isClaim && chosenPurpose?.kind === 'pass_through' && amount > 0 && chosenPurposeBalance - amount < 0
 
   // "Dari siapa? (opsional)" (ADR-034, #211): only for money coming into an
   // open envelope - a contribution is the one shape the schema lets a
@@ -358,11 +381,37 @@ export default function RecordTransaction({
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    if (!canSubmit || accountId === null) return
+    if (!canSubmit) return
+    if (!isClaim && accountId === null) return
 
     void submitRun(async () => {
       const trimmedNote = note.trim()
       const noteOrNull = trimmedNote === '' ? null : trimmedNote
+
+      // A Talangan claim (#368) is off-ledger until it is settled: it is its
+      // own route and posts no transaction. A photo that fails to upload
+      // never rolls the claim back, as for a transaction.
+      if (isClaim) {
+        if (claimMemberId === null || purposeId === null) return null
+        const claim = await createReimbursement({
+          member_id: claimMemberId,
+          purpose_id: purposeId,
+          amount,
+          incurred_on: occurredOn,
+          note: noteOrNull,
+        })
+        let claimPhotoFailed = false
+        if (receiptFile) {
+          try {
+            await uploadReceipt('reimbursements', claim.id, receiptFile)
+          } catch {
+            claimPhotoFailed = true
+          }
+        }
+        onRecorded('reimbursement', claimPhotoFailed)
+        return claim
+      }
+      if (accountId === null) return null
 
       // A transfer is a different route, not a third kind of transaction
       // (ADR-024, ADR-027): POST /api/transfers posts the pair and the fund
@@ -447,6 +496,7 @@ export default function RecordTransaction({
   function chooseDirection(next: Direction) {
     setDirection(next)
     setDuesChosen(false)
+    if (next !== 'out' && fronted) onFrontedChange?.(false)
   }
 
   if (loadState.status === 'error' || !loadState.data) {
@@ -529,7 +579,10 @@ export default function RecordTransaction({
             variant={duesChosen ? 'default' : 'ghost'}
             aria-pressed={duesChosen}
             className={segmentedStackedItemClass(duesChosen)}
-            onClick={() => setDuesChosen(true)}
+            onClick={() => {
+              setDuesChosen(true)
+              if (fronted) onFrontedChange?.(false)
+            }}
           >
             <CalendarCheck aria-hidden="true" />
             {text.directionDues}
@@ -541,6 +594,22 @@ export default function RecordTransaction({
         <RecordDuesPayment embedded onRecorded={onDuesRecorded} onCancel={onDuesCancel ?? onCancel} />
       ) : (
         <form className="flex flex-col gap-4" onSubmit={handleSubmit} noValidate>
+          {/* Keluar only (#368): somebody paid out of pocket, so this is a
+              claim on the kas rather than money leaving it. Ticked, the form
+              loses its location and gains the member who paid. */}
+          {!duesChosen && direction === 'out' && (
+            <label className="flex items-center gap-2 font-medium">
+              <input
+                type="checkbox"
+                className="size-4 rounded border-input accent-primary"
+                checked={isClaim}
+                onChange={(event) => onFrontedChange?.(event.target.checked)}
+                disabled={submitting}
+              />
+              {text.frontedLabel}
+            </label>
+          )}
+
           <AmountInput id="record-amount" label={text.amountLabel} value={amount} onChange={setAmount} disabled={submitting} />
 
           {/* Pindah pos (ADR-036): where the money is for now, and where
@@ -616,19 +685,31 @@ export default function RecordTransaction({
           as the destination pair below does - otherwise the source's preview
           inherits the form's own gap-4 and the two read as differently
           spaced (they were). */}
-          <div className="flex flex-col gap-1.5">
-            <AccountPicker
-              id="record-account"
-              label={isTransfer ? text.fromLocationLabel : text.locationLabel}
-              accounts={loadState.data.accounts}
-              value={accountId}
-              onChange={setAccountId}
+          {isClaim ? (
+            <MemberPicker
+              id="record-claim-member"
+              label={copy.reimbursements.record.memberLabel}
+              placeholder={copy.reimbursements.record.memberPlaceholder}
+              members={loadState.data.members}
+              value={claimMemberId}
+              onChange={setClaimMemberId}
               disabled={submitting}
             />
-            {isTransfer && fromBalance !== null && (
-              <p className="text-sm text-muted-foreground">{text.locationBalance(formatIDR(fromBalance))}</p>
-            )}
-          </div>
+          ) : (
+            <div className="flex flex-col gap-1.5">
+              <AccountPicker
+                id="record-account"
+                label={isTransfer ? text.fromLocationLabel : text.locationLabel}
+                accounts={loadState.data.accounts}
+                value={accountId}
+                onChange={setAccountId}
+                disabled={submitting}
+              />
+              {isTransfer && fromBalance !== null && (
+                <p className="text-sm text-muted-foreground">{text.locationBalance(formatIDR(fromBalance))}</p>
+              )}
+            </div>
+          )}
 
           {isTransfer && (
             <div className="flex flex-col gap-1.5">

@@ -1,6 +1,37 @@
-import { expect, test } from '@playwright/test'
+import { expect, test, type Page } from '@playwright/test'
 
 import { copy } from '../src/copy/id'
+
+// Records a claim the way she does: Catat -> Keluar -> "Pengeluaran ini
+// ditalangi" -> member and amount -> Simpan (#368). Lands on Beranda with
+// the confirmation. Returns the first member's name.
+async function recordClaim(page: Page, amount: string): Promise<string> {
+  await page.getByRole('link', { name: copy.shell.nav.record }).click()
+  await expect(page.getByRole('heading', { name: copy.record.heading })).toBeVisible()
+  await page.getByRole('button', { name: copy.record.directionOut }).click()
+  // click(), not check(): the box mirrors ?fronted=1, which the router
+  // commits a tick after the click, and check() reads the state at once.
+  const fronted = page.getByLabel(copy.record.frontedLabel)
+  await fronted.click()
+  await expect(fronted).toBeChecked()
+  await expect(page).toHaveURL(/\/record\?fronted=1$/)
+  // No location while a member's own money paid: nothing leaves the kas yet.
+  await expect(page.getByLabel(copy.record.locationLabel, { exact: true })).toHaveCount(0)
+  await page.getByRole('combobox', { name: copy.reimbursements.record.memberLabel }).click()
+  const firstOption = page.getByRole('option').first()
+  const name = (await firstOption.textContent())?.trim() ?? ''
+  await firstOption.click()
+  await page.getByLabel(copy.record.amountLabel).fill(amount)
+  await page.getByRole('button', { name: copy.record.submit }).click()
+  await expect(page.getByText(copy.record.successFronted)).toBeVisible()
+  return name
+}
+
+async function openTalangan(page: Page) {
+  await page.getByRole('link', { name: copy.shell.nav.history }).click()
+  await page.getByRole('link', { name: copy.history.tabs.reimbursements }).click()
+  await expect(page.getByRole('button', { name: copy.reimbursements.outstandingTab })).toBeVisible()
+}
 
 // M6.18's own e2e spec: record a reimbursement claim, verify it appears in
 // the outstanding list, settle it and verify it disappears, then waive and
@@ -30,29 +61,10 @@ test.describe('reimbursements', () => {
     await page.getByRole('button', { name: copy.auth.login.submit }).click()
     await expect(page.getByText(copy.home.balanceHeading)).toBeVisible()
 
-    // Navigate to Riwayat's Talangan tab (#226, ADR-032) - the reimbursements
-    // screen's own former home-screen entry point moved here.
-    await page.getByRole('link', { name: copy.shell.nav.history }).click()
-    await page.getByRole('link', { name: copy.history.tabs.reimbursements }).click()
-    await expect(page.getByRole('button', { name: copy.reimbursements.outstandingTab })).toBeVisible()
+    firstMemberName = await recordClaim(page, '10000')
 
-    // Open record form
-    await page.getByRole('button', { name: copy.reimbursements.record.heading }).click()
-    await expect(page).toHaveURL(/\/reimbursements\/new$/)
-    await expect(page.getByRole('heading', { name: copy.reimbursements.record.heading })).toBeVisible()
-
-    // Pick the first member and fill amount
-    await page.getByRole('combobox', { name: copy.reimbursements.record.memberLabel }).click()
-    const firstOption = page.getByRole('option').first()
-    firstMemberName = (await firstOption.textContent())?.trim() ?? ''
-    await firstOption.click()
-    await page.getByLabel(copy.reimbursements.record.amountLabel).fill('10000')
-
-    // Submit
-    await page.getByRole('button', { name: copy.reimbursements.record.submit }).click()
-    await expect(page).toHaveURL(/\/history\/reimbursements$/)
-    await expect(page.getByText(copy.reimbursements.record.success)).toBeVisible()
-
+    // Then Riwayat's Talangan tab (#226, ADR-032), where the claim lives.
+    await openTalangan(page)
     // The claim should now be in the outstanding list
     await expect(page.getByText('Rp 10.000')).toBeVisible()
   })
@@ -104,17 +116,9 @@ test.describe('reimbursements', () => {
     await page.getByRole('button', { name: copy.auth.login.submit }).click()
     await expect(page.getByText(copy.home.balanceHeading)).toBeVisible()
 
-    await page.getByRole('link', { name: copy.shell.nav.history }).click()
-    await page.getByRole('link', { name: copy.history.tabs.reimbursements }).click()
-    await expect(page.getByRole('button', { name: copy.reimbursements.outstandingTab })).toBeVisible()
-
     // The earlier claim was settled - record a fresh one to correct (Rp 30.000).
-    await page.getByRole('button', { name: copy.reimbursements.record.heading }).click()
-    await page.getByRole('combobox', { name: copy.reimbursements.record.memberLabel }).click()
-    await page.getByRole('option').first().click()
-    await page.getByLabel(copy.reimbursements.record.amountLabel).fill('30000')
-    await page.getByRole('button', { name: copy.reimbursements.record.submit }).click()
-    await expect(page.getByText(copy.reimbursements.record.success)).toBeVisible()
+    await recordClaim(page, '30000')
+    await openTalangan(page)
     await expect(page.getByText('Rp 30.000')).toBeVisible()
 
     // Perbaiki sits in the row's "more" menu and opens the claim's own screen.
@@ -152,19 +156,10 @@ test.describe('reimbursements', () => {
     await page.getByRole('button', { name: copy.auth.login.submit }).click()
     await expect(page.getByText(copy.home.balanceHeading)).toBeVisible()
 
-    // Navigate to Riwayat's Talangan tab (#226, ADR-032).
-    await page.getByRole('link', { name: copy.shell.nav.history }).click()
-    await page.getByRole('link', { name: copy.history.tabs.reimbursements }).click()
-    await expect(page.getByRole('button', { name: copy.reimbursements.outstandingTab })).toBeVisible()
-
     // The earlier claim was settled, leaving the outstanding list empty -
     // record a fresh claim to waive. First member again, Rp 20.000.
-    await page.getByRole('button', { name: copy.reimbursements.record.heading }).click()
-    await page.getByRole('combobox', { name: copy.reimbursements.record.memberLabel }).click()
-    await page.getByRole('option').first().click()
-    await page.getByLabel(copy.reimbursements.record.amountLabel).fill('20000')
-    await page.getByRole('button', { name: copy.reimbursements.record.submit }).click()
-    await expect(page.getByText(copy.reimbursements.record.success)).toBeVisible()
+    await recordClaim(page, '20000')
+    await openTalangan(page)
     await expect(page.getByText('Rp 20.000')).toBeVisible()
 
     // Waive it: the row leaves the outstanding list and feedback confirms.

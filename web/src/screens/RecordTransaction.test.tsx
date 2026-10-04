@@ -1,5 +1,6 @@
 import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { MemoryRouter, useSearchParams } from 'react-router-dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import RecordTransaction from '@/screens/RecordTransaction'
@@ -889,5 +890,185 @@ describe('RecordTransaction: Pindah pos (ADR-036, #383)', () => {
     const posted = calls.filter(([, init]) => (init?.method ?? 'GET').toUpperCase() === 'POST').map(([input]) => String(input))
     expect(posted.some((u) => u.includes('/api/transactions'))).toBe(false)
     expect(posted.some((u) => u.includes('/api/transfers'))).toBe(false)
+  })
+})
+
+describe('RecordTransaction: Pengeluaran ini ditalangi (#368)', () => {
+  const claimMembers = [{ id: 1, name: 'Jane', tier_id: 1, joined_on: '2026-01-01', inactive_on: null, created_at: 1 }]
+  // The picker is selectable=true (no closed envelope), for a claim too.
+  const selectablePurposes = purposes.filter((p) => p.id !== 12)
+
+  /** App.tsx's wiring in miniature: the tick lives in the URL. */
+  function Routed({ onRecorded }: { onRecorded: (r: string, photoFailed?: boolean) => void }) {
+    const [params, setParams] = useSearchParams()
+    return (
+      <>
+        <output data-testid="search">{params.toString()}</output>
+        <RecordTransaction
+          onRecorded={onRecorded}
+          onCancel={vi.fn()}
+          onDuesRecorded={vi.fn()}
+          fronted={params.get('fronted') === '1'}
+          onFrontedChange={(next) => setParams(next ? { fronted: '1' } : {}, { replace: true })}
+        />
+      </>
+    )
+  }
+
+  function stub(extra: { match: (m: string, u: string) => boolean; handle: () => Promise<Response> }[] = []) {
+    const inner = routedFetch([
+      {
+        match: (m, u) => m === 'POST' && u.endsWith('/api/reimbursements'),
+        handle: () => Promise.resolve(jsonResponse({ id: 7, member_id: 1, purpose_id: 11, amount: 25_000, receipt_ids: [] }, 201)),
+      },
+      ...extra,
+      {
+        match: (m, u) => m === 'GET' && u.includes('/api/members'),
+        handle: () => Promise.resolve(jsonResponse({ members: claimMembers, next_cursor: null })),
+      },
+      { match: (m, u) => m === 'GET' && u.includes('/api/accounts'), handle: () => Promise.resolve(jsonResponse(accounts)) },
+      { match: (m, u) => m === 'GET' && u.includes('/api/balances'), handle: () => Promise.resolve(jsonResponse(balancesWith(30_000))) },
+    ])
+    const wrapped = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = typeof input === 'string' ? input : input.toString()
+      if (url.includes('/api/purposes')) {
+        return Promise.resolve(jsonResponse(url.includes('selectable=true') ? selectablePurposes : purposes))
+      }
+      return inner(input, init)
+    })
+    vi.stubGlobal('fetch', wrapped)
+    return wrapped
+  }
+
+  function renderRouted(onRecorded = vi.fn(), entry = '/record') {
+    render(
+      <MemoryRouter initialEntries={[entry]}>
+        <Routed onRecorded={onRecorded} />
+      </MemoryRouter>,
+    )
+    return onRecorded
+  }
+
+  function postsOf(fetchMock: ReturnType<typeof stub>) {
+    return fetchMock.mock.calls
+      .filter(([, init]) => (init?.method ?? 'GET').toUpperCase() === 'POST')
+      .map(([input, init]) => ({ url: String(input), body: init?.body }))
+  }
+
+  it('offers the tick only for Keluar, and ticking it writes ?fronted=1 and swaps the location for the member', async () => {
+    stub()
+    renderRouted()
+    await screen.findByLabelText(text.locationLabel)
+    expect(screen.getByLabelText(text.frontedLabel)).not.toBeChecked()
+
+    await userEvent.click(screen.getByLabelText(text.frontedLabel))
+
+    expect(screen.getByTestId('search')).toHaveTextContent('fronted=1')
+    expect(screen.getByLabelText(text.frontedLabel)).toBeChecked()
+    expect(screen.queryByRole('combobox', { name: text.locationLabel })).not.toBeInTheDocument()
+    expect(screen.getByRole('combobox', { name: copy.reimbursements.record.memberLabel })).toBeInTheDocument()
+  })
+
+  it('unticking brings the location back and clears the URL', async () => {
+    stub()
+    renderRouted(vi.fn(), '/record?fronted=1')
+    await screen.findByRole('combobox', { name: copy.reimbursements.record.memberLabel })
+
+    await userEvent.click(screen.getByLabelText(text.frontedLabel))
+
+    expect(screen.getByTestId('search')).toHaveTextContent(/^$/)
+    expect(screen.getByRole('combobox', { name: text.locationLabel })).toBeInTheDocument()
+    expect(screen.queryByRole('combobox', { name: copy.reimbursements.record.memberLabel })).not.toBeInTheDocument()
+  })
+
+  it('switching Jenis away from Keluar clears the tick and hides the checkbox', async () => {
+    stub()
+    renderRouted(vi.fn(), '/record?fronted=1')
+    await screen.findByLabelText(text.frontedLabel)
+
+    await userEvent.click(screen.getByRole('button', { name: text.directionIn }))
+
+    expect(screen.getByTestId('search')).toHaveTextContent(/^$/)
+    expect(screen.queryByLabelText(text.frontedLabel)).not.toBeInTheDocument()
+  })
+
+  it('posts a claim through /api/reimbursements, never /api/transactions', async () => {
+    const fetchMock = stub()
+    const onRecorded = renderRouted(vi.fn(), '/record?fronted=1')
+    await screen.findByRole('combobox', { name: copy.reimbursements.record.memberLabel })
+
+    expect(screen.getByRole('button', { name: text.submit })).toBeDisabled()
+    await chooseOption(copy.reimbursements.record.memberLabel, 'Jane')
+    await userEvent.type(screen.getByLabelText(text.amountLabel), '25000')
+    await userEvent.type(screen.getByLabelText(text.noteLabel), 'Parkir')
+    await userEvent.click(screen.getByRole('button', { name: text.submit }))
+
+    await waitFor(() => expect(onRecorded).toHaveBeenCalledWith('reimbursement', false))
+    const posts = postsOf(fetchMock)
+    expect(posts).toHaveLength(1)
+    expect(posts[0].url).toContain('/api/reimbursements')
+    expect(JSON.parse(String(posts[0].body))).toEqual({
+      member_id: 1,
+      purpose_id: 11,
+      amount: 25_000,
+      incurred_on: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
+      note: 'Parkir',
+    })
+  })
+
+  it('offers a claim only the selectable pos, like Keluar - settling it would post to a closed envelope', async () => {
+    stub()
+    renderRouted(vi.fn(), '/record?fronted=1')
+    await screen.findByRole('combobox', { name: copy.reimbursements.record.memberLabel })
+    expect(await selectOptionNames(text.purposeLabel)).not.toContain('Halal bihalal RT')
+  })
+
+  it('does not warn about Titipan for a claim, which touches no balance', async () => {
+    stub()
+    renderRouted(vi.fn(), '/record?fronted=1')
+    await screen.findByRole('combobox', { name: copy.reimbursements.record.memberLabel })
+    await chooseOption(text.purposeLabel, 'Kas Bidang')
+    await userEvent.type(screen.getByLabelText(text.amountLabel), '90000')
+    expect(screen.queryByText(text.passThroughNegativeHint('Kas Bidang'))).not.toBeInTheDocument()
+  })
+
+  async function fillClaimWithPhoto() {
+    await screen.findByRole('combobox', { name: copy.reimbursements.record.memberLabel })
+    await chooseOption(copy.reimbursements.record.memberLabel, 'Jane')
+    await userEvent.type(screen.getByLabelText(text.amountLabel), '25000')
+    await userEvent.upload(
+      screen.getByLabelText(copy.receipts.addFromRow, { selector: 'input[type="file"]' }),
+      new File(['fake-bytes'], 'nota.jpg', { type: 'image/jpeg' }),
+    )
+    await userEvent.click(screen.getByRole('button', { name: text.submit }))
+  }
+
+  it('uploads the photo to the claim, not to a transaction', async () => {
+    const fetchMock = stub([
+      {
+        match: (m, u) => m === 'POST' && u.includes('/api/reimbursements/7/receipts'),
+        handle: () => Promise.resolve(jsonResponse({ id: 9, uploaded_at: 1 }, 201)),
+      },
+    ])
+    const onRecorded = renderRouted(vi.fn(), '/record?fronted=1')
+    await fillClaimWithPhoto()
+
+    await waitFor(() => expect(onRecorded).toHaveBeenCalledWith('reimbursement', false))
+    const urls = postsOf(fetchMock).map((p) => p.url)
+    expect(urls.some((u) => u.includes('/api/reimbursements/7/receipts'))).toBe(true)
+    expect(urls.some((u) => u.includes('/api/transactions'))).toBe(false)
+  })
+
+  it('still records the claim when the photo upload fails, and says so', async () => {
+    stub([
+      {
+        match: (m, u) => m === 'POST' && u.includes('/api/reimbursements/7/receipts'),
+        handle: () => Promise.resolve(jsonResponse({ error: { code: 'unsupported_media_type', message: 'nope' } }, 415)),
+      },
+    ])
+    const onRecorded = renderRouted(vi.fn(), '/record?fronted=1')
+    await fillClaimWithPhoto()
+
+    await waitFor(() => expect(onRecorded).toHaveBeenCalledWith('reimbursement', true))
   })
 })

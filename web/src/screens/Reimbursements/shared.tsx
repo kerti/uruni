@@ -11,20 +11,15 @@ export const TALANGAN_PATH = '/history/reimbursements'
  * state, the same idiom as App.tsx's HomeState and DuesState: the
  * confirmation belongs to the one history entry that navigation creates, so
  * opening the tab again later does not show a stale one. The tab turns the
- * key into copy; `recordedPhotoFailed` is a claim that saved while its
- * photo did not.
+ * key into copy. (Recording a claim is Catat's, and lands on Beranda.)
  */
 export interface TalanganState {
-  reimbursementDone: 'recorded' | 'recordedPhotoFailed' | 'settled' | 'corrected'
+  reimbursementDone: 'settled' | 'corrected'
 }
 
 /** The tab's success line for a finished screen. */
 export function doneText(done: TalanganState['reimbursementDone']): string {
   switch (done) {
-    case 'recorded':
-      return text.record.success
-    case 'recordedPhotoFailed':
-      return copy.receipts.reimbursementPhotoFailed
     case 'settled':
       return text.settle.success
     case 'corrected':

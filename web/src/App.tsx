@@ -11,14 +11,13 @@ import Register from '@/screens/Register'
 import Login from '@/screens/Login'
 import Setup from '@/screens/Setup/Setup'
 import RecordTransaction from '@/screens/RecordTransaction'
-import type { Direction } from '@/screens/RecordTransaction'
+import type { Recorded } from '@/screens/RecordTransaction'
 import Reconcile from '@/screens/Reconcile'
 import DuesTierScreen from '@/screens/DuesTier'
 import Incidentals from '@/screens/Incidentals'
 import History from '@/screens/History/History'
 import Transactions from '@/screens/History/Transactions'
 import Reimbursements from '@/screens/History/Reimbursements'
-import RecordClaim from '@/screens/Reimbursements/RecordClaim'
 import SettleClaim from '@/screens/Reimbursements/Settle'
 import CorrectClaim from '@/screens/Reimbursements/Correct'
 import type { TalanganState } from '@/screens/Reimbursements/shared'
@@ -146,7 +145,8 @@ function AuthGate({
  * a transfer, which has no photo field. */
 interface HomeState {
   // 'dues': a dues payment recorded through Catat's Iuran (#315).
-  recorded: Direction | 'dues'
+  // 'reimbursement': a Keluar ticked "ditalangi" - a Talangan claim (#368).
+  recorded: Recorded | 'dues'
   photoFailed?: boolean
 }
 
@@ -182,7 +182,7 @@ function AuthedGate({ onLoggedOut }: { onLoggedOut: () => void }) {
   // location.key, minus the entries a dialog pushes or clears - so opening
   // a dialog never reloads the list under it (#359, useRefetchKey).
   const refetchKey = useRefetchKey()
-  const [searchParams] = useSearchParams()
+  const [searchParams, setSearchParams] = useSearchParams()
 
   // ?purpose=<id> - shared by three routes, and read here for two of them
   // (History/Transactions.tsx reads its own). /record?purpose=<id> is
@@ -242,8 +242,8 @@ function AuthedGate({ onLoggedOut }: { onLoggedOut: () => void }) {
   // the form again would show the old confirmation on the way back. A
   // history entry's state belongs to that entry alone, which is exactly the
   // lifetime this message wants.
-  function handleRecorded(direction: Direction, photoFailed?: boolean) {
-    navigate('/', { state: { recorded: direction, photoFailed } satisfies HomeState })
+  function handleRecorded(recorded: Recorded, photoFailed?: boolean) {
+    navigate('/', { state: { recorded, photoFailed } satisfies HomeState })
   }
 
   if (state.status === 'idle' || state.status === 'loading') {
@@ -271,23 +271,40 @@ function AuthedGate({ onLoggedOut }: { onLoggedOut: () => void }) {
   const duesRecorded = (location.state as DuesState | null)?.duesRecorded === true
   const recordFromDues = (location.state as RecordFromDuesState | null)?.fromDues === true
   const recordDues = searchParams.get('type') === 'dues'
+  // "Pengeluaran ini ditalangi" (#368): form mode is a route (ADR-032), like
+  // ?type=dues. Written with replace so ticking it adds no history entry.
+  const recordFronted = searchParams.get('fronted') === '1'
+  const setRecordFronted = (next: boolean) =>
+    setSearchParams(
+      (prev) => {
+        const params = new URLSearchParams(prev)
+        if (next) params.set('fronted', '1')
+        else params.delete('fronted')
+        return params
+      },
+      { replace: true },
+    )
   // A failed photo upload (#154) replaces the ordinary success line rather
   // than joining it - the sentence already says the transaction is saved,
   // so repeating successIn/successOut beside it would say the same thing
   // twice in two different tones.
   const successMessage = photoFailed
-    ? copy.receipts.transactionPhotoFailed
-    : recorded === 'in'
-      ? copy.record.successIn
-      : recorded === 'out'
-        ? copy.record.successOut
-        : recorded === 'transfer'
-          ? copy.record.successTransfer
-          : recorded === 'purpose'
-            ? copy.record.successPurposeMove
-            : recorded === 'dues'
-              ? copy.dues.payment.success
-              : null
+    ? recorded === 'reimbursement'
+      ? copy.receipts.reimbursementPhotoFailed
+      : copy.receipts.transactionPhotoFailed
+    : recorded === 'reimbursement'
+      ? copy.record.successFronted
+      : recorded === 'in'
+        ? copy.record.successIn
+        : recorded === 'out'
+          ? copy.record.successOut
+          : recorded === 'transfer'
+            ? copy.record.successTransfer
+            : recorded === 'purpose'
+              ? copy.record.successPurposeMove
+              : recorded === 'dues'
+                ? copy.dues.payment.success
+                : null
 
   return (
     <Routes>
@@ -301,6 +318,8 @@ function AuthedGate({ onLoggedOut }: { onLoggedOut: () => void }) {
               initialPurposeId={initialPurposeId}
               initialMemberId={initialMemberId}
               initialDues={recordDues}
+              fronted={recordFronted}
+              onFrontedChange={setRecordFronted}
               onDuesRecorded={() =>
                 recordFromDues
                   ? navigate('/dues', { state: { duesRecorded: true } satisfies DuesState })
@@ -357,17 +376,12 @@ function AuthedGate({ onLoggedOut }: { onLoggedOut: () => void }) {
           Talangan now lives at /history/reimbursements (#226, ADR-032),
           same redirect precedent as /dues above. */}
       <Route path="/reimbursements" element={<Navigate to="/history/reimbursements" replace />} />
-      {/* #368, ADR-032: Talangan's money forms are screens, not inline
-          expanders. Cancel and success both return to the tab; success
+      {/* #368, ADR-032: recording a claim is Catat's Keluar with "Pengeluaran
+          ini ditalangi" ticked, so its own former address redirects there
+          (same precedent as /dues/payment below). Settle and correct are
+          screens: cancel and success both return to the tab, and success
           hands its confirmation back through router state. */}
-      <Route
-        path="/reimbursements/new"
-        element={
-          <Shell title={title} onLoggedOut={onLoggedOut}>
-            <RecordClaim onDone={talanganDone} onCancel={backToTalangan} />
-          </Shell>
-        }
-      />
+      <Route path="/reimbursements/new" element={<Navigate to="/record?fronted=1" replace />} />
       <Route
         path="/reimbursements/settle"
         element={

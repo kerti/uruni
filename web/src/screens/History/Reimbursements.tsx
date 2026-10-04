@@ -453,7 +453,7 @@ export default function Reimbursements({ refetchKey }: { refetchKey?: unknown })
         />
       </div>
 
-      <Button type="button" size="lg" onClick={() => navigate('/reimbursements/new')}>
+      <Button type="button" size="lg" onClick={() => navigate('/record?fronted=1')}>
         {text.record.heading}
       </Button>
 

@@ -141,7 +141,7 @@ function renderAt(entry: string | { pathname: string; state: unknown } = '/histo
             </>
           }
         />
-        <Route path="/reimbursements/new" element={<ScreenProbe />} />
+        <Route path="/record" element={<ScreenProbe />} />
         <Route path="/reimbursements/settle" element={<ScreenProbe />} />
         <Route path="/reimbursements/correct" element={<ScreenProbe />} />
       </Routes>
@@ -163,12 +163,12 @@ describe('Reimbursements tab', () => {
     expect(screen.getByText(text.status.outstanding, { selector: 'span' })).toBeInTheDocument()
   })
 
-  it('opens the record, settle and correct screens instead of expanding a form', async () => {
+  it('opens Catat with the claim ticked, and the settle and correct screens instead of expanding a form', async () => {
     vi.stubGlobal('fetch', routedFetch(getHandlers()))
     const first = renderAt()
     await waitFor(() => expect(screen.getByText('Jane')).toBeInTheDocument())
     await userEvent.click(screen.getByRole('button', { name: text.record.heading }))
-    expect(screen.getByTestId('screen')).toHaveTextContent('/reimbursements/new')
+    expect(screen.getByTestId('screen')).toHaveTextContent('/record?fronted=1')
     first.unmount()
 
     const second = renderAt()
@@ -184,8 +184,6 @@ describe('Reimbursements tab', () => {
   })
 
   it.each([
-    ['recorded', text.record.success],
-    ['recordedPhotoFailed', copy.receipts.reimbursementPhotoFailed],
     ['settled', text.settle.success],
     ['corrected', text.correct.success],
   ])('shows the confirmation a screen handed back (%s)', async (done, message) => {

@@ -4,7 +4,6 @@ import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import Correct from '@/screens/Reimbursements/Correct'
-import RecordClaim from '@/screens/Reimbursements/RecordClaim'
 import Settle from '@/screens/Reimbursements/Settle'
 import { chooseOption } from '@/test/select'
 import { copy } from '@/copy/id'
@@ -91,105 +90,6 @@ function renderScreen(element: React.ReactNode) {
     </MemoryRouter>,
   )
 }
-
-describe('RecordClaim', () => {
-  const post: Handler = {
-    match: (m, u) => m === 'POST' && u.endsWith('/api/reimbursements'),
-    handle: () => Promise.resolve(jsonResponse(claim({ id: 3, amount: 10_000, note: null }), 201)),
-  }
-
-  it('records a claim and hands "recorded" back to the tab', async () => {
-    vi.stubGlobal('fetch', routedFetch([post, ...lookups]))
-    const onDone = vi.fn()
-    renderScreen(<RecordClaim onDone={onDone} onCancel={vi.fn()} />)
-
-    expect(await screen.findByRole('heading', { name: text.record.heading })).toBeInTheDocument()
-    await chooseOption(text.record.memberLabel, 'Jane')
-    await userEvent.type(screen.getByLabelText(text.record.amountLabel), '10000')
-    await userEvent.click(screen.getByRole('button', { name: text.record.submit }))
-
-    await waitFor(() => expect(onDone).toHaveBeenCalledWith('recorded'))
-  })
-
-  it('keeps submit disabled until required fields are filled', async () => {
-    vi.stubGlobal('fetch', routedFetch(lookups))
-    renderScreen(<RecordClaim onDone={vi.fn()} onCancel={vi.fn()} />)
-    await waitFor(() => expect(screen.getByRole('button', { name: text.record.submit })).toBeDisabled())
-  })
-
-  it('Batal goes back without posting anything', async () => {
-    const fetchMock = routedFetch(lookups)
-    vi.stubGlobal('fetch', fetchMock)
-    const onCancel = vi.fn()
-    renderScreen(<RecordClaim onDone={vi.fn()} onCancel={onCancel} />)
-
-    await userEvent.click(await screen.findByRole('button', { name: text.record.cancel }))
-    expect(onCancel).toHaveBeenCalled()
-    expect(fetchMock.mock.calls.some(([, init]) => (init?.method ?? 'GET') !== 'GET')).toBe(false)
-  })
-
-  it('says why a failed write failed and stays on the screen', async () => {
-    vi.stubGlobal(
-      'fetch',
-      routedFetch([
-        {
-          match: (m, u) => m === 'POST' && u.endsWith('/api/reimbursements'),
-          handle: () => Promise.resolve(jsonResponse({ error: { code: 'invalid_argument', message: 'english wire text' } }, 400)),
-        },
-        ...lookups,
-      ]),
-    )
-    const onDone = vi.fn()
-    renderScreen(<RecordClaim onDone={onDone} onCancel={vi.fn()} />)
-    await screen.findByRole('heading', { name: text.record.heading })
-
-    await chooseOption(text.record.memberLabel, 'Jane')
-    await userEvent.type(screen.getByLabelText(text.record.amountLabel), '10000')
-    await userEvent.click(screen.getByRole('button', { name: text.record.submit }))
-
-    await waitFor(() => expect(screen.getByRole('alert')).toBeInTheDocument())
-    expect(screen.getByRole('alert').textContent).not.toContain('english wire text')
-    expect(onDone).not.toHaveBeenCalled()
-  })
-
-  async function recordWithPhoto() {
-    await chooseOption(text.record.memberLabel, 'Jane')
-    await userEvent.type(screen.getByLabelText(text.record.amountLabel), '10000')
-    await userEvent.upload(
-      screen.getByLabelText(copy.receipts.addFromRow, { selector: 'input[type="file"]' }),
-      new File(['fake-bytes'], 'nota.jpg', { type: 'image/jpeg' }),
-    )
-    await userEvent.click(screen.getByRole('button', { name: text.record.submit }))
-  }
-
-  it('uploads the picked photo after the claim posts', async () => {
-    const upload: Handler = {
-      match: (m, u) => m === 'POST' && u.includes('/api/reimbursements/3/receipts'),
-      handle: () => Promise.resolve(jsonResponse({ id: 9, uploaded_at: 1 }, 201)),
-    }
-    vi.stubGlobal('fetch', routedFetch([post, upload, ...lookups]))
-    const onDone = vi.fn()
-    renderScreen(<RecordClaim onDone={onDone} onCancel={vi.fn()} />)
-    await screen.findByRole('heading', { name: text.record.heading })
-
-    await recordWithPhoto()
-    await waitFor(() => expect(onDone).toHaveBeenCalledWith('recorded'))
-  })
-
-  it('the claim still saves when the photo upload fails - the tab is told so', async () => {
-    const upload: Handler = {
-      match: (m, u) => m === 'POST' && u.includes('/api/reimbursements/3/receipts'),
-      handle: () => Promise.resolve(jsonResponse({ error: { code: 'unsupported_media_type', message: 'nope' } }, 415)),
-    }
-    vi.stubGlobal('fetch', routedFetch([post, upload, ...lookups]))
-    const onDone = vi.fn()
-    renderScreen(<RecordClaim onDone={onDone} onCancel={vi.fn()} />)
-    await screen.findByRole('heading', { name: text.record.heading })
-
-    await recordWithPhoto()
-    await waitFor(() => expect(onDone).toHaveBeenCalledWith('recordedPhotoFailed'))
-  })
-})
 
 describe('Settle', () => {
   const settle: Handler = {
