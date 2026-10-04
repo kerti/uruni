@@ -92,3 +92,46 @@ export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> 
   }
   return (await res.json()) as T
 }
+
+/**
+ * Calls a route that answers with a file rather than JSON - the backup zips,
+ * the report's PDF - and returns it as a Blob. A failure throws the same
+ * ApiError apiFetch does, decoded from the error envelope when the body is
+ * one, so a caller renders it through the one ErrorState.
+ */
+export async function fetchBlob(path: string): Promise<{ blob: Blob; res: Response }> {
+  let res: Response
+  try {
+    res = await fetch(path)
+  } catch (err) {
+    notifyConnectivity(false)
+    throw new ApiError(NETWORK_ERROR_CODE, err instanceof Error ? err.message : 'network error', true)
+  }
+  notifyConnectivity(true)
+
+  if (!res.ok) {
+    let envelope: ErrorEnvelope = {}
+    try {
+      envelope = (await res.json()) as ErrorEnvelope
+    } catch {
+      // Body wasn't JSON (or was empty) - fall through to the generic code.
+    }
+    const code = envelope.error?.code ?? 'unknown_error'
+    const message = envelope.error?.message ?? `Request failed with status ${res.status}`
+    throw new ApiError(code, message)
+  }
+
+  return { blob: await res.blob(), res }
+}
+
+/** Hands a Blob to the browser to save under `filename`. */
+export function saveBlob(blob: Blob, filename: string) {
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = filename
+  document.body.appendChild(link)
+  link.click()
+  link.remove()
+  URL.revokeObjectURL(url)
+}
