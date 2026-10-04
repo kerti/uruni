@@ -12,10 +12,14 @@ package http
 // space and Indonesian text come out as text a reader can select and search.
 // fonts/ holds Noto Sans Regular and Bold (SIL OFL 1.1, licence beside them),
 // subset to Basic Latin, Latin-1 and Latin Extended-A plus the handful of
-// punctuation the copy uses (dashes, quotes, bullet, ellipsis, arrow, minus):
+// punctuation the copy uses (dashes, quotes, bullet, ellipsis, minus):
 // about 23 KB each instead of the 600 KB full fonts. A character outside that
 // set - a name in another script - has no glyph and prints as a blank box;
-// everything the app's own copy and an Indonesian neighbour's name need is in.
+// everything the app's own copy and an Indonesian neighbour's name need is in,
+// except the arrow of "Dipindah: A -> B": Noto Sans has none in any build
+// (arrows live in Noto Sans Symbols, and fpdf cannot fall back to a second
+// font mid-line), so pdfSafe writes it as "->" here; the page keeps the real
+// one.
 
 import (
 	"bytes"
@@ -114,6 +118,10 @@ type pdfDoc struct {
 	repeat func()
 }
 
+// pdfStandIns are the copy's characters the embedded font has no glyph for,
+// each with the stand-in the PDF prints instead.
+var pdfStandIns = strings.NewReplacer("\u2192", "->")
+
 // pdfSafe drops what fpdf cannot carry: its UTF-8 font map ends at U+FFFF, so
 // a rune above it - an emoji in a fund, member or envelope name - panics
 // inside Output. The emoji presentation selector and the zero-width joiner go
@@ -121,8 +129,10 @@ type pdfDoc struct {
 // neither. Where something was dropped, the spaces that sat around it close
 // up - "Kas RT 05 X - Laporan" reads "Kas RT 05 - Laporan", not with two
 // spaces - and none is left at either end. Text with nothing to drop comes
-// back untouched.
+// back untouched. Before any of that, a character the copy uses but the font
+// lacks is written with one it has (pdfStandIns).
 func pdfSafe(s string) string {
+	s = pdfStandIns.Replace(s)
 	dropped := false
 	out := strings.Map(func(r rune) rune {
 		if r > 0xFFFF || r == 0xFE0F || r == 0x200D {

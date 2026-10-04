@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"compress/zlib"
 	"context"
+	"encoding/binary"
 	"fmt"
 	"io"
 	"net/http"
@@ -397,9 +398,98 @@ func TestPDFSafe(t *testing.T) {
 		// Nothing dropped: the text comes back exactly, spaces and all.
 		{"Rp\u00a050.000  tunai ", "Rp\u00a050.000  tunai "},
 		{"Caf\u00e9 \u2615", "Caf\u00e9 \u2615"},
+		// The font has no arrow: the PDF writes it in ASCII.
+		{"Dipindah: Kas Utama \u2192 Duka", "Dipindah: Kas Utama -> Duka"},
+		{"Dipindah: Kas \U0001F3E0 \u2192 Duka", "Dipindah: Kas -> Duka"},
 	} {
 		if got := pdfSafe(tc.in); got != tc.want {
 			t.Errorf("pdfSafe(%q) = %q, want %q", tc.in, got, tc.want)
 		}
 	}
+}
+
+// Every character the PDF draws has a glyph in the embedded font: a missing
+// one prints as a blank box, which is how "Dipindah: A \u2192 B" came out
+// before the arrow got its stand-in. The scenario carries purpose moves, dues
+// and every label shape the list knows.
+func TestReportPDFDrawsOnlyCharactersTheFontHas(t *testing.T) {
+	s := newTxnScenario(t)
+	rec := s.get(t, "/report/"+s.fund.ReportSlug+"/pdf?month=2026-09")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rec.Code)
+	}
+	runs := pdfText(t, rec.Body.Bytes())
+	if !pdfHas(runs, "Dipindah: Kas Utama -> Duka") {
+		t.Errorf("PDF text has no purpose move with its stand-in arrow; runs:\n%s", strings.Join(runs, "\n"))
+	}
+
+	for _, name := range []string{"fonts/NotoSans-Regular.ttf", "fonts/NotoSans-Bold.ttf"} {
+		raw, err := reportFonts.ReadFile(name)
+		if err != nil {
+			t.Fatalf("reading %s: %v", name, err)
+		}
+		has := fontRunes(t, raw)
+		for _, run := range runs {
+			for _, r := range run {
+				if !has[r] {
+					t.Errorf("%s has no glyph for U+%04X in %q", name, r, run)
+				}
+			}
+		}
+	}
+}
+
+// fontRunes is every character a TrueType font maps to a real glyph, read
+// from its Unicode BMP cmap (format 4) - the one table fpdf's UTF-8 path reads
+// too. Stdlib only, like pdfText: a font-parsing dependency for one test is
+// not worth its weight.
+func fontRunes(t *testing.T, font []byte) map[rune]bool {
+	t.Helper()
+	u16 := func(at int) int { return int(binary.BigEndian.Uint16(font[at:])) }
+	u32 := func(at int) int { return int(binary.BigEndian.Uint32(font[at:])) }
+
+	cmap := -1
+	for i := range u16(4) {
+		rec := 12 + 16*i
+		if string(font[rec:rec+4]) == "cmap" {
+			cmap = u32(rec + 8)
+		}
+	}
+	if cmap < 0 {
+		t.Fatal("font has no cmap table")
+	}
+	sub := -1
+	for i := range u16(cmap + 2) {
+		rec := cmap + 4 + 8*i
+		platform, encoding := u16(rec), u16(rec+2)
+		if (platform == 3 && encoding == 1) || (platform == 0 && encoding == 3) {
+			sub = cmap + u32(rec+4)
+		}
+	}
+	if sub < 0 || u16(sub) != 4 {
+		t.Fatal("font has no format-4 Unicode BMP cmap")
+	}
+
+	segs := u16(sub+6) / 2
+	ends, starts := sub+14, sub+16+2*segs
+	deltas, offsets := starts+2*segs, starts+4*segs
+	has := map[rune]bool{}
+	for i := range segs {
+		start, end := u16(starts+2*i), u16(ends+2*i)
+		delta, offset := u16(deltas+2*i), u16(offsets+2*i)
+		for c := start; c <= end && c != 0xFFFF; c++ {
+			g := (c + delta) & 0xFFFF
+			if offset != 0 {
+				g = u16(offsets + 2*i + offset + 2*(c-start))
+				if g != 0 {
+					g = (g + delta) & 0xFFFF
+				}
+			}
+			if g != 0 {
+				//nolint:gosec // G115: c is a format-4 code, read from 16 bits and below 0xFFFF; it fits a rune
+				has[rune(c)] = true
+			}
+		}
+	}
+	return has
 }
