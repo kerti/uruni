@@ -432,6 +432,12 @@ func (d *pdfDoc) transactions(p reportPage) {
 		if r.Label != "" {
 			note.lines = append(note.lines, pdfLine{text: r.Label, size: pdfBodySize, color: "foreground"})
 		}
+		// Her note, line breaks kept, between the label and the meta line.
+		for _, line := range strings.Split(r.Note, "\n") {
+			if line = strings.TrimSpace(line); line != "" {
+				note.lines = append(note.lines, pdfLine{text: line, size: pdfSmallSize + 0.5, color: "foreground"})
+			}
+		}
 		var meta []string
 		if r.Purpose != "" {
 			meta = append(meta, r.Purpose)

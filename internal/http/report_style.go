@@ -92,6 +92,7 @@ button{border:0;background:var(--primary);color:var(--primary-foreground);paddin
 ul.txns li{align-items:flex-start}
 .what{display:flex;flex-direction:column;min-width:0}
 .label-line{font-weight:500;overflow-wrap:anywhere}
+.note{font-size:14px;overflow-wrap:anywhere;white-space:pre-line}
 .amt{font-weight:600;white-space:nowrap}
 .amt.in{color:var(--success)}
 .amt.move{color:var(--muted-foreground)}

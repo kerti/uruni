@@ -299,3 +299,27 @@ func TestReportMonthStepKeepsTheFilters(t *testing.T) {
 		t.Errorf("filtered: got %q, want %q", got, want)
 	}
 }
+
+// A row shows the note the treasurer typed under its label, trimmed and
+// escaped like any other text; a row without one shows no note line.
+func TestReportRowShowsItsNote(t *testing.T) {
+	f := newReportFixture(t, "Kas RT 05")
+	note := "  Beli gula <b>dan</b> teh  "
+	if _, err := f.l.PostTransaction(context.Background(), ledger.PostTransactionParams{
+		FundID: f.fund.ID, AccountID: f.cashID, PurposeID: f.mainID, Direction: "out", Amount: 40_000, OccurredOn: "2026-09-12", Note: &note,
+	}); err != nil {
+		t.Fatalf("PostTransaction() = %v", err)
+	}
+	f.post(t, "in", 50_000, "2026-09-13")
+
+	body := f.get(t, "/report/"+f.fund.ReportSlug+"?month=2026-09").Body.String()
+	// The raw body, not txnSection, which unescapes: the note's markup must
+	// arrive as text.
+	if want := `<span class="note">Beli gula &lt;b&gt;dan&lt;/b&gt; teh</span>`; !strings.Contains(body, want) {
+		t.Errorf("page does not contain %q:\n%s", want, body)
+	}
+	section := txnSection(t, body)
+	if got := strings.Count(section, `class="note"`); got != 1 {
+		t.Errorf("note lines = %d, want 1 (the row without a note shows none)", got)
+	}
+}

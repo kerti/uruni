@@ -103,11 +103,14 @@ type reportTotals struct {
 }
 
 // reportRow is one line of the month. Class is "in", "out" or "move"; Label is
-// "" for a plain row the treasurer recorded. HasReceipt renders a plain
+// "" for a plain row the treasurer recorded. Note is what she typed, under the
+// label as Riwayat shows it (a settled claim's payout carries the claim's
+// note), "" when there is none; a move has none. HasReceipt renders a plain
 // marker - nothing about the receipt itself reaches the page.
 type reportRow struct {
 	Date       string
 	Label      string
+	Note       string
 	Purpose    string
 	Amount     string
 	Class      string
@@ -426,8 +429,12 @@ func buildReportPage(r ledger.Report, empty bool) reportPage {
 			if e.Direction == ledger.ReportDirectionOut {
 				sign = "-"
 			}
+			note := ""
+			if e.Note != nil {
+				note = strings.TrimSpace(*e.Note)
+			}
 			page.Rows = append(page.Rows, reportRow{
-				Date: date, Label: reportText.entryLabel(*e), Purpose: e.PurposeName,
+				Date: date, Label: reportText.entryLabel(*e), Note: note, Purpose: e.PurposeName,
 				Amount: sign + money.FormatIDR(e.Amount), Class: e.Direction, HasReceipt: e.HasReceipt,
 			})
 		case row.Move != nil:

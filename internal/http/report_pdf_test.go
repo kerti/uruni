@@ -160,6 +160,7 @@ func TestReportPDFCarriesFundTotalsDuesAndEnvelopes(t *testing.T) {
 		money.FormatIDR(1_375_000),       // the balance, a formatted amount with its non-breaking space
 		"+" + money.FormatIDR(1_250_000), // the same, as a row
 		"-" + money.FormatIDR(40_000),    // an outgoing row
+		"Beli gula dan teh",              // a row's note
 		reportText.DuesLabel,             // the dues section
 		"Ani", "Budi", "Cici", "Dedi",    // members
 		reportText.DuesPaidStatus, reportText.DuesUnpaid, reportText.DuesPartial, // dues statuses
