@@ -88,6 +88,16 @@ describe('ReportLink', () => {
     expect(open).toHaveAttribute('rel', expect.stringContaining('noopener'))
   })
 
+  it("downloads the current month's PDF", async () => {
+    stubFund()
+    stubNavigator({})
+    renderCard()
+
+    const pdf = await screen.findByRole('link', { name: text.downloadPdf })
+    expect(pdf).toHaveAttribute('href', `${OLD_URL}/pdf`)
+    expect(pdf).toHaveAttribute('download')
+  })
+
   it('completes a bare path against the page origin', async () => {
     const fetchMock = vi.fn(() => Promise.resolve(jsonResponse({ ...fund, report_url: '/report/abc' })))
     vi.stubGlobal('fetch', fetchMock)

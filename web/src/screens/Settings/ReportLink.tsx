@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Check, Copy, ExternalLink, Share2 } from 'lucide-react'
+import { Check, Copy, Download, ExternalLink, Share2 } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -28,8 +28,8 @@ function absoluteUrl(reportUrl: string): string {
 
 /**
  * The Laporan publik card (#376, ADR-035; ADR-032 allotted it to Pengaturan
- * in advance): the report's link with Salin, Bagikan and a way to open it,
- * and "Buat tautan baru" behind a confirm, the escape hatch for a link that
+ * in advance): the report's link with Salin, Bagikan, a way to open it and
+ * the current month's PDF (#378), and "Buat tautan baru" behind a confirm, the escape hatch for a link that
  * leaked.
  *
  * The confirm is a dialog addressed by `?edit=report:new` like every other
@@ -152,6 +152,15 @@ function LinkActions({ url, onRenew }: { url: string; onRenew: () => void }) {
         <a href={url} target="_blank" rel="noopener noreferrer">
           <ExternalLink aria-hidden="true" className="size-4" />
           {text.open}
+        </a>
+      </Button>
+
+      {/* The current month's PDF (#378); the server picks the month when the
+          link names none, and Content-Disposition makes it a download. */}
+      <Button asChild variant="outline" size="lg" className="w-full justify-center gap-2">
+        <a href={`${url}/pdf`} download>
+          <Download aria-hidden="true" className="size-4" />
+          {text.downloadPdf}
         </a>
       </Button>
 
