@@ -93,6 +93,22 @@ type reportCopy struct {
 	RowReconciliationFix    string
 	RowMoved                func(from, to string) string
 
+	// The monthly PDF (#378): the link in the page's footer and the words the
+	// statement adds. Every section heading and label the page already has is
+	// reused, so the file and the page read the same.
+	PDFDownload     string
+	PDFFilename     func(month string) string
+	PDFStatement    func(month string) string
+	PDFSummary      string
+	PDFColDate      string
+	PDFColNote      string
+	PDFColAmount    string
+	PDFColMember    string
+	PDFColStatus    string
+	PDFNoRows       string
+	PDFPage         func(page, pages string) string
+	PDFFooterSource func(fundName string) string
+
 	NotFoundTitle string
 	NotFoundBody  string
 
@@ -165,6 +181,19 @@ var reportText = reportCopy{
 	RowOpening:              "Saldo awal",
 	RowReconciliationFix:    "Penyesuaian",
 	RowMoved:                func(from, to string) string { return "Dipindah: " + from + " \u2192 " + to },
+
+	PDFDownload:     "Unduh PDF",
+	PDFFilename:     func(month string) string { return "laporan-kas-" + month + ".pdf" },
+	PDFStatement:    func(month string) string { return "Laporan kas bulan " + month },
+	PDFColDate:      "Tanggal",
+	PDFColNote:      "Keterangan",
+	PDFColAmount:    "Jumlah",
+	PDFColMember:    "Anggota",
+	PDFColStatus:    "Status",
+	PDFSummary:      "Ringkasan",
+	PDFNoRows:       "Tidak ada transaksi bulan ini.",
+	PDFPage:         func(page, pages string) string { return "Halaman " + page + " dari " + pages },
+	PDFFooterSource: func(fundName string) string { return fundName + " \u00b7 Laporan kas" },
 
 	NotFoundTitle: "Laporan tidak ditemukan",
 	NotFoundBody:  "Tautan laporan ini tidak berlaku. Minta tautan terbaru ke bendahara.",

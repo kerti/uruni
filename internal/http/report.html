@@ -11,7 +11,8 @@
 <body>
 <main>{{end}}
 
-{{define "foot"}}</main>
+{{define "foot"}}{{if .PDFHref}}<p class="muted pdf"><a href="{{.PDFHref}}" rel="nofollow" download>{{.Text.PDFDownload}}</a></p>
+{{end}}</main>
 </body>
 </html>
 {{end}}
@@ -103,6 +104,7 @@
       <span class="what">
         <span class="muted">{{.Date}}</span>
         {{if .Label}}<span class="label-line">{{.Label}}</span>{{end}}
+        {{if .Note}}<span class="note">{{.Note}}</span>{{end}}
         <span class="muted">{{if .Purpose}}{{.Purpose}}{{end}}{{if .HasReceipt}}{{if .Purpose}} &middot; {{end}}{{$.Text.HasReceipt}}{{end}}</span>
       </span>
       <span class="tabular amt {{.Class}}">{{.Amount}}</span>

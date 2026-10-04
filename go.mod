@@ -3,6 +3,7 @@ module github.com/kerti/uruni
 go 1.26.5
 
 require (
+	codeberg.org/go-pdf/fpdf v0.12.0
 	github.com/alexedwards/scs/v2 v2.9.0
 	github.com/go-chi/chi/v5 v5.3.2
 	github.com/pressly/goose/v3 v3.28.0

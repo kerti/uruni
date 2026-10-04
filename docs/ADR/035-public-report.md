@@ -1,6 +1,6 @@
 # ADR-035 — Public report: one month, server-rendered, nothing the treasurer didn't mean to publish
 
-**Status:** Accepted · `draft` · [ADR index](./README.md)
+**Status:** Accepted · implemented at M7 ([#378](https://github.com/kerti/uruni/issues/378)) · change only by adding a superseding ADR · [ADR index](./README.md)
 
 **Context.** PRD §7.9 says what the report is for and which filters it carries. It does not say what the page shows first, how a list with no paging stays bounded, whether receipts are public, how a Go template gets the app's look, or what "regenerate link" does to a slug that `setup.go` and `Decisions.md` both call permanent. [ADR-030](./030-multi-fund-scoping.md) already settled the address: `/report/{slug}` names its fund, and the slug is a read capability, never an authorization. Grilled 2026-10-02, at the start of M7.
 
@@ -11,7 +11,7 @@ The framing that decides most of it: **the report is where a neighbour checks th
 **What a visitor sees, top to bottom.** One page per month.
 
 1. **Header:** fund name, "per <date>", the total balance, the latest *cek kas* (date and *cocok*, or *selisih* with its amount, in terracotta), and the balance per purpose (Kas Utama, each open envelope, Titipan). **Not** the balance per location: how much cash sits in the treasurer's house is her working detail, not the neighbourhood's.
-2. **Transactions** for the selected month, with money-in, money-out and net totals for whatever is filtered. Rows carry the same display-time labels as Riwayat ([#257](https://github.com/kerti/uruni/issues/257)), never stored text.
+2. **Transactions** for the selected month, with money-in, money-out and net totals for whatever is filtered. Rows carry the same display-time labels as Riwayat ([#257](https://github.com/kerti/uruni/issues/257)), never stored text, and under the label the treasurer's own note when she typed one (a settled claim's payout carries the claim's note; a "Dipindah" row, the note on its legs), as Riwayat shows it.
 3. **Dues** for the same month: every member's name, tier and status (`Belum bayar` / `Bayar sebagian` / `Lunas` / `Lunas - sudah bayar di muka`) with owed and paid amounts, straight from `DuesStatusForPeriod`. **No arrears count.** A running "Tunggakan N bulan" on a public page reads as a debtor list - close enough to nagging (PRD §4, §7.5) to stay in the app.
 4. **Envelopes:** every envelope open at some point in the selected month - for the current month, every open envelope plus any closed in it; for a past month, the envelopes as they stood then - each with its recipients, as a `<details>` with the participation table [ADR-034](./034-envelope-participation.md) already defines ([#338](https://github.com/kerti/uruni/issues/338)).
 

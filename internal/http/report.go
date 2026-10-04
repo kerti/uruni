@@ -48,6 +48,8 @@ type reportPage struct {
 	Check    *reportCheck
 	Purposes []reportPurpose
 
+	PDFHref string
+
 	PrevMonth    string
 	NextMonth    string
 	PrevHref     string
@@ -101,15 +103,27 @@ type reportTotals struct {
 }
 
 // reportRow is one line of the month. Class is "in", "out" or "move"; Label is
-// "" for a plain row the treasurer recorded. HasReceipt renders a plain
+// "" for a plain row the treasurer recorded. Note is what she typed, under the
+// label as Riwayat shows it (a settled claim's payout carries the claim's
+// note; a move, the note both its legs carry), "" when there is none.
+// HasReceipt renders a plain
 // marker - nothing about the receipt itself reaches the page.
 type reportRow struct {
 	Date       string
 	Label      string
+	Note       string
 	Purpose    string
 	Amount     string
 	Class      string
 	HasReceipt bool
+}
+
+// reportNote is a row's note as the report prints it: trimmed, "" for none.
+func reportNote(note *string) string {
+	if note == nil {
+		return ""
+	}
+	return strings.TrimSpace(*note)
 }
 
 // reportFilter is the GET form: every option of every select, with the
@@ -177,18 +191,8 @@ func reportHandler(l *ledger.Ledger, q store.Querier, logger *slog.Logger, now f
 	return func(w http.ResponseWriter, r *http.Request) {
 		setReportHeaders(w)
 
-		fund, err := q.GetFundByReportSlug(r.Context(), chi.URLParam(r, "slug"))
-		if errors.Is(err, sql.ErrNoRows) {
-			renderReport(w, logger, http.StatusNotFound, "notfound", reportPage{
-				Title: reportText.NotFoundTitle,
-				Style: reportStyle(),
-				Text:  reportText,
-			})
-			return
-		}
-		if err != nil {
-			logger.Error("report: looking up the slug", "error", err)
-			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		fund, ok := reportFundOr404(w, r, q, logger)
+		if !ok {
 			return
 		}
 
@@ -198,8 +202,31 @@ func reportHandler(l *ledger.Ledger, q store.Querier, logger *slog.Logger, now f
 			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 			return
 		}
+		// The link is to the month the page shows, which is the ledger's own
+		// validated "YYYY-MM", never the raw query value.
+		page.PDFHref = "/report/" + url.PathEscape(fund.ReportSlug) + "/pdf?month=" + url.QueryEscape(page.Month)
 		renderReport(w, logger, http.StatusOK, "report", page)
 	}
+}
+
+// reportFundOr404 is the lookup both report routes open with: the fund the
+// slug names, or the page's own short 404 (naming no fund) and ok == false.
+func reportFundOr404(w http.ResponseWriter, r *http.Request, q store.Querier, logger *slog.Logger) (store.Fund, bool) {
+	fund, err := q.GetFundByReportSlug(r.Context(), chi.URLParam(r, "slug"))
+	switch {
+	case err == nil:
+		return fund, true
+	case errors.Is(err, sql.ErrNoRows):
+		renderReport(w, logger, http.StatusNotFound, "notfound", reportPage{
+			Title: reportText.NotFoundTitle,
+			Style: reportStyle(),
+			Text:  reportText,
+		})
+	default:
+		logger.Error("report: looking up the slug", "error", err)
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+	}
+	return store.Fund{}, false
 }
 
 // assembleReportPage reads the filter, the month and the fund's emptiness,
@@ -412,12 +439,12 @@ func buildReportPage(r ledger.Report, empty bool) reportPage {
 				sign = "-"
 			}
 			page.Rows = append(page.Rows, reportRow{
-				Date: date, Label: reportText.entryLabel(*e), Purpose: e.PurposeName,
+				Date: date, Label: reportText.entryLabel(*e), Note: reportNote(e.Note), Purpose: e.PurposeName,
 				Amount: sign + money.FormatIDR(e.Amount), Class: e.Direction, HasReceipt: e.HasReceipt,
 			})
 		case row.Move != nil:
 			page.Rows = append(page.Rows, reportRow{
-				Date: date, Label: reportText.moveLabel(*row.Move),
+				Date: date, Label: reportText.moveLabel(*row.Move), Note: reportNote(row.Move.Note),
 				Amount: money.FormatIDR(row.Move.Amount), Class: "move",
 			})
 		}
