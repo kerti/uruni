@@ -93,6 +93,10 @@ type Report struct {
 	// Balance is the fund's one pooled balance (FundBalance).
 	Balance money.Amount
 
+	// OwedToMembers is OwedToMembers as of now, like Balance: the summary is
+	// current whatever month is selected (#406).
+	OwedToMembers money.Amount
+
 	// Reconciliation is nil when no count has ever been taken. A fund nobody
 	// has counted is not a fund that matches (ReconciliationBanner's reasoning).
 	Reconciliation *ReportReconciliation
@@ -323,6 +327,9 @@ func (l *Ledger) monthlyReport(ctx context.Context, p ReportParams) (Report, err
 		return Report{}, err
 	}
 	if r.Balance, err = l.FundBalance(ctx, p.FundID); err != nil {
+		return Report{}, err
+	}
+	if r.OwedToMembers, err = l.OwedToMembers(ctx, p.FundID); err != nil {
 		return Report{}, err
 	}
 	if r.Reconciliation, err = l.reportReconciliation(ctx, p.FundID); err != nil {

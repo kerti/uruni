@@ -517,7 +517,6 @@ func fontRunes(t *testing.T, font []byte) map[rune]bool {
 	return has
 }
 
-
 // The statement opens with Ringkasan on its own page, and every later section
 // - Transaksi, Iuran, Amplop - starts a page of its own, its heading first.
 func TestReportPDFStartsEachSectionOnItsOwnPage(t *testing.T) {
@@ -536,6 +535,33 @@ func TestReportPDFStartsEachSectionOnItsOwnPage(t *testing.T) {
 			if j != i && pdfHas(pages[i], other) {
 				t.Errorf("page %d also carries the heading %q", i+1, other)
 			}
+		}
+	}
+}
+
+// Ringkasan carries the total owed to members (#406), as the page does.
+func TestReportPDFSummaryShowsTheTotalOwedToMembers(t *testing.T) {
+	s := newPDFScenario(t)
+	runs := pdfText(t, s.get(t, "/report/"+s.fund.ReportSlug+"/pdf?month=2026-09").Body.Bytes())
+	if pdfHas(runs, reportText.OwedLabel) {
+		t.Error("PDF of a fund owing nothing has the owed line")
+	}
+
+	q := store.New(s.db)
+	members, err := q.ListMembersByFund(context.Background(), s.fund.ID)
+	if err != nil || len(members) == 0 {
+		t.Fatalf("ListMembersByFund() = %v, %v; want members", members, err)
+	}
+	if _, err := q.CreateReimbursement(context.Background(), store.CreateReimbursementParams{
+		FundID: s.fund.ID, MemberID: members[0].ID, PurposeID: s.mainID, Amount: 45_000, IncurredOn: "2026-09-03", CreatedAt: 1,
+	}); err != nil {
+		t.Fatalf("CreateReimbursement() = %v, want no error", err)
+	}
+
+	runs = pdfText(t, s.get(t, "/report/"+s.fund.ReportSlug+"/pdf?month=2026-09").Body.Bytes())
+	for _, want := range []string{reportText.OwedLabel, money.FormatIDR(45_000)} {
+		if !pdfHas(runs, want) {
+			t.Errorf("PDF text has no run %q; runs:\n%s", want, strings.Join(runs, "\n"))
 		}
 	}
 }

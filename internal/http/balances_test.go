@@ -321,3 +321,42 @@ func TestGetBalancesOnADeadDatabaseIs500(t *testing.T) {
 		t.Errorf("body = %s, want no partial balances payload - the handler must not write before it has every figure", body)
 	}
 }
+
+// owed_to_members (#406) carries an open claim beside fund_total and never
+// inside it: fronting moves no money, so the balance stays where it was.
+func TestGetBalancesCarriesOwedToMembersOutsideFundTotal(t *testing.T) {
+	r := testRouter(t)
+	setup := setUpFund(t, r)
+
+	if got := decodeBalances(t, getBalances(t, r)); got.OwedToMembers != 0 {
+		t.Errorf("owed_to_members with no claims = %d, want 0", got.OwedToMembers)
+	}
+
+	if rec := postTransaction(t, r, transactionRequest{
+		AccountID: setup.CashAccountID(t), PurposeID: setup.MainPurposeID,
+		Direction: "in", Amount: 100_000, OccurredOn: "2026-08-01",
+	}); rec.Code != http.StatusCreated {
+		t.Fatalf("seed in = %d, want %d (body: %s)", rec.Code, http.StatusCreated, rec.Body.String())
+	}
+	memberRec := postMember(t, r, memberRequest{Name: "Jane"})
+	if memberRec.Code != http.StatusCreated {
+		t.Fatalf("POST /api/members = %d, want %d (body: %s)", memberRec.Code, http.StatusCreated, memberRec.Body.String())
+	}
+	var member memberResponse
+	if err := json.NewDecoder(memberRec.Body).Decode(&member); err != nil {
+		t.Fatalf("decoding member response: %v", err)
+	}
+	if rec := postReimbursement(t, r, reimbursementRequest{
+		MemberID: member.ID, PurposeID: setup.MainPurposeID, Amount: 30_000, IncurredOn: "2026-08-02",
+	}); rec.Code != http.StatusCreated {
+		t.Fatalf("POST /api/reimbursements = %d, want %d (body: %s)", rec.Code, http.StatusCreated, rec.Body.String())
+	}
+
+	got := decodeBalances(t, getBalances(t, r))
+	if got.OwedToMembers != 30_000 {
+		t.Errorf("owed_to_members = %d, want 30000", got.OwedToMembers)
+	}
+	if got.FundTotal != 100_000 {
+		t.Errorf("fund_total = %d, want 100000 - an open claim moves no money", got.FundTotal)
+	}
+}

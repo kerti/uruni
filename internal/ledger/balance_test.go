@@ -174,3 +174,72 @@ func TestASecondFundsRowsNeverAppearInTheFirstFundsBalances(t *testing.T) {
 		t.Errorf("AccountBalance(fund 1) = %d, want 50000", acctBal)
 	}
 }
+
+// OwedToMembers (#406) counts a claim until it is settled or waived, follows a
+// correction's new amount, counts an un-waived claim again, and always equals
+// the Talangan "Belum dibayar" list summed.
+func TestOwedToMembersFollowsSettleWaiveUnwaiveAndCorrect(t *testing.T) {
+	l := newTestLedger(t)
+	f := newFixture(t, l)
+	ctx := context.Background()
+	q := store.New(l.db)
+
+	assertOwed := func(want money.Amount, when string) {
+		t.Helper()
+		got, err := l.OwedToMembers(ctx, f.fundID)
+		if err != nil {
+			t.Fatalf("OwedToMembers() %s = %v, want no error", when, err)
+		}
+		if got != want {
+			t.Errorf("OwedToMembers() %s = %d, want %d", when, got, want)
+		}
+		listed, err := q.ListOutstandingReimbursementsByFund(ctx, f.fundID)
+		if err != nil {
+			t.Fatalf("ListOutstandingReimbursementsByFund() = %v, want no error", err)
+		}
+		var sum int64
+		for _, r := range listed {
+			sum += r.Amount
+		}
+		if money.FromDB(sum) != got {
+			t.Errorf("OwedToMembers() %s = %d, but the outstanding list sums to %d", when, got, sum)
+		}
+	}
+
+	assertOwed(0, "with no claims")
+
+	settled := createReimbursement(t, q, f, 100_000, "2026-08-01", nil)
+	waived := createReimbursement(t, q, f, 50_000, "2026-08-02", nil)
+	corrected := createReimbursement(t, q, f, 30_000, "2026-08-03", nil)
+	assertOwed(180_000, "with three open claims")
+
+	if _, err := l.SettleReimbursement(ctx, SettleReimbursementParams{
+		FundID: f.fundID, ReimbursementID: settled.ID, AccountID: f.cashID, OccurredOn: "2026-08-10",
+	}); err != nil {
+		t.Fatalf("SettleReimbursement() = %v, want no error", err)
+	}
+	assertOwed(80_000, "after settling one")
+
+	waivedOn := "2026-08-11"
+	if _, err := l.UpdateReimbursement(ctx, UpdateReimbursementParams{
+		FundID: f.fundID, ReimbursementID: waived.ID, WaivedOn: &waivedOn, SetWaivedOn: true,
+	}); err != nil {
+		t.Fatalf("UpdateReimbursement() waiving = %v, want no error", err)
+	}
+	assertOwed(30_000, "after waiving one")
+
+	newAmount := money.Amount(40_000)
+	if _, err := l.UpdateReimbursement(ctx, UpdateReimbursementParams{
+		FundID: f.fundID, ReimbursementID: corrected.ID, Amount: &newAmount,
+	}); err != nil {
+		t.Fatalf("UpdateReimbursement() correcting = %v, want no error", err)
+	}
+	assertOwed(40_000, "after correcting the amount")
+
+	if _, err := l.UpdateReimbursement(ctx, UpdateReimbursementParams{
+		FundID: f.fundID, ReimbursementID: waived.ID, SetWaivedOn: true,
+	}); err != nil {
+		t.Fatalf("UpdateReimbursement() un-waiving = %v, want no error", err)
+	}
+	assertOwed(90_000, "after un-waiving")
+}

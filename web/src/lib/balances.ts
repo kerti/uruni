@@ -34,6 +34,9 @@ export interface Balances {
   fund_total: number
   accounts: AccountBalance[]
   purposes: PurposeBalance[]
+  /** Unsettled, unwaived talangan claims summed on the server (#406) -
+   * already inside fund_total, never subtracted from it. */
+  owed_to_members: number
 }
 
 /** GET /api/balances - the home screen's balance hero and per-location rows

@@ -32,6 +32,10 @@ type balancesResponse struct {
 	FundTotal int64                    `json:"fund_total"`
 	Accounts  []accountBalanceResponse `json:"accounts"`
 	Purposes  []purposeBalanceResponse `json:"purposes"`
+
+	// OwedToMembers is Ledger.OwedToMembers: unsettled, unwaived claims,
+	// already inside fund_total and never subtracted from it (#406).
+	OwedToMembers int64 `json:"owed_to_members"`
 }
 
 // getBalances is GET /api/balances: the one deliberately composed view-model
@@ -93,9 +97,16 @@ func (a *api) getBalances(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
+	owed, err := a.ledger.OwedToMembers(r.Context(), fund.ID)
+	if err != nil {
+		mapLedgerError(w, a.logger, err)
+		return
+	}
+
 	writeJSON(w, http.StatusOK, balancesResponse{
-		FundTotal: fundTotal.Int64(),
-		Accounts:  accountResp,
-		Purposes:  purposeResp,
+		FundTotal:     fundTotal.Int64(),
+		Accounts:      accountResp,
+		Purposes:      purposeResp,
+		OwedToMembers: owed.Int64(),
 	})
 }

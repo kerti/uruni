@@ -504,6 +504,7 @@ function AuthedGate({ onLoggedOut }: { onLoggedOut: () => void }) {
               onOpenIncidental={(purposeId) => navigate(`/incidentals?purpose=${purposeId}`)}
               onViewTransactionsFor={(purposeId) => navigate(`/history/transactions?purpose=${purposeId}`)}
               onViewHistory={() => navigate('/history/transactions')}
+              onViewOwed={() => navigate('/history/reimbursements')}
             />
           </Shell>
         }

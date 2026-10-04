@@ -274,3 +274,33 @@ func TestReportCopyDates(t *testing.T) {
 		t.Errorf("monthName = %q", got)
 	}
 }
+
+// The total owed to members (#406) sits in the summary as of today, whatever
+// month is shown, and the line is absent while nothing is owed.
+func TestReportSummaryShowsTheTotalOwedToMembers(t *testing.T) {
+	f := newReportFixture(t, "Kas RT 05")
+	f.post(t, "in", 100_000, "2026-09-01")
+
+	if body := f.get(t, "/report/"+f.fund.ReportSlug).Body.String(); strings.Contains(body, reportText.OwedLabel) {
+		t.Error("a fund owing nothing still shows the owed line")
+	}
+
+	q := store.New(f.db)
+	member, err := q.CreateMember(context.Background(), store.CreateMemberParams{FundID: f.fund.ID, Name: "Ani", CreatedAt: 1})
+	if err != nil {
+		t.Fatalf("CreateMember() = %v, want no error", err)
+	}
+	if _, err := q.CreateReimbursement(context.Background(), store.CreateReimbursementParams{
+		FundID: f.fund.ID, MemberID: member.ID, PurposeID: f.mainID, Amount: 45_000, IncurredOn: "2026-09-03", CreatedAt: 1,
+	}); err != nil {
+		t.Fatalf("CreateReimbursement() = %v, want no error", err)
+	}
+
+	for _, month := range []string{"2026-09", "2026-10"} {
+		body := f.get(t, "/report/"+f.fund.ReportSlug+"?month="+month).Body.String()
+		want := "<li><span>" + reportText.OwedLabel + "</span><span class=\"tabular\">" + money.FormatIDR(45_000) + "</span></li>"
+		if !strings.Contains(body, want) {
+			t.Errorf("month %s: body has no owed line %q", month, want)
+		}
+	}
+}

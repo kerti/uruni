@@ -63,6 +63,11 @@ test.describe('reimbursements', () => {
 
     firstMemberName = await recordClaim(page, '10000')
 
+    // Recording lands on Beranda, which now shows what the fund owes (#406).
+    // Visible only: the seed may hold other open claims, so the total is not
+    // this claim's amount alone.
+    await expect(page.getByRole('button', { name: new RegExp(copy.home.owedToMembers) })).toBeVisible()
+
     // Then Riwayat's Talangan tab (#226, ADR-032), where the claim lives.
     await openTalangan(page)
     // The claim should now be in the outstanding list

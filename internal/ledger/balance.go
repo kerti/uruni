@@ -45,3 +45,17 @@ func (l *Ledger) PurposeBalance(ctx context.Context, fundID, purposeID int64) (m
 	}
 	return money.FromDB(v), nil
 }
+
+// OwedToMembers is what the fund still owes members who fronted an expense:
+// every claim neither settled by a payout nor waived, summed (#406). It is not
+// subtracted from FundBalance - the money is still in the kas until the payout
+// - so Beranda and the report show it beside the balance, never inside it.
+// It equals the sum of the Talangan "Belum dibayar" list by construction: the
+// query applies the same two conditions as ListOutstandingReimbursementsByFund.
+func (l *Ledger) OwedToMembers(ctx context.Context, fundID int64) (money.Amount, error) {
+	v, err := l.q.OutstandingReimbursementTotal(ctx, fundID)
+	if err != nil {
+		return 0, fmt.Errorf("owed to members: %w", err)
+	}
+	return money.FromDB(v), nil
+}

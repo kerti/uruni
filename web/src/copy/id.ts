@@ -506,6 +506,10 @@ export const copy = {
     // an open incidental nor a Titipan shows no section at all, so this
     // heading has no accompanying empty-state string.
     purposeBreakdownHeading: 'Saldo per pos',
+    // The total owed to members who fronted an expense (#406), after the
+    // purpose breakdown and only when above zero. Same words as the Talangan
+    // tab it opens, so the row and the list read as one thing.
+    owedToMembers: 'Talangan belum dibayar',
     recentActivityHeading: 'Aktivitas terbaru',
     recentActivityEmpty: 'Belum ada transaksi tercatat.',
     // The entry point into Riwayat's Transaksi tab (M6.23) - the recent-five
