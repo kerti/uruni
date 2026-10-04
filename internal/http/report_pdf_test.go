@@ -20,8 +20,10 @@ import (
 
 // pdfStreams are the page content streams of a PDF fpdf wrote: every
 // "stream ... endstream" body, inflated when it is zlib data (fpdf compresses
-// by default) and raw otherwise.
-var pdfStreamRE = regexp.MustCompile(`(?s)stream\r?\n(.*?)\r?\nendstream`)
+// by default) and raw otherwise. fpdf frames a stream with a bare "\n" on
+// each side; matching an optional "\r" too would eat a compressed stream's
+// last byte whenever that byte is 0x0D.
+var pdfStreamRE = regexp.MustCompile(`(?s)stream\n(.*?)\nendstream`)
 
 // pdfText is the text a reader would see in the file, one string per drawn
 // text run, in drawing order. It reads only what fpdf's UTF-8 path emits:
@@ -347,5 +349,29 @@ func TestReportFontLicenceShipsWithTheFonts(t *testing.T) {
 	}
 	if !bytes.Contains(b, []byte("SIL OPEN FONT LICENSE Version 1.1")) {
 		t.Error("OFL.txt does not look like the SIL Open Font License 1.1")
+	}
+}
+
+// fpdf's font map stops at U+FFFF: a rune above it - an emoji a treasurer
+// typed into the fund's name, a member's or an envelope's - panicked inside
+// Output and the statement was a 500. Such runes are dropped; the rest of the
+// text stays.
+func TestReportPDFSurvivesRunesBeyondTheBMP(t *testing.T) {
+	f := newReportFixture(t, "Kas RT 05 \U0001F3E0")
+	if _, err := f.l.OpenIncidental(context.Background(), ledger.OpenIncidentalParams{
+		FundID: f.fund.ID, Occasion: "Halal bihalal \U0001F319\uFE0F", OpenedOn: "2026-09-01",
+	}); err != nil {
+		t.Fatalf("OpenIncidental() = %v", err)
+	}
+	rec := f.get(t, "/report/"+f.fund.ReportSlug+"/pdf?month=2026-09")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rec.Code)
+	}
+	writeSamplePDF(t, rec.Body.Bytes())
+	text := strings.Join(pdfText(t, rec.Body.Bytes()), "\n")
+	for _, want := range []string{"Kas RT 05", "Halal bihalal"} {
+		if !strings.Contains(text, want) {
+			t.Errorf("PDF text has no %q; runs:\n%s", want, text)
+		}
 	}
 }

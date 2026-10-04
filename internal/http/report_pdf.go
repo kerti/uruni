@@ -114,6 +114,33 @@ type pdfDoc struct {
 	repeat func()
 }
 
+// pdfSafe drops what fpdf cannot carry: its UTF-8 font map ends at U+FFFF, so
+// a rune above it - an emoji in a fund name or a note - panics inside Output.
+// The emoji presentation selector and the zero-width joiner go with it, being
+// only the remains of such an emoji; the embedded font draws neither.
+func pdfSafe(s string) string {
+	return strings.Map(func(r rune) rune {
+		if r > 0xFFFF || r == 0xFE0F || r == 0x200D {
+			return -1
+		}
+		return r
+	}, s)
+}
+
+// CellFormat, SplitText and SetTitle are every way text reaches fpdf here;
+// each passes it through pdfSafe first.
+func (d *pdfDoc) CellFormat(w, h float64, txt, border string, ln int, align string, fill bool, link int, linkStr string) {
+	d.Fpdf.CellFormat(w, h, pdfSafe(txt), border, ln, align, fill, link, linkStr)
+}
+
+func (d *pdfDoc) SplitText(txt string, w float64) []string {
+	return d.Fpdf.SplitText(pdfSafe(txt), w)
+}
+
+func (d *pdfDoc) SetTitle(title string, isUTF8 bool) {
+	d.Fpdf.SetTitle(pdfSafe(title), isUTF8)
+}
+
 func drawReportPDF(page reportPage) ([]byte, error) {
 	regular, err := reportFonts.ReadFile("fonts/NotoSans-Regular.ttf")
 	if err != nil {
