@@ -559,6 +559,39 @@ describe('Reimbursements tab', () => {
     expect(screen.getByLabelText(searchText.searchLabel)).toHaveValue('Budi')
   })
 
+  it('?show=all opens on the all view, and the toggle writes it while keeping ?q=', async () => {
+    const requests: URL[] = []
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = new URL(String(input), 'http://localhost')
+        if (url.pathname === '/api/members') return jsonResponse({ members, next_cursor: null })
+        if (url.pathname === '/api/purposes') return jsonResponse(purposes)
+        if (url.pathname === '/api/accounts') return jsonResponse(accounts)
+        if (url.pathname === '/api/reimbursements') {
+          requests.push(url)
+          return jsonResponse(page([claim(1, { note: 'Parkir' })]))
+        }
+        return jsonResponse({ error: { code: 'not_found', message: 'not found' } }, 404)
+      }),
+    )
+    const user = userEvent.setup()
+    renderAt('/history/reimbursements?q=parkir&show=all')
+
+    expect(await screen.findByText('Parkir')).toBeInTheDocument()
+    expect(screen.getByRole('group', { name: text.heading })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: text.allTab })).toHaveAttribute('aria-pressed', 'true')
+    expect(requests.at(-1)?.searchParams.has('outstanding')).toBe(false)
+
+    await user.click(screen.getByRole('button', { name: text.outstandingTab }))
+    await waitFor(() => expect(screen.getByTestId('location').textContent).toBe('?q=parkir'))
+    await waitFor(() => expect(requests.at(-1)?.searchParams.get('outstanding')).toBe('true'))
+    expect(requests.at(-1)?.searchParams.get('q')).toBe('parkir')
+
+    await user.click(screen.getByRole('button', { name: text.allTab }))
+    await waitFor(() => expect(screen.getByTestId('location').textContent).toBe('?q=parkir&show=all'))
+  })
+
   it('writes a typed search to the URL once, after the pause, and refetches with it', async () => {
     const requests: URL[] = []
     vi.stubGlobal(

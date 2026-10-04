@@ -87,12 +87,11 @@ interface FormData {
  * correct/remove a claim entered wrongly - only until settled, after which
  * the payout is a posted ledger row.
  *
- * Two-tab view: outstanding (default) vs all - kept as component state, not
- * the URL, since it was never a route before this move and nothing here
- * needs a deep link into "all" specifically. Search (?q=) covers member
- * name and note only (narrower than Transaksi's own surface) and does live
- * in the URL, the same reasoning History/Transactions.tsx gives: back and
- * reload should land on the same search.
+ * Two views: outstanding (default) vs all (`?show=all`). Both the view and
+ * the search (?q=) live in the URL (ADR-032: list state is a route, never
+ * component state), so back and reload land on the same list, the same
+ * reasoning History/Transactions.tsx gives. Search covers member name and
+ * note only (narrower than Transaksi's own surface).
  *
  * No heading, no back button and no body copy of its own - Riwayat's own
  * `<h1>` already names the page, the tab strip is the way back to Transaksi
@@ -107,7 +106,9 @@ export default function Reimbursements({ refetchKey }: { refetchKey?: unknown })
   const q = (searchParams.get('q') ?? '').trim()
   const [draft, setDraft] = useState(q)
 
-  const [tab, setTab] = useState<'outstanding' | 'all'>('outstanding')
+  // Anything but `all` reads as the default view, so a stale or hand-typed
+  // value lands on the outstanding list rather than an error.
+  const tab: 'outstanding' | 'all' = searchParams.get('show') === 'all' ? 'all' : 'outstanding'
   const [listState, listRun] = useApi<ReimbursementsPage>()
   // Pages after the first, appended in order - reset whenever the first
   // page is refetched (a tab switch, a search, a write, or refetchKey).
@@ -161,10 +162,40 @@ export default function Reimbursements({ refetchKey }: { refetchKey?: unknown })
     const next = draft.trim()
     if (next === q) return
     const timer = window.setTimeout(() => {
-      setSearchParams(next ? { q: next } : {}, { replace: true })
+      // Rewrites `q` alone, keeping `show` - setSearchParams replaces the
+      // whole query otherwise.
+      setSearchParams(
+        (current) => {
+          const params = new URLSearchParams(current)
+          if (next) params.set('q', next)
+          else params.delete('q')
+          return params
+        },
+        { replace: true },
+      )
     }, SEARCH_DEBOUNCE_MS)
     return () => window.clearTimeout(timer)
   }, [draft, q, setSearchParams])
+
+  // A pushed entry, not a replace: switching view is a navigation, so back
+  // returns to the view she came from.
+  function showView(next: 'outstanding' | 'all') {
+    if (next === tab) return
+    setSearchParams((current) => {
+      const params = new URLSearchParams(current)
+      if (next === 'all') params.set('show', 'all')
+      else params.delete('show')
+      return params
+    })
+  }
+
+  function chooseTab(next: 'outstanding' | 'all') {
+    showView(next)
+    setSettleId(null)
+    setCorrectId(null)
+    setDeleteId(null)
+    setFeedback(null)
+  }
 
   async function loadMore(cursor: string) {
     const startedIn = generation.current
@@ -270,7 +301,7 @@ export default function Reimbursements({ refetchKey }: { refetchKey?: unknown })
         return claim
       },
       () => (photoFailed ? copy.receipts.reimbursementPhotoFailed : text.record.success),
-      () => setTab('outstanding'),
+      () => showView('outstanding'),
     )
   }
 
@@ -504,20 +535,15 @@ export default function Reimbursements({ refetchKey }: { refetchKey?: unknown })
         </p>
       )}
 
-      {/* Tab bar */}
-      <div role="tablist" aria-label={text.heading} className={segmentedTrackClass(2)}>
+      {/* View toggle - a segmented control, not tabs: the Riwayat tab strip
+          above is the only tablist on this screen. */}
+      <div role="group" aria-label={text.heading} className={segmentedTrackClass(2)}>
         <Button
           type="button"
           variant={tab === 'outstanding' ? 'default' : 'ghost'}
           aria-pressed={tab === 'outstanding'}
           className={segmentedItemClass(tab === 'outstanding')}
-          onClick={() => {
-            setTab('outstanding')
-            setSettleId(null)
-            setCorrectId(null)
-            setDeleteId(null)
-            setFeedback(null)
-          }}
+          onClick={() => chooseTab('outstanding')}
         >
           {text.outstandingTab}
         </Button>
@@ -526,13 +552,7 @@ export default function Reimbursements({ refetchKey }: { refetchKey?: unknown })
           variant={tab === 'all' ? 'default' : 'ghost'}
           aria-pressed={tab === 'all'}
           className={segmentedItemClass(tab === 'all')}
-          onClick={() => {
-            setTab('all')
-            setSettleId(null)
-            setCorrectId(null)
-            setDeleteId(null)
-            setFeedback(null)
-          }}
+          onClick={() => chooseTab('all')}
         >
           {text.allTab}
         </Button>

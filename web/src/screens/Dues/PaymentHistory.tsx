@@ -1,5 +1,6 @@
 import { ArrowDownLeft, ArrowUpRight, Search } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -42,14 +43,13 @@ const SEARCH_DEBOUNCE_MS = 300
  * `refetchKey`, the same "a write happened elsewhere, reload" signal every
  * other tab already reads.
  *
- * Search is local state, not the URL: unlike History/Transactions.tsx and
- * History/Reimbursements.tsx, this section is not itself a routed tab (it
- * lives inside the Iuran tab, under the matrix), so there is no deep link
- * into a search here for the URL to carry.
+ * Search (?q=) lives in the URL, as on the other Riwayat tabs (ADR-032):
+ * back and reload land on the same search.
  */
 export default function PaymentHistory({ onOpenStatus, refetchKey }: { onOpenStatus: () => void; refetchKey?: unknown }) {
-  const [draft, setDraft] = useState('')
-  const [q, setQ] = useState('')
+  const [searchParams, setSearchParams] = useSearchParams()
+  const q = (searchParams.get('q') ?? '').trim()
+  const [draft, setDraft] = useState(q)
 
   const [state, run] = useApi<DuesPaymentsPage>()
   const [more, setMore] = useState<DuesPaymentsPage | null>(null)
@@ -70,12 +70,29 @@ export default function PaymentHistory({ onOpenStatus, refetchKey }: { onOpenSta
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [run, q, refetchKey])
 
+  // The URL changed under the field (back, forward, a link): follow it. A
+  // draft that already trims to the same search is left alone, so a
+  // trailing space she is still typing is not snatched away.
+  useEffect(() => {
+    setDraft((current) => (current.trim() === q ? current : q))
+  }, [q])
+
   useEffect(() => {
     const next = draft.trim()
     if (next === q) return
-    const timer = window.setTimeout(() => setQ(next), SEARCH_DEBOUNCE_MS)
+    const timer = window.setTimeout(() => {
+      setSearchParams(
+        (current) => {
+          const params = new URLSearchParams(current)
+          if (next) params.set('q', next)
+          else params.delete('q')
+          return params
+        },
+        { replace: true },
+      )
+    }, SEARCH_DEBOUNCE_MS)
     return () => window.clearTimeout(timer)
-  }, [draft, q])
+  }, [draft, q, setSearchParams])
 
   async function loadMore(cursor: string) {
     const startedIn = generation.current
