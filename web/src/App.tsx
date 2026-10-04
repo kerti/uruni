@@ -18,6 +18,10 @@ import Incidentals from '@/screens/Incidentals'
 import History from '@/screens/History/History'
 import Transactions from '@/screens/History/Transactions'
 import Reimbursements from '@/screens/History/Reimbursements'
+import RecordClaim from '@/screens/Reimbursements/RecordClaim'
+import SettleClaim from '@/screens/Reimbursements/Settle'
+import CorrectClaim from '@/screens/Reimbursements/Correct'
+import type { TalanganState } from '@/screens/Reimbursements/shared'
 import Reconciliations from '@/screens/History/Reconciliations'
 import DuesStatus from '@/screens/Dues/Status'
 import PaymentHistory from '@/screens/Dues/PaymentHistory'
@@ -212,6 +216,17 @@ function AuthedGate({ onLoggedOut }: { onLoggedOut: () => void }) {
   const parsedTier = rawTier === null || rawTier.trim() === '' ? NaN : Number(rawTier)
   const tierId = Number.isInteger(parsedTier) && parsedTier > 0 ? parsedTier : null
 
+  // #368: /reimbursements/settle?id=<id> and /reimbursements/correct?id=<id>
+  // are one claim's own screens, reached from Talangan's row and from
+  // nowhere else - parsed the same way as ?tier= above. Without a usable id
+  // there is nothing to show, so they redirect to the tab.
+  const rawClaim = searchParams.get('id')
+  const parsedClaim = rawClaim === null || rawClaim.trim() === '' ? NaN : Number(rawClaim)
+  const claimId = Number.isInteger(parsedClaim) && parsedClaim > 0 ? parsedClaim : null
+  const backToTalangan = () => navigate('/history/reimbursements')
+  const talanganDone = (reimbursementDone: TalanganState['reimbursementDone']) =>
+    navigate('/history/reimbursements', { state: { reimbursementDone } satisfies TalanganState })
+
   useEffect(() => {
     void run(getFund)
   }, [run])
@@ -342,6 +357,41 @@ function AuthedGate({ onLoggedOut }: { onLoggedOut: () => void }) {
           Talangan now lives at /history/reimbursements (#226, ADR-032),
           same redirect precedent as /dues above. */}
       <Route path="/reimbursements" element={<Navigate to="/history/reimbursements" replace />} />
+      {/* #368, ADR-032: Talangan's money forms are screens, not inline
+          expanders. Cancel and success both return to the tab; success
+          hands its confirmation back through router state. */}
+      <Route
+        path="/reimbursements/new"
+        element={
+          <Shell title={title} onLoggedOut={onLoggedOut}>
+            <RecordClaim onDone={talanganDone} onCancel={backToTalangan} />
+          </Shell>
+        }
+      />
+      <Route
+        path="/reimbursements/settle"
+        element={
+          claimId === null ? (
+            <Navigate to="/history/reimbursements" replace />
+          ) : (
+            <Shell title={title} onLoggedOut={onLoggedOut}>
+              <SettleClaim claimId={claimId} onDone={() => talanganDone('settled')} onCancel={backToTalangan} />
+            </Shell>
+          )
+        }
+      />
+      <Route
+        path="/reimbursements/correct"
+        element={
+          claimId === null ? (
+            <Navigate to="/history/reimbursements" replace />
+          ) : (
+            <Shell title={title} onLoggedOut={onLoggedOut}>
+              <CorrectClaim claimId={claimId} onDone={() => talanganDone('corrected')} onCancel={backToTalangan} />
+            </Shell>
+          )
+        }
+      />
       {/* The dues payment form's own former address (M6.13) - it is Catat's
           fourth Jenis now (#315), opened with Iuran chosen and the matrix as
           the door to return through. */}

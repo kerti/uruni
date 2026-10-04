@@ -63,6 +63,17 @@ export function listReimbursements(input: ListReimbursementsInput = {}): Promise
   )
 }
 
+/**
+ * GET /api/reimbursements/{id}: one claim, with the same `settled` flag and
+ * receipt_ids a list row carries. The settle and correct screens open on a
+ * claim by address (`?id=`), so a reload or a stale link needs a lookup that
+ * does not depend on which page of the list the claim sits in. An id naming
+ * nothing is a 404 (ApiError code not_found).
+ */
+export function getReimbursement(id: number): Promise<Reimbursement> {
+  return apiFetch<Reimbursement>(`/api/reimbursements/${id}`)
+}
+
 /** POST /api/reimbursements - a direct-CRUD write that moves no money.
  * Recording a claim posts nothing to the ledger; the outstanding list shows
  * it immediately. */

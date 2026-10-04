@@ -56,7 +56,7 @@ Standing decisions that no ADR owns go in [`../Decisions.md`](../Decisions.md).
 | [029](./029-reversing-a-dues-payment.md) | Reversing a dues payment: linked adjustment row, not netting | implemented |
 | [030](./030-multi-fund-scoping.md) | Multi-fund scoping: implicit fund resolution, single-account auth | implemented |
 | [031](./031-posting-to-a-closed-incidental.md) | A closed envelope refuses postings, and reopening is the way back | implemented |
-| [032](./032-two-level-navigation.md) | Two-level navigation: five noun slots, one privileged verb | `draft` |
+| [032](./032-two-level-navigation.md) | Two-level navigation: five noun slots, one privileged verb | implemented |
 | [033](./033-correcting-a-posted-purpose.md) | A posted row's peruntukan can be corrected | implemented |
 | [034](./034-envelope-participation.md) | Envelope participation: named contributions, derived from the ledger | implemented |
 | [035](./035-public-report.md) | Public report: one month, server-rendered, nothing the treasurer didn't mean to publish | implemented |

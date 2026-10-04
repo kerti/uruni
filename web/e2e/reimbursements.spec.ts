@@ -38,7 +38,8 @@ test.describe('reimbursements', () => {
 
     // Open record form
     await page.getByRole('button', { name: copy.reimbursements.record.heading }).click()
-    await expect(page.getByText(copy.reimbursements.record.heading)).toBeVisible()
+    await expect(page).toHaveURL(/\/reimbursements\/new$/)
+    await expect(page.getByRole('heading', { name: copy.reimbursements.record.heading })).toBeVisible()
 
     // Pick the first member and fill amount
     await page.getByRole('combobox', { name: copy.reimbursements.record.memberLabel }).click()
@@ -49,6 +50,7 @@ test.describe('reimbursements', () => {
 
     // Submit
     await page.getByRole('button', { name: copy.reimbursements.record.submit }).click()
+    await expect(page).toHaveURL(/\/history\/reimbursements$/)
     await expect(page.getByText(copy.reimbursements.record.success)).toBeVisible()
 
     // The claim should now be in the outstanding list
@@ -72,7 +74,8 @@ test.describe('reimbursements', () => {
     // matching is a case-insensitive substring search, so "Bayar" otherwise
     // also matches the "Belum dibayar" tab button.
     await page.getByRole('button', { name: copy.reimbursements.actions.settle, exact: true }).first().click()
-    await expect(page.getByText(copy.reimbursements.settle.heading)).toBeVisible()
+    await expect(page).toHaveURL(/\/reimbursements\/settle\?id=\d+$/)
+    await expect(page.getByRole('heading', { name: copy.reimbursements.settle.heading })).toBeVisible()
 
     // Pick where the money is paid from - the account has no default.
     await page.getByRole('combobox', { name: copy.reimbursements.settle.accountLabel }).click()
@@ -80,6 +83,7 @@ test.describe('reimbursements', () => {
 
     // Submit settle (date defaults to today)
     await page.getByRole('button', { name: copy.reimbursements.settle.submit, exact: true }).click()
+    await expect(page).toHaveURL(/\/history\/reimbursements$/)
     await expect(page.getByText(copy.reimbursements.settle.success)).toBeVisible()
 
     // The settled claim is no longer owed, so it leaves the outstanding list
@@ -91,6 +95,54 @@ test.describe('reimbursements', () => {
     // bare amount.
     await page.getByRole('link', { name: copy.shell.nav.home }).click()
     await expect(page.getByText(copy.rowLabels.settlement.text(firstMemberName)).first()).toBeVisible()
+  })
+
+  test('correct an outstanding claim from its own screen', async ({ page }) => {
+    await page.goto('/')
+    await page.getByLabel(copy.auth.login.emailLabel).fill(seedEmail)
+    await page.getByLabel(copy.auth.login.passwordLabel, { exact: true }).fill(seedPassword)
+    await page.getByRole('button', { name: copy.auth.login.submit }).click()
+    await expect(page.getByText(copy.home.balanceHeading)).toBeVisible()
+
+    await page.getByRole('link', { name: copy.shell.nav.history }).click()
+    await page.getByRole('link', { name: copy.history.tabs.reimbursements }).click()
+    await expect(page.getByRole('button', { name: copy.reimbursements.outstandingTab })).toBeVisible()
+
+    // The earlier claim was settled - record a fresh one to correct (Rp 30.000).
+    await page.getByRole('button', { name: copy.reimbursements.record.heading }).click()
+    await page.getByRole('combobox', { name: copy.reimbursements.record.memberLabel }).click()
+    await page.getByRole('option').first().click()
+    await page.getByLabel(copy.reimbursements.record.amountLabel).fill('30000')
+    await page.getByRole('button', { name: copy.reimbursements.record.submit }).click()
+    await expect(page.getByText(copy.reimbursements.record.success)).toBeVisible()
+    await expect(page.getByText('Rp 30.000')).toBeVisible()
+
+    // Perbaiki sits in the row's "more" menu and opens the claim's own screen.
+    await page.locator('li', { hasText: 'Rp 30.000' }).getByRole('button', { name: copy.reimbursements.actions.menuAria }).click()
+    await page.getByRole('menuitem', { name: copy.reimbursements.actions.correct, exact: true }).click()
+    await expect(page).toHaveURL(/\/reimbursements\/correct\?id=\d+$/)
+    await expect(page.getByRole('heading', { name: copy.reimbursements.correct.heading })).toBeVisible()
+
+    // Emptied before it is filled: a single fill() over the pre-filled
+    // amount concatenates the two runs of digits (see dues.spec.ts).
+    const amount = page.getByLabel(copy.reimbursements.record.amountLabel)
+    await amount.fill('')
+    await amount.fill('35000')
+    await expect(amount).toHaveValue('35000')
+    await page.getByRole('button', { name: copy.reimbursements.correct.submit }).click()
+
+    // Back on the tab with the confirmation and the corrected amount.
+    await expect(page).toHaveURL(/\/history\/reimbursements$/)
+    await expect(page.getByText(copy.reimbursements.correct.success)).toBeVisible()
+    await expect(page.getByText('Rp 35.000')).toBeVisible()
+    await expect(page.getByText('Rp 30.000')).not.toBeVisible()
+
+    // Settle it so the next test starts from an empty outstanding list.
+    await page.getByRole('button', { name: copy.reimbursements.actions.settle, exact: true }).first().click()
+    await page.getByRole('combobox', { name: copy.reimbursements.settle.accountLabel }).click()
+    await page.getByRole('option').first().click()
+    await page.getByRole('button', { name: copy.reimbursements.settle.submit, exact: true }).click()
+    await expect(page.getByText(copy.reimbursements.settle.success)).toBeVisible()
   })
 
   test('waive a fresh claim, then un-waive it from the all tab', async ({ page }) => {

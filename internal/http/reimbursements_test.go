@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -1152,5 +1153,66 @@ func TestDeleteReimbursementWithAReceiptIs409(t *testing.T) {
 	}
 	if got := decodeError(t, rec); got.Code != "referenced_by_other_records" {
 		t.Errorf("error code = %q, want %q", got.Code, "referenced_by_other_records")
+	}
+}
+
+func getReimbursement(t *testing.T, r http.Handler, id string) *httptest.ResponseRecorder {
+	t.Helper()
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/reimbursements/"+id, nil))
+	return rec
+}
+
+func TestGetReimbursementByIDReturnsTheClaimWithItsSettledFlag(t *testing.T) {
+	r := testRouter(t)
+	setup := setUpFund(t, r)
+	memberID := memberFor(t, r, "Jane")
+
+	createRec := postReimbursement(t, r, reimbursementRequest{
+		MemberID: memberID, PurposeID: setup.MainPurposeID, Amount: 80_000, IncurredOn: "2026-08-10",
+	})
+	var claim reimbursementResponse
+	if err := json.NewDecoder(createRec.Body).Decode(&claim); err != nil {
+		t.Fatalf("decoding claim: %v", err)
+	}
+	id := strconv.FormatInt(claim.ID, 10)
+
+	rec := getReimbursement(t, r, id)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GET claim = %d, want 200 (body: %s)", rec.Code, rec.Body.String())
+	}
+	var got reimbursementResponse
+	if err := json.NewDecoder(rec.Body).Decode(&got); err != nil {
+		t.Fatalf("decoding: %v", err)
+	}
+	if got.ID != claim.ID || got.Amount != 80_000 || got.MemberID != memberID || got.Settled || got.ReceiptIDs == nil {
+		t.Errorf("claim = %+v, want id %d amount 80000 unsettled with receipt_ids []", got, claim.ID)
+	}
+
+	settle := postSettlement(t, r, claim.ID, settleReimbursementRequest{AccountID: setup.CashAccountID(t), OccurredOn: "2026-08-20"})
+	if settle.Code != http.StatusCreated {
+		t.Fatalf("settle = %d (body: %s)", settle.Code, settle.Body.String())
+	}
+	rec = getReimbursement(t, r, id)
+	got = reimbursementResponse{}
+	if err := json.NewDecoder(rec.Body).Decode(&got); err != nil {
+		t.Fatalf("decoding: %v", err)
+	}
+	if !got.Settled {
+		t.Errorf("settled = false after settling, want true")
+	}
+}
+
+func TestGetReimbursementByIDIs404ForUnknownOrNonNumericIDs(t *testing.T) {
+	r := testRouter(t)
+	setUpFund(t, r)
+	for _, id := range []string{"9999", "abc"} {
+		rec := getReimbursement(t, r, id)
+		if rec.Code != http.StatusNotFound {
+			t.Fatalf("GET /api/reimbursements/%s = %d, want 404 (body: %s)", id, rec.Code, rec.Body.String())
+		}
+		if got := decodeError(t, rec); got.Code != "not_found" {
+			t.Errorf("error code = %q, want not_found", got.Code)
+		}
 	}
 }
