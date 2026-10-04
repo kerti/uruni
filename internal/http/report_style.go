@@ -14,6 +14,7 @@ var reportPalette = map[string]string{
 	"card":               "#ffffff",
 	"primary":            "#1f5d50",
 	"primary-foreground": "#ffffff",
+	"accent":             "#7bae8d",
 	"muted":              "#eeebe3",
 	"muted-foreground":   "#67757c",
 	"border":             "#e4e0d7",
@@ -44,7 +45,7 @@ func reportStyle() template.CSS {
 // reportPaletteOrder fixes the emitted order, so the page's bytes do not
 // change between requests the way ranging over a map would make them.
 var reportPaletteOrder = []string{
-	"background", "foreground", "card", "primary", "primary-foreground",
+	"background", "foreground", "card", "primary", "primary-foreground", "accent",
 	"muted", "muted-foreground", "border", "input",
 	"success", "success-soft", "attention", "attention-soft",
 }

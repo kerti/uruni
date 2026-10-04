@@ -26,6 +26,27 @@ import (
 // last byte whenever that byte is 0x0D.
 var pdfStreamRE = regexp.MustCompile(`(?s)stream\n(.*?)\nendstream`)
 
+// pdfPages is pdfText split by page: fpdf writes one content stream per page,
+// in order, and the font streams it also writes carry no text runs.
+func pdfPages(t *testing.T, pdf []byte) [][]string {
+	t.Helper()
+	var pages [][]string
+	for _, m := range pdfStreamRE.FindAllSubmatch(pdf, -1) {
+		body := m[1]
+		if zr, err := zlib.NewReader(bytes.NewReader(body)); err == nil {
+			inflated, err := io.ReadAll(zr)
+			if err != nil {
+				t.Fatalf("inflating a content stream: %v", err)
+			}
+			body = inflated
+		}
+		if runs := tjRuns(body); len(runs) > 0 {
+			pages = append(pages, runs)
+		}
+	}
+	return pages
+}
+
 // pdfText is the text a reader would see in the file, one string per drawn
 // text run, in drawing order. It reads only what fpdf's UTF-8 path emits:
 // "(<UTF-16BE, escaped>) Tj" inside the content streams. That is stdlib-only
@@ -317,8 +338,9 @@ func TestReportPDFPaginates(t *testing.T) {
 			heads++
 		}
 	}
-	if heads != pages {
-		t.Errorf("table header drawn %d times over %d pages, want once per page", heads, pages)
+	// Page 1 is the summary alone; the table runs over every page after it.
+	if heads != pages-1 {
+		t.Errorf("table header drawn %d times over %d pages, want once per page after the summary", heads, pages)
 	}
 	if want := reportText.PDFPage("2", fmt.Sprint(pages)); !pdfHas(runs, want) {
 		t.Errorf("no footer %q; the page count did not resolve", want)
@@ -493,4 +515,27 @@ func fontRunes(t *testing.T, font []byte) map[rune]bool {
 		}
 	}
 	return has
+}
+
+
+// The statement opens with Ringkasan on its own page, and every later section
+// - Transaksi, Iuran, Amplop - starts a page of its own, its heading first.
+func TestReportPDFStartsEachSectionOnItsOwnPage(t *testing.T) {
+	s := newPDFScenario(t)
+	pages := pdfPages(t, s.get(t, "/report/"+s.fund.ReportSlug+"/pdf?month=2026-09").Body.Bytes())
+
+	sections := []string{reportText.PDFSummary, reportText.TransactionsLabel, reportText.DuesLabel, reportText.EnvelopesLabel}
+	if len(pages) != len(sections) {
+		t.Fatalf("pages = %d, want %d (one per section, each fits one page)", len(pages), len(sections))
+	}
+	for i, want := range sections {
+		if !pdfHas(pages[i], want) {
+			t.Errorf("page %d has no heading %q; runs:\n%s", i+1, want, strings.Join(pages[i], "\n"))
+		}
+		for j, other := range sections {
+			if j != i && pdfHas(pages[i], other) {
+				t.Errorf("page %d also carries the heading %q", i+1, other)
+			}
+		}
+	}
 }

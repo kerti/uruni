@@ -99,6 +99,7 @@ type reportCopy struct {
 	PDFDownload     string
 	PDFFilename     func(month string) string
 	PDFStatement    func(month string) string
+	PDFSummary      string
 	PDFColDate      string
 	PDFColNote      string
 	PDFColAmount    string
@@ -189,6 +190,7 @@ var reportText = reportCopy{
 	PDFColAmount:    "Jumlah",
 	PDFColMember:    "Anggota",
 	PDFColStatus:    "Status",
+	PDFSummary:      "Ringkasan",
 	PDFNoRows:       "Tidak ada transaksi bulan ini.",
 	PDFPage:         func(page, pages string) string { return "Halaman " + page + " dari " + pages },
 	PDFFooterSource: func(fundName string) string { return fundName + " \u00b7 Laporan kas" },

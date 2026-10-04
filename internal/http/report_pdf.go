@@ -322,9 +322,13 @@ func headCell(w float64, align, title string) pdfCell {
 	return pdfCell{w: w, align: align, lines: []pdfLine{{text: title, bold: true, size: pdfSmallSize, color: "muted-foreground"}}}
 }
 
-func (d *pdfDoc) section(title string) {
-	d.need(24)
-	d.SetY(d.GetY() + pdfSectionGap)
+func (d *pdfDoc) section(title string, ownPage bool) {
+	if ownPage {
+		d.AddPage()
+	} else {
+		d.need(24)
+		d.SetY(d.GetY() + pdfSectionGap)
+	}
 	d.text(pdfLine{text: title, bold: true, size: 12, color: "primary"}, pdfContentW, "L")
 	d.rule("primary")
 	d.Line(pdfMarginX, d.GetY()+0.6, pdfMarginX+pdfContentW, d.GetY()+0.6)
@@ -347,12 +351,48 @@ func (d *pdfDoc) footer(fundName string) {
 	left := pdfLine{text: reportText.PDFFooterSource(fundName), size: pdfSmallSize, color: "muted-foreground"}
 	right := pdfLine{text: reportText.PDFPage(strconv.Itoa(d.PageNo()), "{nb}"), size: pdfSmallSize, color: "muted-foreground"}
 	y := d.GetY()
+	h := pdfLineHeight(pdfSmallSize)
+	// The mark leads the line, centred on it, with clear space after it.
+	d.mark(pdfMarginX, y+(h-pdfMarkSize)/2, pdfMarkSize)
+	textX := pdfMarginX + pdfMarkSize + 2.5
 	d.face(false, pdfSmallSize)
 	d.ink(left.color)
-	d.SetXY(pdfMarginX, y)
-	d.CellFormat(pdfContentW*0.7, pdfLineHeight(pdfSmallSize), left.text, "", 0, "L", false, 0, "")
+	d.SetXY(textX, y)
+	d.CellFormat(pdfContentW*0.7-(textX-pdfMarginX), h, left.text, "", 0, "L", false, 0, "")
 	d.SetXY(pdfMarginX+pdfContentW*0.7, y)
-	d.CellFormat(pdfContentW*0.3, pdfLineHeight(pdfSmallSize), right.text, "", 0, "R", false, 0, "")
+	d.CellFormat(pdfContentW*0.3, h, right.text, "", 0, "R", false, 0, "")
+}
+
+// pdfMarkSize is the mark's height in the footer, in millimetres: above the
+// 16px minimum Design-System.md sets for it, and no taller than the line.
+const pdfMarkSize = 4.5
+
+// mark draws Uruni's mark, the U-vessel with its Sage dot (Design-System.md,
+// "Logo & mark"), as vectors from web/public/favicon.svg's own geometry - the
+// primary colourway for a light page, without the app icon's tile, and
+// without the wordmark, which is set in Plus Jakarta Sans and the PDF embeds
+// only Noto Sans. size is its height; (x, y) its top-left corner.
+//
+// favicon.svg, in its 64-unit box: the vessel is a 6-wide round-capped stroke
+// down from (21,18) and (43,18) to y=31, joined by the lower half of a circle
+// of radius 11 about (32,31); the dot is a radius-5 circle at (32,30). Stroke
+// included, the vessel spans x 18..46 and y 15..45 - 28 by 30 units.
+func (d *pdfDoc) mark(x, y, size float64) {
+	u := size / 30
+	px := func(ux float64) float64 { return x + (ux-18)*u }
+	py := func(uy float64) float64 { return y + (uy-15)*u }
+
+	d.rule("primary")
+	d.SetLineWidth(6 * u)
+	d.SetLineCapStyle("round")
+	d.Line(px(21), py(18), px(21), py(31))
+	d.Line(px(43), py(18), px(43), py(31))
+	d.Arc(px(32), py(31), 11*u, 11*u, 0, 180, 360, "D")
+	d.SetLineCapStyle("butt")
+	d.SetLineWidth(pdfRuleWidthMM)
+
+	d.fill("accent")
+	d.Circle(px(32), py(30), 5*u, "F")
 }
 
 // --- sections -------------------------------------------------------------
@@ -364,7 +404,8 @@ func (d *pdfDoc) header(p reportPage) {
 	d.text(pdfLine{text: p.FundName, bold: true, size: 22, color: "primary"}, pdfContentW, "L")
 	d.text(pdfLine{text: reportText.PDFStatement(reportText.monthName(p.Month)), bold: true, size: 13, color: "foreground"}, pdfContentW, "L")
 	d.text(pdfLine{text: p.AsOf, size: pdfBodySize, color: "muted-foreground"}, pdfContentW, "L")
-	d.SetY(d.GetY() + 5)
+	d.section(reportText.PDFSummary, false)
+	d.SetY(d.GetY() + 2)
 
 	// The balance, in a quiet panel: ink-light for print, Forest for the figure.
 	y := d.GetY()
@@ -409,7 +450,7 @@ func (d *pdfDoc) header(p reportPage) {
 }
 
 func (d *pdfDoc) transactions(p reportPage) {
-	d.section(reportText.TransactionsLabel)
+	d.section(reportText.TransactionsLabel, true)
 	d.pair(reportText.TotalIn, p.Totals.In, false, "success")
 	d.pair(reportText.TotalOut, p.Totals.Out, false, "foreground")
 	d.pair(reportText.TotalNet, p.Totals.Net, true, "primary")
@@ -468,7 +509,7 @@ func (d *pdfDoc) dues(p reportPage) {
 	if len(p.Dues) == 0 {
 		return
 	}
-	d.section(reportText.DuesLabel)
+	d.section(reportText.DuesLabel, true)
 	const amountW, statusW = 30.0, 54.0
 	nameW := pdfContentW - 2*amountW - statusW
 	d.tableHead([]pdfCell{
@@ -523,7 +564,7 @@ func (d *pdfDoc) envelopes(p reportPage) {
 	if len(p.Envelopes) == 0 {
 		return
 	}
-	d.section(reportText.EnvelopesLabel)
+	d.section(reportText.EnvelopesLabel, true)
 	const amountW, statusW = 36.0, 56.0
 	nameW := pdfContentW - amountW - statusW
 	for _, e := range p.Envelopes {
