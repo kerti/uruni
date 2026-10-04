@@ -105,7 +105,8 @@ type reportTotals struct {
 // reportRow is one line of the month. Class is "in", "out" or "move"; Label is
 // "" for a plain row the treasurer recorded. Note is what she typed, under the
 // label as Riwayat shows it (a settled claim's payout carries the claim's
-// note), "" when there is none; a move has none. HasReceipt renders a plain
+// note; a move, the note both its legs carry), "" when there is none.
+// HasReceipt renders a plain
 // marker - nothing about the receipt itself reaches the page.
 type reportRow struct {
 	Date       string
@@ -115,6 +116,14 @@ type reportRow struct {
 	Amount     string
 	Class      string
 	HasReceipt bool
+}
+
+// reportNote is a row's note as the report prints it: trimmed, "" for none.
+func reportNote(note *string) string {
+	if note == nil {
+		return ""
+	}
+	return strings.TrimSpace(*note)
 }
 
 // reportFilter is the GET form: every option of every select, with the
@@ -429,17 +438,13 @@ func buildReportPage(r ledger.Report, empty bool) reportPage {
 			if e.Direction == ledger.ReportDirectionOut {
 				sign = "-"
 			}
-			note := ""
-			if e.Note != nil {
-				note = strings.TrimSpace(*e.Note)
-			}
 			page.Rows = append(page.Rows, reportRow{
-				Date: date, Label: reportText.entryLabel(*e), Note: note, Purpose: e.PurposeName,
+				Date: date, Label: reportText.entryLabel(*e), Note: reportNote(e.Note), Purpose: e.PurposeName,
 				Amount: sign + money.FormatIDR(e.Amount), Class: e.Direction, HasReceipt: e.HasReceipt,
 			})
 		case row.Move != nil:
 			page.Rows = append(page.Rows, reportRow{
-				Date: date, Label: reportText.moveLabel(*row.Move),
+				Date: date, Label: reportText.moveLabel(*row.Move), Note: reportNote(row.Move.Note),
 				Amount: money.FormatIDR(row.Move.Amount), Class: "move",
 			})
 		}

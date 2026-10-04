@@ -300,17 +300,29 @@ func TestReportMonthStepKeepsTheFilters(t *testing.T) {
 	}
 }
 
-// A row shows the note the treasurer typed under its label, trimmed and
-// escaped like any other text; a row without one shows no note line.
+// Every row shows the note the treasurer typed under its label - an entry
+// and a "Dipindah" move alike - trimmed and escaped like any other text, on
+// the page and in the PDF; a row without one shows no note line.
 func TestReportRowShowsItsNote(t *testing.T) {
+	ctx := context.Background()
 	f := newReportFixture(t, "Kas RT 05")
 	note := "  Beli gula <b>dan</b> teh  "
-	if _, err := f.l.PostTransaction(context.Background(), ledger.PostTransactionParams{
+	if _, err := f.l.PostTransaction(ctx, ledger.PostTransactionParams{
 		FundID: f.fund.ID, AccountID: f.cashID, PurposeID: f.mainID, Direction: "out", Amount: 40_000, OccurredOn: "2026-09-12", Note: &note,
 	}); err != nil {
 		t.Fatalf("PostTransaction() = %v", err)
 	}
 	f.post(t, "in", 50_000, "2026-09-13")
+	env, err := f.l.OpenIncidental(ctx, ledger.OpenIncidentalParams{FundID: f.fund.ID, Occasion: "Duka", OpenedOn: "2026-09-01"})
+	if err != nil {
+		t.Fatalf("OpenIncidental() = %v", err)
+	}
+	moveNote := "Sisa kas untuk santunan"
+	if _, err := f.l.PostPurposeMove(ctx, ledger.PostPurposeMoveParams{
+		FundID: f.fund.ID, FromPurposeID: f.mainID, ToPurposeID: env.PurposeID, AccountID: f.cashID, Amount: 5_000, OccurredOn: "2026-09-14", Note: &moveNote,
+	}); err != nil {
+		t.Fatalf("PostPurposeMove() = %v", err)
+	}
 
 	body := f.get(t, "/report/"+f.fund.ReportSlug+"?month=2026-09").Body.String()
 	// The raw body, not txnSection, which unescapes: the note's markup must
@@ -319,7 +331,17 @@ func TestReportRowShowsItsNote(t *testing.T) {
 		t.Errorf("page does not contain %q:\n%s", want, body)
 	}
 	section := txnSection(t, body)
-	if got := strings.Count(section, `class="note"`); got != 1 {
-		t.Errorf("note lines = %d, want 1 (the row without a note shows none)", got)
+	if want := `<span class="note">` + moveNote + `</span>`; !strings.Contains(section, want) {
+		t.Errorf("the move's row does not carry its note %q:\n%s", want, section)
+	}
+	if got := strings.Count(section, `class="note"`); got != 2 {
+		t.Errorf("note lines = %d, want 2 (the row without a note shows none)", got)
+	}
+
+	runs := pdfText(t, f.get(t, "/report/"+f.fund.ReportSlug+"/pdf?month=2026-09").Body.Bytes())
+	for _, want := range []string{"Beli gula <b>dan</b> teh", moveNote} {
+		if !pdfHas(runs, want) {
+			t.Errorf("PDF text has no run %q; runs:\n%s", want, strings.Join(runs, "\n"))
+		}
 	}
 }
