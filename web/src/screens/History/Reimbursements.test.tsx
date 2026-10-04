@@ -4,7 +4,6 @@ import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import Reimbursements from '@/screens/History/Reimbursements'
-import { chooseOption } from '@/test/select'
 import { copy } from '@/copy/id'
 import { formatIDR } from '@/lib/money'
 
@@ -68,23 +67,6 @@ const outstandingClaims: Claim[] = [claim(1)]
 
 const allClaims: Claim[] = [claim(1), claim(2, { settled: true })]
 
-const postedTransaction = {
-  id: 1,
-  account_id: 1,
-  purpose_id: 11,
-  direction: 'out',
-  amount: 15_000,
-  occurred_on: '2026-09-02',
-  kind: 'reimbursement',
-  member_id: 1,
-  dues_period: null,
-  reimbursement_id: 1,
-  transfer_id: null,
-  reverses_transaction_id: null,
-  note: null,
-  created_at: 3,
-}
-
 function jsonResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } })
 }
@@ -139,7 +121,14 @@ function LocationProbe() {
   return <output data-testid="location">{location.search}</output>
 }
 
-function renderAt(entry = '/history/reimbursements') {
+/** Stands in for the three Talangan screens: all this file needs to know is
+ * where a tap on the tab landed. */
+function ScreenProbe() {
+  const location = useLocation()
+  return <output data-testid="screen">{location.pathname + location.search}</output>
+}
+
+function renderAt(entry: string | { pathname: string; state: unknown } = '/history/reimbursements') {
   return render(
     <MemoryRouter initialEntries={[entry]}>
       <Routes>
@@ -152,6 +141,9 @@ function renderAt(entry = '/history/reimbursements') {
             </>
           }
         />
+        <Route path="/record" element={<ScreenProbe />} />
+        <Route path="/reimbursements/settle" element={<ScreenProbe />} />
+        <Route path="/reimbursements/correct" element={<ScreenProbe />} />
       </Routes>
     </MemoryRouter>,
   )
@@ -171,81 +163,44 @@ describe('Reimbursements tab', () => {
     expect(screen.getByText(text.status.outstanding, { selector: 'span' })).toBeInTheDocument()
   })
 
-  it('records a claim, list updates immediately', async () => {
-    // Recording POSTs a new claim; the reload then returns it alongside the
-    // original outstanding claim.
-    let recorded = false
-    const initial = [claim(1)]
-    vi.stubGlobal(
-      'fetch',
-      routedFetch([
-        {
-          match: (m: string, u: string) => m === 'GET' && u.includes('/api/reimbursements'),
-          handle: () => Promise.resolve(jsonResponse(page(recorded ? [...initial, claim(3, { amount: 10_000, note: null })] : initial))),
-        },
-        {
-          match: (m: string, u: string) => m === 'POST' && u.includes('/api/reimbursements'),
-          handle: () => {
-            recorded = true
-            return Promise.resolve(jsonResponse(claim(3, { amount: 10_000, note: null }), 201))
-          },
-        },
-        {
-          match: (m: string, u: string) => m === 'GET' && u.includes('/api/members'),
-          handle: () => Promise.resolve(jsonResponse({ members, next_cursor: null })),
-        },
-        {
-          match: (m: string, u: string) => m === 'GET' && u.includes('/api/purposes'),
-          handle: () => Promise.resolve(jsonResponse(purposes)),
-        },
-        {
-          match: (m: string, u: string) => m === 'GET' && u.includes('/api/accounts'),
-          handle: () => Promise.resolve(jsonResponse(accounts)),
-        },
-      ]),
-    )
+  it('opens Catat with the claim ticked, and the settle and correct screens instead of expanding a form', async () => {
+    vi.stubGlobal('fetch', routedFetch(getHandlers()))
+    const first = renderAt()
+    await waitFor(() => expect(screen.getByText('Jane')).toBeInTheDocument())
+    await userEvent.click(screen.getByRole('button', { name: text.record.heading }))
+    expect(screen.getByTestId('screen')).toHaveTextContent('/record?fronted=1')
+    first.unmount()
+
+    const second = renderAt()
+    await waitFor(() => expect(screen.getByText('Jane')).toBeInTheDocument())
+    await userEvent.click(screen.getByRole('button', { name: text.actions.settle }))
+    expect(screen.getByTestId('screen')).toHaveTextContent('/reimbursements/settle?id=1')
+    second.unmount()
 
     renderAt()
     await waitFor(() => expect(screen.getByText('Jane')).toBeInTheDocument())
-
-    // Open the record form
-    await userEvent.click(screen.getByRole('button', { name: text.record.heading }))
-    await waitFor(() => expect(screen.getByText(text.record.heading)).toBeInTheDocument())
-
-    // Fill the form
-    await chooseOption(text.record.memberLabel, 'Jane')
-    await userEvent.type(screen.getByLabelText(text.record.amountLabel), '10000')
-    await userEvent.click(screen.getByRole('button', { name: text.record.submit }))
-
-    // Success message shown and form closed
-    await waitFor(() => expect(screen.getByText(text.record.success)).toBeInTheDocument())
+    await chooseFromRowMenu(text.actions.correct)
+    expect(screen.getByTestId('screen')).toHaveTextContent('/reimbursements/correct?id=1')
   })
 
-  it('settle moves a claim out of the outstanding list', async () => {
-    vi.stubGlobal(
-      'fetch',
-      routedFetch([
-        {
-          match: (m: string, u: string) => m === 'POST' && u.includes('/api/reimbursements/1/settle'),
-          handle: () => Promise.resolve(jsonResponse(postedTransaction, 201)),
-        },
-        ...getHandlers(),
-      ]),
-    )
-
-    renderAt()
+  it.each([
+    ['settled', text.settle.success],
+    ['corrected', text.correct.success],
+  ])('shows the confirmation a screen handed back (%s)', async (done, message) => {
+    vi.stubGlobal('fetch', routedFetch(getHandlers()))
+    renderAt({ pathname: '/history/reimbursements', state: { reimbursementDone: done } })
     await waitFor(() => expect(screen.getByText('Jane')).toBeInTheDocument())
+    expect(screen.getByText(message)).toBeInTheDocument()
+  })
 
-    // Open settle form
-    await userEvent.click(screen.getByRole('button', { name: text.actions.settle }))
-    await waitFor(() => expect(screen.getByText(text.settle.heading)).toBeInTheDocument())
+  it('a later action retires the confirmation a screen handed back', async () => {
+    vi.stubGlobal('fetch', routedFetch(getHandlers()))
+    renderAt({ pathname: '/history/reimbursements', state: { reimbursementDone: 'settled' } })
+    await waitFor(() => expect(screen.getByText('Jane')).toBeInTheDocument())
+    expect(screen.getByText(text.settle.success)).toBeInTheDocument()
 
-    // Select account and submit settle
-    await chooseOption(text.settle.accountLabel, 'Tunai')
-    await userEvent.click(screen.getByRole('button', { name: text.settle.submit }))
-
-    // Success message shown
-    await waitFor(() => expect(screen.getByText(text.settle.success)).toBeInTheDocument())
+    await userEvent.click(screen.getByRole('button', { name: text.allTab }))
+    expect(screen.queryByText(text.settle.success)).not.toBeInTheDocument()
   })
 
   it('waive is reversible: un-waive is reachable from the all tab', async () => {
@@ -370,167 +325,6 @@ describe('Reimbursements tab', () => {
     expect(screen.getByText(text.delete.success)).toBeInTheDocument()
   })
 
-  it('correct opens pre-filled edit form, PATCH fires', async () => {
-    vi.stubGlobal(
-      'fetch',
-      routedFetch([
-        {
-          match: (m: string, u: string) => m === 'PATCH' && u.includes('/api/reimbursements/1'),
-          handle: () => Promise.resolve(jsonResponse(claim(1, { amount: 20_000 }))),
-        },
-        ...getHandlers(),
-      ]),
-    )
-
-    renderAt()
-    await waitFor(() => expect(screen.getByText('Jane')).toBeInTheDocument())
-
-    // Open correct form
-    await chooseFromRowMenu(text.actions.correct)
-    await waitFor(() => expect(screen.getByText(text.correct.heading)).toBeInTheDocument())
-
-    // Submit the correction
-    await userEvent.click(screen.getByRole('button', { name: text.correct.submit }))
-
-    // Success message shown
-    await waitFor(() => expect(screen.getByText(text.correct.success)).toBeInTheDocument())
-  })
-
-  it('keeps submit disabled until required fields are filled', async () => {
-    vi.stubGlobal('fetch', routedFetch(getHandlers()))
-    renderAt()
-
-    // Open record form
-    await userEvent.click(await screen.findByRole('button', { name: text.record.heading }))
-
-    // Submit should be disabled (no member, no amount)
-    await waitFor(() => expect(screen.getByRole('button', { name: text.record.submit })).toBeDisabled())
-  })
-
-  it('a failed write says why and keeps the form open', async () => {
-    // A settle that races by (claim already settled) returns 409 with a
-    // named code. The message must come from copy, never the English wire
-    // message, the form must stay open, and the list must still reload.
-    let settleAttempted = false
-    let listRefreshes = 0
-    vi.stubGlobal(
-      'fetch',
-      routedFetch([
-        {
-          match: (m: string, u: string) => m === 'POST' && u.includes('/api/reimbursements/1/settle'),
-          handle: () => {
-            settleAttempted = true
-            return Promise.resolve(jsonResponse({ error: { code: 'reimbursement_already_settled', message: 'already settled' } }, 409))
-          },
-        },
-        {
-          match: (m: string, u: string) => m === 'GET' && u.includes('/api/reimbursements') && u.includes('outstanding=true'),
-          handle: () => {
-            listRefreshes += 1
-            return Promise.resolve(jsonResponse(page(outstandingClaims)))
-          },
-        },
-        {
-          match: (m: string, u: string) => m === 'GET' && u.includes('/api/reimbursements') && !u.includes('outstanding'),
-          handle: () => Promise.resolve(jsonResponse(page(allClaims))),
-        },
-        {
-          match: (m: string, u: string) => m === 'GET' && u.includes('/api/members'),
-          handle: () => Promise.resolve(jsonResponse({ members, next_cursor: null })),
-        },
-        {
-          match: (m: string, u: string) => m === 'GET' && u.includes('/api/purposes'),
-          handle: () => Promise.resolve(jsonResponse(purposes)),
-        },
-        {
-          match: (m: string, u: string) => m === 'GET' && u.includes('/api/accounts'),
-          handle: () => Promise.resolve(jsonResponse(accounts)),
-        },
-      ]),
-    )
-
-    renderAt()
-    await waitFor(() => expect(screen.getByText('Jane')).toBeInTheDocument())
-
-    await userEvent.click(screen.getByRole('button', { name: text.actions.settle }))
-    await waitFor(() => expect(screen.getByText(text.settle.heading)).toBeInTheDocument())
-    await chooseOption(text.settle.accountLabel, 'Tunai')
-    await userEvent.click(screen.getByRole('button', { name: text.settle.submit }))
-
-    // The copy.local error is shown as an alert; no wire message leaks.
-    await waitFor(() => expect(screen.getByRole('alert').textContent).toBe(text.errors.reimbursement_already_settled))
-    // The form is still open, and the failed write still reloaded the list.
-    expect(screen.getByText(text.settle.heading)).toBeInTheDocument()
-    expect(settleAttempted).toBe(true)
-    expect(listRefreshes).toBeGreaterThan(1)
-  })
-
-  it('switching tabs closes an open inline form', async () => {
-    vi.stubGlobal('fetch', routedFetch(getHandlers()))
-    renderAt()
-    await waitFor(() => expect(screen.getByText('Jane')).toBeInTheDocument())
-
-    await userEvent.click(screen.getByRole('button', { name: text.actions.settle }))
-    await waitFor(() => expect(screen.getByText(text.settle.heading)).toBeInTheDocument())
-
-    await userEvent.click(screen.getByRole('button', { name: text.allTab }))
-    expect(screen.queryByText(text.settle.heading)).not.toBeInTheDocument()
-  })
-
-  it('a new action retires the previous success message', async () => {
-    // Settling claim A shows "Talangan sudah dibayar."; the refresh drops A
-    // from the outstanding list and closes the inline form. Starting the next
-    // action on still-outstanding claim B must retire that stale success
-    // message rather than let it describe the wrong row.
-    let settled = false
-    const before = [claim(1), claim(2, { note: 'Beli kabel' })]
-    const after = [claim(2, { note: 'Beli kabel' })]
-    vi.stubGlobal(
-      'fetch',
-      routedFetch([
-        {
-          match: (m: string, u: string) => m === 'POST' && u.includes('/api/reimbursements/1/settle'),
-          handle: () => {
-            settled = true
-            return Promise.resolve(jsonResponse(postedTransaction, 201))
-          },
-        },
-        {
-          match: (m: string, u: string) => m === 'GET' && u.includes('/api/reimbursements') && u.includes('outstanding=true'),
-          handle: () => Promise.resolve(jsonResponse(page(settled ? after : before))),
-        },
-        {
-          match: (m: string, u: string) => m === 'GET' && u.includes('/api/members'),
-          handle: () => Promise.resolve(jsonResponse({ members, next_cursor: null })),
-        },
-        {
-          match: (m: string, u: string) => m === 'GET' && u.includes('/api/purposes'),
-          handle: () => Promise.resolve(jsonResponse(purposes)),
-        },
-        {
-          match: (m: string, u: string) => m === 'GET' && u.includes('/api/accounts'),
-          handle: () => Promise.resolve(jsonResponse(accounts)),
-        },
-      ]),
-    )
-    renderAt()
-    await waitFor(() => expect(screen.getByText('Jane')).toBeInTheDocument())
-
-    await userEvent.click(screen.getAllByRole('button', { name: text.actions.settle })[0])
-    await chooseOption(text.settle.accountLabel, 'Tunai')
-    const settleForm = screen.getByText(text.settle.heading).closest('form')
-    if (!settleForm) throw new Error('settle form not found')
-    await userEvent.click(within(settleForm).getByRole('button', { name: text.settle.submit }))
-    await waitFor(() => expect(screen.getByText(text.settle.success)).toBeInTheDocument())
-
-    // The refresh drops settled claim A (Jane) and closes its inline form;
-    // claim B remains, its action reachable. The delete action on B retires
-    // A's stale success message.
-    await waitFor(() => expect(screen.queryByText('Jane')).not.toBeInTheDocument())
-    await chooseFromRowMenu(text.actions.delete)
-    expect(screen.queryByText(text.settle.success)).not.toBeInTheDocument()
-  })
-
   it('reads ?q= from the URL into the field and sends it to the server', async () => {
     vi.stubGlobal(
       'fetch',
@@ -557,6 +351,39 @@ describe('Reimbursements tab', () => {
 
     expect(await screen.findByText('Budi bayar parkir')).toBeInTheDocument()
     expect(screen.getByLabelText(searchText.searchLabel)).toHaveValue('Budi')
+  })
+
+  it('?show=all opens on the all view, and the toggle writes it while keeping ?q=', async () => {
+    const requests: URL[] = []
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = new URL(String(input), 'http://localhost')
+        if (url.pathname === '/api/members') return jsonResponse({ members, next_cursor: null })
+        if (url.pathname === '/api/purposes') return jsonResponse(purposes)
+        if (url.pathname === '/api/accounts') return jsonResponse(accounts)
+        if (url.pathname === '/api/reimbursements') {
+          requests.push(url)
+          return jsonResponse(page([claim(1, { note: 'Parkir' })]))
+        }
+        return jsonResponse({ error: { code: 'not_found', message: 'not found' } }, 404)
+      }),
+    )
+    const user = userEvent.setup()
+    renderAt('/history/reimbursements?q=parkir&show=all')
+
+    expect(await screen.findByText('Parkir')).toBeInTheDocument()
+    expect(screen.getByRole('group', { name: text.heading })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: text.allTab })).toHaveAttribute('aria-pressed', 'true')
+    expect(requests.at(-1)?.searchParams.has('outstanding')).toBe(false)
+
+    await user.click(screen.getByRole('button', { name: text.outstandingTab }))
+    await waitFor(() => expect(screen.getByTestId('location').textContent).toBe('?q=parkir'))
+    await waitFor(() => expect(requests.at(-1)?.searchParams.get('outstanding')).toBe('true'))
+    expect(requests.at(-1)?.searchParams.get('q')).toBe('parkir')
+
+    await user.click(screen.getByRole('button', { name: text.allTab }))
+    await waitFor(() => expect(screen.getByTestId('location').textContent).toBe('?q=parkir&show=all'))
   })
 
   it('writes a typed search to the URL once, after the pause, and refetches with it', async () => {
@@ -680,69 +507,6 @@ describe('Reimbursements tab', () => {
   // #154: the optional photo, at record time and after the fact.
   describe('receipt photos', () => {
     const receiptsText = copy.receipts
-
-    it('uploads the picked photo after the claim posts, and shows the ordinary success message', async () => {
-      vi.stubGlobal(
-        'fetch',
-        routedFetch([
-          {
-            match: (m: string, u: string) => m === 'POST' && u.includes('/api/reimbursements') && !u.includes('/receipts'),
-            handle: () => Promise.resolve(jsonResponse(claim(3, { amount: 10_000, note: null }), 201)),
-          },
-          {
-            match: (m: string, u: string) => m === 'POST' && u.includes('/api/reimbursements/3/receipts'),
-            handle: () => Promise.resolve(jsonResponse({ id: 9, uploaded_at: 1 }, 201)),
-          },
-          ...getHandlers(),
-        ]),
-      )
-      renderAt()
-      await waitFor(() => expect(screen.getByText('Jane')).toBeInTheDocument())
-
-      await userEvent.click(screen.getByRole('button', { name: text.record.heading }))
-      await waitFor(() => expect(screen.getByText(text.record.heading)).toBeInTheDocument())
-      await chooseOption(text.record.memberLabel, 'Jane')
-      await userEvent.type(screen.getByLabelText(text.record.amountLabel), '10000')
-      await userEvent.upload(
-        screen.getByLabelText(receiptsText.addFromRow, { selector: 'input[type="file"]' }),
-        new File(['fake-bytes'], 'nota.jpg', { type: 'image/jpeg' }),
-      )
-      await userEvent.click(screen.getByRole('button', { name: text.record.submit }))
-
-      await waitFor(() => expect(screen.getByText(text.record.success)).toBeInTheDocument())
-    })
-
-    it('the claim still saves when the photo upload fails - the message says so instead of the ordinary success line', async () => {
-      vi.stubGlobal(
-        'fetch',
-        routedFetch([
-          {
-            match: (m: string, u: string) => m === 'POST' && u.includes('/api/reimbursements') && !u.includes('/receipts'),
-            handle: () => Promise.resolve(jsonResponse(claim(3, { amount: 10_000, note: null }), 201)),
-          },
-          {
-            match: (m: string, u: string) => m === 'POST' && u.includes('/api/reimbursements/3/receipts'),
-            handle: () => Promise.resolve(jsonResponse({ error: { code: 'unsupported_media_type', message: 'nope' } }, 415)),
-          },
-          ...getHandlers(),
-        ]),
-      )
-      renderAt()
-      await waitFor(() => expect(screen.getByText('Jane')).toBeInTheDocument())
-
-      await userEvent.click(screen.getByRole('button', { name: text.record.heading }))
-      await waitFor(() => expect(screen.getByText(text.record.heading)).toBeInTheDocument())
-      await chooseOption(text.record.memberLabel, 'Jane')
-      await userEvent.type(screen.getByLabelText(text.record.amountLabel), '10000')
-      await userEvent.upload(
-        screen.getByLabelText(receiptsText.addFromRow, { selector: 'input[type="file"]' }),
-        new File(['fake-bytes'], 'nota.jpg', { type: 'image/jpeg' }),
-      )
-      await userEvent.click(screen.getByRole('button', { name: text.record.submit }))
-
-      await waitFor(() => expect(screen.getByText(receiptsText.reimbursementPhotoFailed)).toBeInTheDocument())
-      expect(screen.queryByText(text.record.success)).not.toBeInTheDocument()
-    })
 
     it('attaches a photo after the fact from the claim row, and the row control then opens the viewer', async () => {
       let attached = false

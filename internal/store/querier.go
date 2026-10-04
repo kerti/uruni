@@ -249,6 +249,10 @@ type Querier interface {
 	// been settled yet (the expected, non-error path) or the settling row when
 	// it has.
 	GetReimbursementSettlement(ctx context.Context, arg GetReimbursementSettlementParams) (GetReimbursementSettlementRow, error)
+	// One claim with its settled fact, for GET /api/reimbursements/{id}: the
+	// settle and correct screens open on a single claim and must know whether it
+	// is still owed. Fund-scoped for the same reason as GetReimbursement.
+	GetReimbursementWithSettled(ctx context.Context, arg GetReimbursementWithSettledParams) (GetReimbursementWithSettledRow, error)
 	// GetSession only returns a row still inside its idle window; a session past
 	// expires_at is functionally gone even before DeleteExpiredSessions sweeps it.
 	GetSession(ctx context.Context, arg GetSessionParams) (Session, error)

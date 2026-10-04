@@ -32,8 +32,9 @@ function todayISODate(): string {
  * payment recorded in error - the payment is reversed by a new entry, never
  * edited away").
  *
- * There is no payment-history route to read: a dues payment is an ordinary
- * transaction row, so this reads GET /api/transactions?member_id=&dues_period=
+ * Not GET /api/dues-payments (the Iuran tab's fund-wide history, which has
+ * no member or period filter): a dues payment is an ordinary transaction
+ * row, so this reads GET /api/transactions?member_id=&dues_period=
  * (#225 - filtered server-side, never client-side over a paged list). Both
  * halves of a reversal come back under that filter - the kind='dues'
  * payment, and the kind='adjustment' row that reverses it (ADR-029 copies

@@ -292,6 +292,39 @@ func (a *api) listReimbursements(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, reimbursementsPageResponse{Reimbursements: resp, NextCursor: nextCursor})
 }
 
+// getReimbursement is GET /api/reimbursements/{id}: one claim, with the
+// same settled flag and receipt_ids the list rows carry, so the settle and
+// correct screens can open on a claim by address. An id that is not a number
+// names nothing, so it is the same 404 as an unknown one.
+func (a *api) getReimbursement(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		writeAPIError(w, http.StatusNotFound, "not_found", "The requested resource was not found.")
+		return
+	}
+
+	fund, ok := a.resolveFund(w, r)
+	if !ok {
+		return
+	}
+
+	row, err := a.queries.GetReimbursementWithSettled(r.Context(), store.GetReimbursementWithSettledParams{ID: id, FundID: fund.ID})
+	if err != nil {
+		mapSQLiteError(w, a.logger, err) // sql.ErrNoRows -> 404 not_found
+		return
+	}
+
+	receiptIDs, err := a.receiptIDsForReimbursements(r.Context(), fund.ID, []int64{row.ID})
+	if err != nil {
+		mapSQLiteError(w, a.logger, err)
+		return
+	}
+
+	resp := toReimbursementResponseRow(store.ListReimbursementsPageRow(row))
+	resp.ReceiptIDs = orEmptyReceiptIDs(receiptIDs[row.ID])
+	writeJSON(w, http.StatusOK, resp)
+}
+
 // settleReimbursementRequest is POST /api/reimbursements/{id}/settle's body:
 // which account pays the claim out, and when.
 //

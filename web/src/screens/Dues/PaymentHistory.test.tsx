@@ -1,4 +1,6 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { render as rtlRender, screen, waitFor } from '@testing-library/react'
+import type { ReactElement } from 'react'
+import { MemoryRouter, useLocation } from 'react-router-dom'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
@@ -37,6 +39,23 @@ function payment(id: number, memberName: string, overrides: Partial<Record<strin
     reverses_occurred_on: null,
     ...overrides,
   }
+}
+
+function LocationProbe() {
+  const location = useLocation()
+  return <output data-testid="location">{location.search}</output>
+}
+
+/** The list reads and writes ?q=, so every render sits in a router. */
+function render(ui: ReactElement, entry = '/history/dues') {
+  const wrap = (el: ReactElement) => (
+    <MemoryRouter initialEntries={[entry]}>
+      {el}
+      <LocationProbe />
+    </MemoryRouter>
+  )
+  const result = rtlRender(wrap(ui))
+  return { ...result, rerender: (next: ReactElement) => result.rerender(wrap(next)) }
 }
 
 type Page = { dues_payments: unknown[]; next_cursor: string | null }
@@ -111,6 +130,16 @@ describe('PaymentHistory', () => {
     expect(await screen.findByText('Budi Santoso')).toBeInTheDocument()
     // Debounced: no request for "b", "bu", ... - only the finished word.
     expect(requests.filter((url) => url.searchParams.has('q')).map((url) => url.searchParams.get('q'))).toEqual(['budi'])
+    expect(screen.getByTestId('location')).toHaveTextContent('?q=budi')
+  })
+
+  it('reads ?q= from the URL into the field and sends it to the server', async () => {
+    const requests = stubApi(() => ({ dues_payments: [payment(1, 'Budi Santoso')], next_cursor: null }))
+    render(<PaymentHistory onOpenStatus={vi.fn()} />, '/history/dues?q=budi')
+
+    expect(await screen.findByText('Budi Santoso')).toBeInTheDocument()
+    expect(screen.getByLabelText(text.searchLabel)).toHaveValue('budi')
+    expect(requests.map((url) => url.searchParams.get('q'))).toEqual(['budi'])
   })
 
   it('says nothing matched when a search comes back empty', async () => {

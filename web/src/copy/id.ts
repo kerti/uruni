@@ -461,6 +461,12 @@ export const copy = {
     // Installed to a home screen there is no browser back button, so leaving
     // the form without recording needs its own way out.
     cancel: 'Batal',
+    // Keluar's tick box (#368): a member paid out of pocket. Ticked, the
+    // entry becomes a Talangan claim instead of money leaving the kas.
+    frontedLabel: 'Pengeluaran ini ditalangi',
+    // Says what did NOT happen: a claim is off-ledger until it is paid, so the
+    // saldo she watches has not moved yet.
+    successFronted: 'Talangan dicatat. Saldo belum berkurang sampai talangan dibayar.',
     successIn: 'Pemasukan berhasil dicatat.',
     successOut: 'Pengeluaran berhasil dicatat.',
     // Says what did NOT happen as much as what did: the total is the number
@@ -1189,10 +1195,6 @@ export const copy = {
       amountLabel: 'Jumlah',
       dateLabel: 'Tanggal pengeluaran',
       noteLabel: 'Catatan (opsional)',
-      submit: 'Simpan',
-      submitting: 'Menyimpan…',
-      cancel: 'Batal',
-      success: 'Talangan berhasil dicatat.',
     },
     settle: {
       heading: 'Bayar talangan',

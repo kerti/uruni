@@ -98,6 +98,55 @@ func (q *Queries) GetReimbursement(ctx context.Context, arg GetReimbursementPara
 	return i, err
 }
 
+const getReimbursementWithSettled = `-- name: GetReimbursementWithSettled :one
+SELECT r.id, r.fund_id, r.member_id, r.purpose_id, r.amount, r.incurred_on, r.waived_on, r.note, r.created_at,
+  CAST(EXISTS(
+    SELECT 1 FROM "transaction" t
+    WHERE t.reimbursement_id = r.id AND t.kind = 'reimbursement'
+  ) AS INTEGER) AS settled
+FROM reimbursement r
+WHERE r.id = ? AND r.fund_id = ?
+`
+
+type GetReimbursementWithSettledParams struct {
+	ID     int64
+	FundID int64
+}
+
+type GetReimbursementWithSettledRow struct {
+	ID         int64
+	FundID     int64
+	MemberID   int64
+	PurposeID  int64
+	Amount     int64
+	IncurredOn string
+	WaivedOn   *string
+	Note       *string
+	CreatedAt  int64
+	Settled    int64
+}
+
+// One claim with its settled fact, for GET /api/reimbursements/{id}: the
+// settle and correct screens open on a single claim and must know whether it
+// is still owed. Fund-scoped for the same reason as GetReimbursement.
+func (q *Queries) GetReimbursementWithSettled(ctx context.Context, arg GetReimbursementWithSettledParams) (GetReimbursementWithSettledRow, error) {
+	row := q.db.QueryRowContext(ctx, getReimbursementWithSettled, arg.ID, arg.FundID)
+	var i GetReimbursementWithSettledRow
+	err := row.Scan(
+		&i.ID,
+		&i.FundID,
+		&i.MemberID,
+		&i.PurposeID,
+		&i.Amount,
+		&i.IncurredOn,
+		&i.WaivedOn,
+		&i.Note,
+		&i.CreatedAt,
+		&i.Settled,
+	)
+	return i, err
+}
+
 const listOutstandingReimbursementsByFund = `-- name: ListOutstandingReimbursementsByFund :many
 SELECT r.id, r.fund_id, r.member_id, r.purpose_id, r.amount, r.incurred_on, r.waived_on, r.note, r.created_at,
   0 AS settled

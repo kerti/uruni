@@ -226,6 +226,7 @@ func (a *api) routes(r chi.Router) {
 		// shape as members. Both are refused once the claim is settled.
 		r.Post("/reimbursements", a.createReimbursement)
 		r.Get("/reimbursements", a.listReimbursements)
+		r.Get("/reimbursements/{id}", a.getReimbursement)
 		r.Patch("/reimbursements/{id}", a.updateReimbursement)
 		r.Delete("/reimbursements/{id}", a.deleteReimbursement)
 		r.Post("/reimbursements/{id}/settle", a.settleReimbursement)

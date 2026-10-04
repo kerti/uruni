@@ -12,6 +12,18 @@ SELECT id, fund_id, member_id, purpose_id, amount, incurred_on, waived_on, note,
 FROM reimbursement
 WHERE id = ? AND fund_id = ?;
 
+-- One claim with its settled fact, for GET /api/reimbursements/{id}: the
+-- settle and correct screens open on a single claim and must know whether it
+-- is still owed. Fund-scoped for the same reason as GetReimbursement.
+-- name: GetReimbursementWithSettled :one
+SELECT r.id, r.fund_id, r.member_id, r.purpose_id, r.amount, r.incurred_on, r.waived_on, r.note, r.created_at,
+  CAST(EXISTS(
+    SELECT 1 FROM "transaction" t
+    WHERE t.reimbursement_id = r.id AND t.kind = 'reimbursement'
+  ) AS INTEGER) AS settled
+FROM reimbursement r
+WHERE r.id = ? AND r.fund_id = ?;
+
 -- name: ListReimbursementsByFund :many
 SELECT r.id, r.fund_id, r.member_id, r.purpose_id, r.amount, r.incurred_on, r.waived_on, r.note, r.created_at,
   CAST(EXISTS(
