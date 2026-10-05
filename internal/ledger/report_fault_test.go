@@ -6,6 +6,7 @@ import (
 	"math"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/kerti/uruni/internal/store"
 )
@@ -18,12 +19,12 @@ type faultQuerier struct {
 	store.Querier
 	fail      string
 	firstDate *string
-	// failPurpose, when set, breaks PurposeBalance for that one purpose only,
+	// failPurpose, when set, breaks ReportPurposeBalance for that one purpose only,
 	// so a test can reach the envelope section's own balance read past the
 	// header's.
 	failPurpose int64
 	rows        []store.ListReportTransactionsRow
-	// openLines, when set, replaces ListOpenReconciliationLinesByFund's result.
+	// openLines, when set, replaces ReportOpenReconciliationLines's result.
 	openLines []store.ReconciliationLine
 }
 
@@ -46,21 +47,21 @@ func (f faultQuerier) FirstTransactionDateByFund(ctx context.Context, fundID int
 	return f.Querier.FirstTransactionDateByFund(ctx, fundID)
 }
 
-func (f faultQuerier) LatestReconciliation(ctx context.Context, fundID int64) (store.Reconciliation, error) {
-	if f.fail == "LatestReconciliation" {
+func (f faultQuerier) ReportLatestReconciliation(ctx context.Context, arg store.ReportLatestReconciliationParams) (store.Reconciliation, error) {
+	if f.fail == "ReportLatestReconciliation" {
 		return store.Reconciliation{}, errFault
 	}
-	return f.Querier.LatestReconciliation(ctx, fundID)
+	return f.Querier.ReportLatestReconciliation(ctx, arg)
 }
 
-func (f faultQuerier) ListOpenReconciliationLinesByFund(ctx context.Context, fundID int64) ([]store.ReconciliationLine, error) {
-	if f.fail == "ListOpenReconciliationLinesByFund" {
+func (f faultQuerier) ReportOpenReconciliationLines(ctx context.Context, arg store.ReportOpenReconciliationLinesParams) ([]store.ReconciliationLine, error) {
+	if f.fail == "ReportOpenReconciliationLines" {
 		return nil, errFault
 	}
 	if f.openLines != nil {
 		return f.openLines, nil
 	}
-	return f.Querier.ListOpenReconciliationLinesByFund(ctx, fundID)
+	return f.Querier.ReportOpenReconciliationLines(ctx, arg)
 }
 
 func (f faultQuerier) ListIncidentalsByFund(ctx context.Context, fundID int64) ([]store.Incidental, error) {
@@ -101,18 +102,39 @@ func (f faultQuerier) ListIncidentalRecipients(ctx context.Context, purposeID in
 	return f.Querier.ListIncidentalRecipients(ctx, purposeID)
 }
 
-func (f faultQuerier) FundBalance(ctx context.Context, fundID int64) (int64, error) {
-	if f.fail == "FundBalance" {
+func (f faultQuerier) ReportFundBalance(ctx context.Context, arg store.ReportFundBalanceParams) (int64, error) {
+	if f.fail == "ReportFundBalance" {
 		return 0, errFault
 	}
-	return f.Querier.FundBalance(ctx, fundID)
+	return f.Querier.ReportFundBalance(ctx, arg)
 }
 
-func (f faultQuerier) PurposeBalance(ctx context.Context, arg store.PurposeBalanceParams) (int64, error) {
-	if f.fail == "PurposeBalance" || (f.failPurpose != 0 && arg.PurposeID == f.failPurpose) {
+func (f faultQuerier) ReportPurposeBalance(ctx context.Context, arg store.ReportPurposeBalanceParams) (int64, error) {
+	if f.fail == "ReportPurposeBalance" || (f.failPurpose != 0 && arg.PurposeID == f.failPurpose) {
 		return 0, errFault
 	}
-	return f.Querier.PurposeBalance(ctx, arg)
+	return f.Querier.ReportPurposeBalance(ctx, arg)
+}
+
+func (f faultQuerier) ReportOwedToMembers(ctx context.Context, arg store.ReportOwedToMembersParams) (int64, error) {
+	if f.fail == "ReportOwedToMembers" {
+		return 0, errFault
+	}
+	return f.Querier.ReportOwedToMembers(ctx, arg)
+}
+
+func (f faultQuerier) IncidentalActivityTotals(ctx context.Context, arg store.IncidentalActivityTotalsParams) (store.IncidentalActivityTotalsRow, error) {
+	if f.fail == "IncidentalActivityTotals" {
+		return store.IncidentalActivityTotalsRow{}, errFault
+	}
+	return f.Querier.IncidentalActivityTotals(ctx, arg)
+}
+
+func (f faultQuerier) ContributedByIncidentalMember(ctx context.Context, arg store.ContributedByIncidentalMemberParams) ([]store.ContributedByIncidentalMemberRow, error) {
+	if f.fail == "ContributedByIncidentalMember" {
+		return nil, errFault
+	}
+	return f.Querier.ContributedByIncidentalMember(ctx, arg)
 }
 
 func (f faultQuerier) GetIncidental(ctx context.Context, arg store.GetIncidentalParams) (store.Incidental, error) {
@@ -145,7 +167,8 @@ func faultyReportFixtureWithClosed(t *testing.T) (*Ledger, int64, int64) {
 	l := newTestLedger(t)
 	s := newMonthScenario(t, l)
 	openTestIncidental(t, l, s.f.fundID, "Open Collection", "2026-09-01")
-	at := reportNow.Unix()
+	// Counted inside September, so the September report reads it (ADR-037).
+	at := jakartaAt(2026, time.September, 25, 12, 0, 0).Unix()
 	if _, err := store.New(l.db).CreateReconciliation(context.Background(), store.CreateReconciliationParams{
 		FundID: s.f.fundID, PerformedAt: at, CreatedAt: at,
 	}); err != nil {
@@ -164,15 +187,18 @@ func TestMonthlyReportSurfacesEveryReadFailure(t *testing.T) {
 	for _, method := range []string{
 		"GetFund",
 		"FirstTransactionDateByFund",
-		"LatestReconciliation",
-		"ListOpenReconciliationLinesByFund",
+		"ReportLatestReconciliation",
+		"ReportOpenReconciliationLines",
 		"ListIncidentalsByFund",
 		"ListPurposesByFund",
 		"ListReportTransactions",
 		"ListDuesTiersByFund",
 		"ListIncidentalRecipients",
-		"FundBalance",
-		"PurposeBalance",
+		"ReportFundBalance",
+		"ReportPurposeBalance",
+		"ReportOwedToMembers",
+		"IncidentalActivityTotals",
+		"ContributedByIncidentalMember",
 		"GetIncidental",
 		"ListMembersByFund",
 	} {

@@ -565,3 +565,16 @@ func TestReportPDFSummaryShowsTheTotalOwedToMembers(t *testing.T) {
 		}
 	}
 }
+
+// The PDF's date line follows the page's (ADR-037).
+func TestReportPDFDateLineFollowsTheMonth(t *testing.T) {
+	s := newPDFScenario(t)
+	past := pdfText(t, s.get(t, "/report/"+s.fund.ReportSlug+"/pdf?month=2026-09").Body.Bytes())
+	if want := reportText.AsOf("30 September 2026"); !pdfHas(past, want) {
+		t.Errorf("past-month PDF has no run %q; runs:\n%s", want, strings.Join(past, "\n"))
+	}
+	running := pdfText(t, s.get(t, "/report/"+s.fund.ReportSlug+"/pdf").Body.Bytes())
+	if want := reportText.AsOfRunning("2 Oktober 2026"); !pdfHas(running, want) {
+		t.Errorf("running-month PDF has no run %q; runs:\n%s", want, strings.Join(running, "\n"))
+	}
+}

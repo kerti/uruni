@@ -126,7 +126,7 @@ Entitas utama:
 - Halaman menampilkan **semuanya secara bawaan** dan menyediakan **filter** (bulan, pos, anggota, pemasukan/pengeluaran, status iuran) agar pemirsa publik mudah menelusuri data.
 - Pengaman: slug acak yang panjang + `noindex` agar tidak terindeks mesin pencari; ada opsi **"buat ulang tautan"** sebagai jalan darurat bila tautan bocor (tidak diperlukan dalam pemakaian normal). Konsekuensi yang diterima: karena semuanya ditampilkan, URL publik menampakkan nama anggota dan status pembayaran — dapat diterima mengingat niat transparansi bendahara dan rendahnya sensitivitas data.
 - Ini halaman bersama, bukan portal anggota — tanpa akun, tanpa login anggota.
-- Satu bulan per tampilan: bagian atas memuat saldo, cek kas terakhir, dan saldo per pos (tidak per lokasi), lalu transaksi bulan itu, status iurannya (tanpa hitungan tunggakan), dan amplopnya. Foto nota hanya ditandai, tidak ditampilkan. Tautan ditampilkan, disalin, dan dibuat ulang dari Pengaturan. ([ADR-035](./ADR/035-public-report.md))
+- Satu bulan per tampilan, dipilih di bagian paling atas: bagian atas memuat saldo, cek kas terakhir, saldo per pos (tidak per lokasi), dan yang masih harus dibayar ke anggota, masing-masing **per akhir bulan itu** - atau per hari ini untuk bulan yang sedang berjalan, ditandai "bulan berjalan" - lalu transaksi bulan itu, status iurannya (tanpa hitungan tunggakan), dan amplopnya. Foto nota hanya ditandai, tidak ditampilkan. Tautan ditampilkan, disalin, dan dibuat ulang dari Pengaturan. ([ADR-035](./ADR/035-public-report.md), [ADR-037](./ADR/037-report-shows-the-month-as-it-ended.md))
 - **PDF bulanan** dari laporan yang sama, bisa diunduh dari halaman, untuk dicetak atau dikirim ke grup. (Ditambahkan 2026-10-02.)
 
 ### 7.10 Cadangan / ekspor

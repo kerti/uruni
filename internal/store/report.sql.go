@@ -175,3 +175,171 @@ func (q *Queries) ListReportTransactions(ctx context.Context, arg ListReportTran
 	}
 	return items, nil
 }
+
+const reportFundBalance = `-- name: ReportFundBalance :one
+
+SELECT CAST(COALESCE(SUM(CASE WHEN direction = 'in' THEN amount ELSE -amount END), 0) AS INTEGER) AS balance_amount
+FROM "transaction"
+WHERE fund_id = ?1
+  AND (CAST(?2 AS TEXT) IS NULL OR occurred_on <= CAST(?2 AS TEXT))
+`
+
+type ReportFundBalanceParams struct {
+	FundID  int64
+	Through *string
+}
+
+// The report's month-end figures (#408, ADR-037). Each takes a nullable bound:
+// NULL is the running month and reads exactly like its unbounded twin
+// (FundBalance, PurposeBalance, OutstandingReimbursementTotal,
+// LatestReconciliation, ListOpenReconciliationLinesByFund), so the running
+// month and Beranda cannot disagree. A past month passes its last day
+// ("YYYY-MM-DD", compared against occurred_on and the other day columns) or,
+// for a count, the first instant of the next month in Jakarta as unix seconds.
+// The CASTs are what make sqlc emit int64 rather than interface{} (ADR-024).
+func (q *Queries) ReportFundBalance(ctx context.Context, arg ReportFundBalanceParams) (int64, error) {
+	row := q.db.QueryRowContext(ctx, reportFundBalance, arg.FundID, arg.Through)
+	var balance_amount int64
+	err := row.Scan(&balance_amount)
+	return balance_amount, err
+}
+
+const reportLatestReconciliation = `-- name: ReportLatestReconciliation :one
+SELECT id, fund_id, performed_at, through_transaction_id, note, created_at
+FROM reconciliation
+WHERE fund_id = ?1
+  AND (CAST(?2 AS INTEGER) IS NULL OR performed_at < CAST(?2 AS INTEGER))
+ORDER BY performed_at DESC, id DESC
+LIMIT 1
+`
+
+type ReportLatestReconciliationParams struct {
+	FundID int64
+	Before *int64
+}
+
+// A snapshot is never edited (ADR-024), so the latest count before the bound
+// and the lines it left open are exactly what the report said back then.
+func (q *Queries) ReportLatestReconciliation(ctx context.Context, arg ReportLatestReconciliationParams) (Reconciliation, error) {
+	row := q.db.QueryRowContext(ctx, reportLatestReconciliation, arg.FundID, arg.Before)
+	var i Reconciliation
+	err := row.Scan(
+		&i.ID,
+		&i.FundID,
+		&i.PerformedAt,
+		&i.ThroughTransactionID,
+		&i.Note,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
+const reportOpenReconciliationLines = `-- name: ReportOpenReconciliationLines :many
+SELECT rl.id, rl.fund_id, rl.reconciliation_id, rl.account_id, rl.recorded_amount,
+       rl.actual_amount, rl.difference_amount, rl.resolution, rl.adjustment_transaction_id
+FROM reconciliation_line rl
+JOIN reconciliation r ON r.fund_id = rl.fund_id AND r.id = rl.reconciliation_id
+WHERE rl.fund_id = ?1
+  AND rl.resolution = 'left_open'
+  AND (CAST(?2 AS INTEGER) IS NULL OR r.performed_at < CAST(?2 AS INTEGER))
+  AND NOT EXISTS (
+    SELECT 1
+    FROM reconciliation_line rl2
+    JOIN reconciliation r2 ON r2.fund_id = rl2.fund_id AND r2.id = rl2.reconciliation_id
+    WHERE rl2.fund_id = rl.fund_id
+      AND rl2.account_id = rl.account_id
+      AND (CAST(?2 AS INTEGER) IS NULL OR r2.performed_at < CAST(?2 AS INTEGER))
+      AND (r2.performed_at > r.performed_at
+           OR (r2.performed_at = r.performed_at AND r2.id > r.id))
+  )
+ORDER BY r.performed_at, r.id, rl.account_id
+`
+
+type ReportOpenReconciliationLinesParams struct {
+	FundID int64
+	Before *int64
+}
+
+// ListOpenReconciliationLinesByFund with both snapshots bounded: a line is
+// open at the bound when no count before the bound has weighed in on its
+// location since.
+func (q *Queries) ReportOpenReconciliationLines(ctx context.Context, arg ReportOpenReconciliationLinesParams) ([]ReconciliationLine, error) {
+	rows, err := q.db.QueryContext(ctx, reportOpenReconciliationLines, arg.FundID, arg.Before)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ReconciliationLine{}
+	for rows.Next() {
+		var i ReconciliationLine
+		if err := rows.Scan(
+			&i.ID,
+			&i.FundID,
+			&i.ReconciliationID,
+			&i.AccountID,
+			&i.RecordedAmount,
+			&i.ActualAmount,
+			&i.DifferenceAmount,
+			&i.Resolution,
+			&i.AdjustmentTransactionID,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const reportOwedToMembers = `-- name: ReportOwedToMembers :one
+SELECT CAST(COALESCE(SUM(r.amount), 0) AS INTEGER) AS total_amount
+FROM reimbursement r
+WHERE r.fund_id = ?1
+  AND (CAST(?2 AS TEXT) IS NULL OR r.incurred_on <= CAST(?2 AS TEXT))
+  AND (r.waived_on IS NULL OR (CAST(?2 AS TEXT) IS NOT NULL AND r.waived_on > CAST(?2 AS TEXT)))
+  AND NOT EXISTS (
+    SELECT 1 FROM "transaction" t
+    WHERE t.reimbursement_id = r.id AND t.kind = 'reimbursement'
+      AND (CAST(?2 AS TEXT) IS NULL OR t.occurred_on <= CAST(?2 AS TEXT))
+  )
+`
+
+type ReportOwedToMembersParams struct {
+	FundID  int64
+	Through *string
+}
+
+// Owed at the bound: incurred by then, not yet waived then, and not yet paid
+// out by then. waived_on holds only the latest waive, so a claim waived and
+// later un-waived reads as owed in the months it was waived (#408 accepts it).
+func (q *Queries) ReportOwedToMembers(ctx context.Context, arg ReportOwedToMembersParams) (int64, error) {
+	row := q.db.QueryRowContext(ctx, reportOwedToMembers, arg.FundID, arg.Through)
+	var total_amount int64
+	err := row.Scan(&total_amount)
+	return total_amount, err
+}
+
+const reportPurposeBalance = `-- name: ReportPurposeBalance :one
+SELECT CAST(COALESCE(SUM(CASE WHEN direction = 'in' THEN amount ELSE -amount END), 0) AS INTEGER) AS balance_amount
+FROM "transaction"
+WHERE fund_id = ?1 AND purpose_id = ?2
+  AND (CAST(?3 AS TEXT) IS NULL OR occurred_on <= CAST(?3 AS TEXT))
+`
+
+type ReportPurposeBalanceParams struct {
+	FundID    int64
+	PurposeID int64
+	Through   *string
+}
+
+func (q *Queries) ReportPurposeBalance(ctx context.Context, arg ReportPurposeBalanceParams) (int64, error) {
+	row := q.db.QueryRowContext(ctx, reportPurposeBalance, arg.FundID, arg.PurposeID, arg.Through)
+	var balance_amount int64
+	err := row.Scan(&balance_amount)
+	return balance_amount, err
+}

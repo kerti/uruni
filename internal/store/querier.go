@@ -31,6 +31,8 @@ type Querier interface {
 	// ListMembersByFund plus the envelope's opened_on and recipients, read and
 	// combined in Go (Ledger.GetIncidentalParticipation), never a second query
 	// trying to derive the same roster twice.
+	//
+	// through bounds it the way IncidentalActivityTotals's is bounded (#408).
 	ContributedByIncidentalMember(ctx context.Context, arg ContributedByIncidentalMemberParams) ([]ContributedByIncidentalMemberRow, error)
 	// CountUsers is how register (#114) knows whether the one-shot bootstrap
 	// account already exists (ADR-030 decision 2): the gate is the count, not a
@@ -307,6 +309,9 @@ type Querier interface {
 	// disbursed. Collected minus disbursed still moves by exactly the leg's
 	// effect on the balance. A roll - 'roll', or NULL on a row written before
 	// the column existed - stays excluded as above.
+	// through bounds it at a past month's last day for the public report (#408):
+	// only rows dated by then, and a reversal dated after it has not happened
+	// yet. NULL - every other caller - is unbounded.
 	IncidentalActivityTotals(ctx context.Context, arg IncidentalActivityTotalsParams) (IncidentalActivityTotalsRow, error)
 	// The guard's one query (ADR-031): sql.ErrNoRows for a purpose_id that is
 	// not an incidental at all (main, pass_through - PostTransaction's caller
@@ -760,6 +765,27 @@ type Querier interface {
 	// fund; this query itself stays unscoped, the same shape CloseIncidental
 	// already uses.
 	ReopenIncidental(ctx context.Context, purposeID int64) (Incidental, error)
+	// The report's month-end figures (#408, ADR-037). Each takes a nullable bound:
+	// NULL is the running month and reads exactly like its unbounded twin
+	// (FundBalance, PurposeBalance, OutstandingReimbursementTotal,
+	// LatestReconciliation, ListOpenReconciliationLinesByFund), so the running
+	// month and Beranda cannot disagree. A past month passes its last day
+	// ("YYYY-MM-DD", compared against occurred_on and the other day columns) or,
+	// for a count, the first instant of the next month in Jakarta as unix seconds.
+	// The CASTs are what make sqlc emit int64 rather than interface{} (ADR-024).
+	ReportFundBalance(ctx context.Context, arg ReportFundBalanceParams) (int64, error)
+	// A snapshot is never edited (ADR-024), so the latest count before the bound
+	// and the lines it left open are exactly what the report said back then.
+	ReportLatestReconciliation(ctx context.Context, arg ReportLatestReconciliationParams) (Reconciliation, error)
+	// ListOpenReconciliationLinesByFund with both snapshots bounded: a line is
+	// open at the bound when no count before the bound has weighed in on its
+	// location since.
+	ReportOpenReconciliationLines(ctx context.Context, arg ReportOpenReconciliationLinesParams) ([]ReconciliationLine, error)
+	// Owed at the bound: incurred by then, not yet waived then, and not yet paid
+	// out by then. waived_on holds only the latest waive, so a claim waived and
+	// later un-waived reads as owed in the months it was waived (#408 accepts it).
+	ReportOwedToMembers(ctx context.Context, arg ReportOwedToMembersParams) (int64, error)
+	ReportPurposeBalance(ctx context.Context, arg ReportPurposeBalanceParams) (int64, error)
 	RestoreAccount(ctx context.Context, arg RestoreAccountParams) error
 	RestoreDuesRate(ctx context.Context, arg RestoreDuesRateParams) error
 	RestoreDuesTier(ctx context.Context, arg RestoreDuesTierParams) error

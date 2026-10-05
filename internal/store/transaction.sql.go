@@ -53,15 +53,20 @@ func (q *Queries) AccountBalanceThrough(ctx context.Context, arg AccountBalanceT
 const contributedByIncidentalMember = `-- name: ContributedByIncidentalMember :many
 SELECT member_id, CAST(COALESCE(SUM(amount), 0) AS INTEGER) AS contributed_amount
 FROM "transaction" t
-WHERE t.fund_id = ? AND t.purpose_id = ? AND t.kind = 'normal' AND t.direction = 'in'
+WHERE t.fund_id = ?1 AND t.purpose_id = ?2 AND t.kind = 'normal' AND t.direction = 'in'
   AND t.member_id IS NOT NULL
-  AND NOT EXISTS (SELECT 1 FROM "transaction" r WHERE r.reverses_transaction_id = t.id)
+  AND NOT EXISTS (
+    SELECT 1 FROM "transaction" r WHERE r.reverses_transaction_id = t.id
+      AND (CAST(?3 AS TEXT) IS NULL OR r.occurred_on <= CAST(?3 AS TEXT))
+  )
+  AND (CAST(?3 AS TEXT) IS NULL OR t.occurred_on <= CAST(?3 AS TEXT))
 GROUP BY member_id
 `
 
 type ContributedByIncidentalMemberParams struct {
 	FundID    int64
 	PurposeID int64
+	Through   *string
 }
 
 type ContributedByIncidentalMemberRow struct {
@@ -82,8 +87,10 @@ type ContributedByIncidentalMemberRow struct {
 // ListMembersByFund plus the envelope's opened_on and recipients, read and
 // combined in Go (Ledger.GetIncidentalParticipation), never a second query
 // trying to derive the same roster twice.
+//
+// through bounds it the way IncidentalActivityTotals's is bounded (#408).
 func (q *Queries) ContributedByIncidentalMember(ctx context.Context, arg ContributedByIncidentalMemberParams) ([]ContributedByIncidentalMemberRow, error) {
-	rows, err := q.db.QueryContext(ctx, contributedByIncidentalMember, arg.FundID, arg.PurposeID)
+	rows, err := q.db.QueryContext(ctx, contributedByIncidentalMember, arg.FundID, arg.PurposeID, arg.Through)
 	if err != nil {
 		return nil, err
 	}
@@ -472,15 +479,20 @@ SELECT
 FROM "transaction" t
 LEFT JOIN transfer tr ON tr.id = t.transfer_id AND tr.kind = 'reclass_purpose'
 LEFT JOIN "transaction" o ON o.fund_id = tr.fund_id AND o.id = tr.corrects_transaction_id
-WHERE t.fund_id = ? AND t.purpose_id = ?
+WHERE t.fund_id = ?1 AND t.purpose_id = ?2
   AND (tr.id IS NULL OR tr.corrects_transaction_id IS NOT NULL OR tr.reason = 'allocation')
   AND t.reverses_transaction_id IS NULL
-  AND NOT EXISTS (SELECT 1 FROM "transaction" r WHERE r.reverses_transaction_id = t.id)
+  AND NOT EXISTS (
+    SELECT 1 FROM "transaction" r WHERE r.reverses_transaction_id = t.id
+      AND (CAST(?3 AS TEXT) IS NULL OR r.occurred_on <= CAST(?3 AS TEXT))
+  )
+  AND (CAST(?3 AS TEXT) IS NULL OR t.occurred_on <= CAST(?3 AS TEXT))
 `
 
 type IncidentalActivityTotalsParams struct {
 	FundID    int64
 	PurposeID int64
+	Through   *string
 }
 
 type IncidentalActivityTotalsRow struct {
@@ -529,8 +541,11 @@ type IncidentalActivityTotalsRow struct {
 // disbursed. Collected minus disbursed still moves by exactly the leg's
 // effect on the balance. A roll - 'roll', or NULL on a row written before
 // the column existed - stays excluded as above.
+// through bounds it at a past month's last day for the public report (#408):
+// only rows dated by then, and a reversal dated after it has not happened
+// yet. NULL - every other caller - is unbounded.
 func (q *Queries) IncidentalActivityTotals(ctx context.Context, arg IncidentalActivityTotalsParams) (IncidentalActivityTotalsRow, error) {
-	row := q.db.QueryRowContext(ctx, incidentalActivityTotals, arg.FundID, arg.PurposeID)
+	row := q.db.QueryRowContext(ctx, incidentalActivityTotals, arg.FundID, arg.PurposeID, arg.Through)
 	var i IncidentalActivityTotalsRow
 	err := row.Scan(&i.CollectedAmount, &i.DisbursedAmount)
 	return i, err

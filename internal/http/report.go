@@ -48,8 +48,9 @@ type reportPage struct {
 	Check    *reportCheck
 	Purposes []reportPurpose
 
-	// Owed is the total owed to members who fronted an expense, as of today
-	// like Balance; "" when nothing is owed, which hides the line (#406).
+	// Owed is the total owed to members who fronted an expense, as of the
+	// same day as Balance (ADR-037); "" when nothing is owed, which hides the
+	// line (#406).
 	Owed string
 
 	PDFHref string
@@ -395,13 +396,22 @@ func monthlyReportOrCurrent(ctx context.Context, l *ledger.Ledger, params ledger
 	return l.MonthlyReport(ctx, params)
 }
 
+// reportAsOf is the date line every figure on the page answers to (ADR-037):
+// a past month's last day, or today marked as the running month.
+func reportAsOf(r ledger.Report) string {
+	if r.Running {
+		return reportText.AsOfRunning(reportText.longDate(r.AsOf))
+	}
+	return reportText.AsOf(reportText.longDate(r.AsOf))
+}
+
 func buildReportPage(r ledger.Report, empty bool) reportPage {
 	page := reportPage{
 		Title:    reportText.Title(r.FundName),
 		Style:    reportStyle(),
 		Text:     reportText,
 		FundName: r.FundName,
-		AsOf:     reportText.AsOf(reportText.longDate(r.AsOf)),
+		AsOf:     reportAsOf(r),
 		Balance:  money.FormatIDR(r.Balance),
 		Empty:    empty,
 	}

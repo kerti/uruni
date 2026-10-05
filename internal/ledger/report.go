@@ -80,10 +80,11 @@ type ReportParams struct {
 type Report struct {
 	FundName string
 
-	// AsOf is today in Asia/Jakarta ("YYYY-MM-DD"): the "per <date>" the
-	// header's balances are true as of. The header is always current, whatever
-	// month is selected - a past month's rows sit under today's balance.
-	AsOf string
+	// AsOf is the day ("YYYY-MM-DD") every figure is true as of (ADR-037): the
+	// last day of a past month, or today in Asia/Jakarta for the running month,
+	// which Running marks: the month as it ended, or as it stands.
+	AsOf    string
+	Running bool
 
 	// Month is the month shown ("YYYY-MM"); Months is every month offered,
 	// oldest first: the first transaction's month through the current one.
@@ -93,8 +94,8 @@ type Report struct {
 	// Balance is the fund's one pooled balance (FundBalance).
 	Balance money.Amount
 
-	// OwedToMembers is OwedToMembers as of now, like Balance: the summary is
-	// current whatever month is selected (#406).
+	// OwedToMembers is what the fund owed members for talangan as of AsOf
+	// (#406, #408).
 	OwedToMembers money.Amount
 
 	// Reconciliation is nil when no count has ever been taken. A fund nobody
@@ -320,19 +321,29 @@ func (l *Ledger) monthlyReport(ctx context.Context, p ReportParams) (Report, err
 	r := Report{
 		FundName: fund.Name,
 		AsOf:     today.Format(reportDayLayout),
+		Running:  month >= currentMonth,
 		Month:    month,
+	}
+	b := reportBound{}
+	if !r.Running {
+		b = boundAtMonthEnd(monthStart)
+		r.AsOf = *b.through
 	}
 
 	if r.Months, err = l.reportMonths(ctx, p.FundID, today); err != nil {
 		return Report{}, err
 	}
-	if r.Balance, err = l.FundBalance(ctx, p.FundID); err != nil {
-		return Report{}, err
+	balance, err := l.q.ReportFundBalance(ctx, store.ReportFundBalanceParams{FundID: p.FundID, Through: b.through})
+	if err != nil {
+		return Report{}, fmt.Errorf("report fund balance: %w", err)
 	}
-	if r.OwedToMembers, err = l.OwedToMembers(ctx, p.FundID); err != nil {
-		return Report{}, err
+	r.Balance = money.FromDB(balance)
+	owed, err := l.q.ReportOwedToMembers(ctx, store.ReportOwedToMembersParams{FundID: p.FundID, Through: b.through})
+	if err != nil {
+		return Report{}, fmt.Errorf("report owed to members: %w", err)
 	}
-	if r.Reconciliation, err = l.reportReconciliation(ctx, p.FundID); err != nil {
+	r.OwedToMembers = money.FromDB(owed)
+	if r.Reconciliation, err = l.reportReconciliation(ctx, p.FundID, b); err != nil {
 		return Report{}, err
 	}
 
@@ -344,7 +355,7 @@ func (l *Ledger) monthlyReport(ctx context.Context, p ReportParams) (Report, err
 	if err != nil {
 		return Report{}, fmt.Errorf("listing purposes: %w", err)
 	}
-	if r.PurposeBalances, err = l.reportPurposeBalances(ctx, p.FundID, purposes, envelopes); err != nil {
+	if r.PurposeBalances, err = l.reportPurposeBalances(ctx, p.FundID, purposes, envelopes, b); err != nil {
 		return Report{}, err
 	}
 
@@ -355,11 +366,27 @@ func (l *Ledger) monthlyReport(ctx context.Context, p ReportParams) (Report, err
 	if r.Dues, err = l.reportDues(ctx, p.FundID, month, p.DuesStatus); err != nil {
 		return Report{}, err
 	}
-	if r.Envelopes, err = l.reportEnvelopes(ctx, p.FundID, month, purposes, envelopes); err != nil {
+	if r.Envelopes, err = l.reportEnvelopes(ctx, p.FundID, month, purposes, envelopes, b); err != nil {
 		return Report{}, err
 	}
 
 	return r, nil
+}
+
+// reportBound is where a past month's figures stop (ADR-037): through is its
+// last day, compared against the ledger's day columns; before is the first
+// instant of the next month in Jakarta, compared against a count's
+// performed_at. Both nil is the running month, which reads every row - the
+// same figures Beranda shows.
+type reportBound struct {
+	through *string
+	before  *int64
+}
+
+func boundAtMonthEnd(monthStart time.Time) reportBound {
+	last := monthStart.AddDate(0, 1, -1).Format(reportDayLayout)
+	next := time.Date(monthStart.Year(), monthStart.Month()+1, 1, 0, 0, 0, 0, tz.Jakarta).Unix()
+	return reportBound{through: &last, before: &next}
 }
 
 // parseReportMonth returns the first day of a "YYYY-MM" month, refusing
@@ -404,10 +431,11 @@ func (l *Ledger) reportMonths(ctx context.Context, fundID int64, today time.Time
 	return months, nil
 }
 
-// reportReconciliation reads the banner's three states: nil for never counted,
-// otherwise the latest count's date and the fund-wide open difference.
-func (l *Ledger) reportReconciliation(ctx context.Context, fundID int64) (*ReportReconciliation, error) {
-	latest, err := l.q.LatestReconciliation(ctx, fundID)
+// reportReconciliation reads the banner's three states as of the bound: nil
+// for never counted by then, otherwise the latest count's date and the
+// fund-wide difference still open at the bound.
+func (l *Ledger) reportReconciliation(ctx context.Context, fundID int64, b reportBound) (*ReportReconciliation, error) {
+	latest, err := l.q.ReportLatestReconciliation(ctx, store.ReportLatestReconciliationParams{FundID: fundID, Before: b.before})
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
 	}
@@ -415,7 +443,7 @@ func (l *Ledger) reportReconciliation(ctx context.Context, fundID int64) (*Repor
 		return nil, fmt.Errorf("latest reconciliation: %w", err)
 	}
 
-	open, err := l.q.ListOpenReconciliationLinesByFund(ctx, fundID)
+	open, err := l.q.ReportOpenReconciliationLines(ctx, store.ReportOpenReconciliationLinesParams{FundID: fundID, Before: b.before})
 	if err != nil {
 		return nil, fmt.Errorf("listing open reconciliation lines: %w", err)
 	}
@@ -437,10 +465,14 @@ func (l *Ledger) reportReconciliation(ctx context.Context, fundID int64) (*Repor
 	}, nil
 }
 
-// reportPurposeBalances is the header's per-purpose figures: Kas Utama, each
-// open envelope, each pass-through. Ordered by kind, then by opened_on or name,
-// never by id.
-func (l *Ledger) reportPurposeBalances(ctx context.Context, fundID int64, purposes []store.Purpose, envelopes []store.Incidental) ([]ReportPurposeBalance, error) {
+// reportPurposeBalances is the header's per-purpose figures as of the bound:
+// Kas Utama, each envelope open then, each pass-through that existed then -
+// and any other purpose still holding money then, so the lines always sum to
+// Saldo kas. That last case is a purpose created or opened after the month
+// with rows dated inside it, which back-filling produces (#408). A closed
+// envelope holds nothing (ADR-031), so it stays hidden. Ordered by kind, then
+// by opened_on or name, never by id.
+func (l *Ledger) reportPurposeBalances(ctx context.Context, fundID int64, purposes []store.Purpose, envelopes []store.Incidental, b reportBound) ([]ReportPurposeBalance, error) {
 	envelopeByPurpose := make(map[int64]store.Incidental, len(envelopes))
 	for _, e := range envelopes {
 		envelopeByPurpose[e.PurposeID] = e
@@ -449,14 +481,27 @@ func (l *Ledger) reportPurposeBalances(ctx context.Context, fundID int64, purpos
 	type ranked struct {
 		purpose  store.Purpose
 		openedOn string
+		balance  money.Amount
 	}
 	var shown []ranked
 	for _, pu := range purposes {
 		e, isEnvelope := envelopeByPurpose[pu.ID]
-		if isEnvelope && e.ClosedOn != nil {
+		existed := true
+		switch {
+		case isEnvelope:
+			existed = envelopeOpenAt(e, b.through)
+		case pu.Kind == "pass_through" && b.before != nil:
+			// A pass-through has no opening date; it existed once created.
+			existed = pu.CreatedAt < *b.before
+		}
+		bal, err := l.reportPurposeBalance(ctx, fundID, pu.ID, b)
+		if err != nil {
+			return nil, err
+		}
+		if !existed && bal == 0 {
 			continue
 		}
-		shown = append(shown, ranked{purpose: pu, openedOn: e.OpenedOn})
+		shown = append(shown, ranked{purpose: pu, openedOn: e.OpenedOn, balance: bal})
 	}
 
 	kindRank := map[string]int{"main": 0, "incidental": 1, "pass_through": 2}
@@ -473,13 +518,27 @@ func (l *Ledger) reportPurposeBalances(ctx context.Context, fundID int64, purpos
 
 	out := make([]ReportPurposeBalance, 0, len(shown))
 	for _, s := range shown {
-		bal, err := l.PurposeBalance(ctx, fundID, s.purpose.ID)
-		if err != nil {
-			return nil, err
-		}
-		out = append(out, ReportPurposeBalance{PurposeID: s.purpose.ID, Name: s.purpose.Name, Kind: s.purpose.Kind, Balance: bal})
+		out = append(out, ReportPurposeBalance{PurposeID: s.purpose.ID, Name: s.purpose.Name, Kind: s.purpose.Kind, Balance: s.balance})
 	}
 	return out, nil
+}
+
+func (l *Ledger) reportPurposeBalance(ctx context.Context, fundID, purposeID int64, b reportBound) (money.Amount, error) {
+	v, err := l.q.ReportPurposeBalance(ctx, store.ReportPurposeBalanceParams{FundID: fundID, PurposeID: purposeID, Through: b.through})
+	if err != nil {
+		return 0, fmt.Errorf("report purpose balance: %w", err)
+	}
+	return money.FromDB(v), nil
+}
+
+// envelopeOpenAt is whether an envelope was open at the end of the day
+// through, nil meaning now. Closing rolls the leftover out on closed_on, so an
+// envelope closed on that very day is already gone from it.
+func envelopeOpenAt(e store.Incidental, through *string) bool {
+	if through == nil {
+		return e.ClosedOn == nil
+	}
+	return e.OpenedOn <= *through && (e.ClosedOn == nil || *e.ClosedOn > *through)
 }
 
 // reportRows reads the month, folds transfer pairs, applies the filters, and
@@ -673,7 +732,7 @@ func duesStatusMatches(filter string, s DuesStatus) bool {
 // open envelope plus any closed in it (ADR-035); for a past month it is the
 // envelopes as they stood then, so an occasion is readable in every month it
 // ran, not only the one it closed in. Oldest first, then by name.
-func (l *Ledger) reportEnvelopes(ctx context.Context, fundID int64, month string, purposes []store.Purpose, envelopes []store.Incidental) ([]ReportEnvelope, error) {
+func (l *Ledger) reportEnvelopes(ctx context.Context, fundID int64, month string, purposes []store.Purpose, envelopes []store.Incidental, b reportBound) ([]ReportEnvelope, error) {
 	nameByPurpose := make(map[int64]string, len(purposes))
 	for _, pu := range purposes {
 		nameByPurpose[pu.ID] = pu.Name
@@ -691,15 +750,17 @@ func (l *Ledger) reportEnvelopes(ctx context.Context, fundID int64, month string
 			continue
 		}
 
-		balance, err := l.PurposeBalance(ctx, fundID, e.PurposeID)
+		// Every figure on the card is as of the bound (ADR-037), so a past
+		// month's card agrees with the same envelope's Saldo per pos line.
+		balance, err := l.reportPurposeBalance(ctx, fundID, e.PurposeID, b)
 		if err != nil {
 			return nil, err
 		}
-		part, err := l.GetIncidentalParticipation(ctx, fundID, e.PurposeID)
+		part, err := l.incidentalParticipation(ctx, fundID, e.PurposeID, b.through)
 		if err != nil {
 			return nil, err
 		}
-		totals, err := l.q.IncidentalActivityTotals(ctx, store.IncidentalActivityTotalsParams{FundID: fundID, PurposeID: e.PurposeID})
+		totals, err := l.q.IncidentalActivityTotals(ctx, store.IncidentalActivityTotalsParams{FundID: fundID, PurposeID: e.PurposeID, Through: b.through})
 		if err != nil {
 			return nil, fmt.Errorf("computing incidental activity totals: %w", err)
 		}
@@ -708,6 +769,10 @@ func (l *Ledger) reportEnvelopes(ctx context.Context, fundID int64, month string
 			PurposeID: e.PurposeID, Name: nameByPurpose[e.PurposeID],
 			OpenedOn: e.OpenedOn, ClosedOn: e.ClosedOn, Balance: balance,
 			Collected: money.FromDB(totals.CollectedAmount),
+		}
+		// Closed after a past month ended: it was still open at its end.
+		if b.through != nil && e.ClosedOn != nil && *e.ClosedOn > *b.through {
+			env.ClosedOn = nil
 		}
 		if e.TargetAmount != nil {
 			v := money.FromDB(*e.TargetAmount)
