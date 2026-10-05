@@ -161,12 +161,10 @@ ORDER BY occurred_on, id;
 --     an allocation "Pindah pos" from it; only a pair that corrects
 --     nothing carries one.
 --   - effective_purpose_id: the tag this row's money is under NOW - its own
---     purpose_id until a correction (ADR-033) moves it, then the latest
---     correction's target. Which of that correction's two legs IS the
---     target depends on this row's own direction, not on the leg's: an
---     'out' mis-tagged needs the target to take the pair's 'out' leg, an
---     'in' the 'in' leg (PostPurposeCorrection builds it that way), so
---     ct.direction = t.direction reads back exactly what was written.
+--     purpose_id until a correction (ADR-033) moves it, then the end of the
+--     path its corrections walk - EffectivePurposeForTransaction's
+--     derivation (transfer.sql has the reasoning), with no reliance on
+--     transfer id order (#411).
 --     COALESCE to t.purpose_id, so an uncorrected row answers itself and
 --     "has this been corrected?" is effective <> stored rather than a
 --     second boolean column saying the same thing twice.
@@ -192,11 +190,13 @@ SELECT t.id, t.fund_id, t.account_id, t.purpose_id, t.direction, t.amount, t.occ
        CAST(EXISTS(SELECT 1 FROM reconciliation_line rl WHERE rl.adjustment_transaction_id = t.id) AS INTEGER) AS is_reconciliation_fix,
        tr.corrects_transaction_id AS transfer_corrects_transaction_id,
        tr.reason AS transfer_reason,
-       CAST(COALESCE((SELECT ct.purpose_id
+       CAST(COALESCE((SELECT leg.purpose_id
                       FROM transfer c
-                      JOIN "transaction" ct ON ct.transfer_id = c.id AND ct.direction = t.direction
+                      JOIN "transaction" leg ON leg.transfer_id = c.id
                       WHERE c.corrects_transaction_id = t.id
-                      ORDER BY c.id DESC
+                      GROUP BY leg.purpose_id
+                      HAVING SUM(CASE WHEN leg.direction = t.direction THEN 1 ELSE -1 END)
+                             + (leg.purpose_id = t.purpose_id) = 1
                       LIMIT 1), t.purpose_id) AS INTEGER) AS effective_purpose_id
 FROM "transaction" t
 JOIN purpose p ON p.id = t.purpose_id

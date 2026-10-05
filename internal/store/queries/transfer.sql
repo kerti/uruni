@@ -21,26 +21,29 @@ FROM transfer
 WHERE fund_id = ?
 ORDER BY id;
 
--- The effective peruntukan lookup (ADR-033): the LATEST correction pointing
--- at transaction_id, both its legs' purpose ids, or sql.ErrNoRows when none
--- exists - the caller then falls back to the original row's own stored
--- purpose_id. "Latest" is transfer.id DESC: a correction's two legs share
--- one transfer row inserted once, so transfer.id already orders corrections
--- the same way occurred_on cannot (ADR-033's own date-is-not-a-field rule
--- means every correction of the same row can share a date).
+-- The effective peruntukan (ADR-033, #411): the tag this row's money is
+-- under now. Each correction moves the whole row from wherever it is to a new
+-- tag, so a row's corrections form a path starting at its stored purpose_id;
+-- the tag it ends on is the one the money entered once more than it left,
+-- counting the stored tag as the start. That needs no ordering of the
+-- corrections - transfer ids are not an order to rely on - and a row
+-- corrected and then corrected back ends where it began.
 --
--- Both legs, not just one: which leg is "the new tag" depends on the
--- ORIGINAL row's own direction, not on 'out' vs 'in' here - PostPurposeCorrection's
--- own doc comment works out why an 'out' original needs the target at its
--- 'out' leg while an 'in' original needs it at its 'in' leg. Deciding that
--- in SQL would mean joining back to the original row a second time for a
--- fact the caller already has in hand from its own first fetch; the caller
--- (effectivePeruntukan) picks the correct one instead.
--- name: LatestPurposeCorrectionForTransaction :one
-SELECT ol.purpose_id AS out_purpose_id, il.purpose_id AS in_purpose_id
-FROM transfer tr
-JOIN "transaction" ol ON ol.transfer_id = tr.id AND ol.direction = 'out'
-JOIN "transaction" il ON il.transfer_id = tr.id AND il.direction = 'in'
-WHERE tr.fund_id = ? AND tr.corrects_transaction_id = ?
-ORDER BY tr.id DESC
-LIMIT 1;
+-- Which leg of a correction is "entering" depends on the row's own direction:
+-- PostPurposeCorrection puts the target on the leg moving the same way as the
+-- row (an 'out' mis-tag needs the target on the 'out' leg, an 'in' on the
+-- 'in'), so leg.direction = t.direction reads back what it wrote. A row
+-- nothing corrects answers its own purpose_id.
+-- name: EffectivePurposeForTransaction :one
+SELECT CAST(COALESCE((
+  SELECT leg.purpose_id
+  FROM transfer c
+  JOIN "transaction" leg ON leg.transfer_id = c.id
+  WHERE c.corrects_transaction_id = t.id
+  GROUP BY leg.purpose_id
+  HAVING SUM(CASE WHEN leg.direction = t.direction THEN 1 ELSE -1 END)
+         + (leg.purpose_id = t.purpose_id) = 1
+  LIMIT 1
+), t.purpose_id) AS INTEGER) AS effective_purpose_id
+FROM "transaction" t
+WHERE t.fund_id = ? AND t.id = ?;
