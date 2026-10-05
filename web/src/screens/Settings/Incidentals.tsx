@@ -350,7 +350,7 @@ export function ClosedIncidentals({ onBack, onOpen }: { onBack: () => void; onOp
     .sort((a, b) => (a.closed_on < b.closed_on ? 1 : a.closed_on > b.closed_on ? -1 : b.created_at - a.created_at))
 
   return (
-    <div className="mx-auto flex w-full max-w-sm flex-col gap-4">
+    <div className="flex w-full flex-col gap-4">
       <Button type="button" variant="link" className="h-auto min-h-11 self-start p-0 text-muted-foreground" onClick={onBack}>
         <ArrowLeft aria-hidden="true" />
         {copy.incidentals.detail.backToSettings}

@@ -120,7 +120,7 @@ export default function DuesStatus({
   const visibleRows = unpaidOnly ? rows.filter((row) => UNPAID_STATUSES.includes(row.status)) : rows
 
   return (
-    <div className="mx-auto flex w-full max-w-sm flex-col gap-6">
+    <div className="flex w-full flex-col gap-6">
       {notice && (
         <p role="status" className="flex items-center gap-2 text-success">
           <CircleCheck aria-hidden="true" />

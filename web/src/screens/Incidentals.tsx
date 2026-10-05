@@ -336,7 +336,7 @@ function DetailView({
   const rolledAmount = isOpen ? null : envelope.collected_amount - envelope.disbursed_amount
 
   return (
-    <div className="mx-auto flex w-full max-w-sm flex-col gap-4">
+    <div className="flex w-full flex-col gap-4">
       {/* A way back, not an action (#319): a quiet link, like a browser's own
           back, rather than a full-width button competing with the real ones. */}
       <Button type="button" variant="link" className="h-auto min-h-11 self-start p-0 text-muted-foreground" onClick={onBack}>
