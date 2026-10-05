@@ -71,9 +71,12 @@ const listPurposesByFund = `-- name: ListPurposesByFund :many
 SELECT id, fund_id, kind, name, created_at
 FROM purpose
 WHERE fund_id = ?
-ORDER BY id
+ORDER BY kind <> 'main', name COLLATE NOCASE, id
 `
 
+// Kas Utama first, then every other pos by name whatever its kind
+// (maintainer, 2026-10-05). The pickers, Beranda and the report all read this
+// one order. id only breaks a tie between two identical names.
 func (q *Queries) ListPurposesByFund(ctx context.Context, fundID int64) ([]Purpose, error) {
 	rows, err := q.db.QueryContext(ctx, listPurposesByFund, fundID)
 	if err != nil {
@@ -108,7 +111,7 @@ SELECT p.id, p.fund_id, p.kind, p.name, p.created_at
 FROM purpose p
 LEFT JOIN incidental i ON i.purpose_id = p.id
 WHERE p.fund_id = ? AND i.closed_on IS NULL
-ORDER BY p.id
+ORDER BY p.kind <> 'main', p.name COLLATE NOCASE, p.id
 `
 
 // ListSelectablePurposesByFund is ListPurposesByFund with a closed

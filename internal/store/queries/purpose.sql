@@ -11,11 +11,14 @@ SELECT id, fund_id, kind, name, created_at
 FROM purpose
 WHERE id = ? AND fund_id = ?;
 
+-- Kas Utama first, then every other pos by name whatever its kind
+-- (maintainer, 2026-10-05). The pickers, Beranda and the report all read this
+-- one order. id only breaks a tie between two identical names.
 -- name: ListPurposesByFund :many
 SELECT id, fund_id, kind, name, created_at
 FROM purpose
 WHERE fund_id = ?
-ORDER BY id;
+ORDER BY kind <> 'main', name COLLATE NOCASE, id;
 
 -- ListSelectablePurposesByFund is ListPurposesByFund with a closed
 -- incidental's purpose excluded (ADR-031): GET /api/purposes?selectable=true
@@ -33,7 +36,7 @@ SELECT p.id, p.fund_id, p.kind, p.name, p.created_at
 FROM purpose p
 LEFT JOIN incidental i ON i.purpose_id = p.id
 WHERE p.fund_id = ? AND i.closed_on IS NULL
-ORDER BY p.id;
+ORDER BY p.kind <> 'main', p.name COLLATE NOCASE, p.id;
 
 -- UpdatePurposeName renames a purpose. The name is a label - a posted
 -- transaction references the purpose by id, and nothing in the ledger reads

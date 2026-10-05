@@ -99,9 +99,10 @@ const listDuesTiersByFund = `-- name: ListDuesTiersByFund :many
 SELECT id, fund_id, name, created_at
 FROM dues_tier
 WHERE fund_id = ?
-ORDER BY id
+ORDER BY name COLLATE NOCASE, id
 `
 
+// By name, ignoring case (maintainer, 2026-10-05).
 func (q *Queries) ListDuesTiersByFund(ctx context.Context, fundID int64) ([]DuesTier, error) {
 	rows, err := q.db.QueryContext(ctx, listDuesTiersByFund, fundID)
 	if err != nil {

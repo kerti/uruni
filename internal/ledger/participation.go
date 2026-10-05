@@ -75,10 +75,8 @@ type IncidentalParticipation struct {
 // sum is below it - a contribution below no stated minimum is still Sudah,
 // not Kurang.
 //
-// Both result slices are sorted by member name, then id as the tiebreak
-// (ListMembersPage's own ordering) - Go map iteration order is otherwise
-// unspecified, and this is a display list, not an assertion about insertion
-// order.
+// Both result slices are in ListMembersByFund's order - by name, ignoring
+// case - the order every member list reads.
 //
 // This is a read: it uses l.q directly rather than withTx, the same reason
 // DuesStatusForPeriod does (ADR-027) - a handful of consistent SELECTs with
@@ -157,13 +155,8 @@ func (l *Ledger) incidentalParticipation(ctx context.Context, fundID, purposeID 
 			Member: m, ContributedAmount: contributed, State: state,
 		})
 	}
-	sort.Slice(expected, func(i, j int) bool {
-		a, b := expected[i].Member, expected[j].Member
-		if a.Name != b.Name {
-			return a.Name < b.Name
-		}
-		return a.ID < b.ID
-	})
+	// expected is already in ListMembersByFund's order (by name, ignoring
+	// case), since it was built walking that list.
 
 	var unexpected []UnexpectedContribution
 	for _, row := range contributionRows {
@@ -178,12 +171,14 @@ func (l *Ledger) incidentalParticipation(ctx context.Context, fundID, purposeID 
 			Member: m, ContributedAmount: money.FromDB(row.ContributedAmount),
 		})
 	}
+	// The contribution rows come in no order; place each giver where
+	// ListMembersByFund puts them, so both tables read in one order.
+	rank := make(map[int64]int, len(members))
+	for i, m := range members {
+		rank[m.ID] = i
+	}
 	sort.Slice(unexpected, func(i, j int) bool {
-		a, b := unexpected[i].Member, unexpected[j].Member
-		if a.Name != b.Name {
-			return a.Name < b.Name
-		}
-		return a.ID < b.ID
+		return rank[unexpected[i].Member.ID] < rank[unexpected[j].Member.ID]
 	})
 
 	return IncidentalParticipation{Expected: expected, Unexpected: unexpected}, nil

@@ -470,8 +470,8 @@ func (l *Ledger) reportReconciliation(ctx context.Context, fundID int64, b repor
 // and any other purpose still holding money then, so the lines always sum to
 // Saldo kas. That last case is a purpose created or opened after the month
 // with rows dated inside it, which back-filling produces (#408). A closed
-// envelope holds nothing (ADR-031), so it stays hidden. Ordered by kind, then
-// by opened_on or name, never by id.
+// envelope holds nothing (ADR-031), so it stays hidden. In ListPurposesByFund's
+// order: Kas Utama first, then by name.
 func (l *Ledger) reportPurposeBalances(ctx context.Context, fundID int64, purposes []store.Purpose, envelopes []store.Incidental, b reportBound) ([]ReportPurposeBalance, error) {
 	envelopeByPurpose := make(map[int64]store.Incidental, len(envelopes))
 	for _, e := range envelopes {
@@ -479,9 +479,8 @@ func (l *Ledger) reportPurposeBalances(ctx context.Context, fundID int64, purpos
 	}
 
 	type ranked struct {
-		purpose  store.Purpose
-		openedOn string
-		balance  money.Amount
+		purpose store.Purpose
+		balance money.Amount
 	}
 	var shown []ranked
 	for _, pu := range purposes {
@@ -501,20 +500,8 @@ func (l *Ledger) reportPurposeBalances(ctx context.Context, fundID int64, purpos
 		if !existed && bal == 0 {
 			continue
 		}
-		shown = append(shown, ranked{purpose: pu, openedOn: e.OpenedOn, balance: bal})
+		shown = append(shown, ranked{purpose: pu, balance: bal})
 	}
-
-	kindRank := map[string]int{"main": 0, "incidental": 1, "pass_through": 2}
-	sort.SliceStable(shown, func(i, j int) bool {
-		a, b := shown[i], shown[j]
-		if kindRank[a.purpose.Kind] != kindRank[b.purpose.Kind] {
-			return kindRank[a.purpose.Kind] < kindRank[b.purpose.Kind]
-		}
-		if a.openedOn != b.openedOn {
-			return a.openedOn < b.openedOn
-		}
-		return a.purpose.Name < b.purpose.Name
-	})
 
 	out := make([]ReportPurposeBalance, 0, len(shown))
 	for _, s := range shown {

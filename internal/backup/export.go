@@ -10,6 +10,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"slices"
 	"time"
 
 	"github.com/kerti/uruni/internal/ledger"
@@ -188,18 +189,21 @@ func BuildDocument(ctx context.Context, q store.Querier, l *ledger.Ledger) (Docu
 		if err != nil {
 			return Document{}, nil, fmt.Errorf("backup: listing accounts for fund %d: %w", fund.ID, err)
 		}
+		byID(accounts, func(r store.Account) int64 { return r.ID })
 		doc.Accounts = append(doc.Accounts, toAccounts(accounts)...)
 
 		purposes, err := q.ListPurposesByFund(ctx, fund.ID)
 		if err != nil {
 			return Document{}, nil, fmt.Errorf("backup: listing purposes for fund %d: %w", fund.ID, err)
 		}
+		byID(purposes, func(r store.Purpose) int64 { return r.ID })
 		doc.Purposes = append(doc.Purposes, toPurposes(purposes)...)
 
 		tiers, err := q.ListDuesTiersByFund(ctx, fund.ID)
 		if err != nil {
 			return Document{}, nil, fmt.Errorf("backup: listing dues tiers for fund %d: %w", fund.ID, err)
 		}
+		byID(tiers, func(r store.DuesTier) int64 { return r.ID })
 		doc.DuesTiers = append(doc.DuesTiers, toDuesTiers(tiers)...)
 
 		rates, err := q.ListDuesRatesByFund(ctx, fund.ID)
@@ -212,6 +216,7 @@ func BuildDocument(ctx context.Context, q store.Querier, l *ledger.Ledger) (Docu
 		if err != nil {
 			return Document{}, nil, fmt.Errorf("backup: listing members for fund %d: %w", fund.ID, err)
 		}
+		byID(members, func(r store.Member) int64 { return r.ID })
 		doc.Members = append(doc.Members, toMembers(members)...)
 
 		transfers, err := q.ListTransfersByFund(ctx, fund.ID)
@@ -312,4 +317,20 @@ func fundTotals(ctx context.Context, l *ledger.Ledger, fundID int64, accounts []
 	}
 
 	return out, nil
+}
+
+// byID puts rows the store lists in display order back into id order, the
+// canonical document's byte order (TestGoldenFixtureMatchesExport). Screens
+// read names in the order the treasurer reads them; a backup only needs an
+// order that never changes, and ids already give it one.
+func byID[T any](rows []T, id func(T) int64) {
+	slices.SortFunc(rows, func(a, b T) int {
+		switch x, y := id(a), id(b); {
+		case x < y:
+			return -1
+		case x > y:
+			return 1
+		}
+		return 0
+	})
 }

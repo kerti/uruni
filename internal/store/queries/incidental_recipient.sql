@@ -28,7 +28,7 @@ SELECT ir.member_id, m.name AS member_name
 FROM incidental_recipient ir
 JOIN member m ON m.id = ir.member_id
 WHERE ir.purpose_id = ?
-ORDER BY m.name, m.id;
+ORDER BY m.name COLLATE NOCASE, m.id;
 
 -- ListIncidentalRecipientsByFund is the backup export's own read (ADR-012,
 -- #323): every recipient row across every envelope the fund owns, in its
