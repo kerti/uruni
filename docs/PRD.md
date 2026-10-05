@@ -113,6 +113,7 @@ Key entities:
 - Home shows: current total balance, a balance for each location, and a **reconciliation status**: "cocok" or "selisih Rp X — cek?".
 - Optional breakdown by purpose tag.
 - **What the fund owes members** who fronted an expense (talangan not yet settled or waived), as one total, only when above zero. That money is still inside the balance; showing it beside the balance keeps the balance from reading as more spendable than it is. It opens the outstanding talangan list.
+- **This month so far:** the running month's money in and money out, two figures under recent activity - no chart, no comparison ([ADR-038](./ADR/038-the-month-as-a-balance-walk.md)).
 
 ### 7.8 Reconciliation (the heart of the product)
 - A "reconcile" flow the treasurer can run anytime: she enters the *actual* amount held in each active location — the cash she counted, the kas balance the bank shows her — and Uruni compares each to the recorded figure. A retired location is not asked about.
@@ -126,7 +127,7 @@ Key entities:
 - The page shows **everything by default** and provides **filters** (month, purpose/tag, member, income/expense, dues status) so a public viewer can sift the data easily.
 - Safeguards: long random slug + `noindex` so it isn't discoverable via search; an optional **"regenerate link"** escape hatch if it ever leaks (not required in normal use). Trade-off accepted: because everything is shown, the public URL exposes member names and payment status — fine given the treasurer's transparency intent and the low sensitivity of the data.
 - This is a shared page, not a member portal — no accounts, no member logins.
-- One month at a time, chosen at the top: a header with the balance, the latest cash check, the balance per purpose (never per location) and what is owed to members, each **as of the month's last day** - or today for the running month, marked "bulan berjalan" - then that month's transactions, its dues status (no arrears count), and its envelopes. Receipts show as a marker only; the photos stay private. The link is shown, copied and replaced from Pengaturan. ([ADR-035](./ADR/035-public-report.md), [ADR-037](./ADR/037-report-shows-the-month-as-it-ended.md))
+- One month at a time, chosen at the top: a header with the balance, the latest cash check, the balance per purpose (never per location) and what is owed to members, each **as of the month's last day** - or today for the running month, marked "bulan berjalan" - then the month as a walk from the balance it started on, through money in, money out and any adjustment, to the balance it ended on ([ADR-038](./ADR/038-the-month-as-a-balance-walk.md)), that month's transactions, its dues status (no arrears count), and its envelopes. Receipts show as a marker only; the photos stay private. The link is shown, copied and replaced from Pengaturan. ([ADR-035](./ADR/035-public-report.md), [ADR-037](./ADR/037-report-shows-the-month-as-it-ended.md))
 - A **monthly PDF** of the same report, downloadable from the page, for printing or posting in the group chat. (Added 2026-10-02.)
 
 ### 7.10 Backup / export
