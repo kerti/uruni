@@ -17,12 +17,13 @@ import type { Transaction } from '@/lib/transactions'
  * decorative. It is null where the visible text already starts with that
  * word (Pembatalan, Saldo awal, Penyesuaian), so it is never read twice.
  *
- * Order inside 'adjustment' matters: a dues reversal and a reconciliation
- * fix are the schema's two disjoint shapes of that one kind (a reversal
- * always carries member_id+dues_period+reverses_transaction_id; a fix is
- * named by reconciliation_line.adjustment_transaction_id instead), so
- * checking reverses_transaction_id first is exact, never a guess between
- * the two.
+ * Order inside 'adjustment' matters: a reversal and a reconciliation fix
+ * are disjoint shapes of that one kind (a reversal always carries
+ * reverses_transaction_id; a fix is named by
+ * reconciliation_line.adjustment_transaction_id instead), so checking
+ * reverses_transaction_id first is exact, never a guess between the two.
+ * They are not the only shapes: a standalone adjustment (is_adjustment,
+ * ADR-024) is neither, and falls through to no label here.
  */
 function rowLabelFor(transaction: Transaction): { Icon: LucideIcon; srWord: string | null; text: string } | null {
   switch (transaction.kind) {

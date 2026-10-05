@@ -90,6 +90,9 @@ button{border:0;background:var(--primary);color:var(--primary-foreground);paddin
 .totals div{display:flex;justify-content:space-between;gap:12px;padding:8px 0}
 .totals dt{color:var(--muted-foreground)}
 .totals dd{margin:0;font-weight:600}
+.totals .last{border-top:1px solid var(--border)}
+.totals .last dt{color:var(--foreground);font-weight:700}
+.totals .last dd{color:var(--primary);font-weight:700}
 ul.txns li{align-items:flex-start}
 .what{display:flex;flex-direction:column;min-width:0}
 .label-line{font-weight:500;overflow-wrap:anywhere}

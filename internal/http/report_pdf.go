@@ -462,9 +462,16 @@ func (d *pdfDoc) header(p reportPage) {
 
 func (d *pdfDoc) transactions(p reportPage) {
 	d.section(reportText.TransactionsLabel, true)
-	d.pair(reportText.TotalIn, p.Totals.In, false, "success")
-	d.pair(reportText.TotalOut, p.Totals.Out, false, "foreground")
-	d.pair(reportText.TotalNet, p.Totals.Net, true, "primary")
+	for _, t := range p.Totals {
+		color := "foreground"
+		switch {
+		case t.Last:
+			color = "primary"
+		case t.Label == reportText.TotalIn:
+			color = "success"
+		}
+		d.pair(t.Label, t.Value, t.Last, color)
+	}
 
 	if len(p.Rows) == 0 {
 		d.SetY(d.GetY() + 3)

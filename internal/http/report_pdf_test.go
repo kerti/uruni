@@ -177,7 +177,8 @@ func TestReportPDFCarriesFundTotalsDuesAndEnvelopes(t *testing.T) {
 	for _, want := range []string{
 		"Kas RT 05", // the fund
 		reportText.PDFStatement("September 2026"), // the month
-		reportText.TotalIn, reportText.TotalOut, reportText.TotalNet,
+		reportText.TotalIn, reportText.TotalOut,   // the walk
+		reportText.WalkStart("31 Agustus 2026"), reportText.WalkEnd("30 September 2026"),
 		money.FormatIDR(1_375_000),       // the balance, a formatted amount with its non-breaking space
 		"+" + money.FormatIDR(1_250_000), // the same, as a row
 		"-" + money.FormatIDR(40_000),    // an outgoing row

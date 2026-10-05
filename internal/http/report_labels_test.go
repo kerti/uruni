@@ -14,7 +14,8 @@ import (
 //
 // Where the report deliberately differs from Riwayat (no location suffix on
 // "Saldo awal" and "Penyesuaian"; one "Dipindah: ..." wording for every
-// purpose move) the expectation says so.
+// purpose move; "Penyesuaian" on a standalone adjustment, which Riwayat leaves
+// unlabelled) the expectation says so.
 func TestReportRowLabelsMatchTheSPA(t *testing.T) {
 	str := func(s string) *string { return &s }
 	tests := []struct {
@@ -38,7 +39,9 @@ func TestReportRowLabelsMatchTheSPA(t *testing.T) {
 		{"reconciliation fix", ledger.ReportEntry{Kind: "adjustment", IsReconciliationFix: true}, "Penyesuaian"},
 		// plain rows carry no label
 		{"own normal row", ledger.ReportEntry{Kind: "normal"}, ""},
-		{"own adjustment", ledger.ReportEntry{Kind: "adjustment"}, ""},
+		// Deliberately not the SPA's blank (ADR-038): a standalone adjustment is
+		// named for its line in the month's walk, as a reconciliation fix is.
+		{"own adjustment", ledger.ReportEntry{Kind: "adjustment"}, "Penyesuaian"},
 	}
 	for _, tt := range tests {
 		if got := reportText.entryLabel(tt.entry); got != tt.want {

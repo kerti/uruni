@@ -15,6 +15,11 @@ import "github.com/kerti/uruni/internal/ledger"
 //     report never names where the money sits.
 //   - A purpose move is one "Dipindah: <from> -> <to>" row whatever its
 //     reason, where Riwayat words a roll, a correction and a Pindah pos apart.
+//
+// And one the report adds (ADR-038): an adjustment that is neither a reversal
+// nor a cek kas fix - one the treasurer posted on its own - reads "Penyesuaian",
+// where Riwayat leaves it unlabelled, so a row and the walk line it sums share
+// a name.
 
 // entryLabel is the label line for an ordinary row, or "" for a plain row
 // the treasurer recorded (which shows only its purpose and amount).
@@ -36,19 +41,18 @@ func (c reportCopy) entryLabel(e ledger.ReportEntry) string {
 	case "reimbursement":
 		return member
 	case "adjustment":
-		// A reversal first: it and a reconciliation fix are the schema's two
-		// disjoint shapes of this kind, and a dues reversal carries a period
-		// where a contribution reversal never does.
+		// A reversal first: a dues reversal carries a period where a
+		// contribution reversal never does. Every other adjustment - a cek kas
+		// fix, or one the treasurer posted on its own (is_adjustment) - is
+		// "Penyesuaian", the name of its line in the month's walk (ADR-038);
+		// the report says nothing more of it, as it never names the location.
 		if e.IsReversal {
 			if e.DuesPeriod != nil {
 				return c.RowDuesReversal(period, member)
 			}
 			return c.RowContributionReversal(member)
 		}
-		if e.IsReconciliationFix {
-			return c.RowReconciliationFix
-		}
-		return ""
+		return c.RowAdjustment
 	case "normal":
 		// A named contribution says who gave; any other normal row is plain.
 		if e.MemberName != nil {
