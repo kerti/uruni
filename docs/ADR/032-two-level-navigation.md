@@ -1,6 +1,6 @@
 # ADR-032 — Two-level navigation: five noun slots, one privileged verb
 
-**Status:** Accepted · implemented at M7 ([#368](https://github.com/kerti/uruni/issues/368)) · change only by adding a superseding ADR · [ADR index](./README.md)
+**Status:** Accepted · implemented at M7 ([#368](https://github.com/kerti/uruni/issues/368)) · superseded in part by [ADR-038](./038-the-month-as-a-balance-walk.md) · change only by adding a superseding ADR · [ADR index](./README.md)
 
 **Context.** [#212](https://github.com/kerti/uruni/issues/212) was filed because home had become the place new features land: reimbursements ([#151](https://github.com/kerti/uruni/issues/151)) and incidentals ([#152](https://github.com/kerti/uruni/issues/152)) each arrived as another button under the balance hero, and receipts ([#153](https://github.com/kerti/uruni/issues/153)/[#154](https://github.com/kerti/uruni/issues/154)) plus M7's report were queued to arrive the same way. The issue names the symptom. Grilled 2026-09-10, the cause turned out to be larger than the symptom, in two ways.
 
@@ -54,7 +54,7 @@ So this is not a tidying pass on one screen. It is the information architecture 
 
 **Incidentals are not history — they are a live balance, so they go on Beranda.** PRD §7.7's unbuilt *"optional breakdown by purpose tag"* becomes the entry point: each open incidental and each pass-through purpose (**Titipan**, the label `copy` already uses) renders as a row with its balance. Tapping an incidental opens its envelope; a pass-through has no envelope to open, so tapping a Titipan row - or Kas Utama's, which heads the list (#387) - opens Riwayat → Transaksi filtered to that purpose (2026-10-03). This builds §7.7, gives incidentals a home matching what they are, satisfies ADR-031's deferred requirement in the same stroke, and removes a button from Beranda rather than adding one. A **closed** envelope drops off Beranda and is reachable through Riwayat → Transaksi filtered to its purpose — the right asymmetry: open envelopes are current business, closed ones are the record.
 
-Beranda's order becomes: hero, per-location rows, reconciliation banner, **purpose breakdown**, recent five.
+~~Beranda's order becomes: hero, per-location rows, reconciliation banner, **purpose breakdown**, recent five.~~ **Superseded by [ADR-038](./038-the-month-as-a-balance-walk.md)**: an **Arus kas** section (the running month's money in and out) sits below the divider, ahead of the recent five.
 
 **Opening a *new* envelope is Pengaturan's, not Beranda's** (amended 2026-09-16, [#263](https://github.com/kerti/uruni/issues/263)). The paragraph above settled where an envelope is *read* and left where one is *created* unstated, and the gap was real: with the button gone from Beranda, nothing in the app reached the open form at all. It cannot go back on Beranda, and not only because of the rule above — the purpose breakdown renders nothing at all when no envelope is open and no Titipan exists, which is exactly the state a treasurer is in the moment she wants her first envelope. An affordance inside that section would be invisible precisely when it is needed.
 

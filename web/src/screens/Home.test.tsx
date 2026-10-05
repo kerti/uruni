@@ -621,5 +621,25 @@ describe('Home', () => {
       expect(inFigure?.textContent).toMatch(/^-Rp/)
       expect(outFigure).toHaveTextContent(money(85_000))
     })
+
+    it('sits in its own Arus kas section, ahead of the recent activity', async () => {
+      vi.stubGlobal('fetch', stubHome({}))
+      render(
+        <Home
+          refetchKey="1"
+          onReconcile={vi.fn()}
+          onOpenIncidental={vi.fn()}
+          onViewTransactionsFor={vi.fn()}
+          onViewHistory={vi.fn()}
+          onViewOwed={vi.fn()}
+        />,
+      )
+
+      const cashflow = await screen.findByRole('heading', { name: copy.home.cashflowHeading })
+      const recent = screen.getByRole('heading', { name: copy.home.recentActivityHeading })
+      expect(cashflow.closest('section')).toContainElement(screen.getByText(copy.home.monthIn))
+      expect(cashflow.closest('section')).not.toContainElement(recent)
+      expect(cashflow.compareDocumentPosition(recent) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    })
   })
 })

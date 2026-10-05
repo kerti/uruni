@@ -511,8 +511,10 @@ export const copy = {
     // tab it opens, so the row and the list read as one thing.
     owedToMembers: 'Talangan belum dibayar',
     recentActivityHeading: 'Aktivitas terbaru',
-    // The running month's two figures above the activity list (ADR-038): the
-    // report's own In and Out, so the two screens never disagree.
+    // Arus kas, Beranda's first section below the divider (ADR-038): the
+    // running month's two figures, the report's own In and Out, so the two
+    // screens never disagree.
+    cashflowHeading: 'Arus kas',
     monthHeading: 'Bulan ini',
     monthIn: 'Masuk',
     monthOut: 'Keluar',
