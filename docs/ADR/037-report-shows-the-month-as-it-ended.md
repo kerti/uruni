@@ -1,6 +1,6 @@
 # ADR-037 — The report shows each month as it ended
 
-**Status:** Accepted · implemented at M7 ([#408](https://github.com/kerti/uruni/issues/408)) — supersedes [ADR-035](./035-public-report.md) on one point, named below · change only by adding a superseding ADR · [ADR index](./README.md)
+**Status:** Accepted · implemented at M7 ([#408](https://github.com/kerti/uruni/issues/408)) — supersedes [ADR-035](./035-public-report.md) on one point, named below · superseded in part by [ADR-038](./038-the-month-as-a-balance-walk.md) · change only by adding a superseding ADR · [ADR index](./README.md)
 
 **Context.** ADR-035 made the report's header current whatever month was selected: a September page showed today's balance above September's rows. On the page that reads as "the fund now, then what happened in September". The PDF made the split visible: it is titled "Laporan kas bulan September 2026" and is printed and passed round the group chat as a monthly statement, so a copy made in December showed December's balance under a September title, and nothing on it said why. A monthly report, to the people who read one, states the fund as the month left it - which is also how Balances v2 treats its dashboard and its downloadable monthly report. Raised by the maintainer while reviewing #406, ruled 2026-10-05.
 
@@ -19,7 +19,7 @@
 - A talangan claim is owed if it was incurred by then, not paid out by then, and not waived by then.
 - The running month passes no bound at all, so its figures are, by construction, the ones Beranda shows.
 
-**What stays as it was.** Iuran keeps ADR-035's reading: the status of that month's dues as of today. A member who paid September late shows *Lunas* on September, so the public page never keeps calling someone unpaid after they have paid. The month's transaction rows were always month-scoped.
+**What stays as it was.** Iuran keeps ADR-035's reading: the status of that month's dues as of today. A member who paid September late shows *Lunas* on September, so the public page never keeps calling someone unpaid after they have paid. ~~The month's transaction rows were always month-scoped.~~ **Superseded by [ADR-038](./038-the-month-as-a-balance-walk.md)**: the running month's rows have no upper bound, matching its unbounded balance.
 
 ## Consequences
 

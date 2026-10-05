@@ -65,7 +65,7 @@ type reportPage struct {
 	// filtered set, and the rows. Filter is set by the handler, which alone
 	// knows the fund's members and purposes.
 	Filter reportFilter
-	Totals reportTotals
+	Totals []reportTotal
 	Rows   []reportRow
 	Month  string
 	NoRows bool
@@ -99,12 +99,15 @@ type reportPurpose struct {
 	Negative bool
 }
 
-// reportTotals are the filtered set's money in, money out and net, already
-// formatted. Moves and between-accounts transfers are in none of them.
-type reportTotals struct {
-	In  string
-	Out string
-	Net string
+// reportTotal is one line of the month's walk (ADR-038), already formatted:
+// the label and the figure beside it. Last marks the closing balance, which
+// both renderers emphasise. The whole fund, or one pos, reads Saldo <day> down
+// to Saldo <day>; under a member or direction filter only Total masuk and Total
+// keluar, since a balance has no meaning for a slice of the fund.
+type reportTotal struct {
+	Label string
+	Value string
+	Last  bool
 }
 
 // reportRow is one line of the month. Class is "in", "out" or "move"; Label is
@@ -396,6 +399,33 @@ func reportAsOf(r ledger.Report) string {
 	return reportText.AsOf(reportText.longDate(r.AsOf))
 }
 
+// walkLines is the walk's lines in ADR-038's order. Saldo awal, Penyesuaian and
+// Dipindah appear only when they are not zero: most months have none of them.
+func walkLines(w ledger.ReportWalk) []reportTotal {
+	var lines []reportTotal
+	add := func(label string, v money.Amount, last bool) {
+		lines = append(lines, reportTotal{Label: label, Value: money.FormatIDR(v), Last: last})
+	}
+	if w.Full {
+		add(reportText.WalkStart(reportText.longDate(w.StartOn)), w.Start, false)
+		if w.Openings != 0 {
+			add(reportText.RowOpening, w.Openings, false)
+		}
+	}
+	add(reportText.TotalIn, w.In, false)
+	add(reportText.TotalOut, w.Out, false)
+	if w.Full {
+		if w.Adjustments != 0 {
+			add(reportText.RowAdjustment, w.Adjustments, false)
+		}
+		if w.Moved != 0 {
+			add(reportText.WalkMoved, w.Moved, false)
+		}
+		add(reportText.WalkEnd(reportText.longDate(w.EndOn)), w.End, true)
+	}
+	return lines
+}
+
 func buildReportPage(r ledger.Report, empty bool) reportPage {
 	page := reportPage{
 		Title:    reportText.Title(r.FundName),
@@ -433,11 +463,7 @@ func buildReportPage(r ledger.Report, empty bool) reportPage {
 	}
 
 	page.Month = r.Month
-	page.Totals = reportTotals{
-		In:  money.FormatIDR(r.Totals.In),
-		Out: money.FormatIDR(r.Totals.Out),
-		Net: money.FormatIDR(r.Totals.Net),
-	}
+	page.Totals = walkLines(r.Walk)
 	for _, row := range r.Rows {
 		date := reportText.longDate(row.Date)
 		switch {

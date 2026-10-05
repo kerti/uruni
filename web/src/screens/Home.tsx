@@ -285,6 +285,28 @@ export default function Home({
           hairline between the two (#319). */}
       <SectionDivider />
 
+      {/* Arus kas: the running month, two figures (ADR-038), served by the
+          API from the report's own ledger function, so Beranda and the public
+          report cannot disagree. Its own section, first below the divider:
+          what happened this month, then the rows it happened in. Plain ink -
+          a month is not a verdict. */}
+      <section className="flex flex-col gap-2">
+        <h2 className="text-sm font-semibold text-muted-foreground">{copy.home.cashflowHeading}</h2>
+        <div className="rounded-lg bg-card px-4 py-3 shadow-card ring-1 ring-foreground/10">
+          <p className="text-sm text-muted-foreground">{copy.home.monthHeading}</p>
+          <dl className="mt-1 grid grid-cols-2 gap-3">
+            <div>
+              <dt className="text-sm text-muted-foreground">{copy.home.monthIn}</dt>
+              <dd className="tabular font-medium">{formatIDR(balances.month.in)}</dd>
+            </div>
+            <div>
+              <dt className="text-sm text-muted-foreground">{copy.home.monthOut}</dt>
+              <dd className="tabular font-medium">{formatIDR(balances.month.out)}</dd>
+            </div>
+          </dl>
+        </div>
+      </section>
+
       <section className="flex flex-col gap-2">
         <div className="flex items-center justify-between gap-3">
           <h2 className="text-sm font-semibold text-muted-foreground">{copy.home.recentActivityHeading}</h2>

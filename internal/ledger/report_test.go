@@ -74,11 +74,12 @@ func moves(rows []ReportRow) []ReportMove {
 	return out
 }
 
-func assertTotals(t *testing.T, got ReportTotals, in, out, net money.Amount) {
+// assertInOut checks the walk's Total masuk and Total keluar, the two lines
+// every filter keeps; the rest of the walk has its own tests (report_walk_test.go).
+func assertInOut(t *testing.T, got ReportWalk, in, out money.Amount) {
 	t.Helper()
-	want := ReportTotals{In: in, Out: out, Net: net}
-	if got != want {
-		t.Errorf("Totals = %+v, want %+v", got, want)
+	if got.In != in || got.Out != out {
+		t.Errorf("Walk In/Out = %d/%d, want %d/%d", got.In, got.Out, in, out)
 	}
 }
 
@@ -192,7 +193,7 @@ func TestMonthlyReportEmptyFundShowsAHeaderAtZeroAndTheCurrentMonthOnly(t *testi
 	if len(r.Rows) != 0 {
 		t.Errorf("Rows = %d, want none", len(r.Rows))
 	}
-	assertTotals(t, r.Totals, 0, 0, 0)
+	assertInOut(t, r.Walk, 0, 0)
 	if len(r.Dues) != 0 || len(r.Envelopes) != 0 {
 		t.Errorf("Dues = %d, Envelopes = %d, want none of either", len(r.Dues), len(r.Envelopes))
 	}
@@ -341,7 +342,7 @@ func TestMonthlyReportLocationTransferIsHiddenAndInNoTotal(t *testing.T) {
 		t.Errorf("moves = %d, want 0: a location transfer is not a purpose move", len(moves(r.Rows)))
 	}
 	// Both legs would have added 30_000 to in and to out; neither is counted.
-	assertTotals(t, r.Totals, 235_000, 80_000, 155_000)
+	assertInOut(t, r.Walk, 235_000, 80_000)
 	if len(r.Rows) != 5 {
 		t.Errorf("Rows = %d, want 5 (donation, two dues, two outgoing)", len(r.Rows))
 	}
@@ -388,7 +389,7 @@ func TestMonthlyReportPurposeCorrectionIsOneMoveRowMatchedOnEitherSide(t *testin
 					t.Errorf("move = %+v, want 50000 from Primary Cash to Pass-through as a correction", m)
 				}
 			}
-			assertTotals(t, r.Totals, tt.wantIn, 0, tt.wantIn)
+			assertInOut(t, r.Walk, tt.wantIn, 0)
 		})
 	}
 
@@ -436,7 +437,7 @@ func TestMonthlyReportEnvelopeRollIsOneMoveRowOutsideTheTotals(t *testing.T) {
 	}
 	// The roll's 70_000 is in neither total: the envelope's own 100_000 in and
 	// 30_000 out are all the month moved.
-	assertTotals(t, r.Totals, 100_000, 30_000, 70_000)
+	assertInOut(t, r.Walk, 100_000, 30_000)
 	if r.Balance != 70_000 {
 		t.Errorf("Balance = %d, want 70000", r.Balance)
 	}
@@ -451,7 +452,7 @@ func TestMonthlyReportEnvelopeRollIsOneMoveRowOutsideTheTotals(t *testing.T) {
 	if len(moves(r.Rows)) != 1 || len(entries(r.Rows)) != 0 {
 		t.Errorf("under the Kas Utama filter: moves = %d, entries = %d, want 1 and 0", len(moves(r.Rows)), len(entries(r.Rows)))
 	}
-	assertTotals(t, r.Totals, 0, 0, 0)
+	assertInOut(t, r.Walk, 0, 0)
 }
 
 // --- rows, totals and filters ---------------------------------------------------
@@ -462,23 +463,22 @@ func TestMonthlyReportTotalsUnderEachFilter(t *testing.T) {
 	f := s.f
 
 	tests := []struct {
-		name        string
-		p           ReportParams
-		wantRows    int
-		in, out     money.Amount
-		wantNetAlso money.Amount
+		name     string
+		p        ReportParams
+		wantRows int
+		in, out  money.Amount
 	}{
-		{"no filter", ReportParams{}, 5, 235_000, 80_000, 155_000},
-		{"direction in", ReportParams{Direction: "in"}, 3, 235_000, 0, 235_000},
-		{"direction out", ReportParams{Direction: "out"}, 2, 0, 80_000, -80_000},
-		{"purpose main", ReportParams{PurposeID: &f.mainID}, 4, 235_000, 60_000, 175_000},
-		{"purpose pass-through", ReportParams{PurposeID: &f.passID}, 1, 0, 20_000, -20_000},
-		{"purpose and direction", ReportParams{PurposeID: &f.mainID, Direction: "out"}, 1, 0, 60_000, -60_000},
-		{"member one", ReportParams{MemberID: &s.memberOne}, 1, 25_000, 0, 25_000},
-		{"member two", ReportParams{MemberID: &s.memberTwo}, 1, 10_000, 0, 10_000},
-		{"member with no rows", ReportParams{MemberID: &s.memberThree}, 0, 0, 0, 0},
-		{"member and wrong direction", ReportParams{MemberID: &s.memberOne, Direction: "out"}, 0, 0, 0, 0},
-		{"unknown purpose", ReportParams{PurposeID: int64Ptr(999_999)}, 0, 0, 0, 0},
+		{"no filter", ReportParams{}, 5, 235_000, 80_000},
+		{"direction in", ReportParams{Direction: "in"}, 3, 235_000, 0},
+		{"direction out", ReportParams{Direction: "out"}, 2, 0, 80_000},
+		{"purpose main", ReportParams{PurposeID: &f.mainID}, 4, 235_000, 60_000},
+		{"purpose pass-through", ReportParams{PurposeID: &f.passID}, 1, 0, 20_000},
+		{"purpose and direction", ReportParams{PurposeID: &f.mainID, Direction: "out"}, 1, 0, 60_000},
+		{"member one", ReportParams{MemberID: &s.memberOne}, 1, 25_000, 0},
+		{"member two", ReportParams{MemberID: &s.memberTwo}, 1, 10_000, 0},
+		{"member with no rows", ReportParams{MemberID: &s.memberThree}, 0, 0, 0},
+		{"member and wrong direction", ReportParams{MemberID: &s.memberOne, Direction: "out"}, 0, 0, 0},
+		{"unknown purpose", ReportParams{PurposeID: int64Ptr(999_999)}, 0, 0, 0},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -488,7 +488,7 @@ func TestMonthlyReportTotalsUnderEachFilter(t *testing.T) {
 			if len(r.Rows) != tt.wantRows {
 				t.Errorf("Rows = %d, want %d", len(r.Rows), tt.wantRows)
 			}
-			assertTotals(t, r.Totals, tt.in, tt.out, tt.wantNetAlso)
+			assertInOut(t, r.Walk, tt.in, tt.out)
 		})
 	}
 }
@@ -534,7 +534,7 @@ func TestMonthlyReportRowsAreTheMonthsOnlyNewestFirstWithTheirFacts(t *testing.T
 	}
 }
 
-func TestMonthlyReportDuesReversalIsShownAndNetsAgainstThePayment(t *testing.T) {
+func TestMonthlyReportDuesReversalIsShownAndNetsAgainstThePaymentInTotalMasuk(t *testing.T) {
 	ctx := context.Background()
 	l := newTestLedger(t)
 	s := newMonthScenario(t, l)
@@ -570,7 +570,40 @@ func TestMonthlyReportDuesReversalIsShownAndNetsAgainstThePayment(t *testing.T) 
 	if reversals != 1 {
 		t.Errorf("reversals = %d, want 1", reversals)
 	}
-	assertTotals(t, r.Totals, 25_000, 25_000, 0)
+	// ADR-038: the reversal lands on Total masuk as a minus, so the pair nets
+	// to nothing there and Total keluar stays empty. Before, it read 25000 in
+	// and 25000 out.
+	assertInOut(t, r.Walk, 0, 0)
+	for _, e := range es {
+		if e.IsReversal && e.Line != ReportLineIn {
+			t.Errorf("reversal Line = %q, want %q: it filters and counts as Uang masuk", e.Line, ReportLineIn)
+		}
+	}
+
+	// Unfiltered, September's in 235000 already held the payment, so the
+	// netted pair leaves it exactly where it was.
+	all := monthlyReport(t, l, ReportParams{FundID: s.f.fundID, Month: "2026-09"})
+	assertInOut(t, all.Walk, 235_000, 80_000)
+
+	// The reversal filters as Uang masuk: listed under it, gone under Uang keluar.
+	in := monthlyReport(t, l, ReportParams{FundID: s.f.fundID, Month: "2026-09", Direction: "in"})
+	out := monthlyReport(t, l, ReportParams{FundID: s.f.fundID, Month: "2026-09", Direction: "out"})
+	if n := countReversals(in.Rows); n != 1 {
+		t.Errorf("reversals under direction in = %d, want 1", n)
+	}
+	if n := countReversals(out.Rows); n != 0 {
+		t.Errorf("reversals under direction out = %d, want 0", n)
+	}
+}
+
+func countReversals(rows []ReportRow) int {
+	n := 0
+	for _, e := range entries(rows) {
+		if e.IsReversal {
+			n++
+		}
+	}
+	return n
 }
 
 func TestMonthlyReportSettledClaimNamesItsMemberAndCarriesTheClaimsNoteAndReceipt(t *testing.T) {
@@ -615,10 +648,10 @@ func TestMonthlyReportSettledClaimNamesItsMemberAndCarriesTheClaimsNoteAndReceip
 	if !e.HasReceipt {
 		t.Error("payout HasReceipt = false, want true: the claim's receipt is the payout's proof")
 	}
-	assertTotals(t, r.Totals, 0, 40_000, -40_000)
+	assertInOut(t, r.Walk, 0, 40_000)
 }
 
-func TestMonthlyReportOpeningBalanceIsAnOrdinaryInRow(t *testing.T) {
+func TestMonthlyReportOpeningBalanceIsItsOwnLineNotIncome(t *testing.T) {
 	l := newTestLedger(t)
 	f := newFixture(t, l)
 	postOpeningBalance(t, l, f.fundID, f.cashID, f.mainID, 500_000, "2026-09-01")
@@ -629,7 +662,15 @@ func TestMonthlyReportOpeningBalanceIsAnOrdinaryInRow(t *testing.T) {
 	if len(es) != 1 || es[0].Kind != "opening" || es[0].Direction != "in" || es[0].Amount != 500_000 {
 		t.Fatalf("entries = %+v, want one incoming opening row of 500000", es)
 	}
-	assertTotals(t, r.Totals, 500_000, 0, 500_000)
+	// ADR-038: an opening is Saldo awal, not Total masuk, so the setup month
+	// starts at zero instead of showing the whole starting balance as income.
+	want := ReportWalk{Full: true, StartOn: "2026-08-31", EndOn: "2026-09-30", Openings: 500_000, End: 500_000}
+	if r.Walk != want {
+		t.Errorf("Walk = %+v, want %+v", r.Walk, want)
+	}
+	if es[0].Line != ReportLineOpening {
+		t.Errorf("opening Line = %q, want %q", es[0].Line, ReportLineOpening)
+	}
 }
 
 func TestMonthlyReportTotalsRefuseToWrap(t *testing.T) {
@@ -988,7 +1029,7 @@ func TestMonthlyReportAnotherFundsRowsAreInvisible(t *testing.T) {
 	if r.Balance != 165_000 {
 		t.Errorf("Balance = %d, want 165000: the other fund's money is not in it", r.Balance)
 	}
-	assertTotals(t, r.Totals, 235_000, 80_000, 155_000)
+	assertInOut(t, r.Walk, 235_000, 80_000)
 	if len(r.Rows) != 5 {
 		t.Errorf("Rows = %d, want 5", len(r.Rows))
 	}
@@ -1021,7 +1062,7 @@ func TestMonthlyReportAnotherFundsRowsAreInvisible(t *testing.T) {
 
 	// And the other fund's own report is its own.
 	ro := monthlyReport(t, l, ReportParams{FundID: other.fundID, Month: "2026-09"})
-	assertTotals(t, ro.Totals, 900_000, 111_000, 789_000)
+	assertInOut(t, ro.Walk, 900_000, 111_000)
 	if ro.Balance != 789_000 || ro.FundName != "Other Fund" {
 		t.Errorf("other fund: Balance = %d, FundName = %q, want 789000 and Other Fund", ro.Balance, ro.FundName)
 	}
@@ -1179,7 +1220,7 @@ func TestMonthlyReportAllocationIsOneMoveRowCarryingItsReason(t *testing.T) {
 	if m := mv[0]; m.Amount != 120_000 || m.FromPurposeName != "Primary Cash" || m.ToPurposeName != "Bereavement" || m.IsCorrection || !m.IsAllocation {
 		t.Errorf("move = %+v, want an allocation of 120000 from Primary Cash to Bereavement", m)
 	}
-	assertTotals(t, r.Totals, 300_000, 0, 300_000)
+	assertInOut(t, r.Walk, 300_000, 0)
 	if r.Balance != 300_000 {
 		t.Errorf("Balance = %d, want 300000: a move changes no balance", r.Balance)
 	}

@@ -49,7 +49,9 @@ type reportCopy struct {
 	FilterSubmit      string
 	TotalIn           string
 	TotalOut          string
-	TotalNet          string
+	WalkStart         func(date string) string
+	WalkEnd           func(date string) string
+	WalkMoved         string
 	HasReceipt        string
 	NoRows            string
 
@@ -87,12 +89,13 @@ type reportCopy struct {
 
 	// Row labels: the Go half of web/src/copy/id.ts's rowLabels (#257), see
 	// report_labels.go. A location is never named, so Saldo awal and
-	// Penyesuaian stand alone.
+	// Penyesuaian stand alone. They are also the names of the walk's lines
+	// (ADR-038), so a line and the rows it sums share a name.
 	RowDues                 func(period, member string) string
 	RowDuesReversal         func(period, member string) string
 	RowContributionReversal func(member string) string
 	RowOpening              string
-	RowReconciliationFix    string
+	RowAdjustment           string
 	RowMoved                func(from, to string) string
 
 	// The monthly PDF (#378): the link in the page's footer and the words the
@@ -149,7 +152,9 @@ var reportText = reportCopy{
 	FilterSubmit:      "Tampilkan",
 	TotalIn:           "Total masuk",
 	TotalOut:          "Total keluar",
-	TotalNet:          "Bersih",
+	WalkStart:         func(date string) string { return "Saldo " + date },
+	WalkEnd:           func(date string) string { return "Saldo " + date },
+	WalkMoved:         "Dipindah",
 	HasReceipt:        "Ada nota",
 	NoRows:            "Tidak ada transaksi yang cocok bulan ini.",
 
@@ -183,7 +188,7 @@ var reportText = reportCopy{
 	RowDuesReversal:         func(period, member string) string { return "Pembatalan \u00b7 " + period + " \u00b7 " + member },
 	RowContributionReversal: func(member string) string { return "Pembatalan \u00b7 " + member },
 	RowOpening:              "Saldo awal",
-	RowReconciliationFix:    "Penyesuaian",
+	RowAdjustment:           "Penyesuaian",
 	RowMoved:                func(from, to string) string { return "Dipindah: " + from + " \u2192 " + to },
 
 	PDFDownload:     "Unduh PDF",

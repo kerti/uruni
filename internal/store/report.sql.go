@@ -65,14 +65,14 @@ LEFT JOIN purpose fp ON fp.id = tf.purpose_id
 LEFT JOIN purpose tp ON tp.id = tt.purpose_id
 WHERE t.fund_id = ?1
   AND t.occurred_on >= ?2
-  AND t.occurred_on < ?3
+  AND (CAST(?3 AS TEXT) IS NULL OR t.occurred_on < CAST(?3 AS TEXT))
 ORDER BY t.occurred_on DESC, t.created_at DESC
 `
 
 type ListReportTransactionsParams struct {
 	FundID   int64
 	FromDate string
-	ToDate   string
+	ToDate   *string
 }
 
 type ListReportTransactionsRow struct {
@@ -103,16 +103,18 @@ type ListReportTransactionsRow struct {
 	HasReceipt                    int64
 }
 
-// Every ledger row of one fund dated in [from_date, to_date), with the facts a
-// display-time label needs (#257) and nothing the page must not carry: no
-// receipt path or id (has_receipt is a 0/1), no account (a location is the
-// treasurer's working detail, ADR-035), no row ids. Filters are applied in Go,
+// Every ledger row of one fund dated in [from_date, to_date) (to_date NULL: no
+// upper bound), with the facts a display-time label needs (#257) and nothing
+// the page must not carry: no receipt path or id (has_receipt is a 0/1), no
+// account (a location is the treasurer's working detail, ADR-035), no row ids. Filters are applied in Go,
 // not here: a transfer pair must be folded into one row before a purpose
 // filter can say whether either side matches, and a month is a bounded list.
 //
 // from_date/to_date are plain 'YYYY-MM-DD' strings, compared as text, which is
 // exactly how occurred_on already sorts (a CHECK holds it to date()'s own
-// format). to_date is the FIRST day of the next month, exclusive.
+// format). to_date is the FIRST day of the next month, exclusive, and NULL for
+// the running month: it reads every row from the first on, so a row dated after
+// today still belongs to the walk that ends on the unbounded balance (ADR-038).
 //
 // The member columns mirror ListTransactionsPage: member_* is the dues or
 // contribution member, settlement_member_* the paid-back member of a

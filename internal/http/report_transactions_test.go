@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/url"
 	"regexp"
+	"slices"
 	"strings"
 	"testing"
 
@@ -123,14 +124,33 @@ func rowCount(t *testing.T, body string) int {
 	return strings.Count(txnSection(t, body), "<li>")
 }
 
-// totalsOf reads the three totals in page order: in, out, net.
-func totalsOf(t *testing.T, body string) [3]string {
+// totalLine is one line of the walk as the page prints it.
+type totalLine struct{ label, value string }
+
+// totalsOf reads the walk's lines in page order, unescaped.
+func totalsOf(t *testing.T, body string) []totalLine {
 	t.Helper()
-	m := regexp.MustCompile(`<dd class="tabular[^"]*">([^<]*)</dd>`).FindAllStringSubmatch(body, -1)
-	if len(m) != 3 {
-		t.Fatalf("found %d totals, want 3", len(m))
+	dl := regexp.MustCompile(`(?s)<dl class="totals">(.*?)</dl>`).FindStringSubmatch(body)
+	if dl == nil {
+		t.Fatal("no totals list on the page")
 	}
-	return [3]string{m[0][1], m[1][1], m[2][1]}
+	var out []totalLine
+	for _, m := range regexp.MustCompile(`<dt>([^<]*)</dt><dd class="tabular">([^<]*)</dd>`).FindAllStringSubmatch(dl[1], -1) {
+		out = append(out, totalLine{html.UnescapeString(m[1]), html.UnescapeString(m[2])})
+	}
+	return out
+}
+
+// inOut is the two lines every filter keeps.
+func inOut(in, out int64) []totalLine {
+	return []totalLine{
+		{reportText.TotalIn, money.FormatIDR(money.Amount(in))},
+		{reportText.TotalOut, money.FormatIDR(money.Amount(out))},
+	}
+}
+
+func equalLines(a, b []totalLine) bool {
+	return slices.Equal(a, b)
 }
 
 func TestReportListsTheMonthWithLabelsAndTotals(t *testing.T) {
@@ -155,9 +175,17 @@ func TestReportListsTheMonthWithLabelsAndTotals(t *testing.T) {
 		t.Error("an August row appears in September")
 	}
 
-	// in: 200.000 + 25.000 + 15.000; out: 60.000; moves are in neither.
-	want := [3]string{money.FormatIDR(240_000), money.FormatIDR(60_000), money.FormatIDR(180_000)}
-	if got := totalsOf(t, body); got != want {
+	// ADR-038: the month is a walk. The August row (7.000) is what September
+	// started on; in is 200.000 + 25.000 + 15.000 and out 60.000, moves in
+	// neither; and September ended on 187.000. No Saldo awal, no Penyesuaian:
+	// nothing of either was recorded, so neither line shows. There is no Bersih.
+	want := []totalLine{
+		{reportText.WalkStart("31 Agustus 2026"), money.FormatIDR(7_000)},
+		{reportText.TotalIn, money.FormatIDR(240_000)},
+		{reportText.TotalOut, money.FormatIDR(60_000)},
+		{reportText.WalkEnd("30 September 2026"), money.FormatIDR(187_000)},
+	}
+	if got := totalsOf(t, body); !equalLines(got, want) {
 		t.Errorf("totals = %v, want %v", got, want)
 	}
 }
@@ -172,16 +200,21 @@ func TestReportFilters(t *testing.T) {
 		rows  int
 		in    int64
 		out   int64
+
+		// walks marks the queries that still get a walk (ADR-038): no usable
+		// filter at all, or a purpose alone. Only their two shared lines are
+		// checked here; the walks themselves are in report_walk_test.go.
+		walks bool
 	}{
-		{"purpose Kas Utama: its entries and both moves", "&purpose=" + id(s.mainID), 5, 225_000, 60_000},
-		{"purpose Duka: its entry and both moves", "&purpose=" + id(s.duka), 3, 15_000, 0},
-		{"member Ani", "&member=" + id(s.ani), 1, 25_000, 0},
-		{"member Budi", "&member=" + id(s.budi), 1, 15_000, 0},
-		{"direction in hides moves", "&dir=in", 3, 240_000, 0},
-		{"direction out", "&dir=out", 1, 0, 60_000},
-		{"purpose and direction together", "&purpose=" + id(s.duka) + "&dir=in", 1, 15_000, 0},
-		{"a purpose that is not the fund's is no filter", "&purpose=99999", 6, 240_000, 60_000},
-		{"a bad direction is no filter", "&dir=sideways", 6, 240_000, 60_000},
+		{"purpose Kas Utama: its entries and both moves", "&purpose=" + id(s.mainID), 5, 225_000, 60_000, true},
+		{"purpose Duka: its entry and both moves", "&purpose=" + id(s.duka), 3, 15_000, 0, true},
+		{"member Ani", "&member=" + id(s.ani), 1, 25_000, 0, false},
+		{"member Budi", "&member=" + id(s.budi), 1, 15_000, 0, false},
+		{"direction in hides moves", "&dir=in", 3, 240_000, 0, false},
+		{"direction out", "&dir=out", 1, 0, 60_000, false},
+		{"purpose and direction together", "&purpose=" + id(s.duka) + "&dir=in", 1, 15_000, 0, false},
+		{"a purpose that is not the fund's is no filter", "&purpose=99999", 6, 240_000, 60_000, true},
+		{"a bad direction is no filter", "&dir=sideways", 6, 240_000, 60_000, true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -193,9 +226,14 @@ func TestReportFilters(t *testing.T) {
 			if got := rowCount(t, body); got != tt.rows {
 				t.Errorf("rows = %d, want %d:\n%s", got, tt.rows, txnSection(t, body))
 			}
-			net := tt.in - tt.out
-			want := [3]string{money.FormatIDR(money.Amount(tt.in)), money.FormatIDR(money.Amount(tt.out)), money.FormatIDR(money.Amount(net))}
-			if got := totalsOf(t, body); got != want {
+			// A member or direction filter keeps only Total masuk and Total
+			// keluar. A purpose alone, or no usable filter (a stale purpose, a
+			// bad direction), walks, so those check the two lines they share.
+			got := totalsOf(t, body)
+			if tt.walks {
+				got = got[1:3]
+			}
+			if want := inOut(tt.in, tt.out); !equalLines(got, want) {
 				t.Errorf("totals = %v, want %v", got, want)
 			}
 		})
@@ -279,8 +317,8 @@ func TestReportEmptyFilteredMonthSaysSoCalmly(t *testing.T) {
 	if strings.Contains(body, `<ul class="rows txns">`) {
 		t.Error("an empty filtered month renders an empty list")
 	}
-	if got := totalsOf(t, body); got != [3]string{money.FormatIDR(0), money.FormatIDR(0), money.FormatIDR(0)} {
-		t.Errorf("totals = %v, want all zero", got)
+	if got := totalsOf(t, body); !equalLines(got, inOut(0, 0)) {
+		t.Errorf("totals = %v, want Total masuk and Total keluar at zero, no walk under a filter", got)
 	}
 	// A quiet month is not "nothing recorded at all".
 	if strings.Contains(body, reportText.Empty) {
