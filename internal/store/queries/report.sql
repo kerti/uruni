@@ -72,3 +72,72 @@ WHERE t.fund_id = sqlc.arg('fund_id')
   AND t.occurred_on >= sqlc.arg('from_date')
   AND t.occurred_on < sqlc.arg('to_date')
 ORDER BY t.occurred_on DESC, t.created_at DESC;
+
+-- The report's month-end figures (#408, ADR-037). Each takes a nullable bound:
+-- NULL is the running month and reads exactly like its unbounded twin
+-- (FundBalance, PurposeBalance, OutstandingReimbursementTotal,
+-- LatestReconciliation, ListOpenReconciliationLinesByFund), so the running
+-- month and Beranda cannot disagree. A past month passes its last day
+-- ("YYYY-MM-DD", compared against occurred_on and the other day columns) or,
+-- for a count, the first instant of the next month in Jakarta as unix seconds.
+-- The CASTs are what make sqlc emit int64 rather than interface{} (ADR-024).
+
+-- name: ReportFundBalance :one
+SELECT CAST(COALESCE(SUM(CASE WHEN direction = 'in' THEN amount ELSE -amount END), 0) AS INTEGER) AS balance_amount
+FROM "transaction"
+WHERE fund_id = sqlc.arg('fund_id')
+  AND (CAST(sqlc.narg('through') AS TEXT) IS NULL OR occurred_on <= CAST(sqlc.narg('through') AS TEXT));
+
+-- name: ReportPurposeBalance :one
+SELECT CAST(COALESCE(SUM(CASE WHEN direction = 'in' THEN amount ELSE -amount END), 0) AS INTEGER) AS balance_amount
+FROM "transaction"
+WHERE fund_id = sqlc.arg('fund_id') AND purpose_id = sqlc.arg('purpose_id')
+  AND (CAST(sqlc.narg('through') AS TEXT) IS NULL OR occurred_on <= CAST(sqlc.narg('through') AS TEXT));
+
+-- Owed at the bound: incurred by then, not yet waived then, and not yet paid
+-- out by then. waived_on holds only the latest waive, so a claim waived and
+-- later un-waived reads as owed in the months it was waived (#408 accepts it).
+-- name: ReportOwedToMembers :one
+SELECT CAST(COALESCE(SUM(r.amount), 0) AS INTEGER) AS total_amount
+FROM reimbursement r
+WHERE r.fund_id = sqlc.arg('fund_id')
+  AND (CAST(sqlc.narg('through') AS TEXT) IS NULL OR r.incurred_on <= CAST(sqlc.narg('through') AS TEXT))
+  AND (r.waived_on IS NULL OR (CAST(sqlc.narg('through') AS TEXT) IS NOT NULL AND r.waived_on > CAST(sqlc.narg('through') AS TEXT)))
+  AND NOT EXISTS (
+    SELECT 1 FROM "transaction" t
+    WHERE t.reimbursement_id = r.id AND t.kind = 'reimbursement'
+      AND (CAST(sqlc.narg('through') AS TEXT) IS NULL OR t.occurred_on <= CAST(sqlc.narg('through') AS TEXT))
+  );
+
+-- A snapshot is never edited (ADR-024), so the latest count before the bound
+-- and the lines it left open are exactly what the report said back then.
+-- name: ReportLatestReconciliation :one
+SELECT id, fund_id, performed_at, through_transaction_id, note, created_at
+FROM reconciliation
+WHERE fund_id = sqlc.arg('fund_id')
+  AND (CAST(sqlc.narg('before') AS INTEGER) IS NULL OR performed_at < CAST(sqlc.narg('before') AS INTEGER))
+ORDER BY performed_at DESC, id DESC
+LIMIT 1;
+
+-- ListOpenReconciliationLinesByFund with both snapshots bounded: a line is
+-- open at the bound when no count before the bound has weighed in on its
+-- location since.
+-- name: ReportOpenReconciliationLines :many
+SELECT rl.id, rl.fund_id, rl.reconciliation_id, rl.account_id, rl.recorded_amount,
+       rl.actual_amount, rl.difference_amount, rl.resolution, rl.adjustment_transaction_id
+FROM reconciliation_line rl
+JOIN reconciliation r ON r.fund_id = rl.fund_id AND r.id = rl.reconciliation_id
+WHERE rl.fund_id = sqlc.arg('fund_id')
+  AND rl.resolution = 'left_open'
+  AND (CAST(sqlc.narg('before') AS INTEGER) IS NULL OR r.performed_at < CAST(sqlc.narg('before') AS INTEGER))
+  AND NOT EXISTS (
+    SELECT 1
+    FROM reconciliation_line rl2
+    JOIN reconciliation r2 ON r2.fund_id = rl2.fund_id AND r2.id = rl2.reconciliation_id
+    WHERE rl2.fund_id = rl.fund_id
+      AND rl2.account_id = rl.account_id
+      AND (CAST(sqlc.narg('before') AS INTEGER) IS NULL OR r2.performed_at < CAST(sqlc.narg('before') AS INTEGER))
+      AND (r2.performed_at > r.performed_at
+           OR (r2.performed_at = r.performed_at AND r2.id > r.id))
+  )
+ORDER BY r.performed_at, r.id, rl.account_id;

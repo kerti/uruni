@@ -68,6 +68,8 @@ test.describe('report', () => {
 
     // The header carries the fund's name; the heading is the page's h1.
     await expect(page.locator('header').getByRole('heading', { level: 1 })).toHaveText(seedFundName)
+    // The bare link opens the running month, and says so (ADR-037).
+    await expect(page.locator('header p.muted')).toContainText('Bulan berjalan')
 
     // Transactions: the fixture's opening balance, as its "Saldo awal" row.
     // reportText.TransactionsLabel / RowOpening

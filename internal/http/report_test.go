@@ -304,3 +304,28 @@ func TestReportSummaryShowsTheTotalOwedToMembers(t *testing.T) {
 		}
 	}
 }
+
+// The date line says what every figure answers to (ADR-037): a past month's
+// last day, or today as the running month. The month picker comes first, so
+// everything beneath it reads as that month's.
+func TestReportDateLineAndMonthPickerFirst(t *testing.T) {
+	f := newReportFixture(t, "Kas RT 05")
+	f.post(t, "in", 100_000, "2026-09-01")
+	f.post(t, "in", 25_000, "2026-10-01")
+
+	past := f.get(t, "/report/"+f.fund.ReportSlug+"?month=2026-09").Body.String()
+	if want := reportText.AsOf("30 September 2026"); !strings.Contains(past, want) {
+		t.Errorf("past month has no date line %q", want)
+	}
+	if !strings.Contains(past, money.FormatIDR(100_000)) || strings.Contains(past, money.FormatIDR(125_000)) {
+		t.Error("past month's Saldo kas is not its month-end balance")
+	}
+
+	running := f.get(t, "/report/"+f.fund.ReportSlug).Body.String()
+	if want := reportText.AsOfRunning("2 Oktober 2026"); !strings.Contains(running, want) {
+		t.Errorf("running month has no date line %q", want)
+	}
+	if nav, hero := strings.Index(running, `<nav class="months"`), strings.Index(running, `<section class="hero"`); nav < 0 || hero < 0 || nav > hero {
+		t.Errorf("month picker at %d, summary at %d; want the picker first", nav, hero)
+	}
+}

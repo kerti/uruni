@@ -22,6 +22,7 @@ type reportCopy struct {
 
 	Eyebrow       string
 	AsOf          func(date string) string
+	AsOfRunning   func(date string) string
 	BalanceLabel  string
 	LastChecked   func(date string) string
 	Matched       string
@@ -122,6 +123,7 @@ var reportText = reportCopy{
 	Title:         func(fundName string) string { return fundName + " - Laporan kas" },
 	Eyebrow:       "Laporan kas",
 	AsOf:          func(date string) string { return "per " + date },
+	AsOfRunning:   func(date string) string { return "Bulan berjalan \u00b7 per " + date },
 	BalanceLabel:  "Saldo kas",
 	LastChecked:   func(date string) string { return "Terakhir dicek " + date },
 	Matched:       "Kas dan catatan sudah cocok.",

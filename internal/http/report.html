@@ -24,6 +24,22 @@
   <p class="muted">{{.AsOf}}</p>
 </header>
 
+<nav class="months" id="months" aria-label="{{.Text.MonthLabel}}">
+  <div class="step">
+    {{if .PrevHref}}<a href="{{.PrevHref}}" rel="nofollow">{{.Text.MonthPrev}}</a>{{else}}<span></span>{{end}}
+    {{if .NextHref}}<a href="{{.NextHref}}" rel="nofollow">{{.Text.MonthNext}}</a>{{end}}
+  </div>
+  <form method="get" action="#months">
+    {{range $name, $values := .Filter.Active}}{{range $values}}<input type="hidden" name="{{$name}}" value="{{.}}">{{end}}{{end}}
+    <label for="month">{{.Text.MonthLabel}}</label>
+    <select id="month" name="month">
+      {{range .MonthOptions}}<option value="{{.Value}}"{{if .Selected}} selected{{end}}>{{.Label}}</option>
+      {{end}}
+    </select>
+    <button type="submit">{{.Text.MonthSubmit}}</button>
+  </form>
+</nav>
+
 <section class="hero" aria-label="{{.Text.BalanceLabel}}">
   <p class="label">{{.Text.BalanceLabel}}</p>
   <p class="amount tabular">{{.Balance}}</p>
@@ -51,22 +67,6 @@
   </ul>
 </section>
 {{end}}
-
-<nav class="months" id="months" aria-label="{{.Text.MonthLabel}}">
-  <div class="step">
-    {{if .PrevHref}}<a href="{{.PrevHref}}" rel="nofollow">{{.Text.MonthPrev}}</a>{{else}}<span></span>{{end}}
-    {{if .NextHref}}<a href="{{.NextHref}}" rel="nofollow">{{.Text.MonthNext}}</a>{{end}}
-  </div>
-  <form method="get" action="#months">
-    {{range $name, $values := .Filter.Active}}{{range $values}}<input type="hidden" name="{{$name}}" value="{{.}}">{{end}}{{end}}
-    <label for="month">{{.Text.MonthLabel}}</label>
-    <select id="month" name="month">
-      {{range .MonthOptions}}<option value="{{.Value}}"{{if .Selected}} selected{{end}}>{{.Label}}</option>
-      {{end}}
-    </select>
-    <button type="submit">{{.Text.MonthSubmit}}</button>
-  </form>
-</nav>
 
 {{if .Empty}}<p class="empty">{{.Text.Empty}}</p>{{else}}
 <section id="transactions" aria-labelledby="transactions-heading">

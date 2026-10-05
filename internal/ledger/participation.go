@@ -84,6 +84,13 @@ type IncidentalParticipation struct {
 // DuesStatusForPeriod does (ADR-027) - a handful of consistent SELECTs with
 // no write in between.
 func (l *Ledger) GetIncidentalParticipation(ctx context.Context, fundID, purposeID int64) (IncidentalParticipation, error) {
+	return l.incidentalParticipation(ctx, fundID, purposeID, nil)
+}
+
+// incidentalParticipation is GetIncidentalParticipation counting only
+// contributions dated on or before through, nil for all of them - the public
+// report's past-month envelope cards (#408).
+func (l *Ledger) incidentalParticipation(ctx context.Context, fundID, purposeID int64, through *string) (IncidentalParticipation, error) {
 	envelope, err := l.q.GetIncidental(ctx, store.GetIncidentalParams{PurposeID: purposeID, FundID: fundID})
 	if err != nil {
 		return IncidentalParticipation{}, fmt.Errorf("fetching incidental: %w", err)
@@ -108,7 +115,7 @@ func (l *Ledger) GetIncidentalParticipation(ctx context.Context, fundID, purpose
 	}
 
 	contributionRows, err := l.q.ContributedByIncidentalMember(ctx, store.ContributedByIncidentalMemberParams{
-		FundID: fundID, PurposeID: purposeID,
+		FundID: fundID, PurposeID: purposeID, Through: through,
 	})
 	if err != nil {
 		return IncidentalParticipation{}, fmt.Errorf("contributed by incidental member: %w", err)

@@ -397,10 +397,10 @@ func (d *pdfDoc) mark(x, y, size float64) {
 
 // --- sections -------------------------------------------------------------
 
-// header is the page's own: fund and month, today's balance, the latest cek
-// kas, the per-pos balances and what is owed to members. The balance, the
-// check and the owed total are as of today whichever month follows
-// (Report.AsOf), exactly as the page says.
+// header is the page's own: fund and month, the balance, the latest cek
+// kas, the per-pos balances and what is owed to members - every figure as of
+// the month's last day, or today for the running month (ADR-037), which the
+// date line under the title says, exactly as the page does.
 func (d *pdfDoc) header(p reportPage) {
 	d.text(pdfLine{text: p.FundName, bold: true, size: 22, color: "primary"}, pdfContentW, "L")
 	d.text(pdfLine{text: reportText.PDFStatement(reportText.monthName(p.Month)), bold: true, size: 13, color: "foreground"}, pdfContentW, "L")

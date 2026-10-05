@@ -378,6 +378,9 @@ WHERE fund_id = ? AND purpose_id = ?;
 -- disbursed. Collected minus disbursed still moves by exactly the leg's
 -- effect on the balance. A roll - 'roll', or NULL on a row written before
 -- the column existed - stays excluded as above.
+-- through bounds it at a past month's last day for the public report (#408):
+-- only rows dated by then, and a reversal dated after it has not happened
+-- yet. NULL - every other caller - is unbounded.
 -- name: IncidentalActivityTotals :one
 SELECT
   CAST(COALESCE(SUM(CASE
@@ -393,10 +396,14 @@ SELECT
 FROM "transaction" t
 LEFT JOIN transfer tr ON tr.id = t.transfer_id AND tr.kind = 'reclass_purpose'
 LEFT JOIN "transaction" o ON o.fund_id = tr.fund_id AND o.id = tr.corrects_transaction_id
-WHERE t.fund_id = ? AND t.purpose_id = ?
+WHERE t.fund_id = sqlc.arg('fund_id') AND t.purpose_id = sqlc.arg('purpose_id')
   AND (tr.id IS NULL OR tr.corrects_transaction_id IS NOT NULL OR tr.reason = 'allocation')
   AND t.reverses_transaction_id IS NULL
-  AND NOT EXISTS (SELECT 1 FROM "transaction" r WHERE r.reverses_transaction_id = t.id);
+  AND NOT EXISTS (
+    SELECT 1 FROM "transaction" r WHERE r.reverses_transaction_id = t.id
+      AND (CAST(sqlc.narg('through') AS TEXT) IS NULL OR r.occurred_on <= CAST(sqlc.narg('through') AS TEXT))
+  )
+  AND (CAST(sqlc.narg('through') AS TEXT) IS NULL OR t.occurred_on <= CAST(sqlc.narg('through') AS TEXT));
 
 -- The roster query behind "who has paid / partially / not yet" for one
 -- dues_period, across every member in one pass rather than one query per
@@ -472,12 +479,18 @@ LIMIT 1;
 -- ListMembersByFund plus the envelope's opened_on and recipients, read and
 -- combined in Go (Ledger.GetIncidentalParticipation), never a second query
 -- trying to derive the same roster twice.
+--
+-- through bounds it the way IncidentalActivityTotals's is bounded (#408).
 -- name: ContributedByIncidentalMember :many
 SELECT member_id, CAST(COALESCE(SUM(amount), 0) AS INTEGER) AS contributed_amount
 FROM "transaction" t
-WHERE t.fund_id = ? AND t.purpose_id = ? AND t.kind = 'normal' AND t.direction = 'in'
+WHERE t.fund_id = sqlc.arg('fund_id') AND t.purpose_id = sqlc.arg('purpose_id') AND t.kind = 'normal' AND t.direction = 'in'
   AND t.member_id IS NOT NULL
-  AND NOT EXISTS (SELECT 1 FROM "transaction" r WHERE r.reverses_transaction_id = t.id)
+  AND NOT EXISTS (
+    SELECT 1 FROM "transaction" r WHERE r.reverses_transaction_id = t.id
+      AND (CAST(sqlc.narg('through') AS TEXT) IS NULL OR r.occurred_on <= CAST(sqlc.narg('through') AS TEXT))
+  )
+  AND (CAST(sqlc.narg('through') AS TEXT) IS NULL OR t.occurred_on <= CAST(sqlc.narg('through') AS TEXT))
 GROUP BY member_id;
 
 -- The settle-once pre-check. Returns sql.ErrNoRows when the claim has not
