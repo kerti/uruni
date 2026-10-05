@@ -201,12 +201,13 @@ func TestReportFilters(t *testing.T) {
 		in    int64
 		out   int64
 
-		// unfiltered marks the queries that name no usable filter, which still
-		// get the whole walk (ADR-038).
-		unfiltered bool
+		// walks marks the queries that still get a walk (ADR-038): no usable
+		// filter at all, or a purpose alone. Only their two shared lines are
+		// checked here; the walks themselves are in report_walk_test.go.
+		walks bool
 	}{
-		{"purpose Kas Utama: its entries and both moves", "&purpose=" + id(s.mainID), 5, 225_000, 60_000, false},
-		{"purpose Duka: its entry and both moves", "&purpose=" + id(s.duka), 3, 15_000, 0, false},
+		{"purpose Kas Utama: its entries and both moves", "&purpose=" + id(s.mainID), 5, 225_000, 60_000, true},
+		{"purpose Duka: its entry and both moves", "&purpose=" + id(s.duka), 3, 15_000, 0, true},
 		{"member Ani", "&member=" + id(s.ani), 1, 25_000, 0, false},
 		{"member Budi", "&member=" + id(s.budi), 1, 15_000, 0, false},
 		{"direction in hides moves", "&dir=in", 3, 240_000, 0, false},
@@ -225,12 +226,11 @@ func TestReportFilters(t *testing.T) {
 			if got := rowCount(t, body); got != tt.rows {
 				t.Errorf("rows = %d, want %d:\n%s", got, tt.rows, txnSection(t, body))
 			}
-			// Whole-fund walks belong to the unfiltered month: these keep
-			// only Total masuk and Total keluar. The "no filter" rows (a
-			// stale purpose, a bad direction) walk, so they check the two
-			// lines they share.
+			// A member or direction filter keeps only Total masuk and Total
+			// keluar. A purpose alone, or no usable filter (a stale purpose, a
+			// bad direction), walks, so those check the two lines they share.
 			got := totalsOf(t, body)
-			if tt.unfiltered {
+			if tt.walks {
 				got = got[1:3]
 			}
 			if want := inOut(tt.in, tt.out); !equalLines(got, want) {

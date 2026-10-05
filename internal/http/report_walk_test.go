@@ -20,9 +20,11 @@ import (
 //	Sep  8  reversal of Budi's Aug 20 contribution (a LATER month than the gift)
 //	Sep 10  adjustment out 4.000, posted on its own
 //	Sep 12  out   6.000  Kas Utama
+//	Sep 14  Pindah pos 5.000, Kas Utama -> Duka
 //
 // September starts on 27.000 and ends on 297.000:
-// 27.000 + 100.000 + (200.000 - 20.000) - 6.000 - 4.000.
+// 27.000 + 100.000 + (200.000 - 20.000) - 6.000 - 4.000. Kas Utama starts on
+// 7.000 and ends on 292.000; Duka starts on 20.000 and ends on 5.000.
 type walkPage struct {
 	reportFixture
 	budi, duka int64
@@ -70,6 +72,11 @@ func newWalkPage(t *testing.T) walkPage {
 		t.Fatalf("PostTransaction(adjustment) = %v", err)
 	}
 	f.post(t, "out", 6_000, "2026-09-12")
+	if _, err := f.l.PostPurposeMove(ctx, ledger.PostPurposeMoveParams{
+		FundID: f.fund.ID, FromPurposeID: f.mainID, ToPurposeID: w.duka, AccountID: f.cashID, Amount: 5_000, OccurredOn: "2026-09-14",
+	}); err != nil {
+		t.Fatalf("PostPurposeMove() = %v", err)
+	}
 
 	w.base = "/report/" + f.fund.ReportSlug + "?month=2026-09"
 	return w
@@ -140,8 +147,8 @@ func TestReportWalkOfTheRunningMonthEndsOnToday(t *testing.T) {
 	}
 }
 
-// A balance has no meaning for one member, one direction or one pos: only
-// Total masuk and Total keluar, whatever the filter.
+// A balance has no meaning for one member or one direction: only Total masuk
+// and Total keluar, with or without a pos beside it.
 func TestReportWalkUnderAFilterIsOnlyMasukAndKeluar(t *testing.T) {
 	w := newWalkPage(t)
 	tests := []struct {
@@ -152,8 +159,8 @@ func TestReportWalkUnderAFilterIsOnlyMasukAndKeluar(t *testing.T) {
 		{"member", "&member=" + itoa(w.budi), -20_000, 0},
 		{"direction in", "&dir=in", 180_000, 0},
 		{"direction out", "&dir=out", 0, 6_000},
-		{"purpose Kas Utama", "&purpose=" + itoa(w.mainID), 200_000, 6_000},
-		{"purpose Duka", "&purpose=" + itoa(w.duka), -20_000, 0},
+		{"member with a purpose", "&member=" + itoa(w.budi) + "&purpose=" + itoa(w.duka), -20_000, 0},
+		{"direction with a purpose", "&dir=in&purpose=" + itoa(w.mainID), 200_000, 0},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -165,7 +172,7 @@ func TestReportWalkUnderAFilterIsOnlyMasukAndKeluar(t *testing.T) {
 			if got := totalsOf(t, body); !equalLines(got, inOut(tt.in, tt.out)) {
 				t.Errorf("totals = %v, want %v", got, inOut(tt.in, tt.out))
 			}
-			for _, absent := range []string{"Saldo per 31 Agustus", "Saldo per 30 September"} {
+			for _, absent := range []string{"Saldo 31 Agustus", "Saldo 30 September", reportText.WalkMoved} {
 				if strings.Contains(body, absent) {
 					t.Errorf("a filtered page carries %q: a balance has no meaning for a slice of the fund", absent)
 				}
@@ -283,4 +290,114 @@ func slicesIndexFrom(runs []string, want string) int {
 		}
 	}
 	return -1
+}
+
+// A purpose filter walks that pos: its own balance at both ends, and Dipindah
+// for the money moved in or out of it. Same words and order as the whole fund.
+func TestReportPurposeFilterShowsThatPosAsAWalk(t *testing.T) {
+	w := newWalkPage(t)
+	tests := []struct {
+		name    string
+		purpose int64
+		want    []totalLine
+	}{
+		{"Kas Utama", w.mainID, []totalLine{
+			{reportText.WalkStart("31 Agustus 2026"), money.FormatIDR(7_000)},
+			{reportText.RowOpening, money.FormatIDR(100_000)},
+			{reportText.TotalIn, money.FormatIDR(200_000)},
+			{reportText.TotalOut, money.FormatIDR(6_000)},
+			{reportText.RowAdjustment, money.FormatIDR(-4_000)},
+			{reportText.WalkMoved, money.FormatIDR(-5_000)},
+			{reportText.WalkEnd("30 September 2026"), money.FormatIDR(292_000)},
+		}},
+		// No opening and no adjustment, so neither line; the reversal nets the
+		// 20.000 given in August against Total masuk.
+		{"Duka", w.duka, []totalLine{
+			{reportText.WalkStart("31 Agustus 2026"), money.FormatIDR(20_000)},
+			{reportText.TotalIn, money.FormatIDR(-20_000)},
+			{reportText.TotalOut, money.FormatIDR(0)},
+			{reportText.WalkMoved, money.FormatIDR(5_000)},
+			{reportText.WalkEnd("30 September 2026"), money.FormatIDR(5_000)},
+		}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			body := w.get(t, w.base+"&purpose="+itoa(tt.purpose)).Body.String()
+			if got := totalsOf(t, body); !equalLines(got, tt.want) {
+				t.Errorf("walk = %v, want %v", got, tt.want)
+			}
+			if n := strings.Count(body, `<div class="last">`); n != 1 {
+				t.Errorf("emphasised lines = %d, want 1 (the closing balance)", n)
+			}
+		})
+	}
+
+	// A pos with no move in the month shows no Dipindah line.
+	got := totalsOf(t, w.get(t, "/report/"+w.fund.ReportSlug+"?month=2026-08&purpose="+itoa(w.duka)).Body.String())
+	for _, l := range got {
+		if l.label == reportText.WalkMoved {
+			t.Errorf("August has no move for Duka but the walk shows %v", got)
+		}
+	}
+}
+
+// The walk's ends say "Saldo 30 September 2026": the header's Saldo per pos
+// already spends the word "per".
+func TestReportWalkEndsCarryNoPer(t *testing.T) {
+	w := newWalkPage(t)
+	if got := reportText.WalkStart("30 September 2026"); got != "Saldo 30 September 2026" {
+		t.Errorf("WalkStart = %q, want %q", got, "Saldo 30 September 2026")
+	}
+	if got := reportText.WalkEnd("30 September 2026"); got != "Saldo 30 September 2026" {
+		t.Errorf("WalkEnd = %q, want %q", got, "Saldo 30 September 2026")
+	}
+	for _, query := range []string{"", "&purpose=" + itoa(w.duka)} {
+		for _, l := range totalsOf(t, w.get(t, w.base+query).Body.String()) {
+			if strings.Contains(l.label, "Saldo per") {
+				t.Errorf("walk line %q carries \"per\"", l.label)
+			}
+		}
+	}
+}
+
+// The statement is the whole fund's month and takes no filter, so a purpose
+// in its query changes nothing; but it draws the page's walkLines, so a walk
+// that does carry Dipindah reads in the page's order there too.
+func TestReportPDFDrawsTheWalkLinesInThePagesOrder(t *testing.T) {
+	w := newWalkPage(t)
+	plain := pdfText(t, w.get(t, "/report/"+w.fund.ReportSlug+"/pdf?month=2026-09").Body.Bytes())
+	filtered := pdfText(t, w.get(t, "/report/"+w.fund.ReportSlug+"/pdf?month=2026-09&purpose="+itoa(w.duka)).Body.Bytes())
+	if strings.Join(plain, "|") != strings.Join(filtered, "|") {
+		t.Error("a purpose in the PDF's query changed the statement; the PDF is the whole fund's month")
+	}
+
+	walk := ledger.ReportWalk{
+		Full: true, StartOn: "2026-08-31", EndOn: "2026-09-30",
+		Start: 7_000, Openings: 100_000, In: 200_000, Out: 6_000, Adjustments: -4_000, Moved: -5_000, End: 292_000,
+	}
+	page := buildReportPage(ledger.Report{FundName: "Kas RT 05", Month: "2026-09", Walk: walk}, false)
+	body, err := drawReportPDF(page)
+	if err != nil {
+		t.Fatalf("drawReportPDF() = %v", err)
+	}
+	runs := pdfText(t, body)
+
+	want := []string{
+		reportText.WalkStart("31 Agustus 2026"), money.FormatIDR(7_000),
+		reportText.RowOpening, money.FormatIDR(100_000),
+		reportText.TotalIn, money.FormatIDR(200_000),
+		reportText.TotalOut, money.FormatIDR(6_000),
+		reportText.RowAdjustment, money.FormatIDR(-4_000),
+		reportText.WalkMoved, money.FormatIDR(-5_000),
+		reportText.WalkEnd("30 September 2026"), money.FormatIDR(292_000),
+	}
+	at := slicesIndexFrom(runs, reportText.WalkStart("31 Agustus 2026"))
+	if at < 0 || at+len(want) > len(runs) {
+		t.Fatalf("PDF has no walk starting at %q; runs:\n%s", want[0], strings.Join(runs, "\n"))
+	}
+	for i, wantRun := range want {
+		if runs[at+i] != wantRun {
+			t.Errorf("walk run %d = %q, want %q", i, runs[at+i], wantRun)
+		}
+	}
 }

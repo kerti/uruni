@@ -9,13 +9,13 @@
 **A month reads as a walk from the balance it started on to the balance it ended on**, and every posted row lands on exactly one line of it.
 
 ```
-Saldo per <last day of previous month>
+Saldo <last day of previous month>
 + Saldo awal      openings dated in the month; shown only when non-zero
 + Total masuk     income, net of reversals
 - Total keluar    spending
 +/- Penyesuaian   every adjustment that is not a reversal; shown only when non-zero
 +/- Dipindah      purpose filter only: that pos's reclass legs, net
-= Saldo per <last day of the month>    (running month: per today)
+= Saldo <last day of the month>    (running month: today)
 ```
 
 **Where each row lands.** One switch on the row, total by construction:
@@ -45,7 +45,7 @@ Saldo per <last day of previous month>
 
 **Beranda** shows the running month's *Total masuk* and *Total keluar* - two figures, no walk - inside *Aktivitas terbaru*, below the divider where ADR-032 puts "what happened". The API computes them with the same ledger function as the report, in Asia/Jakarta; the client never works out a month. No chart, no comparison with other months: PRD section 4's "analytics dashboards" stays out.
 
-**Copy** (proposed, final at the slice): the walk's ends are dated - "Saldo per 31 Agustus 2026" - rather than *Saldo akhir*, which would be untrue mid-month and would sit beside the existing *Saldo awal* row label as a second meaning. *Saldo awal*, *Penyesuaian* and *Dipindah* are the report's existing row labels, so a line and the rows it sums share a name. *Bersih* goes: the two dated balances already say it.
+**Copy** (proposed, final at the slice): the walk's ends are dated - "Saldo 31 Agustus 2026" - rather than *Saldo akhir*, which would be untrue mid-month and would sit beside the existing *Saldo awal* row label as a second meaning. The date carries no "per": the header's *Saldo per pos* already uses that word for "by purpose", and a second "per" on the same page would read as a second sense. *Saldo awal*, *Penyesuaian* and *Dipindah* are the report's existing row labels, so a line and the rows it sums share a name. *Bersih* goes: the two dated balances already say it.
 
 ## Consequences
 
