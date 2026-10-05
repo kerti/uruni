@@ -553,10 +553,16 @@ func (l *Ledger) reportRows(ctx context.Context, p ReportParams, monthStart time
 		return nil, ReportTotals{}, fmt.Errorf("listing report transactions: %w", err)
 	}
 
+	corrections, err := foldCorrections(rows)
+	if err != nil {
+		return nil, ReportTotals{}, err
+	}
+
 	var (
-		out      []ReportRow
-		totals   ReportTotals
-		moveSeen = make(map[int64]bool)
+		out           []ReportRow
+		totals        ReportTotals
+		moveSeen      = make(map[int64]bool)
+		correctedSeen = make(map[int64]bool)
 	)
 	for _, row := range rows {
 		if row.Kind == "transfer" {
@@ -572,6 +578,22 @@ func (l *Ledger) reportRows(ctx context.Context, p ReportParams, monthStart time
 					continue
 				}
 				moveSeen[*row.TransferID] = true
+
+				// Every correction of one row reads as a single net move
+				// (#280): emitted once, at the first leg met, and not at all
+				// when the corrections cancel out.
+				if c := row.TransferCorrectsTransactionID; c != nil {
+					if correctedSeen[*c] {
+						continue
+					}
+					correctedSeen[*c] = true
+					net, ok := corrections[*c]
+					if !ok || !moveMatches(p, net) {
+						continue
+					}
+					out = append(out, ReportRow{Date: row.OccurredOn, Move: &net})
+					continue
+				}
 
 				move, err := reportMoveFrom(row)
 				if err != nil {
@@ -632,6 +654,83 @@ func reportEntryFrom(row store.ListReportTransactionsRow) ReportEntry {
 		e.Note = row.ClaimNote
 	}
 	return e
+}
+
+// foldCorrections nets every purpose correction of the same row into one
+// move, keyed by the corrected row's id (#280). A row corrected Perpisahan ->
+// Kas Bidang -> Kas Utama -> Kas Bidang reads as Perpisahan -> Kas Bidang; one
+// corrected and then corrected back is absent. Display only: every leg stays
+// posted, and the balances above are sums of them all.
+//
+// Each correction moves the whole row from wherever it is now, so the
+// corrections of one row form a path. Its ends are the purpose left once more
+// than entered (the start) and the one entered once more than left (the end),
+// which needs no ordering - ids are not an order to rely on. Every correction
+// carries the row's own date, so they all fall in that row's month together.
+func foldCorrections(rows []store.ListReportTransactionsRow) (map[int64]ReportMove, error) {
+	type path struct {
+		move  ReportMove
+		net   map[int64]int // purpose id -> times entered minus times left
+		names map[int64]string
+		notes map[string]bool
+	}
+	paths := make(map[int64]*path)
+	seen := make(map[int64]bool)
+	for _, row := range rows {
+		c := row.TransferCorrectsTransactionID
+		if c == nil || row.TransferID == nil || seen[*row.TransferID] {
+			continue
+		}
+		seen[*row.TransferID] = true
+		m, err := reportMoveFrom(row)
+		if err != nil {
+			return nil, err
+		}
+		pa, ok := paths[*c]
+		if !ok {
+			pa = &path{move: m, net: map[int64]int{}, names: map[int64]string{}, notes: map[string]bool{}}
+			paths[*c] = pa
+		}
+		pa.net[m.FromPurposeID]--
+		pa.net[m.ToPurposeID]++
+		pa.names[m.FromPurposeID] = m.FromPurposeName
+		pa.names[m.ToPurposeID] = m.ToPurposeName
+		if m.Note != nil {
+			pa.notes[*m.Note] = true
+		}
+	}
+
+	out := make(map[int64]ReportMove, len(paths))
+	for corrected, pa := range paths {
+		var from, to int64
+		for id, n := range pa.net {
+			switch {
+			case n == -1:
+				from = id
+			case n == 1:
+				to = id
+			case n != 0:
+				return nil, fmt.Errorf("corrections of transaction %d do not form a path", corrected)
+			}
+		}
+		if from == 0 && to == 0 {
+			continue // corrected back to where it started
+		}
+		if from == 0 || to == 0 {
+			return nil, fmt.Errorf("corrections of transaction %d do not form a path", corrected)
+		}
+		m := pa.move
+		m.FromPurposeID, m.FromPurposeName = from, pa.names[from]
+		m.ToPurposeID, m.ToPurposeName = to, pa.names[to]
+		m.Note = nil
+		if len(pa.notes) == 1 {
+			for n := range pa.notes {
+				m.Note = &n
+			}
+		}
+		out[corrected] = m
+	}
+	return out, nil
 }
 
 func reportMoveFrom(row store.ListReportTransactionsRow) (ReportMove, error) {
