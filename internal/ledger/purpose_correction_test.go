@@ -783,3 +783,65 @@ func TestPostPurposeCorrectionSetsCorrectsTransactionID(t *testing.T) {
 		t.Errorf("Kind = %q, want %q", correction.Kind, "reclass_purpose")
 	}
 }
+
+// A row corrected several times within the same second - so neither its date
+// nor created_at can order the corrections - reads the last-chosen pos back,
+// both as the next correction's source and on the transaction listing, for an
+// 'in' row and an 'out' row alike; and one corrected back reads its own pos
+// (#411). Nothing compares transfer ids.
+func TestEffectivePurposeFollowsTheCorrectionPathWithoutIDOrder(t *testing.T) {
+	ctx := context.Background()
+	l := newTestLedger(t)
+	f := newFixture(t, l)
+	q := store.New(l.db)
+	otherID := createPurpose(t, q, f.fundID, "pass_through", "Other pass-through")
+	postEntry(t, l, f.fundID, f.cashID, f.mainID, "in", 500_000, "2026-09-01", nil)
+
+	correct := func(txID, purposeID int64) {
+		t.Helper()
+		if _, err := l.PostPurposeCorrection(ctx, PostPurposeCorrectionParams{FundID: f.fundID, TransactionID: txID, PurposeID: purposeID}); err != nil {
+			t.Fatalf("PostPurposeCorrection(-> %d) = %v, want no error", purposeID, err)
+		}
+	}
+	listed := func(txID int64) int64 {
+		t.Helper()
+		rows, err := q.ListTransactionsPage(ctx, store.ListTransactionsPageParams{FundID: f.fundID, PageLimit: 100})
+		if err != nil {
+			t.Fatalf("ListTransactionsPage() = %v", err)
+		}
+		for _, r := range rows {
+			if r.ID == txID {
+				return r.EffectivePurposeID
+			}
+		}
+		t.Fatalf("transaction %d not listed", txID)
+		return 0
+	}
+
+	for _, direction := range []string{"in", "out"} {
+		t.Run(direction, func(t *testing.T) {
+			row := postEntry(t, l, f.fundID, f.cashID, f.mainID, direction, 40_000, "2026-09-10", nil)
+			for _, step := range []struct{ to, want int64 }{
+				{f.passID, f.passID},
+				{otherID, otherID},
+				{f.passID, f.passID},
+				{f.mainID, f.mainID}, // corrected back to where it began
+				{otherID, otherID},
+			} {
+				correct(row.ID, step.to)
+				got, err := effectivePeruntukan(ctx, q, f.fundID, row)
+				if err != nil {
+					t.Fatalf("effectivePeruntukan() = %v", err)
+				}
+				if got != step.want || listed(row.ID) != step.want {
+					t.Fatalf("after correcting to %d: effective = %d, listed = %d; want %d", step.to, got, listed(row.ID), step.want)
+				}
+			}
+			// Correcting to where it already is stays a no-op, which only
+			// holds if the current pos was read right.
+			if _, err := l.PostPurposeCorrection(ctx, PostPurposeCorrectionParams{FundID: f.fundID, TransactionID: row.ID, PurposeID: otherID}); !errors.Is(err, ErrPurposeCorrectionNoop) {
+				t.Errorf("correcting to the current pos = %v, want ErrPurposeCorrectionNoop", err)
+			}
+		})
+	}
+}

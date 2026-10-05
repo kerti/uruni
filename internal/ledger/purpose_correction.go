@@ -64,10 +64,10 @@ type PostPurposeCorrectionParams struct {
 // check here.
 //
 // The effective peruntukan - not the row's stored purpose_id - is what
-// "undo the original attribution" undoes. GetLatestPurposeCorrectionForTransaction's
-// caller-facing wrapper below follows every prior correction pointing at
-// TransactionID and takes the latest one's destination; with none, the
-// stored purpose_id is still accurate, since nothing has moved the tag yet.
+// "undo the original attribution" undoes. effectivePeruntukan below follows
+// every prior correction pointing at TransactionID to where they end; with
+// none, the stored purpose_id is still accurate, since nothing has moved the
+// tag yet.
 // A second correction built from the stored tag instead would move money
 // out of a tag that no longer holds it and drive it negative - the exact
 // defect #266 reports, re-created by the tool meant to fix it (ADR-033).
@@ -197,35 +197,20 @@ func (l *Ledger) PostPurposeCorrection(ctx context.Context, p PostPurposeCorrect
 	return created, nil
 }
 
-// effectivePeruntukan is the row's current tag: the destination of the
-// latest correction already pointing at it, or its own stored purpose_id
-// when nothing has corrected it yet (ADR-033). See PostPurposeCorrection's
-// own doc comment for why the stored tag alone is unsafe once a correction
-// exists.
-//
-// Which of the latest correction's two legs IS that destination depends on
-// original's own Direction, not on which leg is 'out' vs 'in':
-// PostPurposeCorrection posted that correction with the target at the 'out'
-// leg when original.Direction is "out" (undoing an expense's mis-tag needs
-// the target to take on the -amount) and at the 'in' leg when it is "in" -
-// the exact mapping this function's caller used to build the pair in the
-// first place, applied again here to read it back.
+// effectivePeruntukan is the row's current tag (ADR-033): its stored
+// purpose_id until a correction moves it, then the end of the path its
+// corrections walk. EffectivePurposeForTransaction derives that end without
+// ordering the corrections (#411); transfer.sql has the reasoning. See
+// PostPurposeCorrection's own doc comment for why the stored tag alone is
+// unsafe once a correction exists.
 func effectivePeruntukan(ctx context.Context, q store.Querier, fundID int64, original store.Transaction) (int64, error) {
-	transactionID := original.ID
-	latest, err := q.LatestPurposeCorrectionForTransaction(ctx, store.LatestPurposeCorrectionForTransactionParams{
-		FundID:                fundID,
-		CorrectsTransactionID: &transactionID,
+	id, err := q.EffectivePurposeForTransaction(ctx, store.EffectivePurposeForTransactionParams{
+		FundID: fundID, ID: original.ID,
 	})
-	if err == nil {
-		if original.Direction == "out" {
-			return latest.OutPurposeID, nil
-		}
-		return latest.InPurposeID, nil
+	if err != nil {
+		return 0, fmt.Errorf("finding the effective purpose: %w", err)
 	}
-	if errors.Is(err, sql.ErrNoRows) {
-		return original.PurposeID, nil
-	}
-	return 0, fmt.Errorf("finding the latest purpose correction: %w", err)
+	return id, nil
 }
 
 // refuseClosedIncidental returns refusal when purposeID names a closed

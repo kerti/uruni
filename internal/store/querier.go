@@ -171,6 +171,20 @@ type Querier interface {
 	// row from the sum once something reverses it - which is what makes a
 	// reversed payment disappear from "paid" rather than simply counting twice.
 	DuesPaidByPeriod(ctx context.Context, arg DuesPaidByPeriodParams) ([]DuesPaidByPeriodRow, error)
+	// The effective peruntukan (ADR-033, #411): the tag this row's money is
+	// under now. Each correction moves the whole row from wherever it is to a new
+	// tag, so a row's corrections form a path starting at its stored purpose_id;
+	// the tag it ends on is the one the money entered once more than it left,
+	// counting the stored tag as the start. That needs no ordering of the
+	// corrections - transfer ids are not an order to rely on - and a row
+	// corrected and then corrected back ends where it began.
+	//
+	// Which leg of a correction is "entering" depends on the row's own direction:
+	// PostPurposeCorrection puts the target on the leg moving the same way as the
+	// row (an 'out' mis-tag needs the target on the 'out' leg, an 'in' on the
+	// 'in'), so leg.direction = t.direction reads back what it wrote. A row
+	// nothing corrects answers its own purpose_id.
+	EffectivePurposeForTransaction(ctx context.Context, arg EffectivePurposeForTransactionParams) (int64, error)
 	// The public report's reads (ADR-035, #372). Both are read-only and
 	// fund-scoped, and neither orders by primary key: a month is read by date, and
 	// ties on a date are left unordered on purpose (a display list, not an
@@ -347,22 +361,6 @@ type Querier interface {
 	// chronological MAX(dues_period) for its member, reading as "paid in
 	// advance" through a period that was reversed and is no longer paid at all.
 	LatestDuesPeriodPaidByMember(ctx context.Context, fundID int64) ([]LatestDuesPeriodPaidByMemberRow, error)
-	// The effective peruntukan lookup (ADR-033): the LATEST correction pointing
-	// at transaction_id, both its legs' purpose ids, or sql.ErrNoRows when none
-	// exists - the caller then falls back to the original row's own stored
-	// purpose_id. "Latest" is transfer.id DESC: a correction's two legs share
-	// one transfer row inserted once, so transfer.id already orders corrections
-	// the same way occurred_on cannot (ADR-033's own date-is-not-a-field rule
-	// means every correction of the same row can share a date).
-	//
-	// Both legs, not just one: which leg is "the new tag" depends on the
-	// ORIGINAL row's own direction, not on 'out' vs 'in' here - PostPurposeCorrection's
-	// own doc comment works out why an 'out' original needs the target at its
-	// 'out' leg while an 'in' original needs it at its 'in' leg. Deciding that
-	// in SQL would mean joining back to the original row a second time for a
-	// fact the caller already has in hand from its own first fetch; the caller
-	// (effectivePeruntukan) picks the correct one instead.
-	LatestPurposeCorrectionForTransaction(ctx context.Context, arg LatestPurposeCorrectionForTransactionParams) (LatestPurposeCorrectionForTransactionRow, error)
 	LatestReconciliation(ctx context.Context, fundID int64) (Reconciliation, error)
 	// Cash before bank, then by name (maintainer, 2026-10-05): the box at home,
 	// then the bank, the order she counts in. Every list of locations reads this
@@ -715,12 +713,10 @@ type Querier interface {
 	//     an allocation "Pindah pos" from it; only a pair that corrects
 	//     nothing carries one.
 	//   - effective_purpose_id: the tag this row's money is under NOW - its own
-	//     purpose_id until a correction (ADR-033) moves it, then the latest
-	//     correction's target. Which of that correction's two legs IS the
-	//     target depends on this row's own direction, not on the leg's: an
-	//     'out' mis-tagged needs the target to take the pair's 'out' leg, an
-	//     'in' the 'in' leg (PostPurposeCorrection builds it that way), so
-	//     ct.direction = t.direction reads back exactly what was written.
+	//     purpose_id until a correction (ADR-033) moves it, then the end of the
+	//     path its corrections walk - EffectivePurposeForTransaction's
+	//     derivation (transfer.sql has the reasoning), with no reliance on
+	//     transfer id order (#411).
 	//     COALESCE to t.purpose_id, so an uncorrected row answers itself and
 	//     "has this been corrected?" is effective <> stored rather than a
 	//     second boolean column saying the same thing twice.
