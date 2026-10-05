@@ -47,7 +47,7 @@ A small, calm app that helps a reluctant, non-accountant **treasurer** keep a co
 ## Repo layout
 
 ```
-  cmd/uruni/     main.go, migrate.go, healthcheck.go, version.go (embed.go/embed_test.go live at repo root)
+  cmd/uruni/     main.go, migrate.go, healthcheck.go, version.go, create_user.go, seed_e2e.go (embed.go/embed_test.go live at repo root)
   internal/
     money/       int64 money package — the trust core
     ledger/      transactions, balances, reconciliation, dues, incidental, reimbursement, transfer — the core
@@ -57,6 +57,8 @@ A small, calm app that helps a reluctant, non-accountant **treasurer** keep a co
     auth/        local auth
     config/      env config
     lock/        single-writer DB lock
+    backup/      backup zip export, restore, daily dumps (ADR-012)
+    tz/          Asia/Jakarta, the one clock every "today" and month is read in
   web/           React + Vite app (embedded into the binary at build); e2e/ holds Playwright specs
   docs/          PRD, Tech-Design, ADR/, Design-System, Positioning, Decisions, ROADMAP
 ```

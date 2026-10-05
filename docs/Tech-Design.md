@@ -6,7 +6,7 @@ Companion to [`PRD.md`](./PRD.md). The PRD owns *what* and *why*; this doc owns 
 
 The individual decisions live as one-file-per-ADR in [`ADR/`](./ADR/README.md) — each a single call with context, options, the decision, and consequences. This page keeps what frames them: the constraints, the stack at a glance, the production topology, and what is deliberately still open.
 
-**ADR numbers are permanent** — never reused, never renumbered. An ADR's *text* is editable while it carries the **`draft`** tag, meaning no code implements it yet; once a slice ships code behind it the tag comes off and the decision changes only by adding a **superseding** ADR. Migrations run the other way round: through `0.x` there is **one file, edited in place** ([ADR-025](./ADR/025-one-migration-file-until-1.0.md)) — looser than any ADR — and from the first production deploy it freezes for good, stricter than any ADR.
+**ADR numbers are permanent** — never reused, never renumbered. An ADR's text is editable while it carries the **`draft`** tag; the tag comes off with the last slice of the milestone that implements it, after which the decision changes only by a superseding ADR ([`ADR/README.md`](./ADR/README.md) has the rule).
 
 > Version caveat: recommendations reflect the ecosystem as of ~mid-2025. Before building, verify current versions and that named libraries are still actively maintained.
 
@@ -27,32 +27,7 @@ Rationale for the two anchors: both React and Go are the most densely and accura
 
 ## The decisions
 
-Full text — and the current `draft` / implemented stage of each — in [`ADR/`](./ADR/README.md).
-
-| # | Decision |
-|---|---|
-| [ADR-001](./ADR/001-one-go-binary-single-origin.md) | Overall shape: one Go binary, single origin |
-| [ADR-002](./ADR/002-languages-go-and-react.md) | Languages: Go (server) + TypeScript/React (client) |
-| [ADR-003](./ADR/003-frontend-react-spa-backend-go.md) | Frontend: React SPA (Vite) + backend: Go |
-| [ADR-004](./ADR/004-database-sqlite-only.md) | Database: SQLite only through 0.x |
-| [ADR-005](./ADR/005-data-access-sqlc.md) | Data access: sqlc |
-| [ADR-006](./ADR/006-money-integer-minor-units.md) | Money is integer minor units (never floats) |
-| [ADR-007](./ADR/007-auth-local-email-password.md) | Auth: local email/password now, OIDC later |
-| [ADR-008](./ADR/008-pwa-no-offline-data.md) | PWA: installable shell, no offline data |
-| [ADR-009](./ADR/009-reverse-proxy-caddy.md) | Reverse proxy & TLS: Caddy |
-| [ADR-010](./ADR/010-packaging-and-deployment.md) | Packaging & deployment |
-| [ADR-011](./ADR/011-receipt-photos-local-volume.md) | Receipt photos: local volume |
-| [ADR-012](./ADR/012-backup-and-export.md) | Backup & export implementation |
-| [ADR-013](./ADR/013-scheduling-in-process.md) | Scheduling: in-process |
-| [ADR-014](./ADR/014-localization-indonesian-first.md) | Localization: Indonesian-first, strings centralized |
-| [ADR-015](./ADR/015-testing-money-math.md) | Testing: prioritize the money math |
-| [ADR-016](./ADR/016-deployment-targets-reference-infra.md) | Deployment targets & reference infra |
-| [ADR-017](./ADR/017-cicd-github-actions.md) | CI/CD: GitHub Actions |
-| [ADR-018](./ADR/018-release-and-versioning.md) | Release & versioning: tag-driven SemVer, operator upgrade contract |
-| [ADR-019](./ADR/019-cli-surface-and-runtime-config.md) | CLI surface & runtime config (the scaffold's contract) |
-| [ADR-020](./ADR/020-dev-environment.md) | Dev environment: one entry point, guards committed |
-
----
+Every decision, with its current `draft` / implemented stage, is listed in the [ADR index](./ADR/README.md). That index is the one list; this page does not repeat it.
 
 ## Proposed topology (v1 production)
 
@@ -70,8 +45,7 @@ Dev: `vite` (React, HMR) + `go run`, with `/api` and `/report` proxied to Go.
 
 ## Open technical questions
 
-- JSON export schema: concrete shape + version strategy (own sub-doc when building).
-- Receipt uploads: include in the default scheduled backup, or document as a separate host responsibility?
+None open. The two once listed here - the JSON export's shape and version strategy, and whether receipt photos ride in the scheduled backup - were settled by [ADR-012](./ADR/012-backup-and-export.md) (`format_version`; a zip with a `receipts/` folder).
 
 ## Not deciding yet (deferred)
 

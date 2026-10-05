@@ -1,6 +1,6 @@
 # Uruni — Roadmap
 
-**Version 0.1 · 2026-08-08 · Status: draft**
+**Living document · first written 2026-08-08**
 
 How Uruni gets built and released. Milestones map 1:1 to the supervised build slices in [`../CLAUDE.md`](../CLAUDE.md); the release mechanics come from [`Tech-Design.md`](./Tech-Design.md) ADR-017/018 (adapted from the Balances project's proven scheme).
 
@@ -25,12 +25,12 @@ Cut an **`alpha.N`** whenever a slice (or a coherent batch within one) lands gre
 | **M4 Core API** | `v0.4.0` | 4 | Transactions, dues, incidental, pass-through, reconcile, balances over the model. |
 | **M5 Auth** | `v0.5.0` | 5 | Local email/password + sessions. |
 | **M6 Everyday UI** ★ | `v0.6.0` | 6 | The treasurer's whole app on a phone, and the **first pilotable build** — deployable for her to actually try: record → home (balance hero + reconciliation status) → **Cek kas** (the reconcile flow), an installable PWA, first-run setup. Around the loop: dues (status, payments including months ahead, reversal, tiers and rates, a roster with the arrears badge), reimbursements (**Talangan**), incidental envelopes (**amplop**) with who-gave-what ([ADR-034](./ADR/034-envelope-participation.md)) and pass-through (**Titipan**), and optional receipt photos. It grew past the loop twice: [ADR-032](./ADR/032-two-level-navigation.md) made it the whole information architecture (five footer slots, Riwayat's tabs, dialogs for edits, paged and searchable lists), and backups ([ADR-012](./ADR/012-backup-and-export.md): zip download, daily dumps, in-app restore) moved in from M8. |
-| **M7 Public report** | `v0.7.0` | 7 | SSR report page, filters, stable unguessable slug, `noindex`, optional regenerate. |
+| **M7 Public report** | `v0.7.0` | 7 | The public report a neighbour opens from one unguessable link: a server-rendered page and a monthly PDF, each month shown as it ended and the running month as it stands ([ADR-035](./ADR/035-public-report.md), [ADR-037](./ADR/037-report-shows-the-month-as-it-ended.md)) - balance, cek kas, per-pos balances and what is owed to members, then the month's transactions (filterable), dues and envelopes; `noindex`, a link the treasurer can replace. Around it: Pindah pos ([ADR-036](./ADR/036-moving-money-between-purposes.md)), the move of Talangan and Iuran onto [ADR-032](./ADR/032-two-level-navigation.md)'s screens, and one app column for phones and tablets. |
 | **M8 Excel export** | `v0.8.0` | 8 | The human-readable `.xlsx` workbook ([ADR-012](./ADR/012-backup-and-export.md)). Backup, restore and daily dumps moved into M6 on 2026-09-28; SMTP was cut. The public Fly.io demo ([#144](https://github.com/kerti/uruni/issues/144)) lives here too, moved from M6, and needs its own superseding ADR first. |
 | **M9 Self-host & deploy** | `v0.9.0` | 9 | Dockerfile, compose, Caddy, `SELF-HOSTING.md`, pinned `URUNI_TAG`. Hardening for a real operator. |
 | **Production** | `v1.0.0` | — | First real, maintained deployment for a live treasurer. Migration immutability begins; upgrade contract goes live. **Gate:** the backup importer's format upgrade chain ships in or before this release ([ADR-012](./ADR/012-backup-and-export.md)). |
 
-★ **M6 is the real milestone to aim for** — everything before it is scaffolding toward the moment the treasurer can record → see balance → reconcile on her phone. Ship a private pilot at `v0.6.x` before polishing M7–M9.
+★ **M6 is the real milestone to aim for** — everything before it is scaffolding toward the moment the treasurer can record → see balance → reconcile on her phone. The private pilot started at `v0.6.0` and has run on real data since.
 
 ## Definition of done (per milestone)
 
@@ -75,4 +75,4 @@ There is **no `HANDOFF.md`** and no standalone status doc. The live board is **G
 - **Standing decisions no issue or ADR owns** → [`Decisions.md`](./Decisions.md).
 - **You-are-here** → the one status line below (changes ~once per milestone; never holds shipped detail).
 
-**Status:** **M7 — public report** is next. M6 — the everyday UI, and the backups that moved into it — is done. What is in flight lives on the board, not in this line.
+**Status:** **M7 — public report** is closing: its last item, Riwayat's filters, ships before `v0.7.0`. M6 — the everyday UI, and the backups that moved into it — is done. What is in flight lives on the board, not in this line.

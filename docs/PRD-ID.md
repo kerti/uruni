@@ -82,6 +82,7 @@ Entitas utama:
 ### 7.2 Mencatat transaksi (tindakan sehari-hari)
 - Tombol "tambah" yang menonjol dan bisa dijangkau dengan satu ketukan dari layar utama.
 - Kolom minimal dengan nilai bawaan yang cerdas: nominal, masuk/keluar, lokasi (mengingat yang terakhir), pos (bawaan Kas Utama), tanggal (bawaan hari ini). Catatan dan foto opsional.
+- Uang yang hanya berpindah tempat (tunai ke bank, "Pindah lokasi") atau berpindah pos ("Pindah pos") dicatat sebagai pemindahan yang tidak mengubah nilai, dan pos sebuah baris yang sudah tercatat bisa diperbaiki belakangan ("Perbaiki pos") - keduanya tidak menggerakkan saldo kas.
 - Pencatatan harus terasa responsif; server adalah satu-satunya sumber kebenaran dan mengonfirmasi penulisan dengan cepat.
 - Konektivitas: **aplikasi membutuhkan koneksi aktif.** Saat offline, aplikasi sengaja tidak tersedia — dengan status "butuh koneksi" yang jelas, tanpa data lokal dan tanpa antrean. Ini pilihan pengguna: ia lebih memilih tidak ada kerancuan "salinan mana yang benar?" ketimbang kemampuan offline apa pun.
 
@@ -104,10 +105,11 @@ Entitas utama:
 - Menampilkan siapa yang sudah menyumbang dan berapa, dibandingkan anggota yang aktif pada hari amplop dibuka, di layar amplop dan di laporan publik. Tampilan sederhana "belum menyumbang". **Tanpa pengingat, tanpa penagihan otomatis.** ([ADR-034](./ADR/034-envelope-participation.md))
 - Sumbangan yang tercatat atas nama anggota yang salah dibalik dengan entri baru lalu dicatat ulang, seperti pembayaran iuran (§7.3).
 - Saat ditutup, tampilkan sisanya dan tawarkan **alihkan ke Kas Utama** dengan satu ketukan.
+- Nama acaranya bisa diperbaiki kapan saja, saat amplop terbuka maupun sudah ditutup - mengganti nama tidak menggerakkan uang dan tidak membuat entri.
 
 ### 7.6 Titipan (Kas Bidang)
 - Mencatat uang yang dikumpulkan atas nama organisasi di atasnya (mis. Kas Bidang) beserta penerusannya — masing-masing sebagai transaksi biasa dengan tag `Titipan`, supaya laporan menunjukkan dengan jelas apa yang masuk untuk organisasi di atasnya dan apa yang sudah diteruskan.
-- **Saldo tidak mengecualikannya.** Selama uangnya masih ada di dompet, uang itu memang ada di dompet, jadi ikut terhitung — prinsip §6 "satu saldo riil yang tergabung, dipisahkan secara makna, bukan dalam pos yang terpisah-pisah" berlaku di sini juga. Uruni tidak mencatat setoran ke atas sebagai utang yang belum dibayar dan tidak punya angka "tersedia" yang kedua; setoran itu jadi pengeluaran biasa pada hari ia dibayarkan. (Direvisi 2026-08-12; lihat [ADR-024](./ADR/024-schema-conventions.md).)
+- **Saldo tidak mengecualikannya.** Selama uangnya masih ada di dompet, uang itu memang ada di dompet, jadi ikut terhitung — prinsip §6 "satu saldo riil yang tergabung, dipisahkan secara makna, bukan dalam kantong yang terpisah-pisah" berlaku di sini juga. Uruni tidak mencatat setoran ke atas sebagai utang yang belum dibayar dan tidak punya angka "tersedia" yang kedua; setoran itu jadi pengeluaran biasa pada hari ia dibayarkan. (Direvisi 2026-08-12; lihat [ADR-024](./ADR/024-schema-conventions.md).)
 
 ### 7.7 Saldo & layar utama
 - Layar utama menampilkan: total saldo saat ini, saldo untuk tiap lokasi, dan **status rekonsiliasi**: "cocok" atau "selisih Rp X — cek?".

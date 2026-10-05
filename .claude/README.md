@@ -41,14 +41,14 @@ The session header shows the active level next to the model name, and the footer
 
 ## The cost model
 
-Rates per million tokens, checked **2026-08-12**:
+Rates per million tokens, checked **2026-10-05**:
 
 | | Input | Output |
 |---|---|---|
 | Opus 5 | $5 | $25 |
-| Sonnet 5 | **$2** ($3 from 2026-09-01) | **$10** ($15 from 2026-09-01) |
+| Sonnet 5 | $3 | $15 |
 
-Sonnet's introductory pricing runs through **2026-08-31**; after that the Opus→Sonnet saving narrows from 2.5× to 1.67×. Cache reads cost ≈0.1× the input rate; cache writes 1.25× (5-minute TTL) or 2× (1-hour).
+The Opus→Sonnet saving is 1.67×. Cache reads cost ≈0.1× the input rate; cache writes 1.25× (5-minute TTL) or 2× (1-hour).
 
 Three things follow, in the order they affect the bill:
 
@@ -56,6 +56,6 @@ Three things follow, in the order they affect the bill:
 
 **2. Delegation is a context optimization that happens to pay off.** Total tokens go *up* — a subagent re-derives the repo cold and misses the prompt cache. What it buys is a main window that doesn't carry the exploration. A 15-file investigation (~60k tokens) inline on Opus costs ~$0.30 to read and then ~$0.60 more in cached re-reads across the next twenty turns, and eats 60k of the window; the same work in a `researcher` costs ~$0.17 and returns 800 tokens. Roughly 5×, almost all of it from what *doesn't* stay resident.
 
-**3. It inverts below the floor.** Re-reading something the orchestrator already has cached costs $0.50/MTok on Opus (0.1 × $5) against $2/MTok cold on Sonnet — a **4× loss**. Under about three files or two tool calls, inline wins. This is why a brief should be small and self-contained rather than a context dump: the dump is the expensive part.
+**3. It inverts below the floor.** Re-reading something the orchestrator already has cached costs $0.50/MTok on Opus (0.1 × $5) against $3/MTok cold on Sonnet — a **6× loss**. Under about three files or two tool calls, inline wins. This is why a brief should be small and self-contained rather than a context dump: the dump is the expensive part.
 
 **The fixed tax:** `CLAUDE.md` is ~3.4k tokens and loads into every subagent, so each delegation starts ~$0.007 in the hole before doing anything. Negligible per call — but it means the length of that file is now a running cost, not a style question.
