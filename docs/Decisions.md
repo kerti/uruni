@@ -2,7 +2,7 @@
 
 *A running record of what we've decided and why. Anything here can still change.*
 
-Last updated: 2026-10-05 (M7 docs sweep)
+Last updated: 2026-10-05 (Riwayat filters)
 
 ## What belongs in this file
 
@@ -366,6 +366,8 @@ Rejected: a "+ buka amplop baru" affordance inside Catat's purpose picker. It is
 **The shape is the scope discipline**: `?purpose=<id>` on `/history/transactions` is a **deep link Transaksi renders and can clear, never a chooser it offers**. The link comes from an envelope's detail screen and from nowhere else. Month, member, income/expense and dues status, and any UI for picking a filter, stay M7's.
 
 Rejected: a purpose dropdown on the Transaksi tab. It is more useful standalone, and it is M7's filter set arriving one filter early, which is the creep the prime directive names.
+
+**Delivered at M7 (2026-10-05, [#424](https://github.com/kerti/uruni/issues/424)):** Transaksi takes the report's four filters - `month`, `purpose`, `member`, `dir`, its own params and words - picked in one dialog behind a filter button and shown as chips cleared one at a time; Bulan defaults to all months. Dues status was already the Iuran tab's period and belum-bayar toggle, so it gains nothing; Talangan and Cek kas get no filters.
 
 ## Deleting a golongan takes its tarif with it (decided 2026-09-17)
 

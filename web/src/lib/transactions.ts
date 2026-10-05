@@ -63,6 +63,9 @@ export interface ListTransactionsInput {
   memberId?: number
   duesPeriod?: string
   purposeId?: number
+  /** "YYYY-MM" - the rows dated in that month (#424). */
+  month?: string
+  direction?: 'in' | 'out'
 }
 
 /** One page of GET /api/transactions, camelCase on this side of the wire
@@ -91,6 +94,8 @@ export function listTransactions(input: ListTransactionsInput = {}): Promise<Tra
   if (input.memberId !== undefined) params.set('member_id', String(input.memberId))
   if (input.duesPeriod) params.set('dues_period', input.duesPeriod)
   if (input.purposeId !== undefined) params.set('purpose_id', String(input.purposeId))
+  if (input.month) params.set('month', input.month)
+  if (input.direction) params.set('direction', input.direction)
   const query = params.toString()
 
   return apiFetch<{ transactions: Transaction[]; next_cursor: string | null }>(`/api/transactions${query ? `?${query}` : ''}`).then(

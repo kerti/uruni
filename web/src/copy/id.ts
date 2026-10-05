@@ -50,18 +50,31 @@ export const copy = {
       searchPlaceholder: 'Catatan, pos, anggota, atau jumlah',
       loadMore: 'Muat lebih banyak',
       noResults: (q: string) => `Tidak ada transaksi yang cocok dengan “${q}”.`,
-      // The purpose filter (#262), reached only as a deep link - from an
-      // envelope's detail screen, which is the one route ADR-032 gives a
-      // closed envelope's record. It names itself with the same word the
-      // record form uses ("Pos", CONTEXT.md: one word per concept)
-      // and can always be cleared, so she is never stuck inside a filtered
-      // list wondering where the rest went. The empty line is separate from
-      // noResults above: an empty filter is not a failed search, and saying
-      // "tidak ada yang cocok" about a filter she did not type would be
-      // answering a question she never asked.
+      // The purpose filter (#262) - also the link from an envelope's detail
+      // screen, the one route ADR-032 gives a closed envelope's record. It
+      // names itself with the record form's own word ("Pos", CONTEXT.md: one
+      // word per concept). The empty line is separate from noResults above:
+      // an empty envelope is not a failed search.
       purposeFilterLabel: (name: string) => `Pos: ${name}`,
-      purposeFilterClear: 'Hapus filter pos',
       purposeFilterEmpty: 'Belum ada transaksi untuk pos ini.',
+      // Riwayat's filters (#424): the public report's four, in its own
+      // words (report_copy.go) - Bulan, Pos, Anggota and the record form's
+      // Jenis (record.directionLabel/In/Out, reused rather than repeated).
+      // Picked in a dialog behind one button; each active one shows as a
+      // chip she can clear on its own.
+      filterButton: 'Filter',
+      filterButtonActive: (count: number) => `Filter, ${count} aktif`,
+      filterHeading: 'Filter transaksi',
+      filterMonth: 'Bulan',
+      filterPurpose: 'Pos',
+      filterMember: 'Anggota',
+      filterAll: 'Semua',
+      filterApply: 'Tampilkan',
+      filterReset: 'Hapus semua filter',
+      monthFilterLabel: (month: string) => `Bulan: ${month}`,
+      memberFilterLabel: (name: string) => `Anggota: ${name}`,
+      filterClear: (label: string) => `Hapus filter ${label}`,
+      filterEmpty: 'Tidak ada transaksi yang cocok dengan filter ini.',
       // Undoing a named contribution recorded against the wrong member
       // (ADR-034, #211, #333) - the same "reverse, then post again" shape
       // dues.history gives a dues payment, reused here rather than a second

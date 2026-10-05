@@ -916,8 +916,10 @@ WHERE t.fund_id = ?1
   AND (?6 IS NULL OR t.member_id = ?6)
   AND (?7 IS NULL OR t.dues_period = ?7)
   AND (?8 IS NULL OR t.purpose_id = ?8)
+  AND (?9 IS NULL OR substr(t.occurred_on, 1, 7) = ?9)
+  AND (?10 IS NULL OR t.direction = ?10)
 ORDER BY t.occurred_on DESC, t.id DESC
-LIMIT ?9
+LIMIT ?11
 `
 
 type ListTransactionsPageParams struct {
@@ -929,6 +931,8 @@ type ListTransactionsPageParams struct {
 	MemberID         interface{}
 	DuesPeriod       interface{}
 	PurposeID        interface{}
+	Month            interface{}
+	Direction        interface{}
 	PageLimit        int64
 }
 
@@ -999,15 +1003,12 @@ type ListTransactionsPageRow struct {
 // escaping machinery ADR-032 assumed LIKE would need - "LIKE wildcards in q
 // are literal" is true here by construction, not by escaping.
 //
-// member_id/dues_period are exact-match filters for
-// Dues/MemberPayments.tsx's payment history panel, not a Riwayat UI filter
-// (ADR-032 holds filters to M7) - undocumented in copy/UI on purpose.
-//
-// purpose_id is the one exception to that (#262): ADR-032 names Riwayat ->
-// Transaksi filtered to a purpose as the only route to a CLOSED envelope,
-// so this filter does reach the UI - but as a deep link Transaksi renders
-// and can clear, never as a chooser it offers. All three compose with q and
-// with the keyset cursor rather than replacing either.
+// member_id, purpose_id, month and direction are Riwayat -> Transaksi's
+// filters (#424, the public report's four); dues_period is
+// Dues/MemberPayments.tsx's payment history panel alone. month is
+// "YYYY-MM" against occurred_on's own "YYYY-MM-DD" text (the schema's CHECK
+// keeps it in that form), so a prefix compare is the month. All compose
+// with q and with the keyset cursor rather than replacing either.
 //
 // page_limit is passed as page size + 1: the caller peeks at whether that
 // extra row came back to know whether a next page exists, then trims it
@@ -1104,6 +1105,8 @@ func (q *Queries) ListTransactionsPage(ctx context.Context, arg ListTransactions
 		arg.MemberID,
 		arg.DuesPeriod,
 		arg.PurposeID,
+		arg.Month,
+		arg.Direction,
 		arg.PageLimit,
 	)
 	if err != nil {
