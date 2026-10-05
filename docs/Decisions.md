@@ -2,7 +2,7 @@
 
 *A running record of what we've decided and why. Anything here can still change.*
 
-Last updated: 2026-10-01 (date pickers, #197)
+Last updated: 2026-10-05 (M7 docs sweep)
 
 ## What belongs in this file
 
@@ -198,7 +198,7 @@ Audited on [#14](https://github.com/kerti/uruni/pull/14) and again on [#17](http
 Two calls made building the CLI's runtime config ([#11](https://github.com/kerti/uruni/issues/11), [ADR-019](./ADR/019-cli-surface-and-runtime-config.md)):
 
 1. **One required variable is checked in `config.Load()`, so it gates *every* subcommand, not just `serve`** — it is the "did the operator edit `.env` at all?" check, and unset fails the same way the `.env.example` placeholder does. The cost is real and accepted: a bare `go run ./cmd/uruni healthcheck` outside `make` (which exports `.env`) needs the variable. The alternative — a second, laxer config path for the operator tools — buys a debugging convenience by adding a way to run the binary un-configured, which is the thing being prevented. **That variable is `URUNI_BASE_URL` as of [#119](https://github.com/kerti/uruni/issues/119).** It was `URUNI_SESSION_SECRET`, which M5 proved nothing reads — the session cookie is an opaque token with all its state in the `session` table, so there was never anything to key. A wrong base URL fails visibly, as a report link that works nowhere but the operator's own browser; a wrong session secret produced nothing at all.
-2. **A config error names the variable but never prints its value, for `SMTP_URL`.** It carries a password, and a boot failure is precisely the output an operator pastes into an issue. Everything else (`URUNI_BASE_URL`, `PORT`, the log variables) *does* echo, because seeing what was actually read is the difference between a one-minute fix and a puzzle. Same rule as [ADR-022](./ADR/022-logging-slog.md)'s "log IDs, not names or amounts", applied to errors rather than logs.
+2. **A config error names the variable but never prints its value, for `SMTP_URL`** (since removed with emailed backups, #327 - the rule stands for any credential-bearing variable added later). It carries a password, and a boot failure is precisely the output an operator pastes into an issue. Everything else (`URUNI_BASE_URL`, `PORT`, the log variables) *does* echo, because seeing what was actually read is the difference between a one-minute fix and a puzzle. Same rule as [ADR-022](./ADR/022-logging-slog.md)'s "log IDs, not names or amounts", applied to errors rather than logs.
 
 Also closed here: the **third** of the three release-image faults recorded above under CI hardening. `VERSION` was wired at that point but `COMMIT` was not, and `.dockerignore` keeps `.git` out of the build context — so Go's own VCS stamping had nothing to read and every tagged image would have reported `commit unknown`. It now has a build-arg of its own, filled from `github.sha`; a local `go build` has the mirror-image situation (no stamp, readable `.git`) and falls back to `debug.ReadBuildInfo`.
 
@@ -269,6 +269,8 @@ M6.2 ([#135](https://github.com/kerti/uruni/issues/135)) needed client-side rout
 This also matches §9's success condition, which is that she adopts Uruni as her **sole** record — not that Uruni absorbs the spreadsheet.
 
 ## The app gets a bottom nav, and the add-FAB goes (decided 2026-09-03)
+
+*The four-slot list below was superseded by [ADR-032](./ADR/032-two-level-navigation.md)'s five: Beranda · Riwayat · Catat · Anggota · Pengaturan. The rest of the entry - Catat is a tab, the FAB is gone - stands.*
 
 M6.15 ([#148](https://github.com/kerti/uruni/issues/148)) added a sixth screen, and the shell's own "not a nav bar" comment — written when there were two — stopped being true. The maintainer's call: a **sticky bottom nav** with four destinations, Beranda · Catat · Iuran · Pengaturan.
 

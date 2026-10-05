@@ -1,6 +1,6 @@
 # ADR-032 — Two-level navigation: five noun slots, one privileged verb
 
-**Status:** Accepted · [ADR index](./README.md)
+**Status:** Accepted · implemented at M7 ([#368](https://github.com/kerti/uruni/issues/368)) · change only by adding a superseding ADR · [ADR index](./README.md)
 
 **Context.** [#212](https://github.com/kerti/uruni/issues/212) was filed because home had become the place new features land: reimbursements ([#151](https://github.com/kerti/uruni/issues/151)) and incidentals ([#152](https://github.com/kerti/uruni/issues/152)) each arrived as another button under the balance hero, and receipts ([#153](https://github.com/kerti/uruni/issues/153)/[#154](https://github.com/kerti/uruni/issues/154)) plus M7's report were queued to arrive the same way. The issue names the symptom. Grilled 2026-09-10, the cause turned out to be larger than the symptom, in two ways.
 

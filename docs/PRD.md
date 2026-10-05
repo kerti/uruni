@@ -80,6 +80,7 @@ Key entities:
 ### 7.2 Record a transaction (the everyday action)
 - A prominent "add" action reachable in one tap from the home screen.
 - Minimum fields with smart defaults: amount, in/out, location (remembers last), purpose (defaults to Kas Utama), date (defaults to today). Note and photo optional.
+- Money that only changes place (cash to the bank, "Pindah lokasi") or purpose ("Pindah pos") is recorded as a value-neutral transfer, and a posted row's pos can be corrected after the fact ("Perbaiki pos") - neither moves the fund's balance.
 - Recording should feel responsive; the server is the single source of truth and confirms the write quickly.
 - Connectivity: **the app requires a live connection.** When offline it is deliberately unavailable — a clear "butuh koneksi" state, with no local data and no queue. This is a user-driven choice: she prefers no "which copy is valid?" ambiguity over any offline capability.
 

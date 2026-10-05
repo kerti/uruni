@@ -1,6 +1,6 @@
 # ADR-036 — Moving money between purposes, and saying why it moved
 
-**Status:** Accepted · `draft` · [ADR index](./README.md)
+**Status:** Accepted · implemented at M7 ([#383](https://github.com/kerti/uruni/issues/383)) · change only by adding a superseding ADR · [ADR index](./README.md)
 
 **Context.** A fund often gives from Kas Utama to an envelope: a bereavement, a neighbour in hospital, a celebration the RT pays part of. Uruni could not record that. The engine has had the operation since M3 - a `reclass_purpose` pair moves what money is *for* without moving any money - but only two callers reach it: closing an envelope (the leftover rolls into Kas Utama, [ADR-031](./031-posting-to-a-closed-incidental.md)) and correcting a posted row's pos ([ADR-033](./033-correcting-a-posted-purpose.md)), which moves a whole row and nothing smaller. `POST /api/transfers` moves money between locations and keeps its purpose. So the only way to give Rp 200.000 to an envelope was a fake expense out of Kas Utama and a fake income into the envelope - two rows that inflate both totals and put an expense on the public report that never left the fund. Grilled 2026-10-02.
 
