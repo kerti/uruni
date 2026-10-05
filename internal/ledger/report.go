@@ -109,8 +109,11 @@ type Report struct {
 
 	// Rows are the month's rows after filters, newest first. Rows dated the
 	// same day are in no particular order.
-	Rows   []ReportRow
-	Totals ReportTotals
+	Rows []ReportRow
+
+	// Walk is the month as a walk from the balance it started on to the
+	// balance it ended on (ADR-038), over the rows after filters.
+	Walk ReportWalk
 
 	// Dues is every member's status for Month, after the dues filter.
 	Dues []ReportDuesRow
@@ -148,8 +151,27 @@ type ReportRow struct {
 	Move  *ReportMove
 }
 
+// ReportLine is the one line of the month's walk a row lands on (ADR-038).
+// It is the single class that drives the list, the direction filter and the
+// totals, so the three cannot disagree about a row.
+type ReportLine string
+
+const (
+	// ReportLineOpening is an opening entry: Saldo awal.
+	ReportLineOpening ReportLine = "opening"
+	// ReportLineIn is income - and a reversal, which counts there as a minus.
+	ReportLineIn ReportLine = "in"
+	// ReportLineOut is spending.
+	ReportLineOut ReportLine = "out"
+	// ReportLineAdjustment is every adjustment that is not a reversal.
+	ReportLineAdjustment ReportLine = "adjustment"
+)
+
 // ReportEntry is an ordinary ledger row, with the facts a label needs.
 type ReportEntry struct {
+	// Line is the walk line the row lands on; see classifyReportRow.
+	Line ReportLine
+
 	Kind        string // transaction.kind: opening, normal, dues, reimbursement or adjustment
 	Direction   string // "in" or "out"
 	Amount      money.Amount
@@ -204,12 +226,37 @@ type ReportMove struct {
 	Note         *string
 }
 
-// ReportTotals are money in, money out and net for the filtered entries.
-// Moves are in none of them, and neither is a between-accounts transfer.
-type ReportTotals struct {
-	In  money.Amount
-	Out money.Amount
-	Net money.Amount
+// ReportWalk is the month as ADR-038 reads it: a walk from the balance the
+// month started on to the balance it ended on, in which every posted row lands
+// on exactly one line.
+//
+//	Start + Openings + In - Out + Adjustments = End
+//
+// In is net of reversals, so it can read below zero; Adjustments is signed.
+// Start and End are ledger sums (the bounded fund balance), never computed
+// from the lines, so the equation above is a property the tests assert and
+// not something the report forces; it is not checked at runtime, because a
+// public page does not fail on a neighbour.
+//
+// Full says whether the walk applies. Under a member, direction or purpose
+// filter only In and Out are meaningful (the lines of the rows that matched):
+// Start and End stay zero, since a balance has no meaning for one member or
+// one direction.
+type ReportWalk struct {
+	Full bool
+
+	// StartOn and EndOn date the two balances ("YYYY-MM-DD"): the last day of
+	// the previous month, and the month's last day (today, for the running
+	// month). Set with Full.
+	StartOn string
+	EndOn   string
+
+	Start       money.Amount
+	Openings    money.Amount
+	In          money.Amount
+	Out         money.Amount
+	Adjustments money.Amount
+	End         money.Amount
 }
 
 // ReportDuesRow is one member's standing for the month - DuesStatusForPeriod's
@@ -270,10 +317,12 @@ type ReportContributor struct {
 // Which ledger rows appear, and where they count:
 //   - A between_accounts transfer is left out entirely: with locations hidden
 //     it moves nothing a reader can see, and its two legs would double a total.
-//   - A reclass_purpose pair is one ReportMove, outside the totals. It shows
+//   - A reclass_purpose pair is one ReportMove, outside the walk. It shows
 //     when the purpose filter equals either side, and is hidden by a member or
 //     direction filter, which it has neither of.
-//   - Everything else is a ReportEntry and counts: in, out, net.
+//   - Everything else is a ReportEntry on exactly one line of the walk
+//     (ADR-038, classifyReportRow): Saldo awal, Total masuk, Total keluar or
+//     Penyesuaian.
 //
 // Filtering happens in Go over the month's rows, not in SQL, because a pair
 // must be folded before a purpose filter can ask whether either side matches.
@@ -359,8 +408,18 @@ func (l *Ledger) monthlyReport(ctx context.Context, p ReportParams) (Report, err
 		return Report{}, err
 	}
 
-	if r.Rows, r.Totals, err = l.reportRows(ctx, p, monthStart); err != nil {
+	if r.Rows, r.Walk, err = l.reportRows(ctx, p, monthStart, r.Running); err != nil {
 		return Report{}, err
+	}
+	// The ends of the walk are ledger sums, and only the whole fund has them.
+	if r.Walk.Full {
+		dayBefore := monthStart.AddDate(0, 0, -1).Format(reportDayLayout)
+		start, err := l.q.ReportFundBalance(ctx, store.ReportFundBalanceParams{FundID: p.FundID, Through: &dayBefore})
+		if err != nil {
+			return Report{}, fmt.Errorf("report start balance: %w", err)
+		}
+		r.Walk.Start, r.Walk.StartOn = money.FromDB(start), dayBefore
+		r.Walk.End, r.Walk.EndOn = r.Balance, r.AsOf
 	}
 
 	if r.Dues, err = l.reportDues(ctx, p.FundID, month, p.DuesStatus); err != nil {
@@ -529,32 +588,39 @@ func envelopeOpenAt(e store.Incidental, through *string) bool {
 }
 
 // reportRows reads the month, folds transfer pairs, applies the filters, and
-// totals the entries.
-func (l *Ledger) reportRows(ctx context.Context, p ReportParams, monthStart time.Time) ([]ReportRow, ReportTotals, error) {
+// lands each entry on its line of the walk. The running month reads with no
+// upper bound, matching its unbounded balance (ADR-037, ADR-038): a row dated
+// after today still belongs to the walk that ends on that balance.
+func (l *Ledger) reportRows(ctx context.Context, p ReportParams, monthStart time.Time, running bool) ([]ReportRow, ReportWalk, error) {
+	var to *string
+	if !running {
+		next := monthStart.AddDate(0, 1, 0).Format(reportDayLayout)
+		to = &next
+	}
 	rows, err := l.q.ListReportTransactions(ctx, store.ListReportTransactionsParams{
 		FundID:   p.FundID,
 		FromDate: monthStart.Format(reportDayLayout),
-		ToDate:   monthStart.AddDate(0, 1, 0).Format(reportDayLayout),
+		ToDate:   to,
 	})
 	if err != nil {
-		return nil, ReportTotals{}, fmt.Errorf("listing report transactions: %w", err)
+		return nil, ReportWalk{}, fmt.Errorf("listing report transactions: %w", err)
 	}
 
 	corrections, err := foldCorrections(rows)
 	if err != nil {
-		return nil, ReportTotals{}, err
+		return nil, ReportWalk{}, err
 	}
 
 	var (
 		out           []ReportRow
-		totals        ReportTotals
+		walk          = ReportWalk{Full: p.PurposeID == nil && p.MemberID == nil && p.Direction == ""}
 		moveSeen      = make(map[int64]bool)
 		correctedSeen = make(map[int64]bool)
 	)
 	for _, row := range rows {
 		if row.Kind == "transfer" {
 			if row.TransferKind == nil || row.TransferID == nil {
-				return nil, ReportTotals{}, fmt.Errorf("transfer row dated %s carries no transfer", row.OccurredOn)
+				return nil, ReportWalk{}, fmt.Errorf("transfer row dated %s carries no transfer", row.OccurredOn)
 			}
 			switch *row.TransferKind {
 			case "between_accounts":
@@ -584,7 +650,7 @@ func (l *Ledger) reportRows(ctx context.Context, p ReportParams, monthStart time
 
 				move, err := reportMoveFrom(row)
 				if err != nil {
-					return nil, ReportTotals{}, err
+					return nil, ReportWalk{}, err
 				}
 				if !moveMatches(p, move) {
 					continue
@@ -592,34 +658,87 @@ func (l *Ledger) reportRows(ctx context.Context, p ReportParams, monthStart time
 				out = append(out, ReportRow{Date: row.OccurredOn, Move: &move})
 				continue
 			default:
-				return nil, ReportTotals{}, fmt.Errorf("unknown transfer kind %q", *row.TransferKind)
+				return nil, ReportWalk{}, fmt.Errorf("unknown transfer kind %q", *row.TransferKind)
 			}
 		}
 
-		entry := reportEntryFrom(row)
+		entry, err := reportEntryFrom(row)
+		if err != nil {
+			return nil, ReportWalk{}, err
+		}
 		if !entryMatches(p, row, entry) {
 			continue
 		}
 		out = append(out, ReportRow{Date: row.OccurredOn, Entry: &entry})
 
-		if entry.Direction == ReportDirectionIn {
-			totals.In, err = totals.In.Add(entry.Amount)
-		} else {
-			totals.Out, err = totals.Out.Add(entry.Amount)
-		}
-		if err != nil {
-			return nil, ReportTotals{}, fmt.Errorf("totalling report rows: %w", err)
+		if err := walk.add(entry); err != nil {
+			return nil, ReportWalk{}, fmt.Errorf("totalling report rows: %w", err)
 		}
 	}
-
-	if totals.Net, err = totals.In.Sub(totals.Out); err != nil {
-		return nil, ReportTotals{}, fmt.Errorf("netting report rows: %w", err)
-	}
-	return out, totals, nil
+	return out, walk, nil
 }
 
-func reportEntryFrom(row store.ListReportTransactionsRow) ReportEntry {
+// signed is the amount as the ledger's balance reads it: in is plus, out minus.
+func (e ReportEntry) signed() (money.Amount, error) {
+	if e.Direction == ReportDirectionIn {
+		return e.Amount, nil
+	}
+	return money.Amount(0).Sub(e.Amount)
+}
+
+// add lands one entry on its line of the walk. A reversal is stored out and
+// lands on In as a minus; an adjustment is signed by its own direction.
+func (w *ReportWalk) add(e ReportEntry) error {
+	signed, err := e.signed()
+	if err != nil {
+		return err
+	}
+	switch e.Line {
+	case ReportLineOpening:
+		w.Openings, err = w.Openings.Add(signed)
+	case ReportLineIn:
+		w.In, err = w.In.Add(signed)
+	case ReportLineOut:
+		// Out is a magnitude: spending, shown as a positive figure and
+		// subtracted by the walk.
+		w.Out, err = w.Out.Add(e.Amount)
+	case ReportLineAdjustment:
+		w.Adjustments, err = w.Adjustments.Add(signed)
+	default:
+		return fmt.Errorf("entry has no walk line %q", e.Line)
+	}
+	return err
+}
+
+// classifyReportRow is ADR-038's one switch: the line a posted row lands on.
+// Total by construction - a kind it does not know is an error, not a guess,
+// so a trust report says the ledger is broken rather than drop a row.
+// Transfers never reach it; the caller folds or skips them first.
+func classifyReportRow(kind, direction string, reverses bool) (ReportLine, error) {
+	switch kind {
+	case "opening":
+		return ReportLineOpening, nil
+	case "normal", "dues", "reimbursement":
+		if direction == ReportDirectionIn {
+			return ReportLineIn, nil
+		}
+		return ReportLineOut, nil
+	case "adjustment":
+		if reverses {
+			return ReportLineIn, nil
+		}
+		return ReportLineAdjustment, nil
+	}
+	return "", fmt.Errorf("transaction kind %q has no line in the walk", kind)
+}
+
+func reportEntryFrom(row store.ListReportTransactionsRow) (ReportEntry, error) {
+	line, err := classifyReportRow(row.Kind, row.Direction, row.ReversesTransactionID != nil)
+	if err != nil {
+		return ReportEntry{}, err
+	}
 	e := ReportEntry{
+		Line:                line,
 		Kind:                row.Kind,
 		Direction:           row.Direction,
 		Amount:              money.FromDB(row.Amount),
@@ -640,7 +759,7 @@ func reportEntryFrom(row store.ListReportTransactionsRow) ReportEntry {
 	if row.Kind == "reimbursement" {
 		e.Note = row.ClaimNote
 	}
-	return e
+	return e, nil
 }
 
 // foldCorrections nets every purpose correction of the same row into one
@@ -751,14 +870,21 @@ func moveMatches(p ReportParams, m ReportMove) bool {
 	return true
 }
 
+// entryMatches applies the filters to one entry by its walk line (ADR-038): a
+// reversal filters as Uang masuk, and an opening or a Penyesuaian is neither
+// masuk nor keluar, so a direction or member filter hides it, as it hides a move.
+// A purpose filter matches the row's own purpose; an opening is always Kas Utama's.
 func entryMatches(p ReportParams, row store.ListReportTransactionsRow, e ReportEntry) bool {
 	if p.PurposeID != nil && *p.PurposeID != e.PurposeID {
 		return false
 	}
-	if p.Direction != "" && p.Direction != e.Direction {
+	if p.Direction != "" && string(e.Line) != p.Direction {
 		return false
 	}
 	if p.MemberID != nil {
+		if e.Line == ReportLineOpening || e.Line == ReportLineAdjustment {
+			return false
+		}
 		memberID := row.MemberID
 		if memberID == nil {
 			memberID = row.SettlementMemberID

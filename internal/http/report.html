@@ -100,9 +100,8 @@
   </form>
 
   <dl class="totals">
-    <div><dt>{{.Text.TotalIn}}</dt><dd class="tabular">{{.Totals.In}}</dd></div>
-    <div><dt>{{.Text.TotalOut}}</dt><dd class="tabular">{{.Totals.Out}}</dd></div>
-    <div><dt>{{.Text.TotalNet}}</dt><dd class="tabular">{{.Totals.Net}}</dd></div>
+    {{range .Totals}}<div{{if .Last}} class="last"{{end}}><dt>{{.Label}}</dt><dd class="tabular">{{.Value}}</dd></div>
+    {{end}}
   </dl>
 
   {{if .NoRows}}<p class="empty">{{.Text.NoRows}}</p>{{else}}
