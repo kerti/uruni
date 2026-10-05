@@ -51,6 +51,7 @@ type reportCopy struct {
 	TotalOut          string
 	WalkStart         func(date string) string
 	WalkEnd           func(date string) string
+	WalkMoved         string
 	HasReceipt        string
 	NoRows            string
 
@@ -151,8 +152,9 @@ var reportText = reportCopy{
 	FilterSubmit:      "Tampilkan",
 	TotalIn:           "Total masuk",
 	TotalOut:          "Total keluar",
-	WalkStart:         func(date string) string { return "Saldo per " + date },
-	WalkEnd:           func(date string) string { return "Saldo per " + date },
+	WalkStart:         func(date string) string { return "Saldo " + date },
+	WalkEnd:           func(date string) string { return "Saldo " + date },
+	WalkMoved:         "Dipindah",
 	HasReceipt:        "Ada nota",
 	NoRows:            "Tidak ada transaksi yang cocok bulan ini.",
 

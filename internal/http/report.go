@@ -101,9 +101,9 @@ type reportPurpose struct {
 
 // reportTotal is one line of the month's walk (ADR-038), already formatted:
 // the label and the figure beside it. Last marks the closing balance, which
-// both renderers emphasise. The whole fund reads Saldo per <day> down to Saldo
-// per <day>; under a member, direction or purpose filter only Total masuk and
-// Total keluar, since a balance has no meaning for a slice of the fund.
+// both renderers emphasise. The whole fund, or one pos, reads Saldo <day> down
+// to Saldo <day>; under a member or direction filter only Total masuk and Total
+// keluar, since a balance has no meaning for a slice of the fund.
 type reportTotal struct {
 	Label string
 	Value string
@@ -399,8 +399,8 @@ func reportAsOf(r ledger.Report) string {
 	return reportText.AsOf(reportText.longDate(r.AsOf))
 }
 
-// walkLines is the walk's lines in ADR-038's order. Saldo awal and Penyesuaian
-// appear only when they are not zero: most months have neither.
+// walkLines is the walk's lines in ADR-038's order. Saldo awal, Penyesuaian and
+// Dipindah appear only when they are not zero: most months have none of them.
 func walkLines(w ledger.ReportWalk) []reportTotal {
 	var lines []reportTotal
 	add := func(label string, v money.Amount, last bool) {
@@ -417,6 +417,9 @@ func walkLines(w ledger.ReportWalk) []reportTotal {
 	if w.Full {
 		if w.Adjustments != 0 {
 			add(reportText.RowAdjustment, w.Adjustments, false)
+		}
+		if w.Moved != 0 {
+			add(reportText.WalkMoved, w.Moved, false)
 		}
 		add(reportText.WalkEnd(reportText.longDate(w.EndOn)), w.End, true)
 	}

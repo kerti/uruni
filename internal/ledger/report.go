@@ -230,18 +230,19 @@ type ReportMove struct {
 // month started on to the balance it ended on, in which every posted row lands
 // on exactly one line.
 //
-//	Start + Openings + In - Out + Adjustments = End
+//	Start + Openings + In - Out + Adjustments + Moved = End
 //
-// In is net of reversals, so it can read below zero; Adjustments is signed.
-// Start and End are ledger sums (the bounded fund balance), never computed
-// from the lines, so the equation above is a property the tests assert and
-// not something the report forces; it is not checked at runtime, because a
-// public page does not fail on a neighbour.
+// In is net of reversals, so it can read below zero; Adjustments and Moved are
+// signed. Start and End are ledger sums (the bounded fund or purpose balance),
+// never computed from the lines, so the equation above is a property the tests
+// assert and not something the report forces; it is not checked at runtime,
+// because a public page does not fail on a neighbour.
 //
-// Full says whether the walk applies. Under a member, direction or purpose
-// filter only In and Out are meaningful (the lines of the rows that matched):
-// Start and End stay zero, since a balance has no meaning for one member or
-// one direction.
+// Full says whether the walk applies: with no filter (the whole fund) or with
+// a purpose filter alone (that pos, whose Moved line is the net of its
+// reclass_purpose legs). Under a member or direction filter only In and Out
+// are meaningful (the lines of the rows that matched): Start and End stay
+// zero, since a balance has no meaning for one member or one direction.
 type ReportWalk struct {
 	Full bool
 
@@ -256,7 +257,15 @@ type ReportWalk struct {
 	In          money.Amount
 	Out         money.Amount
 	Adjustments money.Amount
-	End         money.Amount
+
+	// Moved is a purpose filter's own line: the signed net of that purpose's
+	// reclass_purpose legs dated in the month (an envelope's roll, a Pindah pos,
+	// a purpose correction), summed from the raw legs rather than from the
+	// folded display rows, so it equals the change in the pos's balance whatever
+	// the display folds. Always zero for the whole fund, where the two legs of a
+	// move cancel.
+	Moved money.Amount
+	End   money.Amount
 }
 
 // ReportDuesRow is one member's standing for the month - DuesStatusForPeriod's
@@ -411,15 +420,26 @@ func (l *Ledger) monthlyReport(ctx context.Context, p ReportParams) (Report, err
 	if r.Rows, r.Walk, err = l.reportRows(ctx, p, monthStart, r.Running); err != nil {
 		return Report{}, err
 	}
-	// The ends of the walk are ledger sums, and only the whole fund has them.
+	// The ends of the walk are ledger sums, and only the whole fund or one pos
+	// has them. A purpose's are the same bounded figures as its Saldo per pos
+	// line; a purpose that did not exist yet simply sums to nothing.
 	if r.Walk.Full {
 		dayBefore := monthStart.AddDate(0, 0, -1).Format(reportDayLayout)
-		start, err := l.q.ReportFundBalance(ctx, store.ReportFundBalanceParams{FundID: p.FundID, Through: &dayBefore})
-		if err != nil {
-			return Report{}, fmt.Errorf("report start balance: %w", err)
+		r.Walk.StartOn, r.Walk.EndOn = dayBefore, r.AsOf
+		if p.PurposeID == nil {
+			start, err := l.q.ReportFundBalance(ctx, store.ReportFundBalanceParams{FundID: p.FundID, Through: &dayBefore})
+			if err != nil {
+				return Report{}, fmt.Errorf("report start balance: %w", err)
+			}
+			r.Walk.Start, r.Walk.End = money.FromDB(start), r.Balance
+		} else {
+			if r.Walk.Start, err = l.reportPurposeBalance(ctx, p.FundID, *p.PurposeID, reportBound{through: &dayBefore}); err != nil {
+				return Report{}, err
+			}
+			if r.Walk.End, err = l.reportPurposeBalance(ctx, p.FundID, *p.PurposeID, b); err != nil {
+				return Report{}, err
+			}
 		}
-		r.Walk.Start, r.Walk.StartOn = money.FromDB(start), dayBefore
-		r.Walk.End, r.Walk.EndOn = r.Balance, r.AsOf
 	}
 
 	if r.Dues, err = l.reportDues(ctx, p.FundID, month, p.DuesStatus); err != nil {
@@ -613,7 +633,7 @@ func (l *Ledger) reportRows(ctx context.Context, p ReportParams, monthStart time
 
 	var (
 		out           []ReportRow
-		walk          = ReportWalk{Full: p.PurposeID == nil && p.MemberID == nil && p.Direction == ""}
+		walk          = ReportWalk{Full: p.MemberID == nil && p.Direction == ""}
 		moveSeen      = make(map[int64]bool)
 		correctedSeen = make(map[int64]bool)
 	)
@@ -626,6 +646,20 @@ func (l *Ledger) reportRows(ctx context.Context, p ReportParams, monthStart time
 			case "between_accounts":
 				continue
 			case "reclass_purpose":
+				// Dipindah is the raw leg, whatever the display folds: a pair
+				// of corrections that folds to nothing still posted legs, and
+				// this purpose's balance moved by each.
+				if walk.Full && p.PurposeID != nil && row.PurposeID == *p.PurposeID {
+					leg := ReportEntry{Direction: row.Direction, Amount: money.FromDB(row.Amount)}
+					signed, err := leg.signed()
+					if err != nil {
+						return nil, ReportWalk{}, err
+					}
+					if walk.Moved, err = walk.Moved.Add(signed); err != nil {
+						return nil, ReportWalk{}, fmt.Errorf("totalling moved legs: %w", err)
+					}
+				}
+
 				// Both legs describe the same pair; fold on the first.
 				if moveSeen[*row.TransferID] {
 					continue
