@@ -95,7 +95,7 @@ const listReceiptIDsByReimbursementIDs = `-- name: ListReceiptIDsByReimbursement
 SELECT reimbursement_id, id
 FROM receipt
 WHERE fund_id = ? AND reimbursement_id IN (/*SLICE:reimbursement_ids*/?)
-ORDER BY id
+ORDER BY uploaded_at, id
 `
 
 type ListReceiptIDsByReimbursementIDsParams struct {
@@ -148,7 +148,7 @@ const listReceiptIDsByTransactionIDs = `-- name: ListReceiptIDsByTransactionIDs 
 SELECT transaction_id, id
 FROM receipt
 WHERE fund_id = ? AND transaction_id IN (/*SLICE:transaction_ids*/?)
-ORDER BY id
+ORDER BY uploaded_at, id
 `
 
 type ListReceiptIDsByTransactionIDsParams struct {

@@ -52,7 +52,7 @@ SELECT ir.member_id, m.name AS member_name
 FROM incidental_recipient ir
 JOIN member m ON m.id = ir.member_id
 WHERE ir.purpose_id = ?
-ORDER BY m.name, m.id
+ORDER BY m.name COLLATE NOCASE, m.id
 `
 
 type ListIncidentalRecipientsRow struct {

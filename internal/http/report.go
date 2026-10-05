@@ -316,21 +316,13 @@ func fundIsEmpty(ctx context.Context, q store.Querier, fundID int64) (bool, erro
 // readReportFilter turns the query string into ledger params and the form's
 // options. A purpose or member that is not this fund's, and a direction that
 // is neither "in" nor "out", is no filter at all: a stale or hand-edited URL
-// shows the whole month rather than an error page. Options are ordered by
-// name, never by id; Kas Utama leads the purposes, as everywhere else.
+// shows the whole month rather than an error page. Options keep the order
+// the store lists them in - Kas Utama first, then by name; members by name -
+// the order every other list reads.
 func readReportFilter(query url.Values, fundID int64, purposes []store.Purpose, members []store.Member) (ledger.ReportParams, reportFilter) {
 	params := ledger.ReportParams{FundID: fundID, Month: query.Get("month")}
 	filter := reportFilter{Active: url.Values{}}
 
-	slices.SortFunc(purposes, func(a, b store.Purpose) int {
-		if (a.Kind == "main") != (b.Kind == "main") {
-			if a.Kind == "main" {
-				return -1
-			}
-			return 1
-		}
-		return strings.Compare(a.Name, b.Name)
-	})
 	wantPurpose := query.Get("purpose")
 	for _, p := range purposes {
 		id := strconv.FormatInt(p.ID, 10)
@@ -342,7 +334,6 @@ func readReportFilter(query url.Values, fundID int64, purposes []store.Purpose, 
 		filter.Purposes = append(filter.Purposes, reportOption{Value: id, Label: p.Name, Selected: selected})
 	}
 
-	slices.SortFunc(members, func(a, b store.Member) int { return strings.Compare(a.Name, b.Name) })
 	wantMember := query.Get("member")
 	for _, m := range members {
 		id := strconv.FormatInt(m.ID, 10)

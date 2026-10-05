@@ -120,13 +120,15 @@ func (q *Queries) ListOpenReconciliationLinesByFund(ctx context.Context, fundID 
 }
 
 const listReconciliationLines = `-- name: ListReconciliationLines :many
-SELECT id, fund_id, reconciliation_id, account_id, recorded_amount, actual_amount,
-       difference_amount, resolution, adjustment_transaction_id
-FROM reconciliation_line
-WHERE reconciliation_id = ?
-ORDER BY account_id
+SELECT rl.id, rl.fund_id, rl.reconciliation_id, rl.account_id, rl.recorded_amount, rl.actual_amount,
+       rl.difference_amount, rl.resolution, rl.adjustment_transaction_id
+FROM reconciliation_line rl
+JOIN account a ON a.id = rl.account_id
+WHERE rl.reconciliation_id = ?
+ORDER BY CASE a.kind WHEN 'cash' THEN 0 ELSE 1 END, a.name COLLATE NOCASE, a.id
 `
 
+// In ListAccountsByFund's order: cash before bank, then by name.
 func (q *Queries) ListReconciliationLines(ctx context.Context, reconciliationID int64) ([]ReconciliationLine, error) {
 	rows, err := q.db.QueryContext(ctx, listReconciliationLines, reconciliationID)
 	if err != nil {

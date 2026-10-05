@@ -10,11 +10,12 @@ SELECT id, fund_id, name, created_at
 FROM dues_tier
 WHERE id = ? AND fund_id = ?;
 
+-- By name, ignoring case (maintainer, 2026-10-05).
 -- name: ListDuesTiersByFund :many
 SELECT id, fund_id, name, created_at
 FROM dues_tier
 WHERE fund_id = ?
-ORDER BY id;
+ORDER BY name COLLATE NOCASE, id;
 
 -- UpdateDuesTier renames a tier - reference data, not history.
 -- name: UpdateDuesTier :one
