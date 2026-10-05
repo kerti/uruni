@@ -1,6 +1,6 @@
 # ADR-038 — The month as a balance walk
 
-**Status:** `draft` · M7 · supersedes [ADR-035](./035-public-report.md) on its in/out/net totals and [ADR-037](./037-report-shows-the-month-as-it-ended.md) on one point, both named below · [ADR index](./README.md)
+**Status:** Accepted · implemented at M7 ([#416](https://github.com/kerti/uruni/issues/416): #417, #418, #419) — supersedes [ADR-035](./035-public-report.md) on its in/out/net totals and [ADR-037](./037-report-shows-the-month-as-it-ended.md) on one point, both named below · change only by adding a superseding ADR · [ADR index](./README.md)
 
 **Context.** The report's month totals (ADR-035) were "money in, money out and net for whatever is filtered", summed by stored direction. That reads wrongly in three places. An **opening entry** - posted at setup, and again whenever a location is added with money already in it - counts as *Total masuk*, so the setup month shows the whole starting balance as income. A **reversal** (ADR-029) is stored `out`, so a cancelled dues payment shows as Rp X in *and* Rp X out, as if the fund had received and spent it. And a **penyesuaian** - money a *cek kas* found missing or extra, or a standalone adjustment - counts as income or spending, which it is not. Nothing on the page tied the month back to the balance either: a neighbour saw a total and three numbers and could not check one against the other. The maintainer asked for the month's in and out on Beranda, the page and the PDF, with the balance the month started and ended on (2026-10-05).
 
@@ -43,14 +43,15 @@ Saldo <last day of previous month>
 
 **The running month** reads its rows from the first of the month with **no upper bound**, matching its unbounded balance (ADR-037), so a row dated after today still foots.
 
-**Beranda** shows the running month's *Total masuk* and *Total keluar* - two figures, no walk - inside *Aktivitas terbaru*, below the divider where ADR-032 puts "what happened". The API computes them with the same ledger function as the report, in Asia/Jakarta; the client never works out a month. No chart, no comparison with other months: PRD section 4's "analytics dashboards" stays out.
+**Beranda** shows the running month's In and Out - two figures under *Bulan ini*, labelled *Masuk* and *Keluar*, no walk - in a card inside *Aktivitas terbaru*, below the divider where ADR-032 puts "what happened". `GET /api/balances` carries them as `month: {in, out}`, read through the report's own `reportRows` over the unfiltered running month, in Asia/Jakarta; the client never works out a month. No chart, no comparison with other months: PRD section 4's "analytics dashboards" stays out.
 
-**Copy** (proposed, final at the slice): the walk's ends are dated - "Saldo 31 Agustus 2026" - rather than *Saldo akhir*, which would be untrue mid-month and would sit beside the existing *Saldo awal* row label as a second meaning. The date carries no "per": the header's *Saldo per pos* already uses that word for "by purpose", and a second "per" on the same page would read as a second sense. *Saldo awal*, *Penyesuaian* and *Dipindah* are the report's existing row labels, so a line and the rows it sums share a name. *Bersih* goes: the two dated balances already say it.
+**Copy:** the walk's ends are dated - "Saldo 31 Agustus 2026" - rather than *Saldo akhir*, which would be untrue mid-month and would sit beside the existing *Saldo awal* row label as a second meaning. The date carries no "per": the header's *Saldo per pos* already uses that word for "by purpose", and a second "per" on the same page would read as a second sense. *Saldo awal*, *Penyesuaian* and *Dipindah* are the report's existing row labels, so a line and the rows it sums share a name. *Bersih* goes: the two dated balances already say it.
 
 ## Consequences
 
 - One reversal now reads three ways on one page, each correct for what it measures: the dues section drops the payment (status, a stock), an envelope's *terkumpul* drops the pair, and *Total masuk* nets it on the reversal's date (a flow).
 - A standalone adjustment gains a row label, *Penyesuaian*; it rendered blank before.
-- The report's assembly gains the walk; the PDF's *Ringkasan* and the page render the same struct (ADR-035).
+- The report's assembly gains the walk; the page and the PDF render the same lines (ADR-035). The PDF takes no filters, so it always carries the whole-fund walk; the purpose walk is the page's.
+- Riwayat still leaves a standalone adjustment unlabelled; only the report names it.
 
 **Superseded in ADR-035:** "money-in, money-out and net totals for whatever is filtered", for the totals' contents and the net line. **Superseded in ADR-037:** "The month's transaction rows were always month-scoped", for the running month, whose rows are now unbounded above.

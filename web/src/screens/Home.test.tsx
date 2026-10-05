@@ -39,6 +39,7 @@ function money(amount: number): string {
 const balances = {
   fund_total: 1_450_000,
   owed_to_members: 0,
+  month: { in: 320_000, out: 85_000 },
   accounts: [
     { id: 1, kind: 'cash', name: 'Tunai', balance: 950_000 },
     { id: 2, kind: 'bank', name: 'Bank lama (nonaktif)', balance: 500_000 },
@@ -449,6 +450,7 @@ describe('Home', () => {
       const bareBalances = {
         fund_total: 1_450_000,
         owed_to_members: 0,
+        month: { in: 0, out: 0 },
         accounts: balances.accounts,
         purposes: [{ id: 11, kind: 'main', name: 'Kas Utama', balance: 1_450_000 }],
       }
@@ -594,6 +596,30 @@ describe('Home', () => {
       expect(row).toHaveTextContent(money(75_000))
       await userEvent.click(row)
       expect(onViewOwed).toHaveBeenCalledTimes(1)
+    })
+  })
+
+  // ADR-038: the running month's In and Out, two plain figures.
+  describe('the month', () => {
+    it('shows masuk and keluar as served, a negative masuk plainly', async () => {
+      vi.stubGlobal('fetch', stubHome({ balancesOverride: { ...balances, month: { in: -20_000, out: 85_000 } } }))
+      render(
+        <Home
+          refetchKey="1"
+          onReconcile={vi.fn()}
+          onOpenIncidental={vi.fn()}
+          onViewTransactionsFor={vi.fn()}
+          onViewHistory={vi.fn()}
+          onViewOwed={vi.fn()}
+        />,
+      )
+
+      await screen.findByText(copy.home.monthHeading)
+      const inFigure = screen.getByText(copy.home.monthIn).nextElementSibling
+      const outFigure = screen.getByText(copy.home.monthOut).nextElementSibling
+      expect(inFigure).toHaveTextContent(money(-20_000))
+      expect(inFigure?.textContent).toMatch(/^-Rp/)
+      expect(outFigure).toHaveTextContent(money(85_000))
     })
   })
 })

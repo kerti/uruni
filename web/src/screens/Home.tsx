@@ -301,6 +301,22 @@ export default function Home({
             {copy.home.recentActivityViewAll}
           </Button>
         </div>
+        {/* The running month, two figures (ADR-038): served by the API from
+            the report's own ledger function, so Beranda and the public
+            report cannot disagree. Plain ink - a month is not a verdict. */}
+        <div className="rounded-lg bg-card px-4 py-3 shadow-card ring-1 ring-foreground/10">
+          <p className="text-sm text-muted-foreground">{copy.home.monthHeading}</p>
+          <dl className="mt-1 grid grid-cols-2 gap-3">
+            <div>
+              <dt className="text-sm text-muted-foreground">{copy.home.monthIn}</dt>
+              <dd className="tabular font-medium">{formatIDR(balances.month.in)}</dd>
+            </div>
+            <div>
+              <dt className="text-sm text-muted-foreground">{copy.home.monthOut}</dt>
+              <dd className="tabular font-medium">{formatIDR(balances.month.out)}</dd>
+            </div>
+          </dl>
+        </div>
         <TransactionList
           transactions={recentTransactions}
           purposeNames={purposeNames}
