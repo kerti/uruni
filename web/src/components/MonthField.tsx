@@ -30,12 +30,15 @@ export default function MonthField({
   value,
   onChange,
   bounds,
+  emptyLabel = text.emptyMonth,
   disabled = false,
 }: {
   id: string
   value: string
   onChange: (period: string) => void
   bounds: DateBounds
+  /** What an empty field says - Riwayat's filter (#424) reads "Semua". */
+  emptyLabel?: string
   disabled?: boolean
 }) {
   const [open, setOpen] = useState(false)
@@ -55,7 +58,7 @@ export default function MonthField({
       }}
     >
       <Popover.Trigger id={id} className={pickerTrigger} disabled={disabled}>
-        <span className="truncate">{value ? formatPeriod(value) : text.emptyMonth}</span>
+        <span className="truncate">{value ? formatPeriod(value) : emptyLabel}</span>
         <CalendarDays aria-hidden="true" className="size-4 shrink-0 text-muted-foreground" />
       </Popover.Trigger>
       <Popover.Portal>

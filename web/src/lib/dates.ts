@@ -132,4 +132,9 @@ export const periodBounds = {
   status(): DateBounds {
     return { min: `${EARLIEST_YEAR}-01`, max: addMonthsToPeriod(currentPeriod(), 12) }
   },
+  /** Riwayat's month filter (#424): any month money could have moved in -
+   * back to EARLIEST_YEAR, never past this one. */
+  history(): DateBounds {
+    return { min: `${EARLIEST_YEAR}-01`, max: currentPeriod() }
+  },
 }

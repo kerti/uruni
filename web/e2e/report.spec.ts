@@ -104,10 +104,11 @@ test.describe('report', () => {
     await transactions.getByLabel('Jenis').selectOption({ value: 'in' })
     await expect(page).toHaveURL(/[?&]dir=in(&|#|$)/)
 
-    // The page rendered from that URL keeps the choice and still shows the
-    // opening balance, which is money in.
+    // The page rendered from that URL keeps the choice, and the opening
+    // balance - listed unfiltered, see the test above - is gone: ADR-038
+    // hides a Saldo awal under a direction filter, since it is not income.
     await expect(transactions.getByLabel('Jenis')).toHaveValue('in')
-    await expect(transactions.locator('ul.txns li').filter({ hasText: 'Saldo awal' })).toHaveCount(1)
+    await expect(transactions.locator('ul.txns li').filter({ hasText: 'Saldo awal' })).toHaveCount(0)
   })
 
   test('an unknown slug is a 404 page', async ({ page }) => {

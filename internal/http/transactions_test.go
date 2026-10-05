@@ -767,6 +767,73 @@ func TestGetTransactionsMemberIDAndDuesPeriodFiltersIncludeTheReversal(t *testin
 	}
 }
 
+// TestGetTransactionsMonthAndDirectionFilters is #424: ?month= keeps the
+// rows dated in that month, ?direction= the rows going that way, and the two
+// compose - an outflow in August, and nothing from July or going in.
+func TestGetTransactionsMonthAndDirectionFilters(t *testing.T) {
+	r := testRouter(t)
+	setup := setUpFund(t, r)
+
+	post := func(direction, occurredOn string) int64 {
+		t.Helper()
+		rec := postTransaction(t, r, transactionRequest{
+			AccountID: setup.CashAccountID(t), PurposeID: setup.MainPurposeID,
+			Direction: direction, Amount: 10_000, OccurredOn: occurredOn,
+		})
+		if rec.Code != http.StatusCreated {
+			t.Fatalf("POST /api/transactions = %d, want %d (body: %s)", rec.Code, http.StatusCreated, rec.Body.String())
+		}
+		var tx transactionResponse
+		if err := json.NewDecoder(rec.Body).Decode(&tx); err != nil {
+			t.Fatalf("decoding transaction response: %v", err)
+		}
+		return tx.ID
+	}
+	julyOut := post("out", "2026-07-31")
+	augIn := post("in", "2026-08-01")
+	augOut := post("out", "2026-08-31")
+
+	ids := func(rawQuery string) map[int64]bool {
+		t.Helper()
+		got := map[int64]bool{}
+		for _, row := range decodeTransactionsPage(t, getTransactionsQuery(t, r, rawQuery)).Transactions {
+			got[row.ID] = true
+		}
+		return got
+	}
+
+	month := ids("month=2026-08")
+	if !month[augIn] || !month[augOut] || month[julyOut] {
+		t.Errorf("month=2026-08 = %v, want both August rows and not July's", month)
+	}
+	out := ids("direction=out")
+	if !out[julyOut] || !out[augOut] || out[augIn] {
+		t.Errorf("direction=out = %v, want both outflows and not the inflow", out)
+	}
+	both := ids("month=2026-08&direction=out")
+	if len(both) != 1 || !both[augOut] {
+		t.Errorf("month=2026-08&direction=out = %v, want only id %d", both, augOut)
+	}
+}
+
+// TestGetTransactionsRejectsAMalformedMonthOrDirection: a filter she cannot
+// see is one she cannot correct, so garbage is a 400, never the whole list.
+func TestGetTransactionsRejectsAMalformedMonthOrDirection(t *testing.T) {
+	r := testRouter(t)
+	setUpFund(t, r)
+
+	for _, rawQuery := range []string{"month=2026-13", "month=2026-8", "month=august", "direction=sideways", "direction=IN"} {
+		rec := getTransactionsQuery(t, r, rawQuery)
+		if rec.Code != http.StatusBadRequest {
+			t.Errorf("GET /api/transactions?%s = %d, want %d (body: %s)", rawQuery, rec.Code, http.StatusBadRequest, rec.Body.String())
+			continue
+		}
+		if got := decodeError(t, rec); got.Code != "invalid_argument" {
+			t.Errorf("%s: error code = %q, want %q", rawQuery, got.Code, "invalid_argument")
+		}
+	}
+}
+
 // TestGetTransactionsRejectsAMalformedCursor is #225's "malformed cursor ->
 // 400" acceptance criterion.
 func TestGetTransactionsRejectsAMalformedCursor(t *testing.T) {

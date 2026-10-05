@@ -53,6 +53,13 @@ const purposes = [
   { id: 12, kind: 'pass_through', name: 'Titipan', created_at: 1 },
 ]
 
+/** The roster the filter dialog offers (#424) - an inactive member too,
+ * since her rows are still history. */
+const members = [
+  { id: 21, fund_id: 1, name: 'Budi', tier_id: null, joined_on: '2026-01-01', inactive_on: null, created_at: 1 },
+  { id: 22, fund_id: 1, name: 'Sari', tier_id: null, joined_on: '2026-01-01', inactive_on: '2026-06-01', created_at: 1 },
+]
+
 /** Stubs fetch: balances and purposes always answer, GET /api/transactions
  * answers whatever pageFor returns for the request's own URL (throwing from
  * pageFor simulates fetch itself failing). Returns every transactions URL
@@ -67,6 +74,7 @@ function stubApi(pageFor: (url: URL) => Page) {
       const method = (init?.method ?? 'GET').toUpperCase()
       if (url.pathname === '/api/balances') return jsonResponse(balances)
       if (url.pathname === '/api/purposes') return jsonResponse(purposes)
+      if (url.pathname === '/api/members') return jsonResponse({ members, next_cursor: null })
       if (method === 'POST' && url.pathname.endsWith('/purpose-correction')) {
         posted.push({ url: url.pathname, body: JSON.parse(String(init?.body)) })
         return jsonResponse({ id: 1, kind: 'reclass_purpose', created_at: 1 })
@@ -190,7 +198,7 @@ describe('Transactions tab', () => {
 
     expect(await screen.findByText('Setoran')).toBeInTheDocument()
     expect(requests[0].searchParams.has('purpose_id')).toBe(false)
-    expect(screen.queryByLabelText(text.purposeFilterClear)).not.toBeInTheDocument()
+    expect(screen.queryByLabelText(text.filterClear(text.purposeFilterLabel('Kas Utama')))).not.toBeInTheDocument()
   })
 
   it('keeps the purpose filter when she searches inside it, and sends both', async () => {
@@ -216,7 +224,7 @@ describe('Transactions tab', () => {
     renderAt('/history/transactions?purpose=11&q=kambing')
     await screen.findByText(text.purposeFilterLabel('Kas Utama'))
 
-    await user.click(screen.getByLabelText(text.purposeFilterClear))
+    await user.click(screen.getByLabelText(text.filterClear(text.purposeFilterLabel('Kas Utama'))))
 
     await waitFor(() => expect(screen.getByTestId('location')).not.toHaveTextContent('purpose='))
     expect(screen.getByTestId('location')).toHaveTextContent('q=kambing')
@@ -246,6 +254,67 @@ describe('Transactions tab', () => {
     renderAt('/history/transactions?purpose=11')
 
     expect(await screen.findByText(text.purposeFilterEmpty)).toBeInTheDocument()
+  })
+})
+
+describe('Transactions tab: filters (#424)', () => {
+  it('applies the dialog to the URL and the request, keeping the search', async () => {
+    const user = userEvent.setup()
+    const requests = stubApi(() => ({ transactions: [row(1, 'Setoran')], next_cursor: null }))
+    renderAt('/history/transactions?q=kambing')
+    await screen.findByText('Setoran')
+
+    await user.click(screen.getByRole('button', { name: text.filterButton }))
+    await chooseOption(text.filterMember, 'Sari')
+    await chooseOption(copy.record.directionLabel, copy.record.directionOut)
+    await user.click(screen.getByRole('button', { name: text.filterApply }))
+
+    await waitFor(() => expect(requests.length).toBe(2))
+    expect(requests[1].searchParams.get('member_id')).toBe('22')
+    expect(requests[1].searchParams.get('direction')).toBe('out')
+    expect(requests[1].searchParams.get('q')).toBe('kambing')
+    const location = screen.getByTestId('location')
+    expect(location).toHaveTextContent('member=22')
+    expect(location).toHaveTextContent('dir=out')
+    expect(location).not.toHaveTextContent('edit=')
+    expect(screen.getByRole('button', { name: text.filterButtonActive(2) })).toBeInTheDocument()
+  })
+
+  it('names each filter as a chip and clears one without the others', async () => {
+    const user = userEvent.setup()
+    const requests = stubApi(() => ({ transactions: [row(1, 'Setoran')], next_cursor: null }))
+    renderAt('/history/transactions?month=2026-09&member=21&dir=in')
+    await screen.findByText('Setoran')
+    expect(requests[0].searchParams.get('month')).toBe('2026-09')
+
+    const monthChip = text.monthFilterLabel('September 2026')
+    expect(screen.getByText(monthChip)).toBeInTheDocument()
+    expect(await screen.findByText(text.memberFilterLabel('Budi'))).toBeInTheDocument()
+    expect(screen.getByText(copy.record.directionIn)).toBeInTheDocument()
+
+    await user.click(screen.getByLabelText(text.filterClear(monthChip)))
+
+    await waitFor(() => expect(requests.length).toBe(2))
+    expect(requests[1].searchParams.has('month')).toBe(false)
+    expect(requests[1].searchParams.get('member_id')).toBe('21')
+    expect(requests[1].searchParams.get('direction')).toBe('in')
+  })
+
+  it('ignores a month or direction that cannot be one', async () => {
+    const requests = stubApi(() => ({ transactions: [row(1, 'Setoran')], next_cursor: null }))
+    renderAt('/history/transactions?month=2026-13&dir=sideways')
+    await screen.findByText('Setoran')
+
+    expect(requests[0].searchParams.has('month')).toBe(false)
+    expect(requests[0].searchParams.has('direction')).toBe(false)
+    expect(screen.getByRole('button', { name: text.filterButton })).toBeInTheDocument()
+  })
+
+  it('says nothing matched the filters when they come back empty', async () => {
+    stubApi(() => ({ transactions: [], next_cursor: null }))
+    renderAt('/history/transactions?purpose=11&dir=out')
+
+    expect(await screen.findByText(text.filterEmpty)).toBeInTheDocument()
   })
 })
 
