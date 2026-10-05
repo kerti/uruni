@@ -104,7 +104,10 @@ test.describe('golden path', () => {
     // refresh (Home refetches on the "recorded" navigation - App.tsx).
     await expect(page.getByText(copy.home.balanceHeading)).toBeVisible()
     await expect(page.getByText(copy.record.successOut)).toBeVisible()
-    await expect(page.getByText(formatIDR(50_000))).toBeVisible()
+    // Scoped to recent activity: Arus kas (ADR-038) shows the same amount
+    // as the month's Total keluar.
+    const recent = page.locator('section', { has: page.getByRole('heading', { name: copy.home.recentActivityHeading }) })
+    await expect(recent.getByText(formatIDR(50_000))).toBeVisible()
   })
 
   test('home: balance hero + reconciliation status (M6.9)', async ({ page }) => {
