@@ -115,7 +115,7 @@ Entitas utama:
 - Layar utama menampilkan: total saldo saat ini, saldo untuk tiap lokasi, dan **status rekonsiliasi**: "cocok" atau "selisih Rp X — cek?".
 - Rincian opsional menurut pos.
 - **Yang masih harus dibayar ke anggota** yang menalangi (talangan yang belum dibayar atau diputihkan), sebagai satu total, hanya jika lebih dari nol. Uang itu masih termasuk dalam saldo; menampilkannya di samping saldo membuat saldo tidak terbaca lebih leluasa dipakai daripada kenyataannya. Ketukannya membuka daftar talangan yang belum dibayar.
-- **Bulan ini sejauh ini:** uang masuk dan uang keluar bulan berjalan, dua angka di bawah aktivitas terbaru - tanpa grafik, tanpa perbandingan ([ADR-038](./ADR/038-the-month-as-a-balance-walk.md)).
+- **Arus kas:** uang masuk dan uang keluar bulan berjalan, dua angka di bagian tersendiri di atas aktivitas terbaru - tanpa grafik, tanpa perbandingan ([ADR-038](./ADR/038-the-month-as-a-balance-walk.md)).
 
 ### 7.8 Rekonsiliasi (inti dari produk)
 - Alur "rekonsiliasi" yang bisa dijalankan bendahara kapan saja: ia memasukkan jumlah uang *yang sebenarnya* ada di tiap lokasi yang masih aktif — tunai yang ia hitung sendiri, saldo kas yang ditunjukkan bank — lalu Uruni membandingkan masing-masing dengan angka yang tercatat. Lokasi yang sudah dinonaktifkan tidak ditanyakan.

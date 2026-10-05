@@ -36,6 +36,17 @@ type balancesResponse struct {
 	// OwedToMembers is Ledger.OwedToMembers: unsettled, unwaived claims,
 	// already inside fund_total and never subtracted from it (#406).
 	OwedToMembers int64 `json:"owed_to_members"`
+
+	// Month is the running month's money in and out (ADR-038), for Beranda's
+	// "Bulan ini" card: Ledger.MonthInOut, the report's own figures.
+	Month monthInOutResponse `json:"month"`
+}
+
+// monthInOutResponse is the running month's In (net of reversals, so it can
+// be negative) and Out (a magnitude), in integer rupiah.
+type monthInOutResponse struct {
+	In  int64 `json:"in"`
+	Out int64 `json:"out"`
 }
 
 // getBalances is GET /api/balances: the one deliberately composed view-model
@@ -103,10 +114,17 @@ func (a *api) getBalances(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	monthIn, monthOut, err := a.ledger.MonthInOut(r.Context(), fund.ID, a.now())
+	if err != nil {
+		mapLedgerError(w, a.logger, err)
+		return
+	}
+
 	writeJSON(w, http.StatusOK, balancesResponse{
 		FundTotal:     fundTotal.Int64(),
 		Accounts:      accountResp,
 		Purposes:      purposeResp,
 		OwedToMembers: owed.Int64(),
+		Month:         monthInOutResponse{In: monthIn.Int64(), Out: monthOut.Int64()},
 	})
 }

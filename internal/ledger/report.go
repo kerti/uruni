@@ -607,6 +607,30 @@ func envelopeOpenAt(e store.Incidental, through *string) bool {
 	return e.OpenedOn <= *through && (e.ClosedOn == nil || *e.ClosedOn > *through)
 }
 
+// MonthInOut is the running month's In and Out for the whole fund, as Beranda
+// shows them (ADR-038): the very figures the report's running month carries as
+// Walk.In and Walk.Out, because it reads them through the same reportRows
+// over the same unbounded, unfiltered month. The month is read in Asia/Jakarta
+// from now. In is net of reversals and so can be negative; Out is a magnitude.
+func (l *Ledger) MonthInOut(ctx context.Context, fundID int64, now time.Time) (in, out money.Amount, err error) {
+	if now.IsZero() {
+		now = time.Now()
+	}
+	monthStart, err := parseReportMonth(now.In(tz.Jakarta).Format(reportMonthLayout))
+	if err != nil {
+		return 0, 0, err
+	}
+	err = l.withTx(ctx, func(q store.Querier) error {
+		_, walk, err := (&Ledger{db: l.db, q: q}).reportRows(ctx, ReportParams{FundID: fundID}, monthStart, true)
+		if err != nil {
+			return err
+		}
+		in, out = walk.In, walk.Out
+		return nil
+	})
+	return in, out, err
+}
+
 // reportRows reads the month, folds transfer pairs, applies the filters, and
 // lands each entry on its line of the walk. The running month reads with no
 // upper bound, matching its unbounded balance (ADR-037, ADR-038): a row dated

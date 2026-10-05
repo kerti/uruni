@@ -511,6 +511,13 @@ export const copy = {
     // tab it opens, so the row and the list read as one thing.
     owedToMembers: 'Talangan belum dibayar',
     recentActivityHeading: 'Aktivitas terbaru',
+    // Arus kas, Beranda's first section below the divider (ADR-038): the
+    // running month's two figures, the report's own In and Out, so the two
+    // screens never disagree.
+    cashflowHeading: 'Arus kas',
+    monthHeading: 'Bulan ini',
+    monthIn: 'Masuk',
+    monthOut: 'Keluar',
     recentActivityEmpty: 'Belum ada transaksi tercatat.',
     // The entry point into Riwayat's Transaksi tab (M6.23) - the recent-five
     // peek stays exactly that, a peek, so it needs a way to the full list.

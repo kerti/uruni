@@ -62,7 +62,7 @@ Standing decisions that no ADR owns go in [`../Decisions.md`](../Decisions.md).
 | [035](./035-public-report.md) | Public report: one month, server-rendered, nothing the treasurer didn't mean to publish | implemented |
 | [036](./036-moving-money-between-purposes.md) | Moving money between purposes, and saying why it moved | implemented |
 | [037](./037-report-shows-the-month-as-it-ended.md) | The report shows each month as it ended | implemented |
-| [038](./038-the-month-as-a-balance-walk.md) | The month as a balance walk: start, in, out, adjustments, end | `draft` |
+| [038](./038-the-month-as-a-balance-walk.md) | The month as a balance walk: start, in, out, adjustments, end | implemented |
 
 The **Stage** column is the record, and it is all this index says about implementation: `draft` means editable in place, `implemented` means superseding-ADR-only. *Which* slice put code behind a given ADR belongs in that ADR and in the PR that dropped its tag — restated here, this index becomes a changelog.
 
