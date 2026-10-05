@@ -35,7 +35,7 @@ WHERE id = ? AND fund_id = ?;
 SELECT transaction_id, id
 FROM receipt
 WHERE fund_id = ? AND transaction_id IN (sqlc.slice('transaction_ids'))
-ORDER BY id;
+ORDER BY uploaded_at, id;
 
 -- Same shape as ListReceiptIDsByTransactionIDs above, for GET
 -- /api/reimbursements's page.
@@ -43,7 +43,7 @@ ORDER BY id;
 SELECT reimbursement_id, id
 FROM receipt
 WHERE fund_id = ? AND reimbursement_id IN (sqlc.slice('reimbursement_ids'))
-ORDER BY id;
+ORDER BY uploaded_at, id;
 
 -- ListReceiptsByFund is the backup export's own read (ADR-012, #323): every
 -- receipt row the fund owns, so the zip's receipts/ folder and uruni.json's

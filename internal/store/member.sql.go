@@ -94,9 +94,12 @@ const listMembersByFund = `-- name: ListMembersByFund :many
 SELECT id, fund_id, name, tier_id, joined_on, inactive_on, created_at
 FROM member
 WHERE fund_id = ?
-ORDER BY id
+ORDER BY name COLLATE NOCASE, id
 `
 
+// By name, ignoring case (maintainer, 2026-10-05), the order every member
+// list reads - Iuran status in the app and on the report included, since both
+// walk this list. id only breaks a tie between two identical names.
 func (q *Queries) ListMembersByFund(ctx context.Context, fundID int64) ([]Member, error) {
 	rows, err := q.db.QueryContext(ctx, listMembersByFund, fundID)
 	if err != nil {
@@ -147,13 +150,13 @@ LEFT JOIN dues_rate dr
 WHERE m.fund_id = ?2
   AND (
     ?3 IS NULL
-    OR (m.name, m.id) > (?3, CAST(?4 AS INTEGER))
+    OR (m.name COLLATE NOCASE, m.id) > (?3, CAST(?4 AS INTEGER))
   )
   AND (
     ?5 IS NULL
     OR INSTR(LOWER(m.name), LOWER(?5)) > 0
   )
-ORDER BY m.name, m.id
+ORDER BY m.name COLLATE NOCASE, m.id
 LIMIT ?6
 `
 

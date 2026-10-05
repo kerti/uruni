@@ -14,11 +14,14 @@ SELECT id, fund_id, name, tier_id, joined_on, inactive_on, created_at
 FROM member
 WHERE id = ? AND fund_id = ?;
 
+-- By name, ignoring case (maintainer, 2026-10-05), the order every member
+-- list reads - Iuran status in the app and on the report included, since both
+-- walk this list. id only breaks a tie between two identical names.
 -- name: ListMembersByFund :many
 SELECT id, fund_id, name, tier_id, joined_on, inactive_on, created_at
 FROM member
 WHERE fund_id = ?
-ORDER BY id;
+ORDER BY name COLLATE NOCASE, id;
 
 -- UpdateMember is a correction to reference data, not a ledger event. name
 -- is NOT NULL, so COALESCE covers it: a nil argument can only mean "leave
@@ -99,11 +102,11 @@ LEFT JOIN dues_rate dr
 WHERE m.fund_id = sqlc.arg('fund_id')
   AND (
     sqlc.narg('cursor_name') IS NULL
-    OR (m.name, m.id) > (sqlc.narg('cursor_name'), CAST(sqlc.narg('cursor_id') AS INTEGER))
+    OR (m.name COLLATE NOCASE, m.id) > (sqlc.narg('cursor_name'), CAST(sqlc.narg('cursor_id') AS INTEGER))
   )
   AND (
     sqlc.narg('q') IS NULL
     OR INSTR(LOWER(m.name), LOWER(sqlc.narg('q'))) > 0
   )
-ORDER BY m.name, m.id
+ORDER BY m.name COLLATE NOCASE, m.id
 LIMIT sqlc.arg('page_limit');

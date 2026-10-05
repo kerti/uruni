@@ -362,6 +362,10 @@ type Querier interface {
 	// advance" through a period that was reversed and is no longer paid at all.
 	LatestDuesPeriodPaidByMember(ctx context.Context, fundID int64) ([]LatestDuesPeriodPaidByMemberRow, error)
 	LatestReconciliation(ctx context.Context, fundID int64) (Reconciliation, error)
+	// Cash before bank, then by name (maintainer, 2026-10-05): the box at home,
+	// then the bank, the order she counts in. Every list of locations reads this
+	// one order - Beranda, Pengaturan, the pickers, Cek kas. id only breaks a tie
+	// between two identical names.
 	ListAccountsByFund(ctx context.Context, fundID int64) ([]Account, error)
 	ListDuesPaymentsByMember(ctx context.Context, memberID *int64) ([]ListDuesPaymentsByMemberRow, error)
 	// GET /api/dues-payments's real listing (#228, ADR-032 "Lists: paging and
@@ -402,6 +406,7 @@ type Querier interface {
 	// its own caller).
 	ListDuesRatesByFund(ctx context.Context, fundID int64) ([]DuesRate, error)
 	ListDuesRatesByTier(ctx context.Context, tierID int64) ([]DuesRate, error)
+	// By name, ignoring case (maintainer, 2026-10-05).
 	ListDuesTiersByFund(ctx context.Context, fundID int64) ([]DuesTier, error)
 	ListFunds(ctx context.Context) ([]Fund, error)
 	// One envelope's recipients, member name alongside the id so a caller (the
@@ -422,6 +427,9 @@ type Querier interface {
 	// Joined through purpose because that is where fund ownership lives; incidental
 	// has no fund_id of its own (it is 1:1 with a purpose row).
 	ListIncidentalsByFund(ctx context.Context, fundID int64) ([]Incidental, error)
+	// By name, ignoring case (maintainer, 2026-10-05), the order every member
+	// list reads - Iuran status in the app and on the report included, since both
+	// walk this list. id only breaks a tie between two identical names.
 	ListMembersByFund(ctx context.Context, fundID int64) ([]Member, error)
 	// GET /api/members's real listing (#233, ADR-032 "Lists: paging and
 	// search"): the roster read alphabetically, not a newest-first feed, so
@@ -484,6 +492,9 @@ type Querier interface {
 	// settled is a literal 0: every row this list returns is unsettled by
 	// construction, and the wire shape must stay uniform with the full list.
 	ListOutstandingReimbursementsByFund(ctx context.Context, fundID int64) ([]ListOutstandingReimbursementsByFundRow, error)
+	// Kas Utama first, then every other pos by name whatever its kind
+	// (maintainer, 2026-10-05). The pickers, Beranda and the report all read this
+	// one order. id only breaks a tie between two identical names.
 	ListPurposesByFund(ctx context.Context, fundID int64) ([]Purpose, error)
 	// Same shape as ListReceiptIDsByTransactionIDs above, for GET
 	// /api/reimbursements's page.
@@ -504,6 +515,7 @@ type Querier interface {
 	ListReceiptsByFund(ctx context.Context, fundID int64) ([]Receipt, error)
 	ListReceiptsByReimbursement(ctx context.Context, reimbursementID *int64) ([]Receipt, error)
 	ListReceiptsByTransaction(ctx context.Context, transactionID *int64) ([]Receipt, error)
+	// In ListAccountsByFund's order: cash before bank, then by name.
 	ListReconciliationLines(ctx context.Context, reconciliationID int64) ([]ReconciliationLine, error)
 	// ListReconciliationLinesByFund is the backup export's own read (ADR-012,
 	// #323): every line across every snapshot, matched or not - unlike

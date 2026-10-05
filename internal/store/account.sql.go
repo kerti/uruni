@@ -87,9 +87,13 @@ const listAccountsByFund = `-- name: ListAccountsByFund :many
 SELECT id, fund_id, kind, name, created_at, inactive_on
 FROM account
 WHERE fund_id = ?
-ORDER BY id
+ORDER BY CASE kind WHEN 'cash' THEN 0 ELSE 1 END, name COLLATE NOCASE, id
 `
 
+// Cash before bank, then by name (maintainer, 2026-10-05): the box at home,
+// then the bank, the order she counts in. Every list of locations reads this
+// one order - Beranda, Pengaturan, the pickers, Cek kas. id only breaks a tie
+// between two identical names.
 func (q *Queries) ListAccountsByFund(ctx context.Context, fundID int64) ([]Account, error) {
 	rows, err := q.db.QueryContext(ctx, listAccountsByFund, fundID)
 	if err != nil {
