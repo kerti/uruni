@@ -246,6 +246,29 @@ func TestMonthlyReportRefusesALedgerShapeItCannotHaveWritten(t *testing.T) {
 	}
 }
 
+// Two corrections of one row both leaving the same purpose cannot be a path:
+// the ledger never writes that, and the report says so rather than guess a
+// net move (#280).
+func TestMonthlyReportRefusesCorrectionsThatAreNotAPath(t *testing.T) {
+	str := func(s string) *string { return &s }
+	id := func(n int64) *int64 { return &n }
+	leg := func(transferID, from, to int64) store.ListReportTransactionsRow {
+		return store.ListReportTransactionsRow{
+			OccurredOn: "2026-09-10", Direction: "in", Amount: 1_000, Kind: "transfer", PurposeName: "Main",
+			TransferKind: str("reclass_purpose"), TransferID: id(transferID), TransferCorrectsTransactionID: id(99),
+			TransferFromPurposeID: id(from), TransferToPurposeID: id(to),
+			TransferFromPurposeName: str("A"), TransferToPurposeName: str("B"),
+		}
+	}
+	l, fundID := faultyReportFixture(t)
+	odd := &Ledger{db: l.db, q: faultQuerier{Querier: l.q, rows: []store.ListReportTransactionsRow{leg(1, 1, 2), leg(2, 1, 3)}}}
+
+	_, err := odd.monthlyReport(context.Background(), ReportParams{FundID: fundID, Month: "2026-09", Now: reportNow})
+	if err == nil || !strings.Contains(err.Error(), "do not form a path") {
+		t.Fatalf("monthlyReport() = %v, want an error naming the broken path", err)
+	}
+}
+
 func TestMonthlyReportRefusesAMalformedFirstTransactionDate(t *testing.T) {
 	l, fundID := faultyReportFixture(t)
 	bad := "20x6-09-10"

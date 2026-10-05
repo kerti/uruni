@@ -1184,3 +1184,85 @@ func TestMonthlyReportAllocationIsOneMoveRowCarryingItsReason(t *testing.T) {
 		t.Errorf("Balance = %d, want 300000: a move changes no balance", r.Balance)
 	}
 }
+
+// A row corrected more than once reads as one move from where it started to
+// where it ended, and one corrected back to where it started reads as none
+// (#280). The legs all stay posted: only the report's rows fold.
+func TestMonthlyReportFoldsARowsCorrectionsIntoTheirNetMove(t *testing.T) {
+	ctx := context.Background()
+	l := newTestLedger(t)
+	f := newFixture(t, l)
+	q := store.New(l.db)
+	otherID := createPurpose(t, q, f.fundID, "pass_through", "Other pass-through")
+
+	correct := func(txID, purposeID int64) {
+		t.Helper()
+		if _, err := l.PostPurposeCorrection(ctx, PostPurposeCorrectionParams{FundID: f.fundID, TransactionID: txID, PurposeID: purposeID}); err != nil {
+			t.Fatalf("PostPurposeCorrection() = %v, want no error", err)
+		}
+	}
+
+	// Corrected three times: main -> pass -> other -> pass.
+	thrice := postEntry(t, l, f.fundID, f.cashID, f.mainID, "in", 50_000, "2026-09-10", nil)
+	correct(thrice.ID, f.passID)
+	correct(thrice.ID, otherID)
+	correct(thrice.ID, f.passID)
+
+	// Corrected and corrected back: main -> pass -> main.
+	back := postEntry(t, l, f.fundID, f.cashID, f.mainID, "out", 20_000, "2026-09-11", nil)
+	correct(back.ID, f.passID)
+	correct(back.ID, f.mainID)
+
+	// Money moved on purpose is not a correction and never folds.
+	postEntry(t, l, f.fundID, f.cashID, f.mainID, "in", 30_000, "2026-09-01", nil)
+	envelope := openTestIncidental(t, l, f.fundID, "Envelope", "2026-09-01")
+	if _, err := l.PostPurposeMove(ctx, PostPurposeMoveParams{
+		FundID: f.fundID, FromPurposeID: f.mainID, ToPurposeID: envelope.PurposeID, AccountID: f.cashID, Amount: 5_000, OccurredOn: "2026-09-12",
+	}); err != nil {
+		t.Fatalf("PostPurposeMove() = %v, want no error", err)
+	}
+
+	r := monthlyReport(t, l, ReportParams{FundID: f.fundID, Month: "2026-09"})
+	mv := moves(r.Rows)
+	if len(mv) != 2 {
+		t.Fatalf("moves = %+v, want 2: the net correction and the allocation", mv)
+	}
+	var correction, allocation *ReportMove
+	for i := range mv {
+		if mv[i].IsCorrection {
+			correction = &mv[i]
+		}
+		if mv[i].IsAllocation {
+			allocation = &mv[i]
+		}
+	}
+	if correction == nil || correction.Amount != 50_000 || correction.FromPurposeName != "Primary Cash" || correction.ToPurposeName != "Pass-through" {
+		t.Errorf("net correction = %+v, want 50000 from Primary Cash to Pass-through", correction)
+	}
+	if allocation == nil || allocation.Amount != 5_000 {
+		t.Errorf("allocation = %+v, want the 5000 move untouched", allocation)
+	}
+	if got := len(entries(r.Rows)); got != 3 {
+		t.Errorf("entries = %d, want all three posted rows", got)
+	}
+
+	// The purpose the money only passed through has nothing to show.
+	r = monthlyReport(t, l, ReportParams{FundID: f.fundID, Month: "2026-09", PurposeID: &otherID})
+	if mv := moves(r.Rows); len(mv) != 0 {
+		t.Errorf("moves under the intermediate purpose = %+v, want none", mv)
+	}
+
+	// Balances still sum every posted leg.
+	for _, c := range []struct {
+		id   int64
+		want money.Amount
+	}{{f.mainID, 30_000 - 20_000 - 5_000}, {f.passID, 50_000}, {otherID, 0}, {envelope.PurposeID, 5_000}} {
+		got, err := l.PurposeBalance(ctx, f.fundID, c.id)
+		if err != nil {
+			t.Fatalf("PurposeBalance() = %v", err)
+		}
+		if got != c.want {
+			t.Errorf("purpose %d balance = %d, want %d", c.id, got, c.want)
+		}
+	}
+}
