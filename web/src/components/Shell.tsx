@@ -97,7 +97,11 @@ export default function Shell({
   return (
     <div className="flex min-h-dvh flex-col bg-background">
       <header className="sticky top-0 z-10 border-b border-border pt-[env(safe-area-inset-top)] header-glass">
-        <div className="flex items-center justify-between gap-3 py-2 pl-[max(1rem,env(safe-area-inset-left))] pr-[max(1rem,env(safe-area-inset-right))]">
+        {/* One column for every screen (max-w-xl, 576px): on a phone it is
+            the whole width; on a tablet the header, each screen and the
+            footer's buttons line up in it, while the bars' glass still spans
+            the screen. */}
+        <div className="mx-auto flex w-full max-w-xl items-center justify-between gap-3 py-2 pl-[max(1rem,env(safe-area-inset-left))] pr-[max(1rem,env(safe-area-inset-right))]">
           <div className="flex min-w-0 items-center gap-2.5">
             {/* The mark, left of the fund's name (#356). A second way home
                 for a thumb, but not for a keyboard or a screen reader: the
@@ -141,19 +145,21 @@ export default function Shell({
           circle rising 1.75rem above it, and the home-indicator inset -
           otherwise the last row of every screen sits under the bar. */}
       <main className="flex-1 py-4 pb-[calc(env(safe-area-inset-bottom)+6rem)] pl-[max(1rem,env(safe-area-inset-left))] pr-[max(1rem,env(safe-area-inset-right))]">
-        {state.status === 'error' && state.error && (
-          <div className="mb-4">
-            <ErrorState error={state.error} onRetry={() => void run(logout)} />
-          </div>
-        )}
-        {children}
+        <div className="mx-auto w-full max-w-xl">
+          {state.status === 'error' && state.error && (
+            <div className="mb-4">
+              <ErrorState error={state.error} onRetry={() => void run(logout)} />
+            </div>
+          )}
+          {children}
+        </div>
       </main>
 
       <nav
         aria-label={copy.shell.nav.label}
         className="fixed inset-x-0 bottom-0 z-20 border-t border-border pb-[env(safe-area-inset-bottom)] bar-glass"
       >
-        <ul className="flex items-stretch">
+        <ul className="mx-auto flex w-full max-w-xl items-stretch">
           {navItems.map(({ to, icon: Icon, label, end, primary }) => (
             <li key={to} className="flex-1">
               {/* NavLink, not a Button: these are destinations, and the

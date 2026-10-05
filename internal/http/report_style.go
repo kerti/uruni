@@ -56,7 +56,7 @@ html{-webkit-text-size-adjust:100%}
 body{margin:0;background:var(--background);color:var(--foreground);
   font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
   font-size:16px;line-height:1.5}
-main{max-width:40rem;margin:0 auto;padding:24px 16px 48px;display:flex;flex-direction:column;gap:24px}
+main{max-width:38rem;margin:0 auto;padding:24px 16px 48px;display:flex;flex-direction:column;gap:24px}
 h1{margin:0;font-size:24px;line-height:1.25;font-weight:700}
 h2{margin:0 0 8px;font-size:14px;font-weight:600;color:var(--muted-foreground)}
 p{margin:0}

@@ -504,7 +504,7 @@ export default function RecordTransaction({
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-sm flex-col gap-4">
+    <div className="flex w-full flex-col gap-4">
       {/* The heading names what is being recorded: a dues payment keeps the
           title its own screen always had. */}
       <h1 className="text-xl font-semibold">{duesChosen ? copy.dues.payment.heading : text.heading}</h1>

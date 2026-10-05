@@ -223,7 +223,7 @@ export default function RecordDuesPayment({
   const selectableMembers = loadState.data.members.filter((m) => m.inactive_on === null)
 
   return (
-    <form className={embedded ? 'flex flex-col gap-4' : 'mx-auto flex w-full max-w-sm flex-col gap-4'} onSubmit={handleSubmit} noValidate>
+    <form className={embedded ? 'flex flex-col gap-4' : 'flex w-full flex-col gap-4'} onSubmit={handleSubmit} noValidate>
       {!embedded && <h1 className="text-xl font-semibold">{text.heading}</h1>}
 
       <div className="flex flex-col gap-1.5">

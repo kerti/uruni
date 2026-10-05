@@ -321,7 +321,7 @@ export default function Reconcile({ onDone, onCancel }: { onDone: () => void; on
   }
 
   return (
-    <form className="mx-auto flex w-full max-w-sm flex-col gap-6" onSubmit={(e) => void handleSubmit(e)} noValidate>
+    <form className="flex w-full flex-col gap-6" onSubmit={(e) => void handleSubmit(e)} noValidate>
       <div className="flex flex-col gap-1">
         <h1 className="text-xl font-semibold">{text.heading}</h1>
         <p className="text-sm text-muted-foreground">{text.intro}</p>
@@ -628,7 +628,7 @@ function Confirmation({
 
   return (
     <div
-      className={`mx-auto flex w-full max-w-sm flex-col gap-4 transition-all duration-200 ease-out motion-reduce:transition-none motion-reduce:transform-none ${
+      className={`flex w-full flex-col gap-4 transition-all duration-200 ease-out motion-reduce:transition-none motion-reduce:transform-none ${
         mounted ? 'translate-y-0 scale-100 opacity-100' : 'translate-y-1 scale-[0.98] opacity-0'
       }`}
     >
