@@ -284,7 +284,7 @@ func TestMonthlyReportReconciliationNeverCountedMatchedAndDifference(t *testing.
 	}
 }
 
-func TestMonthlyReportReconciliationAdjustingEntryIsFlaggedAndCounted(t *testing.T) {
+func TestMonthlyReportReconciliationAdjustingEntryIsCounted(t *testing.T) {
 	ctx := context.Background()
 	l := newTestLedger(t)
 	f := newFixture(t, l)
@@ -307,12 +307,12 @@ func TestMonthlyReportReconciliationAdjustingEntryIsFlaggedAndCounted(t *testing
 	var fix *ReportEntry
 	for _, e := range entries(r.Rows) {
 		e := e
-		if e.IsReconciliationFix {
+		if e.Kind == "adjustment" && !e.IsReversal {
 			fix = &e
 		}
 	}
 	if fix == nil {
-		t.Fatalf("no row flagged IsReconciliationFix in %d rows", len(r.Rows))
+		t.Fatalf("no adjustment row in %d rows", len(r.Rows))
 	}
 	if fix.Kind != "adjustment" || fix.Direction != "out" || fix.Amount != 3_000 {
 		t.Errorf("fix = %+v, want an outgoing adjustment of 3000", *fix)

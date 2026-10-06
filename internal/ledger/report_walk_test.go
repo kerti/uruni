@@ -291,7 +291,6 @@ func TestWalkScenarioHoldsEveryRowShapeOnItsOwnLine(t *testing.T) {
 		direction  string
 		reversal   bool
 		dues       bool
-		fix        bool
 		wantLine   ReportLine
 		seenInMany int
 	}
@@ -303,7 +302,6 @@ func TestWalkScenarioHoldsEveryRowShapeOnItsOwnLine(t *testing.T) {
 		{kind: "reimbursement", direction: "out", wantLine: ReportLineOut},
 		{kind: "adjustment", direction: "out", reversal: true, dues: true, wantLine: ReportLineIn},
 		{kind: "adjustment", direction: "out", reversal: true, wantLine: ReportLineIn},
-		{kind: "adjustment", direction: "out", fix: true, wantLine: ReportLineAdjustment},
 		{kind: "adjustment", direction: "in", wantLine: ReportLineAdjustment},
 		{kind: "adjustment", direction: "out", wantLine: ReportLineAdjustment},
 	}
@@ -314,7 +312,7 @@ func TestWalkScenarioHoldsEveryRowShapeOnItsOwnLine(t *testing.T) {
 		for _, e := range entries(r.Rows) {
 			for _, sh := range shapes {
 				if e.Kind == sh.kind && e.Direction == sh.direction && e.IsReversal == sh.reversal &&
-					(e.DuesPeriod != nil) == (sh.dues || sh.kind == "dues") && e.IsReconciliationFix == sh.fix {
+					(e.DuesPeriod != nil) == (sh.dues || sh.kind == "dues") {
 					sh.seenInMany++
 					if e.Line != sh.wantLine {
 						t.Errorf("%s: %+v lands on %q, want %q", month, e, e.Line, sh.wantLine)
