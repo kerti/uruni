@@ -614,7 +614,7 @@ describe('Home', () => {
         />,
       )
 
-      await screen.findByText(copy.home.monthHeading)
+      await screen.findByText(copy.home.monthIn)
       const inFigure = screen.getByText(copy.home.monthIn).nextElementSibling
       const outFigure = screen.getByText(copy.home.monthOut).nextElementSibling
       expect(inFigure).toHaveTextContent(money(-20_000))
