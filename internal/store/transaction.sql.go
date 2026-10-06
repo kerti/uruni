@@ -877,7 +877,6 @@ SELECT t.id, t.fund_id, t.account_id, t.purpose_id, t.direction, t.amount, t.occ
        ta.name AS transfer_to_account_name,
        fp.name AS transfer_from_purpose_name,
        tp.name AS transfer_to_purpose_name,
-       CAST(EXISTS(SELECT 1 FROM reconciliation_line rl WHERE rl.adjustment_transaction_id = t.id) AS INTEGER) AS is_reconciliation_fix,
        tr.corrects_transaction_id AS transfer_corrects_transaction_id,
        tr.reason AS transfer_reason,
        CAST(COALESCE((SELECT leg.purpose_id
@@ -961,7 +960,6 @@ type ListTransactionsPageRow struct {
 	TransferToAccountName         *string
 	TransferFromPurposeName       *string
 	TransferToPurposeName         *string
-	IsReconciliationFix           int64
 	TransferCorrectsTransactionID *int64
 	TransferReason                *string
 	EffectivePurposeID            int64
@@ -1060,14 +1058,6 @@ type ListTransactionsPageRow struct {
 //     transfer_kind is toTransactionResponse's job instead, in Go, where
 //     the compiler still sees four ordinary pointers.
 //
-//   - is_reconciliation_fix: whether this row is the entry that squared a
-//     reconciliation gap (resolution 'adjusted', reconciliation_line's own
-//     adjustment_transaction_id) - a plain 0/1 the same way ListReimbursementsPage's
-//     own settled column is: 1 exactly when some line names this row, never
-//     an inferred flag. Always 0 for resolution 'entry_added' (that
-//     resolution never sets adjustment_transaction_id, ADR-024) and for
-//     every non-adjustment kind.
-//
 //   - transfer_corrects_transaction_id: this row's own transfer's link
 //     (ADR-033, #267), non-NULL exactly on a correction pair's two legs -
 //     what tells a correction leg apart from a roll's, both of which are
@@ -1141,7 +1131,6 @@ func (q *Queries) ListTransactionsPage(ctx context.Context, arg ListTransactions
 			&i.TransferToAccountName,
 			&i.TransferFromPurposeName,
 			&i.TransferToPurposeName,
-			&i.IsReconciliationFix,
 			&i.TransferCorrectsTransactionID,
 			&i.TransferReason,
 			&i.EffectivePurposeID,

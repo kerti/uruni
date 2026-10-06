@@ -55,7 +55,6 @@ SELECT t.occurred_on, t.created_at, t.direction, t.amount, t.kind,
        tt.purpose_id AS transfer_to_purpose_id,
        fp.name AS transfer_from_purpose_name,
        tp.name AS transfer_to_purpose_name,
-       CAST(EXISTS(SELECT 1 FROM reconciliation_line rl WHERE rl.adjustment_transaction_id = t.id) AS INTEGER) AS is_reconciliation_fix,
        CAST(EXISTS(SELECT 1 FROM receipt rc
                    WHERE rc.fund_id = t.fund_id
                      AND (rc.transaction_id = t.id

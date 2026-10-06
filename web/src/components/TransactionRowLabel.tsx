@@ -22,8 +22,8 @@ import type { Transaction } from '@/lib/transactions'
  * reverses_transaction_id; a fix is named by
  * reconciliation_line.adjustment_transaction_id instead), so checking
  * reverses_transaction_id first is exact, never a guess between the two.
- * They are not the only shapes: a standalone adjustment (is_adjustment,
- * ADR-024) is neither, and falls through to no label here.
+ * Anything that is not a reversal - a cek kas fix or a standalone
+ * adjustment (ADR-024) - is Penyesuaian, the report's word for it (ADR-038).
  */
 function rowLabelFor(transaction: Transaction): { Icon: LucideIcon; srWord: string | null; text: string } | null {
   switch (transaction.kind) {
@@ -91,15 +91,15 @@ function rowLabelFor(transaction: Transaction): { Icon: LucideIcon; srWord: stri
               : copy.rowLabels.contributionReversal.text(transaction.member_name ?? ''),
         }
       }
-      if (transaction.is_reconciliation_fix) {
-        return {
-          Icon: Scale,
-          srWord: null,
-          text: copy.rowLabels.reconciliationFix.text(transaction.account_name ?? ''),
-        }
+      // Every other adjustment - a cek kas fix, or one she posted on her own
+      // (ADR-024) - is named for the line of the month's walk it sums into
+      // (ADR-038), the same word the report uses. Her own note, if any,
+      // still renders on its own line.
+      return {
+        Icon: Scale,
+        srWord: null,
+        text: copy.rowLabels.adjustment.text(transaction.account_name ?? ''),
       }
-      // An ordinary adjustment (ADR-024) - her own row, her own note.
-      return null
     case 'normal':
       // A named contribution (ADR-034) says who gave, the way a dues row
       // does; any other 'normal' row - including a reconciliation

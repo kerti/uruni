@@ -16,10 +16,9 @@ import "github.com/kerti/uruni/internal/ledger"
 //   - A purpose move is one "Dipindah: <from> -> <to>" row whatever its
 //     reason, where Riwayat words a roll, a correction and a Pindah pos apart.
 //
-// And one the report adds (ADR-038): an adjustment that is neither a reversal
-// nor a cek kas fix - one the treasurer posted on its own - reads "Penyesuaian",
-// where Riwayat leaves it unlabelled, so a row and the walk line it sums share
-// a name.
+// Every adjustment that is not a reversal - a cek kas fix or one the treasurer
+// posted on its own - reads "Penyesuaian" in both, so a row and the walk line
+// it sums into share a name (ADR-038).
 
 // entryLabel is the label line for an ordinary row, or "" for a plain row
 // the treasurer recorded (which shows only its purpose and amount).

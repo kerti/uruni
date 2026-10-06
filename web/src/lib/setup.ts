@@ -77,7 +77,6 @@ export interface Transaction {
   transfer_kind?: 'between_accounts' | 'reclass_purpose' | null
   transfer_from_name?: string | null
   transfer_to_name?: string | null
-  is_reconciliation_fix?: boolean
   /** Non-null only on a purpose correction's two legs (ADR-033, #267) -
    * nil on every other transfer leg, a roll's included, which is what
    * tells the two apart: both are kind='transfer' with

@@ -693,13 +693,6 @@ type Querier interface {
 	//     the time. Picking the account pair or the purpose pair by
 	//     transfer_kind is toTransactionResponse's job instead, in Go, where
 	//     the compiler still sees four ordinary pointers.
-	//   - is_reconciliation_fix: whether this row is the entry that squared a
-	//     reconciliation gap (resolution 'adjusted', reconciliation_line's own
-	//     adjustment_transaction_id) - a plain 0/1 the same way ListReimbursementsPage's
-	//     own settled column is: 1 exactly when some line names this row, never
-	//     an inferred flag. Always 0 for resolution 'entry_added' (that
-	//     resolution never sets adjustment_transaction_id, ADR-024) and for
-	//     every non-adjustment kind.
 	//   - transfer_corrects_transaction_id: this row's own transfer's link
 	//     (ADR-033, #267), non-NULL exactly on a correction pair's two legs -
 	//     what tells a correction leg apart from a roll's, both of which are
