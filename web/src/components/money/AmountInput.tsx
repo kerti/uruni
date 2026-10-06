@@ -50,8 +50,16 @@ export default function AmountInput({
     setFocused(true)
     // Cursor at the end, not wherever the click landed in the reformatted
     // string - there is no stable caret position to preserve across a
-    // "Rp 1.000.000" -> "1000000" swap.
-    requestAnimationFrame(() => event.target.setSelectionRange(event.target.value.length, event.target.value.length))
+    // "Rp 1.000.000" -> "1000000" swap. A frame later, so it lands after the
+    // tap's own caret placement - and only on a collapsed caret: a range
+    // selected in that frame (select-all, or Playwright's fill(), which
+    // selects then types) is left alone, or the typing would land after
+    // the old digits instead of replacing them.
+    const input = event.target
+    requestAnimationFrame(() => {
+      if (input.selectionStart !== input.selectionEnd) return
+      input.setSelectionRange(input.value.length, input.value.length)
+    })
   }
 
   function handleBlur() {
