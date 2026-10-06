@@ -293,8 +293,7 @@ export default function Home({
       <section className="flex flex-col gap-2">
         <h2 className="text-sm font-semibold text-muted-foreground">{copy.home.cashflowHeading}</h2>
         <div className="rounded-lg bg-card px-4 py-3 shadow-card ring-1 ring-foreground/10">
-          <p className="text-sm text-muted-foreground">{copy.home.monthHeading}</p>
-          <dl className="mt-1 grid grid-cols-2 gap-3">
+          <dl className="grid grid-cols-2 gap-3">
             <div>
               <dt className="text-sm text-muted-foreground">{copy.home.monthIn}</dt>
               <dd className="tabular font-medium">{formatIDR(balances.month.in)}</dd>

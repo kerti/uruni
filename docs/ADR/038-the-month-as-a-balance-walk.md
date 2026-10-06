@@ -43,7 +43,7 @@ Saldo <last day of previous month>
 
 **The running month** reads its rows from the first of the month with **no upper bound**, matching its unbounded balance (ADR-037), so a row dated after today still foots.
 
-**Beranda** shows the running month's In and Out in a section of its own, **Arus kas** - one card, *Bulan ini*, with *Masuk* and *Keluar*, no walk - the first section below the divider (#319) that separates the fund as it stands from what happened, ahead of *Aktivitas terbaru*: what happened this month, then the rows it happened in (maintainer, 2026-10-05). Beranda's order becomes hero, per-location rows, reconciliation banner, purpose breakdown, divider, **Arus kas**, recent five. `GET /api/balances` carries them as `month: {in, out}`, read through the report's own `reportRows` over the unfiltered running month, in Asia/Jakarta; the client never works out a month. No chart, no comparison with other months: PRD section 4's "analytics dashboards" stays out.
+**Beranda** shows the running month's In and Out in a section of its own, **Arus kas bulan ini** - one card with *Masuk* and *Keluar*, no walk - the first section below the divider (#319) that separates the fund as it stands from what happened, ahead of *Aktivitas terbaru*: what happened this month, then the rows it happened in (maintainer, 2026-10-05). Beranda's order becomes hero, per-location rows, reconciliation banner, purpose breakdown, divider, **Arus kas**, recent five. `GET /api/balances` carries them as `month: {in, out}`, read through the report's own `reportRows` over the unfiltered running month, in Asia/Jakarta; the client never works out a month. No chart, no comparison with other months: PRD section 4's "analytics dashboards" stays out.
 
 **Copy:** the walk's ends are dated - "Saldo 31 Agustus 2026" - rather than *Saldo akhir*, which would be untrue mid-month and would sit beside the existing *Saldo awal* row label as a second meaning. The date carries no "per": the header's *Saldo per pos* already uses that word for "by purpose", and a second "per" on the same page would read as a second sense. *Saldo awal*, *Penyesuaian* and *Dipindah* are the report's existing row labels, so a line and the rows it sums share a name. *Bersih* goes: the two dated balances already say it.
 
@@ -55,3 +55,11 @@ Saldo <last day of previous month>
 - Riwayat still leaves a standalone adjustment unlabelled; only the report names it.
 
 **Superseded in ADR-035:** "money-in, money-out and net totals for whatever is filtered", for the totals' contents and the net line. **Superseded in ADR-037:** "The month's transaction rows were always month-scoped", for the running month, whose rows are now unbounded above. **Superseded in ADR-032:** "Beranda's order becomes: hero, per-location rows, reconciliation banner, purpose breakdown, recent five", for the Arus kas section before the recent five.
+
+## Amendments
+
+An amendment corrects a statement of fact about the code that has since become false. It never changes a decision, a trade-off or an accepted cost - that is still a superseding ADR. See the [ADR index](./README.md) for the rule.
+
+**2026-10-06** - the Beranda paragraph said the section is "**Arus kas** - one card, *Bulan ini*, with *Masuk* and *Keluar*".
+
+The heading now names the month, *Arus kas bulan ini*, and the card drops its own *Bulan ini* label: the section only ever held the running month, so the label repeated what the heading could say once (maintainer, 2026-10-06). Same section, same place, same two figures; only the words moved.

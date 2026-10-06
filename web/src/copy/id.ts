@@ -526,9 +526,9 @@ export const copy = {
     recentActivityHeading: 'Aktivitas terbaru',
     // Arus kas, Beranda's first section below the divider (ADR-038): the
     // running month's two figures, the report's own In and Out, so the two
-    // screens never disagree.
-    cashflowHeading: 'Arus kas',
-    monthHeading: 'Bulan ini',
+    // screens never disagree. The heading names the month itself, so the
+    // card carries only the two figures.
+    cashflowHeading: 'Arus kas bulan ini',
     monthIn: 'Masuk',
     monthOut: 'Keluar',
     recentActivityEmpty: 'Belum ada transaksi tercatat.',
