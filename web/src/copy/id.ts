@@ -552,8 +552,8 @@ export const copy = {
   // decorative, aria-hidden) with the visible-text formatter - keyed by
   // the row shape, not the raw schema `kind` column, since one schema kind
   // covers more than one label here (`transfer` is either transferLocation
-  // or transferPurpose; `adjustment` is either duesReversal or
-  // reconciliationFix). The " · " separator and " -> " arrow are written
+  // or transferPurpose; `adjustment` is duesReversal,
+  // contributionReversal or adjustment). The " · " separator and " -> " arrow are written
   // out here, never as a literal non-ASCII character in a .tsx file (rule
   // 10 - this file is the one designated exception).
   rowLabels: {
@@ -606,7 +606,9 @@ export const copy = {
     transferPurposeMove: {
       text: (fromName: string, toName: string) => `Pindah pos · ${fromName} → ${toName}`,
     },
-    reconciliationFix: {
+    // Every adjustment that is not a reversal: a cek kas fix or one she
+    // posted on her own - the report's word for both (ADR-038).
+    adjustment: {
       text: (accountName: string) => `Penyesuaian · ${accountName}`,
     },
   },

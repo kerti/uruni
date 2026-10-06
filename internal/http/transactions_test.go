@@ -993,9 +993,6 @@ func TestGetTransactionsDuesPaymentCarriesMemberAndAccountName(t *testing.T) {
 	if row.AccountName != "Tunai" {
 		t.Errorf("account_name = %q, want %q", row.AccountName, "Tunai")
 	}
-	if row.IsReconciliationFix {
-		t.Error("is_reconciliation_fix = true for a dues payment, want false")
-	}
 }
 
 // A dues reversal (kind='adjustment', reverses_transaction_id set) carries
@@ -1033,9 +1030,6 @@ func TestGetTransactionsDuesReversalCarriesMemberName(t *testing.T) {
 	}
 	if row.MemberName == nil || *row.MemberName != "Warga Satu" {
 		t.Errorf("member_name = %v, want %q", row.MemberName, "Warga Satu")
-	}
-	if row.IsReconciliationFix {
-		t.Error("is_reconciliation_fix = true for a dues reversal, want false")
 	}
 }
 
@@ -1249,103 +1243,6 @@ func TestGetTransactionsIncidentalRollShortfallCarriesMainToEnvelopePurposeNames
 	}
 	if found != 2 {
 		t.Fatalf("kind='transfer' rows = %d, want 2 (both roll legs)", found)
-	}
-}
-
-// A reconciliation "adjusted" fix is flagged; an "entry_added" fix on the
-// same snapshot is not - the schema-level distinction (adjustment_
-// transaction_id, only ever set for "adjusted") surfaced on the wire.
-func TestGetTransactionsReconciliationFixFlagDistinguishesAdjustedFromEntryAdded(t *testing.T) {
-	r := testRouter(t)
-	setup := setUpFund(t, r)
-	if rec := postTransaction(t, r, transactionRequest{
-		AccountID: setup.CashAccountID(t), PurposeID: setup.MainPurposeID,
-		Direction: "in", Amount: 100_000, OccurredOn: "2026-08-01",
-	}); rec.Code != http.StatusCreated {
-		t.Fatalf("seed = %d, want %d (body: %s)", rec.Code, http.StatusCreated, rec.Body.String())
-	}
-
-	takeRec := postReconciliation(t, r, takeReconciliationRequest{
-		Counts: []accountCountRequest{
-			{
-				AccountID: setup.CashAccountID(t), ActualAmount: 80_000, Resolution: "adjusted",
-				Fix: &fixRequest{PurposeID: setup.MainPurposeID, Direction: "out", Amount: 20_000, OccurredOn: "2026-08-31"},
-			},
-			{
-				AccountID: setup.BankAccountID(t), ActualAmount: 5_000, Resolution: "entry_added",
-				Fix: &fixRequest{PurposeID: setup.MainPurposeID, Direction: "in", Amount: 5_000, OccurredOn: "2026-08-15"},
-			},
-		},
-	})
-	if takeRec.Code != http.StatusCreated {
-		t.Fatalf("POST /api/reconciliations = %d, want %d (body: %s)", takeRec.Code, http.StatusCreated, takeRec.Body.String())
-	}
-	detail := decodeReconciliationDetail(t, takeRec)
-	adjustedLine := lineFor(t, detail.Lines, setup.CashAccountID(t))
-	entryAddedLine := lineFor(t, detail.Lines, setup.BankAccountID(t))
-	if adjustedLine.AdjustmentTransactionID == nil {
-		t.Fatal("adjusted line's adjustment_transaction_id = nil, want the fix's id")
-	}
-	if entryAddedLine.AdjustmentTransactionID != nil {
-		t.Fatal("entry_added line's adjustment_transaction_id set, want nil (ADR-024: that entry is self-explanatory)")
-	}
-
-	page := decodeTransactionsPage(t, getTransactions(t, r))
-	adjustedRow := findTransactionRow(t, page, *adjustedLine.AdjustmentTransactionID)
-	if !adjustedRow.IsReconciliationFix {
-		t.Error("is_reconciliation_fix = false for the adjusted fix, want true")
-	}
-	if adjustedRow.Kind != "adjustment" {
-		t.Errorf("adjusted fix kind = %q, want %q", adjustedRow.Kind, "adjustment")
-	}
-
-	// The entry_added fix is a kind='normal' row on the bank account with no
-	// reconciliation flag - found by elimination (it's the only other
-	// kind='normal' row this test posted on that account besides the fix
-	// itself and the seed deposit, which is on cash).
-	entryAddedFound := false
-	for _, row := range page.Transactions {
-		if row.AccountID == setup.BankAccountID(t) && row.Kind == "normal" {
-			entryAddedFound = true
-			if row.IsReconciliationFix {
-				t.Error("is_reconciliation_fix = true for an entry_added fix, want false")
-			}
-		}
-	}
-	if !entryAddedFound {
-		t.Fatal("no kind='normal' row found on the bank account for the entry_added fix")
-	}
-}
-
-// An ordinary adjustment (ADR-024: a correction raised on any Tuesday, not
-// through a reconciliation) is never flagged - it is her own row, explained
-// by her own note, exactly as today.
-func TestGetTransactionsOrdinaryAdjustmentIsNotFlagged(t *testing.T) {
-	r := testRouter(t)
-	setup := setUpFund(t, r)
-
-	rec := postTransaction(t, r, transactionRequest{
-		AccountID: setup.CashAccountID(t), PurposeID: setup.MainPurposeID,
-		Direction: "in", Amount: 10_000, OccurredOn: "2026-08-12", IsAdjustment: true,
-	})
-	if rec.Code != http.StatusCreated {
-		t.Fatalf("POST /api/transactions = %d, want %d (body: %s)", rec.Code, http.StatusCreated, rec.Body.String())
-	}
-	var posted transactionResponse
-	if err := json.NewDecoder(rec.Body).Decode(&posted); err != nil {
-		t.Fatalf("decoding transaction response: %v", err)
-	}
-
-	page := decodeTransactionsPage(t, getTransactions(t, r))
-	row := findTransactionRow(t, page, posted.ID)
-	if row.Kind != "adjustment" {
-		t.Fatalf("kind = %q, want %q", row.Kind, "adjustment")
-	}
-	if row.IsReconciliationFix {
-		t.Error("is_reconciliation_fix = true for an ordinary adjustment, want false")
-	}
-	if row.ReversesTransactionID != nil {
-		t.Errorf("reverses_transaction_id = %v, want nil for an ordinary adjustment", row.ReversesTransactionID)
 	}
 }
 

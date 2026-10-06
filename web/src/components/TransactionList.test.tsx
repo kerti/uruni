@@ -44,7 +44,6 @@ function transaction(overrides: Partial<Transaction> = {}): Transaction {
     transfer_kind: null,
     transfer_from_name: null,
     transfer_to_name: null,
-    is_reconciliation_fix: false,
     ...overrides,
   }
 }
@@ -174,12 +173,10 @@ describe('TransactionList row labels (#257)', () => {
   })
 
   it('labels a reconciliation adjusted fix with Scale and "Penyesuaian - {lokasi}", with no duplicate screen-reader word', () => {
-    const { container } = renderRows([
-      transaction({ kind: 'adjustment', direction: 'out', is_reconciliation_fix: true, account_name: 'Tunai' }),
-    ])
+    const { container } = renderRows([transaction({ kind: 'adjustment', direction: 'out', account_name: 'Tunai' })])
 
     expect(container.querySelector('.lucide-scale')).toBeInTheDocument()
-    expect(screen.getByText(copy.rowLabels.reconciliationFix.text('Tunai'))).toBeInTheDocument()
+    expect(screen.getByText(copy.rowLabels.adjustment.text('Tunai'))).toBeInTheDocument()
     // The visible text already starts with the kind word, so there is no
     // sr-only copy of it to read twice.
     expect(document.querySelector('.sr-only')).toBeNull()
@@ -221,11 +218,14 @@ describe('TransactionList row labels (#257)', () => {
     expect(screen.getByText('Kas Utama')).toBeInTheDocument()
   })
 
-  it('renders no label for an ordinary adjustment that is neither a reversal nor a reconciliation fix', () => {
-    const { container } = renderRows([transaction({ kind: 'adjustment', direction: 'out', note: 'Koreksi salah catat' })])
+  it("labels a standalone adjustment Penyesuaian too, the report's word for it (ADR-038), and keeps her note", () => {
+    const { container } = renderRows([
+      transaction({ kind: 'adjustment', direction: 'out', account_name: 'Tunai', note: 'Koreksi salah catat' }),
+    ])
 
     expect(container.querySelector('.lucide-undo-2')).not.toBeInTheDocument()
-    expect(container.querySelector('.lucide-scale')).not.toBeInTheDocument()
+    expect(container.querySelector('.lucide-scale')).toBeInTheDocument()
+    expect(screen.getByText(copy.rowLabels.adjustment.text('Tunai'))).toBeInTheDocument()
     expect(screen.getByText('Koreksi salah catat')).toBeInTheDocument()
   })
 })
@@ -565,12 +565,12 @@ describe('TransactionList entry detail (#359)', () => {
   })
 
   it('carries the app-built label in full, e.g. a reconciliation adjustment', async () => {
-    renderRows([transaction({ kind: 'adjustment', direction: 'out', is_reconciliation_fix: true })])
+    renderRows([transaction({ kind: 'adjustment', direction: 'out' })])
 
     await userEvent.click(screen.getByRole('button', { name: /^Lihat rincian:/ }))
 
     const dialog = await screen.findByRole('dialog')
-    expect(within(dialog).getByText(copy.rowLabels.reconciliationFix.text('Tunai'))).toBeInTheDocument()
+    expect(within(dialog).getByText(copy.rowLabels.adjustment.text('Tunai'))).toBeInTheDocument()
   })
 
   it('leaves a row control to do its own job, without opening the detail', async () => {

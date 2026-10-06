@@ -52,7 +52,7 @@ Saldo <last day of previous month>
 - One reversal now reads three ways on one page, each correct for what it measures: the dues section drops the payment (status, a stock), an envelope's *terkumpul* drops the pair, and *Total masuk* nets it on the reversal's date (a flow).
 - A standalone adjustment gains a row label, *Penyesuaian*; it rendered blank before.
 - The report's assembly gains the walk; the page and the PDF render the same lines (ADR-035). The PDF takes no filters, so it always carries the whole-fund walk; the purpose walk is the page's.
-- Riwayat still leaves a standalone adjustment unlabelled; only the report names it.
+- Riwayat labels a standalone adjustment *Penyesuaian* too, as the report does (amended 2026-10-06, below).
 
 **Superseded in ADR-035:** "money-in, money-out and net totals for whatever is filtered", for the totals' contents and the net line. **Superseded in ADR-037:** "The month's transaction rows were always month-scoped", for the running month, whose rows are now unbounded above. **Superseded in ADR-032:** "Beranda's order becomes: hero, per-location rows, reconciliation banner, purpose breakdown, recent five", for the Arus kas section before the recent five.
 
@@ -63,3 +63,7 @@ An amendment corrects a statement of fact about the code that has since become f
 **2026-10-06** - the Beranda paragraph said the section is "**Arus kas** - one card, *Bulan ini*, with *Masuk* and *Keluar*".
 
 The heading now names the month, *Arus kas bulan ini*, and the card drops its own *Bulan ini* label: the section only ever held the running month, so the label repeated what the heading could say once (maintainer, 2026-10-06). Same section, same place, same two figures; only the words moved.
+
+**2026-10-06** - the Consequences said "Riwayat still leaves a standalone adjustment unlabelled; only the report names it."
+
+Riwayat now labels it *Penyesuaian - <lokasi>* with the cek kas fix's icon, so the treasurer and the neighbour read the same word for the same row (maintainer, 2026-10-06). It is a narrow exception to #257's rule that labels go only on rows the app created: the label names the walk line the row sums into, not who made it, and her note still renders on its own line. The report's wording is unchanged. With both screens labelling every non-reversal adjustment alike, nothing reads `is_reconciliation_fix` any more, so it is gone from `GET /api/transactions` and `ledger.ReportEntry`.

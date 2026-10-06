@@ -36,7 +36,7 @@ func TestReportRowLabelsMatchTheSPA(t *testing.T) {
 		// rowLabels.opening.text, minus the location (report hides it)
 		{"opening", ledger.ReportEntry{Kind: "opening"}, "Saldo awal"},
 		// rowLabels.reconciliationFix.text, minus the location
-		{"reconciliation fix", ledger.ReportEntry{Kind: "adjustment", IsReconciliationFix: true}, "Penyesuaian"},
+		{"adjustment", ledger.ReportEntry{Kind: "adjustment"}, "Penyesuaian"},
 		// plain rows carry no label
 		{"own normal row", ledger.ReportEntry{Kind: "normal"}, ""},
 		// Deliberately not the SPA's blank (ADR-038): a standalone adjustment is

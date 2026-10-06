@@ -191,9 +191,6 @@ type ReportEntry struct {
 	// DuesPeriod is set, of a named contribution when it is not.
 	IsReversal bool
 
-	// IsReconciliationFix marks the entry that squared a reconciliation gap.
-	IsReconciliationFix bool
-
 	// Note is what the treasurer typed. On a settled claim's payout - whose
 	// own note is always empty - it is the claim's note, the way Riwayat
 	// shows it.
@@ -796,18 +793,17 @@ func reportEntryFrom(row store.ListReportTransactionsRow) (ReportEntry, error) {
 		return ReportEntry{}, err
 	}
 	e := ReportEntry{
-		Line:                line,
-		Kind:                row.Kind,
-		Direction:           row.Direction,
-		Amount:              money.FromDB(row.Amount),
-		PurposeName:         row.PurposeName,
-		PurposeID:           row.PurposeID,
-		MemberName:          row.MemberName,
-		DuesPeriod:          row.DuesPeriod,
-		IsReversal:          row.ReversesTransactionID != nil,
-		IsReconciliationFix: row.IsReconciliationFix != 0,
-		Note:                row.Note,
-		HasReceipt:          row.HasReceipt != 0,
+		Line:        line,
+		Kind:        row.Kind,
+		Direction:   row.Direction,
+		Amount:      money.FromDB(row.Amount),
+		PurposeName: row.PurposeName,
+		PurposeID:   row.PurposeID,
+		MemberName:  row.MemberName,
+		DuesPeriod:  row.DuesPeriod,
+		IsReversal:  row.ReversesTransactionID != nil,
+		Note:        row.Note,
+		HasReceipt:  row.HasReceipt != 0,
 	}
 	// A settlement's own row names no member and holds no note: both come from
 	// the claim it settles. At most one of the two member columns is ever set.

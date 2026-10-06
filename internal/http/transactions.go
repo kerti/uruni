@@ -96,12 +96,6 @@ type transactionResponse struct {
 	TransferKind     *string `json:"transfer_kind"`
 	TransferFromName *string `json:"transfer_from_name"`
 	TransferToName   *string `json:"transfer_to_name"`
-	// IsReconciliationFix is true exactly when a reconciliation_line names
-	// this row as the entry that squared its gap (resolution 'adjusted') -
-	// never true for an 'entry_added' fix (ADR-024: that entry is
-	// self-explanatory, posted with the treasurer's own purpose and note)
-	// or for an ordinary adjustment (ADR-024).
-	IsReconciliationFix bool `json:"is_reconciliation_fix"`
 	// TransferCorrectsTransactionID is this row's own transfer's link
 	// (ADR-033, #267) - non-nil exactly on a purpose correction's two legs,
 	// nil on every other transfer leg including a roll's. It is what lets
@@ -193,7 +187,6 @@ func toTransactionsPageResponse(t store.ListTransactionsPageRow) transactionResp
 	resp.AccountName = t.AccountName
 	resp.ClaimNote = t.ClaimNote
 	resp.TransferKind = t.TransferKind
-	resp.IsReconciliationFix = t.IsReconciliationFix != 0
 	resp.TransferCorrectsTransactionID = t.TransferCorrectsTransactionID
 	resp.TransferReason = t.TransferReason
 	resp.EffectivePurposeID = t.EffectivePurposeID
