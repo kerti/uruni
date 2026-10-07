@@ -54,21 +54,13 @@ async function submitLogin(page: Page) {
 // e2e's instance with a bendahara account already registered, so a seeded
 // server always answers GET /api/session with has_account: true and the
 // Register screen is never reachable here - the golden path starts at
-// Login. Register has no e2e coverage as a result; it is covered instead by
-// the vitest suite (web/src/screens/Register.test.tsx), which can reach a
-// fresh, unregistered instance a seeded e2e one cannot (`instance.reset({
-// seed: false })` can, for a journey that wants the real thing).
-//
-// The same is true one layer in for M6.5's setup wizard: the same fixture
-// also seeds a fund (cmd/uruni/seed_e2e.go), so GET /api/fund always answers
-// 200 on a seeded instance and the wizard is never reachable here either -
-// logging in lands straight past it on the home placeholder, which is what
-// this slice's own test below proves (App.tsx's fund probe took the 200
-// branch). The wizard's own four steps - the minimum-one-location guard, the
-// optional-balance skip path, the skippable roster, and POST /api/setup
-// firing exactly once - are covered instead by the vitest suite
-// (web/src/screens/Setup/Setup.test.tsx and App.test.tsx), which can reach a
-// fresh, fund-less instance a seeded e2e one cannot.
+// Login. Register and the setup wizard are walked on an unseeded instance
+// by first-run.spec.ts; their edge cases (the minimum-one-location guard,
+// the optional-balance skip path, the skippable roster, POST /api/setup
+// firing exactly once) stay in the vitest suite (Register.test.tsx,
+// Setup/Setup.test.tsx and App.test.tsx). The same fixture also seeds a fund,
+// so logging in here lands straight on home - which is what this file's
+// first test proves (App.tsx's fund probe took the 200 branch).
 //
 // M6.8's own test below records against the fixture's default location
 // without touching the account picker on purpose - proving the "location
