@@ -1,6 +1,5 @@
-import { expect, test } from '@playwright/test'
-
 import { copy } from '../src/copy/id'
+import { expect, test, logIn } from './fixtures'
 
 // M6.15: the settings screen's locations section (PRD section 7.1, #78's "can a
 // location be added later" answered yes).
@@ -8,31 +7,21 @@ import { copy } from '../src/copy/id'
 // This spec walks the one path that has to work in a real browser - home ->
 // settings -> add a location -> see it in the list - and hands everything
 // else to the vitest suite (Locations.test.tsx), which can stub a 409, a
-// retired row and a rename without touching the shared database.
+// retired row and a rename without a real server.
 //
-// It also cleans up after itself, deliberately: every spec here runs
-// against one seeded instance, and reconcile (golden-path.spec.ts) will not
-// submit until every *active* account has been counted. A location left
-// behind by this file would fail that spec on the next run with no
-// connection to anything it does. The suite is serial now
-// (playwright.config.ts) so nothing overlaps mid-run, but a leftover row
-// outlives the run entirely - hence the delete, which is also the only
-// place the delete path gets exercised against the real server.
+// The delete at the end is part of the journey, and the only place the delete
+// path gets exercised against the real server.
 test.describe('settings', () => {
   test.describe.configure({ mode: 'serial' })
-
-  const seedEmail = 'bendahara@e2e.uruni.test'
-  const seedPassword = 'e2e-fixture-password'
+  test.beforeAll(({ instance }) => instance.reset())
 
   // Not "Tunai" or "Bank Uji Coba" - those are the fixture's own two
-  // locations, which other specs assert on by name.
+  // locations, which the test below asserts are already listed.
   const locationName = 'Kotak Uji Pengaturan'
 
   test('adds a location from the settings screen, then removes it again', async ({ page }) => {
+    await logIn(page)
     await page.goto('/')
-    await page.getByLabel(copy.auth.login.emailLabel).fill(seedEmail)
-    await page.getByLabel(copy.auth.login.passwordLabel, { exact: true }).fill(seedPassword)
-    await page.getByRole('button', { name: copy.auth.login.submit }).click()
     await expect(page.getByText(copy.home.balanceHeading)).toBeVisible()
 
     // The footer nav is how every screen is reached now (M6.15).

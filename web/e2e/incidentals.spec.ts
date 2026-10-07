@@ -1,21 +1,17 @@
-import { expect, test, type Page } from '@playwright/test'
+import type { Page } from '@playwright/test'
 
 import { copy } from '../src/copy/id'
+import { expect, test, logIn } from './fixtures'
 
 // M6.19's own e2e spec: open an envelope, contribute to it through the real
 // record form (M6.8, reused rather than duplicated), then close it and
-// verify the (honest, possibly zero) rollover is shown. One continuous story
-// on a shared seeded database, same idiom as reimbursements.spec.ts.
-//
-// Serial, like golden-path.spec.ts and reimbursements.spec.ts: this spec
-// shares one seeded database and reads it as a continuous story. The seeded
-// instance has an account from the e2e fixture (cmd/uruni/seed_e2e.go).
+// verify the (honest, possibly zero) rollover is shown. One continuous story,
+// so serial, on the file's own seeded instance (cmd/uruni/seed_e2e.go).
 
 test.describe('incidentals', () => {
   test.describe.configure({ mode: 'serial' })
+  test.beforeAll(({ instance }) => instance.reset())
 
-  const seedEmail = 'bendahara@e2e.uruni.test'
-  const seedPassword = 'e2e-fixture-password'
   const occasion = 'Halal bihalal RT E2E'
 
   // The envelope's own row in Beranda's purpose breakdown, anchored to the
@@ -28,10 +24,8 @@ test.describe('incidentals', () => {
   }
 
   test('open an envelope from Pengaturan and verify it appears on Beranda', async ({ page }) => {
+    await logIn(page)
     await page.goto('/')
-    await page.getByLabel(copy.auth.login.emailLabel).fill(seedEmail)
-    await page.getByLabel(copy.auth.login.passwordLabel, { exact: true }).fill(seedPassword)
-    await page.getByRole('button', { name: copy.auth.login.submit }).click()
     await expect(page.getByText(copy.home.balanceHeading)).toBeVisible()
 
     // Opening a brand-new envelope has no button on Beranda (M6.33,
@@ -71,10 +65,8 @@ test.describe('incidentals', () => {
   })
 
   test('contribute to the envelope through the real record form, and verify the collected total updates', async ({ page }) => {
+    await logIn(page)
     await page.goto('/')
-    await page.getByLabel(copy.auth.login.emailLabel).fill(seedEmail)
-    await page.getByLabel(copy.auth.login.passwordLabel, { exact: true }).fill(seedPassword)
-    await page.getByRole('button', { name: copy.auth.login.submit }).click()
     await expect(page.getByText(copy.home.balanceHeading)).toBeVisible()
 
     // The envelope opened in the previous test is still open, so it now
@@ -115,10 +107,8 @@ test.describe('incidentals', () => {
   })
 
   test('close the envelope and verify the rollover is shown honestly', async ({ page }) => {
+    await logIn(page)
     await page.goto('/')
-    await page.getByLabel(copy.auth.login.emailLabel).fill(seedEmail)
-    await page.getByLabel(copy.auth.login.passwordLabel, { exact: true }).fill(seedPassword)
-    await page.getByRole('button', { name: copy.auth.login.submit }).click()
     await expect(page.getByText(copy.home.balanceHeading)).toBeVisible()
 
     // Still open, still its own row on Beranda (M6.33) - tap it straight

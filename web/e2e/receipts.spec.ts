@@ -1,6 +1,7 @@
-import { expect, test } from '@playwright/test'
+import { readdirSync } from 'node:fs'
 
 import { copy } from '../src/copy/id'
+import { expect, test, logIn } from './fixtures'
 
 // M6.21/#154's own e2e spec: an at-record-time photo attach against the
 // real backend (M6.20) - the multipart upload itself, and the row it
@@ -21,15 +22,11 @@ const TINY_JPEG = Buffer.from(
 
 test.describe('receipt photos', () => {
   test.describe.configure({ mode: 'serial' })
+  test.beforeAll(({ instance }) => instance.reset())
 
-  const seedEmail = 'bendahara@e2e.uruni.test'
-  const seedPassword = 'e2e-fixture-password'
-
-  test('records a transaction with an optional photo, uploaded after the row posts', async ({ page }) => {
+  test('records a transaction with an optional photo, uploaded after the row posts', async ({ page, instance }) => {
+    await logIn(page)
     await page.goto('/')
-    await page.getByLabel(copy.auth.login.emailLabel).fill(seedEmail)
-    await page.getByLabel(copy.auth.login.passwordLabel, { exact: true }).fill(seedPassword)
-    await page.getByRole('button', { name: copy.auth.login.submit }).click()
     await expect(page.getByText(copy.home.balanceHeading)).toBeVisible()
 
     await page.getByRole('link', { name: copy.shell.nav.record }).click()
@@ -57,6 +54,9 @@ test.describe('receipt photos', () => {
     await expect(page.getByText(copy.home.balanceHeading)).toBeVisible()
     await expect(page.getByText(copy.record.successOut)).toBeVisible()
     await expect(page.getByText(copy.receipts.transactionPhotoFailed)).not.toBeVisible()
+    // The photo landed in this instance's own uploads directory, never the dev
+    // one the binary would default to.
+    expect(readdirSync(instance.paths.uploadsDir, { recursive: true }).length).toBeGreaterThan(0)
 
     // The row now carries a photo - Riwayat's Transaksi tab is where an
     // after-the-fact viewer lives, and this is the same row this test just

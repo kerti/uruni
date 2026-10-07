@@ -1,6 +1,7 @@
-import { expect, test, type Page } from '@playwright/test'
+import type { Page } from '@playwright/test'
 
 import { copy } from '../src/copy/id'
+import { expect, logIn, seedPassword, test } from './fixtures'
 
 // M6.39/M6.40 (#325, #326, ADR-012): restore, driven through a real browser.
 // vitest covers RestoreDialog's states against stubbed fetches; this spec
@@ -12,29 +13,22 @@ import { copy } from '../src/copy/id'
 //
 // Both restores here are round trips: the first restores a backup of the
 // state the instance is already in, the second restores the safety net
-// that first restore wrote - the same state again. Every spec in this suite
-// shares one seeded instance (playwright.config.ts), so leaving the ledger
-// exactly as it was found is the point, not a shortcut. The login survives
-// both: a restore never touches the live user row (ADR-012).
+// that first restore wrote - the same state again, which is what the preview
+// asserts. The login survives both - a restore never touches the live user
+// row (ADR-012) - but every session does not, so each test signs in again
+// afterwards.
 //
-// The server writes its dumps to E2E_BACKUP_DIR (Makefile), never the dev
-// server's ./backups, so the list below holds only this run's own dumps.
+// The server writes its dumps to its own instance's backup directory
+// (e2e/fixtures.ts), never the dev server's ./backups, so the list below
+// holds only this file's own dumps.
 test.describe('restore', () => {
   test.describe.configure({ mode: 'serial' })
+  test.beforeAll(({ instance }) => instance.reset())
 
-  const seedEmail = 'bendahara@e2e.uruni.test'
-  const seedPassword = 'e2e-fixture-password'
   const seedFundName = 'Kas RT Uji Coba'
 
   const backupText = copy.settings.backup
   const confirmText = copy.restoreConfirm
-
-  async function logIn(page: Page) {
-    await page.getByLabel(copy.auth.login.emailLabel).fill(seedEmail)
-    await page.getByLabel(copy.auth.login.passwordLabel, { exact: true }).fill(seedPassword)
-    await page.getByRole('button', { name: copy.auth.login.submit }).click()
-    await expect(page.getByText(copy.home.balanceHeading)).toBeVisible()
-  }
 
   async function openSettings(page: Page) {
     await page.getByRole('link', { name: copy.shell.nav.settings }).click()
@@ -56,8 +50,9 @@ test.describe('restore', () => {
   }
 
   test('restores an uploaded backup, then logs everyone out', async ({ page }) => {
-    await page.goto('/')
     await logIn(page)
+    await page.goto('/')
+    await expect(page.getByText(copy.home.balanceHeading)).toBeVisible()
     await openSettings(page)
 
     // exact: every server-side row's own download control is labelled
@@ -73,12 +68,13 @@ test.describe('restore', () => {
   })
 
   test('restores the safety net the previous restore wrote, from the server-side list', async ({ page }) => {
-    await page.goto('/')
     await logIn(page)
+    await page.goto('/')
+    await expect(page.getByText(copy.home.balanceHeading)).toBeVisible()
     await openSettings(page)
 
     // The first test's restore wrote a pre-restore dump. The list is newest
-    // first, so .first() is that one even on a rerun that skipped e2e-reset.
+    // first, so .first() is that one.
     const preRestorePrefix = backupText.restoreRowAria(backupText.kindPreRestore, '').trim()
     await page
       .getByRole('button', { name: new RegExp(`^${preRestorePrefix}`) })
@@ -87,9 +83,9 @@ test.describe('restore', () => {
     await confirmRoundTrip(page)
 
     // Still the same instance afterwards: the login works and home renders.
-    // From / - the reload after confirm keeps /settings, and logging in
-    // there lands back on Pengaturan, not Beranda.
-    await page.goto('/')
+    // The restore dropped every session, so this is a fresh sign-in.
     await logIn(page)
+    await page.goto('/')
+    await expect(page.getByText(copy.home.balanceHeading)).toBeVisible()
   })
 })

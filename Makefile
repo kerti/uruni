@@ -48,17 +48,20 @@ DEV_UPLOADS_DIR := $(or $(URUNI_UPLOADS_DIR),./uploads)
 # not already exist (config.EnsureBackupDirWritable) either.
 DEV_BACKUP_DIR := $(or $(URUNI_BACKUP_DIR),./backups)
 
-# E2E (ADR-015). SQLite makes this cheap: a throwaway database *file*, deleted
-# and re-migrated each run, so the dev DB is never touched and there is no
-# container to exec into. Playwright owns the e2e server + vite on dedicated
-# ports, so the 8080/5173 dev servers are never disturbed.
+# E2E (ADR-015). SQLite makes this cheap: throwaway database *files*, so the
+# dev DB is never touched and there is no container to exec into. `make e2e`
+# owns none of the values below: Playwright builds the binary and gives each
+# worker its own server, database, port, backup and uploads directory under
+# the OS temp dir (web/e2e/fixtures.ts). These are the one instance
+# `make e2e-server` runs for debugging by hand, on a port away from the
+# 8080/5173 dev servers.
 E2E_DB   := /tmp/uruni-e2e.db
 E2E_PORT := 8099
-# Its own backup directory, not the dev one: the restore spec writes
-# pre-restore dumps and lists them, so sharing ./backups would mix the dev
-# server's dumps into the e2e list and e2e dumps into the dev one. Reset with
-# the database, so every run's list starts from that run's own boot dump.
+# Its own backup and uploads directories, not the dev ones: restore writes
+# dumps and receipts write photos, so sharing ./backups or ./uploads would
+# mix e2e files into the dev server's. Reset with the database.
 E2E_BACKUP_DIR := /tmp/uruni-e2e-backups
+E2E_UPLOADS_DIR := /tmp/uruni-e2e-uploads
 # The request logger writes one info line per request (internal/http/
 # middleware.go), which buries Playwright's own results in a full run.
 # `make e2e` wants quiet; a human debugging `make e2e-server` can turn it
@@ -116,9 +119,9 @@ help:
 	@echo "  servers-status          show which dev servers are running"
 	@echo ""
 	@echo "E2E (Playwright; ADR-015):"
-	@echo "  e2e                     full run - reset the throwaway DB, run the suite"
+	@echo "  e2e                     full run - build the SPA, then the suite on per-worker instances"
 	@echo "  e2e-install             download the browser Playwright drives (once per machine)"
-	@echo "  e2e-reset               recreate + migrate + seed $(E2E_DB)"
+	@echo "  e2e-reset               recreate + migrate + seed $(E2E_DB) (one instance, by hand)"
 	@echo "  e2e-server              run the server against $(E2E_DB) (foreground, :$(E2E_PORT))"
 	@echo ""
 	@echo "Self-host stack (the operator's docker-compose.yml - not the dev loop):"
@@ -374,32 +377,35 @@ servers-status:
 	fi
 
 # ---- e2e (Playwright; ADR-015) ---------------------------------------------
-# e2e-reset runs synchronously before Playwright, so the file is fully migrated
-# and seeded by the time Playwright's server boots (auto-migrate becomes a
-# no-op, no race). E2E_ARGS forwards Playwright flags:
+# `make e2e` needs no reset step: Playwright's global setup builds the binary
+# and seeds a template database, and every spec file resets its worker's own
+# instance from it (web/playwright.config.ts). The binary embeds web/dist, so
+# the SPA is built first - a run never tests a stale bundle. E2E_ARGS forwards
+# Playwright flags:
 #   make e2e E2E_ARGS='--grep @smoke'
 
-e2e: e2e-reset
-	@( cd web && URUNI_DB="$(E2E_DB)" npm run -s test:e2e -- $(E2E_ARGS) )
+e2e: web-build
+	@( cd web && npm run -s test:e2e -- $(E2E_ARGS) )
 
 # `npm ci` installs the Playwright *runner*, never the browser it drives - that
 # is a separate few-hundred-MB download, once per machine. Keeping it out of
 # `make setup` keeps a fresh clone fast for the contributors who never run e2e;
 # `make doctor` carries the row that tells the rest of us to run this.
 # Chromium alone, because playwright.config.ts declares no `projects` and so
-# runs the default browser only.
+# runs the default browser only (at a phone viewport).
 e2e-install:
 	@( cd web && npx playwright install chromium )
 
+# Not part of `make e2e` (see above): this and e2e-server are for running the
+# one seeded instance by hand, e.g. to click through what a spec sees.
 e2e-reset:
 	@rm -f $(E2E_DB) $(E2E_DB)-wal $(E2E_DB)-shm
-	@rm -rf $(E2E_BACKUP_DIR) && mkdir -p $(E2E_BACKUP_DIR)
+	@rm -rf $(E2E_BACKUP_DIR) $(E2E_UPLOADS_DIR) && mkdir -p $(E2E_BACKUP_DIR) $(E2E_UPLOADS_DIR)
 	@URUNI_DB="$(E2E_DB)" URUNI_LOG_LEVEL=$(E2E_LOG_LEVEL) go run ./cmd/uruni seed-e2e
 	@echo "e2e db: $(E2E_DB) ready"
 
 e2e-server: e2e-reset
-	@mkdir -p "$(DEV_UPLOADS_DIR)"
-	@URUNI_DB="$(E2E_DB)" URUNI_BACKUP_DIR="$(E2E_BACKUP_DIR)" PORT=$(E2E_PORT) URUNI_LOG_LEVEL=$(E2E_LOG_LEVEL) go run ./cmd/uruni serve
+	@URUNI_DB="$(E2E_DB)" URUNI_BACKUP_DIR="$(E2E_BACKUP_DIR)" URUNI_UPLOADS_DIR="$(E2E_UPLOADS_DIR)" PORT=$(E2E_PORT) URUNI_LOG_LEVEL=$(E2E_LOG_LEVEL) go run ./cmd/uruni serve
 
 # ---- self-host stack -------------------------------------------------------
 # Exercises docker-compose.yml - the artifact operators actually run (ADR-010
