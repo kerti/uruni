@@ -10,6 +10,7 @@ import (
 )
 
 func TestAdd(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name     string
 		a, b     money.Amount
@@ -37,6 +38,7 @@ func TestAdd(t *testing.T) {
 }
 
 func TestSub(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name     string
 		a, b     money.Amount
@@ -77,6 +79,7 @@ func TestSub(t *testing.T) {
 // random pairs: Add(-b) disagrees on eleven, all with math.MinInt64 as the
 // subtrahend; the shipped Sub disagrees on none.
 func TestSubIsNotAddOfTheNegation(t *testing.T) {
+	t.Parallel()
 	t.Run("silently returns a wrong value where the true difference overflows", func(t *testing.T) {
 		// Add(-b) computes 0 + MinInt64 = MinInt64, and its sign check sees a
 		// sum that moved the expected way, so it returns MinInt64 with no
@@ -101,6 +104,7 @@ func TestSubIsNotAddOfTheNegation(t *testing.T) {
 }
 
 func TestMul(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name     string
 		a        money.Amount
@@ -133,6 +137,7 @@ func TestMul(t *testing.T) {
 }
 
 func TestDBRoundTrip(t *testing.T) {
+	t.Parallel()
 	for _, v := range []int64{0, 1, -1, 50_000, math.MaxInt64, math.MinInt64} {
 		if got := money.FromDB(v).Int64(); got != v {
 			t.Errorf("FromDB(%d).Int64() = %d, want %d", v, got, v)
@@ -143,6 +148,7 @@ func TestDBRoundTrip(t *testing.T) {
 // The API contract M4 is built against: a bare JSON number, which also rejects
 // a fractional literal for free (ADR-026).
 func TestJSON(t *testing.T) {
+	t.Parallel()
 	t.Run("marshals as a bare number", func(t *testing.T) {
 		got, err := json.Marshal(struct {
 			Amount money.Amount `json:"amount"`

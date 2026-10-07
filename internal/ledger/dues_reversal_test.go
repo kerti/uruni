@@ -14,6 +14,7 @@ import (
 // balance is back to exactly what it was before the payment - an integer
 // comparison, no tolerance (ADR-015).
 func TestReverseDuesPaymentRoundTripsBalanceAndPaidStatus(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 	f := newFixture(t, l)
 	q := store.New(l.db)
@@ -109,6 +110,7 @@ func TestReverseDuesPaymentRoundTripsBalanceAndPaidStatus(t *testing.T) {
 // the named ErrDuesPaymentAlreadyReversed rather than a raw constraint
 // string.
 func TestReverseDuesPaymentTwiceIsRefused(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 	f := newFixture(t, l)
 	q := store.New(l.db)
@@ -146,6 +148,7 @@ func TestReverseDuesPaymentTwiceIsRefused(t *testing.T) {
 // can be reversed through this method - PRD section 4 keeps it exactly as wide as
 // dues, never a generic reverse-any-transaction primitive.
 func TestReverseDuesPaymentRefusesANonDuesTransaction(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 	f := newFixture(t, l)
 	ctx := context.Background()
@@ -171,6 +174,7 @@ func TestReverseDuesPaymentRefusesANonDuesTransaction(t *testing.T) {
 // same ErrNotADuesPayment check as any other non-dues row - ruling out
 // reversing a reversal without a separate check.
 func TestReverseDuesPaymentRefusesReversingAReversal(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 	f := newFixture(t, l)
 	q := store.New(l.db)
@@ -212,6 +216,7 @@ func TestReverseDuesPaymentRefusesReversingAReversal(t *testing.T) {
 // not exist at all - ErrDuesPaymentNotFound, not a generic error and not a
 // silent cross-fund reversal.
 func TestReverseDuesPaymentRefusesAnotherFundsTransaction(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 	f1 := newFixture(t, l)
 	q := store.New(l.db)
@@ -261,6 +266,7 @@ func TestReverseDuesPaymentRefusesAnotherFundsTransaction(t *testing.T) {
 // PostDuesPayments' own argument-shape validation (ADR-027): checked before
 // anything is fetched or written.
 func TestReverseDuesPaymentRejectsInvalidOccurredOn(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 	f := newFixture(t, l)
 	q := store.New(l.db)
@@ -293,6 +299,7 @@ func TestReverseDuesPaymentRejectsInvalidOccurredOn(t *testing.T) {
 // from the paid-amount sum, not merely read as Unpaid through some
 // downstream classification.
 func TestReverseDuesPaymentReversedPeriodNoLongerCountsTowardDuesPaidByPeriod(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 	f := newFixture(t, l)
 	q := store.New(l.db)
@@ -342,6 +349,7 @@ func TestReverseDuesPaymentReversedPeriodNoLongerCountsTowardDuesPaidByPeriod(t 
 // by giving the reversal a different kind entirely is what keeps June out
 // of that MAX once it no longer counts as paid at all.
 func TestReverseDuesPaymentReversedPeriodDoesNotReadAsPaidInAdvance(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 	f := newFixture(t, l)
 	q := store.New(l.db)
@@ -421,6 +429,7 @@ func TestReverseDuesPaymentReversedPeriodDoesNotReadAsPaidInAdvance(t *testing.T
 // every other system path - nothing generated is ever stored, the list
 // labels the row instead (Undo2, "Pembatalan - {period} - {anggota}").
 func TestReverseDuesPaymentNoteFollowsNormalizeNoteContract(t *testing.T) {
+	t.Parallel()
 	postAndReverse := func(t *testing.T, note *string) *string {
 		t.Helper()
 		l := newTestLedger(t)
@@ -468,6 +477,7 @@ func TestReverseDuesPaymentNoteFollowsNormalizeNoteContract(t *testing.T) {
 // TestReverseDuesPaymentRoundTripsBalanceAndPaidStatus already proves for
 // dues.
 func TestReverseDuesPaymentReversesANamedContribution(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 	f := newFixture(t, l)
 	ctx := context.Background()
@@ -548,6 +558,7 @@ func TestReverseDuesPaymentReversesANamedContribution(t *testing.T) {
 // nor a named contribution, exactly the same ErrNotADuesPayment refusal an
 // ordinary transaction already gets (TestReverseDuesPaymentRefusesANonDuesTransaction).
 func TestReverseDuesPaymentRefusesAnUnnamedContribution(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 	f := newFixture(t, l)
 	ctx := context.Background()
@@ -573,6 +584,7 @@ func TestReverseDuesPaymentRefusesAnUnnamedContribution(t *testing.T) {
 // original row's own purpose, so ADR-031's guard applies to it exactly as
 // it does to an ordinary posting - reopen first (ADR-034).
 func TestReverseDuesPaymentRefusesAClosedEnvelope(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 	f := newFixture(t, l)
 	ctx := context.Background()

@@ -51,6 +51,7 @@ func clockFixture(t *testing.T, r http.Handler) memberResponse {
 // GET /api/members/{id}/outstanding-dues with no ?through= walks to the
 // current Jakarta month.
 func TestGetOutstandingDuesDefaultsToTheJakartaMonth(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		name string
 		now  time.Time
@@ -61,6 +62,7 @@ func TestGetOutstandingDuesDefaultsToTheJakartaMonth(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			r := authedRouterAt(t, testStoreDB(t), fixedClock(tc.now))
 			member := clockFixture(t, r)
 
@@ -86,6 +88,7 @@ func TestGetOutstandingDuesDefaultsToTheJakartaMonth(t *testing.T) {
 // GET /api/members: current_rate and arrears_months both read the Jakarta
 // month, from the one value the handler computes per request.
 func TestGetMembersReadsTheJakartaMonth(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		name         string
 		now          time.Time
@@ -98,6 +101,7 @@ func TestGetMembersReadsTheJakartaMonth(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			r := authedRouterAt(t, testStoreDB(t), fixedClock(tc.now))
 			clockFixture(t, r)
 
@@ -119,6 +123,7 @@ func TestGetMembersReadsTheJakartaMonth(t *testing.T) {
 // A direct GET /api/backup names the zip with the Jakarta date, not the
 // server's: at 17:00:00Z it is already the next day for the treasurer.
 func TestDownloadBackupNamesTheZipWithTheJakartaDate(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		now  time.Time
 		want string
@@ -128,6 +133,7 @@ func TestDownloadBackupNamesTheZipWithTheJakartaDate(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.now.Format(time.RFC3339), func(t *testing.T) {
+			t.Parallel()
 			r := authedRouterAt(t, testStoreDB(t), fixedClock(tc.now))
 			setUpFund(t, r)
 

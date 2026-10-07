@@ -68,6 +68,7 @@ func statusFor(t *testing.T, rows []MemberDuesStatus, memberID int64) (MemberDue
 // --- unpaid / partial / paid / paid in advance ------------------------------
 
 func TestDuesStatusForPeriodUnpaidMemberHasPaidNothing(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 	f := newFixture(t, l)
 	q := store.New(l.db)
@@ -98,6 +99,7 @@ func TestDuesStatusForPeriodUnpaidMemberHasPaidNothing(t *testing.T) {
 }
 
 func TestDuesStatusForPeriodPartialMemberPaidLessThanTheRate(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 	f := newFixture(t, l)
 	q := store.New(l.db)
@@ -133,6 +135,7 @@ func TestDuesStatusForPeriodPartialMemberPaidLessThanTheRate(t *testing.T) {
 }
 
 func TestDuesStatusForPeriodPaidMemberPaidExactlyTheRate(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 	f := newFixture(t, l)
 	q := store.New(l.db)
@@ -169,6 +172,7 @@ func TestDuesStatusForPeriodPaidMemberPaidExactlyTheRate(t *testing.T) {
 // owe", and paying more still answers yes. The exact figure stays visible
 // in PaidAmount for anyone who wants it.
 func TestDuesStatusForPeriodOverpaymentReadsAsPaid(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 	f := newFixture(t, l)
 	q := store.New(l.db)
@@ -211,6 +215,7 @@ func TestDuesStatusForPeriodOverpaymentReadsAsPaid(t *testing.T) {
 // period that is itself unpaid or partial stays unpaid/partial even if the
 // member later paid ahead for some other month.
 func TestDuesStatusForPeriodPaidInAdvanceWhenALaterPeriodIsAlsoPaid(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 	f := newFixture(t, l)
 	q := store.New(l.db)
@@ -248,6 +253,7 @@ func TestDuesStatusForPeriodPaidInAdvanceWhenALaterPeriodIsAlsoPaid(t *testing.T
 // though a later period was paid - "paid in advance" describes a period
 // that is itself settled and then some, not a hole with a payment beyond it.
 func TestDuesStatusForPeriodSkippedPeriodStaysUnpaidDespiteALaterPayment(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 	f := newFixture(t, l)
 	q := store.New(l.db)
@@ -284,6 +290,7 @@ func TestDuesStatusForPeriodSkippedPeriodStaysUnpaidDespiteALaterPayment(t *test
 // the last one paid is Paid, and every earlier paid month reads as Paid in
 // advance because a later period was also paid.
 func TestDuesStatusForPeriodSeveralMonthsPaidAtOnceShowCorrectlyPerPeriod(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 	f := newFixture(t, l)
 	q := store.New(l.db)
@@ -329,6 +336,7 @@ func TestDuesStatusForPeriodSeveralMonthsPaidAtOnceShowCorrectlyPerPeriod(t *tes
 // --- exclusion / omission from the roster -----------------------------------
 
 func TestDuesStatusForPeriodMemberWithNoTierIsExcluded(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 	f := newFixture(t, l)
 	q := store.New(l.db)
@@ -349,6 +357,7 @@ func TestDuesStatusForPeriodMemberWithNoTierIsExcluded(t *testing.T) {
 // dues_rate row at all for the period. Uruni does not invent an amount, so
 // the member is omitted rather than shown as owing an unknown figure.
 func TestDuesStatusForPeriodMemberWhoseTierHasNoRateForThePeriodIsOmitted(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 	f := newFixture(t, l)
 	q := store.New(l.db)
@@ -370,6 +379,7 @@ func TestDuesStatusForPeriodMemberWhoseTierHasNoRateForThePeriodIsOmitted(t *tes
 // same omission case, reached through a real effective_from rather than an
 // empty dues_rate table.
 func TestDuesStatusForPeriodMemberWhoseTierRateStartsAfterThePeriodIsOmitted(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 	f := newFixture(t, l)
 	q := store.New(l.db)
@@ -391,6 +401,7 @@ func TestDuesStatusForPeriodMemberWhoseTierRateStartsAfterThePeriodIsOmitted(t *
 // --- active window: joined_on / inactive_on, inclusive by month ------------
 
 func TestDuesStatusForPeriodMemberOwesTheMonthTheyJoinedInFull(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 	f := newFixture(t, l)
 	q := store.New(l.db)
@@ -415,6 +426,7 @@ func TestDuesStatusForPeriodMemberOwesTheMonthTheyJoinedInFull(t *testing.T) {
 }
 
 func TestDuesStatusForPeriodMemberExcludedBeforeTheMonthTheyJoined(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 	f := newFixture(t, l)
 	q := store.New(l.db)
@@ -435,6 +447,7 @@ func TestDuesStatusForPeriodMemberExcludedBeforeTheMonthTheyJoined(t *testing.T)
 }
 
 func TestDuesStatusForPeriodMemberOwesTheMonthTheyWentInactiveInFull(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 	f := newFixture(t, l)
 	q := store.New(l.db)
@@ -459,6 +472,7 @@ func TestDuesStatusForPeriodMemberOwesTheMonthTheyWentInactiveInFull(t *testing.
 }
 
 func TestDuesStatusForPeriodMemberExcludedAfterTheMonthTheyWentInactive(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 	f := newFixture(t, l)
 	q := store.New(l.db)
@@ -479,6 +493,7 @@ func TestDuesStatusForPeriodMemberExcludedAfterTheMonthTheyWentInactive(t *testi
 }
 
 func TestDuesStatusForPeriodNilJoinedOnMeansAlwaysWasAMember(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 	f := newFixture(t, l)
 	q := store.New(l.db)
@@ -500,6 +515,7 @@ func TestDuesStatusForPeriodNilJoinedOnMeansAlwaysWasAMember(t *testing.T) {
 // --- malformed period --------------------------------------------------------
 
 func TestDuesStatusForPeriodRejectsMalformedPeriod(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name   string
 		period string
@@ -510,6 +526,7 @@ func TestDuesStatusForPeriodRejectsMalformedPeriod(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			l := newTestLedger(t)
 			f := newFixture(t, l)
 			ctx := context.Background()
@@ -525,6 +542,7 @@ func TestDuesStatusForPeriodRejectsMalformedPeriod(t *testing.T) {
 // --- fund scoping ------------------------------------------------------------
 
 func TestDuesStatusForPeriodScopesToOneFund(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 	f1 := newFixture(t, l)
 	ctx := context.Background()
@@ -585,6 +603,7 @@ func TestDuesStatusForPeriodScopesToOneFund(t *testing.T) {
 // answer, not a bug: see ADR-024's "Accepted limitation" paragraph and the
 // comment on GetEffectiveDuesRate's call site in dues_status.go.
 func TestDuesStatusForPeriodMidYearPromotionAppliesCurrentTierToPastPeriodsAcceptedLimitation(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 	f := newFixture(t, l)
 	q := store.New(l.db)
@@ -626,6 +645,7 @@ func TestDuesStatusForPeriodMidYearPromotionAppliesCurrentTierToPastPeriodsAccep
 // reports for the same periods - this is the same derivation, not a second
 // opinion.
 func TestOutstandingDuesForMemberReturnsUnpaidAndPartialOldestFirstMatchingDuesStatusForPeriod(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 	f := newFixture(t, l)
 	q := store.New(l.db)
@@ -693,6 +713,7 @@ func TestOutstandingDuesForMemberReturnsUnpaidAndPartialOldestFirstMatchingDuesS
 }
 
 func TestOutstandingDuesForMemberFullyPaidMemberReturnsEmpty(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 	f := newFixture(t, l)
 	q := store.New(l.db)
@@ -724,6 +745,7 @@ func TestOutstandingDuesForMemberFullyPaidMemberReturnsEmpty(t *testing.T) {
 }
 
 func TestOutstandingDuesForMemberTierLessMemberReturnsEmpty(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 	f := newFixture(t, l)
 	q := store.New(l.db)
@@ -746,6 +768,7 @@ func TestOutstandingDuesForMemberTierLessMemberReturnsEmpty(t *testing.T) {
 // start either - and nothing was ever owed against it, so the answer is
 // empty rather than an arbitrary starting month.
 func TestOutstandingDuesForMemberNilJoinedOnAndRatelessTierReturnsEmpty(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 	f := newFixture(t, l)
 	q := store.New(l.db)
@@ -769,6 +792,7 @@ func TestOutstandingDuesForMemberNilJoinedOnAndRatelessTierReturnsEmpty(t *testi
 // walk must return empty rather than iterating backwards or returning a
 // period the member cannot owe yet - the arrears case in reverse.
 func TestOutstandingDuesForMemberJoinedAfterThroughReturnsEmpty(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 	f := newFixture(t, l)
 	q := store.New(l.db)
@@ -791,6 +815,7 @@ func TestOutstandingDuesForMemberJoinedAfterThroughReturnsEmpty(t *testing.T) {
 }
 
 func TestOutstandingDuesForMemberJoinedOnBoundsTheStart(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 	f := newFixture(t, l)
 	q := store.New(l.db)
@@ -817,6 +842,7 @@ func TestOutstandingDuesForMemberJoinedOnBoundsTheStart(t *testing.T) {
 }
 
 func TestOutstandingDuesForMemberInactiveOnBoundsTheEnd(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 	f := newFixture(t, l)
 	q := store.New(l.db)
@@ -849,6 +875,7 @@ func TestOutstandingDuesForMemberInactiveOnBoundsTheEnd(t *testing.T) {
 // first rate exist (because joined_on predates it) are silently omitted,
 // and periods once the rate exists still appear.
 func TestOutstandingDuesForMemberSkipsPeriodWithNoEffectiveRateWithoutTruncatingTheRange(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 	f := newFixture(t, l)
 	q := store.New(l.db)
@@ -876,6 +903,7 @@ func TestOutstandingDuesForMemberSkipsPeriodWithNoEffectiveRateWithoutTruncating
 }
 
 func TestOutstandingDuesForMemberThroughBoundsTheEnd(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 	f := newFixture(t, l)
 	q := store.New(l.db)
@@ -904,6 +932,7 @@ func TestOutstandingDuesForMemberThroughBoundsTheEnd(t *testing.T) {
 // straddle that boundary by one second, and a year boundary too; the walk's
 // last period is the period "now" fell in.
 func TestOutstandingDuesForMemberOmittedThroughDefaultsToTheJakartaMonth(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		name string
 		now  time.Time
@@ -917,6 +946,7 @@ func TestOutstandingDuesForMemberOmittedThroughDefaultsToTheJakartaMonth(t *test
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			l := newTestLedger(t)
 			f := newFixture(t, l)
 			q := store.New(l.db)
@@ -943,8 +973,10 @@ func TestOutstandingDuesForMemberOmittedThroughDefaultsToTheJakartaMonth(t *test
 }
 
 func TestOutstandingDuesForMemberRejectsMalformedThrough(t *testing.T) {
+	t.Parallel()
 	for _, through := range []string{"2026-13", "2026-1", "not-a-period"} {
 		t.Run(through, func(t *testing.T) {
+			t.Parallel()
 			l := newTestLedger(t)
 			f := newFixture(t, l)
 			q := store.New(l.db)
@@ -967,6 +999,7 @@ func TestOutstandingDuesForMemberRejectsMalformedThrough(t *testing.T) {
 // 404 (dues_status_test in package http covers that mapping; this proves
 // the ledger method itself does not swallow or misreport it).
 func TestOutstandingDuesForMemberUnknownMemberIsNotFound(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 	f := newFixture(t, l)
 	ctx := context.Background()
@@ -981,6 +1014,7 @@ func TestOutstandingDuesForMemberUnknownMemberIsNotFound(t *testing.T) {
 // GetEffectiveDuesRate's own call site, reused as-is, that produces it, not
 // something OutstandingDuesForMember could opt out of even if it tried.
 func TestOutstandingDuesForMemberMidYearPromotionAppliesCurrentTierToPastPeriodsAcceptedLimitation(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 	f := newFixture(t, l)
 	q := store.New(l.db)
@@ -1043,6 +1077,7 @@ func newArrearsPeriods(t *testing.T) arrearsPeriods {
 // A member who joined the current period owns no period strictly before
 // it - ADR-032's own "including... a member who joined this period" case.
 func TestArrearsMonthsForMemberJoinedThisPeriodReadsZero(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 	f := newFixture(t, l)
 	q := store.New(l.db)
@@ -1068,6 +1103,7 @@ func TestArrearsMonthsForMemberJoinedThisPeriodReadsZero(t *testing.T) {
 // outstanding for any period before the current one either, so the badge
 // reads zero.
 func TestArrearsMonthsForMemberPaidAheadReadsZero(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 	f := newFixture(t, l)
 	q := store.New(l.db)
@@ -1105,6 +1141,7 @@ func TestArrearsMonthsForMemberPaidAheadReadsZero(t *testing.T) {
 // one (ADR-032's own table) - this is the acceptance criterion's own
 // "Tunggakan 1 bulan" case.
 func TestArrearsMonthsForMemberPartPaidEarlierPeriodReadsOne(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 	f := newFixture(t, l)
 	q := store.New(l.db)
@@ -1140,6 +1177,7 @@ func TestArrearsMonthsForMemberPartPaidEarlierPeriodReadsOne(t *testing.T) {
 // OutstandingDuesForMember itself returns both as outstanding with no
 // further classification.
 func TestArrearsMonthsForMemberCountsUnpaidAndPartialTheSame(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 	f := newFixture(t, l)
 	q := store.New(l.db)
@@ -1176,6 +1214,7 @@ func TestArrearsMonthsForMemberCountsUnpaidAndPartialTheSame(t *testing.T) {
 // still reads zero arrears - the badge must never flip the whole roster to
 // "owing" on the first of the month.
 func TestArrearsMonthsForMemberCurrentPeriodAloneIsExcluded(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 	f := newFixture(t, l)
 	q := store.New(l.db)
@@ -1201,6 +1240,7 @@ func TestArrearsMonthsForMemberCurrentPeriodAloneIsExcluded(t *testing.T) {
 // A tier-less member has no dues obligation at all (mirrors
 // TestOutstandingDuesForMemberTierLessMemberReturnsEmpty).
 func TestArrearsMonthsForMemberTierLessMemberReadsZero(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 	f := newFixture(t, l)
 	q := store.New(l.db)
@@ -1224,6 +1264,7 @@ func TestArrearsMonthsForMemberTierLessMemberReadsZero(t *testing.T) {
 // through the HTTP layer, since this is the ledger derivation's own
 // property, not the route's.
 func TestArrearsMonthsForMemberBackdatingJoinedOnMakesArrearsAppear(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 	f := newFixture(t, l)
 	q := store.New(l.db)
@@ -1264,8 +1305,10 @@ func TestArrearsMonthsForMemberBackdatingJoinedOnMakesArrearsAppear(t *testing.T
 // Malformed currentPeriod is rejected the same way OutstandingDuesForMember
 // rejects a malformed through.
 func TestArrearsMonthsForMemberRejectsMalformedCurrentPeriod(t *testing.T) {
+	t.Parallel()
 	for _, currentPeriod := range []string{"2026-13", "2026-1", "not-a-period", ""} {
 		t.Run(currentPeriod, func(t *testing.T) {
+			t.Parallel()
 			l := newTestLedger(t)
 			f := newFixture(t, l)
 			q := store.New(l.db)
@@ -1287,6 +1330,7 @@ func TestArrearsMonthsForMemberRejectsMalformedCurrentPeriod(t *testing.T) {
 // OutstandingDuesForMember directly, so the same GetMemberForFund lookup
 // backs it.
 func TestArrearsMonthsForMemberUnknownMemberIsNotFound(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 	f := newFixture(t, l)
 	ctx := context.Background()
@@ -1307,6 +1351,7 @@ func TestArrearsMonthsForMemberUnknownMemberIsNotFound(t *testing.T) {
 // happens to run in January - hence a fixed-period test rather than a
 // relative one.
 func TestArrearsMonthsForMemberCrossesTheYearBoundary(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 	f := newFixture(t, l)
 	q := store.New(l.db)
@@ -1379,6 +1424,7 @@ func (p paidThroughFixture) october(t *testing.T) MemberDuesStatus {
 }
 
 func TestDuesStatusForPeriodPaidThroughIsTheLastPeriodOfAnUnbrokenRun(t *testing.T) {
+	t.Parallel()
 	p := newPaidThroughFixture(t, duesMemberParams{}, "2026-10", "2026-11", "2026-12", "2027-01", "2027-02")
 
 	got := p.october(t)
@@ -1388,6 +1434,7 @@ func TestDuesStatusForPeriodPaidThroughIsTheLastPeriodOfAnUnbrokenRun(t *testing
 }
 
 func TestDuesStatusForPeriodPaidThroughStopsAtASkippedPeriod(t *testing.T) {
+	t.Parallel()
 	p := newPaidThroughFixture(t, duesMemberParams{}, "2026-10", "2026-11", "2027-01")
 
 	got := p.october(t)
@@ -1397,6 +1444,7 @@ func TestDuesStatusForPeriodPaidThroughStopsAtASkippedPeriod(t *testing.T) {
 }
 
 func TestDuesStatusForPeriodPaidThroughIsEmptyWhenTheNextPeriodIsTheHole(t *testing.T) {
+	t.Parallel()
 	p := newPaidThroughFixture(t, duesMemberParams{}, "2026-10", "2026-12")
 
 	got := p.october(t)
@@ -1406,6 +1454,7 @@ func TestDuesStatusForPeriodPaidThroughIsEmptyWhenTheNextPeriodIsTheHole(t *test
 }
 
 func TestDuesStatusForPeriodPaidThroughStopsWhereARateRiseLeavesAPeriodShort(t *testing.T) {
+	t.Parallel()
 	p := newPaidThroughFixture(t, duesMemberParams{}, "2026-10", "2026-11", "2026-12")
 	createDuesRate(t, p.q, p.tierID, 30_000, "2026-12")
 
@@ -1416,6 +1465,7 @@ func TestDuesStatusForPeriodPaidThroughStopsWhereARateRiseLeavesAPeriodShort(t *
 }
 
 func TestDuesStatusForPeriodPaidThroughIgnoresAReversedPayment(t *testing.T) {
+	t.Parallel()
 	p := newPaidThroughFixture(t, duesMemberParams{}, "2026-10", "2026-11", "2026-12")
 	ctx := context.Background()
 
@@ -1431,6 +1481,7 @@ func TestDuesStatusForPeriodPaidThroughIgnoresAReversedPayment(t *testing.T) {
 }
 
 func TestDuesStatusForPeriodPaidThroughEndsAtTheMonthTheMemberLeft(t *testing.T) {
+	t.Parallel()
 	inactive := "2026-11-15"
 	p := newPaidThroughFixture(t, duesMemberParams{inactiveOn: &inactive}, "2026-10", "2026-11", "2026-12")
 

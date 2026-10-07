@@ -52,6 +52,7 @@ func getIncidentalParticipation(t *testing.T, r http.Handler, purposeID int64) *
 // through POST /api/transactions and back out through GET /api/transactions,
 // on an incidental purpose.
 func TestPostTransactionAcceptsAMemberOnAContribution(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	setup := setUpFund(t, r)
 	envelope := openIncidentalFor(t, r, "Sunatan", "2026-08-01")
@@ -83,6 +84,7 @@ func TestPostTransactionAcceptsAMemberOnAContribution(t *testing.T) {
 // 400 invalid_argument, a friendly error rather than the trigger's raw
 // message.
 func TestPostTransactionRefusesAMemberOutsideAnIncidentalPurpose(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	setup := setUpFund(t, r)
 	member := createMemberFor(t, r, "Jane")
@@ -104,6 +106,7 @@ func TestPostTransactionRefusesAMemberOutsideAnIncidentalPurpose(t *testing.T) {
 // request and come back on the create response (minimum) and the detail
 // response (recipients).
 func TestOpenIncidentalAcceptsMinimumAndRecipients(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	setUpFund(t, r)
 	recipient := createMemberFor(t, r, "The Recipient")
@@ -138,6 +141,7 @@ func TestOpenIncidentalAcceptsMinimumAndRecipients(t *testing.T) {
 // /api/incidentals/{purposeID} fully replaces both facets, never adds to
 // them.
 func TestPatchIncidentalParticipationReplacesMinimumAndRecipients(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	setUpFund(t, r)
 	envelope := openIncidentalFor(t, r, "Sunatan", "2026-08-01")
@@ -169,6 +173,7 @@ func TestPatchIncidentalParticipationReplacesMinimumAndRecipients(t *testing.T) 
 // rides the same PATCH as the minimum, and omitting it clears it - the field
 // fully replaces its facet like the others.
 func TestPatchIncidentalParticipationSetsAndClearsTheTarget(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	setUpFund(t, r)
 	envelope := openIncidentalFor(t, r, "Sunatan", "2026-08-01")
@@ -201,6 +206,7 @@ func TestPatchIncidentalParticipationSetsAndClearsTheTarget(t *testing.T) {
 // route's own success path: an expected member reads Belum with nothing
 // given, and a later joiner's own gift surfaces under Unexpected.
 func TestGetIncidentalParticipationReturnsExpectedAndUnexpected(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	setup := setUpFund(t, r)
 	expectedMember := createMemberFor(t, r, "Expected Member")
@@ -266,6 +272,7 @@ func TestGetIncidentalParticipationReturnsExpectedAndUnexpected(t *testing.T) {
 // route ADR-029 built now also accepts a named contribution's transaction
 // id (ADR-034) - no new route, no new request shape.
 func TestPostDuesPaymentReversalAcceptsANamedContribution(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	setup := setUpFund(t, r)
 	member := createMemberFor(t, r, "Jane")
@@ -303,6 +310,7 @@ func TestPostDuesPaymentReversalAcceptsANamedContribution(t *testing.T) {
 // distinct from the dues one, exactly the shape mapLedgerError already uses
 // for every other PostPurposeCorrection refusal.
 func TestPostPurposeCorrectionRefusesANamedContribution(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	setup := setUpFund(t, r)
 	member := createMemberFor(t, r, "Jane")

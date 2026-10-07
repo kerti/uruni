@@ -39,6 +39,7 @@ func strPtr(s string) *string { return &s }
 // (ADR-034), fixed by that one date regardless of what the roster looks
 // like later.
 func TestGetIncidentalParticipationExpectedIsSetByOpenedOnDate(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 	f := newFixture(t, l)
 	ctx := context.Background()
@@ -82,6 +83,7 @@ func TestGetIncidentalParticipationExpectedIsSetByOpenedOnDate(t *testing.T) {
 // expected, however active - and if they contribute anyway, they surface
 // under Unexpected, never as a third state on the expected table.
 func TestGetIncidentalParticipationExcludesRecipients(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 	f := newFixture(t, l)
 	ctx := context.Background()
@@ -135,6 +137,7 @@ func TestGetIncidentalParticipationExcludesRecipients(t *testing.T) {
 // - if they give, it is Sumbangan lain, never "belum" for someone who was
 // never asked.
 func TestGetIncidentalParticipationLaterJoinerIsUnexpectedNotBelum(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 	f := newFixture(t, l)
 	ctx := context.Background()
@@ -170,6 +173,7 @@ func TestGetIncidentalParticipationLaterJoinerIsUnexpectedNotBelum(t *testing.T)
 // nothing, kurang only when a minimum is set and the sum is below it - a
 // contribution below no stated minimum is Sudah, not Kurang.
 func TestGetIncidentalParticipationStates(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 	f := newFixture(t, l)
 	ctx := context.Background()
@@ -227,6 +231,7 @@ func TestGetIncidentalParticipationStates(t *testing.T) {
 // minimum set, any contribution at all is Sudah - Kurang is only
 // representable once a minimum exists (ADR-034).
 func TestGetIncidentalParticipationNoMinimumMeansAnyGiftIsSudah(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 	f := newFixture(t, l)
 	ctx := context.Background()
@@ -256,6 +261,7 @@ func TestGetIncidentalParticipationNoMinimumMeansAnyGiftIsSudah(t *testing.T) {
 // mutable like occasion, and a set fully replaces the prior one rather than
 // adding to it.
 func TestSetIncidentalParticipationReplacesMinimumAndRecipients(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 	f := newFixture(t, l)
 	ctx := context.Background()
@@ -311,6 +317,7 @@ func TestSetIncidentalParticipationReplacesMinimumAndRecipients(t *testing.T) {
 // expectation, not a posted fact, so it can be set, changed and cleared - on
 // a closed envelope too - without posting anything or moving a balance.
 func TestSetIncidentalParticipationCorrectsTheTarget(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 	f := newFixture(t, l)
 	ctx := context.Background()
@@ -385,6 +392,7 @@ func TestSetIncidentalParticipationCorrectsTheTarget(t *testing.T) {
 }
 
 func TestSetIncidentalParticipationRefusesANonPositiveTarget(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 	f := newFixture(t, l)
 	envelope := openTestIncidental(t, l, f.fundID, "Sunatan", "2026-08-01")
@@ -400,6 +408,7 @@ func TestSetIncidentalParticipationRefusesANonPositiveTarget(t *testing.T) {
 }
 
 func TestSetIncidentalParticipationRefusesAnotherFundsEnvelope(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 	f := newFixture(t, l)
 	other := newSecondFund(t, l)

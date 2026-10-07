@@ -37,6 +37,7 @@ func deleteAccount(t *testing.T, r http.Handler, id int64) *httptest.ResponseRec
 }
 
 func TestPostAccountsRequiresAFund(t *testing.T) {
+	t.Parallel()
 	rec := postAccount(t, testRouter(t), accountRequest{Kind: "bank", Name: "BCA"})
 
 	if rec.Code != http.StatusNotFound {
@@ -52,6 +53,7 @@ func TestPostAccountsRequiresAFund(t *testing.T) {
 // location after setup, not only choose the starting set - a second bank
 // account, or one setup under-counted.
 func TestPostAccountsCreatesAndListReflectsIt(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	setUpFund(t, r)
 
@@ -109,6 +111,7 @@ func TestPostAccountsCreatesAndListReflectsIt(t *testing.T) {
 // A malformed kind is refused by the schema's own CHECK (kind IN
 // ('cash','bank')), not a hand-rolled enum check in the handler.
 func TestPostAccountsRejectsAMalformedKind(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	setUpFund(t, r)
 
@@ -125,6 +128,7 @@ func TestPostAccountsRejectsAMalformedKind(t *testing.T) {
 // A blank or whitespace-only name is refused by the schema's own CHECK
 // (length(trim(name)) > 0).
 func TestPostAccountsRejectsABlankName(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	setUpFund(t, r)
 
@@ -141,6 +145,7 @@ func TestPostAccountsRejectsABlankName(t *testing.T) {
 }
 
 func TestGetAccountsRequiresAFund(t *testing.T) {
+	t.Parallel()
 	rec := httptest.NewRecorder()
 	testRouter(t).ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/accounts", nil))
 
@@ -154,6 +159,7 @@ func TestGetAccountsRequiresAFund(t *testing.T) {
 }
 
 func TestPatchAccountRenamesIt(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	setup := setUpFund(t, r)
 	cashID := setup.CashAccountID(t)
@@ -186,6 +192,7 @@ func TestPatchAccountRenamesIt(t *testing.T) {
 // three states members_test.go's TestPatchMemberInactiveOnAbsentPresentAndNull
 // already proves for member.inactive_on, applied to account.
 func TestPatchAccountInactiveOnAbsentPresentAndNull(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	setup := setUpFund(t, r)
 	bankID := setup.BankAccountID(t)
@@ -237,6 +244,7 @@ func TestPatchAccountInactiveOnAbsentPresentAndNull(t *testing.T) {
 // the two *Set flags are independent, not a single "any field present"
 // switch.
 func TestPatchAccountBothFieldsAtOnce(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	setup := setUpFund(t, r)
 	bankID := setup.BankAccountID(t)
@@ -260,6 +268,7 @@ func TestPatchAccountBothFieldsAtOnce(t *testing.T) {
 // A blank or whitespace-only name is refused by the schema's own CHECK on
 // PATCH exactly as it is on POST.
 func TestPatchAccountRejectsABlankName(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	setup := setUpFund(t, r)
 	cashID := setup.CashAccountID(t)
@@ -275,6 +284,7 @@ func TestPatchAccountRejectsABlankName(t *testing.T) {
 }
 
 func TestPatchAccountReturns404ForAnUnknownID(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	setUpFund(t, r)
 
@@ -289,6 +299,7 @@ func TestPatchAccountReturns404ForAnUnknownID(t *testing.T) {
 }
 
 func TestPatchAccountReturns400ForANonNumericID(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	setUpFund(t, r)
 
@@ -304,6 +315,7 @@ func TestPatchAccountReturns400ForANonNumericID(t *testing.T) {
 }
 
 func TestPatchAccountRejectsMalformedJSON(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	setup := setUpFund(t, r)
 	cashID := setup.CashAccountID(t)
@@ -321,6 +333,7 @@ func TestPatchAccountRejectsMalformedJSON(t *testing.T) {
 // A never-used duplicate deletes cleanly - #134's first account-lifecycle
 // half.
 func TestDeleteAccountRemovesANeverUsedDuplicate(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	setUpFund(t, r)
 
@@ -358,6 +371,7 @@ func TestDeleteAccountRemovesANeverUsedDuplicate(t *testing.T) {
 // the composite foreign key's own refusal, the same as
 // TestDeleteMemberWithTransactionsReturns409.
 func TestDeleteAccountWithTransactionsReturns409(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	setup := setUpFund(t, r)
 	cashID := setup.CashAccountID(t)
@@ -398,6 +412,7 @@ func TestDeleteAccountWithTransactionsReturns409(t *testing.T) {
 }
 
 func TestDeleteAccountReturns404ForAnUnknownID(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	setUpFund(t, r)
 
@@ -416,6 +431,7 @@ func TestDeleteAccountReturns404ForAnUnknownID(t *testing.T) {
 // transaction as the account. This is the ordinary path: a positive amount
 // creates the account and the balance shows up wherever balances are read.
 func TestPostAccountsWithOpeningBalanceCreatesAndBalancesReflectIt(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	setup := setUpFund(t, r)
 
@@ -468,6 +484,7 @@ func TestPostAccountsWithOpeningBalanceCreatesAndBalancesReflectIt(t *testing.T)
 // A zero-amount opening balance creates the account and posts no row -
 // absent and zero are the same thing.
 func TestPostAccountsWithZeroOpeningBalanceCreatesAccountNoTransaction(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	setUpFund(t, r)
 
@@ -488,6 +505,7 @@ func TestPostAccountsWithZeroOpeningBalanceCreatesAccountNoTransaction(t *testin
 // A negative opening balance refuses the whole request - no account is
 // created either, because the two are born together or not at all (#230).
 func TestPostAccountsRejectsNegativeOpeningBalanceCreatesNoAccount(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	setUpFund(t, r)
 
@@ -514,6 +532,7 @@ func TestPostAccountsRejectsNegativeOpeningBalanceCreatesNoAccount(t *testing.T)
 // A malformed occurred_on in the opening balance refuses the whole request
 // the same way.
 func TestPostAccountsRejectsInvalidOpeningBalanceOccurredOnCreatesNoAccount(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	setUpFund(t, r)
 
@@ -563,6 +582,7 @@ func decodeAccountsList(t *testing.T, r http.Handler) []accountResponse {
 // zero id, and must not create the account either - CreateAccount's own
 // withTx still rolls back.
 func TestPostAccountsWithOpeningBalanceAndNoMainPurposeIs500(t *testing.T) {
+	t.Parallel()
 	sqlDB := testStoreDB(t)
 	r := authedRouterFor(t, sqlDB)
 	setUpFund(t, r)
@@ -602,6 +622,7 @@ func postRawTo(t *testing.T, r http.Handler, path, body string) *httptest.Respon
 }
 
 func TestPostAccountsRejectsMalformedJSON(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	setUpFund(t, r)
 
@@ -620,6 +641,7 @@ func TestPostAccountsRejectsMalformedJSON(t *testing.T) {
 // Decode succeeds and the per-field json.Unmarshal is what fails. Both must
 // answer invalid_json rather than reaching the store with a zero value.
 func TestPatchAccountRejectsAFieldOfTheWrongType(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	setup := setUpFund(t, r)
 	cashID := setup.CashAccountID(t)
@@ -649,6 +671,7 @@ func TestPatchAccountRejectsAFieldOfTheWrongType(t *testing.T) {
 // in internal/ledger branches on it - so entering the wrong one is a typo
 // with a correction, exactly like a misspelt name.
 func TestPatchAccountChangesTheKind(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	setup := setUpFund(t, r)
 
@@ -672,6 +695,7 @@ func TestPatchAccountChangesTheKind(t *testing.T) {
 // The set of kinds is the schema's CHECK to police, not the handler's
 // (ADR-027) - it comes back as 400 through mapSQLiteError.
 func TestPatchAccountRejectsAnUnknownKind(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	setup := setUpFund(t, r)
 

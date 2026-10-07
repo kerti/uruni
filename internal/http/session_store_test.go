@@ -22,6 +22,7 @@ import (
 // shape of this, not an exotic one - it reproduced at 7 failures in 60
 // requests before UpsertSession made the write a single statement.
 func TestConcurrentRequestsOnOneSessionDoNotCollide(t *testing.T) {
+	t.Parallel()
 	r, sqlDB := testRouterAndDB(t)
 
 	rec := postRegister(t, r, "bendahara@example.org", "kata-sandi-panjang")
@@ -86,6 +87,7 @@ func newTestSessionStore(t *testing.T) (*sessionStore, *sql.DB) {
 // forms), so this is the only thing that proves they forward correctly
 // rather than, say, all three landing on the same token.
 func TestSessionStoreRoundTripsThroughThePlainInterface(t *testing.T) {
+	t.Parallel()
 	s, _ := newTestSessionStore(t)
 
 	if err := s.Commit("a-token", []byte("session-data"), time.Now().Add(time.Hour)); err != nil {
@@ -117,6 +119,7 @@ func TestSessionStoreRoundTripsThroughThePlainInterface(t *testing.T) {
 // an expired cookie would keep working until some later request happened to
 // commit.
 func TestSessionStoreFindReportsAMissOnAnUnknownOrExpiredToken(t *testing.T) {
+	t.Parallel()
 	s, sqlDB := newTestSessionStore(t)
 
 	data, found, err := s.FindCtx(context.Background(), "never-issued")
@@ -150,6 +153,7 @@ func TestSessionStoreFindReportsAMissOnAnUnknownOrExpiredToken(t *testing.T) {
 // treasurer out with no explanation anywhere whenever the database is
 // unreachable.
 func TestSessionStoreSurfacesADatabaseError(t *testing.T) {
+	t.Parallel()
 	s, sqlDB := newTestSessionStore(t)
 	if err := sqlDB.Close(); err != nil {
 		t.Fatalf("Close() = %v, want no error", err)

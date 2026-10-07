@@ -21,6 +21,7 @@ func postDuesTier(t *testing.T, r http.Handler, name string) *httptest.ResponseR
 }
 
 func TestPostDuesTiersRequiresAFund(t *testing.T) {
+	t.Parallel()
 	rec := postDuesTier(t, testRouter(t), "Full")
 
 	if rec.Code != http.StatusNotFound {
@@ -33,6 +34,7 @@ func TestPostDuesTiersRequiresAFund(t *testing.T) {
 }
 
 func TestPostDuesTiersCreatesAndListReturnsIt(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	if rec := postSetup(t, r, "Test Fund"); rec.Code != http.StatusCreated {
 		t.Fatalf("POST /api/setup = %d, want %d", rec.Code, http.StatusCreated)
@@ -70,6 +72,7 @@ func TestPostDuesTiersCreatesAndListReturnsIt(t *testing.T) {
 }
 
 func TestPostDuesTiersRejectsADuplicateNameWith409(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	if rec := postSetup(t, r, "Test Fund"); rec.Code != http.StatusCreated {
 		t.Fatalf("POST /api/setup = %d, want %d", rec.Code, http.StatusCreated)
@@ -91,6 +94,7 @@ func TestPostDuesTiersRejectsADuplicateNameWith409(t *testing.T) {
 }
 
 func TestPostDuesTiersRejectsAnEmptyName(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	if rec := postSetup(t, r, "Test Fund"); rec.Code != http.StatusCreated {
 		t.Fatalf("POST /api/setup = %d, want %d", rec.Code, http.StatusCreated)
@@ -119,6 +123,7 @@ func patchDuesTier(t *testing.T, r http.Handler, id int64, name string) *httptes
 }
 
 func TestPatchDuesTiersRenamesItAndListReflectsIt(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	tier := setUpTier(t, r, "Full")
 
@@ -149,6 +154,7 @@ func TestPatchDuesTiersRenamesItAndListReflectsIt(t *testing.T) {
 }
 
 func TestPatchDuesTiersRejectsAnEmptyName(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	tier := setUpTier(t, r, "Full")
 
@@ -163,6 +169,7 @@ func TestPatchDuesTiersRejectsAnEmptyName(t *testing.T) {
 }
 
 func TestPatchDuesTiersReturns404ForAnUnknownID(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	if rec := postSetup(t, r, "Test Fund"); rec.Code != http.StatusCreated {
 		t.Fatalf("POST /api/setup = %d, want %d", rec.Code, http.StatusCreated)
@@ -179,6 +186,7 @@ func TestPatchDuesTiersReturns404ForAnUnknownID(t *testing.T) {
 }
 
 func TestPatchDuesTiersReturns400ForANonNumericID(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	if rec := postSetup(t, r, "Test Fund"); rec.Code != http.StatusCreated {
 		t.Fatalf("POST /api/setup = %d, want %d", rec.Code, http.StatusCreated)
@@ -197,6 +205,7 @@ func TestPatchDuesTiersReturns400ForANonNumericID(t *testing.T) {
 }
 
 func TestPatchDuesTiersRejectsMalformedJSON(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	tier := setUpTier(t, r, "Full")
 
@@ -213,6 +222,7 @@ func TestPatchDuesTiersRejectsMalformedJSON(t *testing.T) {
 }
 
 func TestGetDuesTiersRequiresAFund(t *testing.T) {
+	t.Parallel()
 	rec := httptest.NewRecorder()
 	testRouter(t).ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/dues-tiers", nil))
 
@@ -248,6 +258,7 @@ func decodeDuesTier(t *testing.T, rec *httptest.ResponseRecorder) duesTierRespon
 // is in priced nothing, so its rates are its own children rather than
 // history, and both go in one transaction.
 func TestDeleteDuesTierTakesItsRatesWithIt(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	if rec := postSetup(t, r, "Test Fund"); rec.Code != http.StatusCreated {
 		t.Fatalf("POST /api/setup = %d, want %d", rec.Code, http.StatusCreated)
@@ -286,6 +297,7 @@ func TestDeleteDuesTierTakesItsRatesWithIt(t *testing.T) {
 // member's own FK, after the rate deletion has already run, so the rollback
 // is what keeps that tier's rates intact.
 func TestDeleteDuesTierRefusesOneAMemberIsIn(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	if rec := postSetup(t, r, "Test Fund"); rec.Code != http.StatusCreated {
 		t.Fatalf("POST /api/setup = %d, want %d", rec.Code, http.StatusCreated)
@@ -327,6 +339,7 @@ func TestDeleteDuesTierRefusesOneAMemberIsIn(t *testing.T) {
 // at all never gets that far and is 400, which is resolveDuesTier's own
 // existing split, asserted here so the delete route keeps inheriting it.
 func TestDeleteDuesTierRejectsAnIDItCannotUse(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	if rec := postSetup(t, r, "Test Fund"); rec.Code != http.StatusCreated {
 		t.Fatalf("POST /api/setup = %d, want %d", rec.Code, http.StatusCreated)

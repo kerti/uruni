@@ -36,6 +36,7 @@ func receiptIDsField(t *testing.T, body []byte) json.RawMessage {
 // id), so receipt_ids is always [] here - and, critically, the literal JSON
 // array "[]", not a null that happens to decode the same way into Go.
 func TestPostTransactionReceiptIDsIsAnEmptyArrayNeverNull(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	setup := setUpFund(t, r)
 
@@ -65,6 +66,7 @@ func TestPostTransactionReceiptIDsIsAnEmptyArrayNeverNull(t *testing.T) {
 // receipt_ids showing exactly the ids attached to it and no others, oldest
 // (lowest id) first.
 func TestGetTransactionsReceiptIDsCountsAndOrdersByID(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	setup := setUpFund(t, r)
 
@@ -124,6 +126,7 @@ func TestGetTransactionsReceiptIDsCountsAndOrdersByID(t *testing.T) {
 // must come back empty rather than trusting the id list alone - an id names
 // a row, not permission to see it.
 func TestGetTransactionsReceiptIDsNeverCrossesFunds(t *testing.T) {
+	t.Parallel()
 	sqlDB := testStoreDB(t)
 	r := authedRouterFor(t, sqlDB)
 	setup := setUpFund(t, r)
@@ -193,6 +196,7 @@ func TestGetTransactionsReceiptIDsNeverCrossesFunds(t *testing.T) {
 // two distinct transaction rows, so a receipt attached to one leg must never
 // appear on the other - there is no single "the transfer's receipt."
 func TestGetTransactionsTransferLegsReceiptIDsAreIndependent(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	setup := setUpFund(t, r)
 
@@ -257,6 +261,7 @@ func TestGetTransactionsTransferLegsReceiptIDsAreIndependent(t *testing.T) {
 // own creation case: the posted kind='reimbursement' row is brand new, so it
 // carries the same [] the plain POST /api/transactions case does.
 func TestSettleReimbursementReceiptIDsIsAnEmptyArray(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	setup := setUpFund(t, r)
 	memberID := memberFor(t, r, "Budi")
@@ -280,6 +285,7 @@ func TestSettleReimbursementReceiptIDsIsAnEmptyArray(t *testing.T) {
 // would get wrong - still accurate after a correction that touches only the
 // claim's note, because the receipt was never part of what changed.
 func TestReimbursementReceiptIDsCreatedEmptyListedAccuratelyAndSurvivesPatch(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	setup := setUpFund(t, r)
 	memberID := memberFor(t, r, "Budi")

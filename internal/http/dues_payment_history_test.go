@@ -33,6 +33,7 @@ func decodeDuesPaymentsPage(t *testing.T, rec *httptest.ResponseRecorder) duesPa
 }
 
 func TestGetDuesPaymentsRequiresAFund(t *testing.T) {
+	t.Parallel()
 	rec := getDuesPayments(t, testRouter(t), "")
 	if rec.Code != http.StatusNotFound {
 		t.Fatalf("GET /api/dues-payments before setup = %d, want %d (body: %s)", rec.Code, http.StatusNotFound, rec.Body.String())
@@ -47,6 +48,7 @@ func TestGetDuesPaymentsRequiresAFund(t *testing.T) {
 // criterion: a fund with no dues payments at all answers an empty list, not
 // an error.
 func TestGetDuesPaymentsEmptyFundReturnsEmptyPage(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	setUpFund(t, r)
 
@@ -63,6 +65,7 @@ func TestGetDuesPaymentsEmptyFundReturnsEmptyPage(t *testing.T) {
 // reimbursements_test.go's own test of the same name: two rows sharing an
 // occurred_on must come back (occurred_on DESC, id DESC).
 func TestGetDuesPaymentsOrdersNewestFirstTiesBrokenByIDDesc(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	setup := setUpFund(t, r)
 	memberID := memberFor(t, r, "Jane")
@@ -89,6 +92,7 @@ func TestGetDuesPaymentsOrdersNewestFirstTiesBrokenByIDDesc(t *testing.T) {
 // 60 distinct payments for one member need no second member or account to
 // stay realistic against the schema.
 func TestGetDuesPaymentsPagingWalksTheWholeSetWithNoSkipOrDuplicate(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	setup := setUpFund(t, r)
 	memberID := memberFor(t, r, "Jane")
@@ -147,6 +151,7 @@ func TestGetDuesPaymentsPagingWalksTheWholeSetWithNoSkipOrDuplicate(t *testing.T
 // TestGetDuesPaymentsRejectsAMalformedCursor is #228's "malformed cursor ->
 // 400" acceptance criterion, mirroring reimbursements_test.go's own test.
 func TestGetDuesPaymentsRejectsAMalformedCursor(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	setUpFund(t, r)
 
@@ -173,6 +178,7 @@ func TestGetDuesPaymentsRejectsAMalformedCursor(t *testing.T) {
 // reversal for that member matches too since it carries the same
 // member_id.
 func TestGetDuesPaymentsSearchHitsMemberNameCaseInsensitiveIncludingAReversal(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	setup := setUpFund(t, r)
 	memberID := memberFor(t, r, "Budi Santoso")
@@ -212,6 +218,7 @@ func TestGetDuesPaymentsSearchHitsMemberNameCaseInsensitiveIncludingAReversal(t 
 // carries reverses_transaction_id pointing back plus the original's own
 // occurred_on.
 func TestGetDuesPaymentsReversalAndOriginalAreLinkedBothWays(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	setup := setUpFund(t, r)
 	memberID := memberFor(t, r, "Jane")
@@ -275,6 +282,7 @@ func TestGetDuesPaymentsReversalAndOriginalAreLinkedBothWays(t *testing.T) {
 // wrong: the reversal states the original's date even when that original
 // has fallen off the first page.
 func TestGetDuesPaymentsReversalsOriginalOnAnotherPageStillCarriesReversesOccurredOn(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	setup := setUpFund(t, r)
 	memberID := memberFor(t, r, "Jane")
@@ -342,6 +350,7 @@ func TestGetDuesPaymentsReversalsOriginalOnAnotherPageStillCarriesReversesOccurr
 // correction (kind='adjustment' with no reverses_transaction_id) are not
 // dues history.
 func TestGetDuesPaymentsExcludesOrdinaryTransactionsAndAdjustments(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	setup := setUpFund(t, r)
 	memberID := memberFor(t, r, "Jane")
@@ -373,6 +382,7 @@ func TestGetDuesPaymentsExcludesOrdinaryTransactionsAndAdjustments(t *testing.T)
 // TestGetDuesPaymentsNeverReturnsAnotherFundsRow is #228's fund-isolation
 // acceptance criterion, mirroring TestGetTransactionsNeverReturnsAnotherFundsRow.
 func TestGetDuesPaymentsNeverReturnsAnotherFundsRow(t *testing.T) {
+	t.Parallel()
 	sqlDB := testStoreDB(t)
 	r := authedRouterFor(t, sqlDB)
 	setup := setUpFund(t, r)

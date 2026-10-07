@@ -15,6 +15,7 @@ import (
 // rolls back when it should.
 
 func TestHarnessRoundTripsAnEntry(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 	f := newFixture(t, l)
 	ctx := context.Background()
@@ -43,6 +44,7 @@ func TestHarnessRoundTripsAnEntry(t *testing.T) {
 // it fails only if the pragma is on *and* ADR-024's (fund_id, id) references
 // are doing their job.
 func TestHarnessEnforcesCompositeForeignKeys(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 	f := newFixture(t, l)
 	ctx := context.Background()
@@ -71,6 +73,7 @@ func TestHarnessEnforcesCompositeForeignKeys(t *testing.T) {
 }
 
 func TestWithTxCommits(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 	f := newFixture(t, l)
 	ctx := context.Background()
@@ -94,6 +97,7 @@ func TestWithTxCommits(t *testing.T) {
 }
 
 func TestWithTxRollsBackAndReturnsTheError(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 	f := newFixture(t, l)
 	ctx := context.Background()
@@ -130,6 +134,7 @@ func TestWithTxRollsBackAndReturnsTheError(t *testing.T) {
 // The failure that happens before fn is ever called: withTx has to report it
 // as its own, not hand back a nil error and a transaction nobody opened.
 func TestWithTxReportsAFailureToBegin(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 	if err := l.db.Close(); err != nil {
 		t.Fatalf("Close() = %v, want no error", err)
@@ -152,6 +157,7 @@ func TestWithTxReportsAFailureToBegin(t *testing.T) {
 // the immutability triggers are the realistic way that happens, and the
 // rollback has to leave the earlier insert undone rather than half-applied.
 func TestWithTxRollsBackWhenTheSchemaRefusesAWrite(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 	f := newFixture(t, l)
 	ctx := context.Background()

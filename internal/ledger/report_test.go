@@ -170,6 +170,7 @@ func newMonthScenario(t *testing.T, l *Ledger) monthScenario {
 // --- header ---------------------------------------------------------------------
 
 func TestMonthlyReportEmptyFundShowsAHeaderAtZeroAndTheCurrentMonthOnly(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 	f := newFixture(t, l)
 
@@ -208,6 +209,7 @@ func TestMonthlyReportEmptyFundShowsAHeaderAtZeroAndTheCurrentMonthOnly(t *testi
 }
 
 func TestMonthlyReportHeaderBalanceIsTheLedgersAndEachPurposeSumsToIt(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 	s := newMonthScenario(t, l)
 
@@ -232,6 +234,7 @@ func TestMonthlyReportHeaderBalanceIsTheLedgersAndEachPurposeSumsToIt(t *testing
 }
 
 func TestMonthlyReportReconciliationNeverCountedMatchedAndDifference(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	l := newTestLedger(t)
 	q := store.New(l.db)
@@ -285,6 +288,7 @@ func TestMonthlyReportReconciliationNeverCountedMatchedAndDifference(t *testing.
 }
 
 func TestMonthlyReportReconciliationAdjustingEntryIsCounted(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	l := newTestLedger(t)
 	f := newFixture(t, l)
@@ -328,6 +332,7 @@ func TestMonthlyReportReconciliationAdjustingEntryIsCounted(t *testing.T) {
 // --- transfers ------------------------------------------------------------------
 
 func TestMonthlyReportLocationTransferIsHiddenAndInNoTotal(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 	s := newMonthScenario(t, l)
 
@@ -349,6 +354,7 @@ func TestMonthlyReportLocationTransferIsHiddenAndInNoTotal(t *testing.T) {
 }
 
 func TestMonthlyReportPurposeCorrectionIsOneMoveRowMatchedOnEitherSide(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	l := newTestLedger(t)
 	f := newFixture(t, l)
@@ -409,6 +415,7 @@ func TestMonthlyReportPurposeCorrectionIsOneMoveRowMatchedOnEitherSide(t *testin
 }
 
 func TestMonthlyReportEnvelopeRollIsOneMoveRowOutsideTheTotals(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	l := newTestLedger(t)
 	f := newFixture(t, l)
@@ -458,6 +465,7 @@ func TestMonthlyReportEnvelopeRollIsOneMoveRowOutsideTheTotals(t *testing.T) {
 // --- rows, totals and filters ---------------------------------------------------
 
 func TestMonthlyReportTotalsUnderEachFilter(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 	s := newMonthScenario(t, l)
 	f := s.f
@@ -494,6 +502,7 @@ func TestMonthlyReportTotalsUnderEachFilter(t *testing.T) {
 }
 
 func TestMonthlyReportRowsAreTheMonthsOnlyNewestFirstWithTheirFacts(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 	s := newMonthScenario(t, l)
 
@@ -535,6 +544,7 @@ func TestMonthlyReportRowsAreTheMonthsOnlyNewestFirstWithTheirFacts(t *testing.T
 }
 
 func TestMonthlyReportDuesReversalIsShownAndNetsAgainstThePaymentInTotalMasuk(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	l := newTestLedger(t)
 	s := newMonthScenario(t, l)
@@ -607,6 +617,7 @@ func countReversals(rows []ReportRow) int {
 }
 
 func TestMonthlyReportSettledClaimNamesItsMemberAndCarriesTheClaimsNoteAndReceipt(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	l := newTestLedger(t)
 	q := store.New(l.db)
@@ -652,6 +663,7 @@ func TestMonthlyReportSettledClaimNamesItsMemberAndCarriesTheClaimsNoteAndReceip
 }
 
 func TestMonthlyReportOpeningBalanceIsItsOwnLineNotIncome(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 	f := newFixture(t, l)
 	postOpeningBalance(t, l, f.fundID, f.cashID, f.mainID, 500_000, "2026-09-01")
@@ -674,6 +686,7 @@ func TestMonthlyReportOpeningBalanceIsItsOwnLineNotIncome(t *testing.T) {
 }
 
 func TestMonthlyReportTotalsRefuseToWrap(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 	f := newFixture(t, l)
 	big := money.Amount(math.MaxInt64/2 + 1)
@@ -691,6 +704,7 @@ func TestMonthlyReportTotalsRefuseToWrap(t *testing.T) {
 // --- dues -----------------------------------------------------------------------
 
 func TestMonthlyReportDuesStatusFilter(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 	s := newMonthScenario(t, l)
 
@@ -756,6 +770,7 @@ func TestMonthlyReportDuesStatusFilter(t *testing.T) {
 }
 
 func TestMonthlyReportPaidFilterIncludesAMemberWhoPaidInAdvance(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	l := newTestLedger(t)
 	s := newMonthScenario(t, l)
@@ -779,6 +794,7 @@ func TestMonthlyReportPaidFilterIncludesAMemberWhoPaidInAdvance(t *testing.T) {
 // --- envelopes ------------------------------------------------------------------
 
 func TestMonthlyReportEnvelopesOpenClosedThisMonthAndNotClosedEarlier(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	l := newTestLedger(t)
 	f := newFixture(t, l)
@@ -848,6 +864,7 @@ func TestMonthlyReportEnvelopesOpenClosedThisMonthAndNotClosedEarlier(t *testing
 }
 
 func TestMonthlyReportEnvelopeCarriesItsParticipation(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	l := newTestLedger(t)
 	q := store.New(l.db)
@@ -914,6 +931,7 @@ func TestMonthlyReportEnvelopeCarriesItsParticipation(t *testing.T) {
 // --- month range ----------------------------------------------------------------
 
 func TestMonthlyReportMonthRangeIsReckonedInJakartaAcrossTheMonthBoundary(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 	f := newFixture(t, l)
 	postEntry(t, l, f.fundID, f.cashID, f.mainID, "in", 1_000, "2026-08-31", nil)
@@ -971,6 +989,7 @@ func TestMonthlyReportMonthRangeIsReckonedInJakartaAcrossTheMonthBoundary(t *tes
 }
 
 func TestMonthlyReportMonthRangeWhenTheFirstRowIsThisMonthOrLater(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 	f := newFixture(t, l)
 	postEntry(t, l, f.fundID, f.cashID, f.mainID, "in", 1_000, "2026-10-01", nil)
@@ -991,6 +1010,7 @@ func TestMonthlyReportMonthRangeWhenTheFirstRowIsThisMonthOrLater(t *testing.T) 
 }
 
 func TestMonthlyReportAMonthOutsideTheRangeIsEmptyNotAnError(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 	f := newFixture(t, l)
 	postEntry(t, l, f.fundID, f.cashID, f.mainID, "in", 1_000, "2026-09-01", nil)
@@ -1004,6 +1024,7 @@ func TestMonthlyReportAMonthOutsideTheRangeIsEmptyNotAnError(t *testing.T) {
 // --- fund scoping and validation ------------------------------------------------
 
 func TestMonthlyReportAnotherFundsRowsAreInvisible(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	l := newTestLedger(t)
 	s := newMonthScenario(t, l)
@@ -1072,6 +1093,7 @@ func TestMonthlyReportAnotherFundsRowsAreInvisible(t *testing.T) {
 }
 
 func TestMonthlyReportRefusesMalformedArguments(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 	f := newFixture(t, l)
 
@@ -1099,6 +1121,7 @@ func TestMonthlyReportRefusesMalformedArguments(t *testing.T) {
 }
 
 func TestMonthlyReportUnknownFundIsAnError(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 	if _, err := l.MonthlyReport(context.Background(), ReportParams{FundID: 424_242, Now: reportNow}); err == nil {
 		t.Error("MonthlyReport(unknown fund) = nil error, want one")
@@ -1106,6 +1129,7 @@ func TestMonthlyReportUnknownFundIsAnError(t *testing.T) {
 }
 
 func TestMonthlyReportEnvelopeCarriesItsTargetAndUnexpectedGivers(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	l := newTestLedger(t)
 	q := store.New(l.db)
@@ -1148,6 +1172,7 @@ func TestMonthlyReportEnvelopeCarriesItsTargetAndUnexpectedGivers(t *testing.T) 
 }
 
 func TestMonthlyReportEnvelopesOpenedTheSameDayAreOrderedByName(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 	f := newFixture(t, l)
 	openTestIncidental(t, l, f.fundID, "Zeta Collection", "2026-09-01")
@@ -1176,6 +1201,7 @@ func TestMonthlyReportEnvelopesOpenedTheSameDayAreOrderedByName(t *testing.T) {
 }
 
 func TestMonthlyReportWithNoClockReadsTodayInJakarta(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 	f := newFixture(t, l)
 
@@ -1198,6 +1224,7 @@ func TestMonthlyReportWithNoClockReadsTodayInJakarta(t *testing.T) {
 // but carries its reason so the public page can say "Pindah pos"
 // instead of "Tutup amplop". Outside both totals, no balance moves.
 func TestMonthlyReportAllocationIsOneMoveRowCarryingItsReason(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	l := newTestLedger(t)
 	f := newFixture(t, l)
@@ -1230,6 +1257,7 @@ func TestMonthlyReportAllocationIsOneMoveRowCarryingItsReason(t *testing.T) {
 // where it ended, and one corrected back to where it started reads as none
 // (#280). The legs all stay posted: only the report's rows fold.
 func TestMonthlyReportFoldsARowsCorrectionsIntoTheirNetMove(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	l := newTestLedger(t)
 	f := newFixture(t, l)

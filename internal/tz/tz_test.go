@@ -8,6 +8,7 @@ import (
 // Jakarta is a fixed UTC+7 with no daylight saving, loaded from the embedded
 // tzdata (the runtime image ships no zoneinfo).
 func TestJakartaIsUTCPlusSeven(t *testing.T) {
+	t.Parallel()
 	if Jakarta.String() != "Asia/Jakarta" {
 		t.Fatalf("Jakarta = %q, want Asia/Jakarta", Jakarta.String())
 	}
@@ -22,6 +23,7 @@ func TestJakartaIsUTCPlusSeven(t *testing.T) {
 // A name absent from the IANA database means a broken toolchain, and the
 // loader panics rather than silently dating everything in UTC.
 func TestMustLoadLocationPanicsOnAnUnknownZone(t *testing.T) {
+	t.Parallel()
 	defer func() {
 		if recover() == nil {
 			t.Fatal("mustLoadLocation(unknown zone) did not panic")

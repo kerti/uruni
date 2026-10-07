@@ -33,6 +33,7 @@ func getOutstandingDues(t *testing.T, r http.Handler, memberID int64, through st
 }
 
 func TestGetDuesStatusRequiresAFund(t *testing.T) {
+	t.Parallel()
 	rec := getDuesStatus(t, testRouter(t), "2026-08")
 	if rec.Code != http.StatusNotFound {
 		t.Fatalf("GET /api/dues-status before setup = %d, want %d (body: %s)", rec.Code, http.StatusNotFound, rec.Body.String())
@@ -47,6 +48,7 @@ func TestGetDuesStatusRequiresAFund(t *testing.T) {
 // acceptance criterion: unpaid, partial and paid all read back correctly
 // for one period, across different members of the same tier.
 func TestGetDuesStatusReturnsPerMemberStatus(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	setup := setUpFund(t, r)
 
@@ -155,6 +157,7 @@ func TestGetDuesStatusReturnsPerMemberStatus(t *testing.T) {
 // shape of #357: paid_through names the last month of the run for a member
 // paid ahead, and is null for one who has only paid this month.
 func TestGetDuesStatusCarriesPaidThroughForAMemberPaidAhead(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	setup := setUpFund(t, r)
 
@@ -204,6 +207,7 @@ func TestGetDuesStatusCarriesPaidThroughForAMemberPaidAhead(t *testing.T) {
 // validateDuesPeriod check answers, the handler passes the raw query
 // parameter through unvalidated.
 func TestGetDuesStatusRejectsAMalformedPeriod(t *testing.T) {
+	t.Parallel()
 	for _, period := range []string{"", "2026-13", "not-a-period"} {
 		r := testRouter(t)
 		setUpFund(t, r)
@@ -224,6 +228,7 @@ func TestGetDuesStatusRejectsAMalformedPeriod(t *testing.T) {
 // anything - since DuesStatusForPeriod's own doc comment names this as the
 // roster boundary a member with tier_id == nil sits outside of.
 func TestGetDuesStatusExcludesAMemberWithNoTier(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	setUpFund(t, r)
 
@@ -248,6 +253,7 @@ func TestGetDuesStatusExcludesAMemberWithNoTier(t *testing.T) {
 // partial and one paid period gets back exactly the two outstanding ones,
 // oldest first.
 func TestGetOutstandingDuesReturnsUnpaidAndPartialPeriodsOldestFirst(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	setup := setUpFund(t, r)
 
@@ -304,6 +310,7 @@ func TestGetOutstandingDuesReturnsUnpaidAndPartialPeriodsOldestFirst(t *testing.
 // setup created - it must never be found and only then rejected for
 // ownership.
 func TestGetOutstandingDuesOnAnotherFundsMemberIs404(t *testing.T) {
+	t.Parallel()
 	sqlDB := testStoreDB(t)
 	r := authedRouterFor(t, sqlDB)
 	setUpFund(t, r)
@@ -340,6 +347,7 @@ func TestGetOutstandingDuesOnAnotherFundsMemberIs404(t *testing.T) {
 // query parameter through unvalidated, same as getDuesStatus does for
 // ?period=.
 func TestGetOutstandingDuesRejectsAMalformedThrough(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	setUpFund(t, r)
 
@@ -366,6 +374,7 @@ func TestGetOutstandingDuesRejectsAMalformedThrough(t *testing.T) {
 // is the caller's mistake, not a missing member, and reads as 400 rather
 // than 404.
 func TestGetOutstandingDuesRejectsANonNumericMemberID(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	setUpFund(t, r)
 
@@ -385,6 +394,7 @@ func TestGetOutstandingDuesRejectsANonNumericMemberID(t *testing.T) {
 // the same "run setup first" 404 every other fund-scoped route does - not a
 // 200 with an empty list, which would read as "this member owes nothing".
 func TestGetOutstandingDuesRequiresAFund(t *testing.T) {
+	t.Parallel()
 	rec := getOutstandingDues(t, testRouter(t), 1, "")
 	if rec.Code != http.StatusNotFound {
 		t.Fatalf("GET .../outstanding-dues before setup = %d, want %d (body: %s)", rec.Code, http.StatusNotFound, rec.Body.String())

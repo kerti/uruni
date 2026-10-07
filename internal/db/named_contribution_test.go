@@ -16,6 +16,7 @@ import (
 // own TestDuesFieldsBelongToDuesAndNothingElse already uses for ADR-029.
 
 func TestMemberOnANormalRowOutsideAnEnvelopeIsRefused(t *testing.T) {
+	t.Parallel()
 	sqlDB := migratedTestDB(t)
 	ctx := context.Background()
 	q := store.New(sqlDB)
@@ -35,6 +36,7 @@ func TestMemberOnANormalRowOutsideAnEnvelopeIsRefused(t *testing.T) {
 }
 
 func TestOutgoingNamedNormalRowIsRefused(t *testing.T) {
+	t.Parallel()
 	sqlDB := migratedTestDB(t)
 	ctx := context.Background()
 	q := store.New(sqlDB)
@@ -53,6 +55,7 @@ func TestOutgoingNamedNormalRowIsRefused(t *testing.T) {
 }
 
 func TestNamedContributionOnAnEnvelopeIsAccepted(t *testing.T) {
+	t.Parallel()
 	sqlDB := migratedTestDB(t)
 	ctx := context.Background()
 	q := store.New(sqlDB)
@@ -69,6 +72,7 @@ func TestNamedContributionOnAnEnvelopeIsAccepted(t *testing.T) {
 }
 
 func TestContributionReversalCarryingAPeriodIsRefused(t *testing.T) {
+	t.Parallel()
 	sqlDB := migratedTestDB(t)
 	ctx := context.Background()
 	q := store.New(sqlDB)
@@ -96,6 +100,7 @@ func TestContributionReversalCarryingAPeriodIsRefused(t *testing.T) {
 }
 
 func TestDuesReversalMissingItsPeriodIsRefused(t *testing.T) {
+	t.Parallel()
 	sqlDB := migratedTestDB(t)
 	ctx := context.Background()
 	q := store.New(sqlDB)
@@ -124,6 +129,7 @@ func TestDuesReversalMissingItsPeriodIsRefused(t *testing.T) {
 }
 
 func TestDuesReversalStillWorksUnderTheWidenedTrigger(t *testing.T) {
+	t.Parallel()
 	sqlDB := migratedTestDB(t)
 	ctx := context.Background()
 	q := store.New(sqlDB)
@@ -150,6 +156,7 @@ func TestDuesReversalStillWorksUnderTheWidenedTrigger(t *testing.T) {
 }
 
 func TestContributionReversalWithNoPeriodIsAccepted(t *testing.T) {
+	t.Parallel()
 	sqlDB := migratedTestDB(t)
 	ctx := context.Background()
 	q := store.New(sqlDB)
@@ -175,6 +182,7 @@ func TestContributionReversalWithNoPeriodIsAccepted(t *testing.T) {
 }
 
 func TestReversalMemberMustMatchTheOriginal(t *testing.T) {
+	t.Parallel()
 	sqlDB := migratedTestDB(t)
 	ctx := context.Background()
 	q := store.New(sqlDB)
@@ -201,6 +209,7 @@ func TestReversalMemberMustMatchTheOriginal(t *testing.T) {
 }
 
 func TestIncidentalRecipientCascadesFromMemberDeleteAndScopesByFund(t *testing.T) {
+	t.Parallel()
 	sqlDB := migratedTestDB(t)
 	ctx := context.Background()
 	q := store.New(sqlDB)
@@ -250,6 +259,7 @@ func TestIncidentalRecipientCascadesFromMemberDeleteAndScopesByFund(t *testing.T
 }
 
 func TestIncidentalMinimumPerMemberMustBePositiveWhenSet(t *testing.T) {
+	t.Parallel()
 	sqlDB := migratedTestDB(t)
 	ctx := context.Background()
 	q := store.New(sqlDB)

@@ -205,6 +205,7 @@ func closerToWhite(c color.Color) bool {
 // --- tests -------------------------------------------------------------------
 
 func TestUploadTransactionReceiptStoresAndServesIt(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	setup := setUpFund(t, r)
 	txnID := setUpTransactionForReceipt(t, r, setup)
@@ -250,6 +251,7 @@ func TestUploadTransactionReceiptStoresAndServesIt(t *testing.T) {
 }
 
 func TestUploadReimbursementReceiptStoresAndServesIt(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	setup := setUpFund(t, r)
 
@@ -282,6 +284,7 @@ func TestUploadReimbursementReceiptStoresAndServesIt(t *testing.T) {
 // (#153): long edge capped at 1600px. 3200x1600 is an exact 2x, so the
 // result is an exact 1600x800 with no rounding ambiguity to tolerate.
 func TestUploadReceiptDownscalesALargeImage(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	setup := setUpFund(t, r)
 	txnID := setUpTransactionForReceipt(t, r, setup)
@@ -307,6 +310,7 @@ func TestUploadReceiptDownscalesALargeImage(t *testing.T) {
 // TestUploadReceiptNeverUpscalesASmallImage is the other half of the same
 // ruling - "never upscale".
 func TestUploadReceiptNeverUpscalesASmallImage(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	setup := setUpFund(t, r)
 	txnID := setUpTransactionForReceipt(t, r, setup)
@@ -334,6 +338,7 @@ func TestUploadReceiptNeverUpscalesASmallImage(t *testing.T) {
 // stays sideways. Orientation 6 (rotate 90 CW) is the common case - a phone
 // held upright, portrait, whose sensor itself is mounted landscape.
 func TestUploadReceiptAppliesEXIFOrientation(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	setup := setUpFund(t, r)
 	txnID := setUpTransactionForReceipt(t, r, setup)
@@ -371,6 +376,7 @@ func TestUploadReceiptAppliesEXIFOrientation(t *testing.T) {
 }
 
 func TestUploadReceiptRejectsAnOversizedBody(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	setup := setUpFund(t, r)
 	txnID := setUpTransactionForReceipt(t, r, setup)
@@ -392,6 +398,7 @@ func TestUploadReceiptRejectsAnOversizedBody(t *testing.T) {
 // "ftyp" box rather than trusting a filename or Content-Type either could
 // lie about.
 func TestUploadReceiptRejectsHEIC(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	setup := setUpFund(t, r)
 	txnID := setUpTransactionForReceipt(t, r, setup)
@@ -411,6 +418,7 @@ func TestUploadReceiptRejectsHEIC(t *testing.T) {
 // A tiny PNG whose header declares 65000x65000 must be refused from the header
 // alone - decoding it would allocate gigabytes despite the 10 MB body cap.
 func TestUploadReceiptRejectsOversizedDimensionsBeforeDecoding(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	setup := setUpFund(t, r)
 	txnID := setUpTransactionForReceipt(t, r, setup)
@@ -436,6 +444,7 @@ func TestUploadReceiptRejectsOversizedDimensionsBeforeDecoding(t *testing.T) {
 }
 
 func TestUploadReceiptRejectsAnUnsupportedType(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	setup := setUpFund(t, r)
 	txnID := setUpTransactionForReceipt(t, r, setup)
@@ -453,6 +462,7 @@ func TestUploadReceiptRejectsAnUnsupportedType(t *testing.T) {
 }
 
 func TestUploadReceiptRequiresAFile(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	setup := setUpFund(t, r)
 	txnID := setUpTransactionForReceipt(t, r, setup)
@@ -468,6 +478,7 @@ func TestUploadReceiptRequiresAFile(t *testing.T) {
 }
 
 func TestUploadReceiptOnAMissingParentIs404(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	setUpFund(t, r)
 	fixture := encodeTestJPEG(t, solidBlockImage(16, 16, 4, 4, fixtureBG, fixtureBlock))
@@ -490,6 +501,7 @@ func TestUploadReceiptOnAMissingParentIs404(t *testing.T) {
 }
 
 func TestDeleteReceiptRemovesItAndItsBytesBecomeUnreachable(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	setup := setUpFund(t, r)
 	txnID := setUpTransactionForReceipt(t, r, setup)
@@ -516,6 +528,7 @@ func TestDeleteReceiptRemovesItAndItsBytesBecomeUnreachable(t *testing.T) {
 }
 
 func TestGetAndDeleteReceiptOnAMissingIDAre404(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	setUpFund(t, r)
 
@@ -534,6 +547,7 @@ func TestGetAndDeleteReceiptOnAMissingIDAre404(t *testing.T) {
 // the exact shape fund_scope_test.go's own table already proves for the
 // routes it covers.
 func TestReceiptRoutesOnAnotherFundsRowAre404(t *testing.T) {
+	t.Parallel()
 	sqlDB := testStoreDB(t)
 	r := authedRouterFor(t, sqlDB)
 	setUpFund(t, r)
@@ -624,6 +638,7 @@ func TestReceiptRoutesOnAnotherFundsRowAre404(t *testing.T) {
 // caller with no session at all must not be able to fetch or delete a real
 // receipt's bytes, not just a placeholder id.
 func TestGetAndDeleteReceiptRequireSession(t *testing.T) {
+	t.Parallel()
 	sqlDB := testStoreDB(t)
 	authed := authedRouterFor(t, sqlDB)
 	setup := setUpFund(t, authed)

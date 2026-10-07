@@ -31,6 +31,7 @@ func postReplaceSlug(r http.Handler) *httptest.ResponseRecorder {
 }
 
 func TestPostReportSlugReplacesTheLinkAndTheOldOneIs404(t *testing.T) {
+	t.Parallel()
 	r := authedRouterWithBaseURL(t, testStoreDB(t), "https://kas.example.org/")
 	old := setUpFund(t, r).Fund
 
@@ -85,12 +86,14 @@ func TestPostReportSlugReplacesTheLinkAndTheOldOneIs404(t *testing.T) {
 }
 
 func TestPostReportSlugBeforeSetupIs404(t *testing.T) {
+	t.Parallel()
 	if rec := postReplaceSlug(testRouter(t)); rec.Code != http.StatusNotFound {
 		t.Errorf("POST /api/fund/report-slug before setup = %d, want 404", rec.Code)
 	}
 }
 
 func TestReportURLIsABarePathWithoutABaseURL(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	fund := setUpFund(t, r).Fund
 	if fund.ReportURL != "/report/"+fund.ReportSlug {

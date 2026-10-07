@@ -13,6 +13,7 @@ import (
 // fail by *not* getting an error.
 
 func TestReconciliationLineDifferenceMustAgreeWithItsInputs(t *testing.T) {
+	t.Parallel()
 	sqlDB := migratedTestDB(t)
 	ctx := context.Background()
 	q := store.New(sqlDB)
@@ -45,6 +46,7 @@ func TestReconciliationLineDifferenceMustAgreeWithItsInputs(t *testing.T) {
 }
 
 func TestAdjustedResolutionMustNameTheEntryThatSquaredTheLine(t *testing.T) {
+	t.Parallel()
 	sqlDB := migratedTestDB(t)
 	ctx := context.Background()
 	q := store.New(sqlDB)
@@ -94,6 +96,7 @@ func TestAdjustedResolutionMustNameTheEntryThatSquaredTheLine(t *testing.T) {
 }
 
 func TestSnapshotsAreImmutable(t *testing.T) {
+	t.Parallel()
 	sqlDB := migratedTestDB(t)
 	ctx := context.Background()
 	q := store.New(sqlDB)
@@ -136,6 +139,7 @@ func TestSnapshotsAreImmutable(t *testing.T) {
 }
 
 func TestSnapshotCannotBorrowAnotherFundsRow(t *testing.T) {
+	t.Parallel()
 	sqlDB := migratedTestDB(t)
 	ctx := context.Background()
 	q := store.New(sqlDB)
@@ -168,6 +172,7 @@ func TestSnapshotCannotBorrowAnotherFundsRow(t *testing.T) {
 }
 
 func TestALocationIsCountedOncePerSnapshot(t *testing.T) {
+	t.Parallel()
 	sqlDB := migratedTestDB(t)
 	ctx := context.Background()
 	q := store.New(sqlDB)
@@ -192,6 +197,7 @@ func TestALocationIsCountedOncePerSnapshot(t *testing.T) {
 }
 
 func TestIncidentalIsOneEnvelopePerPurposeAndStaysEditable(t *testing.T) {
+	t.Parallel()
 	sqlDB := migratedTestDB(t)
 	ctx := context.Background()
 	q := store.New(sqlDB)
@@ -223,6 +229,7 @@ func TestIncidentalIsOneEnvelopePerPurposeAndStaysEditable(t *testing.T) {
 }
 
 func TestIncidentalRejectsImpossibleDatesAndTargets(t *testing.T) {
+	t.Parallel()
 	sqlDB := migratedTestDB(t)
 	ctx := context.Background()
 	q := store.New(sqlDB)

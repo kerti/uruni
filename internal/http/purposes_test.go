@@ -30,6 +30,7 @@ func postPassThroughPurpose(t *testing.T, r http.Handler, name string) *httptest
 }
 
 func TestGetPurposesRequiresAFund(t *testing.T) {
+	t.Parallel()
 	rec := getPurposes(t, testRouter(t))
 
 	if rec.Code != http.StatusNotFound {
@@ -42,6 +43,7 @@ func TestGetPurposesRequiresAFund(t *testing.T) {
 }
 
 func TestPostPassThroughPurposesRequiresAFund(t *testing.T) {
+	t.Parallel()
 	rec := postPassThroughPurpose(t, testRouter(t), "Sumbangan duka")
 
 	if rec.Code != http.StatusNotFound {
@@ -54,6 +56,7 @@ func TestPostPassThroughPurposesRequiresAFund(t *testing.T) {
 }
 
 func TestGetPurposesReturnsTheMainPurposeSetupCreated(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	if rec := postSetup(t, r, "Test Fund"); rec.Code != http.StatusCreated {
 		t.Fatalf("POST /api/setup = %d, want %d", rec.Code, http.StatusCreated)
@@ -77,6 +80,7 @@ func TestGetPurposesReturnsTheMainPurposeSetupCreated(t *testing.T) {
 }
 
 func TestPostPassThroughPurposesCreatesAndListReturnsItAlongsideMain(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	if rec := postSetup(t, r, "Test Fund"); rec.Code != http.StatusCreated {
 		t.Fatalf("POST /api/setup = %d, want %d", rec.Code, http.StatusCreated)
@@ -123,6 +127,7 @@ func TestPostPassThroughPurposesCreatesAndListReturnsItAlongsideMain(t *testing.
 // purpose_single_main through this route: a body naming kind='main' is
 // ignored and the row is still created as a pass-through.
 func TestPostPassThroughPurposesIgnoresACallerSuppliedKind(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	if rec := postSetup(t, r, "Test Fund"); rec.Code != http.StatusCreated {
 		t.Fatalf("POST /api/setup = %d, want %d", rec.Code, http.StatusCreated)
@@ -161,6 +166,7 @@ func TestPostPassThroughPurposesIgnoresACallerSuppliedKind(t *testing.T) {
 }
 
 func TestPostPassThroughPurposesRejectsABlankName(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	if rec := postSetup(t, r, "Test Fund"); rec.Code != http.StatusCreated {
 		t.Fatalf("POST /api/setup = %d, want %d", rec.Code, http.StatusCreated)
@@ -187,6 +193,7 @@ func patchPurpose(t *testing.T, r http.Handler, id int64, body string) *httptest
 // nothing in the ledger reads the text, so a mistyped one is correctable
 // exactly like a location's name.
 func TestPatchPurposeRenamesAPassThrough(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	setUpFund(t, r)
 
@@ -220,6 +227,7 @@ func TestPatchPurposeRenamesAPassThrough(t *testing.T) {
 // incidental's occasion moved into the renameable column alongside a
 // pass-through's name.
 func TestPatchPurposeRefusesTheMainPurpose(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	setup := setUpFund(t, r)
 
@@ -239,6 +247,7 @@ func TestPatchPurposeRefusesTheMainPurpose(t *testing.T) {
 // faith from the PATCH response alone - the same discipline
 // TestCloseIncidentalRollsLeftoverVerifiedThroughBalances uses.
 func TestPatchPurposeRenamesAnIncidentalsOccasionAndMovesNoMoney(t *testing.T) {
+	t.Parallel()
 	r, l := testRouterAndLedger(t)
 	setup := setUpFund(t, r)
 	envelope := openIncidentalFor(t, r, "Halal bihalal RT", "2026-08-01")
@@ -315,6 +324,7 @@ func TestPatchPurposeRenamesAnIncidentalsOccasionAndMovesNoMoney(t *testing.T) {
 // A CLOSED envelope is renameable too (#264's whole point: the typo is
 // usually found after the occasion is over).
 func TestPatchPurposeRenamesAClosedIncidental(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	setup := setUpFund(t, r)
 	envelope := openIncidentalFor(t, r, "Halal bihalal RT", "2026-08-01")
@@ -340,6 +350,7 @@ func TestPatchPurposeRenamesAClosedIncidental(t *testing.T) {
 
 // An empty or whitespace-only occasion is refused, the same as opening one.
 func TestPatchPurposeRejectsAnEmptyIncidentalOccasion(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	setUpFund(t, r)
 	envelope := openIncidentalFor(t, r, "Halal bihalal RT", "2026-08-01")
@@ -354,6 +365,7 @@ func TestPatchPurposeRejectsAnEmptyIncidentalOccasion(t *testing.T) {
 }
 
 func TestPatchPurposeWithoutANameIsRejected(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	setUpFund(t, r)
 
@@ -382,6 +394,7 @@ func getSelectablePurposes(t *testing.T, r http.Handler) *httptest.ResponseRecor
 // GET /api/purposes still returns it - a closed envelope is still history.
 // purposeResponse itself gains no closed_on field either way.
 func TestGetSelectablePurposesExcludesAClosedIncidental(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	setup := setUpFund(t, r)
 	envelope := openIncidentalFor(t, r, "Jane's wedding", "2026-08-01")
@@ -451,6 +464,7 @@ func containsPurposeID(purposes []purposeResponse, id int64) bool {
 // An unparseable ?selectable value is a 400, matching listIncidentals'
 // identical guard on its own ?open filter.
 func TestGetPurposesRejectsAnUnparseableSelectableValue(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	setUpFund(t, r)
 

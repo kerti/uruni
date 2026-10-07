@@ -76,6 +76,7 @@ func selectedMonth(t *testing.T, body string) string {
 }
 
 func TestReportKnownSlugIs200WithEveryHeader(t *testing.T) {
+	t.Parallel()
 	f := newReportFixture(t, "Kas RT 05")
 	f.post(t, "in", 250_000, "2026-09-15")
 
@@ -116,6 +117,7 @@ func TestReportKnownSlugIs200WithEveryHeader(t *testing.T) {
 }
 
 func TestReportUnknownSlugIs404NamingNoFund(t *testing.T) {
+	t.Parallel()
 	f := newReportFixture(t, "Kas RT 05")
 
 	rec := f.get(t, "/report/thisslugdoesnotexistanywhere00")
@@ -135,6 +137,7 @@ func TestReportUnknownSlugIs404NamingNoFund(t *testing.T) {
 }
 
 func TestReportMonthFallsBackToTheCurrentMonth(t *testing.T) {
+	t.Parallel()
 	f := newReportFixture(t, "Kas RT 05")
 	f.post(t, "in", 100_000, "2026-08-10")
 	slug := "/report/" + f.fund.ReportSlug
@@ -160,6 +163,7 @@ func TestReportMonthFallsBackToTheCurrentMonth(t *testing.T) {
 }
 
 func TestReportMonthStepLinks(t *testing.T) {
+	t.Parallel()
 	f := newReportFixture(t, "Kas RT 05")
 	f.post(t, "in", 100_000, "2026-08-10")
 	slug := "/report/" + f.fund.ReportSlug
@@ -179,6 +183,7 @@ func TestReportMonthStepLinks(t *testing.T) {
 }
 
 func TestReportEmptyFundShowsRpZeroAndTheWarmLine(t *testing.T) {
+	t.Parallel()
 	f := newReportFixture(t, "Kas RT 05")
 
 	body := f.get(t, "/report/"+f.fund.ReportSlug).Body.String()
@@ -199,6 +204,7 @@ func TestReportEmptyFundShowsRpZeroAndTheWarmLine(t *testing.T) {
 // counted is neutral (never green), matched is green, a discrepancy is
 // terracotta with its amount.
 func TestReportPageCheckStates(t *testing.T) {
+	t.Parallel()
 	base := ledger.Report{FundName: "Kas", AsOf: "2026-10-02", Month: "2026-10", Months: []string{"2026-10"}}
 
 	page := buildReportPage(base, false)
@@ -220,6 +226,7 @@ func TestReportPageCheckStates(t *testing.T) {
 }
 
 func TestReportPagePurposeBalances(t *testing.T) {
+	t.Parallel()
 	page := buildReportPage(ledger.Report{
 		AsOf: "2026-10-02", Month: "2026-10", Months: []string{"2026-10"},
 		PurposeBalances: []ledger.ReportPurposeBalance{
@@ -239,6 +246,7 @@ func TestReportPagePurposeBalances(t *testing.T) {
 // palette copy: every token the report uses must hold the value index.css's
 // :root gives it.
 func TestReportPaletteMatchesIndexCSS(t *testing.T) {
+	t.Parallel()
 	css, err := os.ReadFile("../../web/src/index.css")
 	if err != nil {
 		t.Fatalf("reading index.css: %v", err)
@@ -267,6 +275,7 @@ func TestReportPaletteMatchesIndexCSS(t *testing.T) {
 }
 
 func TestReportCopyDates(t *testing.T) {
+	t.Parallel()
 	if got := reportText.longDate("2026-01-09"); got != "9 Januari 2026" {
 		t.Errorf("longDate = %q", got)
 	}
@@ -278,6 +287,7 @@ func TestReportCopyDates(t *testing.T) {
 // The total owed to members (#406) sits in the summary as of today, whatever
 // month is shown, and the line is absent while nothing is owed.
 func TestReportSummaryShowsTheTotalOwedToMembers(t *testing.T) {
+	t.Parallel()
 	f := newReportFixture(t, "Kas RT 05")
 	f.post(t, "in", 100_000, "2026-09-01")
 
@@ -309,6 +319,7 @@ func TestReportSummaryShowsTheTotalOwedToMembers(t *testing.T) {
 // last day, or today as the running month. The month picker comes first, so
 // everything beneath it reads as that month's.
 func TestReportDateLineAndMonthPickerFirst(t *testing.T) {
+	t.Parallel()
 	f := newReportFixture(t, "Kas RT 05")
 	f.post(t, "in", 100_000, "2026-09-01")
 	f.post(t, "in", 25_000, "2026-10-01")

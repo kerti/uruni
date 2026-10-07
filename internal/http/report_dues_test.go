@@ -100,6 +100,7 @@ func duesNames(sec string) []string {
 }
 
 func TestReportDuesShowsEveryStatusInTheAppsWords(t *testing.T) {
+	t.Parallel()
 	s := newDuesScenario(t)
 	rec := s.get(t, s.base)
 	if rec.Code != http.StatusOK {
@@ -141,6 +142,7 @@ func TestReportDuesShowsEveryStatusInTheAppsWords(t *testing.T) {
 }
 
 func TestReportDuesFilter(t *testing.T) {
+	t.Parallel()
 	s := newDuesScenario(t)
 	for _, tc := range []struct {
 		value, want string
@@ -168,6 +170,7 @@ func TestReportDuesFilter(t *testing.T) {
 }
 
 func TestReportDuesFilterLeavesTransactionsAlone(t *testing.T) {
+	t.Parallel()
 	s := newDuesScenario(t)
 	all := txnSection(t, s.get(t, s.base).Body.String())
 	filtered := txnSection(t, s.get(t, s.base+"&dues=unpaid").Body.String())
@@ -177,6 +180,7 @@ func TestReportDuesFilterLeavesTransactionsAlone(t *testing.T) {
 }
 
 func TestReportDuesFilterWithNoMatchKeepsSectionAndFilter(t *testing.T) {
+	t.Parallel()
 	s := newDuesScenario(t)
 	// Everyone but Budi has paid something, so "unpaid" is Budi alone;
 	// narrowing by month to October leaves partial empty.
@@ -208,6 +212,7 @@ func TestReportDuesFilterWithNoMatchKeepsSectionAndFilter(t *testing.T) {
 }
 
 func TestReportDuesFilterIsCarriedByMonthLinks(t *testing.T) {
+	t.Parallel()
 	s := newDuesScenario(t)
 	body := s.get(t, s.base+"&dues=unpaid").Body.String()
 	if !strings.Contains(body, `<input type="hidden" name="dues" value="unpaid">`) {
@@ -227,6 +232,7 @@ func TestReportDuesFilterIsCarriedByMonthLinks(t *testing.T) {
 }
 
 func TestReportDuesHasNoArrearsWording(t *testing.T) {
+	t.Parallel()
 	s := newDuesScenario(t)
 	for _, path := range []string{s.base, s.base + "&dues=unpaid", "/report/" + s.fund.ReportSlug + "?month=2026-10"} {
 		body := strings.ToLower(s.get(t, path).Body.String())
@@ -239,6 +245,7 @@ func TestReportDuesHasNoArrearsWording(t *testing.T) {
 }
 
 func TestReportDuesOnlyMembersOwingThatMonth(t *testing.T) {
+	t.Parallel()
 	s := newDuesScenario(t)
 	// October: Fina has joined, Gita is still gone.
 	sec := duesSection(t, s.get(t, "/report/"+s.fund.ReportSlug+"?month=2026-10").Body.String())
@@ -249,6 +256,7 @@ func TestReportDuesOnlyMembersOwingThatMonth(t *testing.T) {
 }
 
 func TestReportDuesSectionHidden(t *testing.T) {
+	t.Parallel()
 	t.Run("no tiers", func(t *testing.T) {
 		f := newReportFixture(t, "Kas RT 05")
 		f.post(t, "in", 10_000, "2026-09-03")
@@ -286,6 +294,7 @@ func TestReportDuesSectionHidden(t *testing.T) {
 // The dues filter has its own form beside the table it filters; each of the
 // two filter forms carries the other's choices, so neither drops them.
 func TestReportDuesAndTransactionFormsCarryEachOther(t *testing.T) {
+	t.Parallel()
 	s := newDuesScenario(t)
 	body := s.get(t, s.base+"&dues=unpaid&dir=in").Body.String()
 

@@ -74,8 +74,10 @@ func setUpOtherFund(t *testing.T, sqlDB *sql.DB) otherFundFixture {
 // afterwards. This is the shape #70 established and ADR-030 leans on when it
 // defers multi-fund - "scoping stays defensive."
 func TestRoutesOnAnotherFundsRowAre404(t *testing.T) {
+	t.Parallel()
 	for _, tc := range fundScopedRouteCases() {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			sqlDB := testStoreDB(t)
 			r := authedRouterFor(t, sqlDB)
 			setUpFund(t, r)
@@ -100,6 +102,7 @@ func TestRoutesOnAnotherFundsRowAre404(t *testing.T) {
 // routes answers resolveFund's own "run setup" 404 rather than reaching a
 // row.
 func TestRoutesBeforeSetupAre404(t *testing.T) {
+	t.Parallel()
 	// Setup never runs here, so no row exists for any of these ids - which
 	// is the point: the fund check answers before the lookup is reached.
 	noFund := otherFundFixture{accountID: 1, memberID: 1, tierID: 1, rateID: 1}

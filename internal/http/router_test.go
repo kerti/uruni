@@ -105,6 +105,7 @@ func get(t *testing.T, path string) *httptest.ResponseRecorder {
 }
 
 func TestHealthzIsUnauthenticatedAndOK(t *testing.T) {
+	t.Parallel()
 	rec := get(t, "/healthz")
 	if rec.Code != http.StatusOK {
 		t.Fatalf("GET /healthz = %d, want %d", rec.Code, http.StatusOK)
@@ -128,6 +129,7 @@ func TestHealthzIsUnauthenticatedAndOK(t *testing.T) {
 // untagged build is the case that needs the commit: version is only ever `dev`,
 // so the SHA is the sole thing naming what runs.
 func TestHealthzReportsTheBuildItWasStampedWith(t *testing.T) {
+	t.Parallel()
 	untagged := Build{Version: "dev", Commit: "deadbee"}
 	sqlDB := testStoreDB(t)
 	rec := httptest.NewRecorder()
@@ -147,6 +149,7 @@ func TestHealthzReportsTheBuildItWasStampedWith(t *testing.T) {
 // #278: a database path that no longer names the file this process opened
 // turns /healthz red, so the container HEALTHCHECK raises the alarm.
 func TestHealthzFailsWhenTheDatabaseFileCheckFails(t *testing.T) {
+	t.Parallel()
 	sqlDB := testStoreDB(t)
 	replaced := func() error { return errors.New("the database file was replaced") }
 	rec := httptest.NewRecorder()
@@ -169,6 +172,7 @@ func TestHealthzFailsWhenTheDatabaseFileCheckFails(t *testing.T) {
 }
 
 func TestRootServesTheEmbeddedSPA(t *testing.T) {
+	t.Parallel()
 	rec := get(t, "/")
 	if rec.Code != http.StatusOK {
 		t.Fatalf("GET / = %d, want %d", rec.Code, http.StatusOK)
@@ -179,6 +183,7 @@ func TestRootServesTheEmbeddedSPA(t *testing.T) {
 }
 
 func TestAssetsAreServedAsThemselves(t *testing.T) {
+	t.Parallel()
 	rec := get(t, "/assets/app.js")
 	if rec.Code != http.StatusOK {
 		t.Fatalf("GET /assets/app.js = %d, want %d", rec.Code, http.StatusOK)
@@ -189,6 +194,7 @@ func TestAssetsAreServedAsThemselves(t *testing.T) {
 }
 
 func TestClientRoutesFallBackToIndex(t *testing.T) {
+	t.Parallel()
 	for _, path := range []string{"/catat", "/rekonsiliasi/2026-08"} {
 		rec := get(t, path)
 		if rec.Code != http.StatusOK {
@@ -205,6 +211,7 @@ func TestClientRoutesFallBackToIndex(t *testing.T) {
 // browser that caches either serves an old app from a freshly updated server.
 // Every other asset is content-hashed and deliberately left alone here.
 func TestShellAndServiceWorkerAreNotBrowserCached(t *testing.T) {
+	t.Parallel()
 	for _, path := range []string{"/", "/index.html", "/sw.js", "/catat"} {
 		rec := get(t, path)
 		if got, want := rec.Header().Get("Cache-Control"), "no-cache"; got != want {
@@ -220,6 +227,7 @@ func TestShellAndServiceWorkerAreNotBrowserCached(t *testing.T) {
 // A manifest served as text/plain is one browsers may decline to install
 // from, and Go's mime table has no .webmanifest entry of its own.
 func TestManifestIsServedAsAWebManifest(t *testing.T) {
+	t.Parallel()
 	rec := get(t, "/manifest.webmanifest")
 	if rec.Code != http.StatusOK {
 		t.Fatalf("GET /manifest.webmanifest = %d, want %d", rec.Code, http.StatusOK)
@@ -230,6 +238,7 @@ func TestManifestIsServedAsAWebManifest(t *testing.T) {
 }
 
 func TestUnknownAPIPathsAnswerWithTheErrorEnvelope(t *testing.T) {
+	t.Parallel()
 	// A mistyped path is when a client is least able to cope with a second
 	// error shape, so /api answers in the envelope every other API failure
 	// uses rather than chi's plain-text default.
@@ -252,6 +261,7 @@ func TestUnknownAPIPathsAnswerWithTheErrorEnvelope(t *testing.T) {
 }
 
 func TestServerNamespacesDoNotFallBackToTheSPA(t *testing.T) {
+	t.Parallel()
 	for _, path := range []string{"/api", "/api/transactions", "/report", "/report/abc123"} {
 		rec := get(t, path)
 		if rec.Code != http.StatusNotFound {

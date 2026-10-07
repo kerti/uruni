@@ -19,6 +19,7 @@ import (
 // Number.MAX_SAFE_INTEGER, where Intl is exact; the int64 extremes are checked
 // separately below against known digits.
 func TestFormatIDRMatchesIntl(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name string
 		in   Amount
@@ -51,6 +52,7 @@ func TestFormatIDRMatchesIntl(t *testing.T) {
 // (a JS number is a float64). math.MinInt64 is the one int64 that cannot be
 // negated, so a sign-flip implementation would print it wrong.
 func TestFormatIDRInt64Extremes(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name string
 		in   Amount

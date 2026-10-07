@@ -10,6 +10,7 @@ import (
 // Register created verifies against the same password and returns the real
 // row.
 func TestAuthenticateAcceptsTheCorrectPassword(t *testing.T) {
+	t.Parallel()
 	a, _ := newTestAuth(t)
 	ctx := context.Background()
 
@@ -36,6 +37,7 @@ func TestAuthenticateAcceptsTheCorrectPassword(t *testing.T) {
 // account at all - neither case may surface a different error a caller
 // could branch on.
 func TestAuthenticateWrongPasswordAndUnknownEmailReturnTheSameSentinel(t *testing.T) {
+	t.Parallel()
 	a, _ := newTestAuth(t)
 	ctx := context.Background()
 
@@ -57,6 +59,7 @@ func TestAuthenticateWrongPasswordAndUnknownEmailReturnTheSameSentinel(t *testin
 // TestAuthenticateRejectsAnEmptyPasswordAgainstARealAccount: an empty guess
 // is still just a wrong password, not a special case.
 func TestAuthenticateRejectsAnEmptyPasswordAgainstARealAccount(t *testing.T) {
+	t.Parallel()
 	a, _ := newTestAuth(t)
 	ctx := context.Background()
 
@@ -75,6 +78,7 @@ func TestAuthenticateRejectsAnEmptyPasswordAgainstARealAccount(t *testing.T) {
 // login attempt before Register has ever run once is just another unknown
 // email.
 func TestAuthenticateOnAFreshInstanceWithNoAccountAtAllReturnsTheSameSentinel(t *testing.T) {
+	t.Parallel()
 	a, _ := newTestAuth(t)
 
 	_, err := a.Authenticate(context.Background(), "nobody@example.org", "whatever-password")
@@ -89,6 +93,7 @@ func TestAuthenticateOnAFreshInstanceWithNoAccountAtAllReturnsTheSameSentinel(t 
 // mapAuthError would otherwise answer a broken instance with "wrong
 // password" instead of a 500.
 func TestAuthenticateSurfacesADatabaseFailureAsAPlainError(t *testing.T) {
+	t.Parallel()
 	a, sqlDB := newTestAuth(t)
 	if err := sqlDB.Close(); err != nil {
 		t.Fatalf("Close() = %v, want no error", err)
@@ -108,6 +113,7 @@ func TestAuthenticateSurfacesADatabaseFailureAsAPlainError(t *testing.T) {
 // exact column) is a corrupted row, not a guessed-wrong password - it must
 // not come back as ErrInvalidCredentials either.
 func TestAuthenticateSurfacesAMalformedStoredHashAsAPlainError(t *testing.T) {
+	t.Parallel()
 	a, sqlDB := newTestAuth(t)
 	ctx := context.Background()
 

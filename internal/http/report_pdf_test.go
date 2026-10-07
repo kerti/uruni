@@ -164,6 +164,7 @@ func newPDFScenario(t *testing.T) duesScenario {
 }
 
 func TestReportPDFCarriesFundTotalsDuesAndEnvelopes(t *testing.T) {
+	t.Parallel()
 	s := newPDFScenario(t)
 	rec := s.get(t, "/report/"+s.fund.ReportSlug+"/pdf?month=2026-09")
 	if rec.Code != http.StatusOK {
@@ -217,6 +218,7 @@ func writeSamplePDF(t *testing.T, body []byte) {
 }
 
 func TestReportPDFHeaders(t *testing.T) {
+	t.Parallel()
 	f := newReportFixture(t, "Kas RT 05")
 	f.post(t, "in", 250_000, "2026-09-15")
 
@@ -241,6 +243,7 @@ func TestReportPDFHeaders(t *testing.T) {
 }
 
 func TestReportPDFUnknownSlugIs404NamingNoFund(t *testing.T) {
+	t.Parallel()
 	f := newReportFixture(t, "Kas RT 05")
 
 	rec := f.get(t, "/report/thisslugdoesnotexistanywhere00/pdf?month=2026-09")
@@ -265,6 +268,7 @@ func TestReportPDFUnknownSlugIs404NamingNoFund(t *testing.T) {
 // A month that is missing, malformed or outside the selector is the current
 // one, as on the page - and the filename says which month the file holds.
 func TestReportPDFMonthFallsBackAsThePageDoes(t *testing.T) {
+	t.Parallel()
 	f := newReportFixture(t, "Kas RT 05")
 	f.post(t, "in", 100_000, "2026-08-10")
 	base := "/report/" + f.fund.ReportSlug + "/pdf"
@@ -290,6 +294,7 @@ func TestReportPDFMonthFallsBackAsThePageDoes(t *testing.T) {
 
 // The statement is the full month: the page's filters do not narrow it.
 func TestReportPDFIgnoresPageFilters(t *testing.T) {
+	t.Parallel()
 	s := newPDFScenario(t)
 	base := "/report/" + s.fund.ReportSlug + "/pdf?month=2026-09"
 	plain := pdfText(t, s.get(t, base).Body.Bytes())
@@ -300,6 +305,7 @@ func TestReportPDFIgnoresPageFilters(t *testing.T) {
 }
 
 func TestReportPDFOfAFundWithNothingRecorded(t *testing.T) {
+	t.Parallel()
 	f := newReportFixture(t, "Kas RT 05")
 	rec := f.get(t, "/report/"+f.fund.ReportSlug+"/pdf")
 	if rec.Code != http.StatusOK {
@@ -316,6 +322,7 @@ func TestReportPDFOfAFundWithNothingRecorded(t *testing.T) {
 // A long month runs onto more pages: no row is lost or split, the table's
 // header repeats, and the footer counts the pages.
 func TestReportPDFPaginates(t *testing.T) {
+	t.Parallel()
 	f := newReportFixture(t, "Kas RT 05")
 	const rows = 120
 	for i := 1; i <= rows; i++ {
@@ -349,6 +356,7 @@ func TestReportPDFPaginates(t *testing.T) {
 }
 
 func TestReportPageLinksToThePDFForTheMonthShown(t *testing.T) {
+	t.Parallel()
 	f := newReportFixture(t, "Kas RT 05")
 	f.post(t, "in", 100_000, "2026-08-10")
 
@@ -368,6 +376,7 @@ func TestReportPageLinksToThePDFForTheMonthShown(t *testing.T) {
 }
 
 func TestReportFontLicenceShipsWithTheFonts(t *testing.T) {
+	t.Parallel()
 	b, err := reportFonts.ReadFile("fonts/OFL.txt")
 	if err != nil {
 		t.Fatalf("OFL.txt is not embedded beside the fonts: %v", err)
@@ -382,6 +391,7 @@ func TestReportFontLicenceShipsWithTheFonts(t *testing.T) {
 // Output and the statement was a 500. Such runes are dropped; the rest of the
 // text stays.
 func TestReportPDFSurvivesRunesBeyondTheBMP(t *testing.T) {
+	t.Parallel()
 	f := newReportFixture(t, "Kas RT 05 \U0001F3E0")
 	if _, err := f.l.OpenIncidental(context.Background(), ledger.OpenIncidentalParams{
 		FundID: f.fund.ID, Occasion: "Halal bihalal \U0001F319\uFE0F", OpenedOn: "2026-09-01",
@@ -410,6 +420,7 @@ func TestReportPDFSurvivesRunesBeyondTheBMP(t *testing.T) {
 }
 
 func TestPDFSafe(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ in, want string }{
 		{"Kas RT 05", "Kas RT 05"},
 		{"Kas RT 05 \U0001F3E0", "Kas RT 05"},
@@ -437,6 +448,7 @@ func TestPDFSafe(t *testing.T) {
 // before the arrow got its stand-in. The scenario carries purpose moves, dues
 // and every label shape the list knows.
 func TestReportPDFDrawsOnlyCharactersTheFontHas(t *testing.T) {
+	t.Parallel()
 	s := newTxnScenario(t)
 	rec := s.get(t, "/report/"+s.fund.ReportSlug+"/pdf?month=2026-09")
 	if rec.Code != http.StatusOK {
@@ -521,6 +533,7 @@ func fontRunes(t *testing.T, font []byte) map[rune]bool {
 // The statement opens with Ringkasan on its own page, and every later section
 // - Transaksi, Iuran, Amplop - starts a page of its own, its heading first.
 func TestReportPDFStartsEachSectionOnItsOwnPage(t *testing.T) {
+	t.Parallel()
 	s := newPDFScenario(t)
 	pages := pdfPages(t, s.get(t, "/report/"+s.fund.ReportSlug+"/pdf?month=2026-09").Body.Bytes())
 
@@ -542,6 +555,7 @@ func TestReportPDFStartsEachSectionOnItsOwnPage(t *testing.T) {
 
 // Ringkasan carries the total owed to members (#406), as the page does.
 func TestReportPDFSummaryShowsTheTotalOwedToMembers(t *testing.T) {
+	t.Parallel()
 	s := newPDFScenario(t)
 	runs := pdfText(t, s.get(t, "/report/"+s.fund.ReportSlug+"/pdf?month=2026-09").Body.Bytes())
 	if pdfHas(runs, reportText.OwedLabel) {
@@ -569,6 +583,7 @@ func TestReportPDFSummaryShowsTheTotalOwedToMembers(t *testing.T) {
 
 // The PDF's date line follows the page's (ADR-037).
 func TestReportPDFDateLineFollowsTheMonth(t *testing.T) {
+	t.Parallel()
 	s := newPDFScenario(t)
 	past := pdfText(t, s.get(t, "/report/"+s.fund.ReportSlug+"/pdf?month=2026-09").Body.Bytes())
 	if want := reportText.AsOf("30 September 2026"); !pdfHas(past, want) {

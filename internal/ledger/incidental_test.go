@@ -29,6 +29,7 @@ func openTestIncidental(t *testing.T, l *Ledger, fundID int64, occasion, openedO
 // OpenIncidental writes one purpose row and the incidental row 1:1 with it,
 // and the purpose it creates carries kind='incidental'.
 func TestOpenIncidentalCreatesBothRows(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 	f := newFixture(t, l)
 	ctx := context.Background()
@@ -84,6 +85,7 @@ func TestOpenIncidentalCreatesBothRows(t *testing.T) {
 // meaning "no target", and OpenIncidental must pass that through rather than
 // defaulting to zero.
 func TestOpenIncidentalWithoutTargetAmount(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 	f := newFixture(t, l)
 	ctx := context.Background()
@@ -122,6 +124,7 @@ func TestOpenIncidentalWithoutTargetAmount(t *testing.T) {
 // precondition; the failure OpenIncidental then hits is a genuine PRIMARY
 // KEY violation on incidental.purpose_id, not a mocked or injected error.
 func TestOpenIncidentalAtomicityNoOrphanPurposeWhenSecondInsertFails(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 	f := newFixture(t, l)
 	ctx := context.Background()
@@ -181,6 +184,7 @@ func TestOpenIncidentalAtomicityNoOrphanPurposeWhenSecondInsertFails(t *testing.
 }
 
 func TestOpenIncidentalRejectsEmptyOccasion(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 	f := newFixture(t, l)
 	ctx := context.Background()
@@ -202,6 +206,7 @@ func TestOpenIncidentalRejectsEmptyOccasion(t *testing.T) {
 }
 
 func TestOpenIncidentalRejectsNonPositiveTargetAmount(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name   string
 		target money.Amount
@@ -212,6 +217,7 @@ func TestOpenIncidentalRejectsNonPositiveTargetAmount(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			l := newTestLedger(t)
 			f := newFixture(t, l)
 			ctx := context.Background()
@@ -227,6 +233,7 @@ func TestOpenIncidentalRejectsNonPositiveTargetAmount(t *testing.T) {
 }
 
 func TestOpenIncidentalRejectsInvalidOpenedOn(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 	f := newFixture(t, l)
 	ctx := context.Background()
@@ -247,6 +254,7 @@ func TestOpenIncidentalRejectsInvalidOpenedOn(t *testing.T) {
 // assertion, checked with exact integer comparisons (ADR-015, CLAUDE.md
 // rule 2), never trusted from the return value alone.
 func TestRenameIncidentalMovesBothRowsAndNoMoney(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 	f := newFixture(t, l)
 	ctx := context.Background()
@@ -326,6 +334,7 @@ func TestRenameIncidentalMovesBothRowsAndNoMoney(t *testing.T) {
 // A CLOSED envelope renames successfully - the typo is usually found after
 // the occasion is over, and renaming does not need the envelope reopened.
 func TestRenameIncidentalOnAClosedEnvelope(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 	f := newFixture(t, l)
 	ctx := context.Background()
@@ -354,6 +363,7 @@ func TestRenameIncidentalOnAClosedEnvelope(t *testing.T) {
 // Empty or whitespace-only occasion is refused, the same idiom
 // OpenIncidental uses, and the row is left untouched.
 func TestRenameIncidentalRejectsEmptyOccasion(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 	f := newFixture(t, l)
 	ctx := context.Background()
@@ -381,6 +391,7 @@ func TestRenameIncidentalRejectsEmptyOccasion(t *testing.T) {
 // other single-envelope write in this file - an id names a row, it does not
 // prove the caller may see it.
 func TestRenameIncidentalIsFundScoped(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 	f := newFixture(t, l)
 	ctx := context.Background()
@@ -420,6 +431,7 @@ func TestRenameIncidentalIsFundScoped(t *testing.T) {
 // for), the incidental purpose's balance goes to exactly 0, and the main
 // purpose's balance rises by exactly the leftover.
 func TestCloseIncidentalAndRollPositiveLeftoverRollsAndCloses(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 	f := newFixture(t, l)
 	ctx := context.Background()
@@ -495,6 +507,7 @@ func TestCloseIncidentalAndRollPositiveLeftoverRollsAndCloses(t *testing.T) {
 // A zero leftover closes the envelope and posts nothing - not an error, and
 // not a zero-amount transfer either.
 func TestCloseIncidentalAndRollZeroLeftoverClosesWithoutPosting(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 	f := newFixture(t, l)
 	ctx := context.Background()
@@ -556,6 +569,7 @@ func TestCloseIncidentalAndRollZeroLeftoverClosesWithoutPosting(t *testing.T) {
 // TestCloseIncidentalAndRollPositiveLeftoverRollsAndCloses proves for the
 // opposite sign.
 func TestCloseIncidentalAndRollNegativeLeftoverCoversFromMainAndCloses(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 	f := newFixture(t, l)
 	ctx := context.Background()
@@ -632,6 +646,7 @@ func TestCloseIncidentalAndRollNegativeLeftoverCoversFromMainAndCloses(t *testin
 // sentinel and posts nothing - a second roll would move money that already
 // moved.
 func TestCloseIncidentalAndRollSecondCallReturnsAlreadyClosed(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 	f := newFixture(t, l)
 	ctx := context.Background()
@@ -690,6 +705,7 @@ func TestCloseIncidentalAndRollSecondCallReturnsAlreadyClosed(t *testing.T) {
 // TestPostTransferBetweenAccountsLeavesNoRowsWhenTheSecondLegFails's
 // approach - a real composite foreign key violation, not a fake.
 func TestCloseIncidentalAndRollPairFailureLeavesEnvelopeOpen(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 	f := newFixture(t, l)
 	ctx := context.Background()
@@ -745,6 +761,7 @@ func TestCloseIncidentalAndRollPairFailureLeavesEnvelopeOpen(t *testing.T) {
 }
 
 func TestCloseIncidentalAndRollRejectsInvalidClosedOn(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 	f := newFixture(t, l)
 	ctx := context.Background()
@@ -773,6 +790,7 @@ func TestCloseIncidentalAndRollRejectsInvalidClosedOn(t *testing.T) {
 // fund, so these two are the scoping tests that keep that honest - v1's
 // single-fund rule is a setup constraint, not a reason to read unscoped.
 func TestASecondFundsIncidentalIsInvisibleToTheFirstFund(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 	f := newFixture(t, l)
 	ctx := context.Background()
@@ -804,6 +822,7 @@ func TestASecondFundsIncidentalIsInvisibleToTheFirstFund(t *testing.T) {
 }
 
 func TestClosingASecondFundsIncidentalAcrossTheBoundaryIsRefused(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 	f := newFixture(t, l)
 	ctx := context.Background()
@@ -845,6 +864,7 @@ func TestClosingASecondFundsIncidentalAcrossTheBoundaryIsRefused(t *testing.T) {
 // the transfer's own facts at read time (#257), never by storing generated
 // text.
 func TestCloseIncidentalAndRollWritesTheNoteToBothRollLegs(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 	f := newFixture(t, l)
 	ctx := context.Background()
@@ -887,6 +907,7 @@ func TestCloseIncidentalAndRollWritesTheNoteToBothRollLegs(t *testing.T) {
 }
 
 func TestCloseIncidentalAndRollWritesNoNoteWhenNoneIsGiven(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 	f := newFixture(t, l)
 	ctx := context.Background()
@@ -928,6 +949,7 @@ func TestCloseIncidentalAndRollWritesNoNoteWhenNoneIsGiven(t *testing.T) {
 // since 70.000 of that went back to Kas Utama, not to anything the occasion
 // spent. IncidentalActivityTotals must exclude that leg.
 func TestGetIncidentalDetailExcludesTheRolledOutLegAfterAPositiveClose(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 	f := newFixture(t, l)
 	ctx := context.Background()
@@ -975,6 +997,7 @@ func TestGetIncidentalDetailExcludesTheRolledOutLegAfterAPositiveClose(t *testin
 // disbursements and the rows they cancelled as collections. Both halves
 // drop; collected minus disbursed still equals the envelope's balance.
 func TestGetIncidentalDetailDropsBothHalvesOfACancelledContribution(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 	f := newFixture(t, l)
 	ctx := context.Background()
@@ -1033,6 +1056,7 @@ func TestGetIncidentalDetailDropsBothHalvesOfACancelledContribution(t *testing.T
 // must not inflate collected_amount either, or a treasurer would read a
 // covering transfer from Kas Utama as if it were a fresh contribution.
 func TestGetIncidentalDetailExcludesTheCoveringInLegAfterANegativeClose(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 	f := newFixture(t, l)
 	ctx := context.Background()
@@ -1079,6 +1103,7 @@ func TestGetIncidentalDetailExcludesTheCoveringInLegAfterANegativeClose(t *testi
 // an expense corrected away un-spends. Collected minus disbursed equals the
 // balance at every step.
 func TestGetIncidentalDetailReadsCorrectionsIntoAndOutOfTheEnvelope(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 	f := newFixture(t, l)
 	ctx := context.Background()
@@ -1151,6 +1176,7 @@ func TestGetIncidentalDetailReadsCorrectionsIntoAndOutOfTheEnvelope(t *testing.T
 // is zero: the pair is value-neutral and nets to zero in the unfiltered
 // IncidentalTotals the balance itself comes from).
 func TestGetIncidentalDetailExcludesAContributionCorrectedOutOfTheEnvelope(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 	f := newFixture(t, l)
 	ctx := context.Background()
@@ -1197,6 +1223,7 @@ func TestGetIncidentalDetailExcludesAContributionCorrectedOutOfTheEnvelope(t *te
 // --- Reopen (ADR-031, #214): the deliberate, visible way back ----------
 
 func TestReopenIncidentalClearsClosedOn(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 	f := newFixture(t, l)
 	ctx := context.Background()
@@ -1227,6 +1254,7 @@ func TestReopenIncidentalClearsClosedOn(t *testing.T) {
 
 // Reopening an envelope that is not closed is refused, not a silent no-op.
 func TestReopenIncidentalRejectsAnOpenEnvelope(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 	f := newFixture(t, l)
 	ctx := context.Background()
@@ -1244,6 +1272,7 @@ func TestReopenIncidentalRejectsAnOpenEnvelope(t *testing.T) {
 // GetIncidental-backed sql.ErrNoRows every other single-envelope call in
 // this file answers with - an id names a row, not permission to see it.
 func TestReopenIncidentalIsFundScoped(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 	f := newFixture(t, l)
 	ctx := context.Background()
@@ -1283,6 +1312,7 @@ func TestReopenIncidentalIsFundScoped(t *testing.T) {
 // only the net delta - no new arithmetic, per ADR-031 - and the purpose
 // balance must land back at exactly zero.
 func TestReopenLateContributionThenRecloseRollsOnlyTheNetDeltaAndZerosTheBalance(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 	f := newFixture(t, l)
 	ctx := context.Background()
@@ -1342,6 +1372,7 @@ func TestReopenLateContributionThenRecloseRollsOnlyTheNetDeltaAndZerosTheBalance
 // shortfall must be covered from Kas Utama, and the balance must still land
 // at exactly zero.
 func TestReopenLateDisbursementThenRecloseCoversTheShortfallAndZerosTheBalance(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 	f := newFixture(t, l)
 	ctx := context.Background()
@@ -1399,6 +1430,7 @@ func TestReopenLateDisbursementThenRecloseCoversTheShortfallAndZerosTheBalance(t
 // the purpose balance at exactly zero - the invariant holds across more
 // than one reopen cycle, not just one.
 func TestReopenTwiceEachCloseZerosTheBalance(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 	f := newFixture(t, l)
 	ctx := context.Background()
@@ -1471,6 +1503,7 @@ func TestReopenTwiceEachCloseZerosTheBalance(t *testing.T) {
 // out; close (60k rolls out, balance 0); reopen; 30k more in. Collected is
 // 130k, disbursed 40k - and the envelope holds 30k, not 90k.
 func TestGetIncidentalDetailBalanceIsThePurposeBalanceNotCollectedMinusDisbursed(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	l := newTestLedger(t)
 	f := newFixture(t, l)

@@ -10,6 +10,7 @@ import (
 // still be allowed, and the limit-th failure is what actually trips it -
 // the boundary itself, not just "eventually blocks".
 func TestRateLimiterBlocksAtTheLimitNotBeforeIt(t *testing.T) {
+	t.Parallel()
 	rl := newRateLimiter(3, time.Minute)
 
 	for i := 0; i < 2; i++ {
@@ -32,6 +33,7 @@ func TestRateLimiterBlocksAtTheLimitNotBeforeIt(t *testing.T) {
 // count against a different one - the whole reason the login handler holds
 // two independent keys per request (IP and identifier).
 func TestRateLimiterKeysAreIndependent(t *testing.T) {
+	t.Parallel()
 	rl := newRateLimiter(2, time.Minute)
 
 	rl.recordFailure("a")
@@ -48,6 +50,7 @@ func TestRateLimiterKeysAreIndependent(t *testing.T) {
 // not merely permit one more attempt - a key that was at the limit is fully
 // open again afterward, for the limit's full width.
 func TestRateLimiterResetClearsTheCounter(t *testing.T) {
+	t.Parallel()
 	rl := newRateLimiter(2, time.Minute)
 
 	rl.recordFailure("k")
@@ -75,6 +78,7 @@ func TestRateLimiterResetClearsTheCounter(t *testing.T) {
 // elapsed, the same key must be allowed again and start counting from
 // zero, not from wherever it left off.
 func TestRateLimiterWindowExpiryReopensTheKey(t *testing.T) {
+	t.Parallel()
 	rl := newRateLimiter(2, time.Minute)
 	now := time.Now()
 	rl.now = func() time.Time { return now }
@@ -103,6 +107,7 @@ func TestRateLimiterWindowExpiryReopensTheKey(t *testing.T) {
 // evicts them, rather than the map only ever growing for the life of the
 // process.
 func TestRateLimiterSweepsExpiredEntries(t *testing.T) {
+	t.Parallel()
 	rl := newRateLimiter(5, time.Minute)
 	now := time.Now()
 	rl.now = func() time.Time { return now }
@@ -137,6 +142,7 @@ func TestRateLimiterSweepsExpiredEntries(t *testing.T) {
 // against the same key must land exactly N, with none lost to an
 // unsynchronized read-modify-write. Run with -race, which make check does.
 func TestRateLimiterConcurrentFailuresAreCountedExactly(t *testing.T) {
+	t.Parallel()
 	const n = 200
 	rl := newRateLimiter(n+1, time.Minute) // above n, so nothing is refused mid-run
 
@@ -165,6 +171,7 @@ func TestRateLimiterConcurrentFailuresAreCountedExactly(t *testing.T) {
 // something to catch if any path reaches the map or a counter without
 // holding mu.
 func TestRateLimiterIsRaceFreeUnderMixedConcurrentAccess(t *testing.T) {
+	t.Parallel()
 	rl := newRateLimiter(5, 50*time.Millisecond)
 
 	var wg sync.WaitGroup

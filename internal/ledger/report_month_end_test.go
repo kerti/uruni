@@ -109,6 +109,7 @@ func envelopeNamed(t *testing.T, r Report, name string) ReportEnvelope {
 // A past month is as of its last day: every figure, the summary and
 // the envelope card alike, stops there.
 func TestMonthlyReportPastMonthIsAsOfItsLastDay(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 	s := newMonthEndScenario(t, l)
 
@@ -170,6 +171,7 @@ func TestMonthlyReportPastMonthIsAsOfItsLastDay(t *testing.T) {
 
 // The running month reads every row: the same figures Beranda shows.
 func TestMonthlyReportRunningMonthIsToday(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 	s := newMonthEndScenario(t, l)
 	ctx := context.Background()
@@ -207,6 +209,7 @@ func TestMonthlyReportRunningMonthIsToday(t *testing.T) {
 // 1 November there, so October is a finished month, and a count taken half
 // an hour into November Jakarta time is not October's.
 func TestMonthlyReportRunningMonthTurnsOverInJakarta(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 	s := newMonthEndScenario(t, l)
 	q := store.New(l.db)
@@ -233,6 +236,7 @@ func TestMonthlyReportRunningMonthTurnsOverInJakarta(t *testing.T) {
 // sums to Saldo kas when a purpose was created after the month it holds money
 // for.
 func TestMonthlyReportLastDayBoundaries(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 	ctx := context.Background()
 	q := store.New(l.db)

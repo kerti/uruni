@@ -13,6 +13,7 @@ import (
 // on top of it. No password hashing here - that is #114's.
 
 func TestUserRoundTrip(t *testing.T) {
+	t.Parallel()
 	sqlDB := migratedTestDB(t)
 	ctx := context.Background()
 	q := store.New(sqlDB)
@@ -35,6 +36,7 @@ func TestUserRoundTrip(t *testing.T) {
 }
 
 func TestUserEmailIsUnique(t *testing.T) {
+	t.Parallel()
 	sqlDB := migratedTestDB(t)
 	ctx := context.Background()
 	q := store.New(sqlDB)
@@ -55,6 +57,7 @@ func TestUserEmailIsUnique(t *testing.T) {
 // CountUsers is register's (#114) one-shot bootstrap gate: it must see zero
 // before the first account and a positive count immediately after.
 func TestCountUsersReflectsBootstrapState(t *testing.T) {
+	t.Parallel()
 	sqlDB := migratedTestDB(t)
 	ctx := context.Background()
 	q := store.New(sqlDB)
@@ -75,6 +78,7 @@ func TestCountUsersReflectsBootstrapState(t *testing.T) {
 }
 
 func TestSessionRoundTrip(t *testing.T) {
+	t.Parallel()
 	sqlDB := migratedTestDB(t)
 	ctx := context.Background()
 	q := store.New(sqlDB)
@@ -108,6 +112,7 @@ func TestSessionRoundTrip(t *testing.T) {
 // a session exactly at its expiry instant is already gone and one second
 // before it is still live.
 func TestSessionExpiryBoundary(t *testing.T) {
+	t.Parallel()
 	sqlDB := migratedTestDB(t)
 	ctx := context.Background()
 	q := store.New(sqlDB)
@@ -137,6 +142,7 @@ func TestSessionExpiryBoundary(t *testing.T) {
 // protects GetSession also protects TouchSession from reviving a session that
 // already lapsed.
 func TestTouchSessionSlidesExpiryForward(t *testing.T) {
+	t.Parallel()
 	sqlDB := migratedTestDB(t)
 	ctx := context.Background()
 	q := store.New(sqlDB)
@@ -165,6 +171,7 @@ func TestTouchSessionSlidesExpiryForward(t *testing.T) {
 }
 
 func TestDeleteExpiredSessionsSweepsOnlyPastRows(t *testing.T) {
+	t.Parallel()
 	sqlDB := migratedTestDB(t)
 	ctx := context.Background()
 	q := store.New(sqlDB)
@@ -193,6 +200,7 @@ func TestDeleteExpiredSessionsSweepsOnlyPastRows(t *testing.T) {
 }
 
 func TestSessionTokenCannotBeEmpty(t *testing.T) {
+	t.Parallel()
 	sqlDB := migratedTestDB(t)
 	ctx := context.Background()
 	q := store.New(sqlDB)

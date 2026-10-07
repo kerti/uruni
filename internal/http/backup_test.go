@@ -32,6 +32,7 @@ func getBackup(t *testing.T, r http.Handler) *httptest.ResponseRecorder {
 // same fact told directly, against a router this file builds itself so it
 // can also cover the success path below without a second router.
 func TestDownloadBackupRequiresASession(t *testing.T) {
+	t.Parallel()
 	sqlDB := testStoreDB(t)
 	r := New(testAssets(), testBuild, ledger.New(sqlDB), store.New(sqlDB), sqlDB, nil, testLogger(), auth.New(sqlDB), "", t.TempDir(), t.TempDir())
 
@@ -46,6 +47,7 @@ func TestDownloadBackupRequiresASession(t *testing.T) {
 // uruni.json (decodable, format_version set) and, once a receipt has been
 // uploaded through the ordinary upload route, a receipts/ entry for it.
 func TestDownloadBackupReturnsAZipWithJSONAndReceipt(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	setup := setUpFund(t, r)
 	txnID := setUpTransactionForReceipt(t, r, setup)
@@ -151,6 +153,7 @@ func writeTestDumpFile(t *testing.T, dir, name string, data []byte) {
 // TestListBackupsIsEmptyWithNoDumpsYet: a fresh instance with no scheduled
 // dump yet answers with an empty array, never null and never an error.
 func TestListBackupsIsEmptyWithNoDumpsYet(t *testing.T) {
+	t.Parallel()
 	r, _ := authedRouterWithBackupDir(t)
 
 	rec := getBackups(t, r)
@@ -167,6 +170,7 @@ func TestListBackupsIsEmptyWithNoDumpsYet(t *testing.T) {
 // reads: date, kind, format_version, is_current_format and size, newest
 // dump first.
 func TestListBackupsReturnsEveryDumpNewestFirstWithFormatFlag(t *testing.T) {
+	t.Parallel()
 	r, backupDir := authedRouterWithBackupDir(t)
 
 	oldName := backup.BuildDumpName(time.Date(2026, 9, 28, 1, 0, 0, 0, time.UTC), backup.KindDaily, backup.FormatVersion-1, "aaaaaaaaaaaaaaaa")
@@ -219,6 +223,7 @@ func TestListBackupsReturnsEveryDumpNewestFirstWithFormatFlag(t *testing.T) {
 // TestDownloadStoredBackupServesExactBytesUnderItsOwnName: a listed dump
 // downloads byte for byte, with a Content-Disposition naming it exactly.
 func TestDownloadStoredBackupServesExactBytesUnderItsOwnName(t *testing.T) {
+	t.Parallel()
 	r, backupDir := authedRouterWithBackupDir(t)
 	name := backup.BuildDumpName(time.Date(2026, 9, 30, 1, 0, 0, 0, time.UTC), backup.KindDaily, backup.FormatVersion, "cccccccccccccccc")
 	want := []byte("a fixture zip's stub bytes")
@@ -243,6 +248,7 @@ func TestDownloadStoredBackupServesExactBytesUnderItsOwnName(t *testing.T) {
 // that simply does not exist (never written, or already pruned by
 // retention) is a plain 404, not a 500 from a failed file read.
 func TestDownloadStoredBackupRejectsUnknownName(t *testing.T) {
+	t.Parallel()
 	r, _ := authedRouterWithBackupDir(t)
 	name := backup.BuildDumpName(time.Date(2026, 9, 30, 1, 0, 0, 0, time.UTC), backup.KindDaily, backup.FormatVersion, "dddddddddddddddd")
 
@@ -257,6 +263,7 @@ func TestDownloadStoredBackupRejectsUnknownName(t *testing.T) {
 // os.ReadFile, whatever chi's own route matching lets through as the
 // {name} segment.
 func TestDownloadStoredBackupRefusesPathTraversal(t *testing.T) {
+	t.Parallel()
 	r, backupDir := authedRouterWithBackupDir(t)
 
 	// A real secret sitting next to the backups this instance actually

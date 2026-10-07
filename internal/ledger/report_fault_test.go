@@ -184,6 +184,7 @@ func faultyReportFixtureWithClosed(t *testing.T) (*Ledger, int64, int64) {
 }
 
 func TestMonthlyReportSurfacesEveryReadFailure(t *testing.T) {
+	t.Parallel()
 	for _, method := range []string{
 		"GetFund",
 		"FirstTransactionDateByFund",
@@ -215,6 +216,7 @@ func TestMonthlyReportSurfacesEveryReadFailure(t *testing.T) {
 }
 
 func TestMonthlyReportRefusesALedgerShapeItCannotHaveWritten(t *testing.T) {
+	t.Parallel()
 	str := func(s string) *string { return &s }
 	id := func(n int64) *int64 { return &n }
 	transferRow := func(kind *string, transferID *int64) store.ListReportTransactionsRow {
@@ -250,6 +252,7 @@ func TestMonthlyReportRefusesALedgerShapeItCannotHaveWritten(t *testing.T) {
 // the ledger never writes that, and the report says so rather than guess a
 // net move (#280).
 func TestMonthlyReportRefusesCorrectionsThatAreNotAPath(t *testing.T) {
+	t.Parallel()
 	str := func(s string) *string { return &s }
 	id := func(n int64) *int64 { return &n }
 	leg := func(transferID, from, to int64) store.ListReportTransactionsRow {
@@ -270,6 +273,7 @@ func TestMonthlyReportRefusesCorrectionsThatAreNotAPath(t *testing.T) {
 }
 
 func TestMonthlyReportRefusesAMalformedFirstTransactionDate(t *testing.T) {
+	t.Parallel()
 	l, fundID := faultyReportFixture(t)
 	bad := "20x6-09-10"
 	odd := &Ledger{db: l.db, q: faultQuerier{Querier: l.q, firstDate: &bad}}
@@ -281,6 +285,7 @@ func TestMonthlyReportRefusesAMalformedFirstTransactionDate(t *testing.T) {
 }
 
 func TestMonthlyReportSurfacesAClosedEnvelopesBalanceFailure(t *testing.T) {
+	t.Parallel()
 	l, fundID, closedPurpose := faultyReportFixtureWithClosed(t)
 	broken := &Ledger{db: l.db, q: faultQuerier{Querier: l.q, failPurpose: closedPurpose}}
 
@@ -294,6 +299,7 @@ func TestMonthlyReportSurfacesAClosedEnvelopesBalanceFailure(t *testing.T) {
 // TestMonthlyReportTotalsRefuseToWrap), so these hand the report rows no real
 // fund could hold, to prove its own sums refuse to wrap too.
 func TestMonthlyReportOwnSumsRefuseToWrap(t *testing.T) {
+	t.Parallel()
 	huge := int64(math.MaxInt64)
 	row := store.ListReportTransactionsRow{
 		OccurredOn: "2026-09-10", Direction: "in", Amount: huge, Kind: "normal", PurposeName: "Main",

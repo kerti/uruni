@@ -52,6 +52,7 @@ func findTransactionByKind(t *testing.T, rows []transactionResponse, kind string
 // The success path: the response wears transferResponse's own shape, the
 // same one POST /api/transfers already answers with (ADR-033).
 func TestPostPurposeCorrectionReturnsThePostedTransfer(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	setup := setUpFund(t, r)
 
@@ -114,6 +115,7 @@ func TestPostPurposeCorrectionReturnsThePostedTransfer(t *testing.T) {
 }
 
 func TestPostPurposeCorrectionUnknownTransactionIDIs404(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	setup := setUpFund(t, r)
 
@@ -129,6 +131,7 @@ func TestPostPurposeCorrectionUnknownTransactionIDIs404(t *testing.T) {
 
 // Every named refusal answers 409 with its own distinct code (ADR-033).
 func TestPostPurposeCorrectionRefusalsHaveDistinctCodes(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	setup := setUpFund(t, r)
 

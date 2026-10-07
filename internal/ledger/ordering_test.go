@@ -13,6 +13,7 @@ import (
 // name, pos Kas Utama first then by name. Names are added out of order and
 // in mixed case, so creation (id) order would fail every assertion.
 func TestListsReadInTheirStatedOrder(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	l := newTestLedger(t)
 	f := newFixture(t, l)
@@ -118,6 +119,7 @@ func assertFolded(t *testing.T, what string, got []string) {
 // The roster's keyset cursor compares the way its ORDER BY sorts: walking it
 // two at a time across mixed-case names returns every member once, in order.
 func TestMemberRosterPagesAcrossMixedCase(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	l := newTestLedger(t)
 	f := newFixture(t, l)

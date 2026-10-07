@@ -11,6 +11,7 @@ import (
 // PostDuesPayments writes kind='dues', direction='in', with member_id and
 // dues_period set - exactly the schema's CHECK - and moves the balance.
 func TestPostDuesPaymentsWritesTheDuesShapeAndMovesTheBalance(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 	f := newFixture(t, l)
 	ctx := context.Background()
@@ -56,6 +57,7 @@ func TestPostDuesPaymentsWritesTheDuesShapeAndMovesTheBalance(t *testing.T) {
 // schema's shape and the treasurer's real workflow - and every row stays
 // visible afterwards.
 func TestPostDuesPaymentsSeveralMonthsAtOnceIsOneRowPerPeriod(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 	f := newFixture(t, l)
 	ctx := context.Background()
@@ -115,6 +117,7 @@ func TestPostDuesPaymentsSeveralMonthsAtOnceIsOneRowPerPeriod(t *testing.T) {
 // mid-batch failure rolls back rows that were already inserted in this same
 // transaction rather than leaving them standing.
 func TestPostDuesPaymentsAFailureOnALaterPeriodLeavesZeroRows(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 	f := newFixture(t, l)
 	ctx := context.Background()
@@ -159,6 +162,7 @@ func TestPostDuesPaymentsAFailureOnALaterPeriodLeavesZeroRows(t *testing.T) {
 }
 
 func TestPostDuesPaymentsRejectsEmptyPeriods(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 	f := newFixture(t, l)
 	ctx := context.Background()
@@ -182,6 +186,7 @@ func TestPostDuesPaymentsRejectsEmptyPeriods(t *testing.T) {
 }
 
 func TestPostDuesPaymentsRejectsNonPositiveAmountBeforeTheWrite(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 	f := newFixture(t, l)
 	ctx := context.Background()
@@ -205,6 +210,7 @@ func TestPostDuesPaymentsRejectsNonPositiveAmountBeforeTheWrite(t *testing.T) {
 }
 
 func TestPostDuesPaymentsRejectsInvalidOccurredOn(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 	f := newFixture(t, l)
 	ctx := context.Background()
@@ -222,6 +228,7 @@ func TestPostDuesPaymentsRejectsInvalidOccurredOn(t *testing.T) {
 // A malformed dues_period is rejected with ErrInvalidArgument before the
 // write ever reaches the schema's GLOB/date() CHECK.
 func TestPostDuesPaymentsRejectsInvalidDuesPeriod(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name       string
 		duesPeriod string
@@ -233,6 +240,7 @@ func TestPostDuesPaymentsRejectsInvalidDuesPeriod(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			l := newTestLedger(t)
 			f := newFixture(t, l)
 			ctx := context.Background()
@@ -263,6 +271,7 @@ func TestPostDuesPaymentsRejectsInvalidDuesPeriod(t *testing.T) {
 // PostDuesPaymentsParams contract PostTransferBetweenAccounts already
 // documents via normalizeNote.
 func TestPostDuesPaymentsWithoutANoteStoresNull(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 	f := newFixture(t, l)
 	ctx := context.Background()
@@ -283,6 +292,7 @@ func TestPostDuesPaymentsWithoutANoteStoresNull(t *testing.T) {
 // A blank or whitespace-only note is exactly the same as no note - a form
 // field left untouched - so it stores NULL too, never the empty string.
 func TestPostDuesPaymentsBlankNoteStoresNull(t *testing.T) {
+	t.Parallel()
 	for _, blank := range []string{"", "   ", "\t\n"} {
 		l := newTestLedger(t)
 		f := newFixture(t, l)
@@ -306,6 +316,7 @@ func TestPostDuesPaymentsBlankNoteStoresNull(t *testing.T) {
 // A typed note is trimmed, not stored as-is: surrounding whitespace is not
 // part of what she wrote.
 func TestPostDuesPaymentsTrimsTheNote(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 	f := newFixture(t, l)
 	ctx := context.Background()

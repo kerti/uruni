@@ -97,6 +97,7 @@ func (w moveWorld) move(from, to int64, amount money.Amount) PostPurposeMovePara
 // balances by exactly the amount and nothing else - not the fund, not either
 // account, not Titipan.
 func TestPostPurposeMoveShiftsOnlyThePurposeBalances(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		name     string
 		from, to func(w moveWorld) int64
@@ -108,6 +109,7 @@ func TestPostPurposeMoveShiftsOnlyThePurposeBalances(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			l := newTestLedger(t)
 			w := newMoveWorld(t, l)
 			ctx := context.Background()
@@ -141,6 +143,7 @@ func TestPostPurposeMoveShiftsOnlyThePurposeBalances(t *testing.T) {
 
 // One envelope into another, both open: the third direction ADR-036 allows.
 func TestPostPurposeMoveBetweenTwoEnvelopes(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 	w := newMoveWorld(t, l)
 	ctx := context.Background()
@@ -160,6 +163,7 @@ func TestPostPurposeMoveBetweenTwoEnvelopes(t *testing.T) {
 // linked to no correction, whose 'out' leg is at the source and 'in' leg at
 // the target, both on the chosen account with the same amount, date and note.
 func TestPostPurposeMoveWritesAnAllocationPair(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 	w := newMoveWorld(t, l)
 	ctx := context.Background()
@@ -212,6 +216,7 @@ func TestPostPurposeMoveWritesAnAllocationPair(t *testing.T) {
 // Boundary: the source may give exactly what it holds, down to zero, and not
 // one rupiah more. The comparison is integer-exact, no tolerance (ADR-015).
 func TestPostPurposeMoveSourceBalanceBoundary(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 	w := newMoveWorld(t, l)
 	ctx := context.Background()
@@ -240,6 +245,7 @@ func TestPostPurposeMoveSourceBalanceBoundary(t *testing.T) {
 // lowers what can be given - and one that raised it raises it. A purpose
 // already below zero can give nothing.
 func TestPostPurposeMoveReadsTheBalanceThroughAdjustingEntries(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 	w := newMoveWorld(t, l)
 	ctx := context.Background()
@@ -282,6 +288,7 @@ func TestPostPurposeMoveReadsTheBalanceThroughAdjustingEntries(t *testing.T) {
 // Amounts at the edge of int64 are refused as insufficient, never wrapped
 // into something postable.
 func TestPostPurposeMoveRefusesAnAmountBeyondAnyBalance(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 	w := newMoveWorld(t, l)
 	ctx := context.Background()
@@ -291,6 +298,7 @@ func TestPostPurposeMoveRefusesAnAmountBeyondAnyBalance(t *testing.T) {
 }
 
 func TestPostPurposeMoveRefusals(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	cases := []struct {
 		name  string
@@ -366,6 +374,7 @@ func TestPostPurposeMoveRefusals(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			l := newTestLedger(t)
 			w := newMoveWorld(t, l)
 			p := tc.build(t, l, w)
@@ -423,6 +432,7 @@ func moveSecondFund(t *testing.T, l *Ledger) moveOtherFund {
 // A move in one fund is invisible to another: its balances do not shift,
 // and it has no transfers of its own.
 func TestPostPurposeMoveLeavesASecondFundUntouched(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 	w := newMoveWorld(t, l)
 	other := moveSecondFund(t, l)
@@ -445,6 +455,7 @@ func TestPostPurposeMoveLeavesASecondFundUntouched(t *testing.T) {
 // Reconciliation is untouched (ADR-036): per account, recorded balance is the
 // same before and after, so the counted cash still matches.
 func TestPostPurposeMoveKeepsReconciliationFiguresIdentical(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 	w := newMoveWorld(t, l)
 	ctx := context.Background()
@@ -478,6 +489,7 @@ func reasonsByKind(t *testing.T, l *Ledger, fundID int64) []*string {
 // CloseIncidentalAndRoll labels both of its directions 'roll' (ADR-036), the
 // leftover going out and a shortfall being covered.
 func TestCloseIncidentalAndRollWritesReasonRoll(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name    string
 		posting string
@@ -487,6 +499,7 @@ func TestCloseIncidentalAndRollWritesReasonRoll(t *testing.T) {
 		{"shortfall is covered", "out", 40_000},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			l := newTestLedger(t)
 			f := newFixture(t, l)
 			ctx := context.Background()
@@ -521,6 +534,7 @@ func TestCloseIncidentalAndRollWritesReasonRoll(t *testing.T) {
 // Every other pair keeps NULL: a correction is labelled by its link, a
 // between_accounts pair has no reason to give.
 func TestOtherTransfersKeepANullReason(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 	w := newMoveWorld(t, l)
 	ctx := context.Background()
@@ -558,6 +572,7 @@ func TestOtherTransfersKeepANullReason(t *testing.T) {
 // belongs only on a reclass_purpose pair that corrects nothing, and only
 // from the two values. Written around the ledger, straight at the table.
 func TestTransferReasonCheckConstraint(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 	w := newMoveWorld(t, l)
 	ctx := context.Background()
@@ -603,6 +618,7 @@ func TestTransferReasonCheckConstraint(t *testing.T) {
 // equalling the balance. The roll that closes the envelope still counts as
 // neither (#215).
 func TestPurposeMoveCountsAsCollectedNeverDisbursed(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 	w := newMoveWorld(t, l)
 	ctx := context.Background()

@@ -41,6 +41,7 @@ func createFund(t *testing.T, sqlDB *sql.DB, name, slug string) int64 {
 }
 
 func TestStrictRejectsAFloatInAnIntegerColumn(t *testing.T) {
+	t.Parallel()
 	sqlDB := migratedTestDB(t)
 
 	// created_at is INTEGER; STRICT is what turns "1000.50" into an error
@@ -55,6 +56,7 @@ func TestStrictRejectsAFloatInAnIntegerColumn(t *testing.T) {
 }
 
 func TestPurposeSingleMainIsScopedPerFund(t *testing.T) {
+	t.Parallel()
 	sqlDB := migratedTestDB(t)
 	ctx := context.Background()
 	q := store.New(sqlDB)
@@ -82,6 +84,7 @@ func TestPurposeSingleMainIsScopedPerFund(t *testing.T) {
 }
 
 func TestAccountRejectsAFundIDThatDoesNotExist(t *testing.T) {
+	t.Parallel()
 	sqlDB := migratedTestDB(t)
 	ctx := context.Background()
 	q := store.New(sqlDB)
@@ -95,6 +98,7 @@ func TestAccountRejectsAFundIDThatDoesNotExist(t *testing.T) {
 }
 
 func TestReportSlugLengthAndUniqueness(t *testing.T) {
+	t.Parallel()
 	sqlDB := migratedTestDB(t)
 	ctx := context.Background()
 	q := store.New(sqlDB)
@@ -119,6 +123,7 @@ func TestReportSlugLengthAndUniqueness(t *testing.T) {
 }
 
 func TestNameCannotBeEmptyOrWhitespaceOnly(t *testing.T) {
+	t.Parallel()
 	sqlDB := migratedTestDB(t)
 	ctx := context.Background()
 	q := store.New(sqlDB)
@@ -160,6 +165,7 @@ func TestNameCannotBeEmptyOrWhitespaceOnly(t *testing.T) {
 }
 
 func TestMigrationAppliesFromEmptyAndRoundTrips(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	sqlDB := openTestDB(t)
 
@@ -206,6 +212,7 @@ func createDuesTier(t *testing.T, sqlDB *sql.DB, fundID int64, name string) int6
 }
 
 func TestEffectiveDuesRateFollowsAMidYearChange(t *testing.T) {
+	t.Parallel()
 	sqlDB := migratedTestDB(t)
 	ctx := context.Background()
 	q := store.New(sqlDB)
@@ -259,6 +266,7 @@ func TestEffectiveDuesRateFollowsAMidYearChange(t *testing.T) {
 }
 
 func TestMemberCannotBorrowAnotherFundsTier(t *testing.T) {
+	t.Parallel()
 	sqlDB := migratedTestDB(t)
 	ctx := context.Background()
 	q := store.New(sqlDB)
@@ -292,6 +300,7 @@ func TestMemberCannotBorrowAnotherFundsTier(t *testing.T) {
 }
 
 func TestDuesTierNameIsUniquePerFund(t *testing.T) {
+	t.Parallel()
 	sqlDB := migratedTestDB(t)
 	ctx := context.Background()
 	q := store.New(sqlDB)
@@ -314,6 +323,7 @@ func TestDuesTierNameIsUniquePerFund(t *testing.T) {
 }
 
 func TestDateAndPeriodChecksRejectImpossibleValues(t *testing.T) {
+	t.Parallel()
 	sqlDB := migratedTestDB(t)
 	ctx := context.Background()
 	q := store.New(sqlDB)
@@ -355,6 +365,7 @@ func TestDateAndPeriodChecksRejectImpossibleValues(t *testing.T) {
 }
 
 func TestDuesRateAmountCannotBeNegative(t *testing.T) {
+	t.Parallel()
 	sqlDB := migratedTestDB(t)
 	ctx := context.Background()
 

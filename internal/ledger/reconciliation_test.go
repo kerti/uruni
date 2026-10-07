@@ -31,6 +31,7 @@ func lineFor(t *testing.T, lines []store.ReconciliationLine, accountID int64) st
 // called - every counted account's recorded_amount is 0 by construction, not
 // by querying an empty sum.
 func TestTakeReconciliationEmptyLedgerStoresNullCutoffAndZeroRecorded(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 	f := newFixture(t, l)
 	ctx := context.Background()
@@ -71,6 +72,7 @@ func TestTakeReconciliationEmptyLedgerStoresNullCutoffAndZeroRecorded(t *testing
 // ADR-024/027 describe: schema-legal, and a permanent lie that no gap was
 // ever found.
 func TestTakeReconciliationRegressionAdjustedStoresTheGapFoundNotZero(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 	f := newFixture(t, l)
 	ctx := context.Background()
@@ -126,6 +128,7 @@ func TestTakeReconciliationRegressionAdjustedStoresTheGapFoundNotZero(t *testing
 // the same call still leaves the snapshot holding the gap that was found,
 // not 0 - and unlike "adjusted", it names no transaction.
 func TestTakeReconciliationRegressionEntryAddedStoresTheGapFoundNotZero(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 	f := newFixture(t, l)
 	ctx := context.Background()
@@ -183,6 +186,7 @@ func TestTakeReconciliationRegressionEntryAddedStoresTheGapFoundNotZero(t *testi
 // accounts: adjusted always names its fix, entry_added never does, matched
 // and left_open name nothing at all.
 func TestTakeReconciliationAllFourResolutionsInOneSnapshot(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 	f := newFixture(t, l)
 	ctx := context.Background()
@@ -258,6 +262,7 @@ func TestTakeReconciliationAllFourResolutionsInOneSnapshot(t *testing.T) {
 // at the domain layer: a proof the domain wraps the store's adjusted and
 // left_open scenarios correctly, not a re-test of the store.
 func TestTakeReconciliationReproducesM2AdjustedAndLeftOpenScenarios(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 	f := newFixture(t, l)
 	ctx := context.Background()
@@ -326,6 +331,7 @@ func TestTakeReconciliationReproducesM2AdjustedAndLeftOpenScenarios(t *testing.T
 // only proof available is that both snapshots coexist with their own,
 // independent numbers.
 func TestTakeReconciliationLeftOpenIsRevisitedAsASecondSnapshotFirstUntouched(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 	f := newFixture(t, l)
 	ctx := context.Background()
@@ -428,6 +434,7 @@ func TestTakeReconciliationLeftOpenIsRevisitedAsASecondSnapshotFirstUntouched(t 
 // snapshot's own recorded_amount because the cutoff was taken before it
 // existed. That pair of facts together is the whole design.
 func TestTakeReconciliationFixMovesLiveBalanceButNotThisSnapshotsRecordedAmount(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 	f := newFixture(t, l)
 	ctx := context.Background()
@@ -467,6 +474,7 @@ func TestTakeReconciliationFixMovesLiveBalanceButNotThisSnapshotsRecordedAmount(
 // entries already posted still gets an id above the cutoff, so it stays
 // outside this snapshot and inside the next one.
 func TestTakeReconciliationBackdatedFixLandsInTheNextSnapshotNotThisOne(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 	f := newFixture(t, l)
 	ctx := context.Background()
@@ -530,6 +538,7 @@ func TestTakeReconciliationBackdatedFixLandsInTheNextSnapshotNotThisOne(t *testi
 // domain bug, not a caller mistake, so it is wrapped generically rather than
 // as ErrInvalidArgument (ADR-027).
 func TestTakeReconciliationRejectsAnotherFundsAccount(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 	f := newFixture(t, l)
 	other := newFixtureWithSlug(t, l, "Other Fund", "zyxwvutsrqponmlkjihgfe")
@@ -555,6 +564,7 @@ func TestTakeReconciliationRejectsAnotherFundsAccount(t *testing.T) {
 // Every ErrInvalidArgument path TakeReconciliation checks before writing
 // anything.
 func TestTakeReconciliationRejectsInvalidArguments(t *testing.T) {
+	t.Parallel()
 	validFix := &Fix{PurposeID: 0, Direction: "out", Amount: 10_000, OccurredOn: "2026-08-12"}
 
 	tests := []struct {
@@ -671,6 +681,7 @@ func TestTakeReconciliationRejectsInvalidArguments(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			l := newTestLedger(t)
 			f := newFixture(t, l)
 			ctx := context.Background()
@@ -727,6 +738,7 @@ func newFixtureWithSlug(t *testing.T, l *Ledger, name, slug string) fixture {
 // proves the fix is still excluded from a recorded_amount that was never
 // queried.
 func TestTakeReconciliationEmptyLedgerWithAFixStillRecordsZeroAndTheFullGap(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 	f := newFixture(t, l)
 	ctx := context.Background()
@@ -779,6 +791,7 @@ func TestTakeReconciliationEmptyLedgerWithAFixStillRecordsZeroAndTheFullGap(t *t
 // invariant, and an implementation that derived the difference from the fix
 // would pass every other test in this file.
 func TestTakeReconciliationFixThatUndershootsStillRecordsTheWholeGap(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 	f := newFixture(t, l)
 	ctx := context.Background()
@@ -835,6 +848,7 @@ func TestTakeReconciliationFixThatUndershootsStillRecordsTheWholeGap(t *testing.
 // is the scoping test that keeps that honest - v1's single-fund rule is a
 // setup constraint, not a reason to read unscoped.
 func TestASecondFundsReconciliationIsInvisibleToTheFirstFund(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 	f := newFixture(t, l)
 	ctx := context.Background()
@@ -878,6 +892,7 @@ func TestASecondFundsReconciliationIsInvisibleToTheFirstFund(t *testing.T) {
 // an "adjusted" fix's Note follows the same nil/blank/typed contract as
 // every other system path.
 func TestTakeReconciliationAdjustedFixNoteFollowsNormalizeNoteContract(t *testing.T) {
+	t.Parallel()
 	take := func(t *testing.T, note *string) *string {
 		t.Helper()
 		l := newTestLedger(t)

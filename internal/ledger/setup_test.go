@@ -14,6 +14,7 @@ import (
 // SetUpFund writes exactly the fund, its main purpose, and every requested
 // account, and returns every id the caller needs right away.
 func TestSetUpFundCreatesFundMainPurposeAndAccounts(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 	ctx := context.Background()
 	q := store.New(l.db)
@@ -123,6 +124,7 @@ func TestSetUpFundCreatesFundMainPurposeAndAccounts(t *testing.T) {
 // are all written atomically with the fund and its main purpose, in the
 // order given.
 func TestSetUpFundWritesEveryRequestedAccountAtomically(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 	ctx := context.Background()
 	q := store.New(l.db)
@@ -165,6 +167,7 @@ func TestSetUpFundWritesEveryRequestedAccountAtomically(t *testing.T) {
 // the same "at least one" rule FundName's own empty check already enforces,
 // aimed at the slice instead.
 func TestSetUpFundRejectsZeroAccounts(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 	ctx := context.Background()
 
@@ -188,6 +191,7 @@ func TestSetUpFundRejectsZeroAccounts(t *testing.T) {
 // not a proof of uniqueness (no test can prove that), but a check that the
 // generator is not, say, returning a constant.
 func TestSetUpFundGeneratesDistinctReportSlugs(t *testing.T) {
+	t.Parallel()
 	first, err := newTestLedger(t).SetUpFund(context.Background(), SetUpFundParams{FundName: "Fund One", Accounts: defaultSetupAccounts})
 	if err != nil {
 		t.Fatalf("first SetUpFund() = %v, want no error", err)
@@ -203,6 +207,7 @@ func TestSetUpFundGeneratesDistinctReportSlugs(t *testing.T) {
 }
 
 func TestSetUpFundRejectsEmptyFundName(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 
 	_, err := l.SetUpFund(context.Background(), SetUpFundParams{FundName: "   ", Accounts: defaultSetupAccounts})
@@ -222,6 +227,7 @@ func TestSetUpFundRejectsEmptyFundName(t *testing.T) {
 // A second run is refused with the named sentinel, and leaves the first
 // fund - and only the first fund - standing.
 func TestSetUpFundSecondCallIsRefusedAndPostsNoSecondFund(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 	ctx := context.Background()
 
@@ -267,6 +273,7 @@ func TestSetUpFundSecondCallIsRefusedAndPostsNoSecondFund(t *testing.T) {
 // a fixture's own fund would trip the second-run guard before any of this
 // matters).
 func TestSetUpFundAtomicityNoOrphanFundWhenThePurposeInsertFails(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 	ctx := context.Background()
 
@@ -317,6 +324,8 @@ func TestSetUpFundAtomicityNoOrphanFundWhenThePurposeInsertFails(t *testing.T) {
 	}
 }
 
+// Serial on purpose, no t.Parallel: it swaps the package-level randInt, which
+// every parallel test that sets up a fund reads.
 func TestSetUpFundAbortsWhenTheSlugSourceFails(t *testing.T) {
 	l := newTestLedger(t)
 	ctx := context.Background()
@@ -346,6 +355,7 @@ func TestSetUpFundAbortsWhenTheSlugSourceFails(t *testing.T) {
 }
 
 func TestReplaceReportSlugChangesTheSlugAndKeepsTheSchemaFloor(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 	ctx := context.Background()
 	res, err := l.SetUpFund(ctx, SetUpFundParams{FundName: "Test Fund", Accounts: defaultSetupAccounts})
@@ -372,6 +382,8 @@ func TestReplaceReportSlugChangesTheSlugAndKeepsTheSchemaFloor(t *testing.T) {
 	}
 }
 
+// Serial on purpose, no t.Parallel: it swaps the package-level randInt, which
+// every parallel test that sets up a fund reads.
 func TestReplaceReportSlugAbortsWhenTheSlugSourceFails(t *testing.T) {
 	l := newTestLedger(t)
 	ctx := context.Background()

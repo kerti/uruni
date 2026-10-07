@@ -83,6 +83,7 @@ func newWalkPage(t *testing.T) walkPage {
 }
 
 func TestReportShowsTheMonthAsAWalkFromStartToEnd(t *testing.T) {
+	t.Parallel()
 	w := newWalkPage(t)
 	body := w.get(t, w.base).Body.String()
 
@@ -111,6 +112,7 @@ func TestReportShowsTheMonthAsAWalkFromStartToEnd(t *testing.T) {
 
 // A month with no opening and no adjustment shows neither line.
 func TestReportWalkHidesSaldoAwalAndPenyesuaianWhenZero(t *testing.T) {
+	t.Parallel()
 	w := newWalkPage(t)
 	got := totalsOf(t, w.get(t, "/report/"+w.fund.ReportSlug+"?month=2026-08").Body.String())
 
@@ -127,6 +129,7 @@ func TestReportWalkHidesSaldoAwalAndPenyesuaianWhenZero(t *testing.T) {
 
 // The running month ends on today, and says so with today's date.
 func TestReportWalkOfTheRunningMonthEndsOnToday(t *testing.T) {
+	t.Parallel()
 	w := newWalkPage(t)
 	w.post(t, "in", 1_000, "2026-10-01")
 	// Dated after today (the clock reads 2 Oct): still in the walk.
@@ -150,6 +153,7 @@ func TestReportWalkOfTheRunningMonthEndsOnToday(t *testing.T) {
 // A balance has no meaning for one member or one direction: only Total masuk
 // and Total keluar, with or without a pos beside it.
 func TestReportWalkUnderAFilterIsOnlyMasukAndKeluar(t *testing.T) {
+	t.Parallel()
 	w := newWalkPage(t)
 	tests := []struct {
 		name    string
@@ -185,6 +189,7 @@ func TestReportWalkUnderAFilterIsOnlyMasukAndKeluar(t *testing.T) {
 // shows under Uang keluar. An opening and a Penyesuaian are neither, so a
 // direction or member filter hides them.
 func TestReportReversalFiltersAsMasukAndOpeningAndPenyesuaianAreHiddenByFilters(t *testing.T) {
+	t.Parallel()
 	w := newWalkPage(t)
 	reversal := "Pembatalan \u00b7 Budi"
 
@@ -220,6 +225,7 @@ func TestReportReversalFiltersAsMasukAndOpeningAndPenyesuaianAreHiddenByFilters(
 
 // A standalone adjustment rendered blank before; it now reads Penyesuaian.
 func TestReportStandaloneAdjustmentIsLabelledPenyesuaian(t *testing.T) {
+	t.Parallel()
 	w := newWalkPage(t)
 	section := txnSection(t, w.get(t, w.base).Body.String())
 
@@ -235,6 +241,7 @@ func TestReportStandaloneAdjustmentIsLabelledPenyesuaian(t *testing.T) {
 // order and words, and draws only characters the font has: a negative figure
 // is an ASCII hyphen, never U+2212.
 func TestReportPDFCarriesTheSameWalk(t *testing.T) {
+	t.Parallel()
 	w := newWalkPage(t)
 	rec := w.get(t, "/report/"+w.fund.ReportSlug+"/pdf?month=2026-09")
 	if rec.Code != http.StatusOK {
@@ -295,6 +302,7 @@ func slicesIndexFrom(runs []string, want string) int {
 // A purpose filter walks that pos: its own balance at both ends, and Dipindah
 // for the money moved in or out of it. Same words and order as the whole fund.
 func TestReportPurposeFilterShowsThatPosAsAWalk(t *testing.T) {
+	t.Parallel()
 	w := newWalkPage(t)
 	tests := []struct {
 		name    string
@@ -344,6 +352,7 @@ func TestReportPurposeFilterShowsThatPosAsAWalk(t *testing.T) {
 // The walk's ends say "Saldo 30 September 2026": the header's Saldo per pos
 // already spends the word "per".
 func TestReportWalkEndsCarryNoPer(t *testing.T) {
+	t.Parallel()
 	w := newWalkPage(t)
 	if got := reportText.WalkStart("30 September 2026"); got != "Saldo 30 September 2026" {
 		t.Errorf("WalkStart = %q, want %q", got, "Saldo 30 September 2026")
@@ -364,6 +373,7 @@ func TestReportWalkEndsCarryNoPer(t *testing.T) {
 // in its query changes nothing; but it draws the page's walkLines, so a walk
 // that does carry Dipindah reads in the page's order there too.
 func TestReportPDFDrawsTheWalkLinesInThePagesOrder(t *testing.T) {
+	t.Parallel()
 	w := newWalkPage(t)
 	plain := pdfText(t, w.get(t, "/report/"+w.fund.ReportSlug+"/pdf?month=2026-09").Body.Bytes())
 	filtered := pdfText(t, w.get(t, "/report/"+w.fund.ReportSlug+"/pdf?month=2026-09&purpose="+itoa(w.duka)).Body.Bytes())

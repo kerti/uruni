@@ -58,6 +58,7 @@ func decodeError(t *testing.T, rec *httptest.ResponseRecorder) errorBody {
 }
 
 func TestMapLedgerErrorMapsSentinelsToStatusAndCode(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		name   string
 		err    error
@@ -93,6 +94,7 @@ func TestMapLedgerErrorMapsSentinelsToStatusAndCode(t *testing.T) {
 // fault out of Register has to read as 500, never as the 409 that would
 // tell the treasurer an account already exists when none does.
 func TestMapAuthErrorMapsSentinelsToStatusAndCode(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		name   string
 		err    error
@@ -123,6 +125,7 @@ func TestMapAuthErrorMapsSentinelsToStatusAndCode(t *testing.T) {
 // TestMapLedgerErrorWraps checks that %w-wrapped sentinels still match - every
 // ADR-027 sentinel is returned wrapped with context in real callers.
 func TestMapLedgerErrorMatchesAWrappedSentinel(t *testing.T) {
+	t.Parallel()
 	wrapped := errors.New("posting transfer leg: " + ledger.ErrInvalidArgument.Error())
 	rec := httptest.NewRecorder()
 	mapLedgerError(rec, testLogger(), wrapped)
@@ -142,6 +145,7 @@ func TestMapLedgerErrorMatchesAWrappedSentinel(t *testing.T) {
 }
 
 func TestMapSQLiteErrorMapsAGenuineUniqueViolation(t *testing.T) {
+	t.Parallel()
 	q := store.New(testStoreDB(t))
 	ctx := context.Background()
 
@@ -171,6 +175,7 @@ func TestMapSQLiteErrorMapsAGenuineUniqueViolation(t *testing.T) {
 }
 
 func TestMapSQLiteErrorMapsAGenuineCheckViolation(t *testing.T) {
+	t.Parallel()
 	sqlDB := testStoreDB(t)
 	q := store.New(sqlDB)
 	ctx := context.Background()
@@ -202,6 +207,7 @@ func TestMapSQLiteErrorMapsAGenuineCheckViolation(t *testing.T) {
 }
 
 func TestMapSQLiteErrorMapsAGenuineForeignKeyViolation(t *testing.T) {
+	t.Parallel()
 	sqlDB := testStoreDB(t)
 	q := store.New(sqlDB)
 	ctx := context.Background()
@@ -238,6 +244,7 @@ func TestMapSQLiteErrorMapsAGenuineForeignKeyViolation(t *testing.T) {
 // mapSQLiteError's foreign-key test above, but for a DELETE: the same
 // SQLITE_CONSTRAINT_FOREIGNKEY code, read the opposite way (issue #81).
 func TestMapSQLiteDeleteErrorMapsAGenuineForeignKeyViolationTo409(t *testing.T) {
+	t.Parallel()
 	sqlDB := testStoreDB(t)
 	q := store.New(sqlDB)
 	ctx := context.Background()
@@ -276,6 +283,7 @@ func TestMapSQLiteDeleteErrorMapsAGenuineForeignKeyViolationTo409(t *testing.T) 
 // still behaves exactly like mapSQLiteError, so the DELETE-only override is
 // scoped to the one violation class it exists for.
 func TestMapSQLiteDeleteErrorDelegatesNonForeignKeyViolations(t *testing.T) {
+	t.Parallel()
 	rec := httptest.NewRecorder()
 	mapSQLiteDeleteError(rec, testLogger(), sql.ErrNoRows)
 	if rec.Code != 404 {
@@ -288,6 +296,7 @@ func TestMapSQLiteDeleteErrorDelegatesNonForeignKeyViolations(t *testing.T) {
 }
 
 func TestMapSQLiteErrorMapsNoRowsToNotFound(t *testing.T) {
+	t.Parallel()
 	rec := httptest.NewRecorder()
 	mapSQLiteError(rec, testLogger(), sql.ErrNoRows)
 	if rec.Code != 404 {
@@ -300,6 +309,7 @@ func TestMapSQLiteErrorMapsNoRowsToNotFound(t *testing.T) {
 }
 
 func TestMapSQLiteErrorMapsAnUnrecognizedErrorTo500(t *testing.T) {
+	t.Parallel()
 	rec := httptest.NewRecorder()
 	mapSQLiteError(rec, testLogger(), errors.New("disk full or some other unmapped failure"))
 	if rec.Code != 500 {

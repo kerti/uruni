@@ -47,6 +47,7 @@ func purposeBalanceFor(t *testing.T, purposes []purposeBalanceResponse, purposeI
 }
 
 func TestGetBalancesRequiresAFund(t *testing.T) {
+	t.Parallel()
 	rec := getBalances(t, testRouter(t))
 	if rec.Code != http.StatusNotFound {
 		t.Fatalf("GET /api/balances before setup = %d, want %d (body: %s)", rec.Code, http.StatusNotFound, rec.Body.String())
@@ -61,6 +62,7 @@ func TestGetBalancesRequiresAFund(t *testing.T) {
 // nothing has posted yet, and the route still answers with a row for each
 // account and purpose setup created - all at 0, not an empty list.
 func TestGetBalancesBeforeAnyPostingIsAllZero(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	setup := setUpFund(t, r)
 
@@ -116,6 +118,7 @@ func TestGetBalancesBeforeAnyPostingIsAllZero(t *testing.T) {
 //	                     (reimbursement) +60,000 (roll in) = 505,000
 //	incidental purpose:  +100,000 -40,000 -60,000 (roll out) = 0
 func TestGetBalancesReflectsEveryMilestoneSlice(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	setup := setUpFund(t, r)
 
@@ -247,6 +250,7 @@ func TestGetBalancesReflectsEveryMilestoneSlice(t *testing.T) {
 // the same amount in opposite directions, while the fund total - derived
 // straight from FundBalance, never summed here - does not move at all.
 func TestGetBalancesTransferMovesAccountsLeavesFundTotalUnchanged(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	setup := setUpFund(t, r)
 
@@ -295,6 +299,7 @@ func TestGetBalancesTransferMovesAccountsLeavesFundTotalUnchanged(t *testing.T) 
 // seam that would need is not worth owning for branches that only ever fire
 // together. They stay as honest defensive code, uncovered on purpose.
 func TestGetBalancesOnADeadDatabaseIs500(t *testing.T) {
+	t.Parallel()
 	sqlDB := testStoreDB(t)
 	r := authedRouterFor(t, sqlDB)
 
@@ -325,6 +330,7 @@ func TestGetBalancesOnADeadDatabaseIs500(t *testing.T) {
 // owed_to_members (#406) carries an open claim beside fund_total and never
 // inside it: fronting moves no money, so the balance stays where it was.
 func TestGetBalancesCarriesOwedToMembersOutsideFundTotal(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	setup := setUpFund(t, r)
 

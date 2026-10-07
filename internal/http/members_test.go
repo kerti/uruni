@@ -27,6 +27,7 @@ func postMember(t *testing.T, r http.Handler, req memberRequest) *httptest.Respo
 }
 
 func TestPostMembersRequiresAFund(t *testing.T) {
+	t.Parallel()
 	// No POST /api/setup yet - there is no fund to post a member against.
 	rec := postMember(t, testRouter(t), memberRequest{Name: "Jane"})
 
@@ -40,6 +41,7 @@ func TestPostMembersRequiresAFund(t *testing.T) {
 }
 
 func TestPostMembersCreatesAndListReturnsIt(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	if rec := postSetup(t, r, "Test Fund"); rec.Code != http.StatusCreated {
 		t.Fatalf("POST /api/setup = %d, want %d", rec.Code, http.StatusCreated)
@@ -101,6 +103,7 @@ func TestPostMembersCreatesAndListReturnsIt(t *testing.T) {
 }
 
 func TestGetMembersReturnsAnEmptyListBeforeAnyMemberExists(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	if rec := postSetup(t, r, "Test Fund"); rec.Code != http.StatusCreated {
 		t.Fatalf("POST /api/setup = %d, want %d", rec.Code, http.StatusCreated)
@@ -121,6 +124,7 @@ func TestGetMembersReturnsAnEmptyListBeforeAnyMemberExists(t *testing.T) {
 }
 
 func TestPostMembersRejectsAnEmptyName(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	if rec := postSetup(t, r, "Test Fund"); rec.Code != http.StatusCreated {
 		t.Fatalf("POST /api/setup = %d, want %d", rec.Code, http.StatusCreated)
@@ -139,6 +143,7 @@ func TestPostMembersRejectsAnEmptyName(t *testing.T) {
 }
 
 func TestPostMembersRejectsATierIDBelongingToNoFund(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	if rec := postSetup(t, r, "Test Fund"); rec.Code != http.StatusCreated {
 		t.Fatalf("POST /api/setup = %d, want %d", rec.Code, http.StatusCreated)
@@ -156,6 +161,7 @@ func TestPostMembersRejectsATierIDBelongingToNoFund(t *testing.T) {
 }
 
 func TestPostMembersRejectsMalformedJSON(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	if rec := postSetup(t, r, "Test Fund"); rec.Code != http.StatusCreated {
 		t.Fatalf("POST /api/setup = %d, want %d", rec.Code, http.StatusCreated)
@@ -173,6 +179,7 @@ func TestPostMembersRejectsMalformedJSON(t *testing.T) {
 }
 
 func TestGetMembersRequiresAFund(t *testing.T) {
+	t.Parallel()
 	rec := httptest.NewRecorder()
 	testRouter(t).ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/members", nil))
 
@@ -233,6 +240,7 @@ func setUpMember(t *testing.T, r http.Handler, name string) memberResponse {
 }
 
 func TestPatchMemberRenamesIt(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	member := setUpMember(t, r, "Jame")
 
@@ -259,6 +267,7 @@ func TestPatchMemberRenamesIt(t *testing.T) {
 // obligation (issue #81, "clearing tier_id is what removes a dues
 // obligation").
 func TestPatchMemberTierIDAbsentPresentAndNull(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	if rec := postSetup(t, r, "Test Fund"); rec.Code != http.StatusCreated {
 		t.Fatalf("POST /api/setup = %d, want %d", rec.Code, http.StatusCreated)
@@ -326,6 +335,7 @@ func TestPatchMemberTierIDAbsentPresentAndNull(t *testing.T) {
 // TestPatchMemberInactiveOnAbsentPresentAndNull is inactive_on's version of
 // the tier_id test above - the same three states, since #81 asks for both.
 func TestPatchMemberInactiveOnAbsentPresentAndNull(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	member := setUpMember(t, r, "Jane")
 
@@ -380,6 +390,7 @@ func TestPatchMemberInactiveOnAbsentPresentAndNull(t *testing.T) {
 // and its "excluded after" sibling already cover its semantics directly);
 // this test only proves the PATCH route actually reaches them.
 func TestPatchMemberInactiveOnIsHonoredByDuesStatusForPeriod(t *testing.T) {
+	t.Parallel()
 	r, l := testRouterAndLedger(t)
 
 	if rec := postSetup(t, r, "Test Fund"); rec.Code != http.StatusCreated {
@@ -451,6 +462,7 @@ func TestPatchMemberInactiveOnIsHonoredByDuesStatusForPeriod(t *testing.T) {
 }
 
 func TestPatchMemberReturns404ForAnUnknownID(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	if rec := postSetup(t, r, "Test Fund"); rec.Code != http.StatusCreated {
 		t.Fatalf("POST /api/setup = %d, want %d", rec.Code, http.StatusCreated)
@@ -467,6 +479,7 @@ func TestPatchMemberReturns404ForAnUnknownID(t *testing.T) {
 }
 
 func TestPatchMemberReturns400ForANonNumericID(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	if rec := postSetup(t, r, "Test Fund"); rec.Code != http.StatusCreated {
 		t.Fatalf("POST /api/setup = %d, want %d", rec.Code, http.StatusCreated)
@@ -484,6 +497,7 @@ func TestPatchMemberReturns400ForANonNumericID(t *testing.T) {
 }
 
 func TestPatchMemberRejectsMalformedJSON(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	member := setUpMember(t, r, "Jane")
 
@@ -498,6 +512,7 @@ func TestPatchMemberRejectsMalformedJSON(t *testing.T) {
 }
 
 func TestPatchMemberRejectsAnEmptyName(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	member := setUpMember(t, r, "Jane")
 
@@ -514,6 +529,7 @@ func TestPatchMemberRejectsAnEmptyName(t *testing.T) {
 }
 
 func TestDeleteMemberWithNoTransactionsSucceeds(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	member := setUpMember(t, r, "Jane")
 
@@ -536,6 +552,7 @@ func TestDeleteMemberWithNoTransactionsSucceeds(t *testing.T) {
 // This rides the composite foreign key's own refusal through mapSQLiteError
 // - there is no hand-rolled reference check to bypass.
 func TestDeleteMemberWithTransactionsReturns409(t *testing.T) {
+	t.Parallel()
 	r, l := testRouterAndLedger(t)
 
 	setup := setUpFund(t, r)
@@ -580,6 +597,7 @@ func TestDeleteMemberWithTransactionsReturns409(t *testing.T) {
 }
 
 func TestDeleteMemberReturns404ForAnUnknownID(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	if rec := postSetup(t, r, "Test Fund"); rec.Code != http.StatusCreated {
 		t.Fatalf("POST /api/setup = %d, want %d", rec.Code, http.StatusCreated)
@@ -596,6 +614,7 @@ func TestDeleteMemberReturns404ForAnUnknownID(t *testing.T) {
 }
 
 func TestDeleteMemberReturns400ForANonNumericID(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	if rec := postSetup(t, r, "Test Fund"); rec.Code != http.StatusCreated {
 		t.Fatalf("POST /api/setup = %d, want %d", rec.Code, http.StatusCreated)
@@ -643,6 +662,7 @@ func decodeMembersPage(t *testing.T, rec *httptest.ResponseRecorder) membersPage
 // collects every id it saw into a set regardless of what order pages
 // arrive in.
 func TestGetMembersPagesLargerRosterWithoutSkippingOrDuplicating(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	if rec := postSetup(t, r, "Test Fund"); rec.Code != http.StatusCreated {
 		t.Fatalf("POST /api/setup = %d, want %d", rec.Code, http.StatusCreated)
@@ -706,6 +726,7 @@ func TestGetMembersPagesLargerRosterWithoutSkippingOrDuplicating(t *testing.T) {
 // outright") - a lowercase query must find an uppercase name and vice
 // versa, and must not find a name that does not contain it at all.
 func TestGetMembersQMatchesCaseInsensitiveSubstringServerSide(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	if rec := postSetup(t, r, "Test Fund"); rec.Code != http.StatusCreated {
 		t.Fatalf("POST /api/setup = %d, want %d", rec.Code, http.StatusCreated)
@@ -736,6 +757,7 @@ func TestGetMembersQMatchesCaseInsensitiveSubstringServerSide(t *testing.T) {
 // A malformed cursor is 400 invalid_argument, the same answer
 // decodeTransactionsCursor gives GET /api/transactions (#225).
 func TestGetMembersMalformedCursorReturns400InvalidArgument(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	if rec := postSetup(t, r, "Test Fund"); rec.Code != http.StatusCreated {
 		t.Fatalf("POST /api/setup = %d, want %d", rec.Code, http.StatusCreated)
@@ -759,6 +781,7 @@ func TestGetMembersMalformedCursorReturns400InvalidArgument(t *testing.T) {
 // to tell "no more pages" apart from "here is another cursor" without
 // special-casing an empty members array.
 func TestGetMembersNextCursorIsNilOnLastPage(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	if rec := postSetup(t, r, "Test Fund"); rec.Code != http.StatusCreated {
 		t.Fatalf("POST /api/setup = %d, want %d", rec.Code, http.StatusCreated)
@@ -777,6 +800,7 @@ func TestGetMembersNextCursorIsNilOnLastPage(t *testing.T) {
 // current month - and both read nil for a tier with no rate yet decided
 // (the "madya TBD" case, PRD section 6), never an invented amount.
 func TestGetMembersRowShowsTierNameAndCurrentRateNilWhenUndecided(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	tier := setUpTier(t, r, "Madya")
 	// No rate posted for this tier at all - "TBD".
@@ -800,6 +824,7 @@ func TestGetMembersRowShowsTierNameAndCurrentRateNilWhenUndecided(t *testing.T) 
 }
 
 func TestGetMembersRowShowsCurrentRateWhenOneIsEffective(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	tier := setUpTier(t, r, "Full")
 	if rec := postDuesRate(t, r, tier.ID, duesRateRequest{Amount: 50_000, EffectiveFrom: "2020-01"}); rec.Code != http.StatusCreated {
@@ -841,6 +866,7 @@ func arrearsMonthPeriods() (twoBack, oneBack, current string) {
 // directly (dues_status_test.go in internal/ledger covers the derivation
 // itself in isolation).
 func TestGetMembersRowArrearsMonthsReflectsPartPaidEarlierPeriod(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	setup := setUpFund(t, r)
 
@@ -891,6 +917,7 @@ func TestGetMembersRowArrearsMonthsReflectsPartPaidEarlierPeriod(t *testing.T) {
 // TestArrearsMonthsForMemberBackdatingJoinedOnMakesArrearsAppear proves at
 // the derivation level.
 func TestGetMembersRowArrearsMonthsAppearsAfterBackdatingJoinedOn(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	tier := setUpTier(t, r, "Full")
 	if rec := postDuesRate(t, r, tier.ID, duesRateRequest{Amount: 25_000, EffectiveFrom: "2020-01"}); rec.Code != http.StatusCreated {
@@ -935,6 +962,7 @@ func TestGetMembersRowArrearsMonthsAppearsAfterBackdatingJoinedOn(t *testing.T) 
 // page, which would give the treasurer a "muat lebih banyak" button that
 // loads nothing.
 func TestGetMembersExactlyOnePageFullReturnsNoCursor(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	if rec := postSetup(t, r, "Test Fund"); rec.Code != http.StatusCreated {
 		t.Fatalf("POST /api/setup = %d, want %d", rec.Code, http.StatusCreated)

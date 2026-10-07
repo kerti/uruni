@@ -85,6 +85,7 @@ func rewriteZip(t *testing.T, src []byte, edit func(name string, data []byte) []
 }
 
 func TestRestoreInspectRefusesANewerFormatBackup(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	setUpFund(t, r)
 
@@ -93,6 +94,7 @@ func TestRestoreInspectRefusesANewerFormatBackup(t *testing.T) {
 }
 
 func TestRestoreInspectRefusesTooManyEntries(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	setUpFund(t, r)
 
@@ -114,6 +116,7 @@ func TestRestoreInspectRefusesTooManyEntries(t *testing.T) {
 // A real backup whose one receipt image has been replaced with bytes that
 // are not an image at all.
 func TestRestoreInspectRefusesABadReceiptImage(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	setup := setUpFund(t, r)
 	txnID := setUpTransactionForReceipt(t, r, setup)
@@ -134,6 +137,7 @@ func TestRestoreInspectRefusesABadReceiptImage(t *testing.T) {
 }
 
 func TestRestoreInspectRefusesANonMultipartRequest(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	setUpFund(t, r)
 
@@ -148,6 +152,7 @@ func TestRestoreInspectRefusesANonMultipartRequest(t *testing.T) {
 // part is skipped, the reader runs out, and the answer names the missing
 // file rather than a parse failure.
 func TestRestoreInspectRequiresAFilePart(t *testing.T) {
+	t.Parallel()
 	r, backupDir := authedRouterWithBackupDir(t)
 	setUpFund(t, r)
 
@@ -170,6 +175,7 @@ func TestRestoreInspectRequiresAFilePart(t *testing.T) {
 // A multipart body cut off mid-stream (no closing boundary): the read
 // fails partway, which is a bad request, not a server error.
 func TestRestoreInspectRefusesATruncatedUpload(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	setUpFund(t, r)
 
@@ -186,6 +192,7 @@ func TestRestoreInspectRefusesATruncatedUpload(t *testing.T) {
 // the transaction has been rolled back - the one failure the treasurer can
 // meet after typing her password.
 func TestRestoreConfirmRefusesATotalsMismatch(t *testing.T) {
+	t.Parallel()
 	r, backupDir := authedRouterWithBackupDir(t)
 	setUpFund(t, r)
 
@@ -228,6 +235,7 @@ func TestRestoreConfirmRefusesATotalsMismatch(t *testing.T) {
 // Confirm re-checks the password, so it shares login's limiter (its own
 // key): enough wrong guesses lock it before the password is even looked at.
 func TestRestoreConfirmIsRateLimited(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	setUpFund(t, r)
 	token := decodeInspectToken(t, postRestoreInspect(t, r, downloadRealBackupZip(t, r)))
@@ -244,6 +252,7 @@ func TestRestoreConfirmIsRateLimited(t *testing.T) {
 // An expired stage is noticed on its next access: take refuses it and
 // removes the staged file itself, since nobody will confirm it now.
 func TestRestoreStageExpiryRemovesTheStagedFile(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	path := createRestoreStagingTempOrFatal(t, dir)
 

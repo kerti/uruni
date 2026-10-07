@@ -21,6 +21,7 @@ func postTransfer(t *testing.T, r http.Handler, req transferRequest) *httptest.R
 }
 
 func TestPostTransfersRequiresAFund(t *testing.T) {
+	t.Parallel()
 	rec := postTransfer(t, testRouter(t), transferRequest{
 		PurposeID: 1, FromAccountID: 1, ToAccountID: 2, Amount: 100_000, OccurredOn: "2026-08-12",
 	})
@@ -40,6 +41,7 @@ func TestPostTransfersRequiresAFund(t *testing.T) {
 // sum to zero however the fund's total is derived.
 // internal/ledger/transfer_test.go asserts the balances themselves.
 func TestPostTransfersPostsTwoOppositeLegsAgainstOneTransfer(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	setup := setUpFund(t, r)
 
@@ -118,6 +120,7 @@ func TestPostTransfersPostsTwoOppositeLegsAgainstOneTransfer(t *testing.T) {
 // the movement that would mean nothing: same account on both legs, which
 // every schema CHECK would happily accept.
 func TestPostTransfersRejectsIdenticalAccounts(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	setup := setUpFund(t, r)
 
@@ -138,6 +141,7 @@ func TestPostTransfersRejectsIdenticalAccounts(t *testing.T) {
 }
 
 func TestPostTransfersRejectsNonPositiveAmount(t *testing.T) {
+	t.Parallel()
 	for _, amount := range []int64{0, -1, -50_000} {
 		r := testRouter(t)
 		setup := setUpFund(t, r)
@@ -160,6 +164,7 @@ func TestPostTransfersRejectsNonPositiveAmount(t *testing.T) {
 }
 
 func TestPostTransfersRejectsAMalformedOccurredOn(t *testing.T) {
+	t.Parallel()
 	for _, occurredOn := range []string{"2026-02-30", "not-a-date", "2026-8-12"} {
 		r := testRouter(t)
 		setup := setUpFund(t, r)
@@ -182,6 +187,7 @@ func TestPostTransfersRejectsAMalformedOccurredOn(t *testing.T) {
 }
 
 func TestPostTransfersRejectsMalformedJSON(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	setUpFund(t, r)
 
@@ -200,6 +206,7 @@ func TestPostTransfersRejectsMalformedJSON(t *testing.T) {
 // the route's half of the same guarantee internal/ledger/transfer_test.go
 // asserts on the rows themselves.
 func TestPostTransfersWritesTheNoteToBothLegs(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	setup := setUpFund(t, r)
 
@@ -250,6 +257,7 @@ func TestPostTransfersWritesTheNoteToBothLegs(t *testing.T) {
 // An omitted note is NULL on both legs, not "" - the transaction list must
 // not render an empty note line where there is nothing to say.
 func TestPostTransfersWithoutANoteLeavesBothLegsNull(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	setup := setUpFund(t, r)
 

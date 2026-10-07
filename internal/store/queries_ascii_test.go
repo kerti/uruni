@@ -27,6 +27,7 @@ var queryFiles embed.FS
 // comment. Write "-" and "--", not an em dash; spell out sections rather than
 // typing a section sign.
 func TestQueryFilesAreASCII(t *testing.T) {
+	t.Parallel()
 	paths, err := fs.Glob(queryFiles, "queries/*.sql")
 	if err != nil {
 		t.Fatalf("Glob() = %v, want no error", err)
