@@ -3,6 +3,8 @@
 /bin/
 *.out
 coverage.*
+# ...but not the e2e coverage map (case-insensitive filesystems match it)
+!web/e2e/COVERAGE.md
 
 # SQLite data
 *.db
