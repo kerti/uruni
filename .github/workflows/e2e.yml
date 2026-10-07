@@ -1,0 +1,41 @@
+# E2E (ADR-039): the @smoke journeys gate every PR and every push to main; the
+# full suite runs on a weekday schedule. Both call one runner, e2e-run.yml.
+#
+# Both jobs are named `E2E`, with mutually exclusive `if:`s, so whichever runs
+# reports the one stable check name branch protection requires:
+# `E2E / Playwright`. A failed scheduled run surfaces through GitHub's own
+# email for failed scheduled workflows - no extra machinery.
+name: E2E
+
+on:
+  # No branches filter, as in ci.yml: a PR into an epic branch is checked too.
+  pull_request:
+  push:
+    branches: [main]
+  schedule:
+    # 19:00 UTC Monday-Friday is 02:00 the next morning in Jakarta.
+    - cron: '0 19 * * 1-5'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: e2e-${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  smoke:
+    name: E2E
+    if: github.event_name == 'pull_request' || github.event_name == 'push'
+    uses: ./.github/workflows/e2e-run.yml
+    with:
+      tier: smoke
+      grep: '@smoke'
+
+  full:
+    name: E2E
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    uses: ./.github/workflows/e2e-run.yml
+    with:
+      tier: full

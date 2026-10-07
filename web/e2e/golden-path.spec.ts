@@ -47,7 +47,9 @@ import { expect, logIn, seedEmail, seedPassword, test } from './fixtures'
 // localStorage and a retired account directly; the e2e fixture seeds only
 // active accounts (per #141's own ruling), so the exclusion itself has no
 // e2e coverage either.
-test.describe('golden path', () => {
+test.describe('golden path', { tag: '@smoke' }, () => {
+  // @smoke as a whole: log in, record, Beranda and Cek kas are four of the
+  // smoke tier's seven journeys (ADR-039), and the story only runs whole.
   // Serial: the tests below are one story over one seeded instance - "record
   // a transaction" posts an entry the "home" test then expects to find, and
   // "reconcile" is the one that changes whether a reconciliation has ever

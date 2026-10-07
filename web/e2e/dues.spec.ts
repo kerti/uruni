@@ -46,7 +46,7 @@ test.describe('dues status', () => {
   // outstanding periods, oldest first - which two they are depends on
   // today's date, so this spec ticks the first two checkboxes rather than
   // naming months.
-  test('records a multi-period dues payment', async ({ page }) => {
+  test('records a multi-period dues payment', { tag: '@smoke' }, async ({ page }) => {
     await logIn(page)
     await page.goto('/')
     await expect(page.getByText(copy.home.balanceHeading)).toBeVisible()

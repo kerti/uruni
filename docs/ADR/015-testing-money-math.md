@@ -1,6 +1,6 @@
 # ADR-015 — Testing: prioritize the money math
 
-**Status:** Accepted · implemented at M7 ([#377](https://github.com/kerti/uruni/issues/377)) — change only by adding a superseding ADR · [ADR index](./README.md)
+**Status:** Accepted · implemented at M7 ([#377](https://github.com/kerti/uruni/issues/377)) · **superseded by [ADR-039](./039-e2e-every-operation-gated-in-ci.md)**: every treasurer operation has a Playwright journey, and CI runs them, `@smoke` on every PR and the full suite nightly. The coverage bars below carry over unchanged · [ADR index](./README.md)
 
 **Decision.** **`go test`** for the backend, with the **ledger/reconciliation logic as the highest-priority target**; **Vitest** for client units; **Playwright** for a few end-to-end flows (record → balance → reconcile; public report renders). The money package and reconciliation are must-have coverage.
 

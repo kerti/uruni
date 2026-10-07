@@ -57,7 +57,7 @@ test.describe('report', () => {
     return new URL(href ?? '').pathname
   }
 
-  test('opens the report from Pengaturan and reads its sections', async ({ page }) => {
+  test('opens the report from Pengaturan and reads its sections', { tag: '@smoke' }, async ({ page }) => {
     const card = await openReportCard(page)
     reportPath = await reportPathFrom(card)
 

@@ -23,7 +23,9 @@ test.describe('incidentals', () => {
     return page.getByRole('button', { name: new RegExp(`^${occasion}`) })
   }
 
-  test('open an envelope from Pengaturan and verify it appears on Beranda', async ({ page }) => {
+  // @smoke on this one too: the smoke tier's "record money in" is the next
+  // test, and it contributes to the envelope this one opens.
+  test('open an envelope from Pengaturan and verify it appears on Beranda', { tag: '@smoke' }, async ({ page }) => {
     await logIn(page)
     await page.goto('/')
     await expect(page.getByText(copy.home.balanceHeading)).toBeVisible()
@@ -64,47 +66,51 @@ test.describe('incidentals', () => {
     await expect(berandaRow(page)).toBeVisible()
   })
 
-  test('contribute to the envelope through the real record form, and verify the collected total updates', async ({ page }) => {
-    await logIn(page)
-    await page.goto('/')
-    await expect(page.getByText(copy.home.balanceHeading)).toBeVisible()
+  test(
+    'contribute to the envelope through the real record form, and verify the collected total updates',
+    { tag: '@smoke' },
+    async ({ page }) => {
+      await logIn(page)
+      await page.goto('/')
+      await expect(page.getByText(copy.home.balanceHeading)).toBeVisible()
 
-    // The envelope opened in the previous test is still open, so it now
-    // renders as its own row in Beranda's purpose breakdown (M6.33) -
-    // tapping it opens that envelope's detail, no separate list screen
-    // visited first.
-    await berandaRow(page).click()
-    await expect(page.getByText(copy.incidentals.detail.collectedLabel)).toBeVisible()
+      // The envelope opened in the previous test is still open, so it now
+      // renders as its own row in Beranda's purpose breakdown (M6.33) -
+      // tapping it opens that envelope's detail, no separate list screen
+      // visited first.
+      await berandaRow(page).click()
+      await expect(page.getByText(copy.incidentals.detail.collectedLabel)).toBeVisible()
 
-    // "Catat transaksi" hands off to the real record form (M6.8), with this
-    // envelope's purpose already chosen via /record?purpose=<id> - no
-    // separate contribution form of this screen's own.
-    // exact: the participation list (#339) gives every member row a "Catat
-    // sumbangan dari <name>" control, which a substring match also hits.
-    await page.getByRole('button', { name: copy.incidentals.actions.record, exact: true }).click()
-    await expect(page.getByRole('heading', { name: copy.record.heading })).toBeVisible()
+      // "Catat transaksi" hands off to the real record form (M6.8), with this
+      // envelope's purpose already chosen via /record?purpose=<id> - no
+      // separate contribution form of this screen's own.
+      // exact: the participation list (#339) gives every member row a "Catat
+      // sumbangan dari <name>" control, which a substring match also hits.
+      await page.getByRole('button', { name: copy.incidentals.actions.record, exact: true }).click()
+      await expect(page.getByRole('heading', { name: copy.record.heading })).toBeVisible()
 
-    // A contribution is money in - the record form's own direction toggle,
-    // not a choice this screen makes. Location keeps its remembered/default
-    // account; purpose is already the envelope's.
-    await page.getByRole('button', { name: copy.record.directionIn }).click()
-    await page.getByLabel(copy.record.amountLabel).fill('60000')
-    await page.getByRole('button', { name: copy.record.submit }).click()
-    await expect(page.getByText(copy.record.successIn)).toBeVisible()
+      // A contribution is money in - the record form's own direction toggle,
+      // not a choice this screen makes. Location keeps its remembered/default
+      // account; purpose is already the envelope's.
+      await page.getByRole('button', { name: copy.record.directionIn }).click()
+      await page.getByLabel(copy.record.amountLabel).fill('60000')
+      await page.getByRole('button', { name: copy.record.submit }).click()
+      await expect(page.getByText(copy.record.successIn)).toBeVisible()
 
-    // Back on home, the row's own balance reflects the contribution, and
-    // tapping it again shows the same total on the detail view.
-    await berandaRow(page).click()
-    // Anchored to the collected row rather than the page: since M6.33 this
-    // amount appears three times over - Beranda's own breakdown row, the
-    // recent-five entry for the contribution just recorded, and the detail
-    // view this assertion means. A bare getByText matched whichever of them
-    // the navigation had not yet torn down, which is also why it was racy
-    // before it was ambiguous. toContainText retries, so this waits for the
-    // detail view instead of assuming the click has landed.
-    const collectedRow = page.getByText(copy.incidentals.detail.collectedLabel).locator('..')
-    await expect(collectedRow).toContainText('Rp 60.000')
-  })
+      // Back on home, the row's own balance reflects the contribution, and
+      // tapping it again shows the same total on the detail view.
+      await berandaRow(page).click()
+      // Anchored to the collected row rather than the page: since M6.33 this
+      // amount appears three times over - Beranda's own breakdown row, the
+      // recent-five entry for the contribution just recorded, and the detail
+      // view this assertion means. A bare getByText matched whichever of them
+      // the navigation had not yet torn down, which is also why it was racy
+      // before it was ambiguous. toContainText retries, so this waits for the
+      // detail view instead of assuming the click has landed.
+      const collectedRow = page.getByText(copy.incidentals.detail.collectedLabel).locator('..')
+      await expect(collectedRow).toContainText('Rp 60.000')
+    },
+  )
 
   test('close the envelope and verify the rollover is shown honestly', async ({ page }) => {
     await logIn(page)

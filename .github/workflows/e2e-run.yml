@@ -1,0 +1,90 @@
+# The one e2e runner (ADR-039), called by e2e.yml for both tiers. The tiers
+# differ only in `grep`: smoke passes `@smoke`, the full run passes nothing.
+# Local twin: `make e2e-ci` (and `make e2e` for a human at a terminal).
+#
+# No database service and no mock auth: the whole fixture is one SQLite file,
+# and Playwright's global setup builds the binary and seeds it
+# (web/e2e/global-setup.ts). Every worker then runs its own instance with its
+# own database, backup and uploads directories, so CI needs no .env.
+#
+# Actions are pinned by SHA with a `# vX.Y.Z` comment, as in ci.yml.
+name: E2E run
+
+on:
+  workflow_call:
+    inputs:
+      tier:
+        description: smoke or full - only labels the run and its artifact
+        required: true
+        type: string
+      grep:
+        description: Playwright --grep pattern; empty runs every spec
+        required: false
+        type: string
+        default: ''
+
+permissions:
+  contents: read
+
+jobs:
+  run:
+    # Not tier-specific: the check GitHub reports is `<caller job> / <this
+    # job>`, so a tier in this name would give smoke and full two different
+    # check names and break e2e.yml's one-stable-name promise.
+    name: Playwright
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci
+        working-directory: web
+      # The binary embeds web/dist, so the SPA is built before the suite builds
+      # the binary (`make e2e` does this through web-build; e2e-ci does not).
+      - run: npm run build
+        working-directory: web
+      # Most of this job's wall clock is setup, not the tests (#451), and the
+      # browser download is the largest piece of it. The cache key is the
+      # installed runner's version, because each Playwright release pins its
+      # own browser build. On a hit only the OS packages are installed.
+      - name: Read the Playwright version
+        id: pw
+        working-directory: web
+        run: echo "version=$(node -p "require('@playwright/test/package.json').version")" >> "$GITHUB_OUTPUT"
+      - name: Cache the Playwright browser
+        id: pw-cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ steps.pw.outputs.version }}
+      - name: Install the browser
+        if: steps.pw-cache.outputs.cache-hit != 'true'
+        working-directory: web
+        run: npx playwright install --with-deps chromium
+      - name: Install the browser's OS packages
+        if: steps.pw-cache.outputs.cache-hit == 'true'
+        working-directory: web
+        run: npx playwright install-deps chromium
+      - name: Run the ${{ inputs.tier }} tier
+        env:
+          CI: 'true'
+          GREP: ${{ inputs.grep }}
+        run: |
+          if [ -n "$GREP" ]; then
+            make e2e-ci E2E_ARGS="--grep $GREP"
+          else
+            make e2e-ci
+          fi
+      - name: Upload traces and screenshots
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: e2e-${{ inputs.tier }}-test-results
+          path: web/test-results/
+          retention-days: 7

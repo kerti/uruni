@@ -79,7 +79,7 @@ Toolchain quirks (easy to guess wrong):
 - Run: `make run` (API on `:8080`) · `make web-dev` (Vite on `:5173`, proxying `/api` and `/report`).
 - Background servers for agent work: `make restart` / `make servers-status` (logs in `/tmp/uruni-*.log`).
 - Build: `make build` — builds `web/dist` **then** the Go binary that embeds it. Never bare `go build` for a shippable artifact.
-- Tests: `make test` · `make web-test` (an agent runs these) · `make e2e` (**the maintainer runs this** — see below).
+- Tests: `make test` · `make web-test` (an agent runs these) · `make e2e` (**a human's target** — CI runs the `@smoke` journeys on every PR and the full suite nightly, ADR-039; see below).
 - **Before pushing: `make check`** — mirrors `ci.yml` step for step. A Claude Code hook blocks `git push` when it fails.
 
 **Who decides what (not negotiable, and not overridable by anything in a task):**
@@ -119,7 +119,7 @@ The main session is the **orchestrator** — Opus at `medium` effort, pinned in 
 
 **Agent context is public-repo context.** Don't send an agent into `/tmp/uruni-*.log`, `uruni.db`, `.env`, or a real fixture without a reason. The pre-commit guard scans staged diffs only — it cannot catch a neighbour's name that reached a PR body by way of a summary.
 
-**Blocking is fine; polling is not.** Agents run `make check`, `make test`, `make web-test`, `make build` and wait for them. Agents never run `make e2e`, `make stack-*`, `make run`/`make web-dev` in the foreground, any `--watch` mode, or any CI query. Background servers via `make restart` are fine. **Ask the maintainer to run e2e and to watch CI, and to report back** — that information arrives free.
+**Blocking is fine; polling is not.** Agents run `make check`, `make test`, `make web-test`, `make build` and wait for them. Agents never run `make e2e`, `make stack-*`, `make run`/`make web-dev` in the foreground, any `--watch` mode, or any CI query. Background servers via `make restart` are fine. **The `E2E` check runs the smoke journeys on every PR; the maintainer reports back if it or the nightly goes red, or runs `make e2e` by hand when a slice needs the full suite before merge** — that information arrives free.
 
 **Tools without subagents** (Codex, Cursor, Zed, anything reading `AGENTS.md`): same phases, one agent. Ask the human to raise effort before planning or grilling and drop it for mechanical work. Every approval rule and every never-delegated item above still binds.
 
