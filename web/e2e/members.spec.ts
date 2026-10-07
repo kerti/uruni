@@ -1,6 +1,5 @@
-import { expect, test } from '@playwright/test'
-
 import { copy } from '../src/copy/id'
+import { expect, test, logIn } from './fixtures'
 
 // M6.16 + M6.17 + M6.32 (#233, ADR-032): the roster as a card list with
 // dialog editing, server-side search and keyset paging.
@@ -11,24 +10,17 @@ import { copy } from '../src/copy/id'
 // Tunggakan badge and the partial-update semantics without touching the
 // shared database.
 //
-// Like settings.spec.ts, this file cleans up after itself. A member left
-// behind would change what dues.spec.ts's roster reads, and the suite runs
-// against one seeded instance (playwright.config.ts, workers: 1).
 test.describe('members', () => {
   test.describe.configure({ mode: 'serial' })
-
-  const seedEmail = 'bendahara@e2e.uruni.test'
-  const seedPassword = 'e2e-fixture-password'
+  test.beforeAll(({ instance }) => instance.reset())
 
   // Not "Warga Satu"/"Warga Dua" - those are the fixture's own members, and
-  // dues.spec.ts asserts on them by name.
+  // the test below asserts the fixture's roster is already listed.
   const memberName = 'Warga Uji Anggota'
 
   test('adds a member from the roster screen, then removes them again', async ({ page }) => {
+    await logIn(page)
     await page.goto('/')
-    await page.getByLabel(copy.auth.login.emailLabel).fill(seedEmail)
-    await page.getByLabel(copy.auth.login.passwordLabel, { exact: true }).fill(seedPassword)
-    await page.getByRole('button', { name: copy.auth.login.submit }).click()
     await expect(page.getByText(copy.home.balanceHeading)).toBeVisible()
 
     await page.getByRole('link', { name: copy.shell.nav.members }).click()
@@ -60,10 +52,8 @@ test.describe('members', () => {
   // The header's fund name is the app's second way home (M6.16). Proven
   // here rather than only in jsdom because it is a real navigation.
   test('the fund name in the header navigates home', async ({ page }) => {
+    await logIn(page)
     await page.goto('/')
-    await page.getByLabel(copy.auth.login.emailLabel).fill(seedEmail)
-    await page.getByLabel(copy.auth.login.passwordLabel, { exact: true }).fill(seedPassword)
-    await page.getByRole('button', { name: copy.auth.login.submit }).click()
     await expect(page.getByText(copy.home.balanceHeading)).toBeVisible()
 
     await page.getByRole('link', { name: copy.shell.nav.members }).click()

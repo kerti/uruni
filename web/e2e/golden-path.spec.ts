@@ -1,11 +1,10 @@
-import { expect, test } from '@playwright/test'
-
 // Imported rather than retyped as a literal: the copy lives in one place
 // (ADR-014) and this spec asserting on a stale copy of a string is exactly
 // the drift that centralizing it exists to prevent. Relative, not the `@/`
 // alias - that alias is a Vite/tsconfig concern and web/e2e is neither.
 import { copy } from '../src/copy/id'
 import { formatIDR } from '../src/lib/money'
+import { expect, logIn, seedEmail, seedPassword, test } from './fixtures'
 
 // The golden path this spec walks end to end, for the first time as of
 // M6.10: log in -> first-run setup -> record a transaction -> home (balance
@@ -26,7 +25,8 @@ import { formatIDR } from '../src/lib/money'
 // Register screen is never reachable here - the golden path starts at
 // Login. Register has no e2e coverage as a result; it is covered instead by
 // the vitest suite (web/src/screens/Register.test.tsx), which can reach a
-// fresh, unregistered instance a shared e2e fixture cannot.
+// fresh, unregistered instance a seeded e2e one cannot (`instance.reset({
+// seed: false })` can, for a journey that wants the real thing).
 //
 // The same is true one layer in for M6.5's setup wizard: the same fixture
 // also seeds a fund (cmd/uruni/seed_e2e.go), so GET /api/fund always answers
@@ -37,7 +37,7 @@ import { formatIDR } from '../src/lib/money'
 // optional-balance skip path, the skippable roster, and POST /api/setup
 // firing exactly once - are covered instead by the vitest suite
 // (web/src/screens/Setup/Setup.test.tsx and App.test.tsx), which can reach a
-// fresh, fund-less instance a shared e2e fixture cannot.
+// fresh, fund-less instance a seeded e2e one cannot.
 //
 // M6.8's own test below records against the fixture's default location
 // without touching the account picker on purpose - proving the "location
@@ -48,28 +48,20 @@ import { formatIDR } from '../src/lib/money'
 // active accounts (per #141's own ruling), so the exclusion itself has no
 // e2e coverage either.
 test.describe('golden path', () => {
-  // Serial, not the project's default fullyParallel: true. Every spec below
-  // shares one seeded database (playwright.config.ts's webServer) and reads
-  // it as a continuous story - "record a transaction" posts a real entry
-  // the "home" spec then expects to find, and (new as of M6.10) "reconcile"
-  // is the first spec that changes whether a reconciliation has ever been
-  // taken at all, which the "home" spec above it depends on staying false
-  // until it has run. None of that is safe under out-of-order or concurrent
-  // execution, so this describe opts out of the project default for just
-  // this file.
+  // Serial: the tests below are one story over one seeded instance - "record
+  // a transaction" posts an entry the "home" test then expects to find, and
+  // "reconcile" is the one that changes whether a reconciliation has ever
+  // been taken, which "home" needs to still read as never. The instance is
+  // this file's own (reset in beforeAll), so no other file can disturb it.
   test.describe.configure({ mode: 'serial' })
-
-  // The seeded treasurer account (cmd/uruni/seed_e2e.go) - literals, not an
-  // import, because that file is Go and this spec can't reach into it; only
-  // copy crosses the language boundary via the import above.
-  const seedEmail = 'bendahara@e2e.uruni.test'
-  const seedPassword = 'e2e-fixture-password'
+  test.beforeAll(({ instance }) => instance.reset())
 
   test('log in as the seeded treasurer and land past auth', async ({ page }) => {
     await page.goto('/')
 
     // The seeded instance already has an account, so a fresh, logged-out
-    // visitor lands on Login, not Register.
+    // visitor lands on Login, not Register. This is the one real form login
+    // in the suite; every other test signs in through logIn().
     await expect(page.getByText(copy.auth.login.heading)).toBeVisible()
 
     await page.getByLabel(copy.auth.login.emailLabel).fill(seedEmail)
@@ -84,10 +76,8 @@ test.describe('golden path', () => {
   })
 
   test('record a transaction (M6.8)', async ({ page }) => {
+    await logIn(page)
     await page.goto('/')
-    await page.getByLabel(copy.auth.login.emailLabel).fill(seedEmail)
-    await page.getByLabel(copy.auth.login.passwordLabel, { exact: true }).fill(seedPassword)
-    await page.getByRole('button', { name: copy.auth.login.submit }).click()
     await expect(page.getByText(copy.home.balanceHeading)).toBeVisible()
 
     await page.getByRole('link', { name: copy.shell.nav.record }).click()
@@ -111,10 +101,8 @@ test.describe('golden path', () => {
   })
 
   test('home: balance hero + reconciliation status (M6.9)', async ({ page }) => {
+    await logIn(page)
     await page.goto('/')
-    await page.getByLabel(copy.auth.login.emailLabel).fill(seedEmail)
-    await page.getByLabel(copy.auth.login.passwordLabel, { exact: true }).fill(seedPassword)
-    await page.getByRole('button', { name: copy.auth.login.submit }).click()
 
     // The balance hero, from GET /api/balances's fund_total.
     await expect(page.getByText(copy.home.balanceHeading)).toBeVisible()
@@ -136,14 +124,12 @@ test.describe('golden path', () => {
   })
 
   test('reconcile (M6.10)', async ({ page }) => {
+    await logIn(page)
     await page.goto('/')
-    await page.getByLabel(copy.auth.login.emailLabel).fill(seedEmail)
-    await page.getByLabel(copy.auth.login.passwordLabel, { exact: true }).fill(seedPassword)
-    await page.getByRole('button', { name: copy.auth.login.submit }).click()
     await expect(page.getByText(copy.home.balanceHeading)).toBeVisible()
 
-    // The fixture has never been reconciled before this spec runs (fresh
-    // per `make e2e-reset`), so the banner is still in its neutral
+    // The fixture has never been reconciled before this spec runs (the
+    // instance is reset for this file), so the banner is still in its neutral
     // first-run state - and is the reconcile screen's entry point (M6.10's
     // own ruling: "the reconciliation banner is the natural affordance").
     await expect(page.getByText(copy.reconciliation.neverChecked)).toBeVisible()

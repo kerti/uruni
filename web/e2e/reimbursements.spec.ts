@@ -1,6 +1,7 @@
-import { expect, test, type Page } from '@playwright/test'
+import type { Page } from '@playwright/test'
 
 import { copy } from '../src/copy/id'
+import { expect, test, logIn } from './fixtures'
 
 // Records a claim the way she does: Catat -> Keluar -> "Pengeluaran ini
 // ditalangi" -> member and amount -> Simpan (#368). Lands on Beranda with
@@ -36,36 +37,26 @@ async function openTalangan(page: Page) {
 // M6.18's own e2e spec: record a reimbursement claim, verify it appears in
 // the outstanding list, settle it and verify it disappears, then waive and
 // un-waive a fresh claim across the two tabs. All three are one continuous
-// story on a shared seeded database.
-//
-// Serial, like golden-path.spec.ts: this spec shares one seeded database
-// and reads it as a continuous story. The seeded instance has members and
-// purposes from the e2e fixture (cmd/uruni/seed_e2e.go).
+// story, so serial, on the file's own seeded instance (members and purposes
+// from cmd/uruni/seed_e2e.go).
 test.describe('reimbursements', () => {
   test.describe.configure({ mode: 'serial' })
+  test.beforeAll(({ instance }) => instance.reset())
 
-  const seedEmail = 'bendahara@e2e.uruni.test'
-  const seedPassword = 'e2e-fixture-password'
-
-  // Set by the first test below and read by the second (serial mode, same
-  // shared database): the label a settlement now carries (#257) is just
-  // the claim's own member name, so the settle spec needs to know which
-  // member the claim spec actually picked - "the first option" is not a
-  // fixed name.
+  // Set by the first test below and read by the second (serial mode): the
+  // label a settlement now carries (#257) is just the claim's own member
+  // name, so the settle spec needs to know which member the claim spec
+  // actually picked - "the first option" is not a fixed name.
   let firstMemberName = ''
 
   test('record a claim and verify it appears in the outstanding list', async ({ page }) => {
+    await logIn(page)
     await page.goto('/')
-    await page.getByLabel(copy.auth.login.emailLabel).fill(seedEmail)
-    await page.getByLabel(copy.auth.login.passwordLabel, { exact: true }).fill(seedPassword)
-    await page.getByRole('button', { name: copy.auth.login.submit }).click()
     await expect(page.getByText(copy.home.balanceHeading)).toBeVisible()
 
     firstMemberName = await recordClaim(page, '10000')
 
     // Recording lands on Beranda, which now shows what the fund owes (#406).
-    // Visible only: the seed may hold other open claims, so the total is not
-    // this claim's amount alone.
     await expect(page.getByRole('button', { name: new RegExp(copy.home.owedToMembers) })).toBeVisible()
 
     // Then Riwayat's Talangan tab (#226, ADR-032), where the claim lives.
@@ -75,10 +66,8 @@ test.describe('reimbursements', () => {
   })
 
   test('settle the claim and verify it disappears from outstanding', async ({ page }) => {
+    await logIn(page)
     await page.goto('/')
-    await page.getByLabel(copy.auth.login.emailLabel).fill(seedEmail)
-    await page.getByLabel(copy.auth.login.passwordLabel, { exact: true }).fill(seedPassword)
-    await page.getByRole('button', { name: copy.auth.login.submit }).click()
     await expect(page.getByText(copy.home.balanceHeading)).toBeVisible()
 
     // Navigate to Riwayat's Talangan tab (#226, ADR-032).
@@ -115,10 +104,8 @@ test.describe('reimbursements', () => {
   })
 
   test('correct an outstanding claim from its own screen', async ({ page }) => {
+    await logIn(page)
     await page.goto('/')
-    await page.getByLabel(copy.auth.login.emailLabel).fill(seedEmail)
-    await page.getByLabel(copy.auth.login.passwordLabel, { exact: true }).fill(seedPassword)
-    await page.getByRole('button', { name: copy.auth.login.submit }).click()
     await expect(page.getByText(copy.home.balanceHeading)).toBeVisible()
 
     // The earlier claim was settled - record a fresh one to correct (Rp 30.000).
@@ -155,10 +142,8 @@ test.describe('reimbursements', () => {
   })
 
   test('waive a fresh claim, then un-waive it from the all tab', async ({ page }) => {
+    await logIn(page)
     await page.goto('/')
-    await page.getByLabel(copy.auth.login.emailLabel).fill(seedEmail)
-    await page.getByLabel(copy.auth.login.passwordLabel, { exact: true }).fill(seedPassword)
-    await page.getByRole('button', { name: copy.auth.login.submit }).click()
     await expect(page.getByText(copy.home.balanceHeading)).toBeVisible()
 
     // The earlier claim was settled, leaving the outstanding list empty -

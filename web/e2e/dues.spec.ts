@@ -1,6 +1,5 @@
-import { expect, test } from '@playwright/test'
-
 import { copy } from '../src/copy/id'
+import { expect, test, logIn } from './fixtures'
 
 // M6.12: the dues status roster (PRD section 7.3). The seeded fixture
 // (cmd/uruni/seed_e2e.go) creates two members - "Warga Satu" and "Warga
@@ -12,30 +11,16 @@ import { copy } from '../src/copy/id'
 // covered per-case by the vitest suite (Status.test.tsx), which can stub
 // every status directly.
 //
-// M6.13's payment spec below posts real rows into that shared database, so
-// two rules bind this file:
-//
-//   - Serial, like golden-path.spec.ts and for the same reason: the roster
-//     spec reads state the payment spec changes.
-//   - The amount it pays is deliberately NOT the seeded rate (Rp 50.000),
-//     which golden-path.spec.ts asserts is uniquely visible in recent
-//     activity after its own record step. Every spec here shares one
-//     database and the files run in parallel with each other, so a dues row
-//     for the same amount would break that spec's strict-mode locator from
-//     across the suite. Paying part of a month is a real path anyway - it
-//     leaves both periods outstanding, which keeps this spec re-runnable
-//     against a database that was not reset.
+// M6.13's payment spec below posts real rows, and the reversal spec after it
+// undoes one, so the file is serial: each test reads what the one before
+// changed. The instance is this file's own (reset in beforeAll).
 test.describe('dues status', () => {
   test.describe.configure({ mode: 'serial' })
-
-  const seedEmail = 'bendahara@e2e.uruni.test'
-  const seedPassword = 'e2e-fixture-password'
+  test.beforeAll(({ instance }) => instance.reset())
 
   test('loads the period view and shows the seeded roster', async ({ page }) => {
+    await logIn(page)
     await page.goto('/')
-    await page.getByLabel(copy.auth.login.emailLabel).fill(seedEmail)
-    await page.getByLabel(copy.auth.login.passwordLabel, { exact: true }).fill(seedPassword)
-    await page.getByRole('button', { name: copy.auth.login.submit }).click()
     await expect(page.getByText(copy.home.balanceHeading)).toBeVisible()
 
     await page.getByRole('link', { name: copy.shell.nav.history }).click()
@@ -62,10 +47,8 @@ test.describe('dues status', () => {
   // today's date, so this spec ticks the first two checkboxes rather than
   // naming months.
   test('records a multi-period dues payment', async ({ page }) => {
+    await logIn(page)
     await page.goto('/')
-    await page.getByLabel(copy.auth.login.emailLabel).fill(seedEmail)
-    await page.getByLabel(copy.auth.login.passwordLabel, { exact: true }).fill(seedPassword)
-    await page.getByRole('button', { name: copy.auth.login.submit }).click()
     await expect(page.getByText(copy.home.balanceHeading)).toBeVisible()
 
     await page.getByRole('link', { name: copy.shell.nav.history }).click()
@@ -92,9 +75,8 @@ test.describe('dues status', () => {
     await periods.nth(1).check()
 
     // Each amount arrives pre-filled with the period's own rate and is
-    // edited down here - both to keep this spec's rows off the seeded
-    // Rp 50.000 (see the file header) and because editing a pre-filled
-    // amount is itself the path M6.13 promises.
+    // edited down here: paying part of a month is a real path (M6.13), and
+    // it is what leaves the reversal spec below a partial status to read.
     // Derived from the copy itself (ADR-014), never retyped: the label is
     // "<prefix><month>", so the prefix with an empty month is what every
     // period's amount field starts with.
@@ -108,8 +90,8 @@ test.describe('dues status', () => {
     // Rp 5.000.012.345. Clearing first puts the field in the same empty
     // state golden-path.spec.ts fills, which is deterministic.
     for (const [index, value] of [
-      [0, '12345'],
-      [1, '23456'],
+      [0, '20000'],
+      [1, '30000'],
     ] as const) {
       await amounts.nth(index).fill('')
       await amounts.nth(index).fill(value)
@@ -143,10 +125,8 @@ test.describe('dues status', () => {
   // month on a rate effective from it - so that is the period the payment
   // spec's first checkbox pays, and the one this spec reverses.
   test('reverses a dues payment', async ({ page }) => {
+    await logIn(page)
     await page.goto('/')
-    await page.getByLabel(copy.auth.login.emailLabel).fill(seedEmail)
-    await page.getByLabel(copy.auth.login.passwordLabel, { exact: true }).fill(seedPassword)
-    await page.getByRole('button', { name: copy.auth.login.submit }).click()
     await expect(page.getByText(copy.home.balanceHeading)).toBeVisible()
 
     await page.getByRole('link', { name: copy.shell.nav.history }).click()
