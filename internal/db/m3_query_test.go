@@ -15,6 +15,7 @@ import (
 // already be unique, per ADR-024.
 
 func TestMaxTransactionIDByFundIsNoRowsOnAnEmptyFund(t *testing.T) {
+	t.Parallel()
 	sqlDB := migratedTestDB(t)
 	f := newScenarioFund(t, sqlDB, "Neighborhood Fund", validSlug)
 
@@ -28,6 +29,7 @@ func TestMaxTransactionIDByFundIsNoRowsOnAnEmptyFund(t *testing.T) {
 }
 
 func TestMaxTransactionIDByFundIsTheHighestIDInTheFund(t *testing.T) {
+	t.Parallel()
 	sqlDB := migratedTestDB(t)
 	ctx := context.Background()
 	q := store.New(sqlDB)
@@ -61,6 +63,7 @@ func TestMaxTransactionIDByFundIsTheHighestIDInTheFund(t *testing.T) {
 }
 
 func TestIncidentalTotalsSeparatesCollectedFromDisbursed(t *testing.T) {
+	t.Parallel()
 	sqlDB := migratedTestDB(t)
 	ctx := context.Background()
 	q := store.New(sqlDB)
@@ -102,6 +105,7 @@ func TestIncidentalTotalsSeparatesCollectedFromDisbursed(t *testing.T) {
 }
 
 func TestDuesPaidByPeriodCoversFullPartialAndUnpaidMembers(t *testing.T) {
+	t.Parallel()
 	sqlDB := migratedTestDB(t)
 	ctx := context.Background()
 	q := store.New(sqlDB)
@@ -174,6 +178,7 @@ func TestDuesPaidByPeriodCoversFullPartialAndUnpaidMembers(t *testing.T) {
 }
 
 func TestLatestDuesPeriodPaidByMemberIsTheChronologicalMax(t *testing.T) {
+	t.Parallel()
 	sqlDB := migratedTestDB(t)
 	ctx := context.Background()
 	q := store.New(sqlDB)
@@ -211,6 +216,7 @@ func TestLatestDuesPeriodPaidByMemberIsTheChronologicalMax(t *testing.T) {
 }
 
 func TestGetReimbursementSettlement(t *testing.T) {
+	t.Parallel()
 	sqlDB := migratedTestDB(t)
 	ctx := context.Background()
 	q := store.New(sqlDB)
@@ -245,6 +251,7 @@ func TestGetReimbursementSettlement(t *testing.T) {
 }
 
 func TestGetReimbursementSettlementDoesNotSeeAnotherFundsClaim(t *testing.T) {
+	t.Parallel()
 	sqlDB := migratedTestDB(t)
 	ctx := context.Background()
 	q := store.New(sqlDB)

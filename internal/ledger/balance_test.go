@@ -10,6 +10,7 @@ import (
 
 // An empty fund's balances are 0, not an error.
 func TestEmptyFundBalancesAreZero(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 	f := newFixture(t, l)
 	ctx := context.Background()
@@ -44,6 +45,7 @@ func TestEmptyFundBalancesAreZero(t *testing.T) {
 // both leave the headline or neither does". There is no second "available"
 // balance anywhere in Uruni.
 func TestPassThroughAndIncidentalSumIntoFundAndAccountBalanceLikeMain(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 	f := newFixture(t, l)
 	ctx := context.Background()
@@ -87,6 +89,7 @@ func TestPassThroughAndIncidentalSumIntoFundAndAccountBalanceLikeMain(t *testing
 // PurposeBalance reports per purpose while AccountBalance and FundBalance
 // stay pooled across every purpose.
 func TestPurposeBalanceIsPerPurposeWhileAccountAndFundStayPooled(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 	f := newFixture(t, l)
 	ctx := context.Background()
@@ -131,6 +134,7 @@ func TestPurposeBalanceIsPerPurposeWhileAccountAndFundStayPooled(t *testing.T) {
 
 // A second fund's rows never appear in the first fund's balances.
 func TestASecondFundsRowsNeverAppearInTheFirstFundsBalances(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 	f := newFixture(t, l)
 	ctx := context.Background()
@@ -179,6 +183,7 @@ func TestASecondFundsRowsNeverAppearInTheFirstFundsBalances(t *testing.T) {
 // correction's new amount, counts an un-waived claim again, and always equals
 // the Talangan "Belum dibayar" list summed.
 func TestOwedToMembersFollowsSettleWaiveUnwaiveAndCorrect(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 	f := newFixture(t, l)
 	ctx := context.Background()

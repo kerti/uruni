@@ -15,6 +15,9 @@ import (
 // own comment on why it does not wait for the first hourly fire), and it
 // returns - promptly, with no leaked goroutine spinning after ctx is
 // cancelled - rather than blocking forever.
+//
+// Serial on purpose, no t.Parallel: it asserts 2s wall-clock deadlines, which a
+// suite of parallel -race tests competing for the CPU could trip.
 func TestRunSchedulerWritesOnceThenStopsCleanlyOnCancel(t *testing.T) {
 	sqlDB := newTestDB(t)
 	uploadsDir := t.TempDir()

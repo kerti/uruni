@@ -22,6 +22,7 @@ func postDuesPayment(t *testing.T, r http.Handler, req duesPaymentRequest) *http
 }
 
 func TestPostDuesPaymentsRequiresAFund(t *testing.T) {
+	t.Parallel()
 	rec := postDuesPayment(t, testRouter(t), duesPaymentRequest{
 		AccountID: 1, PurposeID: 1, MemberID: 1, OccurredOn: "2026-08-12",
 		Periods: []duesPaymentPeriod{{DuesPeriod: "2026-08", Amount: 25_000}},
@@ -40,6 +41,7 @@ func TestPostDuesPaymentsRequiresAFund(t *testing.T) {
 // as separate rows - never flattened into one - and the response echoes
 // that shape back rather than collapsing it.
 func TestPostDuesPaymentsSeveralPeriodsYieldsOneRowPerPeriod(t *testing.T) {
+	t.Parallel()
 	r, l := testRouterAndLedger(t)
 	setup := setUpFund(t, r)
 
@@ -114,6 +116,7 @@ func TestPostDuesPaymentsSeveralPeriodsYieldsOneRowPerPeriod(t *testing.T) {
 }
 
 func TestPostDuesPaymentsRejectsEmptyPeriods(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	setup := setUpFund(t, r)
 
@@ -147,6 +150,7 @@ func TestPostDuesPaymentsRejectsEmptyPeriods(t *testing.T) {
 // the slice's "non-positive amount surfaces as 400" acceptance criterion -
 // PostDuesPayments' own check answers, not a second one in the handler.
 func TestPostDuesPaymentsRejectsNonPositiveAmount(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	setup := setUpFund(t, r)
 
@@ -174,6 +178,7 @@ func TestPostDuesPaymentsRejectsNonPositiveAmount(t *testing.T) {
 // criterion's malformed-date case for this route: a dues_period that is not
 // a real "YYYY-MM" month.
 func TestPostDuesPaymentsRejectsAMalformedDuesPeriod(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	setup := setUpFund(t, r)
 
@@ -198,6 +203,7 @@ func TestPostDuesPaymentsRejectsAMalformedDuesPeriod(t *testing.T) {
 }
 
 func TestPostDuesPaymentsRejectsMalformedJSON(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	setUpFund(t, r)
 
@@ -221,6 +227,7 @@ func TestPostDuesPaymentsRejectsMalformedJSON(t *testing.T) {
 // any of them, and writes every row inside one database transaction, so a
 // mid-batch failure leaves nothing behind at all.
 func TestPostDuesPaymentsAMidBatchFailureWritesNothing(t *testing.T) {
+	t.Parallel()
 	r, l := testRouterAndLedger(t)
 	setup := setUpFund(t, r)
 

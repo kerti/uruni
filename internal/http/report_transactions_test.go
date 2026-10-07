@@ -154,6 +154,7 @@ func equalLines(a, b []totalLine) bool {
 }
 
 func TestReportListsTheMonthWithLabelsAndTotals(t *testing.T) {
+	t.Parallel()
 	s := newTxnScenario(t)
 	body := s.get(t, s.base).Body.String()
 
@@ -191,6 +192,7 @@ func TestReportListsTheMonthWithLabelsAndTotals(t *testing.T) {
 }
 
 func TestReportFilters(t *testing.T) {
+	t.Parallel()
 	s := newTxnScenario(t)
 	id := func(n int64) string { return itoa(n) }
 
@@ -242,6 +244,7 @@ func TestReportFilters(t *testing.T) {
 
 // A purpose move is matched by a filter on either side, and shows once.
 func TestReportPurposeMoveMatchesEitherSideOfThePurposeFilter(t *testing.T) {
+	t.Parallel()
 	s := newTxnScenario(t)
 	for name, purpose := range map[string]int64{"from side": s.mainID, "to side": s.duka} {
 		t.Run(name, func(t *testing.T) {
@@ -256,6 +259,7 @@ func TestReportPurposeMoveMatchesEitherSideOfThePurposeFilter(t *testing.T) {
 }
 
 func TestReportFilterFormIsAPlainGetCarryingTheMonth(t *testing.T) {
+	t.Parallel()
 	s := newTxnScenario(t)
 	body := s.get(t, s.base+"&purpose="+itoa(s.duka)+"&member="+itoa(s.budi)+"&dir=in").Body.String()
 
@@ -286,6 +290,7 @@ func TestReportFilterFormIsAPlainGetCarryingTheMonth(t *testing.T) {
 }
 
 func TestReportReceiptIsAMarkerNeverALink(t *testing.T) {
+	t.Parallel()
 	s := newTxnScenario(t)
 	body := s.get(t, s.base).Body.String()
 
@@ -307,6 +312,7 @@ func TestReportReceiptIsAMarkerNeverALink(t *testing.T) {
 }
 
 func TestReportEmptyFilteredMonthSaysSoCalmly(t *testing.T) {
+	t.Parallel()
 	s := newTxnScenario(t)
 	// Budi gave to Duka only; filtered to money out there is nothing.
 	body := s.get(t, s.base+"&member="+itoa(s.budi)+"&dir=out").Body.String()
@@ -327,6 +333,7 @@ func TestReportEmptyFilteredMonthSaysSoCalmly(t *testing.T) {
 }
 
 func TestReportMonthStepKeepsTheFilters(t *testing.T) {
+	t.Parallel()
 	active := url.Values{}
 	if got, want := monthHref("2026-08", active), "?month=2026-08#months"; got != want {
 		t.Errorf("unfiltered: got %q, want %q", got, want)
@@ -342,6 +349,7 @@ func TestReportMonthStepKeepsTheFilters(t *testing.T) {
 // and a "Dipindah" move alike - trimmed and escaped like any other text, on
 // the page and in the PDF; a row without one shows no note line.
 func TestReportRowShowsItsNote(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	f := newReportFixture(t, "Kas RT 05")
 	note := "  Beli gula <b>dan</b> teh  "

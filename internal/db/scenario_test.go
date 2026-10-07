@@ -81,6 +81,7 @@ func (f scenarioFund) purposeBalance(t *testing.T, sqlDB *sql.DB, purposeID int6
 }
 
 func TestOpeningBalancesAreLedgerRowsLikeAnyOther(t *testing.T) {
+	t.Parallel()
 	sqlDB := migratedTestDB(t)
 	f := newScenarioFund(t, sqlDB, "Test Fund", validSlug)
 
@@ -107,6 +108,7 @@ func TestOpeningBalancesAreLedgerRowsLikeAnyOther(t *testing.T) {
 }
 
 func TestSeveralMonthsOfDuesPaidInOneVisit(t *testing.T) {
+	t.Parallel()
 	sqlDB := migratedTestDB(t)
 	ctx := context.Background()
 	f := newScenarioFund(t, sqlDB, "Test Fund", validSlug)
@@ -140,6 +142,7 @@ func TestSeveralMonthsOfDuesPaidInOneVisit(t *testing.T) {
 }
 
 func TestPartialAndAdvanceDuesAreOrdinaryRows(t *testing.T) {
+	t.Parallel()
 	sqlDB := migratedTestDB(t)
 	ctx := context.Background()
 	q := store.New(sqlDB)
@@ -203,6 +206,7 @@ func TestPartialAndAdvanceDuesAreOrdinaryRows(t *testing.T) {
 }
 
 func TestIncidentalOverCollectsThenRollsItsLeftoverIntoMain(t *testing.T) {
+	t.Parallel()
 	sqlDB := migratedTestDB(t)
 	ctx := context.Background()
 	q := store.New(sqlDB)
@@ -264,6 +268,7 @@ func TestIncidentalOverCollectsThenRollsItsLeftoverIntoMain(t *testing.T) {
 }
 
 func TestCashDepositedAtTheBankMovesWithoutChangingTheTotal(t *testing.T) {
+	t.Parallel()
 	sqlDB := migratedTestDB(t)
 	f := newScenarioFund(t, sqlDB, "Test Fund", validSlug)
 
@@ -295,6 +300,7 @@ func TestCashDepositedAtTheBankMovesWithoutChangingTheTotal(t *testing.T) {
 }
 
 func TestPassThroughMoneyCountsWhileItIsHeld(t *testing.T) {
+	t.Parallel()
 	sqlDB := migratedTestDB(t)
 	f := newScenarioFund(t, sqlDB, "Test Fund", validSlug)
 	passID := createPurpose(t, sqlDB, f.fundID, "pass_through", "Pass-through")
@@ -324,6 +330,7 @@ func TestPassThroughMoneyCountsWhileItIsHeld(t *testing.T) {
 }
 
 func TestOneMemberIsRepaidAndAnotherWaivesTheClaim(t *testing.T) {
+	t.Parallel()
 	sqlDB := migratedTestDB(t)
 	ctx := context.Background()
 	q := store.New(sqlDB)
@@ -381,6 +388,7 @@ func TestOneMemberIsRepaidAndAnotherWaivesTheClaim(t *testing.T) {
 }
 
 func TestReconciliationRecordsWhatWasCountedAndHowItWasResolved(t *testing.T) {
+	t.Parallel()
 	sqlDB := migratedTestDB(t)
 	ctx := context.Background()
 	q := store.New(sqlDB)
@@ -472,6 +480,7 @@ func TestReconciliationRecordsWhatWasCountedAndHowItWasResolved(t *testing.T) {
 }
 
 func TestALeftOpenDifferenceIsRevisitedAsASecondSnapshot(t *testing.T) {
+	t.Parallel()
 	sqlDB := migratedTestDB(t)
 	ctx := context.Background()
 	q := store.New(sqlDB)
@@ -575,6 +584,7 @@ func createReconciliation(t *testing.T, sqlDB *sql.DB, fundID, performedAt int64
 // answering for the location the moment someone has looked at it again,
 // regardless of what they found.
 func TestOpenReconciliationLineSupersededByAnyLaterResolution(t *testing.T) {
+	t.Parallel()
 	for _, resolution := range []string{"matched", "entry_added", "adjusted", "left_open"} {
 		t.Run(resolution, func(t *testing.T) {
 			sqlDB := migratedTestDB(t)
@@ -637,6 +647,7 @@ func TestOpenReconciliationLineSupersededByAnyLaterResolution(t *testing.T) {
 // later count that never mentions an account leaves that account's gap open,
 // even though a later snapshot exists and resolved something else.
 func TestOpenReconciliationLineStaysOpenWhenALaterSnapshotSkipsTheLocation(t *testing.T) {
+	t.Parallel()
 	sqlDB := migratedTestDB(t)
 	ctx := context.Background()
 	q := store.New(sqlDB)
@@ -681,6 +692,7 @@ func TestOpenReconciliationLineStaysOpenWhenALaterSnapshotSkipsTheLocation(t *te
 // criterion 3: two locations left open, one recounted clean - only the
 // untouched one remains.
 func TestOpenReconciliationLinesTrackTwoLocationsIndependently(t *testing.T) {
+	t.Parallel()
 	sqlDB := migratedTestDB(t)
 	ctx := context.Background()
 	q := store.New(sqlDB)
@@ -725,6 +737,7 @@ func TestOpenReconciliationLinesTrackTwoLocationsIndependently(t *testing.T) {
 // criterion 4: a location recounted and still off returns just the newest
 // left_open line, never both - no double counting the same gap.
 func TestOpenReconciliationLineRecountStillOffReturnsOnlyTheNewest(t *testing.T) {
+	t.Parallel()
 	sqlDB := migratedTestDB(t)
 	ctx := context.Background()
 	q := store.New(sqlDB)
@@ -769,6 +782,7 @@ func TestOpenReconciliationLineRecountStillOffReturnsOnlyTheNewest(t *testing.T)
 // chronologically after it - and, symmetrically, when performed_at ties, id
 // breaks it.
 func TestOpenReconciliationLineOrderingIsPerformedAtThenID(t *testing.T) {
+	t.Parallel()
 	sqlDB := migratedTestDB(t)
 	ctx := context.Background()
 	q := store.New(sqlDB)

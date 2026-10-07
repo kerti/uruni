@@ -25,6 +25,7 @@ func postSetup(t *testing.T, r http.Handler, name string) *httptest.ResponseReco
 // pinned by #64 for fund and main_purpose_id; accounts became a list under
 // #78, in the order requested.
 func TestPostSetupReturnsThePinnedResponseShape(t *testing.T) {
+	t.Parallel()
 	rec := postSetupWithAccounts(t, testRouter(t), "Test Fund", []setupAccountRequest{
 		{Kind: "cash", Name: "Tunai"},
 		{Kind: "bank", Name: "Bank"},
@@ -81,6 +82,7 @@ func TestPostSetupReturnsThePinnedResponseShape(t *testing.T) {
 // #78: any positive number of accounts is accepted, not only two - a single
 // cash-only fund is exactly as valid as the cash+bank default.
 func TestPostSetupAcceptsASingleAccount(t *testing.T) {
+	t.Parallel()
 	rec := postSetupWithAccounts(t, testRouter(t), "Test Fund", []setupAccountRequest{
 		{Kind: "cash", Name: "Tunai"},
 	})
@@ -102,6 +104,7 @@ func TestPostSetupAcceptsASingleAccount(t *testing.T) {
 // mixed batch - one account with a balance, one without - posts exactly the
 // rows that were asked for.
 func TestPostSetupWithOpeningBalancePostsExactlyTheAccountsThatHaveOne(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 
 	rec := postSetupWithAccounts(t, r, "Test Fund", []setupAccountRequest{
@@ -135,6 +138,7 @@ func TestPostSetupWithOpeningBalancePostsExactlyTheAccountsThatHaveOne(t *testin
 // call, and leaves no fund behind - a retry with a corrected amount must not
 // collide with ErrFundAlreadyExists.
 func TestPostSetupRejectsNegativeOpeningBalanceLeavesNoFundBehind(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 
 	rec := postSetupWithAccounts(t, r, "Test Fund", []setupAccountRequest{
@@ -158,6 +162,7 @@ func TestPostSetupRejectsNegativeOpeningBalanceLeavesNoFundBehind(t *testing.T) 
 // to a clean 400 - not a 500, and no fund left standing for the wizard to
 // collide with on retry.
 func TestPostSetupRejectsZeroAccounts(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 
 	rec := postSetupWithAccounts(t, r, "Test Fund", nil)
@@ -182,6 +187,7 @@ func TestPostSetupRejectsZeroAccounts(t *testing.T) {
 // check_violation path account_test.go's own malformed-kind test exercises
 // for POST /api/accounts.
 func TestPostSetupRejectsAMalformedAccountKind(t *testing.T) {
+	t.Parallel()
 	rec := postSetupWithAccounts(t, testRouter(t), "Test Fund", []setupAccountRequest{
 		{Kind: "wallet", Name: "Dompet"},
 	})
@@ -198,6 +204,7 @@ func TestPostSetupRejectsAMalformedAccountKind(t *testing.T) {
 // (length(trim(name)) > 0), the same rule the fund name itself already
 // enforces one level up (SetUpFund's own ErrInvalidArgument).
 func TestPostSetupRejectsABlankAccountName(t *testing.T) {
+	t.Parallel()
 	rec := postSetupWithAccounts(t, testRouter(t), "Test Fund", []setupAccountRequest{
 		{Kind: "cash", Name: "   "},
 	})
@@ -213,6 +220,7 @@ func TestPostSetupRejectsABlankAccountName(t *testing.T) {
 // A second POST /api/setup answers with the clean 409 envelope, never a raw
 // constraint failure and never a second fund row.
 func TestPostSetupSecondCallReturnsAClean409(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 
 	first := postSetup(t, r, "Test Fund")
@@ -231,6 +239,7 @@ func TestPostSetupSecondCallReturnsAClean409(t *testing.T) {
 }
 
 func TestGetFundReturns404BeforeSetupHasRun(t *testing.T) {
+	t.Parallel()
 	rec := httptest.NewRecorder()
 	testRouter(t).ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/fund", nil))
 
@@ -244,6 +253,7 @@ func TestGetFundReturns404BeforeSetupHasRun(t *testing.T) {
 }
 
 func TestGetFundReturnsTheFundAfterSetup(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 
 	setup := postSetup(t, r, "Test Fund")
@@ -271,6 +281,7 @@ func TestGetFundReturnsTheFundAfterSetup(t *testing.T) {
 }
 
 func TestPostSetupRejectsMalformedJSON(t *testing.T) {
+	t.Parallel()
 	// The one shape problem this layer can see that the ledger cannot: the
 	// body never becomes a request at all, so there is nothing to pass down.
 	rec := httptest.NewRecorder()
@@ -290,6 +301,7 @@ func TestPostSetupRejectsMalformedJSON(t *testing.T) {
 }
 
 func TestAPIRejectsAnUnsupportedMethodInTheEnvelope(t *testing.T) {
+	t.Parallel()
 	// /api/setup exists, DELETE does not - chi answers 405 rather than 404,
 	// and it has to do so in the same envelope as everything else under /api.
 	rec := httptest.NewRecorder()
@@ -309,6 +321,7 @@ func TestAPIRejectsAnUnsupportedMethodInTheEnvelope(t *testing.T) {
 }
 
 func TestGetFundReportsAStoreFailureAsA500(t *testing.T) {
+	t.Parallel()
 	// A read that fails for a reason no handler can anticipate - here the
 	// store is closed underneath it, which is what an unwritable or vanished
 	// database file looks like from up here. It must not be mistaken for
@@ -370,6 +383,7 @@ func patchFund(t *testing.T, r http.Handler, body string) *httptest.ResponseReco
 // ledger event - the setup wizard's own copy already promises "bisa diganti
 // nanti kalau perlu."
 func TestPatchFundRenamesTheFund(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	setUpFund(t, r)
 
@@ -406,6 +420,7 @@ func TestPatchFundRenamesTheFund(t *testing.T) {
 // A body with no name is a 400, never a silent rename to the empty string -
 // the same reason updateDuesRateRequest.Amount is a pointer.
 func TestPatchFundWithoutANameIsRejected(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	setUpFund(t, r)
 
@@ -420,6 +435,7 @@ func TestPatchFundWithoutANameIsRejected(t *testing.T) {
 
 // Before setup there is no fund to rename, and resolveFund answers for it.
 func TestPatchFundBeforeSetupIs404(t *testing.T) {
+	t.Parallel()
 	rec := patchFund(t, testRouter(t), `{"name":"Kas"}`)
 	if rec.Code != http.StatusNotFound {
 		t.Fatalf("PATCH /api/fund before setup = %d, want %d", rec.Code, http.StatusNotFound)

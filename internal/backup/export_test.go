@@ -22,6 +22,7 @@ import (
 // calls the home screen uses - never a figure this test (or, more to the
 // point, BuildDocument itself) sums by hand.
 func TestBuildDocumentTotalsMatchLedgerBalances(t *testing.T) {
+	t.Parallel()
 	sqlDB := newTestDB(t)
 	buildFixture(t, sqlDB, t.TempDir())
 	ctx := context.Background()
@@ -81,6 +82,7 @@ func TestBuildDocumentTotalsMatchLedgerBalances(t *testing.T) {
 // test is the belt to that suspenders: seed a real session row and confirm
 // its token appears nowhere in the marshaled document.
 func TestBuildDocumentExcludesSession(t *testing.T) {
+	t.Parallel()
 	sqlDB := newTestDB(t)
 	buildFixture(t, sqlDB, t.TempDir())
 	ctx := context.Background()
@@ -116,6 +118,7 @@ func TestBuildDocumentExcludesSession(t *testing.T) {
 // the zip's entry name must be exactly the receipt row's own path, and its
 // bytes must be exactly what sits on the uploads volume, unmodified.
 func TestExportIncludesReceiptsUnderStoredName(t *testing.T) {
+	t.Parallel()
 	sqlDB := newTestDB(t)
 	uploadsDir := t.TempDir()
 	buildFixture(t, sqlDB, uploadsDir)
@@ -159,6 +162,7 @@ func TestExportIncludesReceiptsUnderStoredName(t *testing.T) {
 // the receipt row, the image is simply absent, and its stored name comes
 // back in missing for the route to log.
 func TestExportSkipsAMissingReceiptImageInsteadOfFailing(t *testing.T) {
+	t.Parallel()
 	sqlDB := newTestDB(t)
 	uploadsDir := t.TempDir()
 	buildFixture(t, sqlDB, uploadsDir)
@@ -197,6 +201,7 @@ func TestExportSkipsAMissingReceiptImageInsteadOfFailing(t *testing.T) {
 }
 
 func TestZipFilenameIsDated(t *testing.T) {
+	t.Parallel()
 	got := ZipFilename(time.Date(2026, 9, 30, 10, 0, 0, 0, time.UTC))
 	if got != "uruni-2026-09-30.zip" {
 		t.Errorf("ZipFilename() = %q, want uruni-2026-09-30.zip", got)
@@ -207,6 +212,7 @@ func TestZipFilenameIsDated(t *testing.T) {
 // ahead of the golden fixture's own, much stricter comparison: the JSON
 // entry decodes, and its format_version is exactly FormatVersion.
 func TestExportProducesValidJSONMatchingFormatVersion(t *testing.T) {
+	t.Parallel()
 	sqlDB := newTestDB(t)
 	uploadsDir := t.TempDir()
 	buildFixture(t, sqlDB, uploadsDir)

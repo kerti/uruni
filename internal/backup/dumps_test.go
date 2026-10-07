@@ -30,6 +30,7 @@ func testDiscardLogger() *slog.Logger {
 }
 
 func TestBuildDumpNameAndParseDumpNameRoundTrip(t *testing.T) {
+	t.Parallel()
 	when := jakartaTime(2026, 9, 30, 14, 5, 1)
 	hash := "3f9a2c8e10b4deadbeef"
 	name := BuildDumpName(when, KindDaily, 1, hash)
@@ -58,6 +59,7 @@ func TestBuildDumpNameAndParseDumpNameRoundTrip(t *testing.T) {
 }
 
 func TestParseDumpNameRejectsForeignAndTraversalNames(t *testing.T) {
+	t.Parallel()
 	cases := []string{
 		"",
 		"uruni.json",
@@ -82,6 +84,7 @@ func TestParseDumpNameRejectsForeignAndTraversalNames(t *testing.T) {
 }
 
 func TestChangeHashSameInputsSameHash(t *testing.T) {
+	t.Parallel()
 	docBytes := []byte(`{"format_version":1}`)
 	h1 := ChangeHash(docBytes, []string{"b.jpg", "a.jpg"})
 	h2 := ChangeHash(docBytes, []string{"a.jpg", "b.jpg"}) // order must not matter
@@ -91,6 +94,7 @@ func TestChangeHashSameInputsSameHash(t *testing.T) {
 }
 
 func TestChangeHashDiffersOnMissingReceiptChange(t *testing.T) {
+	t.Parallel()
 	docBytes := []byte(`{"format_version":1}`)
 	unchanged := ChangeHash(docBytes, nil)
 	oneMissing := ChangeHash(docBytes, []string{"a.jpg"})
@@ -100,6 +104,7 @@ func TestChangeHashDiffersOnMissingReceiptChange(t *testing.T) {
 }
 
 func TestChangeHashDiffersOnDocBytesChange(t *testing.T) {
+	t.Parallel()
 	h1 := ChangeHash([]byte(`{"a":1}`), nil)
 	h2 := ChangeHash([]byte(`{"a":2}`), nil)
 	if h1 == h2 {
@@ -115,6 +120,7 @@ func writeDumpFile(t *testing.T, dir, name string) {
 }
 
 func TestListDumpsSortsNewestFirstAndIgnoresForeignFiles(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	writeDumpFile(t, dir, "uruni-20260928-000000-daily-fv1-aaaaaaaaaaaa.zip")
 	writeDumpFile(t, dir, "uruni-20260930-000000-daily-fv1-bbbbbbbbbbbb.zip")
@@ -144,6 +150,7 @@ func TestListDumpsSortsNewestFirstAndIgnoresForeignFiles(t *testing.T) {
 // gate that keeps ListDumps, ValidDumpName and therefore ApplyRetention
 // from ever mistaking it for one.
 func TestRestoreStagingFileIsInvisibleToListDumpsAndRetention(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	writeDumpFile(t, dir, "uruni-20260930-000000-daily-fv1-bbbbbbbbbbbb.zip")
 
@@ -181,6 +188,7 @@ func TestRestoreStagingFileIsInvisibleToListDumpsAndRetention(t *testing.T) {
 }
 
 func TestApplyRetentionKeepsOnlyEachKindsOwnQuotaAndTouchesNothingElse(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	// 4 daily dumps, keep 2; 3 pre-restore dumps, keep 1 - deliberately
 	// smaller than the real DailyRetention/PreRestoreRetention constants so
@@ -242,6 +250,7 @@ func TestApplyRetentionKeepsOnlyEachKindsOwnQuotaAndTouchesNothingElse(t *testin
 }
 
 func TestNeedsFormatVersionDumpWhenNoDumpsExistYet(t *testing.T) {
+	t.Parallel()
 	needed, err := NeedsFormatVersionDump(t.TempDir())
 	if err != nil {
 		t.Fatalf("NeedsFormatVersionDump() = %v, want no error", err)
@@ -252,6 +261,7 @@ func TestNeedsFormatVersionDumpWhenNoDumpsExistYet(t *testing.T) {
 }
 
 func TestNeedsFormatVersionDumpWhenNewestMatchesCurrentVersion(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	writeDumpFile(t, dir, BuildDumpName(jakartaTime(2026, 9, 30, 1, 0, 0), KindDaily, FormatVersion, "aaaaaaaaaaaaaaaa"))
 
@@ -265,6 +275,7 @@ func TestNeedsFormatVersionDumpWhenNewestMatchesCurrentVersion(t *testing.T) {
 }
 
 func TestNeedsFormatVersionDumpWhenNewestIsAnOlderFormat(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	writeDumpFile(t, dir, BuildDumpName(jakartaTime(2026, 9, 29, 1, 0, 0), KindDaily, FormatVersion, "aaaaaaaaaaaaaaaa"))
 	writeDumpFile(t, dir, BuildDumpName(jakartaTime(2026, 9, 30, 1, 0, 0), KindDaily, FormatVersion-1, "bbbbbbbbbbbbbbbb"))
@@ -283,6 +294,7 @@ func TestNeedsFormatVersionDumpWhenNewestIsAnOlderFormat(t *testing.T) {
 // name - no leftover ".uruni-backup-tmp-*" file from the write-then-rename
 // step.
 func TestWriteDumpWritesThenRenamesLeavingNoTempFile(t *testing.T) {
+	t.Parallel()
 	sqlDB := newTestDB(t)
 	uploadsDir := t.TempDir()
 	buildFixture(t, sqlDB, uploadsDir)
@@ -312,6 +324,7 @@ func TestWriteDumpWritesThenRenamesLeavingNoTempFile(t *testing.T) {
 }
 
 func TestWriteDailyIfNeededSkipsWhenTodaysDumpAlreadyExists(t *testing.T) {
+	t.Parallel()
 	sqlDB := newTestDB(t)
 	uploadsDir := t.TempDir()
 	buildFixture(t, sqlDB, uploadsDir)
@@ -344,6 +357,7 @@ func TestWriteDailyIfNeededSkipsWhenTodaysDumpAlreadyExists(t *testing.T) {
 }
 
 func TestWriteDailyIfNeededSkipsWhenFundUnchangedSinceLastDailyDump(t *testing.T) {
+	t.Parallel()
 	sqlDB := newTestDB(t)
 	uploadsDir := t.TempDir()
 	buildFixture(t, sqlDB, uploadsDir)
@@ -372,6 +386,7 @@ func TestWriteDailyIfNeededSkipsWhenFundUnchangedSinceLastDailyDump(t *testing.T
 }
 
 func TestWriteDailyIfNeededWritesWhenFundChangedAcrossTheDayBoundary(t *testing.T) {
+	t.Parallel()
 	sqlDB := newTestDB(t)
 	uploadsDir := t.TempDir()
 	buildFixture(t, sqlDB, uploadsDir)
@@ -428,6 +443,7 @@ func TestWriteDailyIfNeededWritesWhenFundChangedAcrossTheDayBoundary(t *testing.
 // 2026-09-30T01:00 WIB (UTC+7) - already the 30th in Jakarta, still the
 // 29th in UTC.
 func TestWriteDailyIfNeededDateIsAsiaJakartaAcrossTheUTCMidnightBoundary(t *testing.T) {
+	t.Parallel()
 	sqlDB := newTestDB(t)
 	uploadsDir := t.TempDir()
 	buildFixture(t, sqlDB, uploadsDir)
@@ -477,6 +493,7 @@ func TestWriteDailyIfNeededDateIsAsiaJakartaAcrossTheUTCMidnightBoundary(t *test
 }
 
 func TestWritePreRestoreDumpWritesAndAppliesItsOwnQuota(t *testing.T) {
+	t.Parallel()
 	sqlDB := newTestDB(t)
 	uploadsDir := t.TempDir()
 	buildFixture(t, sqlDB, uploadsDir)
@@ -525,6 +542,7 @@ func TestWritePreRestoreDumpWritesAndAppliesItsOwnQuota(t *testing.T) {
 // nothing else in the folder - not a real dump, not a foreign file, not a
 // directory that happens to share the prefix.
 func TestRemoveStaleTempsClearsOnlyOwnTempFiles(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	write := func(name string) {
 		t.Helper()
@@ -562,6 +580,7 @@ func TestRemoveStaleTempsClearsOnlyOwnTempFiles(t *testing.T) {
 }
 
 func TestEnsureBootDumpWritesWhenNoneExistAndSkipsOnceCurrent(t *testing.T) {
+	t.Parallel()
 	sqlDB := newTestDB(t)
 	uploadsDir := t.TempDir()
 	buildFixture(t, sqlDB, uploadsDir)
@@ -603,6 +622,7 @@ func TestEnsureBootDumpWritesWhenNoneExistAndSkipsOnceCurrent(t *testing.T) {
 // RemoveStaleTemps call is what notices it, the same as any other
 // interrupted write.
 func TestEnsureBootDumpRemovesLeftoverRestoreStaging(t *testing.T) {
+	t.Parallel()
 	sqlDB := newTestDB(t)
 	uploadsDir := t.TempDir()
 	buildFixture(t, sqlDB, uploadsDir)
@@ -634,6 +654,7 @@ func TestEnsureBootDumpRemovesLeftoverRestoreStaging(t *testing.T) {
 }
 
 func TestEnsureBootDumpWritesAgainWhenFormatVersionChanged(t *testing.T) {
+	t.Parallel()
 	sqlDB := newTestDB(t)
 	uploadsDir := t.TempDir()
 	buildFixture(t, sqlDB, uploadsDir)
@@ -665,6 +686,7 @@ func TestEnsureBootDumpWritesAgainWhenFormatVersionChanged(t *testing.T) {
 // the parse still has to refuse, and the hash and sort details a real
 // directory rarely exercises.
 func TestDumpNameEdgeCases(t *testing.T) {
+	t.Parallel()
 	// The pattern only checks digit counts: a month 13 or a format version
 	// too large for int64 still matches it, and must not parse.
 	for _, name := range []string{

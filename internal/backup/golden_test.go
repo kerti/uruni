@@ -28,6 +28,7 @@ const goldenPath = "testdata/golden.json"
 // the same PR - or an accidental one, which this test exists to catch
 // before it ships as a silent, undocumented format change.
 func TestGoldenFixtureMatchesExport(t *testing.T) {
+	t.Parallel()
 	sqlDB := newTestDB(t)
 	uploadsDir := t.TempDir()
 	buildFixture(t, sqlDB, uploadsDir)

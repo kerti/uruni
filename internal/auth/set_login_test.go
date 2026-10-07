@@ -12,6 +12,7 @@ import (
 // TestSetLoginCreatesTheFirstLogin: on a fresh database SetLogin creates the
 // row, and the login it created authenticates.
 func TestSetLoginCreatesTheFirstLogin(t *testing.T) {
+	t.Parallel()
 	a, _ := newTestAuth(t)
 	ctx := context.Background()
 
@@ -31,6 +32,7 @@ func TestSetLoginCreatesTheFirstLogin(t *testing.T) {
 // database whose password nobody remembers. The old password stops working,
 // the new one works, and no second row appears.
 func TestSetLoginResetsAnExistingPassword(t *testing.T) {
+	t.Parallel()
 	a, sqlDB := newTestAuth(t)
 	ctx := context.Background()
 
@@ -64,6 +66,7 @@ func TestSetLoginResetsAnExistingPassword(t *testing.T) {
 // TestSetLoginResetSignsOutEverySession: a cookie issued under the old
 // password must not outlive the reset.
 func TestSetLoginResetSignsOutEverySession(t *testing.T) {
+	t.Parallel()
 	a, sqlDB := newTestAuth(t)
 	ctx := context.Background()
 	q := store.New(sqlDB)
@@ -89,6 +92,7 @@ func TestSetLoginResetSignsOutEverySession(t *testing.T) {
 // invariant: a different email is refused, not added beside the first, and
 // the existing password is left alone.
 func TestSetLoginRefusesASecondLogin(t *testing.T) {
+	t.Parallel()
 	a, sqlDB := newTestAuth(t)
 	ctx := context.Background()
 
@@ -113,6 +117,7 @@ func TestSetLoginRefusesASecondLogin(t *testing.T) {
 }
 
 func TestSetLoginRefusesABadEmailOrShortPassword(t *testing.T) {
+	t.Parallel()
 	a, _ := newTestAuth(t)
 	ctx := context.Background()
 

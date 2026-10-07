@@ -126,6 +126,7 @@ func downloadRealBackupZip(t *testing.T, r http.Handler) []byte {
 // the right password restores it and clears every session - the same
 // cookie that just confirmed is unauthenticated on the very next request.
 func TestRestoreInspectThenConfirmHappyPath(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	setup := setUpFund(t, r)
 
@@ -168,6 +169,7 @@ func TestRestoreInspectThenConfirmHappyPath(t *testing.T) {
 // anything decoded out of the file - and leaves the session (and the
 // staged upload) alone on a wrong guess.
 func TestRestoreConfirmRefusesWrongPassword(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	setUpFund(t, r)
 	zipBytes := downloadRealBackupZip(t, r)
@@ -194,6 +196,7 @@ func TestRestoreConfirmRefusesWrongPassword(t *testing.T) {
 // TestRestoreConfirmWithUnknownTokenIsGone covers confirming with no prior
 // inspect at all - the token names nothing staged.
 func TestRestoreConfirmWithUnknownTokenIsGone(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	setUpFund(t, r)
 
@@ -208,6 +211,7 @@ func TestRestoreConfirmWithUnknownTokenIsGone(t *testing.T) {
 // restore_test.go (internal/backup) already covers ParseUpload itself in
 // depth; this is only the mapping.
 func TestRestoreInspectRefusesAMalformedFile(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	setUpFund(t, r)
 
@@ -258,6 +262,7 @@ func minimalDumpZip(t *testing.T, formatVersion int64) []byte {
 // shape would produce, so ParseUpload sees exactly what a real scheduled
 // dump would hand it.
 func TestRestoreInspectStoredHappyPath(t *testing.T) {
+	t.Parallel()
 	r, backupDir := authedRouterWithBackupDir(t)
 	setup := setUpFund(t, r)
 
@@ -299,6 +304,7 @@ func TestRestoreInspectStoredHappyPath(t *testing.T) {
 // downloadStoredBackup's own behaviour for the same case - the shared
 // resolveStoredBackupPath validation is what the two routes have in common.
 func TestRestoreInspectStoredRejectsUnknownName(t *testing.T) {
+	t.Parallel()
 	r, _ := authedRouterWithBackupDir(t)
 	setUpFund(t, r)
 
@@ -315,6 +321,7 @@ func TestRestoreInspectStoredRejectsUnknownName(t *testing.T) {
 // segment is never trusted as a bare path, whatever chi's own route
 // matching lets through as {name}.
 func TestRestoreInspectStoredRefusesPathTraversal(t *testing.T) {
+	t.Parallel()
 	r, _ := authedRouterWithBackupDir(t)
 	setUpFund(t, r)
 
@@ -339,6 +346,7 @@ func TestRestoreInspectStoredRefusesPathTraversal(t *testing.T) {
 // zip would hit (ErrFormatVersionOlder) - not a second, duplicated format
 // check against backupListItem's IsCurrentFormat flag.
 func TestRestoreInspectStoredRefusesOlderFormatBackup(t *testing.T) {
+	t.Parallel()
 	r, backupDir := authedRouterWithBackupDir(t)
 	setUpFund(t, r)
 
@@ -368,6 +376,7 @@ func TestRestoreInspectStoredRefusesOlderFormatBackup(t *testing.T) {
 // testRouter/authedRouterWithBackupDir, both of which register and log a
 // treasurer in before returning.
 func TestInspectStoredBackupRequiresASession(t *testing.T) {
+	t.Parallel()
 	sqlDB := testStoreDB(t)
 	r := New(testAssets(), testBuild, ledger.New(sqlDB), store.New(sqlDB), sqlDB, nil, testLogger(), auth.New(sqlDB), "", t.TempDir(), t.TempDir())
 
@@ -385,6 +394,7 @@ func TestInspectStoredBackupRequiresASession(t *testing.T) {
 // session, then restores again - this time from that very safety-net dump,
 // through the new stored-backup route end to end.
 func TestRestoreFromStoredSafetyNetBackupEndToEnd(t *testing.T) {
+	t.Parallel()
 	sqlDB := testStoreDB(t)
 	backupDir := t.TempDir()
 	raw := New(testAssets(), testBuild, ledger.New(sqlDB), store.New(sqlDB), sqlDB, nil, testLogger(), auth.New(sqlDB), "", t.TempDir(), backupDir)
@@ -483,6 +493,7 @@ func decodeInspectToken(t *testing.T, rec *httptest.ResponseRecorder) string {
 // restore-staging slot, the moment inspect answers - and a successful
 // confirm leaves nothing behind.
 func TestRestoreInspectStagesOnDiskAndConfirmRemovesIt(t *testing.T) {
+	t.Parallel()
 	r, backupDir := authedRouterWithBackupDir(t)
 	setUpFund(t, r)
 	zipBytes := downloadRealBackupZip(t, r)
@@ -509,6 +520,7 @@ func TestRestoreInspectStagesOnDiskAndConfirmRemovesIt(t *testing.T) {
 // today, letting the treasurer retype her password and try again without
 // re-uploading.
 func TestRestoreConfirmWrongPasswordKeepsStagedFile(t *testing.T) {
+	t.Parallel()
 	r, backupDir := authedRouterWithBackupDir(t)
 	setUpFund(t, r)
 	zipBytes := downloadRealBackupZip(t, r)
@@ -537,6 +549,7 @@ func TestRestoreConfirmWrongPasswordKeepsStagedFile(t *testing.T) {
 // onto the slot - nothing is left staged for the next request to trip
 // over.
 func TestRestoreFailedInspectLeavesNoStagingFile(t *testing.T) {
+	t.Parallel()
 	r, backupDir := authedRouterWithBackupDir(t)
 	setUpFund(t, r)
 
@@ -552,6 +565,7 @@ func TestRestoreFailedInspectLeavesNoStagingFile(t *testing.T) {
 // token is left naming nothing (a 410 on confirm), and the file behind the
 // second inspect's token is what actually restores.
 func TestRestoreSecondInspectReplacesStagedFile(t *testing.T) {
+	t.Parallel()
 	r, backupDir := authedRouterWithBackupDir(t)
 	setUpFund(t, r)
 	zipBytes := downloadRealBackupZip(t, r)
@@ -587,6 +601,7 @@ func TestRestoreSecondInspectReplacesStagedFile(t *testing.T) {
 // GET /api/backups - which only ever lists what ListDumps recognises -
 // must never surface it, whether or not anything is actually staged.
 func TestRestoreStagingFileNeverAppearsInBackupsList(t *testing.T) {
+	t.Parallel()
 	r, backupDir := authedRouterWithBackupDir(t)
 	setUpFund(t, r)
 	zipBytes := downloadRealBackupZip(t, r)
@@ -617,6 +632,7 @@ func TestRestoreStagingFileNeverAppearsInBackupsList(t *testing.T) {
 // operator, or by retention pruning an older pre-restore dump) between
 // inspect and confirm.
 func TestRestoreInspectStoredThenOriginalDeletedStillConfirms(t *testing.T) {
+	t.Parallel()
 	r, backupDir := authedRouterWithBackupDir(t)
 	setup := setUpFund(t, r)
 	zipBytes := downloadRealBackupZip(t, r)
@@ -661,6 +677,7 @@ func TestRestoreInspectStoredThenOriginalDeletedStillConfirms(t *testing.T) {
 // one owned, under the same mutex that installs the second - never a
 // shared, renamed-onto name either could race over.
 func TestRestoreStageReplacingEarlierStageDeletesEarlierFile(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	s := newRestoreStage()
 
@@ -690,6 +707,7 @@ func TestRestoreStageReplacingEarlierStageDeletesEarlierFile(t *testing.T) {
 // direct call sequence (take, then stage) is enough to prove take() really
 // clears its own bookkeeping before stage() ever runs again.
 func TestRestoreConfirmRemovalLeavesALaterInspectsFileAlone(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	s := newRestoreStage()
 

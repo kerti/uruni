@@ -13,6 +13,7 @@ import (
 // against a placeholder handler: the middleware itself is what M4's other
 // slices depend on, not any particular production route.
 func TestRequestLoggingMiddlewareRoundTrips(t *testing.T) {
+	t.Parallel()
 	var buf bytes.Buffer
 	logger := slog.New(slog.NewTextHandler(&buf, nil))
 

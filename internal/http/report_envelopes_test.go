@@ -99,6 +99,7 @@ func envelopeNames(sec string) []string {
 }
 
 func TestReportEnvelopesListsOpenAndClosedInTheMonthWithSummary(t *testing.T) {
+	t.Parallel()
 	s := newEnvelopeScenario(t)
 	rec := s.get(t, s.base)
 	if rec.Code != http.StatusOK {
@@ -139,6 +140,7 @@ func TestReportEnvelopesListsOpenAndClosedInTheMonthWithSummary(t *testing.T) {
 }
 
 func TestReportEnvelopesParticipationInTheAppsWords(t *testing.T) {
+	t.Parallel()
 	s := newEnvelopeScenario(t)
 	sec := envelopeSection(s.get(t, s.base).Body.String())
 	halal := sec[:strings.Index(sec, "Santunan")]
@@ -168,6 +170,7 @@ func TestReportEnvelopesParticipationInTheAppsWords(t *testing.T) {
 }
 
 func TestReportEnvelopesKurangIsNeverTerracotta(t *testing.T) {
+	t.Parallel()
 	s := newEnvelopeScenario(t)
 	body := s.get(t, s.base).Body.String()
 	sec := envelopeSection(body)
@@ -184,6 +187,7 @@ func TestReportEnvelopesKurangIsNeverTerracotta(t *testing.T) {
 }
 
 func TestReportEnvelopesAreReadOnly(t *testing.T) {
+	t.Parallel()
 	s := newEnvelopeScenario(t)
 	sec := envelopeSection(s.get(t, s.base).Body.String())
 	for _, bad := range []string{"<a ", "<a>", "<button", "<form", "<input", "href"} {
@@ -194,6 +198,7 @@ func TestReportEnvelopesAreReadOnly(t *testing.T) {
 }
 
 func TestReportEnvelopesPurposeFilter(t *testing.T) {
+	t.Parallel()
 	s := newEnvelopeScenario(t)
 	main := s.get(t, s.base+"&purpose="+itoa(s.mainID)).Body.String()
 	if envelopeSection(main) != "" {
@@ -210,6 +215,7 @@ func TestReportEnvelopesPurposeFilter(t *testing.T) {
 }
 
 func TestReportEnvelopesHiddenWithNoneAndOldEnvelopeNeverFilteredIn(t *testing.T) {
+	t.Parallel()
 	s := newEnvelopeScenario(t)
 	if sec := envelopeSection(s.get(t, "/report/"+s.fund.ReportSlug+"?month=2026-08").Body.String()); strings.Contains(sec, "Halal") {
 		t.Errorf("August shows an envelope opened in September")

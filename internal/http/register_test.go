@@ -54,6 +54,7 @@ func sessionCookie(rec *httptest.ResponseRecorder) string {
 // first line: 201, a cookie, and a real row in the session table behind it
 // - not just a Set-Cookie header that happens to look right.
 func TestPostRegisterReturns201SetsTheCookieAndWritesASessionRow(t *testing.T) {
+	t.Parallel()
 	r, sqlDB := testRouterAndDB(t)
 
 	rec := postRegister(t, r, "treasurer@example.org", "correct-horse-battery")
@@ -99,6 +100,7 @@ func TestPostRegisterReturns201SetsTheCookieAndWritesASessionRow(t *testing.T) {
 // always. Secure is covered separately, since it is the one flag that
 // varies with baseURL's scheme.
 func TestPostRegisterCookieIsHttpOnlyAndSameSiteLax(t *testing.T) {
+	t.Parallel()
 	r, _ := testRouterAndDB(t)
 
 	rec := postRegister(t, r, "treasurer@example.org", "correct-horse-battery")
@@ -131,6 +133,7 @@ func TestPostRegisterCookieIsHttpOnlyAndSameSiteLax(t *testing.T) {
 // backwards would make login look silently broken in dev with no error
 // anywhere to explain why.
 func TestSessionCookieSecureFollowsBaseURLScheme(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		name    string
 		baseURL string
@@ -143,6 +146,7 @@ func TestSessionCookieSecureFollowsBaseURLScheme(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			sqlDB := testStoreDB(t)
 			r := New(testAssets(), testBuild, ledger.New(sqlDB), store.New(sqlDB), sqlDB, nil, testLogger(), auth.New(sqlDB), tc.baseURL, t.TempDir(), t.TempDir())
 
@@ -171,6 +175,7 @@ func TestSessionCookieSecureFollowsBaseURLScheme(t *testing.T) {
 // line: a second register - with a *different* email, per ADR-030 decision
 // 2 - answers 409, writes no row, and changes no cookie.
 func TestPostRegisterSecondCallRefusesRegardlessOfEmail(t *testing.T) {
+	t.Parallel()
 	r, sqlDB := testRouterAndDB(t)
 
 	first := postRegister(t, r, "first@example.org", "correct-horse-battery")
@@ -205,6 +210,7 @@ func TestPostRegisterSecondCallRefusesRegardlessOfEmail(t *testing.T) {
 // interpolating the password into an error, and by this handler never
 // logging the request body).
 func TestPostRegisterPasswordNeverAppearsInTheResponse(t *testing.T) {
+	t.Parallel()
 	r, _ := testRouterAndDB(t)
 
 	const password = "correct-horse-battery-staple-marker"
@@ -224,6 +230,7 @@ func TestPostRegisterPasswordNeverAppearsInTheResponse(t *testing.T) {
 // TestPostRegisterRejectsAShortPassword covers the http-layer mapping for
 // auth.ErrInvalidArgument: 400, not 500, and no row written.
 func TestPostRegisterRejectsAShortPassword(t *testing.T) {
+	t.Parallel()
 	r, sqlDB := testRouterAndDB(t)
 
 	rec := postRegister(t, r, "treasurer@example.org", "short")
@@ -248,6 +255,7 @@ func TestPostRegisterRejectsAShortPassword(t *testing.T) {
 // internal/auth is ever called - a body that is not JSON is a 400 and
 // writes nothing.
 func TestPostRegisterRejectsAMalformedBody(t *testing.T) {
+	t.Parallel()
 	r, sqlDB := testRouterAndDB(t)
 
 	rec := httptest.NewRecorder()
@@ -280,6 +288,7 @@ func TestPostRegisterRejectsAMalformedBody(t *testing.T) {
 // first register makes both, the user row is then removed underneath, and a
 // trigger refuses the delete the second attempt's RenewToken will make.
 func TestPostRegisterFailsClosedWhenTheSessionCannotBeRenewed(t *testing.T) {
+	t.Parallel()
 	r, sqlDB := testRouterAndDB(t)
 
 	first := postRegister(t, r, "first@example.org", "correct-horse-battery")

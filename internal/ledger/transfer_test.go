@@ -13,6 +13,7 @@ import (
 // does not create or destroy it. Mirrors internal/db's
 // TestTransferKindRequiresATransfer, asserted here at the domain layer.
 func TestPostTransferBetweenAccountsLeavesFundBalanceUnchanged(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 	f := newFixture(t, l)
 	ctx := context.Background()
@@ -54,6 +55,7 @@ func TestPostTransferBetweenAccountsLeavesFundBalanceUnchanged(t *testing.T) {
 // directions. PurposeBalance, in contrast, does not move at all - the
 // purpose did not change, only where the money sits.
 func TestPostTransferBetweenAccountsMovesBothAccountBalancesOppositely(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 	f := newFixture(t, l)
 	ctx := context.Background()
@@ -106,6 +108,7 @@ func TestPostTransferBetweenAccountsMovesBothAccountBalancesOppositely(t *testin
 // The transfer row exists and both legs reference it; neither leg exists
 // without it.
 func TestPostTransferBetweenAccountsWritesOneTransferRowAndBothLegsReferenceIt(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 	f := newFixture(t, l)
 	ctx := context.Background()
@@ -166,6 +169,7 @@ func TestPostTransferBetweenAccountsWritesOneTransferRowAndBothLegsReferenceIt(t
 // destination account that belongs to another fund entirely - the composite
 // FK the schema enforces.
 func TestPostTransferBetweenAccountsLeavesNoRowsWhenTheSecondLegFails(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 	f := newFixture(t, l)
 	ctx := context.Background()
@@ -206,6 +210,7 @@ func TestPostTransferBetweenAccountsLeavesNoRowsWhenTheSecondLegFails(t *testing
 }
 
 func TestPostTransferBetweenAccountsRejectsNonPositiveAmountBeforeTheWrite(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name   string
 		amount money.Amount
@@ -216,6 +221,7 @@ func TestPostTransferBetweenAccountsRejectsNonPositiveAmountBeforeTheWrite(t *te
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			l := newTestLedger(t)
 			f := newFixture(t, l)
 			ctx := context.Background()
@@ -241,6 +247,7 @@ func TestPostTransferBetweenAccountsRejectsNonPositiveAmountBeforeTheWrite(t *te
 }
 
 func TestPostTransferBetweenAccountsRejectsInvalidOccurredOn(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 	f := newFixture(t, l)
 	ctx := context.Background()
@@ -261,6 +268,7 @@ func TestPostTransferBetweenAccountsRejectsInvalidOccurredOn(t *testing.T) {
 // entry point for reclass_purpose yet - to prove the primitive already fits
 // that caller without a second code path, per ADR-027.
 func TestPostTransferPairSupportsTheReclassPurposeShape(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 	f := newFixture(t, l)
 	ctx := context.Background()
@@ -326,6 +334,7 @@ func TestPostTransferPairSupportsTheReclassPurposeShape(t *testing.T) {
 // same-account, same-purpose pair that moves no money and nets to zero
 // twice over. It is rejected before the write.
 func TestPostTransferBetweenAccountsRejectsIdenticalLegs(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 	f := newFixture(t, l)
 	ctx := context.Background()
@@ -353,6 +362,7 @@ func TestPostTransferBetweenAccountsRejectsIdenticalLegs(t *testing.T) {
 // on the "out" leg alone reads, in the transaction list, as an unexplained
 // arrival somewhere else.
 func TestPostTransferBetweenAccountsWritesTheNoteToBothLegs(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 	f := newFixture(t, l)
 	ctx := context.Background()
@@ -385,6 +395,7 @@ func TestPostTransferBetweenAccountsWritesTheNoteToBothLegs(t *testing.T) {
 // put an empty note line in the transaction list where there is nothing to
 // say, so absence has exactly one representation in the ledger: NULL.
 func TestPostTransferBetweenAccountsStoresNoNoteForABlankOne(t *testing.T) {
+	t.Parallel()
 	for _, blank := range []string{"", "   ", "\t\n"} {
 		l := newTestLedger(t)
 		f := newFixture(t, l)
@@ -415,6 +426,7 @@ func TestPostTransferBetweenAccountsStoresNoNoteForABlankOne(t *testing.T) {
 // The note is trimmed, not stored as typed: a trailing space is not part of
 // what she wrote.
 func TestPostTransferBetweenAccountsTrimsTheNote(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 	f := newFixture(t, l)
 	ctx := context.Background()

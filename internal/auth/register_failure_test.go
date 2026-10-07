@@ -15,6 +15,7 @@ import (
 
 // TestRegisterSurfacesAFailureToOpenATransaction: withTx's BeginTx arm.
 func TestRegisterSurfacesAFailureToOpenATransaction(t *testing.T) {
+	t.Parallel()
 	a, sqlDB := newTestAuth(t)
 	if err := sqlDB.Close(); err != nil {
 		t.Fatalf("Close() = %v, want no error", err)
@@ -31,6 +32,7 @@ func TestRegisterSurfacesAFailureToOpenATransaction(t *testing.T) {
 // is the one-shot gate, so a count that could not be taken must refuse the
 // registration rather than fall through to the insert.
 func TestRegisterSurfacesAFailedCountUsers(t *testing.T) {
+	t.Parallel()
 	a, sqlDB := newTestAuth(t)
 	if _, err := sqlDB.Exec("DROP TABLE user"); err != nil {
 		t.Fatalf("dropping user: %v", err)
@@ -47,6 +49,7 @@ func TestRegisterSurfacesAFailedCountUsers(t *testing.T) {
 // not. A trigger is the only way to fail that one statement while leaving
 // the count reading zero, which is exactly the split this arm needs.
 func TestRegisterSurfacesAFailedInsert(t *testing.T) {
+	t.Parallel()
 	a, sqlDB := newTestAuth(t)
 	if _, err := sqlDB.Exec(`CREATE TRIGGER refuse_insert BEFORE INSERT ON user
 		BEGIN SELECT RAISE(ABORT, 'no'); END`); err != nil {

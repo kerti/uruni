@@ -89,6 +89,7 @@ func openIncidentalFor(t *testing.T, r http.Handler, occasion, openedOn string) 
 }
 
 func TestPostIncidentalsRequiresAFund(t *testing.T) {
+	t.Parallel()
 	rec := postIncidental(t, testRouter(t), openIncidentalRequest{Occasion: "Jane's wedding", OpenedOn: "2026-08-12"})
 	if rec.Code != http.StatusNotFound {
 		t.Fatalf("POST /api/incidentals before setup = %d, want %d (body: %s)", rec.Code, http.StatusNotFound, rec.Body.String())
@@ -102,6 +103,7 @@ func TestPostIncidentalsRequiresAFund(t *testing.T) {
 // TestOpenIncidentalCreatesAnOpenEnvelope pins the create response shape:
 // a fresh envelope, unclosed, with the target amount it was opened with.
 func TestOpenIncidentalCreatesAnOpenEnvelope(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	setUpFund(t, r)
 
@@ -135,6 +137,7 @@ func TestOpenIncidentalCreatesAnOpenEnvelope(t *testing.T) {
 // calendar-invalid opened_on all come back as ErrInvalidArgument through
 // mapLedgerError.
 func TestPostIncidentalsRejectsWhatTheLedgerRefuses(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name string
 		req  openIncidentalRequest
@@ -167,6 +170,7 @@ func TestPostIncidentalsRejectsWhatTheLedgerRefuses(t *testing.T) {
 }
 
 func TestPostIncidentalsRejectsMalformedJSON(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	setUpFund(t, r)
 
@@ -182,6 +186,7 @@ func TestPostIncidentalsRejectsMalformedJSON(t *testing.T) {
 }
 
 func TestGetIncidentalsRequiresAFund(t *testing.T) {
+	t.Parallel()
 	rec := getIncidentals(t, testRouter(t), "")
 	if rec.Code != http.StatusNotFound {
 		t.Fatalf("GET /api/incidentals before setup = %d, want %d (body: %s)", rec.Code, http.StatusNotFound, rec.Body.String())
@@ -193,6 +198,7 @@ func TestGetIncidentalsRequiresAFund(t *testing.T) {
 }
 
 func TestGetIncidentalDetailRequiresAFund(t *testing.T) {
+	t.Parallel()
 	rec := getIncidentalDetail(t, testRouter(t), 1)
 	if rec.Code != http.StatusNotFound {
 		t.Fatalf("GET /api/incidentals/{id} before setup = %d, want %d (body: %s)", rec.Code, http.StatusNotFound, rec.Body.String())
@@ -204,6 +210,7 @@ func TestGetIncidentalDetailRequiresAFund(t *testing.T) {
 }
 
 func TestPostCloseRequiresAFund(t *testing.T) {
+	t.Parallel()
 	rec := postCloseIncidental(t, testRouter(t), 1, closeIncidentalRequest{AccountID: 1, ClosedOn: "2026-08-20"})
 	if rec.Code != http.StatusNotFound {
 		t.Fatalf("POST /api/incidentals/{id}/close before setup = %d, want %d (body: %s)", rec.Code, http.StatusNotFound, rec.Body.String())
@@ -217,6 +224,7 @@ func TestPostCloseRequiresAFund(t *testing.T) {
 // TestGetIncidentalDetailOnAnUnknownPurposeIs404 covers the id naming
 // nothing: the path segment is the client's mistake, not a server fault.
 func TestGetIncidentalDetailOnAnUnknownPurposeIs404(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	setUpFund(t, r)
 
@@ -231,6 +239,7 @@ func TestGetIncidentalDetailOnAnUnknownPurposeIs404(t *testing.T) {
 }
 
 func TestGetIncidentalDetailRejectsANonNumericID(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	setUpFund(t, r)
 
@@ -249,6 +258,7 @@ func TestGetIncidentalDetailRejectsANonNumericID(t *testing.T) {
 // criterion: the unfiltered list keeps every envelope as history, ?open=true
 // keeps only the ones still collecting.
 func TestGetIncidentalsOpenFiltersToOpenEnvelopes(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	setup := setUpFund(t, r)
 
@@ -281,6 +291,7 @@ func TestGetIncidentalsOpenFiltersToOpenEnvelopes(t *testing.T) {
 }
 
 func TestGetIncidentalsRejectsAnUnparseableOpenFilter(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	setUpFund(t, r)
 
@@ -298,6 +309,7 @@ func TestGetIncidentalsRejectsAnUnparseableOpenFilter(t *testing.T) {
 // criterion: collected and disbursed, summed from the transactions actually
 // posted against the envelope's purpose - not stored anywhere on the row.
 func TestGetIncidentalDetailReturnsTotals(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	setup := setUpFund(t, r)
 	envelope := openIncidentalFor(t, r, "Jane's wedding", "2026-08-01")
@@ -346,6 +358,7 @@ func TestGetIncidentalDetailReturnsTotals(t *testing.T) {
 // reading the fund and purpose balances - never by trusting the ledger's own
 // return value alone.
 func TestCloseIncidentalRollsLeftoverVerifiedThroughBalances(t *testing.T) {
+	t.Parallel()
 	r, l := testRouterAndLedger(t)
 	setup := setUpFund(t, r)
 	envelope := openIncidentalFor(t, r, "Jane's wedding", "2026-08-01")
@@ -422,6 +435,7 @@ func TestCloseIncidentalRollsLeftoverVerifiedThroughBalances(t *testing.T) {
 // envelope but post no transaction, verified through the fund's own
 // balance rather than assumed from a 201 status alone.
 func TestCloseIncidentalZeroLeftoverPostsNothing(t *testing.T) {
+	t.Parallel()
 	r, l := testRouterAndLedger(t)
 	setup := setUpFund(t, r)
 	envelope := openIncidentalFor(t, r, "Jane's wedding", "2026-08-01")
@@ -476,6 +490,7 @@ func TestCloseIncidentalZeroLeftoverPostsNothing(t *testing.T) {
 // negative-leftover branch): rolled_amount comes back negative, and the
 // envelope's own purpose balance still lands at exactly zero.
 func TestCloseIncidentalNegativeLeftoverCoversFromMain(t *testing.T) {
+	t.Parallel()
 	r, l := testRouterAndLedger(t)
 	setup := setUpFund(t, r)
 	envelope := openIncidentalFor(t, r, "Jane's wedding", "2026-08-01")
@@ -534,6 +549,7 @@ func TestCloseIncidentalNegativeLeftoverCoversFromMain(t *testing.T) {
 // the route: the second call is a conflict with its own code, not a second
 // roll and not a generic 500.
 func TestCloseIncidentalTwiceReturnsItsNamed409(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	setup := setUpFund(t, r)
 	envelope := openIncidentalFor(t, r, "Jane's wedding", "2026-08-01")
@@ -565,6 +581,7 @@ func TestCloseIncidentalTwiceReturnsItsNamed409(t *testing.T) {
 }
 
 func TestPostCloseOnAnUnknownPurposeIs404(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	setup := setUpFund(t, r)
 
@@ -581,6 +598,7 @@ func TestPostCloseOnAnUnknownPurposeIs404(t *testing.T) {
 }
 
 func TestPostCloseRejectsAMalformedClosedOn(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	setup := setUpFund(t, r)
 	envelope := openIncidentalFor(t, r, "Jane's wedding", "2026-08-01")
@@ -598,6 +616,7 @@ func TestPostCloseRejectsAMalformedClosedOn(t *testing.T) {
 }
 
 func TestPostCloseRejectsANonNumericID(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	setUpFund(t, r)
 
@@ -614,6 +633,7 @@ func TestPostCloseRejectsANonNumericID(t *testing.T) {
 }
 
 func TestPostCloseRejectsMalformedJSON(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	setUpFund(t, r)
 	envelope := openIncidentalFor(t, r, "Jane's wedding", "2026-08-01")
@@ -634,6 +654,7 @@ func TestPostCloseRejectsMalformedJSON(t *testing.T) {
 // there is no dedicated contribute route - a contribution to an envelope is
 // an ordinary transaction posted through POST /api/transactions.
 func TestNoContributeRouteExists(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	setUpFund(t, r)
 	envelope := openIncidentalFor(t, r, "Jane's wedding", "2026-08-01")
@@ -650,6 +671,7 @@ func TestNoContributeRouteExists(t *testing.T) {
 // transfer the treasurer never asks for directly, so an unexplained pair in
 // the transaction list is exactly the confusion this field exists to fix.
 func TestCloseIncidentalWritesTheNoteToBothRollLegs(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	setup := setUpFund(t, r)
 
@@ -695,6 +717,7 @@ func TestCloseIncidentalWritesTheNoteToBothRollLegs(t *testing.T) {
 // closed incidental's purpose is refused with the named 409, in both
 // directions, and posts nothing.
 func TestPostTransactionRefusesAClosedIncidentalBothDirections(t *testing.T) {
+	t.Parallel()
 	for _, direction := range []string{"in", "out"} {
 		t.Run(direction, func(t *testing.T) {
 			r := testRouter(t)
@@ -732,6 +755,7 @@ func TestPostTransactionRefusesAClosedIncidentalBothDirections(t *testing.T) {
 // POST /api/incidentals/{purposeID}/reopen clears closed_on and the
 // envelope rejoins the open list.
 func TestReopenIncidentalClearsClosedOnAndRejoinsTheOpenList(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	setup := setUpFund(t, r)
 	envelope := openIncidentalFor(t, r, "Jane's wedding", "2026-08-01")
@@ -766,6 +790,7 @@ func TestReopenIncidentalClearsClosedOnAndRejoinsTheOpenList(t *testing.T) {
 // Reopening an envelope that is not closed is the named 409, not a silent
 // no-op or a generic 500.
 func TestReopenIncidentalOnAnOpenEnvelopeReturnsItsNamed409(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	setUpFund(t, r)
 	envelope := openIncidentalFor(t, r, "Jane's wedding", "2026-08-01")
@@ -783,6 +808,7 @@ func TestReopenIncidentalOnAnOpenEnvelopeReturnsItsNamed409(t *testing.T) {
 // GetIncidental-backed answer every other single-envelope route in this
 // package gives.
 func TestReopenIncidentalUnknownPurposeIsNotFound(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	setUpFund(t, r)
 

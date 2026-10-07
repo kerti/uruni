@@ -17,6 +17,7 @@ import (
 // purpose move; "Penyesuaian" on a standalone adjustment, which Riwayat leaves
 // unlabelled) the expectation says so.
 func TestReportRowLabelsMatchTheSPA(t *testing.T) {
+	t.Parallel()
 	str := func(s string) *string { return &s }
 	tests := []struct {
 		name  string

@@ -217,6 +217,7 @@ func walkFoots(t *testing.T, w ReportWalk) money.Amount {
 }
 
 func TestMonthlyReportWalkFootsEveryMonthOfAScenarioHoldingEveryRowShape(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 	s := newWalkScenario(t, l)
 
@@ -283,6 +284,7 @@ func TestMonthlyReportWalkFootsEveryMonthOfAScenarioHoldingEveryRowShape(t *test
 // The scenario must really hold every shape, or the footing above proves less
 // than it says.
 func TestWalkScenarioHoldsEveryRowShapeOnItsOwnLine(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 	s := newWalkScenario(t, l)
 
@@ -334,6 +336,7 @@ func TestWalkScenarioHoldsEveryRowShapeOnItsOwnLine(t *testing.T) {
 // A member or direction filter, with or without a purpose, has no balance to
 // walk: only the two lines of the rows that matched, and the ends left at zero.
 func TestMonthlyReportWalkUnderAFilterIsOnlyMasukAndKeluar(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 	s := newWalkScenario(t, l)
 	var mainID int64
@@ -393,6 +396,7 @@ func TestMonthlyReportWalkUnderAFilterIsOnlyMasukAndKeluar(t *testing.T) {
 
 // An opening and a Penyesuaian are listed when nothing narrows the month.
 func TestMonthlyReportListsOpeningsAndAdjustmentsUnfiltered(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 	s := newWalkScenario(t, l)
 
@@ -419,6 +423,7 @@ func TestMonthlyReportListsOpeningsAndAdjustmentsUnfiltered(t *testing.T) {
 // The running month reads from its first day with no upper bound, so a row
 // dated after today is both listed and in the walk.
 func TestMonthlyReportRunningMonthIncludesRowsDatedAfterToday(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 	s := newWalkScenario(t, l)
 
@@ -451,6 +456,7 @@ func TestMonthlyReportRunningMonthIncludesRowsDatedAfterToday(t *testing.T) {
 // A reversal in a month with nothing else in it takes Total masuk below zero,
 // and an adjustment is signed. Both are accepted by ADR-038, and both foot.
 func TestMonthlyReportWalkAllowsANegativeTotalMasuk(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	l := newTestLedger(t)
 	f := newFixture(t, l)
@@ -473,6 +479,7 @@ func TestMonthlyReportWalkAllowsANegativeTotalMasuk(t *testing.T) {
 }
 
 func TestClassifyReportRowRefusesAKindItHasNoLineFor(t *testing.T) {
+	t.Parallel()
 	if _, err := classifyReportRow("transfer", "in", false); err == nil {
 		t.Error("classifyReportRow(transfer) = nil error, want a refusal: transfers are folded or skipped before the switch")
 	}
@@ -529,6 +536,7 @@ func walkFootsMoved(t *testing.T, w ReportWalk) money.Amount {
 // Start and End are its own bounded balances, Dipindah is the net of its raw
 // reclass legs, and the poses together make the fund's walk.
 func TestMonthlyReportWalkFootsEveryMonthForEveryPurpose(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 	s := newWalkScenario(t, l)
 
@@ -665,6 +673,7 @@ func TestMonthlyReportWalkFootsEveryMonthForEveryPurpose(t *testing.T) {
 // Dipindah stays true to the balance whichever way it is summed - but it is the
 // raw legs that make it so, not the display.
 func TestPurposeWalkMovedCountsLegsADisplayFoldsAway(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 	s := newWalkScenario(t, l)
 

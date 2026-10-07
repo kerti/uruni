@@ -13,6 +13,7 @@ import (
 // (a nonzero id, the email as given, a created_at) and the password never
 // lands in the row verbatim - password_hash is not the plaintext password.
 func TestRegisterCreatesTheAccount(t *testing.T) {
+	t.Parallel()
 	a, _ := newTestAuth(t)
 
 	user, err := a.Register(context.Background(), "treasurer@example.org", "correct-horse-battery")
@@ -43,6 +44,7 @@ func TestRegisterCreatesTheAccount(t *testing.T) {
 // still has to be refused, or resolveFund would hand that stranger
 // funds[0].
 func TestRegisterRefusesASecondAccountRegardlessOfEmail(t *testing.T) {
+	t.Parallel()
 	a, _ := newTestAuth(t)
 	ctx := context.Background()
 
@@ -61,6 +63,7 @@ func TestRegisterRefusesASecondAccountRegardlessOfEmail(t *testing.T) {
 // insert share one transaction, so a refused call can't leave a partial or
 // extra row behind.
 func TestRegisterRefusalWritesNoRow(t *testing.T) {
+	t.Parallel()
 	a, sqlDB := newTestAuth(t)
 	ctx := context.Background()
 
@@ -81,6 +84,7 @@ func TestRegisterRefusalWritesNoRow(t *testing.T) {
 }
 
 func TestRegisterRefusesAnEmptyOrMalformedEmail(t *testing.T) {
+	t.Parallel()
 	a, _ := newTestAuth(t)
 	ctx := context.Background()
 
@@ -92,6 +96,7 @@ func TestRegisterRefusesAnEmptyOrMalformedEmail(t *testing.T) {
 }
 
 func TestRegisterRefusesAPasswordUnderTheMinimumLength(t *testing.T) {
+	t.Parallel()
 	a, _ := newTestAuth(t)
 	ctx := context.Background()
 
@@ -104,6 +109,7 @@ func TestRegisterRefusesAPasswordUnderTheMinimumLength(t *testing.T) {
 // A rejected call for either validation reason must also write nothing -
 // the zero-value boundary alongside the one-shot refusal above.
 func TestRegisterValidationFailureWritesNoRow(t *testing.T) {
+	t.Parallel()
 	a, sqlDB := newTestAuth(t)
 	ctx := context.Background()
 

@@ -90,6 +90,7 @@ func memberFor(t *testing.T, r http.Handler, name string) int64 {
 }
 
 func TestPostReimbursementsRequiresAFund(t *testing.T) {
+	t.Parallel()
 	rec := postReimbursement(t, testRouter(t), reimbursementRequest{
 		MemberID: 1, PurposeID: 1, Amount: 80_000, IncurredOn: "2026-08-12",
 	})
@@ -107,6 +108,7 @@ func TestPostReimbursementsRequiresAFund(t *testing.T) {
 // is still zero while it is outstanding - and only settling posts the
 // single 'out' row that pays it.
 func TestReimbursementRoundTripsFromClaimToSettlement(t *testing.T) {
+	t.Parallel()
 	r, l := testRouterAndLedger(t)
 	setup := setUpFund(t, r)
 	memberID := memberFor(t, r, "Jane")
@@ -185,6 +187,7 @@ func TestReimbursementRoundTripsFromClaimToSettlement(t *testing.T) {
 // the route: the second call is a conflict with its own code, not a second
 // payout and not a generic 500.
 func TestPostSettlementTwiceReturnsItsNamed409(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	setup := setUpFund(t, r)
 	memberID := memberFor(t, r, "Jane")
@@ -223,6 +226,7 @@ func TestPostSettlementTwiceReturnsItsNamed409(t *testing.T) {
 // through store.Queries directly - the same way an import or a future waive
 // route would - and the route is asked to settle it.
 func TestPostSettlementOnAWaivedClaimReturnsItsNamed409(t *testing.T) {
+	t.Parallel()
 	sqlDB := testStoreDB(t)
 	q := store.New(sqlDB)
 	r := authedRouterFor(t, sqlDB)
@@ -256,6 +260,7 @@ func TestPostSettlementOnAWaivedClaimReturnsItsNamed409(t *testing.T) {
 // acceptance criterion: the unfiltered list keeps every claim as history,
 // ?outstanding=true keeps only what is still owed.
 func TestGetReimbursementsOutstandingFiltersToUnsettledClaims(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	setup := setUpFund(t, r)
 	memberID := memberFor(t, r, "Jane")
@@ -313,6 +318,7 @@ func TestGetReimbursementsOutstandingFiltersToUnsettledClaims(t *testing.T) {
 }
 
 func TestGetReimbursementsRejectsAnUnparseableOutstandingFilter(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	setUpFund(t, r)
 
@@ -332,6 +338,7 @@ func TestGetReimbursementsRejectsAnUnparseableOutstandingFilter(t *testing.T) {
 // incurred_on must come back (incurred_on DESC, id DESC), the later of the
 // two same-dated rows first.
 func TestGetReimbursementsOrdersNewestFirstTiesBrokenByIDDesc(t *testing.T) {
+	t.Parallel()
 	sqlDB := testStoreDB(t)
 	r := authedRouterFor(t, sqlDB)
 	setup := setUpFund(t, r)
@@ -377,6 +384,7 @@ func TestGetReimbursementsOrdersNewestFirstTiesBrokenByIDDesc(t *testing.T) {
 // "paging walks the whole set with no skip and no duplicate" acceptance
 // criterion, over 60 claims (more than two 25-row pages).
 func TestGetReimbursementsPagingWalksTheWholeSetWithNoSkipOrDuplicate(t *testing.T) {
+	t.Parallel()
 	sqlDB := testStoreDB(t)
 	r := authedRouterFor(t, sqlDB)
 	setup := setUpFund(t, r)
@@ -435,6 +443,7 @@ func TestGetReimbursementsPagingWalksTheWholeSetWithNoSkipOrDuplicate(t *testing
 // proving the keyset cursor (incurred_on, id) is what actually runs rather
 // than LIMIT/OFFSET.
 func TestGetReimbursementsPagingHandlesABackdatedInsertBetweenPageFetches(t *testing.T) {
+	t.Parallel()
 	sqlDB := testStoreDB(t)
 	r := authedRouterFor(t, sqlDB)
 	setup := setUpFund(t, r)
@@ -494,6 +503,7 @@ func TestGetReimbursementsPagingHandlesABackdatedInsertBetweenPageFetches(t *tes
 // TestGetReimbursementsRejectsAMalformedCursor is #226's "malformed cursor
 // -> 400" acceptance criterion.
 func TestGetReimbursementsRejectsAMalformedCursor(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	setUpFund(t, r)
 
@@ -520,6 +530,7 @@ func TestGetReimbursementsRejectsAMalformedCursor(t *testing.T) {
 // TestGetReimbursementsSearchHitsMemberNameCaseInsensitive covers this
 // list's "member name" half of ADR-032's search surface (#226).
 func TestGetReimbursementsSearchHitsMemberNameCaseInsensitive(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	setup := setUpFund(t, r)
 	memberID := memberFor(t, r, "Budi Santoso")
@@ -548,6 +559,7 @@ func TestGetReimbursementsSearchHitsMemberNameCaseInsensitive(t *testing.T) {
 // TestGetReimbursementsSearchHitsNoteCaseInsensitive covers this list's
 // "note" half of ADR-032's search surface (#226).
 func TestGetReimbursementsSearchHitsNoteCaseInsensitive(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	setup := setUpFund(t, r)
 	memberID := memberFor(t, r, "Jane")
@@ -580,6 +592,7 @@ func TestGetReimbursementsSearchHitsNoteCaseInsensitive(t *testing.T) {
 // ?q= comes back, and a settled claim matching ?q= never does even though
 // its note alone would match.
 func TestGetReimbursementsOutstandingAndSearchCombine(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	setup := setUpFund(t, r)
 	memberID := memberFor(t, r, "Jane")
@@ -612,6 +625,7 @@ func TestGetReimbursementsOutstandingAndSearchCombine(t *testing.T) {
 // excluding both a settled and a waived claim, the same pair
 // ListOutstandingReimbursementsByFund already excluded.
 func TestGetReimbursementsOutstandingExcludesSettledAndWaived(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	setup := setUpFund(t, r)
 	memberID := memberFor(t, r, "Jane")
@@ -662,6 +676,7 @@ func claimForWithNote(t *testing.T, r http.Handler, setup setupResponse, memberI
 // validates nothing itself: a non-positive amount, a calendar-invalid date
 // and a member_id naming no row all come back through mapSQLiteError.
 func TestPostReimbursementsRejectsWhatTheSchemaRefuses(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name string
 		req  func(setup setupResponse, memberID int64) reimbursementRequest
@@ -702,6 +717,7 @@ func TestPostReimbursementsRejectsWhatTheSchemaRefuses(t *testing.T) {
 // before writing, and an id naming nothing is the client's mistake about a
 // path segment, not a server failure.
 func TestPostSettlementOnAnUnknownClaimIs404(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	setup := setUpFund(t, r)
 
@@ -718,6 +734,7 @@ func TestPostSettlementOnAnUnknownClaimIs404(t *testing.T) {
 }
 
 func TestPostSettlementRejectsAMalformedOccurredOn(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	setup := setUpFund(t, r)
 	memberID := memberFor(t, r, "Jane")
@@ -744,6 +761,7 @@ func TestPostSettlementRejectsAMalformedOccurredOn(t *testing.T) {
 }
 
 func TestPostReimbursementsRejectsMalformedJSON(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	setUpFund(t, r)
 
@@ -759,6 +777,7 @@ func TestPostReimbursementsRejectsMalformedJSON(t *testing.T) {
 }
 
 func TestGetReimbursementsRequiresAFund(t *testing.T) {
+	t.Parallel()
 	rec := getReimbursements(t, testRouter(t), "")
 	if rec.Code != http.StatusNotFound {
 		t.Fatalf("GET /api/reimbursements before setup = %d, want %d (body: %s)", rec.Code, http.StatusNotFound, rec.Body.String())
@@ -770,6 +789,7 @@ func TestGetReimbursementsRequiresAFund(t *testing.T) {
 }
 
 func TestPostSettlementRequiresAFund(t *testing.T) {
+	t.Parallel()
 	rec := postSettlement(t, testRouter(t), 1, settleReimbursementRequest{
 		AccountID: 1, OccurredOn: "2026-08-20",
 	})
@@ -786,6 +806,7 @@ func TestPostSettlementRequiresAFund(t *testing.T) {
 // owns itself: {id} is a path segment, so a non-numeric one never reaches
 // the ledger to be judged there.
 func TestPostSettlementRejectsANonNumericID(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	setUpFund(t, r)
 
@@ -802,6 +823,7 @@ func TestPostSettlementRejectsANonNumericID(t *testing.T) {
 }
 
 func TestPostSettlementRejectsMalformedJSON(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	setUpFund(t, r)
 
@@ -819,6 +841,7 @@ func TestPostSettlementRejectsMalformedJSON(t *testing.T) {
 // TestNoWaiveRouteExists is the acceptance criterion stated as a test: PRD
 // section 7.4 never asks to waive a claim, so the route is absent and stays absent.
 func TestNoWaiveRouteExists(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	setUpFund(t, r)
 
@@ -899,6 +922,7 @@ func decodeReimbursement(t *testing.T, rec *httptest.ResponseRecorder) reimburse
 // #103: the wrong amount, the wrong member and a note, fixed in place
 // because the claim is off the ledger until it is settled.
 func TestPatchReimbursementCorrectsAnUnsettledClaim(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	setup := setUpFund(t, r)
 	memberID := memberFor(t, r, "Jane")
@@ -932,6 +956,7 @@ func TestPatchReimbursementCorrectsAnUnsettledClaim(t *testing.T) {
 // the member who says "saya yang tanggung" and then changes their mind is
 // not stuck.
 func TestPatchReimbursementWaivesAndUnwaives(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	setup := setUpFund(t, r)
 	memberID := memberFor(t, r, "Jane")
@@ -969,6 +994,7 @@ func TestPatchReimbursementWaivesAndUnwaives(t *testing.T) {
 // routes: waiving through PATCH reaches the same 409 settling has always
 // given a claim created waived.
 func TestSettleRefusesAClaimWaivedOverHTTP(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	setup := setUpFund(t, r)
 	memberID := memberFor(t, r, "Jane")
@@ -990,6 +1016,7 @@ func TestSettleRefusesAClaimWaivedOverHTTP(t *testing.T) {
 }
 
 func TestDeleteReimbursementRemovesAnUnsettledClaim(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	setup := setUpFund(t, r)
 	memberID := memberFor(t, r, "Jane")
@@ -1007,6 +1034,7 @@ func TestDeleteReimbursementRemovesAnUnsettledClaim(t *testing.T) {
 // TestPatchAndDeleteRefuseASettledClaim is the boundary at the route: once
 // a payout references the claim, both are its named 409.
 func TestPatchAndDeleteRefuseASettledClaim(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	setup := setUpFund(t, r)
 	memberID := memberFor(t, r, "Jane")
@@ -1045,6 +1073,7 @@ func TestPatchAndDeleteRefuseASettledClaim(t *testing.T) {
 // request body, so a foreign-key violation is the caller's typo, not a
 // server fault, and answering 500 would blame the wrong party.
 func TestPatchReimbursementUnknownMemberIs400(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	setup := setUpFund(t, r)
 	memberID := memberFor(t, r, "Jane")
@@ -1060,6 +1089,7 @@ func TestPatchReimbursementUnknownMemberIs400(t *testing.T) {
 }
 
 func TestPatchReimbursementRejectsBadArguments(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, body string }{
 		{"non-positive amount", `{"amount":0}`},
 		{"malformed incurred_on", `{"incurred_on":"2026-02-30"}`},
@@ -1083,6 +1113,7 @@ func TestPatchReimbursementRejectsBadArguments(t *testing.T) {
 }
 
 func TestPatchAndDeleteOnAnUnknownClaimAre404(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	setUpFund(t, r)
 
@@ -1095,6 +1126,7 @@ func TestPatchAndDeleteOnAnUnknownClaimAre404(t *testing.T) {
 }
 
 func TestPatchReimbursementRejectsMalformedJSONAndIDs(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	setUpFund(t, r)
 
@@ -1116,6 +1148,7 @@ func TestPatchReimbursementRejectsMalformedJSONAndIDs(t *testing.T) {
 }
 
 func TestPatchAndDeleteRequireAFund(t *testing.T) {
+	t.Parallel()
 	if rec := patchReimbursement(t, testRouter(t), 1, `{"amount":95000}`); rec.Code != http.StatusNotFound {
 		t.Errorf("PATCH before setup = %d, want %d", rec.Code, http.StatusNotFound)
 	}
@@ -1130,6 +1163,7 @@ func TestPatchAndDeleteRequireAFund(t *testing.T) {
 // transactions gives. Receipts have no route yet (#73), so the row is
 // written through store.Queries - the path an import would use.
 func TestDeleteReimbursementWithAReceiptIs409(t *testing.T) {
+	t.Parallel()
 	sqlDB := testStoreDB(t)
 	q := store.New(sqlDB)
 	r := authedRouterFor(t, sqlDB)
@@ -1164,6 +1198,7 @@ func getReimbursement(t *testing.T, r http.Handler, id string) *httptest.Respons
 }
 
 func TestGetReimbursementByIDReturnsTheClaimWithItsSettledFlag(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	setup := setUpFund(t, r)
 	memberID := memberFor(t, r, "Jane")
@@ -1204,6 +1239,7 @@ func TestGetReimbursementByIDReturnsTheClaimWithItsSettledFlag(t *testing.T) {
 }
 
 func TestGetReimbursementByIDIs404ForUnknownOrNonNumericIDs(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	setUpFund(t, r)
 	for _, id := range []string{"9999", "abc"} {

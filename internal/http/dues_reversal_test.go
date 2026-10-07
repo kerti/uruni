@@ -26,6 +26,7 @@ func postDuesPaymentReversal(t *testing.T, r http.Handler, transactionID int64, 
 // transactionResponse shape POST /api/dues-payments and GET
 // /api/transactions already use.
 func TestPostDuesPaymentReversalReturnsThePostedRow(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	setup := setUpFund(t, r)
 
@@ -109,6 +110,7 @@ func TestPostDuesPaymentReversalReturnsThePostedRow(t *testing.T) {
 // "not_found" shape every other missing-resource route in this package
 // already uses.
 func TestPostDuesPaymentReversalNoSuchTransactionIs404(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	setUpFund(t, r)
 
@@ -127,6 +129,7 @@ func TestPostDuesPaymentReversalNoSuchTransactionIs404(t *testing.T) {
 // caller mistake, not a resource-state conflict, so it maps to 400 like
 // ErrInvalidArgument does everywhere else in this mapper.
 func TestPostDuesPaymentReversalNonDuesTransactionIs400(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	setup := setUpFund(t, r)
 
@@ -156,6 +159,7 @@ func TestPostDuesPaymentReversalNonDuesTransactionIs400(t *testing.T) {
 // once - the second attempt is a resource-state conflict, mapped the same
 // way ErrReimbursementAlreadySettled already is.
 func TestPostDuesPaymentReversalTwiceIs409(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	setup := setUpFund(t, r)
 
@@ -194,6 +198,7 @@ func TestPostDuesPaymentReversalTwiceIs409(t *testing.T) {
 // TestPostDuesPaymentReversalRequiresAFund mirrors every other route's
 // before-setup behavior in this package.
 func TestPostDuesPaymentReversalRequiresAFund(t *testing.T) {
+	t.Parallel()
 	rec := postDuesPaymentReversal(t, testRouter(t), 1, reverseDuesPaymentRequest{OccurredOn: "2026-08-15"})
 	if rec.Code != http.StatusNotFound {
 		t.Fatalf("POST reversal before setup = %d, want %d (body: %s)", rec.Code, http.StatusNotFound, rec.Body.String())

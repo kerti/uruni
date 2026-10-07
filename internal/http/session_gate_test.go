@@ -98,6 +98,7 @@ var gatedRoutes = []struct {
 // testRouter, since testRouter's whole purpose is the opposite of what this
 // test needs (see authedRouterFor's own comment).
 func TestEveryGatedRouteReturns401WithNoSession(t *testing.T) {
+	t.Parallel()
 	r, _ := testRouterAndDB(t)
 
 	for _, tc := range gatedRoutes {
@@ -130,6 +131,7 @@ func TestEveryGatedRouteReturns401WithNoSession(t *testing.T) {
 // mean the sweep covers the gated surface exactly, and adding a route to
 // either place without the other fails here.
 func TestGatedRouteTableMatchesTheRouter(t *testing.T) {
+	t.Parallel()
 	r, _ := testRouterAndDB(t)
 
 	mux, ok := r.(chi.Routes)
@@ -173,6 +175,7 @@ func TestGatedRouteTableMatchesTheRouter(t *testing.T) {
 // reach it with no cookie at all, so a 401 there would be self-defeating -
 // there would be no way left to learn that logging in is even an option.
 func TestGetSessionNeverReturns401(t *testing.T) {
+	t.Parallel()
 	r, _ := testRouterAndDB(t)
 
 	rec := httptest.NewRecorder()
@@ -188,6 +191,7 @@ func TestGetSessionNeverReturns401(t *testing.T) {
 // never 401 either way - a caller with an already-expired cookie is asking
 // for exactly what logout gives.
 func TestPostLogoutNeverReturns401AndIs204WithOrWithoutASession(t *testing.T) {
+	t.Parallel()
 	t.Run("no session at all", func(t *testing.T) {
 		r, _ := testRouterAndDB(t)
 		rec := httptest.NewRecorder()
@@ -226,6 +230,7 @@ func TestPostLogoutNeverReturns401AndIs204WithOrWithoutASession(t *testing.T) {
 // not modeled here the same way this package leaves other API-unreachable
 // states untested elsewhere.
 func TestGetSessionShapeAcrossReachableStates(t *testing.T) {
+	t.Parallel()
 	t.Run("no account registered yet", func(t *testing.T) {
 		r, _ := testRouterAndDB(t)
 		got := getSessionStatus(t, r, "")
@@ -310,6 +315,7 @@ func getSessionStatus(t *testing.T, r http.Handler, token string) sessionStatusR
 // TestPostRegisterFailsClosedWhenTheSessionCannotBeRenewed (register_test.go)
 // already does, rather than inventing a second way to attach it.
 func TestFirstRunWalksRegisterSetupLogoutLoginThenAFundScopedRoute(t *testing.T) {
+	t.Parallel()
 	r, _ := testRouterAndDB(t)
 
 	reg := postRegister(t, r, "treasurer@example.org", "correct-horse-battery")

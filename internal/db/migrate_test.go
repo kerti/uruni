@@ -11,6 +11,7 @@ import (
 )
 
 func TestUpAppliesPendingMigrationsAndIsIdempotent(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	sqlDB := openTestDB(t)
 
@@ -60,6 +61,7 @@ func TestUpAppliesPendingMigrationsAndIsIdempotent(t *testing.T) {
 }
 
 func TestDownRollsBackOneMigrationAtATime(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	sqlDB := openTestDB(t)
 
@@ -97,6 +99,7 @@ func TestDownRollsBackOneMigrationAtATime(t *testing.T) {
 }
 
 func TestDownOnAnUnmigratedDatabaseIsNotAFailure(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	sqlDB := openTestDB(t)
 
@@ -109,6 +112,7 @@ func TestDownOnAnUnmigratedDatabaseIsNotAFailure(t *testing.T) {
 }
 
 func TestOpenMigrateQueryThroughTheGeneratedStore(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	sqlDB := openTestDB(t)
 

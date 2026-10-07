@@ -10,6 +10,7 @@ import (
 )
 
 func TestOpenAppliesEveryPragmaToEveryConnection(t *testing.T) {
+	t.Parallel()
 	sqlDB := openTestDB(t)
 
 	// Queried back rather than trusted from the DSN: SQLite silently ignores a
@@ -46,6 +47,7 @@ func TestOpenAppliesEveryPragmaToEveryConnection(t *testing.T) {
 }
 
 func TestOpenSerializesOnOneConnection(t *testing.T) {
+	t.Parallel()
 	sqlDB := openTestDB(t)
 
 	// ADR-004: one connection is what makes SQLITE_BUSY structurally impossible,
@@ -57,6 +59,7 @@ func TestOpenSerializesOnOneConnection(t *testing.T) {
 }
 
 func TestOpenFailsOnAnUnwritablePath(t *testing.T) {
+	t.Parallel()
 	// sql.Open is lazy, so this only fails at boot because Open pings. A database
 	// path the operator mistyped should be a startup error, not a 500 on the
 	// treasurer's first tap.

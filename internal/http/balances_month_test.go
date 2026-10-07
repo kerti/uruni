@@ -16,6 +16,7 @@ import (
 // adjustment and transfers, GET /api/balances carries exactly the report's
 // Walk.In and Walk.Out.
 func TestGetBalancesMonthMatchesTheReportsRunningWalk(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	sqlDB := testStoreDB(t)
 	l := ledger.New(sqlDB)

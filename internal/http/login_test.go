@@ -45,6 +45,7 @@ func postLoginFrom(t *testing.T, r http.Handler, email, password, ip string) *ht
 // register.go's own equivalent test proves - 200, a cookie, and a real row
 // behind it.
 func TestPostLoginReturns200SetsTheCookieAndWritesASessionRow(t *testing.T) {
+	t.Parallel()
 	r, sqlDB := testRouterAndDB(t)
 
 	reg := postRegister(t, r, "treasurer@example.org", "correct-horse-battery")
@@ -88,6 +89,7 @@ func TestPostLoginReturns200SetsTheCookieAndWritesASessionRow(t *testing.T) {
 // 401 with the exact same bytes, or the response itself becomes the
 // account-existence oracle auth.Authenticate's own doc comment forbids.
 func TestPostLoginWrongPasswordAndUnknownEmailReturnByteIdenticalBodies(t *testing.T) {
+	t.Parallel()
 	r, _ := testRouterAndDB(t)
 
 	reg := postRegister(t, r, "treasurer@example.org", "correct-horse-battery")
@@ -121,6 +123,7 @@ func TestPostLoginWrongPasswordAndUnknownEmailReturnByteIdenticalBodies(t *testi
 // half: enough rapid failures from one address, even against different
 // (all unknown) identifiers, trips the IP-keyed counter on its own.
 func TestPostLoginNthFailureFromOneIPReturns429(t *testing.T) {
+	t.Parallel()
 	r, _ := testRouterAndDB(t)
 
 	const ip = "203.0.113.7"
@@ -147,6 +150,7 @@ func TestPostLoginNthFailureFromOneIPReturns429(t *testing.T) {
 // spreading a brute force of one account across many source IPs gains
 // nothing from the IP-keyed counter alone.
 func TestPostLoginNthFailureFromOneIdentifierAcrossIPsReturns429(t *testing.T) {
+	t.Parallel()
 	r, _ := testRouterAndDB(t)
 
 	reg := postRegister(t, r, "treasurer@example.org", "correct-horse-battery")
@@ -184,6 +188,7 @@ func TestPostLoginNthFailureFromOneIdentifierAcrossIPsReturns429(t *testing.T) {
 // right clears the slate, so a treasurer who fumbled her password a few
 // times is not left a few attempts closer to a lockout afterward.
 func TestPostLoginSuccessResetsTheCounter(t *testing.T) {
+	t.Parallel()
 	r, _ := testRouterAndDB(t)
 
 	reg := postRegister(t, r, "treasurer@example.org", "correct-horse-battery")
@@ -222,6 +227,7 @@ func TestPostLoginSuccessResetsTheCounter(t *testing.T) {
 // TestPostLoginRejectsAMalformedBody: decodeJSON's own refusal, before
 // internal/auth or the rate limiter are ever reached.
 func TestPostLoginRejectsAMalformedBody(t *testing.T) {
+	t.Parallel()
 	r, _ := testRouterAndDB(t)
 
 	rec := httptest.NewRecorder()

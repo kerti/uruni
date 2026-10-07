@@ -50,6 +50,7 @@ func setUpTier(t *testing.T, r http.Handler, name string) duesTierResponse {
 }
 
 func TestPostDuesRatesCreatesAndListReturnsIt(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	tier := setUpTier(t, r, "Full")
 
@@ -89,6 +90,7 @@ func TestPostDuesRatesCreatesAndListReturnsIt(t *testing.T) {
 }
 
 func TestPostDuesRatesRejectsADuplicatePeriodWith409(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	tier := setUpTier(t, r, "Full")
 
@@ -110,6 +112,7 @@ func TestPostDuesRatesRejectsADuplicatePeriodWith409(t *testing.T) {
 }
 
 func TestPostDuesRatesRejectsAMalformedEffectiveFrom(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	tier := setUpTier(t, r, "Full")
 
@@ -126,6 +129,7 @@ func TestPostDuesRatesRejectsAMalformedEffectiveFrom(t *testing.T) {
 }
 
 func TestPostDuesRatesReturns404ForAnUnknownTierID(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	setUpTier(t, r, "Full")
 
@@ -140,6 +144,7 @@ func TestPostDuesRatesReturns404ForAnUnknownTierID(t *testing.T) {
 }
 
 func TestPostDuesRatesReturns400ForANonNumericTierID(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	setUpTier(t, r, "Full")
 
@@ -160,6 +165,7 @@ func TestPostDuesRatesReturns400ForANonNumericTierID(t *testing.T) {
 }
 
 func TestGetDuesRatesReturnsAnEmptyListForATierWithNoRateYet(t *testing.T) {
+	t.Parallel()
 	// dues_rate.sql's own comment: "a tier whose rate is undecided simply
 	// has no row" - a legitimate state, not an error.
 	r := testRouter(t)
@@ -175,6 +181,7 @@ func TestGetDuesRatesReturnsAnEmptyListForATierWithNoRateYet(t *testing.T) {
 }
 
 func TestGetDuesRatesReturns404ForAnUnknownTierID(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	setUpTier(t, r, "Full")
 
@@ -189,6 +196,7 @@ func TestGetDuesRatesReturns404ForAnUnknownTierID(t *testing.T) {
 }
 
 func TestGetDuesRatesReturns400ForANonNumericTierID(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	setUpTier(t, r, "Full")
 
@@ -223,6 +231,7 @@ func deleteDuesRate(t *testing.T, r http.Handler, id int64) *httptest.ResponseRe
 }
 
 func TestPatchDuesRatesCorrectsTheAmount(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	tier := setUpTier(t, r, "Full")
 	created := postDuesRate(t, r, tier.ID, duesRateRequest{Amount: 50_000, EffectiveFrom: "2026-01"})
@@ -257,6 +266,7 @@ func TestPatchDuesRatesCorrectsTheAmount(t *testing.T) {
 // exists to let a treasurer fix. Covers both an empty body and a misspelt
 // key, which decode identically.
 func TestPatchDuesRatesRejectsABodyWithNoAmount(t *testing.T) {
+	t.Parallel()
 	for name, body := range map[string]string{
 		"empty object": `{}`,
 		"misspelt key": `{"amout":75000}`,
@@ -294,6 +304,7 @@ func TestPatchDuesRatesRejectsABodyWithNoAmount(t *testing.T) {
 }
 
 func TestPatchDuesRatesReturns404ForAnUnknownID(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	setUpTier(t, r, "Full")
 
@@ -308,6 +319,7 @@ func TestPatchDuesRatesReturns404ForAnUnknownID(t *testing.T) {
 }
 
 func TestPatchDuesRatesReturns400ForANonNumericID(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	setUpTier(t, r, "Full")
 
@@ -325,6 +337,7 @@ func TestPatchDuesRatesReturns400ForANonNumericID(t *testing.T) {
 }
 
 func TestPatchDuesRatesRejectsMalformedJSON(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	tier := setUpTier(t, r, "Full")
 	created := postDuesRate(t, r, tier.ID, duesRateRequest{Amount: 50_000, EffectiveFrom: "2026-01"})
@@ -350,6 +363,7 @@ func TestPatchDuesRatesRejectsMalformedJSON(t *testing.T) {
 // which UNIQUE (tier_id, effective_from) otherwise makes permanently
 // uncorrectable, is deleted and re-added for the right one.
 func TestDeleteDuesRatesThenRepostingForTheRightMonthSucceeds(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	tier := setUpTier(t, r, "Full")
 
@@ -387,6 +401,7 @@ func TestDeleteDuesRatesThenRepostingForTheRightMonthSucceeds(t *testing.T) {
 }
 
 func TestDeleteDuesRatesReturns404ForAnUnknownID(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	setUpTier(t, r, "Full")
 
@@ -401,6 +416,7 @@ func TestDeleteDuesRatesReturns404ForAnUnknownID(t *testing.T) {
 }
 
 func TestDeleteDuesRatesReturns400ForANonNumericID(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	setUpTier(t, r, "Full")
 
@@ -416,6 +432,7 @@ func TestDeleteDuesRatesReturns400ForANonNumericID(t *testing.T) {
 }
 
 func TestPostDuesRatesRejectsMalformedJSON(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	tier := setUpTier(t, r, "Full")
 

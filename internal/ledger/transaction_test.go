@@ -12,6 +12,7 @@ import (
 // Posting moves FundBalance and AccountBalance by exactly the amount, in both
 // directions.
 func TestPostTransactionMovesFundAndAccountBalanceByExactlyTheAmount(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name      string
 		direction string
@@ -24,6 +25,7 @@ func TestPostTransactionMovesFundAndAccountBalanceByExactlyTheAmount(t *testing.
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			l := newTestLedger(t)
 			f := newFixture(t, l)
 			ctx := context.Background()
@@ -67,6 +69,7 @@ func TestPostTransactionMovesFundAndAccountBalanceByExactlyTheAmount(t *testing.
 // A correction is kind='adjustment', selected by the bool - never a string a
 // caller could set to 'dues', 'reimbursement' or 'transfer'.
 func TestPostTransactionPostsAnAdjustment(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 	f := newFixture(t, l)
 	ctx := context.Background()
@@ -87,6 +90,7 @@ func TestPostTransactionPostsAnAdjustment(t *testing.T) {
 // CHECK - proven here by asserting nothing was inserted, not only that an
 // error came back.
 func TestPostTransactionRejectsNonPositiveAmountBeforeTheWrite(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name   string
 		amount money.Amount
@@ -97,6 +101,7 @@ func TestPostTransactionRejectsNonPositiveAmountBeforeTheWrite(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			l := newTestLedger(t)
 			f := newFixture(t, l)
 			ctx := context.Background()
@@ -123,6 +128,7 @@ func TestPostTransactionRejectsNonPositiveAmountBeforeTheWrite(t *testing.T) {
 // Both a malformed occurred_on and a calendar-invalid one are rejected the
 // same way, before the schema's date() CHECK ever sees them.
 func TestPostTransactionRejectsInvalidOccurredOn(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name       string
 		occurredOn string
@@ -133,6 +139,7 @@ func TestPostTransactionRejectsInvalidOccurredOn(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			l := newTestLedger(t)
 			f := newFixture(t, l)
 			ctx := context.Background()
@@ -160,6 +167,7 @@ func TestPostTransactionRejectsInvalidOccurredOn(t *testing.T) {
 // unrecognized value gets the same named error rather than a raw CHECK
 // failure.
 func TestPostTransactionRejectsAnUnrecognizedDirection(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 	f := newFixture(t, l)
 	ctx := context.Background()
@@ -177,6 +185,7 @@ func TestPostTransactionRejectsAnUnrecognizedDirection(t *testing.T) {
 // fund - is a domain bug, not a caller mistake, and is wrapped generically
 // rather than folded into ErrInvalidArgument (ADR-027).
 func TestPostTransactionWrapsASchemaViolationGenerically(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 	f := newFixture(t, l)
 	ctx := context.Background()
@@ -206,8 +215,10 @@ func TestPostTransactionWrapsASchemaViolationGenerically(t *testing.T) {
 // nothing was inserted, not only that an error came back, the same shape
 // TestPostTransactionRejectsNonPositiveAmountBeforeTheWrite uses.
 func TestPostTransactionRefusesAClosedIncidentalBothDirections(t *testing.T) {
+	t.Parallel()
 	for _, direction := range []string{"in", "out"} {
 		t.Run(direction, func(t *testing.T) {
+			t.Parallel()
 			l := newTestLedger(t)
 			f := newFixture(t, l)
 			ctx := context.Background()
@@ -248,6 +259,7 @@ func TestPostTransactionRefusesAClosedIncidentalBothDirections(t *testing.T) {
 // two, and closed_on is NULL for the first, so PostTransaction proceeds
 // exactly as it always has.
 func TestPostTransactionUnaffectedByTheGuardOnOpenOrNonIncidentalPurposes(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 	f := newFixture(t, l)
 	ctx := context.Background()
@@ -274,6 +286,7 @@ func TestPostTransactionUnaffectedByTheGuardOnOpenOrNonIncidentalPurposes(t *tes
 // #211): a kind='normal', direction='in' row tagged to an envelope may name
 // its member, and the posted row carries it straight through.
 func TestPostTransactionAcceptsAnOptionalMemberOnAContribution(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 	f := newFixture(t, l)
 	ctx := context.Background()
@@ -299,6 +312,7 @@ func TestPostTransactionAcceptsAnOptionalMemberOnAContribution(t *testing.T) {
 // named error ahead of the BEFORE INSERT trigger's raw message (ADR-034) -
 // f.mainID is 'main', not 'incidental'.
 func TestPostTransactionRefusesAMemberOutsideAnIncidentalPurpose(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 	f := newFixture(t, l)
 	ctx := context.Background()
@@ -317,6 +331,7 @@ func TestPostTransactionRefusesAMemberOutsideAnIncidentalPurpose(t *testing.T) {
 // direction='in' row - refused before the write is even attempted, whatever
 // the purpose (ADR-034).
 func TestPostTransactionRefusesAMemberOnAnOutgoingOrAdjustingRow(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 	f := newFixture(t, l)
 	ctx := context.Background()
@@ -348,6 +363,7 @@ func TestPostTransactionRefusesAMemberOnAnOutgoingOrAdjustingRow(t *testing.T) {
 // closed-incidental guard (ADR-031) still applies once a row can carry a
 // member - naming a giver does not exempt the posting from it.
 func TestPostTransactionRefusesANamedContributionToAClosedEnvelope(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 	f := newFixture(t, l)
 	ctx := context.Background()

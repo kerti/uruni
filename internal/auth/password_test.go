@@ -10,6 +10,7 @@ import (
 // for on this path: what hashPassword produces, verifyPassword must accept
 // back for the same password, and reject for a different one.
 func TestPasswordHashRoundTrips(t *testing.T) {
+	t.Parallel()
 	encoded, err := hashPassword("correct-horse-battery-staple")
 	if err != nil {
 		t.Fatalf("hashPassword() = %v, want no error", err)
@@ -45,6 +46,7 @@ func TestPasswordHashRoundTrips(t *testing.T) {
 // database, and a precomputed dictionary would work across every row at
 // once instead of needing a fresh attempt per row.
 func TestPasswordHashIsSaltedPerCall(t *testing.T) {
+	t.Parallel()
 	first, err := hashPassword("correct-horse-battery-staple")
 	if err != nil {
 		t.Fatalf("hashPassword() = %v, want no error", err)
@@ -63,6 +65,7 @@ func TestPasswordHashIsSaltedPerCall(t *testing.T) {
 // format row: verifyPassword must answer with ErrMalformedHash rather than
 // panicking or silently reporting a match.
 func TestVerifyPasswordRejectsAMalformedHash(t *testing.T) {
+	t.Parallel()
 	for _, encoded := range []string{
 		"",
 		"not-a-hash-at-all",

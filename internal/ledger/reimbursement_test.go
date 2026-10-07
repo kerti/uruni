@@ -33,6 +33,7 @@ func createReimbursement(t *testing.T, q *store.Queries, f fixture, amount int64
 // carrying the claim's own amount, purpose_id and id - never a figure or
 // purpose the caller supplies.
 func TestSettleReimbursementPostsOneOutRowOfClaimAmount(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 	f := newFixture(t, l)
 	ctx := context.Background()
@@ -77,6 +78,7 @@ func TestSettleReimbursementPostsOneOutRowOfClaimAmount(t *testing.T) {
 // settlement explains itself through a display label built from the claim
 // it settles, at read time, never through stored text).
 func TestSettleReimbursementStoresNoNote(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 	f := newFixture(t, l)
 	ctx := context.Background()
@@ -125,6 +127,7 @@ func TestSettleReimbursementStoresNoNote(t *testing.T) {
 // claim exists, and only moves by exactly the amount when it is settled.
 // Both halves are asserted, not just the second.
 func TestSettleReimbursementFundBalanceUnchangedUntilSettled(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 	f := newFixture(t, l)
 	ctx := context.Background()
@@ -171,6 +174,7 @@ func TestSettleReimbursementFundBalanceUnchangedUntilSettled(t *testing.T) {
 // Settling twice is refused with the named sentinel, and posts nothing on
 // the second call - proven by asserting the row count, not only the error.
 func TestSettleReimbursementTwiceIsRefused(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 	f := newFixture(t, l)
 	ctx := context.Background()
@@ -205,6 +209,7 @@ func TestSettleReimbursementTwiceIsRefused(t *testing.T) {
 // A waived claim can never be settled - it will never be repaid - and the
 // refusal posts nothing.
 func TestSettleReimbursementWaivedClaimIsRefused(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 	f := newFixture(t, l)
 	ctx := context.Background()
@@ -237,6 +242,7 @@ func TestSettleReimbursementWaivedClaimIsRefused(t *testing.T) {
 // refused. This is the test that would catch the pre-check being removed -
 // the same shape as opening_balance_test.go's index test.
 func TestReimbursementSettledOnceIndexRefusesASecondRowInsertedDirectly(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 	f := newFixture(t, l)
 	ctx := context.Background()
@@ -275,6 +281,7 @@ func TestReimbursementSettledOnceIndexRefusesASecondRowInsertedDirectly(t *testi
 // about when the member actually spent the money. A claim incurred in one
 // month and settled the next shows each field carrying a different date.
 func TestSettleReimbursementLedgerDateIsTheSettleDateNotIncurredOn(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 	f := newFixture(t, l)
 	ctx := context.Background()
@@ -313,6 +320,7 @@ func TestSettleReimbursementLedgerDateIsTheSettleDateNotIncurredOn(t *testing.T)
 // A malformed occurred_on is rejected before any write reaches the schema,
 // exactly like PostTransaction's and validateOpeningBalance's own check.
 func TestSettleReimbursementRejectsInvalidOccurredOn(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name       string
 		occurredOn string
@@ -323,6 +331,7 @@ func TestSettleReimbursementRejectsInvalidOccurredOn(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			l := newTestLedger(t)
 			f := newFixture(t, l)
 			ctx := context.Background()
@@ -353,6 +362,7 @@ func TestSettleReimbursementRejectsInvalidOccurredOn(t *testing.T) {
 // CLAUDE.md rule 3's "corrections are new adjusting entries" does not reach
 // it, and the schema agrees by carrying no immutability trigger.
 func TestUpdateReimbursementCorrectsAnUnsettledClaim(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 	f := newFixture(t, l)
 	ctx := context.Background()
@@ -395,6 +405,7 @@ func TestUpdateReimbursementCorrectsAnUnsettledClaim(t *testing.T) {
 // "saya yang tanggung" can change their mind, and a dedicated /waive route
 // would leave the claim stuck.
 func TestUpdateReimbursementWaivesAndUnwaives(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 	f := newFixture(t, l)
 	ctx := context.Background()
@@ -462,6 +473,7 @@ func TestUpdateReimbursementWaivesAndUnwaives(t *testing.T) {
 // waiving through this method reaches the same refusal a claim created
 // waived already got.
 func TestSettleRefusesAClaimWaivedThroughUpdate(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 	f := newFixture(t, l)
 	ctx := context.Background()
@@ -488,6 +500,7 @@ func TestSettleRefusesAClaimWaivedThroughUpdate(t *testing.T) {
 // and purpose onto an immutable transaction, correcting or deleting the
 // claim would let the two disagree while both look authoritative.
 func TestUpdateAndDeleteRefuseASettledClaim(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 	f := newFixture(t, l)
 	ctx := context.Background()
@@ -524,6 +537,7 @@ func TestUpdateAndDeleteRefuseASettledClaim(t *testing.T) {
 // Waiving a settled claim is refused for the same reason: it is neither
 // owed nor forgiven, it is paid.
 func TestUpdateRefusesToWaiveASettledClaim(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 	f := newFixture(t, l)
 	ctx := context.Background()
@@ -546,6 +560,7 @@ func TestUpdateRefusesToWaiveASettledClaim(t *testing.T) {
 }
 
 func TestDeleteReimbursementRemovesAnUnsettledClaim(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 	f := newFixture(t, l)
 	ctx := context.Background()
@@ -569,6 +584,7 @@ func TestDeleteReimbursementRemovesAnUnsettledClaim(t *testing.T) {
 // Argument-shape validation is this method's own (ADR-027), so the message
 // names the field rather than leaving SQLite's CHECK to say "constraint".
 func TestUpdateReimbursementRejectsBadArguments(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 	f := newFixture(t, l)
 	ctx := context.Background()

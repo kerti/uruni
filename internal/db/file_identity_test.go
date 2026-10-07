@@ -13,6 +13,7 @@ import (
 // a restored volume, or `make db-reset` all amount to - and the check has
 // to notice even though the connection itself keeps working.
 func TestFileIdentityNoticesTheDatabaseFileReplacedUnderAnOpenConnection(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	dir := t.TempDir()
 	path := filepath.Join(dir, "uruni.db")
@@ -49,6 +50,7 @@ func TestFileIdentityNoticesTheDatabaseFileReplacedUnderAnOpenConnection(t *test
 }
 
 func TestFileIdentityNoticesTheDatabaseFileRemoved(t *testing.T) {
+	t.Parallel()
 	path := filepath.Join(t.TempDir(), "uruni.db")
 	if err := os.WriteFile(path, nil, 0o600); err != nil {
 		t.Fatalf("writing the database file: %v", err)
@@ -68,6 +70,7 @@ func TestFileIdentityNoticesTheDatabaseFileRemoved(t *testing.T) {
 
 // Writes go to the same inode, so an ordinary busy database never trips it.
 func TestFileIdentityIgnoresWritesToTheSameFile(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	path := filepath.Join(t.TempDir(), "uruni.db")
 	sqlDB, err := Open(ctx, path)
@@ -92,6 +95,7 @@ func TestFileIdentityIgnoresWritesToTheSameFile(t *testing.T) {
 }
 
 func TestIdentifyFileRefusesAMissingPath(t *testing.T) {
+	t.Parallel()
 	if _, err := IdentifyFile(filepath.Join(t.TempDir(), "missing.db")); err == nil {
 		t.Error("IdentifyFile(missing path) = nil error, want one")
 	}

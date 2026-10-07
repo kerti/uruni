@@ -100,6 +100,7 @@ func (f ledgerFixture) post(t *testing.T, sqlDB *sql.DB, direction string, amoun
 }
 
 func TestPostedTransactionCannotBeUpdatedOrDeleted(t *testing.T) {
+	t.Parallel()
 	sqlDB := migratedTestDB(t)
 	f := newLedgerFixture(t, sqlDB, "Test Fund", validSlug)
 	txID := f.post(t, sqlDB, "in", 50000)
@@ -129,6 +130,7 @@ func TestPostedTransactionCannotBeUpdatedOrDeleted(t *testing.T) {
 }
 
 func TestTransferCannotBeUpdatedOrDeleted(t *testing.T) {
+	t.Parallel()
 	sqlDB := migratedTestDB(t)
 	fundID := createFund(t, sqlDB, "Test Fund", validSlug)
 	transferID := createTransfer(t, sqlDB, fundID, "between_accounts")
@@ -151,6 +153,7 @@ func TestTransferCannotBeUpdatedOrDeleted(t *testing.T) {
 }
 
 func TestImmutableTablesStillAcceptInserts(t *testing.T) {
+	t.Parallel()
 	sqlDB := migratedTestDB(t)
 	f := newLedgerFixture(t, sqlDB, "Test Fund", validSlug)
 
@@ -166,6 +169,7 @@ func TestImmutableTablesStillAcceptInserts(t *testing.T) {
 }
 
 func TestReimbursementIsSettledAtMostOnce(t *testing.T) {
+	t.Parallel()
 	sqlDB := migratedTestDB(t)
 	ctx := context.Background()
 	q := store.New(sqlDB)
@@ -187,6 +191,7 @@ func TestReimbursementIsSettledAtMostOnce(t *testing.T) {
 }
 
 func TestReimbursementKindRequiresItsClaimAndAnOutwardDirection(t *testing.T) {
+	t.Parallel()
 	sqlDB := migratedTestDB(t)
 	ctx := context.Background()
 	q := store.New(sqlDB)
@@ -211,6 +216,7 @@ func TestReimbursementKindRequiresItsClaimAndAnOutwardDirection(t *testing.T) {
 }
 
 func TestDuesFieldsBelongToDuesAndNothingElse(t *testing.T) {
+	t.Parallel()
 	sqlDB := migratedTestDB(t)
 	ctx := context.Background()
 	q := store.New(sqlDB)
@@ -311,6 +317,7 @@ func TestDuesFieldsBelongToDuesAndNothingElse(t *testing.T) {
 }
 
 func TestAdjustmentStandsAloneWithNoReconciliation(t *testing.T) {
+	t.Parallel()
 	sqlDB := migratedTestDB(t)
 	f := newLedgerFixture(t, sqlDB, "Test Fund", validSlug)
 
@@ -328,6 +335,7 @@ func TestAdjustmentStandsAloneWithNoReconciliation(t *testing.T) {
 }
 
 func TestTransferKindRequiresATransfer(t *testing.T) {
+	t.Parallel()
 	sqlDB := migratedTestDB(t)
 	ctx := context.Background()
 	q := store.New(sqlDB)
@@ -370,6 +378,7 @@ func TestTransferKindRequiresATransfer(t *testing.T) {
 }
 
 func TestTransactionCannotBorrowAnotherFundsRow(t *testing.T) {
+	t.Parallel()
 	sqlDB := migratedTestDB(t)
 	ctx := context.Background()
 	q := store.New(sqlDB)
@@ -416,6 +425,7 @@ func TestTransactionCannotBorrowAnotherFundsRow(t *testing.T) {
 }
 
 func TestTransactionAmountMustBePositive(t *testing.T) {
+	t.Parallel()
 	sqlDB := migratedTestDB(t)
 	ctx := context.Background()
 	q := store.New(sqlDB)
@@ -435,6 +445,7 @@ func TestTransactionAmountMustBePositive(t *testing.T) {
 }
 
 func TestReceiptHasExactlyOneParent(t *testing.T) {
+	t.Parallel()
 	sqlDB := migratedTestDB(t)
 	ctx := context.Background()
 	q := store.New(sqlDB)
@@ -458,6 +469,7 @@ func TestReceiptHasExactlyOneParent(t *testing.T) {
 }
 
 func TestReceiptCanBeAttachedAfterTheEntryIsPosted(t *testing.T) {
+	t.Parallel()
 	sqlDB := migratedTestDB(t)
 	ctx := context.Background()
 	q := store.New(sqlDB)
@@ -482,6 +494,7 @@ func TestReceiptCanBeAttachedAfterTheEntryIsPosted(t *testing.T) {
 }
 
 func TestBalancesSumTheLedgerAndLandAsInt64(t *testing.T) {
+	t.Parallel()
 	sqlDB := migratedTestDB(t)
 	ctx := context.Background()
 	q := store.New(sqlDB)
@@ -532,6 +545,7 @@ func TestBalancesSumTheLedgerAndLandAsInt64(t *testing.T) {
 }
 
 func TestOutstandingReimbursementsExcludeSettledAndWaived(t *testing.T) {
+	t.Parallel()
 	sqlDB := migratedTestDB(t)
 	ctx := context.Background()
 	q := store.New(sqlDB)
@@ -574,6 +588,7 @@ func TestOutstandingReimbursementsExcludeSettledAndWaived(t *testing.T) {
 }
 
 func TestReimbursementRejectsAnotherFundsMemberOrPurpose(t *testing.T) {
+	t.Parallel()
 	sqlDB := migratedTestDB(t)
 	ctx := context.Background()
 	q := store.New(sqlDB)

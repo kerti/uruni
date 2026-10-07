@@ -59,6 +59,7 @@ func (w purposeMoveWorld) request(t *testing.T, from, to, amount int64) purposeM
 }
 
 func TestPostPurposeMovesRequiresAFund(t *testing.T) {
+	t.Parallel()
 	rec := postPurposeMove(t, testRouter(t), purposeMoveRequest{
 		FromPurposeID: 1, ToPurposeID: 2, AccountID: 1, Amount: 1_000, OccurredOn: "2026-09-10",
 	})
@@ -75,6 +76,7 @@ func TestPostPurposeMovesRequiresAFund(t *testing.T) {
 // purpose names, and the one account - while the fund's own pooled rows keep
 // summing as before.
 func TestPostPurposeMovesPostsAnAllocationPair(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	w := newPurposeMoveWorld(t, r)
 
@@ -130,6 +132,7 @@ func TestPostPurposeMovesPostsAnAllocationPair(t *testing.T) {
 // A roll and a between_accounts transfer keep what they were: the roll
 // reads 'roll', the transfer reads nothing (ADR-036).
 func TestTransactionsCarryTheReasonOfEachKindOfPair(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	w := newPurposeMoveWorld(t, r)
 
@@ -176,6 +179,7 @@ func TestTransactionsCarryTheReasonOfEachKindOfPair(t *testing.T) {
 // Every refusal's status and code. The ledger's own tests cover why; this
 // pins what the client is told.
 func TestPostPurposeMovesRefusals(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		name   string
 		build  func(t *testing.T, r http.Handler, w purposeMoveWorld) purposeMoveRequest
@@ -253,6 +257,7 @@ func TestPostPurposeMovesRefusals(t *testing.T) {
 
 // Another fund's purpose and account answer like ones that do not exist.
 func TestPostPurposeMovesRefusesAnotherFundsRows(t *testing.T) {
+	t.Parallel()
 	sqlDB := testStoreDB(t)
 	r := authedRouterFor(t, sqlDB)
 	w := newPurposeMoveWorld(t, r)

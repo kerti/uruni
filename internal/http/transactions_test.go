@@ -65,6 +65,7 @@ func decodeTransactionsPage(t *testing.T, rec *httptest.ResponseRecorder) transa
 }
 
 func TestPostTransactionsRequiresAFund(t *testing.T) {
+	t.Parallel()
 	rec := postTransaction(t, testRouter(t), transactionRequest{
 		AccountID: 1, PurposeID: 1, Direction: "in", Amount: 10_000, OccurredOn: "2026-08-12",
 	})
@@ -78,6 +79,7 @@ func TestPostTransactionsRequiresAFund(t *testing.T) {
 }
 
 func TestGetTransactionsRequiresAFund(t *testing.T) {
+	t.Parallel()
 	rec := getTransactions(t, testRouter(t))
 	if rec.Code != http.StatusNotFound {
 		t.Fatalf("GET /api/transactions before setup = %d, want %d (body: %s)", rec.Code, http.StatusNotFound, rec.Body.String())
@@ -91,6 +93,7 @@ func TestGetTransactionsRequiresAFund(t *testing.T) {
 // TestGetTransactionsReturnsAnEmptyListBeforeAnyTransaction is #225's
 // "empty fund -> empty list + null cursor" acceptance criterion.
 func TestGetTransactionsReturnsAnEmptyListBeforeAnyTransaction(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	setUpFund(t, r)
 
@@ -112,6 +115,7 @@ func TestGetTransactionsReturnsAnEmptyListBeforeAnyTransaction(t *testing.T) {
 // through GET /api/transactions, and the fund balance moves by exactly its
 // amount - no more, no less.
 func TestPostTransactionsRoundTripsThroughGetAndMovesTheBalance(t *testing.T) {
+	t.Parallel()
 	r, l := testRouterAndLedger(t)
 	setup := setUpFund(t, r)
 
@@ -176,6 +180,7 @@ func TestPostTransactionsRoundTripsThroughGetAndMovesTheBalance(t *testing.T) {
 // its amount, mirroring the 'in' case above rather than merely summing to
 // something nonzero.
 func TestPostTransactionsOutDirectionMovesTheBalanceDown(t *testing.T) {
+	t.Parallel()
 	r, l := testRouterAndLedger(t)
 	setup := setUpFund(t, r)
 	ctx := context.Background()
@@ -207,6 +212,7 @@ func TestPostTransactionsOutDirectionMovesTheBalanceDown(t *testing.T) {
 // intent surface: IsAdjustment on the wire selects kind='adjustment' rather
 // than a raw kind field the caller could otherwise set to anything.
 func TestPostTransactionsIsAdjustmentPostsAnAdjustmentKind(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	setup := setUpFund(t, r)
 
@@ -232,6 +238,7 @@ func TestPostTransactionsIsAdjustmentPostsAnAdjustmentKind(t *testing.T) {
 // real HTTP path, never re-checked here - PostTransaction's own check is
 // what answers.
 func TestPostTransactionsRejectsNonPositiveAmount(t *testing.T) {
+	t.Parallel()
 	for _, amount := range []int64{0, -1, -50_000} {
 		r := testRouter(t)
 		setup := setUpFund(t, r)
@@ -253,6 +260,7 @@ func TestPostTransactionsRejectsNonPositiveAmount(t *testing.T) {
 // TestPostTransactionsRejectsAMalformedOccurredOn is the acceptance
 // criterion's other half: a calendar-invalid date surfaces as 400 too.
 func TestPostTransactionsRejectsAMalformedOccurredOn(t *testing.T) {
+	t.Parallel()
 	for _, occurredOn := range []string{"2026-02-30", "not-a-date", "2026-8-12"} {
 		r := testRouter(t)
 		setup := setUpFund(t, r)
@@ -272,6 +280,7 @@ func TestPostTransactionsRejectsAMalformedOccurredOn(t *testing.T) {
 }
 
 func TestPostTransactionsRejectsMalformedJSON(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	setUpFund(t, r)
 
@@ -291,6 +300,7 @@ func TestPostTransactionsRejectsMalformedJSON(t *testing.T) {
 // "out". Asserted here to prove the handler passes the raw string through
 // rather than pre-checking it against an allow-list of its own.
 func TestPostTransactionsRejectsAnUnrecognizedDirection(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	setup := setUpFund(t, r)
 
@@ -344,6 +354,7 @@ func seedTransactions(t *testing.T, sqlDB *sql.DB, fundID, accountID, purposeID 
 // rows, two sharing an occurred_on, must come back (occurred_on DESC, id
 // DESC) - the later of the two same-dated rows first.
 func TestGetTransactionsOrdersNewestFirstTiesBrokenByIDDesc(t *testing.T) {
+	t.Parallel()
 	sqlDB := testStoreDB(t)
 	r := authedRouterFor(t, sqlDB)
 	setup := setUpFund(t, r)
@@ -390,6 +401,7 @@ func TestGetTransactionsOrdersNewestFirstTiesBrokenByIDDesc(t *testing.T) {
 // once each by following next_cursor to the end, and the order across page
 // boundaries stays newest-first.
 func TestGetTransactionsPagingWalksTheWholeSetWithNoSkipOrDuplicate(t *testing.T) {
+	t.Parallel()
 	sqlDB := testStoreDB(t)
 	r := authedRouterFor(t, sqlDB)
 	setup := setUpFund(t, r)
@@ -451,6 +463,7 @@ func TestGetTransactionsPagingWalksTheWholeSetWithNoSkipOrDuplicate(t *testing.T
 // have silently skipped or duplicated a row landing in the middle of the
 // list like this one does.
 func TestGetTransactionsPagingHandlesABackdatedInsertBetweenPageFetches(t *testing.T) {
+	t.Parallel()
 	sqlDB := testStoreDB(t)
 	r := authedRouterFor(t, sqlDB)
 	setup := setUpFund(t, r)
@@ -511,6 +524,7 @@ func TestGetTransactionsPagingHandlesABackdatedInsertBetweenPageFetches(t *testi
 // over note" (Transaksi's own row in the List/Search-over table), and that
 // it is case-insensitive: q is lower-case, the note is not.
 func TestGetTransactionsSearchHitsNoteCaseInsensitive(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	setup := setUpFund(t, r)
 
@@ -541,6 +555,7 @@ func TestGetTransactionsSearchHitsNoteCaseInsensitive(t *testing.T) {
 // TestGetTransactionsSearchHitsPurposeName is ADR-032's "search over
 // purpose name" half.
 func TestGetTransactionsSearchHitsPurposeName(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	setup := setUpFund(t, r)
 
@@ -580,6 +595,7 @@ func TestGetTransactionsSearchHitsPurposeName(t *testing.T) {
 // name" half - member name reaches a transaction row only through the
 // LEFT JOIN member (most rows carry no member_id at all).
 func TestGetTransactionsSearchHitsMemberName(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	setup := setUpFund(t, r)
 
@@ -624,6 +640,7 @@ func TestGetTransactionsSearchHitsMemberName(t *testing.T) {
 // was that 50.000?" case: an all-digit q also matches amount exactly, not
 // as a substring of a larger figure.
 func TestGetTransactionsSearchAllDigitsMatchesExactAmount(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	setup := setUpFund(t, r)
 
@@ -649,6 +666,7 @@ func TestGetTransactionsSearchAllDigitsMatchesExactAmount(t *testing.T) {
 // wildcards in q are literal": a q containing % or _ must match only notes
 // containing that literal character, never act as a SQL LIKE wildcard.
 func TestGetTransactionsSearchTreatsWildcardsAsLiteral(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	setup := setUpFund(t, r)
 
@@ -698,6 +716,7 @@ func TestGetTransactionsSearchTreatsWildcardsAsLiteral(t *testing.T) {
 // member_id/dues_period (ADR-029), so both must show under the filter -
 // and rows for another member or another period must not.
 func TestGetTransactionsMemberIDAndDuesPeriodFiltersIncludeTheReversal(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	setup := setUpFund(t, r)
 
@@ -771,6 +790,7 @@ func TestGetTransactionsMemberIDAndDuesPeriodFiltersIncludeTheReversal(t *testin
 // rows dated in that month, ?direction= the rows going that way, and the two
 // compose - an outflow in August, and nothing from July or going in.
 func TestGetTransactionsMonthAndDirectionFilters(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	setup := setUpFund(t, r)
 
@@ -819,6 +839,7 @@ func TestGetTransactionsMonthAndDirectionFilters(t *testing.T) {
 // TestGetTransactionsRejectsAMalformedMonthOrDirection: a filter she cannot
 // see is one she cannot correct, so garbage is a 400, never the whole list.
 func TestGetTransactionsRejectsAMalformedMonthOrDirection(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	setUpFund(t, r)
 
@@ -837,6 +858,7 @@ func TestGetTransactionsRejectsAMalformedMonthOrDirection(t *testing.T) {
 // TestGetTransactionsRejectsAMalformedCursor is #225's "malformed cursor ->
 // 400" acceptance criterion.
 func TestGetTransactionsRejectsAMalformedCursor(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	setUpFund(t, r)
 
@@ -864,6 +886,7 @@ func TestGetTransactionsRejectsAMalformedCursor(t *testing.T) {
 // TestGetTransactionsRejectsAMalformedMemberID is #225's "malformed ...
 // member_id -> 400" acceptance criterion.
 func TestGetTransactionsRejectsAMalformedMemberID(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	setUpFund(t, r)
 
@@ -880,6 +903,7 @@ func TestGetTransactionsRejectsAMalformedMemberID(t *testing.T) {
 // TestGetTransactionsRejectsAMalformedDuesPeriod covers the same "validate
 // types -> 400 on garbage" rule for dues_period as the member_id test above.
 func TestGetTransactionsRejectsAMalformedDuesPeriod(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	setUpFund(t, r)
 
@@ -900,6 +924,7 @@ func TestGetTransactionsRejectsAMalformedDuesPeriod(t *testing.T) {
 // still holds" acceptance criterion, applied to the new paged/searched
 // query rather than the old unfiltered one.
 func TestGetTransactionsNeverReturnsAnotherFundsRow(t *testing.T) {
+	t.Parallel()
 	sqlDB := testStoreDB(t)
 	r := authedRouterFor(t, sqlDB)
 	setup := setUpFund(t, r)
@@ -968,6 +993,7 @@ func findTransactionRow(t *testing.T, page transactionsPageResponse, id int64) t
 // account's name, so TransactionList.tsx can build "{period} - {member}"
 // without a second request.
 func TestGetTransactionsDuesPaymentCarriesMemberAndAccountName(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	setup := setUpFund(t, r)
 	memberID := memberFor(t, r, "Budi")
@@ -1000,6 +1026,7 @@ func TestGetTransactionsDuesPaymentCarriesMemberAndAccountName(t *testing.T) {
 // - {period} - {member}" needs it on the reversal row itself, not only on
 // the original payment.
 func TestGetTransactionsDuesReversalCarriesMemberName(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	setup := setUpFund(t, r)
 	memberID := memberFor(t, r, "Warga Satu")
@@ -1036,6 +1063,7 @@ func TestGetTransactionsDuesReversalCarriesMemberName(t *testing.T) {
 // The opening balance row carries its own account's name - the "Saldo awal
 // - {lokasi}" label's only fact besides its kind.
 func TestGetTransactionsOpeningBalanceCarriesAccountName(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	rec := postSetupWithAccounts(t, r, "Test Fund", []setupAccountRequest{
 		{Kind: "cash", Name: "Tunai", OpeningBalance: &openingBalanceRequest{Amount: 100_000, OccurredOn: "2026-08-01"}},
@@ -1062,6 +1090,7 @@ func TestGetTransactionsOpeningBalanceCarriesAccountName(t *testing.T) {
 // so the Talangan label can show "{member}" with the claim's note on the
 // note line.
 func TestGetTransactionsSettlementCarriesClaimMemberAndNote(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	setup := setUpFund(t, r)
 	memberID := memberFor(t, r, "Jane")
@@ -1109,6 +1138,7 @@ func TestGetTransactionsSettlementCarriesClaimMemberAndNote(t *testing.T) {
 // which name is "from" (ListTransactionsPage's own comment has the
 // reasoning).
 func TestGetTransactionsLocationTransferBothLegsNameTheSameFromTo(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	setup := setUpFund(t, r)
 
@@ -1159,6 +1189,7 @@ func TestGetTransactionsLocationTransferBothLegsNameTheSameFromTo(t *testing.T) 
 // Kas Utama" needs the envelope's own occasion and the fund's main purpose
 // name, on both legs identically.
 func TestGetTransactionsIncidentalRollLeftoverCarriesEnvelopeToMainPurposeNames(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	setup := setUpFund(t, r)
 	envelope := openIncidentalFor(t, r, "Jane's wedding", "2026-08-01")
@@ -1203,6 +1234,7 @@ func TestGetTransactionsIncidentalRollLeftoverCarriesEnvelopeToMainPurposeNames(
 // envelope - and the from/to names follow that direction exactly, never the
 // leftover case's fixed order.
 func TestGetTransactionsIncidentalRollShortfallCarriesMainToEnvelopePurposeNames(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	setup := setUpFund(t, r)
 	if rec := postTransaction(t, r, transactionRequest{
@@ -1253,6 +1285,7 @@ func TestGetTransactionsIncidentalRollShortfallCarriesMainToEnvelopePurposeNames
 // but nothing stops two funds naming their own account "Tunai" or their own
 // member "Budi" - same text, different rows).
 func TestGetTransactionsNewFieldsNeverLeakAnotherFundsNames(t *testing.T) {
+	t.Parallel()
 	sqlDB := testStoreDB(t)
 	r := authedRouterFor(t, sqlDB)
 	setup := setUpFund(t, r)
@@ -1325,6 +1358,7 @@ func TestGetTransactionsNewFieldsNeverLeakAnotherFundsNames(t *testing.T) {
 // the envelope is closed - including for the roll-out leg closing posts
 // against that same purpose.
 func TestGetTransactionsPurposeIDFilterReachesAClosedEnvelope(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	setup := setUpFund(t, r)
 	cash := setup.CashAccountID(t)
@@ -1369,6 +1403,7 @@ func TestGetTransactionsPurposeIDFilterReachesAClosedEnvelope(t *testing.T) {
 // replacing it: both clauses must hold at once, so a note matching q under
 // another purpose stays out.
 func TestGetTransactionsPurposeIDFilterComposesWithSearch(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	setup := setUpFund(t, r)
 	cash := setup.CashAccountID(t)
@@ -1405,6 +1440,7 @@ func TestGetTransactionsPurposeIDFilterComposesWithSearch(t *testing.T) {
 // non-positive id: a filter she cannot see is one she cannot correct, so a
 // broken link says so rather than silently listing the whole ledger.
 func TestGetTransactionsRejectsAMalformedPurposeID(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	setUpFund(t, r)
 

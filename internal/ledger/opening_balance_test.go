@@ -22,6 +22,7 @@ import (
 // it just created - and FundBalance/AccountBalance include it exactly like
 // any other entry.
 func TestCreateAccountPostsOpeningBalanceRowIncludedInBalances(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 	f := newFixture(t, l)
 	ctx := context.Background()
@@ -85,6 +86,7 @@ func TestCreateAccountPostsOpeningBalanceRowIncludedInBalances(t *testing.T) {
 // row - the same no-op rule PostOpeningBalance used to carry, now checked at
 // CreateAccount's own boundary.
 func TestCreateAccountZeroOpeningBalancePostsAccountOnlyNoRow(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 	f := newFixture(t, l)
 	ctx := context.Background()
@@ -121,6 +123,7 @@ func TestCreateAccountZeroOpeningBalancePostsAccountOnlyNoRow(t *testing.T) {
 // absent and zero are the same thing (setup.go's own AccountInput doc
 // comment states this; CreateAccountParams shares it).
 func TestCreateAccountNilOpeningBalancePostsAccountOnlyNoRow(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 	f := newFixture(t, l)
 	ctx := context.Background()
@@ -147,6 +150,7 @@ func TestCreateAccountNilOpeningBalancePostsAccountOnlyNoRow(t *testing.T) {
 // transaction: a refused balance must not strand a location with nothing to
 // say about what's in it.
 func TestCreateAccountRejectsNegativeOpeningBalanceLeavesNoAccountBehind(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 	f := newFixture(t, l)
 	ctx := context.Background()
@@ -185,6 +189,7 @@ func TestCreateAccountRejectsNegativeOpeningBalanceLeavesNoAccountBehind(t *test
 // A malformed or calendar-invalid occurred_on is refused the same way, and
 // leaves no account behind either.
 func TestCreateAccountRejectsInvalidOccurredOnLeavesNoAccountBehind(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name       string
 		occurredOn string
@@ -195,6 +200,7 @@ func TestCreateAccountRejectsInvalidOccurredOnLeavesNoAccountBehind(t *testing.T
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			l := newTestLedger(t)
 			f := newFixture(t, l)
 			ctx := context.Background()
@@ -227,6 +233,7 @@ func TestCreateAccountRejectsInvalidOccurredOnLeavesNoAccountBehind(t *testing.T
 // SetUpFund posts exactly the opening balances the accounts asked for -
 // some, none, or all - in one batch, mixed freely in the same call.
 func TestSetUpFundPostsOpeningBalancesForOnlyTheAccountsThatHaveThem(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 	ctx := context.Background()
 
@@ -282,6 +289,7 @@ func TestSetUpFundPostsOpeningBalancesForOnlyTheAccountsThatHaveThem(t *testing.
 // opens, and leaves no fund behind at all - a retry with a corrected amount
 // must not collide with ErrFundAlreadyExists.
 func TestSetUpFundRejectsNegativeOpeningBalanceLeavesNoFundBehind(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 	ctx := context.Background()
 	q := store.New(l.db)
@@ -317,6 +325,7 @@ func TestSetUpFundRejectsNegativeOpeningBalanceLeavesNoFundBehind(t *testing.T) 
 // A malformed occurred_on anywhere in the batch is refused the same way,
 // leaving no fund and no account behind either.
 func TestSetUpFundRejectsInvalidOccurredOnLeavesNoFundBehind(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 	ctx := context.Background()
 	q := store.New(l.db)
@@ -347,6 +356,7 @@ func TestSetUpFundRejectsInvalidOccurredOnLeavesNoFundBehind(t *testing.T) {
 // both CreateAccount and SetUpFund entirely, must still be refused. This is
 // the test that would catch the index itself being dropped.
 func TestOpeningBalanceIndexRefusesASecondRowInsertedDirectly(t *testing.T) {
+	t.Parallel()
 	l := newTestLedger(t)
 	f := newFixture(t, l)
 	ctx := context.Background()
@@ -383,6 +393,7 @@ func TestOpeningBalanceIndexRefusesASecondRowInsertedDirectly(t *testing.T) {
 // balance's Note follows the same nil/blank/typed contract as every other
 // system path.
 func TestCreateAccountOpeningBalanceNoteFollowsNormalizeNoteContract(t *testing.T) {
+	t.Parallel()
 	create := func(t *testing.T, note *string) *string {
 		t.Helper()
 		l := newTestLedger(t)

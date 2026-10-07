@@ -121,6 +121,7 @@ func lineFor(t *testing.T, lines []reconciliationLineResponse, accountID int64) 
 }
 
 func TestPostReconciliationsRequiresAFund(t *testing.T) {
+	t.Parallel()
 	rec := postReconciliation(t, testRouter(t), takeReconciliationRequest{
 		Counts: []accountCountRequest{{AccountID: 1, ActualAmount: 0, Resolution: "matched"}},
 	})
@@ -134,6 +135,7 @@ func TestPostReconciliationsRequiresAFund(t *testing.T) {
 }
 
 func TestGetReconciliationsRequiresAFund(t *testing.T) {
+	t.Parallel()
 	rec := getReconciliations(t, testRouter(t))
 	if rec.Code != http.StatusNotFound {
 		t.Fatalf("GET /api/reconciliations before setup = %d, want %d (body: %s)", rec.Code, http.StatusNotFound, rec.Body.String())
@@ -145,6 +147,7 @@ func TestGetReconciliationsRequiresAFund(t *testing.T) {
 }
 
 func TestGetReconciliationLatestRequiresAFund(t *testing.T) {
+	t.Parallel()
 	rec := getLatestReconciliation(t, testRouter(t))
 	if rec.Code != http.StatusNotFound {
 		t.Fatalf("GET /api/reconciliations/latest before setup = %d, want %d (body: %s)", rec.Code, http.StatusNotFound, rec.Body.String())
@@ -156,6 +159,7 @@ func TestGetReconciliationLatestRequiresAFund(t *testing.T) {
 }
 
 func TestGetReconciliationOpenLinesRequiresAFund(t *testing.T) {
+	t.Parallel()
 	rec := getOpenReconciliationLines(t, testRouter(t))
 	if rec.Code != http.StatusNotFound {
 		t.Fatalf("GET /api/reconciliations/open-lines before setup = %d, want %d (body: %s)", rec.Code, http.StatusNotFound, rec.Body.String())
@@ -167,6 +171,7 @@ func TestGetReconciliationOpenLinesRequiresAFund(t *testing.T) {
 }
 
 func TestGetReconciliationDetailRequiresAFund(t *testing.T) {
+	t.Parallel()
 	rec := getReconciliationDetail(t, testRouter(t), 1)
 	if rec.Code != http.StatusNotFound {
 		t.Fatalf("GET /api/reconciliations/{id} before setup = %d, want %d (body: %s)", rec.Code, http.StatusNotFound, rec.Body.String())
@@ -183,6 +188,7 @@ func TestGetReconciliationDetailRequiresAFund(t *testing.T) {
 // (GET /api/fund before setup, GET /api/incidentals/{id} on an unknown id) -
 // not an empty 200. See latestReconciliation's own doc comment for why.
 func TestGetReconciliationLatestBeforeAnySnapshotIs404(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	setUpFund(t, r)
 
@@ -202,6 +208,7 @@ func TestGetReconciliationLatestBeforeAnySnapshotIs404(t *testing.T) {
 // must resolve to their own static handlers, not fall into the {id} route and
 // fail strconv.ParseInt on "latest"/"open-lines" as invalid_argument.
 func TestReconciliationsLatestAndOpenLinesAreNotParsedAsIDs(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	setUpFund(t, r)
 
@@ -235,6 +242,7 @@ func TestReconciliationsLatestAndOpenLinesAreNotParsedAsIDs(t *testing.T) {
 // resolves as "matched," and reads back identically through both the list
 // and the detail route.
 func TestTakeReconciliationMatchedRoundTripsThroughListAndDetail(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	setup := setUpFund(t, r)
 
@@ -326,6 +334,7 @@ func TestTakeReconciliationMatchedRoundTripsThroughListAndDetail(t *testing.T) {
 // difference_amount would be stored as 0 - schema-legal, and a permanent
 // false record that no gap was ever found.
 func TestTakeReconciliationAdjustedStoresTheGapFoundNotZero(t *testing.T) {
+	t.Parallel()
 	r, l := testRouterAndLedger(t)
 	setup := setUpFund(t, r)
 	ctx := t.Context()
@@ -395,6 +404,7 @@ func TestTakeReconciliationAdjustedStoresTheGapFoundNotZero(t *testing.T) {
 // recorded_amount, because its transaction id lands above the first
 // snapshot's cutoff regardless of its calendar date.
 func TestTakeReconciliationBackdatedFixLandsInNextSnapshotNotThisOne(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	setup := setUpFund(t, r)
 
@@ -481,6 +491,7 @@ func TestTakeReconciliationBackdatedFixLandsInNextSnapshotNotThisOne(t *testing.
 // would otherwise suggest. No pre-check is added here for something the
 // ledger's own schema already refuses (ADR-027).
 func TestTakeReconciliationRejectsAnotherFundsAccount(t *testing.T) {
+	t.Parallel()
 	sqlDB := testStoreDB(t)
 	r := authedRouterFor(t, sqlDB)
 	setUpFund(t, r)
@@ -526,6 +537,7 @@ func TestTakeReconciliationRejectsAnotherFundsAccount(t *testing.T) {
 // in internal/ledger, since v1's HTTP surface only ever resolves to the one
 // fund setup created and so cannot address a second fund's router of its own.
 func TestGetReconciliationDetailOnAnotherFundsSnapshotIs404(t *testing.T) {
+	t.Parallel()
 	sqlDB := testStoreDB(t)
 	r := authedRouterFor(t, sqlDB)
 	setUpFund(t, r)
@@ -574,6 +586,7 @@ func TestGetReconciliationDetailOnAnotherFundsSnapshotIs404(t *testing.T) {
 // as 400 invalid_argument, and proves nothing was written: the list stays
 // empty after every rejected call.
 func TestTakeReconciliationRejectsInvalidArgumentsBeforeAnyWrite(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name string
 		req  takeReconciliationRequest
@@ -629,6 +642,7 @@ func TestTakeReconciliationRejectsInvalidArgumentsBeforeAnyWrite(t *testing.T) {
 }
 
 func TestPostReconciliationsRejectsMalformedJSON(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	setUpFund(t, r)
 
@@ -644,6 +658,7 @@ func TestPostReconciliationsRejectsMalformedJSON(t *testing.T) {
 }
 
 func TestGetReconciliationDetailRejectsANonNumericID(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	setUpFund(t, r)
 
@@ -659,6 +674,7 @@ func TestGetReconciliationDetailRejectsANonNumericID(t *testing.T) {
 }
 
 func TestGetReconciliationDetailOnAnUnknownIDIs404(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	setUpFund(t, r)
 
@@ -678,6 +694,7 @@ func TestGetReconciliationDetailOnAnUnknownIDIs404(t *testing.T) {
 // actionable if the answer says which count it was found in, so
 // reconciliation_id is asserted here and not merely present on the type.
 func TestGetReconciliationOpenLinesReturnsLeftOpenLinesWithTheirSnapshot(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	setup := setUpFund(t, r)
 
@@ -734,6 +751,7 @@ func TestGetReconciliationOpenLinesReturnsLeftOpenLinesWithTheirSnapshot(t *test
 // test on GET /api/transactions and GET /api/reimbursements: two snapshots
 // performed at the same instant are ordered by id, descending.
 func TestGetReconciliationsOrdersNewestFirstTiesBrokenByIDDesc(t *testing.T) {
+	t.Parallel()
 	sqlDB := testStoreDB(t)
 	r := authedRouterFor(t, sqlDB)
 	setup := setUpFund(t, r)
@@ -775,6 +793,7 @@ func TestGetReconciliationsOrdersNewestFirstTiesBrokenByIDDesc(t *testing.T) {
 // #227's "paging walks the whole set with no skip and no duplicate"
 // acceptance criterion, over 60 snapshots (more than two 25-row pages).
 func TestGetReconciliationsPagingWalksTheWholeSetWithNoSkipOrDuplicate(t *testing.T) {
+	t.Parallel()
 	sqlDB := testStoreDB(t)
 	r := authedRouterFor(t, sqlDB)
 	setup := setUpFund(t, r)
@@ -832,6 +851,7 @@ func TestGetReconciliationsPagingWalksTheWholeSetWithNoSkipOrDuplicate(t *testin
 // on page 2 exactly once - proving the keyset cursor (performed_at, id) is
 // what actually runs rather than LIMIT/OFFSET.
 func TestGetReconciliationsPagingHandlesABackdatedInsertBetweenPageFetches(t *testing.T) {
+	t.Parallel()
 	sqlDB := testStoreDB(t)
 	r := authedRouterFor(t, sqlDB)
 	setup := setUpFund(t, r)
@@ -889,6 +909,7 @@ func TestGetReconciliationsPagingHandlesABackdatedInsertBetweenPageFetches(t *te
 // TestGetReconciliationsRejectsAMalformedCursor is #227's "malformed cursor
 // -> 400" acceptance criterion.
 func TestGetReconciliationsRejectsAMalformedCursor(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	setUpFund(t, r)
 
@@ -909,6 +930,7 @@ func TestGetReconciliationsRejectsAMalformedCursor(t *testing.T) {
 // that has never been reconciled" case at the API layer - the empty state
 // Cek kas's own copy handles is driven by this shape, not an error.
 func TestGetReconciliationsOnAnEmptyFundIsAnEmptyPage(t *testing.T) {
+	t.Parallel()
 	r := testRouter(t)
 	setUpFund(t, r)
 
@@ -928,6 +950,7 @@ func TestGetReconciliationsOnAnEmptyFundIsAnEmptyPage(t *testing.T) {
 // negative difference, to prove the sum is over ABS() and not the signed
 // total.
 func TestGetReconciliationsOpenDifferenceAmount(t *testing.T) {
+	t.Parallel()
 	sqlDB := testStoreDB(t)
 	r := authedRouterFor(t, sqlDB)
 	setup := setUpFund(t, r)
