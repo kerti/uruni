@@ -49,7 +49,7 @@ test.describe('restore', () => {
     await expect(page.getByRole('button', { name: copy.auth.login.submit })).toBeVisible()
   }
 
-  test('restores an uploaded backup, then logs everyone out', async ({ page }) => {
+  test('restores an uploaded backup, then logs everyone out', { tag: '@smoke' }, async ({ page }) => {
     await logIn(page)
     await page.goto('/')
     await expect(page.getByText(copy.home.balanceHeading)).toBeVisible()

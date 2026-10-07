@@ -39,7 +39,7 @@ Standing decisions that no ADR owns go in [`../Decisions.md`](../Decisions.md).
 | [012](./012-backup-and-export.md) | Backup & export implementation | `draft` |
 | [013](./013-scheduling-in-process.md) | Scheduling: in-process | implemented |
 | [014](./014-localization-indonesian-first.md) | Localization: Indonesian-first, strings centralized | implemented |
-| [015](./015-testing-money-math.md) | Testing: prioritize the money math | implemented |
+| [015](./015-testing-money-math.md) | Testing: prioritize the money math | superseded by 039 |
 | [016](./016-deployment-targets-reference-infra.md) | Deployment targets & reference infra | implemented |
 | [017](./017-cicd-github-actions.md) | CI/CD: GitHub Actions | implemented |
 | [018](./018-release-and-versioning.md) | Release & versioning: tag-driven SemVer, operator upgrade contract | implemented |
@@ -63,6 +63,7 @@ Standing decisions that no ADR owns go in [`../Decisions.md`](../Decisions.md).
 | [036](./036-moving-money-between-purposes.md) | Moving money between purposes, and saying why it moved | implemented |
 | [037](./037-report-shows-the-month-as-it-ended.md) | The report shows each month as it ended | implemented |
 | [038](./038-the-month-as-a-balance-walk.md) | The month as a balance walk: start, in, out, adjustments, end | implemented |
+| [039](./039-e2e-every-operation-gated-in-ci.md) | Testing: every operation has a journey, and CI runs them | implemented |
 
 The **Stage** column is the record, and it is all this index says about implementation: `draft` means editable in place, `implemented` means superseding-ADR-only. *Which* slice put code behind a given ADR belongs in that ADR and in the PR that dropped its tag — restated here, this index becomes a changelog.
 

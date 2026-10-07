@@ -3,7 +3,7 @@
 - What this is: a hand-kept map from every PRD requirement (sections 7-8) and every treasurer operation to the test layer that covers it. A blank `Covered by` cell or a `Gap` note is a finding; the findings became the M8 issues. Written for #431.
 - The rule: every treasurer operation has at least one Playwright journey. Edge cases live in the fastest layer that is exact for them: Go for money, ledger, reconciliation and API rules; Vitest for client logic; Playwright only for what needs a real browser against the real server.
 - Keeping it current: a PR that adds or changes a feature adds or edits its rows in that same PR. No IDs, no `covers:` annotations, no generator (ROADMAP: no QA matrix).
-- Reading it: **bold** rows are operations, `case:` rows are their edge and failure cases. `Layer` is where the test should live, `Covered by` is what exists today (an operation row lists only its Playwright journey; its cases carry the Go and Vitest tests), `Tier` is the proposed gate for e2e rows (smoke = every PR, nightly = the full run).
+- Reading it: **bold** rows are operations, `case:` rows are their edge and failure cases. `Layer` is where the test should live, `Covered by` is what exists today (an operation row lists only its Playwright journey; its cases carry the Go and Vitest tests), `Tier` is the gate for e2e rows (smoke = tagged `@smoke`, run on every PR; nightly = the full run; ADR-039, `.github/workflows/e2e.yml`).
 - Paths: e2e specs are in `web/e2e/`; Go tests are under `internal/` (`cmd/` is `cmd/uruni/`); Vitest tests are under `web/src/`; `A > B` is file > test name. In section 8 the bold rows are requirements, not operations.
 
 ## 7.1 Setup and access

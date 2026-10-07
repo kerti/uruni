@@ -2,7 +2,7 @@
         run serve-bin build test test-cover lint fmt tidy sqlc migrate-up migrate-down migrate-status db-reset \
         web-install web-dev web-build web-lint web-fmt web-fmt-check web-typecheck web-test \
         server-stop server-restart web-stop web-restart restart servers-status \
-        e2e e2e-install e2e-reset e2e-server stack-up stack-down stack-logs stack-ps \
+        e2e e2e-ci e2e-install e2e-reset e2e-server stack-up stack-down stack-logs stack-ps \
         dev-user start-task check
 
 # `make` with no target prints help.
@@ -48,7 +48,7 @@ DEV_UPLOADS_DIR := $(or $(URUNI_UPLOADS_DIR),./uploads)
 # not already exist (config.EnsureBackupDirWritable) either.
 DEV_BACKUP_DIR := $(or $(URUNI_BACKUP_DIR),./backups)
 
-# E2E (ADR-015). SQLite makes this cheap: throwaway database *files*, so the
+# E2E (ADR-039). SQLite makes this cheap: throwaway database *files*, so the
 # dev DB is never touched and there is no container to exec into. `make e2e`
 # owns none of the values below: Playwright builds the binary and gives each
 # worker its own server, database, port, backup and uploads directory under
@@ -118,8 +118,9 @@ help:
 	@echo "  restart                 restart both"
 	@echo "  servers-status          show which dev servers are running"
 	@echo ""
-	@echo "E2E (Playwright; ADR-015):"
+	@echo "E2E (Playwright; ADR-039):"
 	@echo "  e2e                     full run - build the SPA, then the suite on per-worker instances"
+	@echo "  e2e-ci                  the CI twin of e2e - no SPA build (the workflow did it), CI=true"
 	@echo "  e2e-install             download the browser Playwright drives (once per machine)"
 	@echo "  e2e-reset               recreate + migrate + seed $(E2E_DB) (one instance, by hand)"
 	@echo "  e2e-server              run the server against $(E2E_DB) (foreground, :$(E2E_PORT))"
@@ -376,7 +377,7 @@ servers-status:
 	  echo "web:    stopped"; \
 	fi
 
-# ---- e2e (Playwright; ADR-015) ---------------------------------------------
+# ---- e2e (Playwright; ADR-039) ---------------------------------------------
 # `make e2e` needs no reset step: Playwright's global setup builds the binary
 # and seeds a template database, and every spec file resets its worker's own
 # instance from it (web/playwright.config.ts). The binary embeds web/dist, so
@@ -386,6 +387,13 @@ servers-status:
 
 e2e: web-build
 	@( cd web && npm run -s test:e2e -- $(E2E_ARGS) )
+
+# What .github/workflows/e2e-run.yml runs, after its own `npm ci` and
+# `npm run build` steps have built web/dist. CI=true is what playwright.config.ts reads for
+# forbidOnly, one retry and the github reporter. To reproduce the PR gate:
+#   make e2e-ci E2E_ARGS='--grep @smoke'
+e2e-ci:
+	@( cd web && CI=true npm run -s test:e2e -- $(E2E_ARGS) )
 
 # `npm ci` installs the Playwright *runner*, never the browser it drives - that
 # is a separate few-hundred-MB download, once per machine. Keeping it out of
@@ -441,8 +449,8 @@ start-task:
 # Pre-push gate. Deliberately mirrors .github/workflows/ci.yml step for step, so
 # green locally ~ green in CI (ADR-017). Keep the two in sync when either
 # changes - including the golangci-lint version (see GOLANGCI_CI_VERSION above;
-# `make doctor` flags a mismatch). e2e is excluded - run `make e2e` separately
-# (slow and verbose).
+# `make doctor` flags a mismatch). e2e is excluded: it has its own workflow
+# (e2e.yml, ADR-039) and its own target, `make e2e`.
 #
 # The go.mod / web/package.json guards mirror ci.yml's `preflight` job: the
 # tooling predates the code (ADR-019), so until M1 lands there is nothing to

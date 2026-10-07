@@ -12,8 +12,14 @@
 
 **Deliberately simpler than Balances:** one deploy target (the maintainer's instance), **no** preview/demo/production environment split and **no** nightly upgrade-contract rehearsal until there's real production data to protect. Add them only when warranted.
 
-**Consequences.** `.github/` carries `workflows/{ci,release,codeql,gitleaks}.yml`, plus `release.yml` (the release-*notes* config — note the name collision with the workflow), `dependabot.yml`, `PULL_REQUEST_TEMPLATE.md` and `ISSUE_TEMPLATE/`. Pin action SHAs before going public.
+**Consequences.** `.github/` carries `workflows/{ci,release,codeql,gitleaks}.yml` and the e2e pair `workflows/{e2e,e2e-run}.yml` ([ADR-039](./039-e2e-every-operation-gated-in-ci.md)), plus `release.yml` (the release-*notes* config — note the name collision with the workflow), `dependabot.yml`, `PULL_REQUEST_TEMPLATE.md` and `ISSUE_TEMPLATE/`. Pin action SHAs before going public.
 
 Two version pins have to move in lockstep or `make check` stops predicting CI: **golangci-lint** (`GOLANGCI_VERSION` in `ci.yml` ↔ `GOLANGCI_CI_VERSION` in the `Makefile`, which `make doctor` compares against your local binary) and the **golangci-lint-action major** — v8 drives golangci-lint v2, which is the schema `.golangci.yml` is written in. Action v6 silently ignores a v2 config.
 
 Because the tooling was written before the code ([ADR-019](./019-cli-surface-and-runtime-config.md)), `ci.yml` and `codeql.yml` open with a `preflight` job that skips the backend/frontend jobs until `go.mod` and `web/package.json` actually exist. This keeps `main` green through the pre-scaffold window — "never tag a red `main`" only works if red means something — and goes permanently inert once M1 lands.
+
+## Amendments
+
+An amendment corrects a statement of fact about the code that has since become false. It never changes a decision, a trade-off or an accepted cost — that is still a superseding ADR. See the [ADR index](./README.md) for the rule.
+
+**2026-10-07 ([#434](https://github.com/kerti/uruni/issues/434))** — *Consequences* listed `.github/workflows/` as `{ci,release,codeql,gitleaks}.yml`. E2E now runs in CI from its own pair of workflows, so the list names them too. What ADR-017 decided is unchanged: `ci.yml` and `make check` still mirror each other, and e2e is outside that mirror.

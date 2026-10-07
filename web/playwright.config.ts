@@ -1,6 +1,6 @@
 import { defineConfig } from '@playwright/test'
 
-// E2E (ADR-015's Playwright leg, landed at M6.3). There is no `webServer`
+// E2E (ADR-039; the Playwright leg landed at M6.3). There is no `webServer`
 // block and no `baseURL` here: every worker boots its own server on its own
 // database, backup directory and uploads directory (e2e/fixtures.ts), and the
 // `instance` fixture there supplies the baseURL. The Makefile's E2E_DB /
@@ -26,7 +26,12 @@ export default defineConfig({
   // A stray .only left in a spec must fail CI-shaped runs rather than
   // quietly skip the rest of the suite.
   forbidOnly: !!process.env.CI,
-  reporter: [['list']],
+  // In CI (e2e-run.yml) a test gets one retry, so a flake reads as "flaky"
+  // in the report rather than a red PR, and the retry records the trace
+  // (trace: 'on-first-retry' below) that the failure artifact uploads. The
+  // github reporter puts each failure on the PR as an annotation.
+  retries: process.env.CI ? 1 : 0,
+  reporter: process.env.CI ? [['list'], ['github']] : [['list']],
   use: {
     // The app is phone-first, and the suite runs the way the treasurer does:
     // 390x844 with touch, for every spec (ruled 2026-10-07; the 800px layout
