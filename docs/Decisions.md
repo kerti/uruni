@@ -2,7 +2,7 @@
 
 *A running record of what we've decided and why. Anything here can still change.*
 
-Last updated: 2026-10-05 (Riwayat filters)
+Last updated: 2026-10-07 (Excel parked, M8 becomes audit and e2e coverage)
 
 ## What belongs in this file
 
@@ -412,3 +412,14 @@ Grill A, pulled into M6. The rulings live in [ADR-012](./ADR/012-backup-and-expo
 
 - **react-day-picker is a deliberate new dependency** (about 24 KB gzipped with date-fns). Mocked against three dropdowns and native-plus-text, it won on taps-per-change and on showing the day of the week, which is how a treasurer remembers when something happened.
 - **Every picker is bounded**, in `lib/dates`: money dates run from two calendar years back to today; a join date from 2000 to a year ahead; a rate's start month from 2000 to two years ahead; the status period from 2000 to a year ahead. The server still accepts any real date. The bounds are the UI's guard against a slipped thumb, not a ledger rule.
+
+## Excel is parked, and M8 becomes audit and e2e coverage (decided 2026-10-07)
+
+The app is treated as feature-complete apart from the Excel workbook. #386 (changing the email and password) is still to come in M9, and its e2e ships with it.
+
+- **Excel is parked, not cut.** [#328](https://github.com/kerti/uruni/issues/328) has no milestone and may never be built. PRD section 7.10 already calls it optional, and `v1.0.0` is gated on the importer's upgrade chain, not on Excel. ADR-012's Excel design stays as written. While Excel is unbuilt, ADR-012 can't be marked fully implemented, so the `v1.0.0` gate either builds Excel or splits it out of that ADR.
+- **M8 maps every PRD requirement and treasurer operation to a test layer.** Each operation gets at least one Playwright journey. Edge cases belong to the layer that is fastest and exact for them (Go for money and the ledger, Vitest for client logic), and the map records which layer that is. Every case gets covered, but not every case runs in a browser.
+- **The map is one hand-kept file**, `web/e2e/COVERAGE.md`. It has no IDs, no `covers:` annotations and no generated gate. Balances' QA matrix stays on ROADMAP's "not doing" list.
+- **E2E joins CI, tiered like Balances.** `@smoke` specs gate each PR and the full suite runs nightly. This retires ADR-015's "a few end-to-end flows", so the slice that wires CI also brings the ADR change.
+- **The audit covers four things:** docs-vs-code drift, the security surfaces, dead code and dependencies, and unit-test gaps.
+- **The Fly.io demo ([#144](https://github.com/kerti/uruni/issues/144)) moves to M9**, beside the rest of the deploy work.
