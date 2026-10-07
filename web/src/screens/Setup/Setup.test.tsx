@@ -7,6 +7,7 @@ import { copy } from '@/copy/id'
 
 afterEach(() => {
   vi.unstubAllGlobals()
+  vi.useRealTimers()
 })
 
 const text = copy.setup
@@ -266,6 +267,90 @@ describe('Setup', () => {
       accounts: { name: string; opening_balance?: { amount: number } }[]
     }
     expect(body.accounts.find((a) => a.name === 'Tunai')?.opening_balance).toMatchObject({ amount: 50000 })
+  })
+
+  // The roster step's own writes: the tier, its first rate effective from the
+  // current month (never a backdated one, so nobody owes a month before
+  // adoption), then each named member joined today on that tier.
+  it('finishes the roster with the tier, its first rate this month, and members joined today', async () => {
+    // Only Date is faked, at a local time, so "today" and "this month" are the
+    // browser's local date and userEvent's own timers keep running.
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(new Date(2026, 2, 15, 9, 30))
+    const onDone = vi.fn()
+    const fetchMock = routedFetch([
+      { match: (m, u) => m === 'POST' && u.includes('/api/setup'), handle: () => Promise.resolve(jsonResponse(setupResult, 201)) },
+      {
+        match: (m, u) => m === 'POST' && u.includes('/api/dues-tiers/7/rates'),
+        handle: () => Promise.resolve(jsonResponse({ id: 1, tier_id: 7, amount: 20000, effective_from: '2026-03' }, 201)),
+      },
+      {
+        match: (m, u) => m === 'POST' && u.endsWith('/api/dues-tiers'),
+        handle: () => Promise.resolve(jsonResponse({ id: 7, name: 'Rumah tinggal', created_at: 1 }, 201)),
+      },
+      { match: (m, u) => m === 'POST' && u.includes('/api/members'), handle: () => Promise.resolve(jsonResponse({ id: 1 }, 201)) },
+    ])
+    vi.stubGlobal('fetch', fetchMock)
+    render(<Setup onDone={onDone} />)
+    await goPastFundName()
+    await goPastLocations()
+    await screen.findByText(text.balances.heading)
+    await userEvent.click(screen.getByRole('button', { name: text.next }))
+    await screen.findByText(text.roster.heading)
+
+    await userEvent.type(screen.getByLabelText(text.roster.tierNameLabel), '  Rumah tinggal ')
+    await userEvent.type(screen.getByLabelText(text.roster.rateAmountLabel), '20000')
+    // The step starts with no member rows; each one is added on purpose.
+    await userEvent.click(screen.getByRole('button', { name: text.roster.addMember }))
+    await userEvent.type(screen.getAllByLabelText(text.roster.memberNameLabel)[0], 'Pak Budi')
+    await userEvent.click(screen.getByRole('button', { name: text.roster.addMember }))
+    await userEvent.click(screen.getByRole('button', { name: text.roster.addMember }))
+    // The middle row is left blank and must not become a member.
+    await userEvent.type(screen.getAllByLabelText(text.roster.memberNameLabel)[2], 'Bu Sari')
+    await userEvent.click(screen.getByRole('button', { name: text.roster.finish }))
+
+    await waitFor(() => expect(onDone).toHaveBeenCalledTimes(1))
+
+    const tierCalls = fetchMock.mock.calls.filter(([input]) => (input as string).toString().endsWith('/api/dues-tiers'))
+    expect(tierCalls).toHaveLength(1)
+    expect(JSON.parse(tierCalls[0][1]?.body as string)).toEqual({ name: 'Rumah tinggal' })
+
+    const rateCalls = callsTo(fetchMock, '/api/dues-tiers/7/rates')
+    expect(rateCalls).toHaveLength(1)
+    expect(JSON.parse(rateCalls[0][1]?.body as string)).toEqual({ amount: 20000, effective_from: '2026-03' })
+
+    const memberBodies = callsTo(fetchMock, '/api/members').map(([, init]) => JSON.parse(init?.body as string) as unknown)
+    expect(memberBodies).toEqual([
+      { name: 'Pak Budi', tier_id: 7, joined_on: '2026-03-15' },
+      { name: 'Bu Sari', tier_id: 7, joined_on: '2026-03-15' },
+    ])
+  })
+
+  it('creates no tier or rate when the tier name is blank, and members join with no tier', async () => {
+    const onDone = vi.fn()
+    const fetchMock = routedFetch([
+      { match: (m, u) => m === 'POST' && u.includes('/api/setup'), handle: () => Promise.resolve(jsonResponse(setupResult, 201)) },
+      { match: (m, u) => m === 'POST' && u.includes('/api/members'), handle: () => Promise.resolve(jsonResponse({ id: 1 }, 201)) },
+    ])
+    vi.stubGlobal('fetch', fetchMock)
+    render(<Setup onDone={onDone} />)
+    await goPastFundName()
+    await goPastLocations()
+    await screen.findByText(text.balances.heading)
+    await userEvent.click(screen.getByRole('button', { name: text.next }))
+    await screen.findByText(text.roster.heading)
+
+    // A rate typed without a tier name has nothing to attach to.
+    await userEvent.type(screen.getByLabelText(text.roster.rateAmountLabel), '20000')
+    await userEvent.click(screen.getByRole('button', { name: text.roster.addMember }))
+    await userEvent.type(screen.getAllByLabelText(text.roster.memberNameLabel)[0], 'Pak Budi')
+    await userEvent.click(screen.getByRole('button', { name: text.roster.finish }))
+
+    await waitFor(() => expect(onDone).toHaveBeenCalledTimes(1))
+    expect(callsTo(fetchMock, '/api/dues-tiers')).toHaveLength(0)
+    const members = callsTo(fetchMock, '/api/members')
+    expect(members).toHaveLength(1)
+    expect(JSON.parse(members[0][1]?.body as string)).toMatchObject({ name: 'Pak Budi', tier_id: null })
   })
 
   it('never calls the deleted per-account opening-balance route', async () => {

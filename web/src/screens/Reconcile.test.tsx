@@ -56,16 +56,39 @@ function routedFetch(handlers: { match: (method: string, url: string) => boolean
   })
 }
 
-function stubLoad(balances = balancesBody(100_000, 200_000)) {
+function stubLoad(
+  balances = balancesBody(100_000, 200_000),
+  page: { transactions: unknown[]; next_cursor: string | null } = transactionsPage,
+) {
   return [
     { match: (m: string, u: string) => m === 'GET' && u.includes('/api/accounts'), handle: () => Promise.resolve(jsonResponse(accounts)) },
     { match: (m: string, u: string) => m === 'GET' && u.includes('/api/purposes'), handle: () => Promise.resolve(jsonResponse(purposes)) },
     { match: (m: string, u: string) => m === 'GET' && u.includes('/api/balances'), handle: () => Promise.resolve(jsonResponse(balances)) },
     {
       match: (m: string, u: string) => m === 'GET' && u.includes('/api/transactions'),
-      handle: () => Promise.resolve(jsonResponse(transactionsPage)),
+      handle: () => Promise.resolve(jsonResponse(page)),
     },
   ]
+}
+
+function transaction(id: number, overrides: Record<string, unknown> = {}) {
+  return {
+    id,
+    account_id: 1,
+    purpose_id: 11,
+    direction: 'in',
+    amount: 10_000,
+    occurred_on: '2026-09-01',
+    kind: 'standard',
+    member_id: null,
+    dues_period: null,
+    reimbursement_id: null,
+    transfer_id: null,
+    reverses_transaction_id: null,
+    note: null,
+    created_at: 1_756_000_000,
+    ...overrides,
+  }
 }
 
 function reconciliationDetail(lines: Array<Record<string, unknown>>) {
@@ -549,6 +572,75 @@ describe('Reconcile', () => {
     expect(screen.queryByText(text.staleNotice)).not.toBeInTheDocument()
     // Re-enabled for another try, not stuck mid-submit.
     expect(screen.getByRole('button', { name: text.submit })).toBeEnabled()
+  })
+
+  // The gate is the client half of "every active location counted, every gap
+  // resolved" (#444 is the server half). Walk it one condition at a time.
+  it('keeps submit disabled until every active location is counted and every gap resolved', async () => {
+    vi.stubGlobal('fetch', routedFetch(stubLoad()))
+    render(<Reconcile onDone={vi.fn()} onCancel={vi.fn()} />)
+    await waitForForm()
+
+    const submit = screen.getByRole('button', { name: text.submit })
+    expect(submit).toBeDisabled()
+
+    // One of two locations counted, and it matches: still disabled.
+    await userEvent.type(screen.getByLabelText(text.actualLabel('Tunai')), '100000')
+    expect(submit).toBeDisabled()
+
+    // Both counted, but Bank Uji Coba carries an unresolved gap.
+    await userEvent.type(screen.getByLabelText(text.actualLabel('Bank Uji Coba')), '150000')
+    await screen.findByRole('button', { name: text.resolutionOptions.entry_added })
+    expect(submit).toBeDisabled()
+
+    // A fix-bearing resolution is enough only while its fix is valid.
+    await userEvent.click(screen.getByRole('button', { name: text.resolutionOptions.entry_added }))
+    expect(submit).not.toBeDisabled()
+    await userEvent.clear(screen.getByLabelText(text.fixAmountLabel))
+    expect(submit).toBeDisabled()
+
+    // Leaving it open needs no fix at all.
+    await userEvent.click(screen.getByRole('button', { name: text.resolutionOptions.left_open }))
+    expect(submit).not.toBeDisabled()
+  })
+
+  it('lists the five newest transactions on the count screen, labelled by pos and note', async () => {
+    // The first page is already newest-first (#225); the screen slices, never sorts.
+    const page = {
+      transactions: [
+        transaction(17, { direction: 'out', amount: 25_000, note: 'Beli sapu', occurred_on: '2026-09-20' }),
+        transaction(16, { purpose_id: 10, amount: 40_000, note: null }),
+        transaction(15),
+        transaction(14),
+        transaction(13),
+        transaction(12, { note: 'Terlalu lama' }),
+      ],
+      next_cursor: 'abc',
+    }
+    vi.stubGlobal('fetch', routedFetch(stubLoad(balancesBody(100_000, 200_000), page)))
+    render(<Reconcile onDone={vi.fn()} onCancel={vi.fn()} />)
+    await waitForForm()
+
+    await userEvent.click(screen.getByText(copy.home.recentActivityHeading))
+
+    const rows = screen.getAllByRole('listitem')
+    expect(rows).toHaveLength(5)
+    expect(rows[0]).toHaveTextContent('Kas utama')
+    expect(rows[0]).toHaveTextContent('Beli sapu')
+    expect(rows[0]).toHaveTextContent('Rp 25.000')
+    expect(rows[1]).toHaveTextContent('Kas Bidang')
+    expect(rows[1]).toHaveTextContent('Rp 40.000')
+    expect(screen.queryByText('Terlalu lama')).not.toBeInTheDocument()
+    expect(screen.queryByText(copy.home.recentActivityEmpty)).not.toBeInTheDocument()
+  })
+
+  it('shows the calm empty line when nothing has been recorded yet', async () => {
+    vi.stubGlobal('fetch', routedFetch(stubLoad()))
+    render(<Reconcile onDone={vi.fn()} onCancel={vi.fn()} />)
+    await waitForForm()
+
+    expect(screen.getByText(copy.home.recentActivityEmpty)).toBeInTheDocument()
+    expect(screen.queryAllByRole('listitem')).toHaveLength(0)
   })
 
   it('leaves without submitting anything when cancelled', async () => {
