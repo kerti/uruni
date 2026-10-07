@@ -53,6 +53,9 @@ type SettleReimbursementParams struct {
 //     bypasses this method entirely and inserts through raw store.Queries.
 //     This pre-check exists only to turn that into a clean, named error
 //     instead of a raw "UNIQUE constraint failed" string.
+//
+// A retired AccountID (inactive_on set) is ErrAccountInactive: the claim
+// stays unsettled and nothing is written (#444).
 func (l *Ledger) SettleReimbursement(ctx context.Context, p SettleReimbursementParams) (store.Transaction, error) {
 	if err := validateOccurredOn(p.OccurredOn); err != nil {
 		return store.Transaction{}, err
@@ -67,6 +70,10 @@ func (l *Ledger) SettleReimbursement(ctx context.Context, p SettleReimbursementP
 
 		if claim.WaivedOn != nil {
 			return ErrReimbursementWaived
+		}
+
+		if err := refuseInactiveAccount(ctx, q, p.FundID, p.AccountID); err != nil {
+			return err
 		}
 
 		// The settlement row itself stores no note (#257: nothing generated

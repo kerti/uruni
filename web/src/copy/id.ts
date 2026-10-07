@@ -266,6 +266,12 @@ export const copy = {
       purpose_move_closed: 'Amplop ini sudah ditutup — buka lagi dulu sebelum memindahkan uang ke sini atau dari sini.',
       purpose_move_insufficient: 'Saldo pos asal tidak cukup untuk jumlah ini.',
       purpose_move_account_inactive: 'Lokasi ini sudah tidak dipakai. Pilih lokasi yang lain.',
+      // #444: every posting and every Cek kas count refuses a retired
+      // location, and a count must name every active one. The forms only
+      // offer active locations, so these are the fallback for a stale form.
+      account_inactive: 'Lokasi ini sudah tidak dipakai. Pilih lokasi yang lain.',
+      reconciliation_location_missing:
+        'Ada lokasi aktif yang belum dihitung. Daftarnya sudah diperbarui — hitung lokasi itu, lalu simpan lagi.',
       // ADR-034 (#211): a sumbangan bernama can't be re-tagged the way an
       // ordinary row can - moving it would leave participation counting the
       // member against an envelope the money has left. Same "added ahead of

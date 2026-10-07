@@ -300,7 +300,7 @@ func TestMonthlyReportReconciliationAdjustingEntryIsCounted(t *testing.T) {
 		Counts: []AccountCount{{
 			AccountID: f.cashID, ActualAmount: 97_000, Resolution: "adjusted",
 			Fix: &Fix{PurposeID: f.mainID, Direction: "out", Amount: 3_000, OccurredOn: today},
-		}},
+		}, f.bankZero()},
 	}); err != nil {
 		t.Fatalf("TakeReconciliation() = %v, want no error", err)
 	}

@@ -11,6 +11,14 @@ import (
 	"github.com/kerti/uruni/internal/store"
 )
 
+// bankZero counts the fixture's bank at 0, matched: the figure it holds in
+// every test that never posts to it. Cek kas counts each active location
+// (#444), so a test about the cash line still has to say something about the
+// bank line, and this is the quiet way to.
+func (f fixture) bankZero() AccountCount {
+	return AccountCount{AccountID: f.bankID, ActualAmount: 0, Resolution: "matched"}
+}
+
 // lineFor is a small test helper: find the one reconciliation_line for
 // accountID among a snapshot's lines, or fail the test - every assertion
 // below is about one specific line, and a missing line is itself a failure.
@@ -41,6 +49,7 @@ func TestTakeReconciliationEmptyLedgerStoresNullCutoffAndZeroRecorded(t *testing
 		FundID: f.fundID,
 		Counts: []AccountCount{
 			{AccountID: f.cashID, ActualAmount: 0, Resolution: "matched"},
+			f.bankZero(),
 		},
 	})
 	if err != nil {
@@ -54,14 +63,17 @@ func TestTakeReconciliationEmptyLedgerStoresNullCutoffAndZeroRecorded(t *testing
 	if err != nil {
 		t.Fatalf("ListReconciliationLines() = %v, want no error", err)
 	}
-	if len(lines) != 1 {
-		t.Fatalf("lines = %d, want 1", len(lines))
+	// One line per active location - cash and bank (#444).
+	if len(lines) != 2 {
+		t.Fatalf("lines = %d, want 2", len(lines))
 	}
-	if lines[0].RecordedAmount != 0 {
-		t.Errorf("RecordedAmount = %d, want 0", lines[0].RecordedAmount)
-	}
-	if lines[0].DifferenceAmount != 0 {
-		t.Errorf("DifferenceAmount = %d, want 0", lines[0].DifferenceAmount)
+	for _, ln := range lines {
+		if ln.RecordedAmount != 0 {
+			t.Errorf("account %d RecordedAmount = %d, want 0", ln.AccountID, ln.RecordedAmount)
+		}
+		if ln.DifferenceAmount != 0 {
+			t.Errorf("account %d DifferenceAmount = %d, want 0", ln.AccountID, ln.DifferenceAmount)
+		}
 	}
 }
 
@@ -89,7 +101,7 @@ func TestTakeReconciliationRegressionAdjustedStoresTheGapFoundNotZero(t *testing
 				PurposeID: f.mainID, Direction: "out", Amount: 20_000,
 				OccurredOn: "2026-08-31", Note: &note,
 			},
-		}},
+		}, f.bankZero()},
 	})
 	if err != nil {
 		t.Fatalf("TakeReconciliation() = %v, want no error", err)
@@ -144,7 +156,7 @@ func TestTakeReconciliationRegressionEntryAddedStoresTheGapFoundNotZero(t *testi
 				PurposeID: f.mainID, Direction: "in", Amount: 20_000,
 				OccurredOn: "2026-08-15",
 			},
-		}},
+		}, f.bankZero()},
 	})
 	if err != nil {
 		t.Fatalf("TakeReconciliation() = %v, want no error", err)
@@ -310,6 +322,7 @@ func TestTakeReconciliationReproducesM2AdjustedAndLeftOpenScenarios(t *testing.T
 		FundID: g.fundID,
 		Counts: []AccountCount{
 			{AccountID: g.cashID, ActualAmount: 95_000, Resolution: "left_open"},
+			g.bankZero(),
 		},
 	}); err != nil {
 		t.Fatalf("TakeReconciliation(g) = %v, want no error", err)
@@ -349,6 +362,7 @@ func TestTakeReconciliationLeftOpenIsRevisitedAsASecondSnapshotFirstUntouched(t 
 		FundID: f.fundID,
 		Counts: []AccountCount{
 			{AccountID: f.cashID, ActualAmount: 240_000, Resolution: "left_open"},
+			f.bankZero(),
 		},
 	})
 	if err != nil {
@@ -394,6 +408,7 @@ func TestTakeReconciliationLeftOpenIsRevisitedAsASecondSnapshotFirstUntouched(t 
 		FundID: f.fundID,
 		Counts: []AccountCount{
 			{AccountID: f.cashID, ActualAmount: 240_000, Resolution: "matched"},
+			f.bankZero(),
 		},
 	})
 	if err != nil {
@@ -447,7 +462,7 @@ func TestTakeReconciliationFixMovesLiveBalanceButNotThisSnapshotsRecordedAmount(
 		Counts: []AccountCount{{
 			AccountID: f.cashID, ActualAmount: 90_000, Resolution: "adjusted",
 			Fix: &Fix{PurposeID: f.mainID, Direction: "out", Amount: 10_000, OccurredOn: "2026-08-12"},
-		}},
+		}, f.bankZero()},
 	})
 	if err != nil {
 		t.Fatalf("TakeReconciliation() = %v, want no error", err)
@@ -495,7 +510,7 @@ func TestTakeReconciliationBackdatedFixLandsInTheNextSnapshotNotThisOne(t *testi
 			// Dated the 3rd - earlier than the 2026-08-05 entry already
 			// posted - but this fix is created now, so its id is higher.
 			Fix: &Fix{PurposeID: f.mainID, Direction: "out", Amount: 10_000, OccurredOn: "2026-08-03"},
-		}},
+		}, f.bankZero()},
 	})
 	if err != nil {
 		t.Fatalf("TakeReconciliation(first) = %v, want no error", err)
@@ -519,6 +534,7 @@ func TestTakeReconciliationBackdatedFixLandsInTheNextSnapshotNotThisOne(t *testi
 		FundID: f.fundID,
 		Counts: []AccountCount{
 			{AccountID: f.cashID, ActualAmount: 70_000, Resolution: "matched"},
+			f.bankZero(),
 		},
 	})
 	if err != nil {
@@ -586,7 +602,7 @@ func TestTakeReconciliationRejectsInvalidArguments(t *testing.T) {
 		{
 			name: "matched with a non-zero difference",
 			counts: func(f fixture) []AccountCount {
-				return []AccountCount{{AccountID: f.cashID, ActualAmount: 5_000, Resolution: "matched"}}
+				return []AccountCount{{AccountID: f.cashID, ActualAmount: 5_000, Resolution: "matched"}, f.bankZero()}
 			},
 		},
 		{
@@ -754,7 +770,7 @@ func TestTakeReconciliationEmptyLedgerWithAFixStillRecordsZeroAndTheFullGap(t *t
 				PurposeID: f.mainID, Direction: "in", Amount: 75_000,
 				OccurredOn: "2026-08-12",
 			},
-		}},
+		}, f.bankZero()},
 	})
 	if err != nil {
 		t.Fatalf("TakeReconciliation() = %v, want no error", err)
@@ -814,7 +830,7 @@ func TestTakeReconciliationFixThatUndershootsStillRecordsTheWholeGap(t *testing.
 				PurposeID: f.mainID, Direction: "in", Amount: 20_000,
 				OccurredOn: "2026-08-12",
 			},
-		}},
+		}, f.bankZero()},
 	})
 	if err != nil {
 		t.Fatalf("TakeReconciliation() = %v, want no error", err)
@@ -910,7 +926,7 @@ func TestTakeReconciliationAdjustedFixNoteFollowsNormalizeNoteContract(t *testin
 					PurposeID: f.mainID, Direction: "out", Amount: 20_000,
 					OccurredOn: "2026-08-31", Note: note,
 				},
-			}},
+			}, f.bankZero()},
 		})
 		if err != nil {
 			t.Fatalf("TakeReconciliation() = %v, want no error", err)

@@ -127,6 +127,21 @@ type TakeReconciliationParams struct {
 //     AdjustmentTransactionID for this resolution - it is not a caller
 //     input, so there is nothing to validate against it.
 //
+// The count must be exactly the fund's active locations (PRD section 7.8:
+// "each active location ... a retired location is not asked about"), checked
+// first, inside the transaction, before the cutoff is taken or anything is
+// posted:
+//
+//   - A count naming a retired location (inactive_on set) is
+//     ErrAccountInactive.
+//   - A snapshot leaving out an active location is
+//     ErrReconciliationMissingLocation. Only the full set can freeze a
+//     figure that means "the fund matches"; a subset would read cocok with
+//     the discrepancy sitting in the location nobody counted.
+//
+// Both refuse the whole snapshot: no reconciliation row, no line, and no fix
+// for the lines that were named.
+//
 // Argument-shape failures - an unrecognised resolution, "matched" with a
 // nonzero difference, "adjusted"/"entry_added" missing a Fix, "left_open"
 // naming one, a Fix with a non-positive amount, an unrecognised Fix
@@ -152,6 +167,10 @@ func (l *Ledger) TakeReconciliation(ctx context.Context, p TakeReconciliationPar
 
 	var rec store.Reconciliation
 	err := l.withTx(ctx, func(q store.Querier) error {
+		if err := requireEveryActiveLocationCounted(ctx, q, p); err != nil {
+			return err
+		}
+
 		now := time.Now().Unix()
 
 		cutoff, err := q.MaxTransactionIDByFund(ctx, p.FundID)
@@ -293,6 +312,52 @@ func (l *Ledger) GetReconciliationDetail(ctx context.Context, fundID, id int64) 
 	}
 
 	return ReconciliationDetail{Reconciliation: rec, Lines: lines}, nil
+}
+
+// requireEveryActiveLocationCounted is TakeReconciliation's location rule
+// (#444), read inside its transaction so the fund's locations cannot change
+// between the check and the write.
+//
+// A retired location is inactive_on non-NULL, whatever date it holds - the
+// reading PostPurposeMove and the SPA already use. An account id that is not
+// this fund's (unknown, or another fund's) is skipped by both checks and the
+// completeness check stands down while one is present: the composite foreign
+// key on reconciliation_line always refuses it, and the right answer for that
+// request is that refusal (ADR-027), not "missing location" for a payload
+// whose real fault is the unknown id.
+func requireEveryActiveLocationCounted(ctx context.Context, q store.Querier, p TakeReconciliationParams) error {
+	accounts, err := q.ListAccountsByFund(ctx, p.FundID)
+	if err != nil {
+		return fmt.Errorf("listing the fund's locations: %w", err)
+	}
+	byID := make(map[int64]store.Account, len(accounts))
+	for _, a := range accounts {
+		byID[a.ID] = a
+	}
+
+	counted := make(map[int64]bool, len(p.Counts))
+	foreign := false
+	for _, c := range p.Counts {
+		a, ok := byID[c.AccountID]
+		if !ok {
+			foreign = true
+			continue
+		}
+		if a.InactiveOn != nil {
+			return ErrAccountInactive
+		}
+		counted[a.ID] = true
+	}
+	if foreign {
+		return nil
+	}
+
+	for _, a := range accounts {
+		if a.InactiveOn == nil && !counted[a.ID] {
+			return ErrReconciliationMissingLocation
+		}
+	}
+	return nil
 }
 
 // validateTakeReconciliationParams checks TakeReconciliation's own inputs

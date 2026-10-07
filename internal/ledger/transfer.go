@@ -146,6 +146,9 @@ type PostTransferBetweenAccountsParams struct {
 // the same purpose - cash into the bank, or back out. The fund's total is
 // unchanged by construction; only AccountBalance moves, on both sides, by
 // exactly the amount, in opposite directions.
+//
+// Either location being retired (inactive_on set) is ErrAccountInactive and
+// nothing is written (#444).
 func (l *Ledger) PostTransferBetweenAccounts(ctx context.Context, p PostTransferBetweenAccountsParams) (store.Transfer, error) {
 	if p.Amount <= 0 {
 		return store.Transfer{}, fmt.Errorf("%w: amount must be positive, got %d", ErrInvalidArgument, p.Amount.Int64())
@@ -160,7 +163,20 @@ func (l *Ledger) PostTransferBetweenAccounts(ctx context.Context, p PostTransfer
 		return store.Transfer{}, fmt.Errorf("%w: from_account_id and to_account_id must differ, got %d for both", ErrInvalidArgument, p.FromAccountID)
 	}
 
-	transfer, err := l.postTransferPair(ctx, p.FundID, "between_accounts", from, to, p.Amount, p.OccurredOn, normalizeNote(p.Note))
+	// Both locations are checked inside the same transaction as the write:
+	// money neither leaves a retired location nor arrives in one (#444). To
+	// empty a retired location, reinstate it, move, retire again.
+	var transfer store.Transfer
+	err := l.withTx(ctx, func(q store.Querier) error {
+		for _, accountID := range [...]int64{p.FromAccountID, p.ToAccountID} {
+			if err := refuseInactiveAccount(ctx, q, p.FundID, accountID); err != nil {
+				return err
+			}
+		}
+		var err error
+		transfer, err = l.postTransferPairTx(ctx, q, p.FundID, "between_accounts", from, to, p.Amount, p.OccurredOn, normalizeNote(p.Note), nil, nil)
+		return err
+	})
 	if err != nil {
 		return store.Transfer{}, fmt.Errorf("posting transfer between accounts: %w", err)
 	}

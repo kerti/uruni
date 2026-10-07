@@ -62,6 +62,10 @@ type PostDuesPaymentsParams struct {
 // it as a 400 before ever calling this method: both layers agree that
 // "post a payment with nothing to post" is a caller mistake, not a silent
 // no-op that would answer 201 having written nothing.
+//
+// A retired AccountID (inactive_on set) is ErrAccountInactive, checked once
+// for the whole batch inside the transaction, before any row is written
+// (#444).
 func (l *Ledger) PostDuesPayments(ctx context.Context, p PostDuesPaymentsParams) ([]store.Transaction, error) {
 	if len(p.Periods) == 0 {
 		return nil, fmt.Errorf("%w: periods must not be empty", ErrInvalidArgument)
@@ -80,6 +84,9 @@ func (l *Ledger) PostDuesPayments(ctx context.Context, p PostDuesPaymentsParams)
 
 	posted := make([]store.Transaction, 0, len(p.Periods))
 	err := l.withTx(ctx, func(q store.Querier) error {
+		if err := refuseInactiveAccount(ctx, q, p.FundID, p.AccountID); err != nil {
+			return err
+		}
 		for _, period := range p.Periods {
 			row, err := l.postDuesPaymentTx(ctx, q, p, period)
 			if err != nil {

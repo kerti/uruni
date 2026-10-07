@@ -108,9 +108,10 @@ func newWalkScenario(t *testing.T, l *Ledger) walkScenario {
 	// August: a location added mid-life with money already in it; a pass-through;
 	// two envelopes, one closed and rolled into Kas Utama; a purpose correction
 	// and a Pindah pos.
-	if _, err := l.CreateAccount(ctx, CreateAccountParams{
+	bankB, err := l.CreateAccount(ctx, CreateAccountParams{
 		FundID: fundID, Kind: "bank", Name: "Bank B", OpeningBalance: &OpeningBalance{Amount: 150_000, OccurredOn: "2026-08-02"},
-	}); err != nil {
+	})
+	if err != nil {
 		t.Fatalf("CreateAccount() = %v, want no error", err)
 	}
 	sunatan := openTestIncidental(t, l, fundID, "Sunatan", "2026-08-01")
@@ -159,11 +160,18 @@ func newWalkScenario(t *testing.T, l *Ledger) walkScenario {
 	if err != nil {
 		t.Fatalf("AccountBalance(bank) = %v, want no error", err)
 	}
+	// Cek kas counts every active location (#444), Bank B included - it holds
+	// what it was opened with and the count agrees.
+	bankBBalance, err := l.AccountBalance(ctx, fundID, bankB.ID)
+	if err != nil {
+		t.Fatalf("AccountBalance(bank B) = %v, want no error", err)
+	}
 	if _, err := l.TakeReconciliation(ctx, TakeReconciliationParams{FundID: fundID, Counts: []AccountCount{
 		{AccountID: cashID, ActualAmount: cash - 6_000, Resolution: "adjusted",
 			Fix: &Fix{PurposeID: mainID, Direction: "out", Amount: 6_000, OccurredOn: "2026-09-25"}},
 		{AccountID: bankID, ActualAmount: bank + 2_500, Resolution: "entry_added",
 			Fix: &Fix{PurposeID: mainID, Direction: "in", Amount: 2_500, OccurredOn: "2026-09-25"}},
+		{AccountID: bankB.ID, ActualAmount: bankBBalance, Resolution: "matched"},
 	}}); err != nil {
 		t.Fatalf("TakeReconciliation() = %v, want no error", err)
 	}

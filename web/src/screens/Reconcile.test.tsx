@@ -435,6 +435,57 @@ describe('Reconcile', () => {
     expect(screen.getByLabelText(text.actualLabel('Tunai'))).toHaveValue(`Rp\u00a0100.000`)
   })
 
+  // #444: the server refuses a count that is not exactly the active
+  // locations. A location added after the screen loaded makes the list stale;
+  // the screen re-reads it, shows the refusal, and keeps what she typed.
+  it('re-reads the location list when the server says an active location was not counted', async () => {
+    const added = { id: 4, kind: 'bank', name: 'Bank Baru', inactive_on: null, created_at: 2 }
+    let accountsCallCount = 0
+    const fetchMock = routedFetch([
+      {
+        match: (m, u) => m === 'GET' && u.includes('/api/accounts'),
+        handle: () => {
+          accountsCallCount += 1
+          return Promise.resolve(jsonResponse(accountsCallCount === 1 ? accounts : [...accounts, added]))
+        },
+      },
+      { match: (m, u) => m === 'GET' && u.includes('/api/purposes'), handle: () => Promise.resolve(jsonResponse(purposes)) },
+      {
+        match: (m, u) => m === 'GET' && u.includes('/api/balances'),
+        handle: () => {
+          const body = balancesBody(100_000, 200_000)
+          if (accountsCallCount > 1) body.accounts.push({ id: 4, kind: 'bank', name: 'Bank Baru', balance: 0 })
+          return Promise.resolve(jsonResponse(body))
+        },
+      },
+      { match: (m, u) => m === 'GET' && u.includes('/api/transactions'), handle: () => Promise.resolve(jsonResponse(transactionsPage)) },
+      {
+        match: (m, u) => m === 'POST' && u.includes('/api/reconciliations'),
+        handle: () =>
+          Promise.resolve(
+            jsonResponse(
+              { error: { code: 'reconciliation_location_missing', message: 'A cash count must include every active location.' } },
+              409,
+            ),
+          ),
+      },
+    ])
+    vi.stubGlobal('fetch', fetchMock)
+
+    render(<Reconcile onDone={vi.fn()} onCancel={vi.fn()} />)
+    await waitForForm()
+    expect(screen.queryByLabelText(text.actualLabel('Bank Baru'))).not.toBeInTheDocument()
+
+    await userEvent.type(screen.getByLabelText(text.actualLabel('Tunai')), '100000')
+    await userEvent.type(screen.getByLabelText(text.actualLabel('Bank Uji Coba')), '200000')
+    await userEvent.click(screen.getByRole('button', { name: text.submit }))
+
+    await screen.findByText(copy.common.errors.reconciliation_location_missing)
+    expect(await screen.findByLabelText(text.actualLabel('Bank Baru'))).toBeInTheDocument()
+    expect(screen.getByLabelText(text.actualLabel('Tunai'))).toHaveValue('Rp\u00a0100.000')
+    expect(accountsCallCount).toBe(2)
+  })
+
   it('keeps her typed fix when the same resolution is tapped twice', async () => {
     vi.stubGlobal('fetch', routedFetch(stubLoad()))
     render(<Reconcile onDone={vi.fn()} onCancel={vi.fn()} />)

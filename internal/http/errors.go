@@ -107,6 +107,12 @@ func mapLedgerError(w http.ResponseWriter, logger *slog.Logger, err error) {
 		writeAPIError(w, http.StatusConflict, "purpose_move_insufficient", "The source purpose holds less than that amount.")
 	case errors.Is(err, ledger.ErrPurposeMoveAccountInactive):
 		writeAPIError(w, http.StatusConflict, "purpose_move_account_inactive", "This account is inactive.")
+	case errors.Is(err, ledger.ErrAccountInactive):
+		// Any posting (and a Cek kas count) naming a retired location (#444).
+		// PostPurposeMove keeps its own purpose_move_account_inactive above.
+		writeAPIError(w, http.StatusConflict, "account_inactive", "This location has been retired and cannot take new entries.")
+	case errors.Is(err, ledger.ErrReconciliationMissingLocation):
+		writeAPIError(w, http.StatusConflict, "reconciliation_location_missing", "A cash count must include every active location.")
 	case errors.Is(err, ledger.ErrContributionRequiresIncidentalPurpose):
 		writeAPIError(w, http.StatusBadRequest, "invalid_argument", "A named contribution must be tagged to an incidental (envelope) purpose.")
 	case errors.Is(err, money.ErrOverflow):
