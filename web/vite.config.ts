@@ -109,6 +109,21 @@ export default defineConfig({
       '@': path.resolve(import.meta.dirname, './src'),
     },
   },
+  build: {
+    rolldownOptions: {
+      output: {
+        codeSplitting: {
+          // React, React DOM and the router in a chunk of their own: about
+          // half the JavaScript, and the half that changes only when a
+          // dependency is bumped. A release then re-downloads (and the
+          // service worker re-precaches) only the app chunk, and neither
+          // chunk crosses Vite's 500 kB warning. The total is unchanged -
+          // both load at startup.
+          groups: [{ name: 'react', test: /[\\/]node_modules[\\/](react|react-dom|react-router|scheduler)[\\/]/ }],
+        },
+      },
+    },
+  },
   server: {
     port: 5173,
     allowedHosts,
