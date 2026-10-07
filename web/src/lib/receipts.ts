@@ -18,11 +18,21 @@ export interface ReceiptUploadResult {
   uploaded_at: number
 }
 
+// Receipt ids are reused: SQLite hands a deleted top id to the next insert,
+// so after "Ganti foto" (a delete, then an upload) the new photo can have
+// the old one's id. The browser keeps images it has already shown in this
+// page by URL, so the same URL would keep showing the old photo (#459). A
+// delete here bumps that id's version, which changes every URL built for it
+// from then on. Reloads and other devices are the server's half: it serves
+// receipts no-cache with an ETag per stored file.
+const versions = new Map<number, number>()
+
 /** GET /api/receipts/{id}'s URL - a same-origin, session-gated image
  * (internal/http/receipts.go's getReceipt), safe to use directly as an
- * <img src>. */
+ * <img src>. Carries a version once this page has deleted that id. */
 export function receiptUrl(id: number): string {
-  return `/api/receipts/${id}`
+  const version = versions.get(id)
+  return version === undefined ? `/api/receipts/${id}` : `/api/receipts/${id}?v=${version}`
 }
 
 /**
@@ -48,6 +58,7 @@ export function uploadReceipt(kind: ReceiptParentKind, parentId: number, file: F
 /** DELETE /api/receipts/{id} - for a wrong or duplicate photo. "Ganti foto"
  * (ReceiptDialog.tsx) is this followed by a fresh uploadReceipt - there is
  * no combined replace route. */
-export function deleteReceipt(id: number): Promise<void> {
-  return apiFetch<void>(`/api/receipts/${id}`, { method: 'DELETE' })
+export async function deleteReceipt(id: number): Promise<void> {
+  await apiFetch<void>(`/api/receipts/${id}`, { method: 'DELETE' })
+  versions.set(id, (versions.get(id) ?? 0) + 1)
 }

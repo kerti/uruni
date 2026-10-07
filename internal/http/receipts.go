@@ -403,11 +403,14 @@ func (a *api) getReceipt(w http.ResponseWriter, r *http.Request) {
 	// photo a treasurer uploaded, not a document to render as anything else.
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	// private: this is one treasurer's own session, never a shared cache
-	// sitting in front of the app. A day is long enough that flipping
-	// between receipts in one sitting does not re-fetch each one, short
-	// enough that a deleted receipt's bytes do not linger indefinitely in a
-	// phone's cache under an id nothing serves any more.
-	w.Header().Set("Cache-Control", "private, max-age=86400")
+	// sitting in front of the app. no-cache, not max-age: receipt ids are
+	// reused (SQLite hands a deleted top id to the next insert), so "Ganti
+	// foto" on the newest receipt serves a new photo at the old URL, and a
+	// cache trusted by URL alone kept showing the old one (#459). The
+	// browser asks every time; the ETag is the stored file name, random per
+	// upload, so an unchanged photo is a 304 and a replaced one never is.
+	w.Header().Set("Cache-Control", "private, no-cache")
+	w.Header().Set("ETag", `"`+receipt.Path+`"`)
 
 	http.ServeContent(w, r, receipt.Path, time.Unix(receipt.UploadedAt, 0), file)
 }

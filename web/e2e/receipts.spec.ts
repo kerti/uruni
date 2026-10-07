@@ -1,5 +1,7 @@
 import { readdirSync } from 'node:fs'
 
+import type { Locator, Page } from '@playwright/test'
+
 import { copy } from '../src/copy/id'
 import { expect, test, logIn } from './fixtures'
 
@@ -19,6 +21,17 @@ const TINY_JPEG = Buffer.from(
   '/9j/2wCEAAYEBQYFBAYGBQYHBwYIChAKCgkJChQODwwQFxQYGBcUFhYaHSUfGhsjHBYWICwgIyYnKSopGR8tMC0oMCUoKSgBBwcHCggKEwoKEygaFhooKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKP/AABEIAAgACAMBIgACEQEDEQH/xAGiAAABBQEBAQEBAQAAAAAAAAAAAQIDBAUGBwgJCgsQAAIBAwMCBAMFBQQEAAABfQECAwAEEQUSITFBBhNRYQcicRQygZGhCCNCscEVUtHwJDNicoIJChYXGBkaJSYnKCkqNDU2Nzg5OkNERUZHSElKU1RVVldYWVpjZGVmZ2hpanN0dXZ3eHl6g4SFhoeIiYqSk5SVlpeYmZqio6Slpqeoqaqys7S1tre4ubrCw8TFxsfIycrS09TV1tfY2drh4uPk5ebn6Onq8fLz9PX29/j5+gEAAwEBAQEBAQEBAQAAAAAAAAECAwQFBgcICQoLEQACAQIEBAMEBwUEBAABAncAAQIDEQQFITEGEkFRB2FxEyIygQgUQpGhscEJIzNS8BVictEKFiQ04SXxFxgZGiYnKCkqNTY3ODk6Q0RFRkdISUpTVFVWV1hZWmNkZWZnaGlqc3R1dnd4eXqCg4SFhoeIiYqSk5SVlpeYmZqio6Slpqeoqaqys7S1tre4ubrCw8TFxsfIycrS09TV1tfY2dri4+Tl5ufo6ery8/T19vf4+fr/2gAMAwEAAhEDEQA/APNqKKK1PnT/2Q==',
   'base64',
 )
+
+// The photo's "more" menu, then one of its items. Retried as a pair: right
+// after the previous menu item was chosen, that menu can still be animating
+// closed, and a click on the trigger then toggles it shut instead of open.
+async function choosePhotoAction(page: Page, dialog: Locator, item: string) {
+  await expect(async () => {
+    const menuItem = page.getByRole('menuitem', { name: item })
+    if (!(await menuItem.isVisible())) await dialog.getByRole('button', { name: copy.receipts.photoMenuAria }).click()
+    await menuItem.click({ timeout: 2_000 })
+  }).toPass()
+}
 
 test.describe('receipt photos', () => {
   test.describe.configure({ mode: 'serial' })
@@ -80,5 +93,47 @@ test.describe('receipt photos', () => {
     await page.keyboard.press('Escape')
     await dialog.getByRole('button', { name: copy.receipts.zoomAria }).click()
     await expect(page.getByRole('button', { name: copy.common.close }).last()).toBeVisible()
+  })
+
+  // M8.6 (#437): the photo on a posted row can be replaced and deleted -
+  // the row itself is immutable, the photo is not. Continues from the row
+  // the test above posted with its photo.
+  test('replaces the photo on a posted row, then deletes it', async ({ page, instance }) => {
+    await logIn(page)
+    await page.goto('/history')
+
+    await page.getByRole('button', { name: copy.receipts.viewReceipt }).first().click()
+    const dialog = page.getByRole('dialog')
+    const photo = dialog.getByRole('button', { name: copy.receipts.zoomAria }).locator('img')
+    await expect(photo).toHaveCount(1)
+    const before = await photo.getAttribute('src')
+
+    // Ganti foto: a replace is a delete then a fresh upload, so the photo
+    // comes back under a new id - and the row still has exactly one.
+    await choosePhotoAction(page, dialog, copy.receipts.change)
+    // The replace form takes the add picker's place - wait for it, or the
+    // file lands in the add picker that is still on screen.
+    const replace = dialog.getByRole('button', { name: copy.receipts.change })
+    await expect(replace).toBeVisible()
+    await expect(dialog.locator('input[type="file"]')).toHaveCount(1)
+    await dialog.locator('input[type="file"]').setInputFiles({ name: 'nota-baru.jpg', mimeType: 'image/jpeg', buffer: TINY_JPEG })
+    await replace.click()
+    // The replace form closes once the new photo is in.
+    await expect(replace).toBeHidden()
+    await expect(photo).toHaveCount(1)
+    await expect(photo).not.toHaveAttribute('src', before ?? '')
+    expect(readdirSync(instance.paths.uploadsDir, { recursive: true, withFileTypes: true }).filter((e) => e.isFile())).toHaveLength(1)
+
+    // Hapus foto: confirmed in place, and the row is back to having none.
+    await choosePhotoAction(page, dialog, copy.receipts.delete)
+    await expect(dialog.getByText(copy.receipts.deleteConfirm)).toBeVisible()
+    await dialog.getByRole('button', { name: copy.receipts.delete }).click()
+    await expect(dialog.getByText(copy.receipts.emptyTransaction)).toBeVisible()
+    await expect(photo).toHaveCount(0)
+    expect(readdirSync(instance.paths.uploadsDir, { recursive: true, withFileTypes: true }).filter((e) => e.isFile())).toHaveLength(0)
+
+    // Closed, the row's control offers to add a photo again.
+    await page.keyboard.press('Escape')
+    await expect(page.getByRole('button', { name: copy.receipts.viewReceipt })).toHaveCount(0)
   })
 })

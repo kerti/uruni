@@ -14,6 +14,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/kerti/uruni/internal/auth"
@@ -524,6 +525,60 @@ func TestDeleteReceiptRemovesItAndItsBytesBecomeUnreachable(t *testing.T) {
 	againRec := deleteReceipt(t, r, receipt.ID)
 	if againRec.Code != http.StatusNotFound {
 		t.Errorf("DELETE /api/receipts/%d twice = %d, want %d", receipt.ID, againRec.Code, http.StatusNotFound)
+	}
+}
+
+// #459: SQLite hands a deleted top id to the next insert, so "Ganti foto"
+// (delete, then upload) on the newest receipt serves a different photo at the
+// same URL. A browser that cached the old one by URL alone keeps showing it,
+// so every response must make the browser ask again, and the validator it
+// asks with must tell the two photos apart.
+func TestReplacedReceiptAtAReusedIDIsNeverServedFromAStaleCache(t *testing.T) {
+	t.Parallel()
+	r := testRouter(t)
+	setup := setUpFund(t, r)
+	txnID := setUpTransactionForReceipt(t, r, setup)
+	path := "/api/transactions/" + strconv.FormatInt(txnID, 10) + "/receipts"
+	fixture := encodeTestJPEG(t, solidBlockImage(16, 16, 4, 4, fixtureBG, fixtureBlock))
+
+	first := decodeReceiptResponse(t, postReceiptFile(t, r, path, fixture))
+	firstGet := getReceipt(t, r, first.ID)
+	if cc := firstGet.Header().Get("Cache-Control"); !strings.Contains(cc, "no-cache") || !strings.Contains(cc, "private") {
+		t.Errorf("Cache-Control = %q, want private and no-cache", cc)
+	}
+	firstTag := firstGet.Header().Get("ETag")
+	if firstTag == "" {
+		t.Fatal("ETag is empty, want a validator for the stored photo")
+	}
+
+	// Asking again with the validator it holds is a 304, no bytes.
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/receipts/"+strconv.FormatInt(first.ID, 10), nil)
+	req.Header.Set("If-None-Match", firstTag)
+	r.ServeHTTP(rec, req)
+	if rec.Code != http.StatusNotModified {
+		t.Errorf("GET with a matching If-None-Match = %d, want %d", rec.Code, http.StatusNotModified)
+	}
+
+	if del := deleteReceipt(t, r, first.ID); del.Code != http.StatusNoContent {
+		t.Fatalf("DELETE = %d, want %d", del.Code, http.StatusNoContent)
+	}
+	second := decodeReceiptResponse(t, postReceiptFile(t, r, path, fixture))
+	if second.ID != first.ID {
+		t.Fatalf("replacement id = %d, want the reused id %d - this test is about the reuse", second.ID, first.ID)
+	}
+
+	// The browser revalidates with the old photo's validator, and must get
+	// the new photo, not a 304.
+	rec = httptest.NewRecorder()
+	req = httptest.NewRequest(http.MethodGet, "/api/receipts/"+strconv.FormatInt(second.ID, 10), nil)
+	req.Header.Set("If-None-Match", firstTag)
+	r.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Errorf("GET of the replacement with the old ETag = %d, want %d", rec.Code, http.StatusOK)
+	}
+	if tag := rec.Header().Get("ETag"); tag == "" || tag == firstTag {
+		t.Errorf("replacement ETag = %q, want a new one (old %q)", tag, firstTag)
 	}
 }
 
