@@ -69,6 +69,10 @@ func TestMapLedgerErrorMapsSentinelsToStatusAndCode(t *testing.T) {
 		{"reimbursement waived", ledger.ErrReimbursementWaived, 409, "reimbursement_waived"},
 		{"reimbursement already settled", ledger.ErrReimbursementAlreadySettled, 409, "reimbursement_already_settled"},
 		{"incidental already closed", ledger.ErrIncidentalAlreadyClosed, 409, "incidental_already_closed"},
+		{"retired location", ledger.ErrAccountInactive, 409, "account_inactive"},
+		{"retired location, wrapped", fmt.Errorf("posting transaction: %w", ledger.ErrAccountInactive), 409, "account_inactive"},
+		{"cek kas omits an active location", ledger.ErrReconciliationMissingLocation, 409, "reconciliation_location_missing"},
+		{"purpose move keeps its own retired-location code", ledger.ErrPurposeMoveAccountInactive, 409, "purpose_move_account_inactive"},
 		{"money overflow", money.ErrOverflow, 500, "internal_error"},
 		{"unrecognized", errors.New("some domain-internal failure"), 500, "internal_error"},
 	}

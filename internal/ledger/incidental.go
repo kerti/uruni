@@ -308,6 +308,10 @@ type CloseIncidentalAndRollParams struct {
 //     ErrIncidentalAlreadyClosed and posts nothing. A second roll would
 //     move money that already moved.
 //
+// A retired AccountID is ErrAccountInactive when a leftover has to be posted
+// on it (either direction); a zero leftover posts nothing and ignores the
+// account (#444). Nothing is closed on refusal.
+//
 // Every outcome leaves PurposeBalance(purposeID) at exactly zero - the
 // single invariant ADR-031 makes testable in place of the sign-dependent
 // rule ADR-027 shipped.
@@ -339,6 +343,16 @@ func (l *Ledger) CloseIncidentalAndRoll(ctx context.Context, p CloseIncidentalAn
 		leftover, err := money.FromDB(totals.CollectedAmount).Sub(money.FromDB(totals.DisbursedAmount))
 		if err != nil {
 			return fmt.Errorf("computing incidental leftover: %w", err)
+		}
+
+		// A retired location is refused only when there is something to post
+		// on it. A zero leftover writes nothing, so the account the caller
+		// named is never touched and a stale default must not block the
+		// close (#444).
+		if leftover != 0 {
+			if err := refuseInactiveAccount(ctx, q, p.FundID, p.AccountID); err != nil {
+				return err
+			}
 		}
 
 		switch {

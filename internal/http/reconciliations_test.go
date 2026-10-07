@@ -258,6 +258,7 @@ func TestTakeReconciliationMatchedRoundTripsThroughListAndDetail(t *testing.T) {
 		Note: &note,
 		Counts: []accountCountRequest{
 			{AccountID: setup.CashAccountID(t), ActualAmount: 100_000, Resolution: "matched"},
+			{AccountID: setup.BankAccountID(t), ActualAmount: 0, Resolution: "matched"},
 		},
 	})
 	if takeRec.Code != http.StatusCreated {
@@ -270,10 +271,11 @@ func TestTakeReconciliationMatchedRoundTripsThroughListAndDetail(t *testing.T) {
 	if created.Note == nil || *created.Note != note {
 		t.Errorf("note = %v, want %q", created.Note, note)
 	}
-	if len(created.Lines) != 1 {
-		t.Fatalf("lines = %d, want 1", len(created.Lines))
+	// One line per active location: cash and bank (#444).
+	if len(created.Lines) != 2 {
+		t.Fatalf("lines = %d, want 2", len(created.Lines))
 	}
-	line := created.Lines[0]
+	line := lineFor(t, created.Lines, setup.CashAccountID(t))
 	if line.RecordedAmount != 100_000 || line.ActualAmount != 100_000 || line.DifferenceAmount != 0 {
 		t.Errorf("line = %+v, want recorded=actual=100000, difference=0", line)
 	}
@@ -309,7 +311,7 @@ func TestTakeReconciliationMatchedRoundTripsThroughListAndDetail(t *testing.T) {
 		t.Fatalf("GET /api/reconciliations/{id} = %d, want %d (body: %s)", detailRec.Code, http.StatusOK, detailRec.Body.String())
 	}
 	detail := decodeReconciliationDetail(t, detailRec)
-	if detail.ID != created.ID || len(detail.Lines) != 1 || detail.Lines[0] != line {
+	if detail.ID != created.ID || len(detail.Lines) != 2 || lineFor(t, detail.Lines, setup.CashAccountID(t)) != line {
 		t.Errorf("detail = %+v, want it to match the create response exactly", detail)
 	}
 
@@ -354,7 +356,7 @@ func TestTakeReconciliationAdjustedStoresTheGapFoundNotZero(t *testing.T) {
 				PurposeID: setup.MainPurposeID, Direction: "out", Amount: 20_000,
 				OccurredOn: "2026-08-31", Note: &note,
 			},
-		}},
+		}, {AccountID: setup.BankAccountID(t), ActualAmount: 0, Resolution: "matched"}},
 	})
 	if takeRec.Code != http.StatusCreated {
 		t.Fatalf("POST /api/reconciliations = %d, want %d (body: %s)", takeRec.Code, http.StatusCreated, takeRec.Body.String())
@@ -424,6 +426,7 @@ func TestTakeReconciliationBackdatedFixLandsInNextSnapshotNotThisOne(t *testing.
 	firstRec := postReconciliation(t, r, takeReconciliationRequest{
 		Counts: []accountCountRequest{
 			{AccountID: setup.CashAccountID(t), ActualAmount: 240_000, Resolution: "left_open"},
+			{AccountID: setup.BankAccountID(t), ActualAmount: 0, Resolution: "matched"},
 		},
 	})
 	if firstRec.Code != http.StatusCreated {
@@ -459,6 +462,7 @@ func TestTakeReconciliationBackdatedFixLandsInNextSnapshotNotThisOne(t *testing.
 	secondRec := postReconciliation(t, r, takeReconciliationRequest{
 		Counts: []accountCountRequest{
 			{AccountID: setup.CashAccountID(t), ActualAmount: 240_000, Resolution: "matched"},
+			{AccountID: setup.BankAccountID(t), ActualAmount: 0, Resolution: "matched"},
 		},
 	})
 	if secondRec.Code != http.StatusCreated {
@@ -598,7 +602,10 @@ func TestTakeReconciliationRejectsInvalidArgumentsBeforeAnyWrite(t *testing.T) {
 		{"matched with a nonzero difference", takeReconciliationRequest{
 			// The empty ledger has recorded_amount 0; claiming "matched"
 			// against a nonzero actual_amount is a lying line.
-			Counts: []accountCountRequest{{AccountID: 1, ActualAmount: 50_000, Resolution: "matched"}},
+			Counts: []accountCountRequest{
+				{AccountID: 1, ActualAmount: 50_000, Resolution: "matched"},
+				{AccountID: -1, ActualAmount: 0, Resolution: "matched"}, // the bank, filled in below
+			},
 		}},
 		{"adjusted with no fix", takeReconciliationRequest{
 			Counts: []accountCountRequest{{AccountID: 1, ActualAmount: 50_000, Resolution: "adjusted"}},
@@ -611,8 +618,11 @@ func TestTakeReconciliationRejectsInvalidArgumentsBeforeAnyWrite(t *testing.T) {
 			r := testRouter(t)
 			setup := setUpFund(t, r)
 			for i := range tc.req.Counts {
-				if tc.req.Counts[i].AccountID == 1 {
+				switch tc.req.Counts[i].AccountID {
+				case 1:
 					tc.req.Counts[i].AccountID = setup.CashAccountID(t)
+				case -1:
+					tc.req.Counts[i].AccountID = setup.BankAccountID(t)
 				}
 			}
 

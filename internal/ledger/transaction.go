@@ -62,11 +62,13 @@ type PostTransactionParams struct {
 // account belonging to another fund, an id nothing created - is a domain bug,
 // not a caller mistake, and is wrapped generically for M4 to map to a 500.
 //
-// One business-state check runs first, inside the same transaction as the
-// write (ADR-031): if PurposeID names an incidental whose closed_on is set,
-// the post is refused with ErrIncidentalClosed, in both directions - a late
-// bill deserves attribution to the occasion exactly as much as a late
-// contribution does. IncidentalClosedOnForPurpose returns zero rows for a
+// Two business-state checks run first, inside the same transaction as the
+// write. A retired AccountID (inactive_on set) is refused with
+// ErrAccountInactive, the same rule PostPurposeMove applies and the record
+// forms apply by not offering it (#444). Then (ADR-031): if PurposeID names
+// an incidental whose closed_on is set, the post is refused with
+// ErrIncidentalClosed, in both directions - a late bill deserves attribution
+// to the occasion exactly as much as a late contribution does. IncidentalClosedOnForPurpose returns zero rows for a
 // 'main' or 'pass_through' PurposeID, so no purpose.kind branch is needed;
 // sql.ErrNoRows there just means the guard does not apply. This is a
 // read-before-write refusal in the same shape as ErrReimbursementAlreadySettled
@@ -98,6 +100,10 @@ func (l *Ledger) PostTransaction(ctx context.Context, p PostTransactionParams) (
 
 	var posted store.Transaction
 	err := l.withTx(ctx, func(q store.Querier) error {
+		if err := refuseInactiveAccount(ctx, q, p.FundID, p.AccountID); err != nil {
+			return err
+		}
+
 		closedOn, err := q.IncidentalClosedOnForPurpose(ctx, p.PurposeID)
 		switch {
 		case err == nil:

@@ -244,3 +244,30 @@ var ErrPurposeMoveUnknownAccount = errors.New("ledger: no such account in this f
 // account has been retired (inactive_on set), the same rule the record forms
 // apply by not offering it.
 var ErrPurposeMoveAccountInactive = errors.New("ledger: the account is inactive")
+
+// ErrAccountInactive is returned by every posting that names a location the
+// caller chose - PostTransaction, PostDuesPayments,
+// PostTransferBetweenAccounts (either side), SettleReimbursement and
+// CloseIncidentalAndRoll when it has something to roll - and by
+// TakeReconciliation when a count names one, once that location has been
+// retired (account.inactive_on set, PRD section 6 and 7.8). Nothing is
+// written. Retired means inactive_on is non-NULL, whatever date it holds and
+// whatever the posting's own occurred_on is - the same reading
+// PostPurposeMove and the SPA's pickers already apply. Reinstating the
+// location (PATCH inactive_on null) is the way back.
+//
+// PostPurposeMove keeps its own ErrPurposeMoveAccountInactive and its own
+// wire code: that API is already shipped and the SPA already speaks it.
+//
+// Deliberately not applied to the two postings that inherit their location
+// from the row they correct - ReverseDuesPayment and PostPurposeCorrection:
+// the treasurer chooses nothing there, and refusing would make a mistake
+// on a since-retired location uncorrectable (CLAUDE.md rule 3).
+var ErrAccountInactive = errors.New("ledger: the account is retired")
+
+// ErrReconciliationMissingLocation is returned by TakeReconciliation when
+// the snapshot leaves out an active location of the fund: Cek kas counts
+// each active location, never a subset (PRD section 7.8). A subset would
+// freeze a snapshot that reads "cocok" while a location nobody counted
+// held the discrepancy. Nothing is written.
+var ErrReconciliationMissingLocation = errors.New("ledger: the count omits an active location")

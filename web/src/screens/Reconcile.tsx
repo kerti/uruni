@@ -126,10 +126,11 @@ async function loadReconcileData(): Promise<ReconcileData> {
  * is asked to resolve again; nothing is silently resubmitted (see
  * handleSubmit's catch below).
  *
- * Retired accounts (`inactive_on` set) never appear in the count list - the
- * backend places no such constraint on POST /api/reconciliations's `counts`
- * itself, so this screen is the one place responsible for not asking her to
- * count a location that's been retired (M6.1).
+ * Retired accounts (`inactive_on` set) never appear in the count list, and
+ * every active one does: POST /api/reconciliations refuses a count naming a
+ * retired location (account_inactive) and one that leaves out an active
+ * location (reconciliation_location_missing, #444), so this list and the
+ * server agree on exactly which locations a Cek kas counts.
  *
  * onDone/onCancel mirror RecordTransaction.tsx's own contract: installed
  * standalone there is no browser back button, so both "finished" and
@@ -268,6 +269,17 @@ export default function Reconcile({ onDone, onCancel }: { onDone: () => void; on
       setDetail(result)
     } catch (err) {
       const apiError = err instanceof ApiError ? err : new ApiError('unknown_error', err instanceof Error ? err.message : String(err))
+      // The location list itself went stale (#444): a location was added or
+      // retired after this screen loaded, and the server refuses a count
+      // that is not exactly the active ones. Re-read so the list is right
+      // again - a new location gets an empty line, a retired one drops out,
+      // nothing else she typed is touched - and say what happened. If the
+      // re-read fails too, the submit error alone still stands.
+      if (apiError.code === 'account_inactive' || apiError.code === 'reconciliation_location_missing') {
+        setSubmitError(apiError)
+        await loadRun(loadReconcileData, { silent: true }).catch(() => undefined)
+        return
+      }
       if (apiError.code !== 'invalid_argument') {
         setSubmitError(apiError)
         return

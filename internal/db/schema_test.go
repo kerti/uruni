@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"slices"
 	"strings"
 	"testing"
 
@@ -376,5 +377,76 @@ func TestDuesRateAmountCannotBeNegative(t *testing.T) {
 		TierID: tierID, Amount: -1, EffectiveFrom: "2026-01", CreatedAt: 1,
 	}); err == nil {
 		t.Fatal("CreateDuesRate with a negative amount = nil error, want the CHECK to reject it")
+	}
+}
+
+// A member is a name and the dates around it, nothing to reach them by: PRD
+// section 6 ("Member ... no contact details") and section 8 (data
+// minimization), CLAUDE.md rule 6. Uruni collects only names, amounts, dates
+// and notes, so no member email, phone or other contact column may exist - the
+// treasurer's own login email lives on "user", which is not a member.
+//
+// Read off the real migrated schema (PRAGMA table_info), so a column added to
+// the one migration file fails here whether or not any query uses it. The
+// pattern list is generous on purpose: Indonesian words for the same things
+// (telepon, hp, alamat, kontak) and the usual messaging handles.
+func TestMemberSchemaCarriesNoContactColumn(t *testing.T) {
+	t.Parallel()
+	sqlDB := migratedTestDB(t)
+
+	rows, err := sqlDB.Query(`SELECT name FROM pragma_table_info('member')`)
+	if err != nil {
+		t.Fatalf("PRAGMA table_info(member) = %v, want no error", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	var columns []string
+	for rows.Next() {
+		var name string
+		if err := rows.Scan(&name); err != nil {
+			t.Fatalf("scanning a member column name: %v", err)
+		}
+		columns = append(columns, name)
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatalf("reading member columns: %v", err)
+	}
+
+	// Guard against a vacuous pass: an empty or renamed table would satisfy
+	// the loop below trivially.
+	if len(columns) == 0 {
+		t.Fatal("member has no columns, want the real table - was it renamed?")
+	}
+	hasName := false
+	for _, c := range columns {
+		if c == "name" {
+			hasName = true
+		}
+	}
+	if !hasName {
+		t.Fatalf("member columns = %v, want a name column - the guard is reading the wrong table", columns)
+	}
+
+	// Long enough to be unambiguous anywhere in a column name, so
+	// "phonenumber" and "cellphone" are caught as surely as "phone".
+	forbiddenAnywhere := []string{
+		"email", "mail", "phone", "telp", "telepon", "mobile", "whatsapp", "telegram",
+		"contact", "kontak", "address", "alamat", "msisdn",
+	}
+	// Too short to match inside other words ("tel" in "hotel_id", "wa" in
+	// "award"), so these count only as a whole underscore-separated word.
+	forbiddenWords := []string{"tel", "hp", "cell", "wa", "nik", "ktp"}
+	for _, c := range columns {
+		lower := strings.ToLower(c)
+		for _, sub := range forbiddenAnywhere {
+			if strings.Contains(lower, sub) {
+				t.Errorf("member column %q reads as contact data (%q): collect only names, amounts, dates and notes (PRD 6, 8)", c, sub)
+			}
+		}
+		for _, part := range strings.Split(lower, "_") {
+			if slices.Contains(forbiddenWords, part) {
+				t.Errorf("member column %q reads as contact data (%q): collect only names, amounts, dates and notes (PRD 6, 8)", c, part)
+			}
+		}
 	}
 }
