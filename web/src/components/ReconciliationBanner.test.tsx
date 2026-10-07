@@ -68,4 +68,45 @@ describe('ReconciliationBanner', () => {
     const expected = copy.reconciliation.discrepancy(formatIDR(15_000)).replace(/\u00a0/g, ' ')
     expect(screen.getByText(expected)).toBeInTheDocument()
   })
+
+  // The colour is half the message: green is earned by a count, terracotta
+  // marks a normal gap, and alarm red never appears (CLAUDE.md rule 9). Pin
+  // the token classes beside the text so a restyle can't swap them silently.
+  describe('colour', () => {
+    function panel(text: string) {
+      return screen.getByText(text).closest('p')
+    }
+
+    it('paints "cocok" in the success tokens', () => {
+      render(<ReconciliationBanner openLines={[]} everReconciled />)
+
+      const el = panel(copy.reconciliation.matched)
+      expect(el).toHaveClass('bg-success-soft', 'text-success')
+      expect(el?.className).not.toMatch(/attention|destructive/)
+    })
+
+    it('paints selisih in the attention (terracotta) tokens, never destructive', () => {
+      render(<ReconciliationBanner openLines={[line({ difference_amount: -15_000 })]} everReconciled />)
+
+      const el = panel(copy.reconciliation.discrepancy(formatIDR(15_000)).replace(/\u00a0/g, ' '))
+      expect(el).toHaveClass('bg-attention-soft', 'text-attention')
+      expect(el?.className).not.toMatch(/success|destructive/)
+    })
+
+    it('keeps the never-checked state neutral, neither green nor terracotta', () => {
+      render(<ReconciliationBanner openLines={[]} everReconciled={false} />)
+
+      const el = panel(copy.reconciliation.neverChecked)
+      expect(el).toHaveClass('bg-muted', 'text-muted-foreground')
+      expect(el?.className).not.toMatch(/success|attention|destructive/)
+    })
+
+    it('keeps the same tokens when the banner is a button', () => {
+      render(<ReconciliationBanner openLines={[line({})]} everReconciled onClick={() => {}} />)
+
+      const button = screen.getByRole('button')
+      expect(button).toHaveClass('bg-attention-soft', 'text-attention')
+      expect(button.className).not.toMatch(/destructive/)
+    })
+  })
 })
