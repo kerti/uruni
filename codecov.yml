@@ -48,6 +48,15 @@ flags:
     paths:
       - "web/"
 
+# Three uploads per commit: two backend shards (internal/http, the rest) and
+# the frontend (ci.yml). Without these, the status and the PR comment are
+# computed from whichever upload lands first and then revised - a partial
+# backend number can read as a drop below the 80% floor for a minute.
+codecov:
+  notify:
+    after_n_builds: 3
+
 comment:
+  after_n_builds: 3
   layout: "reach, diff, flags, files"
   require_changes: false

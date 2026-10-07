@@ -50,15 +50,19 @@ jobs:
             echo "::notice::No web/package.json yet - frontend job skipped until the M1 scaffold lands."
           fi
 
-  backend:
-    name: Backend (lint + test)
+  # The backend is three jobs plus a fan-in. Under -race the Go suite needs
+  # roughly 290 CPU-seconds, so one 4-core runner cannot finish it much under
+  # two minutes no matter how parallel the tests are (#451/#453). internal/http
+  # is about half of that on its own, so it gets a runner, everything else
+  # shares a second, and lint runs beside both. `make check` still runs the
+  # whole suite in one `go test ./... -race` locally - the split is CI-only.
+  backend-lint:
+    name: Backend lint
     needs: preflight
     if: needs.preflight.outputs.backend == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          fetch-depth: 0
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
@@ -82,8 +86,35 @@ jobs:
           # never have. Lint runs in ~3s cold; the cache buys nothing worth
           # this.
           skip-cache: true
+
+  backend-test:
+    name: Backend test (${{ matrix.shard }})
+    needs: preflight
+    if: needs.preflight.outputs.backend == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      # One shard failing must not cancel the other: a red run should show
+      # every failing package, not just the first shard to finish.
+      fail-fast: false
+      matrix:
+        shard: [http, rest]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
       - name: Test (race + coverage)
-        run: go test ./... -race -covermode=atomic -coverprofile=coverage.out
+        run: |
+          if [ "${{ matrix.shard }}" = http ]; then
+            pkgs=./internal/http/...
+          else
+            pkgs=$(go list ./... | grep -v '/internal/http')
+          fi
+          # Unquoted on purpose: one argument per package.
+          # shellcheck disable=SC2086
+          go test $pkgs -race -covermode=atomic -coverprofile=coverage.out
       # The token is an input, not step env: the action builds its own CLI
       # invocation and passes `-t` only from the input, so an env-only token left
       # every upload tokenless. Codecov rejects those even from a public repo, and
@@ -94,6 +125,21 @@ jobs:
           files: coverage.out
           flags: backend
           token: ${{ secrets.CODECOV_TOKEN }}
+
+
+  # The name branch protection requires (see required status checks). It
+  # passes only when lint and both shards passed; `always()` makes it run - and
+  # fail - when one of them failed, instead of being skipped, which a required
+  # check would count as a pass.
+  backend:
+    name: Backend (lint + test)
+    needs: [preflight, backend-lint, backend-test]
+    if: always() && needs.preflight.outputs.backend == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Lint and every test shard passed
+        run: |
+          [ "${{ needs.backend-lint.result }}" = success ] && [ "${{ needs.backend-test.result }}" = success ]
 
   frontend:
     name: Frontend (lint + typecheck + test + build)
