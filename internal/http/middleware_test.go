@@ -2,6 +2,7 @@ package http
 
 import (
 	"bytes"
+	"encoding/json"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -133,5 +134,51 @@ func TestAppCSPAllowsOnlySameOriginScript(t *testing.T) {
 	}
 	if scriptSrc != "'self'" {
 		t.Errorf("appCSP script-src = %q, want 'self'", scriptSrc)
+	}
+}
+
+// A write a browser sends from another origin is refused before any handler
+// runs - cross-site, and same-site too, which SameSite=Lax alone lets through
+// (#481). Same-origin writes, writes with no browser headers at all, and
+// reads from anywhere pass. POST /api/logout answers 204 whenever it is
+// reached, so any other status is the guard's.
+func TestCrossOriginWritesAreRefused(t *testing.T) {
+	t.Parallel()
+	r := testRouter(t)
+
+	for _, tc := range []struct {
+		name, method, path string
+		headers            map[string]string
+		want               int
+	}{
+		{"cross-site fetch", http.MethodPost, "/api/logout", map[string]string{"Sec-Fetch-Site": "cross-site", "Origin": "https://evil.example"}, http.StatusForbidden},
+		{"same-site sibling subdomain", http.MethodPost, "/api/logout", map[string]string{"Sec-Fetch-Site": "same-site", "Origin": "https://other.example.com"}, http.StatusForbidden},
+		{"older browser, foreign Origin", http.MethodPost, "/api/logout", map[string]string{"Origin": "https://evil.example"}, http.StatusForbidden},
+		{"same-origin fetch", http.MethodPost, "/api/logout", map[string]string{"Sec-Fetch-Site": "same-origin", "Origin": "https://uruni.example.com"}, http.StatusNoContent},
+		{"older browser, own Origin", http.MethodPost, "/api/logout", map[string]string{"Origin": "https://uruni.example.com"}, http.StatusNoContent},
+		{"typed into the address bar", http.MethodPost, "/api/logout", map[string]string{"Sec-Fetch-Site": "none"}, http.StatusNoContent},
+		{"no browser headers (curl)", http.MethodPost, "/api/logout", nil, http.StatusNoContent},
+		{"cross-site read", http.MethodGet, "/api/session", map[string]string{"Sec-Fetch-Site": "cross-site", "Origin": "https://evil.example"}, http.StatusOK},
+	} {
+		req := httptest.NewRequest(tc.method, "https://uruni.example.com"+tc.path, nil)
+		for k, v := range tc.headers {
+			req.Header.Set(k, v)
+		}
+		rec := httptest.NewRecorder()
+		r.ServeHTTP(rec, req)
+
+		if rec.Code != tc.want {
+			t.Errorf("%s: %s %s = %d, want %d (body: %s)", tc.name, tc.method, tc.path, rec.Code, tc.want, rec.Body.String())
+			continue
+		}
+		if tc.want == http.StatusForbidden {
+			var env errorEnvelope
+			if err := json.Unmarshal(rec.Body.Bytes(), &env); err != nil || env.Error.Code != "cross_origin_request" {
+				t.Errorf("%s: body = %s, want the cross_origin_request envelope", tc.name, rec.Body.String())
+			}
+			if got := rec.Header().Values("Set-Cookie"); len(got) != 0 {
+				t.Errorf("%s: Set-Cookie = %q, want none: a refused request never reaches the session", tc.name, got)
+			}
+		}
 	}
 }

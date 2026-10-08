@@ -103,6 +103,12 @@ func (a *api) routes(r chi.Router) {
 		writeAPIError(w, http.StatusMethodNotAllowed, "method_not_allowed", "That method is not allowed on this resource.")
 	})
 
+	// Cross-origin writes are refused before the session is even loaded
+	// (#481). SameSite=Lax keeps the cookie off a cross-site POST, but a
+	// same-site page - a sibling subdomain under the same registrable domain
+	// - still gets it; this closes that gap. See crossOriginGuard.
+	r.Use(crossOriginGuard)
+
 	// Scoped to /api rather than the whole router (ADR-030): a cookie has no
 	// business being parsed or issued for a static asset request or the SSR
 	// public report, and this is the one mount every session-aware route

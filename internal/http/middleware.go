@@ -135,3 +135,22 @@ func securityHeaders(next http.Handler) http.Handler {
 		next.ServeHTTP(w, r)
 	})
 }
+
+// crossOriginGuard refuses a non-safe request (anything but GET, HEAD and
+// OPTIONS) that a browser sent from another origin, with 403 and the API's
+// error envelope (#481). It is the stdlib's CrossOriginProtection: a request
+// carrying Sec-Fetch-Site is allowed only when that says same-origin or none;
+// an older browser that sends only Origin is allowed only when Origin's host
+// is the request's Host. A request with neither header - curl, the CLI, the
+// e2e API seeding - is not a browser acting for someone else, and passes.
+//
+// Both proxies in front of the app keep this working: Caddy passes the
+// browser's Host through, and behind Vite's dev proxy (changeOrigin rewrites
+// Host) every current browser sends Sec-Fetch-Site, which is checked first.
+var crossOriginGuard = func() func(http.Handler) http.Handler {
+	p := http.NewCrossOriginProtection()
+	p.SetDenyHandler(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		writeAPIError(w, http.StatusForbidden, "cross_origin_request", "Cross-origin requests are not allowed.")
+	}))
+	return p.Handler
+}()
