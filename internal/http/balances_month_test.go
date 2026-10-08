@@ -46,7 +46,7 @@ func TestGetBalancesMonthMatchesTheReportsRunningWalk(t *testing.T) {
 	if err != nil {
 		t.Fatalf("OpenIncidental() = %v", err)
 	}
-	budi, err := store.New(sqlDB).CreateMember(ctx, store.CreateMemberParams{FundID: fundID, Name: "Budi", CreatedAt: 1})
+	budi, err := store.New(sqlDB).CreateMember(ctx, store.CreateMemberParams{JoinedOn: "2000-01-01", FundID: fundID, Name: "Budi", CreatedAt: 1})
 	if err != nil {
 		t.Fatalf("CreateMember() = %v", err)
 	}

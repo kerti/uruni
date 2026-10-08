@@ -17,7 +17,8 @@ import (
 
 func createMemberFor(t *testing.T, r http.Handler, name string) memberResponse {
 	t.Helper()
-	rec := postMember(t, r, memberRequest{Name: name})
+	joined := "2026-01-01" // before every envelope these tests open
+	rec := postMember(t, r, memberRequest{Name: name, JoinedOn: &joined})
 	if rec.Code != http.StatusCreated {
 		t.Fatalf("POST /api/members = %d, want %d (body: %s)", rec.Code, http.StatusCreated, rec.Body.String())
 	}

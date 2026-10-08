@@ -14,12 +14,18 @@ import (
 
 	"github.com/kerti/uruni/internal/ledger"
 	"github.com/kerti/uruni/internal/store"
+	"github.com/kerti/uruni/internal/tz"
 )
 
 // memberRequest is POST /api/members's body. inactive_on is deliberately
 // absent: marking a member inactive is a deactivation route #65 puts out of
 // scope (no UpdateMember query exists), so nothing on the wire can set it at
 // creation either - CreateMember always gets a nil InactiveOn here.
+//
+// joined_on may be absent or null: the server, not the client, owns PRD
+// 7.1's "history starts at adoption" default (#471), so createMember dates
+// such a member today in Asia/Jakarta. Backdating is the caller sending an
+// earlier date - the live-arrears exception.
 type memberRequest struct {
 	Name     string  `json:"name"`
 	TierID   *int64  `json:"tier_id"`
@@ -43,7 +49,7 @@ type memberResponse struct {
 	ID         int64   `json:"id"`
 	Name       string  `json:"name"`
 	TierID     *int64  `json:"tier_id"`
-	JoinedOn   *string `json:"joined_on"`
+	JoinedOn   string  `json:"joined_on"`
 	InactiveOn *string `json:"inactive_on"`
 	CreatedAt  int64   `json:"created_at"`
 
@@ -109,11 +115,16 @@ func (a *api) createMember(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	joinedOn := a.now().In(tz.Jakarta).Format(time.DateOnly)
+	if req.JoinedOn != nil {
+		joinedOn = *req.JoinedOn
+	}
+
 	member, err := a.queries.CreateMember(r.Context(), store.CreateMemberParams{
 		FundID:     fund.ID,
 		Name:       req.Name,
 		TierID:     req.TierID,
-		JoinedOn:   req.JoinedOn,
+		JoinedOn:   joinedOn,
 		InactiveOn: nil,
 		CreatedAt:  time.Now().Unix(),
 	})
@@ -283,9 +294,10 @@ func (a *api) resolveMember(w http.ResponseWriter, r *http.Request) (store.Membe
 }
 
 // updateMemberRequest is PATCH /api/members/{id}'s body. An absent key means
-// "leave alone"; an explicit null on tier_id, joined_on or inactive_on means
-// "clear it" - clearing tier_id drops the dues obligation, clearing
-// inactive_on reinstates the member.
+// "leave alone"; an explicit null on tier_id or inactive_on means "clear it" -
+// clearing tier_id drops the dues obligation, clearing inactive_on reinstates
+// the member. An explicit null on joined_on is refused (#471): there is no
+// "always was a member" to clear it back to.
 //
 // Hence the *Set flags and the map decode below: no struct tag can carry this
 // distinction. Both *T and **T leave the field nil for a missing key and for
@@ -357,7 +369,10 @@ func (a *api) updateMember(w http.ResponseWriter, r *http.Request) {
 		params.TierID = req.TierID
 	}
 	if req.JoinedOnSet {
-		params.SetJoinedOn = 1
+		if req.JoinedOn == nil {
+			writeAPIError(w, http.StatusBadRequest, "invalid_argument", "joined_on cannot be cleared; a member's history starts on a date.")
+			return
+		}
 		params.JoinedOn = req.JoinedOn
 	}
 	if req.InactiveOnSet {

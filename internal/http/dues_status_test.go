@@ -323,7 +323,7 @@ func TestGetOutstandingDuesOnAnotherFundsMemberIs404(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateFund() = %v, want no error", err)
 	}
-	otherMember, err := q.CreateMember(ctx, store.CreateMemberParams{
+	otherMember, err := q.CreateMember(ctx, store.CreateMemberParams{JoinedOn: "2000-01-01",
 		FundID: otherFund.ID, Name: "John", CreatedAt: 1,
 	})
 	if err != nil {

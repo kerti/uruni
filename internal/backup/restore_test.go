@@ -970,3 +970,75 @@ func TestRestoreOfAFileWithoutReasonReadsNull(t *testing.T) {
 		}
 	}
 }
+
+// TestRestoreOfANullJoinedOnReadsTheAdoptionDate is #471's promise to older
+// backups: member.joined_on became NOT NULL, but a format_version 1 file
+// written before that can carry null. Restore reads it as the day the fund's
+// history starts - its earliest opening-balance row - which is all "always
+// was a member" could ever reach back to, so no member's dues change.
+func TestRestoreOfANullJoinedOnReadsTheAdoptionDate(t *testing.T) {
+	t.Parallel()
+	srcDB := newTestDB(t)
+	srcUploads := t.TempDir()
+	buildFixture(t, srcDB, srcUploads)
+	if err := os.WriteFile(filepath.Join(srcUploads, receiptFilename), realJPEGBytes(t), 0o600); err != nil {
+		t.Fatalf("replacing fixture receipt with a real image: %v", err)
+	}
+	_, doc := exportFixture(t, srcDB, srcUploads)
+
+	// The earliest of the two openings is the adoption date, not the first
+	// one in file order.
+	var openings int
+	for i := range doc.Transactions {
+		if doc.Transactions[i].Kind == "opening" {
+			openings++
+			if openings == 2 {
+				doc.Transactions[i].OccurredOn = "2025-12-20"
+			}
+		}
+	}
+	if openings != 2 {
+		t.Fatalf("fixture has %d openings, want 2", openings)
+	}
+	if len(doc.Members) == 0 {
+		t.Fatal("fixture has no members")
+	}
+	for i := range doc.Members {
+		doc.Members[i].JoinedOn = nil
+	}
+	old, err := json.Marshal(doc)
+	if err != nil {
+		t.Fatalf("marshaling old-shaped document: %v", err)
+	}
+
+	parsed, err := parseUploadBytes(t, zipOf(t, old, map[string][]byte{receiptFilename: realJPEGBytes(t)}))
+	if err != nil {
+		t.Fatalf("ParseUpload(file with null joined_on) = %v, want no error", err)
+	}
+	destDB := newTestDB(t)
+	restoreOrFatal(t, destDB, t.TempDir(), t.TempDir(), parsed)
+
+	restored, err := store.New(destDB).ListMembersByFund(context.Background(), 1)
+	if err != nil {
+		t.Fatalf("ListMembersByFund() = %v, want no error", err)
+	}
+	if len(restored) != len(doc.Members) {
+		t.Fatalf("restored %d members, want %d", len(restored), len(doc.Members))
+	}
+	for _, m := range restored {
+		if m.JoinedOn != "2025-12-20" {
+			t.Errorf("member %d restored with joined_on %q, want the adoption date %q", m.ID, m.JoinedOn, "2025-12-20")
+		}
+	}
+}
+
+// A fund that never posted an opening balance starts its history the day it
+// was created, read in Asia/Jakarta: 17:00Z is already the next day there.
+func TestAdoptionDatesFallsBackToTheFundsJakartaCreationDay(t *testing.T) {
+	t.Parallel()
+	created := time.Date(2026, 8, 31, 17, 0, 0, 0, time.UTC).Unix()
+	got := adoptionDates(Document{Funds: []Fund{{ID: 7, CreatedAt: created}}})
+	if got[7] != "2026-09-01" {
+		t.Errorf("adoptionDates()[7] = %q, want %q", got[7], "2026-09-01")
+	}
+}

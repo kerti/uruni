@@ -37,7 +37,7 @@ func createPurpose(t *testing.T, sqlDB *sql.DB, fundID int64, kind, name string)
 
 func createMember(t *testing.T, sqlDB *sql.DB, fundID int64, name string) int64 {
 	t.Helper()
-	m, err := store.New(sqlDB).CreateMember(context.Background(), store.CreateMemberParams{
+	m, err := store.New(sqlDB).CreateMember(context.Background(), store.CreateMemberParams{JoinedOn: "2000-01-01",
 		FundID: fundID, Name: name, CreatedAt: 1,
 	})
 	if err != nil {

@@ -40,7 +40,7 @@ func setUpOtherFund(t *testing.T, sqlDB *sql.DB) otherFundFixture {
 	if err != nil {
 		t.Fatalf("CreateAccount(other) = %v, want no error", err)
 	}
-	member, err := q.CreateMember(ctx, store.CreateMemberParams{
+	member, err := q.CreateMember(ctx, store.CreateMemberParams{JoinedOn: "2000-01-01",
 		FundID: fund.ID, Name: "John", CreatedAt: 1,
 	})
 	if err != nil {

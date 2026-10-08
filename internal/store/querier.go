@@ -853,10 +853,11 @@ type Querier interface {
 	// exactly that reason.
 	UpdateIncidentalOccasion(ctx context.Context, arg UpdateIncidentalOccasionParams) (Incidental, error)
 	// UpdateMember is a correction to reference data, not a ledger event. name
-	// is NOT NULL, so COALESCE covers it: a nil argument can only mean "leave
-	// alone". The three nullable columns need the set_* flags, because there a
-	// null argument is ambiguous between "leave alone" and "clear it" - the CASE
-	// substitutes the new value, NULL included, only when the caller sent it.
+	// and joined_on are NOT NULL, so COALESCE covers them: a nil argument can
+	// only mean "leave alone". The two nullable columns need the set_* flags,
+	// because there a null argument is ambiguous between "leave alone" and
+	// "clear it" - the CASE substitutes the new value, NULL included, only when
+	// the caller sent it.
 	UpdateMember(ctx context.Context, arg UpdateMemberParams) (Member, error)
 	// UpdatePurposeName renames a purpose. The name is a label - a posted
 	// transaction references the purpose by id, and nothing in the ledger reads

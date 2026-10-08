@@ -34,8 +34,8 @@ func unexpectedFor(t *testing.T, rows []UnexpectedContribution, memberID int64) 
 func strPtr(s string) *string { return &s }
 
 // TestGetIncidentalParticipationExpectedIsSetByOpenedOnDate: expected is
-// every member active on the day the envelope opened - joined_on NULL or
-// <= opened_on, inactive_on NULL or > opened_on - tier ignored entirely
+// every member active on the day the envelope opened - joined_on <=
+// opened_on, inactive_on NULL or > opened_on - tier ignored entirely
 // (ADR-034), fixed by that one date regardless of what the roster looks
 // like later.
 func TestGetIncidentalParticipationExpectedIsSetByOpenedOnDate(t *testing.T) {

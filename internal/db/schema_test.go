@@ -278,14 +278,14 @@ func TestMemberCannotBorrowAnotherFundsTier(t *testing.T) {
 
 	// The tier exists, so a single-column FK would have accepted this. Only the
 	// composite (fund_id, tier_id) FK knows it belongs to the wrong fund.
-	if _, err := q.CreateMember(ctx, store.CreateMemberParams{
+	if _, err := q.CreateMember(ctx, store.CreateMemberParams{JoinedOn: "2000-01-01",
 		FundID: fundA, Name: "Jane", TierID: &tierB, CreatedAt: 1,
 	}); err == nil {
 		t.Fatal("CreateMember with another fund's tier = nil error, want the composite FK to reject it")
 	}
 
 	tierA := createDuesTier(t, sqlDB, fundA, "warga")
-	if _, err := q.CreateMember(ctx, store.CreateMemberParams{
+	if _, err := q.CreateMember(ctx, store.CreateMemberParams{JoinedOn: "2000-01-01",
 		FundID: fundA, Name: "Jane", TierID: &tierA, CreatedAt: 1,
 	}); err != nil {
 		t.Fatalf("CreateMember with its own fund's tier = %v, want no error", err)
@@ -293,7 +293,7 @@ func TestMemberCannotBorrowAnotherFundsTier(t *testing.T) {
 
 	// NULL tier_id is a member with no dues obligation, and SQLite's MATCH
 	// SIMPLE leaves the composite FK satisfied.
-	if _, err := q.CreateMember(ctx, store.CreateMemberParams{
+	if _, err := q.CreateMember(ctx, store.CreateMemberParams{JoinedOn: "2000-01-01",
 		FundID: fundA, Name: "Alex", TierID: nil, CreatedAt: 1,
 	}); err != nil {
 		t.Fatalf("CreateMember with a NULL tier_id = %v, want no error", err)
@@ -338,16 +338,22 @@ func TestDateAndPeriodChecksRejectImpossibleValues(t *testing.T) {
 		t.Run("joined_on/"+bad, func(t *testing.T) {
 			d := bad
 			if _, err := q.CreateMember(ctx, store.CreateMemberParams{
-				FundID: fundID, Name: "Jane", JoinedOn: &d, CreatedAt: 1,
+				FundID: fundID, Name: "Jane", JoinedOn: d, CreatedAt: 1,
 			}); err == nil {
 				t.Errorf("CreateMember with joined_on %q = nil error, want the CHECK to reject it", bad)
 			}
 		})
 	}
 
+	// NOT NULL (#471): a fund's history starts at adoption, so no member
+	// predates it.
+	if _, err := sqlDB.ExecContext(ctx, `INSERT INTO member (fund_id, name, joined_on, created_at) VALUES (?, 'Jane', NULL, 1)`, fundID); err == nil {
+		t.Error("INSERT member with joined_on NULL = nil error, want NOT NULL to reject it")
+	}
+
 	valid := "2026-08-12"
 	if _, err := q.CreateMember(ctx, store.CreateMemberParams{
-		FundID: fundID, Name: "Jane", JoinedOn: &valid, CreatedAt: 1,
+		FundID: fundID, Name: "Jane", JoinedOn: valid, CreatedAt: 1,
 	}); err != nil {
 		t.Fatalf("CreateMember with joined_on %q = %v, want no error", valid, err)
 	}

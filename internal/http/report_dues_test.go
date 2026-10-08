@@ -45,8 +45,12 @@ func newDuesScenario(t *testing.T) duesScenario {
 	}
 	str := func(s string) *string { return &s }
 	mk := func(name string, tierID *int64, joined, inactive *string) int64 {
+		joinedOn := "2000-01-01" // nil: before every period this test reads
+		if joined != nil {
+			joinedOn = *joined
+		}
 		m, err := q.CreateMember(ctx, store.CreateMemberParams{
-			FundID: f.fund.ID, Name: name, TierID: tierID, JoinedOn: joined, InactiveOn: inactive, CreatedAt: 1,
+			FundID: f.fund.ID, Name: name, TierID: tierID, JoinedOn: joinedOn, InactiveOn: inactive, CreatedAt: 1,
 		})
 		if err != nil {
 			t.Fatalf("CreateMember(%s) = %v", name, err)
@@ -278,7 +282,7 @@ func TestReportDuesSectionHidden(t *testing.T) {
 			t.Fatalf("CreateDuesRate() = %v", err)
 		}
 		joined := "2026-12-01"
-		if _, err := q.CreateMember(ctx, store.CreateMemberParams{FundID: f.fund.ID, Name: "Fina", TierID: &tier.ID, JoinedOn: &joined, CreatedAt: 1}); err != nil {
+		if _, err := q.CreateMember(ctx, store.CreateMemberParams{FundID: f.fund.ID, Name: "Fina", TierID: &tier.ID, JoinedOn: joined, CreatedAt: 1}); err != nil {
 			t.Fatalf("CreateMember() = %v", err)
 		}
 		body := f.get(t, "/report/"+f.fund.ReportSlug+"?month=2026-09").Body.String()

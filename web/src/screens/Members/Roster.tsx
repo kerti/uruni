@@ -370,7 +370,7 @@ function AddMemberDialog({
     const trimmed = name.trim()
     if (trimmed === '') return
     void run(async () => {
-      const created = await createMember(trimmed, tierId, joinedOn === '' ? null : joinedOn)
+      const created = await createMember(trimmed, tierId, joinedOn)
       onAdded()
       return created
     })
@@ -457,7 +457,7 @@ function EditMemberDialog({
     if (open && shown) {
       setName(shown.name)
       setTierId(shown.tier_id)
-      setJoinedOn(shown.joined_on ?? '')
+      setJoinedOn(shown.joined_on)
       setConfirming(null)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -478,16 +478,15 @@ function EditMemberDialog({
     event.preventDefault()
     if (!shown || confirming !== null) return
     const trimmed = name.trim()
-    const normalizedJoined = joinedOn === '' ? null : joinedOn
     if (trimmed === '') {
       onClose()
       return
     }
     // Only what actually changed goes on the wire: an absent key means
     // "leave alone" server-side, and an explicit null means "clear it" -
-    // which is how a member's tier is dropped and how a joined-on date is
-    // erased back to "always was a member".
-    if (trimmed === shown.name && tierId === shown.tier_id && normalizedJoined === shown.joined_on) {
+    // which is how a member's tier is dropped. The joined-on date only
+    // ever moves (#471): DateField has no empty state to send.
+    if (trimmed === shown.name && tierId === shown.tier_id && joinedOn === shown.joined_on) {
       onClose()
       return
     }
@@ -495,7 +494,7 @@ function EditMemberDialog({
       updateMember(shown.id, {
         name: trimmed === shown.name ? undefined : trimmed,
         tierId: tierId === shown.tier_id ? undefined : tierId,
-        joinedOn: normalizedJoined === shown.joined_on ? undefined : normalizedJoined,
+        joinedOn: joinedOn === shown.joined_on ? undefined : joinedOn,
       }),
     )
   }

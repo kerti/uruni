@@ -103,7 +103,10 @@ CREATE TABLE member (
   fund_id     INTEGER NOT NULL,
   name        TEXT    NOT NULL CHECK (length(trim(name)) > 0),
   tier_id     INTEGER,                    -- NULL = no dues obligation
-  joined_on   TEXT             CHECK (joined_on IS NULL OR (date(joined_on) IS NOT NULL AND joined_on = date(joined_on))),
+  -- NOT NULL (#471): a fund's history starts at adoption (PRD 7.1), so there
+  -- is no "always was a member" - the API defaults a missing date to today
+  -- in Asia/Jakarta, and backdating is the deliberate live-arrears exception.
+  joined_on   TEXT    NOT NULL CHECK (date(joined_on) IS NOT NULL AND joined_on = date(joined_on)),
   inactive_on TEXT             CHECK (inactive_on IS NULL OR (date(inactive_on) IS NOT NULL AND inactive_on = date(inactive_on))),
   created_at  INTEGER NOT NULL,
   UNIQUE (fund_id, id),

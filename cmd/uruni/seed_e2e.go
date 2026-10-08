@@ -118,7 +118,7 @@ func seedE2E(ctx context.Context) error {
 	tierID := tier.ID
 	for _, name := range []string{"Warga Satu", "Warga Dua"} {
 		if _, err := q.CreateMember(ctx, store.CreateMemberParams{
-			FundID: setup.Fund.ID, Name: name, TierID: &tierID, JoinedOn: &joinedOn, CreatedAt: now,
+			FundID: setup.Fund.ID, Name: name, TierID: &tierID, JoinedOn: joinedOn, CreatedAt: now,
 		}); err != nil {
 			return fmt.Errorf("creating e2e member %q: %w", name, err)
 		}

@@ -31,7 +31,11 @@ func newEnvelopeScenario(t *testing.T) envelopeScenario {
 	f := newReportFixture(t, "Kas RT 05")
 	q := store.New(f.db)
 	mk := func(name string, joined *string) int64 {
-		m, err := q.CreateMember(ctx, store.CreateMemberParams{FundID: f.fund.ID, Name: name, JoinedOn: joined, CreatedAt: 1})
+		joinedOn := "2000-01-01" // nil: before every envelope this test opens
+		if joined != nil {
+			joinedOn = *joined
+		}
+		m, err := q.CreateMember(ctx, store.CreateMemberParams{FundID: f.fund.ID, Name: name, JoinedOn: joinedOn, CreatedAt: 1})
 		if err != nil {
 			t.Fatalf("CreateMember(%s) = %v", name, err)
 		}

@@ -296,7 +296,7 @@ func TestReportSummaryShowsTheTotalOwedToMembers(t *testing.T) {
 	}
 
 	q := store.New(f.db)
-	member, err := q.CreateMember(context.Background(), store.CreateMemberParams{FundID: f.fund.ID, Name: "Ani", CreatedAt: 1})
+	member, err := q.CreateMember(context.Background(), store.CreateMemberParams{JoinedOn: "2000-01-01", FundID: f.fund.ID, Name: "Ani", CreatedAt: 1})
 	if err != nil {
 		t.Fatalf("CreateMember() = %v, want no error", err)
 	}

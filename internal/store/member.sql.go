@@ -19,7 +19,7 @@ type CreateMemberParams struct {
 	FundID     int64
 	Name       string
 	TierID     *int64
-	JoinedOn   *string
+	JoinedOn   string
 	InactiveOn *string
 	CreatedAt  int64
 }
@@ -174,7 +174,7 @@ type ListMembersPageRow struct {
 	FundID      int64
 	Name        string
 	TierID      *int64
-	JoinedOn    *string
+	JoinedOn    string
 	InactiveOn  *string
 	CreatedAt   int64
 	TierName    *string
@@ -264,36 +264,35 @@ func (q *Queries) ListMembersPage(ctx context.Context, arg ListMembersPageParams
 const updateMember = `-- name: UpdateMember :one
 UPDATE member
 SET name        = COALESCE(?1, name),
-    tier_id     = CASE WHEN CAST(?2     AS INTEGER) = 1 THEN ?3     ELSE tier_id     END,
-    joined_on   = CASE WHEN CAST(?4   AS INTEGER) = 1 THEN ?5   ELSE joined_on   END,
-    inactive_on = CASE WHEN CAST(?6 AS INTEGER) = 1 THEN ?7 ELSE inactive_on END
-WHERE id = ?8
+    joined_on   = COALESCE(?2, joined_on),
+    tier_id     = CASE WHEN CAST(?3     AS INTEGER) = 1 THEN ?4     ELSE tier_id     END,
+    inactive_on = CASE WHEN CAST(?5 AS INTEGER) = 1 THEN ?6 ELSE inactive_on END
+WHERE id = ?7
 RETURNING id, fund_id, name, tier_id, joined_on, inactive_on, created_at
 `
 
 type UpdateMemberParams struct {
 	Name          *string
+	JoinedOn      *string
 	SetTierID     int64
 	TierID        *int64
-	SetJoinedOn   int64
-	JoinedOn      *string
 	SetInactiveOn int64
 	InactiveOn    *string
 	ID            int64
 }
 
 // UpdateMember is a correction to reference data, not a ledger event. name
-// is NOT NULL, so COALESCE covers it: a nil argument can only mean "leave
-// alone". The three nullable columns need the set_* flags, because there a
-// null argument is ambiguous between "leave alone" and "clear it" - the CASE
-// substitutes the new value, NULL included, only when the caller sent it.
+// and joined_on are NOT NULL, so COALESCE covers them: a nil argument can
+// only mean "leave alone". The two nullable columns need the set_* flags,
+// because there a null argument is ambiguous between "leave alone" and
+// "clear it" - the CASE substitutes the new value, NULL included, only when
+// the caller sent it.
 func (q *Queries) UpdateMember(ctx context.Context, arg UpdateMemberParams) (Member, error) {
 	row := q.db.QueryRowContext(ctx, updateMember,
 		arg.Name,
+		arg.JoinedOn,
 		arg.SetTierID,
 		arg.TierID,
-		arg.SetJoinedOn,
-		arg.JoinedOn,
 		arg.SetInactiveOn,
 		arg.InactiveOn,
 		arg.ID,

@@ -19,7 +19,7 @@ function jsonResponse(body: unknown, status = 200) {
 }
 
 function member(id: number, name: string) {
-  return { id, name, tier_id: 1, joined_on: null, inactive_on: null, created_at: 1 }
+  return { id, name, tier_id: 1, joined_on: '2026-01-01', inactive_on: null, created_at: 1 }
 }
 
 // One row per status the schema defines, plus a tier-less member left out

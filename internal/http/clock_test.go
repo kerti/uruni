@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
@@ -146,6 +147,44 @@ func TestDownloadBackupNamesTheZipWithTheJakartaDate(t *testing.T) {
 			}
 			if _, err := zip.NewReader(bytes.NewReader(rec.Body.Bytes()), int64(rec.Body.Len())); err != nil {
 				t.Errorf("body is not a zip: %v", err)
+			}
+		})
+	}
+}
+
+// POST /api/members with joined_on absent or null dates the member today in
+// Jakarta (#471): the server owns PRD 7.1's "history starts at adoption"
+// default, and there is no "always was a member" for null to ask for.
+func TestPostMembersDefaultsJoinedOnToTheJakartaDay(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name string
+		now  time.Time
+		body string
+		want string
+	}{
+		{"absent, one second before September in Jakarta", beforeSeptemberInJakarta, `{"name":"Jane"}`, "2026-08-31"},
+		{"absent, the first second of September in Jakarta", atSeptemberInJakarta, `{"name":"Jane"}`, "2026-09-01"},
+		{"explicit null", atSeptemberInJakarta, `{"name":"Jane","joined_on":null}`, "2026-09-01"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			r := authedRouterAt(t, testStoreDB(t), fixedClock(tc.now))
+			if rec := postSetup(t, r, "Test Fund"); rec.Code != http.StatusCreated {
+				t.Fatalf("POST /api/setup = %d, want %d", rec.Code, http.StatusCreated)
+			}
+			rec := httptest.NewRecorder()
+			r.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/api/members", strings.NewReader(tc.body)))
+			if rec.Code != http.StatusCreated {
+				t.Fatalf("POST /api/members = %d, want %d (body: %s)", rec.Code, http.StatusCreated, rec.Body.String())
+			}
+			var got memberResponse
+			if err := json.NewDecoder(rec.Body).Decode(&got); err != nil {
+				t.Fatalf("decoding response: %v", err)
+			}
+			if got.JoinedOn != tc.want {
+				t.Errorf("member.joined_on = %q, want %q", got.JoinedOn, tc.want)
 			}
 		})
 	}
