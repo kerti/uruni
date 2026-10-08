@@ -24,7 +24,7 @@ func postDuesPayment(t *testing.T, r http.Handler, req duesPaymentRequest) *http
 func TestPostDuesPaymentsRequiresAFund(t *testing.T) {
 	t.Parallel()
 	rec := postDuesPayment(t, testRouter(t), duesPaymentRequest{
-		AccountID: 1, PurposeID: 1, MemberID: 1, OccurredOn: "2026-08-12",
+		AccountID: 1, MemberID: 1, OccurredOn: "2026-08-12",
 		Periods: []duesPaymentPeriod{{DuesPeriod: "2026-08", Amount: 25_000}},
 	})
 	if rec.Code != http.StatusNotFound {
@@ -60,8 +60,8 @@ func TestPostDuesPaymentsSeveralPeriodsYieldsOneRowPerPeriod(t *testing.T) {
 		{DuesPeriod: "2026-08", Amount: 25_000},
 	}
 	rec := postDuesPayment(t, r, duesPaymentRequest{
-		AccountID: setup.CashAccountID(t), PurposeID: setup.MainPurposeID,
-		MemberID: member.ID, OccurredOn: "2026-08-12",
+		AccountID: setup.CashAccountID(t),
+		MemberID:  member.ID, OccurredOn: "2026-08-12",
 		Periods: periods,
 	})
 	if rec.Code != http.StatusCreated {
@@ -127,8 +127,8 @@ func TestPostDuesPaymentsRejectsEmptyPeriods(t *testing.T) {
 	}
 
 	rec := postDuesPayment(t, r, duesPaymentRequest{
-		AccountID: setup.CashAccountID(t), PurposeID: setup.MainPurposeID,
-		MemberID: member.ID, OccurredOn: "2026-08-12",
+		AccountID: setup.CashAccountID(t),
+		MemberID:  member.ID, OccurredOn: "2026-08-12",
 		Periods: nil,
 	})
 	if rec.Code != http.StatusBadRequest {
@@ -161,8 +161,8 @@ func TestPostDuesPaymentsRejectsNonPositiveAmount(t *testing.T) {
 	}
 
 	rec := postDuesPayment(t, r, duesPaymentRequest{
-		AccountID: setup.CashAccountID(t), PurposeID: setup.MainPurposeID,
-		MemberID: member.ID, OccurredOn: "2026-08-12",
+		AccountID: setup.CashAccountID(t),
+		MemberID:  member.ID, OccurredOn: "2026-08-12",
 		Periods: []duesPaymentPeriod{{DuesPeriod: "2026-08", Amount: 0}},
 	})
 	if rec.Code != http.StatusBadRequest {
@@ -189,8 +189,8 @@ func TestPostDuesPaymentsRejectsAMalformedDuesPeriod(t *testing.T) {
 	}
 
 	rec := postDuesPayment(t, r, duesPaymentRequest{
-		AccountID: setup.CashAccountID(t), PurposeID: setup.MainPurposeID,
-		MemberID: member.ID, OccurredOn: "2026-08-12",
+		AccountID: setup.CashAccountID(t),
+		MemberID:  member.ID, OccurredOn: "2026-08-12",
 		Periods: []duesPaymentPeriod{{DuesPeriod: "2026-13", Amount: 25_000}},
 	})
 	if rec.Code != http.StatusBadRequest {
@@ -238,8 +238,8 @@ func TestPostDuesPaymentsAMidBatchFailureWritesNothing(t *testing.T) {
 	}
 
 	rec := postDuesPayment(t, r, duesPaymentRequest{
-		AccountID: setup.CashAccountID(t), PurposeID: setup.MainPurposeID,
-		MemberID: member.ID, OccurredOn: "2026-08-12",
+		AccountID: setup.CashAccountID(t),
+		MemberID:  member.ID, OccurredOn: "2026-08-12",
 		Periods: []duesPaymentPeriod{
 			{DuesPeriod: "2026-06", Amount: 25_000},
 			{DuesPeriod: "not-a-period", Amount: 25_000},

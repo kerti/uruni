@@ -166,8 +166,8 @@ func TestPostingEndpointsRefuseARetiredLocation(t *testing.T) {
 		}},
 		{"POST /api/dues-payments", func(t *testing.T, r http.Handler, w retiredWorld) *httptest.ResponseRecorder {
 			return postDuesPayment(t, r, duesPaymentRequest{
-				AccountID: w.setup.BankAccountID(t), PurposeID: w.setup.MainPurposeID,
-				MemberID: w.memberID, OccurredOn: "2026-09-10",
+				AccountID: w.setup.BankAccountID(t),
+				MemberID:  w.memberID, OccurredOn: "2026-09-10",
 				Periods: []duesPaymentPeriod{
 					{DuesPeriod: "2026-09", Amount: 25_000},
 					{DuesPeriod: "2026-10", Amount: 25_000},
@@ -272,8 +272,8 @@ func TestReversalOfARowOnARetiredLocationStillWorks(t *testing.T) {
 	w.reinstateBank(t, r)
 
 	rec := postDuesPayment(t, r, duesPaymentRequest{
-		AccountID: w.setup.BankAccountID(t), PurposeID: w.setup.MainPurposeID,
-		MemberID: w.memberID, OccurredOn: "2026-09-04",
+		AccountID: w.setup.BankAccountID(t),
+		MemberID:  w.memberID, OccurredOn: "2026-09-04",
 		Periods: []duesPaymentPeriod{{DuesPeriod: "2026-09", Amount: 25_000}},
 	})
 	if rec.Code != http.StatusCreated {

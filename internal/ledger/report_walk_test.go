@@ -53,7 +53,7 @@ func newWalkScenario(t *testing.T, l *Ledger) walkScenario {
 	payDues := func(member int64, date, period string) store.Transaction {
 		t.Helper()
 		paid, err := l.PostDuesPayments(ctx, PostDuesPaymentsParams{
-			FundID: fundID, AccountID: cashID, PurposeID: mainID, MemberID: member,
+			FundID: fundID, AccountID: cashID, MemberID: member,
 			OccurredOn: date, Periods: []PeriodAmount{{DuesPeriod: period, Amount: 25_000}},
 		})
 		if err != nil {
@@ -469,7 +469,7 @@ func TestMonthlyReportWalkAllowsANegativeTotalMasuk(t *testing.T) {
 	l := newTestLedger(t)
 	f := newFixture(t, l)
 	paid, err := l.PostDuesPayments(ctx, PostDuesPaymentsParams{
-		FundID: f.fundID, AccountID: f.cashID, PurposeID: f.mainID, MemberID: f.memberID,
+		FundID: f.fundID, AccountID: f.cashID, MemberID: f.memberID,
 		OccurredOn: "2026-08-05", Periods: []PeriodAmount{{DuesPeriod: "2026-08", Amount: 25_000}},
 	})
 	if err != nil {

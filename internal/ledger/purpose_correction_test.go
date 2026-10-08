@@ -403,7 +403,7 @@ func TestPostPurposeCorrectionRejectsDuesPayment(t *testing.T) {
 	ctx := context.Background()
 
 	posted, err := l.PostDuesPayments(ctx, PostDuesPaymentsParams{
-		FundID: f.fundID, AccountID: f.cashID, PurposeID: f.mainID,
+		FundID: f.fundID, AccountID: f.cashID,
 		MemberID: f.memberID, OccurredOn: "2026-09-05",
 		Periods: []PeriodAmount{{DuesPeriod: "2026-09", Amount: 25_000}},
 	})
@@ -530,7 +530,7 @@ func TestPostPurposeCorrectionRejectsDuesReversal(t *testing.T) {
 	ctx := context.Background()
 
 	posted, err := l.PostDuesPayments(ctx, PostDuesPaymentsParams{
-		FundID: f.fundID, AccountID: f.cashID, PurposeID: f.mainID,
+		FundID: f.fundID, AccountID: f.cashID,
 		MemberID: f.memberID, OccurredOn: "2026-09-05",
 		Periods: []PeriodAmount{{DuesPeriod: "2026-09", Amount: 25_000}},
 	})

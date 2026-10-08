@@ -117,6 +117,18 @@ describe('Reconcile', () => {
     expect(screen.queryByLabelText(text.actualLabel('Bank lama'))).not.toBeInTheDocument()
   })
 
+  it('offers a fix only the selectable pos, so never a closed amplop', async () => {
+    const fetchMock = routedFetch(stubLoad())
+    vi.stubGlobal('fetch', fetchMock)
+    render(<Reconcile onDone={vi.fn()} onCancel={vi.fn()} />)
+
+    await waitForForm()
+    // #473: the server refuses a fix on a closed amplop (ADR-031), so the
+    // picker reads the same filtered list the record form does.
+    const urls = fetchMock.mock.calls.map(([input]) => String(input))
+    expect(urls).toContain('/api/purposes?selectable=true')
+  })
+
   it('posts every active account as "matched" with no fix when every count equals the recorded balance', async () => {
     const fetchMock = routedFetch([
       ...stubLoad(),

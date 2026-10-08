@@ -144,7 +144,7 @@ func newMonthScenario(t *testing.T, l *Ledger) monthScenario {
 		date   string
 	}{{s.memberOne, 25_000, "2026-09-05"}, {s.memberTwo, 10_000, "2026-09-06"}} {
 		if _, err := l.PostDuesPayments(ctx, PostDuesPaymentsParams{
-			FundID: f.fundID, AccountID: f.cashID, PurposeID: f.mainID, MemberID: d.member,
+			FundID: f.fundID, AccountID: f.cashID, MemberID: d.member,
 			OccurredOn: d.date, Periods: []PeriodAmount{{DuesPeriod: "2026-09", Amount: d.amount}},
 		}); err != nil {
 			t.Fatalf("PostDuesPayments() = %v, want no error", err)
@@ -550,7 +550,7 @@ func TestMonthlyReportDuesReversalIsShownAndNetsAgainstThePaymentInTotalMasuk(t 
 	s := newMonthScenario(t, l)
 
 	paid, err := l.PostDuesPayments(ctx, PostDuesPaymentsParams{
-		FundID: s.f.fundID, AccountID: s.f.cashID, PurposeID: s.f.mainID, MemberID: s.memberThree,
+		FundID: s.f.fundID, AccountID: s.f.cashID, MemberID: s.memberThree,
 		OccurredOn: "2026-09-21", Periods: []PeriodAmount{{DuesPeriod: "2026-09", Amount: 25_000}},
 	})
 	if err != nil {
@@ -775,7 +775,7 @@ func TestMonthlyReportPaidFilterIncludesAMemberWhoPaidInAdvance(t *testing.T) {
 	l := newTestLedger(t)
 	s := newMonthScenario(t, l)
 	if _, err := l.PostDuesPayments(ctx, PostDuesPaymentsParams{
-		FundID: s.f.fundID, AccountID: s.f.cashID, PurposeID: s.f.mainID, MemberID: s.memberOne,
+		FundID: s.f.fundID, AccountID: s.f.cashID, MemberID: s.memberOne,
 		OccurredOn: "2026-09-07", Periods: []PeriodAmount{{DuesPeriod: "2026-10", Amount: 25_000}},
 	}); err != nil {
 		t.Fatalf("PostDuesPayments() = %v, want no error", err)

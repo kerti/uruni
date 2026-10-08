@@ -203,7 +203,7 @@ func TestPostingsRefuseARetiredLocation(t *testing.T) {
 		}},
 		{"dues payment", func(t *testing.T, w retiredWorld) { memberID = duesMember(t, w) }, func(w retiredWorld) error {
 			_, err := w.l.PostDuesPayments(ctx, PostDuesPaymentsParams{
-				FundID: w.fundID, AccountID: w.bankID, PurposeID: w.mainID,
+				FundID: w.fundID, AccountID: w.bankID,
 				MemberID: memberID, OccurredOn: "2026-09-10",
 				Periods: []PeriodAmount{{DuesPeriod: "2026-09", Amount: 25_000}},
 			})
@@ -211,7 +211,7 @@ func TestPostingsRefuseARetiredLocation(t *testing.T) {
 		}},
 		{"multi-period dues payment", func(t *testing.T, w retiredWorld) { memberID = duesMember(t, w) }, func(w retiredWorld) error {
 			_, err := w.l.PostDuesPayments(ctx, PostDuesPaymentsParams{
-				FundID: w.fundID, AccountID: w.bankID, PurposeID: w.mainID,
+				FundID: w.fundID, AccountID: w.bankID,
 				MemberID: memberID, OccurredOn: "2026-09-10",
 				Periods: []PeriodAmount{
 					{DuesPeriod: "2026-09", Amount: 25_000},
@@ -468,7 +468,7 @@ func TestCorrectionsOnARowOfARetiredLocationStillWork(t *testing.T) {
 	createDuesRate(t, q, tierID, 25_000, "2026-01")
 	memberID := createDuesMember(t, q, w.fundID, duesMemberParams{name: "Budi", tierID: &tierID})
 	paid, err := w.l.PostDuesPayments(ctx, PostDuesPaymentsParams{
-		FundID: w.fundID, AccountID: w.bankID, PurposeID: w.mainID, MemberID: memberID,
+		FundID: w.fundID, AccountID: w.bankID, MemberID: memberID,
 		OccurredOn: "2026-09-04", Periods: []PeriodAmount{{DuesPeriod: "2026-09", Amount: 25_000}},
 	})
 	if err != nil {

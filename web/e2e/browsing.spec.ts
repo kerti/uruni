@@ -93,7 +93,6 @@ test.describe('browsing Riwayat, the roster and the locations', () => {
       const period = `${2024 + Math.floor(i / 12)}-${String((i % 12) + 1).padStart(2, '0')}`
       await api(request, 'POST', '/api/dues-payments', {
         account_id: tunai,
-        purpose_id: main,
         member_id: wargaSatu,
         occurred_on: today,
         note: null,
@@ -102,7 +101,6 @@ test.describe('browsing Riwayat, the roster and the locations', () => {
     }
     await api(request, 'POST', '/api/dues-payments', {
       account_id: tunai,
-      purpose_id: main,
       member_id: wargaDua,
       occurred_on: today,
       note: null,

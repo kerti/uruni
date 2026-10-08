@@ -611,16 +611,16 @@ func TestGetTransactionsSearchHitsMemberName(t *testing.T) {
 	}
 
 	payRec := postDuesPayment(t, r, duesPaymentRequest{
-		AccountID: setup.CashAccountID(t), PurposeID: setup.MainPurposeID,
-		MemberID: member.ID, OccurredOn: "2026-08-05",
+		AccountID: setup.CashAccountID(t),
+		MemberID:  member.ID, OccurredOn: "2026-08-05",
 		Periods: []duesPaymentPeriod{{DuesPeriod: "2026-08", Amount: 25_000}},
 	})
 	if payRec.Code != http.StatusCreated {
 		t.Fatalf("POST /api/dues-payments = %d, want %d (body: %s)", payRec.Code, http.StatusCreated, payRec.Body.String())
 	}
 	otherPayRec := postDuesPayment(t, r, duesPaymentRequest{
-		AccountID: setup.CashAccountID(t), PurposeID: setup.MainPurposeID,
-		MemberID: otherMember.ID, OccurredOn: "2026-08-06",
+		AccountID: setup.CashAccountID(t),
+		MemberID:  otherMember.ID, OccurredOn: "2026-08-06",
 		Periods: []duesPaymentPeriod{{DuesPeriod: "2026-08", Amount: 25_000}},
 	})
 	if otherPayRec.Code != http.StatusCreated {
@@ -732,8 +732,8 @@ func TestGetTransactionsMemberIDAndDuesPeriodFiltersIncludeTheReversal(t *testin
 	}
 
 	payRec := postDuesPayment(t, r, duesPaymentRequest{
-		AccountID: setup.CashAccountID(t), PurposeID: setup.MainPurposeID,
-		MemberID: member.ID, OccurredOn: "2026-08-05",
+		AccountID: setup.CashAccountID(t),
+		MemberID:  member.ID, OccurredOn: "2026-08-05",
 		Periods: []duesPaymentPeriod{{DuesPeriod: "2026-08", Amount: 25_000}},
 	})
 	if payRec.Code != http.StatusCreated {
@@ -747,15 +747,15 @@ func TestGetTransactionsMemberIDAndDuesPeriodFiltersIncludeTheReversal(t *testin
 	// Noise this filter must exclude: another period for the same member,
 	// and the same period for another member.
 	if rec := postDuesPayment(t, r, duesPaymentRequest{
-		AccountID: setup.CashAccountID(t), PurposeID: setup.MainPurposeID,
-		MemberID: member.ID, OccurredOn: "2026-09-05",
+		AccountID: setup.CashAccountID(t),
+		MemberID:  member.ID, OccurredOn: "2026-09-05",
 		Periods: []duesPaymentPeriod{{DuesPeriod: "2026-09", Amount: 25_000}},
 	}); rec.Code != http.StatusCreated {
 		t.Fatalf("POST /api/dues-payments (other period) = %d, want %d (body: %s)", rec.Code, http.StatusCreated, rec.Body.String())
 	}
 	if rec := postDuesPayment(t, r, duesPaymentRequest{
-		AccountID: setup.CashAccountID(t), PurposeID: setup.MainPurposeID,
-		MemberID: other.ID, OccurredOn: "2026-08-06",
+		AccountID: setup.CashAccountID(t),
+		MemberID:  other.ID, OccurredOn: "2026-08-06",
 		Periods: []duesPaymentPeriod{{DuesPeriod: "2026-08", Amount: 25_000}},
 	}); rec.Code != http.StatusCreated {
 		t.Fatalf("POST /api/dues-payments (other member) = %d, want %d (body: %s)", rec.Code, http.StatusCreated, rec.Body.String())
@@ -999,7 +999,7 @@ func TestGetTransactionsDuesPaymentCarriesMemberAndAccountName(t *testing.T) {
 	memberID := memberFor(t, r, "Budi")
 
 	payRec := postDuesPayment(t, r, duesPaymentRequest{
-		AccountID: setup.CashAccountID(t), PurposeID: setup.MainPurposeID, MemberID: memberID,
+		AccountID: setup.CashAccountID(t), MemberID: memberID,
 		OccurredOn: "2026-08-12", Periods: []duesPaymentPeriod{{DuesPeriod: "2026-08", Amount: 25_000}},
 	})
 	if payRec.Code != http.StatusCreated {
@@ -1032,7 +1032,7 @@ func TestGetTransactionsDuesReversalCarriesMemberName(t *testing.T) {
 	memberID := memberFor(t, r, "Warga Satu")
 
 	payRec := postDuesPayment(t, r, duesPaymentRequest{
-		AccountID: setup.CashAccountID(t), PurposeID: setup.MainPurposeID, MemberID: memberID,
+		AccountID: setup.CashAccountID(t), MemberID: memberID,
 		OccurredOn: "2026-08-12", Periods: []duesPaymentPeriod{{DuesPeriod: "2026-08", Amount: 25_000}},
 	})
 	var posted []transactionResponse
@@ -1292,7 +1292,7 @@ func TestGetTransactionsNewFieldsNeverLeakAnotherFundsNames(t *testing.T) {
 	memberID := memberFor(t, r, "Budi")
 
 	payRec := postDuesPayment(t, r, duesPaymentRequest{
-		AccountID: setup.CashAccountID(t), PurposeID: setup.MainPurposeID, MemberID: memberID,
+		AccountID: setup.CashAccountID(t), MemberID: memberID,
 		OccurredOn: "2026-08-12", Periods: []duesPaymentPeriod{{DuesPeriod: "2026-08", Amount: 25_000}},
 	})
 	if payRec.Code != http.StatusCreated {

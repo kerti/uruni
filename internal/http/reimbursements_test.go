@@ -672,10 +672,11 @@ func claimForWithNote(t *testing.T, r http.Handler, setup setupResponse, memberI
 	return decodeReimbursement(t, rec)
 }
 
-// TestPostReimbursementsRejectsWhatTheSchemaRefuses proves this handler
-// validates nothing itself: a non-positive amount, a calendar-invalid date
-// and a member_id naming no row all come back through mapSQLiteError.
-func TestPostReimbursementsRejectsWhatTheSchemaRefuses(t *testing.T) {
+// TestPostReimbursementsRejectsBadInput: a non-positive amount is the
+// ledger's to refuse, as UpdateReimbursement and PostTransaction already do
+// (invalid_argument, #473); a calendar-invalid date and a member_id naming
+// no row still come back from the schema through mapSQLiteError.
+func TestPostReimbursementsRejectsBadInput(t *testing.T) {
 	t.Parallel()
 	for _, tc := range []struct {
 		name string
@@ -684,10 +685,10 @@ func TestPostReimbursementsRejectsWhatTheSchemaRefuses(t *testing.T) {
 	}{
 		{"zero amount", func(s setupResponse, m int64) reimbursementRequest {
 			return reimbursementRequest{MemberID: m, PurposeID: s.MainPurposeID, Amount: 0, IncurredOn: "2026-08-10"}
-		}, "check_violation"},
+		}, "invalid_argument"},
 		{"negative amount", func(s setupResponse, m int64) reimbursementRequest {
 			return reimbursementRequest{MemberID: m, PurposeID: s.MainPurposeID, Amount: -80_000, IncurredOn: "2026-08-10"}
-		}, "check_violation"},
+		}, "invalid_argument"},
 		{"malformed incurred_on", func(s setupResponse, m int64) reimbursementRequest {
 			return reimbursementRequest{MemberID: m, PurposeID: s.MainPurposeID, Amount: 80_000, IncurredOn: "2026-02-30"}
 		}, "check_violation"},

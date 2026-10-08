@@ -113,7 +113,6 @@ test.describe('report and backup', () => {
     await post(amplop, 'in', 77_000, today, 'Sumbangan amplop bulan ini', wargaDua)
     await api(request, 'POST', '/api/dues-payments', {
       account_id: tunai,
-      purpose_id: main,
       member_id: wargaSatu,
       occurred_on: today,
       note: null,

@@ -605,7 +605,7 @@ func TestDeleteMemberWithTransactionsReturns409(t *testing.T) {
 
 	ctx := context.Background()
 	if _, err := l.PostDuesPayments(ctx, ledger.PostDuesPaymentsParams{
-		FundID: setup.Fund.ID, AccountID: setup.CashAccountID(t), PurposeID: setup.MainPurposeID,
+		FundID: setup.Fund.ID, AccountID: setup.CashAccountID(t),
 		MemberID: member.ID, OccurredOn: "2026-01-15",
 		Periods: []ledger.PeriodAmount{{DuesPeriod: "2026-01", Amount: 50_000}},
 	}); err != nil {
@@ -932,7 +932,7 @@ func TestGetMembersRowArrearsMonthsReflectsPartPaidEarlierPeriod(t *testing.T) {
 
 	today := time.Now().In(tz.Jakarta).Format("2006-01-02")
 	if rec := postDuesPayment(t, r, duesPaymentRequest{
-		AccountID: setup.CashAccountID(t), PurposeID: setup.MainPurposeID, MemberID: member.ID,
+		AccountID: setup.CashAccountID(t), MemberID: member.ID,
 		OccurredOn: today,
 		Periods:    []duesPaymentPeriod{{DuesPeriod: oneBack, Amount: 10_000}}, // less than the 25000 owed
 	}); rec.Code != http.StatusCreated {

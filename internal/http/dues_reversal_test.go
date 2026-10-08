@@ -37,8 +37,8 @@ func TestPostDuesPaymentReversalReturnsThePostedRow(t *testing.T) {
 	}
 
 	payRec := postDuesPayment(t, r, duesPaymentRequest{
-		AccountID: setup.CashAccountID(t), PurposeID: setup.MainPurposeID,
-		MemberID: member.ID, OccurredOn: "2026-08-12",
+		AccountID: setup.CashAccountID(t),
+		MemberID:  member.ID, OccurredOn: "2026-08-12",
 		Periods: []duesPaymentPeriod{{DuesPeriod: "2026-08", Amount: 25_000}},
 	})
 	if payRec.Code != http.StatusCreated {
@@ -170,8 +170,8 @@ func TestPostDuesPaymentReversalTwiceIs409(t *testing.T) {
 	}
 
 	payRec := postDuesPayment(t, r, duesPaymentRequest{
-		AccountID: setup.CashAccountID(t), PurposeID: setup.MainPurposeID,
-		MemberID: member.ID, OccurredOn: "2026-08-12",
+		AccountID: setup.CashAccountID(t),
+		MemberID:  member.ID, OccurredOn: "2026-08-12",
 		Periods: []duesPaymentPeriod{{DuesPeriod: "2026-08", Amount: 25_000}},
 	})
 	var posted []transactionResponse

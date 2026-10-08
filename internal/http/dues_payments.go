@@ -26,12 +26,12 @@ type duesPaymentPeriod struct {
 }
 
 // duesPaymentRequest is POST /api/dues-payments's body: one member paying
-// one or more periods in the same sitting, on the same account and purpose,
-// dated and noted the same way across all of them - Periods is the only part
-// that repeats.
+// one or more periods in the same sitting, on the same account, dated and
+// noted the same way across all of them - Periods is the only part that
+// repeats. No purpose_id (#473): dues always land on the fund's Kas Utama,
+// which the ledger looks up itself.
 type duesPaymentRequest struct {
 	AccountID  int64               `json:"account_id"`
-	PurposeID  int64               `json:"purpose_id"`
 	MemberID   int64               `json:"member_id"`
 	OccurredOn string              `json:"occurred_on"`
 	Note       *string             `json:"note"`
@@ -85,7 +85,6 @@ func (a *api) createDuesPayment(w http.ResponseWriter, r *http.Request) {
 	posted, err := a.ledger.PostDuesPayments(r.Context(), ledger.PostDuesPaymentsParams{
 		FundID:     fund.ID,
 		AccountID:  req.AccountID,
-		PurposeID:  req.PurposeID,
 		MemberID:   req.MemberID,
 		OccurredOn: req.OccurredOn,
 		Note:       req.Note,

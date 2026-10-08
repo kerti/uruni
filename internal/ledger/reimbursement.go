@@ -11,6 +11,47 @@ import (
 	"github.com/kerti/uruni/internal/store"
 )
 
+// CreateReimbursementParams is every argument CreateReimbursement needs to
+// file one claim: a member fronted Amount on IncurredOn, for PurposeID.
+type CreateReimbursementParams struct {
+	FundID     int64
+	MemberID   int64
+	PurposeID  int64
+	Amount     money.Amount // must be > 0
+	IncurredOn string       // "YYYY-MM-DD", a real calendar date
+	Note       *string
+}
+
+// CreateReimbursement files a claim. It posts nothing - an unsettled claim
+// is off the ledger (ADR-024) - but a claim against a closed envelope can
+// only end in a refused payout, so it is refused here too, with
+// ErrIncidentalClosed (ADR-031, #473): reopen the envelope first, as for
+// any posting. Every other rule (a member or purpose naming no row, a
+// malformed incurred_on) stays the schema's to refuse.
+func (l *Ledger) CreateReimbursement(ctx context.Context, p CreateReimbursementParams) (store.Reimbursement, error) {
+	if p.Amount <= 0 {
+		return store.Reimbursement{}, fmt.Errorf("%w: amount must be positive, got %d", ErrInvalidArgument, p.Amount.Int64())
+	}
+
+	var created store.Reimbursement
+	err := l.withTx(ctx, func(q store.Querier) error {
+		if err := refuseClosedIncidental(ctx, q, p.PurposeID, ErrIncidentalClosed); err != nil {
+			return err
+		}
+		var err error
+		created, err = q.CreateReimbursement(ctx, store.CreateReimbursementParams{
+			FundID: p.FundID, MemberID: p.MemberID, PurposeID: p.PurposeID,
+			Amount: p.Amount.Int64(), IncurredOn: p.IncurredOn, Note: p.Note,
+			CreatedAt: time.Now().Unix(),
+		})
+		return err
+	})
+	if err != nil {
+		return store.Reimbursement{}, fmt.Errorf("creating reimbursement: %w", err)
+	}
+	return created, nil
+}
+
 // SettleReimbursementParams is every argument SettleReimbursement needs to pay
 // out one outstanding claim.
 //
@@ -55,7 +96,10 @@ type SettleReimbursementParams struct {
 //     instead of a raw "UNIQUE constraint failed" string.
 //
 // A retired AccountID (inactive_on set) is ErrAccountInactive: the claim
-// stays unsettled and nothing is written (#444).
+// stays unsettled and nothing is written (#444). A claim whose purpose is a
+// closed envelope is ErrIncidentalClosed (ADR-031, #473): the payout would
+// leave the envelope's balance below the zero its close squared it to, so
+// the treasurer reopens it first, settles, and closes it again.
 func (l *Ledger) SettleReimbursement(ctx context.Context, p SettleReimbursementParams) (store.Transaction, error) {
 	if err := validateOccurredOn(p.OccurredOn); err != nil {
 		return store.Transaction{}, err
@@ -73,6 +117,10 @@ func (l *Ledger) SettleReimbursement(ctx context.Context, p SettleReimbursementP
 		}
 
 		if err := refuseInactiveAccount(ctx, q, p.FundID, p.AccountID); err != nil {
+			return err
+		}
+
+		if err := refuseClosedIncidental(ctx, q, claim.PurposeID, ErrIncidentalClosed); err != nil {
 			return err
 		}
 
@@ -146,6 +194,10 @@ type UpdateReimbursementParams struct {
 // SettleReimbursement's do: it is not a lock (ADR-004's SetMaxOpenConns(1)
 // makes an interleaved write structurally impossible) but a single,
 // coherent read-then-decide.
+//
+// Moving the claim onto a closed envelope is ErrIncidentalClosed, for the
+// reason CreateReimbursement refuses filing one there (#473). Moving it off
+// one is allowed: that posts nothing and leaves the claim payable.
 func (l *Ledger) UpdateReimbursement(ctx context.Context, p UpdateReimbursementParams) (store.Reimbursement, error) {
 	if p.Amount != nil && *p.Amount <= 0 {
 		return store.Reimbursement{}, fmt.Errorf("%w: amount must be positive, got %d", ErrInvalidArgument, p.Amount.Int64())
@@ -163,8 +215,17 @@ func (l *Ledger) UpdateReimbursement(ctx context.Context, p UpdateReimbursementP
 
 	var updated store.Reimbursement
 	err := l.withTx(ctx, func(q store.Querier) error {
-		if _, err := unsettledClaim(ctx, q, p.FundID, p.ReimbursementID); err != nil {
+		claim, err := unsettledClaim(ctx, q, p.FundID, p.ReimbursementID)
+		if err != nil {
 			return err
+		}
+		// Only a move is guarded: a correction re-sends the claim's own
+		// purpose unchanged, and a claim already on a closed envelope must
+		// still take a fixed amount, date or note.
+		if p.PurposeID != nil && *p.PurposeID != claim.PurposeID {
+			if err := refuseClosedIncidental(ctx, q, *p.PurposeID, ErrIncidentalClosed); err != nil {
+				return err
+			}
 		}
 
 		args := store.UpdateReimbursementParams{
@@ -186,7 +247,6 @@ func (l *Ledger) UpdateReimbursement(ctx context.Context, p UpdateReimbursementP
 			args.WaivedOn = p.WaivedOn
 		}
 
-		var err error
 		updated, err = q.UpdateReimbursement(ctx, args)
 		return err
 	})

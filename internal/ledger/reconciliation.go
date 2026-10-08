@@ -208,6 +208,11 @@ func (l *Ledger) TakeReconciliation(ctx context.Context, p TakeReconciliationPar
 
 			var adjustmentTransactionID *int64
 			if c.Fix != nil {
+				// A fix is a posting like any other (ADR-031, #473): it
+				// may not land on a closed envelope.
+				if err := refuseClosedIncidental(ctx, q, c.Fix.PurposeID, ErrIncidentalClosed); err != nil {
+					return err
+				}
 				kind := "normal"
 				if c.Resolution == "adjusted" {
 					kind = "adjustment"

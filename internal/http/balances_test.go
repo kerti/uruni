@@ -146,7 +146,7 @@ func TestGetBalancesReflectsEveryMilestoneSlice(t *testing.T) {
 		t.Fatalf("decoding member response: %v", err)
 	}
 	if rec := postDuesPayment(t, r, duesPaymentRequest{
-		AccountID: setup.CashAccountID(t), PurposeID: setup.MainPurposeID, MemberID: member.ID,
+		AccountID: setup.CashAccountID(t), MemberID: member.ID,
 		OccurredOn: "2026-08-03",
 		Periods:    []duesPaymentPeriod{{DuesPeriod: "2026-08", Amount: 25_000}},
 	}); rec.Code != http.StatusCreated {

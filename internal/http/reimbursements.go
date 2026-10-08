@@ -109,16 +109,15 @@ func toReimbursementResponseRow(r store.ListReimbursementsPageRow) reimbursement
 	}, r.Settled)
 }
 
-// createReimbursement is POST /api/reimbursements: a direct-CRUD write
-// (ADR-027), so it calls a.queries itself. Recording a claim moves no money -
-// there is no ledger row until it is settled, which is exactly why the
-// recorded balance still matches the wallet while a claim is outstanding -
-// so there is no invariant here for the ledger to hold.
+// createReimbursement is POST /api/reimbursements. Recording a claim moves
+// no money - there is no ledger row until it is settled - but it goes
+// through Ledger.CreateReimbursement because one invariant does apply: a
+// claim against a closed envelope could only end in a refused payout, so it
+// answers 409 incidental_closed (ADR-031, #473).
 //
-// A non-positive amount, a malformed incurred_on and a member_id or
-// purpose_id naming no row all reach SQLite's own CHECK and FOREIGN KEY
-// constraints and come back through mapSQLiteError, the single source of
-// truth for those rules.
+// A malformed incurred_on and a member_id or purpose_id naming no row still
+// reach SQLite's own CHECK and FOREIGN KEY constraints, and come back
+// through mapLedgerError's fallthrough to mapSQLiteError.
 func (a *api) createReimbursement(w http.ResponseWriter, r *http.Request) {
 	var req reimbursementRequest
 	if !decodeJSON(w, r, &req) {
@@ -130,18 +129,16 @@ func (a *api) createReimbursement(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	claim, err := a.queries.CreateReimbursement(r.Context(), store.CreateReimbursementParams{
+	claim, err := a.ledger.CreateReimbursement(r.Context(), ledger.CreateReimbursementParams{
 		FundID:     fund.ID,
 		MemberID:   req.MemberID,
 		PurposeID:  req.PurposeID,
-		Amount:     req.Amount,
+		Amount:     money.Amount(req.Amount),
 		IncurredOn: req.IncurredOn,
-		WaivedOn:   nil,
 		Note:       req.Note,
-		CreatedAt:  time.Now().Unix(),
 	})
 	if err != nil {
-		mapSQLiteError(w, a.logger, err)
+		mapLedgerError(w, a.logger, err)
 		return
 	}
 
