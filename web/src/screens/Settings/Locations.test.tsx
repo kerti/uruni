@@ -287,6 +287,44 @@ describe('Settings locations', () => {
     expect(currentSearch()).toContain('edit=location')
   })
 
+  it('renders the 409 on retiring a location that holds money, pointing at Pindah lokasi', async () => {
+    const { fetchMock } = stubAccounts([account(1, 'Kotak kas')], () =>
+      jsonResponse({ error: { code: 'account_holds_money', message: 'holds money' } }, 409),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+    renderAt()
+    await screen.findByRole('list')
+
+    await userEvent.click(screen.getByRole('button', { name: text.editAria('Kotak kas') }))
+    const dialog = screen.getByRole('dialog', { name: text.editTitle })
+    await userEvent.click(within(dialog).getByRole('button', { name: text.deactivate }))
+    await userEvent.click(within(dialog).getByRole('button', { name: text.deactivateConfirmAction }))
+
+    // #474: the money has to leave first - the sentence says how, and the
+    // dialog stays open on it.
+    const alert = await within(dialog).findByRole('alert')
+    expect(alert).toHaveTextContent(copy.common.errors.account_holds_money)
+    expect(currentSearch()).toContain('edit=location')
+  })
+
+  it('renders the 409 on retiring a location below zero, pointing at Cek kas', async () => {
+    const { fetchMock } = stubAccounts([account(1, 'Kotak kas')], () =>
+      jsonResponse({ error: { code: 'account_balance_negative', message: 'negative' } }, 409),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+    renderAt()
+    await screen.findByRole('list')
+
+    await userEvent.click(screen.getByRole('button', { name: text.editAria('Kotak kas') }))
+    const dialog = screen.getByRole('dialog', { name: text.editTitle })
+    await userEvent.click(within(dialog).getByRole('button', { name: text.deactivate }))
+    await userEvent.click(within(dialog).getByRole('button', { name: text.deactivateConfirmAction }))
+
+    const alert = await within(dialog).findByRole('alert')
+    expect(alert).toHaveTextContent(copy.common.errors.account_balance_negative)
+    expect(currentSearch()).toContain('edit=location')
+  })
+
   it('opens a dialog directly from a deep link to ?edit=location:<id>', async () => {
     const { fetchMock } = stubAccounts([account(1, 'Kotak kas')])
     vi.stubGlobal('fetch', fetchMock)

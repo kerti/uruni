@@ -7,12 +7,12 @@ import (
 	"testing"
 )
 
-// retiredWorld is a fund with money in it and its bank retired (#444): cash
-// holds 500.000 and the bank 200.000 in Kas Utama, an open envelope holds
-// 50.000 of contributions (cash), one member and one unsettled claim exist.
-// The retired bank still holding money is the point - nothing requires a zero
-// balance to retire - and every refusal below must leave those integers where
-// they were.
+// retiredWorld is a fund with money in it and its bank retired (#444): the
+// bank took 200.000 into Kas Utama and moved it to cash (Pindah lokasi)
+// before retiring, since a location holding money cannot be retired (#474).
+// Cash holds 700.000 of Kas Utama, an open envelope holds 50.000 of
+// contributions (cash), one member and one unsettled claim exist. Every
+// refusal below must leave those integers where they were.
 type retiredWorld struct {
 	setup      setupResponse
 	envelopeID int64
@@ -34,6 +34,13 @@ func newRetiredWorld(t *testing.T, r http.Handler) retiredWorld {
 		if rec := postTransaction(t, r, in); rec.Code != http.StatusCreated {
 			t.Fatalf("seeding POST /api/transactions = %d, want %d (body: %s)", rec.Code, http.StatusCreated, rec.Body.String())
 		}
+	}
+
+	if rec := postTransfer(t, r, transferRequest{
+		PurposeID: w.setup.MainPurposeID, FromAccountID: w.setup.BankAccountID(t), ToAccountID: w.setup.CashAccountID(t),
+		Amount: 200_000, OccurredOn: "2026-09-04",
+	}); rec.Code != http.StatusCreated {
+		t.Fatalf("emptying the bank: POST /api/transfers = %d, want %d (body: %s)", rec.Code, http.StatusCreated, rec.Body.String())
 	}
 
 	rec := postReimbursement(t, r, reimbursementRequest{
@@ -112,7 +119,7 @@ func TestRetiredWorldStartsWhereTheTestsExpect(t *testing.T) {
 	r := testRouter(t)
 	w := newRetiredWorld(t, r)
 	got := w.state(t, r)
-	want := worldState{rows: 3, fund: 750_000, cash: 550_000, bank: 200_000, envelope: 50_000}
+	want := worldState{rows: 5, fund: 750_000, cash: 750_000, bank: 0, envelope: 50_000}
 	if got != want {
 		t.Fatalf("starting state = %+v, want %+v", got, want)
 	}
@@ -257,14 +264,16 @@ func TestPostingEndpointsStillAcceptActiveAndReinstatedLocations(t *testing.T) {
 	}); rec.Code != http.StatusCreated {
 		t.Fatalf("POST /api/transactions on the reinstated bank = %d, want %d (body: %s)", rec.Code, http.StatusCreated, rec.Body.String())
 	}
-	if got := w.state(t, r); got.cash != 560_000 || got.bank != 210_000 || got.fund != 770_000 {
-		t.Errorf("cash/bank/fund = %d/%d/%d, want 560000/210000/770000", got.cash, got.bank, got.fund)
+	if got := w.state(t, r); got.cash != 760_000 || got.bank != 10_000 || got.fund != 770_000 {
+		t.Errorf("cash/bank/fund = %d/%d/%d, want 760000/10000/770000", got.cash, got.bank, got.fund)
 	}
 }
 
 // Corrections keep their way home: a reversal takes its location from the row
 // it reverses, so a dues payment on a since-retired location is still
-// reversible (CLAUDE.md rule 3).
+// reversible (CLAUDE.md rule 3). The payment's money is moved to cash before
+// the bank retires (#474), so the reversal leaves the retired bank negative -
+// visible on Beranda, and the treasurer's to settle by reinstating it.
 func TestReversalOfARowOnARetiredLocationStillWorks(t *testing.T) {
 	t.Parallel()
 	r := testRouter(t)
@@ -283,14 +292,20 @@ func TestReversalOfARowOnARetiredLocationStillWorks(t *testing.T) {
 	if err := json.NewDecoder(rec.Body).Decode(&posted); err != nil {
 		t.Fatalf("decoding dues payment: %v", err)
 	}
+	if rec := postTransfer(t, r, transferRequest{
+		PurposeID: w.setup.MainPurposeID, FromAccountID: w.setup.BankAccountID(t), ToAccountID: w.setup.CashAccountID(t),
+		Amount: 25_000, OccurredOn: "2026-09-04",
+	}); rec.Code != http.StatusCreated {
+		t.Fatalf("emptying the bank = %d (body: %s)", rec.Code, rec.Body.String())
+	}
 	w.retireBank(t, r)
 
 	rev := postDuesPaymentReversal(t, r, posted[0].ID, reverseDuesPaymentRequest{OccurredOn: "2026-09-12"})
 	if rev.Code != http.StatusCreated {
 		t.Fatalf("POST /api/dues-payments/{id}/reversal on a retired location = %d, want %d (body: %s)", rev.Code, http.StatusCreated, rev.Body.String())
 	}
-	if got := w.state(t, r); got.bank != 200_000 || got.fund != 750_000 {
-		t.Errorf("bank/fund = %d/%d, want 200000/750000 after payment and reversal", got.bank, got.fund)
+	if got := w.state(t, r); got.bank != -25_000 || got.fund != 750_000 {
+		t.Errorf("bank/fund = %d/%d, want -25000/750000 after payment, move and reversal", got.bank, got.fund)
 	}
 }
 
@@ -304,19 +319,19 @@ func TestPostReconciliationsRefusesACountOfARetiredLocation(t *testing.T) {
 	}{
 		{"both counted, one retired", func(w retiredWorld, t *testing.T) []accountCountRequest {
 			return []accountCountRequest{
-				{AccountID: w.setup.CashAccountID(t), ActualAmount: 550_000, Resolution: "matched"},
-				{AccountID: w.setup.BankAccountID(t), ActualAmount: 200_000, Resolution: "matched"},
+				{AccountID: w.setup.CashAccountID(t), ActualAmount: 750_000, Resolution: "matched"},
+				{AccountID: w.setup.BankAccountID(t), ActualAmount: 0, Resolution: "matched"},
 			}
 		}},
 		{"only the retired one", func(w retiredWorld, t *testing.T) []accountCountRequest {
-			return []accountCountRequest{{AccountID: w.setup.BankAccountID(t), ActualAmount: 200_000, Resolution: "matched"}}
+			return []accountCountRequest{{AccountID: w.setup.BankAccountID(t), ActualAmount: 0, Resolution: "matched"}}
 		}},
 		{"a fix aimed at the retired one", func(w retiredWorld, t *testing.T) []accountCountRequest {
 			return []accountCountRequest{
-				{AccountID: w.setup.CashAccountID(t), ActualAmount: 550_000, Resolution: "matched"},
+				{AccountID: w.setup.CashAccountID(t), ActualAmount: 750_000, Resolution: "matched"},
 				{
-					AccountID: w.setup.BankAccountID(t), ActualAmount: 190_000, Resolution: "adjusted",
-					Fix: &fixRequest{PurposeID: w.setup.MainPurposeID, Direction: "out", Amount: 10_000, OccurredOn: "2026-09-10"},
+					AccountID: w.setup.BankAccountID(t), ActualAmount: 10_000, Resolution: "adjusted",
+					Fix: &fixRequest{PurposeID: w.setup.MainPurposeID, Direction: "in", Amount: 10_000, OccurredOn: "2026-09-10"},
 				},
 			}
 		}},
@@ -349,11 +364,11 @@ func TestPostReconciliationsRefusesASnapshotThatOmitsAnActiveLocation(t *testing
 		counts func(w retiredWorld, t *testing.T) []accountCountRequest
 	}{
 		{"cash only", func(w retiredWorld, t *testing.T) []accountCountRequest {
-			return []accountCountRequest{{AccountID: w.setup.CashAccountID(t), ActualAmount: 550_000, Resolution: "matched"}}
+			return []accountCountRequest{{AccountID: w.setup.CashAccountID(t), ActualAmount: 750_000, Resolution: "matched"}}
 		}},
 		{"a fix on the counted line must not post", func(w retiredWorld, t *testing.T) []accountCountRequest {
 			return []accountCountRequest{{
-				AccountID: w.setup.CashAccountID(t), ActualAmount: 540_000, Resolution: "adjusted",
+				AccountID: w.setup.CashAccountID(t), ActualAmount: 740_000, Resolution: "adjusted",
 				Fix: &fixRequest{PurposeID: w.setup.MainPurposeID, Direction: "out", Amount: 10_000, OccurredOn: "2026-09-10"},
 			}}
 		}},
@@ -381,14 +396,14 @@ func TestPostReconciliationsRefusesASnapshotThatOmitsAnActiveLocation(t *testing
 }
 
 // The happy path the two refusals frame: every active location counted, the
-// retired one left out even though it still holds money.
+// retired one left out.
 func TestPostReconciliationsCountsExactlyTheActiveLocations(t *testing.T) {
 	t.Parallel()
 	r := testRouter(t)
 	w := newRetiredWorld(t, r)
 
 	rec := postReconciliation(t, r, takeReconciliationRequest{Counts: []accountCountRequest{
-		{AccountID: w.setup.CashAccountID(t), ActualAmount: 550_000, Resolution: "matched"},
+		{AccountID: w.setup.CashAccountID(t), ActualAmount: 750_000, Resolution: "matched"},
 	}})
 	if rec.Code != http.StatusCreated {
 		t.Fatalf("POST /api/reconciliations = %d, want %d (body: %s)", rec.Code, http.StatusCreated, rec.Body.String())
