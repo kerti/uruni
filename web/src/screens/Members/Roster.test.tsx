@@ -22,7 +22,7 @@ function member(
   name: string,
   overrides: Partial<{
     tier_id: number | null
-    joined_on: string | null
+    joined_on: string
     inactive_on: string | null
     tier_name: string | null
     current_rate: number | null

@@ -58,7 +58,7 @@ type IncidentalParticipation struct {
 // nothing here is stored.
 //
 // Expected is every member active on the day the envelope opened -
-// joined_on NULL or <= opened_on, inactive_on NULL or > opened_on, tier
+// joined_on <= opened_on, inactive_on NULL or > opened_on, tier
 // ignored entirely (unlike dues) - minus its recipients. Fixed by that one
 // date, so the list never shifts when someone later leaves.
 //
@@ -185,12 +185,12 @@ func (l *Ledger) incidentalParticipation(ctx context.Context, fundID, purposeID 
 }
 
 // memberActiveOn reports whether m was active on date (a "YYYY-MM-DD"
-// calendar day): joined_on NULL or <= date, inactive_on NULL or > date
+// calendar day): joined_on <= date, inactive_on NULL or > date
 // (ADR-034). Unlike memberOwesPeriod (dues_status.go) this compares whole
 // dates, not months - an envelope opens on a day, not a period, and ADR-034
 // is explicit the expected list is "fixed by one date."
 func memberActiveOn(m store.Member, date string) bool {
-	if m.JoinedOn != nil && *m.JoinedOn > date {
+	if m.JoinedOn > date {
 		return false
 	}
 	if m.InactiveOn != nil && *m.InactiveOn <= date {

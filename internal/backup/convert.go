@@ -68,7 +68,7 @@ func toMembers(rows []store.Member) []Member {
 	for _, r := range rows {
 		out = append(out, Member{
 			ID: r.ID, FundID: r.FundID, Name: r.Name, TierID: r.TierID,
-			JoinedOn: r.JoinedOn, InactiveOn: r.InactiveOn, CreatedAt: r.CreatedAt,
+			JoinedOn: &r.JoinedOn, InactiveOn: r.InactiveOn, CreatedAt: r.CreatedAt,
 		})
 	}
 	return out

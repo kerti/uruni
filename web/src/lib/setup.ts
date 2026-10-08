@@ -135,7 +135,7 @@ export interface Member {
   id: number
   name: string
   tier_id: number | null
-  joined_on: string | null
+  joined_on: string
   inactive_on: string | null
   created_at: number
   tier_name: string | null
@@ -260,7 +260,7 @@ export async function listAllMembers(): Promise<Member[]> {
   }
 }
 
-export function createMember(name: string, tierId: number | null, joinedOn: string | null): Promise<Member> {
+export function createMember(name: string, tierId: number | null, joinedOn: string): Promise<Member> {
   return apiFetch<Member>('/api/members', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -277,12 +277,13 @@ export function createMember(name: string, tierId: number | null, joinedOn: stri
  * `undefined` for "leave alone" and the body is built key by key below.
  *
  * Clearing `tier_id` drops the member's dues obligation; clearing
- * `inactive_on` reinstates them.
+ * `inactive_on` reinstates them. `joined_on` moves but never clears (#471):
+ * a fund's history starts at adoption, so the server refuses a null.
  */
 export interface MemberPatch {
   name?: string
   tierId?: number | null
-  joinedOn?: string | null
+  joinedOn?: string
   inactiveOn?: string | null
 }
 

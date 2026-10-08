@@ -849,7 +849,7 @@ function member(overrides: Partial<{ id: number; name: string; inactive_on: stri
     id: 1,
     name: 'Budi',
     tier_id: null,
-    joined_on: null,
+    joined_on: '2026-01-01',
     inactive_on: null,
     created_at: 1,
     tier_name: null,

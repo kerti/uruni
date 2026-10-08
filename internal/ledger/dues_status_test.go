@@ -35,7 +35,8 @@ func createDuesRate(t *testing.T, q *store.Queries, tierID int64, amount money.A
 }
 
 // duesMemberParams is the shape createDuesMember needs - a superset of
-// store.CreateMemberParams narrowed to the fields these tests vary.
+// store.CreateMemberParams narrowed to the fields these tests vary. A nil
+// joinedOn is longAgoJoinedOn, not NULL: the column is NOT NULL (#471).
 type duesMemberParams struct {
 	name       string
 	tierID     *int64
@@ -43,11 +44,19 @@ type duesMemberParams struct {
 	inactiveOn *string
 }
 
+// longAgoJoinedOn is the join date of a member whose test does not care
+// about the window: before every period any test here exercises.
+const longAgoJoinedOn = "2000-01-01"
+
 func createDuesMember(t *testing.T, q *store.Queries, fundID int64, p duesMemberParams) int64 {
 	t.Helper()
+	joinedOn := longAgoJoinedOn
+	if p.joinedOn != nil {
+		joinedOn = *p.joinedOn
+	}
 	m, err := q.CreateMember(context.Background(), store.CreateMemberParams{
 		FundID: fundID, Name: p.name, TierID: p.tierID,
-		JoinedOn: p.joinedOn, InactiveOn: p.inactiveOn, CreatedAt: 1,
+		JoinedOn: joinedOn, InactiveOn: p.inactiveOn, CreatedAt: 1,
 	})
 	if err != nil {
 		t.Fatalf("CreateMember(%q) = %v, want no error", p.name, err)
@@ -492,7 +501,12 @@ func TestDuesStatusForPeriodMemberExcludedAfterTheMonthTheyWentInactive(t *testi
 	}
 }
 
-func TestDuesStatusForPeriodNilJoinedOnMeansAlwaysWasAMember(t *testing.T) {
+// PRD 7.1's live-arrears exception backdates one member's joined_on and
+// the tier's rate together. The backdated rate must reach only that member:
+// a member who joined at adoption owes nothing before their own join month
+// (#471 - before it, a NULL joined_on walked from the tier's earliest rate
+// and picked up the backdated periods too).
+func TestOutstandingDuesForMemberBackdatedRateReachesOnlyTheBackdatedMember(t *testing.T) {
 	t.Parallel()
 	l := newTestLedger(t)
 	f := newFixture(t, l)
@@ -500,15 +514,27 @@ func TestDuesStatusForPeriodNilJoinedOnMeansAlwaysWasAMember(t *testing.T) {
 	ctx := context.Background()
 
 	tierID := createDuesTier(t, q, f.fundID, "Tier A")
-	createDuesRate(t, q, tierID, 25_000, "2020-01")
-	memberID := createDuesMember(t, q, f.fundID, duesMemberParams{name: "Jane", tierID: &tierID}) // joinedOn nil
+	createDuesRate(t, q, tierID, 25_000, "2025-10") // backdated for Budi's arrears
+	adoption, backdated := "2026-01-05", "2025-10-01"
+	ani := createDuesMember(t, q, f.fundID, duesMemberParams{name: "Ani", tierID: &tierID, joinedOn: &adoption})
+	budi := createDuesMember(t, q, f.fundID, duesMemberParams{name: "Budi", tierID: &tierID, joinedOn: &backdated})
 
-	rows, err := l.DuesStatusForPeriod(ctx, f.fundID, "2021-03")
-	if err != nil {
-		t.Fatalf("DuesStatusForPeriod() = %v, want no error", err)
-	}
-	if _, ok := statusFor(t, rows, memberID); !ok {
-		t.Errorf("member %d with joined_on = NULL missing for an early period, want them owing it", memberID)
+	for _, tt := range []struct {
+		name      string
+		memberID  int64
+		wantFirst string
+		wantLen   int
+	}{
+		{"joined at adoption", ani, "2026-01", 3},
+		{"backdated for arrears", budi, "2025-10", 6},
+	} {
+		rows, err := l.OutstandingDuesForMember(ctx, f.fundID, tt.memberID, "2026-03", time.Time{})
+		if err != nil {
+			t.Fatalf("%s: OutstandingDuesForMember() = %v, want no error", tt.name, err)
+		}
+		if len(rows) != tt.wantLen || rows[0].Period != tt.wantFirst {
+			t.Errorf("%s: OutstandingDuesForMember() = %+v, want %d periods from %s", tt.name, rows, tt.wantLen, tt.wantFirst)
+		}
 	}
 }
 
@@ -762,12 +788,10 @@ func TestOutstandingDuesForMemberTierLessMemberReturnsEmpty(t *testing.T) {
 	}
 }
 
-// joined_on == nil means "always was a member", so the walk has no join
-// month to start from and falls back to the tier's earliest rate. A tier
-// that has never had a rate at all (the "madya TBD" case) therefore has no
-// start either - and nothing was ever owed against it, so the answer is
-// empty rather than an arbitrary starting month.
-func TestOutstandingDuesForMemberNilJoinedOnAndRatelessTierReturnsEmpty(t *testing.T) {
+// A tier that has never had a rate (the "madya TBD" case) has never had
+// anything owed against it, however long the member has been on the roster:
+// every period in the walk is skipped, none invented.
+func TestOutstandingDuesForMemberRatelessTierReturnsEmpty(t *testing.T) {
 	t.Parallel()
 	l := newTestLedger(t)
 	f := newFixture(t, l)
@@ -776,7 +800,7 @@ func TestOutstandingDuesForMemberNilJoinedOnAndRatelessTierReturnsEmpty(t *testi
 
 	tierID := createDuesTier(t, q, f.fundID, "Madya TBD") // deliberately no rate row
 	memberID := createDuesMember(t, q, f.fundID, duesMemberParams{
-		name: "Jane", tierID: &tierID, // joinedOn left nil
+		name: "Jane", tierID: &tierID,
 	})
 
 	rows, err := l.OutstandingDuesForMember(ctx, f.fundID, memberID, "2026-06", time.Time{})
@@ -953,7 +977,7 @@ func TestOutstandingDuesForMemberOmittedThroughDefaultsToTheJakartaMonth(t *test
 
 			tierID := createDuesTier(t, q, f.fundID, "Tier A")
 			createDuesRate(t, q, tierID, 25_000, "2020-01")
-			memberID := createDuesMember(t, q, f.fundID, duesMemberParams{name: "Jane", tierID: &tierID}) // joined_on nil: always was a member
+			memberID := createDuesMember(t, q, f.fundID, duesMemberParams{name: "Jane", tierID: &tierID}) // joined long before every period here
 
 			rows, err := l.OutstandingDuesForMember(context.Background(), f.fundID, memberID, "", tc.now)
 			if err != nil {
@@ -1287,7 +1311,7 @@ func TestArrearsMonthsForMemberBackdatingJoinedOnMakesArrearsAppear(t *testing.T
 	backdated := p.twoBack + "-01"
 	setTierID := int64(1)
 	if _, err := q.UpdateMember(ctx, store.UpdateMemberParams{
-		ID: memberID, SetJoinedOn: 1, JoinedOn: &backdated, SetTierID: setTierID, TierID: &tierID,
+		ID: memberID, JoinedOn: &backdated, SetTierID: setTierID, TierID: &tierID,
 	}); err != nil {
 		t.Fatalf("UpdateMember(backdate joined_on) = %v, want no error", err)
 	}

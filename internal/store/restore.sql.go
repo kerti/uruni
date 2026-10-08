@@ -300,7 +300,7 @@ type RestoreMemberParams struct {
 	FundID     int64
 	Name       string
 	TierID     *int64
-	JoinedOn   *string
+	JoinedOn   string
 	InactiveOn *string
 	CreatedAt  int64
 }

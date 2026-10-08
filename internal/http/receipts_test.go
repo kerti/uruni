@@ -634,7 +634,7 @@ func TestReceiptRoutesOnAnotherFundsRowAre404(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateTransaction(other) = %v, want no error", err)
 	}
-	otherMember, err := q.CreateMember(ctx, store.CreateMemberParams{
+	otherMember, err := q.CreateMember(ctx, store.CreateMemberParams{JoinedOn: "2000-01-01",
 		FundID: otherFund.ID, Name: "Other Member", CreatedAt: 1,
 	})
 	if err != nil {

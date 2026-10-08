@@ -226,7 +226,7 @@ func TestMapSQLiteErrorMapsAGenuineForeignKeyViolation(t *testing.T) {
 	// tier_id 999 names no dues_tier row - the composite FK requires
 	// (fund_id, tier_id) to match a real dues_tier, which this cannot.
 	noSuchTier := int64(999)
-	_, err = q.CreateMember(ctx, store.CreateMemberParams{
+	_, err = q.CreateMember(ctx, store.CreateMemberParams{JoinedOn: "2000-01-01",
 		FundID: fund.ID, Name: "Jane", TierID: &noSuchTier, CreatedAt: 1,
 	})
 	if err == nil {
@@ -259,7 +259,7 @@ func TestMapSQLiteDeleteErrorMapsAGenuineForeignKeyViolationTo409(t *testing.T) 
 	if err != nil {
 		t.Fatalf("CreateFund() = %v, want no error", err)
 	}
-	if _, err := q.CreateMember(ctx, store.CreateMemberParams{FundID: fund.ID, Name: "Jane", CreatedAt: 1}); err != nil {
+	if _, err := q.CreateMember(ctx, store.CreateMemberParams{JoinedOn: "2000-01-01", FundID: fund.ID, Name: "Jane", CreatedAt: 1}); err != nil {
 		t.Fatalf("CreateMember() = %v, want no error", err)
 	}
 

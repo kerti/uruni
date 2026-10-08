@@ -66,7 +66,7 @@ func TestPostMembersCreatesAndListReturnsIt(t *testing.T) {
 	if created.Name != "Jane" {
 		t.Errorf("member.name = %q, want %q", created.Name, "Jane")
 	}
-	if created.JoinedOn == nil || *created.JoinedOn != joined {
+	if created.JoinedOn != joined {
 		t.Errorf("member.joined_on = %v, want %q", created.JoinedOn, joined)
 	}
 	if created.TierID != nil {
@@ -255,7 +255,7 @@ func TestPatchMemberRenamesIt(t *testing.T) {
 	if got.Name != "Jane" {
 		t.Errorf("member.name = %q, want %q", got.Name, "Jane")
 	}
-	if got.JoinedOn == nil || *got.JoinedOn != *member.JoinedOn {
+	if got.JoinedOn != member.JoinedOn {
 		t.Errorf("member.joined_on = %v, want unchanged %v", got.JoinedOn, member.JoinedOn)
 	}
 }
@@ -328,6 +328,43 @@ func TestPatchMemberTierIDAbsentPresentAndNull(t *testing.T) {
 		}
 		if got.TierID != nil {
 			t.Errorf("member.tier_id = %v, want nil (tier_id explicitly cleared)", got.TierID)
+		}
+	})
+}
+
+// joined_on is NOT NULL (#471): a backdate is the live-arrears exception
+// (PRD 7.1) and goes through, but an explicit null is refused - there is no
+// "always was a member" to clear it back to - and the row is left as it was.
+func TestPatchMemberJoinedOnMovesButNeverClears(t *testing.T) {
+	t.Parallel()
+	r := testRouter(t)
+	member := setUpMember(t, r, "Jane")
+
+	t.Run("present with null is refused", func(t *testing.T) {
+		rec := patchMember(t, r, member.ID, `{"joined_on":null}`)
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("PATCH = %d, want %d (body: %s)", rec.Code, http.StatusBadRequest, rec.Body.String())
+		}
+		if code := decodeError(t, rec).Code; code != "invalid_argument" {
+			t.Errorf("error code = %q, want %q", code, "invalid_argument")
+		}
+		page := decodeMembersPage(t, getMembers(t, r, ""))
+		if len(page.Members) != 1 || page.Members[0].JoinedOn != member.JoinedOn {
+			t.Errorf("roster = %+v after a refused clear, want joined_on unchanged %q", page.Members, member.JoinedOn)
+		}
+	})
+
+	t.Run("present with an earlier date backdates it", func(t *testing.T) {
+		rec := patchMember(t, r, member.ID, `{"joined_on":"2025-10-01"}`)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("PATCH = %d, want %d (body: %s)", rec.Code, http.StatusOK, rec.Body.String())
+		}
+		var got memberResponse
+		if err := json.NewDecoder(rec.Body).Decode(&got); err != nil {
+			t.Fatalf("decoding response: %v", err)
+		}
+		if got.JoinedOn != "2025-10-01" {
+			t.Errorf("member.joined_on = %q, want %q", got.JoinedOn, "2025-10-01")
 		}
 	})
 }

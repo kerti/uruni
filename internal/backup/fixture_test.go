@@ -122,14 +122,14 @@ func buildFixture(t *testing.T, sqlDB *sql.DB, uploadsDir string) {
 
 	joinedOn := "2026-01-01"
 	andi, err := q.CreateMember(ctx, store.CreateMemberParams{
-		FundID: fund.ID, Name: "Andi", TierID: &tier.ID, JoinedOn: &joinedOn, CreatedAt: 1700000000,
+		FundID: fund.ID, Name: "Andi", TierID: &tier.ID, JoinedOn: joinedOn, CreatedAt: 1700000000,
 	})
 	if err != nil {
 		t.Fatalf("CreateMember(andi): %v", err)
 	}
 	inactiveOn := "2026-06-01"
 	budi, err := q.CreateMember(ctx, store.CreateMemberParams{
-		FundID: fund.ID, Name: "Budi", JoinedOn: &joinedOn, InactiveOn: &inactiveOn, CreatedAt: 1700000000,
+		FundID: fund.ID, Name: "Budi", JoinedOn: joinedOn, InactiveOn: &inactiveOn, CreatedAt: 1700000000,
 	})
 	if err != nil {
 		t.Fatalf("CreateMember(budi): %v", err)

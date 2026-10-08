@@ -25,7 +25,7 @@ Both are mutable like `occasion` — nothing on `incidental` is a posted fact. S
 
 **Participation is derived at read time.** For one envelope:
 
-- **Expected** = members active on the day it opened (`joined_on` null or `<= opened_on`, `inactive_on` null or `> opened_on`), **tier ignored**, minus its recipients. Fixed by one date, so the list never shifts when someone later leaves.
+- **Expected** = members active on the day it opened (`joined_on <= opened_on`, `inactive_on` null or `> opened_on`), **tier ignored**, minus its recipients. Fixed by one date, so the list never shifts when someone later leaves.
 - **Contributed** per member = the sum of that envelope's `kind='normal'`, `direction='in'` rows naming them, excluding any row a reversal points at.
 - **State** per expected member: *Sudah menyumbang*, *Belum menyumbang*, or — only when a minimum is set and the sum is below it — *Kurang dari minimal*. Anyone who contributed without being expected (a later joiner, a recipient who gave anyway) is listed under *Sumbangan lain* with their amount, never as "not yet".
 - A closed envelope's participation simply stops changing; nothing is frozen, because nothing was stored.
@@ -56,3 +56,9 @@ Everything else in ADR-029 — full-reversal-only, no one-step reassign, the rea
 **Copy** (approved 2026-09-30): *sumbangan* / *menyumbang*; *Sumbangan minimal per anggota*; *Untuk siapa amplop ini?* / *Untuk: …*; *Sudah menyumbang*, *Belum menyumbang*, *Kurang dari minimal* (neutral, never terracotta — being under a minimum is not a discrepancy); *Sumbangan lain*; *Dari siapa? (opsional)*. Deliberately not dues' *Belum bayar*: a sumbangan is not a debt, and `CONTEXT.md` keeps the two vocabularies apart.
 
 **Not built:** per-member or per-tier expectations; exemptions other than recipients (hardship is a judgement, and the report would publish it); a treasurer-curated expected list per envelope. Each would be its own decision against PRD §4.
+
+## Amendments
+
+An amendment corrects a statement of fact about the code that has since become false. It never changes a decision, a trade-off or an accepted cost — that is still a superseding ADR. See the [ADR index](./README.md) for the rule.
+
+**2026-10-08 ([#471](https://github.com/kerti/uruni/issues/471))** — the Expected bullet read "`joined_on` null or `<= opened_on`". `member.joined_on` is now `NOT NULL`: a fund's history starts at adoption (PRD §7.1), so there is no "always was a member" for a null to mean. Who is expected is unchanged.

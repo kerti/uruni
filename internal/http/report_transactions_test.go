@@ -44,7 +44,7 @@ func newTxnScenario(t *testing.T) txnScenario {
 	s := txnScenario{reportFixture: f}
 
 	mk := func(name string) int64 {
-		m, err := q.CreateMember(ctx, store.CreateMemberParams{FundID: f.fund.ID, Name: name, CreatedAt: 1})
+		m, err := q.CreateMember(ctx, store.CreateMemberParams{JoinedOn: "2000-01-01", FundID: f.fund.ID, Name: name, CreatedAt: 1})
 		if err != nil {
 			t.Fatalf("CreateMember(%s) = %v", name, err)
 		}

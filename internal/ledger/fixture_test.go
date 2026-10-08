@@ -93,7 +93,7 @@ func newFixture(t *testing.T, l *Ledger) fixture {
 	f.incidenID = createPurpose(t, q, f.fundID, "incidental", "John's birthday")
 	f.passID = createPurpose(t, q, f.fundID, "pass_through", "Pass-through")
 
-	member, err := q.CreateMember(ctx, store.CreateMemberParams{
+	member, err := q.CreateMember(ctx, store.CreateMemberParams{JoinedOn: "2000-01-01",
 		FundID: f.fundID, Name: "Jane", CreatedAt: 1,
 	})
 	if err != nil {

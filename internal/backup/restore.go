@@ -679,6 +679,32 @@ func clearFundScopedTables(ctx context.Context, q store.Querier) error {
 	return nil
 }
 
+// adoptionDates maps each fund in doc to the day its Uruni history starts
+// (PRD 7.1): the earliest opening-balance row's occurred_on, or - for a fund
+// that never posted one - the day the fund was created, in Asia/Jakarta.
+// It is what a null member.joined_on meant before #471 made the column NOT
+// NULL: "always was a member" can only reach back as far as the ledger
+// does, so restoring an older backup this way changes no member's dues.
+func adoptionDates(doc Document) map[int64]string {
+	out := make(map[int64]string, len(doc.Funds))
+	for _, f := range doc.Funds {
+		out[f.ID] = time.Unix(f.CreatedAt, 0).In(jakarta).Format("2006-01-02")
+	}
+	opened := make(map[int64]string, len(doc.Funds))
+	for _, t := range doc.Transactions {
+		if t.Kind != "opening" {
+			continue
+		}
+		if d, ok := opened[t.FundID]; !ok || t.OccurredOn < d {
+			opened[t.FundID] = t.OccurredOn
+		}
+	}
+	for id, d := range opened {
+		out[id] = d
+	}
+	return out
+}
+
 // insertDocument writes every row doc holds, in Document's own field order
 // - the migration file's dependency order (backup.go's own comment) - with
 // one exception: doc.Transactions goes through restoreTransactionsInOrder
@@ -723,10 +749,15 @@ func insertDocument(ctx context.Context, q store.Querier, doc Document) error {
 			return fmt.Errorf("backup: restoring dues rate %d: %w", dr.ID, err)
 		}
 	}
+	adopted := adoptionDates(doc)
 	for _, m := range doc.Members {
+		joinedOn := adopted[m.FundID]
+		if m.JoinedOn != nil {
+			joinedOn = *m.JoinedOn
+		}
 		if err := q.RestoreMember(ctx, store.RestoreMemberParams{
 			ID: m.ID, FundID: m.FundID, Name: m.Name, TierID: m.TierID,
-			JoinedOn: m.JoinedOn, InactiveOn: m.InactiveOn, CreatedAt: m.CreatedAt,
+			JoinedOn: joinedOn, InactiveOn: m.InactiveOn, CreatedAt: m.CreatedAt,
 		}); err != nil {
 			return fmt.Errorf("backup: restoring member %d: %w", m.ID, err)
 		}

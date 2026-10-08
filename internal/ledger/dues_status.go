@@ -63,8 +63,9 @@ type MemberDuesStatus struct {
 //     both ends: a member owes every period from the month containing
 //     joined_on through the month containing inactive_on, and a partial
 //     month at either end counts in full - dues here are one monthly amount
-//     paid after payday, not a pro-rated subscription. joined_on == nil
-//     means "always was a member"; inactive_on == nil means "still active".
+//     paid after payday, not a pro-rated subscription. joined_on is always
+//     set (#471: history starts at adoption, PRD 7.1); inactive_on == nil
+//     means "still active".
 //
 // Overpayment (paid > owed for this one period) reads as Paid, not a fifth
 // status: the treasurer's question is "did they clear what they owe", and
@@ -208,18 +209,11 @@ func CurrentDuesPeriod(now time.Time) string {
 //     a second narrowing here - one window rule, one owner. What is bounded
 //     here is only how far the walk ever reaches.
 //   - Start: the month containing joined_on, exactly as memberOwesPeriod
-//     bounds it for DuesStatusForPeriod. joined_on == nil means "always was
-//     a member" (same meaning as everywhere else in this package), but this
-//     method still needs *some* period to start walking from - scanning
-//     from the epoch would mean one GetEffectiveDuesRate call per calendar
-//     month since 1970 for every such member, so the start is bounded
-//     instead at the tier's own earliest dues_rate.effective_from: no rate
-//     was ever effective before that row exists, so no period before it
-//     could ever be owed regardless of how long the member has been on the
-//     roster. A tier with no dues_rate row at all (the "madya TBD" case)
-//     has, by the same reasoning, never had anything owed against it -
-//     nothing to walk, so this returns empty rather than picking an
-//     arbitrary start.
+//     bounds it for DuesStatusForPeriod. joined_on is always set (#471), so
+//     the walk never borrows a start from anywhere else - in particular not
+//     from the tier's earliest dues_rate, which would let a rate backdated
+//     for one member's live arrears (PRD 7.1) put the same periods on
+//     everyone in that tier.
 //
 // Within that range, exactly DuesStatusForPeriod's own rules decide what is
 // owed and skipped - see its doc comment, unchanged here:
@@ -273,20 +267,7 @@ func (l *Ledger) OutstandingDuesForMember(ctx context.Context, fundID, memberID 
 	// database work.
 	end := through
 
-	var start string
-	if member.JoinedOn != nil {
-		start = (*member.JoinedOn)[:7]
-	} else {
-		rates, err := l.q.ListDuesRatesByTier(ctx, *member.TierID)
-		if err != nil {
-			return nil, fmt.Errorf("listing dues rates for tier %d: %w", *member.TierID, err)
-		}
-		if len(rates) == 0 {
-			return nil, nil // tier has never had an effective rate - nothing was ever owed
-		}
-		start = rates[0].EffectiveFrom // ListDuesRatesByTier orders ASC - the earliest row
-	}
-
+	start := member.JoinedOn[:7]
 	if start > end {
 		return nil, nil
 	}
@@ -484,7 +465,7 @@ func (l *Ledger) paidThrough(ctx context.Context, fundID int64, m store.Member, 
 // them, comparable lexicographically against period exactly as dues_period
 // itself is (ADR-024).
 func memberOwesPeriod(m store.Member, period string) bool {
-	if m.JoinedOn != nil && period < (*m.JoinedOn)[:7] {
+	if period < m.JoinedOn[:7] {
 		return false
 	}
 	if m.InactiveOn != nil && period > (*m.InactiveOn)[:7] {

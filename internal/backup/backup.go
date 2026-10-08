@@ -138,7 +138,10 @@ type DuesRate struct {
 }
 
 // Member mirrors the "member" table verbatim: a person in the group
-// (CONTEXT.md).
+// (CONTEXT.md). JoinedOn stays a pointer although the column is NOT NULL
+// (#471): a format_version 1 backup written before that change can carry
+// null, and restore reads it as the fund's adoption date - see
+// adoptionDates.
 type Member struct {
 	ID         int64   `json:"id"`
 	FundID     int64   `json:"fund_id"`

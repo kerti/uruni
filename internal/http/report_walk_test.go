@@ -38,7 +38,7 @@ func newWalkPage(t *testing.T) walkPage {
 	q := store.New(f.db)
 	w := walkPage{reportFixture: f}
 
-	budi, err := q.CreateMember(ctx, store.CreateMemberParams{FundID: f.fund.ID, Name: "Budi", CreatedAt: 1})
+	budi, err := q.CreateMember(ctx, store.CreateMemberParams{JoinedOn: "2000-01-01", FundID: f.fund.ID, Name: "Budi", CreatedAt: 1})
 	if err != nil {
 		t.Fatalf("CreateMember() = %v", err)
 	}
