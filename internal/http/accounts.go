@@ -214,7 +214,8 @@ func decodeUpdateAccountRequest(w http.ResponseWriter, r *http.Request) (updateA
 // the two (ADR-027 - shape is the schema's to police, not this handler's).
 // inactive_on is the other half of #134's account-lifecycle ruling: the
 // retirement date for a used-then-retired location, or an explicit null to
-// reinstate it.
+// reinstate it. Retiring one that still holds money is 409
+// account_holds_money (#474), so the write goes through Ledger.UpdateAccount.
 func (a *api) updateAccount(w http.ResponseWriter, r *http.Request) {
 	account, ok := a.resolveAccount(w, r)
 	if !ok {
@@ -238,9 +239,9 @@ func (a *api) updateAccount(w http.ResponseWriter, r *http.Request) {
 		params.InactiveOn = req.InactiveOn
 	}
 
-	updated, err := a.queries.UpdateAccount(r.Context(), params)
+	updated, err := a.ledger.UpdateAccount(r.Context(), account.FundID, params)
 	if err != nil {
-		mapSQLiteError(w, a.logger, err)
+		mapLedgerError(w, a.logger, err)
 		return
 	}
 

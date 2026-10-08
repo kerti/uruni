@@ -704,3 +704,57 @@ func TestPatchAccountRejectsAnUnknownKind(t *testing.T) {
 		t.Fatalf("PATCH /api/accounts/{id} kind=crypto = %d, want %d (body: %s)", rec.Code, http.StatusBadRequest, rec.Body.String())
 	}
 }
+
+// #474: retiring a location that still holds money answers 409
+// account_holds_money and leaves it active; once Pindah lokasi has emptied
+// it, the same PATCH retires it.
+func TestPatchAccountRefusesToRetireALocationHoldingMoney(t *testing.T) {
+	t.Parallel()
+	r := testRouter(t)
+	setup := setUpFund(t, r)
+	bank := setup.BankAccountID(t)
+	if rec := postTransaction(t, r, transactionRequest{
+		AccountID: bank, PurposeID: setup.MainPurposeID, Direction: "in", Amount: 40_000, OccurredOn: "2026-09-01",
+	}); rec.Code != http.StatusCreated {
+		t.Fatalf("POST /api/transactions = %d (body: %s)", rec.Code, rec.Body.String())
+	}
+
+	rec := patchAccount(t, r, bank, `{"inactive_on":"2026-09-05"}`)
+	if rec.Code != http.StatusConflict {
+		t.Fatalf("PATCH (retire, holding 40000) = %d, want %d (body: %s)", rec.Code, http.StatusConflict, rec.Body.String())
+	}
+	if code := decodeError(t, rec).Code; code != "account_holds_money" {
+		t.Errorf("error code = %q, want %q", code, "account_holds_money")
+	}
+
+	if rec := postTransfer(t, r, transferRequest{
+		PurposeID: setup.MainPurposeID, FromAccountID: bank, ToAccountID: setup.CashAccountID(t), Amount: 40_000, OccurredOn: "2026-09-04",
+	}); rec.Code != http.StatusCreated {
+		t.Fatalf("POST /api/transfers = %d (body: %s)", rec.Code, rec.Body.String())
+	}
+	if rec := patchAccount(t, r, bank, `{"inactive_on":"2026-09-05"}`); rec.Code != http.StatusOK {
+		t.Fatalf("PATCH (retire, empty) = %d, want %d (body: %s)", rec.Code, http.StatusOK, rec.Body.String())
+	}
+}
+
+// Below zero is its own refusal (#474): nothing to move, so the code - and
+// the client's sentence - points at a count instead of Pindah lokasi.
+func TestPatchAccountRefusesToRetireALocationBelowZero(t *testing.T) {
+	t.Parallel()
+	r := testRouter(t)
+	setup := setUpFund(t, r)
+	bank := setup.BankAccountID(t)
+	if rec := postTransaction(t, r, transactionRequest{
+		AccountID: bank, PurposeID: setup.MainPurposeID, Direction: "out", Amount: 15_000, OccurredOn: "2026-09-01",
+	}); rec.Code != http.StatusCreated {
+		t.Fatalf("POST /api/transactions = %d (body: %s)", rec.Code, rec.Body.String())
+	}
+
+	rec := patchAccount(t, r, bank, `{"inactive_on":"2026-09-05"}`)
+	if rec.Code != http.StatusConflict {
+		t.Fatalf("PATCH (retire, at -15000) = %d, want %d (body: %s)", rec.Code, http.StatusConflict, rec.Body.String())
+	}
+	if code := decodeError(t, rec).Code; code != "account_balance_negative" {
+		t.Errorf("error code = %q, want %q", code, "account_balance_negative")
+	}
+}

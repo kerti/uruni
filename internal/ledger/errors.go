@@ -265,6 +265,17 @@ var ErrPurposeMoveAccountInactive = errors.New("ledger: the account is inactive"
 // on a since-retired location uncorrectable (CLAUDE.md rule 3).
 var ErrAccountInactive = errors.New("ledger: the account is retired")
 
+// ErrAccountHoldsMoney is returned by UpdateAccount when asked to retire a
+// location whose recorded balance is above zero (#474): the money has to be
+// moved out first (Pindah lokasi).
+var ErrAccountHoldsMoney = errors.New("ledger: the account still holds money")
+
+// ErrAccountBalanceNegative is UpdateAccount's refusal for a location whose
+// recorded balance is below zero (#474). There is nothing to move - the
+// ledger says more left than came in - so the next step is a Cek kas that
+// finds the gap, not a transfer.
+var ErrAccountBalanceNegative = errors.New("ledger: the account's recorded balance is negative")
+
 // ErrReconciliationMissingLocation is returned by TakeReconciliation when
 // the snapshot leaves out an active location of the fund: Cek kas counts
 // each active location, never a subset (PRD section 7.8). A subset would

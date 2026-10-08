@@ -226,6 +226,13 @@ func TestPostPurposeMovesRefusals(t *testing.T) {
 			return w.request(t, w.setup.MainPurposeID, w.envelope.PurposeID, 500_001)
 		}, http.StatusConflict, "purpose_move_insufficient"},
 		{"inactive account", func(t *testing.T, r http.Handler, w purposeMoveWorld) purposeMoveRequest {
+			// Empty it first: a location holding money cannot be retired (#474).
+			if rec := postTransfer(t, r, transferRequest{
+				PurposeID: w.titipan.ID, FromAccountID: w.setup.BankAccountID(t), ToAccountID: w.setup.CashAccountID(t),
+				Amount: 75_000, OccurredOn: "2026-09-04",
+			}); rec.Code != http.StatusCreated {
+				t.Fatalf("emptying the bank = %d (body: %s)", rec.Code, rec.Body.String())
+			}
 			if rec := patchAccount(t, r, w.setup.BankAccountID(t), `{"inactive_on":"2026-09-05"}`); rec.Code != http.StatusOK {
 				t.Fatalf("retiring the account = %d (body: %s)", rec.Code, rec.Body.String())
 			}

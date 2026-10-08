@@ -67,6 +67,10 @@ func mapLedgerError(w http.ResponseWriter, logger *slog.Logger, err error) {
 		writeAPIError(w, http.StatusConflict, "dues_payment_already_reversed", "This dues payment has already been reversed.")
 	case errors.Is(err, ledger.ErrIncidentalAlreadyClosed):
 		writeAPIError(w, http.StatusConflict, "incidental_already_closed", "This incidental has already been closed.")
+	case errors.Is(err, ledger.ErrAccountHoldsMoney):
+		writeAPIError(w, http.StatusConflict, "account_holds_money", "This location still holds money; move it out before retiring the location.")
+	case errors.Is(err, ledger.ErrAccountBalanceNegative):
+		writeAPIError(w, http.StatusConflict, "account_balance_negative", "This location's recorded balance is negative; reconcile it before retiring the location.")
 	case errors.Is(err, ledger.ErrIncidentalClosed):
 		writeAPIError(w, http.StatusConflict, "incidental_closed", "This incidental is closed and cannot accept new transactions.")
 	case errors.Is(err, ledger.ErrIncidentalNotClosed):

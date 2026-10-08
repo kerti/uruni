@@ -26,9 +26,11 @@ const text = copy.settings.locations
  * dialog"): a card list, with add and edit both opening a dialog addressed
  * by `?edit=location:<id>` / `?edit=location:new`.
  *
- * Every location the fund has is listed, retired ones included - a retired
- * location may still hold a balance, so home keeps showing it (M6.9) and
- * this screen is where it gets reinstated. What a retired location drops out
+ * Every location the fund has is listed, retired ones included - this
+ * screen is where one gets reinstated. Retiring a location that still holds
+ * money is refused (#474, common.errors.account_holds_money), but one retired before that
+ * rule, or left negative by a later reversal, may still hold a balance, so
+ * home keeps showing it (M6.9). What a retired location drops out
  * of is already handled elsewhere and needs nothing here: AccountPicker
  * filters `inactive_on` rows out of the record form, and Reconcile.tsx does
  * the same for the mandatory count.
@@ -394,7 +396,9 @@ function EditLocationDialog({
               copy: "sudah punya riwayat - nonaktifkan, bukan hapus" tells
               her what to do next, which is the whole difference between a
               refusal and a failure. Everything else falls through to
-              ErrorState. */}
+              ErrorState - #474's retire refusals included, whose codes are
+              already location-specific, so their shared sentence is the
+              specific one. */}
           {state.status === 'error' &&
             state.error &&
             (state.error instanceof ApiError && state.error.code === 'referenced_by_other_records' ? (

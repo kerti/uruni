@@ -270,6 +270,13 @@ export const copy = {
       // location, and a count must name every active one. The forms only
       // offer active locations, so these are the fallback for a stale form.
       account_inactive: 'Lokasi ini sudah tidak dipakai. Pilih lokasi yang lain.',
+      // #474: a location whose recorded balance is not zero cannot be
+      // retired. Location-specific codes, so - unlike
+      // referenced_by_other_records - the locations dialog shows these
+      // sentences as they are, through ErrorState. Above zero: move it out.
+      // Below zero: nothing to move; a count finds the gap.
+      account_holds_money: 'Lokasi ini masih menyimpan uang. Pindahkan dulu saldonya ke lokasi lain lewat Pindah lokasi, baru nonaktifkan.',
+      account_balance_negative: 'Saldo tercatat lokasi ini minus. Cek kas dulu untuk menemukan selisihnya, baru nonaktifkan.',
       reconciliation_location_missing:
         'Ada lokasi aktif yang belum dihitung. Daftarnya sudah diperbarui — hitung lokasi itu, lalu simpan lagi.',
       // ADR-034 (#211): a sumbangan bernama can't be re-tagged the way an
@@ -933,7 +940,7 @@ export const copy = {
       // terracotta, not alarm-red: a retired location and a deleted one are
       // different things.
       deactivateConfirm:
-        'Lokasi ini tidak akan muncul lagi saat mencatat atau cek kas. Saldo dan riwayatnya tetap utuh, dan bisa diaktifkan lagi kapan saja.',
+        'Lokasi ini tidak akan muncul lagi saat mencatat atau cek kas. Riwayatnya tetap utuh, dan bisa diaktifkan lagi kapan saja.',
       deactivateConfirmAction: 'Ya, nonaktifkan',
       reinstate: 'Aktifkan lagi',
       reinstating: 'Mengaktifkan…',
