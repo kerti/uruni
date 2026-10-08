@@ -8,7 +8,7 @@
 
 - **Every treasurer operation has at least one Playwright journey.** Edge cases live in the fastest layer that is exact for them: Go for money, ledger, reconciliation and API rules; Vitest for client logic; Playwright only for what needs a real browser against the real server. `web/e2e/COVERAGE.md` is the map, kept by hand, and a PR that adds or changes an operation edits its rows.
 - **The money math stays the first priority.** ADR-015's coverage bars carry over unchanged: `internal/money` >= 90% and `internal/ledger` >= 85%, with the harness in [ADR-028](./028-testing-the-trust-core.md). The e2e layer is in addition to them, not instead of them.
-- **Two tiers, one runner.** A test tagged `@smoke` (`test('...', { tag: '@smoke' }, ...)`) gates every pull request and every push to `main`. The full suite runs on a weekday schedule (02:00 Jakarta) and on demand. `.github/workflows/e2e.yml` decides which tier. `.github/workflows/e2e-run.yml` is the one runner both call; the tiers differ only in `--grep`. Its local twin is `make e2e-ci`.
+- **Two tiers, one runner.** A test tagged `@smoke` (`test('...', { tag: '@smoke' }, ...)`) gates every pull request and every push to `main`. The full suite runs nightly after each weekday (19:00 UTC Monday to Friday, 02:00 Jakarta Tuesday to Saturday) and on demand. `.github/workflows/e2e.yml` decides which tier. `.github/workflows/e2e-run.yml` is the one runner both call; the tiers differ only in `--grep`. Its local twin is `make e2e-ci`.
 - **The smoke tier is seven journeys:** log in, record money out and in, Beranda's balance, Cek kas, a dues payment, the public report renders, and restore. A journey joins smoke only when breaking it would leave the treasurer unable to do the job. Everything else is nightly.
 - **One stable check name.** Both tiers' jobs are named `E2E` with mutually exclusive conditions, so branch protection requires one check, `E2E / Playwright`, whichever tier ran.
 - **CI retries a failed test once** and keeps the trace of that retry. A flake then shows as flaky rather than a red PR, and a real failure uploads `web/test-results/` for seven days.
@@ -16,3 +16,9 @@
 - **A failed nightly run is reported by GitHub's own email** for failed scheduled workflows. No extra notification machinery.
 
 **Consequences.** Every PR waits on a browser run. The tests take seconds; most of the job is setup (Node, the SPA build, the browser download, `go build`), so the browser and the npm cache are cached. A smoke failure blocks a merge the same way a red unit test does, so a flaky smoke test is a bug to fix, not to rerun. Adding the `E2E / Playwright` check to `main`'s required status checks is a branch-protection change, and that is the maintainer's to make. The agent rules in ADR-023 are unchanged: CI now runs e2e on every PR, so nobody has to remember to run it before a release.
+
+## Amendments
+
+An amendment corrects a statement of fact about the code that has since become false. It never changes a decision, a trade-off or an accepted cost — that is still a superseding ADR. See the [ADR index](./README.md) for the rule.
+
+**2026-10-08 ([#446](https://github.com/kerti/uruni/issues/446))** — the tiers bullet said the full suite runs "on a weekday schedule (02:00 Jakarta)". The cron is `0 19 * * 1-5` in UTC, which lands at 02:00 Jakarta Tuesday to Saturday, never Monday. The schedule itself is unchanged.

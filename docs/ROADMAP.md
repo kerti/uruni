@@ -75,4 +75,4 @@ There is **no `HANDOFF.md`** and no standalone status doc. The live board is **G
 - **Standing decisions no issue or ADR owns** → [`Decisions.md`](./Decisions.md).
 - **You-are-here** → the one status line below (changes ~once per milestone; never holds shipped detail).
 
-**Status:** **M8 — Audit & e2e coverage** is next (Excel export parked). M7 — the public report, and Riwayat's filters that rode with it — is done. What is in flight lives on the board, not in this line.
+**Status:** **M8 — Audit & e2e coverage** is in progress (Excel export parked). M7 — the public report, and Riwayat's filters that rode with it — is done. What is in flight lives on the board, not in this line.

@@ -65,11 +65,11 @@ Entitas utama:
 
 - **Dana (Fund)** — kas bersama. Memiliki nama dan mata uang (IDR).
 - **Akun/Lokasi** — tempat uang secara fisik berada: satu daftar yang dinamai sendiri oleh bendahara, masing-masing berjenis tunai atau bank. Satu dana boleh punya beberapa lokasi dari jenis mana pun, boleh juga hanya satu; nama yang tampil adalah nama yang ia ketik sendiri, dan bawaan awalnya "Tunai". Lokasi bisa ditambah dan diganti namanya kemudian, dan lokasi yang sudah terpakai dinonaktifkan, bukan dihapus. Saldo tercatat dilacak *per lokasi* karena pemisahan inilah sumber selisihnya. (v1 mengasumsikan rekening bank bisa jadi rekening pribadi; Uruni hanya melacak bagian yang merupakan kas sesuai yang dilaporkan bendahara.)
-- **Pos** — setiap transaksi diberi pos: `Kas Utama` (rutin), sebuah **Insidentil** bernama (mis. "Duka Pak Budi"), atau `Titipan/Pass-through` (mis. Kas Bidang). Satu saldo riil yang tergabung, dipisahkan *secara makna*, bukan uang yang dipisah-pisah secara fisik.
+- **Pos** — setiap transaksi diberi pos: `Kas Utama` (rutin), sebuah **amplop** bernama (mis. "Duka Pak Budi"), atau `Titipan/Pass-through` (mis. Kas Bidang). Satu saldo riil yang tergabung, dipisahkan *secara makna*, bukan uang yang dipisah-pisah secara fisik.
 - **Anggota** — nama + peran/jenjang. Tidak butuh email/nomor telepon (meminimalkan data yang disimpan).
 - **Tarif iuran** — nominal per jenjang (mis. pelaksana 50rb, fungsional pertama 70rb, muda 80rb, madya belum ditentukan); dapat diubah; berlaku menurut waktu.
 - **Transaksi** — pemasukan atau pengeluaran; nominal; tanggal; lokasi; pos; kaitan anggota opsional (untuk iuran/talangan); catatan opsional; foto nota opsional. Bersifat permanen setelah diposting (koreksi dibuat sebagai entri penyesuaian baru) agar catatan tetap tepercaya.
-- **Pengumpulan insidentil** — amplop ringan: keperluan/peristiwa, kontribusi masuk, penyaluran keluar, dan **sisa** yang bisa dialihkan ke Kas Utama dengan satu ketukan.
+- **Amplop** — pengumpulan ringan untuk satu peristiwa: keperluan/peristiwa, sumbangan masuk, penyaluran keluar, dan **sisa** yang dialihkan ke Kas Utama saat amplop ditutup.
 - **Snapshot rekonsiliasi** — rekaman pada satu titik waktu tentang saldo yang diharapkan vs. yang sebenarnya per lokasi, selisih yang ada, dan cara penyelesaiannya.
 
 ## 7. Kebutuhan fungsional
@@ -98,13 +98,13 @@ Entitas utama:
 - **Putihkan** saat anggota memaafkan utangnya — label di antarmuka adalah "Putihkan". Klaim tetap tercatat dalam riwayat; ia hanya berhenti menjadi utang. Dapat dibatalkan, karena pemutihan juga bisa salah dicatat.
 - **Perbaiki atau hapus klaim yang salah dicatat** — nominal salah, anggota salah, atau seharusnya tidak ada. Hanya sebelum diselesaikan: setelah itu pembayaran sudah menjadi baris buku besar yang diposting, dan koreksinya adalah entri penyesuaian biasa.
 
-### 7.5 Pengumpulan insidentil
-- Membuat insidentil untuk sebuah peristiwa (sakit, kematian, sunatan, pensiun).
+### 7.5 Amplop
+- Membuka amplop untuk sebuah peristiwa (sakit, kematian, sunatan, pensiun).
 - Mengumpulkan sumbangan sekali jalan dan mencatat penyalurannya.
 - Sumbangan boleh mencantumkan anggota yang memberi (opsional — tamu atau penyumbang tanpa nama tetap tanpa nama). Amplop boleh menetapkan **sumbangan minimal per anggota** dan menyebut anggota yang **dituju**, yang tidak diharapkan menyumbang.
 - Menampilkan siapa yang sudah menyumbang dan berapa, dibandingkan anggota yang aktif pada hari amplop dibuka, di layar amplop dan di laporan publik. Tampilan sederhana "belum menyumbang". **Tanpa pengingat, tanpa penagihan otomatis.** ([ADR-034](./ADR/034-envelope-participation.md))
 - Sumbangan yang tercatat atas nama anggota yang salah dibalik dengan entri baru lalu dicatat ulang, seperti pembayaran iuran (§7.3).
-- Saat ditutup, tampilkan sisanya dan tawarkan **alihkan ke Kas Utama** dengan satu ketukan.
+- Saat ditutup, tampilkan sisanya dan **alihkan ke Kas Utama** lewat satu formulir singkat: lokasi tempat sisa itu berada, tanggal, dan catatan opsional.
 - Nama acaranya bisa diperbaiki kapan saja, saat amplop terbuka maupun sudah ditutup - mengganti nama tidak menggerakkan uang dan tidak membuat entri.
 
 ### 7.6 Titipan (Kas Bidang)
