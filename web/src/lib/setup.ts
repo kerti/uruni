@@ -365,8 +365,7 @@ const REPORT_PDF_FALLBACK_NAME = 'laporan-kas.pdf'
 
 /**
  * GET /report/{slug}/pdf - the current month's statement (#378), as a File
- * ready for navigator.share or saveBlob, named by the server's
- * Content-Disposition. Fetched by path, never by the absolute report_url:
+ * ready for saveBlob, named by the server's Content-Disposition. Fetched by path, never by the absolute report_url:
  * URUNI_BASE_URL may name another origin than the one the app is open on
  * (a tunnel in dev), and the request must stay same-origin.
  */
