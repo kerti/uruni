@@ -108,7 +108,7 @@ describe('ReportLink', () => {
     expect(open).toHaveAttribute('rel', expect.stringContaining('noopener'))
   })
 
-  it("hands the current month's PDF to the share sheet, fetched same-origin before the tap", async () => {
+  it("saves the current month's PDF on the tap, fetched same-origin, even where files could be shared", async () => {
     const { pdfGets } = stubFund()
     const share = vi.fn(() => Promise.resolve())
     vi.stubGlobal('navigator', { clipboard: { writeText: vi.fn() }, share, canShare: () => true })
@@ -116,59 +116,33 @@ describe('ReportLink', () => {
     renderCard()
 
     const button = await screen.findByRole('button', { name: text.downloadPdf })
-    // Fetched on mount by path - the report_url's origin is not the app's.
-    await waitFor(() => expect(pdfGets).toEqual([PDF_PATH]))
+    // Nothing is fetched until the tap: no share sheet to race any more.
+    expect(pdfGets).toEqual([])
     await user.click(button)
 
-    expect(share).toHaveBeenCalledTimes(1)
-    const [{ files }] = share.mock.calls[0] as unknown as [{ files: File[] }]
-    expect(files[0].name).toBe(PDF_NAME)
-    expect(files[0].type).toBe('application/pdf')
-    expect(pdfGets).toHaveLength(1)
-    expect(saveBlob).not.toHaveBeenCalled()
-    expect(screen.queryByRole('link', { name: text.downloadPdf })).toBeNull()
-  })
-
-  it('saves the PDF where files cannot be shared', async () => {
-    stubFund()
-    stubNavigator({})
-    const user = userEvent.setup()
-    renderCard()
-
-    await user.click(await screen.findByRole('button', { name: text.downloadPdf }))
-
+    // Fetched by path - the report_url's origin is not the app's.
     await waitFor(() => expect(saveBlob).toHaveBeenCalledTimes(1))
+    expect(pdfGets).toEqual([PDF_PATH])
     const [blob, name] = vi.mocked(saveBlob).mock.calls[0]
     expect(name).toBe(PDF_NAME)
     expect(blob.type).toBe('application/pdf')
+    expect(share).not.toHaveBeenCalled()
+    expect(screen.queryByRole('link', { name: text.downloadPdf })).toBeNull()
   })
 
-  it('treats a dismissed or refused share sheet as no failure', async () => {
-    stubFund()
-    const share = vi.fn(() => Promise.reject(new DOMException('dismissed', 'AbortError')))
-    vi.stubGlobal('navigator', { clipboard: { writeText: vi.fn() }, share, canShare: () => true })
-    const user = userEvent.setup()
-    renderCard()
-
-    await user.click(await screen.findByRole('button', { name: text.downloadPdf }))
-
-    await waitFor(() => expect(share).toHaveBeenCalledTimes(1))
-    expect(screen.queryByRole('alert')).toBeNull()
-    expect(saveBlob).not.toHaveBeenCalled()
-  })
-
-  it('fetches again on the tap when the early fetch failed, and says why when that fails too', async () => {
+  it('says why when the PDF cannot be fetched, and tries again on the next tap', async () => {
     const { pdfGets } = stubFund({ pdf: 'down' })
     stubNavigator({})
     const user = userEvent.setup()
     renderCard()
 
     const button = await screen.findByRole('button', { name: text.downloadPdf })
-    await waitFor(() => expect(pdfGets).toHaveLength(1))
     await user.click(button)
-
-    await waitFor(() => expect(pdfGets).toHaveLength(2))
     expect(await screen.findByText(copy.common.errors.network_error)).toBeInTheDocument()
+    expect(saveBlob).not.toHaveBeenCalled()
+
+    await user.click(button)
+    await waitFor(() => expect(pdfGets).toHaveLength(2))
     expect(saveBlob).not.toHaveBeenCalled()
   })
 

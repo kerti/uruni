@@ -124,7 +124,15 @@ export async function fetchBlob(path: string): Promise<{ blob: Blob; res: Respon
   return { blob: await res.blob(), res }
 }
 
-/** Hands a Blob to the browser to save under `filename`. */
+/** How long a saved Blob's object URL outlives the click that opened it. */
+const BLOB_URL_TTL_MS = 60_000
+
+/**
+ * Hands a Blob to the browser to save under `filename`. The object URL is
+ * revoked later, not at once: the installed iOS app opens it in a file viewer
+ * that reads the URL after the click returns (#475), and a revoked URL there
+ * is an empty viewer.
+ */
 export function saveBlob(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob)
   const link = document.createElement('a')
@@ -133,5 +141,5 @@ export function saveBlob(blob: Blob, filename: string) {
   document.body.appendChild(link)
   link.click()
   link.remove()
-  URL.revokeObjectURL(url)
+  setTimeout(() => URL.revokeObjectURL(url), BLOB_URL_TTL_MS)
 }
