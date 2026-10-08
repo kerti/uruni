@@ -2,8 +2,8 @@ package http
 
 import (
 	"errors"
-	"net"
 	"net/http"
+	"net/netip"
 	"strings"
 
 	"github.com/kerti/uruni/internal/auth"
@@ -40,7 +40,7 @@ func (a *api) login(w http.ResponseWriter, r *http.Request) {
 	// Prefixed so the two keys cannot collide in the limiter's one map:
 	// without them a caller could lock a bystander's IP out by submitting
 	// that address as an email ten times.
-	ip := "ip:" + clientIP(r)
+	ip := "ip:" + a.clientIP(r)
 	identifier := "id:" + strings.TrimSpace(req.Email)
 
 	// Checked independently, not "either" short-circuited into one boolean
@@ -81,26 +81,60 @@ func (a *api) login(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, toUserResponse(user))
 }
 
-// clientIP returns the address a request actually came from. Caddy
-// (ADR-009) is the only ingress in front of the app in production -
-// docker-compose.yml exposes the app only to Caddy's own container, never
-// to the host network - so an X-Forwarded-For header reaching this handler
-// was set by that one reverse proxy, not forged by a caller who could reach
-// the app directly. Its first entry - the original client, per the header's
-// own left-to-right convention as proxies append to it - is preferred.
+// clientIP returns the address a request actually came from, the key the
+// login and restore-confirm limiters count under.
 //
-// RemoteAddr, with the port stripped, is the fallback for a request with no
-// proxy in front of it at all: `make web-dev`'s plain HTTP loopback, and
-// every test in this package.
-func clientIP(r *http.Request) string {
-	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
-		first, _, _ := strings.Cut(xff, ",")
-		return strings.TrimSpace(first)
+// The TCP peer is the answer unless it is one of a.trustedProxies
+// (URUNI_TRUSTED_PROXIES, #447). Only then is X-Forwarded-For read, from the
+// right: each proxy appends the address it received from, so the right-most
+// entry that is not itself a trusted proxy is the first hop nobody trusted -
+// the client. Entries left of it are whatever that client wrote and are
+// never read. Without the setting the header is ignored outright: anyone who
+// can reach the app directly could otherwise name a fresh address per
+// request and never be counted.
+//
+// The shipped stack sets the setting for Caddy (ADR-009), which overwrites
+// the header with the peer it saw. With no proxy at all - `make web-dev`'s
+// loopback, and the tests in this package - the peer is the client.
+func (a *api) clientIP(r *http.Request) string {
+	peer := remoteAddr(r)
+	if !a.trusted(peer) {
+		return peer.String()
 	}
+	hops := strings.Split(strings.Join(r.Header.Values("X-Forwarded-For"), ","), ",")
+	for i := len(hops) - 1; i >= 0; i-- {
+		hop, err := netip.ParseAddr(strings.TrimSpace(hops[i]))
+		if err != nil {
+			// A hop that is not an address cannot be keyed on; the last
+			// address that could be trusted is the honest answer.
+			break
+		}
+		hop = hop.Unmap()
+		if !a.trusted(hop) {
+			return hop.String()
+		}
+		peer = hop
+	}
+	return peer.String()
+}
 
-	host, _, err := net.SplitHostPort(r.RemoteAddr)
-	if err != nil {
-		return r.RemoteAddr
+// trusted reports whether addr is one of a.trustedProxies.
+func (a *api) trusted(addr netip.Addr) bool {
+	for _, p := range a.trustedProxies {
+		if p.Contains(addr) {
+			return true
+		}
 	}
-	return host
+	return false
+}
+
+// remoteAddr is r.RemoteAddr without its port, as an address. A RemoteAddr
+// that does not parse (never, from net/http's own server) is the zero Addr,
+// which no range contains and which keys as "invalid IP".
+func remoteAddr(r *http.Request) netip.Addr {
+	if ap, err := netip.ParseAddrPort(r.RemoteAddr); err == nil {
+		return ap.Addr().Unmap()
+	}
+	addr, _ := netip.ParseAddr(r.RemoteAddr)
+	return addr.Unmap()
 }

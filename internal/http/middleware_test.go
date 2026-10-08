@@ -50,3 +50,66 @@ func TestRequestLoggingMiddlewareRoundTrips(t *testing.T) {
 		}
 	}
 }
+
+// TestRequestLoggerRedactsTheReportSlug is #447's: the slug is the public
+// report's only guard, so it never reaches a log line - not on the page, not
+// on the PDF, not on a /report/ path no route matches.
+func TestRequestLoggerRedactsTheReportSlug(t *testing.T) {
+	t.Parallel()
+	const slug = "Ab3dEf6hIj9kLm2nOp5qRs8tUv1wXy4z"
+
+	for _, tc := range []struct{ path, want string }{
+		{"/report/" + slug, "path=/report/:slug "},
+		{"/report/" + slug + "/pdf", "path=/report/:slug/pdf "},
+		{"/report/" + slug + "/no/such/thing", "path=/report/:slug/no/such/thing "},
+		{"/report/", "path=/report/ "},
+		{"/reports/" + slug, "path=/reports/" + slug + " "},
+	} {
+		var buf bytes.Buffer
+		logger := slog.New(slog.NewTextHandler(&buf, nil))
+		ok := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusOK) })
+
+		requestLogger(logger)(ok).ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, tc.path, nil))
+
+		line := buf.String()
+		if !strings.Contains(line, tc.want) {
+			t.Errorf("GET %s logged %q, want it to contain %q", tc.path, line, tc.want)
+		}
+		if strings.HasPrefix(tc.path, "/report/") && strings.Contains(line, slug) {
+			t.Errorf("GET %s logged the slug: %q", tc.path, line)
+		}
+	}
+}
+
+// TestEveryResponseCarriesTheSecurityHeaders is #447's: the SPA shell, the
+// API (signed in or not) and the public report, including its 404, all
+// answer with the same baseline - and the report keeps its stricter
+// Referrer-Policy.
+func TestEveryResponseCarriesTheSecurityHeaders(t *testing.T) {
+	t.Parallel()
+	r := testRouter(t)
+
+	for _, tc := range []struct{ path, referrer string }{
+		{"/", "same-origin"},
+		{"/riwayat", "same-origin"},
+		{"/api/session", "same-origin"},
+		{"/api/transactions", "same-origin"},
+		{"/healthz", "same-origin"},
+		{"/report/no-such-slug", "no-referrer"},
+	} {
+		rec := httptest.NewRecorder()
+		r.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, tc.path, nil))
+
+		h := rec.Header()
+		for name, want := range map[string]string{
+			"X-Content-Type-Options":  "nosniff",
+			"Referrer-Policy":         tc.referrer,
+			"X-Frame-Options":         "DENY",
+			"Content-Security-Policy": "frame-ancestors 'none'",
+		} {
+			if got := h.Get(name); got != want {
+				t.Errorf("GET %s (%d): %s = %q, want %q", tc.path, rec.Code, name, got, want)
+			}
+		}
+	}
+}

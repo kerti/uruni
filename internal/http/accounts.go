@@ -2,8 +2,6 @@ package http
 
 import (
 	"encoding/json"
-	"errors"
-	"io"
 	"net/http"
 	"strconv"
 
@@ -174,8 +172,7 @@ type updateAccountRequest struct {
 
 func decodeUpdateAccountRequest(w http.ResponseWriter, r *http.Request) (updateAccountRequest, bool) {
 	var raw map[string]json.RawMessage
-	if err := json.NewDecoder(r.Body).Decode(&raw); err != nil && !errors.Is(err, io.EOF) {
-		writeAPIError(w, http.StatusBadRequest, "invalid_json", "The request body is not valid JSON.")
+	if !decodeJSON(w, r, &raw) {
 		return updateAccountRequest{}, false
 	}
 

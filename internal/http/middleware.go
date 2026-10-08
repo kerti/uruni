@@ -3,6 +3,7 @@ package http
 import (
 	"log/slog"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5/middleware"
@@ -45,6 +46,11 @@ func (a *api) sessionRequired(next http.Handler) http.Handler {
 // is where a member name, a note or an amount would end up, and ADR-022
 // forbids logging any of those. Method, path and status are route shape, not
 // payload.
+//
+// The path itself is redacted where it carries a secret (#447): the public
+// report's slug is the only thing guarding it (ADR-035), and logs travel -
+// pasted into a bug report, shipped to a collector - so /report/<slug> and
+// its sub-paths log as /report/:slug (see logPath).
 func requestLogger(logger *slog.Logger) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -59,10 +65,54 @@ func requestLogger(logger *slog.Logger) func(http.Handler) http.Handler {
 
 			logger.Info("request",
 				"method", r.Method,
-				"path", r.URL.Path,
+				"path", logPath(r.URL.Path),
 				"status", ww.Status(),
 				"duration_ms", time.Since(start).Milliseconds(),
 			)
 		})
 	}
+}
+
+// reportPathPrefix is where the public report's slug sits in a path.
+const reportPathPrefix = "/report/"
+
+// logPath is the path requestLogger writes: p itself, except that the
+// segment after /report/ - the report's slug - becomes ":slug". Done on the
+// raw path rather than chi's route pattern so a /report/ path no route
+// matches (a mistyped sub-path, a probe) is redacted too.
+func logPath(p string) string {
+	rest, ok := strings.CutPrefix(p, reportPathPrefix)
+	if !ok || rest == "" {
+		return p
+	}
+	_, tail, hasTail := strings.Cut(rest, "/")
+	if !hasTail {
+		return reportPathPrefix + ":slug"
+	}
+	return reportPathPrefix + ":slug/" + tail
+}
+
+// securityHeaders sets the headers every response carries (#447), whatever
+// route answers it - the SPA shell, its assets, /api, the public report.
+//
+//   - nosniff: a response is only ever the type it says it is.
+//   - Referrer-Policy same-origin: no app URL leaves for another site. The
+//     public report tightens this to no-referrer itself (setReportHeaders),
+//     since its own URL is the secret.
+//   - X-Frame-Options and CSP frame-ancestors: nothing of Uruni's renders
+//     inside another site's frame, so a treasurer cannot be clickjacked into
+//     a write. The CSP carries only that directive; a full policy is its own
+//     piece of work.
+//
+// HSTS is not here: the app speaks plain HTTP behind Caddy, which terminates
+// TLS and sets it (Caddyfile).
+func securityHeaders(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		h := w.Header()
+		h.Set("X-Content-Type-Options", "nosniff")
+		h.Set("Referrer-Policy", "same-origin")
+		h.Set("X-Frame-Options", "DENY")
+		h.Set("Content-Security-Policy", "frame-ancestors 'none'")
+		next.ServeHTTP(w, r)
+	})
 }

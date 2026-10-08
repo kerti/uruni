@@ -7,6 +7,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"net/netip"
 	"time"
 
 	"github.com/alexedwards/scs/v2"
@@ -42,6 +43,10 @@ type api struct {
 	// the process (and, in a test, for the life of the one router that
 	// test built) rather than resetting per call.
 	loginLimiter *rateLimiter
+
+	// trustedProxies is #447's addition: the peers whose X-Forwarded-For
+	// clientIP believes (login.go). Empty believes none.
+	trustedProxies []netip.Prefix
 
 	// uploadsDir is #153's addition: where receipt photos are written to and
 	// read from (ADR-011). `serve` has already proved it exists and is
@@ -344,10 +349,28 @@ func writeJSON(w http.ResponseWriter, status int, body any) {
 // through, they do not re-check what the ledger already validates. Malformed
 // JSON is a shape problem this layer alone can see, so it is the one case
 // answered here rather than passed down.
+//
+// The body is capped at maxJSONBodyBytes first (#447): login and register are
+// reachable by anyone, and an uncapped decode reads whatever a stranger sends.
+// Every JSON body in this package is read through here, so the cap is in one
+// place; the multipart routes (receipts, restore) set their own.
 func decodeJSON(w http.ResponseWriter, r *http.Request, dst any) bool {
+	r.Body = http.MaxBytesReader(w, r.Body, maxJSONBodyBytes)
 	if err := json.NewDecoder(r.Body).Decode(dst); err != nil && !errors.Is(err, io.EOF) {
+		var tooLarge *http.MaxBytesError
+		if errors.As(err, &tooLarge) {
+			// No copy of its own: the SPA never sends a body near this size,
+			// so the treasurer would only ever see the generic error.
+			writeAPIError(w, http.StatusRequestEntityTooLarge, "request_too_large", "The request body is too large.")
+			return false
+		}
 		writeAPIError(w, http.StatusBadRequest, "invalid_json", "The request body is not valid JSON.")
 		return false
 	}
 	return true
 }
+
+// maxJSONBodyBytes caps a JSON request body. The largest the SPA sends - a
+// transaction with its note - is a few kilobytes; 1 MiB is generous for any
+// legitimate request and bounds what an anonymous one costs.
+const maxJSONBodyBytes = 1 << 20

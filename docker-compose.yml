@@ -9,6 +9,10 @@ services:
       - URUNI_DB=/data/uruni.db
       - URUNI_UPLOADS_DIR=/uploads
       - URUNI_BACKUP_DIR=/backups
+      # Caddy, on this stack's private network, is the proxy whose
+      # X-Forwarded-For names the client. Port 8080 is never published, so
+      # nothing else on these ranges can reach the app.
+      - URUNI_TRUSTED_PROXIES=172.16.0.0/12,192.168.0.0/16,10.0.0.0/8
     volumes:
       - uruni-data:/data
       - uruni-uploads:/uploads

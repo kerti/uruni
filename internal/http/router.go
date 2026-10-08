@@ -15,6 +15,7 @@ import (
 	"log/slog"
 	"mime"
 	"net/http"
+	"net/netip"
 	"path"
 	"strings"
 	"time"
@@ -79,17 +80,21 @@ func init() {
 // configured database path still names the file this process opened (see
 // db.FileIdentity). nil skips the check, which is what tests that do not
 // exercise it pass.
-func New(assets fs.FS, build Build, l *ledger.Ledger, q store.Querier, sqlDB *sql.DB, dbFileCheck func() error, logger *slog.Logger, au *auth.Auth, baseURL string, uploadsDir string, backupDir string) http.Handler {
-	return newWithClock(assets, build, l, q, sqlDB, dbFileCheck, logger, au, baseURL, uploadsDir, backupDir, time.Now)
+//
+// trustedProxies is #447's addition (Config.TrustedProxies): the peers whose
+// X-Forwarded-For clientIP believes. nil believes none.
+func New(assets fs.FS, build Build, l *ledger.Ledger, q store.Querier, sqlDB *sql.DB, dbFileCheck func() error, logger *slog.Logger, au *auth.Auth, baseURL string, uploadsDir string, backupDir string, trustedProxies []netip.Prefix) http.Handler {
+	return newWithClock(assets, build, l, q, sqlDB, dbFileCheck, logger, au, baseURL, uploadsDir, backupDir, trustedProxies, time.Now)
 }
 
 // newWithClock is New with the wall clock injectable (#379): the report and
 // every route that reckons a calendar day or month read now, so a test can
 // pick the instant. New passes time.Now.
-func newWithClock(assets fs.FS, build Build, l *ledger.Ledger, q store.Querier, sqlDB *sql.DB, dbFileCheck func() error, logger *slog.Logger, au *auth.Auth, baseURL string, uploadsDir string, backupDir string, now func() time.Time) http.Handler {
+func newWithClock(assets fs.FS, build Build, l *ledger.Ledger, q store.Querier, sqlDB *sql.DB, dbFileCheck func() error, logger *slog.Logger, au *auth.Auth, baseURL string, uploadsDir string, backupDir string, trustedProxies []netip.Prefix, now func() time.Time) http.Handler {
 	r := chi.NewRouter()
 	r.Use(middleware.Recoverer)
 	r.Use(requestLogger(logger))
+	r.Use(securityHeaders)
 
 	r.Get("/healthz", healthz(build, dbFileCheck, logger))
 
@@ -106,6 +111,7 @@ func newWithClock(assets fs.FS, build Build, l *ledger.Ledger, q store.Querier, 
 		auth:           au,
 		sessionManager: sm,
 		loginLimiter:   newRateLimiter(loginRateLimitMaxAttempts, loginRateLimitWindow),
+		trustedProxies: trustedProxies,
 		uploadsDir:     uploadsDir,
 		backupDir:      backupDir,
 		baseURL:        strings.TrimRight(baseURL, "/"),

@@ -4,5 +4,9 @@
 # For a wildcard subdomain, switch to Caddy's DNS-challenge (see docs/ADR/009-reverse-proxy-caddy.md).
 {$URUNI_BASE_URL} {
 	encode zstd gzip
+	# HSTS lives here, not in the app: Caddy terminates TLS, the app speaks
+	# plain HTTP behind it. No includeSubDomains - the domain may serve other
+	# things this instance knows nothing about.
+	header Strict-Transport-Security "max-age=31536000"
 	reverse_proxy app:8080
 }

@@ -30,6 +30,8 @@ Then open your domain and sign in as the treasurer.
 
 The compose file also sets `URUNI_DB`, `URUNI_UPLOADS_DIR` and `URUNI_BACKUP_DIR` to paths on its three volumes, and the app listens on `PORT` (8080); leave those alone unless you run the binary without compose.
 
+It also sets `URUNI_TRUSTED_PROXIES` to the private ranges, so the app believes Caddy's `X-Forwarded-For` when it counts failed logins per address. That only holds while port 8080 stays unpublished, as the compose file ships it. If you run the binary behind a different proxy, set it to that proxy's address. With no proxy, leave it unset.
+
 If a variable is wrong the app exits on boot with one line naming it; `docker compose logs app` shows it.
 
 ## Data & backups
