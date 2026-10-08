@@ -11,7 +11,7 @@
 | `serve` | Run the HTTP server — JSON API, SSR public report, embedded SPA. Applies pending migrations on boot. | M1.1 / M1.2 |
 | `migrate up` / `down` / `status` | goose, embedded. `down` rolls back one step. | M1.3, with the store |
 | `create-user <email> <password>` | Create or reset a local account (argon2id). | **M5** — needs a users table and argon2id |
-| `seed-e2e` | Reset + migrate + seed the Playwright fixture database. Dev-only; refuses to run against a non-throwaway DB. | **when fixtures exist** — needs a domain to seed |
+| `seed-e2e` | Migrate + seed a fresh Playwright fixture database (`make e2e-reset` deletes the old file first; an already-seeded one is refused). Dev-only; refuses to run against a non-throwaway DB. | **when fixtures exist** — needs a domain to seed |
 | `version` | Print the version/commit — the operator's half of the upgrade contract ([ADR-018](./018-release-and-versioning.md)). | M1.2 |
 | `healthcheck` | Probe `/healthz` on the local `PORT`; exit 0 when healthy. Exists **only** because the runtime image is distroless — no shell, no curl — so a container `HEALTHCHECK` has nothing else to call. Added 2026-08-09. | M1.2 |
 
@@ -66,3 +66,5 @@ This goes further than the amendment rule's letter — it retires a named cost, 
 **2026-10-01 ([#327](https://github.com/kerti/uruni/issues/327))** — the runtime-config table had an `SMTP_URL` row ("Optional, for emailed backups ([ADR-012](./012-backup-and-export.md)). Parsed and validated on boot; delivery is M8."), and the `Load` paragraph said error messages "**never echo the value of `SMTP_URL`** — it carries a password, and a boot error is exactly what gets pasted into an issue."
 
 The variable is gone. Emailed backups and reports were cut from [ADR-012](./012-backup-and-export.md) while it was still `draft` (grill A, 2026-09-28), so nothing was ever going to read `Config.SMTPURL`, and a parse that can fail boot for a feature that does not exist is cost with nothing behind it. An operator who still sets `SMTP_URL` now has it ignored, the same way `DATABASE_URL` is. With no credential left in the table, the never-echo rule is restated as the split the code already had — `invalid` for a value that must not be shown, `invalidValue` for one that should — so it still binds whatever credential-carrying variable comes next. The decision this ADR records is the table's shape and its one reader, not which rows it holds, so dropping a row whose feature was cut elsewhere is a correction of fact, not a supersession.
+
+**2026-10-08 ([#446](https://github.com/kerti/uruni/issues/446))** — the `seed-e2e` row read "Reset + migrate + seed the Playwright fixture database." The command never reset anything: `make e2e-reset` deletes the database file, then runs it, and against a database already seeded the treasurer's registration fails and the command stops. A wording correction; the command, its guard and the Makefile are unchanged.

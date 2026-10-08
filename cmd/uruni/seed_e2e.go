@@ -40,8 +40,10 @@ const seedE2EFundName = "Kas RT Uji Coba"
 // it on the public report.
 const seedE2EEnvelope = "Amplop Uji Laporan"
 
-// seedE2E resets, migrates and seeds the database at URUNI_DB with a small,
-// fixed fixture: one fund, a cash and a bank account, a registered treasurer
+// seedE2E migrates and seeds the database at URUNI_DB with a small, fixed
+// fixture. It never resets: `make e2e-reset` deletes the file first, and on a
+// database already seeded the treasurer's registration fails, so it refuses
+// rather than seeding twice. The fixture: one fund, a cash and a bank account, a registered treasurer
 // login, two members on one dues tier with a current rate, and an opening
 // balance on the cash account. That is exactly enough for golden-path.spec.ts
 // to have a treasurer to log in as and a fund to look at once M6.4 onward

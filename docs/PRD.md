@@ -67,7 +67,7 @@ Key entities:
 - **Member** — name + role/tier. No email/phone required (minimize data held).
 - **Dues rate** — amount per tier (e.g. pelaksana 50k, fungsional pertama 70k, muda 80k, madya TBD); editable; effective over time.
 - **Transaction** — income or expense; amount; date; location; purpose tag; optional member link (for dues/reimbursement); optional note; optional receipt photo. Immutable once posted (corrections are new adjusting entries) so the ledger stays trustworthy.
-- **Incidental collection** — a lightweight envelope: target/occasion, contributions in, disbursement out, and a **leftover** that can be rolled into Kas Utama in one tap.
+- **Incidental collection** — a lightweight envelope: target/occasion, contributions in, disbursement out, and a **leftover** that rolls into Kas Utama when it closes.
 - **Reconciliation snapshot** — a point-in-time record of expected vs. actual balance per location, any difference, and how it was resolved.
 
 ## 7. Functional requirements
@@ -102,7 +102,7 @@ Key entities:
 - A contribution may name the member who gave it (optional - a guest or an anonymous giver stays unnamed). An envelope may set a **minimum per member** and name the members it is **for**, who are never expected to give.
 - Show who has contributed and how much against the members active on the day the envelope opened, on the envelope's screen and on the public report. A simple "not yet contributed" view. **No reminders, no nagging automation.** ([ADR-034](./ADR/034-envelope-participation.md))
 - A contribution named against the wrong member is reversed by a new entry and posted again, as a dues payment is (§7.3).
-- On close, show the leftover and offer a one-tap **roll into Kas Utama**.
+- On close, show the leftover and **roll it into Kas Utama** through one short form: the location the leftover sits in, the date, and an optional note.
 - The occasion can be corrected at any time, open or closed - renaming moves no money and posts no entry.
 
 ### 7.6 Pass-through (Kas Bidang)
