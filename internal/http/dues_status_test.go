@@ -79,8 +79,8 @@ func TestGetDuesStatusReturnsPerMemberStatus(t *testing.T) {
 		t.Fatalf("decoding member response: %v", err)
 	}
 	if rec := postDuesPayment(t, r, duesPaymentRequest{
-		AccountID: setup.CashAccountID(t), PurposeID: setup.MainPurposeID,
-		MemberID: partial.ID, OccurredOn: "2026-08-05",
+		AccountID: setup.CashAccountID(t),
+		MemberID:  partial.ID, OccurredOn: "2026-08-05",
 		Periods: []duesPaymentPeriod{{DuesPeriod: "2026-08", Amount: 10_000}},
 	}); rec.Code != http.StatusCreated {
 		t.Fatalf("POST /api/dues-payments (partial) = %d, want %d (body: %s)", rec.Code, http.StatusCreated, rec.Body.String())
@@ -92,8 +92,8 @@ func TestGetDuesStatusReturnsPerMemberStatus(t *testing.T) {
 		t.Fatalf("decoding member response: %v", err)
 	}
 	if rec := postDuesPayment(t, r, duesPaymentRequest{
-		AccountID: setup.CashAccountID(t), PurposeID: setup.MainPurposeID,
-		MemberID: paid.ID, OccurredOn: "2026-08-05",
+		AccountID: setup.CashAccountID(t),
+		MemberID:  paid.ID, OccurredOn: "2026-08-05",
 		Periods: []duesPaymentPeriod{{DuesPeriod: "2026-08", Amount: 25_000}},
 	}); rec.Code != http.StatusCreated {
 		t.Fatalf("POST /api/dues-payments (paid) = %d, want %d (body: %s)", rec.Code, http.StatusCreated, rec.Body.String())
@@ -172,7 +172,7 @@ func TestGetDuesStatusCarriesPaidThroughForAMemberPaidAhead(t *testing.T) {
 		if err := json.NewDecoder(postMember(t, r, memberRequest{Name: name, TierID: &tier.ID}).Body).Decode(&m); err != nil {
 			t.Fatalf("decoding member response: %v", err)
 		}
-		req := duesPaymentRequest{AccountID: setup.CashAccountID(t), PurposeID: setup.MainPurposeID, MemberID: m.ID, OccurredOn: "2026-10-01"}
+		req := duesPaymentRequest{AccountID: setup.CashAccountID(t), MemberID: m.ID, OccurredOn: "2026-10-01"}
 		for _, period := range periods {
 			req.Periods = append(req.Periods, duesPaymentPeriod{DuesPeriod: period, Amount: 25_000})
 		}
@@ -274,8 +274,8 @@ func TestGetOutstandingDuesReturnsUnpaidAndPartialPeriodsOldestFirst(t *testing.
 	}
 
 	if rec := postDuesPayment(t, r, duesPaymentRequest{
-		AccountID: setup.CashAccountID(t), PurposeID: setup.MainPurposeID,
-		MemberID: member.ID, OccurredOn: "2026-03-15",
+		AccountID: setup.CashAccountID(t),
+		MemberID:  member.ID, OccurredOn: "2026-03-15",
 		Periods: []duesPaymentPeriod{
 			{DuesPeriod: "2026-02", Amount: 10_000},
 			{DuesPeriod: "2026-03", Amount: 25_000},

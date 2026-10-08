@@ -104,11 +104,13 @@ export interface DuesPaymentPeriod {
  * field for it, so it is always null there today. Nothing is derived onto
  * the wire any more (#257): a dues payment explains itself through
  * TransactionList's own display label, built from facts already on the row.
+ *
+ * No purpose on the wire (#473): the server always posts dues to the fund's
+ * Kas Utama.
  */
 export function createDuesPayment(params: {
   memberId: number
   accountId: number
-  purposeId: number
   occurredOn: string
   note: string | null
   periods: DuesPaymentPeriod[]
@@ -119,7 +121,6 @@ export function createDuesPayment(params: {
     body: JSON.stringify({
       member_id: params.memberId,
       account_id: params.accountId,
-      purpose_id: params.purposeId,
       occurred_on: params.occurredOn,
       note: params.note,
       periods: params.periods,

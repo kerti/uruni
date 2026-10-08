@@ -96,18 +96,23 @@ function resolutionDefaults(resolution: Resolution, diff: number, mainPurposeId:
 interface ReconcileData {
   accounts: Account[]
   purposes: Purpose[]
+  /** What a fix may be tagged to - `?selectable=true`, so never a closed
+   * amplop, which the server refuses (ADR-031, #473). `purposes` stays the
+   * full list, for naming rows already posted. */
+  selectablePurposes: Purpose[]
   balances: Balances
   transactions: Transaction[]
 }
 
 async function loadReconcileData(): Promise<ReconcileData> {
-  const [accounts, purposes, balances, transactionsPage] = await Promise.all([
+  const [accounts, purposes, selectablePurposes, balances, transactionsPage] = await Promise.all([
     listAccounts(),
     listPurposes(),
+    listPurposes(true),
     getBalances(),
     listTransactions(),
   ])
-  return { accounts, purposes, balances, transactions: transactionsPage.transactions }
+  return { accounts, purposes, selectablePurposes, balances, transactions: transactionsPage.transactions }
 }
 
 /**
@@ -353,7 +358,7 @@ export default function Reconcile({ onDone, onCancel }: { onDone: () => void; on
             account={account}
             recorded={recordedByAccount.get(account.id) ?? 0}
             line={lines[account.id] ?? emptyLine(mainPurposeId)}
-            purposes={data.purposes}
+            purposes={data.selectablePurposes}
             mainPurposeId={mainPurposeId}
             disabled={submitting}
             onChange={(patch) => updateLine(account.id, patch)}

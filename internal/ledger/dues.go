@@ -28,12 +28,16 @@ type PeriodAmount struct {
 
 // PostDuesPaymentsParams is every argument PostDuesPayments needs to post one
 // member's payment across one or more periods, in one sitting, on the same
-// account and purpose, dated and noted the same way across all of them -
-// Periods is the only part that varies per row.
+// account, dated and noted the same way across all of them - Periods is the
+// only part that varies per row.
+//
+// There is deliberately no PurposeID (#473): dues are the routine fund's
+// income, so they always land on the fund's Kas Utama, and the caller does
+// not get to name another - the same way SettleReimbursementParams carries
+// no PurposeID because the claim owns it.
 type PostDuesPaymentsParams struct {
 	FundID     int64
 	AccountID  int64
-	PurposeID  int64
 	MemberID   int64
 	OccurredOn string // "YYYY-MM-DD", a real calendar date, shared by every row
 	Note       *string
@@ -65,7 +69,8 @@ type PostDuesPaymentsParams struct {
 //
 // A retired AccountID (inactive_on set) is ErrAccountInactive, checked once
 // for the whole batch inside the transaction, before any row is written
-// (#444).
+// (#444). Every row's purpose is the fund's Kas Utama, looked up once in the
+// same transaction - never a closed envelope, never a titipan (#473).
 func (l *Ledger) PostDuesPayments(ctx context.Context, p PostDuesPaymentsParams) ([]store.Transaction, error) {
 	if len(p.Periods) == 0 {
 		return nil, fmt.Errorf("%w: periods must not be empty", ErrInvalidArgument)
@@ -87,8 +92,12 @@ func (l *Ledger) PostDuesPayments(ctx context.Context, p PostDuesPaymentsParams)
 		if err := refuseInactiveAccount(ctx, q, p.FundID, p.AccountID); err != nil {
 			return err
 		}
+		mainID, err := mainPurposeID(ctx, q, p.FundID)
+		if err != nil {
+			return err
+		}
 		for _, period := range p.Periods {
-			row, err := l.postDuesPaymentTx(ctx, q, p, period)
+			row, err := l.postDuesPaymentTx(ctx, q, p, mainID, period)
 			if err != nil {
 				return err
 			}
@@ -107,9 +116,9 @@ func (l *Ledger) PostDuesPayments(ctx context.Context, p PostDuesPaymentsParams)
 // doing no transaction management and no validation of its own - both are
 // PostDuesPayments' job, done once for the whole batch before this is ever
 // called.
-func (l *Ledger) postDuesPaymentTx(ctx context.Context, q store.Querier, p PostDuesPaymentsParams, period PeriodAmount) (store.Transaction, error) {
+func (l *Ledger) postDuesPaymentTx(ctx context.Context, q store.Querier, p PostDuesPaymentsParams, purposeID int64, period PeriodAmount) (store.Transaction, error) {
 	return q.CreateTransaction(ctx, store.CreateTransactionParams{
-		FundID: p.FundID, AccountID: p.AccountID, PurposeID: p.PurposeID,
+		FundID: p.FundID, AccountID: p.AccountID, PurposeID: purposeID,
 		Direction: "in", Amount: period.Amount.Int64(), OccurredOn: p.OccurredOn,
 		Kind:       "dues",
 		MemberID:   &p.MemberID,
@@ -175,8 +184,9 @@ type ReverseDuesPaymentParams struct {
 //     incidental (ADR-031) - a reversal posts to that same purpose, so the
 //     envelope must be reopened first, exactly as PostTransaction's own
 //     guard requires for an ordinary posting. A dues payment's purpose is
-//     always 'main', so this never applies to a dues reversal in practice;
-//     only a named contribution's envelope can ever be closed.
+//     always 'main' (PostDuesPayments owns it, #473), so this never applies
+//     to a dues reversal; only a named contribution's envelope can ever be
+//     closed.
 func (l *Ledger) ReverseDuesPayment(ctx context.Context, p ReverseDuesPaymentParams) (store.Transaction, error) {
 	if err := validateOccurredOn(p.OccurredOn); err != nil {
 		return store.Transaction{}, err

@@ -13,12 +13,10 @@ import { listAccounts } from '@/lib/accounts'
 import { createDuesPayment, getOutstandingDues } from '@/lib/dues'
 import { formatPeriod, dateBounds } from '@/lib/dates'
 import { formatIDR } from '@/lib/money'
-import { listPurposes } from '@/lib/purposes'
 import { listAllMembers } from '@/lib/setup'
 import { useApi } from '@/lib/useApi'
 import type { Account } from '@/lib/accounts'
 import type { OutstandingDuesPeriod } from '@/lib/dues'
-import type { Purpose } from '@/lib/purposes'
 import type { Member } from '@/lib/setup'
 
 const text = copy.dues.payment
@@ -63,7 +61,6 @@ function remainingOf(period: OutstandingDuesPeriod): number {
 interface FormData {
   members: Member[]
   accounts: Account[]
-  purposes: Purpose[]
 }
 
 /**
@@ -84,8 +81,8 @@ interface FormData {
  * single database transaction, so a validation failure on any period leaves
  * nothing posted at all.
  *
- * Purpose is not a field here: dues land on the fund's own `kind: "main"`
- * purpose, the same silent default RecordTransaction.tsx starts from, and
+ * Purpose is not a field here: the server posts dues to the fund's own
+ * `kind: "main"` purpose and takes no purpose on the wire (#473), and
  * PRD section 7.3's form is member / amount / location / date. Note is not a
  * field either - the row already says who paid and for which month, through
  * TransactionList's own display label (#257) rather than anything typed
@@ -124,8 +121,8 @@ export default function RecordDuesPayment({
   const through = addMonths(currentISOMonth(), monthsAhead)
 
   async function loadFormData(): Promise<FormData> {
-    const [members, accounts, purposes] = await Promise.all([listAllMembers(), listAccounts(), listPurposes()])
-    return { members, accounts, purposes }
+    const [members, accounts] = await Promise.all([listAllMembers(), listAccounts()])
+    return { members, accounts }
   }
 
   useEffect(() => {
@@ -173,13 +170,11 @@ export default function RecordDuesPayment({
   }, [outstandingState.status, outstandingState.data])
 
   const periods = outstandingState.data ?? []
-  const mainPurpose = loadState.data?.purposes.find((p) => p.kind === 'main') ?? null
   const total = selected.reduce((sum, period) => sum + (amounts[period] ?? 0), 0)
   const submitting = submitState.status === 'loading'
   const canSubmit =
     memberId !== null &&
     accountId !== null &&
-    mainPurpose !== null &&
     occurredOn !== '' &&
     selected.length > 0 &&
     selected.every((period) => (amounts[period] ?? 0) > 0) &&
@@ -191,13 +186,12 @@ export default function RecordDuesPayment({
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    if (!canSubmit || memberId === null || accountId === null || mainPurpose === null) return
+    if (!canSubmit || memberId === null || accountId === null) return
 
     void submitRun(async () => {
       const result = await createDuesPayment({
         memberId,
         accountId,
-        purposeId: mainPurpose.id,
         occurredOn,
         // No note is typed on this form (PRD section 7.3) - the row explains
         // itself through TransactionList's own display label (#257), never

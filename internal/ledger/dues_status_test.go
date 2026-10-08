@@ -119,7 +119,7 @@ func TestDuesStatusForPeriodPartialMemberPaidLessThanTheRate(t *testing.T) {
 	memberID := createDuesMember(t, q, f.fundID, duesMemberParams{name: "Jane", tierID: &tierID})
 
 	if _, err := l.PostDuesPayments(ctx, PostDuesPaymentsParams{
-		FundID: f.fundID, AccountID: f.cashID, PurposeID: f.mainID,
+		FundID: f.fundID, AccountID: f.cashID,
 		MemberID: memberID, OccurredOn: "2026-06-15",
 		Periods: []PeriodAmount{{DuesPeriod: "2026-06", Amount: 10_000}},
 	}); err != nil {
@@ -155,7 +155,7 @@ func TestDuesStatusForPeriodPaidMemberPaidExactlyTheRate(t *testing.T) {
 	memberID := createDuesMember(t, q, f.fundID, duesMemberParams{name: "Jane", tierID: &tierID})
 
 	if _, err := l.PostDuesPayments(ctx, PostDuesPaymentsParams{
-		FundID: f.fundID, AccountID: f.cashID, PurposeID: f.mainID,
+		FundID: f.fundID, AccountID: f.cashID,
 		MemberID: memberID, OccurredOn: "2026-06-15",
 		Periods: []PeriodAmount{{DuesPeriod: "2026-06", Amount: 25_000}},
 	}); err != nil {
@@ -192,7 +192,7 @@ func TestDuesStatusForPeriodOverpaymentReadsAsPaid(t *testing.T) {
 	memberID := createDuesMember(t, q, f.fundID, duesMemberParams{name: "Jane", tierID: &tierID})
 
 	if _, err := l.PostDuesPayments(ctx, PostDuesPaymentsParams{
-		FundID: f.fundID, AccountID: f.cashID, PurposeID: f.mainID,
+		FundID: f.fundID, AccountID: f.cashID,
 		MemberID: memberID, OccurredOn: "2026-06-15",
 		Periods: []PeriodAmount{{DuesPeriod: "2026-06", Amount: 40_000}},
 	}); err != nil {
@@ -236,7 +236,7 @@ func TestDuesStatusForPeriodPaidInAdvanceWhenALaterPeriodIsAlsoPaid(t *testing.T
 
 	for _, period := range []string{"2026-06", "2026-08"} {
 		if _, err := l.PostDuesPayments(ctx, PostDuesPaymentsParams{
-			FundID: f.fundID, AccountID: f.cashID, PurposeID: f.mainID,
+			FundID: f.fundID, AccountID: f.cashID,
 			MemberID: memberID, OccurredOn: "2026-08-01",
 			Periods: []PeriodAmount{{DuesPeriod: period, Amount: 25_000}},
 		}); err != nil {
@@ -274,7 +274,7 @@ func TestDuesStatusForPeriodSkippedPeriodStaysUnpaidDespiteALaterPayment(t *test
 
 	// Paid August, but never paid the July being queried below.
 	if _, err := l.PostDuesPayments(ctx, PostDuesPaymentsParams{
-		FundID: f.fundID, AccountID: f.cashID, PurposeID: f.mainID,
+		FundID: f.fundID, AccountID: f.cashID,
 		MemberID: memberID, OccurredOn: "2026-08-01",
 		Periods: []PeriodAmount{{DuesPeriod: "2026-08", Amount: 25_000}},
 	}); err != nil {
@@ -311,7 +311,7 @@ func TestDuesStatusForPeriodSeveralMonthsPaidAtOnceShowCorrectlyPerPeriod(t *tes
 
 	for _, period := range []string{"2026-06", "2026-07", "2026-08"} {
 		if _, err := l.PostDuesPayments(ctx, PostDuesPaymentsParams{
-			FundID: f.fundID, AccountID: f.cashID, PurposeID: f.mainID,
+			FundID: f.fundID, AccountID: f.cashID,
 			MemberID: memberID, OccurredOn: "2026-08-01",
 			Periods: []PeriodAmount{{DuesPeriod: period, Amount: 25_000}},
 		}); err != nil {
@@ -585,7 +585,7 @@ func TestDuesStatusForPeriodScopesToOneFund(t *testing.T) {
 		t.Fatalf("CreateFund() = %v, want no error", err)
 	}
 	f2cash := createAccount(t, q, other.ID, "cash", "Cash")
-	f2main := createPurpose(t, q, other.ID, "main", "Main")
+	createPurpose(t, q, other.ID, "main", "Main")
 
 	tier1 := createDuesTier(t, q, f1.fundID, "Tier A")
 	createDuesRate(t, q, tier1, 25_000, "2026-01")
@@ -595,7 +595,7 @@ func TestDuesStatusForPeriodScopesToOneFund(t *testing.T) {
 	createDuesRate(t, q, tier2, 99_000, "2026-01")
 	member2 := createDuesMember(t, q, other.ID, duesMemberParams{name: "John", tierID: &tier2})
 	if _, err := l.PostDuesPayments(ctx, PostDuesPaymentsParams{
-		FundID: other.ID, AccountID: f2cash, PurposeID: f2main,
+		FundID: other.ID, AccountID: f2cash,
 		MemberID: member2, OccurredOn: "2026-06-01",
 		Periods: []PeriodAmount{{DuesPeriod: "2026-06", Amount: 99_000}},
 	}); err != nil {
@@ -685,7 +685,7 @@ func TestOutstandingDuesForMemberReturnsUnpaidAndPartialOldestFirstMatchingDuesS
 	// 2026-01 stays unpaid; 2026-02 gets a partial payment; 2026-03 gets paid
 	// in full and must not appear at all.
 	if _, err := l.PostDuesPayments(ctx, PostDuesPaymentsParams{
-		FundID: f.fundID, AccountID: f.cashID, PurposeID: f.mainID,
+		FundID: f.fundID, AccountID: f.cashID,
 		MemberID: memberID, OccurredOn: "2026-03-15",
 		Periods: []PeriodAmount{
 			{DuesPeriod: "2026-02", Amount: 10_000},
@@ -751,7 +751,7 @@ func TestOutstandingDuesForMemberFullyPaidMemberReturnsEmpty(t *testing.T) {
 	memberID := createDuesMember(t, q, f.fundID, duesMemberParams{name: "Jane", tierID: &tierID, joinedOn: &joinedOn})
 
 	if _, err := l.PostDuesPayments(ctx, PostDuesPaymentsParams{
-		FundID: f.fundID, AccountID: f.cashID, PurposeID: f.mainID,
+		FundID: f.fundID, AccountID: f.cashID,
 		MemberID: memberID, OccurredOn: "2026-02-01",
 		Periods: []PeriodAmount{
 			{DuesPeriod: "2026-01", Amount: 25_000},
@@ -1140,7 +1140,7 @@ func TestArrearsMonthsForMemberPaidAheadReadsZero(t *testing.T) {
 	memberID := createDuesMember(t, q, f.fundID, duesMemberParams{name: "Jane", tierID: &tierID, joinedOn: &joinedOn})
 
 	if _, err := l.PostDuesPayments(ctx, PostDuesPaymentsParams{
-		FundID: f.fundID, AccountID: f.cashID, PurposeID: f.mainID,
+		FundID: f.fundID, AccountID: f.cashID,
 		MemberID: memberID, OccurredOn: "2026-01-15",
 		Periods: []PeriodAmount{
 			{DuesPeriod: p.twoBack, Amount: 25_000},
@@ -1178,7 +1178,7 @@ func TestArrearsMonthsForMemberPartPaidEarlierPeriodReadsOne(t *testing.T) {
 	memberID := createDuesMember(t, q, f.fundID, duesMemberParams{name: "Jane", tierID: &tierID, joinedOn: &joinedOn})
 
 	if _, err := l.PostDuesPayments(ctx, PostDuesPaymentsParams{
-		FundID: f.fundID, AccountID: f.cashID, PurposeID: f.mainID,
+		FundID: f.fundID, AccountID: f.cashID,
 		MemberID: memberID, OccurredOn: "2026-01-15",
 		Periods: []PeriodAmount{
 			{DuesPeriod: p.oneBack, Amount: 10_000}, // less than the 25000 owed: partial
@@ -1214,7 +1214,7 @@ func TestArrearsMonthsForMemberCountsUnpaidAndPartialTheSame(t *testing.T) {
 	memberID := createDuesMember(t, q, f.fundID, duesMemberParams{name: "Jane", tierID: &tierID, joinedOn: &joinedOn})
 
 	if _, err := l.PostDuesPayments(ctx, PostDuesPaymentsParams{
-		FundID: f.fundID, AccountID: f.cashID, PurposeID: f.mainID,
+		FundID: f.fundID, AccountID: f.cashID,
 		MemberID: memberID, OccurredOn: "2026-01-15",
 		Periods: []PeriodAmount{
 			{DuesPeriod: p.oneBack, Amount: 10_000}, // partial
@@ -1425,7 +1425,7 @@ func newPaidThroughFixture(t *testing.T, p duesMemberParams, paid ...string) pai
 		periods = append(periods, PeriodAmount{DuesPeriod: period, Amount: 25_000})
 	}
 	posted, err := l.PostDuesPayments(context.Background(), PostDuesPaymentsParams{
-		FundID: f.fundID, AccountID: f.cashID, PurposeID: f.mainID,
+		FundID: f.fundID, AccountID: f.cashID,
 		MemberID: memberID, OccurredOn: "2026-10-01", Periods: periods,
 	})
 	if err != nil {

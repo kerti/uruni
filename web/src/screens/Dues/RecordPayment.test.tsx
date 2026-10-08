@@ -105,7 +105,6 @@ describe('RecordDuesPayment', () => {
     expect(lastPostedBody(fetchMock)).toMatchObject({
       member_id: 1,
       account_id: 7,
-      purpose_id: 3,
       // #257: no note is typed on this form, and nothing is generated onto
       // the wire - the row explains itself through TransactionList's own
       // display label instead.
@@ -115,6 +114,8 @@ describe('RecordDuesPayment', () => {
         { dues_period: '2026-02', amount: 30_000 },
       ],
     })
+    // #473: the server owns the dues purpose - always Kas Utama.
+    expect(lastPostedBody(fetchMock)).not.toHaveProperty('purpose_id')
   })
 
   it('posts only the periods that were ticked, at the amount as edited', async () => {

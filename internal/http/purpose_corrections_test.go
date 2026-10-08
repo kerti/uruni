@@ -159,8 +159,8 @@ func TestPostPurposeCorrectionRefusalsHaveDistinctCodes(t *testing.T) {
 
 	// kind='dues'
 	duesRec := postDuesPayment(t, r, duesPaymentRequest{
-		AccountID: setup.CashAccountID(t), PurposeID: setup.MainPurposeID,
-		MemberID: member.ID, OccurredOn: "2026-09-05",
+		AccountID: setup.CashAccountID(t),
+		MemberID:  member.ID, OccurredOn: "2026-09-05",
 		Periods: []duesPaymentPeriod{{DuesPeriod: "2026-09", Amount: 25_000}},
 	})
 	if duesRec.Code != http.StatusCreated {

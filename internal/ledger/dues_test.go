@@ -17,7 +17,7 @@ func TestPostDuesPaymentsWritesTheDuesShapeAndMovesTheBalance(t *testing.T) {
 	ctx := context.Background()
 
 	posted, err := l.PostDuesPayments(ctx, PostDuesPaymentsParams{
-		FundID: f.fundID, AccountID: f.cashID, PurposeID: f.mainID,
+		FundID: f.fundID, AccountID: f.cashID,
 		MemberID: f.memberID, OccurredOn: "2026-08-12",
 		Periods: []PeriodAmount{{DuesPeriod: "2026-08", Amount: 25_000}},
 	})
@@ -69,7 +69,7 @@ func TestPostDuesPaymentsSeveralMonthsAtOnceIsOneRowPerPeriod(t *testing.T) {
 	}
 
 	posted, err := l.PostDuesPayments(ctx, PostDuesPaymentsParams{
-		FundID: f.fundID, AccountID: f.cashID, PurposeID: f.mainID,
+		FundID: f.fundID, AccountID: f.cashID,
 		MemberID: f.memberID, OccurredOn: "2026-08-12",
 		Periods: periodAmounts,
 	})
@@ -131,7 +131,7 @@ func TestPostDuesPaymentsAFailureOnALaterPeriodLeavesZeroRows(t *testing.T) {
 	}
 
 	_, err = l.PostDuesPayments(ctx, PostDuesPaymentsParams{
-		FundID: f.fundID, AccountID: f.cashID, PurposeID: f.mainID,
+		FundID: f.fundID, AccountID: f.cashID,
 		MemberID: f.memberID, OccurredOn: "2026-08-12",
 		Periods: []PeriodAmount{
 			{DuesPeriod: "2026-06", Amount: 25_000},
@@ -168,7 +168,7 @@ func TestPostDuesPaymentsRejectsEmptyPeriods(t *testing.T) {
 	ctx := context.Background()
 
 	_, err := l.PostDuesPayments(ctx, PostDuesPaymentsParams{
-		FundID: f.fundID, AccountID: f.cashID, PurposeID: f.mainID,
+		FundID: f.fundID, AccountID: f.cashID,
 		MemberID: f.memberID, OccurredOn: "2026-08-12",
 		Periods: nil,
 	})
@@ -192,7 +192,7 @@ func TestPostDuesPaymentsRejectsNonPositiveAmountBeforeTheWrite(t *testing.T) {
 	ctx := context.Background()
 
 	_, err := l.PostDuesPayments(ctx, PostDuesPaymentsParams{
-		FundID: f.fundID, AccountID: f.cashID, PurposeID: f.mainID,
+		FundID: f.fundID, AccountID: f.cashID,
 		MemberID: f.memberID, OccurredOn: "2026-08-12",
 		Periods: []PeriodAmount{{DuesPeriod: "2026-08", Amount: 0}},
 	})
@@ -216,7 +216,7 @@ func TestPostDuesPaymentsRejectsInvalidOccurredOn(t *testing.T) {
 	ctx := context.Background()
 
 	_, err := l.PostDuesPayments(ctx, PostDuesPaymentsParams{
-		FundID: f.fundID, AccountID: f.cashID, PurposeID: f.mainID,
+		FundID: f.fundID, AccountID: f.cashID,
 		MemberID: f.memberID, OccurredOn: "2026-02-30",
 		Periods: []PeriodAmount{{DuesPeriod: "2026-08", Amount: 25_000}},
 	})
@@ -246,7 +246,7 @@ func TestPostDuesPaymentsRejectsInvalidDuesPeriod(t *testing.T) {
 			ctx := context.Background()
 
 			_, err := l.PostDuesPayments(ctx, PostDuesPaymentsParams{
-				FundID: f.fundID, AccountID: f.cashID, PurposeID: f.mainID,
+				FundID: f.fundID, AccountID: f.cashID,
 				MemberID: f.memberID, OccurredOn: "2026-08-12",
 				Periods: []PeriodAmount{{DuesPeriod: tt.duesPeriod, Amount: 25_000}},
 			})
@@ -277,7 +277,7 @@ func TestPostDuesPaymentsWithoutANoteStoresNull(t *testing.T) {
 	ctx := context.Background()
 
 	posted, err := l.PostDuesPayments(ctx, PostDuesPaymentsParams{
-		FundID: f.fundID, AccountID: f.cashID, PurposeID: f.mainID,
+		FundID: f.fundID, AccountID: f.cashID,
 		MemberID: f.memberID, OccurredOn: "2026-08-12",
 		Periods: []PeriodAmount{{DuesPeriod: "2026-08", Amount: 25_000}},
 	})
@@ -300,7 +300,7 @@ func TestPostDuesPaymentsBlankNoteStoresNull(t *testing.T) {
 
 		note := blank
 		posted, err := l.PostDuesPayments(ctx, PostDuesPaymentsParams{
-			FundID: f.fundID, AccountID: f.cashID, PurposeID: f.mainID,
+			FundID: f.fundID, AccountID: f.cashID,
 			MemberID: f.memberID, OccurredOn: "2026-08-12", Note: &note,
 			Periods: []PeriodAmount{{DuesPeriod: "2026-08", Amount: 25_000}},
 		})
@@ -323,7 +323,7 @@ func TestPostDuesPaymentsTrimsTheNote(t *testing.T) {
 
 	note := "  Bayar tunai  "
 	posted, err := l.PostDuesPayments(ctx, PostDuesPaymentsParams{
-		FundID: f.fundID, AccountID: f.cashID, PurposeID: f.mainID,
+		FundID: f.fundID, AccountID: f.cashID,
 		MemberID: f.memberID, OccurredOn: "2026-08-12", Note: &note,
 		Periods: []PeriodAmount{{DuesPeriod: "2026-08", Amount: 25_000}},
 	})

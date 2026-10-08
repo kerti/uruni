@@ -441,8 +441,8 @@ func TestGetDuesPaymentsNeverReturnsAnotherFundsRow(t *testing.T) {
 func postOneDuesPayment(t *testing.T, r http.Handler, setup setupResponse, memberID int64, period, occurredOn string) int64 {
 	t.Helper()
 	rec := postDuesPayment(t, r, duesPaymentRequest{
-		AccountID: setup.CashAccountID(t), PurposeID: setup.MainPurposeID,
-		MemberID: memberID, OccurredOn: occurredOn,
+		AccountID: setup.CashAccountID(t),
+		MemberID:  memberID, OccurredOn: occurredOn,
 		Periods: []duesPaymentPeriod{{DuesPeriod: period, Amount: 25_000}},
 	})
 	if rec.Code != http.StatusCreated {

@@ -61,7 +61,7 @@ func newTxnScenario(t *testing.T) txnScenario {
 	f.post(t, "in", 7_000, "2026-08-20")
 	f.post(t, "in", 200_000, "2026-09-03")
 	if _, err := f.l.PostDuesPayments(ctx, ledger.PostDuesPaymentsParams{
-		FundID: f.fund.ID, AccountID: f.cashID, PurposeID: f.mainID, MemberID: s.ani, OccurredOn: "2026-09-05",
+		FundID: f.fund.ID, AccountID: f.cashID, MemberID: s.ani, OccurredOn: "2026-09-05",
 		Periods: []ledger.PeriodAmount{{DuesPeriod: "2026-09", Amount: 25_000}},
 	}); err != nil {
 		t.Fatalf("PostDuesPayments() = %v", err)

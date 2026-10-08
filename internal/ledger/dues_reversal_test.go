@@ -30,7 +30,7 @@ func TestReverseDuesPaymentRoundTripsBalanceAndPaidStatus(t *testing.T) {
 	memberID := createDuesMember(t, q, f.fundID, duesMemberParams{name: "Jane", tierID: &tierID})
 
 	posted, err := l.PostDuesPayments(ctx, PostDuesPaymentsParams{
-		FundID: f.fundID, AccountID: f.cashID, PurposeID: f.mainID,
+		FundID: f.fundID, AccountID: f.cashID,
 		MemberID: memberID, OccurredOn: "2026-08-12",
 		Periods: []PeriodAmount{{DuesPeriod: "2026-08", Amount: 25_000}},
 	})
@@ -121,7 +121,7 @@ func TestReverseDuesPaymentTwiceIsRefused(t *testing.T) {
 	memberID := createDuesMember(t, q, f.fundID, duesMemberParams{name: "Jane", tierID: &tierID})
 
 	posted, err := l.PostDuesPayments(ctx, PostDuesPaymentsParams{
-		FundID: f.fundID, AccountID: f.cashID, PurposeID: f.mainID,
+		FundID: f.fundID, AccountID: f.cashID,
 		MemberID: memberID, OccurredOn: "2026-08-12",
 		Periods: []PeriodAmount{{DuesPeriod: "2026-08", Amount: 25_000}},
 	})
@@ -185,7 +185,7 @@ func TestReverseDuesPaymentRefusesReversingAReversal(t *testing.T) {
 	memberID := createDuesMember(t, q, f.fundID, duesMemberParams{name: "Jane", tierID: &tierID})
 
 	posted, err := l.PostDuesPayments(ctx, PostDuesPaymentsParams{
-		FundID: f.fundID, AccountID: f.cashID, PurposeID: f.mainID,
+		FundID: f.fundID, AccountID: f.cashID,
 		MemberID: memberID, OccurredOn: "2026-08-12",
 		Periods: []PeriodAmount{{DuesPeriod: "2026-08", Amount: 25_000}},
 	})
@@ -227,7 +227,7 @@ func TestReverseDuesPaymentRefusesAnotherFundsTransaction(t *testing.T) {
 	member1 := createDuesMember(t, q, f1.fundID, duesMemberParams{name: "Jane", tierID: &tier1})
 
 	posted, err := l.PostDuesPayments(ctx, PostDuesPaymentsParams{
-		FundID: f1.fundID, AccountID: f1.cashID, PurposeID: f1.mainID,
+		FundID: f1.fundID, AccountID: f1.cashID,
 		MemberID: member1, OccurredOn: "2026-08-12",
 		Periods: []PeriodAmount{{DuesPeriod: "2026-08", Amount: 25_000}},
 	})
@@ -277,7 +277,7 @@ func TestReverseDuesPaymentRejectsInvalidOccurredOn(t *testing.T) {
 	memberID := createDuesMember(t, q, f.fundID, duesMemberParams{name: "Jane", tierID: &tierID})
 
 	posted, err := l.PostDuesPayments(ctx, PostDuesPaymentsParams{
-		FundID: f.fundID, AccountID: f.cashID, PurposeID: f.mainID,
+		FundID: f.fundID, AccountID: f.cashID,
 		MemberID: memberID, OccurredOn: "2026-08-12",
 		Periods: []PeriodAmount{{DuesPeriod: "2026-08", Amount: 25_000}},
 	})
@@ -308,7 +308,7 @@ func TestReverseDuesPaymentReversedPeriodNoLongerCountsTowardDuesPaidByPeriod(t 
 	memberID := createDuesMember(t, q, f.fundID, duesMemberParams{name: "Jane"})
 
 	posted, err := l.PostDuesPayments(ctx, PostDuesPaymentsParams{
-		FundID: f.fundID, AccountID: f.cashID, PurposeID: f.mainID,
+		FundID: f.fundID, AccountID: f.cashID,
 		MemberID: memberID, OccurredOn: "2026-08-12",
 		Periods: []PeriodAmount{{DuesPeriod: "2026-08", Amount: 25_000}},
 	})
@@ -361,7 +361,7 @@ func TestReverseDuesPaymentReversedPeriodDoesNotReadAsPaidInAdvance(t *testing.T
 
 	// Genuinely paid March.
 	if _, err := l.PostDuesPayments(ctx, PostDuesPaymentsParams{
-		FundID: f.fundID, AccountID: f.cashID, PurposeID: f.mainID,
+		FundID: f.fundID, AccountID: f.cashID,
 		MemberID: memberID, OccurredOn: "2026-03-10",
 		Periods: []PeriodAmount{{DuesPeriod: "2026-03", Amount: 25_000}},
 	}); err != nil {
@@ -370,7 +370,7 @@ func TestReverseDuesPaymentReversedPeriodDoesNotReadAsPaidInAdvance(t *testing.T
 
 	// Wrongly-entered June payment.
 	junePosted, err := l.PostDuesPayments(ctx, PostDuesPaymentsParams{
-		FundID: f.fundID, AccountID: f.cashID, PurposeID: f.mainID,
+		FundID: f.fundID, AccountID: f.cashID,
 		MemberID: memberID, OccurredOn: "2026-06-01",
 		Periods: []PeriodAmount{{DuesPeriod: "2026-06", Amount: 25_000}},
 	})
@@ -437,7 +437,7 @@ func TestReverseDuesPaymentNoteFollowsNormalizeNoteContract(t *testing.T) {
 		ctx := context.Background()
 
 		posted, err := l.PostDuesPayments(ctx, PostDuesPaymentsParams{
-			FundID: f.fundID, AccountID: f.cashID, PurposeID: f.mainID,
+			FundID: f.fundID, AccountID: f.cashID,
 			MemberID: f.memberID, OccurredOn: "2026-08-12",
 			Periods: []PeriodAmount{{DuesPeriod: "2026-08", Amount: 25_000}},
 		})

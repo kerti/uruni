@@ -69,7 +69,7 @@ func newDuesScenario(t *testing.T) duesScenario {
 	pay := func(member int64, amount money.Amount, period string) {
 		t.Helper()
 		if _, err := f.l.PostDuesPayments(ctx, ledger.PostDuesPaymentsParams{
-			FundID: f.fund.ID, AccountID: f.cashID, PurposeID: f.mainID, MemberID: member, OccurredOn: "2026-09-05",
+			FundID: f.fund.ID, AccountID: f.cashID, MemberID: member, OccurredOn: "2026-09-05",
 			Periods: []ledger.PeriodAmount{{DuesPeriod: period, Amount: amount}},
 		}); err != nil {
 			t.Fatalf("PostDuesPayments(%s) = %v", period, err)
@@ -198,7 +198,7 @@ func TestReportDuesFilterWithNoMatchKeepsSectionAndFilter(t *testing.T) {
 	for _, m := range members {
 		if m.Name == "Cici" {
 			if _, err := s.l.PostDuesPayments(context.Background(), ledger.PostDuesPaymentsParams{
-				FundID: s.fund.ID, AccountID: s.cashID, PurposeID: s.mainID, MemberID: m.ID, OccurredOn: "2026-09-06",
+				FundID: s.fund.ID, AccountID: s.cashID, MemberID: m.ID, OccurredOn: "2026-09-06",
 				Periods: []ledger.PeriodAmount{{DuesPeriod: "2026-09", Amount: 15_000}},
 			}); err != nil {
 				t.Fatalf("PostDuesPayments() = %v", err)
