@@ -1,13 +1,10 @@
 // Typed call over apiFetch for GET /api/dues-status (M6.12, PRD section 7.3), same
 // idiom as lib/balances.ts and lib/reconciliations.ts. The Member shape is
-// already defined in lib/setup.ts (the setup wizard's roster step created
-// these same rows) - re-exported here rather than redefined, same reasoning
-// as lib/accounts.ts's own Account re-export.
+// lib/setup.ts's own (the setup wizard's roster step created these same
+// rows), imported rather than redefined.
 
 import { apiFetch } from '@/lib/api'
 import type { Member, Transaction } from '@/lib/setup'
-
-export type { Member }
 
 /** The schema's own four dues-status values (internal/ledger's
  * MemberDuesStatus, ADR-014: English on the wire and in code, Indonesian

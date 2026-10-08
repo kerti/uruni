@@ -44,7 +44,7 @@ type Fix struct {
 // counts[2] would silently square counts[1] instead if a count were ever
 // skipped or reordered. That is the same failure shape ADR-027's transfer
 // leg already removed by construction rather than by validation, by
-// dropping leg's own Direction field so postTransferPair derives it instead
+// dropping leg's own Direction field so postTransferPairTx derives it instead
 // of trusting a caller to set it correctly. Nesting Fix inside AccountCount
 // does the same thing here: "this fix belongs to this line" becomes a
 // property of the Go value, not an alignment invariant.
