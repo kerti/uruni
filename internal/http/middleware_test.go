@@ -84,18 +84,18 @@ func TestRequestLoggerRedactsTheReportSlug(t *testing.T) {
 // TestEveryResponseCarriesTheSecurityHeaders is #447's: the SPA shell, the
 // API (signed in or not) and the public report, including its 404, all
 // answer with the same baseline - and the report keeps its stricter
-// Referrer-Policy.
+// Referrer-Policy and its own nonce CSP (TestReportCSPNonceMatchesThePage).
 func TestEveryResponseCarriesTheSecurityHeaders(t *testing.T) {
 	t.Parallel()
 	r := testRouter(t)
 
-	for _, tc := range []struct{ path, referrer string }{
-		{"/", "same-origin"},
-		{"/riwayat", "same-origin"},
-		{"/api/session", "same-origin"},
-		{"/api/transactions", "same-origin"},
-		{"/healthz", "same-origin"},
-		{"/report/no-such-slug", "no-referrer"},
+	for _, tc := range []struct{ path, referrer, csp string }{
+		{"/", "same-origin", appCSP},
+		{"/riwayat", "same-origin", appCSP},
+		{"/api/session", "same-origin", appCSP},
+		{"/api/transactions", "same-origin", appCSP},
+		{"/healthz", "same-origin", appCSP},
+		{"/report/no-such-slug", "no-referrer", ""},
 	} {
 		rec := httptest.NewRecorder()
 		r.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, tc.path, nil))
@@ -105,11 +105,33 @@ func TestEveryResponseCarriesTheSecurityHeaders(t *testing.T) {
 			"X-Content-Type-Options":  "nosniff",
 			"Referrer-Policy":         tc.referrer,
 			"X-Frame-Options":         "DENY",
-			"Content-Security-Policy": "frame-ancestors 'none'",
+			"Content-Security-Policy": tc.csp,
 		} {
+			if want == "" {
+				continue
+			}
 			if got := h.Get(name); got != want {
 				t.Errorf("GET %s (%d): %s = %q, want %q", tc.path, rec.Code, name, got, want)
 			}
 		}
+		if csp := h.Get("Content-Security-Policy"); !strings.Contains(csp, "frame-ancestors 'none'") {
+			t.Errorf("GET %s: Content-Security-Policy = %q, want frame-ancestors 'none'", tc.path, csp)
+		}
+	}
+}
+
+// The app's script-src is 'self' alone: no 'unsafe-inline', no
+// 'unsafe-eval', no other origin. That is the directive the policy exists
+// for, so it is pinned on its own rather than only as part of a string.
+func TestAppCSPAllowsOnlySameOriginScript(t *testing.T) {
+	t.Parallel()
+	var scriptSrc string
+	for d := range strings.SplitSeq(appCSP, ";") {
+		if f := strings.Fields(d); len(f) > 0 && f[0] == "script-src" {
+			scriptSrc = strings.Join(f[1:], " ")
+		}
+	}
+	if scriptSrc != "'self'" {
+		t.Errorf("appCSP script-src = %q, want 'self'", scriptSrc)
 	}
 }

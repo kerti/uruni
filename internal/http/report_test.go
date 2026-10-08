@@ -116,6 +116,49 @@ func TestReportKnownSlugIs200WithEveryHeader(t *testing.T) {
 	}
 }
 
+// Every report response, the page and its 404, carries a nonce CSP whose
+// nonce is the one on the page's <style> and <script>, and every <style> and
+// <script> on the page carries it - an untagged one would be blocked in the
+// browser. A second request draws a different nonce.
+func TestReportCSPNonceMatchesThePage(t *testing.T) {
+	t.Parallel()
+	f := newReportFixture(t, "Kas RT 05")
+	f.post(t, "in", 250_000, "2026-09-15")
+
+	nonceRe := regexp.MustCompile(`script-src 'nonce-([A-Za-z0-9]+)'`)
+	seen := map[string]bool{}
+	for _, path := range []string{"/report/" + f.fund.ReportSlug, "/report/" + f.fund.ReportSlug, "/report/no-such-slug"} {
+		rec := f.get(t, path)
+		csp := rec.Header().Get("Content-Security-Policy")
+		m := nonceRe.FindStringSubmatch(csp)
+		if m == nil {
+			t.Fatalf("GET %s: Content-Security-Policy = %q, want a script-src nonce", path, csp)
+		}
+		nonce := m[1]
+		if want := reportCSP(nonce); csp != want {
+			t.Errorf("GET %s: Content-Security-Policy = %q, want %q", path, csp, want)
+		}
+		if seen[nonce] {
+			t.Errorf("GET %s: nonce %q repeats an earlier response's", path, nonce)
+		}
+		seen[nonce] = true
+
+		body := rec.Body.String()
+		tagged := `nonce="` + nonce + `"`
+		for _, tag := range regexp.MustCompile(`<(script|style)\b[^>]*>`).FindAllString(body, -1) {
+			if !strings.Contains(tag, tagged) {
+				t.Errorf("GET %s: %s lacks this response's nonce", path, tag)
+			}
+		}
+		if !strings.Contains(body, "<style "+tagged+">") {
+			t.Errorf("GET %s: the page's <style> does not carry the nonce", path)
+		}
+		if path != "/report/no-such-slug" && !strings.Contains(body, "<script "+tagged+">") {
+			t.Errorf("GET %s: the page's <script> does not carry the nonce", path)
+		}
+	}
+}
+
 func TestReportUnknownSlugIs404NamingNoFund(t *testing.T) {
 	t.Parallel()
 	f := newReportFixture(t, "Kas RT 05")

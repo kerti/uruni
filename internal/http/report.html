@@ -6,7 +6,7 @@
 <meta name="robots" content="noindex, nofollow">
 <meta name="referrer" content="no-referrer">
 <title>{{.Title}}</title>
-<style>{{.Style}}</style>
+<style nonce="{{.Nonce}}">{{.Style}}</style>
 </head>
 <body>
 <main>{{end}}
@@ -200,7 +200,7 @@
 </section>
 {{end}}
 {{end}}
-<script>
+<script nonce="{{.Nonce}}">
 // Progressive enhancement: a select submits its form on change, so the
 // buttons go. An empty "Semua" choice is left out of the URL, keeping a
 // shared link short. Without JavaScript the page is the same plain GET forms.

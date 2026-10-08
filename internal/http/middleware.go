@@ -92,6 +92,27 @@ func logPath(p string) string {
 	return reportPathPrefix + ":slug/" + tail
 }
 
+// appCSP is the Content-Security-Policy every response carries unless it
+// sets its own (the public report does, renderReport). The SPA is built by
+// Vite into same-origin files with no inline script, so scripts, fonts,
+// fetches, the service worker and the manifest are 'self' only - an injected
+// <script> or a script from anywhere else does not run.
+//
+// style-src keeps 'unsafe-inline' on purpose. Radix's Dialog locks body
+// scroll by injecting a <style> whose text is computed at runtime (the
+// scrollbar gap), so no hash can cover it, and a nonce cannot either: the
+// service worker precaches index.html, so a per-request nonce would be stale
+// on every later launch. Inline style cannot run script; script-src is the
+// line that matters, and it holds.
+//
+// img-src allows blob: for the receipt photo's preview before upload
+// (ReceiptPicker). object-src, base-uri and frame-ancestors close the
+// remaining ways in: no plugins, no <base> rewriting relative URLs, and no
+// framing, so a treasurer cannot be clickjacked into a write.
+const appCSP = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; " +
+	"img-src 'self' blob:; font-src 'self'; connect-src 'self'; worker-src 'self'; manifest-src 'self'; " +
+	"object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'"
+
 // securityHeaders sets the headers every response carries (#447), whatever
 // route answers it - the SPA shell, its assets, /api, the public report.
 //
@@ -99,10 +120,8 @@ func logPath(p string) string {
 //   - Referrer-Policy same-origin: no app URL leaves for another site. The
 //     public report tightens this to no-referrer itself (setReportHeaders),
 //     since its own URL is the secret.
-//   - X-Frame-Options and CSP frame-ancestors: nothing of Uruni's renders
-//     inside another site's frame, so a treasurer cannot be clickjacked into
-//     a write. The CSP carries only that directive; a full policy is its own
-//     piece of work.
+//   - X-Frame-Options and appCSP: see appCSP. X-Frame-Options repeats
+//     frame-ancestors for browsers that predate it.
 //
 // HSTS is not here: the app speaks plain HTTP behind Caddy, which terminates
 // TLS and sets it (Caddyfile).
@@ -112,7 +131,7 @@ func securityHeaders(next http.Handler) http.Handler {
 		h.Set("X-Content-Type-Options", "nosniff")
 		h.Set("Referrer-Policy", "same-origin")
 		h.Set("X-Frame-Options", "DENY")
-		h.Set("Content-Security-Policy", "frame-ancestors 'none'")
+		h.Set("Content-Security-Policy", appCSP)
 		next.ServeHTTP(w, r)
 	})
 }

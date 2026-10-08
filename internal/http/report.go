@@ -10,6 +10,7 @@ package http
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
 	"database/sql"
 	_ "embed"
 	"errors"
@@ -41,6 +42,10 @@ type reportPage struct {
 	Title string
 	Style template.CSS
 	Text  reportCopy
+
+	// Nonce is this response's CSP nonce, stamped on the page's one <style>
+	// and one <script> (renderReport sets it; callers leave it empty).
+	Nonce string
 
 	FundName string
 	AsOf     string
@@ -563,15 +568,30 @@ func setReportHeaders(w http.ResponseWriter) {
 	h.Set("Cache-Control", "no-store")
 }
 
+// reportCSP is the public report's own Content-Security-Policy, replacing
+// the app's (securityHeaders). The page is one self-contained response: its
+// only script and its only style are inline, and both carry this response's
+// nonce, so nothing else - an injected tag, an attribute handler, a file from
+// anywhere - runs or applies. img-src covers the browser's favicon request;
+// form-action keeps the filter forms on this origin.
+func reportCSP(nonce string) string {
+	return "default-src 'none'; script-src 'nonce-" + nonce + "'; style-src 'nonce-" + nonce + "'; " +
+		"img-src 'self'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'"
+}
+
 // renderReport executes into a buffer first, so a template error is a clean
-// 500 rather than half a page under a 200 that has already gone out.
+// 500 rather than half a page under a 200 that has already gone out. Each
+// render draws a fresh nonce: the page is no-store, so no copy of it outlives
+// the header that names its nonce.
 func renderReport(w http.ResponseWriter, logger *slog.Logger, status int, name string, page reportPage) {
+	page.Nonce = rand.Text()
 	var buf bytes.Buffer
 	if err := reportTemplates.ExecuteTemplate(&buf, name, page); err != nil {
 		logger.Error("report: rendering", "template", name, "error", err)
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
 	}
+	w.Header().Set("Content-Security-Policy", reportCSP(page.Nonce))
 	w.WriteHeader(status)
 	_, _ = buf.WriteTo(w)
 }
