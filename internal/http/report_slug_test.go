@@ -16,7 +16,7 @@ import (
 // report_url the API builds can be asserted on.
 func authedRouterWithBaseURL(t *testing.T, sqlDB *sql.DB, baseURL string) http.Handler {
 	t.Helper()
-	r := New(testAssets(), testBuild, ledger.New(sqlDB), store.New(sqlDB), sqlDB, nil, testLogger(), auth.New(sqlDB), baseURL, t.TempDir(), t.TempDir())
+	r := New(testAssets(), testBuild, ledger.New(sqlDB), store.New(sqlDB), sqlDB, nil, testLogger(), auth.New(sqlDB), baseURL, t.TempDir(), t.TempDir(), nil)
 	reg := postRegister(t, r, "treasurer@example.org", "correct-horse-battery")
 	if reg.Code != http.StatusCreated {
 		t.Fatalf("fixture POST /api/register = %d, want %d", reg.Code, http.StatusCreated)

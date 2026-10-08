@@ -389,7 +389,7 @@ func (a *api) confirmRestore(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ip := "restore-ip:" + clientIP(r)
+	ip := "restore-ip:" + a.clientIP(r)
 	if a.loginLimiter.blocked(ip) {
 		writeAPIError(w, http.StatusTooManyRequests, "too_many_requests", "Too many attempts. Try again later.")
 		return

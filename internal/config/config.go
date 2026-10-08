@@ -15,6 +15,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net/netip"
 	"net/url"
 	"os"
 	"strconv"
@@ -84,6 +85,12 @@ type Config struct {
 	// LogLevel and LogFormat configure the slog handler main builds (ADR-022).
 	LogLevel  slog.Level
 	LogFormat string
+	// TrustedProxies are the peers whose X-Forwarded-For is believed (#447):
+	// the login and restore-confirm rate limiters key on the client address,
+	// and a header from anyone else is a value the client chose. Empty - the
+	// default - ignores the header and keys on the TCP peer itself.
+	// docker-compose.yml sets it so the shipped Caddy is trusted.
+	TrustedProxies []netip.Prefix
 }
 
 // Load reads and validates the whole environment table in ADR-019. It returns
@@ -119,8 +126,37 @@ func Load() (Config, error) {
 	if err := loadLogging(&cfg); err != nil {
 		return Config{}, err
 	}
+	if err := loadTrustedProxies(&cfg); err != nil {
+		return Config{}, err
+	}
 
 	return cfg, nil
+}
+
+// loadTrustedProxies reads URUNI_TRUSTED_PROXIES: a comma-separated list of
+// CIDR ranges or bare addresses. A bare address is its own single-host range.
+func loadTrustedProxies(cfg *Config) error {
+	raw := strings.TrimSpace(os.Getenv("URUNI_TRUSTED_PROXIES"))
+	if raw == "" {
+		return nil
+	}
+	for _, part := range strings.Split(raw, ",") {
+		part = strings.TrimSpace(part)
+		if part == "" {
+			continue
+		}
+		prefix, err := netip.ParsePrefix(part)
+		if err != nil {
+			addr, addrErr := netip.ParseAddr(part)
+			if addrErr != nil {
+				return invalidValue("URUNI_TRUSTED_PROXIES", raw,
+					"want comma-separated CIDR ranges or addresses, e.g. 172.16.0.0/12,10.0.0.0/8")
+			}
+			prefix = netip.PrefixFrom(addr, addr.BitLen())
+		}
+		cfg.TrustedProxies = append(cfg.TrustedProxies, prefix.Masked())
+	}
+	return nil
 }
 
 func loadPort(cfg *Config) error {

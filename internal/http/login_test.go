@@ -5,11 +5,16 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net"
 	"net/http"
 	"net/http/httptest"
+	"net/netip"
+	"strings"
 	"testing"
 	"time"
 
+	"github.com/kerti/uruni/internal/auth"
+	"github.com/kerti/uruni/internal/ledger"
 	"github.com/kerti/uruni/internal/store"
 )
 
@@ -19,11 +24,10 @@ func postLogin(t *testing.T, r http.Handler, email, password string) *httptest.R
 }
 
 // postLoginFrom is postLogin's twin for the rate-limit tests, which need
-// each request to carry its own source IP - X-Forwarded-For, since
-// httptest.NewRequest pins RemoteAddr to the same fixed address on every
-// call (see clientIP's own comment on why that header is trusted at all).
-// ip == "" leaves the default in place, so postLogin above is exactly this
-// with no header added.
+// each request to carry its own source IP - as the TCP peer, since the test
+// router trusts no proxy and so reads no X-Forwarded-For (clientIP, #447).
+// ip == "" keeps httptest.NewRequest's fixed RemoteAddr, so postLogin above
+// is exactly this with nothing changed.
 func postLoginFrom(t *testing.T, r http.Handler, email, password, ip string) *httptest.ResponseRecorder {
 	t.Helper()
 	//nolint:gosec // not a credential leak - this is the request body POST /api/login's own contract requires
@@ -33,7 +37,7 @@ func postLoginFrom(t *testing.T, r http.Handler, email, password, ip string) *ht
 	}
 	req := httptest.NewRequest(http.MethodPost, "/api/login", bytes.NewReader(body))
 	if ip != "" {
-		req.Header.Set("X-Forwarded-For", ip)
+		req.RemoteAddr = net.JoinHostPort(ip, "1234")
 	}
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, req)
@@ -235,5 +239,170 @@ func TestPostLoginRejectsAMalformedBody(t *testing.T) {
 
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("POST /api/login(malformed body) = %d, want %d (body: %s)", rec.Code, http.StatusBadRequest, rec.Body.String())
+	}
+}
+
+// TestPostLoginIgnoresAForgedForwardedForFromAnUntrustedPeer is #447's
+// regression: a caller who reaches the app directly and names a fresh
+// X-Forwarded-For on every guess is still counted under its own address.
+func TestPostLoginIgnoresAForgedForwardedForFromAnUntrustedPeer(t *testing.T) {
+	t.Parallel()
+	r, _ := testRouterAndDB(t)
+
+	post := func(i int) *httptest.ResponseRecorder {
+		//nolint:gosec // not a credential leak - this is the request body POST /api/login's own contract requires
+		body, err := json.Marshal(loginRequest{Email: fmt.Sprintf("nobody-%d@example.org", i), Password: "whatever"})
+		if err != nil {
+			t.Fatalf("marshaling login request: %v", err)
+		}
+		req := httptest.NewRequest(http.MethodPost, "/api/login", bytes.NewReader(body))
+		req.Header.Set("X-Forwarded-For", fmt.Sprintf("198.51.100.%d", i+1))
+		rec := httptest.NewRecorder()
+		r.ServeHTTP(rec, req)
+		return rec
+	}
+
+	for i := 0; i < loginRateLimitMaxAttempts; i++ {
+		if rec := post(i); rec.Code != http.StatusUnauthorized {
+			t.Fatalf("attempt %d = %d, want %d (body: %s)", i+1, rec.Code, http.StatusUnauthorized, rec.Body.String())
+		}
+	}
+	if rec := post(loginRateLimitMaxAttempts); rec.Code != http.StatusTooManyRequests {
+		t.Fatalf("attempt %d under a fresh forged address = %d, want %d", loginRateLimitMaxAttempts+1, rec.Code, http.StatusTooManyRequests)
+	}
+}
+
+func TestClientIP(t *testing.T) {
+	t.Parallel()
+	proxies := []netip.Prefix{netip.MustParsePrefix("10.0.0.0/8"), netip.MustParsePrefix("fd00::/8")}
+
+	for _, tc := range []struct {
+		name    string
+		trusted []netip.Prefix
+		remote  string
+		xff     []string
+		want    string
+	}{
+		{"no proxy, no header: the peer", nil, "203.0.113.7:4321", nil, "203.0.113.7"},
+		{"no trusted proxies: the header is ignored", nil, "203.0.113.7:4321", []string{"198.51.100.1"}, "203.0.113.7"},
+		{"an untrusted peer's header is ignored", proxies, "203.0.113.7:4321", []string{"198.51.100.1"}, "203.0.113.7"},
+		{"a trusted peer: the hop it saw", proxies, "10.0.0.2:4321", []string{"203.0.113.7"}, "203.0.113.7"},
+		{"a trusted peer, no header: the peer", proxies, "10.0.0.2:4321", nil, "10.0.0.2"},
+		{"entries a client wrote, left of the first untrusted hop, are never read", proxies, "10.0.0.2:4321", []string{"198.51.100.1, 203.0.113.7"}, "203.0.113.7"},
+		{"a chain of trusted proxies is walked past", proxies, "10.0.0.2:4321", []string{"203.0.113.7, 10.9.9.9"}, "203.0.113.7"},
+		{"repeated headers read as one list", proxies, "10.0.0.2:4321", []string{"198.51.100.1", "203.0.113.7"}, "203.0.113.7"},
+		{"a hop that is not an address stops at the last trusted one", proxies, "10.0.0.2:4321", []string{"203.0.113.7, junk"}, "10.0.0.2"},
+		{"every hop trusted: the left-most", proxies, "10.0.0.2:4321", []string{"10.3.3.3, 10.9.9.9"}, "10.3.3.3"},
+		{"IPv6 peer", proxies, "[fd00::2]:4321", []string{"2001:db8::7"}, "2001:db8::7"},
+		{"an IPv4-mapped peer is its IPv4 address", proxies, "[::ffff:10.0.0.2]:4321", []string{"203.0.113.7"}, "203.0.113.7"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			req := httptest.NewRequest(http.MethodPost, "/api/login", nil)
+			req.RemoteAddr = tc.remote
+			for _, v := range tc.xff {
+				req.Header.Add("X-Forwarded-For", v)
+			}
+			if got := (&api{trustedProxies: tc.trusted}).clientIP(req); got != tc.want {
+				t.Errorf("clientIP = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+// TestPostLoginRefusesAnOversizedBody is #447's: login is reachable by
+// anyone, so its body is capped before it is decoded (decodeJSON).
+func TestPostLoginRefusesAnOversizedBody(t *testing.T) {
+	t.Parallel()
+	r, _ := testRouterAndDB(t)
+
+	body := `{"email":"` + strings.Repeat("a", maxJSONBodyBytes) + `@example.org","password":"x"}`
+	req := httptest.NewRequest(http.MethodPost, "/api/login", strings.NewReader(body))
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusRequestEntityTooLarge {
+		t.Fatalf("POST /api/login with a %d-byte body = %d, want %d", len(body), rec.Code, http.StatusRequestEntityTooLarge)
+	}
+	if got := decodeError(t, rec); got.Code != "request_too_large" {
+		t.Errorf("error code = %q, want %q", got.Code, "request_too_large")
+	}
+}
+
+// TestPostLoginBehindATrustedProxyCountsEachForwardedClientApart pins the
+// wiring clientIP's own table cannot see: a router built with a trusted
+// proxy (httptest's fixed peer, 192.0.2.1) reads X-Forwarded-For, so one
+// client tripping the IP counter leaves the next client behind the same
+// proxy untouched. Drop trustedProxies anywhere between New and api and
+// every forwarded client shares the proxy's counter - and this fails.
+func TestPostLoginBehindATrustedProxyCountsEachForwardedClientApart(t *testing.T) {
+	t.Parallel()
+	sqlDB := testStoreDB(t)
+	trusted := []netip.Prefix{netip.MustParsePrefix("192.0.2.0/24")}
+	r := New(testAssets(), testBuild, ledger.New(sqlDB), store.New(sqlDB), sqlDB, nil, testLogger(), auth.New(sqlDB), "", t.TempDir(), t.TempDir(), trusted)
+
+	post := func(email, forwardedFor string) *httptest.ResponseRecorder {
+		//nolint:gosec // not a credential leak - this is the request body POST /api/login's own contract requires
+		body, err := json.Marshal(loginRequest{Email: email, Password: "whatever"})
+		if err != nil {
+			t.Fatalf("marshaling login request: %v", err)
+		}
+		req := httptest.NewRequest(http.MethodPost, "/api/login", bytes.NewReader(body))
+		req.Header.Set("X-Forwarded-For", forwardedFor)
+		rec := httptest.NewRecorder()
+		r.ServeHTTP(rec, req)
+		return rec
+	}
+
+	const first, second = "203.0.113.7", "198.51.100.9"
+	for i := 0; i < loginRateLimitMaxAttempts; i++ {
+		if rec := post(fmt.Sprintf("nobody-%d@example.org", i), first); rec.Code != http.StatusUnauthorized {
+			t.Fatalf("attempt %d from %s = %d, want %d (body: %s)", i+1, first, rec.Code, http.StatusUnauthorized, rec.Body.String())
+		}
+	}
+	if rec := post("nobody-overflow@example.org", first); rec.Code != http.StatusTooManyRequests {
+		t.Fatalf("attempt %d from %s = %d, want %d", loginRateLimitMaxAttempts+1, first, rec.Code, http.StatusTooManyRequests)
+	}
+	if rec := post("someone-else@example.org", second); rec.Code != http.StatusUnauthorized {
+		t.Fatalf("first attempt from %s behind the same proxy = %d, want %d (body: %s)", second, rec.Code, http.StatusUnauthorized, rec.Body.String())
+	}
+}
+
+// TestPartialUpdateDecodersRefuseAnOversizedBody covers the three PATCH
+// decoders #447 moved off their own json.NewDecoder onto decodeJSON. Each
+// handler resolves its record before decoding, so the decoders are driven
+// directly: the cap is theirs to honour, not the route's.
+func TestPartialUpdateDecodersRefuseAnOversizedBody(t *testing.T) {
+	t.Parallel()
+	body := `{"name":"` + strings.Repeat("a", maxJSONBodyBytes) + `"}`
+
+	for _, tc := range []struct {
+		name   string
+		decode func(http.ResponseWriter, *http.Request) bool
+	}{
+		{"account", func(w http.ResponseWriter, r *http.Request) bool {
+			_, ok := decodeUpdateAccountRequest(w, r)
+			return ok
+		}},
+		{"member", func(w http.ResponseWriter, r *http.Request) bool { _, ok := decodeUpdateMemberRequest(w, r); return ok }},
+		{"reimbursement", func(w http.ResponseWriter, r *http.Request) bool {
+			_, ok := decodeUpdateReimbursementRequest(w, r)
+			return ok
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			req := httptest.NewRequest(http.MethodPatch, "/api/x/1", strings.NewReader(body))
+			rec := httptest.NewRecorder()
+			if tc.decode(rec, req) {
+				t.Fatalf("decoder accepted a %d-byte body", len(body))
+			}
+			if rec.Code != http.StatusRequestEntityTooLarge {
+				t.Fatalf("status = %d, want %d (body: %s)", rec.Code, http.StatusRequestEntityTooLarge, rec.Body.String())
+			}
+			if got := decodeError(t, rec); got.Code != "request_too_large" {
+				t.Errorf("error code = %q, want %q", got.Code, "request_too_large")
+			}
+		})
 	}
 }

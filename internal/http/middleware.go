@@ -3,6 +3,7 @@ package http
 import (
 	"log/slog"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5/middleware"
@@ -45,6 +46,11 @@ func (a *api) sessionRequired(next http.Handler) http.Handler {
 // is where a member name, a note or an amount would end up, and ADR-022
 // forbids logging any of those. Method, path and status are route shape, not
 // payload.
+//
+// The path itself is redacted where it carries a secret (#447): the public
+// report's slug is the only thing guarding it (ADR-035), and logs travel -
+// pasted into a bug report, shipped to a collector - so /report/<slug> and
+// its sub-paths log as /report/:slug (see logPath).
 func requestLogger(logger *slog.Logger) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -59,10 +65,73 @@ func requestLogger(logger *slog.Logger) func(http.Handler) http.Handler {
 
 			logger.Info("request",
 				"method", r.Method,
-				"path", r.URL.Path,
+				"path", logPath(r.URL.Path),
 				"status", ww.Status(),
 				"duration_ms", time.Since(start).Milliseconds(),
 			)
 		})
 	}
+}
+
+// reportPathPrefix is where the public report's slug sits in a path.
+const reportPathPrefix = "/report/"
+
+// logPath is the path requestLogger writes: p itself, except that the
+// segment after /report/ - the report's slug - becomes ":slug". Done on the
+// raw path rather than chi's route pattern so a /report/ path no route
+// matches (a mistyped sub-path, a probe) is redacted too.
+func logPath(p string) string {
+	rest, ok := strings.CutPrefix(p, reportPathPrefix)
+	if !ok || rest == "" {
+		return p
+	}
+	_, tail, hasTail := strings.Cut(rest, "/")
+	if !hasTail {
+		return reportPathPrefix + ":slug"
+	}
+	return reportPathPrefix + ":slug/" + tail
+}
+
+// appCSP is the Content-Security-Policy every response carries unless it
+// sets its own (the public report does, renderReport). The SPA is built by
+// Vite into same-origin files with no inline script, so scripts, fonts,
+// fetches, the service worker and the manifest are 'self' only - an injected
+// <script> or a script from anywhere else does not run.
+//
+// style-src keeps 'unsafe-inline' on purpose. Radix's Dialog locks body
+// scroll by injecting a <style> whose text is computed at runtime (the
+// scrollbar gap), so no hash can cover it, and a nonce cannot either: the
+// service worker precaches index.html, so a per-request nonce would be stale
+// on every later launch. Inline style cannot run script; script-src is the
+// line that matters, and it holds.
+//
+// img-src allows blob: for the receipt photo's preview before upload
+// (ReceiptPicker). object-src, base-uri and frame-ancestors close the
+// remaining ways in: no plugins, no <base> rewriting relative URLs, and no
+// framing, so a treasurer cannot be clickjacked into a write.
+const appCSP = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; " +
+	"img-src 'self' blob:; font-src 'self'; connect-src 'self'; worker-src 'self'; manifest-src 'self'; " +
+	"object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'"
+
+// securityHeaders sets the headers every response carries (#447), whatever
+// route answers it - the SPA shell, its assets, /api, the public report.
+//
+//   - nosniff: a response is only ever the type it says it is.
+//   - Referrer-Policy same-origin: no app URL leaves for another site. The
+//     public report tightens this to no-referrer itself (setReportHeaders),
+//     since its own URL is the secret.
+//   - X-Frame-Options and appCSP: see appCSP. X-Frame-Options repeats
+//     frame-ancestors for browsers that predate it.
+//
+// HSTS is not here: the app speaks plain HTTP behind Caddy, which terminates
+// TLS and sets it (Caddyfile).
+func securityHeaders(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		h := w.Header()
+		h.Set("X-Content-Type-Options", "nosniff")
+		h.Set("Referrer-Policy", "same-origin")
+		h.Set("X-Frame-Options", "DENY")
+		h.Set("Content-Security-Policy", appCSP)
+		next.ServeHTTP(w, r)
+	})
 }

@@ -4,8 +4,10 @@ import (
 	"errors"
 	"log/slog"
 	"maps"
+	"net/netip"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -18,7 +20,7 @@ func env(t *testing.T, overrides map[string]string) {
 	t.Helper()
 	for _, name := range []string{
 		"URUNI_DB", "PORT", "URUNI_BASE_URL", "URUNI_UPLOADS_DIR", "URUNI_BACKUP_DIR",
-		"URUNI_LOG_LEVEL", "URUNI_LOG_FORMAT",
+		"URUNI_LOG_LEVEL", "URUNI_LOG_FORMAT", "URUNI_TRUSTED_PROXIES",
 	} {
 		t.Setenv(name, "")
 	}
@@ -57,6 +59,9 @@ func TestLoadDefaultsEverythingItCan(t *testing.T) {
 	if cfg.LogFormat != LogFormatText {
 		t.Errorf("LogFormat = %q, want %q", cfg.LogFormat, LogFormatText)
 	}
+	if len(cfg.TrustedProxies) != 0 {
+		t.Errorf("TrustedProxies = %v, want none - no header is believed by default", cfg.TrustedProxies)
+	}
 }
 
 func TestLoadReadsEveryVariable(t *testing.T) {
@@ -68,6 +73,8 @@ func TestLoadReadsEveryVariable(t *testing.T) {
 		"URUNI_BASE_URL":    testBaseURL + "/",
 		"URUNI_LOG_LEVEL":   "debug",
 		"URUNI_LOG_FORMAT":  "json",
+		// Its parsing has its own tests below; here it only has to arrive.
+		"URUNI_TRUSTED_PROXIES": "10.0.0.0/8",
 	})
 
 	cfg, err := Load()
@@ -82,11 +89,12 @@ func TestLoadReadsEveryVariable(t *testing.T) {
 		BackupDir:  "/backups",
 		// The trailing slash is trimmed so callers can join paths without
 		// producing "https://host//report/xyz".
-		BaseURL:   testBaseURL,
-		LogLevel:  slog.LevelDebug,
-		LogFormat: LogFormatJSON,
+		BaseURL:        testBaseURL,
+		LogLevel:       slog.LevelDebug,
+		LogFormat:      LogFormatJSON,
+		TrustedProxies: []netip.Prefix{netip.MustParsePrefix("10.0.0.0/8")},
 	}
-	if cfg != want {
+	if !reflect.DeepEqual(cfg, want) {
 		t.Errorf("Load() = %+v, want %+v", cfg, want)
 	}
 }
@@ -309,5 +317,32 @@ func TestEnsureBackupDirWritableRefusesAReadOnlyDir(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "URUNI_BACKUP_DIR") {
 		t.Errorf("EnsureBackupDirWritable(read-only dir) = %q, want it to name URUNI_BACKUP_DIR", err)
+	}
+}
+
+func TestLoadReadsTrustedProxies(t *testing.T) {
+	env(t, map[string]string{"URUNI_BASE_URL": testBaseURL, "URUNI_TRUSTED_PROXIES": " 172.16.0.0/12, 10.1.2.3 ,fd00::/8,"})
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() = %v, want nil", err)
+	}
+	want := []string{"172.16.0.0/12", "10.1.2.3/32", "fd00::/8"}
+	if len(cfg.TrustedProxies) != len(want) {
+		t.Fatalf("TrustedProxies = %v, want %v", cfg.TrustedProxies, want)
+	}
+	for i, p := range cfg.TrustedProxies {
+		if p.String() != want[i] {
+			t.Errorf("TrustedProxies[%d] = %s, want %s", i, p, want[i])
+		}
+	}
+}
+
+func TestLoadRefusesABadTrustedProxy(t *testing.T) {
+	env(t, map[string]string{"URUNI_BASE_URL": testBaseURL, "URUNI_TRUSTED_PROXIES": "172.16.0.0/12,caddy"})
+
+	_, err := Load()
+	if !errors.Is(err, ErrInvalidConfig) || !strings.Contains(err.Error(), "URUNI_TRUSTED_PROXIES") {
+		t.Fatalf("Load() = %v, want ErrInvalidConfig naming URUNI_TRUSTED_PROXIES", err)
 	}
 }

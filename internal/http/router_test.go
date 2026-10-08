@@ -65,7 +65,7 @@ func authedRouterFor(t *testing.T, sqlDB *sql.DB) http.Handler {
 // a test can stand on either side of a Jakarta month boundary.
 func authedRouterAt(t *testing.T, sqlDB *sql.DB, now func() time.Time) http.Handler {
 	t.Helper()
-	r := newWithClock(testAssets(), testBuild, ledger.New(sqlDB), store.New(sqlDB), sqlDB, nil, testLogger(), auth.New(sqlDB), "", t.TempDir(), t.TempDir(), now)
+	r := newWithClock(testAssets(), testBuild, ledger.New(sqlDB), store.New(sqlDB), sqlDB, nil, testLogger(), auth.New(sqlDB), "", t.TempDir(), t.TempDir(), nil, now)
 
 	reg := postRegister(t, r, "treasurer@example.org", "correct-horse-battery")
 	if reg.Code != http.StatusCreated {
@@ -133,7 +133,7 @@ func TestHealthzReportsTheBuildItWasStampedWith(t *testing.T) {
 	untagged := Build{Version: "dev", Commit: "deadbee"}
 	sqlDB := testStoreDB(t)
 	rec := httptest.NewRecorder()
-	New(testAssets(), untagged, ledger.New(sqlDB), store.New(sqlDB), sqlDB, nil, testLogger(), auth.New(sqlDB), "", t.TempDir(), t.TempDir()).
+	New(testAssets(), untagged, ledger.New(sqlDB), store.New(sqlDB), sqlDB, nil, testLogger(), auth.New(sqlDB), "", t.TempDir(), t.TempDir(), nil).
 		ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/healthz", nil))
 
 	var got health
@@ -153,7 +153,7 @@ func TestHealthzFailsWhenTheDatabaseFileCheckFails(t *testing.T) {
 	sqlDB := testStoreDB(t)
 	replaced := func() error { return errors.New("the database file was replaced") }
 	rec := httptest.NewRecorder()
-	New(testAssets(), testBuild, ledger.New(sqlDB), store.New(sqlDB), sqlDB, replaced, testLogger(), auth.New(sqlDB), "", t.TempDir(), t.TempDir()).
+	New(testAssets(), testBuild, ledger.New(sqlDB), store.New(sqlDB), sqlDB, replaced, testLogger(), auth.New(sqlDB), "", t.TempDir(), t.TempDir(), nil).
 		ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/healthz", nil))
 
 	if rec.Code != http.StatusServiceUnavailable {
