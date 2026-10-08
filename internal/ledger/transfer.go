@@ -12,7 +12,7 @@ import (
 
 // leg identifies one side of a transfer pair: the account and purpose a
 // transaction posts against. It deliberately carries no direction -
-// postTransferPair derives that itself (out at from, in at to), so a caller
+// postTransferPairTx derives that itself (out at from, in at to), so a caller
 // cannot construct a pair with both legs pointing the same way, which would
 // not net to zero.
 type leg struct {
@@ -79,8 +79,7 @@ func normalizeNote(note *string) *string {
 // second l.withTx nested inside the first would try to open a second
 // connection while the outer transaction still holds the only one
 // ADR-004's SetMaxOpenConns(1) allows - a deadlock, not a safety net.
-// postTransferPair below is the thin, transaction-owning wrapper that
-// PostTransferBetweenAccounts and the existing tests still call.
+// Every caller opens its own withTx and passes its Querier in.
 func (l *Ledger) postTransferPairTx(ctx context.Context, q store.Querier, fundID int64, kind string, from, to leg, amount money.Amount, occurredOn string, note *string, correctsTransactionID *int64, reason *string) (store.Transfer, error) {
 	now := time.Now().Unix()
 
@@ -102,22 +101,6 @@ func (l *Ledger) postTransferPairTx(ctx context.Context, q store.Querier, fundID
 		}); err != nil {
 			return store.Transfer{}, fmt.Errorf("posting transfer leg (%s): %w", p.direction, err)
 		}
-	}
-	return transfer, nil
-}
-
-// postTransferPair wraps postTransferPairTx in its own withTx, for a caller
-// that has no outer transaction of its own to share - PostTransferBetweenAccounts,
-// and the reclass_purpose shape exercised directly in transfer_test.go.
-func (l *Ledger) postTransferPair(ctx context.Context, fundID int64, kind string, from, to leg, amount money.Amount, occurredOn string, note *string) (store.Transfer, error) {
-	var transfer store.Transfer
-	err := l.withTx(ctx, func(q store.Querier) error {
-		var err error
-		transfer, err = l.postTransferPairTx(ctx, q, fundID, kind, from, to, amount, occurredOn, note, nil, nil)
-		return err
-	})
-	if err != nil {
-		return store.Transfer{}, err
 	}
 	return transfer, nil
 }

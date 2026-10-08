@@ -5,6 +5,8 @@ import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
 import { configDefaults, defineConfig, type Plugin } from 'vitest/config'
 
+import { copy } from './src/copy/id.ts'
+
 // In production the Go binary is the single origin (ADR-001). In dev the two
 // halves run apart for hot-reload, so vite proxies the server's routes - `/api`
 // (JSON) and `/report` (SSR public report) - to Go on :8080 (ADR-020).
@@ -74,7 +76,7 @@ function pwa(): Plugin[] {
     manifest: {
       name: 'Uruni',
       short_name: 'Uruni',
-      description: 'Kas bersama yang selalu cocok.',
+      description: copy.app.tagline,
       lang: 'id',
       start_url: '/',
       scope: '/',
