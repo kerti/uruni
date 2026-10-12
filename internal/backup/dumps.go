@@ -17,6 +17,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"io/fs"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -24,6 +25,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/kerti/uruni/internal/store"
 )
 
 // Kind is a dump's own kind (ADR-012's "date and kind"): what wrote it, not
@@ -188,12 +191,11 @@ func ListDumps(backupDir string) ([]DumpInfo, error) {
 }
 
 // ChangeHash is the change-only check's own definition (ADR-012: "a hash of
-// uruni.json plus the receipt file list"): the exact bytes uruni.json was
-// marshaled to (docBytes - see BuildZip, whose return value this must
-// always be called with, never a fresh json.Marshal of the same Document,
-// so the hash matches what the zip actually holds), plus which of the
-// zip's receipt files are actually missing from the uploads volume
-// (missing - BuildZip/Export's own return value).
+// uruni.json plus the receipt file list"): the exact bytes uruni.json is
+// marshaled to (docBytes, from marshalDocument - the same bytes the zip holds,
+// never a fresh json.Marshal of the same Document), plus which of the
+// document's receipt files are actually missing from the uploads volume
+// (missing, from planDump's stat; sorted here, so order never matters).
 //
 // Document carries no wall-clock field of its own (no "exported at"
 // timestamp - see backup.go's own comment on why nothing instance- or
@@ -202,9 +204,12 @@ func ListDumps(backupDir string) ([]DumpInfo, error) {
 // byte-identical JSON, and therefore the same hash. missing is folded in
 // separately because it is the one fact about the zip's actual contents
 // that docBytes does not carry - every receipt row's path is already in
-// docBytes, but whether that file currently exists on the uploads volume is
-// not, and a photo silently disappearing from disk (never from a row) is a
-// real change to what the next dump would contain.
+// docBytes (so a receipt added, removed or re-pathed changes the hash through
+// the document), but whether that file currently exists on the uploads volume
+// is not, and a photo silently disappearing from disk (never from a row) is a
+// real change to what the next dump would contain. Receipt file contents are
+// deliberately not hashed: a stored receipt is written once under a fresh
+// random name and never rewritten (ADR-011), so its name identifies its bytes.
 func ChangeHash(docBytes []byte, missing []string) string {
 	sorted := append([]string(nil), missing...)
 	sort.Strings(sorted)
@@ -218,39 +223,101 @@ func ChangeHash(docBytes []byte, missing []string) string {
 	return hex.EncodeToString(h.Sum(nil))
 }
 
-// dumpMaterials is BuildDocument+BuildZip's combined output, computed once
-// and shared by Export, WriteDump and WriteDailyIfNeeded so none of them
-// re-reads the database or re-marshals uruni.json to get what another
-// already built.
-type dumpMaterials struct {
+// dumpPlan is everything a dump decision needs and nothing expensive: the
+// document, its exact bytes, which receipt files are gone from disk, and the
+// change hash over those. Building one reads the database and stats the
+// receipt files; it never reads a receipt's contents and builds no zip.
+type dumpPlan struct {
 	doc      Document
 	docBytes []byte
-	zipBytes []byte
+	receipts []store.Receipt
 	missing  []string
 	hash     string
 }
 
-// buildDumpMaterials is the one path every producer takes - the download,
-// the boot and daily dumps, the pre-restore safety net. The document is read
-// in one transaction (BuildDocument), and then, before any zip is built or
-// any file touched, its totals are recomputed from its own rows (CheckTotals,
-// #496): a document that disagrees with itself is refused here, so a bad
-// dump is never written - there is no temp file to clean up and nothing to
-// rename - and the caller's error log is the operator's signal. Restore is
-// the worst moment to learn a backup was torn; this is the cheapest.
-func buildDumpMaterials(ctx context.Context, read documentReader, uploadsDir string) (dumpMaterials, error) {
+// planDump is the cheap half of every producer, and the only part the hourly
+// scheduler runs on an unchanged fund. The document is read in one
+// transaction (BuildDocument), and then, before any zip is built or any file
+// touched, its totals are recomputed from its own rows (CheckTotals, #496): a
+// document that disagrees with itself is refused here, so a bad dump is never
+// written - there is no temp file to clean up and nothing to rename - and the
+// caller's error log is the operator's signal. Restore is the worst moment to
+// learn a backup was torn; this is the cheapest.
+//
+// The hash is ChangeHash over the document bytes and the receipts whose file
+// is missing from the uploads volume, found by os.Stat. Each receipt row's
+// path is already inside docBytes, so a receipt added, removed or replaced
+// changes the hash through the document, exactly as before; the stat adds the
+// one fact the document cannot carry (#501: it used to take reading every
+// photo into a zip to learn it).
+func planDump(ctx context.Context, read documentReader, uploadsDir string) (dumpPlan, error) {
 	doc, receipts, err := read(ctx)
 	if err != nil {
-		return dumpMaterials{}, err
+		return dumpPlan{}, err
 	}
 	if err := CheckTotals(doc); err != nil {
-		return dumpMaterials{}, fmt.Errorf("backup: refusing to write a document that disagrees with its own totals: %w", err)
+		return dumpPlan{}, fmt.Errorf("backup: refusing to write a document that disagrees with its own totals: %w", err)
 	}
-	zipBytes, docBytes, missing, err := BuildZip(doc, receipts, uploadsDir)
+	docBytes, err := marshalDocument(doc)
+	if err != nil {
+		return dumpPlan{}, err
+	}
+	missing, err := missingReceipts(uploadsDir, receipts)
+	if err != nil {
+		return dumpPlan{}, err
+	}
+	return dumpPlan{doc: doc, docBytes: docBytes, receipts: receipts, missing: missing, hash: ChangeHash(docBytes, missing)}, nil
+}
+
+// missingReceipts names the receipts whose file is absent from uploadsDir,
+// by stat alone - the same ErrNotExist test addReceiptToZip applies on
+// read, without the read. Any other stat error is a real fault and fails,
+// as the read would have.
+func missingReceipts(uploadsDir string, receipts []store.Receipt) ([]string, error) {
+	var missing []string
+	for _, r := range receipts {
+		//nolint:gosec // r.Path is a server-generated receipt filename, see addReceiptToZip
+		if _, err := os.Stat(filepath.Join(uploadsDir, r.Path)); err != nil {
+			if errors.Is(err, fs.ErrNotExist) {
+				missing = append(missing, r.Path)
+				continue
+			}
+			return nil, fmt.Errorf("backup: checking receipt %s: %w", r.Path, err)
+		}
+	}
+	return missing, nil
+}
+
+// dumpMaterials is a dumpPlan plus its zip: what a producer that has decided
+// to write (or download) holds.
+type dumpMaterials struct {
+	dumpPlan
+	zipBytes []byte
+}
+
+// zipFor builds the zip for a plan, reading every receipt file. missing is
+// replaced with what the zip pass itself found, which is what the archive
+// really lacks (the hash keeps the earlier stat; a photo vanishing between
+// the two shows up as a changed hash on the next tick).
+func (p dumpPlan) zipFor(assemble zipAssembler, uploadsDir string) (dumpMaterials, error) {
+	zipBytes, missing, err := assemble(p.docBytes, p.receipts, uploadsDir)
 	if err != nil {
 		return dumpMaterials{}, err
 	}
-	return dumpMaterials{doc: doc, docBytes: docBytes, zipBytes: zipBytes, missing: missing, hash: ChangeHash(docBytes, missing)}, nil
+	p.missing = missing
+	return dumpMaterials{dumpPlan: p, zipBytes: zipBytes}, nil
+}
+
+// buildDumpMaterials is the one path every producer takes when it has
+// decided it wants the archive - the download, the boot dump, the pre-restore
+// safety net and a daily dump the fund has changed for: planDump (read,
+// CheckTotals, hash), then the zip.
+func buildDumpMaterials(ctx context.Context, read documentReader, assemble zipAssembler, uploadsDir string) (dumpMaterials, error) {
+	plan, err := planDump(ctx, read, uploadsDir)
+	if err != nil {
+		return dumpMaterials{}, err
+	}
+	return plan.zipFor(assemble, uploadsDir)
 }
 
 // tempPrefix names writeThenRename's in-flight files. RemoveStaleTemps
@@ -282,37 +349,17 @@ func RemoveStaleTemps(backupDir string) (int, error) {
 }
 
 // writeThenRename is every dump write's own shape: build the whole file in
-// a temp name inside backupDir first, then one os.Rename into its final
-// name. A crash (or a kill -9) between the two can only ever leave a
-// half-written temp file behind - never a file under a name ListDumps,
-// ValidDumpName or ApplyRetention would recognise as a real dump, since
-// the temp prefix matches no dump pattern. The temp file is created inside
-// backupDir itself, not the system temp directory, so the final rename is
-// same-filesystem and therefore atomic.
+// a temp name inside backupDir first, sync it, then one rename into its final
+// name and a sync of backupDir (WriteFileAtomic, atomic.go, which also says
+// why each sync is there). A crash (or a kill -9) between the steps can only
+// ever leave a temp file behind - never a file under a name ListDumps,
+// ValidDumpName or ApplyRetention would recognise as a real dump, since the
+// temp prefix matches no dump pattern, and (with the syncs) never a dump name
+// pointing at an empty file.
 func writeThenRename(backupDir, name string, data []byte) error {
-	tmp, err := os.CreateTemp(backupDir, tempPrefix+"*")
-	if err != nil {
-		return fmt.Errorf("backup: creating temp file in %s: %w", backupDir, err)
+	if err := writeBytesAtomic(backupDir, tempPrefix+"*", name, data); err != nil {
+		return fmt.Errorf("backup: %w", err)
 	}
-	tmpPath := tmp.Name()
-	removeTemp := true
-	defer func() {
-		if removeTemp {
-			_ = os.Remove(tmpPath)
-		}
-	}()
-
-	if _, err := tmp.Write(data); err != nil {
-		_ = tmp.Close()
-		return fmt.Errorf("backup: writing %s: %w", tmpPath, err)
-	}
-	if err := tmp.Close(); err != nil {
-		return fmt.Errorf("backup: closing %s: %w", tmpPath, err)
-	}
-	if err := os.Rename(tmpPath, filepath.Join(backupDir, name)); err != nil {
-		return fmt.Errorf("backup: renaming %s to %s: %w", tmpPath, name, err)
-	}
-	removeTemp = false
 	return nil
 }
 
@@ -322,13 +369,13 @@ func writeThenRename(backupDir, name string, data []byte) error {
 // directly because both always want a fresh dump regardless of whether the
 // fund changed since the last one.
 func WriteDump(ctx context.Context, sqlDB *sql.DB, uploadsDir, backupDir string, kind Kind, now time.Time) (name string, err error) {
-	return writeDump(ctx, readDocumentFrom(sqlDB), uploadsDir, backupDir, kind, now)
+	return writeDump(ctx, readDocumentFrom(sqlDB), assembleZip, uploadsDir, backupDir, kind, now)
 }
 
 // writeDump is WriteDump over an injectable document reader (documentReader's
-// own comment says why).
-func writeDump(ctx context.Context, read documentReader, uploadsDir, backupDir string, kind Kind, now time.Time) (name string, err error) {
-	m, err := buildDumpMaterials(ctx, read, uploadsDir)
+// own comment says why) and zip assembler.
+func writeDump(ctx context.Context, read documentReader, assemble zipAssembler, uploadsDir, backupDir string, kind Kind, now time.Time) (name string, err error) {
+	m, err := buildDumpMaterials(ctx, read, assemble, uploadsDir)
 	if err != nil {
 		return "", err
 	}
@@ -357,11 +404,12 @@ func writeDump(ctx context.Context, read documentReader, uploadsDir, backupDir s
 // and a fund that changed twice in one day still gets only one daily dump
 // for that day, not a second one chasing the second change.
 func WriteDailyIfNeeded(ctx context.Context, sqlDB *sql.DB, uploadsDir, backupDir string, now time.Time) (name string, written bool, err error) {
-	return writeDailyIfNeeded(ctx, readDocumentFrom(sqlDB), uploadsDir, backupDir, now)
+	return writeDailyIfNeeded(ctx, readDocumentFrom(sqlDB), assembleZip, uploadsDir, backupDir, now)
 }
 
-// writeDailyIfNeeded is WriteDailyIfNeeded over an injectable document reader.
-func writeDailyIfNeeded(ctx context.Context, read documentReader, uploadsDir, backupDir string, now time.Time) (name string, written bool, err error) {
+// writeDailyIfNeeded is WriteDailyIfNeeded over an injectable document reader
+// and zip assembler.
+func writeDailyIfNeeded(ctx context.Context, read documentReader, assemble zipAssembler, uploadsDir, backupDir string, now time.Time) (name string, written bool, err error) {
 	dumps, err := ListDumps(backupDir)
 	if err != nil {
 		return "", false, err
@@ -383,12 +431,18 @@ func writeDailyIfNeeded(ctx context.Context, read documentReader, uploadsDir, ba
 		}
 	}
 
-	m, err := buildDumpMaterials(ctx, read, uploadsDir)
+	// Decide from the hash alone (#501): an unchanged fund assembles no zip
+	// and reads no receipt file's contents, however often this is called.
+	plan, err := planDump(ctx, read, uploadsDir)
 	if err != nil {
 		return "", false, err
 	}
-	if haveMostRecentDaily && shortHash(m.hash) == mostRecentDailyHash {
+	if haveMostRecentDaily && shortHash(plan.hash) == mostRecentDailyHash {
 		return "", false, nil
+	}
+	m, err := plan.zipFor(assemble, uploadsDir)
+	if err != nil {
+		return "", false, err
 	}
 
 	name = BuildDumpName(now, KindDaily, m.doc.FormatVersion, m.hash)

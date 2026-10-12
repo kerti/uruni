@@ -56,7 +56,7 @@ const (
 // instance, never less - and a treasurer who lost one photo can still take
 // a backup at all. Any other read failure is a real fault and still fails.
 func Export(ctx context.Context, sqlDB *sql.DB, uploadsDir string) (zipBytes []byte, missing []string, err error) {
-	m, err := buildDumpMaterials(ctx, readDocumentFrom(sqlDB), uploadsDir)
+	m, err := buildDumpMaterials(ctx, readDocumentFrom(sqlDB), assembleZip, uploadsDir)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -70,31 +70,58 @@ func Export(ctx context.Context, sqlDB *sql.DB, uploadsDir string) (zipBytes []b
 // stays cheap" - this is the one place that turns a Document into zip
 // bytes; Export and WriteDump both call it, neither reimplements it).
 //
-// docBytes is returned alongside zipBytes because WriteDump hashes exactly
-// those bytes for the change-only check (dumps.go's ChangeHash) - hashing
-// this return value rather than re-marshaling doc guarantees the hash is
-// computed over the same bytes that actually went into the zip.
+// The producers no longer call BuildZip: they marshal once (marshalDocument),
+// hash those bytes for the change-only check (dumps.go's planDump), and only
+// then assemble the zip (assembleZip) from the same bytes - so an unchanged
+// fund never builds one (#501). BuildZip is the two steps together, for a
+// caller that wants the archive unconditionally.
 func BuildZip(doc Document, receipts []store.Receipt, uploadsDir string) (zipBytes []byte, docBytes []byte, missing []string, err error) {
-	docBytes, err = json.MarshalIndent(doc, "", "  ")
+	docBytes, err = marshalDocument(doc)
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("backup: marshaling uruni.json: %w", err)
+		return nil, nil, nil, err
 	}
+	zipBytes, missing, err = assembleZip(docBytes, receipts, uploadsDir)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	return zipBytes, docBytes, missing, nil
+}
 
+// marshalDocument is the one place uruni.json's bytes are produced. The
+// change hash (planDump) and the zip (assembleZip) both take these exact
+// bytes, so the hash always describes what the zip holds.
+func marshalDocument(doc Document) ([]byte, error) {
+	docBytes, err := json.MarshalIndent(doc, "", "  ")
+	if err != nil {
+		return nil, fmt.Errorf("backup: marshaling uruni.json: %w", err)
+	}
+	return docBytes, nil
+}
+
+// zipAssembler is assembleZip's type: the seam a test swaps for a counting
+// wrapper to prove that an unchanged fund assembles no zip at all.
+type zipAssembler func(docBytes []byte, receipts []store.Receipt, uploadsDir string) (zipBytes []byte, missing []string, err error)
+
+// assembleZip is the expensive half of BuildZip: it reads every receipt file
+// into the archive. Nothing that only needs to know whether the fund changed
+// may call it (planDump decides that from the document bytes and a stat of
+// each receipt, never from this).
+func assembleZip(docBytes []byte, receipts []store.Receipt, uploadsDir string) (zipBytes []byte, missing []string, err error) {
 	var buf bytes.Buffer
 	zw := zip.NewWriter(&buf)
 
 	jsonWriter, err := zw.Create(jsonFilename)
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("backup: creating %s in zip: %w", jsonFilename, err)
+		return nil, nil, fmt.Errorf("backup: creating %s in zip: %w", jsonFilename, err)
 	}
 	if _, err := jsonWriter.Write(docBytes); err != nil {
-		return nil, nil, nil, fmt.Errorf("backup: writing %s: %w", jsonFilename, err)
+		return nil, nil, fmt.Errorf("backup: writing %s: %w", jsonFilename, err)
 	}
 
 	for _, r := range receipts {
 		found, err := addReceiptToZip(zw, uploadsDir, r.Path)
 		if err != nil {
-			return nil, nil, nil, err
+			return nil, nil, err
 		}
 		if !found {
 			missing = append(missing, r.Path)
@@ -102,9 +129,9 @@ func BuildZip(doc Document, receipts []store.Receipt, uploadsDir string) (zipByt
 	}
 
 	if err := zw.Close(); err != nil {
-		return nil, nil, nil, fmt.Errorf("backup: closing zip: %w", err)
+		return nil, nil, fmt.Errorf("backup: closing zip: %w", err)
 	}
-	return buf.Bytes(), docBytes, missing, nil
+	return buf.Bytes(), missing, nil
 }
 
 // addReceiptToZip copies one receipt image from the uploads volume into the

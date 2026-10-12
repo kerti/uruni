@@ -21,6 +21,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/kerti/uruni/internal/backup"
 	"github.com/kerti/uruni/internal/store"
 )
 
@@ -258,24 +259,14 @@ func writeReceiptFile(uploadsDir string, data []byte) (string, error) {
 	// In uploadsDir itself, not os.TempDir(): os.Rename across filesystems
 	// fails, and a container's /uploads volume is very often a different
 	// filesystem from wherever the OS default temp directory lands.
-	tmp, err := os.CreateTemp(uploadsDir, ".receipt-upload-*.tmp")
+	// WriteFileAtomic also fsyncs the file before the rename and the
+	// directory after it, so a power loss cannot leave a receipt row naming
+	// an empty file (#501).
+	err = backup.WriteFileAtomic(uploadsDir, ".receipt-upload-*.tmp", name, func(w io.Writer) error {
+		_, err := w.Write(data)
+		return err
+	})
 	if err != nil {
-		return "", err
-	}
-	tmpPath := tmp.Name()
-
-	if _, err := tmp.Write(data); err != nil {
-		_ = tmp.Close()
-		_ = os.Remove(tmpPath)
-		return "", err
-	}
-	if err := tmp.Close(); err != nil {
-		_ = os.Remove(tmpPath)
-		return "", err
-	}
-
-	if err := os.Rename(tmpPath, filepath.Join(uploadsDir, name)); err != nil {
-		_ = os.Remove(tmpPath)
 		return "", err
 	}
 	return name, nil
