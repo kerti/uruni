@@ -11,7 +11,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kerti/uruni/internal/ledger"
 	"github.com/kerti/uruni/internal/store"
 )
 
@@ -300,10 +299,8 @@ func TestWriteDumpWritesThenRenamesLeavingNoTempFile(t *testing.T) {
 	buildFixture(t, sqlDB, uploadsDir)
 	backupDir := t.TempDir()
 	ctx := context.Background()
-	q := store.New(sqlDB)
-	l := ledger.New(sqlDB)
 
-	name, err := WriteDump(ctx, q, l, uploadsDir, backupDir, KindDaily, jakartaTime(2026, 9, 30, 10, 0, 0))
+	name, err := WriteDump(ctx, sqlDB, uploadsDir, backupDir, KindDaily, jakartaTime(2026, 9, 30, 10, 0, 0))
 	if err != nil {
 		t.Fatalf("WriteDump() = %v, want no error", err)
 	}
@@ -330,8 +327,6 @@ func TestWriteDailyIfNeededSkipsWhenTodaysDumpAlreadyExists(t *testing.T) {
 	buildFixture(t, sqlDB, uploadsDir)
 	backupDir := t.TempDir()
 	ctx := context.Background()
-	q := store.New(sqlDB)
-	l := ledger.New(sqlDB)
 
 	now := jakartaTime(2026, 9, 30, 8, 0, 0)
 	// A dump already exists for today, at an earlier hour, with a hash that
@@ -339,7 +334,7 @@ func TestWriteDailyIfNeededSkipsWhenTodaysDumpAlreadyExists(t *testing.T) {
 	// has one" check short-circuits before the hash is even compared.
 	writeDumpFile(t, backupDir, BuildDumpName(jakartaTime(2026, 9, 30, 1, 0, 0), KindDaily, FormatVersion, "0000000000000000"))
 
-	name, written, err := WriteDailyIfNeeded(ctx, q, l, uploadsDir, backupDir, now)
+	name, written, err := WriteDailyIfNeeded(ctx, sqlDB, uploadsDir, backupDir, now)
 	if err != nil {
 		t.Fatalf("WriteDailyIfNeeded() = %v, want no error", err)
 	}
@@ -363,11 +358,9 @@ func TestWriteDailyIfNeededSkipsWhenFundUnchangedSinceLastDailyDump(t *testing.T
 	buildFixture(t, sqlDB, uploadsDir)
 	backupDir := t.TempDir()
 	ctx := context.Background()
-	q := store.New(sqlDB)
-	l := ledger.New(sqlDB)
 
 	yesterday := jakartaTime(2026, 9, 29, 3, 0, 0)
-	firstName, written, err := WriteDailyIfNeeded(ctx, q, l, uploadsDir, backupDir, yesterday)
+	firstName, written, err := WriteDailyIfNeeded(ctx, sqlDB, uploadsDir, backupDir, yesterday)
 	if err != nil {
 		t.Fatalf("WriteDailyIfNeeded(yesterday) = %v, want no error", err)
 	}
@@ -376,7 +369,7 @@ func TestWriteDailyIfNeededSkipsWhenFundUnchangedSinceLastDailyDump(t *testing.T
 	}
 
 	today := jakartaTime(2026, 9, 30, 3, 0, 0)
-	secondName, written, err := WriteDailyIfNeeded(ctx, q, l, uploadsDir, backupDir, today)
+	secondName, written, err := WriteDailyIfNeeded(ctx, sqlDB, uploadsDir, backupDir, today)
 	if err != nil {
 		t.Fatalf("WriteDailyIfNeeded(today) = %v, want no error", err)
 	}
@@ -393,10 +386,9 @@ func TestWriteDailyIfNeededWritesWhenFundChangedAcrossTheDayBoundary(t *testing.
 	backupDir := t.TempDir()
 	ctx := context.Background()
 	q := store.New(sqlDB)
-	l := ledger.New(sqlDB)
 
 	yesterday := jakartaTime(2026, 9, 29, 3, 0, 0)
-	if _, written, err := WriteDailyIfNeeded(ctx, q, l, uploadsDir, backupDir, yesterday); err != nil || !written {
+	if _, written, err := WriteDailyIfNeeded(ctx, sqlDB, uploadsDir, backupDir, yesterday); err != nil || !written {
 		t.Fatalf("WriteDailyIfNeeded(yesterday) = (written=%v, err=%v), want (true, nil)", written, err)
 	}
 
@@ -425,7 +417,7 @@ func TestWriteDailyIfNeededWritesWhenFundChangedAcrossTheDayBoundary(t *testing.
 	}
 
 	today := jakartaTime(2026, 9, 30, 3, 0, 0)
-	name, written, err := WriteDailyIfNeeded(ctx, q, l, uploadsDir, backupDir, today)
+	name, written, err := WriteDailyIfNeeded(ctx, sqlDB, uploadsDir, backupDir, today)
 	if err != nil {
 		t.Fatalf("WriteDailyIfNeeded(today) = %v, want no error", err)
 	}
@@ -449,11 +441,9 @@ func TestWriteDailyIfNeededDateIsAsiaJakartaAcrossTheUTCMidnightBoundary(t *test
 	buildFixture(t, sqlDB, uploadsDir)
 	backupDir := t.TempDir()
 	ctx := context.Background()
-	q := store.New(sqlDB)
-	l := ledger.New(sqlDB)
 
 	utcJustBeforeJakartaMidnight := time.Date(2026, 9, 29, 18, 0, 0, 0, time.UTC)
-	name, written, err := WriteDailyIfNeeded(ctx, q, l, uploadsDir, backupDir, utcJustBeforeJakartaMidnight)
+	name, written, err := WriteDailyIfNeeded(ctx, sqlDB, uploadsDir, backupDir, utcJustBeforeJakartaMidnight)
 	if err != nil {
 		t.Fatalf("WriteDailyIfNeeded() = %v, want no error", err)
 	}
@@ -476,7 +466,7 @@ func TestWriteDailyIfNeededDateIsAsiaJakartaAcrossTheUTCMidnightBoundary(t *test
 	// too (23:00 WIB, same calendar date) must not roll over early either.
 	utcStillSameJakartaDay := time.Date(2026, 9, 29, 16, 0, 0, 0, time.UTC) // 23:00 WIB, 2026-09-29
 	backupDir2 := t.TempDir()
-	name2, written2, err := WriteDailyIfNeeded(ctx, q, l, uploadsDir, backupDir2, utcStillSameJakartaDay)
+	name2, written2, err := WriteDailyIfNeeded(ctx, sqlDB, uploadsDir, backupDir2, utcStillSameJakartaDay)
 	if err != nil {
 		t.Fatalf("WriteDailyIfNeeded() (second) = %v, want no error", err)
 	}
@@ -499,13 +489,11 @@ func TestWritePreRestoreDumpWritesAndAppliesItsOwnQuota(t *testing.T) {
 	buildFixture(t, sqlDB, uploadsDir)
 	backupDir := t.TempDir()
 	ctx := context.Background()
-	q := store.New(sqlDB)
-	l := ledger.New(sqlDB)
 
 	var names []string
 	for i := 0; i < PreRestoreRetention+2; i++ {
 		when := jakartaTime(2026, 9, 20+i, 12, 0, 0)
-		name, err := WritePreRestoreDump(ctx, q, l, uploadsDir, backupDir, when)
+		name, err := WritePreRestoreDump(ctx, sqlDB, uploadsDir, backupDir, when)
 		if err != nil {
 			t.Fatalf("WritePreRestoreDump() = %v, want no error", err)
 		}
@@ -586,11 +574,9 @@ func TestEnsureBootDumpWritesWhenNoneExistAndSkipsOnceCurrent(t *testing.T) {
 	buildFixture(t, sqlDB, uploadsDir)
 	backupDir := t.TempDir()
 	ctx := context.Background()
-	q := store.New(sqlDB)
-	l := ledger.New(sqlDB)
 	logger := testDiscardLogger()
 
-	if err := EnsureBootDump(ctx, q, l, uploadsDir, backupDir, jakartaTime(2026, 9, 30, 0, 5, 0), logger); err != nil {
+	if err := EnsureBootDump(ctx, sqlDB, uploadsDir, backupDir, jakartaTime(2026, 9, 30, 0, 5, 0), logger); err != nil {
 		t.Fatalf("EnsureBootDump() (first boot) = %v, want no error", err)
 	}
 	first, err := ListDumps(backupDir)
@@ -602,7 +588,7 @@ func TestEnsureBootDumpWritesWhenNoneExistAndSkipsOnceCurrent(t *testing.T) {
 	}
 
 	// A second boot, format version unchanged: no second dump.
-	if err := EnsureBootDump(ctx, q, l, uploadsDir, backupDir, jakartaTime(2026, 9, 30, 0, 10, 0), logger); err != nil {
+	if err := EnsureBootDump(ctx, sqlDB, uploadsDir, backupDir, jakartaTime(2026, 9, 30, 0, 10, 0), logger); err != nil {
 		t.Fatalf("EnsureBootDump() (second boot) = %v, want no error", err)
 	}
 	second, err := ListDumps(backupDir)
@@ -628,8 +614,6 @@ func TestEnsureBootDumpRemovesLeftoverRestoreStaging(t *testing.T) {
 	buildFixture(t, sqlDB, uploadsDir)
 	backupDir := t.TempDir()
 	ctx := context.Background()
-	q := store.New(sqlDB)
-	l := ledger.New(sqlDB)
 	logger := testDiscardLogger()
 
 	staged, err := CreateRestoreStagingTemp(backupDir)
@@ -644,7 +628,7 @@ func TestEnsureBootDumpRemovesLeftoverRestoreStaging(t *testing.T) {
 		t.Fatalf("closing the leftover staging file: %v", err)
 	}
 
-	if err := EnsureBootDump(ctx, q, l, uploadsDir, backupDir, jakartaTime(2026, 9, 30, 0, 5, 0), logger); err != nil {
+	if err := EnsureBootDump(ctx, sqlDB, uploadsDir, backupDir, jakartaTime(2026, 9, 30, 0, 5, 0), logger); err != nil {
 		t.Fatalf("EnsureBootDump() = %v, want no error", err)
 	}
 
@@ -660,13 +644,11 @@ func TestEnsureBootDumpWritesAgainWhenFormatVersionChanged(t *testing.T) {
 	buildFixture(t, sqlDB, uploadsDir)
 	backupDir := t.TempDir()
 	ctx := context.Background()
-	q := store.New(sqlDB)
-	l := ledger.New(sqlDB)
 	logger := testDiscardLogger()
 
 	writeDumpFile(t, backupDir, BuildDumpName(jakartaTime(2026, 9, 29, 0, 0, 0), KindDaily, FormatVersion-1, "aaaaaaaaaaaaaaaa"))
 
-	if err := EnsureBootDump(ctx, q, l, uploadsDir, backupDir, jakartaTime(2026, 9, 30, 0, 5, 0), logger); err != nil {
+	if err := EnsureBootDump(ctx, sqlDB, uploadsDir, backupDir, jakartaTime(2026, 9, 30, 0, 5, 0), logger); err != nil {
 		t.Fatalf("EnsureBootDump() = %v, want no error", err)
 	}
 

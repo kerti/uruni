@@ -162,7 +162,7 @@ func serve() error {
 	// must never keep the treasurer from recording a transaction, which is
 	// what this whole server exists to let her do; EnsureBootDump's own doc
 	// comment carries this reasoning too.
-	if err := backup.EnsureBootDump(ctx, q, l, cfg.UploadsDir, cfg.BackupDir, time.Now(), logger); err != nil {
+	if err := backup.EnsureBootDump(ctx, sqlDB, cfg.UploadsDir, cfg.BackupDir, time.Now(), logger); err != nil {
 		logger.Error("boot backup dump failed", "error", err)
 	}
 
@@ -172,7 +172,7 @@ func serve() error {
 	// dump from ever racing on the same file (internal/backup/scheduler.go's
 	// own doc comment). Stopped by the same ctx signal.NotifyContext
 	// cancels below for the HTTP server's own graceful shutdown.
-	go backup.RunScheduler(ctx, q, l, cfg.UploadsDir, cfg.BackupDir, logger)
+	go backup.RunScheduler(ctx, sqlDB, cfg.UploadsDir, cfg.BackupDir, logger)
 
 	srv := &http.Server{
 		Addr: fmt.Sprintf(":%d", cfg.Port),

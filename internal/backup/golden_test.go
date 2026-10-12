@@ -6,9 +6,6 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
-
-	"github.com/kerti/uruni/internal/ledger"
-	"github.com/kerti/uruni/internal/store"
 )
 
 // goldenPath is the checked-in fixture ADR-012 requires: "a checked-in
@@ -33,10 +30,8 @@ func TestGoldenFixtureMatchesExport(t *testing.T) {
 	uploadsDir := t.TempDir()
 	buildFixture(t, sqlDB, uploadsDir)
 	ctx := context.Background()
-	q := store.New(sqlDB)
-	l := ledger.New(sqlDB)
 
-	doc, _, err := BuildDocument(ctx, q, l)
+	doc, _, err := BuildDocument(ctx, sqlDB)
 	if err != nil {
 		t.Fatalf("BuildDocument() = %v, want no error", err)
 	}

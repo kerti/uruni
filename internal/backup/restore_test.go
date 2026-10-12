@@ -45,9 +45,7 @@ func realJPEGBytes(t *testing.T) []byte {
 func exportFixture(t *testing.T, sqlDB *sql.DB, uploadsDir string) (zipBytes []byte, doc Document) {
 	t.Helper()
 	ctx := context.Background()
-	q := store.New(sqlDB)
-	l := ledger.New(sqlDB)
-	doc, receipts, err := BuildDocument(ctx, q, l)
+	doc, receipts, err := BuildDocument(ctx, sqlDB)
 	if err != nil {
 		t.Fatalf("BuildDocument() = %v, want no error", err)
 	}
@@ -134,9 +132,7 @@ func assertDocumentsEqual(t *testing.T, got, want Document) {
 
 func restoreOrFatal(t *testing.T, destDB *sql.DB, uploadsDir, backupDir string, parsed ParsedUpload) {
 	t.Helper()
-	q := store.New(destDB)
-	l := ledger.New(destDB)
-	if err := Restore(context.Background(), destDB, q, l, uploadsDir, backupDir, parsed, time.Unix(1800000000, 0)); err != nil {
+	if err := Restore(context.Background(), destDB, uploadsDir, backupDir, parsed, time.Unix(1800000000, 0)); err != nil {
 		t.Fatalf("Restore() = %v, want no error", err)
 	}
 }
@@ -169,7 +165,7 @@ func TestRestoreRoundTripGoldenFixture(t *testing.T) {
 	assertBalancesMatch(t, destDB, wantDoc)
 
 	ctx := context.Background()
-	gotDoc, _, err := BuildDocument(ctx, store.New(destDB), ledger.New(destDB))
+	gotDoc, _, err := BuildDocument(ctx, destDB)
 	if err != nil {
 		t.Fatalf("BuildDocument(dest) = %v, want no error", err)
 	}
@@ -228,7 +224,7 @@ func TestRestoreRoundTripWithClosedEnvelope(t *testing.T) {
 	restoreOrFatal(t, destDB, t.TempDir(), t.TempDir(), parsed)
 
 	assertBalancesMatch(t, destDB, wantDoc)
-	gotDoc, _, err := BuildDocument(context.Background(), store.New(destDB), ledger.New(destDB))
+	gotDoc, _, err := BuildDocument(context.Background(), destDB)
 	if err != nil {
 		t.Fatalf("BuildDocument(dest) = %v, want no error", err)
 	}
@@ -484,7 +480,7 @@ func TestRestoreTotalsMismatchRollsBack(t *testing.T) {
 		},
 	}
 
-	err := Restore(context.Background(), destDB, store.New(destDB), ledger.New(destDB), t.TempDir(), t.TempDir(), ParsedUpload{Document: doc}, time.Unix(1800000000, 0))
+	err := Restore(context.Background(), destDB, t.TempDir(), t.TempDir(), ParsedUpload{Document: doc}, time.Unix(1800000000, 0))
 	if !errors.Is(err, ErrTotalsMismatch) {
 		t.Fatalf("Restore() error = %v, want ErrTotalsMismatch", err)
 	}
@@ -535,7 +531,7 @@ func TestRestoreFailureRemovesOnlyTheReceiptsItCreated(t *testing.T) {
 				}
 			}
 
-			err = Restore(context.Background(), destDB, store.New(destDB), ledger.New(destDB), destUploads, t.TempDir(), parsed, time.Unix(1800000000, 0))
+			err = Restore(context.Background(), destDB, destUploads, t.TempDir(), parsed, time.Unix(1800000000, 0))
 			if !errors.Is(err, ErrTotalsMismatch) {
 				t.Fatalf("Restore() error = %v, want ErrTotalsMismatch", err)
 			}
@@ -566,7 +562,7 @@ func TestRestoreSafetyNetDumpFailureAborts(t *testing.T) {
 	}
 
 	doc := minimalDocWithOneFund(t)
-	err := Restore(context.Background(), destDB, store.New(destDB), ledger.New(destDB), t.TempDir(), notADir, ParsedUpload{Document: doc}, time.Unix(1800000000, 0))
+	err := Restore(context.Background(), destDB, t.TempDir(), notADir, ParsedUpload{Document: doc}, time.Unix(1800000000, 0))
 	if err == nil {
 		t.Fatal("Restore() = nil, want an error when the safety-net dump cannot be written")
 	}

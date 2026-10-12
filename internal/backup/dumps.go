@@ -13,6 +13,7 @@ package backup
 import (
 	"context"
 	"crypto/sha256"
+	"database/sql"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -23,9 +24,6 @@ import (
 	"sort"
 	"strings"
 	"time"
-
-	"github.com/kerti/uruni/internal/ledger"
-	"github.com/kerti/uruni/internal/store"
 )
 
 // Kind is a dump's own kind (ADR-012's "date and kind"): what wrote it, not
@@ -221,25 +219,38 @@ func ChangeHash(docBytes []byte, missing []string) string {
 }
 
 // dumpMaterials is BuildDocument+BuildZip's combined output, computed once
-// and shared by WriteDump and WriteDailyIfNeeded so neither re-reads the
-// database or re-marshals uruni.json to get what the other already built.
+// and shared by Export, WriteDump and WriteDailyIfNeeded so none of them
+// re-reads the database or re-marshals uruni.json to get what another
+// already built.
 type dumpMaterials struct {
 	doc      Document
 	docBytes []byte
 	zipBytes []byte
+	missing  []string
 	hash     string
 }
 
-func buildDumpMaterials(ctx context.Context, q store.Querier, l *ledger.Ledger, uploadsDir string) (dumpMaterials, error) {
-	doc, receipts, err := BuildDocument(ctx, q, l)
+// buildDumpMaterials is the one path every producer takes - the download,
+// the boot and daily dumps, the pre-restore safety net. The document is read
+// in one transaction (BuildDocument), and then, before any zip is built or
+// any file touched, its totals are recomputed from its own rows (CheckTotals,
+// #496): a document that disagrees with itself is refused here, so a bad
+// dump is never written - there is no temp file to clean up and nothing to
+// rename - and the caller's error log is the operator's signal. Restore is
+// the worst moment to learn a backup was torn; this is the cheapest.
+func buildDumpMaterials(ctx context.Context, read documentReader, uploadsDir string) (dumpMaterials, error) {
+	doc, receipts, err := read(ctx)
 	if err != nil {
 		return dumpMaterials{}, err
+	}
+	if err := CheckTotals(doc); err != nil {
+		return dumpMaterials{}, fmt.Errorf("backup: refusing to write a document that disagrees with its own totals: %w", err)
 	}
 	zipBytes, docBytes, missing, err := BuildZip(doc, receipts, uploadsDir)
 	if err != nil {
 		return dumpMaterials{}, err
 	}
-	return dumpMaterials{doc: doc, docBytes: docBytes, zipBytes: zipBytes, hash: ChangeHash(docBytes, missing)}, nil
+	return dumpMaterials{doc: doc, docBytes: docBytes, zipBytes: zipBytes, missing: missing, hash: ChangeHash(docBytes, missing)}, nil
 }
 
 // tempPrefix names writeThenRename's in-flight files. RemoveStaleTemps
@@ -310,8 +321,14 @@ func writeThenRename(backupDir, name string, data []byte) error {
 // boot-time format-version dump and #325's safety-net restore call this
 // directly because both always want a fresh dump regardless of whether the
 // fund changed since the last one.
-func WriteDump(ctx context.Context, q store.Querier, l *ledger.Ledger, uploadsDir, backupDir string, kind Kind, now time.Time) (name string, err error) {
-	m, err := buildDumpMaterials(ctx, q, l, uploadsDir)
+func WriteDump(ctx context.Context, sqlDB *sql.DB, uploadsDir, backupDir string, kind Kind, now time.Time) (name string, err error) {
+	return writeDump(ctx, readDocumentFrom(sqlDB), uploadsDir, backupDir, kind, now)
+}
+
+// writeDump is WriteDump over an injectable document reader (documentReader's
+// own comment says why).
+func writeDump(ctx context.Context, read documentReader, uploadsDir, backupDir string, kind Kind, now time.Time) (name string, err error) {
+	m, err := buildDumpMaterials(ctx, read, uploadsDir)
 	if err != nil {
 		return "", err
 	}
@@ -339,7 +356,12 @@ func WriteDump(ctx context.Context, q store.Querier, l *ledger.Ledger, uploadsDi
 // dump of its own yet (ADR-012's "retention counts versions, not days") -
 // and a fund that changed twice in one day still gets only one daily dump
 // for that day, not a second one chasing the second change.
-func WriteDailyIfNeeded(ctx context.Context, q store.Querier, l *ledger.Ledger, uploadsDir, backupDir string, now time.Time) (name string, written bool, err error) {
+func WriteDailyIfNeeded(ctx context.Context, sqlDB *sql.DB, uploadsDir, backupDir string, now time.Time) (name string, written bool, err error) {
+	return writeDailyIfNeeded(ctx, readDocumentFrom(sqlDB), uploadsDir, backupDir, now)
+}
+
+// writeDailyIfNeeded is WriteDailyIfNeeded over an injectable document reader.
+func writeDailyIfNeeded(ctx context.Context, read documentReader, uploadsDir, backupDir string, now time.Time) (name string, written bool, err error) {
 	dumps, err := ListDumps(backupDir)
 	if err != nil {
 		return "", false, err
@@ -361,7 +383,7 @@ func WriteDailyIfNeeded(ctx context.Context, q store.Querier, l *ledger.Ledger, 
 		}
 	}
 
-	m, err := buildDumpMaterials(ctx, q, l, uploadsDir)
+	m, err := buildDumpMaterials(ctx, read, uploadsDir)
 	if err != nil {
 		return "", false, err
 	}
@@ -383,8 +405,8 @@ func WriteDailyIfNeeded(ctx context.Context, q store.Querier, l *ledger.Ledger, 
 // since the last dump" stops being the question that matters), and it
 // prunes its own kind's quota afterward so #325's caller does not also need
 // to know about ApplyRetention.
-func WritePreRestoreDump(ctx context.Context, q store.Querier, l *ledger.Ledger, uploadsDir, backupDir string, now time.Time) (name string, err error) {
-	name, err = WriteDump(ctx, q, l, uploadsDir, backupDir, KindPreRestore, now)
+func WritePreRestoreDump(ctx context.Context, sqlDB *sql.DB, uploadsDir, backupDir string, now time.Time) (name string, err error) {
+	name, err = WriteDump(ctx, sqlDB, uploadsDir, backupDir, KindPreRestore, now)
 	if err != nil {
 		return "", err
 	}
@@ -446,7 +468,7 @@ func ApplyRetention(backupDir string, dailyKeep, preRestoreKeep int) error {
 // call site treats that error as non-fatal - logged, not a refusal to
 // boot: a backup write failing must never keep the treasurer from
 // recording a transaction, which is the app's actual job.
-func EnsureBootDump(ctx context.Context, q store.Querier, l *ledger.Ledger, uploadsDir, backupDir string, now time.Time, logger *slog.Logger) error {
+func EnsureBootDump(ctx context.Context, sqlDB *sql.DB, uploadsDir, backupDir string, now time.Time, logger *slog.Logger) error {
 	// Also sweeps any restore-staging file a restart between an inspect and
 	// its confirm left behind (issue #344): CreateRestoreStagingTemp names
 	// every one of those files with this same tempPrefix, so there is
@@ -465,7 +487,7 @@ func EnsureBootDump(ctx context.Context, q store.Querier, l *ledger.Ledger, uplo
 	if !needed {
 		return nil
 	}
-	name, err := WriteDump(ctx, q, l, uploadsDir, backupDir, KindDaily, now)
+	name, err := WriteDump(ctx, sqlDB, uploadsDir, backupDir, KindDaily, now)
 	if err != nil {
 		return err
 	}

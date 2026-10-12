@@ -160,7 +160,7 @@ func (a *api) downloadStoredBackup(w http.ResponseWriter, r *http.Request) {
 // instance, so the download is too - backup.Export itself walks every fund
 // ListFunds returns, not just the one resolveFund would answer with.
 func (a *api) downloadBackup(w http.ResponseWriter, r *http.Request) {
-	zipBytes, missing, err := backup.Export(r.Context(), a.queries, a.ledger, a.uploadsDir)
+	zipBytes, missing, err := backup.Export(r.Context(), a.sqlDB, a.uploadsDir)
 	if err != nil {
 		a.logger.Error("building backup zip", "error", err)
 		writeAPIError(w, http.StatusInternalServerError, "internal_error", "Something went wrong.")
