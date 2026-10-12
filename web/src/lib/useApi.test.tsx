@@ -1,7 +1,7 @@
 import { act, renderHook, waitFor } from '@testing-library/react'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
-import { ApiError } from '@/lib/api'
+import { ApiError, NETWORK_ERROR_CODE, WRITE_OUTCOME_UNKNOWN } from '@/lib/api'
 import { useApi } from '@/lib/useApi'
 
 /** A promise this test resolves by hand, so two calls can be interleaved. */
@@ -130,6 +130,26 @@ describe('useApi', () => {
     expect(result.current[0].status).toBe('success')
     expect(result.current[0].data).toBe('first')
     expect(result.current[0].error).toBeUndefined()
+  })
+
+  // #507: the settle option re-reads for an uncertain write, and only then
+  // does the error state land.
+  it('runs settle before the error state for write_outcome_unknown, and not for other codes', async () => {
+    const { result } = renderHook(() => useApi<string>())
+    const settle = vi.fn(() => {
+      expect(result.current[0].status).toBe('loading')
+    })
+
+    await act(async () => {
+      await result.current[1](() => Promise.reject(new ApiError(WRITE_OUTCOME_UNKNOWN, 'lost', true)), { settle })
+    })
+    expect(settle).toHaveBeenCalledTimes(1)
+    expect(result.current[0].error?.code).toBe(WRITE_OUTCOME_UNKNOWN)
+
+    await act(async () => {
+      await result.current[1](() => Promise.reject(new ApiError(NETWORK_ERROR_CODE, 'down', true)), { settle })
+    })
+    expect(settle).toHaveBeenCalledTimes(1)
   })
 
   // The hook's other guard - not committing after unmount - is deliberately

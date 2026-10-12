@@ -11,7 +11,7 @@ import { Label } from '@/components/ui/label'
 import Loading from '@/components/states/Loading'
 import ErrorState from '@/components/states/ErrorState'
 import { copy } from '@/copy/id'
-import { ApiError } from '@/lib/api'
+import { ApiError, settleUncertainWrite } from '@/lib/api'
 import { listAccounts } from '@/lib/accounts'
 import { getBalances } from '@/lib/balances'
 import { formatIsoDate, dateBounds } from '@/lib/dates'
@@ -276,6 +276,8 @@ export default function Reconcile({ onDone, onCancel }: { onDone: () => void; on
       const result = await takeReconciliation(null, submitted)
       setDetail(result)
     } catch (err) {
+      // #507: a lost response may still have saved the count; re-read first.
+      await settleUncertainWrite(err, () => loadRun(loadReconcileData, { silent: true }))
       const apiError = err instanceof ApiError ? err : new ApiError('unknown_error', err instanceof Error ? err.message : String(err))
       // The location list itself went stale (#444): a location was added or
       // retired after this screen loaded, and the server refuses a count

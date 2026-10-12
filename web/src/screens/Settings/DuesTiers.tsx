@@ -92,6 +92,9 @@ export default function DuesTiers() {
     void run(load)
   }
 
+  // #507: after a write whose response was lost, re-read in place.
+  const refresh = () => run(load, { silent: true })
+
   const tiers = state.data?.tiers ?? []
   const target = parseDialogTarget('tier', value)
 
@@ -160,12 +163,23 @@ export default function DuesTiers() {
           close()
           reload()
         }}
+        refresh={refresh}
       />
     </section>
   )
 }
 
-function AddTierDialog({ open, onClose, onAdded }: { open: boolean; onClose: () => void; onAdded: () => void }) {
+function AddTierDialog({
+  open,
+  onClose,
+  onAdded,
+  refresh,
+}: {
+  open: boolean
+  onClose: () => void
+  onAdded: () => void
+  refresh: () => Promise<void>
+}) {
   const [state, run] = useApi<DuesTier>()
   const [name, setName] = useState('')
 
@@ -179,11 +193,14 @@ function AddTierDialog({ open, onClose, onAdded }: { open: boolean; onClose: () 
   function handleSubmit(event: FormEvent) {
     event.preventDefault()
     if (trimmed === '') return
-    void run(async () => {
-      const created = await createDuesTier(trimmed)
-      onAdded()
-      return created
-    })
+    void run(
+      async () => {
+        const created = await createDuesTier(trimmed)
+        onAdded()
+        return created
+      },
+      { settle: refresh },
+    )
   }
 
   return (

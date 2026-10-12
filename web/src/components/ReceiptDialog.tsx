@@ -84,6 +84,8 @@ export default function ReceiptDialog({
   })
 
   const busy = state.status === 'loading'
+  // #507: a lost response may still have changed the photos; re-read them before she can retry.
+  const settleOnUnknown = { settle: onChanged }
 
   function handleAdd() {
     if (parentId === null || !newFile) return
@@ -92,7 +94,7 @@ export default function ReceiptDialog({
       setNewFile(null)
       onChanged()
       return result
-    })
+    }, settleOnUnknown)
   }
 
   function handleReplace(oldId: number) {
@@ -108,7 +110,7 @@ export default function ReceiptDialog({
       setReplacementFile(null)
       onChanged()
       return result
-    })
+    }, settleOnUnknown)
   }
 
   function handleDelete(id: number) {
@@ -116,7 +118,7 @@ export default function ReceiptDialog({
       await deleteReceipt(id)
       setConfirmingDeleteId(null)
       onChanged()
-    })
+    }, settleOnUnknown)
   }
 
   return (

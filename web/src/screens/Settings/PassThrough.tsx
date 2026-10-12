@@ -46,6 +46,9 @@ export default function PassThrough() {
     void listRun(listPurposes)
   }
 
+  // #507: after a write whose response was lost, re-read in place.
+  const refresh = () => listRun(listPurposes, { silent: true })
+
   const passThrough = listState.data?.filter((purpose) => purpose.kind === 'pass_through') ?? []
 
   // 'pass-through' is this section's own prefix (dialogTarget.ts) - the
@@ -108,6 +111,7 @@ export default function PassThrough() {
           close()
           reload()
         }}
+        refresh={refresh}
       />
       <EditPassThroughDialog
         purpose={editingPurpose}
@@ -117,12 +121,23 @@ export default function PassThrough() {
           close()
           reload()
         }}
+        refresh={refresh}
       />
     </section>
   )
 }
 
-function AddPassThroughDialog({ open, onClose, onAdded }: { open: boolean; onClose: () => void; onAdded: () => void }) {
+function AddPassThroughDialog({
+  open,
+  onClose,
+  onAdded,
+  refresh,
+}: {
+  open: boolean
+  onClose: () => void
+  onAdded: () => void
+  refresh: () => Promise<void>
+}) {
   const [state, run] = useApi<Purpose>()
   const [name, setName] = useState('')
 
@@ -138,11 +153,14 @@ function AddPassThroughDialog({ open, onClose, onAdded }: { open: boolean; onClo
   function handleSubmit(event: FormEvent) {
     event.preventDefault()
     if (trimmed === '') return
-    void run(async () => {
-      const created = await createPassThroughPurpose(trimmed)
-      onAdded()
-      return created
-    })
+    void run(
+      async () => {
+        const created = await createPassThroughPurpose(trimmed)
+        onAdded()
+        return created
+      },
+      { settle: refresh },
+    )
   }
 
   return (
@@ -186,11 +204,13 @@ function EditPassThroughDialog({
   open,
   onClose,
   onChanged,
+  refresh,
 }: {
   purpose: Purpose | null
   open: boolean
   onClose: () => void
   onChanged: () => void
+  refresh: () => Promise<void>
 }) {
   const [state, run] = useApi<Purpose>()
   const [name, setName] = useState('')
@@ -206,11 +226,14 @@ function EditPassThroughDialog({
   function handleSubmit(event: FormEvent) {
     event.preventDefault()
     if (purpose === null || trimmed === '' || unchanged) return
-    void run(async () => {
-      const updated = await renamePurpose(purpose.id, trimmed)
-      onChanged()
-      return updated
-    })
+    void run(
+      async () => {
+        const updated = await renamePurpose(purpose.id, trimmed)
+        onChanged()
+        return updated
+      },
+      { settle: refresh },
+    )
   }
 
   return (

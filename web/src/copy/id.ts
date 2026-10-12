@@ -217,6 +217,12 @@ export const copy = {
       not_found: 'Data yang dicari tidak ditemukan.',
       method_not_allowed: 'Aksi ini tidak didukung.',
       network_error: 'Belum tersambung — Uruni butuh koneksi.',
+      // #507: a write whose response never arrived. The server may already
+      // have saved it, and a retry would be an immutable duplicate - so say
+      // it is uncertain, and why to look first. The screen has re-read its
+      // data by the time this shows.
+      write_outcome_unknown:
+        'Koneksinya terputus sebelum Uruni sempat menjawab, jadi belum pasti tersimpan. Cek Riwayat dulu sebelum menyimpan lagi, supaya tidak tercatat dua kali.',
       invalid_argument: 'Ada isian yang belum sesuai. Coba periksa lagi.',
       already_registered: 'Akun bendahara untuk Uruni ini sudah pernah dibuat.',
       invalid_credentials: 'Email atau kata sandi salah.',

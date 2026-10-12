@@ -54,6 +54,9 @@ export default function Locations() {
     void listRun(listAccounts)
   }
 
+  // #507: after a write whose response was lost, re-read in place.
+  const refresh = () => listRun(listAccounts, { silent: true })
+
   // 'location' is this section's own prefix; anything else on `?edit=`
   // belongs to a sibling section and comes back `foreign` (dialogTarget.ts).
   const target = parseDialogTarget('location', value)
@@ -119,6 +122,7 @@ export default function Locations() {
           close()
           reload()
         }}
+        refresh={refresh}
       />
       <EditLocationDialog
         account={editingAccount}
@@ -128,6 +132,7 @@ export default function Locations() {
           close()
           reload()
         }}
+        refresh={refresh}
       />
     </section>
   )
@@ -167,7 +172,17 @@ function KindField({
  * not get - a location and its opening balance are born together, in the
  * same database transaction, or not at all, and that is only possible the
  * moment the location itself is created. */
-function AddLocationDialog({ open, onClose, onAdded }: { open: boolean; onClose: () => void; onAdded: () => void }) {
+function AddLocationDialog({
+  open,
+  onClose,
+  onAdded,
+  refresh,
+}: {
+  open: boolean
+  onClose: () => void
+  onAdded: () => void
+  refresh: () => Promise<void>
+}) {
   const [state, run] = useApi<Account>()
   const [kind, setKind] = useState<'cash' | 'bank'>('cash')
   const [name, setName] = useState('')
@@ -190,18 +205,21 @@ function AddLocationDialog({ open, onClose, onAdded }: { open: boolean; onClose:
     event.preventDefault()
     const trimmed = name.trim()
     if (trimmed === '') return
-    void run(async () => {
-      const created = await createAccount(
-        kind,
-        trimmed,
-        // No note is typed here (this dialog has no field for one) - the
-        // row explains itself through TransactionList's own display label
-        // ("Saldo awal - {lokasi}", #257), never through stored text.
-        openingBalance > 0 ? { amount: openingBalance, occurredOn: todayISODate() } : undefined,
-      )
-      onAdded()
-      return created
-    })
+    void run(
+      async () => {
+        const created = await createAccount(
+          kind,
+          trimmed,
+          // No note is typed here (this dialog has no field for one) - the
+          // row explains itself through TransactionList's own display label
+          // ("Saldo awal - {lokasi}", #257), never through stored text.
+          openingBalance > 0 ? { amount: openingBalance, occurredOn: todayISODate() } : undefined,
+        )
+        onAdded()
+        return created
+      },
+      { settle: refresh },
+    )
   }
 
   return (
@@ -266,11 +284,13 @@ function EditLocationDialog({
   open,
   onClose,
   onChanged,
+  refresh,
 }: {
   account: Account | null
   open: boolean
   onClose: () => void
   onChanged: () => void
+  refresh: () => Promise<void>
 }) {
   const lastAccountRef = useRef<Account | null>(null)
   if (account) lastAccountRef.current = account
@@ -300,11 +320,14 @@ function EditLocationDialog({
   // succeeded. useApi's run never throws - a 409 lands in `state` - and
   // closing on it would hide the deleteRefused sentence she needs to see.
   async function submit(fn: () => Promise<unknown>) {
-    await run(async () => {
-      const result = await fn()
-      onChanged()
-      return result
-    })
+    await run(
+      async () => {
+        const result = await fn()
+        onChanged()
+        return result
+      },
+      { settle: refresh },
+    )
   }
 
   function handleSave(event: FormEvent) {

@@ -10,7 +10,7 @@ import { Label } from '@/components/ui/label'
 import Loading from '@/components/states/Loading'
 import ErrorState from '@/components/states/ErrorState'
 import { copy } from '@/copy/id'
-import { ApiError } from '@/lib/api'
+import { ApiError, settleUncertainWrite } from '@/lib/api'
 import { dateBounds } from '@/lib/dates'
 import { listPurposes } from '@/lib/purposes'
 import { getReimbursement, updateReimbursement } from '@/lib/reimbursements'
@@ -42,22 +42,25 @@ export default function Correct({ claimId, onDone, onCancel }: { claimId: number
   const [submitState, submitRun] = useApi<unknown>()
   const [error, setError] = useState<string | null>(null)
 
-  function load() {
-    void dataRun(async () => {
-      const [claim, members, purposes] = await Promise.all([
-        getReimbursement(claimId).catch((err: unknown) => {
-          if (err instanceof ApiError && err.code === 'not_found') return null
-          throw err
-        }),
-        listAllMembers(),
-        listPurposes(),
-      ])
-      return { claim, members, purposes }
-    })
+  function load(silent = false) {
+    return dataRun(
+      async () => {
+        const [claim, members, purposes] = await Promise.all([
+          getReimbursement(claimId).catch((err: unknown) => {
+            if (err instanceof ApiError && err.code === 'not_found') return null
+            throw err
+          }),
+          listAllMembers(),
+          listPurposes(),
+        ])
+        return { claim, members, purposes }
+      },
+      { silent },
+    )
   }
 
   useEffect(() => {
-    load()
+    void load()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dataRun, claimId])
 
@@ -70,6 +73,8 @@ export default function Correct({ claimId, onDone, onCancel }: { claimId: number
         await updateReimbursement(claimId, patch)
         onDone()
       } catch (err) {
+        // #507: a lost response may still have saved; re-read the claim before she can retry.
+        await settleUncertainWrite(err, () => load(true))
         const apiErr = err instanceof ApiError ? err : new ApiError('unknown_error', err instanceof Error ? err.message : String(err))
         setError(errorText(apiErr))
         // eslint-disable-next-line no-console
@@ -80,7 +85,7 @@ export default function Correct({ claimId, onDone, onCancel }: { claimId: number
 
   if (dataState.status === 'idle' || dataState.status === 'loading') return <Loading />
   if (dataState.status === 'error' || !dataState.data) {
-    return dataState.error ? <ErrorState error={dataState.error} onRetry={load} /> : null
+    return dataState.error ? <ErrorState error={dataState.error} onRetry={() => void load()} /> : null
   }
 
   const { claim, members, purposes } = dataState.data

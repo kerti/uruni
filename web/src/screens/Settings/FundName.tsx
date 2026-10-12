@@ -99,6 +99,7 @@ export default function FundName({ onRenamed }: { onRenamed: (fund: Fund) => voi
           close()
           void loadRun(getFund)
         }}
+        refresh={() => loadRun(getFund, { silent: true })}
       />
     </section>
   )
@@ -114,11 +115,13 @@ function EditFundNameDialog({
   open,
   onClose,
   onRenamed,
+  refresh,
 }: {
   fund: Fund | null
   open: boolean
   onClose: () => void
   onRenamed: (fund: Fund) => void
+  refresh: () => Promise<void>
 }) {
   const [state, run] = useApi<Fund>()
   const [name, setName] = useState('')
@@ -136,11 +139,14 @@ function EditFundNameDialog({
   function handleSubmit(event: FormEvent) {
     event.preventDefault()
     if (trimmed === '' || unchanged) return
-    void run(async () => {
-      const updated = await renameFund(trimmed)
-      onRenamed(updated)
-      return updated
-    })
+    void run(
+      async () => {
+        const updated = await renameFund(trimmed)
+        onRenamed(updated)
+        return updated
+      },
+      { settle: refresh },
+    )
   }
 
   return (

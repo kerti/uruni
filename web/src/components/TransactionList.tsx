@@ -56,6 +56,7 @@ export default function TransactionList({
   onCorrectPurpose,
   onReceiptsChanged,
   onContributionReversed,
+  onContributionRefresh,
 }: {
   transactions: Transaction[]
   /** transaction.purpose_id -> its name - a row carries only the id, and
@@ -84,6 +85,8 @@ export default function TransactionList({
    * its own list; canReverseContribution decides per row whether the
    * control shows at all. */
   onContributionReversed?: () => void
+  /** #507: re-reads the caller's list in place when a reversal's response was lost. */
+  onContributionRefresh?: () => Promise<void> | void
 }) {
   // The row whose photo dialog is open, by id rather than by object - so
   // the dialog reads fresh receipt_ids off the current `transactions` prop
@@ -182,7 +185,11 @@ export default function TransactionList({
                 renders on Beranda. */}
             {reversible && onContributionReversed && (
               <div className="pointer-events-none relative [&_button]:pointer-events-auto [&_input]:pointer-events-auto [&_label]:pointer-events-auto">
-                <ContributionReversalControl transaction={transaction} onReversed={onContributionReversed} />
+                <ContributionReversalControl
+                  transaction={transaction}
+                  onReversed={onContributionReversed}
+                  refresh={onContributionRefresh}
+                />
               </div>
             )}
           </li>
@@ -285,7 +292,15 @@ function PurposeLine({
  * expand/collapse is independent and this is the one row shape in the whole
  * list that needs any state at all.
  */
-function ContributionReversalControl({ transaction, onReversed }: { transaction: Transaction; onReversed: () => void }) {
+function ContributionReversalControl({
+  transaction,
+  onReversed,
+  refresh,
+}: {
+  transaction: Transaction
+  onReversed: () => void
+  refresh?: () => Promise<void> | void
+}) {
   const [open, setOpen] = useState(false)
   const [occurredOn, setOccurredOn] = useState(todayISODate)
   const [note, setNote] = useState('')
@@ -294,13 +309,16 @@ function ContributionReversalControl({ transaction, onReversed }: { transaction:
   const busy = state.status === 'loading'
 
   function handleSubmit() {
-    void run(async () => {
-      const trimmed = note.trim()
-      const result = await reverseDuesPayment(transaction.id, occurredOn, trimmed === '' ? null : trimmed)
-      setOpen(false)
-      onReversed()
-      return result
-    })
+    void run(
+      async () => {
+        const trimmed = note.trim()
+        const result = await reverseDuesPayment(transaction.id, occurredOn, trimmed === '' ? null : trimmed)
+        setOpen(false)
+        onReversed()
+        return result
+      },
+      { settle: refresh },
+    )
   }
 
   if (!open) {

@@ -188,22 +188,36 @@ export default function RecordDuesPayment({
     event.preventDefault()
     if (!canSubmit || memberId === null || accountId === null) return
 
-    void submitRun(async () => {
-      const result = await createDuesPayment({
-        memberId,
-        accountId,
-        occurredOn,
-        // No note is typed on this form (PRD section 7.3) - the row explains
-        // itself through TransactionList's own display label (#257), never
-        // through stored text.
-        note: null,
-        // In the order the server offered them - oldest first - so a
-        // multi-period payment reads the way it was collected.
-        periods: periods.filter((p) => selected.includes(p.period)).map((p) => ({ dues_period: p.period, amount: amounts[p.period] ?? 0 })),
-      })
-      onRecorded()
-      return result
-    })
+    void submitRun(
+      async () => {
+        const result = await createDuesPayment({
+          memberId,
+          accountId,
+          occurredOn,
+          // No note is typed on this form (PRD section 7.3) - the row explains
+          // itself through TransactionList's own display label (#257), never
+          // through stored text.
+          note: null,
+          // In the order the server offered them - oldest first - so a
+          // multi-period payment reads the way it was collected.
+          periods: periods
+            .filter((p) => selected.includes(p.period))
+            .map((p) => ({ dues_period: p.period, amount: amounts[p.period] ?? 0 })),
+        })
+        onRecorded()
+        return result
+      },
+      {
+        // #507: a lost response may still have saved the payment; re-read what
+        // the member owes (and the form's balances) before she can retry.
+        settle: async () => {
+          await Promise.all([
+            loadRun(loadFormData, { silent: true }),
+            memberId === null ? undefined : outstandingRun(() => getOutstandingDues(memberId, through), { silent: true }),
+          ])
+        },
+      },
+    )
   }
 
   if (loadState.status === 'idle' || loadState.status === 'loading') {
