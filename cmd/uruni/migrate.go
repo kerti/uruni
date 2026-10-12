@@ -180,5 +180,26 @@ func printMigrationStatus(ctx context.Context, sqlDB *sql.DB, out io.Writer, dbP
 			return err
 		}
 	}
-	return nil
+
+	return printSchemaStatus(ctx, sqlDB, out)
+}
+
+// printSchemaStatus says whether the live schema is the one this binary creates.
+// goose's table above only knows version numbers, and ADR-025 edits the one
+// file in place, so this line is the only place a stale database shows up.
+// A mismatch is reported, not returned as an error: status reports, and exiting
+// non-zero for it would turn a diagnostic into a failure.
+func printSchemaStatus(ctx context.Context, sqlDB *sql.DB, out io.Writer) error {
+	diff, err := db.CheckSchema(ctx, sqlDB)
+	if err != nil {
+		return err
+	}
+	if diff.Matches() {
+		_, err = fmt.Fprintln(out, "\nschema: matches this version")
+		return err
+	}
+	_, err = fmt.Fprintf(out, "\nschema: DIFFERS from this version (%s)\n"+
+		"        see the release notes and the Upgrading section of SELF-HOSTING.md (ADR-025)\n",
+		diff.Summary(schemaDiffNamesShown))
+	return err
 }

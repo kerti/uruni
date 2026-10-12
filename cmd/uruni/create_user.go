@@ -48,6 +48,11 @@ func createUser(ctx context.Context, args []string, out io.Writer) error {
 	if _, err := db.Up(ctx, sqlDB, newLogger(cfg, os.Stderr)); err != nil {
 		return fmt.Errorf("migrating %s: %w", cfg.DBPath, err)
 	}
+	// It writes the login into the operator's real database, so it asks the same
+	// question `serve` does (ADR-025) rather than fail on a missing column.
+	if err := verifySchema(ctx, sqlDB, cfg.DBPath); err != nil {
+		return err
+	}
 
 	created, err := auth.New(sqlDB).SetLogin(ctx, email, password)
 	switch {
