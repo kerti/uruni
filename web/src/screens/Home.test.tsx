@@ -491,7 +491,7 @@ describe('Home', () => {
       )
 
       const amount = await screen.findByText(money(-75_000))
-      expect(amount.className).toContain('text-attention')
+      expect(amount.className).toContain('text-attention-text')
     })
 
     // Tapping an open incidental's row opens that envelope

@@ -107,7 +107,7 @@ describe('ReconciliationBanner', () => {
       render(<ReconciliationBanner openLines={[line({ difference_amount: -15_000, remainder_amount: -15_000 })]} everReconciled />)
 
       const el = panel(copy.reconciliation.discrepancy(formatIDR(15_000)).replace(/\u00a0/g, ' '))
-      expect(el).toHaveClass('bg-attention-soft', 'text-attention')
+      expect(el).toHaveClass('bg-attention-soft', 'text-attention-text')
       expect(el?.className).not.toMatch(/success|destructive/)
     })
 
@@ -123,7 +123,7 @@ describe('ReconciliationBanner', () => {
       render(<ReconciliationBanner openLines={[line({})]} everReconciled onClick={() => {}} />)
 
       const button = screen.getByRole('button')
-      expect(button).toHaveClass('bg-attention-soft', 'text-attention')
+      expect(button).toHaveClass('bg-attention-soft', 'text-attention-text')
       expect(button.className).not.toMatch(/destructive/)
     })
   })

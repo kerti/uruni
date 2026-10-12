@@ -27,7 +27,7 @@ export default function ReconciliationLines({ lines, accountNames }: { lines: Re
             </span>
           )}
           {line.resolution !== 'left_open' && line.remainder_amount !== 0 && (
-            <span className="tabular text-sm text-attention">{text.remainingGap(formatIDR(Math.abs(line.remainder_amount)))}</span>
+            <span className="tabular text-sm text-attention-text">{text.remainingGap(formatIDR(Math.abs(line.remainder_amount)))}</span>
           )}
           <span className="text-sm">
             {text.resolutionOptions[line.resolution as keyof typeof text.resolutionOptions] ?? line.resolution}

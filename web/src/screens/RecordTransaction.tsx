@@ -666,12 +666,12 @@ export default function RecordTransaction({
                 )}
                 {!hasOpenEnvelope && <p className="text-sm text-muted-foreground">{text.noOpenEnvelopeHint}</p>}
                 {samePurpose && (
-                  <p role="status" className="rounded-lg bg-attention-soft px-3 py-2 text-sm text-attention">
+                  <p role="status" className="rounded-lg bg-attention-soft px-3 py-2 text-sm text-attention-text">
                     {text.samePurposeHint}
                   </p>
                 )}
                 {!samePurpose && purposeMoveTooLarge && fromPurposeBalance !== null && (
-                  <p role="status" className="rounded-lg bg-attention-soft px-3 py-2 text-sm text-attention">
+                  <p role="status" className="rounded-lg bg-attention-soft px-3 py-2 text-sm text-attention-text">
                     {text.purposeInsufficientHint(formatIDR(fromPurposeBalance))}
                   </p>
                 )}
@@ -746,12 +746,12 @@ export default function RecordTransaction({
               {toBalance !== null && <p className="text-sm text-muted-foreground">{text.locationBalance(formatIDR(toBalance))}</p>}
 
               {sameLocation && (
-                <p role="status" className="rounded-lg bg-attention-soft px-3 py-2 text-sm text-attention">
+                <p role="status" className="rounded-lg bg-attention-soft px-3 py-2 text-sm text-attention-text">
                   {text.sameLocationHint}
                 </p>
               )}
               {!sameLocation && transferGoesNegative && fromBalance !== null && (
-                <p role="status" className="rounded-lg bg-attention-soft px-3 py-2 text-sm text-attention">
+                <p role="status" className="rounded-lg bg-attention-soft px-3 py-2 text-sm text-attention-text">
                   {text.locationGoesNegative(formatIDR(Math.abs(fromBalance - amount)))}
                 </p>
               )}
@@ -773,7 +773,7 @@ export default function RecordTransaction({
             the tag that fits it, then gets out of the way. role="status"
             rather than "alert" for the same reason. */}
               {warnsPassThroughNegative && (
-                <p role="status" className="rounded-lg bg-attention-soft px-3 py-2 text-sm text-attention">
+                <p role="status" className="rounded-lg bg-attention-soft px-3 py-2 text-sm text-attention-text">
                   {text.passThroughNegativeHint(chosenPurpose?.name ?? '')}
                 </p>
               )}

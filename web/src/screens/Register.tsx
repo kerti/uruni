@@ -94,7 +94,7 @@ export default function Register({ onRegistered }: { onRegistered: (user: AuthUs
               />
             </div>
             {tooShort && (
-              <p role="alert" className="text-attention">
+              <p role="alert" className="text-attention-text">
                 {text.passwordTooShort}
               </p>
             )}

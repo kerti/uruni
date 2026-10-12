@@ -39,7 +39,7 @@ const UNPAID_STATUSES: readonly DuesStatusKind[] = ['unpaid', 'partial']
  * distinguished from the plain badge as the issue asks. */
 const badgeTone: Record<DuesStatusKind, string> = {
   unpaid: 'bg-muted text-muted-foreground',
-  partial: 'bg-attention-soft text-attention',
+  partial: 'bg-attention-soft text-attention-text',
   paid: 'bg-success-soft text-success',
   paid_in_advance: 'bg-success-soft text-success ring-1 ring-success',
 }

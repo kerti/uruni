@@ -488,7 +488,7 @@ function AuthedGate({ onLoggedOut }: { onLoggedOut: () => void }) {
               // transaction itself is fine, but the sentence flags
               // something that did not go through, the same restraint
               // RecordTransaction.tsx's own passThroughNegativeHint uses.
-              <p role="status" className="mb-4 rounded-lg bg-attention-soft px-3 py-2 text-sm text-attention">
+              <p role="status" className="mb-4 rounded-lg bg-attention-soft px-3 py-2 text-sm text-attention-text">
                 {successMessage}
               </p>
             )}

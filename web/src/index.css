@@ -59,6 +59,7 @@
   --color-success-soft: var(--success-soft);
   --color-attention: var(--attention);
   --color-attention-soft: var(--attention-soft);
+  --color-attention-text: var(--attention-text);
   --color-destructive: var(--destructive);
   --color-destructive-foreground: var(--destructive-foreground);
   --color-border: var(--border);
@@ -185,17 +186,21 @@
   --accent-foreground: #22323a;
 
   --muted: #eeebe3;
-  --muted-foreground: #67757c;
+  --muted-foreground: #5e6b71; /* 4.62:1 on --muted, 5.0:1 on the page (#508) */
   --border: #e4e0d7;
   /* A step darker than --border (#356): a field is something to type into,
      and at the hairline's shade its edge all but vanished on the cream. */
-  --input: #cfc8ba;
+  --input: #998a6c; /* 3.08:1 on the page, 3.38:1 on a card: AA non-text (#508) */
   --ring: #2f6f60;
 
   --success: #2e7d5b;
   --success-soft: #e3f1e9;
   --attention: #c96c4a;
   --attention-soft: #f6e6dd;
+  /* Text-only terracotta (#508): --attention reads 3.02:1 on attention-soft
+     and 3.34:1 on the page, under AA's 4.5:1 for text. This is the same hue,
+     darkened just past 4.5:1 on both; --attention stays for icons and fills. */
+  --attention-text: #a55031;
   --destructive: #b4453c;
   --destructive-foreground: #ffffff;
 

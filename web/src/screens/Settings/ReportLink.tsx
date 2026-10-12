@@ -249,7 +249,7 @@ function RenewDialog({
         <DialogHeader>
           <DialogTitle>{text.renew}</DialogTitle>
         </DialogHeader>
-        <p className="text-sm text-attention">{text.renewConfirm}</p>
+        <p className="text-sm text-attention-text">{text.renewConfirm}</p>
         {state.status === 'error' && state.error && <ErrorState error={state.error} />}
         <DialogFooter className="mt-1">
           <Button type="button" variant="outline" size="lg" disabled={busy} onClick={onClose}>

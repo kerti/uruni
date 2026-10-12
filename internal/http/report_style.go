@@ -16,13 +16,14 @@ var reportPalette = map[string]string{
 	"primary-foreground": "#ffffff",
 	"accent":             "#7bae8d",
 	"muted":              "#eeebe3",
-	"muted-foreground":   "#67757c",
+	"muted-foreground":   "#5e6b71",
 	"border":             "#e4e0d7",
-	"input":              "#cfc8ba",
+	"input":              "#998a6c",
 	"success":            "#2e7d5b",
 	"success-soft":       "#e3f1e9",
 	"attention":          "#c96c4a",
 	"attention-soft":     "#f6e6dd",
+	"attention-text":     "#a55031",
 }
 
 // reportStyle is the page's one inline <style> block. System fonts, not the
@@ -47,7 +48,7 @@ func reportStyle() template.CSS {
 var reportPaletteOrder = []string{
 	"background", "foreground", "card", "primary", "primary-foreground", "accent",
 	"muted", "muted-foreground", "border", "input",
-	"success", "success-soft", "attention", "attention-soft",
+	"success", "success-soft", "attention", "attention-soft", "attention-text",
 }
 
 const reportRules = `
@@ -69,13 +70,13 @@ p{margin:0}
 .hero .amount{font-size:36px;font-weight:700;line-height:1.2}
 .status{border-radius:8px;padding:12px 16px;font-size:15px}
 .status.matched{background:var(--success-soft);color:var(--success)}
-.status.discrepancy{background:var(--attention-soft);color:var(--attention)}
+.status.discrepancy{background:var(--attention-soft);color:var(--attention-text)}
 .status.never{background:var(--muted);color:var(--muted-foreground)}
 .status .when{display:block;font-size:13px;opacity:.85;margin-top:2px}
 ul.rows{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
 ul.rows li{display:flex;justify-content:space-between;gap:12px;background:var(--card);
   border-radius:8px;padding:12px 16px;box-shadow:0 1px 2px rgb(34 50 58 / .06),0 4px 12px rgb(34 50 58 / .08)}
-.negative{color:var(--attention)}
+.negative{color:var(--attention-text)}
 nav.months{display:flex;flex-direction:column;gap:12px}
 nav.months .step{display:flex;justify-content:space-between;gap:12px;font-size:14px}
 nav.months a{color:var(--primary);text-decoration:none;font-weight:500;padding:10px 0}
@@ -109,7 +110,7 @@ ul.dues li{flex-direction:column;gap:6px}
 .badge{border-radius:999px;padding:4px 10px;font-size:14px;font-weight:500;white-space:nowrap;flex-shrink:0}
 .sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 .badge.unpaid{background:var(--muted);color:var(--muted-foreground)}
-.badge.partial{background:var(--attention-soft);color:var(--attention)}
+.badge.partial{background:var(--attention-soft);color:var(--attention-text)}
 .badge.paid{background:var(--success-soft);color:var(--success)}
 .badge.paid_in_advance{background:var(--success-soft);color:var(--success);box-shadow:inset 0 0 0 1px var(--success)}
 .envelopes{display:flex;flex-direction:column;gap:8px}

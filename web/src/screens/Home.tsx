@@ -342,5 +342,5 @@ export default function Home({
  * banner's own "selisih" state.
  */
 function PurposeAmount({ balance }: { balance: number }) {
-  return <span className={`tabular font-medium ${balance < 0 ? 'text-attention' : ''}`}>{formatIDR(balance)}</span>
+  return <span className={`tabular font-medium ${balance < 0 ? 'text-attention-text' : ''}`}>{formatIDR(balance)}</span>
 }

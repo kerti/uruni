@@ -350,7 +350,7 @@ export default function Reconcile({ onDone, onCancel }: { onDone: () => void; on
       </div>
 
       {staleNotice && (
-        <p role="status" className="flex items-center gap-2 rounded-lg bg-attention-soft px-4 py-3 text-attention">
+        <p role="status" className="flex items-center gap-2 rounded-lg bg-attention-soft px-4 py-3 text-attention-text">
           <TriangleAlert aria-hidden="true" />
           {text.staleNotice}
         </p>
@@ -498,7 +498,7 @@ function AccountCountRow({
 
         {showGap && (
           <>
-            <p className="flex items-center gap-2 text-attention">
+            <p className="flex items-center gap-2 text-attention-text">
               <TriangleAlert aria-hidden="true" />
               {text.discrepancy(formatIDR(Math.abs(diff)))}
             </p>
@@ -590,7 +590,7 @@ function AccountCountRow({
                     </p>
                   ) : (
                     <>
-                      <p className="tabular flex items-center gap-2 text-attention">
+                      <p className="tabular flex items-center gap-2 text-attention-text">
                         <TriangleAlert aria-hidden="true" className="size-4 shrink-0" />
                         {text.remainingGap(formatIDR(Math.abs(remaining)))}
                       </p>
@@ -674,7 +674,7 @@ function Confirmation({
     >
       <div
         role="status"
-        className={`flex items-center gap-2 rounded-lg px-4 py-3 ${hasOpenGap ? 'bg-attention-soft text-attention' : 'bg-success-soft text-success'}`}
+        className={`flex items-center gap-2 rounded-lg px-4 py-3 ${hasOpenGap ? 'bg-attention-soft text-attention-text' : 'bg-success-soft text-success'}`}
       >
         {hasOpenGap ? <TriangleAlert aria-hidden="true" /> : <CircleCheck aria-hidden="true" />}
         {hasOpenGap ? text.discrepancy(formatIDR(openTotal)) : text.matched}

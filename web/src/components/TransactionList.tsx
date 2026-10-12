@@ -364,7 +364,7 @@ function ContributionReversalControl({
           which is the wrong noun on this list - see this file's own
           reversalErrorText. */}
       {state.status === 'error' && state.error && (
-        <p role="alert" className="text-sm text-attention">
+        <p role="alert" className="text-sm text-attention-text">
           {reversalErrorText(state.error)}
         </p>
       )}
