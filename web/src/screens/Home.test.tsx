@@ -158,6 +158,25 @@ describe('Home', () => {
     expect(await screen.findByText(money(1_450_000))).toBeInTheDocument()
   })
 
+  it('steps the hero down for a wide figure and stacks Arus kas, never wrapping a number (#540)', async () => {
+    const ceiling = 999_999_999_999
+    vi.stubGlobal('fetch', stubHome({ balancesOverride: { ...balances, fund_total: -ceiling, month: { in: ceiling, out: 85_000 } } }))
+    render(
+      <Home
+        refetchKey="1"
+        onReconcile={vi.fn()}
+        onOpenIncidental={vi.fn()}
+        onViewTransactionsFor={vi.fn()}
+        onViewHistory={vi.fn()}
+        onViewOwed={vi.fn()}
+      />,
+    )
+
+    const hero = await screen.findByText(money(-ceiling))
+    expect(hero).toHaveClass('text-[28px]')
+    expect(screen.getByText(money(ceiling)).closest('dl')).toHaveClass('grid-cols-1')
+  })
+
   it('renders every account balances.accounts returns, in the order returned', async () => {
     vi.stubGlobal('fetch', stubHome())
     render(

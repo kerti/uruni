@@ -42,7 +42,7 @@
 
 <section class="hero" aria-label="{{.Text.BalanceLabel}}">
   <p class="label">{{.Text.BalanceLabel}}</p>
-  <p class="amount tabular">{{.Balance}}</p>
+  <p class="amount tabular {{.BalanceSize}}">{{.Balance}}</p>
 </section>
 
 {{with .Check}}

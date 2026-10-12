@@ -272,7 +272,7 @@ function PurposeLine({
       type="button"
       aria-label={copy.purposeCorrection.controlAria(name)}
       onClick={() => onCorrectPurpose(transaction)}
-      className="-my-1.5 flex min-w-0 items-center gap-1.5 self-start py-1.5 text-left"
+      className="-my-1.5 flex max-w-full min-w-0 items-center gap-1.5 self-start py-1.5 text-left"
     >
       <span className="truncate underline decoration-dotted underline-offset-4">{name}</span>
       {marker}

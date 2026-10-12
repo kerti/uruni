@@ -50,8 +50,12 @@ type reportPage struct {
 	FundName string
 	AsOf     string
 	Balance  string
-	Check    *reportCheck
-	Purposes []reportPurpose
+	// BalanceSize is a class that steps the hero figure down when it is wide
+	// (up to Rp 999.999.999.999 and a minus, #540): the figure never wraps or
+	// clips. "" at everyday widths.
+	BalanceSize string
+	Check       *reportCheck
+	Purposes    []reportPurpose
 
 	// Owed is the total owed to members who fronted an expense, as of the
 	// same day as Balance (ADR-037); "" when nothing is owed, which hides the
@@ -433,13 +437,14 @@ func walkLines(w ledger.ReportWalk) []reportTotal {
 
 func buildReportPage(r ledger.Report, empty bool) reportPage {
 	page := reportPage{
-		Title:    reportText.Title(r.FundName),
-		Style:    reportStyle(),
-		Text:     reportText,
-		FundName: r.FundName,
-		AsOf:     reportAsOf(r),
-		Balance:  money.FormatIDR(r.Balance),
-		Empty:    empty,
+		Title:       reportText.Title(r.FundName),
+		Style:       reportStyle(),
+		Text:        reportText,
+		FundName:    r.FundName,
+		AsOf:        reportAsOf(r),
+		Balance:     money.FormatIDR(r.Balance),
+		BalanceSize: heroSizeClass(money.FormatIDR(r.Balance)),
+		Empty:       empty,
 	}
 
 	switch rec := r.Reconciliation; {
@@ -594,4 +599,19 @@ func renderReport(w http.ResponseWriter, logger *slog.Logger, status int, name s
 	w.Header().Set("Content-Security-Policy", reportCSP(page.Nonce))
 	w.WriteHeader(status)
 	_, _ = buf.WriteTo(w)
+}
+
+// heroSizeClass names the report hero's type step for a formatted figure: the
+// same steps Beranda's hero takes, by the figure's length in characters.
+func heroSizeClass(figure string) string {
+	switch n := len([]rune(figure)); {
+	case n <= 15:
+		return ""
+	case n <= 17:
+		return "s32"
+	case n <= 20:
+		return "s28"
+	default:
+		return "s24"
+	}
 }

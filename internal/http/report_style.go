@@ -67,7 +67,10 @@ p{margin:0}
 .hero{background:var(--primary);color:var(--primary-foreground);border-radius:14px;
   padding:24px;text-align:center;display:flex;flex-direction:column;gap:4px}
 .hero .label{font-size:16px;font-weight:500;opacity:.85}
-.hero .amount{font-size:36px;font-weight:700;line-height:1.2}
+.hero .amount{font-size:36px;font-weight:700;line-height:1.2;white-space:nowrap}
+.hero .amount.s32{font-size:32px}
+.hero .amount.s28{font-size:28px}
+.hero .amount.s24{font-size:24px}
 .status{border-radius:8px;padding:12px 16px;font-size:15px}
 .status.matched{background:var(--success-soft);color:var(--success)}
 .status.discrepancy{background:var(--attention-soft);color:var(--attention-text)}
