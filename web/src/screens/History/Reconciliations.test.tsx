@@ -48,6 +48,7 @@ function detailFor(id: number, performedAt: number, note: string | null) {
         actual_amount: 85_000,
         difference_amount: -15_000,
         resolution: 'left_open',
+        remainder_amount: -15_000,
         adjustment_transaction_id: null,
       },
     ],

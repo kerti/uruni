@@ -7,12 +7,32 @@ VALUES (?, ?, ?, ?, ?, ?, ?, ?)
 RETURNING id, fund_id, reconciliation_id, account_id, recorded_amount, actual_amount,
           difference_amount, resolution, adjustment_transaction_id;
 
+-- remainder_amount (#498) is what a line still has open: the part of its
+-- difference its fix did not square, signed like difference_amount
+-- (actual - recorded). left_open: the whole difference. matched: 0. adjusted
+-- and entry_added: difference - signed(fix), where the fix is the entry the
+-- line points at (+ for in, - for out). An entry_added line from before #498
+-- points at nothing, and reads as closed (0): its remainder was never
+-- recorded and cannot be known. The same expression reads in
+-- ListOpenReconciliationLinesByFund, ListReconciliationsPage and
+-- ReportOpenReconciliationLines - keep the four in step.
+--
 -- In ListAccountsByFund's order: cash before bank, then by name.
 -- name: ListReconciliationLines :many
 SELECT rl.id, rl.fund_id, rl.reconciliation_id, rl.account_id, rl.recorded_amount, rl.actual_amount,
-       rl.difference_amount, rl.resolution, rl.adjustment_transaction_id
+       rl.difference_amount, rl.resolution, rl.adjustment_transaction_id,
+       CAST(CASE rl.resolution
+         WHEN 'left_open' THEN rl.difference_amount
+         WHEN 'matched' THEN 0
+         ELSE CASE
+           WHEN fix.id IS NULL THEN 0
+           WHEN fix.direction = 'in' THEN rl.difference_amount - fix.amount
+           ELSE rl.difference_amount + fix.amount
+         END
+       END AS INTEGER) AS remainder_amount
 FROM reconciliation_line rl
 JOIN account a ON a.id = rl.account_id
+LEFT JOIN "transaction" fix ON fix.fund_id = rl.fund_id AND fix.id = rl.adjustment_transaction_id
 WHERE rl.reconciliation_id = ?
 ORDER BY CASE a.kind WHEN 'cash' THEN 0 ELSE 1 END, a.name COLLATE NOCASE, a.id;
 
@@ -37,9 +57,11 @@ SELECT CAST(COALESCE(SUM(difference_amount), 0) AS INTEGER) AS difference_amount
 FROM reconciliation_line
 WHERE reconciliation_id = ?;
 
--- Differences the treasurer chose to sleep on, but only while nothing later
--- has weighed in on the same location. A left_open line stops counting as
--- open the moment a later snapshot has any line at all for that account_id -
+-- Gaps still open: a line whose remainder_amount (see ListReconciliationLines)
+-- is non-zero - a left_open line, or an entry_added line whose entry did not
+-- square the whole difference (#498) - but only while nothing later has
+-- weighed in on the same location. Such a line stops counting as open the
+-- moment a later snapshot has any line at all for that account_id -
 -- matched, entry_added, adjusted, or left_open again all supersede it, since
 -- the question is only "has this location been counted since", not how that
 -- count came out. This is per location, not per snapshot: a later count that
@@ -50,11 +72,29 @@ WHERE reconciliation_id = ?;
 -- just stops being "open".
 -- name: ListOpenReconciliationLinesByFund :many
 SELECT rl.id, rl.fund_id, rl.reconciliation_id, rl.account_id, rl.recorded_amount,
-       rl.actual_amount, rl.difference_amount, rl.resolution, rl.adjustment_transaction_id
+       rl.actual_amount, rl.difference_amount, rl.resolution, rl.adjustment_transaction_id,
+       CAST(CASE rl.resolution
+         WHEN 'left_open' THEN rl.difference_amount
+         WHEN 'matched' THEN 0
+         ELSE CASE
+           WHEN fix.id IS NULL THEN 0
+           WHEN fix.direction = 'in' THEN rl.difference_amount - fix.amount
+           ELSE rl.difference_amount + fix.amount
+         END
+       END AS INTEGER) AS remainder_amount
 FROM reconciliation_line rl
 JOIN reconciliation r ON r.fund_id = rl.fund_id AND r.id = rl.reconciliation_id
+LEFT JOIN "transaction" fix ON fix.fund_id = rl.fund_id AND fix.id = rl.adjustment_transaction_id
 WHERE rl.fund_id = ?
-  AND rl.resolution = 'left_open'
+  AND (CASE rl.resolution
+         WHEN 'left_open' THEN rl.difference_amount
+         WHEN 'matched' THEN 0
+         ELSE CASE
+           WHEN fix.id IS NULL THEN 0
+           WHEN fix.direction = 'in' THEN rl.difference_amount - fix.amount
+           ELSE rl.difference_amount + fix.amount
+         END
+       END) <> 0
   AND NOT EXISTS (
     SELECT 1
     FROM reconciliation_line rl2

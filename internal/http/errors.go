@@ -117,6 +117,8 @@ func mapLedgerError(w http.ResponseWriter, logger *slog.Logger, err error) {
 		writeAPIError(w, http.StatusConflict, "account_inactive", "This location has been retired and cannot take new entries.")
 	case errors.Is(err, ledger.ErrReconciliationMissingLocation):
 		writeAPIError(w, http.StatusConflict, "reconciliation_location_missing", "A cash count must include every active location.")
+	case errors.Is(err, ledger.ErrReconciliationPlugMismatch):
+		writeAPIError(w, http.StatusConflict, "reconciliation_plug_mismatch", "An adjusting entry must equal the difference exactly.")
 	case errors.Is(err, ledger.ErrContributionRequiresIncidentalPurpose):
 		writeAPIError(w, http.StatusBadRequest, "invalid_argument", "A named contribution must be tagged to an incidental (envelope) purpose.")
 	case errors.Is(err, money.ErrOverflow):

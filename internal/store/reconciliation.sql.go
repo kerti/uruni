@@ -134,9 +134,18 @@ func (q *Queries) ListReconciliationsByFund(ctx context.Context, fundID int64) (
 const listReconciliationsPage = `-- name: ListReconciliationsPage :many
 SELECT r.id, r.fund_id, r.performed_at, r.through_transaction_id, r.note, r.created_at,
   CAST(COALESCE((
-    SELECT SUM(ABS(rl.difference_amount))
+    SELECT SUM(ABS(CASE rl.resolution
+         WHEN 'left_open' THEN rl.difference_amount
+         WHEN 'matched' THEN 0
+         ELSE CASE
+           WHEN fix.id IS NULL THEN 0
+           WHEN fix.direction = 'in' THEN rl.difference_amount - fix.amount
+           ELSE rl.difference_amount + fix.amount
+         END
+       END))
     FROM reconciliation_line rl
-    WHERE rl.reconciliation_id = r.id AND rl.resolution = 'left_open'
+    LEFT JOIN "transaction" fix ON fix.fund_id = rl.fund_id AND fix.id = rl.adjustment_transaction_id
+    WHERE rl.reconciliation_id = r.id
   ), 0) AS INTEGER) AS open_difference_amount
 FROM reconciliation r
 WHERE r.fund_id = ?1
@@ -171,8 +180,8 @@ type ListReconciliationsPageRow struct {
 // (their own comments have the full reasoning). No search - a handful of
 // dated snapshots a year, per the issue.
 //
-// open_difference_amount is the sum of ABS(difference_amount) across that
-// snapshot's still-open lines - the same figure Confirmation on /reconcile
+// open_difference_amount is the sum of ABS(remainder_amount) across that
+// snapshot's lines (#498; see ListReconciliationLines for the remainder) - the same figure Confirmation on /reconcile
 // computes client-side from a detail fetch, computed here so a list row can
 // show cocok (0) vs selisih without one. Cast so it lands as int64 rather
 // than interface{} - sqlc's SQLite engine cannot infer the type of a summed

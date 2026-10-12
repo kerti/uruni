@@ -25,7 +25,7 @@ type faultQuerier struct {
 	failPurpose int64
 	rows        []store.ListReportTransactionsRow
 	// openLines, when set, replaces ReportOpenReconciliationLines's result.
-	openLines []store.ReconciliationLine
+	openLines []store.ReportOpenReconciliationLinesRow
 }
 
 var errFault = errors.New("injected fault")
@@ -54,7 +54,7 @@ func (f faultQuerier) ReportLatestReconciliation(ctx context.Context, arg store.
 	return f.Querier.ReportLatestReconciliation(ctx, arg)
 }
 
-func (f faultQuerier) ReportOpenReconciliationLines(ctx context.Context, arg store.ReportOpenReconciliationLinesParams) ([]store.ReconciliationLine, error) {
+func (f faultQuerier) ReportOpenReconciliationLines(ctx context.Context, arg store.ReportOpenReconciliationLinesParams) ([]store.ReportOpenReconciliationLinesRow, error) {
 	if f.fail == "ReportOpenReconciliationLines" {
 		return nil, errFault
 	}
@@ -316,8 +316,8 @@ func TestMonthlyReportOwnSumsRefuseToWrap(t *testing.T) {
 
 	t.Run("open differences", func(t *testing.T) {
 		l, fundID := faultyReportFixture(t)
-		line := store.ReconciliationLine{DifferenceAmount: huge}
-		odd := &Ledger{db: l.db, q: faultQuerier{Querier: l.q, openLines: []store.ReconciliationLine{line, line}}}
+		line := store.ReportOpenReconciliationLinesRow{RemainderAmount: huge}
+		odd := &Ledger{db: l.db, q: faultQuerier{Querier: l.q, openLines: []store.ReportOpenReconciliationLinesRow{line, line}}}
 		_, err := odd.monthlyReport(context.Background(), ReportParams{FundID: fundID, Month: "2026-09", Now: reportNow})
 		if err == nil || !strings.Contains(err.Error(), "summing open differences") {
 			t.Fatalf("monthlyReport() = %v, want a difference overflow", err)

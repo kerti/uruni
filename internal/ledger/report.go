@@ -128,8 +128,8 @@ type ReportReconciliation struct {
 	// Date is the count's day in Asia/Jakarta ("YYYY-MM-DD").
 	Date string
 
-	// Difference is the sum, by magnitude, of every difference still open
-	// across the fund - the figure ReconciliationBanner shows - so a short
+	// Difference is the sum, by magnitude, of every remainder still open
+	// (#498: remainder_amount, not the difference found) across the fund - the figure ReconciliationBanner shows - so a short
 	// location and an over one cannot cancel each other into "cocok". Matched
 	// is Difference == 0.
 	Matched    bool
@@ -509,7 +509,7 @@ func (l *Ledger) reportMonths(ctx context.Context, fundID int64, today time.Time
 
 // reportReconciliation reads the banner's three states as of the bound: nil
 // for never counted by then, otherwise the latest count's date and the
-// fund-wide difference still open at the bound.
+// fund-wide remainder still open at the bound.
 func (l *Ledger) reportReconciliation(ctx context.Context, fundID int64, b reportBound) (*ReportReconciliation, error) {
 	latest, err := l.q.ReportLatestReconciliation(ctx, store.ReportLatestReconciliationParams{FundID: fundID, Before: b.before})
 	if errors.Is(err, sql.ErrNoRows) {
@@ -525,7 +525,7 @@ func (l *Ledger) reportReconciliation(ctx context.Context, fundID int64, b repor
 	}
 	var difference money.Amount
 	for _, line := range open {
-		d := money.FromDB(line.DifferenceAmount)
+		d := money.FromDB(line.RemainderAmount)
 		if d < 0 {
 			d = -d
 		}

@@ -473,9 +473,11 @@ type Querier interface {
 	// other paged list in this package uses.
 	ListMembersPage(ctx context.Context, arg ListMembersPageParams) ([]ListMembersPageRow, error)
 	ListOpenIncidentalsByFund(ctx context.Context, fundID int64) ([]Incidental, error)
-	// Differences the treasurer chose to sleep on, but only while nothing later
-	// has weighed in on the same location. A left_open line stops counting as
-	// open the moment a later snapshot has any line at all for that account_id -
+	// Gaps still open: a line whose remainder_amount (see ListReconciliationLines)
+	// is non-zero - a left_open line, or an entry_added line whose entry did not
+	// square the whole difference (#498) - but only while nothing later has
+	// weighed in on the same location. Such a line stops counting as open the
+	// moment a later snapshot has any line at all for that account_id -
 	// matched, entry_added, adjusted, or left_open again all supersede it, since
 	// the question is only "has this location been counted since", not how that
 	// count came out. This is per location, not per snapshot: a later count that
@@ -484,7 +486,7 @@ type Querier interface {
 	// (performed_at, id), performed_at first - a snapshot is never edited
 	// (ADR-024), so a superseded line stays in the table exactly as recorded; it
 	// just stops being "open".
-	ListOpenReconciliationLinesByFund(ctx context.Context, fundID int64) ([]ReconciliationLine, error)
+	ListOpenReconciliationLinesByFund(ctx context.Context, fundID int64) ([]ListOpenReconciliationLinesByFundRow, error)
 	// What the fund still owes its members: neither settled by a payout nor
 	// waived. Both halves are conditions SQLite cannot express as a CHECK across
 	// tables, so the settle path filters on them here instead.
@@ -515,8 +517,17 @@ type Querier interface {
 	ListReceiptsByFund(ctx context.Context, fundID int64) ([]Receipt, error)
 	ListReceiptsByReimbursement(ctx context.Context, reimbursementID *int64) ([]Receipt, error)
 	ListReceiptsByTransaction(ctx context.Context, transactionID *int64) ([]Receipt, error)
+	// remainder_amount (#498) is what a line still has open: the part of its
+	// difference its fix did not square, signed like difference_amount
+	// (actual - recorded). left_open: the whole difference. matched: 0. adjusted
+	// and entry_added: difference - signed(fix), where the fix is the entry the
+	// line points at (+ for in, - for out). An entry_added line from before #498
+	// points at nothing, and reads as closed (0): its remainder was never
+	// recorded and cannot be known. The same expression reads in
+	// ListOpenReconciliationLinesByFund, ListReconciliationsPage and
+	// ReportOpenReconciliationLines - keep the four in step.
 	// In ListAccountsByFund's order: cash before bank, then by name.
-	ListReconciliationLines(ctx context.Context, reconciliationID int64) ([]ReconciliationLine, error)
+	ListReconciliationLines(ctx context.Context, reconciliationID int64) ([]ListReconciliationLinesRow, error)
 	// ListReconciliationLinesByFund is the backup export's own read (ADR-012,
 	// #323): every line across every snapshot, matched or not - unlike
 	// ListOpenReconciliationLinesByFund above, nothing here is filtered by
@@ -532,8 +543,8 @@ type Querier interface {
 	// (their own comments have the full reasoning). No search - a handful of
 	// dated snapshots a year, per the issue.
 	//
-	// open_difference_amount is the sum of ABS(difference_amount) across that
-	// snapshot's still-open lines - the same figure Confirmation on /reconcile
+	// open_difference_amount is the sum of ABS(remainder_amount) across that
+	// snapshot's lines (#498; see ListReconciliationLines for the remainder) - the same figure Confirmation on /reconcile
 	// computes client-side from a detail fetch, computed here so a list row can
 	// show cocok (0) vs selisih without one. Cast so it lands as int64 rather
 	// than interface{} - sqlc's SQLite engine cannot infer the type of a summed
@@ -778,9 +789,10 @@ type Querier interface {
 	// and the lines it left open are exactly what the report said back then.
 	ReportLatestReconciliation(ctx context.Context, arg ReportLatestReconciliationParams) (Reconciliation, error)
 	// ListOpenReconciliationLinesByFund with both snapshots bounded: a line is
-	// open at the bound when no count before the bound has weighed in on its
-	// location since.
-	ReportOpenReconciliationLines(ctx context.Context, arg ReportOpenReconciliationLinesParams) ([]ReconciliationLine, error)
+	// open at the bound when its remainder_amount is non-zero (see
+	// ListReconciliationLines) and no count before the bound has weighed in on
+	// its location since.
+	ReportOpenReconciliationLines(ctx context.Context, arg ReportOpenReconciliationLinesParams) ([]ReportOpenReconciliationLinesRow, error)
 	// Owed at the bound: incurred by then, not yet waived then, and not yet paid
 	// out by then. waived_on holds only the latest waive, so a claim waived and
 	// later un-waived reads as owed in the months it was waived (#408 accepts it).

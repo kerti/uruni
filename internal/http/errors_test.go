@@ -72,6 +72,7 @@ func TestMapLedgerErrorMapsSentinelsToStatusAndCode(t *testing.T) {
 		{"retired location", ledger.ErrAccountInactive, 409, "account_inactive"},
 		{"retired location, wrapped", fmt.Errorf("posting transaction: %w", ledger.ErrAccountInactive), 409, "account_inactive"},
 		{"cek kas omits an active location", ledger.ErrReconciliationMissingLocation, 409, "reconciliation_location_missing"},
+		{"cek kas plug is not the difference", ledger.ErrReconciliationPlugMismatch, 409, "reconciliation_plug_mismatch"},
 		{"purpose move keeps its own retired-location code", ledger.ErrPurposeMoveAccountInactive, 409, "purpose_move_account_inactive"},
 		{"money overflow", money.ErrOverflow, 500, "internal_error"},
 		{"unrecognized", errors.New("some domain-internal failure"), 500, "internal_error"},

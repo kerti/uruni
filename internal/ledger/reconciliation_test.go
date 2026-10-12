@@ -22,7 +22,7 @@ func (f fixture) bankZero() AccountCount {
 // lineFor is a small test helper: find the one reconciliation_line for
 // accountID among a snapshot's lines, or fail the test - every assertion
 // below is about one specific line, and a missing line is itself a failure.
-func lineFor(t *testing.T, lines []store.ReconciliationLine, accountID int64) store.ReconciliationLine {
+func lineFor(t *testing.T, lines []store.ListReconciliationLinesRow, accountID int64) store.ListReconciliationLinesRow {
 	t.Helper()
 	for _, ln := range lines {
 		if ln.AccountID == accountID {
@@ -30,7 +30,7 @@ func lineFor(t *testing.T, lines []store.ReconciliationLine, accountID int64) st
 		}
 	}
 	t.Fatalf("no reconciliation_line for account %d among %+v", accountID, lines)
-	return store.ReconciliationLine{}
+	return store.ListReconciliationLinesRow{}
 }
 
 // An empty ledger is TakeReconciliation's own code path (ADR-024): no
@@ -138,7 +138,8 @@ func TestTakeReconciliationRegressionAdjustedStoresTheGapFoundNotZero(t *testing
 
 // The same regression, for "entry_added": a forgotten real entry posted in
 // the same call still leaves the snapshot holding the gap that was found,
-// not 0 - and unlike "adjusted", it names no transaction.
+// not 0. Since #498 it names its entry as well, because the line's
+// remainder is derived through that entry; an exact entry leaves nothing open.
 func TestTakeReconciliationRegressionEntryAddedStoresTheGapFoundNotZero(t *testing.T) {
 	t.Parallel()
 	l := newTestLedger(t)
@@ -174,8 +175,11 @@ func TestTakeReconciliationRegressionEntryAddedStoresTheGapFoundNotZero(t *testi
 	if line.DifferenceAmount != 20_000 {
 		t.Fatalf("DifferenceAmount = %d, want 20000 (the gap actually found, not 0)", line.DifferenceAmount)
 	}
-	if line.AdjustmentTransactionID != nil {
-		t.Errorf("AdjustmentTransactionID = %v, want nil - entry_added names nothing, the entry is self-explanatory", line.AdjustmentTransactionID)
+	if line.AdjustmentTransactionID == nil {
+		t.Fatal("AdjustmentTransactionID = nil, want the entry's id - #498 derives the remainder through it")
+	}
+	if line.RemainderAmount != 0 {
+		t.Errorf("RemainderAmount = %d, want 0 - the entry squares the whole gap", line.RemainderAmount)
 	}
 
 	// The fix itself must still exist, correctly dated and kind='normal'.
@@ -195,8 +199,8 @@ func TestTakeReconciliationRegressionEntryAddedStoresTheGapFoundNotZero(t *testi
 }
 
 // All four resolutions, reachable together in one snapshot across four
-// accounts: adjusted always names its fix, entry_added never does, matched
-// and left_open name nothing at all.
+// accounts: adjusted and entry_added each name the entry they posted (#498),
+// matched and left_open name nothing at all.
 func TestTakeReconciliationAllFourResolutionsInOneSnapshot(t *testing.T) {
 	t.Parallel()
 	l := newTestLedger(t)
@@ -265,8 +269,8 @@ func TestTakeReconciliationAllFourResolutionsInOneSnapshot(t *testing.T) {
 	if entryAdded.Resolution != "entry_added" || entryAdded.DifferenceAmount != 20_000 {
 		t.Errorf("entry_added line = %+v, want resolution=entry_added, difference=20000", entryAdded)
 	}
-	if entryAdded.AdjustmentTransactionID != nil {
-		t.Error("entry_added line names a transaction, want nil")
+	if entryAdded.AdjustmentTransactionID == nil {
+		t.Error("entry_added line names no transaction, want the entry it posted (#498)")
 	}
 }
 
@@ -798,61 +802,6 @@ func TestTakeReconciliationEmptyLedgerWithAFixStillRecordsZeroAndTheFullGap(t *t
 	}
 	if bal != 75_000 {
 		t.Errorf("AccountBalance() = %d, want 75000", bal)
-	}
-}
-
-// difference_amount is computed from actual - recorded, never from the fix, so
-// a fix that does not close the whole gap still records the gap honestly and
-// leaves the remainder to be found by the next snapshot. Nothing asserted this
-// invariant, and an implementation that derived the difference from the fix
-// would pass every other test in this file.
-func TestTakeReconciliationFixThatUndershootsStillRecordsTheWholeGap(t *testing.T) {
-	t.Parallel()
-	l := newTestLedger(t)
-	f := newFixture(t, l)
-	ctx := context.Background()
-	q := store.New(l.db)
-
-	if _, err := l.PostTransaction(ctx, PostTransactionParams{
-		FundID: f.fundID, AccountID: f.cashID, PurposeID: f.mainID,
-		Direction: "in", Amount: 100_000, OccurredOn: "2026-08-01",
-	}); err != nil {
-		t.Fatalf("PostTransaction() = %v, want no error", err)
-	}
-
-	// Counted 130,000 against a recorded 100,000: a 30,000 gap, squared by a
-	// fix of only 20,000.
-	rec, err := l.TakeReconciliation(ctx, TakeReconciliationParams{
-		FundID: f.fundID,
-		Counts: []AccountCount{{
-			AccountID: f.cashID, ActualAmount: 130_000, Resolution: "adjusted",
-			Fix: &Fix{
-				PurposeID: f.mainID, Direction: "in", Amount: 20_000,
-				OccurredOn: "2026-08-12",
-			},
-		}, f.bankZero()},
-	})
-	if err != nil {
-		t.Fatalf("TakeReconciliation() = %v, want no error", err)
-	}
-
-	lines, err := q.ListReconciliationLines(ctx, rec.ID)
-	if err != nil {
-		t.Fatalf("ListReconciliationLines() = %v, want no error", err)
-	}
-	line := lineFor(t, lines, f.cashID)
-	if line.DifferenceAmount != 30_000 {
-		t.Errorf("DifferenceAmount = %d, want 30000 - the gap found, not the 20000 the fix covered", line.DifferenceAmount)
-	}
-
-	// The remainder is not lost: it is simply still there, and the next
-	// snapshot compares against a ledger that now holds 120,000.
-	bal, err := l.AccountBalance(ctx, f.fundID, f.cashID)
-	if err != nil {
-		t.Fatalf("AccountBalance() = %v, want no error", err)
-	}
-	if bal != 120_000 {
-		t.Errorf("AccountBalance() = %d, want 120000", bal)
 	}
 }
 

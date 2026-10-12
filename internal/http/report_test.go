@@ -16,6 +16,7 @@ import (
 	"github.com/kerti/uruni/internal/ledger"
 	"github.com/kerti/uruni/internal/money"
 	"github.com/kerti/uruni/internal/store"
+	"github.com/kerti/uruni/internal/tz"
 )
 
 // reportNow is 2026-10-02 10:00 in Asia/Jakarta - early enough in a month
@@ -381,5 +382,43 @@ func TestReportDateLineAndMonthPickerFirst(t *testing.T) {
 	}
 	if nav, hero := strings.Index(running, `<nav class="months"`), strings.Index(running, `<section class="hero"`); nav < 0 || hero < 0 || nav > hero {
 		t.Errorf("month picker at %d, summary at %d; want the picker first", nav, hero)
+	}
+}
+
+// #498: the public page reads selisih for what a partial entry left open -
+// the remainder, not the difference that was found - and cocok once an exact
+// entry closes the line.
+func TestReportReadsAPartialCekKasEntryAsSelisihForTheRemainder(t *testing.T) {
+	t.Parallel()
+	f := newReportFixture(t, "Kas RT 05")
+	f.post(t, "in", 100_000, "2026-09-03")
+	today := reportNow.In(tz.Jakarta).Format("2006-01-02")
+
+	take := func(amount money.Amount) {
+		t.Helper()
+		if _, err := f.l.TakeReconciliation(context.Background(), ledger.TakeReconciliationParams{
+			FundID: f.fund.ID,
+			Counts: []ledger.AccountCount{{
+				AccountID: f.cashID, ActualAmount: 130_000, Resolution: "entry_added",
+				Fix: &ledger.Fix{PurposeID: f.mainID, Direction: "in", Amount: amount, OccurredOn: today},
+			}},
+		}); err != nil {
+			t.Fatalf("TakeReconciliation() = %v, want no error", err)
+		}
+	}
+
+	take(20_000)
+	body := f.get(t, "/report/"+f.fund.ReportSlug).Body.String()
+	if want := reportText.Discrepancy(money.FormatIDR(10_000)); !strings.Contains(body, want) {
+		t.Errorf("report after a partial entry lacks %q:\n%s", want, body)
+	}
+	if strings.Contains(body, reportText.Matched) || strings.Contains(body, money.FormatIDR(30_000)) {
+		t.Error("report after a partial entry says cocok or shows the original 30000 difference")
+	}
+
+	take(10_000)
+	body = f.get(t, "/report/"+f.fund.ReportSlug).Body.String()
+	if !strings.Contains(body, reportText.Matched) {
+		t.Errorf("report after the exact entry does not say cocok:\n%s", body)
 	}
 }

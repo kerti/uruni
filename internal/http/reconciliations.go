@@ -82,6 +82,11 @@ type reconciliationLineResponse struct {
 	DifferenceAmount        int64  `json:"difference_amount"`
 	Resolution              string `json:"resolution"`
 	AdjustmentTransactionID *int64 `json:"adjustment_transaction_id"`
+	// RemainderAmount is what the line still has open (#498): the part of
+	// DifferenceAmount its fix did not square, signed the same way. Zero
+	// means closed; it is the figure every "selisih" reads, never
+	// DifferenceAmount (what was found at the count, frozen).
+	RemainderAmount int64 `json:"remainder_amount"`
 }
 
 // openReconciliationLineResponse is GET /api/reconciliations/open-lines's
@@ -95,14 +100,23 @@ type openReconciliationLineResponse struct {
 	ReconciliationID int64 `json:"reconciliation_id"`
 }
 
-func toOpenReconciliationLineResponse(ln store.ReconciliationLine) openReconciliationLineResponse {
+func toOpenReconciliationLineResponse(ln store.ListOpenReconciliationLinesByFundRow) openReconciliationLineResponse {
 	return openReconciliationLineResponse{
-		reconciliationLineResponse: toReconciliationLineResponse(ln),
-		ReconciliationID:           ln.ReconciliationID,
+		reconciliationLineResponse: reconciliationLineResponse{
+			ID:                      ln.ID,
+			AccountID:               ln.AccountID,
+			RecordedAmount:          ln.RecordedAmount,
+			ActualAmount:            ln.ActualAmount,
+			DifferenceAmount:        ln.DifferenceAmount,
+			Resolution:              ln.Resolution,
+			AdjustmentTransactionID: ln.AdjustmentTransactionID,
+			RemainderAmount:         ln.RemainderAmount,
+		},
+		ReconciliationID: ln.ReconciliationID,
 	}
 }
 
-func toReconciliationLineResponse(ln store.ReconciliationLine) reconciliationLineResponse {
+func toReconciliationLineResponse(ln store.ListReconciliationLinesRow) reconciliationLineResponse {
 	return reconciliationLineResponse{
 		ID:                      ln.ID,
 		AccountID:               ln.AccountID,
@@ -111,6 +125,7 @@ func toReconciliationLineResponse(ln store.ReconciliationLine) reconciliationLin
 		DifferenceAmount:        ln.DifferenceAmount,
 		Resolution:              ln.Resolution,
 		AdjustmentTransactionID: ln.AdjustmentTransactionID,
+		RemainderAmount:         ln.RemainderAmount,
 	}
 }
 
@@ -199,7 +214,7 @@ const reconciliationsPageSize = 25
 
 // reconciliationListItemResponse is one row of GET /api/reconciliations's
 // page: the snapshot plus open_difference_amount, the sum of
-// ABS(difference_amount) across that snapshot's still-open lines
+// ABS(remainder_amount) across that snapshot's lines
 // (ListReconciliationsPage's own comment has the reasoning). Cek kas's list
 // needs this to show cocok versus selisih per row without a detail fetch.
 type reconciliationListItemResponse struct {
@@ -361,11 +376,12 @@ func (a *api) getReconciliation(w http.ResponseWriter, r *http.Request) {
 }
 
 // listOpenReconciliationLines is GET /api/reconciliations/open-lines: every
-// location whose most recent count is still sitting at resolution
-// "left_open" - a gap the treasurer chose to sleep on rather than square
-// immediately (ADR-024). "Most recent" is per account_id, not per snapshot:
+// location whose most recent count still has a non-zero remainder_amount (#498)
+// - a line left_open (a gap the treasurer chose to sleep on rather than
+// square immediately, ADR-024), or an entry_added line whose entry closed only
+// part of the gap. "Most recent" is per account_id, not per snapshot:
 // once any later snapshot has a line for that account (whatever its own
-// resolution), the earlier left_open line stops being open, but a later
+// resolution), the earlier line stops being open, but a later
 // snapshot that skips an account leaves that account's gap open. Later means
 // the owning reconciliation's (performed_at, id).
 //
