@@ -9,6 +9,7 @@
 package http
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"io/fs"
@@ -24,6 +25,7 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 
 	"github.com/kerti/uruni/internal/auth"
+	"github.com/kerti/uruni/internal/backup"
 	"github.com/kerti/uruni/internal/ledger"
 	"github.com/kerti/uruni/internal/store"
 )
@@ -96,7 +98,7 @@ func newWithClock(assets fs.FS, build Build, l *ledger.Ledger, q store.Querier, 
 	r.Use(requestLogger(logger))
 	r.Use(securityHeaders)
 
-	r.Get("/healthz", healthz(build, dbFileCheck, logger))
+	r.Get("/healthz", healthz(build, dbFileCheck, pingStore(q), lastDumpIn(backupDir), logger))
 
 	// Every /api route lives under this one mount, so M5's session middleware
 	// (LoadAndSave, then sessionRequired for every route but the four public
@@ -155,6 +157,43 @@ type health struct {
 	Version string `json:"version"`
 	Commit  string `json:"commit"`
 	Error   string `json:"error,omitempty"`
+	// LastDumpAt is when the newest backup dump in URUNI_BACKUP_DIR was
+	// written (#505). Informational only: it never changes Status, because
+	// the container HEALTHCHECK and Caddy's start-up dependency read this
+	// route as liveness (ADR-019), and a missed dump is not a reason to stop
+	// serving. Absent when there is no dump yet or the directory can't be read.
+	LastDumpAt *time.Time `json:"last_dump_at,omitempty"`
+}
+
+// healthzPingTimeout bounds /healthz's database query (#505). It sits under
+// the Dockerfile HEALTHCHECK's 3s timeout so a slow store answers 503 with a
+// body rather than a probe that times out with none; and it is long enough
+// that the single shared connection (ADR-004) being held by a normal write or
+// a backup's read transaction - milliseconds at this app's size - does not
+// read as down. One slow probe is not a restart either: the HEALTHCHECK needs
+// three failures in a row.
+const healthzPingTimeout = 2 * time.Second
+
+// pingStore is /healthz's database probe: the generated Ping query (SELECT 1)
+// through the same store the handlers use, so it proves the connection can
+// answer a query, not only that the file exists.
+func pingStore(q store.Querier) func(context.Context) error {
+	return func(ctx context.Context) error {
+		_, err := q.Ping(ctx)
+		return err
+	}
+}
+
+// lastDumpIn reads the newest dump's time from backupDir's file names - a
+// directory listing, no file opened.
+func lastDumpIn(backupDir string) func() (time.Time, bool) {
+	return func() (time.Time, bool) {
+		dumps, err := backup.ListDumps(backupDir)
+		if err != nil || len(dumps) == 0 {
+			return time.Time{}, false
+		}
+		return dumps[0].When, true
+	}
 }
 
 // healthz is unauthenticated by design: the dev-server readiness poll and the
@@ -174,16 +213,42 @@ type health struct {
 // vanishes at its next restart, so it answers 503 and logs at error level.
 // The container HEALTHCHECK turning red is the alarm; nothing here refuses
 // writes, since the fix is a restart onto the file the operator meant.
-func healthz(build Build, dbFileCheck func() error, logger *slog.Logger) http.HandlerFunc {
-	return func(w http.ResponseWriter, _ *http.Request) {
+//
+// The other is #505's: a store that cannot answer SELECT 1 within
+// healthzPingTimeout. The M4 worry above was a busy store misfiring; the
+// timeout is what answers it (see healthzPingTimeout). A database that can't
+// answer a trivial query is not serving the treasurer either, and saying ok
+// over it is the failure the assessment found.
+//
+// Either way the body says only "database unavailable": the detail - which
+// can carry the database path - goes to the log, never to an unauthenticated
+// caller (#505).
+func healthz(build Build, dbFileCheck func() error, ping func(context.Context) error, lastDump func() (time.Time, bool), logger *slog.Logger) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
 		body := health{Status: "ok", Version: build.Version, Commit: build.Commit}
 		code := http.StatusOK
+		fail := func(msg string, err error) {
+			logger.Error(msg, "error", err)
+			body.Status = "error"
+			body.Error = "database unavailable"
+			code = http.StatusServiceUnavailable
+		}
 		if dbFileCheck != nil {
 			if err := dbFileCheck(); err != nil {
-				logger.Error("database file check failed", "error", err)
-				body.Status = "error"
-				body.Error = err.Error()
-				code = http.StatusServiceUnavailable
+				fail("database file check failed", err)
+			}
+		}
+		if code == http.StatusOK && ping != nil {
+			ctx, cancel := context.WithTimeout(r.Context(), healthzPingTimeout)
+			err := ping(ctx)
+			cancel()
+			if err != nil {
+				fail("database ping failed", err)
+			}
+		}
+		if lastDump != nil {
+			if at, ok := lastDump(); ok {
+				body.LastDumpAt = &at
 			}
 		}
 

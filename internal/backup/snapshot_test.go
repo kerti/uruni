@@ -203,7 +203,7 @@ func TestDumpRefusesADocumentWhoseTotalsDisagreeWithItsRows(t *testing.T) {
 	t.Run("WriteDailyIfNeeded", func(t *testing.T) {
 		t.Parallel()
 		backupDir := t.TempDir()
-		name, written, err := writeDailyIfNeeded(ctx, read, assembleZip, uploadsDir, backupDir, jakartaTime(2026, 9, 30, 10, 0, 0))
+		name, written, err := writeDailyIfNeeded(ctx, read, assembleZip, nil, uploadsDir, backupDir, jakartaTime(2026, 9, 30, 10, 0, 0))
 		if !errors.Is(err, ErrTotalsMismatch) || written {
 			t.Fatalf("writeDailyIfNeeded() = (%q, %v, %v), want (_, false, ErrTotalsMismatch)", name, written, err)
 		}
