@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import ErrorState from '@/components/states/ErrorState'
 import { copy } from '@/copy/id'
-import { formatRupiahDigits, parseRupiah } from '@/lib/money'
+import { exceedsAmountCeiling, formatRupiahDigits, parseRupiah } from '@/lib/money'
 import type { ApiError } from '@/lib/api'
 import type { LocationRow } from '@/screens/Setup/locationRow'
 
@@ -45,6 +45,8 @@ export default function OpeningBalances({
   error: ApiError | undefined
 }) {
   function handleAmountChange(clientId: string, raw: string) {
+    // A thirteenth digit is not accepted (the ceiling, #499): the field keeps its value.
+    if (exceedsAmountCeiling(raw)) return
     const digits = parseRupiah(raw)
     onChange(clientId, digits === 0 ? '' : formatRupiahDigits(digits))
   }

@@ -257,6 +257,10 @@ export const copy = {
       purpose_correction_target_closed: 'Amplop ini sudah ditutup — buka lagi dulu sebelum memindahkan transaksi ke sini.',
       purpose_correction_source_closed: 'Amplop ini sudah ditutup — buka lagi dulu sebelum memindahkan transaksi dari sini.',
       purpose_correction_noop: 'Baris ini sudah memakai pos itu.',
+      // #499: every amount has a ceiling of Rp 999.999.999.999 (12 digits).
+      // The amount input stops at 12 digits, so this is the fallback for a
+      // request that got past it (a stale client, a direct API call).
+      amount_too_large: 'Jumlahnya terlalu besar. Batasnya Rp 999.999.999.999 — cek lagi, mungkin ada nol yang kelebihan.',
       // ADR-036 (#383): POST /api/purpose-moves' own named refusals. The form
       // already withholds Titipan, a closed envelope and an amount above the
       // balance, so these are the fallback for a stale form - a close or a

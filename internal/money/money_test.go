@@ -203,3 +203,40 @@ func assertResult(t *testing.T, got money.Amount, err error, want money.Amount, 
 		t.Errorf("got %d, want %d", got, want)
 	}
 }
+
+func TestMaxAmountIsTwelveNines(t *testing.T) {
+	t.Parallel()
+	if got, want := money.MaxAmount.Int64(), int64(999_999_999_999); got != want {
+		t.Fatalf("MaxAmount = %d, want %d", got, want)
+	}
+	// The SPA parses digits into a JS number; the ceiling must stay exact there.
+	if money.MaxAmount.Int64() >= 1<<53 {
+		t.Fatalf("MaxAmount = %d, must stay below 2^53", money.MaxAmount.Int64())
+	}
+}
+
+func TestAboveCeiling(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name string
+		a    money.Amount
+		want bool
+	}{
+		{name: "zero", a: 0, want: false},
+		{name: "an ordinary dues payment", a: 50_000, want: false},
+		{name: "one below the ceiling", a: money.MaxAmount - 1, want: false},
+		{name: "exactly the ceiling", a: money.MaxAmount, want: false},
+		{name: "one past the ceiling", a: money.MaxAmount + 1, want: true},
+		{name: "thirteen digits", a: 9_999_999_999_999, want: true},
+		{name: "the int64 maximum", a: math.MaxInt64, want: true},
+		{name: "a negative is not too large, it is invalid elsewhere", a: -1, want: false},
+		{name: "the int64 minimum", a: math.MinInt64, want: false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := tt.a.AboveCeiling(); got != tt.want {
+				t.Fatalf("Amount(%d).AboveCeiling() = %v, want %v", tt.a, got, tt.want)
+			}
+		})
+	}
+}

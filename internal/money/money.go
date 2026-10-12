@@ -36,6 +36,21 @@ import (
 // enum the Go code is the only writer of.
 var ErrOverflow = errors.New("money: result overflows int64")
 
+// MaxAmount is the largest single figure Uruni accepts for any amount a person
+// types or sends: Rp 999.999.999.999, twelve digits, inclusive (#499).
+//
+// Nothing below int64 bounds a ledger on its own. SQLite raises an
+// integer-overflow error when an intermediate SUM passes int64, so two very
+// large entries would break every balance for good, and because entries are
+// immutable an offsetting entry cannot repair it. The ceiling keeps every sum
+// the app derives far inside int64: even 2^63 / MaxAmount (about 9.2 million)
+// entries at the ceiling would be needed to reach it. Twelve digits is also
+// below 2^53, so the SPA's JS number carries the figure exactly (rule 1 at the
+// edge). Rp 1 trillion is out of reach of a community fund by several orders
+// of magnitude; the ceiling exists to make a slipped key harmless, not to
+// model a real balance.
+const MaxAmount Amount = 999_999_999_999
+
 // Amount is a quantity of integer rupiah. The zero value is Rp 0 - an ordinary
 // balance (an empty fund, an account that nets to zero), not a sentinel for
 // "unset". Nothing in the schema or the PRD needs to distinguish the two.
@@ -87,6 +102,12 @@ func (a Amount) Mul(n int64) (Amount, error) {
 	}
 	return Amount(product), nil
 }
+
+// AboveCeiling reports whether a is larger than MaxAmount. It says nothing
+// about a negative a: sign is a separate check each caller already makes
+// (a payment must be positive, a count must not be negative), and a negative
+// amount is an invalid argument, not a too-large one.
+func (a Amount) AboveCeiling() bool { return a > MaxAmount }
 
 // FromDB converts a value read from the database into an Amount.
 //

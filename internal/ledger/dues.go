@@ -82,6 +82,9 @@ func (l *Ledger) PostDuesPayments(ctx context.Context, p PostDuesPaymentsParams)
 		if period.Amount <= 0 {
 			return nil, fmt.Errorf("%w: amount must be positive, got %d", ErrInvalidArgument, period.Amount.Int64())
 		}
+		if err := CheckAmountCeiling("amount", period.Amount); err != nil {
+			return nil, err
+		}
 		if err := validateDuesPeriod(period.DuesPeriod); err != nil {
 			return nil, err
 		}

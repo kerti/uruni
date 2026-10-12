@@ -57,6 +57,9 @@ func (l *Ledger) OpenIncidental(ctx context.Context, p OpenIncidentalParams) (st
 	if p.MinimumPerMember != nil && *p.MinimumPerMember <= 0 {
 		return store.Incidental{}, fmt.Errorf("%w: minimum_per_member must be positive when set, got %d", ErrInvalidArgument, p.MinimumPerMember.Int64())
 	}
+	if err := checkParticipationCeilings(p.TargetAmount, p.MinimumPerMember); err != nil {
+		return store.Incidental{}, err
+	}
 	if err := validateOccurredOn(p.OpenedOn); err != nil {
 		return store.Incidental{}, err
 	}
@@ -226,6 +229,9 @@ func (l *Ledger) SetIncidentalParticipation(ctx context.Context, p SetIncidental
 	}
 	if p.MinimumPerMember != nil && *p.MinimumPerMember <= 0 {
 		return store.Incidental{}, fmt.Errorf("%w: minimum_per_member must be positive when set, got %d", ErrInvalidArgument, p.MinimumPerMember.Int64())
+	}
+	if err := checkParticipationCeilings(p.TargetAmount, p.MinimumPerMember); err != nil {
+		return store.Incidental{}, err
 	}
 
 	var updated store.Incidental

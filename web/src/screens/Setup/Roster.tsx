@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import ErrorState from '@/components/states/ErrorState'
 import { copy } from '@/copy/id'
-import { formatRupiahDigits, parseRupiah } from '@/lib/money'
+import { exceedsAmountCeiling, formatRupiahDigits, parseRupiah } from '@/lib/money'
 import type { ApiError } from '@/lib/api'
 
 const text = copy.setup
@@ -43,6 +43,8 @@ export default function Roster({
   error: ApiError | undefined
 }) {
   function handleRateChange(raw: string) {
+    // A thirteenth digit is not accepted (the ceiling, #499): the field keeps its value.
+    if (exceedsAmountCeiling(raw)) return
     const digits = parseRupiah(raw)
     onRateAmountChange(digits === 0 ? '' : formatRupiahDigits(digits))
   }

@@ -15,6 +15,13 @@ describe('ErrorState', () => {
     expect(screen.getByText(copy.common.errors.not_found)).toBeInTheDocument()
   })
 
+  it('has its own sentence for an amount above the ceiling, not the generic fallback', () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    render(<ErrorState error={new ApiError('amount_too_large', 'An amount cannot be larger than 999,999,999,999 rupiah.')} />)
+    expect(screen.getByText(copy.common.errors.amount_too_large)).toBeInTheDocument()
+    expect(screen.queryByText(copy.common.unknownError)).not.toBeInTheDocument()
+  })
+
   it('falls back to the warm generic sentence for an unknown code', () => {
     render(<ErrorState error={new ApiError('some_future_code', 'Something the map has never seen.')} />)
     expect(screen.getByText(copy.common.unknownError)).toBeInTheDocument()

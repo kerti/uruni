@@ -136,6 +136,9 @@ func (l *Ledger) PostTransferBetweenAccounts(ctx context.Context, p PostTransfer
 	if p.Amount <= 0 {
 		return store.Transfer{}, fmt.Errorf("%w: amount must be positive, got %d", ErrInvalidArgument, p.Amount.Int64())
 	}
+	if err := CheckAmountCeiling("amount", p.Amount); err != nil {
+		return store.Transfer{}, err
+	}
 	if err := validateOccurredOn(p.OccurredOn); err != nil {
 		return store.Transfer{}, err
 	}

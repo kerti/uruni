@@ -7,6 +7,8 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/kerti/uruni/internal/ledger"
+	"github.com/kerti/uruni/internal/money"
 	"github.com/kerti/uruni/internal/store"
 )
 
@@ -95,6 +97,13 @@ func (a *api) createDuesRate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Rates write through queries, not a Ledger method, so the ceiling
+	// (#499) is applied here with the same check the ledger paths use.
+	if err := ledger.CheckAmountCeiling("amount", money.Amount(req.Amount)); err != nil {
+		mapLedgerError(w, a.logger, err)
+		return
+	}
+
 	rate, err := a.queries.CreateDuesRate(r.Context(), store.CreateDuesRateParams{
 		TierID:        tier.ID,
 		Amount:        req.Amount,
@@ -163,6 +172,10 @@ func (a *api) updateDuesRate(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.Amount == nil {
 		writeAPIError(w, http.StatusBadRequest, "invalid_argument", "The corrected amount is required.")
+		return
+	}
+	if err := ledger.CheckAmountCeiling("amount", money.Amount(*req.Amount)); err != nil {
+		mapLedgerError(w, a.logger, err)
 		return
 	}
 

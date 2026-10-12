@@ -34,6 +34,26 @@ export function formatRupiahDigits(amount: number): string {
 }
 
 /**
+ * The largest amount Uruni accepts anywhere: Rp 999.999.999.999, twelve
+ * digits (the server's money.MaxAmount, #499). Twelve digits is also well
+ * under 2^53, so the JS number an input parses to is always the exact figure
+ * typed - past that, Number() silently rounds, which is a rule 1 breach at the
+ * edge.
+ */
+export const MAX_AMOUNT = 999_999_999_999
+export const MAX_AMOUNT_DIGITS = 12
+
+/**
+ * True when whatever was typed or pasted carries more than twelve
+ * significant digits, i.e. is above MAX_AMOUNT. Leading zeros do not count:
+ * "0000000000001" is 1. Amount inputs use this to refuse the keystroke and
+ * keep the value they already hold, the way they already drop a non-digit.
+ */
+export function exceedsAmountCeiling(input: string): boolean {
+  return input.replace(/\D/g, '').replace(/^0+/, '').length > MAX_AMOUNT_DIGITS
+}
+
+/**
  * Reads whatever the treasurer typed into an amount field as integer
  * rupiah, ignoring everything that is not a digit: "Rp 1.000.000",
  * "1000000" and "1 000 000" are all 1000000.
@@ -48,5 +68,8 @@ export function formatRupiahDigits(amount: number): string {
 export function parseRupiah(input: string): number {
   const digits = input.replace(/\D/g, '')
   if (digits === '') return 0
+  // No clamp: the inputs refuse a thirteenth digit (exceedsAmountCeiling),
+  // and a figure that gets past them anyway must stay above the ceiling so
+  // the server refuses it, never be pulled down to a different amount.
   return Number(digits)
 }

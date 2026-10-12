@@ -66,6 +66,8 @@ func TestMapLedgerErrorMapsSentinelsToStatusAndCode(t *testing.T) {
 		code   string
 	}{
 		{"invalid argument", ledger.ErrInvalidArgument, 400, "invalid_argument"},
+		{"amount above the ceiling", ledger.ErrAmountTooLarge, 400, "amount_too_large"},
+		{"amount above the ceiling, wrapped", fmt.Errorf("posting transaction: %w", ledger.CheckAmountCeiling("amount", money.MaxAmount+1)), 400, "amount_too_large"},
 		{"reimbursement waived", ledger.ErrReimbursementWaived, 409, "reimbursement_waived"},
 		{"reimbursement already settled", ledger.ErrReimbursementAlreadySettled, 409, "reimbursement_already_settled"},
 		{"incidental already closed", ledger.ErrIncidentalAlreadyClosed, 409, "incidental_already_closed"},

@@ -35,6 +35,41 @@ describe('AmountInput', () => {
     expect(onChange).toHaveBeenLastCalledWith(150_000)
   })
 
+  it('accepts twelve digits, the ceiling Rp 999.999.999.999', async () => {
+    const onChange = vi.fn()
+    render(<ControlledAmountInput onChange={onChange} />)
+
+    const input = screen.getByLabelText('Jumlah') as HTMLInputElement
+    await userEvent.type(input, '999999999999')
+
+    expect(input.value).toBe('999999999999')
+    expect(onChange).toHaveBeenLastCalledWith(999_999_999_999)
+  })
+
+  it('does not accept a thirteenth digit: the field keeps its value, as it does for a non-digit', async () => {
+    const onChange = vi.fn()
+    render(<ControlledAmountInput onChange={onChange} />)
+
+    const input = screen.getByLabelText('Jumlah') as HTMLInputElement
+    await userEvent.type(input, '9999999999999')
+
+    expect(input.value).toBe('999999999999')
+    expect(onChange).toHaveBeenLastCalledWith(999_999_999_999)
+    expect(onChange.mock.calls.every(([amount]) => amount <= 999_999_999_999)).toBe(true)
+  })
+
+  it('refuses a pasted figure above the ceiling whole, rather than cutting it to twelve digits', async () => {
+    const onChange = vi.fn()
+    render(<ControlledAmountInput onChange={onChange} />)
+
+    const input = screen.getByLabelText('Jumlah') as HTMLInputElement
+    await userEvent.type(input, '500')
+    await userEvent.paste('1.000.000.000.000')
+
+    expect(input.value).toBe('500')
+    expect(onChange).toHaveBeenLastCalledWith(500)
+  })
+
   it('formats with Indonesian thousands separators on blur, and reverts to plain digits on focus', async () => {
     const onChange = vi.fn()
     render(<ControlledAmountInput onChange={onChange} />)

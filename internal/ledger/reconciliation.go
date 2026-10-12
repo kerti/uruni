@@ -428,6 +428,9 @@ func validateTakeReconciliationParams(p TakeReconciliationParams) error {
 		if c.ActualAmount < 0 {
 			return fmt.Errorf("%w: actual_amount must not be negative, got %d", ErrInvalidArgument, c.ActualAmount.Int64())
 		}
+		if err := CheckAmountCeiling("actual_amount", c.ActualAmount); err != nil {
+			return err
+		}
 
 		switch c.Resolution {
 		case "matched", "left_open":
@@ -440,6 +443,9 @@ func validateTakeReconciliationParams(p TakeReconciliationParams) error {
 			}
 			if c.Fix.Amount <= 0 {
 				return fmt.Errorf("%w: fix amount for account %d must be positive, got %d", ErrInvalidArgument, c.AccountID, c.Fix.Amount.Int64())
+			}
+			if err := CheckAmountCeiling("fix amount", c.Fix.Amount); err != nil {
+				return err
 			}
 			if c.Fix.Direction != "in" && c.Fix.Direction != "out" {
 				return fmt.Errorf("%w: fix direction for account %d must be \"in\" or \"out\", got %q", ErrInvalidArgument, c.AccountID, c.Fix.Direction)

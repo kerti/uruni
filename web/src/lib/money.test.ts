@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { formatIDR, formatRupiahDigits, parseRupiah } from '@/lib/money'
+import { exceedsAmountCeiling, formatIDR, formatRupiahDigits, MAX_AMOUNT, MAX_AMOUNT_DIGITS, parseRupiah } from '@/lib/money'
 
 // Intl's id-ID currency output uses a non-breaking space after "Rp" - asserted
 // against a normalized string so these tests describe the digits and grouping,
@@ -48,5 +48,34 @@ describe('parseRupiah', () => {
     // rupiah. 15 is the honest reading of the digits typed.
     expect(parseRupiah('1.5')).toBe(15)
     expect(Number.isInteger(parseRupiah('1.5'))).toBe(true)
+  })
+})
+
+describe('the amount ceiling', () => {
+  it('is twelve nines, and exact in a JS number', () => {
+    expect(MAX_AMOUNT).toBe(999_999_999_999)
+    expect(MAX_AMOUNT_DIGITS).toBe(12)
+    expect(Number.isSafeInteger(MAX_AMOUNT)).toBe(true)
+  })
+
+  it('accepts twelve digits and refuses thirteen', () => {
+    expect(exceedsAmountCeiling('999999999999')).toBe(false)
+    expect(exceedsAmountCeiling('1000000000000')).toBe(true)
+    expect(exceedsAmountCeiling('9999999999999')).toBe(true)
+  })
+
+  it('counts digits however they were written, and ignores leading zeros', () => {
+    expect(exceedsAmountCeiling('Rp 999.999.999.999')).toBe(false)
+    expect(exceedsAmountCeiling('1.000.000.000.000')).toBe(true)
+    expect(exceedsAmountCeiling('0000000000001')).toBe(false)
+    expect(exceedsAmountCeiling('')).toBe(false)
+  })
+
+  it('parseRupiah reads the ceiling exactly and never pulls an oversized figure down under it', () => {
+    expect(parseRupiah('999999999999')).toBe(999_999_999_999)
+    // Above the ceiling the figure stays above it, so the server refuses it
+    // (amount_too_large) instead of a clamp quietly saving a different amount.
+    expect(parseRupiah('1000000000000')).toBe(1_000_000_000_000)
+    expect(parseRupiah('99999999999999999999')).toBeGreaterThan(MAX_AMOUNT)
   })
 })
