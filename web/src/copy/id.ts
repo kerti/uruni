@@ -220,7 +220,7 @@ export const copy = {
       invalid_argument: 'Ada isian yang belum sesuai. Coba periksa lagi.',
       already_registered: 'Akun bendahara untuk Uruni ini sudah pernah dibuat.',
       invalid_credentials: 'Email atau kata sandi salah.',
-      too_many_requests: 'Terlalu banyak percobaan. Coba lagi beberapa menit lagi, ya.',
+      too_many_requests: 'Terlalu banyak percobaan. Tunggu dulu, lalu coba lagi nanti, ya.',
       // #495: every slot for checking a password is busy (503). Nothing is
       // wrong with what she typed and she is not locked out - the server is
       // simply occupied for a moment - so it says to try again right away,
@@ -376,7 +376,7 @@ export const copy = {
       submit: 'Masuk',
       submitting: 'Sedang masuk…',
       invalidCredentials: 'Email atau kata sandi salah. Coba periksa lagi.',
-      tooManyRequests: 'Terlalu banyak percobaan masuk. Coba lagi beberapa menit lagi, ya.',
+      tooManyRequests: 'Terlalu banyak percobaan masuk. Tunggu dulu, lalu coba lagi nanti, ya.',
     },
   },
   // The first-run setup wizard (M6.5, PRD §7.1): four steps, only the first

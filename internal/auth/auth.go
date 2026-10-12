@@ -27,6 +27,17 @@ import (
 // log in with. 8 matches NIST 800-63B's own stated minimum.
 const MinPasswordLength = 8
 
+// NormalizeEmail is the one form an email takes everywhere it is stored,
+// looked up or counted (#500): trimmed, then lower-cased. Register and
+// SetLogin store it, Authenticate looks it up, and the login limiter keys on
+// it, so "Treasurer@Example.org " and "treasurer@example.org" are one account
+// and one rate-limit key rather than a wrong password and a fresh budget.
+// Callers outside this package (the HTTP limiter) must use this, not their
+// own TrimSpace, so the two can never disagree.
+func NormalizeEmail(email string) string {
+	return strings.ToLower(strings.TrimSpace(email))
+}
+
 // Auth is the bootstrap-account service.
 type Auth struct {
 	db *sql.DB
@@ -107,7 +118,7 @@ func (a *Auth) withTx(ctx context.Context, fn func(store.Querier) error) error {
 // The UNIQUE index on email stays in the schema regardless, as a backstop
 // this check should make it impossible to ever reach.
 func (a *Auth) Register(ctx context.Context, email, password string) (store.User, error) {
-	email = strings.TrimSpace(email)
+	email = NormalizeEmail(email)
 	if email == "" || !strings.Contains(email, "@") {
 		return store.User{}, fmt.Errorf("%w: email must be a valid address", ErrInvalidArgument)
 	}

@@ -51,11 +51,24 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 const getUserByEmail = `-- name: GetUserByEmail :one
 SELECT id, email, password_hash, created_at
 FROM "user"
-WHERE email = ?
+WHERE lower(email) = ?1 OR email = ?2
 `
 
-func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error) {
-	row := q.db.QueryRowContext(ctx, getUserByEmail, email)
+type GetUserByEmailParams struct {
+	Normalized string
+	Exact      string
+}
+
+// GetUserByEmail finds the login case-insensitively without a schema change
+// (#500). New rows are stored trimmed and lower-cased (auth.NormalizeEmail),
+// but a row written before that keeps whatever case it was typed in, so the
+// lookup matches either the normalized form against lower(email) or the
+// address exactly as stored. SQLite's lower() folds ASCII only: the exact arm
+// is what keeps a legacy row with a non-ASCII capital findable by the very
+// text it was registered with. The COLLATE NOCASE column rides the schema
+// epic (#523); user holds one row, so no index is lost to the OR.
+func (q *Queries) GetUserByEmail(ctx context.Context, arg GetUserByEmailParams) (User, error) {
+	row := q.db.QueryRowContext(ctx, getUserByEmail, arg.Normalized, arg.Exact)
 	var i User
 	err := row.Scan(
 		&i.ID,
@@ -108,20 +121,22 @@ func (q *Queries) ListUsers(ctx context.Context) ([]User, error) {
 
 const updateUserPassword = `-- name: UpdateUserPassword :one
 UPDATE "user"
-SET password_hash = ?
-WHERE email = ?
+SET password_hash = ?1
+WHERE lower(email) = ?2 OR email = ?3
 RETURNING id, email, password_hash, created_at
 `
 
 type UpdateUserPasswordParams struct {
 	PasswordHash string
-	Email        string
+	Normalized   string
+	Exact        string
 }
 
 // UpdateUserPassword is create-user's reset half (#287): the email is the
-// key, and the hash is computed by internal/auth before the call.
+// key (matched as GetUserByEmail does, #500), and the hash is computed by
+// internal/auth before the call.
 func (q *Queries) UpdateUserPassword(ctx context.Context, arg UpdateUserPasswordParams) (User, error) {
-	row := q.db.QueryRowContext(ctx, updateUserPassword, arg.PasswordHash, arg.Email)
+	row := q.db.QueryRowContext(ctx, updateUserPassword, arg.PasswordHash, arg.Normalized, arg.Exact)
 	var i User
 	err := row.Scan(
 		&i.ID,

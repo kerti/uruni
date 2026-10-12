@@ -32,7 +32,9 @@ func createUser(ctx context.Context, args []string, out io.Writer) error {
 	if len(args) != 2 {
 		return errCreateUserUsage
 	}
-	email, password := args[0], args[1]
+	// Echoed back in the form it is stored and matched in (#500), so what the
+	// operator reads is the address she must log in with, whatever case she typed.
+	email, password := auth.NormalizeEmail(args[0]), args[1]
 
 	cfg, err := config.Load()
 	if err != nil {

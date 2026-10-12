@@ -21,10 +21,17 @@ import (
 // ErrOtherAccountExists and writes nothing. A second row would get funds[0]
 // from resolveFund exactly as a second registration would.
 //
+// The email is normalised (NormalizeEmail) before it is stored or matched,
+// and the match is case-insensitive, so create-user Treasurer@X resets the
+// login stored as treasurer@x - and one stored before #500 as Treasurer@X,
+// whose stored form is left as it was (a reset changes the password, not the
+// address).
+//
 // A reset also deletes every session, so a cookie issued under the old
 // password stops working the moment the password changes.
 func (a *Auth) SetLogin(ctx context.Context, email, password string) (created bool, err error) {
-	email = strings.TrimSpace(email)
+	exact := strings.TrimSpace(email)
+	email = NormalizeEmail(email)
 	if email == "" || !strings.Contains(email, "@") {
 		return false, fmt.Errorf("%w: email must be a valid address", ErrInvalidArgument)
 	}
@@ -39,7 +46,7 @@ func (a *Auth) SetLogin(ctx context.Context, email, password string) (created bo
 	}
 
 	err = a.withTx(ctx, func(q store.Querier) error {
-		_, err := q.UpdateUserPassword(ctx, store.UpdateUserPasswordParams{PasswordHash: hash, Email: email})
+		_, err := q.UpdateUserPassword(ctx, store.UpdateUserPasswordParams{PasswordHash: hash, Normalized: email, Exact: exact})
 		switch {
 		case err == nil:
 			if err := q.DeleteAllSessions(ctx); err != nil {

@@ -415,7 +415,7 @@ func (a *api) confirmRestore(w http.ResponseWriter, r *http.Request) {
 	// Reserved before the password is verified, for the reason login.go
 	// gives (#495): the attempt counts while it is in flight. Kept for a
 	// wrong password, handed back for anything that was not a guess.
-	ip := "restore-ip:" + a.clientIP(r)
+	ip := "restore-ip:" + a.clientNetwork(r)
 	reservation, ok := a.loginLimiter.reserve(ip)
 	if !ok {
 		writeAPIError(w, http.StatusTooManyRequests, "too_many_requests", "Too many attempts. Try again later.")

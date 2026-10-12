@@ -51,7 +51,7 @@ func (a *api) register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	reservation, ok := a.registerLimiter.reserve("register-ip:" + a.clientIP(r))
+	reservation, ok := a.registerLimiter.reserve("register-ip:" + a.clientNetwork(r))
 	if !ok {
 		writeAPIError(w, http.StatusTooManyRequests, "too_many_requests", "Too many attempts. Try again later.")
 		return

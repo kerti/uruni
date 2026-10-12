@@ -26,7 +26,7 @@ func TestUserRoundTrip(t *testing.T) {
 		t.Fatalf("CreateUser() = %v, want no error", err)
 	}
 
-	got, err := q.GetUserByEmail(ctx, "treasurer@example.org")
+	got, err := q.GetUserByEmail(ctx, store.GetUserByEmailParams{Normalized: "treasurer@example.org", Exact: "treasurer@example.org"})
 	if err != nil {
 		t.Fatalf("GetUserByEmail() = %v, want no error", err)
 	}
