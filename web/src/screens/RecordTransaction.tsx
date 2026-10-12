@@ -221,6 +221,9 @@ export default function RecordTransaction({
     return { accounts, purposes, balances, members }
   }
 
+  // #507: a write whose response was lost re-reads the balances before she can retry.
+  const settleOnUnknown = { settle: () => loadRun(loadFormData, { silent: true }) }
+
   useEffect(() => {
     void loadRun(loadFormData)
     // loadRun is a stable useCallback (useApi.ts); this fires once on mount,
@@ -486,7 +489,7 @@ export default function RecordTransaction({
 
       onRecorded(direction, photoFailed)
       return result
-    })
+    }, settleOnUnknown)
   }
 
   if (loadState.status === 'idle' || loadState.status === 'loading') {

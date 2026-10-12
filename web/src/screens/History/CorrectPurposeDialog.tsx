@@ -41,6 +41,7 @@ export default function CorrectPurposeDialog({
   open,
   onClose,
   onCorrected,
+  refresh,
 }: {
   transaction: Transaction | null
   purposes: Purpose[]
@@ -48,6 +49,7 @@ export default function CorrectPurposeDialog({
   open: boolean
   onClose: () => void
   onCorrected: () => void
+  refresh: () => Promise<void>
 }) {
   const [state, run] = useApi<unknown>()
   const [purposeId, setPurposeId] = useState<number | null>(null)
@@ -71,11 +73,14 @@ export default function CorrectPurposeDialog({
   function handleSubmit(event: FormEvent) {
     event.preventDefault()
     if (transaction === null || purposeId === null || unchanged) return
-    void run(async () => {
-      const result = await correctPurpose(transaction.id, purposeId)
-      onCorrected()
-      return result
-    })
+    void run(
+      async () => {
+        const result = await correctPurpose(transaction.id, purposeId)
+        onCorrected()
+        return result
+      },
+      { settle: refresh },
+    )
   }
 
   return (

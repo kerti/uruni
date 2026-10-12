@@ -12,7 +12,7 @@ import { Label } from '@/components/ui/label'
 import Loading from '@/components/states/Loading'
 import ErrorState from '@/components/states/ErrorState'
 import { copy } from '@/copy/id'
-import { ApiError } from '@/lib/api'
+import { ApiError, settleUncertainWrite } from '@/lib/api'
 import { formatIsoDate } from '@/lib/dates'
 import { formatIDR } from '@/lib/money'
 import { cn } from '@/lib/utils'
@@ -223,6 +223,8 @@ export default function Reimbursements({ refetchKey }: { refetchKey?: unknown })
         await api()
         setFeedback({ kind: 'success', text: successText })
       } catch (err) {
+        // #507: a lost response may still have saved; re-read before she can retry.
+        await settleUncertainWrite(err, () => listRun(loadFirstPage, { silent: true }))
         const apiErr = err instanceof ApiError ? err : new ApiError('unknown_error', err instanceof Error ? err.message : String(err))
         setFeedback({ kind: 'error', text: errorText(apiErr) })
         // eslint-disable-next-line no-console
@@ -380,7 +382,10 @@ export default function Reimbursements({ refetchKey }: { refetchKey?: unknown })
           receiptIds={claims.find((c) => c.id === receiptsForId)?.receipt_ids ?? []}
           open={receiptsForId !== null}
           onClose={() => setReceiptsForId(null)}
-          onChanged={refetchFirstPage}
+          // Silent, so the list keeps its rows (and this dialog its claim)
+          // while it re-reads - including after an uncertain save (#507),
+          // when the dialog's own message has to stay on screen.
+          onChanged={() => listRun(loadFirstPage, { silent: true })}
         />
         {nextCursor && moreError && <ErrorState error={moreError} onRetry={() => void loadMore(nextCursor)} />}
         {nextCursor && !moreError && (

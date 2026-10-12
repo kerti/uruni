@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 
-import { ApiError } from '@/lib/api'
+import { ApiError, settleUncertainWrite } from '@/lib/api'
 
 export type ApiStatus = 'idle' | 'loading' | 'error' | 'success'
 
@@ -38,7 +38,15 @@ export interface RunOptions {
    * the right one.
    */
   silent?: boolean
+  /**
+   * For a write: re-reads the screen's data when the write's outcome is
+   * unknown (#507), before the error state is set - so the treasurer's retry
+   * happens against fresh data. Runs only for that one error code.
+   */
+  settle?: () => Promise<void> | void
 }
+
+const noop = () => {}
 
 export function useApi<T>(): [ApiState<T>, (fn: () => Promise<T>, options?: RunOptions) => Promise<void>] {
   const [state, setState] = useState<ApiState<T>>({
@@ -71,6 +79,8 @@ export function useApi<T>(): [ApiState<T>, (fn: () => Promise<T>, options?: RunO
       // A silent refresh that fails changes nothing on screen - see
       // RunOptions.silent. A visible one still surfaces the error.
       if (silent) return
+      await settleUncertainWrite(err, options?.settle ?? noop)
+      if (!mountedRef.current || callId !== callIdRef.current) return
       const apiError = err instanceof ApiError ? err : new ApiError('unknown_error', err instanceof Error ? err.message : String(err))
       setState({ status: 'error', data: undefined, error: apiError })
     }

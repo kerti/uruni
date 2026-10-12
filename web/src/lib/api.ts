@@ -27,6 +27,24 @@ export class ApiError extends Error {
 /** The one code used for a request that never got a response. */
 export const NETWORK_ERROR_CODE = 'network_error'
 
+/**
+ * The code for a WRITE whose fetch threw (connection lost, or the timeout
+ * fired). The server may have committed before the response was lost, so the
+ * save is uncertain - unlike a read's network_error, which only means "no data".
+ */
+export const WRITE_OUTCOME_UNKNOWN = 'write_outcome_unknown'
+
+/** How long a write may wait for its response before it is reported as uncertain. */
+export const WRITE_TIMEOUT_MS = 20_000
+
+/**
+ * The same wait for a write that carries a file (a receipt photo, a backup
+ * zip): the body itself has to cross a mobile connection before any response
+ * can start, and cutting off an upload that would have landed is the
+ * duplicate this whole code exists to prevent.
+ */
+export const UPLOAD_TIMEOUT_MS = 120_000
+
 interface ErrorEnvelope {
   error?: {
     code?: string
@@ -63,12 +81,35 @@ function notifyConnectivity(online: boolean) {
  *   present (isNetworkError: false)
  */
 export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
+  const method = (init?.method ?? 'GET').toUpperCase()
+  const isWrite = method !== 'GET' && method !== 'HEAD'
+
   let res: Response
+  let timeout: ReturnType<typeof setTimeout> | undefined
   try {
-    res = await fetch(path, init)
+    if (isWrite) {
+      // A write gets a bounded wait. Our own controller carries the timeout and
+      // mirrors the caller's signal, so a caller abort stays distinguishable
+      // from the timeout (the caller's signal is aborted, ours alone is not).
+      const controller = new AbortController()
+      const caller = init?.signal
+      if (caller?.aborted) controller.abort(caller.reason)
+      else caller?.addEventListener('abort', () => controller.abort(caller.reason), { once: true })
+      const wait = init?.body instanceof FormData ? UPLOAD_TIMEOUT_MS : WRITE_TIMEOUT_MS
+      timeout = setTimeout(() => controller.abort(new Error('write timed out')), wait)
+      res = await fetch(path, { ...init, signal: controller.signal })
+    } else {
+      res = await fetch(path, init)
+    }
   } catch (err) {
     notifyConnectivity(false)
-    throw new ApiError(NETWORK_ERROR_CODE, err instanceof Error ? err.message : 'network error', true)
+    const message = err instanceof Error ? err.message : 'network error'
+    // A caller-initiated abort (e.g. unmount) is not an uncertain save: the
+    // caller walked away and nothing is waiting on the outcome.
+    if (isWrite && !init?.signal?.aborted) throw new ApiError(WRITE_OUTCOME_UNKNOWN, message, true)
+    throw new ApiError(NETWORK_ERROR_CODE, message, true)
+  } finally {
+    clearTimeout(timeout)
   }
 
   if (!res.ok) {
@@ -91,6 +132,31 @@ export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> 
     return undefined as T
   }
   return (await res.json()) as T
+}
+
+/**
+ * For a write that changes no ledger data (sign-in, a restore's inspect step):
+ * "the save is uncertain" would mislead there, so the lost response is reported
+ * as the plain connection message a read gets. Use as `.catch(plainConnectionError)`.
+ */
+export function plainConnectionError(err: unknown): never {
+  if (err instanceof ApiError && err.code === WRITE_OUTCOME_UNKNOWN) throw new ApiError(NETWORK_ERROR_CODE, err.message, true)
+  throw err
+}
+
+/**
+ * After a write that threw WRITE_OUTCOME_UNKNOWN, re-reads the screen's data so
+ * the treasurer sees whether the save landed before she can retry. Any other
+ * error is a no-op. A failing reload is logged and swallowed: the original
+ * error is the one she must see.
+ */
+export async function settleUncertainWrite(err: unknown, reload: () => Promise<void> | void): Promise<void> {
+  if (!(err instanceof ApiError) || err.code !== WRITE_OUTCOME_UNKNOWN) return
+  try {
+    await reload()
+  } catch (reloadErr) {
+    console.warn('reload after an uncertain write failed', reloadErr)
+  }
 }
 
 /**

@@ -91,6 +91,10 @@ export default function DuesTierScreen({ tierId, onBack }: { tierId: number; onB
     void run(load)
   }
 
+  // #507: after a write whose response was lost, re-read in place (silent, so
+  // the form that is about to show the uncertain message is not unmounted).
+  const refresh = () => run(load, { silent: true })
+
   const tier = state.data?.tier ?? null
 
   // A `tier` id naming no golongan - a stale bookmark, or one deleted from
@@ -121,17 +125,17 @@ export default function DuesTierScreen({ tierId, onBack }: { tierId: number; onB
       <h1 className="text-xl font-semibold">{tier.name}</h1>
 
       {/* Three independent sections, a hairline between each (#319). */}
-      <TierName tier={tier} onRenamed={reload} />
+      <TierName tier={tier} onRenamed={reload} refresh={refresh} />
       <SectionDivider />
-      <TierRates tier={tier} rates={state.data.rates} onChanged={reload} />
+      <TierRates tier={tier} rates={state.data.rates} onChanged={reload} refresh={refresh} />
       <SectionDivider />
-      <DeleteTier tier={tier} onDeleted={onBack} />
+      <DeleteTier tier={tier} onDeleted={onBack} refresh={refresh} />
     </div>
   )
 }
 
 /** The name, on its own, with one action row. */
-function TierName({ tier, onRenamed }: { tier: DuesTier; onRenamed: () => void }) {
+function TierName({ tier, onRenamed, refresh }: { tier: DuesTier; onRenamed: () => void; refresh: () => Promise<void> }) {
   const [state, run] = useApi<DuesTier>()
   const [name, setName] = useState(tier.name)
   // Follows a rename that lands from the server (the reload after saving) -
@@ -146,11 +150,14 @@ function TierName({ tier, onRenamed }: { tier: DuesTier; onRenamed: () => void }
   function handleSubmit(event: FormEvent) {
     event.preventDefault()
     if (trimmed === '' || unchanged) return
-    void run(async () => {
-      const updated = await renameDuesTier(tier.id, trimmed)
-      onRenamed()
-      return updated
-    })
+    void run(
+      async () => {
+        const updated = await renameDuesTier(tier.id, trimmed)
+        onRenamed()
+        return updated
+      },
+      { settle: refresh },
+    )
   }
 
   return (
@@ -171,7 +178,17 @@ function TierName({ tier, onRenamed }: { tier: DuesTier; onRenamed: () => void }
 }
 
 /** The price history, and the fields for adding to it. */
-function TierRates({ tier, rates, onChanged }: { tier: DuesTier; rates: DuesRate[]; onChanged: () => void }) {
+function TierRates({
+  tier,
+  rates,
+  onChanged,
+  refresh,
+}: {
+  tier: DuesTier
+  rates: DuesRate[]
+  onChanged: () => void
+  refresh: () => Promise<void>
+}) {
   return (
     <section className="flex flex-col gap-3">
       <h2 className="text-base font-semibold">{text.ratesHeading}</h2>
@@ -180,11 +197,11 @@ function TierRates({ tier, rates, onChanged }: { tier: DuesTier; rates: DuesRate
       ) : (
         <ul className="flex flex-col gap-2">
           {rates.map((rate) => (
-            <RateRow key={rate.id} rate={rate} onChanged={onChanged} />
+            <RateRow key={rate.id} rate={rate} onChanged={onChanged} refresh={refresh} />
           ))}
         </ul>
       )}
-      <AddRate tierId={tier.id} onAdded={onChanged} />
+      <AddRate tierId={tier.id} onAdded={onChanged} refresh={refresh} />
     </section>
   )
 }
@@ -193,7 +210,7 @@ function TierRates({ tier, rates, onChanged }: { tier: DuesTier; rates: DuesRate
  * API allows. Correcting happens in the row itself - there is one back on
  * this screen, so an inline form here has no escape route to compete with
  * (#285). */
-function RateRow({ rate, onChanged }: { rate: DuesRate; onChanged: () => void }) {
+function RateRow({ rate, onChanged, refresh }: { rate: DuesRate; onChanged: () => void; refresh: () => Promise<void> }) {
   const [state, run] = useApi<unknown>()
   const [editing, setEditing] = useState(false)
   const [amount, setAmount] = useState(rate.amount)
@@ -206,12 +223,15 @@ function RateRow({ rate, onChanged }: { rate: DuesRate; onChanged: () => void })
       setEditing(false)
       return
     }
-    void run(async () => {
-      const updated = await updateDuesRate(rate.id, amount)
-      setEditing(false)
-      onChanged()
-      return updated
-    })
+    void run(
+      async () => {
+        const updated = await updateDuesRate(rate.id, amount)
+        setEditing(false)
+        onChanged()
+        return updated
+      },
+      { settle: refresh },
+    )
   }
 
   return (
@@ -230,11 +250,14 @@ function RateRow({ rate, onChanged }: { rate: DuesRate; onChanged: () => void })
               className="text-attention"
               disabled={busy}
               onClick={() =>
-                void run(async () => {
-                  await deleteDuesRate(rate.id)
-                  setEditing(false)
-                  onChanged()
-                })
+                void run(
+                  async () => {
+                    await deleteDuesRate(rate.id)
+                    setEditing(false)
+                    onChanged()
+                  },
+                  { settle: refresh },
+                )
               }
             >
               {busy ? text.deletingRate : text.deleteRate}
@@ -279,7 +302,7 @@ function RateRow({ rate, onChanged }: { rate: DuesRate; onChanged: () => void })
  * the month stays a free field rather than being pinned to today. PRD
  * section 7.1's live-arrears escape hatch depends on being able to set it in
  * the past. */
-function AddRate({ tierId, onAdded }: { tierId: number; onAdded: () => void }) {
+function AddRate({ tierId, onAdded, refresh }: { tierId: number; onAdded: () => void; refresh: () => Promise<void> }) {
   const [state, run] = useApi<DuesRate>()
   const [amount, setAmount] = useState(0)
   const [effectiveFrom, setEffectiveFrom] = useState(currentISOMonth)
@@ -289,13 +312,16 @@ function AddRate({ tierId, onAdded }: { tierId: number; onAdded: () => void }) {
   function handleSubmit(event: FormEvent) {
     event.preventDefault()
     if (amount <= 0 || effectiveFrom === '') return
-    void run(async () => {
-      const created = await createDuesRate(tierId, amount, effectiveFrom)
-      setAmount(0)
-      setEffectiveFrom(currentISOMonth())
-      onAdded()
-      return created
-    })
+    void run(
+      async () => {
+        const created = await createDuesRate(tierId, amount, effectiveFrom)
+        setAmount(0)
+        setEffectiveFrom(currentISOMonth())
+        onAdded()
+        return created
+      },
+      { settle: refresh },
+    )
   }
 
   return (
@@ -330,7 +356,7 @@ function AddRate({ tierId, onAdded }: { tierId: number; onAdded: () => void }) {
  * is in comes back 409 referenced_by_other_records from that member's own
  * foreign key, and the copy names why rather than restating the wire message
  * (ADR-014). */
-function DeleteTier({ tier, onDeleted }: { tier: DuesTier; onDeleted: () => void }) {
+function DeleteTier({ tier, onDeleted, refresh }: { tier: DuesTier; onDeleted: () => void; refresh: () => Promise<void> }) {
   const [state, run] = useApi<void>()
   const [confirming, setConfirming] = useState(false)
 
@@ -363,10 +389,13 @@ function DeleteTier({ tier, onDeleted }: { tier: DuesTier; onDeleted: () => void
             className="bg-attention text-attention-foreground hover:bg-attention/90"
             disabled={busy}
             onClick={() =>
-              void run(async () => {
-                await deleteDuesTier(tier.id)
-                onDeleted()
-              })
+              void run(
+                async () => {
+                  await deleteDuesTier(tier.id)
+                  onDeleted()
+                },
+                { settle: refresh },
+              )
             }
           >
             {busy ? text.deleting : text.deleteConfirmAction}

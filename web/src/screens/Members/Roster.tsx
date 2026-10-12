@@ -126,6 +126,9 @@ export default function Roster() {
     void run(loadFirstPage)
   }
 
+  // #507: after a write whose response was lost, re-read in place.
+  const refresh = () => run(loadFirstPage, { silent: true })
+
   async function loadMore(cursor: string) {
     const startedIn = generation.current
     setMoreLoading(true)
@@ -275,6 +278,7 @@ export default function Roster() {
           close()
           reload()
         }}
+        refresh={refresh}
       />
       <EditMemberDialog
         member={editingMember}
@@ -285,6 +289,7 @@ export default function Roster() {
           close()
           reload()
         }}
+        refresh={refresh}
       />
     </section>
   )
@@ -342,11 +347,13 @@ function AddMemberDialog({
   open,
   onClose,
   onAdded,
+  refresh,
 }: {
   tiers: DuesTier[]
   open: boolean
   onClose: () => void
   onAdded: () => void
+  refresh: () => Promise<void>
 }) {
   const [state, run] = useApi<Member>()
   const [name, setName] = useState('')
@@ -369,11 +376,14 @@ function AddMemberDialog({
     event.preventDefault()
     const trimmed = name.trim()
     if (trimmed === '') return
-    void run(async () => {
-      const created = await createMember(trimmed, tierId, joinedOn)
-      onAdded()
-      return created
-    })
+    void run(
+      async () => {
+        const created = await createMember(trimmed, tierId, joinedOn)
+        onAdded()
+        return created
+      },
+      { settle: refresh },
+    )
   }
 
   return (
@@ -430,12 +440,14 @@ function EditMemberDialog({
   open,
   onClose,
   onChanged,
+  refresh,
 }: {
   member: Member | null
   tiers: DuesTier[]
   open: boolean
   onClose: () => void
   onChanged: () => void
+  refresh: () => Promise<void>
 }) {
   const lastMemberRef = useRef<Member | null>(null)
   if (member) lastMemberRef.current = member
@@ -467,11 +479,14 @@ function EditMemberDialog({
   // succeeded. useApi's run never throws - a 409 lands in `state` - and
   // closing on it would hide the deleteRefused sentence she needs to see.
   async function submit(fn: () => Promise<unknown>) {
-    await run(async () => {
-      const result = await fn()
-      onChanged()
-      return result
-    })
+    await run(
+      async () => {
+        const result = await fn()
+        onChanged()
+        return result
+      },
+      { settle: refresh },
+    )
   }
 
   function handleSave(event: FormEvent) {

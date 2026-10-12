@@ -748,6 +748,41 @@ describe('Reconcile', () => {
     expect(screen.getByRole('button', { name: text.submit })).toBeEnabled()
   })
 
+  // #507: the response to a write can be lost after the server committed it.
+  // The screen re-reads before the message shows, so the retry is made on
+  // fresh data rather than posting a duplicate.
+  it('re-reads the balances before saying a lost submit is uncertain, then re-enables submit', async () => {
+    let balancesCalls = 0
+    const fetchMock = routedFetch([
+      ...stubLoad().filter((h) => !h.match('GET', '/api/balances')),
+      {
+        match: (m: string, u: string) => m === 'GET' && u.includes('/api/balances'),
+        handle: () => {
+          balancesCalls += 1
+          return Promise.resolve(jsonResponse(balancesBody(100_000, 200_000)))
+        },
+      },
+      {
+        match: (m: string, u: string) => m === 'POST' && u.includes('/api/reconciliations'),
+        handle: () => Promise.reject(new TypeError('Failed to fetch')),
+      },
+    ])
+    vi.stubGlobal('fetch', fetchMock)
+
+    render(<Reconcile onDone={vi.fn()} onCancel={vi.fn()} />)
+    await waitForForm()
+    expect(balancesCalls).toBe(1)
+
+    await userEvent.type(screen.getByLabelText(text.actualLabel('Tunai')), '100000')
+    await userEvent.type(screen.getByLabelText(text.actualLabel('Bank Uji Coba')), '200000')
+    await userEvent.click(screen.getByRole('button', { name: text.submit }))
+
+    await screen.findByText(copy.common.errors.write_outcome_unknown)
+    // The re-read had already happened by the time the message appeared.
+    expect(balancesCalls).toBe(2)
+    expect(screen.getByRole('button', { name: text.submit })).toBeEnabled()
+  })
+
   // The gate is the client half of "every active location counted, every gap
   // resolved" (#444 is the server half). Walk it one condition at a time.
   it('keeps submit disabled until every active location is counted and every gap resolved', async () => {

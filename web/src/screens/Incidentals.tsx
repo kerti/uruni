@@ -15,7 +15,7 @@ import { Label } from '@/components/ui/label'
 import Loading from '@/components/states/Loading'
 import ErrorState from '@/components/states/ErrorState'
 import { copy } from '@/copy/id'
-import { ApiError } from '@/lib/api'
+import { ApiError, settleUncertainWrite } from '@/lib/api'
 import { listAccounts } from '@/lib/accounts'
 import { parseDialogTarget } from '@/lib/dialogTarget'
 import { formatIDR } from '@/lib/money'
@@ -158,6 +158,12 @@ export default function Incidentals({
 
   const submitting = submitState.status === 'loading'
 
+  const refreshDetail = () =>
+    Promise.all([
+      detailRun(() => getIncidental(purposeId), { silent: true }),
+      participationRun(() => getIncidentalParticipation(purposeId), { silent: true }),
+    ]).then(() => undefined)
+
   /** Every write on this screen - close, reopen - clears stale feedback,
    * runs the call, then says what happened. A named 409
    * (incidental_already_closed / incidental_not_closed) reaches the
@@ -172,6 +178,8 @@ export default function Incidentals({
         setFeedback({ kind: 'success', text: successText })
         onSuccess?.(result)
       } catch (err) {
+        // #507: a lost response may still have saved; re-read before she can retry.
+        await settleUncertainWrite(err, refreshDetail)
         const apiErr = err instanceof ApiError ? err : new ApiError('unknown_error', err instanceof Error ? err.message : String(err))
         setFeedback({ kind: 'error', text: errorText(apiErr) })
         // eslint-disable-next-line no-console
@@ -254,6 +262,7 @@ export default function Incidentals({
         open={isRenaming}
         onClose={closeDialog}
         onRenamed={handleRenamed}
+        refresh={refreshDetail}
       />
     </>
   )
@@ -668,12 +677,14 @@ function RenameIncidentalDialog({
   open,
   onClose,
   onRenamed,
+  refresh,
 }: {
   envelope: IncidentalDetail | null
   members: Member[]
   open: boolean
   onClose: () => void
   onRenamed: () => void
+  refresh: () => Promise<void>
 }) {
   const [state, run] = useApi<unknown>()
   const [occasion, setOccasion] = useState('')
@@ -706,17 +717,20 @@ function RenameIncidentalDialog({
   function handleSubmit(event: FormEvent) {
     event.preventDefault()
     if (envelope === null || trimmed === '' || !changed) return
-    void run(async () => {
-      if (occasionChanged) await renamePurpose(envelope.purpose_id, trimmed)
-      if (targetChanged || minimumChanged || recipientsChanged) {
-        await updateIncidentalParticipation(envelope.purpose_id, {
-          targetAmount: targetAmount > 0 ? targetAmount : null,
-          minimumPerMember: minimumPerMember > 0 ? minimumPerMember : null,
-          recipientMemberIds,
-        })
-      }
-      onRenamed()
-    })
+    void run(
+      async () => {
+        if (occasionChanged) await renamePurpose(envelope.purpose_id, trimmed)
+        if (targetChanged || minimumChanged || recipientsChanged) {
+          await updateIncidentalParticipation(envelope.purpose_id, {
+            targetAmount: targetAmount > 0 ? targetAmount : null,
+            minimumPerMember: minimumPerMember > 0 ? minimumPerMember : null,
+            recipientMemberIds,
+          })
+        }
+        onRenamed()
+      },
+      { settle: refresh },
+    )
   }
 
   return (

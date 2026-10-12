@@ -316,6 +316,7 @@ export default function Transactions({ refetchKey }: { refetchKey?: unknown }) {
             setContributionReversed(true)
             void run(loadFirstPage)
           }}
+          onContributionRefresh={() => run(loadFirstPage, { silent: true })}
         />
         <CorrectPurposeDialog
           transaction={correcting}
@@ -328,6 +329,7 @@ export default function Transactions({ refetchKey }: { refetchKey?: unknown }) {
             setCorrected(true)
             void run(loadFirstPage)
           }}
+          refresh={() => run(loadFirstPage, { silent: true })}
         />
         {nextCursor && moreError && <ErrorState error={moreError} onRetry={() => void loadMore(nextCursor)} />}
         {nextCursor && !moreError && (

@@ -9,7 +9,7 @@
 // below never needs to know which of the two inspect calls staged what it
 // is about to confirm.
 
-import { apiFetch } from '@/lib/api'
+import { apiFetch, plainConnectionError } from '@/lib/api'
 
 /** A file fund's own place in the restore preview - kept (present on both
  * sides), removed (live only) or added (file only). Mirrors
@@ -54,7 +54,7 @@ export function inspectRestoreUpload(file: File): Promise<RestoreInspectResult> 
   return apiFetch<RestoreInspectResult>('/api/restore/inspect', {
     method: 'POST',
     body: form,
-  })
+  }).catch(plainConnectionError)
 }
 
 /**
@@ -68,7 +68,7 @@ export function inspectRestoreUpload(file: File): Promise<RestoreInspectResult> 
 export function inspectStoredRestore(name: string): Promise<RestoreInspectResult> {
   return apiFetch<RestoreInspectResult>(`/api/restore/inspect-stored/${encodeURIComponent(name)}`, {
     method: 'POST',
-  })
+  }).catch(plainConnectionError)
 }
 
 /**

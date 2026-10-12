@@ -91,20 +91,23 @@ export default function MemberPayments({ memberId, period, onReversed }: { membe
   }
 
   function submitReversal(transactionId: number) {
-    void submitRun(async () => {
-      const trimmed = note.trim()
-      // A blank reason sends null, never a generated default (#257): the
-      // reversal explains itself through TransactionList's own display
-      // label ("Pembatalan - {period} - {anggota}") instead.
-      const result = await reverseDuesPayment(transactionId, occurredOn, trimmed === '' ? null : trimmed)
-      setReversingId(null)
-      // Refetch this list *and* tell the roster above to refetch its own:
-      // the member reads as unpaid for the period again, and neither
-      // refresh is the treasurer's job.
-      await run(loadRows)
-      onReversed()
-      return result
-    })
+    void submitRun(
+      async () => {
+        const trimmed = note.trim()
+        // A blank reason sends null, never a generated default (#257): the
+        // reversal explains itself through TransactionList's own display
+        // label ("Pembatalan - {period} - {anggota}") instead.
+        const result = await reverseDuesPayment(transactionId, occurredOn, trimmed === '' ? null : trimmed)
+        setReversingId(null)
+        // Refetch this list *and* tell the roster above to refetch its own:
+        // the member reads as unpaid for the period again, and neither
+        // refresh is the treasurer's job.
+        await run(loadRows)
+        onReversed()
+        return result
+      },
+      { settle: () => run(loadRows, { silent: true }) },
+    )
   }
 
   if (state.status === 'idle' || state.status === 'loading') {

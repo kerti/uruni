@@ -3,7 +3,7 @@
 // gate itself is a Go decision; this module only names its wire shapes on
 // the client so App.tsx and the screens don't hand-roll fetch calls.
 
-import { apiFetch } from '@/lib/api'
+import { apiFetch, plainConnectionError } from '@/lib/api'
 
 /** GET /api/session's entire body (internal/http/session.go). Never 401. */
 export interface SessionStatus {
@@ -30,7 +30,7 @@ export function register(email: string, password: string): Promise<AuthUser> {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ email, password }),
-  })
+  }).catch(plainConnectionError)
 }
 
 export function login(email: string, password: string): Promise<AuthUser> {
@@ -38,12 +38,12 @@ export function login(email: string, password: string): Promise<AuthUser> {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ email, password }),
-  })
+  }).catch(plainConnectionError)
 }
 
 // Wired but deliberately not called from any screen this slice - a real
 // logout affordance belongs with the app shell chrome (M6.6). Exists now so
 // the route is proven reachable before a human has anything to click.
 export function logout(): Promise<void> {
-  return apiFetch<void>('/api/logout', { method: 'POST' })
+  return apiFetch<void>('/api/logout', { method: 'POST' }).catch(plainConnectionError)
 }

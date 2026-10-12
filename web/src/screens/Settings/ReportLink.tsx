@@ -89,6 +89,7 @@ export default function ReportLink() {
           void loadRun(() => Promise.resolve(updated), { silent: true })
           close()
         }}
+        refresh={() => loadRun(getFund, { silent: true })}
       />
     </section>
   )
@@ -212,16 +213,29 @@ function PdfButton({ reportUrl }: { reportUrl: string }) {
 
 /** The confirm. The consequence is named in terracotta, never alarm-red
  * (ADR-032), and the dialog's own X is its only close besides Batal. */
-function RenewDialog({ open, onClose, onRenewed }: { open: boolean; onClose: () => void; onRenewed: (fund: Fund) => void }) {
+function RenewDialog({
+  open,
+  onClose,
+  onRenewed,
+  refresh,
+}: {
+  open: boolean
+  onClose: () => void
+  onRenewed: (fund: Fund) => void
+  refresh: () => Promise<void>
+}) {
   const [state, run] = useApi<Fund>()
   const busy = state.status === 'loading'
 
   function handleConfirm() {
-    void run(async () => {
-      const updated = await replaceReportSlug()
-      onRenewed(updated)
-      return updated
-    })
+    void run(
+      async () => {
+        const updated = await replaceReportSlug()
+        onRenewed(updated)
+        return updated
+      },
+      { settle: refresh },
+    )
   }
 
   return (
