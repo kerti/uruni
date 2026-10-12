@@ -180,8 +180,15 @@ func TestMigrationAppliesFromEmptyAndRoundTrips(t *testing.T) {
 		t.Fatalf("ListFunds() after Up() = %v, want no error", err)
 	}
 
-	if _, err := Down(ctx, sqlDB, discardLogger()); err != nil {
-		t.Fatalf("Down() = %v, want no error", err)
+	// Down() refuses the baseline now (#494), so the baseline's own down script is
+	// driven through the runner directly: it is still the schema's inverse and
+	// must stay a working one, even though no command reaches it.
+	p, err := provider(sqlDB)
+	if err != nil {
+		t.Fatalf("provider() = %v, want no error", err)
+	}
+	if _, err := p.Down(ctx); err != nil {
+		t.Fatalf("rolling back the baseline = %v, want no error", err)
 	}
 	status, err := Status(ctx, sqlDB)
 	if err != nil {

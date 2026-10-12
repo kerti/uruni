@@ -65,10 +65,9 @@ func TestMigrateUpStatusDownAgainstAFreshFile(t *testing.T) {
 		t.Errorf("migrate([status]) printed %q, want the first migration reported applied", status)
 	}
 
-	if got := run(t, "down"); !strings.Contains(got, "rolled back migration 1") {
-		t.Errorf("migrate([down]) printed %q, want it to name what it rolled back", got)
-	}
-	if got := run(t, "down"); !strings.Contains(got, "nothing to roll back") {
-		t.Errorf("second migrate([down]) printed %q, want the non-event reported", got)
+	// The only migration is the baseline, so down is refused (#494); the fuller
+	// baseline tests are in migrate_guard_test.go.
+	if err := migrate(context.Background(), []string{"down"}, io.Discard); !errors.Is(err, ErrBaselineDown) {
+		t.Errorf("migrate([down]) = %v, want ErrBaselineDown", err)
 	}
 }

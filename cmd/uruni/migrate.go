@@ -6,13 +6,25 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"log/slog"
 	"os"
 	"time"
 
+	"github.com/kerti/uruni/internal/backup"
 	"github.com/kerti/uruni/internal/config"
 	"github.com/kerti/uruni/internal/db"
+	"github.com/kerti/uruni/internal/lock"
 )
+
+// ErrServerRunning is what `migrate up` and `migrate down` return while another
+// process (normally `serve`) holds the instance lock. `migrate status` never
+// takes the lock, so it never returns this.
+var ErrServerRunning = errors.New("uruni is already running against this database")
+
+// ErrBaselineDown is what `migrate down` returns when the step would roll the
+// baseline back, i.e. leave the database empty (#494).
+var ErrBaselineDown = errors.New("migrate down refuses to roll back the baseline migration, it would empty the database - restore a backup instead (Pengaturan > Cadangan, see SELF-HOSTING.md)")
 
 // migrateUsage lists the three verbs ADR-019 pins. `down` is one step, never a
 // range: the command exists for backing out a bad upgrade, and a flag away from
@@ -49,6 +61,20 @@ func migrate(ctx context.Context, args []string, out io.Writer) error {
 	}
 	logger := newLogger(cfg, os.Stderr)
 
+	// up and down change the schema, so they take the same instance lock `serve`
+	// holds at boot and refuse while it is held. status only reads, and an
+	// operator legitimately runs it while a server is up, so it stays lock-free.
+	if verb != "status" {
+		instanceLock, err := lock.Acquire(lock.PathFor(cfg.DBPath))
+		if errors.Is(err, lock.ErrLocked) {
+			return fmt.Errorf("%w: stop it before running migrate %s (migrate status works while it runs)", ErrServerRunning, verb)
+		}
+		if err != nil {
+			return err
+		}
+		defer func() { _ = instanceLock.Release() }()
+	}
+
 	sqlDB, err := db.Open(ctx, cfg.DBPath)
 	if err != nil {
 		return err
@@ -59,7 +85,7 @@ func migrate(ctx context.Context, args []string, out io.Writer) error {
 	case "up":
 		return migrateUp(ctx, sqlDB, logger, out, cfg.DBPath)
 	case "down":
-		return migrateDown(ctx, sqlDB, logger, out)
+		return migrateDown(ctx, sqlDB, nil, logger, out, dumpBeforeDown(sqlDB, cfg))
 	default:
 		return printMigrationStatus(ctx, sqlDB, out, cfg.DBPath)
 	}
@@ -82,14 +108,41 @@ func migrateUp(ctx context.Context, sqlDB *sql.DB, logger *slog.Logger, out io.W
 	return err
 }
 
+// dumpBeforeDown is the dump `migrate down` takes before it changes anything. It
+// goes to the directory `serve` writes its own to, so it shows up in the Cadangan
+// list; a missing or read-only directory fails here, before the rollback starts.
+func dumpBeforeDown(sqlDB *sql.DB, cfg config.Config) func(context.Context) (string, error) {
+	return func(ctx context.Context) (string, error) {
+		if err := config.EnsureBackupDirWritable(cfg.BackupDir); err != nil {
+			return "", err
+		}
+		return backup.WritePreRestoreDump(ctx, sqlDB, cfg.UploadsDir, cfg.BackupDir, time.Now())
+	}
+}
+
 // migrateDown reports an already-empty database as the non-event it is: rolling
 // back nothing is not a failure, and exiting non-zero for it would break any
-// script that rolls back before restoring a backup.
-func migrateDown(ctx context.Context, sqlDB *sql.DB, logger *slog.Logger, out io.Writer) error {
-	version, err := db.Down(ctx, sqlDB, logger)
+// script that rolls back before restoring a backup. Rolling back the baseline is
+// the opposite, refused (ErrBaselineDown). Any rollback that does run writes a
+// dump first via dump, and a dump that fails refuses it. fsys is the migration
+// set, nil for the embedded one (see db.Down).
+func migrateDown(ctx context.Context, sqlDB *sql.DB, fsys fs.FS, logger *slog.Logger, out io.Writer, dump func(context.Context) (string, error)) error {
+	before := func(version int64) error {
+		name, err := dump(ctx)
+		if err != nil {
+			return fmt.Errorf("could not write a backup before rolling back migration %d, so nothing was rolled back: %w", version, err)
+		}
+		_, err = fmt.Fprintf(out, "wrote backup %s before rolling back\n", name)
+		return err
+	}
+
+	version, err := db.Down(ctx, sqlDB, fsys, logger, before)
 	if errors.Is(err, db.ErrNothingToRollBack) {
 		_, err := fmt.Fprintln(out, "nothing to roll back - the database is at version 0")
 		return err
+	}
+	if errors.Is(err, db.ErrBaseline) {
+		return ErrBaselineDown
 	}
 	if err != nil {
 		return err

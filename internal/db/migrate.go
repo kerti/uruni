@@ -27,6 +27,12 @@ var migrationsFS embed.FS
 // non-event it is instead of failing the command.
 var ErrNothingToRollBack = errors.New("no applied migration to roll back")
 
+// ErrBaseline is returned by Down when the migration it would roll back is the
+// lowest one the binary carries. Rolling the baseline back leaves goose at
+// version 0 - an empty database, the treasurer's account and the whole ledger
+// dropped with it - and that is a restore's job, not a migration's (#494).
+var ErrBaseline = errors.New("rolling back the baseline migration would empty the database")
+
 // Migration is one migration's state, as `migrate status` prints it. It is this
 // package's own type rather than goose's so the CLI never imports goose:
 // migrations are a store concern, and swapping the runner should not be a change
@@ -66,12 +72,45 @@ func Up(ctx context.Context, sqlDB *sql.DB, logger *slog.Logger) (int, error) {
 // because `migrate down` is what an operator reaches for after a bad upgrade and
 // a flag away from wiping the ledger is the wrong shape for that command
 // (ADR-019).
+//
+// It refuses (ErrBaseline) when that migration is the lowest the binary carries,
+// i.e. when the step would leave the database at version 0. Checked against the
+// migration set rather than the number 1, so it stays right after 1.0 adds files.
+//
+// before, when non-nil, runs after the guards and before anything is changed;
+// its error refuses the rollback. The CLI uses it to write a dump first. fsys is
+// the migration set, nil for the embedded one; tests pass a set with more than
+// one version because the real one has a single file through 0.x (ADR-025).
+//
 // It returns the version it rolled back. A database already at version 0 is
 // ErrNothingToRollBack, not a failure.
-func Down(ctx context.Context, sqlDB *sql.DB, logger *slog.Logger) (int64, error) {
-	p, err := provider(sqlDB)
+func Down(ctx context.Context, sqlDB *sql.DB, fsys fs.FS, logger *slog.Logger, before func(version int64) error) (int64, error) {
+	p, err := providerFor(sqlDB, fsys)
 	if err != nil {
 		return 0, err
+	}
+
+	statuses, err := p.Status(ctx)
+	if err != nil {
+		return 0, fmt.Errorf("reading migration status: %w", err)
+	}
+	var latest int64
+	for _, s := range statuses {
+		if s.State == goose.StateApplied && s.Source.Version > latest {
+			latest = s.Source.Version
+		}
+	}
+	if latest == 0 {
+		return 0, ErrNothingToRollBack
+	}
+	if latest == statuses[0].Source.Version {
+		return 0, fmt.Errorf("%w (migration %d)", ErrBaseline, latest)
+	}
+
+	if before != nil {
+		if err := before(latest); err != nil {
+			return 0, err
+		}
 	}
 
 	result, err := p.Down(ctx)
@@ -120,9 +159,18 @@ func Status(ctx context.Context, sqlDB *sql.DB) ([]Migration, error) {
 // state (a dialect, a registry), which makes two databases in one process - the
 // dev database and a test's temporary file - able to interfere.
 func provider(sqlDB *sql.DB) (*goose.Provider, error) {
-	fsys, err := fs.Sub(migrationsFS, "migrations")
-	if err != nil {
-		return nil, fmt.Errorf("reading the embedded migrations: %w", err)
+	return providerFor(sqlDB, nil)
+}
+
+// providerFor is provider over an injectable migration set; nil means the
+// embedded one. Only Down takes the injection, for its tests.
+func providerFor(sqlDB *sql.DB, fsys fs.FS) (*goose.Provider, error) {
+	if fsys == nil {
+		sub, err := fs.Sub(migrationsFS, "migrations")
+		if err != nil {
+			return nil, fmt.Errorf("reading the embedded migrations: %w", err)
+		}
+		fsys = sub
 	}
 
 	p, err := goose.NewProvider(goose.DialectSQLite3, sqlDB, fsys,
