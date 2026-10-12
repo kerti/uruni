@@ -240,12 +240,17 @@ test.describe('browser-only non-functionals', () => {
       expect(res.headers()['content-type']).toContain(icon.type)
     }
 
-    // The worker registers and reaches "activated"; ready resolves only then.
-    const state = await page.evaluate(async () => {
-      const registration = await navigator.serviceWorker.ready
-      return registration.active?.state ?? null
-    })
-    expect(state).toBe('activated')
+    // The worker registers and reaches "activated". ready resolves as soon as
+    // the registration has an active worker, which can still be "activating",
+    // so poll the state rather than read it once.
+    await expect
+      .poll(() =>
+        page.evaluate(async () => {
+          const registration = await navigator.serviceWorker.ready
+          return registration.active?.state ?? null
+        }),
+      )
+      .toBe('activated')
   })
 
   test('the precache holds the shell and never an API or report response', async ({ page }) => {
