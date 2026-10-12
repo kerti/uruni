@@ -59,6 +59,9 @@ func (l *Ledger) PostPurposeMove(ctx context.Context, p PostPurposeMoveParams) (
 	if p.Amount <= 0 {
 		return store.Transfer{}, fmt.Errorf("%w: amount must be positive, got %d", ErrInvalidArgument, p.Amount.Int64())
 	}
+	if err := CheckAmountCeiling("amount", p.Amount); err != nil {
+		return store.Transfer{}, err
+	}
 	if err := validateOccurredOn(p.OccurredOn); err != nil {
 		return store.Transfer{}, err
 	}

@@ -690,8 +690,18 @@ func TestMonthlyReportTotalsRefuseToWrap(t *testing.T) {
 	l := newTestLedger(t)
 	f := newFixture(t, l)
 	big := money.Amount(math.MaxInt64/2 + 1)
-	postEntry(t, l, f.fundID, f.cashID, f.mainID, "in", big, "2026-09-01", nil)
-	postEntry(t, l, f.fundID, f.cashID, f.mainID, "in", big, "2026-09-02", nil)
+	// The ceiling (#499) means no ledger method writes a figure this large
+	// any more, so the rows go in around it: what a database from before the
+	// ceiling, or a restored backup, can still hold. The report must refuse
+	// them rather than show a wrapped total.
+	for _, on := range []string{"2026-09-01", "2026-09-02"} {
+		if _, err := store.New(l.db).CreateTransaction(context.Background(), store.CreateTransactionParams{
+			FundID: f.fundID, AccountID: f.cashID, PurposeID: f.mainID, Direction: "in",
+			Amount: big.Int64(), OccurredOn: on, Kind: "normal", CreatedAt: 1,
+		}); err != nil {
+			t.Fatalf("CreateTransaction(%d on %s) = %v, want no error", big, on, err)
+		}
+	}
 
 	// SQLite's own SUM() in FundBalance trips first, before the checked Add
 	// over the rows could; either way an error, never a wrapped figure.

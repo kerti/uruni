@@ -186,6 +186,44 @@ describe('Setup', () => {
     expect(bank?.opening_balance).toBeUndefined()
   })
 
+  it('takes twelve digits in an opening balance and does not accept a thirteenth', async () => {
+    vi.stubGlobal('fetch', vi.fn())
+    render(<Setup onDone={vi.fn()} />)
+    await goPastFundName()
+    await goPastLocations()
+    await screen.findByText(text.balances.heading)
+
+    const amountField = screen.getByLabelText(text.balances.amountLabel('Tunai')) as HTMLInputElement
+    await userEvent.type(amountField, '999999999999')
+    expect(amountField.value).toBe('999.999.999.999')
+
+    await userEvent.type(amountField, '9')
+    expect(amountField.value).toBe('999.999.999.999')
+  })
+
+  it('takes twelve digits in the first dues rate and does not accept a thirteenth', async () => {
+    vi.stubGlobal(
+      'fetch',
+      routedFetch([
+        { match: (m, u) => m === 'POST' && u.includes('/api/setup'), handle: () => Promise.resolve(jsonResponse(setupResult, 201)) },
+      ]),
+    )
+    render(<Setup onDone={vi.fn()} />)
+    await goPastFundName()
+    await goPastLocations()
+    await screen.findByText(text.balances.heading)
+    await userEvent.click(screen.getByRole('button', { name: text.next }))
+    await screen.findByText(text.roster.heading)
+
+    await userEvent.type(screen.getByLabelText(text.roster.tierNameLabel), 'Rumah tinggal')
+    const rateField = screen.getByLabelText(text.roster.rateAmountLabel) as HTMLInputElement
+    await userEvent.type(rateField, '999999999999')
+    expect(rateField.value).toBe('999.999.999.999')
+
+    await userEvent.type(rateField, '9')
+    expect(rateField.value).toBe('999.999.999.999')
+  })
+
   it('going back from balances to locations and returning keeps names and amounts', async () => {
     vi.stubGlobal('fetch', vi.fn())
     render(<Setup onDone={vi.fn()} />)

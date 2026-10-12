@@ -78,6 +78,9 @@ func (l *Ledger) PostTransaction(ctx context.Context, p PostTransactionParams) (
 	if p.Amount <= 0 {
 		return store.Transaction{}, fmt.Errorf("%w: amount must be positive, got %d", ErrInvalidArgument, p.Amount.Int64())
 	}
+	if err := CheckAmountCeiling("amount", p.Amount); err != nil {
+		return store.Transaction{}, err
+	}
 	if p.Direction != "in" && p.Direction != "out" {
 		return store.Transaction{}, fmt.Errorf("%w: direction must be \"in\" or \"out\", got %q", ErrInvalidArgument, p.Direction)
 	}
@@ -174,6 +177,9 @@ type OpeningBalance struct {
 func validateOpeningBalance(ob OpeningBalance) error {
 	if ob.Amount < 0 {
 		return fmt.Errorf("%w: opening balance amount must not be negative, got %d", ErrInvalidArgument, ob.Amount.Int64())
+	}
+	if err := CheckAmountCeiling("opening balance amount", ob.Amount); err != nil {
+		return err
 	}
 	if ob.Amount > 0 {
 		if err := validateOccurredOn(ob.OccurredOn); err != nil {

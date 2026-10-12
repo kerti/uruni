@@ -32,6 +32,9 @@ func (l *Ledger) CreateReimbursement(ctx context.Context, p CreateReimbursementP
 	if p.Amount <= 0 {
 		return store.Reimbursement{}, fmt.Errorf("%w: amount must be positive, got %d", ErrInvalidArgument, p.Amount.Int64())
 	}
+	if err := CheckAmountCeiling("amount", p.Amount); err != nil {
+		return store.Reimbursement{}, err
+	}
 
 	var created store.Reimbursement
 	err := l.withTx(ctx, func(q store.Querier) error {
@@ -114,6 +117,12 @@ func (l *Ledger) SettleReimbursement(ctx context.Context, p SettleReimbursementP
 
 		if claim.WaivedOn != nil {
 			return ErrReimbursementWaived
+		}
+
+		// The payout copies the claim's amount, so a claim filed before the
+		// ceiling existed (or restored from a backup) is refused here too.
+		if err := CheckAmountCeiling("amount", money.FromDB(claim.Amount)); err != nil {
+			return err
 		}
 
 		if err := refuseInactiveAccount(ctx, q, p.FundID, p.AccountID); err != nil {
@@ -201,6 +210,11 @@ type UpdateReimbursementParams struct {
 func (l *Ledger) UpdateReimbursement(ctx context.Context, p UpdateReimbursementParams) (store.Reimbursement, error) {
 	if p.Amount != nil && *p.Amount <= 0 {
 		return store.Reimbursement{}, fmt.Errorf("%w: amount must be positive, got %d", ErrInvalidArgument, p.Amount.Int64())
+	}
+	if p.Amount != nil {
+		if err := CheckAmountCeiling("amount", *p.Amount); err != nil {
+			return store.Reimbursement{}, err
+		}
 	}
 	if p.IncurredOn != nil {
 		if err := validateOccurredOn(*p.IncurredOn); err != nil {

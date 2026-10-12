@@ -285,15 +285,20 @@ func TestPostPurposeMoveReadsTheBalanceThroughAdjustingEntries(t *testing.T) {
 	}
 }
 
-// Amounts at the edge of int64 are refused as insufficient, never wrapped
-// into something postable.
+// An amount beyond any balance is refused as insufficient, never wrapped into
+// something postable. The largest amount the ceiling lets through is the
+// largest this can be; anything above it (the int64 edge included) is refused
+// earlier, as too large (#499).
 func TestPostPurposeMoveRefusesAnAmountBeyondAnyBalance(t *testing.T) {
 	t.Parallel()
 	l := newTestLedger(t)
 	w := newMoveWorld(t, l)
 	ctx := context.Background()
-	if _, err := l.PostPurposeMove(ctx, w.move(w.mainID, w.envelopeID, money.Amount(math.MaxInt64))); !errors.Is(err, ErrPurposeMoveInsufficient) {
-		t.Errorf("PostPurposeMove(MaxInt64) = %v, want ErrPurposeMoveInsufficient", err)
+	if _, err := l.PostPurposeMove(ctx, w.move(w.mainID, w.envelopeID, money.MaxAmount)); !errors.Is(err, ErrPurposeMoveInsufficient) {
+		t.Errorf("PostPurposeMove(MaxAmount) = %v, want ErrPurposeMoveInsufficient", err)
+	}
+	if _, err := l.PostPurposeMove(ctx, w.move(w.mainID, w.envelopeID, money.Amount(math.MaxInt64))); !errors.Is(err, ErrAmountTooLarge) {
+		t.Errorf("PostPurposeMove(MaxInt64) = %v, want ErrAmountTooLarge", err)
 	}
 }
 

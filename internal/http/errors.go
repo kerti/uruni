@@ -45,6 +45,12 @@ func mapLedgerError(w http.ResponseWriter, logger *slog.Logger, err error) {
 	switch {
 	case errors.Is(err, ledger.ErrInvalidArgument):
 		writeAPIError(w, http.StatusBadRequest, "invalid_argument", "The request contains an invalid argument.")
+	case errors.Is(err, ledger.ErrAmountTooLarge):
+		// Rp 999.999.999.999 (money.MaxAmount, #499). Its own code, not
+		// invalid_argument: the amount is well-formed, and the SPA tells her
+		// the one thing to change. 400 like every other input refusal from
+		// the ledger; the message names the limit, never the value sent.
+		writeAPIError(w, http.StatusBadRequest, "amount_too_large", "An amount cannot be larger than 999,999,999,999 rupiah.")
 	case errors.Is(err, ledger.ErrReimbursementWaived):
 		writeAPIError(w, http.StatusConflict, "reimbursement_waived", "This reimbursement has been waived.")
 	case errors.Is(err, ledger.ErrReimbursementAlreadySettled):

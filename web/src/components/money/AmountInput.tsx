@@ -2,7 +2,7 @@ import { useId, useState, type ChangeEvent, type FocusEvent } from 'react'
 
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { formatIDR, parseRupiah } from '@/lib/money'
+import { exceedsAmountCeiling, formatIDR, parseRupiah } from '@/lib/money'
 
 /**
  * The amount field every record-transaction form needs (PRD section 7.2,
@@ -41,6 +41,10 @@ export default function AmountInput({
 
   function handleChange(event: ChangeEvent<HTMLInputElement>) {
     const digits = event.target.value.replace(/\D/g, '')
+    // A thirteenth digit (typed, or a longer paste) is not accepted: the
+    // field keeps what it holds, the way it drops a non-digit. 12 digits is
+    // the ceiling, Rp 999.999.999.999 (#499).
+    if (exceedsAmountCeiling(digits)) return
     setRawDigits(digits)
     onChange(parseRupiah(digits))
   }
