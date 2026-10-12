@@ -49,6 +49,10 @@ type api struct {
 	// and a register success must not.
 	registerLimiter *rateLimiter
 
+	// devices remembers the device cookies login has issued (#500): the only
+	// callers let past login's shared keys.
+	devices *deviceTokens
+
 	// trustedProxies is #447's addition: the peers whose X-Forwarded-For
 	// clientIP believes (login.go). Empty believes none.
 	trustedProxies []netip.Prefix

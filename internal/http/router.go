@@ -103,6 +103,16 @@ func newWithClock(assets fs.FS, build Build, l *ledger.Ledger, q store.Querier, 
 	// ones - api.go's two groups) has exactly one seam to wrap instead of
 	// routes scattered across the tree (ADR-021).
 	sm := newSessionManager(q, baseURL, logger)
+
+	// The limiters and the device-token store read the same injectable clock
+	// as the routes (#500), so a test moves every lockout with one fake.
+	loginLimiter := newEscalatingRateLimiter(loginRateLimitMaxAttempts, loginRateLimitWindow, loginLockouts, lockoutDecay)
+	loginLimiter.now = now
+	registerLimiter := newEscalatingRateLimiter(registerRateLimitMaxAttempts, registerRateLimitWindow, loginLockouts, lockoutDecay)
+	registerLimiter.now = now
+	devices := newDeviceTokens()
+	devices.now = now
+
 	r.Route("/api", (&api{
 		ledger:          l,
 		queries:         q,
@@ -110,8 +120,9 @@ func newWithClock(assets fs.FS, build Build, l *ledger.Ledger, q store.Querier, 
 		logger:          logger,
 		auth:            au,
 		sessionManager:  sm,
-		loginLimiter:    newRateLimiter(loginRateLimitMaxAttempts, loginRateLimitWindow),
-		registerLimiter: newRateLimiter(registerRateLimitMaxAttempts, registerRateLimitWindow),
+		loginLimiter:    loginLimiter,
+		registerLimiter: registerLimiter,
+		devices:         devices,
 		trustedProxies:  trustedProxies,
 		uploadsDir:      uploadsDir,
 		backupDir:       backupDir,

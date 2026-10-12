@@ -150,9 +150,16 @@ func TestPostLoginNthFailureFromOneIPReturns429(t *testing.T) {
 
 // TestPostLoginNthFailureFromOneIdentifierAcrossIPsReturns429 is the DoD's
 // third line, identifier half: the same target email, guessed wrong from a
-// different address every time, still trips its own counter - an attacker
-// spreading a brute force of one account across many source IPs gains
-// nothing from the IP-keyed counter alone.
+// different address every time, still trips a counter - an attacker spreading
+// a brute force of one account across many source IPs gains nothing from the
+// per-address counters alone.
+//
+// #500 moved where that counter trips. It used to be ten failures on the
+// identifier from anywhere, which let anyone who knew the email lock the
+// treasurer out from every network. Ten from ten addresses now spend ten
+// separate budgets and shut nobody out (login_limits_test.go proves she gets
+// in); what the identifier counter bounds is the total, loginIdentifierCeiling
+// an hour.
 func TestPostLoginNthFailureFromOneIdentifierAcrossIPsReturns429(t *testing.T) {
 	t.Parallel()
 	r, _ := testRouterAndDB(t)
@@ -162,7 +169,11 @@ func TestPostLoginNthFailureFromOneIdentifierAcrossIPsReturns429(t *testing.T) {
 		t.Fatalf("POST /api/register = %d, want %d (body: %s)", reg.Code, http.StatusCreated, reg.Body.String())
 	}
 
-	for i := 0; i < loginRateLimitMaxAttempts; i++ {
+	// The ceiling is far above the per-address limit, so this walks real
+	// argon2id verifications up to it; the stubbed-hash router in
+	// login_limits_test.go covers the same ground without that cost, and this
+	// one keeps the production hasher in the loop for the 429 itself.
+	for i := 0; i < loginIdentifierCeiling; i++ {
 		ip := fmt.Sprintf("198.51.100.%d", i+1)
 		rec := postLoginFrom(t, r, "treasurer@example.org", "not-the-password", ip)
 		if rec.Code != http.StatusUnauthorized {
@@ -170,9 +181,9 @@ func TestPostLoginNthFailureFromOneIdentifierAcrossIPsReturns429(t *testing.T) {
 		}
 	}
 
-	rec := postLoginFrom(t, r, "treasurer@example.org", "not-the-password", "198.51.100.250")
+	rec := postLoginFrom(t, r, "treasurer@example.org", "not-the-password", "203.0.113.250")
 	if rec.Code != http.StatusTooManyRequests {
-		t.Fatalf("attempt %d (new IP) = %d, want %d (body: %s)", loginRateLimitMaxAttempts+1, rec.Code, http.StatusTooManyRequests, rec.Body.String())
+		t.Fatalf("attempt %d (new IP) = %d, want %d (body: %s)", loginIdentifierCeiling+1, rec.Code, http.StatusTooManyRequests, rec.Body.String())
 	}
 	got := decodeError(t, rec)
 	if got.Code != "too_many_requests" {
@@ -180,11 +191,11 @@ func TestPostLoginNthFailureFromOneIdentifierAcrossIPsReturns429(t *testing.T) {
 	}
 
 	// The correct password, from yet another fresh IP, must also be
-	// refused while locked out - the lockout blocks the identifier
+	// refused while the ceiling is full - it blocks the identifier
 	// regardless of whether the next guess would actually have been right.
-	rec = postLoginFrom(t, r, "treasurer@example.org", "correct-horse-battery", "198.51.100.251")
+	rec = postLoginFrom(t, r, "treasurer@example.org", "correct-horse-battery", "203.0.113.251")
 	if rec.Code != http.StatusTooManyRequests {
-		t.Fatalf("correct password while locked out = %d, want %d (body: %s)", rec.Code, http.StatusTooManyRequests, rec.Body.String())
+		t.Fatalf("correct password while the ceiling is full = %d, want %d (body: %s)", rec.Code, http.StatusTooManyRequests, rec.Body.String())
 	}
 }
 

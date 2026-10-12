@@ -41,7 +41,7 @@ func init() {
 }
 
 // Authenticate verifies email and password against the account
-// GetUserByEmail(email) names, returning that row on success.
+// GetUserByEmail(email) names (trimmed, matched case-insensitively), returning that row on success.
 //
 // It answers ErrInvalidCredentials - one sentinel, no other error naming a
 // login failure - whether email matches no account at all or matches one
@@ -69,9 +69,13 @@ func init() {
 // unknown email alike, so it is no more an oracle than the 401 is, and the
 // caller must not count it as a wrong guess.
 func (a *Auth) Authenticate(ctx context.Context, email, password string) (store.User, error) {
-	email = strings.TrimSpace(email)
-
-	user, err := a.q.GetUserByEmail(ctx, email)
+	// Looked up by the normalised form, case-insensitively (#500): rows
+	// written before normalisation keep the case they were typed in, and the
+	// exact arm finds those by the text they were registered with.
+	user, err := a.q.GetUserByEmail(ctx, store.GetUserByEmailParams{
+		Normalized: NormalizeEmail(email),
+		Exact:      strings.TrimSpace(email),
+	})
 	if err != nil {
 		if !errors.Is(err, sql.ErrNoRows) {
 			return store.User{}, fmt.Errorf("looking up account: %w", err)

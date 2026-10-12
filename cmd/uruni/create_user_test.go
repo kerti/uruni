@@ -49,6 +49,29 @@ func TestCreateUserCreatesThenResets(t *testing.T) {
 	}
 }
 
+// TestCreateUserNormalisesTheEmail (#500): a capitalised or padded address
+// creates the lower-case login, a differently-cased one resets it rather than
+// being refused as another account, and the output names the stored form.
+func TestCreateUserNormalisesTheEmail(t *testing.T) {
+	t.Setenv("URUNI_DB", filepath.Join(t.TempDir(), "uruni.db"))
+	t.Setenv("URUNI_BASE_URL", "https://uruni.test")
+	ctx := context.Background()
+
+	var first, second bytes.Buffer
+	if err := createUser(ctx, []string{" Treasurer@Example.ORG ", "correct-horse-battery"}, &first); err != nil {
+		t.Fatalf("first createUser() = %v, want nil", err)
+	}
+	if err := createUser(ctx, []string{"TREASURER@example.org", "another-long-enough-password"}, &second); err != nil {
+		t.Fatalf("second createUser() = %v, want a reset", err)
+	}
+	if want := "created login treasurer@example.org\n"; first.String() != want {
+		t.Errorf("first output = %q, want %q", first.String(), want)
+	}
+	if !strings.HasPrefix(second.String(), "reset the password for treasurer@example.org") {
+		t.Errorf("second output = %q, want a reset of treasurer@example.org", second.String())
+	}
+}
+
 func TestCreateUserRefusesASecondLogin(t *testing.T) {
 	t.Setenv("URUNI_DB", filepath.Join(t.TempDir(), "uruni.db"))
 	t.Setenv("URUNI_BASE_URL", "https://uruni.test")

@@ -281,7 +281,15 @@ type Querier interface {
 	// new caller that fetches a transaction by id from an untrusted request.
 	GetTransactionForFund(ctx context.Context, arg GetTransactionForFundParams) (Transaction, error)
 	GetTransfer(ctx context.Context, id int64) (Transfer, error)
-	GetUserByEmail(ctx context.Context, email string) (User, error)
+	// GetUserByEmail finds the login case-insensitively without a schema change
+	// (#500). New rows are stored trimmed and lower-cased (auth.NormalizeEmail),
+	// but a row written before that keeps whatever case it was typed in, so the
+	// lookup matches either the normalized form against lower(email) or the
+	// address exactly as stored. SQLite's lower() folds ASCII only: the exact arm
+	// is what keeps a legacy row with a non-ASCII capital findable by the very
+	// text it was registered with. The COLLATE NOCASE column rides the schema
+	// epic (#523); user holds one row, so no index is lost to the OR.
+	GetUserByEmail(ctx context.Context, arg GetUserByEmailParams) (User, error)
 	// What the occasion itself collected and disbursed (PRD section 7.5's
 	// detail screen), as opposed to IncidentalTotals above's net-including-rolls. The
 	// LEFT JOIN excludes only a reclass_purpose leg - the roll CloseIncidentalAndRoll
@@ -893,7 +901,8 @@ type Querier interface {
 	// can, and only a set_* flag can tell that from "leave alone".
 	UpdateReimbursement(ctx context.Context, arg UpdateReimbursementParams) (Reimbursement, error)
 	// UpdateUserPassword is create-user's reset half (#287): the email is the
-	// key, and the hash is computed by internal/auth before the call.
+	// key (matched as GetUserByEmail does, #500), and the hash is computed by
+	// internal/auth before the call.
 	UpdateUserPassword(ctx context.Context, arg UpdateUserPasswordParams) (User, error)
 	// UpsertSession is what a session store commits through: one atomic
 	// statement, because a commit rewrites a token that may or may not already
