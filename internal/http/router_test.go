@@ -210,7 +210,7 @@ func TestClientRoutesFallBackToIndex(t *testing.T) {
 // The stale-app failure ADR-008's prompt-to-update strategy would otherwise
 // still lose to: index.html and sw.js keep their names across deploys, so a
 // browser that caches either serves an old app from a freshly updated server.
-// Every other asset is content-hashed and deliberately left alone here.
+// Content-hashed assets are the opposite case, cached for a year (#506).
 func TestShellAndServiceWorkerAreNotBrowserCached(t *testing.T) {
 	t.Parallel()
 	for _, path := range []string{"/", "/index.html", "/sw.js", "/catat"} {
@@ -220,8 +220,10 @@ func TestShellAndServiceWorkerAreNotBrowserCached(t *testing.T) {
 		}
 	}
 
-	if got := get(t, "/assets/app.js").Header().Get("Cache-Control"); got != "" {
-		t.Errorf("GET /assets/app.js Cache-Control = %q, want it unset - hashed assets are cacheable", got)
+	// Hashed assets get the opposite, a year-long immutable header (#506,
+	// TestHashedAssetsCacheAsImmutable).
+	if got := get(t, "/assets/app.js").Header().Get("Cache-Control"); got == "no-cache" {
+		t.Errorf("GET /assets/app.js Cache-Control = %q, want hashed assets cacheable", got)
 	}
 }
 
