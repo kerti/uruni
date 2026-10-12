@@ -163,8 +163,9 @@ func TestHealthzFailsWhenTheDatabaseFileCheckFails(t *testing.T) {
 	if err := json.NewDecoder(rec.Body).Decode(&got); err != nil {
 		t.Fatalf("decoding /healthz body: %v", err)
 	}
-	if got.Status != "error" || got.Error != "the database file was replaced" {
-		t.Errorf("GET /healthz = %+v, want status error carrying the check's message", got)
+	// The detail stays in the log (#505): the body is generic.
+	if got.Status != "error" || got.Error != "database unavailable" {
+		t.Errorf("GET /healthz = %+v, want status error with the generic message", got)
 	}
 	if got.Version != testBuild.Version {
 		t.Errorf("GET /healthz version = %q, want %q - the build stays readable when unhealthy", got.Version, testBuild.Version)

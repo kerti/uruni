@@ -152,6 +152,13 @@ func serve() error {
 		return err
 	}
 
+	// A damaged file is refused here too (#505): serving it would put the
+	// treasurer's next entries on top of pages SQLite already can't read, and
+	// the boot dump below would write the damage into the backup directory.
+	if err := db.QuickCheck(ctx, sqlDB); err != nil {
+		return fmt.Errorf("database integrity check failed for %s - restore a backup (see SELF-HOSTING.md): %w", cfg.DBPath, err)
+	}
+
 	// A second, independent store.New(sqlDB) alongside ledger.New(sqlDB):
 	// store.Queries is a stateless wrapper over the shared *sql.DB (ADR-004's
 	// single connection), so this costs nothing and avoids adding a Querier

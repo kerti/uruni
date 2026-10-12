@@ -26,6 +26,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/kerti/uruni/internal/db"
 	"github.com/kerti/uruni/internal/store"
 )
 
@@ -404,12 +405,13 @@ func writeDump(ctx context.Context, read documentReader, assemble zipAssembler, 
 // and a fund that changed twice in one day still gets only one daily dump
 // for that day, not a second one chasing the second change.
 func WriteDailyIfNeeded(ctx context.Context, sqlDB *sql.DB, uploadsDir, backupDir string, now time.Time) (name string, written bool, err error) {
-	return writeDailyIfNeeded(ctx, readDocumentFrom(sqlDB), assembleZip, uploadsDir, backupDir, now)
+	check := func(ctx context.Context) error { return db.QuickCheck(ctx, sqlDB) }
+	return writeDailyIfNeeded(ctx, readDocumentFrom(sqlDB), assembleZip, check, uploadsDir, backupDir, now)
 }
 
-// writeDailyIfNeeded is WriteDailyIfNeeded over an injectable document reader
-// and zip assembler.
-func writeDailyIfNeeded(ctx context.Context, read documentReader, assemble zipAssembler, uploadsDir, backupDir string, now time.Time) (name string, written bool, err error) {
+// writeDailyIfNeeded is WriteDailyIfNeeded over an injectable document reader,
+// zip assembler and integrity check (nil skips the check).
+func writeDailyIfNeeded(ctx context.Context, read documentReader, assemble zipAssembler, check func(context.Context) error, uploadsDir, backupDir string, now time.Time) (name string, written bool, err error) {
 	dumps, err := ListDumps(backupDir)
 	if err != nil {
 		return "", false, err
@@ -439,6 +441,15 @@ func writeDailyIfNeeded(ctx context.Context, read documentReader, assemble zipAs
 	}
 	if haveMostRecentDaily && shortHash(plan.hash) == mostRecentDailyHash {
 		return "", false, nil
+	}
+	// Only a dump that will actually be written pays for the integrity check
+	// (#505), so it runs about once a day, not every tick. A damaged file is
+	// refused rather than dumped: a dump of it would count against the
+	// 7-version retention and could push the last good backups out.
+	if check != nil {
+		if err := check(ctx); err != nil {
+			return "", false, fmt.Errorf("backup: not writing a daily dump: %w", err)
+		}
 	}
 	m, err := plan.zipFor(assemble, uploadsDir)
 	if err != nil {
