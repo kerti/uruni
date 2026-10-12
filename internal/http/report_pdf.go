@@ -478,7 +478,9 @@ func (d *pdfDoc) transactions(p reportPage) {
 		d.text(pdfLine{text: reportText.PDFNoRows, size: pdfBodySize, color: "muted-foreground"}, pdfContentW, "L")
 		return
 	}
-	const dateW, amountW = 34.0, 36.0
+	// amountW fits "+Rp 999.999.999.999" (33mm in bold 9.5pt, #540) with room
+	// to spare: a figure that did not would wrap at its space.
+	const dateW, amountW = 32.0, 40.0
 	noteW := pdfContentW - dateW - amountW
 	d.SetY(d.GetY() + 4)
 	d.tableHead([]pdfCell{
@@ -528,7 +530,7 @@ func (d *pdfDoc) dues(p reportPage) {
 		return
 	}
 	d.section(reportText.DuesLabel, true)
-	const amountW, statusW = 30.0, 54.0
+	const amountW, statusW = 38.0, 54.0
 	nameW := pdfContentW - 2*amountW - statusW
 	d.tableHead([]pdfCell{
 		headCell(nameW, "L", reportText.PDFColMember),
@@ -583,7 +585,7 @@ func (d *pdfDoc) envelopes(p reportPage) {
 		return
 	}
 	d.section(reportText.EnvelopesLabel, true)
-	const amountW, statusW = 36.0, 56.0
+	const amountW, statusW = 38.0, 52.0
 	nameW := pdfContentW - amountW - statusW
 	for _, e := range p.Envelopes {
 		// The heading and its first rows stay together.

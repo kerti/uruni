@@ -422,3 +422,23 @@ func TestReportReadsAPartialCekKasEntryAsSelisihForTheRemainder(t *testing.T) {
 		t.Errorf("report after the exact entry does not say cocok:\n%s", body)
 	}
 }
+
+// TestHeroSizeClassStepsDownAsTheFigureGrows pins #540's steps: everyday
+// figures keep the full hero size, and the widest legal figure (Rp
+// 999.999.999.999, with or without its minus) always gets a smaller one.
+func TestHeroSizeClassStepsDownAsTheFigureGrows(t *testing.T) {
+	for _, c := range []struct {
+		figure string
+		want   string
+	}{
+		{money.FormatIDR(1_450_000), ""},
+		{money.FormatIDR(money.MaxAmount), "s28"},
+		{money.FormatIDR(99_999_999_999), "s32"},
+		{money.FormatIDR(-money.MaxAmount), "s28"},
+		{money.FormatIDR(2_999_999_999_997), "s28"},
+	} {
+		if got := heroSizeClass(c.figure); got != c.want {
+			t.Errorf("heroSizeClass(%q) = %q, want %q", c.figure, got, c.want)
+		}
+	}
+}

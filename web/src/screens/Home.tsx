@@ -196,7 +196,7 @@ export default function Home({
         className="relative flex flex-col items-center gap-2 rounded-2xl bg-primary px-6 py-6 text-center text-primary-foreground hero-glass glass-rim"
       >
         <p className="text-base font-medium text-primary-foreground/85">{copy.home.balanceHeading}</p>
-        <p className="tabular text-[36px] font-bold leading-tight">{formatIDR(balances.fund_total)}</p>
+        <p className={`tabular font-bold leading-tight ${heroSize(formatIDR(balances.fund_total))}`}>{formatIDR(balances.fund_total)}</p>
       </section>
 
       <section className="flex flex-col gap-2">
@@ -293,7 +293,12 @@ export default function Home({
       <section className="flex flex-col gap-2">
         <h2 className="text-sm font-semibold text-muted-foreground">{copy.home.cashflowHeading}</h2>
         <div className="rounded-lg bg-card px-4 py-3 shadow-card ring-1 ring-foreground/10">
-          <dl className="grid grid-cols-2 gap-3">
+          {/* Two columns while both figures are short; one under the other when
+              either is wide enough to crowd its half (a whole figure to its
+              own line, never a clipped or wrapped number). */}
+          <dl
+            className={`grid gap-3 ${Math.max(formatIDR(balances.month.in).length, formatIDR(balances.month.out).length) > 15 ? 'grid-cols-1' : 'grid-cols-2'}`}
+          >
             <div>
               <dt className="text-sm text-muted-foreground">{copy.home.monthIn}</dt>
               <dd className="tabular font-medium">{formatIDR(balances.month.in)}</dd>
@@ -331,6 +336,19 @@ export default function Home({
       </section>
     </div>
   )
+}
+
+/**
+ * The hero's type size, stepped down by how wide the figure is so it always
+ * fits the card on one line: 36px for everyday figures, smaller as the
+ * formatted figure grows toward Rp 999.999.999.999 and its minus (19
+ * characters). Never a wrap or an ellipsis inside the number (#540).
+ */
+function heroSize(figure: string): string {
+  if (figure.length <= 15) return 'text-[36px]'
+  if (figure.length <= 17) return 'text-[32px]'
+  if (figure.length <= 20) return 'text-[28px]'
+  return 'text-2xl'
 }
 
 /**
