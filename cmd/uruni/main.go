@@ -146,6 +146,14 @@ func serve() error {
 		return err
 	}
 
+	// ADR-025: goose cannot see that the one migration file was edited in place,
+	// so a database from an older build migrates "successfully" and stays on the
+	// old schema. Refuse here, before anything is served or written, rather than
+	// let /healthz say ok and the treasurer meet the 500s.
+	if err := verifySchema(ctx, sqlDB, cfg.DBPath); err != nil {
+		return err
+	}
+
 	// A second, independent store.New(sqlDB) alongside ledger.New(sqlDB):
 	// store.Queries is a stateless wrapper over the shared *sql.DB (ADR-004's
 	// single connection), so this costs nothing and avoids adding a Querier
