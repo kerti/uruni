@@ -1,8 +1,10 @@
 package http
 
 import (
+	"errors"
 	"net/http"
 
+	"github.com/kerti/uruni/internal/auth"
 	"github.com/kerti/uruni/internal/store"
 )
 
@@ -34,14 +36,32 @@ func toUserResponse(u store.User) userResponse {
 // strand first-run setup behind a login screen nothing has offered her yet.
 // The treasurer typed the password one second ago; there is no verification
 // step to bridge before trusting it again.
+//
+// Register is public, so it is bounded the way login is (#495): rate limited
+// per client IP, the attempt reserved before auth.Register runs so a burst is
+// counted while it is in flight. Auth.Register itself refuses an instance that
+// already has an account before it hashes anything, and every hash it does
+// run goes through the process-wide gate. The reservation stands whenever
+// Register actually judged the attempt (created, refused as invalid, refused
+// as already registered) and is handed back when it did not (busy, broken).
+// Success keeps the count too: unlike login there is no reset.
 func (a *api) register(w http.ResponseWriter, r *http.Request) {
 	var req registerRequest
 	if !decodeJSON(w, r, &req) {
 		return
 	}
 
+	reservation, ok := a.registerLimiter.reserve("register-ip:" + a.clientIP(r))
+	if !ok {
+		writeAPIError(w, http.StatusTooManyRequests, "too_many_requests", "Too many attempts. Try again later.")
+		return
+	}
+
 	user, err := a.auth.Register(r.Context(), req.Email, req.Password)
 	if err != nil {
+		if !errors.Is(err, auth.ErrInvalidArgument) && !errors.Is(err, auth.ErrAlreadyRegistered) {
+			reservation.release()
+		}
 		mapAuthError(w, a.logger, err)
 		return
 	}

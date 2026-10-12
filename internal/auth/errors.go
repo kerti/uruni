@@ -21,3 +21,9 @@ var ErrAlreadyRegistered = errors.New("auth: an account has already been registe
 // (ADR-030 decision 2), so SetLogin resets that login or creates the first -
 // it never mints a second one beside it.
 var ErrOtherAccountExists = errors.New("auth: this instance already has a login under a different email")
+
+// ErrBusy is returned by anything that hashes or verifies a password when
+// every slot of the process-wide gate (password_gate.go) stayed taken for the
+// whole wait. It says nothing about the caller or the password: nothing was
+// computed, so a caller that counts attempts must not count this one.
+var ErrBusy = errors.New("auth: password hashing is busy")

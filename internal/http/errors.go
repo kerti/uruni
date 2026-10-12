@@ -171,6 +171,16 @@ func mapAuthError(w http.ResponseWriter, logger *slog.Logger, err error) {
 		// this was, so the response bytes cannot become the oracle
 		// Authenticate's own doc comment says they must not be.
 		writeAPIError(w, http.StatusUnauthorized, "invalid_credentials", "Invalid email or password.")
+	case errors.Is(err, auth.ErrBusy):
+		// Every password-hashing slot stayed taken for the whole wait
+		// (auth/password_gate.go, #495). 503, not 429: nothing about this
+		// caller is over a limit - the server is saturated - and 429 already
+		// means "you, wait minutes" to the SPA (too_many_requests). Its own
+		// code, so the copy says "busy, try again in a moment" and not
+		// "too many attempts". Retry-After: the wait was seconds, so a retry
+		// after one is reasonable.
+		w.Header().Set("Retry-After", "1")
+		writeAPIError(w, http.StatusServiceUnavailable, "server_busy", "The server is busy. Try again in a moment.")
 	default:
 		logger.Error("unhandled auth error", "error", err)
 		writeAPIError(w, http.StatusInternalServerError, "internal_error", "Something went wrong.")

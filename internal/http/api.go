@@ -44,6 +44,11 @@ type api struct {
 	// test built) rather than resetting per call.
 	loginLimiter *rateLimiter
 
+	// registerLimiter is POST /api/register's, counted per client IP (#495).
+	// Its own instance, not loginLimiter's: a success there resets the key,
+	// and a register success must not.
+	registerLimiter *rateLimiter
+
 	// trustedProxies is #447's addition: the peers whose X-Forwarded-For
 	// clientIP believes (login.go). Empty believes none.
 	trustedProxies []netip.Prefix

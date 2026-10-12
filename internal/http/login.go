@@ -25,12 +25,14 @@ type loginRequest struct {
 // the way register.go already does - RenewToken then Put, so the pattern
 // isn't invented twice.
 //
-// The rate limiter is checked before Authenticate ever runs, so a caller
-// already locked out never pays argon2id's cost, and is updated only on
-// auth.ErrInvalidCredentials specifically - a malformed body never reaches
-// here (decodeJSON returns first) and an infrastructure failure inside
-// Authenticate is not a guessed-wrong password, so neither counts as an
-// attempt.
+// The attempt is reserved with the rate limiter before Authenticate runs
+// (#495), so concurrent attempts are counted while they are still in flight:
+// a burst of N wrong guesses admits exactly the limit's worth and refuses the
+// rest before any of them pays argon2id's cost. The reservation stands for an
+// ErrInvalidCredentials (a real wrong guess), is handed back for anything
+// else - a busy hasher, a broken database - since none of those is a guess,
+// and both keys are cleared by a success. A malformed body never reaches here
+// (decodeJSON returns first).
 func (a *api) login(w http.ResponseWriter, r *http.Request) {
 	var req loginRequest
 	if !decodeJSON(w, r, &req) {
@@ -43,19 +45,20 @@ func (a *api) login(w http.ResponseWriter, r *http.Request) {
 	ip := "ip:" + a.clientIP(r)
 	identifier := "id:" + strings.TrimSpace(req.Email)
 
-	// Checked independently, not "either" short-circuited into one boolean
-	// before recording below: both keys have to be live for the "distributed
-	// guesser vs. single-account brute force" pairing issue #115 asks for.
-	if a.loginLimiter.blocked(ip) || a.loginLimiter.blocked(identifier) {
+	// Both keys are reserved together or neither is: both have to be live for
+	// the "distributed guesser vs. single-account brute force" pairing issue
+	// #115 asks for, and a refused request must not spend the other key's
+	// budget.
+	reservation, ok := a.loginLimiter.reserve(ip, identifier)
+	if !ok {
 		writeAPIError(w, http.StatusTooManyRequests, "too_many_requests", "Too many login attempts. Try again later.")
 		return
 	}
 
 	user, err := a.auth.Authenticate(r.Context(), req.Email, req.Password)
 	if err != nil {
-		if errors.Is(err, auth.ErrInvalidCredentials) {
-			a.loginLimiter.recordFailure(ip)
-			a.loginLimiter.recordFailure(identifier)
+		if !errors.Is(err, auth.ErrInvalidCredentials) {
+			reservation.release()
 		}
 		mapAuthError(w, a.logger, err)
 		return
@@ -64,8 +67,7 @@ func (a *api) login(w http.ResponseWriter, r *http.Request) {
 	// A success clears both counters (issue #115) - the treasurer got it
 	// right, so any earlier mistyped attempts should not still be counted
 	// against her.
-	a.loginLimiter.reset(ip)
-	a.loginLimiter.reset(identifier)
+	a.loginLimiter.reset(ip, identifier)
 
 	// RenewToken before writing anything into the session: a token issued
 	// before the identity was known to it must never be the one that ends
@@ -82,7 +84,7 @@ func (a *api) login(w http.ResponseWriter, r *http.Request) {
 }
 
 // clientIP returns the address a request actually came from, the key the
-// login and restore-confirm limiters count under.
+// login, register and restore-confirm limiters count under.
 //
 // The TCP peer is the answer unless it is one of a.trustedProxies
 // (URUNI_TRUSTED_PROXIES, #447). Only then is X-Forwarded-For read, from the
