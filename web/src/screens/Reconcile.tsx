@@ -17,7 +17,7 @@ import { getBalances } from '@/lib/balances'
 import { formatIsoDate, dateBounds } from '@/lib/dates'
 import { formatIDR } from '@/lib/money'
 import { listPurposes } from '@/lib/purposes'
-import { takeReconciliation } from '@/lib/reconciliations'
+import { fixRemainder, takeReconciliation } from '@/lib/reconciliations'
 import { listTransactions } from '@/lib/transactions'
 import { useApi } from '@/lib/useApi'
 import type { Account } from '@/lib/accounts'
@@ -221,7 +221,10 @@ export default function Reconcile({ onDone, onCancel }: { onDone: () => void; on
       if (diff === 0) return true
       if (!line.resolution) return false
       if (line.resolution === 'left_open') return true
-      return fixIsValid(line)
+      if (!fixIsValid(line)) return false
+      // A plug closes the whole gap or the server refuses it (#498); an
+      // entry may close only part of it.
+      return line.resolution !== 'adjusted' || fixRemainder(diff, line.fixDirection, line.fixAmount) === 0
     })
 
   function buildCounts(): AccountCountInput[] {
@@ -451,6 +454,8 @@ function AccountCountRow({
   const showGap = line.touched && diff !== 0
   const showMatched = line.touched && diff === 0
   const showFixFields = line.resolution === 'entry_added' || line.resolution === 'adjusted'
+  // What would still be open if she saved now (#498), live as she types.
+  const remaining = showFixFields ? fixRemainder(diff, line.fixDirection, line.fixAmount) : 0
 
   // aria-labelledby rather than a <legend>: a legend renders into the
   // fieldset's border, which is exactly what made the location name look
@@ -575,6 +580,23 @@ function AccountCountRow({
                   disabled={disabled}
                 />
 
+                <div role="status" className="flex flex-col gap-1 text-sm">
+                  {remaining === 0 ? (
+                    <p className="flex items-center gap-2 text-success">
+                      <CircleCheck aria-hidden="true" className="size-4 shrink-0" />
+                      {text.remainingNone}
+                    </p>
+                  ) : (
+                    <>
+                      <p className="tabular flex items-center gap-2 text-attention">
+                        <TriangleAlert aria-hidden="true" className="size-4 shrink-0" />
+                        {text.remainingGap(formatIDR(Math.abs(remaining)))}
+                      </p>
+                      {line.resolution === 'adjusted' && <p className="text-muted-foreground">{text.adjustedMustMatch}</p>}
+                    </>
+                  )}
+                </div>
+
                 <div className="flex flex-col gap-1.5">
                   <Label htmlFor={`reconcile-fix-date-${account.id}`}>{text.fixDateLabel}</Label>
                   <DateField
@@ -609,12 +631,13 @@ function AccountCountRow({
 /**
  * The confirmation state, rendered only from POST /api/reconciliations's own
  * response - never from the pre-submit preview above (the orchestrator's own
- * ruling). "Cocok" only when nothing is left open: a line resolved via
- * entry_added/adjusted already got its squaring fix posted in the same
- * request, so - same as ReconciliationBanner.tsx's own open-lines-only
- * count - it is not an open gap anymore even though its stored
- * difference_amount is still whatever was actually found. Only "left_open"
- * lines count toward the discrepancy figure shown here, for that reason.
+ * ruling). "Cocok" only when nothing is left open: a line whose fix squared
+ * the whole gap is not an open gap anymore even though its stored
+ * difference_amount is still whatever was actually found. What counts toward
+ * the discrepancy figure shown here is each line's remainder_amount (#498) -
+ * the whole gap for left_open, whatever an entry_added fix did not cover, 0
+ * for a plug or an exact entry - the same figure ReconciliationBanner.tsx
+ * reads.
  *
  * Motion: a single 200ms ease-out fade/rise on mount, nothing bouncy
  * (Design-System.md:98-100), disabled outright under prefers-reduced-motion
@@ -638,10 +661,8 @@ function Confirmation({
     return () => cancelAnimationFrame(frame)
   }, [])
 
-  const hasOpenGap = detail.lines.some((line) => line.resolution === 'left_open')
-  const openTotal = detail.lines
-    .filter((line) => line.resolution === 'left_open')
-    .reduce((sum, line) => sum + Math.abs(line.difference_amount), 0)
+  const hasOpenGap = detail.lines.some((line) => line.remainder_amount !== 0)
+  const openTotal = detail.lines.reduce((sum, line) => sum + Math.abs(line.remainder_amount), 0)
 
   return (
     <div

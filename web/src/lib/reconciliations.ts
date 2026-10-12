@@ -16,6 +16,10 @@ export interface OpenReconciliationLine {
   difference_amount: number
   resolution: string
   adjustment_transaction_id: number | null
+  /** What the line still has open (#498): difference_amount minus its fix,
+   * signed like difference_amount. Every "selisih" reads this, never
+   * difference_amount, which stays the gap found at the count. */
+  remainder_amount: number
   reconciliation_id: number
 }
 
@@ -96,6 +100,18 @@ export interface ReconciliationLine {
   difference_amount: number
   resolution: string
   adjustment_transaction_id: number | null
+  /** See OpenReconciliationLine.remainder_amount. 0 means closed. */
+  remainder_amount: number
+}
+
+/**
+ * What a Cek kas line would still have open if saved with this fix (#498):
+ * the line's difference (actual - recorded) minus the fix's signed amount,
+ * "in" positive and "out" negative - the same arithmetic the server does,
+ * for the live "masih tersisa" line. Plain integers.
+ */
+export function fixRemainder(difference: number, direction: 'in' | 'out', amount: number): number {
+  return difference - (direction === 'in' ? amount : -amount)
 }
 
 /** POST /api/reconciliations's 201 body (reconciliationDetailResponse) -
@@ -113,7 +129,7 @@ export interface ReconciliationDetail {
 /** One row of GET /api/reconciliations's page
  * (internal/http/reconciliations.go's reconciliationListItemResponse): the
  * snapshot plus open_difference_amount, the sum of ABS(difference_amount)
- * over that snapshot's still-open lines - enough for Cek kas's list to show
+ * over that snapshot's lines (#498: the remainder each still has open, not the gap found) - enough for Cek kas's list to show
  * cocok (0) vs selisih without a detail fetch. */
 export interface ReconciliationListItem {
   id: number

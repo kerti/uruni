@@ -279,6 +279,11 @@ export const copy = {
       account_balance_negative: 'Saldo tercatat lokasi ini minus. Cek kas dulu untuk menemukan selisihnya, baru nonaktifkan.',
       reconciliation_location_missing:
         'Ada lokasi aktif yang belum dihitung. Daftarnya sudah diperbarui — hitung lokasi itu, lalu simpan lagi.',
+      // #498: a Cek kas "Sesuaikan saldo" (adjusted) must equal the selisih
+      // exactly. The form blocks a mismatch before save, so she only meets
+      // this when the gap moved under a stale form (a transaction landed
+      // after she opened it) - hence "muat ulang", not "pick another option".
+      reconciliation_plug_mismatch: 'Selisihnya berubah sejak lokasi ini dihitung. Muat ulang, cek lagi angkanya, lalu simpan.',
       // ADR-034 (#211): a sumbangan bernama can't be re-tagged the way an
       // ordinary row can - moving it would leave participation counting the
       // member against an envelope the money has left. Same "added ahead of
@@ -690,6 +695,17 @@ export const copy = {
     // for a list row). "Cocok" alone reuses resolutionOptions.matched
     // instead of repeating the word here.
     selisihBadge: (amount: string) => `Selisih ${amount}`,
+    // #498: what a line still has open after its fix. Live under the fix
+    // fields as she types (amount already formatted, by magnitude), and per
+    // line in the saved snapshot when an entry closed only part of the gap.
+    remainingGap: (amount: string) => `Masih tersisa selisih ${amount}`,
+    // The same slot when the fix squares the gap exactly.
+    remainingNone: 'Selisihnya tertutup.',
+    // Under remainingGap when the resolution is "Sesuaikan saldo": unlike
+    // "Ada transaksi yang belum tercatat", a plug must close the whole gap,
+    // so save stays off until it does.
+    adjustedMustMatch:
+      'Penyesuaian harus pas dengan selisihnya. Kalau baru sebagian yang ketemu, pilih "Ada transaksi yang belum tercatat".',
   },
   // The dues status roster (M6.12, PRD §7.3): "view members and, for the
   // current period, who has paid / partially paid / paid in advance." A

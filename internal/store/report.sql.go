@@ -235,11 +235,29 @@ func (q *Queries) ReportLatestReconciliation(ctx context.Context, arg ReportLate
 
 const reportOpenReconciliationLines = `-- name: ReportOpenReconciliationLines :many
 SELECT rl.id, rl.fund_id, rl.reconciliation_id, rl.account_id, rl.recorded_amount,
-       rl.actual_amount, rl.difference_amount, rl.resolution, rl.adjustment_transaction_id
+       rl.actual_amount, rl.difference_amount, rl.resolution, rl.adjustment_transaction_id,
+       CAST(CASE rl.resolution
+         WHEN 'left_open' THEN rl.difference_amount
+         WHEN 'matched' THEN 0
+         ELSE CASE
+           WHEN fix.id IS NULL THEN 0
+           WHEN fix.direction = 'in' THEN rl.difference_amount - fix.amount
+           ELSE rl.difference_amount + fix.amount
+         END
+       END AS INTEGER) AS remainder_amount
 FROM reconciliation_line rl
 JOIN reconciliation r ON r.fund_id = rl.fund_id AND r.id = rl.reconciliation_id
+LEFT JOIN "transaction" fix ON fix.fund_id = rl.fund_id AND fix.id = rl.adjustment_transaction_id
 WHERE rl.fund_id = ?1
-  AND rl.resolution = 'left_open'
+  AND (CASE rl.resolution
+         WHEN 'left_open' THEN rl.difference_amount
+         WHEN 'matched' THEN 0
+         ELSE CASE
+           WHEN fix.id IS NULL THEN 0
+           WHEN fix.direction = 'in' THEN rl.difference_amount - fix.amount
+           ELSE rl.difference_amount + fix.amount
+         END
+       END) <> 0
   AND (CAST(?2 AS INTEGER) IS NULL OR r.performed_at < CAST(?2 AS INTEGER))
   AND NOT EXISTS (
     SELECT 1
@@ -259,18 +277,32 @@ type ReportOpenReconciliationLinesParams struct {
 	Before *int64
 }
 
+type ReportOpenReconciliationLinesRow struct {
+	ID                      int64
+	FundID                  int64
+	ReconciliationID        int64
+	AccountID               int64
+	RecordedAmount          int64
+	ActualAmount            int64
+	DifferenceAmount        int64
+	Resolution              string
+	AdjustmentTransactionID *int64
+	RemainderAmount         int64
+}
+
 // ListOpenReconciliationLinesByFund with both snapshots bounded: a line is
-// open at the bound when no count before the bound has weighed in on its
-// location since.
-func (q *Queries) ReportOpenReconciliationLines(ctx context.Context, arg ReportOpenReconciliationLinesParams) ([]ReconciliationLine, error) {
+// open at the bound when its remainder_amount is non-zero (see
+// ListReconciliationLines) and no count before the bound has weighed in on
+// its location since.
+func (q *Queries) ReportOpenReconciliationLines(ctx context.Context, arg ReportOpenReconciliationLinesParams) ([]ReportOpenReconciliationLinesRow, error) {
 	rows, err := q.db.QueryContext(ctx, reportOpenReconciliationLines, arg.FundID, arg.Before)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []ReconciliationLine{}
+	items := []ReportOpenReconciliationLinesRow{}
 	for rows.Next() {
-		var i ReconciliationLine
+		var i ReportOpenReconciliationLinesRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.FundID,
@@ -281,6 +313,7 @@ func (q *Queries) ReportOpenReconciliationLines(ctx context.Context, arg ReportO
 			&i.DifferenceAmount,
 			&i.Resolution,
 			&i.AdjustmentTransactionID,
+			&i.RemainderAmount,
 		); err != nil {
 			return nil, err
 		}

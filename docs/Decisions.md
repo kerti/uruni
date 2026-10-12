@@ -423,3 +423,4 @@ The app is treated as feature-complete apart from the Excel workbook. #386 (chan
 - **E2E joins CI, tiered like Balances.** `@smoke` specs gate each PR and the full suite runs nightly. This retires ADR-015's "a few end-to-end flows", so the slice that wires CI also brings the ADR change.
 - **The audit covers four things:** docs-vs-code drift, the security surfaces, dead code and dependencies, and unit-test gaps.
 - **The Fly.io demo ([#144](https://github.com/kerti/uruni/issues/144)) moves to M9**, beside the rest of the deploy work.
+- **A Cek kas fix must close what it claims to close** ([#498](https://github.com/kerti/uruni/issues/498), 2026-10-12). An *adjusted* line is a plug: its signed amount must equal the difference exactly, or it is refused. An *entry_added* line may close part of the gap, and the remainder (difference minus the signed entry) keeps it open. "Open" means a non-zero remainder on Beranda, in the open lines and on the public report.

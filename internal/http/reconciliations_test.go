@@ -1029,3 +1029,104 @@ func TestGetReconciliationsOpenDifferenceAmount(t *testing.T) {
 		t.Errorf("mixed.OpenDifferenceAmount = %d, want 21000 (abs(-15000) + abs(6000))", got)
 	}
 }
+
+// takeCashCount posts a Cek kas counting the cash account with one
+// resolution and one fix (the bank always counts 0, matched).
+func takeCashCount(t *testing.T, r http.Handler, setup setupResponse, actual int64, resolution, direction string, amount int64) *httptest.ResponseRecorder {
+	t.Helper()
+	return postReconciliation(t, r, takeReconciliationRequest{
+		Counts: []accountCountRequest{{
+			AccountID: setup.CashAccountID(t), ActualAmount: actual, Resolution: resolution,
+			Fix: &fixRequest{PurposeID: setup.MainPurposeID, Direction: direction, Amount: amount, OccurredOn: "2026-08-31"},
+		}, {AccountID: setup.BankAccountID(t), ActualAmount: 0, Resolution: "matched"}},
+	})
+}
+
+func seedCash(t *testing.T, r http.Handler, setup setupResponse, amount int64) {
+	t.Helper()
+	if rec := postTransaction(t, r, transactionRequest{
+		AccountID: setup.CashAccountID(t), PurposeID: setup.MainPurposeID,
+		Direction: "in", Amount: amount, OccurredOn: "2026-08-01",
+	}); rec.Code != http.StatusCreated {
+		t.Fatalf("seed transaction = %d, want %d (body: %s)", rec.Code, http.StatusCreated, rec.Body.String())
+	}
+}
+
+// #498: an adjusted fix that is not the line's difference is refused with its
+// own code, whatever the way it misses - and nothing is written.
+func TestTakeReconciliationAdjustedPlugThatMissesTheDifferenceIs409(t *testing.T) {
+	t.Parallel()
+	for name, tc := range map[string]struct {
+		direction string
+		amount    int64
+	}{
+		"undershoot":      {"in", 20_000},
+		"overshoot":       {"in", 40_000},
+		"wrong direction": {"out", 30_000},
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			r := testRouter(t)
+			setup := setUpFund(t, r)
+			seedCash(t, r, setup, 100_000)
+
+			rec := takeCashCount(t, r, setup, 130_000, "adjusted", tc.direction, tc.amount)
+			if rec.Code != http.StatusConflict {
+				t.Fatalf("POST /api/reconciliations = %d, want %d (body: %s)", rec.Code, http.StatusConflict, rec.Body.String())
+			}
+			if got := decodeError(t, rec); got.Code != "reconciliation_plug_mismatch" {
+				t.Errorf("code = %q, want reconciliation_plug_mismatch", got.Code)
+			}
+			if page := decodeReconciliationsPage(t, getReconciliations(t, r)); len(page.Reconciliations) != 0 {
+				t.Errorf("snapshots after a refusal = %d, want 0", len(page.Reconciliations))
+			}
+		})
+	}
+}
+
+// #498: a partial entry_added keeps the remainder open on every surface the
+// SPA and the public page read - the POST response, the open lines, the Cek
+// kas list row - and an exact one closes the line.
+func TestTakeReconciliationPartialEntryReadsAsOpenForTheRemainder(t *testing.T) {
+	t.Parallel()
+	r := testRouter(t)
+	setup := setUpFund(t, r)
+	seedCash(t, r, setup, 100_000)
+
+	rec := takeCashCount(t, r, setup, 130_000, "entry_added", "in", 20_000)
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("POST /api/reconciliations = %d, want %d (body: %s)", rec.Code, http.StatusCreated, rec.Body.String())
+	}
+	created := decodeReconciliationDetail(t, rec)
+	line := lineFor(t, created.Lines, setup.CashAccountID(t))
+	if line.DifferenceAmount != 30_000 || line.RemainderAmount != 10_000 {
+		t.Errorf("line difference/remainder = %d/%d, want 30000/10000", line.DifferenceAmount, line.RemainderAmount)
+	}
+
+	var open []openReconciliationLineResponse
+	openRec := getOpenReconciliationLines(t, r)
+	if err := json.NewDecoder(openRec.Body).Decode(&open); err != nil {
+		t.Fatalf("decoding open lines: %v", err)
+	}
+	if len(open) != 1 || open[0].RemainderAmount != 10_000 || open[0].DifferenceAmount != 30_000 {
+		t.Errorf("open lines = %+v, want the cash line with remainder 10000", open)
+	}
+
+	page := decodeReconciliationsPage(t, getReconciliations(t, r))
+	if len(page.Reconciliations) != 1 || page.Reconciliations[0].OpenDifferenceAmount != 10_000 {
+		t.Errorf("list rows = %+v, want one row with open_difference_amount 10000", page.Reconciliations)
+	}
+
+	// Counting again, this time finding the rest exactly, closes it.
+	if rec := takeCashCount(t, r, setup, 130_000, "entry_added", "in", 10_000); rec.Code != http.StatusCreated {
+		t.Fatalf("second POST = %d, want %d (body: %s)", rec.Code, http.StatusCreated, rec.Body.String())
+	}
+	openRec = getOpenReconciliationLines(t, r)
+	open = nil
+	if err := json.NewDecoder(openRec.Body).Decode(&open); err != nil {
+		t.Fatalf("decoding open lines: %v", err)
+	}
+	if len(open) != 0 {
+		t.Errorf("open lines after the exact entry = %+v, want none", open)
+	}
+}

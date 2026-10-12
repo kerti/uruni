@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import Reconcile from '@/screens/Reconcile'
 import { copy } from '@/copy/id'
+import { formatIDR } from '@/lib/money'
 
 const text = copy.reconciliation
 
@@ -145,6 +146,7 @@ describe('Reconcile', () => {
                   actual_amount: 100_000,
                   difference_amount: 0,
                   resolution: 'matched',
+                  remainder_amount: 0,
                   adjustment_transaction_id: null,
                 },
                 {
@@ -154,6 +156,7 @@ describe('Reconcile', () => {
                   actual_amount: 200_000,
                   difference_amount: 0,
                   resolution: 'matched',
+                  remainder_amount: 0,
                   adjustment_transaction_id: null,
                 },
               ]),
@@ -206,6 +209,7 @@ describe('Reconcile', () => {
                   actual_amount: 150_000,
                   difference_amount: 50_000,
                   resolution: 'entry_added',
+                  remainder_amount: 0,
                   adjustment_transaction_id: null,
                 },
                 {
@@ -215,6 +219,7 @@ describe('Reconcile', () => {
                   actual_amount: 200_000,
                   difference_amount: 0,
                   resolution: 'matched',
+                  remainder_amount: 0,
                   adjustment_transaction_id: null,
                 },
               ]),
@@ -275,6 +280,7 @@ describe('Reconcile', () => {
                   actual_amount: 80_000,
                   difference_amount: -20_000,
                   resolution: 'adjusted',
+                  remainder_amount: 0,
                   adjustment_transaction_id: 55,
                 },
                 {
@@ -284,6 +290,7 @@ describe('Reconcile', () => {
                   actual_amount: 200_000,
                   difference_amount: 0,
                   resolution: 'matched',
+                  remainder_amount: 0,
                   adjustment_transaction_id: null,
                 },
               ]),
@@ -315,6 +322,159 @@ describe('Reconcile', () => {
     expect(tunaiCount?.fix).toMatchObject({ direction: 'out', amount: 20_000 })
   })
 
+  // #498: the form says what would still be open, live, before anything is
+  // saved. A rupiah figure is compared with its nbsp collapsed, as getByText
+  // normalizes the DOM text but never the matcher.
+  const plain = (s: string) => s.replace(/\u00a0/g, ' ')
+
+  it('shows the remaining gap live as the fix is typed, and an entry may leave some of it open', async () => {
+    vi.stubGlobal('fetch', routedFetch(stubLoad()))
+    render(<Reconcile onDone={vi.fn()} onCancel={vi.fn()} />)
+    await waitForForm()
+
+    await userEvent.type(screen.getByLabelText(text.actualLabel('Tunai')), '150000')
+    await userEvent.type(screen.getByLabelText(text.actualLabel('Bank Uji Coba')), '200000')
+    await userEvent.click(await screen.findByRole('button', { name: text.resolutionOptions.entry_added }))
+
+    // The default fix is the whole gap: nothing remains.
+    expect(screen.getByText(text.remainingNone)).toBeInTheDocument()
+    expect(screen.queryByText(plain(text.remainingGap(formatIDR(30_000))))).not.toBeInTheDocument()
+
+    // A smaller entry (one of two missing receipts): 50_000 - 20_000 remains.
+    const amount = screen.getByLabelText(text.fixAmountLabel)
+    await userEvent.clear(amount)
+    await userEvent.type(amount, '20000')
+    expect(screen.getByText(plain(text.remainingGap(formatIDR(30_000))))).toBeInTheDocument()
+    expect(screen.queryByText(text.remainingNone)).not.toBeInTheDocument()
+    // ...and an entry is allowed to leave it open.
+    expect(screen.getByRole('button', { name: text.submit })).not.toBeDisabled()
+    expect(screen.queryByText(text.adjustedMustMatch)).not.toBeInTheDocument()
+
+    // The wrong direction only grows the remainder: 50_000 + 20_000.
+    await userEvent.click(screen.getByRole('button', { name: copy.record.directionOut }))
+    expect(screen.getByText(plain(text.remainingGap(formatIDR(70_000))))).toBeInTheDocument()
+
+    // More than the gap flips the sign; the line is still open, by magnitude.
+    await userEvent.click(screen.getByRole('button', { name: copy.record.directionIn }))
+    await userEvent.clear(amount)
+    await userEvent.type(amount, '60000')
+    expect(screen.getByText(plain(text.remainingGap(formatIDR(10_000))))).toBeInTheDocument()
+  })
+
+  it('keeps save off for a plug that does not equal the gap, and says why', async () => {
+    vi.stubGlobal('fetch', routedFetch(stubLoad()))
+    render(<Reconcile onDone={vi.fn()} onCancel={vi.fn()} />)
+    await waitForForm()
+
+    await userEvent.type(screen.getByLabelText(text.actualLabel('Tunai')), '80000')
+    await userEvent.type(screen.getByLabelText(text.actualLabel('Bank Uji Coba')), '200000')
+    await userEvent.click(await screen.findByRole('button', { name: text.resolutionOptions.adjusted }))
+
+    const submit = screen.getByRole('button', { name: text.submit })
+    expect(screen.getByText(text.remainingNone)).toBeInTheDocument()
+    expect(submit).not.toBeDisabled()
+
+    // Undershoot: 20_000 gap, 5_000 plug.
+    const amount = screen.getByLabelText(text.fixAmountLabel)
+    await userEvent.clear(amount)
+    await userEvent.type(amount, '5000')
+    expect(screen.getByText(plain(text.remainingGap(formatIDR(15_000))))).toBeInTheDocument()
+    expect(screen.getByText(text.adjustedMustMatch)).toBeInTheDocument()
+    expect(submit).toBeDisabled()
+
+    // Exact again.
+    await userEvent.clear(amount)
+    await userEvent.type(amount, '20000')
+    expect(screen.getByText(text.remainingNone)).toBeInTheDocument()
+    expect(submit).not.toBeDisabled()
+
+    // Wrong direction doubles the gap.
+    await userEvent.click(screen.getByRole('button', { name: copy.record.directionIn }))
+    expect(screen.getByText(plain(text.remainingGap(formatIDR(40_000))))).toBeInTheDocument()
+    expect(submit).toBeDisabled()
+  })
+
+  it('confirms a partly closed line as selisih for the remainder, not cocok', async () => {
+    vi.stubGlobal(
+      'fetch',
+      routedFetch([
+        ...stubLoad(),
+        {
+          match: (m, u) => m === 'POST' && u.includes('/api/reconciliations'),
+          handle: () =>
+            Promise.resolve(
+              jsonResponse(
+                reconciliationDetail([
+                  {
+                    id: 1,
+                    account_id: 1,
+                    recorded_amount: 100_000,
+                    actual_amount: 150_000,
+                    difference_amount: 50_000,
+                    resolution: 'entry_added',
+                    remainder_amount: 30_000,
+                    adjustment_transaction_id: 55,
+                  },
+                  {
+                    id: 2,
+                    account_id: 3,
+                    recorded_amount: 200_000,
+                    actual_amount: 200_000,
+                    difference_amount: 0,
+                    resolution: 'matched',
+                    remainder_amount: 0,
+                    adjustment_transaction_id: null,
+                  },
+                ]),
+                201,
+              ),
+            ),
+        },
+      ]),
+    )
+    render(<Reconcile onDone={vi.fn()} onCancel={vi.fn()} />)
+    await waitForForm()
+
+    await userEvent.type(screen.getByLabelText(text.actualLabel('Tunai')), '150000')
+    await userEvent.type(screen.getByLabelText(text.actualLabel('Bank Uji Coba')), '200000')
+    await userEvent.click(await screen.findByRole('button', { name: text.resolutionOptions.entry_added }))
+    await userEvent.click(screen.getByRole('button', { name: text.submit }))
+
+    // The headline reads the 30_000 left, not the 50_000 found and not cocok.
+    expect(await screen.findByText(plain(text.discrepancy(formatIDR(30_000))))).toBeInTheDocument()
+    expect(screen.queryByText(text.matched)).not.toBeInTheDocument()
+    // The line itself says how much it still has open.
+    expect(screen.getByText(plain(text.remainingGap(formatIDR(30_000))))).toBeInTheDocument()
+  })
+
+  it('shows the server copy when a plug is refused for not equalling the gap', async () => {
+    vi.stubGlobal(
+      'fetch',
+      routedFetch([
+        ...stubLoad(),
+        {
+          match: (m, u) => m === 'POST' && u.includes('/api/reconciliations'),
+          handle: () =>
+            Promise.resolve(
+              jsonResponse(
+                { error: { code: 'reconciliation_plug_mismatch', message: 'An adjusting entry must equal the difference exactly.' } },
+                409,
+              ),
+            ),
+        },
+      ]),
+    )
+    render(<Reconcile onDone={vi.fn()} onCancel={vi.fn()} />)
+    await waitForForm()
+
+    await userEvent.type(screen.getByLabelText(text.actualLabel('Tunai')), '80000')
+    await userEvent.type(screen.getByLabelText(text.actualLabel('Bank Uji Coba')), '200000')
+    await userEvent.click(await screen.findByRole('button', { name: text.resolutionOptions.adjusted }))
+    await userEvent.click(screen.getByRole('button', { name: text.submit }))
+
+    await screen.findByText(copy.common.errors.reconciliation_plug_mismatch)
+  })
+
   it('reaches the left_open resolution and posts no fix at all', async () => {
     const fetchMock = routedFetch([
       ...stubLoad(),
@@ -331,6 +491,7 @@ describe('Reconcile', () => {
                   actual_amount: 80_000,
                   difference_amount: -20_000,
                   resolution: 'left_open',
+                  remainder_amount: -20_000,
                   adjustment_transaction_id: null,
                 },
                 {
@@ -340,6 +501,7 @@ describe('Reconcile', () => {
                   actual_amount: 200_000,
                   difference_amount: 0,
                   resolution: 'matched',
+                  remainder_amount: 0,
                   adjustment_transaction_id: null,
                 },
               ]),

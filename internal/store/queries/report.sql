@@ -121,15 +121,34 @@ ORDER BY performed_at DESC, id DESC
 LIMIT 1;
 
 -- ListOpenReconciliationLinesByFund with both snapshots bounded: a line is
--- open at the bound when no count before the bound has weighed in on its
--- location since.
+-- open at the bound when its remainder_amount is non-zero (see
+-- ListReconciliationLines) and no count before the bound has weighed in on
+-- its location since.
 -- name: ReportOpenReconciliationLines :many
 SELECT rl.id, rl.fund_id, rl.reconciliation_id, rl.account_id, rl.recorded_amount,
-       rl.actual_amount, rl.difference_amount, rl.resolution, rl.adjustment_transaction_id
+       rl.actual_amount, rl.difference_amount, rl.resolution, rl.adjustment_transaction_id,
+       CAST(CASE rl.resolution
+         WHEN 'left_open' THEN rl.difference_amount
+         WHEN 'matched' THEN 0
+         ELSE CASE
+           WHEN fix.id IS NULL THEN 0
+           WHEN fix.direction = 'in' THEN rl.difference_amount - fix.amount
+           ELSE rl.difference_amount + fix.amount
+         END
+       END AS INTEGER) AS remainder_amount
 FROM reconciliation_line rl
 JOIN reconciliation r ON r.fund_id = rl.fund_id AND r.id = rl.reconciliation_id
+LEFT JOIN "transaction" fix ON fix.fund_id = rl.fund_id AND fix.id = rl.adjustment_transaction_id
 WHERE rl.fund_id = sqlc.arg('fund_id')
-  AND rl.resolution = 'left_open'
+  AND (CASE rl.resolution
+         WHEN 'left_open' THEN rl.difference_amount
+         WHEN 'matched' THEN 0
+         ELSE CASE
+           WHEN fix.id IS NULL THEN 0
+           WHEN fix.direction = 'in' THEN rl.difference_amount - fix.amount
+           ELSE rl.difference_amount + fix.amount
+         END
+       END) <> 0
   AND (CAST(sqlc.narg('before') AS INTEGER) IS NULL OR r.performed_at < CAST(sqlc.narg('before') AS INTEGER))
   AND NOT EXISTS (
     SELECT 1

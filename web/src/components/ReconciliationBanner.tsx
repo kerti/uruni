@@ -22,10 +22,12 @@ import type { OpenReconciliationLine } from '@/lib/reconciliations'
  *     not an alarm (CLAUDE.md rule 9, ErrorState's own reasoning for the
  *     same choice).
  *
- * The figure is the sum of every open line's difference_amount by
- * *magnitude*. difference_amount is signed - the schema's CHECK is
- * `difference_amount = actual_amount - recorded_amount`, so a location
- * holding less cash than the ledger says carries a negative one. Summing
+ * The figure is the sum of every open line's remainder_amount by
+ * *magnitude* (#498: what is still open after the line's fix, not the gap
+ * found at the count). remainder_amount is signed like difference_amount -
+ * the schema's CHECK is `difference_amount = actual_amount -
+ * recorded_amount`, so a location holding less cash than the ledger says
+ * carries a negative one. Summing
  * the raw values would let a short location and an over location cancel
  * out and render "selisih Rp 0" while two gaps sit open, and a single
  * short location would put a minus sign in the middle of the sentence.
@@ -69,7 +71,7 @@ export default function ReconciliationBanner({
     )
   }
 
-  const totalDifference = openLines.reduce((sum, line) => sum + Math.abs(line.difference_amount), 0)
+  const totalDifference = openLines.reduce((sum, line) => sum + Math.abs(line.remainder_amount), 0)
 
   return (
     <Wrapper onClick={onClick} className="bg-attention-soft text-attention">

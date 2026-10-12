@@ -282,3 +282,13 @@ var ErrAccountBalanceNegative = errors.New("ledger: the account's recorded balan
 // freeze a snapshot that reads "cocok" while a location nobody counted
 // held the discrepancy. Nothing is written.
 var ErrReconciliationMissingLocation = errors.New("ledger: the count omits an active location")
+
+// ErrReconciliationPlugMismatch is returned by TakeReconciliation when a line
+// resolved as "adjusted" carries a fix whose signed amount (+ for in, - for
+// out) is not exactly the line's difference (#498). An adjusted line is a
+// plug: it claims the gap is squared, so a fix that undershoots, overshoots
+// or points the wrong way (doubling the gap) would let Beranda and the public
+// report say cocok while the ledger already knows a gap remains. Nothing is
+// written. A forgotten entry that explains only part of a gap is
+// "entry_added", which keeps the remainder open instead.
+var ErrReconciliationPlugMismatch = errors.New("ledger: an adjusted fix must equal the line's difference")

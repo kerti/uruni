@@ -89,7 +89,8 @@ type TakeReconciliationParams struct {
 //     "adjusted", kind='normal' for "entry_added" - using the caller's raw
 //     Fix data, never a transaction id the caller supplies.
 //  4. Insert the reconciliation row, then its reconciliation_line rows,
-//     naming the fix ids where the resolution is "adjusted".
+//     naming the fix ids where the resolution is "adjusted" or
+//     "entry_added" (#498).
 //
 // The ordering is the entire point (ADR-024, ADR-027). If a fix were posted
 // through an ordinary call before the cutoff was taken, the cutoff would
@@ -117,15 +118,23 @@ type TakeReconciliationParams struct {
 //     is saved as-is; revisiting it later is a new snapshot; see
 //     ADR-024, never an edit to this one - the immutability triggers make an
 //     edit impossible even if this package wanted to write one.
-//   - "adjusted": Fix's transaction is posted (kind='adjustment') and the
-//     line names it in adjustment_transaction_id, which the schema's own
-//     CHECK also requires.
+//   - "adjusted": a plug (#498). Fix's signed amount (+ for "in", - for
+//     "out") must equal the line's difference exactly, or the whole snapshot
+//     is refused with ErrReconciliationPlugMismatch before anything is
+//     posted - a plug that undershoots, overshoots or points the wrong way
+//     would leave a gap the system already knows about under a resolution
+//     that claims there is none. Fix's transaction is posted
+//     (kind='adjustment') and the line names it in
+//     adjustment_transaction_id, which the schema's own CHECK also requires.
 //   - "entry_added": Fix's transaction is posted (kind='normal') with its
-//     own real OccurredOn; adjustment_transaction_id stays NULL, because
-//     that entry is self-explanatory in the ledger in a way a plug is not
-//     (ADR-024). Nothing in this package ever sets
-//     AdjustmentTransactionID for this resolution - it is not a caller
-//     input, so there is nothing to validate against it.
+//     own real OccurredOn. It may close only part of the gap - the treasurer
+//     found one missing entry, not necessarily all of them - so no amount is
+//     refused; whatever is left (difference - signed(fix), the
+//     remainder_amount ListReconciliationLines reads) keeps the line open. The line names the entry in
+//     adjustment_transaction_id too (#498): that link is what lets a read
+//     derive the remainder from the ledger instead of storing a second
+//     figure beside the difference. Nothing in this package takes the id
+//     from a caller - it is the row this very call just posted.
 //
 // The count must be exactly the fund's active locations (PRD section 7.8:
 // "each active location ... a retired location is not asked about"), checked
@@ -208,6 +217,19 @@ func (l *Ledger) TakeReconciliation(ctx context.Context, p TakeReconciliationPar
 
 			var adjustmentTransactionID *int64
 			if c.Fix != nil {
+				// A plug must square the gap exactly (#498). Checked against
+				// the frozen difference, before the fix is posted, so a
+				// refusal leaves nothing behind (the whole call is one tx).
+				if c.Resolution == "adjusted" {
+					signed, err := SignedFixAmount(c.Fix)
+					if err != nil {
+						return fmt.Errorf("signing the fix for account %d: %w", c.AccountID, err)
+					}
+					if signed != diff {
+						return fmt.Errorf("%w: account %d has a difference of %d, the plug is %d",
+							ErrReconciliationPlugMismatch, c.AccountID, diff.Int64(), signed.Int64())
+					}
+				}
 				// A fix is a posting like any other (ADR-031, #473): it
 				// may not land on a closed envelope.
 				if err := refuseClosedIncidental(ctx, q, c.Fix.PurposeID, ErrIncidentalClosed); err != nil {
@@ -231,11 +253,9 @@ func (l *Ledger) TakeReconciliation(ctx context.Context, p TakeReconciliationPar
 				if err != nil {
 					return fmt.Errorf("posting the fix for account %d: %w", c.AccountID, err)
 				}
-				// entry_added names nothing: that entry is self-explanatory
-				// in the ledger in a way a plug is not (ADR-024).
-				if c.Resolution == "adjusted" {
-					adjustmentTransactionID = &fix.ID
-				}
+				// Both resolutions name the entry they posted (#498): the
+				// remainder of a partial entry_added is derived through it.
+				adjustmentTransactionID = &fix.ID
 			}
 
 			lines = append(lines, lineInput{
@@ -285,13 +305,27 @@ func (l *Ledger) TakeReconciliation(ctx context.Context, p TakeReconciliationPar
 	return rec, nil
 }
 
+// SignedFixAmount is a fix's effect on its account's balance: positive for
+// "in", negative for "out". Fix.Amount is validated positive before this is
+// reached, so negation cannot overflow.
+func SignedFixAmount(f *Fix) (money.Amount, error) {
+	switch f.Direction {
+	case "in":
+		return f.Amount, nil
+	case "out":
+		return money.Amount(0).Sub(f.Amount)
+	default:
+		return 0, fmt.Errorf("%w: fix direction must be \"in\" or \"out\", got %q", ErrInvalidArgument, f.Direction)
+	}
+}
+
 // ReconciliationDetail is one snapshot together with the counted-account lines
 // it froze - what GET /api/reconciliations/{id} shows (PRD section 7.8),
 // composed the same way GetIncidentalDetail composes an envelope with its
 // totals.
 type ReconciliationDetail struct {
 	Reconciliation store.Reconciliation
-	Lines          []store.ReconciliationLine
+	Lines          []store.ListReconciliationLinesRow
 }
 
 // GetReconciliationDetail fetches one snapshot and its lines for GET
