@@ -1001,8 +1001,8 @@ func removeFiles(paths []string) {
 }
 
 // writeReceiptFileFromZip streams one receipt's zip entry into
-// uploadsDir/name, temp-file-then-rename like receipts.go's own
-// writeReceiptFile - except under a name this package is handed, never one
+// uploadsDir/name, through WriteFileAtomic (temp file, fsync, rename, fsync
+// the directory) like receipts.go's own writeReceiptFile - except under a name this package is handed, never one
 // it mints itself: a restore's receipt keeps the exact filename its
 // Receipt row already names (ADR-011's stored, server-generated name,
 // preserved verbatim like every other id this package restores).
@@ -1027,35 +1027,20 @@ func writeReceiptFileFromZip(uploadsDir, name string, zf *zip.File) (created boo
 	}
 	defer func() { _ = rc.Close() }()
 
-	tmp, err := os.CreateTemp(uploadsDir, ".receipt-restore-*.tmp")
-	if err != nil {
-		return false, err
-	}
-	tmpPath := tmp.Name()
-	removeTemp := true
-	defer func() {
-		if removeTemp {
-			_ = os.Remove(tmpPath)
-		}
-	}()
-
-	n, err := io.Copy(tmp, io.LimitReader(rc, MaxUnzippedBytes+1))
-	if err != nil {
-		_ = tmp.Close()
-		return false, err
-	}
-	if n > MaxUnzippedBytes {
-		_ = tmp.Close()
-		return false, fmt.Errorf("%w: more than %d bytes unzipped", ErrUnzippedTooLarge, MaxUnzippedBytes)
-	}
-	if err := tmp.Close(); err != nil {
-		return false, err
-	}
 	dest := filepath.Join(uploadsDir, name)
 	_, statErr := os.Stat(dest)
-	if err := os.Rename(tmpPath, dest); err != nil {
+	err = WriteFileAtomic(uploadsDir, ".receipt-restore-*.tmp", name, func(w io.Writer) error {
+		n, err := io.Copy(w, io.LimitReader(rc, MaxUnzippedBytes+1))
+		if err != nil {
+			return err
+		}
+		if n > MaxUnzippedBytes {
+			return fmt.Errorf("%w: more than %d bytes unzipped", ErrUnzippedTooLarge, MaxUnzippedBytes)
+		}
+		return nil
+	})
+	if err != nil {
 		return false, err
 	}
-	removeTemp = false
 	return statErr != nil, nil
 }
