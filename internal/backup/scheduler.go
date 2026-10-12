@@ -2,11 +2,9 @@ package backup
 
 import (
 	"context"
+	"database/sql"
 	"log/slog"
 	"time"
-
-	"github.com/kerti/uruni/internal/ledger"
-	"github.com/kerti/uruni/internal/store"
 )
 
 // schedulerInterval is how often RunScheduler wakes up to ask "does today
@@ -41,9 +39,9 @@ const schedulerInterval = time.Hour
 // the very first thing RunScheduler's own immediate tick (below) can
 // observe is a backupDir that boot's own dump, if any, has already finished
 // writing.
-func RunScheduler(ctx context.Context, q store.Querier, l *ledger.Ledger, uploadsDir, backupDir string, logger *slog.Logger) {
+func RunScheduler(ctx context.Context, sqlDB *sql.DB, uploadsDir, backupDir string, logger *slog.Logger) {
 	tick := func() {
-		name, written, err := WriteDailyIfNeeded(ctx, q, l, uploadsDir, backupDir, time.Now())
+		name, written, err := WriteDailyIfNeeded(ctx, sqlDB, uploadsDir, backupDir, time.Now())
 		if err != nil {
 			logger.Error("scheduled backup dump failed", "error", err)
 			return

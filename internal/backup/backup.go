@@ -261,11 +261,13 @@ type IncidentalRecipient struct {
 }
 
 // Totals is ADR-012's "a restore proves its numbers": derived balance per
-// fund, per account (location) and per purpose, computed by the same
-// internal/ledger functions the home screen's GET /api/balances uses
-// (FundBalance, AccountBalance, PurposeBalance) - never re-summed here or
-// in SQL. A future importer recomputes the same three calls against the
-// rows it just inserted and refuses to commit on any mismatch.
+// fund, per account (location) and per purpose, read with the same generated
+// queries the home screen's GET /api/balances composes (FundBalance,
+// AccountBalance, PurposeBalance), inside the one read transaction that read
+// the rows beside them (#496). Every path that makes or accepts a file
+// recomputes them from its rows and compares exactly (totals.go): the
+// export before it writes, inspect before the password prompt, and Restore
+// against the rows it just inserted, refusing to commit on any mismatch.
 type Totals struct {
 	Funds    []FundTotal    `json:"funds"`
 	Accounts []AccountTotal `json:"accounts"`

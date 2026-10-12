@@ -36,7 +36,6 @@ import (
 	_ "golang.org/x/image/webp" // registers the WebP decoder - decode-only,
 	// same reasoning as receipt_image.go's own blank import.
 
-	"github.com/kerti/uruni/internal/ledger"
 	"github.com/kerti/uruni/internal/money"
 	"github.com/kerti/uruni/internal/store"
 )
@@ -136,10 +135,12 @@ var (
 	// ParseUpload skips it silently (ruling 5: "a missing image never
 	// blocks a restore").
 	ErrBadReceiptImage = errors.New("backup: a receipt image in the file could not be read")
-	// ErrTotalsMismatch is Restore's own refusal, raised inside the write
-	// transaction after every row is inserted and before COMMIT - the
-	// transaction rolls back with nothing changed, exactly like every
-	// other error Restore returns.
+	// ErrTotalsMismatch is the refusal for a backup whose totals block
+	// disagrees with its own rows (compareTotals). It is raised by every
+	// producer before a byte is written (Export, the dumps), by ParseUpload
+	// at inspect, and by Restore inside the write transaction after every
+	// row is inserted and before COMMIT - the transaction rolls back with
+	// nothing changed, exactly like every other error Restore returns.
 	ErrTotalsMismatch = errors.New("backup: the restored totals did not match the file's own totals")
 )
 
@@ -176,9 +177,11 @@ type ParsedUpload struct {
 // once format_version already matches; and every receipt image the zip
 // actually carries is decode-checked last, one at a time, its bytes
 // discarded the moment its own check finishes rather than held alongside
-// every other receipt's - ADR-012's "a restore proves its numbers" (the
-// totals check) is not this function's job - Restore verifies those after
-// inserting, since it needs a live transaction to recompute them against.
+// every other receipt's. The totals check (CheckTotals) runs after the
+// strict decode and before any image is read, so a document that disagrees
+// with itself is refused with ErrTotalsMismatch before the treasurer is
+// asked for her password; Restore proves the same totals again, against the
+// database it fills.
 func ParseUpload(path string) (ParsedUpload, error) {
 	//nolint:gosec // path is always this package's own staging file
 	// (internal/http/restore.go streams the upload or the stored dump into
@@ -254,6 +257,17 @@ func ParseUpload(path string) (ParsedUpload, error) {
 			return ParsedUpload{}, fmt.Errorf("%w: receipt path %q is not a bare filename", ErrMalformedBackup, r.Path)
 		}
 		referenced[r.Path] = true
+	}
+
+	// The document must agree with itself before anything else about it is
+	// worth checking (#496): its totals block, recomputed from its own
+	// transaction rows. A file torn by a write landing mid-export, or edited
+	// by hand, is refused here - at inspect, before the treasurer is asked
+	// for her password - rather than after the confirm. Restore still proves
+	// the same totals against the database it fills (verifyTotals); this is
+	// the same comparison, made early and in memory.
+	if err := CheckTotals(doc); err != nil {
+		return ParsedUpload{}, err
 	}
 
 	// Pass 2: every other entry - every receipt, whether or not doc.Receipts
@@ -566,12 +580,13 @@ var immutableTriggers = []string{
 // this transaction's own store.New(tx) instead - the exact same generated
 // queries l.FundBalance etc. call, just bound to the right connection.
 //
-// q and l are still needed for WritePreRestoreDump, which runs before this
-// function's own transaction opens and is meant to read the database's
-// current, live, still-uncommitted-to state - exactly what the top-level
-// query and ledger objects already point at.
-func Restore(ctx context.Context, sqlDB *sql.DB, q store.Querier, l *ledger.Ledger, uploadsDir, backupDir string, parsed ParsedUpload, now time.Time) error {
-	if _, err := WritePreRestoreDump(ctx, q, l, uploadsDir, backupDir, now); err != nil {
+// WritePreRestoreDump runs before this function's own transaction opens and
+// is meant to read the database's current, live, still-uncommitted-to state;
+// it opens its own read transaction (BuildDocument), which is finished and
+// released before this function asks the pool's one connection for its
+// write transaction.
+func Restore(ctx context.Context, sqlDB *sql.DB, uploadsDir, backupDir string, parsed ParsedUpload, now time.Time) error {
+	if _, err := WritePreRestoreDump(ctx, sqlDB, uploadsDir, backupDir, now); err != nil {
 		return fmt.Errorf("backup: writing the safety-net dump: %w", err)
 	}
 
@@ -885,52 +900,44 @@ func restoreTransactionsInOrder(ctx context.Context, q store.Querier, txns []Tra
 	return nil
 }
 
-// verifyTotals is ADR-012's "a restore proves its numbers": every figure in
-// doc.Totals, recomputed from the rows Restore just inserted, inside the
-// same still-open transaction, and compared exactly (int64, no tolerance) -
-// CLAUDE.md's own money rule. It calls store.Queries' generated
+// verifyTotals is ADR-012's "a restore proves its numbers": every fund,
+// account and purpose doc lists, recomputed by the generated balance queries
+// from the rows Restore just inserted, inside the same still-open
+// transaction, and compared exactly (int64, no tolerance - CLAUDE.md's own
+// money rule) with doc.Totals through compareTotals, the comparison the
+// inspect step and every dump share. It calls store.Queries' generated
 // FundBalance/AccountBalance/PurposeBalance directly rather than going
 // through a *ledger.Ledger - see Restore's own doc comment for why a
 // Ledger bound to sqlDB cannot be called from inside this transaction
 // without deadlocking ADR-004's single connection.
 func verifyTotals(ctx context.Context, q store.Querier, doc Document) error {
-	accountFund := make(map[int64]int64, len(doc.Accounts))
+	got := Totals{
+		Funds:    make([]FundTotal, 0, len(doc.Funds)),
+		Accounts: make([]AccountTotal, 0, len(doc.Accounts)),
+		Purposes: make([]PurposeTotal, 0, len(doc.Purposes)),
+	}
+	for _, f := range doc.Funds {
+		v, err := q.FundBalance(ctx, f.ID)
+		if err != nil {
+			return fmt.Errorf("backup: recomputing fund %d balance: %w", f.ID, err)
+		}
+		got.Funds = append(got.Funds, FundTotal{FundID: f.ID, Balance: money.FromDB(v).Int64()})
+	}
 	for _, a := range doc.Accounts {
-		accountFund[a.ID] = a.FundID
+		v, err := q.AccountBalance(ctx, store.AccountBalanceParams{FundID: a.FundID, AccountID: a.ID})
+		if err != nil {
+			return fmt.Errorf("backup: recomputing account %d balance: %w", a.ID, err)
+		}
+		got.Accounts = append(got.Accounts, AccountTotal{AccountID: a.ID, Balance: money.FromDB(v).Int64()})
 	}
-	purposeFund := make(map[int64]int64, len(doc.Purposes))
 	for _, p := range doc.Purposes {
-		purposeFund[p.ID] = p.FundID
-	}
-
-	for _, ft := range doc.Totals.Funds {
-		v, err := q.FundBalance(ctx, ft.FundID)
+		v, err := q.PurposeBalance(ctx, store.PurposeBalanceParams{FundID: p.FundID, PurposeID: p.ID})
 		if err != nil {
-			return fmt.Errorf("backup: recomputing fund %d balance: %w", ft.FundID, err)
+			return fmt.Errorf("backup: recomputing purpose %d balance: %w", p.ID, err)
 		}
-		if got := money.FromDB(v).Int64(); got != ft.Balance {
-			return fmt.Errorf("%w: fund %d recomputed %d, file says %d", ErrTotalsMismatch, ft.FundID, got, ft.Balance)
-		}
+		got.Purposes = append(got.Purposes, PurposeTotal{PurposeID: p.ID, Balance: money.FromDB(v).Int64()})
 	}
-	for _, at := range doc.Totals.Accounts {
-		v, err := q.AccountBalance(ctx, store.AccountBalanceParams{FundID: accountFund[at.AccountID], AccountID: at.AccountID})
-		if err != nil {
-			return fmt.Errorf("backup: recomputing account %d balance: %w", at.AccountID, err)
-		}
-		if got := money.FromDB(v).Int64(); got != at.Balance {
-			return fmt.Errorf("%w: account %d recomputed %d, file says %d", ErrTotalsMismatch, at.AccountID, got, at.Balance)
-		}
-	}
-	for _, pt := range doc.Totals.Purposes {
-		v, err := q.PurposeBalance(ctx, store.PurposeBalanceParams{FundID: purposeFund[pt.PurposeID], PurposeID: pt.PurposeID})
-		if err != nil {
-			return fmt.Errorf("backup: recomputing purpose %d balance: %w", pt.PurposeID, err)
-		}
-		if got := money.FromDB(v).Int64(); got != pt.Balance {
-			return fmt.Errorf("%w: purpose %d recomputed %d, file says %d", ErrTotalsMismatch, pt.PurposeID, got, pt.Balance)
-		}
-	}
-	return nil
+	return compareTotals(doc.Totals, got)
 }
 
 // extractReceipts is Restore's own receipt-extraction step: re-opens the

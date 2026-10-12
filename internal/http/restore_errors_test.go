@@ -187,11 +187,11 @@ func TestRestoreInspectRefusesATruncatedUpload(t *testing.T) {
 	assertAPIError(t, rec, http.StatusBadRequest, "invalid_argument")
 }
 
-// A backup whose totals block disagrees with its own rows passes inspect
-// (ParseUpload does not recompute totals) and is refused at confirm, after
-// the transaction has been rolled back - the one failure the treasurer can
-// meet after typing her password.
-func TestRestoreConfirmRefusesATotalsMismatch(t *testing.T) {
+// A backup whose totals block disagrees with its own rows is refused at
+// inspect (#496), before the treasurer is ever asked for her password -
+// not after the confirm, which is the worst moment to find out. Nothing is
+// staged, and nothing changed.
+func TestRestoreInspectRefusesATotalsMismatch(t *testing.T) {
 	t.Parallel()
 	r, backupDir := authedRouterWithBackupDir(t)
 	setUpFund(t, r)
@@ -219,17 +219,16 @@ func TestRestoreConfirmRefusesATotalsMismatch(t *testing.T) {
 		return out
 	})
 
-	token := decodeInspectToken(t, postRestoreInspect(t, r, tampered))
-	rec := postRestoreConfirm(t, r, token, fixturePassword)
-	assertAPIError(t, rec, http.StatusUnprocessableEntity, "restore_totals_mismatch")
+	rec := postRestoreInspect(t, r, tampered)
+	assertAPIError(t, rec, http.StatusUnprocessableEntity, "restore_file_inconsistent")
+	assertRestoreStagingFileExists(t, backupDir, false)
 
-	// Nothing changed: the session that confirmed is still valid.
+	// Nothing changed: the session that inspected is still valid.
 	fundRec := httptest.NewRecorder()
 	r.ServeHTTP(fundRec, httptest.NewRequest(http.MethodGet, "/api/fund", nil))
 	if fundRec.Code != http.StatusOK {
-		t.Errorf("GET /api/fund after a refused restore = %d, want %d", fundRec.Code, http.StatusOK)
+		t.Errorf("GET /api/fund after a refused inspect = %d, want %d", fundRec.Code, http.StatusOK)
 	}
-	assertRestoreStagingFileExists(t, backupDir, false)
 }
 
 // Confirm re-checks the password, so it shares login's limiter (its own

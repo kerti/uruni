@@ -5,9 +5,6 @@ import (
 	"os"
 	"testing"
 	"time"
-
-	"github.com/kerti/uruni/internal/ledger"
-	"github.com/kerti/uruni/internal/store"
 )
 
 // TestRunSchedulerWritesOnceThenStopsCleanlyOnCancel is the scheduler's own
@@ -23,15 +20,13 @@ func TestRunSchedulerWritesOnceThenStopsCleanlyOnCancel(t *testing.T) {
 	uploadsDir := t.TempDir()
 	buildFixture(t, sqlDB, uploadsDir)
 	backupDir := t.TempDir()
-	q := store.New(sqlDB)
-	l := ledger.New(sqlDB)
 	logger := testDiscardLogger()
 
 	ctx, cancel := context.WithCancel(context.Background())
 
 	done := make(chan struct{})
 	go func() {
-		RunScheduler(ctx, q, l, uploadsDir, backupDir, logger)
+		RunScheduler(ctx, sqlDB, uploadsDir, backupDir, logger)
 		close(done)
 	}()
 

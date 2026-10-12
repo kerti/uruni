@@ -4,6 +4,7 @@ import (
 	"archive/zip"
 	"bytes"
 	"context"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -13,7 +14,7 @@ import (
 	"slices"
 	"time"
 
-	"github.com/kerti/uruni/internal/ledger"
+	"github.com/kerti/uruni/internal/money"
 	"github.com/kerti/uruni/internal/store"
 )
 
@@ -54,13 +55,12 @@ const (
 // caller to log. The backup is then exactly as complete as the live
 // instance, never less - and a treasurer who lost one photo can still take
 // a backup at all. Any other read failure is a real fault and still fails.
-func Export(ctx context.Context, q store.Querier, l *ledger.Ledger, uploadsDir string) (zipBytes []byte, missing []string, err error) {
-	doc, receipts, err := BuildDocument(ctx, q, l)
+func Export(ctx context.Context, sqlDB *sql.DB, uploadsDir string) (zipBytes []byte, missing []string, err error) {
+	m, err := buildDumpMaterials(ctx, readDocumentFrom(sqlDB), uploadsDir)
 	if err != nil {
 		return nil, nil, err
 	}
-	zipBytes, _, missing, err = BuildZip(doc, receipts, uploadsDir)
-	return zipBytes, missing, err
+	return m.zipBytes, m.missing, nil
 }
 
 // BuildZip marshals doc to uruni.json and assembles the finished zip -
@@ -139,11 +139,47 @@ func addReceiptToZip(zw *zip.Writer, uploadsDir, path string) (found bool, err e
 // without also decoding a zip - and so #325's importer can call it (or its
 // eventual write-side twin) without going through archive/zip at all.
 //
+// The whole document - every row and every total - is read inside ONE read
+// transaction (#496). Under ADR-004's single connection a bare read is
+// consistent, but a sequence of about fifteen of them is not: a write can
+// land between the rows and the totals, and the zip that results passes
+// inspection yet disagrees with itself. BeginTx checks the pool's one
+// connection out for the length of the reads, so no in-process write can
+// interleave at all, and SQLite's own snapshot isolation inside a BEGIN
+// (WAL) covers a writer in another process. The totals are read through the
+// same transaction rather than through *ledger.Ledger, whose methods are
+// bound to sqlDB and would ask the pool for a second connection while this
+// one is held - a deadlock, the same trap Restore documents.
+//
 // It also returns the receipt rows it read, since Export needs their Path
 // to build the zip's receipts/ folder and BuildDocument's own caller (the
 // golden fixture test) needs them to seed the uploads directory it reads
 // from.
-func BuildDocument(ctx context.Context, q store.Querier, l *ledger.Ledger) (Document, []store.Receipt, error) {
+func BuildDocument(ctx context.Context, sqlDB *sql.DB) (Document, []store.Receipt, error) {
+	tx, err := sqlDB.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
+	if err != nil {
+		return Document{}, nil, fmt.Errorf("backup: beginning the read transaction: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }() // a read transaction has nothing to commit
+
+	return readDocument(ctx, store.New(tx))
+}
+
+// documentReader is how the dump and download paths obtain a Document: a
+// seam so a test can hand them a document that disagrees with itself and
+// watch every producer refuse it. Production always passes
+// readDocumentFrom(sqlDB).
+type documentReader func(ctx context.Context) (Document, []store.Receipt, error)
+
+func readDocumentFrom(sqlDB *sql.DB) documentReader {
+	return func(ctx context.Context) (Document, []store.Receipt, error) {
+		return BuildDocument(ctx, sqlDB)
+	}
+}
+
+// readDocument is BuildDocument's body, over a Querier that must already be
+// pinned to one transaction. It never opens one itself.
+func readDocument(ctx context.Context, q store.Querier) (Document, []store.Receipt, error) {
 	users, err := q.ListUsers(ctx)
 	if err != nil {
 		return Document{}, nil, fmt.Errorf("backup: listing users: %w", err)
@@ -268,7 +304,7 @@ func BuildDocument(ctx context.Context, q store.Querier, l *ledger.Ledger) (Docu
 		}
 		doc.IncidentalRecipients = append(doc.IncidentalRecipients, toIncidentalRecipients(recipients)...)
 
-		totals, err := fundTotals(ctx, l, fund.ID, accounts, purposes)
+		totals, err := readFundTotals(ctx, q, fund.ID, accounts, purposes)
 		if err != nil {
 			return Document{}, nil, err
 		}
@@ -286,34 +322,36 @@ type oneFundTotals struct {
 	purposes []PurposeTotal
 }
 
-// fundTotals is the totals block's own read (ADR-012's "a restore proves
-// its numbers"): every figure comes from a ledger call - FundBalance,
-// AccountBalance, PurposeBalance - the exact three GET /api/balances
-// composes for the home screen (internal/http/balances.go). This function
-// composes those same calls; it does not sum, subtract or otherwise
-// re-derive a balance of its own.
-func fundTotals(ctx context.Context, l *ledger.Ledger, fundID int64, accounts []store.Account, purposes []store.Purpose) (oneFundTotals, error) {
-	fundBalance, err := l.FundBalance(ctx, fundID)
+// readFundTotals is the totals block's own read (ADR-012's "a restore proves
+// its numbers"): every figure comes from the generated FundBalance /
+// AccountBalance / PurposeBalance queries - the exact three GET
+// /api/balances composes for the home screen through internal/ledger, and
+// the exact three Restore's verifyTotals recomputes against. It does not
+// sum, subtract or otherwise re-derive a balance of its own; q is the
+// export's one read transaction, so these figures and the rows beside them
+// are the same instant.
+func readFundTotals(ctx context.Context, q store.Querier, fundID int64, accounts []store.Account, purposes []store.Purpose) (oneFundTotals, error) {
+	fundBalance, err := q.FundBalance(ctx, fundID)
 	if err != nil {
 		return oneFundTotals{}, fmt.Errorf("backup: fund balance for fund %d: %w", fundID, err)
 	}
 
-	out := oneFundTotals{fund: FundTotal{FundID: fundID, Balance: fundBalance.Int64()}}
+	out := oneFundTotals{fund: FundTotal{FundID: fundID, Balance: money.FromDB(fundBalance).Int64()}}
 
 	for _, a := range accounts {
-		balance, err := l.AccountBalance(ctx, fundID, a.ID)
+		balance, err := q.AccountBalance(ctx, store.AccountBalanceParams{FundID: fundID, AccountID: a.ID})
 		if err != nil {
 			return oneFundTotals{}, fmt.Errorf("backup: account balance for account %d: %w", a.ID, err)
 		}
-		out.accounts = append(out.accounts, AccountTotal{AccountID: a.ID, Balance: balance.Int64()})
+		out.accounts = append(out.accounts, AccountTotal{AccountID: a.ID, Balance: money.FromDB(balance).Int64()})
 	}
 
 	for _, p := range purposes {
-		balance, err := l.PurposeBalance(ctx, fundID, p.ID)
+		balance, err := q.PurposeBalance(ctx, store.PurposeBalanceParams{FundID: fundID, PurposeID: p.ID})
 		if err != nil {
 			return oneFundTotals{}, fmt.Errorf("backup: purpose balance for purpose %d: %w", p.ID, err)
 		}
-		out.purposes = append(out.purposes, PurposeTotal{PurposeID: p.ID, Balance: balance.Int64()})
+		out.purposes = append(out.purposes, PurposeTotal{PurposeID: p.ID, Balance: money.FromDB(balance).Int64()})
 	}
 
 	return out, nil

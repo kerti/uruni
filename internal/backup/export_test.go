@@ -26,10 +26,9 @@ func TestBuildDocumentTotalsMatchLedgerBalances(t *testing.T) {
 	sqlDB := newTestDB(t)
 	buildFixture(t, sqlDB, t.TempDir())
 	ctx := context.Background()
-	q := store.New(sqlDB)
 	l := ledger.New(sqlDB)
 
-	doc, _, err := BuildDocument(ctx, q, l)
+	doc, _, err := BuildDocument(ctx, sqlDB)
 	if err != nil {
 		t.Fatalf("BuildDocument() = %v, want no error", err)
 	}
@@ -87,7 +86,6 @@ func TestBuildDocumentExcludesSession(t *testing.T) {
 	buildFixture(t, sqlDB, t.TempDir())
 	ctx := context.Background()
 	q := store.New(sqlDB)
-	l := ledger.New(sqlDB)
 
 	const sentinelToken = "session-token-must-never-be-exported"
 	if _, err := q.CreateSession(ctx, store.CreateSessionParams{
@@ -96,7 +94,7 @@ func TestBuildDocumentExcludesSession(t *testing.T) {
 		t.Fatalf("CreateSession: %v", err)
 	}
 
-	doc, _, err := BuildDocument(ctx, q, l)
+	doc, _, err := BuildDocument(ctx, sqlDB)
 	if err != nil {
 		t.Fatalf("BuildDocument() = %v, want no error", err)
 	}
@@ -123,10 +121,8 @@ func TestExportIncludesReceiptsUnderStoredName(t *testing.T) {
 	uploadsDir := t.TempDir()
 	buildFixture(t, sqlDB, uploadsDir)
 	ctx := context.Background()
-	q := store.New(sqlDB)
-	l := ledger.New(sqlDB)
 
-	zipBytes, _, err := Export(ctx, q, l, uploadsDir)
+	zipBytes, _, err := Export(ctx, sqlDB, uploadsDir)
 	if err != nil {
 		t.Fatalf("Export() = %v, want no error", err)
 	}
@@ -171,7 +167,7 @@ func TestExportSkipsAMissingReceiptImageInsteadOfFailing(t *testing.T) {
 	}
 	ctx := context.Background()
 
-	zipBytes, missing, err := Export(ctx, store.New(sqlDB), ledger.New(sqlDB), uploadsDir)
+	zipBytes, missing, err := Export(ctx, sqlDB, uploadsDir)
 	if err != nil {
 		t.Fatalf("Export() = %v, want no error - a missing image must not block the backup", err)
 	}
@@ -217,10 +213,8 @@ func TestExportProducesValidJSONMatchingFormatVersion(t *testing.T) {
 	uploadsDir := t.TempDir()
 	buildFixture(t, sqlDB, uploadsDir)
 	ctx := context.Background()
-	q := store.New(sqlDB)
-	l := ledger.New(sqlDB)
 
-	zipBytes, _, err := Export(ctx, q, l, uploadsDir)
+	zipBytes, _, err := Export(ctx, sqlDB, uploadsDir)
 	if err != nil {
 		t.Fatalf("Export() = %v, want no error", err)
 	}

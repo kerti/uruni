@@ -356,6 +356,12 @@ func writeRestoreParseError(w http.ResponseWriter, logger interface {
 	case errors.Is(err, backup.ErrBadReceiptImage):
 		writeAPIError(w, http.StatusUnprocessableEntity, "restore_bad_image",
 			"One of the backup's receipt photos could not be read.")
+	case errors.Is(err, backup.ErrTotalsMismatch):
+		// The file disagrees with itself (#496): its totals block does not
+		// match its own rows. Its own code, not restore_totals_mismatch -
+		// that one is the rolled-back-restore message, and says so.
+		writeAPIError(w, http.StatusUnprocessableEntity, "restore_file_inconsistent",
+			"The backup's totals do not match its own entries, so it cannot be restored.")
 	case errors.Is(err, backup.ErrMalformedBackup):
 		writeAPIError(w, http.StatusUnprocessableEntity, "restore_invalid_file",
 			"That file is not a valid Uruni backup.")
@@ -430,7 +436,7 @@ func (a *api) confirmRestore(w http.ResponseWriter, r *http.Request) {
 	// on the success path below and on this one alike, since either way
 	// there is nothing left anyone could still confirm with this token
 	// (issue #344: "a successful confirm, and a failed one, removes it").
-	restoreErr := backup.Restore(r.Context(), a.sqlDB, a.queries, a.ledger, a.uploadsDir, a.backupDir, parsed, time.Now())
+	restoreErr := backup.Restore(r.Context(), a.sqlDB, a.uploadsDir, a.backupDir, parsed, time.Now())
 	if err := os.Remove(parsed.StagingPath); err != nil && !errors.Is(err, os.ErrNotExist) {
 		a.logger.Error("removing restore staging file after confirm", "error", err)
 		// Not itself a reason to report the restore as having failed -

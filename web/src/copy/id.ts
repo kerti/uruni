@@ -315,6 +315,12 @@ export const copy = {
       restore_invalid_file: 'File ini bukan cadangan Uruni yang sah.',
       restore_bad_image: 'Salah satu foto nota di dalam cadangan tidak bisa dibaca.',
       restore_file_too_large: 'File ini lebih besar daripada cadangan Uruni pada umumnya.',
+      // The inspect step (#496): the file's own totals do not match its own
+      // entries, so it is refused before she is asked for her password. Not
+      // restore_totals_mismatch below, which is about a restore that already
+      // ran and rolled back.
+      restore_file_inconsistent:
+        'Jumlah di file ini tidak cocok dengan catatan di dalamnya, jadi file ini tidak bisa dipakai untuk memulihkan. Coba file cadangan yang lain.',
       // A rolled-back restore (ADR-012's own numbers check) - nothing in
       // the kas berubah, so the wording says so rather than leaving her to
       // guess whether anything happened.
