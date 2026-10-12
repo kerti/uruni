@@ -534,6 +534,7 @@ type Querier interface {
 	// recorded and cannot be known. The same expression reads in
 	// ListOpenReconciliationLinesByFund, ListReconciliationsPage and
 	// ReportOpenReconciliationLines - keep the four in step.
+	//
 	// In ListAccountsByFund's order: cash before bank, then by name.
 	ListReconciliationLines(ctx context.Context, reconciliationID int64) ([]ListReconciliationLinesRow, error)
 	// ListReconciliationLinesByFund is the backup export's own read (ADR-012,

@@ -194,6 +194,7 @@ type ListReconciliationLinesRow struct {
 // recorded and cannot be known. The same expression reads in
 // ListOpenReconciliationLinesByFund, ListReconciliationsPage and
 // ReportOpenReconciliationLines - keep the four in step.
+//
 // In ListAccountsByFund's order: cash before bank, then by name.
 func (q *Queries) ListReconciliationLines(ctx context.Context, reconciliationID int64) ([]ListReconciliationLinesRow, error) {
 	rows, err := q.db.QueryContext(ctx, listReconciliationLines, reconciliationID)
