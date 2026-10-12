@@ -275,12 +275,23 @@ func spa(assets fs.FS) http.HandlerFunc {
 		name := strings.TrimPrefix(path.Clean(r.URL.Path), "/")
 
 		servesShell := name == "" || name == "index.html"
+		hashed := strings.HasPrefix(name, "assets/")
 		if name != "" {
-			if _, err := fs.Stat(assets, name); err != nil {
+			// A directory is never listed (#506): it reads as a client-side
+			// route like any other path that names no file.
+			if info, err := fs.Stat(assets, name); err != nil || info.IsDir() {
+				// A missing file under assets/ is a chunk an older shell still
+				// names after a deploy. The shell would arrive as JavaScript
+				// and fail confusingly; a 404 is what the browser can report.
+				if hashed && err != nil {
+					http.NotFound(w, r)
+					return
+				}
 				// Not a real asset - a client-side route. Serve the shell.
 				r = r.Clone(r.Context())
 				r.URL.Path = "/"
 				servesShell = true
+				hashed = false
 			}
 		}
 
@@ -292,6 +303,14 @@ func spa(assets fs.FS) http.HandlerFunc {
 		// assets, and sw.js is what notices there is a new build at all.
 		if servesShell || name == "sw.js" {
 			w.Header().Set("Cache-Control", "no-cache")
+		}
+		// Everything under assets/ is Vite's content-hashed output: a new
+		// build gets new names, so a cached copy can never be stale (#506).
+		// Embedded files carry no modification time, so without this there
+		// is no Last-Modified or ETag either, and every load re-downloaded
+		// the whole bundle over mobile data.
+		if hashed {
+			w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
 		}
 
 		files.ServeHTTP(w, r)
