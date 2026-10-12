@@ -77,13 +77,13 @@ export default function Login({ onLoggedIn }: { onLoggedIn: (user: AuthUser) => 
               />
             </div>
             {code === 'invalid_credentials' && (
-              <p role="alert" className="flex items-center gap-2 text-attention">
+              <p role="alert" className="flex items-center gap-2 text-attention-text">
                 <CircleAlert aria-hidden="true" />
                 {text.invalidCredentials}
               </p>
             )}
             {code === 'too_many_requests' && (
-              <p role="alert" className="flex items-center gap-2 text-attention">
+              <p role="alert" className="flex items-center gap-2 text-attention-text">
                 <CircleAlert aria-hidden="true" />
                 {text.tooManyRequests}
               </p>

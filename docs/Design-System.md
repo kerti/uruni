@@ -28,9 +28,9 @@ Light theme is primary (dark mode deferred). Values are hex for clarity; plug in
 | `--card` | `#FFFFFF` | surfaces, cards |
 | `--foreground` | `#22323A` | primary text (soft ink) |
 | `--muted` | `#EEEBE3` | subtle fills |
-| `--muted-foreground` | `#67757C` | secondary text |
+| `--muted-foreground` | `#5E6B71` | secondary text - 5.0:1 on the page, 4.62:1 on `--muted` (AA; was `#67757C`, [#508](https://github.com/kerti/uruni/issues/508)) |
 | `--border` | `#E4E0D7` | hairlines |
-| `--input` | `#CFC8BA` | field borders - a step darker than a hairline |
+| `--input` | `#998A6C` | field borders - 3.08:1 on the page, 3.38:1 on a card, AA's 3:1 for a control's boundary (was `#CFC8BA`, [#508](https://github.com/kerti/uruni/issues/508)) |
 | `--ring` | `#2F6F60` | focus ring |
 
 **Brand**
@@ -54,6 +54,7 @@ Light theme is primary (dark mode deferred). Values are hex for clarity; plug in
 | `--success-soft` | `#E3F1E9` | success backgrounds |
 | `--attention` | `#C96C4A` | "selisih" / discrepancy — warm terracotta, **not** alarm-red |
 | `--attention-soft` | `#F6E6DD` | attention backgrounds |
+| `--attention-text` | `#A55031` | attention **text** - the same terracotta darkened to 4.56:1 on `--attention-soft` and 5.04:1 on the page; `--attention` stays for icons and fills ([#508](https://github.com/kerti/uruni/issues/508)) |
 | `--destructive` | `#B4453C` | destructive actions only (delete) |
 | `--destructive-foreground` | `#FFFFFF` | text on destructive |
 

@@ -410,7 +410,7 @@ function EditLocationDialog({
           ) : (
             // The consequence, named in terracotta and never alarm-red, right
             // above the footer that now asks for the confirm (ADR-032).
-            <p className="border-t border-border pt-3 text-sm text-attention">
+            <p className="border-t border-border pt-3 text-sm text-attention-text">
               {confirming === 'deactivate' ? text.deactivateConfirm : text.deleteConfirm}
             </p>
           )}
@@ -425,7 +425,7 @@ function EditLocationDialog({
           {state.status === 'error' &&
             state.error &&
             (state.error instanceof ApiError && state.error.code === 'referenced_by_other_records' ? (
-              <p role="alert" className="text-sm text-attention">
+              <p role="alert" className="text-sm text-attention-text">
                 {text.deleteRefused}
               </p>
             ) : (

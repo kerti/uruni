@@ -29,7 +29,7 @@ export default function ErrorState({ error, onRetry }: { error: ApiError; onRetr
   const text = errorCopy[error.code] ?? copy.common.unknownError
 
   return (
-    <div role="alert" className="flex flex-col items-start gap-2 text-attention">
+    <div role="alert" className="flex flex-col items-start gap-2 text-attention-text">
       <p className="flex items-center gap-2">
         <CircleAlert aria-hidden="true" />
         {text}

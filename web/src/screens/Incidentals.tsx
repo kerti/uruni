@@ -363,7 +363,7 @@ function DetailView({
           role={feedback.kind === 'error' ? 'alert' : 'status'}
           className={
             feedback.kind === 'error'
-              ? 'rounded-lg bg-attention-soft px-3 py-2 text-sm text-attention'
+              ? 'rounded-lg bg-attention-soft px-3 py-2 text-sm text-attention-text'
               : 'rounded-lg bg-success-soft px-3 py-2 text-sm text-success'
           }
         >

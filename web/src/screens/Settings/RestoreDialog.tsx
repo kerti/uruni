@@ -160,7 +160,7 @@ const RestoreDialog = forwardRef<RestoreDialogHandle>(function RestoreDialog(_pr
                 ))}
               </ul>
 
-              <p className="text-sm text-attention">{confirmText.warning}</p>
+              <p className="text-sm text-attention-text">{confirmText.warning}</p>
 
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="restore-password">{confirmText.passwordLabel}</Label>

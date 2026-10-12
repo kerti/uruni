@@ -164,7 +164,7 @@ function SnapshotBadge({ row }: { row: ReconciliationListItem }) {
     )
   }
   return (
-    <span className="tabular shrink-0 rounded-full bg-attention-soft px-2 py-0.5 text-xs font-medium text-attention">
+    <span className="tabular shrink-0 rounded-full bg-attention-soft px-2 py-0.5 text-xs font-medium text-attention-text">
       {text.selisihBadge(formatIDR(row.open_difference_amount))}
     </span>
   )

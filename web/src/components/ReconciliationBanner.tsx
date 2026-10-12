@@ -74,7 +74,7 @@ export default function ReconciliationBanner({
   const totalDifference = openLines.reduce((sum, line) => sum + Math.abs(line.remainder_amount), 0)
 
   return (
-    <Wrapper onClick={onClick} className="bg-attention-soft text-attention">
+    <Wrapper onClick={onClick} className="bg-attention-soft text-attention-text">
       <TriangleAlert aria-hidden="true" />
       {copy.reconciliation.discrepancy(formatIDR(totalDifference))}
     </Wrapper>

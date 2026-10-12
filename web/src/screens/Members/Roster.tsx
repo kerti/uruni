@@ -215,7 +215,7 @@ export default function Roster() {
                       semantic state for a discrepancy (Design-System.md) -
                       arrears is a normal fact to find here, not an alarm. */}
                   {member.arrears_months > 0 && (
-                    <span className="tabular shrink-0 rounded-full bg-attention-soft px-2 py-0.5 text-xs font-medium text-attention">
+                    <span className="tabular shrink-0 rounded-full bg-attention-soft px-2 py-0.5 text-xs font-medium text-attention-text">
                       {text.arrearsBadge(member.arrears_months)}
                     </span>
                   )}
@@ -582,7 +582,7 @@ function EditMemberDialog({
               </Button>
             </div>
           ) : (
-            <p className="border-t border-border pt-3 text-sm text-attention">
+            <p className="border-t border-border pt-3 text-sm text-attention-text">
               {confirming === 'deactivate' ? text.deactivateConfirm : text.deleteConfirm}
             </p>
           )}
@@ -594,7 +594,7 @@ function EditMemberDialog({
           {state.status === 'error' &&
             state.error &&
             (state.error instanceof ApiError && state.error.code === 'referenced_by_other_records' ? (
-              <p role="alert" className="text-sm text-attention">
+              <p role="alert" className="text-sm text-attention-text">
                 {text.deleteRefused}
               </p>
             ) : (

@@ -247,7 +247,7 @@ function RateRow({ rate, onChanged, refresh }: { rate: DuesRate; onChanged: () =
               type="button"
               variant="ghost"
               size="lg"
-              className="text-attention"
+              className="text-attention-text"
               disabled={busy}
               onClick={() =>
                 void run(
@@ -372,9 +372,9 @@ function DeleteTier({ tier, onDeleted, refresh }: { tier: DuesTier; onDeleted: (
     <section className="flex flex-col gap-2">
       {/* The consequence, named just above the button that does it -
           terracotta, not alarm-red, the same as Lokasi's own confirms. */}
-      {confirming && <p className="text-sm text-attention">{text.deleteConfirm}</p>}
+      {confirming && <p className="text-sm text-attention-text">{text.deleteConfirm}</p>}
       {error !== null && (
-        <p role="alert" className="text-sm text-attention">
+        <p role="alert" className="text-sm text-attention-text">
           {errorTextFor(error.code)}
         </p>
       )}
@@ -386,7 +386,7 @@ function DeleteTier({ tier, onDeleted, refresh }: { tier: DuesTier; onDeleted: (
           <Button
             type="button"
             size="lg"
-            className="bg-attention text-attention-foreground hover:bg-attention/90"
+            className="bg-attention-text text-primary-foreground hover:bg-attention-text/90"
             disabled={busy}
             onClick={() =>
               void run(
@@ -402,7 +402,7 @@ function DeleteTier({ tier, onDeleted, refresh }: { tier: DuesTier; onDeleted: (
           </Button>
         </div>
       ) : (
-        <Button type="button" variant="ghost" size="lg" className="self-start text-attention" onClick={() => setConfirming(true)}>
+        <Button type="button" variant="ghost" size="lg" className="self-start text-attention-text" onClick={() => setConfirming(true)}>
           {text.delete}
         </Button>
       )}
