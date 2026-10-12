@@ -62,6 +62,28 @@ describe('Register', () => {
     expect(onRegistered).not.toHaveBeenCalled()
   })
 
+  it('renders a 503 (server busy) as the shared "try again in a moment" copy', async () => {
+    stubApi(() => Promise.resolve(errorResponse('server_busy', 503)))
+    const onRegistered = vi.fn()
+    render(<Register onRegistered={onRegistered} />)
+
+    await fillAndSubmit('bendahara@example.test', 'super-secret-1')
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(copy.common.errors.server_busy)
+    expect(onRegistered).not.toHaveBeenCalled()
+  })
+
+  it('renders a 429 (too many register attempts) as the shared rate-limit copy', async () => {
+    stubApi(() => Promise.resolve(errorResponse('too_many_requests', 429)))
+    const onRegistered = vi.fn()
+    render(<Register onRegistered={onRegistered} />)
+
+    await fillAndSubmit('bendahara@example.test', 'super-secret-1')
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(copy.common.errors.too_many_requests)
+    expect(onRegistered).not.toHaveBeenCalled()
+  })
+
   it('guards the 8-character password floor client-side without sending a request', async () => {
     const fetchMock = stubApi()
     const onRegistered = vi.fn()

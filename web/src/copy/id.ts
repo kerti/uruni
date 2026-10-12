@@ -221,6 +221,11 @@ export const copy = {
       already_registered: 'Akun bendahara untuk Uruni ini sudah pernah dibuat.',
       invalid_credentials: 'Email atau kata sandi salah.',
       too_many_requests: 'Terlalu banyak percobaan. Coba lagi beberapa menit lagi, ya.',
+      // #495: every slot for checking a password is busy (503). Nothing is
+      // wrong with what she typed and she is not locked out - the server is
+      // simply occupied for a moment - so it says to try again right away,
+      // unlike too_many_requests above, which says to wait minutes.
+      server_busy: 'Uruni sedang sibuk. Coba lagi sebentar lagi, ya.',
       // M6.5's setup wizard: a second POST /api/setup, and a malformed
       // request body.
       fund_already_exists: 'Kas ini sudah pernah disiapkan.',

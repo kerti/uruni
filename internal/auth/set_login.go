@@ -33,7 +33,7 @@ func (a *Auth) SetLogin(ctx context.Context, email, password string) (created bo
 	}
 
 	// Hashed outside the transaction, for the reason Register gives.
-	hash, err := hashPassword(password)
+	hash, err := a.hash(ctx, password)
 	if err != nil {
 		return false, fmt.Errorf("hashing password: %w", err)
 	}

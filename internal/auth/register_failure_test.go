@@ -28,15 +28,37 @@ func TestRegisterSurfacesAFailureToOpenATransaction(t *testing.T) {
 	assertNotASentinel(t, err)
 }
 
-// TestRegisterSurfacesAFailedCountUsers: the count inside the transaction
-// is the one-shot gate, so a count that could not be taken must refuse the
-// registration rather than fall through to the insert.
-func TestRegisterSurfacesAFailedCountUsers(t *testing.T) {
+// TestRegisterSurfacesAFailedPreCheck: the cheap count before any hashing
+// (#495) failing must refuse the registration, not fall through to hashing.
+func TestRegisterSurfacesAFailedPreCheck(t *testing.T) {
 	t.Parallel()
 	a, sqlDB := newTestAuth(t)
 	if _, err := sqlDB.Exec("DROP TABLE user"); err != nil {
 		t.Fatalf("dropping user: %v", err)
 	}
+
+	_, err := a.Register(context.Background(), "treasurer@example.org", "correct-horse-battery")
+	if err == nil {
+		t.Fatal("Register() with no user table = nil, want an error")
+	}
+	assertNotASentinel(t, err)
+}
+
+// TestRegisterSurfacesAFailedCountUsers: the count inside the transaction
+// is the one-shot gate, so a count that could not be taken must refuse the
+// registration rather than fall through to the insert. The pre-check before
+// hashing would trip first on a table that was never there, so the table is
+// dropped from inside the hash - after the pre-check passed, before the
+// transaction opens.
+func TestRegisterSurfacesAFailedCountUsers(t *testing.T) {
+	t.Parallel()
+	sqlDB := newTestDB(t)
+	a := New(sqlDB, WithPasswordFuncs(func(password string) (string, error) {
+		if _, err := sqlDB.Exec("DROP TABLE user"); err != nil {
+			t.Errorf("dropping user: %v", err)
+		}
+		return hashPassword(password)
+	}, verifyPassword))
 
 	_, err := a.Register(context.Background(), "treasurer@example.org", "correct-horse-battery")
 	if err == nil {

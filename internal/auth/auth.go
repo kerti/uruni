@@ -31,13 +31,35 @@ const MinPasswordLength = 8
 type Auth struct {
 	db *sql.DB
 	q  store.Querier
+
+	// slots, slotWait, hashFn and verifyFn are password_gate.go's: the
+	// semaphore every argon2id computation runs behind (#495), and the
+	// computations themselves, replaceable only by a test.
+	slots    chan struct{}
+	slotWait time.Duration
+	hashFn   func(password string) (string, error)
+	verifyFn func(password, encoded string) (bool, error)
 }
 
 // New returns an Auth over an already-open database. It does not migrate:
 // callers run internal/db.Up themselves, exactly as internal/ledger.New
 // documents for itself.
-func New(sqlDB *sql.DB) *Auth {
-	return &Auth{db: sqlDB, q: store.New(sqlDB)}
+//
+// One Auth is one process-wide gate on password hashing and verifying
+// (password_gate.go): build one and share it, never one per request.
+func New(sqlDB *sql.DB, opts ...Option) *Auth {
+	a := &Auth{
+		db:       sqlDB,
+		q:        store.New(sqlDB),
+		slots:    make(chan struct{}, defaultMaxConcurrentHashes()),
+		slotWait: defaultSlotWait,
+		hashFn:   hashPassword,
+		verifyFn: verifyPassword,
+	}
+	for _, opt := range opts {
+		opt(a)
+	}
+	return a
 }
 
 // withTx runs fn inside one database transaction, committing if it returns
@@ -93,11 +115,24 @@ func (a *Auth) Register(ctx context.Context, email, password string) (store.User
 		return store.User{}, fmt.Errorf("%w: password must be at least %d characters", ErrInvalidArgument, MinPasswordLength)
 	}
 
+	// A cheap pre-check, before any hashing (#495): on an instance that is
+	// already set up, a refused register must cost one COUNT, not one
+	// argon2id computation. It is only an optimisation - two requests can
+	// both pass it on a fresh instance - so the count inside the transaction
+	// below stays the authoritative check.
+	existing, err := a.q.CountUsers(ctx)
+	if err != nil {
+		return store.User{}, fmt.Errorf("checking for an existing account: %w", err)
+	}
+	if existing > 0 {
+		return store.User{}, ErrAlreadyRegistered
+	}
+
 	// Hashed before the transaction opens: argon2id is deliberately slow -
 	// that cost is the entire point of the parameters in password.go - and
 	// nothing is gained by holding ADR-004's one write connection for the
 	// time that work takes.
-	hash, err := hashPassword(password)
+	hash, err := a.hash(ctx, password)
 	if err != nil {
 		return store.User{}, fmt.Errorf("hashing password: %w", err)
 	}

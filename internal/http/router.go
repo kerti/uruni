@@ -104,19 +104,20 @@ func newWithClock(assets fs.FS, build Build, l *ledger.Ledger, q store.Querier, 
 	// routes scattered across the tree (ADR-021).
 	sm := newSessionManager(q, baseURL, logger)
 	r.Route("/api", (&api{
-		ledger:         l,
-		queries:        q,
-		sqlDB:          sqlDB,
-		logger:         logger,
-		auth:           au,
-		sessionManager: sm,
-		loginLimiter:   newRateLimiter(loginRateLimitMaxAttempts, loginRateLimitWindow),
-		trustedProxies: trustedProxies,
-		uploadsDir:     uploadsDir,
-		backupDir:      backupDir,
-		baseURL:        strings.TrimRight(baseURL, "/"),
-		now:            now,
-		restoreStage:   newRestoreStage(),
+		ledger:          l,
+		queries:         q,
+		sqlDB:           sqlDB,
+		logger:          logger,
+		auth:            au,
+		sessionManager:  sm,
+		loginLimiter:    newRateLimiter(loginRateLimitMaxAttempts, loginRateLimitWindow),
+		registerLimiter: newRateLimiter(registerRateLimitMaxAttempts, registerRateLimitWindow),
+		trustedProxies:  trustedProxies,
+		uploadsDir:      uploadsDir,
+		backupDir:       backupDir,
+		baseURL:         strings.TrimRight(baseURL, "/"),
+		now:             now,
+		restoreStage:    newRestoreStage(),
 	}).routes)
 
 	// The public report (ADR-035): outside /api, so no session manager ever

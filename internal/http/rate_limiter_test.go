@@ -2,47 +2,145 @@ package http
 
 import (
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 )
 
-// TestRateLimiterBlocksAtTheLimitNotBeforeIt: exactly limit-1 failures must
-// still be allowed, and the limit-th failure is what actually trips it -
-// the boundary itself, not just "eventually blocks".
-func TestRateLimiterBlocksAtTheLimitNotBeforeIt(t *testing.T) {
+// admitted reports whether one attempt on keys was admitted, keeping the
+// reservation (the attempt stands, as a failed guess does).
+func admitted(rl *rateLimiter, keys ...string) bool {
+	_, ok := rl.reserve(keys...)
+	return ok
+}
+
+func countOf(rl *rateLimiter, key string) int {
+	rl.mu.Lock()
+	defer rl.mu.Unlock()
+	if c, ok := rl.counters[key]; ok {
+		return c.count
+	}
+	return 0
+}
+
+// TestRateLimiterAdmitsExactlyTheLimitThenRefuses: the boundary itself - the
+// limit-th attempt is still admitted, the one after it is not.
+func TestRateLimiterAdmitsExactlyTheLimitThenRefuses(t *testing.T) {
 	t.Parallel()
 	rl := newRateLimiter(3, time.Minute)
 
-	for i := 0; i < 2; i++ {
-		if rl.blocked("k") {
-			t.Fatalf("blocked(\"k\") after %d failures = true, want false (limit is 3)", i)
+	for i := 1; i <= 3; i++ {
+		if !admitted(rl, "k") {
+			t.Fatalf("attempt %d refused, want admitted (limit is 3)", i)
 		}
-		rl.recordFailure("k")
 	}
-	if rl.blocked("k") {
-		t.Fatal("blocked(\"k\") after 2 failures = true, want false")
+	if admitted(rl, "k") {
+		t.Fatal("attempt 4 admitted, want refused (limit reached)")
 	}
-
-	rl.recordFailure("k") // the 3rd failure
-	if !rl.blocked("k") {
-		t.Fatal("blocked(\"k\") after 3 failures = false, want true (limit reached)")
+	if got := countOf(rl, "k"); got != 3 {
+		t.Errorf("count after a refused attempt = %d, want 3 - a refusal must not count", got)
 	}
 }
 
-// TestRateLimiterKeysAreIndependent: failures against one key must never
+// TestRateLimiterKeysAreIndependent: attempts against one key must never
 // count against a different one - the whole reason the login handler holds
 // two independent keys per request (IP and identifier).
 func TestRateLimiterKeysAreIndependent(t *testing.T) {
 	t.Parallel()
 	rl := newRateLimiter(2, time.Minute)
 
-	rl.recordFailure("a")
-	rl.recordFailure("a")
-	if !rl.blocked("a") {
-		t.Error("blocked(\"a\") = false, want true")
+	admitted(rl, "a")
+	admitted(rl, "a")
+	if admitted(rl, "a") {
+		t.Error("third attempt on \"a\" admitted, want refused")
 	}
-	if rl.blocked("b") {
-		t.Error("blocked(\"b\") = true, want false - \"a\"'s failures must not leak into \"b\"'s counter")
+	if !admitted(rl, "b") {
+		t.Error("attempt on \"b\" refused, want admitted - \"a\"'s attempts must not leak into \"b\"'s counter")
+	}
+}
+
+// TestRateLimiterReservesAllKeysOrNone: a request is reserved under its IP
+// and its identifier together. If one is full the other must not be charged
+// for a request that never ran.
+func TestRateLimiterReservesAllKeysOrNone(t *testing.T) {
+	t.Parallel()
+	rl := newRateLimiter(2, time.Minute)
+
+	admitted(rl, "id:x")
+	admitted(rl, "id:x") // "id:x" is now full
+
+	if admitted(rl, "ip:1", "id:x") {
+		t.Fatal("reserve(ip:1, id:x) admitted with id:x full, want refused")
+	}
+	if got := countOf(rl, "ip:1"); got != 0 {
+		t.Errorf("ip:1 count after a refused joint reserve = %d, want 0 - nothing may be charged on a refusal", got)
+	}
+	if got := countOf(rl, "id:x"); got != 2 {
+		t.Errorf("id:x count = %d, want 2", got)
+	}
+
+	// And the success shape: both keys charged exactly once.
+	if !admitted(rl, "ip:2", "id:y") {
+		t.Fatal("reserve(ip:2, id:y) refused, want admitted")
+	}
+	if countOf(rl, "ip:2") != 1 || countOf(rl, "id:y") != 1 {
+		t.Errorf("counts after one joint reserve = %d, %d, want 1, 1", countOf(rl, "ip:2"), countOf(rl, "id:y"))
+	}
+}
+
+// TestRateLimiterReleaseGivesTheAttemptBack: an attempt that never really
+// happened (the server was busy) hands its slot in the window back.
+func TestRateLimiterReleaseGivesTheAttemptBack(t *testing.T) {
+	t.Parallel()
+	rl := newRateLimiter(2, time.Minute)
+
+	res, ok := rl.reserve("ip:1", "id:x")
+	if !ok {
+		t.Fatal("reserve refused on a fresh limiter")
+	}
+	admitted(rl, "ip:1")
+	res.release()
+	res.release() // a second release is harmless
+
+	if got := countOf(rl, "ip:1"); got != 1 {
+		t.Errorf("ip:1 count after releasing one of two = %d, want 1", got)
+	}
+	if got := countOf(rl, "id:x"); got != 0 {
+		t.Errorf("id:x count after releasing its only attempt = %d, want 0", got)
+	}
+	rl.mu.Lock()
+	_, kept := rl.counters["id:x"]
+	rl.mu.Unlock()
+	if kept {
+		t.Error("id:x still has a counter at zero, want it dropped")
+	}
+}
+
+// TestRateLimiterReleaseAfterResetOrExpiryLeavesTheNewCounterAlone: a
+// release must undo only the count it took. If a success wiped the key
+// meanwhile, or the window rolled over, a late release has nothing to undo
+// and must not eat into the attempts counted since.
+func TestRateLimiterReleaseAfterResetOrExpiryLeavesTheNewCounterAlone(t *testing.T) {
+	t.Parallel()
+	rl := newRateLimiter(5, time.Minute)
+	now := time.Now()
+	rl.now = func() time.Time { return now }
+
+	res, _ := rl.reserve("k")
+	rl.reset("k")
+	admitted(rl, "k")
+	res.release()
+	if got := countOf(rl, "k"); got != 1 {
+		t.Errorf("count after a release that predates a reset = %d, want 1", got)
+	}
+
+	res, _ = rl.reserve("e")
+	now = now.Add(time.Minute) // the window the reservation lives in has elapsed
+	admitted(rl, "e")
+	admitted(rl, "e")
+	res.release()
+	if got := countOf(rl, "e"); got != 2 {
+		t.Errorf("count after a release that predates the window = %d, want 2", got)
 	}
 }
 
@@ -53,24 +151,32 @@ func TestRateLimiterResetClearsTheCounter(t *testing.T) {
 	t.Parallel()
 	rl := newRateLimiter(2, time.Minute)
 
-	rl.recordFailure("k")
-	rl.recordFailure("k")
-	if !rl.blocked("k") {
-		t.Fatal("blocked(\"k\") = false, want true before reset")
+	admitted(rl, "k")
+	admitted(rl, "k")
+	if admitted(rl, "k") {
+		t.Fatal("third attempt admitted, want refused before reset")
 	}
 
 	rl.reset("k")
-	if rl.blocked("k") {
-		t.Fatal("blocked(\"k\") = true, want false immediately after reset")
+	for i := 1; i <= 2; i++ {
+		if !admitted(rl, "k") {
+			t.Fatalf("attempt %d refused right after reset, want the full width open again", i)
+		}
 	}
+	if admitted(rl, "k") {
+		t.Fatal("third attempt after reset admitted, want refused")
+	}
+}
 
-	rl.recordFailure("k")
-	if rl.blocked("k") {
-		t.Fatal("blocked(\"k\") = true after 1 failure post-reset, want false (limit is 2)")
-	}
-	rl.recordFailure("k")
-	if !rl.blocked("k") {
-		t.Fatal("blocked(\"k\") = false after 2 failures post-reset, want true")
+// TestRateLimiterResetClearsEveryKeyGiven: a successful login resets its IP
+// and identifier in one call.
+func TestRateLimiterResetClearsEveryKeyGiven(t *testing.T) {
+	t.Parallel()
+	rl := newRateLimiter(5, time.Minute)
+	admitted(rl, "ip:1", "id:x")
+	rl.reset("ip:1", "id:x")
+	if countOf(rl, "ip:1") != 0 || countOf(rl, "id:x") != 0 {
+		t.Error("counters survive reset(ip, id), want both cleared")
 	}
 }
 
@@ -83,22 +189,19 @@ func TestRateLimiterWindowExpiryReopensTheKey(t *testing.T) {
 	now := time.Now()
 	rl.now = func() time.Time { return now }
 
-	rl.recordFailure("k")
-	rl.recordFailure("k")
-	if !rl.blocked("k") {
-		t.Fatal("blocked(\"k\") = false, want true within the window")
+	admitted(rl, "k")
+	admitted(rl, "k")
+	if admitted(rl, "k") {
+		t.Fatal("attempt admitted at the limit within the window, want refused")
 	}
 
 	now = now.Add(time.Minute) // exactly at the boundary: the window has elapsed
-	if rl.blocked("k") {
-		t.Fatal("blocked(\"k\") = true after the window elapsed, want false")
+	if !admitted(rl, "k") {
+		t.Fatal("attempt refused after the window elapsed, want admitted")
 	}
-
-	// A fresh failure after expiry must start a new window at count 1, not
-	// resume accumulating past the old window's count.
-	rl.recordFailure("k")
-	if rl.blocked("k") {
-		t.Fatal("blocked(\"k\") = true after 1 failure in the new window, want false (limit is 2)")
+	// The first attempt after expiry starts a new window at count 1.
+	if got := countOf(rl, "k"); got != 1 {
+		t.Errorf("count after the first post-expiry attempt = %d, want 1", got)
 	}
 }
 
@@ -113,7 +216,7 @@ func TestRateLimiterSweepsExpiredEntries(t *testing.T) {
 	rl.now = func() time.Time { return now }
 
 	for i := 0; i < 50; i++ {
-		rl.recordFailure(string(rune('a' + i%26)))
+		admitted(rl, string(rune('a'+i%26)))
 	}
 	rl.mu.Lock()
 	before := len(rl.counters)
@@ -123,53 +226,56 @@ func TestRateLimiterSweepsExpiredEntries(t *testing.T) {
 	}
 
 	now = now.Add(2 * time.Minute) // well past every key's window
-	rl.blocked("unrelated-key")    // any call sweeps as a side effect
+	admitted(rl, "unrelated-key")  // any reserve sweeps as a side effect
 
 	rl.mu.Lock()
 	after := len(rl.counters)
 	rl.mu.Unlock()
-	// "unrelated-key" itself was just created by the blocked() call above
-	// (a miss still allocates nothing - blocked() only reads - so it must
-	// not appear at all), and every one of the 50 keys from before the
-	// sweep must be gone.
-	if after != 0 {
-		t.Errorf("counters after sweeping = %d, want 0 (before: %d)", after, before)
+	// Only the key just reserved may remain.
+	if after != 1 {
+		t.Errorf("counters after sweeping = %d, want 1 (before: %d)", after, before)
 	}
 }
 
-// TestRateLimiterConcurrentFailuresAreCountedExactly is the concurrency-
-// safety requirement (issue #115): N goroutines each recording one failure
-// against the same key must land exactly N, with none lost to an
-// unsynchronized read-modify-write. Run with -race, which make check does.
-func TestRateLimiterConcurrentFailuresAreCountedExactly(t *testing.T) {
+// TestRateLimiterConcurrentReservesAdmitExactlyTheLimit is #495's core
+// property at the limiter: with far more simultaneous callers than room,
+// exactly `limit` are admitted - none lost to an unsynchronised
+// read-modify-write, none let through because nobody had been counted yet.
+// Run with -race, which make check does.
+func TestRateLimiterConcurrentReservesAdmitExactlyTheLimit(t *testing.T) {
 	t.Parallel()
-	const n = 200
-	rl := newRateLimiter(n+1, time.Minute) // above n, so nothing is refused mid-run
+	const limit, callers = 10, 200
+	rl := newRateLimiter(limit, time.Minute)
 
 	var wg sync.WaitGroup
-	wg.Add(n)
-	for i := 0; i < n; i++ {
+	var ok atomic.Int64
+	start := make(chan struct{})
+	wg.Add(callers)
+	for i := 0; i < callers; i++ {
 		go func() {
 			defer wg.Done()
-			rl.recordFailure("shared-key")
+			<-start
+			if admitted(rl, "ip:1", "id:x") {
+				ok.Add(1)
+			}
 		}()
 	}
+	close(start)
 	wg.Wait()
 
-	rl.mu.Lock()
-	got := rl.counters["shared-key"].count
-	rl.mu.Unlock()
-	if got != n {
-		t.Errorf("count after %d concurrent recordFailure() calls = %d, want %d", n, got, n)
+	if got := ok.Load(); got != limit {
+		t.Errorf("admitted = %d, want exactly %d", got, limit)
+	}
+	if countOf(rl, "ip:1") != limit || countOf(rl, "id:x") != limit {
+		t.Errorf("counts = %d, %d, want %d each", countOf(rl, "ip:1"), countOf(rl, "id:x"), limit)
 	}
 }
 
 // TestRateLimiterIsRaceFreeUnderMixedConcurrentAccess exercises every
-// method - blocked, recordFailure, reset - concurrently across overlapping
-// keys. It asserts nothing about the final state (that is what the
-// exactness test above is for); its only job is to give `go test -race`
-// something to catch if any path reaches the map or a counter without
-// holding mu.
+// method - reserve, release, reset - concurrently across overlapping
+// keys. It asserts nothing about the final state (the exactness test above
+// is for that); its only job is to give `go test -race` something to catch
+// if any path reaches the map or a counter without holding mu.
 func TestRateLimiterIsRaceFreeUnderMixedConcurrentAccess(t *testing.T) {
 	t.Parallel()
 	rl := newRateLimiter(5, 50*time.Millisecond)
@@ -181,12 +287,15 @@ func TestRateLimiterIsRaceFreeUnderMixedConcurrentAccess(t *testing.T) {
 		go func(g int) {
 			defer wg.Done()
 			key := keys[g%len(keys)]
+			other := keys[(g+1)%len(keys)]
 			for i := 0; i < 25; i++ {
 				switch i % 3 {
 				case 0:
-					rl.blocked(key)
+					if res, ok := rl.reserve(key, other); ok {
+						res.release()
+					}
 				case 1:
-					rl.recordFailure(key)
+					rl.reserve(key)
 				case 2:
 					rl.reset(key)
 				}
@@ -194,5 +303,5 @@ func TestRateLimiterIsRaceFreeUnderMixedConcurrentAccess(t *testing.T) {
 		}(g)
 	}
 	wg.Wait()
-	t.Log("no race detected across mixed blocked/recordFailure/reset calls")
+	t.Log("no race detected across mixed reserve/release/reset calls")
 }

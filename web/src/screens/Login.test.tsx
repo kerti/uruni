@@ -46,6 +46,19 @@ describe('Login', () => {
     expect(alert).not.toHaveTextContent(copy.auth.login.invalidCredentials)
   })
 
+  it('renders a 503 (server busy) as the shared "try again in a moment" copy, not a lockout', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(errorResponse('server_busy', 503)))
+    const onLoggedIn = vi.fn()
+    render(<Login onLoggedIn={onLoggedIn} />)
+
+    await fillAndSubmit('bendahara@example.test', 'some-password')
+
+    const alert = await screen.findByRole('alert')
+    expect(alert).toHaveTextContent(copy.common.errors.server_busy)
+    expect(alert).not.toHaveTextContent(copy.auth.login.tooManyRequests)
+    expect(onLoggedIn).not.toHaveBeenCalled()
+  })
+
   it('falls through to the shared error state on a network failure', async () => {
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('network down')))
     const onLoggedIn = vi.fn()

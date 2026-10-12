@@ -63,6 +63,11 @@ func init() {
 // function calls verifyPassword exactly once before it can return a
 // failure; there is no return between "we know which case this is" and
 // "the hash comparison has run".
+//
+// The one other answer is ErrBusy (password_gate.go): the comparison is
+// refused a slot, so nothing was checked. It is returned for a known and an
+// unknown email alike, so it is no more an oracle than the 401 is, and the
+// caller must not count it as a wrong guess.
 func (a *Auth) Authenticate(ctx context.Context, email, password string) (store.User, error) {
 	email = strings.TrimSpace(email)
 
@@ -72,7 +77,7 @@ func (a *Auth) Authenticate(ctx context.Context, email, password string) (store.
 			return store.User{}, fmt.Errorf("looking up account: %w", err)
 		}
 
-		if _, verr := verifyPassword(password, dummyPasswordHash); verr != nil {
+		if _, verr := a.verify(ctx, password, dummyPasswordHash); verr != nil {
 			// dummyPasswordHash is this package's own well-formed output;
 			// a decoy comparison failing at all means something is
 			// actually broken, not that the login attempt was bad.
@@ -81,7 +86,7 @@ func (a *Auth) Authenticate(ctx context.Context, email, password string) (store.
 		return store.User{}, ErrInvalidCredentials
 	}
 
-	ok, err := verifyPassword(password, user.PasswordHash)
+	ok, err := a.verify(ctx, password, user.PasswordHash)
 	if err != nil {
 		// A stored hash that doesn't parse is a corrupted row (see
 		// verifyPassword's own doc comment on ErrMalformedHash), not a

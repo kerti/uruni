@@ -55,6 +55,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/kerti/uruni/internal/auth"
 	"github.com/kerti/uruni/internal/backup"
 )
 
@@ -395,12 +396,6 @@ func (a *api) confirmRestore(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ip := "restore-ip:" + a.clientIP(r)
-	if a.loginLimiter.blocked(ip) {
-		writeAPIError(w, http.StatusTooManyRequests, "too_many_requests", "Too many attempts. Try again later.")
-		return
-	}
-
 	users, err := a.queries.ListUsers(r.Context())
 	if err != nil {
 		a.logger.Error("listing the live user for restore confirm", "error", err)
@@ -417,8 +412,19 @@ func (a *api) confirmRestore(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Reserved before the password is verified, for the reason login.go
+	// gives (#495): the attempt counts while it is in flight. Kept for a
+	// wrong password, handed back for anything that was not a guess.
+	ip := "restore-ip:" + a.clientIP(r)
+	reservation, ok := a.loginLimiter.reserve(ip)
+	if !ok {
+		writeAPIError(w, http.StatusTooManyRequests, "too_many_requests", "Too many attempts. Try again later.")
+		return
+	}
 	if _, err := a.auth.Authenticate(r.Context(), users[0].Email, req.Password); err != nil {
-		a.loginLimiter.recordFailure(ip)
+		if !errors.Is(err, auth.ErrInvalidCredentials) {
+			reservation.release()
+		}
 		mapAuthError(w, a.logger, err)
 		return
 	}
