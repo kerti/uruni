@@ -2,10 +2,13 @@ package db
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"io"
+	"io/fs"
 	"log/slog"
 	"testing"
+	"testing/fstest"
 
 	"github.com/kerti/uruni/internal/store"
 )
@@ -60,41 +63,121 @@ func TestUpAppliesPendingMigrationsAndIsIdempotent(t *testing.T) {
 	}
 }
 
-func TestDownRollsBackOneMigrationAtATime(t *testing.T) {
+// threeVersions is a migration set with a baseline and two more files. The real
+// set has one file through 0.x (ADR-025), which Down must refuse to roll back, so
+// everything about a down that runs needs a set of its own.
+func threeVersions() fstest.MapFS {
+	file := func(name string) *fstest.MapFile {
+		return &fstest.MapFile{Data: []byte("-- +goose Up\nCREATE TABLE " + name + " (id INTEGER PRIMARY KEY) STRICT;\n" +
+			"-- +goose Down\nDROP TABLE " + name + ";\n")}
+	}
+	return fstest.MapFS{
+		"00001_a.sql": file("a"),
+		"00002_b.sql": file("b"),
+		"00003_c.sql": file("c"),
+	}
+}
+
+func upThrough(t *testing.T, sqlDB *sql.DB, fsys fs.FS) {
+	t.Helper()
+	p, err := providerFor(sqlDB, fsys)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := p.Up(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func hasTable(t *testing.T, sqlDB *sql.DB, name string) bool {
+	t.Helper()
+	var n int
+	if err := sqlDB.QueryRow(`SELECT count(*) FROM sqlite_master WHERE type = 'table' AND name = ?`, name).Scan(&n); err != nil {
+		t.Fatal(err)
+	}
+	return n == 1
+}
+
+func TestDownRollsBackOneMigrationAtATimeAndStopsAtTheBaseline(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
 	sqlDB := openTestDB(t)
+	fsys := threeVersions()
+	upThrough(t, sqlDB, fsys)
 
+	for _, want := range []int64{3, 2} {
+		version, err := Down(ctx, sqlDB, fsys, discardLogger(), nil)
+		if err != nil {
+			t.Fatalf("Down() = %v, want no error", err)
+		}
+		if version != want {
+			t.Errorf("Down() rolled back version %d, want the most recent %d", version, want)
+		}
+	}
+
+	// One step per invocation, and the baseline is what is left.
+	if !hasTable(t, sqlDB, "a") || hasTable(t, sqlDB, "b") || hasTable(t, sqlDB, "c") {
+		t.Errorf("tables after two downs: a=%v b=%v c=%v, want only a", hasTable(t, sqlDB, "a"), hasTable(t, sqlDB, "b"), hasTable(t, sqlDB, "c"))
+	}
+
+	if _, err := Down(ctx, sqlDB, fsys, discardLogger(), nil); !errors.Is(err, ErrBaseline) {
+		t.Fatalf("Down() at the baseline = %v, want ErrBaseline", err)
+	}
+	if !hasTable(t, sqlDB, "a") {
+		t.Errorf("a refused baseline Down() dropped the baseline's table")
+	}
+}
+
+func TestDownRefusesTheEmbeddedBaseline(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	sqlDB := openTestDB(t)
 	if _, err := Up(ctx, sqlDB, discardLogger()); err != nil {
 		t.Fatalf("Up() = %v, want no error", err)
 	}
 
+	called := false
+	_, err := Down(ctx, sqlDB, nil, discardLogger(), func(int64) error { called = true; return nil })
+	if !errors.Is(err, ErrBaseline) {
+		t.Fatalf("Down() on the real single-file set = %v, want ErrBaseline", err)
+	}
+	if called {
+		t.Errorf("the before hook ran for a refused rollback")
+	}
 	applied, err := Status(ctx, sqlDB)
 	if err != nil {
-		t.Fatalf("Status() = %v, want no error", err)
+		t.Fatal(err)
 	}
-	latest := applied[len(applied)-1]
+	if !applied[0].Applied {
+		t.Errorf("the baseline is no longer applied after a refused Down()")
+	}
+}
 
-	version, err := Down(ctx, sqlDB, discardLogger())
-	if err != nil {
-		t.Fatalf("Down() = %v, want no error", err)
-	}
-	if version != latest.Version {
-		t.Errorf("Down() rolled back version %d, want the most recent %d", version, latest.Version)
-	}
+func TestDownRunsTheBeforeHookFirstAndItsErrorRefuses(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	sqlDB := openTestDB(t)
+	fsys := threeVersions()
+	upThrough(t, sqlDB, fsys)
 
-	rolled, err := Status(ctx, sqlDB)
-	if err != nil {
-		t.Fatalf("Status() after Down() = %v, want no error", err)
-	}
-	if rolled[len(rolled)-1].Applied {
-		t.Errorf("migration %d still applied after Down()", latest.Version)
-	}
-	// One step per invocation: everything below the last migration is untouched.
-	for _, m := range rolled[:len(rolled)-1] {
-		if !m.Applied {
-			t.Errorf("Down() also rolled back migration %d (%s), want one step only", m.Version, m.Name)
+	var sawVersion int64
+	_, err := Down(ctx, sqlDB, fsys, discardLogger(), func(v int64) error {
+		sawVersion = v
+		if !hasTable(t, sqlDB, "c") {
+			t.Error("before ran after the rollback, want it first")
 		}
+		return nil
+	})
+	if err != nil || sawVersion != 3 {
+		t.Fatalf("Down() = %v with before seeing version %d, want nil and 3", err, sawVersion)
+	}
+
+	boom := errors.New("no dump")
+	if _, err := Down(ctx, sqlDB, fsys, discardLogger(), func(int64) error { return boom }); !errors.Is(err, boom) {
+		t.Fatalf("Down() with a failing before = %v, want its error", err)
+	}
+	if !hasTable(t, sqlDB, "b") {
+		t.Errorf("migration 2 was rolled back although before failed")
 	}
 }
 
@@ -106,7 +189,7 @@ func TestDownOnAnUnmigratedDatabaseIsNotAFailure(t *testing.T) {
 	// Nothing applied at all. Rolling back nothing is a non-event the CLI reports
 	// and exits 0 on, so a script that rolls back before restoring a backup keeps
 	// working.
-	if _, err := Down(ctx, sqlDB, discardLogger()); !errors.Is(err, ErrNothingToRollBack) {
+	if _, err := Down(ctx, sqlDB, nil, discardLogger(), nil); !errors.Is(err, ErrNothingToRollBack) {
 		t.Fatalf("Down() on version 0 = %v, want ErrNothingToRollBack", err)
 	}
 }
