@@ -10,10 +10,9 @@ describe('ReceiptViewer (#154 follow-up)', () => {
     const onClose = vi.fn()
     render(<ReceiptViewer open src="/api/receipts/9" anchor={{ fx: 0.5, fy: 0.5 }} onClose={onClose} />)
 
-    // The photo is decorative (alt="", the same split every other image in
-    // this app uses) and only ever one at a time, so it is queried by tag
-    // rather than role. Radix portals the dialog onto `document.body`,
-    // outside the render container, so it is queried from there.
+    // The photo is decorative (alt="") and only ever one at a time, so it is
+    // queried by tag rather than role. Radix portals the dialog onto
+    // `document.body`, outside the render container.
     const image = document.querySelector('img') as HTMLImageElement
     expect(image).toHaveAttribute('src', '/api/receipts/9')
     // Natural size: nothing scales it down to the screen.

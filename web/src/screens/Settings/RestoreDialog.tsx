@@ -14,35 +14,30 @@ import type { FundRestorePreview, RestorePreview } from '@/lib/restore'
 const text = copy.settings.backup
 const confirmText = copy.restoreConfirm
 
-/** RestoreDialog's own imperative surface (#326): the Cadangan card's
- * per-row "pulihkan" control has no file to pick, so it reaches past the
- * file-picker trigger this component renders and starts the identical
- * inspect-then-confirm flow directly, against a stored backup's own
- * server-side name instead of an uploaded file. */
+/** RestoreDialog's imperative surface: the Cadangan card's per-row "pulihkan"
+ * control has no file to pick, so it reaches past the file-picker trigger and
+ * starts the identical inspect-then-confirm flow directly, against a stored
+ * backup's server-side name instead of an uploaded file. */
 export interface RestoreDialogHandle {
   openForStoredBackup: (name: string) => void
 }
 
 /**
- * The whole upload-then-restore flow (M6.39, #325, ADR-012), as one
- * component the Cadangan card mounts always-present: a hidden file input
- * this component owns, an inspect step that runs the instant a file is
- * picked, and - once the server has answered with a preview - the confirm
- * dialog itself (date, funds, total, password). Two server calls
- * (inspectRestoreUpload, confirmRestore), never the raw zip sent twice -
- * lib/restore.ts's own comment has the reasoning.
+ * The whole upload-then-restore flow (ADR-012), as one component the Cadangan
+ * card mounts always-present: a hidden file input, an inspect step that runs
+ * the instant a file is picked, and - once the server answers with a preview -
+ * the confirm dialog (date, funds, total, password). Two server calls
+ * (inspectRestoreUpload, confirmRestore), never the raw zip sent twice - see
+ * lib/restore.ts.
  *
- * #326 adds a second way into the same dialog: the auto-backup list's own
- * "pulihkan" row action, one per current-format stored dump, calls
- * openForStoredBackup (exposed via ref) instead of picking a file - the
- * preview/confirm step that follows is exactly this component's existing
- * one, unchanged, so there is no second restore implementation for a
- * stored backup to run through.
+ * The auto-backup list's "pulihkan" row action, one per current-format stored
+ * dump, calls openForStoredBackup (exposed via ref) instead of picking a file;
+ * the preview/confirm step is the same one, so there is no second restore
+ * implementation.
  *
- * open/preview/token all live here rather than in Backup.tsx: the trigger
- * button is the only piece the card itself needs to render, so this
- * component's own exported surface is just the button plus the dialog it
- * owns (plus, now, the ref handle above).
+ * open/preview/token live here rather than in Backup.tsx: the card needs only
+ * the trigger button, so this component's surface is the button plus the
+ * dialog it owns (and the ref handle above).
  */
 const RestoreDialog = forwardRef<RestoreDialogHandle>(function RestoreDialog(_props, ref) {
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -50,9 +45,9 @@ const RestoreDialog = forwardRef<RestoreDialogHandle>(function RestoreDialog(_pr
   const [confirmState, runConfirm] = useApi<void>()
   const [password, setPassword] = useState('')
   const [open, setOpen] = useState(false)
-  // useApi has no reset, and this one dialog instance outlives every restore
-  // it runs: without this flag a wrong-password error from a cancelled
-  // attempt would still sit under the next preview's password field.
+  // useApi has no reset, and this dialog instance outlives every restore it
+  // runs: without this flag a wrong-password error from a cancelled attempt
+  // would sit under the next preview's password field.
   const [confirmAttempted, setConfirmAttempted] = useState(false)
 
   const inspecting = inspectState.status === 'loading'
@@ -73,9 +68,8 @@ const RestoreDialog = forwardRef<RestoreDialogHandle>(function RestoreDialog(_pr
 
   function handleFileChosen(event: React.ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0]
-    // The input is reset regardless, so picking the exact same file twice
-    // in a row (after cancelling) still fires a change event the second
-    // time.
+    // The input is reset regardless, so picking the same file twice in a row
+    // (after cancelling) still fires a change event.
     event.target.value = ''
     if (!file) return
 
@@ -100,10 +94,10 @@ const RestoreDialog = forwardRef<RestoreDialogHandle>(function RestoreDialog(_pr
     setConfirmAttempted(true)
     void runConfirm(async () => {
       await confirmRestore(staged.token, password)
-      // Every session is gone now, including this one - the only correct
-      // next step is a full reload, which lands on the login screen once
-      // GET /api/session reports authenticated: false. There is nothing
-      // left in this SPA's own state worth preserving through that.
+      // Every session is gone now, including this one - the only correct next
+      // step is a full reload, which lands on the login screen once
+      // GET /api/session reports authenticated: false. Nothing in this SPA's
+      // state is worth preserving through that.
       window.location.reload()
     })
   }
@@ -114,10 +108,9 @@ const RestoreDialog = forwardRef<RestoreDialogHandle>(function RestoreDialog(_pr
         ref={fileInputRef}
         type="file"
         accept=".zip"
-        // The button below is the visible control; this input only carries
-        // the name for assistive tech and tests (ReceiptPicker.tsx's own
-        // pattern), and stays out of the tab order so keyboard users meet
-        // one control, not two.
+        // The button below is the visible control; this input only carries the
+        // name for assistive tech and tests (as ReceiptPicker.tsx) and stays out
+        // of the tab order so keyboard users meet one control, not two.
         aria-label={text.restoreLabel}
         tabIndex={-1}
         className="sr-only"
@@ -194,10 +187,9 @@ const RestoreDialog = forwardRef<RestoreDialogHandle>(function RestoreDialog(_pr
 
 export default RestoreDialog
 
-/** One preview line's own wording, chosen by status and - for a kept fund -
- * whether the file carries a cutoff date for it at all (fundLine's own
- * three branches for "kept" mirror the three copy strings restoreConfirm
- * offers for exactly that split). */
+/** One preview line's wording, chosen by status and - for a kept fund - whether
+ * the file carries a cutoff date for it (fundLine's three "kept" branches
+ * mirror the three copy strings restoreConfirm offers for that split). */
 function fundLine(fund: FundRestorePreview): string {
   if (fund.status === 'removed') return confirmText.fundRemoved(fund.name)
   if (fund.status === 'added') return confirmText.fundAdded(fund.name)

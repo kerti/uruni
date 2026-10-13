@@ -4,22 +4,22 @@ import { copy } from '../src/copy/id'
 import { formatIDR } from '../src/lib/money'
 import { expect, logIn, test } from './fixtures'
 
-// M8.12 (#443): what only a real browser can say about the app's
-// non-functional promises, on the real binary with the built SPA embedded
-// (so the real service worker from vite-plugin-pwa is what runs).
+// What only a real browser can say about the app's non-functional promises, on
+// the real binary with the built SPA embedded (so the real service worker from
+// vite-plugin-pwa is what runs).
 //
 //   - Offline is unavailable: the banner shows mid-session, a write attempt
 //     fails visibly and nothing is queued or posted later (CLAUDE.md rule 4).
 //   - Installable PWA: the manifest is linked and parses, the service worker
-//     registers and activates, and the precache holds the shell and no /api
-//     or /report response.
-//   - Phone-first layout: one column of at most 576px, no horizontal scroll,
-//     on every main screen at 390px; at 800px the column is exactly 576px,
+//     registers and activates, and the precache holds the shell and no /api or
+//     /report response.
+//   - Phone-first layout: one column of at most 576px, no horizontal scroll, on
+//     every main screen at 390px; at 800px the column is exactly 576px,
 //     centred, with the header and the footer's buttons inside it.
 //   - Beranda's Arus kas totals, and a negative pos shown plainly.
 //
-// Serial, one story on the seeded fixture (Tunai Rp 1.000.000, Kas Utama,
-// the open envelope "Amplop Uji Laporan"). Money is seeded over the API.
+// Serial, one story on the seeded fixture (Tunai Rp 1.000.000, Kas Utama, the
+// open envelope "Amplop Uji Laporan"). Money is seeded over the API.
 
 const envelope = 'Amplop Uji Laporan'
 
@@ -101,9 +101,9 @@ async function openScreen(page: Page, path: string) {
 }
 
 // What the Shell promises on `path`, measured on real elements: no sideways
-// scroll, and the header, the main column and the footer's buttons all sit
-// in one column. At 390px that column is the viewport minus its 16px gutters;
-// wider, it stops at 576px (max-w-xl) and centres.
+// scroll, and the header, the main column and the footer's buttons all in one
+// column. At 390px that column is the viewport minus its 16px gutters; wider,
+// it stops at 576px (max-w-xl) and centres.
 async function expectOneColumn(page: Page, path: string) {
   const viewport = page.viewportSize()
   if (!viewport) throw new Error('no viewport')
@@ -175,9 +175,9 @@ test.describe('browser-only non-functionals', () => {
     await page.context().setOffline(true)
     await expect(offlineBanner(page)).toBeVisible()
 
-    // Catat is a client-side route, but the form loads its locations and
-    // pos from the API, so offline it shows the same "butuh koneksi" state
-    // with a retry instead of a form.
+    // Catat is a client-side route, but the form loads its locations and pos
+    // from the API, so offline it shows the "butuh koneksi" state with a retry
+    // instead of a form.
     await page.getByRole('link', { name: copy.shell.nav.record }).click()
     const loadFailed = page.getByRole('main').getByRole('alert').filter({ hasText: copy.common.errors.network_error })
     await expect(loadFailed).toBeVisible()
@@ -204,8 +204,8 @@ test.describe('browser-only non-functionals', () => {
     await page.context().setOffline(false)
     await expect(offlineBanner(page)).toBeHidden()
 
-    // Nothing was queued: even after a reload and a wait, the ledger holds
-    // exactly what it held, and the balances have not moved.
+    // Nothing was queued: even after a reload and a wait, the ledger holds what
+    // it held, and the balances have not moved.
     await page.reload()
     await expect(page.getByRole('heading', { name: copy.record.heading })).toBeVisible()
     await page.waitForLoadState('networkidle')
@@ -241,8 +241,8 @@ test.describe('browser-only non-functionals', () => {
     }
 
     // The worker registers and reaches "activated". ready resolves as soon as
-    // the registration has an active worker, which can still be "activating",
-    // so poll the state rather than read it once.
+    // the registration has an active worker, which can still be "activating", so
+    // poll the state rather than read it once.
     await expect
       .poll(() =>
         page.evaluate(async () => {
@@ -258,9 +258,9 @@ test.describe('browser-only non-functionals', () => {
     await page.goto('/')
     await page.evaluate(() => navigator.serviceWorker.ready)
 
-    // Real API traffic first, from the page itself, so a cache that stored
-    // responses would have something to hold. A reload brings the worker in
-    // as controller, so the second round runs through it.
+    // Real API traffic first, from the page, so a cache that stored responses
+    // would have something to hold. A reload brings the worker in as controller,
+    // so the second round runs through it.
     for (let round = 0; round < 2; round++) {
       await page.reload()
       await expect(page.getByText(copy.home.balanceHeading)).toBeVisible()
@@ -335,8 +335,8 @@ test.describe('browser-only non-functionals', () => {
     await page.goto('/')
     await expect(berandaRow(page, envelope)).toContainText(formatIDR(0))
 
-    // The ledger never refuses an out larger than a pos holds (ADR-031), so
-    // an empty envelope can be spent from.
+    // The ledger never refuses an out larger than a pos holds (ADR-031), so an
+    // empty envelope can be spent from.
     await post(request, tunai, amplop, 'out', 25_000)
 
     await page.reload()

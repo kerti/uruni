@@ -14,13 +14,12 @@ const text = copy.setup
 
 /**
  * Setup step 2 of 4: choose and name every location the fund starts with.
- * Seeded with one cash and one bank row (#78's resolution) - both editable
- * and removable down to a floor of one, and a row can be added. Submitting
- * fires no request of its own (#230) - it only advances to step 3, where the
- * opening balance for each of these rows is collected before the wizard's
- * one POST /api/setup fires with everything at once. Rows are keyed by their
- * own `clientId`, never by array index, so removing an earlier row here
- * cannot shift which row's opening balance a later step is editing.
+ * Seeded with one cash and one bank row - both editable and removable down to
+ * a floor of one, and a row can be added. Submitting fires no request; it
+ * advances to step 3, where each row's opening balance is collected before the
+ * wizard's one POST /api/setup fires with everything. Rows are keyed by
+ * `clientId`, never by array index, so removing an earlier row cannot shift
+ * which row's opening balance a later step is editing.
  */
 export default function Locations({
   rows,

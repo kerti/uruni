@@ -14,7 +14,7 @@ import type { Member } from '@/lib/setup'
 const text = copy.history.transactions
 
 /** Radix's Select refuses an empty-string item value, so "Semua" needs a
- * sentinel no id can collide with (OptionalMemberPicker's own trick). */
+ * sentinel no id can collide with (as OptionalMemberPicker). */
 const ALL = '__all__'
 
 function FilterSelect({
@@ -50,11 +50,11 @@ function FilterSelect({
 }
 
 /**
- * Where she picks Transaksi's filters (#424). Edits a draft and applies it
- * only on "Tampilkan", so a half-chosen set never fires a request per
- * field. Every purpose is offered, a closed envelope's too - this list is
- * that envelope's record (ADR-032) - and every member, an inactive one too,
- * since their rows are still history.
+ * Where she picks Transaksi's filters. Edits a draft and applies it only on
+ * "Tampilkan", so a half-chosen set never fires a request per field. Every
+ * purpose is offered, a closed envelope's too - this list is that envelope's
+ * record (ADR-032) - and every member, an inactive one too, since their rows
+ * are still history.
  */
 export default function TransactionFilterDialog({
   open,

@@ -5,15 +5,14 @@ import { formatPeriod } from '../src/lib/dates'
 import { formatIDR } from '../src/lib/money'
 import { expect, logIn, test } from './fixtures'
 
-// M8.8 (#439): dues past the one multi-month payment dues.spec.ts walks.
-// Paying a month ahead, paying part of a month, the belum-bayar filter, a
-// backdated join date that carries arrears onto the roster, and golongan and
-// tarif in Pengaturan.
+// Dues past the one multi-month payment dues.spec.ts walks: paying a month
+// ahead, paying part of a month, the belum-bayar filter, a backdated join date
+// that carries arrears onto the roster, and golongan and tarif in Pengaturan.
 //
 // Three members join this month on the fixture's Reguler tier (Rp 50.000),
-// added over the API so each owes exactly the current month and nothing
-// before it: what this file shows about them is then down to what it does.
-// Serial, one story on the seeded fixture.
+// added over the API so each owes exactly the current month and nothing before
+// it: what this file shows about them is then down to what it does. Serial,
+// one story on the seeded fixture.
 
 const rate = 50_000
 const part = 20_000
@@ -58,8 +57,8 @@ async function pay(page: Page, member: string, periods: { period: string; amount
   }
   for (const { period, amount } of periods) {
     await page.getByRole('checkbox', { name: formatPeriod(period) }).check()
-    // Emptied first: the field shows the formatted rate when blurred, and a
-    // fill straight over it concatenates (see dues.spec.ts).
+    // Emptied first: the field shows the formatted rate when blurred, and a fill
+    // straight over it concatenates (see dues.spec.ts).
     const field = page.getByLabel(copy.dues.payment.amountLabel(formatPeriod(period)))
     await field.fill('')
     await field.fill(String(amount))
@@ -100,8 +99,8 @@ test.describe('dues in depth', () => {
       1,
     )
 
-    // Paid ahead with a known end (#357): the badge is a plain "Lunas" and
-    // the month it is paid through has a line of its own.
+    // Paid ahead with a known end: the badge is a plain "Lunas" and the month it
+    // is paid through has a line of its own.
     const card = statusCard(page, 'Warga Muka')
     await expect(card).toContainText(copy.dues.statuses.paid)
     await expect(card).toContainText(copy.dues.paidThrough(formatPeriod(jakartaMonth(1))))
@@ -145,8 +144,8 @@ test.describe('dues in depth', () => {
     await expect(card).toBeVisible()
     await expect(card).not.toContainText(/Tunggakan/)
 
-    // Mulai ikut moves back three months, through the calendar's own month
-    // and year dropdowns, to the first of that month.
+    // Mulai ikut moves back three months, through the calendar's month and year
+    // dropdowns, to the first of that month.
     const joined = jakartaMonth(-3)
     const [year, month] = joined.split('-').map(Number)
     await card.click()
@@ -175,8 +174,8 @@ test.describe('dues in depth', () => {
     await addDialog.getByRole('button', { name: text.add }).click()
     await expect(addDialog).toBeHidden()
 
-    // A new tier has no rate yet; its own screen adds one from a month (the
-    // form's default, this month).
+    // A new tier has no rate yet; its screen adds one from a month (the form's
+    // default, this month).
     const tierCard = page.getByRole('button', { name: text.cardAria('Madya') })
     await expect(tierCard).toContainText(text.noRates)
     await tierCard.click()
@@ -189,9 +188,9 @@ test.describe('dues in depth', () => {
       .filter({ hasText: text.effectiveFrom(formatPeriod(jakartaMonth())) })
     await expect(rateRow).toContainText(formatIDR(75_000))
 
-    // Perbaiki nominal: the amount changes, the month never does. While it
-    // is open the row is an editor without its "Mulai" line, so the editor
-    // is found by its own field.
+    // Perbaiki nominal: the amount changes, the month never does. While open the
+    // row is an editor without its "Mulai" line, so the editor is found by its
+    // own field.
     const editor = page
       .getByRole('main')
       .getByRole('listitem')

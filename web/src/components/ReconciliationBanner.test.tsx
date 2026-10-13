@@ -27,10 +27,9 @@ describe('ReconciliationBanner', () => {
     expect(screen.getByText(copy.reconciliation.matched)).toBeInTheDocument()
   })
 
-  // The whole reason this prop exists: a fund nobody ever counted also has
-  // no open lines, and painting that green would tell the treasurer her cash
-  // matches her records - something Uruni has never checked and cannot know
-  // until the reconcile flow (M6.10) asks her what she actually counted.
+  // A fund nobody ever counted also has no open lines, and painting that green
+  // would tell the treasurer her cash matches her records - which Uruni has
+  // never checked until the reconcile flow asks what she counted.
   it('renders the neutral first-run state when no count has ever been taken', () => {
     render(<ReconciliationBanner openLines={[]} everReconciled={false} />)
 
@@ -45,17 +44,16 @@ describe('ReconciliationBanner', () => {
     ]
     render(<ReconciliationBanner openLines={openLines} everReconciled />)
 
-    // 15_000 + 5_000 = 20_000, plain integer addition - no float anywhere
-    // near a rupiah figure. The U+00A0 formatIDR puts after "Rp" is
-    // collapsed to a regular space here because getByText normalizes the
-    // DOM text it searches but never the string matcher itself.
+    // 15_000 + 5_000 = 20_000, plain integer addition. The U+00A0 formatIDR
+    // puts after "Rp" is collapsed to a space because getByText normalizes the
+    // DOM text but never the string matcher.
     const expected = copy.reconciliation.discrepancy(formatIDR(20_000)).replace(/\u00a0/g, ' ')
     expect(screen.getByText(expected)).toBeInTheDocument()
     expect(screen.queryByText(copy.reconciliation.matched)).not.toBeInTheDocument()
   })
 
-  // #498: an entry that closed only part of the gap leaves the line open for
-  // the REMAINDER. The 30_000 found at the count must not reach the sentence.
+  // An entry that closed only part of the gap leaves the line open for the
+  // REMAINDER. The 30_000 found at the count must not reach the sentence.
   it('reads the remainder of a partly closed line, not the difference that was found', () => {
     const partial = line({ difference_amount: 30_000, remainder_amount: 10_000, resolution: 'entry_added', adjustment_transaction_id: 7 })
     render(<ReconciliationBanner openLines={[partial]} everReconciled />)
@@ -67,9 +65,9 @@ describe('ReconciliationBanner', () => {
 
   it('sums by magnitude, so a short location and an over one never cancel out', () => {
     // difference_amount is signed (actual - recorded): -20_000 is a location
-    // holding less than the ledger says, +20_000 one holding more. Summing
-    // the raw values would render "selisih Rp 0" with two gaps still open,
-    // and would never render "cocok"'s green - the worst of both.
+    // holding less than the ledger says, +20_000 one holding more. Summing the
+    // raw values would render "selisih Rp 0" with two gaps still open, and
+    // never "cocok"'s green - the worst of both.
     const openLines = [
       line({ id: 1, difference_amount: -20_000, remainder_amount: -20_000 }),
       line({ id: 2, difference_amount: 20_000, remainder_amount: 20_000 }),
@@ -88,8 +86,8 @@ describe('ReconciliationBanner', () => {
   })
 
   // The colour is half the message: green is earned by a count, terracotta
-  // marks a normal gap, and alarm red never appears (CLAUDE.md rule 9). Pin
-  // the token classes beside the text so a restyle can't swap them silently.
+  // marks a normal gap, alarm red never appears (CLAUDE.md rule 9). Pin the
+  // token classes so a restyle can't swap them silently.
   describe('colour', () => {
     function panel(text: string) {
       return screen.getByText(text).closest('p')

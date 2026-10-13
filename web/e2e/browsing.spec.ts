@@ -3,15 +3,14 @@ import type { APIRequestContext, Page } from '@playwright/test'
 import { copy } from '../src/copy/id'
 import { expect, logIn, test } from './fixtures'
 
-// M8.7 (#438): finding things again. Riwayat's four tabs (search, the
-// Transaksi filter dialog and its chips, paging), the roster (search, paging,
-// the arrears badge, edit, retire, reinstate) and the locations in Pengaturan
-// (edit, retire, reinstate).
+// Finding things again. Riwayat's four tabs (search, the Transaksi filter
+// dialog and its chips, paging), the roster (search, paging, the arrears
+// badge, edit, retire, reinstate) and the locations in Pengaturan (edit,
+// retire, reinstate).
 //
-// Every list pages at 25 rows (the server's *PageSize constants), so the
-// rows are seeded over the API rather than typed in - this spec is about
-// browsing them, and the forms that write them have journeys of their own.
-// Serial, one story on the seeded fixture: the edits come last, after
+// Every list pages at 25 rows (the server's *PageSize constants), so the rows
+// are seeded over the API rather than typed in - this spec is about browsing
+// them. Serial, one story on the seeded fixture: the edits come last, after
 // everything that searches by the seeded names.
 
 const PAGE = 25
@@ -247,9 +246,9 @@ test.describe('browsing Riwayat, the roster and the locations', () => {
     await search.fill('tidak ada yang begini')
     await expect(page.getByText(text.noResults('tidak ada yang begini'))).toBeVisible()
 
-    // Warga Dua paid one month since 2024-01, so the card carries arrears.
-    // The search stays on for the edits below: unfiltered, Warga Dua sorts
-    // after the 25 seeded members, onto the second page.
+    // Warga Dua paid one month since 2024-01, so the card carries arrears. The
+    // search stays on for the edits below: unfiltered, Warga Dua sorts after the
+    // 25 seeded members, onto the second page.
     await search.fill('Warga Dua')
     const card = page.getByRole('button', { name: text.editAria('Warga Dua') })
     await expect(card).toBeVisible()

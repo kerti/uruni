@@ -130,12 +130,10 @@ describe('RestoreDialog', () => {
     expect(fetchMock).not.toHaveBeenCalledWith('/api/restore/confirm', expect.anything())
   })
 
-  // #326: the Cadangan card's per-row "pulihkan" control skips the file
-  // picker entirely and reaches this same dialog through its ref handle -
-  // everything past the inspect call (the preview, the password field, the
-  // confirm button above) is the identical markup the file-picked cases
-  // above already cover, so this test only needs to prove the entry point
-  // itself reaches the right server route.
+  // The Cadangan card's per-row "pulihkan" control skips the file picker and
+  // reaches this dialog through its ref handle - everything past the inspect
+  // call is the markup the file-picked cases cover, so this proves only that
+  // the entry point reaches the right server route.
   it('opens the confirm dialog with the preview when started from a stored backup, via the ref handle', async () => {
     const fetchMock = stubFetch({})
     const ref = createRef<RestoreDialogHandle>()

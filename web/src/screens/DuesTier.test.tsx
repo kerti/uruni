@@ -69,7 +69,7 @@ describe('A golongan screen', () => {
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
   })
 
-  // #285: the whole reason this is a screen. No dialog anywhere on it.
+  // The whole reason this is a screen: no dialog anywhere on it.
   it('holds no dialog at all', async () => {
     const { fetchMock } = stubTier([tier(1, 'Pelaksana')], [rate(1, 1, 50_000, '2026-01')])
     vi.stubGlobal('fetch', fetchMock)
@@ -78,8 +78,8 @@ describe('A golongan screen', () => {
 
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
 
-    // Including while a rate is being corrected - the old shape put a
-    // second save/cancel pair inside a dialog that already had a footer.
+    // Including while a rate is being corrected - a dialog shape put a second
+    // save/cancel pair inside a dialog that already had a footer.
     await userEvent.click(screen.getByRole('button', { name: text.editRate }))
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
     // One save per thing being saved, each naming what it saves.

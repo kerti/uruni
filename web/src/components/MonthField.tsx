@@ -9,19 +9,19 @@ import { cn } from '@/lib/utils'
 
 const text = copy.dateField
 
-// "Jan", "Feb", ... "Agu", "Des" - id-ID's own short month names, so the
-// grid needs no copy strings of its own.
+// "Jan", "Feb", ... "Agu", "Des" - id-ID's short month names, so the grid
+// needs no copy strings.
 const shortMonth = new Intl.DateTimeFormat('id-ID', { month: 'short' })
 const MONTH_LABELS = Array.from({ length: 12 }, (_, i) => shortMonth.format(new Date(2000, i, 1)))
 
 /**
- * A month field for the two places that take a month, not a day (#197): a
- * rate's start month and the dues status period. A day grid would ask for a
- * day that means nothing there, so this opens a year with a 4x3 grid of
- * months instead - the shape Balances' MonthPickerPopover settled on, in the
- * same trigger and popover as DateField so the two read as one family.
+ * A month field for the two places that take a month, not a day: a rate's
+ * start month and the dues status period. A day grid would ask for a day that
+ * means nothing there, so this opens a year with a 4x3 grid of months - the
+ * shape Balances' MonthPickerPopover settled on, in the same trigger and
+ * popover as DateField.
  *
- * `value` and `onChange` speak "YYYY-MM", the wire format, exactly as
+ * `value` and `onChange` speak "YYYY-MM", the wire format, as
  * `<input type="month">` did. `bounds` ("YYYY-MM" both ends, inclusive)
  * disables the months outside it and stops the year arrows at its years.
  */
@@ -37,7 +37,7 @@ export default function MonthField({
   value: string
   onChange: (period: string) => void
   bounds: DateBounds
-  /** What an empty field says - Riwayat's filter (#424) reads "Semua". */
+  /** What an empty field says - Riwayat's filter reads "Semua". */
   emptyLabel?: string
   disabled?: boolean
 }) {

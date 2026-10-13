@@ -5,11 +5,11 @@ import { copy } from '@/copy/id'
 import { formatPeriod, parseIsoDate } from '@/lib/dates'
 
 /**
- * Drives DateField (#197) the way she does: open it by its label, choose the
- * month and year from the calendar's own header lists, tap the day. The
- * day is found by its accessible name, which react-day-picker writes out in
- * full in the locale ("Kamis, 1 Oktober 2026"), so the match is on the day,
- * month and year rather than a bare "1" that appears in every month.
+ * Drives DateField the way she does: open it by its label, choose the month
+ * and year from the calendar's header lists, tap the day. The day is found by
+ * its accessible name, which react-day-picker writes out in full in the
+ * locale ("Kamis, 1 Oktober 2026"), so the match is on day, month and year
+ * rather than a bare "1" that appears in every month.
  */
 export async function pickDate(label: string, iso: string): Promise<void> {
   const date = parseIsoDate(iso)
@@ -24,8 +24,8 @@ export async function pickDate(label: string, iso: string): Promise<void> {
   await userEvent.click(within(dialog).getByRole('button', { name: dayName }))
 }
 
-/** Drives MonthField (#197): open it by its label, step the year arrows to
- * the right year, tap the month. */
+/** Drives MonthField: open it by its label, step the year arrows to the right
+ * year, tap the month. */
 export async function pickMonth(label: string, period: string): Promise<void> {
   await userEvent.click(screen.getByLabelText(label))
   const dialog = await screen.findByRole('dialog')

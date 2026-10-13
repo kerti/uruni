@@ -1,11 +1,11 @@
 @import 'tailwindcss';
 
-/* Plus Jakarta Sans, latin and latin-ext only. The package's own stylesheet
-   also declares vietnamese and cyrillic-ext; a browser never fetches those
-   for Indonesian, but the service worker precaches every built woff2, so each
+/* Plus Jakarta Sans, latin and latin-ext only. The package's stylesheet also
+   declares vietnamese and cyrillic-ext; a browser never fetches those for
+   Indonesian, but the service worker precaches every built woff2, so each
    install downloaded them anyway. latin covers the copy; latin-ext stays for
    member names the treasurer types, so an accented letter does not drop to a
-   fallback font mid-name. The ranges are the package's own. */
+   fallback font mid-name. The ranges are the package's. */
 @font-face {
   font-family: 'Plus Jakarta Sans Variable';
   font-style: normal;
@@ -30,8 +30,8 @@
     U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
 }
 
-/* Dark mode is deferred (Design-System.md), so the `dark:` variant is bound to a
-   `.dark` ancestor that nothing sets - rather than Tailwind's default
+/* Dark mode is deferred (Design-System.md), so the `dark:` variant is bound to
+   a `.dark` ancestor that nothing sets - rather than Tailwind's default
    prefers-color-scheme, which would fire shadcn's dark: utilities against the
    light palette on an OS in dark mode. */
 @custom-variant dark (&:is(.dark *));
@@ -73,35 +73,34 @@
   --radius-2xl: calc(var(--radius) * 1.8);
 
   --shadow-sm: 0 1px 2px rgb(34 50 58 / 0.06);
-  /* Two layers since #356: a tight contact shadow and a soft ambient one.
-     The single 6% layer it replaced did not read on a phone. */
+  /* Two layers: a tight contact shadow and a soft ambient one. A single 6%
+       layer did not read on a phone. */
   --shadow-card: 0 1px 2px rgb(34 50 58 / 0.06), 0 4px 12px rgb(34 50 58 / 0.08);
   /* Filled buttons: a thin white highlight along the top edge (the glass
-     finish's rim, scaled down) over a small lift. Pressed, a button drops
-     to --shadow-sm. */
+       finish's rim, scaled down) over a small lift. Pressed, a button drops to
+       --shadow-sm. */
   --shadow-button: inset 0 1px 0 rgb(255 255 255 / 0.2), 0 1px 2px rgb(34 50 58 / 0.12), 0 2px 6px rgb(34 50 58 / 0.08);
-  /* The segmented control (#356): the track is a shallow well, and the
-     active option rises out of it with a top highlight and a bottom inner
-     shade. Inset only - the flush track clips anything drawn outside. */
+  /* The segmented control: the track is a shallow well, and the active option
+       rises out of it with a top highlight and a bottom inner shade. Inset only
+       - the flush track clips anything drawn outside. */
   --shadow-well: inset 0 1px 3px rgb(34 50 58 / 0.1);
   --shadow-segment: inset 0 1px 0 rgb(255 255 255 / 0.28), inset 0 -2px 4px rgb(0 0 0 / 0.2);
   --shadow-floating: 0 8px 24px rgb(34 50 58 / 0.1);
-  /* The fixed bottom nav's own lift: card-strength, cast upward, so rows
-     scrolling under the bar read as passing beneath it rather than meeting
-     a cream strip of the same colour as the page. */
+  /* The fixed bottom nav's lift: card-strength, cast upward, so rows
+       scrolling under the bar read as passing beneath it rather than meeting a
+       cream strip the colour of the page. */
   --shadow-bar: 0 -4px 16px rgb(34 50 58 / 0.08);
-  /* Catat's circle: the one control that sits on top of the bar, so it
-     needs more lift than any token above. floating at 10% was invisible on
-     an iPhone - most of it hides behind the dark circle. Two layers instead:
-     a tight contact shadow and a soft ambient one, still neutral ink, never
-     a coloured glow. */
+  /* Catat's circle: the one control that sits on top of the bar, so it needs
+       more lift than any token above. floating at 10% was invisible on an
+       iPhone - most of it hides behind the dark circle. Two layers instead: a
+       tight contact shadow and a soft ambient one, neutral ink, never a
+       coloured glow. */
   --shadow-fab: 0 3px 6px rgb(34 50 58 / 0.22), 0 10px 24px rgb(34 50 58 / 0.24);
 
   /* Design-System.md's motion rule - "calm and quick: 150-250ms ease-out,
-     nothing bouncy". One shared reveal for anything that appears in place
-     (the dues history panel today), so a second one is never invented with
-     its own timing. Opacity and transform only: both are composited, which
-     is what keeps it smooth on a phone rather than repainting each frame. */
+       nothing bouncy". One shared reveal for anything that appears in place, so
+       a second is never invented with its own timing. Opacity and transform
+       only: both are composited, which keeps it smooth on a phone. */
   --animate-reveal: reveal 180ms ease-out;
 
   @keyframes reveal {
@@ -115,11 +114,11 @@
     }
   }
 
-  /* The dialog primitive (M6.28): a quick fade with a slight zoom, the same
-     motion Balances' dialog gets from tw-animate-css, without the
-     dependency. Opacity and scale only, so both are GPU-composited. `scale`
-     is its own property, so it composes with the `translate` Tailwind uses
-     to centre the dialog instead of overwriting it. */
+  /* The dialog primitive: a quick fade with a slight zoom, the motion
+       Balances' dialog gets from tw-animate-css, without the dependency.
+       Opacity and scale only, so both are GPU-composited. `scale` is its own
+       property, so it composes with the `translate` Tailwind uses to centre the
+       dialog instead of overwriting it. */
   --animate-dialog-in: dialog-in 100ms ease-out;
   --animate-dialog-out: dialog-out 100ms ease-in;
   --animate-overlay-in: overlay-in 100ms ease-out;
@@ -188,8 +187,8 @@
   --muted: #eeebe3;
   --muted-foreground: #5e6b71; /* 4.62:1 on --muted, 5.0:1 on the page (#508) */
   --border: #e4e0d7;
-  /* A step darker than --border (#356): a field is something to type into,
-     and at the hairline's shade its edge all but vanished on the cream. */
+  /* A step darker than the --border hairline: a field is something to type into,
+       and at the hairline's shade its edge all but vanished on the cream. */
   --input: #998a6c; /* 3.08:1 on the page, 3.38:1 on a card: AA non-text (#508) */
   --ring: #2f6f60;
 
@@ -197,15 +196,15 @@
   --success-soft: #e3f1e9;
   --attention: #c96c4a;
   --attention-soft: #f6e6dd;
-  /* Text-only terracotta (#508): --attention reads 3.02:1 on attention-soft
-     and 3.34:1 on the page, under AA's 4.5:1 for text. This is the same hue,
-     darkened just past 4.5:1 on both; --attention stays for icons and fills. */
+  /* Text-only terracotta: --attention reads 3.02:1 on attention-soft and
+       3.34:1 on the page, under AA's 4.5:1 for text. The same hue, darkened just
+       past 4.5:1 on both; --attention stays for icons and fills. */
   --attention-text: #a55031;
   --destructive: #b4453c;
   --destructive-foreground: #ffffff;
 
-  /* 8px (#319): 14px made cards ~25px and buttons ~20px round, which read as
-     soft-to-bubbly on a phone. Every rounded-* scales from this one token. */
+  /* 8px: 14px made cards ~25px and buttons ~20px round, which read as
+       soft-to-bubbly on a phone. Every rounded-* scales from this one token. */
   --radius: 0.5rem;
 }
 
@@ -224,8 +223,7 @@
     font-variant-numeric: tabular-nums;
   }
   /* Design-System.md: "respect prefers-reduced-motion". One rule for the
-     whole app rather than a motion-reduce: variant remembered per call
-     site. */
+       whole app rather than a motion-reduce: variant remembered per call site. */
   @media (prefers-reduced-motion: reduce) {
     *:not(.animate-spin),
     *::before,
@@ -241,12 +239,12 @@
    sit above the page: Catat's circle and Beranda's balance hero. They keep
    their solid fill (see-through glass would wash out the action colour and
    the white figures on it) and borrow only the light-play, all ink and
-   white, no new colour: a sheen fading down from the top, a soft inner glow
-   under the top edge, a faint inner shade at the bottom, and glass-rim's
-   edge. Two utilities rather than one because the glow and shade are sized
-   to the surface - a 56px circle and a full-width block need different
-   depths - and the lift differs too: --shadow-fab for Catat, which floats
-   over the bar, a card-sized lift for the hero, which sits on the page. */
+   white: a sheen fading down from the top, a soft inner glow under the top
+   edge, a faint inner shade at the bottom, and glass-rim's edge. Two
+   utilities because the glow and shade are sized to the surface - a 56px
+   circle and a full-width block need different depths - and the lift
+   differs: --shadow-fab for Catat, which floats over the bar, a card-sized
+   lift for the hero, which sits on the page. */
 @utility fab-glass {
   background-image: linear-gradient(180deg, rgb(255 255 255 / 0.16) 0%, rgb(255 255 255 / 0) 55%);
   box-shadow:
@@ -264,9 +262,9 @@
     0 10px 24px rgb(34 50 58 / 0.14);
 }
 
-/* The rim both solid-glass surfaces share: bright at the top, nearly gone
-   at the sides, faintly back at the bottom, like light catching an edge. A
-   1px gradient ring masked out of a ::before, since a border cannot take a
+/* The rim both solid-glass surfaces share: bright at the top, nearly gone at
+   the sides, faintly back at the bottom, like light catching an edge. A 1px
+   gradient ring masked out of a ::before, since a border cannot take a
    gradient and keep the radius. The element must be positioned. */
 @utility glass-rim {
   &::before {
@@ -287,13 +285,13 @@
   }
 }
 
-/* The two bars' glass, the same light-play as fab-glass on a wide
-   translucent surface: more see-through than the page (60%) with a strong
-   blur and a little saturation, so rows passing beneath tint the bar
-   instead of vanishing, and a bright 1px line just inside the hairline
-   border on the edge that faces the content, with a soft glow falling from
-   it. Each casts its lift toward the content too: up for the bottom nav
-   (--shadow-bar), down for the sticky header. */
+/* The two bars' glass, the same light-play as fab-glass on a wide translucent
+   surface: more see-through than the page (60%) with a strong blur and a
+   little saturation, so rows passing beneath tint the bar instead of
+   vanishing, and a bright 1px line just inside the hairline border on the
+   edge that faces the content, with a soft glow falling from it. Each casts
+   its lift toward the content: up for the bottom nav (--shadow-bar), down for
+   the sticky header. */
 @utility bar-glass {
   background-color: color-mix(in srgb, var(--background) 60%, transparent);
   -webkit-backdrop-filter: blur(20px) saturate(1.6);

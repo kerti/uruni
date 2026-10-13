@@ -28,12 +28,12 @@ interface SettleData {
 
 /**
  * Settle a Talangan claim, on its own screen at `/reimbursements/settle?id=`
- * (#368, ADR-032). The amount and purpose come from the claim itself; she
- * picks only which account pays and when.
+ * (ADR-032). The amount and purpose come from the claim; she picks only which
+ * account pays and when.
  *
- * A claim that is unknown, already settled or waived has nothing to settle,
- * so the screen goes back to the tab (replace) - a stale bookmark, or a
- * claim settled from another device.
+ * A claim that is unknown, already settled or waived has nothing to settle, so
+ * the screen goes back to the tab (replace) - a stale bookmark, or a claim
+ * settled from another device.
  */
 export default function Settle({ claimId, onDone, onCancel }: { claimId: number; onDone: () => void; onCancel: () => void }) {
   const [dataState, dataRun] = useApi<SettleData>()
@@ -71,7 +71,7 @@ export default function Settle({ claimId, onDone, onCancel }: { claimId: number;
         await settleReimbursement(claimId, { account_id: accountId, occurred_on: occurredOn })
         onDone()
       } catch (err) {
-        // #507: a lost response may still have saved; re-read the claim before she can retry.
+        // A lost response may still have saved; re-read the claim before she can retry.
         await settleUncertainWrite(err, () => load(true))
         const apiErr = err instanceof ApiError ? err : new ApiError('unknown_error', err instanceof Error ? err.message : String(err))
         setError(errorText(apiErr))

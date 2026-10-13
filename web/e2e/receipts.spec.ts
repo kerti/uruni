@@ -5,18 +5,14 @@ import type { Locator, Page } from '@playwright/test'
 import { copy } from '../src/copy/id'
 import { expect, test, logIn } from './fixtures'
 
-// M6.21/#154's own e2e spec: an at-record-time photo attach against the
-// real backend (M6.20) - the multipart upload itself, and the row it
-// attaches to, are the one thing the vitest suite (RecordTransaction.test.tsx,
-// stubbed fetch) cannot prove end to end.
+// An at-record-time photo attach against the real backend: the multipart
+// upload, and the row it attaches to, are what the vitest suite
+// (RecordTransaction.test.tsx, stubbed fetch) cannot prove end to end.
 //
-// A minimal, valid 1x1 JPEG, inlined rather than a fixture file on disk -
-// playwright's setInputFiles takes a buffer directly, and this is the
-// smallest input the server's own processReceiptImage (internal/http) will
-// still decode and re-encode as a real photo.
-// An 8x8 JPEG written by Go's own image/jpeg encoder, so the server's
-// decoder is guaranteed to accept it (a hand-made 1x1 one was rejected as
-// unsupported_media_type).
+// An 8x8 JPEG written by Go's image/jpeg encoder, inlined rather than a fixture
+// file (setInputFiles takes a buffer), so the server's decoder
+// (processReceiptImage) is guaranteed to accept it - a hand-made 1x1 one was
+// rejected as unsupported_media_type.
 const TINY_JPEG = Buffer.from(
   '/9j/2wCEAAYEBQYFBAYGBQYHBwYIChAKCgkJChQODwwQFxQYGBcUFhYaHSUfGhsjHBYWICwgIyYnKSopGR8tMC0oMCUoKSgBBwcHCggKEwoKEygaFhooKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKP/AABEIAAgACAMBIgACEQEDEQH/xAGiAAABBQEBAQEBAQAAAAAAAAAAAQIDBAUGBwgJCgsQAAIBAwMCBAMFBQQEAAABfQECAwAEEQUSITFBBhNRYQcicRQygZGhCCNCscEVUtHwJDNicoIJChYXGBkaJSYnKCkqNDU2Nzg5OkNERUZHSElKU1RVVldYWVpjZGVmZ2hpanN0dXZ3eHl6g4SFhoeIiYqSk5SVlpeYmZqio6Slpqeoqaqys7S1tre4ubrCw8TFxsfIycrS09TV1tfY2drh4uPk5ebn6Onq8fLz9PX29/j5+gEAAwEBAQEBAQEBAQAAAAAAAAECAwQFBgcICQoLEQACAQIEBAMEBwUEBAABAncAAQIDEQQFITEGEkFRB2FxEyIygQgUQpGhscEJIzNS8BVictEKFiQ04SXxFxgZGiYnKCkqNTY3ODk6Q0RFRkdISUpTVFVWV1hZWmNkZWZnaGlqc3R1dnd4eXqCg4SFhoeIiYqSk5SVlpeYmZqio6Slpqeoqaqys7S1tre4ubrCw8TFxsfIycrS09TV1tfY2dri4+Tl5ufo6ery8/T19vf4+fr/2gAMAwEAAhEDEQA/APNqKKK1PnT/2Q==',
   'base64',
@@ -48,9 +44,9 @@ test.describe('receipt photos', () => {
     await page.getByRole('button', { name: copy.record.directionOut }).click()
     await page.getByLabel(copy.record.amountLabel).fill('12000')
 
-    // The optional photo field (#154) - a hidden <input type="file"> named
-    // "Tambah foto nota" by aria-label. Row buttons share that name, so
-    // the match is narrowed to the file input itself.
+    // The optional photo field - a hidden <input type="file"> named "Tambah foto
+    // nota" by aria-label. Row buttons share that name, so the match is narrowed
+    // to the file input.
     await page.getByLabel(copy.receipts.addFromRow).and(page.locator('input[type="file"]')).setInputFiles({
       name: 'nota.jpg',
       mimeType: 'image/jpeg',
@@ -60,29 +56,26 @@ test.describe('receipt photos', () => {
 
     await page.getByRole('button', { name: copy.record.submit }).click()
 
-    // The ordinary success line, not the "belum terunggah" one: the upload
-    // itself must have succeeded against the real backend for this message
-    // to be the one that renders (App.tsx only shows it when photoFailed is
-    // false).
+    // The ordinary success line, not the "belum terunggah" one: the upload must
+    // have succeeded against the real backend for this message to render
+    // (App.tsx shows it only when photoFailed is false).
     await expect(page.getByText(copy.home.balanceHeading)).toBeVisible()
     await expect(page.getByText(copy.record.successOut)).toBeVisible()
     await expect(page.getByText(copy.receipts.transactionPhotoFailed)).not.toBeVisible()
-    // The photo landed in this instance's own uploads directory, never the dev
-    // one the binary would default to.
+    // The photo landed in this instance's uploads directory, never the dev one
+    // the binary would default to.
     expect(readdirSync(instance.paths.uploadsDir, { recursive: true }).length).toBeGreaterThan(0)
 
     // The row now carries a photo - Riwayat's Transaksi tab is where an
-    // after-the-fact viewer lives, and this is the same row this test just
-    // posted (Rp 12.000, freshly recorded, so the newest row in the list).
+    // after-the-fact viewer lives, and this is the row just posted (Rp 12.000,
+    // the newest in the list).
     await page.getByRole('link', { name: copy.shell.nav.history }).click()
     await expect(page.getByRole('button', { name: copy.receipts.viewReceipt }).first()).toBeVisible()
 
     // Opens the dialog and shows a real photo read back from GET
-    // /api/receipts/{id} - proving the round trip, not only the upload.
-    // Ganti foto/Hapus foto now live behind the per-photo "more" menu on
-    // the photo itself (#154 follow-up), not a button row under it, so
-    // opening that menu is what proves the photo - and its actions -
-    // are really there.
+    // /api/receipts/{id} - proving the round trip, not only the upload. Ganti
+    // foto/Hapus foto live behind the per-photo "more" menu, so opening it
+    // proves the photo and its actions are there.
     await page.getByRole('button', { name: copy.receipts.viewReceipt }).first().click()
     const dialog = page.getByRole('dialog')
     await dialog.getByRole('button', { name: copy.receipts.photoMenuAria }).click()
@@ -95,9 +88,8 @@ test.describe('receipt photos', () => {
     await expect(page.getByRole('button', { name: copy.common.close }).last()).toBeVisible()
   })
 
-  // M8.6 (#437): the photo on a posted row can be replaced and deleted -
-  // the row itself is immutable, the photo is not. Continues from the row
-  // the test above posted with its photo.
+  // The photo on a posted row can be replaced and deleted - the row is
+  // immutable, the photo is not. Continues from the row the test above posted.
   test('replaces the photo on a posted row, then deletes it', async ({ page, instance }) => {
     await logIn(page)
     await page.goto('/history')
@@ -108,11 +100,11 @@ test.describe('receipt photos', () => {
     await expect(photo).toHaveCount(1)
     const before = await photo.getAttribute('src')
 
-    // Ganti foto: a replace is a delete then a fresh upload, so the photo
-    // comes back under a new id - and the row still has exactly one.
+    // Ganti foto: a replace is a delete then a fresh upload, so the photo comes
+    // back under a new id - and the row still has exactly one.
     await choosePhotoAction(page, dialog, copy.receipts.change)
-    // The replace form takes the add picker's place - wait for it, or the
-    // file lands in the add picker that is still on screen.
+    // The replace form takes the add picker's place - wait for it, or the file
+    // lands in the add picker still on screen.
     const replace = dialog.getByRole('button', { name: copy.receipts.change })
     await expect(replace).toBeVisible()
     await expect(dialog.locator('input[type="file"]')).toHaveCount(1)

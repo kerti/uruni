@@ -28,15 +28,15 @@ import { doneText, errorText, todayISODate, type TalanganState } from '@/screens
 const text = copy.reimbursements
 const searchText = copy.history.reimbursements
 
-/** Long enough that a word typed at normal speed is one request, short
- * enough that the list follows her without a visible pause - same value as
- * History/Transactions.tsx's own debounce. */
+/** Long enough that a word typed at normal speed is one request, short enough
+ * that the list follows her without a visible pause - the value of
+ * History/Transactions.tsx's debounce. */
 const SEARCH_DEBOUNCE_MS = 300
 
 /**
- * One speaking-string feedback for a finished action: a success, or a
- * failure with a reason. Stale either way is worse than none, so every
- * action starts by clearing it.
+ * One speaking-string feedback for a finished action: a success, or a failure
+ * with a reason. Stale either way is worse than none, so every action starts
+ * by clearing it.
  */
 type Feedback = { kind: 'success' | 'error'; text: string }
 
@@ -46,26 +46,25 @@ interface FormData {
 }
 
 /**
- * Riwayat's Talangan tab (M6.18, moved under Riwayat and made paged and
- * searchable by #226, ADR-032): the list of claims a member fronted, with
- * waive ("putihkan"), un-waive and delete in place. The money forms - record
- * a claim, settle it, correct it - are screens of their own (#368, ADR-032:
- * a form is a route, never an inline expander); this tab only navigates to
- * them and shows the confirmation they hand back through router state.
+ * Riwayat's Talangan tab (paged and searchable, ADR-032): the list of claims
+ * a member fronted, with waive ("putihkan"), un-waive and delete in place. The
+ * money forms - record a claim, settle it, correct it - are screens of their
+ * own (ADR-032: a form is a route, never an inline expander); this tab only
+ * navigates to them and shows the confirmation they hand back through router
+ * state.
  *
- * Two views: outstanding (default) vs all (`?show=all`). Both the view and
- * the search (?q=) live in the URL (ADR-032: list state is a route, never
- * component state), so back and reload land on the same list, the same
- * reasoning History/Transactions.tsx gives. Search covers member name and
- * note only (narrower than Transaksi's own surface).
+ * Two views: outstanding (default) vs all (`?show=all`). The view and the
+ * search (?q=) live in the URL (ADR-032: list state is a route), so back and
+ * reload land on the same list, as in History/Transactions.tsx. Search covers
+ * member name and note only (narrower than Transaksi's).
  *
- * No heading, no back button and no body copy of its own - Riwayat's own
- * `<h1>` already names the page, the tab strip is the way back to Transaksi
- * or Iuran, and Transactions.tsx (the in-tab precedent) carries none of the
- * three either.
+ * No heading, no back button and no body copy of its own - Riwayat's `<h1>`
+ * names the page, the tab strip is the way back to Transaksi or Iuran, and
+ * Transactions.tsx (the in-tab precedent) carries none of the three either.
  *
- * `refetchKey` is App.tsx's `useRefetchKey()` (location.key, minus dialog entries), the same mechanism the other
- * two tabs already use to pick up a write just made elsewhere.
+ * `refetchKey` is App.tsx's `useRefetchKey()` (location.key, minus dialog
+ * entries), the mechanism the other two tabs use to pick up a write made
+ * elsewhere.
  */
 export default function Reimbursements({ refetchKey }: { refetchKey?: unknown }) {
   const [searchParams, setSearchParams] = useSearchParams()
@@ -78,11 +77,10 @@ export default function Reimbursements({ refetchKey }: { refetchKey?: unknown })
   // value lands on the outstanding list rather than an error.
   const tab: 'outstanding' | 'all' = searchParams.get('show') === 'all' ? 'all' : 'outstanding'
   const [listState, listRun] = useApi<ReimbursementsPage>()
-  // Pages after the first, appended in order - reset whenever the first
-  // page is refetched (a tab switch, a search, a write, or refetchKey).
+  // Pages after the first, appended in order - reset whenever the first page
+  // is refetched (a tab switch, a search, a write, or refetchKey).
   // `generation` stops a slow "load more" from a stale tab/search from
-  // appending its rows to the new one, the same guard
-  // History/Transactions.tsx uses.
+  // appending its rows to the new one, as in History/Transactions.tsx.
   const [more, setMore] = useState<ReimbursementsPage | null>(null)
   const [moreLoading, setMoreLoading] = useState(false)
   const [moreError, setMoreError] = useState<ApiError | null>(null)
@@ -92,9 +90,9 @@ export default function Reimbursements({ refetchKey }: { refetchKey?: unknown })
   const [submitState, submitRun] = useApi<unknown>()
 
   const [deleteId, setDeleteId] = useState<number | null>(null)
-  // The claim id whose photo dialog is open (#154) - never a search param
-  // (unlike CorrectPurposeDialog's own `?edit=`): this tab already owns `q`
-  // and no other dialog here is a deep link, so component state is enough.
+  // The claim id whose photo dialog is open - not a search param (unlike
+  // CorrectPurposeDialog's `?edit=`): this tab owns `q` and no other dialog
+  // here is a deep link, so component state is enough.
   const [receiptsForId, setReceiptsForId] = useState<number | null>(null)
 
   // The confirmation a record/settle/correct screen handed back: read once,
@@ -122,8 +120,8 @@ export default function Reimbursements({ refetchKey }: { refetchKey?: unknown })
   }, [refetchFirstPage, refetchKey])
 
   // The URL changed under the field (back, forward, a link): follow it. A
-  // draft that already trims to the same search is left alone, so a
-  // trailing space she is still typing is not snatched away.
+  // draft that already trims to the same search is left alone, so a trailing
+  // space she is still typing is not snatched away.
   useEffect(() => {
     setDraft((current) => (current.trim() === q ? current : q))
   }, [q])
@@ -132,8 +130,8 @@ export default function Reimbursements({ refetchKey }: { refetchKey?: unknown })
     const next = draft.trim()
     if (next === q) return
     const timer = window.setTimeout(() => {
-      // Rewrites `q` alone, keeping `show` - setSearchParams replaces the
-      // whole query otherwise.
+      // Rewrites `q` alone, keeping `show` - setSearchParams otherwise replaces
+      // the whole query.
       setSearchParams(
         (current) => {
           const params = new URLSearchParams(current)
@@ -209,13 +207,13 @@ export default function Reimbursements({ refetchKey }: { refetchKey?: unknown })
   const submitting = submitState.status === 'loading'
 
   /**
-   * Every write on this tab - waive, un-waive, delete - follows the same shape: clear any stale feedback, run the call,
-   * then say what happened. A named 409 (already settled, already waived)
-   * reaches the treasurer through copy.reimbursements.errors; anything else
-   * falls back to the shared map, never the English wire message (ADR-014).
-   * The list reloads from the first page after both outcomes: on success it
-   * shows the new state, on a 409 the claim row unmounts with the message
-   * explaining why.
+   * Every write on this tab - waive, un-waive, delete - follows one shape:
+   * clear stale feedback, run the call, say what happened. A named 409
+   * (already settled, already waived) reaches the treasurer through
+   * copy.reimbursements.errors; anything else falls back to the shared map,
+   * never the English wire message (ADR-014). The list reloads from the first
+   * page after both outcomes: on success it shows the new state, on a 409 the
+   * claim row unmounts with the message explaining why.
    */
   function runWrite(api: () => Promise<unknown>, successText: string) {
     void submitRun(async () => {
@@ -224,7 +222,7 @@ export default function Reimbursements({ refetchKey }: { refetchKey?: unknown })
         await api()
         setFeedback({ kind: 'success', text: successText })
       } catch (err) {
-        // #507: a lost response may still have saved; re-read before she can retry.
+        // A lost response may still have saved; re-read before she can retry.
         await settleUncertainWrite(err, () => listRun(loadFirstPage, { silent: true }))
         const apiErr = err instanceof ApiError ? err : new ApiError('unknown_error', err instanceof Error ? err.message : String(err))
         setFeedback({ kind: 'error', text: errorText(apiErr) })
@@ -383,8 +381,8 @@ export default function Reimbursements({ refetchKey }: { refetchKey?: unknown })
           open={receiptsForId !== null}
           onClose={() => setReceiptsForId(null)}
           // Silent, so the list keeps its rows (and this dialog its claim)
-          // while it re-reads - including after an uncertain save (#507),
-          // when the dialog's own message has to stay on screen.
+          // while it re-reads - including after an uncertain save, when the
+          // dialog's message has to stay on screen.
           onChanged={() => listRun(loadFirstPage, { silent: true })}
         />
         {nextCursor && moreError && <ErrorState error={moreError} onRetry={() => void loadMore(nextCursor)} />}
@@ -472,20 +470,18 @@ function StatusBadge({ claim }: { claim: Reimbursement }) {
     return <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">{text.status.waived}</span>
   }
   // `settled` travels on the wire: the list queries compute whether a
-  // kind='reimbursement' payout references the claim, so this badge is
-  // honest on both tabs - an outstanding list only ever says "Belum
-  // dibayar", and the all list says "Dibayar" only for a row a payout
-  // actually settled.
+  // kind='reimbursement' payout references the claim, so this badge is honest
+  // on both tabs - an outstanding list only says "Belum dibayar", and the all
+  // list says "Dibayar" only for a row a payout settled.
   if (claim.settled) {
     return <span className="rounded-full bg-success-soft px-2 py-0.5 text-xs font-medium text-success">{text.status.settled}</span>
   }
   return <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">{text.status.outstanding}</span>
 }
 
-/** A row control's box (#314): sized to its content so the row stays one
- * quiet line, with an invisible 44px hit area centred on it - the same
- * technique ReceiptRowButton uses - so the target still meets
- * Design-System.md's minimum. */
+/** A row control's box: sized to its content so the row stays one quiet line,
+ * with an invisible 44px hit area centred on it - the technique
+ * ReceiptRowButton uses - so the target meets Design-System.md's minimum. */
 function rowControlClass(className: string): string {
   return cn(
     "relative flex shrink-0 items-center transition-colors after:absolute after:top-1/2 after:left-1/2 after:size-11 after:-translate-x-1/2 after:-translate-y-1/2 after:content-['']",

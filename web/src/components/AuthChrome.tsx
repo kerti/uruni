@@ -12,14 +12,13 @@ const footerLink =
   'inline-flex min-h-11 items-center underline-offset-4 hover:text-foreground hover:underline rounded-sm outline-none focus-visible:ring-3 focus-visible:ring-ring/50'
 
 /**
- * The frame around both signed-out screens, Login and Register (#356,
- * #364): the logo with the tagline and promise above the card, and the
- * version, source, licence and maintainer below it. The card itself - the
- * form - is the caller's.
+ * The frame around both signed-out screens, Login and Register: the logo with
+ * the tagline and promise above the card, and the version, source, licence
+ * and maintainer below it. The card - the form - is the caller's.
  *
- * Register shows it too because it is the first screen a fresh install
- * puts in front of anyone, and AGPL-3.0 section 13 offers a network user
- * the source of the version they are using from the start.
+ * Register shows it too because it is the first screen a fresh install shows
+ * anyone, and AGPL-3.0 section 13 offers a network user the source of the
+ * version they are using from the start.
  */
 export default function AuthChrome({ children }: { children: ReactNode }) {
   const build = useBuild()

@@ -42,7 +42,7 @@ function stubTiers(tiers: ReturnType<typeof tier>[], rates: ReturnType<typeof ra
 }
 
 /** This section's dialogs ARE the URL (ADR-032), so `?edit=` is state worth
- * asserting on directly. */
+ * asserting on. */
 function LocationProbe() {
   const location = useLocation()
   return <output data-testid="location-search">{location.search}</output>
@@ -152,8 +152,8 @@ describe('Settings dues tiers', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent(copy.common.errors.unique_violation)
   })
 
-  // #285: the card is the way into the golongan's own screen now, not into
-  // a dialog holding its whole life.
+  // The card is the way into the golongan's screen, not into a dialog holding
+  // its whole life.
   it("navigates to a golongan's own screen", async () => {
     const { fetchMock } = stubTiers([tier(1, 'Pelaksana')], [rate(1, 1, 50_000, '2026-01')])
     vi.stubGlobal('fetch', fetchMock)

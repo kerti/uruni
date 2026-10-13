@@ -7,7 +7,7 @@ import { copy } from '@/copy/id'
 import { cn } from '@/lib/utils'
 
 /**
- * A password field with a peek button (#356): a mistyped password on a phone
+ * A password field with a peek button: a mistyped password on a phone
  * keyboard is otherwise invisible until the server says no, and enough of
  * those trip the login rate limit.
  *
@@ -15,8 +15,8 @@ import { cn } from '@/lib/utils'
  * screen reader hears "Tampilkan kata sandi, pressed" rather than a label
  * that changes under it. It sits inside the field's right edge at the full
  * 44px, and pr-11 keeps typed text from running under it. preventDefault on
- * pointer down keeps focus in the field, so tapping it on a phone does not
- * close the keyboard mid-word. Ghost and plain ink, like every row control.
+ * pointer down keeps focus in the field, so tapping it does not close the
+ * phone keyboard mid-word. Ghost and plain ink, like every row control.
  */
 export default function PasswordInput({ className, disabled, ...props }: Omit<ComponentProps<'input'>, 'type'>) {
   const [visible, setVisible] = useState(false)

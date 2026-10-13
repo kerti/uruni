@@ -1,21 +1,19 @@
 import { copy } from '../src/copy/id'
 import { expect, test, logIn } from './fixtures'
 
-// M6.16 + M6.17 + M6.32 (#233, ADR-032): the roster as a card list with
-// dialog editing, server-side search and keyset paging.
+// The roster as a card list with dialog editing, server-side search and keyset
+// paging (ADR-032).
 //
 // One path in a real browser - home -> Anggota -> add a member through the
-// dialog -> see it in the list -> remove it again - and everything else
-// left to the vitest suites, which can stub a 409, a retired row, the
-// Tunggakan badge and the partial-update semantics without touching the
-// shared database.
-//
+// dialog -> see it in the list -> remove it again - and everything else left to
+// the vitest suites, which can stub a 409, a retired row, the Tunggakan badge
+// and the partial-update semantics without touching the shared database.
 test.describe('members', () => {
   test.describe.configure({ mode: 'serial' })
   test.beforeAll(({ instance }) => instance.reset())
 
-  // Not "Warga Satu"/"Warga Dua" - those are the fixture's own members, and
-  // the test below asserts the fixture's roster is already listed.
+  // Not "Warga Satu"/"Warga Dua" - the fixture's members, which the test below
+  // asserts are already listed.
   const memberName = 'Warga Uji Anggota'
 
   test('adds a member from the roster screen, then removes them again', async ({ page }) => {
@@ -41,7 +39,7 @@ test.describe('members', () => {
 
     // Never referenced by a transaction, so the delete is allowed - a member
     // with history answers 409 and the edit dialog says "nonaktifkan, bukan
-    // hapus" instead, which is covered in vitest.
+    // hapus" (covered in vitest).
     await card.click()
     const editDialog = page.getByRole('dialog', { name: copy.members.roster.editTitle })
     await editDialog.getByRole('button', { name: copy.members.roster.delete }).click()
@@ -49,8 +47,8 @@ test.describe('members', () => {
     await expect(page.getByRole('button', { name: copy.members.roster.editAria(memberName) })).toHaveCount(0)
   })
 
-  // The header's fund name is the app's second way home (M6.16). Proven
-  // here rather than only in jsdom because it is a real navigation.
+  // The header's fund name is the app's second way home. Proven here rather than
+  // only in jsdom because it is a real navigation.
   test('the fund name in the header navigates home', async ({ page }) => {
     await logIn(page)
     await page.goto('/')

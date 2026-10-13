@@ -5,10 +5,10 @@ import type { APIRequestContext, Locator, Page } from '@playwright/test'
 import { copy } from '../src/copy/id'
 import { expect, logIn, seedPassword, test } from './fixtures'
 
-// M8.11 (#442): the public report's month walk, its pos / anggota / status
-// iuran filters, its PDF, and Salin / Bagikan on the Laporan publik card;
-// then Cadangan's refusals (a wrong password, a file that is no backup), the
-// "Harian" row the server wrote on its own, and a server-side row's download.
+// The public report's month walk, its pos / anggota / status iuran filters, its
+// PDF, and Salin / Bagikan on the Laporan publik card; then Cadangan's
+// refusals (a wrong password, a file that is no backup), the "Harian" row the
+// server wrote on its own, and a server-side row's download.
 //
 // report.spec.ts keeps the bare link, the Jenis filter, the 404 and the new
 // link; restore.spec.ts keeps both restores. Nothing here restores anything:
@@ -164,8 +164,8 @@ test.describe('report and backup', () => {
     await expect(txn(page, 'Sumbangan amplop bulan ini')).toHaveCount(1)
     await expect(transactions.locator('select[name="purpose"]')).toHaveValue(/\d+/)
 
-    // reportText.FilterMember: from the pos filter to a member's rows. The
-    // pos stays chosen, so clear it first by going back to the bare month.
+    // reportText.FilterMember: from the pos filter to a member's rows. The pos
+    // stays chosen, so clear it first by going back to the bare month.
     await page.goto(`${reportPath}?month=${thisMonth}`)
     await transactions.locator('select[name="member"]').selectOption({ label: 'Warga Satu' })
     await expect(page).toHaveURL(/[?&]member=/)
@@ -284,7 +284,7 @@ test.describe('report and backup', () => {
     await dialog.getByRole('button', { name: confirmText.confirm, exact: true }).click()
 
     await expect(dialog.getByRole('alert')).toHaveText(copy.common.errors.invalid_credentials)
-    // Still the same page, same session: no reload, no login screen, and the
+    // Still the same page and session: no reload, no login screen, and the
     // password field is there for another try.
     await expect(dialog.getByLabel(confirmText.passwordLabel)).toBeVisible()
     await dialog.getByRole('button', { name: confirmText.cancel }).click()

@@ -3,8 +3,8 @@ name: CodeQL
 on:
   push:
     branches: [main]
-  # No branches filter: the filter matches the PR's *base*, so `[main]` left
-  # every PR into a long-lived branch (e.g. epic/*) completely unchecked.
+    # No branches filter: it matches the PR's *base*, so `[main]` left every PR
+    # into a long-lived branch (e.g. epic/*) unchecked.
   pull_request:
   schedule:
     - cron: "0 3 * * 1"

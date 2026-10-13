@@ -1,14 +1,13 @@
-// Typed call over apiFetch for POST /api/transactions (M6.8), same idiom as
-// lib/setup.ts's postSetup. The Transaction response shape is already
-// defined in lib/setup.ts - re-exported here rather than redefined.
+// Typed call over apiFetch for POST /api/transactions. The Transaction
+// response shape is defined in lib/setup.ts - re-exported here.
 
 import { apiFetch } from '@/lib/api'
 import type { Transaction } from '@/lib/setup'
 
 export type { Transaction }
 
-/** POST /api/transactions's body (internal/http/transactions.go's
- * transactionRequest), camelCase on this side of the wire boundary. */
+/** POST /api/transactions's body (transactionRequest), camelCase on this side
+ * of the wire boundary. */
 export interface CreateTransactionInput {
   accountId: number
   purposeId: number
@@ -16,17 +15,15 @@ export interface CreateTransactionInput {
   amount: number
   occurredOn: string
   note: string | null
-  /** Who a contribution into an open envelope is from (ADR-034, #211) -
-   * Catat's "Dari siapa? (opsional)". Omitted or null for every other
-   * posting - a guest, an anonymous giver, or money that isn't a
-   * contribution at all. */
+  /** Who a contribution into an open envelope is from (ADR-034) - Catat's
+   * "Dari siapa? (opsional)". Omitted or null for every other posting. */
   memberId?: number | null
 }
 
 /**
  * POST /api/transactions - one ordinary entry (kind='normal').
- * is_adjustment is always false here: M6.10's reconcile flow is the only
- * caller that ever posts kind='adjustment', through its own request.
+ * is_adjustment is always false here: the reconcile flow is the only caller
+ * that posts kind='adjustment', through its own request.
  */
 export function createTransaction(input: CreateTransactionInput): Promise<Transaction> {
   return apiFetch<Transaction>('/api/transactions', {
@@ -45,45 +42,40 @@ export function createTransaction(input: CreateTransactionInput): Promise<Transa
   })
 }
 
-/** GET /api/transactions's optional query parameters (#225, ADR-032
- * "Lists: paging and search"). cursor is the opaque string a previous
- * page's nextCursor returned - omit it for the first page. memberId/
- * duesPeriod are exact-match filters for Dues/MemberPayments.tsx alone,
- * not a Riwayat UI filter (ADR-032 holds filters to M7) - there is
- * deliberately no copy or UI surface naming them.
+/** GET /api/transactions's optional query parameters (ADR-032 "Lists: paging
+ * and search"). cursor is a previous page's nextCursor - omit it for the
+ * first page. memberId/duesPeriod are exact-match filters for
+ * Dues/MemberPayments.tsx alone, not a Riwayat UI filter (ADR-032 holds
+ * filters to M7) - there is deliberately no copy or UI surface naming them.
  *
- * purposeId is the one that does have a UI surface (#262): ADR-032 makes
- * Riwayat -> Transaksi filtered to a purpose the only route to a closed
- * envelope, so History/Transactions.tsx renders it from `?purpose=<id>` as
- * a filter it can clear. Still not a chooser it offers - that is M7's
- * filter set. All of these narrow the same list `q` searches. */
+ * purposeId does have a UI surface: ADR-032 makes Riwayat -> Transaksi
+ * filtered to a purpose the only route to a closed envelope, so
+ * History/Transactions.tsx renders it from `?purpose=<id>` as a filter it
+ * can clear, but offers no chooser. All of these narrow the same list `q`
+ * searches. */
 export interface ListTransactionsInput {
   cursor?: string
   q?: string
   memberId?: number
   duesPeriod?: string
   purposeId?: number
-  /** "YYYY-MM" - the rows dated in that month (#424). */
+  /** "YYYY-MM" - the rows dated in that month. */
   month?: string
   direction?: 'in' | 'out'
 }
 
 /** One page of GET /api/transactions, camelCase on this side of the wire
- * boundary (the server's own envelope is {transactions, next_cursor}).
- * nextCursor is null once there is no further page. */
+ * boundary. nextCursor is null once there is no further page. */
 export interface TransactionsPage {
   transactions: Transaction[]
   nextCursor: string | null
 }
 
 /**
- * GET /api/transactions (M6.9, keyset-paged and searchable as of #225):
- * newest-first, 25 rows a page (internal/http/transactions.go's
- * listTransactions). Home and Reconcile take their first five rows straight
- * off the first page (the server's own order is already what they want),
+ * GET /api/transactions (keyset-paged, searchable): newest-first, 25 rows a
+ * page. Home and Reconcile take their first five rows off the first page,
  * MemberPayments passes memberId/duesPeriod instead of filtering
- * client-side, and History/Transactions follows nextCursor for its "load
- * more".
+ * client-side, and History/Transactions follows nextCursor for "load more".
  */
 export function listTransactions(input: ListTransactionsInput = {}): Promise<TransactionsPage> {
   const params = new URLSearchParams()
@@ -102,11 +94,9 @@ export function listTransactions(input: ListTransactionsInput = {}): Promise<Tra
 }
 
 /**
- * The text a row's note line shows, for TransactionList.tsx (#257). A
- * settlement's (kind='reimbursement') own Note is always nil server-side -
- * nothing generated is ever stored - so its "note" is the settled claim's
- * own note instead; every other row shows what she actually typed on the
- * row itself.
+ * The text a row's note line shows. A settlement's (kind='reimbursement')
+ * Note is always nil server-side - nothing generated is ever stored - so its
+ * "note" is the settled claim's note; every other row shows what she typed.
  */
 export function noteForDisplay(transaction: Transaction): string | null {
   if (transaction.kind === 'reimbursement') {
@@ -116,16 +106,15 @@ export function noteForDisplay(transaction: Transaction): string | null {
 }
 
 /**
- * POST /api/transactions/{id}/purpose-correction (ADR-033, #267) - moves a
- * posted row's pos to the tag it should always have had, by posting
- * a value-neutral reclass_purpose pair on the row's own account and date.
+ * POST /api/transactions/{id}/purpose-correction (ADR-033) - moves a posted
+ * row's pos to the tag it should always have had, by posting a value-neutral
+ * reclass_purpose pair on the row's account and date.
  *
- * One field, deliberately: the amount, the account and the date are read
- * off the row server-side and cannot be sent, which is what keeps this a
- * correction of that row rather than an edit of an immutable entry. The
- * server also decides the pair's legs from the row's EFFECTIVE pos,
- * so correcting a row that was already corrected moves money out of the
- * tag that actually holds it.
+ * One field, deliberately: the amount, account and date are read off the row
+ * server-side and cannot be sent, which keeps this a correction of that row
+ * rather than an edit of an immutable entry. The server decides the pair's
+ * legs from the row's EFFECTIVE pos, so correcting an already-corrected row
+ * moves money out of the tag that actually holds it.
  *
  * Answers the transfer row. Every refusal is a named 409 the caller maps
  * through copy.common.errors (purpose_correction_*).
@@ -139,21 +128,17 @@ export function correctPurpose(transactionId: number, purposeId: number): Promis
 }
 
 /**
- * Whether this row's pos may be corrected at all (ADR-033's
- * eligibility list). The server refuses the rest with a named 409 either
- * way; this is what decides whether the row offers the control, so an
- * ineligible row renders its pos as plain text rather than a dead
- * tap.
+ * Whether this row's pos may be corrected at all (ADR-033's eligibility
+ * list). The server refuses the rest with a named 409; this decides whether
+ * the row offers the control, so an ineligible row renders its pos as plain
+ * text rather than a dead tap.
  *
- * kind='adjustment' is eligible EXCEPT a dues reversal, whose pos
- * must track the dues row it reverses (ADR-029).
+ * kind='adjustment' is eligible EXCEPT a dues reversal, whose pos must track
+ * the dues row it reverses (ADR-029).
  *
  * A named contribution (kind='normal' with member_id set) is excluded too
- * (ADR-034): moving it would leave participation counting the member
- * against an envelope the money has left, so the server refuses it with its
- * own named 409 (purpose_correction_named_contribution) - this is what
- * keeps the control from ever offering a tap that would only be refused,
- * the same reasoning this function already gives for a dues reversal.
+ * (ADR-034): moving it would leave participation counting the member against
+ * an envelope the money has left.
  */
 export function canCorrectPurpose(transaction: Transaction): boolean {
   if (transaction.kind === 'normal') return transaction.member_id === null
@@ -161,16 +146,14 @@ export function canCorrectPurpose(transaction: Transaction): boolean {
 }
 
 /**
- * Whether this row may be reversed the way a dues payment can (ADR-034,
- * #211, per the reversal endpoint's own comment): a named contribution -
- * kind='normal', direction='in', member_id set - that is not itself a
- * reversal. `reversedIds` is the set of transaction ids some OTHER loaded
- * row already reverses (`reverses_transaction_id`), the same technique
- * Dues/MemberPayments.tsx uses for its own reversedIds - a row whose
- * reversal sits on a page this list has not fetched yet still offers the
- * control, and the server's own named 409
- * (dues_payment_already_reversed) is the backstop for that gap, never a
- * silent double-reversal.
+ * Whether this row may be reversed the way a dues payment can (ADR-034): a
+ * named contribution - kind='normal', direction='in', member_id set - that is
+ * not itself a reversal. `reversedIds` is the set of transaction ids some
+ * OTHER loaded row already reverses (`reverses_transaction_id`), the same
+ * technique Dues/MemberPayments.tsx uses. A row whose reversal sits on a page
+ * not fetched yet still offers the control; the server's named 409
+ * (dues_payment_already_reversed) is the backstop, never a silent
+ * double-reversal.
  */
 export function canReverseContribution(transaction: Transaction, reversedIds: ReadonlySet<number>): boolean {
   return (

@@ -6,18 +6,17 @@ import { exceedsAmountCeiling, formatIDR, parseRupiah } from '@/lib/money'
 
 /**
  * The amount field every record-transaction form needs (PRD section 7.2,
- * Design-System.md's "Amount inputs use inputmode=numeric and format to Rp
- * on blur"). Wraps lib/money.ts rather than re-deriving its parsing -
- * parseRupiah reads only digits (CLAUDE.md rule 1: never a float on the way
- * to the server), formatIDR is the one full-currency rendering.
+ * Design-System.md's "Amount inputs use inputmode=numeric and format to Rp on
+ * blur"). Wraps lib/money.ts: parseRupiah reads only digits (CLAUDE.md rule
+ * 1: never a float on the way to the server), formatIDR is the one
+ * full-currency rendering.
  *
  * Holds and emits a plain integer (`value`/`onChange`) - the component owns
- * only how that integer is *displayed*, never a string the caller has to
- * re-parse. Two display modes, switched on focus:
- *  - focused: the bare digits she is typing (parseRupiah of the raw input),
- *    so the caret isn't fighting a "Rp" prefix or thousands dots underfoot;
- *  - blurred: `formatIDR(value)` - "Rp 1.000.000" - tabular figures so it
- *    reads like every other amount in the app.
+ * only how that integer is *displayed*. Two display modes, switched on focus:
+ *  - focused: the bare digits she is typing, so the caret isn't fighting a
+ *    "Rp" prefix or thousands dots;
+ *  - blurred: `formatIDR(value)` - "Rp 1.000.000" - in tabular figures like
+ *    every other amount in the app.
  */
 export default function AmountInput({
   id,
@@ -41,9 +40,9 @@ export default function AmountInput({
 
   function handleChange(event: ChangeEvent<HTMLInputElement>) {
     const digits = event.target.value.replace(/\D/g, '')
-    // A thirteenth digit (typed, or a longer paste) is not accepted: the
-    // field keeps what it holds, the way it drops a non-digit. 12 digits is
-    // the ceiling, Rp 999.999.999.999 (#499).
+    // A thirteenth digit (typed, or a longer paste) is not accepted: the field
+    // keeps what it holds, as it drops a non-digit. 12 digits is the ceiling,
+    // Rp 999.999.999.999.
     if (exceedsAmountCeiling(digits)) return
     setRawDigits(digits)
     onChange(parseRupiah(digits))
@@ -53,12 +52,12 @@ export default function AmountInput({
     setRawDigits(value === 0 ? '' : String(value))
     setFocused(true)
     // Cursor at the end, not wherever the click landed in the reformatted
-    // string - there is no stable caret position to preserve across a
-    // "Rp 1.000.000" -> "1000000" swap. A frame later, so it lands after the
-    // tap's own caret placement - and only on a collapsed caret: a range
-    // selected in that frame (select-all, or Playwright's fill(), which
-    // selects then types) is left alone, or the typing would land after
-    // the old digits instead of replacing them.
+    // string - there is no stable caret to preserve across a "Rp 1.000.000" ->
+    // "1000000" swap. A frame later, so it lands after the tap's caret
+    // placement - and only on a collapsed caret: a range selected in that
+    // frame (select-all, or Playwright's fill(), which selects then types) is
+    // left alone, or the typing would land after the old digits instead of
+    // replacing them.
     const input = event.target
     requestAnimationFrame(() => {
       if (input.selectionStart !== input.selectionEnd) return

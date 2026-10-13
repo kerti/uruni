@@ -1,7 +1,5 @@
-// Typed calls over apiFetch for the three auth routes M6.4's screens need,
-// plus logout (wired, unexposed - see its own comment below). ADR-030's
-// gate itself is a Go decision; this module only names its wire shapes on
-// the client so App.tsx and the screens don't hand-roll fetch calls.
+// Typed calls over apiFetch for the auth routes, plus logout. ADR-030's gate
+// is a Go decision; this module only names its wire shapes on the client.
 
 import { apiFetch, plainConnectionError } from '@/lib/api'
 
@@ -23,8 +21,7 @@ export function getSession(): Promise<SessionStatus> {
 }
 
 // A successful register also establishes the session server-side
-// (register.go: RenewToken + Put) - there is no separate "log in after
-// registering" step on the client.
+// (register.go: RenewToken + Put) - no separate login step on the client.
 export function register(email: string, password: string): Promise<AuthUser> {
   return apiFetch<AuthUser>('/api/register', {
     method: 'POST',

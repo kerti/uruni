@@ -38,8 +38,8 @@ const text = copy.record
 const LAST_ACCOUNT_KEY = 'uruni:record:last-account-id'
 
 /** Reads the remembered account id, or null if there is none, it doesn't
- * parse, or storage isn't reachable at all (a private window can throw on
- * the property access itself, not just the call). */
+ * parse, or storage isn't reachable (a private window can throw on the
+ * property access itself, not just the call). */
 function readLastAccountId(): number | null {
   try {
     const raw = window.localStorage.getItem(LAST_ACCOUNT_KEY)
@@ -56,12 +56,12 @@ function rememberAccountId(accountId: number) {
     window.localStorage.setItem(LAST_ACCOUNT_KEY, String(accountId))
   } catch {
     // Private window, storage disabled, quota - the remembered default is a
-    // convenience, not a requirement; losing it costs one extra tap.
+    // convenience; losing it costs one extra tap.
   }
 }
 
 /** Local YYYY-MM-DD - never toISOString(), which is UTC and can read as
- * yesterday's date in WIB. Same helper as Setup.tsx's own todayISODate. */
+ * yesterday's date in WIB. */
 function todayISODate(): string {
   const now = new Date()
   const mm = String(now.getMonth() + 1).padStart(2, '0')
@@ -71,71 +71,64 @@ function todayISODate(): string {
 
 /**
  * What the form is recording. 'in' and 'out' post a transaction; 'transfer'
- * posts a pair through POST /api/transfers (#235) - money that is neither
- * entering nor leaving the fund, only changing place, which is why it gets
- * its own direction rather than being an out with a special purpose.
- * 'purpose' is its counterpart (ADR-036, #383): money that stays where it
+ * posts a pair through POST /api/transfers - money that only changes place,
+ * so it gets its own direction rather than being an out with a special
+ * purpose. 'purpose' is its counterpart (ADR-036): money that stays where it
  * is and changes what it is for, posted through POST /api/purpose-moves.
  */
 export type Direction = 'in' | 'out' | 'transfer' | 'purpose'
 
-/** What onRecorded names: a Direction, or 'reimbursement' for a Keluar that
- * was ticked "Pengeluaran ini ditalangi" (#368) - a claim, which posts
- * nothing to the ledger, so it has no Direction of its own. */
+/** What onRecorded names: a Direction, or 'reimbursement' for a Keluar ticked
+ * "Pengeluaran ini ditalangi" - a claim, which posts nothing to the ledger,
+ * so it has no Direction of its own. */
 export type Recorded = Direction | 'reimbursement'
 
 interface FormData {
   accounts: Account[]
   purposes: Purpose[]
-  /** Every purpose's current balance (#266). Fetched with the form rather
-   * than on demand so the Titipan warning below can appear as she types,
-   * without a request per keystroke. */
+  /** Every purpose's current balance. Fetched with the form so the Titipan
+   * warning below can appear as she types, without a request per keystroke. */
   balances: Balances
-  /** The "Dari siapa? (opsional)" picker's own roster (ADR-034, #211) -
-   * fetched with the rest of the form's data rather than only once the
-   * field itself becomes visible, so choosing "Uang masuk" on an envelope
-   * shows a filled picker instead of a spinner. */
+  /** The "Dari siapa? (opsional)" picker's roster (ADR-034) - fetched with the
+   * rest of the form's data so choosing "Uang masuk" on an envelope shows a
+   * filled picker instead of a spinner. */
   members: Member[]
 }
 
 /**
- * The record-transaction screen (M6.8, PRD section 7.2): amount, direction,
- * location, purpose, date, optional note, and - as of M6.21/#154 - an
- * optional photo of the nota, posted through POST /api/transactions.
- * is_adjustment always stays false on the wire - only M6.10's reconcile
- * flow ever sets it.
+ * The record-transaction screen (PRD section 7.2): amount, direction,
+ * location, purpose, date, optional note, and an optional photo of the nota,
+ * posted through POST /api/transactions. is_adjustment always stays false on
+ * the wire - only the reconcile flow sets it.
  *
- * The photo travels a second request behind the transaction itself: the
- * upload route needs the posted row's own id (POST
- * /api/transactions/{id}/receipts), so it can only go out once
- * createTransaction's response comes back. A transfer has no photo field -
- * it moves money between the fund's own locations, with no nota to
- * document, unlike an ordinary in/out. If that second request fails, the
- * transaction itself is NOT rolled back (ADR-011: a receipt lives in its
- * own table precisely so it can be attached, or fail to attach, without
- * touching the immutable row it names) - onRecorded's second argument says
- * so, and App.tsx shows the "tersimpan, tapi belum terunggah" message
- * instead of the ordinary success line.
+ * The photo travels a second request behind the transaction: the upload route
+ * needs the posted row's id (POST /api/transactions/{id}/receipts), so it
+ * goes out only once createTransaction's response comes back. A transfer has
+ * no photo field - no nota to document. If the second request fails, the
+ * transaction is NOT rolled back (ADR-011: a receipt lives in its own table
+ * precisely so it can be attached, or fail to attach, without touching the
+ * immutable row it names) - onRecorded's second argument says so, and App.tsx
+ * shows the "tersimpan, tapi belum terunggah" message instead of the ordinary
+ * success line.
  *
  * Smart defaults per PRD section 7.2: location remembers the last choice
  * (localStorage, guarded - see readLastAccountId), purpose defaults to the
  * `kind: "main"` row, date defaults to today. Direction has no PRD-specified
  * default; this screen defaults to "out" (an expense) as the more frequent
- * everyday entry - a call made here, not one settled elsewhere.
+ * everyday entry - a call made here, not settled elsewhere.
  *
  * onRecorded is called once, after a successful post - the caller (App.tsx)
- * owns navigating back to home and showing the success message there; this
- * screen has no route knowledge of its own. onCancel is the same contract
- * for leaving without recording: installed to a home screen the app runs in
- * `display: standalone` (ADR-008, M6.7), where there is no browser back
- * button, so a form with only a submit is a room with no door.
+ * owns navigating home and showing the success message; this screen has no
+ * route knowledge. onCancel is the same contract for leaving without
+ * recording: the installed app runs in `display: standalone` (ADR-008), where
+ * there is no browser back button, so a form with only a submit is a room
+ * with no door.
  *
  * `initialPurposeId`, when given, seeds the purpose default with that id
- * instead of the fund's `kind: "main"` row - M6.19's incidentals screen
- * reuses this form entirely for contributions/disbursements by navigating
- * here with the envelope's own purpose already chosen (App.tsx's `/record`
- * route reads it from a `purpose` search param), rather than duplicating
- * the field set. Absent, behaviour is unchanged.
+ * instead of the fund's `kind: "main"` row - the incidentals screen reuses
+ * this form for contributions/disbursements by navigating here with the
+ * envelope's purpose already chosen (App.tsx's `/record` route reads it from
+ * a `purpose` search param). Absent, behaviour is unchanged.
  */
 export default function RecordTransaction({
   onRecorded,
@@ -148,29 +141,28 @@ export default function RecordTransaction({
   onDuesRecorded,
   onDuesCancel,
 }: {
-  /** photoFailed is true only when a photo was picked and the parent
-   * transaction posted successfully but the receipt upload itself failed
-   * (#154) - never set for a transfer, which offers no photo field. */
+  /** photoFailed is true only when a photo was picked and the transaction
+   * posted but the receipt upload failed - never set for a transfer, which
+   * offers no photo field. */
   onRecorded: (recorded: Recorded, photoFailed?: boolean) => void
   onCancel: () => void
   initialPurposeId?: number | null
-  /** Seeds the "Dari siapa?" field (ADR-034, #211): Incidentals.tsx's own
-   * participation row navigates here with both the envelope's purpose and
-   * this member already chosen, the same `/record` route reading a second
-   * search param (App.tsx's `member`) the way it already reads `purpose`.
-   * Absent, the field starts unset - a guest or an anonymous giver, or any
-   * form that isn't a contribution at all. */
+  /** Seeds the "Dari siapa?" field (ADR-034): Incidentals.tsx's participation
+   * row navigates here with both the envelope's purpose and this member
+   * chosen, the `/record` route reading a second search param (App.tsx's
+   * `member`) as it reads `purpose`. Absent, the field starts unset - a guest,
+   * an anonymous giver, or a form that isn't a contribution at all. */
   initialMemberId?: number | null
-  /** Iuran, the toggle's fourth item (#315): a dues payment moves money,
-   * so it is recorded here like every other kind (ADR-032). Choosing it
-   * swaps the form below for RecordDuesPayment's own; its own callbacks,
-   * since where she lands after a dues payment depends on the door she came
-   * in by. initialDues opens with it chosen. */
+  /** Iuran, the toggle's fourth item: a dues payment moves money, so it is
+   * recorded here like every other kind (ADR-032). Choosing it swaps the form
+   * below for RecordDuesPayment's, with its own callbacks, since where she
+   * lands after a dues payment depends on the door she came in by.
+   * initialDues opens with it chosen. */
   initialDues?: boolean
-  /** "Pengeluaran ini ditalangi" is ticked (#368): a member paid out of
-   * pocket, so this Keluar is a Talangan claim. Form mode is a route
-   * (ADR-032), so it arrives from `/record?fronted=1` and every change goes
-   * back out through onFrontedChange for the caller to write to the URL. */
+  /** "Pengeluaran ini ditalangi" is ticked: a member paid out of pocket, so
+   * this Keluar is a Talangan claim. Form mode is a route (ADR-032), so it
+   * arrives from `/record?fronted=1` and every change goes back out through
+   * onFrontedChange for the caller to write to the URL. */
   fronted?: boolean
   onFrontedChange?: (fronted: boolean) => void
   onDuesRecorded: () => void
@@ -179,61 +171,58 @@ export default function RecordTransaction({
   const [loadState, loadRun] = useApi<FormData>()
   const [submitState, submitRun] = useApi<unknown>()
 
-  // A link naming a contributor (/record?member=, the envelope's own
-  // "Catat sumbangan") is money coming in by definition - opening on 'out'
-  // would hide "Dari siapa?" and the member it carries (ADR-034).
+  // A link naming a contributor (/record?member=) is money coming in by
+  // definition - opening on 'out' would hide "Dari siapa?" and the member it
+  // carries (ADR-034).
   const [direction, setDirection] = useState<Direction>(initialMemberId != null ? 'in' : 'out')
-  // Kept apart from direction rather than widening Direction: every other
-  // line of this form means a transaction's direction by it, and switching
-  // to Iuran and back leaves the transaction form exactly as she left it.
+  // Kept apart from direction rather than widening Direction: every other line
+  // of this form means a transaction's direction by it, and switching to Iuran
+  // and back leaves the transaction form as she left it.
   const [duesChosen, setDuesChosen] = useState(initialDues)
   const [accountId, setAccountId] = useState<number | null>(null)
-  // Only used by 'transfer': where the money lands. The single accountId
-  // above is where it leaves from, which is what it already means for an
-  // ordinary out - so the field she has been using keeps its meaning and
-  // only the second one is new.
+  // Only used by 'transfer': where the money lands. The single accountId above
+  // is where it leaves from, as for an ordinary out - so the field she has
+  // been using keeps its meaning and only the second is new.
   const [toAccountId, setToAccountId] = useState<number | null>(null)
   const [purposeId, setPurposeId] = useState<number | null>(null)
-  // Only used by 'purpose' (ADR-036): where the money is for now, and where
-  // it should be for. purposeId above is the ordinary entry's one tag and
-  // keeps its meaning.
+  // Only used by 'purpose' (ADR-036): where the money is for now, and where it
+  // should be for. purposeId above is the ordinary entry's one tag.
   const [fromPurposeId, setFromPurposeId] = useState<number | null>(null)
   const [toPurposeId, setToPurposeId] = useState<number | null>(null)
   const [amount, setAmount] = useState(0)
   const [occurredOn, setOccurredOn] = useState(todayISODate)
   const [note, setNote] = useState('')
   const [receiptFile, setReceiptFile] = useState<File | null>(null)
-  // "Dari siapa? (opsional)" (ADR-034, #211) - seeded once below, alongside
-  // the account/purpose defaults.
+  // "Dari siapa? (opsional)" (ADR-034) - seeded once below, alongside the
+  // account/purpose defaults.
   const [memberId, setMemberId] = useState<number | null>(null)
-  // Who paid, for a claim. Apart from memberId: that one is the optional
+  // Who paid, for a claim. Apart from memberId: that is the optional
   // contributor of an incoming envelope entry and must never leak across.
   const [claimMemberId, setClaimMemberId] = useState<number | null>(null)
 
   async function loadFormData(): Promise<FormData> {
     // selectable=true (ADR-031): a closed envelope's purpose is excluded,
-    // since PostTransaction's own guard would now refuse a posting to it.
-    // A late entry against one goes through Incidentals.tsx's reopen
-    // affordance first, not this everyday picker.
-    // A claim uses the same list: settling it posts to its pos, which the
-    // same guard would refuse on a closed envelope.
+    // since PostTransaction would refuse a posting to it. A late entry against
+    // one goes through Incidentals.tsx's reopen affordance first. A claim uses
+    // the same list: settling it posts to its pos, which the same guard would
+    // refuse on a closed envelope.
     const [accounts, purposes, balances, members] = await Promise.all([listAccounts(), listPurposes(true), getBalances(), listAllMembers()])
     return { accounts, purposes, balances, members }
   }
 
-  // #507: a write whose response was lost re-reads the balances before she can retry.
+  // A write whose response was lost re-reads the balances before she can retry.
   const settleOnUnknown = { settle: () => loadRun(loadFormData, { silent: true }) }
 
   useEffect(() => {
     void loadRun(loadFormData)
     // loadRun is a stable useCallback (useApi.ts); this fires once on mount,
-    // matching App.tsx's own session-probe effect.
+    // like App.tsx's session-probe effect.
   }, [loadRun])
 
   // Applies the smart defaults once the form data has loaded: location
-  // remembers the last active choice (falling back to the first active
-  // account when there is none, or the remembered one was since retired),
-  // purpose defaults to the fund's one `kind: "main"` row.
+  // remembers the last active choice (falling back to the first active account
+  // when there is none, or the remembered one was since retired), purpose
+  // defaults to the fund's one `kind: "main"` row.
   useEffect(() => {
     if (loadState.status !== 'success' || !loadState.data) return
 
@@ -245,9 +234,9 @@ export default function RecordTransaction({
     }
 
     if (purposeId === null) {
-      // Only honour a seed the fund actually has: a stale link to a purpose
-      // that no longer exists would otherwise leave the picker on an id
-      // nothing matches, and the form unsubmittable for no visible reason.
+      // Only honour a seed the fund has: a stale link to a purpose that no
+      // longer exists would leave the picker on an id nothing matches, and the
+      // form unsubmittable for no visible reason.
       const seeded = initialPurposeId == null ? undefined : loadState.data.purposes.find((p) => p.id === initialPurposeId)
       if (seeded) {
         setPurposeId(seeded.id)
@@ -257,10 +246,10 @@ export default function RecordTransaction({
       }
     }
 
-    // Pindah pos opens on the common case - giving from Kas Utama to
-    // an envelope (ADR-036) - with the first open envelope already chosen,
-    // so the usual move is an amount and a tap. Never a Titipan: it is not
-    // offered at all (movablePurposes below).
+    // Pindah pos opens on the common case - giving from Kas Utama to an
+    // envelope (ADR-036) - with the first open envelope chosen, so the usual
+    // move is an amount and a tap. Never a Titipan: it is not offered at all
+    // (movablePurposes below).
     if (fromPurposeId === null && toPurposeId === null) {
       const movable = loadState.data.purposes.filter((p) => p.kind !== 'pass_through')
       const main = movable.find((p) => p.kind === 'main')
@@ -271,16 +260,16 @@ export default function RecordTransaction({
       }
     }
 
-    // "Dari siapa?" (ADR-034, #211) - same "only honour a real one" guard as
-    // purposeId's own seed above: a stale link naming a member the fund no
-    // longer has (or has since deactivated) leaves the field at its default
-    // rather than a picker showing nobody for an id that matches nothing.
+    // "Dari siapa?" (ADR-034) - the same "only honour a real one" guard as
+    // purposeId's seed: a stale link naming a member the fund no longer has (or
+    // has deactivated) leaves the field at its default rather than a picker
+    // showing nobody.
     if (memberId === null && initialMemberId != null) {
       const seeded = loadState.data.members.find((m) => m.id === initialMemberId && m.inactive_on === null)
       if (seeded) setMemberId(seeded.id)
     }
-    // Only re-run when the load itself changes - accountId/purposeId/memberId
-    // are this effect's own output, including them would fight its one-time
+    // Re-run only when the load itself changes - accountId/purposeId/memberId
+    // are this effect's output, and including them would fight its one-time
     // default assignment on every keystroke that changes them.
     // oxlint-disable-next-line react/exhaustive-deps -- seed the defaults once per load; clearing "Dari siapa?" back to null would otherwise re-seed it from initialMemberId
   }, [loadState.status, loadState.data])
@@ -292,25 +281,24 @@ export default function RecordTransaction({
   const isClaim = fronted && direction === 'out' && !duesChosen
 
   // The same location on both sides moves nothing, and the ledger refuses it
-  // anyway (ErrInvalidArgument). Caught here so she reads why in her own
-  // language instead of a rejected submit, and the button stays disabled
-  // rather than the form failing after the fact.
+  // anyway (ErrInvalidArgument). Caught here so she reads why in her language,
+  // and the button stays disabled rather than the form failing after the fact.
   const sameLocation = isTransfer && accountId !== null && accountId === toAccountId
 
   // A purpose move (ADR-036) never offers Titipan: that money belongs to the
   // parent body and leaves only by being forwarded. selectable=true already
   // withheld the closed envelopes, which the ledger refuses on either side.
   const movablePurposes = (loadState.data?.purposes ?? []).filter((p) => p.kind !== 'pass_through')
-  // Kas Utama is the only pos that always exists; without an open
-  // envelope there is nowhere for it to move to, so say so instead of
-  // leaving "Ke" empty.
+  // Kas Utama is the only pos that always exists; without an open envelope
+  // there is nowhere for it to move to, so say so instead of leaving "Ke"
+  // empty.
   const hasOpenEnvelope = movablePurposes.some((p) => p.kind === 'incidental')
   const samePurpose = isPurposeMove && fromPurposeId !== null && fromPurposeId === toPurposeId
   // The source cannot give more than it holds, read from the balance fetched
   // with the form (the ledger re-checks at posting time, so a stale figure
-  // costs one refused submit, never a wrong post). Unlike a location
-  // transfer this blocks: the ledger refuses it, so letting her try would
-  // only move the message.
+  // costs one refused submit, never a wrong post). Unlike a location transfer
+  // this blocks: the ledger refuses it, so letting her try would only move the
+  // message.
   const purposeBalance = (id: number | null) =>
     id === null ? null : (loadState.data?.balances.purposes.find((p) => p.id === id)?.balance ?? null)
   const fromPurposeBalance = purposeBalance(fromPurposeId)
@@ -330,41 +318,42 @@ export default function RecordTransaction({
           ? fromPurposeId !== null && toPurposeId !== null && !samePurpose && !purposeMoveTooLarge
           : purposeId !== null)
 
-  // Paying the parent body is two economically different things wearing one
-  // shape here (#266, PRD section 7.6): money the fund COLLECTED for the
-  // parent and now forwards is Titipan, and a levy the unit pays out of its
-  // own routine money is an ordinary expense on Kas Utama. The picker lists
-  // both tags flat, and picking Titipan for the second drives its balance
-  // negative - which reads as forwarding money nobody ever gave her.
+  // Paying the parent body is two economically different things in one shape
+  // (PRD section 7.6): money the fund COLLECTED for the parent and now
+  // forwards is Titipan, and a levy the unit pays out of its own routine money
+  // is an ordinary expense on Kas Utama. The picker lists both tags flat, and
+  // picking Titipan for the second drives its balance negative - which reads
+  // as forwarding money nobody gave her.
   //
-  // The warning fires on exactly that, and on nothing else: a genuine
-  // custodial forward can never take Titipan below zero, because the fund
-  // collected the money before it forwarded it. So this is the definition of
-  // the mistake rather than a heuristic about it, which is why the form can
-  // stay silent through every correct recording.
+  // The warning fires on exactly that and nothing else: a genuine custodial
+  // forward can never take Titipan below zero, because the fund collected the
+  // money before forwarding it. So this is the definition of the mistake, not
+  // a heuristic, which is why the form stays silent through every correct
+  // recording.
   //
   // It warns and never blocks. A Titipan may legitimately sit negative -
   // ADR-031 blessed the same shape for an incidental's shortfall - so a
-  // treasurer who means it goes ahead, and #276 makes it correctable
-  // afterwards either way.
-  // The purpose a transfer carries. Never chosen by her: both legs carry it,
-  // so it nets to zero on every purpose balance, and a field asking which
-  // one would be a question with no consequence (#235, ADR-024).
-  // What each side of a transfer holds right now, and what the source is
-  // left with (#235 revision). Shown under both pickers - the glimpse is
-  // also what makes the swap button's effect legible - but only the source
-  // can be driven negative: receiving money never pushes a balance down, so
-  // a destination already below zero only moves closer to it.
+  // treasurer who means it goes ahead, and the pos correction (ADR-033) fixes
+  // it afterwards either way.
+  //
+  // The purpose a transfer carries is never chosen by her: both legs carry it,
+  // so it nets to zero on every purpose balance, and a field asking which one
+  // would be a question with no consequence (ADR-024).
+  //
+  // Below: what each side of a transfer holds now, and what the source is
+  // left with. Shown under both pickers - the glimpse also makes the swap
+  // button's effect legible - but only the source can be driven negative:
+  // receiving money never pushes a balance down.
   const accountBalance = (id: number | null) =>
     id === null ? null : (loadState.data?.balances.accounts.find((a) => a.id === id)?.balance ?? null)
   const fromBalance = accountBalance(accountId)
   const toBalance = accountBalance(toAccountId)
 
-  // Warns, never blocks - the same call #266 made, and for the same reason:
-  // every other posting path in this app already permits an out larger than
-  // any balance, and a treasurer recording a real deposit out of a wallet
-  // the app believes is empty must be able to say so. The refusal would be
-  // a new overdraft rule applied in exactly one place.
+  // Warns, never blocks, for the same reason as the Titipan warning: every
+  // other posting path already permits an out larger than any balance, and a
+  // treasurer recording a real deposit out of a wallet the app believes is
+  // empty must be able to say so. A refusal would be a new overdraft rule
+  // applied in exactly one place.
   const transferGoesNegative = isTransfer && amount > 0 && fromBalance !== null && fromBalance - amount < 0
 
   const mainPurposeId = loadState.data?.purposes.find((p) => p.kind === 'main')?.id ?? null
@@ -373,12 +362,11 @@ export default function RecordTransaction({
   const warnsPassThroughNegative =
     direction === 'out' && !isClaim && chosenPurpose?.kind === 'pass_through' && amount > 0 && chosenPurposeBalance - amount < 0
 
-  // "Dari siapa? (opsional)" (ADR-034, #211): only for money coming into an
-  // open envelope - a contribution is the one shape the schema lets a
-  // member_id ride on. Not gated on the envelope being open specifically:
-  // PostTransaction's own guard already refuses a posting to a closed one
-  // (ADR-031), and the picker excludes it from purposeId's own choices
-  // (selectable=true) before this field would ever have a chance to show.
+  // "Dari siapa? (opsional)" (ADR-034): only for money coming into an open
+  // envelope - a contribution is the one shape the schema lets a member_id
+  // ride on. Not gated on the envelope being open: PostTransaction already
+  // refuses a posting to a closed one (ADR-031), and the picker excludes it
+  // (selectable=true) before this field could show.
   const showContributorField = direction === 'in' && chosenPurpose?.kind === 'incidental'
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -390,9 +378,9 @@ export default function RecordTransaction({
       const trimmedNote = note.trim()
       const noteOrNull = trimmedNote === '' ? null : trimmedNote
 
-      // A Talangan claim (#368) is off-ledger until it is settled: it is its
-      // own route and posts no transaction. A photo that fails to upload
-      // never rolls the claim back, as for a transaction.
+      // A Talangan claim is off-ledger until settled: its own route, no
+      // transaction posted. A photo that fails to upload never rolls the claim
+      // back, as for a transaction.
       if (isClaim) {
         if (claimMemberId === null || purposeId === null) return null
         const claim = await createReimbursement({
@@ -417,13 +405,12 @@ export default function RecordTransaction({
 
       // A transfer is a different route, not a third kind of transaction
       // (ADR-024, ADR-027): POST /api/transfers posts the pair and the fund
-      // total cannot move, because one amount goes out and the same amount
-      // comes in. purpose_id is required by that route but immaterial to
-      // every balance - both legs carry it, so it nets to zero - which is
-      // why the form sends Kas Utama rather than asking (#235).
-      // `direction === 'transfer'` rather than the isTransfer boolean: this
-      // is the branch that narrows the type for createTransaction below,
-      // which takes 'in' | 'out' and nothing else.
+      // total cannot move, because one amount goes out and the same comes in.
+      // purpose_id is required by that route but immaterial to every balance -
+      // both legs carry it, so it nets to zero - which is why the form sends
+      // Kas Utama rather than asking. `direction === 'transfer'` rather than
+      // the isTransfer boolean: this branch narrows the type for
+      // createTransaction below, which takes 'in' | 'out' only.
       if (direction === 'transfer') {
         if (toAccountId === null) return null
         const transfer = await postTransfer({
@@ -465,18 +452,17 @@ export default function RecordTransaction({
         amount,
         occurredOn,
         note: noteOrNull,
-        // Only ever sent when the field itself is showing (ADR-034) - a
-        // stale memberId left over from a purpose or direction she has since
-        // changed away from never reaches the wire.
+        // Only sent when the field is showing (ADR-034) - a stale memberId from
+        // a purpose or direction she has changed away from never reaches the
+        // wire.
         memberId: showContributorField ? memberId : null,
       })
       rememberAccountId(accountId)
 
-      // A second request, only once the row above exists (see this
-      // component's own doc comment). A failure here never rolls the
-      // transaction back and never surfaces through submitState's own
-      // error path - it is caught here, not rethrown, so the form still
-      // reports success and only says photoFailed.
+      // A second request, only once the row above exists (see this component's
+      // doc comment). A failure here never rolls the transaction back and never
+      // surfaces through submitState's error path - it is caught, not
+      // rethrown, so the form reports success and only says photoFailed.
       let photoFailed = false
       if (receiptFile) {
         try {

@@ -4,16 +4,16 @@ import { copy } from '../src/copy/id'
 import { formatIDR } from '../src/lib/money'
 import { expect, logIn, test } from './fixtures'
 
-// M8.9 (#440): one amplop's whole life, past the open-contribute-close that
+// One amplop's whole life, past the open-contribute-close that
 // incidentals.spec.ts walks. Named contributions and the participation list,
 // paying out of it, cancelling a contribution, correcting the occasion,
-// minimum and recipients, closing with a shortfall, reopening for a late
-// entry, and closing again at exactly zero - with Target, Terkumpul, Terpakai
-// and Sisa read after every step that moves them.
+// minimum and recipients, closing with a shortfall, reopening for a late entry,
+// and closing again at exactly zero - with Target, Terkumpul, Terpakai and Sisa
+// read after every step that moves them.
 //
-// The fixture's two members (Warga Satu, Warga Dua) joined in 2024, so both
-// are expected to give to an amplop opened today (ADR-034). Serial, one story
-// on the seeded instance; this file's own amplop, not the fixture's.
+// The fixture's two members (Warga Satu, Warga Dua) joined in 2024, so both are
+// expected to give to an amplop opened today (ADR-034). Serial, one story on
+// the seeded instance; this file's own amplop, not the fixture's.
 
 const occasion = 'Pernikahan Anak Warga'
 const renamed = 'Pernikahan Anak Warga Satu'
@@ -38,9 +38,9 @@ async function expectTotals(page: Page, f: { target?: number; collected: number;
   await expect(line(t.detail.remainingLabel)).toContainText(formatIDR(f.balance))
 }
 
-// A participation row, by member, in the expected list or under Sumbangan
-// lain - scoped to Partisipasi, since the detail's own transaction list names
-// the giver too.
+// A participation row, by member, in the expected list or under Sumbangan lain
+// - scoped to Partisipasi, since the detail's transaction list names the giver
+// too.
 function participant(page: Page, name: string) {
   return page
     .locator('section', { has: page.getByRole('heading', { name: t.participation.heading }) })
@@ -48,7 +48,7 @@ function participant(page: Page, name: string) {
     .filter({ has: page.getByText(name, { exact: true }) })
 }
 
-// The record form, already on this amplop's pos (the detail's own Catat, or a
+// The record form, already on this amplop's pos (the detail's Catat, or a
 // participation row's), finished with a direction, an amount and a note.
 async function finishRecord(page: Page, direction: 'in' | 'out', amount: number, note: string) {
   await expect(page.getByRole('heading', { name: copy.record.heading })).toBeVisible()
@@ -197,9 +197,9 @@ test.describe('amplop in depth', () => {
     await openFromBeranda(page, renamed)
     await expectTotals(page, { collected: 60_000, disbursed: 70_000, balance: 0 })
     await close(page)
-    // A closed amplop's line is its whole life's net, Terkumpul less
-    // Terpakai (Incidentals.tsx): the late entry nets to zero, so the
-    // shortfall Kas Utama covered at the first close still stands.
+    // A closed amplop's line is its whole life's net, Terkumpul less Terpakai
+    // (Incidentals.tsx): the late entry nets to zero, so the shortfall Kas Utama
+    // covered at the first close still stands.
     await expect(page.getByText(t.close.rolledLabel(-10_000))).toBeVisible()
     await expect(page.getByText(t.close.rolledLabel(-10_000)).locator('..')).toContainText(formatIDR(10_000))
   })

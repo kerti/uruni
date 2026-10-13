@@ -16,35 +16,32 @@ import { useApi } from '@/lib/useApi'
 import type { DuesPaymentHistoryRow, DuesPaymentsPage } from '@/lib/dues'
 
 const text = copy.history.dues
-// reversalRow/reversedBadge already name these two facts on the
-// period-scoped panel (MemberPayments.tsx) - reused verbatim here rather
-// than restated, since the same two words mean the same thing in both
-// places.
+// reversalRow/reversedBadge name these two facts on the period-scoped panel
+// (MemberPayments.tsx) - reused verbatim here, since the same two words mean
+// the same thing in both places.
 const rowText = copy.dues.history
 
-/** Long enough that a word typed at normal speed is one request, short
- * enough that the list follows her without a visible pause - same value
- * every other paged, searched list in this app uses. */
+/** Long enough that a word typed at normal speed is one request, short enough
+ * that the list follows her without a visible pause - the value every paged,
+ * searched list in this app uses. */
 const SEARCH_DEBOUNCE_MS = 300
 
 /**
- * The Iuran tab's payment history (#228, PRD section 7.3): every posted dues
- * payment and every reversal (ADR-029), newest-first, 25 a page, searchable
- * by member name - what actually happened, as opposed to the status matrix,
- * which only ever answers "who owes what for one period". A reversal is
- * never edited away: both halves of the pair stay listed, and a reversal
- * names the original payment's own date so the link reads even when that
- * payment has fallen off an earlier page.
+ * The Iuran tab's payment history (PRD section 7.3): every posted dues payment
+ * and every reversal (ADR-029), newest-first, 25 a page, searchable by member
+ * name - what happened, as opposed to the status matrix, which answers "who
+ * owes what for one period". A reversal is never edited away: both halves of
+ * the pair stay listed, and a reversal names the original payment's date so
+ * the link reads even when that payment has fallen off an earlier page.
  *
  * This is the whole Iuran tab. The status matrix is its own screen at /dues
- * (Status.tsx), opened by the row at the top (onOpenStatus) and never
- * stacked on this list (ADR-032: tabs hold lists). The period drives only
- * that screen - this component takes no period prop at all, only
- * `refetchKey`, the same "a write happened elsewhere, reload" signal every
- * other tab already reads.
+ * (Status.tsx), opened by the row at the top (onOpenStatus) and never stacked
+ * on this list (ADR-032: tabs hold lists). The period drives only that screen
+ * - this component takes no period prop, only `refetchKey`, the "a write
+ * happened elsewhere, reload" signal every tab reads.
  *
- * Search (?q=) lives in the URL, as on the other Riwayat tabs (ADR-032):
- * back and reload land on the same search.
+ * Search (?q=) lives in the URL, as on the other Riwayat tabs (ADR-032): back
+ * and reload land on the same search.
  */
 export default function PaymentHistory({ onOpenStatus, refetchKey }: { onOpenStatus: () => void; refetchKey?: unknown }) {
   const [searchParams, setSearchParams] = useSearchParams()
@@ -68,9 +65,9 @@ export default function PaymentHistory({ onOpenStatus, refetchKey }: { onOpenSta
     void run(loadFirstPage)
   }, [run, loadFirstPage, refetchKey])
 
-  // The URL changed under the field (back, forward, a link): follow it. A
-  // draft that already trims to the same search is left alone, so a
-  // trailing space she is still typing is not snatched away.
+  // The URL changed under the field (back, forward, a link): follow it. A draft
+  // that already trims to the same search is left alone, so a trailing space
+  // she is still typing is not snatched away.
   useEffect(() => {
     // oxlint-disable-next-line react/set-state-in-effect -- follow the URL back into the search field (back, forward, a link); the URL is the source of truth
     setDraft((current) => (current.trim() === q ? current : q))

@@ -15,33 +15,30 @@ export interface ApiState<T> {
  * data-fetching library (no caching, no retries, no offline queue - ADR-008
  * rule 4: offline means unavailable, not queued).
  *
- * Guards the two bugs this shape always has:
- * - setting state after the component has unmounted
- * - a slow request's response overwriting a newer, faster one's (each call
- *   is tagged; only the most recently *started* call is allowed to commit)
+ * Guards two bugs this shape always has: setting state after unmount, and a
+ * slow request's response overwriting a newer, faster one's (each call is
+ * tagged; only the most recently *started* call may commit).
  */
 export interface RunOptions {
   /**
-   * Refresh in place: keep whatever is already on screen instead of
-   * dropping to the loading state, and leave it there if the refresh fails.
+   * Refresh in place: keep whatever is on screen instead of dropping to the
+   * loading state, and leave it there if the refresh fails.
    *
    * For a background refresh the user did not ask for - Home re-reading its
-   * data when the app comes back to the foreground - the default behaviour
-   * is wrong twice over: it blanks a perfectly good screen to "Memuat..." on
-   * every app switch, and it replaces it with ErrorState if the network
-   * happens to be down for that one moment. A silent refresh that fails
-   * leaves the last good data visible; the app's own OfflineBanner is what
-   * says "butuh koneksi", not a screen that erases itself.
+   * data when the app returns to the foreground - the default is wrong twice
+   * over: it blanks a good screen to "Memuat..." on every app switch, and
+   * replaces it with ErrorState if the network is down for that moment. A
+   * silent refresh that fails leaves the last good data visible; the
+   * OfflineBanner says "butuh koneksi".
    *
-   * Never use this for a fetch the user is waiting on: there, a stale
-   * screen with no feedback is the wrong answer and the loading state is
-   * the right one.
+   * Never use this for a fetch the user is waiting on: there the loading
+   * state is the right one.
    */
   silent?: boolean
   /**
    * For a write: re-reads the screen's data when the write's outcome is
-   * unknown (#507), before the error state is set - so the treasurer's retry
-   * happens against fresh data. Runs only for that one error code.
+   * unknown, before the error state is set, so the treasurer's retry happens
+   * against fresh data. Runs only for that one error code.
    */
   settle?: () => Promise<void> | void
 }

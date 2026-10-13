@@ -45,8 +45,8 @@ function stubApi(periods: unknown = outstanding) {
 }
 
 async function pickFirstMember() {
-  // The themed Select's options live in a portal (M6.15) - open it, then
-  // pick by the name she actually reads.
+  // The themed Select's options live in a portal - open it, then pick by the
+  // name she reads.
   await screen.findByLabelText(text.memberLabel)
   await chooseOption(text.memberLabel, 'Warga Satu')
 }
@@ -105,16 +105,15 @@ describe('RecordDuesPayment', () => {
     expect(lastPostedBody(fetchMock)).toMatchObject({
       member_id: 1,
       account_id: 7,
-      // #257: no note is typed on this form, and nothing is generated onto
-      // the wire - the row explains itself through TransactionList's own
-      // display label instead.
+      // No note is typed on this form and nothing is generated onto the wire -
+      // the row explains itself through TransactionList's display label.
       note: null,
       periods: [
         { dues_period: '2026-01', amount: 50_000 },
         { dues_period: '2026-02', amount: 30_000 },
       ],
     })
-    // #473: the server owns the dues purpose - always Kas Utama.
+    // The server owns the dues purpose - always Kas Utama.
     expect(lastPostedBody(fetchMock)).not.toHaveProperty('purpose_id')
   })
 

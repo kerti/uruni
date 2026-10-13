@@ -4,15 +4,15 @@ import { copy } from '../src/copy/id'
 import { formatIDR, MAX_AMOUNT } from '../src/lib/money'
 import { expect, logIn, test } from './fixtures'
 
-// M8.38 (#540): the widest legal figure, Rp 999.999.999.999 (money.MaxAmount,
-// #499) and its negative, laid out on a phone. Seeds ceiling-sized amounts
-// over the API - balances, Arus kas, a negative Titipan, a dues rate and
-// payment, a Talangan, an envelope with a ceiling target and minimum, and a
-// Cek kas left open - then walks the main screens at 390px and asserts that
-// no page scrolls sideways and that every money figure is whole: on one line,
-// inside the viewport, not clipped by an ancestor, never an ellipsis (a
-// clipped number is a wrong number). Layout is measured on real elements, so
-// it can only be a browser's job (Vitest has no layout).
+// The widest legal figure, Rp 999.999.999.999 (money.MaxAmount) and its
+// negative, laid out on a phone. Seeds ceiling-sized amounts over the API -
+// balances, Arus kas, a negative Titipan, a dues rate and payment, a Talangan,
+// an envelope with a ceiling target and minimum, and a Cek kas left open - then
+// walks the main screens at 390px and asserts that no page scrolls sideways and
+// that every money figure is whole: on one line, inside the viewport, not
+// clipped by an ancestor, never an ellipsis (a clipped number is a wrong
+// number). Layout is measured on real elements, so it is a browser's job
+// (Vitest has no layout).
 //
 // Serial, one story on the seeded fixture (Tunai Rp 1.000.000, Bank Uji Coba,
 // Kas Utama, the envelope "Amplop Uji Laporan", two members on a tier).

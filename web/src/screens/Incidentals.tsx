@@ -40,14 +40,14 @@ import type { Transaction } from '@/lib/transactions'
 const text = copy.incidentals
 
 /**
- * One speaking-string feedback for a finished action - same shape as
- * Reimbursements.tsx's own Feedback type.
+ * One speaking-string feedback for a finished action - the shape of
+ * Reimbursements.tsx's Feedback type.
  */
 type Feedback = { kind: 'success' | 'error'; text: string }
 
-/** Wire error code -> Indonesian copy, scoped first to this screen's own
- * codes (incidental_already_closed) then to the shared map; never the
- * English wire message (ADR-014). Mirrors Reimbursements.tsx's errorText. */
+/** Wire error code -> Indonesian copy, scoped first to this screen's codes
+ * (incidental_already_closed) then to the shared map; never the English wire
+ * message (ADR-014). Mirrors Reimbursements.tsx's errorText. */
 function errorText(err: ApiError): string {
   const specific = text.errors[err.code as keyof typeof text.errors]
   if (specific) return specific
@@ -55,7 +55,7 @@ function errorText(err: ApiError): string {
   return common ?? copy.common.unknownError
 }
 
-/** Local YYYY-MM-DD - same helper as every other record form in this app. */
+/** Local YYYY-MM-DD - the helper every record form uses. */
 function todayISODate(): string {
   const now = new Date()
   const mm = String(now.getMonth() + 1).padStart(2, '0')
@@ -64,33 +64,30 @@ function todayISODate(): string {
 }
 
 /**
- * The incidental-envelope detail screen (M6.19, PRD section 7.5; reduced to
- * detail-only by #263/ADR-032): a separate pot for a one-off occasion -
- * collect contributions and pay disbursements against it, then close it
- * once the occasion is over. Closing rolls any leftover into the fund's
- * main purpose and answers with `rolled_amount`, shown here honestly even
- * when it is zero - a zero rollover is not the same as no answer.
+ * The incidental-envelope detail screen (PRD section 7.5; detail-only per
+ * ADR-032): a separate pot for a one-off occasion - collect contributions and
+ * pay disbursements against it, then close it once the occasion is over.
+ * Closing rolls any leftover into the fund's main purpose and answers with
+ * `rolled_amount`, shown here honestly even when it is zero - a zero rollover
+ * is not the same as no answer.
  *
- * Contributions and disbursements are not this screen's own form: they are
- * ordinary POST /api/transactions calls tagged to the envelope's purpose,
- * and M6.8's RecordTransaction.tsx already has every field that needs -
- * account, amount, direction, date, note. `onRecordFor` (App.tsx) navigates
- * there with the envelope's purpose pre-chosen (`/record?purpose=<id>`)
- * rather than this screen duplicating that form. Closing IS specific to an
- * envelope, so it keeps its own inline form here.
+ * Contributions and disbursements are not this screen's form: they are
+ * ordinary POST /api/transactions calls tagged to the envelope's purpose, and
+ * RecordTransaction.tsx has every field they need. `onRecordFor` (App.tsx)
+ * navigates there with the purpose pre-chosen (`/record?purpose=<id>`).
+ * Closing IS specific to an envelope, so it keeps an inline form here.
  *
- * Opening a new envelope, and the card list of every envelope the fund has
- * (open and closed), both moved to Pengaturan's own section
- * (screens/Settings/Incidentals.tsx, #263) - they are the same object as
- * Titipan there. What survives at this route is the detail view alone,
- * always reached with `?purpose=<id>` (App.tsx redirects `/incidentals`
+ * Opening a new envelope and the card list of every envelope (open and
+ * closed) live in Pengaturan (screens/Settings/Incidentals.tsx) - the same
+ * object as Titipan there. What survives at this route is the detail view
+ * alone, always reached with `?purpose=<id>` (App.tsx redirects `/incidentals`
  * without one, or with an unparseable one, to `/settings`): from a Beranda
  * purpose-breakdown row, or from a card in that section.
  *
- * `onViewTransactionsFor` (#262) leads the other way, into Riwayat ->
- * Transaksi filtered to this envelope's purpose. ADR-032 drops a closed
- * envelope off Beranda and names that filtered list as its record, so for a
- * closed envelope this screen is the only place that route begins.
+ * `onViewTransactionsFor` leads the other way, into Riwayat -> Transaksi
+ * filtered to this envelope's purpose. ADR-032 drops a closed envelope off
+ * Beranda and names that filtered list as its record, so for a closed
+ * envelope this screen is the only place that route begins.
  */
 export default function Incidentals({
   onBack,
@@ -99,9 +96,9 @@ export default function Incidentals({
   purposeId,
 }: {
   onBack: () => void
-  /** Navigates to Catat, this envelope's purpose pre-chosen - and, when
-   * given, a member pre-chosen too (ADR-034's "one action per row: record a
-   * contribution with the member already filled in"). */
+  /** Navigates to Catat, this envelope's purpose pre-chosen - and, when given,
+   * a member pre-chosen too (ADR-034: one action per row, record a
+   * contribution with the member already filled in). */
   onRecordFor: (purposeId: number, memberId?: number) => void
   onViewTransactionsFor: (purposeId: number) => void
   purposeId: number
@@ -116,11 +113,10 @@ export default function Incidentals({
 
   const [feedback, setFeedback] = useState<Feedback | null>(null)
 
-  // The rename dialog (#264), addressed by the URL rather than component
-  // state (ADR-032) - `?edit=incidental:<id>`, the same search-param pattern
-  // PassThrough.tsx's EditPassThroughDialog uses, hosted here rather than in
-  // Pengaturan's own card list because this detail screen is where the
-  // occasion is actually read and where a typo is actually noticed.
+  // The rename dialog, addressed by the URL rather than component state
+  // (ADR-032) - `?edit=incidental:<id>`, the pattern PassThrough.tsx's
+  // EditPassThroughDialog uses, hosted here because this detail screen is
+  // where the occasion is read and a typo is noticed.
   const { value: dialogValue, open: openDialog, close: closeDialog, clear: clearDialog } = useDialogParam()
   const dialogTarget = parseDialogTarget('incidental', dialogValue)
   const isRenaming = dialogTarget.kind === 'edit' && dialogTarget.id === purposeId
@@ -130,22 +126,19 @@ export default function Incidentals({
     void membersRun(listAllMembers)
   }, [accountsRun, membersRun])
 
-  // Fetches once for the purpose this screen was navigated with - a fresh
-  // navigation to a different envelope remounts this component with a fresh
-  // purposeId, same as initialPurposeId used to work before the list view
-  // that once let her switch envelopes in place.
+  // Fetches once for the purpose this screen was navigated with - navigating
+  // to a different envelope remounts this component with a fresh purposeId.
   useEffect(() => {
     void detailRun(() => getIncidental(purposeId))
     void participationRun(() => getIncidentalParticipation(purposeId))
   }, [purposeId, detailRun, participationRun])
 
-  // An `incidental:` value naming a different or malformed id: strip it
-  // once the detail has loaded, rather than flash an empty dialog - never
-  // closeDialog(), for the same reason PassThrough.tsx's own effect gives
-  // (a closeDialog() here could run after a closeDialog() already in
-  // flight has gone back, taking her off the screen entirely). A `foreign`
-  // value is left exactly where it is - it belongs to something this
-  // screen does not own.
+  // An `incidental:` value naming a different or malformed id: strip it once
+  // the detail has loaded, rather than flash an empty dialog - never
+  // closeDialog(), for the reason PassThrough.tsx's effect gives (it could run
+  // after a closeDialog() already in flight has gone back, taking her off the
+  // screen). A `foreign` value is left where it is - it belongs to something
+  // this screen does not own.
   useEffect(() => {
     if (dialogTarget.kind === 'foreign' || dialogTarget.kind === 'new') return
     if (detailState.status !== 'success') return
@@ -161,12 +154,12 @@ export default function Incidentals({
       participationRun(() => getIncidentalParticipation(purposeId), { silent: true }),
     ]).then(() => undefined)
 
-  /** Every write on this screen - close, reopen - clears stale feedback,
-   * runs the call, then says what happened. A named 409
-   * (incidental_already_closed / incidental_not_closed) reaches the
-   * treasurer through copy.incidentals.errors; anything else falls back to
-   * the shared map, never the English wire message (ADR-014). Mirrors
-   * Reimbursements.tsx's runWrite. */
+  /** Every write on this screen - close, reopen - clears stale feedback, runs
+   * the call, then says what happened. A named 409 (incidental_already_closed
+   * / incidental_not_closed) reaches the treasurer through
+   * copy.incidentals.errors; anything else falls back to the shared map,
+   * never the English wire message (ADR-014). Mirrors Reimbursements.tsx's
+   * runWrite. */
   function runWrite<T>(api: () => Promise<T>, successText: string, onSuccess?: (result: T) => void) {
     void submitRun(async () => {
       setFeedback(null)
@@ -175,7 +168,7 @@ export default function Incidentals({
         setFeedback({ kind: 'success', text: successText })
         onSuccess?.(result)
       } catch (err) {
-        // #507: a lost response may still have saved; re-read before she can retry.
+        // A lost response may still have saved; re-read before she can retry.
         await settleUncertainWrite(err, refreshDetail)
         const apiErr = err instanceof ApiError ? err : new ApiError('unknown_error', err instanceof Error ? err.message : String(err))
         setFeedback({ kind: 'error', text: errorText(apiErr) })
@@ -184,11 +177,10 @@ export default function Incidentals({
     })
   }
 
-  // The close response's own rolled_amount is deliberately not kept here
-  // (#270): the refetched detail already states the rollover, and a second
-  // copy in component state is the bug this issue reported - it survived
-  // exactly one screen-lifetime. See DetailView's rolledAmount for the
-  // derivation.
+  // The close response's rolled_amount is deliberately not kept here: the
+  // refetched detail already states the rollover, and a second copy in
+  // component state survived exactly one screen-lifetime. See DetailView's
+  // rolledAmount for the derivation.
   function handleClose(accountId: number, closedOn: string, note: string) {
     runWrite(
       () => closeIncidental(purposeId, { accountId, closedOn, note: note.trim() === '' ? null : note }),
@@ -200,12 +192,11 @@ export default function Incidentals({
     )
   }
 
-  // The way back from a closed envelope (ADR-031): reopening just clears
-  // closed_on and refetches the detail, which is enough on its own -
-  // DetailView's isOpen block already renders "Catat transaksi" and "Tutup
-  // amplop" for any open envelope, so a reopen leads straight into the same
-  // close form a late entry is meant to end at, not a bare toggle with
-  // nothing next.
+  // The way back from a closed envelope (ADR-031): reopening clears closed_on
+  // and refetches the detail, which suffices - DetailView's isOpen block
+  // renders "Catat transaksi" and "Tutup amplop" for any open envelope, so a
+  // reopen leads straight into the close form a late entry is meant to end
+  // at, not a bare toggle.
   function handleReopen() {
     runWrite(
       () => reopenIncidental(purposeId),
@@ -216,13 +207,11 @@ export default function Incidentals({
     )
   }
 
-  // On success the dialog itself has already made the PATCH/PUT calls (see
-  // RenameIncidentalDialog) - this just closes it, refetches the detail so
-  // the <h1> and the recipients line show whatever changed, refetches the
-  // participation table too (a new minimum or a changed recipient set moves
-  // rows between "belum"/"kurang" and the recipients exclusion), and reuses
-  // the screen's own Feedback banner rather than a second, parallel success
-  // mechanism.
+  // On success the dialog has already made the PATCH/PUT calls (see
+  // RenameIncidentalDialog) - this closes it, refetches the detail so the <h1>
+  // and recipients line show what changed, refetches the participation table
+  // too (a new minimum or recipient set moves rows between "belum"/"kurang"
+  // and the recipients exclusion), and reuses the screen's Feedback banner.
   function handleRenamed() {
     closeDialog()
     setFeedback({ kind: 'success', text: text.rename.success })
@@ -272,9 +261,8 @@ function StatusBadge({ envelope }: { envelope: Incidental }) {
 }
 
 /** The detail view: one envelope's totals, a link into the real record form
- * for contributions/disbursements, and close once it is still open. Kept as
- * its own component (rather than inlined into Incidentals) so the close
- * form doesn't crowd the rest of the JSX. */
+ * for contributions/disbursements, and close once it is still open. Its own
+ * component so the close form doesn't crowd the rest of the JSX. */
 function DetailView({
   detailState,
   participationState,
@@ -319,22 +307,21 @@ function DetailView({
   const envelope = detailState.data
   const isOpen = envelope.closed_on === null
 
-  // What the close rolled, derived rather than remembered (#270).
+  // What the close rolled, derived rather than remembered.
   //
   // ADR-031's invariant is that closing leaves this purpose's balance at
-  // exactly zero, in whichever direction that takes. The balance is the
-  // unfiltered net of everything posted against the purpose; collected and
-  // disbursed here are the same net with the roll's own leg excluded
-  // (IncidentalActivityTotals, the seam #215 drew). Zero net including the
-  // roll therefore means the roll is exactly the net excluding it - so the
-  // rollover is the gap between the two figures already on screen, which is
-  // the very gap that made this screen unreadable: Terkumpul 10.000 against
-  // Terpakai 0 on an envelope holding nothing.
+  // exactly zero, in whichever direction. The balance is the unfiltered net of
+  // everything posted against the purpose; collected and disbursed here are
+  // the same net with the roll's leg excluded (IncidentalActivityTotals). Zero
+  // net including the roll therefore means the roll is exactly the net
+  // excluding it - so the rollover is the gap between the two figures already
+  // on screen, the gap that made this screen unreadable: Terkumpul 10.000
+  // against Terpakai 0 on an envelope holding nothing.
   //
   // It holds across a close, a reopen, a late entry and a second close: each
-  // close re-establishes the same zero. It is signed like the close
-  // response's rolled_amount - positive rolled out, negative covered from
-  // Kas Utama - so close.rolledLabel says which way it went, unchanged.
+  // close re-establishes the same zero. Signed like the close response's
+  // rolled_amount - positive rolled out, negative covered from Kas Utama - so
+  // close.rolledLabel says which way it went.
   //
   // Only for a closed envelope. An open one has not rolled anything, and a
   // reopened one must not claim to have.
@@ -429,10 +416,9 @@ function DetailView({
               </Button>
             </>
           ) : (
-            /* The way back from a closed envelope (ADR-031): reopening
-               rejoins the open row - Catat for the late entry and Tutup to
-               close again - rather than leaving a bare toggle with nothing
-               next. */
+            /* The way back from a closed envelope (ADR-031): reopening rejoins
+                           the open row - Catat for the late entry and Tutup to close again
+                           - rather than a bare toggle with nothing next. */
             <Button type="button" size="lg" variant="outline" onClick={onReopen} disabled={submitting}>
               {text.actions.reopen}
             </Button>
@@ -523,9 +509,9 @@ function CloseForm({
 }
 
 /** One expected member's state -> its label and whether the amount shows
- * beside it (ADR-034): "Belum menyumbang" says nothing has come in, so
- * showing "Rp 0" beside it would repeat the sentence in numbers; the other
- * two states show what has come in so far. */
+ * beside it (ADR-034): "Belum menyumbang" says nothing has come in, so "Rp 0"
+ * beside it would repeat the sentence in numbers; the other two states show
+ * what has come in so far. */
 function participationStateText(state: ParticipationStateKind): { label: string; showAmount: boolean } {
   switch (state) {
     case 'sudah':
@@ -538,23 +524,22 @@ function participationStateText(state: ParticipationStateKind): { label: string;
 }
 
 /**
- * The participation table (ADR-034, #211, #333): who has contributed and how
- * much, derived from the ledger against this envelope's own expectation -
- * never stored, so this section fetches for itself and simply reflects
- * whatever the server currently answers, the same reasoning EnvelopeActivity
- * below it already follows for its own read-only list.
+ * The participation table (ADR-034): who has contributed and how much,
+ * derived from the ledger against this envelope's expectation - never
+ * stored, so this section fetches for itself and reflects what the server
+ * currently answers, as EnvelopeActivity below does for its read-only list.
  *
  * "Kurang dari minimal" renders in muted ink, never terracotta
- * (Design-System.md, the issue's own acceptance criterion): being under a
- * minimum is not the discrepancy a reconciliation gap is, and this app's one
- * warm color for "something needs a look" stays reserved for that.
+ * (Design-System.md): being under a minimum is not the discrepancy a
+ * reconciliation gap is, and this app's one warm color for "something needs
+ * a look" stays reserved for that.
  *
- * One action per expected row (ADR-034's own "Where it shows"): record a
+ * One action per expected row (ADR-034 "Where it shows"): record a
  * contribution with the member already filled in. "Sumbangan lain" carries
- * no action - those givers were never expected, so there is nothing here to
+ * no action - those givers were never expected, so there is nothing to
  * prompt them to finish. No reminder, share or message action anywhere on
  * this screen (PRD section 4/7.5) - the row action is the only thing a
- * treasurer can do about "belum", and it is the one she already had.
+ * treasurer can do about "belum".
  */
 function ParticipationSection({
   recipients,
@@ -642,9 +627,9 @@ function ParticipationSection({
 }
 
 /** Two arrays are the same set of ids, order ignored - the "did recipients
- * actually change?" check the edit dialog's own unchanged/disabled state
- * needs, since MemberMultiPicker's onChange always hands back a fresh array
- * even when the resulting set is identical. */
+ * change?" check for the edit dialog's disabled state, since
+ * MemberMultiPicker's onChange always hands back a fresh array even when the
+ * set is identical. */
 function sameMemberSet(a: number[], b: number[]): boolean {
   if (a.length !== b.length) return false
   const sorted = [...b].sort((x, y) => x - y)
@@ -652,20 +637,19 @@ function sameMemberSet(a: number[], b: number[]): boolean {
 }
 
 /**
- * The edit dialog (#264, widened by #333/ADR-034), modelled on
- * PassThrough.tsx's own EditPassThroughDialog: occasion, target, minimum and
- * recipients together (#381 added the target), seeded from the envelope's current values, submit
- * disabled while busy or when nothing has actually changed. It makes the
- * write calls itself - renamePurpose only when the occasion changed
- * (moves both purpose.name and incidental.occasion together server-side),
- * updateIncidentalParticipation only when the target, the minimum or the
- * recipient set changed - and, on success, hands off to `onRenamed`: Incidentals' own
- * handleRenamed, which closes the dialog, refetches the detail and the
+ * The edit dialog (ADR-034), modelled on PassThrough.tsx's
+ * EditPassThroughDialog: occasion, target, minimum and recipients together,
+ * seeded from the envelope's current values, submit disabled while busy or
+ * when nothing has changed. It makes the write calls itself - renamePurpose
+ * only when the occasion changed (moves purpose.name and incidental.occasion
+ * together server-side), updateIncidentalParticipation only when the target,
+ * minimum or recipient set changed - and on success hands off to
+ * `onRenamed`: handleRenamed closes the dialog, refetches the detail and
  * participation table, and posts the success message through the screen's
- * existing Feedback banner rather than a second, dialog-local one.
+ * Feedback banner rather than a dialog-local one.
  *
- * `envelope` is null only while closing, the same window
- * EditPassThroughDialog documents for its own `purpose` prop.
+ * `envelope` is null only while closing, the window EditPassThroughDialog
+ * documents for its `purpose` prop.
  */
 function RenameIncidentalDialog({
   envelope,
@@ -799,20 +783,20 @@ function RenameIncidentalDialog({
 }
 
 /** How many of the envelope's latest transactions its detail screen shows -
- * the same five Beranda's recent activity shows (Home.tsx). */
+ * the five Beranda's recent activity shows (Home.tsx). */
 const ENVELOPE_ACTIVITY_COUNT = 5
 
 /**
- * The envelope's own recent activity, shaped like Beranda's "Aktivitas
- * terbaru" and spoken in its words: the latest few rows posted against this
- * purpose, and "Lihat semua" into Riwayat -> Transaksi filtered to it (#262)
- * - which for a closed envelope is the only route to its record, since
- * ADR-032 drops it off Beranda.
+ * The envelope's recent activity, shaped like Beranda's "Aktivitas terbaru"
+ * and spoken in its words: the latest few rows posted against this purpose,
+ * and "Lihat semua" into Riwayat -> Transaksi filtered to it - which for a
+ * closed envelope is the only route to its record, since ADR-032 drops it off
+ * Beranda.
  *
  * Fetches for itself rather than widening the detail load: it is a reading
  * aid below the actions, so a failure here must not blank the envelope.
- * Refetches whenever the envelope object is replaced - a close, a reopen or
- * a rename reloads the detail, and a close posts the rollover row.
+ * Refetches whenever the envelope object is replaced - a close, a reopen or a
+ * rename reloads the detail, and a close posts the rollover row.
  */
 function EnvelopeActivity({ envelope, onViewAll }: { envelope: Incidental; onViewAll: () => void }) {
   const [state, run] = useApi<Transaction[]>()

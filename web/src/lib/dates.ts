@@ -1,21 +1,15 @@
 /**
- * The app's date formatting, in one place.
- *
- * It lived in four screens as four copies of the same two helpers, which is
- * how one of them came to read "3 Sep 2026" while the rate list beside it
- * spelled September out - a difference nobody chose. One module, so a change
- * of mind about how a date reads is one edit.
+ * The app's date formatting, in one place, so a change of mind about how a
+ * date reads is one edit.
  *
  * **`dateStyle: 'long'`, not `'medium'`.** In id-ID, medium abbreviates the
- * month ("3 Sep 2026") and long writes it out ("3 September 2026"). Written
- * out is what the design system's warm, unhurried voice asks for, and the
- * rows here have the width for it.
+ * month ("3 Sep 2026") and long writes it out ("3 September 2026"), which is
+ * what the design system's warm, unhurried voice asks for.
  *
  * Every function parses the date's parts by hand rather than handing a bare
  * string to the Date constructor: `new Date('2026-09-03')` is parsed as UTC
- * midnight, which renders as the previous day west of Greenwich - and WIB is
- * east of it, so the bug shows up as a date a day early for anyone testing
- * from the Americas. Same reasoning for a bare 'YYYY-MM'.
+ * midnight, which renders as the previous day west of Greenwich. Same for a
+ * bare 'YYYY-MM'.
  */
 
 const dateFormatter = new Intl.DateTimeFormat('id-ID', { dateStyle: 'long' })
@@ -32,8 +26,8 @@ export function todayISODate(): string {
   return `${now.getFullYear()}-${mm}-${dd}`
 }
 
-/** "2026-09-03" -> "3 September 2026". A transaction's `occurred_on`, a
- * member's `joined_on`, an account's `inactive_on`. */
+/** "2026-09-03" -> "3 September 2026". An `occurred_on`, `joined_on`,
+ * `inactive_on`. */
 export function formatIsoDate(isoDate: string): string {
   const [year, month, day] = isoDate.split('-').map(Number)
   if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day)) return isoDate
@@ -47,7 +41,7 @@ export function formatUnixSeconds(unixSeconds: number): string {
 }
 
 /** A unix-seconds timestamp with its time of day -> "1 Oktober 2026 pukul
- * 13.42". A row's `created_at` in the entry detail (#359), where when it was
+ * 13.42". A row's `created_at` in the entry detail, where when it was
  * actually recorded is the point. */
 export function formatUnixSecondsWithTime(unixSeconds: number): string {
   return dateTimeFormatter.format(new Date(unixSeconds * 1000))
@@ -60,8 +54,8 @@ export function formatPeriod(period: string): string {
   return monthFormatter.format(new Date(year, month - 1, 1))
 }
 
-/** "YYYY-MM-DD" -> a local-midnight Date, or null for anything else. The
- * date pickers' own parse (#197) - never `new Date(iso)`, see above. */
+/** "YYYY-MM-DD" -> a local-midnight Date, or null for anything else. Never
+ * `new Date(iso)`, see above. */
 export function parseIsoDate(iso: string): Date | null {
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso)
   if (!match) return null
@@ -88,11 +82,10 @@ export function currentPeriod(): string {
   return todayISODate().slice(0, 7)
 }
 
-/** The inclusive range a date picker offers (#197). The server accepts any
- * real calendar date; these exist so the treasurer cannot land on a date
- * that makes no sense for the field by a slip of the thumb - a payment
- * dated next year, or a year of 20026 - and so the calendar's year list
- * stays short. */
+/** The inclusive range a date picker offers. The server accepts any real
+ * calendar date; these keep the treasurer from landing on a nonsensical one
+ * by a slip of the thumb (a payment dated next year, a year of 20026) and
+ * keep the calendar's year list short. */
 export interface DateBounds {
   min: string
   max: string
@@ -100,8 +93,8 @@ export interface DateBounds {
 
 /** The earliest year any picker offers. A fund adopting Uruni carries its
  * history in the opening balance (PRD: history starts at adoption); only a
- * member's join date or a rate's start month ever reaches back further, for
- * live arrears, and not past this. */
+ * member's join date or a rate's start month reaches back further, for live
+ * arrears, and not past this. */
 const EARLIEST_YEAR = 2000
 
 export const dateBounds = {
@@ -128,12 +121,12 @@ export const periodBounds = {
     return { min: `${EARLIEST_YEAR}-01`, max: addMonthsToPeriod(currentPeriod(), 24) }
   },
   /** The dues status period: back to EARLIEST_YEAR, and a year ahead, far
-   * enough to read a member paid in advance (#357). */
+   * enough to read a member paid in advance. */
   status(): DateBounds {
     return { min: `${EARLIEST_YEAR}-01`, max: addMonthsToPeriod(currentPeriod(), 12) }
   },
-  /** Riwayat's month filter (#424): any month money could have moved in -
-   * back to EARLIEST_YEAR, never past this one. */
+  /** Riwayat's month filter: any month money could have moved in - back to
+   * EARLIEST_YEAR, never past this one. */
   history(): DateBounds {
     return { min: `${EARLIEST_YEAR}-01`, max: currentPeriod() }
   },

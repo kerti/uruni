@@ -45,14 +45,13 @@ function getServerSnapshot(): KeyboardInset {
 /**
  * The on-screen keyboard, measured through `window.visualViewport`.
  *
- * iOS Safari - and Chrome on Android since 108, whose default is
- * `interactive-widget=resizes-visual` - does not shrink the layout viewport
- * when the keyboard opens; it slides the keyboard over the page. A
- * `position: fixed` dialog is still placed against the layout viewport, part
- * of which is now behind the keyboard, and `dvh` does not help because the
- * layout viewport never changed. Only the visual viewport shrinks, so that
- * is what gets measured: the gap between its bottom edge and the layout
- * viewport's, and how tall the part still showing is.
+ * iOS Safari - and Chrome on Android since 108 (`interactive-widget=
+ * resizes-visual`) - does not shrink the layout viewport when the keyboard
+ * opens; it slides over the page. A `position: fixed` dialog is placed
+ * against the layout viewport, part of which is now behind the keyboard, and
+ * `dvh` does not help. Only the visual viewport shrinks, so that is measured:
+ * the gap between its bottom edge and the layout viewport's, and how tall the
+ * part still showing is.
  *
  * Browsers without `visualViewport` (and jsdom) read as no keyboard.
  */

@@ -63,18 +63,17 @@ function routedFetch(handlers: { match: (method: string, url: string) => boolean
     const method = (init?.method ?? 'GET').toUpperCase()
     const handler = handlers.find((h) => h.match(method, url))
     if (handler) return handler.handle()
-    // The "Dari siapa?" picker's own roster (ADR-034, #211, #333) - fetched
-    // with the rest of the form's data on every mount, so a test not about
-    // that field gets an empty roster rather than reaching for its own
-    // fixture.
+    // The "Dari siapa?" picker's roster (ADR-034) - fetched with the rest of
+    // the form's data on every mount, so a test not about that field gets an
+    // empty roster.
     if (method === 'GET' && url.includes('/api/members')) return Promise.resolve(jsonResponse({ members: [], next_cursor: null }))
     return Promise.reject(new Error(`unstubbed fetch: ${method} ${url}`))
   })
 }
 
-/** Purpose balances, which the form fetches so the Titipan warning (#266)
- * can answer as she types. Kas Bidang holds 30.000 of somebody else's
- * money; an out larger than that is the mis-tag the warning is about. */
+/** Purpose balances, which the form fetches so the Titipan warning can answer
+ * as she types. Kas Bidang holds 30.000 of somebody else's money; an out
+ * larger than that is the mis-tag the warning is about. */
 function balancesWith(passThroughBalance: number, tunaiBalance = 1_000_000, bankBalance = 250_000) {
   return {
     fund_total: 1_000_000,
@@ -102,9 +101,8 @@ function stubFormLoad(passThroughBalance = 30_000) {
 }
 
 describe('RecordTransaction', () => {
-  // ADR-031: the picker asks for selectable=true so it never offers a
-  // closed envelope's purpose - PostTransaction's own guard would refuse
-  // posting to one anyway.
+  // ADR-031: the picker asks for selectable=true so it never offers a closed
+  // envelope's purpose - PostTransaction would refuse posting to one anyway.
   it('requests only selectable purposes for the picker', async () => {
     const fetchMock = stubFormLoad()
     vi.stubGlobal('fetch', fetchMock)
@@ -119,8 +117,8 @@ describe('RecordTransaction', () => {
     expect(purposeCall?.[0]).toContain('selectable=true')
   })
 
-  // The themed Select shows the chosen item's name, not its id (M6.15), so
-  // these assert on what she actually sees in the closed field.
+  // The themed Select shows the chosen item's name, not its id, so these
+  // assert on what she sees in the closed field.
   it('defaults the purpose to the kind:"main" row, not whichever purpose sorts first', async () => {
     vi.stubGlobal('fetch', stubFormLoad())
     render(<RecordTransaction onRecorded={vi.fn()} onCancel={vi.fn()} onDuesRecorded={vi.fn()} />)
@@ -130,8 +128,8 @@ describe('RecordTransaction', () => {
   })
 
   it('seeds the purpose from initialPurposeId, so M6.19 can reuse this form for an envelope', async () => {
-    // The incidentals screen navigates here as /record?purpose=12 rather
-    // than carrying a second copy of these fields (M6.19).
+    // The incidentals screen navigates here as /record?purpose=12 rather than
+    // carrying a second copy of these fields.
     vi.stubGlobal('fetch', stubFormLoad())
     render(<RecordTransaction onRecorded={vi.fn()} onCancel={vi.fn()} onDuesRecorded={vi.fn()} initialPurposeId={12} />)
 
@@ -139,8 +137,8 @@ describe('RecordTransaction', () => {
   })
 
   it('falls back to the main purpose when initialPurposeId names one the fund no longer has', async () => {
-    // A stale link would otherwise leave the picker on an id nothing
-    // matches, and the form unsubmittable for no visible reason.
+    // A stale link would otherwise leave the picker on an id nothing matches,
+    // and the form unsubmittable for no visible reason.
     vi.stubGlobal('fetch', stubFormLoad())
     render(<RecordTransaction onRecorded={vi.fn()} onCancel={vi.fn()} onDuesRecorded={vi.fn()} initialPurposeId={999} />)
 
@@ -177,8 +175,8 @@ describe('RecordTransaction', () => {
     vi.stubGlobal('fetch', stubFormLoad())
     render(<RecordTransaction onRecorded={vi.fn()} onCancel={vi.fn()} onDuesRecorded={vi.fn()} />)
 
-    // DateField (#197) shows the date the way the app writes it, not the
-    // wire value a native input held.
+    // DateField shows the date the way the app writes it, not the wire value a
+    // native input held.
     expect(await screen.findByLabelText(text.dateLabel)).toHaveTextContent(formatIsoDate(todayISODate()))
   })
 
@@ -201,8 +199,8 @@ describe('RecordTransaction', () => {
     await userEvent.type(screen.getByLabelText(text.amountLabel), '50000')
     await userEvent.click(screen.getByRole('button', { name: text.submit }))
 
-    // No photo picked, so photoFailed is always false - see this
-    // screen's own doc comment on onRecorded's second argument (#154).
+    // No photo picked, so photoFailed is false - see the doc comment on
+    // onRecorded's second argument.
     await waitFor(() => expect(onRecorded).toHaveBeenCalledWith('out', false))
 
     const postCall = fetchMock.mock.calls.find(([input]) => (input as string).toString().includes('/api/transactions'))
@@ -221,8 +219,8 @@ describe('RecordTransaction', () => {
   })
 
   // Installed to a home screen there is no browser back button (ADR-008's
-  // display: standalone), so leaving without recording has to be possible
-  // from inside the form.
+  // display: standalone), so leaving without recording has to be possible from
+  // inside the form.
   it('leaves without posting anything when cancelled', async () => {
     const onCancel = vi.fn()
     vi.stubGlobal('fetch', stubFormLoad())
@@ -232,10 +230,9 @@ describe('RecordTransaction', () => {
     expect(onCancel).toHaveBeenCalledTimes(1)
   })
 
-  // #315: Iuran is the toggle's fourth item - a dues payment moves money,
-  // so Catat records it (ADR-032). Choosing it swaps in the dues form under
-  // its own heading; choosing a direction again brings the transaction form
-  // back as she left it.
+  // Iuran is the toggle's fourth item - a dues payment moves money, so Catat
+  // records it (ADR-032). Choosing it swaps in the dues form under its heading;
+  // choosing a direction again brings the transaction form back as she left it.
   it('swaps to the dues payment form under Iuran, and back', async () => {
     vi.stubGlobal('fetch', stubFormLoad())
     render(<RecordTransaction onRecorded={vi.fn()} onCancel={vi.fn()} onDuesRecorded={vi.fn()} />)
@@ -264,11 +261,10 @@ describe('RecordTransaction', () => {
 })
 
 describe('RecordTransaction: the Titipan warning (#266)', () => {
-  // Paying the parent body is two different things wearing one shape (PRD
-  // section 7.6). The warning fires on the one that is wrong and stays
-  // silent on the one that is right, which is possible because a genuine
-  // forward can never take a titipan below zero - the fund collected the
-  // money before it forwarded it.
+  // Paying the parent body is two different things in one shape (PRD section
+  // 7.6). The warning fires on the one that is wrong and stays silent on the
+  // right one, which is possible because a genuine forward can never take a
+  // titipan below zero - the fund collected the money before forwarding it.
   async function fillOut(amount: string, purposeName: string) {
     const user = userEvent.setup()
     await user.type(screen.getByLabelText(text.amountLabel), amount)
@@ -310,7 +306,7 @@ describe('RecordTransaction: the Titipan warning (#266)', () => {
 
   it('stays silent for Kas Utama and for an amplop, which may go negative on their own terms', async () => {
     // ADR-031 blessed an incidental's shortfall; nothing here second-guesses
-    // the fund's own routine money either.
+    // the fund's routine money either.
     vi.stubGlobal('fetch', stubFormLoad(0))
     render(<RecordTransaction onRecorded={vi.fn()} onCancel={vi.fn()} onDuesRecorded={vi.fn()} />)
     await waitFor(() => expect(screen.getByLabelText(text.locationLabel)).toBeInTheDocument())
@@ -334,10 +330,9 @@ describe('RecordTransaction: the Titipan warning (#266)', () => {
 })
 
 describe('RecordTransaction: Pindah lokasi (#235)', () => {
-  // POST /api/transfers existed since M4 with no UI path at all, so cash
-  // deposited at the bank could not be recorded and the per-location split -
-  // the whole reason balances are tracked per location, PRD section 6 -
-  // drifted from reality.
+  // A location transfer is how cash deposited at the bank gets recorded;
+  // without it the per-location split - the reason balances are tracked per
+  // location (PRD section 6) - drifts from reality.
   function stubTransferPost() {
     const posts: unknown[] = []
     vi.stubGlobal(
@@ -369,8 +364,8 @@ describe('RecordTransaction: Pindah lokasi (#235)', () => {
 
     expect(screen.getByLabelText(text.fromLocationLabel)).toBeInTheDocument()
     expect(screen.getByLabelText(text.toLocationLabel)).toBeInTheDocument()
-    // A transfer has no pos to choose: both legs carry the same one
-    // and it nets to zero (ADR-024).
+    // A transfer has no pos to choose: both legs carry the same one and it nets
+    // to zero (ADR-024).
     expect(screen.queryByLabelText(text.purposeLabel)).not.toBeInTheDocument()
   })
 
@@ -423,20 +418,20 @@ describe('RecordTransaction: Pindah lokasi (#235)', () => {
       from_account_id: 1,
       to_account_id: 3,
       amount: 50_000,
-      // Kas Utama, never asked for: both legs carry it, so it nets to zero
-      // on every purpose balance (#235).
+      // Kas Utama, never asked for: both legs carry it, so it nets to zero on
+      // every purpose balance.
       purpose_id: 11,
       note: 'Setor tunai ke bank',
     })
-    // The caller is told which of the three it was, so Beranda shows the
-    // confirmation that names the total staying put.
+    // The caller is told which kind it was, so Beranda shows the confirmation
+    // that names the total staying put.
     expect(onRecorded).toHaveBeenCalledWith('transfer')
   })
 
   it('never posts a transfer to /api/transactions', async () => {
     // A transfer is a different route, not a third kind of transaction
-    // (ADR-024, ADR-027). One row would change the fund total; nothing moved,
-    // so nothing may.
+    // (ADR-024, ADR-027). One row would change the fund total; nothing moved, so
+    // nothing may.
     stubTransferPost()
     render(<RecordTransaction onRecorded={vi.fn()} onCancel={vi.fn()} onDuesRecorded={vi.fn()} />)
     const user = await chooseTransfer()
@@ -511,15 +506,15 @@ describe('RecordTransaction: moving money, with its balances in view (#235 revis
     await chooseOption(text.toLocationLabel, 'Bank Uji Coba')
 
     expect(await screen.findByText(text.locationGoesNegative(money(20_000)))).toBeInTheDocument()
-    // Never blocked: every other posting path already allows an out larger
-    // than the balance, and a real deposit from a wallet the app believes is
-    // empty has to be recordable.
+    // Never blocked: every other posting path allows an out larger than the
+    // balance, and a real deposit from a wallet the app believes is empty has
+    // to be recordable.
     expect(screen.getByRole('button', { name: text.submit })).toBeEnabled()
   })
 
   it('never warns about the destination, which receiving money cannot push down', async () => {
-    // The destination starts negative and stays negative - but it is moving
-    // toward zero, not away from it, so there is nothing to say.
+    // The destination starts negative and stays negative - but it moves toward
+    // zero, not away, so there is nothing to say.
     stubWith(1_000_000, -80_000)
     render(<RecordTransaction onRecorded={vi.fn()} onCancel={vi.fn()} onDuesRecorded={vi.fn()} />)
     const user = await startTransfer()
@@ -545,8 +540,8 @@ describe('RecordTransaction: moving money, with its balances in view (#235 revis
     expect(selectedOptionName(text.toLocationLabel)).toBe('Tunai')
   })
 
-  // #154: the optional photo field, posted as a second request once the
-  // transaction itself exists.
+  // The optional photo field, posted as a second request once the transaction
+  // exists.
   describe('the optional receipt photo', () => {
     const receiptsText = copy.receipts
 
@@ -694,9 +689,9 @@ describe('RecordTransaction: "Dari siapa? (opsional)" (ADR-034, #211)', () => {
   })
 
   it('seeds the field from initialMemberId, honouring only a real active member', async () => {
-    // The seed is Incidentals.tsx's own row action (App.tsx's /record?purpose=&member=),
+    // The seed is Incidentals.tsx's row action (/record?purpose=&member=),
     // which always means a contribution - so the form opens on "Uang masuk"
-    // by itself, with the field showing: nothing for her to switch first.
+    // with the field showing: nothing for her to switch first.
     vi.stubGlobal('fetch', stubWithMembers())
     render(<RecordTransaction onRecorded={vi.fn()} onCancel={vi.fn()} onDuesRecorded={vi.fn()} initialPurposeId={12} initialMemberId={7} />)
     await screen.findByLabelText(text.locationLabel)

@@ -41,7 +41,7 @@ function stubFund() {
 }
 
 /** Exposes the router's search string: this section's dialog IS the URL
- * (ADR-032), so `?edit=` is state worth asserting on directly. */
+ * (ADR-032), so `?edit=` is state worth asserting on. */
 function LocationProbe() {
   const location = useLocation()
   return <output data-testid="location-search">{location.search}</output>
@@ -76,8 +76,7 @@ describe('Settings fund name', () => {
     renderAt()
 
     expect(await screen.findByRole('button', { name: text.editAria('Kas Ruang 3A') })).toBeInTheDocument()
-    // The inline form is gone (M6.30): Pengaturan has no form on it until
-    // she asks for one.
+    // The inline form is gone: Pengaturan has no form until she asks for one.
     expect(screen.queryByLabelText(text.nameLabel)).not.toBeInTheDocument()
   })
 
@@ -114,7 +113,7 @@ describe('Settings fund name', () => {
     await waitFor(() => expect(calls).toHaveLength(1))
     expect(calls[0]).toMatchObject({ method: 'PATCH', body: { name: 'Kas Ruang 3B' } })
     // Shell's header is the same name, read once when the app booted - the
-    // callback is what keeps it from showing the old one until a reload.
+    // callback keeps it from showing the old one until a reload.
     await waitFor(() => expect(onRenamed).toHaveBeenCalledWith(expect.objectContaining({ name: 'Kas Ruang 3B' })))
     // The dialog closing IS the confirmation now - no inline "saved" line.
     await waitFor(() => expect(currentSearch()).toBe(''))
@@ -133,7 +132,7 @@ describe('Settings fund name', () => {
     expect(calls).toHaveLength(0)
   })
 
-  // A `fund:` value with nothing behind it is this section's own dead link.
+  // A `fund:` value with nothing behind it is this section's dead link.
   it('strips a fund: value it cannot use, and opens no dialog for it', async () => {
     const { fetchMock } = stubFund()
     vi.stubGlobal('fetch', fetchMock)
@@ -143,22 +142,22 @@ describe('Settings fund name', () => {
     expect(screen.queryByLabelText(text.nameLabel)).not.toBeInTheDocument()
   })
 
-  // The case that keeps sibling sections from closing each other's dialogs:
-  // another section's param is foreign and must be left exactly where it is.
+  // What keeps sibling sections from closing each other's dialogs: another
+  // section's param is foreign and must be left where it is.
   it("leaves another section's ?edit= alone", async () => {
     const { fetchMock } = stubFund()
     vi.stubGlobal('fetch', fetchMock)
     renderAt('/settings?edit=location:3')
 
     await screen.findByRole('button', { name: text.editAria('Kas Ruang 3A') })
-    // Byte for byte as it arrived: this section never rewrote it, so it is
-    // not even re-encoded the way a value this section set would be.
+    // Byte for byte as it arrived: this section never rewrote it, so it is not
+    // re-encoded as a value this section set would be.
     expect(currentSearch()).toBe('?edit=location:3')
   })
 
-  // Radix's FocusScope focuses the first tabbable with `select: true`, which
-  // on a pre-filled field means her whole kas name arrives highlighted and
-  // one keystroke from gone. dialog.tsx takes that focus step over.
+  // Radix's FocusScope focuses the first tabbable with `select: true`, which on
+  // a pre-filled field means her whole kas name arrives highlighted and one
+  // keystroke from gone. dialog.tsx takes that focus step over.
   it('opens with the caret in the name, not the whole name selected', async () => {
     const { fetchMock } = stubFund()
     vi.stubGlobal('fetch', fetchMock)

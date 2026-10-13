@@ -37,19 +37,17 @@ function fundNotFoundResponse() {
   return jsonResponse({ error: { code: 'not_found', message: 'no fund' } }, 404)
 }
 
-/** Home's own four GET routes (M6.9), stubbed to the emptiest shape each
- * answers with: no accounts/purposes with a balance, nothing open, never
- * reconciled (404 not_found - a normal first-run state), no transactions
- * yet. Every test below that reaches past auth needs these, since Home is
- * what renders there now. */
+/** Home's four GET routes, stubbed to the emptiest shape each answers with:
+ * no balances, nothing open, never reconciled (404 not_found - a normal
+ * first-run state), no transactions. Every test that reaches past auth needs
+ * these, since Home is what renders there. */
 const emptyHomeRoutes: { match: (method: string, url: string) => boolean; handle: () => Promise<Response> }[] = [
   {
     match: (m, u) => m === 'GET' && u.includes('/api/balances'),
     handle: () =>
       Promise.resolve(jsonResponse({ fund_total: 0, accounts: [], purposes: [], owed_to_members: 0, month: { in: 0, out: 0 } })),
   },
-  // Home's purpose breakdown (M6.33) fetches the open envelopes list too -
-  // empty, same as everything else in this fixture.
+  // Home's purpose breakdown fetches the open envelopes list too - empty.
   { match: (m, u) => m === 'GET' && u.includes('/api/incidentals'), handle: () => Promise.resolve(jsonResponse([])) },
   {
     match: (m, u) => m === 'GET' && u.includes('/api/reconciliations/open-lines'),
@@ -65,35 +63,32 @@ const emptyHomeRoutes: { match: (method: string, url: string) => boolean; handle
   },
 ]
 
-/** Routes a stubbed fetch by method + url match, same idiom as
- * RecordTransaction.test.tsx's own routedFetch - a plain path substring
- * can't tell GET /api/transactions (Home's list) apart from POST
- * /api/transactions (the record form's create). */
+/** Routes a stubbed fetch by method + url match, as RecordTransaction.test.tsx's
+ * routedFetch does - a path substring can't tell GET /api/transactions (Home's
+ * list) from POST /api/transactions (the record form's create). */
 function routedFetch(handlers: { match: (method: string, url: string) => boolean; handle: () => Promise<Response> }[]) {
   return vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
     const url = typeof input === 'string' ? input : input.toString()
     const method = (init?.method ?? 'GET').toUpperCase()
-    // A GET .../participation is a suffix of the same path a test's own
-    // '/api/incidentals/<id>' matcher already satisfies (ADR-034, #333), so
-    // it is resolved before the handler list - never through it - the same
-    // reasoning Incidentals.test.tsx's own routedFetch documents.
+    // A GET .../participation is a suffix of the path a test's
+    // '/api/incidentals/<id>' matcher already satisfies (ADR-034), so it is
+    // resolved before the handler list, as Incidentals.test.tsx's routedFetch
+    // documents.
     if (method === 'GET' && url.includes('/participation')) return Promise.resolve(jsonResponse({ expected: [], unexpected: [] }))
     const handler = handlers.find((h) => h.match(method, url))
     if (handler) return handler.handle()
-    // The "Dari siapa?" picker's own roster (ADR-034, #211, #333) - fetched
-    // on every mount of RecordTransaction; a test not about that field gets
-    // an empty roster rather than an unstubbed rejection, which would
-    // otherwise trip the connectivity watcher and show the offline banner
-    // for the whole app (apiFetch's own catch calls notifyConnectivity(false)
-    // on ANY thrown fetch, not just the one route that failed).
+    // The "Dari siapa?" picker's roster (ADR-034) is fetched on every mount of
+    // RecordTransaction; a test not about that field gets an empty roster
+    // rather than an unstubbed rejection, which would trip the connectivity
+    // watcher and show the offline banner for the whole app (apiFetch's catch
+    // calls notifyConnectivity(false) on ANY thrown fetch).
     if (method === 'GET' && url.includes('/api/members')) return Promise.resolve(jsonResponse({ members: [], next_cursor: null }))
     return Promise.reject(new Error(`unstubbed fetch: ${method} ${url}`))
   })
 }
 
-/** An authenticated session, wired to answer GET /api/fund with 200 (fund
- * exists), plus Home's own routes so the everyday-loop home screen it lands
- * on actually renders. */
+/** An authenticated session, wired to answer GET /api/fund with 200, plus
+ * Home's routes so the home screen it lands on renders. */
 function authenticatedWithFund() {
   return routedFetch([
     {
@@ -115,8 +110,8 @@ describe('App (session probe)', () => {
 
   it('renders an error with retry when the session probe fails, and retry re-probes', async () => {
     // The first session probe fails, the retry succeeds. Register's footer
-    // reads /healthz too (#364), so that is answered separately rather than
-    // letting it take one of the two session responses.
+    // reads /healthz too, so that is answered separately rather than taking one
+    // of the two session responses.
     const session = vi
       .fn()
       .mockRejectedValueOnce(new Error('network down'))
@@ -155,10 +150,9 @@ describe('App (session probe)', () => {
 })
 
 describe('App (fund probe)', () => {
-  // The wizard-skipped-on-reload behaviour (#138's own DoD): a GET /api/fund
-  // that answers 200 on any later load skips the wizard entirely, including
-  // a mid-wizard reload - there is no client-side "setup done" flag, the
-  // fund's own existence is the only source of truth.
+  // A GET /api/fund that answers 200 on any later load skips the wizard,
+  // including a mid-wizard reload - there is no client-side "setup done"
+  // flag; the fund's existence is the only source of truth.
   it('skips the wizard and renders home when GET /api/fund answers 200', async () => {
     vi.stubGlobal('fetch', authenticatedWithFund())
     render(<App />)
@@ -208,14 +202,13 @@ describe('App (app shell chrome)', () => {
 
     await userEvent.click(screen.getByRole('button', { name: copy.shell.logout }))
 
-    // has_account stays true through a logout - the account still exists, it
-    // is only the session that is gone.
+    // has_account stays true through a logout - only the session is gone.
     expect(await screen.findByText(copy.auth.login.heading)).toBeInTheDocument()
     expect(screen.queryByText(copy.auth.register.heading)).not.toBeInTheDocument()
   })
 
   // Neither auth nor the wizard renders inside the shell: there is no fund to
-  // name in the header yet, and no session worth offering a logout for.
+  // name yet, and no session worth a logout.
   it('does not render the shell around Login or the setup wizard', async () => {
     vi.stubGlobal(
       'fetch',
@@ -268,8 +261,7 @@ describe('App (record loop)', () => {
     ])
   }
 
-  // /record?purpose=<id> is how M6.19's incidentals screen reuses this form
-  // instead of carrying a second copy of its fields.
+  // /record?purpose=<id> is how the incidentals screen reuses this form.
   it('pre-chooses the purpose named by ?purpose= on the record route', async () => {
     window.history.pushState({}, '', '/record?purpose=12')
     vi.stubGlobal('fetch', authenticatedWithRecordRoutes())
@@ -280,9 +272,9 @@ describe('App (record loop)', () => {
     window.history.pushState({}, '', '/')
   })
 
-  // #315: the status matrix's Catat pembayaran opens Catat with Iuran
-  // already chosen - one dues form, at one address - and Batal goes back
-  // through the door she came in by, not to Beranda.
+  // The status matrix's Catat pembayaran opens Catat with Iuran already
+  // chosen - one dues form, one address - and Batal goes back through the door
+  // she came in by, not to Beranda.
   it('opens Catat on Iuran from the dues matrix, and Batal returns there', async () => {
     window.history.pushState({}, '', '/dues')
     const base = authenticatedWithRecordRoutes()
@@ -308,7 +300,7 @@ describe('App (record loop)', () => {
 
   it('falls back to the main purpose when ?purpose= is malformed', async () => {
     // Number('') is 0 and finite, so an empty param must not read as a
-    // purpose id; the default is the fund's own main row, as if it were absent.
+    // purpose id; the default is the fund's main row, as if absent.
     window.history.pushState({}, '', '/record?purpose=')
     vi.stubGlobal('fetch', authenticatedWithRecordRoutes())
     render(<App />)
@@ -318,11 +310,10 @@ describe('App (record loop)', () => {
     window.history.pushState({}, '', '/')
   })
 
-  // The /incidentals route and its hand-off into the record form, together:
-  // tapping the envelope's record action must land on the real form with
-  // that envelope's purpose already chosen. The route is detail-only since
-  // #263 (its list moved to Pengaturan), so it is reached directly with
-  // ?purpose=<id> here rather than through a list click.
+  // The /incidentals route and its hand-off into the record form: tapping the
+  // envelope's record action must land on the real form with that envelope's
+  // purpose chosen. The route is detail-only (its list moved to Pengaturan),
+  // so it is reached directly with ?purpose=<id>.
   it("routes an envelope's record action into the record form with its purpose chosen", async () => {
     const envelope = {
       purpose_id: 12,
@@ -360,9 +351,8 @@ describe('App (record loop)', () => {
     window.history.pushState({}, '', '/')
   })
 
-  // /incidentals with no ?purpose= (or an unparseable one) has nothing of
-  // its own to show now that its list is retired (#263) - it redirects to
-  // Pengaturan, which owns that list instead.
+  // /incidentals with no ?purpose= (or an unparseable one) has nothing to show
+  // now that its list is retired - it redirects to Pengaturan.
   it('redirects a bare /incidentals visit to settings', async () => {
     window.history.pushState({}, '', '/incidentals')
     vi.stubGlobal('fetch', authenticatedWithRecordRoutes())
@@ -409,9 +399,9 @@ describe('App (record loop)', () => {
   })
 })
 
-// M6.23 (ADR-032): Riwayat replaces Iuran's own footer slot with a tab
-// strip - these tests are the router-level half of that (Shell.test.tsx
-// covers the footer bar and its active markers on their own).
+// Riwayat (ADR-032) replaces Iuran's footer slot with a tab strip - these are
+// the router-level half (Shell.test.tsx covers the footer bar and its active
+// markers).
 describe('App (Riwayat)', () => {
   function authenticatedWithHistoryRoutes() {
     return routedFetch([
@@ -440,9 +430,8 @@ describe('App (Riwayat)', () => {
     await waitFor(() => expect(tab).toHaveAttribute('aria-current', 'page'))
   })
 
-  // The index route's <Navigate> fires as an effect, so the tab exists in
-  // the DOM a tick before it reads current - waitFor is what a real
-  // redirect needs here, not a single findByRole snapshot.
+  // The index route's <Navigate> fires as an effect, so the tab exists a tick
+  // before it reads current - waitFor, not a single findByRole snapshot.
   it('redirects /history to the Transaksi tab', async () => {
     window.history.pushState({}, '', '/history')
     vi.stubGlobal('fetch', authenticatedWithHistoryRoutes())
@@ -453,8 +442,8 @@ describe('App (Riwayat)', () => {
     window.history.pushState({}, '', '/')
   })
 
-  // #228: the status matrix is its own screen at /dues, outside Riwayat's
-  // tab strip - it never shares a page with the payment history.
+  // The status matrix is its own screen at /dues, outside Riwayat's tab strip
+  // - it never shares a page with the payment history.
   it('renders the dues status matrix on its own screen at /dues', async () => {
     window.history.pushState({}, '', '/dues')
     vi.stubGlobal('fetch', authenticatedWithHistoryRoutes())
@@ -466,9 +455,9 @@ describe('App (Riwayat)', () => {
     window.history.pushState({}, '', '/')
   })
 
-  // Deep link and reload both land on the right tab (Riwayat repeats the
-  // same rule Shell's own footer already states). The tab is the payment
-  // history alone, with the way into the matrix at its top (#228).
+  // Deep link and reload both land on the right tab (the rule Shell's footer
+  // states). The tab is the payment history alone, with the way into the
+  // matrix at its top.
   it('deep-links straight to /history/dues with that tab current', async () => {
     window.history.pushState({}, '', '/history/dues')
     vi.stubGlobal('fetch', authenticatedWithHistoryRoutes())
@@ -484,9 +473,8 @@ describe('App (Riwayat)', () => {
     window.history.pushState({}, '', '/')
   })
 
-  // Same rule again, for Cek kas (#227): a fourth tab route,
-  // /history/reconciliations, must be reachable by deep link with its own
-  // tab reading current.
+  // Same rule for Cek kas: /history/reconciliations is reachable by deep link
+  // with its tab reading current.
   it('deep-links straight to /history/reconciliations with that tab current', async () => {
     window.history.pushState({}, '', '/history/reconciliations')
     vi.stubGlobal(
@@ -517,10 +505,9 @@ describe('App (connectivity watcher)', () => {
   it('shows the offline banner when the browser goes offline, and clears it when connectivity returns', async () => {
     vi.stubGlobal('fetch', authenticatedWithFund())
     render(<App />)
-    // Let the session probe's own successful response settle first - it
-    // calls the same connectivity watcher (a 2xx counts as "online") and
-    // would otherwise race the offline event dispatched below and win,
-    // masking it.
+    // Let the session probe's successful response settle first - it calls the
+    // connectivity watcher (a 2xx counts as "online") and would otherwise race
+    // the offline event dispatched below and win, masking it.
     await screen.findByText(copy.home.balanceHeading)
     expect(screen.queryByText(copy.common.offlineBanner)).not.toBeInTheDocument()
 

@@ -25,9 +25,9 @@ function jsonResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } })
 }
 
-/** Routes a stubbed fetch by method + path substring. Every call is recorded
- * on the returned mock's own `.mock.calls`, so a test can assert on what a
- * specific route was called with. */
+/** Routes a stubbed fetch by method + path substring. Every call is recorded on
+ * the returned mock's `.mock.calls`, so a test can assert on what a route was
+ * called with. */
 function routedFetch(handlers: { match: (method: string, url: string) => boolean; handle: () => Promise<Response> }[]) {
   return vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
     const url = typeof input === 'string' ? input : input.toString()
@@ -71,8 +71,8 @@ describe('Setup', () => {
     expect(removeButtons).toHaveLength(2)
 
     await userEvent.click(removeButtons[0])
-    // Down to one row: its own remove button is now disabled, and the
-    // minimum-one-location message is shown.
+    // Down to one row: its remove button is disabled and the minimum-one-location
+    // message is shown.
     const remaining = screen.getAllByRole('button', { name: text.locations.removeRow })
     expect(remaining).toHaveLength(1)
     expect(remaining[0]).toBeDisabled()
@@ -102,8 +102,8 @@ describe('Setup', () => {
     render(<Setup onDone={vi.fn()} />)
     await goPastFundName()
 
-    // Rename the seeded "Tunai" row to something else - the row must post
-    // under the new name, not get filtered out as a "default".
+    // Rename the seeded "Tunai" row: the row must post under the new name, not
+    // get filtered out as a "default".
     const nameInputs = screen.getAllByLabelText(text.locations.nameLabel)
     await userEvent.clear(nameInputs[0])
     await userEvent.type(nameInputs[0], 'Kas Ketua RT')
@@ -177,10 +177,10 @@ describe('Setup', () => {
     }
     const tunai = body.accounts.find((a) => a.name === 'Tunai')
     const bank = body.accounts.find((a) => a.name === 'Bank')
-    // #257: no note is typed in this wizard, and nothing is generated onto
-    // the wire - this row is read again months later, in home's recent
-    // activity and in the public report, through TransactionList's own
-    // display label ("Saldo awal - {lokasi}") rather than stored text.
+    // No note is typed in this wizard and nothing is generated onto the wire -
+    // the row is read again months later in home's recent activity and the
+    // public report through TransactionList's display label ("Saldo awal -
+    // {lokasi}"), not stored text.
     expect(tunai?.opening_balance).toMatchObject({ amount: 50000 })
     expect(tunai?.opening_balance?.note).toBeUndefined()
     expect(bank?.opening_balance).toBeUndefined()
@@ -260,7 +260,7 @@ describe('Setup', () => {
     await userEvent.click(screen.getByRole('button', { name: text.back }))
     expect(await screen.findByText(text.locations.heading)).toBeInTheDocument()
 
-    // Remove the first row (Tunai) - Bank's own amount must survive.
+    // Remove the first row (Tunai) - Bank's amount must survive.
     await userEvent.click(screen.getAllByRole('button', { name: text.locations.removeRow })[0])
     await goPastLocations()
 
@@ -290,8 +290,8 @@ describe('Setup', () => {
     await userEvent.type(screen.getByLabelText(text.balances.amountLabel('Tunai')), '50000')
     await userEvent.click(screen.getByRole('button', { name: text.next }))
 
-    // Still on balances, with the failure rendered - never advanced past a
-    // call that did not succeed.
+    // Still on balances, with the failure rendered - never advanced past a call
+    // that did not succeed.
     expect(await screen.findByRole('alert')).toHaveTextContent(copy.common.errors.invalid_argument)
     expect(screen.getByText(text.balances.heading)).toBeInTheDocument()
     expect(screen.queryByText(text.roster.heading)).not.toBeInTheDocument()
@@ -307,12 +307,12 @@ describe('Setup', () => {
     expect(body.accounts.find((a) => a.name === 'Tunai')?.opening_balance).toMatchObject({ amount: 50000 })
   })
 
-  // The roster step's own writes: the tier, its first rate effective from the
-  // current month (never a backdated one, so nobody owes a month before
-  // adoption), then each named member joined today on that tier.
+  // The roster step's writes: the tier, its first rate effective from the
+  // current month (never backdated, so nobody owes a month before adoption),
+  // then each named member joined today on that tier.
   it('finishes the roster with the tier, its first rate this month, and members joined today', async () => {
     // Only Date is faked, at a local time, so "today" and "this month" are the
-    // browser's local date and userEvent's own timers keep running.
+    // browser's local date and userEvent's timers keep running.
     vi.useFakeTimers({ toFake: ['Date'] })
     vi.setSystemTime(new Date(2026, 2, 15, 9, 30))
     const onDone = vi.fn()

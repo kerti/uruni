@@ -19,26 +19,26 @@ import type { DuesRate, DuesTier } from '@/lib/setup'
 const text = copy.settings.tiers
 
 /** Local YYYY-MM - never toISOString(), which is UTC and can read a month
- * early in WIB. Same helper as Status.tsx's currentISOMonth. */
+ * early in WIB. */
 function currentISOMonth(): string {
   const now = new Date()
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
 }
 
-/** Every tier the fund has, each with its own rate history. One shape for
- * the whole section: the card list reads the current price off it, and the
- * dialog reads the same rows rather than fetching them a second time. */
+/** Every tier the fund has, each with its rate history. One shape for the
+ * section: the card list reads the current price off it, and the dialog reads
+ * the same rows rather than fetching them again. */
 interface TiersData {
   tiers: DuesTier[]
-  /** tier id -> that tier's rates, oldest first (listDuesRates' own order). */
+  /** tier id -> that tier's rates, oldest first (listDuesRates' order). */
   rates: Map<number, DuesRate[]>
 }
 
 /**
- * The rate in force for `month` - the latest row at or before it, which is
- * exactly what the server's own GetEffectiveDuesRate reads. Null when the
- * tier has no rate yet, or none that has started: both are legal states
- * (PRD section 6's madya), not errors.
+ * The rate in force for `month` - the latest row at or before it, as the
+ * server's GetEffectiveDuesRate reads. Null when the tier has no rate yet, or
+ * none that has started: both are legal states (PRD section 6's madya), not
+ * errors.
  */
 function effectiveRate(rates: DuesRate[], month: string): DuesRate | null {
   let found: DuesRate | null = null
@@ -49,25 +49,19 @@ function effectiveRate(rates: DuesRate[], month: string): DuesRate | null {
 }
 
 /**
- * Dues tiers and their rates (M6.17, moved here from Anggota by M6.31 -
- * #232), as a Pengaturan card list with dialog editing.
+ * Dues tiers and their rates, as a Pengaturan card list with dialog editing.
+ * Moved here from Anggota: once the roster row shows the tier's effect, the
+ * two are read together on the roster and written together only rarely.
+ * Naming and pricing a tier is rare admin; the roster is an everyday list.
  *
- * The move supersedes M6.16/M6.17's own placement, whose reason was that "a
- * member's tier is set on the member, so the two are read and edited in one
- * sitting". That stops holding once the roster row shows the tier's effect
- * (#233): the two are then read together on the roster and written together
- * only rarely. Naming and pricing a tier is rare admin; the roster is an
- * everyday list.
- *
- * The rule this section exists to express is unchanged by the move: **a rate
- * is added, never repriced in place.** A new price is a new row effective
- * from a new month, because the old one still explains the months it covered
- * - GetEffectiveDuesRate reads the latest row at or before the period being
+ * **A rate is added, never repriced in place.** A new price is a new row
+ * effective from a new month, because the old one still explains the months it
+ * covered - GetEffectiveDuesRate reads the latest row at or before the period
  * asked about, so overwriting one would silently restate every settled month
- * it touched. PATCH is only for a mistyped amount on the row just entered,
- * and DELETE for one filed against the wrong month entirely - which is what
- * makes that correctable at all, since UNIQUE (tier_id, effective_from)
- * refuses the corrected row while the wrong one stands.
+ * it touched. PATCH is only for a mistyped amount on the row just entered, and
+ * DELETE for one filed against the wrong month - which makes that correctable,
+ * since UNIQUE (tier_id, effective_from) refuses the corrected row while the
+ * wrong one stands.
  *
  * Rates load with the tiers rather than per card, so opening a tier's dialog
  * costs no further request and the card can show what the tier costs today.
@@ -91,18 +85,17 @@ export default function DuesTiers() {
     void run(load)
   }
 
-  // #507: after a write whose response was lost, re-read in place.
+  // After a write whose response was lost, re-read in place.
   const refresh = () => run(load, { silent: true })
 
   const tiers = state.data?.tiers ?? []
   const target = parseDialogTarget('tier', value)
 
-  // This section owns exactly one dialog now - `tier:new` (#285 moved
-  // editing to the golongan's own screen) - so any other `tier:` value is
-  // a stale link to a dialog that no longer exists here. Strip it rather
-  // than leave a parameter naming nothing: `clear` and never `close`, and
-  // never a `foreign` value, both for the reasons Locations documents at
-  // the same effect.
+  // This section owns one dialog - `tier:new` (editing lives on the golongan's
+  // screen) - so any other `tier:` value is a stale link to a dialog that no
+  // longer exists here. Strip it rather than leave a parameter naming nothing:
+  // `clear` and never `close`, and never a `foreign` value, for the reasons
+  // Locations documents at the same effect.
   useEffect(() => {
     if (target.kind === 'foreign' || target.kind === 'new') return
     if (state.status !== 'success') return

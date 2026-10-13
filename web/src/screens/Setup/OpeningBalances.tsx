@@ -13,21 +13,20 @@ import type { LocationRow } from '@/screens/Setup/locationRow'
 const text = copy.setup
 
 /**
- * Setup step 3 of 4: an optional opening balance per location named on step
- * 2. Left blank, that row's amount never leaves the browser - submitting
- * fires the wizard's one POST /api/setup (#230: the fund, its accounts and
- * their opening balances are created together, in one database transaction,
- * or not at all), and only a row that parsed to a non-zero amount carries an
- * `opening_balance` in that request, matching the server's own "a zero
- * amount posts no row" contract rather than sending a zero-amount balance
- * just to have the route tolerate it.
+ * Setup step 3 of 4: an optional opening balance per location named on step 2.
+ * Left blank, a row's amount never leaves the browser - submitting fires the
+ * wizard's one POST /api/setup (the fund, its accounts and their opening
+ * balances are created together, in one database transaction, or not at
+ * all), and only a row that parsed to a non-zero amount carries an
+ * `opening_balance`, matching the server's "a zero amount posts no row"
+ * contract rather than sending a zero balance for the route to tolerate.
  *
  * Fields hold the grouped display string (formatRupiahDigits), re-derived on
- * every keystroke from parseRupiah so a typed "1000000" always reads back as
- * "1.000.000" - the same edge money.ts documents for any amount input.
+ * every keystroke from parseRupiah so a typed "1000000" reads back as
+ * "1.000.000" - the edge money.ts documents for any amount input.
  *
- * Going back to step 2 is always safe: nothing has posted yet, and rows are
- * matched by `clientId` so their names and amounts survive the round trip.
+ * Going back to step 2 is safe: nothing has posted yet, and rows are matched
+ * by `clientId` so names and amounts survive the round trip.
  */
 export default function OpeningBalances({
   rows,
@@ -45,7 +44,7 @@ export default function OpeningBalances({
   error: ApiError | undefined
 }) {
   function handleAmountChange(clientId: string, raw: string) {
-    // A thirteenth digit is not accepted (the ceiling, #499): the field keeps its value.
+    // A thirteenth digit is not accepted (the ceiling): the field keeps its value.
     if (exceedsAmountCeiling(raw)) return
     const digits = parseRupiah(raw)
     onChange(clientId, digits === 0 ? '' : formatRupiahDigits(digits))

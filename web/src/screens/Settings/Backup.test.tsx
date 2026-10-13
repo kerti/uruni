@@ -21,9 +21,9 @@ afterEach(() => {
 })
 
 function zipResponse(filename = 'uruni.zip') {
-  // A string body, not a jsdom Blob: Node 22's own Response cannot read a
-  // jsdom Blob back out (res.blob() throws), so a Blob body passed under
-  // Node 24 and failed under 22 - the stub has to work on either.
+  // A string body, not a jsdom Blob: Node 22's Response cannot read a jsdom
+  // Blob back out (res.blob() throws), so a Blob body passed under Node 24 and
+  // failed under 22 - the stub has to work on either.
   return new Response('stub zip bytes', {
     status: 200,
     headers: { 'Content-Type': 'application/zip', 'Content-Disposition': `attachment; filename="${filename}"` },
@@ -52,12 +52,11 @@ function requestURL(input: RequestInfo | URL): string {
 }
 
 /**
- * Every test in this file needs GET /api/backups to answer with *something*
- * - the auto-list fetches it on mount regardless of what the test is
- * actually about - so this is the one fetch stub every case builds on:
- * route by URL, default the list to empty unless a test asks otherwise, and
- * fail loudly on an unexpected path rather than silently returning
- * undefined (which would surface as a confusing "res.ok of undefined").
+ * Every test needs GET /api/backups to answer with *something* - the
+ * auto-list fetches it on mount regardless - so this is the one fetch stub
+ * every case builds on: route by URL, default the list to empty unless a test
+ * asks otherwise, and fail loudly on an unexpected path rather than returning
+ * undefined (a confusing "res.ok of undefined").
  */
 function stubFetch(overrides: { download?: () => Response; list?: () => Response; restoreInspectStored?: () => Response }) {
   const fetchMock = vi.fn((input: RequestInfo | URL) => {
@@ -87,9 +86,9 @@ describe('Settings backup card', () => {
 
   it('downloads the zip when the button is tapped, disabling itself meanwhile', async () => {
     const fetchMock = stubFetch({})
-    // jsdom has no object URL support - stubbed so saveBlob's own calls
-    // don't throw, not asserted on further: this test is about the request
-    // and the button's own state, not the browser's save mechanics.
+    // jsdom has no object URL support - stubbed so saveBlob's calls don't
+    // throw; this test is about the request and the button's state, not the
+    // browser's save mechanics.
     vi.stubGlobal('URL', { ...URL, createObjectURL: vi.fn(() => 'blob:stub'), revokeObjectURL: vi.fn() })
 
     const user = userEvent.setup()
@@ -146,9 +145,8 @@ describe('Settings backup card', () => {
     stubFetch({})
     render(<Backup />)
     const button = screen.getByRole('button', { name: text.download })
-    // h-11 is Tailwind's 44px (2.75rem @ 16px root) - the same class every
-    // other primary action on this screen uses (FundName's save button,
-    // Locations' add button).
+    // h-11 is Tailwind's 44px (2.75rem @ 16px root), the class every other
+    // primary action on this screen uses.
     expect(button.className).toContain('h-11')
   })
 })
@@ -305,8 +303,7 @@ describe('Settings backup card - automatic backup list', () => {
       expect(fetchMock).toHaveBeenCalledWith(`/api/restore/inspect-stored/${name}`, expect.objectContaining({ method: 'POST' })),
     )
     // Past this point it is the identical confirm dialog RestoreDialog.test.tsx
-    // already covers in depth - only the entry point differs, so this is the
-    // one fact worth proving here.
+    // covers in depth - only the entry point differs.
     expect(await screen.findByText(confirmText.dateLabel('2026-09-30'))).toBeInTheDocument()
   })
 
@@ -318,8 +315,8 @@ describe('Settings backup card - automatic backup list', () => {
     render(<Backup />)
 
     const rowButton = await screen.findByRole('button', { name: text.downloadRowAria(text.kindDaily, formatIsoDate('2026-09-30')) })
-    // size-11 is Tailwind's 44px, the same scale h-11 uses elsewhere on this
-    // screen - a row control this small still needs the full touch target.
+    // size-11 is Tailwind's 44px, the scale h-11 uses elsewhere on this screen -
+    // a row control this small still needs the full touch target.
     expect(rowButton.className).toContain('size-11')
   })
 })

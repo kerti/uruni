@@ -44,8 +44,8 @@ describe('parseRupiah', () => {
 
   it('never goes through a float: a typed decimal keeps every digit', () => {
     // parseFloat('1.5') would be 1.5, and a naive strip-then-parse would be
-    // 15 rupiah; both are wrong for a field that only ever means whole
-    // rupiah. 15 is the honest reading of the digits typed.
+    // 15 rupiah; both are wrong for whole-rupiah fields. 15 is the honest
+    // reading of the digits typed.
     expect(parseRupiah('1.5')).toBe(15)
     expect(Number.isInteger(parseRupiah('1.5'))).toBe(true)
   })

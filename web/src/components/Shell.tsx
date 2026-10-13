@@ -10,11 +10,11 @@ import { copy } from '@/copy/id'
 import { logout } from '@/lib/auth'
 import { useApi } from '@/lib/useApi'
 
-/** The footer's five destinations, in order (M6.23, ADR-032). Kept here
- * rather than passed in: the bar is the app's navigation, and a caller that
- * could vary it would be a caller that could give one screen a different
- * app. `primary` marks Catat, the one raised slot. Riwayat's icon is a clock,
- * not a money glyph: Design-System.md rules those out as imagery. */
+/** The footer's five destinations, in order (ADR-032). Kept here rather than
+ * passed in: the bar is the app's navigation, and a caller that could vary it
+ * could give one screen a different app. `primary` marks Catat, the one
+ * raised slot. Riwayat's icon is a clock, not a money glyph: Design-System.md
+ * rules those out as imagery. */
 const navItems = [
   { to: '/', icon: Home, label: copy.shell.nav.home, end: true, primary: false },
   { to: '/history', icon: History, label: copy.shell.nav.history, end: false, primary: false },
@@ -25,55 +25,44 @@ const navItems = [
 ] as const
 
 /**
- * The frame every authenticated screen renders inside, from M6.8 onward
- * (M6.6). Three jobs, and deliberately no more:
+ * The frame every authenticated screen renders inside. Three jobs, and
+ * deliberately no more:
  *
- * 1. A header naming the fund, so the treasurer always knows which kas she
- *    is looking at, with the app's only logout affordance next to it - M6.4
- *    wired POST /api/logout but left it unexposed, waiting for exactly this.
+ * 1. A header naming the fund, so the treasurer always knows which kas she is
+ *    looking at, with the app's only logout affordance next to it.
  * 2. Safe-area padding, so the header clears a notch and the footer clears a
  *    home indicator. index.html carries the matching `viewport-fit=cover`;
  *    without it the env() insets are all zero.
  * 3. A sticky footer carrying the app's five destinations - Beranda,
- *    Riwayat, Catat, Anggota, Pengaturan (M6.23, ADR-032). Five is the
- *    platform's own cap for a tab bar, not over it: at 375px that is 75px a
- *    tab, which fits an 11px label. Four are nouns; Catat is the one
- *    privileged verb ADR-032 allows, which is why it alone renders as a
- *    raised Forest pill rather than another flat tab - see the render logic
- *    below.
+ *    Riwayat, Catat, Anggota, Pengaturan (ADR-032). Five is the platform's
+ *    cap for a tab bar: at 375px that is 75px a tab, which fits an 11px
+ *    label. Four are nouns; Catat is the one privileged verb ADR-032 allows,
+ *    which is why it alone renders as a raised Forest pill.
  *
- * That footer replaced two earlier shapes, both deliberately (M6.15, the
- * maintainer's call). It replaced this file's own "not a nav bar" ruling,
- * which held while there were two screens and stopped holding at six; and it
- * replaced Design-System.md's circular add-FAB, since "Catat" became a tab
- * and a screen may not have two entry points. M6.23 then moved Iuran off
- * this bar and into a tab under Riwayat (History.tsx, /history/dues) - dues
- * status is one reading of one month, and it was occupying a fifth of the
- * app's navigation on its own. Since #228 that tab is the payment history,
- * and the status matrix is its own screen at /dues, opened from the tab.
+ * Catat is a tab, so a screen may not also have Design-System.md's circular
+ * add-FAB (a second entry point). Iuran is a tab under Riwayat (History.tsx,
+ * /history/dues), not on this bar: dues status is one reading of one month.
+ * That tab is the payment history; the status matrix is its own screen at
+ * /dues, opened from the tab.
  *
- * Reconcile is deliberately not a tab: M6.10's ruling is that the
- * reconciliation banner on home IS its affordance, and a tab would give that
- * screen a second door.
+ * Reconcile is deliberately not a tab: the reconciliation banner on home IS
+ * its affordance, and a tab would give that screen a second door.
  *
- * The header's fund name is a link home as well (M6.16). That is a second
- * way to the same place, never the only one - a top-corner control is the
- * hardest thing on a phone to reach one-handed, which is exactly why the
- * Beranda tab stays.
+ * The header's fund name is a link home as well - a second way to the same
+ * place, never the only one: a top-corner control is the hardest thing on a
+ * phone to reach one-handed, which is why the Beranda tab stays.
  *
- * Active state (M6.23): a Forest line on the bar's top edge above the
- * current slot, plus a Forest caption and icon - the line is the half that
- * is not color. It is the same for all five, Catat included, which is what
- * lets Catat's raised Forest circle stay identical on every screen: the
- * circle is the verb's permanent emphasis, never "you are here".
- * `aria-current` is what assistive tech reads. Resting slots sit at 80% of
- * muted-foreground, icon and caption alike, which keeps the icons at the
- * 3:1 non-text contrast minimum.
+ * Active state: a Forest line on the bar's top edge above the current slot,
+ * plus a Forest caption and icon - the line is the half that is not color. It
+ * is the same for all five, Catat included, which lets Catat's raised Forest
+ * circle stay identical on every screen: the circle is the verb's permanent
+ * emphasis, never "you are here". `aria-current` is what assistive tech
+ * reads. Resting slots sit at 80% of muted-foreground, icon and caption
+ * alike, which keeps the icons at the 3:1 non-text contrast minimum.
  *
  * Every slot reserves the same icon row above its caption, so all five
- * captions sit on one baseline; Catat's row stays empty and its icon rides
- * in the circle above it. Icons keep one size when active for the same
- * reason - a growing icon would push its caption off that baseline.
+ * captions sit on one baseline; Catat's row stays empty and its icon rides in
+ * the circle above it. Icons keep one size when active for the same reason.
  */
 export default function Shell({
   title,

@@ -1,11 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 
-/** The private tag this hook writes to `location.state` on the entry it
- * pushes for `open()` - not app data, just a marker `close()` reads back to
- * tell "this entry exists because a dialog was opened from within the app"
- * apart from "the browser landed here directly" (a deep link, a reload, a
- * bookmark). */
+/** The private tag this hook writes to `location.state` on the entry `open()`
+ * pushes - a marker `close()` reads back to tell "this entry exists because a
+ * dialog was opened from within the app" from "the browser landed here
+ * directly" (a deep link, a reload, a bookmark). */
 interface DialogLocationState {
   dialog?: boolean
   /** Set by `clear()`: this entry differs from the one before it only by a
@@ -23,22 +22,22 @@ function isDialogEntry(state: unknown): boolean {
 /**
  * The "reload your data" signal App.tsx hands every screen that refetches on
  * navigation: `location.key`, except across entries a dialog pushed or
- * cleared (#359).
+ * cleared.
  *
  * Every navigation mints a new `location.key`, and an open dialog is a
- * navigation (ADR-032). Fed straight to a screen's refetch, opening any
- * dialog reloaded the list underneath it - dropped it to Loading, threw away
- * the pages she had loaded with "Muat lebih banyak", and left her back at
- * the top. Opening and closing a dialog changes nothing a list shows; a
- * write made inside one already refreshes its own screen explicitly. So the
- * key only moves on an entry that is not a dialog's, and going back from a
- * dialog lands on the very entry - same key - she opened it from.
+ * navigation (ADR-032). Fed straight to a screen's refetch, opening a dialog
+ * reloaded the list underneath it - dropping it to Loading, discarding the
+ * pages loaded with "Muat lebih banyak". Opening and closing a dialog changes
+ * nothing a list shows (a write inside one refreshes its own screen
+ * explicitly), so the key only moves on an entry that is not a dialog's, and
+ * going back from a dialog lands on the very entry - same key - it was opened
+ * from.
  */
 export function useRefetchKey(): string {
   const location = useLocation()
   const [key, setKey] = useState(location.key)
-  // Derived state, set during render (React's own pattern for it) so the
-  // screen never renders once with a stale key and once with the new one.
+  // Derived state, set during render (React's pattern for it) so the screen
+  // never renders once with a stale key and once with the new one.
   if (!isDialogEntry(location.state) && location.key !== key) {
     setKey(location.key)
   }
@@ -47,19 +46,17 @@ export function useRefetchKey(): string {
 
 /**
  * Search-param-driven dialog state (ADR-032 "An open dialog is a search
- * parameter"). No component holds modal open/closed state of its own - the
- * URL is the source of truth, so back/forward, reload and a deep link all
- * agree with what is on screen.
+ * parameter"). No component holds modal open/closed state: the URL is the
+ * source of truth, so back/forward, reload and a deep link all agree with
+ * what is on screen.
  *
- * `open(value)` pushes a history entry carrying `?<param>=<value>` and
- * marks it with the tag above. `close()` reads the tag back: when the
- * current entry was pushed by `open`, closing is `navigate(-1)`, so Batal,
- * a backdrop tap, Esc and the browser/Android back gesture all land in
- * exactly the same place - never a fresh entry stacked behind the one that
- * opened it. When the current entry was NOT pushed by `open` (a deep link
- * straight to `?edit=...`), there is nothing inside the app to go back to,
- * so `close()` strips the param in place instead (`replace: true`) - never
- * navigating the user out of the app.
+ * `open(value)` pushes a history entry carrying `?<param>=<value>` and marks
+ * it with the tag above. `close()` reads the tag back: when the current entry
+ * was pushed by `open`, closing is `navigate(-1)`, so Batal, a backdrop tap,
+ * Esc and the back gesture all land in the same place - never a fresh entry
+ * stacked behind the one that opened it. When it was NOT pushed by `open` (a
+ * deep link straight to `?edit=...`), `close()` strips the param in place
+ * (`replace: true`) instead of navigating the user out of the app.
  */
 export function useDialogParam(param = 'edit') {
   const [searchParams, setSearchParams] = useSearchParams()
@@ -69,9 +66,9 @@ export function useDialogParam(param = 'edit') {
   const value = searchParams.get(param)
 
   // react-router hands back a new setSearchParams whenever the search
-  // changes. Reading it through a ref keeps open/clear/close identities
-  // tied to `param` alone, so an effect that calls clear() can list it
-  // honestly without re-running on every URL change.
+  // changes. Reading it through a ref ties open/clear/close identities to
+  // `param` alone, so an effect that calls clear() can list it without
+  // re-running on every URL change.
   const setSearchParamsRef = useRef(setSearchParams)
   useEffect(() => {
     setSearchParamsRef.current = setSearchParams
@@ -92,10 +89,9 @@ export function useDialogParam(param = 'edit') {
   )
 
   // Strips the param in place and never moves through history. close()'s
-  // fallback, and on its own the right call for a param naming something
-  // that does not exist: calling close() there instead can run after a
-  // close() already in flight has gone back, and a second navigate(-1)
-  // takes her off the screen entirely.
+  // fallback, and the right call for a param naming something that does not
+  // exist: close() there can run after a close() already in flight has gone
+  // back, and a second navigate(-1) takes her off the screen entirely.
   const clear = useCallback(() => {
     setSearchParamsRef.current(
       (prev) => {

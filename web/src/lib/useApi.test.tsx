@@ -59,9 +59,8 @@ describe('useApi', () => {
     expect(result.current[0].error?.code).toBe('unknown_error')
   })
 
-  // The race this shape always has: a slow first call must not overwrite a
-  // newer one that already answered. Only the most recently *started* call
-  // may commit.
+  // The race: a slow first call must not overwrite a newer one that already
+  // answered. Only the most recently *started* call may commit.
   it('ignores a slow response that lost the race to a newer call', async () => {
     const slow = deferred<string>()
     const fast = deferred<string>()
@@ -89,10 +88,10 @@ describe('useApi', () => {
     expect(result.current[0].status).toBe('success')
   })
 
-  // RunOptions.silent: a background refresh keeps what is on screen. Both
-  // halves matter - Home calls this on every return to the foreground, so
-  // dropping to loading would blank the balance on every app switch, and
-  // failing loudly would erase it whenever the network blinked.
+  // RunOptions.silent: a background refresh keeps what is on screen. Home
+  // calls this on every return to the foreground, so dropping to loading
+  // would blank the balance on every app switch, and failing loudly would
+  // erase it whenever the network blinked.
   it('a silent run keeps the previous data instead of showing loading', async () => {
     const { result } = renderHook(() => useApi<string>())
 
@@ -132,8 +131,8 @@ describe('useApi', () => {
     expect(result.current[0].error).toBeUndefined()
   })
 
-  // #507: the settle option re-reads for an uncertain write, and only then
-  // does the error state land.
+  // The settle option re-reads for an uncertain write, and only then does the
+  // error state land.
   it('runs settle before the error state for write_outcome_unknown, and not for other codes', async () => {
     const { result } = renderHook(() => useApi<string>())
     const settle = vi.fn(() => {
@@ -153,17 +152,14 @@ describe('useApi', () => {
   })
 
   // The hook's other guard - not committing after unmount - is deliberately
-  // NOT asserted here, because no assertion in this environment can tell it
-  // apart from its absence. React 19 makes a setState on an unmounted
-  // component a silent no-op (no warning since 18), and renderHook's
-  // `result.current` freezes at the last render either way, so a test written
-  // against it passes with the guard deleted. Verified by mutation: removing
-  // `!mountedRef.current` leaves every test in this file green, while removing
-  // the callId check reddens the race test above.
-  //
-  // The guard stays in the hook - it is correct, and it will matter again the
-  // moment a caller holds a ref across unmount - but pretending it is covered
-  // would be worse than saying it is not.
+  // NOT asserted here: nothing in this environment can tell it from its
+  // absence. React 19 makes setState on an unmounted component a silent no-op,
+  // and renderHook's `result.current` freezes at the last render either way.
+  // Verified by mutation: removing `!mountedRef.current` leaves every test
+  // here green, while removing the callId check reddens the race test above.
+  // The guard stays - it will matter once a caller holds a ref across
+  // unmount - but pretending it is covered would be worse than saying it is
+  // not.
   it('resolving after unmount neither throws nor warns', async () => {
     const call = deferred<string>()
     const { result, unmount } = renderHook(() => useApi<string>())

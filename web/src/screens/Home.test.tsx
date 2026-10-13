@@ -8,8 +8,8 @@ import Home from '@/screens/Home'
 import { copy } from '@/copy/id'
 import { formatIDR } from '@/lib/money'
 
-// The recent-activity list keeps its entry-detail dialog in the URL (#359),
-// so Home needs a router around it.
+// The recent-activity list keeps its entry-detail dialog in the URL, so Home
+// needs a router around it.
 function render(ui: ReactElement) {
   return rtlRender(ui, { wrapper: MemoryRouter })
 }
@@ -22,20 +22,17 @@ function jsonResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } })
 }
 
-/** formatIDR's output for use as a getByText/findByText matcher: testing-
- * library normalizes the DOM text it searches (collapsing whitespace,
- * including the U+00A0 non-breaking space Intl.NumberFormat inserts after
- * "Rp") but never normalizes a string matcher itself, so a raw formatIDR()
- * string with its NBSP intact never equals the normalized DOM text it is
- * compared against. */
+/** formatIDR's output for use as a getByText/findByText matcher: testing-library
+ * normalizes the DOM text it searches (collapsing whitespace, including the
+ * U+00A0 Intl.NumberFormat inserts after "Rp") but never a string matcher, so
+ * a raw formatIDR() string with its NBSP intact never equals the DOM text. */
 function money(amount: number): string {
   return formatIDR(amount).replace(/\u00a0/g, ' ')
 }
 
-// M6.33's purpose breakdown: 12 (pass_through) always qualifies, 13 (an
-// open incidental, per the default openIncidentals fixture below)
-// qualifies, and 14 (an incidental with no matching open envelope, i.e.
-// closed) does not.
+// The purpose breakdown: 12 (pass_through) always qualifies, 13 (an open
+// incidental, per the default openIncidentals fixture) qualifies, and 14 (an
+// incidental with no matching open envelope, i.e. closed) does not.
 const balances = {
   fund_total: 1_450_000,
   owed_to_members: 0,
@@ -61,8 +58,7 @@ const openIncidentalEnvelope = {
   created_at: 1,
 }
 
-// Newest-first (#225's own order - GET /api/transactions no longer answers
-// oldest-first, and Home.tsx no longer reverses it).
+// Newest-first, as GET /api/transactions answers.
 const transactionsPage = {
   transactions: [
     {
@@ -103,8 +99,8 @@ const transactionsPage = {
 
 const latestReconciliation = { id: 1, performed_at: 1_756_000_000, through_transaction_id: 5, note: null, created_at: 1_756_000_000 }
 
-/** Routes a stubbed fetch by method + path substring, same idiom as
- * RecordTransaction.test.tsx's own routedFetch. */
+/** Routes a stubbed fetch by method + path substring, as
+ * RecordTransaction.test.tsx's routedFetch does. */
 function routedFetch(handlers: { match: (method: string, url: string) => boolean; handle: () => Promise<Response> }[]) {
   return vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
     const url = typeof input === 'string' ? input : input.toString()
@@ -213,10 +209,9 @@ describe('Home', () => {
     expect(screen.queryByText(copy.reconciliation.neverChecked)).not.toBeInTheDocument()
   })
 
-  // The reconciliation banner is the reconcile screen's entry point
-  // (M6.10) - Home stays router-agnostic and hands the click straight to
-  // whatever App.tsx wired up as navigation, the same contract
-  // RecordTransaction.tsx's onRecorded/onCancel already use.
+  // The reconciliation banner is the reconcile screen's entry point - Home
+  // stays router-agnostic and hands the click to whatever App.tsx wired up, as
+  // RecordTransaction.tsx's onRecorded/onCancel do.
   it('calls onReconcile when the reconciliation banner is activated', async () => {
     vi.stubGlobal('fetch', stubHome())
     const onReconcile = vi.fn()
@@ -236,8 +231,8 @@ describe('Home', () => {
   })
 
   // GET /api/reconciliations/latest answering 404 not_found is a normal
-  // first-run state (a fund that has never been reconciled), not an error -
-  // it must render the first-run copy, never ErrorState.
+  // first-run state (a fund never reconciled), not an error - it must render
+  // the first-run copy, never ErrorState.
   it('treats a 404 not_found from /api/reconciliations/latest as first-run, not an error', async () => {
     vi.stubGlobal('fetch', stubHome({ latest: 'not_found' }))
     render(
@@ -272,9 +267,9 @@ describe('Home', () => {
     )
 
     const items = await screen.findAllByText(/Rp/)
-    // GET /api/transactions answers newest-first itself now (#225) - the
-    // 200_000 "in" entry (occurred 2026-09-02) is the newest, so it appears
-    // before the 50_000 "out" entry (occurred 2026-09-01) in document order.
+    // GET /api/transactions answers newest-first: the 200_000 "in" entry
+    // (occurred 2026-09-02) is newer than the 50_000 "out" entry (2026-09-01),
+    // so it comes first in document order.
     const amounts = items.map((el) => el.textContent)
     const inIndex = amounts.findIndex((t) => t === formatIDR(200_000))
     const outIndex = amounts.findIndex((t) => t === formatIDR(50_000))
@@ -296,8 +291,8 @@ describe('Home', () => {
     )
 
     // purpose_id 11 is 'Kas Utama' in balances.purposes - both entries carry
-    // it, so both rows are labelled without a fifth request (the third is
-    // the breakdown's own Kas Utama row).
+    // it, so both rows are labelled without another request (the third match is
+    // the breakdown's Kas Utama row).
     expect(await screen.findAllByText('Kas Utama')).toHaveLength(3)
     // The optional note (PRD 6) shows when there is one, and nothing stands
     // in for it when there isn't.
@@ -322,10 +317,9 @@ describe('Home', () => {
     const callsBefore = fetchMock.mock.calls.length
     document.dispatchEvent(new Event('visibilitychange'))
 
-    // The refresh is silent: the balance stays on screen throughout rather
-    // than dropping to the loading state on every app switch (iOS may or
-    // may not have evicted the app - a warm resume shows stale numbers
-    // unless something re-reads them).
+    // The refresh is silent: the balance stays on screen rather than dropping
+    // to loading on every app switch (a warm resume shows stale numbers unless
+    // something re-reads them).
     await waitFor(() => expect(fetchMock.mock.calls.length).toBeGreaterThan(callsBefore))
     expect(screen.getByText(money(1_450_000))).toBeInTheDocument()
     expect(screen.queryByText(copy.common.loading)).not.toBeInTheDocument()
@@ -333,7 +327,7 @@ describe('Home', () => {
 
   // The recent-five peek is evidence a record just worked (App.tsx's
   // handleRecorded), not the whole list - this link is the way to the rest
-  // (M6.23, ADR-032). Router-agnostic, same contract as onReconcile above.
+  // (ADR-032).
   it('calls onViewHistory when "lihat semua" is activated', async () => {
     vi.stubGlobal('fetch', stubHome())
     const onViewHistory = vi.fn()
@@ -382,7 +376,7 @@ describe('Home', () => {
     await waitFor(() => expect(fetchMock.mock.calls.length).toBeGreaterThan(callsBefore))
   })
 
-  // The purpose breakdown (M6.33, PRD section 7.7, ADR-032).
+  // The purpose breakdown (PRD section 7.7, ADR-032).
   describe('purpose breakdown', () => {
     it('renders a Titipan (pass_through) purpose row with its balance', async () => {
       vi.stubGlobal('fetch', stubHome())
@@ -421,8 +415,8 @@ describe('Home', () => {
     })
 
     // Purpose 14 ('17 Agustus') has no matching row in the open-incidentals
-    // fixture, so it is closed and must not appear at all - ADR-032's "a
-    // closed envelope drops off Beranda entirely".
+    // fixture, so it is closed and must not appear - ADR-032's "a closed
+    // envelope drops off Beranda entirely".
     it('does not render a closed incidental', async () => {
       vi.stubGlobal('fetch', stubHome())
       render(
@@ -440,9 +434,9 @@ describe('Home', () => {
       expect(screen.queryByText('17 Agustus')).not.toBeInTheDocument()
     })
 
-    // Kas Utama is the first row (#387): the hero is the fund total, so
-    // this is the only place its own balance shows - and it shows even when
-    // there is no open incidental and no Titipan.
+    // Kas Utama is the first row: the hero is the fund total, so this is the
+    // only place its own balance shows - even with no open incidental and no
+    // Titipan.
     it('renders Kas Utama first, with its own balance rather than the fund total', async () => {
       vi.stubGlobal('fetch', stubHome())
       render(
@@ -460,8 +454,8 @@ describe('Home', () => {
       const rows = within(heading.closest('section') as HTMLElement).getAllByRole('listitem')
       expect(rows[0]).toHaveTextContent('Kas Utama')
       expect(rows[0]).toHaveTextContent(money(1_000_000))
-      // A button too, though there is no envelope to open: it opens its
-      // own history (see the Titipan test below).
+      // A button too, though there is no envelope to open: it opens its own
+      // history (see the Titipan test below).
       expect(within(rows[0]).getByRole('button')).toBeInTheDocument()
     })
 
@@ -490,8 +484,7 @@ describe('Home', () => {
     })
 
     // A negative purpose balance (ADR-031's covered shortfall) is legible
-    // through the terracotta `--attention` token alone - never a red or an
-    // icon.
+    // through the terracotta `--attention` token alone - never red or an icon.
     it('renders a negative purpose balance in the attention (terracotta) treatment', async () => {
       const negativeBalances = {
         ...balances,
@@ -513,9 +506,9 @@ describe('Home', () => {
       expect(amount.className).toContain('text-attention-text')
     })
 
-    // Tapping an open incidental's row opens that envelope
-    // (App.tsx navigates to /incidentals?purpose=<id>) - Kas Utama and
-    // Titipan have no envelope, so theirs opens Riwayat filtered to them.
+    // Tapping an open incidental's row opens that envelope (App.tsx navigates
+    // to /incidentals?purpose=<id>) - Kas Utama and Titipan have no envelope,
+    // so theirs opens Riwayat filtered to them.
     it('calls onOpenIncidental with the purpose id when an open incidental row is activated', async () => {
       vi.stubGlobal('fetch', stubHome())
       const onOpenIncidental = vi.fn()
@@ -557,9 +550,8 @@ describe('Home', () => {
     })
   })
 
-  // The everyday-loop button into a standalone incidentals list is gone
-  // (M6.33) - incidentals are entry points on this screen now, not a
-  // destination behind a button.
+  // Incidentals are entry points on this screen, not a destination behind a
+  // button.
   it('no longer shows a button into a standalone incidentals list', async () => {
     vi.stubGlobal('fetch', stubHome())
     render(
@@ -577,8 +569,8 @@ describe('Home', () => {
     expect(screen.queryByText('Lihat kegiatan insidental')).not.toBeInTheDocument()
   })
 
-  // #406: the total owed to members who fronted an expense - a row after the
-  // purpose breakdown that opens Talangan, and nothing at all at zero.
+  // The total owed to members who fronted an expense - a row after the purpose
+  // breakdown that opens Talangan, and nothing at all at zero.
   describe('owed to members', () => {
     it('shows no row while nothing is owed', async () => {
       vi.stubGlobal('fetch', stubHome())

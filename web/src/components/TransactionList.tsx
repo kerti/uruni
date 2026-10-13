@@ -21,10 +21,9 @@ import type { Transaction } from '@/lib/transactions'
 
 const reverseText = copy.history.transactions
 
-/** Wire error code -> Indonesian copy, scoped first to this list's own
- * sumbangan wording (dues_payment_already_reversed reads as "iuran" in the
- * shared map, ADR-034/#333) then falling back to it - the same chain
- * Incidentals.tsx's own errorText already follows. */
+/** Wire error code -> Indonesian copy, scoped first to this list's sumbangan
+ * wording (dues_payment_already_reversed reads as "iuran" in the shared map,
+ * ADR-034) then falling back to it, as Incidentals.tsx's errorText does. */
 function reversalErrorText(err: ApiError): string {
   const specific = reverseText.errors[err.code as keyof typeof reverseText.errors]
   if (specific) return specific
@@ -32,8 +31,7 @@ function reversalErrorText(err: ApiError): string {
   return common ?? copy.common.unknownError
 }
 
-/** Local YYYY-MM-DD - never toISOString(). Same helper as
- * Dues/MemberPayments.tsx's own. */
+/** Local YYYY-MM-DD - never toISOString(). */
 function todayISODate(): string {
   const now = new Date()
   const mm = String(now.getMonth() + 1).padStart(2, '0')
@@ -42,12 +40,10 @@ function todayISODate(): string {
 }
 
 /**
- * One transaction row's markup (M6.23) - extracted out of Home.tsx so
- * Riwayat's Transaksi tab (Transactions.tsx) can render the exact same rows
- * instead of a second copy of this list, per the issue's own instruction.
- * Home decides which slice of the list to pass in (its own recent-five) and
- * Transactions passes the whole thing; this component has no opinion on
- * count or order, only on how one row reads.
+ * One transaction row's markup, shared by Home and Riwayat's Transaksi tab
+ * (Transactions.tsx). Home passes its recent five and Transactions the whole
+ * list; this component has no opinion on count or order, only on how one row
+ * reads.
  */
 export default function TransactionList({
   transactions,
@@ -60,42 +56,37 @@ export default function TransactionList({
 }: {
   transactions: Transaction[]
   /** transaction.purpose_id -> its name - a row carries only the id, and
-   * GET /api/balances already answers with every purpose the fund has,
-   * names included (see Home.tsx's own comment on this lookup). */
+   * GET /api/balances answers with every purpose the fund has (see Home.tsx). */
   purposeNames: Map<number, string>
   emptyMessage: string
-  /** Opens the correction dialog for one row (#276, ADR-033). Optional,
-   * and that is the whole of how Beranda stays inert: Riwayat's Transaksi
-   * tab passes it, Home does not, so the same row markup is a control in
-   * the list she came to work in and plain text in the summary she came to
-   * read. A row this handler is passed for may still be ineligible -
-   * canCorrectPurpose decides that per row, so an ineligible one renders
-   * its pos as text rather than a tap that would only be refused. */
+  /** Opens the correction dialog for one row (ADR-033). Optional, and that is
+   * how Beranda stays inert: Riwayat's Transaksi tab passes it, Home does not,
+   * so the same row is a control in the list she works in and plain text in
+   * the summary she reads. A row this is passed for may still be ineligible -
+   * canCorrectPurpose decides per row, so an ineligible one renders its pos
+   * as text rather than a tap that would only be refused. */
   onCorrectPurpose?: (transaction: Transaction) => void
-  /** Refetches whatever list this component's own `transactions` prop came
-   * from, after a photo is added, replaced or deleted (#154) - this
-   * component holds no list state of its own. Unlike onCorrectPurpose, both
-   * callers pass this one: attaching a nota after the fact is offered on
-   * Beranda's recent activity too, not only inside Riwayat. */
+  /** Refetches whatever list this component's `transactions` came from, after
+   * a photo is added, replaced or deleted - this component holds no list
+   * state. Unlike onCorrectPurpose, both callers pass this: attaching a nota
+   * after the fact is offered on Beranda's recent activity too. */
   onReceiptsChanged?: () => void
-  /** Reverses a named contribution the way a dues payment already can
-   * (ADR-034, #211, #333): optional, same reasoning as onCorrectPurpose -
-   * only Riwayat's Transaksi tab passes it, so Beranda's recent activity
-   * stays inert. Called after a successful reversal so the caller refetches
-   * its own list; canReverseContribution decides per row whether the
-   * control shows at all. */
+  /** Reverses a named contribution the way a dues payment can (ADR-034):
+   * optional like onCorrectPurpose - only Riwayat's Transaksi tab passes it,
+   * so Beranda stays inert. Called after a successful reversal so the caller
+   * refetches; canReverseContribution decides per row whether the control
+   * shows at all. */
   onContributionReversed?: () => void
-  /** #507: re-reads the caller's list in place when a reversal's response was lost. */
+  /** Re-reads the caller's list in place when a reversal's response was lost. */
   onContributionRefresh?: () => Promise<void> | void
 }) {
-  // The row whose photo dialog is open, by id rather than by object - so
-  // the dialog reads fresh receipt_ids off the current `transactions` prop
-  // the moment the caller's onReceiptsChanged refetch resolves, the same
-  // by-id lookup History/Transactions.tsx's own correction dialog uses.
+  // The row whose photo dialog is open, by id rather than by object, so the
+  // dialog reads fresh receipt_ids off the current `transactions` prop the
+  // moment the caller's onReceiptsChanged refetch resolves.
   const [receiptsForId, setReceiptsForId] = useState<number | null>(null)
-  // The entry read in full (#359), by id in the URL (ADR-032: an open
-  // dialog is a search parameter), so back closes it. An id not on this
-  // page - a stale deep link - simply opens nothing.
+  // The entry read in full, by id in the URL (ADR-032: an open dialog is a
+  // search parameter), so back closes it. An id not on this page - a stale
+  // deep link - opens nothing.
   const entry = useDialogParam('entry')
 
   if (transactions.length === 0) {
@@ -105,11 +96,9 @@ export default function TransactionList({
   const receiptsForTransaction = transactions.find((t) => t.id === receiptsForId) ?? null
   const detailTransaction = entry.value === null ? null : (transactions.find((t) => String(t.id) === entry.value) ?? null)
 
-  // Which rows some OTHER row in this same list already reverses (ADR-034) -
-  // computed once for the whole page, the same technique
-  // Dues/MemberPayments.tsx's own reversedIds uses. A reversal that landed on
-  // a page this list has not fetched still offers the control; the server's
-  // own named 409 is the backstop (canReverseContribution's own comment).
+  // Which rows some OTHER row in this list already reverses (ADR-034),
+  // computed once for the page. A reversal on a page not fetched still offers
+  // the control; the server's named 409 is the backstop.
   const reversedIds = new Set(transactions.map((t) => t.reverses_transaction_id).filter((id): id is number => id !== null))
 
   return (
@@ -211,33 +200,27 @@ export default function TransactionList({
 }
 
 /**
- * The row's first line: what this entry was for, and - on a row whose
- * pos may still be corrected - the control that corrects it
- * (#276, ADR-033).
+ * The row's first line: what this entry was for, and - on a row whose pos may
+ * still be corrected - the control that corrects it (ADR-033).
  *
- * The pos IS the control, rather than a button beside it. The whole
- * row is not the correction control because eligibility varies, so it would
- * be a dead tap on a dues row and a live one on the expense beneath it with
- * nothing visible to tell them apart (the row's own tap opens the entry
- * detail instead, #359, which every row has); and a button of its own would either
- * break the amount column's right alignment - the column she scans down -
- * or add 44px to every eligible row on the app's densest unbounded list.
- * Tapping the noun that is wrong is also simply what she means.
+ * The pos IS the control, rather than a button beside it. The whole row is
+ * not the control because eligibility varies: it would be a dead tap on a
+ * dues row and a live one on the expense beneath it, with nothing visible to
+ * tell them apart (the row's tap opens the entry detail instead, which every
+ * row has). A separate button would break the amount column's right
+ * alignment or add 44px to every eligible row on the app's densest list.
+ * Tapping the noun that is wrong is also what she means.
  *
- * `py-1.5 -my-1.5` is the 44px target without changing the row's height:
- * the padding grows the hit area and the negative margin gives the space
- * back to the layout. A dotted underline is what makes it read as tappable
- * at all, since text that taps and text that does not are otherwise
- * identical.
+ * `py-1.5 -my-1.5` is the 44px target without changing the row's height: the
+ * padding grows the hit area and the negative margin gives the space back. A
+ * dotted underline is what makes it read as tappable at all.
  *
- * The stored pos is what renders, never the effective one, even
- * after a correction has moved the money elsewhere: the ledger sums stored
- * tags, so a row showing its effective tag would leave the screen out of
- * step with the balances (ADR-033). The Tags glyph is what says a
- * correction exists - the same glyph its two legs carry a few rows down,
- * which is what ties them together without either saying so - and it is
- * hidden from screen readers, with the sentence beside it in sr-only text,
- * the split #257 already uses for every other icon in this list.
+ * The stored pos is what renders, never the effective one, even after a
+ * correction has moved the money: the ledger sums stored tags, so showing the
+ * effective tag would put the screen out of step with the balances
+ * (ADR-033). The Tags glyph says a correction exists - the same glyph its two
+ * legs carry a few rows down, which ties them together - and is hidden from
+ * screen readers, with the sentence beside it in sr-only text.
  */
 function PurposeLine({
   transaction,
@@ -281,16 +264,14 @@ function PurposeLine({
 }
 
 /**
- * A named contribution's own undo, reachable the way a dues payment's
- * already is (ADR-034, #211, #333's own acceptance criterion): the same
- * button-then-inline-form shape Dues/MemberPayments.tsx uses for its own
- * reversal, reusing that screen's own POST /api/dues-payments/{id}/reversal
- * call (reverseDuesPayment) - the route reverses any kind='normal' or
- * kind='dues' row alike, per that route's own doc comment.
+ * A named contribution's undo, reachable the way a dues payment's is
+ * (ADR-034): the same button-then-inline-form shape as
+ * Dues/MemberPayments.tsx, reusing reverseDuesPayment - the route reverses
+ * any kind='normal' or kind='dues' row alike.
  *
- * Its own component, not lifted state on the list above, because each row's
- * expand/collapse is independent and this is the one row shape in the whole
- * list that needs any state at all.
+ * Its own component, not lifted state on the list, because each row's
+ * expand/collapse is independent and this is the one row shape that needs
+ * any state at all.
  */
 function ContributionReversalControl({
   transaction,

@@ -17,22 +17,21 @@ import type { Purpose } from '@/lib/purposes'
 const text = copy.settings.passThrough
 
 /**
- * The pass-through section of the settings screen (M6.15, PRD section 7.6:
- * "record money collected on behalf of the parent org (e.g. Kas Bidang)";
- * converted to the card-plus-dialog shape in M6.30 - ADR-032 "Every
- * non-posting edit is a dialog"): a card list, with add and edit both
- * opening a dialog addressed by `?edit=pass-through:<id>` /
+ * The pass-through section of the settings screen (PRD section 7.6: "record
+ * money collected on behalf of the parent org (e.g. Kas Bidang)"), as a
+ * card-plus-dialog (ADR-032 "Every non-posting edit is a dialog"): add and edit
+ * both open a dialog addressed by `?edit=pass-through:<id>` /
  * `?edit=pass-through:new`.
  *
  * Add and rename, no delete. The name is a label - a posted transaction
- * references the purpose by id and nothing in the ledger reads the text - so
- * a typo is correctable exactly like a location's name; but money that passed
- * through is not unsaid, so the row itself stays. The kind is pinned
- * server-side and appears on no form here.
+ * references the purpose by id and nothing in the ledger reads the text - so a
+ * typo is correctable like a location's name; but money that passed through is
+ * not unsaid, so the row stays. The kind is pinned server-side and appears on
+ * no form here.
  *
- * GET /api/purposes answers every tag the fund has, so the list is filtered
- * to `pass_through` here: the fund's own 'main' purpose is not this section's
- * business, and an incidental belongs to the section below (#263).
+ * GET /api/purposes answers every tag the fund has, so the list is filtered to
+ * `pass_through`: the fund's 'main' purpose is not this section's business,
+ * and an incidental belongs to the section below.
  */
 export default function PassThrough() {
   const [listState, listRun] = useApi<Purpose[]>()
@@ -46,22 +45,22 @@ export default function PassThrough() {
     void listRun(listPurposes)
   }
 
-  // #507: after a write whose response was lost, re-read in place.
+  // After a write whose response was lost, re-read in place.
   const refresh = () => listRun(listPurposes, { silent: true })
 
   const passThrough = listState.data?.filter((purpose) => purpose.kind === 'pass_through') ?? []
 
-  // 'pass-through' is this section's own prefix (dialogTarget.ts) - the
-  // identifier's own words, hyphenated for the URL, never the Indonesian
-  // label. Anything else on `?edit=` belongs to a sibling section here and
-  // comes back `foreign`, to be left exactly where it is.
+  // 'pass-through' is this section's prefix (dialogTarget.ts) - the
+  // identifier's words, hyphenated for the URL, never the Indonesian label.
+  // Anything else on `?edit=` belongs to a sibling section and comes back
+  // `foreign`, to be left where it is.
   const target = parseDialogTarget('pass-through', value)
   const editingPurpose = target.kind === 'edit' ? (passThrough.find((p) => p.id === target.id) ?? null) : null
 
-  // A `pass-through:` value with an unknown or malformed id: strip it once
-  // the list has loaded, rather than flash an empty dialog. Never a `foreign`
-  // value, and `clear` rather than `close` - both for the reasons Locations
-  // documents at the same effect.
+  // A `pass-through:` value with an unknown or malformed id: strip it once the
+  // list has loaded, rather than flash an empty dialog. Never a `foreign`
+  // value, and `clear` rather than `close`, for the reasons Locations
+  // documents.
   useEffect(() => {
     if (target.kind === 'foreign' || target.kind === 'new') return
     if (listState.status !== 'success') return
@@ -140,8 +139,8 @@ function AddPassThroughDialog({
   const [state, run] = useApi<Purpose>()
   const [name, setName] = useState('')
 
-  // A fresh field every time the dialog opens, so a titipan added a moment
-  // ago does not leave its name sitting there for the next one.
+  // A fresh field every time the dialog opens, so a titipan added a moment ago
+  // does not leave its name there for the next one.
   useResetWhen(open, () => {
     if (open) setName('')
   })
@@ -194,9 +193,9 @@ function AddPassThroughDialog({
 }
 
 /**
- * Rename, and nothing else - there is no delete here, deliberately: money
- * that passed through is not unsaid. `purpose` is null only while closing,
- * the same window EditLocationDialog documents.
+ * Rename, and nothing else - no delete, deliberately: money that passed
+ * through is not unsaid. `purpose` is null only while closing, the window
+ * EditLocationDialog documents.
  */
 function EditPassThroughDialog({
   purpose,

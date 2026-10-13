@@ -1,5 +1,4 @@
-// Typed call over apiFetch for POST /api/transfers, same idiom as
-// lib/transactions.ts.
+// Typed call over apiFetch for POST /api/transfers.
 
 import { apiFetch } from '@/lib/api'
 
@@ -22,19 +21,18 @@ export interface PostTransferInput {
 }
 
 /**
- * POST /api/transfers (#235) - money moving between two locations, cash
- * deposited at the bank or drawn back out (PRD section 6). The fund's total
- * is unchanged by construction: one amount, two opposite legs.
+ * POST /api/transfers - money moving between two locations, cash deposited at
+ * the bank or drawn back out (PRD section 6). The fund's total is unchanged
+ * by construction: one amount, two opposite legs.
  *
  * `purposeId` is singular deliberately, and the record form does not ask for
- * it: both legs carry the same purpose, so every purpose balance nets to
- * zero whichever one it is - a location transfer never changes what the
- * money is for (ADR-024), only where it sits. The form sends the fund's own
- * Kas Utama row.
+ * it: both legs carry the same purpose, so every purpose balance nets to zero
+ * whichever it is - a location transfer never changes what the money is for
+ * (ADR-024), only where it sits. The form sends the fund's Kas Utama row.
  *
- * The note reaches both legs or neither (#213): one movement is one thing
- * that happened, and a note on the "out" leg alone reads, in the transaction
- * list, as an unexplained arrival somewhere else.
+ * The note reaches both legs or neither: one movement is one thing that
+ * happened, and a note on the "out" leg alone reads, in the transaction list,
+ * as an unexplained arrival elsewhere.
  */
 export function postTransfer(input: PostTransferInput): Promise<Transfer> {
   return apiFetch<Transfer>('/api/transfers', {

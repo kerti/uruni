@@ -37,45 +37,39 @@ import type { Fund } from '@/lib/setup'
 import { copy } from '@/copy/id'
 
 /**
- * Router root for the whole SPA (M6.2, extended by M6.4's session probe,
- * M6.5's fund probe and M6.8/M6.9's everyday-loop routes).
+ * Router root for the whole SPA.
  *
  * On mount it probes GET /api/session once and routes off the result:
- * `has_account: false` renders Register, `has_account: true,
- * authenticated: false` renders Login, and `authenticated: true` hands off
- * to AuthedGate, which probes GET /api/fund the same way: 404 renders Setup
- * (M6.5), 200 renders the everyday-loop routes inside M6.6's Shell - home
- * (M6.9) and "/record". A successful register or login calls back into this
- * component and optimistically marks the session probe authenticated rather
- * than re-fetching /api/session, so the handoff needs no reload; Setup's
- * onDone re-probes GET /api/fund the same way once setup finishes.
+ * `has_account: false` renders Register, `has_account: true, authenticated:
+ * false` renders Login, and `authenticated: true` hands off to AuthedGate,
+ * which probes GET /api/fund the same way: 404 renders Setup, 200 renders the
+ * everyday-loop routes inside Shell. A successful register or login calls back
+ * here and optimistically marks the session probe authenticated rather than
+ * re-fetching /api/session, so the handoff needs no reload; Setup's onDone
+ * re-probes GET /api/fund the same way.
  */
 export default function App() {
   const [state, run] = useApi<SessionStatus>()
 
   // Probed once, on boot: `run` is a stable useCallback (useApi.ts), so this
   // effect never re-fires on its own. A session established afterward
-  // (register/login) updates local state directly instead, see below.
+  // (register/login) updates local state directly instead.
   useEffect(() => {
     void run(getSession)
   }, [run])
 
   function handleAuthenticated(_user: AuthUser) {
-    // The server session is already established by this point (register.go
-    // and login.go both RenewToken + Put before answering 2xx) - this just
-    // brings the client's view of /api/session's shape in sync with that,
-    // without paying for a second round trip to learn what the request
-    // that just succeeded already told us.
+    // The server session is already established (register.go and login.go both
+    // RenewToken + Put before answering 2xx) - this syncs the client's view of
+    // /api/session without a second round trip.
     void run(async () => ({ authenticated: true, has_account: true }))
   }
 
-  // Mirror image of handleAuthenticated, for the shell's logout button
-  // (M6.6): POST /api/logout has already destroyed the server session by the
-  // time Shell calls this, so the client's view is brought back in line
-  // without a second round trip. has_account stays true - the account still
-  // exists, it is only the session that is gone - so this lands on Login,
-  // never back on Register. useCallback because Shell's success effect
-  // depends on this identity.
+  // Mirror image of handleAuthenticated, for the shell's logout button:
+  // POST /api/logout has already destroyed the server session by the time
+  // Shell calls this. has_account stays true - the account exists, only the
+  // session is gone - so this lands on Login, never Register. useCallback
+  // because Shell's success effect depends on this identity.
   const handleLoggedOut = useCallback(() => {
     void run(async () => ({ authenticated: false, has_account: true }))
   }, [run])
@@ -140,86 +134,76 @@ function AuthGate({
 }
 
 /** What a successful record hands to home through the history entry it
- * creates. photoFailed (#154) is true only when a photo was picked and the
- * transaction itself posted but the receipt upload failed - never set for
- * a transfer, which has no photo field. */
+ * creates. photoFailed is true only when a photo was picked and the
+ * transaction posted but the receipt upload failed - never set for a
+ * transfer, which has no photo field. */
 interface HomeState {
-  // 'dues': a dues payment recorded through Catat's Iuran (#315).
-  // 'reimbursement': a Keluar ticked "ditalangi" - a Talangan claim (#368).
+  // 'dues': a dues payment recorded through Catat's Iuran.
+  // 'reimbursement': a Keluar ticked "ditalangi" - a Talangan claim.
   recorded: Recorded | 'dues'
   photoFailed?: boolean
 }
 
-/** The same idiom for a dues payment (M6.13): the confirmation belongs to
- * the one history entry that navigation creates, not to this component. */
+/** The same idiom for a dues payment: the confirmation belongs to the one
+ * history entry that navigation creates, not to this component. */
 interface DuesState {
   duesRecorded: true
 }
 
-/** A dues payment opened from the status matrix (#315) rather than from
- * Catat's own Iuran: saving and Batal both go back to the matrix, the door
- * she came in by. */
+/** A dues payment opened from the status matrix rather than from Catat's
+ * Iuran: saving and Batal both go back to the matrix, the door she came in
+ * by. */
 interface RecordFromDuesState {
   fromDues: true
 }
 
 /**
  * Once GET /api/session says authenticated: true, this decides setup-vs-home
- * from GET /api/fund - the same probe-once shape as AuthGate's own session
- * probe above, just one layer in. A 404 (no fund yet) renders Setup; any
- * other success renders the everyday-loop routes: "/" is Home (M6.9),
- * "/record" is RecordTransaction (M6.8), both inside Shell.
- *
- * The 200 branch is also where M6.6's Shell starts: everything past setup
- * renders inside it, titled with the fund's own name. Register, Login and
- * the setup wizard stay outside it deliberately - there is no fund to name
- * in the header yet, and no session worth offering a logout button for.
+ * from GET /api/fund - the same probe-once shape as the session probe above.
+ * A 404 (no fund yet) renders Setup; any other success renders the
+ * everyday-loop routes inside Shell, titled with the fund's name. Register,
+ * Login and the setup wizard stay outside it deliberately: there is no fund
+ * to name in the header yet, and no session worth a logout button.
  */
 function AuthedGate({ onLoggedOut }: { onLoggedOut: () => void }) {
   const [state, run] = useApi<Fund>()
   const navigate = useNavigate()
   const location = useLocation()
-  // location.key, minus the entries a dialog pushes or clears - so opening
-  // a dialog never reloads the list under it (#359, useRefetchKey).
+  // location.key, minus the entries a dialog pushes or clears - so opening a
+  // dialog never reloads the list under it (useRefetchKey).
   const refetchKey = useRefetchKey()
   const [searchParams, setSearchParams] = useSearchParams()
 
-  // ?purpose=<id> - shared by three routes, and read here for two of them
+  // ?purpose=<id> - shared by three routes, read here for two of them
   // (History/Transactions.tsx reads its own). /record?purpose=<id> is
-  // Incidentals.tsx's own contribute/disburse entry point, reusing this
-  // form entirely rather than a second copy of it (M6.19); a missing or
-  // non-numeric value falls back to RecordTransaction's own default (the
-  // `kind: "main"` row) exactly as if the param were absent.
-  // /incidentals?purpose=<id> is Home's purpose-breakdown row (M6.33) and
-  // Pengaturan's incidentals cards (#263): the only way that route ever
-  // renders a detail view now that its list is retired - see the route
-  // below. /history/transactions?purpose=<id> is the third (#262) - the
-  // filter ADR-032 makes a closed envelope's only route to its own record,
-  // linked from the detail screen this one renders.
+  // Incidentals.tsx's contribute/disburse entry point, reusing this form; a
+  // missing or non-numeric value falls back to RecordTransaction's default
+  // (the `kind: "main"` row) as if absent. /incidentals?purpose=<id> is
+  // Home's purpose-breakdown row and Pengaturan's incidentals cards: the only
+  // way that route renders a detail view now that its list is retired.
+  // /history/transactions?purpose=<id> is the filter ADR-032 makes a closed
+  // envelope's only route to its own record.
   const rawPurpose = searchParams.get('purpose')
   const parsedPurpose = rawPurpose === null || rawPurpose.trim() === '' ? NaN : Number(rawPurpose)
   const initialPurposeId = Number.isInteger(parsedPurpose) && parsedPurpose > 0 ? parsedPurpose : null
 
-  // /record?member=<id> (ADR-034, #211, #333): Incidentals.tsx's own
-  // participation row action pre-chooses the contributor the same way
-  // ?purpose= pre-chooses the envelope - a missing or unparseable value
-  // falls back to RecordTransaction's own default (nobody named), exactly
-  // as if the param were absent.
+  // /record?member=<id> (ADR-034): Incidentals.tsx's participation row action
+  // pre-chooses the contributor as ?purpose= pre-chooses the envelope - a
+  // missing or unparseable value falls back to nobody named.
   const rawMember = searchParams.get('member')
   const parsedMember = rawMember === null || rawMember.trim() === '' ? NaN : Number(rawMember)
   const initialMemberId = Number.isInteger(parsedMember) && parsedMember > 0 ? parsedMember : null
 
-  // #285: /dues-tiers?tier=<id> is a golongan's own screen, reached from the
-  // Golongan card in Pengaturan and from nowhere else - the same shape as
-  // /incidentals?purpose=<id> above, and parsed the same way.
+  // /dues-tiers?tier=<id> is a golongan's screen, reached from the Golongan
+  // card in Pengaturan only - parsed like /incidentals?purpose=<id> above.
   const rawTier = searchParams.get('tier')
   const parsedTier = rawTier === null || rawTier.trim() === '' ? NaN : Number(rawTier)
   const tierId = Number.isInteger(parsedTier) && parsedTier > 0 ? parsedTier : null
 
-  // #368: /reimbursements/settle?id=<id> and /reimbursements/correct?id=<id>
-  // are one claim's own screens, reached from Talangan's row and from
-  // nowhere else - parsed the same way as ?tier= above. Without a usable id
-  // there is nothing to show, so they redirect to the tab.
+  // /reimbursements/settle?id=<id> and /reimbursements/correct?id=<id> are
+  // one claim's screens, reached from Talangan's row only - parsed like
+  // ?tier= above. Without a usable id there is nothing to show, so they
+  // redirect to the tab.
   const rawClaim = searchParams.get('id')
   const parsedClaim = rawClaim === null || rawClaim.trim() === '' ? NaN : Number(rawClaim)
   const claimId = Number.isInteger(parsedClaim) && parsedClaim > 0 ? parsedClaim : null
@@ -231,17 +215,16 @@ function AuthedGate({ onLoggedOut }: { onLoggedOut: () => void }) {
     void run(getFund)
   }, [run])
 
-  // The record form's own onRecorded contract (RecordTransaction.tsx): fired
-  // once after a successful POST /api/transactions. Home reads
-  // refetchKey (useRefetchKey) to refetch its data on this navigation, so the new
-  // entry is visible in recent activity without a manual refresh; the
-  // success message itself stays here, not duplicated inside Home.
+  // The record form's onRecorded contract (RecordTransaction.tsx): fired once
+  // after a successful POST /api/transactions. Home reads refetchKey to
+  // refetch on this navigation, so the new entry shows in recent activity; the
+  // success message stays here, not duplicated inside Home.
   //
   // Carried as router location state, not component state: state on this
   // component outlives the navigation, so recording once and later opening
-  // the form again would show the old confirmation on the way back. A
-  // history entry's state belongs to that entry alone, which is exactly the
-  // lifetime this message wants.
+  // the form again would show the old confirmation on the way back. A history
+  // entry's state belongs to that entry alone, the lifetime this message
+  // wants.
   function handleRecorded(recorded: Recorded, photoFailed?: boolean) {
     navigate('/', { state: { recorded, photoFailed } satisfies HomeState })
   }
@@ -271,7 +254,7 @@ function AuthedGate({ onLoggedOut }: { onLoggedOut: () => void }) {
   const duesRecorded = (location.state as DuesState | null)?.duesRecorded === true
   const recordFromDues = (location.state as RecordFromDuesState | null)?.fromDues === true
   const recordDues = searchParams.get('type') === 'dues'
-  // "Pengeluaran ini ditalangi" (#368): form mode is a route (ADR-032), like
+  // "Pengeluaran ini ditalangi": form mode is a route (ADR-032), like
   // ?type=dues. Written with replace so ticking it adds no history entry.
   const recordFronted = searchParams.get('fronted') === '1'
   const setRecordFronted = (next: boolean) =>
@@ -284,10 +267,10 @@ function AuthedGate({ onLoggedOut }: { onLoggedOut: () => void }) {
       },
       { replace: true },
     )
-  // A failed photo upload (#154) replaces the ordinary success line rather
-  // than joining it - the sentence already says the transaction is saved,
-  // so repeating successIn/successOut beside it would say the same thing
-  // twice in two different tones.
+  // A failed photo upload replaces the ordinary success line rather than
+  // joining it - the sentence already says the transaction is saved, so
+  // repeating successIn/successOut would say the same thing twice in two
+  // tones.
   const successMessage = photoFailed
     ? recorded === 'reimbursement'
       ? copy.receipts.reimbursementPhotoFailed
@@ -485,9 +468,9 @@ function AuthedGate({ onLoggedOut }: { onLoggedOut: () => void }) {
           <Shell title={title} onLoggedOut={onLoggedOut}>
             {successMessage && photoFailed && (
               // Terracotta --attention, not the success green above: the
-              // transaction itself is fine, but the sentence flags
-              // something that did not go through, the same restraint
-              // RecordTransaction.tsx's own passThroughNegativeHint uses.
+              // transaction is fine, but the sentence flags something that did
+              // not go through, the restraint RecordTransaction.tsx's
+              // passThroughNegativeHint uses.
               <p role="status" className="mb-4 rounded-lg bg-attention-soft px-3 py-2 text-sm text-attention-text">
                 {successMessage}
               </p>

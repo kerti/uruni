@@ -4,20 +4,18 @@ import { copy } from '@/copy/id'
 import { cn } from '@/lib/utils'
 
 /**
- * The row-level photo affordance (#154 follow-up), shared by
- * TransactionList.tsx and History/Reimbursements.tsx so the two lists read
- * as one control rather than two similar-looking buttons drifting apart.
+ * The row-level photo affordance, shared by TransactionList.tsx and
+ * History/Reimbursements.tsx so the two lists read as one control.
  *
- * Plain ink, no chrome - the same way the row marks its other tappable
- * thing, the dotted-underline purpose name. A row that has a nota shows a
- * Forest `Camera` plus the count (always shown, even at 1); a row with none
- * shows a muted `ImagePlus`, barely there, since most entries never get a
- * photo. Colour and glyph carry the difference, not a filled box.
+ * Plain ink, no chrome - as the row marks its other tappable thing, the
+ * dotted-underline purpose name. A row with a nota shows a Forest `Camera`
+ * plus the count (always shown, even at 1); a row with none shows a muted
+ * `ImagePlus`, barely there, since most entries never get a photo. Colour and
+ * glyph carry the difference, not a filled box.
  *
  * The 44px hit area (Design-System.md's minimum) is an invisible `after:`
  * layer centred on the icon, so it takes no layout space: the row keeps its
- * own even padding instead of stretching around a 44px box, which is what a
- * visible chip that size did.
+ * even padding instead of stretching around a 44px box.
  */
 export default function ReceiptRowButton({
   receiptIds,

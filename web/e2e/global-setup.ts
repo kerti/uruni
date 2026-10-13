@@ -6,8 +6,8 @@ import { ROOT_ENV, binaryPath, instanceEnv, run, templatePath } from './harness'
 
 // Once per run, before any worker: build the binary and make the two database
 // templates every instance is reset from. Building here (not `go run` per
-// server) is what keeps a reset to a process start, and seeding here (not per
-// reset) keeps argon2id's password hashing out of every spec file.
+// server) keeps a reset to a process start, and seeding here (not per reset)
+// keeps argon2id's password hashing out of every spec file.
 //
 // The binary embeds web/dist, so a stale bundle is tested if it was not built
 // first; `make e2e` builds it, a bare `npx playwright test` takes what is there.

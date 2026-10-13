@@ -8,7 +8,7 @@
 name: E2E
 
 on:
-  # No branches filter, as in ci.yml: a PR into an epic branch is checked too.
+    # No branches filter, as in ci.yml: a PR into an epic branch is checked too.
   pull_request:
   push:
     branches: [main]

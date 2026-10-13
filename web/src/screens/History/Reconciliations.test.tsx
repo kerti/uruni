@@ -59,8 +59,8 @@ type Page = { reconciliations: unknown[]; next_cursor: string | null }
 
 /** Stubs fetch: GET /api/accounts always answers the same roster,
  * GET /api/reconciliations answers whatever pageFor returns, and
- * GET /api/reconciliations/{id} answers whatever detailFor returns - same
- * shape Transactions.test.tsx's own stubApi uses. */
+ * GET /api/reconciliations/{id} answers whatever detailFor returns, as
+ * Transactions.test.tsx's stubApi does. */
 function stubApi(pageFor: (url: URL) => Page, detailForId?: (id: number) => unknown) {
   const requests: URL[] = []
   vi.stubGlobal(

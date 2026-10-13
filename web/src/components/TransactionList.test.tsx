@@ -11,8 +11,8 @@ import { formatPeriod } from '@/lib/dates'
 import { formatIDR } from '@/lib/money'
 import type { Transaction } from '@/lib/transactions'
 
-// TransactionList keeps its entry-detail dialog in the URL (#359,
-// ADR-032), so every render needs a router.
+// TransactionList keeps its entry-detail dialog in the URL (ADR-032), so
+// every render needs a router.
 function render(ui: ReactElement) {
   return rtlRender(ui, { wrapper: MemoryRouter })
 }
@@ -53,8 +53,7 @@ function renderRows(rows: Transaction[]) {
 }
 
 /** The same list Riwayat renders: with a correction handler, so an eligible
- * row's pos is a control (#276). Home passes no handler, which is
- * what renderRows above still covers. */
+ * row's pos is a control. Home passes none, which renderRows covers. */
 function renderCorrectableRows(rows: Transaction[], onCorrectPurpose = vi.fn()) {
   const result = render(
     <TransactionList transactions={rows} purposeNames={purposeNames} emptyMessage="Belum ada." onCorrectPurpose={onCorrectPurpose} />,
@@ -85,8 +84,7 @@ describe('TransactionList row labels (#257)', () => {
 
     expect(container.querySelector('.lucide-undo-2')).toBeInTheDocument()
     expect(screen.getByText(copy.rowLabels.duesReversal.text(formatPeriod('2026-08'), 'Budi'))).toBeInTheDocument()
-    // The visible text already starts with the kind word, so there is no
-    // sr-only copy of it to read twice.
+    // The visible text already starts with the kind word: no sr-only copy.
     expect(document.querySelector('.sr-only')).toBeNull()
   })
 
@@ -113,8 +111,7 @@ describe('TransactionList row labels (#257)', () => {
 
     expect(container.querySelector('.lucide-flag')).toBeInTheDocument()
     expect(screen.getByText(copy.rowLabels.opening.text('Bank Jago'))).toBeInTheDocument()
-    // The visible text already starts with the kind word, so there is no
-    // sr-only copy of it to read twice.
+    // The visible text already starts with the kind word: no sr-only copy.
     expect(document.querySelector('.sr-only')).toBeNull()
   })
 
@@ -135,8 +132,7 @@ describe('TransactionList row labels (#257)', () => {
     // not repeated inside it.
     expect(screen.getByText(copy.rowLabels.settlement.text('Jane'))).toBeInTheDocument()
     expect(screen.getByText(copy.rowLabels.settlement.kind)).toBeInTheDocument()
-    // The settlement's own Note is nil (#257) - what renders on the note
-    // line is the settled claim's own note instead.
+    // The settlement's Note is nil - the note line shows the settled claim's.
     expect(screen.getByText('Beli galon')).toBeInTheDocument()
   })
 
@@ -177,8 +173,7 @@ describe('TransactionList row labels (#257)', () => {
 
     expect(container.querySelector('.lucide-scale')).toBeInTheDocument()
     expect(screen.getByText(copy.rowLabels.adjustment.text('Tunai'))).toBeInTheDocument()
-    // The visible text already starts with the kind word, so there is no
-    // sr-only copy of it to read twice.
+    // The visible text already starts with the kind word: no sr-only copy.
     expect(document.querySelector('.sr-only')).toBeNull()
   })
 
@@ -233,9 +228,8 @@ describe('TransactionList row labels (#257)', () => {
 describe('TransactionList purpose correction (#276, ADR-033)', () => {
   it('labels a correction leg with Tags and Perbaikan pos, never Tutup amplop', () => {
     // A roll and a correction are the same shape on the wire - kind='transfer',
-    // transfer_kind='reclass_purpose' - and only corrects_transaction_id
-    // tells them apart. Before this, every correction read as an envelope
-    // closing that never happened.
+    // transfer_kind='reclass_purpose' - and only corrects_transaction_id tells
+    // them apart.
     const { container } = renderRows([
       transaction({
         kind: 'transfer',
@@ -264,9 +258,9 @@ describe('TransactionList purpose correction (#276, ADR-033)', () => {
   })
 
   it("leaves an ineligible row's pos as plain text - a dead tap is worse than none", () => {
-    // Eligibility varies row by row (ADR-033), which is exactly why the
-    // whole row is not tappable: a dues row and the expense beneath it
-    // would look identical and behave differently.
+    // Eligibility varies row by row (ADR-033), which is why the whole row is
+    // not tappable: a dues row and the expense beneath it would look identical
+    // and behave differently.
     renderCorrectableRows([transaction({ id: 13, kind: 'dues', member_id: 1, dues_period: '2026-08', member_name: 'Budi' })])
 
     expect(screen.queryByRole('button', { name: copy.purposeCorrection.controlAria('Kas Utama') })).not.toBeInTheDocument()
@@ -292,7 +286,7 @@ describe('TransactionList purpose correction (#276, ADR-033)', () => {
   it('offers no control at all where no handler is passed - Beranda stays inert', () => {
     renderRows([transaction({ id: 15 })])
 
-    // The only button left is the card's own read-only detail tap (#359).
+    // The only button left is the card's read-only detail tap.
     expect(screen.getAllByRole('button').map((b) => b.getAttribute('aria-label'))).toEqual([
       copy.transactionDetail.openAria('Kas Utama', formatIDR(25_000), '12 Agustus 2026'),
     ])
@@ -300,9 +294,9 @@ describe('TransactionList purpose correction (#276, ADR-033)', () => {
   })
 
   it('marks a corrected row with the glyph and an sr-only sentence, still showing its STORED tag', () => {
-    // The stored tag is what renders even though the money is elsewhere:
-    // the ledger sums stored tags, so a row showing its effective one would
-    // put the screen out of step with the balances (ADR-033).
+    // The stored tag renders even though the money is elsewhere: the ledger
+    // sums stored tags, so showing the effective one would put the screen out
+    // of step with the balances (ADR-033).
     const { container } = renderCorrectableRows([transaction({ id: 16, purpose_id: 2, effective_purpose_id: 1 })])
 
     expect(screen.getByText("Jane's wedding")).toBeInTheDocument()
@@ -469,9 +463,8 @@ describe('TransactionList receipt photos (#154)', () => {
     await userEvent.click(screen.getByRole('button', { name: text.viewReceipt }))
     const dialog = await screen.findByRole('dialog')
 
-    // Hapus foto lives inside the "more" menu on the photo itself, never
-    // in a footer under it - opening it is what surfaces the inline
-    // confirm bar, not the delete API call directly.
+    // Hapus foto lives inside the "more" menu on the photo itself - opening
+    // it surfaces the inline confirm bar, not the delete API call.
     await userEvent.click(within(dialog).getByRole('button', { name: text.photoMenuAria }))
     await userEvent.click(within(await screen.findByRole('menu')).getByRole('menuitem', { name: text.delete }))
     expect(within(dialog).getByText(text.deleteConfirm)).toBeInTheDocument()
@@ -504,9 +497,8 @@ describe('TransactionList receipt photos (#154)', () => {
     await userEvent.click(within(dialog).getByRole('button', { name: text.change }))
 
     await waitFor(() => expect(onReceiptsChanged).toHaveBeenCalled())
-    // Delete-then-upload, in that order (no combined replace route) -
-    // see ReceiptDialog.tsx's own comment on why that order is the safer
-    // of the two ways a replace can go half-done.
+    // Delete-then-upload, in that order (no combined replace route) - see
+    // ReceiptDialog.tsx for why that order is the safer half-done.
     expect(calls[0]).toBe('DELETE /api/receipts/42')
     expect(calls[1]).toBe('POST /api/transactions/23/receipts')
   })
@@ -521,11 +513,9 @@ describe('TransactionList receipt photos (#154)', () => {
 
     await userEvent.click(within(dialog).getByRole('button', { name: text.zoomAria }))
 
-    // Two dialogs are now open: ReceiptDialog itself and the viewer layered
-    // above it. `hidden: true` because Radix marks the first inert (and so
-    // hidden from the accessibility tree) while the second sits on top of
-    // it, the same "hides the row underneath" behaviour Reimbursements'
-    // own receipt tests already rely on.
+    // Two dialogs are open: ReceiptDialog and the viewer above it. `hidden:
+    // true` because Radix marks the first inert (hidden from the accessibility
+    // tree) while the second sits on top.
     await waitFor(() => expect(screen.getAllByRole('dialog', { hidden: true })).toHaveLength(2))
   })
 
@@ -541,7 +531,7 @@ describe('TransactionList entry detail (#359)', () => {
 
   it('opens the entry in full on a tap of the card, with the whole note and when it was recorded', async () => {
     // Built in local time, not Date.UTC: the dialog formats in the runner's
-    // own timezone, which is WIB on a laptop and UTC in CI.
+    // timezone, WIB on a laptop and UTC in CI.
     renderRows([transaction({ direction: 'out', note: longNote, created_at: new Date(2026, 9, 1, 13, 42).getTime() / 1000 })])
 
     await userEvent.click(screen.getByRole('button', { name: /^Lihat rincian:/ }))

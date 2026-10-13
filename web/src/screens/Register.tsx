@@ -15,22 +15,21 @@ import type { AuthUser } from '@/lib/auth'
 
 const text = copy.auth.register
 
-// The same floor internal/auth/auth.go's MinPasswordLength enforces, named
-// here rather than inline so the two are greppable as a pair. The server is
-// the real guard; this only saves the treasurer a round trip.
+// The floor internal/auth/auth.go's MinPasswordLength enforces, named here so
+// the two are greppable as a pair. The server is the real guard; this only
+// saves the treasurer a round trip.
 const MIN_PASSWORD_LENGTH = 8
 
 /**
  * The one-shot bootstrap account screen (ADR-030 decision 2). Rendered by
  * App.tsx only while GET /api/session answers has_account: false - once a
- * registration succeeds there is no route back here in this same session,
- * so a 409 (a second registration racing this one) is the only server error
- * this screen has to plan for, and it renders as an ordinary ErrorState
- * rather than anything special-cased.
+ * registration succeeds there is no route back here in this session, so a 409
+ * (a second registration racing this one) is the only server error to plan
+ * for, and it renders as an ordinary ErrorState.
  *
  * A successful register also establishes the session server-side
- * (register.go's own comment), so onRegistered here is what moves App past
- * auth entirely - never to a login screen the treasurer never asked for.
+ * (register.go), so onRegistered moves App past auth entirely - never to a
+ * login screen the treasurer never asked for.
  */
 export default function Register({ onRegistered }: { onRegistered: (user: AuthUser) => void }) {
   const [email, setEmail] = useState('')
@@ -43,10 +42,9 @@ export default function Register({ onRegistered }: { onRegistered: (user: AuthUs
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
 
-    // Checked before the request ever leaves the browser - the treasurer is
-    // told about the 8-character floor without paying a round trip for it.
-    // auth.go enforces the same floor server-side; this is a courtesy, not
-    // the only guard.
+    // Checked before the request leaves the browser, so the treasurer hears
+    // about the 8-character floor without a round trip. auth.go enforces the
+    // same floor server-side; this is a courtesy, not the only guard.
     if (password.length < MIN_PASSWORD_LENGTH) {
       setTooShort(true)
       return

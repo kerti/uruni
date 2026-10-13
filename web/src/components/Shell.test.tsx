@@ -32,10 +32,8 @@ describe('Shell', () => {
     expect(screen.getByRole('main')).toHaveTextContent('isi layar')
   })
 
-  // The footer nav (M6.15, reshaped by M6.23/ADR-032) replaced the add-FAB:
-  // "Catat" is a tab now, and no screen has two entry points. Iuran no
-  // longer holds a slot - it moved to a Riwayat tab (Shell.test.tsx below
-  // covers Catat's own active/resting distinction).
+  // The footer nav replaced the add-FAB: "Catat" is a tab, and no screen has
+  // two entry points. Iuran moved to a Riwayat tab.
   it('renders the five destinations in the footer nav, in order', () => {
     renderShell(
       <Shell title="Kas RT 04" onLoggedOut={() => {}}>
@@ -60,7 +58,7 @@ describe('Shell', () => {
   })
 
   // Every footer target clears the 44px minimum (Design-System.md), Catat's
-  // slot included - its circle adds to the target, never replaces it.
+  // included - its circle adds to the target, never replaces it.
   it('gives every footer target at least a 44px touch height', () => {
     renderShell(
       <Shell title="Kas RT 04" onLoggedOut={() => {}}>
@@ -75,9 +73,8 @@ describe('Shell', () => {
   })
 
   // The active marker is a line above the slot, never color alone, and the
-  // same for all five - so Catat's permanently Forest circle does not change
-  // with the route and cannot read as "you are here" on every screen
-  // (ADR-032's "one consequence must be paid in the same PR").
+  // same for all five - so Catat's permanently Forest circle cannot read as
+  // "you are here" on every screen (ADR-032).
   it('draws the active line above the current slot only, Catat included', () => {
     const { unmount } = renderShell(
       <Shell title="Kas RT 04" onLoggedOut={() => {}}>
@@ -104,8 +101,8 @@ describe('Shell', () => {
     expect(record.querySelector('[data-nav-raised]')?.className).toBe(restingCircle)
   })
 
-  // A second way home, next to the Beranda tab - never instead of it: a
-  // top-corner control is the hardest thing on a phone to reach one-handed.
+  // A second way home, never instead of the Beranda tab: a top-corner control
+  // is the hardest thing on a phone to reach one-handed.
   it('makes the fund name a link home without renaming the heading', () => {
     renderShell(
       <Shell title="Kas RT 04" onLoggedOut={() => {}}>
@@ -114,8 +111,8 @@ describe('Shell', () => {
       '/settings',
     )
 
-    // The heading still announces the fund's name and nothing else - an
-    // aria-label on the link would have become the heading's name too.
+    // The heading announces only the fund's name - an aria-label on the link
+    // would have become the heading's name too.
     expect(screen.getByRole('heading', { name: 'Kas RT 04' })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Kas RT 04' })).toHaveAttribute('href', '/')
     // And the Beranda tab is still there.
@@ -124,9 +121,9 @@ describe('Shell', () => {
     ).toBeInTheDocument()
   })
 
-  // aria-current comes from the URL, not from anything Shell remembers, so
-  // a deep link and a back button both land on the right tab. Riwayat has
-  // no `end`, so it stays current across every /history/* tab.
+  // aria-current comes from the URL, not from anything Shell remembers, so a
+  // deep link and a back button both land on the right tab. Riwayat has no
+  // `end`, so it stays current across every /history/* tab.
   it('marks the tab matching the current route, and only that one', () => {
     renderShell(
       <Shell title="Kas RT 04" onLoggedOut={() => {}}>
@@ -156,7 +153,7 @@ describe('Shell', () => {
 
     await waitFor(() => expect(onLoggedOut).toHaveBeenCalledTimes(1))
 
-    // Not calls[0]: the header's version line (#319) reads /healthz on mount.
+    // Not calls[0]: the header's version line reads /healthz on mount.
     const [url, init] = fetchMock.mock.calls.find(([u]) => u === '/api/logout') as [string, RequestInit]
     expect(url).toBe('/api/logout')
     expect(init.method).toBe('POST')

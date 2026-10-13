@@ -60,10 +60,9 @@ function render(ui: ReactElement, entry = '/history/dues') {
 
 type Page = { dues_payments: unknown[]; next_cursor: string | null }
 
-/** Stubs fetch: GET /api/dues-payments answers whatever pageFor returns for
- * the request's own URL. Returns every requested URL, in order, so a test
- * can assert on what reached the server (the same idiom
- * History/Transactions.test.tsx uses for its own stub). */
+/** Stubs fetch: GET /api/dues-payments answers whatever pageFor returns for the
+ * request's URL. Returns every requested URL, in order, so a test can assert
+ * on what reached the server (as History/Transactions.test.tsx's stub does). */
 function stubApi(pageFor: (url: URL) => Page) {
   const requests: URL[] = []
   vi.stubGlobal(
@@ -172,8 +171,8 @@ describe('PaymentHistory', () => {
     await screen.findAllByText('Warga Satu')
     // The reversed payment carries the badge.
     expect(screen.getByText(rowText.reversedBadge)).toBeInTheDocument()
-    // The reversal names itself and states which payment it undoes, by
-    // that payment's own date.
+    // The reversal names itself and states which payment it undoes, by that
+    // payment's date.
     expect(screen.getByText(new RegExp(rowText.reversalRow))).toBeInTheDocument()
     expect(screen.getByText(text.reversesLabel('1 Agustus 2026'))).toBeInTheDocument()
   })
@@ -190,8 +189,8 @@ describe('PaymentHistory', () => {
     await waitFor(() => expect(requests.length).toBeGreaterThan(callsBefore))
   })
 
-  // #228: the status matrix is its own screen, reached from the top of this
-  // tab rather than stacked above the list.
+  // The status matrix is its own screen, reached from the top of this tab
+  // rather than stacked above the list.
   it('opens the status matrix from the row at the top of the tab', async () => {
     stubApi(() => ({ dues_payments: [], next_cursor: null }))
     const onOpenStatus = vi.fn()

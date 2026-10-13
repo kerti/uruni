@@ -4,18 +4,18 @@ import { copy } from '../src/copy/id'
 import { formatIDR } from '../src/lib/money'
 import { expect, test } from './fixtures'
 
-// M8.5 (#436): the treasurer's first hour, on an instance with nothing in it -
-// register, the four-step setup wizard, a first record - then the access
-// paths around it: a reload keeps her signed in, the fund can be renamed, a
-// wrong password gets its own warm message, and repeated failures get the
-// rate-limit one. Every other spec starts from the seeded fixture, which
-// already has an account and a fund, so Register and Setup are reachable
-// only here (`instance.reset({ seed: false })`).
+// The treasurer's first hour, on an instance with nothing in it - register, the
+// four-step setup wizard, a first record - then the access paths around it: a
+// reload keeps her signed in, the fund can be renamed, a wrong password gets
+// its own warm message, and repeated failures get the rate-limit one. Every
+// other spec starts from the seeded fixture, which has an account and a fund,
+// so Register and Setup are reachable only here
+// (`instance.reset({ seed: false })`).
 //
 // Serial, one story: each test continues from the state the one before left.
-// The rate-limit test is last on purpose - the limiter blocks this browser's
-// IP as well as the email, so nothing can log in after it until the next
-// file's reset restarts the server.
+// The rate-limit test is last on purpose - the limiter blocks this browser's IP
+// as well as the email, so nothing can log in after it until the next file's
+// reset restarts the server.
 
 const email = 'bendahara-baru@e2e.uruni.test'
 const password = 'kata-sandi-pertama'

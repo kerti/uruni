@@ -1,8 +1,6 @@
-// Typed call over apiFetch for GET /api/accounts (M6.8), same idiom as
-// lib/auth.ts and lib/setup.ts. The Account shape is already defined in
-// lib/setup.ts (the setup wizard reads the same rows POST /api/setup just
-// created) - re-exported here rather than redefined, so the two modules
-// can't drift apart on the same wire shape.
+// Typed call over apiFetch for GET /api/accounts. The Account shape is
+// lib/setup.ts's (the setup wizard reads the same rows), re-exported here so
+// the two modules can't drift apart on one wire shape.
 
 import { apiFetch } from '@/lib/api'
 import type { Account } from '@/lib/setup'
@@ -11,10 +9,9 @@ export type { Account }
 
 /**
  * GET /api/accounts - every location the fund has, active and retired alike
- * (internal/http/accounts.go's listAccounts: history still needs the
- * retired ones). Callers that must offer only a place to *record against*
- * - this screen's AccountPicker - filter out `inactive_on` rows themselves;
- * this module stays a plain wire call with no policy of its own.
+ * (history still needs the retired ones). Callers that must offer only a place
+ * to *record against* - AccountPicker - filter out `inactive_on` rows
+ * themselves; this stays a plain wire call with no policy.
  */
 export function listAccounts(): Promise<Account[]> {
   return apiFetch<Account[]>('/api/accounts')
@@ -22,19 +19,16 @@ export function listAccounts(): Promise<Account[]> {
 
 /**
  * POST /api/accounts - one more location for a fund that already exists
- * (#78: setup asks for the first batch, this adds to them afterward). Kind
- * is fixed at creation; there is no route that changes it, deliberately -
+ * (setup asks for the first batch). Kind is fixed at creation, deliberately -
  * cash and bank reconcile differently, so a location that changed kind is a
  * different location.
  *
  * `openingBalance`, when given, is posted in the same database transaction
- * that creates the account (#230: a location and its opening balance are
- * born together, or not at all - there is no separate opening-balance
- * route any more). Omit it, or leave the amount at 0, for a location that
- * starts empty. Its `note` holds only what the treasurer typed - the
- * add-location dialog has no field for one today, so it is always omitted
- * in practice; the row explains itself through a display label instead
- * (#257).
+ * that creates the account: a location and its opening balance are born
+ * together, or not at all. Omit it, or leave the amount at 0, for a location
+ * that starts empty. Its `note` holds only what the treasurer typed - the
+ * add-location dialog has no field for one, so it is omitted in practice; the
+ * row explains itself through a display label.
  */
 export function createAccount(
   kind: string,
@@ -56,10 +50,10 @@ export function createAccount(
 
 /**
  * PATCH /api/accounts/{id} for the two labels a location carries. An absent
- * key means "leave alone" server-side, so an undefined field here is simply
- * left out of the body rather than sent as null - null means something else
- * on this route (see setAccountInactiveOn), which is why retiring has its
- * own function instead of a third optional field here.
+ * key means "leave alone" server-side, so an undefined field is left out of
+ * the body rather than sent as null - null means something else on this
+ * route (see setAccountInactiveOn), which is why retiring has its own
+ * function.
  *
  * Kind is editable because nothing in the ledger branches on it: 'cash' vs
  * 'bank' is a label on the location, not a rule about the money in it.
@@ -86,11 +80,10 @@ export function setAccountInactiveOn(id: number, inactiveOn: string | null): Pro
 }
 
 /**
- * DELETE /api/accounts/{id} - for a duplicate that was never used. The
- * moment anything references the location the server answers 409
- * `referenced_by_other_records` (mapSQLiteDeleteError), which the settings
- * screen renders as "nonaktifkan, bukan hapus" rather than a generic
- * failure: deactivating is what the treasurer actually wants there.
+ * DELETE /api/accounts/{id} - for a duplicate that was never used. Once
+ * anything references the location the server answers 409
+ * `referenced_by_other_records`, which the settings screen renders as
+ * "nonaktifkan, bukan hapus" rather than a generic failure.
  */
 export function deleteAccount(id: number): Promise<void> {
   return apiFetch<void>(`/api/accounts/${id}`, { method: 'DELETE' })

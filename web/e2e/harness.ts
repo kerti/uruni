@@ -4,15 +4,15 @@ import { createServer } from 'node:net'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-// Plain Node, no Playwright: the pieces global-setup.ts (build + templates)
-// and fixtures.ts (one server per worker) both need. Everything that reaches
-// the Go binary goes through instanceEnv(), so there is exactly one list of
-// what an e2e server is told.
+// Plain Node, no Playwright: the pieces global-setup.ts (build + templates) and
+// fixtures.ts (one server per worker) both need. Everything that reaches the Go
+// binary goes through instanceEnv(), so there is one list of what an e2e server
+// is told.
 
 export const repoRoot = fileURLToPath(new URL('../../', import.meta.url))
 
 // The one place the e2e root is named: global-setup.ts creates it and exports
-// it here, so workers (which are spawned after global setup) inherit it.
+// it here, so workers (spawned after global setup) inherit it.
 export const ROOT_ENV = 'E2E_ROOT'
 
 // seed-e2e refuses any path outside the OS temp dir or without "e2e" in its

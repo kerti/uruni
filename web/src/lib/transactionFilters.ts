@@ -1,8 +1,8 @@
-// Riwayat -> Transaksi's filters (#424) as URL state - read by
+// Riwayat -> Transaksi's filters as URL state - read by
 // History/Transactions.tsx, edited in TransactionFilterDialog.
 
-/** Riwayat -> Transaksi's filters (#424): the public report's four, under
- * the report's own URL params - `month`, `purpose`, `member`, `dir`. */
+/** The public report's four filters, under the report's URL params -
+ * `month`, `purpose`, `member`, `dir`. */
 export interface TransactionFilters {
   month: string | null
   purposeId: number | null
@@ -18,8 +18,8 @@ function positiveId(raw: string | null): number | null {
 }
 
 /** Reads the filters off the URL. A value that cannot be one is treated as
- * absent rather than sent on to be rejected - the same forgiving read the
- * report gives a stale or hand-edited link. */
+ * absent rather than sent on to be rejected - the forgiving read the report
+ * gives a stale or hand-edited link. */
 export function readFilters(params: URLSearchParams): TransactionFilters {
   const month = params.get('month')
   const dir = params.get('dir')

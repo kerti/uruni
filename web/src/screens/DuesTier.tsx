@@ -20,59 +20,48 @@ import type { DuesRate, DuesTier } from '@/lib/setup'
 const text = copy.settings.tiers
 
 /** Local YYYY-MM - never toISOString(), which is UTC and can read a month
- * early in WIB. Same helper as Status.tsx's currentISOMonth. */
+ * early in WIB. */
 function currentISOMonth(): string {
   const now = new Date()
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
 }
 
-/** One golongan and its rates, fetched together - the screen needs both and
- * neither is useful here without the other. */
+/** One golongan and its rates, fetched together - the screen needs both. */
 interface TierData {
   tier: DuesTier | null
   rates: DuesRate[]
 }
 
 /**
- * One golongan's own screen (#285), reached as `/dues-tiers?tier=<id>` from
- * the Golongan card in Pengaturan - the same shape ADR-032 kept for the
- * envelope detail view at `/incidentals?purpose=<id>` when it retired that
- * list screen (#263), with the same single entry point and the same
+ * One golongan's screen, reached as `/dues-tiers?tier=<id>` from the Golongan
+ * card in Pengaturan - the shape ADR-032 kept for the envelope detail view at
+ * `/incidentals?purpose=<id>`, with the same single entry point and the same
  * redirect to Pengaturan when the parameter names nothing.
  *
- * It is a screen and not a dialog, and that is the whole point of the
- * change. A golongan holds a name and a price history, and #232 put both in
- * one dialog: a rename form with its own Save, a per-rate form with its own
- * Save/Cancel, a bordered add-tarif card, and a footer belonging to none of
- * them. Splitting that into two dialogs was tried and rejected for two
- * reasons a second dialog cannot fix. The rate history is an unbounded list,
- * and ADR-032 draws the line itself - "tabs when every panel is an
- * unbounded list, sections when the panels are short and read together" - so
- * a growing price history in a modal is on the wrong side of the app's own
- * classification. And correcting a row inside a dialog gives her two
- * different backs: a Batal that returns to the list, and an Esc or backdrop
- * tap that closes everything and discards the correction, with nothing on
- * screen saying which is about to happen. That ambiguity is exactly what
- * ADR-032's "no nested dialogs, ever" exists to prevent, reached without
- * technically nesting anything.
+ * It is a screen and not a dialog because a golongan holds a name and a price
+ * history, and splitting them across dialogs does not fix two problems. The
+ * rate history is an unbounded list, and ADR-032 draws the line itself -
+ * "tabs when every panel is an unbounded list, sections when the panels are
+ * short and read together" - so a growing history in a modal is on the wrong
+ * side. And correcting a row inside a dialog gives her two different backs: a
+ * Batal that returns to the list, and an Esc or backdrop tap that closes
+ * everything and discards the correction, with nothing saying which is about
+ * to happen - the ambiguity ADR-032's "no nested dialogs, ever" exists to
+ * prevent. On a screen there is one way back, so a row's correction is an
+ * ordinary inline form.
  *
- * On a screen there is one way back - the control at the top, and the
- * footer nav - so a row's correction is an ordinary inline form.
+ * Why only a rate's amount is correctable: a new price is a new row effective
+ * from a new month, because the old row still explains the months it covered
+ * - GetEffectiveDuesRate reads the latest row at or before the period asked
+ * about, so overwriting one would silently restate every settled month it
+ * touched. PATCH is for a mistyped amount on the row just entered, and DELETE
+ * for one filed against the wrong month, which is what makes that
+ * correctable: UNIQUE (tier_id, effective_from) refuses the corrected row
+ * while the wrong one stands.
  *
- * Why only a rate's amount is correctable: a new price is a new row
- * effective from a new month, because the old row still explains the months
- * it covered - GetEffectiveDuesRate reads the latest row at or before the
- * period being asked about, so overwriting one would silently restate every
- * settled month it touched. PATCH is for a mistyped amount on the row just
- * entered, and DELETE for one filed against the wrong month entirely, which
- * is what makes that correctable at all: UNIQUE (tier_id, effective_from)
- * refuses the corrected row while the wrong one stands.
- *
- * The rate history is deliberately not paged. A golongan carries a handful
- * of rates for all of 0.x, and building paging for a volume that does not
- * exist is the creep CLAUDE.md's prime directive names. What the screen
- * buys is somewhere paging can go if that ever changes, which a dialog
- * does not have.
+ * The rate history is deliberately not paged. A golongan carries a handful of
+ * rates for all of 0.x, and paging for a volume that does not exist is the
+ * creep CLAUDE.md's prime directive names.
  */
 export default function DuesTierScreen({ tierId, onBack }: { tierId: number; onBack: () => void }) {
   const [state, run] = useApi<TierData>()
@@ -90,16 +79,16 @@ export default function DuesTierScreen({ tierId, onBack }: { tierId: number; onB
     void run(load)
   }
 
-  // #507: after a write whose response was lost, re-read in place (silent, so
-  // the form that is about to show the uncertain message is not unmounted).
+  // After a write whose response was lost, re-read in place (silent, so the
+  // form about to show the uncertain message is not unmounted).
   const refresh = () => run(load, { silent: true })
 
   const tier = state.data?.tier ?? null
 
   // A `tier` id naming no golongan - a stale bookmark, or one deleted from
-  // another device - goes back to Pengaturan, the screen that owns the
-  // list. Same answer App.tsx gives a missing or unparseable parameter,
-  // just decided one step later because only a fetch can tell.
+  // another device - goes back to Pengaturan, the screen that owns the list.
+  // The answer App.tsx gives a missing or unparseable parameter, decided one
+  // step later because only a fetch can tell.
   useEffect(() => {
     if (state.status !== 'success') return
     if (tier === null) onBack()
@@ -139,7 +128,7 @@ function TierName({ tier, onRenamed, refresh }: { tier: DuesTier; onRenamed: () 
   const [name, setName] = useState(tier.name)
   // Follows a rename that lands from the server (the reload after saving) -
   // during render, never in an effect that could fire after her first
-  // keystroke and put the old name back under her typing (#361).
+  // keystroke and put the old name back under her typing.
   useResetWhen(tier.name, () => setName(tier.name))
 
   const busy = state.status === 'loading'
@@ -206,9 +195,8 @@ function TierRates({
 }
 
 /** One rate: what it costs, the month it starts, and the two corrections the
- * API allows. Correcting happens in the row itself - there is one back on
- * this screen, so an inline form here has no escape route to compete with
- * (#285). */
+ * API allows. Correcting happens in the row - there is one back on this
+ * screen, so an inline form has no escape route to compete with. */
 function RateRow({ rate, onChanged, refresh }: { rate: DuesRate; onChanged: () => void; refresh: () => Promise<void> }) {
   const [state, run] = useApi<unknown>()
   const [editing, setEditing] = useState(false)
@@ -295,11 +283,10 @@ function RateRow({ rate, onChanged, refresh }: { rate: DuesRate; onChanged: () =
   )
 }
 
-/** A new price, effective from a month. Defaults to the current month: a
- * rate decided today normally starts today's month, and backdating one is a
- * deliberate act (#187 - a fund's history starts at adoption), which is why
- * the month stays a free field rather than being pinned to today. PRD
- * section 7.1's live-arrears escape hatch depends on being able to set it in
+/** A new price, effective from a month. Defaults to the current month: a rate
+ * decided today normally starts this month, and backdating one is deliberate
+ * (a fund's history starts at adoption), which is why the month stays a free
+ * field. PRD section 7.1's live-arrears escape hatch depends on setting it in
  * the past. */
 function AddRate({ tierId, onAdded, refresh }: { tierId: number; onAdded: () => void; refresh: () => Promise<void> }) {
   const [state, run] = useApi<DuesRate>()
@@ -352,8 +339,8 @@ function AddRate({ tierId, onAdded, refresh }: { tierId: number; onAdded: () => 
 
 /** Deleting the golongan itself, confirmed in place - never window.confirm(),
  * and on a screen there is no dialog to nest one inside. A golongan a member
- * is in comes back 409 referenced_by_other_records from that member's own
- * foreign key, and the copy names why rather than restating the wire message
+ * is in comes back 409 referenced_by_other_records from that member's foreign
+ * key, and the copy names why rather than restating the wire message
  * (ADR-014). */
 function DeleteTier({ tier, onDeleted, refresh }: { tier: DuesTier; onDeleted: () => void; refresh: () => Promise<void> }) {
   const [state, run] = useApi<void>()

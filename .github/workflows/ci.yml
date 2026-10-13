@@ -7,41 +7,40 @@ name: CI
 on:
   push:
     branches: [main]
-  # No branches filter: the filter matches the PR's *base*, so `[main]` left
-  # every PR into a long-lived branch (e.g. epic/*) completely unchecked.
+    # No branches filter: it matches the PR's *base*, so `[main]` left every PR
+    # into a long-lived branch (e.g. epic/*) unchecked.
   pull_request:
 
 permissions:
   contents: read
 
 # A new push to a PR cancels that PR's run in progress: only the newest commit
-# can merge. Pushes to main group by SHA, so no run on main is ever cancelled.
+# can merge. Pushes to main group by SHA, so no run on main is cancelled.
 concurrency:
   group: ci-${{ github.event.pull_request.number || github.sha }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
-  # Keep in lockstep with the `version: "2"` schema in .golangci.yml and with
-  # whatever `make lint` runs locally - that lockstep IS `make check`'s promise
-  # that green-locally means green-in-CI (ADR-020). golangci-lint-action v8
-  # drives golangci-lint v2; do not drop back to action v6 (v1 only).
+    # Keep in lockstep with the `version: "2"` schema in .golangci.yml and with
+    # what `make lint` runs locally - that lockstep IS `make check`'s promise that
+    # green-locally means green-in-CI (ADR-020). golangci-lint-action v8 drives
+    # golangci-lint v2; do not drop back to action v6 (v1 only).
   GOLANGCI_VERSION: v2.13.2
-  # Both in lockstep with the Makefile (SQLC_CI_VERSION, GOVULNCHECK_VERSION).
-  # SQLC_VERSION must also match the `sqlc vX` header in internal/store, or
-  # `sqlc diff` fails on code nobody touched. SQLC_SHA256 is the linux_amd64
-  # tarball's - sqlc publishes no checksum file, so this pin is ours, taken
-  # when the version was bumped.
+    # Both in lockstep with the Makefile (SQLC_CI_VERSION, GOVULNCHECK_VERSION).
+    # SQLC_VERSION must also match the `sqlc vX` header in internal/store, or
+    # `sqlc diff` fails on code nobody touched. SQLC_SHA256 is the linux_amd64
+    # tarball's - sqlc publishes no checksum file, so this pin is ours.
   SQLC_VERSION: v1.31.1
   SQLC_SHA256: 497ae4fcdfa64c5b0c311ffe4c2bd991e43991e82e5367792ed78bc2dca27354
   GOVULNCHECK_VERSION: v1.9.0
 
 jobs:
-  # The backend is three jobs plus a fan-in. Under -race the Go suite needs
-  # roughly 290 CPU-seconds, so one 4-core runner cannot finish it much under
-  # two minutes no matter how parallel the tests are (#451/#453). internal/http
-  # is about half of that on its own, so it gets a runner, everything else
-  # shares a second, and lint runs beside both. `make check` still runs the
-  # whole suite in one `go test ./... -race` locally - the split is CI-only.
+    # The backend is three jobs plus a fan-in. Under -race the Go suite needs
+    # roughly 290 CPU-seconds, so one 4-core runner cannot finish it much under
+    # two minutes. internal/http is about half of that, so it gets a runner,
+    # everything else shares a second, and lint runs beside both. `make check`
+    # still runs the whole suite in one `go test ./... -race` - the split is
+    # CI-only.
   backend-lint:
     name: Backend lint
     runs-on: ubuntu-latest
@@ -54,27 +53,25 @@ jobs:
         with:
           go-version-file: go.mod
       - name: Lint
-        # SHA of the v8 major - the v8-drives-v2 constraint above now lives in
-        # the version comment, so read it before accepting a Dependabot bump.
+                # SHA of the v8 major - the v8-drives-v2 constraint above lives in the
+                # version comment, so read it before accepting a Dependabot bump.
         uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
         with:
           version: ${{ env.GOLANGCI_VERSION }}
-          # The action's cache key is `golangci-lint.cache-<os>-<day>-<go.sum
-          # hash>` - it carries neither the golangci-lint version nor the Go
-          # version, so a cache written by one toolchain is restored for
-          # another. Stale analysis facts then lose testing.Fatal's noreturn
-          # property, and staticcheck reports SA5011 "possible nil pointer
-          # dereference" against every correct `if x == nil { t.Fatal(...) }`
-          # guard in the package - in files a PR never touched (#134/#162: 5
-          # of 7 hits were in register_test.go, untouched since #118). It is
-          # deterministic while the poisoned entry lives and self-heals only
-          # when cache-invalidation-interval rotates it, which is exactly the
-          # "green locally, red in CI" failure ADR-020 says `make check` must
-          # never have. Lint runs in ~3s cold; the cache buys nothing worth
-          # this.
+                    # The action's cache key is `golangci-lint.cache-<os>-<day>-<go.sum
+                    # hash>` - it carries neither the golangci-lint nor the Go version, so
+                    # a cache written by one toolchain is restored for another. Stale
+                    # analysis facts then lose testing.Fatal's noreturn property, and
+                    # staticcheck reports SA5011 "possible nil pointer dereference"
+                    # against every correct `if x == nil { t.Fatal(...) }` guard - in
+                    # files a PR never touched. It is deterministic while the poisoned
+                    # entry lives and self-heals only when cache-invalidation-interval
+                    # rotates it: the "green locally, red in CI" failure ADR-020 says
+                    # `make check` must never have. Lint runs in ~3s cold; the cache buys
+                    # nothing worth this.
           skip-cache: true
-      # Lint above also enforces gofmt (formatters: in .golangci.yml). The three
-      # below catch what only discipline or a local hook kept right (#502).
+            # Lint above also enforces gofmt (formatters: in .golangci.yml). The three
+            # below catch what only discipline or a local hook kept right.
       - name: go.mod and go.sum are tidy
         run: go mod tidy -diff
       - name: Generated sqlc code matches the queries and schema
@@ -94,8 +91,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     strategy:
-      # One shard failing must not cancel the other: a red run should show
-      # every failing package, not just the first shard to finish.
+            # One shard failing must not cancel the other: a red run should show every
+            # failing package, not just the first shard to finish.
       fail-fast: false
       matrix:
         shard: [http, rest]
@@ -117,10 +114,10 @@ jobs:
           # Unquoted on purpose: one argument per package.
           # shellcheck disable=SC2086
           go test $pkgs -race -covermode=atomic -coverprofile=coverage.out
-      # The token is an input, not step env: the action builds its own CLI
-      # invocation and passes `-t` only from the input, so an env-only token left
-      # every upload tokenless. Codecov rejects those even from a public repo, and
-      # the action does not fail the build on an upload error - so this was silent.
+            # The token is an input, not step env: the action builds its CLI
+            # invocation and passes `-t` only from the input, so an env-only token left
+            # every upload tokenless. Codecov rejects those even from a public repo,
+            # and the action does not fail the build on an upload error - so silent.
       - name: Upload coverage
         uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
         with:
@@ -129,11 +126,11 @@ jobs:
           token: ${{ secrets.CODECOV_TOKEN }}
 
 
-  # The name branch protection requires (see required status checks). It
-  # passes only when lint and both shards passed; `!cancelled()` makes it run -
-  # and fail - when one of them failed, instead of being skipped, which a
-  # required check would count as a pass. A run cancelled by a newer push skips
-  # it, harmlessly: protection reads the check on the PR's newest commit.
+    # The name branch protection requires. It passes only when lint and both
+    # shards passed; `!cancelled()` makes it run - and fail - when one of them
+    # failed, instead of being skipped, which a required check would count as a
+    # pass. A run cancelled by a newer push skips it, harmlessly: protection reads
+    # the check on the PR's newest commit.
   backend:
     name: Backend (lint + test)
     needs: [backend-lint, backend-test]
@@ -159,8 +156,8 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
-          # Resolved from the repo root: `defaults.run.working-directory` applies
-          # to `run:` steps only, never to an action's own inputs.
+                    # Resolved from the repo root: `defaults.run.working-directory` applies
+                    # to `run:` steps only, never to an action's inputs.
           node-version-file: .nvmrc
           cache: npm
           cache-dependency-path: web/package-lock.json
@@ -169,13 +166,13 @@ jobs:
       - run: npm run fmt:check
       - run: npm run typecheck
       - run: npm run test -- --coverage
-      # Vitest writes lcov paths relative to its own project root (web/), so the
-      # report says `SF:src/App.tsx` - a path that does not exist at the repo
-      # root, leaving Codecov nothing to match and the whole upload resolving to
-      # zero files. That is why the `frontend` flag has never appeared at all,
-      # rather than appearing at 0%: the runner-side upload succeeds every time.
-      # network_prefix puts web/ back on the front of those paths. The backend
-      # job needs no equivalent - Go's coverage.out carries full module paths.
+            # Vitest writes lcov paths relative to its project root (web/), so the
+            # report says `SF:src/App.tsx` - a path that does not exist at the repo
+            # root, leaving Codecov nothing to match and the upload resolving to zero
+            # files (the `frontend` flag never appeared at all, though the runner-side
+            # upload succeeds). network_prefix puts web/ back on the front. The
+            # backend job needs no equivalent - Go's coverage.out carries full module
+            # paths.
       - name: Upload coverage
         uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
         with:

@@ -5,10 +5,10 @@ import { describe, expect, it } from 'vitest'
 
 import { useDialogParam, useRefetchKey } from '@/lib/useDialogParam'
 
-/** Renders the hook plus enough chrome to drive and observe it: the current
- * search string, an open/close pair, and a manual "go back once more"
- * button - the only way from outside to tell a pushed entry from a replaced
- * one is to see what a further back-navigation lands on. */
+/** Renders the hook plus enough chrome to drive and observe it: the search
+ * string, an open/close pair, and a "go back once more" button - the only
+ * way to tell a pushed entry from a replaced one is to see what a further
+ * back-navigation lands on. */
 function Probe({ onBackAgain }: { onBackAgain?: (pathname: string) => void }) {
   const { value, open, close } = useDialogParam()
   const location = useLocation()
@@ -71,13 +71,11 @@ describe('useDialogParam', () => {
     expect(screen.getByTestId('search')).toHaveTextContent('?edit=foo')
 
     await userEvent.click(screen.getByRole('button', { name: 'close' }))
-    // Back to /list with no dialog - the push open() made was undone, not
-    // stacked on top of.
+    // Back to /list with no dialog - the push open() made was undone.
     expect(screen.getByTestId('search')).toHaveTextContent('')
 
-    // One more back-navigation should land on /start, proving close()
-    // consumed exactly the one entry open() pushed - not zero (a leftover
-    // dialog entry) and not two (it ate into history that came before it).
+    // One more back lands on /start: close() consumed exactly the one entry
+    // open() pushed - not zero (a leftover dialog entry), not two.
     await userEvent.click(screen.getByRole('button', { name: 'back-again' }))
     expect(await screen.findByTestId('landed-on')).toHaveTextContent('/start')
   })
@@ -96,19 +94,18 @@ describe('useDialogParam', () => {
 
     await userEvent.click(screen.getByRole('button', { name: 'close' }))
     await waitFor(() => expect(screen.getByTestId('search')).toHaveTextContent(''))
-    // Still on /list - close() never navigated away from the screen for a
-    // link that landed straight on the dialog.
+    // Still on /list - close() never navigated away for a link that landed
+    // straight on the dialog.
     expect(screen.queryByTestId('landed-on')).not.toBeInTheDocument()
 
-    // The strip was a replace, not a push: a single back-navigation from
-    // here goes straight to /start, not back to the (now-gone) ?edit=foo.
+    // The strip was a replace: one back-navigation goes straight to /start.
     await userEvent.click(screen.getByRole('button', { name: 'back-again' }))
     expect(await screen.findByTestId('landed-on')).toHaveTextContent('/start')
   })
 })
 
-/** The refetch signal plus a dialog and an ordinary same-route navigation,
- * so the test can see which of them move it (#359). */
+/** The refetch signal plus a dialog and an ordinary same-route navigation, so
+ * the test can see which of them move it. */
 function RefetchProbe() {
   const refetchKey = useRefetchKey()
   const { open, close, clear } = useDialogParam('entry')

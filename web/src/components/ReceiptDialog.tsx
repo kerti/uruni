@@ -17,24 +17,21 @@ const text = copy.receipts
 
 /**
  * The viewer/attach/replace/delete dialog for one transaction's or one
- * reimbursement claim's photos (#154, ADR-011). Opened from the row
- * indicator (TransactionList.tsx, History/Reimbursements.tsx) whether the
- * row already has a photo or not - the same dialog covers "add a first
- * photo" and "look at, replace or remove one already there", since a row
- * with several receipt_ids still opens straight to the list rather than a
- * picker.
+ * reimbursement claim's photos (ADR-011). Opened from the row indicator
+ * (TransactionList.tsx, History/Reimbursements.tsx) whether or not the row
+ * has a photo: one dialog covers "add a first photo" and "look at, replace or
+ * remove one", since a row with several receipt_ids opens straight to the
+ * list rather than a picker.
  *
- * `onChanged` is called after every successful upload or delete so the
- * caller can refetch the list this dialog's own receiptIds prop came from -
- * this component holds no list data of its own, matching
- * CorrectPurposeDialog.tsx's own contract. The dialog stays open across a
- * change (unlike CorrectPurposeDialog, which closes on success): a
- * treasurer replacing a wrong photo, or attaching a second one, stays on
- * this screen to see the result rather than needing to reopen it.
+ * `onChanged` is called after every successful upload or delete so the caller
+ * can refetch the list `receiptIds` came from - this component holds no list
+ * data, matching CorrectPurposeDialog.tsx. The dialog stays open across a
+ * change (unlike CorrectPurposeDialog): a treasurer replacing a wrong photo,
+ * or attaching a second, stays to see the result.
  *
- * `receiptIds` is read fresh from the caller's own list state on every
- * render, so a change lands here the moment the caller's refetch resolves -
- * there is no separate "loading" state for the ids themselves.
+ * `receiptIds` is read fresh from the caller's list state on every render, so
+ * a change lands the moment the caller's refetch resolves - no separate
+ * "loading" state for the ids.
  */
 export default function ReceiptDialog({
   kind,
@@ -54,16 +51,15 @@ export default function ReceiptDialog({
   const [state, run] = useApi<unknown>()
   const [newFile, setNewFile] = useState<File | null>(null)
   // The one receipt currently offering its "Ganti foto" picker, if any -
-  // never more than one at a time, the same single-open-form shape
-  // History/Reimbursements.tsx already uses for settle/correct.
+  // never more than one at a time, the single-open-form shape
+  // History/Reimbursements.tsx uses for settle/correct.
   const [replacingId, setReplacingId] = useState<number | null>(null)
   const [replacementFile, setReplacementFile] = useState<File | null>(null)
   const [confirmingDeleteId, setConfirmingDeleteId] = useState<number | null>(null)
-  // The photo currently open in the full-screen viewer, if any (#154
-  // follow-up) - a separate id from replacingId/confirmingDeleteId, since
-  // the viewer and the menu's replace/delete flow are never open together
-  // (tapping the photo opens the viewer; the menu sits on the same photo
-  // but is a distinct control).
+  // The photo open in the full-screen viewer, if any - a separate id from
+  // replacingId/confirmingDeleteId, since the viewer and the menu's
+  // replace/delete flow are never open together (tapping the photo opens the
+  // viewer; the menu is a distinct control on the same photo).
   const [viewingId, setViewingId] = useState<number | null>(null)
   // Where on the photo it was tapped, so the viewer opens centred there.
   const [viewAnchor, setViewAnchor] = useState<{ fx: number; fy: number } | null>(null)
@@ -71,8 +67,7 @@ export default function ReceiptDialog({
   // closes only the menu (see onPointerDownOutside below).
   const [menuOpen, setMenuOpen] = useState(false)
 
-  // A fresh dialog every time it opens: no form left over from the last
-  // photo it showed.
+  // A fresh dialog every time it opens: no form left over from the last photo.
   useResetWhen(open ? parentId : null, () => {
     if (!open) return
     setNewFile(null)
@@ -84,7 +79,7 @@ export default function ReceiptDialog({
   })
 
   const busy = state.status === 'loading'
-  // #507: a lost response may still have changed the photos; re-read them before she can retry.
+  // A lost response may still have changed the photos; re-read them before she can retry.
   const settleOnUnknown = { settle: onChanged }
 
   function handleAdd() {
@@ -100,10 +95,10 @@ export default function ReceiptDialog({
   function handleReplace(oldId: number) {
     if (parentId === null || !replacementFile) return
     void run(async () => {
-      // Delete-then-upload (no combined replace route): if the upload
-      // fails after the delete succeeds, the row is left with one fewer
-      // photo rather than a wrong one - the safer of the two ways this can
-      // go half-done, and "Tambah foto nota" below still recovers it.
+      // Delete-then-upload (no combined replace route): if the upload fails
+      // after the delete succeeds, the row is left with one fewer photo
+      // rather than a wrong one - the safer way to go half-done, and "Tambah
+      // foto nota" recovers it.
       await deleteReceipt(oldId)
       const result = await uploadReceipt(kind, parentId, replacementFile)
       setReplacingId(null)
@@ -131,9 +126,9 @@ export default function ReceiptDialog({
       <DialogContent
         closeLabel={copy.common.close}
         // The menus are non-modal (modal={false} below), so an outside tap
-        // reaches this dialog too; with a menu open that tap only closes
-        // the menu. The next outside tap closes the dialog - two taps, not
-        // the three a modal menu's pointer-events lock used to cost.
+        // reaches this dialog too; with a menu open that tap only closes the
+        // menu. The next outside tap closes the dialog - two taps, not the
+        // three a modal menu's pointer-events lock cost.
         onPointerDownOutside={(event) => {
           if (menuOpen) event.preventDefault()
         }}

@@ -6,11 +6,10 @@ import type { Purpose } from '@/lib/purposes'
 
 /**
  * Picks the purpose tag ("pos") a transaction carries - every row
- * GET /api/purposes returns (main, any pass-through, any open incidental),
- * unlike AccountPicker there is no retirement to exclude: a purpose is never
- * deactivated. RecordTransaction.tsx picks the default (the `kind: "main"`
- * row, PRD section 7.2) since that default also has to survive a fund with no
- * purposes loaded yet.
+ * GET /api/purposes returns (main, any pass-through, any open incidental).
+ * Unlike AccountPicker there is no retirement to exclude. RecordTransaction.tsx
+ * picks the default (the `kind: "main"` row, PRD section 7.2), which must also
+ * survive a fund with no purposes loaded yet.
  */
 export default function PurposePicker({
   id,

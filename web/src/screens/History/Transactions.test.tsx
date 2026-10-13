@@ -45,26 +45,26 @@ function row(id: number, note: string) {
 
 type Page = { transactions: unknown[]; next_cursor: string | null }
 
-/** Every purpose the correction picker may offer (#276). `?selectable=true`
- * is what the screen asks for, so a closed envelope is already excluded
- * server-side - correcting INTO one is a named refusal (ADR-033). */
+/** Every purpose the correction picker may offer. `?selectable=true` is what
+ * the screen asks for, so a closed envelope is excluded server-side -
+ * correcting INTO one is a named refusal (ADR-033). */
 const purposes = [
   { id: 11, kind: 'main', name: 'Kas Utama', created_at: 1 },
   { id: 12, kind: 'pass_through', name: 'Titipan', created_at: 1 },
 ]
 
-/** The roster the filter dialog offers (#424) - an inactive member too,
- * since her rows are still history. */
+/** The roster the filter dialog offers - an inactive member too, since her
+ * rows are still history. */
 const members = [
   { id: 21, fund_id: 1, name: 'Budi', tier_id: null, joined_on: '2026-01-01', inactive_on: null, created_at: 1 },
   { id: 22, fund_id: 1, name: 'Sari', tier_id: null, joined_on: '2026-01-01', inactive_on: '2026-06-01', created_at: 1 },
 ]
 
 /** Stubs fetch: balances and purposes always answer, GET /api/transactions
- * answers whatever pageFor returns for the request's own URL (throwing from
- * pageFor simulates fetch itself failing). Returns every transactions URL
- * requested, in order, so a test can assert on what reached the server.
- * `posts` collects any correction POST, for #276's own tests. */
+ * answers whatever pageFor returns for the request's URL (throwing from
+ * pageFor simulates fetch failing). Returns every transactions URL requested,
+ * in order, so a test can assert on what reached the server. `posts` collects
+ * any correction POST. */
 function stubApi(pageFor: (url: URL) => Page) {
   const requests: URL[] = []
   vi.stubGlobal(
@@ -182,8 +182,8 @@ describe('Transactions tab', () => {
     expect(screen.getByLabelText(text.searchLabel)).toHaveValue('xyz')
   })
 
-  // #262: the purpose filter, ADR-032's only route to a closed envelope's
-  // record. It arrives as a link, never as a chooser this screen offers.
+  // The purpose filter, ADR-032's only route to a closed envelope's record. It
+  // arrives as a link, never as a chooser this screen offers.
   it('reads ?purpose= from the URL, names the filter and sends it to the server', async () => {
     const requests = stubApi(() => ({ transactions: [row(1, 'Setoran')], next_cursor: null }))
     renderAt('/history/transactions?purpose=11')
@@ -347,8 +347,8 @@ describe('Transactions tab: correcting a pos (#276, ADR-033)', () => {
     await waitFor(() => expect(posted).toHaveLength(1))
     expect(posted[0]).toMatchObject({ url: '/api/transactions/6/purpose-correction', body: { purpose_id: 12 } })
 
-    // The list is refetched, because the row it just corrected now carries a
-    // marker and two new legs sit above it.
+    // The list is refetched, because the row it corrected now carries a marker
+    // and two new legs sit above it.
     await waitFor(() => expect(requests.length).toBeGreaterThan(before))
     expect(await screen.findByText(copy.purposeCorrection.success)).toBeInTheDocument()
   })

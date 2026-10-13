@@ -4,19 +4,19 @@ import { copy } from '../src/copy/id'
 import { formatIDR } from '../src/lib/money'
 import { expect, test, logIn } from './fixtures'
 
-// M7's e2e spec (#377, ADR-015's "the public report renders"): reach the
-// report from the Laporan publik card in Pengaturan, read its sections, use
-// a filter, meet the 404 page, then make a new link and see the old one die.
+// The public report (ADR-015 "the public report renders"): reach it from the
+// Laporan publik card in Pengaturan, read its sections, use a filter, meet the
+// 404 page, then make a new link and see the old one die.
 //
-// The report is server-rendered Go, so its strings are not in copy/id.ts;
-// each literal below names the reportText field in internal/http/report_copy.go
-// it mirrors. The fixture (cmd/uruni/seed_e2e.go) supplies what it reads: the
+// The report is server-rendered Go, so its strings are not in copy/id.ts; each
+// literal below names the reportText field in internal/http/report_copy.go it
+// mirrors. The fixture (cmd/uruni/seed_e2e.go) supplies what it reads: the
 // opening balance (a "Saldo awal" row), two members on a tier (dues rows) and
 // one open envelope, all dated the month the fixture was seeded.
 //
 // Serial, and the new-link test is last: it replaces the fund's slug, which
-// the tests before it read. Pages under /report are public, so only the
-// two Pengaturan tests log in.
+// the tests before it read. Pages under /report are public, so only the two
+// Pengaturan tests log in.
 test.describe('report', () => {
   test.describe.configure({ mode: 'serial' })
   test.beforeAll(({ instance }) => instance.reset())
@@ -39,16 +39,16 @@ test.describe('report', () => {
     await page.getByRole('link', { name: copy.shell.nav.settings }).click()
     await expect(page.getByRole('heading', { name: copy.settings.heading })).toBeVisible()
 
-    // The card is a plain <section> with an <h2>; scoped to it, since
-    // Pengaturan has a dozen buttons and other sections' headings.
+    // The card is a plain <section> with an <h2>; scoped to it, since Pengaturan
+    // has a dozen buttons and other sections' headings.
     const card = page.locator('section').filter({ has: page.getByRole('heading', { name: copy.settings.report.heading }) })
     await expect(card.getByRole('link', { name: copy.settings.report.open })).toBeVisible()
     return card
   }
 
-  // The card's "Buka laporan" link, as a path. The link is absolute and opens
-  // a new tab; the path is navigated in this tab so the test does not depend
-  // on URUNI_BASE_URL naming the e2e server's own origin.
+  // The card's "Buka laporan" link, as a path. The link is absolute and opens a
+  // new tab; the path is navigated in this tab so the test does not depend on
+  // URUNI_BASE_URL naming the e2e server's origin.
   async function reportPathFrom(card: Awaited<ReturnType<typeof openReportCard>>) {
     const open = card.getByRole('link', { name: copy.settings.report.open })
     await expect(open).toHaveAttribute('target', '_blank')

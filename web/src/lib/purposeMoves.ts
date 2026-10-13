@@ -1,5 +1,4 @@
-// Typed call over apiFetch for POST /api/purpose-moves, same idiom as
-// lib/transfers.ts.
+// Typed call over apiFetch for POST /api/purpose-moves.
 
 import { apiFetch } from '@/lib/api'
 import type { Transfer } from '@/lib/transfers'
@@ -14,17 +13,16 @@ export interface PostPurposeMoveInput {
 }
 
 /**
- * POST /api/purpose-moves (ADR-036, #383) - money that stays where it is but
+ * POST /api/purpose-moves (ADR-036) - money that stays where it is but
  * changes what it is for: from Kas Utama to an envelope, back again, or from
  * one envelope to another. Nothing leaves the fund or any location, so no
- * balance and no reconciliation figure moves; only the two purposes' balances
- * do, by exactly the amount.
+ * balance and no reconciliation figure moves; only the two purposes'
+ * balances do, by exactly the amount.
  *
- * `accountId` is the one location both legs post on. It is asked for rather
- * than chosen silently because the row names it (the close-envelope form's
- * precedent).
+ * `accountId` is the one location both legs post on, asked for rather than
+ * chosen silently because the row names it.
  *
- * The note reaches both legs or neither, the same contract as a transfer's.
+ * The note reaches both legs or neither, as a transfer's does.
  */
 export function postPurposeMove(input: PostPurposeMoveInput): Promise<Transfer> {
   return apiFetch<Transfer>('/api/purpose-moves', {

@@ -17,27 +17,25 @@ import type { Fund } from '@/lib/setup'
 const text = copy.settings.fund
 
 /**
- * Renaming the kas (M6.15, converted to the card-plus-dialog shape in M6.30 -
- * ADR-032 "Every non-posting edit is a dialog"): the name reads as a card,
- * and tapping it opens the rename dialog at `?edit=fund:name`.
- *
- * The setup wizard already promises this - "bisa diganti nanti kalau perlu" -
- * and until M6.15 nothing delivered it.
+ * Renaming the kas, as a card-plus-dialog (ADR-032 "Every non-posting edit is a
+ * dialog"): the name reads as a card, and tapping it opens the rename dialog at
+ * `?edit=fund:name`. The setup wizard promises this - "bisa diganti nanti kalau
+ * perlu".
  *
  * The name is a display label: it heads every screen and the public report,
- * and nothing posted references it, so a rename rewrites no history. What it
- * does not touch is the report's slug, which is the address she may already
- * have shared; replacing that is its own decision (Laporan publik's
- * "Buat tautan baru"), not a side effect of fixing a typo.
+ * and nothing posted references it, so a rename rewrites no history. It does
+ * not touch the report's slug, the address she may have shared; replacing that
+ * is its own decision (Laporan publik's "Buat tautan baru"), not a side effect
+ * of fixing a typo.
  *
  * `onRenamed` exists because the fund's name is also Shell's header, which
- * App.tsx read once on mount - without it the header would keep showing the
- * old name until a reload.
+ * App.tsx read once on mount - without it the header would keep the old name
+ * until a reload.
  *
- * There is exactly one fund, so this section's dialog has no id to carry and
- * no list to look one up in: `fund:name` is its only value, and `new` is a
- * value it never opens. An `?edit=fund:<anything else>` arriving by hand is
- * cleared once, the same as a dead id in any other section.
+ * There is exactly one fund, so this section's dialog has no id to carry:
+ * `fund:name` is its only value, and `new` is a value it never opens. An
+ * `?edit=fund:<anything else>` arriving by hand is cleared once, like a dead id
+ * in any other section.
  */
 export default function FundName({ onRenamed }: { onRenamed: (fund: Fund) => void }) {
   const [loadState, loadRun] = useApi<Fund>()
@@ -49,19 +47,17 @@ export default function FundName({ onRenamed }: { onRenamed: (fund: Fund) => voi
 
   const fund = loadState.data ?? null
 
-  // 'fund' is this section's own prefix (dialogTarget.ts). The rename dialog
-  // is addressed by name rather than by id, so it lands as `invalid` on that
-  // parser - this section's one owned value, told apart from a real dead
-  // link by comparing the raw string.
+  // 'fund' is this section's prefix (dialogTarget.ts). The rename dialog is
+  // addressed by name rather than id, so it lands as `invalid` on that parser -
+  // this section's one owned value, told apart from a real dead link by
+  // comparing the raw string.
   const target = parseDialogTarget('fund', value)
   const isOwn = target.kind !== 'foreign'
   const editing = value === 'fund:name'
 
-  // A `fund:` value this section cannot use: strip it once, rather than
-  // leave a param no dialog answers to. Never a `foreign` value - that
-  // belongs to a sibling section on this same screen. `clear`, not `close`,
-  // for the reason Locations documents: a dead link is not a navigation
-  // worth undoing.
+  // A `fund:` value this section cannot use: strip it once, rather than leave a
+  // param no dialog answers to. Never a `foreign` value - that belongs to a
+  // sibling section. `clear`, not `close`, for the reason Locations documents.
   useEffect(() => {
     if (!isOwn || editing) return
     clear()
@@ -105,7 +101,7 @@ export default function FundName({ onRenamed }: { onRenamed: (fund: Fund) => voi
 }
 
 /**
- * The rename dialog. `fund` is null only while closing (the same window
+ * The rename dialog. `fund` is null only while closing (the window
  * EditLocationDialog documents), so the last known name stays on screen
  * rather than the field blanking mid-close.
  */
@@ -125,8 +121,8 @@ function EditFundNameDialog({
   const [state, run] = useApi<Fund>()
   const [name, setName] = useState('')
 
-  // Reset to the fund's current name each time the dialog opens, so a
-  // cancelled edit never leaves its text waiting for the next one.
+  // Reset to the fund's current name each time the dialog opens, so a cancelled
+  // edit never leaves its text waiting for the next one.
   useResetWhen(open ? fund : null, () => {
     if (open && fund !== null) setName(fund.name)
   })
