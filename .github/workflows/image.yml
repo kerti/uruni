@@ -1,0 +1,108 @@
+# Builds and boots the container image before a release does. Path-filtered on
+# PRs, so it must never be a required check (a skipped required check blocks
+# the merge); main runs it on every push. Local mirror: `make stack-up-local`.
+# Actions are SHA-pinned as in ci.yml; keep the trailing version comments.
+name: Container image
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    paths:
+      - Dockerfile
+      - .dockerignore
+      - docker-compose.yml
+      - Caddyfile
+      - go.mod
+      - go.sum
+      - cmd/**
+      - internal/**
+      - embed.go
+      - web/**
+      - .github/workflows/image.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: image-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  boot:
+    name: Image boots (amd64)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          platforms: linux/amd64
+          load: true
+          push: false
+          tags: uruni-ci:test
+          cache-from: type=gha,scope=image-amd64
+          cache-to: type=gha,mode=max,scope=image-amd64
+      - name: Compose file validates
+        env:
+          URUNI_BASE_URL: https://uruni.example.com
+          URUNI_TAG: ci
+        run: docker compose -f docker-compose.yml config -q
+      - name: Boot on fresh volumes
+        run: |
+          for v in data uploads backups; do docker volume create "uruni-ci-$v"; done
+          docker run -d --name uruni-ci -p 127.0.0.1:8080:8080 \
+            -e URUNI_BASE_URL=http://localhost:8080 \
+            -e URUNI_DB=/data/uruni.db \
+            -e URUNI_UPLOADS_DIR=/uploads \
+            -e URUNI_BACKUP_DIR=/backups \
+            -v uruni-ci-data:/data -v uruni-ci-uploads:/uploads -v uruni-ci-backups:/backups \
+            uruni-ci:test
+      - name: Container becomes healthy
+        run: |
+          for _ in $(seq 1 30); do
+            status=$(docker inspect -f '{{.State.Health.Status}}' uruni-ci)
+            [ "$status" = healthy ] && exit 0
+            sleep 2
+          done
+          echo "health status after 60s: $status"
+          docker logs uruni-ci
+          exit 1
+      - name: Healthz answers ok and the boot dump landed
+        run: |
+          curl -fsS http://127.0.0.1:8080/healthz | tee /tmp/healthz.json
+          grep -q '"status":[[:space:]]*"ok"' /tmp/healthz.json
+          # Distroless has no shell or ls: list the volume from a throwaway image.
+          docker run --rm -v uruni-ci-backups:/b:ro busybox:1 ls /b | tee /tmp/dumps.txt
+          grep -Eq '^uruni-[0-9]{8}-[0-9]{6}-daily-fv[0-9]+-[0-9a-f]{12}\.zip$' /tmp/dumps.txt
+      - name: Container logs on failure
+        if: failure()
+        run: docker logs uruni-ci || true
+      - name: Clean up
+        if: always()
+        run: |
+          docker rm -f uruni-ci || true
+          docker volume rm uruni-ci-data uruni-ci-uploads uruni-ci-backups || true
+
+  # No QEMU: the Dockerfile cross-compiles on the build platform and its only
+  # target-platform stage is COPY, so this checks exactly that claim.
+  arm64:
+    name: Image builds (arm64)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          platforms: linux/arm64
+          push: false
+          cache-from: type=gha,scope=image-arm64
+          cache-to: type=gha,mode=max,scope=image-arm64
