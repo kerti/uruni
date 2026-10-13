@@ -65,8 +65,7 @@ export default function FundName({ onRenamed }: { onRenamed: (fund: Fund) => voi
   useEffect(() => {
     if (!isOwn || editing) return
     clear()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [value, isOwn, editing])
+  }, [value, isOwn, editing, clear])
 
   return (
     <section className="flex flex-col gap-3">

@@ -1,5 +1,5 @@
 import { ArrowLeft } from 'lucide-react'
-import { useEffect, useState, type FormEvent } from 'react'
+import { useCallback, useEffect, useState, type FormEvent } from 'react'
 
 import MonthField from '@/components/MonthField'
 import AmountInput from '@/components/money/AmountInput'
@@ -77,15 +77,14 @@ interface TierData {
 export default function DuesTierScreen({ tierId, onBack }: { tierId: number; onBack: () => void }) {
   const [state, run] = useApi<TierData>()
 
-  async function load(): Promise<TierData> {
+  const load = useCallback(async (): Promise<TierData> => {
     const [tiers, rates] = await Promise.all([listDuesTiers(), listDuesRates(tierId)])
     return { tier: tiers.find((candidate) => candidate.id === tierId) ?? null, rates }
-  }
+  }, [tierId])
 
   useEffect(() => {
     void run(load)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [run, tierId])
+  }, [run, load])
 
   function reload() {
     void run(load)
@@ -104,7 +103,7 @@ export default function DuesTierScreen({ tierId, onBack }: { tierId: number; onB
   useEffect(() => {
     if (state.status !== 'success') return
     if (tier === null) onBack()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // oxlint-disable-next-line react/exhaustive-deps -- onBack is an inline arrow from the router; leave once when the load lands, not on every parent render
   }, [state.status, tier])
 
   if (state.status === 'idle' || state.status === 'loading') return <Loading />

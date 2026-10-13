@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 
 import ReconciliationLines from '@/components/ReconciliationLines'
 import { Button } from '@/components/ui/button'
@@ -54,25 +54,24 @@ export default function Reconciliations({ refetchKey }: { refetchKey?: unknown }
 
   const [accountsState, accountsRun] = useApi<Account[]>()
 
-  function refetchFirstPage() {
+  const refetchFirstPage = useCallback(() => {
     generation.current += 1
     setMore(null)
     setMoreLoading(false)
     setMoreError(null)
     void listRun(() => listReconciliations())
-  }
+  }, [listRun])
 
   useEffect(() => {
+    // oxlint-disable-next-line react/set-state-in-effect -- refetchFirstPage resets the appended pages and refetches when the key moves; the refetch is the external sync
     refetchFirstPage()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [refetchKey])
+  }, [refetchFirstPage, refetchKey])
 
   useEffect(() => {
     // accountsRun is a stable useCallback (useApi.ts); fires once. Location
     // names for the detail sheet - the same list Reconcile.tsx already
     // fetches for its own count form.
     void accountsRun(listAccounts)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [accountsRun])
 
   async function loadMore(cursor: string) {
@@ -183,8 +182,7 @@ function SnapshotDialog({ id, open, onClose, accounts }: { id: number | null; op
   useEffect(() => {
     if (id === null) return
     void run(() => getReconciliation(id))
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id])
+  }, [id, run])
 
   const accountNames = new Map(accounts.map((a) => [a.id, a.name]))
 

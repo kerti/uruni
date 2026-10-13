@@ -1,5 +1,5 @@
 import { Funnel, Search, X } from 'lucide-react'
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 
 import ErrorState from '@/components/states/ErrorState'
@@ -43,6 +43,22 @@ interface FirstPage {
   purposes: Purpose[]
 }
 
+/** The list request for the URL's search and filters; `cursor` asks for the page after it. */
+function pageInput(
+  q: string,
+  { purposeId, memberId, month, direction }: Pick<TransactionFilters, 'purposeId' | 'memberId' | 'month' | 'direction'>,
+  cursor?: string,
+) {
+  return {
+    q: q || undefined,
+    purposeId: purposeId ?? undefined,
+    memberId: memberId ?? undefined,
+    month: month ?? undefined,
+    direction: direction ?? undefined,
+    cursor,
+  }
+}
+
 /**
  * Riwayat's Transaksi tab (M6.23, paged and searchable as of #225, ADR-032
  * "Lists: paging and search"): newest-first, 25 a page, "muat lebih banyak"
@@ -75,7 +91,7 @@ export default function Transactions({ refetchKey }: { refetchKey?: unknown }) {
   const q = (searchParams.get('q') ?? '').trim()
   const [draft, setDraft] = useState(q)
 
-  const filters = readFilters(searchParams)
+  const filters = useMemo(() => readFilters(searchParams), [searchParams])
   const { month, purposeId, memberId, direction } = filters
   const filterCount = activeFilterCount(filters)
 
@@ -120,35 +136,26 @@ export default function Transactions({ refetchKey }: { refetchKey?: unknown }) {
     }
   }, [])
 
-  function pageInput(cursor?: string) {
-    return {
-      q: q || undefined,
-      purposeId: purposeId ?? undefined,
-      memberId: memberId ?? undefined,
-      month: month ?? undefined,
-      direction: direction ?? undefined,
-      cursor,
-    }
-  }
-
-  async function loadFirstPage(): Promise<FirstPage> {
-    const [balances, page, purposes] = await Promise.all([getBalances(), listTransactions(pageInput()), listPurposes(true)])
+  const loadFirstPage = useCallback(async (): Promise<FirstPage> => {
+    const input = pageInput(q, { purposeId, memberId, month, direction })
+    const [balances, page, purposes] = await Promise.all([getBalances(), listTransactions(input), listPurposes(true)])
     return { balances, page, purposes }
-  }
+  }, [q, purposeId, memberId, month, direction])
 
   useEffect(() => {
     generation.current += 1
+    // oxlint-disable-next-line react/set-state-in-effect -- reset the appended pages whenever the first page is refetched; the refetch is the external sync
     setMore(null)
     setMoreLoading(false)
     setMoreError(null)
     void run(loadFirstPage)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [run, q, purposeId, memberId, month, direction, refetchKey])
+  }, [run, loadFirstPage, refetchKey])
 
   // The URL changed under the field (back, forward, a link): follow it. A
   // draft that already trims to the same search is left alone, so a trailing
   // space she is still typing is not snatched away.
   useEffect(() => {
+    // oxlint-disable-next-line react/set-state-in-effect -- follow the URL back into the search field (back, forward, a link); the URL is the source of truth
     setDraft((current) => (current.trim() === q ? current : q))
   }, [q])
 
@@ -177,14 +184,16 @@ export default function Transactions({ refetchKey }: { refetchKey?: unknown }) {
   // inert param sitting in the URL. clear(), never close() - a dead link is
   // not a navigation to undo, the same reasoning Locations.tsx documents. A
   // `foreign` value belongs to nothing on this screen and is left alone.
+  const correctionKind = correctionTarget.kind
+  const correctionId = correctionTarget.kind === 'edit' ? correctionTarget.id : null
+  const loadedData = state.data
   useEffect(() => {
-    if (correctionTarget.kind === 'foreign' || correctionTarget.kind === 'new') return
-    if (state.status !== 'success' || !state.data) return
-    const rows = more ? [...state.data.page.transactions, ...more.transactions] : state.data.page.transactions
-    if (correctionTarget.kind === 'edit' && rows.some((t) => t.id === correctionTarget.id)) return
+    if (correctionKind === 'foreign' || correctionKind === 'new') return
+    if (state.status !== 'success' || !loadedData) return
+    const rows = more ? [...loadedData.page.transactions, ...more.transactions] : loadedData.page.transactions
+    if (correctionKind === 'edit' && rows.some((t) => t.id === correctionId)) return
     clearDialog()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dialogValue, correctionTarget.kind, state.status, more])
+  }, [dialogValue, correctionKind, correctionId, state.status, loadedData, more, clearDialog])
 
   /** Clears one filter and keeps the rest and whatever she has searched.
    * Not `replace`: arriving here from an envelope was a navigation, so the
@@ -212,7 +221,7 @@ export default function Transactions({ refetchKey }: { refetchKey?: unknown }) {
     setMoreLoading(true)
     setMoreError(null)
     try {
-      const page = await listTransactions(pageInput(cursor))
+      const page = await listTransactions(pageInput(q, { purposeId, memberId, month, direction }, cursor))
       if (startedIn !== generation.current) return
       setMore((prev) => ({ transactions: [...(prev?.transactions ?? []), ...page.transactions], nextCursor: page.nextCursor }))
     } catch (err) {

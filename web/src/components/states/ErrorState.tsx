@@ -22,7 +22,6 @@ const errorCopy: Record<string, string> = copy.common.errors
  */
 export default function ErrorState({ error, onRetry }: { error: ApiError; onRetry?: () => void }) {
   useEffect(() => {
-    // eslint-disable-next-line no-console
     console.error('API error', error.code, error.message)
   }, [error])
 

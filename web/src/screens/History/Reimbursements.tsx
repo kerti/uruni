@@ -1,5 +1,5 @@
 import { MoreHorizontal, Search } from 'lucide-react'
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 
 import ReceiptDialog from '@/components/ReceiptDialog'
@@ -23,7 +23,7 @@ import type { Member } from '@/lib/setup'
 import type { Purpose } from '@/lib/purposes'
 import type { Reimbursement, ReimbursementsPage } from '@/lib/reimbursements'
 import { listAllMembers } from '@/lib/setup'
-import { doneText, errorText, todayISODate, type TalanganState } from '@/screens/Reimbursements/shared'
+import { doneText, errorText, todayISODate, type TalanganState } from '@/screens/Reimbursements/helpers'
 
 const text = copy.reimbursements
 const searchText = copy.history.reimbursements
@@ -104,22 +104,22 @@ export default function Reimbursements({ refetchKey }: { refetchKey?: unknown })
     return done ? { kind: 'success', text: doneText(done) } : null
   })
 
-  async function loadFirstPage(): Promise<ReimbursementsPage> {
-    return listReimbursements({ outstanding: tab === 'outstanding', q: q || undefined })
-  }
+  const loadFirstPage = useCallback(
+    (): Promise<ReimbursementsPage> => listReimbursements({ outstanding: tab === 'outstanding', q: q || undefined }),
+    [tab, q],
+  )
 
-  function refetchFirstPage() {
+  const refetchFirstPage = useCallback(() => {
     generation.current += 1
     setMore(null)
     setMoreLoading(false)
     setMoreError(null)
     void listRun(loadFirstPage)
-  }
+  }, [listRun, loadFirstPage])
 
   useEffect(() => {
     refetchFirstPage()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tab, q, refetchKey])
+  }, [refetchFirstPage, refetchKey])
 
   // The URL changed under the field (back, forward, a link): follow it. A
   // draft that already trims to the same search is left alone, so a
@@ -184,17 +184,18 @@ export default function Reimbursements({ refetchKey }: { refetchKey?: unknown })
     }
   }
 
-  function fetchFormData() {
-    return formDataRun(async () => {
-      const [members, purposes] = await Promise.all([listAllMembers(), listPurposes()])
-      return { members, purposes }
-    })
-  }
+  const fetchFormData = useCallback(
+    () =>
+      formDataRun(async () => {
+        const [members, purposes] = await Promise.all([listAllMembers(), listPurposes()])
+        return { members, purposes }
+      }),
+    [formDataRun],
+  )
 
   useEffect(() => {
     void fetchFormData()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [formDataRun])
+  }, [fetchFormData])
 
   // Close the delete confirmation when a successful action's list refresh
   // lands; an error keeps it open so she can read why before deciding again.
@@ -202,7 +203,7 @@ export default function Reimbursements({ refetchKey }: { refetchKey?: unknown })
     if (listState.status === 'success' && feedback?.kind === 'success') {
       setDeleteId(null)
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // oxlint-disable-next-line react/exhaustive-deps -- fire when the list refresh lands, not when feedback changes; feedback is only read to tell a success from an error
   }, [listState.status])
 
   const submitting = submitState.status === 'loading'
@@ -227,7 +228,6 @@ export default function Reimbursements({ refetchKey }: { refetchKey?: unknown })
         await settleUncertainWrite(err, () => listRun(loadFirstPage, { silent: true }))
         const apiErr = err instanceof ApiError ? err : new ApiError('unknown_error', err instanceof Error ? err.message : String(err))
         setFeedback({ kind: 'error', text: errorText(apiErr) })
-        // eslint-disable-next-line no-console
         console.error('API error', apiErr.code, apiErr.message)
       }
       refetchFirstPage()

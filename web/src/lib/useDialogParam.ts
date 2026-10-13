@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 
 /** The private tag this hook writes to `location.state` on the entry it
@@ -68,9 +68,18 @@ export function useDialogParam(param = 'edit') {
 
   const value = searchParams.get(param)
 
+  // react-router hands back a new setSearchParams whenever the search
+  // changes. Reading it through a ref keeps open/clear/close identities
+  // tied to `param` alone, so an effect that calls clear() can list it
+  // honestly without re-running on every URL change.
+  const setSearchParamsRef = useRef(setSearchParams)
+  useEffect(() => {
+    setSearchParamsRef.current = setSearchParams
+  })
+
   const open = useCallback(
     (next: string) => {
-      setSearchParams(
+      setSearchParamsRef.current(
         (prev) => {
           const params = new URLSearchParams(prev)
           params.set(param, next)
@@ -79,7 +88,7 @@ export function useDialogParam(param = 'edit') {
         { state: { dialog: true } satisfies DialogLocationState },
       )
     },
-    [param, setSearchParams],
+    [param],
   )
 
   // Strips the param in place and never moves through history. close()'s
@@ -88,7 +97,7 @@ export function useDialogParam(param = 'edit') {
   // close() already in flight has gone back, and a second navigate(-1)
   // takes her off the screen entirely.
   const clear = useCallback(() => {
-    setSearchParams(
+    setSearchParamsRef.current(
       (prev) => {
         const params = new URLSearchParams(prev)
         params.delete(param)
@@ -96,7 +105,7 @@ export function useDialogParam(param = 'edit') {
       },
       { replace: true, state: { dialogCleared: true } satisfies DialogLocationState },
     )
-  }, [param, setSearchParams])
+  }, [param])
 
   const close = useCallback(() => {
     const state = location.state as DialogLocationState | null

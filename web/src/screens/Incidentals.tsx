@@ -128,7 +128,6 @@ export default function Incidentals({
   useEffect(() => {
     void accountsRun(listAccounts)
     void membersRun(listAllMembers)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [accountsRun, membersRun])
 
   // Fetches once for the purpose this screen was navigated with - a fresh
@@ -138,8 +137,7 @@ export default function Incidentals({
   useEffect(() => {
     void detailRun(() => getIncidental(purposeId))
     void participationRun(() => getIncidentalParticipation(purposeId))
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [purposeId])
+  }, [purposeId, detailRun, participationRun])
 
   // An `incidental:` value naming a different or malformed id: strip it
   // once the detail has loaded, rather than flash an empty dialog - never
@@ -153,8 +151,7 @@ export default function Incidentals({
     if (detailState.status !== 'success') return
     if (isRenaming) return
     clearDialog()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dialogValue, dialogTarget.kind, detailState.status, isRenaming])
+  }, [dialogValue, dialogTarget.kind, detailState.status, isRenaming, clearDialog])
 
   const submitting = submitState.status === 'loading'
 
@@ -182,7 +179,6 @@ export default function Incidentals({
         await settleUncertainWrite(err, refreshDetail)
         const apiErr = err instanceof ApiError ? err : new ApiError('unknown_error', err instanceof Error ? err.message : String(err))
         setFeedback({ kind: 'error', text: errorText(apiErr) })
-        // eslint-disable-next-line no-console
         console.error('API error', apiErr.code, apiErr.message)
       }
     })

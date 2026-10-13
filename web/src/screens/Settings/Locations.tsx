@@ -74,8 +74,7 @@ export default function Locations() {
     if (listState.status !== 'success') return
     if (target.kind === 'edit' && editingAccount !== null) return
     clear()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [value, target.kind, listState.status, editingAccount])
+  }, [value, target.kind, listState.status, editingAccount, clear])
 
   return (
     <section className="flex flex-col gap-3">
@@ -313,7 +312,7 @@ function EditLocationDialog({
       setKind(shown.kind === 'bank' ? 'bank' : 'cash')
       setConfirming(null)
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // oxlint-disable-next-line react/exhaustive-deps -- seed once per open, keyed on the record's id; a refetched copy of the same record would wipe the treasurer's edits
   }, [open, shown?.id])
 
   // onChanged closes the dialog, so it runs only once the request has

@@ -54,7 +54,7 @@ async function pickFirstMember() {
 /** The parsed body of the last POST /api/dues-payments the stub saw. */
 function lastPostedBody(fetchMock: ReturnType<typeof stubApi>) {
   const call = fetchMock.mock.calls.filter(([, init]) => (init as RequestInit | undefined)?.method === 'POST').at(-1)
-  return JSON.parse(String((call?.[1] as RequestInit).body))
+  return JSON.parse(String((call?.[1] as RequestInit | undefined)?.body))
 }
 
 describe('RecordDuesPayment', () => {
