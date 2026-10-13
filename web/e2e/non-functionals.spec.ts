@@ -195,7 +195,10 @@ test.describe('browser-only non-functionals', () => {
     await page.getByRole('button', { name: copy.record.submit }).click()
 
     // It fails visibly: no success message, still on the form, still offline.
-    await expect(page.getByRole('alert').filter({ hasText: copy.common.errors.network_error })).toBeVisible()
+    // A write whose fetch throws is reported as uncertain, not as the plain
+    // connection message (#507): the client can't tell "never sent" from
+    // "response lost".
+    await expect(page.getByRole('alert').filter({ hasText: copy.common.errors.write_outcome_unknown })).toBeVisible()
     await expect(page.getByText(copy.record.successOut)).toBeHidden()
     await expect(page.getByRole('heading', { name: copy.record.heading })).toBeVisible()
     await expect(offlineBanner(page)).toBeVisible()

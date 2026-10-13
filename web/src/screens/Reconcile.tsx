@@ -467,7 +467,7 @@ function AccountCountRow({
       >
         <span className="text-base font-semibold">{account.name}</span>
         <span className="text-sm text-muted-foreground">
-          {text.recordedLabel} <span className="tabular font-medium text-foreground">{formatIDR(recorded)}</span>
+          {text.recordedLabel} <span className="tabular whitespace-nowrap font-medium text-foreground">{formatIDR(recorded)}</span>
         </span>
       </div>
 
