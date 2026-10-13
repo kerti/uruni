@@ -3,8 +3,8 @@
 #
 # Both jobs are named `E2E`, with mutually exclusive `if:`s, so whichever runs
 # reports the one stable check name branch protection requires:
-# `E2E / Playwright`. A failed scheduled run surfaces through GitHub's own
-# email for failed scheduled workflows - no extra machinery.
+# `E2E / Playwright`. A failed scheduled run opens (or comments on) one tracking
+# issue, so a red nightly is not just an email.
 name: E2E
 
 on:
@@ -39,3 +39,28 @@ jobs:
     uses: ./.github/workflows/e2e-run.yml
     with:
       tier: full
+
+  # One open issue per streak of failures: comment on it, or open it.
+  nightly-failed:
+    name: Report nightly failure
+    needs: full
+    if: ${{ always() && github.event_name == 'schedule' && needs.full.result == 'failure' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      issues: write
+    steps:
+      - name: Open or update the tracking issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          TITLE: Nightly e2e is failing
+        run: |
+          number=$(gh issue list --state open --search "\"$TITLE\" in:title" --json number,title \
+            --jq "map(select(.title == \"$TITLE\")) | .[0].number // empty")
+          if [ -n "$number" ]; then
+            gh issue comment "$number" --body "Failed again: $RUN_URL"
+          else
+            gh issue create --title "$TITLE" --body "The scheduled full e2e suite failed: $RUN_URL"
+          fi
