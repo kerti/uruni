@@ -20,6 +20,14 @@ env:
   # that green-locally means green-in-CI (ADR-020). golangci-lint-action v8
   # drives golangci-lint v2; do not drop back to action v6 (v1 only).
   GOLANGCI_VERSION: v2.13.2
+  # Both in lockstep with the Makefile (SQLC_CI_VERSION, GOVULNCHECK_VERSION).
+  # SQLC_VERSION must also match the `sqlc vX` header in internal/store, or
+  # `sqlc diff` fails on code nobody touched. SQLC_SHA256 is the linux_amd64
+  # tarball's - sqlc publishes no checksum file, so this pin is ours, taken
+  # when the version was bumped.
+  SQLC_VERSION: v1.31.1
+  SQLC_SHA256: 497ae4fcdfa64c5b0c311ffe4c2bd991e43991e82e5367792ed78bc2dca27354
+  GOVULNCHECK_VERSION: v1.9.0
 
 jobs:
   # The Makefile, hooks and workflows were deliberately written before the
@@ -86,6 +94,21 @@ jobs:
           # never have. Lint runs in ~3s cold; the cache buys nothing worth
           # this.
           skip-cache: true
+      # Lint above also enforces gofmt (formatters: in .golangci.yml). The three
+      # below catch what only discipline or a local hook kept right (#502).
+      - name: go.mod and go.sum are tidy
+        run: go mod tidy -diff
+      - name: Generated sqlc code matches the queries and schema
+        run: |
+          v="${SQLC_VERSION#v}"
+          curl -fsSL -o /tmp/sqlc.tgz "https://github.com/sqlc-dev/sqlc/releases/download/${SQLC_VERSION}/sqlc_${v}_linux_amd64.tar.gz"
+          echo "${SQLC_SHA256}  /tmp/sqlc.tgz" | sha256sum -c -
+          tar -xzf /tmp/sqlc.tgz -C /tmp sqlc
+          /tmp/sqlc diff
+      # Scans with the Go that setup-go installed from go.mod's toolchain line,
+      # so a stdlib fix lands by bumping that line.
+      - name: No known vulnerabilities reachable from our code
+        run: go run "golang.org/x/vuln/cmd/govulncheck@${GOVULNCHECK_VERSION}" ./...
 
   backend-test:
     name: Backend test (${{ matrix.shard }})

@@ -76,6 +76,17 @@ E2E_LOG_LEVEL ?= warn
 # both together.
 GOLANGCI_CI_VERSION := v2.13.2
 
+# The sqlc version that wrote internal/store (the `sqlc vX` line in every
+# generated header) and that ci.yml installs (env.SQLC_VERSION there). Another
+# version writes different code, and `sqlc diff` in `make check` and CI then
+# fails on a tree nobody edited. `doctor` compares yours exactly. Bump all three
+# together, by regenerating with the new one.
+SQLC_CI_VERSION := v1.31.1
+
+# govulncheck runs through `go run` at this exact version, here and in ci.yml
+# (env.GOVULNCHECK_VERSION there) - nothing to install, nothing to drift.
+GOVULNCHECK_VERSION := v1.9.0
+
 help:
 	@echo "uruni - make targets (run 'make <target>')"
 	@echo ""
@@ -206,7 +217,11 @@ doctor:
 	  if [ "v$$v" = "$(GOLANGCI_CI_VERSION)" ]; then echo "v$$v"; \
 	  else echo "v$$v - CI pins $(GOLANGCI_CI_VERSION). Different linter versions disagree about real code; install the pinned one."; fi; \
 	else echo 'MISSING (make lint / make check)'; fi
-	@printf '%-16s' 'sqlc';          command -v sqlc          >/dev/null 2>&1 && echo 'ok'                      || echo 'MISSING (make sqlc)'
+	@printf '%-16s' 'sqlc';          if command -v sqlc >/dev/null 2>&1; then \
+	  v=$$(sqlc version 2>/dev/null); \
+	  if [ "$$v" = "$(SQLC_CI_VERSION)" ]; then echo "$$v"; \
+	  else echo "$$v - CI pins $(SQLC_CI_VERSION). Another version writes different code into internal/store; install the pinned one."; fi; \
+	else echo 'MISSING (make sqlc / make check)'; fi
 	@printf '%-16s' 'claude';        command -v claude        >/dev/null 2>&1 && echo 'ok'                      || echo 'not on PATH (install separately; the Makefile cannot)'
 	@printf '%-16s' 'git hooks';     [ "$$(git config core.hooksPath)" = ".githooks" ] && echo 'armed'          || echo 'NOT armed - run make hooks-install'
 	@printf '%-16s' 'pii-patterns';  [ -f .pii-patterns ] && echo 'present'                                     || echo 'MISSING - run make hooks-install'
@@ -448,8 +463,14 @@ start-task:
 
 # Pre-push gate. Deliberately mirrors .github/workflows/ci.yml step for step, so
 # green locally ~ green in CI (ADR-017). Keep the two in sync when either
-# changes - including the golangci-lint version (see GOLANGCI_CI_VERSION above;
-# `make doctor` flags a mismatch). e2e is excluded: it has its own workflow
+# changes - including the golangci-lint and sqlc versions (GOLANGCI_CI_VERSION
+# and SQLC_CI_VERSION above; `make doctor` flags a mismatch). govulncheck needs
+# the network: it reads the vulnerability database at vuln.go.dev.
+#
+# The Go steps run on go.mod's `toolchain` line, which is what setup-go installs
+# in CI - not whatever Go is on your PATH. A newer local Go would otherwise
+# change the answer: govulncheck scans the stdlib you build with, and a patch
+# release can change export data under a pinned golangci-lint (go1.27.2 did). e2e is excluded: it has its own workflow
 # (e2e.yml, ADR-039) and its own target, `make e2e`.
 #
 # The go.mod / web/package.json guards mirror ci.yml's `preflight` job: the
@@ -460,8 +481,12 @@ start-task:
 check:
 	@fail=0; \
 	if [ -f go.mod ]; then \
+	  export GOTOOLCHAIN=$$(sed -n 's/^toolchain //p' go.mod); \
 	  printf '%-14s' 'golangci-lint'; golangci-lint run                >/tmp/uruni-check-go-lint.log 2>&1 && echo 'ok' || { echo 'FAIL -> /tmp/uruni-check-go-lint.log'; fail=1; }; \
 	  printf '%-14s' 'go test';       go test ./... -race              >/tmp/uruni-check-go-test.log 2>&1 && echo 'ok' || { echo 'FAIL -> /tmp/uruni-check-go-test.log'; fail=1; }; \
+	  printf '%-14s' 'go mod tidy';   go mod tidy -diff                >/tmp/uruni-check-go-tidy.log 2>&1 && echo 'ok' || { echo 'FAIL -> /tmp/uruni-check-go-tidy.log (make tidy)'; fail=1; }; \
+	  printf '%-14s' 'sqlc diff';     sqlc diff                        >/tmp/uruni-check-sqlc.log    2>&1 && echo 'ok' || { echo 'FAIL -> /tmp/uruni-check-sqlc.log (make sqlc; make doctor for the version)'; fail=1; }; \
+	  printf '%-14s' 'govulncheck';   go run golang.org/x/vuln/cmd/govulncheck@$(GOVULNCHECK_VERSION) ./... >/tmp/uruni-check-go-vuln.log 2>&1 && echo 'ok' || { echo 'FAIL -> /tmp/uruni-check-go-vuln.log'; fail=1; }; \
 	else \
 	  printf '%-14s' 'go'; echo '- skipped (no go.mod yet - ci.yml skips too)'; \
 	fi; \

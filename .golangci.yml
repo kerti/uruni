@@ -12,3 +12,9 @@ linters:
 
 issues:
   max-same-issues: 0
+
+# `golangci-lint run` reports unformatted files as issues, so gofmt is enforced
+# in CI and in `make check` without a separate step (#502).
+formatters:
+  enable:
+    - gofmt

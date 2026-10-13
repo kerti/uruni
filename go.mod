@@ -2,6 +2,8 @@ module github.com/kerti/uruni
 
 go 1.26.5
 
+toolchain go1.26.9
+
 require (
 	codeberg.org/go-pdf/fpdf v0.12.0
 	github.com/alexedwards/scs/v2 v2.9.0
