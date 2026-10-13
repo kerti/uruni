@@ -16,15 +16,13 @@ import (
 )
 
 // reimbursementRequest is POST /api/reimbursements's body: a member fronting
-// their own money for the fund (PRD section 7.4), recorded now and paid back later.
+// their money for the fund (PRD section 7.4), recorded now and paid back
+// later.
 //
-// waived_on is deliberately absent, for the same reason memberRequest omits
-// inactive_on: PRD section 7.4 never asks to waive a claim, so #69 adds no waive
-// route - and accepting waived_on at creation would be that route by the back
-// door, a claim born unpayable with no way to undo it. It stays off the
-// create body now that PATCH can set it (#103) - a claim is born owed, and
-// waiving it is a later event with its own date; CreateReimbursement always
-// gets a nil WaivedOn here.
+// waived_on is absent, as memberRequest omits inactive_on: accepting it at
+// creation would be a waive route by the back door, a claim born unpayable.
+// A claim is born owed; waiving (#103) is a later event with its own date, so
+// CreateReimbursement always gets a nil WaivedOn here.
 type reimbursementRequest struct {
 	MemberID   int64   `json:"member_id"`
 	PurposeID  int64   `json:"purpose_id"`
@@ -34,20 +32,16 @@ type reimbursementRequest struct {
 }
 
 // reimbursementResponse is the wire shape of a claim. incurred_on is when the
-// member actually spent their own money, which is not when the fund pays them
-// back - the settlement posts on its own date and lives on the transaction
-// row, not here (ADR-024).
+// member spent their money, not when the fund pays them back; the settlement
+// posts on its own date and lives on the transaction row (ADR-024).
 //
-// settled says whether a kind='reimbursement' transaction already references
-// the claim - a fact about the ledger, not about this row. It rides the list
-// queries (a computed column) so the client can render an "all" list honestly
-// without a second call: a row here is settled only when a payout row exists.
-// A claim that is not settled and not waived is still owed.
+// settled says whether a kind='reimbursement' transaction references the
+// claim: a fact about the ledger, not this row. It rides the list queries (a
+// computed column) so the client can render an "all" list without a second
+// call. A claim neither settled nor waived is still owed.
 //
-// waived_on is on the wire as of #103, when it became settable: a claim the
-// member forgave is not owed and not paid, and nothing else on this row says
-// so. It was withheld while #69 left it unsettable, since a field that is
-// always null tells a client nothing.
+// waived_on is on the wire since #103: a claim the member forgave is not owed
+// and not paid, and nothing else on the row says so.
 type reimbursementResponse struct {
 	ID         int64   `json:"id"`
 	MemberID   int64   `json:"member_id"`
@@ -59,22 +53,18 @@ type reimbursementResponse struct {
 	Settled    bool    `json:"settled"`
 	CreatedAt  int64   `json:"created_at"`
 
-	// ReceiptIDs is every receipt attached to this claim, oldest first
-	// (#154): always present, [] rather than null when there are none.
-	// toReimbursementResponse defaults it to [] - correct for
-	// createReimbursement, whose claim id is brand new and could not
-	// already have a receipt - and listReimbursements/updateReimbursement
-	// each overwrite it with a real, batched or single-row lookup, since
-	// both read an existing claim a photo may already have been attached
-	// to.
+	// ReceiptIDs is every receipt attached to this claim, oldest first (#154):
+	// always present, [] rather than null when none. toReimbursementResponse
+	// defaults it to [] (right for createReimbursement, whose claim id is new);
+	// listReimbursements and updateReimbursement overwrite it with a real
+	// lookup, since a photo may already be attached.
 	ReceiptIDs []int64 `json:"receipt_ids"`
 }
 
-// toReimbursementResponse maps a store row (and the settled fact that only
-// the list queries know) to the wire. createReimbursement and
-// updateReimbursement pass 0: a fresh claim is born owed, and the ledger
-// refuses every write to a settled claim, so a 0 is a guarantee, not an
-// assumption.
+// toReimbursementResponse maps a store row (and the settled fact only the
+// list queries know) to the wire. createReimbursement and updateReimbursement
+// pass 0: a fresh claim is born owed, and the ledger refuses every write to
+// a settled claim, so 0 is a guarantee.
 func toReimbursementResponse(r store.Reimbursement, settled int64) reimbursementResponse {
 	return reimbursementResponse{
 		ID:         r.ID,
@@ -107,15 +97,15 @@ func toReimbursementResponseRow(r store.ListReimbursementsPageRow) reimbursement
 	}, r.Settled)
 }
 
-// createReimbursement is POST /api/reimbursements. Recording a claim moves
-// no money - there is no ledger row until it is settled - but it goes
-// through Ledger.CreateReimbursement because one invariant does apply: a
-// claim against a closed envelope could only end in a refused payout, so it
-// answers 409 incidental_closed (ADR-031, #473).
+// createReimbursement is POST /api/reimbursements. Recording a claim moves no
+// money (no ledger row until settled), but it goes through
+// Ledger.CreateReimbursement because one invariant applies: a claim against a
+// closed envelope could only end in a refused payout, so it answers 409
+// incidental_closed (ADR-031, #473).
 //
-// A malformed incurred_on and a member_id or purpose_id naming no row still
-// reach SQLite's own CHECK and FOREIGN KEY constraints, and come back
-// through mapLedgerError's fallthrough to mapSQLiteError.
+// A malformed incurred_on and a member_id or purpose_id naming no row reach
+// SQLite's CHECK and FOREIGN KEY constraints and come back through
+// mapLedgerError's fallthrough to mapSQLiteError.
 func (a *api) createReimbursement(w http.ResponseWriter, r *http.Request) {
 	var req reimbursementRequest
 	if !decodeJSON(w, r, &req) {
@@ -143,34 +133,29 @@ func (a *api) createReimbursement(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, toReimbursementResponse(claim, 0))
 }
 
-// reimbursementsPageSize is GET /api/reimbursements's fixed page size
-// (#226, ADR-032 "Lists: paging and search"): 25 a page, same as
-// GET /api/transactions.
+// reimbursementsPageSize is GET /api/reimbursements's fixed page size (#226,
+// ADR-032): 25 a page, as GET /api/transactions.
 const reimbursementsPageSize = 25
 
 // reimbursementsPageResponse is GET /api/reimbursements's envelope (#226),
-// the same {rows, next_cursor} shape transactionsPageResponse introduced -
-// see that type's own comment for why this route stopped answering a bare
-// array.
+// the {rows, next_cursor} shape of transactionsPageResponse.
 type reimbursementsPageResponse struct {
 	Reimbursements []reimbursementResponse `json:"reimbursements"`
 	NextCursor     *string                 `json:"next_cursor"`
 }
 
-// encodeReimbursementsCursor/decodeReimbursementsCursor are
-// encodeTransactionsCursor/decodeTransactionsCursor's own shape (base64 of
-// "incurred_on|id", the pair ListReimbursementsPage's keyset WHERE clause
-// compares against) kept local rather than shared: the two routes' cursors
-// are opaque wire formats over different tables and different date
-// columns, and generalizing them would only add an indirection neither
-// route's own callers need.
+// encodeReimbursementsCursor/decodeReimbursementsCursor have the shape of the
+// transactions cursor (base64 of "incurred_on|id", the pair
+// ListReimbursementsPage's keyset WHERE compares), kept local: the cursors
+// are opaque wire formats over different tables and date columns, and
+// generalizing would add an indirection neither needs.
 func encodeReimbursementsCursor(incurredOn string, id int64) string {
 	return base64.RawURLEncoding.EncodeToString([]byte(incurredOn + "|" + strconv.FormatInt(id, 10)))
 }
 
-// decodeReimbursementsCursor rejects anything that doesn't round-trip to a
-// real calendar date plus a positive id, the shape listReimbursements below
-// answers 400 invalid_argument for.
+// decodeReimbursementsCursor rejects anything that does not round-trip to a
+// real calendar date plus a positive id; listReimbursements answers 400
+// invalid_argument.
 func decodeReimbursementsCursor(raw string) (incurredOn string, id int64, ok bool) {
 	decoded, err := base64.RawURLEncoding.DecodeString(raw)
 	if err != nil {
@@ -191,29 +176,22 @@ func decodeReimbursementsCursor(raw string) (incurredOn string, id int64, ok boo
 	return incurredOn, id, true
 }
 
-// listReimbursements is GET /api/reimbursements (#226, ADR-032 "Lists:
-// paging and search"): newest-first, keyset-paged on
-// (incurred_on DESC, id DESC), 25 a page - the same shape
-// GET /api/transactions already answers, and for the same reason
-// (ListReimbursementsPage's own comment has the row-value-keyset
+// listReimbursements is GET /api/reimbursements (#226, ADR-032): newest-first,
+// keyset-paged on (incurred_on DESC, id DESC), 25 a page, like
+// GET /api/transactions (see ListReimbursementsPage for the keyset
 // reasoning).
 //
 // ?outstanding=true narrows to claims still owed (neither settled nor
-// waived) - the list the treasurer actually looks at, since a settled claim
-// is history. An unparseable value is a 400 rather than a silent "all":
-// ?outstanding=yes most likely means the caller believes it is filtering,
-// and answering with the full list would quietly show settled claims as
-// though they were owed.
+// waived), the list the treasurer looks at. An unparseable value is a 400,
+// not a silent "all": ?outstanding=yes means the caller believes it is
+// filtering, and the full list would show settled claims as owed.
 //
-// ?q= searches member name and note (case-insensitive substring) - ADR-032
-// named this list's search surface explicitly, narrower than
-// GET /api/transactions's because a claim has no purpose-name column worth
-// searching the way a transaction does.
+// ?q= searches member name and note (case-insensitive substring), narrower
+// than GET /api/transactions's search (ADR-032): a claim has no purpose-name
+// column worth searching.
 //
-// ListReimbursementsPage is asked for one row more than the page size so
-// this handler can tell "the next page is empty" apart from "there is a
-// next page" without a second round trip, the same trick listTransactions
-// uses.
+// ListReimbursementsPage is asked for one row more than the page size, as in
+// listTransactions, to tell an empty next page from a next page.
 func (a *api) listReimbursements(w http.ResponseWriter, r *http.Request) {
 	outstandingOnly := false
 	if raw := r.URL.Query().Get("outstanding"); raw != "" {
@@ -266,8 +244,8 @@ func (a *api) listReimbursements(w http.ResponseWriter, r *http.Request) {
 		nextCursor = &encoded
 	}
 
-	// One batched, fund-scoped receipt lookup for the whole page (#154), the
-	// same shape listTransactions uses - never one query per row.
+	// One batched, fund-scoped receipt lookup for the page (#154), as in
+	// listTransactions.
 	ids := make([]int64, len(rows))
 	for i, claim := range rows {
 		ids[i] = claim.ID
@@ -288,9 +266,9 @@ func (a *api) listReimbursements(w http.ResponseWriter, r *http.Request) {
 }
 
 // getReimbursement is GET /api/reimbursements/{id}: one claim, with the
-// same settled flag and receipt_ids the list rows carry, so the settle and
-// correct screens can open on a claim by address. An id that is not a number
-// names nothing, so it is the same 404 as an unknown one.
+// settled flag and receipt_ids the list rows carry, so the settle and correct
+// screens can open on a claim by address. A non-numeric id is the same 404 as
+// an unknown one.
 func (a *api) getReimbursement(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
@@ -323,12 +301,10 @@ func (a *api) getReimbursement(w http.ResponseWriter, r *http.Request) {
 // settleReimbursementRequest is POST /api/reimbursements/{id}/settle's body:
 // which account pays the claim out, and when.
 //
-// No amount and no purpose_id, matching SettleReimbursementParams itself:
-// both are read from the claim being settled, because a settlement that paid
-// a different figure than the claim would not be a settlement of that claim.
-// occurred_on is the settle date - the day the fund actually handed the money
-// over - never incurred_on, which stays on the claim as the truth about when
-// the member spent it.
+// No amount and no purpose_id, as in SettleReimbursementParams: both come
+// from the claim, since a settlement paying a different figure would not
+// settle that claim. occurred_on is the settle date (when the fund handed the
+// money over), never incurred_on, which stays on the claim.
 type settleReimbursementRequest struct {
 	AccountID  int64  `json:"account_id"`
 	OccurredOn string `json:"occurred_on"`
@@ -336,12 +312,11 @@ type settleReimbursementRequest struct {
 
 // settleReimbursement is POST /api/reimbursements/{id}/settle: wraps
 // Ledger.SettleReimbursement, the one call in this file that moves money. It
-// posts a single kind='reimbursement', direction='out' row and returns it as
-// the transactionResponse every other transaction-shaped route already uses.
+// posts a single kind='reimbursement', direction='out' row and returns the
+// shared transactionResponse.
 //
 // Settling twice is ErrReimbursementAlreadySettled and settling a waived
-// claim is ErrReimbursementWaived; both reach the client as their own named
-// 409 through the shared mapper, which already knows them.
+// claim is ErrReimbursementWaived; the shared mapper gives each a named 409.
 func (a *api) settleReimbursement(w http.ResponseWriter, r *http.Request) {
 	id, ok := reimbursementID(w, r)
 	if !ok {
@@ -373,13 +348,13 @@ func (a *api) settleReimbursement(w http.ResponseWriter, r *http.Request) {
 }
 
 // updateReimbursementRequest is PATCH /api/reimbursements/{id}'s body. An
-// absent key means "leave alone"; an explicit null on note or waived_on
-// means "clear it" - clearing waived_on un-waives a claim, which is why
-// waiving is a field here rather than a /waive route of its own. The four
-// NOT NULL columns cannot be cleared, so they need no flag.
+// absent key means "leave alone"; an explicit null on note or waived_on means
+// "clear it" (clearing waived_on un-waives, which is why waiving is a field
+// and not a /waive route). The four NOT NULL columns cannot be cleared, so
+// they need no flag.
 //
-// Same *Set-flag shape as updateMemberRequest, and for the same reason: no
-// struct tag distinguishes a missing key from an explicit null.
+// Same *Set-flag shape as updateMemberRequest: no struct tag distinguishes a
+// missing key from an explicit null.
 type updateReimbursementRequest struct {
 	MemberID      *int64
 	MemberIDSet   bool
@@ -429,16 +404,16 @@ func decodeUpdateReimbursementRequest(w http.ResponseWriter, r *http.Request) (u
 }
 
 // updateReimbursement is PATCH /api/reimbursements/{id}: correcting a claim
-// the treasurer got wrong, and waiving one the member has forgiven - the
-// same route, because waiving sets a column (#103).
+// and waiving one the member forgave, one route because waiving sets a column
+// (#103).
 //
-// It goes through the ledger rather than a.queries, unlike the POST above:
-// "only until settled" is a fact in the transaction table, and a cross-table
-// invariant is ADR-027's own test for what belongs in internal/ledger.
+// It goes through the ledger, unlike the POST: "only until settled" is a fact
+// in the transaction table, and a cross-table invariant is ADR-027's test for
+// what belongs in internal/ledger.
 //
-// A settled claim is refused with its named 409. Nothing here re-checks it,
-// and nothing here pre-checks that member_id names a real member either -
-// that reaches SQLite's foreign key and comes back through the mapper.
+// A settled claim is refused with its named 409. Nothing here re-checks that,
+// or pre-checks that member_id names a real member; SQLite's foreign key does
+// and the mapper reports it.
 func (a *api) updateReimbursement(w http.ResponseWriter, r *http.Request) {
 	id, ok := reimbursementID(w, r)
 	if !ok {
@@ -485,10 +460,9 @@ func (a *api) updateReimbursement(w http.ResponseWriter, r *http.Request) {
 	}
 
 	resp := toReimbursementResponse(updated, 0)
-	// Unlike createReimbursement's brand-new claim, the row being corrected
-	// here already existed and may already carry a receipt uploaded before
-	// this PATCH - so receipt_ids gets a real, single-row lookup rather than
-	// the [] default, per #154's "always accurate" contract.
+	// The row already existed and may carry a receipt uploaded before this
+	// PATCH, so receipt_ids gets a real single-row lookup, not the [] default
+	// (#154).
 	receiptIDs, err := a.receiptIDsForReimbursements(r.Context(), fund.ID, []int64{updated.ID})
 	if err != nil {
 		mapSQLiteError(w, a.logger, err)
@@ -500,14 +474,12 @@ func (a *api) updateReimbursement(w http.ResponseWriter, r *http.Request) {
 }
 
 // deleteReimbursement is DELETE /api/reimbursements/{id}: for a claim that
-// should never have existed - the treasurer's own typo. A claim the member
-// actually forgave is waived through the PATCH above, not deleted: that one
-// happened, and the record should keep saying so.
+// should never have existed (a typo). A claim the member forgave is waived
+// through the PATCH, not deleted: it happened, and the record should say so.
 //
-// A claim that still has a receipt photo attached is refused by receipt's
-// foreign key as a 409, the same answer deleting a member with posted
-// transactions gives. Receipts have no milestone owner yet (#73), so that
-// path is latent rather than dead.
+// A claim with a receipt photo attached is refused by receipt's foreign key
+// as a 409, like deleting a member with posted transactions. Receipts have no
+// milestone owner yet (#73), so that path is latent rather than dead.
 func (a *api) deleteReimbursement(w http.ResponseWriter, r *http.Request) {
 	id, ok := reimbursementID(w, r)
 	if !ok {
@@ -529,8 +501,7 @@ func (a *api) deleteReimbursement(w http.ResponseWriter, r *http.Request) {
 
 // reimbursementID parses {id}, or answers the request and reports false.
 // Unlike resolveMember it does not pre-fetch the row: every caller hands the
-// id to a ledger method that fetches it anyway, and a second read would only
-// duplicate the 404 that method already produces.
+// id to a ledger method that fetches it and produces the 404.
 func reimbursementID(w http.ResponseWriter, r *http.Request) (int64, bool) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {

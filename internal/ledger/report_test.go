@@ -580,9 +580,9 @@ func TestMonthlyReportDuesReversalIsShownAndNetsAgainstThePaymentInTotalMasuk(t 
 	if reversals != 1 {
 		t.Errorf("reversals = %d, want 1", reversals)
 	}
-	// ADR-038: the reversal lands on Total masuk as a minus, so the pair nets
-	// to nothing there and Total keluar stays empty. Before, it read 25000 in
-	// and 25000 out.
+	// ADR-038: the reversal lands on Total masuk as a minus, so the pair nets to
+	// nothing there and Total keluar stays empty (it read 25000 in and 25000 out
+	// before).
 	assertInOut(t, r.Walk, 0, 0)
 	for _, e := range es {
 		if e.IsReversal && e.Line != ReportLineIn {
@@ -690,10 +690,9 @@ func TestMonthlyReportTotalsRefuseToWrap(t *testing.T) {
 	l := newTestLedger(t)
 	f := newFixture(t, l)
 	big := money.Amount(math.MaxInt64/2 + 1)
-	// The ceiling (#499) means no ledger method writes a figure this large
-	// any more, so the rows go in around it: what a database from before the
-	// ceiling, or a restored backup, can still hold. The report must refuse
-	// them rather than show a wrapped total.
+	// The ceiling (#499) means no ledger method writes a figure this large, so the
+	// rows go in around it, as a database from before the ceiling or a restored
+	// backup can hold. The report must refuse them, not show a wrapped total.
 	for _, on := range []string{"2026-09-01", "2026-09-02"} {
 		if _, err := store.New(l.db).CreateTransaction(context.Background(), store.CreateTransactionParams{
 			FundID: f.fundID, AccountID: f.cashID, PurposeID: f.mainID, Direction: "in",
@@ -1221,7 +1220,7 @@ func TestMonthlyReportWithNoClockReadsTodayInJakarta(t *testing.T) {
 	}
 	today := time.Now().In(tz.Jakarta)
 	// Straddling midnight in Jakarta between the two reads is the only way this
-	// differs; accept either side of it.
+	// differs; accept either side.
 	if r.AsOf != today.Format("2006-01-02") && r.AsOf != today.Add(-time.Minute).Format("2006-01-02") {
 		t.Errorf("AsOf = %q, want today in Jakarta (%s)", r.AsOf, today.Format("2006-01-02"))
 	}

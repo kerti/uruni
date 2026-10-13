@@ -21,21 +21,17 @@ import (
 	"github.com/kerti/uruni/internal/store"
 )
 
-// restoreStagingTempPrefix mirrors backup.CreateRestoreStagingTemp's own
-// os.CreateTemp pattern (dumps.go's tempPrefix+"restore-*") - dumps.go's
-// tempPrefix is unexported, so this test package spells the literal out
-// directly rather than reaching across the package boundary for a string
-// only tests need. There is no fixed staging name any more (issue #344's
-// own follow-up: a shared name is exactly what let two concurrent inspects
-// race), so every staging test finds its file(s) by this prefix instead of
-// a single known path.
+// restoreStagingTempPrefix mirrors backup.CreateRestoreStagingTemp's
+// os.CreateTemp pattern (dumps.go's tempPrefix+"restore-*"); tempPrefix is
+// unexported, so this test package spells it out. There is no fixed staging
+// name (a shared name let two concurrent inspects race), so staging tests
+// find their files by this prefix.
 const restoreStagingTempPrefix = ".uruni-backup-tmp-restore-"
 
 // restoreStagingFilesIn lists every file currently staged in backupDir, by
-// name only - never a real dump (backup.ValidDumpName's own pattern shares
-// nothing with this prefix) and never a plain RemoveStaleTemps leftover
-// from a dump write (dumps.go's own temp files carry no "restore-" of
-// their own).
+// name: never a real dump (ValidDumpName's pattern shares nothing with this
+// prefix) and never a RemoveStaleTemps leftover from a dump write (those
+// carry no "restore-").
 func restoreStagingFilesIn(t *testing.T, backupDir string) []string {
 	t.Helper()
 	entries, err := os.ReadDir(backupDir)
@@ -51,9 +47,8 @@ func restoreStagingFilesIn(t *testing.T, backupDir string) []string {
 	return names
 }
 
-// assertRestoreStagingFileExists checks only whether *some* staging file is
-// present - the tests that care about exactly which one, or how many, call
-// restoreStagingFilesIn directly instead.
+// assertRestoreStagingFileExists checks only whether some staging file is
+// present; tests that care which, or how many, use restoreStagingFilesIn.
 func assertRestoreStagingFileExists(t *testing.T, backupDir string, want bool) {
 	t.Helper()
 	got := len(restoreStagingFilesIn(t, backupDir)) > 0
@@ -62,9 +57,8 @@ func assertRestoreStagingFileExists(t *testing.T, backupDir string, want bool) {
 	}
 }
 
-// fixturePassword is testRouter's own registered password
-// (authedRouterFor, router_test.go) - the confirm step checks against
-// exactly this.
+// fixturePassword is testRouter's registered password (authedRouterFor,
+// router_test.go), which the confirm step checks against.
 const fixturePassword = "correct-horse-battery"
 
 func postRestoreInspect(t *testing.T, r http.Handler, zipBytes []byte) *httptest.ResponseRecorder {
@@ -98,7 +92,7 @@ func postRestoreInspectStored(t *testing.T, r http.Handler, name string) *httpte
 
 func postRestoreConfirm(t *testing.T, r http.Handler, token, password string) *httptest.ResponseRecorder {
 	t.Helper()
-	//nolint:gosec // not a credential leak - this is the request body POST /api/restore/confirm's own contract requires
+	//nolint:gosec // not a credential leak - this is the request body POST /api/restore/confirm's contract requires
 	b, err := json.Marshal(restoreConfirmRequest{Token: token, Password: password})
 	if err != nil {
 		t.Fatalf("marshaling restore confirm request: %v", err)
@@ -108,9 +102,8 @@ func postRestoreConfirm(t *testing.T, r http.Handler, token, password string) *h
 	return rec
 }
 
-// downloadRealBackupZip is every restore test's own fixture: GET /api/backup
-// against a router that already has a fund, so ParseUpload is handed a
-// real, valid zip rather than one hand-built in this package.
+// downloadRealBackupZip is every restore test's fixture: GET /api/backup
+// against a router that already has a fund, so ParseUpload gets a real zip.
 func downloadRealBackupZip(t *testing.T, r http.Handler) []byte {
 	t.Helper()
 	rec := getBackup(t, r)
@@ -120,11 +113,11 @@ func downloadRealBackupZip(t *testing.T, r http.Handler) []byte {
 	return rec.Body.Bytes()
 }
 
-// TestRestoreInspectThenConfirmHappyPath is the whole two-step flow, end to
-// end: inspect answers a preview naming the one live fund as "kept" with
-// nothing lost (the file is this same database's own backup), confirm with
-// the right password restores it and clears every session - the same
-// cookie that just confirmed is unauthenticated on the very next request.
+// TestRestoreInspectThenConfirmHappyPath is the whole two-step flow:
+// inspect answers a preview naming the live fund "kept" with nothing lost
+// (the file is this database's backup), and confirm with the right password
+// restores it and clears every session, so the same cookie is
+// unauthenticated on the next request.
 func TestRestoreInspectThenConfirmHappyPath(t *testing.T) {
 	t.Parallel()
 	r := testRouter(t)
@@ -156,8 +149,8 @@ func TestRestoreInspectThenConfirmHappyPath(t *testing.T) {
 		t.Fatalf("POST /api/restore/confirm = %d, want %d (body: %s)", confirmRec.Code, http.StatusOK, confirmRec.Body.String())
 	}
 
-	// The very same (fixed, auto-attached) session cookie now names no
-	// session row at all - every session is gone after a restore.
+	// The same session cookie now names no session row: every session is gone
+	// after a restore.
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/fund", nil))
 	if rec.Code != http.StatusUnauthorized {
@@ -166,8 +159,8 @@ func TestRestoreInspectThenConfirmHappyPath(t *testing.T) {
 }
 
 // TestRestoreConfirmRefusesWrongPassword checks the current password, not
-// anything decoded out of the file - and leaves the session (and the
-// staged upload) alone on a wrong guess.
+// anything decoded from the file, and leaves the session and the staged
+// upload alone.
 func TestRestoreConfirmRefusesWrongPassword(t *testing.T) {
 	t.Parallel()
 	r := testRouter(t)
@@ -185,7 +178,7 @@ func TestRestoreConfirmRefusesWrongPassword(t *testing.T) {
 		t.Fatalf("POST /api/restore/confirm (wrong password) = %d, want %d (body: %s)", rec.Code, http.StatusUnauthorized, rec.Body.String())
 	}
 
-	// The session survives a refused confirm - a gated route still answers.
+	// The session survives a refused confirm: a gated route still answers.
 	fundRec := httptest.NewRecorder()
 	r.ServeHTTP(fundRec, httptest.NewRequest(http.MethodGet, "/api/fund", nil))
 	if fundRec.Code != http.StatusOK {
@@ -194,7 +187,7 @@ func TestRestoreConfirmRefusesWrongPassword(t *testing.T) {
 }
 
 // TestRestoreConfirmWithUnknownTokenIsGone covers confirming with no prior
-// inspect at all - the token names nothing staged.
+// inspect: the token names nothing staged.
 func TestRestoreConfirmWithUnknownTokenIsGone(t *testing.T) {
 	t.Parallel()
 	r := testRouter(t)
@@ -206,10 +199,9 @@ func TestRestoreConfirmWithUnknownTokenIsGone(t *testing.T) {
 	}
 }
 
-// TestRestoreInspectRefusesAMalformedFile is the HTTP wiring's own proof
-// that ParseUpload's sentinel errors reach the wire as a distinct code -
-// restore_test.go (internal/backup) already covers ParseUpload itself in
-// depth; this is only the mapping.
+// TestRestoreInspectRefusesAMalformedFile proves ParseUpload's sentinel
+// errors reach the wire as distinct codes; internal/backup's tests cover
+// ParseUpload itself.
 func TestRestoreInspectRefusesAMalformedFile(t *testing.T) {
 	t.Parallel()
 	r := testRouter(t)
@@ -233,11 +225,9 @@ func TestRestoreInspectRefusesAMalformedFile(t *testing.T) {
 }
 
 // minimalDumpZip builds a zip holding only {"format_version": formatVersion}
-// under uruni.json - just enough for backup.ParseUpload's own
-// checkFormatVersion peek to fire before any strict decode, which is all
-// TestRestoreInspectStoredRefusesOlderFormatBackup below needs to prove the
-// stored-backup inspect route goes through the exact same check an uploaded
-// zip would.
+// under uruni.json: enough for checkFormatVersion's peek to fire before any
+// strict decode, which is all TestRestoreInspectStoredRefusesOlderFormatBackup
+// needs to prove the stored route runs the same check as an upload.
 func minimalDumpZip(t *testing.T, formatVersion int64) []byte {
 	t.Helper()
 	var buf bytes.Buffer
@@ -255,12 +245,10 @@ func minimalDumpZip(t *testing.T, formatVersion int64) []byte {
 	return buf.Bytes()
 }
 
-// TestRestoreInspectStoredHappyPath is #326's whole point: the same inspect
-// step as an upload, but reading a name straight out of backupDir. The dump
-// used here is a real GET /api/backup zip of the router's own live fund,
-// written under a name the production dump-writer's own BuildDumpName
-// shape would produce, so ParseUpload sees exactly what a real scheduled
-// dump would hand it.
+// TestRestoreInspectStoredHappyPath (#326): the inspect step as for an
+// upload, reading a name from backupDir. The dump is a real GET /api/backup
+// zip of the router's live fund, written under a BuildDumpName name, so
+// ParseUpload sees what a scheduled dump would hand it.
 func TestRestoreInspectStoredHappyPath(t *testing.T) {
 	t.Parallel()
 	r, backupDir := authedRouterWithBackupDir(t)
@@ -285,9 +273,8 @@ func TestRestoreInspectStoredHappyPath(t *testing.T) {
 		t.Fatalf("preview.Funds = %v, want exactly the one live fund %d", inspected.Preview.Funds, setup.Fund.ID)
 	}
 
-	// The token behaves exactly like one from the upload route: confirm
-	// restores it and clears every session, this one included - no second
-	// restore implementation, same tail.
+	// The token behaves like one from the upload route: confirm restores it and
+	// clears every session, this one included; same tail, no second restore path.
 	confirmRec := postRestoreConfirm(t, r, inspected.Token, fixturePassword)
 	if confirmRec.Code != http.StatusOK {
 		t.Fatalf("POST /api/restore/confirm = %d, want %d (body: %s)", confirmRec.Code, http.StatusOK, confirmRec.Body.String())
@@ -299,10 +286,9 @@ func TestRestoreInspectStoredHappyPath(t *testing.T) {
 	}
 }
 
-// TestRestoreInspectStoredRejectsUnknownName: a syntactically valid name
-// that was never written (or already pruned) is a plain 404, matching
-// downloadStoredBackup's own behaviour for the same case - the shared
-// resolveStoredBackupPath validation is what the two routes have in common.
+// TestRestoreInspectStoredRejectsUnknownName: a valid name never written (or
+// pruned) is a 404, as downloadStoredBackup; both share
+// resolveStoredBackupPath.
 func TestRestoreInspectStoredRejectsUnknownName(t *testing.T) {
 	t.Parallel()
 	r, _ := authedRouterWithBackupDir(t)
@@ -317,9 +303,8 @@ func TestRestoreInspectStoredRejectsUnknownName(t *testing.T) {
 }
 
 // TestRestoreInspectStoredRefusesPathTraversal mirrors
-// TestDownloadStoredBackupRefusesPathTraversal (backup_test.go) - the name
-// segment is never trusted as a bare path, whatever chi's own route
-// matching lets through as {name}.
+// TestDownloadStoredBackupRefusesPathTraversal (backup_test.go): the name
+// segment is never trusted as a bare path, whatever chi lets through.
 func TestRestoreInspectStoredRefusesPathTraversal(t *testing.T) {
 	t.Parallel()
 	r, _ := authedRouterWithBackupDir(t)
@@ -340,11 +325,10 @@ func TestRestoreInspectStoredRefusesPathTraversal(t *testing.T) {
 }
 
 // TestRestoreInspectStoredRefusesOlderFormatBackup: an older-format dump is
-// still listed and downloadable (Backup.tsx's own "Dibuat versi lama"
-// label), but never offered for restore. This route enforces that itself,
-// through the exact same backup.ParseUpload check an uploaded older-format
-// zip would hit (ErrFormatVersionOlder) - not a second, duplicated format
-// check against backupListItem's IsCurrentFormat flag.
+// still listed and downloadable (Backup.tsx's "Dibuat versi lama") but never
+// offered for restore. This route enforces that through the same
+// backup.ParseUpload check as an upload (ErrFormatVersionOlder), not a second
+// check against IsCurrentFormat.
 func TestRestoreInspectStoredRefusesOlderFormatBackup(t *testing.T) {
 	t.Parallel()
 	r, backupDir := authedRouterWithBackupDir(t)
@@ -371,10 +355,8 @@ func TestRestoreInspectStoredRefusesOlderFormatBackup(t *testing.T) {
 }
 
 // TestInspectStoredBackupRequiresASession is the auth-gate half of the DoD,
-// matching TestDownloadBackupRequiresASession's own shape for this new
-// route - built against a fresh, unauthenticated router rather than
-// testRouter/authedRouterWithBackupDir, both of which register and log a
-// treasurer in before returning.
+// against a fresh unauthenticated router (testRouter and
+// authedRouterWithBackupDir both log a treasurer in).
 func TestInspectStoredBackupRequiresASession(t *testing.T) {
 	t.Parallel()
 	sqlDB := testStoreDB(t)
@@ -386,13 +368,11 @@ func TestInspectStoredBackupRequiresASession(t *testing.T) {
 	}
 }
 
-// TestRestoreFromStoredSafetyNetBackupEndToEnd is #326's own named
-// acceptance criterion: "restoring a safety-net backup works, so a restore
-// can itself be undone." It runs the ordinary upload-restore path once
-// (which writes a pre-restore safety-net dump to backupDir as a side
-// effect, per ADR-012), logs back in since that restore cleared every
-// session, then restores again - this time from that very safety-net dump,
-// through the new stored-backup route end to end.
+// TestRestoreFromStoredSafetyNetBackupEndToEnd (#326): "restoring a
+// safety-net backup works, so a restore can itself be undone." It runs the
+// upload-restore path once (writing a pre-restore safety-net dump, per
+// ADR-012), logs back in since that cleared every session, then restores
+// again from that safety-net dump through the stored route.
 func TestRestoreFromStoredSafetyNetBackupEndToEnd(t *testing.T) {
 	t.Parallel()
 	sqlDB := testStoreDB(t)
@@ -407,9 +387,8 @@ func TestRestoreFromStoredSafetyNetBackupEndToEnd(t *testing.T) {
 	r1 := withSessionCookie{Handler: raw, token: sessionCookie(reg)}
 	setUpFund(t, r1)
 
-	// First restore: an ordinary upload of the router's own current state.
-	// Its only interesting side effect here is the pre-restore safety-net
-	// dump ADR-012 requires Restore to write before it changes anything.
+	// First restore: an upload of the router's current state; the point here is
+	// the pre-restore safety-net dump ADR-012 requires.
 	zipBytes := downloadRealBackupZip(t, r1)
 	firstInspect := postRestoreInspect(t, r1, zipBytes)
 	if firstInspect.Code != http.StatusOK {
@@ -443,8 +422,8 @@ func TestRestoreFromStoredSafetyNetBackupEndToEnd(t *testing.T) {
 		t.Fatalf("safety-net dump format_version = %d, want the current %d - it must itself be restorable", safetyNet.FormatVersion, backup.FormatVersion)
 	}
 
-	// Every session (including r1's) is gone now - log back in for the
-	// second restore, this time of the safety-net dump itself.
+	// Every session (r1's included) is gone: log back in for the second restore,
+	// of the safety-net dump.
 	login := postLogin(t, raw, email, fixturePassword)
 	if login.Code != http.StatusOK {
 		t.Fatalf("POST /api/login (after first restore) = %d, want %d (body: %s)", login.Code, http.StatusOK, login.Body.String())
@@ -465,8 +444,8 @@ func TestRestoreFromStoredSafetyNetBackupEndToEnd(t *testing.T) {
 		t.Fatalf("POST /api/restore/confirm (second, from safety net) = %d, want %d (body: %s)", secondConfirm.Code, http.StatusOK, secondConfirm.Body.String())
 	}
 
-	// The second restore's own session is gone too - restoring a safety net
-	// is an ordinary restore in every respect, including this one.
+	// The second restore's session is gone too; restoring a safety net is an
+	// ordinary restore.
 	rec := httptest.NewRecorder()
 	r2.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/fund", nil))
 	if rec.Code != http.StatusUnauthorized {
@@ -474,8 +453,7 @@ func TestRestoreFromStoredSafetyNetBackupEndToEnd(t *testing.T) {
 	}
 }
 
-// decodeInspectToken is every staging test's own shorthand for pulling the
-// token out of a successful inspect response.
+// decodeInspectToken pulls the token out of a successful inspect response.
 func decodeInspectToken(t *testing.T, rec *httptest.ResponseRecorder) string {
 	t.Helper()
 	var inspected restoreInspectResponse
@@ -488,10 +466,9 @@ func decodeInspectToken(t *testing.T, rec *httptest.ResponseRecorder) string {
 	return inspected.Token
 }
 
-// TestRestoreInspectStagesOnDiskAndConfirmRemovesIt is issue #344's own
-// headline property: the upload lands on disk, under backupDir's one
-// restore-staging slot, the moment inspect answers - and a successful
-// confirm leaves nothing behind.
+// TestRestoreInspectStagesOnDiskAndConfirmRemovesIt (#344): the upload lands
+// on disk under backupDir's restore-staging slot the moment inspect answers,
+// and a successful confirm leaves nothing behind.
 func TestRestoreInspectStagesOnDiskAndConfirmRemovesIt(t *testing.T) {
 	t.Parallel()
 	r, backupDir := authedRouterWithBackupDir(t)
@@ -515,9 +492,8 @@ func TestRestoreInspectStagesOnDiskAndConfirmRemovesIt(t *testing.T) {
 }
 
 // TestRestoreConfirmWrongPasswordKeepsStagedFile: a wrong password never
-// reaches restoreStage.take() (confirmRestore checks the password first),
-// so the stage - and the file behind it - survives exactly as it does
-// today, letting the treasurer retype her password and try again without
+// reaches restoreStage.take() (confirmRestore checks the password first), so
+// the stage and its file survive, and the treasurer can retype without
 // re-uploading.
 func TestRestoreConfirmWrongPasswordKeepsStagedFile(t *testing.T) {
 	t.Parallel()
@@ -535,8 +511,8 @@ func TestRestoreConfirmWrongPasswordKeepsStagedFile(t *testing.T) {
 	}
 	assertRestoreStagingFileExists(t, backupDir, true)
 
-	// The treasurer can still retry with the same token, proving the stage
-	// - not only the file - genuinely survived the wrong guess.
+	// The treasurer can retry with the same token, proving the stage survived
+	// the wrong guess.
 	confirmRec := postRestoreConfirm(t, r, token, fixturePassword)
 	if confirmRec.Code != http.StatusOK {
 		t.Fatalf("POST /api/restore/confirm (retry) = %d, want %d (body: %s)", confirmRec.Code, http.StatusOK, confirmRec.Body.String())
@@ -544,10 +520,8 @@ func TestRestoreConfirmWrongPasswordKeepsStagedFile(t *testing.T) {
 	assertRestoreStagingFileExists(t, backupDir, false)
 }
 
-// TestRestoreFailedInspectLeavesNoStagingFile: a malformed upload never
-// gets past ParseUpload, so stageAndInspect never commits its temp file
-// onto the slot - nothing is left staged for the next request to trip
-// over.
+// TestRestoreFailedInspectLeavesNoStagingFile: a malformed upload never gets
+// past ParseUpload, so nothing is left staged.
 func TestRestoreFailedInspectLeavesNoStagingFile(t *testing.T) {
 	t.Parallel()
 	r, backupDir := authedRouterWithBackupDir(t)
@@ -560,10 +534,9 @@ func TestRestoreFailedInspectLeavesNoStagingFile(t *testing.T) {
 	assertRestoreStagingFileExists(t, backupDir, false)
 }
 
-// TestRestoreSecondInspectReplacesStagedFile: one slot, like the stash
-// itself - a second successful inspect always wins. The first inspect's
-// token is left naming nothing (a 410 on confirm), and the file behind the
-// second inspect's token is what actually restores.
+// TestRestoreSecondInspectReplacesStagedFile: one slot, so a second
+// successful inspect wins. The first token names nothing (410 on confirm),
+// and the file behind the second token is what restores.
 func TestRestoreSecondInspectReplacesStagedFile(t *testing.T) {
 	t.Parallel()
 	r, backupDir := authedRouterWithBackupDir(t)
@@ -585,8 +558,8 @@ func TestRestoreSecondInspectReplacesStagedFile(t *testing.T) {
 	if staleConfirm.Code != http.StatusGone {
 		t.Fatalf("POST /api/restore/confirm (superseded token) = %d, want %d (body: %s)", staleConfirm.Code, http.StatusGone, staleConfirm.Body.String())
 	}
-	// The second inspect's own stage must still be intact - a stale
-	// confirm must not have disturbed it.
+	// The second inspect's stage must be intact; a stale confirm must not have
+	// disturbed it.
 	assertRestoreStagingFileExists(t, backupDir, true)
 
 	confirmRec := postRestoreConfirm(t, r, secondToken, fixturePassword)
@@ -596,10 +569,9 @@ func TestRestoreSecondInspectReplacesStagedFile(t *testing.T) {
 	assertRestoreStagingFileExists(t, backupDir, false)
 }
 
-// TestRestoreStagingFileNeverAppearsInBackupsList: a staging file's own
-// name (backup.CreateRestoreStagingTemp) never matches dumpNamePattern, so
-// GET /api/backups - which only ever lists what ListDumps recognises -
-// must never surface it, whether or not anything is actually staged.
+// TestRestoreStagingFileNeverAppearsInBackupsList: a staging file's name
+// never matches dumpNamePattern, so GET /api/backups (ListDumps only) never
+// surfaces it, staged or not.
 func TestRestoreStagingFileNeverAppearsInBackupsList(t *testing.T) {
 	t.Parallel()
 	r, backupDir := authedRouterWithBackupDir(t)
@@ -625,12 +597,10 @@ func TestRestoreStagingFileNeverAppearsInBackupsList(t *testing.T) {
 	}
 }
 
-// TestRestoreInspectStoredThenOriginalDeletedStillConfirms is issue #344's
-// own correctness half: inspecting a stored dump copies it into the
-// staging slot immediately, so confirm - which only ever reads that
-// copy - still succeeds even if the original dump file is deleted (by an
-// operator, or by retention pruning an older pre-restore dump) between
-// inspect and confirm.
+// TestRestoreInspectStoredThenOriginalDeletedStillConfirms (#344):
+// inspecting a stored dump copies it into the staging slot, so confirm, which
+// reads only that copy, succeeds even if the original is deleted (by an
+// operator, or retention pruning) between inspect and confirm.
 func TestRestoreInspectStoredThenOriginalDeletedStillConfirms(t *testing.T) {
 	t.Parallel()
 	r, backupDir := authedRouterWithBackupDir(t)
@@ -672,10 +642,9 @@ func TestRestoreInspectStoredThenOriginalDeletedStillConfirms(t *testing.T) {
 }
 
 // TestRestoreStageReplacingEarlierStageDeletesEarlierFile is a white-box
-// proof of restoreStage.stage's own concurrency fix (issue #344's
-// follow-up): staging a second upload removes exactly the file the first
-// one owned, under the same mutex that installs the second - never a
-// shared, renamed-onto name either could race over.
+// proof of restoreStage.stage's concurrency fix (#344): staging a second
+// upload removes exactly the file the first owned, under the mutex that
+// installs the second, never a shared name either could race over.
 func TestRestoreStageReplacingEarlierStageDeletesEarlierFile(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
@@ -699,13 +668,11 @@ func TestRestoreStageReplacingEarlierStageDeletesEarlierFile(t *testing.T) {
 	}
 }
 
-// TestRestoreConfirmRemovalLeavesALaterInspectsFileAlone is the other half
-// of the same fix: once take() has handed a file to a (simulated) confirm,
-// restoreStage no longer references it at all - a later inspect's own
-// stage() call, landing before that confirm gets around to removing its
-// own file, must neither touch it nor be affected by it. No goroutines: a
-// direct call sequence (take, then stage) is enough to prove take() really
-// clears its own bookkeeping before stage() ever runs again.
+// TestRestoreConfirmRemovalLeavesALaterInspectsFileAlone: once take() hands a
+// file to a (simulated) confirm, restoreStage no longer references it, so a
+// later inspect's stage(), landing before that confirm removes its file,
+// neither touches it nor is affected. No goroutines: take then stage proves
+// take() clears its bookkeeping before stage() runs.
 func TestRestoreConfirmRemovalLeavesALaterInspectsFileAlone(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
@@ -722,8 +689,8 @@ func TestRestoreConfirmRemovalLeavesALaterInspectsFileAlone(t *testing.T) {
 		t.Fatalf("take(%q) = (%+v, %v), want the first stage's own file", token1, taken, ok)
 	}
 
-	// A second inspect lands next - before this test's own stand-in for
-	// confirmRestore ever removes taken.StagingPath.
+	// A second inspect lands next, before this test's stand-in for confirmRestore
+	// removes taken.StagingPath.
 	path2 := createRestoreStagingTempOrFatal(t, dir)
 	if _, err := s.stage(backup.ParsedUpload{StagingPath: path2}); err != nil {
 		t.Fatalf("stage() (second, after take) = %v, want no error", err)
@@ -736,9 +703,8 @@ func TestRestoreConfirmRemovalLeavesALaterInspectsFileAlone(t *testing.T) {
 		t.Errorf("stat(second staged file) = %v, want it present", err)
 	}
 
-	// confirmRestore's own cleanup, stood in for directly: removing the
-	// file take() handed it must never reach for anything restoreStage
-	// currently holds.
+	// confirmRestore's cleanup, stood in for directly: removing the file take()
+	// handed it must not reach for anything restoreStage holds.
 	if err := os.Remove(taken.StagingPath); err != nil {
 		t.Fatalf("removing the taken file: %v", err)
 	}
@@ -747,11 +713,9 @@ func TestRestoreConfirmRemovalLeavesALaterInspectsFileAlone(t *testing.T) {
 	}
 }
 
-// createRestoreStagingTempOrFatal is these two white-box tests' own
-// shorthand for a real file at a real, uniquely-named staging path -
-// backup.CreateRestoreStagingTemp itself, closed immediately since these
-// tests only care about the path's presence or absence, never its
-// contents.
+// createRestoreStagingTempOrFatal makes a real file at a unique staging path
+// via backup.CreateRestoreStagingTemp, closed immediately: these white-box
+// tests only need the path's presence or absence.
 func createRestoreStagingTempOrFatal(t *testing.T, dir string) string {
 	t.Helper()
 	f, err := backup.CreateRestoreStagingTemp(dir)

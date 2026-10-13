@@ -11,14 +11,12 @@ import (
 	"golang.org/x/crypto/argon2"
 )
 
-// Argon2id parameters: OWASP's Password Storage Cheat Sheet second listed
-// baseline (m=19 MiB, t=2, p=1) - a reasonable cost for a single small
-// self-hosted instance rather than the memory-heaviest option, since the
-// same process also holds SQLite's one connection (ADR-004) and serves
-// every request. Named constants rather than numbers inline so a future
-// retuning touches exactly this block; the encoded hash carries its own
-// parameters (see hashPassword), so retuning these never invalidates a
-// password hashed under the old values.
+// Argon2id parameters: OWASP's Password Storage Cheat Sheet second baseline
+// (m=19 MiB, t=2, p=1), a reasonable cost for one small self-hosted instance
+// rather than the memory-heaviest option, as the same process holds SQLite's
+// one connection (ADR-004) and serves every request. Named constants so a
+// retune touches this block; the encoded hash carries its parameters (see
+// hashPassword), so retuning never invalidates an old hash.
 const (
 	argonMemoryKiB   = 19 * 1024 // 19 MiB, in KiB - argon2.IDKey's own unit
 	argonIterations  = 2
@@ -27,18 +25,15 @@ const (
 	argonKeyLength   = 32
 )
 
-// ErrMalformedHash is returned by verifyPassword when a stored hash is not
-// in the format hashPassword produces - a corrupted row, distinct from a
-// wrong password.
+// ErrMalformedHash is returned by verifyPassword when a stored hash is not in
+// hashPassword's format: a corrupted row, distinct from a wrong password.
 var ErrMalformedHash = errors.New("auth: malformed password hash")
 
-// hashPassword returns a self-describing PHC-like string - algorithm,
-// version, parameters, salt and hash all travel together as one column
-// value, so verifyPassword reads the parameters back out of the string
-// itself rather than assuming today's constants above. That is what lets
-// argonMemoryKiB/argonIterations/argonParallelism be retuned later without
-// a migration: an old row still verifies under the parameters it was
-// actually hashed with.
+// hashPassword returns a self-describing PHC-like string (algorithm, version,
+// parameters, salt and hash in one column), so verifyPassword reads the
+// parameters back from the string, not today's constants. That lets
+// argonMemoryKiB/argonIterations/argonParallelism be retuned without a
+// migration: an old row verifies under the parameters it was hashed with.
 func hashPassword(password string) (string, error) {
 	salt := make([]byte, argonSaltLength)
 	if _, err := rand.Read(salt); err != nil {
@@ -55,16 +50,15 @@ func hashPassword(password string) (string, error) {
 }
 
 // verifyPassword reports whether password matches the encoded hash
-// hashPassword produced. The comparison is constant-time (crypto/subtle),
-// so a timing side channel can't leak how many leading bytes matched.
+// hashPassword produced. The comparison is constant-time (crypto/subtle), so
+// timing cannot leak how many leading bytes matched.
 //
-// Authenticate (POST /api/login) is its production caller, and the round-trip
-// test is what proves hashPassword's output is actually checkable - hashing
-// without a matching verify path is not a real round trip.
+// Authenticate (POST /api/login) is the production caller; the round-trip test
+// proves hashPassword's output is checkable.
 func verifyPassword(password, encoded string) (bool, error) {
 	parts := strings.Split(encoded, "$")
-	// "$argon2id$v=19$m=...,t=...,p=...$salt$hash" splits on "$" into 6
-	// fields, the first empty (a leading separator always produces one).
+	// "$argon2id$v=19$m=...,t=...,p=...$salt$hash" splits on "$" into 6 fields,
+	// the first empty (a leading separator).
 	if len(parts) != 6 || parts[1] != "argon2id" {
 		return false, ErrMalformedHash
 	}
@@ -88,15 +82,13 @@ func verifyPassword(password, encoded string) (bool, error) {
 	if err != nil {
 		return false, ErrMalformedHash
 	}
-	// A hash this package wrote is always exactly argonKeyLength (32)
-	// bytes, so anything else is a corrupted row - and ADR-030's recovery
-	// story ("a forgotten password is recovered by the host at the
-	// database") means a hand-edited column is a path that really exists.
-	// A truncated paste must fail closed: an empty final field still splits
-	// into six parts, decodes to a zero-length want, and argon2.IDKey
-	// panics on a zero key length rather than returning anything to
-	// compare. Pinning the exact length also removes the int -> uint32
-	// conversion's own bounds question.
+	// A hash this package wrote is exactly argonKeyLength (32) bytes, so anything
+	// else is a corrupted row, and ADR-030's recovery story ("a forgotten password
+	// is recovered by the host at the database") makes a hand-edited column a real
+	// path. A truncated paste must fail closed: an empty final field still splits
+	// into six parts and decodes to a zero-length want, and argon2.IDKey panics on
+	// a zero key length. Pinning the length also settles the int -> uint32
+	// conversion's bounds.
 	if len(want) != argonKeyLength {
 		return false, ErrMalformedHash
 	}

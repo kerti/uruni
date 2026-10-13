@@ -34,12 +34,11 @@ func TestPostTransfersRequiresAFund(t *testing.T) {
 	}
 }
 
-// TestPostTransfersPostsTwoOppositeLegsAgainstOneTransfer is the route's
-// success path and its fund-neutrality proof at this layer: the two rows
-// GET /api/transactions returns carry the same amount in opposite
-// directions, against the same purpose and the same transfer id, so they
-// sum to zero however the fund's total is derived.
-// internal/ledger/transfer_test.go asserts the balances themselves.
+// TestPostTransfersPostsTwoOppositeLegsAgainstOneTransfer is the route's success
+// path and fund-neutrality proof here: the two rows GET /api/transactions
+// returns carry the same amount in opposite directions, the same purpose and
+// transfer id, so they sum to zero however the fund's total is derived.
+// internal/ledger/transfer_test.go asserts the balances.
 func TestPostTransfersPostsTwoOppositeLegsAgainstOneTransfer(t *testing.T) {
 	t.Parallel()
 	r := testRouter(t)
@@ -116,9 +115,9 @@ func TestPostTransfersPostsTwoOppositeLegsAgainstOneTransfer(t *testing.T) {
 	}
 }
 
-// TestPostTransfersRejectsIdenticalAccounts is the acceptance criterion for
-// the movement that would mean nothing: same account on both legs, which
-// every schema CHECK would happily accept.
+// TestPostTransfersRejectsIdenticalAccounts is the criterion for the
+// meaningless movement: the same account on both legs, which every schema
+// CHECK would accept.
 func TestPostTransfersRejectsIdenticalAccounts(t *testing.T) {
 	t.Parallel()
 	r := testRouter(t)
@@ -202,9 +201,8 @@ func TestPostTransfersRejectsMalformedJSON(t *testing.T) {
 	}
 }
 
-// The note reaches both legs over the wire, not just the ledger: this is
-// the route's half of the same guarantee internal/ledger/transfer_test.go
-// asserts on the rows themselves.
+// The note reaches both legs over the wire, the route's half of the guarantee
+// internal/ledger/transfer_test.go asserts on the rows.
 func TestPostTransfersWritesTheNoteToBothLegs(t *testing.T) {
 	t.Parallel()
 	r := testRouter(t)
@@ -254,8 +252,8 @@ func TestPostTransfersWritesTheNoteToBothLegs(t *testing.T) {
 	}
 }
 
-// An omitted note is NULL on both legs, not "" - the transaction list must
-// not render an empty note line where there is nothing to say.
+// An omitted note is NULL on both legs, not "": the list must not render an
+// empty note line.
 func TestPostTransfersWithoutANoteLeavesBothLegsNull(t *testing.T) {
 	t.Parallel()
 	r := testRouter(t)

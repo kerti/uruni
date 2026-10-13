@@ -16,10 +16,9 @@ import (
 	"github.com/kerti/uruni/internal/store"
 )
 
-// testRouterAndDB is testRouter's twin for these tests: they need the raw
-// *sql.DB underneath the router to look directly at the session table
-// (store.Queries has no route of its own for "does a session row exist" -
-// deliberately, that would be its own oracle).
+// testRouterAndDB is testRouter with the raw *sql.DB, to look at the session
+// table (store.Queries has no route for "does a session row exist": that would
+// be its own oracle).
 func testRouterAndDB(t *testing.T) (http.Handler, *sql.DB) {
 	t.Helper()
 	sqlDB := testStoreDB(t)
@@ -38,9 +37,8 @@ func postRegister(t *testing.T, r http.Handler, email, password string) *httptes
 	return rec
 }
 
-// sessionCookie returns the "session" cookie a response set, or "" if none
-// was set - used to check both that register sets one and that a refused
-// second call does not.
+// sessionCookie returns the "session" cookie a response set, or "" if none,
+// to check register sets one and a refused second call does not.
 func sessionCookie(rec *httptest.ResponseRecorder) string {
 	for _, c := range rec.Result().Cookies() {
 		if c.Name == "session" {
@@ -51,8 +49,8 @@ func sessionCookie(rec *httptest.ResponseRecorder) string {
 }
 
 // TestPostRegisterReturns201SetsTheCookieAndWritesASessionRow is the DoD's
-// first line: 201, a cookie, and a real row in the session table behind it
-// - not just a Set-Cookie header that happens to look right.
+// first line: 201, a cookie, and a real session row behind it, not only a
+// Set-Cookie header.
 func TestPostRegisterReturns201SetsTheCookieAndWritesASessionRow(t *testing.T) {
 	t.Parallel()
 	r, sqlDB := testRouterAndDB(t)
@@ -95,10 +93,9 @@ func TestPostRegisterReturns201SetsTheCookieAndWritesASessionRow(t *testing.T) {
 	}
 }
 
-// TestPostRegisterCookieIsHttpOnlyAndSameSiteLax pins the two cookie flags
-// #114 fixes regardless of URUNI_BASE_URL: httpOnly always, SameSite=Lax
-// always. Secure is covered separately, since it is the one flag that
-// varies with baseURL's scheme.
+// TestPostRegisterCookieIsHttpOnlyAndSameSiteLax pins the flags #114 fixes
+// whatever URUNI_BASE_URL: httpOnly and SameSite=Lax always. Secure varies
+// with baseURL's scheme and is covered separately.
 func TestPostRegisterCookieIsHttpOnlyAndSameSiteLax(t *testing.T) {
 	t.Parallel()
 	r, _ := testRouterAndDB(t)
@@ -125,13 +122,11 @@ func TestPostRegisterCookieIsHttpOnlyAndSameSiteLax(t *testing.T) {
 	}
 }
 
-// TestSessionCookieSecureFollowsBaseURLScheme is the ADR-019-preserving
-// rule #114 adds: Secure is derived from URUNI_BASE_URL's scheme, not a new
-// environment variable. https turns it on; http or unset (the plain-HTTP
-// loopback make web-dev runs on) leaves it off, because a Secure cookie is
-// simply never sent back by the browser over plain HTTP - getting this
-// backwards would make login look silently broken in dev with no error
-// anywhere to explain why.
+// TestSessionCookieSecureFollowsBaseURLScheme (#114, ADR-019): Secure is
+// derived from URUNI_BASE_URL's scheme, not a new variable. https turns it on;
+// http or unset (the plain-HTTP loopback of make web-dev) leaves it off,
+// since a browser never sends a Secure cookie over plain HTTP; the wrong way
+// would make dev login look silently broken.
 func TestSessionCookieSecureFollowsBaseURLScheme(t *testing.T) {
 	t.Parallel()
 	cases := []struct {
@@ -171,9 +166,9 @@ func TestSessionCookieSecureFollowsBaseURLScheme(t *testing.T) {
 	}
 }
 
-// TestPostRegisterSecondCallRefusesRegardlessOfEmail is the DoD's second
-// line: a second register - with a *different* email, per ADR-030 decision
-// 2 - answers 409, writes no row, and changes no cookie.
+// TestPostRegisterSecondCallRefusesRegardlessOfEmail is the DoD's second line:
+// a second register with a different email (ADR-030 decision 2) answers 409,
+// writes no row, and changes no cookie.
 func TestPostRegisterSecondCallRefusesRegardlessOfEmail(t *testing.T) {
 	t.Parallel()
 	r, sqlDB := testRouterAndDB(t)
@@ -205,10 +200,9 @@ func TestPostRegisterSecondCallRefusesRegardlessOfEmail(t *testing.T) {
 	}
 }
 
-// TestPostRegisterPasswordNeverAppearsInTheResponse is the DoD's third
-// line's response-body half (the log half is covered by internal/auth never
-// interpolating the password into an error, and by this handler never
-// logging the request body).
+// TestPostRegisterPasswordNeverAppearsInTheResponse is the DoD's third line's
+// response half (the log half: internal/auth never interpolates the password
+// into an error, and this handler never logs the request body).
 func TestPostRegisterPasswordNeverAppearsInTheResponse(t *testing.T) {
 	t.Parallel()
 	r, _ := testRouterAndDB(t)
@@ -227,7 +221,7 @@ func TestPostRegisterPasswordNeverAppearsInTheResponse(t *testing.T) {
 	}
 }
 
-// TestPostRegisterRejectsAShortPassword covers the http-layer mapping for
+// TestPostRegisterRejectsAShortPassword covers the mapping for
 // auth.ErrInvalidArgument: 400, not 500, and no row written.
 func TestPostRegisterRejectsAShortPassword(t *testing.T) {
 	t.Parallel()
@@ -251,9 +245,8 @@ func TestPostRegisterRejectsAShortPassword(t *testing.T) {
 	}
 }
 
-// TestPostRegisterRejectsAMalformedBody: decodeJSON's own refusal, before
-// internal/auth is ever called - a body that is not JSON is a 400 and
-// writes nothing.
+// TestPostRegisterRejectsAMalformedBody: decodeJSON's refusal, before
+// internal/auth: a body that is not JSON is a 400 and writes nothing.
 func TestPostRegisterRejectsAMalformedBody(t *testing.T) {
 	t.Parallel()
 	r, sqlDB := testRouterAndDB(t)
@@ -275,18 +268,15 @@ func TestPostRegisterRejectsAMalformedBody(t *testing.T) {
 }
 
 // TestPostRegisterFailsClosedWhenTheSessionCannotBeRenewed is the fixation
-// guard's failure arm. RenewToken deletes the token the request arrived
-// with before a new one is minted; if that delete fails, the handler must
-// answer 500 and put nothing in the session, because the alternative -
-// carrying on - would leave the treasurer's identity on a token that
-// existed before she was known, which is exactly what RenewToken is there
-// to prevent.
+// guard's failure arm. RenewToken deletes the arriving token before minting a
+// new one; if that delete fails, the handler must answer 500 and put nothing
+// in the session, since carrying on would leave her identity on a token that
+// existed before she was known.
 //
-// The setup is the only shape that reaches it: a request needs a session
-// that already exists (otherwise there is nothing to delete) while the
-// instance still has no account (otherwise Register refuses first). So a
-// first register makes both, the user row is then removed underneath, and a
-// trigger refuses the delete the second attempt's RenewToken will make.
+// Only one setup reaches it: the request needs an existing session (else
+// nothing to delete) while the instance has no account (else Register refuses
+// first). A first register makes both, the user row is then removed, and a
+// trigger refuses the delete the second attempt's RenewToken makes.
 func TestPostRegisterFailsClosedWhenTheSessionCannotBeRenewed(t *testing.T) {
 	t.Parallel()
 	r, sqlDB := testRouterAndDB(t)

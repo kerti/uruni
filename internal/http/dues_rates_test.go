@@ -31,8 +31,8 @@ func getDuesRates(t *testing.T, r http.Handler, tierIDPathSegment string) *httpt
 	return rec
 }
 
-// setUpTier is the fixture every dues-rate test needs: a fund, then a tier
-// to hang rates off of.
+// setUpTier is the fixture every dues-rate test needs: a fund, then a tier to
+// hang rates off.
 func setUpTier(t *testing.T, r http.Handler, name string) duesTierResponse {
 	t.Helper()
 	if rec := postSetup(t, r, "Test Fund"); rec.Code != http.StatusCreated {
@@ -98,9 +98,9 @@ func TestPostDuesRatesRejectsADuplicatePeriodWith409(t *testing.T) {
 		t.Fatalf("first POST .../rates = %d, want %d (body: %s)", rec.Code, http.StatusCreated, rec.Body.String())
 	}
 
-	// dues_rate's own UNIQUE (tier_id, effective_from) - a second rate for
-	// the same tier and period is a correction, and PRD section 6 says the way to
-	// correct it is a *different* effective_from, not this one repeated.
+	// UNIQUE (tier_id, effective_from): a second rate for the same tier and period
+	// is a correction, and PRD section 6 corrects it with a different
+	// effective_from, not this one repeated.
 	rec := postDuesRate(t, r, tier.ID, duesRateRequest{Amount: 75_000, EffectiveFrom: "2026-01"})
 	if rec.Code != http.StatusConflict {
 		t.Fatalf("second POST .../rates with a duplicate period = %d, want %d (body: %s)", rec.Code, http.StatusConflict, rec.Body.String())
@@ -116,8 +116,8 @@ func TestPostDuesRatesRejectsAMalformedEffectiveFrom(t *testing.T) {
 	r := testRouter(t)
 	tier := setUpTier(t, r, "Full")
 
-	// dues_rate.effective_from CHECK - GLOB 'YYYY-MM' and a real calendar
-	// month. "2026-13" matches the GLOB shape but names no such month.
+	// dues_rate.effective_from CHECK: GLOB 'YYYY-MM' and a real calendar month;
+	// "2026-13" matches the GLOB but names no month.
 	rec := postDuesRate(t, r, tier.ID, duesRateRequest{Amount: 50_000, EffectiveFrom: "2026-13"})
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("POST .../rates with effective_from=2026-13 = %d, want %d (body: %s)", rec.Code, http.StatusBadRequest, rec.Body.String())
@@ -166,8 +166,8 @@ func TestPostDuesRatesReturns400ForANonNumericTierID(t *testing.T) {
 
 func TestGetDuesRatesReturnsAnEmptyListForATierWithNoRateYet(t *testing.T) {
 	t.Parallel()
-	// dues_rate.sql's own comment: "a tier whose rate is undecided simply
-	// has no row" - a legitimate state, not an error.
+	// dues_rate.sql: "a tier whose rate is undecided simply has no row", a
+	// legitimate state, not an error.
 	r := testRouter(t)
 	tier := setUpTier(t, r, "Madya")
 
@@ -259,12 +259,11 @@ func TestPatchDuesRatesCorrectsTheAmount(t *testing.T) {
 	}
 }
 
-// A body carrying no amount must be refused rather than read as zero.
-// CHECK (amount >= 0) admits 0, so decoding an absent key to the zero value
-// would silently make the tier free and read every derived dues status for
-// the periods that rate covers as paid - the exact corruption this route
-// exists to let a treasurer fix. Covers both an empty body and a misspelt
-// key, which decode identically.
+// A body with no amount must be refused, not read as zero. CHECK (amount >= 0)
+// admits 0, so decoding an absent key to zero would make the tier free and read
+// every derived dues status for the periods that rate covers as paid: the
+// corruption this route exists to let a treasurer fix. Covers an empty body
+// and a misspelt key, which decode identically.
 func TestPatchDuesRatesRejectsABodyWithNoAmount(t *testing.T) {
 	t.Parallel()
 	for name, body := range map[string]string{
@@ -358,10 +357,10 @@ func TestPatchDuesRatesRejectsMalformedJSON(t *testing.T) {
 	}
 }
 
-// TestDeleteDuesRatesThenRepostingForTheRightMonthSucceeds is the concrete
-// case that motivated the slice: a rate entered against the wrong month,
-// which UNIQUE (tier_id, effective_from) otherwise makes permanently
-// uncorrectable, is deleted and re-added for the right one.
+// TestDeleteDuesRatesThenRepostingForTheRightMonthSucceeds is the case that
+// motivated the slice: a rate entered against the wrong month, which UNIQUE
+// (tier_id, effective_from) otherwise makes uncorrectable, is deleted and
+// re-added for the right one.
 func TestDeleteDuesRatesThenRepostingForTheRightMonthSucceeds(t *testing.T) {
 	t.Parallel()
 	r := testRouter(t)
@@ -381,10 +380,9 @@ func TestDeleteDuesRatesThenRepostingForTheRightMonthSucceeds(t *testing.T) {
 		t.Fatalf("DELETE /api/dues-rates/%d = %d, want %d (body: %s)", wrongRate.ID, del.Code, http.StatusNoContent, del.Body.String())
 	}
 
-	// The corrected row for the intended month - 2026-01, not 2026-02 -
-	// would previously never even reach here, since it isn't a duplicate of
-	// the deleted row's period. Posted anyway, to prove the delete really
-	// freed the tier up rather than merely accepting an unrelated period.
+	// The corrected row for the intended month (2026-01, not 2026-02) would never
+	// have reached here, being no duplicate of the deleted row's period. Posted to
+	// prove the delete freed the tier, not merely accepted an unrelated period.
 	right := postDuesRate(t, r, tier.ID, duesRateRequest{Amount: 50_000, EffectiveFrom: "2026-01"})
 	if right.Code != http.StatusCreated {
 		t.Fatalf("POST .../rates for the corrected month = %d, want %d (body: %s)", right.Code, http.StatusCreated, right.Body.String())

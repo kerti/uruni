@@ -1,17 +1,13 @@
 package http
 
-// GET /api/backup (M6.37, #323, ADR-012): the whole fund, downloaded as one
-// zip - uruni.json plus every receipt image under its stored name. All of
-// the actual work lives in internal/backup, so #325's importer can sit
-// beside it in the same package; this file is the thin route that streams
-// what that package builds.
+// GET /api/backup (ADR-012): the whole fund as one zip, uruni.json plus every
+// receipt image under its stored name. The work lives in internal/backup; this
+// file is the thin route that streams what it builds.
 //
-// GET /api/backups and GET /api/backups/{name} (M6.38, #324, ADR-012/013)
-// are this file's other addition: listing the server-side dumps
-// internal/backup's own scheduler and boot check already write to
-// URUNI_BACKUP_DIR, and downloading one of them by name. Neither builds
-// anything - they only ever read the directory - which is the whole reason
-// they are separate routes from the singular /api/backup above.
+// GET /api/backups and GET /api/backups/{name} (ADR-012/013) list and
+// download the server-side dumps internal/backup's scheduler and boot check
+// write to URUNI_BACKUP_DIR. Neither builds anything, they only read the
+// directory, which is why they are separate from the singular /api/backup.
 
 import (
 	"errors"
@@ -28,19 +24,16 @@ import (
 )
 
 // resolveStoredBackupPath validates name against backup.ValidDumpName and
-// resolves it to a path inside a.backupDir - the one place a client-
-// supplied backup name is turned into a filesystem path, shared by
-// downloadStoredBackup above and restore.go's inspectStoredBackup (#326),
-// which both address a server-side dump by exactly this identifier, never a
-// client-supplied path.
+// resolves it to a path inside a.backupDir: the one place a client-supplied
+// backup name becomes a filesystem path, shared by downloadStoredBackup and
+// restore.go's inspectStoredBackup (#326). Both address a dump by this
+// identifier, never a client path.
 //
-// Two checks, deliberately both: ValidDumpName alone would already refuse
-// every path-traversal shape (dumpNamePattern's character classes contain
-// no "/" and no ".."), but resolving the joined path and requiring it stay
-// inside a.backupDir is the same belt-and-suspenders internal/http already
-// applies wherever a path is built from request input elsewhere in this
-// package - cheap, and it costs nothing to keep the two packages' habits
-// matched.
+// Two checks, both on purpose: ValidDumpName alone refuses every
+// path-traversal shape (no "/" or ".." in dumpNamePattern), but resolving the
+// joined path and requiring it stay inside a.backupDir matches the
+// belt-and-suspenders internal/http applies wherever a path is built from
+// request input, and costs nothing.
 func (a *api) resolveStoredBackupPath(name string) (string, bool) {
 	if !backup.ValidDumpName(name) {
 		return "", false
@@ -52,12 +45,11 @@ func (a *api) resolveStoredBackupPath(name string) (string, bool) {
 	return full, true
 }
 
-// backupListItem is one dump's own wire shape (GET /api/backups): enough
-// for the Cadangan card to render a row - date, kind, whether it can still
-// be restored - and enough for the download route below to be handed back
-// exactly the name it must ask for. Everything here is read straight off
-// DumpInfo, parsed from the file's own name (internal/backup/dumps.go) -
-// nothing is derived a second way.
+// backupListItem is one dump's wire shape (GET /api/backups): enough for the
+// Cadangan card to render a row (date, kind, whether it can still be
+// restored) and for the download route to be given the name to ask for. All
+// of it is read off DumpInfo, parsed from the file's name
+// (internal/backup/dumps.go); nothing is derived a second way.
 type backupListItem struct {
 	Name            string `json:"name"`
 	Date            string `json:"date"` // YYYY-MM-DD, Asia/Jakarta
@@ -67,12 +59,11 @@ type backupListItem struct {
 	SizeBytes       int64  `json:"size_bytes"`
 }
 
-// listBackups is GET /api/backups: every dump backup.ListDumps recognises
-// in URUNI_BACKUP_DIR, newest first - the Cadangan card's own list, no
-// dialog, no filter, matching the whole section's "one thing to browse, not
-// to edit" shape (Backup.tsx's own comment). Unscoped by fund for the same
-// reason /api/backup already is: a dump is a whole-instance file, not a
-// per-fund one (ADR-012's restore scope).
+// listBackups is GET /api/backups: every dump backup.ListDumps recognises in
+// URUNI_BACKUP_DIR, newest first: the Cadangan card's list, with no dialog or
+// filter ("one thing to browse, not to edit", see Backup.tsx). Unscoped by
+// fund like /api/backup: a dump is a whole-instance file (ADR-012's restore
+// scope).
 func (a *api) listBackups(w http.ResponseWriter, _ *http.Request) {
 	dumps, err := backup.ListDumps(a.backupDir)
 	if err != nil {
@@ -81,9 +72,8 @@ func (a *api) listBackups(w http.ResponseWriter, _ *http.Request) {
 		return
 	}
 
-	// Always an array, never "null" for an instance with no dumps yet
-	// (the same "always an array" contract getBalances and BuildDocument's
-	// own slices keep for their own wire shapes).
+	// Always an array, never "null", for an instance with no dumps (as
+	// getBalances and BuildDocument's slices).
 	items := make([]backupListItem, 0, len(dumps))
 	for _, d := range dumps {
 		info, err := os.Stat(filepath.Join(a.backupDir, d.Name))
@@ -105,14 +95,12 @@ func (a *api) listBackups(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, items)
 }
 
-// downloadStoredBackup is GET /api/backups/{name}: streams one already-
-// written dump back out, byte for byte. name must be exactly a filename
-// backup.ListDumps just returned to this same caller - never trusted as a
-// bare path segment, however chi routed it here. resolveStoredBackupPath
-// above is the validation; the os.ReadFile error below (fs.ErrNotExist) is
-// what turns "a syntactically valid but unknown name" into a plain 404
-// instead of a 500, for a name that was never written or was since pruned
-// by retention.
+// downloadStoredBackup is GET /api/backups/{name}: streams one written dump
+// back byte for byte. name must be a filename backup.ListDumps returned, never
+// trusted as a bare path segment however chi routed it;
+// resolveStoredBackupPath validates it, and the os.ReadFile error below
+// (fs.ErrNotExist) turns a valid but unknown or since-pruned name into a 404
+// instead of a 500.
 func (a *api) downloadStoredBackup(w http.ResponseWriter, r *http.Request) {
 	name := chi.URLParam(r, "name")
 	full, ok := a.resolveStoredBackupPath(name)
@@ -149,16 +137,15 @@ func (a *api) downloadStoredBackup(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write(data)
 }
 
-// downloadBackup answers with the finished zip, Content-Disposition set so
-// the browser saves it under backup.ZipFilename's dated name rather than opening it
-// inline. Session-gated like every route in this group (api.go's second
-// r.Group) - the copy on Pengaturan's own Cadangan card is what tells the
-// treasurer this file carries the login, so there is nothing left for this
-// route itself to warn about.
+// downloadBackup answers with the finished zip, Content-Disposition set so the
+// browser saves it under backup.ZipFilename's dated name rather than opening
+// it. Session-gated like every route in this group (api.go's second
+// r.Group); Pengaturan's Cadangan card tells the treasurer the file carries
+// the login, so this route has nothing to warn about.
 //
-// Unscoped by fund on purpose: ADR-012's restore scope is the whole
-// instance, so the download is too - backup.Export itself walks every fund
-// ListFunds returns, not just the one resolveFund would answer with.
+// Unscoped by fund on purpose: ADR-012's restore scope is the whole instance,
+// so the download is too; backup.Export walks every fund ListFunds returns,
+// not the one resolveFund would answer with.
 func (a *api) downloadBackup(w http.ResponseWriter, r *http.Request) {
 	zipBytes, missing, err := backup.Export(r.Context(), a.sqlDB, a.uploadsDir)
 	if err != nil {
@@ -168,8 +155,8 @@ func (a *api) downloadBackup(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if len(missing) > 0 {
-		// Skipped, not failed (backup.Export): the operator learns a photo is
-		// gone from the uploads volume; the treasurer still gets her backup.
+		// Skipped, not failed (backup.Export): the operator learns a photo is gone
+		// from the uploads volume; the treasurer still gets her backup.
 		a.logger.Warn("backup: receipt images missing from uploads dir", "count", len(missing), "paths", missing)
 	}
 

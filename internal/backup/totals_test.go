@@ -9,10 +9,10 @@ import (
 	"testing"
 )
 
-// totalsDoc is the smallest document CheckTotals can say something about:
-// one fund, one account, two purposes (main and an incidental envelope), and
-// whatever transactions the case supplies. Its totals are computed by the
-// caller, by hand, so the test's expectation is never the code under test.
+// totalsDoc is the smallest document CheckTotals can judge: one fund, one
+// account, two purposes (main and an incidental envelope), and the case's
+// transactions. The caller computes its totals by hand, so the expectation is
+// never the code under test.
 func totalsDoc(txns []Transaction, totals Totals) Document {
 	return Document{
 		Funds:        []Fund{{ID: 1}},
@@ -95,8 +95,8 @@ func TestCheckTotalsRefusesAnyDisagreementExactly(t *testing.T) {
 	}
 }
 
-// A sum that cannot be held in an int64 is a corrupt file, said as such -
-// never a wrapped-around figure that happens to compare equal.
+// A sum that cannot be held in an int64 is a corrupt file, said as such, never
+// a wrapped figure that happens to compare equal.
 func TestCheckTotalsRefusesAnOverflowingSum(t *testing.T) {
 	t.Parallel()
 	doc := totalsDoc([]Transaction{txn(1, "in", math.MaxInt64, 20), txn(2, "in", 1, 20)}, totals(0, 0, 0, 0))
@@ -105,9 +105,9 @@ func TestCheckTotalsRefusesAnOverflowingSum(t *testing.T) {
 	}
 }
 
-// The real fixture, through the real export: what BuildDocument writes is
-// what CheckTotals accepts (every table, a reversal, a transfer, an envelope,
-// a reconciliation).
+// The real fixture through the real export: what BuildDocument writes,
+// CheckTotals accepts (every table, a reversal, a transfer, an envelope, a
+// reconciliation).
 func TestCheckTotalsAcceptsAnExportedFixture(t *testing.T) {
 	t.Parallel()
 	sqlDB := newTestDB(t)
@@ -122,9 +122,9 @@ func TestCheckTotalsAcceptsAnExportedFixture(t *testing.T) {
 }
 
 // The inspect step: ParseUpload refuses a zip whose totals disagree with its
-// rows, with the shared sentinel, before any caller could ask for a password
-// - and accepts the same export untampered, so the refusal is the totals and
-// nothing else (the receipt is a real image, the zip otherwise identical).
+// rows, with the shared sentinel, before any password prompt, and accepts the
+// same export untampered, so the refusal is the totals alone (the receipt is a
+// real image, the zip otherwise identical).
 func TestParseUploadChecksTheTotalsAgainstTheRows(t *testing.T) {
 	t.Parallel()
 	sqlDB := newTestDB(t)

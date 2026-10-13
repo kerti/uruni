@@ -11,10 +11,10 @@ import (
 	"time"
 )
 
-// The server runs UTC but the treasurer lives in Asia/Jakarta (UTC+7), so the
-// last UTC instant of a Jakarta month is 16:59:59Z on its last day and the
-// next Jakarta month begins at 17:00:00Z (#379). Every route that reckons a
-// calendar day or month must flip on that second, not at UTC midnight.
+// The server runs UTC but the treasurer lives in Asia/Jakarta (UTC+7), so a
+// Jakarta month's last UTC instant is 16:59:59Z on its last day and the next
+// begins at 17:00:00Z (#379). Every route reckoning a calendar day or month
+// must flip on that second, not at UTC midnight.
 var (
 	beforeSeptemberInJakarta = time.Date(2026, 8, 31, 16, 59, 59, 0, time.UTC)
 	atSeptemberInJakarta     = time.Date(2026, 8, 31, 17, 0, 0, 0, time.UTC)
@@ -22,10 +22,10 @@ var (
 
 func fixedClock(at time.Time) func() time.Time { return func() time.Time { return at } }
 
-// clockFixture is a fund whose one member joined in August 2026 and owes
-// 25000 a month from 2020, with a 30000 rate taking over in September.
-// Nothing is paid, so the August period is outstanding exactly when the
-// current month is September or later.
+// clockFixture is a fund whose one member joined in August 2026 and owes 25000
+// a month from 2020, with a 30000 rate taking over in September. Nothing is
+// paid, so August is outstanding exactly when the current month is September
+// or later.
 func clockFixture(t *testing.T, r http.Handler) memberResponse {
 	t.Helper()
 	tier := setUpTier(t, r, "Full")

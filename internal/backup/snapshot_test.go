@@ -16,12 +16,12 @@ import (
 )
 
 // newFileTestDBs opens one migrated, file-backed database through two
-// independent pools - reader and writer - so a test can land a committed
-// write from "another connection" at an exact point inside a read. (The
-// shared :memory: helper cannot: its single connection has no second handle.)
-// This is the cross-connection shape of #496; in production the same
-// interleaving needs a second process, since ADR-004's one connection already
-// keeps every in-process writer out of an open transaction.
+// independent pools (reader and writer), so a test can land a committed write
+// from "another connection" at an exact point inside a read. The shared
+// :memory: helper cannot: its single connection has no second handle. This is
+// #496's cross-connection shape; in production the interleaving needs a second
+// process, as ADR-004's one connection keeps in-process writers out of an open
+// transaction.
 func newFileTestDBs(t *testing.T) (reader, writer *sql.DB) {
 	t.Helper()
 	path := filepath.Join(t.TempDir(), "uruni.db")
@@ -40,9 +40,9 @@ func newFileTestDBs(t *testing.T) (reader, writer *sql.DB) {
 	return reader, open()
 }
 
-// injectingQuerier runs inject exactly once, right after the export has read
-// the fund's transaction rows and before it reads anything else - the point
-// where, before #496, a write would land between the rows and the totals.
+// injectingQuerier runs inject once, right after the export has read the
+// fund's transaction rows and before anything else: where, before #496, a
+// write would land between the rows and the totals.
 type injectingQuerier struct {
 	store.Querier
 	once   sync.Once
@@ -55,9 +55,9 @@ func (q *injectingQuerier) ListTransactionsByFund(ctx context.Context, fundID in
 	return rows, err
 }
 
-// postDuesLikeIncome commits one more income row through the writer's own
-// connection - a normal, valid posting, exactly what a second process (or,
-// before the transaction, the HTTP handler) would land mid-export.
+// postDuesLikeIncome commits one more income row through the writer's
+// connection: a valid posting, what a second process (or, before the
+// transaction, the HTTP handler) would land mid-export.
 func postDuesLikeIncome(t *testing.T, writer *sql.DB, doc Document) {
 	t.Helper()
 	var main Purpose
@@ -75,10 +75,10 @@ func postDuesLikeIncome(t *testing.T, writer *sql.DB, doc Document) {
 }
 
 // TestWriteMidExportCannotTearTheDocument is #496's core claim, made
-// deterministic: the interleaved write is committed synchronously from the
-// hook, not raced. Inside BuildDocument's one read transaction the export
-// keeps reading its snapshot, so the rows and the totals describe the same
-// instant and CheckTotals passes; the write simply is not in this backup.
+// deterministic: the write is committed synchronously from the hook, not
+// raced. In BuildDocument's one read transaction the export keeps reading its
+// snapshot, so rows and totals describe one instant and CheckTotals passes;
+// the write is simply not in this backup.
 func TestWriteMidExportCannotTearTheDocument(t *testing.T) {
 	t.Parallel()
 	reader, writer := newFileTestDBs(t)
@@ -126,11 +126,11 @@ func TestWriteMidExportCannotTearTheDocument(t *testing.T) {
 }
 
 // TestReadingWithoutATransactionTearsTheDocument is the control for the test
-// above: the same injected write, the same hook, but read statement by
-// statement as the export did before #496. The document comes out torn -
-// transaction rows from before the write, totals from after it - and
-// CheckTotals names it. Without this, the test above could pass for the
-// wrong reason (a hook that never fires, a write that never lands).
+// above: the same injected write and hook, read statement by statement as the
+// export did before #496. The document comes out torn (rows from before the
+// write, totals from after) and CheckTotals names it. Without this, the test
+// above could pass for the wrong reason (a hook that never fires, a write that
+// never lands).
 func TestReadingWithoutATransactionTearsTheDocument(t *testing.T) {
 	t.Parallel()
 	reader, writer := newFileTestDBs(t)
@@ -152,8 +152,8 @@ func TestReadingWithoutATransactionTearsTheDocument(t *testing.T) {
 	}
 }
 
-// tamperedReader hands the dump path a document whose totals disagree with
-// its rows by exactly one rupiah - the smallest torn document there is.
+// tamperedReader hands the dump path a document whose totals disagree with its
+// rows by one rupiah, the smallest torn document.
 func tamperedReader(t *testing.T, sqlDB *sql.DB) documentReader {
 	t.Helper()
 	return func(ctx context.Context) (Document, []store.Receipt, error) {
@@ -178,11 +178,11 @@ func assertDirEmpty(t *testing.T, dir string) {
 }
 
 // TestDumpRefusesADocumentWhoseTotalsDisagreeWithItsRows: every producer
-// shares buildDumpMaterials, so each is refused with ErrTotalsMismatch and
-// the backup directory stays empty - nothing renamed into place, and no temp
-// file left behind. (Each caller logs the returned error at error level:
-// main.go for the boot dump, the scheduler tick for the daily one, the HTTP
-// handler for the download and the pre-restore safety net.)
+// shares buildDumpMaterials, so each is refused with ErrTotalsMismatch and the
+// backup directory stays empty: nothing renamed into place, no temp file left.
+// (Each caller logs the error at error level: main.go for the boot dump, the
+// scheduler tick for the daily one, the HTTP handler for the download and the
+// pre-restore safety net.)
 func TestDumpRefusesADocumentWhoseTotalsDisagreeWithItsRows(t *testing.T) {
 	t.Parallel()
 	sqlDB := newTestDB(t)
@@ -217,8 +217,8 @@ func TestDumpRefusesADocumentWhoseTotalsDisagreeWithItsRows(t *testing.T) {
 	})
 }
 
-// TestDumpOfAConsistentDocumentIsStillWritten guards the other direction: the
-// check refuses only a bad document, never a good one.
+// TestDumpOfAConsistentDocumentIsStillWritten: the check refuses only a bad
+// document, never a good one.
 func TestDumpOfAConsistentDocumentIsStillWritten(t *testing.T) {
 	t.Parallel()
 	sqlDB := newTestDB(t)

@@ -13,14 +13,13 @@ import (
 )
 
 // TestConcurrentRequestsOnOneSessionDoNotCollide is the regression test for
-// the delete-then-insert commit this store used to do. scs marks every
-// loaded session Modified while IdleTimeout is set, so each of these
-// requests re-commits the same token; under the old pair, two of them
-// interleaved as DELETE / DELETE / INSERT / INSERT and the second INSERT
-// tripped session.token's primary key, answering one perfectly ordinary
-// request with a 500. Two parallel fetches from one SPA is the everyday
-// shape of this, not an exotic one - it reproduced at 7 failures in 60
-// requests before UpsertSession made the write a single statement.
+// the old delete-then-insert commit. scs marks every loaded session Modified
+// while IdleTimeout is set, so each request re-commits the same token; under
+// the old pair, two interleaved as DELETE / DELETE / INSERT / INSERT and the
+// second INSERT tripped session.token's primary key, a 500 on an ordinary
+// request. Two parallel fetches from one SPA is everyday, not exotic: it
+// reproduced at 7 failures in 60 requests before UpsertSession made the write
+// one statement.
 func TestConcurrentRequestsOnOneSessionDoNotCollide(t *testing.T) {
 	t.Parallel()
 	r, sqlDB := testRouterAndDB(t)
@@ -42,10 +41,9 @@ func TestConcurrentRequestsOnOneSessionDoNotCollide(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			req := httptest.NewRequest(http.MethodGet, "/api/fund", nil)
-			// An inbound request cookie: only Name and Value ever cross
-			// the wire from a browser, so the flags gosec wants here have
-			// nowhere to go. The flags that matter are asserted on the
-			// response in register_test.go.
+			// An inbound request cookie: only Name and Value cross the wire from a
+			// browser, so the flags gosec wants have nowhere to go. The flags that matter
+			// are asserted on the response in register_test.go.
 			req.AddCookie(&http.Cookie{Name: "session", Value: token}) //nolint:gosec // request-side cookie carries name and value only
 			w := httptest.NewRecorder()
 			r.ServeHTTP(w, req)
@@ -60,8 +58,7 @@ func TestConcurrentRequestsOnOneSessionDoNotCollide(t *testing.T) {
 		}
 	}
 
-	// One cookie must still mean exactly one row, however many requests
-	// rewrote it.
+	// One cookie still means one row, however many requests rewrote it.
 	var rows int
 	if err := sqlDB.QueryRow("SELECT count(*) FROM session").Scan(&rows); err != nil {
 		t.Fatalf("counting sessions: %v", err)
@@ -72,20 +69,19 @@ func TestConcurrentRequestsOnOneSessionDoNotCollide(t *testing.T) {
 }
 
 // newTestSessionStore returns the store over a real migrated database. The
-// tests below drive scs.Store's own contract directly, because the arms
-// they cover - an unknown token, an expired row, a database that has gone
-// away - are ones a request through the router never produces on purpose.
+// tests drive scs.Store's contract directly, because their arms (an unknown
+// token, an expired row, a database gone away) are ones a router request never
+// produces on purpose.
 func newTestSessionStore(t *testing.T) (*sessionStore, *sql.DB) {
 	t.Helper()
 	sqlDB := testStoreDB(t)
 	return newSessionStore(store.New(sqlDB)), sqlDB
 }
 
-// TestSessionStoreRoundTripsThroughThePlainInterface exercises Find, Commit
-// and Delete - the non-ctx trio scs.Store requires for the field this store
-// is assigned to. They are never called in production (scs prefers the Ctx
-// forms), so this is the only thing that proves they forward correctly
-// rather than, say, all three landing on the same token.
+// TestSessionStoreRoundTripsThroughThePlainInterface exercises Find, Commit and
+// Delete, the non-ctx trio scs.Store requires. Production never calls them
+// (scs prefers the Ctx forms), so this alone proves they forward correctly,
+// not all three landing on one token.
 func TestSessionStoreRoundTripsThroughThePlainInterface(t *testing.T) {
 	t.Parallel()
 	s, _ := newTestSessionStore(t)
@@ -113,11 +109,10 @@ func TestSessionStoreRoundTripsThroughThePlainInterface(t *testing.T) {
 	}
 }
 
-// TestSessionStoreFindReportsAMissOnAnUnknownOrExpiredToken is scs's
-// Store.Find contract: "not found" is not an error, and a row past its idle
-// window reads as absent even before the lazy sweep removes it - otherwise
-// an expired cookie would keep working until some later request happened to
-// commit.
+// TestSessionStoreFindReportsAMissOnAnUnknownOrExpiredToken is scs's Store.Find
+// contract: "not found" is not an error, and a row past its idle window reads
+// absent even before the lazy sweep, or an expired cookie would work until a
+// later request committed.
 func TestSessionStoreFindReportsAMissOnAnUnknownOrExpiredToken(t *testing.T) {
 	t.Parallel()
 	s, sqlDB := newTestSessionStore(t)
@@ -137,8 +132,8 @@ func TestSessionStoreFindReportsAMissOnAnUnknownOrExpiredToken(t *testing.T) {
 		t.Errorf("FindCtx(expired token) = found %v, err %v, want false and no error", found, err)
 	}
 
-	// The sweep rides on the commit above, so the expired row is gone from
-	// the table too, not merely filtered out of the read.
+	// The sweep rides on the commit above, so the expired row is gone from the
+	// table too, not merely filtered from the read.
 	var rows int
 	if err := sqlDB.QueryRow("SELECT count(*) FROM session WHERE token = 'stale'").Scan(&rows); err != nil {
 		t.Fatalf("counting sessions: %v", err)
@@ -148,10 +143,9 @@ func TestSessionStoreFindReportsAMissOnAnUnknownOrExpiredToken(t *testing.T) {
 	}
 }
 
-// TestSessionStoreSurfacesADatabaseError: every arm has to return the error
-// rather than swallow it into a silent "no session," which would log the
-// treasurer out with no explanation anywhere whenever the database is
-// unreachable.
+// TestSessionStoreSurfacesADatabaseError: every arm returns the error rather
+// than swallow it into a silent "no session", which would log the treasurer
+// out unexplained whenever the database is unreachable.
 func TestSessionStoreSurfacesADatabaseError(t *testing.T) {
 	t.Parallel()
 	s, sqlDB := newTestSessionStore(t)

@@ -18,9 +18,8 @@ func getDuesStatus(t *testing.T, r http.Handler, period string) *httptest.Respon
 	return rec
 }
 
-// getOutstandingDues issues GET /api/members/{id}/outstanding-dues. through
-// is appended as a query parameter only when non-empty, so a caller testing
-// the omitted-through default can pass "".
+// getOutstandingDues issues GET /api/members/{id}/outstanding-dues; through is
+// sent only when non-empty, so "" tests the omitted-through default.
 func getOutstandingDues(t *testing.T, r http.Handler, memberID int64, through string) *httptest.ResponseRecorder {
 	t.Helper()
 	path := fmt.Sprintf("/api/members/%d/outstanding-dues", memberID)
@@ -44,9 +43,9 @@ func TestGetDuesStatusRequiresAFund(t *testing.T) {
 	}
 }
 
-// TestGetDuesStatusReturnsPerMemberStatus is the slice's dues-status
-// acceptance criterion: unpaid, partial and paid all read back correctly
-// for one period, across different members of the same tier.
+// TestGetDuesStatusReturnsPerMemberStatus is the dues-status criterion:
+// unpaid, partial and paid read back correctly for one period across members
+// of one tier.
 func TestGetDuesStatusReturnsPerMemberStatus(t *testing.T) {
 	t.Parallel()
 	r := testRouter(t)
@@ -153,9 +152,9 @@ func TestGetDuesStatusReturnsPerMemberStatus(t *testing.T) {
 	}
 }
 
-// TestGetDuesStatusCarriesPaidThroughForAMemberPaidAhead checks the wire
-// shape of #357: paid_through names the last month of the run for a member
-// paid ahead, and is null for one who has only paid this month.
+// TestGetDuesStatusCarriesPaidThroughForAMemberPaidAhead checks #357's wire
+// shape: paid_through names the last month of the run for a member paid ahead,
+// and is null for one who only paid this month.
 func TestGetDuesStatusCarriesPaidThroughForAMemberPaidAhead(t *testing.T) {
 	t.Parallel()
 	r := testRouter(t)
@@ -203,9 +202,8 @@ func TestGetDuesStatusCarriesPaidThroughForAMemberPaidAhead(t *testing.T) {
 }
 
 // TestGetDuesStatusRejectsAMalformedPeriod is this route's half of the
-// slice's malformed-input acceptance criterion: DuesStatusForPeriod's own
-// validateDuesPeriod check answers, the handler passes the raw query
-// parameter through unvalidated.
+// malformed-input criterion: DuesStatusForPeriod's validateDuesPeriod answers,
+// the handler passing the raw query parameter through.
 func TestGetDuesStatusRejectsAMalformedPeriod(t *testing.T) {
 	t.Parallel()
 	for _, period := range []string{"", "2026-13", "not-a-period"} {
@@ -223,10 +221,9 @@ func TestGetDuesStatusRejectsAMalformedPeriod(t *testing.T) {
 	}
 }
 
-// TestGetDuesStatusExcludesAMemberWithNoTier proves a member carrying no
-// dues obligation never appears here at all - not as unpaid, not as
-// anything - since DuesStatusForPeriod's own doc comment names this as the
-// roster boundary a member with tier_id == nil sits outside of.
+// TestGetDuesStatusExcludesAMemberWithNoTier: a member with no dues obligation
+// never appears, not even as unpaid; DuesStatusForPeriod names tier_id == nil
+// as outside the roster.
 func TestGetDuesStatusExcludesAMemberWithNoTier(t *testing.T) {
 	t.Parallel()
 	r := testRouter(t)
@@ -245,13 +242,12 @@ func TestGetDuesStatusExcludesAMemberWithNoTier(t *testing.T) {
 	}
 }
 
-// --- GET /api/members/{id}/outstanding-dues (#186) ---------------------------
+// --- GET /api/members/{id}/outstanding-dues (#186) ---
 
 // TestGetOutstandingDuesReturnsUnpaidAndPartialPeriodsOldestFirst is this
-// route's own acceptance criterion, exercised through the real HTTP surface
-// rather than the ledger method directly: a member with one unpaid, one
-// partial and one paid period gets back exactly the two outstanding ones,
-// oldest first.
+// route's criterion through the real HTTP surface: a member with one unpaid,
+// one partial and one paid period gets exactly the two outstanding, oldest
+// first.
 func TestGetOutstandingDuesReturnsUnpaidAndPartialPeriodsOldestFirst(t *testing.T) {
 	t.Parallel()
 	r := testRouter(t)
@@ -304,11 +300,9 @@ func TestGetOutstandingDuesReturnsUnpaidAndPartialPeriodsOldestFirst(t *testing.
 }
 
 // TestGetOutstandingDuesOnAnotherFundsMemberIs404 mirrors
-// TestGetReconciliationDetailOnAnotherFundsSnapshotIs404: a real member id
-// belonging to a second fund must read as not-found through this app's
-// router, which only ever resolves to the first (and only, per v1) fund
-// setup created - it must never be found and only then rejected for
-// ownership.
+// TestGetReconciliationDetailOnAnotherFundsSnapshotIs404: a real member id of
+// a second fund reads as not-found through this app's router, which resolves
+// only to the one fund setup created, never found then rejected for ownership.
 func TestGetOutstandingDuesOnAnotherFundsMemberIs404(t *testing.T) {
 	t.Parallel()
 	sqlDB := testStoreDB(t)
@@ -342,10 +336,9 @@ func TestGetOutstandingDuesOnAnotherFundsMemberIs404(t *testing.T) {
 }
 
 // TestGetOutstandingDuesRejectsAMalformedThrough is this route's half of the
-// slice's malformed-input acceptance criterion: OutstandingDuesForMember's
-// own validateDuesPeriod check answers, the handler passes the raw ?through=
-// query parameter through unvalidated, same as getDuesStatus does for
-// ?period=.
+// malformed-input criterion: OutstandingDuesForMember's validateDuesPeriod
+// answers, the handler passing the raw ?through= through, as getDuesStatus
+// does ?period=.
 func TestGetOutstandingDuesRejectsAMalformedThrough(t *testing.T) {
 	t.Parallel()
 	r := testRouter(t)
@@ -369,10 +362,9 @@ func TestGetOutstandingDuesRejectsAMalformedThrough(t *testing.T) {
 	}
 }
 
-// The member id in the path is parsed by this handler rather than by
-// resolveMember, so its own bad-input path needs covering: a non-numeric id
-// is the caller's mistake, not a missing member, and reads as 400 rather
-// than 404.
+// The member id in the path is parsed here, not by resolveMember, so its
+// bad-input path needs covering: a non-numeric id is the caller's mistake and
+// reads 400, not 404.
 func TestGetOutstandingDuesRejectsANonNumericMemberID(t *testing.T) {
 	t.Parallel()
 	r := testRouter(t)
@@ -390,9 +382,9 @@ func TestGetOutstandingDuesRejectsANonNumericMemberID(t *testing.T) {
 	}
 }
 
-// Before setup there is no fund to scope the lookup to, so the route answers
-// the same "run setup first" 404 every other fund-scoped route does - not a
-// 200 with an empty list, which would read as "this member owes nothing".
+// Before setup there is no fund to scope the lookup, so the route answers the
+// "run setup first" 404 of every fund-scoped route, not a 200 with an empty
+// list, which would read as "this member owes nothing".
 func TestGetOutstandingDuesRequiresAFund(t *testing.T) {
 	t.Parallel()
 	rec := getOutstandingDues(t, testRouter(t), 1, "")

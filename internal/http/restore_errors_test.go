@@ -19,12 +19,11 @@ import (
 	"github.com/kerti/uruni/internal/backup"
 )
 
-// The refusals below are what the treasurer actually reads when a restore
-// cannot go ahead: each wire code maps to its own sentence in
-// copy.common.errors, so a code drifting (or collapsing into
-// internal_error) would show her the wrong reason. internal/backup's tests
-// cover the sentinel errors themselves; these cover the mapping, end to
-// end through the router.
+// The refusals below are what the treasurer reads when a restore cannot go
+// ahead: each wire code maps to its sentence in copy.common.errors, so a code
+// drifting (or collapsing into internal_error) would show her the wrong
+// reason. internal/backup's tests cover the sentinel errors; these cover the
+// mapping, end to end through the router.
 
 func decodeErrorCode(t *testing.T, rec *httptest.ResponseRecorder) string {
 	t.Helper()
@@ -49,9 +48,8 @@ func assertAPIError(t *testing.T, rec *httptest.ResponseRecorder, status int, co
 	}
 }
 
-// rewriteZip copies src entry by entry, letting edit replace any entry's
-// bytes - how a test turns a real, valid backup into one that fails exactly
-// one check.
+// rewriteZip copies src entry by entry, letting edit replace any entry's bytes:
+// how a test turns a valid backup into one failing exactly one check.
 func rewriteZip(t *testing.T, src []byte, edit func(name string, data []byte) []byte) []byte {
 	t.Helper()
 	zr, err := zip.NewReader(bytes.NewReader(src), int64(len(src)))
@@ -113,8 +111,8 @@ func TestRestoreInspectRefusesTooManyEntries(t *testing.T) {
 	assertAPIError(t, rec, http.StatusRequestEntityTooLarge, "restore_file_too_large")
 }
 
-// A real backup whose one receipt image has been replaced with bytes that
-// are not an image at all.
+// A real backup whose one receipt image is replaced with bytes that are not an
+// image.
 func TestRestoreInspectRefusesABadReceiptImage(t *testing.T) {
 	t.Parallel()
 	r := testRouter(t)
@@ -148,9 +146,9 @@ func TestRestoreInspectRefusesANonMultipartRequest(t *testing.T) {
 	assertAPIError(t, rec, http.StatusBadRequest, "invalid_argument")
 }
 
-// A multipart body carrying some other field but no "file" part: the other
-// part is skipped, the reader runs out, and the answer names the missing
-// file rather than a parse failure.
+// A multipart body with some other field but no "file" part: the other part is
+// skipped, the reader runs out, and the answer names the missing file, not a
+// parse failure.
 func TestRestoreInspectRequiresAFilePart(t *testing.T) {
 	t.Parallel()
 	r, backupDir := authedRouterWithBackupDir(t)
@@ -172,8 +170,8 @@ func TestRestoreInspectRequiresAFilePart(t *testing.T) {
 	assertRestoreStagingFileExists(t, backupDir, false)
 }
 
-// A multipart body cut off mid-stream (no closing boundary): the read
-// fails partway, which is a bad request, not a server error.
+// A multipart body cut off mid-stream (no closing boundary): the read fails
+// partway, a bad request, not a server error.
 func TestRestoreInspectRefusesATruncatedUpload(t *testing.T) {
 	t.Parallel()
 	r := testRouter(t)
@@ -187,10 +185,9 @@ func TestRestoreInspectRefusesATruncatedUpload(t *testing.T) {
 	assertAPIError(t, rec, http.StatusBadRequest, "invalid_argument")
 }
 
-// A backup whose totals block disagrees with its own rows is refused at
-// inspect (#496), before the treasurer is ever asked for her password -
-// not after the confirm, which is the worst moment to find out. Nothing is
-// staged, and nothing changed.
+// A backup whose totals block disagrees with its rows is refused at inspect
+// (#496), before the password prompt, not after the confirm, the worst moment
+// to find out. Nothing is staged or changed.
 func TestRestoreInspectRefusesATotalsMismatch(t *testing.T) {
 	t.Parallel()
 	r, backupDir := authedRouterWithBackupDir(t)
@@ -231,8 +228,8 @@ func TestRestoreInspectRefusesATotalsMismatch(t *testing.T) {
 	}
 }
 
-// Confirm re-checks the password, so it shares login's limiter (its own
-// key): enough wrong guesses lock it before the password is even looked at.
+// Confirm re-checks the password, so it shares login's limiter (under its own
+// key): enough wrong guesses lock it before the password is looked at.
 func TestRestoreConfirmIsRateLimited(t *testing.T) {
 	t.Parallel()
 	r := testRouter(t)
@@ -248,8 +245,8 @@ func TestRestoreConfirmIsRateLimited(t *testing.T) {
 	assertAPIError(t, rec, http.StatusTooManyRequests, "too_many_requests")
 }
 
-// An expired stage is noticed on its next access: take refuses it and
-// removes the staged file itself, since nobody will confirm it now.
+// An expired stage is noticed on its next access: take refuses it and removes
+// the staged file, since nobody will confirm it now.
 func TestRestoreStageExpiryRemovesTheStagedFile(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()

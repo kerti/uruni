@@ -7,14 +7,14 @@ import (
 	"github.com/kerti/uruni/internal/store"
 )
 
-// duesTierRequest is POST /api/dues-tiers's body: just the name the
-// treasurer gives the tier (PRD section 6 - "a table, not an enum").
+// duesTierRequest is POST /api/dues-tiers's body: the name the treasurer
+// gives the tier (PRD section 6: "a table, not an enum").
 type duesTierRequest struct {
 	Name string `json:"name"`
 }
 
-// duesTierResponse is the wire shape of a dues_tier row. No fund_id, same
-// reasoning as memberResponse.
+// duesTierResponse is the wire shape of a dues_tier row. No fund_id, as
+// memberResponse.
 type duesTierResponse struct {
 	ID        int64  `json:"id"`
 	Name      string `json:"name"`
@@ -26,8 +26,8 @@ func toDuesTierResponse(t store.DuesTier) duesTierResponse {
 }
 
 // createDuesTier is POST /api/dues-tiers: a direct-CRUD write (ADR-027). A
-// duplicate name for this fund hits dues_tier's own UNIQUE (fund_id, name)
-// and comes back as 409 through mapSQLiteError - not re-checked here.
+// duplicate name for this fund hits UNIQUE (fund_id, name) and returns 409
+// through mapSQLiteError; not re-checked here.
 func (a *api) createDuesTier(w http.ResponseWriter, r *http.Request) {
 	var req duesTierRequest
 	if !decodeJSON(w, r, &req) {
@@ -53,9 +53,8 @@ func (a *api) createDuesTier(w http.ResponseWriter, r *http.Request) {
 }
 
 // updateDuesTier is PATCH /api/dues-tiers/{id}: a rename. name is the only
-// mutable field and is NOT NULL, so unlike member there is no "leave alone
-// vs. clear" to express - a PATCH always names the new value, and an empty
-// one is refused by the column's own CHECK.
+// mutable field and is NOT NULL, so there is no "leave alone vs. clear" as for
+// member: a PATCH names the new value, and the column's CHECK refuses empty.
 func (a *api) updateDuesTier(w http.ResponseWriter, r *http.Request) {
 	tier, ok := a.resolveDuesTier(w, r)
 	if !ok {
@@ -100,17 +99,16 @@ func (a *api) listDuesTiers(w http.ResponseWriter, r *http.Request) {
 }
 
 // deleteDuesTier is DELETE /api/dues-tiers/{id} (#232): for a tier the fund
-// never put anyone in - a setup typo, a golongan named twice - never for one
-// with members behind it.
+// never put anyone in (a setup typo, a golongan named twice), never one with
+// members.
 //
-// Ledger.DeleteDuesTier rather than a.queries directly, which is the one
-// place in this file that is not plain direct CRUD (ADR-027): the tier and
-// the rates that priced it have to go in one transaction, and the ledger is
-// what owns a transaction. Its own comment has the ordering reasoning.
+// It uses Ledger.DeleteDuesTier, not a.queries, the one non-plain-CRUD place
+// here (ADR-027): the tier and its rates must go in one transaction, which the
+// ledger owns (see its ordering note).
 //
-// A tier a member still references comes back from SQLite as a foreign-key
-// violation and leaves as 409 referenced_by_other_records, the same answer
-// deleting a used location or member already gives.
+// A tier a member still references returns from SQLite as a foreign-key
+// violation and leaves as 409 referenced_by_other_records, like deleting a
+// used location or member.
 func (a *api) deleteDuesTier(w http.ResponseWriter, r *http.Request) {
 	tier, ok := a.resolveDuesTier(w, r)
 	if !ok {

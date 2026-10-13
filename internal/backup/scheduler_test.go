@@ -7,14 +7,12 @@ import (
 	"time"
 )
 
-// TestRunSchedulerWritesOnceThenStopsCleanlyOnCancel is the scheduler's own
-// two promises: it writes today's dump (the immediate tick, scheduler.go's
-// own comment on why it does not wait for the first hourly fire), and it
-// returns - promptly, with no leaked goroutine spinning after ctx is
-// cancelled - rather than blocking forever.
+// TestRunSchedulerWritesOnceThenStopsCleanlyOnCancel: the scheduler writes
+// today's dump (the immediate tick, see scheduler.go) and returns promptly,
+// with no leaked goroutine, once ctx is cancelled.
 //
-// Serial on purpose, no t.Parallel: it asserts 2s wall-clock deadlines, which a
-// suite of parallel -race tests competing for the CPU could trip.
+// Serial on purpose, no t.Parallel: it asserts 2s wall-clock deadlines that
+// parallel -race tests competing for the CPU could trip.
 func TestRunSchedulerWritesOnceThenStopsCleanlyOnCancel(t *testing.T) {
 	sqlDB := newTestDB(t)
 	uploadsDir := t.TempDir()
@@ -30,10 +28,9 @@ func TestRunSchedulerWritesOnceThenStopsCleanlyOnCancel(t *testing.T) {
 		close(done)
 	}()
 
-	// The immediate tick (scheduler.go) runs synchronously before
-	// RunScheduler ever reaches its select - waiting for it to have taken
-	// effect only needs a moment for the goroutine to be scheduled, not a
-	// full schedulerInterval.
+	// The immediate tick runs synchronously before RunScheduler reaches its select;
+	// waiting for it needs only a moment for the goroutine to be scheduled, not a
+	// schedulerInterval.
 	deadline := time.After(2 * time.Second)
 	for {
 		entries, err := os.ReadDir(backupDir)

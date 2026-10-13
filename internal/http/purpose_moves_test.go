@@ -71,10 +71,9 @@ func TestPostPurposeMovesRequiresAFund(t *testing.T) {
 	}
 }
 
-// The success path: 201, a reclass_purpose transfer, and two legs in
-// GET /api/transactions carrying transfer_reason 'allocation', the two
-// purpose names, and the one account - while the fund's own pooled rows keep
-// summing as before.
+// The success path: 201, a reclass_purpose transfer, and two legs in GET
+// /api/transactions with transfer_reason 'allocation', the two purpose names
+// and the one account, while the fund's pooled rows sum as before.
 func TestPostPurposeMovesPostsAnAllocationPair(t *testing.T) {
 	t.Parallel()
 	r := testRouter(t)
@@ -176,8 +175,8 @@ func TestTransactionsCarryTheReasonOfEachKindOfPair(t *testing.T) {
 	}
 }
 
-// Every refusal's status and code. The ledger's own tests cover why; this
-// pins what the client is told.
+// Every refusal's status and code. The ledger's tests cover why; this pins
+// what the client is told.
 func TestPostPurposeMovesRefusals(t *testing.T) {
 	t.Parallel()
 	cases := []struct {

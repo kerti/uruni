@@ -19,77 +19,64 @@ import (
 )
 
 // api holds what every /api handler needs, so a route is a method rather than
-// a closure over three captured variables repeated at each registration.
+// a closure repeated at each registration.
 //
-// Both a ledger and a plain Querier, deliberately: routes with a derived
-// invariant go through the ledger, and the direct-CRUD routes ADR-027 keeps
-// out of it (members, dues tiers, dues rates) call queries themselves. Which
-// of the two a handler reaches for is the visible form of that boundary.
+// It holds both a ledger and a plain Querier: routes with a derived invariant
+// go through the ledger, and the direct-CRUD routes ADR-027 keeps out of it
+// (members, dues tiers, dues rates) call queries themselves.
 type api struct {
 	ledger  *ledger.Ledger
 	queries store.Querier
 	logger  *slog.Logger
 
-	// auth and sessionManager are M5's addition (issue #114): the bootstrap
-	// account and the session cookie that logs it straight in. Both are nil
-	// only in the sense that no handler before this milestone reached for
-	// them - every handler in this file still goes through ledger or
-	// queries exactly as before.
+	// auth and sessionManager: the bootstrap account and the session cookie that
+	// logs it straight in.
 	auth           *auth.Auth
 	sessionManager *scs.SessionManager
 
-	// loginLimiter is POST /api/login's rate limiter (issue #115) - one
-	// instance per api, so it accumulates across requests for the life of
-	// the process (and, in a test, for the life of the one router that
-	// test built) rather than resetting per call.
+	// loginLimiter is POST /api/login's rate limiter: one instance per api, so
+	// it accumulates across requests for the life of the process.
 	loginLimiter *rateLimiter
 
 	// registerLimiter is POST /api/register's, counted per client IP (#495).
-	// Its own instance, not loginLimiter's: a success there resets the key,
-	// and a register success must not.
+	// Separate from loginLimiter, whose key a success resets; a register success
+	// must not.
 	registerLimiter *rateLimiter
 
 	// devices remembers the device cookies login has issued (#500): the only
 	// callers let past login's shared keys.
 	devices *deviceTokens
 
-	// trustedProxies is #447's addition: the peers whose X-Forwarded-For
-	// clientIP believes (login.go). Empty believes none.
+	// trustedProxies are the peers whose X-Forwarded-For clientIP believes
+	// (login.go). Empty believes none.
 	trustedProxies []netip.Prefix
 
-	// uploadsDir is #153's addition: where receipt photos are written to and
-	// read from (ADR-011). `serve` has already proved it exists and is
-	// writable (config.EnsureUploadsDirWritable) before this struct is ever
-	// built.
+	// uploadsDir is where receipt photos are written and read (ADR-011); `serve`
+	// has proved it exists and is writable (config.EnsureUploadsDirWritable).
 	uploadsDir string
 
-	// backupDir is #324's addition: where the daily server-side backup dumps
-	// (ADR-012/ADR-013) are written to and listed from. Like uploadsDir,
-	// `serve` has already proved it exists and is writable
-	// (config.EnsureBackupDirWritable) before this struct is ever built.
+	// backupDir is where the daily backup dumps (ADR-012/ADR-013) are written and
+	// listed; `serve` has proved it exists and is writable
+	// (config.EnsureBackupDirWritable).
 	backupDir string
 
 	// baseURL is URUNI_BASE_URL (no trailing slash; empty in local dev). It
 	// builds the report's shareable link, fundResponse.ReportURL.
 	baseURL string
 
-	// sqlDB is #325's addition: the raw connection restore.go's confirmRestore
-	// hands to internal/backup.Restore, which opens its own write
-	// transaction spanning virtually every table. See router.go's New for
-	// why this cannot be reached through ledger or queries alone.
+	// sqlDB is the raw connection restore.go's confirmRestore hands to
+	// internal/backup.Restore, which opens a write transaction spanning nearly
+	// every table. See router.go's New.
 	sqlDB *sql.DB
 
-	// now is the clock every handler that reckons a calendar day or month
-	// reads (#379), injectable so a test can stand on either side of a
-	// Jakarta month boundary. Production is time.Now; the handler converts
-	// to tz.Jakarta itself, as the report does. Instants (created_at,
-	// session expiry) keep calling time.Now directly - no calendar day
-	// hangs on them.
+	// now is the clock every handler that reckons a calendar day or month reads
+	// (#379), injectable so a test can stand on either side of a Jakarta month
+	// boundary. Production is time.Now; the handler converts to tz.Jakarta.
+	// Instants (created_at, session expiry) call time.Now directly.
 	now func() time.Time
 
-	// restoreStage is #325's own one-slot stash between the upload/inspect
-	// step and the confirm step - restore.go's own doc comment explains the
-	// shape.
+	// restoreStage is the one-slot stash between the upload/inspect step and the
+	// confirm step; see restore.go.
 	restoreStage *restoreStage
 }
 
@@ -97,12 +84,10 @@ type api struct {
 // guard and session middleware, the routes a stranger can reach, and the
 // session-gated routes behind them.
 //
-// It also registers the NotFound and MethodNotAllowed pair first. Without them
-// an unknown /api path answers with chi's plain-text "404 page not found" while
-// every other failure under /api is the JSON envelope - a client would have to
-// parse two shapes to learn the same thing, and a mistyped path is exactly when
-// it is least able to. Registering them here rather than per handler means the
-// whole namespace answers the same way.
+// It registers the NotFound and MethodNotAllowed pair first. Without them an
+// unknown /api path answers with chi's plain-text "404 page not found" while
+// every other failure under /api is the JSON envelope, so a client would
+// have to parse two shapes.
 func (a *api) routes(r chi.Router) {
 	r.NotFound(func(w http.ResponseWriter, _ *http.Request) {
 		writeAPIError(w, http.StatusNotFound, "not_found", "The requested resource was not found.")
@@ -111,73 +96,56 @@ func (a *api) routes(r chi.Router) {
 		writeAPIError(w, http.StatusMethodNotAllowed, "method_not_allowed", "That method is not allowed on this resource.")
 	})
 
-	// Cross-origin writes are refused before the session is even loaded
-	// (#481). SameSite=Lax keeps the cookie off a cross-site POST, but a
-	// same-site page - a sibling subdomain under the same registrable domain
-	// - still gets it; this closes that gap. See crossOriginGuard.
+	// Cross-origin writes are refused before the session is loaded (#481).
+	// SameSite=Lax keeps the cookie off a cross-site POST, but a same-site page
+	// (a sibling subdomain) still gets it; see crossOriginGuard.
 	r.Use(crossOriginGuard)
 
-	// Scoped to /api rather than the whole router (ADR-030): a cookie has no
-	// business being parsed or issued for a static asset request or the SSR
-	// public report, and this is the one mount every session-aware route
-	// already funnels through.
+	// Scoped to /api rather than the whole router (ADR-030): no cookie should be
+	// parsed or issued for a static asset or the SSR public report.
 	r.Use(a.sessionManager.LoadAndSave)
 
-	// The four routes a stranger can reach with no session at all (#116).
-	// Nothing joins this group without an explicit reason on the spot -
-	// every other handler in this file, setup included, sits behind
-	// sessionRequired in the group below.
+	// The four routes a stranger can reach with no session (#116). Nothing joins
+	// this group without an explicit reason; every other handler, setup
+	// included, sits behind sessionRequired below.
 	r.Group(func(r chi.Router) {
-		// The bootstrap account (#114). Unauthenticated by design - there is
-		// no session yet to gate it with, and it refuses itself the moment
-		// any account exists (auth.ErrAlreadyRegistered).
+		// The bootstrap account (#114). Unauthenticated by design: there is no
+		// session yet, and it refuses itself once any account exists
+		// (auth.ErrAlreadyRegistered).
 		r.Post("/register", a.register)
 
-		// The everyday login (#115), alongside register above - also
-		// unauthenticated by design, and for the same reason: there is no
-		// session yet for a session-gated route to check.
+		// The everyday login (#115): unauthenticated by design, like register.
 		r.Post("/login", a.login)
 
-		// The one read a booting, logged-out client needs before it has
-		// anything to authenticate with: cookies are httpOnly, so this is
+		// The one read a logged-out client needs: cookies are httpOnly, so this is
 		// the SPA's only way to tell whether to render register or login.
 		r.Get("/session", a.getSession)
 
-		// Destroying a session a caller may or may not still have. Public
-		// for the same reason getSession is: a caller with an already-
-		// expired cookie is asking for exactly what logout gives, and a 401
-		// there would be hostile for no gain.
+		// Public like getSession: a caller with an expired cookie is asking for what
+		// logout gives, and a 401 would be hostile for no gain.
 		r.Post("/logout", a.logout)
 	})
 
-	// Every other route in the surface, now that a session proves "you are
-	// the treasurer" (ADR-030 decision 2). sessionRequired runs first so
-	// nothing below it is ever reached without one.
+	// Every other route, behind a session that proves "you are the treasurer"
+	// (ADR-030 decision 2). sessionRequired runs first.
 	r.Group(func(r chi.Router) {
 		r.Use(a.sessionRequired)
 
-		// POST /setup sits *inside* the gate - ADR-030's explicit ruling,
-		// and the one placement worth stating outright because the opposite
-		// reads as obvious and is wrong. Registration closes after first
-		// use, but between the treasurer registering and finishing setup
-		// there is a window in which a public /setup would let a stranger
-		// create and name her own fund - and ErrFundAlreadyExists would make
-		// that permanent, report_slug and all, for the treasurer who
-		// registered first. Gating it here is what closes that window.
+		// POST /setup sits inside the gate (ADR-030's ruling). Registration closes
+		// after first use, but between registering and finishing setup a public
+		// /setup would let a stranger create and name a fund, and
+		// ErrFundAlreadyExists would make that permanent, report_slug and all.
 		r.Post("/setup", a.setupFund)
 		r.Get("/fund", a.getFund)
 		r.Patch("/fund", a.updateFund)
 		r.Post("/fund/report-slug", a.replaceReportSlug)
 
-		// The fund's structure. Accounts are whatever the treasurer named at
-		// setup (#78) plus anything added or corrected afterward. PATCH and
-		// DELETE stay direct-CRUD (ADR-027), the same shape as members below;
-		// POST goes through the ledger instead (#230) because it may carry an
-		// opening balance that must post inside the same transaction as the
-		// account. Purposes stay read-only here but for the one kind a
-		// treasurer creates herself (pass-through); the other two kinds are
-		// written by SetUpFund and OpenIncidental. PATCH renames whichever
-		// kind the id names except the fund's own 'main' row (#264).
+		// The fund's structure. PATCH and DELETE are direct-CRUD (ADR-027), like
+		// members below; POST goes through the ledger (#230) because it may carry an
+		// opening balance that must post in the same transaction as the account.
+		// Purposes are read-only here except the one kind a treasurer creates
+		// (pass-through); the other kinds are written by SetUpFund and
+		// OpenIncidental. PATCH renames any kind except the fund's 'main' row (#264).
 		r.Post("/accounts", a.createAccount)
 		r.Get("/accounts", a.listAccounts)
 		r.Patch("/accounts/{id}", a.updateAccount)
@@ -186,10 +154,9 @@ func (a *api) routes(r chi.Router) {
 		r.Post("/pass-through-purposes", a.createPassThroughPurpose)
 		r.Patch("/purposes/{id}", a.updatePurposeName)
 
-		// The roster, one block per entity. Direct-CRUD (ADR-027) - no derived
-		// invariant, so these call a.queries rather than a.ledger, same split as
-		// getFund above. DELETE is only ever for a duplicate added at setup; a
-		// member who actually leaves gets inactive_on, which is a PATCH.
+		// The roster. Direct-CRUD (ADR-027): no derived invariant, so these call
+		// a.queries rather than a.ledger. DELETE is only for a duplicate added at
+		// setup; a member who leaves gets inactive_on, a PATCH.
 		r.Post("/members", a.createMember)
 		r.Get("/members", a.listMembers)
 		r.Patch("/members/{id}", a.updateMember)
@@ -200,49 +167,39 @@ func (a *api) routes(r chi.Router) {
 		r.Patch("/dues-tiers/{id}", a.updateDuesTier)
 		r.Delete("/dues-tiers/{id}", a.deleteDuesTier)
 
-		// Rates are created and listed under their tier, but corrected by their
-		// own id: a rate is only ever reached through one tier, and {id} in the
-		// nested path already means the tier.
+		// Rates are created and listed under their tier but corrected by id: a rate
+		// is only reached through one tier, so {id} in the nested path means the tier.
 		r.Post("/dues-tiers/{id}/rates", a.createDuesRate)
 		r.Get("/dues-tiers/{id}/rates", a.listDuesRates)
 		r.Patch("/dues-rates/{id}", a.updateDuesRate)
 		r.Delete("/dues-rates/{id}", a.deleteDuesRate)
 
-		// The everyday loop's write path (PRD section 7.2, section 7.3, section 7.6) and the
+		// The everyday loop's write path (PRD sections 7.2, 7.3, 7.6) and the
 		// reconcile flow's read path (PRD section 7.8). A pass-through movement and a
-		// correction are both ordinary POST /api/transactions calls - see
-		// transactionRequest's own comment - so there is no separate route for
-		// either.
+		// correction are ordinary POST /api/transactions calls (see
+		// transactionRequest), so neither has its own route.
 		r.Post("/transactions", a.createTransaction)
 		r.Get("/transactions", a.listTransactions)
-		// Fixing a posted row's peruntukan (ADR-033, #267): a
-		// reclass_purpose pair naming the row it corrects, addressed by
-		// that row's own id, matching the nested-verb idiom
-		// /api/incidentals/{purposeID}/close already uses. Not a second
-		// write path into PostTransaction (ADR-027) - it wraps
-		// Ledger.PostPurposeCorrection, which itself reuses transfer.go's
-		// postTransferPairTx.
+		// Fixing a posted row's peruntukan (ADR-033, #267): a reclass_purpose pair
+		// naming the row it corrects, addressed by that row's id like
+		// /api/incidentals/{purposeID}/close. It wraps Ledger.PostPurposeCorrection,
+		// not a second write path into PostTransaction (ADR-027).
 		r.Post("/transactions/{id}/purpose-correction", a.postPurposeCorrection)
-		// Moving money between two accounts without changing what the fund
-		// holds in total (PRD section 6). No GET: a transfer's two legs are ordinary
-		// transaction rows and already surface through GET /api/transactions.
+		// Moving money between accounts without changing the fund's total (PRD
+		// section 6). No GET: the two legs are ordinary transaction rows and surface
+		// through GET /api/transactions.
 		r.Post("/transfers", a.createTransfer)
-		// Moving money between purposes - Kas Utama to an envelope and back,
-		// or envelope to envelope - without moving any money (ADR-036,
-		// #383). The third caller of postTransferPairTx, through
-		// Ledger.PostPurposeMove; its legs surface through GET
-		// /api/transactions like a transfer's do.
+		// Moving money between purposes without moving any money (ADR-036, #383),
+		// through Ledger.PostPurposeMove; its legs surface through GET
+		// /api/transactions like a transfer's.
 		r.Post("/purpose-moves", a.createPurposeMove)
 
-		// A member fronting their own money (PRD section 7.4). Recording the claim
-		// moves nothing - only settling posts a ledger row, which is why the
-		// recorded balance still matches the wallet while a claim is
-		// outstanding. There is deliberately no waive route: PRD section 7.4 never
-		// asks for one.
-		// PATCH is both the correction and the waive (#103): waiving sets one
-		// column, so pairing it with the ordinary correction is what makes
-		// un-waiving free, and keeps the block the same POST/GET/PATCH/DELETE
-		// shape as members. Both are refused once the claim is settled.
+		// A member fronting their money (PRD section 7.4). Recording the claim moves
+		// nothing; only settling posts a ledger row, so the recorded balance still
+		// matches the wallet while a claim is outstanding. There is no waive route:
+		// PRD section 7.4 never asks for one. PATCH is both the correction and the
+		// waive (#103): waiving sets one column, so pairing it with the correction
+		// makes un-waiving free. Both are refused once the claim is settled.
 		r.Post("/reimbursements", a.createReimbursement)
 		r.Get("/reimbursements", a.listReimbursements)
 		r.Get("/reimbursements/{id}", a.getReimbursement)
@@ -252,104 +209,80 @@ func (a *api) routes(r chi.Router) {
 
 		r.Post("/dues-payments", a.createDuesPayment)
 		r.Post("/dues-payments/{id}/reversal", a.reverseDuesPayment)
-		// Dues payment history (#228, PRD section 7.3): every posted
-		// payment and reversal, newest-first, searchable by member name -
-		// GET /dues-status only ever answers one period at a time, and
-		// never lists what was actually posted.
+		// Dues payment history (#228, PRD section 7.3): every posted payment and
+		// reversal, newest-first, searchable by member name. GET /dues-status
+		// answers one period at a time and never lists what was posted.
 		r.Get("/dues-payments", a.listDuesPayments)
 		r.Get("/dues-status", a.getDuesStatus)
-		// Which periods one member still owes (#186), split out of #146 so
-		// the record-a-dues-payment screen has a server-side answer instead
-		// of guessing a window and firing one request per month against the
-		// fund-wide route above.
+		// Which periods one member still owes (#186), so the record-a-dues-payment
+		// screen has a server-side answer instead of one request per month.
 		r.Get("/members/{id}/outstanding-dues", a.getOutstandingDues)
 
-		// A one-off collection for an occasion, tracked separately from the
-		// general fund and closed when it's over (PRD section 7.5). Addressed by
-		// purpose id, matching how an incidental is addressed everywhere else
-		// in the domain. There is deliberately no contribute route: a
-		// contribution is an ordinary transaction tagged to the envelope's
-		// purpose, posted through POST /api/transactions above (#67).
+		// A one-off collection for an occasion, tracked apart from the general fund
+		// and closed when over (PRD section 7.5). Addressed by purpose id. There is
+		// no contribute route: a contribution is an ordinary transaction tagged to
+		// the envelope's purpose, posted through POST /api/transactions (#67).
 		r.Post("/incidentals", a.openIncidental)
 		r.Get("/incidentals", a.listIncidentals)
 		r.Get("/incidentals/{purposeID}", a.getIncidental)
-		// The minimum and the recipients (ADR-034, #211) - both editable
-		// like occasion, never a posted fact, so a plain PATCH on the
-		// resource itself rather than a nested-verb action route.
+		// The minimum and the recipients (ADR-034, #211): editable like occasion,
+		// never a posted fact, so a plain PATCH on the resource.
 		r.Patch("/incidentals/{purposeID}", a.updateIncidentalParticipation)
 		r.Post("/incidentals/{purposeID}/close", a.closeIncidental)
-		// The way back from a closed envelope (ADR-031), matching the
-		// resource's own .../close idiom rather than reimbursement's
-		// PATCH-a-nullable-field shape.
+		// The way back from a closed envelope (ADR-031), a nested verb like .../close.
 		r.Post("/incidentals/{purposeID}/reopen", a.reopenIncidental)
-		// The envelope's participation table (ADR-034, #211): who has
-		// contributed and how much, derived from the ledger against who
-		// was expected - never stored, so this is a GET, not a resource of
-		// its own.
+		// The envelope's participation table (ADR-034, #211): who contributed and
+		// how much against who was expected, derived from the ledger and never
+		// stored, so a GET.
 		r.Get("/incidentals/{purposeID}/participation", a.getIncidentalParticipation)
 
 		// Counting the real money and comparing it to the recorded balance (PRD
 		// section 7.7's home banner, section 7.8's reconcile flow). "latest" and
-		// "open-lines" are literal path segments, not ids - they are registered
-		// ahead of the {id} route below so chi's router resolves them as their own
-		// static routes rather than the {id} wildcard swallowing "latest" as an
-		// id chi then fails to parse as an integer.
+		// "open-lines" are literal segments, registered ahead of {id} so chi does not
+		// swallow them as an id.
 		r.Post("/reconciliations", a.takeReconciliation)
 		r.Get("/reconciliations", a.listReconciliations)
 		r.Get("/reconciliations/latest", a.latestReconciliation)
 		r.Get("/reconciliations/open-lines", a.listOpenReconciliationLines)
 		r.Get("/reconciliations/{id}", a.getReconciliation)
 
-		// The composed view-model for the home screen (PRD section 7.7): the
-		// fund total, every account's balance and every purpose's balance, in one
-		// round trip. See getBalances's own comment for why this is the one route
-		// in M4 built by composing ledger reads rather than wrapping a single
-		// ledger call.
+		// The composed view-model for the home screen (PRD section 7.7): fund total
+		// and every account's and purpose's balance in one round trip. See
+		// getBalances.
 		r.Get("/balances", a.getBalances)
 
-		// Receipt photos (PRD section 7.4, ADR-011): an attachment, not a
-		// ledger fact, so it hangs off a transaction or a reimbursement
-		// through its own table rather than a column on either (receipt's
-		// exactly-one-parent CHECK) - two upload routes rather than one that
-		// accepts either id, matching that CHECK. GET is the first route in
-		// this whole surface that answers with image bytes instead of JSON;
-		// it stays behind this session gate rather than joining the four
-		// public routes above - a receipt "shows what the fund bought," and
-		// nothing in PRD section 7.9 asks for it on the public report.
+		// Receipt photos (PRD section 7.4, ADR-011): an attachment, not a ledger
+		// fact, so it hangs off a transaction or a reimbursement through its own
+		// table (receipt's exactly-one-parent CHECK), with two upload routes to
+		// match. GET answers with image bytes and stays behind this session gate: a
+		// receipt "shows what the fund bought," and PRD section 7.9 does not ask for
+		// it on the public report.
 		r.Post("/transactions/{id}/receipts", a.uploadTransactionReceipt)
 		r.Post("/reimbursements/{id}/receipts", a.uploadReimbursementReceipt)
 		r.Get("/receipts/{id}", a.getReceipt)
 		r.Delete("/receipts/{id}", a.deleteReceipt)
 
-		// The whole fund as one zip (M6.37, #323, ADR-012): uruni.json plus
-		// every receipt image. Session-gated for the same reason every
-		// route in this group is - it carries the password hash alongside
-		// everything else.
+		// The whole fund as one zip (ADR-012): uruni.json plus every receipt image.
+		// Session-gated like every route here; it carries the password hash.
 		r.Get("/backup", a.downloadBackup)
 
-		// The Cadangan card's own two routes (M6.38, #324, ADR-012/013):
-		// what server-side dumps already exist, and downloading one of
-		// them by name. Plural and distinct from the singular /backup
-		// above on purpose - that route builds a fresh zip on demand and
-		// answers with it directly; these two only ever read
-		// URUNI_BACKUP_DIR, never build anything themselves.
+		// The Cadangan card's two routes (ADR-012/013): what server-side dumps
+		// exist, and downloading one by name. Distinct from the singular /backup,
+		// which builds a fresh zip on demand; these only read URUNI_BACKUP_DIR.
 		r.Get("/backups", a.listBackups)
 		r.Get("/backups/{name}", a.downloadStoredBackup)
 
-		// Restore from an uploaded backup (M6.39, #325, ADR-012), or from one
-		// of the server's own stored dumps (M6.40, #326): inspect/preview
-		// (from either source), then confirm with a password re-entry -
-		// restore.go's own doc comment has the three-route shape and why.
+		// Restore from an uploaded backup (ADR-012) or one of the server's stored
+		// dumps: inspect/preview, then confirm with a password re-entry. See
+		// restore.go for the three-route shape.
 		r.Post("/restore/inspect", a.inspectRestoreUpload)
 		r.Post("/restore/inspect-stored/{name}", a.inspectStoredBackup)
 		r.Post("/restore/confirm", a.confirmRestore)
 	})
 }
 
-// writeJSON is writeAPIError's counterpart for a successful response: every
-// route in this package that answers with a body goes through this one
-// function, the same way every failure goes through writeAPIError, so the
-// two shapes can't drift route by route either.
+// writeJSON is writeAPIError's counterpart for a successful response. Every
+// body-carrying route goes through it, so the two shapes cannot drift.
 func writeJSON(w http.ResponseWriter, status int, body any) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(status)
@@ -357,24 +290,21 @@ func writeJSON(w http.ResponseWriter, status int, body any) {
 }
 
 // decodeJSON decodes r's body into dst and reports whether the handler
-// should continue. An empty body (io.EOF) is not itself an error here - it
-// decodes to dst's zero value and lets the ledger's own ErrInvalidArgument
-// checks name the missing field, per ADR-027: handlers decode and pass
-// through, they do not re-check what the ledger already validates. Malformed
-// JSON is a shape problem this layer alone can see, so it is the one case
-// answered here rather than passed down.
+// should continue. An empty body (io.EOF) decodes to dst's zero value and
+// lets the ledger's ErrInvalidArgument checks name the missing field
+// (ADR-027): handlers pass through what the ledger validates. Malformed JSON
+// is the one case answered here.
 //
 // The body is capped at maxJSONBodyBytes first (#447): login and register are
-// reachable by anyone, and an uncapped decode reads whatever a stranger sends.
-// Every JSON body in this package is read through here, so the cap is in one
-// place; the multipart routes (receipts, restore) set their own.
+// reachable by anyone. Every JSON body goes through here, so the cap is in
+// one place; the multipart routes (receipts, restore) set their own.
 func decodeJSON(w http.ResponseWriter, r *http.Request, dst any) bool {
 	r.Body = http.MaxBytesReader(w, r.Body, maxJSONBodyBytes)
 	if err := json.NewDecoder(r.Body).Decode(dst); err != nil && !errors.Is(err, io.EOF) {
 		var tooLarge *http.MaxBytesError
 		if errors.As(err, &tooLarge) {
-			// No copy of its own: the SPA never sends a body near this size,
-			// so the treasurer would only ever see the generic error.
+			// No copy: the SPA never sends a body near this size, so the treasurer
+			// would only see the generic error.
 			writeAPIError(w, http.StatusRequestEntityTooLarge, "request_too_large", "The request body is too large.")
 			return false
 		}
@@ -384,7 +314,7 @@ func decodeJSON(w http.ResponseWriter, r *http.Request, dst any) bool {
 	return true
 }
 
-// maxJSONBodyBytes caps a JSON request body. The largest the SPA sends - a
-// transaction with its note - is a few kilobytes; 1 MiB is generous for any
-// legitimate request and bounds what an anonymous one costs.
+// maxJSONBodyBytes caps a JSON request body. The SPA's largest (a transaction
+// with its note) is a few kilobytes; 1 MiB is generous and bounds what an
+// anonymous request costs.
 const maxJSONBodyBytes = 1 << 20

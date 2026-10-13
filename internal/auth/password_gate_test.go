@@ -12,9 +12,9 @@ import (
 )
 
 // probe is the test seam for password_gate.go: it stands in for the argon2id
-// computations, counts every call, tracks how many run at once, and can park
-// a computation until the test lets it go - so the tests below observe the
-// gate without a real hash and without a sleep standing in for ordering.
+// computations, counts every call, tracks how many run at once, and can park a
+// computation until released, so tests observe the gate without a real hash or
+// a sleep standing in for ordering.
 type probe struct {
 	hashes    atomic.Int64
 	verifies  atomic.Int64
@@ -102,11 +102,10 @@ func TestRegisterOnASetUpInstanceDoesNoHashing(t *testing.T) {
 	}
 }
 
-// TestRegisterTransactionCountStaysAuthoritative: the pre-check is only an
-// optimisation. An account created after the pre-check passed - here, from
-// inside the hash, which runs between the pre-check and the transaction -
-// must still be refused by the count inside the transaction, and no second
-// row may land.
+// TestRegisterTransactionCountStaysAuthoritative: the pre-check is an
+// optimisation only. An account created after it passed (here from inside the
+// hash, which runs between the pre-check and the transaction) must still be
+// refused by the count in the transaction, with no second row.
 func TestRegisterTransactionCountStaysAuthoritative(t *testing.T) {
 	t.Parallel()
 	sqlDB := newTestDB(t)
@@ -134,10 +133,9 @@ func TestRegisterTransactionCountStaysAuthoritative(t *testing.T) {
 }
 
 // TestPasswordWorkNeverExceedsTheConcurrencyLimit is #495's third test
-// criterion: with far more callers than slots, the number of computations
-// in flight reaches the limit and never passes it. Every computation parks
-// until the test has seen the limit reached, so overlap is certain rather
-// than hoped for.
+// criterion: with far more callers than slots, computations in flight reach the
+// limit and never pass it. Every computation parks until the test has seen the
+// limit reached, so overlap is certain, not hoped for.
 func TestPasswordWorkNeverExceedsTheConcurrencyLimit(t *testing.T) {
 	t.Parallel()
 	const limit, callers = 3, 20
@@ -175,9 +173,9 @@ func TestPasswordWorkNeverExceedsTheConcurrencyLimit(t *testing.T) {
 	}
 }
 
-// TestPasswordWorkWithNoFreeSlotAnswersErrBusy: the slot-timeout path, on
-// both the verify side (Authenticate) and the hash side (Register). The
-// holder parks until the end, so the wait can only end by timing out.
+// TestPasswordWorkWithNoFreeSlotAnswersErrBusy: the slot-timeout path, on the
+// verify side (Authenticate) and the hash side (Register). The holder parks to
+// the end, so the wait can only end by timing out.
 func TestPasswordWorkWithNoFreeSlotAnswersErrBusy(t *testing.T) {
 	t.Parallel()
 	p := newProbe(8)

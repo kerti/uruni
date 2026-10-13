@@ -9,11 +9,10 @@ import (
 	"testing"
 )
 
-// ADR-034: a contribution may name its member, an envelope gains a minimum
-// and its recipients, and participation is derived and read back through
-// its own route. These tests are the HTTP-layer half of the engine slice -
-// the same thin-mapping shape every other handler test in this package
-// already exercises.
+// ADR-034: a contribution may name its member, an envelope gains a minimum and
+// recipients, and participation is derived and read back through its route.
+// These tests are the HTTP half of the engine slice, the thin-mapping shape of
+// every handler test here.
 
 func createMemberFor(t *testing.T, r http.Handler, name string) memberResponse {
 	t.Helper()
@@ -103,9 +102,9 @@ func TestPostTransactionRefusesAMemberOutsideAnIncidentalPurpose(t *testing.T) {
 	}
 }
 
-// TestOpenIncidentalAcceptsMinimumAndRecipients: both ride the create
-// request and come back on the create response (minimum) and the detail
-// response (recipients).
+// TestOpenIncidentalAcceptsMinimumAndRecipients: both ride the create request
+// and come back on the create response (minimum) and detail response
+// (recipients).
 func TestOpenIncidentalAcceptsMinimumAndRecipients(t *testing.T) {
 	t.Parallel()
 	r := testRouter(t)
@@ -204,8 +203,8 @@ func TestPatchIncidentalParticipationSetsAndClearsTheTarget(t *testing.T) {
 }
 
 // TestGetIncidentalParticipationReturnsExpectedAndUnexpected is the read
-// route's own success path: an expected member reads Belum with nothing
-// given, and a later joiner's own gift surfaces under Unexpected.
+// route's success path: an expected member reads Belum with nothing given, and
+// a later joiner's gift surfaces under Unexpected.
 func TestGetIncidentalParticipationReturnsExpectedAndUnexpected(t *testing.T) {
 	t.Parallel()
 	r := testRouter(t)
@@ -269,9 +268,9 @@ func TestGetIncidentalParticipationReturnsExpectedAndUnexpected(t *testing.T) {
 	}
 }
 
-// TestPostDuesPaymentReversalAcceptsANamedContribution: the same reversal
-// route ADR-029 built now also accepts a named contribution's transaction
-// id (ADR-034) - no new route, no new request shape.
+// TestPostDuesPaymentReversalAcceptsANamedContribution: the reversal route
+// ADR-029 built also accepts a named contribution's transaction id (ADR-034):
+// no new route or request shape.
 func TestPostDuesPaymentReversalAcceptsANamedContribution(t *testing.T) {
 	t.Parallel()
 	r := testRouter(t)
@@ -307,9 +306,9 @@ func TestPostDuesPaymentReversalAcceptsANamedContribution(t *testing.T) {
 	}
 }
 
-// TestPostPurposeCorrectionRefusesANamedContribution: mapped to its own 409,
-// distinct from the dues one, exactly the shape mapLedgerError already uses
-// for every other PostPurposeCorrection refusal.
+// TestPostPurposeCorrectionRefusesANamedContribution: its own 409, distinct
+// from the dues one, the shape mapLedgerError uses for every
+// PostPurposeCorrection refusal.
 func TestPostPurposeCorrectionRefusesANamedContribution(t *testing.T) {
 	t.Parallel()
 	r := testRouter(t)

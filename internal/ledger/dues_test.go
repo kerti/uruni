@@ -8,8 +8,8 @@ import (
 	"github.com/kerti/uruni/internal/store"
 )
 
-// PostDuesPayments writes kind='dues', direction='in', with member_id and
-// dues_period set - exactly the schema's CHECK - and moves the balance.
+// PostDuesPayments writes kind='dues', direction='in' with member_id and
+// dues_period set (the schema's CHECK) and moves the balance.
 func TestPostDuesPaymentsWritesTheDuesShapeAndMovesTheBalance(t *testing.T) {
 	t.Parallel()
 	l := newTestLedger(t)
@@ -53,9 +53,8 @@ func TestPostDuesPaymentsWritesTheDuesShapeAndMovesTheBalance(t *testing.T) {
 	}
 }
 
-// Several months paid at once is one call, one row per period - the
-// schema's shape and the treasurer's real workflow - and every row stays
-// visible afterwards.
+// Several months at once is one call, one row per period (the schema's shape
+// and the treasurer's workflow), every row visible afterward.
 func TestPostDuesPaymentsSeveralMonthsAtOnceIsOneRowPerPeriod(t *testing.T) {
 	t.Parallel()
 	l := newTestLedger(t)
@@ -109,13 +108,11 @@ func TestPostDuesPaymentsSeveralMonthsAtOnceIsOneRowPerPeriod(t *testing.T) {
 	}
 }
 
-// TestPostDuesPaymentsAFailureOnALaterPeriodLeavesZeroRows is the direct
-// regression test for #96: a multi-period payment where a later period is
-// malformed must post NOTHING, not the earlier periods that would have
-// succeeded on their own. PostDuesPayments validates every period before
-// writing any of them, and writes every row inside one withTx, so a
-// mid-batch failure rolls back rows that were already inserted in this same
-// transaction rather than leaving them standing.
+// TestPostDuesPaymentsAFailureOnALaterPeriodLeavesZeroRows is #96's regression:
+// a multi-period payment with a malformed later period posts nothing, not the
+// earlier periods that would have succeeded. PostDuesPayments validates every
+// period first and writes all rows in one withTx, so a mid-batch failure rolls
+// back rows already inserted.
 func TestPostDuesPaymentsAFailureOnALaterPeriodLeavesZeroRows(t *testing.T) {
 	t.Parallel()
 	l := newTestLedger(t)
@@ -225,8 +222,8 @@ func TestPostDuesPaymentsRejectsInvalidOccurredOn(t *testing.T) {
 	}
 }
 
-// A malformed dues_period is rejected with ErrInvalidArgument before the
-// write ever reaches the schema's GLOB/date() CHECK.
+// A malformed dues_period is rejected with ErrInvalidArgument before reaching
+// the schema's GLOB/date() CHECK.
 func TestPostDuesPaymentsRejectsInvalidDuesPeriod(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
@@ -265,11 +262,9 @@ func TestPostDuesPaymentsRejectsInvalidDuesPeriod(t *testing.T) {
 	}
 }
 
-// #257: transaction.note holds only what the treasurer typed. Nothing is
-// derived into it any more - recent activity and the report show a label
-// instead, built at display time - so a nil Note stores NULL, the same
-// PostDuesPaymentsParams contract PostTransferBetweenAccounts already
-// documents via normalizeNote.
+// #257: transaction.note holds only what the treasurer typed; nothing is
+// derived into it (the list and report show a label), so a nil Note stores
+// NULL, the contract PostTransferBetweenAccounts documents via normalizeNote.
 func TestPostDuesPaymentsWithoutANoteStoresNull(t *testing.T) {
 	t.Parallel()
 	l := newTestLedger(t)
@@ -289,8 +284,8 @@ func TestPostDuesPaymentsWithoutANoteStoresNull(t *testing.T) {
 	}
 }
 
-// A blank or whitespace-only note is exactly the same as no note - a form
-// field left untouched - so it stores NULL too, never the empty string.
+// A blank or whitespace-only note is the same as none (an untouched form
+// field): NULL, never the empty string.
 func TestPostDuesPaymentsBlankNoteStoresNull(t *testing.T) {
 	t.Parallel()
 	for _, blank := range []string{"", "   ", "\t\n"} {
@@ -313,8 +308,7 @@ func TestPostDuesPaymentsBlankNoteStoresNull(t *testing.T) {
 	}
 }
 
-// A typed note is trimmed, not stored as-is: surrounding whitespace is not
-// part of what she wrote.
+// A typed note is trimmed, not stored as-is.
 func TestPostDuesPaymentsTrimsTheNote(t *testing.T) {
 	t.Parallel()
 	l := newTestLedger(t)

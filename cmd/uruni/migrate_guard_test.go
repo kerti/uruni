@@ -22,8 +22,8 @@ import (
 	"github.com/kerti/uruni/internal/lock"
 )
 
-// Tests for #494: `migrate down` must not be able to empty the database by
-// accident. See migrate.go.
+// Tests for #494: `migrate down` must not empty the database by accident. See
+// migrate.go.
 
 // migrateEnv points the CLI at a fresh database, backup and uploads directory,
 // and returns the database path and the backup directory.
@@ -73,8 +73,8 @@ func TestMigrateDownRefusesTheBaseline(t *testing.T) {
 		t.Errorf("refusal = %q, want one line pointing at restoring a backup", err)
 	}
 
-	// Nothing was touched: the baseline is still applied, its tables are still
-	// there, and no dump was written for a rollback that never ran.
+	// Nothing was touched: the baseline is still applied, its tables are there,
+	// and no dump was written for a rollback that never ran.
 	sqlDB, err := db.Open(ctx, dbPath)
 	if err != nil {
 		t.Fatal(err)
@@ -141,9 +141,9 @@ func TestMigrateUpAndDownRefuseWhileTheInstanceLockIsHeld(t *testing.T) {
 	}
 }
 
-// twoVersionMigrations is the real baseline plus a throwaway second migration.
-// The real set has one file through 0.x (ADR-025), so a down that is allowed to
-// run cannot be reached any other way.
+// twoVersionMigrations is the real baseline plus a throwaway second migration;
+// the real set has one file through 0.x (ADR-025), so a down allowed to run is
+// reachable no other way.
 func twoVersionMigrations(t *testing.T) fs.FS {
 	t.Helper()
 	baseline, err := os.ReadFile(filepath.Join("..", "..", "internal", "db", "migrations", "00001_schema.sql"))

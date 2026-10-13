@@ -107,8 +107,8 @@ func newTxnScenario(t *testing.T) txnScenario {
 	return s
 }
 
-// txnSection is the transactions list's markup alone, so an assertion about
-// a row is never satisfied by the header or the filter form.
+// txnSection is the transactions list's markup alone, so a row assertion is
+// never satisfied by the header or filter form.
 func txnSection(t *testing.T, body string) string {
 	t.Helper()
 	i := strings.Index(body, `<ul class="rows txns">`)
@@ -178,8 +178,8 @@ func TestReportListsTheMonthWithLabelsAndTotals(t *testing.T) {
 
 	// ADR-038: the month is a walk. The August row (7.000) is what September
 	// started on; in is 200.000 + 25.000 + 15.000 and out 60.000, moves in
-	// neither; and September ended on 187.000. No Saldo awal, no Penyesuaian:
-	// nothing of either was recorded, so neither line shows. There is no Bersih.
+	// neither; September ended on 187.000. No Saldo awal or Penyesuaian (none
+	// recorded), so neither line shows, and there is no Bersih.
 	want := []totalLine{
 		{reportText.WalkStart("31 Agustus 2026"), money.FormatIDR(7_000)},
 		{reportText.TotalIn, money.FormatIDR(240_000)},
@@ -203,9 +203,9 @@ func TestReportFilters(t *testing.T) {
 		in    int64
 		out   int64
 
-		// walks marks the queries that still get a walk (ADR-038): no usable
-		// filter at all, or a purpose alone. Only their two shared lines are
-		// checked here; the walks themselves are in report_walk_test.go.
+		// walks marks queries that still get a walk (ADR-038): no usable filter, or a
+		// purpose alone. Only their two shared lines are checked here; the walks are
+		// in report_walk_test.go.
 		walks bool
 	}{
 		{"purpose Kas Utama: its entries and both moves", "&purpose=" + id(s.mainID), 5, 225_000, 60_000, true},
@@ -228,9 +228,9 @@ func TestReportFilters(t *testing.T) {
 			if got := rowCount(t, body); got != tt.rows {
 				t.Errorf("rows = %d, want %d:\n%s", got, tt.rows, txnSection(t, body))
 			}
-			// A member or direction filter keeps only Total masuk and Total
-			// keluar. A purpose alone, or no usable filter (a stale purpose, a
-			// bad direction), walks, so those check the two lines they share.
+			// A member or direction filter keeps only Total masuk and Total keluar. A
+			// purpose alone, or no usable filter (stale purpose, bad direction), walks, so
+			// those check the two lines they share.
 			got := totalsOf(t, body)
 			if tt.walks {
 				got = got[1:3]
@@ -345,9 +345,9 @@ func TestReportMonthStepKeepsTheFilters(t *testing.T) {
 	}
 }
 
-// Every row shows the note the treasurer typed under its label - an entry
-// and a "Dipindah" move alike - trimmed and escaped like any other text, on
-// the page and in the PDF; a row without one shows no note line.
+// Every row shows the note the treasurer typed under its label (an entry and
+// a "Dipindah" move alike), trimmed and escaped, on the page and in the PDF; a
+// row without one shows no note line.
 func TestReportRowShowsItsNote(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()

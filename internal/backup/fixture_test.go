@@ -13,9 +13,9 @@ import (
 	"github.com/kerti/uruni/internal/store"
 )
 
-// newTestDB is the same recipe internal/ledger's and internal/http's own
-// fixture helpers use: a real, migrated in-memory database, so the export
-// runs against genuine SQLite result codes and triggers rather than a fake.
+// newTestDB is the recipe of internal/ledger's and internal/http's fixture
+// helpers: a real, migrated in-memory database, so the export runs against
+// genuine SQLite result codes and triggers.
 func newTestDB(t *testing.T) *sql.DB {
 	t.Helper()
 	sqlDB, err := db.Open(context.Background(), ":memory:")
@@ -33,32 +33,26 @@ func newTestDB(t *testing.T) *sql.DB {
 	return sqlDB
 }
 
-// receiptFilename is fixed, not crypto/rand-generated, so the golden fixture
-// stays byte-identical across regenerations - production code
-// (internal/http/receipts.go's randomReceiptFilename) still generates a
-// real random name; only this test fixture pins one.
+// receiptFilename is fixed, not crypto/rand, so the golden fixture is
+// byte-identical across regenerations; production
+// (internal/http/receipts.go's randomReceiptFilename) generates a random name.
 const receiptFilename = "0000000000000000000000000000ff.jpg"
 
-// receiptFileBytes is the stub content written to uploadsDir under
-// receiptFilename and asserted, byte for byte, inside the zip's own
-// receipts/ entry - not a real JPEG, since Export never decodes it, only
-// copies it.
+// receiptFileBytes is the stub written to uploadsDir under receiptFilename and
+// asserted byte for byte in the zip's receipts/ entry: not a real JPEG, as
+// Export only copies it.
 var receiptFileBytes = []byte("stub receipt bytes for the golden fixture")
 
-// buildFixture writes one complete, deterministic fund through store.Queries
-// directly - not through internal/ledger - because every ledger write
-// stamps CreatedAt with time.Now() (no injected clock exists yet), which
-// would make a byte-exact golden comparison flaky by the second. Inserting
-// through the same queries the ledger itself uses, in the schema's own
-// dependency order (00001_schema.sql; see backup.go's own comment), is
-// exactly what ADR-012 already says an importer must do - this is that
-// order, exercised once, by hand, for a shape-pinning test rather than a
-// restore.
+// buildFixture writes one complete, deterministic fund through store.Queries,
+// not internal/ledger, because every ledger write stamps CreatedAt with
+// time.Now() (no injected clock yet), which would make a byte-exact golden
+// comparison flaky. It inserts in the schema's dependency order
+// (00001_schema.sql; see backup.go), what ADR-012 says an importer must do,
+// exercised once by hand for a shape-pinning test, not a restore.
 //
-// It deliberately touches every table this package exports at least once,
-// including the two ADR-034 added most recently (incidental_recipient,
-// incidental.minimum_per_member) - the fixture's whole job is to pin their
-// shape in the export too, not just the tables that existed at M2.
+// It touches every exported table at least once, including the two ADR-034
+// added most recently (incidental_recipient, incidental.minimum_per_member):
+// its job is to pin their shape in the export too.
 func buildFixture(t *testing.T, sqlDB *sql.DB, uploadsDir string) {
 	t.Helper()
 	ctx := context.Background()
@@ -149,8 +143,8 @@ func buildFixture(t *testing.T, sqlDB *sql.DB, uploadsDir string) {
 		t.Fatalf("CreateTransaction(opening bank): %v", err)
 	}
 
-	// A dues payment, then its reversal (ADR-029) - pins kind=dues and
-	// kind=adjustment/reverses_transaction_id in the same fixture.
+	// A dues payment, then its reversal (ADR-029): pins kind=dues and
+	// kind=adjustment/reverses_transaction_id.
 	duesPeriod := "2026-01"
 	duesPayment, err := q.CreateTransaction(ctx, store.CreateTransactionParams{
 		FundID: fund.ID, AccountID: cash.ID, PurposeID: main.ID, Direction: "in", Amount: 50000,
@@ -201,10 +195,10 @@ func buildFixture(t *testing.T, sqlDB *sql.DB, uploadsDir string) {
 		t.Fatalf("CreateTransaction(transfer in): %v", err)
 	}
 
-	// Two purpose pairs on one account, each carrying its reason (ADR-036):
-	// the treasurer moving 20000 from Kas Utama into the envelope, and the
-	// envelope rolling 10000 back. Both are value-neutral on cash, so the
-	// reconciliation figures below do not move.
+	// Two purpose pairs on one account, each with its reason (ADR-036): the
+	// treasurer moving 20000 from Kas Utama into the envelope, and the envelope
+	// rolling 10000 back. Both are value-neutral on cash, so the reconciliation
+	// figures below do not move.
 	for i, pair := range [...]struct {
 		reason   string
 		from, to int64

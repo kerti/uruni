@@ -3,9 +3,8 @@ package http
 import "net/http"
 
 // accountBalanceResponse is one account's row within GET /api/balances: the
-// same identifying fields listAccounts already returns (id, kind, name), plus
-// the balance this route exists to add - so the home screen (PRD section 7.7)
-// can render every location without a second round trip to GET /api/accounts.
+// identifying fields listAccounts returns (id, kind, name) plus the balance,
+// so the home screen (PRD section 7.7) renders every location in one trip.
 type accountBalanceResponse struct {
 	ID      int64  `json:"id"`
 	Kind    string `json:"kind"`
@@ -14,8 +13,8 @@ type accountBalanceResponse struct {
 }
 
 // purposeBalanceResponse is one purpose's row within GET /api/balances,
-// mirroring accountBalanceResponse exactly - the same identifying fields
-// listPurposes already returns, plus the balance.
+// mirroring accountBalanceResponse: the fields listPurposes returns plus the
+// balance.
 type purposeBalanceResponse struct {
 	ID      int64  `json:"id"`
 	Kind    string `json:"kind"`
@@ -23,11 +22,10 @@ type purposeBalanceResponse struct {
 	Balance int64  `json:"balance"`
 }
 
-// balancesResponse is GET /api/balances's body: the fund's one pooled total,
-// every account's share of it, and every purpose's running total (PRD
-// section 7.7). fund_total is asserted by a test to equal the sum of the
-// account balances, but that arithmetic lives in the test, never here - see
-// getBalances's own comment.
+// balancesResponse is GET /api/balances's body: the fund's pooled total, every
+// account's share, and every purpose's running total (PRD section 7.7). A test
+// asserts fund_total equals the sum of the account balances; that arithmetic
+// lives in the test, never here (see getBalances).
 type balancesResponse struct {
 	FundTotal int64                    `json:"fund_total"`
 	Accounts  []accountBalanceResponse `json:"accounts"`
@@ -49,19 +47,17 @@ type monthInOutResponse struct {
 	Out int64 `json:"out"`
 }
 
-// getBalances is GET /api/balances: the one deliberately composed view-model
-// route in M4, feeding the home screen's balance hero and per-location/
-// per-purpose breakdown (PRD section 7.7) in a single round trip.
+// getBalances is GET /api/balances: the one composed view-model route in M4,
+// feeding the home screen's balance hero and per-location/per-purpose
+// breakdown (PRD section 7.7) in one trip.
 //
-// Every figure returned here comes back from a ledger call -
-// Ledger.FundBalance, Ledger.AccountBalance, Ledger.PurposeBalance - over the
-// rows ListAccountsByFund and ListPurposesByFund name. This handler composes
-// those reads; it does not sum, subtract, reconcile or otherwise re-derive a
-// single number of its own. In particular fund_total comes from FundBalance
-// directly, never from adding up the account balances gathered below, even
-// though they must and do agree (a fact the test suite checks, not this
-// handler). That is ADR-027's "thin mapping" applied to a read: composing
-// calls is legitimate handler work; doing arithmetic on the results is not.
+// Every figure comes from a ledger call (FundBalance, AccountBalance,
+// PurposeBalance) over the rows ListAccountsByFund and ListPurposesByFund
+// name. The handler composes those reads and derives no number itself:
+// fund_total comes from FundBalance, never from adding the account balances,
+// though they agree (the test suite checks that). That is ADR-027's "thin
+// mapping" for a read: composing calls is handler work, arithmetic on the
+// results is not.
 func (a *api) getBalances(w http.ResponseWriter, r *http.Request) {
 	fund, ok := a.resolveFund(w, r)
 	if !ok {

@@ -22,9 +22,8 @@ import (
 	"github.com/kerti/uruni/internal/store"
 )
 
-// postReceiptFile is every upload test's shared request builder: a
-// multipart/form-data body with one "file" field - the field name both
-// upload routes read (receipts.go's readReceiptUpload).
+// postReceiptFile is the shared upload request builder: a multipart body with
+// one "file" field, the name both routes read (readReceiptUpload).
 func postReceiptFile(t *testing.T, r http.Handler, path string, data []byte) *httptest.ResponseRecorder {
 	t.Helper()
 	body := &bytes.Buffer{}
@@ -48,8 +47,7 @@ func postReceiptFile(t *testing.T, r http.Handler, path string, data []byte) *ht
 }
 
 // postReceiptWithNoFileField is TestUploadReceiptRequiresAFile's fixture: a
-// well-formed multipart body that simply never names the "file" field the
-// handler looks for.
+// well-formed multipart body that never names the "file" field.
 func postReceiptWithNoFileField(t *testing.T, r http.Handler, path string) *httptest.ResponseRecorder {
 	t.Helper()
 	body := &bytes.Buffer{}
@@ -82,8 +80,8 @@ func deleteReceipt(t *testing.T, r http.Handler, id int64) *httptest.ResponseRec
 	return rec
 }
 
-// decodeReceiptResponse is this file's own decode helper, matching
-// decodeReimbursement's shape in reimbursements_test.go.
+// decodeReceiptResponse matches decodeReimbursement's shape in
+// reimbursements_test.go.
 func decodeReceiptResponse(t *testing.T, rec *httptest.ResponseRecorder) receiptResponse {
 	t.Helper()
 	var got receiptResponse
@@ -94,7 +92,7 @@ func decodeReceiptResponse(t *testing.T, rec *httptest.ResponseRecorder) receipt
 }
 
 // setUpTransactionForReceipt posts one ordinary transaction and returns its
-// id - every upload-to-a-transaction test's shared fixture.
+// id, the fixture for upload-to-a-transaction tests.
 func setUpTransactionForReceipt(t *testing.T, r http.Handler, setup setupResponse) int64 {
 	t.Helper()
 	rec := postTransaction(t, r, transactionRequest{
@@ -111,8 +109,8 @@ func setUpTransactionForReceipt(t *testing.T, r http.Handler, setup setupRespons
 	return txn.ID
 }
 
-// setUpReimbursementForReceipt posts one claim and returns its id - every
-// upload-to-a-reimbursement test's shared fixture.
+// setUpReimbursementForReceipt posts one claim and returns its id, the fixture
+// for upload-to-a-reimbursement tests.
 func setUpReimbursementForReceipt(t *testing.T, r http.Handler, setup setupResponse, memberID int64) int64 {
 	t.Helper()
 	rec := postReimbursement(t, r, reimbursementRequest{
@@ -127,11 +125,9 @@ func setUpReimbursementForReceipt(t *testing.T, r http.Handler, setup setupRespo
 
 // --- image fixtures ---------------------------------------------------------
 
-// solidBlockImage is every image fixture's shared builder: bg everywhere,
-// with a solid block of a different color in the top-left corner - a shape
-// deliberately simple enough that JPEG's own lossy 8x8-block compression at
-// quality 80 (receipt_image.go's own setting) still leaves it clearly
-// distinguishable from the background afterward.
+// solidBlockImage is the shared image builder: bg everywhere with a solid
+// block of another color top-left, simple enough that JPEG's lossy 8x8-block
+// compression at quality 80 (receipt_image.go) leaves it distinguishable.
 func solidBlockImage(w, h, blockW, blockH int, bg, block color.RGBA) *image.RGBA {
 	img := image.NewRGBA(image.Rect(0, 0, w, h))
 	draw.Draw(img, img.Bounds(), &image.Uniform{C: bg}, image.Point{}, draw.Src)
@@ -148,12 +144,10 @@ func encodeTestJPEG(t *testing.T, img image.Image) []byte {
 	return buf.Bytes()
 }
 
-// withEXIFOrientation splices a minimal hand-built APP1 Exif segment (a
-// TIFF header, one IFD0 entry naming the Orientation tag 0x0112) right after
-// jpegBytes' own SOI marker - the same structure jpegOrientation
-// (receipt_image.go) reads, built independently here rather than through
-// this package's own encoder, so the test does not just check the code
-// against itself.
+// withEXIFOrientation splices a minimal hand-built APP1 Exif segment (a TIFF
+// header, one IFD0 entry naming Orientation 0x0112) after jpegBytes' SOI. It
+// is the structure jpegOrientation reads, built independently of this
+// package's encoder so the test does not check the code against itself.
 func withEXIFOrientation(t *testing.T, jpegBytes []byte, orientation byte) []byte {
 	t.Helper()
 	if len(jpegBytes) < 2 || jpegBytes[0] != 0xFF || jpegBytes[1] != 0xD8 {
@@ -188,10 +182,9 @@ var (
 	fixtureBlock = color.RGBA{R: 220, G: 20, B: 20, A: 255}
 )
 
-// closerToRed reports whether c reads as much closer to fixtureBlock (a
-// strong red) than to fixtureBG (white) - the tolerant check every pixel
-// assertion below uses instead of exact equality, since re-encoding through
-// JPEG at quality 80 (receipt_image.go) never round-trips exact byte values.
+// closerToRed reports whether c reads much closer to fixtureBlock (a strong
+// red) than fixtureBG (white): the tolerant check pixel assertions use, as
+// re-encoding at quality 80 never round-trips exact values.
 func closerToRed(c color.Color) bool {
 	r, g, b, _ := c.RGBA()
 	// RGBA() returns 16-bit-scaled channels; red should dominate clearly.
@@ -281,9 +274,8 @@ func TestUploadReimbursementReceiptStoresAndServesIt(t *testing.T) {
 	}
 }
 
-// TestUploadReceiptDownscalesALargeImage is the maintainer's own ruling
-// (#153): long edge capped at 1600px. 3200x1600 is an exact 2x, so the
-// result is an exact 1600x800 with no rounding ambiguity to tolerate.
+// TestUploadReceiptDownscalesALargeImage (#153): long edge capped at 1600px.
+// 3200x1600 is an exact 2x, so the result is an exact 1600x800.
 func TestUploadReceiptDownscalesALargeImage(t *testing.T) {
 	t.Parallel()
 	r := testRouter(t)
@@ -308,8 +300,7 @@ func TestUploadReceiptDownscalesALargeImage(t *testing.T) {
 	}
 }
 
-// TestUploadReceiptNeverUpscalesASmallImage is the other half of the same
-// ruling - "never upscale".
+// TestUploadReceiptNeverUpscalesASmallImage: the other half, "never upscale".
 func TestUploadReceiptNeverUpscalesASmallImage(t *testing.T) {
 	t.Parallel()
 	r := testRouter(t)
@@ -334,21 +325,19 @@ func TestUploadReceiptNeverUpscalesASmallImage(t *testing.T) {
 	}
 }
 
-// TestUploadReceiptAppliesEXIFOrientation is #153's EXIF ruling: a phone's
-// orientation tag has to be applied before resizing, or a sideways receipt
-// stays sideways. Orientation 6 (rotate 90 CW) is the common case - a phone
-// held upright, portrait, whose sensor itself is mounted landscape.
+// TestUploadReceiptAppliesEXIFOrientation (#153): a phone's orientation tag
+// is applied before resizing, or a sideways receipt stays sideways.
+// Orientation 6 (rotate 90 CW) is the common case: a phone held upright.
 func TestUploadReceiptAppliesEXIFOrientation(t *testing.T) {
 	t.Parallel()
 	r := testRouter(t)
 	setup := setUpFund(t, r)
 	txnID := setUpTransactionForReceipt(t, r, setup)
 
-	// A 64x32 landscape source with its marker block in the top-left 16x16
-	// corner, tagged orientation=6. Rotating 90 CW maps that corner to the
-	// resulting 32-wide x 64-tall image's top-right: dst(x,y) with
-	// dx=h-1-y, dy=x for source (x,y) in the block (x<16, y<16) lands at
-	// dx in [16,31], dy in [0,15] - the top-right quadrant.
+	// A 64x32 landscape source with its marker block in the top-left 16x16,
+	// tagged orientation=6. Rotating 90 CW maps that corner to the top-right of
+	// the resulting 32x64 image: dst dx=h-1-y, dy=x puts the block at dx in
+	// [16,31], dy in [0,15].
 	plain := encodeTestJPEG(t, solidBlockImage(64, 32, 16, 16, fixtureBG, fixtureBlock))
 	fixture := withEXIFOrientation(t, plain, 6)
 
@@ -394,10 +383,9 @@ func TestUploadReceiptRejectsAnOversizedBody(t *testing.T) {
 	}
 }
 
-// TestUploadReceiptRejectsHEIC is the maintainer's own ruling: HEIC/HEIF
-// gets its own distinct error, detected by sniffing the ISO base media
-// "ftyp" box rather than trusting a filename or Content-Type either could
-// lie about.
+// TestUploadReceiptRejectsHEIC: HEIC/HEIF gets its own error, detected by
+// sniffing the ISO base media "ftyp" box, not a filename or Content-Type
+// either could lie about.
 func TestUploadReceiptRejectsHEIC(t *testing.T) {
 	t.Parallel()
 	r := testRouter(t)
@@ -416,8 +404,8 @@ func TestUploadReceiptRejectsHEIC(t *testing.T) {
 	}
 }
 
-// A tiny PNG whose header declares 65000x65000 must be refused from the header
-// alone - decoding it would allocate gigabytes despite the 10 MB body cap.
+// A tiny PNG whose header declares 65000x65000 is refused from the header
+// alone: decoding it would allocate gigabytes despite the 10 MB body cap.
 func TestUploadReceiptRejectsOversizedDimensionsBeforeDecoding(t *testing.T) {
 	t.Parallel()
 	r := testRouter(t)
@@ -530,9 +518,9 @@ func TestDeleteReceiptRemovesItAndItsBytesBecomeUnreachable(t *testing.T) {
 
 // #459: SQLite hands a deleted top id to the next insert, so "Ganti foto"
 // (delete, then upload) on the newest receipt serves a different photo at the
-// same URL. A browser that cached the old one by URL alone keeps showing it,
-// so every response must make the browser ask again, and the validator it
-// asks with must tell the two photos apart.
+// same URL. A browser that cached the old one by URL keeps showing it, so
+// every response must make it ask again, with a validator that tells the two
+// photos apart.
 func TestReplacedReceiptAtAReusedIDIsNeverServedFromAStaleCache(t *testing.T) {
 	t.Parallel()
 	r := testRouter(t)
@@ -568,8 +556,8 @@ func TestReplacedReceiptAtAReusedIDIsNeverServedFromAStaleCache(t *testing.T) {
 		t.Fatalf("replacement id = %d, want the reused id %d - this test is about the reuse", second.ID, first.ID)
 	}
 
-	// The browser revalidates with the old photo's validator, and must get
-	// the new photo, not a 304.
+	// The browser revalidates with the old photo's validator and must get the new
+	// photo, not a 304.
 	rec = httptest.NewRecorder()
 	req = httptest.NewRequest(http.MethodGet, "/api/receipts/"+strconv.FormatInt(second.ID, 10), nil)
 	req.Header.Set("If-None-Match", firstTag)
@@ -595,12 +583,11 @@ func TestGetAndDeleteReceiptOnAMissingIDAre404(t *testing.T) {
 	}
 }
 
-// TestReceiptRoutesOnAnotherFundsRowAre404 is #188's own regression applied
-// to every receipt route: a second fund's transaction, reimbursement and
-// receipt, written straight through the store (the API refuses a second
-// fund by design), must each read as not-found from our fund's session -
-// the exact shape fund_scope_test.go's own table already proves for the
-// routes it covers.
+// TestReceiptRoutesOnAnotherFundsRowAre404 is #188's regression for every
+// receipt route: a second fund's transaction, reimbursement and receipt,
+// written through the store (the API refuses a second fund), each read as
+// not-found from our fund's session, as fund_scope_test.go's table proves for
+// its routes.
 func TestReceiptRoutesOnAnotherFundsRowAre404(t *testing.T) {
 	t.Parallel()
 	sqlDB := testStoreDB(t)
@@ -688,9 +675,8 @@ func TestReceiptRoutesOnAnotherFundsRowAre404(t *testing.T) {
 	}
 }
 
-// TestGetAndDeleteReceiptRequireSession is the two byte-serving/mutating
-// routes' own check, alongside session_gate_test.go's generic sweep: a
-// caller with no session at all must not be able to fetch or delete a real
+// TestGetAndDeleteReceiptRequireSession: beside session_gate_test.go's
+// generic sweep, a caller with no session must not fetch or delete a real
 // receipt's bytes, not just a placeholder id.
 func TestGetAndDeleteReceiptRequireSession(t *testing.T) {
 	t.Parallel()

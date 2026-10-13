@@ -12,28 +12,28 @@ import (
 	"github.com/kerti/uruni/internal/db"
 )
 
-// errCreateUserUsage is returned for a wrong argument count, so the operator
-// sees the one shape ADR-019's table gives the command.
+// errCreateUserUsage is returned for a wrong argument count, showing the shape
+// ADR-019's table gives the command.
 var errCreateUserUsage = errors.New("usage: uruni create-user <email> <password>")
 
 // createUser is ADR-019's `create-user <email> <password>` (#287): create the
 // instance's login, or reset its password when the email already names it.
-// `make dev-user` is its dev-side caller; on a deployment it is the way back
-// in for a treasurer who forgot their password.
+// `make dev-user` calls it in dev; on a deployment it is the way back in for a
+// treasurer who forgot their password.
 //
-// Unlike seed-e2e it goes through config.Load, like `serve` and `migrate`:
-// it writes the same database an operator's server reads, so it resolves
-// URUNI_DB the same way and refuses an unconfigured instance the same way.
-// It migrates first, so it also works on a database no server has opened.
+// Unlike seed-e2e it goes through config.Load, like `serve` and `migrate`: it
+// writes the database an operator's server reads, so it resolves URUNI_DB and
+// refuses an unconfigured instance the same way. It migrates first, so it also
+// works on a database no server has opened.
 //
-// The password is never printed or logged; the email is echoed back only to
-// the operator's own terminal, on stdout.
+// The password is never printed or logged; the email is echoed only to the
+// operator's terminal, on stdout.
 func createUser(ctx context.Context, args []string, out io.Writer) error {
 	if len(args) != 2 {
 		return errCreateUserUsage
 	}
-	// Echoed back in the form it is stored and matched in (#500), so what the
-	// operator reads is the address she must log in with, whatever case she typed.
+	// Echoed in the form it is stored and matched in (#500), so the operator reads
+	// the address she must log in with, whatever case she typed.
 	email, password := auth.NormalizeEmail(args[0]), args[1]
 
 	cfg, err := config.Load()
@@ -50,8 +50,8 @@ func createUser(ctx context.Context, args []string, out io.Writer) error {
 	if _, err := db.Up(ctx, sqlDB, newLogger(cfg, os.Stderr)); err != nil {
 		return fmt.Errorf("migrating %s: %w", cfg.DBPath, err)
 	}
-	// It writes the login into the operator's real database, so it asks the same
-	// question `serve` does (ADR-025) rather than fail on a missing column.
+	// It writes into the operator's real database, so it asks `serve`'s question
+	// (ADR-025) rather than fail on a missing column.
 	if err := verifySchema(ctx, sqlDB, cfg.DBPath); err != nil {
 		return err
 	}

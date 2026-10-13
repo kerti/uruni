@@ -7,14 +7,14 @@ import (
 	"github.com/kerti/uruni/internal/money"
 )
 
-// purposeMoveRequest is POST /api/purpose-moves's body (ADR-036, #383):
-// an amount leaving one purpose and arriving in another, both legs on one
-// account. The account is asked for rather than chosen silently because the
-// row names it and the choice is the treasurer's, on the close-envelope
-// form's precedent; its balance does not move.
+// purposeMoveRequest is POST /api/purpose-moves's body (ADR-036, #383): an
+// amount leaving one purpose and arriving in another, both legs on one account.
+// The account is asked for, not chosen silently, because the row names it and
+// the choice is the treasurer's (the close-envelope form's precedent); its
+// balance does not move.
 //
-// The optional note is written to both legs, or to neither, the same
-// contract POST /api/transfers has.
+// The optional note is written to both legs, or neither, as in POST
+// /api/transfers.
 type purposeMoveRequest struct {
 	FromPurposeID int64   `json:"from_purpose_id"`
 	ToPurposeID   int64   `json:"to_purpose_id"`
@@ -24,16 +24,15 @@ type purposeMoveRequest struct {
 	Note          *string `json:"note"`
 }
 
-// createPurposeMove is POST /api/purpose-moves: wraps
-// Ledger.PostPurposeMove, the treasurer giving from Kas Utama to an
-// envelope, taking it back, or moving between two envelopes. Nothing leaves
-// the fund, so no balance and no reconciliation figure moves; only what the
-// money is for does.
+// createPurposeMove is POST /api/purpose-moves: wraps Ledger.PostPurposeMove,
+// the treasurer giving from Kas Utama to an envelope, taking it back, or moving
+// between two envelopes. Nothing leaves the fund, so no balance or
+// reconciliation figure moves; only what the money is for.
 //
 // Nothing is validated here (ADR-027): every refusal is PostPurposeMove's
-// own named error, reaching the client through mapLedgerError. It answers
-// with the same transferResponse POST /api/transfers does; the two legs are
-// ordinary rows already readable through GET /api/transactions.
+// named error, through mapLedgerError. It answers with POST /api/transfers'
+// transferResponse; the two legs are ordinary rows readable through GET
+// /api/transactions.
 func (a *api) createPurposeMove(w http.ResponseWriter, r *http.Request) {
 	var req purposeMoveRequest
 	if !decodeJSON(w, r, &req) {

@@ -100,8 +100,8 @@ func TestPostIncidentalsRequiresAFund(t *testing.T) {
 	}
 }
 
-// TestOpenIncidentalCreatesAnOpenEnvelope pins the create response shape:
-// a fresh envelope, unclosed, with the target amount it was opened with.
+// TestOpenIncidentalCreatesAnOpenEnvelope pins the create response: a fresh,
+// unclosed envelope with the target amount it was opened with.
 func TestOpenIncidentalCreatesAnOpenEnvelope(t *testing.T) {
 	t.Parallel()
 	r := testRouter(t)
@@ -132,10 +132,9 @@ func TestOpenIncidentalCreatesAnOpenEnvelope(t *testing.T) {
 	}
 }
 
-// TestPostIncidentalsRejectsWhatTheLedgerRefuses proves this handler
-// validates nothing itself: an empty occasion, a non-positive target and a
-// calendar-invalid opened_on all come back as ErrInvalidArgument through
-// mapLedgerError.
+// TestPostIncidentalsRejectsWhatTheLedgerRefuses: the handler validates
+// nothing itself; an empty occasion, non-positive target and invalid
+// opened_on come back as ErrInvalidArgument through mapLedgerError.
 func TestPostIncidentalsRejectsWhatTheLedgerRefuses(t *testing.T) {
 	t.Parallel()
 	for _, tc := range []struct {
@@ -221,8 +220,8 @@ func TestPostCloseRequiresAFund(t *testing.T) {
 	}
 }
 
-// TestGetIncidentalDetailOnAnUnknownPurposeIs404 covers the id naming
-// nothing: the path segment is the client's mistake, not a server fault.
+// TestGetIncidentalDetailOnAnUnknownPurposeIs404: an id naming nothing is the
+// client's mistake, not a server fault.
 func TestGetIncidentalDetailOnAnUnknownPurposeIs404(t *testing.T) {
 	t.Parallel()
 	r := testRouter(t)
@@ -254,9 +253,8 @@ func TestGetIncidentalDetailRejectsANonNumericID(t *testing.T) {
 	}
 }
 
-// TestGetIncidentalsOpenFiltersToOpenEnvelopes is the filter's acceptance
-// criterion: the unfiltered list keeps every envelope as history, ?open=true
-// keeps only the ones still collecting.
+// TestGetIncidentalsOpenFiltersToOpenEnvelopes: the unfiltered list keeps
+// every envelope as history, ?open=true only those still collecting.
 func TestGetIncidentalsOpenFiltersToOpenEnvelopes(t *testing.T) {
 	t.Parallel()
 	r := testRouter(t)
@@ -305,9 +303,9 @@ func TestGetIncidentalsRejectsAnUnparseableOpenFilter(t *testing.T) {
 	}
 }
 
-// TestGetIncidentalDetailReturnsTotals is the detail route's acceptance
-// criterion: collected and disbursed, summed from the transactions actually
-// posted against the envelope's purpose - not stored anywhere on the row.
+// TestGetIncidentalDetailReturnsTotals: collected and disbursed are summed
+// from the transactions posted against the envelope's purpose, not stored on
+// the row.
 func TestGetIncidentalDetailReturnsTotals(t *testing.T) {
 	t.Parallel()
 	r := testRouter(t)
@@ -352,11 +350,10 @@ func TestGetIncidentalDetailReturnsTotals(t *testing.T) {
 	}
 }
 
-// TestCloseIncidentalRollsLeftoverVerifiedThroughBalances is the slice's
-// central acceptance criterion: open, contribute through the ordinary
-// transactions endpoint, close, and prove the leftover actually moved by
-// reading the fund and purpose balances - never by trusting the ledger's own
-// return value alone.
+// TestCloseIncidentalRollsLeftoverVerifiedThroughBalances is the central
+// criterion: open, contribute through the ordinary transactions endpoint,
+// close, and prove the leftover moved by reading fund and purpose balances,
+// not trusting the ledger's return value alone.
 func TestCloseIncidentalRollsLeftoverVerifiedThroughBalances(t *testing.T) {
 	t.Parallel()
 	r, l := testRouterAndLedger(t)
@@ -400,11 +397,10 @@ func TestCloseIncidentalRollsLeftoverVerifiedThroughBalances(t *testing.T) {
 		t.Errorf("closed_on = %v, want %q", closed.Incidental.ClosedOn, "2026-08-20")
 	}
 
-	// The balance check is the acceptance criterion itself: the fund's total
-	// is unchanged (a roll moves money, it does not create or destroy it),
-	// the envelope's own purpose balance goes to exactly 0, and main rises
-	// by exactly the leftover - all read fresh off the ledger, never taken
-	// from closed.RolledAmount alone.
+	// The balance check is the criterion: the fund's total is unchanged (a roll
+	// moves money, it does not create or destroy it), the envelope's purpose
+	// balance goes to exactly 0, and main rises by exactly the leftover, all read
+	// fresh off the ledger, not from closed.RolledAmount.
 	fundAfter, err := l.FundBalance(ctx, setup.Fund.ID)
 	if err != nil {
 		t.Fatalf("FundBalance() after = %v, want no error", err)
@@ -431,9 +427,8 @@ func TestCloseIncidentalRollsLeftoverVerifiedThroughBalances(t *testing.T) {
 }
 
 // TestCloseIncidentalZeroLeftoverPostsNothing and its negative-leftover
-// sibling below are the two "nothing to roll" boundaries: both close the
-// envelope but post no transaction, verified through the fund's own
-// balance rather than assumed from a 201 status alone.
+// sibling are the two "nothing to roll" boundaries: both close the envelope
+// but post no transaction, verified through the fund balance, not a 201.
 func TestCloseIncidentalZeroLeftoverPostsNothing(t *testing.T) {
 	t.Parallel()
 	r, l := testRouterAndLedger(t)
@@ -485,10 +480,9 @@ func TestCloseIncidentalZeroLeftoverPostsNothing(t *testing.T) {
 	}
 }
 
-// A negative leftover covers the shortfall from the fund's main purpose
-// instead of posting nothing (ADR-031, superseding ADR-027's original
-// negative-leftover branch): rolled_amount comes back negative, and the
-// envelope's own purpose balance still lands at exactly zero.
+// A negative leftover covers the shortfall from the main purpose instead of
+// posting nothing (ADR-031, superseding ADR-027): rolled_amount comes back
+// negative, and the envelope's purpose balance still lands at exactly zero.
 func TestCloseIncidentalNegativeLeftoverCoversFromMain(t *testing.T) {
 	t.Parallel()
 	r, l := testRouterAndLedger(t)
@@ -545,9 +539,8 @@ func TestCloseIncidentalNegativeLeftoverCoversFromMain(t *testing.T) {
 	}
 }
 
-// TestCloseIncidentalTwiceReturnsItsNamed409 covers the closed-once rule at
-// the route: the second call is a conflict with its own code, not a second
-// roll and not a generic 500.
+// TestCloseIncidentalTwiceReturnsItsNamed409: the closed-once rule at the
+// route: a conflict with its code, not a second roll or a generic 500.
 func TestCloseIncidentalTwiceReturnsItsNamed409(t *testing.T) {
 	t.Parallel()
 	r := testRouter(t)
@@ -650,9 +643,8 @@ func TestPostCloseRejectsMalformedJSON(t *testing.T) {
 	}
 }
 
-// TestNoContributeRouteExists is the acceptance criterion stated as a test:
-// there is no dedicated contribute route - a contribution to an envelope is
-// an ordinary transaction posted through POST /api/transactions.
+// TestNoContributeRouteExists: there is no contribute route; a contribution to
+// an envelope is an ordinary transaction via POST /api/transactions.
 func TestNoContributeRouteExists(t *testing.T) {
 	t.Parallel()
 	r := testRouter(t)
@@ -669,7 +661,7 @@ func TestNoContributeRouteExists(t *testing.T) {
 
 // The roll's note reaches both legs over the wire. Closing is the one
 // transfer the treasurer never asks for directly, so an unexplained pair in
-// the transaction list is exactly the confusion this field exists to fix.
+// the list is the confusion this field fixes.
 func TestCloseIncidentalWritesTheNoteToBothRollLegs(t *testing.T) {
 	t.Parallel()
 	r := testRouter(t)
@@ -714,8 +706,8 @@ func TestCloseIncidentalWritesTheNoteToBothRollLegs(t *testing.T) {
 }
 
 // The guard's HTTP surface (ADR-031, #214): POST /api/transactions against a
-// closed incidental's purpose is refused with the named 409, in both
-// directions, and posts nothing.
+// closed incidental's purpose is the named 409, both directions, posting
+// nothing.
 func TestPostTransactionRefusesAClosedIncidentalBothDirections(t *testing.T) {
 	t.Parallel()
 	for _, direction := range []string{"in", "out"} {
@@ -752,8 +744,8 @@ func TestPostTransactionRefusesAClosedIncidentalBothDirections(t *testing.T) {
 	}
 }
 
-// POST /api/incidentals/{purposeID}/reopen clears closed_on and the
-// envelope rejoins the open list.
+// POST /api/incidentals/{purposeID}/reopen clears closed_on and the envelope
+// rejoins the open list.
 func TestReopenIncidentalClearsClosedOnAndRejoinsTheOpenList(t *testing.T) {
 	t.Parallel()
 	r := testRouter(t)
@@ -804,9 +796,8 @@ func TestReopenIncidentalOnAnOpenEnvelopeReturnsItsNamed409(t *testing.T) {
 	}
 }
 
-// An id naming no incidental at all (or another fund's) is 404, the same
-// GetIncidental-backed answer every other single-envelope route in this
-// package gives.
+// An id naming no incidental (or another fund's) is 404, the GetIncidental-
+// backed answer of every single-envelope route here.
 func TestReopenIncidentalUnknownPurposeIsNotFound(t *testing.T) {
 	t.Parallel()
 	r := testRouter(t)

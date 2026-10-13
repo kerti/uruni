@@ -53,8 +53,8 @@ func TestMigrateUpStatusDownAgainstAFreshFile(t *testing.T) {
 		t.Errorf("second migrate([up]) printed %q, want it to report nothing to do", got)
 	}
 
-	// M2.1 replaced the temporary baseline migration with the real first
-	// migration (see 00001_schema.sql), so these assertions now name that one.
+	// M2.1 replaced the temporary baseline migration with the real first one (see
+	// 00001_schema.sql), so these assertions name that one.
 	status := run(t, "status")
 	// The file name is on the line because migrating the wrong database is the
 	// commonest surprise here (URUNI_DB unset, or .env not exported).

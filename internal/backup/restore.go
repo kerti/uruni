@@ -1,15 +1,11 @@
-// restore.go is #325's own half of ADR-012: parsing and validating an
+// restore.go is the restore half of ADR-012: parsing and validating an
 // uploaded backup zip (ParseUpload), previewing what it would change
-// against the live database (BuildPreview), and the atomic restore itself
-// (Restore). All three are pure package functions rather than methods on a
-// stateful type - restore is a one-shot operation with nothing to carry
-// between calls, and a future CLI `uruni import` (ADR-012's own deferred
-// promise) calls exactly this trio: read the file, ParseUpload it, and
-// either print BuildPreview's own numbers or skip straight to Restore.
+// (BuildPreview), and the atomic restore itself (Restore). They are plain
+// package functions because restore is one-shot with no state to carry; a
+// future CLI `uruni import` calls the same trio.
 //
-// (A blank line separates this from `package backup` on purpose - dumps.go's
-// own comment explains why: without it, revive's package-comments check
-// reads this as *the* package doc comment, which export.go already owns.)
+// (A blank line separates this from `package backup` so revive does not read
+// it as the package doc comment, which export.go owns.)
 
 package backup
 
@@ -23,10 +19,9 @@ import (
 	"fmt"
 	"image"
 	_ "image/jpeg" // registers the JPEG decoder - every receipt this package
-	// ever wrote is one (receipt_image.go always re-encodes to JPEG), and a
-	// restore validates whatever the zip actually carries, not only that.
+	// ever wrote is one, but a restore validates whatever the zip carries.
 	_ "image/png" // registers the PNG decoder - decode-only, same reasoning
-	// internal/http/receipt_image.go gives for the same blank import.
+	// as receipt_image.go.
 	"io"
 	"os"
 	"path/filepath"
@@ -34,58 +29,36 @@ import (
 	"time"
 
 	_ "golang.org/x/image/webp" // registers the WebP decoder - decode-only,
-	// same reasoning as receipt_image.go's own blank import.
+	// as receipt_image.go.
 
 	"github.com/kerti/uruni/internal/money"
 	"github.com/kerti/uruni/internal/store"
 )
 
-// Upload caps (issue #325's own acceptance criteria): 256 MB of *compressed*
-// body - enforced by the HTTP handler wrapping the request in
-// http.MaxBytesReader before a single byte reaches this package, so
-// MaxUploadBytes exists here only as the one named constant both layers
-// read, not as a second enforcement point - 1 GB of *unzipped* content,
-// counted from bytes actually copied out of the zip as ParseUpload reads
-// them, never from a zip entry's own declared UncompressedSize64 (a
-// dishonest header is exactly what a zip bomb lies about), and 5,000
-// entries. All three together are what makes an upload zip-bomb safe:
-// nothing this package ever does can be made to allocate more than
-// MaxUnzippedBytes of decompressed data, however small the compressed file
-// claims to be.
+// Upload caps: 256 MB compressed (enforced by the handler's MaxBytesReader;
+// the constant lives here so both layers read one value), 1 GB unzipped -
+// counted from bytes actually copied, never an entry's declared size, which
+// is what a zip bomb lies about - and 5,000 entries.
 //
-// var, not const: restore_test.go temporarily shrinks these to exercise
-// the two size caps without actually building gigabyte-scale test fixtures
-// - the values below are what the running binary always uses outside a
-// test that says otherwise.
+// var, not const, so restore_test.go can shrink them.
 var (
 	MaxUploadBytes   int64 = 256 << 20
 	MaxUnzippedBytes int64 = 1 << 30
 	MaxZipEntries          = 5000
 )
 
-// CreateRestoreStagingTemp opens a fresh, uniquely-named temp file inside
-// backupDir for an inspect route to stream an upload (or a copied stored
-// dump) into, before either route knows yet whether what it is streaming
-// is even a valid backup - ParseUpload runs against this temp file's own
-// path. Every inspect gets its own file under its own os.CreateTemp-minted
-// name, never a shared fixed name: two concurrent inspects (two tabs) must
-// never be able to race over which one's bytes a third party's rename
-// leaves behind (issue #344's own follow-up - a fixed slot two inspects
-// could both rename onto was exactly that race). restoreStage
-// (internal/http/restore.go) owns this file from the moment a successful
-// inspect stages it - removing it when superseded, expired, or confirmed -
-// and a failed inspect removes only this file itself, never touching
-// whatever restoreStage currently holds.
+// CreateRestoreStagingTemp opens a uniquely-named temp file inside backupDir
+// for an inspect route to stream an upload (or a copied stored dump) into
+// before it knows the file is a valid backup. The name is never shared, so
+// two concurrent inspects (two tabs) cannot race over which bytes a rename
+// leaves behind. restoreStage (internal/http/restore.go) owns the file once
+// a successful inspect stages it; a failed inspect removes only this file.
 //
-// Named with dumps.go's own tempPrefix, so a crash before restoreStage ever
-// takes ownership - or before this file is otherwise cleaned up - leaves
-// exactly the kind of stale temp file RemoveStaleTemps already sweeps at
-// boot. That prefix starts with "." and never with "uruni-", so it can
-// never match dumpNamePattern either: ListDumps, ValidDumpName,
-// ApplyRetention and the daily-dump change hash (dumps.go) all key off that
-// pattern alone, and so never see a staged file - it never appears in a
-// backup listing, is never pruned by retention, and never perturbs "did the
-// fund change since the last dump".
+// It uses dumps.go's tempPrefix, so a crash before restoreStage takes
+// ownership leaves a stale temp that RemoveStaleTemps sweeps at boot. The
+// prefix starts with "." and never "uruni-", so it cannot match
+// dumpNamePattern: a staged file never appears in a backup listing, is never
+// pruned by retention, and never perturbs the daily-dump change hash.
 func CreateRestoreStagingTemp(backupDir string) (*os.File, error) {
 	f, err := os.CreateTemp(backupDir, tempPrefix+"restore-*")
 	if err != nil {
@@ -95,98 +68,74 @@ func CreateRestoreStagingTemp(backupDir string) (*os.File, error) {
 }
 
 // MaxReceiptPixels bounds what a decoder may allocate (ADR-011's decode
-// check). A body or unzipped-size cap bounds only *compressed* bytes: a
-// ~100-byte PNG can declare 65000x65000 in its header and make image/png
-// allocate gigabytes before it notices the pixel data is missing
-// (x/image/webp has the same gap). 50 MP clears a 48 MP phone sensor with
-// room to spare and keeps one decode to a few hundred MB. Defined here, not
-// in internal/http, because http already imports this package: the receipt
-// upload route and restore share this one constant, so they cannot drift.
+// check). A byte cap bounds only compressed bytes: a ~100-byte PNG can
+// declare 65000x65000 in its header and make image/png allocate gigabytes
+// (x/image/webp has the same gap). 50 MP clears a 48 MP phone sensor and
+// keeps one decode to a few hundred MB. It lives here because http already
+// imports this package, so the receipt upload route and restore share one
+// constant.
 const MaxReceiptPixels = 50_000_000
 
-// Sentinel errors ParseUpload, BuildPreview and Restore return, wrapped
-// with the specific detail (a byte count, a table name, an id) that made
-// each one fire - callers distinguish the case with errors.Is against one
-// of these, the same shape ledger's own ErrInvalidArgument family already
-// uses.
+// Sentinel errors from ParseUpload, BuildPreview and Restore, wrapped with
+// the detail (a byte count, a table name, an id) that made each fire.
+// Callers distinguish them with errors.Is.
 var (
-	// ErrFormatVersionNewer and ErrFormatVersionOlder are deliberately
-	// distinct (issue #325's own acceptance criteria): a newer file means
-	// the binary needs upgrading first; an older one is refused outright
-	// through 0.x (ADR-012's "restoring onto an older binary is refused -
-	// rolling the image back is the operator's job" - there is no
-	// per-version upgrade chain yet, so "older" and "newer" both refuse
-	// today, but for different reasons a treasurer would act on
-	// differently).
+	// ErrFormatVersionNewer and ErrFormatVersionOlder are distinct: a newer file
+	// means the binary needs upgrading first; an older one is refused outright
+	// through 0.x (ADR-012: restoring onto an older binary is refused, rolling
+	// the image back is the operator's job). Both refuse today, for different
+	// reasons a treasurer would act on differently.
 	ErrFormatVersionNewer = errors.New("backup: the file was made by a newer version of Uruni than this server runs")
 	ErrFormatVersionOlder = errors.New("backup: the file was made by an older version of Uruni than this server understands")
-	// ErrMalformedBackup covers every shape problem short of the version
-	// mismatch above: not a zip, no uruni.json inside it, an unknown field
-	// DisallowUnknownFields caught, or a receipt path that is not a bare
-	// filename (see ParseUpload's own check - a decoded backup is untrusted
-	// input, unlike a live receipt row's path, which is always
-	// server-generated).
+	// ErrMalformedBackup covers every shape problem short of a version
+	// mismatch: not a zip, no uruni.json, an unknown field, or a receipt path
+	// that is not a bare filename (a decoded backup is untrusted input, unlike a
+	// live receipt row's server-generated path).
 	ErrMalformedBackup  = errors.New("backup: the file is not a valid Uruni backup")
 	ErrTooManyEntries   = errors.New("backup: the zip holds more files than a backup ever should")
 	ErrUnzippedTooLarge = errors.New("backup: the zip's contents are larger, unzipped, than a backup ever should be")
-	// ErrBadReceiptImage is issue #325's "bad image" refusal case: a
-	// receipt file present in the zip that fails the same decode checks
-	// ADR-011 already applies on upload. A *missing* file is not this -
-	// ParseUpload skips it silently (ruling 5: "a missing image never
-	// blocks a restore").
+	// ErrBadReceiptImage is a receipt in the zip that fails the decode checks
+	// ADR-011 applies on upload. A missing file is not this: ParseUpload skips
+	// it silently (a missing image never blocks a restore).
 	ErrBadReceiptImage = errors.New("backup: a receipt image in the file could not be read")
 	// ErrTotalsMismatch is the refusal for a backup whose totals block
-	// disagrees with its own rows (compareTotals). It is raised by every
-	// producer before a byte is written (Export, the dumps), by ParseUpload
-	// at inspect, and by Restore inside the write transaction after every
-	// row is inserted and before COMMIT - the transaction rolls back with
-	// nothing changed, exactly like every other error Restore returns.
+	// disagrees with its rows (compareTotals). Producers raise it before a byte
+	// is written (Export, the dumps), ParseUpload at inspect, and Restore inside
+	// the write transaction before COMMIT, which rolls back with nothing changed.
 	ErrTotalsMismatch = errors.New("backup: the restored totals did not match the file's own totals")
 )
 
 // ParsedUpload is ParseUpload's result: the decoded, validated document and
-// the on-disk path of the staged zip Restore re-opens to extract receipts
-// from - never the receipt bytes themselves (issue #344: holding every
-// decompressed receipt, up to 1 GB, in this struct for the life of the
-// 10-minute stage is exactly the "restore holds the whole upload in RAM"
-// bug). BuildPreview and Restore both take this, never a raw zip again -
-// the CLI import ADR-012 defers calls ParseUpload once and hands the same
-// value to whichever of the two it needs.
+// the on-disk path of the staged zip Restore re-opens to extract receipts,
+// never the receipt bytes themselves (holding up to 1 GB of them for the
+// 10-minute stage was a RAM bug). BuildPreview and Restore both take this.
 //
-// StagingPath is empty only when a caller (a test) hand-builds a
-// ParsedUpload with a Document that carries no Receipts at all - Restore
-// never opens a zip it has nothing to extract from.
+// StagingPath is empty only when a test hand-builds a ParsedUpload whose
+// Document has no Receipts; Restore never opens a zip it has nothing to
+// extract from.
 type ParsedUpload struct {
 	Document    Document
 	StagingPath string
 }
 
-// ParseUpload decodes and validates a backup zip already sitting on disk at
-// path - the inspect handler's own staging file (internal/http/restore.go),
-// streamed there from an upload or copied there from a stored dump before
-// this function ever runs, so no caller of this function ever hands it a
-// whole zip's bytes in memory. Read-only (no database call, no filesystem
-// write of its own) - safe to run as the HTTP handler's "inspect" step, well
-// before the treasurer has typed her password to confirm anything.
+// ParseUpload decodes and validates a backup zip already on disk at path
+// (the inspect handler's staging file, internal/http/restore.go), so no
+// caller hands it a whole zip in memory. Read-only: safe as the "inspect"
+// step, before the treasurer has typed her password.
 //
-// Order matters: the two caps (entries, unzipped bytes) are enforced while
-// reading, before either is trusted; format_version is checked next,
-// against the raw bytes, so a newer or older file gets its own distinct
-// error before DisallowUnknownFields ever runs against a shape this
-// server's Document might not even recognise; the strict decode runs only
-// once format_version already matches; and every receipt image the zip
-// actually carries is decode-checked last, one at a time, its bytes
-// discarded the moment its own check finishes rather than held alongside
-// every other receipt's. The totals check (CheckTotals) runs after the
-// strict decode and before any image is read, so a document that disagrees
-// with itself is refused with ErrTotalsMismatch before the treasurer is
-// asked for her password; Restore proves the same totals again, against the
-// database it fills.
+// Order matters: the entry and unzipped-byte caps are enforced while
+// reading; format_version is checked next against the raw bytes, so a newer
+// or older file gets its distinct error before DisallowUnknownFields sees a
+// shape this server may not recognise; the strict decode runs once the
+// version matches; then CheckTotals, so a self-contradicting document is
+// refused with ErrTotalsMismatch before the password prompt (Restore proves
+// the same totals again against the database it fills); and every receipt
+// image is decode-checked last, one at a time, its bytes discarded after its
+// check.
 func ParseUpload(path string) (ParsedUpload, error) {
-	//nolint:gosec // path is always this package's own staging file
-	// (internal/http/restore.go streams the upload or the stored dump into
-	// it before calling this) or a test's own fixture file, never a path
-	// built from request input directly.
+	//nolint:gosec // path is this package's staging file (internal/http/restore.go
+	// streams the upload or stored dump into it) or a test fixture, never built
+	// from request input.
 	f, err := os.Open(path)
 	if err != nil {
 		return ParsedUpload{}, fmt.Errorf("%w: opening the staged upload: %v", ErrMalformedBackup, err) //nolint:errorlint
@@ -212,12 +161,9 @@ func ParseUpload(path string) (ParsedUpload, error) {
 
 	remaining := MaxUnzippedBytes
 
-	// Pass 1: find uruni.json (wherever it sits in the zip's own entry
-	// order - never assumed to be first) and decode it. Every matching
-	// entry is read and capped, not just the first, so a crafted zip with
-	// two entries of the same name cannot dodge the unzipped-bytes cap by
-	// hiding extra bytes behind a name this loop has already stopped
-	// reading.
+	// Pass 1: find uruni.json (not assumed first in the zip) and decode it.
+	// Every matching entry is read and capped, so a crafted zip with two
+	// entries of that name cannot dodge the unzipped-bytes cap.
 	var jsonBytes []byte
 	for _, zf := range zr.File {
 		if zf.Name != jsonFilename {
@@ -245,12 +191,10 @@ func ParseUpload(path string) (ParsedUpload, error) {
 		return ParsedUpload{}, fmt.Errorf("%w: decoding %s: %v", ErrMalformedBackup, jsonFilename, err) //nolint:errorlint
 	}
 
-	// Every receipt path must already be a bare filename before any zip
-	// entry is ever trusted to match it - r.Path came out of an uploaded,
-	// untrusted file, unlike a live receipt row's Path, which
-	// internal/http/receipts.go only ever sets from randomReceiptFilename.
-	// This check does not depend on what the zip actually carries, so it
-	// runs against doc.Receipts alone, independent of pass 2 below.
+	// Every receipt path must be a bare filename before any zip entry is
+	// trusted to match it: r.Path came from an uploaded, untrusted file, unlike
+	// a live row's path (receipts.go only sets it from randomReceiptFilename).
+	// The check depends only on doc.Receipts, not on pass 2.
 	referenced := make(map[string]bool, len(doc.Receipts))
 	for _, r := range doc.Receipts {
 		if r.Path != filepath.Base(r.Path) {
@@ -259,26 +203,19 @@ func ParseUpload(path string) (ParsedUpload, error) {
 		referenced[r.Path] = true
 	}
 
-	// The document must agree with itself before anything else about it is
-	// worth checking (#496): its totals block, recomputed from its own
-	// transaction rows. A file torn by a write landing mid-export, or edited
-	// by hand, is refused here - at inspect, before the treasurer is asked
-	// for her password - rather than after the confirm. Restore still proves
-	// the same totals against the database it fills (verifyTotals); this is
-	// the same comparison, made early and in memory.
+	// The document must agree with itself (#496): its totals block, recomputed
+	// from its transaction rows. A file torn by a write mid-export, or edited by
+	// hand, is refused here at inspect, before the password prompt. Restore
+	// proves the same totals again (verifyTotals).
 	if err := CheckTotals(doc); err != nil {
 		return ParsedUpload{}, err
 	}
 
-	// Pass 2: every other entry - every receipt, whether or not doc.Receipts
-	// actually references it, and anything else the zip carries - read and
-	// capped exactly once, one at a time, never held past its own iteration
-	// and never alongside any other entry's bytes: this is issue #344's own
-	// fix. An entry doc.Receipts references gets its image decode-checked
-	// immediately, on the same bytes, before they are discarded; an entry
-	// nothing references is still read (so the unzipped-bytes cap still
-	// bounds it - the same tolerance ListDumps extends to a foreign file
-	// sitting in the backup directory) but never validated or kept.
+	// Pass 2: every other entry, read and capped exactly once, one at a time,
+	// never alongside another entry's bytes. An entry doc.Receipts references
+	// is decode-checked on the same bytes before they are discarded; an
+	// unreferenced entry is still read (so the unzipped-bytes cap bounds it) but
+	// never validated or kept.
 	for _, zf := range zr.File {
 		if zf.Name == jsonFilename {
 			continue
@@ -304,10 +241,9 @@ func ParseUpload(path string) (ParsedUpload, error) {
 	return ParsedUpload{Document: doc, StagingPath: path}, nil
 }
 
-// readCappedEntry opens and fully reads one zip entry, refusing to read
-// past remaining+1 bytes regardless of what the entry's own header claims
-// to hold - the read itself, not the header, is what a zip bomb has to lie
-// through, and this is what makes that lie visible.
+// readCappedEntry reads one zip entry fully, refusing to read past
+// remaining+1 bytes whatever the header claims: the read, not the header, is
+// what a zip bomb has to lie through.
 func readCappedEntry(f *zip.File, remaining int64) ([]byte, int64, error) {
 	rc, err := f.Open()
 	if err != nil {
@@ -325,11 +261,10 @@ func readCappedEntry(f *zip.File, remaining int64) ([]byte, int64, error) {
 	return data, int64(len(data)), nil
 }
 
-// checkFormatVersion peeks format_version out of the raw JSON bytes before
-// any strict, full decode is attempted - so a file from a future,
-// differently-shaped version of this schema still gets the specific
-// "newer version" refusal instead of tripping DisallowUnknownFields with a
-// generic shape error.
+// checkFormatVersion peeks format_version out of the raw JSON before the
+// strict decode, so a file from a differently-shaped future version gets
+// the "newer version" refusal instead of a generic DisallowUnknownFields
+// error.
 func checkFormatVersion(jsonBytes []byte) error {
 	var peek struct {
 		FormatVersion int64 `json:"format_version"`
@@ -347,12 +282,10 @@ func checkFormatVersion(jsonBytes []byte) error {
 	}
 }
 
-// validateReceiptImageBytes is ADR-011's decode check, restore's own copy:
-// the image must be decodable and within the same pixel ceiling
-// receipt_image.go enforces on ordinary upload. It does not downscale or
-// re-encode - Restore writes these bytes to the uploads volume verbatim,
-// since they are already whatever the live instance had written there the
-// day the backup was taken.
+// validateReceiptImageBytes is ADR-011's decode check: the image must decode
+// within the pixel ceiling receipt_image.go enforces on upload. It does not
+// downscale or re-encode; Restore writes these bytes to the uploads volume
+// verbatim.
 func validateReceiptImageBytes(data []byte) error {
 	cfg, _, err := image.DecodeConfig(bytes.NewReader(data))
 	if err != nil {
@@ -367,13 +300,11 @@ func validateReceiptImageBytes(data []byte) error {
 	return nil
 }
 
-// FundStatus is one fund's own place in a restore preview: whether it
-// exists on both sides, only live, or only in the file (ADR-012's
-// per-fund confirm-step copy, added by this issue's own ADR amendment).
+// FundStatus is one fund's place in a restore preview: on both sides, only
+// live, or only in the file (ADR-012's per-fund confirm-step copy).
 type FundStatus string
 
-// The three shapes a whole-instance replace can produce for one fund - see
-// FundStatus's own comment.
+// The three shapes a whole-instance replace can produce for one fund.
 const (
 	FundKept    FundStatus = "kept"
 	FundRemoved FundStatus = "removed"
@@ -382,11 +313,10 @@ const (
 
 // FundPreview is one line of the confirm step's per-fund list.
 // TransactionsLost and CutoffDate are meaningful only when Status is
-// FundKept - ADR-012's restore-scope paragraph: "live transactions whose id
-// is past the file's highest id... e.g. '12 transaksi setelah 26 Sep akan
-// hilang'". CutoffDate is empty when the file carries no transaction for
-// this fund at all yet, in which case every live transaction counts as
-// lost.
+// FundKept (ADR-012 restore scope): live transactions whose id is past the
+// file's highest id, e.g. '12 transaksi setelah 26 Sep akan hilang'.
+// CutoffDate is empty when the file has no transaction for this fund, so
+// every live transaction counts as lost.
 type FundPreview struct {
 	FundID           int64      `json:"fund_id"`
 	Name             string     `json:"name"`
@@ -395,25 +325,20 @@ type FundPreview struct {
 	CutoffDate       string     `json:"cutoff_date,omitempty"`
 }
 
-// Preview is BuildPreview's whole result: what the confirm step shows
-// before the treasurer types her password (issue #325's acceptance
-// criteria: "date, funds, total, per-fund line").
+// Preview is BuildPreview's whole result: what the confirm step shows before
+// the treasurer types her password.
 type Preview struct {
-	// Date stands in for "when was this backup taken" - the newest
-	// created_at (or, for a receipt, uploaded_at) found anywhere in the
-	// file. Document itself carries no wall-clock "exported at" field
-	// (backup.go's own comment on why), and a filename is not a safe
-	// substitute: a direct GET /api/backup download's name carries a date,
-	// but a treasurer can rename the file before re-uploading it, and an
-	// upload's own name is never trusted for anything this package does.
+	// Date is when the backup was taken: the newest created_at (or, for a
+	// receipt, uploaded_at) in the file. Document carries no "exported at"
+	// field (see backup.go), and a filename is not safe: a treasurer can rename
+	// the file before re-uploading it.
 	Date  string        `json:"date"`
 	Total int64         `json:"total"`
 	Funds []FundPreview `json:"funds"`
 }
 
 // BuildPreview compares doc against the live database and reports what a
-// restore would change - read-only, no transaction, safe to call as often
-// as the treasurer re-opens the confirm dialog.
+// restore would change. Read-only, no transaction.
 func BuildPreview(ctx context.Context, q store.Querier, doc Document) (Preview, error) {
 	liveFunds, err := q.ListFunds(ctx)
 	if err != nil {
@@ -482,10 +407,8 @@ func BuildPreview(ctx context.Context, q store.Querier, doc Document) (Preview, 
 	return preview, nil
 }
 
-// newestMoment scans every timestamp Document carries (created_at, or a
-// receipt's own uploaded_at) and returns the latest one as a Jakarta
-// calendar date - see Preview.Date's own comment for why this, rather than
-// a stored field or the upload's filename, is what "date" means here.
+// newestMoment returns the latest timestamp Document carries (created_at, or
+// a receipt's uploaded_at) as a Jakarta calendar date; see Preview.Date.
 func newestMoment(doc Document) string {
 	var latest int64
 	consider := func(t int64) {
@@ -537,20 +460,15 @@ func newestMoment(doc Document) string {
 
 // immutableTriggers names 00001_schema.sql's eight BEFORE UPDATE/DELETE
 // triggers guarding "transaction", transfer, reconciliation and
-// reconciliation_line. Restore drops every one of them for exactly the
-// width of its own write transaction - SQLite has no "temporarily disable
-// this trigger" short of dropping and recreating it - clears and
-// re-populates the four tables they guard while they are gone, then
-// recreates each one before COMMIT. The window is invisible to anything
-// else: ADR-004's single connection (SetMaxOpenConns(1)) means no other
-// statement can even be in flight while this transaction holds it.
+// reconciliation_line. Restore drops them for the width of its write
+// transaction (SQLite cannot disable a trigger short of dropping it), clears
+// and re-populates the four tables, then recreates each before COMMIT.
+// ADR-004's single connection means nothing else can be in flight meanwhile.
 //
-// Only the names live here. Each trigger's body is read back out of
-// sqlite_master inside the same transaction just before it is dropped, so
-// a restore always reinstates whatever the schema currently says - an edit
-// to a trigger in the migration file can never be silently reverted by a
-// stale copy in this package. TestRestoreRecreatesImmutableTriggers proves
-// each one still refuses after a restore.
+// Only the names live here. Each body is read back from sqlite_master in the
+// same transaction just before the drop, so an edit to a trigger in the
+// migration can never be reverted by a stale copy here.
+// TestRestoreRecreatesImmutableTriggers proves each one still refuses.
 var immutableTriggers = []string{
 	"transaction_immutable_update",
 	"transaction_immutable_delete",
@@ -562,38 +480,29 @@ var immutableTriggers = []string{
 	"reconciliation_line_immutable_delete",
 }
 
-// Restore is the whole write side of ADR-012's restore path: a safety-net
-// dump, additive receipt extraction, then one write transaction that
-// clears every fund-scoped table, re-inserts exactly what parsed.Document
-// holds with every id preserved, proves the totals, and commits - or
-// changes nothing at all.
+// Restore is the write side of ADR-012's restore path: a safety-net dump,
+// additive receipt extraction, then one write transaction that clears every
+// fund-scoped table, re-inserts exactly what parsed.Document holds with
+// every id preserved, proves the totals, and commits - or changes nothing.
 //
-// sqlDB is the raw connection pool rather than a *ledger.Ledger or
-// store.Querier alone: this is the one operation in the whole codebase
-// that has to open its own transaction spanning virtually every table, and
-// ledger.Ledger's own balance methods are bound to sqlDB directly (not to
-// whatever transaction is currently open on it) - calling them from inside
-// this function's own transaction would ask ADR-004's single connection
-// for a second connection while the first is still checked out, which
-// deadlocks rather than reading a stale value. verifyTotals below calls
-// store.Queries.FundBalance/AccountBalance/PurposeBalance directly against
-// this transaction's own store.New(tx) instead - the exact same generated
-// queries l.FundBalance etc. call, just bound to the right connection.
+// sqlDB is the raw pool because this operation opens a transaction spanning
+// nearly every table, and ledger.Ledger's balance methods are bound to
+// sqlDB, not the open transaction: calling them here would ask ADR-004's
+// single connection for a second one and deadlock. verifyTotals calls the
+// generated FundBalance/AccountBalance/PurposeBalance directly on this
+// transaction instead.
 //
-// WritePreRestoreDump runs before this function's own transaction opens and
-// is meant to read the database's current, live, still-uncommitted-to state;
-// it opens its own read transaction (BuildDocument), which is finished and
-// released before this function asks the pool's one connection for its
-// write transaction.
+// WritePreRestoreDump runs before the transaction opens, reads the live
+// state in its own read transaction (BuildDocument), and releases the
+// connection before the write transaction asks for it.
 func Restore(ctx context.Context, sqlDB *sql.DB, uploadsDir, backupDir string, parsed ParsedUpload, now time.Time) error {
 	if _, err := WritePreRestoreDump(ctx, sqlDB, uploadsDir, backupDir, now); err != nil {
 		return fmt.Errorf("backup: writing the safety-net dump: %w", err)
 	}
 
 	// Receipt files this restore created (not ones already on disk under the
-	// same name, which are the same image) are removed again if anything
-	// below fails before the commit - so a refused restore really does
-	// change nothing but the safety-net dump, as its error copy says.
+	// same name) are removed if anything fails before the commit, so a refused
+	// restore changes nothing but the safety-net dump.
 	written, err := extractReceipts(uploadsDir, parsed.Document, parsed.StagingPath)
 	committed := false
 	defer func() {
@@ -640,10 +549,9 @@ func Restore(ctx context.Context, sqlDB *sql.DB, uploadsDir, backupDir string, p
 		}
 	}
 
-	// Every session is gone after a restore (ADR-012: "sessions are never
-	// exported... a restore logs everyone out"), inside the same
-	// transaction as everything else - a rolled-back restore must leave
-	// the treasurer's own session untouched too.
+	// Every session is gone after a restore (ADR-012: sessions are never
+	// exported, a restore logs everyone out), inside the same transaction, so a
+	// rolled-back restore leaves the treasurer's session untouched.
 	if err := tq.DeleteAllSessions(ctx); err != nil {
 		return fmt.Errorf("backup: clearing sessions: %w", err)
 	}
@@ -660,12 +568,9 @@ func Restore(ctx context.Context, sqlDB *sql.DB, uploadsDir, backupDir string, p
 }
 
 // clearFundScopedTables deletes every row from every table this package
-// restores, save "user" (never touched - ADR-012's login ruling) and
-// "session" (cleared separately, inside Restore itself, matching
-// DeleteAllSessions' own existing shape). Listed child-before-parent for a
-// human reading it, though the order does not matter to SQLite itself:
-// defer_foreign_keys=ON (set before this runs) defers every FK check in
-// the whole transaction to COMMIT.
+// restores, except "user" (ADR-012's login ruling) and "session" (cleared in
+// Restore). Listed child-before-parent for a reader; order does not matter
+// because defer_foreign_keys=ON defers every FK check to COMMIT.
 func clearFundScopedTables(ctx context.Context, q store.Querier) error {
 	deletes := []struct {
 		name string
@@ -695,11 +600,10 @@ func clearFundScopedTables(ctx context.Context, q store.Querier) error {
 }
 
 // adoptionDates maps each fund in doc to the day its Uruni history starts
-// (PRD 7.1): the earliest opening-balance row's occurred_on, or - for a fund
-// that never posted one - the day the fund was created, in Asia/Jakarta.
-// It is what a null member.joined_on meant before #471 made the column NOT
-// NULL: "always was a member" can only reach back as far as the ledger
-// does, so restoring an older backup this way changes no member's dues.
+// (PRD 7.1): the earliest opening-balance row's occurred_on, or, for a fund
+// with none, the day the fund was created in Asia/Jakarta. It is what a null
+// member.joined_on meant before #471 made the column NOT NULL, so restoring
+// an older backup this way changes no member's dues.
 func adoptionDates(doc Document) map[int64]string {
 	out := make(map[int64]string, len(doc.Funds))
 	for _, f := range doc.Funds {
@@ -720,14 +624,12 @@ func adoptionDates(doc Document) map[int64]string {
 	return out
 }
 
-// insertDocument writes every row doc holds, in Document's own field order
-// - the migration file's dependency order (backup.go's own comment) - with
-// one exception: doc.Transactions goes through restoreTransactionsInOrder
-// instead of a plain loop, because the live transaction_named_row_shape
-// trigger (ADR-012 obligation 1) still checks, at INSERT time, that a
-// reversal's own target row already exists - a check no PRAGMA defers.
-// Every other table's foreign keys are ordinary declarative ones, and
-// defer_foreign_keys=ON already lets them land in any order.
+// insertDocument writes every row doc holds in Document's field order (the
+// migration's dependency order, see backup.go), except doc.Transactions,
+// which goes through restoreTransactionsInOrder: the transaction_named_row_shape
+// trigger (ADR-012 obligation 1) checks at INSERT that a reversal's target
+// exists, and no PRAGMA defers that. Other foreign keys are declarative and
+// land in any order under defer_foreign_keys=ON.
 func insertDocument(ctx context.Context, q store.Querier, doc Document) error {
 	for _, f := range doc.Funds {
 		if err := q.RestoreFund(ctx, store.RestoreFundParams{
@@ -838,16 +740,13 @@ func insertDocument(ctx context.Context, q store.Querier, doc Document) error {
 	return nil
 }
 
-// restoreTransactionsInOrder inserts every row in txns, a row at a time,
-// but only once whatever row its own reverses_transaction_id names (if
-// any) is already inserted - the one true dependency the live
-// transaction_named_row_shape trigger enforces immediately, not deferred
-// (ADR-012 obligation 1: "by dependency, not by id, since id order is not
-// something new code may rely on"). A recursive insert-then-mark-visited
-// walk, not a sort by id: the file's own array order is whatever
-// ListTransactionsByFund happened to return it in (id ascending, in
-// practice, but CLAUDE.md's own "no primary-key order" rule is exactly why
-// this does not lean on that holding).
+// restoreTransactionsInOrder inserts every row in txns once the row its
+// reverses_transaction_id names (if any) is inserted: the one dependency the
+// transaction_named_row_shape trigger enforces immediately (ADR-012
+// obligation 1: by dependency, not by id, since id order is not something
+// new code may rely on). A recursive insert-then-mark-visited walk, not a
+// sort by id, because the file's array order must not be assumed to be id
+// order (CLAUDE.md: no primary-key order).
 func restoreTransactionsInOrder(ctx context.Context, q store.Querier, txns []Transaction) error {
 	byID := make(map[int64]Transaction, len(txns))
 	for _, t := range txns {
@@ -863,10 +762,8 @@ func restoreTransactionsInOrder(ctx context.Context, q store.Querier, txns []Tra
 		}
 		t, ok := byID[id]
 		if !ok {
-			// Names a row this file does not itself carry. Nothing to
-			// insert on its behalf - if some other row's
-			// reverses_transaction_id depends on it, the live trigger
-			// refuses that insert on its own, with its own message.
+			// Names a row this file does not carry. Nothing to insert on its behalf;
+			// if another row depends on it, the trigger refuses that insert.
 			return nil
 		}
 		if visiting[id] {
@@ -902,14 +799,11 @@ func restoreTransactionsInOrder(ctx context.Context, q store.Querier, txns []Tra
 
 // verifyTotals is ADR-012's "a restore proves its numbers": every fund,
 // account and purpose doc lists, recomputed by the generated balance queries
-// from the rows Restore just inserted, inside the same still-open
-// transaction, and compared exactly (int64, no tolerance - CLAUDE.md's own
-// money rule) with doc.Totals through compareTotals, the comparison the
-// inspect step and every dump share. It calls store.Queries' generated
-// FundBalance/AccountBalance/PurposeBalance directly rather than going
-// through a *ledger.Ledger - see Restore's own doc comment for why a
-// Ledger bound to sqlDB cannot be called from inside this transaction
-// without deadlocking ADR-004's single connection.
+// from the rows Restore just inserted, in the same open transaction, and
+// compared exactly (int64, no tolerance) with doc.Totals through
+// compareTotals, the comparison the inspect step and every dump share. It
+// calls the generated queries directly, not a *ledger.Ledger; see Restore
+// for why.
 func verifyTotals(ctx context.Context, q store.Querier, doc Document) error {
 	got := Totals{
 		Funds:    make([]FundTotal, 0, len(doc.Funds)),
@@ -940,22 +834,17 @@ func verifyTotals(ctx context.Context, q store.Querier, doc Document) error {
 	return compareTotals(doc.Totals, got)
 }
 
-// extractReceipts is Restore's own receipt-extraction step: re-opens the
-// staged zip at stagingPath exactly once and streams each receipt doc
-// actually names into uploadsDir, one at a time - never loading a whole
-// receipt's bytes into a map first (issue #344's own fix, mirroring
-// ParseUpload's own "validate one at a time, retain nothing" shape). A
-// Document with no Receipts at all never opens stagingPath, which is what
-// lets a hand-built ParsedUpload (most of this package's own Restore tests)
-// pass an empty StagingPath safely.
+// extractReceipts re-opens the staged zip at stagingPath once and streams
+// each receipt doc names into uploadsDir, one at a time, never loading a
+// receipt into a map first. A Document with no Receipts never opens
+// stagingPath, so a hand-built ParsedUpload in tests may leave it empty.
 func extractReceipts(uploadsDir string, doc Document, stagingPath string) (written []string, err error) {
 	if len(doc.Receipts) == 0 {
 		return nil, nil
 	}
 
-	//nolint:gosec // stagingPath is either this package's own staging file
-	// (internal/http/restore.go) or a test's own fixture file, never
-	// request input directly.
+	//nolint:gosec // stagingPath is this package's staging file
+	// (internal/http/restore.go) or a test fixture, never request input.
 	f, err := os.Open(stagingPath)
 	if err != nil {
 		return nil, fmt.Errorf("backup: re-opening the staged upload to extract receipts: %w", err)
@@ -993,7 +882,7 @@ func extractReceipts(uploadsDir string, doc Document, stagingPath string) (writt
 
 // removeFiles deletes each path, best effort: it runs only on a restore that
 // has already failed, and a file it cannot remove is an orphan ADR-011
-// already tolerates, not a reason to mask the original error.
+// tolerates, not a reason to mask the original error.
 func removeFiles(paths []string) {
 	for _, p := range paths {
 		_ = os.Remove(p)
@@ -1001,25 +890,19 @@ func removeFiles(paths []string) {
 }
 
 // writeReceiptFileFromZip streams one receipt's zip entry into
-// uploadsDir/name, through WriteFileAtomic (temp file, fsync, rename, fsync
-// the directory) like receipts.go's own writeReceiptFile - except under a name this package is handed, never one
-// it mints itself: a restore's receipt keeps the exact filename its
-// Receipt row already names (ADR-011's stored, server-generated name,
-// preserved verbatim like every other id this package restores).
-// "Additive" (ADR-012): an existing file already at that name is
-// overwritten with what should be identical bytes - two receipts colliding
-// on a crypto/rand name is not a case this package tries to detect.
+// uploadsDir/name through WriteFileAtomic (temp file, fsync, rename, fsync
+// the directory), like receipts.go's writeReceiptFile, except under the
+// filename the Receipt row already names (ADR-011's server-generated name,
+// preserved verbatim). "Additive" (ADR-012): an existing file at that name is
+// overwritten with what should be identical bytes; a crypto/rand name
+// collision is not detected.
 //
-// The copy re-applies MaxUnzippedBytes as a per-entry ceiling while
-// reading, never trusting zf's own declared UncompressedSize64 a second
-// time either - the same reasoning readCappedEntry's own comment gives for
-// ParseUpload's identical check on this exact entry. ParseUpload already
-// proved this entry decodes as a valid image; this function only ever
-// copies bytes, it does not decode them again.
+// The copy re-applies MaxUnzippedBytes as a per-entry ceiling while reading,
+// never trusting zf's declared UncompressedSize64 (see readCappedEntry).
+// ParseUpload already proved the entry decodes; this only copies bytes.
 //
-// Callers must have already proven name is a bare filename (ParseUpload's
-// own check) - this function does not re-check, the same trust boundary
-// addReceiptToZip already documents for a live receipt row's path.
+// Callers must have proven name is a bare filename (ParseUpload does); this
+// does not re-check, the same trust boundary addReceiptToZip documents.
 func writeReceiptFileFromZip(uploadsDir, name string, zf *zip.File) (created bool, err error) {
 	rc, err := zf.Open()
 	if err != nil {

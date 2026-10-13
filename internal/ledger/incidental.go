@@ -13,40 +13,32 @@ import (
 // OpenIncidentalParams is every argument OpenIncidental needs to open one
 // envelope.
 //
-// There is deliberately no separate purpose-name field: Occasion becomes
-// both the purpose row's name and the incidental row's occasion, because
-// PRD 7.5's own language treats them as the same label ("create an
-// incidental for an occasion").
+// There is no separate purpose-name field: Occasion becomes both the purpose
+// row's name and the incidental row's occasion, since PRD 7.5 treats them as
+// one label.
 type OpenIncidentalParams struct {
 	FundID       int64
 	Occasion     string        // non-empty; becomes purpose.name and incidental.occasion
 	TargetAmount *money.Amount // nil = no target (the schema allows NULL); must be > 0 if set
 	OpenedOn     string        // "YYYY-MM-DD", a real calendar date
 
-	// MinimumPerMember is the one figure every expected member is asked to
-	// give (ADR-034) - nil = no minimum; must be > 0 if set, the same shape
-	// TargetAmount holds itself to.
+	// MinimumPerMember is the one figure every expected member is asked to give
+	// (ADR-034). nil means no minimum; if set it must be > 0, like TargetAmount.
 	MinimumPerMember *money.Amount
 
-	// RecipientMemberIDs are the members this envelope is for (ADR-034) -
-	// never expected to contribute themselves. Zero or more; nil and an
-	// empty slice both mean none.
+	// RecipientMemberIDs are the members this envelope is for (ADR-034), never
+	// expected to contribute. nil and an empty slice both mean none.
 	RecipientMemberIDs []int64
 }
 
-// OpenIncidental writes one purpose row (kind='incidental') and the
-// incidental row that is 1:1 with it, inside one withTx, and returns the
-// created incidental.
+// OpenIncidental writes one purpose row (kind='incidental') and the 1:1
+// incidental row inside one withTx, and returns the created incidental.
 //
-// The two inserts happen together on purpose. Opening an envelope is a
-// purpose row and an incidental row in two different tables; nothing in the
-// schema ties their creation together, so two separate store.Queries calls
-// - the shape M4 would otherwise have reached for - leave a window where a
-// crash between them strands an orphan purpose: a tag that exists, appears
-// in purpose lists, accepts transactions, and has no occasion, target or
-// opened_on behind it (see #42's comment). That is the same atomicity
-// argument ADR-027 already makes for CloseIncidentalAndRoll, applied to the
-// other end of the same lifecycle.
+// They go together because nothing in the schema ties the two inserts, and
+// two separate store.Queries calls would let a crash between them strand an
+// orphan purpose: a tag that appears in purpose lists and accepts
+// transactions but has no occasion, target or opened_on (#42). Same
+// atomicity argument as ADR-027 makes for CloseIncidentalAndRoll.
 func (l *Ledger) OpenIncidental(ctx context.Context, p OpenIncidentalParams) (store.Incidental, error) {
 	if strings.TrimSpace(p.Occasion) == "" {
 		return store.Incidental{}, fmt.Errorf("%w: occasion must not be empty", ErrInvalidArgument)
@@ -106,19 +98,15 @@ func (l *Ledger) OpenIncidental(ctx context.Context, p OpenIncidentalParams) (st
 }
 
 // putIncidentalRecipientsTx replaces purposeID's recipient set with
-// memberIDs, inside the caller's already-open store.Querier (ADR-027's ...Tx
-// composition rule). It never checks the envelope's own state - recipients
-// are mutable like occasion, never a posted fact (ADR-034), so both
-// OpenIncidental (nothing to delete yet) and SetIncidentalParticipation
-// (replacing a prior set) share this one primitive rather than a second copy
-// of the insert loop.
+// memberIDs inside the caller's open store.Querier (ADR-027's ...Tx
+// composition rule). It never checks the envelope's state: recipients are
+// mutable like occasion, never a posted fact (ADR-034), so OpenIncidental and
+// SetIncidentalParticipation share this one primitive.
 //
-// No dedup and no pre-check against member: a repeated id or one belonging
-// to another fund is a caller mistake, not a domain bug, and surfaces as an
-// ordinary constraint violation the same way UpdateReimbursement's
-// caller-supplied ids already do (ADR-027's Amendments) - the primary key on
-// (fund_id, purpose_id, member_id) and the composite FK are the actual
-// guarantees, not a re-derivation of either here.
+// No dedup and no pre-check against member: a repeated id or another fund's
+// member is a caller mistake that surfaces as an ordinary constraint
+// violation (ADR-027's Amendments); the primary key on (fund_id, purpose_id,
+// member_id) and the composite FK are the guarantees.
 func putIncidentalRecipientsTx(ctx context.Context, q store.Querier, fundID, purposeID int64, memberIDs []int64) error {
 	if err := q.DeleteIncidentalRecipientsByPurpose(ctx, purposeID); err != nil {
 		return fmt.Errorf("clearing incidental recipients: %w", err)
@@ -133,34 +121,26 @@ func putIncidentalRecipientsTx(ctx context.Context, q store.Querier, fundID, pur
 	return nil
 }
 
-// RenameIncidentalParams is every argument RenameIncidental needs to correct
-// one envelope's occasion.
+// RenameIncidentalParams is every argument RenameIncidental needs.
 type RenameIncidentalParams struct {
 	FundID    int64
 	PurposeID int64
 	Occasion  string // non-empty; becomes purpose.name and incidental.occasion, same as OpenIncidentalParams.Occasion
 }
 
-// RenameIncidental corrects a mistyped occasion (#264). The occasion is
-// stored twice - as purpose.name and as incidental.occasion - for the same
-// reason OpenIncidentalParams' own comment gives: PRD 7.5 treats the two as
-// one label, so a rename that moved only one of them would leave the pair
-// half-corrected, the exact half-renamed-row shape OpenIncidental's own
-// atomicity argument exists to prevent at creation time. Both updates run
-// inside one withTx so a crash between them cannot strand that
-// disagreement.
+// RenameIncidental corrects a mistyped occasion (#264). The occasion is stored
+// twice, as purpose.name and incidental.occasion (PRD 7.5 treats them as one
+// label), so a rename moving only one would leave the pair half-corrected.
+// Both updates run inside one withTx.
 //
 // This posts no ledger entry and moves no money: a posted transaction
-// references a purpose by id, and nothing in the ledger reads the text, so
-// correcting it rewrites no history - the same correction UpdatePurposeName's
-// own comment already makes for a location or a titipan, extended here to
-// the one other place the label happens to live twice.
+// references a purpose by id and nothing in the ledger reads the text, so no
+// history is rewritten (as UpdatePurposeName does).
 //
-// Fund-scoped through the same GetIncidental fetch every other single-
-// envelope write in this file opens with (ReopenIncidental, CloseIncidentalAndRoll):
-// an id names a row, it does not prove the caller may see it, so the fetch
-// runs first and the two unscoped updates that follow only ever touch a
-// purpose_id already proven to belong to FundID.
+// Fund-scoped through the GetIncidental fetch every single-envelope write in
+// this file opens with: an id names a row, it does not prove the caller may
+// see it, so the two unscoped updates only touch a purpose_id proven to
+// belong to FundID.
 func (l *Ledger) RenameIncidental(ctx context.Context, p RenameIncidentalParams) (store.Incidental, error) {
 	if strings.TrimSpace(p.Occasion) == "" {
 		return store.Incidental{}, fmt.Errorf("%w: occasion must not be empty", ErrInvalidArgument)
@@ -191,38 +171,30 @@ func (l *Ledger) RenameIncidental(ctx context.Context, p RenameIncidentalParams)
 	return renamed, nil
 }
 
-// SetIncidentalParticipationParams is every argument SetIncidentalParticipation
-// needs to replace one envelope's minimum and its recipients (ADR-034).
+// SetIncidentalParticipationParams is every argument
+// SetIncidentalParticipation needs (ADR-034).
 type SetIncidentalParticipationParams struct {
 	FundID    int64
 	PurposeID int64
 
-	// TargetAmount nil clears the target; a set value must be > 0, the same
-	// shape OpenIncidentalParams.TargetAmount holds itself to (#381).
+	// TargetAmount nil clears the target; a set value must be > 0 (#381).
 	TargetAmount *money.Amount
 
-	// MinimumPerMember nil clears the minimum; a set value must be > 0,
-	// the same shape OpenIncidentalParams.MinimumPerMember holds itself to.
+	// MinimumPerMember nil clears the minimum; a set value must be > 0.
 	MinimumPerMember *money.Amount
 
-	// RecipientMemberIDs fully replaces the envelope's recipient set - not
-	// an add/remove delta - the same "editable like occasion" shape
-	// RenameIncidental gives the occasion itself. nil and an empty slice
-	// both mean "no recipients".
+	// RecipientMemberIDs fully replaces the recipient set, not a delta. nil and
+	// an empty slice both mean no recipients.
 	RecipientMemberIDs []int64
 }
 
 // SetIncidentalParticipation replaces one envelope's target_amount,
 // minimum_per_member and incidental_recipient rows in one withTx (ADR-034,
-// #381). All three are mutable like occasion - nothing here is a posted fact
-// (strict about money, lax about naming), so none of them checks the
-// envelope's own closed_on: a closed envelope's expectation can still be
-// corrected the same way its occasion can (RenameIncidental carries no such
-// check either), and only a *posting* is what ADR-031 refuses.
+// #381). All three are mutable like occasion; nothing here is a posted fact,
+// so none checks closed_on: a closed envelope's expectation can still be
+// corrected, and only a posting is what ADR-031 refuses.
 //
-// Fund-scoped through the same GetIncidental fetch every other single-
-// envelope write in this file opens with: an id names a row, it does not
-// prove the caller may change it.
+// Fund-scoped through the GetIncidental fetch, as RenameIncidental is.
 func (l *Ledger) SetIncidentalParticipation(ctx context.Context, p SetIncidentalParticipationParams) (store.Incidental, error) {
 	if p.TargetAmount != nil && *p.TargetAmount <= 0 {
 		return store.Incidental{}, fmt.Errorf("%w: target_amount must be positive when set, got %d", ErrInvalidArgument, p.TargetAmount.Int64())
@@ -259,68 +231,55 @@ func (l *Ledger) SetIncidentalParticipation(ctx context.Context, p SetIncidental
 	return updated, nil
 }
 
-// CloseIncidentalAndRollParams is every argument CloseIncidentalAndRoll
-// needs to close one envelope and roll its leftover into the fund's main
-// purpose.
+// CloseIncidentalAndRollParams is every argument CloseIncidentalAndRoll needs
+// to close one envelope and roll its leftover into the main purpose.
 type CloseIncidentalAndRollParams struct {
 	FundID    int64
 	PurposeID int64 // the incidental purpose closing
 
-	// AccountID is the account the reclass_purpose pair posts through on
-	// both legs. Its choice is immaterial to correctness - a same-account
-	// pair always nets to zero on that account regardless of which
-	// account the original contributions actually came in through
-	// (ADR-027) - so it is a plain parameter with no derivation behind
-	// it.
+	// AccountID is the account the reclass_purpose pair posts through on both
+	// legs. The choice is immaterial: a same-account pair nets to zero on that
+	// account whatever account the contributions came in through (ADR-027).
 	AccountID int64
 
 	ClosedOn string // "YYYY-MM-DD", a real calendar date
 
-	// Note is written to both legs of the roll, or to neither - the same
-	// contract PostTransferBetweenAccountsParams.Note describes. It is the
-	// treasurer's own sentence, never generated here: the ledger writes no
-	// note of its own. A roll with no typed note is not left unexplained
-	// any more, though - it gets a display label built at read time from
-	// the transfer's own facts (#257), same as every other system-created
-	// row.
+	// Note is written to both legs of the roll, or neither, as
+	// PostTransferBetweenAccountsParams.Note describes. It is the treasurer's
+	// sentence; the ledger writes none. A roll with no note gets a display label
+	// built at read time from the transfer's facts (#257).
 	Note *string
 }
 
 // CloseIncidentalAndRoll closes one envelope and squares its purpose balance
-// to exactly zero, in whichever direction that takes - one call, one withTx,
-// per ADR-027, rolling per ADR-031.
+// to exactly zero, in whichever direction that takes: one call, one withTx
+// (ADR-027), rolling per ADR-031.
 //
 // The leftover is IncidentalTotals' collected minus disbursed
-// (money.Amount.Sub, checked for overflow) - mathematically PurposeBalance
-// for this purpose_id, since both sum the same signed ledger over the same
-// rows. Three outcomes:
+// (money.Amount.Sub, overflow-checked), mathematically PurposeBalance for
+// this purpose_id. Outcomes:
 //
-//   - Leftover > 0 (collected more than disbursed): postTransferPairTx
-//     posts a reclass_purpose pair - same AccountID on both legs, from the
-//     incidental purpose to the fund's main purpose - and closed_on is set
-//     in the same transaction. Returns the leftover, positive: rolled out.
+//   - Leftover > 0: postTransferPairTx posts a reclass_purpose pair, same
+//     AccountID on both legs, from the incidental purpose to the main
+//     purpose, and closed_on is set in the same transaction. Returns the
+//     leftover: rolled out.
 //   - Leftover < 0 (disbursed more than collected): the pair runs the other
-//     way, from the fund's main purpose into the incidental purpose, for
-//     the shortfall (-leftover, itself overflow-checked). Returns the
-//     leftover, still negative: covered from Kas Utama. This is ADR-031's
-//     supersession of ADR-027's original negative-leftover branch, which
-//     closed and posted nothing - left uncovered, that shortfall would
-//     leave the envelope permanently negative once a report ever shows a
-//     purpose balance (ADR-031's consequences).
-//   - Leftover == 0: closes the envelope and posts nothing - not an error,
-//     since an error inside withTx would roll the close back, and there is
-//     nothing to square. Returns 0.
-//   - Already closed (closed_on already set): returns
-//     ErrIncidentalAlreadyClosed and posts nothing. A second roll would
-//     move money that already moved.
+//     way, from the main purpose into the incidental purpose, for the
+//     shortfall (-leftover, overflow-checked). Returns the leftover, still
+//     negative: covered from Kas Utama. ADR-031 supersedes ADR-027's branch
+//     that closed and posted nothing, which would leave the envelope
+//     negative once a report shows purpose balances.
+//   - Leftover == 0: closes the envelope and posts nothing. Not an error,
+//     since an error inside withTx would roll the close back. Returns 0.
+//   - Already closed: returns ErrIncidentalAlreadyClosed and posts nothing; a
+//     second roll would move money that already moved.
 //
 // A retired AccountID is ErrAccountInactive when a leftover has to be posted
 // on it (either direction); a zero leftover posts nothing and ignores the
 // account (#444). Nothing is closed on refusal.
 //
-// Every outcome leaves PurposeBalance(purposeID) at exactly zero - the
-// single invariant ADR-031 makes testable in place of the sign-dependent
-// rule ADR-027 shipped.
+// Every outcome leaves PurposeBalance(purposeID) at exactly zero, the
+// invariant ADR-031 makes testable in place of ADR-027's sign-dependent rule.
 func (l *Ledger) CloseIncidentalAndRoll(ctx context.Context, p CloseIncidentalAndRollParams) (money.Amount, error) {
 	if err := validateOccurredOn(p.ClosedOn); err != nil {
 		return 0, err
@@ -351,9 +310,8 @@ func (l *Ledger) CloseIncidentalAndRoll(ctx context.Context, p CloseIncidentalAn
 			return fmt.Errorf("computing incidental leftover: %w", err)
 		}
 
-		// A retired location is refused only when there is something to post
-		// on it. A zero leftover writes nothing, so the account the caller
-		// named is never touched and a stale default must not block the
+		// A retired location is refused only when there is something to post on it.
+		// A zero leftover touches no account, so a stale default must not block the
 		// close (#444).
 		if leftover != 0 {
 			if err := refuseInactiveAccount(ctx, q, p.FundID, p.AccountID); err != nil {
@@ -379,10 +337,8 @@ func (l *Ledger) CloseIncidentalAndRoll(ctx context.Context, p CloseIncidentalAn
 			if err != nil {
 				return err
 			}
-			// The shortfall, as a positive amount to post: 0 - leftover,
-			// not a bare unary minus - money.Amount.Sub is the checked
-			// negation this package uses everywhere else, and it is the
-			// one that gets math.MinInt64 right (Sub's own doc comment).
+			// The shortfall as a positive amount: 0 - leftover via the checked
+			// money.Amount.Sub, which gets math.MinInt64 right, not a bare unary minus.
 			covering, err := money.Amount(0).Sub(leftover)
 			if err != nil {
 				return fmt.Errorf("computing incidental shortfall: %w", err)
@@ -409,26 +365,25 @@ func (l *Ledger) CloseIncidentalAndRoll(ctx context.Context, p CloseIncidentalAn
 	return rolled, nil
 }
 
-// IncidentalRecipient names one member an envelope is for (ADR-034) -
-// never expected to contribute themselves (see GetIncidentalParticipation).
+// IncidentalRecipient names one member an envelope is for (ADR-034), never
+// expected to contribute (see GetIncidentalParticipation).
 type IncidentalRecipient struct {
 	MemberID   int64
 	MemberName string
 }
 
-// IncidentalDetail is one envelope together with the totals PRD section 7.5 shows
-// for it - what it has collected and disbursed so far, summed straight from
-// the ledger (CLAUDE.md rule 2) rather than tracked as a running balance on
-// the row itself - and the recipients it names (ADR-034).
+// IncidentalDetail is one envelope with the totals PRD section 7.5 shows -
+// collected and disbursed so far, summed from the ledger (CLAUDE.md rule 2),
+// not a running balance on the row - and its recipients (ADR-034).
 type IncidentalDetail struct {
 	Incidental store.Incidental
 	Collected  money.Amount
 	Disbursed  money.Amount
 
-	// Balance is what the envelope holds right now - PurposeBalance, rolls
-	// included - which is not Collected minus Disbursed once an envelope has
-	// been closed and reopened: those two leave a prior roll's leg out (#215),
-	// the balance cannot. Zero on a closed envelope, by ADR-031's invariant.
+	// Balance is what the envelope holds now (PurposeBalance, rolls included).
+	// It is not Collected minus Disbursed once an envelope has been closed and
+	// reopened: those leave a prior roll's leg out (#215). Zero on a closed
+	// envelope, by ADR-031's invariant.
 	Balance money.Amount
 
 	Recipients []IncidentalRecipient
@@ -437,18 +392,14 @@ type IncidentalDetail struct {
 // GetIncidentalDetail fetches one envelope and its collected/disbursed
 // totals for GET /api/incidentals/{purposeID}.
 //
-// Both halves are fund-scoped. An id names a row, it does not prove the
-// caller may see it: PRD section 6 allows a server to hold more than one
-// fund, so an unscoped read here would be a cross-fund read the moment a
-// second fund exists. A purpose_id belonging to another fund is
-// sql.ErrNoRows - indistinguishable from an unknown id, which is the answer
-// it should get.
+// Both halves are fund-scoped: PRD section 6 allows more than one fund, so
+// an unscoped read would cross funds. Another fund's purpose_id is
+// sql.ErrNoRows, indistinguishable from an unknown id.
 //
 // IncidentalActivityTotals, not IncidentalTotals: this screen wants what the
-// occasion itself collected and spent, not CloseIncidentalAndRoll's
-// net-including-rolls figure. Conflating the two - showing the roll's own
-// leg as if it were a fresh contribution or disbursement - was #215; see
-// that query's own comment for the seam ADR-031 draws between them.
+// occasion itself collected and spent, not the net-including-rolls figure
+// CloseIncidentalAndRoll uses. Showing the roll's leg as a fresh contribution
+// or disbursement was #215; see that query for the seam ADR-031 draws.
 func (l *Ledger) GetIncidentalDetail(ctx context.Context, fundID, purposeID int64) (IncidentalDetail, error) {
 	envelope, err := l.q.GetIncidental(ctx, store.GetIncidentalParams{
 		PurposeID: purposeID, FundID: fundID,
@@ -488,18 +439,14 @@ func (l *Ledger) GetIncidentalDetail(ctx context.Context, fundID, purposeID int6
 }
 
 // ReopenIncidental sets a closed envelope's closed_on back to NULL
-// (ADR-031) - the deliberate, visible way back that keeps the guard in
-// PostTransaction from turning "attribution needs flexibility" into "the
-// envelope is stuck". The treasurer reopens, posts the late entry through
-// the ordinary record form, and closes again; CloseIncidentalAndRoll's
-// unfiltered IncidentalTotals then rolls only the net delta, since the
-// first roll's own leg already counts toward the sum.
+// (ADR-031), the visible way back that keeps PostTransaction's guard from
+// leaving an envelope stuck. The treasurer reopens, posts the late entry,
+// and closes again; CloseIncidentalAndRoll's unfiltered IncidentalTotals
+// then rolls only the net delta, since the first roll's leg already counts.
 //
-// Fund-scoped through the same GetIncidental join every other single-
-// envelope read and write in this file uses, for the reason GetIncidentalDetail's
-// own comment gives: an id names a row, not permission to see or change it.
-// ErrIncidentalNotClosed answers an envelope that is not closed - reopening
-// one twice is refused, not a silent no-op.
+// Fund-scoped through the GetIncidental join, as GetIncidentalDetail is.
+// ErrIncidentalNotClosed answers an envelope that is not closed; reopening
+// twice is refused, not a silent no-op.
 func (l *Ledger) ReopenIncidental(ctx context.Context, fundID, purposeID int64) (store.Incidental, error) {
 	var reopened store.Incidental
 	err := l.withTx(ctx, func(q store.Querier) error {
@@ -526,9 +473,8 @@ func (l *Ledger) ReopenIncidental(ctx context.Context, fundID, purposeID int64) 
 }
 
 // mainPurposeID finds the fund's one kind='main' purpose. purpose_single_main
-// guarantees exactly one exists per fund, so ListPurposesByFund - already
-// scoped by fund_id - is enough; no dedicated query is added for a lookup
-// this small.
+// guarantees exactly one per fund, so the fund-scoped ListPurposesByFund is
+// enough.
 func mainPurposeID(ctx context.Context, q store.Querier, fundID int64) (int64, error) {
 	purposes, err := q.ListPurposesByFund(ctx, fundID)
 	if err != nil {

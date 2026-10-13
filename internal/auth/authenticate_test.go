@@ -7,8 +7,7 @@ import (
 )
 
 // TestAuthenticateAcceptsTheCorrectPassword is the happy path: the account
-// Register created verifies against the same password and returns the real
-// row.
+// Register created verifies and returns the real row.
 func TestAuthenticateAcceptsTheCorrectPassword(t *testing.T) {
 	t.Parallel()
 	a, _ := newTestAuth(t)
@@ -31,11 +30,10 @@ func TestAuthenticateAcceptsTheCorrectPassword(t *testing.T) {
 	}
 }
 
-// TestAuthenticateWrongPasswordAndUnknownEmailReturnTheSameSentinel is
-// issue #115's "one generic failure": errors.Is must report true for
-// ErrInvalidCredentials on both a wrong password and an email that names no
-// account at all - neither case may surface a different error a caller
-// could branch on.
+// TestAuthenticateWrongPasswordAndUnknownEmailReturnTheSameSentinel is #115's
+// "one generic failure": errors.Is reports ErrInvalidCredentials for a wrong
+// password and for an email naming no account; neither may surface a
+// different error a caller could branch on.
 func TestAuthenticateWrongPasswordAndUnknownEmailReturnTheSameSentinel(t *testing.T) {
 	t.Parallel()
 	a, _ := newTestAuth(t)
@@ -56,8 +54,8 @@ func TestAuthenticateWrongPasswordAndUnknownEmailReturnTheSameSentinel(t *testin
 	}
 }
 
-// TestAuthenticateRejectsAnEmptyPasswordAgainstARealAccount: an empty guess
-// is still just a wrong password, not a special case.
+// TestAuthenticateRejectsAnEmptyPasswordAgainstARealAccount: an empty guess is
+// just a wrong password.
 func TestAuthenticateRejectsAnEmptyPasswordAgainstARealAccount(t *testing.T) {
 	t.Parallel()
 	a, _ := newTestAuth(t)
@@ -74,9 +72,8 @@ func TestAuthenticateRejectsAnEmptyPasswordAgainstARealAccount(t *testing.T) {
 }
 
 // TestAuthenticateOnAFreshInstanceWithNoAccountAtAllReturnsTheSameSentinel:
-// the "no such email" arm must not require any row to exist anywhere - a
-// login attempt before Register has ever run once is just another unknown
-// email.
+// the "no such email" arm needs no row anywhere; a login before Register has
+// run is another unknown email.
 func TestAuthenticateOnAFreshInstanceWithNoAccountAtAllReturnsTheSameSentinel(t *testing.T) {
 	t.Parallel()
 	a, _ := newTestAuth(t)
@@ -87,11 +84,10 @@ func TestAuthenticateOnAFreshInstanceWithNoAccountAtAllReturnsTheSameSentinel(t 
 	}
 }
 
-// TestAuthenticateSurfacesADatabaseFailureAsAPlainError: a lookup that
-// fails for an infrastructure reason - here the database is closed
-// underneath it - must not be mistaken for ErrInvalidCredentials.
-// mapAuthError would otherwise answer a broken instance with "wrong
-// password" instead of a 500.
+// TestAuthenticateSurfacesADatabaseFailureAsAPlainError: a lookup failing for
+// an infrastructure reason (the database closed underneath) must not read as
+// ErrInvalidCredentials, which mapAuthError would answer as "wrong password"
+// instead of a 500.
 func TestAuthenticateSurfacesADatabaseFailureAsAPlainError(t *testing.T) {
 	t.Parallel()
 	a, sqlDB := newTestAuth(t)
@@ -109,9 +105,9 @@ func TestAuthenticateSurfacesADatabaseFailureAsAPlainError(t *testing.T) {
 }
 
 // TestAuthenticateSurfacesAMalformedStoredHashAsAPlainError: a hand-edited
-// password_hash column (ADR-030's recovery story puts an operator at this
-// exact column) is a corrupted row, not a guessed-wrong password - it must
-// not come back as ErrInvalidCredentials either.
+// password_hash (ADR-030's recovery story puts an operator at this column) is
+// a corrupted row, not a wrong guess, and must not read as
+// ErrInvalidCredentials.
 func TestAuthenticateSurfacesAMalformedStoredHashAsAPlainError(t *testing.T) {
 	t.Parallel()
 	a, sqlDB := newTestAuth(t)

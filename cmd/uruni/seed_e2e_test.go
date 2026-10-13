@@ -11,9 +11,8 @@ import (
 	"github.com/kerti/uruni/internal/auth"
 )
 
-// TestSeedE2ERefusesAnUnsetURUNI_DB is the guard's most important case: no
-// silent fallback to config.DefaultDBPath, which in a developer's working
-// copy is their real dev database.
+// TestSeedE2ERefusesAnUnsetURUNI_DB is the guard's key case: no silent
+// fallback to config.DefaultDBPath, a developer's real dev database.
 func TestSeedE2ERefusesAnUnsetURUNI_DB(t *testing.T) {
 	t.Setenv("URUNI_DB", "")
 
@@ -26,10 +25,8 @@ func TestSeedE2ERefusesAnUnsetURUNI_DB(t *testing.T) {
 	}
 }
 
-// TestSeedE2ERefusesTheDevDatabase covers the guard's whole point: pointing
-// it at what looks like an ordinary project-local database must refuse
-// rather than wipe it, even though the path is a perfectly valid SQLite
-// file.
+// TestSeedE2ERefusesTheDevDatabase: an ordinary project-local database path
+// must refuse rather than wipe, though a perfectly valid SQLite file.
 func TestSeedE2ERefusesTheDevDatabase(t *testing.T) {
 	t.Setenv("URUNI_DB", "./uruni.db")
 
@@ -43,9 +40,8 @@ func TestSeedE2ERefusesTheDevDatabase(t *testing.T) {
 }
 
 // TestSeedE2ERefusesATempPathWithoutE2EInTheName: living under a temp
-// directory alone isn't enough - a stray "/tmp/uruni.db" a developer created
-// by hand while debugging something else must not look throwaway just
-// because of where it happens to sit.
+// directory is not enough; a hand-made "/tmp/uruni.db" must not look
+// throwaway because of where it sits.
 func TestSeedE2ERefusesATempPathWithoutE2EInTheName(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "uruni.db")
 	t.Setenv("URUNI_DB", path)
@@ -55,11 +51,10 @@ func TestSeedE2ERefusesATempPathWithoutE2EInTheName(t *testing.T) {
 	}
 }
 
-// TestSeedE2ESeedsAThrowawayDatabase is the happy path: a path that satisfies
-// both halves of the guard (under a temp directory, "e2e" in the filename)
-// migrates and seeds cleanly against a database that does not exist yet -
-// which is the only state `make e2e` ever calls it in, since `make e2e-reset`
-// deletes the file first.
+// TestSeedE2ESeedsAThrowawayDatabase is the happy path: a path satisfying both
+// halves of the guard (under a temp directory, "e2e" in the name) migrates and
+// seeds cleanly against a database that does not exist yet, the only state
+// `make e2e` calls it in, as `make e2e-reset` deletes the file first.
 func TestSeedE2ESeedsAThrowawayDatabase(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "uruni-e2e.db")
 	t.Setenv("URUNI_DB", path)
@@ -69,12 +64,10 @@ func TestSeedE2ESeedsAThrowawayDatabase(t *testing.T) {
 	}
 }
 
-// TestSeedE2ERefusesAnAlreadySeededDatabase pins the other half of that: the
-// command is *not* idempotent and must not pretend to be. auth.Register is
-// single-account by design (ErrAlreadyRegistered), so a second run against a
-// database that still has the first fixture fails loudly rather than seeding a
-// second fund on top of the first. `make e2e-reset` deleting the file is what
-// makes a re-run work, and this is the test that says so.
+// TestSeedE2ERefusesAnAlreadySeededDatabase: the command is not idempotent.
+// auth.Register is single-account (ErrAlreadyRegistered), so a second run on a
+// seeded database fails loudly rather than seeding a second fund. `make
+// e2e-reset` deleting the file makes a re-run work.
 func TestSeedE2ERefusesAnAlreadySeededDatabase(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "uruni-e2e.db")
 	t.Setenv("URUNI_DB", path)
@@ -92,13 +85,12 @@ func TestSeedE2ERefusesAnAlreadySeededDatabase(t *testing.T) {
 	}
 }
 
-// TestSeedE2EReportsADatabaseItCannotOpen covers the failure an operator is
-// most likely to actually hit past the guard: the path looks throwaway but is
-// not a file seedE2E can open. The error has to name the path, because the
-// only thing the operator controls here is URUNI_DB.
+// TestSeedE2EReportsADatabaseItCannotOpen: the failure an operator most likely
+// hits past the guard, a throwaway-looking path seedE2E cannot open. The error
+// must name the path, the only thing the operator controls (URUNI_DB).
 func TestSeedE2EReportsADatabaseItCannotOpen(t *testing.T) {
-	// A directory where a database file should be: passes both halves of the
-	// guard, then fails at db.Open's ping.
+	// A directory where a database file belongs: passes both halves of the guard,
+	// then fails at db.Open's ping.
 	path := filepath.Join(t.TempDir(), "uruni-e2e.db")
 	if err := os.Mkdir(path, 0o750); err != nil {
 		t.Fatalf("creating the directory standing in for a database: %v", err)

@@ -10,18 +10,17 @@ import (
 )
 
 // The five queries M3's domain layer (internal/ledger) reads, exercised
-// directly against the real schema before any ledger code depends on them
-// (issue #38). Each is scoped by fund_id even where a narrower key would
-// already be unique, per ADR-024.
+// against the real schema before any ledger code depends on them (#38). Each
+// is scoped by fund_id even where a narrower key would be unique (ADR-024).
 
 func TestMaxTransactionIDByFundIsNoRowsOnAnEmptyFund(t *testing.T) {
 	t.Parallel()
 	sqlDB := migratedTestDB(t)
 	f := newScenarioFund(t, sqlDB, "Neighborhood Fund", validSlug)
 
-	// This is the whole reason the query is ORDER BY ... LIMIT 1 rather than
-	// an aggregate: a fund's first-ever reconciliation must see a clean
-	// sql.ErrNoRows, not a NULL-scan error (ADR-024, issue #38).
+	// Why the query is ORDER BY ... LIMIT 1, not an aggregate: a fund's first
+	// reconciliation must see a clean sql.ErrNoRows, not a NULL-scan error
+	// (ADR-024, #38).
 	_, err := store.New(sqlDB).MaxTransactionIDByFund(context.Background(), f.fundID)
 	if !errors.Is(err, sql.ErrNoRows) {
 		t.Fatalf("MaxTransactionIDByFund on an empty fund = %v, want sql.ErrNoRows", err)
@@ -44,9 +43,8 @@ func TestMaxTransactionIDByFundIsTheHighestIDInTheFund(t *testing.T) {
 		OccurredOn: "2026-08-02", Kind: "normal",
 	})
 
-	// A second fund with a higher-numbered row of its own - scoping proof, not
-	// just a happy path. If the query forgot fund_id it would return this row
-	// instead of the first fund's.
+	// A second fund with a higher-numbered row: a scoping proof, not just a happy
+	// path. If the query forgot fund_id it would return this row.
 	g := newScenarioFund(t, sqlDB, "Community Fund", "zyxwvutsrqponmlkjihgfe")
 	g.entry(t, sqlDB, store.CreateTransactionParams{
 		AccountID: g.cashID, PurposeID: g.mainID, Direction: "in", Amount: 999_000,
@@ -137,9 +135,8 @@ func TestDuesPaidByPeriodCoversFullPartialAndUnpaidMembers(t *testing.T) {
 		t.Fatalf("CreateMember(Jack Doe) = %v, want no error", err)
 	}
 
-	// Jane Doe paid in full, John Doe paid part of it, Jack Doe has not paid at
-	// all - and so has no row in the result at all, since GROUP BY member_id
-	// only sees members who posted a dues row for this period.
+	// Jane Doe paid in full, John Doe part, Jack Doe nothing, so Jack has no row:
+	// GROUP BY member_id only sees members who posted a dues row for the period.
 	f.entry(t, sqlDB, store.CreateTransactionParams{
 		AccountID: f.cashID, PurposeID: f.mainID, Direction: "in", Amount: 25_000,
 		OccurredOn: "2026-08-05", Kind: "dues", MemberID: &jane.ID, DuesPeriod: &period,
@@ -206,9 +203,8 @@ func TestLatestDuesPeriodPaidByMemberIsTheChronologicalMax(t *testing.T) {
 		t.Fatalf("LatestDuesPeriodPaidByMember member_id = %v, want %d", rows[0].MemberID, memberID)
 	}
 
-	// The type assertion is the test: LatestPeriod must already be a plain
-	// string (the CAST(... AS TEXT) fix), not something the caller has to
-	// type-assert out of interface{}.
+	// The type assertion is the test: LatestPeriod must already be a plain string
+	// (the CAST(... AS TEXT) fix), not something to type-assert out of interface{}.
 	latest := rows[0].LatestPeriod
 	if latest != "2026-12" {
 		t.Errorf("latest period = %q, want 2026-12 - the chronological max, not the last one inserted", latest)
@@ -265,8 +261,8 @@ func TestGetReimbursementSettlementDoesNotSeeAnotherFundsClaim(t *testing.T) {
 		OccurredOn: "2026-08-15", Kind: "reimbursement", ReimbursementID: &claimB,
 	})
 
-	// The claim id exists and is settled - but in fund B, not fund A. Without
-	// fund_id scoping this would wrongly return fund B's settlement.
+	// The claim exists and is settled, but in fund B, not A. Without fund_id
+	// scoping this would return fund B's settlement.
 	if _, err := q.GetReimbursementSettlement(ctx, store.GetReimbursementSettlementParams{
 		FundID: a.fundID, ReimbursementID: &claimB,
 	}); !errors.Is(err, sql.ErrNoRows) {

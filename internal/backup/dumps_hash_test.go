@@ -11,8 +11,8 @@ import (
 	"github.com/kerti/uruni/internal/store"
 )
 
-// countingAssembler wraps assembleZip so a test can assert how many zips a
-// call built - the seam #501 added, instead of timing anything.
+// countingAssembler wraps assembleZip so a test can assert how many zips a call
+// built: the seam #501 added, not timing.
 func countingAssembler() (zipAssembler, *atomic.Int64) {
 	var n atomic.Int64
 	return func(docBytes []byte, receipts []store.Receipt, uploadsDir string) ([]byte, []string, error) {
@@ -22,7 +22,7 @@ func countingAssembler() (zipAssembler, *atomic.Int64) {
 }
 
 // TestWriteDailyIfNeededUnchangedFundBuildsNoZip: the hourly tick on a day
-// without a dump yet but without a change either decides from the hash alone.
+// without a dump but without a change decides from the hash alone.
 func TestWriteDailyIfNeededUnchangedFundBuildsNoZip(t *testing.T) {
 	t.Parallel()
 	sqlDB := newTestDB(t)
@@ -52,8 +52,8 @@ func TestWriteDailyIfNeededUnchangedFundBuildsNoZip(t *testing.T) {
 	}
 }
 
-// TestWriteDailyIfNeededBuildsExactlyOneZipWhenTheFundChanged: the other
-// direction - the early return must not swallow a real change.
+// TestWriteDailyIfNeededBuildsExactlyOneZipWhenTheFundChanged: the early
+// return must not swallow a real change.
 func TestWriteDailyIfNeededBuildsExactlyOneZipWhenTheFundChanged(t *testing.T) {
 	t.Parallel()
 	sqlDB := newTestDB(t)
@@ -109,8 +109,7 @@ func planHash(t *testing.T, read documentReader, uploadsDir string) string {
 }
 
 // TestChangeHashFollowsTheReceiptList: adding a receipt, removing it, and a
-// photo going missing from disk each move the hash; putting things back
-// restores it.
+// photo going missing from disk each move the hash; restoring them restores it.
 func TestChangeHashFollowsTheReceiptList(t *testing.T) {
 	t.Parallel()
 	sqlDB := newTestDB(t)
@@ -167,10 +166,10 @@ func TestChangeHashFollowsTheReceiptList(t *testing.T) {
 	}
 }
 
-// TestChangeHashIgnoresWhatVariesPerTick: the document has no wall-clock
-// field and the receipt files' mtimes are not read, so repeated plans of an
-// untouched fund - however much later - hash identically. If this ever
-// fails, the scheduler's dedupe has silently stopped working.
+// TestChangeHashIgnoresWhatVariesPerTick: the document has no wall-clock field
+// and receipt mtimes are not read, so repeated plans of an untouched fund,
+// however much later, hash identically. If this fails, the scheduler's dedupe
+// has silently stopped working.
 func TestChangeHashIgnoresWhatVariesPerTick(t *testing.T) {
 	t.Parallel()
 	sqlDB := newTestDB(t)

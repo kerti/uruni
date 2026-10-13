@@ -8,11 +8,10 @@ import (
 	"github.com/kerti/uruni/internal/store"
 )
 
-// TestReverseDuesPaymentRoundTripsBalanceAndPaidStatus is the acceptance
-// criterion from #82, both halves in one test: pay, then reverse, and (a)
-// the member reads as UNPAID for that period again, and (b) the fund
-// balance is back to exactly what it was before the payment - an integer
-// comparison, no tolerance (ADR-015).
+// TestReverseDuesPaymentRoundTripsBalanceAndPaidStatus is #82's criterion, both
+// halves: pay, then reverse, and (a) the member reads UNPAID for that period
+// again, and (b) the fund balance is exactly what it was before the payment,
+// an integer comparison (ADR-015).
 func TestReverseDuesPaymentRoundTripsBalanceAndPaidStatus(t *testing.T) {
 	t.Parallel()
 	l := newTestLedger(t)
@@ -78,7 +77,7 @@ func TestReverseDuesPaymentRoundTripsBalanceAndPaidStatus(t *testing.T) {
 		t.Errorf("reversal DuesPeriod = %v, want %q (copied from the original)", reversal.DuesPeriod, "2026-08")
 	}
 
-	// (a) the member reads as UNPAID for that period again.
+	// (a) the member reads UNPAID for that period again.
 	statusAfter, err := l.DuesStatusForPeriod(ctx, f.fundID, "2026-08")
 	if err != nil {
 		t.Fatalf("DuesStatusForPeriod() after reversal = %v, want no error", err)
@@ -94,8 +93,7 @@ func TestReverseDuesPaymentRoundTripsBalanceAndPaidStatus(t *testing.T) {
 		t.Errorf("PaidAmount after reversal = %d, want 0", gotAfter.PaidAmount)
 	}
 
-	// (b) the fund balance is back to exactly what it was before the
-	// payment - an integer comparison, no tolerance.
+	// (b) the fund balance is back to exactly what it was before the payment.
 	balanceAfterReversal, err := l.FundBalance(ctx, f.fundID)
 	if err != nil {
 		t.Fatalf("FundBalance() after reversal = %v, want no error", err)
@@ -105,10 +103,9 @@ func TestReverseDuesPaymentRoundTripsBalanceAndPaidStatus(t *testing.T) {
 	}
 }
 
-// TestReverseDuesPaymentTwiceIsRefused: a payment is reversible at most
-// once - the dues_payment_reversed_once partial unique index, surfaced as
-// the named ErrDuesPaymentAlreadyReversed rather than a raw constraint
-// string.
+// TestReverseDuesPaymentTwiceIsRefused: a payment is reversible at most once
+// (the dues_payment_reversed_once partial unique index), surfaced as the named
+// ErrDuesPaymentAlreadyReversed, not a raw constraint string.
 func TestReverseDuesPaymentTwiceIsRefused(t *testing.T) {
 	t.Parallel()
 	l := newTestLedger(t)
@@ -144,9 +141,9 @@ func TestReverseDuesPaymentTwiceIsRefused(t *testing.T) {
 	}
 }
 
-// TestReverseDuesPaymentRefusesANonDuesTransaction: only a kind='dues' row
-// can be reversed through this method - PRD section 4 keeps it exactly as wide as
-// dues, never a generic reverse-any-transaction primitive.
+// TestReverseDuesPaymentRefusesANonDuesTransaction: only a kind='dues' row can
+// be reversed here; PRD section 4 keeps it as wide as dues, never a generic
+// reverse-any-transaction.
 func TestReverseDuesPaymentRefusesANonDuesTransaction(t *testing.T) {
 	t.Parallel()
 	l := newTestLedger(t)
@@ -169,10 +166,9 @@ func TestReverseDuesPaymentRefusesANonDuesTransaction(t *testing.T) {
 	}
 }
 
-// TestReverseDuesPaymentRefusesReversingAReversal: a reversal is itself
-// posted as kind='adjustment', never kind='dues' (ADR-029), so it fails the
-// same ErrNotADuesPayment check as any other non-dues row - ruling out
-// reversing a reversal without a separate check.
+// TestReverseDuesPaymentRefusesReversingAReversal: a reversal is posted as
+// kind='adjustment', never kind='dues' (ADR-029), so it fails the same
+// ErrNotADuesPayment check, with no separate check.
 func TestReverseDuesPaymentRefusesReversingAReversal(t *testing.T) {
 	t.Parallel()
 	l := newTestLedger(t)
@@ -208,13 +204,11 @@ func TestReverseDuesPaymentRefusesReversingAReversal(t *testing.T) {
 	}
 }
 
-// TestReverseDuesPaymentRefusesAnotherFundsTransaction: the fetch behind
-// ReverseDuesPayment is fund-scoped (GetTransactionForFund: WHERE fund_id =
-// ? AND id = ?), which is what the composite FK on reverses_transaction_id
-// exists to back at the schema level. A transaction id that is real but
-// belongs to another fund must fail for the SAME reason as one that does
-// not exist at all - ErrDuesPaymentNotFound, not a generic error and not a
-// silent cross-fund reversal.
+// TestReverseDuesPaymentRefusesAnotherFundsTransaction: the fetch is
+// fund-scoped (GetTransactionForFund), backing the composite FK on
+// reverses_transaction_id at the schema level. A real transaction id of
+// another fund must fail for the same reason as one that does not exist:
+// ErrDuesPaymentNotFound, not a generic error or a silent cross-fund reversal.
 func TestReverseDuesPaymentRefusesAnotherFundsTransaction(t *testing.T) {
 	t.Parallel()
 	l := newTestLedger(t)
@@ -236,9 +230,8 @@ func TestReverseDuesPaymentRefusesAnotherFundsTransaction(t *testing.T) {
 	}
 	paymentID := posted[0].ID
 
-	// A second fund, built by hand (mirrors TestDuesStatusForPeriodScopesToOneFund
-	// in dues_status_test.go): newFixture hard-codes report_slug, so a second
-	// fund needs its own distinct one.
+	// A second fund, built by hand (as in TestDuesStatusForPeriodScopesToOneFund):
+	// newFixture hard-codes report_slug, so a second needs its own.
 	other, err := q.CreateFund(ctx, store.CreateFundParams{
 		Name: "Other Fund", Currency: "IDR", ReportSlug: "zyxwvutsrqponmlkjihgfe", CreatedAt: 1,
 	})
@@ -253,8 +246,8 @@ func TestReverseDuesPaymentRefusesAnotherFundsTransaction(t *testing.T) {
 		t.Fatalf("ReverseDuesPayment(fund 2, fund 1's transaction id) = %v, want an error wrapping ErrDuesPaymentNotFound", err)
 	}
 
-	// And the payment must still be reversible, untouched, from its real fund -
-	// proving the refusal above was scoping, not a corrupted or consumed row.
+	// The payment is still reversible from its real fund, so the refusal above
+	// was scoping, not a corrupted or consumed row.
 	if _, err := l.ReverseDuesPayment(ctx, ReverseDuesPaymentParams{
 		FundID: f1.fundID, TransactionID: paymentID, OccurredOn: "2026-08-16",
 	}); err != nil {
@@ -262,9 +255,9 @@ func TestReverseDuesPaymentRefusesAnotherFundsTransaction(t *testing.T) {
 	}
 }
 
-// TestReverseDuesPaymentRejectsInvalidOccurredOn mirrors
-// PostDuesPayments' own argument-shape validation (ADR-027): checked before
-// anything is fetched or written.
+// TestReverseDuesPaymentRejectsInvalidOccurredOn mirrors PostDuesPayments'
+// argument-shape validation (ADR-027): checked before anything is fetched or
+// written.
 func TestReverseDuesPaymentRejectsInvalidOccurredOn(t *testing.T) {
 	t.Parallel()
 	l := newTestLedger(t)
@@ -294,10 +287,9 @@ func TestReverseDuesPaymentRejectsInvalidOccurredOn(t *testing.T) {
 }
 
 // TestReverseDuesPaymentReversedPeriodNoLongerCountsTowardDuesPaidByPeriod
-// exercises DuesPaidByPeriod directly (not through DuesStatusForPeriod),
-// proving the AND NOT EXISTS clause itself: a reversed period must vanish
-// from the paid-amount sum, not merely read as Unpaid through some
-// downstream classification.
+// exercises DuesPaidByPeriod directly, proving the AND NOT EXISTS clause: a
+// reversed period vanishes from the paid-amount sum, not merely reads Unpaid
+// downstream.
 func TestReverseDuesPaymentReversedPeriodNoLongerCountsTowardDuesPaidByPeriod(t *testing.T) {
 	t.Parallel()
 	l := newTestLedger(t)
@@ -340,14 +332,12 @@ func TestReverseDuesPaymentReversedPeriodNoLongerCountsTowardDuesPaidByPeriod(t 
 	}
 }
 
-// TestReverseDuesPaymentReversedPeriodDoesNotReadAsPaidInAdvance is the
-// specific bug ADR-029's chosen design exists to avoid, named directly in
-// the ADR: a member who paid March, then had a wrongly-entered June payment
-// reversed, must NOT read as paid in advance through June. Under the
-// rejected netting design, June would still be the chronological MAX
-// dues_period touched by a kind='dues' row for this member - reversing it
-// by giving the reversal a different kind entirely is what keeps June out
-// of that MAX once it no longer counts as paid at all.
+// TestReverseDuesPaymentReversedPeriodDoesNotReadAsPaidInAdvance is the bug
+// ADR-029's design exists to avoid: a member who paid March, then had a
+// wrongly-entered June payment reversed, must not read as paid in advance
+// through June. Under the rejected netting design June would still be the
+// MAX dues_period of a kind='dues' row; the reversal's different kind keeps
+// June out of that MAX once it no longer counts as paid.
 func TestReverseDuesPaymentReversedPeriodDoesNotReadAsPaidInAdvance(t *testing.T) {
 	t.Parallel()
 	l := newTestLedger(t)
@@ -378,8 +368,8 @@ func TestReverseDuesPaymentReversedPeriodDoesNotReadAsPaidInAdvance(t *testing.T
 		t.Fatalf("PostDuesPayments(June) = %v, want no error", err)
 	}
 
-	// Before reversing June, March genuinely does read as paid in advance -
-	// establishing the mechanism the reversal must then undo.
+	// Before reversing June, March reads as paid in advance: the mechanism the
+	// reversal must undo.
 	statusBeforeReversal, err := l.DuesStatusForPeriod(ctx, f.fundID, "2026-03")
 	if err != nil {
 		t.Fatalf("DuesStatusForPeriod(March) before June's reversal = %v, want no error", err)
@@ -396,8 +386,8 @@ func TestReverseDuesPaymentReversedPeriodDoesNotReadAsPaidInAdvance(t *testing.T
 		t.Fatalf("ReverseDuesPayment(June) = %v, want no error", err)
 	}
 
-	// March must now read as plain Paid - NOT paid in advance through a June
-	// that no longer counts as paid at all.
+	// March must now read plain Paid, not paid in advance through a June that no
+	// longer counts.
 	statusAfterReversal, err := l.DuesStatusForPeriod(ctx, f.fundID, "2026-03")
 	if err != nil {
 		t.Fatalf("DuesStatusForPeriod(March) after June's reversal = %v, want no error", err)
@@ -411,7 +401,7 @@ func TestReverseDuesPaymentReversedPeriodDoesNotReadAsPaidInAdvance(t *testing.T
 			gotAfterReversal.Status, DuesStatusPaid)
 	}
 
-	// And June itself must read as Unpaid, not merely "not advance".
+	// And June itself reads Unpaid, not merely "not advance".
 	statusJune, err := l.DuesStatusForPeriod(ctx, f.fundID, "2026-06")
 	if err != nil {
 		t.Fatalf("DuesStatusForPeriod(June) after its own reversal = %v, want no error", err)
@@ -425,9 +415,9 @@ func TestReverseDuesPaymentReversedPeriodDoesNotReadAsPaidInAdvance(t *testing.T
 	}
 }
 
-// #257: a reversal's own Note follows the same nil/blank/typed contract as
-// every other system path - nothing generated is ever stored, the list
-// labels the row instead (Undo2, "Pembatalan - {period} - {anggota}").
+// #257: a reversal's Note follows the nil/blank/typed contract of every system
+// path: nothing generated is stored; the list labels the row (Undo2,
+// "Pembatalan - {period} - {anggota}").
 func TestReverseDuesPaymentNoteFollowsNormalizeNoteContract(t *testing.T) {
 	t.Parallel()
 	postAndReverse := func(t *testing.T, note *string) *string {
@@ -467,15 +457,12 @@ func TestReverseDuesPaymentNoteFollowsNormalizeNoteContract(t *testing.T) {
 	}
 }
 
-// --- ADR-034: the reversal widens to a named contribution -----------------
+// --- ADR-034: the reversal widens to a named contribution ---
 
-// TestReverseDuesPaymentReversesANamedContribution: the fields ADR-029
-// already copies from a dues payment - account_id, purpose_id, amount,
-// member_id, dues_period - are copied identically from a named contribution,
-// with dues_period staying nil (a contribution never carries one). The fund
-// balance round-trips exactly, the same integer-comparison guarantee
-// TestReverseDuesPaymentRoundTripsBalanceAndPaidStatus already proves for
-// dues.
+// TestReverseDuesPaymentReversesANamedContribution: the fields ADR-029 copies
+// from a dues payment (account_id, purpose_id, amount, member_id, dues_period)
+// are copied identically from a named contribution, with dues_period staying
+// nil. The fund balance round-trips exactly, as for dues.
 func TestReverseDuesPaymentReversesANamedContribution(t *testing.T) {
 	t.Parallel()
 	l := newTestLedger(t)
@@ -533,10 +520,9 @@ func TestReverseDuesPaymentReversesANamedContribution(t *testing.T) {
 		t.Fatalf("FundBalance() after reversal = %d, want %d (exactly the pre-contribution balance)", balanceAfter, balanceBefore)
 	}
 
-	// The reversed contribution no longer counts toward participation
-	// (ADR-034): the member reads Belum, not Sudah, and the reversed row's
-	// own amount is excluded from the sum entirely - not merely below a
-	// minimum.
+	// The reversed contribution no longer counts toward participation (ADR-034):
+	// the member reads Belum, not Sudah, and its amount is excluded from the sum
+	// entirely, not merely below a minimum.
 	participation, err := l.GetIncidentalParticipation(ctx, f.fundID, envelope.PurposeID)
 	if err != nil {
 		t.Fatalf("GetIncidentalParticipation() = %v, want no error", err)
@@ -553,10 +539,9 @@ func TestReverseDuesPaymentReversesANamedContribution(t *testing.T) {
 	}
 }
 
-// TestReverseDuesPaymentRefusesAnUnnamedContribution: an unnamed
-// contribution is not reversible through this method - it is neither dues
-// nor a named contribution, exactly the same ErrNotADuesPayment refusal an
-// ordinary transaction already gets (TestReverseDuesPaymentRefusesANonDuesTransaction).
+// TestReverseDuesPaymentRefusesAnUnnamedContribution: an unnamed contribution
+// is neither dues nor a named contribution, so it gets the ErrNotADuesPayment
+// refusal of TestReverseDuesPaymentRefusesANonDuesTransaction.
 func TestReverseDuesPaymentRefusesAnUnnamedContribution(t *testing.T) {
 	t.Parallel()
 	l := newTestLedger(t)
@@ -581,8 +566,8 @@ func TestReverseDuesPaymentRefusesAnUnnamedContribution(t *testing.T) {
 }
 
 // TestReverseDuesPaymentRefusesAClosedEnvelope: a reversal posts to the
-// original row's own purpose, so ADR-031's guard applies to it exactly as
-// it does to an ordinary posting - reopen first (ADR-034).
+// original row's purpose, so ADR-031's guard applies as to an ordinary
+// posting: reopen first (ADR-034).
 func TestReverseDuesPaymentRefusesAClosedEnvelope(t *testing.T) {
 	t.Parallel()
 	l := newTestLedger(t)

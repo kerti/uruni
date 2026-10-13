@@ -17,35 +17,31 @@ import (
 type DuesStatus string
 
 const (
-	// DuesStatusUnpaid is a member who owes this period and has paid nothing
-	// toward it.
+	// DuesStatusUnpaid is a member who owes this period and has paid nothing.
 	DuesStatusUnpaid DuesStatus = "unpaid"
-	// DuesStatusPartial is a member who has paid something toward this
-	// period, but less than their tier's effective rate.
+	// DuesStatusPartial is a member who paid something, but less than their
+	// tier's effective rate.
 	DuesStatusPartial DuesStatus = "partial"
-	// DuesStatusPaid is a member who has paid at least their tier's
-	// effective rate for this period. An overpayment (more than the rate)
-	// is still Paid, not a distinct status - see DuesStatusForPeriod's
-	// doc comment.
+	// DuesStatusPaid is a member who paid at least their tier's effective rate.
+	// An overpayment is still Paid (see DuesStatusForPeriod).
 	DuesStatusPaid DuesStatus = "paid"
-	// DuesStatusPaidInAdvance is a member who has fully paid this period
-	// and has also paid a later period - PRD 7.3's "some pay several
-	// months at once".
+	// DuesStatusPaidInAdvance is a member who fully paid this period and also a
+	// later one (PRD 7.3: "some pay several months at once").
 	DuesStatusPaidInAdvance DuesStatus = "paid_in_advance"
 )
 
-// MemberDuesStatus is one row of DuesStatusForPeriod's roster: one member who
-// owes dues for the requested period, what their tier's rate says they owe,
-// what they have actually paid toward that period, and the derived status.
+// MemberDuesStatus is one row of DuesStatusForPeriod's roster: a member who
+// owes dues for the period, what their tier's rate says they owe, what they
+// paid toward it, and the derived status.
 type MemberDuesStatus struct {
 	Member     store.Member
 	OwedAmount money.Amount
 	PaidAmount money.Amount
 	Status     DuesStatus
-	// PaidThrough is the last period of the unbroken run of fully paid
-	// periods that starts at the requested one (#357) - "lunas sampai" - set
-	// only when Status is DuesStatusPaidInAdvance and the run actually
-	// reaches past the requested period; empty otherwise. See paidThrough.
+	// PaidThrough is the last period of the unbroken run of fully paid periods
+	// starting at the requested one (#357), "lunas sampai". Set only when Status
+	// is DuesStatusPaidInAdvance and the run reaches past the requested period.
+	// See paidThrough.
 	PaidThrough string
 }
 
@@ -54,36 +50,30 @@ type MemberDuesStatus struct {
 // paid in advance.
 //
 // Who is on the roster at all:
-//   - member.tier_id IS NULL means no dues obligation - excluded entirely,
-//     never shown as "unpaid".
-//   - A member whose tier has no dues_rate row effective for this period
-//     (the "madya TBD" case PRD 6 names) is omitted. Uruni does not invent
-//     an amount and does not show an unknown one.
+//   - member.tier_id IS NULL means no dues obligation: excluded, never shown
+//     as "unpaid".
+//   - A member whose tier has no dues_rate effective for this period (the
+//     "madya TBD" case, PRD 6) is omitted. Uruni does not invent an amount.
 //   - joined_on / inactive_on bound the active window, inclusive by month at
 //     both ends: a member owes every period from the month containing
-//     joined_on through the month containing inactive_on, and a partial
-//     month at either end counts in full - dues here are one monthly amount
-//     paid after payday, not a pro-rated subscription. joined_on is always
-//     set (#471: history starts at adoption, PRD 7.1); inactive_on == nil
-//     means "still active".
+//     joined_on through the month containing inactive_on, and a partial month
+//     counts in full (dues are one monthly amount paid after payday, not
+//     pro-rated). joined_on is always set (#471: history starts at adoption,
+//     PRD 7.1); inactive_on == nil means still active.
 //
-// Overpayment (paid > owed for this one period) reads as Paid, not a fifth
-// status: the treasurer's question is "did they clear what they owe", and
-// "yes, and then some" is still yes. The extra is visible in PaidAmount for
-// anyone who wants the exact figure; PRD 7.3 asks for a paid/partial/unpaid/
+// Overpayment (paid > owed for this period) reads as Paid, not a fifth
+// status: the treasurer's question is "did they clear what they owe". The
+// extra is visible in PaidAmount; PRD 7.3 asks for a paid/partial/unpaid/
 // ahead view, not a running credit ledger.
 //
-// Paid in advance is an upgrade of Paid, not an independent branch: a period
-// only reads as "paid in advance" when it is itself fully covered AND
-// LatestDuesPeriodPaidByMember shows a later period was also paid. A member
-// who paid March but skipped February still reads as Unpaid for February -
-// "ahead" describes a period that is itself settled and then some, not a
-// hole with a payment beyond it. This is a read-only method: no rows are
-// ever written or removed, and it reports state without nagging, escalating
-// or counting days overdue (PRD 7.3, PRD 4).
+// Paid in advance upgrades Paid: a period reads "paid in advance" only when
+// it is itself fully covered AND LatestDuesPeriodPaidByMember shows a later
+// period was also paid. A member who paid March but skipped February is
+// Unpaid for February. Read-only: it reports state without nagging,
+// escalating or counting days overdue (PRD 7.3, PRD 4).
 //
-// This is a read: it uses l.q directly rather than withTx, because it is a
-// handful of consistent SELECTs with no write in between (ADR-027).
+// It uses l.q directly rather than withTx: a handful of consistent SELECTs
+// with no write in between (ADR-027).
 func (l *Ledger) DuesStatusForPeriod(ctx context.Context, fundID int64, period string) ([]MemberDuesStatus, error) {
 	if err := validateDuesPeriod(period); err != nil {
 		return nil, err
@@ -127,13 +117,10 @@ func (l *Ledger) DuesStatusForPeriod(ctx context.Context, fundID int64, period s
 			continue // outside the joined_on..inactive_on window
 		}
 
-		// Accepted limitation (ADR-024): member.tier_id names the member's
-		// CURRENT tier, not the tier effective at `period`. A member
-		// promoted mid-year has that later tier applied to every past
-		// period too, so a period before the promotion can be misstated
-		// here. See
-		// TestDuesStatusForPeriodMidYearPromotionAppliesCurrentTierToPastPeriodsAcceptedLimitation
-		// for the concrete, accepted-wrong case.
+		// Accepted limitation (ADR-024): member.tier_id names the member's CURRENT
+		// tier, not the tier effective at `period`, so a period before a promotion
+		// can be misstated. See
+		// TestDuesStatusForPeriodMidYearPromotionAppliesCurrentTierToPastPeriodsAcceptedLimitation.
 		rate, err := l.q.GetEffectiveDuesRate(ctx, store.GetEffectiveDuesRateParams{
 			TierID: *m.TierID, EffectiveFrom: period,
 		})
@@ -167,13 +154,10 @@ func (l *Ledger) DuesStatusForPeriod(ctx context.Context, fundID int64, period s
 	return statuses, nil
 }
 
-// OutstandingDuesPeriod is one row of OutstandingDuesForMember's result: one
-// period a member still owes something for. Unlike MemberDuesStatus this
-// carries no store.Member - the caller already named the one member this
-// whole result is about - and Status is only ever DuesStatusUnpaid or
-// DuesStatusPartial: OutstandingDuesForMember never returns a period that
-// came back Paid or PaidInAdvance from classifyDuesStatus, so this type has
-// no representable state for either.
+// OutstandingDuesPeriod is one period a member still owes something for.
+// Unlike MemberDuesStatus it carries no store.Member (the caller named the
+// member), and Status is only DuesStatusUnpaid or DuesStatusPartial:
+// OutstandingDuesForMember never returns a Paid or PaidInAdvance period.
 type OutstandingDuesPeriod struct {
 	Period     string // "YYYY-MM"
 	OwedAmount money.Amount
@@ -181,67 +165,51 @@ type OutstandingDuesPeriod struct {
 	Status     DuesStatus
 }
 
-// CurrentDuesPeriod is the dues period ("YYYY-MM") that now falls in, reckoned
-// in Asia/Jakarta (tz.Jakarta), never the server's own zone: production runs
-// UTC, so between 17:00 and 24:00 UTC on a month's last day the host clock
-// still reads the old month while the treasurer is already in the next one
-// (#379). The report's "current month" is reckoned the same way (ADR-035).
+// CurrentDuesPeriod is the dues period ("YYYY-MM") that now falls in,
+// reckoned in Asia/Jakarta (tz.Jakarta), never the server's zone: production
+// runs UTC, so on a month's last evening the host clock still reads the old
+// month while the treasurer is in the next (#379). The report's "current
+// month" is reckoned the same way (ADR-035).
 func CurrentDuesPeriod(now time.Time) string {
 	return now.In(tz.Jakarta).Format(duesPeriodLayout)
 }
 
 // OutstandingDuesForMember returns, oldest first, every period fundID's
-// member memberID still owes something for - the same per-member,
-// per-period derivation DuesStatusForPeriod applies to its whole roster,
-// walked here across a range of periods for one member instead of across
-// every member for one period. A member who is square gets an empty slice
-// and no error, never a 404: "you owe nothing" is a normal answer, not a
-// failure to find something.
+// member memberID still owes something for: the per-period derivation
+// DuesStatusForPeriod applies to its roster, walked across a range of
+// periods for one member. A square member gets an empty slice and no error:
+// "you owe nothing" is a normal answer.
 //
-// through bounds the end of the range ("YYYY-MM"); an empty string defaults
-// to CurrentDuesPeriod(now), the current month in Jakarta. now is the current
-// instant, passed in so a test can stand on either side of a Jakarta month
-// boundary (as ReportParams.Now does); it is read only when through is empty.
+// through bounds the end of the range ("YYYY-MM"); empty defaults to
+// CurrentDuesPeriod(now). now is injected so a test can stand on either side
+// of a Jakarta month boundary (as ReportParams.Now does); it is read only
+// when through is empty.
 //
 // The range:
-//   - End: through. A member who left owes nothing for a month after they
-//     left, but that bound is memberOwesPeriod's inside the loop rather than
-//     a second narrowing here - one window rule, one owner. What is bounded
-//     here is only how far the walk ever reaches.
-//   - Start: the month containing joined_on, exactly as memberOwesPeriod
-//     bounds it for DuesStatusForPeriod. joined_on is always set (#471), so
-//     the walk never borrows a start from anywhere else - in particular not
-//     from the tier's earliest dues_rate, which would let a rate backdated
-//     for one member's live arrears (PRD 7.1) put the same periods on
-//     everyone in that tier.
+//   - End: through. A member who left owes nothing after they left, but that
+//     bound is memberOwesPeriod's inside the loop, not a second narrowing
+//     here: one window rule, one owner.
+//   - Start: the month containing joined_on, as memberOwesPeriod bounds it.
+//     joined_on is always set (#471), so the walk never borrows a start from
+//     the tier's earliest dues_rate, which would let a rate backdated for one
+//     member's live arrears (PRD 7.1) put the same periods on everyone in
+//     that tier.
 //
-// Within that range, exactly DuesStatusForPeriod's own rules decide what is
-// owed and skipped - see its doc comment, unchanged here:
-//   - member.tier_id == nil: no obligation at all, empty result.
-//   - memberOwesPeriod bounds every period the same way, both ends
-//     inclusive by month.
+// Within the range DuesStatusForPeriod's rules decide what is owed:
+//   - member.tier_id == nil: no obligation, empty result.
+//   - memberOwesPeriod bounds every period, both ends inclusive by month.
 //   - a period whose tier has no dues_rate effective yet is skipped, not
-//     invented, and does not truncate the walk - a later period can still
-//     be owed once a rate exists again.
-//   - the mid-year-promotion limitation (ADR-024): member.tier_id names the
-//     member's CURRENT tier, so a past period can be misstated against a
-//     rate that was not actually in force yet when it happened. Accepted
-//     and unchanged, exactly as DuesStatusForPeriod carries it - see
+//     invented, and does not truncate the walk: a later period can still be
+//     owed once a rate exists.
+//   - the mid-year-promotion limitation (ADR-024) is accepted and carried
+//     over unchanged; see
 //     TestDuesStatusForPeriodMidYearPromotionAppliesCurrentTierToPastPeriodsAcceptedLimitation.
 //
-// A period only appears in the result when classifyDuesStatus says Unpaid
-// or Partial for it; Paid and PaidInAdvance are both "nothing outstanding"
-// here and are silently dropped, never returned as a fourth or fifth
-// status. That is also why this method needs no "paid in advance" signal of
-// its own (unlike DuesStatusForPeriod, it never calls
-// LatestDuesPeriodPaidByMember): a period that would read as paid in
-// advance is fully covered either way, and fully covered periods do not
-// appear in an "outstanding" list regardless of what, if anything, was
-// paid beyond them.
+// A period appears only when classifyDuesStatus says Unpaid or Partial; Paid
+// and PaidInAdvance are "nothing outstanding" and dropped. So unlike
+// DuesStatusForPeriod it needs no LatestDuesPeriodPaidByMember call.
 //
-// This is a read: it uses l.q directly rather than withTx, for the same
-// reason DuesStatusForPeriod does (ADR-027) - a handful of consistent
-// SELECTs with no write in between.
+// It uses l.q directly rather than withTx, like DuesStatusForPeriod (ADR-027).
 func (l *Ledger) OutstandingDuesForMember(ctx context.Context, fundID, memberID int64, through string, now time.Time) ([]OutstandingDuesPeriod, error) {
 	if through == "" {
 		through = CurrentDuesPeriod(now)
@@ -258,13 +226,11 @@ func (l *Ledger) OutstandingDuesForMember(ctx context.Context, fundID, memberID 
 		return nil, nil // no dues obligation
 	}
 
-	// The end of the walk is `through` alone. inactive_on is deliberately NOT
-	// narrowed in here: memberOwesPeriod inside the loop already refuses every
-	// period after the month a member left, and having the bound in two places
-	// means two definitions of the same window rule that can drift apart. The
-	// cost is a few extra iterations of a string comparison for a member who
-	// has left - the comparison happens before the rate query, so no extra
-	// database work.
+	// The end of the walk is `through` alone. inactive_on is deliberately not
+	// narrowed in here: memberOwesPeriod in the loop already refuses every period
+	// after the month a member left, and a second bound would be a second
+	// definition of the window rule that can drift. The cost is a few string
+	// comparisons before the rate query, so no extra database work.
 	end := through
 
 	start := member.JoinedOn[:7]
@@ -299,8 +265,7 @@ func (l *Ledger) OutstandingDuesForMember(ctx context.Context, fundID, memberID 
 			continue // outside the joined_on..inactive_on window
 		}
 
-		// Accepted limitation (ADR-024) - see this method's own doc comment
-		// and DuesStatusForPeriod's identical call site.
+		// Accepted limitation (ADR-024); see DuesStatusForPeriod.
 		rate, err := l.q.GetEffectiveDuesRate(ctx, store.GetEffectiveDuesRateParams{
 			TierID: *member.TierID, EffectiveFrom: period,
 		})
@@ -327,48 +292,30 @@ func (l *Ledger) OutstandingDuesForMember(ctx context.Context, fundID, memberID 
 	return outstanding, nil
 }
 
-// ArrearsMonthsForMember is Anggota's roster badge (#233, ADR-032 "The
-// roster row, and a word that does not exist yet"): N, in whole months, of
-// periods strictly BEFORE currentPeriod that fundID's member memberID still
-// owes something for. It is a thin count over OutstandingDuesForMember, not
-// a second derivation of what is owed - every rule that decides who owes
-// what (the joined_on/inactive_on window, the skip-a-period-with-no-rate
-// case, the mid-year-promotion limitation) lives exactly once, on that
-// method and on DuesStatusForPeriod beneath it, and this function adds
-// nothing to that list. See OutstandingDuesForMember's own doc comment for
-// all of it.
+// ArrearsMonthsForMember is Anggota's roster badge (#233, ADR-032): N, in
+// whole months, of periods strictly BEFORE currentPeriod that fundID's member
+// memberID still owes something for. It is a thin count over
+// OutstandingDuesForMember, not a second derivation: every rule deciding who
+// owes what lives once, there and in DuesStatusForPeriod beneath it.
 //
-// currentPeriod is excluded entirely, by construction: this asks
-// OutstandingDuesForMember for everything through the month immediately
-// before currentPeriod, so currentPeriod's own status - unpaid, partial,
-// paid, or paid in advance - never enters the count. ADR-032 spells out why
-// the badge must not reach into the current period at all: on the first of
-// every month the whole roster would flip to "owing" at once, and for the
-// first weeks of a month the badge could not tell a member who simply
-// has not paid yet (normal, benign) from one six months behind (the only
-// case the badge exists to surface). A member who joined this period, or
-// who paid ahead of it, therefore both read zero arrears here - not because
-// either is special-cased, but because neither has anything before
-// currentPeriod for OutstandingDuesForMember to return.
+// currentPeriod is excluded by construction (OutstandingDuesForMember is
+// asked for everything through the month before it). ADR-032 spells out why:
+// on the first of every month the whole roster would flip to "owing", and
+// early in a month the badge could not tell a member who has not paid yet
+// (benign) from one six months behind (the only case the badge exists to
+// surface). A member who joined this period, or paid ahead of it, reads zero
+// arrears with no special case: neither has anything before currentPeriod.
 //
-// currentPeriod is the caller's own answer to "what period is this right
-// now", passed in rather than computed here with a second clock read.
-// GET /api/members carries no ?through= or ?period= for a caller to
-// override (ADR-032 keeps a period selector out of Anggota entirely, which
-// is the whole reason this route needed a badge instead), so the caller
-// computes it with CurrentDuesPeriod - the Jakarta month, the same default
-// OutstandingDuesForMember itself falls back to when through is omitted.
-// The handler computes that one value once per request and hands it to
-// every member's call on the page, plus to ListMembersPage's own
-// current_rate column, so a clock tick between two members - or between a
-// row's current_rate and its arrears count - can never disagree about what
-// "now" was for this one response.
+// currentPeriod is passed in rather than computed with a second clock read.
+// GET /api/members has no ?through= or ?period= to override it (ADR-032
+// keeps a period selector out of Anggota), so the handler computes it once
+// per request with CurrentDuesPeriod and hands it to every member's call and
+// to ListMembersPage's current_rate column, so a clock tick cannot make a
+// row's current_rate and arrears count disagree about "now".
 //
-// A part-paid earlier period counts as one month, exactly like an unpaid
-// one (ADR-032's own table): OutstandingDuesForMember already makes no
-// distinction between Unpaid and Partial in what it returns, so len() of
-// its result is already the right count with no further classification
-// needed here.
+// A part-paid earlier period counts as one month, like an unpaid one
+// (ADR-032): OutstandingDuesForMember makes no Unpaid/Partial distinction,
+// so len() of its result is the count.
 func (l *Ledger) ArrearsMonthsForMember(ctx context.Context, fundID, memberID int64, currentPeriod string) (int, error) {
 	if err := validateDuesPeriod(currentPeriod); err != nil {
 		return 0, err
@@ -388,12 +335,9 @@ func (l *Ledger) ArrearsMonthsForMember(ctx context.Context, fundID, memberID in
 }
 
 // classifyDuesStatus derives unpaid / partial / paid from owed vs paid alone,
-// for one member and one period - the three-way comparison both
-// DuesStatusForPeriod (there, followed by its own paid-in-advance upgrade)
-// and OutstandingDuesForMember (there, followed by dropping anything that
-// comes back Paid) build on. Extracted so the comparison itself - what "paid
-// enough" means - has exactly one definition in this package, not one
-// per caller that happens to read the same today.
+// for one member and one period: the comparison DuesStatusForPeriod (followed
+// by its paid-in-advance upgrade) and OutstandingDuesForMember (followed by
+// dropping Paid) both build on. Extracted so "paid enough" has one definition.
 func classifyDuesStatus(owed, paid money.Amount) DuesStatus {
 	switch {
 	case paid >= owed:
@@ -406,18 +350,16 @@ func classifyDuesStatus(owed, paid money.Amount) DuesStatus {
 }
 
 // paidThrough walks forward from the period after `period` and returns the
-// last one of the unbroken run of fully paid periods (#357), or "" when the
-// very next owed period is not fully paid - a member who paid October and
-// December but skipped November is paid through October, not December.
-// `latest` is LatestDuesPeriodPaidByMember's value for the member and bounds
-// the walk: nothing past it was paid at all.
+// last of the unbroken run of fully paid periods (#357), or "" when the very
+// next owed period is not fully paid: a member who paid October and December
+// but skipped November is paid through October, not December. `latest` is
+// LatestDuesPeriodPaidByMember's value and bounds the walk.
 //
-// Each step applies exactly DuesStatusForPeriod's own rules: a period
-// outside the member's active window ends the run (nothing past the month
-// they left is "paid ahead"); a period whose tier has no effective rate owes
-// nothing, so it is skipped without breaking the run (OutstandingDuesForMember's
-// rule); and a period paid below its own effective rate breaks it, so a rate
-// rise in a prepaid month reads honestly as not paid through.
+// Each step applies DuesStatusForPeriod's rules: a period outside the
+// member's active window ends the run; a period whose tier has no effective
+// rate owes nothing, so it is skipped without breaking the run; a period
+// paid below its effective rate breaks it, so a rate rise in a prepaid month
+// reads honestly as not paid through.
 func (l *Ledger) paidThrough(ctx context.Context, fundID int64, m store.Member, period, latest string) (string, error) {
 	paidRows, err := l.q.DuesPaidByMemberGroupedByPeriod(ctx, store.DuesPaidByMemberGroupedByPeriodParams{
 		FundID: fundID, MemberID: &m.ID,
@@ -460,10 +402,9 @@ func (l *Ledger) paidThrough(ctx context.Context, fundID int64, m store.Member, 
 
 // memberOwesPeriod reports whether period falls within the member's active
 // window: the month containing joined_on through the month containing
-// inactive_on, both ends inclusive. joined_on / inactive_on are "YYYY-MM-DD"
-// so their first seven characters are the "YYYY-MM" period that contains
-// them, comparable lexicographically against period exactly as dues_period
-// itself is (ADR-024).
+// inactive_on, both ends inclusive. Both are "YYYY-MM-DD", so their first
+// seven characters are the containing "YYYY-MM", comparable lexicographically
+// against period like dues_period itself (ADR-024).
 func memberOwesPeriod(m store.Member, period string) bool {
 	if period < m.JoinedOn[:7] {
 		return false

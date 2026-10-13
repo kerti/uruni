@@ -9,8 +9,8 @@ import (
 	"testing"
 )
 
-// TestRunDispatchesCreateUser: `make dev-user` invokes this name (ADR-019),
-// so the wiring itself is worth a test - #287 was exactly this wiring missing.
+// TestRunDispatchesCreateUser: `make dev-user` invokes this name (ADR-019); #287
+// was exactly this wiring missing.
 func TestRunDispatchesCreateUser(t *testing.T) {
 	t.Setenv("URUNI_DB", filepath.Join(t.TempDir(), "uruni.db"))
 	t.Setenv("URUNI_BASE_URL", "https://uruni.test")

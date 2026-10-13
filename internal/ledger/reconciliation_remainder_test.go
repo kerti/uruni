@@ -10,11 +10,11 @@ import (
 )
 
 // #498: an "adjusted" line is a plug and must square its difference exactly;
-// an "entry_added" line may square only part of it, and whatever is left (the
-// remainder, difference - signed(fix)) keeps the line open everywhere a
-// line's status is read - the open-lines list, the Cek kas list row and the
-// public report. These tests replace the one that used to pin a 20,000 plug
-// against a 30,000 gap as accepted.
+// an "entry_added" line may square only part, and whatever is left (the
+// remainder, difference - signed(fix)) keeps the line open wherever status is
+// read: the open-lines list, the Cek kas list row and the public report.
+// These replace the test that pinned a 20,000 plug against a 30,000 gap as
+// accepted.
 
 // remainderFixture is a fund holding 100,000 in cash, with the bank at 0.
 func remainderFixture(t *testing.T) (*Ledger, fixture, store.Querier) {
@@ -135,8 +135,8 @@ func TestTakeReconciliationAdjustedPlugRefusalLeavesOtherLinesUnposted(t *testin
 	ctx := context.Background()
 	postOpeningBalance(t, l, f.fundID, f.bankID, f.mainID, 50_000, "2026-08-01")
 
-	// The bank line is a valid plug, the cash line is not: the snapshot is
-	// one call, so the bank's fix must not survive the cash line's refusal.
+	// The bank line is a valid plug, the cash line is not: the snapshot is one
+	// call, so the bank's fix must not survive the cash line's refusal.
 	_, err := l.TakeReconciliation(ctx, TakeReconciliationParams{
 		FundID: f.fundID,
 		Counts: []AccountCount{
@@ -247,8 +247,7 @@ func TestTakeReconciliationEntryAddedPartialEntryKeepsTheRemainderOpen(t *testin
 }
 
 // A partial entry stays open only until the location is counted again: the
-// next count of the same location supersedes it, exactly as it does a
-// left_open line.
+// next count of that location supersedes it, as a left_open line.
 func TestTakeReconciliationPartialEntryIsSupersededByTheNextCount(t *testing.T) {
 	t.Parallel()
 	l, f, q := remainderFixture(t)
@@ -257,8 +256,8 @@ func TestTakeReconciliationPartialEntryIsSupersededByTheNextCount(t *testing.T) 
 	if _, err := takeCash(l, f, 130_000, "entry_added", fixOf(f, "in", 20_000)); err != nil {
 		t.Fatalf("TakeReconciliation() = %v, want no error", err)
 	}
-	// The ledger now holds 120,000; the second count finds 130,000 and plugs
-	// the rest exactly.
+	// The ledger now holds 120,000; the second count finds 130,000 and plugs the
+	// rest exactly.
 	if _, err := takeCash(l, f, 130_000, "adjusted", fixOf(f, "in", 10_000)); err != nil {
 		t.Fatalf("TakeReconciliation(second) = %v, want no error", err)
 	}
@@ -271,10 +270,10 @@ func TestTakeReconciliationPartialEntryIsSupersededByTheNextCount(t *testing.T) 
 	}
 }
 
-// Lines written before #498 carry no link for entry_added (their remainder
-// was never recorded) and may carry a short plug for adjusted. The first
-// reads closed, as it always did; the second now reads open for what its
-// plug missed, because the ledger can prove it.
+// Lines written before #498 carry no link for entry_added (the remainder was
+// never recorded) and may carry a short plug for adjusted. The first reads
+// closed, as it always did; the second now reads open for what its plug
+// missed, because the ledger can prove it.
 func TestReconciliationRemainderOfLinesWrittenBeforeTheRule(t *testing.T) {
 	t.Parallel()
 	l, f, q := remainderFixture(t)

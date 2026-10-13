@@ -81,8 +81,8 @@ func TestPostDuesTiersRejectsADuplicateNameWith409(t *testing.T) {
 		t.Fatalf("first POST /api/dues-tiers = %d, want %d (body: %s)", rec.Code, http.StatusCreated, rec.Body.String())
 	}
 
-	// dues_tier's own UNIQUE (fund_id, name) - proven through the shared
-	// mapper, not a hand-rolled duplicate check in the handler.
+	// dues_tier UNIQUE (fund_id, name), proven through the shared mapper, not a
+	// handler duplicate check.
 	rec := postDuesTier(t, r, "Full")
 	if rec.Code != http.StatusConflict {
 		t.Fatalf("second POST /api/dues-tiers with a duplicate name = %d, want %d (body: %s)", rec.Code, http.StatusConflict, rec.Body.String())
@@ -254,9 +254,9 @@ func decodeDuesTier(t *testing.T, rec *httptest.ResponseRecorder) duesTierRespon
 	return tier
 }
 
-// TestDeleteDuesTierTakesItsRatesWithIt is #232's ruling: a tier no member
-// is in priced nothing, so its rates are its own children rather than
-// history, and both go in one transaction.
+// TestDeleteDuesTierTakesItsRatesWithIt is #232's ruling: a tier no member is
+// in priced nothing, so its rates are its children, not history, and both go in
+// one transaction.
 func TestDeleteDuesTierTakesItsRatesWithIt(t *testing.T) {
 	t.Parallel()
 	r := testRouter(t)
@@ -274,8 +274,8 @@ func TestDeleteDuesTierTakesItsRatesWithIt(t *testing.T) {
 		t.Fatalf("DELETE /api/dues-tiers/%d = %d, want %d (body: %s)", tier.ID, rec.Code, http.StatusNoContent, rec.Body.String())
 	}
 
-	// Gone from the list, and its rates with it - the rates route now has no
-	// tier to answer for at all.
+	// Gone from the list, and its rates with it: the rates route has no tier to
+	// answer for.
 	listRec := httptest.NewRecorder()
 	r.ServeHTTP(listRec, httptest.NewRequest(http.MethodGet, "/api/dues-tiers", nil))
 	var tiers []duesTierResponse
@@ -292,10 +292,9 @@ func TestDeleteDuesTierTakesItsRatesWithIt(t *testing.T) {
 	}
 }
 
-// TestDeleteDuesTierRefusesOneAMemberIsIn is the acceptance criterion, and
-// the reason the delete runs in a transaction: the refusal comes from
-// member's own FK, after the rate deletion has already run, so the rollback
-// is what keeps that tier's rates intact.
+// TestDeleteDuesTierRefusesOneAMemberIsIn is the acceptance criterion, and why
+// the delete runs in a transaction: the refusal comes from member's FK after
+// the rate deletion ran, so the rollback keeps that tier's rates intact.
 func TestDeleteDuesTierRefusesOneAMemberIsIn(t *testing.T) {
 	t.Parallel()
 	r := testRouter(t)
@@ -319,8 +318,8 @@ func TestDeleteDuesTierRefusesOneAMemberIsIn(t *testing.T) {
 		t.Errorf("error code = %q, want %q", got.Code, "referenced_by_other_records")
 	}
 
-	// The rollback's whole point: the rate deletion ran inside the same
-	// transaction and must not have survived it.
+	// The rollback's point: the rate deletion ran in the same transaction and must
+	// not have survived it.
 	ratesRec := getDuesRates(t, r, fmt.Sprintf("%d", tier.ID))
 	if ratesRec.Code != http.StatusOK {
 		t.Fatalf("GET rates after a refused delete = %d, want %d (body: %s)", ratesRec.Code, http.StatusOK, ratesRec.Body.String())
@@ -334,10 +333,10 @@ func TestDeleteDuesTierRefusesOneAMemberIsIn(t *testing.T) {
 	}
 }
 
-// A tier this fund does not have is 404, never 204 - an id names a row, it
-// does not prove the caller may touch it (#188). An id that is not a number
-// at all never gets that far and is 400, which is resolveDuesTier's own
-// existing split, asserted here so the delete route keeps inheriting it.
+// A tier this fund does not have is 404, never 204: an id names a row, not
+// permission to touch it (#188). A non-numeric id never gets that far and is
+// 400, resolveDuesTier's existing split, asserted so the delete route keeps
+// inheriting it.
 func TestDeleteDuesTierRejectsAnIDItCannotUse(t *testing.T) {
 	t.Parallel()
 	r := testRouter(t)

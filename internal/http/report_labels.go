@@ -3,25 +3,25 @@ package http
 import "github.com/kerti/uruni/internal/ledger"
 
 // This file is the Go port of web/src/components/TransactionRowLabel.tsx's
-// rowLabelFor and web/src/copy/id.ts's rowLabels (#257): the label a row
-// carries is built at display time from facts, never read from a stored note,
-// and the neighbour reads the same words the treasurer does in Riwayat.
-// ADR-035 names this the third hand-kept copy; TestReportRowLabelsMatchTheSPA
-// pins a handful of strings against what the SPA produces.
+// rowLabelFor and web/src/copy/id.ts's rowLabels (#257): a row's label is built
+// at display time from facts, never a stored note, and a neighbour reads the
+// same words the treasurer does in Riwayat. ADR-035 calls this the third
+// hand-kept copy; TestReportRowLabelsMatchTheSPA pins a handful of strings
+// against the SPA.
 //
-// Two deliberate differences from Riwayat, both because the report hides what
-// only the treasurer needs (ADR-035):
+// Two differences from Riwayat, as the report hides what only the treasurer
+// needs (ADR-035):
 //   - "Saldo awal" and "Penyesuaian" carry no " - <location>" suffix: the
 //     report never names where the money sits.
 //   - A purpose move is one "Dipindah: <from> -> <to>" row whatever its
 //     reason, where Riwayat words a roll, a correction and a Pindah pos apart.
 //
-// Every adjustment that is not a reversal - a cek kas fix or one the treasurer
-// posted on its own - reads "Penyesuaian" in both, so a row and the walk line
-// it sums into share a name (ADR-038).
+// Every adjustment that is not a reversal (a cek kas fix or one posted alone)
+// reads "Penyesuaian" in both, so a row and the walk line it sums into share a
+// name (ADR-038).
 
 // entryLabel is the label line for an ordinary row, or "" for a plain row
-// the treasurer recorded (which shows only its purpose and amount).
+// (shown with only its purpose and amount).
 func (c reportCopy) entryLabel(e ledger.ReportEntry) string {
 	member := ""
 	if e.MemberName != nil {
@@ -40,11 +40,10 @@ func (c reportCopy) entryLabel(e ledger.ReportEntry) string {
 	case "reimbursement":
 		return member
 	case "adjustment":
-		// A reversal first: a dues reversal carries a period where a
-		// contribution reversal never does. Every other adjustment - a cek kas
-		// fix, or one the treasurer posted on its own (is_adjustment) - is
-		// "Penyesuaian", the name of its line in the month's walk (ADR-038);
-		// the report says nothing more of it, as it never names the location.
+		// A reversal first: a dues reversal carries a period, a contribution reversal
+		// never does. Every other adjustment (a cek kas fix, or one posted alone) is
+		// "Penyesuaian", its line in the month's walk (ADR-038); the report says no
+		// more, never naming the location.
 		if e.IsReversal {
 			if e.DuesPeriod != nil {
 				return c.RowDuesReversal(period, member)

@@ -36,10 +36,9 @@ func TestPostDuesPaymentsRequiresAFund(t *testing.T) {
 	}
 }
 
-// TestPostDuesPaymentsSeveralPeriodsYieldsOneRowPerPeriod is the slice's
-// dues-payments acceptance criterion: several periods paid in one call post
-// as separate rows - never flattened into one - and the response echoes
-// that shape back rather than collapsing it.
+// TestPostDuesPaymentsSeveralPeriodsYieldsOneRowPerPeriod is the dues-payments
+// criterion: several periods paid in one call post as separate rows, never
+// flattened, and the response echoes that shape.
 func TestPostDuesPaymentsSeveralPeriodsYieldsOneRowPerPeriod(t *testing.T) {
 	t.Parallel()
 	r, l := testRouterAndLedger(t)
@@ -147,8 +146,8 @@ func TestPostDuesPaymentsRejectsEmptyPeriods(t *testing.T) {
 }
 
 // TestPostDuesPaymentsRejectsNonPositiveAmount is the dues-payments half of
-// the slice's "non-positive amount surfaces as 400" acceptance criterion -
-// PostDuesPayments' own check answers, not a second one in the handler.
+// "non-positive amount surfaces as 400": PostDuesPayments' check answers, not a
+// second one in the handler.
 func TestPostDuesPaymentsRejectsNonPositiveAmount(t *testing.T) {
 	t.Parallel()
 	r := testRouter(t)
@@ -174,9 +173,8 @@ func TestPostDuesPaymentsRejectsNonPositiveAmount(t *testing.T) {
 	}
 }
 
-// TestPostDuesPaymentsRejectsAMalformedDuesPeriod is the acceptance
-// criterion's malformed-date case for this route: a dues_period that is not
-// a real "YYYY-MM" month.
+// TestPostDuesPaymentsRejectsAMalformedDuesPeriod is the malformed-date case
+// here: a dues_period that is not a real "YYYY-MM" month.
 func TestPostDuesPaymentsRejectsAMalformedDuesPeriod(t *testing.T) {
 	t.Parallel()
 	r := testRouter(t)
@@ -218,14 +216,12 @@ func TestPostDuesPaymentsRejectsMalformedJSON(t *testing.T) {
 	}
 }
 
-// TestPostDuesPaymentsAMidBatchFailureWritesNothing is the HTTP-level half
-// of #96's regression test: a batch whose second period is malformed must
-// post ZERO rows, not the first period that would have succeeded on its
-// own. Before the fix, each period was posted by its own independently
-// committed call, so the first period's row was left standing when the
-// second failed; PostDuesPayments now validates every period before writing
-// any of them, and writes every row inside one database transaction, so a
-// mid-batch failure leaves nothing behind at all.
+// TestPostDuesPaymentsAMidBatchFailureWritesNothing is the HTTP half of #96's
+// regression: a batch whose second period is malformed posts zero rows, not
+// the first period that would have succeeded. Each period used to be posted by
+// its own committed call, leaving the first row standing when the second
+// failed; PostDuesPayments now validates every period before writing and
+// writes all rows in one transaction.
 func TestPostDuesPaymentsAMidBatchFailureWritesNothing(t *testing.T) {
 	t.Parallel()
 	r, l := testRouterAndLedger(t)

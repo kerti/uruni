@@ -44,9 +44,8 @@ func TestGetDuesPaymentsRequiresAFund(t *testing.T) {
 	}
 }
 
-// TestGetDuesPaymentsEmptyFundReturnsEmptyPage is the "empty" acceptance
-// criterion: a fund with no dues payments at all answers an empty list, not
-// an error.
+// TestGetDuesPaymentsEmptyFundReturnsEmptyPage: a fund with no dues payments
+// answers an empty list, not an error.
 func TestGetDuesPaymentsEmptyFundReturnsEmptyPage(t *testing.T) {
 	t.Parallel()
 	r := testRouter(t)
@@ -61,9 +60,9 @@ func TestGetDuesPaymentsEmptyFundReturnsEmptyPage(t *testing.T) {
 	}
 }
 
-// TestGetDuesPaymentsOrdersNewestFirstTiesBrokenByIDDesc mirrors
-// reimbursements_test.go's own test of the same name: two rows sharing an
-// occurred_on must come back (occurred_on DESC, id DESC).
+// TestGetDuesPaymentsOrdersNewestFirstTiesBrokenByIDDesc mirrors the
+// reimbursements test: two rows sharing an occurred_on come back
+// (occurred_on DESC, id DESC).
 func TestGetDuesPaymentsOrdersNewestFirstTiesBrokenByIDDesc(t *testing.T) {
 	t.Parallel()
 	r := testRouter(t)
@@ -86,11 +85,10 @@ func TestGetDuesPaymentsOrdersNewestFirstTiesBrokenByIDDesc(t *testing.T) {
 	}
 }
 
-// TestGetDuesPaymentsPagingWalksTheWholeSetWithNoSkipOrDuplicate mirrors
-// reimbursements_test.go's own paging test, over 60 dues payments (more
-// than two 25-row pages). Each row gets its own dues_period (periodAt) so
-// 60 distinct payments for one member need no second member or account to
-// stay realistic against the schema.
+// TestGetDuesPaymentsPagingWalksTheWholeSetWithNoSkipOrDuplicate mirrors the
+// reimbursements paging test over 60 dues payments (more than two 25-row
+// pages). Each row has its own dues_period (periodAt), so 60 distinct
+// payments for one member need no second member or account.
 func TestGetDuesPaymentsPagingWalksTheWholeSetWithNoSkipOrDuplicate(t *testing.T) {
 	t.Parallel()
 	r := testRouter(t)
@@ -149,7 +147,7 @@ func TestGetDuesPaymentsPagingWalksTheWholeSetWithNoSkipOrDuplicate(t *testing.T
 }
 
 // TestGetDuesPaymentsRejectsAMalformedCursor is #228's "malformed cursor ->
-// 400" acceptance criterion, mirroring reimbursements_test.go's own test.
+// 400", as the reimbursements test.
 func TestGetDuesPaymentsRejectsAMalformedCursor(t *testing.T) {
 	t.Parallel()
 	r := testRouter(t)
@@ -167,16 +165,15 @@ func TestGetDuesPaymentsRejectsAMalformedCursor(t *testing.T) {
 		}
 	}
 
-	// An empty cursor param is the same as omitting it - the first page.
+	// An empty cursor param is the same as omitting it: the first page.
 	if rec := getDuesPayments(t, r, "?cursor="); rec.Code != http.StatusOK {
 		t.Errorf("GET /api/dues-payments?cursor= = %d, want %d", rec.Code, http.StatusOK)
 	}
 }
 
-// TestGetDuesPaymentsSearchHitsMemberNameCaseInsensitiveIncludingAReversal
-// covers this list's search surface: member name, case-insensitive, and a
-// reversal for that member matches too since it carries the same
-// member_id.
+// TestGetDuesPaymentsSearchHitsMemberNameCaseInsensitiveIncludingAReversal:
+// member name, case-insensitive; a reversal for that member matches too, as it
+// carries the same member_id.
 func TestGetDuesPaymentsSearchHitsMemberNameCaseInsensitiveIncludingAReversal(t *testing.T) {
 	t.Parallel()
 	r := testRouter(t)
@@ -212,11 +209,10 @@ func TestGetDuesPaymentsSearchHitsMemberNameCaseInsensitiveIncludingAReversal(t 
 	}
 }
 
-// TestGetDuesPaymentsReversalAndOriginalAreLinkedBothWays is the slice's
-// central acceptance criterion: a reversed payment carries
-// reversed_by_transaction_id pointing at the reversal, and the reversal
-// carries reverses_transaction_id pointing back plus the original's own
-// occurred_on.
+// TestGetDuesPaymentsReversalAndOriginalAreLinkedBothWays is the central
+// criterion: a reversed payment carries reversed_by_transaction_id pointing at
+// the reversal, and the reversal carries reverses_transaction_id pointing back
+// plus the original's occurred_on.
 func TestGetDuesPaymentsReversalAndOriginalAreLinkedBothWays(t *testing.T) {
 	t.Parallel()
 	r := testRouter(t)
@@ -278,22 +274,20 @@ func TestGetDuesPaymentsReversalAndOriginalAreLinkedBothWays(t *testing.T) {
 }
 
 // TestGetDuesPaymentsReversalsOriginalOnAnotherPageStillCarriesReversesOccurredOn
-// is #228's own acceptance criterion for the case a naive join would get
-// wrong: the reversal states the original's date even when that original
-// has fallen off the first page.
+// is #228's criterion for the case a naive join gets wrong: the reversal states
+// the original's date even when that original has fallen off the first page.
 func TestGetDuesPaymentsReversalsOriginalOnAnotherPageStillCarriesReversesOccurredOn(t *testing.T) {
 	t.Parallel()
 	r := testRouter(t)
 	setup := setUpFund(t, r)
 	memberID := memberFor(t, r, "Jane")
 
-	// The payment to reverse, dated first (oldest) so it is guaranteed off
-	// page 1 once enough newer rows exist.
+	// The payment to reverse, dated oldest so it is off page 1 once enough newer
+	// rows exist.
 	paymentID := postOneDuesPayment(t, r, setup, memberID, "2020-01", "2020-01-01")
 
-	// 25 more payments, each newer than the last (2026-01-01 onward), so
-	// page 1 (25 rows) is entirely these and the original payment lands on
-	// page 2.
+	// 25 more payments, each newer than the last (2026-01-01 onward), so page 1
+	// is entirely these and the original lands on page 2.
 	start, err := time.Parse("2006-01-02", "2026-01-01")
 	if err != nil {
 		t.Fatalf("parsing start date: %v", err)
@@ -303,7 +297,7 @@ func TestGetDuesPaymentsReversalsOriginalOnAnotherPageStillCarriesReversesOccurr
 		postOneDuesPayment(t, r, setup, memberID, periodAt(i+1), date)
 	}
 
-	// The reversal, dated newest of all, so it is the very first row.
+	// The reversal, newest of all, so it is the first row.
 	reversalRec := postDuesPaymentReversal(t, r, paymentID, reverseDuesPaymentRequest{OccurredOn: "2026-06-01"})
 	if reversalRec.Code != http.StatusCreated {
 		t.Fatalf("POST /api/dues-payments/{id}/reversal = %d, want %d (body: %s)", reversalRec.Code, http.StatusCreated, reversalRec.Body.String())
@@ -346,9 +340,8 @@ func TestGetDuesPaymentsReversalsOriginalOnAnotherPageStillCarriesReversesOccurr
 }
 
 // TestGetDuesPaymentsExcludesOrdinaryTransactionsAndAdjustments is #228's
-// own scoping rule: a plain kind='normal' transaction and an ordinary
-// correction (kind='adjustment' with no reverses_transaction_id) are not
-// dues history.
+// scoping rule: a plain kind='normal' transaction and an ordinary correction
+// (kind='adjustment', no reverses_transaction_id) are not dues history.
 func TestGetDuesPaymentsExcludesOrdinaryTransactionsAndAdjustments(t *testing.T) {
 	t.Parallel()
 	r := testRouter(t)
@@ -380,7 +373,7 @@ func TestGetDuesPaymentsExcludesOrdinaryTransactionsAndAdjustments(t *testing.T)
 }
 
 // TestGetDuesPaymentsNeverReturnsAnotherFundsRow is #228's fund-isolation
-// acceptance criterion, mirroring TestGetTransactionsNeverReturnsAnotherFundsRow.
+// criterion, as TestGetTransactionsNeverReturnsAnotherFundsRow.
 func TestGetDuesPaymentsNeverReturnsAnotherFundsRow(t *testing.T) {
 	t.Parallel()
 	sqlDB := testStoreDB(t)
@@ -389,8 +382,8 @@ func TestGetDuesPaymentsNeverReturnsAnotherFundsRow(t *testing.T) {
 	memberID := memberFor(t, r, "Jane")
 	postOneDuesPayment(t, r, setup, memberID, "2026-08", "2026-08-01")
 
-	// A second fund, written straight through the store - the API refuses a
-	// second fund by design (ErrFundAlreadyExists).
+	// A second fund, written through the store; the API refuses one by design
+	// (ErrFundAlreadyExists).
 	q := store.New(sqlDB)
 	ctx := context.Background()
 	otherFund, err := q.CreateFund(ctx, store.CreateFundParams{
@@ -435,9 +428,8 @@ func TestGetDuesPaymentsNeverReturnsAnotherFundsRow(t *testing.T) {
 	}
 }
 
-// postOneDuesPayment posts a single-period dues payment and returns the
-// posted transaction id, for the tests above that only need one row and
-// its id.
+// postOneDuesPayment posts a single-period dues payment and returns the posted
+// transaction id, for tests needing one row.
 func postOneDuesPayment(t *testing.T, r http.Handler, setup setupResponse, memberID int64, period, occurredOn string) int64 {
 	t.Helper()
 	rec := postDuesPayment(t, r, duesPaymentRequest{
@@ -455,10 +447,9 @@ func postOneDuesPayment(t *testing.T, r http.Handler, setup setupResponse, membe
 	return posted[0].ID
 }
 
-// periodAt returns a distinct "YYYY-MM" dues_period for index i, walking
-// forward one calendar month at a time from 2020-01 - enough distinct
-// months to cover this file's largest fixture (60 rows) without repeating,
-// which keeps every seeded payment addressable by (member, period) alone.
+// periodAt returns a distinct "YYYY-MM" dues_period for index i, one calendar
+// month at a time from 2020-01: enough months for this file's largest fixture
+// (60 rows) with every payment addressable by (member, period) alone.
 func periodAt(i int) string {
 	t := time.Date(2020, time.January, 1, 0, 0, 0, 0, time.UTC).AddDate(0, i, 0)
 	return fmt.Sprintf("%04d-%02d", t.Year(), int(t.Month()))

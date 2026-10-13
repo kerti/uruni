@@ -9,11 +9,10 @@ import (
 	"github.com/kerti/uruni/internal/ledger"
 )
 
-// duesStatusResponse is one row of GET /api/dues-status's roster: one member
-// who owes dues for the requested period, classified against
-// DuesStatusForPeriod (PRD section 7.3). member is the full roster shape members.go
-// already exposes, not a trimmed id+name pair - the reconcile flow reading
-// this list wants the same member fields the roster screen shows.
+// duesStatusResponse is one row of GET /api/dues-status's roster: a member who
+// owes dues for the requested period, classified by DuesStatusForPeriod (PRD
+// section 7.3). member is the full roster shape of members.go, not a trimmed
+// id+name: the reconcile flow wants the fields the roster screen shows.
 type duesStatusResponse struct {
 	Member     memberResponse `json:"member"`
 	OwedAmount int64          `json:"owed_amount"`
@@ -38,11 +37,10 @@ func toDuesStatusResponse(s ledger.MemberDuesStatus) duesStatusResponse {
 }
 
 // getDuesStatus is GET /api/dues-status?period=YYYY-MM: wraps
-// DuesStatusForPeriod. The period query parameter is passed through
-// unvalidated - a missing or malformed period reaches
-// DuesStatusForPeriod's own validateDuesPeriod check and comes back as
-// ErrInvalidArgument through mapLedgerError, the same single source of
-// truth every other route in this file defers to (ADR-027).
+// DuesStatusForPeriod. period is passed through unvalidated: a missing or
+// malformed value reaches validateDuesPeriod and returns as
+// ErrInvalidArgument through mapLedgerError, the single source of truth
+// (ADR-027).
 func (a *api) getDuesStatus(w http.ResponseWriter, r *http.Request) {
 	fund, ok := a.resolveFund(w, r)
 	if !ok {
@@ -62,11 +60,10 @@ func (a *api) getDuesStatus(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, resp)
 }
 
-// outstandingDuesResponse is one row of GET
-// /api/members/{id}/outstanding-dues's result: one period the path's member
-// still owes something for, oldest first. No nested member object - the id
-// is already the path segment - and status is only ever "unpaid" or
-// "partial", per OutstandingDuesForMember's own doc comment.
+// outstandingDuesResponse is one row of GET /api/members/{id}/outstanding-dues:
+// a period the path's member still owes something for, oldest first. No nested
+// member (the id is the path segment); status is only "unpaid" or "partial"
+// (see OutstandingDuesForMember).
 type outstandingDuesResponse struct {
 	Period     string `json:"period"`
 	OwedAmount int64  `json:"owed_amount"`
@@ -84,20 +81,16 @@ func toOutstandingDuesResponse(p ledger.OutstandingDuesPeriod) outstandingDuesRe
 }
 
 // getOutstandingDues is GET /api/members/{id}/outstanding-dues: wraps
-// OutstandingDuesForMember. through is the optional ?through=YYYY-MM query
-// parameter, passed through unvalidated exactly as getDuesStatus passes
-// period through - a missing value means "default to the server's current
-// month" (OutstandingDuesForMember's own job to decide), and a malformed one
-// reaches its validateDuesPeriod check and comes back as ErrInvalidArgument
-// through mapLedgerError, same as every other route in this file.
+// OutstandingDuesForMember. through is the optional ?through=YYYY-MM, passed
+// through unvalidated as getDuesStatus does period: missing means the
+// server's current month (OutstandingDuesForMember decides), malformed
+// returns ErrInvalidArgument through mapLedgerError.
 //
-// {id} is parsed here rather than through resolveMember: that helper's own
-// GetMember lookup takes no fund_id, so it cannot be this route's fund-scope
-// guard. Fund scoping here is GetMemberForFund's job inside
-// OutstandingDuesForMember itself - a member id belonging to another fund
-// never reaches a lookup that would find it, it reaches sql.ErrNoRows, which
-// mapLedgerError already turns into 404 (ADR-029's GetTransactionForFund
-// shape, applied here to members).
+// {id} is parsed here, not through resolveMember: that GetMember lookup takes
+// no fund_id, so it cannot guard fund scope. GetMemberForFund inside
+// OutstandingDuesForMember does: another fund's member id reaches
+// sql.ErrNoRows, which mapLedgerError turns into 404 (ADR-029's
+// GetTransactionForFund shape, for members).
 func (a *api) getOutstandingDues(w http.ResponseWriter, r *http.Request) {
 	memberID, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {

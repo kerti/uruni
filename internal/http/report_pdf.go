@@ -1,25 +1,22 @@
 package http
 
 // The monthly PDF (ADR-035, #378): GET /report/{slug}/pdf?month=YYYY-MM, the
-// whole month with no filters, for the treasurer to print or drop in the group
-// chat. It is a second renderer over the page's own shaping: buildReportPage
-// has already turned the ledger's Report into display text - formatted rupiah
-// (money.FormatIDR), Indonesian dates and labels - so nothing is computed or
-// queried here, and a number cannot read one way on the page and another in
-// the file.
+// whole month with no filters, to print or drop in the group chat. A second
+// renderer over the page's shaping: buildReportPage has turned the ledger's
+// Report into display text (money.FormatIDR rupiah, Indonesian dates and
+// labels), so nothing is computed or queried here and a number cannot read
+// one way on the page and another in the file.
 //
 // Fonts. fpdf's UTF-8 path embeds a TrueType font, so "Rp", the non-breaking
-// space and Indonesian text come out as text a reader can select and search.
-// fonts/ holds Noto Sans Regular and Bold (SIL OFL 1.1, licence beside them),
-// subset to Basic Latin, Latin-1 and Latin Extended-A plus the handful of
-// punctuation the copy uses (dashes, quotes, bullet, ellipsis, minus):
-// about 23 KB each instead of the 600 KB full fonts. A character outside that
-// set - a name in another script - has no glyph and prints as a blank box;
-// everything the app's own copy and an Indonesian neighbour's name need is in,
-// except the arrow of "Dipindah: A -> B": Noto Sans has none in any build
-// (arrows live in Noto Sans Symbols, and fpdf cannot fall back to a second
-// font mid-line), so pdfSafe writes it as "->" here; the page keeps the real
-// one.
+// space and Indonesian text are selectable, searchable text. fonts/ holds
+// Noto Sans Regular and Bold (SIL OFL 1.1, licence beside them), subset to
+// Basic Latin, Latin-1 and Latin Extended-A plus the copy's punctuation
+// (dashes, quotes, bullet, ellipsis, minus): about 23 KB each instead of 600
+// KB. A character outside the set (a name in another script) has no glyph and
+// prints as a blank box. The one gap in the app's own copy is the arrow of
+// "Dipindah: A -> B": no Noto Sans build has it (arrows live in Noto Sans
+// Symbols, and fpdf cannot fall back mid-line), so pdfSafe writes "->" here;
+// the page keeps the real one.
 
 import (
 	"bytes"
@@ -56,9 +53,9 @@ const (
 	pdfRuleWidthMM = 0.2
 )
 
-// reportPDFHandler serves GET /report/{slug}/pdf. Same edge as the page: the
-// same headers, the same 404 for an unknown slug, and a missing or malformed
-// month is the current one. now is injectable for the same reason.
+// reportPDFHandler serves GET /report/{slug}/pdf with the page's edge: the
+// same headers, the same 404 for an unknown slug, a missing or malformed month
+// is the current one, and now is injectable likewise.
 func reportPDFHandler(l *ledger.Ledger, q store.Querier, logger *slog.Logger, now func() time.Time) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		setReportHeaders(w)
@@ -85,9 +82,9 @@ func reportPDFHandler(l *ledger.Ledger, q store.Querier, logger *slog.Logger, no
 	}
 }
 
-// renderReportPDF assembles the month exactly as the page does - same fallback
-// for a bad month, same shaping - and draws it. It returns the month it
-// actually rendered, for the filename.
+// renderReportPDF assembles the month as the page does (same bad-month
+// fallback, same shaping) and draws it. It returns the month it rendered, for
+// the filename.
 func renderReportPDF(ctx context.Context, l *ledger.Ledger, fundID int64, month string, now time.Time) ([]byte, string, error) {
 	report, err := monthlyReportOrCurrent(ctx, l, ledger.ReportParams{FundID: fundID, Month: month}, now)
 	if err != nil {
@@ -118,17 +115,16 @@ type pdfDoc struct {
 	repeat func()
 }
 
-// pdfStandIns are the copy's characters the embedded font has no glyph for,
-// each with the stand-in the PDF prints instead.
+// pdfStandIns are the copy's characters the embedded font lacks, with the
+// stand-in the PDF prints.
 var pdfStandIns = strings.NewReplacer("\u2192", "->")
 
 // pdfSafe drops what fpdf cannot carry: its UTF-8 font map ends at U+FFFF, so
-// a rune above it - an emoji in a fund, member or envelope name - panics
-// inside Output. The emoji presentation selector and the zero-width joiner go
-// with it, being only the remains of such an emoji; the embedded font draws
-// neither. Where something was dropped, the spaces that sat around it close
-// up - "Kas RT 05 X - Laporan" reads "Kas RT 05 - Laporan", not with two
-// spaces - and none is left at either end. Text with nothing to drop comes
+// a rune above it (an emoji in a fund, member or envelope name) panics inside
+// Output. The emoji presentation selector and zero-width joiner go too, being
+// remains of such an emoji that the font draws neither of. Where something was
+// dropped, the spaces around it close up ("Kas RT 05 X - Laporan" reads "Kas
+// RT 05 - Laporan"), none left at either end. Text with nothing to drop comes
 // back untouched. Before any of that, a character the copy uses but the font
 // lacks is written with one it has (pdfStandIns).
 func pdfSafe(s string) string {
@@ -364,14 +360,14 @@ func (d *pdfDoc) footer(fundName string) {
 }
 
 // pdfMarkSize is the mark's height in the footer, in millimetres: above the
-// 16px minimum Design-System.md sets for it, and no taller than the line.
+// 16px minimum Design-System.md sets, and no taller than the line.
 const pdfMarkSize = 4.5
 
 // mark draws Uruni's mark, the U-vessel with its Sage dot (Design-System.md,
-// "Logo & mark"), as vectors from web/public/favicon.svg's own geometry - the
-// primary colourway for a light page, without the app icon's tile, and
-// without the wordmark, which is set in Plus Jakarta Sans and the PDF embeds
-// only Noto Sans. size is its height; (x, y) its top-left corner.
+// "Logo & mark"), as vectors from web/public/favicon.svg's geometry: the
+// primary colourway for a light page, without the app icon's tile or the
+// wordmark (Plus Jakarta Sans; the PDF embeds only Noto Sans). size is its
+// height; (x, y) its top-left corner.
 //
 // favicon.svg, in its 64-unit box: the vessel is a 6-wide round-capped stroke
 // down from (21,18) and (43,18) to y=31, joined by the lower half of a circle
@@ -397,10 +393,10 @@ func (d *pdfDoc) mark(x, y, size float64) {
 
 // --- sections -------------------------------------------------------------
 
-// header is the page's own: fund and month, the balance, the latest cek
-// kas, the per-pos balances and what is owed to members - every figure as of
-// the month's last day, or today for the running month (ADR-037), which the
-// date line under the title says, exactly as the page does.
+// header is the page's: fund and month, the balance, the latest cek kas, the
+// per-pos balances and what is owed to members, every figure as of the
+// month's last day or today for the running month (ADR-037), as the date line
+// under the title says.
 func (d *pdfDoc) header(p reportPage) {
 	d.text(pdfLine{text: p.FundName, bold: true, size: 22, color: "primary"}, pdfContentW, "L")
 	d.text(pdfLine{text: reportText.PDFStatement(reportText.monthName(p.Month)), bold: true, size: 13, color: "foreground"}, pdfContentW, "L")

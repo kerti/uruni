@@ -21,10 +21,9 @@ func postDuesPaymentReversal(t *testing.T, r http.Handler, transactionID int64, 
 	return rec
 }
 
-// TestPostDuesPaymentReversalReturnsThePostedRow is the route's success
-// path: the response is the reversal row, wearing the same
-// transactionResponse shape POST /api/dues-payments and GET
-// /api/transactions already use.
+// TestPostDuesPaymentReversalReturnsThePostedRow is the success path: the
+// response is the reversal row in the transactionResponse shape of POST
+// /api/dues-payments and GET /api/transactions.
 func TestPostDuesPaymentReversalReturnsThePostedRow(t *testing.T) {
 	t.Parallel()
 	r := testRouter(t)
@@ -80,16 +79,16 @@ func TestPostDuesPaymentReversalReturnsThePostedRow(t *testing.T) {
 	if reversal.ID == paymentID {
 		t.Error("reversal.ID equals the original payment's id, want a distinct new row")
 	}
-	// The link is the whole point of the row: without it on the wire a client
-	// cannot tell this apart from an ordinary correction, or say which
-	// payment it undid (ADR-029).
+	// The link is the point of the row: without it on the wire a client cannot
+	// tell this from an ordinary correction, or say which payment it undid
+	// (ADR-029).
 	if reversal.ReversesTransactionID == nil || *reversal.ReversesTransactionID != paymentID {
 		t.Errorf("ReversesTransactionID = %v, want %d - the response must name the payment it reversed",
 			reversal.ReversesTransactionID, paymentID)
 	}
 
-	// And it survives the round trip into the recent-transactions list the
-	// reconcile flow reads, not only the response to the call that made it.
+	// And it survives into the recent-transactions list the reconcile flow reads,
+	// not only the response that made it.
 	listed := decodeTransactionsPage(t, getTransactions(t, r)).Transactions
 	var found *transactionResponse
 	for i := range listed {
@@ -105,10 +104,8 @@ func TestPostDuesPaymentReversalReturnsThePostedRow(t *testing.T) {
 	}
 }
 
-// TestPostDuesPaymentReversalNoSuchTransactionIs404: reversing a
-// transaction id that does not exist in this fund answers 404, the same
-// "not_found" shape every other missing-resource route in this package
-// already uses.
+// TestPostDuesPaymentReversalNoSuchTransactionIs404: a transaction id not in
+// this fund answers 404 "not_found", as every missing-resource route here.
 func TestPostDuesPaymentReversalNoSuchTransactionIs404(t *testing.T) {
 	t.Parallel()
 	r := testRouter(t)
@@ -125,9 +122,8 @@ func TestPostDuesPaymentReversalNoSuchTransactionIs404(t *testing.T) {
 }
 
 // TestPostDuesPaymentReversalNonDuesTransactionIs400: PRD section 4 keeps this
-// route exactly as wide as dues - reversing an ordinary transaction is a
-// caller mistake, not a resource-state conflict, so it maps to 400 like
-// ErrInvalidArgument does everywhere else in this mapper.
+// route as wide as dues; reversing an ordinary transaction is a caller
+// mistake, not a state conflict, so 400 like ErrInvalidArgument.
 func TestPostDuesPaymentReversalNonDuesTransactionIs400(t *testing.T) {
 	t.Parallel()
 	r := testRouter(t)
@@ -155,9 +151,8 @@ func TestPostDuesPaymentReversalNonDuesTransactionIs400(t *testing.T) {
 	}
 }
 
-// TestPostDuesPaymentReversalTwiceIs409: a payment is reversible at most
-// once - the second attempt is a resource-state conflict, mapped the same
-// way ErrReimbursementAlreadySettled already is.
+// TestPostDuesPaymentReversalTwiceIs409: a payment is reversible at most once;
+// the second attempt is a state conflict, mapped as ErrReimbursementAlreadySettled.
 func TestPostDuesPaymentReversalTwiceIs409(t *testing.T) {
 	t.Parallel()
 	r := testRouter(t)
@@ -195,8 +190,8 @@ func TestPostDuesPaymentReversalTwiceIs409(t *testing.T) {
 	}
 }
 
-// TestPostDuesPaymentReversalRequiresAFund mirrors every other route's
-// before-setup behavior in this package.
+// TestPostDuesPaymentReversalRequiresAFund mirrors every route's before-setup
+// behavior here.
 func TestPostDuesPaymentReversalRequiresAFund(t *testing.T) {
 	t.Parallel()
 	rec := postDuesPaymentReversal(t, testRouter(t), 1, reverseDuesPaymentRequest{OccurredOn: "2026-08-15"})

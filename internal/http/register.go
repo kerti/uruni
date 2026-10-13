@@ -14,11 +14,10 @@ type registerRequest struct {
 	Password string `json:"password"`
 }
 
-// userResponse is the wire shape of a user row - deliberately never
-// includes password_hash. store.User carries no json tags of its own
-// (sqlc.yaml's emit_json_tags: false, the same reason fundResponse exists
-// in setup.go), so this package owns the wire shape explicitly rather than
-// relying on a field simply not being referenced.
+// userResponse is the wire shape of a user row, never including
+// password_hash. store.User has no json tags (sqlc.yaml emit_json_tags: false,
+// as for fundResponse in setup.go), so this package owns the wire shape
+// instead of relying on a field going unreferenced.
 type userResponse struct {
 	ID        int64  `json:"id"`
 	Email     string `json:"email"`
@@ -30,20 +29,18 @@ func toUserResponse(u store.User) userResponse {
 }
 
 // register is POST /api/register: the one-shot bootstrap account (ADR-030
-// decision 2, issue #114). It also logs the treasurer in - RenewToken then
-// Put below - because POST /setup sits *inside* the auth gate (ADR-030's
-// consequences), so a register that did not establish a session would
-// strand first-run setup behind a login screen nothing has offered her yet.
-// The treasurer typed the password one second ago; there is no verification
-// step to bridge before trusting it again.
+// decision 2, #114). It also logs the treasurer in (RenewToken then Put)
+// because POST /setup sits inside the auth gate (ADR-030), so a register
+// without a session would strand first-run setup behind a login screen
+// nothing has offered her. She typed the password a second ago; nothing needs
+// verifying again.
 //
-// Register is public, so it is bounded the way login is (#495): rate limited
-// per client IP, the attempt reserved before auth.Register runs so a burst is
-// counted while it is in flight. Auth.Register itself refuses an instance that
-// already has an account before it hashes anything, and every hash it does
-// run goes through the process-wide gate. The reservation stands whenever
-// Register actually judged the attempt (created, refused as invalid, refused
-// as already registered) and is handed back when it did not (busy, broken).
+// Register is public, so bounded as login is (#495): rate limited per client
+// IP, the attempt reserved before auth.Register runs so a burst is counted in
+// flight. Auth.Register refuses an instance that already has an account
+// before hashing, and every hash goes through the process-wide gate. The
+// reservation stands whenever Register judged the attempt (created, invalid,
+// already registered) and is handed back when it did not (busy, broken).
 // Success keeps the count too: unlike login there is no reset.
 func (a *api) register(w http.ResponseWriter, r *http.Request) {
 	var req registerRequest
@@ -66,9 +63,8 @@ func (a *api) register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// RenewToken before writing anything into the session: a token issued
-	// before the identity was known to it must never be the one that ends
-	// up carrying that identity (session fixation).
+	// RenewToken before writing anything into the session: a token issued before
+	// the identity was known must never carry that identity (session fixation).
 	if err := a.sessionManager.RenewToken(r.Context()); err != nil {
 		a.logger.Error("renewing session token after register", "error", err)
 		writeAPIError(w, http.StatusInternalServerError, "internal_error", "Something went wrong.")

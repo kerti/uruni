@@ -12,16 +12,15 @@ import (
 )
 
 // faultQuerier wraps a real Querier and breaks one of MonthlyReport's reads:
-// fail names the method that returns errFault, and rows, firstDate and
-// openLines, when set, replace a read's result so a test can hand the report
-// a ledger shape the ledger's own writes never produce. Every other call goes through.
+// fail names the method returning errFault, and rows, firstDate and openLines,
+// when set, replace a read's result so a test can hand the report a ledger
+// shape its own writes never produce. Every other call goes through.
 type faultQuerier struct {
 	store.Querier
 	fail      string
 	firstDate *string
 	// failPurpose, when set, breaks ReportPurposeBalance for that one purpose only,
-	// so a test can reach the envelope section's own balance read past the
-	// header's.
+	// to reach the envelope section's balance read past the header's.
 	failPurpose int64
 	rows        []store.ListReportTransactionsRow
 	// openLines, when set, replaces ReportOpenReconciliationLines's result.
@@ -151,9 +150,9 @@ func (f faultQuerier) ListMembersByFund(ctx context.Context, fundID int64) ([]st
 	return f.Querier.ListMembersByFund(ctx, fundID)
 }
 
-// faultyReportFixture is a fund with every surface MonthlyReport reads - a
-// reconciliation, an open envelope, a dues tier, a September row - so each
-// injected fault is reached rather than skipped by an empty result.
+// faultyReportFixture is a fund with every surface MonthlyReport reads (a
+// reconciliation, an open envelope, a dues tier, a September row), so each
+// injected fault is reached, not skipped by an empty result.
 func faultyReportFixture(t *testing.T) (*Ledger, int64) {
 	l, fundID, _ := faultyReportFixtureWithClosed(t)
 	return l, fundID
@@ -295,9 +294,9 @@ func TestMonthlyReportSurfacesAClosedEnvelopesBalanceFailure(t *testing.T) {
 	}
 }
 
-// The ledger's own SUM refuses an overflowing balance first (see
+// The ledger's SUM refuses an overflowing balance first (see
 // TestMonthlyReportTotalsRefuseToWrap), so these hand the report rows no real
-// fund could hold, to prove its own sums refuse to wrap too.
+// fund could hold, to prove its sums refuse to wrap too.
 func TestMonthlyReportOwnSumsRefuseToWrap(t *testing.T) {
 	t.Parallel()
 	huge := int64(math.MaxInt64)

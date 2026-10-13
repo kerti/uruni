@@ -86,12 +86,10 @@ func TestPostMembersCreatesAndListReturnsIt(t *testing.T) {
 	if err := json.NewDecoder(list.Body).Decode(&page); err != nil {
 		t.Fatalf("decoding response: %v (body: %s)", err, list.Body.String())
 	}
-	// *string fields compare by address, not value, so this can't use != on
-	// the struct - compare the JSON each side encodes to instead. created
-	// itself has zero-value tier_name/current_rate/arrears_months (no
-	// tier), and so does this member's own list row (no tier means no dues
-	// obligation, hence no arrears either) - the two are expected to match
-	// field for field.
+	// *string fields compare by address, so compare the encoded JSON instead.
+	// Both created and this member's list row have zero-value tier_name,
+	// current_rate and arrears_months (no tier, no dues obligation, no arrears),
+	// so they match field for field.
 	gotJSON, _ := json.Marshal(page.Members)
 	wantJSON, _ := json.Marshal([]memberResponse{created})
 	if len(page.Members) != 1 || string(gotJSON) != string(wantJSON) {
@@ -114,9 +112,8 @@ func TestGetMembersReturnsAnEmptyListBeforeAnyMemberExists(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("GET /api/members = %d, want %d", rec.Code, http.StatusOK)
 	}
-	// members: [] on the wire, never null, so a client need not nil-check
-	// before ranging - and next_cursor: null, the envelope #233 always
-	// answers with now, never the bare array #65 originally shipped.
+	// members: [] on the wire, never null, so a client need not nil-check, and
+	// next_cursor: null, the envelope #233 always answers with.
 	want := `{"members":[],"next_cursor":null}` + "\n"
 	if got := rec.Body.String(); got != want {
 		t.Errorf("GET /api/members body = %q, want %q", got, want)
@@ -130,8 +127,8 @@ func TestPostMembersRejectsAnEmptyName(t *testing.T) {
 		t.Fatalf("POST /api/setup = %d, want %d", rec.Code, http.StatusCreated)
 	}
 
-	// member.name CHECK (length(trim(name)) > 0) - proven through the shared
-	// mapper, not a hand-rolled check in the handler.
+	// member.name CHECK (length(trim(name)) > 0), proven through the shared
+	// mapper, not a handler check.
 	rec := postMember(t, r, memberRequest{Name: ""})
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("POST /api/members with empty name = %d, want %d (body: %s)", rec.Code, http.StatusBadRequest, rec.Body.String())
@@ -192,10 +189,9 @@ func TestGetMembersRequiresAFund(t *testing.T) {
 	}
 }
 
-// testRouterAndLedger is testRouter's twin for #81's one integration-style
-// test: it needs a real *ledger.Ledger over the same *sql.DB the router
-// answers requests against, so a PATCH through the HTTP route and a read
-// through DuesStatusForPeriod see the same data.
+// testRouterAndLedger is testRouter with a real *ledger.Ledger over the same
+// *sql.DB, so a PATCH through the route and a DuesStatusForPeriod read see the
+// same data (#81).
 func testRouterAndLedger(t *testing.T) (http.Handler, *ledger.Ledger) {
 	t.Helper()
 	sqlDB := testStoreDB(t)
@@ -219,9 +215,8 @@ func deleteMember(t *testing.T, r http.Handler, id int64) *httptest.ResponseReco
 	return rec
 }
 
-// setUpMember is the fixture every plain PATCH/DELETE member test needs: a
-// fund, then a member with no tier - renaming, deleting and clearing a
-// nullable field none of them need dues data behind them.
+// setUpMember is the fixture for plain PATCH/DELETE member tests: a fund, then
+// a member with no tier (none needs dues data).
 func setUpMember(t *testing.T, r http.Handler, name string) memberResponse {
 	t.Helper()
 	if rec := postSetup(t, r, "Test Fund"); rec.Code != http.StatusCreated {
@@ -260,12 +255,9 @@ func TestPatchMemberRenamesIt(t *testing.T) {
 	}
 }
 
-// TestPatchMemberTierIDAbsentPresentAndNull covers all three states #81
-// asks for on a nullable field: the key missing from the body entirely
-// leaves tier_id untouched, the key present with a value sets it, and the
-// key present with JSON null clears it - which is what removes the dues
-// obligation (issue #81, "clearing tier_id is what removes a dues
-// obligation").
+// TestPatchMemberTierIDAbsentPresentAndNull covers the three states #81 asks
+// for on a nullable field: key missing leaves tier_id untouched, a value sets
+// it, JSON null clears it (which removes the dues obligation).
 func TestPatchMemberTierIDAbsentPresentAndNull(t *testing.T) {
 	t.Parallel()
 	r := testRouter(t)
@@ -332,9 +324,9 @@ func TestPatchMemberTierIDAbsentPresentAndNull(t *testing.T) {
 	})
 }
 
-// joined_on is NOT NULL (#471): a backdate is the live-arrears exception
-// (PRD 7.1) and goes through, but an explicit null is refused - there is no
-// "always was a member" to clear it back to - and the row is left as it was.
+// joined_on is NOT NULL (#471): a backdate is the live-arrears exception (PRD
+// 7.1) and goes through, but an explicit null is refused (no "always was a
+// member" to clear it back to) and the row is left as it was.
 func TestPatchMemberJoinedOnMovesButNeverClears(t *testing.T) {
 	t.Parallel()
 	r := testRouter(t)
@@ -369,8 +361,8 @@ func TestPatchMemberJoinedOnMovesButNeverClears(t *testing.T) {
 	})
 }
 
-// TestPatchMemberInactiveOnAbsentPresentAndNull is inactive_on's version of
-// the tier_id test above - the same three states, since #81 asks for both.
+// TestPatchMemberInactiveOnAbsentPresentAndNull is the tier_id test for
+// inactive_on: the same three states (#81).
 func TestPatchMemberInactiveOnAbsentPresentAndNull(t *testing.T) {
 	t.Parallel()
 	r := testRouter(t)
@@ -419,13 +411,11 @@ func TestPatchMemberInactiveOnAbsentPresentAndNull(t *testing.T) {
 	})
 }
 
-// TestPatchMemberInactiveOnIsHonoredByDuesStatusForPeriod is the
-// integration-style assertion #81 asks for: it goes through the route, then
-// checks the *derived* status via internal/ledger's own
-// DuesStatusForPeriod, not just that the column changed. DuesStatusForPeriod
-// itself is not under test here (TestDuesStatusForPeriodMemberOwesThe...
-// and its "excluded after" sibling cover its semantics directly); this test
-// only proves the PATCH route actually reaches them.
+// TestPatchMemberInactiveOnIsHonoredByDuesStatusForPeriod is #81's
+// integration assertion: through the route, then the derived status via
+// internal/ledger's DuesStatusForPeriod, not just that the column changed.
+// DuesStatusForPeriod's semantics are covered in its own tests; this proves
+// the PATCH route reaches them.
 func TestPatchMemberInactiveOnIsHonoredByDuesStatusForPeriod(t *testing.T) {
 	t.Parallel()
 	r, l := testRouterAndLedger(t)
@@ -455,7 +445,7 @@ func TestPatchMemberInactiveOnIsHonoredByDuesStatusForPeriod(t *testing.T) {
 		t.Fatalf("decoding member response: %v", err)
 	}
 
-	// Leaves partway through March - owed for March in full, gone from April.
+	// Leaves partway through March: owed for March in full, gone from April.
 	rec := patchMember(t, r, member.ID, `{"inactive_on":"2026-03-15"}`)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("PATCH /api/members/%d = %d, want %d (body: %s)", member.ID, rec.Code, http.StatusOK, rec.Body.String())
@@ -553,8 +543,8 @@ func TestPatchMemberRejectsAnEmptyName(t *testing.T) {
 	r := testRouter(t)
 	member := setUpMember(t, r, "Jane")
 
-	// member.name CHECK (length(trim(name)) > 0) - proven through the shared
-	// mapper, same as the creation-side test.
+	// member.name CHECK (length(trim(name)) > 0), through the shared mapper, as
+	// in the creation-side test.
 	rec := patchMember(t, r, member.ID, `{"name":""}`)
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("PATCH /api/members/%d with empty name = %d, want %d (body: %s)", member.ID, rec.Code, http.StatusBadRequest, rec.Body.String())
@@ -584,10 +574,9 @@ func TestDeleteMemberWithNoTransactionsSucceeds(t *testing.T) {
 }
 
 // TestDeleteMemberWithTransactionsReturns409 is #81's other must-have: a
-// member with real money posted against them refuses the delete with a
-// clean 409, not a 500 and not a cascade that would orphan the transaction.
-// This rides the composite foreign key's own refusal through mapSQLiteError
-// - there is no hand-rolled reference check to bypass.
+// member with money posted against them refuses the delete with a clean 409,
+// not a 500 or a cascade orphaning the transaction. It rides the composite
+// foreign key's refusal through mapSQLiteError, with no hand-rolled check.
 func TestDeleteMemberWithTransactionsReturns409(t *testing.T) {
 	t.Parallel()
 	r, l := testRouterAndLedger(t)
@@ -621,7 +610,7 @@ func TestDeleteMemberWithTransactionsReturns409(t *testing.T) {
 		t.Errorf("error code = %q, want %q", got.Code, "referenced_by_other_records")
 	}
 
-	// The member and its transaction both survive - nothing was cascaded.
+	// The member and its transaction both survive.
 	list := httptest.NewRecorder()
 	r.ServeHTTP(list, httptest.NewRequest(http.MethodGet, "/api/members", nil))
 	var page membersPageResponse
@@ -690,14 +679,10 @@ func decodeMembersPage(t *testing.T, rec *httptest.ResponseRecorder) membersPage
 	return page
 }
 
-// A roster bigger than one page (membersPageSize=25) is walked to the end
-// via next_cursor with no member skipped and none duplicated - #233's own
-// "one request per page regardless of member count" and ADR-032's keyset
-// contract together. Names are zero-padded so lexicographic order (what the
-// server actually sorts by) matches creation order, keeping the assertions
-// readable without depending on that order for correctness - the test
-// collects every id it saw into a set regardless of what order pages
-// arrive in.
+// A roster bigger than one page (membersPageSize=25) is walked to the end via
+// next_cursor with no member skipped or duplicated (#233, ADR-032's keyset
+// contract). Names are zero-padded so lexicographic order matches creation
+// order; the test collects every id into a set regardless of page order.
 func TestGetMembersPagesLargerRosterWithoutSkippingOrDuplicating(t *testing.T) {
 	t.Parallel()
 	r := testRouter(t)
@@ -751,17 +736,15 @@ func TestGetMembersPagesLargerRosterWithoutSkippingOrDuplicating(t *testing.T) {
 			t.Errorf("member %d was created but never seen while paging", id)
 		}
 	}
-	// The second page must have existed at all - a single oversized page
-	// would make the skip/duplicate assertions above vacuous.
+	// The second page must exist, or the skip/duplicate assertions are vacuous.
 	if pages < 2 {
 		t.Fatalf("paged only %d time(s) for %d members and a page size of %d, want at least 2 pages", pages, total, membersPageSize)
 	}
 }
 
-// ?q= is a case-insensitive substring match on name, computed on the
-// server (ADR-032: "Client-side filtering of a paged list is prohibited
-// outright") - a lowercase query must find an uppercase name and vice
-// versa, and must not find a name that does not contain it at all.
+// ?q= is a case-insensitive substring match on name, computed on the server
+// (ADR-032: client-side filtering of a paged list is prohibited): lowercase
+// finds uppercase and vice versa, and a non-containing name is not found.
 func TestGetMembersQMatchesCaseInsensitiveSubstringServerSide(t *testing.T) {
 	t.Parallel()
 	r := testRouter(t)
@@ -791,8 +774,8 @@ func TestGetMembersQMatchesCaseInsensitiveSubstringServerSide(t *testing.T) {
 	}
 }
 
-// A malformed cursor is 400 invalid_argument, the same answer
-// decodeTransactionsCursor gives GET /api/transactions (#225).
+// A malformed cursor is 400 invalid_argument, as decodeTransactionsCursor
+// gives GET /api/transactions (#225).
 func TestGetMembersMalformedCursorReturns400InvalidArgument(t *testing.T) {
 	t.Parallel()
 	r := testRouter(t)
@@ -814,9 +797,8 @@ func TestGetMembersMalformedCursorReturns400InvalidArgument(t *testing.T) {
 	}
 }
 
-// next_cursor is null on the last (here, only) page - a client must be able
-// to tell "no more pages" apart from "here is another cursor" without
-// special-casing an empty members array.
+// next_cursor is null on the last (here only) page, so a client can tell "no
+// more pages" from "another cursor" without special-casing an empty array.
 func TestGetMembersNextCursorIsNilOnLastPage(t *testing.T) {
 	t.Parallel()
 	r := testRouter(t)
@@ -833,14 +815,14 @@ func TestGetMembersNextCursorIsNilOnLastPage(t *testing.T) {
 	}
 }
 
-// A member's row carries its tier's name and the rate effective for the
-// current month - and both read nil for a tier with no rate yet decided
-// (the "madya TBD" case, PRD section 6), never an invented amount.
+// A member's row carries its tier's name and the rate effective this month;
+// both read nil for a tier with no rate decided (the "madya TBD" case, PRD
+// section 6), never an invented amount.
 func TestGetMembersRowShowsTierNameAndCurrentRateNilWhenUndecided(t *testing.T) {
 	t.Parallel()
 	r := testRouter(t)
 	tier := setUpTier(t, r, "Madya")
-	// No rate posted for this tier at all - "TBD".
+	// No rate posted for this tier at all: "TBD".
 
 	rec := postMember(t, r, memberRequest{Name: "Jane", TierID: &tier.ID})
 	if rec.Code != http.StatusCreated {
@@ -883,25 +865,20 @@ func TestGetMembersRowShowsCurrentRateWhenOneIsEffective(t *testing.T) {
 	}
 }
 
-// arrearsMonthPeriods gives this file's own HTTP-level arrears tests the
-// same relative-to-now periods internal/ledger's own
-// TestArrearsMonthsForMember* tests use, for the same reason: a fixture
-// pinned to a hard-coded calendar month eventually becomes a fixture about
-// the past.
+// arrearsMonthPeriods gives the HTTP-level arrears tests the relative-to-now
+// periods of internal/ledger's TestArrearsMonthsForMember* tests: a fixture
+// pinned to a calendar month becomes a fixture about the past.
 func arrearsMonthPeriods() (twoBack, oneBack, current string) {
 	// First of the month in Jakarta, the zone the server reckons the current
-	// period in (#379): no host-zone dependence, and no AddDate day overflow
-	// from the 31st.
+	// period in (#379), with no AddDate overflow from the 31st.
 	now := time.Now().In(tz.Jakarta)
 	first := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, tz.Jakarta)
 	return first.AddDate(0, -2, 0).Format("2006-01"), first.AddDate(0, -1, 0).Format("2006-01"), first.Format("2006-01")
 }
 
-// The full round trip for #233's own headline acceptance criterion: a
-// member with a part-paid earlier period reads arrears_months=1 on the
-// roster row, through the real route rather than the ledger method
-// directly (dues_status_test.go in internal/ledger covers the derivation
-// itself in isolation).
+// #233's headline round trip: a member with a part-paid earlier period reads
+// arrears_months=1 on the roster row, through the real route (the derivation
+// is covered in internal/ledger's dues_status_test.go).
 func TestGetMembersRowArrearsMonthsReflectsPartPaidEarlierPeriod(t *testing.T) {
 	t.Parallel()
 	r := testRouter(t)
@@ -948,11 +925,9 @@ func TestGetMembersRowArrearsMonthsReflectsPartPaidEarlierPeriod(t *testing.T) {
 	}
 }
 
-// PRD section 7.1: backdating a join date makes arrears appear on the
-// roster row that were not there before - the full HTTP round trip for the
-// property internal/ledger's own
-// TestArrearsMonthsForMemberBackdatingJoinedOnMakesArrearsAppear proves at
-// the derivation level.
+// PRD section 7.1: backdating a join date makes arrears appear on the roster
+// row, the HTTP round trip of internal/ledger's
+// TestArrearsMonthsForMemberBackdatingJoinedOnMakesArrearsAppear.
 func TestGetMembersRowArrearsMonthsAppearsAfterBackdatingJoinedOn(t *testing.T) {
 	t.Parallel()
 	r := testRouter(t)
@@ -992,12 +967,10 @@ func TestGetMembersRowArrearsMonthsAppearsAfterBackdatingJoinedOn(t *testing.T) 
 	}
 }
 
-// The page-boundary case the 30-member test cannot reach: a roster of
-// exactly membersPageSize. The handler peeks at one extra row to decide
-// whether there is a next page, so exactly 25 must come back as one full
-// page with next_cursor nil - never a cursor pointing at an empty 26th-row
-// page, which would give the treasurer a "muat lebih banyak" button that
-// loads nothing.
+// The page-boundary case the 30-member test cannot reach: a roster of exactly
+// membersPageSize. The handler peeks one extra row to decide whether a next
+// page exists, so exactly 25 return as one full page with next_cursor nil,
+// never a cursor to an empty page and a "muat lebih banyak" that loads nothing.
 func TestGetMembersExactlyOnePageFullReturnsNoCursor(t *testing.T) {
 	t.Parallel()
 	r := testRouter(t)

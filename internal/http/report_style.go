@@ -3,11 +3,10 @@ package http
 import "html/template"
 
 // reportPalette is the slice of web/src/index.css's :root tokens the public
-// report uses, copied by hand (ADR-035): the page is one request with no
-// asset path and no Vite coupling, so it cannot import the SPA's stylesheet.
-// TestReportPaletteMatchesIndexCSS reads index.css and fails on any value
-// that drifts from these, so the copy is kept honest by a test, not by a
-// comment.
+// report uses, copied by hand (ADR-035): the page is one request with no asset
+// path and no Vite coupling, so it cannot import the SPA's stylesheet.
+// TestReportPaletteMatchesIndexCSS fails on any drift, so a test, not a
+// comment, keeps the copy honest.
 var reportPalette = map[string]string{
 	"background":         "#f6f4ef",
 	"foreground":         "#22323a",
@@ -28,11 +27,11 @@ var reportPalette = map[string]string{
 
 // reportStyle is the page's one inline <style> block. System fonts, not the
 // app's Plus Jakarta Sans: the page loads nothing but itself. Amounts use
-// tabular figures (Design-System.md), and the layout is a single phone-width
-// column, since the link mostly opens from a WhatsApp message.
+// tabular figures (Design-System.md), in a single phone-width column, since
+// the link mostly opens from a WhatsApp message.
 //
-// Colours come from reportPalette through CSS custom properties, so the
-// rules below name tokens exactly as the SPA's Tailwind classes do.
+// Colours come from reportPalette through CSS custom properties, naming tokens
+// as the SPA's Tailwind classes do.
 func reportStyle() template.CSS {
 	vars := ":root{"
 	for _, name := range reportPaletteOrder {
@@ -43,8 +42,8 @@ func reportStyle() template.CSS {
 	return template.CSS(vars + reportRules)
 }
 
-// reportPaletteOrder fixes the emitted order, so the page's bytes do not
-// change between requests the way ranging over a map would make them.
+// reportPaletteOrder fixes the emitted order so the page's bytes do not change
+// between requests, as ranging over a map would.
 var reportPaletteOrder = []string{
 	"background", "foreground", "card", "primary", "primary-foreground", "accent",
 	"muted", "muted-foreground", "border", "input",

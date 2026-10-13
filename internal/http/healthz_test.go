@@ -122,8 +122,8 @@ func TestHealthzReportsTheLastDumpWithoutChangingStatus(t *testing.T) {
 	}
 }
 
-// The full router wires the ping: New's /healthz answers 503 once its store
-// is gone.
+// The full router wires the ping: New's /healthz answers 503 once its store is
+// gone.
 func TestRouterHealthzPingsItsStore(t *testing.T) {
 	t.Parallel()
 	sqlDB := testStoreDB(t)

@@ -34,9 +34,8 @@ func createDuesRate(t *testing.T, q *store.Queries, tierID int64, amount money.A
 	}
 }
 
-// duesMemberParams is the shape createDuesMember needs - a superset of
-// store.CreateMemberParams narrowed to the fields these tests vary. A nil
-// joinedOn is longAgoJoinedOn, not NULL: the column is NOT NULL (#471).
+// duesMemberParams is the shape createDuesMember needs: the fields these
+// tests vary. A nil joinedOn is longAgoJoinedOn, not NULL (#471, NOT NULL).
 type duesMemberParams struct {
 	name       string
 	tierID     *int64
@@ -176,10 +175,8 @@ func TestDuesStatusForPeriodPaidMemberPaidExactlyTheRate(t *testing.T) {
 	}
 }
 
-// Overpayment (paid more than the rate) reads as Paid, not a fifth status:
-// the treasurer's question this view answers is "did they clear what they
-// owe", and paying more still answers yes. The exact figure stays visible
-// in PaidAmount for anyone who wants it.
+// Overpayment (paid more than the rate) reads as Paid, not a fifth status;
+// the exact figure stays visible in PaidAmount.
 func TestDuesStatusForPeriodOverpaymentReadsAsPaid(t *testing.T) {
 	t.Parallel()
 	l := newTestLedger(t)
@@ -219,10 +216,9 @@ func TestDuesStatusForPeriodOverpaymentReadsAsPaid(t *testing.T) {
 	}
 }
 
-// Paid in advance is Paid-for-this-period plus a later period also paid, not
-// merely "a later period exists somewhere in this member's history". A
-// period that is itself unpaid or partial stays unpaid/partial even if the
-// member later paid ahead for some other month.
+// Paid in advance is Paid for this period plus a later period also paid. A
+// period that is itself unpaid or partial stays so even if the member paid
+// ahead for another month.
 func TestDuesStatusForPeriodPaidInAdvanceWhenALaterPeriodIsAlsoPaid(t *testing.T) {
 	t.Parallel()
 	l := newTestLedger(t)
@@ -258,9 +254,8 @@ func TestDuesStatusForPeriodPaidInAdvanceWhenALaterPeriodIsAlsoPaid(t *testing.T
 	}
 }
 
-// A member who skipped a period entirely still reads as Unpaid for it, even
-// though a later period was paid - "paid in advance" describes a period
-// that is itself settled and then some, not a hole with a payment beyond it.
+// A member who skipped a period still reads Unpaid for it though a later
+// period was paid: "ahead" describes a settled period, not a hole.
 func TestDuesStatusForPeriodSkippedPeriodStaysUnpaidDespiteALaterPayment(t *testing.T) {
 	t.Parallel()
 	l := newTestLedger(t)
@@ -272,7 +267,7 @@ func TestDuesStatusForPeriodSkippedPeriodStaysUnpaidDespiteALaterPayment(t *test
 	createDuesRate(t, q, tierID, 25_000, "2026-01")
 	memberID := createDuesMember(t, q, f.fundID, duesMemberParams{name: "Jane", tierID: &tierID})
 
-	// Paid August, but never paid the July being queried below.
+	// Paid August, never July.
 	if _, err := l.PostDuesPayments(ctx, PostDuesPaymentsParams{
 		FundID: f.fundID, AccountID: f.cashID,
 		MemberID: memberID, OccurredOn: "2026-08-01",
@@ -295,9 +290,8 @@ func TestDuesStatusForPeriodSkippedPeriodStaysUnpaidDespiteALaterPayment(t *test
 	}
 }
 
-// Several months paid at once shows correctly for each of those periods:
-// the last one paid is Paid, and every earlier paid month reads as Paid in
-// advance because a later period was also paid.
+// Several months paid at once: the last is Paid and every earlier paid month
+// reads Paid in advance.
 func TestDuesStatusForPeriodSeveralMonthsPaidAtOnceShowCorrectlyPerPeriod(t *testing.T) {
 	t.Parallel()
 	l := newTestLedger(t)
@@ -362,9 +356,8 @@ func TestDuesStatusForPeriodMemberWithNoTierIsExcluded(t *testing.T) {
 	}
 }
 
-// The "madya TBD" case, PRD 6: a tier whose rate is not yet decided has no
-// dues_rate row at all for the period. Uruni does not invent an amount, so
-// the member is omitted rather than shown as owing an unknown figure.
+// The "madya TBD" case, PRD 6: a tier with no dues_rate row for the period.
+// Uruni does not invent an amount, so the member is omitted.
 func TestDuesStatusForPeriodMemberWhoseTierHasNoRateForThePeriodIsOmitted(t *testing.T) {
 	t.Parallel()
 	l := newTestLedger(t)
@@ -384,9 +377,8 @@ func TestDuesStatusForPeriodMemberWhoseTierHasNoRateForThePeriodIsOmitted(t *tes
 	}
 }
 
-// A tier whose rate only takes effect later than the queried period is the
-// same omission case, reached through a real effective_from rather than an
-// empty dues_rate table.
+// A tier whose rate takes effect after the queried period is the same
+// omission, via a real effective_from.
 func TestDuesStatusForPeriodMemberWhoseTierRateStartsAfterThePeriodIsOmitted(t *testing.T) {
 	t.Parallel()
 	l := newTestLedger(t)
@@ -501,11 +493,10 @@ func TestDuesStatusForPeriodMemberExcludedAfterTheMonthTheyWentInactive(t *testi
 	}
 }
 
-// PRD 7.1's live-arrears exception backdates one member's joined_on and
-// the tier's rate together. The backdated rate must reach only that member:
-// a member who joined at adoption owes nothing before their own join month
-// (#471 - before it, a NULL joined_on walked from the tier's earliest rate
-// and picked up the backdated periods too).
+// PRD 7.1's live-arrears exception backdates one member's joined_on and the
+// tier's rate together. The backdated rate must reach only that member
+// (#471: a NULL joined_on used to walk from the tier's earliest rate and
+// pick up the backdated periods too).
 func TestOutstandingDuesForMemberBackdatedRateReachesOnlyTheBackdatedMember(t *testing.T) {
 	t.Parallel()
 	l := newTestLedger(t)
@@ -574,10 +565,8 @@ func TestDuesStatusForPeriodScopesToOneFund(t *testing.T) {
 	ctx := context.Background()
 	q := store.New(l.db)
 
-	// Mirrors TestASecondFundsRowsNeverAppearInTheFirstFundsBalances in
-	// balance_test.go: a second fund built by hand, not a second
-	// newFixture(t, l) call, because newFixture hard-codes the fund's
-	// report_slug and a second fund needs a distinct one.
+	// Mirrors TestASecondFundsRowsNeverAppearInTheFirstFundsBalances: a second
+	// fund built by hand, since newFixture hard-codes the report_slug.
 	other, err := q.CreateFund(ctx, store.CreateFundParams{
 		Name: "Other Fund", Currency: "IDR", ReportSlug: "zyxwvutsrqponmlkjihgfe", CreatedAt: 1,
 	})
@@ -620,14 +609,11 @@ func TestDuesStatusForPeriodScopesToOneFund(t *testing.T) {
 
 // --- the accepted limitation (ADR-024) --------------------------------------
 
-// member.tier_id is not effective-dated (ADR-024's accepted limitation), so
-// a member promoted mid-year has their CURRENT tier applied to every past
-// period too. This member is on the schema's only representable state -
-// their present tier, Tier B (the promotion) - and January's owed figure
-// comes back at Tier B's rate, not the Tier A rate that was actually in
-// force when January happened. That is the accepted, documented wrong
-// answer, not a bug: see ADR-024's "Accepted limitation" paragraph and the
-// comment on GetEffectiveDuesRate's call site in dues_status.go.
+// member.tier_id is not effective-dated (ADR-024's accepted limitation), so a
+// member promoted mid-year has their CURRENT tier applied to every past
+// period. January's owed figure comes back at Tier B's rate, not the Tier A
+// rate in force then. That is the accepted wrong answer, not a bug; see
+// ADR-024 and dues_status.go.
 func TestDuesStatusForPeriodMidYearPromotionAppliesCurrentTierToPastPeriodsAcceptedLimitation(t *testing.T) {
 	t.Parallel()
 	l := newTestLedger(t)
@@ -641,9 +627,8 @@ func TestDuesStatusForPeriodMidYearPromotionAppliesCurrentTierToPastPeriodsAccep
 	tierB := createDuesTier(t, q, f.fundID, "Tier B") // the tier the member was promoted to in June
 	createDuesRate(t, q, tierB, 50_000, "2026-01")
 
-	// The schema has no record of "was on Tier A until June, then Tier B" -
-	// member.tier_id carries only the member's current tier, so this row is
-	// exactly what the database holds today, after the promotion.
+	// The schema has no record of "Tier A until June, then Tier B";
+	// member.tier_id holds only the current tier.
 	memberID := createDuesMember(t, q, f.fundID, duesMemberParams{name: "Jane", tierID: &tierB})
 
 	rows, err := l.DuesStatusForPeriod(ctx, f.fundID, "2026-01")
@@ -665,11 +650,9 @@ func TestDuesStatusForPeriodMidYearPromotionAppliesCurrentTierToPastPeriodsAccep
 // --- OutstandingDuesForMember (#186) -----------------------------------------
 
 // TestOutstandingDuesForMemberReturnsUnpaidAndPartialOldestFirstMatchingDuesStatusForPeriod
-// is the slice's core acceptance criterion: three periods in range, one
-// unpaid, one partial, one paid, come back as exactly the two outstanding
-// ones, oldest first, with amounts matching what DuesStatusForPeriod itself
-// reports for the same periods - this is the same derivation, not a second
-// opinion.
+// is the core criterion: of three periods (unpaid, partial, paid), exactly
+// the two outstanding come back, oldest first, with the amounts
+// DuesStatusForPeriod reports; it is the same derivation.
 func TestOutstandingDuesForMemberReturnsUnpaidAndPartialOldestFirstMatchingDuesStatusForPeriod(t *testing.T) {
 	t.Parallel()
 	l := newTestLedger(t)
@@ -682,8 +665,8 @@ func TestOutstandingDuesForMemberReturnsUnpaidAndPartialOldestFirstMatchingDuesS
 	joinedOn := "2026-01-01"
 	memberID := createDuesMember(t, q, f.fundID, duesMemberParams{name: "Jane", tierID: &tierID, joinedOn: &joinedOn})
 
-	// 2026-01 stays unpaid; 2026-02 gets a partial payment; 2026-03 gets paid
-	// in full and must not appear at all.
+	// 2026-01 stays unpaid; 2026-02 gets a partial payment; 2026-03 is paid in
+	// full and must not appear.
 	if _, err := l.PostDuesPayments(ctx, PostDuesPaymentsParams{
 		FundID: f.fundID, AccountID: f.cashID,
 		MemberID: memberID, OccurredOn: "2026-03-15",
@@ -720,8 +703,7 @@ func TestOutstandingDuesForMemberReturnsUnpaidAndPartialOldestFirstMatchingDuesS
 		t.Errorf("2026-02 owed/paid = %d/%d, want 25000/10000", rows[1].OwedAmount, rows[1].PaidAmount)
 	}
 
-	// Cross-check against DuesStatusForPeriod for the same two periods - the
-	// same derivation, not a re-typed opinion of it.
+	// Cross-check against DuesStatusForPeriod for the same two periods.
 	for i, period := range []string{"2026-01", "2026-02"} {
 		want, err := l.DuesStatusForPeriod(ctx, f.fundID, period)
 		if err != nil {
@@ -788,9 +770,8 @@ func TestOutstandingDuesForMemberTierLessMemberReturnsEmpty(t *testing.T) {
 	}
 }
 
-// A tier that has never had a rate (the "madya TBD" case) has never had
-// anything owed against it, however long the member has been on the roster:
-// every period in the walk is skipped, none invented.
+// A tier that never had a rate has nothing owed: every period is skipped,
+// none invented.
 func TestOutstandingDuesForMemberRatelessTierReturnsEmpty(t *testing.T) {
 	t.Parallel()
 	l := newTestLedger(t)
@@ -812,9 +793,8 @@ func TestOutstandingDuesForMemberRatelessTierReturnsEmpty(t *testing.T) {
 	}
 }
 
-// A member who joins after `through` has no periods in range at all. The
-// walk must return empty rather than iterating backwards or returning a
-// period the member cannot owe yet - the arrears case in reverse.
+// A member who joins after `through` has no periods in range; the walk
+// returns empty rather than iterating backwards.
 func TestOutstandingDuesForMemberJoinedAfterThroughReturnsEmpty(t *testing.T) {
 	t.Parallel()
 	l := newTestLedger(t)
@@ -880,8 +860,7 @@ func TestOutstandingDuesForMemberInactiveOnBoundsTheEnd(t *testing.T) {
 		name: "Jane", tierID: &tierID, joinedOn: &joinedOn, inactiveOn: &inactiveOn,
 	})
 
-	// through reaches well past inactive_on's month - the answer must stop
-	// at 2026-03 regardless.
+	// through reaches well past inactive_on's month; the answer stops at 2026-03.
 	rows, err := l.OutstandingDuesForMember(ctx, f.fundID, memberID, "2026-06", time.Time{})
 	if err != nil {
 		t.Fatalf("OutstandingDuesForMember() = %v, want no error", err)
@@ -894,10 +873,9 @@ func TestOutstandingDuesForMemberInactiveOnBoundsTheEnd(t *testing.T) {
 	}
 }
 
-// A period whose tier has no effective rate is skipped, and the range keeps
-// walking past it rather than stopping there: periods before the tier's
-// first rate exist (because joined_on predates it) are silently omitted,
-// and periods once the rate exists still appear.
+// A period whose tier has no effective rate is skipped and the range keeps
+// walking: periods before the tier's first rate are omitted, and periods once
+// it exists still appear.
 func TestOutstandingDuesForMemberSkipsPeriodWithNoEffectiveRateWithoutTruncatingTheRange(t *testing.T) {
 	t.Parallel()
 	l := newTestLedger(t)
@@ -950,11 +928,10 @@ func TestOutstandingDuesForMemberThroughBoundsTheEnd(t *testing.T) {
 	}
 }
 
-// An omitted through defaults to the current month in Jakarta, not the
-// host's zone (#379): production runs UTC, so on a month's last day from
-// 17:00:00Z the treasurer is already in the next month. The instants below
-// straddle that boundary by one second, and a year boundary too; the walk's
-// last period is the period "now" fell in.
+// An omitted through defaults to the current month in Jakarta, not the host's
+// zone (#379): production runs UTC, so on a month's last day from 17:00:00Z
+// the treasurer is in the next month. The instants straddle that boundary by
+// one second, and a year boundary too.
 func TestOutstandingDuesForMemberOmittedThroughDefaultsToTheJakartaMonth(t *testing.T) {
 	t.Parallel()
 	cases := []struct {
@@ -1017,11 +994,9 @@ func TestOutstandingDuesForMemberRejectsMalformedThrough(t *testing.T) {
 	}
 }
 
-// An unknown member id - including one belonging to another fund, since
-// GetMemberForFund's WHERE clause makes the two indistinguishable - answers
-// sql.ErrNoRows, which the HTTP layer's mapLedgerError already turns into
-// 404 (dues_status_test in package http covers that mapping; this proves
-// the ledger method itself does not swallow or misreport it).
+// An unknown member id, including another fund's (GetMemberForFund makes them
+// indistinguishable), answers sql.ErrNoRows, which mapLedgerError turns into
+// 404; this proves the ledger method does not swallow it.
 func TestOutstandingDuesForMemberUnknownMemberIsNotFound(t *testing.T) {
 	t.Parallel()
 	l := newTestLedger(t)
@@ -1034,9 +1009,8 @@ func TestOutstandingDuesForMemberUnknownMemberIsNotFound(t *testing.T) {
 	}
 }
 
-// The mid-year-promotion limitation (ADR-024) carries over unchanged: it is
-// GetEffectiveDuesRate's own call site, reused as-is, that produces it, not
-// something OutstandingDuesForMember could opt out of even if it tried.
+// The mid-year-promotion limitation (ADR-024) carries over unchanged: it
+// comes from the reused GetEffectiveDuesRate call site.
 func TestOutstandingDuesForMemberMidYearPromotionAppliesCurrentTierToPastPeriodsAcceptedLimitation(t *testing.T) {
 	t.Parallel()
 	l := newTestLedger(t)
@@ -1069,17 +1043,12 @@ func TestOutstandingDuesForMemberMidYearPromotionAppliesCurrentTierToPastPeriods
 
 // --- ArrearsMonthsForMember (#233, ADR-032) --------------------------------
 //
-// These build periods relative to time.Now() rather than hard-coded
-// calendar months, the same reasoning
-// TestOutstandingDuesForMemberOmittedThroughDefaultsToCurrentMonth already
-// gives: a fixture pinned to "2026-06" eventually becomes a fixture about
-// the past, and this function's whole job is "relative to whatever period
-// is current right now".
+// These build periods relative to time.Now(), not hard-coded months: a
+// fixture pinned to "2026-06" eventually becomes a fixture about the past.
 
-// arrearsPeriods bundles the four periods every test below needs relative
-// to the moment it runs: two months before the current one, the month
-// before it, the current one itself, and the month after it. Naming them
-// once here keeps each test's own arithmetic readable.
+// arrearsPeriods bundles the four periods every test below needs relative to
+// now: two months before the current one, the month before it, the current
+// one, and the month after it.
 type arrearsPeriods struct {
 	twoBack, oneBack, current, ahead string
 }
@@ -1087,7 +1056,7 @@ type arrearsPeriods struct {
 func newArrearsPeriods(t *testing.T) arrearsPeriods {
 	t.Helper()
 	// First of the month in Jakarta (#379): no host-zone dependence, and no
-	// AddDate day overflow from the 31st.
+	// AddDate overflow from the 31st.
 	now := time.Now().In(tz.Jakarta)
 	first := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, tz.Jakarta)
 	return arrearsPeriods{
@@ -1098,8 +1067,8 @@ func newArrearsPeriods(t *testing.T) arrearsPeriods {
 	}
 }
 
-// A member who joined the current period owns no period strictly before
-// it - ADR-032's own "including... a member who joined this period" case.
+// A member who joined the current period owes no period strictly before it
+// (ADR-032: "a member who joined this period").
 func TestArrearsMonthsForMemberJoinedThisPeriodReadsZero(t *testing.T) {
 	t.Parallel()
 	l := newTestLedger(t)
@@ -1123,9 +1092,7 @@ func TestArrearsMonthsForMemberJoinedThisPeriodReadsZero(t *testing.T) {
 }
 
 // A member who has fully paid every period through one ahead of the current
-// one - DuesStatusForPeriod's own "paid in advance" shape - has nothing
-// outstanding for any period before the current one either, so the badge
-// reads zero.
+// one has nothing outstanding before the current one, so the badge reads zero.
 func TestArrearsMonthsForMemberPaidAheadReadsZero(t *testing.T) {
 	t.Parallel()
 	l := newTestLedger(t)
@@ -1161,9 +1128,8 @@ func TestArrearsMonthsForMemberPaidAheadReadsZero(t *testing.T) {
 	}
 }
 
-// A part-paid earlier period counts as one month, the same as an unpaid
-// one (ADR-032's own table) - this is the acceptance criterion's own
-// "Tunggakan 1 bulan" case.
+// A part-paid earlier period counts as one month, like an unpaid one
+// (ADR-032): the "Tunggakan 1 bulan" case.
 func TestArrearsMonthsForMemberPartPaidEarlierPeriodReadsOne(t *testing.T) {
 	t.Parallel()
 	l := newTestLedger(t)
@@ -1196,10 +1162,8 @@ func TestArrearsMonthsForMemberPartPaidEarlierPeriodReadsOne(t *testing.T) {
 	}
 }
 
-// Two periods before the current one, one unpaid and one partial, both
-// count - the whole-months count treats them identically, exactly as
-// OutstandingDuesForMember itself returns both as outstanding with no
-// further classification.
+// Two periods before the current one, one unpaid and one partial, both count
+// identically.
 func TestArrearsMonthsForMemberCountsUnpaidAndPartialTheSame(t *testing.T) {
 	t.Parallel()
 	l := newTestLedger(t)
@@ -1233,10 +1197,9 @@ func TestArrearsMonthsForMemberCountsUnpaidAndPartialTheSame(t *testing.T) {
 	}
 }
 
-// The current period is excluded entirely, by construction (ADR-032): a
-// member who owes only the current period, and has paid nothing toward it,
-// still reads zero arrears - the badge must never flip the whole roster to
-// "owing" on the first of the month.
+// The current period is excluded by construction (ADR-032): a member owing
+// only the current period still reads zero arrears, so the badge never flips
+// the whole roster to "owing" on the first of the month.
 func TestArrearsMonthsForMemberCurrentPeriodAloneIsExcluded(t *testing.T) {
 	t.Parallel()
 	l := newTestLedger(t)
@@ -1249,8 +1212,8 @@ func TestArrearsMonthsForMemberCurrentPeriodAloneIsExcluded(t *testing.T) {
 	createDuesRate(t, q, tierID, 25_000, "2020-01")
 	joinedOn := p.current + "-01"
 	memberID := createDuesMember(t, q, f.fundID, duesMemberParams{name: "Jane", tierID: &tierID, joinedOn: &joinedOn})
-	// Nothing paid at all - the member owes exactly the current period and
-	// nothing else, since they joined it.
+	// Nothing paid: the member owes exactly the current period, since they
+	// joined it.
 
 	got, err := l.ArrearsMonthsForMember(ctx, f.fundID, memberID, p.current)
 	if err != nil {
@@ -1282,11 +1245,10 @@ func TestArrearsMonthsForMemberTierLessMemberReadsZero(t *testing.T) {
 	}
 }
 
-// PRD section 7.1: backdating a join date exposes arrears that were not
-// there before, because it widens OutstandingDuesForMember's own walk back
-// to an earlier start - proved directly against UpdateMember rather than
-// through the HTTP layer, since this is the ledger derivation's own
-// property, not the route's.
+// PRD section 7.1: backdating a join date exposes arrears that were not there
+// before, because it widens OutstandingDuesForMember's walk. Proved against
+// UpdateMember directly, as this is the derivation's property, not the
+// route's.
 func TestArrearsMonthsForMemberBackdatingJoinedOnMakesArrearsAppear(t *testing.T) {
 	t.Parallel()
 	l := newTestLedger(t)
@@ -1349,10 +1311,9 @@ func TestArrearsMonthsForMemberRejectsMalformedCurrentPeriod(t *testing.T) {
 	}
 }
 
-// An unknown member id answers sql.ErrNoRows, mirroring
-// TestOutstandingDuesForMemberUnknownMemberIsNotFound - this function calls
-// OutstandingDuesForMember directly, so the same GetMemberForFund lookup
-// backs it.
+// An unknown member id answers sql.ErrNoRows, as
+// TestOutstandingDuesForMemberUnknownMemberIsNotFound; the same
+// GetMemberForFund lookup backs it.
 func TestArrearsMonthsForMemberUnknownMemberIsNotFound(t *testing.T) {
 	t.Parallel()
 	l := newTestLedger(t)
@@ -1366,14 +1327,11 @@ func TestArrearsMonthsForMemberUnknownMemberIsNotFound(t *testing.T) {
 	}
 }
 
-// The current-period exclusion is month arithmetic, and the one input that
-// can break month arithmetic is January: "2026-01" minus a month has to
-// reach December of the PREVIOUS year, not December of the same one, or the
-// badge silently reports a year's worth of arrears every January. Every
-// other arrears test derives its periods from time.Now() through
-// newArrearsPeriods, so none of them exercises this unless the suite
-// happens to run in January - hence a fixed-period test rather than a
-// relative one.
+// The current-period exclusion is month arithmetic, and January is the input
+// that can break it: "2026-01" minus a month must reach December of the
+// PREVIOUS year, or the badge reports a year's arrears every January. The
+// other arrears tests derive periods from time.Now(), so none covers this
+// unless the suite runs in January; hence a fixed-period test.
 func TestArrearsMonthsForMemberCrossesTheYearBoundary(t *testing.T) {
 	t.Parallel()
 	l := newTestLedger(t)
@@ -1386,8 +1344,8 @@ func TestArrearsMonthsForMemberCrossesTheYearBoundary(t *testing.T) {
 	joinedOn := "2025-11-01"
 	memberID := createDuesMember(t, q, f.fundID, duesMemberParams{name: "Jane", tierID: &tierID, joinedOn: &joinedOn})
 
-	// currentPeriod is January, so the walk must end at 2025-12: November and
-	// December 2025 are owed and unpaid, January 2026 itself is excluded.
+	// currentPeriod is January, so the walk ends at 2025-12: November and
+	// December 2025 are owed and unpaid, January 2026 is excluded.
 	got, err := l.ArrearsMonthsForMember(ctx, f.fundID, memberID, "2026-01")
 	if err != nil {
 		t.Fatalf("ArrearsMonthsForMember(2026-01) = %v, want no error", err)

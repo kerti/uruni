@@ -1,14 +1,13 @@
 // Package config reads the binary's runtime configuration from the
-// environment. Environment variables only - there is no config file, and no
-// third-party config library (ADR-019).
+// environment. Environment variables only: no config file and no third-party
+// config library (ADR-019).
 //
-// This package is the *only* place in the binary that calls os.Getenv. Every
-// other package takes a Config. That keeps the documented table in ADR-019
-// checkable against one file rather than against a grep of the whole tree.
+// This is the only place in the binary that calls os.Getenv; every other
+// package takes a Config, so ADR-019's table is checkable against one file.
 //
-// Errors here are operator-facing, so they are in English like the rest of the
-// CLI and the self-hosting docs; Indonesian is the treasurer's surface, the SPA
-// and the public report (ADR-014).
+// Errors here are operator-facing, so English like the CLI and self-hosting
+// docs; Indonesian is the treasurer's surface, the SPA and public report
+// (ADR-014).
 package config
 
 import (
@@ -22,80 +21,73 @@ import (
 	"strings"
 )
 
-// Defaults for the variables that have one. The rest are required outright
-// (URUNI_BASE_URL).
+// Defaults for the variables that have one; URUNI_BASE_URL is required.
 const (
 	DefaultDBPath    = "./uruni.db"
 	DefaultPort      = 8080
 	DefaultLogLevel  = slog.LevelInfo
 	DefaultLogFormat = LogFormatText
-	// DefaultUploadsDir mirrors DefaultDBPath's own split: a dev-friendly
-	// relative default that the production image and docker-compose.yml
-	// override to the volume-mounted /uploads explicitly (ADR-019, ADR-011),
-	// the same way URUNI_DB defaults to ./uruni.db locally and is overridden
-	// to /data/uruni.db in the compose stack.
+	// DefaultUploadsDir is a dev-friendly relative default that the production
+	// image and docker-compose.yml override to the volume-mounted /uploads
+	// (ADR-019, ADR-011), as URUNI_DB defaults to ./uruni.db and becomes
+	// /data/uruni.db in compose.
 	DefaultUploadsDir = "./uploads"
-	// DefaultBackupDir is the same split again, for the daily server-side
-	// dumps ADR-012/ADR-013 describe (M6.38, #324): a dev-friendly relative
-	// default, overridden to the volume-mounted /backups in the compose
-	// stack and the production image.
+	// DefaultBackupDir is the same split for the daily dumps (ADR-012/ADR-013):
+	// a relative dev default, overridden to /backups in compose and the image.
 	DefaultBackupDir = "./backups"
 )
 
-// Log output formats. Text is the default because the operator reads container
-// logs with their eyes far more often than with a log shipper (ADR-022).
+// Log output formats. Text is the default: operators read container logs with
+// their eyes far more than with a shipper (ADR-022).
 const (
 	LogFormatText = "text"
 	LogFormatJSON = "json"
 )
 
-// placeholderBaseURL is the value .env.example ships. Refusing it is what makes
-// URUNI_BASE_URL the "did you configure this instance at all?" gate: it is the
-// one variable an operator must set for the instance to be reachable at the
-// address it hands out, and booting on the template value produces a shareable
-// report link that works nowhere but the operator's own browser (ADR-019).
+// placeholderBaseURL is the value .env.example ships. Refusing it makes
+// URUNI_BASE_URL the "did you configure this at all?" gate: booting on the
+// template value yields a report link that works nowhere but the operator's
+// browser (ADR-019).
 const placeholderBaseURL = "https://uruni.example.com"
 
-// ErrInvalidConfig wraps every configuration failure, so callers and tests can
-// branch on identity rather than on message text. The message names the
-// variable at fault; which one it is, is what the operator needs to know.
+// ErrInvalidConfig wraps every configuration failure, so callers and tests
+// branch on identity, not message text. The message names the variable at
+// fault.
 var ErrInvalidConfig = errors.New("invalid configuration")
 
-// Config is the resolved runtime configuration. It is a value, passed down from
-// main - there is no package-level singleton to reach for.
+// Config is the resolved runtime configuration: a value passed down from
+// main, with no package-level singleton.
 type Config struct {
-	// DBPath is the SQLite file. SQLite is the only engine through 0.x, so
-	// there is no DATABASE_URL to parse (ADR-004).
+	// DBPath is the SQLite file. SQLite is the only engine through 0.x, so there
+	// is no DATABASE_URL (ADR-004).
 	DBPath string
 	// Port is the TCP port the server listens on.
 	Port int
 	// BaseURL is this instance's public origin. It builds the shareable report
-	// link (M7), and its scheme decides whether the session cookie is Secure
-	// (ADR-007). Required - an instance with no origin is an unconfigured one.
+	// link and its scheme decides whether the session cookie is Secure (ADR-007).
+	// Required: an instance with no origin is unconfigured.
 	BaseURL string
 	// UploadsDir is the local volume receipt photos are written to (ADR-011).
-	// Existence and writability are not checked here - Load stays a pure
-	// parse of the environment table, with no filesystem I/O of its own - see
-	// EnsureUploadsDirWritable, which `serve` alone calls at boot.
+	// Load does no filesystem I/O; see EnsureUploadsDirWritable, which `serve`
+	// alone calls at boot.
 	UploadsDir string
-	// BackupDir is the local volume the daily server-side dumps are written
-	// to (ADR-012/ADR-013, M6.38 #324) - the same existence-and-writability
-	// story as UploadsDir: not checked here, see EnsureBackupDirWritable.
+	// BackupDir is the local volume the daily dumps are written to
+	// (ADR-012/ADR-013); not checked here either, see EnsureBackupDirWritable.
 	BackupDir string
 	// LogLevel and LogFormat configure the slog handler main builds (ADR-022).
 	LogLevel  slog.Level
 	LogFormat string
-	// TrustedProxies are the peers whose X-Forwarded-For is believed (#447):
-	// the login and restore-confirm rate limiters key on the client address,
-	// and a header from anyone else is a value the client chose. Empty - the
-	// default - ignores the header and keys on the TCP peer itself.
-	// docker-compose.yml sets it so the shipped Caddy is trusted.
+	// TrustedProxies are the peers whose X-Forwarded-For is believed (#447): the
+	// login and restore-confirm rate limiters key on the client address, and a
+	// header from anyone else is chosen by the client. Empty, the default,
+	// ignores the header and keys on the TCP peer. docker-compose.yml sets it so
+	// the shipped Caddy is trusted.
 	TrustedProxies []netip.Prefix
 }
 
 // Load reads and validates the whole environment table in ADR-019. It returns
-// the first problem it finds rather than a list: an operator fixes one variable
-// and re-runs, and a wall of errors on boot reads worse than one line.
+// the first problem found, not a list: an operator fixes one variable and
+// re-runs.
 func Load() (Config, error) {
 	cfg := Config{
 		DBPath:     DefaultDBPath,
@@ -178,15 +170,14 @@ func loadBaseURL(cfg *Config) error {
 		return invalid("URUNI_BASE_URL",
 			"not set - the public origin this instance is reached at, e.g. https://uruni.example.com; `make setup` writes a loopback one for local dev")
 	case placeholderBaseURL:
-		// Safe to echo: an origin is not a credential, and seeing the
-		// template value quoted back is what makes the fault obvious.
+		// Safe to echo: an origin is not a credential, and the quoted template value
+		// makes the fault obvious.
 		return invalidValue("URUNI_BASE_URL", cfg.BaseURL,
 			"still the placeholder from .env.example; set the origin this instance is actually reached at")
 	}
 	u, err := url.Parse(cfg.BaseURL)
 	// The report link is pasted into a WhatsApp group, so a relative or
-	// scheme-less value would produce a link that works nowhere but the
-	// operator's own browser.
+	// scheme-less value would work nowhere but the operator's browser.
 	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
 		return invalidValue("URUNI_BASE_URL", cfg.BaseURL,
 			"want an absolute origin, e.g. https://uruni.example.com")
@@ -216,16 +207,13 @@ func loadLogging(cfg *Config) error {
 }
 
 // EnsureUploadsDirWritable checks that dir (Config.UploadsDir) exists, is a
-// directory, and accepts a new file - the boot-time check `serve` alone runs
-// (issue #153), never `migrate`, `create-user`, `healthcheck` or `seed-e2e`:
-// none of those write a receipt, so none of them need the volume to be
-// there. Kept out of Load itself, which stays a pure parse of the
-// environment with no filesystem I/O of its own.
+// directory, and accepts a new file: the boot check `serve` alone runs, not
+// `migrate`, `create-user`, `healthcheck` or `seed-e2e`, which write no
+// receipt. Kept out of Load, which does no filesystem I/O.
 //
-// A missing or unwritable directory is exactly the "root:root named volume"
-// failure ADR-019's Dockerfile comment already describes for /data and
-// /uploads - this turns that into a clear boot error instead of the first
-// upload failing silently deep in a handler.
+// A missing or unwritable directory is the "root:root named volume" failure
+// ADR-019's Dockerfile comment describes for /data and /uploads; this turns it
+// into a clear boot error instead of the first upload failing silently.
 func EnsureUploadsDirWritable(dir string) error {
 	info, err := os.Stat(dir)
 	switch {
@@ -248,11 +236,9 @@ func EnsureUploadsDirWritable(dir string) error {
 	return nil
 }
 
-// EnsureBackupDirWritable is EnsureUploadsDirWritable's own twin for
-// URUNI_BACKUP_DIR (M6.38, #324): checked at boot, for `serve` only - the
-// same "root:root named volume" failure this ADR-019 pattern already
-// exists to turn into a clear boot error, this time for the daily dump
-// directory instead of the uploads volume.
+// EnsureBackupDirWritable is EnsureUploadsDirWritable for URUNI_BACKUP_DIR,
+// checked at boot for `serve` only: the same "root:root named volume" failure,
+// for the daily dump directory.
 func EnsureBackupDirWritable(dir string) error {
 	info, err := os.Stat(dir)
 	switch {
@@ -275,17 +261,15 @@ func EnsureBackupDirWritable(dir string) error {
 	return nil
 }
 
-// invalid reports a bad variable without repeating its value - for the unset
-// case, where there is no value to show, and for any future variable that
-// carries a credential. Anything printed here can end up in a container log
-// the operator pastes into an issue.
+// invalid reports a bad variable without repeating its value: for the unset
+// case, and for any variable that carries a credential. Anything printed here
+// can end up in a container log pasted into an issue.
 func invalid(name, why string) error {
 	return fmt.Errorf("%w: %s %s", ErrInvalidConfig, name, why)
 }
 
-// invalidValue is the same, for variables whose value is safe to echo. Showing
-// what was actually read is the difference between a one-minute fix and a
-// puzzle, so use it wherever the value cannot be a credential.
+// invalidValue is invalid for variables whose value is safe to echo; showing
+// what was read turns a puzzle into a one-minute fix.
 func invalidValue(name, value, why string) error {
 	return fmt.Errorf("%w: %s=%q - %s", ErrInvalidConfig, name, value, why)
 }

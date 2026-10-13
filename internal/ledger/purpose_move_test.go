@@ -10,9 +10,9 @@ import (
 	"github.com/kerti/uruni/internal/store"
 )
 
-// moveWorld is the fixture plus what a purpose move needs to be interesting:
-// Kas Utama holding 800.000 (500.000 on cash, 300.000 on the bank), the
-// envelope holding 200.000 (cash), and Titipan holding 75.000 (bank).
+// moveWorld is the fixture plus what a purpose move needs: Kas Utama holding
+// 800.000 (500.000 cash, 300.000 bank), the envelope 200.000 (cash), and
+// Titipan 75.000 (bank).
 type moveWorld struct {
 	fixture
 	envelopeID int64 // an open envelope, 200.000
@@ -22,8 +22,8 @@ func newMoveWorld(t *testing.T, l *Ledger) moveWorld {
 	t.Helper()
 	ctx := context.Background()
 	f := newFixture(t, l)
-	// A real envelope (a purpose with its incidental row), so it can be
-	// closed; the fixture's bare incidental purpose has no such row.
+	// A real envelope (a purpose with its incidental row), so it can be closed;
+	// the fixture's bare incidental purpose has none.
 	w := moveWorld{fixture: f, envelopeID: openTestIncidental(t, l, f.fundID, "Bereavement", "2026-09-01").PurposeID}
 	for _, in := range []struct {
 		account, purpose int64
@@ -93,9 +93,8 @@ func (w moveWorld) move(from, to int64, amount money.Amount) PostPurposeMovePara
 	}
 }
 
-// The crux (ADR-036, rule 2): a move shifts exactly the two purpose
-// balances by exactly the amount and nothing else - not the fund, not either
-// account, not Titipan.
+// The crux (ADR-036, rule 2): a move shifts exactly the two purpose balances by
+// exactly the amount and nothing else: not the fund, an account, or Titipan.
 func TestPostPurposeMoveShiftsOnlyThePurposeBalances(t *testing.T) {
 	t.Parallel()
 	cases := []struct {
@@ -159,9 +158,9 @@ func TestPostPurposeMoveBetweenTwoEnvelopes(t *testing.T) {
 	}
 }
 
-// The pair's own shape: one reclass_purpose transfer reading 'allocation',
-// linked to no correction, whose 'out' leg is at the source and 'in' leg at
-// the target, both on the chosen account with the same amount, date and note.
+// The pair's shape: one reclass_purpose transfer reading 'allocation', linked
+// to no correction, 'out' leg at the source and 'in' leg at the target, on the
+// chosen account with the same amount, date and note.
 func TestPostPurposeMoveWritesAnAllocationPair(t *testing.T) {
 	t.Parallel()
 	l := newTestLedger(t)
@@ -213,8 +212,8 @@ func TestPostPurposeMoveWritesAnAllocationPair(t *testing.T) {
 	}
 }
 
-// Boundary: the source may give exactly what it holds, down to zero, and not
-// one rupiah more. The comparison is integer-exact, no tolerance (ADR-015).
+// Boundary: the source may give exactly what it holds, down to zero, not one
+// rupiah more. Integer-exact, no tolerance (ADR-015).
 func TestPostPurposeMoveSourceBalanceBoundary(t *testing.T) {
 	t.Parallel()
 	l := newTestLedger(t)
@@ -241,9 +240,9 @@ func TestPostPurposeMoveSourceBalanceBoundary(t *testing.T) {
 	}
 }
 
-// The balance is the ledger sum, so an adjusting entry that lowered it
-// lowers what can be given - and one that raised it raises it. A purpose
-// already below zero can give nothing.
+// The balance is the ledger sum, so an adjusting entry that lowered it lowers
+// what can be given, and one that raised it raises it. A purpose below zero
+// can give nothing.
 func TestPostPurposeMoveReadsTheBalanceThroughAdjustingEntries(t *testing.T) {
 	t.Parallel()
 	l := newTestLedger(t)
@@ -286,9 +285,8 @@ func TestPostPurposeMoveReadsTheBalanceThroughAdjustingEntries(t *testing.T) {
 }
 
 // An amount beyond any balance is refused as insufficient, never wrapped into
-// something postable. The largest amount the ceiling lets through is the
-// largest this can be; anything above it (the int64 edge included) is refused
-// earlier, as too large (#499).
+// something postable. The ceiling's largest amount bounds this; above it (the
+// int64 edge included) is refused earlier as too large (#499).
 func TestPostPurposeMoveRefusesAnAmountBeyondAnyBalance(t *testing.T) {
 	t.Parallel()
 	l := newTestLedger(t)
@@ -409,8 +407,8 @@ func closeEnvelope(t *testing.T, l *Ledger, w moveWorld, purposeID int64) {
 	}
 }
 
-// moveSecondFund is a second fund built by hand, with its own money, so a leak across the
-// boundary would show as a balance moving.
+// moveOtherFund is a second fund built by hand with its own money, so a leak
+// across the boundary shows as a balance moving.
 type moveOtherFund struct{ fundID, cashID, mainID int64 }
 
 func moveSecondFund(t *testing.T, l *Ledger) moveOtherFund {
@@ -434,8 +432,8 @@ func moveSecondFund(t *testing.T, l *Ledger) moveOtherFund {
 	return o
 }
 
-// A move in one fund is invisible to another: its balances do not shift,
-// and it has no transfers of its own.
+// A move in one fund is invisible to another: its balances do not shift and it
+// has no transfers.
 func TestPostPurposeMoveLeavesASecondFundUntouched(t *testing.T) {
 	t.Parallel()
 	l := newTestLedger(t)
@@ -457,8 +455,8 @@ func TestPostPurposeMoveLeavesASecondFundUntouched(t *testing.T) {
 	}
 }
 
-// Reconciliation is untouched (ADR-036): per account, recorded balance is the
-// same before and after, so the counted cash still matches.
+// Reconciliation is untouched (ADR-036): per account, the recorded balance is
+// the same before and after, so the counted cash still matches.
 func TestPostPurposeMoveKeepsReconciliationFiguresIdentical(t *testing.T) {
 	t.Parallel()
 	l := newTestLedger(t)
@@ -491,7 +489,7 @@ func reasonsByKind(t *testing.T, l *Ledger, fundID int64) []*string {
 	return out
 }
 
-// CloseIncidentalAndRoll labels both of its directions 'roll' (ADR-036), the
+// CloseIncidentalAndRoll labels both directions 'roll' (ADR-036): the
 // leftover going out and a shortfall being covered.
 func TestCloseIncidentalAndRollWritesReasonRoll(t *testing.T) {
 	t.Parallel()
@@ -537,7 +535,7 @@ func TestCloseIncidentalAndRollWritesReasonRoll(t *testing.T) {
 }
 
 // Every other pair keeps NULL: a correction is labelled by its link, a
-// between_accounts pair has no reason to give.
+// between_accounts pair has no reason.
 func TestOtherTransfersKeepANullReason(t *testing.T) {
 	t.Parallel()
 	l := newTestLedger(t)
@@ -573,9 +571,9 @@ func TestOtherTransfersKeepANullReason(t *testing.T) {
 	}
 }
 
-// The schema is the real guarantee behind the column (ADR-036): a reason
-// belongs only on a reclass_purpose pair that corrects nothing, and only
-// from the two values. Written around the ledger, straight at the table.
+// The schema is the guarantee behind the column (ADR-036): a reason belongs
+// only on a reclass_purpose pair that corrects nothing, from the two values.
+// Written around the ledger, straight at the table.
 func TestTransferReasonCheckConstraint(t *testing.T) {
 	t.Parallel()
 	l := newTestLedger(t)
@@ -618,10 +616,9 @@ func TestTransferReasonCheckConstraint(t *testing.T) {
 	}
 }
 
-// An allocation counts toward the envelope's Terkumpul - in adds, out takes
-// back - and never toward Terpakai, so collected minus disbursed keeps
-// equalling the balance. The roll that closes the envelope still counts as
-// neither (#215).
+// An allocation counts toward the envelope's Terkumpul (in adds, out takes
+// back) and never toward Terpakai, so collected minus disbursed equals the
+// balance. The roll that closes the envelope counts as neither (#215).
 func TestPurposeMoveCountsAsCollectedNeverDisbursed(t *testing.T) {
 	t.Parallel()
 	l := newTestLedger(t)

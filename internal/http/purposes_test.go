@@ -123,9 +123,9 @@ func TestPostPassThroughPurposesCreatesAndListReturnsItAlongsideMain(t *testing.
 	}
 }
 
-// The caller cannot choose the kind, so there is no way to reach
-// purpose_single_main through this route: a body naming kind='main' is
-// ignored and the row is still created as a pass-through.
+// The caller cannot choose the kind, so purpose_single_main is unreachable
+// through this route: a body naming kind='main' is ignored and the row is
+// created as a pass-through.
 func TestPostPassThroughPurposesIgnoresACallerSuppliedKind(t *testing.T) {
 	t.Parallel()
 	r := testRouter(t)
@@ -190,8 +190,8 @@ func patchPurpose(t *testing.T, r http.Handler, id int64, body string) *httptest
 }
 
 // A purpose's name is a label: a posted transaction references it by id and
-// nothing in the ledger reads the text, so a mistyped one is correctable
-// exactly like a location's name.
+// nothing in the ledger reads the text, so a mistyped one is correctable like
+// a location's name.
 func TestPatchPurposeRenamesAPassThrough(t *testing.T) {
 	t.Parallel()
 	r := testRouter(t)
@@ -214,18 +214,17 @@ func TestPatchPurposeRenamesAPassThrough(t *testing.T) {
 	if updated.Name != "Kas Bidang" {
 		t.Errorf("Name = %q, want %q", updated.Name, "Kas Bidang")
 	}
-	// The kind is not on the wire and cannot move: a caller that could name
-	// it could ask for a second 'main'.
+	// The kind is not on the wire and cannot move: a caller naming it could ask
+	// for a second 'main'.
 	if updated.Kind != "pass_through" {
 		t.Errorf("Kind = %q, want %q", updated.Kind, "pass_through")
 	}
 }
 
-// 'main' is the fund's own system row (purpose_single_main), not a label the
-// treasurer typed. 409, not 404 - the row is there and she may be looking
-// right at it. This is now the ONLY kind PATCH refuses (#264) - an
-// incidental's occasion moved into the renameable column alongside a
-// pass-through's name.
+// 'main' is the fund's system row (purpose_single_main), not a label the
+// treasurer typed. 409, not 404: the row is there and she may be looking at
+// it. The only kind PATCH refuses (#264); an incidental's occasion is
+// renameable alongside a pass-through's name.
 func TestPatchPurposeRefusesTheMainPurpose(t *testing.T) {
 	t.Parallel()
 	r := testRouter(t)
@@ -240,20 +239,19 @@ func TestPatchPurposeRefusesTheMainPurpose(t *testing.T) {
 	}
 }
 
-// #264: a mistyped occasion is correctable exactly like a location's name -
-// renaming an incidental moves both purpose.name and incidental.occasion
-// together, posts no transaction and changes no balance. The balance and
-// transaction-count checks are read fresh off the ledger, never taken on
-// faith from the PATCH response alone - the same discipline
-// TestCloseIncidentalRollsLeftoverVerifiedThroughBalances uses.
+// #264: a mistyped occasion is correctable like a location's name: renaming an
+// incidental moves purpose.name and incidental.occasion together, posts no
+// transaction and changes no balance. Balance and transaction-count checks
+// are read fresh off the ledger, not trusted from the PATCH response, as in
+// TestCloseIncidentalRollsLeftoverVerifiedThroughBalances.
 func TestPatchPurposeRenamesAnIncidentalsOccasionAndMovesNoMoney(t *testing.T) {
 	t.Parallel()
 	r, l := testRouterAndLedger(t)
 	setup := setUpFund(t, r)
 	envelope := openIncidentalFor(t, r, "Halal bihalal RT", "2026-08-01")
 
-	// A contribution, so there is a real fund balance and a real transaction
-	// row to prove untouched.
+	// A contribution, so there is a real fund balance and transaction row to
+	// prove untouched.
 	if rec := postTransaction(t, r, transactionRequest{
 		AccountID: setup.CashAccountID(t), PurposeID: envelope.PurposeID,
 		Direction: "in", Amount: 50_000, OccurredOn: "2026-08-02",
@@ -287,8 +285,8 @@ func TestPatchPurposeRenamesAnIncidentalsOccasionAndMovesNoMoney(t *testing.T) {
 		t.Errorf("Kind = %q, want %q", updated.Kind, "incidental")
 	}
 
-	// incidental.occasion moved together with purpose.name - the detail
-	// route reads it back from the incidental row, not the purpose row.
+	// incidental.occasion moved with purpose.name: the detail route reads it from
+	// the incidental row.
 	detailRec := getIncidentalDetail(t, r, envelope.PurposeID)
 	if detailRec.Code != http.StatusOK {
 		t.Fatalf("GET /api/incidentals/{id} after rename = %d, want %d (body: %s)", detailRec.Code, http.StatusOK, detailRec.Body.String())
@@ -299,8 +297,7 @@ func TestPatchPurposeRenamesAnIncidentalsOccasionAndMovesNoMoney(t *testing.T) {
 	}
 
 	// The trust-core assertion: renaming posts no transaction and changes no
-	// balance. Integers compared exactly - no tolerance, no float anywhere on
-	// this path (ADR-015).
+	// balance. Integers compared exactly, no float on this path (ADR-015).
 	txAfter := decodeTransactionsPage(t, getTransactions(t, r))
 	if len(txAfter.Transactions) != len(txBefore.Transactions) {
 		t.Errorf("transaction count after rename = %d, want %d (unchanged) - a rename must post nothing", len(txAfter.Transactions), len(txBefore.Transactions))
@@ -321,8 +318,8 @@ func TestPatchPurposeRenamesAnIncidentalsOccasionAndMovesNoMoney(t *testing.T) {
 	}
 }
 
-// A CLOSED envelope is renameable too (#264's whole point: the typo is
-// usually found after the occasion is over).
+// A closed envelope is renameable too (#264: the typo is usually found after
+// the occasion is over).
 func TestPatchPurposeRenamesAClosedIncidental(t *testing.T) {
 	t.Parallel()
 	r := testRouter(t)
@@ -389,10 +386,10 @@ func getSelectablePurposes(t *testing.T, r http.Handler) *httptest.ResponseRecor
 }
 
 // GET /api/purposes?selectable=true excludes a closed incidental's purpose
-// (ADR-031: the everyday record-transaction picker stops offering what
-// PostTransaction's own guard would now refuse), while the unfiltered
-// GET /api/purposes still returns it - a closed envelope is still history.
-// purposeResponse itself gains no closed_on field either way.
+// (ADR-031: the record-transaction picker stops offering what
+// PostTransaction's guard refuses), while unfiltered GET /api/purposes returns
+// it, a closed envelope being history. purposeResponse gains no closed_on
+// either way.
 func TestGetSelectablePurposesExcludesAClosedIncidental(t *testing.T) {
 	t.Parallel()
 	r := testRouter(t)
@@ -440,8 +437,7 @@ func TestGetSelectablePurposesExcludesAClosedIncidental(t *testing.T) {
 		t.Errorf("selectable purposes = %+v, want the fund's main purpose included", selectable)
 	}
 
-	// The unfiltered list still returns everything, closed envelope included
-	// - a closed envelope is still history.
+	// The unfiltered list returns everything, closed envelope included.
 	unfiltered := getPurposes(t, r)
 	var got []purposeResponse
 	if err := json.NewDecoder(unfiltered.Body).Decode(&got); err != nil {
@@ -461,8 +457,8 @@ func containsPurposeID(purposes []purposeResponse, id int64) bool {
 	return false
 }
 
-// An unparseable ?selectable value is a 400, matching listIncidentals'
-// identical guard on its own ?open filter.
+// An unparseable ?selectable value is a 400, as listIncidentals' guard on
+// ?open.
 func TestGetPurposesRejectsAnUnparseableSelectableValue(t *testing.T) {
 	t.Parallel()
 	r := testRouter(t)

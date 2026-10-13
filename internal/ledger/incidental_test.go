@@ -11,10 +11,8 @@ import (
 	"github.com/kerti/uruni/internal/store"
 )
 
-// openTestIncidental is the test helper for a fresh envelope: the domain
-// call itself, since OpenIncidental is exactly what #42 adds and every
-// CloseIncidentalAndRoll test needs a real incidental row - not a purpose
-// alone - to close.
+// openTestIncidental opens a fresh envelope through OpenIncidental, since
+// every CloseIncidentalAndRoll test needs a real incidental row to close.
 func openTestIncidental(t *testing.T, l *Ledger, fundID int64, occasion, openedOn string) store.Incidental {
 	t.Helper()
 	created, err := l.OpenIncidental(context.Background(), OpenIncidentalParams{
@@ -101,28 +99,19 @@ func TestOpenIncidentalWithoutTargetAmount(t *testing.T) {
 	}
 }
 
-// Atomicity of the open: if the second insert (incidental) fails after the
-// first (purpose) already succeeded within the same withTx, neither survives
-// - no orphan purpose.
+// Atomicity of the open: if the incidental insert fails after the purpose
+// insert succeeded in the same withTx, neither survives (no orphan purpose).
 //
-// Forcing this requires a real conflict on incidental's own PRIMARY KEY
-// (purpose_id), since every other failure mode of CreateIncidental (a
-// malformed occasion, opened_on, or a non-positive target_amount) is already
-// rejected by OpenIncidental's own validation before either insert runs, and
-// the purpose_id it passes always names the row CreatePurpose just created
-// in the same transaction, so the ordinary foreign key cannot be made to
-// fail. The lever actually available: SQLite assigns a rowid table's next id
-// as (current max + 1) - documented, deterministic behavior, not
-// implementation trivia - so the fixture's three purposes (ids 1-3, created
-// with no gaps) guarantee the next purpose OpenIncidental creates gets id 4.
-// Pre-occupying purpose_id 4 in `incidental` before calling OpenIncidental
-// then forces its CreateIncidental to collide with a real, already-existing
-// row. Building that pre-existing row requires a purpose_id with no live
-// purpose behind it, which the schema's own foreign key would refuse under
-// normal enforcement - so this is the one place in the whole suite that
-// toggles `PRAGMA foreign_keys` around a single raw INSERT, to construct the
-// precondition; the failure OpenIncidental then hits is a genuine PRIMARY
-// KEY violation on incidental.purpose_id, not a mocked or injected error.
+// The lever is a real PRIMARY KEY conflict on incidental.purpose_id: every
+// other CreateIncidental failure is rejected by OpenIncidental's validation
+// first, and the purpose_id it passes always names the row just created. A
+// rowid table's next id is (current max + 1) (documented SQLite behaviour),
+// so the fixture's three purposes (ids 1-3) guarantee the next purpose gets
+// id 4. Pre-occupying purpose_id 4 in `incidental` forces the collision. That
+// row has no live purpose behind it, which the foreign key would refuse, so
+// this is the one place in the suite that toggles `PRAGMA foreign_keys`
+// around a single raw INSERT. The failure OpenIncidental hits is a genuine
+// PRIMARY KEY violation, not an injected error.
 func TestOpenIncidentalAtomicityNoOrphanPurposeWhenSecondInsertFails(t *testing.T) {
 	t.Parallel()
 	l := newTestLedger(t)
@@ -252,7 +241,7 @@ func TestOpenIncidentalRejectsInvalidOpenedOn(t *testing.T) {
 // RenameIncidental moves both purpose.name and incidental.occasion together,
 // and posts no transaction and changes no balance - the trust-core
 // assertion, checked with exact integer comparisons (ADR-015, CLAUDE.md
-// rule 2), never trusted from the return value alone.
+// rule 2).
 func TestRenameIncidentalMovesBothRowsAndNoMoney(t *testing.T) {
 	t.Parallel()
 	l := newTestLedger(t)
@@ -331,8 +320,8 @@ func TestRenameIncidentalMovesBothRowsAndNoMoney(t *testing.T) {
 	}
 }
 
-// A CLOSED envelope renames successfully - the typo is usually found after
-// the occasion is over, and renaming does not need the envelope reopened.
+// A closed envelope renames successfully: the typo is usually found after the
+// occasion is over.
 func TestRenameIncidentalOnAClosedEnvelope(t *testing.T) {
 	t.Parallel()
 	l := newTestLedger(t)
@@ -360,8 +349,8 @@ func TestRenameIncidentalOnAClosedEnvelope(t *testing.T) {
 	}
 }
 
-// Empty or whitespace-only occasion is refused, the same idiom
-// OpenIncidental uses, and the row is left untouched.
+// An empty or whitespace-only occasion is refused, as in OpenIncidental, and
+// the row is left untouched.
 func TestRenameIncidentalRejectsEmptyOccasion(t *testing.T) {
 	t.Parallel()
 	l := newTestLedger(t)
@@ -387,9 +376,8 @@ func TestRenameIncidentalRejectsEmptyOccasion(t *testing.T) {
 	}
 }
 
-// A second fund's envelope is invisible to the first fund, mirroring every
-// other single-envelope write in this file - an id names a row, it does not
-// prove the caller may see it.
+// A second fund's envelope is invisible to the first fund, as for every
+// single-envelope write in this file.
 func TestRenameIncidentalIsFundScoped(t *testing.T) {
 	t.Parallel()
 	l := newTestLedger(t)
@@ -426,10 +414,10 @@ func TestRenameIncidentalIsFundScoped(t *testing.T) {
 	}
 }
 
-// A positive leftover rolls into the main purpose, and closed_on is set in
-// the same call: FundBalance is unchanged (nothing moved, only what it is
-// for), the incidental purpose's balance goes to exactly 0, and the main
-// purpose's balance rises by exactly the leftover.
+// A positive leftover rolls into the main purpose and closed_on is set in
+// the same call: FundBalance is unchanged (only what it is for moved), the
+// incidental purpose's balance goes to exactly 0, and the main purpose's
+// rises by exactly the leftover.
 func TestCloseIncidentalAndRollPositiveLeftoverRollsAndCloses(t *testing.T) {
 	t.Parallel()
 	l := newTestLedger(t)
@@ -504,8 +492,8 @@ func TestCloseIncidentalAndRollPositiveLeftoverRollsAndCloses(t *testing.T) {
 	}
 }
 
-// A zero leftover closes the envelope and posts nothing - not an error, and
-// not a zero-amount transfer either.
+// A zero leftover closes the envelope and posts nothing: not an error, and
+// not a zero-amount transfer.
 func TestCloseIncidentalAndRollZeroLeftoverClosesWithoutPosting(t *testing.T) {
 	t.Parallel()
 	l := newTestLedger(t)
@@ -560,14 +548,12 @@ func TestCloseIncidentalAndRollZeroLeftoverClosesWithoutPosting(t *testing.T) {
 	}
 }
 
-// A negative leftover - the envelope disbursed more than it collected -
-// closes the envelope AND covers the shortfall from the fund's main purpose
-// (ADR-031, superseding ADR-027's original "closes and posts nothing"
-// branch): FundBalance is unchanged (nothing moved, only what it is for),
-// the incidental purpose's balance still goes to exactly 0, and the main
-// purpose's balance falls by exactly the shortfall - the same invariant
-// TestCloseIncidentalAndRollPositiveLeftoverRollsAndCloses proves for the
-// opposite sign.
+// A negative leftover (the envelope disbursed more than it collected) closes
+// the envelope and covers the shortfall from the main purpose (ADR-031,
+// superseding ADR-027's "closes and posts nothing"): FundBalance is
+// unchanged, the incidental purpose's balance goes to exactly 0, and the main
+// purpose's falls by exactly the shortfall, the mirror of
+// TestCloseIncidentalAndRollPositiveLeftoverRollsAndCloses.
 func TestCloseIncidentalAndRollNegativeLeftoverCoversFromMainAndCloses(t *testing.T) {
 	t.Parallel()
 	l := newTestLedger(t)
@@ -643,8 +629,7 @@ func TestCloseIncidentalAndRollNegativeLeftoverCoversFromMainAndCloses(t *testin
 }
 
 // A second call on an already-closed envelope is refused with the named
-// sentinel and posts nothing - a second roll would move money that already
-// moved.
+// sentinel and posts nothing; a second roll would move money twice.
 func TestCloseIncidentalAndRollSecondCallReturnsAlreadyClosed(t *testing.T) {
 	t.Parallel()
 	l := newTestLedger(t)
@@ -700,10 +685,9 @@ func TestCloseIncidentalAndRollSecondCallReturnsAlreadyClosed(t *testing.T) {
 }
 
 // A roll whose pair fails leaves the envelope open: the close and the pair
-// are one transaction, so neither half survives alone. Forced with an
-// account that belongs to another fund entirely, mirroring
-// TestPostTransferBetweenAccountsLeavesNoRowsWhenTheSecondLegFails's
-// approach - a real composite foreign key violation, not a fake.
+// are one transaction. Forced with an account of another fund, a real
+// composite foreign key violation, as in
+// TestPostTransferBetweenAccountsLeavesNoRowsWhenTheSecondLegFails.
 func TestCloseIncidentalAndRollPairFailureLeavesEnvelopeOpen(t *testing.T) {
 	t.Parallel()
 	l := newTestLedger(t)
@@ -785,10 +769,9 @@ func TestCloseIncidentalAndRollRejectsInvalidClosedOn(t *testing.T) {
 }
 
 // A second fund's envelope is invisible to the first fund, and closing it
-// across the fund boundary is refused. An id names a row; it does not prove
-// the caller may see it. PRD section 6 allows a server to hold more than one
-// fund, so these two are the scoping tests that keep that honest - v1's
-// single-fund rule is a setup constraint, not a reason to read unscoped.
+// across the boundary is refused. An id names a row, not permission to see
+// it. PRD section 6 allows more than one fund; v1's single-fund rule is a
+// setup constraint, not a reason to read unscoped.
 func TestASecondFundsIncidentalIsInvisibleToTheFirstFund(t *testing.T) {
 	t.Parallel()
 	l := newTestLedger(t)
@@ -814,8 +797,8 @@ func TestASecondFundsIncidentalIsInvisibleToTheFirstFund(t *testing.T) {
 		t.Errorf("GetIncidentalDetail(fund 1, fund 2's envelope) = %v, want an error wrapping sql.ErrNoRows", err)
 	}
 
-	// The same envelope read through its own fund still resolves, so the
-	// test above is scoping and not a broken lookup.
+	// The same envelope read through its fund still resolves, so the test above
+	// is scoping and not a broken lookup.
 	if _, err := l.GetIncidentalDetail(ctx, other.ID, envelope.PurposeID); err != nil {
 		t.Errorf("GetIncidentalDetail(fund 2, fund 2's envelope) = %v, want no error", err)
 	}
@@ -858,11 +841,9 @@ func TestClosingASecondFundsIncidentalAcrossTheBoundaryIsRefused(t *testing.T) {
 	}
 }
 
-// The roll is a transfer like any other, so its note lands on both legs -
-// and the ledger writes no note of its own when none is given. A roll with
-// no typed note is not left unexplained, though: the list labels it from
-// the transfer's own facts at read time (#257), never by storing generated
-// text.
+// The roll is a transfer like any other, so its note lands on both legs, and
+// the ledger writes no note when none is given: the list labels such a roll
+// from the transfer's facts at read time (#257), never from stored text.
 func TestCloseIncidentalAndRollWritesTheNoteToBothRollLegs(t *testing.T) {
 	t.Parallel()
 	l := newTestLedger(t)
@@ -939,15 +920,13 @@ func TestCloseIncidentalAndRollWritesNoNoteWhenNoneIsGiven(t *testing.T) {
 	}
 }
 
-// --- #215: GetIncidentalDetail must not report a roll's own leg as fresh
-// collection or disbursement -------------------------------------------
+// --- #215: GetIncidentalDetail must not report a roll's leg as fresh activity
 
-// The regression #215 was filed for: collect 100.000, spend 30.000, close
-// (positive leftover, 70.000 rolls out). Before the fix, IncidentalTotals'
-// unfiltered sum counted the roll's own "out" leg toward disbursed_amount,
-// so the detail screen read "Terkumpul 100.000 / Terpakai 100.000" - a lie,
-// since 70.000 of that went back to Kas Utama, not to anything the occasion
-// spent. IncidentalActivityTotals must exclude that leg.
+// The regression #215: collect 100.000, spend 30.000, close (70.000 rolls
+// out). IncidentalTotals' unfiltered sum counted the roll's "out" leg toward
+// disbursed_amount, so the detail read "Terkumpul 100.000 / Terpakai
+// 100.000", though 70.000 went back to Kas Utama. IncidentalActivityTotals
+// must exclude that leg.
 func TestGetIncidentalDetailExcludesTheRolledOutLegAfterAPositiveClose(t *testing.T) {
 	t.Parallel()
 	l := newTestLedger(t)
@@ -991,11 +970,11 @@ func TestGetIncidentalDetailExcludesTheRolledOutLegAfterAPositiveClose(t *testin
 	}
 }
 
-// A cancelled contribution (ADR-034) is neither collected nor spent: the
-// maintainer's own dev envelope read "Terkumpul 345.000 / Terpakai
-// 210.000" with nothing paid out, because the two reversals counted as
-// disbursements and the rows they cancelled as collections. Both halves
-// drop; collected minus disbursed still equals the envelope's balance.
+// A cancelled contribution (ADR-034) is neither collected nor spent: a dev
+// envelope read "Terkumpul 345.000 / Terpakai 210.000" with nothing paid out,
+// because the reversals counted as disbursements and the cancelled rows as
+// collections. Both halves drop; collected minus disbursed still equals the
+// envelope's balance.
 func TestGetIncidentalDetailDropsBothHalvesOfACancelledContribution(t *testing.T) {
 	t.Parallel()
 	l := newTestLedger(t)
@@ -1051,10 +1030,9 @@ func TestGetIncidentalDetailDropsBothHalvesOfACancelledContribution(t *testing.T
 	}
 }
 
-// The mirror case on the "in" side: an over-disbursed envelope's shortfall
-// is covered by an "in" leg at the incidental purpose (ADR-031). That leg
-// must not inflate collected_amount either, or a treasurer would read a
-// covering transfer from Kas Utama as if it were a fresh contribution.
+// The mirror case on the "in" side: an over-disbursed envelope's shortfall is
+// covered by an "in" leg at the incidental purpose (ADR-031), which must not
+// inflate collected_amount.
 func TestGetIncidentalDetailExcludesTheCoveringInLegAfterANegativeClose(t *testing.T) {
 	t.Parallel()
 	l := newTestLedger(t)
@@ -1098,10 +1076,10 @@ func TestGetIncidentalDetailExcludesTheCoveringInLegAfterANegativeClose(t *testi
 	}
 }
 
-// #342: the corrections that bring money INTO an envelope - back after an
-// earlier correction out, or from Kas Utama - read as collected there, and
-// an expense corrected away un-spends. Collected minus disbursed equals the
-// balance at every step.
+// #342: corrections that bring money INTO an envelope (back after an earlier
+// correction out, or from Kas Utama) read as collected there, and an expense
+// corrected away un-spends. Collected minus disbursed equals the balance at
+// every step.
 func TestGetIncidentalDetailReadsCorrectionsIntoAndOutOfTheEnvelope(t *testing.T) {
 	t.Parallel()
 	l := newTestLedger(t)
@@ -1163,18 +1141,14 @@ func TestGetIncidentalDetailReadsCorrectionsIntoAndOutOfTheEnvelope(t *testing.T
 	assertDetail("expense corrected away", 35_000, 0)
 }
 
-// #342: an unnamed contribution posted to an envelope, then moved out of
-// it with a peruntukan correction (ADR-033), is money that left the
-// envelope - not money it collected. Before the fix, IncidentalActivityTotals
-// excluded the correction pair's own legs (the same tr.kind = 'reclass_purpose'
-// filter #215 added for a roll) but left the ORIGINAL contribution row
-// standing, so the envelope's Terkumpul kept counting money that was no
-// longer there. The correct read is the same shape ADR-034's cancellation
-// drop uses: both halves of the correction - the original row and its
-// matching reclass_purpose legs - disappear from this envelope's activity
-// together, and collected minus disbursed still equals the balance (which
-// is zero: the pair is value-neutral and nets to zero in the unfiltered
-// IncidentalTotals the balance itself comes from).
+// #342: an unnamed contribution moved out of an envelope with a peruntukan
+// correction (ADR-033) is money that left, not money collected.
+// IncidentalActivityTotals excluded the correction pair's legs (the
+// tr.kind = 'reclass_purpose' filter from #215) but left the original
+// contribution standing, so Terkumpul counted money no longer there. As with
+// ADR-034's cancellation, both halves (the original row and its matching
+// reclass_purpose legs) drop from the envelope's activity, and collected
+// minus disbursed still equals the balance (zero: the pair is value-neutral).
 func TestGetIncidentalDetailExcludesAContributionCorrectedOutOfTheEnvelope(t *testing.T) {
 	t.Parallel()
 	l := newTestLedger(t)
@@ -1220,7 +1194,7 @@ func TestGetIncidentalDetailExcludesAContributionCorrectedOutOfTheEnvelope(t *te
 	}
 }
 
-// --- Reopen (ADR-031, #214): the deliberate, visible way back ----------
+// --- Reopen (ADR-031, #214)
 
 func TestReopenIncidentalClearsClosedOn(t *testing.T) {
 	t.Parallel()
@@ -1268,9 +1242,8 @@ func TestReopenIncidentalRejectsAnOpenEnvelope(t *testing.T) {
 }
 
 // A second fund's closed envelope is invisible to the first fund, and
-// reopening it across the fund boundary is refused with the same
-// GetIncidental-backed sql.ErrNoRows every other single-envelope call in
-// this file answers with - an id names a row, not permission to see it.
+// reopening it across the boundary is refused with the GetIncidental-backed
+// sql.ErrNoRows that every single-envelope call here answers with.
 func TestReopenIncidentalIsFundScoped(t *testing.T) {
 	t.Parallel()
 	l := newTestLedger(t)
@@ -1303,14 +1276,13 @@ func TestReopenIncidentalIsFundScoped(t *testing.T) {
 	}
 }
 
-// --- The invariant to test hardest: a closed envelope's purpose balance
-// is exactly zero, always - across reopen, a late entry in either
-// direction, and a second reopen. ---------------------------------------
+// --- The invariant to test hardest: a closed envelope's purpose balance is
+// exactly zero, always, across reopen, a late entry either way, and a second
+// reopen.
 
-// A late contribution after reopening: close (rolls the original leftover
-// out), reopen, post a late "in", close again. The second close must roll
-// only the net delta - no new arithmetic, per ADR-031 - and the purpose
-// balance must land back at exactly zero.
+// A late contribution after reopening: close (rolls the leftover out),
+// reopen, post a late "in", close again. The second close rolls only the net
+// delta (ADR-031) and the purpose balance lands back at exactly zero.
 func TestReopenLateContributionThenRecloseRollsOnlyTheNetDeltaAndZerosTheBalance(t *testing.T) {
 	t.Parallel()
 	l := newTestLedger(t)
@@ -1337,10 +1309,9 @@ func TestReopenLateContributionThenRecloseRollsOnlyTheNetDeltaAndZerosTheBalance
 		t.Fatalf("ReopenIncidental() = %v, want no error", err)
 	}
 
-	// A late contribution, dated after the original close - ADR-031 needs
-	// no backdating logic (ADR-024's id cutoff already covers it), and this
-	// is the ordinary case anyway: money that arrives after the envelope
-	// was thought done.
+	// A late contribution dated after the original close: ADR-031 needs no
+	// backdating logic (ADR-024's id cutoff covers it); this is money arriving
+	// after the envelope was thought done.
 	if _, err := l.PostTransaction(ctx, PostTransactionParams{
 		FundID: f.fundID, AccountID: f.cashID, PurposeID: envelope.PurposeID,
 		Direction: "in", Amount: 20_000, OccurredOn: "2026-08-25",
@@ -1367,10 +1338,9 @@ func TestReopenLateContributionThenRecloseRollsOnlyTheNetDeltaAndZerosTheBalance
 	}
 }
 
-// A late bill after reopening: close (rolls the original leftover out),
-// reopen, post a late "out" larger than what remains, close again. The
-// shortfall must be covered from Kas Utama, and the balance must still land
-// at exactly zero.
+// A late bill after reopening: close, reopen, post a late "out" larger than
+// what remains, close again. The shortfall is covered from Kas Utama and the
+// balance still lands at exactly zero.
 func TestReopenLateDisbursementThenRecloseCoversTheShortfallAndZerosTheBalance(t *testing.T) {
 	t.Parallel()
 	l := newTestLedger(t)
@@ -1397,8 +1367,8 @@ func TestReopenLateDisbursementThenRecloseCoversTheShortfallAndZerosTheBalance(t
 		t.Fatalf("ReopenIncidental() = %v, want no error", err)
 	}
 
-	// A late bill for the occasion - PRD section 7.5's own scenario for why the
-	// guard is symmetric.
+	// A late bill for the occasion: PRD section 7.5's scenario for why the guard
+	// is symmetric.
 	if _, err := l.PostTransaction(ctx, PostTransactionParams{
 		FundID: f.fundID, AccountID: f.cashID, PurposeID: envelope.PurposeID,
 		Direction: "out", Amount: 20_000, OccurredOn: "2026-08-25",
@@ -1425,10 +1395,9 @@ func TestReopenLateDisbursementThenRecloseCoversTheShortfallAndZerosTheBalance(t
 	}
 }
 
-// Reopening twice: close, reopen, close again with nothing new to roll,
-// reopen again, post a late entry, close a third time. Every close leaves
-// the purpose balance at exactly zero - the invariant holds across more
-// than one reopen cycle, not just one.
+// Reopening twice: close, reopen, close with nothing new, reopen, post a late
+// entry, close a third time. Every close leaves the purpose balance at exactly
+// zero across more than one reopen cycle.
 func TestReopenTwiceEachCloseZerosTheBalance(t *testing.T) {
 	t.Parallel()
 	l := newTestLedger(t)
@@ -1449,9 +1418,8 @@ func TestReopenTwiceEachCloseZerosTheBalance(t *testing.T) {
 		t.Fatalf("first CloseIncidentalAndRoll() = %v, want no error", err)
 	}
 
-	// Reopen and close again with nothing new posted: the leftover is back
-	// to 0 (the first roll's own leg already nets it), so this close posts
-	// nothing.
+	// Reopen and close with nothing new posted: the leftover is 0 (the first
+	// roll's leg already nets it), so this close posts nothing.
 	if _, err := l.ReopenIncidental(ctx, f.fundID, envelope.PurposeID); err != nil {
 		t.Fatalf("first ReopenIncidental() = %v, want no error", err)
 	}
@@ -1470,8 +1438,7 @@ func TestReopenTwiceEachCloseZerosTheBalance(t *testing.T) {
 		t.Errorf("PurposeBalance() after second close = %d, want 0", bal)
 	}
 
-	// Reopen a second time and post a late contribution, then close a
-	// third time.
+	// Reopen again, post a late contribution, close a third time.
 	if _, err := l.ReopenIncidental(ctx, f.fundID, envelope.PurposeID); err != nil {
 		t.Fatalf("second ReopenIncidental() = %v, want no error", err)
 	}
@@ -1499,9 +1466,9 @@ func TestReopenTwiceEachCloseZerosTheBalance(t *testing.T) {
 
 // TestGetIncidentalDetailBalanceIsThePurposeBalanceNotCollectedMinusDisbursed:
 // once a closed envelope is reopened, collected minus disbursed (rolls left
-// out, #215) no longer says what it holds. Balance does: open 100k in, 40k
+// out, #215) no longer says what it holds; Balance does. Open: 100k in, 40k
 // out; close (60k rolls out, balance 0); reopen; 30k more in. Collected is
-// 130k, disbursed 40k - and the envelope holds 30k, not 90k.
+// 130k, disbursed 40k, and the envelope holds 30k, not 90k.
 func TestGetIncidentalDetailBalanceIsThePurposeBalanceNotCollectedMinusDisbursed(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()

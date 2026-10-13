@@ -6,9 +6,9 @@ import (
 	"testing"
 )
 
-// TestPasswordHashRoundTrips is the money/ledger-grade bit CLAUDE.md asks
-// for on this path: what hashPassword produces, verifyPassword must accept
-// back for the same password, and reject for a different one.
+// TestPasswordHashRoundTrips: what hashPassword produces, verifyPassword
+// accepts for the same password and rejects for another (CLAUDE.md's
+// money/ledger-grade bar for this path).
 func TestPasswordHashRoundTrips(t *testing.T) {
 	t.Parallel()
 	encoded, err := hashPassword("correct-horse-battery-staple")
@@ -40,11 +40,10 @@ func TestPasswordHashRoundTrips(t *testing.T) {
 	}
 }
 
-// TestPasswordHashIsSaltedPerCall: hashing the identical password twice must
-// not produce the identical stored value - otherwise two treasurers who
-// happened to pick the same password would be visibly identical in the
-// database, and a precomputed dictionary would work across every row at
-// once instead of needing a fresh attempt per row.
+// TestPasswordHashIsSaltedPerCall: hashing one password twice must not give
+// the same stored value, or two treasurers choosing the same password would
+// look identical in the database and a precomputed dictionary would work
+// across every row.
 func TestPasswordHashIsSaltedPerCall(t *testing.T) {
 	t.Parallel()
 	first, err := hashPassword("correct-horse-battery-staple")
@@ -61,9 +60,8 @@ func TestPasswordHashIsSaltedPerCall(t *testing.T) {
 	}
 }
 
-// TestVerifyPasswordRejectsAMalformedHash covers a corrupted or foreign-
-// format row: verifyPassword must answer with ErrMalformedHash rather than
-// panicking or silently reporting a match.
+// TestVerifyPasswordRejectsAMalformedHash covers a corrupted or foreign-format
+// row: ErrMalformedHash, not a panic or a silent match.
 func TestVerifyPasswordRejectsAMalformedHash(t *testing.T) {
 	t.Parallel()
 	for _, encoded := range []string{
@@ -71,20 +69,18 @@ func TestVerifyPasswordRejectsAMalformedHash(t *testing.T) {
 		"not-a-hash-at-all",
 		"$argon2id$v=19$m=19456,t=2,p=1$onlyonefield",
 		"$bcrypt$v=19$m=19456,t=2,p=1$c2FsdA$aGFzaA",
-		// A hand-edited row truncated to an empty hash field. It still
-		// splits into six parts, so only the key-length check catches it -
-		// and it has to be caught: argon2.IDKey panics outright on a zero
-		// key length. ADR-030 puts an operator at this column by design.
+		// A hand-edited row truncated to an empty hash field still splits into six
+		// parts, so only the key-length check catches it, and it must be:
+		// argon2.IDKey panics on a zero key length. ADR-030 puts an operator at this
+		// column by design.
 		"$argon2id$v=19$m=19456,t=2,p=1$c2FsdA$",
-		// A hash of the right shape but the wrong length - a partial paste.
+		// The right shape but the wrong length: a partial paste.
 		"$argon2id$v=19$m=19456,t=2,p=1$c2FsdA$aGFzaA",
-		// The version field itself unreadable - a row written by some
-		// other tool that happens to start "$argon2id$".
+		// The version field unreadable: a row from another tool starting "$argon2id$".
 		"$argon2id$version=19$m=19456,t=2,p=1$c2FsdA$aGFzaA",
-		// The parameter field in a shape Sscanf cannot read back, so the
-		// cost parameters this hash was actually made with are unknown -
-		// verifying under today's constants instead would silently compare
-		// against a different hash.
+		// The parameter field in a shape Sscanf cannot read, so the hash's cost
+		// parameters are unknown; verifying under today's constants would silently
+		// compare against a different hash.
 		"$argon2id$v=19$memory=19456$c2FsdA$aGFzaA",
 		// Salt and hash fields that are not base64 at all.
 		"$argon2id$v=19$m=19456,t=2,p=1$sa!t$aGFzaA",

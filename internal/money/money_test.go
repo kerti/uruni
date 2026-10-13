@@ -54,11 +54,11 @@ func TestSub(t *testing.T) {
 		{name: "one past the floor", a: math.MinInt64, b: 1, overflow: true},
 		{name: "one past the ceiling", a: math.MaxInt64, b: -1, overflow: true},
 
-		// The case an Add(-b) implementation gets wrong: negating math.MinInt64
-		// wraps to itself, so a - MinInt64 would come back as a + MinInt64.
-		// ADR-028 calls this out by name. No live call site can reach it today,
-		// but actual_amount is a figure the treasurer types, so the one
-		// unbounded input in the trust core meets the one asymmetric operation.
+		// The case an Add(-b) implementation gets wrong: negating math.MinInt64 wraps
+		// to itself, so a - MinInt64 would come back as a + MinInt64 (ADR-028 names
+		// it). No live call site reaches it, but actual_amount is typed by the
+		// treasurer: the one unbounded input in the trust core meets the one
+		// asymmetric operation.
 		{name: "MinInt64 as the subtrahend, representable", a: -1, b: math.MinInt64, want: math.MaxInt64},
 		{name: "MinInt64 as the subtrahend, overflowing", a: 0, b: math.MinInt64, overflow: true},
 		{name: "MinInt64 minus itself", a: math.MinInt64, b: math.MinInt64, want: 0},
@@ -73,26 +73,24 @@ func TestSub(t *testing.T) {
 }
 
 // A regression test for the implementation ADR-028 warns against: Sub written
-// as Add(-b). Negating math.MinInt64 wraps back to itself, and the two ways
-// that goes wrong point in opposite directions, so one example cannot catch
-// both. Verified against big.Int truth over the edge cases plus two million
-// random pairs: Add(-b) disagrees on eleven, all with math.MinInt64 as the
-// subtrahend; the shipped Sub disagrees on none.
+// as Add(-b). Negating math.MinInt64 wraps to itself and the two ways that
+// goes wrong point opposite directions, so one example cannot catch both.
+// Checked against big.Int over the edge cases plus two million random pairs:
+// Add(-b) disagrees on eleven, all with math.MinInt64 as subtrahend; the
+// shipped Sub on none.
 func TestSubIsNotAddOfTheNegation(t *testing.T) {
 	t.Parallel()
 	t.Run("silently returns a wrong value where the true difference overflows", func(t *testing.T) {
-		// Add(-b) computes 0 + MinInt64 = MinInt64, and its sign check sees a
-		// sum that moved the expected way, so it returns MinInt64 with no
-		// error - a confidently wrong number, which is the failure mode this
-		// package exists to refuse.
+		// Add(-b) computes 0 + MinInt64 = MinInt64, and its sign check sees a sum that
+		// moved the expected way, returning MinInt64 with no error: a confidently wrong
+		// number, the failure this package exists to refuse.
 		if got, err := money.Amount(0).Sub(math.MinInt64); !errors.Is(err, money.ErrOverflow) {
 			t.Errorf("Sub(0, math.MinInt64) = (%d, %v), want ErrOverflow", got, err)
 		}
 	})
 
 	t.Run("falsely reports overflow where the true difference fits", func(t *testing.T) {
-		// The mirror case: -1 - MinInt64 is exactly math.MaxInt64, but Add(-b)
-		// rejects it.
+		// The mirror: -1 - MinInt64 is exactly math.MaxInt64, but Add(-b) rejects it.
 		got, err := money.Amount(-1).Sub(math.MinInt64)
 		if err != nil {
 			t.Fatalf("Sub(-1, math.MinInt64) returned %v, want %d", err, math.MaxInt64)
@@ -122,8 +120,8 @@ func TestMul(t *testing.T) {
 		{name: "twice the ceiling", a: math.MaxInt64, n: 2, overflow: true},
 		{name: "the floor exactly", a: math.MinInt64, n: 1, want: math.MinInt64},
 
-		// math.MinInt64 / -1 is defined in Go as math.MinInt64, so the division
-		// check agrees with itself here and needs the explicit guard.
+		// math.MinInt64 / -1 is math.MinInt64 in Go, so the division check agrees with
+		// itself and needs the explicit guard.
 		{name: "the floor negated, which has no positive counterpart", a: math.MinInt64, n: -1, overflow: true},
 		{name: "a large amount by a large count", a: math.MaxInt64 / 2, n: 3, overflow: true},
 	}

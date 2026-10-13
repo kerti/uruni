@@ -86,9 +86,8 @@ func TestPostTransactionPostsAnAdjustment(t *testing.T) {
 	}
 }
 
-// amount <= 0 must be rejected before the write ever reaches the schema's
-// CHECK - proven here by asserting nothing was inserted, not only that an
-// error came back.
+// amount <= 0 is rejected before the write reaches the schema's CHECK,
+// proven by asserting nothing was inserted, not only that an error returned.
 func TestPostTransactionRejectsNonPositiveAmountBeforeTheWrite(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
@@ -125,8 +124,8 @@ func TestPostTransactionRejectsNonPositiveAmountBeforeTheWrite(t *testing.T) {
 	}
 }
 
-// Both a malformed occurred_on and a calendar-invalid one are rejected the
-// same way, before the schema's date() CHECK ever sees them.
+// A malformed and a calendar-invalid occurred_on are both rejected before the
+// schema's date() CHECK sees them.
 func TestPostTransactionRejectsInvalidOccurredOn(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
@@ -163,9 +162,8 @@ func TestPostTransactionRejectsInvalidOccurredOn(t *testing.T) {
 	}
 }
 
-// direction is as much a caller-typed shape as amount and occurred_on, so an
-// unrecognized value gets the same named error rather than a raw CHECK
-// failure.
+// direction is a caller-typed shape like amount and occurred_on, so an
+// unrecognized value gets the same named error, not a raw CHECK failure.
 func TestPostTransactionRejectsAnUnrecognizedDirection(t *testing.T) {
 	t.Parallel()
 	l := newTestLedger(t)
@@ -181,9 +179,8 @@ func TestPostTransactionRejectsAnUnrecognizedDirection(t *testing.T) {
 	}
 }
 
-// Everything past argument shape - here, an account borrowed from another
-// fund - is a domain bug, not a caller mistake, and is wrapped generically
-// rather than folded into ErrInvalidArgument (ADR-027).
+// Everything past argument shape (here, another fund's account) is a domain
+// bug, wrapped generically, not ErrInvalidArgument (ADR-027).
 func TestPostTransactionWrapsASchemaViolationGenerically(t *testing.T) {
 	t.Parallel()
 	l := newTestLedger(t)
@@ -209,11 +206,10 @@ func TestPostTransactionWrapsASchemaViolationGenerically(t *testing.T) {
 	}
 }
 
-// The guard's whole point (ADR-031, #214): a closed envelope refuses every
-// posting, in both directions - a late bill deserves attribution to the
-// occasion exactly as much as a late contribution does. Proven by asserting
-// nothing was inserted, not only that an error came back, the same shape
-// TestPostTransactionRejectsNonPositiveAmountBeforeTheWrite uses.
+// The guard (ADR-031, #214): a closed envelope refuses every posting, both
+// directions (a late bill deserves attribution as much as a late
+// contribution). Proven by asserting nothing was inserted, as
+// TestPostTransactionRejectsNonPositiveAmountBeforeTheWrite.
 func TestPostTransactionRefusesAClosedIncidentalBothDirections(t *testing.T) {
 	t.Parallel()
 	for _, direction := range []string{"in", "out"} {
@@ -254,10 +250,9 @@ func TestPostTransactionRefusesAClosedIncidentalBothDirections(t *testing.T) {
 	}
 }
 
-// An open incidental, main and pass-through purposes are all unaffected by
-// the guard: IncidentalClosedOnForPurpose returns zero rows for the latter
-// two, and closed_on is NULL for the first, so PostTransaction proceeds
-// exactly as it always has.
+// An open incidental, main and pass-through purposes are unaffected by the
+// guard: IncidentalClosedOnForPurpose returns no rows for the latter two and
+// closed_on is NULL for the first.
 func TestPostTransactionUnaffectedByTheGuardOnOpenOrNonIncidentalPurposes(t *testing.T) {
 	t.Parallel()
 	l := newTestLedger(t)
@@ -282,9 +277,9 @@ func TestPostTransactionUnaffectedByTheGuardOnOpenOrNonIncidentalPurposes(t *tes
 	}
 }
 
-// TestPostTransactionAcceptsAnOptionalMemberOnAContribution (ADR-034,
-// #211): a kind='normal', direction='in' row tagged to an envelope may name
-// its member, and the posted row carries it straight through.
+// TestPostTransactionAcceptsAnOptionalMemberOnAContribution (ADR-034, #211): a
+// kind='normal', direction='in' row on an envelope may name its member, and
+// the row carries it.
 func TestPostTransactionAcceptsAnOptionalMemberOnAContribution(t *testing.T) {
 	t.Parallel()
 	l := newTestLedger(t)
@@ -308,9 +303,9 @@ func TestPostTransactionAcceptsAnOptionalMemberOnAContribution(t *testing.T) {
 	}
 }
 
-// TestPostTransactionRefusesAMemberOutsideAnIncidentalPurpose: a friendly,
-// named error ahead of the BEFORE INSERT trigger's raw message (ADR-034) -
-// f.mainID is 'main', not 'incidental'.
+// TestPostTransactionRefusesAMemberOutsideAnIncidentalPurpose: a named error
+// ahead of the BEFORE INSERT trigger's raw message (ADR-034); f.mainID is
+// 'main', not 'incidental'.
 func TestPostTransactionRefusesAMemberOutsideAnIncidentalPurpose(t *testing.T) {
 	t.Parallel()
 	l := newTestLedger(t)
@@ -326,10 +321,9 @@ func TestPostTransactionRefusesAMemberOutsideAnIncidentalPurpose(t *testing.T) {
 	}
 }
 
-// TestPostTransactionRefusesAMemberOnAnOutgoingOrAdjustingRow: naming a
-// member is only ever valid on a contribution - a kind='normal',
-// direction='in' row - refused before the write is even attempted, whatever
-// the purpose (ADR-034).
+// TestPostTransactionRefusesAMemberOnAnOutgoingOrAdjustingRow: a member is
+// valid only on a contribution (kind='normal', direction='in'), refused before
+// the write whatever the purpose (ADR-034).
 func TestPostTransactionRefusesAMemberOnAnOutgoingOrAdjustingRow(t *testing.T) {
 	t.Parallel()
 	l := newTestLedger(t)
@@ -360,8 +354,7 @@ func TestPostTransactionRefusesAMemberOnAnOutgoingOrAdjustingRow(t *testing.T) {
 }
 
 // TestPostTransactionRefusesANamedContributionToAClosedEnvelope: the
-// closed-incidental guard (ADR-031) still applies once a row can carry a
-// member - naming a giver does not exempt the posting from it.
+// closed-incidental guard (ADR-031) still applies when a row carries a member.
 func TestPostTransactionRefusesANamedContributionToAClosedEnvelope(t *testing.T) {
 	t.Parallel()
 	l := newTestLedger(t)

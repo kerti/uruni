@@ -16,11 +16,10 @@ import (
 	"github.com/kerti/uruni/internal/store"
 )
 
-// TestBuildDocumentTotalsMatchLedgerBalances is CLAUDE.md rule 1 and 2 and
-// ADR-012's "a restore proves its numbers" applied to the export side: the
-// totals block must equal a fresh, independent read of the same ledger
-// calls the home screen uses - never a figure this test (or, more to the
-// point, BuildDocument itself) sums by hand.
+// TestBuildDocumentTotalsMatchLedgerBalances is CLAUDE.md rules 1 and 2 and
+// ADR-012's "a restore proves its numbers" on the export side: the totals
+// block equals an independent read of the ledger calls the home screen uses,
+// never a figure summed by hand here or in BuildDocument.
 func TestBuildDocumentTotalsMatchLedgerBalances(t *testing.T) {
 	t.Parallel()
 	sqlDB := newTestDB(t)
@@ -73,13 +72,11 @@ func TestBuildDocumentTotalsMatchLedgerBalances(t *testing.T) {
 	}
 }
 
-// TestBuildDocumentExcludesSession is ADR-012's "the backup holds every
-// table except session" - a live session's own token must never reach the
-// export, since a restored session would let a stale cookie for a login
-// that no longer exists (or, restored the other way, a leaked token) keep
-// working after a restore. Document has no Sessions field at all - this
-// test is the belt to that suspenders: seed a real session row and confirm
-// its token appears nowhere in the marshaled document.
+// TestBuildDocumentExcludesSession is ADR-012's "the backup holds every table
+// except session": a live session's token must never reach the export, or a
+// restored stale cookie (or a leaked token) would keep working. Document has
+// no Sessions field; this test is the second guard: seed a session row and
+// confirm its token appears nowhere in the marshaled document.
 func TestBuildDocumentExcludesSession(t *testing.T) {
 	t.Parallel()
 	sqlDB := newTestDB(t)
@@ -112,9 +109,9 @@ func TestBuildDocumentExcludesSession(t *testing.T) {
 }
 
 // TestExportIncludesReceiptsUnderStoredName is ADR-012's "receipts/ folder
-// holding every receipt image under its stored, server-generated name" -
-// the zip's entry name must be exactly the receipt row's own path, and its
-// bytes must be exactly what sits on the uploads volume, unmodified.
+// holding every receipt image under its stored, server-generated name": the
+// zip entry name is exactly the receipt row's path, its bytes exactly what is
+// on the uploads volume.
 func TestExportIncludesReceiptsUnderStoredName(t *testing.T) {
 	t.Parallel()
 	sqlDB := newTestDB(t)
@@ -153,10 +150,9 @@ func TestExportIncludesReceiptsUnderStoredName(t *testing.T) {
 }
 
 // TestExportSkipsAMissingReceiptImageInsteadOfFailing: a receipt whose image
-// file is gone from the uploads volume must never block a backup
-// (maintainer, 2026-09-30). The zip still builds, uruni.json still carries
-// the receipt row, the image is simply absent, and its stored name comes
-// back in missing for the route to log.
+// file is gone must not block a backup (maintainer, 2026-09-30). The zip
+// builds, uruni.json carries the receipt row, the image is absent, and its
+// stored name comes back in missing for the route to log.
 func TestExportSkipsAMissingReceiptImageInsteadOfFailing(t *testing.T) {
 	t.Parallel()
 	sqlDB := newTestDB(t)
@@ -204,9 +200,9 @@ func TestZipFilenameIsDated(t *testing.T) {
 	}
 }
 
-// TestExportProducesValidJSONMatchingFormatVersion is a cheap smoke test
-// ahead of the golden fixture's own, much stricter comparison: the JSON
-// entry decodes, and its format_version is exactly FormatVersion.
+// TestExportProducesValidJSONMatchingFormatVersion is a cheap smoke test ahead
+// of the golden fixture's stricter comparison: the JSON entry decodes and its
+// format_version is FormatVersion.
 func TestExportProducesValidJSONMatchingFormatVersion(t *testing.T) {
 	t.Parallel()
 	sqlDB := newTestDB(t)

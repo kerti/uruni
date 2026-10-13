@@ -6,23 +6,23 @@ import (
 	"os"
 )
 
-// ErrDatabaseFileReplaced is what FileIdentity.Check returns when the path
-// the server was started with no longer names the file it opened (#278).
+// ErrDatabaseFileReplaced is what FileIdentity.Check returns when the server's
+// database path no longer names the file it opened (#278).
 var ErrDatabaseFileReplaced = errors.New("the database file was replaced or removed while the server holds it open")
 
 // FileIdentity remembers which file the configured database path named when
-// the server opened it, so a later check can tell whether the path still
-// names that same file.
+// the server opened it, so a later check can tell whether the path still names
+// that file.
 //
-// SQLite holds the file by descriptor, not by name. Delete or replace the
-// file underneath a running server and it keeps reading and writing the
-// orphaned inode: balances add up, entries save, and every write since the
-// swap is gone at the next restart, with nothing logged (#278). The in-app
-// restore (ADR-012) replaces rows on the open connection and never does
-// this; an operator copying a file or swapping a volume by hand does.
+// SQLite holds the file by descriptor, not name. Delete or replace the file
+// under a running server and it keeps using the orphaned inode: balances add
+// up, entries save, and every write since the swap is gone at the next
+// restart, with nothing logged (#278). The in-app restore (ADR-012) replaces
+// rows on the open connection and never does this; an operator copying a file
+// or swapping a volume by hand does.
 //
-// os.SameFile compares device and inode on Unix, which is exactly the
-// question; no syscall package needed.
+// os.SameFile compares device and inode on Unix, which is the question; no
+// syscall package needed.
 type FileIdentity struct {
 	path   string
 	opened os.FileInfo

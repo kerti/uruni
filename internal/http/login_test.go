@@ -23,11 +23,10 @@ func postLogin(t *testing.T, r http.Handler, email, password string) *httptest.R
 	return postLoginFrom(t, r, email, password, "")
 }
 
-// postLoginFrom is postLogin's twin for the rate-limit tests, which need
-// each request to carry its own source IP - as the TCP peer, since the test
-// router trusts no proxy and so reads no X-Forwarded-For (clientIP, #447).
-// ip == "" keeps httptest.NewRequest's fixed RemoteAddr, so postLogin above
-// is exactly this with nothing changed.
+// postLoginFrom is postLogin for the rate-limit tests, each request carrying
+// its own source IP as the TCP peer (the test router trusts no proxy, so
+// reads no X-Forwarded-For, clientIP #447). ip == "" keeps
+// httptest.NewRequest's fixed RemoteAddr, so postLogin is this unchanged.
 func postLoginFrom(t *testing.T, r http.Handler, email, password, ip string) *httptest.ResponseRecorder {
 	t.Helper()
 	//nolint:gosec // not a credential leak - this is the request body POST /api/login's own contract requires
@@ -44,10 +43,9 @@ func postLoginFrom(t *testing.T, r http.Handler, email, password, ip string) *ht
 	return rec
 }
 
-// TestPostLoginReturns200SetsTheCookieAndWritesASessionRow is the DoD's
-// first line: the correct password logs the treasurer in exactly the way
-// register.go's own equivalent test proves - 200, a cookie, and a real row
-// behind it.
+// TestPostLoginReturns200SetsTheCookieAndWritesASessionRow is the DoD's first
+// line: the correct password logs in as register.go's test proves: 200, a
+// cookie, a real row behind it.
 func TestPostLoginReturns200SetsTheCookieAndWritesASessionRow(t *testing.T) {
 	t.Parallel()
 	r, sqlDB := testRouterAndDB(t)
@@ -89,9 +87,9 @@ func TestPostLoginReturns200SetsTheCookieAndWritesASessionRow(t *testing.T) {
 }
 
 // TestPostLoginWrongPasswordAndUnknownEmailReturnByteIdenticalBodies is the
-// DoD's second line, at the wire level: both failure causes must answer
-// 401 with the exact same bytes, or the response itself becomes the
-// account-existence oracle auth.Authenticate's own doc comment forbids.
+// DoD's second line on the wire: both failures answer 401 with the same
+// bytes, or the response becomes the account-existence oracle
+// auth.Authenticate forbids.
 func TestPostLoginWrongPasswordAndUnknownEmailReturnByteIdenticalBodies(t *testing.T) {
 	t.Parallel()
 	r, _ := testRouterAndDB(t)
@@ -123,9 +121,9 @@ func TestPostLoginWrongPasswordAndUnknownEmailReturnByteIdenticalBodies(t *testi
 	}
 }
 
-// TestPostLoginNthFailureFromOneIPReturns429 is the DoD's third line, IP
-// half: enough rapid failures from one address, even against different
-// (all unknown) identifiers, trips the IP-keyed counter on its own.
+// TestPostLoginNthFailureFromOneIPReturns429 is the DoD's third line, IP half:
+// enough rapid failures from one address, even against different unknown
+// identifiers, trip the IP-keyed counter.
 func TestPostLoginNthFailureFromOneIPReturns429(t *testing.T) {
 	t.Parallel()
 	r, _ := testRouterAndDB(t)
@@ -149,17 +147,15 @@ func TestPostLoginNthFailureFromOneIPReturns429(t *testing.T) {
 }
 
 // TestPostLoginNthFailureFromOneIdentifierAcrossIPsReturns429 is the DoD's
-// third line, identifier half: the same target email, guessed wrong from a
-// different address every time, still trips a counter - an attacker spreading
-// a brute force of one account across many source IPs gains nothing from the
-// per-address counters alone.
+// third line, identifier half: guessing one email wrong from a different
+// address every time still trips a counter, so a brute force of one account
+// across many IPs gains nothing from per-address counters alone.
 //
-// #500 moved where that counter trips. It used to be ten failures on the
-// identifier from anywhere, which let anyone who knew the email lock the
-// treasurer out from every network. Ten from ten addresses now spend ten
-// separate budgets and shut nobody out (login_limits_test.go proves she gets
-// in); what the identifier counter bounds is the total, loginIdentifierCeiling
-// an hour.
+// #500 moved where it trips. It was ten failures on the identifier from
+// anywhere, which let anyone who knew the email lock the treasurer out from
+// every network. Ten from ten addresses now spend ten budgets and shut nobody
+// out (login_limits_test.go proves she gets in); the identifier counter
+// bounds the total, loginIdentifierCeiling an hour.
 func TestPostLoginNthFailureFromOneIdentifierAcrossIPsReturns429(t *testing.T) {
 	t.Parallel()
 	r, _ := testRouterAndDB(t)
@@ -169,10 +165,10 @@ func TestPostLoginNthFailureFromOneIdentifierAcrossIPsReturns429(t *testing.T) {
 		t.Fatalf("POST /api/register = %d, want %d (body: %s)", reg.Code, http.StatusCreated, reg.Body.String())
 	}
 
-	// The ceiling is far above the per-address limit, so this walks real
-	// argon2id verifications up to it; the stubbed-hash router in
-	// login_limits_test.go covers the same ground without that cost, and this
-	// one keeps the production hasher in the loop for the 429 itself.
+	// The ceiling is far above the per-address limit, so this walks real argon2id
+	// verifications up to it; login_limits_test.go's stubbed-hash router covers
+	// the same ground without the cost, and this keeps the production hasher in
+	// the loop for the 429.
 	for i := 0; i < loginIdentifierCeiling; i++ {
 		ip := fmt.Sprintf("198.51.100.%d", i+1)
 		rec := postLoginFrom(t, r, "treasurer@example.org", "not-the-password", ip)
@@ -190,9 +186,8 @@ func TestPostLoginNthFailureFromOneIdentifierAcrossIPsReturns429(t *testing.T) {
 		t.Errorf("error code = %q, want %q", got.Code, "too_many_requests")
 	}
 
-	// The correct password, from yet another fresh IP, must also be
-	// refused while the ceiling is full - it blocks the identifier
-	// regardless of whether the next guess would actually have been right.
+	// The correct password, from yet another fresh IP, is also refused while the
+	// ceiling is full: it blocks the identifier whether or not the guess is right.
 	rec = postLoginFrom(t, r, "treasurer@example.org", "correct-horse-battery", "203.0.113.251")
 	if rec.Code != http.StatusTooManyRequests {
 		t.Fatalf("correct password while the ceiling is full = %d, want %d (body: %s)", rec.Code, http.StatusTooManyRequests, rec.Body.String())
@@ -200,8 +195,8 @@ func TestPostLoginNthFailureFromOneIdentifierAcrossIPsReturns429(t *testing.T) {
 }
 
 // TestPostLoginSuccessResetsTheCounter is the DoD's fourth line: getting it
-// right clears the slate, so a treasurer who fumbled her password a few
-// times is not left a few attempts closer to a lockout afterward.
+// right clears the slate, so a fumbling treasurer is not left closer to a
+// lockout.
 func TestPostLoginSuccessResetsTheCounter(t *testing.T) {
 	t.Parallel()
 	r, _ := testRouterAndDB(t)
@@ -224,9 +219,8 @@ func TestPostLoginSuccessResetsTheCounter(t *testing.T) {
 		t.Fatalf("POST /api/login(correct password) = %d, want %d (body: %s)", success.Code, http.StatusOK, success.Body.String())
 	}
 
-	// A fresh run of failures, same identifier and same IP, must reach the
-	// same threshold again rather than starting already partway (or
-	// already locked out) from before the success.
+	// A fresh run of failures, same identifier and IP, must reach the threshold
+	// again, not start partway or already locked out.
 	for i := 0; i < loginRateLimitMaxAttempts; i++ {
 		rec := postLoginFrom(t, r, "treasurer@example.org", "not-the-password", ip)
 		if rec.Code != http.StatusUnauthorized {
@@ -239,8 +233,8 @@ func TestPostLoginSuccessResetsTheCounter(t *testing.T) {
 	}
 }
 
-// TestPostLoginRejectsAMalformedBody: decodeJSON's own refusal, before
-// internal/auth or the rate limiter are ever reached.
+// TestPostLoginRejectsAMalformedBody: decodeJSON's refusal, before
+// internal/auth or the rate limiter.
 func TestPostLoginRejectsAMalformedBody(t *testing.T) {
 	t.Parallel()
 	r, _ := testRouterAndDB(t)
@@ -253,9 +247,9 @@ func TestPostLoginRejectsAMalformedBody(t *testing.T) {
 	}
 }
 
-// TestPostLoginIgnoresAForgedForwardedForFromAnUntrustedPeer is #447's
-// regression: a caller who reaches the app directly and names a fresh
-// X-Forwarded-For on every guess is still counted under its own address.
+// TestPostLoginIgnoresAForgedForwardedForFromAnUntrustedPeer (#447): a caller
+// reaching the app directly and naming a fresh X-Forwarded-For per guess is
+// counted under its own address.
 func TestPostLoginIgnoresAForgedForwardedForFromAnUntrustedPeer(t *testing.T) {
 	t.Parallel()
 	r, _ := testRouterAndDB(t)
@@ -321,8 +315,8 @@ func TestClientIP(t *testing.T) {
 	}
 }
 
-// TestPostLoginRefusesAnOversizedBody is #447's: login is reachable by
-// anyone, so its body is capped before it is decoded (decodeJSON).
+// TestPostLoginRefusesAnOversizedBody (#447): login is reachable by anyone, so
+// its body is capped before decoding (decodeJSON).
 func TestPostLoginRefusesAnOversizedBody(t *testing.T) {
 	t.Parallel()
 	r, _ := testRouterAndDB(t)
@@ -341,11 +335,11 @@ func TestPostLoginRefusesAnOversizedBody(t *testing.T) {
 }
 
 // TestPostLoginBehindATrustedProxyCountsEachForwardedClientApart pins the
-// wiring clientIP's own table cannot see: a router built with a trusted
-// proxy (httptest's fixed peer, 192.0.2.1) reads X-Forwarded-For, so one
-// client tripping the IP counter leaves the next client behind the same
-// proxy untouched. Drop trustedProxies anywhere between New and api and
-// every forwarded client shares the proxy's counter - and this fails.
+// wiring clientIP's table cannot see: a router with a trusted proxy
+// (httptest's fixed peer, 192.0.2.1) reads X-Forwarded-For, so one client
+// tripping the IP counter leaves the next behind the same proxy untouched.
+// Drop trustedProxies between New and api and every forwarded client shares
+// the proxy's counter, and this fails.
 func TestPostLoginBehindATrustedProxyCountsEachForwardedClientApart(t *testing.T) {
 	t.Parallel()
 	sqlDB := testStoreDB(t)
@@ -380,9 +374,8 @@ func TestPostLoginBehindATrustedProxyCountsEachForwardedClientApart(t *testing.T
 }
 
 // TestPartialUpdateDecodersRefuseAnOversizedBody covers the three PATCH
-// decoders #447 moved off their own json.NewDecoder onto decodeJSON. Each
-// handler resolves its record before decoding, so the decoders are driven
-// directly: the cap is theirs to honour, not the route's.
+// decoders #447 moved onto decodeJSON. Each handler resolves its record
+// before decoding, so the decoders are driven directly: the cap is theirs.
 func TestPartialUpdateDecodersRefuseAnOversizedBody(t *testing.T) {
 	t.Parallel()
 	body := `{"name":"` + strings.Repeat("a", maxJSONBodyBytes) + `"}`

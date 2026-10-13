@@ -10,8 +10,8 @@ import (
 )
 
 // monthEndScenario spans August to October 2026 with an event on each side of
-// the August/September boundary (#408, ADR-037), so each month-end figure can
-// be shown to include the one and leave out the other.
+// the August/September boundary (#408, ADR-037), so each month-end figure
+// shows it includes one and leaves out the other.
 type monthEndScenario struct {
 	f        fixture
 	envelope store.Incidental
@@ -29,8 +29,8 @@ func newMonthEndScenario(t *testing.T, l *Ledger) monthEndScenario {
 	postEntry(t, l, f.fundID, f.cashID, f.mainID, "in", 100_000, "2026-08-31", nil)
 	postEntry(t, l, f.fundID, f.cashID, f.mainID, "in", 50_000, "2026-09-01", nil)
 
-	// An envelope opened and given to in August, then closed in September -
-	// open at August's end, gone by September's.
+	// An envelope opened and given to in August, then closed in September: open at
+	// August's end, gone by September's.
 	s.envelope = openTestIncidental(t, l, f.fundID, "Halal bihalal", "2026-08-10")
 	if _, err := l.PostTransaction(ctx, PostTransactionParams{
 		FundID: f.fundID, AccountID: f.cashID, PurposeID: s.envelope.PurposeID,
@@ -205,9 +205,9 @@ func TestMonthlyReportRunningMonthIsToday(t *testing.T) {
 	}
 }
 
-// Which month is running is Jakarta's call: 31 October 18:00 UTC is already
-// 1 November there, so October is a finished month, and a count taken half
-// an hour into November Jakarta time is not October's.
+// Which month is running is Jakarta's call: 31 October 18:00 UTC is already 1
+// November there, so October is finished, and a count half an hour into
+// November Jakarta time is not October's.
 func TestMonthlyReportRunningMonthTurnsOverInJakarta(t *testing.T) {
 	t.Parallel()
 	l := newTestLedger(t)
@@ -232,7 +232,7 @@ func TestMonthlyReportRunningMonthTurnsOverInJakarta(t *testing.T) {
 }
 
 // Every bound at its edge (#408 review): an event on the month's last day
-// belongs to the month, one on the next day does not, and Saldo per pos still
+// belongs to the month, one the next day does not, and Saldo per pos still
 // sums to Saldo kas when a purpose was created after the month it holds money
 // for.
 func TestMonthlyReportLastDayBoundaries(t *testing.T) {

@@ -9,8 +9,8 @@ import (
 	"github.com/kerti/uruni/internal/store"
 )
 
-// participationFor finds one member's row in an Expected slice, mirroring
-// dues_status_test.go's own statusFor.
+// participationFor finds one member's row in an Expected slice, like
+// dues_status_test.go's statusFor.
 func participationFor(t *testing.T, rows []MemberParticipation, memberID int64) (MemberParticipation, bool) {
 	t.Helper()
 	for _, r := range rows {
@@ -33,11 +33,10 @@ func unexpectedFor(t *testing.T, rows []UnexpectedContribution, memberID int64) 
 
 func strPtr(s string) *string { return &s }
 
-// TestGetIncidentalParticipationExpectedIsSetByOpenedOnDate: expected is
-// every member active on the day the envelope opened - joined_on <=
-// opened_on, inactive_on NULL or > opened_on - tier ignored entirely
-// (ADR-034), fixed by that one date regardless of what the roster looks
-// like later.
+// TestGetIncidentalParticipationExpectedIsSetByOpenedOnDate: expected is every
+// member active on the day the envelope opened (joined_on <= opened_on,
+// inactive_on NULL or > opened_on), tier ignored (ADR-034), fixed by that date
+// whatever the roster looks like later.
 func TestGetIncidentalParticipationExpectedIsSetByOpenedOnDate(t *testing.T) {
 	t.Parallel()
 	l := newTestLedger(t)
@@ -80,8 +79,8 @@ func TestGetIncidentalParticipationExpectedIsSetByOpenedOnDate(t *testing.T) {
 }
 
 // TestGetIncidentalParticipationExcludesRecipients: a recipient is never
-// expected, however active - and if they contribute anyway, they surface
-// under Unexpected, never as a third state on the expected table.
+// expected, however active, and if they contribute anyway they surface under
+// Unexpected, never as a third state on the expected table.
 func TestGetIncidentalParticipationExcludesRecipients(t *testing.T) {
 	t.Parallel()
 	l := newTestLedger(t)
@@ -107,8 +106,7 @@ func TestGetIncidentalParticipationExcludesRecipients(t *testing.T) {
 		t.Error("recipient found in Expected, want it excluded")
 	}
 
-	// The recipient gives anyway - still not "expected", but not ignored:
-	// Sumbangan lain.
+	// The recipient gives anyway: still not "expected", not ignored: Sumbangan lain.
 	if _, err := l.PostTransaction(ctx, PostTransactionParams{
 		FundID: f.fundID, AccountID: f.cashID, PurposeID: envelope.PurposeID,
 		Direction: "in", Amount: 10_000, OccurredOn: "2026-08-12", MemberID: &recipientID,
@@ -132,10 +130,9 @@ func TestGetIncidentalParticipationExcludesRecipients(t *testing.T) {
 	}
 }
 
-// TestGetIncidentalParticipationLaterJoinerIsUnexpectedNotBelum: a member
-// who joins after the envelope opened is not on the expected roster at all
-// - if they give, it is Sumbangan lain, never "belum" for someone who was
-// never asked.
+// TestGetIncidentalParticipationLaterJoinerIsUnexpectedNotBelum: a member who
+// joins after the envelope opened is not on the expected roster; if they give
+// it is Sumbangan lain, never "belum" for someone never asked.
 func TestGetIncidentalParticipationLaterJoinerIsUnexpectedNotBelum(t *testing.T) {
 	t.Parallel()
 	l := newTestLedger(t)

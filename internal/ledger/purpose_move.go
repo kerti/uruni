@@ -11,15 +11,15 @@ import (
 )
 
 // PostPurposeMoveParams is every argument PostPurposeMove needs to move an
-// amount from one purpose to another (ADR-036, #383).
+// amount between purposes (ADR-036, #383).
 type PostPurposeMoveParams struct {
 	FundID        int64
 	FromPurposeID int64
 	ToPurposeID   int64
 
-	// AccountID is the one location both legs post on. Its balance does not
-	// move - one 'out' and one 'in' of the same amount net to zero there -
-	// but the row names it, and the choice is the treasurer's (ADR-036).
+	// AccountID is the one location both legs post on. Its balance does not move
+	// (one 'out' and one 'in' of the same amount net to zero) but the row names it,
+	// and the choice is the treasurer's (ADR-036).
 	AccountID  int64
 	Amount     money.Amount // must be > 0
 	OccurredOn string       // "YYYY-MM-DD", a real calendar date
@@ -30,31 +30,29 @@ type PostPurposeMoveParams struct {
 
 // PostPurposeMove moves Amount of what the fund holds from one purpose to
 // another: a reclass_purpose pair with reason 'allocation', both legs on
-// AccountID. Nothing leaves the fund or any account - the fund balance and
-// every account balance are unchanged - and the two purpose balances shift
-// by exactly Amount, in opposite directions (ADR-036).
+// AccountID. Nothing leaves the fund or any account, and the two purpose
+// balances shift by exactly Amount, oppositely (ADR-036).
 //
 // It is the third caller of postTransferPairTx, after CloseIncidentalAndRoll
-// and PostPurposeCorrection, and adds no second write path (ADR-027).
-// postTransferPairTx checks nothing, so every rule lives here, each its own
-// named error:
+// and PostPurposeCorrection, with no second write path (ADR-027).
+// postTransferPairTx checks nothing, so every rule lives here as a named
+// error:
 //
 //   - Amount <= 0 or a malformed date: ErrInvalidArgument.
 //   - FromPurposeID equal to ToPurposeID: ErrPurposeMoveSamePurpose.
-//   - A purpose that is not this fund's (including an id that names
-//     nothing): ErrPurposeMoveUnknownPurpose.
+//   - A purpose not this fund's (including an id naming nothing):
+//     ErrPurposeMoveUnknownPurpose.
 //   - Titipan (pass-through) on either side: ErrPurposeMovePassThrough. That
 //     money belongs to the parent body and leaves only by being forwarded.
-//   - A closed envelope on either side: ErrPurposeMoveClosed - reopen it
-//     first, the rule ADR-031 applies to postings.
-//   - An account that is not this fund's: ErrPurposeMoveUnknownAccount; a
-//     retired one: ErrPurposeMoveAccountInactive.
+//   - A closed envelope on either side: ErrPurposeMoveClosed - reopen first,
+//     the rule ADR-031 applies to postings.
+//   - An account not this fund's: ErrPurposeMoveUnknownAccount; a retired one:
+//     ErrPurposeMoveAccountInactive.
 //   - Amount above the source purpose's balance: ErrPurposeMoveInsufficient.
-//     The balance is the ledger sum at posting time, read inside the same
-//     transaction as the write (ADR-004's single connection makes that
-//     read-then-write atomic); it is not the balance as of OccurredOn, so a
-//     backdated move can leave a purpose briefly negative on an earlier day,
-//     the same tolerance every backdated posting has (ADR-036).
+//     The balance is the ledger sum at posting time, read in the write's
+//     transaction (ADR-004's single connection makes read-then-write atomic),
+//     not as of OccurredOn, so a backdated move can leave a purpose briefly
+//     negative on an earlier day, as every backdated posting can (ADR-036).
 func (l *Ledger) PostPurposeMove(ctx context.Context, p PostPurposeMoveParams) (store.Transfer, error) {
 	if p.Amount <= 0 {
 		return store.Transfer{}, fmt.Errorf("%w: amount must be positive, got %d", ErrInvalidArgument, p.Amount.Int64())

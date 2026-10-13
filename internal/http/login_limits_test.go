@@ -50,9 +50,9 @@ func (c *fakeClock) advance(d time.Duration) {
 }
 
 // limitsRouter is a router with a registered treasurer, a fake clock, and
-// password hashing replaced by a stub (the ceiling test makes dozens of
-// attempts; the limiter, not argon2id, is under test). trusted is the
-// trusted-proxy list, nil for none.
+// stubbed password hashing (the ceiling test makes dozens of attempts and the
+// limiter, not argon2id, is under test). trusted is the trusted-proxy list,
+// nil for none.
 func limitsRouter(t *testing.T, trusted []netip.Prefix) (http.Handler, *fakeClock) {
 	t.Helper()
 	clk := newFakeClock()
@@ -84,9 +84,8 @@ func wrongGuesses(t *testing.T, r http.Handler, email, ip string, n int) {
 
 // TestLoginFromACleanIPIsNotBlockedWhileTheIdentifierIsUnderAttack is #500's
 // first line. Strangers who know the treasurer's email fill the per-address
-// budgets of several addresses; she logs in from an address with no failures
-// and is let in. The attackers' own addresses stay locked, so the attack did
-// cost them something.
+// budgets of several addresses; she logs in from a clean address and is let
+// in, while the attackers' addresses stay locked.
 func TestLoginFromACleanIPIsNotBlockedWhileTheIdentifierIsUnderAttack(t *testing.T) {
 	t.Parallel()
 	r, _ := limitsRouter(t, nil)
@@ -102,10 +101,9 @@ func TestLoginFromACleanIPIsNotBlockedWhileTheIdentifierIsUnderAttack(t *testing
 	wantLogin(t, r, limitsEmail, limitsPassword, attackers[0], http.StatusTooManyRequests)
 }
 
-// TestDistributedAttackOnOneIdentifierIsStillBounded: more addresses do not
-// buy more guesses. After loginIdentifierCeiling attempts in the hour no new
-// address gets through, the right password included; when the hour is over
-// the account opens again.
+// TestDistributedAttackOnOneIdentifierIsStillBounded: more addresses do not buy
+// more guesses. After loginIdentifierCeiling attempts in the hour no new
+// address gets through, the right password included; after the hour it opens.
 func TestDistributedAttackOnOneIdentifierIsStillBounded(t *testing.T) {
 	t.Parallel()
 	r, clk := limitsRouter(t, nil)
@@ -123,8 +121,7 @@ func TestDistributedAttackOnOneIdentifierIsStillBounded(t *testing.T) {
 	wantLogin(t, r, limitsEmail, limitsPassword, "203.0.113.2", http.StatusOK)
 }
 
-// loginWith is postLoginFrom carrying cookies, and returning the recorder so a
-// test can read what came back.
+// loginWith is postLoginFrom carrying cookies, returning the recorder.
 func loginWith(t *testing.T, r http.Handler, email, password, ip string, cookies ...*http.Cookie) *httptest.ResponseRecorder {
 	t.Helper()
 	body, err := json.Marshal(loginRequest{Email: email, Password: password}) //nolint:gosec // request body
@@ -176,17 +173,16 @@ func deviceFor(t *testing.T, r http.Handler, email, ip string) *http.Cookie {
 }
 
 // TestADeviceCookieGetsPastTheSharedKeys: with her network key and the
-// account-wide ceiling both full - the two ways a stranger can close the
-// account to her - a browser carrying her device cookie still logs in, and a
-// browser without one does not.
+// account-wide ceiling full (the two ways a stranger can close the account to
+// her), a browser with her device cookie still logs in; one without does not.
 func TestADeviceCookieGetsPastTheSharedKeys(t *testing.T) {
 	t.Parallel()
 	r, _ := limitsRouter(t, nil)
 	const home = "203.0.113.20"
 	device := deviceFor(t, r, limitsEmail, home)
 
-	// The ceiling: the rest of its fifty (the login above used one) from
-	// other addresses.
+	// The ceiling: the rest of its fifty (the login above used one), from other
+	// addresses.
 	for i := 0; i < loginIdentifierCeiling-1; i++ {
 		wantLogin(t, r, limitsEmail, "not-the-password", fmt.Sprintf("198.51.100.%d", i+1), http.StatusUnauthorized)
 	}
@@ -201,8 +197,8 @@ func TestADeviceCookieGetsPastTheSharedKeys(t *testing.T) {
 }
 
 // TestWrongPasswordsWithADeviceCookieLockOnlyThatDevice: the cookie is no way
-// round the cost of a guess. Ten wrong passwords lock the device key - the right
-// one is then refused too - and nothing else.
+// round a guess's cost. Ten wrong passwords lock the device key (the right
+// one is then refused too) and nothing else.
 func TestWrongPasswordsWithADeviceCookieLockOnlyThatDevice(t *testing.T) {
 	t.Parallel()
 	r, _ := limitsRouter(t, nil)
@@ -241,8 +237,8 @@ func TestADeviceKeyEscalates(t *testing.T) {
 }
 
 // TestADeviceCookieIsForItsOwnIdentifier: the cookie issued for the
-// treasurer's email buys nothing for another one - that attempt is on the
-// shared keys like any other.
+// treasurer's email buys nothing for another; that attempt is on the shared
+// keys.
 func TestADeviceCookieIsForItsOwnIdentifier(t *testing.T) {
 	t.Parallel()
 	r, _ := limitsRouter(t, nil)
@@ -277,11 +273,11 @@ func TestAnUnknownExpiredOrForgedDeviceTokenIsNoDevice(t *testing.T) {
 	for i := 1; i < loginRateLimitMaxAttempts; i++ {
 		wantLoginWith(t, r, limitsEmail, "not-the-password", "198.51.100.9", http.StatusUnauthorized, device)
 	}
-	// Ten on the shared pair key, not the device key: the eleventh is refused
-	// and so is the right password with the (expired) cookie.
+	// Ten on the shared pair key, not the device key: the eleventh and the right
+	// password with the (expired) cookie are refused.
 	wantLoginWith(t, r, limitsEmail, limitsPassword, "198.51.100.9", http.StatusTooManyRequests, device)
-	// The same pair key refuses a request with no cookie at all: it was the
-	// shared path that counted, not a device key.
+	// The same pair key refuses a request with no cookie: the shared path
+	// counted, not a device key.
 	wantLogin(t, r, limitsEmail, limitsPassword, "198.51.100.9", http.StatusTooManyRequests)
 }
 
@@ -335,8 +331,8 @@ func TestLoginSetsADeviceCookieWithTheSessionCookiesAttributes(t *testing.T) {
 				t.Errorf("token %q is shorter than 32 bytes of entropy", device.Value)
 			}
 
-			// Logged in again with the cookie: the same token is refreshed,
-			// not replaced, and its lifetime restarts.
+			// Logged in again with the cookie: the same token is refreshed, not replaced,
+			// its lifetime restarting.
 			clk.advance(10 * 24 * time.Hour)
 			again := wantLoginWith(t, r, limitsEmail, limitsPassword, "203.0.113.20", http.StatusOK, requestCookie(device.Name, device.Value))
 			refreshed := cookieNamed(again, deviceCookieName)
@@ -406,9 +402,9 @@ func TestRestoreConfirmIgnoresTheDeviceCookie(t *testing.T) {
 	assertAPIError(t, postRestoreConfirm(t, with, token, fixturePassword), http.StatusTooManyRequests, "too_many_requests")
 }
 
-// TestLoginLockoutsEscalateAndDecay drives escalation through the handler:
-// 5 minutes for the first fill of one pair, 15 for the second, an hour for the
-// third and every later one, and a quiet day afterward starts it over.
+// TestLoginLockoutsEscalateAndDecay drives escalation through the handler: 5
+// minutes the first time one pair fills, 15 the second, an hour the third and
+// after, and a quiet day starts it over.
 func TestLoginLockoutsEscalateAndDecay(t *testing.T) {
 	t.Parallel()
 	r, clk := limitsRouter(t, nil)
@@ -473,8 +469,8 @@ func TestIPv6AddressesInOneSlash64ShareAKey(t *testing.T) {
 	t.Parallel()
 	r, _ := limitsRouter(t, nil)
 
-	// Ten attempts, each from a different address in 2001:db8:0:1::/64 and
-	// each at a different identifier, so only the network key can be what fills.
+	// Ten attempts, each from a different address in 2001:db8:0:1::/64 and a
+	// different identifier, so only the network key can fill.
 	for i := 0; i < loginRateLimitMaxAttempts; i++ {
 		wantLogin(t, r, fmt.Sprintf("nobody-%d@example.org", i), "x", fmt.Sprintf("2001:db8:0:1:%x::1", i+1), http.StatusUnauthorized)
 	}
@@ -555,8 +551,8 @@ func TestNetworkOf(t *testing.T) {
 }
 
 // TestLoginEmailIsTrimmedAndCaseInsensitive: a capitalised or padded email is
-// the same account (no spurious "wrong password") and the same limiter key (no
-// fresh budget for each spelling).
+// the same account (no spurious "wrong password") and the same limiter key
+// (no fresh budget per spelling).
 func TestLoginEmailIsTrimmedAndCaseInsensitive(t *testing.T) {
 	t.Parallel()
 	r, _ := limitsRouter(t, nil)
@@ -598,9 +594,9 @@ func TestRegisterStoresAndReturnsTheNormalisedEmail(t *testing.T) {
 	}
 }
 
-// TestRegisterIPv6Slash64SharesALimit: register's own limiter is keyed by the
-// same network reduction. Invalid attempts count, so ten refused ones from
-// one /64 close it to the eleventh from a third address in it.
+// TestRegisterIPv6Slash64SharesALimit: register's limiter uses the same network
+// reduction. Invalid attempts count, so ten refused from one /64 close it to
+// an eleventh from a third address in it.
 func TestRegisterIPv6Slash64SharesALimit(t *testing.T) {
 	t.Parallel()
 	r, _ := testRouterAndDB(t)

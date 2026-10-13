@@ -23,8 +23,8 @@ func countOf(rl *rateLimiter, key string) int {
 	return 0
 }
 
-// TestRateLimiterAdmitsExactlyTheLimitThenRefuses: the boundary itself - the
-// limit-th attempt is still admitted, the one after it is not.
+// TestRateLimiterAdmitsExactlyTheLimitThenRefuses: the limit-th attempt is
+// admitted, the next is not.
 func TestRateLimiterAdmitsExactlyTheLimitThenRefuses(t *testing.T) {
 	t.Parallel()
 	rl := newRateLimiter(3, time.Minute)
@@ -42,9 +42,8 @@ func TestRateLimiterAdmitsExactlyTheLimitThenRefuses(t *testing.T) {
 	}
 }
 
-// TestRateLimiterKeysAreIndependent: attempts against one key must never
-// count against a different one - the whole reason the login handler holds
-// two independent keys per request (IP and identifier).
+// TestRateLimiterKeysAreIndependent: attempts on one key never count against
+// another (the login handler holds an IP and an identifier key).
 func TestRateLimiterKeysAreIndependent(t *testing.T) {
 	t.Parallel()
 	rl := newRateLimiter(2, time.Minute)
@@ -59,9 +58,8 @@ func TestRateLimiterKeysAreIndependent(t *testing.T) {
 	}
 }
 
-// TestRateLimiterReservesAllKeysOrNone: a request is reserved under its IP
-// and its identifier together. If one is full the other must not be charged
-// for a request that never ran.
+// TestRateLimiterReservesAllKeysOrNone: if one key is full, the other is not
+// charged for a request that never ran.
 func TestRateLimiterReservesAllKeysOrNone(t *testing.T) {
 	t.Parallel()
 	rl := newRateLimiter(2, time.Minute)
@@ -79,7 +77,7 @@ func TestRateLimiterReservesAllKeysOrNone(t *testing.T) {
 		t.Errorf("id:x count = %d, want 2", got)
 	}
 
-	// And the success shape: both keys charged exactly once.
+	// And the success shape: both keys charged once.
 	if !admitted(rl, "ip:2", "id:y") {
 		t.Fatal("reserve(ip:2, id:y) refused, want admitted")
 	}
@@ -89,7 +87,7 @@ func TestRateLimiterReservesAllKeysOrNone(t *testing.T) {
 }
 
 // TestRateLimiterReleaseGivesTheAttemptBack: an attempt that never really
-// happened (the server was busy) hands its slot in the window back.
+// happened (server busy) hands its slot back.
 func TestRateLimiterReleaseGivesTheAttemptBack(t *testing.T) {
 	t.Parallel()
 	rl := newRateLimiter(2, time.Minute)
@@ -116,10 +114,9 @@ func TestRateLimiterReleaseGivesTheAttemptBack(t *testing.T) {
 	}
 }
 
-// TestRateLimiterReleaseAfterResetOrExpiryLeavesTheNewCounterAlone: a
-// release must undo only the count it took. If a success wiped the key
-// meanwhile, or the window rolled over, a late release has nothing to undo
-// and must not eat into the attempts counted since.
+// TestRateLimiterReleaseAfterResetOrExpiryLeavesTheNewCounterAlone: a release
+// undoes only the count it took. If a success wiped the key or the window
+// rolled over, a late release must not eat into the attempts counted since.
 func TestRateLimiterReleaseAfterResetOrExpiryLeavesTheNewCounterAlone(t *testing.T) {
 	t.Parallel()
 	rl := newRateLimiter(5, time.Minute)
@@ -144,9 +141,8 @@ func TestRateLimiterReleaseAfterResetOrExpiryLeavesTheNewCounterAlone(t *testing
 	}
 }
 
-// TestRateLimiterResetClearsTheCounter: reset must drop the count entirely,
-// not merely permit one more attempt - a key that was at the limit is fully
-// open again afterward, for the limit's full width.
+// TestRateLimiterResetClearsTheCounter: reset drops the count entirely, not
+// permits one more attempt; a key at the limit is fully open again.
 func TestRateLimiterResetClearsTheCounter(t *testing.T) {
 	t.Parallel()
 	rl := newRateLimiter(2, time.Minute)
@@ -180,9 +176,8 @@ func TestRateLimiterResetClearsEveryKeyGiven(t *testing.T) {
 	}
 }
 
-// TestRateLimiterWindowExpiryReopensTheKey: once the fixed window has
-// elapsed, the same key must be allowed again and start counting from
-// zero, not from wherever it left off.
+// TestRateLimiterWindowExpiryReopensTheKey: once the window has elapsed the
+// key is allowed again, counting from zero.
 func TestRateLimiterWindowExpiryReopensTheKey(t *testing.T) {
 	t.Parallel()
 	rl := newRateLimiter(2, time.Minute)
@@ -205,10 +200,8 @@ func TestRateLimiterWindowExpiryReopensTheKey(t *testing.T) {
 	}
 }
 
-// TestRateLimiterSweepsExpiredEntries proves the map does not grow without
-// bound: once other keys' windows have elapsed, the next call anywhere
-// evicts them, rather than the map only ever growing for the life of the
-// process.
+// TestRateLimiterSweepsExpiredEntries: the map does not grow without bound;
+// once other keys' windows have elapsed, the next call anywhere evicts them.
 func TestRateLimiterSweepsExpiredEntries(t *testing.T) {
 	t.Parallel()
 	rl := newRateLimiter(5, time.Minute)
@@ -238,10 +231,9 @@ func TestRateLimiterSweepsExpiredEntries(t *testing.T) {
 }
 
 // TestRateLimiterConcurrentReservesAdmitExactlyTheLimit is #495's core
-// property at the limiter: with far more simultaneous callers than room,
-// exactly `limit` are admitted - none lost to an unsynchronised
-// read-modify-write, none let through because nobody had been counted yet.
-// Run with -race, which make check does.
+// property: with far more simultaneous callers than room, exactly `limit` are
+// admitted, none lost to an unsynchronised read-modify-write, none let
+// through uncounted. Run with -race (make check does).
 func TestRateLimiterConcurrentReservesAdmitExactlyTheLimit(t *testing.T) {
 	t.Parallel()
 	const limit, callers = 10, 200
@@ -271,11 +263,10 @@ func TestRateLimiterConcurrentReservesAdmitExactlyTheLimit(t *testing.T) {
 	}
 }
 
-// TestRateLimiterIsRaceFreeUnderMixedConcurrentAccess exercises every
-// method - reserve, release, reset - concurrently across overlapping
-// keys. It asserts nothing about the final state (the exactness test above
-// is for that); its only job is to give `go test -race` something to catch
-// if any path reaches the map or a counter without holding mu.
+// TestRateLimiterIsRaceFreeUnderMixedConcurrentAccess exercises reserve,
+// release and reset concurrently across overlapping keys. It asserts nothing
+// about final state (the test above does); it gives `go test -race` something
+// to catch if a path reaches the map or a counter without holding mu.
 func TestRateLimiterIsRaceFreeUnderMixedConcurrentAccess(t *testing.T) {
 	t.Parallel()
 	rl := newRateLimiter(5, 50*time.Millisecond)
@@ -349,8 +340,7 @@ func TestRateLimiterLockoutsEscalate(t *testing.T) {
 		if !admitted(rl, "k") {
 			t.Fatalf("refused at the end of the %v lock", step)
 		}
-		// That admitted attempt opened a fresh window with count 1; two more
-		// fill it again.
+		// That admitted attempt opened a fresh window at count 1; two more fill it.
 		if got := countOf(rl, "k"); got != 1 {
 			t.Fatalf("count after the lock ended = %d, want 1 (a fresh window)", got)
 		}
@@ -360,8 +350,8 @@ func TestRateLimiterLockoutsEscalate(t *testing.T) {
 }
 
 // TestRateLimiterStrikesDecayAfterAQuietPeriod: a key left alone for the decay
-// period after its lockout ends starts the ladder again; one that comes back
-// sooner does not.
+// period after its lockout ends starts the ladder again; one back sooner does
+// not.
 func TestRateLimiterStrikesDecayAfterAQuietPeriod(t *testing.T) {
 	t.Parallel()
 
@@ -409,8 +399,8 @@ func TestRateLimiterResetForgetsStrikes(t *testing.T) {
 	}
 }
 
-// TestRateLimiterReleaseUndoesTheLockoutItCaused: handing back the attempt that
-// filled the window reopens the key and gives back the strike - a busy server
+// TestRateLimiterReleaseUndoesTheLockoutItCaused: handing back the attempt
+// that filled the window reopens the key and returns the strike; a busy server
 // must not walk a key up the ladder.
 func TestRateLimiterReleaseUndoesTheLockoutItCaused(t *testing.T) {
 	t.Parallel()
@@ -433,9 +423,8 @@ func TestRateLimiterReleaseUndoesTheLockoutItCaused(t *testing.T) {
 	}
 }
 
-// TestRateLimiterSweepKeepsStrikesThenEvicts: a key that earned a strike
-// outlives its window and lockout (that is the memory escalation needs) and
-// is gone once the decay has passed, so the map still empties.
+// TestRateLimiterSweepKeepsStrikesThenEvicts: a key with a strike outlives its
+// window and lockout (the memory escalation needs) and is gone after decay.
 func TestRateLimiterSweepKeepsStrikesThenEvicts(t *testing.T) {
 	t.Parallel()
 	rl, now := ladderLimiter()

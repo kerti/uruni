@@ -19,8 +19,8 @@ import (
 	"github.com/kerti/uruni/internal/tz"
 )
 
-// reportNow is 2026-10-02 10:00 in Asia/Jakarta - early enough in a month
-// that the current month is unambiguous on any CI clock.
+// reportNow is 2026-10-02 10:00 in Asia/Jakarta: early enough in a month that
+// the current month is unambiguous on any CI clock.
 var reportNow = time.Date(2026, 10, 2, 3, 0, 0, 0, time.UTC)
 
 type reportFixture struct {
@@ -117,10 +117,10 @@ func TestReportKnownSlugIs200WithEveryHeader(t *testing.T) {
 	}
 }
 
-// Every report response, the page and its 404, carries a nonce CSP whose
-// nonce is the one on the page's <style> and <script>, and every <style> and
-// <script> on the page carries it - an untagged one would be blocked in the
-// browser. A second request draws a different nonce.
+// Every report response, the page and its 404, carries a nonce CSP whose nonce
+// is the one on the page's <style> and <script>, and every <style> and
+// <script> carries it (an untagged one would be blocked). A second request
+// draws a different nonce.
 func TestReportCSPNonceMatchesThePage(t *testing.T) {
 	t.Parallel()
 	f := newReportFixture(t, "Kas RT 05")
@@ -244,9 +244,9 @@ func TestReportEmptyFundShowsRpZeroAndTheWarmLine(t *testing.T) {
 	}
 }
 
-// The three cek kas states, read the way the home banner reads them: never
-// counted is neutral (never green), matched is green, a discrepancy is
-// terracotta with its amount.
+// The three cek kas states, read as the home banner reads them: never counted
+// is neutral (never green), matched is green, a discrepancy is terracotta
+// with its amount.
 func TestReportPageCheckStates(t *testing.T) {
 	t.Parallel()
 	base := ledger.Report{FundName: "Kas", AsOf: "2026-10-02", Month: "2026-10", Months: []string{"2026-10"}}
@@ -286,9 +286,8 @@ func TestReportPagePurposeBalances(t *testing.T) {
 	}
 }
 
-// TestReportPaletteMatchesIndexCSS is ADR-035's guard on the hand-kept
-// palette copy: every token the report uses must hold the value index.css's
-// :root gives it.
+// TestReportPaletteMatchesIndexCSS is ADR-035's guard on the hand-kept palette:
+// every token the report uses holds the value index.css's :root gives it.
 func TestReportPaletteMatchesIndexCSS(t *testing.T) {
 	t.Parallel()
 	css, err := os.ReadFile("../../web/src/index.css")
@@ -360,8 +359,8 @@ func TestReportSummaryShowsTheTotalOwedToMembers(t *testing.T) {
 }
 
 // The date line says what every figure answers to (ADR-037): a past month's
-// last day, or today as the running month. The month picker comes first, so
-// everything beneath it reads as that month's.
+// last day, or today for the running month. The month picker comes first, so
+// everything beneath reads as that month's.
 func TestReportDateLineAndMonthPickerFirst(t *testing.T) {
 	t.Parallel()
 	f := newReportFixture(t, "Kas RT 05")
@@ -385,9 +384,9 @@ func TestReportDateLineAndMonthPickerFirst(t *testing.T) {
 	}
 }
 
-// #498: the public page reads selisih for what a partial entry left open -
-// the remainder, not the difference that was found - and cocok once an exact
-// entry closes the line.
+// #498: the public page reads selisih for what a partial entry left open (the
+// remainder, not the difference found), and cocok once an exact entry closes
+// the line.
 func TestReportReadsAPartialCekKasEntryAsSelisihForTheRemainder(t *testing.T) {
 	t.Parallel()
 	f := newReportFixture(t, "Kas RT 05")
@@ -425,7 +424,7 @@ func TestReportReadsAPartialCekKasEntryAsSelisihForTheRemainder(t *testing.T) {
 
 // TestHeroSizeClassStepsDownAsTheFigureGrows pins #540's steps: everyday
 // figures keep the full hero size, and the widest legal figure (Rp
-// 999.999.999.999, with or without its minus) always gets a smaller one.
+// 999.999.999.999, with or without its minus) gets a smaller one.
 func TestHeroSizeClassStepsDownAsTheFigureGrows(t *testing.T) {
 	for _, c := range []struct {
 		figure string

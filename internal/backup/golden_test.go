@@ -8,22 +8,21 @@ import (
 	"testing"
 )
 
-// goldenPath is the checked-in fixture ADR-012 requires: "a checked-in
-// golden uruni.json must round-trip exactly, so any schema edit that
-// changes the export breaks a test and forces a conscious bump."
+// goldenPath is the checked-in fixture ADR-012 requires: "a checked-in golden
+// uruni.json must round-trip exactly, so any schema edit that changes the
+// export breaks a test and forces a conscious bump."
 const goldenPath = "testdata/golden.json"
 
 // TestGoldenFixtureMatchesExport is that test. buildFixture's deterministic
-// data (fixed timestamps, a fixed receipt filename, one row per table this
-// package exports) is built fresh against a real migrated database, run
-// through BuildDocument, marshaled exactly as Export marshals it, and
-// compared byte-for-byte against the checked-in testdata/golden.json.
+// data (fixed timestamps and receipt filename, one row per exported table) is
+// built fresh against a migrated database, run through BuildDocument,
+// marshaled as Export marshals it, and compared byte-for-byte with
+// testdata/golden.json.
 //
-// A failure here means one of two things: a genuine, deliberate change to
-// what the export contains - regenerate testdata/golden.json (this test
-// prints the new bytes on failure) and bump FormatVersion in backup.go in
-// the same PR - or an accidental one, which this test exists to catch
-// before it ships as a silent, undocumented format change.
+// A failure means a deliberate change to what the export contains (regenerate
+// testdata/golden.json, which this test prints on failure, and bump
+// FormatVersion in backup.go in the same PR) or an accidental one, which this
+// exists to catch before it ships as a silent format change.
 func TestGoldenFixtureMatchesExport(t *testing.T) {
 	t.Parallel()
 	sqlDB := newTestDB(t)

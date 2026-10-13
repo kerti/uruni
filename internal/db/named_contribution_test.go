@@ -8,12 +8,12 @@ import (
 	"github.com/kerti/uruni/internal/store"
 )
 
-// ADR-034: a contribution may name its member on the ledger row - the CHECKs
-// alone cannot see purpose.kind, so which purpose a member may be tagged to,
-// and what a reversal may target, is a BEFORE INSERT trigger. These tests
-// exercise that trigger and its own CHECK relaxation directly against the
-// schema, the same "what the database itself refuses" shape ledger_test.go's
-// own TestDuesFieldsBelongToDuesAndNothingElse already uses for ADR-029.
+// ADR-034: a contribution may name its member on the ledger row. The CHECKs
+// cannot see purpose.kind, so which purpose a member may be tagged to, and what
+// a reversal may target, is a BEFORE INSERT trigger. These tests exercise that
+// trigger and its CHECK relaxation against the schema, the "what the database
+// refuses" shape of ledger_test.go's TestDuesFieldsBelongToDuesAndNothingElse
+// for ADR-029.
 
 func TestMemberOnANormalRowOutsideAnEnvelopeIsRefused(t *testing.T) {
 	t.Parallel()
@@ -22,8 +22,8 @@ func TestMemberOnANormalRowOutsideAnEnvelopeIsRefused(t *testing.T) {
 	q := store.New(sqlDB)
 	f := newLedgerFixture(t, sqlDB, "Test Fund", validSlug)
 
-	// f.purposeID is kind='main' (newLedgerFixture's own setup) - a member
-	// name only belongs on an incidental purpose (ADR-034).
+	// f.purposeID is kind='main' (newLedgerFixture): a member name belongs only on
+	// an incidental purpose (ADR-034).
 	if _, err := q.CreateTransaction(ctx, store.CreateTransactionParams{
 		FundID: f.fundID, AccountID: f.accountID, PurposeID: f.purposeID,
 		Direction: "in", Amount: 25000, OccurredOn: "2026-08-12", Kind: "normal",
@@ -116,9 +116,9 @@ func TestDuesReversalMissingItsPeriodIsRefused(t *testing.T) {
 		t.Fatalf("posting the dues payment to reverse = %v, want no error", err)
 	}
 
-	// member_id matches the payment, but dues_period is missing - the CHECK
-	// alone would now accept this (ADR-034 dropped its own dues_period
-	// requirement), so this is exactly what the trigger exists to catch.
+	// member_id matches the payment but dues_period is missing: the CHECK alone
+	// would accept this (ADR-034 dropped its dues_period requirement), which is
+	// what the trigger catches.
 	if _, err := q.CreateTransaction(ctx, store.CreateTransactionParams{
 		FundID: f.fundID, AccountID: f.accountID, PurposeID: f.purposeID,
 		Direction: "out", Amount: 25000, OccurredOn: "2026-08-13", Kind: "adjustment",
@@ -227,9 +227,9 @@ func TestIncidentalRecipientCascadesFromMemberDeleteAndScopesByFund(t *testing.T
 		t.Fatalf("CreateIncidentalRecipient = %v, want no error", err)
 	}
 
-	// Another fund's member cannot be named a recipient of this fund's
-	// envelope - the composite FK to purpose is what makes that a schema
-	// violation rather than an application-remembered rule.
+	// Another fund's member cannot be named a recipient of this fund's envelope:
+	// the composite FK to purpose makes that a schema violation, not an
+	// application-remembered rule.
 	other := newLedgerFixture(t, sqlDB, "Other Fund", "bcdefghijklmnopqrstuvw")
 	if err := q.CreateIncidentalRecipient(ctx, store.CreateIncidentalRecipientParams{
 		FundID: f.fundID, PurposeID: envelopeID, MemberID: other.memberID,

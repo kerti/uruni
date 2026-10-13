@@ -1,11 +1,11 @@
 package http
 
 // The public report (ADR-035, #373): GET /report/{slug}, server-rendered with
-// html/template from ledger.MonthlyReport. No session, no resolveFund - the
-// slug names its fund (ADR-030's carve-out), and is a read capability, never an
-// authorization. The page is the header and month selector, then the balance,
-// per-purpose balances, what is owed to members, transactions, dues and
-// envelopes, all from the same Report.
+// html/template from ledger.MonthlyReport. No session, no resolveFund: the
+// slug names its fund (ADR-030's carve-out) and is a read capability, never
+// an authorization. The page is the header and month selector, then the
+// balance, per-purpose balances, what is owed to members, transactions, dues
+// and envelopes, all from the same Report.
 
 import (
 	"bytes"
@@ -36,30 +36,29 @@ var reportTemplateSource string
 var reportTemplates = template.Must(template.New("report").Parse(reportTemplateSource))
 
 // reportPage is everything the "report" template reads. Every string is
-// already display text - formatted rupiah, Indonesian dates - so the template
-// only places it, and nothing is computed there (ADR-035).
+// already display text (formatted rupiah, Indonesian dates), so the template
+// computes nothing (ADR-035).
 type reportPage struct {
 	Title string
 	Style template.CSS
 	Text  reportCopy
 
-	// Nonce is this response's CSP nonce, stamped on the page's one <style>
-	// and one <script> (renderReport sets it; callers leave it empty).
+	// Nonce is this response's CSP nonce, on the page's one <style> and one
+	// <script> (renderReport sets it).
 	Nonce string
 
 	FundName string
 	AsOf     string
 	Balance  string
-	// BalanceSize is a class that steps the hero figure down when it is wide
-	// (up to Rp 999.999.999.999 and a minus, #540): the figure never wraps or
-	// clips. "" at everyday widths.
+	// BalanceSize is a class that steps the hero figure down when wide (up to Rp
+	// 999.999.999.999 and a minus, #540) so it never wraps or clips. "" at
+	// everyday widths.
 	BalanceSize string
 	Check       *reportCheck
 	Purposes    []reportPurpose
 
-	// Owed is the total owed to members who fronted an expense, as of the
-	// same day as Balance (ADR-037); "" when nothing is owed, which hides the
-	// line (#406).
+	// Owed is the total owed to members who fronted an expense, as of the same
+	// day as Balance (ADR-037); "" hides the line (#406).
 	Owed string
 
 	PDFHref string
@@ -70,32 +69,32 @@ type reportPage struct {
 	NextHref     string
 	MonthOptions []reportMonthOption
 
-	// The transactions section (#374): the filter form, the totals for the
-	// filtered set, and the rows. Filter is set by the handler, which alone
-	// knows the fund's members and purposes.
+	// The transactions section (#374): the filter form, totals for the filtered
+	// set, and rows. The handler sets Filter; it alone knows the fund's members
+	// and purposes.
 	Filter reportFilter
 	Totals []reportTotal
 	Rows   []reportRow
 	Month  string
 	NoRows bool
 
-	// The dues section (#375). HasDues is whether any member owes for the
-	// month at all, before the dues filter: it shows the section and the
-	// filter, so a filter that matches nobody still reads as one.
+	// The dues section (#375). HasDues is whether any member owes for the month
+	// before the dues filter, so a filter matching nobody still shows the
+	// section and filter.
 	HasDues bool
 	Dues    []reportDuesRow
 
 	// The envelopes section (#338): every envelope the ledger listed for the
-	// month, narrowed by the purpose filter. The section is hidden when empty.
+	// month, narrowed by the purpose filter; hidden when empty.
 	Envelopes []reportEnvelope
 
-	// Empty is a fund with nothing recorded at all - not merely a quiet
-	// month - which gets the warm line instead of a bare Rp 0.
+	// Empty is a fund with nothing recorded at all, not a quiet month: it gets
+	// the warm line instead of a bare Rp 0.
 	Empty bool
 }
 
-// reportCheck is the latest cek kas, as the home banner reads it: matched,
-// a discrepancy in terracotta, or never counted (neutral, never green).
+// reportCheck is the latest cek kas as the home banner reads it: matched, a
+// discrepancy in terracotta, or never counted (neutral, never green).
 type reportCheck struct {
 	Class   string // "matched", "discrepancy" or "never"
 	Message string
@@ -108,11 +107,11 @@ type reportPurpose struct {
 	Negative bool
 }
 
-// reportTotal is one line of the month's walk (ADR-038), already formatted:
-// the label and the figure beside it. Last marks the closing balance, which
-// both renderers emphasise. The whole fund, or one pos, reads Saldo <day> down
-// to Saldo <day>; under a member or direction filter only Total masuk and Total
-// keluar, since a balance has no meaning for a slice of the fund.
+// reportTotal is one line of the month's walk (ADR-038), formatted: label and
+// figure. Last marks the closing balance, which both renderers emphasise. The
+// whole fund, or one pos, reads Saldo <day> down to Saldo <day>; under a
+// member or direction filter only Total masuk and Total keluar, since a
+// balance has no meaning for a slice.
 type reportTotal struct {
 	Label string
 	Value string
@@ -120,11 +119,10 @@ type reportTotal struct {
 }
 
 // reportRow is one line of the month. Class is "in", "out" or "move"; Label is
-// "" for a plain row the treasurer recorded. Note is what she typed, under the
-// label as Riwayat shows it (a settled claim's payout carries the claim's
-// note; a move, the note both its legs carry), "" when there is none.
-// HasReceipt renders a plain
-// marker - nothing about the receipt itself reaches the page.
+// "" for a plain row. Note is what she typed, under the label as Riwayat
+// shows it (a settled claim's payout carries the claim's note; a move, the
+// note both legs carry), "" for none. HasReceipt renders a plain marker;
+// nothing about the receipt reaches the page.
 type reportRow struct {
 	Date       string
 	Label      string
@@ -143,21 +141,21 @@ func reportNote(note *string) string {
 	return strings.TrimSpace(*note)
 }
 
-// reportFilter is the GET form: every option of every select, with the
-// current choice marked, so a filtered view reads back as what it is.
+// reportFilter is the GET form: every option of every select, the current
+// choice marked, so a filtered view reads back as what it is.
 type reportFilter struct {
 	Purposes   []reportOption
 	Members    []reportOption
 	Directions []reportOption
 	Dues       []reportOption
 
-	// Active is the filters in force, carried by the month steps and the
-	// month form so changing month keeps what the visitor sifted for.
+	// Active is the filters in force, carried by the month steps and month form
+	// so changing month keeps them.
 	Active url.Values
 }
 
-// reportDuesRow is one member's standing. Class is the ledger's status
-// value, which the stylesheet colours; Status is the app's own wording.
+// reportDuesRow is one member's standing. Class is the ledger's status value,
+// which the stylesheet colours; Status is the app's wording.
 type reportDuesRow struct {
 	Name        string
 	Tier        string
@@ -169,7 +167,7 @@ type reportDuesRow struct {
 }
 
 // reportEnvelope is one envelope's <details>: the summary's facts, who it is
-// for, and the participation table. Class on a person is the ledger's state
+// for, and the participation table. A person's Class is the ledger's state
 // ("sudah", "belum", "kurang"), which the stylesheet colours.
 type reportEnvelope struct {
 	Name       string
@@ -219,15 +217,15 @@ func reportHandler(l *ledger.Ledger, q store.Querier, logger *slog.Logger, now f
 			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 			return
 		}
-		// The link is to the month the page shows, which is the ledger's own
-		// validated "YYYY-MM", never the raw query value.
+		// The link is to the month the page shows, the ledger's validated "YYYY-MM",
+		// never the raw query value.
 		page.PDFHref = "/report/" + url.PathEscape(fund.ReportSlug) + "/pdf?month=" + url.QueryEscape(page.Month)
 		renderReport(w, logger, http.StatusOK, "report", page)
 	}
 }
 
 // reportFundOr404 is the lookup both report routes open with: the fund the
-// slug names, or the page's own short 404 (naming no fund) and ok == false.
+// slug names, or a short 404 naming no fund and ok == false.
 func reportFundOr404(w http.ResponseWriter, r *http.Request, q store.Querier, logger *slog.Logger) (store.Fund, bool) {
 	fund, err := q.GetFundByReportSlug(r.Context(), chi.URLParam(r, "slug"))
 	switch {
@@ -289,10 +287,10 @@ func assembleReportPage(ctx context.Context, l *ledger.Ledger, q store.Querier, 
 }
 
 // envelopesForPurpose narrows the month's envelopes to the purpose filter's:
-// no filter keeps them all; an envelope purpose keeps that one (none, if it
-// was not open that month); any other purpose - Kas Utama, a pass-through -
-// keeps none, since the filter asks for that purpose alone and no envelope is
-// it. The ledger assembles the month unfiltered, so this only picks from it.
+// no filter keeps all; an envelope purpose keeps that one (none if not open
+// that month); any other purpose (Kas Utama, a pass-through) keeps none,
+// since no envelope is it. The ledger assembles the month unfiltered, so this
+// only picks from it.
 func envelopesForPurpose(envs []ledger.ReportEnvelope, purposeID *int64) []ledger.ReportEnvelope {
 	if purposeID == nil {
 		return envs
@@ -307,7 +305,7 @@ func envelopesForPurpose(envs []ledger.ReportEnvelope, purposeID *int64) []ledge
 }
 
 // monthHref steps to another month with the same filters, landing on the
-// month nav rather than the top of the page.
+// month nav.
 func monthHref(month string, active url.Values) string {
 	href := "?month=" + url.QueryEscape(month)
 	if len(active) > 0 {
@@ -326,11 +324,10 @@ func fundIsEmpty(ctx context.Context, q store.Querier, fundID int64) (bool, erro
 }
 
 // readReportFilter turns the query string into ledger params and the form's
-// options. A purpose or member that is not this fund's, and a direction that
-// is neither "in" nor "out", is no filter at all: a stale or hand-edited URL
-// shows the whole month rather than an error page. Options keep the order
-// the store lists them in - Kas Utama first, then by name; members by name -
-// the order every other list reads.
+// options. A purpose or member not this fund's, and a direction that is not
+// "in" or "out", is no filter: a stale or hand-edited URL shows the whole
+// month, not an error page. Options keep the store's order (Kas Utama first,
+// then by name; members by name), as every other list.
 func readReportFilter(query url.Values, fundID int64, purposes []store.Purpose, members []store.Member) (ledger.ReportParams, reportFilter) {
 	params := ledger.ReportParams{FundID: fundID, Month: query.Get("month")}
 	filter := reportFilter{Active: url.Values{}}
@@ -381,11 +378,10 @@ func readReportFilter(query url.Values, fundID int64, purposes []store.Purpose, 
 	return params, filter
 }
 
-// monthlyReportOrCurrent reads ?month= as ADR-035 says to: a missing,
-// malformed or out-of-range month is the current one, never an error page.
-// A malformed month is the ledger's ErrInvalidArgument; an out-of-range one
-// assembles fine but names a month the selector does not offer, so it is
-// re-read as the current month too.
+// monthlyReportOrCurrent reads ?month= per ADR-035: a missing, malformed or
+// out-of-range month is the current one, never an error page. Malformed is
+// the ledger's ErrInvalidArgument; out-of-range assembles fine but names a
+// month the selector does not offer, so it is re-read as the current month.
 func monthlyReportOrCurrent(ctx context.Context, l *ledger.Ledger, params ledger.ReportParams, now time.Time) (ledger.Report, error) {
 	params.Now = now
 	report, err := l.MonthlyReport(ctx, params)
@@ -399,8 +395,8 @@ func monthlyReportOrCurrent(ctx context.Context, l *ledger.Ledger, params ledger
 	return l.MonthlyReport(ctx, params)
 }
 
-// reportAsOf is the date line every figure on the page answers to (ADR-037):
-// a past month's last day, or today marked as the running month.
+// reportAsOf is the date line every figure answers to (ADR-037): a past
+// month's last day, or today marked as the running month.
 func reportAsOf(r ledger.Report) string {
 	if r.Running {
 		return reportText.AsOfRunning(reportText.longDate(r.AsOf))
@@ -408,8 +404,8 @@ func reportAsOf(r ledger.Report) string {
 	return reportText.AsOf(reportText.longDate(r.AsOf))
 }
 
-// walkLines is the walk's lines in ADR-038's order. Saldo awal, Penyesuaian and
-// Dipindah appear only when they are not zero: most months have none of them.
+// walkLines is the walk's lines in ADR-038's order. Saldo awal, Penyesuaian
+// and Dipindah appear only when non-zero.
 func walkLines(w ledger.ReportWalk) []reportTotal {
 	var lines []reportTotal
 	add := func(label string, v money.Amount, last bool) {
@@ -501,8 +497,8 @@ func buildReportPage(r ledger.Report, empty bool) reportPage {
 			Name: d.MemberName, Tier: d.TierName, Owed: money.FormatIDR(d.Owed), Paid: money.FormatIDR(d.Paid),
 			Class: string(d.Status), Status: reportText.duesStatus(d.Status),
 		}
-		// As the app does: a known end reads as a plain "Lunas" with the
-		// month on its own line.
+		// As the app does: a known end reads as a plain "Lunas" with the month on
+		// its own line.
 		if d.Status == ledger.DuesStatusPaidInAdvance && d.PaidThrough != "" {
 			row.Class = string(ledger.DuesStatusPaid)
 			row.Status = reportText.DuesPaidStatus
@@ -562,9 +558,8 @@ func buildReportPage(r ledger.Report, empty bool) reportPage {
 }
 
 // setReportHeaders is ADR-035's request edge: not indexed, not followed, no
-// referrer leaking the slug onward, not cached by anything in between, and no
-// cookie - this route never touches the session manager, which is mounted on
-// /api alone.
+// referrer leaking the slug onward, not cached in between, and no cookie
+// (this route never touches the session manager, mounted on /api alone).
 func setReportHeaders(w http.ResponseWriter) {
 	h := w.Header()
 	h.Set("Content-Type", "text/html; charset=utf-8")
@@ -573,21 +568,21 @@ func setReportHeaders(w http.ResponseWriter) {
 	h.Set("Cache-Control", "no-store")
 }
 
-// reportCSP is the public report's own Content-Security-Policy, replacing
-// the app's (securityHeaders). The page is one self-contained response: its
-// only script and its only style are inline, and both carry this response's
-// nonce, so nothing else - an injected tag, an attribute handler, a file from
-// anywhere - runs or applies. img-src covers the browser's favicon request;
-// form-action keeps the filter forms on this origin.
+// reportCSP is the report's Content-Security-Policy, replacing the app's
+// (securityHeaders). The page is one self-contained response: its only script
+// and style are inline and carry this response's nonce, so nothing else (an
+// injected tag, an attribute handler, a file from anywhere) runs or applies.
+// img-src covers the browser's favicon request; form-action keeps the filter
+// forms on this origin.
 func reportCSP(nonce string) string {
 	return "default-src 'none'; script-src 'nonce-" + nonce + "'; style-src 'nonce-" + nonce + "'; " +
 		"img-src 'self'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'"
 }
 
 // renderReport executes into a buffer first, so a template error is a clean
-// 500 rather than half a page under a 200 that has already gone out. Each
-// render draws a fresh nonce: the page is no-store, so no copy of it outlives
-// the header that names its nonce.
+// 500 rather than half a page under a 200 already sent. Each render draws a
+// fresh nonce: the page is no-store, so no copy outlives the header naming
+// its nonce.
 func renderReport(w http.ResponseWriter, logger *slog.Logger, status int, name string, page reportPage) {
 	page.Nonce = rand.Text()
 	var buf bytes.Buffer
@@ -601,8 +596,8 @@ func renderReport(w http.ResponseWriter, logger *slog.Logger, status int, name s
 	_, _ = buf.WriteTo(w)
 }
 
-// heroSizeClass names the report hero's type step for a formatted figure: the
-// same steps Beranda's hero takes, by the figure's length in characters.
+// heroSizeClass names the report hero's type step for a formatted figure, the
+// same steps as Beranda's hero, by length in characters.
 func heroSizeClass(figure string) string {
 	switch n := len([]rune(figure)); {
 	case n <= 15:

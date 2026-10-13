@@ -35,11 +35,8 @@ func getTransactions(t *testing.T, r http.Handler) *httptest.ResponseRecorder {
 	return rec
 }
 
-// getTransactionsQuery is getTransactions's twin for #225's own tests: every
-// case below that exercises the cursor, q, member_id or dues_period query
-// parameters needs a raw query string on the request, which getTransactions
-// deliberately never takes (most of this package's other test files only
-// want "everything posted so far", unpaged and unfiltered).
+// getTransactionsQuery is getTransactions with a raw query string, for the
+// tests that exercise cursor, q, member_id or dues_period.
 func getTransactionsQuery(t *testing.T, r http.Handler, rawQuery string) *httptest.ResponseRecorder {
 	t.Helper()
 	target := "/api/transactions"
@@ -51,10 +48,8 @@ func getTransactionsQuery(t *testing.T, r http.Handler, rawQuery string) *httpte
 	return rec
 }
 
-// decodeTransactionsPage decodes GET /api/transactions's envelope
-// ({"transactions":[...],"next_cursor":...}, #225) and fails the test on any
-// shape mismatch, the same t.Fatalf-on-decode-error idiom every other
-// decode helper in this package uses.
+// decodeTransactionsPage decodes GET /api/transactions's envelope (#225) and
+// fails the test on any shape mismatch.
 func decodeTransactionsPage(t *testing.T, rec *httptest.ResponseRecorder) transactionsPageResponse {
 	t.Helper()
 	var page transactionsPageResponse
@@ -110,10 +105,9 @@ func TestGetTransactionsReturnsAnEmptyListBeforeAnyTransaction(t *testing.T) {
 	}
 }
 
-// TestPostTransactionsRoundTripsThroughGetAndMovesTheBalance is the slice's
-// headline acceptance criterion: a posted transaction shows up unchanged
-// through GET /api/transactions, and the fund balance moves by exactly its
-// amount - no more, no less.
+// TestPostTransactionsRoundTripsThroughGetAndMovesTheBalance: a posted
+// transaction shows up unchanged through GET /api/transactions, and the fund
+// balance moves by exactly its amount.
 func TestPostTransactionsRoundTripsThroughGetAndMovesTheBalance(t *testing.T) {
 	t.Parallel()
 	r, l := testRouterAndLedger(t)
@@ -175,10 +169,8 @@ func TestPostTransactionsRoundTripsThroughGetAndMovesTheBalance(t *testing.T) {
 	}
 }
 
-// TestPostTransactionsOutDirectionMovesTheBalanceDown checks the other
-// boundary: a direction='out' entry decreases the fund balance by exactly
-// its amount, mirroring the 'in' case above rather than merely summing to
-// something nonzero.
+// TestPostTransactionsOutDirectionMovesTheBalanceDown: a direction='out' entry
+// decreases the fund balance by exactly its amount.
 func TestPostTransactionsOutDirectionMovesTheBalanceDown(t *testing.T) {
 	t.Parallel()
 	r, l := testRouterAndLedger(t)
@@ -208,9 +200,8 @@ func TestPostTransactionsOutDirectionMovesTheBalanceDown(t *testing.T) {
 	}
 }
 
-// TestPostTransactionsIsAdjustmentPostsAnAdjustmentKind proves the ADR-027
-// intent surface: IsAdjustment on the wire selects kind='adjustment' rather
-// than a raw kind field the caller could otherwise set to anything.
+// TestPostTransactionsIsAdjustmentPostsAnAdjustmentKind proves ADR-027's
+// intent surface: IsAdjustment selects kind='adjustment', not a raw kind.
 func TestPostTransactionsIsAdjustmentPostsAnAdjustmentKind(t *testing.T) {
 	t.Parallel()
 	r := testRouter(t)
@@ -233,10 +224,8 @@ func TestPostTransactionsIsAdjustmentPostsAnAdjustmentKind(t *testing.T) {
 	}
 }
 
-// TestPostTransactionsRejectsNonPositiveAmount covers the acceptance
-// criterion end to end: a non-positive amount surfaces as 400 through the
-// real HTTP path, never re-checked here - PostTransaction's own check is
-// what answers.
+// TestPostTransactionsRejectsNonPositiveAmount: a non-positive amount
+// surfaces as 400 through the real HTTP path; PostTransaction's check answers.
 func TestPostTransactionsRejectsNonPositiveAmount(t *testing.T) {
 	t.Parallel()
 	for _, amount := range []int64{0, -1, -50_000} {
@@ -257,8 +246,8 @@ func TestPostTransactionsRejectsNonPositiveAmount(t *testing.T) {
 	}
 }
 
-// TestPostTransactionsRejectsAMalformedOccurredOn is the acceptance
-// criterion's other half: a calendar-invalid date surfaces as 400 too.
+// TestPostTransactionsRejectsAMalformedOccurredOn: a calendar-invalid date is
+// 400 too.
 func TestPostTransactionsRejectsAMalformedOccurredOn(t *testing.T) {
 	t.Parallel()
 	for _, occurredOn := range []string{"2026-02-30", "not-a-date", "2026-8-12"} {
@@ -295,10 +284,8 @@ func TestPostTransactionsRejectsMalformedJSON(t *testing.T) {
 	}
 }
 
-// TestPostTransactionsRejectsAnUnrecognizedDirection is the argument-shape
-// case PostTransaction itself validates: "sideways" is neither "in" nor
-// "out". Asserted here to prove the handler passes the raw string through
-// rather than pre-checking it against an allow-list of its own.
+// TestPostTransactionsRejectsAnUnrecognizedDirection: "sideways" is neither
+// "in" nor "out"; the handler passes the raw string to PostTransaction.
 func TestPostTransactionsRejectsAnUnrecognizedDirection(t *testing.T) {
 	t.Parallel()
 	r := testRouter(t)
@@ -320,12 +307,9 @@ func TestPostTransactionsRejectsAnUnrecognizedDirection(t *testing.T) {
 // ---- #225: keyset paging and search --------------------------------------
 
 // seedTransactions writes n ordinary 'normal' transactions straight through
-// the store (bypassing the HTTP route, same idiom fund_scope_test.go uses
-// for fixtures that don't need the route's own validation), one calendar
-// day apart starting at startDate, oldest first in the returned slice - the
-// paging tests below need many rows with known, distinct occurred_on values
-// more than they need those rows to have come through POST
-// /api/transactions itself.
+// the store, one calendar day apart from startDate, oldest first in the
+// returned slice. The paging tests need many rows with distinct occurred_on
+// more than they need POST /api/transactions.
 func seedTransactions(t *testing.T, sqlDB *sql.DB, fundID, accountID, purposeID int64, n int, startDate string) []store.Transaction {
 	t.Helper()
 	start, err := time.Parse("2006-01-02", startDate)
@@ -349,10 +333,8 @@ func seedTransactions(t *testing.T, sqlDB *sql.DB, fundID, accountID, purposeID 
 	return rows
 }
 
-// TestGetTransactionsOrdersNewestFirstTiesBrokenByIDDesc is the ordering
-// half of #225's "newest-first, keyset-paged" acceptance criterion: three
-// rows, two sharing an occurred_on, must come back (occurred_on DESC, id
-// DESC) - the later of the two same-dated rows first.
+// TestGetTransactionsOrdersNewestFirstTiesBrokenByIDDesc: three rows, two
+// sharing an occurred_on, come back (occurred_on DESC, id DESC).
 func TestGetTransactionsOrdersNewestFirstTiesBrokenByIDDesc(t *testing.T) {
 	t.Parallel()
 	sqlDB := testStoreDB(t)
@@ -395,11 +377,9 @@ func TestGetTransactionsOrdersNewestFirstTiesBrokenByIDDesc(t *testing.T) {
 	}
 }
 
-// TestGetTransactionsPagingWalksTheWholeSetWithNoSkipOrDuplicate is #225's
-// "Paging walks the whole set with no skip and no duplicate" acceptance
-// criterion: 60 rows (more than two pages at 25 each) are reachable exactly
-// once each by following next_cursor to the end, and the order across page
-// boundaries stays newest-first.
+// TestGetTransactionsPagingWalksTheWholeSetWithNoSkipOrDuplicate: 60 rows
+// (more than two pages at 25) are reachable exactly once each by following
+// next_cursor, newest-first across page boundaries.
 func TestGetTransactionsPagingWalksTheWholeSetWithNoSkipOrDuplicate(t *testing.T) {
 	t.Parallel()
 	sqlDB := testStoreDB(t)
@@ -455,13 +435,10 @@ func TestGetTransactionsPagingWalksTheWholeSetWithNoSkipOrDuplicate(t *testing.T
 	}
 }
 
-// TestGetTransactionsPagingHandlesABackdatedInsertBetweenPageFetches is
-// #225's required test: a row inserted after page 1 is fetched, dated
-// older than everything on page 1 but inside page 2's date range, must
-// appear on page 2 exactly once - proving the keyset cursor (occurred_on,
-// id) rather than LIMIT/OFFSET is what actually runs, since an offset would
-// have silently skipped or duplicated a row landing in the middle of the
-// list like this one does.
+// TestGetTransactionsPagingHandlesABackdatedInsertBetweenPageFetches: a row
+// inserted after page 1, older than everything on page 1 but inside page 2's
+// date range, appears on page 2 exactly once. That proves the keyset cursor
+// (occurred_on, id), since an offset would skip or duplicate it.
 func TestGetTransactionsPagingHandlesABackdatedInsertBetweenPageFetches(t *testing.T) {
 	t.Parallel()
 	sqlDB := testStoreDB(t)
@@ -480,9 +457,8 @@ func TestGetTransactionsPagingHandlesABackdatedInsertBetweenPageFetches(t *testi
 		t.Fatal("page 1 next_cursor = nil, want a cursor - 30 rows is more than one page")
 	}
 
-	// Lands strictly inside page 2's date range (2026-01-01..2026-01-05, the
-	// 5 rows page 1 did not cover) - older than every row already handed
-	// out on page 1, and it did not exist when page 1 was fetched.
+	// Lands inside page 2's date range (2026-01-01..2026-01-05) and did not
+	// exist when page 1 was fetched.
 	q := store.New(sqlDB)
 	backdated, err := q.CreateTransaction(context.Background(), store.CreateTransactionParams{
 		FundID: setup.Fund.ID, AccountID: setup.CashAccountID(t), PurposeID: setup.MainPurposeID,
@@ -520,9 +496,8 @@ func TestGetTransactionsPagingHandlesABackdatedInsertBetweenPageFetches(t *testi
 	}
 }
 
-// TestGetTransactionsSearchHitsNoteCaseInsensitive covers ADR-032's "search
-// over note" (Transaksi's own row in the List/Search-over table), and that
-// it is case-insensitive: q is lower-case, the note is not.
+// TestGetTransactionsSearchHitsNoteCaseInsensitive covers ADR-032's search
+// over note, case-insensitive: q is lower-case, the note is not.
 func TestGetTransactionsSearchHitsNoteCaseInsensitive(t *testing.T) {
 	t.Parallel()
 	r := testRouter(t)
@@ -552,8 +527,7 @@ func TestGetTransactionsSearchHitsNoteCaseInsensitive(t *testing.T) {
 	}
 }
 
-// TestGetTransactionsSearchHitsPurposeName is ADR-032's "search over
-// purpose name" half.
+// TestGetTransactionsSearchHitsPurposeName: ADR-032's search over purpose name.
 func TestGetTransactionsSearchHitsPurposeName(t *testing.T) {
 	t.Parallel()
 	r := testRouter(t)
@@ -591,9 +565,8 @@ func TestGetTransactionsSearchHitsPurposeName(t *testing.T) {
 	}
 }
 
-// TestGetTransactionsSearchHitsMemberName is ADR-032's "search over member
-// name" half - member name reaches a transaction row only through the
-// LEFT JOIN member (most rows carry no member_id at all).
+// TestGetTransactionsSearchHitsMemberName: ADR-032's search over member name,
+// which reaches a row only through the LEFT JOIN member.
 func TestGetTransactionsSearchHitsMemberName(t *testing.T) {
 	t.Parallel()
 	r := testRouter(t)
@@ -636,9 +609,8 @@ func TestGetTransactionsSearchHitsMemberName(t *testing.T) {
 	}
 }
 
-// TestGetTransactionsSearchAllDigitsMatchesExactAmount is ADR-032's "what
-// was that 50.000?" case: an all-digit q also matches amount exactly, not
-// as a substring of a larger figure.
+// TestGetTransactionsSearchAllDigitsMatchesExactAmount: an all-digit q also
+// matches amount exactly (ADR-032), not as a substring of a larger figure.
 func TestGetTransactionsSearchAllDigitsMatchesExactAmount(t *testing.T) {
 	t.Parallel()
 	r := testRouter(t)
@@ -662,9 +634,8 @@ func TestGetTransactionsSearchAllDigitsMatchesExactAmount(t *testing.T) {
 	}
 }
 
-// TestGetTransactionsSearchTreatsWildcardsAsLiteral is #225's "LIKE
-// wildcards in q are literal": a q containing % or _ must match only notes
-// containing that literal character, never act as a SQL LIKE wildcard.
+// TestGetTransactionsSearchTreatsWildcardsAsLiteral: a q containing % or _
+// matches only notes containing that literal, never as a LIKE wildcard.
 func TestGetTransactionsSearchTreatsWildcardsAsLiteral(t *testing.T) {
 	t.Parallel()
 	r := testRouter(t)
@@ -682,8 +653,7 @@ func TestGetTransactionsSearchTreatsWildcardsAsLiteral(t *testing.T) {
 
 	percentNote := "Diskon 10% dari toko"
 	mustPostNote(percentNote, "2026-08-01")
-	// If % were a wildcard rather than literal, q="10%" would also match
-	// this row - it has no percent sign, just more text after "10".
+	// If % were a wildcard, q="10%" would also match this row.
 	mustPostNote("Diskon 10X dari toko lain", "2026-08-02")
 
 	page := decodeTransactionsPage(t, getTransactionsQuery(t, r, "q="+url.QueryEscape("10%")))
@@ -696,8 +666,7 @@ func TestGetTransactionsSearchTreatsWildcardsAsLiteral(t *testing.T) {
 
 	underscoreNote := "Kode A_B dibeli"
 	mustPostNote(underscoreNote, "2026-08-03")
-	// If _ were a wildcard rather than literal, q="A_B" would also match
-	// this row - _ matches any single character in SQL LIKE.
+	// If _ were a wildcard, q="A_B" would also match this row.
 	mustPostNote("Kode AXB dibeli juga", "2026-08-04")
 
 	page2 := decodeTransactionsPage(t, getTransactionsQuery(t, r, "q=A_B"))
@@ -709,12 +678,10 @@ func TestGetTransactionsSearchTreatsWildcardsAsLiteral(t *testing.T) {
 	}
 }
 
-// TestGetTransactionsMemberIDAndDuesPeriodFiltersIncludeTheReversal is
-// #225's member_id/dues_period filter, exercised the way its one real
-// caller (Dues/MemberPayments.tsx) uses it: both the kind='dues' payment
-// and the kind='adjustment' row that reverses it carry the same
-// member_id/dues_period (ADR-029), so both must show under the filter -
-// and rows for another member or another period must not.
+// TestGetTransactionsMemberIDAndDuesPeriodFiltersIncludeTheReversal: the
+// kind='dues' payment and the kind='adjustment' row reversing it carry the
+// same member_id/dues_period (ADR-029), so both show under the filter, and
+// rows for another member or period do not.
 func TestGetTransactionsMemberIDAndDuesPeriodFiltersIncludeTheReversal(t *testing.T) {
 	t.Parallel()
 	r := testRouter(t)
@@ -786,9 +753,8 @@ func TestGetTransactionsMemberIDAndDuesPeriodFiltersIncludeTheReversal(t *testin
 	}
 }
 
-// TestGetTransactionsMonthAndDirectionFilters is #424: ?month= keeps the
-// rows dated in that month, ?direction= the rows going that way, and the two
-// compose - an outflow in August, and nothing from July or going in.
+// TestGetTransactionsMonthAndDirectionFilters (#424): ?month= keeps rows in
+// that month, ?direction= rows going that way, and they compose.
 func TestGetTransactionsMonthAndDirectionFilters(t *testing.T) {
 	t.Parallel()
 	r := testRouter(t)
@@ -836,8 +802,8 @@ func TestGetTransactionsMonthAndDirectionFilters(t *testing.T) {
 	}
 }
 
-// TestGetTransactionsRejectsAMalformedMonthOrDirection: a filter she cannot
-// see is one she cannot correct, so garbage is a 400, never the whole list.
+// TestGetTransactionsRejectsAMalformedMonthOrDirection: garbage is a 400,
+// never the whole list.
 func TestGetTransactionsRejectsAMalformedMonthOrDirection(t *testing.T) {
 	t.Parallel()
 	r := testRouter(t)
@@ -855,8 +821,7 @@ func TestGetTransactionsRejectsAMalformedMonthOrDirection(t *testing.T) {
 	}
 }
 
-// TestGetTransactionsRejectsAMalformedCursor is #225's "malformed cursor ->
-// 400" acceptance criterion.
+// TestGetTransactionsRejectsAMalformedCursor: a malformed cursor is 400 (#225).
 func TestGetTransactionsRejectsAMalformedCursor(t *testing.T) {
 	t.Parallel()
 	r := testRouter(t)
@@ -883,8 +848,7 @@ func TestGetTransactionsRejectsAMalformedCursor(t *testing.T) {
 	}
 }
 
-// TestGetTransactionsRejectsAMalformedMemberID is #225's "malformed ...
-// member_id -> 400" acceptance criterion.
+// TestGetTransactionsRejectsAMalformedMemberID: a malformed member_id is 400.
 func TestGetTransactionsRejectsAMalformedMemberID(t *testing.T) {
 	t.Parallel()
 	r := testRouter(t)
@@ -900,8 +864,8 @@ func TestGetTransactionsRejectsAMalformedMemberID(t *testing.T) {
 	}
 }
 
-// TestGetTransactionsRejectsAMalformedDuesPeriod covers the same "validate
-// types -> 400 on garbage" rule for dues_period as the member_id test above.
+// TestGetTransactionsRejectsAMalformedDuesPeriod: the same rule for
+// dues_period.
 func TestGetTransactionsRejectsAMalformedDuesPeriod(t *testing.T) {
 	t.Parallel()
 	r := testRouter(t)
@@ -920,9 +884,8 @@ func TestGetTransactionsRejectsAMalformedDuesPeriod(t *testing.T) {
 	}
 }
 
-// TestGetTransactionsNeverReturnsAnotherFundsRow is #225's "fund scoping
-// still holds" acceptance criterion, applied to the new paged/searched
-// query rather than the old unfiltered one.
+// TestGetTransactionsNeverReturnsAnotherFundsRow: fund scoping holds for the
+// paged/searched query (#225).
 func TestGetTransactionsNeverReturnsAnotherFundsRow(t *testing.T) {
 	t.Parallel()
 	sqlDB := testStoreDB(t)
@@ -936,9 +899,8 @@ func TestGetTransactionsNeverReturnsAnotherFundsRow(t *testing.T) {
 		t.Fatalf("POST /api/transactions = %d, want %d (body: %s)", rec.Code, http.StatusCreated, rec.Body.String())
 	}
 
-	// A second fund, written straight through the store - the API refuses a
-	// second fund by design (ErrFundAlreadyExists), same as
-	// fund_scope_test.go's own otherFundFixture.
+	// A second fund, written through the store; the API refuses a second fund
+	// (ErrFundAlreadyExists).
 	q := store.New(sqlDB)
 	ctx := context.Background()
 	otherFund, err := q.CreateFund(ctx, store.CreateFundParams{
@@ -975,9 +937,8 @@ func TestGetTransactionsNeverReturnsAnotherFundsRow(t *testing.T) {
 	}
 }
 
-// findTransactionRow locates one row of a decoded transactions page by id,
-// failing the test if it is not there - every test below asserts on the
-// specific row a system path just posted, not "some row in the page".
+// findTransactionRow locates one row of a decoded page by id, failing the
+// test if it is absent.
 func findTransactionRow(t *testing.T, page transactionsPageResponse, id int64) transactionResponse {
 	t.Helper()
 	for _, row := range page.Transactions {
@@ -989,9 +950,8 @@ func findTransactionRow(t *testing.T, page transactionsPageResponse, id int64) t
 	return transactionResponse{}
 }
 
-// #257: a dues payment's row carries the member it was paid for and its own
-// account's name, so TransactionList.tsx can build "{period} - {member}"
-// without a second request.
+// #257: a dues payment's row carries its member and account name, so
+// TransactionList.tsx can build "{period} - {member}" without another request.
 func TestGetTransactionsDuesPaymentCarriesMemberAndAccountName(t *testing.T) {
 	t.Parallel()
 	r := testRouter(t)
@@ -1022,9 +982,8 @@ func TestGetTransactionsDuesPaymentCarriesMemberAndAccountName(t *testing.T) {
 }
 
 // A dues reversal (kind='adjustment', reverses_transaction_id set) carries
-// the same member name as the payment it reverses - the label's "Pembatalan
-// - {period} - {member}" needs it on the reversal row itself, not only on
-// the original payment.
+// the payment's member name; the "Pembatalan - {period} - {member}" label
+// needs it on the reversal row.
 func TestGetTransactionsDuesReversalCarriesMemberName(t *testing.T) {
 	t.Parallel()
 	r := testRouter(t)
@@ -1060,8 +1019,8 @@ func TestGetTransactionsDuesReversalCarriesMemberName(t *testing.T) {
 	}
 }
 
-// The opening balance row carries its own account's name - the "Saldo awal
-// - {lokasi}" label's only fact besides its kind.
+// The opening balance row carries its account's name, for the "Saldo awal -
+// {lokasi}" label.
 func TestGetTransactionsOpeningBalanceCarriesAccountName(t *testing.T) {
 	t.Parallel()
 	r := testRouter(t)
@@ -1085,10 +1044,9 @@ func TestGetTransactionsOpeningBalanceCarriesAccountName(t *testing.T) {
 	}
 }
 
-// A settlement row (kind='reimbursement') carries the claim's own member and
-// note - its own Note stays nil (#257: nothing generated is ever stored) -
-// so the Talangan label can show "{member}" with the claim's note on the
-// note line.
+// A settlement row (kind='reimbursement') carries the claim's member and
+// note; its Note stays nil (#257), so the Talangan label shows the claim's
+// note.
 func TestGetTransactionsSettlementCarriesClaimMemberAndNote(t *testing.T) {
 	t.Parallel()
 	r := testRouter(t)
@@ -1133,10 +1091,8 @@ func TestGetTransactionsSettlementCarriesClaimMemberAndNote(t *testing.T) {
 	}
 }
 
-// A location transfer's two legs carry the SAME from/to account names, in
-// the transfer's own out->in order - never the leg's own direction flipping
-// which name is "from" (ListTransactionsPage's own comment has the
-// reasoning).
+// A location transfer's two legs carry the same from/to account names in the
+// transfer's out->in order, whichever leg this is (see ListTransactionsPage).
 func TestGetTransactionsLocationTransferBothLegsNameTheSameFromTo(t *testing.T) {
 	t.Parallel()
 	r := testRouter(t)
@@ -1184,10 +1140,8 @@ func TestGetTransactionsLocationTransferBothLegsNameTheSameFromTo(t *testing.T) 
 	}
 }
 
-// An incidental roll's leftover leg (reclass_purpose, envelope -> Kas
-// Utama) carries the two PURPOSE names, not account names - "{amplop} ->
-// Kas Utama" needs the envelope's own occasion and the fund's main purpose
-// name, on both legs identically.
+// An incidental roll's leftover leg (reclass_purpose, envelope -> Kas Utama)
+// carries the two purpose names, not account names, identically on both legs.
 func TestGetTransactionsIncidentalRollLeftoverCarriesEnvelopeToMainPurposeNames(t *testing.T) {
 	t.Parallel()
 	r := testRouter(t)
@@ -1230,9 +1184,8 @@ func TestGetTransactionsIncidentalRollLeftoverCarriesEnvelopeToMainPurposeNames(
 	}
 }
 
-// The shortfall direction rolls the other way - Kas Utama covers the
-// envelope - and the from/to names follow that direction exactly, never the
-// leftover case's fixed order.
+// The shortfall rolls the other way (Kas Utama covers the envelope), and the
+// from/to names follow that direction.
 func TestGetTransactionsIncidentalRollShortfallCarriesMainToEnvelopePurposeNames(t *testing.T) {
 	t.Parallel()
 	r := testRouter(t)
@@ -1278,12 +1231,9 @@ func TestGetTransactionsIncidentalRollShortfallCarriesMainToEnvelopePurposeNames
 	}
 }
 
-// Fund isolation for every new field (#257): a second fund's member,
-// account and purpose names must never appear on our fund's own rows, even
-// though the underlying ids can collide across funds (each table's own
-// primary key is a per-fund-scoped identity in this schema's composite FKs,
-// but nothing stops two funds naming their own account "Tunai" or their own
-// member "Budi" - same text, different rows).
+// Fund isolation for every new field (#257): a second fund's member, account
+// and purpose names never appear on our fund's rows, though two funds can
+// name an account "Tunai" or a member "Budi".
 func TestGetTransactionsNewFieldsNeverLeakAnotherFundsNames(t *testing.T) {
 	t.Parallel()
 	sqlDB := testStoreDB(t)
@@ -1299,10 +1249,8 @@ func TestGetTransactionsNewFieldsNeverLeakAnotherFundsNames(t *testing.T) {
 		t.Fatalf("POST /api/dues-payments = %d, want %d (body: %s)", payRec.Code, http.StatusCreated, payRec.Body.String())
 	}
 
-	// A second fund, written straight through the store (the API refuses a
-	// second fund by design) - same account/member/purpose names as ours, so
-	// a leak would read as a plausible row rather than an obviously wrong
-	// one.
+	// A second fund written through the store, with the same account/member/
+	// purpose names as ours, so a leak would read as a plausible row.
 	q := store.New(sqlDB)
 	ctx := context.Background()
 	otherFund, err := q.CreateFund(ctx, store.CreateFundParams{
@@ -1351,12 +1299,10 @@ func TestGetTransactionsNewFieldsNeverLeakAnotherFundsNames(t *testing.T) {
 	}
 }
 
-// TestGetTransactionsPurposeIDFilterReachesAClosedEnvelope is #262's whole
-// point, and the reason this filter is the one that reaches the UI at all:
-// ADR-032 makes Riwayat -> Transaksi filtered to a purpose the only route
-// to a CLOSED envelope's record, so the filter must keep answering after
-// the envelope is closed - including for the roll-out leg closing posts
-// against that same purpose.
+// TestGetTransactionsPurposeIDFilterReachesAClosedEnvelope (#262): ADR-032
+// makes Riwayat -> Transaksi filtered to a purpose the only route to a
+// closed envelope's record, so the filter must keep answering after the
+// close, including for the roll-out leg posted against that purpose.
 func TestGetTransactionsPurposeIDFilterReachesAClosedEnvelope(t *testing.T) {
 	t.Parallel()
 	r := testRouter(t)
@@ -1365,8 +1311,8 @@ func TestGetTransactionsPurposeIDFilterReachesAClosedEnvelope(t *testing.T) {
 
 	envelope := decodeIncidental(t, postIncidental(t, r, openIncidentalRequest{Occasion: "Kurban", OpenedOn: "2026-08-01"}))
 
-	// One contribution into the envelope, and one row against Kas Utama on
-	// the same day that the filter must exclude.
+	// One contribution into the envelope, and one Kas Utama row the same day
+	// that the filter must exclude.
 	if rec := postTransaction(t, r, transactionRequest{
 		AccountID: cash, PurposeID: envelope.PurposeID, Direction: "in", Amount: 300_000, OccurredOn: "2026-08-02",
 	}); rec.Code != http.StatusCreated {
@@ -1392,16 +1338,14 @@ func TestGetTransactionsPurposeIDFilterReachesAClosedEnvelope(t *testing.T) {
 		}
 	}
 	// The contribution, plus the roll-out leg the close posted against this
-	// same purpose (ADR-031) - never the Kas Utama row above.
+	// purpose (ADR-031), never the Kas Utama row.
 	if len(page.Transactions) != 2 {
 		t.Errorf("purpose_id filter returned %d rows, want 2 (the contribution and the roll-out leg): %+v", len(page.Transactions), page.Transactions)
 	}
 }
 
-// TestGetTransactionsPurposeIDFilterComposesWithSearch is the acceptance
-// criterion that the filter narrows the same list q searches rather than
-// replacing it: both clauses must hold at once, so a note matching q under
-// another purpose stays out.
+// TestGetTransactionsPurposeIDFilterComposesWithSearch: the filter narrows
+// the list q searches, so a note matching q under another purpose stays out.
 func TestGetTransactionsPurposeIDFilterComposesWithSearch(t *testing.T) {
 	t.Parallel()
 	r := testRouter(t)
@@ -1436,9 +1380,8 @@ func TestGetTransactionsPurposeIDFilterComposesWithSearch(t *testing.T) {
 }
 
 // TestGetTransactionsRejectsAMalformedPurposeID holds purpose_id to the
-// same "validate types -> 400 on garbage" rule as member_id, including a
-// non-positive id: a filter she cannot see is one she cannot correct, so a
-// broken link says so rather than silently listing the whole ledger.
+// same rule as member_id, including a non-positive id: a broken link says so
+// rather than listing the whole ledger.
 func TestGetTransactionsRejectsAMalformedPurposeID(t *testing.T) {
 	t.Parallel()
 	r := testRouter(t)

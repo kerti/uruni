@@ -49,9 +49,8 @@ func TestPostAccountsRequiresAFund(t *testing.T) {
 	}
 }
 
-// #78's other half: POST /api/accounts is what lets a treasurer add a
-// location after setup, not only choose the starting set - a second bank
-// account, or one setup under-counted.
+// #78: POST /api/accounts lets a treasurer add a location after setup (a
+// second bank account, or one setup under-counted).
 func TestPostAccountsCreatesAndListReflectsIt(t *testing.T) {
 	t.Parallel()
 	r := testRouter(t)
@@ -91,9 +90,8 @@ func TestPostAccountsCreatesAndListReflectsIt(t *testing.T) {
 	if err := json.NewDecoder(list.Body).Decode(&accounts); err != nil {
 		t.Fatalf("decoding response: %v", err)
 	}
-	// setUpFund's cash+bank pair, plus the one just added - no cap on
-	// accounts per kind (#134's own "not in scope" ruling), so a second bank
-	// account is exactly as valid as the first.
+	// setUpFund's cash+bank pair, plus the one added; no cap per kind (#134), so a
+	// second bank account is as valid as the first.
 	if len(accounts) != 3 {
 		t.Fatalf("GET /api/accounts = %d rows, want 3 (setup's 2 plus the one just created)", len(accounts))
 	}
@@ -108,8 +106,8 @@ func TestPostAccountsCreatesAndListReflectsIt(t *testing.T) {
 	}
 }
 
-// A malformed kind is refused by the schema's own CHECK (kind IN
-// ('cash','bank')), not a hand-rolled enum check in the handler.
+// A malformed kind is refused by the schema's CHECK (kind IN
+// ('cash','bank')), not a handler enum check.
 func TestPostAccountsRejectsAMalformedKind(t *testing.T) {
 	t.Parallel()
 	r := testRouter(t)
@@ -125,7 +123,7 @@ func TestPostAccountsRejectsAMalformedKind(t *testing.T) {
 	}
 }
 
-// A blank or whitespace-only name is refused by the schema's own CHECK
+// A blank or whitespace-only name is refused by the schema's CHECK
 // (length(trim(name)) > 0).
 func TestPostAccountsRejectsABlankName(t *testing.T) {
 	t.Parallel()
@@ -186,11 +184,9 @@ func TestPatchAccountRenamesIt(t *testing.T) {
 	}
 }
 
-// TestPatchAccountInactiveOnAbsentPresentAndNull is #134's own account-
-// lifecycle test: inactive_on absent leaves it untouched, present with a
-// date retires the account, and present with null reinstates it - the same
-// three states members_test.go's TestPatchMemberInactiveOnAbsentPresentAndNull
-// already proves for member.inactive_on, applied to account.
+// TestPatchAccountInactiveOnAbsentPresentAndNull is #134's lifecycle test:
+// inactive_on absent leaves it, a date retires the account, null reinstates
+// it, the three states members_test.go proves for member.inactive_on.
 func TestPatchAccountInactiveOnAbsentPresentAndNull(t *testing.T) {
 	t.Parallel()
 	r := testRouter(t)
@@ -240,9 +236,8 @@ func TestPatchAccountInactiveOnAbsentPresentAndNull(t *testing.T) {
 	})
 }
 
-// Both fields at once: a rename and a retirement in the same PATCH, proving
-// the two *Set flags are independent, not a single "any field present"
-// switch.
+// Both fields at once, a rename and a retirement in one PATCH: the two *Set
+// flags are independent, not one "any field present" switch.
 func TestPatchAccountBothFieldsAtOnce(t *testing.T) {
 	t.Parallel()
 	r := testRouter(t)
@@ -265,8 +260,8 @@ func TestPatchAccountBothFieldsAtOnce(t *testing.T) {
 	}
 }
 
-// A blank or whitespace-only name is refused by the schema's own CHECK on
-// PATCH exactly as it is on POST.
+// A blank or whitespace-only name is refused by the schema's CHECK on PATCH as
+// on POST.
 func TestPatchAccountRejectsABlankName(t *testing.T) {
 	t.Parallel()
 	r := testRouter(t)
@@ -330,8 +325,7 @@ func TestPatchAccountRejectsMalformedJSON(t *testing.T) {
 	}
 }
 
-// A never-used duplicate deletes cleanly - #134's first account-lifecycle
-// half.
+// A never-used duplicate deletes cleanly (#134).
 func TestDeleteAccountRemovesANeverUsedDuplicate(t *testing.T) {
 	t.Parallel()
 	r := testRouter(t)
@@ -364,12 +358,10 @@ func TestDeleteAccountRemovesANeverUsedDuplicate(t *testing.T) {
 	}
 }
 
-// #134's second account-lifecycle half: an account with a real transaction
-// posted against it refuses the delete with a clean 409, not a 500 and not
-// a cascade - the treasurer needs inactive_on for this account instead
-// (updateAccount, tested above). No pre-check in the handler; this rides
-// the composite foreign key's own refusal, the same as
-// TestDeleteMemberWithTransactionsReturns409.
+// #134: an account with a transaction posted against it refuses the delete
+// with a clean 409, not a 500 or a cascade; the treasurer needs inactive_on
+// instead (updateAccount). No handler pre-check; it rides the composite
+// foreign key's refusal, as TestDeleteMemberWithTransactionsReturns409.
 func TestDeleteAccountWithTransactionsReturns409(t *testing.T) {
 	t.Parallel()
 	r := testRouter(t)
@@ -393,7 +385,7 @@ func TestDeleteAccountWithTransactionsReturns409(t *testing.T) {
 		t.Errorf("error code = %q, want %q", got.Code, "referenced_by_other_records")
 	}
 
-	// The account and its transaction both survive - nothing was cascaded.
+	// The account and its transaction both survive.
 	list := httptest.NewRecorder()
 	r.ServeHTTP(list, httptest.NewRequest(http.MethodGet, "/api/accounts", nil))
 	var accounts []accountResponse
@@ -426,10 +418,10 @@ func TestDeleteAccountReturns404ForAnUnknownID(t *testing.T) {
 	}
 }
 
-// #230's uniform rule applied to POST /api/accounts: an optional
-// opening_balance rides the same request and posts inside the same
-// transaction as the account. This is the ordinary path: a positive amount
-// creates the account and the balance shows up wherever balances are read.
+// #230 applied to POST /api/accounts: an optional opening_balance rides the
+// request and posts in the account's transaction. The ordinary path: a
+// positive amount creates the account and the balance shows wherever balances
+// are read.
 func TestPostAccountsWithOpeningBalanceCreatesAndBalancesReflectIt(t *testing.T) {
 	t.Parallel()
 	r := testRouter(t)
@@ -481,8 +473,8 @@ func TestPostAccountsWithOpeningBalanceCreatesAndBalancesReflectIt(t *testing.T)
 	}
 }
 
-// A zero-amount opening balance creates the account and posts no row -
-// absent and zero are the same thing.
+// A zero opening balance creates the account and posts no row; absent and
+// zero are the same.
 func TestPostAccountsWithZeroOpeningBalanceCreatesAccountNoTransaction(t *testing.T) {
 	t.Parallel()
 	r := testRouter(t)
@@ -502,8 +494,8 @@ func TestPostAccountsWithZeroOpeningBalanceCreatesAccountNoTransaction(t *testin
 	}
 }
 
-// A negative opening balance refuses the whole request - no account is
-// created either, because the two are born together or not at all (#230).
+// A negative opening balance refuses the whole request, creating no account
+// either: the two are born together or not at all (#230).
 func TestPostAccountsRejectsNegativeOpeningBalanceCreatesNoAccount(t *testing.T) {
 	t.Parallel()
 	r := testRouter(t)
@@ -529,8 +521,7 @@ func TestPostAccountsRejectsNegativeOpeningBalanceCreatesNoAccount(t *testing.T)
 	}
 }
 
-// A malformed occurred_on in the opening balance refuses the whole request
-// the same way.
+// A malformed occurred_on in the opening balance refuses the whole request alike.
 func TestPostAccountsRejectsInvalidOpeningBalanceOccurredOnCreatesNoAccount(t *testing.T) {
 	t.Parallel()
 	r := testRouter(t)
@@ -556,8 +547,8 @@ func TestPostAccountsRejectsInvalidOpeningBalanceOccurredOnCreatesNoAccount(t *t
 	}
 }
 
-// decodeAccountsList is GET /api/accounts, decoded - shared by the refusal
-// tests above to prove a rejected create left the roster untouched.
+// decodeAccountsList decodes GET /api/accounts, for the refusal tests to prove
+// a rejected create left the roster untouched.
 func decodeAccountsList(t *testing.T, r http.Handler) []accountResponse {
 	t.Helper()
 	rec := httptest.NewRecorder()
@@ -572,15 +563,14 @@ func decodeAccountsList(t *testing.T, r http.Handler) []accountResponse {
 	return accounts
 }
 
-// mainPurposeID's last branch (internal/ledger): a fund that somehow has no
-// kind='main' purpose. purpose_single_main makes this unreachable through any
-// route - SetUpFund writes the row and nothing deletes it - so the row is
-// removed underneath the handler with raw SQL, the only honest way to reach
-// defensive code that exists precisely because the invariant could be
-// violated by something outside this package (a hand-edited database, a
-// botched restore). It must answer a clean 500 envelope, never panic on the
-// zero id, and must not create the account either - CreateAccount's own
-// withTx still rolls back.
+// mainPurposeID's last branch (internal/ledger): a fund with no kind='main'
+// purpose. purpose_single_main makes this unreachable through any route
+// (SetUpFund writes the row and nothing deletes it), so the row is removed
+// with raw SQL, the only honest way to reach defensive code that exists
+// because something outside this package (a hand-edited database, a botched
+// restore) could violate the invariant. It must answer a clean 500 envelope,
+// never panic on the zero id, and not create the account (CreateAccount's
+// withTx rolls back).
 func TestPostAccountsWithOpeningBalanceAndNoMainPurposeIs500(t *testing.T) {
 	t.Parallel()
 	sqlDB := testStoreDB(t)
@@ -611,9 +601,9 @@ func TestPostAccountsWithOpeningBalanceAndNoMainPurposeIs500(t *testing.T) {
 	}
 }
 
-// postRawTo sends a body this package's typed helpers cannot express - a
-// malformed document, or a well-formed one whose field types are wrong.
-// Everything else goes through postAccount.
+// postRawTo sends a body the typed helpers cannot express: a malformed
+// document, or a well-formed one with wrong field types. Everything else uses
+// postAccount.
 func postRawTo(t *testing.T, r http.Handler, path, body string) *httptest.ResponseRecorder {
 	t.Helper()
 	rec := httptest.NewRecorder()
@@ -636,10 +626,10 @@ func TestPostAccountsRejectsMalformedJSON(t *testing.T) {
 	}
 }
 
-// A body that parses as an object but whose field holds the wrong type is a
-// different path through decodeUpdateAccountRequest than "{oops": the outer
-// Decode succeeds and the per-field json.Unmarshal is what fails. Both must
-// answer invalid_json rather than reaching the store with a zero value.
+// A body that parses as an object with a wrong-typed field takes a different
+// path through decodeUpdateAccountRequest than "{oops": the outer Decode
+// succeeds and the per-field json.Unmarshal fails. Both must answer
+// invalid_json, not reach the store with a zero value.
 func TestPatchAccountRejectsAFieldOfTheWrongType(t *testing.T) {
 	t.Parallel()
 	r := testRouter(t)
@@ -658,18 +648,16 @@ func TestPatchAccountRejectsAFieldOfTheWrongType(t *testing.T) {
 	}
 }
 
-// Deliberately not covered, following the precedent
-// TestGetBalancesOnADeadDatabaseIs500 sets out: the mapSQLiteError/
-// mapLedgerError branches in listAccounts and createAccount's own resolveFund
-// call fire only when a store read fails, and #116's session gate reads the
-// store first - so on a closed database the gate answers the identical 500
-// envelope and the handler never runs. They stay as honest defensive code
-// rather than growing an injection seam for branches that can only ever fire
-// together.
+// Deliberately not covered, following TestGetBalancesOnADeadDatabaseIs500: the
+// mapSQLiteError/mapLedgerError branches in listAccounts and createAccount's
+// resolveFund call fire only when a store read fails, and #116's session gate
+// reads the store first, so on a closed database the gate answers the same 500
+// and the handler never runs. They stay as defensive code rather than gain an
+// injection seam for branches that can only fire together.
 
-// A location's kind is a label, not a rule about the money in it - nothing
-// in internal/ledger branches on it - so entering the wrong one is a typo
-// with a correction, exactly like a misspelt name.
+// A location's kind is a label, not a rule about the money (nothing in
+// internal/ledger branches on it), so the wrong one is a typo with a
+// correction, like a misspelt name.
 func TestPatchAccountChangesTheKind(t *testing.T) {
 	t.Parallel()
 	r := testRouter(t)
@@ -686,14 +674,14 @@ func TestPatchAccountChangesTheKind(t *testing.T) {
 	if updated.Kind != "bank" {
 		t.Errorf("Kind = %q, want %q", updated.Kind, "bank")
 	}
-	// The name is untouched: an absent key still means "leave alone".
+	// The name is untouched: an absent key means "leave alone".
 	if updated.Name != "Tunai" {
 		t.Errorf("Name = %q, want it unchanged (%q)", updated.Name, "Tunai")
 	}
 }
 
-// The set of kinds is the schema's CHECK to police, not the handler's
-// (ADR-027) - it comes back as 400 through mapSQLiteError.
+// The set of kinds is the schema's CHECK to police (ADR-027): 400 through
+// mapSQLiteError.
 func TestPatchAccountRejectsAnUnknownKind(t *testing.T) {
 	t.Parallel()
 	r := testRouter(t)
@@ -705,9 +693,8 @@ func TestPatchAccountRejectsAnUnknownKind(t *testing.T) {
 	}
 }
 
-// #474: retiring a location that still holds money answers 409
-// account_holds_money and leaves it active; once Pindah lokasi has emptied
-// it, the same PATCH retires it.
+// #474: retiring a location that holds money answers 409 account_holds_money
+// and leaves it active; once Pindah lokasi empties it, the same PATCH retires it.
 func TestPatchAccountRefusesToRetireALocationHoldingMoney(t *testing.T) {
 	t.Parallel()
 	r := testRouter(t)
@@ -737,8 +724,8 @@ func TestPatchAccountRefusesToRetireALocationHoldingMoney(t *testing.T) {
 	}
 }
 
-// Below zero is its own refusal (#474): nothing to move, so the code - and
-// the client's sentence - points at a count instead of Pindah lokasi.
+// Below zero is its own refusal (#474): nothing to move, so the code and the
+// client's sentence point at a count, not Pindah lokasi.
 func TestPatchAccountRefusesToRetireALocationBelowZero(t *testing.T) {
 	t.Parallel()
 	r := testRouter(t)

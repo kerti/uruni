@@ -9,9 +9,9 @@ import (
 	"github.com/kerti/uruni/internal/store"
 )
 
-// The property the whole package exists to prove: a transfer moves money, it
-// does not create or destroy it. Mirrors internal/db's
-// TestTransferKindRequiresATransfer, asserted here at the domain layer.
+// The property the package exists to prove: a transfer moves money, it does
+// not create or destroy it. Mirrors internal/db's
+// TestTransferKindRequiresATransfer at the domain layer.
 func TestPostTransferBetweenAccountsLeavesFundBalanceUnchanged(t *testing.T) {
 	t.Parallel()
 	l := newTestLedger(t)
@@ -51,9 +51,9 @@ func TestPostTransferBetweenAccountsLeavesFundBalanceUnchanged(t *testing.T) {
 	}
 }
 
-// AccountBalance moves by exactly the amount on both sides, in opposite
-// directions. PurposeBalance, in contrast, does not move at all - the
-// purpose did not change, only where the money sits.
+// AccountBalance moves by exactly the amount on both sides, oppositely.
+// PurposeBalance does not move: the purpose did not change, only where the
+// money sits.
 func TestPostTransferBetweenAccountsMovesBothAccountBalancesOppositely(t *testing.T) {
 	t.Parallel()
 	l := newTestLedger(t)
@@ -163,11 +163,9 @@ func TestPostTransferBetweenAccountsWritesOneTransferRowAndBothLegsReferenceIt(t
 	}
 }
 
-// Atomicity: a pair whose second leg violates the schema leaves zero rows
-// behind, not one. A second, identical call to the same accounts with the
-// same purpose is legal on its own, so this forces the violation with a
-// destination account that belongs to another fund entirely - the composite
-// FK the schema enforces.
+// Atomicity: a pair whose second leg violates the schema leaves zero rows, not
+// one. An identical call to the same accounts is legal, so the violation is
+// forced with a destination account of another fund: the composite FK.
 func TestPostTransferBetweenAccountsLeavesNoRowsWhenTheSecondLegFails(t *testing.T) {
 	t.Parallel()
 	l := newTestLedger(t)
@@ -262,10 +260,9 @@ func TestPostTransferBetweenAccountsRejectsInvalidOccurredOn(t *testing.T) {
 	}
 }
 
-// Two identical legs - here, the same account on both sides of the same
-// purpose - would satisfy every schema CHECK while meaning nothing: a
-// same-account, same-purpose pair that moves no money and nets to zero
-// twice over. It is rejected before the write.
+// Two identical legs (the same account on both sides of the same purpose)
+// would satisfy every schema CHECK while meaning nothing: a pair that moves
+// no money. It is rejected before the write.
 func TestPostTransferBetweenAccountsRejectsIdenticalLegs(t *testing.T) {
 	t.Parallel()
 	l := newTestLedger(t)
@@ -290,10 +287,9 @@ func TestPostTransferBetweenAccountsRejectsIdenticalLegs(t *testing.T) {
 	}
 }
 
-// The note is the treasurer's explanation of why money moved, and one
-// movement is one thing that happened - so it belongs on both legs. A note
-// on the "out" leg alone reads, in the transaction list, as an unexplained
-// arrival somewhere else.
+// The note is the treasurer's explanation of why money moved, and one movement
+// is one thing that happened, so it belongs on both legs; a note on the "out"
+// leg alone reads in the list as an unexplained arrival elsewhere.
 func TestPostTransferBetweenAccountsWritesTheNoteToBothLegs(t *testing.T) {
 	t.Parallel()
 	l := newTestLedger(t)
@@ -324,9 +320,8 @@ func TestPostTransferBetweenAccountsWritesTheNoteToBothLegs(t *testing.T) {
 	}
 }
 
-// A form field left untouched arrives as "" (or spaces). Storing that would
-// put an empty note line in the transaction list where there is nothing to
-// say, so absence has exactly one representation in the ledger: NULL.
+// A form field left untouched arrives as "" (or spaces). Storing it would put
+// an empty note line in the list, so absence has one representation: NULL.
 func TestPostTransferBetweenAccountsStoresNoNoteForABlankOne(t *testing.T) {
 	t.Parallel()
 	for _, blank := range []string{"", "   ", "\t\n"} {
