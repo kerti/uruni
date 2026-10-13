@@ -1,3 +1,7 @@
+# Strict up-to-date protection and human-only merges make every open PR rebase
+# and re-run CI after each merge, so minor and patch bumps arrive as one PR per
+# ecosystem; majors stay separate for review. Lockstep groups come first:
+# Dependabot puts a dependency in the first group it matches.
 version: 2
 updates:
   - package-ecosystem: gomod
@@ -5,6 +9,10 @@ updates:
     schedule:
       interval: weekly
     labels: [dependencies]
+    groups:
+      gomod-minor-patch:
+        patterns: ["*"]
+        update-types: [minor, patch]
   - package-ecosystem: npm
     directory: "/web"
     schedule:
@@ -23,6 +31,9 @@ updates:
       react:
         # react-dom requires the exact same react; the types follow them.
         patterns: ["react", "react-dom", "@types/react", "@types/react-dom"]
+      npm-minor-patch:
+        patterns: ["*"]
+        update-types: [minor, patch]
   - package-ecosystem: github-actions
     directory: "/"
     schedule:
@@ -34,3 +45,27 @@ updates:
       # version X, but running version Y"), so they must bump in one PR.
       codeql-action:
         patterns: ["github/codeql-action*"]
+      actions-minor-patch:
+        patterns: ["*"]
+        update-types: [minor, patch]
+  # Images are pinned as tag@sha256 (Dockerfile, compose); these keep the digests
+  # moving. A golang bump must ride with go.mod's toolchain line
+  # (TestDockerfileGoMatchesToolchain).
+  - package-ecosystem: docker
+    directory: "/"
+    schedule:
+      interval: weekly
+    labels: [dependencies]
+    groups:
+      docker-minor-patch:
+        patterns: ["*"]
+        update-types: [minor, patch]
+  - package-ecosystem: docker-compose
+    directory: "/"
+    schedule:
+      interval: weekly
+    labels: [dependencies]
+    groups:
+      compose-minor-patch:
+        patterns: ["*"]
+        update-types: [minor, patch]
