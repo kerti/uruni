@@ -2,7 +2,7 @@
         run serve-bin build test test-cover lint fmt tidy sqlc migrate-up migrate-down migrate-status db-reset \
         web-install web-dev web-build web-lint web-fmt web-fmt-check web-typecheck web-test \
         server-stop server-restart web-stop web-restart restart servers-status \
-        e2e e2e-ci e2e-install e2e-reset e2e-server stack-up stack-down stack-logs stack-ps \
+        e2e e2e-ci e2e-install e2e-reset e2e-server stack-up stack-up-local stack-down stack-logs stack-ps \
         dev-user start-task check
 
 # `make` with no target prints help.
@@ -136,6 +136,7 @@ help:
 	@echo ""
 	@echo "Self-host stack (the operator's docker-compose.yml - not the dev loop):"
 	@echo "  stack-up                start the compose stack in the background"
+	@echo "  stack-up-local          build the image from this tree, then start the stack on it"
 	@echo "  stack-down              stop it"
 	@echo "  stack-logs              follow its logs"
 	@echo "  stack-ps                show service status"
@@ -431,6 +432,11 @@ e2e-server: e2e-reset
 
 stack-up:
 	docker compose -f $(COMPOSE) up -d
+
+# Overrides the image name and tag only for this invocation; .env is untouched.
+stack-up-local:
+	docker build -t uruni-local:local .
+	URUNI_IMAGE=uruni-local URUNI_TAG=local docker compose -f $(COMPOSE) up -d
 
 stack-down:
 	docker compose -f $(COMPOSE) down
