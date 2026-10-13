@@ -57,3 +57,5 @@ USER nonroot:nonroot
 HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
     CMD ["/uruni", "healthcheck"]
 ENTRYPOINT ["/uruni"]
+# Without a CMD the entrypoint exits "no command given" and the container loops.
+CMD ["serve"]
