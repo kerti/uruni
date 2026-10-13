@@ -10,12 +10,71 @@ on:
 
 permissions:
   contents: read
-  packages: write
 
 jobs:
+  # "Never tag a red main", enforced: the tag must sit on main and main's required
+  # checks must already be green on that exact commit. One read, no waiting - a
+  # check still running means the tag was pushed too early.
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      checks: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Tag is on main
+        run: |
+          git fetch --no-tags origin main
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+            echo "::error::$GITHUB_REF_NAME ($GITHUB_SHA) is not reachable from main"
+            exit 1
+          fi
+      - name: Required checks are green
+        env:
+          GH_TOKEN: ${{ github.token }}
+          # Mirrors main's branch protection (GITHUB_TOKEN cannot read it). The
+          # "CodeQL" context is not a check run of this repo's workflows, so its two
+          # Analyze runs (codeql.yml) stand in for it.
+          REQUIRED: |
+            Backend (lint + test)
+            Frontend (lint + typecheck + test + build)
+            E2E / Playwright
+            scan
+            Analyze (go)
+            Analyze (javascript-typescript)
+        run: |
+          gh api "repos/$GITHUB_REPOSITORY/commits/$GITHUB_SHA/check-runs?per_page=100" --paginate \
+            --jq '.check_runs[] | [.id, .name, (.conclusion // .status)] | @tsv' > runs.tsv
+          failed=0
+          while IFS= read -r name; do
+            [ -n "$name" ] || continue
+            # A re-run has a higher id; the latest run of a name decides.
+            result=$(awk -F'\t' -v n="$name" '$2 == n && $1 > id { id = $1; r = $3 } END { print r }' runs.tsv)
+            if [ "$result" != "success" ]; then
+              echo "::error::required check \"$name\" is ${result:-missing} on $GITHUB_SHA"
+              failed=1
+            fi
+          done <<< "$REQUIRED"
+          exit "$failed"
+
+  # The full suite, not just @smoke, before an image exists to pull.
+  e2e:
+    needs: verify
+    uses: ./.github/workflows/e2e-run.yml
+    with:
+      tier: full
+
   image:
+    needs: [verify, e2e]
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
