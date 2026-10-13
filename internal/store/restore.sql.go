@@ -41,20 +41,14 @@ const deleteAllFunds = `-- name: DeleteAllFunds :exec
 DELETE FROM fund
 `
 
-// Restore's own queries (M6.39, #325, ADR-012): every table this package's
-// normal Create* queries also cover, plus two restore only needs. A normal
-// Create* never takes id - the schema assigns it - so restore, which must
-// preserve every id verbatim (ADR-012's obligation 2), needs its own insert
-// naming id explicitly instead of reusing them. The DeleteAll* queries are
-// restore's other own need: clearing a table in full before re-inserting
-// exactly what the file holds, the same "delete all sessions" shape
-// DeleteAllSessions (session.sql) already established for a password reset.
+// Restore's queries (ADR-012). A normal Create* never takes id, but restore
+// must preserve every id verbatim (ADR-012 obligation 2), so each table gets an
+// insert naming id. The DeleteAll* queries clear a table in full before
+// re-inserting exactly what the file holds.
 //
-// Table order below follows Document's own field order (internal/backup/
-// backup.go), itself the migration file's dependency order - not because
-// these statements must run in that order (internal/backup/restore.go's own
-// comment says why they need not), but so this file reads the same way the
-// schema and the export already do.
+// Table order follows Document's field order (internal/backup/backup.go), the
+// schema's dependency order; the statements need not run in it (see
+// internal/backup/restore.go).
 func (q *Queries) DeleteAllFunds(ctx context.Context) error {
 	_, err := q.db.ExecContext(ctx, deleteAllFunds)
 	return err
@@ -487,11 +481,10 @@ type RestoreTransactionParams struct {
 	CreatedAt             int64
 }
 
-// RestoreTransaction is the one insert restore.go must sequence with care
-// (ADR-012's obligation 1): "transaction" keeps its transaction_named_row_shape
-// BEFORE INSERT trigger live through a restore - on purpose, it is what
+// The one insert restore.go must sequence (ADR-012 obligation 1):
+// transaction_named_row_shape stays live through a restore, on purpose - it
 // refuses a hand-edited or corrupted backup - so every row naming a
-// reverses_transaction_id must still be inserted after the row it names.
+// reverses_transaction_id must be inserted after the row it names.
 func (q *Queries) RestoreTransaction(ctx context.Context, arg RestoreTransactionParams) error {
 	_, err := q.db.ExecContext(ctx, restoreTransaction,
 		arg.ID,

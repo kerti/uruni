@@ -12,8 +12,8 @@ RETURNING id, fund_id, reconciliation_id, account_id, recorded_amount, actual_am
 -- (actual - recorded). left_open: the whole difference. matched: 0. adjusted
 -- and entry_added: difference - signed(fix), where the fix is the entry the
 -- line points at (+ for in, - for out). An entry_added line from before #498
--- points at nothing, and reads as closed (0): its remainder was never
--- recorded and cannot be known. The same expression reads in
+-- points at nothing and reads as closed (0): its remainder was never recorded
+-- and cannot be known. The same expression appears in
 -- ListOpenReconciliationLinesByFund, ListReconciliationsPage and
 -- ReportOpenReconciliationLines - keep the four in step.
 --
@@ -36,12 +36,9 @@ LEFT JOIN "transaction" fix ON fix.fund_id = rl.fund_id AND fix.id = rl.adjustme
 WHERE rl.reconciliation_id = ?
 ORDER BY CASE a.kind WHEN 'cash' THEN 0 ELSE 1 END, a.name COLLATE NOCASE, a.id;
 
--- ListReconciliationLinesByFund is the backup export's own read (ADR-012,
--- #323): every line across every snapshot, matched or not - unlike
--- ListOpenReconciliationLinesByFund above, nothing here is filtered by
--- resolution or superseded by a later count, since a restore needs the
--- whole frozen history back, not just what is still open today. Ordered by
--- id purely for the export's own deterministic byte order.
+-- The backup export's read (ADR-012): every line across every snapshot, not
+-- filtered by resolution or superseded by a later count, since a restore needs
+-- the whole frozen history. Ordered by id only for deterministic export bytes.
 -- name: ListReconciliationLinesByFund :many
 SELECT id, fund_id, reconciliation_id, account_id, recorded_amount, actual_amount,
        difference_amount, resolution, adjustment_transaction_id
@@ -59,17 +56,14 @@ WHERE reconciliation_id = ?;
 
 -- Gaps still open: a line whose remainder_amount (see ListReconciliationLines)
 -- is non-zero - a left_open line, or an entry_added line whose entry did not
--- square the whole difference (#498) - but only while nothing later has
--- weighed in on the same location. Such a line stops counting as open the
--- moment a later snapshot has any line at all for that account_id -
--- matched, entry_added, adjusted, or left_open again all supersede it, since
--- the question is only "has this location been counted since", not how that
--- count came out. This is per location, not per snapshot: a later count that
--- skips an account leaves that account's gap open regardless of what else the
--- later snapshot resolved. "Later" means the owning reconciliation's
--- (performed_at, id), performed_at first - a snapshot is never edited
--- (ADR-024), so a superseded line stays in the table exactly as recorded; it
--- just stops being "open".
+-- square the whole difference (#498) - while nothing later has weighed in on
+-- the same location. A later snapshot with any line at all for that account_id
+-- supersedes it (matched, entry_added, adjusted or left_open again), since the
+-- question is only "has this location been counted since", not how that count
+-- came out. Per location, not per snapshot: a later count that skips an
+-- account leaves its gap open. "Later" means the owning reconciliation's
+-- (performed_at, id), performed_at first. A snapshot is never edited
+-- (ADR-024), so a superseded line stays as recorded; it just stops being open.
 -- name: ListOpenReconciliationLinesByFund :many
 SELECT rl.id, rl.fund_id, rl.reconciliation_id, rl.account_id, rl.recorded_amount,
        rl.actual_amount, rl.difference_amount, rl.resolution, rl.adjustment_transaction_id,

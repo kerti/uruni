@@ -37,9 +37,8 @@ const deleteDuesRatesByTier = `-- name: DeleteDuesRatesByTier :exec
 DELETE FROM dues_rate WHERE tier_id = ?
 `
 
-// Every rate belonging to one tier. Its own children, not history anyone was
-// charged under: a tier no member is in priced nothing, so its rates go with
-// it rather than standing in the way of deleting it.
+// A tier no member is in priced nothing, so its rates are not history anyone
+// was charged under and go with it.
 func (q *Queries) DeleteDuesRatesByTier(ctx context.Context, tierID int64) error {
 	_, err := q.db.ExecContext(ctx, deleteDuesRatesByTier, tierID)
 	return err
@@ -54,17 +53,13 @@ type DeleteDuesTierParams struct {
 	FundID int64
 }
 
-// DeleteDuesTier removes a tier the fund never put anyone in (#232) - the
-// setup typo, the golongan renamed into existence twice, never a tier with
-// history behind it. No pre-check for members: member's composite FK
-// (fund_id, tier_id) refuses it on its own, and a COUNT(*) first would only
-// race it - the same reasoning DeleteAccount's own handler documents.
+// Removes a tier the fund never put anyone in (#232): the setup typo, never a
+// tier with history. No pre-check for members: member's composite
+// (fund_id, tier_id) FK refuses it, and a COUNT(*) first would only race it.
 //
-// The caller runs this inside one transaction with DeleteDuesRatesByTier
-// below, rates first. Both orders of that pair matter: rates have their own
-// FK onto the tier, so the tier cannot go first, and if a member then
-// refuses the tier the whole transaction rolls back and the rates it had
-// already deleted come back with it.
+// The caller runs this in one transaction after DeleteDuesRatesByTier: rates
+// FK onto the tier so it cannot go first, and if a member then refuses the
+// tier the transaction rolls back and the deleted rates come back.
 func (q *Queries) DeleteDuesTier(ctx context.Context, arg DeleteDuesTierParams) error {
 	_, err := q.db.ExecContext(ctx, deleteDuesTier, arg.ID, arg.FundID)
 	return err
@@ -81,8 +76,7 @@ type GetDuesTierForFundParams struct {
 	FundID int64
 }
 
-// GetDuesTierForFund is the only single-tier lookup, fund-scoped for the
-// reason GetMemberForFund is (#188).
+// Fund-scoped like GetMemberForFund (#188).
 func (q *Queries) GetDuesTierForFund(ctx context.Context, arg GetDuesTierForFundParams) (DuesTier, error) {
 	row := q.db.QueryRowContext(ctx, getDuesTierForFund, arg.ID, arg.FundID)
 	var i DuesTier

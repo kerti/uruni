@@ -13,18 +13,15 @@ const ping = `-- name: Ping :one
 SELECT 1 AS ok
 `
 
-// Ping proves the store is reachable through the generated code (open,
-// migrate, query) without naming a table, which M1.3 deliberately has none of.
-// Every real query arrives with the schema at M2; this one stays as the
-// readiness probe /healthz calls.
+// The readiness probe /healthz calls: proves the store is reachable through the
+// generated code without naming a table.
 //
 // Every comment in this directory is pure ASCII, and that is load-bearing:
 // sqlc v1.31.1's SQLite engine measures a statement's end in runes but slices
 // the source in bytes, so each non-ASCII character in a query's leading
-// comment silently chops one more byte off the tail of the generated constant.
-// Three em dashes here used to cost six bytes, leaving `SELECT 1` where
-// `SELECT 1 AS ok` was written; it still ran, which is what makes it
-// dangerous. `LIMIT 1` losing its `1` does not. See ADR-024 and ADR-005.
+// comment silently chops one more byte off the tail of the generated constant
+// (`SELECT 1 AS ok` became `SELECT 1`). It still ran, which is what makes it
+// dangerous; `LIMIT 1` losing its `1` does not. See ADR-024 and ADR-005.
 func (q *Queries) Ping(ctx context.Context) (int64, error) {
 	row := q.db.QueryRowContext(ctx, ping)
 	var ok int64

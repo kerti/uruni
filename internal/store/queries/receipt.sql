@@ -15,55 +15,44 @@ FROM receipt
 WHERE reimbursement_id = ?
 ORDER BY id;
 
--- Fund-scoped fetch, the same shape as GetAccountForFund/GetReimbursement:
--- an id names a row, not permission to see it - and a receipt is the one
--- resource this API serves as raw bytes, so this is the only gate between a
--- session and someone else's photo (#153).
+-- Fund-scoped: a receipt is the one resource this API serves as raw bytes, so
+-- this is the only gate between a session and someone else's photo (#153).
 -- name: GetReceiptForFund :one
 SELECT id, fund_id, transaction_id, reimbursement_id, path, uploaded_at
 FROM receipt
 WHERE id = ? AND fund_id = ?;
 
--- Batched, fund-scoped lookup for a whole page of rows at once (#154) - one
--- query per list response, never one per row (N+1). fund_id is checked
--- alongside the id list rather than trusted alone: an id belonging to
--- another fund must never surface here, the same rule GetReceiptForFund
--- enforces for a single row. Ordered by id ascending so a caller that
--- appends rows in the order they arrive keeps that same order per parent
--- id, matching receipt_ids' own "ordered by id ascending" contract.
+-- Batched, fund-scoped lookup for a whole page of rows (#154): one query per
+-- list response, never one per row. fund_id is checked alongside the id list,
+-- so another fund's id never surfaces. Callers append in arrival order, which
+-- keeps receipt_ids in upload order per parent.
 -- name: ListReceiptIDsByTransactionIDs :many
 SELECT transaction_id, id
 FROM receipt
 WHERE fund_id = ? AND transaction_id IN (sqlc.slice('transaction_ids'))
 ORDER BY uploaded_at, id;
 
--- Same shape as ListReceiptIDsByTransactionIDs above, for GET
--- /api/reimbursements's page.
+-- Same, for GET /api/reimbursements's page.
 -- name: ListReceiptIDsByReimbursementIDs :many
 SELECT reimbursement_id, id
 FROM receipt
 WHERE fund_id = ? AND reimbursement_id IN (sqlc.slice('reimbursement_ids'))
 ORDER BY uploaded_at, id;
 
--- ListReceiptsByFund is the backup export's own read (ADR-012, #323): every
--- receipt row the fund owns, so the zip's receipts/ folder and uruni.json's
--- receipt rows name the same files (path is the on-disk filename under
--- URUNI_UPLOADS_DIR, ADR-011). Ordered by id purely for the export's own
--- deterministic byte order.
+-- The backup export's read (ADR-012): every receipt row, so the zip's receipts/
+-- folder and uruni.json name the same files (path is the on-disk filename
+-- under URUNI_UPLOADS_DIR, ADR-011). Ordered by id only for deterministic
+-- export bytes.
 -- name: ListReceiptsByFund :many
 SELECT id, fund_id, transaction_id, reimbursement_id, path, uploaded_at
 FROM receipt
 WHERE fund_id = ?
 ORDER BY id;
 
--- DeleteReceipt removes a wrong or duplicate photo - ADR-011 states plainly
--- that "a wrong photo is replaceable" and `receipt` rows are insertable and
--- deletable, unlike a ledger row. Scoped by id alone, the same shape as
--- DeleteAccount and DeleteReimbursement: the caller already fund-scoped the
--- row through GetReceiptForFund above before reaching this. It removes only
--- the database row - the file on disk is left in place; see
--- internal/http/receipts.go's own comment for why (ADR-011 already accepts
--- the orphan as cheaper than a transactional delete).
+-- Removes a wrong or duplicate photo; receipt rows are deletable, unlike a
+-- ledger row (ADR-011). Scoped by id alone: the caller fund-scoped the row via
+-- GetReceiptForFund. Only the database row goes - the file on disk stays, an
+-- orphan ADR-011 accepts as cheaper than a transactional delete.
 -- name: DeleteReceipt :exec
 DELETE FROM receipt
 WHERE id = ?;

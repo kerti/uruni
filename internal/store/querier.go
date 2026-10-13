@@ -15,41 +15,33 @@ type Querier interface {
 	// a correction backdated after the count keeps its higher id and stays outside
 	// the old snapshot's arithmetic while counting toward today's balance.
 	AccountBalanceThrough(ctx context.Context, arg AccountBalanceThroughParams) (int64, error)
-	// Closing an envelope moves no money, so this is an UPDATE rather than a ledger
-	// entry - incidental carries no immutability trigger for exactly this reason.
+	// Closing an envelope moves no money: an UPDATE, not a ledger entry, which is
+	// why incidental carries no immutability trigger.
 	CloseIncidental(ctx context.Context, arg CloseIncidentalParams) (Incidental, error)
 	// The named half of an envelope's participation (ADR-034): every named
-	// contribution posted against one purpose_id, summed per member - excluding
-	// a row some reversal points at, the same NOT EXISTS shape DuesPaidByPeriod
-	// already uses (ADR-029) so a reversed contribution disappears from "gave"
-	// rather than counting twice. member_id IS NOT NULL is redundant with the
-	// schema's own CHECK (kind='normal' AND direction='in' never carries a
-	// member outside a named contribution) but kept explicit rather than
-	// leaned on silently.
+	// contribution against one purpose_id, summed per member, excluding a row some
+	// reversal points at (the NOT EXISTS of DuesPaidByPeriod, ADR-029) so a
+	// reversed contribution disappears from "gave" rather than counting twice.
+	// member_id IS NOT NULL is redundant with the schema's CHECK but kept explicit.
 	//
-	// This says nothing about who was EXPECTED to give - that half is
-	// ListMembersByFund plus the envelope's opened_on and recipients, read and
-	// combined in Go (Ledger.GetIncidentalParticipation), never a second query
-	// trying to derive the same roster twice.
+	// Says nothing about who was EXPECTED to give: that is ListMembersByFund plus
+	// the envelope's opened_on and recipients, combined in Go
+	// (Ledger.GetIncidentalParticipation).
 	//
-	// through bounds it the way IncidentalActivityTotals's is bounded (#408).
+	// through bounds it as in IncidentalActivityTotals (#408).
 	ContributedByIncidentalMember(ctx context.Context, arg ContributedByIncidentalMemberParams) ([]ContributedByIncidentalMemberRow, error)
-	// CountUsers is how register (#114) knows whether the one-shot bootstrap
-	// account already exists (ADR-030 decision 2): the gate is the count, not a
-	// duplicate-email collision.
+	// How register (#114) knows whether the one-shot bootstrap account exists
+	// (ADR-030): the gate is the count, not a duplicate-email collision.
 	CountUsers(ctx context.Context) (int64, error)
 	CreateAccount(ctx context.Context, arg CreateAccountParams) (Account, error)
 	CreateDuesRate(ctx context.Context, arg CreateDuesRateParams) (DuesRate, error)
 	CreateDuesTier(ctx context.Context, arg CreateDuesTierParams) (DuesTier, error)
 	CreateFund(ctx context.Context, arg CreateFundParams) (Fund, error)
 	CreateIncidental(ctx context.Context, arg CreateIncidentalParams) (Incidental, error)
-	// The members an envelope is for (ADR-034), never expected to contribute
-	// themselves. Inserted one row at a time inside Ledger.OpenIncidental's and
-	// Ledger.SetIncidentalParticipation's own withTx - unscoped validation here,
-	// the same shape UpdateIncidentalOccasion's own comment argues for: both
-	// callers already hold a purpose_id (and, for SetIncidentalParticipation, a
-	// fund_id) proven to belong to the caller's fund by an earlier fund-scoped
-	// fetch in the same transaction.
+	// The members an envelope is for (ADR-034). Unscoped: both callers
+	// (Ledger.OpenIncidental, Ledger.SetIncidentalParticipation) already proved
+	// purpose_id belongs to the caller's fund by a fund-scoped fetch earlier in
+	// the same transaction.
 	CreateIncidentalRecipient(ctx context.Context, arg CreateIncidentalRecipientParams) error
 	CreateMember(ctx context.Context, arg CreateMemberParams) (Member, error)
 	CreatePurpose(ctx context.Context, arg CreatePurposeParams) (Purpose, error)
@@ -59,37 +51,28 @@ type Querier interface {
 	CreateReimbursement(ctx context.Context, arg CreateReimbursementParams) (Reimbursement, error)
 	CreateSession(ctx context.Context, arg CreateSessionParams) (Session, error)
 	CreateTransaction(ctx context.Context, arg CreateTransactionParams) (Transaction, error)
-	// corrects_transaction_id is nil for every transfer but a purpose
-	// correction (ADR-033) - between_accounts and CloseIncidentalAndRoll's own
-	// reclass_purpose rolls both pass nil, the same NULL the schema's CHECK
-	// requires of anything that is not kind='reclass_purpose'. reason (ADR-036)
-	// is 'roll' for CloseIncidentalAndRoll, 'allocation' for a purpose move, and
-	// nil for every other pair - the same CHECK holds it to a reclass_purpose
-	// pair that corrects nothing.
+	// corrects_transaction_id is nil for every transfer but a purpose correction
+	// (ADR-033); the schema's CHECK requires NULL of anything not
+	// kind='reclass_purpose'. reason (ADR-036) is 'roll' for
+	// CloseIncidentalAndRoll, 'allocation' for a purpose move, nil for every other
+	// pair - the CHECK holds it to a reclass_purpose pair that corrects nothing.
 	CreateTransfer(ctx context.Context, arg CreateTransferParams) (Transfer, error)
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
-	// DeleteAccount leans on the composite foreign keys from "transaction" and
-	// reconciliation_line to refuse it once real data references the account -
-	// for a never-used duplicate only; a used-then-retired account gets
-	// UpdateAccount's inactive_on instead.
+	// Leans on the composite FKs from "transaction" and reconciliation_line to
+	// refuse once real data references the account. For a never-used duplicate
+	// only; a used-then-retired account gets inactive_on via UpdateAccount.
 	DeleteAccount(ctx context.Context, id int64) error
 	DeleteAllAccounts(ctx context.Context) error
 	DeleteAllDuesRates(ctx context.Context) error
 	DeleteAllDuesTiers(ctx context.Context) error
-	// Restore's own queries (M6.39, #325, ADR-012): every table this package's
-	// normal Create* queries also cover, plus two restore only needs. A normal
-	// Create* never takes id - the schema assigns it - so restore, which must
-	// preserve every id verbatim (ADR-012's obligation 2), needs its own insert
-	// naming id explicitly instead of reusing them. The DeleteAll* queries are
-	// restore's other own need: clearing a table in full before re-inserting
-	// exactly what the file holds, the same "delete all sessions" shape
-	// DeleteAllSessions (session.sql) already established for a password reset.
+	// Restore's queries (ADR-012). A normal Create* never takes id, but restore
+	// must preserve every id verbatim (ADR-012 obligation 2), so each table gets an
+	// insert naming id. The DeleteAll* queries clear a table in full before
+	// re-inserting exactly what the file holds.
 	//
-	// Table order below follows Document's own field order (internal/backup/
-	// backup.go), itself the migration file's dependency order - not because
-	// these statements must run in that order (internal/backup/restore.go's own
-	// comment says why they need not), but so this file reads the same way the
-	// schema and the export already do.
+	// Table order follows Document's field order (internal/backup/backup.go), the
+	// schema's dependency order; the statements need not run in it (see
+	// internal/backup/restore.go).
 	DeleteAllFunds(ctx context.Context) error
 	DeleteAllIncidentalRecipients(ctx context.Context) error
 	DeleteAllIncidentals(ctx context.Context) error
@@ -99,100 +82,77 @@ type Querier interface {
 	DeleteAllReconciliationLines(ctx context.Context) error
 	DeleteAllReconciliations(ctx context.Context) error
 	DeleteAllReimbursements(ctx context.Context) error
-	// DeleteAllSessions signs every device out. A password reset (#287) calls it:
-	// the instance holds one login (ADR-030), so "every session" is exactly "every
-	// session of the account whose password just changed", and a reset that left
+	// Signs every device out, for a password reset (#287): the instance holds one
+	// login (ADR-030), so "every session" is that account's, and a reset that left
 	// an old cookie working would not be a reset.
 	DeleteAllSessions(ctx context.Context) error
 	DeleteAllTransactions(ctx context.Context) error
 	DeleteAllTransfers(ctx context.Context) error
-	// DeleteDuesRate is what makes a wrong-month rate correctable at all, since
-	// UNIQUE (tier_id, effective_from) refuses the corrected row otherwise.
+	// What makes a wrong-month rate correctable: UNIQUE (tier_id, effective_from)
+	// refuses the corrected row otherwise.
 	DeleteDuesRate(ctx context.Context, id int64) error
-	// Every rate belonging to one tier. Its own children, not history anyone was
-	// charged under: a tier no member is in priced nothing, so its rates go with
-	// it rather than standing in the way of deleting it.
+	// A tier no member is in priced nothing, so its rates are not history anyone
+	// was charged under and go with it.
 	DeleteDuesRatesByTier(ctx context.Context, tierID int64) error
-	// DeleteDuesTier removes a tier the fund never put anyone in (#232) - the
-	// setup typo, the golongan renamed into existence twice, never a tier with
-	// history behind it. No pre-check for members: member's composite FK
-	// (fund_id, tier_id) refuses it on its own, and a COUNT(*) first would only
-	// race it - the same reasoning DeleteAccount's own handler documents.
+	// Removes a tier the fund never put anyone in (#232): the setup typo, never a
+	// tier with history. No pre-check for members: member's composite
+	// (fund_id, tier_id) FK refuses it, and a COUNT(*) first would only race it.
 	//
-	// The caller runs this inside one transaction with DeleteDuesRatesByTier
-	// below, rates first. Both orders of that pair matter: rates have their own
-	// FK onto the tier, so the tier cannot go first, and if a member then
-	// refuses the tier the whole transaction rolls back and the rates it had
-	// already deleted come back with it.
+	// The caller runs this in one transaction after DeleteDuesRatesByTier: rates
+	// FK onto the tier so it cannot go first, and if a member then refuses the
+	// tier the transaction rolls back and the deleted rates come back.
 	DeleteDuesTier(ctx context.Context, arg DeleteDuesTierParams) error
-	// DeleteExpiredSessions is the lazy sweep: called as a side effect of a
-	// session write, never by a background ticker (ADR-013's scheduler stays
-	// out of it).
+	// The lazy sweep: a side effect of a session write, never a background ticker
+	// (ADR-013).
 	DeleteExpiredSessions(ctx context.Context, expiresAt int64) error
-	// The full-replace half of SetIncidentalParticipation (ADR-034): recipients
-	// are edited like occasion, not accumulated, so setting a new list clears the
-	// old one first. Unscoped by fund_id for the reason CreateIncidentalRecipient's
-	// own comment gives - purpose_id already belongs to the caller's fund by the
-	// time this runs.
+	// The full-replace half of SetIncidentalParticipation (ADR-034): a new list
+	// clears the old one first. Unscoped for the reason CreateIncidentalRecipient
+	// gives.
 	DeleteIncidentalRecipientsByPurpose(ctx context.Context, purposeID int64) error
-	// DeleteMember leans on the composite foreign keys from "transaction" and
-	// reimbursement to refuse it once a real row references the member.
+	// Leans on the composite FKs from "transaction" and reimbursement to refuse
+	// once a real row references the member.
 	DeleteMember(ctx context.Context, id int64) error
-	// DeleteReceipt removes a wrong or duplicate photo - ADR-011 states plainly
-	// that "a wrong photo is replaceable" and `receipt` rows are insertable and
-	// deletable, unlike a ledger row. Scoped by id alone, the same shape as
-	// DeleteAccount and DeleteReimbursement: the caller already fund-scoped the
-	// row through GetReceiptForFund above before reaching this. It removes only
-	// the database row - the file on disk is left in place; see
-	// internal/http/receipts.go's own comment for why (ADR-011 already accepts
-	// the orphan as cheaper than a transactional delete).
+	// Removes a wrong or duplicate photo; receipt rows are deletable, unlike a
+	// ledger row (ADR-011). Scoped by id alone: the caller fund-scoped the row via
+	// GetReceiptForFund. Only the database row goes - the file on disk stays, an
+	// orphan ADR-011 accepts as cheaper than a transactional delete.
 	DeleteReceipt(ctx context.Context, id int64) error
-	// DeleteReimbursement removes a claim that should never have existed. It
-	// leans on receipt's composite foreign key to refuse a claim that still has
-	// a photo attached, the same way DeleteMember leans on its referencing
-	// tables; the settled check is internal/ledger's, above.
+	// Removes a claim that should never have existed. Leans on receipt's composite
+	// FK to refuse a claim with a photo attached; the settled check is
+	// internal/ledger's.
 	DeleteReimbursement(ctx context.Context, id int64) error
 	DeleteSession(ctx context.Context, token string) error
-	// DuesPaidByMemberGroupedByPeriod is DuesPaidByPeriod's transpose: every
-	// period one member has paid anything toward, in one pass over that
-	// member's whole history rather than one query per period
-	// (OutstandingDuesForMember's range walk). Same reversed-row exclusion
-	// (ADR-029) and the same CAST(... AS TEXT) forcing dues_period non-null
-	// LatestDuesPeriodPaidByMember already relies on - kind = 'dues' rows always
-	// carry a dues_period (schema CHECK), so this is never actually NULL, only
-	// untyped without the cast.
+	// DuesPaidByPeriod's transpose: every period one member has paid toward, in one
+	// pass over their history (OutstandingDuesForMember's range walk). Same
+	// reversed-row exclusion (ADR-029) and the same CAST(... AS TEXT) as
+	// LatestDuesPeriodPaidByMember - kind = 'dues' rows always carry a dues_period
+	// (schema CHECK), so it is never NULL, only untyped without the cast.
 	DuesPaidByMemberGroupedByPeriod(ctx context.Context, arg DuesPaidByMemberGroupedByPeriodParams) ([]DuesPaidByMemberGroupedByPeriodRow, error)
 	// The roster query behind "who has paid / partially / not yet" for one
-	// dues_period, across every member in one pass rather than one query per
-	// member.
+	// dues_period, every member in one pass.
 	// The AND NOT EXISTS clause is ADR-029's half of the reversal design: a
-	// reversed dues row itself never matched kind = 'dues' in the first place
-	// (a reversal is posted as kind='adjustment'), so this drops the ORIGINAL
-	// row from the sum once something reverses it - which is what makes a
-	// reversed payment disappear from "paid" rather than simply counting twice.
+	// reversal is kind='adjustment' so never matches kind = 'dues'; this drops the
+	// ORIGINAL row once something reverses it, so a reversed payment disappears
+	// from "paid" rather than counting twice.
 	DuesPaidByPeriod(ctx context.Context, arg DuesPaidByPeriodParams) ([]DuesPaidByPeriodRow, error)
-	// The effective peruntukan (ADR-033, #411): the tag this row's money is
-	// under now. Each correction moves the whole row from wherever it is to a new
-	// tag, so a row's corrections form a path starting at its stored purpose_id;
-	// the tag it ends on is the one the money entered once more than it left,
-	// counting the stored tag as the start. That needs no ordering of the
-	// corrections - transfer ids are not an order to rely on - and a row
-	// corrected and then corrected back ends where it began.
+	// The effective peruntukan (ADR-033, #411): the tag this row's money is under
+	// now. Each correction moves the whole row to a new tag, so its corrections
+	// form a path starting at the stored purpose_id; the tag it ends on is the one
+	// the money entered once more than it left, counting the stored tag as the
+	// start. That needs no ordering of corrections (transfer ids are not an order
+	// to rely on), and a row corrected and then corrected back ends where it began.
 	//
-	// Which leg of a correction is "entering" depends on the row's own direction:
-	// PostPurposeCorrection puts the target on the leg moving the same way as the
-	// row (an 'out' mis-tag needs the target on the 'out' leg, an 'in' on the
-	// 'in'), so leg.direction = t.direction reads back what it wrote. A row
-	// nothing corrects answers its own purpose_id.
+	// Which leg is "entering" depends on the row's direction: PostPurposeCorrection
+	// puts the target on the leg moving the same way as the row, so
+	// leg.direction = t.direction reads back what it wrote. A row nothing corrects
+	// answers its own purpose_id.
 	EffectivePurposeForTransaction(ctx context.Context, arg EffectivePurposeForTransactionParams) (int64, error)
-	// The public report's reads (ADR-035, #372). Both are read-only and
-	// fund-scoped, and neither orders by primary key: a month is read by date, and
-	// ties on a date are left unordered on purpose (a display list, not an
-	// assertion about insertion order).
-	// The first month the report offers. Not an aggregate, for the reason
-	// MaxTransactionIDByFund gives: MIN() on an empty fund is one row of NULL
-	// where this form is zero rows, a clean sql.ErrNoRows the domain reads as "no
-	// ledger yet".
+	// The public report's reads (ADR-035, #372): read-only, fund-scoped, and none
+	// orders by primary key - a month is read by date, ties left unordered on
+	// purpose (a display list, not an assertion about insertion order).
+	// The first month the report offers. Not an aggregate (see
+	// MaxTransactionIDByFund): MIN() on an empty fund is one row of NULL, where
+	// this form is zero rows - a clean sql.ErrNoRows read as "no ledger yet".
 	FirstTransactionDateByFund(ctx context.Context, fundID int64) (string, error)
 	// Every balance in Uruni is this shape: sum the ledger, never read a stored
 	// total (CLAUDE.md rule 2). direction carries the sign, so the CASE is the
@@ -200,328 +160,238 @@ type Querier interface {
 	// emits interface{} for the aggregate and the trust core loses its compiler
 	// exactly where it is needed most (ADR-024).
 	FundBalance(ctx context.Context, fundID int64) (int64, error)
-	// GetAccountForFund is the only single-account lookup, fund-scoped for the
-	// reason GetMemberForFund is (#188): an account id belonging to another fund
-	// answers sql.ErrNoRows rather than being found and only then rejected.
+	// Fund-scoped like GetMemberForFund (#188): another fund's account id answers
+	// sql.ErrNoRows rather than being found and then rejected.
 	GetAccountForFund(ctx context.Context, arg GetAccountForFundParams) (Account, error)
-	// The reversed-once pre-check, same shape as GetReimbursementSettlement
-	// above: sql.ErrNoRows means "not yet reversed, proceed"
-	// (the expected, non-error path); a row means it already has been. The
-	// dues_payment_reversed_once partial unique index is the actual guarantee -
-	// this pre-check only turns a raw constraint violation into a clean, named
-	// error (ADR-029, mirroring ADR-027's ErrReimbursementAlreadySettled).
+	// The reversed-once pre-check, like GetReimbursementSettlement: sql.ErrNoRows
+	// means "not yet reversed, proceed"; a row means it already has been. The
+	// dues_payment_reversed_once index is the actual guarantee - this only turns a
+	// raw constraint violation into a named error (ADR-029).
 	GetDuesPaymentReversal(ctx context.Context, arg GetDuesPaymentReversalParams) (Transaction, error)
-	// GetDuesRateForFund is the lookup PATCH and DELETE both do ahead of the
-	// write: an UPDATE's RETURNING would answer an unknown id with
-	// sql.ErrNoRows, but a DELETE affecting zero rows raises nothing at all.
-	// dues_rate carries no fund_id of its own, so the scope comes through its
-	// tier - the same guarantee GetMemberForFund gives directly (#188).
+	// The lookup PATCH and DELETE both do ahead of the write: an UPDATE's
+	// RETURNING answers an unknown id with sql.ErrNoRows, but a DELETE affecting
+	// zero rows raises nothing. dues_rate has no fund_id, so scope comes through
+	// its tier (#188).
 	GetDuesRateForFund(ctx context.Context, arg GetDuesRateForFundParams) (DuesRate, error)
-	// GetDuesTierForFund is the only single-tier lookup, fund-scoped for the
-	// reason GetMemberForFund is (#188).
+	// Fund-scoped like GetMemberForFund (#188).
 	GetDuesTierForFund(ctx context.Context, arg GetDuesTierForFundParams) (DuesTier, error)
 	// The rate in force for a period: the latest row whose effective_from is at or
-	// before it. One-sided intervals mean there is no end date to check, and no
-	// row at all is a legitimate answer: a tier whose rate is not yet decided.
-	// effective_from is 'YYYY-MM', so a string comparison is a chronological one.
+	// before it. No row is a legitimate answer (a tier whose rate is not yet
+	// decided). effective_from is 'YYYY-MM', so string order is chronological.
 	GetEffectiveDuesRate(ctx context.Context, arg GetEffectiveDuesRateParams) (DuesRate, error)
 	GetFund(ctx context.Context, id int64) (Fund, error)
-	// GetFundByReportSlug is the public report's only way in (ADR-030's
-	// carve-out, ADR-035): the slug names its fund, with no session involved.
-	// report_slug is UNIQUE, so this is one row or sql.ErrNoRows.
+	// The public report's only way in (ADR-030 carve-out, ADR-035): the slug names
+	// its fund, with no session. report_slug is UNIQUE: one row or sql.ErrNoRows.
 	GetFundByReportSlug(ctx context.Context, reportSlug string) (Fund, error)
-	// Fund-scoped through purpose, which is where the envelope's fund_id lives
-	// (incidental is 1:1 with its purpose row and carries no fund_id of its own).
-	// An id names a row, it does not prove the caller may see it: PRD section 6 allows a
-	// server to hold more than one fund, so a bare WHERE purpose_id = ? would be a
-	// cross-fund read the moment a second fund exists.
+	// Fund-scoped through purpose, where the envelope's fund_id lives. PRD section
+	// 6 allows a server to hold more than one fund, so a bare WHERE purpose_id = ?
+	// would be a cross-fund read the moment a second fund exists.
 	GetIncidental(ctx context.Context, arg GetIncidentalParams) (Incidental, error)
-	// GetMemberForFund is the only single-member lookup: WHERE id = ? AND
-	// fund_id = ?, the same shape GetTransactionForFund and GetReimbursement
-	// already use, so a member id that is real but belongs to another fund
-	// answers sql.ErrNoRows here rather than being found and only then rejected
-	// for ownership. Its unscoped predecessor GetMember is gone (#188) - keeping
-	// one around is how resolveMember came to be unscoped in the first place.
+	// The only single-member lookup, fund-scoped: a real id belonging to another
+	// fund answers sql.ErrNoRows rather than being found and then rejected. There
+	// is deliberately no unscoped GetMember (#188).
 	GetMemberForFund(ctx context.Context, arg GetMemberForFundParams) (Member, error)
-	// GetPurposeForFund is the only single-purpose lookup, fund-scoped for the
-	// reason GetMemberForFund is (#188): an id belonging to another fund
-	// answers sql.ErrNoRows rather than being found and only then rejected.
+	// Fund-scoped like GetMemberForFund (#188).
 	GetPurposeForFund(ctx context.Context, arg GetPurposeForFundParams) (Purpose, error)
-	// Fund-scoped fetch, the same shape as GetAccountForFund/GetReimbursement:
-	// an id names a row, not permission to see it - and a receipt is the one
-	// resource this API serves as raw bytes, so this is the only gate between a
-	// session and someone else's photo (#153).
+	// Fund-scoped: a receipt is the one resource this API serves as raw bytes, so
+	// this is the only gate between a session and someone else's photo (#153).
 	GetReceiptForFund(ctx context.Context, arg GetReceiptForFundParams) (Receipt, error)
-	// Fund-scoped: an id names a row, it does not prove the caller may see it.
-	// PRD section 6 allows a server to hold more than one fund, so a bare lookup
-	// by id alone would be a cross-fund read the moment a second fund exists.
+	// Fund-scoped: PRD section 6 allows a server to hold more than one fund, so a
+	// bare lookup by id would be a cross-fund read.
 	GetReconciliation(ctx context.Context, arg GetReconciliationParams) (Reconciliation, error)
-	// Fund-scoped on purpose: an id names a row, it does not prove the caller may
-	// see it. PRD section 6 allows a server to hold more than one fund, so a bare
-	// lookup by id alone would be a cross-fund read the moment a second fund
-	// exists.
+	// Fund-scoped: PRD section 6 allows a server to hold more than one fund, so a
+	// bare lookup by id would be a cross-fund read.
 	GetReimbursement(ctx context.Context, arg GetReimbursementParams) (Reimbursement, error)
-	// The settle-once pre-check. Returns sql.ErrNoRows when the claim has not
-	// been settled yet (the expected, non-error path) or the settling row when
-	// it has.
+	// The settle-once pre-check: sql.ErrNoRows when the claim is not yet settled,
+	// the settling row when it is.
 	GetReimbursementSettlement(ctx context.Context, arg GetReimbursementSettlementParams) (GetReimbursementSettlementRow, error)
-	// One claim with its settled fact, for GET /api/reimbursements/{id}: the
-	// settle and correct screens open on a single claim and must know whether it
-	// is still owed. Fund-scoped for the same reason as GetReimbursement.
+	// One claim with its settled fact, for GET /api/reimbursements/{id}: the settle
+	// and correct screens must know whether it is still owed. Fund-scoped.
 	GetReimbursementWithSettled(ctx context.Context, arg GetReimbursementWithSettledParams) (GetReimbursementWithSettledRow, error)
-	// GetSession only returns a row still inside its idle window; a session past
-	// expires_at is functionally gone even before DeleteExpiredSessions sweeps it.
+	// Only a row still inside its idle window; a session past expires_at is gone
+	// even before DeleteExpiredSessions sweeps it.
 	GetSession(ctx context.Context, arg GetSessionParams) (Session, error)
 	GetTransaction(ctx context.Context, id int64) (Transaction, error)
-	// The fund-scoped fetch a dues reversal fetches its target through (ADR-029):
-	// WHERE fund_id = ? AND id = ?, not id alone, so a transaction belonging to
-	// another fund reads as sql.ErrNoRows here rather than being found and only
-	// later rejected by the composite FK. GetTransaction above stays as it is -
-	// other callers already have their fund-scoped row in hand - this is the one
-	// new caller that fetches a transaction by id from an untrusted request.
+	// The fund-scoped fetch a dues reversal gets its target through (ADR-029): a
+	// transaction of another fund reads as sql.ErrNoRows rather than being found
+	// and later rejected by the composite FK. GetTransaction stays unscoped for
+	// callers that already hold a fund-scoped row; this is the one that fetches by
+	// id from an untrusted request.
 	GetTransactionForFund(ctx context.Context, arg GetTransactionForFundParams) (Transaction, error)
 	GetTransfer(ctx context.Context, id int64) (Transfer, error)
-	// GetUserByEmail finds the login case-insensitively without a schema change
-	// (#500). New rows are stored trimmed and lower-cased (auth.NormalizeEmail),
-	// but a row written before that keeps whatever case it was typed in, so the
-	// lookup matches either the normalized form against lower(email) or the
-	// address exactly as stored. SQLite's lower() folds ASCII only: the exact arm
-	// is what keeps a legacy row with a non-ASCII capital findable by the very
-	// text it was registered with. The COLLATE NOCASE column rides the schema
-	// epic (#523); user holds one row, so no index is lost to the OR.
+	// Finds the login case-insensitively without a schema change (#500). New rows
+	// are stored trimmed and lower-cased (auth.NormalizeEmail), but an older row
+	// keeps whatever case it was typed in, so the lookup matches the normalized
+	// form against lower(email) or the address exactly as stored. SQLite's lower()
+	// folds ASCII only: the exact arm keeps a legacy row with a non-ASCII capital
+	// findable. The COLLATE NOCASE column rides the schema epic (#523); user holds
+	// one row, so the OR costs no index.
 	GetUserByEmail(ctx context.Context, arg GetUserByEmailParams) (User, error)
-	// What the occasion itself collected and disbursed (PRD section 7.5's
-	// detail screen), as opposed to IncidentalTotals above's net-including-rolls. The
-	// LEFT JOIN excludes only a reclass_purpose leg - the roll CloseIncidentalAndRoll
-	// posts, in either direction (ADR-031's leftover-in as much as the original
-	// leftover-out) - by transfer.kind, not by transaction.kind: every leg of
-	// every transfer is posted as transaction.kind='transfer' regardless of
-	// whether the transfer itself is 'between_accounts' or 'reclass_purpose', so
-	// transaction.kind alone cannot tell a roll's leg from an ordinary transfer
-	// between this envelope's own accounts, and this screen has no reason to
-	// exclude the latter. tr.id IS NULL keeps every row the join found no
-	// matching reclass_purpose transfer for - which is every kind but that one;
-	// a correction's legs come back in below.
+	// What the occasion itself collected and disbursed (PRD section 7.5's detail
+	// screen), as opposed to IncidentalTotals' net-including-rolls. The LEFT JOIN
+	// excludes only a reclass_purpose leg that is a roll (CloseIncidentalAndRoll,
+	// in either direction, ADR-031), by transfer.kind and not transaction.kind:
+	// every transfer leg is posted as transaction.kind='transfer', so that alone
+	// cannot tell a roll's leg from an ordinary between_accounts transfer, which
+	// this screen has no reason to exclude. tr.id IS NULL keeps every row with no
+	// reclass_purpose transfer; a correction's legs come back in below.
 	//
 	// A cancelled contribution (ADR-034's widened ADR-029 reversal) is dropped
-	// whole: the reversal row itself (reverses_transaction_id set) and the row
-	// it reverses, the same NOT EXISTS ContributedByIncidentalMember uses.
-	// Otherwise a cancellation reads as money the occasion spent - "Terpakai"
-	// - and the cancelled row as money it collected. Both halves go, so
-	// collected minus disbursed still equals the envelope's balance.
-	// IncidentalTotals above stays unfiltered: the pair nets to zero there.
+	// whole: the reversal row and the row it reverses, the same NOT EXISTS as
+	// ContributedByIncidentalMember. Otherwise a cancellation reads as money
+	// spent ("Terpakai") and the cancelled row as money collected. Both halves go,
+	// so collected minus disbursed still equals the envelope's balance;
+	// IncidentalTotals stays unfiltered because the pair nets to zero there.
 	//
-	// A peruntukan correction (ADR-033) is not dropped but re-attributed
-	// (#342). Its legs carry tr.corrects_transaction_id, which a roll's never
-	// do, so the join keeps them and reads each one against the bucket of the
-	// row it corrects (o.direction): a leg moving the same way as that row adds
-	// to the bucket, a leg moving the other way takes it back out. So an
-	// unnamed contribution corrected out of this envelope nets to zero
-	// collected here; one corrected in - from Kas Utama, or back after an
-	// earlier correction out - reads as collected; an expense corrected away
-	// un-spends. Each leg still moves collected minus disbursed by exactly its
-	// own effect on the balance, so the two stay equal. The corrected row
-	// itself is never a reversal (ADR-033 refuses those), so the cancellation
-	// filters above never meet it.
+	// A peruntukan correction (ADR-033) is re-attributed, not dropped (#342). Its
+	// legs carry tr.corrects_transaction_id, which a roll's never do, so the join
+	// keeps them and reads each against the bucket of the row it corrects
+	// (o.direction): a leg moving the same way as that row adds to the bucket, the
+	// other way takes it back out. So an unnamed contribution corrected out of
+	// this envelope nets to zero collected here; one corrected in reads as
+	// collected; an expense corrected away un-spends. Each leg still moves
+	// collected minus disbursed by exactly its effect on the balance. The
+	// corrected row is never a reversal (ADR-033 refuses those), so the
+	// cancellation filters never meet it.
 	//
-	// A purpose move (ADR-036, tr.reason = 'allocation') is kept too, and only
-	// ever counts as collected: money allocated in is money the envelope now
-	// has to work with, and money allocated out was never spent on the
-	// occasion, so it takes back what was collected rather than reading as
-	// disbursed. Collected minus disbursed still moves by exactly the leg's
-	// effect on the balance. A roll - 'roll', or NULL on a row written before
-	// the column existed - stays excluded as above.
+	// A purpose move (ADR-036, tr.reason = 'allocation') is kept and only ever
+	// counts as collected: money allocated in is money the envelope has to work
+	// with, and money allocated out was never spent on the occasion, so it takes
+	// back what was collected rather than reading as disbursed. A roll - 'roll',
+	// or NULL on a row written before the column existed - stays excluded.
+	//
 	// through bounds it at a past month's last day for the public report (#408):
-	// only rows dated by then, and a reversal dated after it has not happened
-	// yet. NULL - every other caller - is unbounded.
+	// only rows dated by then, and a reversal dated after it has not happened yet.
+	// NULL (every other caller) is unbounded.
 	IncidentalActivityTotals(ctx context.Context, arg IncidentalActivityTotalsParams) (IncidentalActivityTotalsRow, error)
-	// The guard's one query (ADR-031): sql.ErrNoRows for a purpose_id that is
-	// not an incidental at all (main, pass_through - PostTransaction's caller
-	// reads that as "no guard applies", not as a schema violation), a row with
-	// closed_on NULL for an open envelope, and a row with closed_on set for a
-	// closed one. Deliberately not scoped by fund_id: PostTransaction already
-	// holds a purpose_id it trusts (its own caller's fund-scoped picker, or the
-	// schema's own composite FK once the write lands), and this check runs
-	// before that write, not in place of it.
+	// The closed-envelope guard's one query (ADR-031): sql.ErrNoRows for a
+	// purpose_id that is not an incidental (main, pass_through - "no guard
+	// applies"), closed_on NULL for an open envelope, set for a closed one. Not
+	// scoped by fund_id: PostTransaction already holds a trusted purpose_id, and
+	// the composite FK still guards the write that follows.
 	IncidentalClosedOnForPurpose(ctx context.Context, purposeID int64) (*string, error)
-	// The envelope's net, everything it has ever posted against its own
-	// purpose_id, rolls included. This is what CloseIncidentalAndRoll leans on
-	// (ADR-031): collected minus disbursed here is exactly PurposeBalance for
-	// this purpose, so a prior roll's own leg already nets the envelope to zero
-	// by construction, and reopening, posting a late entry, and closing again
-	// computes the *net delta* through this same unfiltered sum rather than new
-	// arithmetic. Leftover is collected minus disbursed, computed in Go via
-	// money.Amount.Sub, rather than a third column here.
+	// The envelope's net: everything ever posted against its purpose_id, rolls
+	// included. CloseIncidentalAndRoll leans on it (ADR-031): collected minus
+	// disbursed is exactly PurposeBalance, so a prior roll's leg already nets the
+	// envelope to zero, and reopening, posting a late entry and closing again
+	// computes the *net delta* through this same unfiltered sum. Leftover is
+	// collected minus disbursed, computed in Go via money.Amount.Sub.
 	//
-	// Not what GET /api/incidentals/{purposeID} shows: that figure wants what
-	// the occasion itself collected and spent, with a prior roll's leg excluded
-	// - see IncidentalActivityTotals below. Conflating the two was #215; this
-	// comment is the seam between them.
+	// Not what GET /api/incidentals/{purposeID} shows: that wants what the
+	// occasion itself collected and spent, rolls excluded - see
+	// IncidentalActivityTotals. Conflating the two was #215.
 	IncidentalTotals(ctx context.Context, arg IncidentalTotalsParams) (IncidentalTotalsRow, error)
 	// The "paid in advance" signal. dues_period is 'YYYY-MM', so a lexicographic
-	// MAX is also the chronological one. The CAST(... AS TEXT) is load-bearing,
-	// not decoration: uncast, MAX(dues_period) generates interface{} - the same
-	// untyped-interface trap ADR-024 documents for SUM, reached here through MAX
-	// on a TEXT column - and a .(string) assertion on it is a live panic risk
-	// since drivers commonly hand back []byte.
-	// The AND NOT EXISTS clause is ADR-029's fix for the specific bug the chosen
-	// design exists to avoid: without it, a reversed row would still be the
-	// chronological MAX(dues_period) for its member, reading as "paid in
-	// advance" through a period that was reversed and is no longer paid at all.
+	// MAX is also the chronological one. The CAST(... AS TEXT) is load-bearing:
+	// uncast, MAX(dues_period) generates interface{} (the ADR-024 trap for SUM,
+	// reached through MAX), and a .(string) assertion on it can panic since drivers
+	// commonly hand back []byte.
+	// The AND NOT EXISTS clause is ADR-029's fix: without it a reversed row would
+	// still be the MAX(dues_period) for its member, reading as "paid in advance"
+	// through a period that is no longer paid at all.
 	LatestDuesPeriodPaidByMember(ctx context.Context, fundID int64) ([]LatestDuesPeriodPaidByMemberRow, error)
 	LatestReconciliation(ctx context.Context, fundID int64) (Reconciliation, error)
-	// Cash before bank, then by name (maintainer, 2026-10-05): the box at home,
-	// then the bank, the order she counts in. Every list of locations reads this
-	// one order - Beranda, Pengaturan, the pickers, Cek kas. id only breaks a tie
-	// between two identical names.
+	// Cash before bank, then by name (maintainer, 2026-10-05): the order she
+	// counts in. Every list of locations reads this one order. id only breaks a
+	// tie between identical names.
 	ListAccountsByFund(ctx context.Context, fundID int64) ([]Account, error)
 	ListDuesPaymentsByMember(ctx context.Context, memberID *int64) ([]ListDuesPaymentsByMemberRow, error)
-	// GET /api/dues-payments's real listing (#228, ADR-032 "Lists: paging and
-	// search"): newest-first and keyset-paged on (occurred_on DESC, id DESC),
-	// the same shape ListTransactionsPage/ListReimbursementsPage already use
-	// (their own doc comments have the row-value-keyset reasoning, the
-	// CAST(sqlc.narg('cursor_id') AS INTEGER) fix, and why this query uses
-	// INSTR/LOWER rather than "COLLATE NOCASE LIKE ... ESCAPE" - sqlc 1.31.1's
-	// repeated-ESCAPE bug, documented in full on ListTransactionsPage above).
+	// GET /api/dues-payments (#228, ADR-032): newest-first, keyset-paged on
+	// (occurred_on DESC, id DESC) like ListTransactionsPage, which documents the
+	// row-value keyset, the cursor_id CAST, and why INSTR/LOWER replaces
+	// "COLLATE NOCASE LIKE ... ESCAPE" (the sqlc 1.31.1 repeated-ESCAPE bug).
 	//
-	// Both halves of a reversal share this one list (PRD section 7.3, ADR-029):
-	// every kind='dues' payment, and every kind='adjustment' row that reverses
-	// one - never a bare "every transaction", since an ordinary correction with
-	// no reverses_transaction_id has nothing to do with dues.
+	// Both halves of a reversal share this list (PRD section 7.3, ADR-029): every
+	// kind='dues' payment and every kind='adjustment' row that reverses one -
+	// never a bare "every transaction".
 	//
-	// rv is the reversal that undoes THIS row, when this row is itself a
-	// payment - reversed_by_transaction_id, null on every row that is not a
-	// reversed payment (a reversal is never itself reversed, so it is always
-	// null on a reversal row too).
+	// rv is the reversal that undoes THIS row when it is a payment
+	// (reversed_by_transaction_id; null otherwise, as a reversal is never itself
+	// reversed). orig is the payment THIS row reverses, carried forward as
+	// reverses_occurred_on so a reversal states the original's date even when that
+	// payment sits on a later page.
 	//
-	// orig is the payment THIS row reverses, when this row is itself a
-	// reversal - carried forward as reverses_occurred_on so a reversal states
-	// the original's date even when that original payment sits on a later
-	// page than the reversal itself.
+	// ?q= searches member name only.
 	//
-	// ?q= searches member name only (the response's own decided shape has no
-	// purpose or note column worth searching for this list).
-	//
-	// page_limit is page size + 1, the same peek-one-extra-row trick every
-	// other paged list in this package uses.
+	// page_limit is page size + 1: peek at one extra row.
 	ListDuesPaymentsPage(ctx context.Context, arg ListDuesPaymentsPageParams) ([]ListDuesPaymentsPageRow, error)
-	// ListDuesRatesByFund is the backup export's own read (ADR-012, #323): every
-	// rate across every tier the fund owns. dues_rate carries no fund_id of its
-	// own, so the join through dues_tier is the only way to scope it - the same
-	// reasoning GetDuesRateForFund's own comment gives. Ordered by id purely for
-	// the export's own deterministic byte order, not a claim about the rate's
-	// effective date (ListDuesRatesByTier above already owns that ordering for
-	// its own caller).
+	// The backup export's read (ADR-012): every rate across the fund's tiers,
+	// scoped through dues_tier. Ordered by id only for deterministic export bytes,
+	// not by effective date.
 	ListDuesRatesByFund(ctx context.Context, fundID int64) ([]DuesRate, error)
 	ListDuesRatesByTier(ctx context.Context, tierID int64) ([]DuesRate, error)
 	// By name, ignoring case (maintainer, 2026-10-05).
 	ListDuesTiersByFund(ctx context.Context, fundID int64) ([]DuesTier, error)
 	ListFunds(ctx context.Context) ([]Fund, error)
-	// One envelope's recipients, member name alongside the id so a caller (the
-	// participation view, the envelope's own detail screen) never has to look
-	// each one up separately. Ordered by name then id - the same tiebreak
-	// ListMembersPage uses - rather than insertion order, which carries no
-	// meaning here (CLAUDE.md's "no primary-key order" rule).
+	// One envelope's recipients with the member name, so callers need no second
+	// lookup. Ordered by name then id (as ListMembersPage), not insertion order,
+	// which carries no meaning here.
 	ListIncidentalRecipients(ctx context.Context, purposeID int64) ([]ListIncidentalRecipientsRow, error)
-	// ListIncidentalRecipientsByFund is the backup export's own read (ADR-012,
-	// #323): every recipient row across every envelope the fund owns, in its
-	// own raw columns (fund_id, purpose_id, member_id) rather than
-	// ListIncidentalRecipients' joined member_name - the export names the
-	// table's own columns, and a restore reads member_id, not a name. The table
-	// has no single-column id (its primary key is the (fund_id, purpose_id,
-	// member_id) triple), so this orders by that triple directly - purely for
-	// the export's own deterministic byte order.
+	// The backup export's read (ADR-012): raw table columns, no joined member_name,
+	// since a restore reads member_id. The primary key is the (fund_id, purpose_id,
+	// member_id) triple, so it orders by that, only for deterministic export bytes.
 	ListIncidentalRecipientsByFund(ctx context.Context, fundID int64) ([]IncidentalRecipient, error)
-	// Joined through purpose because that is where fund ownership lives; incidental
-	// has no fund_id of its own (it is 1:1 with a purpose row).
+	// Joined through purpose, where fund ownership lives.
 	ListIncidentalsByFund(ctx context.Context, fundID int64) ([]Incidental, error)
-	// By name, ignoring case (maintainer, 2026-10-05), the order every member
-	// list reads - Iuran status in the app and on the report included, since both
-	// walk this list. id only breaks a tie between two identical names.
+	// By name, ignoring case (maintainer, 2026-10-05): the order every member list
+	// reads, Iuran status included. id only breaks a tie between identical names.
 	ListMembersByFund(ctx context.Context, fundID int64) ([]Member, error)
-	// GET /api/members's real listing (#233, ADR-032 "Lists: paging and
-	// search"): the roster read alphabetically, not a newest-first feed, so
-	// this keyset-pages ascending on (name, id) rather than the (occurred_on
-	// DESC, id DESC)/(performed_at DESC, id DESC) shape every other paged list
-	// in this package uses - a roster has no date to sort by, and ADR-032 is
-	// explicit this list is "by member name, then id, as the tiebreak". The
-	// comparison is still row-value keyset, same reasoning as
-	// ListTransactionsPage's own comment: an OFFSET would silently skip or
-	// duplicate a member whenever two names compare equal at the page boundary
-	// and a third with the same name is inserted between two fetches.
+	// GET /api/members (#233, ADR-032): the roster read alphabetically, so it
+	// keyset-pages ascending on (name, id), not the date-descending shape of the
+	// other paged lists. Row-value keyset like ListTransactionsPage: an OFFSET
+	// would skip or duplicate a member when equal names straddle a page boundary
+	// and a same-named member is inserted between fetches.
 	//
-	// tier_name is dues_tier.name, NULL for a member with no tier_id - a plain
-	// LEFT JOIN, never invented.
+	// tier_name is NULL for a member with no tier_id (plain LEFT JOIN).
 	//
-	// current_rate is the rate effective for sqlc.arg('current_period')
-	// ("YYYY-MM", the caller's one snapshot of "now" - see
-	// Ledger.ArrearsMonthsForMember's doc comment for why the same value drives
-	// both this column and the arrears figure computed in Go), found the exact
-	// row GetEffectiveDuesRate would find: the latest dues_rate row for the
-	// member's tier at or before that period. A plain LEFT JOIN rather than a
-	// correlated scalar subquery, on purpose - a scalar subquery's result needs
-	// a CAST to read as a concrete Go type at all, and this codebase's own CAST
-	// idiom (ListTransactionsPage's comment has it) is documented to mean "this
-	// value is never NULL", the opposite of what current_rate must be able to
-	// say: a tier with no rate yet effective (the "madya TBD" case, PRD section
-	// 6) reads NULL here, never an invented 0 or a stale figure. The dr2
-	// NOT EXISTS half of the join condition is what picks exactly the one row
-	// with the latest effective_from <= current_period per tier - an ordinary
-	// LEFT JOIN column, so sqlc types dr.amount as *int64 the same way it
-	// already types tier_name as *string from the dt join below. A member with
-	// no tier_id never matches dr.tier_id = m.tier_id (NULL = NULL is never
-	// true in SQL) and also reads NULL, which is what "no tier" should show
-	// either way.
+	// current_rate is the rate GetEffectiveDuesRate would find for
+	// sqlc.arg('current_period') ("YYYY-MM", the caller's one snapshot of "now",
+	// shared with the arrears figure computed in Go - see
+	// Ledger.ArrearsMonthsForMember). A LEFT JOIN, not a scalar subquery, on
+	// purpose: a scalar subquery needs a CAST to get a concrete Go type, and this
+	// codebase's CAST idiom means "never NULL" - the opposite of what current_rate
+	// must say. A tier with no rate yet effective (the "madya TBD" case, PRD
+	// section 6) and a member with no tier (NULL = NULL is never true) both read
+	// NULL, never an invented 0 or a stale figure. The dr2 NOT EXISTS picks the
+	// single row with the latest effective_from <= current_period per tier.
 	//
-	// ?q= is a case-insensitive substring match on name alone (ADR-032 line
-	// 138: INSTR/LOWER, never "COLLATE NOCASE LIKE ... ESCAPE" - sqlc 1.31.1
-	// silently drops a repeated sqlc.narg inside that clause).
+	// ?q= is a case-insensitive substring match on name alone (ADR-032): INSTR/LOWER,
+	// never "COLLATE NOCASE LIKE ... ESCAPE" - sqlc 1.31.1 silently drops a
+	// repeated sqlc.narg inside that clause.
 	//
-	// page_limit is page size + 1, the same "peek at one extra row" trick every
-	// other paged list in this package uses.
+	// page_limit is page size + 1: peek at one extra row.
 	ListMembersPage(ctx context.Context, arg ListMembersPageParams) ([]ListMembersPageRow, error)
 	ListOpenIncidentalsByFund(ctx context.Context, fundID int64) ([]Incidental, error)
 	// Gaps still open: a line whose remainder_amount (see ListReconciliationLines)
 	// is non-zero - a left_open line, or an entry_added line whose entry did not
-	// square the whole difference (#498) - but only while nothing later has
-	// weighed in on the same location. Such a line stops counting as open the
-	// moment a later snapshot has any line at all for that account_id -
-	// matched, entry_added, adjusted, or left_open again all supersede it, since
-	// the question is only "has this location been counted since", not how that
-	// count came out. This is per location, not per snapshot: a later count that
-	// skips an account leaves that account's gap open regardless of what else the
-	// later snapshot resolved. "Later" means the owning reconciliation's
-	// (performed_at, id), performed_at first - a snapshot is never edited
-	// (ADR-024), so a superseded line stays in the table exactly as recorded; it
-	// just stops being "open".
+	// square the whole difference (#498) - while nothing later has weighed in on
+	// the same location. A later snapshot with any line at all for that account_id
+	// supersedes it (matched, entry_added, adjusted or left_open again), since the
+	// question is only "has this location been counted since", not how that count
+	// came out. Per location, not per snapshot: a later count that skips an
+	// account leaves its gap open. "Later" means the owning reconciliation's
+	// (performed_at, id), performed_at first. A snapshot is never edited
+	// (ADR-024), so a superseded line stays as recorded; it just stops being open.
 	ListOpenReconciliationLinesByFund(ctx context.Context, fundID int64) ([]ListOpenReconciliationLinesByFundRow, error)
-	// What the fund still owes its members: neither settled by a payout nor
-	// waived. Both halves are conditions SQLite cannot express as a CHECK across
-	// tables, so the settle path filters on them here instead.
-	//
-	// settled is a literal 0: every row this list returns is unsettled by
-	// construction, and the wire shape must stay uniform with the full list.
+	// What the fund still owes its members: neither settled by a payout nor waived.
+	// A CHECK cannot span tables, so the settle path filters here instead.
+	// settled is a literal 0 (unsettled by construction), keeping the wire shape
+	// uniform with the full list.
 	ListOutstandingReimbursementsByFund(ctx context.Context, fundID int64) ([]ListOutstandingReimbursementsByFundRow, error)
-	// Kas Utama first, then every other pos by name whatever its kind
-	// (maintainer, 2026-10-05). The pickers, Beranda and the report all read this
-	// one order. id only breaks a tie between two identical names.
+	// Kas Utama first, then every other pos by name whatever its kind (maintainer,
+	// 2026-10-05); every list reads this order. id only breaks a tie.
 	ListPurposesByFund(ctx context.Context, fundID int64) ([]Purpose, error)
-	// Same shape as ListReceiptIDsByTransactionIDs above, for GET
-	// /api/reimbursements's page.
+	// Same, for GET /api/reimbursements's page.
 	ListReceiptIDsByReimbursementIDs(ctx context.Context, arg ListReceiptIDsByReimbursementIDsParams) ([]ListReceiptIDsByReimbursementIDsRow, error)
-	// Batched, fund-scoped lookup for a whole page of rows at once (#154) - one
-	// query per list response, never one per row (N+1). fund_id is checked
-	// alongside the id list rather than trusted alone: an id belonging to
-	// another fund must never surface here, the same rule GetReceiptForFund
-	// enforces for a single row. Ordered by id ascending so a caller that
-	// appends rows in the order they arrive keeps that same order per parent
-	// id, matching receipt_ids' own "ordered by id ascending" contract.
+	// Batched, fund-scoped lookup for a whole page of rows (#154): one query per
+	// list response, never one per row. fund_id is checked alongside the id list,
+	// so another fund's id never surfaces. Callers append in arrival order, which
+	// keeps receipt_ids in upload order per parent.
 	ListReceiptIDsByTransactionIDs(ctx context.Context, arg ListReceiptIDsByTransactionIDsParams) ([]ListReceiptIDsByTransactionIDsRow, error)
-	// ListReceiptsByFund is the backup export's own read (ADR-012, #323): every
-	// receipt row the fund owns, so the zip's receipts/ folder and uruni.json's
-	// receipt rows name the same files (path is the on-disk filename under
-	// URUNI_UPLOADS_DIR, ADR-011). Ordered by id purely for the export's own
-	// deterministic byte order.
+	// The backup export's read (ADR-012): every receipt row, so the zip's receipts/
+	// folder and uruni.json name the same files (path is the on-disk filename
+	// under URUNI_UPLOADS_DIR, ADR-011). Ordered by id only for deterministic
+	// export bytes.
 	ListReceiptsByFund(ctx context.Context, fundID int64) ([]Receipt, error)
 	ListReceiptsByReimbursement(ctx context.Context, reimbursementID *int64) ([]Receipt, error)
 	ListReceiptsByTransaction(ctx context.Context, transactionID *int64) ([]Receipt, error)
@@ -530,281 +400,213 @@ type Querier interface {
 	// (actual - recorded). left_open: the whole difference. matched: 0. adjusted
 	// and entry_added: difference - signed(fix), where the fix is the entry the
 	// line points at (+ for in, - for out). An entry_added line from before #498
-	// points at nothing, and reads as closed (0): its remainder was never
-	// recorded and cannot be known. The same expression reads in
+	// points at nothing and reads as closed (0): its remainder was never recorded
+	// and cannot be known. The same expression appears in
 	// ListOpenReconciliationLinesByFund, ListReconciliationsPage and
 	// ReportOpenReconciliationLines - keep the four in step.
 	//
 	// In ListAccountsByFund's order: cash before bank, then by name.
 	ListReconciliationLines(ctx context.Context, reconciliationID int64) ([]ListReconciliationLinesRow, error)
-	// ListReconciliationLinesByFund is the backup export's own read (ADR-012,
-	// #323): every line across every snapshot, matched or not - unlike
-	// ListOpenReconciliationLinesByFund above, nothing here is filtered by
-	// resolution or superseded by a later count, since a restore needs the
-	// whole frozen history back, not just what is still open today. Ordered by
-	// id purely for the export's own deterministic byte order.
+	// The backup export's read (ADR-012): every line across every snapshot, not
+	// filtered by resolution or superseded by a later count, since a restore needs
+	// the whole frozen history. Ordered by id only for deterministic export bytes.
 	ListReconciliationLinesByFund(ctx context.Context, fundID int64) ([]ReconciliationLine, error)
 	// Newest first: the home screen wants the last count, not the first.
 	ListReconciliationsByFund(ctx context.Context, fundID int64) ([]Reconciliation, error)
-	// GET /api/reconciliations's real listing (#227, ADR-032 "Lists: paging and
-	// search") - newest-first and keyset-paged on (performed_at, id), the same
-	// row-value-keyset shape ListReimbursementsPage/ListTransactionsPage use
-	// (their own comments have the full reasoning). No search - a handful of
-	// dated snapshots a year, per the issue.
+	// GET /api/reconciliations (#227, ADR-032): newest-first, keyset-paged on
+	// (performed_at, id) like ListTransactionsPage (which has the reasoning). No
+	// search - a handful of snapshots a year.
 	//
-	// open_difference_amount is the sum of ABS(remainder_amount) across that
-	// snapshot's lines (#498; see ListReconciliationLines for the remainder) - the same figure Confirmation on /reconcile
-	// computes client-side from a detail fetch, computed here so a list row can
-	// show cocok (0) vs selisih without one. Cast so it lands as int64 rather
-	// than interface{} - sqlc's SQLite engine cannot infer the type of a summed
-	// expression (ADR-024).
+	// open_difference_amount is the sum of ABS(remainder_amount) across the
+	// snapshot's lines (#498; see ListReconciliationLines) - the figure
+	// Confirmation on /reconcile computes client-side, here so a list row can show
+	// cocok (0) vs selisih without a detail fetch. Cast so it lands as int64
+	// rather than interface{}: sqlc's SQLite engine cannot infer the type of a
+	// summed expression (ADR-024).
 	//
-	// page_limit is page size + 1, the same "peek at one extra row" trick the
-	// other two paged lists use.
+	// page_limit is page size + 1: peek at one extra row.
 	ListReconciliationsPage(ctx context.Context, arg ListReconciliationsPageParams) ([]ListReconciliationsPageRow, error)
 	ListReimbursementsByFund(ctx context.Context, fundID int64) ([]ListReimbursementsByFundRow, error)
-	// GET /api/reimbursements's real listing (#226, ADR-032 "Lists: paging and
-	// search") - newest-first and keyset-paged on (incurred_on, id), the same
-	// shape as ListTransactionsPage (transaction.sql has the full reasoning for
-	// row-value keyset over LIMIT/OFFSET, the CAST on cursor_id, and INSTR/LOWER
-	// over "COLLATE NOCASE LIKE ... ESCAPE" - sqlc 1.31.1's bug with a repeated
-	// ESCAPE clause applies here too, since q searches two columns).
+	// GET /api/reimbursements (#226, ADR-032): newest-first, keyset-paged on
+	// (incurred_on, id) like ListTransactionsPage (transaction.sql has the
+	// reasoning for row-value keyset, the CAST on cursor_id, and INSTR/LOWER over
+	// "COLLATE NOCASE LIKE ... ESCAPE" - the sqlc 1.31.1 repeated-ESCAPE bug
+	// applies here too, since q searches two columns).
 	//
-	// Search (?q=) covers member name and note only - PRD section 7.4 gives a
-	// claim no purpose-name search surface the way a transaction has one, and
-	// ADR-032 named "member name and note" for this list specifically.
+	// Search (?q=) covers member name and note only (ADR-032, PRD section 7.4).
 	//
-	// sqlc.narg('outstanding_only') gates the same pair of conditions
-	// ListOutstandingReimbursementsByFund applies (waived_on IS NULL and no
-	// settling transaction) so `settled` stays correctly computed in both
-	// modes: literal 0 when outstanding_only narrows the WHERE clause itself
-	// (every row satisfying it is unsettled by construction, same as that
-	// query), the real EXISTS check otherwise.
+	// outstanding_only applies the same two conditions as
+	// ListOutstandingReimbursementsByFund (waived_on IS NULL, no settling
+	// transaction), so `settled` is a literal 0 in that mode (unsettled by
+	// construction) and the real EXISTS check otherwise.
 	//
-	// page_limit is page size + 1, the same "peek at one extra row" trick
-	// ListTransactionsPage uses to know whether a next page exists.
+	// page_limit is page size + 1: peek at one extra row.
 	ListReimbursementsPage(ctx context.Context, arg ListReimbursementsPageParams) ([]ListReimbursementsPageRow, error)
 	// Every ledger row of one fund dated in [from_date, to_date) (to_date NULL: no
 	// upper bound), with the facts a display-time label needs (#257) and nothing
-	// the page must not carry: no receipt path or id (has_receipt is a 0/1), no
-	// account (a location is the treasurer's working detail, ADR-035), no row ids. Filters are applied in Go,
-	// not here: a transfer pair must be folded into one row before a purpose
-	// filter can say whether either side matches, and a month is a bounded list.
+	// the public page must not carry: no receipt path or id (has_receipt is 0/1),
+	// no account (a location is the treasurer's working detail, ADR-035), no row
+	// ids. Filters run in Go: a transfer pair must be folded into one row before a
+	// purpose filter can say whether either side matches.
 	//
-	// from_date/to_date are plain 'YYYY-MM-DD' strings, compared as text, which is
-	// exactly how occurred_on already sorts (a CHECK holds it to date()'s own
-	// format). to_date is the FIRST day of the next month, exclusive, and NULL for
-	// the running month: it reads every row from the first on, so a row dated after
-	// today still belongs to the walk that ends on the unbounded balance (ADR-038).
+	// from_date/to_date are 'YYYY-MM-DD' strings compared as text, which is how
+	// occurred_on already sorts (a CHECK holds it to date()'s format). to_date is
+	// the FIRST day of the next month, exclusive, and NULL for the running month:
+	// it reads every row, so a row dated after today still belongs to the walk
+	// that ends on the unbounded balance (ADR-038).
 	//
-	// The member columns mirror ListTransactionsPage: member_* is the dues or
-	// contribution member, settlement_member_* the paid-back member of a
-	// settled reimbursement (t.member_id is NULL on that kind). Merged in Go for
-	// the sqlc COALESCE typing reason ListTransactionsPage documents.
+	// Member columns mirror ListTransactionsPage: member_* is the dues or
+	// contribution member, settlement_member_* the paid-back member of a settled
+	// reimbursement (t.member_id is NULL on that kind), merged in Go for the sqlc
+	// COALESCE typing reason documented there.
 	//
-	// The transfer columns are only meaningful on kind='transfer' rows, found the
-	// way ListTransactionsPage finds them: 'out' is the pair's from leg and 'in' its
-	// to leg. Both legs of one pair carry identical from/to facts, so the Go fold
-	// keeps either.
+	// Transfer columns mean something only on kind='transfer' rows: 'out' is the
+	// pair's from leg and 'in' its to leg. Both legs carry identical from/to
+	// facts, so the Go fold keeps either.
 	//
-	// has_receipt is true for a receipt on the row itself, or - on a
-	// reimbursement payout - on the claim it settles: the claim's nota is the proof
-	// of that payout (ADR-011), and the row carries no other.
+	// has_receipt is true for a receipt on the row itself or, on a reimbursement
+	// payout, on the claim it settles: that nota is the proof of the payout
+	// (ADR-011).
 	ListReportTransactions(ctx context.Context, arg ListReportTransactionsParams) ([]ListReportTransactionsRow, error)
-	// ListSelectablePurposesByFund is ListPurposesByFund with a closed
-	// incidental's purpose excluded (ADR-031): GET /api/purposes?selectable=true
-	// backs the everyday record form's picker, which stops offering what
-	// PostTransaction's own guard would now refuse. The LEFT JOIN is what makes
-	// "not an incidental at all" and "an incidental that's still open" the same
-	// case - main and pass_through purposes have no incidental row to join
-	// against, so i.closed_on reads NULL for them exactly as it does for an open
-	// envelope, and both pass the filter. A closed envelope's purpose_id is the
-	// only row this excludes, never a field added to purposeResponse - the
-	// lifecycle lives in the filter, not on the wire shape every other caller
-	// reads too.
+	// ListPurposesByFund minus closed envelopes (ADR-031): backs the record form's
+	// picker, which stops offering what PostTransaction's guard would refuse. The
+	// LEFT JOIN treats "not an incidental" and "an open incidental" alike - main
+	// and pass_through have no incidental row, so closed_on reads NULL for both.
+	// The lifecycle lives in this filter, not on the shared wire shape.
 	ListSelectablePurposesByFund(ctx context.Context, fundID int64) ([]Purpose, error)
 	ListTransactionsByFund(ctx context.Context, fundID int64) ([]Transaction, error)
-	// GET /api/transactions's real listing (#225, ADR-032 "Lists: paging and
-	// search") - newest-first and keyset-paged on the same pair it orders by.
-	// LIMIT/OFFSET was rejected outright: occurred_on is backdatable (PRD
-	// section 7.2 defaults to today, editable), so a row can land in the middle
-	// of a newest-first list between two page fetches and an offset would
-	// silently skip or duplicate it. The row-value comparison below cannot:
-	// cursor_occurred_on/cursor_id NULL on the first page (the whole clause
-	// short-circuits true and nothing is excluded), and a later page passes the
-	// previous page's last row, keeping only strictly older pairs regardless of
-	// what was inserted since. cursor_id is CAST to INTEGER inside the tuple -
-	// without it sqlc infers its Go type from the row-value's other element
-	// (cursor_occurred_on, TEXT) instead of the id column it is actually
-	// compared against, and generates CursorID as *string for what is an int64
-	// primary key.
+	// GET /api/transactions (#225, ADR-032): newest-first, keyset-paged on the pair
+	// it orders by. LIMIT/OFFSET was rejected: occurred_on is backdatable (PRD
+	// section 7.2), so a row can land mid-list between two page fetches and an
+	// offset would skip or duplicate it. The row-value comparison cannot:
+	// cursor_occurred_on/cursor_id are NULL on the first page (the clause
+	// short-circuits true), and a later page passes the previous page's last row,
+	// keeping only strictly older pairs. cursor_id is CAST to INTEGER inside the
+	// tuple because otherwise sqlc infers its Go type from the tuple's other
+	// element (TEXT) and generates CursorID as *string for an int64 key.
 	//
-	// Search is every clause under q: a case-insensitive substring test over
-	// note, purpose name and member name (LEFT JOIN - most rows carry no
-	// member_id), plus an exact amount match. INSTR(LOWER(col), LOWER(q)) > 0
-	// rather than "col COLLATE NOCASE LIKE q ESCAPE '$'" as ADR-032 literally
-	// asks for: sqlc v1.31.1's SQLite query analyzer only registers the FIRST
-	// "COLLATE ... LIKE <param> ESCAPE '<literal>'" clause in a query and
-	// silently leaves every later occurrence of that exact construct as
-	// un-rewritten literal text ("sqlc.narg('q_purpose')" etc, verbatim) in the
-	// emitted SQL - a bare LIKE with no ESCAPE, or the same clause used only
-	// once, both generate correctly, which is what makes this so easy to ship
-	// unnoticed (confirmed by bisection: swapping ESCAPE for INSTR/LOWER below,
-	// with nothing else changed, fixes it). No test in this file could have
-	// caught it either - `go vet`/the compiler see a struct simply missing the
-	// fields the broken clauses reference, `make sqlc`'s own generate step
-	// exits 0, and the query is syntactically valid SQL that runs and returns
-	// rows; it is only wrong once a purpose- or member-name search is exercised
-	// against real data. INSTR does not interpret % or _ as wildcards at all
-	// (it is a plain substring test), so this also drops the ESCAPE-and-wildcard-
-	// escaping machinery ADR-032 assumed LIKE would need - "LIKE wildcards in q
-	// are literal" is true here by construction, not by escaping.
+	// Search is every clause under q: a case-insensitive substring test over note,
+	// purpose name and member name (LEFT JOIN - most rows carry no member_id),
+	// plus an exact amount match. INSTR(LOWER(col), LOWER(q)) > 0 rather than
+	// "col COLLATE NOCASE LIKE q ESCAPE '$'" as ADR-032 literally asks for: sqlc
+	// v1.31.1 only registers the FIRST such clause in a query and silently leaves
+	// every later one as literal text ("sqlc.narg('q_purpose')" verbatim) in the
+	// emitted SQL. Nothing catches it: the compiler sees a struct missing fields,
+	// `make sqlc` exits 0, and the query is valid SQL that returns rows; it is
+	// only wrong once a purpose- or member-name search runs on real data. INSTR
+	// also treats % and _ as plain characters, so "LIKE wildcards in q are
+	// literal" holds by construction, not by escaping.
 	//
-	// member_id, purpose_id, month and direction are Riwayat -> Transaksi's
-	// filters (#424, the public report's four); dues_period is
-	// Dues/MemberPayments.tsx's payment history panel alone. month is
-	// "YYYY-MM" against occurred_on's own "YYYY-MM-DD" text (the schema's CHECK
-	// keeps it in that form), so a prefix compare is the month. All compose
-	// with q and with the keyset cursor rather than replacing either.
+	// member_id, purpose_id, month and direction are Riwayat -> Transaksi's filters
+	// (#424, the public report's four); dues_period is Dues/MemberPayments.tsx's
+	// payment history panel alone. month is "YYYY-MM", prefix-compared against
+	// occurred_on's "YYYY-MM-DD" (the schema's CHECK keeps that form). All compose
+	// with q and the keyset cursor.
 	//
-	// page_limit is passed as page size + 1: the caller peeks at whether that
-	// extra row came back to know whether a next page exists, then trims it
-	// before building the response.
+	// page_limit is page size + 1: the caller peeks at the extra row to know
+	// whether a next page exists, then trims it.
 	//
-	// The columns after created_at (#257) carry every fact a system-created
-	// row's display label needs, so the client never issues a second request to
-	// build one - see TransactionList.tsx. Every join below is fund-scoped by
-	// construction, not by an extra "AND fund_id = ..." clause: each id it joins
-	// on (member_id, reimbursement_id, transfer_id, a fix's own row id) reaches
-	// this table only through a composite FK back to "transaction"(fund_id, id)
-	// or an equivalent composite FK on the table that named it, so a row from
-	// another fund can never be the thing joined to.
+	// The columns after created_at (#257) carry every fact a system-created row's
+	// display label needs, so the client never makes a second request - see
+	// TransactionList.tsx. Every join is fund-scoped by construction, not by an
+	// extra fund_id clause: each id it joins on reaches this table only through a
+	// composite FK, so another fund's row can never be joined.
 	//
-	//   - account_name: this row's own account (location) - opening balance
-	//     and a reconciliation fix both label themselves by it. INNER, not
-	//     LEFT: account_id is NOT NULL and DeleteAccount refuses an account any
-	//     transaction still references, so the row always exists.
-	//   - member_name/settlement_member_name: the dues member for a dues
-	//     payment or reversal (t.member_id), or, separately, the settled
-	//     claim's member for a reimbursement payout (t.member_id is NULL on
-	//     kind='reimbursement' - ADR-024 - so that row's member comes from the
-	//     reimbursement row it settles instead). Two columns, not one merged
-	//     by SQL COALESCE: sqlc 1.31.1's SQLite analyzer infers COALESCE(a, b)
-	//     of two LEFT-JOINed, equally-nullable columns as NOT NULL here - the
-	//     same shape of static-analysis miss ListTransactionsPage's own q
-	//     clause already documents for a repeated ESCAPE - so the merge (at
-	//     most one of the two is ever non-NULL for a given row) happens in Go,
-	//     in toTransactionResponse, where the compiler still sees a pointer.
-	//   - claim_note: the settled claim's own note (reimbursement.note),
-	//     always NULL except on a kind='reimbursement' row.
-	//   - transfer_kind plus four transfer_from/to_account/purpose_name
-	//     columns: only meaningful for kind='transfer' rows. tf/tt are this
-	//     transfer's two legs, found by direction ('out' is always the pair's
-	//     from leg, 'in' its to leg - postTransferPairTx's own construction,
-	//     internal/ledger/transfer.go) - never by which of the two *this* row
-	//     happens to be, so both legs of one transfer carry identical from/to
-	//     facts. Four plain columns rather than one SQL CASE selecting between
-	//     an account and a purpose column by transfer.kind: sqlc 1.31.1 cannot
-	//     type such a CASE here at all (it lands on the Go side as an untyped
-	//     interface{}, losing the compile-time check ADR-024 relies on), and
-	//     forcing a type with CAST is this codebase's own documented way to
-	//     tell sqlc a value is never NULL (LatestDuesPeriodPaidByMember's own
-	//     comment) - the opposite of what these four columns are, the rest of
-	//     the time. Picking the account pair or the purpose pair by
-	//     transfer_kind is toTransactionResponse's job instead, in Go, where
-	//     the compiler still sees four ordinary pointers.
-	//   - transfer_corrects_transaction_id: this row's own transfer's link
-	//     (ADR-033, #267), non-NULL exactly on a correction pair's two legs -
-	//     what tells a correction leg apart from a roll's, both of which are
-	//     otherwise the same kind='transfer', kind='reclass_purpose' shape.
-	//     Read off tr, the same join transfer_kind already uses, not a second
-	//     one.
-	//   - transfer_reason: this row's own transfer's reason (ADR-036) - 'roll',
-	//     'allocation', or NULL (a correction, a between_accounts pair, or a
-	//     pair that predates the column, which reads as a roll). Riwayat labels
-	//     an allocation "Pindah pos" from it; only a pair that corrects
-	//     nothing carries one.
+	//   - account_name: this row's account - opening balance and a reconciliation
+	//     fix label themselves by it. INNER join: account_id is NOT NULL and
+	//     DeleteAccount refuses an account any transaction references.
+	//   - member_name/settlement_member_name: the dues member for a dues payment
+	//     or reversal (t.member_id), or, separately, the settled claim's member
+	//     for a reimbursement payout (t.member_id is NULL on kind='reimbursement',
+	//     ADR-024). Two columns, not one SQL COALESCE: sqlc 1.31.1 infers
+	//     COALESCE(a, b) of two LEFT-JOINed nullable columns as NOT NULL, so the
+	//     merge (at most one is non-NULL per row) happens in Go, in
+	//     toTransactionResponse, where the compiler still sees a pointer.
+	//   - claim_note: the settled claim's note, NULL except on a
+	//     kind='reimbursement' row.
+	//   - transfer_kind plus four transfer_from/to_account/purpose_name columns:
+	//     only meaningful for kind='transfer' rows. tf/tt are the transfer's two
+	//     legs, found by direction ('out' is the pair's from leg, 'in' its to leg;
+	//     internal/ledger/transfer.go) - never by which leg *this* row is, so both
+	//     legs carry identical from/to facts. Four plain columns rather than a SQL
+	//     CASE choosing by transfer.kind: sqlc 1.31.1 cannot type such a CASE (it
+	//     lands as interface{}, losing the compile-time check ADR-024 relies on),
+	//     and forcing a type with CAST claims "never NULL" (see
+	//     LatestDuesPeriodPaidByMember) - false for these. toTransactionResponse
+	//     picks the account or purpose pair in Go.
+	//   - transfer_corrects_transaction_id: the transfer's link (ADR-033, #267),
+	//     non-NULL exactly on a correction pair's two legs - what tells them from a
+	//     roll's, which has the same kind='transfer', kind='reclass_purpose' shape.
+	//   - transfer_reason: the transfer's reason (ADR-036) - 'roll', 'allocation',
+	//     or NULL (a correction, a between_accounts pair, or a pair predating the
+	//     column, which reads as a roll). Riwayat labels an allocation "Pindah pos"
+	//     from it.
 	//   - effective_purpose_id: the tag this row's money is under NOW - its own
 	//     purpose_id until a correction (ADR-033) moves it, then the end of the
-	//     path its corrections walk - EffectivePurposeForTransaction's
-	//     derivation (transfer.sql has the reasoning), with no reliance on
-	//     transfer id order (#411).
-	//     COALESCE to t.purpose_id, so an uncorrected row answers itself and
-	//     "has this been corrected?" is effective <> stored rather than a
-	//     second boolean column saying the same thing twice.
+	//     path its corrections walk (EffectivePurposeForTransaction; transfer.sql
+	//     has the reasoning, #411). COALESCEd to t.purpose_id, so an uncorrected
+	//     row answers itself and "has this been corrected?" is effective <> stored.
 	//
-	//     The list keeps rendering the STORED tag (ADR-033): the ledger sums
-	//     stored tags, so a row showing its effective one would put the screen
-	//     out of step with the balances. This column is for the correction
-	//     dialog, which must build its pair from where the money actually is,
-	//     and for the marker that says a correction exists.
+	//     The list keeps rendering the STORED tag (ADR-033): the ledger sums stored
+	//     tags, so showing the effective one would put the screen out of step with
+	//     the balances. This column is for the correction dialog, which must build
+	//     its pair from where the money actually is, and for the marker that says a
+	//     correction exists.
 	ListTransactionsPage(ctx context.Context, arg ListTransactionsPageParams) ([]ListTransactionsPageRow, error)
 	ListTransfersByFund(ctx context.Context, fundID int64) ([]Transfer, error)
-	// ListUsers is the backup export's own read (ADR-012, #323): the whole
-	// table, password hash included - the backup download itself is what
-	// warns the treasurer this file holds the login. user carries no fund_id
-	// (ADR-030), so there is nothing to scope this by; ordered by id purely for
-	// the export's own deterministic byte order (CLAUDE.md's "no primary-key
-	// order" binds a semantic guarantee, not a serialization tiebreak).
+	// The backup export's read (ADR-012): the whole table, password hash included
+	// - the backup download itself warns the treasurer this file holds the login.
+	// user has no fund_id (ADR-030), so nothing to scope by; ordered by id only for
+	// deterministic export bytes, a serialization tiebreak, not a semantic order.
 	ListUsers(ctx context.Context) ([]User, error)
-	// The reconciliation cutoff. Deliberately not an aggregate: SELECT
-	// CAST(MAX(id) AS INTEGER) generates a non-nullable (int64, error), and a
-	// bare aggregate with no GROUP BY still returns one row on an empty table
-	// with the value NULL - so a fund's first-ever reconciliation would fail
-	// with "converting NULL to int64 is unsupported". This form returns zero
-	// rows instead, giving a clean sql.ErrNoRows the domain reads as "no ledger
-	// yet".
+	// The reconciliation cutoff. Deliberately not an aggregate: CAST(MAX(id) AS
+	// INTEGER) generates a non-nullable (int64, error), yet a bare aggregate still
+	// returns one NULL row on an empty table, so a fund's first-ever
+	// reconciliation would fail with "converting NULL to int64 is unsupported".
+	// This form returns zero rows instead - a clean sql.ErrNoRows the domain reads
+	// as "no ledger yet".
 	MaxTransactionIDByFund(ctx context.Context, fundID int64) (int64, error)
 	// The outstanding total, cast so it lands as int64 rather than interface{}:
-	// sqlc's SQLite engine cannot infer the type of a summed expression, and an
-	// uncast aggregate is a silent failure that only surfaces at M3 (ADR-024).
+	// sqlc's SQLite engine cannot infer the type of a summed expression (ADR-024).
 	OutstandingReimbursementTotal(ctx context.Context, fundID int64) (int64, error)
-	// Ping proves the store is reachable through the generated code (open,
-	// migrate, query) without naming a table, which M1.3 deliberately has none of.
-	// Every real query arrives with the schema at M2; this one stays as the
-	// readiness probe /healthz calls.
+	// The readiness probe /healthz calls: proves the store is reachable through the
+	// generated code without naming a table.
 	//
 	// Every comment in this directory is pure ASCII, and that is load-bearing:
 	// sqlc v1.31.1's SQLite engine measures a statement's end in runes but slices
 	// the source in bytes, so each non-ASCII character in a query's leading
-	// comment silently chops one more byte off the tail of the generated constant.
-	// Three em dashes here used to cost six bytes, leaving `SELECT 1` where
-	// `SELECT 1 AS ok` was written; it still ran, which is what makes it
-	// dangerous. `LIMIT 1` losing its `1` does not. See ADR-024 and ADR-005.
+	// comment silently chops one more byte off the tail of the generated constant
+	// (`SELECT 1 AS ok` became `SELECT 1`). It still ran, which is what makes it
+	// dangerous; `LIMIT 1` losing its `1` does not. See ADR-024 and ADR-005.
 	Ping(ctx context.Context) (int64, error)
 	PurposeBalance(ctx context.Context, arg PurposeBalanceParams) (int64, error)
 	// Whether the fund as a whole came out even. Cast so the trust core gets an
 	// int64 rather than interface{} - sqlc's SQLite engine cannot infer the type of
 	// a summed expression (ADR-024).
 	ReconciliationDifferenceTotal(ctx context.Context, reconciliationID int64) (int64, error)
-	// The way back (ADR-031): closed_on to NULL, the exact inverse of
-	// CloseIncidental above and, like it, a plain UPDATE rather than a ledger
-	// entry - reopening moves no money either. Ledger.ReopenIncidental fetches
-	// the envelope through GetIncidental's fund-scoped join first, so by the
-	// time this runs the purpose_id is already known to belong to the caller's
-	// fund; this query itself stays unscoped, the same shape CloseIncidental
-	// already uses.
+	// The way back (ADR-031): closed_on to NULL, a plain UPDATE like
+	// CloseIncidental. Unscoped: Ledger.ReopenIncidental fetches through
+	// GetIncidental's fund-scoped join first.
 	ReopenIncidental(ctx context.Context, purposeID int64) (Incidental, error)
 	// The report's month-end figures (#408, ADR-037). Each takes a nullable bound:
 	// NULL is the running month and reads exactly like its unbounded twin
 	// (FundBalance, PurposeBalance, OutstandingReimbursementTotal,
 	// LatestReconciliation, ListOpenReconciliationLinesByFund), so the running
 	// month and Beranda cannot disagree. A past month passes its last day
-	// ("YYYY-MM-DD", compared against occurred_on and the other day columns) or,
-	// for a count, the first instant of the next month in Jakarta as unix seconds.
-	// The CASTs are what make sqlc emit int64 rather than interface{} (ADR-024).
+	// ("YYYY-MM-DD") or, for a count, the first instant of the next month in
+	// Jakarta as unix seconds. The CASTs make sqlc emit int64, not interface{}
+	// (ADR-024).
 	ReportFundBalance(ctx context.Context, arg ReportFundBalanceParams) (int64, error)
 	// A snapshot is never edited (ADR-024), so the latest count before the bound
 	// and the lines it left open are exactly what the report said back then.
 	ReportLatestReconciliation(ctx context.Context, arg ReportLatestReconciliationParams) (Reconciliation, error)
-	// ListOpenReconciliationLinesByFund with both snapshots bounded: a line is
-	// open at the bound when its remainder_amount is non-zero (see
-	// ListReconciliationLines) and no count before the bound has weighed in on
-	// its location since.
+	// ListOpenReconciliationLinesByFund bounded: a line is open at the bound when
+	// its remainder_amount is non-zero (see ListReconciliationLines) and no count
+	// before the bound has weighed in on its location since.
 	ReportOpenReconciliationLines(ctx context.Context, arg ReportOpenReconciliationLinesParams) ([]ReportOpenReconciliationLinesRow, error)
-	// Owed at the bound: incurred by then, not yet waived then, and not yet paid
-	// out by then. waived_on holds only the latest waive, so a claim waived and
-	// later un-waived reads as owed in the months it was waived (#408 accepts it).
+	// Owed at the bound: incurred by then, not yet waived, not yet paid out.
+	// waived_on holds only the latest waive, so a claim waived and later un-waived
+	// reads as owed in the months it was waived (#408 accepts it).
 	ReportOwedToMembers(ctx context.Context, arg ReportOwedToMembersParams) (int64, error)
 	ReportPurposeBalance(ctx context.Context, arg ReportPurposeBalanceParams) (int64, error)
 	RestoreAccount(ctx context.Context, arg RestoreAccountParams) error
@@ -819,100 +621,71 @@ type Querier interface {
 	RestoreReconciliation(ctx context.Context, arg RestoreReconciliationParams) error
 	RestoreReconciliationLine(ctx context.Context, arg RestoreReconciliationLineParams) error
 	RestoreReimbursement(ctx context.Context, arg RestoreReimbursementParams) error
-	// RestoreTransaction is the one insert restore.go must sequence with care
-	// (ADR-012's obligation 1): "transaction" keeps its transaction_named_row_shape
-	// BEFORE INSERT trigger live through a restore - on purpose, it is what
+	// The one insert restore.go must sequence (ADR-012 obligation 1):
+	// transaction_named_row_shape stays live through a restore, on purpose - it
 	// refuses a hand-edited or corrupted backup - so every row naming a
-	// reverses_transaction_id must still be inserted after the row it names.
+	// reverses_transaction_id must be inserted after the row it names.
 	RestoreTransaction(ctx context.Context, arg RestoreTransactionParams) error
 	RestoreTransfer(ctx context.Context, arg RestoreTransferParams) error
-	// TouchSession is the sliding 30-day idle timeout (#113): every read that
-	// proves the session still valid pushes expires_at forward by the same fixed
-	// window, computed by the caller - there is no absolute cap to enforce here.
+	// The sliding 30-day idle timeout (#113): every read that proves the session
+	// valid pushes expires_at forward by a caller-computed window. No absolute cap.
 	TouchSession(ctx context.Context, arg TouchSessionParams) (Session, error)
-	// UpdateAccount is a correction to a location's own labels, not a ledger
-	// event: renaming, re-kinding or retiring an account changes nothing already
-	// posted (name and kind are both labels, not posted facts - nothing in
-	// internal/ledger branches on kind, and the schema's CHECK is the only rule
-	// it carries). name is NOT NULL, so
-	// COALESCE covers it the same way UpdateMember's does; inactive_on needs the
-	// set_inactive_on flag for the same reason UpdateMember's does - a null
-	// argument is ambiguous between "leave alone" and "reinstate".
+	// A correction to a location's labels, not a ledger event: renaming,
+	// re-kinding or retiring an account changes nothing already posted (nothing in
+	// internal/ledger branches on kind; the schema's CHECK is its only rule).
+	// COALESCE covers the NOT NULL name; inactive_on needs the set_inactive_on
+	// flag because a null argument is ambiguous between "leave alone" and
+	// "reinstate" (as in UpdateMember).
 	UpdateAccount(ctx context.Context, arg UpdateAccountParams) (Account, error)
-	// UpdateDuesRate corrects a mistyped amount. effective_from stays fixed: a
-	// rate filed against the wrong month is deleted and re-posted, not moved.
+	// Corrects a mistyped amount. effective_from stays fixed: a rate filed against
+	// the wrong month is deleted and re-posted, not moved.
 	UpdateDuesRate(ctx context.Context, arg UpdateDuesRateParams) (DuesRate, error)
 	// UpdateDuesTier renames a tier - reference data, not history.
 	UpdateDuesTier(ctx context.Context, arg UpdateDuesTierParams) (DuesTier, error)
-	// UpdateFund renames the fund. name is a display label - it heads every
-	// screen and the public report - and nothing posted references it, so this
-	// changes no history (the same reasoning UpdateAccount's own rename rests
-	// on). currency and report_slug are deliberately not settable here: one is
-	// an invariant through 0.x, the other is the report's unguessable address
-	// (which only UpdateFundReportSlug changes).
+	// Renames the fund. name is a display label nothing posted references, so this
+	// changes no history. currency (an invariant through 0.x) and report_slug (the
+	// report's unguessable address; see UpdateFundReportSlug) are deliberately not
+	// settable here.
 	UpdateFund(ctx context.Context, arg UpdateFundParams) (Fund, error)
-	// UpdateFundReportSlug replaces the report's address (ADR-035's leak escape
-	// hatch). The old slug is simply gone: no history, no redirect, so it is an
-	// ordinary unknown slug to GetFundByReportSlug from the next read on.
+	// Replaces the report's address (ADR-035's leak escape hatch). The old slug is
+	// simply gone: no redirect, an ordinary unknown slug from the next read on.
 	UpdateFundReportSlug(ctx context.Context, arg UpdateFundReportSlugParams) (Fund, error)
-	// Setting or clearing the envelope's two expectations - its target and the
-	// minimum every expected member is asked to give (ADR-034, #381) - mutable
-	// like occasion, never a posted fact, so this is a plain UPDATE, the same
-	// shape UpdateIncidentalOccasion already uses. Unscoped by fund_id for the
-	// same reason: Ledger.SetIncidentalParticipation fetches the envelope through
-	// GetIncidental's fund-scoped join first, so by the time this runs the
-	// purpose_id is already known to belong to the caller's fund.
+	// Sets or clears the envelope's target and per-member minimum (ADR-034, #381):
+	// mutable, never a posted fact. Unscoped: Ledger.SetIncidentalParticipation
+	// fetches through GetIncidental's fund-scoped join first.
 	UpdateIncidentalExpectations(ctx context.Context, arg UpdateIncidentalExpectationsParams) (Incidental, error)
-	// A mistyped occasion, corrected in place (#264). Unscoped by fund_id for
-	// the same reason CloseIncidental and ReopenIncidental are: Ledger.RenameIncidental
-	// fetches nothing first here because it has no need to - it already ran
-	// UpdatePurposeName inside the same withTx, which is itself fund-scoped
-	// (GetPurposeForFund via the http layer's resolveRenameablePurpose), so by
-	// the time this runs the purpose_id is already known to belong to the
-	// caller's fund. Renaming moves no money and posts no ledger entry - the
-	// same UPDATE shape CloseIncidental and ReopenIncidental already use for
-	// exactly that reason.
+	// A mistyped occasion, corrected in place (#264). Unscoped: Ledger.RenameIncidental
+	// already ran the fund-scoped UpdatePurposeName in the same transaction.
+	// Renaming moves no money.
 	UpdateIncidentalOccasion(ctx context.Context, arg UpdateIncidentalOccasionParams) (Incidental, error)
-	// UpdateMember is a correction to reference data, not a ledger event. name
-	// and joined_on are NOT NULL, so COALESCE covers them: a nil argument can
-	// only mean "leave alone". The two nullable columns need the set_* flags,
-	// because there a null argument is ambiguous between "leave alone" and
-	// "clear it" - the CASE substitutes the new value, NULL included, only when
-	// the caller sent it.
+	// A correction to reference data, not a ledger event. name and joined_on are
+	// NOT NULL, so COALESCE covers them: nil can only mean "leave alone". The two
+	// nullable columns need the set_* flags, since there a null argument is
+	// ambiguous between "leave alone" and "clear it".
 	UpdateMember(ctx context.Context, arg UpdateMemberParams) (Member, error)
-	// UpdatePurposeName renames a purpose. The name is a label - a posted
-	// transaction references the purpose by id, and nothing in the ledger reads
-	// the text - so this is the same correction UpdateAccount makes for a
-	// location. Which purposes may be renamed is the handler's call, not this
-	// query's: kind is policy (everything but the fund's own 'main' row today),
-	// not shape. For an incidental this is one half of the pair
-	// Ledger.RenameIncidental runs together with UpdateIncidentalOccasion, since
-	// an incidental's occasion is stored on both rows (#264).
+	// Renames a purpose; a posted transaction references it by id and nothing in
+	// the ledger reads the text. Which purposes may be renamed is the handler's
+	// call (policy, not shape). For an incidental this is one half of the pair
+	// Ledger.RenameIncidental runs with UpdateIncidentalOccasion, since the
+	// occasion is stored on both rows (#264).
 	UpdatePurposeName(ctx context.Context, arg UpdatePurposeNameParams) (Purpose, error)
-	// UpdateReimbursement corrects a claim that has not been settled yet - a
-	// wrong amount, the wrong member, or the day it was actually spent. The
-	// claim is off the ledger until it is settled (ADR-024), so this is an
-	// UPDATE and not an adjusting entry; the settled check that keeps it that
-	// way lives in internal/ledger, because it reads another table.
+	// Corrects a claim not yet settled. A claim is off the ledger until settled
+	// (ADR-024), so this is an UPDATE, not an adjusting entry; the settled check
+	// lives in internal/ledger because it reads another table.
 	//
-	// waived_on rides on the same statement rather than a route of its own:
-	// waiving is one column, and pairing it with the ordinary correction is
-	// what makes un-waiving free. Same COALESCE/set_* split as UpdateMember -
-	// the four NOT NULL columns cannot mean "clear it", the two nullable ones
-	// can, and only a set_* flag can tell that from "leave alone".
+	// waived_on rides on the same statement, which makes un-waiving free. Same
+	// COALESCE/set_* split as UpdateMember: the four NOT NULL columns cannot mean
+	// "clear it", the two nullable ones can, and only a set_* flag tells that from
+	// "leave alone".
 	UpdateReimbursement(ctx context.Context, arg UpdateReimbursementParams) (Reimbursement, error)
-	// UpdateUserPassword is create-user's reset half (#287): the email is the
-	// key (matched as GetUserByEmail does, #500), and the hash is computed by
-	// internal/auth before the call.
+	// create-user's reset half (#287): the email is the key, matched as
+	// GetUserByEmail does (#500); the hash is computed by internal/auth.
 	UpdateUserPassword(ctx context.Context, arg UpdateUserPasswordParams) (User, error)
-	// UpsertSession is what a session store commits through: one atomic
-	// statement, because a commit rewrites a token that may or may not already
-	// exist. A delete-then-insert pair cannot stand in for it - ADR-004's
-	// SetMaxOpenConns(1) serialises the two statements but does not join them,
-	// so two concurrent requests carrying the same cookie interleave as
-	// DELETE / DELETE / INSERT / INSERT and the second INSERT trips
-	// session.token's primary key. ON CONFLICT makes the rewrite one statement,
-	// which is the only thing that closes that window.
+	// What a session store commits through, as one atomic statement: a delete then
+	// insert pair cannot stand in. ADR-004's SetMaxOpenConns(1) serialises the two
+	// statements but does not join them, so two concurrent requests carrying the
+	// same cookie interleave as DELETE / DELETE / INSERT / INSERT and the second
+	// INSERT trips session.token's primary key. ON CONFLICT closes that window.
 	UpsertSession(ctx context.Context, arg UpsertSessionParams) (Session, error)
 }
 

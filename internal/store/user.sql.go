@@ -14,9 +14,8 @@ SELECT CAST(COUNT(*) AS INTEGER) AS user_count
 FROM "user"
 `
 
-// CountUsers is how register (#114) knows whether the one-shot bootstrap
-// account already exists (ADR-030 decision 2): the gate is the count, not a
-// duplicate-email collision.
+// How register (#114) knows whether the one-shot bootstrap account exists
+// (ADR-030): the gate is the count, not a duplicate-email collision.
 func (q *Queries) CountUsers(ctx context.Context) (int64, error) {
 	row := q.db.QueryRowContext(ctx, countUsers)
 	var user_count int64
@@ -59,14 +58,13 @@ type GetUserByEmailParams struct {
 	Exact      string
 }
 
-// GetUserByEmail finds the login case-insensitively without a schema change
-// (#500). New rows are stored trimmed and lower-cased (auth.NormalizeEmail),
-// but a row written before that keeps whatever case it was typed in, so the
-// lookup matches either the normalized form against lower(email) or the
-// address exactly as stored. SQLite's lower() folds ASCII only: the exact arm
-// is what keeps a legacy row with a non-ASCII capital findable by the very
-// text it was registered with. The COLLATE NOCASE column rides the schema
-// epic (#523); user holds one row, so no index is lost to the OR.
+// Finds the login case-insensitively without a schema change (#500). New rows
+// are stored trimmed and lower-cased (auth.NormalizeEmail), but an older row
+// keeps whatever case it was typed in, so the lookup matches the normalized
+// form against lower(email) or the address exactly as stored. SQLite's lower()
+// folds ASCII only: the exact arm keeps a legacy row with a non-ASCII capital
+// findable. The COLLATE NOCASE column rides the schema epic (#523); user holds
+// one row, so the OR costs no index.
 func (q *Queries) GetUserByEmail(ctx context.Context, arg GetUserByEmailParams) (User, error) {
 	row := q.db.QueryRowContext(ctx, getUserByEmail, arg.Normalized, arg.Exact)
 	var i User
@@ -85,12 +83,10 @@ FROM "user"
 ORDER BY id
 `
 
-// ListUsers is the backup export's own read (ADR-012, #323): the whole
-// table, password hash included - the backup download itself is what
-// warns the treasurer this file holds the login. user carries no fund_id
-// (ADR-030), so there is nothing to scope this by; ordered by id purely for
-// the export's own deterministic byte order (CLAUDE.md's "no primary-key
-// order" binds a semantic guarantee, not a serialization tiebreak).
+// The backup export's read (ADR-012): the whole table, password hash included
+// - the backup download itself warns the treasurer this file holds the login.
+// user has no fund_id (ADR-030), so nothing to scope by; ordered by id only for
+// deterministic export bytes, a serialization tiebreak, not a semantic order.
 func (q *Queries) ListUsers(ctx context.Context) ([]User, error) {
 	rows, err := q.db.QueryContext(ctx, listUsers)
 	if err != nil {
@@ -132,9 +128,8 @@ type UpdateUserPasswordParams struct {
 	Exact        string
 }
 
-// UpdateUserPassword is create-user's reset half (#287): the email is the
-// key (matched as GetUserByEmail does, #500), and the hash is computed by
-// internal/auth before the call.
+// create-user's reset half (#287): the email is the key, matched as
+// GetUserByEmail does (#500); the hash is computed by internal/auth.
 func (q *Queries) UpdateUserPassword(ctx context.Context, arg UpdateUserPasswordParams) (User, error) {
 	row := q.db.QueryRowContext(ctx, updateUserPassword, arg.PasswordHash, arg.Normalized, arg.Exact)
 	var i User

@@ -54,9 +54,8 @@ type GetReconciliationParams struct {
 	FundID int64
 }
 
-// Fund-scoped: an id names a row, it does not prove the caller may see it.
-// PRD section 6 allows a server to hold more than one fund, so a bare lookup
-// by id alone would be a cross-fund read the moment a second fund exists.
+// Fund-scoped: PRD section 6 allows a server to hold more than one fund, so a
+// bare lookup by id would be a cross-fund read.
 func (q *Queries) GetReconciliation(ctx context.Context, arg GetReconciliationParams) (Reconciliation, error) {
 	row := q.db.QueryRowContext(ctx, getReconciliation, arg.ID, arg.FundID)
 	var i Reconciliation
@@ -174,21 +173,18 @@ type ListReconciliationsPageRow struct {
 	OpenDifferenceAmount int64
 }
 
-// GET /api/reconciliations's real listing (#227, ADR-032 "Lists: paging and
-// search") - newest-first and keyset-paged on (performed_at, id), the same
-// row-value-keyset shape ListReimbursementsPage/ListTransactionsPage use
-// (their own comments have the full reasoning). No search - a handful of
-// dated snapshots a year, per the issue.
+// GET /api/reconciliations (#227, ADR-032): newest-first, keyset-paged on
+// (performed_at, id) like ListTransactionsPage (which has the reasoning). No
+// search - a handful of snapshots a year.
 //
-// open_difference_amount is the sum of ABS(remainder_amount) across that
-// snapshot's lines (#498; see ListReconciliationLines for the remainder) - the same figure Confirmation on /reconcile
-// computes client-side from a detail fetch, computed here so a list row can
-// show cocok (0) vs selisih without one. Cast so it lands as int64 rather
-// than interface{} - sqlc's SQLite engine cannot infer the type of a summed
-// expression (ADR-024).
+// open_difference_amount is the sum of ABS(remainder_amount) across the
+// snapshot's lines (#498; see ListReconciliationLines) - the figure
+// Confirmation on /reconcile computes client-side, here so a list row can show
+// cocok (0) vs selisih without a detail fetch. Cast so it lands as int64
+// rather than interface{}: sqlc's SQLite engine cannot infer the type of a
+// summed expression (ADR-024).
 //
-// page_limit is page size + 1, the same "peek at one extra row" trick the
-// other two paged lists use.
+// page_limit is page size + 1: peek at one extra row.
 func (q *Queries) ListReconciliationsPage(ctx context.Context, arg ListReconciliationsPageParams) ([]ListReconciliationsPageRow, error) {
 	rows, err := q.db.QueryContext(ctx, listReconciliationsPage,
 		arg.FundID,

@@ -32,9 +32,8 @@ const deleteAllSessions = `-- name: DeleteAllSessions :exec
 DELETE FROM session
 `
 
-// DeleteAllSessions signs every device out. A password reset (#287) calls it:
-// the instance holds one login (ADR-030), so "every session" is exactly "every
-// session of the account whose password just changed", and a reset that left
+// Signs every device out, for a password reset (#287): the instance holds one
+// login (ADR-030), so "every session" is that account's, and a reset that left
 // an old cookie working would not be a reset.
 func (q *Queries) DeleteAllSessions(ctx context.Context) error {
 	_, err := q.db.ExecContext(ctx, deleteAllSessions)
@@ -46,9 +45,8 @@ DELETE FROM session
 WHERE expires_at <= ?
 `
 
-// DeleteExpiredSessions is the lazy sweep: called as a side effect of a
-// session write, never by a background ticker (ADR-013's scheduler stays
-// out of it).
+// The lazy sweep: a side effect of a session write, never a background ticker
+// (ADR-013).
 func (q *Queries) DeleteExpiredSessions(ctx context.Context, expiresAt int64) error {
 	_, err := q.db.ExecContext(ctx, deleteExpiredSessions, expiresAt)
 	return err
@@ -75,8 +73,8 @@ type GetSessionParams struct {
 	ExpiresAt int64
 }
 
-// GetSession only returns a row still inside its idle window; a session past
-// expires_at is functionally gone even before DeleteExpiredSessions sweeps it.
+// Only a row still inside its idle window; a session past expires_at is gone
+// even before DeleteExpiredSessions sweeps it.
 func (q *Queries) GetSession(ctx context.Context, arg GetSessionParams) (Session, error) {
 	row := q.db.QueryRowContext(ctx, getSession, arg.Token, arg.ExpiresAt)
 	var i Session
@@ -97,9 +95,8 @@ type TouchSessionParams struct {
 	NotBefore    int64
 }
 
-// TouchSession is the sliding 30-day idle timeout (#113): every read that
-// proves the session still valid pushes expires_at forward by the same fixed
-// window, computed by the caller - there is no absolute cap to enforce here.
+// The sliding 30-day idle timeout (#113): every read that proves the session
+// valid pushes expires_at forward by a caller-computed window. No absolute cap.
 func (q *Queries) TouchSession(ctx context.Context, arg TouchSessionParams) (Session, error) {
 	row := q.db.QueryRowContext(ctx, touchSession, arg.NewExpiresAt, arg.Token, arg.NotBefore)
 	var i Session
@@ -121,14 +118,11 @@ type UpsertSessionParams struct {
 	ExpiresAt int64
 }
 
-// UpsertSession is what a session store commits through: one atomic
-// statement, because a commit rewrites a token that may or may not already
-// exist. A delete-then-insert pair cannot stand in for it - ADR-004's
-// SetMaxOpenConns(1) serialises the two statements but does not join them,
-// so two concurrent requests carrying the same cookie interleave as
-// DELETE / DELETE / INSERT / INSERT and the second INSERT trips
-// session.token's primary key. ON CONFLICT makes the rewrite one statement,
-// which is the only thing that closes that window.
+// What a session store commits through, as one atomic statement: a delete then
+// insert pair cannot stand in. ADR-004's SetMaxOpenConns(1) serialises the two
+// statements but does not join them, so two concurrent requests carrying the
+// same cookie interleave as DELETE / DELETE / INSERT / INSERT and the second
+// INSERT trips session.token's primary key. ON CONFLICT closes that window.
 func (q *Queries) UpsertSession(ctx context.Context, arg UpsertSessionParams) (Session, error) {
 	row := q.db.QueryRowContext(ctx, upsertSession, arg.Token, arg.Data, arg.ExpiresAt)
 	var i Session

@@ -3,81 +3,61 @@ INSERT INTO incidental (purpose_id, occasion, target_amount, opened_on, closed_o
 VALUES (?, ?, ?, ?, ?, ?, ?)
 RETURNING purpose_id, occasion, target_amount, opened_on, closed_on, minimum_per_member, created_at;
 
--- Fund-scoped through purpose, which is where the envelope's fund_id lives
--- (incidental is 1:1 with its purpose row and carries no fund_id of its own).
--- An id names a row, it does not prove the caller may see it: PRD section 6 allows a
--- server to hold more than one fund, so a bare WHERE purpose_id = ? would be a
--- cross-fund read the moment a second fund exists.
+-- Fund-scoped through purpose, where the envelope's fund_id lives. PRD section
+-- 6 allows a server to hold more than one fund, so a bare WHERE purpose_id = ?
+-- would be a cross-fund read the moment a second fund exists.
 -- name: GetIncidental :one
 SELECT i.purpose_id, i.occasion, i.target_amount, i.opened_on, i.closed_on, i.minimum_per_member, i.created_at
 FROM incidental i
 JOIN purpose p ON p.id = i.purpose_id
 WHERE i.purpose_id = ? AND p.fund_id = ?;
 
--- Closing an envelope moves no money, so this is an UPDATE rather than a ledger
--- entry - incidental carries no immutability trigger for exactly this reason.
+-- Closing an envelope moves no money: an UPDATE, not a ledger entry, which is
+-- why incidental carries no immutability trigger.
 -- name: CloseIncidental :one
 UPDATE incidental
 SET closed_on = ?
 WHERE purpose_id = ?
 RETURNING purpose_id, occasion, target_amount, opened_on, closed_on, minimum_per_member, created_at;
 
--- The guard's one query (ADR-031): sql.ErrNoRows for a purpose_id that is
--- not an incidental at all (main, pass_through - PostTransaction's caller
--- reads that as "no guard applies", not as a schema violation), a row with
--- closed_on NULL for an open envelope, and a row with closed_on set for a
--- closed one. Deliberately not scoped by fund_id: PostTransaction already
--- holds a purpose_id it trusts (its own caller's fund-scoped picker, or the
--- schema's own composite FK once the write lands), and this check runs
--- before that write, not in place of it.
+-- The closed-envelope guard's one query (ADR-031): sql.ErrNoRows for a
+-- purpose_id that is not an incidental (main, pass_through - "no guard
+-- applies"), closed_on NULL for an open envelope, set for a closed one. Not
+-- scoped by fund_id: PostTransaction already holds a trusted purpose_id, and
+-- the composite FK still guards the write that follows.
 -- name: IncidentalClosedOnForPurpose :one
 SELECT closed_on
 FROM incidental
 WHERE purpose_id = ?;
 
--- A mistyped occasion, corrected in place (#264). Unscoped by fund_id for
--- the same reason CloseIncidental and ReopenIncidental are: Ledger.RenameIncidental
--- fetches nothing first here because it has no need to - it already ran
--- UpdatePurposeName inside the same withTx, which is itself fund-scoped
--- (GetPurposeForFund via the http layer's resolveRenameablePurpose), so by
--- the time this runs the purpose_id is already known to belong to the
--- caller's fund. Renaming moves no money and posts no ledger entry - the
--- same UPDATE shape CloseIncidental and ReopenIncidental already use for
--- exactly that reason.
+-- A mistyped occasion, corrected in place (#264). Unscoped: Ledger.RenameIncidental
+-- already ran the fund-scoped UpdatePurposeName in the same transaction.
+-- Renaming moves no money.
 -- name: UpdateIncidentalOccasion :one
 UPDATE incidental
 SET occasion = ?
 WHERE purpose_id = ?
 RETURNING purpose_id, occasion, target_amount, opened_on, closed_on, minimum_per_member, created_at;
 
--- The way back (ADR-031): closed_on to NULL, the exact inverse of
--- CloseIncidental above and, like it, a plain UPDATE rather than a ledger
--- entry - reopening moves no money either. Ledger.ReopenIncidental fetches
--- the envelope through GetIncidental's fund-scoped join first, so by the
--- time this runs the purpose_id is already known to belong to the caller's
--- fund; this query itself stays unscoped, the same shape CloseIncidental
--- already uses.
+-- The way back (ADR-031): closed_on to NULL, a plain UPDATE like
+-- CloseIncidental. Unscoped: Ledger.ReopenIncidental fetches through
+-- GetIncidental's fund-scoped join first.
 -- name: ReopenIncidental :one
 UPDATE incidental
 SET closed_on = NULL
 WHERE purpose_id = ?
 RETURNING purpose_id, occasion, target_amount, opened_on, closed_on, minimum_per_member, created_at;
 
--- Setting or clearing the envelope's two expectations - its target and the
--- minimum every expected member is asked to give (ADR-034, #381) - mutable
--- like occasion, never a posted fact, so this is a plain UPDATE, the same
--- shape UpdateIncidentalOccasion already uses. Unscoped by fund_id for the
--- same reason: Ledger.SetIncidentalParticipation fetches the envelope through
--- GetIncidental's fund-scoped join first, so by the time this runs the
--- purpose_id is already known to belong to the caller's fund.
+-- Sets or clears the envelope's target and per-member minimum (ADR-034, #381):
+-- mutable, never a posted fact. Unscoped: Ledger.SetIncidentalParticipation
+-- fetches through GetIncidental's fund-scoped join first.
 -- name: UpdateIncidentalExpectations :one
 UPDATE incidental
 SET target_amount = ?, minimum_per_member = ?
 WHERE purpose_id = ?
 RETURNING purpose_id, occasion, target_amount, opened_on, closed_on, minimum_per_member, created_at;
 
--- Joined through purpose because that is where fund ownership lives; incidental
--- has no fund_id of its own (it is 1:1 with a purpose row).
+-- Joined through purpose, where fund ownership lives.
 -- name: ListIncidentalsByFund :many
 SELECT i.purpose_id, i.occasion, i.target_amount, i.opened_on, i.closed_on, i.minimum_per_member, i.created_at
 FROM incidental i

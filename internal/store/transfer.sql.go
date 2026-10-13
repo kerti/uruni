@@ -23,13 +23,11 @@ type CreateTransferParams struct {
 	CreatedAt             int64
 }
 
-// corrects_transaction_id is nil for every transfer but a purpose
-// correction (ADR-033) - between_accounts and CloseIncidentalAndRoll's own
-// reclass_purpose rolls both pass nil, the same NULL the schema's CHECK
-// requires of anything that is not kind='reclass_purpose'. reason (ADR-036)
-// is 'roll' for CloseIncidentalAndRoll, 'allocation' for a purpose move, and
-// nil for every other pair - the same CHECK holds it to a reclass_purpose
-// pair that corrects nothing.
+// corrects_transaction_id is nil for every transfer but a purpose correction
+// (ADR-033); the schema's CHECK requires NULL of anything not
+// kind='reclass_purpose'. reason (ADR-036) is 'roll' for
+// CloseIncidentalAndRoll, 'allocation' for a purpose move, nil for every other
+// pair - the CHECK holds it to a reclass_purpose pair that corrects nothing.
 func (q *Queries) CreateTransfer(ctx context.Context, arg CreateTransferParams) (Transfer, error) {
 	row := q.db.QueryRowContext(ctx, createTransfer,
 		arg.FundID,
@@ -70,19 +68,17 @@ type EffectivePurposeForTransactionParams struct {
 	ID     int64
 }
 
-// The effective peruntukan (ADR-033, #411): the tag this row's money is
-// under now. Each correction moves the whole row from wherever it is to a new
-// tag, so a row's corrections form a path starting at its stored purpose_id;
-// the tag it ends on is the one the money entered once more than it left,
-// counting the stored tag as the start. That needs no ordering of the
-// corrections - transfer ids are not an order to rely on - and a row
-// corrected and then corrected back ends where it began.
+// The effective peruntukan (ADR-033, #411): the tag this row's money is under
+// now. Each correction moves the whole row to a new tag, so its corrections
+// form a path starting at the stored purpose_id; the tag it ends on is the one
+// the money entered once more than it left, counting the stored tag as the
+// start. That needs no ordering of corrections (transfer ids are not an order
+// to rely on), and a row corrected and then corrected back ends where it began.
 //
-// Which leg of a correction is "entering" depends on the row's own direction:
-// PostPurposeCorrection puts the target on the leg moving the same way as the
-// row (an 'out' mis-tag needs the target on the 'out' leg, an 'in' on the
-// 'in'), so leg.direction = t.direction reads back what it wrote. A row
-// nothing corrects answers its own purpose_id.
+// Which leg is "entering" depends on the row's direction: PostPurposeCorrection
+// puts the target on the leg moving the same way as the row, so
+// leg.direction = t.direction reads back what it wrote. A row nothing corrects
+// answers its own purpose_id.
 func (q *Queries) EffectivePurposeForTransaction(ctx context.Context, arg EffectivePurposeForTransactionParams) (int64, error) {
 	row := q.db.QueryRowContext(ctx, effectivePurposeForTransaction, arg.FundID, arg.ID)
 	var effective_purpose_id int64

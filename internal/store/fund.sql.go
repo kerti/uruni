@@ -65,9 +65,8 @@ FROM fund
 WHERE report_slug = ?
 `
 
-// GetFundByReportSlug is the public report's only way in (ADR-030's
-// carve-out, ADR-035): the slug names its fund, with no session involved.
-// report_slug is UNIQUE, so this is one row or sql.ErrNoRows.
+// The public report's only way in (ADR-030 carve-out, ADR-035): the slug names
+// its fund, with no session. report_slug is UNIQUE: one row or sql.ErrNoRows.
 func (q *Queries) GetFundByReportSlug(ctx context.Context, reportSlug string) (Fund, error) {
 	row := q.db.QueryRowContext(ctx, getFundByReportSlug, reportSlug)
 	var i Fund
@@ -128,12 +127,10 @@ type UpdateFundParams struct {
 	ID   int64
 }
 
-// UpdateFund renames the fund. name is a display label - it heads every
-// screen and the public report - and nothing posted references it, so this
-// changes no history (the same reasoning UpdateAccount's own rename rests
-// on). currency and report_slug are deliberately not settable here: one is
-// an invariant through 0.x, the other is the report's unguessable address
-// (which only UpdateFundReportSlug changes).
+// Renames the fund. name is a display label nothing posted references, so this
+// changes no history. currency (an invariant through 0.x) and report_slug (the
+// report's unguessable address; see UpdateFundReportSlug) are deliberately not
+// settable here.
 func (q *Queries) UpdateFund(ctx context.Context, arg UpdateFundParams) (Fund, error) {
 	row := q.db.QueryRowContext(ctx, updateFund, arg.Name, arg.ID)
 	var i Fund
@@ -159,9 +156,8 @@ type UpdateFundReportSlugParams struct {
 	ID         int64
 }
 
-// UpdateFundReportSlug replaces the report's address (ADR-035's leak escape
-// hatch). The old slug is simply gone: no history, no redirect, so it is an
-// ordinary unknown slug to GetFundByReportSlug from the next read on.
+// Replaces the report's address (ADR-035's leak escape hatch). The old slug is
+// simply gone: no redirect, an ordinary unknown slug from the next read on.
 func (q *Queries) UpdateFundReportSlug(ctx context.Context, arg UpdateFundReportSlugParams) (Fund, error) {
 	row := q.db.QueryRowContext(ctx, updateFundReportSlug, arg.ReportSlug, arg.ID)
 	var i Fund
