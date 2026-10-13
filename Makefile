@@ -72,7 +72,7 @@ E2E_LOG_LEVEL ?= warn
 # ignores the v2 schema in .golangci.yml, and two v2 releases also disagree
 # about real code (2.12 and 2.13 ship different staticcheck versions), so
 # `make check` would stop meaning what ADR-020 says. Bump both together.
-GOLANGCI_CI_VERSION := v2.13.2
+GOLANGCI_CI_VERSION := v2.14.0
 
 # The sqlc version that wrote internal/store (the `sqlc vX` line in every
 # generated header) and that ci.yml installs (env.SQLC_VERSION there). Another
