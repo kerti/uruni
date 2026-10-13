@@ -1,28 +1,21 @@
--- The members an envelope is for (ADR-034), never expected to contribute
--- themselves. Inserted one row at a time inside Ledger.OpenIncidental's and
--- Ledger.SetIncidentalParticipation's own withTx - unscoped validation here,
--- the same shape UpdateIncidentalOccasion's own comment argues for: both
--- callers already hold a purpose_id (and, for SetIncidentalParticipation, a
--- fund_id) proven to belong to the caller's fund by an earlier fund-scoped
--- fetch in the same transaction.
+-- The members an envelope is for (ADR-034). Unscoped: both callers
+-- (Ledger.OpenIncidental, Ledger.SetIncidentalParticipation) already proved
+-- purpose_id belongs to the caller's fund by a fund-scoped fetch earlier in
+-- the same transaction.
 -- name: CreateIncidentalRecipient :exec
 INSERT INTO incidental_recipient (fund_id, purpose_id, member_id)
 VALUES (?, ?, ?);
 
--- The full-replace half of SetIncidentalParticipation (ADR-034): recipients
--- are edited like occasion, not accumulated, so setting a new list clears the
--- old one first. Unscoped by fund_id for the reason CreateIncidentalRecipient's
--- own comment gives - purpose_id already belongs to the caller's fund by the
--- time this runs.
+-- The full-replace half of SetIncidentalParticipation (ADR-034): a new list
+-- clears the old one first. Unscoped for the reason CreateIncidentalRecipient
+-- gives.
 -- name: DeleteIncidentalRecipientsByPurpose :exec
 DELETE FROM incidental_recipient
 WHERE purpose_id = ?;
 
--- One envelope's recipients, member name alongside the id so a caller (the
--- participation view, the envelope's own detail screen) never has to look
--- each one up separately. Ordered by name then id - the same tiebreak
--- ListMembersPage uses - rather than insertion order, which carries no
--- meaning here (CLAUDE.md's "no primary-key order" rule).
+-- One envelope's recipients with the member name, so callers need no second
+-- lookup. Ordered by name then id (as ListMembersPage), not insertion order,
+-- which carries no meaning here.
 -- name: ListIncidentalRecipients :many
 SELECT ir.member_id, m.name AS member_name
 FROM incidental_recipient ir
@@ -30,14 +23,9 @@ JOIN member m ON m.id = ir.member_id
 WHERE ir.purpose_id = ?
 ORDER BY m.name COLLATE NOCASE, m.id;
 
--- ListIncidentalRecipientsByFund is the backup export's own read (ADR-012,
--- #323): every recipient row across every envelope the fund owns, in its
--- own raw columns (fund_id, purpose_id, member_id) rather than
--- ListIncidentalRecipients' joined member_name - the export names the
--- table's own columns, and a restore reads member_id, not a name. The table
--- has no single-column id (its primary key is the (fund_id, purpose_id,
--- member_id) triple), so this orders by that triple directly - purely for
--- the export's own deterministic byte order.
+-- The backup export's read (ADR-012): raw table columns, no joined member_name,
+-- since a restore reads member_id. The primary key is the (fund_id, purpose_id,
+-- member_id) triple, so it orders by that, only for deterministic export bytes.
 -- name: ListIncidentalRecipientsByFund :many
 SELECT fund_id, purpose_id, member_id
 FROM incidental_recipient

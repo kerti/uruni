@@ -3,11 +3,10 @@ INSERT INTO dues_rate (tier_id, amount, effective_from, created_at)
 VALUES (?, ?, ?, ?)
 RETURNING id, tier_id, amount, effective_from, created_at;
 
--- GetDuesRateForFund is the lookup PATCH and DELETE both do ahead of the
--- write: an UPDATE's RETURNING would answer an unknown id with
--- sql.ErrNoRows, but a DELETE affecting zero rows raises nothing at all.
--- dues_rate carries no fund_id of its own, so the scope comes through its
--- tier - the same guarantee GetMemberForFund gives directly (#188).
+-- The lookup PATCH and DELETE both do ahead of the write: an UPDATE's
+-- RETURNING answers an unknown id with sql.ErrNoRows, but a DELETE affecting
+-- zero rows raises nothing. dues_rate has no fund_id, so scope comes through
+-- its tier (#188).
 -- name: GetDuesRateForFund :one
 SELECT dues_rate.id, dues_rate.tier_id, dues_rate.amount, dues_rate.effective_from, dues_rate.created_at
 FROM dues_rate
@@ -15,9 +14,8 @@ JOIN dues_tier ON dues_tier.id = dues_rate.tier_id
 WHERE dues_rate.id = ? AND dues_tier.fund_id = ?;
 
 -- The rate in force for a period: the latest row whose effective_from is at or
--- before it. One-sided intervals mean there is no end date to check, and no
--- row at all is a legitimate answer: a tier whose rate is not yet decided.
--- effective_from is 'YYYY-MM', so a string comparison is a chronological one.
+-- before it. No row is a legitimate answer (a tier whose rate is not yet
+-- decided). effective_from is 'YYYY-MM', so string order is chronological.
 -- name: GetEffectiveDuesRate :one
 SELECT id, tier_id, amount, effective_from, created_at
 FROM dues_rate
@@ -31,27 +29,23 @@ FROM dues_rate
 WHERE tier_id = ?
 ORDER BY effective_from;
 
--- UpdateDuesRate corrects a mistyped amount. effective_from stays fixed: a
--- rate filed against the wrong month is deleted and re-posted, not moved.
+-- Corrects a mistyped amount. effective_from stays fixed: a rate filed against
+-- the wrong month is deleted and re-posted, not moved.
 -- name: UpdateDuesRate :one
 UPDATE dues_rate
 SET amount = ?
 WHERE id = ?
 RETURNING id, tier_id, amount, effective_from, created_at;
 
--- DeleteDuesRate is what makes a wrong-month rate correctable at all, since
--- UNIQUE (tier_id, effective_from) refuses the corrected row otherwise.
+-- What makes a wrong-month rate correctable: UNIQUE (tier_id, effective_from)
+-- refuses the corrected row otherwise.
 -- name: DeleteDuesRate :exec
 DELETE FROM dues_rate
 WHERE id = ?;
 
--- ListDuesRatesByFund is the backup export's own read (ADR-012, #323): every
--- rate across every tier the fund owns. dues_rate carries no fund_id of its
--- own, so the join through dues_tier is the only way to scope it - the same
--- reasoning GetDuesRateForFund's own comment gives. Ordered by id purely for
--- the export's own deterministic byte order, not a claim about the rate's
--- effective date (ListDuesRatesByTier above already owns that ordering for
--- its own caller).
+-- The backup export's read (ADR-012): every rate across the fund's tiers,
+-- scoped through dues_tier. Ordered by id only for deterministic export bytes,
+-- not by effective date.
 -- name: ListDuesRatesByFund :many
 SELECT dues_rate.id, dues_rate.tier_id, dues_rate.amount, dues_rate.effective_from, dues_rate.created_at
 FROM dues_rate

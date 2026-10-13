@@ -45,8 +45,8 @@ DELETE FROM dues_rate
 WHERE id = ?
 `
 
-// DeleteDuesRate is what makes a wrong-month rate correctable at all, since
-// UNIQUE (tier_id, effective_from) refuses the corrected row otherwise.
+// What makes a wrong-month rate correctable: UNIQUE (tier_id, effective_from)
+// refuses the corrected row otherwise.
 func (q *Queries) DeleteDuesRate(ctx context.Context, id int64) error {
 	_, err := q.db.ExecContext(ctx, deleteDuesRate, id)
 	return err
@@ -64,11 +64,10 @@ type GetDuesRateForFundParams struct {
 	FundID int64
 }
 
-// GetDuesRateForFund is the lookup PATCH and DELETE both do ahead of the
-// write: an UPDATE's RETURNING would answer an unknown id with
-// sql.ErrNoRows, but a DELETE affecting zero rows raises nothing at all.
-// dues_rate carries no fund_id of its own, so the scope comes through its
-// tier - the same guarantee GetMemberForFund gives directly (#188).
+// The lookup PATCH and DELETE both do ahead of the write: an UPDATE's
+// RETURNING answers an unknown id with sql.ErrNoRows, but a DELETE affecting
+// zero rows raises nothing. dues_rate has no fund_id, so scope comes through
+// its tier (#188).
 func (q *Queries) GetDuesRateForFund(ctx context.Context, arg GetDuesRateForFundParams) (DuesRate, error) {
 	row := q.db.QueryRowContext(ctx, getDuesRateForFund, arg.ID, arg.FundID)
 	var i DuesRate
@@ -96,9 +95,8 @@ type GetEffectiveDuesRateParams struct {
 }
 
 // The rate in force for a period: the latest row whose effective_from is at or
-// before it. One-sided intervals mean there is no end date to check, and no
-// row at all is a legitimate answer: a tier whose rate is not yet decided.
-// effective_from is 'YYYY-MM', so a string comparison is a chronological one.
+// before it. No row is a legitimate answer (a tier whose rate is not yet
+// decided). effective_from is 'YYYY-MM', so string order is chronological.
 func (q *Queries) GetEffectiveDuesRate(ctx context.Context, arg GetEffectiveDuesRateParams) (DuesRate, error) {
 	row := q.db.QueryRowContext(ctx, getEffectiveDuesRate, arg.TierID, arg.EffectiveFrom)
 	var i DuesRate
@@ -120,13 +118,9 @@ WHERE dues_tier.fund_id = ?
 ORDER BY dues_rate.id
 `
 
-// ListDuesRatesByFund is the backup export's own read (ADR-012, #323): every
-// rate across every tier the fund owns. dues_rate carries no fund_id of its
-// own, so the join through dues_tier is the only way to scope it - the same
-// reasoning GetDuesRateForFund's own comment gives. Ordered by id purely for
-// the export's own deterministic byte order, not a claim about the rate's
-// effective date (ListDuesRatesByTier above already owns that ordering for
-// its own caller).
+// The backup export's read (ADR-012): every rate across the fund's tiers,
+// scoped through dues_tier. Ordered by id only for deterministic export bytes,
+// not by effective date.
 func (q *Queries) ListDuesRatesByFund(ctx context.Context, fundID int64) ([]DuesRate, error) {
 	rows, err := q.db.QueryContext(ctx, listDuesRatesByFund, fundID)
 	if err != nil {
@@ -204,8 +198,8 @@ type UpdateDuesRateParams struct {
 	ID     int64
 }
 
-// UpdateDuesRate corrects a mistyped amount. effective_from stays fixed: a
-// rate filed against the wrong month is deleted and re-posted, not moved.
+// Corrects a mistyped amount. effective_from stays fixed: a rate filed against
+// the wrong month is deleted and re-posted, not moved.
 func (q *Queries) UpdateDuesRate(ctx context.Context, arg UpdateDuesRateParams) (DuesRate, error) {
 	row := q.db.QueryRowContext(ctx, updateDuesRate, arg.Amount, arg.ID)
 	var i DuesRate

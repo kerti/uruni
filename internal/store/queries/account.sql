@@ -3,32 +3,28 @@ INSERT INTO account (fund_id, kind, name, created_at)
 VALUES (?, ?, ?, ?)
 RETURNING id, fund_id, kind, name, created_at, inactive_on;
 
--- GetAccountForFund is the only single-account lookup, fund-scoped for the
--- reason GetMemberForFund is (#188): an account id belonging to another fund
--- answers sql.ErrNoRows rather than being found and only then rejected.
+-- Fund-scoped like GetMemberForFund (#188): another fund's account id answers
+-- sql.ErrNoRows rather than being found and then rejected.
 -- name: GetAccountForFund :one
 SELECT id, fund_id, kind, name, created_at, inactive_on
 FROM account
 WHERE id = ? AND fund_id = ?;
 
--- Cash before bank, then by name (maintainer, 2026-10-05): the box at home,
--- then the bank, the order she counts in. Every list of locations reads this
--- one order - Beranda, Pengaturan, the pickers, Cek kas. id only breaks a tie
--- between two identical names.
+-- Cash before bank, then by name (maintainer, 2026-10-05): the order she
+-- counts in. Every list of locations reads this one order. id only breaks a
+-- tie between identical names.
 -- name: ListAccountsByFund :many
 SELECT id, fund_id, kind, name, created_at, inactive_on
 FROM account
 WHERE fund_id = ?
 ORDER BY CASE kind WHEN 'cash' THEN 0 ELSE 1 END, name COLLATE NOCASE, id;
 
--- UpdateAccount is a correction to a location's own labels, not a ledger
--- event: renaming, re-kinding or retiring an account changes nothing already
--- posted (name and kind are both labels, not posted facts - nothing in
--- internal/ledger branches on kind, and the schema's CHECK is the only rule
--- it carries). name is NOT NULL, so
--- COALESCE covers it the same way UpdateMember's does; inactive_on needs the
--- set_inactive_on flag for the same reason UpdateMember's does - a null
--- argument is ambiguous between "leave alone" and "reinstate".
+-- A correction to a location's labels, not a ledger event: renaming,
+-- re-kinding or retiring an account changes nothing already posted (nothing in
+-- internal/ledger branches on kind; the schema's CHECK is its only rule).
+-- COALESCE covers the NOT NULL name; inactive_on needs the set_inactive_on
+-- flag because a null argument is ambiguous between "leave alone" and
+-- "reinstate" (as in UpdateMember).
 -- name: UpdateAccount :one
 UPDATE account
 SET name        = COALESCE(sqlc.narg('name'), name),
@@ -37,10 +33,9 @@ SET name        = COALESCE(sqlc.narg('name'), name),
 WHERE id = sqlc.arg('id')
 RETURNING id, fund_id, kind, name, created_at, inactive_on;
 
--- DeleteAccount leans on the composite foreign keys from "transaction" and
--- reconciliation_line to refuse it once real data references the account -
--- for a never-used duplicate only; a used-then-retired account gets
--- UpdateAccount's inactive_on instead.
+-- Leans on the composite FKs from "transaction" and reconciliation_line to
+-- refuse once real data references the account. For a never-used duplicate
+-- only; a used-then-retired account gets inactive_on via UpdateAccount.
 -- name: DeleteAccount :exec
 DELETE FROM account
 WHERE id = ?;

@@ -3,34 +3,25 @@ INSERT INTO purpose (fund_id, kind, name, created_at)
 VALUES (?, ?, ?, ?)
 RETURNING id, fund_id, kind, name, created_at;
 
--- GetPurposeForFund is the only single-purpose lookup, fund-scoped for the
--- reason GetMemberForFund is (#188): an id belonging to another fund
--- answers sql.ErrNoRows rather than being found and only then rejected.
+-- Fund-scoped like GetMemberForFund (#188).
 -- name: GetPurposeForFund :one
 SELECT id, fund_id, kind, name, created_at
 FROM purpose
 WHERE id = ? AND fund_id = ?;
 
--- Kas Utama first, then every other pos by name whatever its kind
--- (maintainer, 2026-10-05). The pickers, Beranda and the report all read this
--- one order. id only breaks a tie between two identical names.
+-- Kas Utama first, then every other pos by name whatever its kind (maintainer,
+-- 2026-10-05); every list reads this order. id only breaks a tie.
 -- name: ListPurposesByFund :many
 SELECT id, fund_id, kind, name, created_at
 FROM purpose
 WHERE fund_id = ?
 ORDER BY kind <> 'main', name COLLATE NOCASE, id;
 
--- ListSelectablePurposesByFund is ListPurposesByFund with a closed
--- incidental's purpose excluded (ADR-031): GET /api/purposes?selectable=true
--- backs the everyday record form's picker, which stops offering what
--- PostTransaction's own guard would now refuse. The LEFT JOIN is what makes
--- "not an incidental at all" and "an incidental that's still open" the same
--- case - main and pass_through purposes have no incidental row to join
--- against, so i.closed_on reads NULL for them exactly as it does for an open
--- envelope, and both pass the filter. A closed envelope's purpose_id is the
--- only row this excludes, never a field added to purposeResponse - the
--- lifecycle lives in the filter, not on the wire shape every other caller
--- reads too.
+-- ListPurposesByFund minus closed envelopes (ADR-031): backs the record form's
+-- picker, which stops offering what PostTransaction's guard would refuse. The
+-- LEFT JOIN treats "not an incidental" and "an open incidental" alike - main
+-- and pass_through have no incidental row, so closed_on reads NULL for both.
+-- The lifecycle lives in this filter, not on the shared wire shape.
 -- name: ListSelectablePurposesByFund :many
 SELECT p.id, p.fund_id, p.kind, p.name, p.created_at
 FROM purpose p
@@ -38,14 +29,11 @@ LEFT JOIN incidental i ON i.purpose_id = p.id
 WHERE p.fund_id = ? AND i.closed_on IS NULL
 ORDER BY p.kind <> 'main', p.name COLLATE NOCASE, p.id;
 
--- UpdatePurposeName renames a purpose. The name is a label - a posted
--- transaction references the purpose by id, and nothing in the ledger reads
--- the text - so this is the same correction UpdateAccount makes for a
--- location. Which purposes may be renamed is the handler's call, not this
--- query's: kind is policy (everything but the fund's own 'main' row today),
--- not shape. For an incidental this is one half of the pair
--- Ledger.RenameIncidental runs together with UpdateIncidentalOccasion, since
--- an incidental's occasion is stored on both rows (#264).
+-- Renames a purpose; a posted transaction references it by id and nothing in
+-- the ledger reads the text. Which purposes may be renamed is the handler's
+-- call (policy, not shape). For an incidental this is one half of the pair
+-- Ledger.RenameIncidental runs with UpdateIncidentalOccasion, since the
+-- occasion is stored on both rows (#264).
 -- name: UpdatePurposeName :one
 UPDATE purpose
 SET name = ?

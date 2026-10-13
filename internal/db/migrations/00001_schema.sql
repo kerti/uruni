@@ -1,20 +1,13 @@
--- The PRD section 6 data model. This is the only migration Uruni has, and the only one
--- it gets before v1.0.0 - every schema change edits this file in place, so it
--- always reads as the complete current schema (ADR-025). After pulling a change
--- to it, run `make db-reset`: goose tracks migrations by number and cannot see
--- that this one moved. fund, the location money physically sits in
--- (account), the tag every transaction carries (purpose), and who owes dues
--- (dues_tier, dues_rate, member), the ledger itself - transfer, reimbursement,
--- transaction, receipt - and the counts taken against it (reconciliation,
--- reconciliation_line) plus the incidental envelope. That is every PRD section 6
--- entity; the file is complete.
+-- The PRD section 6 data model, and the only migration Uruni gets before v1.0.0:
+-- every schema change edits this file in place, so it always reads as the
+-- complete current schema (ADR-025). After pulling a change, run `make db-reset`:
+-- goose tracks migrations by number and cannot see that this one moved.
 --
--- user and session (M5 Auth, ADR-030) are not PRD section 6 entities: they are the
--- treasurer's login, the only rows in this schema not scoped to a fund
--- (ADR-030 decision 2) - no fund_id, no membership table.
+-- user and session (ADR-030) are not PRD section 6 entities: they are the
+-- treasurer's login, the only rows not scoped to a fund (no fund_id, no
+-- membership table).
 --
--- Conventions below follow docs/ADR/024-schema-conventions.md; see it for the
--- reasoning, not restated here.
+-- Conventions follow docs/ADR/024-schema-conventions.md.
 
 -- +goose Up
 
@@ -27,8 +20,7 @@ CREATE TABLE "user" (                     -- the treasurer's login; the only tab
 
 CREATE TABLE session (                    -- a logged-in session; token is the cookie value
   -- No fund_id (ADR-030): a session proves the treasurer, not a fund. Rows are
-  -- swept lazily as a side effect of session writes (#113), never a background
-  -- ticker (ADR-013's scope).
+  -- swept lazily on session writes (#113), never by a background ticker (ADR-013).
   token      TEXT    PRIMARY KEY CHECK (length(token) > 0),
   data       BLOB    NOT NULL,
   expires_at INTEGER NOT NULL
@@ -40,8 +32,8 @@ CREATE TABLE fund (
   id          INTEGER PRIMARY KEY,
   name        TEXT    NOT NULL CHECK (length(trim(name)) > 0),
   currency    TEXT    NOT NULL DEFAULT 'IDR' CHECK (currency = 'IDR'),
-  -- Unguessability for the public report link lives here, not in an id scheme
-  -- (ADR-024): 22+ chars is roughly a UUID's worth of entropy in base62.
+  -- Unguessability of the public report link lives here, not in an id scheme
+  -- (ADR-024): 22+ base62 chars is roughly a UUID's worth of entropy.
   report_slug TEXT    NOT NULL UNIQUE CHECK (length(report_slug) >= 22),
   created_at  INTEGER NOT NULL
 ) STRICT; -- rejects "1000.50" landing in an INTEGER column; see ADR-024, ADR-006
@@ -53,12 +45,10 @@ CREATE TABLE account (                    -- location: where money physically si
   name       TEXT    NOT NULL CHECK (length(trim(name)) > 0),
   created_at INTEGER NOT NULL,
   -- A used-then-retired location (a bank switch, a tin no longer kept), not a
-  -- never-used duplicate (that's DELETE). Mirrors member.inactive_on exactly,
-  -- below - same shape, same reasoning (M6.1, #134).
+  -- never-used duplicate (that's DELETE). Same shape as member.inactive_on.
   inactive_on TEXT CHECK (inactive_on IS NULL OR (date(inactive_on) IS NOT NULL AND inactive_on = date(inactive_on))),
-  -- Not a second key: (fund_id, id) is what a later fund-scoped child (e.g. a
-  -- transaction) references instead of id alone, so SQLite itself rejects a
-  -- row whose parent belongs to another fund (ADR-024's composite-FK rule).
+  -- Children reference (fund_id, id) instead of id alone, so SQLite itself
+  -- rejects a row whose parent belongs to another fund (ADR-024 composite FKs).
   UNIQUE (fund_id, id)
 ) STRICT;
 
@@ -88,7 +78,7 @@ CREATE TABLE dues_rate (                  -- effective-dated, one-sided interval
   -- No effective_to and no fund_id: the rate for a period is the latest row at
   -- or before it, and ownership comes through tier_id. Two-sided intervals
   -- would need gaps and overlaps policed; this shape cannot express either.
-  -- A tier whose rate is undecided (madya, PRD section 6) simply has no row.
+  -- A tier with an undecided rate (madya, PRD section 6) simply has no row.
   id             INTEGER PRIMARY KEY,
   tier_id        INTEGER NOT NULL REFERENCES dues_tier(id),
   amount         INTEGER NOT NULL CHECK (amount >= 0),
@@ -104,15 +94,15 @@ CREATE TABLE member (
   name        TEXT    NOT NULL CHECK (length(trim(name)) > 0),
   tier_id     INTEGER,                    -- NULL = no dues obligation
   -- NOT NULL (#471): a fund's history starts at adoption (PRD 7.1), so there
-  -- is no "always was a member" - the API defaults a missing date to today
-  -- in Asia/Jakarta, and backdating is the deliberate live-arrears exception.
+  -- is no "always was a member". The API defaults a missing date to today in
+  -- Asia/Jakarta; backdating is the deliberate live-arrears exception.
   joined_on   TEXT    NOT NULL CHECK (date(joined_on) IS NOT NULL AND joined_on = date(joined_on)),
   inactive_on TEXT             CHECK (inactive_on IS NULL OR (date(inactive_on) IS NOT NULL AND inactive_on = date(inactive_on))),
   created_at  INTEGER NOT NULL,
   UNIQUE (fund_id, id),
   FOREIGN KEY (fund_id) REFERENCES fund(id),
-  -- Composite, so a member cannot borrow another fund's tier. NULL tier_id
-  -- satisfies it either way: SQLite's MATCH SIMPLE skips a partly-NULL key.
+  -- Composite, so a member cannot borrow another fund's tier. A NULL tier_id
+  -- passes: SQLite's MATCH SIMPLE skips a partly-NULL key.
   FOREIGN KEY (fund_id, tier_id) REFERENCES dues_tier(fund_id, id)
 ) STRICT;
 
@@ -124,31 +114,26 @@ CREATE TABLE transfer (                   -- pair-holder: cash<->bank, or purpos
   fund_id    INTEGER NOT NULL REFERENCES fund(id),
   kind       TEXT    NOT NULL CHECK (kind IN ('between_accounts','reclass_purpose')),
   -- Null is a roll (CloseIncidentalAndRoll); set names the row this pair
-  -- corrects (ADR-033) - a treasurer fixing a mis-tagged row's peruntukan
-  -- rather than hand-building the pair herself. It sits on the pair, not on
-  -- either leg, because the correction is the pair. Forward FK to
-  -- "transaction" below, resolved at insert time, not at CREATE TABLE - the
-  -- same deferred-check shape "transaction" itself relies on for its own
-  -- FOREIGN KEY (fund_id, transfer_id) back onto this table, the other way.
+  -- corrects (ADR-033). It sits on the pair, not on either leg, because the
+  -- correction is the pair. Forward FK to "transaction" below, resolved at
+  -- insert time, not at CREATE TABLE.
   corrects_transaction_id INTEGER,
   -- Why a purpose pair that corrects nothing moved (ADR-036): 'roll' is an
   -- envelope closing into or out of Kas Utama (ADR-031), 'allocation' is the
   -- treasurer moving money between purposes on purpose ("Pindah peruntukan").
   -- NULL means the row predates the column; every such uncorrected pair is a
-  -- roll, because nothing else could post one, so readers treat NULL as roll.
-  -- A separate column, not a third kind: kind keeps answering only what shape
-  -- of move this is (ADR-033).
+  -- roll, so readers treat NULL as roll. A separate column, not a third kind:
+  -- kind answers only what shape of move this is (ADR-033).
   reason TEXT,
   created_at INTEGER NOT NULL,
   UNIQUE (fund_id, id),                   -- see account.id above: enables composite FKs from children
   FOREIGN KEY (fund_id, corrects_transaction_id) REFERENCES "transaction"(fund_id, id),
   -- Asymmetric on purpose (ADR-033): nothing but a purpose move may claim to
-  -- correct anything, but a purpose move need not. The mirror - a correction
-  -- must set the link - is not enforced, which would need a third
-  -- transfer.kind answering "why it moved" beside the two answering "what
-  -- moved" (between_accounts, reclass_purpose); that split was refused.
-  -- Unenforced, the worst a wrongly-linked roll can do is mislabel one row
-  -- in Riwayat - unlike the dues-reversal CHECK below, which guards a query
+  -- correct anything, but a purpose move need not. The mirror (a correction
+  -- must set the link) would need a third transfer.kind answering "why it
+  -- moved" beside the two answering "what moved"; that split was refused.
+  -- Unenforced, the worst a wrongly-linked roll can do is mislabel one row in
+  -- Riwayat - unlike the dues-reversal CHECK below, which guards a query
   -- (DuesPaidByPeriod) and had to be absolute.
   CHECK (corrects_transaction_id IS NULL OR kind = 'reclass_purpose'),
   -- A reason belongs to a purpose pair that corrects nothing: a correction is
@@ -195,10 +180,9 @@ CREATE TABLE "transaction" (              -- the ledger. insert-only.
   note        TEXT,
   created_at  INTEGER NOT NULL,
   UNIQUE (fund_id, id),
-  -- Six composite FKs: each one is what stops a transaction borrowing another
-  -- fund's row, which a single-column REFERENCES would happily allow. The
-  -- reverses_transaction_id one is what stops a treasurer of one fund naming
-  -- another fund's row as the payment they are reversing (ADR-029).
+  -- Six composite FKs: each stops a transaction borrowing another fund's row,
+  -- which a single-column REFERENCES would allow. The reverses_transaction_id
+  -- one stops naming another fund's row as the payment being reversed (ADR-029).
   FOREIGN KEY (fund_id, account_id)       REFERENCES account(fund_id, id),
   FOREIGN KEY (fund_id, purpose_id)       REFERENCES purpose(fund_id, id),
   FOREIGN KEY (fund_id, member_id)        REFERENCES member(fund_id, id),
@@ -208,68 +192,55 @@ CREATE TABLE "transaction" (              -- the ledger. insert-only.
   CHECK (dues_period IS NULL OR (dues_period GLOB '[0-9][0-9][0-9][0-9]-[0-1][0-9]'
                                  AND date(dues_period||'-01') IS NOT NULL)),
   CHECK (kind <> 'dues'          OR (member_id IS NOT NULL AND dues_period IS NOT NULL AND direction = 'in')),
-  -- A dues reversal (ADR-029) and a named contribution (ADR-034, widening
-  -- ADR-029's reversal) are the two shapes of a non-dues row allowed to
-  -- carry a member: a dues reversal is the one shape of kind='adjustment'
-  -- allowed to carry one, and a contribution is the one shape of an
-  -- ordinary kind='normal' row allowed to - CHECK alone cannot see
-  -- purpose.kind, so which purpose a contribution's member may be tagged
-  -- to is the BEFORE INSERT trigger's job below, not this CHECK's. Neither
-  -- shape carries dues_period: a dues reversal's own period is verified
-  -- against the payment it reverses by that same trigger, since a CHECK
-  -- cannot read another row either; every other kind still needs neither
-  -- field.
+  -- Two shapes of a non-dues row may carry a member: a dues reversal (the one
+  -- kind='adjustment' shape, ADR-029) and a named contribution (the one
+  -- kind='normal' shape, ADR-034). A CHECK cannot see purpose.kind, so which
+  -- purpose a contribution may be tagged to is the BEFORE INSERT trigger's job
+  -- below. Neither shape carries dues_period here: a dues reversal's period is
+  -- verified against the payment it reverses by that same trigger, since a
+  -- CHECK cannot read another row. Every other kind needs neither field.
   CHECK (kind =  'dues'          OR (member_id IS NULL AND dues_period IS NULL)
                                  OR (kind = 'normal' AND direction = 'in'
                                      AND reverses_transaction_id IS NULL AND dues_period IS NULL)
                                  OR (kind = 'adjustment' AND reverses_transaction_id IS NOT NULL
                                      AND member_id IS NOT NULL AND direction = 'out')),
-  -- ...and the column guards itself in the other direction: nothing that is
-  -- not a reversal may claim to reverse anything. Without this, a
-  -- kind='normal' row carrying no member and no period satisfies the CHECK
-  -- above and still sets reverses_transaction_id - which would both hide the
-  -- original dues payment from DuesPaidByPeriod (the NOT EXISTS only asks
-  -- whether *something* points at the row) and consume the reversed-once
-  -- slot, so the genuine reversal could never be posted. The ledger never
-  -- writes that row; the schema is what makes it unrepresentable (ADR-029).
-  -- dues_period is deliberately not required here any more (ADR-034): a
-  -- reversal of a named contribution carries none, a reversal of a dues
-  -- payment still must - and that difference is exactly what the trigger
-  -- below checks against the row being reversed, which this own-row CHECK
-  -- cannot read.
+  -- ...and the column guards itself the other way: nothing that is not a
+  -- reversal may claim to reverse anything. Without this, a kind='normal' row
+  -- with no member and no period satisfies the CHECK above yet sets
+  -- reverses_transaction_id - which would hide the original dues payment from
+  -- DuesPaidByPeriod (its NOT EXISTS only asks whether *something* points at
+  -- the row) and consume the reversed-once slot, so the genuine reversal could
+  -- never be posted. The schema makes that row unrepresentable (ADR-029).
+  -- dues_period is deliberately not required here (ADR-034): reversing a named
+  -- contribution carries none, reversing a dues payment must - which the
+  -- trigger below checks against the reversed row, as this CHECK cannot.
   CHECK (reverses_transaction_id IS NULL
          OR (kind = 'adjustment' AND direction = 'out'
              AND member_id IS NOT NULL)),
   CHECK (kind <> 'reimbursement' OR (reimbursement_id IS NOT NULL AND direction = 'out')),
   CHECK (kind <> 'transfer'      OR transfer_id IS NOT NULL)
-  -- kind='adjustment' otherwise requires nothing extra: an ordinary
-  -- correction may be raised on any Tuesday, not only during a
-  -- reconciliation (ADR-024).
+  -- kind='adjustment' otherwise requires nothing extra: an ordinary correction
+  -- may be raised any time, not only during a reconciliation (ADR-024).
 ) STRICT;
 
--- A CHECK reads only its own row, so the two cross-table halves of ADR-034's
--- named-contribution design - which purpose a member may be tagged to, and
--- what a reversal may target and must copy - are a BEFORE INSERT trigger
--- instead. The ledger checks first so the treasurer gets copy, not a
--- constraint error (ADR-034); this is what makes both shapes unrepresentable
--- for anything that writes around the ledger.
+-- A CHECK reads only its own row, so the two cross-table halves of ADR-034 -
+-- which purpose a named member may be tagged to, and what a reversal may
+-- target and must copy - are a BEFORE INSERT trigger. The ledger checks first
+-- so the treasurer gets copy, not a constraint error; this makes both shapes
+-- unrepresentable for anything that writes around the ledger.
 -- +goose StatementBegin
 CREATE TRIGGER transaction_named_row_shape BEFORE INSERT ON "transaction" BEGIN
   -- A kind='normal' row naming a member is a contribution (ADR-034) and may
-  -- only be tagged to an incidental purpose - a dues payment already owns
-  -- member_id on a 'main' purpose, and nothing else has a reason to.
+  -- only be tagged to an incidental purpose.
   SELECT RAISE(ABORT, 'a named transaction must be tagged to an incidental purpose')
   WHERE NEW.kind = 'normal' AND NEW.member_id IS NOT NULL
     AND NOT EXISTS (SELECT 1 FROM purpose WHERE id = NEW.purpose_id AND kind = 'incidental');
 
-  -- A reversal (ADR-029, widened by ADR-034) must target a dues payment or
-  -- a named contribution, and must carry that row's own member_id and
-  -- dues_period exactly - never re-typed by the caller. This is what keeps
-  -- a dues reversal carrying its period and a contribution reversal
-  -- carrying none: the CHECK above cannot read the original row, only this
-  -- trigger can. "o.dues_period IS NEW.dues_period" is NULL-safe equality -
-  -- a contribution's own dues_period is always NULL, so the reversal's must
-  -- be too.
+  -- A reversal (ADR-029, ADR-034) must target a dues payment or a named
+  -- contribution and carry that row's member_id and dues_period exactly, never
+  -- re-typed by the caller: a dues reversal keeps its period, a contribution
+  -- reversal carries none. "o.dues_period IS NEW.dues_period" is NULL-safe
+  -- equality.
   SELECT RAISE(ABORT, 'a reversal must target a dues payment or a named contribution, carrying its member and period')
   WHERE NEW.reverses_transaction_id IS NOT NULL
     AND NOT EXISTS (
@@ -281,26 +252,20 @@ CREATE TRIGGER transaction_named_row_shape BEFORE INSERT ON "transaction" BEGIN
 END;
 -- +goose StatementEnd
 
--- "Settle once" was otherwise only prose. Partial, so the NULLs on every other
--- kind are unconstrained.
+-- "Settle once" as a constraint, not prose. Partial, so other kinds are free.
 CREATE UNIQUE INDEX reimbursement_settled_once ON "transaction"(reimbursement_id) WHERE kind = 'reimbursement';
 
--- A dues payment is reversible at most once, the same partial-unique shape as
--- reimbursement_settled_once above (ADR-029). Partial, so every row that
--- carries no reversal - which is everything except a dues reversal itself -
--- stays unconstrained.
+-- A dues payment is reversible at most once (ADR-029); partial, same shape as
+-- reimbursement_settled_once.
 CREATE UNIQUE INDEX dues_payment_reversed_once ON "transaction"(reverses_transaction_id) WHERE reverses_transaction_id IS NOT NULL;
 
--- One opening entry per account, enforced the same way and for a sharper
--- reason: nothing else in the schema stops a second opening row, and a second
--- one silently doubles the money the fund starts with. Partial, so every
--- non-opening kind - and every account that has no opening row at all - stays
--- unconstrained.
+-- One opening entry per account: nothing else stops a second opening row, and
+-- a second one silently doubles the money the fund starts with.
 CREATE UNIQUE INDEX opening_balance_once_per_account ON "transaction"(account_id) WHERE kind = 'opening';
 
 CREATE TABLE receipt (                    -- attachment, not a ledger fact; addable after the fact
-  -- Its own table precisely because ledger rows are immutable: a photo taken
-  -- after the entry was posted still has somewhere to go (ADR-011).
+  -- A table of its own because ledger rows are immutable: a photo taken after
+  -- the entry was posted still has somewhere to go (ADR-011).
   id               INTEGER PRIMARY KEY,
   fund_id          INTEGER NOT NULL,
   transaction_id   INTEGER,
@@ -352,35 +317,30 @@ CREATE TABLE reconciliation_line (        -- one counted location within a snaps
 ) STRICT;
 
 CREATE TABLE incidental (                 -- the envelope's lifecycle, 1:1 with its purpose row
-  -- Not a column on purpose: only kind='incidental' rows have an occasion, a
-  -- target or a closing date, and a table keeps those out of every other tag.
-  -- The money itself is ordinary transactions carrying purpose_id; closing an
-  -- envelope moves nothing, which is why closed_on lives here and not in the
-  -- ledger. Mutable by design - opening a collection is a decision that gets
-  -- revised, and nothing here is a posted fact.
+  -- A table, not purpose columns: only kind='incidental' rows have an occasion,
+  -- a target or a closing date. The money itself is ordinary transactions
+  -- carrying purpose_id; closing an envelope moves nothing, which is why
+  -- closed_on lives here and not in the ledger. Mutable by design - nothing
+  -- here is a posted fact.
   purpose_id    INTEGER PRIMARY KEY REFERENCES purpose(id),
   occasion      TEXT    NOT NULL CHECK (length(trim(occasion)) > 0),
   target_amount INTEGER CHECK (target_amount IS NULL OR target_amount > 0),
   opened_on     TEXT    NOT NULL CHECK (date(opened_on) IS NOT NULL AND opened_on = date(opened_on)),
   closed_on     TEXT             CHECK (closed_on IS NULL OR (date(closed_on) IS NOT NULL AND closed_on = date(closed_on))),
-  -- One figure every expected member is asked to give (ADR-034) - same shape
-  -- and nullability as target_amount, not a dues rate: no tiers, no
-  -- effective dates, editable like occasion, never a posted fact.
+  -- One figure every expected member is asked to give (ADR-034). Not a dues
+  -- rate: no tiers, no effective dates, editable like occasion.
   minimum_per_member INTEGER CHECK (minimum_per_member IS NULL OR minimum_per_member > 0),
   created_at    INTEGER NOT NULL
 ) STRICT;
 
 -- The members an envelope is *for* (ADR-034): the sick, the bereaved family,
 -- the birthday pair - never expected to contribute themselves. Zero or more,
--- always members, editable like occasion - a choice, not a record, which is
--- what ON DELETE CASCADE from member says below.
+-- editable like occasion - a choice, not a record, hence ON DELETE CASCADE.
 --
--- fund_id is not a column incidental itself carries (it is 1:1 with a
--- purpose row and has none), so this table's own composite FKs read fund
--- ownership through purpose - (fund_id, purpose_id) REFERENCES
--- purpose(fund_id, id), ADR-024's usual fund-scoping shape - and the plain
--- purpose_id REFERENCES incidental(purpose_id) is what additionally proves
--- the purpose named is actually an envelope, not main or pass_through.
+-- incidental has no fund_id (it is 1:1 with a purpose row), so fund ownership
+-- is read through the composite (fund_id, purpose_id) FK to purpose (ADR-024),
+-- and the plain purpose_id FK to incidental proves the purpose is an envelope,
+-- not main or pass_through.
 CREATE TABLE incidental_recipient (
   fund_id    INTEGER NOT NULL,
   purpose_id INTEGER NOT NULL,
@@ -388,35 +348,30 @@ CREATE TABLE incidental_recipient (
   PRIMARY KEY (fund_id, purpose_id, member_id),
   FOREIGN KEY (purpose_id)          REFERENCES incidental(purpose_id),
   FOREIGN KEY (fund_id, purpose_id) REFERENCES purpose(fund_id, id),
-  -- A recipient is a choice, not a record: deleting a member (setup
-  -- duplicates only, ADR-024) takes their recipient rows with them rather
-  -- than refusing the delete the way a posted transaction would.
+  -- Deleting a member (setup duplicates only, ADR-024) takes their recipient
+  -- rows with them rather than refusing, as a posted transaction would.
   FOREIGN KEY (fund_id, member_id)  REFERENCES member(fund_id, id) ON DELETE CASCADE
 ) STRICT;
 
--- fund_id, occurred_on, id, in that order: the leftmost pair alone still
--- covers every fund_id+occurred_on-range query this index served before
--- (#225 added the third column, nothing removed it), and with id the index
--- fully orders GET /api/transactions's own (occurred_on DESC, id DESC)
--- keyset scan instead of leaving SQLite to sort after the fact.
+-- (fund_id, occurred_on, id): the leftmost pair still serves every
+-- fund_id+occurred_on range query, and with id the index fully orders the
+-- (occurred_on DESC, id DESC) keyset scan of GET /api/transactions (#225).
 CREATE INDEX transaction_by_date    ON "transaction"(fund_id, occurred_on, id);
 CREATE INDEX transaction_by_account ON "transaction"(account_id, occurred_on);
 CREATE INDEX transaction_by_purpose ON "transaction"(purpose_id);
 CREATE INDEX transaction_by_dues    ON "transaction"(member_id, dues_period) WHERE kind = 'dues';
 
--- Same shape as transaction_by_date above (#226): fully orders GET
--- /api/reimbursements's own (incurred_on DESC, id DESC) keyset scan.
+-- Same shape: orders the (incurred_on DESC, id DESC) keyset scan (#226).
 CREATE INDEX reimbursement_by_date  ON reimbursement(fund_id, incurred_on, id);
 
--- Same shape again (#227): fully orders GET /api/reconciliations's own
--- (performed_at DESC, id DESC) keyset scan.
+-- Same shape: orders the (performed_at DESC, id DESC) keyset scan (#227).
 CREATE INDEX reconciliation_by_date ON reconciliation(fund_id, performed_at, id);
 
 -- Immutability is a trigger, not a convention (ADR-024, CLAUDE.md rule 3).
--- INSERT stays open, which is what lets ADR-012's import restore a database.
--- A snapshot is a claim about a moment, so it is as immutable as the ledger:
--- revisiting a left_open difference means a second snapshot, not an edit to the
--- first. incidental is deliberately absent - see its comment above.
+-- INSERT stays open, which lets ADR-012's import restore a database. A snapshot
+-- is a claim about a moment, so it is as immutable as the ledger: revisiting a
+-- left_open difference means a second snapshot. incidental is deliberately
+-- absent (mutable by design).
 
 -- +goose StatementBegin
 CREATE TRIGGER transaction_immutable_update BEFORE UPDATE ON "transaction" BEGIN

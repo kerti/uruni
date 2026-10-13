@@ -46,10 +46,9 @@ DELETE FROM account
 WHERE id = ?
 `
 
-// DeleteAccount leans on the composite foreign keys from "transaction" and
-// reconciliation_line to refuse it once real data references the account -
-// for a never-used duplicate only; a used-then-retired account gets
-// UpdateAccount's inactive_on instead.
+// Leans on the composite FKs from "transaction" and reconciliation_line to
+// refuse once real data references the account. For a never-used duplicate
+// only; a used-then-retired account gets inactive_on via UpdateAccount.
 func (q *Queries) DeleteAccount(ctx context.Context, id int64) error {
 	_, err := q.db.ExecContext(ctx, deleteAccount, id)
 	return err
@@ -66,9 +65,8 @@ type GetAccountForFundParams struct {
 	FundID int64
 }
 
-// GetAccountForFund is the only single-account lookup, fund-scoped for the
-// reason GetMemberForFund is (#188): an account id belonging to another fund
-// answers sql.ErrNoRows rather than being found and only then rejected.
+// Fund-scoped like GetMemberForFund (#188): another fund's account id answers
+// sql.ErrNoRows rather than being found and then rejected.
 func (q *Queries) GetAccountForFund(ctx context.Context, arg GetAccountForFundParams) (Account, error) {
 	row := q.db.QueryRowContext(ctx, getAccountForFund, arg.ID, arg.FundID)
 	var i Account
@@ -90,10 +88,9 @@ WHERE fund_id = ?
 ORDER BY CASE kind WHEN 'cash' THEN 0 ELSE 1 END, name COLLATE NOCASE, id
 `
 
-// Cash before bank, then by name (maintainer, 2026-10-05): the box at home,
-// then the bank, the order she counts in. Every list of locations reads this
-// one order - Beranda, Pengaturan, the pickers, Cek kas. id only breaks a tie
-// between two identical names.
+// Cash before bank, then by name (maintainer, 2026-10-05): the order she
+// counts in. Every list of locations reads this one order. id only breaks a
+// tie between identical names.
 func (q *Queries) ListAccountsByFund(ctx context.Context, fundID int64) ([]Account, error) {
 	rows, err := q.db.QueryContext(ctx, listAccountsByFund, fundID)
 	if err != nil {
@@ -141,14 +138,12 @@ type UpdateAccountParams struct {
 	ID            int64
 }
 
-// UpdateAccount is a correction to a location's own labels, not a ledger
-// event: renaming, re-kinding or retiring an account changes nothing already
-// posted (name and kind are both labels, not posted facts - nothing in
-// internal/ledger branches on kind, and the schema's CHECK is the only rule
-// it carries). name is NOT NULL, so
-// COALESCE covers it the same way UpdateMember's does; inactive_on needs the
-// set_inactive_on flag for the same reason UpdateMember's does - a null
-// argument is ambiguous between "leave alone" and "reinstate".
+// A correction to a location's labels, not a ledger event: renaming,
+// re-kinding or retiring an account changes nothing already posted (nothing in
+// internal/ledger branches on kind; the schema's CHECK is its only rule).
+// COALESCE covers the NOT NULL name; inactive_on needs the set_inactive_on
+// flag because a null argument is ambiguous between "leave alone" and
+// "reinstate" (as in UpdateMember).
 func (q *Queries) UpdateAccount(ctx context.Context, arg UpdateAccountParams) (Account, error) {
 	row := q.db.QueryRowContext(ctx, updateAccount,
 		arg.Name,

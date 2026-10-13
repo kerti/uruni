@@ -57,10 +57,9 @@ DELETE FROM reimbursement
 WHERE id = ?
 `
 
-// DeleteReimbursement removes a claim that should never have existed. It
-// leans on receipt's composite foreign key to refuse a claim that still has
-// a photo attached, the same way DeleteMember leans on its referencing
-// tables; the settled check is internal/ledger's, above.
+// Removes a claim that should never have existed. Leans on receipt's composite
+// FK to refuse a claim with a photo attached; the settled check is
+// internal/ledger's.
 func (q *Queries) DeleteReimbursement(ctx context.Context, id int64) error {
 	_, err := q.db.ExecContext(ctx, deleteReimbursement, id)
 	return err
@@ -77,10 +76,8 @@ type GetReimbursementParams struct {
 	FundID int64
 }
 
-// Fund-scoped on purpose: an id names a row, it does not prove the caller may
-// see it. PRD section 6 allows a server to hold more than one fund, so a bare
-// lookup by id alone would be a cross-fund read the moment a second fund
-// exists.
+// Fund-scoped: PRD section 6 allows a server to hold more than one fund, so a
+// bare lookup by id would be a cross-fund read.
 func (q *Queries) GetReimbursement(ctx context.Context, arg GetReimbursementParams) (Reimbursement, error) {
 	row := q.db.QueryRowContext(ctx, getReimbursement, arg.ID, arg.FundID)
 	var i Reimbursement
@@ -126,9 +123,8 @@ type GetReimbursementWithSettledRow struct {
 	Settled    int64
 }
 
-// One claim with its settled fact, for GET /api/reimbursements/{id}: the
-// settle and correct screens open on a single claim and must know whether it
-// is still owed. Fund-scoped for the same reason as GetReimbursement.
+// One claim with its settled fact, for GET /api/reimbursements/{id}: the settle
+// and correct screens must know whether it is still owed. Fund-scoped.
 func (q *Queries) GetReimbursementWithSettled(ctx context.Context, arg GetReimbursementWithSettledParams) (GetReimbursementWithSettledRow, error) {
 	row := q.db.QueryRowContext(ctx, getReimbursementWithSettled, arg.ID, arg.FundID)
 	var i GetReimbursementWithSettledRow
@@ -173,12 +169,10 @@ type ListOutstandingReimbursementsByFundRow struct {
 	Settled    int64
 }
 
-// What the fund still owes its members: neither settled by a payout nor
-// waived. Both halves are conditions SQLite cannot express as a CHECK across
-// tables, so the settle path filters on them here instead.
-//
-// settled is a literal 0: every row this list returns is unsettled by
-// construction, and the wire shape must stay uniform with the full list.
+// What the fund still owes its members: neither settled by a payout nor waived.
+// A CHECK cannot span tables, so the settle path filters here instead.
+// settled is a literal 0 (unsettled by construction), keeping the wire shape
+// uniform with the full list.
 func (q *Queries) ListOutstandingReimbursementsByFund(ctx context.Context, fundID int64) ([]ListOutstandingReimbursementsByFundRow, error) {
 	rows, err := q.db.QueryContext(ctx, listOutstandingReimbursementsByFund, fundID)
 	if err != nil {
@@ -327,26 +321,20 @@ type ListReimbursementsPageRow struct {
 	Settled    int64
 }
 
-// GET /api/reimbursements's real listing (#226, ADR-032 "Lists: paging and
-// search") - newest-first and keyset-paged on (incurred_on, id), the same
-// shape as ListTransactionsPage (transaction.sql has the full reasoning for
-// row-value keyset over LIMIT/OFFSET, the CAST on cursor_id, and INSTR/LOWER
-// over "COLLATE NOCASE LIKE ... ESCAPE" - sqlc 1.31.1's bug with a repeated
-// ESCAPE clause applies here too, since q searches two columns).
+// GET /api/reimbursements (#226, ADR-032): newest-first, keyset-paged on
+// (incurred_on, id) like ListTransactionsPage (transaction.sql has the
+// reasoning for row-value keyset, the CAST on cursor_id, and INSTR/LOWER over
+// "COLLATE NOCASE LIKE ... ESCAPE" - the sqlc 1.31.1 repeated-ESCAPE bug
+// applies here too, since q searches two columns).
 //
-// Search (?q=) covers member name and note only - PRD section 7.4 gives a
-// claim no purpose-name search surface the way a transaction has one, and
-// ADR-032 named "member name and note" for this list specifically.
+// Search (?q=) covers member name and note only (ADR-032, PRD section 7.4).
 //
-// sqlc.narg('outstanding_only') gates the same pair of conditions
-// ListOutstandingReimbursementsByFund applies (waived_on IS NULL and no
-// settling transaction) so `settled` stays correctly computed in both
-// modes: literal 0 when outstanding_only narrows the WHERE clause itself
-// (every row satisfying it is unsettled by construction, same as that
-// query), the real EXISTS check otherwise.
+// outstanding_only applies the same two conditions as
+// ListOutstandingReimbursementsByFund (waived_on IS NULL, no settling
+// transaction), so `settled` is a literal 0 in that mode (unsettled by
+// construction) and the real EXISTS check otherwise.
 //
-// page_limit is page size + 1, the same "peek at one extra row" trick
-// ListTransactionsPage uses to know whether a next page exists.
+// page_limit is page size + 1: peek at one extra row.
 func (q *Queries) ListReimbursementsPage(ctx context.Context, arg ListReimbursementsPageParams) ([]ListReimbursementsPageRow, error) {
 	rows, err := q.db.QueryContext(ctx, listReimbursementsPage,
 		arg.OutstandingOnly,
@@ -400,8 +388,7 @@ WHERE r.fund_id = ?
 `
 
 // The outstanding total, cast so it lands as int64 rather than interface{}:
-// sqlc's SQLite engine cannot infer the type of a summed expression, and an
-// uncast aggregate is a silent failure that only surfaces at M3 (ADR-024).
+// sqlc's SQLite engine cannot infer the type of a summed expression (ADR-024).
 func (q *Queries) OutstandingReimbursementTotal(ctx context.Context, fundID int64) (int64, error) {
 	row := q.db.QueryRowContext(ctx, outstandingReimbursementTotal, fundID)
 	var total_amount int64
@@ -433,17 +420,14 @@ type UpdateReimbursementParams struct {
 	ID          int64
 }
 
-// UpdateReimbursement corrects a claim that has not been settled yet - a
-// wrong amount, the wrong member, or the day it was actually spent. The
-// claim is off the ledger until it is settled (ADR-024), so this is an
-// UPDATE and not an adjusting entry; the settled check that keeps it that
-// way lives in internal/ledger, because it reads another table.
+// Corrects a claim not yet settled. A claim is off the ledger until settled
+// (ADR-024), so this is an UPDATE, not an adjusting entry; the settled check
+// lives in internal/ledger because it reads another table.
 //
-// waived_on rides on the same statement rather than a route of its own:
-// waiving is one column, and pairing it with the ordinary correction is
-// what makes un-waiving free. Same COALESCE/set_* split as UpdateMember -
-// the four NOT NULL columns cannot mean "clear it", the two nullable ones
-// can, and only a set_* flag can tell that from "leave alone".
+// waived_on rides on the same statement, which makes un-waiving free. Same
+// COALESCE/set_* split as UpdateMember: the four NOT NULL columns cannot mean
+// "clear it", the two nullable ones can, and only a set_* flag tells that from
+// "leave alone".
 func (q *Queries) UpdateReimbursement(ctx context.Context, arg UpdateReimbursementParams) (Reimbursement, error) {
 	row := q.db.QueryRowContext(ctx, updateReimbursement,
 		arg.MemberID,

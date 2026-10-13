@@ -16,12 +16,11 @@ SELECT id, fund_id, account_id, purpose_id, direction, amount, occurred_on, kind
 FROM "transaction"
 WHERE id = ?;
 
--- The fund-scoped fetch a dues reversal fetches its target through (ADR-029):
--- WHERE fund_id = ? AND id = ?, not id alone, so a transaction belonging to
--- another fund reads as sql.ErrNoRows here rather than being found and only
--- later rejected by the composite FK. GetTransaction above stays as it is -
--- other callers already have their fund-scoped row in hand - this is the one
--- new caller that fetches a transaction by id from an untrusted request.
+-- The fund-scoped fetch a dues reversal gets its target through (ADR-029): a
+-- transaction of another fund reads as sql.ErrNoRows rather than being found
+-- and later rejected by the composite FK. GetTransaction stays unscoped for
+-- callers that already hold a fund-scoped row; this is the one that fetches by
+-- id from an untrusted request.
 -- name: GetTransactionForFund :one
 SELECT id, fund_id, account_id, purpose_id, direction, amount, occurred_on, kind,
        member_id, dues_period, reimbursement_id, transfer_id, reverses_transaction_id,
@@ -29,12 +28,10 @@ SELECT id, fund_id, account_id, purpose_id, direction, amount, occurred_on, kind
 FROM "transaction"
 WHERE fund_id = ? AND id = ?;
 
--- The reversed-once pre-check, same shape as GetReimbursementSettlement
--- above: sql.ErrNoRows means "not yet reversed, proceed"
--- (the expected, non-error path); a row means it already has been. The
--- dues_payment_reversed_once partial unique index is the actual guarantee -
--- this pre-check only turns a raw constraint violation into a clean, named
--- error (ADR-029, mirroring ADR-027's ErrReimbursementAlreadySettled).
+-- The reversed-once pre-check, like GetReimbursementSettlement: sql.ErrNoRows
+-- means "not yet reversed, proceed"; a row means it already has been. The
+-- dues_payment_reversed_once index is the actual guarantee - this only turns a
+-- raw constraint violation into a named error (ADR-029).
 -- name: GetDuesPaymentReversal :one
 SELECT id, fund_id, account_id, purpose_id, direction, amount, occurred_on, kind,
        member_id, dues_period, reimbursement_id, transfer_id, reverses_transaction_id,
@@ -50,120 +47,83 @@ FROM "transaction"
 WHERE fund_id = ?
 ORDER BY occurred_on, id;
 
--- GET /api/transactions's real listing (#225, ADR-032 "Lists: paging and
--- search") - newest-first and keyset-paged on the same pair it orders by.
--- LIMIT/OFFSET was rejected outright: occurred_on is backdatable (PRD
--- section 7.2 defaults to today, editable), so a row can land in the middle
--- of a newest-first list between two page fetches and an offset would
--- silently skip or duplicate it. The row-value comparison below cannot:
--- cursor_occurred_on/cursor_id NULL on the first page (the whole clause
--- short-circuits true and nothing is excluded), and a later page passes the
--- previous page's last row, keeping only strictly older pairs regardless of
--- what was inserted since. cursor_id is CAST to INTEGER inside the tuple -
--- without it sqlc infers its Go type from the row-value's other element
--- (cursor_occurred_on, TEXT) instead of the id column it is actually
--- compared against, and generates CursorID as *string for what is an int64
--- primary key.
+-- GET /api/transactions (#225, ADR-032): newest-first, keyset-paged on the pair
+-- it orders by. LIMIT/OFFSET was rejected: occurred_on is backdatable (PRD
+-- section 7.2), so a row can land mid-list between two page fetches and an
+-- offset would skip or duplicate it. The row-value comparison cannot:
+-- cursor_occurred_on/cursor_id are NULL on the first page (the clause
+-- short-circuits true), and a later page passes the previous page's last row,
+-- keeping only strictly older pairs. cursor_id is CAST to INTEGER inside the
+-- tuple because otherwise sqlc infers its Go type from the tuple's other
+-- element (TEXT) and generates CursorID as *string for an int64 key.
 --
--- Search is every clause under q: a case-insensitive substring test over
--- note, purpose name and member name (LEFT JOIN - most rows carry no
--- member_id), plus an exact amount match. INSTR(LOWER(col), LOWER(q)) > 0
--- rather than "col COLLATE NOCASE LIKE q ESCAPE '$'" as ADR-032 literally
--- asks for: sqlc v1.31.1's SQLite query analyzer only registers the FIRST
--- "COLLATE ... LIKE <param> ESCAPE '<literal>'" clause in a query and
--- silently leaves every later occurrence of that exact construct as
--- un-rewritten literal text ("sqlc.narg('q_purpose')" etc, verbatim) in the
--- emitted SQL - a bare LIKE with no ESCAPE, or the same clause used only
--- once, both generate correctly, which is what makes this so easy to ship
--- unnoticed (confirmed by bisection: swapping ESCAPE for INSTR/LOWER below,
--- with nothing else changed, fixes it). No test in this file could have
--- caught it either - `go vet`/the compiler see a struct simply missing the
--- fields the broken clauses reference, `make sqlc`'s own generate step
--- exits 0, and the query is syntactically valid SQL that runs and returns
--- rows; it is only wrong once a purpose- or member-name search is exercised
--- against real data. INSTR does not interpret % or _ as wildcards at all
--- (it is a plain substring test), so this also drops the ESCAPE-and-wildcard-
--- escaping machinery ADR-032 assumed LIKE would need - "LIKE wildcards in q
--- are literal" is true here by construction, not by escaping.
+-- Search is every clause under q: a case-insensitive substring test over note,
+-- purpose name and member name (LEFT JOIN - most rows carry no member_id),
+-- plus an exact amount match. INSTR(LOWER(col), LOWER(q)) > 0 rather than
+-- "col COLLATE NOCASE LIKE q ESCAPE '$'" as ADR-032 literally asks for: sqlc
+-- v1.31.1 only registers the FIRST such clause in a query and silently leaves
+-- every later one as literal text ("sqlc.narg('q_purpose')" verbatim) in the
+-- emitted SQL. Nothing catches it: the compiler sees a struct missing fields,
+-- `make sqlc` exits 0, and the query is valid SQL that returns rows; it is
+-- only wrong once a purpose- or member-name search runs on real data. INSTR
+-- also treats % and _ as plain characters, so "LIKE wildcards in q are
+-- literal" holds by construction, not by escaping.
 --
--- member_id, purpose_id, month and direction are Riwayat -> Transaksi's
--- filters (#424, the public report's four); dues_period is
--- Dues/MemberPayments.tsx's payment history panel alone. month is
--- "YYYY-MM" against occurred_on's own "YYYY-MM-DD" text (the schema's CHECK
--- keeps it in that form), so a prefix compare is the month. All compose
--- with q and with the keyset cursor rather than replacing either.
+-- member_id, purpose_id, month and direction are Riwayat -> Transaksi's filters
+-- (#424, the public report's four); dues_period is Dues/MemberPayments.tsx's
+-- payment history panel alone. month is "YYYY-MM", prefix-compared against
+-- occurred_on's "YYYY-MM-DD" (the schema's CHECK keeps that form). All compose
+-- with q and the keyset cursor.
 --
--- page_limit is passed as page size + 1: the caller peeks at whether that
--- extra row came back to know whether a next page exists, then trims it
--- before building the response.
+-- page_limit is page size + 1: the caller peeks at the extra row to know
+-- whether a next page exists, then trims it.
 --
--- The columns after created_at (#257) carry every fact a system-created
--- row's display label needs, so the client never issues a second request to
--- build one - see TransactionList.tsx. Every join below is fund-scoped by
--- construction, not by an extra "AND fund_id = ..." clause: each id it joins
--- on (member_id, reimbursement_id, transfer_id, a fix's own row id) reaches
--- this table only through a composite FK back to "transaction"(fund_id, id)
--- or an equivalent composite FK on the table that named it, so a row from
--- another fund can never be the thing joined to.
+-- The columns after created_at (#257) carry every fact a system-created row's
+-- display label needs, so the client never makes a second request - see
+-- TransactionList.tsx. Every join is fund-scoped by construction, not by an
+-- extra fund_id clause: each id it joins on reaches this table only through a
+-- composite FK, so another fund's row can never be joined.
 --
---   - account_name: this row's own account (location) - opening balance
---     and a reconciliation fix both label themselves by it. INNER, not
---     LEFT: account_id is NOT NULL and DeleteAccount refuses an account any
---     transaction still references, so the row always exists.
---   - member_name/settlement_member_name: the dues member for a dues
---     payment or reversal (t.member_id), or, separately, the settled
---     claim's member for a reimbursement payout (t.member_id is NULL on
---     kind='reimbursement' - ADR-024 - so that row's member comes from the
---     reimbursement row it settles instead). Two columns, not one merged
---     by SQL COALESCE: sqlc 1.31.1's SQLite analyzer infers COALESCE(a, b)
---     of two LEFT-JOINed, equally-nullable columns as NOT NULL here - the
---     same shape of static-analysis miss ListTransactionsPage's own q
---     clause already documents for a repeated ESCAPE - so the merge (at
---     most one of the two is ever non-NULL for a given row) happens in Go,
---     in toTransactionResponse, where the compiler still sees a pointer.
---   - claim_note: the settled claim's own note (reimbursement.note),
---     always NULL except on a kind='reimbursement' row.
---   - transfer_kind plus four transfer_from/to_account/purpose_name
---     columns: only meaningful for kind='transfer' rows. tf/tt are this
---     transfer's two legs, found by direction ('out' is always the pair's
---     from leg, 'in' its to leg - postTransferPairTx's own construction,
---     internal/ledger/transfer.go) - never by which of the two *this* row
---     happens to be, so both legs of one transfer carry identical from/to
---     facts. Four plain columns rather than one SQL CASE selecting between
---     an account and a purpose column by transfer.kind: sqlc 1.31.1 cannot
---     type such a CASE here at all (it lands on the Go side as an untyped
---     interface{}, losing the compile-time check ADR-024 relies on), and
---     forcing a type with CAST is this codebase's own documented way to
---     tell sqlc a value is never NULL (LatestDuesPeriodPaidByMember's own
---     comment) - the opposite of what these four columns are, the rest of
---     the time. Picking the account pair or the purpose pair by
---     transfer_kind is toTransactionResponse's job instead, in Go, where
---     the compiler still sees four ordinary pointers.
---   - transfer_corrects_transaction_id: this row's own transfer's link
---     (ADR-033, #267), non-NULL exactly on a correction pair's two legs -
---     what tells a correction leg apart from a roll's, both of which are
---     otherwise the same kind='transfer', kind='reclass_purpose' shape.
---     Read off tr, the same join transfer_kind already uses, not a second
---     one.
---   - transfer_reason: this row's own transfer's reason (ADR-036) - 'roll',
---     'allocation', or NULL (a correction, a between_accounts pair, or a
---     pair that predates the column, which reads as a roll). Riwayat labels
---     an allocation "Pindah pos" from it; only a pair that corrects
---     nothing carries one.
+--   - account_name: this row's account - opening balance and a reconciliation
+--     fix label themselves by it. INNER join: account_id is NOT NULL and
+--     DeleteAccount refuses an account any transaction references.
+--   - member_name/settlement_member_name: the dues member for a dues payment
+--     or reversal (t.member_id), or, separately, the settled claim's member
+--     for a reimbursement payout (t.member_id is NULL on kind='reimbursement',
+--     ADR-024). Two columns, not one SQL COALESCE: sqlc 1.31.1 infers
+--     COALESCE(a, b) of two LEFT-JOINed nullable columns as NOT NULL, so the
+--     merge (at most one is non-NULL per row) happens in Go, in
+--     toTransactionResponse, where the compiler still sees a pointer.
+--   - claim_note: the settled claim's note, NULL except on a
+--     kind='reimbursement' row.
+--   - transfer_kind plus four transfer_from/to_account/purpose_name columns:
+--     only meaningful for kind='transfer' rows. tf/tt are the transfer's two
+--     legs, found by direction ('out' is the pair's from leg, 'in' its to leg;
+--     internal/ledger/transfer.go) - never by which leg *this* row is, so both
+--     legs carry identical from/to facts. Four plain columns rather than a SQL
+--     CASE choosing by transfer.kind: sqlc 1.31.1 cannot type such a CASE (it
+--     lands as interface{}, losing the compile-time check ADR-024 relies on),
+--     and forcing a type with CAST claims "never NULL" (see
+--     LatestDuesPeriodPaidByMember) - false for these. toTransactionResponse
+--     picks the account or purpose pair in Go.
+--   - transfer_corrects_transaction_id: the transfer's link (ADR-033, #267),
+--     non-NULL exactly on a correction pair's two legs - what tells them from a
+--     roll's, which has the same kind='transfer', kind='reclass_purpose' shape.
+--   - transfer_reason: the transfer's reason (ADR-036) - 'roll', 'allocation',
+--     or NULL (a correction, a between_accounts pair, or a pair predating the
+--     column, which reads as a roll). Riwayat labels an allocation "Pindah pos"
+--     from it.
 --   - effective_purpose_id: the tag this row's money is under NOW - its own
 --     purpose_id until a correction (ADR-033) moves it, then the end of the
---     path its corrections walk - EffectivePurposeForTransaction's
---     derivation (transfer.sql has the reasoning), with no reliance on
---     transfer id order (#411).
---     COALESCE to t.purpose_id, so an uncorrected row answers itself and
---     "has this been corrected?" is effective <> stored rather than a
---     second boolean column saying the same thing twice.
+--     path its corrections walk (EffectivePurposeForTransaction; transfer.sql
+--     has the reasoning, #411). COALESCEd to t.purpose_id, so an uncorrected
+--     row answers itself and "has this been corrected?" is effective <> stored.
 --
---     The list keeps rendering the STORED tag (ADR-033): the ledger sums
---     stored tags, so a row showing its effective one would put the screen
---     out of step with the balances. This column is for the correction
---     dialog, which must build its pair from where the money actually is,
---     and for the marker that says a correction exists.
+--     The list keeps rendering the STORED tag (ADR-033): the ledger sums stored
+--     tags, so showing the effective one would put the screen out of step with
+--     the balances. This column is for the correction dialog, which must build
+--     its pair from where the money actually is, and for the marker that says a
+--     correction exists.
 -- name: ListTransactionsPage :many
 SELECT t.id, t.fund_id, t.account_id, t.purpose_id, t.direction, t.amount, t.occurred_on, t.kind,
        t.member_id, t.dues_period, t.reimbursement_id, t.transfer_id, t.reverses_transaction_id,
@@ -256,34 +216,24 @@ FROM "transaction"
 WHERE member_id = ? AND kind = 'dues'
 ORDER BY dues_period, id;
 
--- GET /api/dues-payments's real listing (#228, ADR-032 "Lists: paging and
--- search"): newest-first and keyset-paged on (occurred_on DESC, id DESC),
--- the same shape ListTransactionsPage/ListReimbursementsPage already use
--- (their own doc comments have the row-value-keyset reasoning, the
--- CAST(sqlc.narg('cursor_id') AS INTEGER) fix, and why this query uses
--- INSTR/LOWER rather than "COLLATE NOCASE LIKE ... ESCAPE" - sqlc 1.31.1's
--- repeated-ESCAPE bug, documented in full on ListTransactionsPage above).
+-- GET /api/dues-payments (#228, ADR-032): newest-first, keyset-paged on
+-- (occurred_on DESC, id DESC) like ListTransactionsPage, which documents the
+-- row-value keyset, the cursor_id CAST, and why INSTR/LOWER replaces
+-- "COLLATE NOCASE LIKE ... ESCAPE" (the sqlc 1.31.1 repeated-ESCAPE bug).
 --
--- Both halves of a reversal share this one list (PRD section 7.3, ADR-029):
--- every kind='dues' payment, and every kind='adjustment' row that reverses
--- one - never a bare "every transaction", since an ordinary correction with
--- no reverses_transaction_id has nothing to do with dues.
+-- Both halves of a reversal share this list (PRD section 7.3, ADR-029): every
+-- kind='dues' payment and every kind='adjustment' row that reverses one -
+-- never a bare "every transaction".
 --
--- rv is the reversal that undoes THIS row, when this row is itself a
--- payment - reversed_by_transaction_id, null on every row that is not a
--- reversed payment (a reversal is never itself reversed, so it is always
--- null on a reversal row too).
+-- rv is the reversal that undoes THIS row when it is a payment
+-- (reversed_by_transaction_id; null otherwise, as a reversal is never itself
+-- reversed). orig is the payment THIS row reverses, carried forward as
+-- reverses_occurred_on so a reversal states the original's date even when that
+-- payment sits on a later page.
 --
--- orig is the payment THIS row reverses, when this row is itself a
--- reversal - carried forward as reverses_occurred_on so a reversal states
--- the original's date even when that original payment sits on a later
--- page than the reversal itself.
+-- ?q= searches member name only.
 --
--- ?q= searches member name only (the response's own decided shape has no
--- purpose or note column worth searching for this list).
---
--- page_limit is page size + 1, the same peek-one-extra-row trick every
--- other paged list in this package uses.
+-- page_limit is page size + 1: peek at one extra row.
 -- name: ListDuesPaymentsPage :many
 SELECT
   t.id, t.kind, t.member_id, m.name AS member_name, t.dues_period, t.amount,
@@ -308,19 +258,16 @@ WHERE t.fund_id = sqlc.arg('fund_id')
 ORDER BY t.occurred_on DESC, t.id DESC
 LIMIT sqlc.arg('page_limit');
 
--- The envelope's net, everything it has ever posted against its own
--- purpose_id, rolls included. This is what CloseIncidentalAndRoll leans on
--- (ADR-031): collected minus disbursed here is exactly PurposeBalance for
--- this purpose, so a prior roll's own leg already nets the envelope to zero
--- by construction, and reopening, posting a late entry, and closing again
--- computes the *net delta* through this same unfiltered sum rather than new
--- arithmetic. Leftover is collected minus disbursed, computed in Go via
--- money.Amount.Sub, rather than a third column here.
+-- The envelope's net: everything ever posted against its purpose_id, rolls
+-- included. CloseIncidentalAndRoll leans on it (ADR-031): collected minus
+-- disbursed is exactly PurposeBalance, so a prior roll's leg already nets the
+-- envelope to zero, and reopening, posting a late entry and closing again
+-- computes the *net delta* through this same unfiltered sum. Leftover is
+-- collected minus disbursed, computed in Go via money.Amount.Sub.
 --
--- Not what GET /api/incidentals/{purposeID} shows: that figure wants what
--- the occasion itself collected and spent, with a prior roll's leg excluded
--- - see IncidentalActivityTotals below. Conflating the two was #215; this
--- comment is the seam between them.
+-- Not what GET /api/incidentals/{purposeID} shows: that wants what the
+-- occasion itself collected and spent, rolls excluded - see
+-- IncidentalActivityTotals. Conflating the two was #215.
 -- name: IncidentalTotals :one
 SELECT
   CAST(COALESCE(SUM(CASE WHEN direction = 'in' THEN amount ELSE 0 END), 0) AS INTEGER) AS collected_amount,
@@ -328,50 +275,42 @@ SELECT
 FROM "transaction"
 WHERE fund_id = ? AND purpose_id = ?;
 
--- What the occasion itself collected and disbursed (PRD section 7.5's
--- detail screen), as opposed to IncidentalTotals above's net-including-rolls. The
--- LEFT JOIN excludes only a reclass_purpose leg - the roll CloseIncidentalAndRoll
--- posts, in either direction (ADR-031's leftover-in as much as the original
--- leftover-out) - by transfer.kind, not by transaction.kind: every leg of
--- every transfer is posted as transaction.kind='transfer' regardless of
--- whether the transfer itself is 'between_accounts' or 'reclass_purpose', so
--- transaction.kind alone cannot tell a roll's leg from an ordinary transfer
--- between this envelope's own accounts, and this screen has no reason to
--- exclude the latter. tr.id IS NULL keeps every row the join found no
--- matching reclass_purpose transfer for - which is every kind but that one;
--- a correction's legs come back in below.
+-- What the occasion itself collected and disbursed (PRD section 7.5's detail
+-- screen), as opposed to IncidentalTotals' net-including-rolls. The LEFT JOIN
+-- excludes only a reclass_purpose leg that is a roll (CloseIncidentalAndRoll,
+-- in either direction, ADR-031), by transfer.kind and not transaction.kind:
+-- every transfer leg is posted as transaction.kind='transfer', so that alone
+-- cannot tell a roll's leg from an ordinary between_accounts transfer, which
+-- this screen has no reason to exclude. tr.id IS NULL keeps every row with no
+-- reclass_purpose transfer; a correction's legs come back in below.
 --
 -- A cancelled contribution (ADR-034's widened ADR-029 reversal) is dropped
--- whole: the reversal row itself (reverses_transaction_id set) and the row
--- it reverses, the same NOT EXISTS ContributedByIncidentalMember uses.
--- Otherwise a cancellation reads as money the occasion spent - "Terpakai"
--- - and the cancelled row as money it collected. Both halves go, so
--- collected minus disbursed still equals the envelope's balance.
--- IncidentalTotals above stays unfiltered: the pair nets to zero there.
+-- whole: the reversal row and the row it reverses, the same NOT EXISTS as
+-- ContributedByIncidentalMember. Otherwise a cancellation reads as money
+-- spent ("Terpakai") and the cancelled row as money collected. Both halves go,
+-- so collected minus disbursed still equals the envelope's balance;
+-- IncidentalTotals stays unfiltered because the pair nets to zero there.
 --
--- A peruntukan correction (ADR-033) is not dropped but re-attributed
--- (#342). Its legs carry tr.corrects_transaction_id, which a roll's never
--- do, so the join keeps them and reads each one against the bucket of the
--- row it corrects (o.direction): a leg moving the same way as that row adds
--- to the bucket, a leg moving the other way takes it back out. So an
--- unnamed contribution corrected out of this envelope nets to zero
--- collected here; one corrected in - from Kas Utama, or back after an
--- earlier correction out - reads as collected; an expense corrected away
--- un-spends. Each leg still moves collected minus disbursed by exactly its
--- own effect on the balance, so the two stay equal. The corrected row
--- itself is never a reversal (ADR-033 refuses those), so the cancellation
--- filters above never meet it.
+-- A peruntukan correction (ADR-033) is re-attributed, not dropped (#342). Its
+-- legs carry tr.corrects_transaction_id, which a roll's never do, so the join
+-- keeps them and reads each against the bucket of the row it corrects
+-- (o.direction): a leg moving the same way as that row adds to the bucket, the
+-- other way takes it back out. So an unnamed contribution corrected out of
+-- this envelope nets to zero collected here; one corrected in reads as
+-- collected; an expense corrected away un-spends. Each leg still moves
+-- collected minus disbursed by exactly its effect on the balance. The
+-- corrected row is never a reversal (ADR-033 refuses those), so the
+-- cancellation filters never meet it.
 --
--- A purpose move (ADR-036, tr.reason = 'allocation') is kept too, and only
--- ever counts as collected: money allocated in is money the envelope now
--- has to work with, and money allocated out was never spent on the
--- occasion, so it takes back what was collected rather than reading as
--- disbursed. Collected minus disbursed still moves by exactly the leg's
--- effect on the balance. A roll - 'roll', or NULL on a row written before
--- the column existed - stays excluded as above.
+-- A purpose move (ADR-036, tr.reason = 'allocation') is kept and only ever
+-- counts as collected: money allocated in is money the envelope has to work
+-- with, and money allocated out was never spent on the occasion, so it takes
+-- back what was collected rather than reading as disbursed. A roll - 'roll',
+-- or NULL on a row written before the column existed - stays excluded.
+--
 -- through bounds it at a past month's last day for the public report (#408):
--- only rows dated by then, and a reversal dated after it has not happened
--- yet. NULL - every other caller - is unbounded.
+-- only rows dated by then, and a reversal dated after it has not happened yet.
+-- NULL (every other caller) is unbounded.
 -- name: IncidentalActivityTotals :one
 SELECT
   CAST(COALESCE(SUM(CASE
@@ -397,28 +336,23 @@ WHERE t.fund_id = sqlc.arg('fund_id') AND t.purpose_id = sqlc.arg('purpose_id')
   AND (CAST(sqlc.narg('through') AS TEXT) IS NULL OR t.occurred_on <= CAST(sqlc.narg('through') AS TEXT));
 
 -- The roster query behind "who has paid / partially / not yet" for one
--- dues_period, across every member in one pass rather than one query per
--- member.
+-- dues_period, every member in one pass.
 -- name: DuesPaidByPeriod :many
 -- The AND NOT EXISTS clause is ADR-029's half of the reversal design: a
--- reversed dues row itself never matched kind = 'dues' in the first place
--- (a reversal is posted as kind='adjustment'), so this drops the ORIGINAL
--- row from the sum once something reverses it - which is what makes a
--- reversed payment disappear from "paid" rather than simply counting twice.
+-- reversal is kind='adjustment' so never matches kind = 'dues'; this drops the
+-- ORIGINAL row once something reverses it, so a reversed payment disappears
+-- from "paid" rather than counting twice.
 SELECT member_id, CAST(COALESCE(SUM(amount), 0) AS INTEGER) AS paid_amount
 FROM "transaction" t
 WHERE t.fund_id = ? AND t.kind = 'dues' AND t.dues_period = ?
   AND NOT EXISTS (SELECT 1 FROM "transaction" r WHERE r.reverses_transaction_id = t.id)
 GROUP BY member_id;
 
--- DuesPaidByMemberGroupedByPeriod is DuesPaidByPeriod's transpose: every
--- period one member has paid anything toward, in one pass over that
--- member's whole history rather than one query per period
--- (OutstandingDuesForMember's range walk). Same reversed-row exclusion
--- (ADR-029) and the same CAST(... AS TEXT) forcing dues_period non-null
--- LatestDuesPeriodPaidByMember already relies on - kind = 'dues' rows always
--- carry a dues_period (schema CHECK), so this is never actually NULL, only
--- untyped without the cast.
+-- DuesPaidByPeriod's transpose: every period one member has paid toward, in one
+-- pass over their history (OutstandingDuesForMember's range walk). Same
+-- reversed-row exclusion (ADR-029) and the same CAST(... AS TEXT) as
+-- LatestDuesPeriodPaidByMember - kind = 'dues' rows always carry a dues_period
+-- (schema CHECK), so it is never NULL, only untyped without the cast.
 -- name: DuesPaidByMemberGroupedByPeriod :many
 SELECT CAST(dues_period AS TEXT) AS dues_period, CAST(COALESCE(SUM(amount), 0) AS INTEGER) AS paid_amount
 FROM "transaction" t
@@ -427,29 +361,26 @@ WHERE t.fund_id = ? AND t.member_id = ? AND t.kind = 'dues'
 GROUP BY dues_period;
 
 -- The "paid in advance" signal. dues_period is 'YYYY-MM', so a lexicographic
--- MAX is also the chronological one. The CAST(... AS TEXT) is load-bearing,
--- not decoration: uncast, MAX(dues_period) generates interface{} - the same
--- untyped-interface trap ADR-024 documents for SUM, reached here through MAX
--- on a TEXT column - and a .(string) assertion on it is a live panic risk
--- since drivers commonly hand back []byte.
+-- MAX is also the chronological one. The CAST(... AS TEXT) is load-bearing:
+-- uncast, MAX(dues_period) generates interface{} (the ADR-024 trap for SUM,
+-- reached through MAX), and a .(string) assertion on it can panic since drivers
+-- commonly hand back []byte.
 -- name: LatestDuesPeriodPaidByMember :many
--- The AND NOT EXISTS clause is ADR-029's fix for the specific bug the chosen
--- design exists to avoid: without it, a reversed row would still be the
--- chronological MAX(dues_period) for its member, reading as "paid in
--- advance" through a period that was reversed and is no longer paid at all.
+-- The AND NOT EXISTS clause is ADR-029's fix: without it a reversed row would
+-- still be the MAX(dues_period) for its member, reading as "paid in advance"
+-- through a period that is no longer paid at all.
 SELECT member_id, CAST(MAX(dues_period) AS TEXT) AS latest_period
 FROM "transaction" t
 WHERE t.fund_id = ? AND t.kind = 'dues'
   AND NOT EXISTS (SELECT 1 FROM "transaction" r WHERE r.reverses_transaction_id = t.id)
 GROUP BY member_id;
 
--- The reconciliation cutoff. Deliberately not an aggregate: SELECT
--- CAST(MAX(id) AS INTEGER) generates a non-nullable (int64, error), and a
--- bare aggregate with no GROUP BY still returns one row on an empty table
--- with the value NULL - so a fund's first-ever reconciliation would fail
--- with "converting NULL to int64 is unsupported". This form returns zero
--- rows instead, giving a clean sql.ErrNoRows the domain reads as "no ledger
--- yet".
+-- The reconciliation cutoff. Deliberately not an aggregate: CAST(MAX(id) AS
+-- INTEGER) generates a non-nullable (int64, error), yet a bare aggregate still
+-- returns one NULL row on an empty table, so a fund's first-ever
+-- reconciliation would fail with "converting NULL to int64 is unsupported".
+-- This form returns zero rows instead - a clean sql.ErrNoRows the domain reads
+-- as "no ledger yet".
 -- name: MaxTransactionIDByFund :one
 SELECT id
 FROM "transaction"
@@ -458,20 +389,16 @@ ORDER BY id DESC
 LIMIT 1;
 
 -- The named half of an envelope's participation (ADR-034): every named
--- contribution posted against one purpose_id, summed per member - excluding
--- a row some reversal points at, the same NOT EXISTS shape DuesPaidByPeriod
--- already uses (ADR-029) so a reversed contribution disappears from "gave"
--- rather than counting twice. member_id IS NOT NULL is redundant with the
--- schema's own CHECK (kind='normal' AND direction='in' never carries a
--- member outside a named contribution) but kept explicit rather than
--- leaned on silently.
+-- contribution against one purpose_id, summed per member, excluding a row some
+-- reversal points at (the NOT EXISTS of DuesPaidByPeriod, ADR-029) so a
+-- reversed contribution disappears from "gave" rather than counting twice.
+-- member_id IS NOT NULL is redundant with the schema's CHECK but kept explicit.
 --
--- This says nothing about who was EXPECTED to give - that half is
--- ListMembersByFund plus the envelope's opened_on and recipients, read and
--- combined in Go (Ledger.GetIncidentalParticipation), never a second query
--- trying to derive the same roster twice.
+-- Says nothing about who was EXPECTED to give: that is ListMembersByFund plus
+-- the envelope's opened_on and recipients, combined in Go
+-- (Ledger.GetIncidentalParticipation).
 --
--- through bounds it the way IncidentalActivityTotals's is bounded (#408).
+-- through bounds it as in IncidentalActivityTotals (#408).
 -- name: ContributedByIncidentalMember :many
 SELECT member_id, CAST(COALESCE(SUM(amount), 0) AS INTEGER) AS contributed_amount
 FROM "transaction" t
@@ -484,9 +411,8 @@ WHERE t.fund_id = sqlc.arg('fund_id') AND t.purpose_id = sqlc.arg('purpose_id') 
   AND (CAST(sqlc.narg('through') AS TEXT) IS NULL OR t.occurred_on <= CAST(sqlc.narg('through') AS TEXT))
 GROUP BY member_id;
 
--- The settle-once pre-check. Returns sql.ErrNoRows when the claim has not
--- been settled yet (the expected, non-error path) or the settling row when
--- it has.
+-- The settle-once pre-check: sql.ErrNoRows when the claim is not yet settled,
+-- the settling row when it is.
 -- name: GetReimbursementSettlement :one
 SELECT id, fund_id, account_id, purpose_id, direction, amount, occurred_on, kind,
        member_id, dues_period, reimbursement_id, transfer_id, note, created_at

@@ -1,12 +1,10 @@
--- The public report's reads (ADR-035, #372). Both are read-only and
--- fund-scoped, and neither orders by primary key: a month is read by date, and
--- ties on a date are left unordered on purpose (a display list, not an
--- assertion about insertion order).
+-- The public report's reads (ADR-035, #372): read-only, fund-scoped, and none
+-- orders by primary key - a month is read by date, ties left unordered on
+-- purpose (a display list, not an assertion about insertion order).
 
--- The first month the report offers. Not an aggregate, for the reason
--- MaxTransactionIDByFund gives: MIN() on an empty fund is one row of NULL
--- where this form is zero rows, a clean sql.ErrNoRows the domain reads as "no
--- ledger yet".
+-- The first month the report offers. Not an aggregate (see
+-- MaxTransactionIDByFund): MIN() on an empty fund is one row of NULL, where
+-- this form is zero rows - a clean sql.ErrNoRows read as "no ledger yet".
 -- name: FirstTransactionDateByFund :one
 SELECT occurred_on
 FROM "transaction"
@@ -16,30 +14,29 @@ LIMIT 1;
 
 -- Every ledger row of one fund dated in [from_date, to_date) (to_date NULL: no
 -- upper bound), with the facts a display-time label needs (#257) and nothing
--- the page must not carry: no receipt path or id (has_receipt is a 0/1), no
--- account (a location is the treasurer's working detail, ADR-035), no row ids. Filters are applied in Go,
--- not here: a transfer pair must be folded into one row before a purpose
--- filter can say whether either side matches, and a month is a bounded list.
+-- the public page must not carry: no receipt path or id (has_receipt is 0/1),
+-- no account (a location is the treasurer's working detail, ADR-035), no row
+-- ids. Filters run in Go: a transfer pair must be folded into one row before a
+-- purpose filter can say whether either side matches.
 --
--- from_date/to_date are plain 'YYYY-MM-DD' strings, compared as text, which is
--- exactly how occurred_on already sorts (a CHECK holds it to date()'s own
--- format). to_date is the FIRST day of the next month, exclusive, and NULL for
--- the running month: it reads every row from the first on, so a row dated after
--- today still belongs to the walk that ends on the unbounded balance (ADR-038).
+-- from_date/to_date are 'YYYY-MM-DD' strings compared as text, which is how
+-- occurred_on already sorts (a CHECK holds it to date()'s format). to_date is
+-- the FIRST day of the next month, exclusive, and NULL for the running month:
+-- it reads every row, so a row dated after today still belongs to the walk
+-- that ends on the unbounded balance (ADR-038).
 --
--- The member columns mirror ListTransactionsPage: member_* is the dues or
--- contribution member, settlement_member_* the paid-back member of a
--- settled reimbursement (t.member_id is NULL on that kind). Merged in Go for
--- the sqlc COALESCE typing reason ListTransactionsPage documents.
+-- Member columns mirror ListTransactionsPage: member_* is the dues or
+-- contribution member, settlement_member_* the paid-back member of a settled
+-- reimbursement (t.member_id is NULL on that kind), merged in Go for the sqlc
+-- COALESCE typing reason documented there.
 --
--- The transfer columns are only meaningful on kind='transfer' rows, found the
--- way ListTransactionsPage finds them: 'out' is the pair's from leg and 'in' its
--- to leg. Both legs of one pair carry identical from/to facts, so the Go fold
--- keeps either.
+-- Transfer columns mean something only on kind='transfer' rows: 'out' is the
+-- pair's from leg and 'in' its to leg. Both legs carry identical from/to
+-- facts, so the Go fold keeps either.
 --
--- has_receipt is true for a receipt on the row itself, or - on a
--- reimbursement payout - on the claim it settles: the claim's nota is the proof
--- of that payout (ADR-011), and the row carries no other.
+-- has_receipt is true for a receipt on the row itself or, on a reimbursement
+-- payout, on the claim it settles: that nota is the proof of the payout
+-- (ADR-011).
 -- name: ListReportTransactions :many
 SELECT t.occurred_on, t.created_at, t.direction, t.amount, t.kind,
        t.purpose_id, p.name AS purpose_name,
@@ -79,9 +76,9 @@ ORDER BY t.occurred_on DESC, t.created_at DESC;
 -- (FundBalance, PurposeBalance, OutstandingReimbursementTotal,
 -- LatestReconciliation, ListOpenReconciliationLinesByFund), so the running
 -- month and Beranda cannot disagree. A past month passes its last day
--- ("YYYY-MM-DD", compared against occurred_on and the other day columns) or,
--- for a count, the first instant of the next month in Jakarta as unix seconds.
--- The CASTs are what make sqlc emit int64 rather than interface{} (ADR-024).
+-- ("YYYY-MM-DD") or, for a count, the first instant of the next month in
+-- Jakarta as unix seconds. The CASTs make sqlc emit int64, not interface{}
+-- (ADR-024).
 
 -- name: ReportFundBalance :one
 SELECT CAST(COALESCE(SUM(CASE WHEN direction = 'in' THEN amount ELSE -amount END), 0) AS INTEGER) AS balance_amount
@@ -95,9 +92,9 @@ FROM "transaction"
 WHERE fund_id = sqlc.arg('fund_id') AND purpose_id = sqlc.arg('purpose_id')
   AND (CAST(sqlc.narg('through') AS TEXT) IS NULL OR occurred_on <= CAST(sqlc.narg('through') AS TEXT));
 
--- Owed at the bound: incurred by then, not yet waived then, and not yet paid
--- out by then. waived_on holds only the latest waive, so a claim waived and
--- later un-waived reads as owed in the months it was waived (#408 accepts it).
+-- Owed at the bound: incurred by then, not yet waived, not yet paid out.
+-- waived_on holds only the latest waive, so a claim waived and later un-waived
+-- reads as owed in the months it was waived (#408 accepts it).
 -- name: ReportOwedToMembers :one
 SELECT CAST(COALESCE(SUM(r.amount), 0) AS INTEGER) AS total_amount
 FROM reimbursement r
@@ -120,10 +117,9 @@ WHERE fund_id = sqlc.arg('fund_id')
 ORDER BY performed_at DESC, id DESC
 LIMIT 1;
 
--- ListOpenReconciliationLinesByFund with both snapshots bounded: a line is
--- open at the bound when its remainder_amount is non-zero (see
--- ListReconciliationLines) and no count before the bound has weighed in on
--- its location since.
+-- ListOpenReconciliationLinesByFund bounded: a line is open at the bound when
+-- its remainder_amount is non-zero (see ListReconciliationLines) and no count
+-- before the bound has weighed in on its location since.
 -- name: ReportOpenReconciliationLines :many
 SELECT rl.id, rl.fund_id, rl.reconciliation_id, rl.account_id, rl.recorded_amount,
        rl.actual_amount, rl.difference_amount, rl.resolution, rl.adjustment_transaction_id,
