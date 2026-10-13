@@ -1,14 +1,12 @@
 # Uruni — Technical Design
 
-**Version 0.4 · 2026-08-09 · Status: draft (stack confirmed: Go + React)**
+**Status: living overview. The stack is built; each decision's stage is in the ADR index.**
 
 Companion to [`PRD.md`](./PRD.md). The PRD owns *what* and *why*; this doc owns *how*.
 
 The individual decisions live as one-file-per-ADR in [`ADR/`](./ADR/README.md) — each a single call with context, options, the decision, and consequences. This page keeps what frames them: the constraints, the stack at a glance, the production topology, and what is deliberately still open.
 
 **ADR numbers are permanent** — never reused, never renumbered. An ADR's text is editable while it carries the **`draft`** tag; the tag comes off with the last slice of the milestone that implements it, after which the decision changes only by a superseding ADR ([`ADR/README.md`](./ADR/README.md) has the rule).
-
-> Version caveat: recommendations reflect the ecosystem as of ~mid-2025. Before building, verify current versions and that named libraries are still actively maintained.
 
 ## Constraints that drive the tech (from the PRD)
 
@@ -29,12 +27,13 @@ Rationale for the two anchors: both React and Go are the most densely and accura
 
 Every decision, with its current `draft` / implemented stage, is listed in the [ADR index](./ADR/README.md). That index is the one list; this page does not repeat it.
 
-## Proposed topology (v1 production)
+## Production topology
 
 ```
 Internet ──▶ Caddy (TLS) ──▶ Go app  (single binary)
                                ├─ JSON API            /api/*
                                ├─ Public report (SSR) /report/*
+                               ├─ Health check        /healthz (DB ping, last dump time)
                                ├─ React SPA (embed.FS) everything else
                                ├─ SQLite file   (volume)
                                ├─ uploads/      (volume)
@@ -49,4 +48,4 @@ None open. The two once listed here - the JSON export's shape and version strate
 
 ## Not deciding yet (deferred)
 
-Error monitoring/observability, rate-limit specifics, a multi-environment (preview/demo/production) split, and any nightly migration-rehearsal CI — all deferred until there's real production data or a second deploy target to justify them. (CI/CD and release/versioning are now decided — [ADR-017](./ADR/017-cicd-github-actions.md)/[ADR-018](./ADR/018-release-and-versioning.md).)
+Error monitoring/observability, a multi-environment (preview/demo/production) split, and any nightly migration-rehearsal CI — all deferred until there's real production data or a second deploy target to justify them. (CI/CD and release/versioning are now decided — [ADR-017](./ADR/017-cicd-github-actions.md)/[ADR-018](./ADR/018-release-and-versioning.md).)

@@ -146,8 +146,8 @@ export default function Home({
   // A transaction row carries purpose_id, not a purpose name - and
   // GET /api/balances already answers with every purpose and account the
   // fund has, names included. So "what was this entry?" costs a lookup, not
-  // a fifth request. A member name would need GET /api/members and is not
-  // this slice's (M6.13 gives dues entries a member of their own).
+  // another request. A member's name already rides on the transaction row
+  // (member_name).
   const purposeNames = new Map(balances.purposes.map((purpose) => [purpose.id, purpose.name]))
 
   // The purpose breakdown (M6.33, PRD section 7.7, ADR-032): Kas Utama

@@ -28,6 +28,14 @@ The alternative is what M3–M9 look like under ADR-018: a `00002_add_x.sql` tha
 
 **Upgrading a `0.x` instance can require throwing the data away.** This is the cost, and it is the point: the operator upgrade contract does not apply below `v1.0.0`. Anyone running a `0.x` build is running a preview, and [`SELF-HOSTING.md`](../../SELF-HOSTING.md) says so. The pilot at `v0.6.x` is the one place this will bite — a schema change mid-pilot means re-entering whatever the treasurer recorded, or restoring through [ADR-012](./012-backup-and-export.md)'s canonical JSON once M8 exists. Worth knowing before the pilot starts, not after.
 
-**A stale local database is now the likeliest confusing failure.** Symptoms are a `no such column` or a `CHECK` that fires on a row the schema plainly allows. The answer is always `make db-reset`; `make doctor` does not detect it, because goose genuinely believes it is up to date.
+**A stale local database is now the likeliest failure.** `serve` and `create-user` refuse to start on a schema that is not the one the binary creates, in one line that names the objects that differ ([#497](https://github.com/kerti/uruni/issues/497)); `make migrate-status` prints the same verdict. The answer is always `make db-reset`. `make doctor` never opens the database, so it does not detect it.
 
 **`v1.0.0` gets a clean starting point.** A first-deploy operator applies one file that reads like a schema, instead of replaying nine milestones of the project changing its mind.
+
+## Amendments
+
+An amendment corrects a statement of fact about the code that has since become false. It never changes a decision, a trade-off or an accepted cost — that is still a superseding ADR. See the [ADR index](./README.md) for the rule.
+
+**2026-10-13 ([#497](https://github.com/kerti/uruni/issues/497), [#509](https://github.com/kerti/uruni/issues/509))** — *Consequences* said "A stale local database is now the likeliest confusing failure. Symptoms are a `no such column` or a `CHECK` that fires on a row the schema plainly allows. The answer is always `make db-reset`; `make doctor` does not detect it, because goose genuinely believes it is up to date."
+
+Those symptoms are now caught at boot: after migrating, `serve` (and `create-user`) compare the live schema with the one the embedded migration creates and refuse to start on a mismatch, so the failure is a clear refusal rather than a `no such column` mid-request. goose still believes it is up to date; the check does not ask it. `make db-reset` is still the answer, and `make doctor` still does not detect a stale database, because it does not open one; `make migrate-status` does report it. The decision is unchanged: one file, edited in place, reset rather than migrated.

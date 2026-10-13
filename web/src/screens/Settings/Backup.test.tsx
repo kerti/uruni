@@ -207,8 +207,8 @@ describe('Settings backup card - automatic backup list', () => {
 
     const row = (await screen.findAllByRole('listitem'))[0]
     expect(within(row).getByText(new RegExp(text.olderFormat))).toBeInTheDocument()
-    // No restore control anywhere on an older-format row - #326 builds one,
-    // this slice never does, for any row.
+    // An older-format row is never offered for restore (ADR-012), whatever
+    // the rest of the list does.
     expect(within(row).queryByRole('button', { name: /pulih/i })).not.toBeInTheDocument()
     // The download control is still there - an older-format dump stays
     // downloadable (ADR-012), only restore is withheld.

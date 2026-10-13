@@ -265,10 +265,9 @@ const duesPeriodLayout = "2006-01"
 
 // transactionsPageResponse is GET /api/transactions's envelope (#225): the
 // page of rows plus an opaque cursor for the next one, null once there is
-// no further page. No list route in this package returned an envelope
-// before this - every other GET here still answers a bare, unpaginated
-// array - so {"transactions":[...],"next_cursor":...} is the shape this
-// slice chose, there being no existing convention to follow.
+// no further page. The other paged lists (members, reimbursements, dues
+// payments, reconciliations) answer the same shape with their own rows key:
+// {"transactions":[...],"next_cursor":...}.
 type transactionsPageResponse struct {
 	Transactions []transactionResponse `json:"transactions"`
 	NextCursor   *string               `json:"next_cursor"`

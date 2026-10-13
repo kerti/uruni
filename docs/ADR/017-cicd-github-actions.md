@@ -5,7 +5,7 @@
 **Context.** Public GitHub repo, AGPL-3.0, solo maintainer, release by pushing tags.
 
 **Decision.**
-- **`ci.yml`** on PRs and pushes to `main`: Go lint (golangci-lint) + `go test`, frontend lint/typecheck + Vitest, and a build check. A local **`make check`** mirrors CI so green-locally ≈ green-in-CI.
+- **`ci.yml`** on PRs and pushes to `main`: Go lint (golangci-lint) + `go test`, `go mod tidy -diff`, `sqlc diff` and govulncheck, frontend lint/typecheck + Vitest, and a build check. A local **`make check`** mirrors CI so green-locally ≈ green-in-CI.
 - **`workflows/release.yml`** on tag push (`v*`): build the single-origin image (multi-arch `linux/amd64,linux/arm64`, cross-compiled rather than QEMU-emulated) and publish to **GHCR** (`build-once`), so any tag's artifact can later be promoted without a rebuild. The tag is passed in as the `VERSION` build-arg — otherwise `uruni version` reports `dev` forever and the operator's upgrade contract ([ADR-018](./018-release-and-versioning.md)) is a lie. **There is no `deploy.yml`:** deploying a published image to the maintainer's instance is a manual ops step kept out of this repo ([ADR-016](./016-deployment-targets-reference-infra.md)).
 - **Secret scanning** (gitleaks) and **CodeQL** on a public repo; **Dependabot** for deps.
 - Branch protection on `main`: require PR + green CI, linear history (squash), admin bypass on (never lock out the solo maintainer). *Current state: protection is on but with **no required status checks**, deliberately — there is nothing meaningful to require until the scaffold exists. The M1 PR turns them on and this note goes away.*
@@ -14,7 +14,7 @@
 
 **Consequences.** `.github/` carries `workflows/{ci,release,codeql,gitleaks}.yml` and the e2e pair `workflows/{e2e,e2e-run}.yml` ([ADR-039](./039-e2e-every-operation-gated-in-ci.md)), plus `release.yml` (the release-*notes* config — note the name collision with the workflow), `dependabot.yml`, `PULL_REQUEST_TEMPLATE.md` and `ISSUE_TEMPLATE/`. Pin action SHAs before going public.
 
-Two version pins have to move in lockstep or `make check` stops predicting CI: **golangci-lint** (`GOLANGCI_VERSION` in `ci.yml` ↔ `GOLANGCI_CI_VERSION` in the `Makefile`, which `make doctor` compares against your local binary) and the **golangci-lint-action major** — v8 drives golangci-lint v2, which is the schema `.golangci.yml` is written in. Action v6 silently ignores a v2 config.
+Four version pins have to move in lockstep or `make check` stops predicting CI: **golangci-lint** (`GOLANGCI_VERSION` in `ci.yml` ↔ `GOLANGCI_CI_VERSION` in the `Makefile`, which `make doctor` compares against your local binary), **sqlc** (`SQLC_VERSION` ↔ `SQLC_CI_VERSION`, which `make doctor` compares the same way), **govulncheck** (`GOVULNCHECK_VERSION` in both; `go run` fetches that exact version, so there is nothing to compare) and the **golangci-lint-action major** — v8 drives golangci-lint v2, which is the schema `.golangci.yml` is written in. Action v6 silently ignores a v2 config.
 
 Because the tooling was written before the code ([ADR-019](./019-cli-surface-and-runtime-config.md)), `ci.yml` and `codeql.yml` open with a `preflight` job that skips the backend/frontend jobs until `go.mod` and `web/package.json` actually exist. This keeps `main` green through the pre-scaffold window — "never tag a red `main`" only works if red means something — and goes permanently inert once M1 lands.
 
@@ -25,3 +25,5 @@ Because the tooling was written before the code ([ADR-019](./019-cli-surface-and
 An amendment corrects a statement of fact about the code that has since become false. It never changes a decision, a trade-off or an accepted cost — that is still a superseding ADR. See the [ADR index](./README.md) for the rule.
 
 **2026-10-07 ([#434](https://github.com/kerti/uruni/issues/434))** — *Consequences* listed `.github/workflows/` as `{ci,release,codeql,gitleaks}.yml`. E2E now runs in CI from its own pair of workflows, so the list names them too. What ADR-017 decided is unchanged: `ci.yml` and `make check` still mirror each other, and e2e is outside that mirror.
+
+**2026-10-13 ([#509](https://github.com/kerti/uruni/issues/509))** — the `ci.yml` bullet listed Go lint + `go test`, frontend lint/typecheck + Vitest and a build check, and *Consequences* said "Two version pins have to move in lockstep" (golangci-lint and the action's major). [#554](https://github.com/kerti/uruni/pull/554) added `go mod tidy -diff`, `sqlc diff` and govulncheck to `ci.yml` and `make check`, and with them two more pins, sqlc and govulncheck; both sentences name them now. `make check` needs network access for govulncheck, and runs its Go steps on `go.mod`'s `toolchain` line, as setup-go does in CI. The CI decision is unchanged.

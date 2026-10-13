@@ -121,7 +121,7 @@ interface FormData {
  * (localStorage, guarded - see readLastAccountId), purpose defaults to the
  * `kind: "main"` row, date defaults to today. Direction has no PRD-specified
  * default; this screen defaults to "out" (an expense) as the more frequent
- * everyday entry - a call this slice made, not one settled elsewhere.
+ * everyday entry - a call made here, not one settled elsewhere.
  *
  * onRecorded is called once, after a successful post - the caller (App.tsx)
  * owns navigating back to home and showing the success message there; this

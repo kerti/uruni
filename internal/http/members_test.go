@@ -423,9 +423,9 @@ func TestPatchMemberInactiveOnAbsentPresentAndNull(t *testing.T) {
 // integration-style assertion #81 asks for: it goes through the route, then
 // checks the *derived* status via internal/ledger's own
 // DuesStatusForPeriod, not just that the column changed. DuesStatusForPeriod
-// itself is untouched by this slice (TestDuesStatusForPeriodMemberOwesThe...
-// and its "excluded after" sibling already cover its semantics directly);
-// this test only proves the PATCH route actually reaches them.
+// itself is not under test here (TestDuesStatusForPeriodMemberOwesThe...
+// and its "excluded after" sibling cover its semantics directly); this test
+// only proves the PATCH route actually reaches them.
 func TestPatchMemberInactiveOnIsHonoredByDuesStatusForPeriod(t *testing.T) {
 	t.Parallel()
 	r, l := testRouterAndLedger(t)

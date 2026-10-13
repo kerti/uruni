@@ -47,7 +47,7 @@ async function submitLogin(page: Page) {
 //   M6.5  first-run setup (fund, accounts, dues tier)
 //   M6.8  record a transaction
 //   M6.9  home (balance hero + reconciliation status)
-//   M6.10 reconcile (this slice)
+//   M6.10 reconcile
 //
 // M6.4 gives this spec its first screen to walk through:
 // `cmd/uruni/seed_e2e.go`'s fixture command seeds

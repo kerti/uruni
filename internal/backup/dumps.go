@@ -36,7 +36,7 @@ import (
 type Kind string
 
 const (
-	// KindDaily is the scheduled once-a-day dump (this slice) and also what
+	// KindDaily is the scheduled once-a-day dump and also what
 	// the boot-time format-version dump writes - it is still, in substance,
 	// today's daily copy, just taken at boot instead of on the hourly tick.
 	KindDaily Kind = "daily"
@@ -464,12 +464,12 @@ func writeDailyIfNeeded(ctx context.Context, read documentReader, assemble zipAs
 }
 
 // WritePreRestoreDump is the safety-net dump ADR-012's restore path takes
-// before it changes a single row - this slice (#324) only builds the
-// function; #325 is what calls it from the restore handler. Unconditional,
-// like WriteDump (a restore is exactly the moment "did the fund change
-// since the last dump" stops being the question that matters), and it
-// prunes its own kind's quota afterward so #325's caller does not also need
-// to know about ApplyRetention.
+// before it changes a single row. Restore calls it before its transaction
+// opens, and `migrate down` before it rolls a step back. Unconditional, like
+// WriteDump (a restore is exactly the moment "did the fund change since the
+// last dump" stops being the question that matters), and it prunes its own
+// kind's quota afterward so its callers do not also need to know about
+// ApplyRetention.
 func WritePreRestoreDump(ctx context.Context, sqlDB *sql.DB, uploadsDir, backupDir string, now time.Time) (name string, err error) {
 	name, err = WriteDump(ctx, sqlDB, uploadsDir, backupDir, KindPreRestore, now)
 	if err != nil {

@@ -32,8 +32,8 @@ type transferRequest struct {
 // transferResponse is the wire shape of the transfer row. No fund_id, same
 // reasoning as accountResponse. The two legs it groups are not repeated here:
 // they are ordinary transaction rows, already readable through GET
-// /api/transactions, which is why this slice deliberately has no GET
-// /api/transfers of its own.
+// /api/transactions, which is why there is deliberately no GET
+// /api/transfers.
 type transferResponse struct {
 	ID        int64  `json:"id"`
 	Kind      string `json:"kind"`

@@ -40,7 +40,7 @@ A **mobile app** that makes the treasurer's job effortless capture and honest ma
 
 - The server is **open source and self-hostable**. A community's data lives on the community's *own* instance, under its own control.
 - For the validated user, a technical helper stands the instance up. It's not a tap-to-install consumer app, and we don't pretend it is.
-- **AGPL-3.0**: anyone who hosts Uruni for their community must keep the code open. The trust story is auditable and true by construction.
+- **AGPL-3.0**: the code is open, and anyone who modifies Uruni and makes it available to users over a network must offer those users the source of their modified version. The trust story is auditable and true by construction.
 
 Every competitor is a company's server holding your data. With Uruni, the server is *yours*.
 

@@ -3,7 +3,7 @@
 # formatting never shows up as review noise or as a `make check` failure.
 #
 # Go   -> gofmt -w
-# TS/JS -> prettier --write, then eslint --fix   (skipped until web deps exist)
+# TS/JS/CSS -> prettier --write   (skipped until web deps exist)
 #
 # Best-effort and silent: any missing tool is a no-op, never a failed edit.
 set -eu
@@ -29,13 +29,6 @@ case "$f" in
     # possible hang) inside an edit hook.
     [ -x web/node_modules/.bin/prettier ] &&
       web/node_modules/.bin/prettier --write "$f" >/dev/null 2>&1 || true
-    case "$f" in
-      *.css) ;;
-      *)
-        [ -x web/node_modules/.bin/eslint ] &&
-          web/node_modules/.bin/eslint --fix "$f" >/dev/null 2>&1 || true
-        ;;
-    esac
     ;;
 esac
 exit 0

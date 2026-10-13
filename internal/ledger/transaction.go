@@ -22,7 +22,7 @@ const occurredOnLayout = "2006-01-02"
 // kind='normal' and kind='adjustment' - dues, reimbursement and transfer each
 // carry their own extra schema invariant (member_id+dues_period,
 // reimbursement_id, transfer_id) that this method does not check, and get
-// their own method in a later slice (#40-#42). A string Kind field would let a
+// their own methods (PostDuesPayments, PostTransferBetweenAccounts and the reimbursement ones). A string Kind field would let a
 // caller reach those kinds through this method without the invariant that
 // makes them safe - CreateTransactionParams would accept it and the schema's
 // CHECKs would reject most such calls, but not all of them (kind='opening' has

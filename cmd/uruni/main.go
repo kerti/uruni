@@ -95,8 +95,8 @@ func serve() error {
 	// never runs under a live server (#494). `migrate status` does not: an
 	// operator legitimately runs it *while* a server is up to check what it has
 	// applied. What the lock guards against for `serve` is two long-lived
-	// `serve` processes both reaching the domain-level singleton guard M4 adds
-	// next (first-run setup refusing a second fund) at once - see internal/lock's package doc.
+	// `serve` processes both reaching the domain-level singleton guard
+	// (first-run setup refusing a second fund) at once - see internal/lock's package doc.
 	lockPath := lock.PathFor(cfg.DBPath)
 	instanceLock, err := lock.Acquire(lockPath)
 	if err != nil {

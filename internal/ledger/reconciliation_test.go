@@ -77,7 +77,7 @@ func TestTakeReconciliationEmptyLedgerStoresNullCutoffAndZeroRecorded(t *testing
 	}
 }
 
-// The false-record regression this slice exists to prevent: a gap is found
+// The false-record regression this test exists to catch: a gap is found
 // and resolved by an "adjusted" fix in the same call, and the stored
 // difference_amount is the gap that was actually found - never 0. 0 would
 // mean the cutoff was taken after the fix landed, which is exactly the bug

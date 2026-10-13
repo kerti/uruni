@@ -42,7 +42,7 @@ func toDuesStatusResponse(s ledger.MemberDuesStatus) duesStatusResponse {
 // unvalidated - a missing or malformed period reaches
 // DuesStatusForPeriod's own validateDuesPeriod check and comes back as
 // ErrInvalidArgument through mapLedgerError, the same single source of
-// truth every other route in this slice defers to (ADR-027).
+// truth every other route in this file defers to (ADR-027).
 func (a *api) getDuesStatus(w http.ResponseWriter, r *http.Request) {
 	fund, ok := a.resolveFund(w, r)
 	if !ok {
@@ -89,7 +89,7 @@ func toOutstandingDuesResponse(p ledger.OutstandingDuesPeriod) outstandingDuesRe
 // period through - a missing value means "default to the server's current
 // month" (OutstandingDuesForMember's own job to decide), and a malformed one
 // reaches its validateDuesPeriod check and comes back as ErrInvalidArgument
-// through mapLedgerError, same as every other route in this slice.
+// through mapLedgerError, same as every other route in this file.
 //
 // {id} is parsed here rather than through resolveMember: that helper's own
 // GetMember lookup takes no fund_id, so it cannot be this route's fund-scope
