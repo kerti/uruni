@@ -81,16 +81,14 @@ async function seedCeilingFigures(request: APIRequestContext) {
     incurred_on: today,
     note: 'Talangan besar',
   })
-  // Cek kas: Tunai counted at zero and left open, a difference as wide as the
-  // balance; the bank matches.
-  const balances = await api<{ accounts: { id: number; name: string; balance: number }[] }>(request, 'GET', '/api/balances')
+  // Cek kas: every location counted at zero and left open, so each difference
+  // is as wide as its balance. The bank's recorded balance is negative (the
+  // Titipan went out of it) and a count can't be, so it can't be "matched".
+  const balances = await api<{ fund_total: number; accounts: { id: number }[] }>(request, 'GET', '/api/balances')
   await api(request, 'POST', '/api/reconciliations', {
-    counts: balances.accounts.map((a) =>
-      a.name === 'Tunai'
-        ? { account_id: a.id, actual_amount: 0, resolution: 'left_open' }
-        : { account_id: a.id, actual_amount: a.balance, resolution: 'matched' },
-    ),
+    counts: balances.accounts.map((a) => ({ account_id: a.id, actual_amount: 0, resolution: 'left_open' })),
   })
+  return balances.fund_total
 }
 
 // Runs in the page: every "Rp ..." figure in the text, measured with a Range.
@@ -139,9 +137,12 @@ async function expectFiguresFit(page: Page, where: string) {
   expect(issues, where).toEqual([])
 }
 
+// A path that opens a dialog (`?edit=`) hides the shell behind it, so it is
+// ready when the dialog is.
 async function openScreen(page: Page, path: string) {
   await page.goto(path)
-  await expect(page.getByRole('navigation', { name: copy.shell.nav.label })).toBeVisible()
+  const ready = path.includes('edit=') ? page.getByRole('dialog') : page.getByRole('navigation', { name: copy.shell.nav.label })
+  await expect(ready).toBeVisible()
   await page.waitForLoadState('networkidle')
 }
 
@@ -162,9 +163,12 @@ test.describe('the ceiling figure fits', () => {
 
   test('seed ceiling-sized figures: Beranda shows them whole', async ({ page }) => {
     await logIn(page)
-    await seedCeilingFigures(page.context().request)
+    const fundTotal = await seedCeilingFigures(page.context().request)
     await openScreen(page, '/')
-    await expect(page.getByRole('region', { name: copy.home.balanceHeading })).toContainText(widest)
+    // The hero is the fund total, which the seed runs past the ceiling: a
+    // thirteen-digit figure, wider than any single amount.
+    expect(fundTotal).toBeGreaterThan(ceiling)
+    await expect(page.getByRole('region', { name: copy.home.balanceHeading })).toContainText(formatIDR(fundTotal))
     await expect(page.getByRole('button', { name: /^Titipan Uji Lebar/ })).toContainText(formatIDR(-ceiling))
     await expectFiguresFit(page, '/ at 390px')
   })
