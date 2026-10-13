@@ -4,8 +4,8 @@
 #
 # No database service and no mock auth: the whole fixture is one SQLite file,
 # and Playwright's global setup builds the binary and seeds it
-# (web/e2e/global-setup.ts). Every worker then runs its own instance with its
-# own database, backup and uploads directories, so CI needs no .env.
+# (web/e2e/global-setup.ts). Every worker runs its own instance with its own
+# database, backup and uploads directories, so CI needs no .env.
 #
 # Actions are pinned by SHA with a `# vX.Y.Z` comment, as in ci.yml.
 name: E2E run
@@ -28,13 +28,13 @@ permissions:
 
 jobs:
   run:
-    # Not tier-specific: the check GitHub reports is `<caller job> / <this
-    # job>`, so a tier in this name would give smoke and full two different
-    # check names and break e2e.yml's one-stable-name promise.
+        # Not tier-specific: the check GitHub reports is `<caller job> / <this
+        # job>`, so a tier in this name would give smoke and full different check
+        # names and break e2e.yml's one-stable-name promise.
     name: Playwright
     runs-on: ubuntu-latest
-    # The full tier takes about 2.5 minutes; this only stops a hung server
-    # from holding a runner for the 6-hour default.
+        # The full tier takes about 2.5 minutes; this only stops a hung server from
+        # holding a runner for the 6-hour default.
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -50,14 +50,14 @@ jobs:
           cache-dependency-path: web/package-lock.json
       - run: npm ci
         working-directory: web
-      # The binary embeds web/dist, so the SPA is built before the suite builds
-      # the binary (`make e2e` does this through web-build; e2e-ci does not).
+            # The binary embeds web/dist, so the SPA is built before the suite builds
+            # the binary (`make e2e` does this through web-build; e2e-ci does not).
       - run: npm run build
         working-directory: web
-      # Most of this job's wall clock is setup, not the tests (#451), and the
-      # browser download is the largest piece of it. The cache key is the
-      # installed runner's version, because each Playwright release pins its
-      # own browser build. On a hit only the OS packages are installed.
+            # Most of this job's wall clock is setup, and the browser download is the
+            # largest piece. The cache key is the installed runner's version, because
+            # each Playwright release pins its own browser build. On a hit only the OS
+            # packages are installed.
       - name: Read the Playwright version
         id: pw
         working-directory: web

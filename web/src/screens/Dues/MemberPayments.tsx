@@ -17,8 +17,7 @@ import type { Transaction } from '@/lib/transactions'
 
 const text = copy.dues.history
 
-/** Local YYYY-MM-DD - never toISOString(). Same helper as
- * RecordPayment.tsx's own. */
+/** Local YYYY-MM-DD - never toISOString(). */
 function todayISODate(): string {
   const now = new Date()
   const mm = String(now.getMonth() + 1).padStart(2, '0')
@@ -28,35 +27,31 @@ function todayISODate(): string {
 
 /**
  * One member's dues rows for one period, with a reversal action on each
- * payment that has not already been reversed (M6.14, PRD section 7.3: "undo a dues
- * payment recorded in error - the payment is reversed by a new entry, never
- * edited away").
+ * payment not already reversed (PRD section 7.3: "undo a dues payment
+ * recorded in error - the payment is reversed by a new entry, never edited
+ * away").
  *
- * Not GET /api/dues-payments (the Iuran tab's fund-wide history, which has
- * no member or period filter): a dues payment is an ordinary transaction
- * row, so this reads GET /api/transactions?member_id=&dues_period=
- * (#225 - filtered server-side, never client-side over a paged list). Both
- * halves of a reversal come back under that filter - the kind='dues'
- * payment, and the kind='adjustment' row that reverses it (ADR-029 copies
- * the member and period onto the reversal, which is what makes the server
- * filter find it too: the schema only ever lets an adjustment carry a
+ * Not GET /api/dues-payments (the Iuran tab's fund-wide history, with no
+ * member or period filter): a dues payment is an ordinary transaction row, so
+ * this reads GET /api/transactions?member_id=&dues_period= (filtered
+ * server-side, never client-side over a paged list). Both halves of a
+ * reversal come back under that filter - the kind='dues' payment, and the
+ * kind='adjustment' row that reverses it (ADR-029 copies the member and
+ * period onto the reversal; the schema only lets an adjustment carry a
  * member_id/dues_period when it is a reversal). Showing only the payment
- * would hide the correction that is the whole point of never editing a
- * posted row.
+ * would hide the correction that is the point of never editing a posted row.
  *
  * Nothing here decides what a reversal contains: the request carries only a
- * date and a note, and the ledger copies account, purpose, amount, member
- * and period from the row being reversed. A blank reason sends null, never
- * a generated default (#257) - the row explains itself through
- * TransactionList's own display label instead, so there is no longer a
- * memberName prop here to build one from.
+ * date and a note, and the ledger copies account, purpose, amount, member and
+ * period from the reversed row. A blank reason sends null, never a generated
+ * default - the row explains itself through TransactionList's display label.
  */
 export default function MemberPayments({ memberId, period, onReversed }: { memberId: number; period: string; onReversed: () => void }) {
   const [state, run] = useApi<Transaction[]>()
   const [submitState, submitRun] = useApi<unknown>()
 
-  // Which payment's reversal form is open, if any - one at a time, so the
-  // date and note below always belong to a single row.
+  // Which payment's reversal form is open, if any - one at a time, so the date
+  // and note always belong to a single row.
   const [reversingId, setReversingId] = useState<number | null>(null)
   const [occurredOn, setOccurredOn] = useState(todayISODate)
   const [note, setNote] = useState('')
@@ -68,15 +63,14 @@ export default function MemberPayments({ memberId, period, onReversed }: { membe
 
   useEffect(() => {
     void run(loadRows)
-    // run is a stable useCallback (useApi.ts); this component is mounted by
-    // an expanded member row, so the fetch belongs to that expansion.
+    // run is a stable useCallback (useApi.ts); an expanded member row mounts
+    // this component, so the fetch belongs to that expansion.
   }, [run, loadRows])
 
-  // The server already filtered to this member+period (#225) - everything
-  // it returns for this filter is either the kind='dues' payment or a
-  // kind='adjustment' reversal of it, so no further client-side filtering
+  // The server already filtered to this member+period - everything it returns
+  // is either the kind='dues' payment or a kind='adjustment' reversal of it
   // (schema CHECK: only a reversal may carry member_id+dues_period on a
-  // non-'dues' row).
+  // non-'dues' row), so no client-side filtering.
   const rows = state.data ?? []
   // A payment is spent once any row reverses it.
   const reversedIds = new Set(rows.map((t) => t.reverses_transaction_id).filter((id): id is number => id !== null))
@@ -93,14 +87,14 @@ export default function MemberPayments({ memberId, period, onReversed }: { membe
     void submitRun(
       async () => {
         const trimmed = note.trim()
-        // A blank reason sends null, never a generated default (#257): the
-        // reversal explains itself through TransactionList's own display
-        // label ("Pembatalan - {period} - {anggota}") instead.
+        // A blank reason sends null, never a generated default: the reversal
+        // explains itself through TransactionList's display label
+        // ("Pembatalan - {period} - {anggota}").
         const result = await reverseDuesPayment(transactionId, occurredOn, trimmed === '' ? null : trimmed)
         setReversingId(null)
-        // Refetch this list *and* tell the roster above to refetch its own:
-        // the member reads as unpaid for the period again, and neither
-        // refresh is the treasurer's job.
+        // Refetch this list *and* tell the roster above to refetch: the member
+        // reads as unpaid for the period again, and neither refresh is the
+        // treasurer's job.
         await run(loadRows)
         onReversed()
         return result
@@ -121,18 +115,16 @@ export default function MemberPayments({ memberId, period, onReversed }: { membe
     return <p className="text-sm text-muted-foreground">{text.empty}</p>
   }
 
-  // The panel's own surface is the caller's (Status.tsx); rows only separate
-  // from each other - 12px of air on both sides of each hairline, symmetric
-  // so the rule reads as belonging to neither record. A payment row is
-  // three short lines and one occasional button, not a card: it reads
-  // better dense, with the rule doing the separating.
+  // The panel's surface is the caller's (Status.tsx); rows only separate from
+  // each other - 12px of air on both sides of each hairline, symmetric so the
+  // rule belongs to neither record. A payment row is three short lines and one
+  // occasional button, not a card: it reads better dense.
   //
-  // Deliberately not `gap-* divide-y`: Tailwind v4's divide-y draws the
-  // border on the *bottom* of every item but the last, so a flex gap lands
-  // entirely below the line and the row's own padding above it - the rule
-  // ends up hugging the record above and floating far from the one below.
-  // Each row owning its own padding and top border is the shape that
-  // actually centres the hairline.
+  // Deliberately not `gap-* divide-y`: Tailwind v4's divide-y draws the border
+  // on the *bottom* of every item but the last, so a flex gap lands entirely
+  // below the line and the rule ends up hugging the record above and floating
+  // far from the one below. Each row owning its padding and top border
+  // centres the hairline.
   return (
     <ul className="flex flex-col [&>li]:border-t [&>li]:border-foreground/10 [&>li]:py-3 [&>li:first-child]:border-t-0 [&>li:first-child]:pt-0 [&>li:last-child]:pb-0">
       {rows.map((row) => {

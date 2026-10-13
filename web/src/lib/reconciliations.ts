@@ -1,13 +1,11 @@
 // Typed calls over apiFetch for the /api/reconciliations/* routes: the two
-// GETs the home screen reads (M6.9) and POST /api/reconciliations, the one
-// call M6.10's reconcile screen builds around (PRD section 7.8) - same idiom as
-// lib/accounts.ts and lib/balances.ts throughout.
+// GETs the home screen reads and POST /api/reconciliations, which the
+// reconcile screen builds around (PRD section 7.8).
 
 import { apiFetch } from '@/lib/api'
 
-/** One still-open counted line across every reconciliation snapshot
- * (internal/http/reconciliations.go's openReconciliationLineResponse) - a
- * gap found at a count that hasn't been resolved yet. */
+/** One still-open counted line across every reconciliation snapshot - a gap
+ * found at a count that hasn't been resolved yet. */
 export interface OpenReconciliationLine {
   id: number
   account_id: number
@@ -16,25 +14,23 @@ export interface OpenReconciliationLine {
   difference_amount: number
   resolution: string
   adjustment_transaction_id: number | null
-  /** What the line still has open (#498): difference_amount minus its fix,
-   * signed like difference_amount. Every "selisih" reads this, never
+  /** What the line still has open: difference_amount minus its fix, signed
+   * like difference_amount. Every "selisih" reads this, never
    * difference_amount, which stays the gap found at the count. */
   remainder_amount: number
   reconciliation_id: number
 }
 
 /**
- * GET /api/reconciliations/open-lines - every line still open. An empty
- * fund answers 200 with `[]`, never 404: the reconciliation banner's "cocok"
- * state and "nothing open yet" are the same response shape, not two states
- * to branch on here.
+ * GET /api/reconciliations/open-lines - every line still open. An empty fund
+ * answers 200 with `[]`, never 404: "cocok" and "nothing open yet" are the
+ * same response shape, not two states to branch on.
  */
 export function listOpenReconciliationLines(): Promise<OpenReconciliationLine[]> {
   return apiFetch<OpenReconciliationLine[]>('/api/reconciliations/open-lines')
 }
 
-/** The most recent reconciliation snapshot taken
- * (internal/http/reconciliations.go's reconciliationResponse). */
+/** The most recent reconciliation snapshot taken. */
 export interface LatestReconciliation {
   id: number
   performed_at: number
@@ -45,10 +41,8 @@ export interface LatestReconciliation {
 
 /**
  * GET /api/reconciliations/latest - feeds the home screen's "last checked"
- * line. Before any snapshot has ever been taken this answers 404 with code
- * `not_found` (latestReconciliation's own doc comment) - a normal first-run
- * state, not an error, and the only way to tell it apart from every other
- * `not_found` this app can hit: callers check `err.code === 'not_found'`
+ * line. Before any snapshot exists this answers 404 `not_found` - a normal
+ * first-run state, not an error. Callers check `err.code === 'not_found'`
  * (ApiError carries no HTTP status).
  */
 export function getLatestReconciliation(): Promise<LatestReconciliation> {
@@ -56,14 +50,12 @@ export function getLatestReconciliation(): Promise<LatestReconciliation> {
 }
 
 /**
- * One fix's data (internal/http/reconciliations.go's fixRequest), camelCase
- * on this side of the wire boundary - same convention lib/transactions.ts's
- * CreateTransactionInput uses. Required when a count's resolution is
- * "adjusted" or "entry_added", absent for "matched" and "left_open"
- * (TakeReconciliation's own rule, internal/ledger/reconciliation.go:329-336).
- * Modelled as an optional field here (never `fix: null`) so
- * JSON.stringify drops the key entirely for those two resolutions rather
- * than sending an explicit null the server would have to also accept.
+ * One fix's data (fixRequest), camelCase on this side of the wire boundary.
+ * Required when a count's resolution is "adjusted" or "entry_added", absent
+ * for "matched" and "left_open" (TakeReconciliation's rule,
+ * internal/ledger/reconciliation.go:329-336). An optional field here (never
+ * `fix: null`) so JSON.stringify drops the key for those two resolutions
+ * rather than sending an explicit null.
  */
 export interface FixInput {
   purposeId: number
@@ -74,11 +66,9 @@ export interface FixInput {
 }
 
 /**
- * One counted account within POST /api/reconciliations's body
- * (accountCountRequest). The caller decides `resolution` itself, from a
- * client-side preview against GET /api/balances - this module has no
- * opinion on whether that choice is correct; TakeReconciliation is the sole
- * judge of whether a claimed "matched" is real
+ * One counted account within POST /api/reconciliations's body. The caller
+ * decides `resolution` from a client-side preview against GET /api/balances;
+ * TakeReconciliation is the sole judge of whether a claimed "matched" is real
  * (internal/ledger/reconciliation.go:185-188).
  */
 export interface AccountCountInput {
@@ -88,9 +78,8 @@ export interface AccountCountInput {
   fix?: FixInput
 }
 
-/** One line of POST /api/reconciliations's response
- * (reconciliationLineResponse) - what the server actually recorded for one
- * counted account. The reconcile screen's confirmation state renders from
+/** One line of POST /api/reconciliations's response - what the server
+ * recorded for one counted account. The confirmation state renders from
  * this, never from its own pre-submit preview. */
 export interface ReconciliationLine {
   id: number
@@ -105,18 +94,17 @@ export interface ReconciliationLine {
 }
 
 /**
- * What a Cek kas line would still have open if saved with this fix (#498):
- * the line's difference (actual - recorded) minus the fix's signed amount,
- * "in" positive and "out" negative - the same arithmetic the server does,
- * for the live "masih tersisa" line. Plain integers.
+ * What a Cek kas line would still have open if saved with this fix: the
+ * line's difference (actual - recorded) minus the fix's signed amount, "in"
+ * positive and "out" negative - the same arithmetic the server does, for the
+ * live "masih tersisa" line. Plain integers.
  */
 export function fixRemainder(difference: number, direction: 'in' | 'out', amount: number): number {
   return difference - (direction === 'in' ? amount : -amount)
 }
 
-/** POST /api/reconciliations's 201 body (reconciliationDetailResponse) -
- * the same shape GET /api/reconciliations/{id} answers with: the snapshot
- * plus every line it froze, in one round trip. */
+/** POST /api/reconciliations's 201 body - the same shape as
+ * GET /api/reconciliations/{id}: the snapshot plus every line it froze. */
 export interface ReconciliationDetail {
   id: number
   performed_at: number
@@ -126,11 +114,10 @@ export interface ReconciliationDetail {
   lines: ReconciliationLine[]
 }
 
-/** One row of GET /api/reconciliations's page
- * (internal/http/reconciliations.go's reconciliationListItemResponse): the
- * snapshot plus open_difference_amount, the sum of ABS(difference_amount)
- * over that snapshot's lines (#498: the remainder each still has open, not the gap found) - enough for Cek kas's list to show
- * cocok (0) vs selisih without a detail fetch. */
+/** One row of GET /api/reconciliations's page: the snapshot plus
+ * open_difference_amount, the sum of ABS(difference_amount) over its lines -
+ * the remainder each still has open, not the gap found - enough for Cek
+ * kas's list to show cocok (0) vs selisih without a detail fetch. */
 export interface ReconciliationListItem {
   id: number
   performed_at: number
@@ -141,17 +128,15 @@ export interface ReconciliationListItem {
 }
 
 /** One page of GET /api/reconciliations, camelCase on this side of the wire
- * boundary (the server's own envelope is {reconciliations, next_cursor}) -
- * same shape ReimbursementsPage/TransactionsPage already use. nextCursor is
- * null once there is no further page. */
+ * boundary. nextCursor is null once there is no further page. */
 export interface ReconciliationsPage {
   reconciliations: ReconciliationListItem[]
   nextCursor: string | null
 }
 
 /**
- * GET /api/reconciliations (#227, keyset-paged): newest-first, 25 rows a
- * page. No search - a handful of dated snapshots a year (ADR-032).
+ * GET /api/reconciliations (keyset-paged): newest-first, 25 rows a page. No
+ * search - a handful of dated snapshots a year (ADR-032).
  */
 export function listReconciliations(input: { cursor?: string } = {}): Promise<ReconciliationsPage> {
   const params = new URLSearchParams()
@@ -164,10 +149,8 @@ export function listReconciliations(input: { cursor?: string } = {}): Promise<Re
 }
 
 /**
- * GET /api/reconciliations/{id} (#227) - one snapshot's full detail, the
- * same shape POST /api/reconciliations's own 201 body already answers.
- * Cek kas's detail sheet reads from this, never writes to it: the tab is
- * read-only by the issue's own hard rule.
+ * GET /api/reconciliations/{id} - one snapshot's full detail. Cek kas's
+ * detail sheet only reads from this; the tab is read-only.
  */
 export function getReconciliation(id: number): Promise<ReconciliationDetail> {
   return apiFetch<ReconciliationDetail>(`/api/reconciliations/${id}`)
@@ -175,11 +158,10 @@ export function getReconciliation(id: number): Promise<ReconciliationDetail> {
 
 /**
  * POST /api/reconciliations - takes one snapshot across every counted
- * account in a single request (M6.10, PRD section 7.8). No performed_at param:
- * the server always stamps time.Now() (TakeReconciliationParams's own doc
- * comment - a reconciliation is something done right now, never backdated).
- * The server creates each fix's transaction itself from the raw fix data;
- * this call never posts a separate transaction or supplies a transaction id.
+ * account in a single request (PRD section 7.8). No performed_at param: the
+ * server always stamps time.Now() - a reconciliation is never backdated. The
+ * server creates each fix's transaction itself from the raw fix data; this
+ * call never posts a separate transaction.
  */
 export function takeReconciliation(note: string | null, counts: AccountCountInput[]): Promise<ReconciliationDetail> {
   return apiFetch<ReconciliationDetail>('/api/reconciliations', {

@@ -34,9 +34,9 @@ interface CorrectData {
 
 /**
  * Correct a Talangan claim entered wrongly, on its own screen at
- * `/reimbursements/correct?id=` (#368, ADR-032). Only until it is settled,
- * after which the payout is a posted ledger row; a claim that is unknown,
- * settled or waived goes back to the tab (replace).
+ * `/reimbursements/correct?id=` (ADR-032). Only until it is settled, after
+ * which the payout is a posted ledger row; a claim that is unknown, settled or
+ * waived goes back to the tab (replace).
  */
 export default function Correct({ claimId, onDone, onCancel }: { claimId: number; onDone: () => void; onCancel: () => void }) {
   const [dataState, dataRun] = useApi<CorrectData>()
@@ -75,7 +75,7 @@ export default function Correct({ claimId, onDone, onCancel }: { claimId: number
         await updateReimbursement(claimId, patch)
         onDone()
       } catch (err) {
-        // #507: a lost response may still have saved; re-read the claim before she can retry.
+        // A lost response may still have saved; re-read the claim before she can retry.
         await settleUncertainWrite(err, () => load(true))
         const apiErr = err instanceof ApiError ? err : new ApiError('unknown_error', err instanceof Error ? err.message : String(err))
         setError(errorText(apiErr))

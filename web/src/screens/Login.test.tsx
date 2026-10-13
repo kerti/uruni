@@ -71,8 +71,8 @@ describe('Login', () => {
 
   it('logs in and hands the user back to the caller', async () => {
     const user = { id: 1, email: 'bendahara@example.test', created_at: 1234 }
-    // A fresh Response per call: the footer's /healthz read (AppVersion,
-    // #356) would otherwise consume the one body the login call needs.
+    // A fresh Response per call: the footer's /healthz read (AppVersion) would
+    // otherwise consume the one body the login call needs.
     vi.stubGlobal(
       'fetch',
       vi.fn(() => Promise.resolve(new Response(JSON.stringify(user), { status: 200, headers: { 'Content-Type': 'application/json' } }))),

@@ -7,16 +7,16 @@ import { DB_FILE, e2eRoot, freePort, resetFiles, startServer, templatePath, type
 
 // The treasurer login seed-e2e registers (cmd/uruni/seed_e2e.go) - literals,
 // not an import, because that file is Go; only copy crosses the language
-// boundary, via the specs' own import of it.
+// boundary, via the specs' import of it.
 export const seedEmail = 'bendahara@e2e.uruni.test'
 export const seedPassword = 'e2e-fixture-password'
 
 export type Instance = {
   // Where this worker's server listens; also what every page's baseURL is.
   url: string
-  // Every spec file calls this from beforeAll: it stops the server, puts back
-  // a pristine database (seeded unless told otherwise), empties the backup and
-  // uploads directories and starts the server again, so a file never sees what
+  // Every spec file calls this from beforeAll: it stops the server, puts back a
+  // pristine database (seeded unless told otherwise), empties the backup and
+  // uploads directories and restarts the server, so a file never sees what
   // another left behind. Tests inside a file stay serial and share the result.
   //
   // `seed: false` is a migrated database with nothing in it - no account, no
@@ -60,8 +60,8 @@ export const test = base.extend<object, { instance: Instance }>({
         },
         running: () => server !== undefined,
       }
-      // Not started here: every file resets first, and booting a server only
-      // to throw its database away is the slowest way to begin.
+      // Not started here: every file resets first, and booting a server only to
+      // throw its database away is the slowest way to begin.
       await provide(instance)
 
       await server?.stop()
@@ -71,7 +71,7 @@ export const test = base.extend<object, { instance: Instance }>({
   ],
 
   // Resolved before beforeAll has run, so it must not look at whether the
-  // server is up yet - the port is fixed for the worker's life.
+  // server is up - the port is fixed for the worker's life.
   baseURL: async ({ instance }, provide) => {
     await provide(instance.url)
   },
@@ -87,11 +87,11 @@ export const test = base.extend<object, { instance: Instance }>({
 
 export { expect }
 
-// Signs in through the API, into the page's own browser context - the same
-// session cookie the login form ends up with, minus a screen per test. The one
-// journey that is about the form (golden-path.spec.ts) types it for real.
-// Call it before the first goto, or reload after; a restore drops every
-// session, so a spec that restores calls it again.
+// Signs in through the API, into the page's browser context - the session
+// cookie the login form ends up with, minus a screen per test. The one journey
+// about the form (golden-path.spec.ts) types it for real. Call it before the
+// first goto, or reload after; a restore drops every session, so a spec that
+// restores calls it again.
 export async function logIn(page: Page) {
   const response = await page.context().request.post('/api/login', { data: { email: seedEmail, password: seedPassword } })
   expect(response.ok(), `POST /api/login answered ${response.status()}`).toBe(true)

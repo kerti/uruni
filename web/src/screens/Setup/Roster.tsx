@@ -13,10 +13,9 @@ import type { ApiError } from '@/lib/api'
 const text = copy.setup
 
 /**
- * Setup step 4 of 4, fully optional and fully skippable (the issue's own
- * settled ruling: nothing in the schema requires a fund to have any members
- * or tiers, and M6.16/M6.17 give a full roster screen for later). Skip fires
- * no request at all; Finish creates only what she actually filled in -
+ * Setup step 4 of 4, fully optional and skippable (nothing in the schema
+ * requires a fund to have members or tiers, and Anggota is the roster screen
+ * for later). Skip fires no request; Finish creates only what she filled in -
  * Setup.tsx decides which calls that is.
  */
 export default function Roster({
@@ -43,7 +42,7 @@ export default function Roster({
   error: ApiError | undefined
 }) {
   function handleRateChange(raw: string) {
-    // A thirteenth digit is not accepted (the ceiling, #499): the field keeps its value.
+    // A thirteenth digit is not accepted (the ceiling): the field keeps its value.
     if (exceedsAmountCeiling(raw)) return
     const digits = parseRupiah(raw)
     onRateAmountChange(digits === 0 ? '' : formatRupiahDigits(digits))
@@ -94,10 +93,10 @@ export default function Roster({
                 inputMode="numeric"
                 value={rateAmount}
                 onChange={(event) => handleRateChange(event.target.value)}
-                // A rate belongs to a tier (POST /api/dues-tiers/{id}/rates
-                // takes one in its path), so an amount typed with no tier
-                // named has nowhere to go - Setup.tsx would drop it
-                // silently. Held closed until there is a tier to hang it on.
+                // A rate belongs to a tier (POST /api/dues-tiers/{id}/rates takes
+                // one in its path), so an amount typed with no tier named has
+                // nowhere to go - Setup.tsx would drop it silently. Held closed
+                // until there is a tier to hang it on.
                 disabled={submitting || tierName.trim() === ''}
               />
             </div>

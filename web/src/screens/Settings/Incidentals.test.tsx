@@ -20,11 +20,11 @@ function envelope(purposeId: number, occasion: string, closedOn: string | null =
   return { purpose_id: purposeId, occasion, target_amount: null, opened_on: '2026-09-01', closed_on: closedOn, created_at: purposeId }
 }
 
-/** One stub for the whole section: GET /api/incidentals?open=false answers
- * the current list (open and closed together), and POST /api/incidentals is
- * recorded so a test can assert what was actually sent. `members` answers
- * the recipients picker's own roster (ADR-034, #333) - empty by default,
- * since most of this suite is not about that field. */
+/** One stub for the section: GET /api/incidentals?open=false answers the
+ * current list (open and closed together), and POST /api/incidentals is
+ * recorded so a test can assert what was sent. `members` answers the
+ * recipients picker's roster (ADR-034) - empty by default, since most of this
+ * suite is not about that field. */
 function stubIncidentals(initial: ReturnType<typeof envelope>[], writeResponse?: () => Response, members: unknown[] = []) {
   const calls: { method: string; url: string; body: unknown }[] = []
   const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
@@ -56,9 +56,9 @@ function member(overrides: Partial<{ id: number; name: string }> = {}) {
   }
 }
 
-/** Exposes the router's current search string and pathname, the same way
- * Locations.test.tsx's own probe does - this screen's dialog and its cards'
- * navigation are both asserted against the URL. */
+/** Exposes the router's search string and pathname, as Locations.test.tsx's
+ * probe does - this screen's dialog and its cards' navigation are asserted
+ * against the URL. */
 function LocationProbe() {
   const location = useLocation()
   return (
@@ -97,8 +97,8 @@ function currentLocation() {
 }
 
 describe('Settings incidentals', () => {
-  // #319: closed envelopes pile up over the years, so Pengaturan lists the
-  // open ones and gathers the closed behind one row that says how many.
+  // Closed envelopes pile up over the years, so Pengaturan lists the open ones
+  // and gathers the closed behind one row that says how many.
   it('lists open envelopes, and gathers closed ones behind a row with their count', async () => {
     const { fetchMock } = stubIncidentals([
       envelope(1, 'Halal bihalal RT'),
@@ -165,8 +165,8 @@ describe('Settings incidentals', () => {
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
   })
 
-  // ADR-034 (#211): the open dialog also carries the envelope's minimum and
-  // its recipients - both optional, and posted only what she actually fills.
+  // ADR-034: the open dialog also carries the envelope's minimum and its
+  // recipients - both optional, and posted only what she fills.
   it('opens an envelope with a minimum and a recipient, both optional fields', async () => {
     const { fetchMock, calls } = stubIncidentals([], () => jsonResponse(envelope(3, 'Kerja bakti'), 201), [member({ id: 7, name: 'Budi' })])
     vi.stubGlobal('fetch', fetchMock)
@@ -223,8 +223,8 @@ describe('Settings incidentals', () => {
   })
 })
 
-// #319: the screen behind Pengaturan's closed row - closed envelopes only,
-// most recently closed first, each opening its detail.
+// The screen behind Pengaturan's closed row - closed envelopes only, most
+// recently closed first, each opening its detail.
 describe('Closed incidentals', () => {
   it('lists only closed envelopes, most recently closed first, and opens one', async () => {
     const { fetchMock } = stubIncidentals([

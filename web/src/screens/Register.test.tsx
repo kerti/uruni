@@ -16,9 +16,9 @@ function errorResponse(code: string, status: number) {
   })
 }
 
-/** Answers the footer's own /healthz read (AuthChrome, #364) with a 404 -
- * a footnote that fails quietly - and hands every other request to
- * `api`, so a test's stubbed response is never consumed by the footer. */
+/** Answers the footer's /healthz read (AuthChrome) with a 404 - a footnote that
+ * fails quietly - and hands every other request to `api`, so a test's stubbed
+ * response is never consumed by the footer. */
 function stubApi(api: (input: RequestInfo | URL) => Promise<Response> = () => Promise.reject(new Error('unstubbed'))) {
   const fetchMock = vi.fn((input: RequestInfo | URL) => {
     if (String(input).includes('/healthz')) return Promise.resolve(new Response(null, { status: 404 }))

@@ -5,20 +5,15 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import type { Account } from '@/lib/accounts'
 
 /**
- * Picks the location ("lokasi") a transaction is recorded against. A
- * retired account (`inactive_on` set) is excluded from the selectable list
- * entirely - PRD section 7.2's location field is for recording new money, not for
- * browsing history, and #141's own definition of done: a location retired
- * through account lifecycle (M6's account-lifecycle slice) must not be
- * pickable for a fresh entry. RecordTransaction.tsx is responsible for the
- * same exclusion when choosing the *default* selection, since that default
- * also has to fall back past a remembered-but-now-retired choice.
+ * Picks the location ("lokasi") a transaction is recorded against. A retired
+ * account (`inactive_on` set) is excluded entirely - PRD section 7.2's
+ * location field is for recording new money, not browsing history.
+ * RecordTransaction.tsx applies the same exclusion when choosing the
+ * *default* selection, which must also fall back past a
+ * remembered-but-now-retired choice.
  *
- * Renders through the themed Select (M6.15). It was a native <select>
- * until then, on the grounds that the design system had no select of its
- * own and one should not be invented for a picker - what changed is that
- * `radix-ui` was already a dependency, so the themed control costs styling
- * rather than a new package.
+ * Renders through the themed Select (`radix-ui` is already a dependency, so
+ * this costs styling, not a new package).
  */
 export default function AccountPicker({
   id,
@@ -36,7 +31,7 @@ export default function AccountPicker({
   disabled?: boolean
 }) {
   // Same fallback AmountInput uses: `id` is optional, and a Label whose
-  // htmlFor is undefined silently stops labelling anything.
+  // htmlFor is undefined stops labelling anything.
   const autoId = useId()
   const selectId = id ?? autoId
   const activeAccounts = accounts.filter((account) => account.inactive_on === null)

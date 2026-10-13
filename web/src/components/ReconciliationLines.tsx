@@ -6,11 +6,10 @@ const text = copy.reconciliation
 
 /**
  * The per-location line list within one reconciliation snapshot - shared by
- * Reconcile.tsx's own Confirmation state and Cek kas's read-only detail
- * sheet (#227, extracted out of Confirmation so both render identically):
- * location name, recorded versus actual, the difference when there is one,
- * and the resolution's own label. Tabular figures throughout (`tabular`),
- * formatIDR at the display edge only (CLAUDE.md rule 1).
+ * Reconcile.tsx's Confirmation state and Cek kas's read-only detail sheet so
+ * both render identically: location name, recorded versus actual, the
+ * difference when there is one, and the resolution's label. Tabular figures
+ * throughout, formatIDR at the display edge only (CLAUDE.md rule 1).
  */
 export default function ReconciliationLines({ lines, accountNames }: { lines: ReconciliationLine[]; accountNames: Map<number, string> }) {
   return (

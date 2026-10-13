@@ -21,9 +21,9 @@ function account(id: number, name: string, kind = 'cash', inactiveOn: string | n
   return { id, kind, name, inactive_on: inactiveOn, created_at: 1 }
 }
 
-/** One stub for the whole section: GET answers the current list, and every
- * write is recorded so a test can assert the request the row actually made
- * (method, path, body) rather than only what re-rendered. */
+/** One stub for the section: GET answers the current list, and every write is
+ * recorded so a test can assert the request the row made (method, path, body)
+ * rather than only what re-rendered. */
 function stubAccounts(initial: ReturnType<typeof account>[], writeResponse?: () => Response) {
   const calls: { method: string; url: string; body: unknown }[] = []
   const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
@@ -39,9 +39,8 @@ function stubAccounts(initial: ReturnType<typeof account>[], writeResponse?: () 
   return { fetchMock, calls }
 }
 
-/** Exposes the router's current search string, so a test can assert on
- * `?edit=` the same way it asserts on what re-rendered - the whole point of
- * this screen's dialogs is that the URL is the state. */
+/** Exposes the router's search string, so a test can assert on `?edit=` as it
+ * asserts on what re-rendered - the URL is these dialogs' state. */
 function LocationProbe() {
   const location = useLocation()
   return <output data-testid="location-search">{location.search}</output>
@@ -79,8 +78,8 @@ describe('Settings locations', () => {
     expect(screen.getByRole('button', { name: text.editAria('Kotak kas') })).toBeInTheDocument()
     const bankCard = screen.getByRole('button', { name: text.editAria('Bank Jago') })
     expect(within(bankCard).getByText(text.kindBank)).toBeInTheDocument()
-    // The retired one is listed and labelled, not hidden: it may still hold
-    // a balance, and this screen is where it gets reinstated.
+    // The retired one is listed and labelled, not hidden: it may still hold a
+    // balance, and this screen is where it gets reinstated.
     expect(within(bankCard).getByText(text.inactiveBadge)).toBeInTheDocument()
   })
 
@@ -140,9 +139,8 @@ describe('Settings locations', () => {
     const body = calls[0].body as { opening_balance?: { amount: number; occurred_on: string; note?: string | null } }
     expect(body.opening_balance?.amount).toBe(50000)
     expect(body.opening_balance?.occurred_on).toMatch(/^\d{4}-\d{2}-\d{2}$/)
-    // #257: no note is typed here (this dialog has no field for one), and
-    // nothing is generated onto the wire - the row explains itself through
-    // TransactionList's own display label instead.
+    // No note is typed here and nothing is generated onto the wire - the row
+    // explains itself through TransactionList's display label.
     expect(body.opening_balance?.note ?? null).toBeNull()
   })
 
@@ -218,8 +216,8 @@ describe('Settings locations', () => {
     const dialog = screen.getByRole('dialog', { name: text.editTitle })
 
     await userEvent.click(within(dialog).getByRole('button', { name: text.deactivate }))
-    // No request yet - tapping the button only swaps the footer to the
-    // inline confirm, it never posts by itself.
+    // No request yet - tapping the button swaps the footer to the inline
+    // confirm; it never posts by itself.
     expect(calls).toHaveLength(0)
     expect(within(dialog).getByText(text.deactivateConfirm)).toBeInTheDocument()
 
@@ -276,14 +274,14 @@ describe('Settings locations', () => {
     await userEvent.click(within(dialog).getByRole('button', { name: text.delete }))
     await userEvent.click(within(dialog).getByRole('button', { name: text.deleteConfirmAction }))
 
-    // The specific sentence, not the shared error copy: a refusal that
-    // tells her what to do instead is the whole point of the case - and it
-    // stays inside the dialog that raised it.
+    // The specific sentence, not the shared error copy: a refusal that tells
+    // her what to do instead is the point - and it stays inside the dialog that
+    // raised it.
     const alert = await within(dialog).findByRole('alert')
     expect(alert).toHaveTextContent(text.deleteRefused)
-    // A refusal is not a success: the dialog stays open. Asserted on the
-    // URL, because jsdom never finishes Radix's exit animation and a
-    // closing dialog would still be in the DOM for the alert query above.
+    // A refusal is not a success: the dialog stays open. Asserted on the URL,
+    // because jsdom never finishes Radix's exit animation and a closing dialog
+    // would still be in the DOM for the alert query above.
     expect(currentSearch()).toContain('edit=location')
   })
 
@@ -300,8 +298,8 @@ describe('Settings locations', () => {
     await userEvent.click(within(dialog).getByRole('button', { name: text.deactivate }))
     await userEvent.click(within(dialog).getByRole('button', { name: text.deactivateConfirmAction }))
 
-    // #474: the money has to leave first - the sentence says how, and the
-    // dialog stays open on it.
+    // The money has to leave first - the sentence says how, and the dialog
+    // stays open on it.
     const alert = await within(dialog).findByRole('alert')
     expect(alert).toHaveTextContent(copy.common.errors.account_holds_money)
     expect(currentSearch()).toContain('edit=location')

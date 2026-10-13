@@ -12,75 +12,73 @@
 export
 
 # Uruni is one Go binary at the repo root (ADR-001) with the React app in web/,
-# and SQLite as its only store (ADR-004) - so dev needs no containers at all. The
+# and SQLite as its only store (ADR-004) - so dev needs no containers. The
 # repo-root docker-compose.yml is the *operator* self-host stack; the stack-*
-# targets below exercise it locally, they are not the dev loop.
+# targets exercise it locally, they are not the dev loop.
 COMPOSE := docker-compose.yml
 
 # Background dev-server logs. tail -f to follow.
 SERVER_LOG := /tmp/uruni-server.log
 WEB_LOG    := /tmp/uruni-web.log
 
-# Process match for *this clone's* vite. Anchored to $(CURDIR) on purpose: a bare
-# `pkill -f 'npm run dev'` would take down every other project's dev server on
-# the machine. It also matches vite's real argv - npm execs the resolved script
+# Process match for *this clone's* vite. Anchored to $(CURDIR): a bare
+# `pkill -f 'npm run dev'` would take down every other project's dev server. It
+# matches vite's real argv - npm execs the resolved script
 # (node .../web/node_modules/vite/bin/vite.js), not the .bin/ shim.
 WEB_PROC := $(CURDIR)/web/node_modules
 
-# Port the Go server listens on (matches the config default); used by the
-# readiness poll in `server-restart`. Override by setting PORT in .env.
+# Port the Go server listens on (the config default); used by the readiness
+# poll in `server-restart`. Override by setting PORT in .env.
 SERVER_PORT := $(or $(PORT),8080)
 
-# The dev database `db-reset` deletes. Matches the binary's own default
-# (config.DefaultDBPath); URUNI_DB in .env wins, exactly as it does for `run`.
+# The dev database `db-reset` deletes. Matches the binary's default
+# (config.DefaultDBPath); URUNI_DB in .env wins, as it does for `run`.
 DEV_DB := $(or $(URUNI_DB),./uruni.db)
 
-# Where dev receipt uploads land. Matches the binary's own default
-# (config.DefaultUploadsDir); URUNI_UPLOADS_DIR in .env wins, same as DEV_DB
-# above. Unlike the SQLite file, `serve` refuses to boot if this directory
-# does not already exist (config.EnsureUploadsDirWritable) - so every target
-# that starts the server creates it first.
+# Where dev receipt uploads land. Matches the binary's default
+# (config.DefaultUploadsDir); URUNI_UPLOADS_DIR in .env wins. Unlike the SQLite
+# file, `serve` refuses to boot if this directory does not exist
+# (config.EnsureUploadsDirWritable) - so every target that starts the server
+# creates it first.
 DEV_UPLOADS_DIR := $(or $(URUNI_UPLOADS_DIR),./uploads)
 
-# Where dev backup dumps land (#324). Matches the binary's own default
-# (config.DefaultBackupDir); URUNI_BACKUP_DIR in .env wins, same split as
-# DEV_UPLOADS_DIR above - `serve` refuses to boot if this directory does
-# not already exist (config.EnsureBackupDirWritable) either.
+# Where dev backup dumps land. Matches the binary's default
+# (config.DefaultBackupDir); URUNI_BACKUP_DIR in .env wins. `serve` refuses to
+# boot if this directory does not exist (config.EnsureBackupDirWritable)
+# either.
 DEV_BACKUP_DIR := $(or $(URUNI_BACKUP_DIR),./backups)
 
 # E2E (ADR-039). SQLite makes this cheap: throwaway database *files*, so the
-# dev DB is never touched and there is no container to exec into. `make e2e`
-# owns none of the values below: Playwright builds the binary and gives each
-# worker its own server, database, port, backup and uploads directory under
-# the OS temp dir (web/e2e/fixtures.ts). These are the one instance
-# `make e2e-server` runs for debugging by hand, on a port away from the
-# 8080/5173 dev servers.
+# dev DB is never touched. `make e2e` owns none of the values below: Playwright
+# builds the binary and gives each worker its own server, database, port,
+# backup and uploads directory under the OS temp dir (web/e2e/fixtures.ts).
+# These are the one instance `make e2e-server` runs for debugging by hand, on a
+# port away from the 8080/5173 dev servers.
 E2E_DB   := /tmp/uruni-e2e.db
 E2E_PORT := 8099
 # Its own backup and uploads directories, not the dev ones: restore writes
-# dumps and receipts write photos, so sharing ./backups or ./uploads would
-# mix e2e files into the dev server's. Reset with the database.
+# dumps and receipts write photos, so sharing ./backups or ./uploads would mix
+# e2e files into the dev server's. Reset with the database.
 E2E_BACKUP_DIR := /tmp/uruni-e2e-backups
 E2E_UPLOADS_DIR := /tmp/uruni-e2e-uploads
-# The request logger writes one info line per request (internal/http/
-# middleware.go), which buries Playwright's own results in a full run.
-# `make e2e` wants quiet; a human debugging `make e2e-server` can turn it
-# back up: `make e2e-server E2E_LOG_LEVEL=debug`.
+# The request logger writes one info line per request
+# (internal/http/middleware.go), which buries Playwright's results in a full
+# run. `make e2e` wants quiet; for debugging:
+# `make e2e-server E2E_LOG_LEVEL=debug`.
 E2E_LOG_LEVEL ?= warn
 
 # The golangci-lint version ci.yml pins (env.GOLANGCI_VERSION there). `doctor`
-# compares your local one against it exactly - not just the major. A v1 binary
-# silently ignores the v2 schema in .golangci.yml, but two v2 releases also
-# disagree about real code (2.12 and 2.13 ship different staticcheck versions),
-# and either way `make check` stops meaning what ADR-020 says it means. Bump
-# both together.
+# compares your local one exactly, not just the major: a v1 binary silently
+# ignores the v2 schema in .golangci.yml, and two v2 releases also disagree
+# about real code (2.12 and 2.13 ship different staticcheck versions), so
+# `make check` would stop meaning what ADR-020 says. Bump both together.
 GOLANGCI_CI_VERSION := v2.13.2
 
 # The sqlc version that wrote internal/store (the `sqlc vX` line in every
 # generated header) and that ci.yml installs (env.SQLC_VERSION there). Another
-# version writes different code, and `sqlc diff` in `make check` and CI then
-# fails on a tree nobody edited. `doctor` compares yours exactly. Bump all three
-# together, by regenerating with the new one.
+# version writes different code, and `sqlc diff` then fails on a tree nobody
+# edited. `doctor` compares yours exactly. Bump all three together, by
+# regenerating with the new one.
 SQLC_CI_VERSION := v1.31.1
 
 # govulncheck runs through `go run` at this exact version, here and in ci.yml
@@ -152,20 +150,18 @@ help:
 # safe to re-run, and worth re-running after a pull that touches .claude/ or
 # .githooks/ (both need a chmod that git alone won't reapply on some clones).
 #
-# Everything here is deterministic. What a Makefile *cannot* do is install or
-# authenticate Claude Code itself, or grant it permissions - `make doctor`
-# reports on those instead of pretending to fix them.
+# What a Makefile *cannot* do is install or authenticate Claude Code, or grant
+# it permissions - `make doctor` reports on those instead.
 #
-# The generated .env rewrites one line of .env.example, because that file is the
-# self-host template and its values are production values. URUNI_BASE_URL is
-# rewritten to a loopback http origin for two reasons. The server refuses to
-# start on the template value - that refusal is the "did you configure this
-# instance at all?" gate (ADR-019) - and the cookie's Secure flag is derived
-# from the scheme (internal/http/session.go): shipping the https:// template
-# value into local dev sets a Secure cookie on a plain-HTTP origin, which the
-# browser then declines to keep on any dev origin that is not localhost -
-# testing on a phone over the LAN being the one that matters. Only the scheme
-# is read for that, so the port here need not match `make web-dev`'s 5173.
+# The generated .env rewrites one line of .env.example, the self-host template
+# whose values are production values. URUNI_BASE_URL becomes a loopback http
+# origin because the server refuses to start on the template value (the "did
+# you configure this instance at all?" gate, ADR-019), and the cookie's Secure
+# flag is derived from the scheme (internal/http/session.go): the https://
+# template value in local dev would set a Secure cookie on a plain-HTTP origin,
+# which the browser declines to keep on any dev origin that is not localhost -
+# phone testing over the LAN being the case that matters. Only the scheme is
+# read, so the port need not match `make web-dev`'s 5173.
 setup: hooks-install claude-install web-install
 	@if [ ! -f .env ]; then \
 	  sed -e "s|^URUNI_BASE_URL=.*|URUNI_BASE_URL=http://localhost:8080|" \
@@ -176,7 +172,7 @@ setup: hooks-install claude-install web-install
 	@mkdir -p "$(DEV_BACKUP_DIR)"
 	@echo "ok setup complete - next: make run (API on :$(SERVER_PORT), applies migrations on boot), and make web-dev (Vite on :5173) in a second terminal"
 
-# Point git at the repo's own hooks directory and seed the local, gitignored
+# Point git at the repo's hooks directory and seed the local, gitignored
 # .pii-patterns denylist from the template + your git identity, so the
 # pre-commit pii-guard protects commits out of the box. Idempotent.
 hooks-install:
@@ -190,10 +186,10 @@ hooks-install:
 	fi
 	@echo "ok git hooks installed (core.hooksPath=.githooks); pre-commit pii-guard active"
 
-# Arm the Claude Code hooks. The behaviour itself is committed in
-# .claude/settings.json (portable - it addresses scripts via
-# $$CLAUDE_PROJECT_DIR, never an absolute path), so all that's left per clone is
-# the executable bit and your personal settings file. Idempotent.
+# Arm the Claude Code hooks. The behaviour is committed in
+# .claude/settings.json (portable - scripts addressed via
+# $$CLAUDE_PROJECT_DIR, never an absolute path), so per clone only the
+# executable bit and your personal settings file remain. Idempotent.
 claude-install:
 	@chmod +x .claude/hooks/*.sh
 	@if [ ! -f .claude/settings.local.json ]; then \
@@ -206,8 +202,8 @@ claude-install:
 	fi
 	@echo "ok Claude Code hooks armed (session-start, pre-push gate, agent gate, format-on-write)"
 
-# Report on the parts of the environment the Makefile can't install for you.
-# Never fails - it's a status readout, not a gate.
+# Report on what the Makefile can't install for you. Never fails - a status
+# readout, not a gate.
 doctor:
 	@printf '%-16s' 'go';            command -v go            >/dev/null 2>&1 && go version | awk '{print $$3}' || echo 'MISSING'
 	@printf '%-16s' 'node';          command -v node          >/dev/null 2>&1 && node --version                 || echo 'MISSING'
@@ -240,19 +236,16 @@ run:
 	go run ./cmd/uruni serve
 
 # The embed pipeline (ADR-001): the React bundle must exist before the Go build
-# so embed.FS picks it up. Never `go build` alone when you want a shippable
-# binary - you'll embed a stale (or empty) web/dist.
+# so embed.FS picks it up. Never `go build` alone for a shippable binary - it
+# would embed a stale (or empty) web/dist.
 build: web-build
 	go build -o bin/uruni ./cmd/uruni
 
-# Run the built artifact rather than `go run`, with .env exported for you - the
-# gap that makes a bare `./bin/uruni serve` fail on URUNI_BASE_URL, since
-# .env is a Makefile convenience and the binary reads only real environment
-# variables (ADR-019: env vars only, no config file).
-#
-# Worth having separately from `run` because `go run` binaries carry no VCS
-# record, so `uruni version` and /healthz report commit "unknown" under it. This
-# reports the real SHA, which is what the image does.
+# Run the built artifact rather than `go run`, with .env exported: .env is a
+# Makefile convenience and the binary reads only real environment variables
+# (ADR-019), so a bare `./bin/uruni serve` fails on URUNI_BASE_URL. Also
+# `go run` binaries carry no VCS record, so `uruni version` and /healthz report
+# commit "unknown"; this reports the real SHA, as the image does.
 serve-bin: build
 	@mkdir -p "$(DEV_UPLOADS_DIR)"
 	@mkdir -p "$(DEV_BACKUP_DIR)"
@@ -287,10 +280,10 @@ migrate-status:
 
 # Through 0.x the schema is one file edited in place (ADR-025), and goose
 # records applied migrations by *number* - so it cannot tell that 00001 changed
-# under it and will happily report "up to date" against a stale database. This
-# is the normal move after pulling a schema change, not a recovery step: there
-# is no data to lose before v1.0.0. -wal/-shm go too, or SQLite replays a
-# journal belonging to a file that no longer exists.
+# and reports "up to date" against a stale database. This is the normal move
+# after pulling a schema change; there is no data to lose before v1.0.0.
+# -wal/-shm go too, or SQLite replays a journal belonging to a file that no
+# longer exists.
 db-reset:
 	@rm -f $(DEV_DB) $(DEV_DB)-wal $(DEV_DB)-shm
 	@URUNI_DB="$(DEV_DB)" go run ./cmd/uruni migrate up
@@ -327,12 +320,12 @@ web-test:
 # ones in the background, logging to files. Useful after a migration change
 # (the server runs goose on serve) or when iterating on env vars.
 #
-# Stops wait for the process to actually exit; starts poll for real readiness
-# (server /healthz; vite's "Local:" line) rather than a blind sleep. Starts fail
-# loud: the poll exits non-zero if the process dies (compile error, panic, port
-# already bound) or never signals readiness, printing the tail of the log. A
-# failed server-restart short-circuits `restart`, so vite isn't restarted
-# against a server that never came up.
+# Stops wait for the process to exit; starts poll for real readiness (server
+# /healthz; vite's "Local:" line) rather than a blind sleep, and fail loud: the
+# poll exits non-zero if the process dies (compile error, panic, port bound) or
+# never signals readiness, printing the tail of the log. A failed server-restart
+# short-circuits `restart`, so vite isn't restarted against a server that never
+# came up.
 
 server-stop:
 	@pkill -f 'go run ./cmd/uruni' 2>/dev/null || true
@@ -394,7 +387,7 @@ servers-status:
 
 # ---- e2e (Playwright; ADR-039) ---------------------------------------------
 # `make e2e` needs no reset step: Playwright's global setup builds the binary
-# and seeds a template database, and every spec file resets its worker's own
+# and seeds a template database, and every spec file resets its worker's
 # instance from it (web/playwright.config.ts). The binary embeds web/dist, so
 # the SPA is built first - a run never tests a stale bundle. E2E_ARGS forwards
 # Playwright flags:
@@ -404,23 +397,24 @@ e2e: web-build
 	@( cd web && npm run -s test:e2e -- $(E2E_ARGS) )
 
 # What .github/workflows/e2e-run.yml runs, after its own `npm ci` and
-# `npm run build` steps have built web/dist. CI=true is what playwright.config.ts reads for
-# forbidOnly, one retry and the github reporter. To reproduce the PR gate:
+# `npm run build` steps have built web/dist. CI=true is what
+# playwright.config.ts reads for forbidOnly, one retry and the github reporter.
+# To reproduce the PR gate:
 #   make e2e-ci E2E_ARGS='--grep @smoke'
 e2e-ci:
 	@( cd web && CI=true npm run -s test:e2e -- $(E2E_ARGS) )
 
-# `npm ci` installs the Playwright *runner*, never the browser it drives - that
-# is a separate few-hundred-MB download, once per machine. Keeping it out of
-# `make setup` keeps a fresh clone fast for the contributors who never run e2e;
-# `make doctor` carries the row that tells the rest of us to run this.
-# Chromium alone, because playwright.config.ts declares no `projects` and so
-# runs the default browser only (at a phone viewport).
+# `npm ci` installs the Playwright *runner*, never the browser - a separate
+# few-hundred-MB download, once per machine. Keeping it out of `make setup`
+# keeps a fresh clone fast for contributors who never run e2e; `make doctor`
+# tells the rest of us to run this. Chromium alone, because
+# playwright.config.ts declares no `projects` and runs the default browser only
+# (at a phone viewport).
 e2e-install:
 	@( cd web && npx playwright install chromium )
 
-# Not part of `make e2e` (see above): this and e2e-server are for running the
-# one seeded instance by hand, e.g. to click through what a spec sees.
+# Not part of `make e2e`: this and e2e-server run the one seeded instance by
+# hand, e.g. to click through what a spec sees.
 e2e-reset:
 	@rm -f $(E2E_DB) $(E2E_DB)-wal $(E2E_DB)-shm
 	@rm -rf $(E2E_BACKUP_DIR) $(E2E_UPLOADS_DIR) && mkdir -p $(E2E_BACKUP_DIR) $(E2E_UPLOADS_DIR)
@@ -431,9 +425,9 @@ e2e-server: e2e-reset
 	@URUNI_DB="$(E2E_DB)" URUNI_BACKUP_DIR="$(E2E_BACKUP_DIR)" URUNI_UPLOADS_DIR="$(E2E_UPLOADS_DIR)" PORT=$(E2E_PORT) URUNI_LOG_LEVEL=$(E2E_LOG_LEVEL) go run ./cmd/uruni serve
 
 # ---- self-host stack -------------------------------------------------------
-# Exercises docker-compose.yml - the artifact operators actually run (ADR-010
-# calls it a first-class deliverable, so it deserves to be run locally before
-# every release, not only by strangers).
+# Exercises docker-compose.yml - the artifact operators run (ADR-010 calls it a
+# first-class deliverable, so it should be run locally before every release,
+# not only by strangers).
 
 stack-up:
 	docker compose -f $(COMPOSE) up -d
@@ -452,8 +446,7 @@ stack-ps:
 # agent's context; verbose output goes to a /tmp log, read only on failure.
 
 # Pre-task pre-flight: refuse on a dirty tree, verify GitHub access, then
-# fast-forward main. Run before starting any new work so you never branch off a
-# stale local main.
+# fast-forward main, so you never branch off a stale local main.
 start-task:
 	@test -z "$$(git status --porcelain)" || { echo "FAIL working tree dirty - commit or stash first, then re-run"; exit 1; }
 	@git ls-remote origin HEAD >/dev/null 2>&1 || { echo "FAIL no GitHub access - unlock the SSH key (ssh-add) or run 'gh auth login'"; exit 1; }
@@ -461,17 +454,17 @@ start-task:
 	@git pull --ff-only >/dev/null 2>&1 || { echo "FAIL pull failed (diverged or no upstream) - resolve manually"; exit 1; }
 	@echo "ok on main, up to date @ $$(git rev-parse --short HEAD)"
 
-# Pre-push gate. Deliberately mirrors .github/workflows/ci.yml step for step, so
-# green locally ~ green in CI (ADR-017). Keep the two in sync when either
-# changes - including the golangci-lint and sqlc versions (GOLANGCI_CI_VERSION
-# and SQLC_CI_VERSION above; `make doctor` flags a mismatch). govulncheck needs
-# the network: it reads the vulnerability database at vuln.go.dev.
+# Pre-push gate. Mirrors .github/workflows/ci.yml step for step, so green
+# locally ~ green in CI (ADR-017). Keep the two in sync when either changes -
+# including the golangci-lint and sqlc versions (GOLANGCI_CI_VERSION and
+# SQLC_CI_VERSION above; `make doctor` flags a mismatch). govulncheck needs the
+# network: it reads the vulnerability database at vuln.go.dev.
 #
-# The Go steps run on go.mod's `toolchain` line, which is what setup-go installs
-# in CI - not whatever Go is on your PATH. A newer local Go would otherwise
+# The Go steps run on go.mod's `toolchain` line, which is what setup-go
+# installs in CI - not whatever Go is on your PATH. A newer local Go would
 # change the answer: govulncheck scans the stdlib you build with, and a patch
-# release can change export data under a pinned golangci-lint (go1.27.2 did). e2e is excluded: it has its own workflow
-# (e2e.yml, ADR-039) and its own target, `make e2e`.
+# release can change export data under a pinned golangci-lint (go1.27.2 did).
+# e2e is excluded: it has its own workflow (e2e.yml, ADR-039) and target.
 check:
 	@fail=0; \
 	export GOTOOLCHAIN=$$(sed -n 's/^toolchain //p' go.mod); \

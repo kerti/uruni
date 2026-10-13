@@ -40,7 +40,7 @@ function stubPurposes(initial: ReturnType<typeof purpose>[]) {
 }
 
 /** Exposes the router's search string: this section's dialogs ARE the URL
- * (ADR-032), so `?edit=` is state worth asserting on directly. */
+ * (ADR-032), so `?edit=` is state worth asserting on. */
 function LocationProbe() {
   const location = useLocation()
   return <output data-testid="location-search">{location.search}</output>
@@ -93,7 +93,7 @@ describe('Settings pass-through', () => {
     expect(await screen.findByText(text.empty)).toBeInTheDocument()
   })
 
-  // M6.30: nothing on this section is a form until she asks for one.
+  // Nothing on this section is a form until she asks for one.
   it('has no inline form on the section itself', async () => {
     const { fetchMock } = stubPurposes([purpose(2, 'pass_through', 'Kas Bidang')])
     vi.stubGlobal('fetch', fetchMock)

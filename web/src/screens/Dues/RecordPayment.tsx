@@ -21,9 +21,8 @@ import type { Member } from '@/lib/setup'
 
 const text = copy.dues.payment
 
-/** Local YYYY-MM-DD / YYYY-MM - never toISOString(), which is UTC and can
- * read a day (and so a month) early in WIB. Same helpers as
- * RecordTransaction.tsx's todayISODate and Status.tsx's currentISOMonth. */
+/** Local YYYY-MM-DD / YYYY-MM - never toISOString(), which is UTC and can read
+ * a day (and so a month) early in WIB. */
 function todayISODate(): string {
   const now = new Date()
   const mm = String(now.getMonth() + 1).padStart(2, '0')
@@ -36,24 +35,24 @@ function currentISOMonth(): string {
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
 }
 
-/** The YYYY-MM `months` after `period` - plain integer month arithmetic,
- * never a Date, so no timezone can shift it. */
+/** The YYYY-MM `months` after `period` - integer month arithmetic, never a
+ * Date, so no timezone can shift it. */
 function addMonths(period: string, months: number): string {
   const [year, month] = period.split('-').map(Number)
   const index = year * 12 + (month - 1) + months
   return `${Math.floor(index / 12)}-${String((index % 12) + 1).padStart(2, '0')}`
 }
 
-/** How far past the current month the form will offer periods (#357): a
- * year is the longest anyone pays ahead, and a bound keeps the button from
- * walking forever. */
+/** How far past the current month the form offers periods: a year is the
+ * longest anyone pays ahead, and a bound keeps the button from walking
+ * forever. */
 const MAX_MONTHS_AHEAD = 12
 
-/** What one outstanding period still needs to settle it: the tier's
- * effective rate for that month, less anything already paid toward it. For
- * an `unpaid` period that is the whole rate; for a `partial` one it is the
- * sisa, which is what the treasurer is actually collecting - pre-filling the
- * full rate there would overpay the month. */
+/** What one outstanding period still needs to settle it: the tier's effective
+ * rate for that month, less anything already paid toward it. For an `unpaid`
+ * period that is the whole rate; for a `partial` one the sisa, which is what
+ * the treasurer is collecting - pre-filling the full rate there would overpay
+ * the month. */
 function remainingOf(period: OutstandingDuesPeriod): number {
   return Math.max(period.owed_amount - period.paid_amount, 0)
 }
@@ -64,33 +63,29 @@ interface FormData {
 }
 
 /**
- * Recording a dues payment (M6.13, PRD section 7.3): "mark a dues payment (amount
+ * Recording a dues payment (PRD section 7.3): "mark a dues payment (amount
  * auto-filled from the member's tier, editable; location; cash/transfer),"
  * including the multi-period case.
  *
  * The periods on offer come from GET /api/members/{id}/outstanding-dues,
- * whose rows already carry the effective rate for each month (#186) - this
- * screen never looks a rate up itself, and never offers a period the server
- * did not call outstanding. That is also what keeps it from becoming a way
- * to enter settled history: a fund's history starts at adoption (#187), so
- * money from before that is already inside the opening balance and simply
- * never appears here.
+ * whose rows already carry the effective rate for each month - this screen
+ * never looks a rate up itself, and never offers a period the server did not
+ * call outstanding. That also keeps it from becoming a way to enter settled
+ * history: a fund's history starts at adoption, so money from before that is
+ * inside the opening balance and never appears here.
  *
  * Every selected period is posted in ONE POST /api/dues-payments carrying
  * them all - never one call per period. The server writes them inside a
  * single database transaction, so a validation failure on any period leaves
- * nothing posted at all.
+ * nothing posted.
  *
- * Purpose is not a field here: the server posts dues to the fund's own
- * `kind: "main"` purpose and takes no purpose on the wire (#473), and
- * PRD section 7.3's form is member / amount / location / date. Note is not a
- * field either - the row already says who paid and for which month, through
- * TransactionList's own display label (#257) rather than anything typed
- * here or generated onto the wire.
+ * Purpose is not a field: the server posts dues to the fund's `kind: "main"`
+ * purpose and takes none on the wire, and PRD section 7.3's form is member /
+ * amount / location / date. Note is not a field either - the row says who paid
+ * and for which month through TransactionList's display label.
  *
- * Router-agnostic, same contract as every other screen App.tsx mounts:
- * onRecorded and onCancel are the caller's navigation, not links this
- * component owns.
+ * Router-agnostic, like every screen App.tsx mounts: onRecorded and onCancel
+ * are the caller's navigation.
  */
 export default function RecordDuesPayment({
   onRecorded,
@@ -99,8 +94,8 @@ export default function RecordDuesPayment({
 }: {
   onRecorded: () => void
   onCancel: () => void
-  /** Rendered inside Catat (#315), under its heading and Jenis toggle - so
-   * no heading or page frame of its own. */
+  /** Rendered inside Catat, under its heading and Jenis toggle - so no heading
+   * or page frame of its own. */
   embedded?: boolean
 }) {
   const [loadState, loadRun] = useApi<FormData>()
@@ -111,12 +106,11 @@ export default function RecordDuesPayment({
   const [accountId, setAccountId] = useState<number | null>(null)
   const [occurredOn, setOccurredOn] = useState(todayISODate)
   // period -> the amount being paid toward it, pre-filled from the server's
-  // own numbers and editable per period; `selected` is which of them this
-  // submit actually carries.
+  // numbers and editable per period; `selected` is which this submit carries.
   const [amounts, setAmounts] = useState<Record<string, number>>({})
   const [selected, setSelected] = useState<string[]>([])
-  // How many months past the current one the period list reaches (#357) -
-  // 0 is "what is owed up to now", each tap of the add-month button one more.
+  // How many months past the current one the period list reaches - 0 is "what
+  // is owed up to now", each tap of the add-month button one more.
   const [monthsAhead, setMonthsAhead] = useState(0)
   const through = addMonths(currentISOMonth(), monthsAhead)
 
@@ -127,29 +121,27 @@ export default function RecordDuesPayment({
 
   useEffect(() => {
     void loadRun(loadFormData)
-    // loadRun is a stable useCallback (useApi.ts); this fires once on mount,
-    // same shape as RecordTransaction.tsx's own load.
+    // loadRun is a stable useCallback (useApi.ts); this fires once on mount.
   }, [loadRun])
 
   // Default location: the first active account. Deliberately not
-  // RecordTransaction's remembered-last-location - dues are usually
-  // collected the same way every month, but that memory belongs to the
-  // everyday record form, and sharing its key across two screens would let
-  // one silently change the other's default.
+  // RecordTransaction's remembered-last-location: that memory belongs to the
+  // everyday record form, and sharing its key across two screens would let one
+  // silently change the other's default.
   useEffect(() => {
     if (loadState.status !== 'success' || !loadState.data) return
     if (accountId !== null) return
     const active = loadState.data.accounts.filter((a) => a.inactive_on === null)
     // oxlint-disable-next-line react/set-state-in-effect -- one-time default location once the accounts have loaded
     if (active.length > 0) setAccountId(active[0].id)
-    // accountId is this effect's own output; the early return above makes
-    // listing it a no-op once the default has been set.
+    // accountId is this effect's output; the early return above makes listing
+    // it a no-op once the default has been set.
   }, [loadState.status, loadState.data, accountId])
 
   // Re-read what the member owes whenever the member or the window changes.
   // `through` is this client's local month, always sent: the server does not
-  // share the treasurer's timezone (#186). A month ahead is simply a later
-  // `through` - the server already prices future months (#357).
+  // share the treasurer's timezone. A month ahead is a later `through` - the
+  // server already prices future months.
   useEffect(() => {
     if (memberId === null) return
     void outstandingRun(() => getOutstandingDues(memberId, through))
@@ -157,9 +149,9 @@ export default function RecordDuesPayment({
     // deliberate dependencies.
   }, [outstandingRun, memberId, through])
 
-  // Pre-fill every newly offered period with what it would take to settle
-  // it. A period already on screen keeps whatever she typed: extending the
-  // window by a month must not undo an edit she made to an earlier one.
+  // Pre-fill every newly offered period with what it would take to settle it.
+  // A period already on screen keeps what she typed: extending the window by
+  // a month must not undo an edit to an earlier one.
   useEffect(() => {
     if (outstandingState.status !== 'success' || !outstandingState.data) return
     const fresh = Object.fromEntries(outstandingState.data.map((p) => [p.period, remainingOf(p)]))
@@ -193,8 +185,7 @@ export default function RecordDuesPayment({
           accountId,
           occurredOn,
           // No note is typed on this form (PRD section 7.3) - the row explains
-          // itself through TransactionList's own display label (#257), never
-          // through stored text.
+          // itself through TransactionList's display label.
           note: null,
           // In the order the server offered them - oldest first - so a
           // multi-period payment reads the way it was collected.
@@ -206,8 +197,8 @@ export default function RecordDuesPayment({
         return result
       },
       {
-        // #507: a lost response may still have saved the payment; re-read what
-        // the member owes (and the form's balances) before she can retry.
+        // A lost response may still have saved the payment; re-read what the
+        // member owes (and the form's balances) before she can retry.
         settle: async () => {
           await Promise.all([
             loadRun(loadFormData, { silent: true }),
@@ -242,10 +233,10 @@ export default function RecordDuesPayment({
             // '' is Radix's "nothing selected" on mount, and Number('') is 0;
             // re-picking the same member must not wipe what she ticked.
             if (next === '' || Number(next) === memberId) return
-            // A different member starts from a clean slate: nothing
-            // selected, nothing edited, and the list back to what is owed
-            // up to now - reset here, in one render with the new id, so the
-            // fetch never runs once with the old member's window.
+            // A different member starts from a clean slate: nothing selected,
+            // nothing edited, the list back to what is owed up to now - reset
+            // here, in one render with the new id, so the fetch never runs once
+            // with the old member's window.
             setSelected([])
             setAmounts({})
             setMonthsAhead(0)

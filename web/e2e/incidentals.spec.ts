@@ -3,10 +3,9 @@ import type { Page } from '@playwright/test'
 import { copy } from '../src/copy/id'
 import { expect, test, logIn } from './fixtures'
 
-// M6.19's own e2e spec: open an envelope, contribute to it through the real
-// record form (M6.8, reused rather than duplicated), then close it and
-// verify the (honest, possibly zero) rollover is shown. One continuous story,
-// so serial, on the file's own seeded instance (cmd/uruni/seed_e2e.go).
+// Open an envelope, contribute to it through the real record form (reused, not
+// duplicated), then close it and verify the (honest, possibly zero) rollover.
+// One continuous story, so serial, on the file's own seeded instance.
 
 test.describe('incidentals', () => {
   test.describe.configure({ mode: 'serial' })
@@ -14,26 +13,24 @@ test.describe('incidentals', () => {
 
   const occasion = 'Halal bihalal RT E2E'
 
-  // The envelope's own row in Beranda's purpose breakdown, anchored to the
-  // start of its name: Beranda's recent activity also lists this envelope's
-  // entries, and each card's detail button names its pos
-  // ("Lihat rincian: <occasion>, ...", #359), so an unanchored match finds
-  // those too.
+  // The envelope's row in Beranda's purpose breakdown, anchored to the start of
+  // its name: recent activity also lists this envelope's entries, and each
+  // card's detail button names its pos ("Lihat rincian: <occasion>, ..."), so
+  // an unanchored match finds those too.
   function berandaRow(page: Page) {
     return page.getByRole('button', { name: new RegExp(`^${occasion}`) })
   }
 
-  // @smoke on this one too: the smoke tier's "record money in" is the next
-  // test, and it contributes to the envelope this one opens.
+  // @smoke on this one too: the smoke tier's "record money in" is the next test
+  // and contributes to the envelope this one opens.
   test('open an envelope from Pengaturan and verify it appears on Beranda', { tag: '@smoke' }, async ({ page }) => {
     await logIn(page)
     await page.goto('/')
     await expect(page.getByText(copy.home.balanceHeading)).toBeVisible()
 
-    // Opening a brand-new envelope has no button on Beranda (M6.33,
-    // ADR-032): incidentals are entry points there, not a destination
-    // behind a button. Opening one is Pengaturan's, beside Titipan (#263) -
-    // reached through the footer nav, the same way every screen is now.
+    // Opening a new envelope has no button on Beranda (ADR-032): incidentals
+    // are entry points there, not a destination behind a button. Opening one is
+    // Pengaturan's, beside Titipan - reached through the footer nav.
     await page.getByRole('link', { name: copy.shell.nav.settings }).click()
     await expect(page.getByRole('heading', { name: copy.settings.heading })).toBeVisible()
 
@@ -47,21 +44,20 @@ test.describe('incidentals', () => {
     await openDialog.getByLabel(copy.incidentals.open.occasionLabel).fill(occasion)
     await openDialog.getByLabel(copy.incidentals.open.targetLabel).fill('100000')
 
-    // Exact: the date field is a button too since #197, named by its label
-    // "Tanggal dibuka" - which contains "buka" for a substring match. The
-    // close form's "Tutup" below has the same trap in "Tanggal ditutup".
+    // Exact: the date field is a button too, named by its label "Tanggal
+    // dibuka" - which contains "buka" for a substring match. The close form's
+    // "Tutup" has the same trap in "Tanggal ditutup".
     await openDialog.getByRole('button', { name: copy.incidentals.open.submit, exact: true }).click()
     await expect(openDialog).not.toBeVisible()
 
-    // The new envelope is now a card in this section, open status shown on
-    // it. Anchored to the card rather than a bare getByText, since
-    // "Berjalan" is not unique once a second envelope opens.
+    // The new envelope is a card in this section, open status shown. Anchored to
+    // the card: "Berjalan" is not unique once a second envelope opens.
     const card = page.getByRole('button', { name: new RegExp(occasion) })
     await expect(card).toBeVisible()
     await expect(card).toContainText(copy.incidentals.status.open)
 
-    // Beranda keeps its own entry point too (the ADR's actual point): a
-    // fresh visit to home renders the same envelope as its own row.
+    // Beranda keeps its own entry point too (the ADR's point): a fresh visit to
+    // home renders the same envelope as its own row.
     await page.getByRole('link', { name: copy.shell.nav.home }).click()
     await expect(berandaRow(page)).toBeVisible()
   })
@@ -74,39 +70,35 @@ test.describe('incidentals', () => {
       await page.goto('/')
       await expect(page.getByText(copy.home.balanceHeading)).toBeVisible()
 
-      // The envelope opened in the previous test is still open, so it now
-      // renders as its own row in Beranda's purpose breakdown (M6.33) -
-      // tapping it opens that envelope's detail, no separate list screen
-      // visited first.
+      // The envelope opened in the previous test is still open, so it renders as
+      // its own row in Beranda's purpose breakdown - tapping it opens that
+      // envelope's detail, no separate list screen first.
       await berandaRow(page).click()
       await expect(page.getByText(copy.incidentals.detail.collectedLabel)).toBeVisible()
 
-      // "Catat transaksi" hands off to the real record form (M6.8), with this
-      // envelope's purpose already chosen via /record?purpose=<id> - no
-      // separate contribution form of this screen's own.
-      // exact: the participation list (#339) gives every member row a "Catat
-      // sumbangan dari <name>" control, which a substring match also hits.
+      // "Catat transaksi" hands off to the real record form with this envelope's
+      // purpose chosen via /record?purpose=<id>. exact: the participation list
+      // gives every member row a "Catat sumbangan dari <name>" control, which a
+      // substring match also hits.
       await page.getByRole('button', { name: copy.incidentals.actions.record, exact: true }).click()
       await expect(page.getByRole('heading', { name: copy.record.heading })).toBeVisible()
 
-      // A contribution is money in - the record form's own direction toggle,
-      // not a choice this screen makes. Location keeps its remembered/default
-      // account; purpose is already the envelope's.
+      // A contribution is money in - the record form's direction toggle, not a
+      // choice this screen makes. Location keeps its default account; purpose
+      // is already the envelope's.
       await page.getByRole('button', { name: copy.record.directionIn }).click()
       await page.getByLabel(copy.record.amountLabel).fill('60000')
       await page.getByRole('button', { name: copy.record.submit }).click()
       await expect(page.getByText(copy.record.successIn)).toBeVisible()
 
-      // Back on home, the row's own balance reflects the contribution, and
-      // tapping it again shows the same total on the detail view.
+      // Back on home, the row's balance reflects the contribution, and tapping
+      // it again shows the same total on the detail view.
       await berandaRow(page).click()
-      // Anchored to the collected row rather than the page: since M6.33 this
-      // amount appears three times over - Beranda's own breakdown row, the
-      // recent-five entry for the contribution just recorded, and the detail
-      // view this assertion means. A bare getByText matched whichever of them
-      // the navigation had not yet torn down, which is also why it was racy
-      // before it was ambiguous. toContainText retries, so this waits for the
-      // detail view instead of assuming the click has landed.
+      // Anchored to the collected row, not the page: this amount appears three
+      // times - Beranda's breakdown row, the recent-five entry for the
+      // contribution, and the detail view this means. A bare getByText matched
+      // whichever the navigation had not yet torn down (racy before it was
+      // ambiguous). toContainText retries, so this waits for the detail view.
       const collectedRow = page.getByText(copy.incidentals.detail.collectedLabel).locator('..')
       await expect(collectedRow).toContainText('Rp 60.000')
     },
@@ -117,8 +109,7 @@ test.describe('incidentals', () => {
     await page.goto('/')
     await expect(page.getByText(copy.home.balanceHeading)).toBeVisible()
 
-    // Still open, still its own row on Beranda (M6.33) - tap it straight
-    // into the envelope's detail.
+    // Still open, still its own row on Beranda - tap it into the detail.
     await berandaRow(page).click()
     await expect(page.getByText(copy.incidentals.detail.collectedLabel)).toBeVisible()
 
@@ -129,25 +120,23 @@ test.describe('incidentals', () => {
     // Pick where the leftover rolls to, submit (date defaults to today)
     await page.getByRole('combobox', { name: copy.incidentals.close.accountLabel }).click()
     await page.getByRole('option').first().click()
-    // The roll is a transfer nobody asked for directly (#210) - the note is
-    // what stops it reading as two unexplained rows in the ledger.
+    // The roll is a transfer nobody asked for directly - the note stops it
+    // reading as two unexplained rows in the ledger.
     await page.getByLabel(copy.incidentals.close.noteLabel).fill('Sisa halal bihalal')
 
     await page.getByRole('button', { name: copy.incidentals.close.submit, exact: true }).click()
     await expect(page.getByText(copy.incidentals.close.success)).toBeVisible()
 
     // The rollover (Rp 60.000 collected, nothing disbursed - all of it rolls
-    // out) is rendered, never hidden even if it turns out to be zero.
-    // rolled_amount is signed (ADR-031): 60.000 here is positive, so the
-    // "rolled out" sentence is the one that must show. The double-close 409
-    // refusal itself is covered at the unit level (Incidentals.test.tsx) -
-    // once closed, this screen instead offers the reopen affordance, not a
-    // second close.
+    // out) is rendered, never hidden even if zero. rolled_amount is signed
+    // (ADR-031): 60.000 is positive, so the "rolled out" sentence must show.
+    // The double-close 409 is covered at the unit level (Incidentals.test.tsx);
+    // once closed, this screen offers reopen, not a second close.
     await expect(page.getByText(copy.incidentals.close.rolledLabel(60_000))).toBeVisible()
 
-    // Once closed, the envelope leaves Pengaturan's own list for the
-    // closed-envelopes screen behind its one row (#319) - never hidden, one
-    // tap away - and its card there opens the detail again.
+    // Once closed, the envelope leaves Pengaturan's list for the
+    // closed-envelopes screen behind its one row - one tap away - and its card
+    // there opens the detail again.
     await page.getByRole('button', { name: copy.incidentals.detail.backToSettings }).click()
     await expect(page.getByRole('heading', { name: copy.settings.heading })).toBeVisible()
     await expect(page.getByRole('button', { name: new RegExp(occasion) })).toBeHidden()

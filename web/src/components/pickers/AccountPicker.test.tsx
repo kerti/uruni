@@ -12,9 +12,8 @@ const accounts: Account[] = [
 ]
 
 describe('AccountPicker', () => {
-  // The options live in a portal that only exists while the popup is open
-  // (the themed Select replaced the native one in M6.15), so these assert on
-  // what opening it actually offers.
+  // The options live in a portal that exists only while the popup is open, so
+  // these assert on what opening it offers.
   it('excludes a retired account (inactive_on set) from the selectable list', async () => {
     render(<AccountPicker id="account" label="Lokasi" accounts={accounts} value={1} onChange={vi.fn()} />)
 

@@ -4,8 +4,8 @@ import { copy } from '../src/copy/id'
 import { expect, test, logIn } from './fixtures'
 
 // Records a claim the way she does: Catat -> Keluar -> "Pengeluaran ini
-// ditalangi" -> member and amount -> Simpan (#368). Lands on Beranda with
-// the confirmation. Returns the first member's name.
+// ditalangi" -> member and amount -> Simpan. Lands on Beranda with the
+// confirmation. Returns the first member's name.
 async function recordClaim(page: Page, amount: string): Promise<string> {
   await page.getByRole('link', { name: copy.shell.nav.record }).click()
   await expect(page.getByRole('heading', { name: copy.record.heading })).toBeVisible()
@@ -34,19 +34,17 @@ async function openTalangan(page: Page) {
   await expect(page.getByRole('button', { name: copy.reimbursements.outstandingTab })).toBeVisible()
 }
 
-// M6.18's own e2e spec: record a reimbursement claim, verify it appears in
-// the outstanding list, settle it and verify it disappears, then waive and
-// un-waive a fresh claim across the two tabs. All three are one continuous
-// story, so serial, on the file's own seeded instance (members and purposes
-// from cmd/uruni/seed_e2e.go).
+// Record a reimbursement claim, verify it appears in the outstanding list,
+// settle it and verify it disappears, then waive and un-waive a fresh claim
+// across the two tabs. One continuous story, so serial, on the file's seeded
+// instance (members and purposes from cmd/uruni/seed_e2e.go).
 test.describe('reimbursements', () => {
   test.describe.configure({ mode: 'serial' })
   test.beforeAll(({ instance }) => instance.reset())
 
-  // Set by the first test below and read by the second (serial mode): the
-  // label a settlement now carries (#257) is just the claim's own member
-  // name, so the settle spec needs to know which member the claim spec
-  // actually picked - "the first option" is not a fixed name.
+  // Set by the first test and read by the second (serial mode): a settlement's
+  // label is the claim's member name, so the settle spec needs to know which
+  // member the claim spec picked - "the first option" is not a fixed name.
   let firstMemberName = ''
 
   test('record a claim and verify it appears in the outstanding list', async ({ page }) => {
@@ -56,10 +54,10 @@ test.describe('reimbursements', () => {
 
     firstMemberName = await recordClaim(page, '10000')
 
-    // Recording lands on Beranda, which now shows what the fund owes (#406).
+    // Recording lands on Beranda, which shows what the fund owes.
     await expect(page.getByRole('button', { name: new RegExp(copy.home.owedToMembers) })).toBeVisible()
 
-    // Then Riwayat's Talangan tab (#226, ADR-032), where the claim lives.
+    // Then Riwayat's Talangan tab, where the claim lives.
     await openTalangan(page)
     // The claim should now be in the outstanding list
     await expect(page.getByText('Rp 10.000')).toBeVisible()
@@ -70,15 +68,15 @@ test.describe('reimbursements', () => {
     await page.goto('/')
     await expect(page.getByText(copy.home.balanceHeading)).toBeVisible()
 
-    // Navigate to Riwayat's Talangan tab (#226, ADR-032).
+    // Navigate to Riwayat's Talangan tab.
     await page.getByRole('link', { name: copy.shell.nav.history }).click()
     await page.getByRole('link', { name: copy.history.tabs.reimbursements }).click()
     await expect(page.getByRole('button', { name: copy.reimbursements.outstandingTab })).toBeVisible()
 
-    // There should be at least one outstanding claim from the previous test
-    // (serial mode). Open settle form. `exact: true` is required: name
-    // matching is a case-insensitive substring search, so "Bayar" otherwise
-    // also matches the "Belum dibayar" tab button.
+    // There is at least one outstanding claim from the previous test (serial
+    // mode). Open settle form. `exact: true` is required: name matching is a
+    // case-insensitive substring search, so "Bayar" otherwise also matches the
+    // "Belum dibayar" tab button.
     await page.getByRole('button', { name: copy.reimbursements.actions.settle, exact: true }).first().click()
     await expect(page).toHaveURL(/\/reimbursements\/settle\?id=\d+$/)
     await expect(page.getByRole('heading', { name: copy.reimbursements.settle.heading })).toBeVisible()
@@ -95,10 +93,9 @@ test.describe('reimbursements', () => {
     // The settled claim is no longer owed, so it leaves the outstanding list
     await expect(page.getByText('Rp 10.000')).not.toBeVisible()
 
-    // The payout row carries a label built from the claim it settled (#257:
-    // a display label, never stored text) - the member's own name, with the
-    // HandHelping icon making it read as a Talangan repayment rather than a
-    // bare amount.
+    // The payout row carries a label built from the claim it settled (a display
+    // label, never stored text) - the member's name, with the HandHelping icon
+    // making it read as a Talangan repayment rather than a bare amount.
     await page.getByRole('link', { name: copy.shell.nav.home }).click()
     await expect(page.getByText(copy.rowLabels.settlement.text(firstMemberName)).first()).toBeVisible()
   })
@@ -113,14 +110,14 @@ test.describe('reimbursements', () => {
     await openTalangan(page)
     await expect(page.getByText('Rp 30.000')).toBeVisible()
 
-    // Perbaiki sits in the row's "more" menu and opens the claim's own screen.
+    // Perbaiki sits in the row's "more" menu and opens the claim's screen.
     await page.locator('li', { hasText: 'Rp 30.000' }).getByRole('button', { name: copy.reimbursements.actions.menuAria }).click()
     await page.getByRole('menuitem', { name: copy.reimbursements.actions.correct, exact: true }).click()
     await expect(page).toHaveURL(/\/reimbursements\/correct\?id=\d+$/)
     await expect(page.getByRole('heading', { name: copy.reimbursements.correct.heading })).toBeVisible()
 
-    // Emptied before it is filled: a single fill() over the pre-filled
-    // amount concatenates the two runs of digits (see dues.spec.ts).
+    // Emptied before it is filled: one fill() over the pre-filled amount
+    // concatenates the two runs of digits (see dues.spec.ts).
     const amount = page.getByLabel(copy.reimbursements.record.amountLabel)
     await amount.fill('')
     await amount.fill('35000')
@@ -153,15 +150,15 @@ test.describe('reimbursements', () => {
     await expect(page.getByText('Rp 20.000')).toBeVisible()
 
     // Waive it: the row leaves the outstanding list and feedback confirms.
-    // Putihkan sits in the row's "more" menu (#314), behind the one plain Bayar.
+    // Putihkan sits in the row's "more" menu, behind the one plain Bayar.
     await page.locator('li', { hasText: 'Rp 20.000' }).getByRole('button', { name: copy.reimbursements.actions.menuAria }).click()
     await page.getByRole('menuitem', { name: copy.reimbursements.actions.waive, exact: true }).click()
     await expect(page.getByText(copy.reimbursements.waive.success)).toBeVisible()
     await expect(page.getByText('Rp 20.000')).not.toBeVisible()
 
-    // The all tab carries the waived row, with "Batalkan pemutihan" where
-    // the outstanding tab (which filters waived rows out) can never reach.
-    // The row-scoped badge locators avoid the tab button's identical label.
+    // The all tab carries the waived row, with "Batalkan pemutihan" where the
+    // outstanding tab (which filters waived rows out) can never reach. The
+    // row-scoped badge locators avoid the tab button's identical label.
     await page.getByRole('button', { name: copy.reimbursements.allTab }).click()
     const row = page.locator('li', { hasText: 'Rp 20.000' })
     await expect(row.getByText(copy.reimbursements.status.waived)).toBeVisible()

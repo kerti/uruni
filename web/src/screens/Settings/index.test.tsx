@@ -5,20 +5,17 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import Settings from '@/screens/Settings/index'
 import { copy } from '@/copy/id'
 
-// Pengaturan as a whole, rather than one section at a time - which is the
-// only way this suite's subject is visible at all.
+// Pengaturan as a whole, rather than one section at a time - the only way this
+// suite's subject is visible at all.
 //
-// Two sections own an `?edit=` dialog (Lokasi and Amplop, #263) and every
-// section renders against the same URL. Each one strips an `?edit=` value it
-// cannot use, so before #263 they stripped each other's: opening Amplop's
-// dialog set `?edit=incidental:new`, Lokasi's own cleanup read that as
-// malformed the moment its account list resolved, and the param - and with it
-// the open dialog - vanished mid-edit. It raced on which list loaded first,
-// and e2e caught it as `element was detached from the DOM` in two specs at
-// once, including one that had not been touched.
-//
-// Every section-level suite passed throughout, because a section mounted
-// alone has nobody to fight with. Hence this file.
+// Two sections own an `?edit=` dialog (Lokasi and Amplop) and every section
+// renders against the same URL. Each strips an `?edit=` value it cannot use,
+// and they once stripped each other's: opening Amplop's dialog set
+// `?edit=incidental:new`, Lokasi's cleanup read that as malformed the moment
+// its account list resolved, and the param - and the open dialog - vanished
+// mid-edit. It raced on which list loaded first; e2e caught it as `element was
+// detached from the DOM`. Every section-level suite passed throughout, because
+// a section mounted alone has nobody to fight with. Hence this file.
 
 afterEach(() => {
   vi.unstubAllGlobals()
@@ -41,8 +38,7 @@ function stubSettings() {
       )
     }
     // Not "Tunai": that string is also the cash kind's badge, and these
-    // assertions match on text (see the note in the first test), so the
-    // fixture's name has to be a string that appears exactly once.
+    // assertions match on text, so the fixture's name must appear exactly once.
     if (url.includes('/api/accounts')) {
       return Promise.resolve(jsonResponse([{ id: 1, name: 'Dompet Bendahara', kind: 'cash', inactive_on: null }]))
     }
@@ -86,13 +82,12 @@ function search() {
 /**
  * Gives every pending effect its turn before the param is read back.
  *
- * Without this the survival assertions pass vacuously: the cleanup that used
- * to strip a sibling's param runs in an effect keyed on the list reaching
+ * Without this the survival assertions pass vacuously: the cleanup that
+ * stripped a sibling's param runs in an effect keyed on the list reaching
  * `success`, which lands *after* the render that puts the list's text on
- * screen. Asserting the moment the text appears therefore reads the param
- * before anything has had the chance to remove it, and the test stays green
- * against code that does remove it - which is exactly how it behaved when
- * first written.
+ * screen. Asserting the moment the text appears reads the param before
+ * anything could remove it, so the test stays green against code that does
+ * remove it.
  */
 async function flushEffects() {
   await act(async () => {
@@ -112,15 +107,15 @@ describe('Settings, all sections against one URL', () => {
     // be on screen before believing the dialog survived.
     //
     // By text, never by role. Radix inerts everything behind an open modal
-    // (dialog.tsx), so *ByRole - which skips aria-hidden subtrees - cannot
-    // see a background section at all while a dialog is up, and a wait
-    // written that way fails whether or not the bug is present.
+    // (dialog.tsx), so *ByRole - which skips aria-hidden subtrees - cannot see a
+    // background section while a dialog is up, and a wait written that way fails
+    // whether or not the bug is present.
     await screen.findByText('Dompet Bendahara')
     await waitFor(() => expect(screen.getByText('Kas Bidang')).toBeInTheDocument())
     await flushEffects()
 
-    // The literal value, not a percent-encoded one: this entry was pushed as
-    // a string rather than written through setSearchParams.
+    // The literal value, not percent-encoded: this entry was pushed as a
+    // string rather than written through setSearchParams.
     expect(search()).toBe('?edit=incidental:new')
     expect(screen.getByRole('dialog', { name: copy.incidentals.open.heading })).toBeInTheDocument()
   })
@@ -132,8 +127,8 @@ describe('Settings, all sections against one URL', () => {
     const dialog = await screen.findByRole('dialog', { name: copy.settings.locations.add })
     expect(dialog).toBeInTheDocument()
 
-    // The mirror case: Amplop's own list resolving must not strip a value
-    // that belongs to Lokasi. By text, for the inerting reason above.
+    // The mirror case: Amplop's list resolving must not strip a value that
+    // belongs to Lokasi. By text, for the inerting reason above.
     await screen.findByText('Halal bihalal RT')
     await flushEffects()
 
@@ -145,9 +140,9 @@ describe('Settings, all sections against one URL', () => {
     vi.stubGlobal('fetch', stubSettings())
     renderAt('/settings?edit=incidental:7')
 
-    // `incidental:` is Amplop's prefix and `7` is not a target it can open
-    // (a card navigates to the envelope instead), so this one is its own to
-    // clear - the foreign-value rule must not have disabled that.
+    // `incidental:` is Amplop's prefix and `7` is not a target it can open (a
+    // card navigates to the envelope instead), so this one is its to clear -
+    // the foreign-value rule must not have disabled that.
     await waitFor(() => expect(search()).toBe(''))
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
   })

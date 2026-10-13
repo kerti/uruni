@@ -22,11 +22,10 @@ function member(id: number, name: string) {
   return { id, name, tier_id: 1, joined_on: '2026-01-01', inactive_on: null, created_at: 1 }
 }
 
-// One row per status the schema defines, plus a tier-less member left out
-// of the fixture entirely - GET /api/dues-status never synthesizes a row
-// for a member with no dues tier, so this suite proves that exclusion by
-// simply never including "Tanpa golongan" in the stubbed response and
-// asserting it never renders.
+// One row per status the schema defines, plus a tier-less member left out of
+// the fixture - GET /api/dues-status never synthesizes a row for a member with
+// no dues tier, so this suite proves the exclusion by never including "Tanpa
+// golongan" in the stubbed response and asserting it never renders.
 const rows = [
   { member: member(1, 'Warga Satu'), owed_amount: 50_000, paid_amount: 0, status: 'unpaid', paid_through: null },
   { member: member(2, 'Warga Dua'), owed_amount: 50_000, paid_amount: 20_000, status: 'partial', paid_through: null },
@@ -66,9 +65,8 @@ describe('DuesStatus', () => {
     expect(screen.getByText(text.statuses.paid_in_advance)).toBeInTheDocument()
 
     // formatIDR puts a non-breaking space after "Rp". This matcher reads
-    // el.textContent, which is the raw DOM text, so that NBSP is compared
-    // as-is - unlike testing-library's own string matchers, which normalize
-    // it away (Home.test.tsx converts it for exactly that reason).
+    // el.textContent, the raw DOM text, so the NBSP is compared as-is - unlike
+    // testing-library's string matchers, which normalize it away.
     expect(screen.getAllByText((_content, el) => el?.textContent === `${text.owedLabel}: ${formatIDR(50_000)}`).length).toBeGreaterThan(0)
   })
 

@@ -49,16 +49,13 @@ const tiers = [
 ]
 
 /** One stub for the screen: GET /api/members answers the paged envelope
- * ({members, next_cursor}), GET /api/dues-tiers answers the picker's list,
- * and every write is recorded so a test can assert the exact body - which
- * matters here more than anywhere else in the app, because PATCH
- * /api/members/{id} reads an absent key and an explicit null as two
- * different instructions.
+ * ({members, next_cursor}), GET /api/dues-tiers answers the picker's list, and
+ * every write is recorded so a test can assert the exact body - which matters
+ * here more than anywhere, because PATCH /api/members/{id} reads an absent key
+ * and an explicit null as two different instructions.
  *
- * `pages` lets a paging test hand back more than one page keyed by the
- * cursor requested; a plain array behaves as a single, unpaged page (no
- * next_cursor).
- */
+ * `pages` lets a paging test hand back more than one page keyed by the cursor
+ * requested; a plain array behaves as a single, unpaged page. */
 function stubRoster(
   membersOrPages: ReturnType<typeof member>[] | Record<string, { members: ReturnType<typeof member>[]; next_cursor: string | null }>,
   writeResponse?: () => Response,
@@ -90,9 +87,8 @@ function stubRoster(
   return { fetchMock, calls, getCalls }
 }
 
-/** Exposes the router's current search string, the same probe
- * Locations.test.tsx uses - the whole point of this screen's dialogs and
- * search is that the URL is the state. */
+/** Exposes the router's search string, as Locations.test.tsx's probe does -
+ * the URL is the state of this screen's dialogs and search. */
 function SearchProbe() {
   const location = useLocation()
   return <output data-testid="roster-search">{location.search}</output>
@@ -133,8 +129,8 @@ describe('Roster', () => {
     expect(within(cardOne).getByText(text.tierRateLine('Pelaksana', 'Rp 50.000'))).toBeInTheDocument()
 
     const cardTwo = screen.getByRole('button', { name: text.editAria('Warga Dua') })
-    // A member with no tier owes no dues - a real state, shown as such
-    // rather than as a blank, and with no rate appended.
+    // A member with no tier owes no dues - a real state, shown as such rather
+    // than as a blank, and with no rate appended.
     expect(within(cardTwo).getByText(text.tierNone)).toBeInTheDocument()
     expect(within(cardTwo).getByText(text.inactiveBadge)).toBeInTheDocument()
   })
@@ -159,8 +155,8 @@ describe('Roster', () => {
     const withoutArrears = screen.getByRole('button', { name: text.editAria('Lunas Semua') })
     expect(within(withoutArrears).queryByText(/Tunggakan/)).not.toBeInTheDocument()
 
-    // The badge never borrows the current period's own vocabulary - a row
-    // with no arrears is simply quiet, never labelled "Lunas" here.
+    // The badge never borrows the current period's vocabulary - a row with no
+    // arrears is quiet, never labelled "Lunas" here.
     expect(within(withoutArrears).queryByText(copy.dues.statuses.paid)).not.toBeInTheDocument()
   })
 
@@ -224,8 +220,8 @@ describe('Roster', () => {
 
     await waitFor(() => expect(calls).toHaveLength(1))
     expect(calls[0]).toMatchObject({ method: 'POST', body: { name: 'Warga Baru', tier_id: 2 } })
-    // joined_on defaults to today (#187: a fund's history starts at
-    // adoption, so a new member owes from now, not from the past).
+    // joined_on defaults to today (a fund's history starts at adoption, so a
+    // new member owes from now, not from the past).
     expect(calls[0].body?.joined_on).toMatch(/^\d{4}-\d{2}-\d{2}$/)
     await waitFor(() => expect(currentSearch()).toBe(''))
   })

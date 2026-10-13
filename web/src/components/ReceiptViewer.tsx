@@ -5,21 +5,20 @@ import { useLayoutEffect, useRef } from 'react'
 import { copy } from '@/copy/id'
 
 /**
- * The full-screen zoom view opened by tapping a photo in ReceiptDialog
- * (#154 follow-up) - a second, black, safe-area-aware Dialog layered above
- * it, so it needs its own primitive rather than ui/dialog.tsx's centred card.
+ * The full-screen zoom view opened by tapping a photo in ReceiptDialog - a
+ * second, black, safe-area-aware Dialog layered above it, so it needs its
+ * own primitive rather than ui/dialog.tsx's centred card.
  *
  * One state only: the photo at its stored pixel size (receipts are
  * re-encoded to at most 1600px on the long edge - internal/http's
  * processReceiptImage) inside an `overflow-auto` box, panned with the
- * platform's own scrolling. The dialog's full-width photo is already the
- * "whole photo" view, so a full-screen fit mode would only repeat it. No
- * zoom/gesture library and no pinch handling - this is the whole of "zoom".
+ * platform's scrolling. The dialog's full-width photo is already the "whole
+ * photo" view, so a fit mode would only repeat it. No zoom/gesture library,
+ * no pinch handling.
  *
  * Opening scrolls so the point tapped in the dialog (`anchor`, as fractions
- * of the image) lands at the centre of the screen, rather than snapping to
- * the top-left corner. A tap on the photo, the close button or Escape all go
- * back to the dialog.
+ * of the image) lands at the centre of the screen. A tap on the photo, the
+ * close button or Escape all go back to the dialog.
  *
  * No swipe-down-to-close: a downward pan meant to dismiss cannot be told
  * apart from one meant to move around the photo.
@@ -32,9 +31,8 @@ export default function ReceiptViewer({
 }: {
   open: boolean
   /** GET /api/receipts/{id}'s URL (lib/receipts.ts's receiptUrl), or null
-   * while no photo is the current target - mirrors ReceiptDialog's own
-   * `parentId` idiom so this component never has to know about receipt ids
-   * itself. */
+   * while no photo is the target - mirrors ReceiptDialog's `parentId` idiom so
+   * this component never knows about receipt ids. */
   src: string | null
   /** Where the photo was tapped, as fractions (0..1) across and down it. */
   anchor: { fx: number; fy: number } | null
@@ -45,7 +43,7 @@ export default function ReceiptViewer({
 
   // Centres the tapped point. Runs once the dialog has mounted and again on
   // the image's load event, since naturalWidth is 0 until the image decodes
-  // (usually it is already cached from the dialog, and the first run wins).
+  // (usually already cached from the dialog, so the first run wins).
   function centreOnAnchor() {
     const container = containerRef.current
     const img = imgRef.current

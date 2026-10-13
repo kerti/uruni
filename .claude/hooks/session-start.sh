@@ -4,10 +4,9 @@
 #
 # Deliberate difference from the Balances version this is adapted from: that one
 # ran `make start-task` on any clean tree, and start-task ends in
-# `git checkout main`. Starting a session on a clean *feature* branch therefore
-# yanked you off your branch silently. Here, main is only fast-forwarded when
-# you are already on main; on any other branch the hook just reports where you
-# are and touches nothing.
+# `git checkout main`, silently yanking you off a clean feature branch. Here,
+# main is only fast-forwarded when you are already on main; on any other branch
+# the hook reports where you are and touches nothing.
 #
 # Emits JSON on stdout: additionalContext goes into the agent's context,
 # systemMessage is shown to the human. Never fails the session - worst case it

@@ -14,13 +14,12 @@ command -v jq >/dev/null 2>&1 || exit 0
 
 cmd=$(jq -r '.tool_input.command // ""' 2>/dev/null) || exit 0
 
-# Decide whether one command segment invokes `git push`. Matching the raw string
-# is wrong in both directions: a prefix-only test (`"git push"*`) lets
-# `make check && git push` through, while a plain substring test fires on
-# `git commit -m "add push notification"` and on any command that merely mentions
-# the phrase. So: confirm the segment's first word is `git`, walk past git's own
-# options (`-c key=val`, `-C dir`, ...), and require the subcommand itself to be
-# `push`.
+# Decide whether one command segment invokes `git push`. Matching the raw
+# string is wrong both ways: a prefix-only test (`"git push"*`) lets
+# `make check && git push` through, while a substring test fires on
+# `git commit -m "add push notification"`. So: confirm the segment's first word
+# is `git`, walk past git's options (`-c key=val`, `-C dir`, ...), and require
+# the subcommand to be `push`.
 is_git_push() {
   set -f            # no globbing while we word-split
   # shellcheck disable=SC2086

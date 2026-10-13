@@ -13,26 +13,25 @@ import type { Transaction } from '@/lib/setup'
 const text = copy.purposeCorrection
 
 /**
- * Correcting one posted row's pos (#276, ADR-033).
+ * Correcting one posted row's pos (ADR-033).
  *
  * One field, because everything else is read off the row server-side and
- * cannot be sent: the amount, the account and the date are the original's,
- * which is what keeps this a correction of that row rather than an edit of
- * an immutable entry. It is a dialog rather than a route under ADR-032's
- * sharpened rule - a dialog may post only when the posting is value-neutral
- * and carries a single field - and the pair it posts cannot move a balance
- * in any month, so the worst a stray backdrop tap can do is nothing.
+ * cannot be sent: the amount, account and date are the original's, which
+ * keeps this a correction of that row rather than an edit of an immutable
+ * entry. It is a dialog rather than a route under ADR-032's sharpened rule - a
+ * dialog may post only when the posting is value-neutral and carries a single
+ * field - and the pair it posts cannot move a balance in any month, so the
+ * worst a stray backdrop tap can do is nothing.
  *
- * `currentLabel` appears only on a row that has already been corrected,
- * where the money is under a tag the row itself no longer shows. Without it
- * the dialog and the row beneath it would appear to disagree: the list
- * renders the STORED tag deliberately, because the ledger sums stored tags
- * and a row showing its effective one would put the screen out of step with
- * the balances (ADR-033). The server builds the pair from the effective tag
- * either way; this is only saying so.
+ * `currentLabel` appears only on a row already corrected, where the money is
+ * under a tag the row no longer shows. Without it the dialog and the row
+ * beneath would appear to disagree: the list renders the STORED tag
+ * deliberately, because the ledger sums stored tags and a row showing its
+ * effective one would put the screen out of step with the balances (ADR-033).
+ * The server builds the pair from the effective tag either way.
  *
- * `transaction` is null only while the dialog closes, the same window
- * EditPassThroughDialog documents for its own row prop.
+ * `transaction` is null only while the dialog closes, the window
+ * EditPassThroughDialog documents for its row prop.
  */
 export default function CorrectPurposeDialog({
   transaction,
@@ -54,14 +53,14 @@ export default function CorrectPurposeDialog({
   const [state, run] = useApi<unknown>()
   const [purposeId, setPurposeId] = useState<number | null>(null)
 
-  // The effective tag - where the money actually is - which is the row's own
-  // pos until a correction has moved it.
+  // The effective tag - where the money actually is - which is the row's pos
+  // until a correction has moved it.
   const effectivePurposeId = transaction ? (transaction.effective_purpose_id ?? transaction.purpose_id) : null
   const alreadyCorrected = transaction !== null && effectivePurposeId !== transaction.purpose_id
 
-  // A fresh picker every time the dialog opens, seeded with where the money
-  // is now - so the field starts on a true statement, and the submit button
-  // starts disabled until she actually changes something.
+  // A fresh picker every time the dialog opens, seeded with where the money is
+  // now - so the field starts on a true statement, and submit starts disabled
+  // until she changes something.
   useEffect(() => {
     // oxlint-disable-next-line react/set-state-in-effect -- seed the picker from the record each time the dialog opens
     if (open && transaction !== null) setPurposeId(effectivePurposeId)

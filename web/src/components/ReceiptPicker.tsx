@@ -7,24 +7,22 @@ import { copy } from '@/copy/id'
 const text = copy.receipts
 
 /** The three types the backend accepts (internal/http's receipt routes) -
- * HEIC is deliberately absent, so a phone's default camera format is
- * refused by the OS picker itself on platforms that honour `accept`,
- * rather than only after an upload round-trip. No `capture` attribute: the
- * issue is explicit that skipping the photo is the normal path, and forcing
- * the camera would take away the "pick an existing photo" option every
- * phone's file picker already offers beside it. */
+ * HEIC is deliberately absent, so a phone's default camera format is refused
+ * by the OS picker on platforms that honour `accept`, not after an upload
+ * round-trip. No `capture` attribute: skipping the photo is the normal path,
+ * and forcing the camera would take away the "pick an existing photo" option
+ * every phone's file picker offers. */
 const ACCEPTED_TYPES = 'image/jpeg,image/png,image/webp'
 
 /**
- * A reusable optional-photo field (#154): `<input type="file">` plus a
- * small preview of the chosen file, with a way to clear it before
- * submitting. Used at record time (RecordTransaction.tsx, the
- * reimbursement claim form) and, wrapped by ReceiptDialog.tsx, for
- * attaching or replacing a photo after the fact.
+ * A reusable optional-photo field: `<input type="file">` plus a small preview
+ * of the chosen file, with a way to clear it before submitting. Used at
+ * record time (RecordTransaction.tsx, the reimbursement claim form) and,
+ * wrapped by ReceiptDialog.tsx, for attaching or replacing a photo later.
  *
- * Controlled by `value`/`onChange` alone - this component holds no upload
- * state of its own, since at record time the file travels with the rest of
- * the form and is only posted after the parent row exists.
+ * Controlled by `value`/`onChange` alone - no upload state, since at record
+ * time the file travels with the rest of the form and is posted only after
+ * the parent row exists.
  */
 export default function ReceiptPicker({
   id,
@@ -38,11 +36,11 @@ export default function ReceiptPicker({
   disabled?: boolean
 }) {
   const inputRef = useRef<HTMLInputElement>(null)
-  // The preview is an object URL over the file already sitting in memory -
-  // never uploaded just to be shown back. Derived from the file itself
-  // (#361) rather than copied into state by an effect; the effect below
-  // only revokes it, on every change and on unmount, so a form opened and
-  // abandoned repeatedly does not leak one per photo picked.
+  // The preview is an object URL over the file already in memory - never
+  // uploaded just to be shown back. Derived from the file rather than copied
+  // into state by an effect; the effect below only revokes it, on every change
+  // and on unmount, so a form opened and abandoned repeatedly does not leak
+  // one per photo picked.
   const previewUrl = useMemo(() => (value ? URL.createObjectURL(value) : null), [value])
   useEffect(() => {
     if (!previewUrl) return
@@ -52,8 +50,8 @@ export default function ReceiptPicker({
   function handlePick(event: React.ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0] ?? null
     onChange(file)
-    // Clears the input's own value so picking the exact same file again
-    // after clearing still fires a change event.
+    // Clears the input's value so picking the same file again after clearing
+    // still fires a change event.
     event.target.value = ''
   }
 
@@ -76,9 +74,9 @@ export default function ReceiptPicker({
       {value && (
         <div className="flex items-center gap-3 rounded-lg bg-muted p-2">
           {previewUrl && (
-            // Decorative beside the file name text right after it - the
-            // pair together are the accessible description, same split
-            // TransactionList.tsx's own icons use.
+            // Decorative beside the file name text right after it - the pair
+            // is the accessible description, the split TransactionList.tsx's
+            // icons use.
             <img src={previewUrl} alt="" className="size-14 shrink-0 rounded-md object-cover" />
           )}
           <span className="min-w-0 flex-1 truncate text-sm text-muted-foreground">{value.name}</span>
@@ -101,9 +99,9 @@ export default function ReceiptPicker({
         id={id}
         type="file"
         accept={ACCEPTED_TYPES}
-        // The button above is the visible control; the input only carries
-        // the name for assistive tech and tests, and stays out of the tab
-        // order so keyboard users meet one control, not two.
+        // The button above is the visible control; the input only carries the
+        // name for assistive tech and tests, and stays out of the tab order so
+        // keyboard users meet one control, not two.
         aria-label={text.addFromRow}
         tabIndex={-1}
         className="sr-only"

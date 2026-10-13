@@ -30,8 +30,7 @@ describe('AmountInput', () => {
     const input = screen.getByLabelText('Jumlah')
     await userEvent.type(input, 'Rp1a5b0,0.0c0')
 
-    // Every non-digit character was dropped on the way in - "150000" is what
-    // survives, and that's what onChange was last called with.
+    // Every non-digit was dropped on the way in - "150000" survives.
     expect(onChange).toHaveBeenLastCalledWith(150_000)
   })
 
@@ -90,8 +89,8 @@ describe('AmountInput', () => {
     // The e2e flake (dues and reimbursements specs): Playwright's fill()
     // focuses, selects all, then types. When the focus handler's deferred
     // caret move landed between the select and the type, it collapsed the
-    // selection and the new digits were appended - 50000 then 23456 posted
-    // as 5000023456.
+    // selection and the new digits were appended - 50000 then 23456 posted as
+    // 5000023456.
     const frames: FrameRequestCallback[] = []
     const raf = vi.spyOn(window, 'requestAnimationFrame').mockImplementation((cb) => {
       frames.push(cb)

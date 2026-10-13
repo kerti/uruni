@@ -7,11 +7,11 @@ const text = copy.reimbursements
 export const TALANGAN_PATH = '/history/reimbursements'
 
 /**
- * What a Talangan screen hands back to the tab through router location
- * state, the same idiom as App.tsx's HomeState and DuesState: the
- * confirmation belongs to the one history entry that navigation creates, so
- * opening the tab again later does not show a stale one. The tab turns the
- * key into copy. (Recording a claim is Catat's, and lands on Beranda.)
+ * What a Talangan screen hands back to the tab through router location state,
+ * as App.tsx's HomeState and DuesState do: the confirmation belongs to the one
+ * history entry that navigation creates, so opening the tab later does not
+ * show a stale one. The tab turns the key into copy. (Recording a claim is
+ * Catat's, and lands on Beranda.)
  */
 export interface TalanganState {
   reimbursementDone: 'settled' | 'corrected'
@@ -27,10 +27,9 @@ export function doneText(done: TalanganState['reimbursementDone']): string {
   }
 }
 
-/** Wire error code -> Indonesian copy, scoped first to this feature's own
- * codes (reimbursement_already_settled, reimbursement_waived) then to the
- * shared map; never the English wire message (ADR-014: the API is a code
- * surface). */
+/** Wire error code -> Indonesian copy, scoped first to this feature's codes
+ * (reimbursement_already_settled, reimbursement_waived) then to the shared
+ * map; never the English wire message (ADR-014). */
 export function errorText(err: ApiError): string {
   const specific = text.errors[err.code as keyof typeof text.errors]
   if (specific) return specific

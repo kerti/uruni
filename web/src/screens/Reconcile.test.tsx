@@ -44,9 +44,9 @@ function jsonResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } })
 }
 
-/** Routes a stubbed fetch by method + path substring, same idiom as
- * RecordTransaction.test.tsx's own routedFetch - a handler can be called
- * more than once and each `handle` decides its own response per call. */
+/** Routes a stubbed fetch by method + path substring, as
+ * RecordTransaction.test.tsx's routedFetch does - a handler can be called more
+ * than once and each `handle` decides its response per call. */
 function routedFetch(handlers: { match: (method: string, url: string) => boolean; handle: () => Promise<Response> }[]) {
   return vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
     const url = typeof input === 'string' ? input : input.toString()
@@ -124,8 +124,8 @@ describe('Reconcile', () => {
     render(<Reconcile onDone={vi.fn()} onCancel={vi.fn()} />)
 
     await waitForForm()
-    // #473: the server refuses a fix on a closed amplop (ADR-031), so the
-    // picker reads the same filtered list the record form does.
+    // The server refuses a fix on a closed amplop (ADR-031), so the picker
+    // reads the same filtered list the record form does.
     const urls = fetchMock.mock.calls.map(([input]) => String(input))
     expect(urls).toContain('/api/purposes?selectable=true')
   })
@@ -173,8 +173,8 @@ describe('Reconcile', () => {
     await userEvent.type(screen.getByLabelText(text.actualLabel('Tunai')), '100000')
     await userEvent.type(screen.getByLabelText(text.actualLabel('Bank Uji Coba')), '200000')
 
-    // A zero-gap line needs no resolution choice - matched is reached
-    // without ever touching a resolution button.
+    // A zero-gap line needs no resolution choice - matched is reached without
+    // touching a resolution button.
     expect(await screen.findAllByText(text.matched)).toHaveLength(2)
     expect(screen.getByRole('button', { name: text.submit })).not.toBeDisabled()
 
@@ -245,9 +245,9 @@ describe('Reconcile', () => {
 
     await userEvent.click(screen.getByRole('button', { name: text.resolutionOptions.entry_added }))
 
-    // The fix's amount/direction default off the gap: actual > recorded is
-    // an unrecorded inflow, so direction defaults to "in" and amount to the
-    // gap's own magnitude - nothing left to type for the common case.
+    // The fix's amount/direction default off the gap: actual > recorded is an
+    // unrecorded inflow, so direction defaults to "in" and amount to the gap's
+    // magnitude - nothing to type for the common case.
     expect(screen.getByRole('button', { name: copy.record.directionIn })).toHaveAttribute('aria-pressed', 'true')
     expect(screen.getByLabelText(text.fixAmountLabel)).toHaveValue('Rp\u00a050.000')
 
@@ -322,9 +322,9 @@ describe('Reconcile', () => {
     expect(tunaiCount?.fix).toMatchObject({ direction: 'out', amount: 20_000 })
   })
 
-  // #498: the form says what would still be open, live, before anything is
-  // saved. A rupiah figure is compared with its nbsp collapsed, as getByText
-  // normalizes the DOM text but never the matcher.
+  // The form says what would still be open, live, before anything is saved. A
+  // rupiah figure is compared with its nbsp collapsed, as getByText normalizes
+  // the DOM text but never the matcher.
   const plain = (s: string) => s.replace(/\u00a0/g, ' ')
 
   it('shows the remaining gap live as the fix is typed, and an entry may leave some of it open', async () => {
@@ -519,8 +519,8 @@ describe('Reconcile', () => {
     await userEvent.type(screen.getByLabelText(text.actualLabel('Bank Uji Coba')), '200000')
 
     await userEvent.click(await screen.findByRole('button', { name: text.resolutionOptions.left_open }))
-    // Choosing "left_open" surfaces no fix fields - there is nothing left to
-    // fill in for a gap she is deliberately leaving open.
+    // Choosing "left_open" surfaces no fix fields - nothing to fill in for a
+    // gap she is deliberately leaving open.
     expect(screen.queryByLabelText(text.fixAmountLabel)).not.toBeInTheDocument()
 
     await userEvent.click(screen.getByRole('button', { name: text.submit }))
@@ -538,11 +538,10 @@ describe('Reconcile', () => {
     await waitFor(() => expect(screen.getByText(text.discrepancy('Rp 20.000'))).toBeInTheDocument())
   })
 
-  // Orchestrator ruling 2: the server rejects a "matched" line whose real
-  // difference is no longer 0 because a write landed between the count and
-  // the submit (reconciliation.go:185-188). The client must re-read the
-  // numbers and ask her to resolve again - never look like a crash, and
-  // never silently resubmit.
+  // The server rejects a "matched" line whose real difference is no longer 0
+  // because a write landed between the count and the submit
+  // (reconciliation.go:185-188). The client must re-read the numbers and ask
+  // her to resolve again - never look like a crash, never silently resubmit.
   it('recovers from a rejected "matched" line by re-reading balances instead of resubmitting', async () => {
     let balancesCallCount = 0
     const fetchMock = routedFetch([
@@ -554,7 +553,7 @@ describe('Reconcile', () => {
           balancesCallCount += 1
           // Second read (after the rejected submit) shows Tunai's recorded
           // balance moved from 100_000 to 130_000 - a transaction landed in
-          // between, exactly the mechanism this failure path exists for.
+          // between, the mechanism this failure path exists for.
           const balances = balancesCallCount === 1 ? balancesBody(100_000, 200_000) : balancesBody(130_000, 200_000)
           return Promise.resolve(jsonResponse(balances))
         },
@@ -583,9 +582,9 @@ describe('Reconcile', () => {
     const callsBeforeSubmit = fetchMock.mock.calls.length
     await userEvent.click(screen.getByRole('button', { name: text.submit }))
 
-    // The stale notice appears, balances were re-read, and the gap for
-    // Tunai now shows against the updated recorded figure - all without a
-    // second POST /api/reconciliations.
+    // The stale notice appears, balances were re-read, and Tunai's gap now
+    // shows against the updated recorded figure - all without a second POST
+    // /api/reconciliations.
     await screen.findByText(text.staleNotice)
     await waitFor(() => expect(screen.getByText(text.discrepancy('Rp 30.000'))).toBeInTheDocument())
 
@@ -603,9 +602,9 @@ describe('Reconcile', () => {
   })
 
   // The same `invalid_argument` code covers every ledger validation failure
-  // (internal/http/errors.go:53), so a rejected request whose counts are
-  // still perfectly current is NOT the stale-count race. Saying it was
-  // would send her hunting for a transaction nobody posted.
+  // (internal/http/errors.go:53), so a rejected request whose counts are still
+  // current is NOT the stale-count race. Saying it was would send her hunting
+  // for a transaction nobody posted.
   it('reports a rejected submit as an error when nothing moved under her', async () => {
     const fetchMock = routedFetch([
       ...stubLoad(),
@@ -623,18 +622,18 @@ describe('Reconcile', () => {
     await userEvent.type(screen.getByLabelText(text.actualLabel('Bank Uji Coba')), '200000')
     await userEvent.click(screen.getByRole('button', { name: text.submit }))
 
-    // The balances come back unchanged, so every "matched" count still has
-    // a zero difference: the request was the problem, not a race.
+    // The balances come back unchanged, so every "matched" count still has a
+    // zero difference: the request was the problem, not a race.
     await screen.findByText(copy.common.errors.invalid_argument)
     expect(screen.queryByText(text.staleNotice)).not.toBeInTheDocument()
-    // And her counts are still on screen either way. formatIDR puts a
-    // U+00A0 after "Rp" and toHaveValue compares the raw value, unnormalized.
+    // Her counts are still on screen either way. formatIDR puts a U+00A0 after
+    // "Rp" and toHaveValue compares the raw value, unnormalized.
     expect(screen.getByLabelText(text.actualLabel('Tunai'))).toHaveValue(`Rp\u00a0100.000`)
   })
 
-  // #444: the server refuses a count that is not exactly the active
-  // locations. A location added after the screen loaded makes the list stale;
-  // the screen re-reads it, shows the refusal, and keeps what she typed.
+  // The server refuses a count that is not exactly the active locations. A
+  // location added after the screen loaded makes the list stale; the screen
+  // re-reads it, shows the refusal, and keeps what she typed.
   it('re-reads the location list when the server says an active location was not counted', async () => {
     const added = { id: 4, kind: 'bank', name: 'Bank Baru', inactive_on: null, created_at: 2 }
     let accountsCallCount = 0
@@ -694,16 +693,16 @@ describe('Reconcile', () => {
     const noteField = screen.getByLabelText(text.fixNoteLabel)
     await userEvent.type(noteField, 'Beli galon, lupa dicatat')
 
-    // A stray second tap on the option already chosen must not reset the
-    // fix back to its gap-derived defaults - these buttons read as toggles
-    // and a phone makes a double tap easy.
+    // A stray second tap on the option already chosen must not reset the fix to
+    // its gap-derived defaults - these buttons read as toggles and a phone makes
+    // a double tap easy.
     await userEvent.click(screen.getByRole('button', { name: text.resolutionOptions.entry_added }))
     expect(noteField).toHaveValue('Beli galon, lupa dicatat')
   })
 
-  // The re-read after a rejected submit can fail too. It must not escape as
-  // an unhandled rejection and leave the form re-enabled with no notice -
-  // that reads as "my submit worked".
+  // The re-read after a rejected submit can fail too. It must not escape as an
+  // unhandled rejection and leave the form re-enabled with no notice - that
+  // reads as "my submit worked".
   it('reports the failed submit when the balances re-read also fails', async () => {
     let balancesCalls = 0
     const fetchMock = routedFetch([
@@ -748,9 +747,9 @@ describe('Reconcile', () => {
     expect(screen.getByRole('button', { name: text.submit })).toBeEnabled()
   })
 
-  // #507: the response to a write can be lost after the server committed it.
-  // The screen re-reads before the message shows, so the retry is made on
-  // fresh data rather than posting a duplicate.
+  // The response to a write can be lost after the server committed it. The
+  // screen re-reads before the message shows, so the retry is made on fresh
+  // data rather than posting a duplicate.
   it('re-reads the balances before saying a lost submit is uncertain, then re-enables submit', async () => {
     let balancesCalls = 0
     const fetchMock = routedFetch([
@@ -783,8 +782,8 @@ describe('Reconcile', () => {
     expect(screen.getByRole('button', { name: text.submit })).toBeEnabled()
   })
 
-  // The gate is the client half of "every active location counted, every gap
-  // resolved" (#444 is the server half). Walk it one condition at a time.
+  // The client half of "every active location counted, every gap resolved"
+  // (the server enforces the other). Walk it one condition at a time.
   it('keeps submit disabled until every active location is counted and every gap resolved', async () => {
     vi.stubGlobal('fetch', routedFetch(stubLoad()))
     render(<Reconcile onDone={vi.fn()} onCancel={vi.fn()} />)
@@ -814,7 +813,7 @@ describe('Reconcile', () => {
   })
 
   it('lists the five newest transactions on the count screen, labelled by pos and note', async () => {
-    // The first page is already newest-first (#225); the screen slices, never sorts.
+    // The first page is already newest-first; the screen slices, never sorts.
     const page = {
       transactions: [
         transaction(17, { direction: 'out', amount: 25_000, note: 'Beli sapu', occurred_on: '2026-09-20' }),

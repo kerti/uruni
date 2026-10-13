@@ -18,25 +18,21 @@ const text = copy.dues
 const historyText = copy.dues.history
 
 /** Local YYYY-MM - never toISOString(), which is UTC and can read a month
- * early in WIB. Same reasoning as Setup.tsx's own currentISOMonth and
- * Reconcile.tsx's todayISODate. */
+ * early in WIB. */
 function currentISOMonth(): string {
   const now = new Date()
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
 }
 
-/** Rows the "belum bayar" filter isolates - unpaid and partial both still
- * owe something for the period (PRD section 7.3's "simple 'not yet paid' view").
- * A plain filter, nothing else: no reminder, nudge, notification or chase
- * affordance is rendered anywhere near it, per PRD section 7.3's own explicit
- * rule. */
+/** Rows the "belum bayar" filter isolates - unpaid and partial both still owe
+ * something for the period (PRD section 7.3's "simple 'not yet paid' view").
+ * A plain filter: no reminder, nudge, notification or chase affordance
+ * anywhere near it, per PRD section 7.3's explicit rule. */
 const UNPAID_STATUSES: readonly DuesStatusKind[] = ['unpaid', 'partial']
 
-/** Tone classes for one status badge, per the issue's own table - no
- * `--destructive` red anywhere on this screen. `paid_in_advance` reuses
- * `paid`'s success colors but adds a ring, so it reads as a variant of
- * "lunas" rather than an unrelated state, while still being visually
- * distinguished from the plain badge as the issue asks. */
+/** Tone classes for one status badge - no `--destructive` red anywhere on this
+ * screen. `paid_in_advance` reuses `paid`'s success colors but adds a ring, so
+ * it reads as a variant of "lunas" while staying distinguishable. */
 const badgeTone: Record<DuesStatusKind, string> = {
   unpaid: 'bg-muted text-muted-foreground',
   partial: 'bg-attention-soft text-attention-text',
@@ -44,12 +40,11 @@ const badgeTone: Record<DuesStatusKind, string> = {
   paid_in_advance: 'bg-success-soft text-success ring-1 ring-success',
 }
 
-/** Icons stay as calm as the tones: an empty circle for what is not paid
- * yet, a dashed one for a part-payment in progress, a check for settled.
- * Deliberately no alert triangle - Reconcile.tsx uses that shape for a
- * selisih, and an ordinary unpaid or half-paid month is not a discrepancy
- * (Design-System.md: gentle semantic states, never an alarm for a normal
- * one). */
+/** Icons stay as calm as the tones: an empty circle for what is not paid yet,
+ * a dashed one for a part-payment in progress, a check for settled. No alert
+ * triangle - Reconcile.tsx uses that shape for a selisih, and an ordinary
+ * unpaid or half-paid month is not a discrepancy (Design-System.md: gentle
+ * semantic states). */
 const badgeIcon: Record<DuesStatusKind, typeof Circle> = {
   unpaid: Circle,
   partial: CircleDashed,
@@ -68,27 +63,23 @@ function StatusBadge({ status }: { status: DuesStatusKind }) {
 }
 
 /**
- * The dues status roster (M6.12, PRD section 7.3): who has paid / partially paid /
- * paid in advance for one period, read straight from GET
- * /api/dues-status?period=YYYY-MM - all four statuses are the server's own
- * derivation (DuesStatusForPeriod), this screen renders them and nothing
- * more.
+ * The dues status roster (PRD section 7.3): who has paid / partially paid /
+ * paid in advance for one period, read from GET /api/dues-status?period=YYYY-MM
+ * - all four statuses are the server's derivation (DuesStatusForPeriod); this
+ * screen renders them and nothing more.
  *
- * A member with no dues tier is absent from the response entirely (no dues
- * obligation) - never synthesized as a row, never shown as "paid" (the
- * issue's own explicit rule). This screen has no opinion on why a row is
- * missing; it renders exactly what the server returns.
+ * A member with no dues tier is absent from the response (no dues obligation)
+ * - never synthesized as a row, never shown as "paid". This screen has no
+ * opinion on why a row is missing; it renders what the server returns.
  *
- * Router-agnostic, same contract as every other screen App.tsx mounts:
- * onBack is the caller's navigate back to Riwayat's Iuran tab (#228), not a
- * Link this component owns.
- * onRecordPayment is the same contract for M6.13's payment form, which is
- * reached from here rather than from a second link on home - the shape of
- * navigation as a whole is settled once alpha.4's screens exist (#177).
+ * Router-agnostic, like every screen App.tsx mounts: onBack is the caller's
+ * navigate back to Riwayat's Iuran tab, not a Link this component owns.
+ * onRecordPayment is the same contract for the payment form, reached from
+ * here rather than from a second link on home.
  *
  * `refetchKey` changes whenever App.tsx navigates back here after a payment
- * was posted, so the roster reflects it without a manual refresh - the same
- * mechanism, and the same reasoning, as Home's own refetchKey.
+ * was posted, so the roster reflects it without a manual refresh - as Home's
+ * does.
  */
 export default function DuesStatus({
   onBack,
@@ -103,16 +94,16 @@ export default function DuesStatus({
 }) {
   const [period, setPeriod] = useState(currentISOMonth)
   const [unpaidOnly, setUnpaidOnly] = useState(false)
-  // Which member's payment history is open (M6.14) - one at a time, and
-  // never open across a period change, since the history is period-scoped.
+  // Which member's payment history is open - one at a time, and never open
+  // across a period change, since the history is period-scoped.
   const [expandedMemberId, setExpandedMemberId] = useState<number | null>(null)
   const [state, run] = useApi<DuesStatusRow[]>()
 
   useEffect(() => {
     void run(() => getDuesStatus(period))
-    // run is a stable useCallback (useApi.ts); period is the deliberate
-    // dependency that refetches whenever the selector changes, refetchKey
-    // the one that reloads it after a payment was recorded.
+    // run is a stable useCallback (useApi.ts); period is the dependency that
+    // refetches when the selector changes, refetchKey the one that reloads it
+    // after a payment was recorded.
   }, [run, period, refetchKey])
 
   const rows = state.data ?? []

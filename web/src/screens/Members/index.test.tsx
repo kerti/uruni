@@ -7,9 +7,9 @@ import Members from '@/screens/Members'
 import { copy } from '@/copy/id'
 import { openSelect } from '@/test/select'
 
-// Roster.tsx reads and writes `?q=`/`?edit=` through react-router's
-// useSearchParams (#233, ADR-032), so this screen needs a Router in its
-// tree even where a test never looks at the URL itself.
+// Roster.tsx reads and writes `?q=`/`?edit=` through useSearchParams (ADR-032),
+// so this screen needs a Router in its tree even where a test never looks at
+// the URL.
 function renderMembers() {
   return render(
     <MemoryRouter initialEntries={['/members']}>
@@ -28,8 +28,8 @@ function jsonResponse(body: unknown, status = 200) {
 
 /**
  * A stub that behaves like the server, with a handle on the tier's name so a
- * test can change it the way Pengaturan would - out of band, while this
- * screen is not looking.
+ * test can change it as Pengaturan would - out of band, while this screen is
+ * not looking.
  */
 function stubMembersScreen() {
   let tierName = 'Pelaksana'
@@ -58,10 +58,9 @@ function stubMembersScreen() {
       return Promise.resolve(jsonResponse({ id: 1, name: tierName, created_at: 1 }))
     }
     if (url.includes('/api/members')) {
-      // The roster card renders whatever tier_name the row itself carries,
-      // not a second lookup against the tiers list - so the stub echoes
-      // whatever name is current at the moment of the GET, the same way
-      // the server would after a rename elsewhere.
+      // The roster card renders the tier_name the row carries, not a second
+      // lookup against the tiers list - so the stub echoes the name current at
+      // the GET, as the server would after a rename elsewhere.
       return Promise.resolve(jsonResponse({ members: members.map((m) => ({ ...m, tier_name: tierName })), next_cursor: null }))
     }
     return Promise.reject(new Error(`unstubbed fetch: ${url}`))
@@ -75,11 +74,9 @@ function stubMembersScreen() {
 }
 
 describe('Members screen', () => {
-  // #232 moved the tiers section to Pengaturan, and `tiersVersion` went with
-  // it: the counter existed only because the two shared one screen. What
-  // replaces it is this - the roster reads members AND tiers on mount, and
-  // reaching Anggota from Pengaturan is a navigation, so the picker cannot
-  // show a name the tier no longer has.
+  // The roster reads members AND tiers on mount, and reaching Anggota from
+  // Pengaturan is a navigation, so the picker cannot show a name the tier no
+  // longer has.
   it('re-reads the tiers on mount, so a tier renamed in Pengaturan is current here', async () => {
     const { fetchMock, renameTierElsewhere } = stubMembersScreen()
     vi.stubGlobal('fetch', fetchMock)
@@ -106,7 +103,7 @@ describe('Members screen', () => {
     expect(within(options).getByRole('option', { name: 'Pelaksana Muda' })).toBeInTheDocument()
   })
 
-  // The screen is the roster alone now - the tiers section is not on it.
+  // The screen is the roster alone - the tiers section is not on it.
   it('does not render the tiers section', async () => {
     const { fetchMock } = stubMembersScreen()
     vi.stubGlobal('fetch', fetchMock)

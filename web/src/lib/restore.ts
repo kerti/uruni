@@ -1,23 +1,20 @@
-// Typed calls over apiFetch for restoring from an uploaded backup (M6.39,
-// #325, ADR-012): POST /api/restore/inspect (multipart, answers with a
-// preview and a short-lived token) and POST /api/restore/confirm (the
-// token plus the treasurer's current password - the only call that
-// actually changes anything). inspectStoredRestore (M6.40, #326) is the
-// same first step for one of the server's own stored dumps: no file, no
-// multipart body - just the name GET /api/backups already listed - and it
-// answers with the identical RestoreInspectResult shape, so confirmRestore
-// below never needs to know which of the two inspect calls staged what it
-// is about to confirm.
+// Typed calls over apiFetch for restoring from a backup (ADR-012):
+// POST /api/restore/inspect (multipart; answers with a preview and a
+// short-lived token) and POST /api/restore/confirm (the token plus the
+// treasurer's current password - the only call that changes anything).
+// inspectStoredRestore is the same first step for one of the server's stored
+// dumps and answers with the identical RestoreInspectResult, so confirmRestore
+// never needs to know which inspect call staged what it confirms.
 
 import { apiFetch, plainConnectionError } from '@/lib/api'
 
-/** A file fund's own place in the restore preview - kept (present on both
- * sides), removed (live only) or added (file only). Mirrors
- * internal/backup's FundStatus exactly. */
+/** A file fund's place in the restore preview - kept (present on both sides),
+ * removed (live only) or added (file only). Mirrors internal/backup's
+ * FundStatus. */
 export type FundRestoreStatus = 'kept' | 'removed' | 'added'
 
 /** One line of the confirm step's per-fund list (internal/backup's
- * FundPreview). transactions_lost and cutoff_date are only meaningful when
+ * FundPreview). transactions_lost and cutoff_date only mean something when
  * status is "kept". */
 export interface FundRestorePreview {
   fund_id: number
@@ -27,8 +24,7 @@ export interface FundRestorePreview {
   cutoff_date?: string
 }
 
-/** POST /api/restore/inspect's own preview block (internal/backup's
- * Preview): what the confirm step shows before anything changes. */
+/** POST /api/restore/inspect's preview block (internal/backup's Preview). */
 export interface RestorePreview {
   date: string
   total: number
@@ -42,11 +38,10 @@ export interface RestoreInspectResult {
 }
 
 /**
- * POST /api/restore/inspect - multipart, one "file" field, the same shape
- * receipts.ts's own uploadReceipt uses. Decodes and validates the upload
- * server-side but changes nothing; the token it returns is what
- * confirmRestore below must send back, so the (possibly large) file itself
- * is never uploaded a second time.
+ * POST /api/restore/inspect - multipart, one "file" field. Decodes and
+ * validates the upload server-side but changes nothing; the token it returns
+ * is what confirmRestore sends back, so the (possibly large) file is never
+ * uploaded twice.
  */
 export function inspectRestoreUpload(file: File): Promise<RestoreInspectResult> {
   const form = new FormData()
@@ -59,11 +54,11 @@ export function inspectRestoreUpload(file: File): Promise<RestoreInspectResult> 
 
 /**
  * POST /api/restore/inspect-stored/{name} - the stored-backup twin of
- * inspectRestoreUpload above: name is a StoredBackup's own `name` (lib/
- * backup.ts), the exact server-side identifier GET /api/backups already
- * handed the client, never a path. Changes nothing server-side either -
- * an older-format dump is refused here the same way an older-format upload
- * would be (internal/backup's ParseUpload, the one place that check lives).
+ * inspectRestoreUpload: name is a StoredBackup's `name` (lib/backup.ts), the
+ * server-side identifier GET /api/backups handed the client, never a path.
+ * Changes nothing either - an older-format dump is refused here as an
+ * older-format upload would be (internal/backup's ParseUpload, the one place
+ * that check lives).
  */
 export function inspectStoredRestore(name: string): Promise<RestoreInspectResult> {
   return apiFetch<RestoreInspectResult>(`/api/restore/inspect-stored/${encodeURIComponent(name)}`, {
@@ -72,10 +67,9 @@ export function inspectStoredRestore(name: string): Promise<RestoreInspectResult
 }
 
 /**
- * POST /api/restore/confirm - the one call that restores anything. A
- * success means every session is gone, including this one's own - the
- * caller's job afterward is to send the treasurer back to a fresh login,
- * not to keep using this session for anything else.
+ * POST /api/restore/confirm - the one call that restores anything. A success
+ * means every session is gone, including this one's - the caller sends the
+ * treasurer back to a fresh login.
  */
 export function confirmRestore(token: string, password: string): Promise<void> {
   return apiFetch<void>('/api/restore/confirm', {

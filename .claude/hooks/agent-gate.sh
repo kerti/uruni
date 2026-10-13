@@ -2,7 +2,7 @@
 # PreToolUse(Agent) hook - no subagent runs without the maintainer saying yes.
 #
 # Delegation is cheap to start and expensive to finish: a subagent re-derives
-# the repo cold, misses the prompt cache, and reports its own work optimistically.
+# the repo cold, misses the prompt cache, and reports its work optimistically.
 # Whether that trade is worth making is the maintainer's call, not the
 # orchestrator's (ADR-023), so every Agent call becomes a permission prompt -
 # including the built-in Explore and Plan agents.

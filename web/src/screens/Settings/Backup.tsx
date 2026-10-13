@@ -16,24 +16,22 @@ import type { StoredBackup } from '@/lib/backup'
 const text = copy.settings.backup
 
 /**
- * The Cadangan card: download now (M6.37, #323, ADR-012) plus the auto-list
- * of what the server already keeps on its own (M6.38, #324, ADR-013). Two
- * separate actions, so two separate pieces - the on-demand button first
- * (unchanged since #323), then the list, its own small heading telling them
- * apart rather than one undifferentiated block of controls.
+ * The Cadangan card: download now (ADR-012) plus the auto-list of what the
+ * server already keeps on its own (ADR-013). Two separate actions, so two
+ * pieces - the on-demand button first, then the list, its small heading
+ * telling them apart.
  *
- * useApi<void>() gives the top button the same idle/loading/error shape
- * every other write action on this screen already uses, even though the
- * call itself is a GET - it still needs to disable itself while the zip is
- * being built and show the same ErrorState a failed save would.
+ * useApi<void>() gives the top button the idle/loading/error shape every
+ * other write action on this screen uses, though the call is a GET - it still
+ * needs to disable itself while the zip is built and show the ErrorState a
+ * failed save would.
  */
 export default function Backup() {
   const [state, run] = useApi<void>()
   const busy = state.status === 'loading'
-  // Shared with AutoBackupList's own per-row "pulihkan" control (#326): one
-  // RestoreDialog instance runs the whole preview/confirm flow regardless
-  // of whether it started from a picked file or a stored dump's name -
-  // RestoreDialog.tsx's own comment has the reasoning.
+  // Shared with AutoBackupList's per-row "pulihkan" control: one RestoreDialog
+  // instance runs the preview/confirm flow whether it started from a picked
+  // file or a stored dump's name (see RestoreDialog.tsx).
   const restoreDialogRef = useRef<RestoreDialogHandle>(null)
 
   return (
@@ -65,8 +63,8 @@ export default function Backup() {
 }
 
 /** "512" -> "512 B", "51200" -> "50 KB", "5242880" -> "5 MB". Whole numbers
- * only - a dump's size is a rough sense of "is this normal", never a figure
- * anyone reads precisely, so a decimal place would be false precision. */
+ * only - a dump's size is a rough sense of "is this normal", and a decimal
+ * place would be false precision. */
 function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`
   if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`
@@ -78,18 +76,16 @@ function kindLabel(kind: StoredBackup['kind']): string {
 }
 
 /**
- * The list of server-side dumps ADR-013's own scheduler (and the boot-time
- * format-version check) already wrote to URUNI_BACKUP_DIR - dense rows, no
- * dialog, nothing here to edit: every row is history, not a record this
- * screen can change (restoring one is a whole separate dialog, RestoreDialog,
- * this list only ever starts). Each row's own download and restore controls
- * sit as plain ink beside the row's text (#257/ui-review: no big outlined
- * button per row), each a 44px target the same way every other tappable
- * control on this screen is one.
+ * The list of server-side dumps ADR-013's scheduler (and the boot-time
+ * format-version check) wrote to URUNI_BACKUP_DIR - dense rows, no dialog,
+ * nothing to edit: every row is history (restoring is a separate dialog,
+ * RestoreDialog, which this list only starts). Each row's download and
+ * restore controls are plain ink beside the row's text (no big outlined button
+ * per row), each a 44px target.
  *
- * An older-format row (is_current_format false) gets the "older version"
- * label in place of the restore control (#326) - still listed, still
- * downloadable, never offered for restore.
+ * An older-format row (is_current_format false) gets the "older version" label
+ * in place of the restore control - listed and downloadable, never offered for
+ * restore.
  */
 function AutoBackupList({ onRestore }: { onRestore: (name: string) => void }) {
   const [listState, listRun] = useApi<StoredBackup[]>()

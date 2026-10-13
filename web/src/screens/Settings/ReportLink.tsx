@@ -29,10 +29,10 @@ function absoluteUrl(reportUrl: string): string {
 }
 
 /**
- * The Laporan publik card (#376, ADR-035; ADR-032 allotted it to Pengaturan
- * in advance): the report's link with Salin, Bagikan, a way to open it and
- * the current month's PDF (#378), and "Buat tautan baru" behind a confirm, the escape hatch for a link that
- * leaked.
+ * The Laporan publik card (ADR-035; ADR-032 allotted it to Pengaturan): the
+ * report's link with Salin, Bagikan, a way to open it and the current
+ * month's PDF, and "Buat tautan baru" behind a confirm, the escape hatch for a
+ * link that leaked.
  *
  * The confirm is a dialog addressed by `?edit=report:new` like every other
  * Pengaturan dialog (ADR-032: the URL is the source of truth). Replacing the
@@ -52,9 +52,9 @@ export default function ReportLink() {
 
   const fund = loadState.data ?? null
 
-  // 'report' is this section's own prefix (dialogTarget.ts); `new` is its
-  // only value. Anything else carrying the prefix is cleared once, and a
-  // sibling's value is never touched.
+  // 'report' is this section's prefix (dialogTarget.ts); `new` is its only
+  // value. Anything else carrying the prefix is cleared once, and a sibling's
+  // value is never touched.
   const target = parseDialogTarget('report', value)
   const isOwn = target.kind !== 'foreign'
   const confirming = target.kind === 'new'
@@ -83,8 +83,8 @@ export default function ReportLink() {
         open={confirming && fund !== null}
         onClose={close}
         onRenewed={(updated) => {
-          // Straight into the card's own state: no second fetch, and the old
-          // link is never on screen once the new one exists.
+          // Straight into the card's state: no second fetch, and the old link
+          // is never on screen once the new one exists.
           void loadRun(() => Promise.resolve(updated), { silent: true })
           close()
         }}
@@ -110,8 +110,8 @@ function LinkActions({ url, reportUrl, onRenew }: { url: string; reportUrl: stri
     try {
       await navigator.clipboard.writeText(url)
     } catch {
-      // No clipboard permission (or no secure context): the link is on
-      // screen and selectable, so there is nothing to report.
+      // No clipboard permission (or no secure context): the link is on screen
+      // and selectable, so there is nothing to report.
       return
     }
     setCopiedUrl(url)
@@ -123,8 +123,8 @@ function LinkActions({ url, reportUrl, onRenew }: { url: string; reportUrl: stri
     try {
       await navigator.share({ title: text.shareTitle, url })
     } catch {
-      // The treasurer closing the share sheet rejects with AbortError; that
-      // is a choice, not a failure.
+      // Closing the share sheet rejects with AbortError; that is a choice, not
+      // a failure.
     }
   }
 
@@ -165,13 +165,13 @@ function LinkActions({ url, reportUrl, onRenew }: { url: string; reportUrl: stri
 }
 
 /**
- * Unduh PDF (#378, #475). Never a link to /report/.../pdf: an installed
- * PWA's scope is `/`, so iOS opens that path inside the app's own window -
- * `download` and `target` both ignored - and the PDF replaces the shell with
- * no way back. The app fetches the file itself and saves it from a `blob:`
- * URL, which sits outside the scope: the installed iOS app shows it in its
- * file viewer (close, back, and Share for Files, Print, WhatsApp) and returns
- * to Uruni on close; a desktop browser simply downloads it.
+ * Unduh PDF. Never a link to /report/.../pdf: an installed PWA's scope is `/`,
+ * so iOS opens that path inside the app's window - `download` and `target`
+ * both ignored - and the PDF replaces the shell with no way back. The app
+ * fetches the file and saves it from a `blob:` URL, which sits outside the
+ * scope: the installed iOS app shows it in its file viewer (close, back, and
+ * Share for Files, Print, WhatsApp) and returns to Uruni on close; a desktop
+ * browser simply downloads it.
  */
 function PdfButton({ reportUrl }: { reportUrl: string }) {
   const [busy, setBusy] = useState(false)
@@ -209,7 +209,7 @@ function PdfButton({ reportUrl }: { reportUrl: string }) {
 }
 
 /** The confirm. The consequence is named in terracotta, never alarm-red
- * (ADR-032), and the dialog's own X is its only close besides Batal. */
+ * (ADR-032), and the dialog's X is its only close besides Batal. */
 function RenewDialog({
   open,
   onClose,

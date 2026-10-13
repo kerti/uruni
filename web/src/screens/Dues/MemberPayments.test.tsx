@@ -37,10 +37,10 @@ function transaction(overrides: Record<string, unknown>) {
 }
 
 // One payment for this member and period, one for another period, one for
-// another member, and a kind='normal' row - only the first belongs here.
-// #225 moved the member_id/dues_period filter server-side, so this fixture
-// is deliberately the *unfiltered* set the stub below filters from, the
-// same way the real GET /api/transactions?member_id=&dues_period= would.
+// another member, and a kind='normal' row - only the first belongs here. The
+// member_id/dues_period filter is server-side, so this fixture is the
+// *unfiltered* set the stub below filters from, as the real
+// GET /api/transactions?member_id=&dues_period= would.
 const rows = [
   transaction({ id: 10 }),
   transaction({ id: 11, dues_period: '2026-02' }),
@@ -48,10 +48,10 @@ const rows = [
   transaction({ id: 13, kind: 'normal', member_id: null, dues_period: null }),
 ]
 
-// stubTransactions filters `body` by the request's own member_id/dues_period
-// query params before answering, mirroring the server (#225) - a test
-// against this proves MemberPayments passes those params through, not that
-// it filters client-side (which #225 made illegal for a paged list).
+// stubTransactions filters `body` by the request's member_id/dues_period
+// query params before answering, mirroring the server - a test against this
+// proves MemberPayments passes those params through, not that it filters
+// client-side (illegal for a paged list).
 function stubTransactions(body: Record<string, unknown>[] = rows) {
   return vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
     const url = typeof input === 'string' ? input : input.toString()
@@ -72,8 +72,8 @@ function stubTransactions(body: Record<string, unknown>[] = rows) {
 }
 
 /** formatIDR puts a non-breaking space after "Rp", which testing-library's
- * own string matchers normalize away - this one reads el.textContent, so the
- * NBSP is compared as-is. Same helper shape as Status.test.tsx's. */
+ * string matchers normalize away - this one reads el.textContent, so the NBSP
+ * is compared as-is. */
 function amountMatcher(amount: number) {
   return (_content: string, el: Element | null) => el?.tagName === 'SPAN' && el.textContent === formatIDR(amount)
 }
@@ -108,9 +108,9 @@ describe('MemberPayments', () => {
     const body = JSON.parse(String((post?.[1] as RequestInit | undefined)?.body))
     // ADR-029: only a date and a note ever cross the wire.
     expect(Object.keys(body).sort()).toEqual(['note', 'occurred_on'])
-    // #257: nothing generated is ever stored - a blank reason sends null,
-    // never a derived default. The row explains itself through
-    // TransactionList's own display label instead.
+    // Nothing generated is ever stored - a blank reason sends null, never a
+    // derived default. The row explains itself through TransactionList's
+    // display label.
     expect(body.note).toBeNull()
   })
 

@@ -22,15 +22,15 @@ import type { LatestReconciliation, OpenReconciliationLine } from '@/lib/reconci
 import type { Transaction } from '@/lib/transactions'
 
 /** How many of the most recent transactions the recent-activity list shows -
- * a client-side slice of GET /api/transactions's first page, which is
- * already newest-first (#225). */
+ * a client-side slice of GET /api/transactions's first page, which is already
+ * newest-first. */
 const RECENT_ACTIVITY_COUNT = 5
 
 interface HomeData {
   balances: Balances
-  // Only the purpose_ids of still-open envelopes (GET /api/incidentals -
-  // M6.33) - the piece GET /api/balances's purposeBalanceResponse does not
-  // carry, since closed_on lives on the incidental row, not the balance.
+  // Only the purpose_ids of still-open envelopes (GET /api/incidentals) - the
+  // piece GET /api/balances does not carry, since closed_on lives on the
+  // incidental row, not the balance.
   openIncidentals: Incidental[]
   openLines: OpenReconciliationLine[]
   latest: LatestReconciliation | null
@@ -38,19 +38,17 @@ interface HomeData {
 }
 
 /**
- * The home screen (M6.9, PRD section 7.7): the everyday-loop landing page reached
+ * The home screen (PRD section 7.7): the everyday-loop landing page reached
  * at "/" once a fund exists (App.tsx's AuthedGate). Order per ADR-032 -
  * balance hero, per-location rows, reconciliation banner + last-checked,
- * purpose breakdown, recent activity. Navigation is Shell's footer
- * (M6.15) and the post-record success banner is App.tsx's, not this
- * screen's - see those files' own comments. The reconciliation banner is
- * the one destination home still owns, per M6.10's ruling that the banner
- * IS reconcile's affordance.
+ * purpose breakdown, recent activity. Navigation is Shell's footer and the
+ * post-record success banner is App.tsx's, not this screen's. The
+ * reconciliation banner is the one destination home owns: it IS reconcile's
+ * affordance.
  *
  * `refetchKey` changes whenever App.tsx's router state carries a fresh
- * "recorded" navigation (a successful POST /api/transactions just
- * happened), so a new entry is visible in recent activity without a manual
- * refresh, without this screen needing any router knowledge of its own.
+ * "recorded" navigation, so a new entry is visible in recent activity without
+ * a manual refresh and without this screen needing router knowledge.
  */
 export default function Home({
   refetchKey,
@@ -62,23 +60,19 @@ export default function Home({
 }: {
   refetchKey: unknown
   onReconcile: () => void
-  /** A tap on one of the purpose-breakdown's incidental rows (M6.33) -
-   * carries that envelope's purpose id, mirroring the record form's own
-   * `onRecordFor` contract (Incidentals.tsx). Kas Utama and Titipan rows
-   * have no envelope to open, so they call onViewTransactionsFor instead.
-   * Router-agnostic, same caller-owns-navigation contract as the
-   * callbacks below. */
+  /** A tap on one of the purpose-breakdown's incidental rows - carries that
+   * envelope's purpose id, mirroring the record form's `onRecordFor`
+   * (Incidentals.tsx). Kas Utama and Titipan rows have no envelope to open, so
+   * they call onViewTransactionsFor instead. Router-agnostic: the caller owns
+   * navigation, as for the callbacks below. */
   onOpenIncidental: (purposeId: number) => void
   /** A tap on the Kas Utama or a Titipan row: Riwayat's Transaksi tab
-   * filtered to that purpose (#262's `?purpose=<id>`). Same
-   * caller-owns-navigation contract as the callbacks around it. */
+   * filtered to that purpose (`?purpose=<id>`). */
   onViewTransactionsFor: (purposeId: number) => void
-  /** Riwayat's Transaksi tab (M6.23) - the "lihat semua" link below. Same
-   * caller-owns-navigation contract as the two callbacks above: this screen
-   * stays router-agnostic and App.tsx supplies the actual navigate() call. */
+  /** Riwayat's Transaksi tab - the "lihat semua" link below. App.tsx supplies
+   * the actual navigate() call. */
   onViewHistory: () => void
-  /** The owed-to-members row (#406): Riwayat's Talangan tab, outstanding
-   * view. Same caller-owns-navigation contract. */
+  /** The owed-to-members row: Riwayat's Talangan tab, outstanding view. */
   onViewOwed: () => void
 }) {
   const [state, run] = useApi<HomeData>()
@@ -90,10 +84,9 @@ export default function Home({
       listOpenReconciliationLines(),
       listTransactions(),
       // A fresh fund has never been reconciled - GET
-      // /api/reconciliations/latest answers 404 `not_found` for that, a
-      // normal first-run state (reconciliations.go's latestReconciliation),
-      // not a load failure. Any other error still fails the whole load,
-      // same as the other three calls.
+      // /api/reconciliations/latest answers 404 `not_found` for that, a normal
+      // first-run state, not a load failure. Any other error still fails the
+      // whole load, as for the other three calls.
       getLatestReconciliation().catch((err: unknown) => {
         if (err instanceof ApiError && err.code === 'not_found') return null
         throw err
@@ -105,23 +98,21 @@ export default function Home({
   useEffect(() => {
     void run(loadHomeData)
     // run is a stable useCallback (useApi.ts); refetchKey is the deliberate
-    // extra dependency that makes a fresh "recorded" navigation reload this
-    // screen's data.
+    // extra dependency that makes a fresh "recorded" navigation reload.
   }, [run, refetchKey])
 
   // Re-read the fund whenever the app comes back to the foreground.
   //
-  // On iOS an installed PWA is usually evicted while it is in the
-  // background, so returning to it is a cold relaunch and this screen
-  // remounts with fresh data anyway - but that is memory pressure, not a
-  // guarantee. Switch back quickly, or resume on Android or a desktop, and
-  // the app comes back warm: same React tree, same numbers, however old
-  // they are. A stale balance looks exactly like a current one, which is
-  // the one thing this screen must never do (PRD section 7.7).
+  // On iOS an installed PWA is usually evicted while in the background, so
+  // returning is a cold relaunch and this screen remounts with fresh data
+  // anyway - but that is memory pressure, not a guarantee. Switch back
+  // quickly, or resume on Android or a desktop, and the app comes back warm:
+  // same React tree, same numbers, however old. A stale balance looks exactly
+  // like a current one, which is the one thing this screen must never do
+  // (PRD section 7.7).
   //
   // Silent, so an app switch never blanks the screen to "Memuat..." and a
-  // moment without signal never replaces it with ErrorState - see
-  // RunOptions.silent.
+  // moment without signal never replaces it with ErrorState (RunOptions.silent).
   useEffect(() => {
     function refreshWhenVisible() {
       if (document.visibilityState === 'visible') void run(loadHomeData, { silent: true })
@@ -139,27 +130,24 @@ export default function Home({
   }
 
   const { balances, openIncidentals, openLines, latest, transactions } = state.data
-  // GET /api/transactions's first page is already newest-first (#225) - no
-  // more reversing a client-side slice of an oldest-first list.
+  // GET /api/transactions's first page is already newest-first.
   const recentTransactions = transactions.slice(0, RECENT_ACTIVITY_COUNT)
 
-  // A transaction row carries purpose_id, not a purpose name - and
-  // GET /api/balances already answers with every purpose and account the
-  // fund has, names included. So "what was this entry?" costs a lookup, not
-  // another request. A member's name already rides on the transaction row
-  // (member_name).
+  // A transaction row carries purpose_id, not a name - and GET /api/balances
+  // answers with every purpose and account the fund has, names included, so
+  // "what was this entry?" costs a lookup, not another request. A member's
+  // name already rides on the row (member_name).
   const purposeNames = new Map(balances.purposes.map((purpose) => [purpose.id, purpose.name]))
 
-  // The purpose breakdown (M6.33, PRD section 7.7, ADR-032): Kas Utama
-  // (`kind === 'main'`) never appears here - it is the hero above - and a
-  // closed incidental drops off the moment openIncidentals no longer names
-  // it. Titipan has no open/closed concept at all, so every pass_through
-  // purpose always qualifies.
+  // The purpose breakdown (PRD section 7.7, ADR-032): Kas Utama
+  // (`kind === 'main'`) is the hero above, and a closed incidental drops off
+  // once openIncidentals no longer names it. Titipan has no open/closed
+  // concept, so every pass_through purpose qualifies.
   const openIncidentalIds = new Set(openIncidentals.map((incidental) => incidental.purpose_id))
-  // Kas Utama first (#387): the hero is the fund total, envelopes and
-  // Titipan included, so once money is allocated into envelopes (ADR-036)
-  // this row is the only place she sees what Kas Utama itself has left -
-  // and the only place its ADR-031 negative shows.
+  // Kas Utama first: the hero is the fund total, envelopes and Titipan
+  // included, so once money is allocated into envelopes (ADR-036) this row is
+  // the only place she sees what Kas Utama itself has left - and its ADR-031
+  // negative.
   const purposeRows = [
     ...balances.purposes.filter((purpose) => purpose.kind === 'main'),
     ...balances.purposes.filter(
@@ -238,9 +226,9 @@ export default function Home({
           <ul className="flex flex-col gap-2">
             {purposeRows.map((purpose: PurposeBalance) => (
               // Every row opens something, so every row is a button with a
-              // chevron: an open envelope opens that envelope (Incidentals.tsx's
-              // detail view, ?purpose=<id>); Kas Utama and Titipan have no
-              // envelope, so they open their own history in Riwayat.
+              // chevron: an open envelope opens its detail view
+              // (Incidentals.tsx, ?purpose=<id>); Kas Utama and Titipan open
+              // their own history in Riwayat.
               <li key={purpose.id}>
                 <button
                   type="button"
@@ -340,7 +328,7 @@ export default function Home({
  * The hero's type size, stepped down by how wide the figure is so it always
  * fits the card on one line: 36px for everyday figures, smaller as the
  * formatted figure grows toward Rp 999.999.999.999 and its minus (19
- * characters). Never a wrap or an ellipsis inside the number (#540).
+ * characters). Never a wrap or an ellipsis inside the number.
  */
 function heroSize(figure: string): string {
   if (figure.length <= 15) return 'text-[36px]'
@@ -350,12 +338,11 @@ function heroSize(figure: string): string {
 }
 
 /**
- * A purpose-breakdown row's amount (M6.33): a negative balance - a
- * shortfall an incidental's disbursements ran ahead of its collections,
- * covered from Kas Utama per ADR-031 - is legible without ever reading as
- * an alarm. `--attention` (terracotta) on the figure is the whole
- * treatment: no icon, no extra word, same restraint as the reconciliation
- * banner's own "selisih" state.
+ * A purpose-breakdown row's amount: a negative balance - a shortfall an
+ * incidental's disbursements ran ahead of its collections, covered from Kas
+ * Utama per ADR-031 - is legible without reading as an alarm. `--attention`
+ * (terracotta) on the figure is the whole treatment: no icon, no extra word,
+ * the restraint of the reconciliation banner's "selisih" state.
  */
 function PurposeAmount({ balance }: { balance: number }) {
   return <span className={`tabular font-medium ${balance < 0 ? 'text-attention-text' : ''}`}>{formatIDR(balance)}</span>

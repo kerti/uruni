@@ -23,10 +23,10 @@ case "$f" in
     command -v gofmt >/dev/null 2>&1 && gofmt -w "$f" >/dev/null 2>&1 || true
     ;;
   *.ts|*.tsx|*.js|*.jsx|*.css)
-    # Call the installed binaries directly. `npx --prefix web <tool>` does NOT
-    # redirect npx's local-bin resolution, so on a miss npx falls through to
-    # fetching the package from the registry - a silent network install (and a
-    # possible hang) inside an edit hook.
+        # Call the installed binaries directly. `npx --prefix web <tool>` does NOT
+        # redirect npx's local-bin resolution, so on a miss npx falls through to the
+        # registry - a silent network install (and a possible hang) inside an edit
+        # hook.
     [ -x web/node_modules/.bin/prettier ] &&
       web/node_modules/.bin/prettier --write "$f" >/dev/null 2>&1 || true
     ;;

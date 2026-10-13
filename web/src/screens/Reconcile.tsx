@@ -29,14 +29,13 @@ import type { Transaction } from '@/lib/transactions'
 const text = copy.reconciliation
 
 /** How many of the most recent transactions the recent-activity list shows -
- * the same client-side slice of GET /api/transactions's first page
- * Home.tsx already does (#225: already newest-first, no reversing needed),
- * reused here rather than re-derived so the two screens agree on what
+ * the same client-side slice of GET /api/transactions's first page (already
+ * newest-first) that Home.tsx takes, so the two screens agree on what
  * "recent" means. */
 const RECENT_ACTIVITY_COUNT = 5
 
 /** Local YYYY-MM-DD - never toISOString(), which is UTC and can read as
- * yesterday's date in WIB. Same helper as RecordTransaction.tsx's own. */
+ * yesterday's date in WIB. */
 function todayISODate(): string {
   const now = new Date()
   const mm = String(now.getMonth() + 1).padStart(2, '0')
@@ -46,10 +45,9 @@ function todayISODate(): string {
 
 type Resolution = 'entry_added' | 'adjusted' | 'left_open'
 
-/** One active account's count-in-progress. `touched` is what tells "she
- * hasn't looked at this location yet" apart from "she counted it and it
- * really holds zero" - AmountInput's own 0-means-blank display can't carry
- * that distinction on its own. */
+/** One active account's count-in-progress. `touched` tells "she hasn't looked
+ * at this location yet" apart from "she counted it and it really holds zero" -
+ * AmountInput's 0-means-blank display can't carry that distinction. */
 interface LineState {
   touched: boolean
   actualAmount: number
@@ -75,10 +73,10 @@ function emptyLine(mainPurposeId: number | null): LineState {
 }
 
 /** Defaults applied the moment a resolution button is pressed: amount and
- * direction read off the just-computed gap (diff = actual - recorded, same
- * sign PRD/ReconciliationBanner.tsx already give that figure), so the
- * common case - the fix squares the gap exactly - needs no typing. Nothing
- * stops her editing them afterward; see PurposePicker/AmountInput below. */
+ * direction read off the just-computed gap (diff = actual - recorded, the
+ * sign PRD/ReconciliationBanner.tsx give that figure), so the common case -
+ * the fix squares the gap exactly - needs no typing. She can edit them
+ * afterward. */
 function resolutionDefaults(resolution: Resolution, diff: number, mainPurposeId: number | null): Partial<LineState> {
   if (resolution === 'left_open') {
     return { resolution, fixAmount: 0, fixNote: '' }
@@ -97,8 +95,8 @@ interface ReconcileData {
   accounts: Account[]
   purposes: Purpose[]
   /** What a fix may be tagged to - `?selectable=true`, so never a closed
-   * amplop, which the server refuses (ADR-031, #473). `purposes` stays the
-   * full list, for naming rows already posted. */
+   * amplop, which the server refuses (ADR-031). `purposes` stays the full
+   * list, for naming rows already posted. */
   selectablePurposes: Purpose[]
   balances: Balances
   transactions: Transaction[]
@@ -116,31 +114,30 @@ async function loadReconcileData(): Promise<ReconcileData> {
 }
 
 /**
- * The reconcile screen (M6.10, PRD section 7.8: "the heart of the product").
- * Enter what's actually in each active location, preview the gap against
- * the recorded balance, choose how to resolve it, submit every count in one
- * POST /api/reconciliations, then confirm from that response.
+ * The reconcile screen (PRD section 7.8: "the heart of the product"). Enter
+ * what's actually in each active location, preview the gap against the
+ * recorded balance, choose how to resolve it, submit every count in one POST
+ * /api/reconciliations, then confirm from that response.
  *
- * The gap preview here is client-side arithmetic only, purely to drive
- * which resolution buttons make sense before she picks one - the server is
- * the sole judge of a "matched" claim (it rejects one whose real difference
- * isn't 0, internal/ledger/reconciliation.go:185-188) and the confirmation
- * below always renders from the POST response's own lines, never from this
- * preview. If a submit is rejected for exactly that reason - a transaction
- * landed between the count and the submit - the numbers are re-read and she
- * is asked to resolve again; nothing is silently resubmitted (see
- * handleSubmit's catch below).
+ * The gap preview is client-side arithmetic only, purely to drive which
+ * resolution buttons make sense before she picks one - the server is the sole
+ * judge of a "matched" claim (it rejects one whose real difference isn't 0,
+ * internal/ledger/reconciliation.go:185-188) and the confirmation always
+ * renders from the POST response's lines, never from this preview. If a
+ * submit is rejected for exactly that reason - a transaction landed between
+ * the count and the submit - the numbers are re-read and she is asked to
+ * resolve again; nothing is silently resubmitted (see handleSubmit's catch).
  *
  * Retired accounts (`inactive_on` set) never appear in the count list, and
  * every active one does: POST /api/reconciliations refuses a count naming a
  * retired location (account_inactive) and one that leaves out an active
- * location (reconciliation_location_missing, #444), so this list and the
- * server agree on exactly which locations a Cek kas counts.
+ * location (reconciliation_location_missing), so this list and the server
+ * agree on which locations a Cek kas counts.
  *
- * onDone/onCancel mirror RecordTransaction.tsx's own contract: installed
+ * onDone/onCancel mirror RecordTransaction.tsx's contract: installed
  * standalone there is no browser back button, so both "finished" and
  * "leaving without finishing" need their own way out, owned by the caller
- * (App.tsx), not this screen.
+ * (App.tsx).
  */
 export default function Reconcile({ onDone, onCancel }: { onDone: () => void; onCancel: () => void }) {
   const [loadState, loadRun] = useApi<ReconcileData>()
@@ -155,9 +152,9 @@ export default function Reconcile({ onDone, onCancel }: { onDone: () => void; on
     // loadRun is a stable useCallback (useApi.ts); fires once on mount.
   }, [loadRun])
 
-  // Seeds a LineState for every active account once the load succeeds -
-  // only for accounts that don't already have one, so a reload after the
-  // stale-notice path (below) never clobbers what she already typed.
+  // Seeds a LineState for every active account once the load succeeds - only
+  // for accounts that don't have one, so a reload after the stale-notice path
+  // (below) never clobbers what she typed.
   useEffect(() => {
     if (loadState.status !== 'success' || !loadState.data) return
     const mainPurposeId = loadState.data.purposes.find((p) => p.kind === 'main')?.id ?? null
@@ -195,8 +192,7 @@ export default function Reconcile({ onDone, onCancel }: { onDone: () => void; on
   const activeAccounts = data.accounts.filter((a) => a.inactive_on === null)
   const recordedByAccount = new Map(data.balances.accounts.map((a) => [a.id, a.balance]))
   const mainPurposeId = data.purposes.find((p) => p.kind === 'main')?.id ?? null
-  // GET /api/transactions's first page is already newest-first (#225) - no
-  // more reversing a client-side slice of an oldest-first list.
+  // GET /api/transactions's first page is already newest-first.
   const recentTransactions = data.transactions.slice(0, RECENT_ACTIVITY_COUNT)
   const purposeNames = new Map(data.purposes.map((p) => [p.id, p.name]))
 
@@ -221,8 +217,8 @@ export default function Reconcile({ onDone, onCancel }: { onDone: () => void; on
       if (!line.resolution) return false
       if (line.resolution === 'left_open') return true
       if (!fixIsValid(line)) return false
-      // A plug closes the whole gap or the server refuses it (#498); an
-      // entry may close only part of it.
+      // A plug closes the whole gap or the server refuses it; an entry may
+      // close only part of it.
       return line.resolution !== 'adjusted' || fixRemainder(diff, line.fixDirection, line.fixAmount) === 0
     })
 
@@ -248,9 +244,9 @@ export default function Reconcile({ onDone, onCancel }: { onDone: () => void; on
       return {
         accountId: account.id,
         actualAmount: line.actualAmount,
-        // canSubmit already proved resolution is 'entry_added' | 'adjusted'
-        // and fixIsValid here - TypeScript can't see that guarantee, so it
-        // is re-asserted rather than re-checked.
+        // canSubmit already proved resolution is 'entry_added' | 'adjusted' and
+        // fixIsValid here - TypeScript can't see that, so it is re-asserted
+        // rather than re-checked.
         resolution: line.resolution as 'entry_added' | 'adjusted',
         fix: {
           purposeId: line.fixPurposeId as number,
@@ -275,15 +271,15 @@ export default function Reconcile({ onDone, onCancel }: { onDone: () => void; on
       const result = await takeReconciliation(null, submitted)
       setDetail(result)
     } catch (err) {
-      // #507: a lost response may still have saved the count; re-read first.
+      // A lost response may still have saved the count; re-read first.
       await settleUncertainWrite(err, () => loadRun(loadReconcileData, { silent: true }))
       const apiError = err instanceof ApiError ? err : new ApiError('unknown_error', err instanceof Error ? err.message : String(err))
-      // The location list itself went stale (#444): a location was added or
-      // retired after this screen loaded, and the server refuses a count
-      // that is not exactly the active ones. Re-read so the list is right
-      // again - a new location gets an empty line, a retired one drops out,
-      // nothing else she typed is touched - and say what happened. If the
-      // re-read fails too, the submit error alone still stands.
+      // The location list went stale: a location was added or retired after
+      // this screen loaded, and the server refuses a count that is not exactly
+      // the active ones. Re-read so the list is right again - a new location
+      // gets an empty line, a retired one drops out, nothing she typed is
+      // touched - and say what happened. If the re-read fails too, the submit
+      // error alone stands.
       if (apiError.code === 'account_inactive' || apiError.code === 'reconciliation_location_missing') {
         setSubmitError(apiError)
         await loadRun(loadReconcileData, { silent: true }).catch(() => undefined)
@@ -295,20 +291,19 @@ export default function Reconcile({ onDone, onCancel }: { onDone: () => void; on
       }
 
       // `invalid_argument` does not identify what went wrong: every ledger
-      // validation failure reaches the client under that one code with a
-      // generic message (internal/http/errors.go:53), so a malformed fix
-      // and the stale-count race are indistinguishable from the response
-      // alone. Ask the ledger instead of guessing - re-read the balances
-      // and see whether a line submitted as "matched" still has a
-      // difference of zero. If one doesn't, the race is what happened;
-      // if they all do, it was the request itself and saying otherwise
-      // would send her hunting for a transaction nobody posted.
-      // The re-read can fail too - the network can drop between the
-      // rejected POST and this GET. Without this guard the rejection
-      // escapes handleSubmit (the caller is `void handleSubmit(e)`, so it
-      // becomes a silent unhandled rejection): the form would re-enable
-      // with no notice at all, which reads as "my submit worked". The
-      // submit is what failed, so that is what gets reported.
+      // validation failure reaches the client under that code with a generic
+      // message (internal/http/errors.go:53), so a malformed fix and the
+      // stale-count race are indistinguishable from the response alone. Ask
+      // the ledger instead of guessing - re-read the balances and see whether a
+      // line submitted as "matched" still has a difference of zero. If one
+      // doesn't, the race is what happened; if they all do, it was the request
+      // itself and saying otherwise would send her hunting for a transaction
+      // nobody posted. The re-read can fail too (the network can drop between
+      // the rejected POST and this GET); without this guard the rejection
+      // escapes handleSubmit (the caller is `void handleSubmit(e)`, a silent
+      // unhandled rejection) and the form re-enables with no notice, which
+      // reads as "my submit worked". The submit is what failed, so that is
+      // what gets reported.
       let fresh: ReconcileData
       try {
         fresh = await loadReconcileData()
@@ -322,12 +317,12 @@ export default function Reconcile({ onDone, onCancel }: { onDone: () => void; on
         (count) => count.resolution === 'matched' && count.actualAmount - (freshRecorded.get(count.accountId) ?? 0) !== 0,
       )
 
-      // Committed through loadRun so the screen re-renders against the
-      // ledger as it is now. Nothing she typed is discarded: `matched` is
-      // never stored on a line, it is derived from a zero gap at submit
-      // time, so a line the ledger moved under her turns back into a gap
-      // by itself and canSubmit will require her to resolve it. Wiping the
-      // resolutions she already chose for other lines would be pure loss.
+      // Committed through loadRun so the screen re-renders against the ledger
+      // as it is now. Nothing she typed is discarded: `matched` is never stored
+      // on a line, it is derived from a zero gap at submit time, so a line the
+      // ledger moved under her turns back into a gap by itself and canSubmit
+      // requires her to resolve it. Wiping the resolutions she chose for other
+      // lines would be pure loss.
       await loadRun(() => Promise.resolve(fresh), { silent: true })
       if (raced) setStaleNotice(true)
       else setSubmitError(apiError)
@@ -428,12 +423,11 @@ export default function Reconcile({ onDone, onCancel }: { onDone: () => void; on
   )
 }
 
-/** One counted location: the recorded figure, the actual-amount input, and
- * - once she's typed something and a gap remains - the resolution choice
- * and, for entry_added/adjusted, the fix fields. Composed from the same
- * primitives RecordTransaction.tsx uses (AmountInput, PurposePicker) rather
- * than reusing that screen itself - the fix has no account field of its
- * own, the counted line already names it. */
+/** One counted location: the recorded figure, the actual-amount input, and -
+ * once she's typed something and a gap remains - the resolution choice and,
+ * for entry_added/adjusted, the fix fields. Composed from the primitives
+ * RecordTransaction.tsx uses (AmountInput, PurposePicker) rather than that
+ * screen itself - the fix has no account field, the counted line names it. */
 function AccountCountRow({
   account,
   recorded,
@@ -455,15 +449,13 @@ function AccountCountRow({
   const showGap = line.touched && diff !== 0
   const showMatched = line.touched && diff === 0
   const showFixFields = line.resolution === 'entry_added' || line.resolution === 'adjusted'
-  // What would still be open if she saved now (#498), live as she types.
+  // What would still be open if she saved now, live as she types.
   const remaining = showFixFields ? fixRemainder(diff, line.fixDirection, line.fixAmount) : 0
 
   // aria-labelledby rather than a <legend>: a legend renders into the
-  // fieldset's border, which is exactly what made the location name look
-  // like it was sitting on the card's edge. This keeps the grouping
-  // semantics a screen reader needs while letting the name and the recorded
-  // figure be a real card header - they are the line's identity and belong
-  // together, above the input.
+  // fieldset's border, which made the location name look like it sat on the
+  // card's edge. This keeps the grouping semantics a screen reader needs while
+  // the name and the recorded figure form a real card header, above the input.
   return (
     <fieldset
       aria-labelledby={`reconcile-account-${account.id}`}
@@ -516,7 +508,7 @@ function AccountCountRow({
                   // gap-derived defaults, so without this guard a stray second
                   // tap - easy on a phone, and these read as toggles - would
                   // silently discard a custom amount, a backdated date or a
-                  // note she had already typed for this line.
+                  // note she had typed for this line.
                   onClick={() => {
                     if (line.resolution !== option) onChange(resolutionDefaults(option, diff, mainPurposeId))
                   }}
@@ -535,8 +527,8 @@ function AccountCountRow({
                     id={`reconcile-fix-direction-${account.id}`}
                     role="group"
                     aria-label={copy.record.directionLabel}
-                    // bg-background: this sits inside the fix panel's own
-                    // bg-muted, where the track's default bg-muted would vanish.
+                    // bg-background: this sits inside the fix panel's bg-muted,
+                    // where the track's default bg-muted would vanish.
                     className={segmentedTrackClass(2, 'bg-background')}
                   >
                     <Button
@@ -630,21 +622,19 @@ function AccountCountRow({
 }
 
 /**
- * The confirmation state, rendered only from POST /api/reconciliations's own
- * response - never from the pre-submit preview above (the orchestrator's own
- * ruling). "Cocok" only when nothing is left open: a line whose fix squared
- * the whole gap is not an open gap anymore even though its stored
- * difference_amount is still whatever was actually found. What counts toward
- * the discrepancy figure shown here is each line's remainder_amount (#498) -
- * the whole gap for left_open, whatever an entry_added fix did not cover, 0
- * for a plug or an exact entry - the same figure ReconciliationBanner.tsx
- * reads.
+ * The confirmation state, rendered only from POST /api/reconciliations's
+ * response - never from the pre-submit preview above. "Cocok" only when
+ * nothing is left open: a line whose fix squared the whole gap is not an open
+ * gap even though its stored difference_amount is still what was found. What
+ * counts toward the discrepancy figure shown here is each line's
+ * remainder_amount - the whole gap for left_open, whatever an entry_added fix
+ * did not cover, 0 for a plug or an exact entry - the figure
+ * ReconciliationBanner.tsx reads.
  *
  * Motion: a single 200ms ease-out fade/rise on mount, nothing bouncy
  * (Design-System.md:98-100), disabled outright under prefers-reduced-motion
- * rather than merely shortened - there is no separate reduced-motion
- * duration to fall back to, only "on" or "off". No animation library: a
- * mount-triggered class swap plus Tailwind's transition utilities.
+ * rather than shortened. No animation library: a mount-triggered class swap
+ * plus Tailwind's transition utilities.
  */
 function Confirmation({
   detail,

@@ -9,10 +9,10 @@ import { copy } from '@/copy/id'
 import { formatIsoDate, parseIsoDate, toIsoDate, type DateBounds } from '@/lib/dates'
 import { cn } from '@/lib/utils'
 
-/** The calendar in the design system's own tokens: Forest for the chosen
- * day, 44px day cells for the touch floor. Set on the DayPicker itself -
- * its stylesheet declares these on `.rdp-root`, which beats anything
- * inherited from the popover around it. */
+/** The calendar in the design system's tokens: Forest for the chosen day,
+ * 44px day cells for the touch floor. Set on the DayPicker itself - its
+ * stylesheet declares these on `.rdp-root`, which beats anything inherited
+ * from the popover around it. */
 const calendarStyle = {
   '--rdp-accent-color': 'var(--primary)',
   '--rdp-accent-background-color': 'var(--muted)',
@@ -31,17 +31,17 @@ export const pickerTrigger =
 export const pickerPopover = 'z-50 rounded-xl bg-popover p-3 text-popover-foreground shadow-card ring-1 ring-foreground/10'
 
 /**
- * A date field that reads the same on every phone (#197): the trigger shows
- * the date the way the rest of the app writes it ("1 Oktober 2026"), and a
- * tap opens a calendar in a popover. Replaces `<input type="date">`, whose
- * text is drawn by the platform - "3 Sep 2026" on iOS, "09/03/2026" on
- * Android, "yyyy-mm-dd" on desktop Firefox - and which no CSS can reach.
+ * A date field that reads the same on every phone: the trigger shows the date
+ * as the rest of the app writes it ("1 Oktober 2026"), and a tap opens a
+ * calendar in a popover. Replaces `<input type="date">`, whose text is drawn
+ * by the platform - "3 Sep 2026" on iOS, "09/03/2026" on Android,
+ * "yyyy-mm-dd" on desktop Firefox - and which no CSS can reach.
  *
- * `value` and `onChange` speak the wire format, "YYYY-MM-DD", exactly as the
- * native input did, so swapping it in changes nothing about a form's state.
- * `bounds` is the inclusive range on offer (lib/dates' dateBounds): days
- * outside it are disabled, and the header's month and year lists stop at
- * its ends. The trigger carries `id`, so a `<Label htmlFor>` names it.
+ * `value` and `onChange` speak the wire format, "YYYY-MM-DD", as the native
+ * input did, so swapping it in changes nothing about a form's state. `bounds`
+ * is the inclusive range on offer (lib/dates' dateBounds): days outside it
+ * are disabled, and the header's month and year lists stop at its ends. The
+ * trigger carries `id`, so a `<Label htmlFor>` names it.
  */
 export default function DateField({
   id,

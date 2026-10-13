@@ -21,25 +21,23 @@ import type { Account } from '@/lib/accounts'
 const text = copy.settings.locations
 
 /**
- * The locations section of the settings screen (M6.15, converted to the
- * dialog primitive in M6.28 - ADR-032 "Every non-posting edit is a
- * dialog"): a card list, with add and edit both opening a dialog addressed
- * by `?edit=location:<id>` / `?edit=location:new`.
+ * The locations section of the settings screen (ADR-032 "Every non-posting
+ * edit is a dialog"): a card list, with add and edit both opening a dialog
+ * addressed by `?edit=location:<id>` / `?edit=location:new`.
  *
- * Every location the fund has is listed, retired ones included - this
- * screen is where one gets reinstated. Retiring a location that still holds
- * money is refused (#474, common.errors.account_holds_money), but one retired before that
+ * Every location the fund has is listed, retired ones included - this screen
+ * is where one gets reinstated. Retiring a location that still holds money is
+ * refused (common.errors.account_holds_money), but one retired before that
  * rule, or left negative by a later reversal, may still hold a balance, so
- * home keeps showing it (M6.9). What a retired location drops out
- * of is already handled elsewhere and needs nothing here: AccountPicker
- * filters `inactive_on` rows out of the record form, and Reconcile.tsx does
- * the same for the mandatory count.
+ * home keeps showing it. What a retired location drops out of is handled
+ * elsewhere: AccountPicker filters `inactive_on` rows out of the record form,
+ * and Reconcile.tsx does the same for the mandatory count.
  *
- * Name and kind are both editable, and for the same reason: they are labels
- * on the location, not posted facts. Nothing in internal/ledger branches on
- * kind - the schema's CHECK (kind IN ('cash','bank')) is the only rule it
- * carries - so a location entered as the wrong one is a typo like any
- * other, and correcting either moves nothing already posted.
+ * Name and kind are both editable, for the same reason: they are labels on
+ * the location, not posted facts. Nothing in internal/ledger branches on kind
+ * - the schema's CHECK (kind IN ('cash','bank')) is the only rule - so a
+ * location entered as the wrong one is a typo like any other, and correcting
+ * either moves nothing already posted.
  */
 export default function Locations() {
   const [listState, listRun] = useApi<Account[]>()
@@ -54,21 +52,20 @@ export default function Locations() {
     void listRun(listAccounts)
   }
 
-  // #507: after a write whose response was lost, re-read in place.
+  // After a write whose response was lost, re-read in place.
   const refresh = () => listRun(listAccounts, { silent: true })
 
-  // 'location' is this section's own prefix; anything else on `?edit=`
-  // belongs to a sibling section and comes back `foreign` (dialogTarget.ts).
+  // 'location' is this section's prefix; anything else on `?edit=` belongs to
+  // a sibling section and comes back `foreign` (dialogTarget.ts).
   const target = parseDialogTarget('location', value)
   const editingAccount = target.kind === 'edit' ? (listState.data?.find((a) => a.id === target.id) ?? null) : null
 
   // A `location:` value with an unknown id or a malformed one: strip it once
   // the list has loaded, rather than flash an empty dialog. Never a `foreign`
-  // value - that belongs to a sibling section on this same screen (#263).
-  // `replace` because a dead link is not a real navigation to undo - and
-  // clear(), never close(): right after a delete the reloaded list can land
-  // before close()'s own back navigation does, and a second back would
-  // leave the settings screen.
+  // value - that belongs to a sibling section on this screen. `replace`
+  // because a dead link is not a navigation to undo - and clear(), never
+  // close(): right after a delete the reloaded list can land before close()'s
+  // back navigation does, and a second back would leave the settings screen.
   useEffect(() => {
     if (target.kind === 'foreign' || target.kind === 'new') return
     if (listState.status !== 'success') return
@@ -165,12 +162,11 @@ function KindField({
   )
 }
 
-/** Adding a location after setup (#78: setup asks for the first batch, this
- * is what adds to them afterward). #230's named exception to "dialogs never
- * post" carries an opening balance field here that EditLocationDialog does
- * not get - a location and its opening balance are born together, in the
- * same database transaction, or not at all, and that is only possible the
- * moment the location itself is created. */
+/** Adding a location after setup (setup asks for the first batch). The named
+ * exception to "dialogs never post" carries an opening balance field here
+ * that EditLocationDialog does not get - a location and its opening balance
+ * are born together, in one database transaction, or not at all, which is
+ * only possible when the location is created. */
 function AddLocationDialog({
   open,
   onClose,
@@ -189,9 +185,8 @@ function AddLocationDialog({
 
   const busy = state.status === 'loading'
 
-  // A fresh form every time the dialog opens, so a location added a moment
-  // ago does not leave its name (or balance) sitting in the fields for the
-  // next one.
+  // A fresh form every time the dialog opens, so a location added a moment ago
+  // does not leave its name (or balance) in the fields for the next one.
   useResetWhen(open, () => {
     if (open) {
       setKind('cash')
@@ -209,9 +204,8 @@ function AddLocationDialog({
         const created = await createAccount(
           kind,
           trimmed,
-          // No note is typed here (this dialog has no field for one) - the
-          // row explains itself through TransactionList's own display label
-          // ("Saldo awal - {lokasi}", #257), never through stored text.
+          // No note is typed here (no field for one) - the row explains itself
+          // through TransactionList's display label ("Saldo awal - {lokasi}").
           openingBalance > 0 ? { amount: openingBalance, occurredOn: todayISODate() } : undefined,
         )
         onAdded()
@@ -263,20 +257,20 @@ function AddLocationDialog({
   )
 }
 
-/** Which of the dialog's two destructive actions the footer is confirming,
- * if either - inline, in place, never a second dialog and never
+/** Which of the dialog's two destructive actions the footer is confirming, if
+ * either - inline, in place, never a second dialog and never
  * `window.confirm()` (ADR-032). */
 type ConfirmKind = 'deactivate' | 'delete' | null
 
 /**
  * Rename, retire and delete, all in one dialog. `account` is null only while
- * closing (the row that opened it may already be gone from `listState` by
- * the time the exit animation plays) - the last known account is kept on
- * screen for that window rather than blanking the form mid-close.
+ * closing (the row that opened it may already be gone from `listState` by the
+ * time the exit animation plays) - the last known account stays on screen for
+ * that window rather than blanking the form mid-close.
  *
  * The footer always holds the buttons for the decision on screen: Batal and
- * Simpan while editing, Batal and the confirm action once Nonaktifkan or
- * Hapus has been tapped - with the consequence named just above it.
+ * Simpan while editing, Batal and the confirm action once Nonaktifkan or Hapus
+ * has been tapped - with the consequence named just above it.
  */
 function EditLocationDialog({
   account,
@@ -303,9 +297,9 @@ function EditLocationDialog({
   const busy = state.status === 'loading'
   const inactive = shown?.inactive_on !== null && shown?.inactive_on !== undefined
 
-  // A fresh copy of the account's own fields each time the dialog opens for
-  // it, and the confirm footer starts closed - reopening a dialog never
-  // shows a stale edit or a confirm left mid-flight from last time.
+  // A fresh copy of the account's fields each time the dialog opens for it, and
+  // the confirm footer starts closed - reopening never shows a stale edit or a
+  // confirm left mid-flight.
   useEffect(() => {
     if (open && shown) {
       setName(shown.name)
@@ -362,8 +356,8 @@ function EditLocationDialog({
         // to deactivate or delete, where a stray keystroke would replace the
         // name and a phone would raise its keyboard unasked - so focus lands on
         // the dialog itself (still trapped) until she taps a field. Cancelling
-        // also skips Radix's own fallback to the dialog, which would leave
-        // focus on the card behind the overlay, so it is done here.
+        // also skips Radix's fallback to the dialog, which would leave focus on
+        // the card behind the overlay, so it is done here.
         onOpenAutoFocus={(event) => {
           event.preventDefault()
           ;(event.currentTarget as HTMLElement).focus()

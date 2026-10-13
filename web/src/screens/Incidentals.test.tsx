@@ -53,15 +53,14 @@ function jsonResponse(body: unknown, status = 200) {
 
 type Handler = { match: (method: string, url: string) => boolean; handle: () => Promise<Response> }
 
-/** Routes a stubbed fetch by method + path substring, recording every call */
 /**
+ * Routes a stubbed fetch by method + path substring, recording every call.
  * `participation`, when given, answers every GET .../participation request -
  * checked before `handlers`, never through it: a GET .../participation is a
- * suffix of the same path most tests' own detail handler matches by
- * `u.includes('/api/incidentals/<id>')`, so a plain handler list can never
- * tell the two apart. Omitted, participation answers empty - no expected
- * members, no unexpected ones - which is what every test not about the
- * participation table itself wants.
+ * suffix of the path most tests' detail handler matches by
+ * `u.includes('/api/incidentals/<id>')`. Omitted, participation answers empty
+ * (no expected members, no unexpected ones), which is what every test not
+ * about the participation table wants.
  */
 function routedFetch(handlers: Handler[], participation?: () => Promise<Response>) {
   return vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
@@ -74,19 +73,18 @@ function routedFetch(handlers: Handler[], participation?: () => Promise<Response
 
     const handler = handlers.find((h) => h.match(method, url))
     if (handler) return handler.handle()
-    // The envelope's recent activity (#314) fetches on every render of the
-    // detail; tests about something else get an empty list for it.
+    // The envelope's recent activity fetches on every render of the detail;
+    // tests about something else get an empty list.
     if (method === 'GET' && url.includes('/api/transactions')) return Promise.resolve(jsonResponse({ transactions: [], next_cursor: null }))
-    // The roster (#333: the edit dialog's recipients picker) - tests about
+    // The roster (the edit dialog's recipients picker) - tests about
     // something else get an empty roster.
     if (method === 'GET' && url.includes('/api/members')) return Promise.resolve(jsonResponse({ members: [], next_cursor: null }))
     return Promise.reject(new Error(`unstubbed fetch: ${method} ${url}`))
   })
 }
 
-/** The default GET handler backing every test: the accounts list, fetched
- * once on mount. Envelope list routes are gone with the list view (#263) -
- * this screen is detail-only now, always given a purposeId. */
+/** The default GET handler backing every test: the accounts list, fetched once
+ * on mount. This screen is detail-only, always given a purposeId. */
 function getHandlers() {
   return [
     { match: (m: string, u: string) => m === 'GET' && u.includes('/api/accounts'), handle: () => Promise.resolve(jsonResponse(accounts)) },
@@ -94,16 +92,14 @@ function getHandlers() {
 }
 
 /** Exposes the router's search string: the rename dialog is addressed by
- * `?edit=incidental:<id>` (ADR-032), the same pattern PassThrough.test.tsx
- * asserts on directly. */
+ * `?edit=incidental:<id>` (ADR-032), as PassThrough.test.tsx asserts. */
 function LocationProbe() {
   const location = useLocation()
   return <output data-testid="location-search">{location.search}</output>
 }
 
-/** Incidentals.tsx now reads the URL itself (useDialogParam, #264), so every
- * render needs a Router around it - the same requirement PassThrough.tsx's
- * own renderAt satisfies for its screen. */
+/** Incidentals.tsx reads the URL itself (useDialogParam), so every render
+ * needs a Router around it. */
 function renderIncidentals(node: Parameters<typeof render>[0], entry = '/incidentals') {
   return render(
     <MemoryRouter initialEntries={[entry]}>
@@ -145,10 +141,10 @@ describe('Incidentals', () => {
     expect(screen.getByText(text.detail.collectedLabel)).toBeInTheDocument()
   })
 
-  // The info card reads target, collected, used, remaining, in that order,
-  // and Sisa is the server's balance - not collected minus used, which a
-  // reopened envelope's earlier roll makes wrong (here 300k - 120k would
-  // read 180k, while the envelope holds 30k after its first roll).
+  // The info card reads target, collected, used, remaining, in that order, and
+  // Sisa is the server's balance - not collected minus used, which a reopened
+  // envelope's earlier roll makes wrong (here 300k - 120k would read 180k,
+  // while the envelope holds 30k after its first roll).
   it('shows target, collected, used and remaining in order, remaining from the balance', async () => {
     const detail = { ...openEnvelope, collected_amount: 300_000, disbursed_amount: 120_000, balance_amount: 30_000 }
     vi.stubGlobal(
@@ -193,10 +189,9 @@ describe('Incidentals', () => {
   })
 
   it('hands contribution/disbursement off to the real record form, pre-chosen to this envelope', async () => {
-    // Contributions and disbursements are not this screen's own form - one
-    // action navigates into RecordTransaction.tsx with the envelope's
-    // purpose already picked (App.tsx wires onRecordFor to
-    // /record?purpose=<id>); direction is that form's own toggle.
+    // Contributions and disbursements are not this screen's form - one action
+    // navigates into RecordTransaction.tsx with the envelope's purpose picked
+    // (App.tsx wires onRecordFor to /record?purpose=<id>).
     const detail = { ...openEnvelope, collected_amount: 0, disbursed_amount: 0, balance_amount: 0 }
     vi.stubGlobal(
       'fetch',
@@ -214,17 +209,16 @@ describe('Incidentals', () => {
     await waitFor(() => expect(screen.getByText(text.detail.collectedLabel)).toBeInTheDocument())
 
     await userEvent.click(screen.getByRole('button', { name: text.actions.record }))
-    // Called with no member (#333: the top action row records without one
-    // prefilled - only the participation table's own per-row action names a
-    // member).
+    // Called with no member: the top action row records without one prefilled
+    // - only the participation table's per-row action names a member.
     expect(onRecordFor).toHaveBeenCalledWith(1, undefined)
   })
 
   it('closes an envelope with a zero rollover, shown honestly rather than hidden', async () => {
-    // Collected equals disbursed, so the close rolls nothing - and the
-    // readout is derived from exactly those two figures (#270), which is why
-    // the refetched detail carries the same pair with closed_on set rather
-    // than the close response's rolled_amount being remembered.
+    // Collected equals disbursed, so the close rolls nothing - and the readout
+    // is derived from those two figures, which is why the refetched detail
+    // carries the same pair with closed_on set rather than the close response's
+    // rolled_amount being remembered.
     const detail = { ...openEnvelope, collected_amount: 120_000, disbursed_amount: 120_000, balance_amount: 0, target_amount: null }
     const closed = { ...openEnvelope, closed_on: '2026-09-10' }
     let detailCalls = 0
@@ -263,9 +257,9 @@ describe('Incidentals', () => {
   })
 
   it('sends the close note to the server, and null when the field was left alone', async () => {
-    // The roll is a transfer the treasurer never asks for directly (#210):
-    // without a note it lands in the transaction list as two unexplained
-    // rows. An untouched field is null, never "".
+    // The roll is a transfer the treasurer never asks for directly: without a
+    // note it lands in the transaction list as two unexplained rows. An
+    // untouched field is null, never "".
     const detail = { ...openEnvelope, collected_amount: 120_000, disbursed_amount: 0, balance_amount: 120000, target_amount: null }
     const closed = { ...openEnvelope, closed_on: '2026-09-10' }
     let posted: unknown = null
@@ -277,7 +271,7 @@ describe('Incidentals', () => {
       const url = typeof input === 'string' ? input : input.toString()
       const method = (init?.method ?? 'GET').toUpperCase()
       // Checked before the generic '/api/incidentals/1' branch below - a
-      // participation GET is a suffix of that same path (#333).
+      // participation GET is a suffix of that same path.
       if (method === 'GET' && url.includes('/participation')) return Promise.resolve(jsonResponse({ expected: [], unexpected: [] }))
       if (method === 'GET' && url.includes('/api/transactions'))
         return Promise.resolve(jsonResponse({ transactions: [], next_cursor: null }))
@@ -311,7 +305,7 @@ describe('Incidentals', () => {
       const url = typeof input === 'string' ? input : input.toString()
       const method = (init?.method ?? 'GET').toUpperCase()
       // Checked before the generic '/api/incidentals/1' branch below - a
-      // participation GET is a suffix of that same path (#333).
+      // participation GET is a suffix of that same path.
       if (method === 'GET' && url.includes('/participation')) return Promise.resolve(jsonResponse({ expected: [], unexpected: [] }))
       if (method === 'GET' && url.includes('/api/transactions'))
         return Promise.resolve(jsonResponse({ transactions: [], next_cursor: null }))
@@ -364,8 +358,8 @@ describe('Incidentals', () => {
     await chooseOption(text.close.accountLabel, 'Tunai')
     await userEvent.click(screen.getByRole('button', { name: text.close.submit }))
 
-    // The named 409's own copy is shown, never the English wire message, and
-    // the close form stays open so she can read why.
+    // The named 409's copy is shown, never the English wire message, and the
+    // close form stays open so she can read why.
     await waitFor(() => expect(screen.getByRole('alert').textContent).toBe(text.errors.incidental_already_closed))
     expect(screen.getByText(text.close.heading)).toBeInTheDocument()
   })
@@ -400,7 +394,7 @@ describe('Incidentals', () => {
       const url = typeof input === 'string' ? input : input.toString()
       const method = (init?.method ?? 'GET').toUpperCase()
       // Checked before the generic '/api/incidentals/2' branch below - a
-      // participation GET is a suffix of that same path (#333).
+      // participation GET is a suffix of that same path.
       if (method === 'GET' && url.includes('/participation')) return Promise.resolve(jsonResponse({ expected: [], unexpected: [] }))
       if (method === 'GET' && url.includes('/api/transactions'))
         return Promise.resolve(jsonResponse({ transactions: [], next_cursor: null }))
@@ -424,8 +418,8 @@ describe('Incidentals', () => {
     await userEvent.click(screen.getByRole('button', { name: text.actions.reopen }))
 
     await waitFor(() => expect(screen.getByText(text.reopen.success)).toBeInTheDocument())
-    // Reopened - the same record/close actions any open envelope shows, not
-    // a bare toggle with nothing next.
+    // Reopened - the record/close actions any open envelope shows, not a bare
+    // toggle with nothing next.
     expect(screen.getByRole('button', { name: text.actions.record })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: text.actions.close })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: text.actions.reopen })).not.toBeInTheDocument()
@@ -450,9 +444,9 @@ describe('Incidentals', () => {
     expect(onBack).toHaveBeenCalledTimes(1)
   })
 
-  // #262: a closed envelope is off Beranda (ADR-032), so this link is the
-  // only route it has to its own record - which is why the button is here
-  // for a closed envelope, not only an open one.
+  // A closed envelope is off Beranda (ADR-032), so this link is its only route
+  // to its record - which is why the button is here for a closed envelope, not
+  // only an open one.
   it('links a closed envelope to its own transactions, the only route it has', async () => {
     const detail = { ...closedEnvelope, collected_amount: 200_000, disbursed_amount: 200_000, balance_amount: 0 }
     vi.stubGlobal(
@@ -474,9 +468,8 @@ describe('Incidentals', () => {
     expect(onViewTransactionsFor).toHaveBeenCalledWith(2)
   })
 
-  // #314: the envelope's own recent activity, asked for by purpose - the
-  // same filter "Lihat semua" leads to - so the rows below the actions are
-  // this envelope's and nobody else's.
+  // The envelope's recent activity, asked for by purpose - the filter "Lihat
+  // semua" leads to - so the rows below the actions are this envelope's alone.
   it("lists the envelope's recent transactions, fetched by its purpose", async () => {
     const row = {
       id: 7,
@@ -515,14 +508,12 @@ describe('Incidentals', () => {
     expect(urls.some((u) => u.includes('/api/transactions') && u.includes('purpose_id=2'))).toBe(true)
   })
 
-  // --- The rollover, on every visit (#270) --------------------------------
+  // --- The rollover, on every visit ----------------------------------------
   //
-  // The readout used to live in component state set by the close response,
-  // so it survived exactly one screen-lifetime: a treasurer returning to a
-  // closed envelope saw Terkumpul and Terpakai against a zero balance and
-  // no sentence reconciling them. It is derived from those same two figures
-  // now, so every one of these opens the screen cold - no close is
-  // performed anywhere below.
+  // The readout is derived from the two figures on the detail, not kept in
+  // state set by the close response, so a treasurer returning to a closed
+  // envelope sees a sentence reconciling Terkumpul and Terpakai against a zero
+  // balance. Every test here opens the screen cold - no close is performed.
 
   it("states a closed envelope's rollover on a cold visit, with no close in sight", async () => {
     const detail = { ...closedEnvelope, collected_amount: 10_000, disbursed_amount: 0, balance_amount: 0 }
@@ -540,8 +531,8 @@ describe('Incidentals', () => {
     renderIncidentals(<Incidentals onBack={vi.fn()} onRecordFor={vi.fn()} onViewTransactionsFor={vi.fn()} purposeId={2} />)
     await waitFor(() => expect(screen.getByText(text.detail.collectedLabel)).toBeInTheDocument())
 
-    // The exact walk #270 reported: 10.000 collected, nothing spent, and an
-    // envelope holding nothing - now with the sentence that explains it.
+    // 10.000 collected, nothing spent, an envelope holding nothing - with the
+    // sentence that explains it.
     expect(screen.getByText(text.close.rolledLabel(10_000))).toBeInTheDocument()
     expect(screen.getAllByText(money(10_000))).toHaveLength(2)
   })
@@ -609,8 +600,8 @@ describe('Incidentals', () => {
   })
 
   it('a reopened envelope with a past roll does not claim to have rolled', async () => {
-    // Reopening does not reverse the roll, so the ledger still carries it -
-    // but the envelope is open again and must not read as finished.
+    // Reopening does not reverse the roll, so the ledger still carries it - but
+    // the envelope is open again and must not read as finished.
     const closedDetail = { ...closedEnvelope, collected_amount: 50_000, disbursed_amount: 0, balance_amount: 0 }
     const reopened = { ...closedEnvelope, closed_on: null }
     const reopenedDetail = { ...reopened, collected_amount: 50_000, disbursed_amount: 0, balance_amount: 50000 }
@@ -642,7 +633,7 @@ describe('Incidentals', () => {
     expect(screen.queryByText(text.close.rolledLabel(50_000))).not.toBeInTheDocument()
   })
 
-  // --- Rename (#264): correcting a mistyped occasion ---------------------
+  // --- Rename: correcting a mistyped occasion ------------------------------
 
   it('opens the rename dialog, addressed by ?edit=incidental:<id>, when Ubah nama is clicked', async () => {
     const detail = { ...openEnvelope, collected_amount: 0, disbursed_amount: 0, balance_amount: 0 }
@@ -676,7 +667,7 @@ describe('Incidentals', () => {
       const url = typeof input === 'string' ? input : input.toString()
       const method = (init?.method ?? 'GET').toUpperCase()
       // Checked before the generic '/api/incidentals/1' branch below - a
-      // participation GET is a suffix of that same path (#333).
+      // participation GET is a suffix of that same path.
       if (method === 'GET' && url.includes('/participation')) return Promise.resolve(jsonResponse({ expected: [], unexpected: [] }))
       if (method === 'GET' && url.includes('/api/transactions'))
         return Promise.resolve(jsonResponse({ transactions: [], next_cursor: null }))
@@ -713,18 +704,16 @@ describe('Incidentals', () => {
     })
 
     // The dialog closes, the <h1> shows the corrected occasion fetched fresh
-    // off the server (never the dialog's own local state), and the success
-    // message reaches the treasurer through the screen's existing Feedback
-    // banner - the same one close/reopen already use, not a second one.
+    // off the server (never the dialog's local state), and the success message
+    // goes through the screen's Feedback banner - the one close/reopen use.
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
     expect(screen.getByRole('heading', { name: 'Halal bihalal RT 2026' })).toBeInTheDocument()
     expect(screen.getByText(text.rename.success)).toBeInTheDocument()
   })
 
-  // Widened by #333/ADR-034: the same edit dialog carries the minimum and
-  // the recipients, seeded from the envelope and PATCHed to
-  // /api/incidentals/{id} when either changes - occasion untouched, so
-  // renamePurpose is never called.
+  // The same edit dialog carries the minimum and the recipients (ADR-034),
+  // seeded from the envelope and PATCHed to /api/incidentals/{id} when either
+  // changes - occasion untouched, so renamePurpose is never called.
   it('edits the minimum and recipients through the same dialog, without touching the occasion', async () => {
     const detail = {
       ...openEnvelope,
@@ -770,14 +759,14 @@ describe('Incidentals', () => {
 
     await waitFor(() => expect(patched).not.toBeNull())
     // The PATCH replaces every facet, so the untouched target rides along
-    // unchanged rather than being cleared (#381).
+    // unchanged rather than being cleared.
     expect(patched).toMatchObject({ body: { target_amount: 500_000, minimum_per_member: 25_000, recipient_member_ids: [7] } })
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
     expect(screen.getByText(text.rename.success)).toBeInTheDocument()
   })
 
-  // #381: the target is an expectation like the minimum, corrected in the
-  // same dialog - and clearing the field clears the target.
+  // The target is an expectation like the minimum, corrected in the same
+  // dialog - and clearing the field clears the target.
   it.each([
     ['changes', '750000', 750_000],
     ['clears', '', null],
@@ -823,8 +812,8 @@ describe('Incidentals', () => {
     expect(patched).toMatchObject({ body: { target_amount: sent, minimum_per_member: null, recipient_member_ids: [] } })
   })
 
-  // The whole point of #264: the typo is usually noticed after the occasion
-  // is over, so a closed envelope must offer the same correction.
+  // The typo is usually noticed after the occasion is over, so a closed
+  // envelope must offer the same correction.
   it('offers the rename button for a closed envelope too', async () => {
     const detail = { ...closedEnvelope, collected_amount: 50_000, disbursed_amount: 0, balance_amount: 0 }
     vi.stubGlobal(

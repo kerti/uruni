@@ -23,51 +23,45 @@ import type { DuesTier, Member, MembersPage } from '@/lib/setup'
 
 const text = copy.members.roster
 
-/** Long enough that a word typed at normal speed is one request, short
- * enough that the list follows her without a visible pause - the same
- * budget History/Transactions.tsx spends on its own search field. */
+/** Long enough that a word typed at normal speed is one request, short enough
+ * that the list follows her without a visible pause - the budget
+ * History/Transactions.tsx spends on its search field. */
 const SEARCH_DEBOUNCE_MS = 300
 
 /** The "no tier" option: a real state (a member who owes no dues), not an
- * empty field. Radix item values must be non-empty strings, so it cannot
- * simply be ''. Same constant the old inline-edit roster used. */
+ * empty field. Radix item values must be non-empty strings, so it cannot be
+ * ''. */
 const NO_TIER = 'none'
 
 interface FirstPage {
   page: MembersPage
-  /** For the add/edit dialog's tier picker. Loaded with the first page
-   * rather than per dialog open, so opening the dialog costs no further
-   * request. */
+  /** For the add/edit dialog's tier picker. Loaded with the first page so
+   * opening the dialog costs no further request. */
   tiers: DuesTier[]
 }
 
 /**
- * Anggota's roster (M6.16, rebuilt in M6.32 - #233, ADR-032 "Lists: paging
- * and search" and "The roster row, and a word that does not exist yet"):
- * card list, dialog editing, keyset-paged and searchable by name on the
- * server - the last screen to move onto the pattern every other list in
- * the app already uses, so this file borrows its shape from
- * Settings/Locations.tsx (the card-plus-dialog primitive) and
- * History/Transactions.tsx (the paging and search half) rather than
- * inventing either again.
+ * Anggota's roster (ADR-032 "Lists: paging and search" and "The roster row,
+ * and a word that does not exist yet"): card list, dialog editing,
+ * keyset-paged and searchable by name on the server. Borrows its shape from
+ * Settings/Locations.tsx (card-plus-dialog) and History/Transactions.tsx
+ * (paging and search).
  *
  * Every member is listed, retired ones included - dues status and history
- * still name them, and this is where one gets reinstated. Deactivating is
- * the right action for someone who actually left: `inactive_on` bounds the
- * window `DuesStatusForPeriod` walks, so no further month is owed, while
- * everything already recorded stays exactly as it was. Delete is only for a
- * duplicate typed twice, and the foreign key refuses it the moment anything
- * references the row.
+ * still name them, and this is where one gets reinstated. Deactivating is the
+ * right action for someone who left: `inactive_on` bounds the window
+ * `DuesStatusForPeriod` walks, so no further month is owed, while everything
+ * recorded stays as it was. Delete is only for a duplicate typed twice, and
+ * the foreign key refuses it once anything references the row.
  *
- * Each row shows name, tier name, current rate and the Tunggakan badge -
- * the first three period-independent and come straight off the row
- * GET /api/members already returns, the badge computed server-side through
- * the same ledger path GET /api/members/{id}/outstanding-dues uses
- * (CLAUDE.md rule 2: one source of truth for what is owed). It is absent
- * entirely when arrears_months is 0 and never reuses copy.dues.statuses'
- * words - that vocabulary reads one period at a time and this one is
- * cumulative, and spending the same word on both would put two disagreeing
- * readings of it on two screens (ADR-032).
+ * Each row shows name, tier name, current rate and the Tunggakan badge - the
+ * first three period-independent and straight off the row GET /api/members
+ * returns, the badge computed server-side through the same ledger path
+ * GET /api/members/{id}/outstanding-dues uses (CLAUDE.md rule 2: one source
+ * of truth for what is owed). It is absent when arrears_months is 0 and never
+ * reuses copy.dues.statuses' words - that vocabulary reads one period at a
+ * time and this one is cumulative, and one word for both would put two
+ * disagreeing readings of it on two screens (ADR-032).
  */
 export default function Roster() {
   const [searchParams, setSearchParams] = useSearchParams()
@@ -77,8 +71,8 @@ export default function Roster() {
   const { value: dialogValue, open, close, clear } = useDialogParam()
 
   const [state, run] = useApi<FirstPage>()
-  // Pages after the first, appended in order - same shape
-  // History/Transactions.tsx uses for its own "muat lebih banyak".
+  // Pages after the first, appended in order - the shape History/Transactions.tsx
+  // uses for "muat lebih banyak".
   const [more, setMore] = useState<MembersPage | null>(null)
   const [moreLoading, setMoreLoading] = useState(false)
   const [moreError, setMoreError] = useState<ApiError | null>(null)
@@ -99,8 +93,8 @@ export default function Roster() {
   }, [run, loadFirstPage])
 
   // The URL changed under the field (back, forward, a link): follow it. A
-  // draft that already trims to the same search is left alone, so a
-  // trailing space she is still typing is not snatched away.
+  // draft that already trims to the same search is left alone, so a trailing
+  // space she is still typing is not snatched away.
   useEffect(() => {
     // oxlint-disable-next-line react/set-state-in-effect -- follow the URL back into the search field (back, forward, a link); the URL is the source of truth
     setDraft((current) => (current.trim() === q ? current : q))
@@ -127,7 +121,7 @@ export default function Roster() {
     void run(loadFirstPage)
   }
 
-  // #507: after a write whose response was lost, re-read in place.
+  // After a write whose response was lost, re-read in place.
   const refresh = () => run(loadFirstPage, { silent: true })
 
   async function loadMore(cursor: string) {
@@ -149,18 +143,16 @@ export default function Roster() {
   const members = state.data ? [...state.data.page.members, ...(more?.members ?? [])] : []
   const tiers = state.data?.tiers ?? []
 
-  // 'member' is this screen's own prefix (dialogTarget.ts). Anggota is its
-  // own route, so no sibling section shares `?edit=` the way Pengaturan's
-  // sections do, but the parser is still what reads the param - the same
-  // reasoning History/Transactions.tsx gives for its own single-owner use.
+  // 'member' is this screen's prefix (dialogTarget.ts). Anggota is its own
+  // route, so no sibling shares `?edit=`, but the parser is still what reads
+  // the param, as in History/Transactions.tsx.
   const target = parseDialogTarget('member', dialogValue)
   const editingMember = target.kind === 'edit' ? (members.find((m) => m.id === target.id) ?? null) : null
 
   // A `member:` value naming an id this page has not loaded (a deep link, a
-  // stale link, or one already removed) - strip it once the page has
-  // loaded rather than flash an empty dialog. `clear`, never `close` - a
-  // dead link is not a navigation to undo, same reasoning Locations.tsx
-  // documents at the same effect.
+  // stale link, or one already removed) - strip it once the page has loaded
+  // rather than flash an empty dialog. `clear`, never `close` - a dead link is
+  // not a navigation to undo (see Locations.tsx).
   useEffect(() => {
     if (target.kind === 'foreign' || target.kind === 'new') return
     if (state.status !== 'success') return
@@ -339,9 +331,9 @@ function TierField({
 }
 
 /** Adding a member after setup - the wizard's optional step, available for
- * the rest of the fund's life. joined_on defaults to today, per #187: a
- * fund's history starts at adoption, so a new member owes from now, and
- * backdating is the deliberate exception for arrears actually owed. */
+ * the rest of the fund's life. joined_on defaults to today: a fund's history
+ * starts at adoption, so a new member owes from now, and backdating is the
+ * deliberate exception for arrears actually owed. */
 function AddMemberDialog({
   tiers,
   open,
@@ -362,8 +354,8 @@ function AddMemberDialog({
 
   const busy = state.status === 'loading'
 
-  // A fresh form every time the dialog opens, so a member added a moment
-  // ago does not leave their name sitting in the fields for the next one.
+  // A fresh form every time the dialog opens, so a member added a moment ago
+  // does not leave their name in the fields for the next one.
   useResetWhen(open, () => {
     if (open) {
       setName('')
@@ -422,17 +414,16 @@ function AddMemberDialog({
   )
 }
 
-/** Which of the dialog's two destructive actions the footer is confirming,
- * if either - inline, in place, never a second dialog and never
- * `window.confirm()` (ADR-032), same shape Locations.tsx's own
- * EditLocationDialog uses. */
+/** Which of the dialog's two destructive actions the footer is confirming, if
+ * either - inline, in place, never a second dialog and never
+ * `window.confirm()` (ADR-032), as Locations.tsx's EditLocationDialog does. */
 type ConfirmKind = 'deactivate' | 'delete' | null
 
 /**
  * Rename, retire and delete, all in one dialog. `member` is null only while
- * closing (the row that opened it may already be gone from the loaded page
- * by the time the exit animation plays) - the last known member is kept on
- * screen for that window rather than blanking the form mid-close.
+ * closing (the row that opened it may already be gone from the loaded page by
+ * the time the exit animation plays) - the last known member stays on screen
+ * for that window rather than blanking the form mid-close.
  */
 function EditMemberDialog({
   member,
@@ -462,9 +453,9 @@ function EditMemberDialog({
   const busy = state.status === 'loading'
   const inactive = shown?.inactive_on !== null && shown?.inactive_on !== undefined
 
-  // A fresh copy of the member's own fields each time the dialog opens for
-  // it, and the confirm footer starts closed - reopening a dialog never
-  // shows a stale edit or a confirm left mid-flight from last time.
+  // A fresh copy of the member's fields each time the dialog opens for it, and
+  // the confirm footer starts closed - reopening never shows a stale edit or a
+  // confirm left mid-flight.
   useEffect(() => {
     if (open && shown) {
       setName(shown.name)
@@ -497,10 +488,10 @@ function EditMemberDialog({
       onClose()
       return
     }
-    // Only what actually changed goes on the wire: an absent key means
-    // "leave alone" server-side, and an explicit null means "clear it" -
-    // which is how a member's tier is dropped. The joined-on date only
-    // ever moves (#471): DateField has no empty state to send.
+    // Only what changed goes on the wire: an absent key means "leave alone"
+    // server-side, an explicit null means "clear it" - how a member's tier is
+    // dropped. The joined-on date only ever moves: DateField has no empty
+    // state to send.
     if (trimmed === shown.name && tierId === shown.tier_id && joinedOn === shown.joined_on) {
       onClose()
       return
@@ -525,10 +516,9 @@ function EditMemberDialog({
     >
       <DialogContent
         closeLabel={copy.common.close}
-        // Same reasoning Locations.tsx documents at this prop: most visits
-        // here are to deactivate or delete, so focus lands on the dialog
-        // itself rather than the name field, which would else select its
-        // text and raise the keyboard unasked.
+        // As at this prop in Locations.tsx: most visits here are to deactivate
+        // or delete, so focus lands on the dialog rather than the name field,
+        // which would select its text and raise the keyboard unasked.
         onOpenAutoFocus={(event) => {
           event.preventDefault()
           ;(event.currentTarget as HTMLElement).focus()

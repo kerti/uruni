@@ -12,17 +12,15 @@ import {
 } from '@/lib/dates'
 
 describe('formatIsoDate', () => {
-  // The month is written out, never abbreviated: id-ID's `medium` style
-  // renders "3 Sep 2026", which is what these screens used to show.
+  // The month is written out, never abbreviated (`medium` renders "3 Sep 2026").
   it('writes the month out in full', () => {
     expect(formatIsoDate('2026-09-03')).toBe('3 September 2026')
   })
 
-  // The whole reason these helpers parse the parts by hand: the Date
-  // constructor reads a bare 'YYYY-MM-DD' as UTC midnight, which is the
-  // previous day west of Greenwich. This test only fails somewhere with a
-  // negative offset - so the assertion is the local calendar day, which is
-  // what the treasurer typed.
+  // The helpers parse the parts by hand because the Date constructor reads a
+  // bare 'YYYY-MM-DD' as UTC midnight, the previous day west of Greenwich. This
+  // only fails somewhere with a negative offset, so the assertion is the local
+  // calendar day the treasurer typed.
   it('keeps the calendar day the string names, whatever the timezone', () => {
     expect(formatIsoDate('2026-01-01')).toBe('1 Januari 2026')
   })

@@ -4,12 +4,11 @@ import { copy } from '../src/copy/id'
 import { formatIDR } from '../src/lib/money'
 import { expect, logIn, test } from './fixtures'
 
-// M8.6 (#437): money that moves without leaving the fund. Pindah lokasi
-// moves it between places, Pindah pos between purposes, and Perbaiki pos
-// re-tags a posted row after the fact. Each one leaves the fund total where
-// it was and moves exactly the figures it names - which is the whole promise
-// these three make to the treasurer, so each test reads the total and the
-// figures on Beranda before and after.
+// Money that moves without leaving the fund. Pindah lokasi moves it between
+// places, Pindah pos between purposes, and Perbaiki pos re-tags a posted row
+// after the fact. Each leaves the fund total where it was and moves exactly the
+// figures it names - the whole promise these three make to the treasurer - so
+// each test reads the total and the figures on Beranda before and after.
 //
 // The fixture (cmd/uruni/seed_e2e.go): Tunai opens at Rp 1.000.000, Bank Uji
 // Coba at zero, everything in Kas Utama, and one empty open envelope. Serial,
@@ -42,8 +41,8 @@ async function expectBeranda(page: Page, f: { tunai: number; bank: number; main:
 
 async function pick(page: Page, label: string, option: string) {
   // The themed Select is a button plus a portalled listbox; the option is
-  // scoped to the listbox because Radix's hidden native select carries the
-  // same text.
+  // scoped to the listbox because Radix's hidden native select carries the same
+  // text.
   await page.getByRole('combobox', { name: label }).click()
   await page.getByRole('listbox').getByRole('option', { name: option }).click()
 }

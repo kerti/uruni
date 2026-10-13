@@ -26,12 +26,12 @@ const text = copy.settings.incidentals
 const openText = copy.incidentals.open
 
 /**
- * This section owns `?edit=incidental:new` and nothing else: there is no
- * edit-existing dialog here, because a card navigates straight to the
- * envelope's own detail view (`/incidentals?purpose=<id>`). So an
- * `incidental:<id>` that arrives by hand is `invalid` - a value with this
- * section's prefix and no dialog to show for it. See dialogTarget.ts for why
- * `foreign` is the case that matters on a screen whose sections share a URL.
+ * This section owns `?edit=incidental:new` and nothing else: a card navigates
+ * straight to the envelope's detail view (`/incidentals?purpose=<id>`), so
+ * there is no edit-existing dialog. An `incidental:<id>` that arrives by hand
+ * is `invalid` - this section's prefix and no dialog to show. See
+ * dialogTarget.ts for why `foreign` is the case that matters on a screen whose
+ * sections share a URL.
  */
 function parseEditTarget(value: string | null): 'new' | 'foreign' | 'invalid' {
   const target = parseDialogTarget('incidental', value)
@@ -40,40 +40,32 @@ function parseEditTarget(value: string | null): 'new' | 'foreign' | 'invalid' {
 }
 
 /**
- * The incidentals section of the settings screen (#263, ADR-032 "an
- * incidental is a purpose, so it is opened in Pengaturan"). Opening a new
- * envelope lost its home when M6.33 (#265) turned Beranda's purpose
- * breakdown into entry points only - this section is where it lands
- * instead, beside Titipan, because CONTEXT.md makes incidental and
- * pass-through two kinds of one `purpose`.
+ * The incidentals section of the settings screen (ADR-032 "an incidental is a
+ * purpose, so it is opened in Pengaturan"), beside Titipan because CONTEXT.md
+ * makes incidental and pass-through two kinds of one `purpose`.
  *
- * Open envelopes are listed here; closed ones are gathered behind a single
- * row into their own screen (ClosedIncidentals below, #319), because they pile
- * up over the years and would turn Pengaturan into a wall of them. They are
- * never hidden, only moved one tap away - reopening (ADR-031) still needs a
- * door that does not wait on a purpose filter (#262). Tapping a card
- * navigates to its detail view; only
- * "open a new envelope" is a dialog here, addressed by
- * `?edit=incidental:new`, same idiom as Locations' `?edit=location:new`.
+ * Open envelopes are listed here; closed ones are gathered behind a single row
+ * into their own screen (ClosedIncidentals below), because they pile up over
+ * the years and would turn Pengaturan into a wall of them. They are moved one
+ * tap away, never hidden - reopening (ADR-031) still needs a door that does
+ * not wait on a purpose filter. Tapping a card navigates to its detail view;
+ * only "open a new envelope" is a dialog here, addressed by
+ * `?edit=incidental:new`, like Locations' `?edit=location:new`.
  *
- * The open form itself is Incidentals.tsx's former OpenForm, lifted here
- * nearly verbatim: occasion, an optional target, and a date defaulting to
- * today. Contributing and disbursing stay on the envelope's own detail
- * screen, reached by tapping the card once it is open.
+ * The form is occasion, an optional target, and a date defaulting to today.
+ * Contributing and disbursing stay on the envelope's detail screen.
  */
 export default function SettingsIncidentals() {
   const navigate = useNavigate()
   const [listState, listRun] = useApi<Incidental[]>()
-  // The recipients picker's own roster (ADR-034) - fetched alongside the
-  // envelope list rather than only when the dialog opens, the same reasoning
-  // History/Transactions.tsx's own FirstPage gives for its purposes fetch:
-  // opening the dialog shows a filled picker instead of a spinner.
+  // The recipients picker's roster (ADR-034) - fetched alongside the envelope
+  // list, as History/Transactions.tsx does for purposes, so opening the dialog
+  // shows a filled picker instead of a spinner.
   const [membersState, membersRun] = useApi<Member[]>()
   const { value, open, close, clear } = useDialogParam()
 
   useEffect(() => {
-    // listRun/membersRun are stable useCallbacks (useApi.ts), so this fires
-    // once.
+    // listRun/membersRun are stable useCallbacks (useApi.ts): fires once.
     void listRun(() => listIncidentals(false))
     void membersRun(listAllMembers)
   }, [listRun, membersRun])
@@ -85,11 +77,11 @@ export default function SettingsIncidentals() {
   const target = parseEditTarget(value)
 
   // `incidental:` naming anything but a new envelope: strip it once the list
-  // has loaded, rather than flash an empty dialog. Only ever a value this
-  // section owns - a `foreign` one belongs to a sibling section and is never
-  // touched. clear(), never close() - same reasoning as Locations.tsx: a dead
-  // link is not a real navigation to undo, and a reload racing a close()'s own
-  // back navigation must not leave the settings screen.
+  // has loaded, rather than flash an empty dialog. Only a value this section
+  // owns - a `foreign` one belongs to a sibling section and is never touched.
+  // clear(), never close() - as in Locations.tsx: a dead link is not a
+  // navigation to undo, and a reload racing close()'s back navigation must not
+  // leave the settings screen.
   useEffect(() => {
     if (target !== 'invalid') return
     if (listState.status !== 'success') return
@@ -133,8 +125,8 @@ export default function SettingsIncidentals() {
 }
 
 /** The open envelopes as cards, then - once any exist - one card-shaped row
- * into the closed ones, carrying their count so she knows what is behind it.
- * The empty line only when there is nothing at all, open or closed. */
+ * into the closed ones, carrying their count. The empty line only when there
+ * is nothing at all, open or closed. */
 function EnvelopeCards({
   envelopes,
   onOpen,
@@ -182,9 +174,8 @@ function EnvelopeCards({
 const cardClass =
   'flex min-h-11 w-full items-center justify-between gap-3 rounded-lg bg-card px-4 py-3 text-left shadow-card ring-1 ring-foreground/10 select-none transition-colors hover:bg-muted/40'
 
-/** Same open/closed badge Incidentals.tsx's own StatusBadge renders. Kept
- * as a small local copy rather than a shared export - one component, two
- * call sites, is not yet worth a shared file. */
+/** The open/closed badge of Incidentals.tsx's StatusBadge, kept as a small
+ * local copy: one component, two call sites, is not worth a shared file. */
 function StatusBadge({ envelope }: { envelope: Incidental }) {
   if (envelope.closed_on) {
     return (
@@ -200,10 +191,8 @@ function StatusBadge({ envelope }: { envelope: Incidental }) {
   )
 }
 
-/** Opening a new envelope, in the dialog primitive (ADR-032). The fields
- * and their copy carry over unchanged from Incidentals.tsx's former
- * OpenForm - occasion doubles as the purpose's own name, target is
- * optional, and the date defaults to today. */
+/** Opening a new envelope, in the dialog primitive (ADR-032): occasion doubles
+ * as the purpose's name, target is optional, and the date defaults to today. */
 function OpenIncidentalDialog({
   open,
   members,
@@ -225,9 +214,8 @@ function OpenIncidentalDialog({
   const busy = state.status === 'loading'
   const canSubmit = occasion.trim() !== '' && openedOn !== '' && !busy
 
-  // A fresh form every time the dialog opens, so an envelope opened a
-  // moment ago does not leave its occasion sitting in the fields for the
-  // next one.
+  // A fresh form every time the dialog opens, so an envelope opened a moment
+  // ago does not leave its occasion in the fields for the next one.
   useResetWhen(open, () => {
     if (open) {
       setOccasion('')
@@ -329,12 +317,11 @@ function OpenIncidentalDialog({
 }
 
 /**
- * Every closed envelope, most recently closed first (#319) - the screen
- * behind Pengaturan's "Amplop yang sudah ditutup" row. A screen rather than
- * a dialog because the list is unbounded, and one list rather than tabs:
- * ADR-032 retired the old open/all tab screen, and open envelopes still live
- * on Pengaturan itself. Each card opens the envelope's detail, where reading
- * its record and Buka lagi both are; the detail's own way back is still to
+ * Every closed envelope, most recently closed first - the screen behind
+ * Pengaturan's "Amplop yang sudah ditutup" row. A screen rather than a dialog
+ * because the list is unbounded, and one list rather than tabs: ADR-032
+ * retired the open/all tab screen. Each card opens the envelope's detail,
+ * where its record and Buka lagi both are; the detail's way back is still to
  * Pengaturan, one tap from here.
  */
 export function ClosedIncidentals({ onBack, onOpen }: { onBack: () => void; onOpen: (purposeId: number) => void }) {

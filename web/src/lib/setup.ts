@@ -1,7 +1,6 @@
-// Typed calls over apiFetch for the setup wizard's routes (M6.5), same idiom
-// as lib/auth.ts. The wire shapes are copied verbatim from internal/http -
-// see setup.go, accounts.go, dues_tiers.go, dues_rates.go and members.go for
-// the Go side of each one.
+// Typed calls over apiFetch for the setup wizard's routes. Wire shapes are
+// copied from internal/http (setup.go, accounts.go, dues_tiers.go,
+// dues_rates.go, members.go).
 
 import { apiFetch, fetchBlob } from '@/lib/api'
 
@@ -33,27 +32,22 @@ export interface SetupResult {
   accounts: Account[]
 }
 
-/** One row of POST /api/setup's `accounts` array. `opening_balance` is
- * optional and, when given, is posted in the same database transaction that
- * creates the fund and its accounts (#230: a location and its opening
- * balance are born together, or not at all) - never a separate request.
- * `note` holds only what the treasurer typed - the wizard has no field for
- * one, so it is always omitted in practice; the row explains itself
- * through a display label instead (#257). */
+/** One row of POST /api/setup's `accounts`. `opening_balance`, when given, is
+ * posted in the same database transaction that creates the fund and its
+ * accounts - never a separate request. `note` holds only what the treasurer
+ * typed; the wizard has no field for it, so it is omitted in practice (the
+ * row explains itself through a display label). */
 export interface SetupAccountInput {
   kind: 'cash' | 'bank'
   name: string
   opening_balance?: { amount: number; occurred_on: string; note?: string | null }
 }
 
-/** The posted transaction row a successful opening balance answers with -
- * also GET /api/transactions' own row shape (lib/transactions.ts's
- * re-export), which is where the fields after created_at actually come
- * populated: they carry the facts a system-created row's display label
- * needs (#257, internal/http/transactions.go's own toTransactionsPageResponse
- * doc comment), and are optional here because a route that posts one row
- * (POST /api/transactions, /api/dues-payments, a settlement, a transfer
- * leg) never sets them - only the list route does. */
+/** The posted transaction row, also GET /api/transactions' row shape. The
+ * fields after created_at carry the facts a system-created row's display
+ * label needs; they are optional because a route that posts one row
+ * (POST /api/transactions, /api/dues-payments, a settlement, a transfer leg)
+ * never sets them - only the list route does. */
 export interface Transaction {
   id: number
   account_id: number
@@ -70,38 +64,33 @@ export interface Transaction {
   note: string | null
   created_at: number
 
-  // List-only fields (#257) - see this interface's own doc comment above.
+  // List-only fields - see the doc comment above.
   account_name?: string
   member_name?: string | null
   claim_note?: string | null
   transfer_kind?: 'between_accounts' | 'reclass_purpose' | null
   transfer_from_name?: string | null
   transfer_to_name?: string | null
-  /** Non-null only on a purpose correction's two legs (ADR-033, #267) -
-   * nil on every other transfer leg, a roll's included, which is what
-   * tells the two apart: both are kind='transfer' with
-   * transfer_kind='reclass_purpose'. */
+  /** Non-null only on a purpose correction's two legs (ADR-033); nil on every
+   * other transfer leg, a roll's included, which is what tells the two apart:
+   * both are kind='transfer' with transfer_kind='reclass_purpose'. */
   transfer_corrects_transaction_id?: number | null
   /** Why a purpose pair that corrects nothing moved (ADR-036): 'allocation'
-   * is the treasurer's own "Pindah pos", 'roll' an envelope closing.
-   * Null on a correction, a location transfer, and a roll from before the
-   * column existed - which reads as a roll. */
+   * is the treasurer's "Pindah pos", 'roll' an envelope closing. Null on a
+   * correction, a location transfer, and a roll from before the column
+   * existed - which reads as a roll. */
   transfer_reason?: 'roll' | 'allocation' | null
-  /** The tag this row's money is under now: its own purpose_id until a
-   * correction moves it, then the latest correction's target. The list
-   * still renders purpose_id - the ledger sums stored tags, so a row
-   * showing its effective one would put the screen out of step with the
-   * balances (ADR-033). This drives the "sudah diperbaiki" marker
-   * (effective !== stored) and the correction dialog, which must build
-   * its pair from where the money actually is. */
+  /** The tag this row's money is under now: its purpose_id until a
+   * correction moves it, then the latest correction's target. The list still
+   * renders purpose_id - the ledger sums stored tags, so showing the
+   * effective one would put the screen out of step with the balances
+   * (ADR-033). Drives the "sudah diperbaiki" marker (effective !== stored)
+   * and the correction dialog, which must build its pair from where the
+   * money actually is. */
   effective_purpose_id?: number
-  /** Every receipt attached to this row, oldest first (#154's backend,
-   * internal/http/transactions.go). Optional here alongside the other
-   * list-only fields above: every route in this app's own backend now
-   * answers it, but treating it as always-present would force every
-   * existing test fixture in this file's callers to grow the field too - a
-   * caller that never checks it just never renders the photo affordance.
-   * TransactionList.tsx reads it as `transaction.receipt_ids ?? []`. */
+  /** Every receipt attached to this row, oldest first. Optional so existing
+   * test fixtures need not grow the field; TransactionList reads it as
+   * `transaction.receipt_ids ?? []`. */
   receipt_ids?: number[]
 }
 
@@ -121,16 +110,13 @@ export interface DuesRate {
 
 /** A member row, as every route in this module returns it.
  *
- * tier_name and current_rate (#233, ADR-032) are period-independent -
- * tier_name is dues_tier.name for tier_id, current_rate is the dues_rate in
- * force this month for it - and both are nil for a member with no tier, or
- * (current_rate alone) a tier whose rate has not started yet (the "madya
- * TBD" case, PRD section 6). arrears_months is the Tunggakan badge's own
- * figure: whole months of periods strictly before the current one that are
- * still owed, 0 meaning no badge. All three are zero-valued on a
- * POST/PATCH reply (internal/http/members.go's memberResponse doc comment)
- * - present on the type because the wire shape carries them, but not
- * meaningful off a write's response; read them only from listMembersPage. */
+ * tier_name and current_rate are period-independent: dues_tier.name for
+ * tier_id, and the dues_rate in force this month for it. Both are nil for a
+ * member with no tier, and current_rate alone for a tier whose rate has not
+ * started yet (the "madya TBD" case, PRD section 6). arrears_months is the
+ * Tunggakan badge's figure: whole months of periods strictly before the
+ * current one still owed, 0 meaning no badge. All three are zero-valued on a
+ * POST/PATCH reply - read them only from listMembersPage. */
 export interface Member {
   id: number
   name: string
@@ -143,10 +129,9 @@ export interface Member {
   arrears_months: number
 }
 
-/** One page of GET /api/members (#233, ADR-032 "Lists: paging and search"):
- * 25 rows, ascending by name with id as the tiebreak. next_cursor is null
- * once there is no further page - camelCase on this side of the wire
- * boundary, same idiom lib/transactions.ts's TransactionsPage uses. */
+/** One page of GET /api/members (ADR-032 "Lists: paging and search"): 25
+ * rows, ascending by name with id as the tiebreak. next_cursor is null once
+ * there is no further page; camelCase on this side of the wire boundary. */
 export interface MembersPage {
   members: Member[]
   nextCursor: string | null
@@ -183,10 +168,8 @@ export function replaceReportSlug(): Promise<Fund> {
 
 /**
  * POST /api/setup - the fund's name plus every account it starts with, and
- * each account's opening balance if it has one, in one call (#230: the fund,
- * its accounts and their opening balances are born together, in one database
- * transaction, or not at all). A second call for a fund that already exists
- * is 409 fund_already_exists.
+ * each opening balance, in one call: one database transaction, or nothing.
+ * A second call for a fund that already exists is 409 fund_already_exists.
  */
 export function postSetup(name: string, accounts: SetupAccountInput[]): Promise<SetupResult> {
   return apiFetch<SetupResult>('/api/setup', {
@@ -213,16 +196,13 @@ export function createDuesRate(tierId: number, amount: number, effectiveFrom: st
 }
 
 /**
- * GET /api/members (#233, ADR-032 "Lists: paging and search") - one page of
- * the roster, keyset-paged and optionally searched by name. This is
- * Anggota's own call: server-side paging and search are this list's
- * contract (ADR-032 prohibits filtering a paged list client-side), so a
- * caller that needs the whole roster does not walk this function itself -
- * it calls listAllMembers below instead.
+ * GET /api/members (ADR-032 "Lists: paging and search") - one page of the
+ * roster, keyset-paged and optionally searched by name. Paging and search are
+ * server-side because ADR-032 prohibits filtering a paged list client-side;
+ * a caller that needs the whole roster uses listAllMembers.
  *
- * `q`, when given, is a case-insensitive substring match on name, done
- * server-side. `cursor` is a previous page's `nextCursor` - omit it for the
- * first page.
+ * `q` is a case-insensitive substring match on name. `cursor` is a previous
+ * page's `nextCursor` - omit it for the first page.
  */
 export function listMembersPage(q?: string, cursor?: string): Promise<MembersPage> {
   const params = new URLSearchParams()
@@ -237,17 +217,14 @@ export function listMembersPage(q?: string, cursor?: string): Promise<MembersPag
 }
 
 /**
- * The fund's whole roster, retired members included (`inactive_on` set),
- * for a picker (RecordPayment's and Reimbursements' member `<Select>`,
- * MemberPicker) rather than for Anggota itself.
+ * The fund's whole roster, retired members included (`inactive_on` set), for
+ * a picker (RecordPayment's and Reimbursements' member `<Select>`,
+ * MemberPicker).
  *
  * A `<Select>` needs every member to resolve whatever it is showing, so it
- * cannot page - but paging is Anggota's own contract (ADR-032), not a
- * picker's, so this walks listMembersPage's `nextCursor` until it comes back
- * null and hands back the flat list, preserving the whole-roster contract
- * this function's callers already depend on. A caller recording new money
- * filters retired rows out itself, the way AccountPicker does for a retired
- * location; a caller reading history needs them.
+ * cannot page: this walks listMembersPage's `nextCursor` until null. A caller
+ * recording new money filters retired rows out itself, as AccountPicker does
+ * for a retired location; a caller reading history needs them.
  */
 export async function listAllMembers(): Promise<Member[]> {
   const all: Member[] = []
@@ -269,16 +246,16 @@ export function createMember(name: string, tierId: number | null, joinedOn: stri
 }
 
 /**
- * PATCH /api/members/{id}. The server distinguishes three cases per field
- * and so must this: an **absent key** means "leave alone", an explicit
- * **null** means "clear it" (no tier, or reinstated), and a value sets it.
- * A partial object cannot express that on its own - `{ tierId: null }` and
- * `{}` are indistinguishable once spread - so each field is passed as
- * `undefined` for "leave alone" and the body is built key by key below.
+ * PATCH /api/members/{id}. The server distinguishes three cases per field: an
+ * **absent key** means "leave alone", an explicit **null** means "clear it"
+ * (no tier, or reinstated), and a value sets it. A partial object cannot
+ * express that - `{ tierId: null }` and `{}` are indistinguishable once
+ * spread - so each field is passed as `undefined` for "leave alone" and the
+ * body is built key by key below.
  *
  * Clearing `tier_id` drops the member's dues obligation; clearing
- * `inactive_on` reinstates them. `joined_on` moves but never clears (#471):
- * a fund's history starts at adoption, so the server refuses a null.
+ * `inactive_on` reinstates them. `joined_on` moves but never clears: a fund's
+ * history starts at adoption, so the server refuses a null.
  */
 export interface MemberPatch {
   name?: string
@@ -301,11 +278,10 @@ export function updateMember(id: number, patch: MemberPatch): Promise<Member> {
 }
 
 /**
- * DELETE /api/members/{id} - only for a duplicate with no posted history.
- * A member any transaction references is refused by the foreign key as 409
+ * DELETE /api/members/{id} - only for a duplicate with no posted history. A
+ * member any transaction references is refused by the foreign key as 409
  * `referenced_by_other_records`, which the roster renders as "sudah punya
- * riwayat - nonaktifkan, bukan hapus": deactivating is what she wants for
- * someone who actually left.
+ * riwayat - nonaktifkan, bukan hapus".
  */
 export function deleteMember(id: number): Promise<void> {
   return apiFetch<void>(`/api/members/${id}`, { method: 'DELETE' })
@@ -327,11 +303,10 @@ export function renameDuesTier(id: number, name: string): Promise<DuesTier> {
   })
 }
 
-/** DELETE /api/dues-tiers/{id} (#232) - for a tier the fund never put anyone
- * in: a setup typo, a golongan named twice. The tier's own rates go with it
- * in the same transaction (they priced nobody), but a tier a member
- * references is refused 409 referenced_by_other_records by that member's own
- * foreign key, and nothing is deleted. */
+/** DELETE /api/dues-tiers/{id} - for a tier the fund never put anyone in (a
+ * setup typo). Its rates go with it in the same transaction (they priced
+ * nobody); a tier a member references is refused 409
+ * referenced_by_other_records and nothing is deleted. */
 export function deleteDuesTier(id: number): Promise<void> {
   return apiFetch<void>(`/api/dues-tiers/${id}`, { method: 'DELETE' })
 }
@@ -364,10 +339,11 @@ export function deleteDuesRate(id: number): Promise<void> {
 const REPORT_PDF_FALLBACK_NAME = 'laporan-kas.pdf'
 
 /**
- * GET /report/{slug}/pdf - the current month's statement (#378), as a File
- * ready for saveBlob, named by the server's Content-Disposition. Fetched by path, never by the absolute report_url:
- * URUNI_BASE_URL may name another origin than the one the app is open on
- * (a tunnel in dev), and the request must stay same-origin.
+ * GET /report/{slug}/pdf - the current month's statement, as a File ready for
+ * saveBlob, named by the server's Content-Disposition. Fetched by path, never
+ * by the absolute report_url: URUNI_BASE_URL may name another origin than the
+ * one the app is open on (a tunnel in dev), and the request must stay
+ * same-origin.
  */
 export async function fetchReportPdf(reportUrl: string): Promise<File> {
   const path = reportUrl.startsWith('/') ? reportUrl : new URL(reportUrl).pathname

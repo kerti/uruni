@@ -20,14 +20,11 @@ const text = copy.auth.login
  * The everyday door (POST /api/login). Rendered by App.tsx when
  * has_account: true and authenticated: false.
  *
- * Two of login's failure codes get their own copy rather than falling
- * through to the shared ErrorState (issue #115): invalid_credentials must
- * read as an ordinary "check what you typed", and too_many_requests must
- * read as a temporary lockout, not the same generic sentence - folding
- * them together would hide from the treasurer *why* the door isn't
- * opening. Every other code (network_error, internal_error, ...) still
- * goes through the shared ErrorState so this screen doesn't have to
- * duplicate that mapping.
+ * Two failure codes get their own copy rather than the shared ErrorState:
+ * invalid_credentials must read as an ordinary "check what you typed", and
+ * too_many_requests as a temporary lockout - folding them together would hide
+ * *why* the door isn't opening. Every other code (network_error,
+ * internal_error, ...) goes through the shared ErrorState.
  */
 export default function Login({ onLoggedIn }: { onLoggedIn: (user: AuthUser) => void }) {
   const [email, setEmail] = useState('')

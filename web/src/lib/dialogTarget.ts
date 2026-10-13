@@ -1,15 +1,14 @@
 /**
  * What an `?edit=` value names, from one section's point of view.
  *
- * `foreign` is the load-bearing case, and the reason this parser is shared
- * rather than written per section. Pengaturan renders every section against
- * one URL, and four of them own an `?edit=` dialog, so "not mine" and "mine
- * but broken" must be told apart: a section that cleared everything it could
- * not parse would strip the param its neighbour's open dialog is living on
- * and close it mid-edit. Anything carrying another section's prefix - or no
- * prefix at all - is `foreign` and is left exactly where it is. Only a value
- * with this section's own prefix and an unusable rest is `invalid`, and only
- * that is ever cleared.
+ * `foreign` is the load-bearing case, and the reason this parser is shared.
+ * Pengaturan renders every section against one URL, and four of them own an
+ * `?edit=` dialog, so "not mine" and "mine but broken" must be told apart: a
+ * section that cleared everything it could not parse would strip the param
+ * its neighbour's open dialog is living on and close it mid-edit. Anything
+ * carrying another section's prefix - or no prefix - is `foreign` and left
+ * where it is. Only a value with this section's prefix and an unusable rest
+ * is `invalid`, and only that is ever cleared.
  */
 export type DialogTarget = { kind: 'new' } | { kind: 'edit'; id: number } | { kind: 'foreign' } | { kind: 'invalid' }
 
@@ -17,9 +16,8 @@ export type DialogTarget = { kind: 'new' } | { kind: 'edit'; id: number } | { ki
  * Parses `?edit=<prefix>:<rest>` for the section owning `prefix`.
  *
  * `<prefix>:new` is the add dialog; `<prefix>:<positive integer>` names an
- * existing row. A section that owns no add dialog, or no edit dialog, simply
- * never opens that value and treats it as unusable when it arrives by hand -
- * the parser does not need to know which sections those are.
+ * existing row. A section that owns no add or edit dialog never opens that
+ * value and treats it as unusable when it arrives by hand.
  */
 export function parseDialogTarget(prefix: string, value: string | null): DialogTarget {
   if (value === null) return { kind: 'foreign' }

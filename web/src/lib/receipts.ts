@@ -1,17 +1,14 @@
-// Typed calls over apiFetch for the receipt-photo routes (M6.20 backend,
-// M6.21/#154 frontend): an optional image attached to a transaction or a
-// reimbursement claim, at record time or after the fact (ADR-011, PRD
-// section 7.4).
+// Typed calls over apiFetch for the receipt-photo routes: an optional image
+// attached to a transaction or a reimbursement claim, at record time or after
+// the fact (ADR-011, PRD section 7.4).
 
 import { apiFetch } from '@/lib/api'
 
 /** The two kinds of row a receipt can attach to - also the routes'
- * `{parent}/{id}/receipts` segment, so a caller never has to spell the
- * path itself. */
+ * `{parent}/{id}/receipts` segment. */
 export type ReceiptParentKind = 'transactions' | 'reimbursements'
 
-/** POST .../receipts's 201 body (internal/http/receipts.go's
- * receiptResponse). The stored file path is never exposed - GET
+/** POST .../receipts's 201 body. The stored file path is never exposed - GET
  * /api/receipts/{id} is the only way to read the bytes back. */
 export interface ReceiptUploadResult {
   id: number
@@ -19,17 +16,16 @@ export interface ReceiptUploadResult {
 }
 
 // Receipt ids are reused: SQLite hands a deleted top id to the next insert,
-// so after "Ganti foto" (a delete, then an upload) the new photo can have
-// the old one's id. The browser keeps images it has already shown in this
-// page by URL, so the same URL would keep showing the old photo (#459). A
-// delete here bumps that id's version, which changes every URL built for it
-// from then on. Reloads and other devices are the server's half: it serves
-// receipts no-cache with an ETag per stored file.
+// so after "Ganti foto" (a delete, then an upload) the new photo can have the
+// old one's id, and the browser keeps images it has shown by URL - the same
+// URL would keep showing the old photo. A delete here bumps that id's
+// version, which changes every URL built for it from then on. Reloads and
+// other devices are the server's half: receipts are served no-cache with an
+// ETag per stored file.
 const versions = new Map<number, number>()
 
-/** GET /api/receipts/{id}'s URL - a same-origin, session-gated image
- * (internal/http/receipts.go's getReceipt), safe to use directly as an
- * <img src>. Carries a version once this page has deleted that id. */
+/** GET /api/receipts/{id}'s URL - a same-origin, session-gated image, safe to
+ * use as an <img src>. Carries a version once this page has deleted that id. */
 export function receiptUrl(id: number): string {
   const version = versions.get(id)
   return version === undefined ? `/api/receipts/${id}` : `/api/receipts/${id}?v=${version}`
@@ -37,14 +33,13 @@ export function receiptUrl(id: number): string {
 
 /**
  * POST /api/{transactions|reimbursements}/{id}/receipts - multipart, one
- * "file" field. Always a second request after the parent row already
- * exists (the upload route needs its id), so a caller posts the parent
- * first and only then calls this - never rolling the parent back if this
- * one fails (see RecordTransaction.tsx's own comment on that).
+ * "file" field. Always a second request after the parent row exists (the
+ * upload route needs its id): post the parent first, then this - never
+ * rolling the parent back if this fails.
  *
- * No Content-Type header set by hand: FormData sets its own multipart
- * boundary, and overriding it here would drop the boundary parameter and
- * break the server's parse.
+ * No Content-Type header set by hand: FormData sets its multipart boundary,
+ * and overriding it would drop the boundary parameter and break the server's
+ * parse.
  */
 export function uploadReceipt(kind: ReceiptParentKind, parentId: number, file: File): Promise<ReceiptUploadResult> {
   const form = new FormData()
@@ -56,8 +51,7 @@ export function uploadReceipt(kind: ReceiptParentKind, parentId: number, file: F
 }
 
 /** DELETE /api/receipts/{id} - for a wrong or duplicate photo. "Ganti foto"
- * (ReceiptDialog.tsx) is this followed by a fresh uploadReceipt - there is
- * no combined replace route. */
+ * is this followed by a fresh uploadReceipt - there is no replace route. */
 export async function deleteReceipt(id: number): Promise<void> {
   await apiFetch<void>(`/api/receipts/${id}`, { method: 'DELETE' })
   versions.set(id, (versions.get(id) ?? 0) + 1)

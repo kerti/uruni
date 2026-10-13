@@ -4,19 +4,18 @@ import { copy } from '../src/copy/id'
 import { formatIDR } from '../src/lib/money'
 import { expect, logIn, test } from './fixtures'
 
-// M8.10 (#441): the two ways money sits in the fund without being the
-// fund's own. Talangan - a member's own money paid for the kas (removing a
-// claim, its receipt photo, what Beranda says the fund owes, the Semua tab) -
-// and Titipan, money held for someone else (made in Pengaturan, received and
-// forwarded as two ordinary records, its own pos on Beranda and on the
-// public report, renamed).
+// The two ways money sits in the fund without being the fund's own. Talangan -
+// a member's money paid for the kas (removing a claim, its receipt photo, what
+// Beranda says the fund owes, the Semua tab) - and Titipan, money held for
+// someone else (made in Pengaturan, received and forwarded as two ordinary
+// records, its own pos on Beranda and on the public report, renamed).
 //
 // Paging and search on Belum dibayar live in browsing.spec.ts; this file adds
 // the Semua tab's search, where a settled claim is still found.
 //
-// Serial, one story on the seeded fixture (Tunai Rp 1.000.000, Kas Utama,
-// Warga Satu and Warga Dua). Claims are seeded over the API: the record form
-// has its own journey in reimbursements.spec.ts.
+// Serial, one story on the seeded fixture (Tunai Rp 1.000.000, Kas Utama, Warga
+// Satu and Warga Dua). Claims are seeded over the API: the record form has its
+// own journey in reimbursements.spec.ts.
 
 // The same 8x8 JPEG receipts.spec.ts uploads: written by Go's own encoder, so
 // the server's decoder is guaranteed to accept it.
@@ -91,8 +90,7 @@ async function removeClaim(card: Locator, page: Page) {
 }
 
 // The photo's "more" menu, then one of its items. Retried as a pair - see
-// receipts.spec.ts, which this is copied from: a menu still animating closed
-// turns the trigger click into a toggle.
+// receipts.spec.ts, which this is copied from.
 async function choosePhotoAction(page: Page, dialog: Locator, item: string) {
   await expect(async () => {
     const menuItem = page.getByRole('menuitem', { name: item })
@@ -257,8 +255,8 @@ test.describe('talangan and titipan', () => {
     await expect(owed).toContainText(formatIDR(40_000))
   })
 
-  // The report is public, so the URL is read from the logged-in Pengaturan
-  // card and then navigated like any reader would.
+  // The report is public, so the URL is read from the logged-in Pengaturan card
+  // and then navigated like any reader would.
   let reportPath = ''
 
   test('create a Titipan in Pengaturan; it starts at zero on Beranda', async ({ page }) => {

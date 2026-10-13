@@ -58,7 +58,7 @@ function claim(id: number, overrides: Partial<Claim> = {}): Claim {
   }
 }
 
-/** Wraps rows in GET /api/reimbursements's own envelope (#226). */
+/** Wraps rows in GET /api/reimbursements's envelope. */
 function page(rows: Claim[], nextCursor: string | null = null) {
   return { reimbursements: rows, next_cursor: nextCursor }
 }
@@ -73,9 +73,9 @@ function jsonResponse(body: unknown, status = 200) {
 
 type Handler = { match: (method: string, url: string) => boolean; handle: () => Promise<Response> }
 
-/** Opens the first claim row's "more" menu and picks an item from it (#314):
- * Perbaiki, Putihkan and Hapus live there now, behind the row's one plain
- * Bayar control. */
+/** Opens the first claim row's "more" menu and picks an item from it:
+ * Perbaiki, Putihkan and Hapus live there, behind the row's one plain Bayar
+ * control. */
 async function chooseFromRowMenu(name: string) {
   await userEvent.click(screen.getAllByRole('button', { name: text.actions.menuAria })[0])
   await userEvent.click(within(await screen.findByRole('menu')).getByRole('menuitem', { name }))
@@ -93,8 +93,8 @@ function routedFetch(handlers: Handler[]) {
 }
 
 /** The default GET handlers backing every test: the reimbursements list
- * (outstanding vs all variants) plus the members/purposes/accounts form
- * data fetched when a record/settle/correct form is opened. */
+ * (outstanding vs all variants) plus the members/purposes/accounts form data
+ * fetched when a record/settle/correct form is opened. */
 function getHandlers(opts: { outstanding?: Claim[]; all?: Claim[] } = {}) {
   const outstanding = opts.outstanding ?? outstandingClaims
   const all = opts.all ?? allClaims
@@ -121,7 +121,7 @@ function LocationProbe() {
   return <output data-testid="location">{location.search}</output>
 }
 
-/** Stands in for the three Talangan screens: all this file needs to know is
+/** Stands in for the three Talangan screens: this file only needs to know
  * where a tap on the tab landed. */
 function ScreenProbe() {
   const location = useLocation()
@@ -157,9 +157,9 @@ describe('Reimbursements tab', () => {
     await waitFor(() => expect(screen.getByText('Jane')).toBeInTheDocument())
     expect(screen.getByText('Parkir')).toBeInTheDocument()
     expect(screen.getByText(money(15_000))).toBeInTheDocument()
-    // The outstanding tab honestly labels a still-owed claim "Belum dibayar".
-    // `settled` rides the wire (the list queries compute the flag), so the
-    // badge is a fact, not a tab-dependent guess.
+    // The outstanding tab labels a still-owed claim "Belum dibayar". `settled`
+    // rides the wire (the list queries compute it), so the badge is a fact, not
+    // a tab-dependent guess.
     expect(screen.getByText(text.status.outstanding, { selector: 'span' })).toBeInTheDocument()
   })
 
@@ -204,10 +204,10 @@ describe('Reimbursements tab', () => {
   })
 
   it('waive is reversible: un-waive is reachable from the all tab', async () => {
-    // The outstanding list never contains a waived claim, so after a waive
-    // the row leaves it; the all tab shows the waived row with "Batalkan
+    // The outstanding list never contains a waived claim, so after a waive the
+    // row leaves it; the all tab shows the waived row with "Batalkan
     // pemutihan", which un-waives it straight back. The outstanding GET can
-    // therefore never present a row with a "Batalkan pemutihan" affordance.
+    // never present a row with that affordance.
     let waived = false
     const initial = [claim(1)]
     vi.stubGlobal(
@@ -263,9 +263,9 @@ describe('Reimbursements tab', () => {
   })
 
   it('all tab is honest history: Dibayar only when the ledger settled it', async () => {
-    // The all tab mixes a settled row (id 2, flagged by the list queries) and
-    // a still-owed row (id 1). The badges must reflect the flag: never a
-    // "Dibayar" label on an unsettled claim, and no action buttons at all.
+    // The all tab mixes a settled row (id 2) and a still-owed row (id 1). The
+    // badges must reflect the flag: never "Dibayar" on an unsettled claim, and
+    // no action buttons at all.
     vi.stubGlobal('fetch', routedFetch(getHandlers({ outstanding: [], all: allClaims })))
     renderAt()
 
@@ -319,7 +319,7 @@ describe('Reimbursements tab', () => {
     // Confirm delete
     await userEvent.click(screen.getByRole('button', { name: text.actions.delete }))
 
-    // After deletion, the list refreshes (the claim disappears) and feedback
+    // After deletion the list refreshes (the claim disappears) and feedback
     // confirms the write landed.
     await waitFor(() => expect(screen.queryByText('Jane')).not.toBeInTheDocument())
     expect(screen.getByText(text.delete.success)).toBeInTheDocument()
@@ -504,7 +504,7 @@ describe('Reimbursements tab', () => {
     expect(last?.searchParams.get('q')).toBe('parkir')
   })
 
-  // #154: the optional photo, at record time and after the fact.
+  // The optional photo, at record time and after the fact.
   describe('receipt photos', () => {
     const receiptsText = copy.receipts
 
@@ -550,18 +550,16 @@ describe('Reimbursements tab', () => {
       )
       await userEvent.click(within(dialog).getByRole('button', { name: receiptsText.addFromRow }))
 
-      // The dialog itself shows the new photo once the refetch resolves -
-      // the per-photo "more" menu (Ganti foto/Hapus foto) only renders once
-      // a receipt exists (the photo itself is alt="" - decorative, so it
-      // carries no accessible "img" role to query by). Radix also hides the
-      // row underneath from the accessibility tree while the dialog stays
-      // open, so the row's own renamed control is only checked after
-      // closing it.
+      // The dialog shows the new photo once the refetch resolves - the
+      // per-photo "more" menu only renders once a receipt exists (the photo is
+      // alt="" - decorative, no accessible "img" role). Radix hides the row
+      // underneath from the accessibility tree while the dialog stays open, so
+      // the row's renamed control is only checked after closing it.
       await waitFor(() => expect(within(dialog).getByRole('button', { name: receiptsText.photoMenuAria })).toBeInTheDocument())
       await userEvent.click(within(dialog).getAllByRole('button', { name: copy.common.close })[0])
 
       // The list refetch now answers with a receipt attached, so the row's
-      // own control renames itself to "Lihat nota".
+      // control renames itself to "Lihat nota".
       await waitFor(() => expect(screen.getByRole('button', { name: receiptsText.viewReceipt })).toBeInTheDocument())
     })
 
@@ -601,17 +599,16 @@ describe('Reimbursements tab', () => {
       await userEvent.click(screen.getByRole('button', { name: receiptsText.viewReceipt }))
       const dialog = await screen.findByRole('dialog')
 
-      // Hapus foto lives inside the per-photo "more" menu now, not a
-      // footer button under the image.
+      // Hapus foto lives inside the per-photo "more" menu, not a footer
+      // button under the image.
       await userEvent.click(within(dialog).getByRole('button', { name: receiptsText.photoMenuAria }))
       await userEvent.click(within(await screen.findByRole('menu')).getByRole('menuitem', { name: receiptsText.delete }))
       expect(within(dialog).getByText(receiptsText.deleteConfirm)).toBeInTheDocument()
       await userEvent.click(within(dialog).getByRole('button', { name: receiptsText.delete }))
 
-      // Same reasoning as the attach test above: check the dialog's own
-      // state (no photo left to show - the "more" menu only renders per
-      // receipt) before closing it and reading the row's control, since
-      // the row is hidden from the tree while the dialog is open.
+      // As in the attach test: check the dialog's state (no photo left - the
+      // "more" menu renders per receipt) before closing it and reading the
+      // row's control, since the row is hidden while the dialog is open.
       await waitFor(() => expect(within(dialog).queryByRole('button', { name: receiptsText.photoMenuAria })).not.toBeInTheDocument())
       await userEvent.click(within(dialog).getAllByRole('button', { name: copy.common.close })[0])
 
