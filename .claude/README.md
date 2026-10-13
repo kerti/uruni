@@ -8,7 +8,7 @@ The rules the agents follow are in [`CLAUDE.md`](../CLAUDE.md); the reasoning is
 
 | Path | Loaded when | Purpose |
 |---|---|---|
-| `settings.json` | Session start | Pins the orchestrator (`opus` · `medium`), wires the hooks, allows the safe Bash verbs |
+| `settings.json` | Session start | Pins the orchestrator (`opus` · `medium`), wires the hooks, allows the safe Bash verbs. For `gh issue` that is `view` and `list` only: issue text is public input, so every write prompts |
 | `settings.local.json` | Session start | Yours, gitignored. Personal approvals + commit attribution. Seeded by `make claude-install` |
 | `agents/*.md` | On delegation | One role per file; `model` and `effort` in the frontmatter are the only thing that actually binds those choices |
 | `hooks/session-start.sh` | Session start | Orients; fast-forwards `main` only when already on `main` |

@@ -15,7 +15,11 @@
     "CLAUDE_CODE_FORK_SUBAGENT=0 turns off the built-in 'fork' agent type. While",
     "forks are on, Claude Code drops run_in_background from the Agent tool and",
     "runs every subagent in the background, so CLAUDE.md's foreground rule could",
-    "not be followed. Uruni delegates only to its role agents, never to forks."
+    "not be followed. Uruni delegates only to its role agents, never to forks.",
+    "gh issue: only view and list are allowed. Anyone can write an issue, and",
+    "agents read issue text as live state, so a write (create, comment, edit,",
+    "close, delete, transfer) always prompts - an instruction planted in an",
+    "issue must never publish without a human (#504)."
   ],
   "env": {
     "CLAUDE_CODE_FORK_SUBAGENT": "0"
@@ -42,7 +46,9 @@
       "Bash(git log *)",
       "Bash(git checkout -b *)",
       "Bash(git switch -c *)",
-      "Bash(gh issue *)",
+      "Bash(gh issue view *)",
+      "Bash(gh issue list)",
+      "Bash(gh issue list *)",
       "Bash(gh pr view *)"
     ]
   },
