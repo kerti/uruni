@@ -11,9 +11,8 @@ import (
 	"github.com/kerti/uruni/internal/store"
 )
 
-// migratedTestDB opens a throwaway database (via openTestDB, from db_test.go)
-// and applies every migration, which every schema test needs before it can
-// exercise a table.
+// migratedTestDB opens a throwaway database (openTestDB, db_test.go) with every
+// migration applied, which every schema test needs.
 func migratedTestDB(t *testing.T) *sql.DB {
 	t.Helper()
 	sqlDB := openTestDB(t)
@@ -23,8 +22,8 @@ func migratedTestDB(t *testing.T) *sql.DB {
 	return sqlDB
 }
 
-// validSlug is 22 characters - the minimum report_slug length - so tests that
-// aren't exercising the slug constraint itself can just reuse it.
+// validSlug is 22 characters, the minimum report_slug length, for tests not
+// exercising the slug constraint.
 const validSlug = "abcdefghijklmnopqrstuv"
 
 func createFund(t *testing.T, sqlDB *sql.DB, name, slug string) int64 {
@@ -45,8 +44,8 @@ func TestStrictRejectsAFloatInAnIntegerColumn(t *testing.T) {
 	t.Parallel()
 	sqlDB := migratedTestDB(t)
 
-	// created_at is INTEGER; STRICT is what turns "1000.50" into an error
-	// instead of a silently truncated or coerced value (ADR-024, ADR-006).
+	// created_at is INTEGER; STRICT turns "1000.50" into an error instead of a
+	// silently truncated or coerced value (ADR-024, ADR-006).
 	_, err := sqlDB.Exec(
 		`INSERT INTO fund (name, currency, report_slug, created_at) VALUES (?, ?, ?, 1000.50)`,
 		"Test Fund", "IDR", validSlug,
@@ -180,9 +179,9 @@ func TestMigrationAppliesFromEmptyAndRoundTrips(t *testing.T) {
 		t.Fatalf("ListFunds() after Up() = %v, want no error", err)
 	}
 
-	// Down() refuses the baseline now (#494), so the baseline's own down script is
-	// driven through the runner directly: it is still the schema's inverse and
-	// must stay a working one, even though no command reaches it.
+	// Down() refuses the baseline now (#494), so the baseline's down script is
+	// driven through the runner directly: it is the schema's inverse and must stay
+	// working though no command reaches it.
 	p, err := provider(sqlDB)
 	if err != nil {
 		t.Fatalf("provider() = %v, want no error", err)
@@ -264,8 +263,8 @@ func TestEffectiveDuesRateFollowsAMidYearChange(t *testing.T) {
 		})
 	}
 
-	// A period before every rate has no answer, and that is not an error state
-	// the schema can express - it is simply no row.
+	// A period before every rate has no answer: no row, not an error state the
+	// schema can express.
 	if _, err := q.GetEffectiveDuesRate(ctx, store.GetEffectiveDuesRateParams{
 		TierID: tierID, EffectiveFrom: "2025-12",
 	}); !errors.Is(err, sql.ErrNoRows) {
@@ -283,8 +282,8 @@ func TestMemberCannotBorrowAnotherFundsTier(t *testing.T) {
 	fundB := createFund(t, sqlDB, "Fund B", "bcdefghijklmnopqrstuvw")
 	tierB := createDuesTier(t, sqlDB, fundB, "warga")
 
-	// The tier exists, so a single-column FK would have accepted this. Only the
-	// composite (fund_id, tier_id) FK knows it belongs to the wrong fund.
+	// The tier exists, so a single-column FK would accept this; only the composite
+	// (fund_id, tier_id) FK knows it belongs to the wrong fund.
 	if _, err := q.CreateMember(ctx, store.CreateMemberParams{JoinedOn: "2000-01-01",
 		FundID: fundA, Name: "Jane", TierID: &tierB, CreatedAt: 1,
 	}); err == nil {
@@ -394,15 +393,15 @@ func TestDuesRateAmountCannotBeNegative(t *testing.T) {
 }
 
 // A member is a name and the dates around it, nothing to reach them by: PRD
-// section 6 ("Member ... no contact details") and section 8 (data
-// minimization), CLAUDE.md rule 6. Uruni collects only names, amounts, dates
-// and notes, so no member email, phone or other contact column may exist - the
-// treasurer's own login email lives on "user", which is not a member.
+// section 6 ("Member ... no contact details"), section 8 (data minimization),
+// CLAUDE.md rule 6. Uruni collects only names, amounts, dates and notes, so no
+// member email, phone or contact column may exist; the treasurer's login email
+// lives on "user", not a member.
 //
 // Read off the real migrated schema (PRAGMA table_info), so a column added to
-// the one migration file fails here whether or not any query uses it. The
-// pattern list is generous on purpose: Indonesian words for the same things
-// (telepon, hp, alamat, kontak) and the usual messaging handles.
+// the migration file fails here whether or not a query uses it. The pattern
+// list is generous: Indonesian words for the same things (telepon, hp, alamat,
+// kontak) and the usual messaging handles.
 func TestMemberSchemaCarriesNoContactColumn(t *testing.T) {
 	t.Parallel()
 	sqlDB := migratedTestDB(t)

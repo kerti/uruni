@@ -9,8 +9,8 @@ import (
 	"github.com/kerti/uruni/internal/store"
 )
 
-// #113: the raw round trip on user and session, before any of #114-#116 build
-// on top of it. No password hashing here - that is #114's.
+// #113: the raw round trip on user and session, before #114-#116 build on it.
+// No password hashing here (that is #114's).
 
 func TestUserRoundTrip(t *testing.T) {
 	t.Parallel()
@@ -54,8 +54,8 @@ func TestUserEmailIsUnique(t *testing.T) {
 	}
 }
 
-// CountUsers is register's (#114) one-shot bootstrap gate: it must see zero
-// before the first account and a positive count immediately after.
+// CountUsers is register's (#114) one-shot bootstrap gate: zero before the
+// first account, positive immediately after.
 func TestCountUsersReflectsBootstrapState(t *testing.T) {
 	t.Parallel()
 	sqlDB := migratedTestDB(t)
@@ -108,9 +108,8 @@ func TestSessionRoundTrip(t *testing.T) {
 }
 
 // TestSessionExpiryBoundary is the sliding 30-day idle timeout's edge (#113):
-// GetSession's "not_before" comparison is expires_at > ?, strictly greater, so
-// a session exactly at its expiry instant is already gone and one second
-// before it is still live.
+// GetSession compares expires_at > ?, strictly, so a session exactly at its
+// expiry is gone and one a second before is live.
 func TestSessionExpiryBoundary(t *testing.T) {
 	t.Parallel()
 	sqlDB := migratedTestDB(t)
@@ -137,10 +136,9 @@ func TestSessionExpiryBoundary(t *testing.T) {
 	}
 }
 
-// TestTouchSessionSlidesExpiryForward is the "sliding" half of the idle
-// timeout: a live session's expires_at moves forward, and the same guard that
-// protects GetSession also protects TouchSession from reviving a session that
-// already lapsed.
+// TestTouchSessionSlidesExpiryForward is the "sliding" half: a live session's
+// expires_at moves forward, and the guard protecting GetSession also stops
+// TouchSession reviving a lapsed session.
 func TestTouchSessionSlidesExpiryForward(t *testing.T) {
 	t.Parallel()
 	sqlDB := migratedTestDB(t)

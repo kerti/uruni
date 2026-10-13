@@ -8,19 +8,17 @@ import (
 	"github.com/kerti/uruni/internal/store"
 )
 
-// #230's uniform rule: a location and its opening balance are born together,
-// in one database transaction, or not at all - everywhere in the app. There
-// is no longer any standalone way to post an opening balance, so this file
-// tests the two paths that now carry one: Ledger.CreateAccount (a location
-// added after setup) and SetUpFund (the accounts a fund starts with).
-// TestOpeningBalanceIndexRefusesASecondRowInsertedDirectly is the one
-// survivor from before #230: it proves the schema's own guarantee, which
-// neither entry point's pre-check logic touches.
+// #230: a location and its opening balance are born together, in one database
+// transaction, or not at all, everywhere in the app; there is no standalone
+// way to post one. This file tests the two paths that carry one:
+// Ledger.CreateAccount (a location added after setup) and SetUpFund (the
+// starting accounts). TestOpeningBalanceIndexRefusesASecondRowInsertedDirectly
+// is the survivor from before #230, proving the schema's guarantee, which
+// neither entry point's pre-check touches.
 
 // CreateAccount, given an opening balance, posts one kind='opening',
-// direction='in' row tagged to the fund's main purpose, against the account
-// it just created - and FundBalance/AccountBalance include it exactly like
-// any other entry.
+// direction='in' row tagged to the main purpose against the new account, and
+// FundBalance/AccountBalance include it like any entry.
 func TestCreateAccountPostsOpeningBalanceRowIncludedInBalances(t *testing.T) {
 	t.Parallel()
 	l := newTestLedger(t)
@@ -82,9 +80,8 @@ func TestCreateAccountPostsOpeningBalanceRowIncludedInBalances(t *testing.T) {
 	}
 }
 
-// A zero-amount opening balance still creates the account, but posts no
-// row - the same no-op rule PostOpeningBalance used to carry, now checked at
-// CreateAccount's own boundary.
+// A zero-amount opening balance still creates the account but posts no row,
+// the no-op rule PostOpeningBalance carried, checked at CreateAccount.
 func TestCreateAccountZeroOpeningBalancePostsAccountOnlyNoRow(t *testing.T) {
 	t.Parallel()
 	l := newTestLedger(t)
@@ -119,9 +116,8 @@ func TestCreateAccountZeroOpeningBalancePostsAccountOnlyNoRow(t *testing.T) {
 	}
 }
 
-// No OpeningBalance at all behaves exactly like an explicit zero one -
-// absent and zero are the same thing (setup.go's own AccountInput doc
-// comment states this; CreateAccountParams shares it).
+// No OpeningBalance behaves like an explicit zero: absent and zero are the
+// same (see AccountInput in setup.go; CreateAccountParams shares it).
 func TestCreateAccountNilOpeningBalancePostsAccountOnlyNoRow(t *testing.T) {
 	t.Parallel()
 	l := newTestLedger(t)
@@ -145,10 +141,9 @@ func TestCreateAccountNilOpeningBalancePostsAccountOnlyNoRow(t *testing.T) {
 	}
 }
 
-// A negative opening balance is refused before withTx opens, and leaves no
-// account behind either - the whole point of folding the two writes into one
-// transaction: a refused balance must not strand a location with nothing to
-// say about what's in it.
+// A negative opening balance is refused before withTx opens and leaves no
+// account behind: the point of folding the writes into one transaction is that
+// a refused balance must not strand a location.
 func TestCreateAccountRejectsNegativeOpeningBalanceLeavesNoAccountBehind(t *testing.T) {
 	t.Parallel()
 	l := newTestLedger(t)
@@ -186,8 +181,8 @@ func TestCreateAccountRejectsNegativeOpeningBalanceLeavesNoAccountBehind(t *test
 	}
 }
 
-// A malformed or calendar-invalid occurred_on is refused the same way, and
-// leaves no account behind either.
+// A malformed or calendar-invalid occurred_on is refused alike and leaves no
+// account behind.
 func TestCreateAccountRejectsInvalidOccurredOnLeavesNoAccountBehind(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
@@ -230,8 +225,8 @@ func TestCreateAccountRejectsInvalidOccurredOnLeavesNoAccountBehind(t *testing.T
 	}
 }
 
-// SetUpFund posts exactly the opening balances the accounts asked for -
-// some, none, or all - in one batch, mixed freely in the same call.
+// SetUpFund posts exactly the opening balances the accounts asked for (some,
+// none, or all) in one batch.
 func TestSetUpFundPostsOpeningBalancesForOnlyTheAccountsThatHaveThem(t *testing.T) {
 	t.Parallel()
 	l := newTestLedger(t)
@@ -286,8 +281,8 @@ func TestSetUpFundPostsOpeningBalancesForOnlyTheAccountsThatHaveThem(t *testing.
 }
 
 // A negative opening balance anywhere in the batch is refused before withTx
-// opens, and leaves no fund behind at all - a retry with a corrected amount
-// must not collide with ErrFundAlreadyExists.
+// opens and leaves no fund; a corrected retry must not hit
+// ErrFundAlreadyExists.
 func TestSetUpFundRejectsNegativeOpeningBalanceLeavesNoFundBehind(t *testing.T) {
 	t.Parallel()
 	l := newTestLedger(t)
@@ -312,8 +307,7 @@ func TestSetUpFundRejectsNegativeOpeningBalanceLeavesNoFundBehind(t *testing.T) 
 		t.Fatalf("ListFunds() = %d funds after a refused setup, want 0", len(funds))
 	}
 
-	// The retry succeeds - the refused call did not consume ErrFundAlreadyExists's
-	// one-fund slot.
+	// The retry succeeds: the refused call did not consume the one-fund slot.
 	if _, err := l.SetUpFund(ctx, SetUpFundParams{
 		FundName: "Test Fund",
 		Accounts: []AccountInput{{Kind: "cash", Name: "Tunai"}},
@@ -322,8 +316,8 @@ func TestSetUpFundRejectsNegativeOpeningBalanceLeavesNoFundBehind(t *testing.T) 
 	}
 }
 
-// A malformed occurred_on anywhere in the batch is refused the same way,
-// leaving no fund and no account behind either.
+// A malformed occurred_on anywhere in the batch is refused alike, leaving no
+// fund or account.
 func TestSetUpFundRejectsInvalidOccurredOnLeavesNoFundBehind(t *testing.T) {
 	t.Parallel()
 	l := newTestLedger(t)
@@ -350,11 +344,10 @@ func TestSetUpFundRejectsInvalidOccurredOnLeavesNoFundBehind(t *testing.T) {
 	}
 }
 
-// The schema's opening_balance_once_per_account index is the actual
-// guarantee, independent of either entry point's own logic: inserting a
-// second kind='opening' row directly through raw store.Queries, bypassing
-// both CreateAccount and SetUpFund entirely, must still be refused. This is
-// the test that would catch the index itself being dropped.
+// The schema's opening_balance_once_per_account index is the actual guarantee,
+// independent of either entry point: a second kind='opening' row inserted
+// through raw store.Queries, bypassing CreateAccount and SetUpFund, must still
+// be refused. This would catch the index being dropped.
 func TestOpeningBalanceIndexRefusesASecondRowInsertedDirectly(t *testing.T) {
 	t.Parallel()
 	l := newTestLedger(t)
@@ -388,10 +381,9 @@ func TestOpeningBalanceIndexRefusesASecondRowInsertedDirectly(t *testing.T) {
 	}
 }
 
-// #257: nothing is generated into transaction.note any more - "Saldo awal -
-// {lokasi}" is now a display label, not stored text - so an opening
-// balance's Note follows the same nil/blank/typed contract as every other
-// system path.
+// #257: nothing is generated into transaction.note ("Saldo awal - {lokasi}" is
+// a display label, not stored text), so an opening balance's Note follows the
+// nil/blank/typed contract of every system path.
 func TestCreateAccountOpeningBalanceNoteFollowsNormalizeNoteContract(t *testing.T) {
 	t.Parallel()
 	create := func(t *testing.T, note *string) *string {

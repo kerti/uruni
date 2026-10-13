@@ -1,7 +1,6 @@
-// Command uruni is the whole product: one binary that serves the API, the
-// public report and the embedded SPA (ADR-001). Its subcommand surface is
-// pinned by ADR-019 - the Makefile and the container HEALTHCHECK are written
-// against that table, so it is a contract, not a convenience.
+// Command uruni is the whole product: one binary serving the API, the public
+// report and the embedded SPA (ADR-001). ADR-019 pins the subcommand surface;
+// the Makefile and container HEALTHCHECK are written against it.
 package main
 
 import (
@@ -34,18 +33,16 @@ func main() {
 	}
 }
 
-// The CLI and the server logs are the *operator's* surface, so they are in
-// English like the rest of the self-hosting documentation. Indonesian is for
-// the treasurer's surface - the SPA and the public report (ADR-014).
+// The CLI and server logs are the operator's surface, so English like the
+// self-hosting docs. Indonesian is the treasurer's: the SPA and public report
+// (ADR-014).
 var (
-	// ErrNoCommand and ErrUnknownCommand are sentinels so callers and tests can
-	// branch on identity rather than on message text.
+	// ErrNoCommand and ErrUnknownCommand are sentinels, matched by identity.
 	ErrNoCommand      = errors.New("no command given")
 	ErrUnknownCommand = errors.New("unknown command")
 )
 
-// usage lists every subcommand in ADR-019's table. `seed-e2e` landed at M6.3,
-// `create-user` at #287 - the last row of the table to get an implementation.
+// usage lists every subcommand in ADR-019's table.
 const usage = "try: uruni serve | migrate up|down|status | create-user <email> <password> | version | healthcheck | seed-e2e"
 
 func run(args []string) error {
@@ -79,24 +76,22 @@ func serve() error {
 		return err
 	}
 
-	// The one boot-time filesystem check config.Load itself does not make
-	// (that function stays a pure environment parse) - only `serve` writes a
-	// receipt, so only `serve` needs the volume to already be there and
-	// writable (#153).
+	// The one boot-time filesystem check config.Load (a pure environment parse)
+	// does not make: only `serve` writes a receipt, so only it needs the volume
+	// present and writable (#153).
 	if err := config.EnsureUploadsDirWritable(cfg.UploadsDir); err != nil {
 		return err
 	}
-	// Same check, for the daily backup dumps' own directory (#324).
+	// Same check for the daily backup dumps' directory (#324).
 	if err := config.EnsureBackupDirWritable(cfg.BackupDir); err != nil {
 		return err
 	}
 
 	// `serve` and `migrate up` / `migrate down` take this lock, so a migration
 	// never runs under a live server (#494). `migrate status` does not: an
-	// operator legitimately runs it *while* a server is up to check what it has
-	// applied. What the lock guards against for `serve` is two long-lived
-	// `serve` processes both reaching the domain-level singleton guard
-	// (first-run setup refusing a second fund) at once - see internal/lock's package doc.
+	// operator runs it while a server is up. For `serve` the lock stops two
+	// long-lived `serve` processes both reaching the domain-level singleton guard
+	// (first-run setup refusing a second fund) at once; see internal/lock.
 	lockPath := lock.PathFor(cfg.DBPath)
 	instanceLock, err := lock.Acquire(lockPath)
 	if err != nil {
@@ -109,97 +104,88 @@ func serve() error {
 		return fmt.Errorf("opening the embedded web assets: %w", err)
 	}
 
-	// One logger, built at startup and passed down - no package-level global
-	// (ADR-022). Threaded into internal/http below, where its request-logging
-	// middleware and error mappers use it (ADR-021).
+	// One logger, built at startup and passed down, no package-level global
+	// (ADR-022); internal/http's request logging and error mappers use it
+	// (ADR-021).
 	logger := newLogger(cfg, os.Stderr)
 
-	// SIGINT/SIGTERM close in-flight requests cleanly - `make restart` and
-	// `docker compose down` both stop the process this way. Established before
-	// the store opens so a Ctrl-C during a long first migration is honoured.
+	// SIGINT/SIGTERM close in-flight requests cleanly (`make restart` and
+	// `docker compose down` stop the process this way). Set up before the store
+	// opens so a Ctrl-C during a long first migration is honoured.
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
 	// The store, opened once for the process (ADR-004: one connection, so
-	// everything serializes). M4's handlers take it; for now it is what the
-	// migrations run against.
+	// everything serializes).
 	sqlDB, err := db.Open(ctx, cfg.DBPath)
 	if err != nil {
 		return err
 	}
 	defer func() { _ = sqlDB.Close() }()
 
-	// Which file the path names now, so /healthz can tell if it is later
-	// deleted or replaced under this process (#278).
+	// Which file the path names now, so /healthz can tell if it is later deleted
+	// or replaced under this process (#278).
 	dbFile, err := db.IdentifyFile(cfg.DBPath)
 	if err != nil {
 		return err
 	}
 
 	// Migrations run on boot, so self-hosting stays `docker compose up` with no
-	// migration step for the operator (ADR-019). The cost is a slower first boot
-	// after an upgrade, which is the right side of that trade for one small
-	// instance per community.
+	// migration step (ADR-019). The cost is a slower first boot after an
+	// upgrade, the right side of that trade for one small instance.
 	if _, err := db.Up(ctx, sqlDB, logger); err != nil {
 		return err
 	}
 
 	// ADR-025: goose cannot see that the one migration file was edited in place,
-	// so a database from an older build migrates "successfully" and stays on the
-	// old schema. Refuse here, before anything is served or written, rather than
-	// let /healthz say ok and the treasurer meet the 500s.
+	// so an older database migrates "successfully" and stays on the old schema.
+	// Refuse before serving or writing, rather than let /healthz say ok and the
+	// treasurer meet 500s.
 	if err := verifySchema(ctx, sqlDB, cfg.DBPath); err != nil {
 		return err
 	}
 
-	// A damaged file is refused here too (#505): serving it would put the
-	// treasurer's next entries on top of pages SQLite already can't read, and
-	// the boot dump below would write the damage into the backup directory.
+	// A damaged file is refused too (#505): serving it would put new entries on
+	// pages SQLite can't read, and the boot dump would write the damage into the
+	// backup directory.
 	if err := db.QuickCheck(ctx, sqlDB); err != nil {
 		return fmt.Errorf("database integrity check failed for %s - restore a backup (see SELF-HOSTING.md): %w", cfg.DBPath, err)
 	}
 
-	// A second, independent store.New(sqlDB) alongside ledger.New(sqlDB):
-	// store.Queries is a stateless wrapper over the shared *sql.DB (ADR-004's
-	// single connection), so this costs nothing and avoids adding a Querier
-	// accessor to ADR-027's already-implemented ledger boundary.
+	// A second store.New(sqlDB) beside ledger.New(sqlDB): store.Queries is a
+	// stateless wrapper over the shared *sql.DB (ADR-004), so this costs nothing
+	// and avoids a Querier accessor on ADR-027's ledger boundary.
 	q := store.New(sqlDB)
 	l := ledger.New(sqlDB)
 	au := auth.New(sqlDB)
 
-	// The boot-time dump ADR-012 promises: a restorable backup in the
-	// running binary's own format always exists once serve has finished
-	// booting, even the very first time this version runs against an
-	// instance whose newest (or only) dump is older. Deliberately
-	// non-fatal - logged, not returned - because a backup write failing
-	// must never keep the treasurer from recording a transaction, which is
-	// what this whole server exists to let her do; EnsureBootDump's own doc
-	// comment carries this reasoning too.
+	// The boot-time dump ADR-012 promises: once serve has booted, a restorable
+	// backup in the running binary's format exists, even the first time this
+	// version runs against an instance whose newest dump is older. Non-fatal
+	// (logged): a backup failing must never keep the treasurer from recording a
+	// transaction (see EnsureBootDump).
 	if err := backup.EnsureBootDump(ctx, sqlDB, cfg.UploadsDir, cfg.BackupDir, time.Now(), logger); err != nil {
 		logger.Error("boot backup dump failed", "error", err)
 	}
 
-	// The daily scheduler (ADR-013): one goroutine, started only after the
-	// boot dump above has already finished writing (or failed and logged) -
-	// this ordering, not a lock, is what keeps the scheduler and the boot
-	// dump from ever racing on the same file (internal/backup/scheduler.go's
-	// own doc comment). Stopped by the same ctx signal.NotifyContext
-	// cancels below for the HTTP server's own graceful shutdown.
+	// The daily scheduler (ADR-013): one goroutine, started after the boot dump
+	// has finished (or failed and logged). That ordering, not a lock, keeps the
+	// two from racing on one file (internal/backup/scheduler.go). Stopped by the
+	// same ctx that gracefully shuts the HTTP server.
 	go backup.RunScheduler(ctx, sqlDB, cfg.UploadsDir, cfg.BackupDir, logger)
 
 	srv := &http.Server{
 		Addr: fmt.Sprintf(":%d", cfg.Port),
 		Handler: uruniHTTP.New(assets, uruniHTTP.Build{Version: version, Commit: buildCommit()}, l, q, sqlDB, dbFile.Check, logger,
 			au, cfg.BaseURL, cfg.UploadsDir, cfg.BackupDir, cfg.TrustedProxies),
-		// Set explicitly: a server with no header timeout can be held open by a
-		// slow client indefinitely.
+		// Explicit: a server with no header timeout can be held open by a slow client.
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 
 	errc := make(chan error, 1)
 	go func() {
-		// The version goes in the boot line on purpose: it is the first thing
-		// worth knowing when an operator pastes their logs into an issue.
+		// The version is in the boot line on purpose: the first thing worth knowing
+		// when an operator pastes logs into an issue.
 		logger.Info("listening", "port", cfg.Port, "version", version, "db", cfg.DBPath)
 		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			errc <- err
@@ -218,11 +204,11 @@ func serve() error {
 	}
 }
 
-// newLogger builds the one logger the process uses. Text to stderr by default,
-// JSON when the operator ships logs somewhere that parses them (ADR-022).
+// newLogger builds the process's one logger. Text to stderr by default, JSON
+// when the operator ships logs somewhere that parses them (ADR-022).
 //
-// Whatever ends up here is operator-facing and public: never log a member name,
-// a note, or an amount. Log IDs (PRD section 6, data minimization).
+// Output is operator-facing and public: never log a member name, a note or an
+// amount. Log IDs (PRD section 6, data minimization).
 func newLogger(cfg config.Config, w io.Writer) *slog.Logger {
 	opts := &slog.HandlerOptions{Level: cfg.LogLevel}
 	if cfg.LogFormat == config.LogFormatJSON {

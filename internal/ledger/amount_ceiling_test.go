@@ -9,10 +9,10 @@ import (
 	"github.com/kerti/uruni/internal/store"
 )
 
-// The ceiling (#499): every write that takes an amount accepts exactly
+// The ceiling (#499): every write taking an amount accepts exactly
 // money.MaxAmount and refuses one rupiah more with ErrAmountTooLarge, writing
 // nothing. Both sides of the boundary are pinned on every path, so a path that
-// forgets the check, or checks off by one, fails here by name.
+// forgets the check, or is off by one, fails here by name.
 
 const (
 	atMax    = money.MaxAmount
@@ -112,9 +112,8 @@ func ceilingPaths() []ceilingPath {
 			},
 		},
 		{
-			// The payout copies the claim's stored amount. A claim that got
-			// past the ceiling (written before it existed, or restored from a
-			// backup) must not become a payout above it.
+			// The payout copies the claim's stored amount. A claim past the ceiling
+			// (written before it existed, or restored) must not become a payout above it.
 			name: "SettleReimbursement of a stored claim",
 			call: func(t *testing.T, l *Ledger, f fixture, a money.Amount) error {
 				claim := createReimbursement(t, store.New(l.db), f, a.Int64(), date, nil)
@@ -285,8 +284,8 @@ func countRows(t *testing.T, q *store.Queries, fundID int64) rowCounts {
 	return rowCounts{transactions: len(txs), transfers: len(trs)}
 }
 
-// Refusing the ceiling must not reorder the sign checks: zero and negative
-// amounts are still ErrInvalidArgument, never ErrAmountTooLarge.
+// Refusing the ceiling must not reorder the sign checks: zero and negative are
+// still ErrInvalidArgument, never ErrAmountTooLarge.
 func TestCeilingDoesNotChangeTheSignChecks(t *testing.T) {
 	t.Parallel()
 	for _, amount := range []money.Amount{0, -1, -overMax} {
@@ -326,8 +325,8 @@ func TestCheckAmountCeilingNamesTheFieldNotTheValue(t *testing.T) {
 	}
 }
 
-// Two entries at the ceiling are the case the ceiling exists for: their sum
-// must still be a number SQLite can add, so a balance stays readable.
+// Two entries at the ceiling are what it exists for: their sum must be a
+// number SQLite can add, so a balance stays readable.
 func TestTwoEntriesAtTheCeilingStillSum(t *testing.T) {
 	t.Parallel()
 	l := newTestLedger(t)
@@ -350,7 +349,7 @@ func TestTwoEntriesAtTheCeilingStillSum(t *testing.T) {
 	}
 }
 
-// SetUpFund is the other door for an opening balance, and it runs on an empty
+// SetUpFund is the other door for an opening balance and runs on an empty
 // database, so it sits outside the table above (which starts from a fund).
 func TestSetUpFundOpeningBalanceCeiling(t *testing.T) {
 	t.Parallel()

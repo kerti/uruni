@@ -2,12 +2,10 @@ package backup
 
 import "github.com/kerti/uruni/internal/store"
 
-// toX below are thin, mechanical maps from store's sqlc-generated row types
-// to this package's own exported shape (backup.go's own comment says why
-// the shape is not the generated struct directly: json tags need to be
-// snake_case and stable, where the generated struct carries neither). Each
-// one always returns a non-nil (possibly empty) slice, matching
-// BuildDocument's own "always an array" contract.
+// toX below are thin maps from store's sqlc row types to this package's
+// exported shape (backup.go says why not the generated struct: json tags must
+// be stable snake_case). Each returns a non-nil (possibly empty) slice,
+// matching BuildDocument's "always an array" contract.
 
 func toUsers(rows []store.User) []User {
 	out := make([]User, 0, len(rows))
@@ -86,11 +84,10 @@ func toTransfers(rows []store.Transfer) []Transfer {
 }
 
 // toReimbursements reads store.ListReimbursementsByFundRow, the fund-scoped
-// listing every other caller of it uses too - its extra Settled column
-// (whether a settling transaction exists) is derived, not stored, so it is
-// left out here: uruni.json exports the reimbursement table's own columns,
-// and a restore recomputes "settled" from the transactions it just
-// inserted exactly as this column already does.
+// listing every other caller uses. Its Settled column (whether a settling
+// transaction exists) is derived, not stored, so it is left out: uruni.json
+// exports the reimbursement table's columns, and a restore recomputes
+// "settled" from the transactions it inserted, as the column does.
 func toReimbursements(rows []store.ListReimbursementsByFundRow) []Reimbursement {
 	out := make([]Reimbursement, 0, len(rows))
 	for _, r := range rows {

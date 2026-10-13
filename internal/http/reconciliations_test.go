@@ -51,11 +51,9 @@ func decodeReconciliationsPage(t *testing.T, rec *httptest.ResponseRecorder) rec
 	return got
 }
 
-// seedReconciliations inserts n bare snapshots (no lines) directly through
-// the store, oldest first, each performed_at 1 second apart starting at
-// startPerformedAt - the same "seed directly, bypass the ledger" shape
-// seedReimbursements uses, since these paging tests care about ordering and
-// count, not about what TakeReconciliation itself validates.
+// seedReconciliations inserts n bare snapshots (no lines) through the store,
+// oldest first, performed_at 1 second apart from startPerformedAt, like
+// seedReimbursements: paging cares about ordering and count.
 func seedReconciliations(t *testing.T, sqlDB *sql.DB, fundID int64, n int, startPerformedAt int64) []store.Reconciliation {
 	t.Helper()
 	q := store.New(sqlDB)
@@ -106,9 +104,8 @@ func decodeReconciliationDetail(t *testing.T, rec *httptest.ResponseRecorder) re
 	return got
 }
 
-// lineFor finds the response line for accountID, or fails the test - every
-// assertion below is about one specific line, and a missing line is itself a
-// failure, mirroring internal/ledger's own lineFor helper.
+// lineFor finds the response line for accountID, or fails the test, like
+// internal/ledger's lineFor helper.
 func lineFor(t *testing.T, lines []reconciliationLineResponse, accountID int64) reconciliationLineResponse {
 	t.Helper()
 	for _, ln := range lines {
@@ -182,11 +179,10 @@ func TestGetReconciliationDetailRequiresAFund(t *testing.T) {
 	}
 }
 
-// TestGetReconciliationLatestBeforeAnySnapshotIs404 is the "latest when
-// empty" decision, made explicit: 404 "not_found," the same code
-// every other "no such row yet" route in this package already answers with
-// (GET /api/fund before setup, GET /api/incidentals/{id} on an unknown id) -
-// not an empty 200. See latestReconciliation's own doc comment for why.
+// TestGetReconciliationLatestBeforeAnySnapshotIs404: 404 "not_found", the code
+// every "no such row yet" route here answers with (GET /api/fund before
+// setup, GET /api/incidentals/{id} on an unknown id), not an empty 200. See
+// latestReconciliation.
 func TestGetReconciliationLatestBeforeAnySnapshotIs404(t *testing.T) {
 	t.Parallel()
 	r := testRouter(t)
@@ -202,11 +198,10 @@ func TestGetReconciliationLatestBeforeAnySnapshotIs404(t *testing.T) {
 	}
 }
 
-// TestReconciliationsLatestAndOpenLinesAreNotParsedAsIDs is the route-ordering
-// acceptance criterion stated directly: with a fund set up but no snapshot
-// taken, GET /api/reconciliations/latest and GET /api/reconciliations/open-lines
-// must resolve to their own static handlers, not fall into the {id} route and
-// fail strconv.ParseInt on "latest"/"open-lines" as invalid_argument.
+// TestReconciliationsLatestAndOpenLinesAreNotParsedAsIDs: with no snapshot
+// taken, GET /api/reconciliations/latest and /open-lines must resolve to
+// their static handlers, not the {id} route failing strconv.ParseInt as
+// invalid_argument.
 func TestReconciliationsLatestAndOpenLinesAreNotParsedAsIDs(t *testing.T) {
 	t.Parallel()
 	r := testRouter(t)
@@ -237,10 +232,9 @@ func TestReconciliationsLatestAndOpenLinesAreNotParsedAsIDs(t *testing.T) {
 	}
 }
 
-// TestTakeReconciliationMatchedRoundTripsThroughListAndDetail is the plain
-// happy path: a count that agrees with the recorded balance posts nothing,
-// resolves as "matched," and reads back identically through both the list
-// and the detail route.
+// TestTakeReconciliationMatchedRoundTripsThroughListAndDetail is the happy
+// path: a count that agrees with the recorded balance posts nothing,
+// resolves "matched", and reads back identically through list and detail.
 func TestTakeReconciliationMatchedRoundTripsThroughListAndDetail(t *testing.T) {
 	t.Parallel()
 	r := testRouter(t)
@@ -330,11 +324,10 @@ func TestTakeReconciliationMatchedRoundTripsThroughListAndDetail(t *testing.T) {
 }
 
 // TestTakeReconciliationAdjustedStoresTheGapFoundNotZero is the trust-core
-// regression, re-asserted at the HTTP layer: a fix posted
-// as part of the same snapshot does NOT retroactively zero that snapshot's
-// own recorded difference. If the cutoff were taken after the fix landed,
-// difference_amount would be stored as 0 - schema-legal, and a permanent
-// false record that no gap was ever found.
+// regression at the HTTP layer: a fix posted in the same snapshot does not
+// retroactively zero that snapshot's difference. A cutoff taken after the
+// fix would store difference_amount 0: schema-legal, and a permanent false
+// record that no gap was found.
 func TestTakeReconciliationAdjustedStoresTheGapFoundNotZero(t *testing.T) {
 	t.Parallel()
 	r, l := testRouterAndLedger(t)
@@ -378,8 +371,7 @@ func TestTakeReconciliationAdjustedStoresTheGapFoundNotZero(t *testing.T) {
 		t.Fatal("adjustment_transaction_id is nil, want the fix's transaction id")
 	}
 
-	// Re-fetched fresh through GET /api/reconciliations/{id}: still -20000,
-	// never silently rewritten to 0 by a second read.
+	// Re-fetched through GET /api/reconciliations/{id}: still -20000.
 	detailRec := getReconciliationDetail(t, r, created.ID)
 	detail := decodeReconciliationDetail(t, detailRec)
 	againLine := lineFor(t, detail.Lines, setup.CashAccountID(t))
@@ -387,8 +379,8 @@ func TestTakeReconciliationAdjustedStoresTheGapFoundNotZero(t *testing.T) {
 		t.Fatalf("difference_amount on re-read = %d, want -20000 (still the gap found, not zeroed on read-back)", againLine.DifferenceAmount)
 	}
 
-	// The fix itself really moved the ledger: cash is now 80000, verified fresh
-	// off the ledger rather than trusted from the response alone.
+	// The fix moved the ledger: cash is now 80000, checked off the ledger, not
+	// the response.
 	balance, err := l.AccountBalance(ctx, setup.Fund.ID, setup.CashAccountID(t))
 	if err != nil {
 		t.Fatalf("AccountBalance() = %v, want no error", err)
@@ -399,12 +391,10 @@ func TestTakeReconciliationAdjustedStoresTheGapFoundNotZero(t *testing.T) {
 }
 
 // TestTakeReconciliationBackdatedFixLandsInNextSnapshotNotThisOne is the
-// other half of ADR-024's cutoff ordering, asserted through HTTP: a gap left
-// open in one snapshot, later explained by an ordinary backdated entry posted
-// through POST /api/transactions, does not retroactively rewrite the first
-// snapshot's own numbers - it only counts toward the SECOND snapshot's
-// recorded_amount, because its transaction id lands above the first
-// snapshot's cutoff regardless of its calendar date.
+// other half of ADR-024's cutoff ordering over HTTP: a gap left open, later
+// explained by a backdated entry via POST /api/transactions, does not rewrite
+// the first snapshot. It counts toward the second's recorded_amount, because
+// its transaction id is above the first's cutoff whatever its calendar date.
 func TestTakeReconciliationBackdatedFixLandsInNextSnapshotNotThisOne(t *testing.T) {
 	t.Parallel()
 	r := testRouter(t)
@@ -438,10 +428,9 @@ func TestTakeReconciliationBackdatedFixLandsInNextSnapshotNotThisOne(t *testing.
 		t.Fatalf("first line = %+v, want recorded=250000 difference=-10000", firstLine)
 	}
 
-	// A week later the missing receipt turns up: a 10000 expense from the
-	// 3rd, posted now as an adjustment - backdated in occurred_on, current in
-	// id - through the ordinary transactions route, not as part of a
-	// reconciliation call.
+	// A week later the missing receipt turns up: a 10000 expense from the 3rd,
+	// posted as an adjustment (backdated occurred_on, current id) through the
+	// ordinary transactions route.
 	if rec := postTransaction(t, r, transactionRequest{
 		AccountID: setup.CashAccountID(t), PurposeID: setup.MainPurposeID,
 		Direction: "out", Amount: 10_000, OccurredOn: "2026-08-03", IsAdjustment: true,
@@ -457,8 +446,7 @@ func TestTakeReconciliationBackdatedFixLandsInNextSnapshotNotThisOne(t *testing.
 		t.Errorf("first snapshot after the late entry = %+v, want unchanged recorded=250000 difference=-10000", firstLineAgain)
 	}
 
-	// Counted again; this time it agrees, because the late entry now counts
-	// toward today's balance.
+	// Counted again; it agrees, because the late entry now counts.
 	secondRec := postReconciliation(t, r, takeReconciliationRequest{
 		Counts: []accountCountRequest{
 			{AccountID: setup.CashAccountID(t), ActualAmount: 240_000, Resolution: "matched"},
@@ -474,10 +462,8 @@ func TestTakeReconciliationBackdatedFixLandsInNextSnapshotNotThisOne(t *testing.
 		t.Errorf("second snapshot = %+v, want recorded=240000 difference=0 - the late entry now counts", secondLine)
 	}
 
-	// The first snapshot's row is still on record - the second snapshot did
-	// not rewrite history, it only added a new one - but the second snapshot
-	// counted this same account and it matched, so the gap itself is no
-	// longer open.
+	// The first snapshot is still on record, but the second counted this account
+	// and matched, so the gap is no longer open.
 	open := getOpenReconciliationLines(t, r)
 	var openLines []reconciliationLineResponse
 	if err := json.NewDecoder(open.Body).Decode(&openLines); err != nil {
@@ -488,21 +474,18 @@ func TestTakeReconciliationBackdatedFixLandsInNextSnapshotNotThisOne(t *testing.
 	}
 }
 
-// TestTakeReconciliationRejectsAnotherFundsAccount is the ruling from the
-// issue: a cross-fund account_id trips reconciliation_line's composite
-// foreign key, which #103 already taught mapLedgerError to route through
-// mapSQLiteError as a 400 - not the 500 ADR-027's own "domain bug" language
-// would otherwise suggest. No pre-check is added here for something the
-// ledger's own schema already refuses (ADR-027).
+// TestTakeReconciliationRejectsAnotherFundsAccount: a cross-fund account_id
+// trips reconciliation_line's composite foreign key, which mapLedgerError
+// routes through mapSQLiteError as a 400 (#103), not the 500 ADR-027's
+// "domain bug" language suggests. No pre-check for what the schema refuses.
 func TestTakeReconciliationRejectsAnotherFundsAccount(t *testing.T) {
 	t.Parallel()
 	sqlDB := testStoreDB(t)
 	r := authedRouterFor(t, sqlDB)
 	setUpFund(t, r)
 
-	// A second fund, created directly through the store - the app itself
-	// only ever exposes one (v1), so the only way to get a genuine
-	// cross-fund account id is to reach past the HTTP surface for it.
+	// A second fund, created through the store: the app exposes one (v1), so a
+	// cross-fund account id means reaching past the HTTP surface.
 	q := store.New(sqlDB)
 	ctx := t.Context()
 	otherFund, err := q.CreateFund(ctx, store.CreateFundParams{
@@ -532,14 +515,11 @@ func TestTakeReconciliationRejectsAnotherFundsAccount(t *testing.T) {
 	}
 }
 
-// TestGetReconciliationDetailOnAnotherFundsSnapshotIs404 is #105's standing
-// context applied to the detail route: GetReconciliation now
-// takes fund_id alongside id, so a real snapshot id belonging to another
-// fund must read as not-found through THIS app's router rather than being
-// fetched and only then rejected. The positive control - the same snapshot
-// read through its own fund still resolving - is TestASecondFundsReconciliationIsInvisibleToTheFirstFund
-// in internal/ledger, since v1's HTTP surface only ever resolves to the one
-// fund setup created and so cannot address a second fund's router of its own.
+// TestGetReconciliationDetailOnAnotherFundsSnapshotIs404 (#105):
+// GetReconciliation takes fund_id alongside id, so another fund's snapshot id
+// reads as not-found rather than fetched then rejected. The positive control
+// is TestASecondFundsReconciliationIsInvisibleToTheFirstFund in
+// internal/ledger, since v1's HTTP surface resolves to one fund.
 func TestGetReconciliationDetailOnAnotherFundsSnapshotIs404(t *testing.T) {
 	t.Parallel()
 	sqlDB := testStoreDB(t)
@@ -573,8 +553,8 @@ func TestGetReconciliationDetailOnAnotherFundsSnapshotIs404(t *testing.T) {
 		t.Fatalf("CreateReconciliationLine(other) = %v, want no error", err)
 	}
 
-	// The other fund's own snapshot id, read through this app's one
-	// resolved fund, must be invisible.
+	// The other fund's snapshot id, read through this app's one fund, must be
+	// invisible.
 	rec := getReconciliationDetail(t, r, otherRec.ID)
 	if rec.Code != http.StatusNotFound {
 		t.Fatalf("GET /api/reconciliations/{other fund's id} = %d, want %d (body: %s)", rec.Code, http.StatusNotFound, rec.Body.String())
@@ -586,9 +566,8 @@ func TestGetReconciliationDetailOnAnotherFundsSnapshotIs404(t *testing.T) {
 }
 
 // TestTakeReconciliationRejectsInvalidArgumentsBeforeAnyWrite covers the
-// shape checks TakeReconciliation itself makes (ADR-027) reaching the client
-// as 400 invalid_argument, and proves nothing was written: the list stays
-// empty after every rejected call.
+// shape checks (ADR-027) reaching the client as 400 invalid_argument, with
+// nothing written: the list stays empty after every rejection.
 func TestTakeReconciliationRejectsInvalidArgumentsBeforeAnyWrite(t *testing.T) {
 	t.Parallel()
 	for _, tc := range []struct {
@@ -600,8 +579,8 @@ func TestTakeReconciliationRejectsInvalidArgumentsBeforeAnyWrite(t *testing.T) {
 			Counts: []accountCountRequest{{AccountID: 1, ActualAmount: 0, Resolution: "sort-of"}},
 		}},
 		{"matched with a nonzero difference", takeReconciliationRequest{
-			// The empty ledger has recorded_amount 0; claiming "matched"
-			// against a nonzero actual_amount is a lying line.
+			// The empty ledger has recorded_amount 0; "matched" against a nonzero
+			// actual_amount is a lying line.
 			Counts: []accountCountRequest{
 				{AccountID: 1, ActualAmount: 50_000, Resolution: "matched"},
 				{AccountID: -1, ActualAmount: 0, Resolution: "matched"}, // the bank, filled in below
@@ -699,10 +678,9 @@ func TestGetReconciliationDetailOnAnUnknownIDIs404(t *testing.T) {
 }
 
 // TestGetReconciliationOpenLinesReturnsLeftOpenLinesWithTheirSnapshot is the
-// open-lines route doing its actual job, which the route-ordering test above
-// only proves is reachable. A gap the treasurer chose to sleep on is only
-// actionable if the answer says which count it was found in, so
-// reconciliation_id is asserted here and not merely present on the type.
+// open-lines route doing its job, beyond the route-ordering test. A gap
+// slept on is actionable only if the answer says which count found it, so
+// reconciliation_id is asserted.
 func TestGetReconciliationOpenLinesReturnsLeftOpenLinesWithTheirSnapshot(t *testing.T) {
 	t.Parallel()
 	r := testRouter(t)
@@ -715,8 +693,8 @@ func TestGetReconciliationOpenLinesReturnsLeftOpenLinesWithTheirSnapshot(t *test
 		t.Fatalf("seed = %d, want %d (body: %s)", rec.Code, http.StatusCreated, rec.Body.String())
 	}
 
-	// One count that agrees on the bank account and leaves a real gap open on
-	// cash: only the second belongs in open-lines.
+	// One count agrees on the bank and leaves a real gap on cash: only the
+	// second belongs in open-lines.
 	takeRec := postReconciliation(t, r, takeReconciliationRequest{
 		Counts: []accountCountRequest{
 			{AccountID: setup.BankAccountID(t), ActualAmount: 0, Resolution: "matched"},
@@ -758,8 +736,7 @@ func TestGetReconciliationOpenLinesReturnsLeftOpenLinesWithTheirSnapshot(t *test
 }
 
 // TestGetReconciliationsOrdersNewestFirstTiesBrokenByIDDesc mirrors the same
-// test on GET /api/transactions and GET /api/reimbursements: two snapshots
-// performed at the same instant are ordered by id, descending.
+// test for transactions and reimbursements: equal instants order by id desc.
 func TestGetReconciliationsOrdersNewestFirstTiesBrokenByIDDesc(t *testing.T) {
 	t.Parallel()
 	sqlDB := testStoreDB(t)
@@ -799,9 +776,8 @@ func TestGetReconciliationsOrdersNewestFirstTiesBrokenByIDDesc(t *testing.T) {
 	}
 }
 
-// TestGetReconciliationsPagingWalksTheWholeSetWithNoSkipOrDuplicate is
-// #227's "paging walks the whole set with no skip and no duplicate"
-// acceptance criterion, over 60 snapshots (more than two 25-row pages).
+// TestGetReconciliationsPagingWalksTheWholeSetWithNoSkipOrDuplicate (#227)
+// over 60 snapshots (more than two 25-row pages).
 func TestGetReconciliationsPagingWalksTheWholeSetWithNoSkipOrDuplicate(t *testing.T) {
 	t.Parallel()
 	sqlDB := testStoreDB(t)
@@ -855,18 +831,16 @@ func TestGetReconciliationsPagingWalksTheWholeSetWithNoSkipOrDuplicate(t *testin
 }
 
 // TestGetReconciliationsPagingHandlesABackdatedInsertBetweenPageFetches
-// mirrors transactions_test.go's and reimbursements_test.go's own test of
-// the same name: a snapshot inserted after page 1 is fetched, performed
-// earlier than everything on page 1 but inside page 2's range, must appear
-// on page 2 exactly once - proving the keyset cursor (performed_at, id) is
-// what actually runs rather than LIMIT/OFFSET.
+// mirrors the transactions and reimbursements test: a snapshot inserted after
+// page 1, performed earlier than page 1 but inside page 2's range, appears on
+// page 2 exactly once, proving the keyset cursor (performed_at, id), not
+// LIMIT/OFFSET.
 func TestGetReconciliationsPagingHandlesABackdatedInsertBetweenPageFetches(t *testing.T) {
 	t.Parallel()
 	sqlDB := testStoreDB(t)
 	r := authedRouterFor(t, sqlDB)
 	setup := setUpFund(t, r)
-	// 30 snapshots performed_at 1000..1029 (oldest, seeded[0], through
-	// newest, seeded[29]).
+	// 30 snapshots, performed_at 1000..1029 (seeded[0] oldest).
 	seeded := seedReconciliations(t, sqlDB, setup.Fund.ID, 30, 1000)
 
 	page1 := decodeReconciliationsPage(t, getReconciliations(t, r))
@@ -877,9 +851,8 @@ func TestGetReconciliationsPagingHandlesABackdatedInsertBetweenPageFetches(t *te
 		t.Fatal("page 1 next_cursor = nil, want a cursor - 30 rows is more than one page")
 	}
 
-	// Lands strictly inside page 2's range (performed_at 1000..1004, the 5
-	// rows page 1 did not cover) - earlier than every row already handed
-	// out on page 1, and it did not exist when page 1 was fetched.
+	// Lands inside page 2's range (performed_at 1000..1004), earlier than every
+	// row on page 1, and did not exist when page 1 was fetched.
 	q := store.New(sqlDB)
 	backdated, err := q.CreateReconciliation(context.Background(), store.CreateReconciliationParams{
 		FundID: setup.Fund.ID, PerformedAt: 1002, CreatedAt: 99_999,
@@ -916,8 +889,8 @@ func TestGetReconciliationsPagingHandlesABackdatedInsertBetweenPageFetches(t *te
 	}
 }
 
-// TestGetReconciliationsRejectsAMalformedCursor is #227's "malformed cursor
-// -> 400" acceptance criterion.
+// TestGetReconciliationsRejectsAMalformedCursor: a malformed cursor is 400
+// (#227).
 func TestGetReconciliationsRejectsAMalformedCursor(t *testing.T) {
 	t.Parallel()
 	r := testRouter(t)
@@ -936,9 +909,8 @@ func TestGetReconciliationsRejectsAMalformedCursor(t *testing.T) {
 	}
 }
 
-// TestGetReconciliationsOnAnEmptyFundIsAnEmptyPage covers #227's "a fund
-// that has never been reconciled" case at the API layer - the empty state
-// Cek kas's own copy handles is driven by this shape, not an error.
+// TestGetReconciliationsOnAnEmptyFundIsAnEmptyPage (#227): a never-reconciled
+// fund is an empty page, not an error; Cek kas's copy is driven by it.
 func TestGetReconciliationsOnAnEmptyFundIsAnEmptyPage(t *testing.T) {
 	t.Parallel()
 	r := testRouter(t)
@@ -954,11 +926,10 @@ func TestGetReconciliationsOnAnEmptyFundIsAnEmptyPage(t *testing.T) {
 }
 
 // TestGetReconciliationsOpenDifferenceAmount covers #227's per-row
-// open_difference_amount: 0 for a fully matched snapshot, 0 for one whose
-// gap was fully resolved (entry_added/adjusted), and the absolute sum of
-// every left_open line's difference for a mixed snapshot - including a
-// negative difference, to prove the sum is over ABS() and not the signed
-// total.
+// open_difference_amount: 0 for a matched snapshot, 0 for one fully resolved
+// (entry_added/adjusted), and the absolute sum of every left_open line's
+// difference for a mixed one, including a negative difference, to prove the
+// sum is over ABS() and not the signed total.
 func TestGetReconciliationsOpenDifferenceAmount(t *testing.T) {
 	t.Parallel()
 	sqlDB := testStoreDB(t)
@@ -1053,7 +1024,7 @@ func seedCash(t *testing.T, r http.Handler, setup setupResponse, amount int64) {
 }
 
 // #498: an adjusted fix that is not the line's difference is refused with its
-// own code, whatever the way it misses - and nothing is written.
+// code, however it misses, and nothing is written.
 func TestTakeReconciliationAdjustedPlugThatMissesTheDifferenceIs409(t *testing.T) {
 	t.Parallel()
 	for name, tc := range map[string]struct {
@@ -1084,9 +1055,9 @@ func TestTakeReconciliationAdjustedPlugThatMissesTheDifferenceIs409(t *testing.T
 	}
 }
 
-// #498: a partial entry_added keeps the remainder open on every surface the
-// SPA and the public page read - the POST response, the open lines, the Cek
-// kas list row - and an exact one closes the line.
+// #498: a partial entry_added keeps the remainder open on every surface (the
+// POST response, the open lines, the Cek kas list row); an exact one closes
+// the line.
 func TestTakeReconciliationPartialEntryReadsAsOpenForTheRemainder(t *testing.T) {
 	t.Parallel()
 	r := testRouter(t)

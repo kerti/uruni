@@ -18,16 +18,15 @@ import (
 	"github.com/kerti/uruni/internal/store"
 )
 
-// testLogger discards output - these tests assert the HTTP response, not the
-// log line (requestLogger's own test covers what gets logged).
+// testLogger discards output: these tests assert the HTTP response, not the
+// log line (requestLogger's test covers that).
 func testLogger() *slog.Logger {
 	return slog.New(slog.NewTextHandler(io.Discard, nil))
 }
 
-// testStoreDB returns a real, migrated in-memory database, the same recipe
-// internal/ledger's own fixture_test.go uses - a genuine driver is the whole
-// point of this file: the mapper is verified against real SQLite result codes,
-// not a hand-made fake.
+// testStoreDB returns a real, migrated in-memory database (the recipe of
+// internal/ledger's fixture_test.go): a genuine driver is the point, verifying
+// the mapper against real SQLite result codes, not a fake.
 func testStoreDB(t *testing.T) *sql.DB {
 	t.Helper()
 	sqlDB, err := db.Open(context.Background(), ":memory:")
@@ -97,9 +96,9 @@ func TestMapLedgerErrorMapsSentinelsToStatusAndCode(t *testing.T) {
 }
 
 // TestMapAuthErrorMapsSentinelsToStatusAndCode is mapLedgerError's twin for
-// internal/auth's taxonomy. The unrecognized arm matters most: a database
-// fault out of Register has to read as 500, never as the 409 that would
-// tell the treasurer an account already exists when none does.
+// internal/auth. The unrecognized arm matters most: a database fault out of
+// Register must read 500, never the 409 telling the treasurer an account
+// exists when none does.
 func TestMapAuthErrorMapsSentinelsToStatusAndCode(t *testing.T) {
 	t.Parallel()
 	cases := []struct {
@@ -129,16 +128,15 @@ func TestMapAuthErrorMapsSentinelsToStatusAndCode(t *testing.T) {
 	}
 }
 
-// TestMapLedgerErrorWraps checks that %w-wrapped sentinels still match - every
-// ADR-027 sentinel is returned wrapped with context in real callers.
+// TestMapLedgerErrorMatchesAWrappedSentinel: %w-wrapped sentinels still match;
+// real callers return every ADR-027 sentinel wrapped with context.
 func TestMapLedgerErrorMatchesAWrappedSentinel(t *testing.T) {
 	t.Parallel()
 	wrapped := errors.New("posting transfer leg: " + ledger.ErrInvalidArgument.Error())
 	rec := httptest.NewRecorder()
 	mapLedgerError(rec, testLogger(), wrapped)
-	// A plain errors.New wrapping only the *text* does not satisfy errors.Is -
-	// this asserts the unrecognized path, not a false match, guarding against a
-	// mapper that accidentally string-matches instead of using errors.Is.
+	// A plain errors.New wrapping only the text does not satisfy errors.Is: this
+	// asserts the unrecognized path, guarding against a mapper that string-matches.
 	if rec.Code != 500 {
 		t.Fatalf("status = %d, want 500 (text alone must not satisfy errors.Is)", rec.Code)
 	}
@@ -226,8 +224,8 @@ func TestMapSQLiteErrorMapsAGenuineForeignKeyViolation(t *testing.T) {
 		t.Fatalf("CreateFund() = %v, want no error", err)
 	}
 
-	// tier_id 999 names no dues_tier row - the composite FK requires
-	// (fund_id, tier_id) to match a real dues_tier, which this cannot.
+	// tier_id 999 names no dues_tier row: the composite FK requires (fund_id,
+	// tier_id) to match a real one.
 	noSuchTier := int64(999)
 	_, err = q.CreateMember(ctx, store.CreateMemberParams{JoinedOn: "2000-01-01",
 		FundID: fund.ID, Name: "Jane", TierID: &noSuchTier, CreatedAt: 1,
@@ -247,9 +245,9 @@ func TestMapSQLiteErrorMapsAGenuineForeignKeyViolation(t *testing.T) {
 	}
 }
 
-// TestMapSQLiteDeleteErrorMapsAGenuineForeignKeyViolationTo409 is
-// mapSQLiteError's foreign-key test above, but for a DELETE: the same
-// SQLITE_CONSTRAINT_FOREIGNKEY code, read the opposite way (issue #81).
+// TestMapSQLiteDeleteErrorMapsAGenuineForeignKeyViolationTo409 is the foreign-
+// key test above for a DELETE: the same SQLITE_CONSTRAINT_FOREIGNKEY read the
+// opposite way (#81).
 func TestMapSQLiteDeleteErrorMapsAGenuineForeignKeyViolationTo409(t *testing.T) {
 	t.Parallel()
 	sqlDB := testStoreDB(t)
@@ -266,9 +264,8 @@ func TestMapSQLiteDeleteErrorMapsAGenuineForeignKeyViolationTo409(t *testing.T) 
 		t.Fatalf("CreateMember() = %v, want no error", err)
 	}
 
-	// fund is referenced by member.fund_id (plain FOREIGN KEY) - deleting it
-	// out from under a real member is what a genuine "row exists, real data
-	// still points at it" DELETE-time FK violation looks like here.
+	// fund is referenced by member.fund_id (plain FOREIGN KEY): deleting it under
+	// a real member is a genuine "row exists, real data points at it" violation.
 	_, err = sqlDB.ExecContext(ctx, "DELETE FROM fund WHERE id = ?", fund.ID)
 	if err == nil {
 		t.Fatalf("DELETE FROM fund with a real member = nil error, want a FOREIGN KEY violation")
@@ -285,10 +282,9 @@ func TestMapSQLiteDeleteErrorMapsAGenuineForeignKeyViolationTo409(t *testing.T) 
 	}
 }
 
-// TestMapSQLiteDeleteErrorDelegatesNonForeignKeyViolations proves the
-// delegation for every other class - CHECK, UNIQUE, no-rows, unrecognized -
-// still behaves exactly like mapSQLiteError, so the DELETE-only override is
-// scoped to the one violation class it exists for.
+// TestMapSQLiteDeleteErrorDelegatesNonForeignKeyViolations: every other class
+// (CHECK, UNIQUE, no-rows, unrecognized) behaves as mapSQLiteError, so the
+// DELETE override is scoped to the one class it exists for.
 func TestMapSQLiteDeleteErrorDelegatesNonForeignKeyViolations(t *testing.T) {
 	t.Parallel()
 	rec := httptest.NewRecorder()

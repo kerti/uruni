@@ -10,9 +10,9 @@ import (
 	"testing"
 )
 
-// TestRequestLoggingMiddlewareRoundTrips exercises requestLogger directly
-// against a placeholder handler: the middleware itself is what M4's other
-// slices depend on, not any particular production route.
+// TestRequestLoggingMiddlewareRoundTrips exercises requestLogger against a
+// placeholder handler: the middleware is what M4's slices depend on, not any
+// production route.
 func TestRequestLoggingMiddlewareRoundTrips(t *testing.T) {
 	t.Parallel()
 	var buf bytes.Buffer
@@ -43,8 +43,8 @@ func TestRequestLoggingMiddlewareRoundTrips(t *testing.T) {
 	}
 
 	// ADR-022's logging rule: no member name, no amount. The request carries
-	// neither here, but the assertion pins the shape - only method, path,
-	// status and duration ever appear on this line.
+	// neither here, but the assertion pins the shape: only method, path, status
+	// and duration appear on this line.
 	for _, forbidden := range []string{"member", "amount", "rupiah"} {
 		if strings.Contains(strings.ToLower(line), forbidden) {
 			t.Errorf("log line %q unexpectedly contains %q", line, forbidden)
@@ -53,8 +53,8 @@ func TestRequestLoggingMiddlewareRoundTrips(t *testing.T) {
 }
 
 // TestRequestLoggerRedactsTheReportSlug is #447's: the slug is the public
-// report's only guard, so it never reaches a log line - not on the page, not
-// on the PDF, not on a /report/ path no route matches.
+// report's only guard, so it never reaches a log line: not on the page, the
+// PDF, or a /report/ path no route matches.
 func TestRequestLoggerRedactsTheReportSlug(t *testing.T) {
 	t.Parallel()
 	const slug = "Ab3dEf6hIj9kLm2nOp5qRs8tUv1wXy4z"
@@ -82,10 +82,10 @@ func TestRequestLoggerRedactsTheReportSlug(t *testing.T) {
 	}
 }
 
-// TestEveryResponseCarriesTheSecurityHeaders is #447's: the SPA shell, the
-// API (signed in or not) and the public report, including its 404, all
-// answer with the same baseline - and the report keeps its stricter
-// Referrer-Policy and its own nonce CSP (TestReportCSPNonceMatchesThePage).
+// TestEveryResponseCarriesTheSecurityHeaders is #447's: the SPA shell, the API
+// (signed in or not) and the public report, its 404 included, answer with the
+// same baseline, and the report keeps its stricter Referrer-Policy and nonce
+// CSP (TestReportCSPNonceMatchesThePage).
 func TestEveryResponseCarriesTheSecurityHeaders(t *testing.T) {
 	t.Parallel()
 	r := testRouter(t)
@@ -121,9 +121,9 @@ func TestEveryResponseCarriesTheSecurityHeaders(t *testing.T) {
 	}
 }
 
-// The app's script-src is 'self' alone: no 'unsafe-inline', no
-// 'unsafe-eval', no other origin. That is the directive the policy exists
-// for, so it is pinned on its own rather than only as part of a string.
+// The app's script-src is 'self' alone: no 'unsafe-inline', no 'unsafe-eval',
+// no other origin. That is the directive the policy exists for, so it is
+// pinned on its own.
 func TestAppCSPAllowsOnlySameOriginScript(t *testing.T) {
 	t.Parallel()
 	var scriptSrc string
@@ -138,10 +138,10 @@ func TestAppCSPAllowsOnlySameOriginScript(t *testing.T) {
 }
 
 // A write a browser sends from another origin is refused before any handler
-// runs - cross-site, and same-site too, which SameSite=Lax alone lets through
-// (#481). Same-origin writes, writes with no browser headers at all, and
-// reads from anywhere pass. POST /api/logout answers 204 whenever it is
-// reached, so any other status is the guard's.
+// runs, cross-site and same-site too, which SameSite=Lax alone lets through
+// (#481). Same-origin writes, writes with no browser headers, and reads from
+// anywhere pass. POST /api/logout answers 204 whenever reached, so any other
+// status is the guard's.
 func TestCrossOriginWritesAreRefused(t *testing.T) {
 	t.Parallel()
 	r := testRouter(t)

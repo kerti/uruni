@@ -12,11 +12,10 @@ import (
 	"github.com/kerti/uruni/internal/store"
 )
 
-// receiptIDsField decodes just the receipt_ids key off a raw JSON body -
-// used where the test cares whether the wire actually carries [] rather
-// than an absent key or a null (both of which json.Unmarshal into a Go
-// []int64 field would silently accept as the same nil value), per #154's
-// "always present, [] never null" ruling.
+// receiptIDsField decodes just the receipt_ids key off a raw JSON body, for
+// tests that care whether the wire carries [] rather than an absent key or null
+// (json.Unmarshal into []int64 treats them alike), per #154's "always present,
+// [] never null".
 func receiptIDsField(t *testing.T, body []byte) json.RawMessage {
 	t.Helper()
 	var raw map[string]json.RawMessage
@@ -31,10 +30,9 @@ func receiptIDsField(t *testing.T, body []byte) json.RawMessage {
 }
 
 // TestPostTransactionReceiptIDsIsAnEmptyArrayNeverNull is #154's creation
-// ruling applied to POST /api/transactions: a row this response just posted
-// cannot already have a receipt (a receipt names an existing transaction
-// id), so receipt_ids is always [] here - and, critically, the literal JSON
-// array "[]", not a null that happens to decode the same way into Go.
+// ruling for POST /api/transactions: a row just posted cannot have a receipt
+// (a receipt names an existing transaction id), so receipt_ids is always the
+// literal JSON "[]", not a null that decodes the same into Go.
 func TestPostTransactionReceiptIDsIsAnEmptyArrayNeverNull(t *testing.T) {
 	t.Parallel()
 	r := testRouter(t)
@@ -62,9 +60,8 @@ func TestPostTransactionReceiptIDsIsAnEmptyArrayNeverNull(t *testing.T) {
 }
 
 // TestGetTransactionsReceiptIDsCountsAndOrdersByID is #154's core case: 0, 1
-// and 2 receipts across three otherwise-identical rows, each one's
-// receipt_ids showing exactly the ids attached to it and no others, oldest
-// (lowest id) first.
+// and 2 receipts across three otherwise-identical rows, each receipt_ids
+// showing exactly its ids, oldest (lowest id) first.
 func TestGetTransactionsReceiptIDsCountsAndOrdersByID(t *testing.T) {
 	t.Parallel()
 	r := testRouter(t)
@@ -119,12 +116,11 @@ func TestGetTransactionsReceiptIDsCountsAndOrdersByID(t *testing.T) {
 	}
 }
 
-// TestGetTransactionsReceiptIDsNeverCrossesFunds is ListReceiptIDsByTransactionIDs'
-// own fund-scoping proof, the same shape TestReceiptRoutesOnAnotherFundsRowAre404
-// already established for the single-row GetReceiptForFund: a call naming a
-// real receipt id and a real transaction id, both from a different fund,
-// must come back empty rather than trusting the id list alone - an id names
-// a row, not permission to see it.
+// TestGetTransactionsReceiptIDsNeverCrossesFunds is
+// ListReceiptIDsByTransactionIDs' fund-scoping proof, as
+// TestReceiptRoutesOnAnotherFundsRowAre404 for GetReceiptForFund: a call naming
+// a real receipt id and transaction id from a different fund comes back empty
+// rather than trusting the id list: an id names a row, not permission to see it.
 func TestGetTransactionsReceiptIDsNeverCrossesFunds(t *testing.T) {
 	t.Parallel()
 	sqlDB := testStoreDB(t)
@@ -165,9 +161,8 @@ func TestGetTransactionsReceiptIDsNeverCrossesFunds(t *testing.T) {
 		t.Fatalf("CreateReceipt(other) = %v, want no error", err)
 	}
 
-	// Naming our fund's id but the other fund's real transaction id must
-	// come back empty - the fund_id half of the WHERE clause is what
-	// refuses it, since the id itself does exist in the receipt table.
+	// Our fund's id with the other fund's real transaction id comes back empty:
+	// the fund_id half of the WHERE refuses it, as the id exists in the table.
 	rows, err := q.ListReceiptIDsByTransactionIDs(ctx, store.ListReceiptIDsByTransactionIDsParams{
 		FundID:         setup.Fund.ID,
 		TransactionIds: []*int64{&otherTxn.ID},
@@ -179,9 +174,8 @@ func TestGetTransactionsReceiptIDsNeverCrossesFunds(t *testing.T) {
 		t.Errorf("rows = %+v, want none for another fund's transaction id", rows)
 	}
 
-	// End-to-end: our own fund's list must never mention the other fund's
-	// receipt id anywhere, even though nothing about the query result size
-	// alone would prove that.
+	// End-to-end: our fund's list never mentions the other fund's receipt id,
+	// which the result size alone would not prove.
 	txnID := setUpTransactionForReceipt(t, r, setup)
 	listRec := getTransactions(t, r)
 	page := decodeTransactionsPage(t, listRec)
@@ -191,10 +185,9 @@ func TestGetTransactionsReceiptIDsNeverCrossesFunds(t *testing.T) {
 	}
 }
 
-// TestGetTransactionsTransferLegsReceiptIDsAreIndependent is the transfer
-// case the maintainer's brief called out by name: a transfer's two legs are
-// two distinct transaction rows, so a receipt attached to one leg must never
-// appear on the other - there is no single "the transfer's receipt."
+// TestGetTransactionsTransferLegsReceiptIDsAreIndependent: a transfer's two
+// legs are two transaction rows, so a receipt on one never appears on the
+// other; there is no single "the transfer's receipt."
 func TestGetTransactionsTransferLegsReceiptIDsAreIndependent(t *testing.T) {
 	t.Parallel()
 	r := testRouter(t)
@@ -257,9 +250,9 @@ func TestGetTransactionsTransferLegsReceiptIDsAreIndependent(t *testing.T) {
 	}
 }
 
-// TestSettleReimbursementReceiptIDsIsAnEmptyArray is the settlement route's
-// own creation case: the posted kind='reimbursement' row is brand new, so it
-// carries the same [] the plain POST /api/transactions case does.
+// TestSettleReimbursementReceiptIDsIsAnEmptyArray: the posted
+// kind='reimbursement' row is new, so it carries the same [] as POST
+// /api/transactions.
 func TestSettleReimbursementReceiptIDsIsAnEmptyArray(t *testing.T) {
 	t.Parallel()
 	r := testRouter(t)
@@ -279,11 +272,10 @@ func TestSettleReimbursementReceiptIDsIsAnEmptyArray(t *testing.T) {
 }
 
 // TestReimbursementReceiptIDsCreatedEmptyListedAccuratelyAndSurvivesPatch
-// walks #154's full reimbursement path: [] at creation, a real batched count
-// once GET /api/reimbursements lists an existing claim with a photo already
-// on it, and - the case a naive "PATCH always resets to []" implementation
-// would get wrong - still accurate after a correction that touches only the
-// claim's note, because the receipt was never part of what changed.
+// walks #154's reimbursement path: [] at creation, a real batched count when
+// GET /api/reimbursements lists a claim with a photo, and, where a naive
+// "PATCH resets to []" fails, still accurate after a correction touching only
+// the note.
 func TestReimbursementReceiptIDsCreatedEmptyListedAccuratelyAndSurvivesPatch(t *testing.T) {
 	t.Parallel()
 	r := testRouter(t)

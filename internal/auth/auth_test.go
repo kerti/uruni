@@ -9,9 +9,9 @@ import (
 	"github.com/kerti/uruni/internal/store"
 )
 
-// TestRegisterCreatesTheAccount is the happy path: the returned row is real
-// (a nonzero id, the email as given, a created_at) and the password never
-// lands in the row verbatim - password_hash is not the plaintext password.
+// TestRegisterCreatesTheAccount is the happy path: the returned row is real (a
+// nonzero id, the email as given, a created_at) and password_hash is not the
+// plaintext password.
 func TestRegisterCreatesTheAccount(t *testing.T) {
 	t.Parallel()
 	a, _ := newTestAuth(t)
@@ -39,10 +39,9 @@ func TestRegisterCreatesTheAccount(t *testing.T) {
 }
 
 // TestRegisterRefusesASecondAccountRegardlessOfEmail is ADR-030 decision 2's
-// whole point: the gate is the row count, not a duplicate email colliding
-// with the UNIQUE index. A second registration with a *different* address
-// still has to be refused, or resolveFund would hand that stranger
-// funds[0].
+// point: the gate is the row count, not a duplicate email colliding with the
+// UNIQUE index. A second registration with a different address must still be
+// refused, or resolveFund would hand that stranger funds[0].
 func TestRegisterRefusesASecondAccountRegardlessOfEmail(t *testing.T) {
 	t.Parallel()
 	a, _ := newTestAuth(t)
@@ -58,10 +57,9 @@ func TestRegisterRefusesASecondAccountRegardlessOfEmail(t *testing.T) {
 	}
 }
 
-// TestRegisterRefusalWritesNoRow proves the refusal is a pure read: exactly
-// one row exists after the second, refused call - the count check and the
-// insert share one transaction, so a refused call can't leave a partial or
-// extra row behind.
+// TestRegisterRefusalWritesNoRow proves the refusal is a pure read: one row
+// exists after the second, refused call, as the count check and insert share
+// one transaction.
 func TestRegisterRefusalWritesNoRow(t *testing.T) {
 	t.Parallel()
 	a, sqlDB := newTestAuth(t)
@@ -106,8 +104,8 @@ func TestRegisterRefusesAPasswordUnderTheMinimumLength(t *testing.T) {
 	}
 }
 
-// A rejected call for either validation reason must also write nothing -
-// the zero-value boundary alongside the one-shot refusal above.
+// A rejected call for either validation reason also writes nothing: the
+// zero-value boundary beside the one-shot refusal above.
 func TestRegisterValidationFailureWritesNoRow(t *testing.T) {
 	t.Parallel()
 	a, sqlDB := newTestAuth(t)

@@ -10,21 +10,20 @@ import (
 )
 
 // ParticipationState classifies one expected member's standing against an
-// envelope's contributions (ADR-034) - the envelope's counterpart of
-// DuesStatus, deliberately not sharing its vocabulary: a sumbangan is not a
-// debt, and CONTEXT.md keeps the two words apart.
+// envelope's contributions (ADR-034), the counterpart of DuesStatus with its
+// own vocabulary: a sumbangan is not a debt, and CONTEXT.md keeps the words
+// apart.
 type ParticipationState string
 
 const (
-	// ParticipationSudah is an expected member who has contributed anything
-	// at all - even below a minimum, when no minimum is set.
+	// ParticipationSudah is an expected member who contributed anything, even
+	// below a minimum when none is set.
 	ParticipationSudah ParticipationState = "sudah"
 	// ParticipationBelum is an expected member who has contributed nothing.
 	ParticipationBelum ParticipationState = "belum"
-	// ParticipationKurang is an expected member who has contributed
-	// something, but less than the envelope's own minimum - only reachable
-	// when a minimum is set at all (ADR-034); a contribution below zero
-	// minimum-worth of nothing is Belum, not Kurang.
+	// ParticipationKurang is an expected member who contributed something but
+	// less than the envelope's minimum; reachable only when a minimum is set
+	// (ADR-034). Contributing nothing is Belum, not Kurang.
 	ParticipationKurang ParticipationState = "kurang"
 )
 
@@ -37,9 +36,9 @@ type MemberParticipation struct {
 }
 
 // UnexpectedContribution is a contribution from someone the envelope did not
-// expect - a member who joined after it opened, or a recipient who gave
-// anyway (ADR-034). Always its own list: never folded into the expected
-// table and never read as "not yet".
+// expect: a member who joined after it opened, or a recipient who gave
+// anyway (ADR-034). Always its own list, never folded into the expected table
+// or read as "not yet".
 type UnexpectedContribution struct {
 	Member            store.Member
 	ContributedAmount money.Amount
@@ -53,41 +52,36 @@ type IncidentalParticipation struct {
 	Unexpected []UnexpectedContribution
 }
 
-// GetIncidentalParticipation derives one envelope's participation table
-// entirely from the ledger and the envelope's own facts (CLAUDE.md rule 2) -
-// nothing here is stored.
+// GetIncidentalParticipation derives one envelope's participation table from
+// the ledger and the envelope's facts (CLAUDE.md rule 2); nothing is stored.
 //
-// Expected is every member active on the day the envelope opened -
-// joined_on <= opened_on, inactive_on NULL or > opened_on, tier
-// ignored entirely (unlike dues) - minus its recipients. Fixed by that one
-// date, so the list never shifts when someone later leaves.
+// Expected is every member active on the day the envelope opened
+// (joined_on <= opened_on, inactive_on NULL or > opened_on, tier ignored,
+// unlike dues) minus its recipients. Fixed by that date, so the list never
+// shifts when someone later leaves.
 //
 // Contributed is summed per member by ContributedByIncidentalMember, which
-// already excludes a row some reversal points at - the same NOT EXISTS
-// exclusion DuesPaidByPeriod uses (ADR-029), so a reversed contribution
-// disappears rather than counting twice. A member who contributed without
-// being expected - a later joiner, or a recipient who gave anyway - is never
-// folded into the expected table; they surface in Unexpected instead,
-// however much they gave (ADR-034: "never shown as not yet").
+// excludes a row some reversal points at (the NOT EXISTS of DuesPaidByPeriod,
+// ADR-029), so a reversed contribution disappears rather than counting twice.
+// A contributor who was not expected (a later joiner, or a recipient who gave
+// anyway) surfaces in Unexpected, however much they gave (ADR-034: "never
+// shown as not yet").
 //
 // State per expected member: Sudah for anything contributed, Belum for
-// nothing, and Kurang only when the envelope's own minimum is set and the
-// sum is below it - a contribution below no stated minimum is still Sudah,
-// not Kurang.
+// nothing, Kurang only when the envelope's minimum is set and the sum is
+// below it; a contribution below no stated minimum is Sudah.
 //
-// Both result slices are in ListMembersByFund's order - by name, ignoring
-// case - the order every member list reads.
+// Both slices are in ListMembersByFund's order (by name, ignoring case).
 //
-// This is a read: it uses l.q directly rather than withTx, the same reason
-// DuesStatusForPeriod does (ADR-027) - a handful of consistent SELECTs with
-// no write in between.
+// It uses l.q directly rather than withTx, like DuesStatusForPeriod
+// (ADR-027): a handful of consistent SELECTs with no write.
 func (l *Ledger) GetIncidentalParticipation(ctx context.Context, fundID, purposeID int64) (IncidentalParticipation, error) {
 	return l.incidentalParticipation(ctx, fundID, purposeID, nil)
 }
 
 // incidentalParticipation is GetIncidentalParticipation counting only
-// contributions dated on or before through, nil for all of them - the public
-// report's past-month envelope cards (#408).
+// contributions dated on or before through (nil for all): the public report's
+// past-month envelope cards (#408).
 func (l *Ledger) incidentalParticipation(ctx context.Context, fundID, purposeID int64, through *string) (IncidentalParticipation, error) {
 	envelope, err := l.q.GetIncidental(ctx, store.GetIncidentalParams{PurposeID: purposeID, FundID: fundID})
 	if err != nil {
@@ -155,8 +149,7 @@ func (l *Ledger) incidentalParticipation(ctx context.Context, fundID, purposeID 
 			Member: m, ContributedAmount: contributed, State: state,
 		})
 	}
-	// expected is already in ListMembersByFund's order (by name, ignoring
-	// case), since it was built walking that list.
+	// expected is already in ListMembersByFund's order, built walking that list.
 
 	var unexpected []UnexpectedContribution
 	for _, row := range contributionRows {
@@ -184,11 +177,11 @@ func (l *Ledger) incidentalParticipation(ctx context.Context, fundID, purposeID 
 	return IncidentalParticipation{Expected: expected, Unexpected: unexpected}, nil
 }
 
-// memberActiveOn reports whether m was active on date (a "YYYY-MM-DD"
-// calendar day): joined_on <= date, inactive_on NULL or > date
-// (ADR-034). Unlike memberOwesPeriod (dues_status.go) this compares whole
-// dates, not months - an envelope opens on a day, not a period, and ADR-034
-// is explicit the expected list is "fixed by one date."
+// memberActiveOn reports whether m was active on date ("YYYY-MM-DD"):
+// joined_on <= date, inactive_on NULL or > date (ADR-034). Unlike
+// memberOwesPeriod (dues_status.go) it compares whole dates, not months: an
+// envelope opens on a day, and ADR-034 says the expected list is "fixed by one
+// date."
 func memberActiveOn(m store.Member, date string) bool {
 	if m.JoinedOn > date {
 		return false

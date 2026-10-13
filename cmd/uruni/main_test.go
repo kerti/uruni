@@ -35,8 +35,8 @@ func TestRunRejectsAnUnknownCommand(t *testing.T) {
 }
 
 // TestRunDispatchesSeedE2E: the subcommand table is a contract the Makefile is
-// written against (ADR-019), so the wiring itself - the name `make e2e-reset`
-// invokes reaching seedE2E - is worth a test, not just seedE2E's own behaviour.
+// written against (ADR-019), so the wiring (the name `make e2e-reset` invokes
+// reaching seedE2E) is worth a test beyond seedE2E's behaviour.
 func TestRunDispatchesSeedE2E(t *testing.T) {
 	t.Setenv("URUNI_DB", filepath.Join(t.TempDir(), "uruni-e2e.db"))
 

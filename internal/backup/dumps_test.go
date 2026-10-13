@@ -14,16 +14,15 @@ import (
 	"github.com/kerti/uruni/internal/store"
 )
 
-// jakartaTime is a small test helper: a time.Time constructed directly in
-// Asia/Jakarta, so a test that cares about the treasurer's calendar day
-// never has to route its intent through a UTC offset by hand.
+// jakartaTime constructs a time.Time directly in Asia/Jakarta, so a test about
+// the treasurer's calendar day needs no UTC offset by hand.
 func jakartaTime(year int, month time.Month, day, hour, minute, second int) time.Time {
 	return time.Date(year, month, day, hour, minute, second, 0, jakarta)
 }
 
-// testDiscardLogger is the same recipe internal/http's own errors_test.go
-// uses: a real *slog.Logger, writing nowhere, so EnsureBootDump's logging
-// calls have somewhere to go without a test asserting on log lines.
+// testDiscardLogger is a real *slog.Logger writing nowhere (the recipe of
+// internal/http's errors_test.go), so EnsureBootDump's logging has
+// somewhere to go.
 func testDiscardLogger() *slog.Logger {
 	return slog.New(slog.NewTextHandler(io.Discard, nil))
 }
@@ -142,12 +141,10 @@ func TestListDumpsSortsNewestFirstAndIgnoresForeignFiles(t *testing.T) {
 	}
 }
 
-// TestRestoreStagingFileIsInvisibleToListDumpsAndRetention is issue #344's
-// own "verify each of those" requirement: a restore-staging file
-// (internal/http/restore.go, via CreateRestoreStagingTemp) sits in the very
-// same backupDir every dump lives in, and dumpNamePattern is the single
-// gate that keeps ListDumps, ValidDumpName and therefore ApplyRetention
-// from ever mistaking it for one.
+// TestRestoreStagingFileIsInvisibleToListDumpsAndRetention (#344): a
+// restore-staging file (CreateRestoreStagingTemp) sits in the backupDir every
+// dump lives in, and dumpNamePattern is the one gate keeping ListDumps,
+// ValidDumpName and so ApplyRetention from mistaking it for one.
 func TestRestoreStagingFileIsInvisibleToListDumpsAndRetention(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
@@ -175,9 +172,8 @@ func TestRestoreStagingFileIsInvisibleToListDumpsAndRetention(t *testing.T) {
 		t.Fatalf("len(dumps) = %d, want 1 (the staging file must not be listed): %+v", len(dumps), dumps)
 	}
 
-	// A retention pass small enough to prune everything else must still
-	// leave the staging file untouched - it was never in ListDumps' own
-	// result to begin with.
+	// A retention pass small enough to prune everything else still leaves the
+	// staging file: it was never in ListDumps' result.
 	if err := ApplyRetention(dir, 0, 0); err != nil {
 		t.Fatalf("ApplyRetention() = %v, want no error", err)
 	}
@@ -189,9 +185,8 @@ func TestRestoreStagingFileIsInvisibleToListDumpsAndRetention(t *testing.T) {
 func TestApplyRetentionKeepsOnlyEachKindsOwnQuotaAndTouchesNothingElse(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
-	// 4 daily dumps, keep 2; 3 pre-restore dumps, keep 1 - deliberately
-	// smaller than the real DailyRetention/PreRestoreRetention constants so
-	// the test proves the parameters are honoured, not just the defaults.
+	// 4 daily dumps, keep 2; 3 pre-restore dumps, keep 1: smaller than the real
+	// retention constants, so the parameters are proven honoured, not the defaults.
 	dailyNames := []string{
 		"uruni-20260901-000000-daily-fv1-111111111111.zip",
 		"uruni-20260902-000000-daily-fv1-222222222222.zip",
@@ -288,10 +283,9 @@ func TestNeedsFormatVersionDumpWhenNewestIsAnOlderFormat(t *testing.T) {
 	}
 }
 
-// TestWriteDumpWritesThenRenamesLeavingNoTempFile: after WriteDump returns,
-// the backup directory holds exactly the finished dump under its own final
-// name - no leftover ".uruni-backup-tmp-*" file from the write-then-rename
-// step.
+// TestWriteDumpWritesThenRenamesLeavingNoTempFile: after WriteDump the backup
+// directory holds exactly the finished dump under its final name, no leftover
+// ".uruni-backup-tmp-*" from the write-then-rename.
 func TestWriteDumpWritesThenRenamesLeavingNoTempFile(t *testing.T) {
 	t.Parallel()
 	sqlDB := newTestDB(t)
@@ -329,9 +323,9 @@ func TestWriteDailyIfNeededSkipsWhenTodaysDumpAlreadyExists(t *testing.T) {
 	ctx := context.Background()
 
 	now := jakartaTime(2026, 9, 30, 8, 0, 0)
-	// A dump already exists for today, at an earlier hour, with a hash that
-	// does not match the current fund state - proving the "today already
-	// has one" check short-circuits before the hash is even compared.
+	// A dump already exists for today, earlier, with a hash not matching the
+	// current fund: the "today already has one" check short-circuits before the
+	// hash is compared.
 	writeDumpFile(t, backupDir, BuildDumpName(jakartaTime(2026, 9, 30, 1, 0, 0), KindDaily, FormatVersion, "0000000000000000"))
 
 	name, written, err := WriteDailyIfNeeded(ctx, sqlDB, uploadsDir, backupDir, now)
@@ -392,10 +386,10 @@ func TestWriteDailyIfNeededWritesWhenFundChangedAcrossTheDayBoundary(t *testing.
 		t.Fatalf("WriteDailyIfNeeded(yesterday) = (written=%v, err=%v), want (true, nil)", written, err)
 	}
 
-	// The fund changes: a fresh transaction, posted directly through
-	// store.Queries (buildFixture's own pattern - see its doc comment on
-	// why this package's fixtures avoid internal/ledger's time.Now() stamps),
-	// against the one fund and account buildFixture already created.
+	// The fund changes: a fresh transaction posted through store.Queries
+	// (buildFixture's pattern; its doc comment says why fixtures here avoid
+	// internal/ledger's time.Now() stamps), against the one fund and account
+	// buildFixture created.
 	funds, err := q.ListFunds(ctx)
 	if err != nil || len(funds) != 1 {
 		t.Fatalf("ListFunds() = (%v, %v), want exactly 1 fund", funds, err)
@@ -429,11 +423,10 @@ func TestWriteDailyIfNeededWritesWhenFundChangedAcrossTheDayBoundary(t *testing.
 	}
 }
 
-// TestWriteDailyIfNeededDateIsAsiaJakartaAcrossTheUTCMidnightBoundary is the
-// exact scenario the issue names: a container clock in UTC must still date
-// the dump by the treasurer's own WIB day. 2026-09-29T18:00:00Z is
-// 2026-09-30T01:00 WIB (UTC+7) - already the 30th in Jakarta, still the
-// 29th in UTC.
+// TestWriteDailyIfNeededDateIsAsiaJakartaAcrossTheUTCMidnightBoundary: a UTC
+// container clock must still date the dump by the treasurer's WIB day.
+// 2026-09-29T18:00:00Z is 2026-09-30T01:00 WIB (UTC+7): the 30th in Jakarta,
+// the 29th in UTC.
 func TestWriteDailyIfNeededDateIsAsiaJakartaAcrossTheUTCMidnightBoundary(t *testing.T) {
 	t.Parallel()
 	sqlDB := newTestDB(t)
@@ -462,8 +455,8 @@ func TestWriteDailyIfNeededDateIsAsiaJakartaAcrossTheUTCMidnightBoundary(t *test
 			gotDate, utcJustBeforeJakartaMidnight.Format(time.RFC3339), wantDate)
 	}
 
-	// The complementary edge: a UTC time that is still the same day in WIB
-	// too (23:00 WIB, same calendar date) must not roll over early either.
+	// The complementary edge: a UTC time still the same day in WIB (23:00 WIB,
+	// same date) must not roll over early.
 	utcStillSameJakartaDay := time.Date(2026, 9, 29, 16, 0, 0, 0, time.UTC) // 23:00 WIB, 2026-09-29
 	backupDir2 := t.TempDir()
 	name2, written2, err := WriteDailyIfNeeded(ctx, sqlDB, uploadsDir, backupDir2, utcStillSameJakartaDay)
@@ -512,7 +505,7 @@ func TestWritePreRestoreDumpWritesAndAppliesItsOwnQuota(t *testing.T) {
 			t.Errorf("dump %s has kind %q, want %q", d.Name, d.Kind, KindPreRestore)
 		}
 	}
-	// The most recent write must have survived pruning.
+	// The most recent write survived pruning.
 	lastName := names[len(names)-1]
 	found := false
 	for _, d := range dumps {
@@ -525,10 +518,9 @@ func TestWritePreRestoreDumpWritesAndAppliesItsOwnQuota(t *testing.T) {
 	}
 }
 
-// TestRemoveStaleTempsClearsOnlyOwnTempFiles: a crash between write and
-// rename leaves a tempPrefix file behind; the next boot removes it, and
-// nothing else in the folder - not a real dump, not a foreign file, not a
-// directory that happens to share the prefix.
+// TestRemoveStaleTempsClearsOnlyOwnTempFiles: a crash between write and rename
+// leaves a tempPrefix file; the next boot removes it and nothing else: not a
+// dump, a foreign file, or a directory sharing the prefix.
 func TestRemoveStaleTempsClearsOnlyOwnTempFiles(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
@@ -600,13 +592,11 @@ func TestEnsureBootDumpWritesWhenNoneExistAndSkipsOnceCurrent(t *testing.T) {
 	}
 }
 
-// TestEnsureBootDumpRemovesLeftoverRestoreStaging is issue #344's own boot
-// sweep: a restart between an inspect and its confirm leaves a
-// restore-staging file with no one left to confirm it. There is no
-// separate sweep for this - CreateRestoreStagingTemp names every staged
-// file with RemoveStaleTemps' own tempPrefix, so EnsureBootDump's existing
-// RemoveStaleTemps call is what notices it, the same as any other
-// interrupted write.
+// TestEnsureBootDumpRemovesLeftoverRestoreStaging (#344): a restart between an
+// inspect and its confirm leaves a restore-staging file with no one to
+// confirm it. There is no separate sweep: CreateRestoreStagingTemp uses
+// RemoveStaleTemps' tempPrefix, so EnsureBootDump's RemoveStaleTemps call
+// removes it as any interrupted write.
 func TestEnsureBootDumpRemovesLeftoverRestoreStaging(t *testing.T) {
 	t.Parallel()
 	sqlDB := newTestDB(t)
@@ -664,13 +654,12 @@ func TestEnsureBootDumpWritesAgainWhenFormatVersionChanged(t *testing.T) {
 	}
 }
 
-// TestDumpNameEdgeCases covers the shapes the pattern alone lets through but
-// the parse still has to refuse, and the hash and sort details a real
-// directory rarely exercises.
+// TestDumpNameEdgeCases covers shapes the pattern lets through but the parse
+// must refuse, and hash and sort details a real directory rarely exercises.
 func TestDumpNameEdgeCases(t *testing.T) {
 	t.Parallel()
-	// The pattern only checks digit counts: a month 13 or a format version
-	// too large for int64 still matches it, and must not parse.
+	// The pattern only checks digit counts: month 13 or a format version too large
+	// for int64 matches it and must not parse.
 	for _, name := range []string{
 		"uruni-20261340-140501-daily-fv1-3f9a2c8e10b4.zip",
 		"uruni-20260930-140501-daily-fv99999999999999999999-3f9a2c8e10b4.zip",
@@ -685,8 +674,8 @@ func TestDumpNameEdgeCases(t *testing.T) {
 		t.Errorf("shortHash(%q) = %q, want it unchanged", "abc", got)
 	}
 
-	// Two dumps in the same second (a daily and a pre-restore can collide)
-	// still sort deterministically, by name; a subdirectory is never a dump.
+	// Two dumps in one second (a daily and a pre-restore can collide) sort
+	// deterministically by name; a subdirectory is never a dump.
 	dir := t.TempDir()
 	when := time.Date(2026, 9, 30, 14, 5, 1, 0, time.UTC)
 	a := BuildDumpName(when, KindDaily, FormatVersion, "aaaaaaaaaaaa")

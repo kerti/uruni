@@ -7,12 +7,12 @@ import (
 	"github.com/kerti/uruni/internal/ledger"
 )
 
-// reportCopy is every Indonesian string the public report prints - the Go
-// half of ADR-014, the way web/src/copy/id.ts is the SPA's. One place, so a
-// future locale is one more value of this type rather than a hunt through a
-// template. Wording that already exists in the app is reused verbatim
-// (balanceHeading, lastChecked, matched, purposeBreakdownHeading), so a
-// neighbour and the treasurer read the same words for the same thing.
+// reportCopy is every Indonesian string the public report prints: the Go half
+// of ADR-014, as web/src/copy/id.ts is the SPA's. One place, so a locale is
+// one more value of this type, not a hunt through a template. Existing app
+// wording is reused verbatim (balanceHeading, lastChecked, matched,
+// purposeBreakdownHeading), so a neighbour and the treasurer read the same
+// words for the same thing.
 //
 // Source files are ASCII (CLAUDE.md rule 10): a character beyond it is a \u
 // escape here, never a raw byte.
@@ -56,9 +56,8 @@ type reportCopy struct {
 	NoRows            string
 
 	// The dues section (#375). The four statuses are web/src/copy/id.ts's
-	// dues.statuses verbatim, so the report and the app read the same words;
-	// the filter offers three of them, "Lunas" covering paid in advance too.
-	// There is deliberately no arrears wording here (ADR-035).
+	// dues.statuses verbatim; the filter offers three, "Lunas" covering paid in
+	// advance. No arrears wording here (ADR-035).
 	DuesLabel         string
 	DuesFilter        string
 	DuesTier          string
@@ -71,10 +70,10 @@ type reportCopy struct {
 	DuesPaidStatus    string
 	DuesPaidInAdvance string
 
-	// The envelopes section (#338). Everything but EnvelopeGiven is the
-	// envelope screen's own wording from web/src/copy/id.ts (incidentals.
-	// heading, detail.collectedLabel, status, participation), verbatim.
-	// EnvelopeGiven is the report's own: the screen shows no count.
+	// The envelopes section (#338). All but EnvelopeGiven is the envelope screen's
+	// wording from web/src/copy/id.ts (incidentals.heading, detail.collectedLabel,
+	// status, participation), verbatim; EnvelopeGiven is the report's: the screen
+	// shows no count.
 	EnvelopesLabel     string
 	EnvelopeCollected  string
 	EnvelopeOpen       string
@@ -87,10 +86,10 @@ type reportCopy struct {
 	ParticipationNot   string
 	ParticipationUnder string
 
-	// Row labels: the Go half of web/src/copy/id.ts's rowLabels (#257), see
-	// report_labels.go. A location is never named, so Saldo awal and
-	// Penyesuaian stand alone. They are also the names of the walk's lines
-	// (ADR-038), so a line and the rows it sums share a name.
+	// Row labels: the Go half of web/src/copy/id.ts's rowLabels (#257); see
+	// report_labels.go. A location is never named, so Saldo awal and Penyesuaian
+	// stand alone. They also name the walk's lines (ADR-038), so a line and the
+	// rows it sums share a name.
 	RowDues                 func(period, member string) string
 	RowDuesReversal         func(period, member string) string
 	RowContributionReversal func(member string) string
@@ -98,9 +97,8 @@ type reportCopy struct {
 	RowAdjustment           string
 	RowMoved                func(from, to string) string
 
-	// The monthly PDF (#378): the link in the page's footer and the words the
-	// statement adds. Every section heading and label the page already has is
-	// reused, so the file and the page read the same.
+	// The monthly PDF (#378): the page footer's link and the words the statement
+	// adds. Section headings and labels already on the page are reused.
 	PDFDownload     string
 	PDFFilename     func(month string) string
 	PDFStatement    func(month string) string
@@ -213,13 +211,12 @@ var reportText = reportCopy{
 	},
 }
 
-// reportMonthLayout is "YYYY-MM", the ?month= value and the ledger's own.
+// reportMonthLayout is "YYYY-MM", the ?month= value and the ledger's.
 const reportMonthLayout = "2006-01"
 
-// longDate renders "YYYY-MM-DD" as "2 Oktober 2026", the way the app's date
-// field reads. An unparseable value comes back as given:
-// the ledger only ever hands this a valid date, and a raw ISO date on the
-// page beats a blank.
+// longDate renders "YYYY-MM-DD" as "2 Oktober 2026", as the app's date field
+// reads. An unparseable value comes back as given: the ledger only hands this
+// a valid date, and a raw ISO date beats a blank.
 func (c reportCopy) longDate(iso string) string {
 	t, err := time.Parse(time.DateOnly, iso)
 	if err != nil {

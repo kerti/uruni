@@ -21,10 +21,9 @@ func postPurposeCorrection(t *testing.T, r http.Handler, transactionID int64, re
 	return rec
 }
 
-// decodeTransactionsList fetches and decodes every posted transaction, the
-// same way this package's other test files read the row back to find one
-// they need the id of (opening balances, dues rows) that their own POST
-// response never carries directly.
+// decodeTransactionsList fetches and decodes every posted transaction, as other
+// test files do to find an id (opening balances, dues rows) their POST response
+// never carries.
 func decodeTransactionsList(t *testing.T, r http.Handler) []transactionResponse {
 	t.Helper()
 	rec := getTransactions(t, r)
@@ -49,8 +48,8 @@ func findTransactionByKind(t *testing.T, rows []transactionResponse, kind string
 	return transactionResponse{}
 }
 
-// The success path: the response wears transferResponse's own shape, the
-// same one POST /api/transfers already answers with (ADR-033).
+// The success path: the response is transferResponse's shape, as POST
+// /api/transfers (ADR-033).
 func TestPostPurposeCorrectionReturnsThePostedTransfer(t *testing.T) {
 	t.Parallel()
 	r := testRouter(t)
@@ -90,9 +89,8 @@ func TestPostPurposeCorrectionReturnsThePostedTransfer(t *testing.T) {
 		t.Errorf("Kind = %q, want %q", transfer.Kind, "reclass_purpose")
 	}
 
-	// The original row still shows its stored tag (ADR-033: the list keeps
-	// showing the stored tag), and GET /api/transactions now marks it
-	// corrected while marking the correction's own legs by their link.
+	// The original row still shows its stored tag (ADR-033), and GET
+	// /api/transactions marks it corrected and the correction's legs by their link.
 	rows := decodeTransactionsList(t, r)
 	original := findTransactionByKind(t, rows, "normal")
 	if original.PurposeID != titipan.ID {

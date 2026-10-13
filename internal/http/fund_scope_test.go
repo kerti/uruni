@@ -11,11 +11,10 @@ import (
 	"github.com/kerti/uruni/internal/store"
 )
 
-// otherFundFixture is a second fund and one row of every kind a resolve*
-// helper looks up, written straight through the store rather than the API -
-// the API refuses a second fund by design (ErrFundAlreadyExists), which is
-// exactly why the unscoped lookups #188 found were never exploitable and
-// never noticed either.
+// otherFundFixture is a second fund and one row of every kind a resolve* helper
+// looks up, written through the store, not the API, which refuses a second fund
+// by design (ErrFundAlreadyExists): why the unscoped lookups #188 found were
+// never exploitable and never noticed.
 type otherFundFixture struct {
 	accountID int64
 	memberID  int64
@@ -67,12 +66,11 @@ func setUpOtherFund(t *testing.T, sqlDB *sql.DB) otherFundFixture {
 	}
 }
 
-// TestRoutesOnAnotherFundsRowAre404 is #188's regression: every route that
-// reaches a row through a resolve* helper must read a real id belonging to a
-// second fund as not-found, because the lookup is fund-scoped in the query
-// (GetMemberForFund and its siblings) rather than found first and rejected
-// afterwards. This is the shape #70 established and ADR-030 leans on when it
-// defers multi-fund - "scoping stays defensive."
+// TestRoutesOnAnotherFundsRowAre404 is #188's regression: every route reaching
+// a row through a resolve* helper must read a real id of a second fund as
+// not-found, as the lookup is fund-scoped in the query (GetMemberForFund and
+// siblings), not found then rejected. This is the shape of #70 and ADR-030's
+// "scoping stays defensive."
 func TestRoutesOnAnotherFundsRowAre404(t *testing.T) {
 	t.Parallel()
 	for _, tc := range fundScopedRouteCases() {
@@ -96,15 +94,14 @@ func TestRoutesOnAnotherFundsRowAre404(t *testing.T) {
 	}
 }
 
-// TestRoutesBeforeSetupAre404 is the other half of the scoping the resolve*
-// helpers now do: they resolve the fund themselves, so on an instance where
-// setup has not run there is no fund to scope to and every one of these
-// routes answers resolveFund's own "run setup" 404 rather than reaching a
-// row.
+// TestRoutesBeforeSetupAre404 is the other half of the scoping: the resolve*
+// helpers resolve the fund themselves, so before setup there is no fund to
+// scope to and each route answers resolveFund's "run setup" 404 rather than
+// reaching a row.
 func TestRoutesBeforeSetupAre404(t *testing.T) {
 	t.Parallel()
-	// Setup never runs here, so no row exists for any of these ids - which
-	// is the point: the fund check answers before the lookup is reached.
+	// Setup never runs, so no row exists for these ids: the fund check answers
+	// before the lookup.
 	noFund := otherFundFixture{accountID: 1, memberID: 1, tierID: 1, rateID: 1}
 
 	for _, tc := range fundScopedRouteCases() {
@@ -124,9 +121,8 @@ func TestRoutesBeforeSetupAre404(t *testing.T) {
 	}
 }
 
-// fundScopedRouteCases is every route that reaches a row through a resolve*
-// helper, shared by the two tests above so the list cannot drift between
-// them.
+// fundScopedRouteCases is every route reaching a row through a resolve* helper,
+// shared by the two tests above so the list cannot drift.
 func fundScopedRouteCases() []struct {
 	name string
 	call func(t *testing.T, r http.Handler, other otherFundFixture) *httptest.ResponseRecorder

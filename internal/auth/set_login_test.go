@@ -89,8 +89,8 @@ func TestSetLoginResetSignsOutEverySession(t *testing.T) {
 }
 
 // TestSetLoginRefusesASecondLogin keeps ADR-030 decision 2's one-login
-// invariant: a different email is refused, not added beside the first, and
-// the existing password is left alone.
+// invariant: a different email is refused, not added, and the existing
+// password is left alone.
 func TestSetLoginRefusesASecondLogin(t *testing.T) {
 	t.Parallel()
 	a, sqlDB := newTestAuth(t)

@@ -8,9 +8,8 @@ import (
 	"github.com/kerti/uruni/internal/store"
 )
 
-// #500: an email is trimmed and lower-cased wherever it is stored, looked up
-// or counted, and rows written before that keep the case they were typed in
-// and must still be found.
+// #500: an email is trimmed and lower-cased wherever stored, looked up or
+// counted; rows written before keep their typed case and must still be found.
 
 func TestNormalizeEmail(t *testing.T) {
 	t.Parallel()
@@ -159,13 +158,13 @@ func TestCreateUserFindsAMixedCaseRowFromBefore(t *testing.T) {
 	}
 }
 
-// TestANonASCIICapitalFromBeforeIsFoundOnlyByItsStoredSpelling pins the one
-// case the case-insensitive match cannot reach. SQLite's lower() folds ASCII
-// only, so for a legacy row whose address holds a non-ASCII capital the
-// normalised (fully lower-cased) form can never equal lower(email); the row
-// is found by exactly the text it was registered with, as it always was, and
-// by no other spelling. Such an address is exceedingly unlikely, and the
-// treasurer's way out is create-user with the stored spelling.
+// TestANonASCIICapitalFromBeforeIsFoundOnlyByItsStoredSpelling pins the one case
+// the case-insensitive match cannot reach. SQLite's lower() folds ASCII only,
+// so for a legacy row with a non-ASCII capital the fully lower-cased
+// normalised form never equals lower(email); the row is found by the text it
+// was registered with, as always, and by no other spelling. Such an address is
+// very unlikely, and the treasurer's way out is create-user with the stored
+// spelling.
 func TestANonASCIICapitalFromBeforeIsFoundOnlyByItsStoredSpelling(t *testing.T) {
 	t.Parallel()
 	a, _ := newTestAuth(t)

@@ -11,14 +11,14 @@ import (
 )
 
 // ADR-025 keeps one migration file and edits it in place through 0.x. goose
-// tracks applied migrations by number, so a database that already ran 00001 never
-// sees that file change: a release that edits the schema boots on the old one and
-// /healthz says ok. CheckSchema is the guard that makes that safe to operate - it
-// compares the live schema with the one this binary would create, so `serve` can
-// refuse to start instead of handing the treasurer a 500.
+// tracks applied migrations by number, so a database that already ran 00001
+// never sees that file change: a release editing the schema boots on the old
+// one and /healthz says ok. CheckSchema compares the live schema with the one
+// this binary would create, so `serve` can refuse to start instead of handing
+// the treasurer a 500.
 
-// gooseTable is goose's own bookkeeping table. It is the runner's, not the
-// schema's, so it is left out of the comparison.
+// gooseTable is goose's bookkeeping table: the runner's, not the schema's, so
+// excluded from the comparison.
 const gooseTable = "goose_db_version"
 
 // schemaObject is one row of sqlite_schema: a table, index, view or trigger.
@@ -53,7 +53,7 @@ func (d SchemaDiff) Matches() bool {
 // Summary names the differing objects in one short phrase, at most limit of
 // them, e.g. "table fund changed, index x missing, and 2 more". Empty when the
 // schemas match. Changed objects come first: a changed column is the usual
-// shape of a stale database, and the likeliest thing to read first.
+// shape of a stale database.
 func (d SchemaDiff) Summary(limit int) string {
 	var parts []string
 	for _, n := range d.Changed {
@@ -74,21 +74,21 @@ func (d SchemaDiff) Summary(limit int) string {
 
 // CheckSchema compares sqlDB's schema with the one the embedded migrations
 // create. The expected schema is built by running those migrations into a
-// throwaway in-memory database on the same driver, so "what this binary creates"
-// is measured, not restated. Read-only against sqlDB.
+// throwaway in-memory database on the same driver, so "what this binary
+// creates" is measured, not restated. Read-only against sqlDB.
 //
-// What is compared: type, name, owning table and DDL text of every table, index,
-// view and trigger in sqlite_schema, sorted by type and name. What is left out:
-// SQLite's own objects (sqlite_sequence, sqlite_stat*, and the autoindexes whose
-// sql is NULL) and goose's version table.
+// Compared: type, name, owning table and DDL text of every table, index, view
+// and trigger in sqlite_schema, sorted by type and name. Left out: SQLite's
+// objects (sqlite_sequence, sqlite_stat*, autoindexes whose sql is NULL) and
+// goose's version table.
 //
-// How the DDL is normalised: SQLite stores each statement verbatim, so two
-// databases built from the same file hold identical text. The only trap is that
-// 00001_schema.sql carries comments inside its CREATE statements, and SQLite
-// keeps those too - so a comment-only edit would read as a schema change and
-// refuse to boot an instance whose structure is exactly right. normalizeDDL
-// therefore drops comments and collapses whitespace runs, and nothing else:
-// string literals and quoted identifiers are left byte for byte.
+// DDL normalisation: SQLite stores each statement verbatim, so two databases
+// from the same file hold identical text. The trap is that 00001_schema.sql
+// has comments inside its CREATE statements, which SQLite keeps, so a
+// comment-only edit would read as a schema change and refuse to boot an
+// instance whose structure is right. normalizeDDL therefore drops comments and
+// collapses whitespace runs, nothing else: string literals and quoted
+// identifiers stay byte for byte.
 func CheckSchema(ctx context.Context, sqlDB *sql.DB) (SchemaDiff, error) {
 	want, err := expectedSchema(ctx)
 	if err != nil {
@@ -178,10 +178,9 @@ func compareSchemas(want, got []schemaObject) SchemaDiff {
 }
 
 // normalizeDDL drops SQL comments (-- to end of line, /* ... */) and collapses
-// every run of whitespace to one space, trimming the ends. Single-quoted
-// strings, double-quoted identifiers, backtick identifiers and [bracketed]
-// identifiers are copied untouched, so a '--' or a double space inside a
-// literal or a CHECK's string survives.
+// every whitespace run to one space, trimming the ends. Single-quoted strings,
+// double-quoted, backtick and [bracketed] identifiers are copied untouched, so
+// a '--' or double space inside a literal or CHECK string survives.
 func normalizeDDL(ddl string) string {
 	var b strings.Builder
 	b.Grow(len(ddl))

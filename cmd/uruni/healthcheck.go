@@ -13,10 +13,10 @@ import (
 // a hung server produces our error rather than Docker's kill.
 const healthcheckTimeout = 2 * time.Second
 
-// healthcheck exists *only* because the runtime image is distroless - no shell,
-// no curl - so the image's HEALTHCHECK has nothing else to call (ADR-019). It
-// probes the server this same binary would serve, on the same PORT, and exits
-// 0 when it answers.
+// healthcheck exists only because the runtime image is distroless (no shell,
+// no curl), so the image's HEALTHCHECK has nothing else to call (ADR-019). It
+// probes the server this binary would serve, on the same PORT, and exits 0
+// when it answers.
 func healthcheck() error {
 	cfg, err := config.Load()
 	if err != nil {
@@ -31,8 +31,8 @@ func probeHealth(url string, timeout time.Duration) error {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
-	// Built as a request rather than http.Get so the timeout is the context's
-	// and the URL is never a bare variable handed to the default client.
+	// A request, not http.Get, so the timeout is the context's and the URL is
+	// never a bare variable handed to the default client.
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return fmt.Errorf("healthcheck: %w", err)

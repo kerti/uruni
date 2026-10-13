@@ -12,15 +12,15 @@ import (
 )
 
 // duesPeriodLayout is the schema's period shape (ADR-024): "YYYY-MM", not a
-// calendar date - dues are monthly, and a period is not a date.
+// date; dues are monthly.
 const duesPeriodLayout = "2006-01"
 
 // PeriodAmount is one period within a multi-period dues payment: the period
-// paid and the amount paid toward it. The schema's kind='dues' CHECK requires
-// exactly one dues_period per row (ADR-024), and paying several months at
-// once is the treasurer's real workflow (PRD section 7.3) - not one row that means
-// three things - so Periods is a slice on PostDuesPaymentsParams and every
-// entry becomes its own "transaction" row, never flattened into a total.
+// paid and the amount toward it. The kind='dues' CHECK requires exactly one
+// dues_period per row (ADR-024), and paying several months at once is the
+// treasurer's real workflow (PRD section 7.3), so Periods is a slice on
+// PostDuesPaymentsParams and each entry becomes its own "transaction" row,
+// never flattened into a total.
 type PeriodAmount struct {
 	DuesPeriod string       // "YYYY-MM", a real calendar month
 	Amount     money.Amount // must be > 0
@@ -28,13 +28,12 @@ type PeriodAmount struct {
 
 // PostDuesPaymentsParams is every argument PostDuesPayments needs to post one
 // member's payment across one or more periods, in one sitting, on the same
-// account, dated and noted the same way across all of them - Periods is the
-// only part that varies per row.
+// account, dated and noted alike; Periods is the only part that varies per
+// row.
 //
-// There is deliberately no PurposeID (#473): dues are the routine fund's
-// income, so they always land on the fund's Kas Utama, and the caller does
-// not get to name another - the same way SettleReimbursementParams carries
-// no PurposeID because the claim owns it.
+// There is no PurposeID (#473): dues are the routine fund's income and always
+// land on Kas Utama, as SettleReimbursementParams carries none because the
+// claim owns it.
 type PostDuesPaymentsParams struct {
 	FundID     int64
 	AccountID  int64
@@ -45,32 +44,27 @@ type PostDuesPaymentsParams struct {
 }
 
 // PostDuesPayments writes one kind='dues' entry per element of Periods -
-// direction='in', with member_id and dues_period set, exactly as the
-// schema's CHECK requires - all inside a single database transaction.
+// direction='in', with member_id and dues_period set, as the schema's CHECK
+// requires - all inside a single database transaction.
 //
-// Every period is validated before anything is written, and then every row
-// is inserted inside one withTx: a failure on period N leaves zero rows
-// written, not N-1. This is the fix for the defect this type replaces
-// (#96) - the previous shape, a singular PostDuesPayment called once per
-// period by the HTTP handler, left every already-posted row standing when a
-// later period failed, because each call owned and committed its own
-// transaction independently. Two ways to post one dues row was also the
-// footgun ADR-027 argues against, so there is no singular form left beside
-// this one; a single-period payment is a one-element Periods slice.
+// Every period is validated before anything is written, then every row is
+// inserted inside one withTx: a failure on period N leaves zero rows, not
+// N-1. (A singular PostDuesPayment called once per period by the handler used
+// to leave posted rows standing when a later period failed, #96; two ways to
+// post one dues row is also the footgun ADR-027 argues against, so a
+// single-period payment is a one-element Periods slice.)
 //
 // Argument-shape failures - an empty Periods, a non-positive amount, a
 // malformed or calendar-invalid occurred_on, a malformed or calendar-invalid
-// dues_period on any period - are rejected before anything reaches the
-// write, and before any row in the batch is written (ADR-027). An empty
-// Periods is ErrInvalidArgument here, the same way the HTTP handler treats
-// it as a 400 before ever calling this method: both layers agree that
+// dues_period on any period - are rejected before any row is written
+// (ADR-027). An empty Periods is ErrInvalidArgument here as the handler's 400:
 // "post a payment with nothing to post" is a caller mistake, not a silent
-// no-op that would answer 201 having written nothing.
+// no-op answering 201.
 //
 // A retired AccountID (inactive_on set) is ErrAccountInactive, checked once
-// for the whole batch inside the transaction, before any row is written
-// (#444). Every row's purpose is the fund's Kas Utama, looked up once in the
-// same transaction - never a closed envelope, never a titipan (#473).
+// for the whole batch in the transaction before any row is written (#444).
+// Every row's purpose is Kas Utama, looked up once in the same transaction:
+// never a closed envelope, never a titipan (#473).
 func (l *Ledger) PostDuesPayments(ctx context.Context, p PostDuesPaymentsParams) ([]store.Transaction, error) {
 	if len(p.Periods) == 0 {
 		return nil, fmt.Errorf("%w: periods must not be empty", ErrInvalidArgument)
@@ -114,11 +108,9 @@ func (l *Ledger) PostDuesPayments(ctx context.Context, p PostDuesPaymentsParams)
 	return posted, nil
 }
 
-// postDuesPaymentTx inserts one period's "transaction" row using the
-// caller's already-open store.Querier (ADR-027's ...Tx composition rule),
-// doing no transaction management and no validation of its own - both are
-// PostDuesPayments' job, done once for the whole batch before this is ever
-// called.
+// postDuesPaymentTx inserts one period's "transaction" row using the caller's
+// open store.Querier (ADR-027's ...Tx composition rule), with no transaction
+// management or validation: PostDuesPayments does both once per batch.
 func (l *Ledger) postDuesPaymentTx(ctx context.Context, q store.Querier, p PostDuesPaymentsParams, purposeID int64, period PeriodAmount) (store.Transaction, error) {
 	return q.CreateTransaction(ctx, store.CreateTransactionParams{
 		FundID: p.FundID, AccountID: p.AccountID, PurposeID: purposeID,
@@ -134,13 +126,10 @@ func (l *Ledger) postDuesPaymentTx(ctx context.Context, q store.Querier, p PostD
 // ReverseDuesPaymentParams is every argument ReverseDuesPayment needs to
 // reverse one previously-posted dues payment.
 //
-// There is deliberately no AccountID, PurposeID, Amount, MemberID or
-// DuesPeriod field: all five are copied from the original row by
-// ReverseDuesPayment itself, never re-typed by the caller - the same
-// discipline ADR-027 already applies to SettleReimbursementParams, which
-// carries no Amount or PurposeID for exactly this reason. A reversal that
-// could name a different amount or member than the payment it reverses
-// would not be a reversal of that payment (ADR-029).
+// There is no AccountID, PurposeID, Amount, MemberID or DuesPeriod field: all
+// five are copied from the original row, never re-typed, as ADR-027 does for
+// SettleReimbursementParams. A reversal naming a different amount or member
+// would not reverse that payment (ADR-029).
 type ReverseDuesPaymentParams struct {
 	FundID        int64
 	TransactionID int64  // the kind='dues' row, or a named contribution, being reversed (ADR-034)
@@ -154,42 +143,34 @@ type ReverseDuesPaymentParams struct {
 // naming the row it reverses. It returns the posted reversal row.
 //
 // account_id, purpose_id, amount, member_id and dues_period are copied from
-// the original row, inside the same withTx that posts the reversal - never
-// re-typed by the caller (see ReverseDuesPaymentParams). Only occurred_on
-// and note are the caller's to choose: the date the correction is actually
-// made, and why. Copying dues_period unchanged is what makes a dues
-// reversal carry its period and a contribution reversal carry none (a
-// contribution's own dues_period is always NULL) - the same fact the
-// schema's own BEFORE INSERT trigger verifies independently.
+// the original row inside the same withTx (see ReverseDuesPaymentParams).
+// Only occurred_on and note are the caller's: the date the correction is
+// made, and why. Copying dues_period unchanged makes a dues reversal carry
+// its period and a contribution reversal carry none (a contribution's
+// dues_period is NULL), which the schema's BEFORE INSERT trigger verifies
+// independently.
 //
 // The original row is fetched fund-scoped (GetTransactionForFund: WHERE
-// fund_id = ? AND id = ?), not by id alone. That is what makes
-// ErrDuesPaymentNotFound the answer for a transaction id belonging to
-// another fund, exactly as it is for one that does not exist at all - the
-// composite FK on reverses_transaction_id backs the same guarantee at the
-// schema level, but the fund-scoped fetch is what stops this method from
-// ever constructing the cross-fund insert in the first place.
+// fund_id = ? AND id = ?), so ErrDuesPaymentNotFound answers for another
+// fund's transaction id as for a missing one. The composite FK on
+// reverses_transaction_id backs this at the schema level, but the fund-scoped
+// fetch stops the method constructing the cross-fund insert at all.
 //
-// Four named errors, each a pre-check ahead of a guarantee the schema
-// already enforces on its own - here purely to give the caller a clean,
-// named error instead of a raw constraint string (ADR-027's
-// ErrReimbursementAlreadySettled shape):
+// Four named errors, each a pre-check ahead of a guarantee the schema already
+// enforces, giving a clean error instead of a raw constraint string
+// (ADR-027's ErrReimbursementAlreadySettled shape):
 //
 //   - ErrDuesPaymentNotFound: no row with this id exists in this fund.
-//   - ErrNotADuesPayment: the row exists but is neither kind='dues' nor a
-//     named contribution (kind='normal' with member_id set) - which also
-//     rules out reversing a reversal, since a reversal is itself posted as
-//     kind='adjustment', never kind='dues' or a member-carrying 'normal'.
-//   - ErrDuesPaymentAlreadyReversed: GetDuesPaymentReversal already finds a
-//     reversal row for this payment - the dues_payment_reversed_once
-//     partial unique index is the actual guarantee, at most once ever.
-//   - ErrIncidentalClosed: the original row's own purpose is a closed
-//     incidental (ADR-031) - a reversal posts to that same purpose, so the
-//     envelope must be reopened first, exactly as PostTransaction's own
-//     guard requires for an ordinary posting. A dues payment's purpose is
-//     always 'main' (PostDuesPayments owns it, #473), so this never applies
-//     to a dues reversal; only a named contribution's envelope can ever be
-//     closed.
+//   - ErrNotADuesPayment: the row is neither kind='dues' nor a named
+//     contribution (kind='normal' with member_id set). That also rules out
+//     reversing a reversal, which is kind='adjustment'.
+//   - ErrDuesPaymentAlreadyReversed: GetDuesPaymentReversal finds a reversal
+//     for this payment; the dues_payment_reversed_once partial unique index
+//     is the guarantee, at most once ever.
+//   - ErrIncidentalClosed: the original row's purpose is a closed incidental
+//     (ADR-031). The reversal posts to that purpose, so the envelope must be
+//     reopened first, as PostTransaction's guard requires. A dues payment is
+//     always on 'main' (#473), so this applies only to a named contribution.
 func (l *Ledger) ReverseDuesPayment(ctx context.Context, p ReverseDuesPaymentParams) (store.Transaction, error) {
 	if err := validateOccurredOn(p.OccurredOn); err != nil {
 		return store.Transaction{}, err
@@ -255,10 +236,9 @@ func (l *Ledger) ReverseDuesPayment(ctx context.Context, p ReverseDuesPaymentPar
 }
 
 // validateDuesPeriod rejects anything that is not a real "YYYY-MM" calendar
-// month, mirroring validateOccurredOn's approach: time.Parse with this
-// exact, strict layout already refuses an out-of-range month - "2026-13"
-// fails to parse - and the round-trip format comparison catches a
-// short-width value like "2026-1" that Parse would otherwise accept loosely.
+// month, like validateOccurredOn: time.Parse with this strict layout refuses
+// an out-of-range month ("2026-13"), and the round-trip comparison catches a
+// short value like "2026-1" that Parse would accept.
 func validateDuesPeriod(s string) error {
 	t, err := time.Parse(duesPeriodLayout, s)
 	if err != nil {
@@ -273,19 +253,19 @@ func validateDuesPeriod(s string) error {
 // DeleteDuesTier removes a tier and the rates that priced it, in one
 // transaction (#232).
 //
-// Not money, so not really this package's business - but it is the only
-// place with a transaction, and the two statements have to share one. A
-// tier's rates carry their own FK onto it, so the tier cannot be deleted
-// first; and if a member then refuses the tier through member's composite
-// (fund_id, tier_id) FK, the rollback takes the rate deletion with it. Split
-// across two calls, a refused tier would leave its rates already gone.
+// Not money, but it is the only place with a transaction, and the two
+// statements must share one. A tier's rates have an FK onto it, so the tier
+// cannot be deleted first; and if a member then refuses the tier through
+// member's composite (fund_id, tier_id) FK, the rollback takes the rate
+// deletion with it. Split across two calls, a refused tier would leave its
+// rates gone.
 //
-// No pre-check for members. The foreign key is the check, and a COUNT(*)
-// first would only race it - DeleteAccount's own handler documents the same
-// reasoning. The caller maps the resulting constraint error to 409.
+// No pre-check for members: the foreign key is the check, and a COUNT(*)
+// first would only race it (as DeleteAccount's handler documents). The
+// caller maps the constraint error to 409.
 //
-// fundID scopes the delete for the reason GetDuesTierForFund exists (#188):
-// an id names a row, it does not prove the caller may touch it.
+// fundID scopes the delete (GetDuesTierForFund, #188): an id names a row, it
+// does not prove the caller may touch it.
 func (l *Ledger) DeleteDuesTier(ctx context.Context, fundID, tierID int64) error {
 	return l.withTx(ctx, func(q store.Querier) error {
 		if err := q.DeleteDuesRatesByTier(ctx, tierID); err != nil {

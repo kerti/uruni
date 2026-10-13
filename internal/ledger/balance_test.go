@@ -40,10 +40,9 @@ func TestEmptyFundBalancesAreZero(t *testing.T) {
 	}
 }
 
-// pass_through and incidental purposes sum into FundBalance and
-// AccountBalance exactly like main - PRD 7.6 as revised, ADR-024's "either
-// both leave the headline or neither does". There is no second "available"
-// balance anywhere in Uruni.
+// pass_through and incidental purposes sum into FundBalance and AccountBalance
+// like main (PRD 7.6 as revised, ADR-024's "either both leave the headline or
+// neither does"). There is no second "available" balance.
 func TestPassThroughAndIncidentalSumIntoFundAndAccountBalanceLikeMain(t *testing.T) {
 	t.Parallel()
 	l := newTestLedger(t)

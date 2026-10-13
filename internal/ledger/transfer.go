@@ -11,26 +11,23 @@ import (
 )
 
 // leg identifies one side of a transfer pair: the account and purpose a
-// transaction posts against. It deliberately carries no direction -
-// postTransferPairTx derives that itself (out at from, in at to), so a caller
-// cannot construct a pair with both legs pointing the same way, which would
-// not net to zero.
+// transaction posts against. It carries no direction: postTransferPairTx
+// derives it (out at from, in at to), so a caller cannot build a pair with
+// both legs pointing the same way, which would not net to zero.
 type leg struct {
 	AccountID int64
 	PurposeID int64
 }
 
-// legsIdentical reports whether from and to name the same account and the
-// same purpose - an account-to-itself (or purpose-to-itself) transfer that
-// would satisfy every schema CHECK while moving nothing and meaning nothing.
+// legsIdentical reports whether from and to name the same account and purpose:
+// a transfer to itself would satisfy every schema CHECK while moving nothing.
 func legsIdentical(from, to leg) bool {
 	return from.AccountID == to.AccountID && from.PurposeID == to.PurposeID
 }
 
-// normalizeNote collapses "no note" to a single representation. A caller can
-// express absence as nil or as an empty (or whitespace-only) string - a form
-// field left untouched arrives as the latter - and storing "" would make the
-// transaction list render an empty note line where there is nothing to say.
+// normalizeNote collapses "no note" to one representation. Absence can arrive
+// as nil or an empty or whitespace-only string (an untouched form field), and
+// storing "" would render an empty note line in the transaction list.
 func normalizeNote(note *string) *string {
 	if note == nil {
 		return nil
@@ -42,44 +39,38 @@ func normalizeNote(note *string) *string {
 	return &trimmed
 }
 
-// postTransferPairTx is the one primitive behind every value-neutral
-// movement (ADR-024, ADR-027): insert one transfer row, then two
-// "transaction" rows referencing it, equal amount, opposite direction. The
-// fund's total is unchanged by construction - one amount, two directions -
-// because nothing moved, only where the money sits (between_accounts) or
-// what it is for (reclass_purpose).
+// postTransferPairTx is the one primitive behind every value-neutral movement
+// (ADR-024, ADR-027): insert one transfer row, then two "transaction" rows
+// referencing it, equal amount, opposite direction. The fund's total is
+// unchanged by construction: only where the money sits (between_accounts) or
+// what it is for (reclass_purpose) moves.
 //
-// kind selects which of the two the transfer row records; the two rows this
-// function posts are identical either way, since the "same purpose" or "same
-// account" constraint each caller upholds lives in the leg values it passes,
-// not in this function's logic. This is deliberate: postTransferPairTx does
-// not know or check which fields its two callers hold equal, so
-// CloseIncidentalAndRoll (#42) needs no second code path, only different
-// legs and kind='reclass_purpose'.
+// kind selects which the transfer row records; the two rows posted are the
+// same either way, since the "same purpose" or "same account" constraint each
+// caller upholds lives in the legs it passes. This function does not check
+// which fields its callers hold equal, so CloseIncidentalAndRoll (#42) needs
+// no second code path, only different legs and kind='reclass_purpose'.
 //
-// correctsTransactionID is nil for every pair but a purpose correction
-// (ADR-033, #267): PostPurposeCorrection is this primitive's third caller,
-// reusing it rather than opening a second write path (ADR-027) - the schema's
-// own CHECK is what stops a between_accounts pair or a roll from setting it,
-// not a branch in here.
+// correctsTransactionID is nil except for a purpose correction (ADR-033,
+// #267): PostPurposeCorrection reuses this primitive rather than opening a
+// second write path (ADR-027); the schema's CHECK stops a between_accounts
+// pair or a roll from setting it.
 //
-// reason is nil for every pair but the two that say why a purpose pair
-// moved (ADR-036): reasonRoll from CloseIncidentalAndRoll, reasonAllocation
-// from PostPurposeMove. Corrections and between_accounts pairs pass nil; the
-// schema's CHECK refuses a reason anywhere else.
+// reason is nil except for the two that say why a purpose pair moved
+// (ADR-036): reasonRoll from CloseIncidentalAndRoll, reasonAllocation from
+// PostPurposeMove. Corrections and between_accounts pairs pass nil; the
+// schema's CHECK refuses a reason elsewhere.
 //
-// No argument-shape validation happens here (ADR-027): that is each exported
-// caller's job, because the message a caller wants ("from_account_id and
-// to_account_id must differ") reads differently depending on which two
-// fields the caller holds fixed. This function trusts its caller completely.
+// No argument-shape validation happens here (ADR-027): each exported caller
+// validates, because the message ("from_account_id and to_account_id must
+// differ") depends on which fields that caller holds fixed. This function
+// trusts its caller.
 //
-// It takes an already-open store.Querier rather than opening its own
-// transaction, unlike its predecessor before #42: CloseIncidentalAndRoll
-// needs the pair and the incidental UPDATE in the same atomic write, and a
-// second l.withTx nested inside the first would try to open a second
-// connection while the outer transaction still holds the only one
-// ADR-004's SetMaxOpenConns(1) allows - a deadlock, not a safety net.
-// Every caller opens its own withTx and passes its Querier in.
+// It takes an open store.Querier rather than opening its own transaction:
+// CloseIncidentalAndRoll needs the pair and the incidental UPDATE in one
+// atomic write, and a nested l.withTx would ask ADR-004's
+// SetMaxOpenConns(1) for a second connection while the outer holds the only
+// one: a deadlock. Every caller opens its withTx and passes its Querier in.
 func (l *Ledger) postTransferPairTx(ctx context.Context, q store.Querier, fundID int64, kind string, from, to leg, amount money.Amount, occurredOn string, note *string, correctsTransactionID *int64, reason *string) (store.Transfer, error) {
 	now := time.Now().Unix()
 
@@ -106,9 +97,8 @@ func (l *Ledger) postTransferPairTx(ctx context.Context, q store.Querier, fundID
 }
 
 // PostTransferBetweenAccountsParams is every argument
-// PostTransferBetweenAccounts needs: the same purpose, moving between two
-// different accounts - depositing the wallet's cash at the bank is the
-// PRD's example.
+// PostTransferBetweenAccounts needs: the same purpose, between two different
+// accounts (the PRD's example: depositing the wallet's cash at the bank).
 type PostTransferBetweenAccountsParams struct {
 	FundID        int64
 	PurposeID     int64
@@ -117,18 +107,16 @@ type PostTransferBetweenAccountsParams struct {
 	Amount        money.Amount // must be > 0
 	OccurredOn    string       // "YYYY-MM-DD", a real calendar date
 
-	// Note is written to both legs, or to neither. One movement is one
-	// thing that happened, so the sentence explaining it belongs on both
-	// halves of the pair - a note on the "out" leg alone reads, in the
-	// transaction list, as an unexplained arrival somewhere else. nil and
-	// an empty string both mean no note; see normalizeNote.
+	// Note is written to both legs, or neither. One movement is one thing that
+	// happened, so its explanation belongs on both halves; a note on the "out"
+	// leg alone reads in the list as an unexplained arrival elsewhere. nil and an
+	// empty string both mean no note; see normalizeNote.
 	Note *string
 }
 
 // PostTransferBetweenAccounts moves money from one account to another within
-// the same purpose - cash into the bank, or back out. The fund's total is
-// unchanged by construction; only AccountBalance moves, on both sides, by
-// exactly the amount, in opposite directions.
+// the same purpose. The fund's total is unchanged by construction; only
+// AccountBalance moves, on both sides, by exactly the amount, oppositely.
 //
 // Either location being retired (inactive_on set) is ErrAccountInactive and
 // nothing is written (#444).
@@ -149,9 +137,9 @@ func (l *Ledger) PostTransferBetweenAccounts(ctx context.Context, p PostTransfer
 		return store.Transfer{}, fmt.Errorf("%w: from_account_id and to_account_id must differ, got %d for both", ErrInvalidArgument, p.FromAccountID)
 	}
 
-	// Both locations are checked inside the same transaction as the write:
-	// money neither leaves a retired location nor arrives in one (#444). To
-	// empty a retired location, reinstate it, move, retire again.
+	// Both locations are checked inside the write's transaction: money neither
+	// leaves a retired location nor arrives in one (#444). To empty a retired
+	// location, reinstate it, move, retire again.
 	var transfer store.Transfer
 	err := l.withTx(ctx, func(q store.Querier) error {
 		for _, accountID := range [...]int64{p.FromAccountID, p.ToAccountID} {
@@ -169,9 +157,8 @@ func (l *Ledger) PostTransferBetweenAccounts(ctx context.Context, p PostTransfer
 	return transfer, nil
 }
 
-// The two reasons a purpose pair that corrects nothing can carry
-// (ADR-036). They are the schema's own CHECK values, named once here so the
-// two callers and the tests spell them the same way.
+// The two reasons a purpose pair that corrects nothing can carry (ADR-036):
+// the schema's CHECK values, named once for the callers and tests.
 const (
 	reasonRoll       = "roll"
 	reasonAllocation = "allocation"

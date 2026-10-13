@@ -13,9 +13,9 @@ func TestOpenAppliesEveryPragmaToEveryConnection(t *testing.T) {
 	t.Parallel()
 	sqlDB := openTestDB(t)
 
-	// Queried back rather than trusted from the DSN: SQLite silently ignores a
-	// pragma it doesn't recognise, so a typo in the list would otherwise leave
-	// foreign keys off (or the journal in rollback mode) with nothing to show it.
+	// Queried back, not trusted from the DSN: SQLite silently ignores an
+	// unrecognised pragma, so a typo would leave foreign keys off (or the journal
+	// in rollback mode) with nothing to show it.
 	want := map[string]string{
 		"journal_mode": "wal",
 		"busy_timeout": "5000",
@@ -39,8 +39,7 @@ func TestOpenAppliesEveryPragmaToEveryConnection(t *testing.T) {
 	assert(t, "on the first connection")
 
 	// "Every connection", not "the first one": retire it and make the pool open a
-	// fresh one, which is what happens in a long-lived server whenever a
-	// connection is replaced.
+	// fresh one, as a long-lived server does whenever a connection is replaced.
 	sqlDB.SetConnMaxLifetime(time.Nanosecond)
 	time.Sleep(time.Millisecond)
 	assert(t, "on a reopened connection")
@@ -50,9 +49,9 @@ func TestOpenSerializesOnOneConnection(t *testing.T) {
 	t.Parallel()
 	sqlDB := openTestDB(t)
 
-	// ADR-004: one connection is what makes SQLITE_BUSY structurally impossible,
-	// so the ledger never needs retry logic. Raising this is a decision, not a
-	// tuning knob - it needs a superseding ADR.
+	// ADR-004: one connection makes SQLITE_BUSY structurally impossible, so the
+	// ledger needs no retry logic. Raising this is a decision, not a tuning knob;
+	// it needs a superseding ADR.
 	if got := sqlDB.Stats().MaxOpenConnections; got != 1 {
 		t.Errorf("MaxOpenConnections = %d, want 1", got)
 	}
@@ -60,9 +59,9 @@ func TestOpenSerializesOnOneConnection(t *testing.T) {
 
 func TestOpenFailsOnAnUnwritablePath(t *testing.T) {
 	t.Parallel()
-	// sql.Open is lazy, so this only fails at boot because Open pings. A database
-	// path the operator mistyped should be a startup error, not a 500 on the
-	// treasurer's first tap.
+	// sql.Open is lazy, so this fails at boot only because Open pings. A mistyped
+	// database path should be a startup error, not a 500 on the treasurer's first
+	// tap.
 	missingDir := filepath.Join(t.TempDir(), "no-such-dir", "uruni.db")
 
 	sqlDB, err := Open(context.Background(), missingDir)
@@ -75,9 +74,9 @@ func TestOpenFailsOnAnUnwritablePath(t *testing.T) {
 	}
 }
 
-// openTestDB opens a throwaway database on a real file - not :memory: - because
-// the pragmas under test (WAL especially) behave differently for an in-memory
-// database, which would make the test prove less than it appears to.
+// openTestDB opens a throwaway database on a real file, not :memory:: the
+// pragmas under test (WAL especially) behave differently in-memory, so the
+// test would prove less than it appears to.
 func openTestDB(t *testing.T) *sql.DB {
 	t.Helper()
 

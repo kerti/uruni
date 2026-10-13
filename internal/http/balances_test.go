@@ -58,9 +58,8 @@ func TestGetBalancesRequiresAFund(t *testing.T) {
 	}
 }
 
-// TestGetBalancesBeforeAnyPostingIsAllZero is the empty-fund case: setup runs,
-// nothing has posted yet, and the route still answers with a row for each
-// account and purpose setup created - all at 0, not an empty list.
+// TestGetBalancesBeforeAnyPostingIsAllZero: after setup with nothing posted,
+// the route answers a row for each account and purpose at 0, not an empty list.
 func TestGetBalancesBeforeAnyPostingIsAllZero(t *testing.T) {
 	t.Parallel()
 	r := testRouter(t)
@@ -97,14 +96,14 @@ func TestGetBalancesBeforeAnyPostingIsAllZero(t *testing.T) {
 }
 
 // TestGetBalancesReflectsEveryMilestoneSlice is the milestone's acceptance
-// criterion: one GET reflects every prior M4 slice's postings correctly. It
-// seeds an ordinary in and out, a dues payment, a transfer between cash and
-// bank, a reimbursement settlement, and an incidental opened, contributed to,
-// disbursed from and closed with a leftover that rolls into main - then
-// checks the fund total, every account balance and every purpose balance
-// against hand-computed integers.
+// criterion: one GET reflects every prior M4 slice's postings. It seeds an
+// ordinary in and out, a dues payment, a transfer between cash and bank, a
+// reimbursement settlement, and an incidental opened, contributed to,
+// disbursed from and closed with a leftover rolling into main, then checks the
+// fund total and every account and purpose balance against hand-computed
+// integers.
 //
-// Hand computation (cash starts and ends in rupiah, never floats):
+// Hand computation (rupiah, never floats):
 //
 //	cash:   +500,000 (in) -50,000 (out) +25,000 (dues) -200,000 (transfer out)
 //	        +100,000 (incidental contribution) -40,000 (incidental disbursement)
@@ -178,8 +177,8 @@ func TestGetBalancesReflectsEveryMilestoneSlice(t *testing.T) {
 		t.Fatalf("settle reimbursement = %d, want %d (body: %s)", rec.Code, http.StatusCreated, rec.Body.String())
 	}
 
-	// An incidental envelope: opened, contributed to, disbursed from, then
-	// closed - the leftover rolls into main.
+	// An incidental envelope: opened, contributed to, disbursed from, then closed;
+	// the leftover rolls into main.
 	incRec := postIncidental(t, r, openIncidentalRequest{Occasion: "Lebaran", OpenedOn: "2026-08-01"})
 	if incRec.Code != http.StatusCreated {
 		t.Fatalf("POST /api/incidentals = %d, want %d (body: %s)", incRec.Code, http.StatusCreated, incRec.Body.String())
@@ -232,9 +231,8 @@ func TestGetBalancesReflectsEveryMilestoneSlice(t *testing.T) {
 		t.Errorf("incidental purpose balance = %d, want 0 (fully collected, disbursed, and rolled)", incBalance.Balance)
 	}
 
-	// CONSISTENCY CHECK - this arithmetic belongs here, in the test, and
-	// nowhere in the handler: the fund total must equal the sum of the
-	// account balances the same GET returned.
+	// CONSISTENCY CHECK, in the test and nowhere in the handler: the fund total
+	// equals the sum of the account balances the same GET returned.
 	var accountSum int64
 	for _, a := range got.Accounts {
 		accountSum += a.Balance
@@ -244,11 +242,10 @@ func TestGetBalancesReflectsEveryMilestoneSlice(t *testing.T) {
 	}
 }
 
-// TestGetBalancesTransferMovesAccountsLeavesFundTotalUnchanged is the
-// transfer property named in the issue, isolated from the milestone fixture
-// above: moving money between cash and bank changes both account balances by
-// the same amount in opposite directions, while the fund total - derived
-// straight from FundBalance, never summed here - does not move at all.
+// TestGetBalancesTransferMovesAccountsLeavesFundTotalUnchanged, isolated from
+// the milestone fixture: moving money between cash and bank changes both
+// account balances by the same amount oppositely, while the fund total,
+// derived from FundBalance and never summed here, does not move.
 func TestGetBalancesTransferMovesAccountsLeavesFundTotalUnchanged(t *testing.T) {
 	t.Parallel()
 	r := testRouter(t)
@@ -287,17 +284,15 @@ func TestGetBalancesTransferMovesAccountsLeavesFundTotalUnchanged(t *testing.T) 
 	}
 }
 
-// TestGetBalancesOnADeadDatabaseIs500 pins down that a dead database produces
-// a clean 500 with the generic envelope - not a panic, and not a half-written
-// 200 body carrying a fund_total the handler could not finish.
+// TestGetBalancesOnADeadDatabaseIs500: a dead database gives a clean 500 with
+// the generic envelope, not a panic or a half-written 200 carrying a
+// fund_total the handler could not finish.
 //
-// Note what it does NOT reach. resolveFund runs first and queries the same
-// database, so any fault wide enough to break FundBalance breaks ListFunds a
-// line earlier and returns there. The five `if err != nil` branches below
-// resolveFund are unreachable through this route by any whole-database
-// failure; distinguishing them would take per-call fault injection, and the
-// seam that would need is not worth owning for branches that only ever fire
-// together. They stay as honest defensive code, uncovered on purpose.
+// It does not reach the five `if err != nil` branches below resolveFund:
+// resolveFund queries the same database, so any fault wide enough to break
+// FundBalance breaks ListFunds a line earlier. Distinguishing them needs
+// per-call fault injection, not worth a seam for branches that fire together;
+// they stay as uncovered defensive code.
 func TestGetBalancesOnADeadDatabaseIs500(t *testing.T) {
 	t.Parallel()
 	sqlDB := testStoreDB(t)
@@ -307,13 +302,11 @@ func TestGetBalancesOnADeadDatabaseIs500(t *testing.T) {
 		t.Fatalf("POST /api/setup = %d, want %d (body: %s)", rec.Code, http.StatusCreated, rec.Body.String())
 	}
 
-	// Nothing can read after this, so every branch below the first is
-	// unreachable by construction - the point is the shape of the answer.
-	// That now includes the session manager's own store read (session.go's
-	// ErrorFunc): #116 gates this route, so the request below needs its
-	// cookie's session loaded before GetBalances ever runs, and a dead
-	// database answers that lookup with the identical 500 envelope this
-	// test already asserts on.
+	// Nothing can read after this, so every branch below the first is unreachable;
+	// the point is the answer's shape. That includes the session manager's store
+	// read (session.go's ErrorFunc): #116 gates this route, so the cookie's
+	// session is loaded before GetBalances, and a dead database answers that
+	// lookup with the same 500 envelope.
 	if err := sqlDB.Close(); err != nil {
 		t.Fatalf("closing the test database = %v, want no error", err)
 	}

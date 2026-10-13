@@ -9,10 +9,9 @@ import (
 	"github.com/kerti/uruni/internal/store"
 )
 
-// The harness is only worth anything if it reaches the real schema, so these
-// tests prove the plumbing rather than any domain behaviour: an entry survives
-// a round trip, foreign keys are actually enforced, and withTx commits and
-// rolls back when it should.
+// The harness is worth something only if it reaches the real schema, so these
+// tests prove the plumbing, not domain behaviour: an entry survives a round
+// trip, foreign keys are enforced, and withTx commits and rolls back.
 
 func TestHarnessRoundTripsAnEntry(t *testing.T) {
 	t.Parallel()
@@ -38,11 +37,10 @@ func TestHarnessRoundTripsAnEntry(t *testing.T) {
 	}
 }
 
-// The self-check that matters: foreign keys are off by default in SQLite, per
-// connection, so a harness that forgot them would let every later test pass
-// against a database enforcing nothing. A composite FK is the sharper probe -
-// it fails only if the pragma is on *and* ADR-024's (fund_id, id) references
-// are doing their job.
+// The self-check that matters: SQLite leaves foreign keys off per connection,
+// so a harness forgetting them would let every later test pass against a
+// database enforcing nothing. A composite FK is the sharper probe: it fails
+// only if the pragma is on and ADR-024's (fund_id, id) references work.
 func TestHarnessEnforcesCompositeForeignKeys(t *testing.T) {
 	t.Parallel()
 	l := newTestLedger(t)
@@ -57,8 +55,8 @@ func TestHarnessEnforcesCompositeForeignKeys(t *testing.T) {
 	}
 
 	// The account belongs to the first fund; the transaction claims the second.
-	// Only the composite reference can catch this - a single-column
-	// REFERENCES account(id) would find the row and be satisfied.
+	// Only the composite reference catches this; a single-column REFERENCES
+	// account(id) would find the row and be satisfied.
 	_, err = store.New(l.db).CreateTransaction(ctx, store.CreateTransactionParams{
 		FundID: other.ID, AccountID: f.cashID, PurposeID: f.mainID,
 		Direction: "in", Amount: 50_000, OccurredOn: "2026-08-12", Kind: "normal",
@@ -104,8 +102,8 @@ func TestWithTxRollsBackAndReturnsTheError(t *testing.T) {
 
 	sentinel := errors.New("the caller changed its mind")
 
-	// Two writes, then a failure: the second row is what proves the rollback
-	// covers the whole function rather than only its last statement.
+	// Two writes, then a failure: the second row proves the rollback covers the
+	// whole function, not only its last statement.
 	err := l.withTx(ctx, func(q store.Querier) error {
 		for _, amount := range []int64{50_000, 70_000} {
 			if _, err := q.CreateTransaction(ctx, store.CreateTransactionParams{
@@ -131,8 +129,8 @@ func TestWithTxRollsBackAndReturnsTheError(t *testing.T) {
 	}
 }
 
-// The failure that happens before fn is ever called: withTx has to report it
-// as its own, not hand back a nil error and a transaction nobody opened.
+// The failure before fn is called: withTx reports it, not a nil error and a
+// transaction nobody opened.
 func TestWithTxReportsAFailureToBegin(t *testing.T) {
 	t.Parallel()
 	l := newTestLedger(t)
@@ -153,9 +151,9 @@ func TestWithTxReportsAFailureToBegin(t *testing.T) {
 	}
 }
 
-// A rollback must also survive the database refusing a write mid-function -
-// the immutability triggers are the realistic way that happens, and the
-// rollback has to leave the earlier insert undone rather than half-applied.
+// A rollback must survive the database refusing a write mid-function (the
+// immutability triggers are the realistic way): the earlier insert is undone,
+// not half-applied.
 func TestWithTxRollsBackWhenTheSchemaRefusesAWrite(t *testing.T) {
 	t.Parallel()
 	l := newTestLedger(t)

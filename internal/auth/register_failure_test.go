@@ -6,12 +6,11 @@ import (
 	"testing"
 )
 
-// The three tests below cover Register's database-failure arms - the ones a
-// happy-path test can never reach. Each has to answer with a plain wrapped
-// error, never with one of this package's sentinels: mapAuthError routes
-// ErrInvalidArgument to 400 and ErrAlreadyRegistered to 409, so a database
-// fault that came back wearing either would tell the treasurer her input
-// was wrong when in fact the instance is broken.
+// These tests cover Register's database-failure arms, which a happy-path test
+// never reaches. Each must answer a plain wrapped error, never a sentinel of
+// this package: mapAuthError routes ErrInvalidArgument to 400 and
+// ErrAlreadyRegistered to 409, so a database fault wearing either would tell
+// the treasurer her input was wrong when the instance is broken.
 
 // TestRegisterSurfacesAFailureToOpenATransaction: withTx's BeginTx arm.
 func TestRegisterSurfacesAFailureToOpenATransaction(t *testing.T) {
@@ -28,8 +27,8 @@ func TestRegisterSurfacesAFailureToOpenATransaction(t *testing.T) {
 	assertNotASentinel(t, err)
 }
 
-// TestRegisterSurfacesAFailedPreCheck: the cheap count before any hashing
-// (#495) failing must refuse the registration, not fall through to hashing.
+// TestRegisterSurfacesAFailedPreCheck: the cheap count before hashing (#495)
+// failing must refuse the registration, not fall through to hashing.
 func TestRegisterSurfacesAFailedPreCheck(t *testing.T) {
 	t.Parallel()
 	a, sqlDB := newTestAuth(t)
@@ -44,12 +43,11 @@ func TestRegisterSurfacesAFailedPreCheck(t *testing.T) {
 	assertNotASentinel(t, err)
 }
 
-// TestRegisterSurfacesAFailedCountUsers: the count inside the transaction
-// is the one-shot gate, so a count that could not be taken must refuse the
-// registration rather than fall through to the insert. The pre-check before
-// hashing would trip first on a table that was never there, so the table is
-// dropped from inside the hash - after the pre-check passed, before the
-// transaction opens.
+// TestRegisterSurfacesAFailedCountUsers: the count in the transaction is the
+// one-shot gate, so a count that could not be taken must refuse the
+// registration, not fall through to the insert. The pre-check would trip first
+// on a table never there, so the table is dropped from inside the hash: after
+// the pre-check passed, before the transaction opens.
 func TestRegisterSurfacesAFailedCountUsers(t *testing.T) {
 	t.Parallel()
 	sqlDB := newTestDB(t)
@@ -67,9 +65,9 @@ func TestRegisterSurfacesAFailedCountUsers(t *testing.T) {
 	assertNotASentinel(t, err)
 }
 
-// TestRegisterSurfacesAFailedInsert: the count succeeds and the insert does
-// not. A trigger is the only way to fail that one statement while leaving
-// the count reading zero, which is exactly the split this arm needs.
+// TestRegisterSurfacesAFailedInsert: the count succeeds, the insert does not. A
+// trigger is the only way to fail that one statement while the count reads
+// zero, the split this arm needs.
 func TestRegisterSurfacesAFailedInsert(t *testing.T) {
 	t.Parallel()
 	a, sqlDB := newTestAuth(t)

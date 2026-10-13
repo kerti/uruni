@@ -11,27 +11,24 @@ import (
 	"github.com/kerti/uruni/internal/store"
 )
 
-// openIncidentalRequest is POST /api/incidentals's body: opening one
-// envelope for an occasion (PRD section 7.5). There is no separate name field -
-// Occasion doubles as the purpose's name, the same choice
-// OpenIncidentalParams's own doc comment explains.
+// openIncidentalRequest is POST /api/incidentals's body: opening one envelope
+// for an occasion (PRD section 7.5). No separate name field: Occasion doubles
+// as the purpose's name (see OpenIncidentalParams).
 type openIncidentalRequest struct {
 	Occasion     string `json:"occasion"`
 	TargetAmount *int64 `json:"target_amount"`
 	OpenedOn     string `json:"opened_on"`
 
-	// MinimumPerMember and RecipientMemberIDs are ADR-034's addition
-	// (#211): the one figure every expected member is asked to give, and
-	// the members this envelope is for. Both are optional - nil/empty
-	// means no minimum and no recipients, same as leaving TargetAmount
-	// unset.
+	// MinimumPerMember and RecipientMemberIDs (ADR-034, #211): the figure every
+	// expected member is asked to give, and the members this envelope is for.
+	// Both optional: nil/empty means no minimum and no recipients.
 	MinimumPerMember   *int64  `json:"minimum_per_member"`
 	RecipientMemberIDs []int64 `json:"recipient_member_ids"`
 }
 
-// incidentalResponse is the wire shape of one envelope on its own - what
-// POST /api/incidentals and GET /api/incidentals return. No fund_id, same
-// reasoning as every other response type in this package.
+// incidentalResponse is the wire shape of one envelope alone, what POST
+// /api/incidentals and GET /api/incidentals return. No fund_id, like the
+// other response types.
 type incidentalResponse struct {
 	PurposeID    int64   `json:"purpose_id"`
 	Occasion     string  `json:"occasion"`
@@ -39,8 +36,7 @@ type incidentalResponse struct {
 	OpenedOn     string  `json:"opened_on"`
 	ClosedOn     *string `json:"closed_on"`
 	CreatedAt    int64   `json:"created_at"`
-	// MinimumPerMember is ADR-034's addition - nil means no minimum, the
-	// same nullability TargetAmount carries.
+	// MinimumPerMember (ADR-034): nil means no minimum, like TargetAmount.
 	MinimumPerMember *int64 `json:"minimum_per_member"`
 }
 
@@ -57,10 +53,9 @@ func toIncidentalResponse(i store.Incidental) incidentalResponse {
 }
 
 // incidentalDetailResponse is GET /api/incidentals/{purposeID}'s body: the
-// envelope plus the totals PRD section 7.5 shows for it. Not embedded on
-// incidentalResponse - the two totals only exist once a request asks for
-// them specifically, the same reasoning reimbursementResponse's own comment
-// gives for keeping a derived fact off the plain list shape.
+// envelope plus the totals PRD section 7.5 shows. Not embedded in
+// incidentalResponse: the totals exist only when a request asks for them, as
+// reimbursementResponse keeps derived facts off the list shape.
 type incidentalDetailResponse struct {
 	PurposeID       int64   `json:"purpose_id"`
 	Occasion        string  `json:"occasion"`
@@ -70,23 +65,20 @@ type incidentalDetailResponse struct {
 	CreatedAt       int64   `json:"created_at"`
 	CollectedAmount int64   `json:"collected_amount"`
 	DisbursedAmount int64   `json:"disbursed_amount"`
-	// BalanceAmount is what the envelope holds now (PurposeBalance), the
-	// figure collected minus disbursed stops being once a closed envelope is
-	// reopened - so the screen reads it rather than subtracting.
+	// BalanceAmount is what the envelope holds now (PurposeBalance). Collected
+	// minus disbursed stops being that once a closed envelope is reopened, so the
+	// screen reads this rather than subtracting.
 	BalanceAmount int64 `json:"balance_amount"`
-	// MinimumPerMember and Recipients are ADR-034's addition. Recipients
-	// rides only on the detail response, not the plain list - the same
-	// "a derived figure costs nothing extra only where it is actually
-	// asked for" split TargetAmount/CollectedAmount already draws, here
-	// avoiding an extra query per row on GET /api/incidentals.
+	// MinimumPerMember and Recipients (ADR-034). Recipients rides only on the
+	// detail response, as TargetAmount/CollectedAmount do, avoiding an extra
+	// query per row on GET /api/incidentals.
 	MinimumPerMember *int64                        `json:"minimum_per_member"`
 	Recipients       []incidentalRecipientResponse `json:"recipients"`
 }
 
-// incidentalRecipientResponse is one member an envelope is for (ADR-034) -
-// id and name together, the same reasoning ListIncidentalRecipients' own
-// comment gives for joining member in SQL rather than asking the caller to
-// look each one up.
+// incidentalRecipientResponse is one member an envelope is for (ADR-034): id
+// and name together, joined in SQL (ListIncidentalRecipients) so the caller
+// need not look each one up.
 type incidentalRecipientResponse struct {
 	MemberID   int64  `json:"member_id"`
 	MemberName string `json:"member_name"`
@@ -113,10 +105,9 @@ func toIncidentalDetailResponse(d ledger.IncidentalDetail) incidentalDetailRespo
 }
 
 // openIncidental is POST /api/incidentals: wraps Ledger.OpenIncidental, which
-// creates the purpose and the incidental row in one transaction (M3's
-// atomicity; this handler only exposes it). Handlers decode and pass
-// through - occasion, target_amount and opened_on's own shape checks are
-// OpenIncidental's job alone (ADR-027).
+// creates the purpose and the incidental row in one transaction. Handlers
+// decode and pass through; occasion, target_amount and opened_on shape checks
+// are OpenIncidental's alone (ADR-027).
 func (a *api) openIncidental(w http.ResponseWriter, r *http.Request) {
 	var req openIncidentalRequest
 	if !decodeJSON(w, r, &req) {
@@ -156,12 +147,10 @@ func (a *api) openIncidental(w http.ResponseWriter, r *http.Request) {
 }
 
 // listIncidentals is GET /api/incidentals, optionally ?open=true: every
-// envelope ever opened, or only the ones still collecting - the same
-// unfiltered-vs-filtered split GET /api/reimbursements?outstanding uses, and
-// for the same reason: a closed envelope is still history.
+// envelope ever opened, or only those still collecting, like
+// GET /api/reimbursements?outstanding: a closed envelope is still history.
 //
-// An unparseable value is a 400 rather than a silent "all", matching
-// listReimbursements's identical guard.
+// An unparseable value is a 400, not a silent "all", as in listReimbursements.
 func (a *api) listIncidentals(w http.ResponseWriter, r *http.Request) {
 	openOnly := false
 	if raw := r.URL.Query().Get("open"); raw != "" {
@@ -198,8 +187,8 @@ func (a *api) listIncidentals(w http.ResponseWriter, r *http.Request) {
 }
 
 // getIncidental is GET /api/incidentals/{purposeID}: wraps
-// Ledger.GetIncidentalDetail, which is the envelope's own row plus the
-// collected/disbursed totals PRD section 7.5 shows for it.
+// Ledger.GetIncidentalDetail, the envelope row plus the collected/disbursed
+// totals PRD section 7.5 shows.
 func (a *api) getIncidental(w http.ResponseWriter, r *http.Request) {
 	purposeID, ok := incidentalPurposeID(w, r)
 	if !ok {
@@ -221,9 +210,8 @@ func (a *api) getIncidental(w http.ResponseWriter, r *http.Request) {
 }
 
 // closeIncidentalRequest is POST /api/incidentals/{purposeID}/close's body:
-// which account the roll posts through on both legs (immaterial to
-// correctness, see CloseIncidentalAndRollParams's own comment) and the
-// close date.
+// the account the roll posts through on both legs (immaterial to correctness,
+// see CloseIncidentalAndRollParams) and the close date.
 type closeIncidentalRequest struct {
 	AccountID int64   `json:"account_id"`
 	ClosedOn  string  `json:"closed_on"`
@@ -231,23 +219,21 @@ type closeIncidentalRequest struct {
 }
 
 // closeIncidentalResponse is POST /api/incidentals/{purposeID}/close's body:
-// the now-closed envelope, and the amount rolled - signed (ADR-031):
-// positive rolled out to Kas Utama, negative covered a shortfall from Kas
-// Utama, zero means the envelope landed square and nothing posted.
+// the now-closed envelope and the amount rolled, signed (ADR-031): positive
+// rolled out to Kas Utama, negative covered a shortfall from Kas Utama, zero
+// landed square with nothing posted.
 type closeIncidentalResponse struct {
 	Incidental   incidentalResponse `json:"incidental"`
 	RolledAmount int64              `json:"rolled_amount"`
 }
 
 // closeIncidental is POST /api/incidentals/{purposeID}/close: wraps
-// Ledger.CloseIncidentalAndRoll. A second close on an already-closed
-// envelope is ErrIncidentalAlreadyClosed, mapped to its own named 409.
+// Ledger.CloseIncidentalAndRoll. A second close is
+// ErrIncidentalAlreadyClosed, a named 409.
 //
-// The response is built from a fresh read after the write, the same shape
-// settleReimbursement uses for its own posted row: CloseIncidentalAndRoll
-// returns only the rolled amount, not the updated incidental, so the closed
-// row (closed_on now set) is re-fetched through a.queries rather than
-// reconstructed by hand here.
+// The response is built from a fresh read after the write, as
+// settleReimbursement does: CloseIncidentalAndRoll returns only the rolled
+// amount, so the closed row (closed_on set) is re-fetched through a.queries.
 func (a *api) closeIncidental(w http.ResponseWriter, r *http.Request) {
 	purposeID, ok := incidentalPurposeID(w, r)
 	if !ok {
@@ -284,10 +270,9 @@ func (a *api) closeIncidental(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 200, not 201: what the response addresses is the envelope the caller
-	// already named, now closed - the same shape PATCH /api/reimbursements
-	// answers with. The roll may post a transaction, but a zero or negative
-	// leftover closes without creating anything at all.
+	// 200, not 201: the response addresses the envelope the caller named, now
+	// closed, as PATCH /api/reimbursements does. A roll may post a transaction,
+	// but a zero or negative leftover closes without creating anything.
 	writeJSON(w, http.StatusOK, closeIncidentalResponse{
 		Incidental:   toIncidentalResponse(closed),
 		RolledAmount: rolled.Int64(),
@@ -295,15 +280,11 @@ func (a *api) closeIncidental(w http.ResponseWriter, r *http.Request) {
 }
 
 // reopenIncidental is POST /api/incidentals/{purposeID}/reopen: wraps
-// Ledger.ReopenIncidental, the deliberate, visible way back ADR-031 gives a
-// closed envelope so a late entry has somewhere to post. No request body -
-// there is nothing to say about a reopen beyond which envelope, matching
-// GET /api/incidentals/{purposeID}'s own no-body idiom rather than close's
-// account/date/note.
+// Ledger.ReopenIncidental, the visible way back ADR-031 gives a closed
+// envelope so a late entry has somewhere to post. No request body: there is
+// nothing to say beyond which envelope.
 //
-// 200, not 201: the response addresses the envelope the caller already
-// named, now reopened, the same reasoning closeIncidental's own comment
-// gives for its status code.
+// 200, not 201, for the reason closeIncidental gives.
 func (a *api) reopenIncidental(w http.ResponseWriter, r *http.Request) {
 	purposeID, ok := incidentalPurposeID(w, r)
 	if !ok {
@@ -325,17 +306,15 @@ func (a *api) reopenIncidental(w http.ResponseWriter, r *http.Request) {
 }
 
 // updateIncidentalParticipationRequest is PATCH /api/incidentals/{purposeID}'s
-// body: the envelope's target, minimum and recipients (ADR-034, #381), the facets
-// PATCH /api/purposes/{id} does not reach - that route corrects occasion
-// alone, through RenameIncidental, and stays that way rather than growing a
-// second, overlapping way to edit the same envelope.
+// body: the envelope's target, minimum and recipients (ADR-034, #381), the
+// facets PATCH /api/purposes/{id} does not reach (that route corrects
+// occasion alone, through RenameIncidental, rather than grow a second
+// overlapping way to edit the envelope).
 //
-// Every field fully replaces its own facet, the same "editable like
-// occasion" shape SetIncidentalParticipation itself carries: nil
-// TargetAmount or MinimumPerMember clears it (#381 added the target), and
-// RecipientMemberIDs (nil or empty alike) replaces the whole recipient set,
-// never an add/remove delta. A caller that omits target_amount therefore
-// clears it - the SPA always sends all three.
+// Every field fully replaces its facet, as SetIncidentalParticipation does:
+// nil TargetAmount or MinimumPerMember clears it, and RecipientMemberIDs (nil
+// or empty alike) replaces the whole set, never a delta. A caller that omits
+// target_amount therefore clears it; the SPA always sends all three.
 type updateIncidentalParticipationRequest struct {
 	TargetAmount       *int64  `json:"target_amount"`
 	MinimumPerMember   *int64  `json:"minimum_per_member"`
@@ -343,8 +322,8 @@ type updateIncidentalParticipationRequest struct {
 }
 
 // updateIncidentalParticipation is PATCH /api/incidentals/{purposeID}: wraps
-// Ledger.SetIncidentalParticipation. Handlers decode and pass through -
-// minimum_per_member's shape check is that method's job alone (ADR-027).
+// Ledger.SetIncidentalParticipation. Handlers decode and pass through;
+// minimum_per_member's shape check is that method's (ADR-027).
 func (a *api) updateIncidentalParticipation(w http.ResponseWriter, r *http.Request) {
 	purposeID, ok := incidentalPurposeID(w, r)
 	if !ok {
@@ -388,8 +367,7 @@ func (a *api) updateIncidentalParticipation(w http.ResponseWriter, r *http.Reque
 
 // participationStateResponse is one expected member's row on GET
 // /api/incidentals/{purposeID}/participation (ADR-034). member is the full
-// roster shape members.go already exposes, the same choice
-// duesStatusResponse's own comment makes for the reconcile flow's roster.
+// roster shape members.go exposes, as duesStatusResponse does.
 type participationStateResponse struct {
 	Member            memberResponse `json:"member"`
 	ContributedAmount int64          `json:"contributed_amount"`
@@ -405,8 +383,8 @@ func toParticipationStateResponse(p ledger.MemberParticipation) participationSta
 }
 
 // unexpectedContributionResponse is one row of the "Sumbangan lain" list
-// (ADR-034): a contribution from someone the envelope did not expect. No
-// state - unexpected is not itself a status, only an amount.
+// (ADR-034): a contribution from someone the envelope did not expect. Only an
+// amount, no state.
 type unexpectedContributionResponse struct {
 	Member            memberResponse `json:"member"`
 	ContributedAmount int64          `json:"contributed_amount"`
@@ -427,7 +405,7 @@ type incidentalParticipationResponse struct {
 }
 
 // getIncidentalParticipation is GET /api/incidentals/{purposeID}/participation:
-// wraps Ledger.GetIncidentalParticipation - PRD section 7.5's "who has
+// wraps Ledger.GetIncidentalParticipation, PRD section 7.5's "who has
 // contributed and how much", derived from the ledger, never stored.
 func (a *api) getIncidentalParticipation(w http.ResponseWriter, r *http.Request) {
 	purposeID, ok := incidentalPurposeID(w, r)
@@ -460,8 +438,7 @@ func (a *api) getIncidentalParticipation(w http.ResponseWriter, r *http.Request)
 
 // incidentalPurposeID parses {purposeID}, or answers the request and reports
 // false. Unlike resolveMember it does not pre-fetch the row: every caller
-// hands the id to a ledger method that fetches it anyway, the same reasoning
-// reimbursementID's own comment gives.
+// hands the id to a ledger method that fetches it, as reimbursementID does.
 func incidentalPurposeID(w http.ResponseWriter, r *http.Request) (int64, bool) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "purposeID"), 10, 64)
 	if err != nil {

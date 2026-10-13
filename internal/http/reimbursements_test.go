@@ -35,10 +35,8 @@ func getReimbursements(t *testing.T, r http.Handler, query string) *httptest.Res
 	return rec
 }
 
-// seedReimbursements creates n unsettled claims for the same member and
-// purpose, dated one calendar day apart starting at startDate - the same
-// idiom seedTransactions (transactions_test.go) uses for its own paging
-// tests, over CreateReimbursement instead of CreateTransaction.
+// seedReimbursements creates n unsettled claims for one member and purpose,
+// one calendar day apart from startDate, as seedTransactions does.
 func seedReimbursements(t *testing.T, sqlDB *sql.DB, fundID, memberID, purposeID int64, n int, startDate string) []store.Reimbursement {
 	t.Helper()
 	start, err := time.Parse("2006-01-02", startDate)
@@ -74,8 +72,8 @@ func postSettlement(t *testing.T, r http.Handler, id int64, req settleReimbursem
 	return rec
 }
 
-// memberFor creates one member and returns its id, for the tests below that
-// need a claimant and nothing else about them.
+// memberFor creates one member and returns its id, for tests needing only a
+// claimant.
 func memberFor(t *testing.T, r http.Handler, name string) int64 {
 	t.Helper()
 	rec := postMember(t, r, memberRequest{Name: name})
@@ -103,9 +101,8 @@ func TestPostReimbursementsRequiresAFund(t *testing.T) {
 	}
 }
 
-// TestReimbursementRoundTripsFromClaimToSettlement is the slice's central
-// acceptance criterion: the claim itself moves no money - the fund balance
-// is still zero while it is outstanding - and only settling posts the
+// TestReimbursementRoundTripsFromClaimToSettlement: the claim moves no money
+// (the fund balance stays zero while outstanding) and only settling posts the
 // single 'out' row that pays it.
 func TestReimbursementRoundTripsFromClaimToSettlement(t *testing.T) {
 	t.Parallel()
@@ -165,8 +162,7 @@ func TestReimbursementRoundTripsFromClaimToSettlement(t *testing.T) {
 	if posted.PurposeID != setup.MainPurposeID {
 		t.Errorf("settlement purpose = %d, want the claim's %d", posted.PurposeID, setup.MainPurposeID)
 	}
-	// The settle date, not incurred_on - the claim keeps the truth about when
-	// the member actually spent their own money.
+	// The settle date, not incurred_on; the claim keeps when the member spent it.
 	if posted.OccurredOn != "2026-08-20" {
 		t.Errorf("settlement occurred_on = %q, want the settle date %q, not incurred_on", posted.OccurredOn, "2026-08-20")
 	}
@@ -183,9 +179,8 @@ func TestReimbursementRoundTripsFromClaimToSettlement(t *testing.T) {
 	}
 }
 
-// TestPostSettlementTwiceReturnsItsNamed409 covers the settled-once rule at
-// the route: the second call is a conflict with its own code, not a second
-// payout and not a generic 500.
+// TestPostSettlementTwiceReturnsItsNamed409: the second call is a conflict
+// with its code, not a second payout or a generic 500.
 func TestPostSettlementTwiceReturnsItsNamed409(t *testing.T) {
 	t.Parallel()
 	r := testRouter(t)
@@ -221,10 +216,9 @@ func TestPostSettlementTwiceReturnsItsNamed409(t *testing.T) {
 }
 
 // TestPostSettlementOnAWaivedClaimReturnsItsNamed409 reaches
-// ErrReimbursementWaived, which no route can produce on its own: nothing on
-// the wire sets waived_on (#69 adds no waive route), so the claim is waived
-// through store.Queries directly - the same way an import or a future waive
-// route would - and the route is asked to settle it.
+// ErrReimbursementWaived, which no route produces alone (nothing on the wire
+// sets waived_on, #69): the claim is waived through store.Queries, as an
+// import or future waive route would.
 func TestPostSettlementOnAWaivedClaimReturnsItsNamed409(t *testing.T) {
 	t.Parallel()
 	sqlDB := testStoreDB(t)
@@ -256,9 +250,8 @@ func TestPostSettlementOnAWaivedClaimReturnsItsNamed409(t *testing.T) {
 	}
 }
 
-// TestGetReimbursementsOutstandingFiltersToUnsettledClaims is the filter's
-// acceptance criterion: the unfiltered list keeps every claim as history,
-// ?outstanding=true keeps only what is still owed.
+// TestGetReimbursementsOutstandingFiltersToUnsettledClaims: the unfiltered
+// list keeps every claim as history; ?outstanding=true keeps what is owed.
 func TestGetReimbursementsOutstandingFiltersToUnsettledClaims(t *testing.T) {
 	t.Parallel()
 	r := testRouter(t)
@@ -292,8 +285,8 @@ func TestGetReimbursementsOutstandingFiltersToUnsettledClaims(t *testing.T) {
 	if len(all) != 2 {
 		t.Errorf("GET /api/reimbursements returned %d claims, want 2 - a settled claim is still history", len(all))
 	}
-	// The full list carries the settled fact: the payout posted for claims[0]
-	// but not for claims[1], and the wire says so without a second query.
+	// The full list carries the settled fact: claims[0] has a payout, claims[1]
+	// not, with no second query.
 	for _, claim := range all {
 		want := claim.ID == claims[0].ID
 		if claim.Settled != want {
@@ -332,11 +325,8 @@ func TestGetReimbursementsRejectsAnUnparseableOutstandingFilter(t *testing.T) {
 	}
 }
 
-// TestGetReimbursementsOrdersNewestFirstTiesBrokenByIDDesc is #226's
-// ordering half of "newest-first, keyset-paged" - the same acceptance
-// criterion GET /api/transactions already carries: two rows sharing an
-// incurred_on must come back (incurred_on DESC, id DESC), the later of the
-// two same-dated rows first.
+// TestGetReimbursementsOrdersNewestFirstTiesBrokenByIDDesc (#226): two rows
+// sharing an incurred_on come back (incurred_on DESC, id DESC).
 func TestGetReimbursementsOrdersNewestFirstTiesBrokenByIDDesc(t *testing.T) {
 	t.Parallel()
 	sqlDB := testStoreDB(t)
@@ -380,9 +370,8 @@ func TestGetReimbursementsOrdersNewestFirstTiesBrokenByIDDesc(t *testing.T) {
 	}
 }
 
-// TestGetReimbursementsPagingWalksTheWholeSetWithNoSkipOrDuplicate is #226's
-// "paging walks the whole set with no skip and no duplicate" acceptance
-// criterion, over 60 claims (more than two 25-row pages).
+// TestGetReimbursementsPagingWalksTheWholeSetWithNoSkipOrDuplicate (#226)
+// over 60 claims (more than two 25-row pages).
 func TestGetReimbursementsPagingWalksTheWholeSetWithNoSkipOrDuplicate(t *testing.T) {
 	t.Parallel()
 	sqlDB := testStoreDB(t)
@@ -437,19 +426,16 @@ func TestGetReimbursementsPagingWalksTheWholeSetWithNoSkipOrDuplicate(t *testing
 }
 
 // TestGetReimbursementsPagingHandlesABackdatedInsertBetweenPageFetches
-// mirrors transactions_test.go's own test of the same name: a claim
-// inserted after page 1 is fetched, dated older than everything on page 1
-// but inside page 2's date range, must appear on page 2 exactly once -
-// proving the keyset cursor (incurred_on, id) is what actually runs rather
-// than LIMIT/OFFSET.
+// mirrors the transactions test: a claim inserted after page 1, older than
+// page 1 but inside page 2's range, appears on page 2 exactly once, proving
+// the keyset cursor (incurred_on, id), not LIMIT/OFFSET.
 func TestGetReimbursementsPagingHandlesABackdatedInsertBetweenPageFetches(t *testing.T) {
 	t.Parallel()
 	sqlDB := testStoreDB(t)
 	r := authedRouterFor(t, sqlDB)
 	setup := setUpFund(t, r)
 	memberID := memberFor(t, r, "Jane")
-	// 30 claims dated 2026-01-01 (oldest, seeded[0]) through 2026-01-30
-	// (newest, seeded[29]).
+	// 30 claims dated 2026-01-01 (seeded[0]) through 2026-01-30 (seeded[29]).
 	seeded := seedReimbursements(t, sqlDB, setup.Fund.ID, memberID, setup.MainPurposeID, 30, "2026-01-01")
 
 	page1 := decodeReimbursementsPage(t, getReimbursements(t, r, ""))
@@ -460,9 +446,8 @@ func TestGetReimbursementsPagingHandlesABackdatedInsertBetweenPageFetches(t *tes
 		t.Fatal("page 1 next_cursor = nil, want a cursor - 30 rows is more than one page")
 	}
 
-	// Lands strictly inside page 2's date range (2026-01-01..2026-01-05, the
-	// 5 rows page 1 did not cover) - older than every row already handed
-	// out on page 1, and it did not exist when page 1 was fetched.
+	// Lands inside page 2's range (2026-01-01..2026-01-05), older than every row
+	// on page 1, and did not exist when page 1 was fetched.
 	q := store.New(sqlDB)
 	backdated, err := q.CreateReimbursement(context.Background(), store.CreateReimbursementParams{
 		FundID: setup.Fund.ID, MemberID: memberID, PurposeID: setup.MainPurposeID,
@@ -500,8 +485,7 @@ func TestGetReimbursementsPagingHandlesABackdatedInsertBetweenPageFetches(t *tes
 	}
 }
 
-// TestGetReimbursementsRejectsAMalformedCursor is #226's "malformed cursor
-// -> 400" acceptance criterion.
+// TestGetReimbursementsRejectsAMalformedCursor: a malformed cursor is 400 (#226).
 func TestGetReimbursementsRejectsAMalformedCursor(t *testing.T) {
 	t.Parallel()
 	r := testRouter(t)
@@ -510,7 +494,7 @@ func TestGetReimbursementsRejectsAMalformedCursor(t *testing.T) {
 	for _, cursor := range []string{"not-base64!!", "", "2026-13-40|1"} {
 		rec := getReimbursements(t, r, "?cursor="+url.QueryEscape(cursor))
 		if cursor == "" {
-			// An empty cursor param is the same as omitting it - the first page.
+			// An empty cursor param is the same as omitting it: the first page.
 			if rec.Code != http.StatusOK {
 				t.Errorf("GET /api/reimbursements?cursor= = %d, want %d", rec.Code, http.StatusOK)
 			}
@@ -527,8 +511,8 @@ func TestGetReimbursementsRejectsAMalformedCursor(t *testing.T) {
 	}
 }
 
-// TestGetReimbursementsSearchHitsMemberNameCaseInsensitive covers this
-// list's "member name" half of ADR-032's search surface (#226).
+// TestGetReimbursementsSearchHitsMemberNameCaseInsensitive: the member-name
+// half of ADR-032's search (#226).
 func TestGetReimbursementsSearchHitsMemberNameCaseInsensitive(t *testing.T) {
 	t.Parallel()
 	r := testRouter(t)
@@ -556,8 +540,8 @@ func TestGetReimbursementsSearchHitsMemberNameCaseInsensitive(t *testing.T) {
 	}
 }
 
-// TestGetReimbursementsSearchHitsNoteCaseInsensitive covers this list's
-// "note" half of ADR-032's search surface (#226).
+// TestGetReimbursementsSearchHitsNoteCaseInsensitive: the note half of
+// ADR-032's search (#226).
 func TestGetReimbursementsSearchHitsNoteCaseInsensitive(t *testing.T) {
 	t.Parallel()
 	r := testRouter(t)
@@ -586,11 +570,9 @@ func TestGetReimbursementsSearchHitsNoteCaseInsensitive(t *testing.T) {
 	}
 }
 
-// TestGetReimbursementsOutstandingAndSearchCombine proves the two filters
-// AND together rather than one silently overriding the other: of two
-// outstanding claims with matching notes, only the one that also matches
-// ?q= comes back, and a settled claim matching ?q= never does even though
-// its note alone would match.
+// TestGetReimbursementsOutstandingAndSearchCombine: the two filters AND
+// together. Of two outstanding claims with matching notes, only the one
+// matching ?q= comes back, and a settled claim matching ?q= never does.
 func TestGetReimbursementsOutstandingAndSearchCombine(t *testing.T) {
 	t.Parallel()
 	r := testRouter(t)
@@ -620,10 +602,9 @@ func TestGetReimbursementsOutstandingAndSearchCombine(t *testing.T) {
 	}
 }
 
-// TestGetReimbursementsOutstandingExcludesSettledAndWaived is #226's own
-// check that ListReimbursementsPage's outstanding_only branch keeps
-// excluding both a settled and a waived claim, the same pair
-// ListOutstandingReimbursementsByFund already excluded.
+// TestGetReimbursementsOutstandingExcludesSettledAndWaived (#226):
+// ListReimbursementsPage's outstanding_only keeps excluding a settled and a
+// waived claim, as ListOutstandingReimbursementsByFund did.
 func TestGetReimbursementsOutstandingExcludesSettledAndWaived(t *testing.T) {
 	t.Parallel()
 	r := testRouter(t)
@@ -658,8 +639,8 @@ func TestGetReimbursementsOutstandingExcludesSettledAndWaived(t *testing.T) {
 	}
 }
 
-// claimForWithNote is claimFor with a caller-supplied note, for the search
-// tests above that need to tell claims apart by more than amount.
+// claimForWithNote is claimFor with a note, for search tests that tell claims
+// apart by more than amount.
 func claimForWithNote(t *testing.T, r http.Handler, setup setupResponse, memberID int64, note string) reimbursementResponse {
 	t.Helper()
 	rec := postReimbursement(t, r, reimbursementRequest{
@@ -673,9 +654,8 @@ func claimForWithNote(t *testing.T, r http.Handler, setup setupResponse, memberI
 }
 
 // TestPostReimbursementsRejectsBadInput: a non-positive amount is the
-// ledger's to refuse, as UpdateReimbursement and PostTransaction already do
-// (invalid_argument, #473); a calendar-invalid date and a member_id naming
-// no row still come back from the schema through mapSQLiteError.
+// ledger's to refuse (invalid_argument, #473); a calendar-invalid date and a
+// member_id naming no row come back from the schema through mapSQLiteError.
 func TestPostReimbursementsRejectsBadInput(t *testing.T) {
 	t.Parallel()
 	for _, tc := range []struct {
@@ -713,10 +693,9 @@ func TestPostReimbursementsRejectsBadInput(t *testing.T) {
 	}
 }
 
-// TestPostSettlementOnAnUnknownClaimIs404 is the case that reaches
-// mapLedgerError's sql.ErrNoRows arm: SettleReimbursement fetches the claim
-// before writing, and an id naming nothing is the client's mistake about a
-// path segment, not a server failure.
+// TestPostSettlementOnAnUnknownClaimIs404 reaches mapLedgerError's
+// sql.ErrNoRows arm: SettleReimbursement fetches the claim first, and an id
+// naming nothing is a client mistake, not a server failure.
 func TestPostSettlementOnAnUnknownClaimIs404(t *testing.T) {
 	t.Parallel()
 	r := testRouter(t)
@@ -803,9 +782,8 @@ func TestPostSettlementRequiresAFund(t *testing.T) {
 	}
 }
 
-// TestPostSettlementRejectsANonNumericID covers the one check this handler
-// owns itself: {id} is a path segment, so a non-numeric one never reaches
-// the ledger to be judged there.
+// TestPostSettlementRejectsANonNumericID covers the one check the handler
+// owns: a non-numeric {id} never reaches the ledger.
 func TestPostSettlementRejectsANonNumericID(t *testing.T) {
 	t.Parallel()
 	r := testRouter(t)
@@ -839,8 +817,8 @@ func TestPostSettlementRejectsMalformedJSON(t *testing.T) {
 	}
 }
 
-// TestNoWaiveRouteExists is the acceptance criterion stated as a test: PRD
-// section 7.4 never asks to waive a claim, so the route is absent and stays absent.
+// TestNoWaiveRouteExists: PRD section 7.4 never asks to waive a claim, so the
+// route is absent and stays absent.
 func TestNoWaiveRouteExists(t *testing.T) {
 	t.Parallel()
 	r := testRouter(t)
@@ -853,18 +831,15 @@ func TestNoWaiveRouteExists(t *testing.T) {
 	}
 }
 
-// decodeReimbursements decodes GET /api/reimbursements's envelope
-// ({"reimbursements":[...],"next_cursor":...}, #226) and returns just the
-// rows - every caller that predates paging only ever wanted the page's
-// contents, never the cursor.
+// decodeReimbursements decodes GET /api/reimbursements's envelope (#226) and
+// returns just the rows, for callers that predate paging.
 func decodeReimbursements(t *testing.T, rec *httptest.ResponseRecorder) []reimbursementResponse {
 	t.Helper()
 	return decodeReimbursementsPage(t, rec).Reimbursements
 }
 
-// decodeReimbursementsPage decodes GET /api/reimbursements's envelope in
-// full, for the paging tests below that need next_cursor - the same idiom
-// decodeTransactionsPage (transactions_test.go) uses for #225.
+// decodeReimbursementsPage decodes the envelope in full, for the paging tests
+// that need next_cursor, like decodeTransactionsPage.
 func decodeReimbursementsPage(t *testing.T, rec *httptest.ResponseRecorder) reimbursementsPageResponse {
 	t.Helper()
 	if rec.Code != http.StatusOK {
@@ -920,8 +895,8 @@ func decodeReimbursement(t *testing.T, rec *httptest.ResponseRecorder) reimburse
 }
 
 // TestPatchReimbursementCorrectsAnUnsettledClaim is the correction half of
-// #103: the wrong amount, the wrong member and a note, fixed in place
-// because the claim is off the ledger until it is settled.
+// #103: wrong amount, member and note fixed in place, as the claim is off the
+// ledger until settled.
 func TestPatchReimbursementCorrectsAnUnsettledClaim(t *testing.T) {
 	t.Parallel()
 	r := testRouter(t)
@@ -953,9 +928,8 @@ func TestPatchReimbursementCorrectsAnUnsettledClaim(t *testing.T) {
 	}
 }
 
-// TestPatchReimbursementWaivesAndUnwaives is the waive half: one field, so
-// the member who says "saya yang tanggung" and then changes their mind is
-// not stuck.
+// TestPatchReimbursementWaivesAndUnwaives is the waive half: one field, so a
+// member who says "saya yang tanggung" and changes their mind is not stuck.
 func TestPatchReimbursementWaivesAndUnwaives(t *testing.T) {
 	t.Parallel()
 	r := testRouter(t)
@@ -991,9 +965,8 @@ func TestPatchReimbursementWaivesAndUnwaives(t *testing.T) {
 	}
 }
 
-// TestSettleRefusesAClaimWaivedOverHTTP closes the loop between the two
-// routes: waiving through PATCH reaches the same 409 settling has always
-// given a claim created waived.
+// TestSettleRefusesAClaimWaivedOverHTTP: waiving through PATCH reaches the
+// same 409 settling gives a claim created waived.
 func TestSettleRefusesAClaimWaivedOverHTTP(t *testing.T) {
 	t.Parallel()
 	r := testRouter(t)
@@ -1032,8 +1005,8 @@ func TestDeleteReimbursementRemovesAnUnsettledClaim(t *testing.T) {
 	}
 }
 
-// TestPatchAndDeleteRefuseASettledClaim is the boundary at the route: once
-// a payout references the claim, both are its named 409.
+// TestPatchAndDeleteRefuseASettledClaim: once a payout references the claim,
+// both are its named 409.
 func TestPatchAndDeleteRefuseASettledClaim(t *testing.T) {
 	t.Parallel()
 	r := testRouter(t)
@@ -1069,10 +1042,9 @@ func TestPatchAndDeleteRefuseASettledClaim(t *testing.T) {
 	}
 }
 
-// TestPatchReimbursementUnknownMemberIs400 is the case that made
-// mapLedgerError classify SQLite errors at all: the id comes from the
-// request body, so a foreign-key violation is the caller's typo, not a
-// server fault, and answering 500 would blame the wrong party.
+// TestPatchReimbursementUnknownMemberIs400 is why mapLedgerError classifies
+// SQLite errors at all: the id comes from the request body, so a foreign-key
+// violation is the caller's typo, and a 500 would blame the wrong party.
 func TestPatchReimbursementUnknownMemberIs400(t *testing.T) {
 	t.Parallel()
 	r := testRouter(t)
@@ -1158,11 +1130,10 @@ func TestPatchAndDeleteRequireAFund(t *testing.T) {
 	}
 }
 
-// TestDeleteReimbursementWithAReceiptIs409 answers #103's open question:
-// a claim that still has a photo attached is refused rather than taking the
-// receipt down with it, the same answer deleting a member with posted
-// transactions gives. Receipts have no route yet (#73), so the row is
-// written through store.Queries - the path an import would use.
+// TestDeleteReimbursementWithAReceiptIs409 answers #103's open question: a
+// claim with a photo attached is refused rather than taking the receipt with
+// it, as for a member with posted transactions. Receipts have no route yet
+// (#73), so the row is written through store.Queries, as an import would.
 func TestDeleteReimbursementWithAReceiptIs409(t *testing.T) {
 	t.Parallel()
 	sqlDB := testStoreDB(t)

@@ -94,9 +94,8 @@ func TestSetUpFundCreatesFundMainPurposeAndAccounts(t *testing.T) {
 		t.Errorf("bank account FundID = %d, want %d", bank.FundID, result.Fund.ID)
 	}
 
-	// Nothing else landed in the atomic core: no members, dues tiers, dues
-	// rates or opening balances - those are composed afterward by later
-	// slices, as ordinary retriable calls.
+	// Nothing else landed in the atomic core: no members, dues tiers, dues rates
+	// or opening balances (composed later as retriable calls).
 	members, err := q.ListMembersByFund(ctx, result.Fund.ID)
 	if err != nil {
 		t.Fatalf("ListMembersByFund() = %v, want no error", err)
@@ -120,9 +119,8 @@ func TestSetUpFundCreatesFundMainPurposeAndAccounts(t *testing.T) {
 	}
 }
 
-// #78: a fund is not pinned to exactly two accounts. Three named locations
-// are all written atomically with the fund and its main purpose, in the
-// order given.
+// #78: a fund is not pinned to two accounts. Three named locations are written
+// atomically with the fund and main purpose, in the order given.
 func TestSetUpFundWritesEveryRequestedAccountAtomically(t *testing.T) {
 	t.Parallel()
 	l := newTestLedger(t)
@@ -163,9 +161,8 @@ func TestSetUpFundWritesEveryRequestedAccountAtomically(t *testing.T) {
 	}
 }
 
-// Zero requested accounts is ErrInvalidArgument, and nothing is written -
-// the same "at least one" rule FundName's own empty check already enforces,
-// aimed at the slice instead.
+// Zero requested accounts is ErrInvalidArgument and nothing is written: the
+// "at least one" rule, as FundName's empty check, aimed at the slice.
 func TestSetUpFundRejectsZeroAccounts(t *testing.T) {
 	t.Parallel()
 	l := newTestLedger(t)
@@ -185,11 +182,9 @@ func TestSetUpFundRejectsZeroAccounts(t *testing.T) {
 	}
 }
 
-// Two different funds - necessarily two different databases, since a second
-// SetUpFund call against the same one is refused (see the test below) - get
-// two different slugs. This is the whole entropy argument made observable,
-// not a proof of uniqueness (no test can prove that), but a check that the
-// generator is not, say, returning a constant.
+// Two different funds (necessarily two databases, as a second SetUpFund on one
+// is refused) get two different slugs: the entropy argument made observable,
+// not a uniqueness proof, but a check the generator is not returning a constant.
 func TestSetUpFundGeneratesDistinctReportSlugs(t *testing.T) {
 	t.Parallel()
 	first, err := newTestLedger(t).SetUpFund(context.Background(), SetUpFundParams{FundName: "Fund One", Accounts: defaultSetupAccounts})
@@ -224,8 +219,7 @@ func TestSetUpFundRejectsEmptyFundName(t *testing.T) {
 	}
 }
 
-// A second run is refused with the named sentinel, and leaves the first
-// fund - and only the first fund - standing.
+// A second run is refused with the named sentinel, leaving only the first fund.
 func TestSetUpFundSecondCallIsRefusedAndPostsNoSecondFund(t *testing.T) {
 	t.Parallel()
 	l := newTestLedger(t)
@@ -253,25 +247,20 @@ func TestSetUpFundSecondCallIsRefusedAndPostsNoSecondFund(t *testing.T) {
 	}
 }
 
-// Atomicity of the atomic core: if the purpose insert fails right after the
-// fund insert already succeeded within the same withTx, the fund does not
-// survive either - no orphan fund with nowhere to post, and no accounts
-// created off the back of a purpose that never landed.
+// Atomicity of the atomic core: if the purpose insert fails after the fund
+// insert succeeded in the same withTx, the fund does not survive either: no
+// orphan fund with nowhere to post, no accounts off a purpose that never
+// landed.
 //
-// Forcing this needs a real conflict, not a mocked one. Unlike incidental
-// (#42's own atomicity test), account and purpose both use a plain
-// autoincrementing PRIMARY KEY, and SQLite assigns a rowid table's next id as
-// (current max + 1) - which means pre-occupying a row at the id an upcoming
-// insert would take does not force a collision, it just pushes the next
-// insert one further along. purpose_single_main is the lever that works
-// instead: it is a genuine UNIQUE index (partial: WHERE kind = 'main'), so
-// pre-occupying fund_id=1's only kind='main' slot before calling SetUpFund
-// - with `PRAGMA foreign_keys` toggled off around the one raw INSERT needed
-// to write a purpose row against a fund_id with no live fund behind it yet -
-// guarantees SetUpFund's own main-purpose insert collides with it, once its
-// fund insert lands at id 1 in this brand-new, empty database (no fixture -
-// a fixture's own fund would trip the second-run guard before any of this
-// matters).
+// A real conflict is needed, not a mock. Unlike incidental (#42's test),
+// account and purpose use an autoincrementing PRIMARY KEY and SQLite assigns
+// the next rowid as (max + 1), so pre-occupying the id an insert would take
+// only pushes it along. purpose_single_main works: a UNIQUE partial index
+// (WHERE kind = 'main'), so pre-occupying fund_id=1's kind='main' slot
+// before SetUpFund (with `PRAGMA foreign_keys` off around the one raw INSERT
+// of a purpose against a fund_id with no live fund yet) makes SetUpFund's
+// main-purpose insert collide once its fund insert lands at id 1 in this empty
+// database. No fixture: its fund would trip the second-run guard first.
 func TestSetUpFundAtomicityNoOrphanFundWhenThePurposeInsertFails(t *testing.T) {
 	t.Parallel()
 	l := newTestLedger(t)
@@ -306,7 +295,7 @@ func TestSetUpFundAtomicityNoOrphanFundWhenThePurposeInsertFails(t *testing.T) {
 		t.Errorf("ListFunds() = %d rows after the forced failure, want 0 - no orphan fund", len(funds))
 	}
 
-	// Exactly the squatter row - SetUpFund's own attempt must have rolled back.
+	// Exactly the squatter row: SetUpFund's attempt rolled back.
 	var purposeCount int
 	if err := l.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM purpose").Scan(&purposeCount); err != nil {
 		t.Fatalf("counting purpose rows = %v, want no error", err)
@@ -324,16 +313,15 @@ func TestSetUpFundAtomicityNoOrphanFundWhenThePurposeInsertFails(t *testing.T) {
 	}
 }
 
-// Serial on purpose, no t.Parallel: it swaps the package-level randInt, which
-// every parallel test that sets up a fund reads.
+// Serial on purpose, no t.Parallel: it swaps the package-level randInt that
+// every parallel test setting up a fund reads.
 func TestSetUpFundAbortsWhenTheSlugSourceFails(t *testing.T) {
 	l := newTestLedger(t)
 	ctx := context.Background()
 
-	// A failing random source is not a real operating condition, but the slug
-	// is the one value here that must never be quietly weakened: it is
-	// generated once, changes only on purpose, and PRD section 7.9 leans on it being
-	// unguessable. Setup must abort rather than fall back to anything.
+	// A failing random source is not real, but the slug is the one value that must
+	// never be quietly weakened: generated once, changed only on purpose, and PRD
+	// section 7.9 leans on it being unguessable. Setup must abort, not fall back.
 	original := randInt
 	randInt = func(io.Reader, *big.Int) (*big.Int, error) {
 		return nil, errors.New("no entropy available")
@@ -382,8 +370,8 @@ func TestReplaceReportSlugChangesTheSlugAndKeepsTheSchemaFloor(t *testing.T) {
 	}
 }
 
-// Serial on purpose, no t.Parallel: it swaps the package-level randInt, which
-// every parallel test that sets up a fund reads.
+// Serial on purpose, no t.Parallel: it swaps the package-level randInt that
+// every parallel test setting up a fund reads.
 func TestReplaceReportSlugAbortsWhenTheSlugSourceFails(t *testing.T) {
 	l := newTestLedger(t)
 	ctx := context.Background()

@@ -19,15 +19,14 @@ import (
 	"github.com/kerti/uruni/internal/store"
 )
 
-// pdfStreams are the page content streams of a PDF fpdf wrote: every
-// "stream ... endstream" body, inflated when it is zlib data (fpdf compresses
-// by default) and raw otherwise. fpdf frames a stream with a bare "\n" on
-// each side; matching an optional "\r" too would eat a compressed stream's
-// last byte whenever that byte is 0x0D.
+// pdfStreams are the page content streams of a PDF fpdf wrote: each
+// "stream ... endstream" body, inflated when zlib (fpdf compresses by default)
+// and raw otherwise. fpdf frames a stream with a bare "\n" each side; matching
+// an optional "\r" would eat a compressed stream's last byte when it is 0x0D.
 var pdfStreamRE = regexp.MustCompile(`(?s)stream\n(.*?)\nendstream`)
 
 // pdfPages is pdfText split by page: fpdf writes one content stream per page,
-// in order, and the font streams it also writes carry no text runs.
+// in order; the font streams carry no text runs.
 func pdfPages(t *testing.T, pdf []byte) [][]string {
 	t.Helper()
 	var pages [][]string
@@ -47,12 +46,11 @@ func pdfPages(t *testing.T, pdf []byte) [][]string {
 	return pages
 }
 
-// pdfText is the text a reader would see in the file, one string per drawn
-// text run, in drawing order. It reads only what fpdf's UTF-8 path emits:
-// "(<UTF-16BE, escaped>) Tj" inside the content streams. That is stdlib-only
-// on purpose - a PDF-parsing dependency for one assertion helper is not worth
-// its weight - and it is as strict as it needs to be: if the font were not
-// embedded as Unicode text, the amounts below would not come back out.
+// pdfText is the text a reader would see, one string per drawn text run, in
+// drawing order. It reads only what fpdf's UTF-8 path emits: "(<UTF-16BE,
+// escaped>) Tj" in the content streams. Stdlib-only on purpose (a PDF parser
+// for one helper is not worth its weight) and as strict as needed: if the font
+// were not embedded as Unicode text, the amounts would not come back out.
 func pdfText(t *testing.T, pdf []byte) []string {
 	t.Helper()
 	var runs []string
@@ -71,7 +69,7 @@ func pdfText(t *testing.T, pdf []byte) []string {
 }
 
 // tjRuns finds each "(...) Tj" in a content stream and decodes its operand:
-// PDF literal-string escapes first (\\, \(, \), \r), then UTF-16BE.
+// PDF literal-string escapes (\\, \(, \), \r), then UTF-16BE.
 func tjRuns(content []byte) []string {
 	var runs []string
 	for i := 0; i < len(content); i++ {
@@ -114,9 +112,8 @@ func pdfHas(runs []string, want string) bool {
 	return false
 }
 
-// pdfScenario is the dues scenario's September 2026 plus an incoming and an
-// outgoing row and an envelope with participation, so every section of the
-// statement has something in it.
+// newPDFScenario is the dues scenario's September 2026 plus an incoming and an
+// outgoing row and an envelope with participation, so every section has content.
 func newPDFScenario(t *testing.T) duesScenario {
 	t.Helper()
 	ctx := context.Background()
@@ -265,8 +262,8 @@ func TestReportPDFUnknownSlugIs404NamingNoFund(t *testing.T) {
 	}
 }
 
-// A month that is missing, malformed or outside the selector is the current
-// one, as on the page - and the filename says which month the file holds.
+// A month missing, malformed or outside the selector is the current one, as on
+// the page, and the filename says which month the file holds.
 func TestReportPDFMonthFallsBackAsThePageDoes(t *testing.T) {
 	t.Parallel()
 	f := newReportFixture(t, "Kas RT 05")
@@ -319,8 +316,8 @@ func TestReportPDFOfAFundWithNothingRecorded(t *testing.T) {
 	}
 }
 
-// A long month runs onto more pages: no row is lost or split, the table's
-// header repeats, and the footer counts the pages.
+// A long month runs onto more pages: no row lost or split, the table header
+// repeats, and the footer counts the pages.
 func TestReportPDFPaginates(t *testing.T) {
 	t.Parallel()
 	f := newReportFixture(t, "Kas RT 05")
@@ -386,10 +383,9 @@ func TestReportFontLicenceShipsWithTheFonts(t *testing.T) {
 	}
 }
 
-// fpdf's font map stops at U+FFFF: a rune above it - an emoji a treasurer
-// typed into the fund's name, a member's or an envelope's - panicked inside
-// Output and the statement was a 500. Such runes are dropped; the rest of the
-// text stays.
+// fpdf's font map stops at U+FFFF: a rune above it (an emoji a treasurer typed
+// into the fund's, a member's or an envelope's name) panicked inside Output
+// and the statement was a 500. Such runes are dropped; the rest stays.
 func TestReportPDFSurvivesRunesBeyondTheBMP(t *testing.T) {
 	t.Parallel()
 	f := newReportFixture(t, "Kas RT 05 \U0001F3E0")
@@ -444,9 +440,8 @@ func TestPDFSafe(t *testing.T) {
 }
 
 // Every character the PDF draws has a glyph in the embedded font: a missing
-// one prints as a blank box, which is how "Dipindah: A \u2192 B" came out
-// before the arrow got its stand-in. The scenario carries purpose moves, dues
-// and every label shape the list knows.
+// one prints as a blank box, as "Dipindah: A \u2192 B" did before the arrow got
+// its stand-in. The scenario has purpose moves, dues and every label shape.
 func TestReportPDFDrawsOnlyCharactersTheFontHas(t *testing.T) {
 	t.Parallel()
 	s := newTxnScenario(t)
@@ -475,10 +470,9 @@ func TestReportPDFDrawsOnlyCharactersTheFontHas(t *testing.T) {
 	}
 }
 
-// fontRunes is every character a TrueType font maps to a real glyph, read
-// from its Unicode BMP cmap (format 4) - the one table fpdf's UTF-8 path reads
-// too. Stdlib only, like pdfText: a font-parsing dependency for one test is
-// not worth its weight.
+// fontRunes is every character a TrueType font maps to a real glyph, read from
+// its Unicode BMP cmap (format 4), the table fpdf's UTF-8 path reads. Stdlib
+// only, like pdfText.
 func fontRunes(t *testing.T, font []byte) map[rune]bool {
 	t.Helper()
 	u16 := func(at int) int { return int(binary.BigEndian.Uint16(font[at:])) }
@@ -531,7 +525,7 @@ func fontRunes(t *testing.T, font []byte) map[rune]bool {
 }
 
 // The statement opens with Ringkasan on its own page, and every later section
-// - Transaksi, Iuran, Amplop - starts a page of its own, its heading first.
+// (Transaksi, Iuran, Amplop) starts a page of its own, heading first.
 func TestReportPDFStartsEachSectionOnItsOwnPage(t *testing.T) {
 	t.Parallel()
 	s := newPDFScenario(t)

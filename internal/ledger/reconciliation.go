@@ -12,17 +12,15 @@ import (
 )
 
 // Fix is the raw data behind the entry that resolves one reconciliation
-// line - either the plug that squares a gap (resolution "adjusted") or the
-// real, forgotten entry that explains it (resolution "entry_added").
-// TakeReconciliation posts it as a new "transaction" row from these fields,
-// inside its own withTx, and never accepts a transaction id from the caller
-// (ADR-024, ADR-027): a caller-supplied id could name an entry the cutoff had
-// already counted, which is exactly the false-record bug this rule exists to
-// prevent.
+// line: the plug that squares a gap (resolution "adjusted") or the real,
+// forgotten entry that explains it ("entry_added"). TakeReconciliation posts
+// it as a new "transaction" row from these fields, inside its withTx, and
+// never accepts a transaction id from the caller (ADR-024, ADR-027): a
+// caller-supplied id could name an entry the cutoff had already counted,
+// the false-record bug this rule exists to prevent.
 //
-// There is deliberately no AccountID field. The fix always posts against the
-// account its enclosing AccountCount is about - see AccountCount's comment
-// for why that is derived rather than repeated.
+// There is no AccountID field: the fix posts against the account of its
+// enclosing AccountCount, which is derived rather than repeated.
 type Fix struct {
 	PurposeID  int64
 	Direction  string       // "in" or "out"
@@ -32,43 +30,33 @@ type Fix struct {
 }
 
 // AccountCount is one counted location within a reconciliation snapshot: an
-// account, what the treasurer actually found there, and how any gap was
-// resolved.
+// account, what the treasurer found there, and how any gap was resolved.
 //
-// Fix is nested here rather than living in a second slice matched by
-// account_id, which is the shape ADR-027's own draft paragraph sketched.
-// A fix exists to square exactly one line, so naming that line through a
-// separate collection - by position, or by repeating the account id - is
-// exactly the kind of alignment a caller (and this function) could get wrong
-// silently: a fixes[2] meant to resolve
-// counts[2] would silently square counts[1] instead if a count were ever
-// skipped or reordered. That is the same failure shape ADR-027's transfer
-// leg already removed by construction rather than by validation, by
-// dropping leg's own Direction field so postTransferPairTx derives it instead
-// of trusting a caller to set it correctly. Nesting Fix inside AccountCount
-// does the same thing here: "this fix belongs to this line" becomes a
-// property of the Go value, not an alignment invariant.
+// Fix is nested here rather than in a second slice matched by account_id
+// (the shape ADR-027's draft sketched). A fix squares exactly one line, and
+// naming that line by position or a repeated account id is an alignment a
+// caller could get wrong silently: fixes[2] meant for counts[2] would square
+// counts[1] if a count were skipped or reordered. ADR-027's transfer leg
+// removed the same failure by dropping the leg's Direction field. Nesting
+// makes "this fix belongs to this line" a property of the Go value.
 type AccountCount struct {
 	AccountID    int64
 	ActualAmount money.Amount // what the treasurer actually counted; must not be negative
 	Resolution   string       // "matched", "left_open", "adjusted", "entry_added"
 
 	// Fix carries the raw data behind the entry that resolves this line.
-	// Required (non-nil) when Resolution is "adjusted" or "entry_added";
-	// must be nil for "matched" and "left_open".
+	// Required (non-nil) when Resolution is "adjusted" or "entry_added"; must be
+	// nil for "matched" and "left_open".
 	Fix *Fix
 }
 
 // TakeReconciliationParams is every argument TakeReconciliation needs to take
 // one snapshot.
 //
-// There is no PerformedAt field: a reconciliation is something the treasurer
-// does right now, in one sitting, with no PRD-described reason to backdate
-// it - unlike OccurredOn on a transaction, which names a calendar day that
-// can differ from when it was typed in. TakeReconciliation stamps both
-// PerformedAt and CreatedAt with the same time.Now().Unix(), exactly how
-// every other write method in this package stamps CreatedAt itself rather
-// than accepting it as an argument.
+// There is no PerformedAt field: a reconciliation is done right now, in one
+// sitting, with no reason to backdate it (unlike a transaction's OccurredOn).
+// TakeReconciliation stamps PerformedAt and CreatedAt with the same
+// time.Now().Unix(), as every write in this package stamps CreatedAt.
 type TakeReconciliationParams struct {
 	FundID int64
 	Note   *string
@@ -77,96 +65,88 @@ type TakeReconciliationParams struct {
 
 // TakeReconciliation takes one reconciliation snapshot: for each counted
 // account, it freezes the recorded figure as of a single ledger cutoff,
-// compares it to what the treasurer actually counted, and - for a resolution
-// that calls for one - posts the entry that resolves the gap. One call, one
-// withTx, in the order ADR-024 and ADR-027 both require:
+// compares it to what the treasurer counted, and, where the resolution calls
+// for one, posts the entry that resolves the gap. One call, one withTx, in
+// the order ADR-024 and ADR-027 require:
 //
 //  1. Take the cutoff (MaxTransactionIDByFund). sql.ErrNoRows means an empty
 //     ledger: through_transaction_id is stored NULL and every recorded_amount
-//     is 0, without calling AccountBalanceThrough at all.
+//     is 0, without calling AccountBalanceThrough.
 //  2. Read recorded_amount per counted account, through that cutoff.
 //  3. Insert each fix as its own "transaction" row - kind='adjustment' for
-//     "adjusted", kind='normal' for "entry_added" - using the caller's raw
-//     Fix data, never a transaction id the caller supplies.
+//     "adjusted", kind='normal' for "entry_added" - from the caller's raw Fix
+//     data, never a transaction id the caller supplies.
 //  4. Insert the reconciliation row, then its reconciliation_line rows,
-//     naming the fix ids where the resolution is "adjusted" or
-//     "entry_added" (#498).
+//     naming the fix ids where the resolution is "adjusted" or "entry_added"
+//     (#498).
 //
-// The ordering is the entire point (ADR-024, ADR-027). If a fix were posted
-// through an ordinary call before the cutoff was taken, the cutoff would
-// already include it, recorded_amount would equal actual_amount, and a line
-// labelled "entry_added" would store difference_amount = 0 - schema-legal,
-// since the CHECK verifies arithmetic and not history, and a permanent false
-// record that no gap was ever found. Taking the cutoff first and posting
-// fixes from raw data inside this same call is what makes that impossible:
-// a fix's row always gets an id above the cutoff, so it lands outside this
-// snapshot's own math and inside the next one's - by construction, not by a
-// rule a caller could forget.
+// The ordering is the point (ADR-024, ADR-027). A fix posted through an
+// ordinary call before the cutoff was taken would be inside the cutoff,
+// recorded_amount would equal actual_amount, and an "entry_added" line would
+// store difference_amount = 0: schema-legal, since the CHECK verifies
+// arithmetic and not history, and a permanent false record that no gap was
+// found. Taking the cutoff first and posting fixes from raw data in the same
+// call gives a fix an id above the cutoff, outside this snapshot's math and
+// inside the next one's, by construction.
 //
 // difference_amount is computed in Go with the checked money.Amount.Sub,
 // never in SQL; the schema's CHECK (difference_amount = actual_amount -
-// recorded_amount) then re-confirms the same arithmetic the domain already
-// did, rather than being the only place it happens.
+// recorded_amount) re-confirms the arithmetic rather than being its only
+// home.
 //
 // The four resolutions:
 //
-//   - "matched": difference_amount must be 0. No fix. A caller claiming
-//     "matched" against a nonzero gap is ErrInvalidArgument - the schema has
-//     no CHECK tying resolution to the sign or size of the difference, so
-//     without this check a lying "matched" line would be schema-legal.
-//   - "left_open": the figures differ and nothing is posted today. The line
-//     is saved as-is; revisiting it later is a new snapshot; see
-//     ADR-024, never an edit to this one - the immutability triggers make an
-//     edit impossible even if this package wanted to write one.
+//   - "matched": difference_amount must be 0. No fix. "Matched" against a
+//     nonzero gap is ErrInvalidArgument: the schema has no CHECK tying
+//     resolution to the difference, so a lying "matched" would be
+//     schema-legal.
+//   - "left_open": the figures differ and nothing is posted. The line is
+//     saved as-is; revisiting it is a new snapshot (ADR-024), never an edit
+//     (the immutability triggers forbid one).
 //   - "adjusted": a plug (#498). Fix's signed amount (+ for "in", - for
 //     "out") must equal the line's difference exactly, or the whole snapshot
 //     is refused with ErrReconciliationPlugMismatch before anything is
-//     posted - a plug that undershoots, overshoots or points the wrong way
-//     would leave a gap the system already knows about under a resolution
-//     that claims there is none. Fix's transaction is posted
-//     (kind='adjustment') and the line names it in
-//     adjustment_transaction_id, which the schema's own CHECK also requires.
+//     posted: a plug that undershoots, overshoots or points the wrong way
+//     would leave a known gap under a resolution claiming none. Fix's
+//     transaction is posted (kind='adjustment') and the line names it in
+//     adjustment_transaction_id, which the schema's CHECK also requires.
 //   - "entry_added": Fix's transaction is posted (kind='normal') with its
-//     own real OccurredOn. It may close only part of the gap - the treasurer
-//     found one missing entry, not necessarily all of them - so no amount is
-//     refused; whatever is left (difference - signed(fix), the
-//     remainder_amount ListReconciliationLines reads) keeps the line open. The line names the entry in
-//     adjustment_transaction_id too (#498): that link is what lets a read
-//     derive the remainder from the ledger instead of storing a second
-//     figure beside the difference. Nothing in this package takes the id
-//     from a caller - it is the row this very call just posted.
+//     real OccurredOn. It may close only part of the gap (the treasurer found
+//     one missing entry, not necessarily all), so no amount is refused;
+//     whatever is left (difference - signed(fix), the remainder_amount
+//     ListReconciliationLines reads) keeps the line open. The line names the
+//     entry in adjustment_transaction_id too (#498), so a read derives the
+//     remainder from the ledger instead of storing a second figure. The id is
+//     the row this call just posted, never from a caller.
 //
 // The count must be exactly the fund's active locations (PRD section 7.8:
 // "each active location ... a retired location is not asked about"), checked
-// first, inside the transaction, before the cutoff is taken or anything is
-// posted:
+// first, inside the transaction, before the cutoff or any posting:
 //
 //   - A count naming a retired location (inactive_on set) is
 //     ErrAccountInactive.
 //   - A snapshot leaving out an active location is
-//     ErrReconciliationMissingLocation. Only the full set can freeze a
-//     figure that means "the fund matches"; a subset would read cocok with
-//     the discrepancy sitting in the location nobody counted.
+//     ErrReconciliationMissingLocation. Only the full set can freeze a figure
+//     meaning "the fund matches"; a subset would read cocok with the
+//     discrepancy in the uncounted location.
 //
-// Both refuse the whole snapshot: no reconciliation row, no line, and no fix
-// for the lines that were named.
+// Both refuse the whole snapshot: no reconciliation row, no line, no fix.
 //
 // Argument-shape failures - an unrecognised resolution, "matched" with a
 // nonzero difference, "adjusted"/"entry_added" missing a Fix, "left_open"
 // naming one, a Fix with a non-positive amount, an unrecognised Fix
-// direction, a malformed OccurredOn, the same account counted twice, or an
-// empty actual_amount that is negative - are rejected as ErrInvalidArgument
-// before anything is written (ADR-027). Everything else - an account or
-// purpose id belonging to another fund - is a domain bug, not a caller
-// mistake, and surfaces wrapped generically.
+// direction, a malformed OccurredOn, the same account counted twice, a
+// negative actual_amount - are ErrInvalidArgument before anything is written
+// (ADR-027). Anything else, such as an account or purpose id of another
+// fund, is a domain bug and surfaces wrapped generically.
 func (l *Ledger) TakeReconciliation(ctx context.Context, p TakeReconciliationParams) (store.Reconciliation, error) {
 	if err := validateTakeReconciliationParams(p); err != nil {
 		return store.Reconciliation{}, err
 	}
 
 	// lineInput is one line's numbers and the fix id (if any) it should name,
-	// resolved while the cutoff is still fixed, so the reconciliation row and
-	// its lines can be inserted afterwards without recomputing anything.
+	// resolved while the cutoff is fixed, so the reconciliation row and lines
+	// insert afterwards without recomputing.
 	type lineInput struct {
 		accountID                          int64
 		recordedAmount, actualAmount, diff money.Amount
@@ -217,9 +197,8 @@ func (l *Ledger) TakeReconciliation(ctx context.Context, p TakeReconciliationPar
 
 			var adjustmentTransactionID *int64
 			if c.Fix != nil {
-				// A plug must square the gap exactly (#498). Checked against
-				// the frozen difference, before the fix is posted, so a
-				// refusal leaves nothing behind (the whole call is one tx).
+				// A plug must square the gap exactly (#498). Checked against the frozen
+				// difference before the fix is posted, so a refusal leaves nothing behind.
 				if c.Resolution == "adjusted" {
 					signed, err := SignedFixAmount(c.Fix)
 					if err != nil {
@@ -230,8 +209,8 @@ func (l *Ledger) TakeReconciliation(ctx context.Context, p TakeReconciliationPar
 							ErrReconciliationPlugMismatch, c.AccountID, diff.Int64(), signed.Int64())
 					}
 				}
-				// A fix is a posting like any other (ADR-031, #473): it
-				// may not land on a closed envelope.
+				// A fix is a posting like any other (ADR-031, #473): it may not land on a
+				// closed envelope.
 				if err := refuseClosedIncidental(ctx, q, c.Fix.PurposeID, ErrIncidentalClosed); err != nil {
 					return err
 				}
@@ -253,8 +232,8 @@ func (l *Ledger) TakeReconciliation(ctx context.Context, p TakeReconciliationPar
 				if err != nil {
 					return fmt.Errorf("posting the fix for account %d: %w", c.AccountID, err)
 				}
-				// Both resolutions name the entry they posted (#498): the
-				// remainder of a partial entry_added is derived through it.
+				// Both resolutions name the entry they posted (#498); the remainder of a
+				// partial entry_added is derived through it.
 				adjustmentTransactionID = &fix.ID
 			}
 
@@ -319,10 +298,8 @@ func SignedFixAmount(f *Fix) (money.Amount, error) {
 	}
 }
 
-// ReconciliationDetail is one snapshot together with the counted-account lines
-// it froze - what GET /api/reconciliations/{id} shows (PRD section 7.8),
-// composed the same way GetIncidentalDetail composes an envelope with its
-// totals.
+// ReconciliationDetail is one snapshot with the counted-account lines it
+// froze, what GET /api/reconciliations/{id} shows (PRD section 7.8).
 type ReconciliationDetail struct {
 	Reconciliation store.Reconciliation
 	Lines          []store.ListReconciliationLinesRow
@@ -331,14 +308,10 @@ type ReconciliationDetail struct {
 // GetReconciliationDetail fetches one snapshot and its lines for GET
 // /api/reconciliations/{id}.
 //
-// The snapshot fetch is fund-scoped (GetReconciliation now takes fund_id
-// alongside id, #105): an id names a row, it does not prove the caller may
-// see it, the same reasoning GetIncidentalDetail's own comment gives. The line
-// fetch that follows is not separately fund-scoped - reconciliation_id alone
-// is enough once the snapshot itself is already known to belong to this fund,
-// since a line can only ever be created against the reconciliation that owns
-// it (reconciliation_line's own composite FK ties fund_id to
-// reconciliation_id).
+// The snapshot fetch is fund-scoped (#105): an id names a row, it does not
+// prove the caller may see it. The line fetch is not separately scoped:
+// reconciliation_id suffices once the snapshot is known to be this fund's,
+// since reconciliation_line's composite FK ties fund_id to reconciliation_id.
 func (l *Ledger) GetReconciliationDetail(ctx context.Context, fundID, id int64) (ReconciliationDetail, error) {
 	rec, err := l.q.GetReconciliation(ctx, store.GetReconciliationParams{ID: id, FundID: fundID})
 	if err != nil {
@@ -357,13 +330,12 @@ func (l *Ledger) GetReconciliationDetail(ctx context.Context, fundID, id int64) 
 // (#444), read inside its transaction so the fund's locations cannot change
 // between the check and the write.
 //
-// A retired location is inactive_on non-NULL, whatever date it holds - the
-// reading PostPurposeMove and the SPA already use. An account id that is not
-// this fund's (unknown, or another fund's) is skipped by both checks and the
-// completeness check stands down while one is present: the composite foreign
-// key on reconciliation_line always refuses it, and the right answer for that
-// request is that refusal (ADR-027), not "missing location" for a payload
-// whose real fault is the unknown id.
+// A retired location is inactive_on non-NULL, whatever date it holds, as in
+// PostPurposeMove and the SPA. An account id not this fund's (unknown, or
+// another fund's) is skipped by both checks, and the completeness check
+// stands down while one is present: the composite foreign key on
+// reconciliation_line always refuses it, and that refusal (ADR-027) is the
+// right answer, not "missing location".
 func requireEveryActiveLocationCounted(ctx context.Context, q store.Querier, p TakeReconciliationParams) error {
 	accounts, err := q.ListAccountsByFund(ctx, p.FundID)
 	if err != nil {
@@ -399,20 +371,17 @@ func requireEveryActiveLocationCounted(ctx context.Context, q store.Querier, p T
 	return nil
 }
 
-// validateTakeReconciliationParams checks TakeReconciliation's own inputs
-// before anything is written: an unrecognised resolution, a Fix present or
-// missing where the resolution disagrees, a non-positive or malformed Fix,
-// a negative actual_amount, an empty Counts, or the same account named
-// twice. None of this re-derives an invariant the schema already enforces
-// (ADR-027) - reconciliation_line's own CHECKs verify arithmetic and the
-// "adjusted names something" rule, but nothing in the schema stops a lying
-// "matched" line or a duplicate account (that is reconciliation_line's
-// UNIQUE (reconciliation_id, account_id), which would reject a duplicate
-// too, but only with a raw "UNIQUE constraint failed" string).
+// validateTakeReconciliationParams checks TakeReconciliation's inputs before
+// anything is written: an unrecognised resolution, a Fix present or missing
+// against the resolution, a non-positive or malformed Fix, a negative
+// actual_amount, an empty Counts, or the same account named twice. None of
+// this re-derives what the schema enforces (ADR-027): reconciliation_line's
+// CHECKs verify arithmetic and the "adjusted names something" rule, but
+// nothing stops a lying "matched" line, and a duplicate account would only
+// fail UNIQUE (reconciliation_id, account_id) with a raw string.
 //
-// "matched" needing difference_amount == 0 is checked separately, inside
-// withTx, because computing it needs the frozen recorded_amount this
-// function has no database access to read.
+// "matched" needing difference_amount == 0 is checked inside withTx, since it
+// needs the frozen recorded_amount this function cannot read.
 func validateTakeReconciliationParams(p TakeReconciliationParams) error {
 	if len(p.Counts) == 0 {
 		return fmt.Errorf("%w: counts must not be empty", ErrInvalidArgument)

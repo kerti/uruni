@@ -12,10 +12,10 @@ import (
 	"testing"
 )
 
-// The Makefile exports .env into every `make test` run, so a test that only set
-// the variable it cares about would read the developer's real PORT or base URL.
-// env clears the whole table first, then applies the case's overrides - which
-// also makes "unset" a value a test can assert on.
+// The Makefile exports .env into every `make test` run, so a test setting only
+// its variable would read the developer's real PORT or base URL. env clears
+// the table first, then applies the overrides, which also makes "unset" a
+// value a test can assert on.
 func env(t *testing.T, overrides map[string]string) {
 	t.Helper()
 	for _, name := range []string{
@@ -29,9 +29,9 @@ func env(t *testing.T, overrides map[string]string) {
 	}
 }
 
-// An origin every test that isn't *about* the base URL can lean on. Anything
-// absolute and not the placeholder will do; `.test` is reserved by RFC 2606, so
-// it can never become somebody's real instance.
+// An origin for every test not about the base URL: anything absolute and not
+// the placeholder. `.test` is reserved by RFC 2606, so it never becomes a real
+// instance.
 const testBaseURL = "https://uruni.test"
 
 func TestLoadDefaultsEverythingItCan(t *testing.T) {
@@ -88,7 +88,7 @@ func TestLoadReadsEveryVariable(t *testing.T) {
 		UploadsDir: "/uploads",
 		BackupDir:  "/backups",
 		// The trailing slash is trimmed so callers can join paths without
-		// producing "https://host//report/xyz".
+		// "https://host//report/xyz".
 		BaseURL:        testBaseURL,
 		LogLevel:       slog.LevelDebug,
 		LogFormat:      LogFormatJSON,
@@ -103,8 +103,8 @@ func TestLoadRejectsBadValues(t *testing.T) {
 	cases := []struct {
 		name      string
 		overrides map[string]string
-		// mentions is the variable name the message must name - the operator's
-		// whole job on a boot failure is knowing which line of .env to fix.
+		// mentions is the variable name the message must name: the operator's job on
+		// a boot failure is knowing which .env line to fix.
 		mentions string
 	}{
 		{"port not a number", map[string]string{"PORT": "eight thousand"}, "PORT"},
@@ -134,8 +134,8 @@ func TestLoadRejectsBadValues(t *testing.T) {
 }
 
 // URUNI_BASE_URL is the one variable an operator must set, so it carries the
-// "is this instance configured at all?" check: unset and the .env.example
-// placeholder are both refusals, and both name the variable (#119, ADR-019).
+// "is this configured at all?" check: unset and the .env.example placeholder
+// both refuse, naming the variable (#119, ADR-019).
 func TestLoadRefusesAnUnconfiguredBaseURL(t *testing.T) {
 	for _, base := range []string{"", placeholderBaseURL, placeholderBaseURL + "/"} {
 		env(t, map[string]string{"URUNI_BASE_URL": base})
@@ -150,9 +150,8 @@ func TestLoadRefusesAnUnconfiguredBaseURL(t *testing.T) {
 	}
 }
 
-// #327: emailed backups were cut (ADR-012), so SMTP_URL is no longer a
-// variable. An operator who still sets one - even a malformed one - boots
-// normally rather than failing on a line that configures nothing.
+// #327: emailed backups were cut (ADR-012), so SMTP_URL is not a variable. An
+// operator still setting one, even malformed, boots normally.
 func TestLoadIgnoresSMTPURL(t *testing.T) {
 	env(t, map[string]string{"URUNI_BASE_URL": testBaseURL})
 	t.Setenv("SMTP_URL", "not a url %zz")
@@ -162,8 +161,8 @@ func TestLoadIgnoresSMTPURL(t *testing.T) {
 	}
 }
 
-// ADR-004: SQLite is the only engine through 0.x, so DATABASE_URL must not be a
-// variable the binary reacts to at all - not honoured, not warned about.
+// ADR-004: SQLite is the only engine through 0.x, so DATABASE_URL must not be
+// reacted to at all: not honoured, not warned about.
 func TestLoadIgnoresDatabaseURL(t *testing.T) {
 	env(t, map[string]string{"URUNI_BASE_URL": testBaseURL})
 	t.Setenv("DATABASE_URL", "postgres://user:pass@localhost:5432/uruni")
@@ -178,10 +177,8 @@ func TestLoadIgnoresDatabaseURL(t *testing.T) {
 }
 
 // #153: the compose stack overrides URUNI_UPLOADS_DIR to the volume-mounted
-// /uploads explicitly, the same way it does URUNI_DB - this is that override
-// read through, on its own rather than folded into
-// TestLoadReadsEveryVariable, since the default itself (a relative dev path)
-// is worth its own defaults test above.
+// /uploads, as it does URUNI_DB; this reads the override on its own, since the
+// relative dev default has its own test above.
 func TestLoadReadsUploadsDirOverride(t *testing.T) {
 	env(t, map[string]string{"URUNI_BASE_URL": testBaseURL, "URUNI_UPLOADS_DIR": "/uploads"})
 
@@ -194,8 +191,7 @@ func TestLoadReadsUploadsDirOverride(t *testing.T) {
 	}
 }
 
-// #324: the compose stack overrides URUNI_BACKUP_DIR to the volume-mounted
-// /backups explicitly, the same pattern as URUNI_UPLOADS_DIR above.
+// #324: compose overrides URUNI_BACKUP_DIR to /backups, as URUNI_UPLOADS_DIR.
 func TestLoadReadsBackupDirOverride(t *testing.T) {
 	env(t, map[string]string{"URUNI_BASE_URL": testBaseURL, "URUNI_BACKUP_DIR": "/backups"})
 
@@ -241,9 +237,9 @@ func TestEnsureUploadsDirWritableRefusesAFileNotADir(t *testing.T) {
 	}
 }
 
-// A directory with no write permission is the "seeded root:root" failure
-// ADR-019's Dockerfile comment describes - skipped as root, since root
-// ignores the permission bits this test relies on to fail the write.
+// A directory without write permission is the "seeded root:root" failure of
+// ADR-019's Dockerfile comment; skipped as root, which ignores the permission
+// bits this test relies on.
 func TestEnsureUploadsDirWritableRefusesAReadOnlyDir(t *testing.T) {
 	if os.Geteuid() == 0 {
 		t.Skip("running as root - permission bits do not apply")
@@ -264,8 +260,8 @@ func TestEnsureUploadsDirWritableRefusesAReadOnlyDir(t *testing.T) {
 	}
 }
 
-// EnsureBackupDirWritable (#324) is EnsureUploadsDirWritable's own twin -
-// the four cases below mirror its four tests above exactly, one per branch.
+// EnsureBackupDirWritable (#324) mirrors EnsureUploadsDirWritable: the four
+// cases below mirror its four tests, one per branch.
 
 func TestEnsureBackupDirWritableAcceptsAWritableDir(t *testing.T) {
 	if err := EnsureBackupDirWritable(t.TempDir()); err != nil {

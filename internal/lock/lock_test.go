@@ -45,8 +45,8 @@ func TestAcquireRefusesASecondHolder(t *testing.T) {
 	if !errors.Is(err, ErrLocked) {
 		t.Fatalf("second Acquire() = %v, want ErrLocked", err)
 	}
-	// The operator-facing message names the lock file and says plainly that
-	// another instance is running - that is the whole point of the error.
+	// The operator-facing message names the lock file and says another instance is
+	// running: the point of the error.
 	if !strings.Contains(err.Error(), path) {
 		t.Errorf("second Acquire() error = %q, want it to name %q", err, path)
 	}
@@ -56,9 +56,8 @@ func TestAcquireRefusesASecondHolder(t *testing.T) {
 }
 
 func TestAcquireReportsAnUnopenableLockPath(t *testing.T) {
-	// A lock file the operator's URUNI_DB implies but that cannot be created -
-	// here because its parent directory does not exist, which is what a typo'd
-	// or unmounted data path looks like at boot.
+	// A lock file URUNI_DB implies but that cannot be created: its parent
+	// directory does not exist, as a typo'd or unmounted data path looks at boot.
 	path := filepath.Join(t.TempDir(), "no-such-directory", "uruni.db.lock")
 
 	_, err := Acquire(path)
@@ -74,11 +73,10 @@ func TestAcquireReportsAnUnopenableLockPath(t *testing.T) {
 }
 
 func TestAcquireReportsAFlockFailureThatIsNotContention(t *testing.T) {
-	// An exclusive flock on a valid descriptor has no real-world failure other
-	// than contention, so the syscall is stubbed. The branch still has to be
-	// right: a kernel refusal is not "someone else holds it", and reporting it
-	// as ErrLocked would send an operator hunting for a second process that
-	// does not exist.
+	// An exclusive flock on a valid descriptor fails in the real world only on
+	// contention, so the syscall is stubbed. The branch must still be right: a
+	// kernel refusal is not "someone else holds it", and ErrLocked would send an
+	// operator hunting a second process that does not exist.
 	stubFlock(t, func(int, int) error { return unix.EIO })
 
 	_, err := Acquire(filepath.Join(t.TempDir(), "uruni.db.lock"))
@@ -122,10 +120,9 @@ func TestReleaseTwiceIsANoOpAndNeverTouchesAReusedDescriptor(t *testing.T) {
 		t.Fatalf("first Release() = %v, want nil", err)
 	}
 
-	// serve releases through a defer, so an explicit release followed by the
-	// deferred one is an ordinary shape, not an abuse. The second call must not
-	// reach the syscall at all: the descriptor is closed, and the kernel is free
-	// to have given that number to any file opened since - unlocking which would
+	// serve releases through a defer, so an explicit release then the deferred one
+	// is ordinary. The second call must not reach the syscall: the descriptor is
+	// closed and the kernel may have reused that number, so unlocking would
 	// release a lock this process never took.
 	stubFlock(t, func(int, int) error {
 		t.Error("second Release() called flock on a closed descriptor")
@@ -156,9 +153,8 @@ func TestReleaseAllowsAnOrdinaryRestart(t *testing.T) {
 		t.Fatalf("Release() = %v, want nil", err)
 	}
 
-	// A clean stop-then-start is the ordinary restart path (`make
-	// server-restart`): the second Acquire must succeed with no manual
-	// cleanup of the lock file.
+	// A clean stop-then-start is the ordinary restart (`make server-restart`):
+	// the second Acquire must succeed with no manual cleanup.
 	second, err := Acquire(path)
 	if err != nil {
 		t.Fatalf("Acquire() after Release() = %v, want nil", err)
@@ -166,14 +162,13 @@ func TestReleaseAllowsAnOrdinaryRestart(t *testing.T) {
 	defer func() { _ = second.Release() }()
 }
 
-// TestStaleLockFromAKilledProcessDoesNotWedge is the acceptance criterion
-// that a lock left by a killed process must not permanently wedge the
-// instance. It spawns this same test binary as a subprocess that acquires
-// the lock and blocks forever, kills that subprocess the same way
-// `make server-stop` escalates to once its grace period elapses, waits for
-// the kernel to actually reap it, and then asserts a fresh Acquire succeeds
-// immediately - no polling, no sleep, because cmd.Wait returning is itself
-// the guarantee that the file descriptor holding the lock is gone.
+// TestStaleLockFromAKilledProcessDoesNotWedge: a lock left by a killed
+// process must not wedge the instance. It spawns this test binary as a
+// subprocess that acquires the lock and blocks, kills it as `make
+// server-stop` escalates after its grace period, waits for the kernel to
+// reap it, and asserts a fresh Acquire succeeds immediately: cmd.Wait
+// returning guarantees the descriptor holding the lock is gone, so no
+// polling or sleep.
 func TestStaleLockFromAKilledProcessDoesNotWedge(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "uruni.db.lock")
 
@@ -190,8 +185,8 @@ func TestStaleLockFromAKilledProcessDoesNotWedge(t *testing.T) {
 		t.Fatalf("starting the helper process = %v, want nil", err)
 	}
 
-	// Blocks on the child's own stdout until it writes its ready line - a
-	// real synchronization point, not a sleep guessing how long Acquire takes.
+	// Blocks on the child's stdout until its ready line: a real synchronization
+	// point, not a sleep guessing how long Acquire takes.
 	line, err := bufio.NewReader(stdout).ReadString('\n')
 	if err != nil || strings.TrimSpace(line) != "locked" {
 		_ = cmd.Process.Kill()
@@ -202,8 +197,8 @@ func TestStaleLockFromAKilledProcessDoesNotWedge(t *testing.T) {
 	if err := cmd.Process.Kill(); err != nil {
 		t.Fatalf("killing the helper process = %v, want nil", err)
 	}
-	// Wait, not a poll loop: once it returns, the kernel has already reclaimed
-	// every file descriptor the killed process held, flock included.
+	// Wait, not a poll loop: once it returns, the kernel has reclaimed every
+	// descriptor the killed process held, flock included.
 	_ = cmd.Wait()
 
 	l, err := Acquire(path)
@@ -213,9 +208,9 @@ func TestStaleLockFromAKilledProcessDoesNotWedge(t *testing.T) {
 	defer func() { _ = l.Release() }()
 }
 
-// TestHelperAcquireAndBlock is not a real test: it is `go test`'s standard
-// way to get a subprocess running production code, gated so it is a no-op
-// under a normal `go test` run. See TestStaleLockFromAKilledProcessDoesNotWedge.
+// TestHelperAcquireAndBlock is not a real test: `go test`'s standard way to
+// get a subprocess running production code, a no-op under a normal run. See
+// TestStaleLockFromAKilledProcessDoesNotWedge.
 func TestHelperAcquireAndBlock(t *testing.T) {
 	if os.Getenv("URUNI_LOCK_TEST_HELPER") != "1" {
 		t.Skip("not invoked as a helper process")

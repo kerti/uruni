@@ -11,45 +11,37 @@ import (
 	"github.com/kerti/uruni/internal/store"
 )
 
-// reportSlugAlphabet is base62: digits and both cases, so the slug is safe to
-// drop straight into a URL path with no escaping.
+// reportSlugAlphabet is base62: digits and both cases, so the slug drops into
+// a URL path with no escaping.
 const reportSlugAlphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
 
-// reportSlugLength is 32. The schema's own CHECK (length(report_slug) >= 22)
-// already picked a floor - "roughly a UUID's worth of entropy in base62" - so
-// 22 would satisfy it, but this generator is the slug's only source, not a
-// re-derivation of something else, and PRD section 7.9 treats it as a
-// security-relevant unguessable token that a link, once shared, only ever
-// changes through ReplaceReportSlug - the treasurer's deliberate act. 32
-// base62 characters is about 190 bits, comfortably past the schema's floor
-// and past a UUID's 122 bits, at a cost (10 more characters in a URL nobody
-// types by hand) that is free to pay once at setup.
+// reportSlugLength is 32. The schema's CHECK (length(report_slug) >= 22) sets
+// a floor of roughly a UUID's entropy in base62, but PRD section 7.9 treats
+// the slug as a security-relevant unguessable token that, once shared,
+// changes only through ReplaceReportSlug (the treasurer's deliberate act). 32
+// base62 characters is about 190 bits, past the floor and a UUID's 122 bits,
+// at the free cost of a longer URL nobody types.
 const reportSlugLength = 32
 
-// generateReportSlug returns a random base62 string for fund.report_slug,
-// drawn from crypto/rand, never math/rand: PRD section 7.9 relies on this being
-// unguessable, and math/rand's default source is neither seeded for that nor
-// safe against an adversary who can observe other output from it.
-//
-// rand.Int is used per character rather than reading raw bytes and reducing
-// mod 62, which would bias the low characters of the alphabet very slightly
-// toward the low end of the byte range (256 is not a multiple of 62).
-// rand.Int's rejection sampling has no such bias, and this runs once per
-// fund, so the extra syscalls cost nothing that matters.
-//
-// No collision retry: at this length a collision is far less likely than a
-// hardware fault during the same call, and the schema's UNIQUE on
-// report_slug is the backstop if the impossible ever happens - CreateFund
-// would surface it as an ordinary unique-violation, mapped like any other by
-// M4's error handling, not silently accepted.
-// randInt is crypto/rand.Int, indirected so the tests can drive the failure
-// below. A random source that errors is not a real operating condition, but
-// this is the one call in setup whose silent failure would matter: a fund is
-// created once, its slug changes only through ReplaceReportSlug, and the link
-// is only unguessable if this call actually produced what it claims to have.
-// The test that stubs this proves setup aborts rather than falling back to something weaker.
+// randInt is crypto/rand.Int, indirected so tests can drive the failure
+// below. A failing random source is not a real condition, but this is the one
+// call in setup whose silent failure would matter: the link is only
+// unguessable if this call produced what it claims. The test that stubs this
+// proves setup aborts rather than falling back to something weaker.
 var randInt = rand.Int
 
+// generateReportSlug returns a random base62 string for fund.report_slug,
+// drawn from crypto/rand, never math/rand: PRD section 7.9 relies on it being
+// unguessable, and math/rand's default source is neither seeded for that nor
+// safe against an adversary who can observe its other output.
+//
+// rand.Int is used per character, not raw bytes reduced mod 62, which would
+// slightly bias the low characters (256 is not a multiple of 62); rand.Int's
+// rejection sampling has no such bias, and this runs once per fund.
+//
+// No collision retry: at this length a collision is far less likely than a
+// hardware fault, and the schema's UNIQUE on report_slug is the backstop;
+// CreateFund surfaces it as an ordinary unique-violation.
 func generateReportSlug() (string, error) {
 	alphabetSize := big.NewInt(int64(len(reportSlugAlphabet)))
 	b := make([]byte, reportSlugLength)
@@ -63,41 +55,35 @@ func generateReportSlug() (string, error) {
 	return string(b), nil
 }
 
-// AccountInput is one location the treasurer names at setup - #78's
-// resolution of "which accounts does a fund start with": the wizard lets her
-// choose and name each one, rather than SetUpFund fixing a cash/bank pair
-// for her.
+// AccountInput is one location the treasurer names at setup (#78): the wizard
+// lets her choose and name each one, rather than SetUpFund fixing a
+// cash/bank pair.
 type AccountInput struct {
 	Kind string // "cash" or "bank" - the schema's own CHECK (kind IN (...)) is the single source of truth for the set
 	Name string // non-empty after trimming - the schema's own CHECK (length(trim(name)) > 0) refuses it, not pre-validated here (ADR-027)
 
-	// OpeningBalance is this account's starting figure, optional - #230's
-	// uniform rule: a location and its opening balance are born together, in
-	// this same withTx, or not at all. nil is exactly the same as an
-	// OpeningBalance with Amount 0 - neither posts a row.
+	// OpeningBalance is this account's starting figure, optional (#230): a
+	// location and its opening balance are born together in this withTx, or not
+	// at all. nil is the same as Amount 0; neither posts a row.
 	OpeningBalance *OpeningBalance
 }
 
 // SetUpFundParams is every argument SetUpFund needs to bring a brand-new
 // fund into existence.
 type SetUpFundParams struct {
-	// FundName is the treasurer's own name for the fund (PRD section 7.1: "name the
+	// FundName is the treasurer's name for the fund (PRD section 7.1: "name the
 	// fund"). Non-empty after trimming.
 	FundName string
 
-	// Accounts is every location the treasurer wants the fund to start with
-	// (#78). At least one is required - a fund with zero accounts could
-	// record nothing (every transaction needs an account_id), the same
-	// reasoning FundName's own empty check already applies, just aimed at a
-	// slice instead of a string.
+	// Accounts is every location the fund starts with (#78). At least one is
+	// required: a fund with no accounts could record nothing (every transaction
+	// needs an account_id).
 	Accounts []AccountInput
 }
 
 // SetUpFundResult names every row the caller needs immediately: the whole
-// fund row (it carries report_slug, which M7's public report needs and
-// nothing else in this response can substitute for), the main purpose id,
-// and every created account, full rows (not bare ids) so the caller doesn't
-// have to re-read them back out to learn kind/name - in the order Accounts
+// fund row (it carries report_slug, which the public report needs), the main
+// purpose id, and every created account as full rows, in the order Accounts
 // was given.
 type SetUpFundResult struct {
 	Fund          store.Fund
@@ -105,43 +91,33 @@ type SetUpFundResult struct {
 	Accounts      []store.Account
 }
 
-// SetUpFund writes the rows a fund cannot function without - the fund
-// itself, its one kind='main' purpose, and every account the treasurer asked
-// for - inside one withTx, and returns their ids.
+// SetUpFund writes the rows a fund cannot function without - the fund, its
+// kind='main' purpose, and every account the treasurer asked for - inside one
+// withTx, and returns their ids.
 //
-// The atomic core is deliberately this small and no smaller. A transaction
-// requires both an account_id and a purpose_id (schema FKs), so a fund with
-// no main purpose and no accounts cannot record even its first entry - a
-// crash partway through would leave a fund that exists, appears in
-// ListFunds, and has nowhere to post anything, the same orphan shape #42's
-// OpenIncidental closed for a purpose with no incidental row behind it,
-// inverted onto a fund with nothing underneath it at all. #78 does not
-// change that argument, only its size: N accounts instead of a fixed two,
-// still written inside the same transaction as the fund and its main
-// purpose.
+// The atomic core is this small and no smaller. A transaction needs both an
+// account_id and a purpose_id (schema FKs), so a fund with no main purpose
+// and no accounts could not record its first entry; a crash partway would
+// leave a fund that exists, appears in ListFunds, and has nowhere to post, the
+// orphan shape #42's OpenIncidental closed for a purpose without an
+// incidental row. N accounts (#78) are still written in the same transaction
+// as the fund and main purpose.
 //
-// Opening balances ARE folded in, one per account, each inside this same
-// withTx (#230's uniform rule: a location and its opening balance are born
-// together, or not at all). That is safe to fold in where members, dues
-// tiers and dues rates are not, because an opening balance's only failure
-// modes are refused up front, before withTx even opens -
-// validateOpeningBalance rejects a negative amount or a malformed date on
-// every account in the batch before the first row is written - and a
-// location born with no opening balance has no later standalone way to gain
-// one, so there is nothing "resumable" about it to preserve. Members, dues
-// tiers and dues rates are still deliberately NOT here: members carry no
-// cross-row invariant beyond what the schema already enforces (ADR-027's own
-// carve-out - no domain wrapper for them at all), and tiers/rates have only
-// ordinary unique constraints a create-then-retry handles with a 409. Folding
-// any of those in would mean one mistyped tier reference aborts a perfectly
-// good fund and its accounts - the opposite of what a "first-run setup" flow
-// should risk. They are composed afterward by the caller as ordinary
-// retriable calls.
+// Opening balances are folded in, one per account, in this withTx (#230: a
+// location and its opening balance are born together, or not at all). That is
+// safe, unlike members, dues tiers and dues rates, because an opening
+// balance's failures are refused before withTx opens (validateOpeningBalance
+// rejects a negative amount or malformed date on every account first), and a
+// location born without one has no later standalone way to gain one. Members,
+// tiers and rates are not here: members carry no cross-row invariant beyond
+// the schema (ADR-027's carve-out), and tiers/rates have ordinary unique
+// constraints a create-then-retry handles with a 409. Folding them in would
+// let one mistyped tier reference abort a good fund and its accounts. The
+// caller composes them afterward as retriable calls.
 //
-// A second run is refused. The pre-check runs inside this same withTx and
-// returns ErrFundAlreadyExists the moment a fund is found - see that
-// sentinel's own doc comment for why this guard, alone among this package's
-// pre-checks, has no unique index backing it.
+// A second run is refused. The pre-check runs in this withTx and returns
+// ErrFundAlreadyExists the moment a fund is found (see that sentinel for why
+// this guard alone has no unique index).
 func (l *Ledger) SetUpFund(ctx context.Context, p SetUpFundParams) (SetUpFundResult, error) {
 	name := strings.TrimSpace(p.FundName)
 	if name == "" {
@@ -150,9 +126,8 @@ func (l *Ledger) SetUpFund(ctx context.Context, p SetUpFundParams) (SetUpFundRes
 	if len(p.Accounts) == 0 {
 		return SetUpFundResult{}, fmt.Errorf("%w: at least one account is required", ErrInvalidArgument)
 	}
-	// Every opening balance is validated before withTx opens - a refused one
-	// (anywhere in the batch) must leave no fund and no account behind, not
-	// just the account it belonged to.
+	// Every opening balance is validated before withTx opens: a refused one
+	// anywhere in the batch must leave no fund and no account behind.
 	for _, a := range p.Accounts {
 		if a.OpeningBalance != nil {
 			if err := validateOpeningBalance(*a.OpeningBalance); err != nil {
@@ -185,9 +160,8 @@ func (l *Ledger) SetUpFund(ctx context.Context, p SetUpFundParams) (SetUpFundRes
 			return fmt.Errorf("creating fund: %w", err)
 		}
 
-		// "Kas Utama" is the domain's own name for the routine purpose
-		// (CONTEXT.md, ADR-014) - not user input, so there is no field for
-		// it on SetUpFundParams.
+		// "Kas Utama" is the domain's name for the routine purpose (CONTEXT.md,
+		// ADR-014), not user input, so SetUpFundParams has no field for it.
 		mainPurpose, err := q.CreatePurpose(ctx, store.CreatePurposeParams{
 			FundID: fund.ID, Kind: "main", Name: "Kas Utama", CreatedAt: now,
 		})
@@ -195,12 +169,10 @@ func (l *Ledger) SetUpFund(ctx context.Context, p SetUpFundParams) (SetUpFundRes
 			return fmt.Errorf("creating main purpose: %w", err)
 		}
 
-		// #78: the treasurer chooses and names each account, no longer a
-		// fixed cash/bank pair - kind and name shape (CHECK (kind IN
-		// ('cash','bank')), CHECK (length(trim(name)) > 0)) are the schema's
-		// job alone to refuse, the same split every other direct-CRUD write
-		// in this codebase already uses (ADR-027); a bad row here aborts the
-		// whole withTx, same as the purpose-insert failure above.
+		// #78: the treasurer chooses and names each account. Kind and name shape
+		// (CHECK (kind IN ('cash','bank')), CHECK (length(trim(name)) > 0)) are the
+		// schema's to refuse (ADR-027); a bad row aborts the whole withTx, as the
+		// purpose-insert failure above does.
 		accounts := make([]store.Account, 0, len(p.Accounts))
 		for _, a := range p.Accounts {
 			account, err := q.CreateAccount(ctx, store.CreateAccountParams{
@@ -232,12 +204,12 @@ func (l *Ledger) SetUpFund(ctx context.Context, p SetUpFundParams) (SetUpFundRes
 	return result, nil
 }
 
-// ReplaceReportSlug gives the fund a fresh report slug from the same
-// generator SetUpFund uses and returns the updated fund row (ADR-035's "Buat
-// tautan baru"). This is the only way a slug changes after setup: the old one
-// is overwritten, so it 404s on /report from then on - no history, no
-// redirect, because a redirect would defeat the point of replacing a leaked
-// link. A failed random source aborts rather than writing anything weaker.
+// ReplaceReportSlug gives the fund a fresh report slug from SetUpFund's
+// generator and returns the updated fund row (ADR-035's "Buat tautan baru").
+// It is the only way a slug changes after setup: the old one is overwritten
+// and 404s on /report, with no history or redirect, since a redirect would
+// defeat replacing a leaked link. A failed random source aborts rather than
+// writing anything weaker.
 func (l *Ledger) ReplaceReportSlug(ctx context.Context, fundID int64) (store.Fund, error) {
 	slug, err := generateReportSlug()
 	if err != nil {

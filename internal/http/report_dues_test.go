@@ -14,8 +14,8 @@ import (
 	"github.com/kerti/uruni/internal/store"
 )
 
-// duesScenario is September 2026 with one member in every status, two who
-// are not owing that month, and one with no tier:
+// duesScenario is September 2026 with one member in every status, two not
+// owing that month, and one with no tier:
 //
 //	Ani    paid 25.000 of 25.000 for 2026-09          Lunas
 //	Budi   nothing                                    Belum bayar

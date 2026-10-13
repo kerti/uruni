@@ -15,49 +15,43 @@ import (
 	"github.com/kerti/uruni/internal/backup"
 )
 
-// maxReceiptLongEdge and receiptJPEGQuality are the maintainer's own ruling
-// (#153, ADR-011 "downscale on upload"): resize so the long edge is at most
-// 1600px, never upscale, and always re-encode as JPEG at roughly quality 80.
-// A phone photo is typically 3000-4000px on its long edge and multiple
-// megabytes; a receipt only needs to be legible, not archival, and PRD
-// section 7.4 calls the photo optional evidence, not a primary record.
+// maxReceiptLongEdge and receiptJPEGQuality (#153, ADR-011 "downscale on
+// upload"): resize so the long edge is at most 1600px, never upscale, and
+// always re-encode as JPEG at roughly quality 80. A phone photo is typically
+// 3000-4000px and several megabytes; a receipt needs to be legible, not
+// archival (PRD section 7.4: optional evidence, not a primary record).
 const (
 	maxReceiptLongEdge = 1600
 	receiptJPEGQuality = 80
 )
 
 // errReceiptUnsupportedMediaType and errReceiptHEICUnsupported are the two
-// distinct rejections the maintainer's ruling asks for: any format this
-// package cannot decode at all, and HEIC/HEIF specifically, which needs its
-// own clear error rather than surfacing as a generic "unsupported type" - a
-// phone that defaults to HEIC is the single most common reason an upload
-// would hit this path at all, so the treasurer needs to know to re-export as
-// JPEG, not just that "something" was wrong.
+// distinct rejections: any format this package cannot decode, and HEIC/HEIF
+// specifically. A phone defaulting to HEIC is the most common reason an
+// upload reaches this path, so the treasurer needs to know to re-export as
+// JPEG, not just that something was wrong.
 var (
 	errReceiptUnsupportedMediaType = errors.New("unsupported receipt media type")
 	errReceiptHEICUnsupported      = errors.New("HEIC/HEIF receipts are not supported")
 	errReceiptTooManyPixels        = errors.New("receipt image dimensions too large")
 )
 
-// processReceiptImage turns an uploaded file's raw bytes into what actually
-// gets written to disk: EXIF-corrected, downscaled if needed, and always
-// re-encoded as JPEG.
+// processReceiptImage turns an uploaded file's raw bytes into what is written
+// to disk: EXIF-corrected, downscaled if needed, always re-encoded as JPEG.
 //
-// Re-encoding unconditionally - even a file already within the size and
-// format limits - is deliberate, not incidental: it is also what strips
-// EXIF/GPS metadata a phone embeds by default (CLAUDE.md rule 6, data
-// minimization - PRD section 6 asks for names, amounts, dates and notes, not
-// the GPS coordinates a receipt photo would otherwise carry along for free).
-// The orientation tag is read and applied *before* that strip, in
-// jpegOrientation below, or the rotation it describes would be lost along
-// with the rest of the EXIF block.
+// Re-encoding unconditionally, even a file within the limits, is deliberate:
+// it strips the EXIF/GPS metadata phones embed (CLAUDE.md rule 6, data
+// minimization; PRD section 6 asks for names, amounts, dates and notes, not
+// GPS coordinates). The orientation tag is read and applied before that
+// strip, in jpegOrientation, or the rotation would be lost with the EXIF
+// block.
 func processReceiptImage(raw []byte) ([]byte, error) {
 	if isHEIC(raw) {
 		return nil, errReceiptHEICUnsupported
 	}
 
-	// DecodeConfig reads only the header, so the dimension check costs
-	// nothing and runs before any decoder sizes a pixel buffer.
+	// DecodeConfig reads only the header, so the dimension check is free and
+	// runs before any decoder sizes a pixel buffer.
 	cfg, _, err := image.DecodeConfig(bytes.NewReader(raw))
 	if err != nil {
 		return nil, errReceiptUnsupportedMediaType
@@ -71,11 +65,9 @@ func processReceiptImage(raw []byte) ([]byte, error) {
 		return nil, errReceiptUnsupportedMediaType
 	}
 
-	// Only a JPEG can carry the EXIF orientation tag phones use to record
-	// "this sensor was held sideways" instead of rotating the pixels
-	// themselves - decoding it through image/jpeg (like every other decoder)
-	// silently drops that tag, which is why it has to be read from the raw
-	// bytes separately, before the decoded image is used for anything else.
+	// Only a JPEG carries the EXIF orientation tag phones use for "held
+	// sideways" instead of rotating pixels. image/jpeg drops that tag when
+	// decoding, so it is read from the raw bytes before the decoded image is used.
 	if format == "jpeg" {
 		if orientation := jpegOrientation(raw); orientation > 1 {
 			img = applyOrientation(img, orientation)
@@ -86,8 +78,7 @@ func processReceiptImage(raw []byte) ([]byte, error) {
 }
 
 // downscaleAndEncodeJPEG resizes img so its long edge is at most
-// maxReceiptLongEdge - never upscaling a smaller photo - and always
-// re-encodes the result as JPEG, per the maintainer's ruling.
+// maxReceiptLongEdge, never upscaling, and re-encodes it as JPEG.
 func downscaleAndEncodeJPEG(img image.Image) ([]byte, error) {
 	b := img.Bounds()
 	w, h := b.Dx(), b.Dy()
@@ -109,9 +100,8 @@ func downscaleAndEncodeJPEG(img image.Image) ([]byte, error) {
 		}
 
 		dst := image.NewRGBA(image.Rect(0, 0, newW, newH))
-		// CatmullRom is the maintainer's own pick: a smooth, quality-first
-		// resample - appropriate here because this runs once, on upload, not
-		// on every request.
+		// CatmullRom: a smooth, quality-first resample, fine because this runs once
+		// per upload, not per request.
 		draw.CatmullRom.Scale(dst, dst.Bounds(), img, b, draw.Over, nil)
 		img = dst
 	}
@@ -123,20 +113,15 @@ func downscaleAndEncodeJPEG(img image.Image) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-// isHEIC sniffs for the ISO base media file format "ftyp" box HEIC/HEIF
-// photos are wrapped in, and the specific brand codes iPhones (and Android's
-// own HEIF support) write - never the filename or the multipart
-// Content-Type, both of which the client fully controls and neither of
-// which is what actually determines whether image.Decode below can read the
-// bytes.
+// isHEIC sniffs for the ISO base media "ftyp" box HEIC/HEIF photos are
+// wrapped in and the brand codes iPhones (and Android's HEIF support) write,
+// never the filename or multipart Content-Type, which the client controls and
+// which do not decide whether image.Decode can read the bytes.
 //
-// The box layout is: a 4-byte big-endian size, the 4 ASCII bytes "ftyp", then
-// a 4-byte major brand. avif/avis (AV1 Image File Format, a sibling
-// container the maintainer's ruling does not name) are deliberately left
-// out - those fall through to image.Decode, fail to decode, and are reported
-// as the generic errReceiptUnsupportedMediaType instead, which is the
-// correct rejection for a format this package was never asked to name
-// specifically.
+// The layout is a 4-byte big-endian size, the ASCII "ftyp", then a 4-byte
+// major brand. avif/avis (a sibling container ADR-011 does not name) are left
+// out: they fall through to image.Decode, fail, and report as the generic
+// errReceiptUnsupportedMediaType.
 func isHEIC(b []byte) bool {
 	if len(b) < 12 {
 		return false
@@ -152,26 +137,20 @@ func isHEIC(b []byte) bool {
 	}
 }
 
-// jpegOrientation reads the EXIF orientation tag (0x0112) out of raw JPEG
-// bytes, or returns 1 (normal - "do nothing") if there is no EXIF block, no
-// orientation tag, or anything about the structure fails to parse. A
-// malformed or absent EXIF block is not this function's problem to fail on -
-// a receipt photo with no orientation tag is not sideways, it just does not
-// say so, and the image is still perfectly usable at whatever orientation
-// image.Decode already produced.
+// jpegOrientation reads the EXIF orientation tag (0x0112) from raw JPEG
+// bytes, or returns 1 (normal, "do nothing") if there is no EXIF block, no
+// tag, or the structure fails to parse. A malformed or absent block is not
+// worth failing on: a photo with no tag is not sideways, it just does not
+// say so.
 //
-// A small hand-rolled reader rather than an EXIF library (the maintainer's
-// own call, #153): the only field this whole feature ever needs is one
-// SHORT tag, and a general-purpose EXIF parser is a much larger dependency
-// than "find tag 0x0112".
+// A small hand-rolled reader, not an EXIF library (#153): the feature needs
+// one SHORT tag, and a general parser is a much larger dependency.
 func jpegOrientation(raw []byte) int {
-	// JPEG: a stream of markers, each 0xFF followed by a one-byte code. SOI
-	// (0xFFD8) has no length or payload; every marker from APP0 (0xFFE0)
-	// onward is followed by a 2-byte big-endian length (itself included) and
-	// that many bytes of payload. SOS (0xFFDA) is where the actual image
-	// data starts - no more markers worth reading appear after it, so
-	// scanning stops there rather than continuing into an entropy-coded
-	// scan that happens to contain 0xFF bytes of its own.
+	// JPEG: a stream of markers, each 0xFF plus a one-byte code. SOI (0xFFD8) has
+	// no length or payload; every marker from APP0 (0xFFE0) on is followed by a
+	// 2-byte big-endian length (itself included) and that many payload bytes.
+	// SOS (0xFFDA) starts the image data, so scanning stops there rather than
+	// entering an entropy-coded scan that contains 0xFF bytes of its own.
 	if len(raw) < 4 || raw[0] != 0xFF || raw[1] != 0xD8 {
 		return 1
 	}
@@ -186,7 +165,7 @@ func jpegOrientation(raw []byte) int {
 			return 1
 		}
 		if marker == 0xD8 || marker == 0xD9 || (marker >= 0xD0 && marker <= 0xD7) {
-			// Standalone markers with no length/payload of their own.
+			// Standalone markers with no length or payload.
 			pos += 2
 			continue
 		}
@@ -209,10 +188,10 @@ func jpegOrientation(raw []byte) int {
 	return 1
 }
 
-// orientationFromTIFF reads the Orientation tag (0x0112) out of a TIFF
-// header + IFD0, the structure every JPEG's EXIF APP1 payload wraps after
-// its "Exif\0\0" prefix. Returns 0 if the tag is absent or anything fails to
-// parse - jpegOrientation above treats that the same as "no EXIF at all".
+// orientationFromTIFF reads the Orientation tag (0x0112) from a TIFF header +
+// IFD0, which a JPEG's EXIF APP1 payload wraps after its "Exif\0\0" prefix.
+// Returns 0 if the tag is absent or parsing fails; jpegOrientation treats
+// that as no EXIF.
 func orientationFromTIFF(tiff []byte) int {
 	if len(tiff) < 8 {
 		return 0
@@ -248,9 +227,8 @@ func orientationFromTIFF(tiff []byte) int {
 		if tag != 0x0112 { // Orientation
 			continue
 		}
-		// SHORT (type 3): the value occupies the first 2 bytes of the
-		// 4-byte value/offset field, never a separate offset elsewhere in
-		// the block - a SHORT always fits inline.
+		// SHORT (type 3): the value sits in the first 2 bytes of the 4-byte
+		// value/offset field, never a separate offset.
 		valueField := tiff[start+8 : start+12]
 		return int(order.Uint16(valueField[:2]))
 	}
@@ -258,11 +236,9 @@ func orientationFromTIFF(tiff []byte) int {
 }
 
 // applyOrientation returns a new image with EXIF orientation o (2-8) applied,
-// or img itself unchanged for 1 (normal) or anything outside the valid EXIF
-// range. Implemented as an explicit per-orientation pixel remap rather than a
-// generic affine transform: eight fixed cases are easier to verify by hand
-// (and to unit-test against known-good fixtures) than a matrix multiply that
-// would need the same eight cases tested to trust anyway.
+// or img unchanged for 1 (normal) or anything outside the valid range. An
+// explicit per-orientation pixel remap, not an affine transform: eight fixed
+// cases are easier to verify by hand and to unit-test.
 func applyOrientation(src image.Image, o int) image.Image {
 	if o <= 1 || o > 8 {
 		return src
@@ -271,9 +247,8 @@ func applyOrientation(src image.Image, o int) image.Image {
 	b := src.Bounds()
 	w, h := b.Dx(), b.Dy()
 
-	// Orientations 5-8 are the ones with a 90-degree rotation, which swap
-	// width and height; 2-4 only mirror or rotate 180, keeping the same
-	// dimensions.
+	// Orientations 5-8 rotate 90 degrees and swap width and height; 2-4 only
+	// mirror or rotate 180.
 	dstW, dstH := w, h
 	if o >= 5 {
 		dstW, dstH = h, w

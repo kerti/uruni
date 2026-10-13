@@ -18,19 +18,17 @@ import (
 	"github.com/kerti/uruni/internal/store"
 )
 
-// #495: the work register and login do is bounded three ways - an
+// #495: the work register and login do is bounded three ways: an
 // already-registered instance is refused before any hashing, the limiter
-// counts an attempt while it is still in flight, and a process-wide gate
-// caps how many argon2id computations run at once. The tests below hold each
-// to its number with deterministic seams: a probe stands in for the argon2id
-// computations, counts them, and can park them so a burst is certain to
-// overlap. None of them sleeps to order events; the only clock in play is the
-// gate's own slot wait, which is shrunk where a test needs it to expire.
+// counts an attempt while in flight, and a process-wide gate caps concurrent
+// argon2id computations. Each is held to its number with deterministic seams:
+// a probe stands in for argon2id, counts, and can park computations so a
+// burst certainly overlaps. None sleeps to order events; the only clock is
+// the gate's slot wait, shrunk where a test needs it to expire.
 
 // hashProbe replaces auth's hash and verify. Every call is counted; while
 // parking is set, a call blocks after announcing itself on entered until park
-// is closed. verify always answers "wrong password", which is all these
-// tests need from it.
+// is closed. verify always answers "wrong password".
 type hashProbe struct {
 	hashes   atomic.Int64
 	verifies atomic.Int64
@@ -72,8 +70,8 @@ func (p *hashProbe) awaitEntered(n int) {
 	}
 }
 
-// drain forgets the announcements of computations already finished, so a
-// later awaitEntered counts only what happens after it.
+// drain forgets announcements of finished computations, so a later
+// awaitEntered counts only what follows.
 func (p *hashProbe) drain() {
 	for {
 		select {
@@ -111,9 +109,8 @@ func postLoginRaw(r http.Handler, email, password, ip string) *httptest.Response
 	return rec
 }
 
-// TestRefusedRegisterDoesNoHashing is #495's first criterion at the wire:
-// with an account present, a second register answers 409 and the hasher is
-// never called for it.
+// TestRefusedRegisterDoesNoHashing is #495's first criterion on the wire: with
+// an account present, a second register answers 409 and never calls the hasher.
 func TestRefusedRegisterDoesNoHashing(t *testing.T) {
 	t.Parallel()
 	p := newHashProbe()
@@ -157,10 +154,9 @@ func TestRegisterIsRateLimitedPerIP(t *testing.T) {
 }
 
 // TestConcurrentRegisterBurstIsHeldToTheCeiling: on a fresh instance every
-// request passes the pre-check, so the limiter is what stops a burst from
-// hashing 30 times. Exactly the ceiling reaches the hash; the rest are 429
-// before it. Of those that hashed, the transaction still lets exactly one
-// create the account.
+// request passes the pre-check, so the limiter stops a burst hashing 30 times.
+// Exactly the ceiling reaches the hash; the rest are 429 before it. Of those
+// that hashed, the transaction lets exactly one create the account.
 func TestConcurrentRegisterBurstIsHeldToTheCeiling(t *testing.T) {
 	t.Parallel()
 	const callers = 30
@@ -175,8 +171,8 @@ func TestConcurrentRegisterBurstIsHeldToTheCeiling(t *testing.T) {
 		}()
 	}
 
-	// The refused callers answer while the admitted ones are still parked
-	// in the hash - that is what "counted while in flight" means.
+	// The refused callers answer while the admitted ones are parked in the hash:
+	// "counted while in flight".
 	refused := callers - registerRateLimitMaxAttempts
 	for i := 0; i < refused; i++ {
 		if rec := <-results; rec.Code != http.StatusTooManyRequests {
@@ -198,10 +194,10 @@ func TestConcurrentRegisterBurstIsHeldToTheCeiling(t *testing.T) {
 	}
 }
 
-// TestConcurrentWrongPasswordLoginsAreHeldToTheCeiling is #495's second test
+// TestConcurrentWrongPasswordLoginsAreHeldToTheCeiling is #495's second
 // criterion: 50 simultaneous wrong guesses at one account from one address
 // admit exactly loginRateLimitMaxAttempts to the hash. Before the fix all 50
-// passed the check together, because none had been counted yet.
+// passed together, none yet counted.
 func TestConcurrentWrongPasswordLoginsAreHeldToTheCeiling(t *testing.T) {
 	t.Parallel()
 	const callers = 50
@@ -239,9 +235,9 @@ func TestConcurrentWrongPasswordLoginsAreHeldToTheCeiling(t *testing.T) {
 	}
 }
 
-// TestHashingConcurrencyLimitHoldsAcrossLogins is the gate seen from the
-// handlers: more simultaneous logins than slots, each from its own address
-// so the limiter admits them all, never run more than the limit at once.
+// TestHashingConcurrencyLimitHoldsAcrossLogins: more simultaneous logins than
+// slots, each from its own address so the limiter admits all, never run more
+// than the limit at once.
 func TestHashingConcurrencyLimitHoldsAcrossLogins(t *testing.T) {
 	t.Parallel()
 	const limit, callers = 2, 8
@@ -294,10 +290,9 @@ func TestHashingConcurrencyLimitHoldsAcrossLogins(t *testing.T) {
 }
 
 // TestBusyHasherAnswers503ServerBusyAndIsNotCountedAsAnAttempt: when no slot
-// frees up in the wait, login and restore confirm answer 503 with their own
-// code and a Retry-After, and the refused request gives its attempt back -
-// twelve busy answers from one address, with a ceiling of ten, must leave
-// the full ten wrong guesses still to spend.
+// frees in the wait, login and restore confirm answer 503 with their code and
+// a Retry-After, and the refused request gives its attempt back: twelve busy
+// answers from one address, ceiling ten, leave all ten wrong guesses to spend.
 func TestBusyHasherAnswers503ServerBusyAndIsNotCountedAsAnAttempt(t *testing.T) {
 	t.Parallel()
 	p := newHashProbe()
@@ -337,8 +332,8 @@ func TestBusyHasherAnswers503ServerBusyAndIsNotCountedAsAnAttempt(t *testing.T) 
 		t.Fatalf("the parked login finished with %d, want %d", rec.Code, http.StatusUnauthorized)
 	}
 
-	// Nothing above was a guess: all ten are still available, and the
-	// eleventh is refused.
+	// Nothing above was a guess: all ten are still available, the eleventh is
+	// refused.
 	for i := 0; i < loginRateLimitMaxAttempts; i++ {
 		if rec := postLoginRaw(r, "treasurer@example.org", "not-the-password", ip); rec.Code != http.StatusUnauthorized {
 			t.Fatalf("login %d after the busy spell = %d, want %d - busy answers were counted (body: %s)", i+1, rec.Code, http.StatusUnauthorized, rec.Body.String())
@@ -362,8 +357,8 @@ func TestBusyHasherAnswers503ServerBusyAndIsNotCountedAsAnAttempt(t *testing.T) 
 	assertAPIError(t, rec, http.StatusTooManyRequests, "too_many_requests")
 }
 
-// TestBusyHasherOnRegisterAnswers503AndIsNotCounted: the hash side of the
-// gate. A register that cannot get a slot answers 503 and keeps its attempt.
+// TestBusyHasherOnRegisterAnswers503AndIsNotCounted: a register that cannot get
+// a slot answers 503 and keeps its attempt.
 func TestBusyHasherOnRegisterAnswers503AndIsNotCounted(t *testing.T) {
 	t.Parallel()
 	p := newHashProbe()
@@ -389,8 +384,8 @@ func TestBusyHasherOnRegisterAnswers503AndIsNotCounted(t *testing.T) {
 		t.Fatalf("the parked register finished with %d, want %d (body: %s)", rec.Code, http.StatusCreated, rec.Body.String())
 	}
 
-	// The busy answers were handed back, so the address still has its full
-	// ten attempts (each now a cheap 409), and only the eleventh is refused.
+	// The busy answers were handed back, so the address still has its ten attempts
+	// (each now a cheap 409), and only the eleventh is refused.
 	for i := 0; i < registerRateLimitMaxAttempts; i++ {
 		if rec := postRegisterFrom(r, "treasurer@example.org", "correct-horse-battery", ip); rec.Code != http.StatusConflict {
 			t.Fatalf("register %d after the busy spell = %d, want %d - busy answers were counted (body: %s)", i+1, rec.Code, http.StatusConflict, rec.Body.String())

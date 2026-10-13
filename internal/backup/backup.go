@@ -1,58 +1,49 @@
-// Package backup is ADR-012's implementation: the whole fund, as one zip a
+// Package backup is ADR-012's implementation: the whole fund as one zip a
 // session-gated route streams to the treasurer, the daily dumps the server
-// writes on its own, and the restore that reads one back. The halves live here
-// together on the maintainer's own ruling in ADR-012 - "the logic lives in one
-// package so that stays cheap" - rather than export and import drifting into
-// two packages that quietly disagree about the shape between them.
+// writes, and the restore that reads one back. They live in one package on
+// ADR-012's ruling ("the logic lives in one package so that stays cheap"), so
+// export and import cannot drift into disagreeing about the shape between
+// them.
 //
-// Export and the dumps only read the database; Restore (restore.go) is the one
-// place in this package that writes it.
+// Export and the dumps only read the database; Restore (restore.go) is the
+// one place here that writes it.
 package backup
 
-// FormatVersion is uruni.json's own integer version (ADR-012's
-// "compatibility across versions" paragraph) - separate from the app's own
-// build version (ADR-018), and bumped only when the exported shape itself
-// changes. Through 0.x the importer accepts only its own FormatVersion, so
-// a bump is a conscious, load-bearing act, not a side effect of an
-// unrelated release.
+// FormatVersion is uruni.json's integer version (ADR-012's "compatibility
+// across versions"), separate from the app's build version (ADR-018) and
+// bumped only when the exported shape changes. Through 0.x the importer
+// accepts only its FormatVersion, so a bump is a conscious act.
 //
-// TestGoldenFixtureMatchesExport (golden_test.go) is what makes a bump
-// conscious: any change to a table this package exports, or to the shape
-// below, fails that test until testdata/golden.json is regenerated and
-// FormatVersion is bumped alongside it - the schema-change-breaks-a-test
-// promise ADR-012 makes.
+// TestGoldenFixtureMatchesExport (golden_test.go) makes it conscious: any
+// change to an exported table or the shape below fails that test until
+// testdata/golden.json is regenerated and FormatVersion bumped (ADR-012's
+// schema-change-breaks-a-test promise).
 const FormatVersion int64 = 1
 
-// Document is uruni.json's root object: every table but session (ADR-012 -
-// sessions are never exported, so a restore always logs everyone out), ids
-// preserved verbatim, plus the totals block a restore proves its numbers
-// against. Every field name doubles as its own json tag, snake_case to
-// match the schema's own column names - a restored file reads like the
-// database it came from, not like a Go struct.
+// Document is uruni.json's root object: every table but session (ADR-012:
+// sessions are never exported, so a restore logs everyone out), ids preserved
+// verbatim, plus the totals block a restore proves its numbers against. Field
+// names are snake_case json tags matching the schema's columns, so a restored
+// file reads like the database it came from.
 //
-// Nothing instance-level appears here on purpose (ADR-012's "the file stays
-// tenant-shaped"): no config, no instance id, no filesystem path. A
-// receipt's Path is the one exception worth naming explicitly - it is the
-// server-generated filename under URUNI_UPLOADS_DIR (ADR-011), not an
-// absolute path, and the matching bytes sit beside it in the zip's
-// receipts/ folder under that same name.
+// Nothing instance-level appears here (ADR-012: "the file stays
+// tenant-shaped"): no config, instance id or filesystem path. A receipt's
+// Path is the one exception worth naming: the server-generated filename
+// under URUNI_UPLOADS_DIR (ADR-011), not an absolute path, with the bytes
+// beside it in the zip's receipts/ folder under that name.
 //
-// Table order follows the migration file's own CREATE TABLE order
-// (00001_schema.sql) - already the dependency order ADR-024 documents
-// (fund -> account/purpose/dues_tier/dues_rate/member/transfer/
-// reimbursement -> transaction -> receipt -> reconciliation/
-// reconciliation_line -> incidental/incidental_recipient), plus "user"
-// first since nothing depends on it. Row order within each table is
-// whatever query this package already had reason to write for it - most
-// reuse an existing ORDER BY id (or an existing fully-ordered listing);
-// the few added for the export (ListUsers, ListDuesRatesByFund,
-// ListReceiptsByFund, ListReconciliationLinesByFund,
-// ListIncidentalRecipientsByFund) order by id (or, where a table has no
-// single-column id, by its primary key columns) purely so the export is
-// byte-for-byte reproducible across two runs against the same database -
-// not a claim that id order means anything (CLAUDE.md's "no primary-key
-// order" rule), which is why that reasoning is spelled out at each query
-// rather than assumed.
+// Table order follows the migration's CREATE TABLE order (00001_schema.sql),
+// already the dependency order ADR-024 documents (fund ->
+// account/purpose/dues_tier/dues_rate/member/transfer/reimbursement ->
+// transaction -> receipt -> reconciliation/reconciliation_line ->
+// incidental/incidental_recipient), plus "user" first since nothing depends
+// on it. Row order within a table is whatever query already existed for it
+// (mostly ORDER BY id); the queries added for the export (ListUsers,
+// ListDuesRatesByFund, ListReceiptsByFund, ListReconciliationLinesByFund,
+// ListIncidentalRecipientsByFund) order by id, or by primary key columns
+// where there is no single id, only so the export is byte-for-byte
+// reproducible across two runs. That is not a claim that id order means
+// anything (CLAUDE.md's "no primary-key order" rule); each query spells it out.
 type Document struct {
 	FormatVersion int64 `json:"format_version"`
 
@@ -77,9 +68,9 @@ type Document struct {
 	Totals Totals `json:"totals"`
 }
 
-// User mirrors the "user" table verbatim, password hash included - the one
-// reason the download card warns "termasuk info login" (ADR-012: "the zip
-// carries a password hash and every name").
+// User mirrors the "user" table verbatim, password hash included: why the
+// download card warns "termasuk info login" (ADR-012: the zip carries a
+// password hash and every name).
 type User struct {
 	ID           int64  `json:"id"`
 	Email        string `json:"email"`
@@ -138,10 +129,9 @@ type DuesRate struct {
 }
 
 // Member mirrors the "member" table verbatim: a person in the group
-// (CONTEXT.md). JoinedOn stays a pointer although the column is NOT NULL
-// (#471): a format_version 1 backup written before that change can carry
-// null, and restore reads it as the fund's adoption date - see
-// adoptionDates.
+// (CONTEXT.md). JoinedOn stays a pointer though the column is NOT NULL
+// (#471): a format_version 1 backup from before can carry null, which restore
+// reads as the fund's adoption date (see adoptionDates).
 type Member struct {
 	ID         int64   `json:"id"`
 	FundID     int64   `json:"fund_id"`
@@ -159,17 +149,16 @@ type Transfer struct {
 	FundID                int64  `json:"fund_id"`
 	Kind                  string `json:"kind"`
 	CorrectsTransactionID *int64 `json:"corrects_transaction_id"`
-	// Reason is 'roll', 'allocation' or null (ADR-036). A file written
-	// before the column has no such key, which decodes to nil - which is
-	// what a pre-column roll is - so no format_version bump.
+	// Reason is 'roll', 'allocation' or null (ADR-036). A file written before the
+	// column has no such key, which decodes to nil, what a pre-column roll is, so
+	// no format_version bump.
 	Reason    *string `json:"reason"`
 	CreatedAt int64   `json:"created_at"`
 }
 
-// Reimbursement mirrors the "reimbursement" table verbatim: a member's
-// claim, off the ledger until settled (CONTEXT.md). The row's own
-// "settled" state is derived, not stored - see convert.go's toReimbursements
-// for why that computed column is left out here.
+// Reimbursement mirrors the "reimbursement" table verbatim: a member's claim,
+// off the ledger until settled (CONTEXT.md). Its "settled" state is derived,
+// not stored; see convert.go's toReimbursements.
 type Reimbursement struct {
 	ID         int64   `json:"id"`
 	FundID     int64   `json:"fund_id"`
@@ -203,8 +192,8 @@ type Transaction struct {
 }
 
 // Receipt mirrors the "receipt" table verbatim. Path is the stored,
-// server-generated filename under URUNI_UPLOADS_DIR (ADR-011) - the same
-// name the zip's receipts/ entry for this row uses.
+// server-generated filename under URUNI_UPLOADS_DIR (ADR-011), the name the
+// zip's receipts/ entry uses.
 type Receipt struct {
 	ID              int64  `json:"id"`
 	FundID          int64  `json:"fund_id"`
@@ -252,8 +241,8 @@ type Incidental struct {
 }
 
 // IncidentalRecipient has no single-column id (its primary key is the
-// (fund_id, purpose_id, member_id) triple) - every field is part of the
-// key, so all three are exported verbatim.
+// (fund_id, purpose_id, member_id) triple); every field is part of the key,
+// so all three are exported verbatim.
 type IncidentalRecipient struct {
 	FundID    int64 `json:"fund_id"`
 	PurposeID int64 `json:"purpose_id"`
@@ -261,13 +250,13 @@ type IncidentalRecipient struct {
 }
 
 // Totals is ADR-012's "a restore proves its numbers": derived balance per
-// fund, per account (location) and per purpose, read with the same generated
-// queries the home screen's GET /api/balances composes (FundBalance,
-// AccountBalance, PurposeBalance), inside the one read transaction that read
-// the rows beside them (#496). Every path that makes or accepts a file
-// recomputes them from its rows and compares exactly (totals.go): the
-// export before it writes, inspect before the password prompt, and Restore
-// against the rows it just inserted, refusing to commit on any mismatch.
+// fund, account (location) and purpose, read with the generated queries the
+// home screen's GET /api/balances composes (FundBalance, AccountBalance,
+// PurposeBalance), in the one read transaction that read the rows beside them
+// (#496). Every path that makes or accepts a file recomputes them from its
+// rows and compares exactly (totals.go): export before writing, inspect
+// before the password prompt, and Restore against the rows it inserted,
+// refusing to commit on any mismatch.
 type Totals struct {
 	Funds    []FundTotal    `json:"funds"`
 	Accounts []AccountTotal `json:"accounts"`

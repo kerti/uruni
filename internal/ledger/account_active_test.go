@@ -14,9 +14,8 @@ import (
 // Utama and is retired on retiredOn. An open envelope holds 50.000 of
 // contributions, on cash.
 //
-// The bank still holding money is the point: a retired location is not
-// necessarily empty (nothing requires a zero balance to retire), and every
-// refusal below has to leave those integers exactly where they were.
+// The bank still holding money is the point: a retired location need not be
+// empty, and every refusal below must leave those integers where they were.
 type retiredWorld struct {
 	fixture
 	l          *Ledger
@@ -128,14 +127,14 @@ func TestRetiredWorldStartsWhereTheTestsExpect(t *testing.T) {
 }
 
 // Every posting that names a location the caller chose refuses a retired one
-// with ErrAccountInactive, writes nothing, and moves no integer anywhere
-// (#444, PRD 7.8 and 6).
+// with ErrAccountInactive, writes nothing, and moves no integer (#444, PRD 7.8
+// and 6).
 func TestPostingsRefuseARetiredLocation(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
 
-	// duesWorld builds a member with a rate, which is not a posting against
-	// the location, and returns the member id.
+	// duesMember builds a member with a rate (not a posting against the
+	// location) and returns the id.
 	duesMember := func(t *testing.T, w retiredWorld) int64 {
 		q := store.New(w.l.db)
 		tierID := createDuesTier(t, q, w.fundID, "Tier A")
@@ -146,9 +145,8 @@ func TestPostingsRefuseARetiredLocation(t *testing.T) {
 
 	cases := []struct {
 		name string
-		// setup builds whatever the posting needs that is not itself a
-		// posting against the location (a member, a claim, a prior
-		// spend). It runs before the state is taken.
+		// setup builds what the posting needs that is not itself a posting against
+		// the location (a member, a claim, a prior spend), before the state is taken.
 		setup func(t *testing.T, w retiredWorld)
 		post  func(w retiredWorld) error
 	}{
@@ -250,9 +248,8 @@ func TestPostingsRefuseARetiredLocation(t *testing.T) {
 			return err
 		}},
 		{"close an envelope overspent", func(t *testing.T, w retiredWorld) {
-			// Disburse 80.000 against 50.000 collected: a 30.000 shortfall
-			// Kas Utama would cover - on the retired location, which is
-			// refused. The spend itself goes on cash.
+			// Disburse 80.000 against 50.000 collected: the 30.000 shortfall Kas Utama
+			// would cover on the retired location is refused. The spend itself is on cash.
 			if _, err := w.l.PostTransaction(ctx, PostTransactionParams{
 				FundID: w.fundID, AccountID: w.cashID, PurposeID: w.envelopeID,
 				Direction: "out", Amount: 80_000, OccurredOn: "2026-09-04",
@@ -269,9 +266,8 @@ func TestPostingsRefuseARetiredLocation(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			// Not parallel: setup writes through the shared closure
-			// variables above. The ledgers are private in-memory
-			// databases, so the cost is a few milliseconds each.
+			// Not parallel: setup writes through shared closure variables. The ledgers
+			// are private in-memory databases, costing a few milliseconds each.
 			w := newRetiredWorld(t, newTestLedger(t))
 			if tc.setup != nil {
 				tc.setup(t, w)
@@ -288,9 +284,9 @@ func TestPostingsRefuseARetiredLocation(t *testing.T) {
 	}
 }
 
-// The control for the table above: with the bank retired, every posting that
-// names only active locations still goes through, so the refusal is about the
-// location and not a blanket failure.
+// The control for the table above: with the bank retired, postings naming
+// only active locations still go through, so the refusal is about the
+// location, not a blanket failure.
 func TestPostingsStillAcceptActiveLocationsBesideARetiredOne(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
@@ -323,8 +319,8 @@ func TestPostingsStillAcceptActiveLocationsBesideARetiredOne(t *testing.T) {
 	}
 }
 
-// "Retired" is inactive_on non-NULL, whatever date it holds - PostPurposeMove's
-// and the SPA's reading. A posting dated before the retirement, and a
+// "Retired" is inactive_on non-NULL, whatever date it holds (PostPurposeMove's
+// and the SPA's reading). A posting dated before the retirement, and a
 // retirement dated in the future, are both refused.
 func TestRetiredMeansInactiveOnIsSetWhateverTheDates(t *testing.T) {
 	t.Parallel()
@@ -375,9 +371,8 @@ func TestAReinstatedLocationTakesPostingsAgain(t *testing.T) {
 	}
 }
 
-// Emptying a retired location is a reinstate-move-retire round trip, and the
-// move itself is an ordinary transfer: the fund total never changes, only
-// where the money sits.
+// Emptying a retired location is a reinstate-move-retire round trip; the move
+// is an ordinary transfer, so the fund total never changes.
 func TestEmptyingARetiredLocationNeedsReinstatingItFirst(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
@@ -402,9 +397,8 @@ func TestEmptyingARetiredLocationNeedsReinstatingItFirst(t *testing.T) {
 	}
 }
 
-// A close that has nothing to roll posts nothing, so the account it names is
-// never written to: it must not be refused for a location the screen merely
-// defaulted to.
+// A close with nothing to roll posts nothing, so the account it names is never
+// written to: it must not be refused for a location the screen defaulted to.
 func TestClosingAnEnvelopeWithNothingToRollIgnoresARetiredAccount(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
@@ -432,7 +426,7 @@ func TestClosingAnEnvelopeWithNothingToRollIgnoresARetiredAccount(t *testing.T) 
 }
 
 // An id that is not this fund's is not "retired": the guard stays out of the
-// way and the composite foreign key refuses it, exactly as before (ADR-027).
+// way and the composite foreign key refuses it (ADR-027).
 func TestAnUnknownLocationIsTheSchemasToRefuseNotTheRetiredGuards(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
@@ -454,9 +448,9 @@ func TestAnUnknownLocationIsTheSchemasToRefuseNotTheRetiredGuards(t *testing.T) 
 }
 
 // Corrections never lose their way home. A reversal and a purpose correction
-// take their location from the row they correct, not from the treasurer, so a
-// mistake on a since-retired location stays correctable without reinstating
-// anything (CLAUDE.md rule 3).
+// take their location from the row they correct, so a mistake on a
+// since-retired location stays correctable without reinstating (CLAUDE.md
+// rule 3).
 func TestCorrectionsOnARowOfARetiredLocationStillWork(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
@@ -500,8 +494,8 @@ func TestCorrectionsOnARowOfARetiredLocationStillWork(t *testing.T) {
 	}
 
 	after := w.state(t)
-	// The reversal took the 25.000 back out of the bank; the purpose
-	// correction moved no money between locations at all.
+	// The reversal took the 25.000 back out of the bank; the purpose correction
+	// moved no money between locations.
 	if after.bank != 160_000 {
 		t.Errorf("bank balance = %d, want 160000 (185000 less the reversed 25000)", after.bank)
 	}
@@ -510,15 +504,14 @@ func TestCorrectionsOnARowOfARetiredLocationStillWork(t *testing.T) {
 	}
 }
 
-// --- Cek kas: each active location, no retired one ---------------------------
+// --- Cek kas: each active location, no retired one ---
 
 func countOf(accountID int64, amount money.Amount, resolution string) AccountCount {
 	return AccountCount{AccountID: accountID, ActualAmount: amount, Resolution: resolution}
 }
 
 // A snapshot must name every active location. Omitting one is refused whole:
-// no reconciliation row, no line, and no fix posted for the lines that were
-// named (PRD 7.8).
+// no reconciliation row, line, or fix for the lines named (PRD 7.8).
 func TestTakeReconciliationRefusesASnapshotThatOmitsAnActiveLocation(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
@@ -616,9 +609,9 @@ func TestTakeReconciliationRefusesACountOfARetiredLocation(t *testing.T) {
 	}
 }
 
-// The happy path the two refusals frame: count every active location, skip the
-// retired one, even when the retired one still holds money. The snapshot
-// carries a line for exactly the active locations.
+// The happy path the two refusals frame: count every active location and skip
+// the retired one, even if it holds money. The snapshot has a line for exactly
+// the active locations.
 func TestTakeReconciliationCountsExactlyTheActiveLocations(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
@@ -641,7 +634,7 @@ func TestTakeReconciliationCountsExactlyTheActiveLocations(t *testing.T) {
 }
 
 // Reinstating a location puts it back in every later count: the rule reads the
-// account's state at snapshot time, not at some remembered moment.
+// account's state at snapshot time.
 func TestTakeReconciliationReadsRetirementAtSnapshotTime(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
@@ -657,8 +650,8 @@ func TestTakeReconciliationReadsRetirementAtSnapshotTime(t *testing.T) {
 	}
 }
 
-// A second fund's locations are not this fund's to count, and its retired
-// ones are not this fund's to refuse.
+// A second fund's locations are not this fund's to count, nor its retired ones
+// to refuse.
 func TestTakeReconciliationCompletenessIsPerFund(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
@@ -675,9 +668,9 @@ func TestTakeReconciliationCompletenessIsPerFund(t *testing.T) {
 	}
 }
 
-// An id that is not this fund's is still the foreign key's to refuse - the
-// completeness check steps aside for it rather than answering "missing" for a
-// request whose real fault is the unknown id.
+// An id that is not this fund's is still the foreign key's to refuse; the
+// completeness check steps aside rather than answer "missing" for a request
+// whose fault is the unknown id.
 func TestTakeReconciliationUnknownLocationStaysAForeignKeyRefusal(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()

@@ -9,21 +9,18 @@ import (
 	"testing"
 )
 
-// postSetup is the generic "just get a fund to exist" fixture every test in
-// this package that doesn't care which accounts it has reaches for - one
-// default cash account, the minimum #78 requires. A test that needs a
-// specific set of accounts (this file's own response-shape and refusal
-// tests, accounts_test.go) calls postSetupWithAccounts directly instead;
-// a test that needs the package's usual cash+bank pair calls setUpFund
-// (testhelpers_test.go).
+// postSetup is the fixture for a test that needs a fund but not particular
+// accounts: one default cash account, the minimum #78 requires. A test needing
+// specific accounts calls postSetupWithAccounts; one needing the usual
+// cash+bank pair calls setUpFund (testhelpers_test.go).
 func postSetup(t *testing.T, r http.Handler, name string) *httptest.ResponseRecorder {
 	t.Helper()
 	return postSetupWithAccounts(t, r, name, []setupAccountRequest{{Kind: "cash", Name: "Tunai"}})
 }
 
-// The 201 response body is exactly {fund, main_purpose_id, accounts} -
-// pinned by #64 for fund and main_purpose_id; accounts became a list under
-// #78, in the order requested.
+// The 201 body is exactly {fund, main_purpose_id, accounts}: pinned by #64 for
+// fund and main_purpose_id; accounts became a list under #78, in requested
+// order.
 func TestPostSetupReturnsThePinnedResponseShape(t *testing.T) {
 	t.Parallel()
 	rec := postSetupWithAccounts(t, testRouter(t), "Test Fund", []setupAccountRequest{
@@ -79,8 +76,8 @@ func TestPostSetupReturnsThePinnedResponseShape(t *testing.T) {
 	}
 }
 
-// #78: any positive number of accounts is accepted, not only two - a single
-// cash-only fund is exactly as valid as the cash+bank default.
+// #78: any positive number of accounts is accepted, not only two; a cash-only
+// fund is as valid as cash+bank.
 func TestPostSetupAcceptsASingleAccount(t *testing.T) {
 	t.Parallel()
 	rec := postSetupWithAccounts(t, testRouter(t), "Test Fund", []setupAccountRequest{
@@ -99,10 +96,9 @@ func TestPostSetupAcceptsASingleAccount(t *testing.T) {
 	}
 }
 
-// #230's uniform rule applied to setup: an account may carry its opening
-// balance in the same request, posted inside SetUpFund's own transaction. A
-// mixed batch - one account with a balance, one without - posts exactly the
-// rows that were asked for.
+// #230 applied to setup: an account may carry its opening balance in the
+// request, posted in SetUpFund's transaction. A mixed batch posts exactly the
+// rows asked for.
 func TestPostSetupWithOpeningBalancePostsExactlyTheAccountsThatHaveOne(t *testing.T) {
 	t.Parallel()
 	r := testRouter(t)
@@ -134,9 +130,8 @@ func TestPostSetupWithOpeningBalancePostsExactlyTheAccountsThatHaveOne(t *testin
 	}
 }
 
-// A negative opening balance anywhere in the batch refuses the whole setup
-// call, and leaves no fund behind - a retry with a corrected amount must not
-// collide with ErrFundAlreadyExists.
+// A negative opening balance anywhere in the batch refuses the whole setup and
+// leaves no fund, so a corrected retry does not hit ErrFundAlreadyExists.
 func TestPostSetupRejectsNegativeOpeningBalanceLeavesNoFundBehind(t *testing.T) {
 	t.Parallel()
 	r := testRouter(t)
@@ -158,9 +153,8 @@ func TestPostSetupRejectsNegativeOpeningBalanceLeavesNoFundBehind(t *testing.T) 
 	}
 }
 
-// Zero accounts is refused with the ledger's own ErrInvalidArgument, mapped
-// to a clean 400 - not a 500, and no fund left standing for the wizard to
-// collide with on retry.
+// Zero accounts is refused with the ledger's ErrInvalidArgument, mapped to a
+// clean 400, not a 500, with no fund left for a retry to collide with.
 func TestPostSetupRejectsZeroAccounts(t *testing.T) {
 	t.Parallel()
 	r := testRouter(t)
@@ -174,18 +168,17 @@ func TestPostSetupRejectsZeroAccounts(t *testing.T) {
 		t.Errorf("error code = %q, want %q", got.Code, "invalid_argument")
 	}
 
-	// The refused call must not have left a fund behind - a retry with real
-	// accounts has to still succeed, not collide with ErrFundAlreadyExists.
+	// The refused call left no fund: a retry with real accounts must succeed, not
+	// hit ErrFundAlreadyExists.
 	retry := postSetupWithAccounts(t, r, "Test Fund", []setupAccountRequest{{Kind: "cash", Name: "Tunai"}})
 	if retry.Code != http.StatusCreated {
 		t.Fatalf("POST /api/setup retry after a rejected zero-account call = %d, want %d (body: %s)", retry.Code, http.StatusCreated, retry.Body.String())
 	}
 }
 
-// A malformed kind is refused by the schema's own CHECK (kind IN
-// ('cash','bank')), surfaced as a 400 rather than a 500 - the same
-// check_violation path account_test.go's own malformed-kind test exercises
-// for POST /api/accounts.
+// A malformed kind is refused by the schema's CHECK (kind IN ('cash','bank')),
+// a 400 not a 500, the check_violation path of account_test.go's POST
+// /api/accounts test.
 func TestPostSetupRejectsAMalformedAccountKind(t *testing.T) {
 	t.Parallel()
 	rec := postSetupWithAccounts(t, testRouter(t), "Test Fund", []setupAccountRequest{
@@ -200,9 +193,8 @@ func TestPostSetupRejectsAMalformedAccountKind(t *testing.T) {
 	}
 }
 
-// A blank account name is refused by the schema's own CHECK
-// (length(trim(name)) > 0), the same rule the fund name itself already
-// enforces one level up (SetUpFund's own ErrInvalidArgument).
+// A blank account name is refused by the schema's CHECK (length(trim(name)) >
+// 0), as the fund name is one level up (SetUpFund's ErrInvalidArgument).
 func TestPostSetupRejectsABlankAccountName(t *testing.T) {
 	t.Parallel()
 	rec := postSetupWithAccounts(t, testRouter(t), "Test Fund", []setupAccountRequest{
@@ -282,8 +274,8 @@ func TestGetFundReturnsTheFundAfterSetup(t *testing.T) {
 
 func TestPostSetupRejectsMalformedJSON(t *testing.T) {
 	t.Parallel()
-	// The one shape problem this layer can see that the ledger cannot: the
-	// body never becomes a request at all, so there is nothing to pass down.
+	// The one shape problem this layer sees that the ledger cannot: the body never
+	// becomes a request, so there is nothing to pass down.
 	rec := httptest.NewRecorder()
 	testRouter(t).ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/api/setup", strings.NewReader("{oops")))
 
@@ -302,8 +294,8 @@ func TestPostSetupRejectsMalformedJSON(t *testing.T) {
 
 func TestAPIRejectsAnUnsupportedMethodInTheEnvelope(t *testing.T) {
 	t.Parallel()
-	// /api/setup exists, DELETE does not - chi answers 405 rather than 404,
-	// and it has to do so in the same envelope as everything else under /api.
+	// /api/setup exists, DELETE does not: chi answers 405, not 404, in the same
+	// envelope as everything else under /api.
 	rec := httptest.NewRecorder()
 	testRouter(t).ServeHTTP(rec, httptest.NewRequest(http.MethodDelete, "/api/setup", nil))
 
@@ -322,22 +314,18 @@ func TestAPIRejectsAnUnsupportedMethodInTheEnvelope(t *testing.T) {
 
 func TestGetFundReportsAStoreFailureAsA500(t *testing.T) {
 	t.Parallel()
-	// A read that fails for a reason no handler can anticipate - here the
-	// store is closed underneath it, which is what an unwritable or vanished
-	// database file looks like from up here. It must not be mistaken for
-	// "no fund yet", which is a 404 and means something entirely different
-	// to the client: run setup.
+	// A read failing for a reason no handler anticipates: the store is closed
+	// underneath it, as an unwritable or vanished database file looks from here.
+	// It must not read as "no fund yet" (404, run setup), which means something
+	// else to the client.
 	sqlDB := testStoreDB(t)
 	router := authedRouterFor(t, sqlDB)
 
-	// The session cookie has to be minted before the store dies - #116 gates
-	// GET /api/fund, and the session manager's own ErrorFunc (session.go)
-	// answers a *store* failure met while loading that cookie's session with
-	// this exact same 500 envelope, so this test would still pass even if it
-	// never got past the gate to resolveFund at all. Extracting the cookie
-	// and asserting on it isn't needed for that reason - either failure
-	// point answers identically, which is the point of routing both through
-	// writeAPIError.
+	// The session cookie must be minted before the store dies: #116 gates GET
+	// /api/fund, and the session manager's ErrorFunc (session.go) answers a store
+	// failure loading that cookie with this same 500 envelope, so the test would
+	// pass even without reaching resolveFund. Either failure point answers
+	// identically, which is the point of routing both through writeAPIError.
 	if err := sqlDB.Close(); err != nil {
 		t.Fatalf("closing the store = %v, want no error", err)
 	}
@@ -358,9 +346,9 @@ func TestGetFundReportsAStoreFailureAsA500(t *testing.T) {
 	}
 }
 
-// postSetupWithAccounts is postSetup's counterpart when a test needs to name
-// its own accounts rather than take postSetup's single-cash-account default
-// or setUpFund's cash+bank pair (testhelpers_test.go).
+// postSetupWithAccounts is postSetup for a test naming its own accounts, not
+// postSetup's single cash account or setUpFund's cash+bank pair
+// (testhelpers_test.go).
 func postSetupWithAccounts(t *testing.T, r http.Handler, name string, accounts []setupAccountRequest) *httptest.ResponseRecorder {
 	t.Helper()
 	body, err := json.Marshal(setupRequest{Name: name, Accounts: accounts})
@@ -380,8 +368,8 @@ func patchFund(t *testing.T, r http.Handler, body string) *httptest.ResponseReco
 }
 
 // The fund's name is a display label, so correcting it is a rename, not a
-// ledger event - the setup wizard's own copy already promises "bisa diganti
-// nanti kalau perlu."
+// ledger event; the setup wizard's copy promises "bisa diganti nanti kalau
+// perlu."
 func TestPatchFundRenamesTheFund(t *testing.T) {
 	t.Parallel()
 	r := testRouter(t)
@@ -399,8 +387,7 @@ func TestPatchFundRenamesTheFund(t *testing.T) {
 		t.Errorf("Name = %q, want %q", updated.Name, "Kas Ruang 3B")
 	}
 
-	// And the rename is what the next reader sees, not just what the write
-	// echoed back.
+	// And the rename is what the next reader sees, not only what the write echoed.
 	getRec := httptest.NewRecorder()
 	r.ServeHTTP(getRec, httptest.NewRequest(http.MethodGet, "/api/fund", nil))
 	var got fundResponse
@@ -410,15 +397,15 @@ func TestPatchFundRenamesTheFund(t *testing.T) {
 	if got.Name != "Kas Ruang 3B" {
 		t.Errorf("GET /api/fund Name = %q, want %q", got.Name, "Kas Ruang 3B")
 	}
-	// The report's address is not collateral damage of a rename - it is the
-	// public link she may already have shared.
+	// The report's address is not collateral damage of a rename: it is the public
+	// link she may have shared.
 	if got.ReportSlug != "" && updated.ReportSlug != got.ReportSlug {
 		t.Errorf("ReportSlug changed on rename: %q -> %q", updated.ReportSlug, got.ReportSlug)
 	}
 }
 
-// A body with no name is a 400, never a silent rename to the empty string -
-// the same reason updateDuesRateRequest.Amount is a pointer.
+// A body with no name is a 400, never a silent rename to the empty string, as
+// updateDuesRateRequest.Amount is a pointer.
 func TestPatchFundWithoutANameIsRejected(t *testing.T) {
 	t.Parallel()
 	r := testRouter(t)

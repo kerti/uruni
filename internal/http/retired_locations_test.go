@@ -7,12 +7,12 @@ import (
 	"testing"
 )
 
-// retiredWorld is a fund with money in it and its bank retired (#444): the
-// bank took 200.000 into Kas Utama and moved it to cash (Pindah lokasi)
-// before retiring, since a location holding money cannot be retired (#474).
-// Cash holds 700.000 of Kas Utama, an open envelope holds 50.000 of
-// contributions (cash), one member and one unsettled claim exist. Every
-// refusal below must leave those integers where they were.
+// retiredWorld is a fund with money in it and its bank retired (#444): the bank
+// took 200.000 into Kas Utama and moved it to cash (Pindah lokasi) before
+// retiring, since a location holding money cannot be retired (#474). Cash holds
+// 700.000 of Kas Utama, an open envelope 50.000 of contributions (cash), and
+// one member and one unsettled claim exist. Every refusal must leave those
+// integers where they were.
 type retiredWorld struct {
 	setup      setupResponse
 	envelopeID int64
@@ -73,8 +73,8 @@ func (w retiredWorld) reinstateBank(t *testing.T, r http.Handler) {
 	}
 }
 
-// worldState is everything a refused request must leave alone, read back
-// through the API.
+// worldState is everything a refused request must leave alone, read through
+// the API.
 type worldState struct {
 	rows, reconciliations      int
 	fund, cash, bank, envelope int64
@@ -271,9 +271,9 @@ func TestPostingEndpointsStillAcceptActiveAndReinstatedLocations(t *testing.T) {
 
 // Corrections keep their way home: a reversal takes its location from the row
 // it reverses, so a dues payment on a since-retired location is still
-// reversible (CLAUDE.md rule 3). The payment's money is moved to cash before
-// the bank retires (#474), so the reversal leaves the retired bank negative -
-// visible on Beranda, and the treasurer's to settle by reinstating it.
+// reversible (CLAUDE.md rule 3). Its money moved to cash before the bank
+// retired (#474), so the reversal leaves the retired bank negative, visible on
+// Beranda and the treasurer's to settle by reinstating it.
 func TestReversalOfARowOnARetiredLocationStillWorks(t *testing.T) {
 	t.Parallel()
 	r := testRouter(t)

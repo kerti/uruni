@@ -8,11 +8,9 @@ import (
 	"github.com/kerti/uruni/internal/store"
 )
 
-// transactionsForTransfer finds the two legs a transfer posted, the only
-// way this package's own tests can inspect a pair's actual account/purpose
-// values without a dedicated query - ListTransactionsByFund and a filter,
-// the same approach every other transfer test in this package uses when it
-// needs more than a balance.
+// transactionsForTransfer finds the two legs a transfer posted, the way this
+// package's tests inspect a pair's account/purpose values without a dedicated
+// query: ListTransactionsByFund and a filter.
 func transactionsForTransfer(t *testing.T, q *store.Queries, fundID, transferID int64) []store.Transaction {
 	t.Helper()
 	rows, err := q.ListTransactionsByFund(context.Background(), fundID)
@@ -28,9 +26,8 @@ func transactionsForTransfer(t *testing.T, q *store.Queries, fundID, transferID 
 	return legs
 }
 
-// legByDirection finds the one leg of legs carrying direction, failing the
-// test if there is not exactly one - every pair postTransferPairTx writes
-// has exactly one 'out' and one 'in'.
+// legByDirection finds the one leg carrying direction, failing the test unless
+// there is exactly one: every postTransferPairTx pair has one 'out', one 'in'.
 func legByDirection(t *testing.T, legs []store.Transaction, direction string) store.Transaction {
 	t.Helper()
 	var found []store.Transaction
@@ -47,17 +44,14 @@ func legByDirection(t *testing.T, legs []store.Transaction, direction string) st
 
 // Value-neutrality (CLAUDE.md rule 2, ADR-033): a purpose correction is a
 // same-account reclass_purpose pair, so the fund total and every account
-// balance must be byte-identical before and after it - never assumed, and
-// never allowed to drift by even one rupiah since money is int64 with no
-// tolerance (ADR-015).
+// balance are identical before and after, to the rupiah (int64, ADR-015).
 func TestPostPurposeCorrectionLeavesFundAndAccountBalancesUnchanged(t *testing.T) {
 	t.Parallel()
 	l := newTestLedger(t)
 	f := newFixture(t, l)
 	ctx := context.Background()
 
-	// Seed both accounts so the fund is not accidentally starting at zero,
-	// which would make "unchanged" trivially true.
+	// Seed both accounts so "unchanged" is not trivially true at zero.
 	if _, err := l.PostTransaction(ctx, PostTransactionParams{
 		FundID: f.fundID, AccountID: f.cashID, PurposeID: f.mainID,
 		Direction: "in", Amount: 500_000, OccurredOn: "2026-09-01",
@@ -124,9 +118,9 @@ func TestPostPurposeCorrectionLeavesFundAndAccountBalancesUnchanged(t *testing.T
 	}
 }
 
-// The crux (ADR-033's own words): an 'out' row mis-tagged leaves the wrong
-// purpose as if the expense had never been tagged there (net back to zero)
-// and the target as if it had always held it (net to -amount).
+// The crux (ADR-033): an 'out' row mis-tagged leaves the wrong purpose as if
+// the expense had never been tagged there (net zero) and the target as if it
+// always held it (net -amount).
 func TestPostPurposeCorrectionMovesPurposeBalancesForAnOutOriginal(t *testing.T) {
 	t.Parallel()
 	l := newTestLedger(t)
@@ -164,8 +158,8 @@ func TestPostPurposeCorrectionMovesPurposeBalancesForAnOutOriginal(t *testing.T)
 	}
 }
 
-// The mirror image: an 'in' row mis-tagged (a contribution) must leave the
-// wrong purpose back at zero and the target holding the full amount.
+// The mirror: an 'in' row mis-tagged (a contribution) leaves the wrong purpose
+// at zero and the target holding the full amount.
 func TestPostPurposeCorrectionMovesPurposeBalancesForAnInOriginal(t *testing.T) {
 	t.Parallel()
 	l := newTestLedger(t)
@@ -203,10 +197,9 @@ func TestPostPurposeCorrectionMovesPurposeBalancesForAnInOriginal(t *testing.T) 
 	}
 }
 
-// The leg values themselves, not just the derived balances: an 'out'
-// original's correction posts its 'out' leg at the target and its 'in' leg
-// at the effective (here, stored) tag - the direction flip
-// PostPurposeCorrection's own doc comment works out.
+// The leg values, not just derived balances: an 'out' original's correction
+// posts its 'out' leg at the target and its 'in' leg at the effective (here,
+// stored) tag, the direction flip PostPurposeCorrection works out.
 func TestPostPurposeCorrectionLegDirectionForAnOutOriginal(t *testing.T) {
 	t.Parallel()
 	l := newTestLedger(t)
@@ -244,10 +237,9 @@ func TestPostPurposeCorrectionLegDirectionForAnOutOriginal(t *testing.T) {
 	}
 }
 
-// The second-correction case ADR-033 exists to prevent getting wrong: A->B,
-// then B->C. The second pair must be built from B (the effective tag), not
-// from A (the stored, now-stale tag) - and A's own balance must be
-// untouched by the second correction.
+// The second-correction case ADR-033 guards: A->B, then B->C. The second pair
+// is built from B (the effective tag), not A (the stale stored tag), and A's
+// balance is untouched by it.
 func TestPostPurposeCorrectionSecondCorrectionUsesTheEffectiveTag(t *testing.T) {
 	t.Parallel()
 	l := newTestLedger(t)
@@ -283,8 +275,8 @@ func TestPostPurposeCorrectionSecondCorrectionUsesTheEffectiveTag(t *testing.T) 
 		t.Fatalf("second PostPurposeCorrection() = %v, want no error", err)
 	}
 
-	// The second pair's legs must name B (mainID) and C (thirdID) - never A
-	// (passID), which a stored-tag bug would reach for instead.
+	// The second pair's legs name B (mainID) and C (thirdID), never A (passID),
+	// which a stored-tag bug would use.
 	legs := transactionsForTransfer(t, q, f.fundID, second.ID)
 	outLeg := legByDirection(t, legs, "out")
 	inLeg := legByDirection(t, legs, "in")
@@ -320,9 +312,9 @@ func TestPostPurposeCorrectionSecondCorrectionUsesTheEffectiveTag(t *testing.T) 
 	}
 }
 
-// A correction's own legs are kind='transfer', and ErrPurposeCorrectionTransfer
-// is what makes correcting a correction impossible - no depth limit, no
-// cycle rule (ADR-033).
+// A correction's legs are kind='transfer', and ErrPurposeCorrectionTransfer
+// makes correcting a correction impossible: no depth limit or cycle rule
+// (ADR-033).
 func TestPostPurposeCorrectionCannotCorrectACorrection(t *testing.T) {
 	t.Parallel()
 	l := newTestLedger(t)
@@ -420,10 +412,10 @@ func TestPostPurposeCorrectionRejectsDuesPayment(t *testing.T) {
 }
 
 // TestPostPurposeCorrectionRejectsNamedContribution: a named contribution
-// (ADR-034) is refused the same way a dues payment already is - moving it
-// would leave participation counting the member against an envelope the
-// money has left. An unnamed contribution on the very same envelope is
-// untouched by this refusal (see TestPostPurposeCorrectionAcceptsUnnamedContribution).
+// (ADR-034) is refused as a dues payment is, since moving it would leave
+// participation counting the member against an envelope the money has left.
+// An unnamed contribution on the same envelope is unaffected (see
+// TestPostPurposeCorrectionAcceptsUnnamedContribution).
 func TestPostPurposeCorrectionRejectsNamedContribution(t *testing.T) {
 	t.Parallel()
 	l := newTestLedger(t)
@@ -448,9 +440,9 @@ func TestPostPurposeCorrectionRejectsNamedContribution(t *testing.T) {
 	}
 }
 
-// TestPostPurposeCorrectionAcceptsUnnamedContribution: ADR-033 is
-// untouched for a contribution nobody named - member_id NULL is the same
-// kind='normal' shape any other correction-eligible row already has.
+// TestPostPurposeCorrectionAcceptsUnnamedContribution: ADR-033 is unchanged
+// for a contribution nobody named; member_id NULL is the ordinary
+// correction-eligible kind='normal' shape.
 func TestPostPurposeCorrectionAcceptsUnnamedContribution(t *testing.T) {
 	t.Parallel()
 	l := newTestLedger(t)
@@ -553,9 +545,9 @@ func TestPostPurposeCorrectionRejectsDuesReversal(t *testing.T) {
 	}
 }
 
-// An ordinary reconciliation fix - kind='adjustment' with no
-// reverses_transaction_id - is the other adjustment shape, and ADR-033
-// says it is eligible, not refused.
+// An ordinary reconciliation fix (kind='adjustment', no
+// reverses_transaction_id) is the other adjustment shape; ADR-033 makes it
+// eligible.
 func TestPostPurposeCorrectionAcceptsOrdinaryAdjustment(t *testing.T) {
 	t.Parallel()
 	l := newTestLedger(t)
@@ -578,9 +570,9 @@ func TestPostPurposeCorrectionAcceptsOrdinaryAdjustment(t *testing.T) {
 	}
 }
 
-// Correcting into a closed incidental is refused in both directions
-// (ADR-031, ADR-033). This is the target-side case: the row being corrected
-// is an ordinary mis-tag, but the requested destination is closed.
+// Correcting into a closed incidental is refused in both directions (ADR-031,
+// ADR-033). Target side: the row is an ordinary mis-tag, but the requested
+// destination is closed.
 func TestPostPurposeCorrectionRejectsClosedTarget(t *testing.T) {
 	t.Parallel()
 	l := newTestLedger(t)
@@ -616,10 +608,9 @@ func TestPostPurposeCorrectionRejectsClosedTarget(t *testing.T) {
 	}
 }
 
-// The source-side case: the row's effective peruntukan (still its stored
-// tag - nothing has corrected it) is a now-closed incidental. Correcting it
-// out would leave that envelope's balance non-zero, breaking the rollover
-// invariant #270 reads (ADR-031, ADR-033).
+// Source side: the row's effective peruntukan (its stored tag, uncorrected) is
+// a now-closed incidental. Correcting out would leave that envelope's balance
+// non-zero, breaking the rollover invariant #270 reads (ADR-031, ADR-033).
 func TestPostPurposeCorrectionRejectsClosedSource(t *testing.T) {
 	t.Parallel()
 	l := newTestLedger(t)
@@ -678,10 +669,9 @@ func TestPostPurposeCorrectionRejectsNoop(t *testing.T) {
 	}
 }
 
-// A transaction id real in one fund but named from another must answer the
-// same not-found error as an id that does not exist at all (ADR-029's own
-// fund-scoped-fetch reasoning, applied here) - never be found and only then
-// rejected.
+// A transaction id real in one fund but named from another answers the same
+// not-found as an id that does not exist (ADR-029's fund-scoped fetch), never
+// found then rejected.
 func TestPostPurposeCorrectionIsFundScoped(t *testing.T) {
 	t.Parallel()
 	l := newTestLedger(t)
@@ -697,10 +687,8 @@ func TestPostPurposeCorrectionIsFundScoped(t *testing.T) {
 		t.Fatalf("PostTransaction() = %v, want no error", err)
 	}
 
-	// A second fund, built by hand: newFixture hard-codes report_slug, so a
-	// second fund needs its own distinct one (the same approach
-	// TestReverseDuesPaymentRefusesAnotherFundsTransaction uses in
-	// dues_reversal_test.go).
+	// A second fund, built by hand: newFixture hard-codes report_slug (as in
+	// TestReverseDuesPaymentRefusesAnotherFundsTransaction).
 	other, err := q.CreateFund(ctx, store.CreateFundParams{
 		Name: "Other Fund", Currency: "IDR", ReportSlug: "zyxwvutsrqponmlkjihgfe", CreatedAt: 1,
 	})
@@ -716,8 +704,8 @@ func TestPostPurposeCorrectionIsFundScoped(t *testing.T) {
 		t.Errorf("PostPurposeCorrection(cross-fund id) = %v, want ErrPurposeCorrectionNotFound", err)
 	}
 
-	// And the row must still be correctable, untouched, from its real fund -
-	// proving the refusal above was scoping, not a corrupted row.
+	// The row is still correctable from its real fund, so the refusal above was
+	// scoping, not a corrupted row.
 	if _, err := l.PostPurposeCorrection(ctx, PostPurposeCorrectionParams{
 		FundID: f1.fundID, TransactionID: posted.ID, PurposeID: f1.mainID,
 	}); err != nil {
@@ -739,9 +727,8 @@ func TestPostPurposeCorrectionUnknownTransactionID(t *testing.T) {
 	}
 }
 
-// The pair carries the original row's own account_id and occurred_on - the
-// date is not an input (ADR-033) - never today's date or a caller-supplied
-// account.
+// The pair carries the original row's account_id and occurred_on (the date is
+// not an input, ADR-033), never today's date or a caller-supplied account.
 func TestPostPurposeCorrectionLegsCarryTheOriginalAccountAndDate(t *testing.T) {
 	t.Parallel()
 	l := newTestLedger(t)
@@ -774,8 +761,8 @@ func TestPostPurposeCorrectionLegsCarryTheOriginalAccountAndDate(t *testing.T) {
 	}
 }
 
-// The transfer row itself carries corrects_transaction_id naming the
-// original row (ADR-033) - the link a roll never sets.
+// The transfer row carries corrects_transaction_id naming the original row
+// (ADR-033), the link a roll never sets.
 func TestPostPurposeCorrectionSetsCorrectsTransactionID(t *testing.T) {
 	t.Parallel()
 	l := newTestLedger(t)
@@ -805,11 +792,11 @@ func TestPostPurposeCorrectionSetsCorrectsTransactionID(t *testing.T) {
 	}
 }
 
-// A row corrected several times within the same second - so neither its date
-// nor created_at can order the corrections - reads the last-chosen pos back,
-// both as the next correction's source and on the transaction listing, for an
-// 'in' row and an 'out' row alike; and one corrected back reads its own pos
-// (#411). Nothing compares transfer ids.
+// A row corrected several times within one second, so neither date nor
+// created_at orders the corrections, reads the last-chosen pos back, as the
+// next correction's source and on the listing, for an 'in' and an 'out' row;
+// and one corrected back reads its own pos (#411). Nothing compares transfer
+// ids.
 func TestEffectivePurposeFollowsTheCorrectionPathWithoutIDOrder(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
@@ -859,8 +846,8 @@ func TestEffectivePurposeFollowsTheCorrectionPathWithoutIDOrder(t *testing.T) {
 					t.Fatalf("after correcting to %d: effective = %d, listed = %d; want %d", step.to, got, listed(row.ID), step.want)
 				}
 			}
-			// Correcting to where it already is stays a no-op, which only
-			// holds if the current pos was read right.
+			// Correcting to where it already is stays a no-op, which holds only if the
+			// current pos was read right.
 			if _, err := l.PostPurposeCorrection(ctx, PostPurposeCorrectionParams{FundID: f.fundID, TransactionID: row.ID, PurposeID: otherID}); !errors.Is(err, ErrPurposeCorrectionNoop) {
 				t.Errorf("correcting to the current pos = %v, want ErrPurposeCorrectionNoop", err)
 			}

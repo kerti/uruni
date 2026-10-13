@@ -26,11 +26,10 @@ func getBackup(t *testing.T, r http.Handler) *httptest.ResponseRecorder {
 	return rec
 }
 
-// TestDownloadBackupRequiresASession is the auth-gate half of the DoD -
-// session_gate_test.go's table-driven sweep already covers "401 with no
-// cookie at all" for every gated route including this one; this test is the
-// same fact told directly, against a router this file builds itself so it
-// can also cover the success path below without a second router.
+// TestDownloadBackupRequiresASession is the auth-gate half of the DoD.
+// session_gate_test.go's sweep covers "401 with no cookie" for every gated
+// route; this is the same fact against a router built here, so the success
+// path below needs no second router.
 func TestDownloadBackupRequiresASession(t *testing.T) {
 	t.Parallel()
 	sqlDB := testStoreDB(t)
@@ -42,10 +41,9 @@ func TestDownloadBackupRequiresASession(t *testing.T) {
 	}
 }
 
-// TestDownloadBackupReturnsAZipWithJSONAndReceipt is the route's own
-// end-to-end shape: a session-gated GET answers with a zip carrying
-// uruni.json (decodable, format_version set) and, once a receipt has been
-// uploaded through the ordinary upload route, a receipts/ entry for it.
+// TestDownloadBackupReturnsAZipWithJSONAndReceipt: a session-gated GET answers
+// a zip carrying uruni.json (decodable, format_version set) and, once a
+// receipt is uploaded through the ordinary route, a receipts/ entry for it.
 func TestDownloadBackupReturnsAZipWithJSONAndReceipt(t *testing.T) {
 	t.Parallel()
 	r := testRouter(t)
@@ -107,11 +105,10 @@ func TestDownloadBackupReturnsAZipWithJSONAndReceipt(t *testing.T) {
 	}
 }
 
-// authedRouterWithBackupDir is authedRouterFor's own recipe (router_test.go),
-// but built directly here rather than reused, so this file can hold onto
-// the backupDir it passed to New - the tests below need to seed dump files
-// into it directly, since these routes only ever read URUNI_BACKUP_DIR and
-// nothing in this package writes to it through the HTTP surface itself.
+// authedRouterWithBackupDir is authedRouterFor's recipe (router_test.go) built
+// here so the file keeps the backupDir passed to New: tests seed dump files
+// into it directly, as these routes only read URUNI_BACKUP_DIR and nothing
+// writes it through the HTTP surface.
 func authedRouterWithBackupDir(t *testing.T) (http.Handler, string) {
 	t.Helper()
 	sqlDB := testStoreDB(t)
@@ -150,8 +147,8 @@ func writeTestDumpFile(t *testing.T, dir, name string, data []byte) {
 	}
 }
 
-// TestListBackupsIsEmptyWithNoDumpsYet: a fresh instance with no scheduled
-// dump yet answers with an empty array, never null and never an error.
+// TestListBackupsIsEmptyWithNoDumpsYet: a fresh instance answers an empty
+// array, never null or an error.
 func TestListBackupsIsEmptyWithNoDumpsYet(t *testing.T) {
 	t.Parallel()
 	r, _ := authedRouterWithBackupDir(t)
@@ -165,10 +162,9 @@ func TestListBackupsIsEmptyWithNoDumpsYet(t *testing.T) {
 	}
 }
 
-// TestListBackupsReturnsEveryDumpNewestFirstWithFormatFlag lists a mix of
-// current- and older-format dumps and checks every field the Cadangan card
-// reads: date, kind, format_version, is_current_format and size, newest
-// dump first.
+// TestListBackupsReturnsEveryDumpNewestFirstWithFormatFlag lists current- and
+// older-format dumps and checks every field the Cadangan card reads: date,
+// kind, format_version, is_current_format and size, newest first.
 func TestListBackupsReturnsEveryDumpNewestFirstWithFormatFlag(t *testing.T) {
 	t.Parallel()
 	r, backupDir := authedRouterWithBackupDir(t)
@@ -244,9 +240,9 @@ func TestDownloadStoredBackupServesExactBytesUnderItsOwnName(t *testing.T) {
 	}
 }
 
-// TestDownloadStoredBackupRejectsUnknownName: a syntactically valid name
-// that simply does not exist (never written, or already pruned by
-// retention) is a plain 404, not a 500 from a failed file read.
+// TestDownloadStoredBackupRejectsUnknownName: a valid name that does not exist
+// (never written, or pruned by retention) is a 404, not a 500 from a failed
+// read.
 func TestDownloadStoredBackupRejectsUnknownName(t *testing.T) {
 	t.Parallel()
 	r, _ := authedRouterWithBackupDir(t)
@@ -258,16 +254,15 @@ func TestDownloadStoredBackupRejectsUnknownName(t *testing.T) {
 	}
 }
 
-// TestDownloadStoredBackupRefusesPathTraversal is the download route's own
+// TestDownloadStoredBackupRefusesPathTraversal is the download route's
 // security property: nothing that is not exactly a dump name reaches
-// os.ReadFile, whatever chi's own route matching lets through as the
-// {name} segment.
+// os.ReadFile, whatever chi lets through as {name}.
 func TestDownloadStoredBackupRefusesPathTraversal(t *testing.T) {
 	t.Parallel()
 	r, backupDir := authedRouterWithBackupDir(t)
 
-	// A real secret sitting next to the backups this instance actually
-	// wrote - proof that a traversal attempt cannot reach it.
+	// A real secret beside the backups this instance wrote: proof a traversal
+	// cannot reach it.
 	secretPath := filepath.Join(filepath.Dir(backupDir), "secret.txt")
 	if err := os.WriteFile(secretPath, []byte("should never be servable"), 0o600); err != nil {
 		t.Fatalf("writing sibling secret file: %v", err)

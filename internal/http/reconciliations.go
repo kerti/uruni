@@ -14,10 +14,9 @@ import (
 )
 
 // fixRequest is one AccountCount's fix, decoded straight into ledger.Fix.
-// Shape checks - a non-positive amount, an unrecognised direction, a
-// calendar-invalid occurred_on - are TakeReconciliation's own job (ADR-027);
-// this handler decodes and passes through, same as every other write route
-// in this package.
+// Shape checks (non-positive amount, unrecognised direction, invalid
+// occurred_on) are TakeReconciliation's job (ADR-027); the handler passes
+// through.
 type fixRequest struct {
 	PurposeID  int64   `json:"purpose_id"`
 	Direction  string  `json:"direction"`
@@ -27,9 +26,8 @@ type fixRequest struct {
 }
 
 // accountCountRequest is one counted location within POST
-// /api/reconciliations's body: an account, what the treasurer found there,
-// how the gap (if any) was resolved, and the fix that resolves it where the
-// resolution calls for one.
+// /api/reconciliations's body: an account, what the treasurer found, how the
+// gap (if any) was resolved, and the fix where the resolution calls for one.
 type accountCountRequest struct {
 	AccountID    int64       `json:"account_id"`
 	ActualAmount int64       `json:"actual_amount"`
@@ -37,18 +35,17 @@ type accountCountRequest struct {
 	Fix          *fixRequest `json:"fix"`
 }
 
-// takeReconciliationRequest is POST /api/reconciliations's body: taking one
-// snapshot across every account the treasurer counted (PRD section 7.8).
-// There is deliberately no performed_at field - TakeReconciliationParams's own
-// comment explains why a reconciliation is always "now," never backdated.
+// takeReconciliationRequest is POST /api/reconciliations's body: one snapshot
+// across every account the treasurer counted (PRD section 7.8). There is no
+// performed_at: a reconciliation is always "now" (see
+// TakeReconciliationParams).
 type takeReconciliationRequest struct {
 	Note   *string               `json:"note"`
 	Counts []accountCountRequest `json:"counts"`
 }
 
-// reconciliationResponse is the wire shape of one snapshot on its own - no
-// lines, no fund_id, same reasoning every other response type in this
-// package gives for both omissions.
+// reconciliationResponse is the wire shape of one snapshot alone: no lines,
+// no fund_id, like the other response types here.
 type reconciliationResponse struct {
 	ID                   int64   `json:"id"`
 	PerformedAt          int64   `json:"performed_at"`
@@ -68,12 +65,11 @@ func toReconciliationResponse(rec store.Reconciliation) reconciliationResponse {
 }
 
 // reconciliationLineResponse is the wire shape of one counted account within
-// a snapshot. No fund_id or reconciliation_id - both are implied by the
-// detail response this is always nested in.
+// a snapshot. No fund_id or reconciliation_id: the detail response it nests
+// in implies both.
 //
-// resolution is returned as the plain schema string ("matched", "left_open",
-// "adjusted", "entry_added"), never a color or an Indonesian label: those are
-// the SPA's concern, not the API's.
+// resolution is the plain schema string ("matched", "left_open", "adjusted",
+// "entry_added"), never a color or Indonesian label; those are the SPA's.
 type reconciliationLineResponse struct {
 	ID                      int64  `json:"id"`
 	AccountID               int64  `json:"account_id"`
@@ -83,18 +79,16 @@ type reconciliationLineResponse struct {
 	Resolution              string `json:"resolution"`
 	AdjustmentTransactionID *int64 `json:"adjustment_transaction_id"`
 	// RemainderAmount is what the line still has open (#498): the part of
-	// DifferenceAmount its fix did not square, signed the same way. Zero
-	// means closed; it is the figure every "selisih" reads, never
-	// DifferenceAmount (what was found at the count, frozen).
+	// DifferenceAmount its fix did not square, signed alike. Zero means closed.
+	// Every "selisih" reads this, never DifferenceAmount (what was found at the
+	// count, frozen).
 	RemainderAmount int64 `json:"remainder_amount"`
 }
 
 // openReconciliationLineResponse is GET /api/reconciliations/open-lines's
-// element: the same line, plus the reconciliation_id the nested shape can
-// leave implied and this one cannot. A flat list across every snapshot is
-// unreadable without it - "there is a gap of 15000 somewhere" is not an
-// answer the treasurer can act on, and which count it was found in is the
-// one fact that makes it one.
+// element: the same line plus the reconciliation_id the nested shape leaves
+// implied. A flat list across snapshots is unactionable without which count
+// found the gap.
 type openReconciliationLineResponse struct {
 	reconciliationLineResponse
 	ReconciliationID int64 `json:"reconciliation_id"`
@@ -130,11 +124,10 @@ func toReconciliationLineResponse(ln store.ListReconciliationLinesRow) reconcili
 }
 
 // reconciliationDetailResponse is what POST /api/reconciliations and GET
-// /api/reconciliations/{id} both return: the snapshot plus every line it
-// froze. POST returns the same shape as the detail GET, not the bare
-// snapshot - a caller taking a count wants to see how each line was resolved
-// (the recorded/actual/difference numbers and, where posted, the fix's own
-// transaction id) without a second round trip.
+// /api/reconciliations/{id} return: the snapshot plus every line it froze.
+// POST returns the detail shape, not the bare snapshot, so a caller sees how
+// each line resolved (numbers and the fix's transaction id) without a second
+// round trip.
 type reconciliationDetailResponse struct {
 	reconciliationResponse
 	Lines []reconciliationLineResponse `json:"lines"`
@@ -153,10 +146,9 @@ func toReconciliationDetailResponse(d ledger.ReconciliationDetail) reconciliatio
 
 // takeReconciliation is POST /api/reconciliations: wraps
 // Ledger.TakeReconciliation, which freezes a ledger cutoff, compares it to
-// what the treasurer counted per account, and posts whatever fix each line's
-// resolution calls for - all inside one withTx (PRD section 7.8). See that
-// method's own doc comment for the cutoff/resolution rules this handler
-// re-asserts nothing about; it only decodes and passes through (ADR-027).
+// what the treasurer counted per account, and posts each line's fix, in one
+// withTx (PRD section 7.8). See that method for the cutoff/resolution rules;
+// the handler decodes and passes through (ADR-027).
 func (a *api) takeReconciliation(w http.ResponseWriter, r *http.Request) {
 	var req takeReconciliationRequest
 	if !decodeJSON(w, r, &req) {
@@ -208,42 +200,36 @@ func (a *api) takeReconciliation(w http.ResponseWriter, r *http.Request) {
 }
 
 // reconciliationsPageSize is GET /api/reconciliations's fixed page size
-// (#227, ADR-032 "Lists: paging and search"): 25 a page, same as
-// GET /api/transactions and GET /api/reimbursements.
+// (#227, ADR-032): 25 a page, as the other lists.
 const reconciliationsPageSize = 25
 
 // reconciliationListItemResponse is one row of GET /api/reconciliations's
 // page: the snapshot plus open_difference_amount, the sum of
-// ABS(remainder_amount) across that snapshot's lines
-// (ListReconciliationsPage's own comment has the reasoning). Cek kas's list
-// needs this to show cocok versus selisih per row without a detail fetch.
+// ABS(remainder_amount) across its lines (see ListReconciliationsPage). Cek
+// kas's list needs it to show cocok versus selisih per row.
 type reconciliationListItemResponse struct {
 	reconciliationResponse
 	OpenDifferenceAmount int64 `json:"open_difference_amount"`
 }
 
 // reconciliationsPageResponse is GET /api/reconciliations's envelope (#227),
-// the same {rows, next_cursor} shape transactionsPageResponse and
-// reimbursementsPageResponse already use.
+// the {rows, next_cursor} shape of the other paged lists.
 type reconciliationsPageResponse struct {
 	Reconciliations []reconciliationListItemResponse `json:"reconciliations"`
 	NextCursor      *string                          `json:"next_cursor"`
 }
 
-// encodeReconciliationsCursor/decodeReconciliationsCursor are
-// encodeTransactionsCursor/decodeTransactionsCursor's own shape (base64 of
-// "performed_at|id", the pair ListReconciliationsPage's keyset WHERE clause
-// compares against), except performed_at is itself an integer (a Unix
-// timestamp, not a calendar date - CreateReconciliation's own comment has
-// why), so both halves are validated as positive integers rather than one
-// being parsed as a date.
+// encodeReconciliationsCursor/decodeReconciliationsCursor have the shape of
+// the transactions cursor (base64 of "performed_at|id", the pair
+// ListReconciliationsPage's keyset WHERE compares), except performed_at is a
+// Unix timestamp integer (see CreateReconciliation), so both halves are
+// validated as positive integers.
 func encodeReconciliationsCursor(performedAt, id int64) string {
 	return base64.RawURLEncoding.EncodeToString([]byte(strconv.FormatInt(performedAt, 10) + "|" + strconv.FormatInt(id, 10)))
 }
 
-// decodeReconciliationsCursor rejects anything that doesn't round-trip to
-// two positive integers - the shape listReconciliations below answers 400
-// invalid_argument for.
+// decodeReconciliationsCursor rejects anything that does not round-trip to
+// two positive integers; listReconciliations answers 400 invalid_argument.
 func decodeReconciliationsCursor(raw string) (performedAt, id int64, ok bool) {
 	decoded, err := base64.RawURLEncoding.DecodeString(raw)
 	if err != nil {
@@ -264,18 +250,14 @@ func decodeReconciliationsCursor(raw string) (performedAt, id int64, ok bool) {
 	return performedAt, id, true
 }
 
-// listReconciliations is GET /api/reconciliations (#227, ADR-032 "Lists:
-// paging and search"): newest-first, keyset-paged on
-// (performed_at DESC, id DESC), 25 a page - the same shape
-// GET /api/transactions and GET /api/reimbursements already answer, and for
-// the same reason (ListReconciliationsPage's own comment has the
-// row-value-keyset reasoning). No search - a handful of dated snapshots a
-// year, per the issue.
+// listReconciliations is GET /api/reconciliations (#227, ADR-032):
+// newest-first, keyset-paged on (performed_at DESC, id DESC), 25 a page, like
+// GET /api/transactions and GET /api/reimbursements (see
+// ListReconciliationsPage for the keyset reasoning). No search: a handful of
+// dated snapshots a year.
 //
-// ListReconciliationsPage is asked for one row more than the page size so
-// this handler can tell "the next page is empty" apart from "there is a
-// next page" without a second round trip, the same trick listTransactions
-// and listReimbursements use.
+// ListReconciliationsPage is asked for one row more than the page size, as in
+// listTransactions, to tell an empty next page from a next page.
 func (a *api) listReconciliations(w http.ResponseWriter, r *http.Request) {
 	fund, ok := a.resolveFund(w, r)
 	if !ok {
@@ -327,17 +309,14 @@ func (a *api) listReconciliations(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, reconciliationsPageResponse{Reconciliations: resp, NextCursor: nextCursor})
 }
 
-// latestReconciliation is GET /api/reconciliations/latest: the one snapshot
-// PRD section 7.7's home banner reads to show "last counted on X."
+// latestReconciliation is GET /api/reconciliations/latest: the snapshot PRD
+// section 7.7's home banner reads for "last counted on X."
 //
-// Before any snapshot has ever been taken this answers 404 "not_found," the
-// same code every other "no such row yet" route in this package already
-// uses (GET /api/fund before setup, GET /api/incidentals/{id} on an unknown
-// id) - not an empty 200. An empty body here would make the caller
-// distinguish "no snapshot yet" from "the snapshot has no lines" by shape
-// alone, and 404 is also exactly what LatestReconciliation's own sql.ErrNoRows
-// already gives for free through mapSQLiteError, so no special case is added
-// here to produce anything else.
+// Before any snapshot exists this answers 404 "not_found", the code every "no
+// such row yet" route uses (GET /api/fund before setup, GET
+// /api/incidentals/{id} on an unknown id), not an empty 200, which would make
+// the caller tell "no snapshot yet" from "no lines" by shape. LatestReconciliation's
+// sql.ErrNoRows already gives 404 through mapSQLiteError.
 func (a *api) latestReconciliation(w http.ResponseWriter, r *http.Request) {
 	fund, ok := a.resolveFund(w, r)
 	if !ok {
@@ -376,20 +355,18 @@ func (a *api) getReconciliation(w http.ResponseWriter, r *http.Request) {
 }
 
 // listOpenReconciliationLines is GET /api/reconciliations/open-lines: every
-// location whose most recent count still has a non-zero remainder_amount (#498)
-// - a line left_open (a gap the treasurer chose to sleep on rather than
-// square immediately, ADR-024), or an entry_added line whose entry closed only
-// part of the gap. "Most recent" is per account_id, not per snapshot:
-// once any later snapshot has a line for that account (whatever its own
-// resolution), the earlier line stops being open, but a later
-// snapshot that skips an account leaves that account's gap open. Later means
-// the owning reconciliation's (performed_at, id).
+// location whose most recent count still has a non-zero remainder_amount
+// (#498): a left_open line (a gap the treasurer chose to sleep on,
+// ADR-024), or an entry_added line whose entry closed only part of the gap.
+// "Most recent" is per account_id, not per snapshot: once any later snapshot
+// has a line for that account, whatever its resolution, the earlier line
+// stops being open, but a later snapshot that skips an account leaves its gap
+// open. Later means the owning reconciliation's (performed_at, id).
 //
-// Included on the maintainer's ruling that kept transfers in M4: left_open is
-// a schema-committed state and the capability to read it back already exists,
-// so it gets a surface now even though no PRD screen names one yet. No
-// filter, no pagination - the same "read everything, let the SPA decide what
-// to show" shape GET /api/reimbursements uses for its own unfiltered list.
+// Kept on the maintainer's ruling that kept transfers in M4: left_open is a
+// schema-committed state, so reading it back gets a surface though no PRD
+// screen names one. No filter or pagination: read everything, let the SPA
+// decide, as GET /api/reimbursements does.
 func (a *api) listOpenReconciliationLines(w http.ResponseWriter, r *http.Request) {
 	fund, ok := a.resolveFund(w, r)
 	if !ok {
@@ -411,8 +388,7 @@ func (a *api) listOpenReconciliationLines(w http.ResponseWriter, r *http.Request
 
 // reconciliationID parses {id}, or answers the request and reports false.
 // Unlike resolveMember it does not pre-fetch the row: every caller hands the
-// id to a ledger method that fetches it anyway, the same reasoning
-// incidentalPurposeID's own comment gives.
+// id to a ledger method that fetches it, as incidentalPurposeID does.
 func reconciliationID(w http.ResponseWriter, r *http.Request) (int64, bool) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {

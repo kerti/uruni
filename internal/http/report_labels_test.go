@@ -8,13 +8,13 @@ import (
 )
 
 // TestReportRowLabelsMatchTheSPA pins the Go port of the row labels against
-// the strings web/src/copy/id.ts's rowLabels (with formatPeriod, "2026-06" ->
-// "Juni 2026") produces. The expected values are written out, not derived, so
-// editing either side alone fails here.
+// what web/src/copy/id.ts's rowLabels (with formatPeriod, "2026-06" -> "Juni
+// 2026") produces. Expected values are written out, not derived, so editing
+// either side alone fails here.
 //
 // Where the report deliberately differs from Riwayat (no location suffix on
-// "Saldo awal" and "Penyesuaian"; one "Dipindah: ..." wording for every
-// purpose move; "Penyesuaian" on a standalone adjustment, which Riwayat leaves
+// "Saldo awal" and "Penyesuaian"; one "Dipindah: ..." wording for every purpose
+// move; "Penyesuaian" on a standalone adjustment, which Riwayat leaves
 // unlabelled) the expectation says so.
 func TestReportRowLabelsMatchTheSPA(t *testing.T) {
 	t.Parallel()

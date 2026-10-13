@@ -8,14 +8,13 @@ import (
 	"github.com/kerti/uruni/internal/store"
 )
 
-// The point of the whole M2 epic (#21, #25): every situation the PRD describes
-// has to be recordable, and every number the treasurer sees has to fall out of
-// summing raw rows. No stored total appears anywhere below except inside a
-// reconciliation snapshot, which is a historical claim rather than a balance.
+// The point of the M2 epic (#21, #25): every situation the PRD describes is
+// recordable, and every number the treasurer sees falls out of summing raw
+// rows. No stored total appears below except inside a reconciliation
+// snapshot, a historical claim rather than a balance.
 //
-// One scenario is deliberately absent because it already has a home: a
-// correction posted outside any reconciliation lives in ledger_test.go's
-// TestAdjustmentStandsAloneWithNoReconciliation.
+// One scenario lives elsewhere: a correction outside any reconciliation, in
+// ledger_test.go's TestAdjustmentStandsAloneWithNoReconciliation.
 
 // scenarioFund is a fund with both locations money can sit in and the routine
 // purpose every ordinary entry carries.
@@ -33,9 +32,8 @@ func newScenarioFund(t *testing.T, sqlDB *sql.DB, name, slug string) scenarioFun
 	return f
 }
 
-// entry posts one row and returns its id. Every scenario builds its ledger out
-// of these, so the assertions below are always reading rows a treasurer could
-// have recorded through the app.
+// entry posts one row and returns its id. Scenarios build their ledger from
+// these, so assertions read rows a treasurer could have recorded.
 func (f scenarioFund) entry(t *testing.T, sqlDB *sql.DB, p store.CreateTransactionParams) int64 {
 	t.Helper()
 	p.FundID = f.fundID
@@ -85,8 +83,8 @@ func TestOpeningBalancesAreLedgerRowsLikeAnyOther(t *testing.T) {
 	sqlDB := migratedTestDB(t)
 	f := newScenarioFund(t, sqlDB, "Test Fund", validSlug)
 
-	// Day one: the treasurer counts what is already there. Nothing about an
-	// opening figure is special enough to earn a column of its own.
+	// Day one: the treasurer counts what is already there. An opening figure
+	// needs no column of its own.
 	f.entry(t, sqlDB, store.CreateTransactionParams{
 		AccountID: f.cashID, PurposeID: f.mainID, Direction: "in", Amount: 1_250_000,
 		OccurredOn: "2026-01-01", Kind: "opening",
@@ -114,8 +112,8 @@ func TestSeveralMonthsOfDuesPaidInOneVisit(t *testing.T) {
 	f := newScenarioFund(t, sqlDB, "Test Fund", validSlug)
 	memberID := createMember(t, sqlDB, f.fundID, "Jane")
 
-	// Three months settled at the door. One row per period, never one row for
-	// 75000 - otherwise "which months has she paid?" stops being answerable.
+	// Three months settled at the door: one row per period, never one for 75000,
+	// or "which months has she paid?" is unanswerable.
 	for _, period := range []string{"2026-06", "2026-07", "2026-08"} {
 		p := period
 		f.entry(t, sqlDB, store.CreateTransactionParams{
@@ -161,8 +159,8 @@ func TestPartialAndAdvanceDuesAreOrdinaryRows(t *testing.T) {
 	}
 
 	// Ten thousand now, the rest whenever. The schema takes no view on what a
-	// period "should" total - the rate is an expectation, not a constraint, and
-	// the arrears arithmetic is M3's job over exactly these rows.
+	// period "should" total (the rate is an expectation); arrears arithmetic is
+	// M3's job over these rows.
 	august := "2026-08"
 	f.entry(t, sqlDB, store.CreateTransactionParams{
 		AccountID: f.cashID, PurposeID: f.mainID, Direction: "in", Amount: 10_000,
@@ -173,7 +171,7 @@ func TestPartialAndAdvanceDuesAreOrdinaryRows(t *testing.T) {
 		OccurredOn: "2026-08-20", Kind: "dues", MemberID: &memberID.ID, DuesPeriod: &august,
 	})
 
-	// And a month paid before it starts, recorded on the day the money arrived.
+	// And a month paid before it starts, recorded the day the money arrived.
 	december := "2026-12"
 	f.entry(t, sqlDB, store.CreateTransactionParams{
 		AccountID: f.cashID, PurposeID: f.mainID, Direction: "in", Amount: 25_000,
@@ -244,8 +242,7 @@ func TestIncidentalOverCollectsThenRollsItsLeftoverIntoMain(t *testing.T) {
 	}
 
 	// The roll-in is a reclass: the same rupiah, a different label. Two rows in
-	// one transfer, because a single row would change the fund's total and
-	// nothing actually moved.
+	// one transfer, since a single row would change the fund's total.
 	transferID := createTransfer(t, sqlDB, f.fundID, "reclass_purpose")
 	f.entry(t, sqlDB, store.CreateTransactionParams{
 		AccountID: f.cashID, PurposeID: kurbanID, Direction: "out", Amount: 200_000,
@@ -305,10 +302,9 @@ func TestPassThroughMoneyCountsWhileItIsHeld(t *testing.T) {
 	f := newScenarioFund(t, sqlDB, "Test Fund", validSlug)
 	passID := createPurpose(t, sqlDB, f.fundID, "pass_through", "Pass-through")
 
-	// PRD section 7.6 as amended (ADR-024): pass-through is descriptive, and drives no
-	// arithmetic. While the money sits in the tin it is in the tin, so it is in
-	// the balance - two headline figures that disagree is the wrong thing to put
-	// on the calmest screen in the app.
+	// PRD section 7.6 as amended (ADR-024): pass-through is descriptive and drives
+	// no arithmetic. While the money sits in the tin it is in the balance; two
+	// headline figures that disagree would be wrong on the calmest screen.
 	f.entry(t, sqlDB, store.CreateTransactionParams{
 		AccountID: f.cashID, PurposeID: passID, Direction: "in", Amount: 500_000,
 		OccurredOn: "2026-08-01", Kind: "normal",
@@ -342,8 +338,8 @@ func TestOneMemberIsRepaidAndAnotherWaivesTheClaim(t *testing.T) {
 		OccurredOn: "2026-08-01", Kind: "opening",
 	})
 
-	// Fronting your own money does not move the fund's cash, so neither claim is on the
-	// ledger yet and the balance has not budged.
+	// Fronting your own money does not move the fund's cash: neither claim is on
+	// the ledger and the balance has not budged.
 	janeClaim := createReimbursement(t, sqlDB, f.fundID, jane, f.mainID, 150_000)
 	johnClaim, err := q.CreateReimbursement(ctx, store.CreateReimbursementParams{
 		FundID: f.fundID, MemberID: john, PurposeID: f.mainID, Amount: 80_000,
@@ -364,8 +360,8 @@ func TestOneMemberIsRepaidAndAnotherWaivesTheClaim(t *testing.T) {
 		t.Errorf("outstanding total = %d, want %d", total, want)
 	}
 
-	// Jane is paid back: one real 'out'. John tells the treasurer to keep
-	// it, which closes his claim without any money moving.
+	// Jane is paid back: one real 'out'. John tells the treasurer to keep it,
+	// which closes his claim without money moving.
 	f.entry(t, sqlDB, store.CreateTransactionParams{
 		AccountID: f.cashID, PurposeID: f.mainID, Direction: "out", Amount: 150_000,
 		OccurredOn: "2026-08-15", Kind: "reimbursement", ReimbursementID: &janeClaim,
@@ -420,8 +416,8 @@ func TestReconciliationRecordsWhatWasCountedAndHowItWasResolved(t *testing.T) {
 		t.Fatalf("a matched line = %v, want no error", err)
 	}
 
-	// The tin is 20000 short. The treasurer posts an adjusting entry - never an
-	// edit to a posted row (CLAUDE.md rule 3) - and the line names it.
+	// The tin is 20000 short. The treasurer posts an adjusting entry, never an
+	// edit to a posted row (CLAUDE.md rule 3), and the line names it.
 	cashRecorded := frozenBalance(t, sqlDB, f, f.cashID, cutoff)
 	note := "cash count difference"
 	fix := f.entry(t, sqlDB, store.CreateTransactionParams{
@@ -447,8 +443,8 @@ func TestReconciliationRecordsWhatWasCountedAndHowItWasResolved(t *testing.T) {
 		t.Errorf("fund balance after the adjustment = %d, want %d", got, want)
 	}
 
-	// A second fund, counted the same day, where the treasurer decides to sleep
-	// on the difference instead. 'left_open' is a resolution, not a failure.
+	// A second fund, counted the same day, where the treasurer sleeps on the
+	// difference. 'left_open' is a resolution, not a failure.
 	g := newScenarioFund(t, sqlDB, "Other Fund", "zyxwvutsrqponmlkjihgfe")
 	g.entry(t, sqlDB, store.CreateTransactionParams{
 		AccountID: g.cashID, PurposeID: g.mainID, Direction: "in", Amount: 100_000,
@@ -511,9 +507,9 @@ func TestALeftOpenDifferenceIsRevisitedAsASecondSnapshot(t *testing.T) {
 	}
 
 	// A week later the missing receipt turns up: a 10000 expense from the 3rd,
-	// posted now. It is backdated in occurred_on and current in id, which is the
-	// whole reason the cutoff is an id - the old snapshot's arithmetic must not
-	// change under it, and today's balance must.
+	// posted now, backdated in occurred_on and current in id. That is why the
+	// cutoff is an id: the old snapshot's arithmetic must not change, and today's
+	// balance must.
 	late := f.entry(t, sqlDB, store.CreateTransactionParams{
 		AccountID: f.cashID, PurposeID: f.mainID, Direction: "out", Amount: 10_000,
 		OccurredOn: "2026-08-03", Kind: "adjustment",
@@ -528,8 +524,8 @@ func TestALeftOpenDifferenceIsRevisitedAsASecondSnapshot(t *testing.T) {
 		t.Errorf("today's cash balance = %d, want %d - the late entry counts now", got, want)
 	}
 
-	// Counted again, and this time it agrees. The first snapshot is untouched:
-	// revisiting means a new row, never an edit.
+	// Counted again, and it agrees. The first snapshot is untouched: revisiting
+	// means a new row, never an edit.
 	second, err := q.CreateReconciliation(ctx, store.CreateReconciliationParams{
 		FundID: f.fundID, PerformedAt: 2_000, ThroughTransactionID: &late, CreatedAt: 2_000,
 	})
@@ -544,9 +540,9 @@ func TestALeftOpenDifferenceIsRevisitedAsASecondSnapshot(t *testing.T) {
 		t.Fatalf("the second snapshot's line = %v, want no error", err)
 	}
 
-	// The second snapshot counted this same account (and it matched), so the
-	// first snapshot's left_open line is superseded: the gap is no longer
-	// open, even though the first row itself was never touched.
+	// The second snapshot counted this account and matched, so the first's
+	// left_open line is superseded and the gap is no longer open, though the
+	// first row was never touched.
 	stillOpen, err := q.ListOpenReconciliationLinesByFund(ctx, f.fundID)
 	if err != nil {
 		t.Fatalf("ListOpenReconciliationLinesByFund = %v, want no error", err)
@@ -563,9 +559,9 @@ func TestALeftOpenDifferenceIsRevisitedAsASecondSnapshot(t *testing.T) {
 	}
 }
 
-// createReconciliation is the bare snapshot header the open-lines tests below
-// build on: no cutoff, no note - only what ordering ("latest per location")
-// actually depends on, performed_at and id.
+// createReconciliation is the bare snapshot header the open-lines tests build
+// on: no cutoff, no note, only what "latest per location" ordering depends on,
+// performed_at and id.
 func createReconciliation(t *testing.T, sqlDB *sql.DB, fundID, performedAt int64) store.Reconciliation {
 	t.Helper()
 	rec, err := store.New(sqlDB).CreateReconciliation(context.Background(), store.CreateReconciliationParams{
@@ -577,12 +573,11 @@ func createReconciliation(t *testing.T, sqlDB *sql.DB, fundID, performedAt int64
 	return rec
 }
 
-// TestOpenReconciliationLineSupersededByAnyLaterResolution is acceptance
-// criterion 1: a left_open line stops being open once a later snapshot has a
-// line for the same location, whatever that later line's own resolution.
-// "Superseded" is not "resolved" - the point is that the query stops
-// answering for the location the moment someone has looked at it again,
-// regardless of what they found.
+// TestOpenReconciliationLineSupersededByAnyLaterResolution is criterion 1: a
+// left_open line stops being open once a later snapshot has a line for the
+// same location, whatever that line's resolution. "Superseded" is not
+// "resolved": the query stops answering for the location once someone has
+// looked again.
 func TestOpenReconciliationLineSupersededByAnyLaterResolution(t *testing.T) {
 	t.Parallel()
 	for _, resolution := range []string{"matched", "entry_added", "adjusted", "left_open"} {
@@ -628,8 +623,8 @@ func TestOpenReconciliationLineSupersededByAnyLaterResolution(t *testing.T) {
 				t.Fatalf("ListOpenReconciliationLinesByFund = %v, want no error", err)
 			}
 			if resolution == "left_open" {
-				// The second line is itself left_open, so it is the open one -
-				// the first is superseded, not the list emptied.
+				// The second line is itself left_open, so it is the open one; the first is
+				// superseded, not the list emptied.
 				if len(open) != 1 || open[0].ReconciliationID != second.ID {
 					t.Errorf("open lines = %+v, want only the second snapshot's", open)
 				}
@@ -643,9 +638,8 @@ func TestOpenReconciliationLineSupersededByAnyLaterResolution(t *testing.T) {
 }
 
 // TestOpenReconciliationLineStaysOpenWhenALaterSnapshotSkipsTheLocation is
-// acceptance criterion 2: superseding is per location, not per snapshot. A
-// later count that never mentions an account leaves that account's gap open,
-// even though a later snapshot exists and resolved something else.
+// criterion 2: superseding is per location, not per snapshot. A later count
+// that never mentions an account leaves its gap open.
 func TestOpenReconciliationLineStaysOpenWhenALaterSnapshotSkipsTheLocation(t *testing.T) {
 	t.Parallel()
 	sqlDB := migratedTestDB(t)
@@ -688,9 +682,8 @@ func TestOpenReconciliationLineStaysOpenWhenALaterSnapshotSkipsTheLocation(t *te
 	}
 }
 
-// TestOpenReconciliationLinesTrackTwoLocationsIndependently is acceptance
-// criterion 3: two locations left open, one recounted clean - only the
-// untouched one remains.
+// TestOpenReconciliationLinesTrackTwoLocationsIndependently is criterion 3:
+// two locations left open, one recounted clean; only the untouched one stays.
 func TestOpenReconciliationLinesTrackTwoLocationsIndependently(t *testing.T) {
 	t.Parallel()
 	sqlDB := migratedTestDB(t)
@@ -733,9 +726,9 @@ func TestOpenReconciliationLinesTrackTwoLocationsIndependently(t *testing.T) {
 	}
 }
 
-// TestOpenReconciliationLineRecountStillOffReturnsOnlyTheNewest is acceptance
-// criterion 4: a location recounted and still off returns just the newest
-// left_open line, never both - no double counting the same gap.
+// TestOpenReconciliationLineRecountStillOffReturnsOnlyTheNewest is criterion
+// 4: a location recounted and still off returns just the newest left_open
+// line, never both.
 func TestOpenReconciliationLineRecountStillOffReturnsOnlyTheNewest(t *testing.T) {
 	t.Parallel()
 	sqlDB := migratedTestDB(t)
@@ -775,12 +768,11 @@ func TestOpenReconciliationLineRecountStillOffReturnsOnlyTheNewest(t *testing.T)
 	}
 }
 
-// TestOpenReconciliationLineOrderingIsPerformedAtThenID is acceptance
-// criterion 5: "latest" is the owning snapshot's (performed_at, id), with
-// performed_at the primary key. A snapshot inserted later (a higher id) but
-// backdated to an earlier performed_at does not supersede one performed
-// chronologically after it - and, symmetrically, when performed_at ties, id
-// breaks it.
+// TestOpenReconciliationLineOrderingIsPerformedAtThenID is criterion 5:
+// "latest" is the owning snapshot's (performed_at, id), performed_at primary.
+// A snapshot inserted later (higher id) but backdated to an earlier
+// performed_at does not supersede one performed after it, and when
+// performed_at ties, id breaks it.
 func TestOpenReconciliationLineOrderingIsPerformedAtThenID(t *testing.T) {
 	t.Parallel()
 	sqlDB := migratedTestDB(t)
@@ -790,8 +782,8 @@ func TestOpenReconciliationLineOrderingIsPerformedAtThenID(t *testing.T) {
 	t.Run("higher id but earlier performed_at does not supersede", func(t *testing.T) {
 		f := newScenarioFund(t, sqlDB, "Test Fund A", validSlug)
 
-		// Inserted first (lower id), but performed_at puts it chronologically
-		// after the row inserted next.
+		// Inserted first (lower id), but performed_at puts it chronologically after
+		// the next row.
 		chronologicallyLater := createReconciliation(t, sqlDB, f.fundID, 5_000)
 		if _, err := q.CreateReconciliationLine(ctx, store.CreateReconciliationLineParams{
 			FundID: f.fundID, ReconciliationID: chronologicallyLater.ID, AccountID: f.cashID,
@@ -856,7 +848,7 @@ func TestOpenReconciliationLineOrderingIsPerformedAtThenID(t *testing.T) {
 }
 
 // frozenBalance is what a snapshot stores in recorded_amount: the ledger summed
-// up to the cutoff id, not to today.
+// to the cutoff id, not today.
 func frozenBalance(t *testing.T, sqlDB *sql.DB, f scenarioFund, accountID, throughID int64) int64 {
 	t.Helper()
 	got, err := store.New(sqlDB).AccountBalanceThrough(context.Background(), store.AccountBalanceThroughParams{

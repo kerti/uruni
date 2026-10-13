@@ -9,17 +9,16 @@ import (
 )
 
 // transferRequest is POST /api/transfers's body: one amount leaving one
-// account and arriving in another, within the same purpose. purpose_id is
-// singular deliberately - a between_accounts transfer never changes what the
-// money is for, only where it sits (ADR-024), and the reclass_purpose shape
-// that does change it belongs to CloseIncidentalAndRoll, not to a route.
+// account and arriving in another, within one purpose. purpose_id is singular:
+// a between_accounts transfer changes where money sits, not what it is for
+// (ADR-024); the reclass_purpose shape that changes it belongs to
+// CloseIncidentalAndRoll, not a route.
 //
-// The optional note is written to both legs, or to neither. This reverses
-// an earlier reading of ADR-024 - that a pair's amount, date and direction
-// already say everything - which held only for the cash-to-bank case it was
-// written about. "Why did this move?" is exactly the question a transfer
-// leaves open, and answering it on one leg alone makes the other read, in
-// the transaction list, as an unexplained arrival.
+// The optional note is written to both legs, or neither. This reverses an
+// earlier reading of ADR-024 (that amount, date and direction say everything),
+// which held only for cash-to-bank. "Why did this move?" is what a transfer
+// leaves open, and a note on one leg alone makes the other read as an
+// unexplained arrival.
 type transferRequest struct {
 	PurposeID     int64   `json:"purpose_id"`
 	FromAccountID int64   `json:"from_account_id"`
@@ -29,11 +28,9 @@ type transferRequest struct {
 	Note          *string `json:"note"`
 }
 
-// transferResponse is the wire shape of the transfer row. No fund_id, same
-// reasoning as accountResponse. The two legs it groups are not repeated here:
-// they are ordinary transaction rows, already readable through GET
-// /api/transactions, which is why there is deliberately no GET
-// /api/transfers.
+// transferResponse is the wire shape of the transfer row. No fund_id, as
+// accountResponse. Its two legs are ordinary transaction rows readable through
+// GET /api/transactions, so there is no GET /api/transfers.
 type transferResponse struct {
 	ID        int64  `json:"id"`
 	Kind      string `json:"kind"`
@@ -46,14 +43,13 @@ func toTransferResponse(t store.Transfer) transferResponse {
 
 // createTransfer is POST /api/transfers: wraps
 // Ledger.PostTransferBetweenAccounts, the treasurer depositing the wallet's
-// cash at the bank or drawing it back out (PRD section 6's location tracking). The
-// fund's total is unchanged by construction - one amount, two opposite legs -
-// so the only thing that moves is where the money sits.
+// cash at the bank or drawing it back out (PRD section 6). The fund's total is
+// unchanged by construction (one amount, two opposite legs); only where the
+// money sits moves.
 //
-// Nothing is validated here (ADR-027): a non-positive amount, a malformed
-// date and identical from/to legs are all the ledger's own
-// ErrInvalidArgument, reaching the client as a 400 through the shared mapper
-// with the ledger's message rather than a second one written here.
+// Nothing is validated here (ADR-027): a non-positive amount, malformed date
+// and identical from/to legs are the ledger's ErrInvalidArgument, a 400
+// through the shared mapper with the ledger's message.
 func (a *api) createTransfer(w http.ResponseWriter, r *http.Request) {
 	var req transferRequest
 	if !decodeJSON(w, r, &req) {

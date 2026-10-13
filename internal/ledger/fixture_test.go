@@ -13,23 +13,22 @@ import (
 	"github.com/kerti/uruni/internal/store"
 )
 
-// newTestLedger returns a Ledger over a private in-memory database carrying the
+// newTestLedger returns a Ledger over a private in-memory database with the
 // real schema.
 //
-// It reuses internal/db.Open rather than opening a connection itself, so the
-// tests run against production's configuration: SetMaxOpenConns(1) and all four
-// pragmas, foreign_keys=ON among them - SQLite leaves that off by default, per
-// connection, and the DSN is what turns it on everywhere (ADR-028).
+// It reuses internal/db.Open, so tests run on production's configuration:
+// SetMaxOpenConns(1) and all four pragmas, foreign_keys=ON among them (SQLite
+// leaves it off per connection; the DSN turns it on everywhere, ADR-028).
 //
 // ":memory:" is private to this connection, with no cache=shared. That is safe
 // only because the pool never opens a second connection; raising MaxOpenConns
-// above 1 would silently give a second connection an empty database. Whoever
-// revisits pooling should read ADR-028 as well as ADR-004.
+// above 1 would silently give a second connection an empty database. Read
+// ADR-028 as well as ADR-004 before revisiting pooling.
 //
-// This differs from internal/db's own helper, which uses a real temp file
-// deliberately: those tests assert the WAL pragma itself, and WAL degrades to a
-// memory journal in-memory. Nothing here asserts a pragma - these tests are
-// about CHECKs, foreign keys and triggers, which behave identically.
+// This differs from internal/db's helper, which uses a real temp file because
+// those tests assert the WAL pragma, and WAL degrades to a memory journal
+// in-memory. Nothing here asserts a pragma: these tests are about CHECKs,
+// foreign keys and triggers, which behave identically.
 func newTestLedger(t *testing.T) *Ledger {
 	t.Helper()
 	return New(newTestDB(t))
@@ -54,13 +53,13 @@ func newTestDB(t *testing.T) *sql.DB {
 	return sqlDB
 }
 
-// validSlug is 22 characters, the minimum report_slug length, so a fixture that
-// is not exercising the slug constraint can reuse it.
+// validSlug is 22 characters, the minimum report_slug length, for fixtures not
+// exercising the slug constraint.
 const validSlug = "abcdefghijklmnopqrstuv"
 
-// fixture is one fund with the rows the domain tests need under it. It mirrors
-// internal/db's ledgerFixture rather than sharing it: that one is unexported in
-// another package, and one more small fixture file is cheaper than exporting
+// fixture is one fund with the rows the domain tests need. It mirrors
+// internal/db's ledgerFixture rather than sharing it: that one is unexported
+// in another package, and a small fixture file is cheaper than exporting
 // test-only surface across a package boundary (ADR-028).
 type fixture struct {
 	fundID    int64
@@ -115,20 +114,17 @@ func createAccount(t *testing.T, q *store.Queries, fundID int64, kind, name stri
 	return a.ID
 }
 
-// defaultSetupAccounts is the cash+bank pair every SetUpFund test in this
-// package builds on unless it's specifically exercising #78's "N accounts,
-// not a fixed two" - one shared default rather than each test re-typing the
-// same two-element literal, the ledger-package equivalent of
-// internal/http/testhelpers_test.go's shared fixture.
+// defaultSetupAccounts is the cash+bank pair every SetUpFund test builds on
+// unless exercising #78's "N accounts, not a fixed two"; one shared default,
+// as internal/http/testhelpers_test.go's fixture.
 var defaultSetupAccounts = []AccountInput{
 	{Kind: "cash", Name: "Tunai"},
 	{Kind: "bank", Name: "Bank"},
 }
 
-// CashAccountID and BankAccountID find SetUpFundResult's own cash/bank
-// account by Kind rather than assuming a fixed slice order or count - #78
-// dropped both assumptions from production code, so the test helper that
-// reads a result back out does not get to lean on them either.
+// CashAccountID and BankAccountID find SetUpFundResult's cash/bank account by
+// Kind, not by slice order or count: #78 dropped both assumptions from
+// production code, so test helpers may not lean on them either.
 func (r SetUpFundResult) CashAccountID(t *testing.T) int64 {
 	return accountIDByKind(t, r.Accounts, "cash")
 }
@@ -148,14 +144,12 @@ func accountIDByKind(t *testing.T, accounts []store.Account, kind string) int64 
 	return 0
 }
 
-// postOpeningBalance is the fixture reconciliation_test.go and
-// reimbursement_test.go reach for to give an already-existing account a
-// starting figure: #230 removed PostOpeningBalance and the standalone route
-// it backed, so an opening balance now only ever posts alongside the account
-// it belongs to (SetUpFund, Ledger.CreateAccount) - neither of which fits a
-// test whose account came from this file's own createAccount. It goes
-// straight to the package's own unexported insert path rather than
-// reintroducing a third production entry point just for tests.
+// postOpeningBalance gives an existing account a starting figure for
+// reconciliation_test.go and reimbursement_test.go: #230 removed
+// PostOpeningBalance and its route, so an opening balance posts only with its
+// account (SetUpFund, Ledger.CreateAccount), neither of which fits a test
+// whose account came from this file's createAccount. It uses the package's
+// unexported insert path rather than add a production entry point for tests.
 func postOpeningBalance(t *testing.T, l *Ledger, fundID, accountID, purposeID int64, amount money.Amount, occurredOn string) store.Transaction {
 	t.Helper()
 	ob := OpeningBalance{Amount: amount, OccurredOn: occurredOn}

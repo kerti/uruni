@@ -1,11 +1,10 @@
 package http
 
 // Receipt photos (PRD section 7.4, ADR-011): an optional image attached to a
-// transaction or a reimbursement claim after the fact. Two upload routes
-// rather than one that accepts either kind of id, matching the receipt
-// table's own "exactly one parent" CHECK (transaction_id XOR
-// reimbursement_id) - a route that could name either would have to re-derive
-// that exclusivity itself instead of leaning on the schema for it.
+// transaction or reimbursement claim after the fact. Two upload routes, not
+// one accepting either id, match the receipt table's "exactly one parent"
+// CHECK (transaction_id XOR reimbursement_id) without re-deriving that
+// exclusivity.
 
 import (
 	"context"
@@ -25,17 +24,16 @@ import (
 	"github.com/kerti/uruni/internal/store"
 )
 
-// maxReceiptRequestBytes is the maintainer's own size cap (#153): 10 MB of
-// raw request body, enforced with http.MaxBytesReader before a single byte of
-// the multipart form is parsed - a phone photo well under this limit still
-// downscales to a few hundred KB on disk (receipt_image.go), so the cap is
-// about refusing something absurd early, not about the final stored size.
+// maxReceiptRequestBytes caps the raw request body at 10 MB (#153), enforced
+// with http.MaxBytesReader before any of the multipart form is parsed. A
+// phone photo under it downscales to a few hundred KB (receipt_image.go), so
+// the cap refuses something absurd early; it is not the stored size.
 const maxReceiptRequestBytes = 10 << 20 // 10 MiB
 
-// receiptResponse is the wire shape of an uploaded receipt: just enough for
-// a client to list, link to (GET /api/receipts/{id}) and offer to delete.
-// The on-disk path is never exposed - it is server-generated and has no
-// meaning to a caller (#153's filename ruling, below).
+// receiptResponse is the wire shape of an uploaded receipt: enough for a
+// client to list, link to (GET /api/receipts/{id}) and offer to delete. The
+// on-disk path is never exposed: it is server-generated and meaningless to a
+// caller.
 type receiptResponse struct {
 	ID         int64 `json:"id"`
 	UploadedAt int64 `json:"uploaded_at"`
@@ -46,9 +44,8 @@ func toReceiptResponse(r store.Receipt) receiptResponse {
 }
 
 // uploadTransactionReceipt is POST /api/transactions/{id}/receipts: attaching
-// a photo to an already-posted transaction. Nothing about the transaction
-// row changes - ADR-011's whole point is that a receipt lives in its own
-// table precisely so a photo can be added after the fact without touching an
+// a photo to a posted transaction. The row does not change: ADR-011 puts a
+// receipt in its own table so a photo can be added without touching an
 // immutable ledger row.
 func (a *api) uploadTransactionReceipt(w http.ResponseWriter, r *http.Request) {
 	txn, ok := a.resolveTransactionForReceipt(w, r)
@@ -59,8 +56,8 @@ func (a *api) uploadTransactionReceipt(w http.ResponseWriter, r *http.Request) {
 }
 
 // uploadReimbursementReceipt is POST /api/reimbursements/{id}/receipts: the
-// same attachment, hung off a claim instead - PRD section 7.4's member
-// fronting their own money, and the nota that proves it.
+// same attachment on a claim (PRD section 7.4: a member fronting money, and
+// the nota that proves it).
 func (a *api) uploadReimbursementReceipt(w http.ResponseWriter, r *http.Request) {
 	claim, ok := a.resolveReimbursementForReceipt(w, r)
 	if !ok {
@@ -70,9 +67,8 @@ func (a *api) uploadReimbursementReceipt(w http.ResponseWriter, r *http.Request)
 }
 
 // resolveTransactionForReceipt reads {id}, fund-scopes it through
-// GetTransactionForFund, and answers 404 for one belonging to another fund
-// or naming no row at all - the exact shape resolveDuesTier and resolveAccount
-// already use for every other route that reaches a row by path id.
+// GetTransactionForFund, and answers 404 for another fund's row or none, as
+// resolveDuesTier and resolveAccount do.
 func (a *api) resolveTransactionForReceipt(w http.ResponseWriter, r *http.Request) (store.Transaction, bool) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
@@ -94,8 +90,7 @@ func (a *api) resolveTransactionForReceipt(w http.ResponseWriter, r *http.Reques
 }
 
 // resolveReimbursementForReceipt is resolveTransactionForReceipt's twin over
-// reimbursement, using the same fund-scoped GetReimbursement every other
-// reimbursement route already reads through.
+// reimbursement, through the fund-scoped GetReimbursement.
 func (a *api) resolveReimbursementForReceipt(w http.ResponseWriter, r *http.Request) (store.Reimbursement, bool) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
@@ -117,9 +112,9 @@ func (a *api) resolveReimbursementForReceipt(w http.ResponseWriter, r *http.Requ
 }
 
 // resolveReceipt is GET and DELETE's shared lookup: {id}, fund-scoped through
-// GetReceiptForFund. This is the one gate between a session and someone
-// else's photo - GET answers image bytes, not JSON, so there is no second
-// layer downstream that would otherwise catch a wrong fund's row.
+// GetReceiptForFund. It is the one gate between a session and someone else's
+// photo: GET answers image bytes, so no downstream layer would catch a wrong
+// fund's row.
 func (a *api) resolveReceipt(w http.ResponseWriter, r *http.Request) (store.Receipt, bool) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
@@ -141,11 +136,11 @@ func (a *api) resolveReceipt(w http.ResponseWriter, r *http.Request) (store.Rece
 }
 
 // processAndStoreReceipt is the two upload routes' shared body: read the
-// multipart file (capped, per maxReceiptRequestBytes), downscale and
-// re-encode it (receipt_image.go), write it to the uploads volume under a
-// server-generated name, and insert the row. Exactly one of transactionID
-// and reimbursementID is non-nil, matching the schema's own CHECK - the two
-// callers above are what enforce that, not this function.
+// multipart file (capped by maxReceiptRequestBytes), downscale and re-encode
+// it (receipt_image.go), write it to the uploads volume under a
+// server-generated name, and insert the row. Exactly one of transactionID and
+// reimbursementID is non-nil (the schema's CHECK); the two callers enforce
+// that.
 func (a *api) processAndStoreReceipt(w http.ResponseWriter, r *http.Request, fundID int64, transactionID, reimbursementID *int64) {
 	raw, ok := a.readReceiptUpload(w, r)
 	if !ok {
@@ -156,11 +151,9 @@ func (a *api) processAndStoreReceipt(w http.ResponseWriter, r *http.Request, fun
 	if err != nil {
 		switch {
 		case errors.Is(err, errReceiptHEICUnsupported):
-			// Distinct from the generic rejection below on purpose (the
-			// maintainer's own ruling, #153): a phone shooting HEIC by
-			// default is the single most likely reason this path is ever
-			// reached at all, and the fix (re-export or share as JPEG) is
-			// different from "pick a different kind of file."
+			// Distinct from the generic rejection below (#153): a phone shooting HEIC by
+			// default is the likeliest way to reach this, and the fix (re-export or share
+			// as JPEG) differs from "pick a different kind of file."
 			writeAPIError(w, http.StatusUnsupportedMediaType, "heic_unsupported",
 				"HEIC/HEIF photos are not supported here - share or export the photo as JPEG or PNG instead.")
 		case errors.Is(err, errReceiptTooManyPixels):
@@ -191,10 +184,9 @@ func (a *api) processAndStoreReceipt(w http.ResponseWriter, r *http.Request, fun
 		UploadedAt:      time.Now().Unix(),
 	})
 	if err != nil {
-		// The file now sits on disk with no row naming it - unlike the
-		// orphan ADR-011 already accepts from a *delete* (reachable, until
-		// then, through the id that named it), this one never had an id at
-		// all, so best-effort cleanup here is the only chance to remove it.
+		// The file is on disk with no row naming it. Unlike the orphan ADR-011
+		// accepts from a delete (reachable through its id until then), this one never
+		// had an id, so best-effort cleanup here is the only chance to remove it.
 		_ = os.Remove(filepath.Join(a.uploadsDir, filename))
 		mapSQLiteError(w, a.logger, err)
 		return
@@ -203,14 +195,12 @@ func (a *api) processAndStoreReceipt(w http.ResponseWriter, r *http.Request, fun
 	writeJSON(w, http.StatusCreated, toReceiptResponse(receipt))
 }
 
-// readReceiptUpload enforces the size cap and pulls the uploaded file's raw
-// bytes out of the multipart body - the "file" field, by this route's own
-// contract. It answers the request itself on any failure, the same
-// decode-and-report shape decodeJSON uses for a JSON body.
+// readReceiptUpload enforces the size cap and pulls the "file" field's raw
+// bytes out of the multipart body. It answers the request itself on failure,
+// as decodeJSON does for JSON.
 func (a *api) readReceiptUpload(w http.ResponseWriter, r *http.Request) ([]byte, bool) {
-	// Wraps r.Body before ParseMultipartForm ever reads a byte of it - the
-	// cap has to apply to the whole raw request body (maintainer's own
-	// wording), not to some part parsed out of it afterward.
+	// Wraps r.Body before ParseMultipartForm reads any of it: the cap applies to
+	// the whole raw body, not a part parsed from it.
 	r.Body = http.MaxBytesReader(w, r.Body, maxReceiptRequestBytes)
 
 	if err := r.ParseMultipartForm(maxReceiptRequestBytes); err != nil { //nolint:gosec // not unbounded - r.Body is already wrapped in http.MaxBytesReader above, which is exactly what caps this read
@@ -246,22 +236,20 @@ func (a *api) readReceiptUpload(w http.ResponseWriter, r *http.Request) ([]byte,
 
 // writeReceiptFile writes data under a fresh, server-generated name inside
 // uploadsDir and returns that name (the path CreateReceipt stores, relative
-// to the uploads directory - never derived from anything the client sent, so
-// there is no path-traversal surface here to defend). It writes to a temp
-// file in the same directory first and renames into place, so a reader can
-// never observe a partially-written file under the final name.
+// to uploadsDir, never derived from client input, so no path-traversal
+// surface). It writes a temp file in the same directory and renames into
+// place, so a reader never sees a partial file under the final name.
 func writeReceiptFile(uploadsDir string, data []byte) (string, error) {
 	name, err := randomReceiptFilename()
 	if err != nil {
 		return "", err
 	}
 
-	// In uploadsDir itself, not os.TempDir(): os.Rename across filesystems
-	// fails, and a container's /uploads volume is very often a different
-	// filesystem from wherever the OS default temp directory lands.
-	// WriteFileAtomic also fsyncs the file before the rename and the
-	// directory after it, so a power loss cannot leave a receipt row naming
-	// an empty file (#501).
+	// In uploadsDir, not os.TempDir(): os.Rename across filesystems fails, and a
+	// container's /uploads volume is often a different filesystem from the OS
+	// temp directory. WriteFileAtomic also fsyncs the file before the rename and
+	// the directory after, so a power loss cannot leave a receipt row naming an
+	// empty file (#501).
 	err = backup.WriteFileAtomic(uploadsDir, ".receipt-upload-*.tmp", name, func(w io.Writer) error {
 		_, err := w.Write(data)
 		return err
@@ -273,11 +261,10 @@ func writeReceiptFile(uploadsDir string, data []byte) (string, error) {
 }
 
 // randomReceiptFilename returns a fresh crypto/rand name, never derived from
-// the client's own filename - the maintainer's own ruling (#153): nothing
-// about a stored receipt's name is ever attacker-influenced, so there is no
-// path-traversal surface to sanitize against in the first place. Every
-// receipt is re-encoded as JPEG (receipt_image.go), so the extension is
-// always .jpg regardless of what was uploaded.
+// the client's filename (#153): nothing about a stored receipt's name is
+// attacker-influenced, so there is no path-traversal surface to sanitize.
+// Every receipt is re-encoded as JPEG (receipt_image.go), so the extension is
+// always .jpg.
 func randomReceiptFilename() (string, error) {
 	buf := make([]byte, 16)
 	if _, err := rand.Read(buf); err != nil {
@@ -287,11 +274,10 @@ func randomReceiptFilename() (string, error) {
 }
 
 // receiptIDsForTransactions batch-loads receipt_ids for a fund-scoped page of
-// transaction rows (#154), one query per page rather than one per row
-// (N+1). The returned map holds an entry only for a transaction id that
-// actually has at least one receipt attached - toTransactionResponse already
-// defaults every row's ReceiptIDs to []int64{}, so a caller only needs to
-// overwrite the ids this map actually names, via orEmptyReceiptIDs below.
+// transaction rows (#154), one query per page, not per row. The map has an
+// entry only for a transaction with a receipt; toTransactionResponse defaults
+// ReceiptIDs to []int64{}, so callers overwrite only the named ids via
+// orEmptyReceiptIDs.
 func (a *api) receiptIDsForTransactions(ctx context.Context, fundID int64, ids []int64) (map[int64][]int64, error) {
 	if len(ids) == 0 {
 		return nil, nil
@@ -317,11 +303,10 @@ func (a *api) receiptIDsForTransactions(ctx context.Context, fundID int64, ids [
 	return byParent, nil
 }
 
-// receiptIDsForReimbursements is receiptIDsForTransactions' twin over
-// reimbursement claims, for GET /api/reimbursements's page and for
-// PATCH /api/reimbursements/{id}'s single-row response (a claim corrected
-// after a photo was already attached to it must not report an empty
-// receipt_ids just because this response is not, itself, the create route).
+// receiptIDsForReimbursements is receiptIDsForTransactions' twin over claims,
+// for GET /api/reimbursements's page and PATCH /api/reimbursements/{id}'s
+// response (a claim corrected after a photo was attached must not report
+// empty receipt_ids).
 func (a *api) receiptIDsForReimbursements(ctx context.Context, fundID int64, ids []int64) (map[int64][]int64, error) {
 	if len(ids) == 0 {
 		return nil, nil
@@ -347,9 +332,9 @@ func (a *api) receiptIDsForReimbursements(ctx context.Context, fundID int64, ids
 	return byParent, nil
 }
 
-// orEmptyReceiptIDs turns receiptIDsForTransactions/receiptIDsForReimbursements'
-// "absent means none" map lookup into receipt_ids' own "always [], never
-// null" wire contract (the maintainer's ruling on #154).
+// orEmptyReceiptIDs turns the "absent means none" map lookup of
+// receiptIDsForTransactions/receiptIDsForReimbursements into receipt_ids'
+// "always [], never null" wire contract (#154).
 func orEmptyReceiptIDs(ids []int64) []int64 {
 	if ids == nil {
 		return []int64{}
@@ -357,21 +342,18 @@ func orEmptyReceiptIDs(ids []int64) []int64 {
 	return ids
 }
 
-// getReceipt is GET /api/receipts/{id}: the first route in this whole
-// surface that answers with image bytes instead of the JSON envelope every
-// other route shares. Session-gated rather than public (#153's own ruling) -
-// see api.go's route comment for why.
+// getReceipt is GET /api/receipts/{id}: the first route answering with image
+// bytes instead of the JSON envelope. Session-gated, not public (#153); see
+// api.go.
 func (a *api) getReceipt(w http.ResponseWriter, r *http.Request) {
 	receipt, ok := a.resolveReceipt(w, r)
 	if !ok {
 		return
 	}
 
-	// Defense in depth, not a check this path can actually fail today:
-	// receipt.Path is always the bare filename writeReceiptFile generated,
-	// with no directory separators to begin with. Refusing anything else
-	// here is what keeps that true rather than merely documented, the
-	// moment something upstream changes.
+	// Defense in depth, not a check this path can fail today: receipt.Path is the
+	// bare filename writeReceiptFile generated. Refusing anything else keeps that
+	// true if something upstream changes.
 	if receipt.Path != filepath.Base(receipt.Path) {
 		a.logger.Error("receipt path is not a bare filename", "id", receipt.ID)
 		writeAPIError(w, http.StatusInternalServerError, "internal_error", "Something went wrong.")
@@ -386,20 +368,18 @@ func (a *api) getReceipt(w http.ResponseWriter, r *http.Request) {
 	}
 	defer func() { _ = file.Close() }()
 
-	// Every receipt is stored as JPEG (receipt_image.go always re-encodes),
-	// so the type is a known constant, not something to sniff or trust from
-	// the stored row.
+	// Every receipt is stored as JPEG (receipt_image.go re-encodes), so the type
+	// is a known constant, not sniffed or trusted from the row.
 	w.Header().Set("Content-Type", "image/jpeg")
-	// The browser must not guess past the Content-Type above - this is a
-	// photo a treasurer uploaded, not a document to render as anything else.
+	// The browser must not guess past the Content-Type: this is an uploaded
+	// photo, not a document to render as anything else.
 	w.Header().Set("X-Content-Type-Options", "nosniff")
-	// private: this is one treasurer's own session, never a shared cache
-	// sitting in front of the app. no-cache, not max-age: receipt ids are
-	// reused (SQLite hands a deleted top id to the next insert), so "Ganti
-	// foto" on the newest receipt serves a new photo at the old URL, and a
-	// cache trusted by URL alone kept showing the old one (#459). The
-	// browser asks every time; the ETag is the stored file name, random per
-	// upload, so an unchanged photo is a 304 and a replaced one never is.
+	// private: one treasurer's session, never a shared cache. no-cache, not
+	// max-age: receipt ids are reused (SQLite hands a deleted top id to the next
+	// insert), so "Ganti foto" on the newest receipt serves a new photo at the
+	// old URL, and a cache trusted by URL alone kept showing the old one (#459).
+	// The ETag is the stored file name, random per upload, so an unchanged photo
+	// is a 304 and a replaced one never is.
 	w.Header().Set("Cache-Control", "private, no-cache")
 	w.Header().Set("ETag", `"`+receipt.Path+`"`)
 
@@ -407,12 +387,10 @@ func (a *api) getReceipt(w http.ResponseWriter, r *http.Request) {
 }
 
 // deleteReceipt is DELETE /api/receipts/{id}: for a wrong or duplicate photo
-// (ADR-011: "a wrong photo is replaceable"). It removes the database row and
-// then best-effort removes the file - ADR-011 already accepts an orphaned
-// file as the cost of not making image deletion transactional ("a deleted
-// receipt row leaves an orphaned file on the volume until something sweeps
-// it"), so a failed os.Remove here is neither reported to the caller nor
-// retried; there is deliberately no sweep job.
+// (ADR-011: "a wrong photo is replaceable"). It removes the row, then
+// best-effort removes the file: ADR-011 accepts an orphaned file as the cost
+// of non-transactional image deletion, so a failed os.Remove is neither
+// reported nor retried, and there is no sweep job.
 func (a *api) deleteReceipt(w http.ResponseWriter, r *http.Request) {
 	receipt, ok := a.resolveReceipt(w, r)
 	if !ok {

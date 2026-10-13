@@ -9,13 +9,13 @@ import (
 	"github.com/kerti/uruni/internal/store"
 )
 
-// ADR-031: a closed envelope refuses every posting. These are the paths
-// #473 found that walked past it - a dues payment naming its own purpose,
-// and a reimbursement paid out to (or filed against) a closed envelope.
+// ADR-031: a closed envelope refuses every posting. These are the paths #473
+// found walking past it: a dues payment naming its purpose, and a
+// reimbursement paid out to (or filed against) a closed envelope.
 
-// closedEnvelopeWithClaim opens an envelope, files a claim against it while it is
-// open, and closes it with nothing collected - so its purpose balance is
-// zero and a payout afterwards is exactly the -X ADR-031's Context names.
+// closedEnvelopeWithClaim opens an envelope, files a claim against it while
+// open, and closes it with nothing collected, so its purpose balance is zero
+// and a later payout is the -X ADR-031's Context names.
 func closedEnvelopeWithClaim(t *testing.T, l *Ledger, f fixture) (envelopePurposeID int64, claim store.Reimbursement) {
 	t.Helper()
 	ctx := context.Background()
@@ -84,9 +84,9 @@ func TestCreateReimbursementRefusesAClosedEnvelope(t *testing.T) {
 	}
 }
 
-// Moving a claim onto a closed envelope is refused; moving one off it - the
-// treasurer re-tagging a claim she filed against the wrong envelope - is
-// not, since it posts nothing and ends with the claim payable.
+// Moving a claim onto a closed envelope is refused; moving one off it (the
+// treasurer re-tagging a claim filed against the wrong envelope) is not, as it
+// posts nothing and leaves the claim payable.
 func TestUpdateReimbursementRefusesMovingOntoAClosedEnvelopeButNotOff(t *testing.T) {
 	t.Parallel()
 	l := newTestLedger(t)
@@ -113,9 +113,8 @@ func TestUpdateReimbursementRefusesMovingOntoAClosedEnvelopeButNotOff(t *testing
 	}
 }
 
-// The server owns a dues payment's purpose: always the fund's Kas Utama,
-// never one the caller names - so no envelope, open or closed, and no
-// titipan can receive dues.
+// The server owns a dues payment's purpose: always Kas Utama, never one the
+// caller names, so no envelope, open or closed, and no titipan can receive dues.
 func TestPostDuesPaymentsLandOnKasUtama(t *testing.T) {
 	t.Parallel()
 	l := newTestLedger(t)
@@ -135,10 +134,10 @@ func TestPostDuesPaymentsLandOnKasUtama(t *testing.T) {
 	}
 }
 
-// Correcting a claim's amount, date or note sends its purpose back
-// unchanged (Correct.tsx always does). A claim filed against an envelope
-// that has since closed must still take that correction: only moving a
-// claim ONTO a closed envelope is refused, and this one is already there.
+// Correcting a claim's amount, date or note sends its purpose back unchanged
+// (Correct.tsx always does). A claim filed against an envelope since closed
+// must still take that correction: only moving a claim onto a closed envelope
+// is refused, and this one is already there.
 func TestUpdateReimbursementCorrectsAClaimAlreadyOnAClosedEnvelope(t *testing.T) {
 	t.Parallel()
 	l := newTestLedger(t)

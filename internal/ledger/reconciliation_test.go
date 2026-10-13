@@ -11,17 +11,15 @@ import (
 	"github.com/kerti/uruni/internal/store"
 )
 
-// bankZero counts the fixture's bank at 0, matched: the figure it holds in
-// every test that never posts to it. Cek kas counts each active location
-// (#444), so a test about the cash line still has to say something about the
-// bank line, and this is the quiet way to.
+// bankZero counts the fixture's bank at 0, matched, for tests that never post
+// to it. Cek kas counts each active location (#444), so a cash-line test must
+// still say something about the bank line.
 func (f fixture) bankZero() AccountCount {
 	return AccountCount{AccountID: f.bankID, ActualAmount: 0, Resolution: "matched"}
 }
 
-// lineFor is a small test helper: find the one reconciliation_line for
-// accountID among a snapshot's lines, or fail the test - every assertion
-// below is about one specific line, and a missing line is itself a failure.
+// lineFor finds the one reconciliation_line for accountID among a snapshot's
+// lines, or fails the test.
 func lineFor(t *testing.T, lines []store.ListReconciliationLinesRow, accountID int64) store.ListReconciliationLinesRow {
 	t.Helper()
 	for _, ln := range lines {
@@ -33,11 +31,10 @@ func lineFor(t *testing.T, lines []store.ListReconciliationLinesRow, accountID i
 	return store.ListReconciliationLinesRow{}
 }
 
-// An empty ledger is TakeReconciliation's own code path (ADR-024): no
-// transaction exists yet, so MaxTransactionIDByFund returns sql.ErrNoRows,
+// An empty ledger takes TakeReconciliation's own path (ADR-024): no
+// transaction exists, so MaxTransactionIDByFund returns sql.ErrNoRows,
 // through_transaction_id is stored NULL, and AccountBalanceThrough is never
-// called - every counted account's recorded_amount is 0 by construction, not
-// by querying an empty sum.
+// called; every recorded_amount is 0 by construction.
 func TestTakeReconciliationEmptyLedgerStoresNullCutoffAndZeroRecorded(t *testing.T) {
 	t.Parallel()
 	l := newTestLedger(t)
@@ -63,7 +60,7 @@ func TestTakeReconciliationEmptyLedgerStoresNullCutoffAndZeroRecorded(t *testing
 	if err != nil {
 		t.Fatalf("ListReconciliationLines() = %v, want no error", err)
 	}
-	// One line per active location - cash and bank (#444).
+	// One line per active location: cash and bank (#444).
 	if len(lines) != 2 {
 		t.Fatalf("lines = %d, want 2", len(lines))
 	}
@@ -77,12 +74,10 @@ func TestTakeReconciliationEmptyLedgerStoresNullCutoffAndZeroRecorded(t *testing
 	}
 }
 
-// The false-record regression this test exists to catch: a gap is found
-// and resolved by an "adjusted" fix in the same call, and the stored
-// difference_amount is the gap that was actually found - never 0. 0 would
-// mean the cutoff was taken after the fix landed, which is exactly the bug
-// ADR-024/027 describe: schema-legal, and a permanent lie that no gap was
-// ever found.
+// The false-record regression: a gap is found and resolved by an "adjusted"
+// fix in the same call, and the stored difference_amount is the gap found,
+// never 0. 0 would mean the cutoff was taken after the fix landed (ADR-024/027):
+// schema-legal, and a permanent lie that no gap was found.
 func TestTakeReconciliationRegressionAdjustedStoresTheGapFoundNotZero(t *testing.T) {
 	t.Parallel()
 	l := newTestLedger(t)
@@ -119,7 +114,7 @@ func TestTakeReconciliationRegressionAdjustedStoresTheGapFoundNotZero(t *testing
 	if line.ActualAmount != 80_000 {
 		t.Errorf("ActualAmount = %d, want 80000", line.ActualAmount)
 	}
-	// The regression assertion: the gap that was actually found, not 0.
+	// The gap actually found, not 0.
 	if line.DifferenceAmount != -20_000 {
 		t.Fatalf("DifferenceAmount = %d, want -20000 (the gap actually found, not 0)", line.DifferenceAmount)
 	}
@@ -136,10 +131,10 @@ func TestTakeReconciliationRegressionAdjustedStoresTheGapFoundNotZero(t *testing
 	}
 }
 
-// The same regression, for "entry_added": a forgotten real entry posted in
-// the same call still leaves the snapshot holding the gap that was found,
-// not 0. Since #498 it names its entry as well, because the line's
-// remainder is derived through that entry; an exact entry leaves nothing open.
+// The same regression for "entry_added": a forgotten entry posted in the same
+// call still leaves the snapshot holding the gap found, not 0. Since #498 it
+// names its entry too, as the line's remainder is derived through it; an exact
+// entry leaves nothing open.
 func TestTakeReconciliationRegressionEntryAddedStoresTheGapFoundNotZero(t *testing.T) {
 	t.Parallel()
 	l := newTestLedger(t)
@@ -182,7 +177,7 @@ func TestTakeReconciliationRegressionEntryAddedStoresTheGapFoundNotZero(t *testi
 		t.Errorf("RemainderAmount = %d, want 0 - the entry squares the whole gap", line.RemainderAmount)
 	}
 
-	// The fix itself must still exist, correctly dated and kind='normal'.
+	// The fix must exist, correctly dated and kind='normal'.
 	all, err := q.ListTransactionsByFund(ctx, f.fundID)
 	if err != nil {
 		t.Fatalf("ListTransactionsByFund() = %v, want no error", err)
@@ -198,9 +193,8 @@ func TestTakeReconciliationRegressionEntryAddedStoresTheGapFoundNotZero(t *testi
 	}
 }
 
-// All four resolutions, reachable together in one snapshot across four
-// accounts: adjusted and entry_added each name the entry they posted (#498),
-// matched and left_open name nothing at all.
+// All four resolutions in one snapshot across four accounts: adjusted and
+// entry_added name the entry they posted (#498), matched and left_open none.
 func TestTakeReconciliationAllFourResolutionsInOneSnapshot(t *testing.T) {
 	t.Parallel()
 	l := newTestLedger(t)
@@ -275,8 +269,8 @@ func TestTakeReconciliationAllFourResolutionsInOneSnapshot(t *testing.T) {
 }
 
 // Reproduces internal/db's TestReconciliationRecordsWhatWasCountedAndHowItWasResolved
-// at the domain layer: a proof the domain wraps the store's adjusted and
-// left_open scenarios correctly, not a re-test of the store.
+// at the domain layer: the domain wraps the store's adjusted and left_open
+// scenarios correctly.
 func TestTakeReconciliationReproducesM2AdjustedAndLeftOpenScenarios(t *testing.T) {
 	t.Parallel()
 	l := newTestLedger(t)
@@ -287,8 +281,8 @@ func TestTakeReconciliationReproducesM2AdjustedAndLeftOpenScenarios(t *testing.T
 	postOpeningBalance(t, l, f.fundID, f.cashID, f.mainID, 500_000, "2026-08-01")
 	postOpeningBalance(t, l, f.fundID, f.bankID, f.mainID, 2_000_000, "2026-08-01")
 
-	// The bank statement agrees to the rupiah; the tin is 20000 short and gets
-	// an adjusting entry.
+	// The bank statement agrees to the rupiah; the tin is 20000 short and gets an
+	// adjusting entry.
 	rec, err := l.TakeReconciliation(ctx, TakeReconciliationParams{
 		FundID: f.fundID,
 		Counts: []AccountCount{
@@ -319,7 +313,7 @@ func TestTakeReconciliationReproducesM2AdjustedAndLeftOpenScenarios(t *testing.T
 		t.Errorf("FundBalance() = %d, want 2480000", fundBalance)
 	}
 
-	// A second fund, where the treasurer decides to sleep on a difference.
+	// A second fund, where the treasurer sleeps on a difference.
 	g := newFixtureWithSlug(t, l, "Other Fund", "zyxwvutsrqponmlkjihgfe")
 	postOpeningBalance(t, l, g.fundID, g.cashID, g.mainID, 100_000, "2026-08-01")
 	if _, err := l.TakeReconciliation(ctx, TakeReconciliationParams{
@@ -343,9 +337,8 @@ func TestTakeReconciliationReproducesM2AdjustedAndLeftOpenScenarios(t *testing.T
 
 // Reproduces internal/db's TestALeftOpenDifferenceIsRevisitedAsASecondSnapshot
 // at the domain layer: a left_open difference is picked up by a second
-// TakeReconciliation call, never by editing the first. The immutability
-// triggers make an edit impossible even for this package's own code, so the
-// only proof available is that both snapshots coexist with their own,
+// TakeReconciliation, never by editing the first. The immutability triggers
+// forbid an edit, so the proof is that both snapshots coexist with
 // independent numbers.
 func TestTakeReconciliationLeftOpenIsRevisitedAsASecondSnapshotFirstUntouched(t *testing.T) {
 	t.Parallel()
@@ -382,7 +375,7 @@ func TestTakeReconciliationLeftOpenIsRevisitedAsASecondSnapshotFirstUntouched(t 
 	}
 
 	// A week later the missing receipt turns up: a 10000 expense from the 3rd,
-	// posted now as an adjustment - backdated in occurred_on, current in id.
+	// posted as an adjustment (backdated occurred_on, current id).
 	if _, err := l.PostTransaction(ctx, PostTransactionParams{
 		FundID: f.fundID, AccountID: f.cashID, PurposeID: f.mainID,
 		Direction: "out", Amount: 10_000, OccurredOn: "2026-08-03", IsAdjustment: true,
@@ -407,7 +400,7 @@ func TestTakeReconciliationLeftOpenIsRevisitedAsASecondSnapshotFirstUntouched(t 
 		t.Errorf("today's cash balance = %d, want 240000 - the late entry counts now", todayBalance)
 	}
 
-	// Counted again; this time it agrees. The first snapshot stays untouched.
+	// Counted again; it agrees. The first snapshot stays untouched.
 	second, err := l.TakeReconciliation(ctx, TakeReconciliationParams{
 		FundID: f.fundID,
 		Counts: []AccountCount{
@@ -419,9 +412,9 @@ func TestTakeReconciliationLeftOpenIsRevisitedAsASecondSnapshotFirstUntouched(t 
 		t.Fatalf("TakeReconciliation(second) = %v, want no error", err)
 	}
 
-	// The second snapshot counted this same account (and it matched), so the
-	// first snapshot's left_open line is superseded: the gap is no longer
-	// open, even though the first row itself was never touched.
+	// The second snapshot counted this account and matched, so the first's
+	// left_open line is superseded and the gap is no longer open, though the
+	// first row was never touched.
 	stillOpen, err := q.ListOpenReconciliationLinesByFund(ctx, f.fundID)
 	if err != nil {
 		t.Fatalf("ListOpenReconciliationLinesByFund() = %v, want no error", err)
@@ -438,7 +431,7 @@ func TestTakeReconciliationLeftOpenIsRevisitedAsASecondSnapshotFirstUntouched(t 
 		t.Errorf("LatestReconciliation() = %d, want %d", latest.ID, second.ID)
 	}
 
-	// Both snapshots coexist with their own numbers.
+	// Both snapshots coexist with their numbers.
 	firstStillThere, err := q.GetReconciliation(ctx, store.GetReconciliationParams{ID: first.ID, FundID: f.fundID})
 	if err != nil {
 		t.Fatalf("GetReconciliation(first) = %v, want no error", err)
@@ -449,9 +442,9 @@ func TestTakeReconciliationLeftOpenIsRevisitedAsASecondSnapshotFirstUntouched(t 
 }
 
 // The fix a reconciliation posts is a real "transaction" row: it moves the
-// live balance immediately, in the same call, while being excluded from this
-// snapshot's own recorded_amount because the cutoff was taken before it
-// existed. That pair of facts together is the whole design.
+// live balance immediately, in the same call, yet is excluded from this
+// snapshot's recorded_amount because the cutoff preceded it. Together those
+// are the design.
 func TestTakeReconciliationFixMovesLiveBalanceButNotThisSnapshotsRecordedAmount(t *testing.T) {
 	t.Parallel()
 	l := newTestLedger(t)
@@ -489,9 +482,9 @@ func TestTakeReconciliationFixMovesLiveBalanceButNotThisSnapshotsRecordedAmount(
 	}
 }
 
-// The cutoff is id order, not date order: a fix backdated earlier than
-// entries already posted still gets an id above the cutoff, so it stays
-// outside this snapshot and inside the next one.
+// The cutoff is id order, not date order: a fix backdated before entries
+// already posted still gets an id above the cutoff, outside this snapshot and
+// inside the next.
 func TestTakeReconciliationBackdatedFixLandsInTheNextSnapshotNotThisOne(t *testing.T) {
 	t.Parallel()
 	l := newTestLedger(t)
@@ -511,8 +504,8 @@ func TestTakeReconciliationBackdatedFixLandsInTheNextSnapshotNotThisOne(t *testi
 		FundID: f.fundID,
 		Counts: []AccountCount{{
 			AccountID: f.cashID, ActualAmount: 70_000, Resolution: "entry_added",
-			// Dated the 3rd - earlier than the 2026-08-05 entry already
-			// posted - but this fix is created now, so its id is higher.
+			// Dated the 3rd, before the 2026-08-05 entry already posted, but created now,
+			// so its id is higher.
 			Fix: &Fix{PurposeID: f.mainID, Direction: "out", Amount: 10_000, OccurredOn: "2026-08-03"},
 		}, f.bankZero()},
 	})
@@ -532,8 +525,8 @@ func TestTakeReconciliationBackdatedFixLandsInTheNextSnapshotNotThisOne(t *testi
 		t.Errorf("first snapshot DifferenceAmount = %d, want -10000", firstLine.DifferenceAmount)
 	}
 
-	// A second snapshot, taken after the backdated fix, includes it: the
-	// live balance is now 70000, and this cutoff is above the fix's id.
+	// A second snapshot after the backdated fix includes it: the live balance is
+	// 70000 and this cutoff is above the fix's id.
 	second, err := l.TakeReconciliation(ctx, TakeReconciliationParams{
 		FundID: f.fundID,
 		Counts: []AccountCount{
@@ -553,10 +546,10 @@ func TestTakeReconciliationBackdatedFixLandsInTheNextSnapshotNotThisOne(t *testi
 	}
 }
 
-// TakeReconciliation refuses to insert a line naming another fund's account:
-// the composite foreign key on reconciliation_line rejects it, and this is a
-// domain bug, not a caller mistake, so it is wrapped generically rather than
-// as ErrInvalidArgument (ADR-027).
+// TakeReconciliation refuses a line naming another fund's account: the
+// composite foreign key on reconciliation_line rejects it. A domain bug, not
+// a caller mistake, so it is wrapped generically, not ErrInvalidArgument
+// (ADR-027).
 func TestTakeReconciliationRejectsAnotherFundsAccount(t *testing.T) {
 	t.Parallel()
 	l := newTestLedger(t)
@@ -581,8 +574,7 @@ func TestTakeReconciliationRejectsAnotherFundsAccount(t *testing.T) {
 	}
 }
 
-// Every ErrInvalidArgument path TakeReconciliation checks before writing
-// anything.
+// Every ErrInvalidArgument path TakeReconciliation checks before writing.
 func TestTakeReconciliationRejectsInvalidArguments(t *testing.T) {
 	t.Parallel()
 	validFix := &Fix{PurposeID: 0, Direction: "out", Amount: 10_000, OccurredOn: "2026-08-12"}
@@ -715,9 +707,8 @@ func TestTakeReconciliationRejectsInvalidArguments(t *testing.T) {
 				t.Fatalf("TakeReconciliation() = %v, want an error matching ErrInvalidArgument", err)
 			}
 
-			// Nothing was written: an invalid call leaves no trace, whether
-			// it was rejected before withTx even opened, or rolled back
-			// from partway through it.
+			// Nothing was written: an invalid call leaves no trace, whether rejected
+			// before withTx opened or rolled back partway.
 			recs, err := q.ListReconciliationsByFund(ctx, f.fundID)
 			if err != nil {
 				t.Fatalf("ListReconciliationsByFund() = %v, want no error", err)
@@ -729,9 +720,8 @@ func TestTakeReconciliationRejectsInvalidArguments(t *testing.T) {
 	}
 }
 
-// newFixtureWithSlug is newFixture for a second fund in the same test - the
-// fixture's own fund carries a fixed slug, so any test needing two funds
-// needs a second one with a different report_slug.
+// newFixtureWithSlug is newFixture for a second fund in the same test; the
+// fixture's fund has a fixed slug, so a second needs a different report_slug.
 func newFixtureWithSlug(t *testing.T, l *Ledger, name, slug string) fixture {
 	t.Helper()
 	ctx := context.Background()
@@ -751,12 +741,11 @@ func newFixtureWithSlug(t *testing.T, l *Ledger, name, slug string) fixture {
 	return f
 }
 
-// The two code paths the suite exercised only separately: an empty ledger and
-// a fix in the same call. A fund's very first reconciliation can still find a
-// gap - the treasurer counts money that was never recorded at all - and the
-// NULL-cutoff branch skips AccountBalanceThrough entirely, so nothing else
-// proves the fix is still excluded from a recorded_amount that was never
-// queried.
+// The two paths the suite exercised only separately: an empty ledger and a fix
+// in the same call. A fund's first reconciliation can still find a gap (the
+// treasurer counts money never recorded), and the NULL-cutoff branch skips
+// AccountBalanceThrough, so nothing else proves the fix is excluded from a
+// recorded_amount that was never queried.
 func TestTakeReconciliationEmptyLedgerWithAFixStillRecordsZeroAndTheFullGap(t *testing.T) {
 	t.Parallel()
 	l := newTestLedger(t)
@@ -795,7 +784,7 @@ func TestTakeReconciliationEmptyLedgerWithAFixStillRecordsZeroAndTheFullGap(t *t
 		t.Errorf("DifferenceAmount = %d, want 75000 - the whole counted sum was the gap", line.DifferenceAmount)
 	}
 
-	// The fix is live immediately even though the snapshot excluded it.
+	// The fix is live immediately though the snapshot excluded it.
 	bal, err := l.AccountBalance(ctx, f.fundID, f.cashID)
 	if err != nil {
 		t.Fatalf("AccountBalance() = %v, want no error", err)
@@ -805,13 +794,12 @@ func TestTakeReconciliationEmptyLedgerWithAFixStillRecordsZeroAndTheFullGap(t *t
 	}
 }
 
-// A second fund's reconciliation is invisible to the first fund - the #105
-// scoping test mirrored for GetReconciliationDetail, the same shape
-// TestASecondFundsIncidentalIsInvisibleToTheFirstFund uses for
-// GetIncidentalDetail. An id names a row; it does not prove the caller may
-// see it. PRD section 6 allows a server to hold more than one fund, so this
-// is the scoping test that keeps that honest - v1's single-fund rule is a
-// setup constraint, not a reason to read unscoped.
+// A second fund's reconciliation is invisible to the first fund: the #105
+// scoping test for GetReconciliationDetail, as
+// TestASecondFundsIncidentalIsInvisibleToTheFirstFund for GetIncidentalDetail.
+// An id names a row, not permission to see it; PRD section 6 allows more than
+// one fund, and v1's single-fund rule is a setup constraint, not a reason to
+// read unscoped.
 func TestASecondFundsReconciliationIsInvisibleToTheFirstFund(t *testing.T) {
 	t.Parallel()
 	l := newTestLedger(t)
@@ -841,8 +829,8 @@ func TestASecondFundsReconciliationIsInvisibleToTheFirstFund(t *testing.T) {
 		t.Errorf("GetReconciliationDetail(fund 1, fund 2's snapshot) = %v, want an error wrapping sql.ErrNoRows", err)
 	}
 
-	// The same snapshot read through its own fund still resolves, so the
-	// test above is scoping and not a broken lookup.
+	// The same snapshot read through its fund still resolves, so the test above
+	// is scoping and not a broken lookup.
 	detail, err := l.GetReconciliationDetail(ctx, other.ID, rec.ID)
 	if err != nil {
 		t.Errorf("GetReconciliationDetail(fund 2, fund 2's snapshot) = %v, want no error", err)
@@ -852,10 +840,9 @@ func TestASecondFundsReconciliationIsInvisibleToTheFirstFund(t *testing.T) {
 	}
 }
 
-// #257: nothing is generated into transaction.note - "Penyesuaian -
-// {lokasi}" is a display label built at read time, never stored text - so
-// an "adjusted" fix's Note follows the same nil/blank/typed contract as
-// every other system path.
+// #257: nothing is generated into transaction.note ("Penyesuaian - {lokasi}"
+// is a display label built at read time), so an "adjusted" fix's Note follows
+// the nil/blank/typed contract of every system path.
 func TestTakeReconciliationAdjustedFixNoteFollowsNormalizeNoteContract(t *testing.T) {
 	t.Parallel()
 	take := func(t *testing.T, note *string) *string {

@@ -9,9 +9,8 @@ import (
 	"github.com/kerti/uruni/internal/store"
 )
 
-// createReimbursement is the test helper for a raw claim: there is no
-// domain wrapper (ADR-027 - "no CreateReimbursement domain wrapper"), so M4
-// and these tests both call store.Queries directly, exactly like members.
+// createReimbursement is the helper for a raw claim: there is no domain
+// wrapper (ADR-027), so M4 and these tests call store.Queries, like members.
 func createReimbursement(t *testing.T, q *store.Queries, f fixture, amount int64, incurredOn string, waivedOn *string) store.Reimbursement {
 	t.Helper()
 	r, err := q.CreateReimbursement(context.Background(), store.CreateReimbursementParams{
@@ -29,9 +28,8 @@ func createReimbursement(t *testing.T, q *store.Queries, f fixture, amount int64
 	return r
 }
 
-// Settling posts exactly one kind='reimbursement', direction='out' row
-// carrying the claim's own amount, purpose_id and id - never a figure or
-// purpose the caller supplies.
+// Settling posts exactly one kind='reimbursement', direction='out' row with
+// the claim's amount, purpose_id and id, never a caller-supplied figure.
 func TestSettleReimbursementPostsOneOutRowOfClaimAmount(t *testing.T) {
 	t.Parallel()
 	l := newTestLedger(t)
@@ -73,10 +71,9 @@ func TestSettleReimbursementPostsOneOutRowOfClaimAmount(t *testing.T) {
 	}
 }
 
-// The settlement row itself stores no note, with or without a claim note
-// behind it (#257: nothing generated is ever stored in transaction.note - a
-// settlement explains itself through a display label built from the claim
-// it settles, at read time, never through stored text).
+// The settlement row stores no note, with or without a claim note (#257:
+// nothing generated is stored in transaction.note; a settlement is explained
+// by a display label built from the claim at read time).
 func TestSettleReimbursementStoresNoNote(t *testing.T) {
 	t.Parallel()
 	l := newTestLedger(t)
@@ -122,10 +119,9 @@ func TestSettleReimbursementStoresNoNote(t *testing.T) {
 	}
 }
 
-// ADR-024's whole reason reimbursement is its own table: creating a claim
-// does not move the kas, so FundBalance must be unchanged the moment the
-// claim exists, and only moves by exactly the amount when it is settled.
-// Both halves are asserted, not just the second.
+// ADR-024's reason reimbursement is its own table: creating a claim does not
+// move the kas, so FundBalance is unchanged when the claim exists and moves
+// by exactly the amount on settling. Both halves are asserted.
 func TestSettleReimbursementFundBalanceUnchangedUntilSettled(t *testing.T) {
 	t.Parallel()
 	l := newTestLedger(t)
@@ -145,8 +141,8 @@ func TestSettleReimbursementFundBalanceUnchangedUntilSettled(t *testing.T) {
 
 	claim := createReimbursement(t, q, f, 30_000, "2026-08-01", nil)
 
-	// Creating the claim - no ledger row, no domain call at all - must not
-	// move the fund's balance.
+	// Creating the claim (no ledger row, no domain call) must not move the
+	// fund's balance.
 	afterClaim, err := l.FundBalance(ctx, f.fundID)
 	if err != nil {
 		t.Fatalf("FundBalance() after claim creation = %v, want no error", err)
@@ -171,8 +167,8 @@ func TestSettleReimbursementFundBalanceUnchangedUntilSettled(t *testing.T) {
 	}
 }
 
-// Settling twice is refused with the named sentinel, and posts nothing on
-// the second call - proven by asserting the row count, not only the error.
+// Settling twice is refused with the named sentinel and posts nothing the
+// second time, proven by the row count.
 func TestSettleReimbursementTwiceIsRefused(t *testing.T) {
 	t.Parallel()
 	l := newTestLedger(t)
@@ -206,8 +202,8 @@ func TestSettleReimbursementTwiceIsRefused(t *testing.T) {
 	}
 }
 
-// A waived claim can never be settled - it will never be repaid - and the
-// refusal posts nothing.
+// A waived claim can never be settled (it will never be repaid); the refusal
+// posts nothing.
 func TestSettleReimbursementWaivedClaimIsRefused(t *testing.T) {
 	t.Parallel()
 	l := newTestLedger(t)
@@ -236,11 +232,10 @@ func TestSettleReimbursementWaivedClaimIsRefused(t *testing.T) {
 }
 
 // The schema's reimbursement_settled_once index is the actual guarantee,
-// independent of the domain's pre-check: inserting a second
-// kind='reimbursement' row for the same claim directly through raw
-// store.Queries, bypassing SettleReimbursement entirely, must still be
-// refused. This is the test that would catch the pre-check being removed -
-// the same shape as opening_balance_test.go's index test.
+// independent of the domain pre-check: a second kind='reimbursement' row for
+// the same claim inserted through raw store.Queries must still be refused.
+// This would catch the pre-check being removed, like opening_balance_test.go's
+// index test.
 func TestReimbursementSettledOnceIndexRefusesASecondRowInsertedDirectly(t *testing.T) {
 	t.Parallel()
 	l := newTestLedger(t)
@@ -276,10 +271,9 @@ func TestReimbursementSettledOnceIndexRefusesASecondRowInsertedDirectly(t *testi
 	}
 }
 
-// ADR-024's accepted cost, made visible rather than assumed: the expense
-// lands on the ledger at the settle date, while incurred_on keeps the truth
-// about when the member actually spent the money. A claim incurred in one
-// month and settled the next shows each field carrying a different date.
+// ADR-024's accepted cost, made visible: the expense lands on the ledger at the
+// settle date, while incurred_on keeps when the member spent the money. A
+// claim incurred in one month and settled the next shows different dates.
 func TestSettleReimbursementLedgerDateIsTheSettleDateNotIncurredOn(t *testing.T) {
 	t.Parallel()
 	l := newTestLedger(t)
@@ -317,8 +311,8 @@ func TestSettleReimbursementLedgerDateIsTheSettleDateNotIncurredOn(t *testing.T)
 	}
 }
 
-// A malformed occurred_on is rejected before any write reaches the schema,
-// exactly like PostTransaction's and validateOpeningBalance's own check.
+// A malformed occurred_on is rejected before any write reaches the schema, as
+// PostTransaction's and validateOpeningBalance's checks.
 func TestSettleReimbursementRejectsInvalidOccurredOn(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
@@ -359,8 +353,8 @@ func TestSettleReimbursementRejectsInvalidOccurredOn(t *testing.T) {
 }
 
 // An unsettled claim is correctable in place: it is off the ledger, so
-// CLAUDE.md rule 3's "corrections are new adjusting entries" does not reach
-// it, and the schema agrees by carrying no immutability trigger.
+// CLAUDE.md rule 3 does not reach it, and the schema carries no immutability
+// trigger for it.
 func TestUpdateReimbursementCorrectsAnUnsettledClaim(t *testing.T) {
 	t.Parallel()
 	l := newTestLedger(t)
@@ -389,8 +383,7 @@ func TestUpdateReimbursementCorrectsAnUnsettledClaim(t *testing.T) {
 	if updated.Note == nil || *updated.Note != note {
 		t.Errorf("Note = %v, want %q", updated.Note, note)
 	}
-	// Untouched fields keep their values - an absent field is "leave alone",
-	// never "clear it".
+	// Untouched fields keep their values: absent means "leave alone", not clear.
 	if updated.MemberID != claim.MemberID || updated.PurposeID != claim.PurposeID {
 		t.Errorf("member/purpose = %d/%d, want the claim's own %d/%d",
 			updated.MemberID, updated.PurposeID, claim.MemberID, claim.PurposeID)
@@ -400,10 +393,9 @@ func TestUpdateReimbursementCorrectsAnUnsettledClaim(t *testing.T) {
 	}
 }
 
-// Waiving and un-waiving are the same call with SetWaivedOn, which is the
-// whole reason waiving is a field rather than a route: the member who says
-// "saya yang tanggung" can change their mind, and a dedicated /waive route
-// would leave the claim stuck.
+// Waiving and un-waiving are the same call with SetWaivedOn, which is why
+// waiving is a field, not a route: a member who says "saya yang tanggung" can
+// change their mind, which a /waive route would not allow.
 func TestUpdateReimbursementWaivesAndUnwaives(t *testing.T) {
 	t.Parallel()
 	l := newTestLedger(t)
@@ -469,9 +461,8 @@ func TestUpdateReimbursementWaivesAndUnwaives(t *testing.T) {
 	}
 }
 
-// A waived claim still cannot be settled - the two rules compose, and
-// waiving through this method reaches the same refusal a claim created
-// waived already got.
+// A waived claim still cannot be settled: the rules compose, and waiving
+// through this method reaches the refusal a claim created waived gets.
 func TestSettleRefusesAClaimWaivedThroughUpdate(t *testing.T) {
 	t.Parallel()
 	l := newTestLedger(t)
@@ -496,9 +487,9 @@ func TestSettleRefusesAClaimWaivedThroughUpdate(t *testing.T) {
 	}
 }
 
-// Settlement is the boundary. Once a payout row copies the claim's amount
-// and purpose onto an immutable transaction, correcting or deleting the
-// claim would let the two disagree while both look authoritative.
+// Settlement is the boundary. Once a payout copies the claim's amount and
+// purpose onto an immutable transaction, correcting or deleting the claim
+// would let the two disagree while both look authoritative.
 func TestUpdateAndDeleteRefuseASettledClaim(t *testing.T) {
 	t.Parallel()
 	l := newTestLedger(t)
@@ -534,8 +525,8 @@ func TestUpdateAndDeleteRefuseASettledClaim(t *testing.T) {
 	}
 }
 
-// Waiving a settled claim is refused for the same reason: it is neither
-// owed nor forgiven, it is paid.
+// Waiving a settled claim is refused alike: it is neither owed nor forgiven,
+// it is paid.
 func TestUpdateRefusesToWaiveASettledClaim(t *testing.T) {
 	t.Parallel()
 	l := newTestLedger(t)
@@ -581,8 +572,8 @@ func TestDeleteReimbursementRemovesAnUnsettledClaim(t *testing.T) {
 	}
 }
 
-// Argument-shape validation is this method's own (ADR-027), so the message
-// names the field rather than leaving SQLite's CHECK to say "constraint".
+// Argument-shape validation is this method's (ADR-027), so the message names
+// the field rather than leaving SQLite's CHECK to say "constraint".
 func TestUpdateReimbursementRejectsBadArguments(t *testing.T) {
 	t.Parallel()
 	l := newTestLedger(t)

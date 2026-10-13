@@ -7,8 +7,8 @@ import (
 	"testing"
 )
 
-// migratedDB is a file-backed database with every embedded migration applied -
-// what an up-to-date instance looks like.
+// migratedDB is a file-backed database with every embedded migration applied:
+// an up-to-date instance.
 func migratedDB(t *testing.T) *sql.DB {
 	t.Helper()
 	sqlDB := openTestDB(t)
@@ -75,7 +75,7 @@ func TestCheckSchemaRefusesADatabaseDifferingByOneColumn(t *testing.T) {
 	t.Parallel()
 	sqlDB := migratedDB(t)
 	// The stale-database shape ADR-025 warns about: the old build's fund table
-	// lacked (or had an extra) column. goose still reports everything applied.
+	// lacked (or had an extra) column, and goose still reports everything applied.
 	mustExec(t, sqlDB, `ALTER TABLE fund ADD COLUMN stray TEXT`)
 
 	diff := checkSchema(t, sqlDB)
@@ -151,8 +151,8 @@ func TestCheckSchemaIgnoresACommentOnlyEdit(t *testing.T) {
 	if err != nil {
 		t.Fatalf("expectedSchema() = %v", err)
 	}
-	// What an old build's database looks like when the file's comments, and only
-	// its comments and layout, were later edited: same structure, different bytes.
+	// A database whose file's comments and layout, and only those, were later
+	// edited: same structure, different bytes.
 	edited := make([]schemaObject, len(got))
 	copy(edited, got)
 	for i, o := range edited {
@@ -208,9 +208,9 @@ func TestNormalizeDDL(t *testing.T) {
 func TestCheckSchemaIgnoresACommentEditedInTheStoredDDL(t *testing.T) {
 	t.Parallel()
 	sqlDB := migratedDB(t)
-	// SQLite keeps comments inside a CREATE verbatim; rewriting the stored text is
-	// the faithful stand-in for an instance built from an older revision of the
-	// file whose only change since was a comment.
+	// SQLite keeps comments inside a CREATE verbatim; rewriting the stored text
+	// stands in for an instance built from an older revision whose only change
+	// since was a comment.
 	mustExec(t, sqlDB, `PRAGMA writable_schema = ON`)
 	mustExec(t, sqlDB, `UPDATE sqlite_schema SET sql = replace(sql, 'CREATE TABLE fund (', 'CREATE TABLE fund ( -- an older comment' || char(10)) WHERE name = 'fund'`)
 	mustExec(t, sqlDB, `PRAGMA writable_schema = OFF`)

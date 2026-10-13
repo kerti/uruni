@@ -64,8 +64,8 @@ func TestUpAppliesPendingMigrationsAndIsIdempotent(t *testing.T) {
 }
 
 // threeVersions is a migration set with a baseline and two more files. The real
-// set has one file through 0.x (ADR-025), which Down must refuse to roll back, so
-// everything about a down that runs needs a set of its own.
+// set has one file through 0.x (ADR-025), which Down refuses to roll back, so a
+// down that runs needs its own set.
 func threeVersions() fstest.MapFS {
 	file := func(name string) *fstest.MapFile {
 		return &fstest.MapFile{Data: []byte("-- +goose Up\nCREATE TABLE " + name + " (id INTEGER PRIMARY KEY) STRICT;\n" +
@@ -186,9 +186,8 @@ func TestDownOnAnUnmigratedDatabaseIsNotAFailure(t *testing.T) {
 	ctx := context.Background()
 	sqlDB := openTestDB(t)
 
-	// Nothing applied at all. Rolling back nothing is a non-event the CLI reports
-	// and exits 0 on, so a script that rolls back before restoring a backup keeps
-	// working.
+	// Nothing applied. Rolling back nothing is a non-event the CLI reports and
+	// exits 0 on, so a script rolling back before restoring a backup keeps working.
 	if _, err := Down(ctx, sqlDB, nil, discardLogger(), nil); !errors.Is(err, ErrNothingToRollBack) {
 		t.Fatalf("Down() on version 0 = %v, want ErrNothingToRollBack", err)
 	}
@@ -203,9 +202,9 @@ func TestOpenMigrateQueryThroughTheGeneratedStore(t *testing.T) {
 		t.Fatalf("Up() = %v, want no error", err)
 	}
 
-	// The whole point of M1.3: the database path works end to end - opened with
-	// its pragmas, migrated, and queried through the sqlc-generated code
-	// (ADR-005) rather than through hand-written SQL in a test.
+	// The point of M1.3: the database path works end to end (opened with its
+	// pragmas, migrated, queried through sqlc-generated code, ADR-005), not
+	// hand-written SQL in a test.
 	ok, err := store.New(sqlDB).Ping(ctx)
 	if err != nil {
 		t.Fatalf("Ping() = %v, want no error", err)
@@ -215,8 +214,8 @@ func TestOpenMigrateQueryThroughTheGeneratedStore(t *testing.T) {
 	}
 }
 
-// discardLogger is the logger for tests that care about the migration, not the
-// line it prints. main builds the real one from URUNI_LOG_* (ADR-022).
+// discardLogger is for tests that care about the migration, not the line it
+// prints. main builds the real one from URUNI_LOG_* (ADR-022).
 func discardLogger() *slog.Logger {
 	return slog.New(slog.NewTextHandler(io.Discard, nil))
 }

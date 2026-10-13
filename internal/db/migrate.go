@@ -15,42 +15,38 @@ import (
 )
 
 // The migrations travel inside the binary, so a self-hoster runs
-// `docker compose up` and never a migration step: `serve` applies whatever is
-// pending on boot (ADR-019). Embedding is what makes that possible - the
-// distroless image has no .sql files and no shell to run them with.
+// `docker compose up` with no migration step: `serve` applies what is pending
+// on boot (ADR-019). The distroless image has no .sql files and no shell.
 //
 //go:embed migrations/*.sql
 var migrationsFS embed.FS
 
-// ErrNothingToRollBack is returned by Down when the database is already at
-// version 0. A sentinel rather than a message, so the CLI can report it as the
-// non-event it is instead of failing the command.
+// ErrNothingToRollBack is returned by Down when the database is at version 0.
+// A sentinel so the CLI reports it as a non-event, not a failure.
 var ErrNothingToRollBack = errors.New("no applied migration to roll back")
 
 // ErrBaseline is returned by Down when the migration it would roll back is the
-// lowest one the binary carries. Rolling the baseline back leaves goose at
-// version 0 - an empty database, the treasurer's account and the whole ledger
-// dropped with it - and that is a restore's job, not a migration's (#494).
+// lowest the binary carries. Rolling the baseline back leaves goose at version
+// 0, an empty database with the account and ledger dropped; that is a
+// restore's job, not a migration's (#494).
 var ErrBaseline = errors.New("rolling back the baseline migration would empty the database")
 
-// Migration is one migration's state, as `migrate status` prints it. It is this
-// package's own type rather than goose's so the CLI never imports goose:
-// migrations are a store concern, and swapping the runner should not be a change
-// to cmd/.
+// Migration is one migration's state, as `migrate status` prints it. It is
+// this package's type, not goose's, so the CLI never imports goose and
+// swapping the runner does not touch cmd/.
 type Migration struct {
 	Version int64
 	// Name is the migration's file name, e.g. "00001_baseline.sql".
 	Name string
-	// Applied is false for a migration present in the binary but not yet in this
-	// database.
+	// Applied is false for a migration in the binary but not yet in this database.
 	Applied bool
 	// AppliedAt is the zero time when Applied is false.
 	AppliedAt time.Time
 }
 
-// Up applies every pending migration, in order, logs one line per migration
-// applied, and reports how many that was. An already-current database logs
-// nothing and returns 0 - this runs on every boot, so silence is the normal case.
+// Up applies every pending migration in order, logs one line per migration
+// applied, and reports how many. An already-current database logs nothing and
+// returns 0: this runs on every boot, so silence is normal.
 func Up(ctx context.Context, sqlDB *sql.DB, logger *slog.Logger) (int, error) {
 	p, err := provider(sqlDB)
 	if err != nil {
@@ -68,21 +64,20 @@ func Up(ctx context.Context, sqlDB *sql.DB, logger *slog.Logger) (int, error) {
 	return len(results), nil
 }
 
-// Down rolls back exactly one migration - the most recently applied. One step,
-// because `migrate down` is what an operator reaches for after a bad upgrade and
-// a flag away from wiping the ledger is the wrong shape for that command
-// (ADR-019).
+// Down rolls back exactly one migration, the most recently applied: `migrate
+// down` is what an operator reaches for after a bad upgrade, and a flag away
+// from wiping the ledger is the wrong shape for it (ADR-019).
 //
-// It refuses (ErrBaseline) when that migration is the lowest the binary carries,
-// i.e. when the step would leave the database at version 0. Checked against the
-// migration set rather than the number 1, so it stays right after 1.0 adds files.
+// It refuses (ErrBaseline) when that migration is the lowest the binary
+// carries, i.e. the step would leave version 0. It checks the migration set,
+// not the number 1, so it stays right after 1.0 adds files.
 //
-// before, when non-nil, runs after the guards and before anything is changed;
-// its error refuses the rollback. The CLI uses it to write a dump first. fsys is
-// the migration set, nil for the embedded one; tests pass a set with more than
-// one version because the real one has a single file through 0.x (ADR-025).
+// before, when non-nil, runs after the guards and before any change; its error
+// refuses the rollback (the CLI writes a dump first). fsys is the migration
+// set, nil for the embedded one; tests pass a set with more than one version
+// because the real one has a single file through 0.x (ADR-025).
 //
-// It returns the version it rolled back. A database already at version 0 is
+// It returns the version it rolled back. A database at version 0 is
 // ErrNothingToRollBack, not a failure.
 func Down(ctx context.Context, sqlDB *sql.DB, fsys fs.FS, logger *slog.Logger, before func(version int64) error) (int64, error) {
 	p, err := providerFor(sqlDB, fsys)
@@ -126,8 +121,8 @@ func Down(ctx context.Context, sqlDB *sql.DB, fsys fs.FS, logger *slog.Logger, b
 }
 
 // Status reports every migration the binary carries, applied or not, oldest
-// first. It changes nothing - including not migrating the database it is asked
-// about, which is the whole point of being able to run it.
+// first. It changes nothing, not even migrating the database it is asked
+// about, which is the point of being able to run it.
 func Status(ctx context.Context, sqlDB *sql.DB) ([]Migration, error) {
 	p, err := provider(sqlDB)
 	if err != nil {
@@ -151,19 +146,18 @@ func Status(ctx context.Context, sqlDB *sql.DB) ([]Migration, error) {
 	return migrations, nil
 }
 
-// provider builds goose over the embedded migrations. Cheap enough to build per
-// call, and building it per call keeps the caller's *sql.DB the only long-lived
-// thing.
+// provider builds goose over the embedded migrations, per call, so the
+// caller's *sql.DB is the only long-lived thing.
 //
 // The provider API is deliberate: goose's package-level functions carry global
-// state (a dialect, a registry), which makes two databases in one process - the
-// dev database and a test's temporary file - able to interfere.
+// state (a dialect, a registry), letting two databases in one process (dev and
+// a test's temp file) interfere.
 func provider(sqlDB *sql.DB) (*goose.Provider, error) {
 	return providerFor(sqlDB, nil)
 }
 
 // providerFor is provider over an injectable migration set; nil means the
-// embedded one. Only Down takes the injection, for its tests.
+// embedded one. Only Down takes it, for its tests.
 func providerFor(sqlDB *sql.DB, fsys fs.FS) (*goose.Provider, error) {
 	if fsys == nil {
 		sub, err := fs.Sub(migrationsFS, "migrations")
@@ -174,9 +168,8 @@ func providerFor(sqlDB *sql.DB, fsys fs.FS) (*goose.Provider, error) {
 	}
 
 	p, err := goose.NewProvider(goose.DialectSQLite3, sqlDB, fsys,
-		// goose's own output is off: this package logs through the caller's
-		// slog.Logger instead, so migration lines look like every other line in
-		// the operator's logs (ADR-022).
+		// goose's output is off: this package logs through the caller's slog.Logger so
+		// migration lines look like every other operator log line (ADR-022).
 		goose.WithVerbose(false),
 		goose.WithDisableGlobalRegistry(true),
 	)

@@ -185,9 +185,9 @@ func TestReportWalkUnderAFilterIsOnlyMasukAndKeluar(t *testing.T) {
 	}
 }
 
-// A reversal filters as Uang masuk (and counts there as a minus); it no longer
-// shows under Uang keluar. An opening and a Penyesuaian are neither, so a
-// direction or member filter hides them.
+// A reversal filters as Uang masuk (counting there as a minus), no longer under
+// Uang keluar. An opening and a Penyesuaian are neither, so a direction or
+// member filter hides them.
 func TestReportReversalFiltersAsMasukAndOpeningAndPenyesuaianAreHiddenByFilters(t *testing.T) {
 	t.Parallel()
 	w := newWalkPage(t)
@@ -238,8 +238,8 @@ func TestReportStandaloneAdjustmentIsLabelledPenyesuaian(t *testing.T) {
 }
 
 // The statement's Ringkasan reads the same walk as the page, in the same
-// order and words, and draws only characters the font has: a negative figure
-// is an ASCII hyphen, never U+2212.
+// order and words, drawing only characters the font has: a negative figure is
+// an ASCII hyphen, never U+2212.
 func TestReportPDFCarriesTheSameWalk(t *testing.T) {
 	t.Parallel()
 	w := newWalkPage(t)
@@ -299,8 +299,8 @@ func slicesIndexFrom(runs []string, want string) int {
 	return -1
 }
 
-// A purpose filter walks that pos: its own balance at both ends, and Dipindah
-// for the money moved in or out of it. Same words and order as the whole fund.
+// A purpose filter walks that pos: its balance at both ends, and Dipindah for
+// money moved in or out. Same words and order as the whole fund.
 func TestReportPurposeFilterShowsThatPosAsAWalk(t *testing.T) {
 	t.Parallel()
 	w := newWalkPage(t)
@@ -369,9 +369,9 @@ func TestReportWalkEndsCarryNoPer(t *testing.T) {
 	}
 }
 
-// The statement is the whole fund's month and takes no filter, so a purpose
-// in its query changes nothing; but it draws the page's walkLines, so a walk
-// that does carry Dipindah reads in the page's order there too.
+// The statement is the whole fund's month and takes no filter, so a purpose in
+// its query changes nothing; it draws the page's walkLines, so a walk with
+// Dipindah reads in the page's order there too.
 func TestReportPDFDrawsTheWalkLinesInThePagesOrder(t *testing.T) {
 	t.Parallel()
 	w := newWalkPage(t)

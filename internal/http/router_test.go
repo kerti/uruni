@@ -24,38 +24,34 @@ func testAssets() fstest.MapFS {
 		".gitkeep":             {Data: []byte("")},
 		"assets/app.css":       {Data: []byte("body{}")},
 		"manifest.webmanifest": {Data: []byte("{}")},
-		// A real file, not a fallback to the shell: the Cache-Control test
-		// below means to exercise the service worker's own branch (ADR-008).
+		// A real file, not a fallback to the shell: the Cache-Control test below
+		// exercises the service worker's branch (ADR-008).
 		"sw.js": {Data: []byte("// service worker")},
 	}
 }
 
-// testBuild stands in for the linker stamp; the point of the /healthz body is
-// that whatever was stamped comes back out.
+// testBuild stands in for the linker stamp; /healthz must return whatever was
+// stamped.
 var testBuild = Build{Version: "v9.9.9-test", Commit: "abc1234"}
 
-// testRouter builds a router over a real, migrated in-memory database - the
-// ledger and store arguments are threaded through New for later M4 slices to
-// use, so building it for real here (rather than passing nil) is what proves
-// the constructor's new signature actually wires together. It carries a
-// valid session throughout - see authedRouterFor's own comment for why.
+// testRouter builds a router over a real, migrated in-memory database. The
+// ledger and store are threaded through New for later slices, so building it
+// for real (not nil) proves the constructor's signature wires together. It
+// carries a valid session throughout; see authedRouterFor.
 func testRouter(t *testing.T) http.Handler {
 	t.Helper()
 	return authedRouterFor(t, testStoreDB(t))
 }
 
-// authedRouterFor builds the same router New builds, then makes one real
-// POST /api/register call against it before returning, so every request the
-// caller sends afterward already carries a valid session. #116 moved the
-// entire surface but for four routes behind sessionRequired; this package's
-// hundred-plus pre-existing business-logic tests exist to prove what a route
-// does once a session is present, not to each separately reprove they can
-// get past the gate, so the fixture absorbs that once here rather than at
-// every call site.
+// authedRouterFor builds the router New builds, then makes one real POST
+// /api/register against it, so every later request already carries a valid
+// session. #116 moved all but four routes behind sessionRequired, and this
+// package's hundred-plus business-logic tests prove what a route does once a
+// session is present, so the fixture absorbs the gate once here.
 //
-// A test that means to exercise the gate itself - or the two routes that
-// stay reachable without one - talks to testRouterAndDB, postRegister,
-// postLogin or postLogout directly, never this.
+// A test of the gate itself, or of the two routes reachable without a
+// session, uses testRouterAndDB, postRegister, postLogin or postLogout, never
+// this.
 func authedRouterFor(t *testing.T, sqlDB *sql.DB) http.Handler {
 	t.Helper()
 	return authedRouterAt(t, sqlDB, time.Now)
@@ -78,13 +74,10 @@ func authedRouterAt(t *testing.T, sqlDB *sql.DB, now func() time.Time) http.Hand
 	return withSessionCookie{Handler: r, token: token}
 }
 
-// withSessionCookie attaches one fixed, already-established session cookie
-// to any request that doesn't already carry one of its own, then delegates.
-// It exists so the hundred-plus tests already constructing their own
-// httptest.NewRequest calls throughout this package did not each need to
-// learn how to carry a cookie forward - they ask testRouter for a handler
-// exactly as before, and the handler now happens to answer every request as
-// the one treasurer authedRouterFor registered.
+// withSessionCookie attaches one fixed, established session cookie to any
+// request without its own, then delegates, so the hundred-plus tests building
+// their own httptest.NewRequest need not learn to carry a cookie: they ask
+// testRouter for a handler and it answers as the one registered treasurer.
 type withSessionCookie struct {
 	http.Handler
 	token string
@@ -124,10 +117,10 @@ func TestHealthzIsUnauthenticatedAndOK(t *testing.T) {
 	}
 }
 
-// The stamp has to be the one the binary was built with, not a constant baked
-// into the router - that is the whole point of reading it off a deployment. An
-// untagged build is the case that needs the commit: version is only ever `dev`,
-// so the SHA is the sole thing naming what runs.
+// The stamp must be the one the binary was built with, not a router constant:
+// that is the point of reading it off a deployment. An untagged build needs
+// the commit: version is only `dev`, so the SHA is the sole thing naming what
+// runs.
 func TestHealthzReportsTheBuildItWasStampedWith(t *testing.T) {
 	t.Parallel()
 	untagged := Build{Version: "dev", Commit: "deadbee"}
@@ -146,8 +139,8 @@ func TestHealthzReportsTheBuildItWasStampedWith(t *testing.T) {
 	}
 }
 
-// #278: a database path that no longer names the file this process opened
-// turns /healthz red, so the container HEALTHCHECK raises the alarm.
+// #278: a database path no longer naming the file this process opened turns
+// /healthz red, so the container HEALTHCHECK raises the alarm.
 func TestHealthzFailsWhenTheDatabaseFileCheckFails(t *testing.T) {
 	t.Parallel()
 	sqlDB := testStoreDB(t)
@@ -207,10 +200,10 @@ func TestClientRoutesFallBackToIndex(t *testing.T) {
 	}
 }
 
-// The stale-app failure ADR-008's prompt-to-update strategy would otherwise
-// still lose to: index.html and sw.js keep their names across deploys, so a
-// browser that caches either serves an old app from a freshly updated server.
-// Content-hashed assets are the opposite case, cached for a year (#506).
+// The stale-app failure ADR-008's prompt-to-update would still lose to:
+// index.html and sw.js keep their names across deploys, so a browser caching
+// either serves an old app from an updated server. Content-hashed assets are
+// the opposite, cached for a year (#506).
 func TestShellAndServiceWorkerAreNotBrowserCached(t *testing.T) {
 	t.Parallel()
 	for _, path := range []string{"/", "/index.html", "/sw.js", "/catat"} {
@@ -227,8 +220,8 @@ func TestShellAndServiceWorkerAreNotBrowserCached(t *testing.T) {
 	}
 }
 
-// A manifest served as text/plain is one browsers may decline to install
-// from, and Go's mime table has no .webmanifest entry of its own.
+// A manifest served as text/plain may be declined by browsers, and Go's mime
+// table has no .webmanifest entry.
 func TestManifestIsServedAsAWebManifest(t *testing.T) {
 	t.Parallel()
 	rec := get(t, "/manifest.webmanifest")
@@ -242,9 +235,8 @@ func TestManifestIsServedAsAWebManifest(t *testing.T) {
 
 func TestUnknownAPIPathsAnswerWithTheErrorEnvelope(t *testing.T) {
 	t.Parallel()
-	// A mistyped path is when a client is least able to cope with a second
-	// error shape, so /api answers in the envelope every other API failure
-	// uses rather than chi's plain-text default.
+	// A mistyped path is when a client copes worst with a second error shape, so
+	// /api answers in the usual envelope, not chi's plain text.
 	rec := get(t, "/api/no-such-route")
 
 	if rec.Code != http.StatusNotFound {

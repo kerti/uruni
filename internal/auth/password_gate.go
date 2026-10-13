@@ -7,37 +7,34 @@ import (
 	"time"
 )
 
-// Every argon2id computation this package runs - hashing a new password,
-// verifying a login, verifying the restore-confirm password - goes through
-// Auth.hash or Auth.verify below, and so through one gate: a counting
-// semaphore sized by maxConcurrentHashes. The rate limiter in internal/http
-// bounds how often one caller may try; this bounds how much of the machine
-// all callers together may spend at once.
+// Every argon2id computation this package runs (hashing a new password,
+// verifying a login, verifying the restore-confirm password) goes through
+// Auth.hash or Auth.verify and so one gate: a counting semaphore sized by
+// maxConcurrentHashes. The rate limiter in internal/http bounds how often one
+// caller may try; this bounds how much of the machine all callers together
+// spend at once.
 //
-// Why a bound at all: one computation allocates argonMemoryKiB (19 MiB) and
-// burns one core for tens of milliseconds (argonParallelism is 1). Without
-// a ceiling, N simultaneous public requests hold N * 19 MiB at once and
-// queue behind each other for CPU, on a box that also runs SQLite and the
-// report renderer. Past the core count, more concurrency buys no throughput
-// at all - it only raises the memory peak.
+// Why a bound: one computation allocates argonMemoryKiB (19 MiB) and burns a
+// core for tens of milliseconds (argonParallelism is 1). Without a ceiling, N
+// simultaneous public requests hold N * 19 MiB and queue for CPU on a box that
+// also runs SQLite and the report renderer. Past the core count, concurrency
+// buys no throughput, only a higher memory peak.
 
 // maxConcurrentHashesCap is the most computations that ever run at once,
-// however many cores there are: 4 * 19 MiB = 76 MiB of argon2 working memory
-// in the worst case, which a small self-host VPS (the target, Tech-Design)
-// can carry without swapping.
+// whatever the cores: 4 * 19 MiB = 76 MiB of argon2 memory worst case, which a
+// small self-host VPS (the target, Tech-Design) carries without swapping.
 const maxConcurrentHashesCap = 4
 
-// defaultSlotWait is how long a request waits for a slot before it is
-// refused with ErrBusy. A computation takes tens of milliseconds, so two
-// seconds covers a busy moment's queue many times over while still answering
-// well before a client or proxy gives up; past that the box is saturated,
-// not momentarily busy, and holding more requests open only adds to it.
+// defaultSlotWait is how long a request waits for a slot before ErrBusy. A
+// computation takes tens of milliseconds, so two seconds covers a busy moment's
+// queue many times over and still answers before a client or proxy gives up;
+// past that the box is saturated, and holding more requests open only adds
+// to it.
 const defaultSlotWait = 2 * time.Second
 
-// defaultMaxConcurrentHashes is min(GOMAXPROCS, maxConcurrentHashesCap),
-// never below one: the computation is single-threaded CPU work, so a slot
-// per core is the most that can run in parallel, and the cap keeps memory
-// bounded on a many-core host.
+// defaultMaxConcurrentHashes is min(GOMAXPROCS, maxConcurrentHashesCap), at
+// least one: the work is single-threaded CPU, so a slot per core is the most
+// that runs in parallel, and the cap bounds memory on a many-core host.
 func defaultMaxConcurrentHashes() int {
 	n := runtime.GOMAXPROCS(0)
 	if n > maxConcurrentHashesCap {
@@ -49,9 +46,8 @@ func defaultMaxConcurrentHashes() int {
 	return n
 }
 
-// Option configures New. The defaults are the production values; the
-// options exist so a test can pick a small ceiling and a short wait, and
-// observe or block the work itself.
+// Option configures New. Defaults are production values; options let a test
+// pick a small ceiling and short wait, and observe or block the work.
 type Option func(*Auth)
 
 // WithMaxConcurrentHashes sets the semaphore's size. Values below one are
@@ -70,10 +66,9 @@ func WithSlotWait(d time.Duration) Option {
 	return func(a *Auth) { a.slotWait = d }
 }
 
-// WithPasswordFuncs replaces the argon2id computations themselves. It is a
-// test seam: a test counts calls, observes how many run at once, or parks a
-// computation to hold its slot, without paying for (or depending on the
-// timing of) a real hash. Production never passes it.
+// WithPasswordFuncs replaces the argon2id computations: a test seam to count
+// calls, observe concurrency, or park a computation holding its slot, without
+// a real hash or its timing. Production never passes it.
 func WithPasswordFuncs(hash func(password string) (string, error), verify func(password, encoded string) (bool, error)) Option {
 	return func(a *Auth) {
 		a.hashFn = hash
@@ -81,10 +76,10 @@ func WithPasswordFuncs(hash func(password string) (string, error), verify func(p
 	}
 }
 
-// acquire takes a slot, waiting up to slotWait, and returns the function
-// that gives it back. A slot already free is taken without arming a timer.
-// ErrBusy means the wait elapsed; a cancelled ctx (the client went away)
-// returns its own error, which is not busyness and is not reported as it.
+// acquire takes a slot, waiting up to slotWait, and returns the function that
+// gives it back. A free slot is taken without arming a timer. ErrBusy means
+// the wait elapsed; a cancelled ctx (the client left) returns its own error,
+// not busyness.
 func (a *Auth) acquire(ctx context.Context) (release func(), err error) {
 	release = func() { <-a.slots }
 

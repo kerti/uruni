@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-// TestFormatIDRMatchesIntl pins FormatIDR to the SPA's own formatter
+// TestFormatIDRMatchesIntl pins FormatIDR to the SPA's formatter
 // (web/src/lib/money.ts, ADR-035): the report and the app must never print one
 // amount two ways.
 //
@@ -48,9 +48,9 @@ func TestFormatIDRMatchesIntl(t *testing.T) {
 	}
 }
 
-// TestFormatIDRInt64Extremes covers the values Intl cannot represent exactly
-// (a JS number is a float64). math.MinInt64 is the one int64 that cannot be
-// negated, so a sign-flip implementation would print it wrong.
+// TestFormatIDRInt64Extremes covers values Intl cannot represent exactly (a JS
+// number is a float64). math.MinInt64 cannot be negated, so a sign-flip
+// implementation would print it wrong.
 func TestFormatIDRInt64Extremes(t *testing.T) {
 	t.Parallel()
 	tests := []struct {

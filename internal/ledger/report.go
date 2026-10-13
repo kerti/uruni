@@ -27,8 +27,7 @@ const (
 	ReportDuesUnpaid = "unpaid"
 	// ReportDuesPartial is the dues filter's value for DuesStatusPartial.
 	ReportDuesPartial = "partial"
-	// ReportDuesPaid also matches DuesStatusPaidInAdvance: a member who has
-	// paid ahead has, plainly, paid.
+	// ReportDuesPaid also matches DuesStatusPaidInAdvance: paying ahead is paid.
 	ReportDuesPaid = "paid"
 )
 
@@ -38,13 +37,13 @@ type ReportParams struct {
 	FundID int64
 
 	// Month is "YYYY-MM". Empty means the current month in Asia/Jakarta. A
-	// malformed month is ErrInvalidArgument - reading an invalid ?month= as
-	// the current one is the HTTP edge's call (ADR-035), not this layer's.
+	// malformed month is ErrInvalidArgument; reading an invalid ?month= as the
+	// current one is the HTTP edge's call (ADR-035).
 	Month string
 
-	// PurposeID filters transactions to one purpose tag (the stored tag, the
-	// one every balance sums). A purpose move matches when it names the
-	// purpose on either side.
+	// PurposeID filters transactions to one purpose tag (the stored tag every
+	// balance sums). A purpose move matches when it names the purpose on either
+	// side.
 	PurposeID *int64
 
 	// MemberID filters transactions to one member: the dues or contribution
@@ -60,29 +59,25 @@ type ReportParams struct {
 	// "". It filters the dues table only, never the transactions (ADR-035).
 	DuesStatus string
 
-	// Now is the current instant, injectable so a test can stand on either
-	// side of a Jakarta month boundary; the zero value means time.Now(). It is
-	// a field rather than a Ledger setting so the clock is an argument, the
-	// way backup passes its own (WriteDump, EnsureBootDump) and
-	// OutstandingDuesForMember takes its now.
+	// Now is the current instant, injectable so a test can stand on either side
+	// of a Jakarta month boundary; the zero value means time.Now().
 	Now time.Time
 }
 
 // Report is one fund's public report for one month (ADR-035): the single
 // struct the HTML page and the monthly PDF both render, so nothing is
-// recomputed in a template. Every field is a fact, never a label - the display
-// text ("Iuran 2026-06 - Jane") is built at render time from them, the way
-// Riwayat builds it (#257).
+// recomputed in a template. Every field is a fact, never a label; display
+// text is built at render time, as Riwayat does.
 //
-// What it deliberately does not carry: a location's name or balance, a
-// receipt's path or id, a transaction id, a dues arrears count, or a member's
-// join or leave date. The treasurer collected those for their own records (rule 6).
+// It deliberately omits a location's name or balance, a receipt's path or id,
+// a transaction id, a dues arrears count, and a member's join or leave date
+// (rule 6).
 type Report struct {
 	FundName string
 
 	// AsOf is the day ("YYYY-MM-DD") every figure is true as of (ADR-037): the
-	// last day of a past month, or today in Asia/Jakarta for the running month,
-	// which Running marks: the month as it ended, or as it stands.
+	// last day of a past month, or today in Asia/Jakarta for the running month
+	// (marked by Running).
 	AsOf    string
 	Running bool
 
@@ -94,17 +89,16 @@ type Report struct {
 	// Balance is the fund's one pooled balance (FundBalance).
 	Balance money.Amount
 
-	// OwedToMembers is what the fund owed members for talangan as of AsOf
-	// (#406, #408).
+	// OwedToMembers is what the fund owed members for talangan as of AsOf.
 	OwedToMembers money.Amount
 
-	// Reconciliation is nil when no count has ever been taken. A fund nobody
-	// has counted is not a fund that matches (ReconciliationBanner's reasoning).
+	// Reconciliation is nil when no count has ever been taken. A fund nobody has
+	// counted is not a fund that matches.
 	Reconciliation *ReportReconciliation
 
 	// PurposeBalances is Kas Utama first, then each open envelope (oldest
-	// first), then each pass-through (by name). A closed envelope is gone from
-	// it: closing rolled its leftover into Kas Utama.
+	// first), then each pass-through (by name). A closed envelope is gone:
+	// closing rolled its leftover into Kas Utama.
 	PurposeBalances []ReportPurposeBalance
 
 	// Rows are the month's rows after filters, newest first. Rows dated the
@@ -122,16 +116,15 @@ type Report struct {
 	Envelopes []ReportEnvelope
 }
 
-// ReportReconciliation is the latest cek kas as the home banner reads it: its
-// date, and whether the fund as a whole is square right now.
+// ReportReconciliation is the latest cek kas as the home banner reads it.
 type ReportReconciliation struct {
 	// Date is the count's day in Asia/Jakarta ("YYYY-MM-DD").
 	Date string
 
 	// Difference is the sum, by magnitude, of every remainder still open
-	// (#498: remainder_amount, not the difference found) across the fund - the figure ReconciliationBanner shows - so a short
-	// location and an over one cannot cancel each other into "cocok". Matched
-	// is Difference == 0.
+	// (#498: remainder_amount, not the difference found) across the fund, as
+	// ReconciliationBanner shows it, so a short location and an over one cannot
+	// cancel into "cocok". Matched is Difference == 0.
 	Matched    bool
 	Difference money.Amount
 }
@@ -151,15 +144,14 @@ type ReportRow struct {
 	Move  *ReportMove
 }
 
-// ReportLine is the one line of the month's walk a row lands on (ADR-038).
-// It is the single class that drives the list, the direction filter and the
-// totals, so the three cannot disagree about a row.
+// ReportLine is the walk line (ADR-038) a row lands on. It drives the list,
+// the direction filter and the totals, so the three cannot disagree.
 type ReportLine string
 
 const (
 	// ReportLineOpening is an opening entry: Saldo awal.
 	ReportLineOpening ReportLine = "opening"
-	// ReportLineIn is income - and a reversal, which counts there as a minus.
+	// ReportLineIn is income, and a reversal, which counts there as a minus.
 	ReportLineIn ReportLine = "in"
 	// ReportLineOut is spending.
 	ReportLineOut ReportLine = "out"
@@ -178,22 +170,20 @@ type ReportEntry struct {
 	PurposeName string
 	PurposeID   int64
 
-	// MemberName is the dues member, the named contributor, or - on a
-	// settled claim's payout - the member paid back; nil when the row names
-	// none.
+	// MemberName is the dues member, the named contributor, or the member paid
+	// back on a settled claim's payout; nil when the row names none.
 	MemberName *string
 
-	// DuesPeriod is "YYYY-MM" on a dues row and on a dues reversal; nil on
-	// every other row, a contribution's reversal included.
+	// DuesPeriod is "YYYY-MM" on a dues row and a dues reversal; nil otherwise,
+	// a contribution's reversal included.
 	DuesPeriod *string
 
 	// IsReversal marks a reversal (kind adjustment): of a dues payment when
 	// DuesPeriod is set, of a named contribution when it is not.
 	IsReversal bool
 
-	// Note is what the treasurer typed. On a settled claim's payout - whose
-	// own note is always empty - it is the claim's note, the way Riwayat
-	// shows it.
+	// Note is what the treasurer typed. On a settled claim's payout, whose note
+	// is empty, it is the claim's note, as Riwayat shows it.
 	Note *string
 
 	// HasReceipt is whether a photo exists, never the photo.
@@ -201,9 +191,9 @@ type ReportEntry struct {
 }
 
 // ReportMove is a reclass_purpose pair folded into one row: an envelope's
-// leftover rolled into Kas Utama, a purpose correction, or money the
-// treasurer moved between purposes (ADR-036). It moves nothing in or out of
-// the fund, so it is outside the totals.
+// leftover rolled into Kas Utama, a purpose correction, or money moved
+// between purposes (ADR-036). It moves nothing in or out of the fund, so it
+// is outside the totals.
 type ReportMove struct {
 	Amount          money.Amount
 	FromPurposeName string
@@ -215,37 +205,37 @@ type ReportMove struct {
 	// correction names the row it corrects (ADR-033).
 	IsCorrection bool
 
-	// IsAllocation tells money the treasurer moved between purposes
-	// ("Pindah pos", transfer.reason 'allocation', ADR-036) from an
-	// envelope's roll. Neither IsCorrection nor IsAllocation: a roll, which
-	// is also what a pair from before the column reads as.
+	// IsAllocation tells money moved between purposes ("Pindah pos",
+	// transfer.reason 'allocation', ADR-036) from an envelope's roll. Neither
+	// flag set means a roll, which is also how a pair from before the column
+	// reads.
 	IsAllocation bool
 	Note         *string
 }
 
 // ReportWalk is the month as ADR-038 reads it: a walk from the balance the
-// month started on to the balance it ended on, in which every posted row lands
-// on exactly one line.
+// month started on to the balance it ended on, in which every posted row
+// lands on exactly one line.
 //
 //	Start + Openings + In - Out + Adjustments + Moved = End
 //
-// In is net of reversals, so it can read below zero; Adjustments and Moved are
-// signed. Start and End are ledger sums (the bounded fund or purpose balance),
-// never computed from the lines, so the equation above is a property the tests
-// assert and not something the report forces; it is not checked at runtime,
-// because a public page does not fail on a neighbour.
+// In is net of reversals, so it can read below zero; Adjustments and Moved
+// are signed. Start and End are ledger sums (the bounded fund or purpose
+// balance), never computed from the lines, so the equation is a property the
+// tests assert, not something the report forces or checks at runtime (a
+// public page does not fail on a neighbour).
 //
-// Full says whether the walk applies: with no filter (the whole fund) or with
-// a purpose filter alone (that pos, whose Moved line is the net of its
+// Full says whether the walk applies: with no filter (the whole fund) or a
+// purpose filter alone (that pos, whose Moved line is the net of its
 // reclass_purpose legs). Under a member or direction filter only In and Out
-// are meaningful (the lines of the rows that matched): Start and End stay
-// zero, since a balance has no meaning for one member or one direction.
+// are meaningful; Start and End stay zero, since a balance has no meaning for
+// one member or direction.
 type ReportWalk struct {
 	Full bool
 
-	// StartOn and EndOn date the two balances ("YYYY-MM-DD"): the last day of
-	// the previous month, and the month's last day (today, for the running
-	// month). Set with Full.
+	// StartOn and EndOn date the two balances ("YYYY-MM-DD"): the last day of the
+	// previous month, and the month's last day (today, for the running month).
+	// Set with Full.
 	StartOn string
 	EndOn   string
 
@@ -255,19 +245,18 @@ type ReportWalk struct {
 	Out         money.Amount
 	Adjustments money.Amount
 
-	// Moved is a purpose filter's own line: the signed net of that purpose's
-	// reclass_purpose legs dated in the month (an envelope's roll, a Pindah pos,
-	// a purpose correction), summed from the raw legs rather than from the
-	// folded display rows, so it equals the change in the pos's balance whatever
-	// the display folds. Always zero for the whole fund, where the two legs of a
-	// move cancel.
+	// Moved is a purpose filter's line: the signed net of that purpose's
+	// reclass_purpose legs dated in the month, summed from the raw legs rather
+	// than the folded display rows, so it equals the change in the pos's balance
+	// whatever the display folds. Always zero for the whole fund, where the two
+	// legs of a move cancel.
 	Moved money.Amount
 	End   money.Amount
 }
 
-// ReportDuesRow is one member's standing for the month - DuesStatusForPeriod's
-// row with the member's tier by name, and without their dates. Names and tiers
-// are public by the maintainer's call (2026-10-02): the slug is the guard.
+// ReportDuesRow is one member's standing for the month: DuesStatusForPeriod's
+// row with the member's tier by name, without their dates. Names and tiers
+// are public by the maintainer's call (2026-10-02); the slug is the guard.
 type ReportDuesRow struct {
 	MemberName  string
 	TierName    string // "" when the member has no tier
@@ -287,9 +276,9 @@ type ReportEnvelope struct {
 	ClosedOn         *string // nil while open
 	Balance          money.Amount
 
-	// Collected is what the occasion itself took in, as the envelope screen's
-	// "Terkumpul" reads it (GetIncidentalDetail) - not Balance, which is zero
-	// on a closed envelope once its leftover has rolled out.
+	// Collected is what the occasion took in, as the envelope screen's
+	// "Terkumpul" reads it (GetIncidentalDetail), not Balance, which is zero on a
+	// closed envelope once its leftover has rolled out.
 	Collected money.Amount
 
 	// Recipients are the members the envelope is for, by name; never expected
@@ -313,19 +302,18 @@ type ReportContributor struct {
 	Amount     money.Amount
 }
 
-// MonthlyReport assembles everything the public report shows for one fund and
-// one month (ADR-035, #372). Unlike the ledger's other reads it runs inside one
-// transaction: it is a dozen queries, and a write landing between two of them
-// could show a header balance one row newer than the rows beneath it - on the
-// one page whose job is to show that the numbers agree. Every helper it calls
-// reads through the snapshot's q, so nothing reaches for a second connection.
+// MonthlyReport assembles everything the public report shows for one fund
+// and one month (ADR-035). It runs inside one transaction: it is a dozen
+// queries, and a write landing between two could show a header balance one
+// row newer than the rows beneath it, on the page whose job is to show that
+// the numbers agree. Every helper reads through the snapshot's q.
 //
 // Which ledger rows appear, and where they count:
-//   - A between_accounts transfer is left out entirely: with locations hidden
-//     it moves nothing a reader can see, and its two legs would double a total.
+//   - A between_accounts transfer is left out: with locations hidden it
+//     moves nothing a reader can see, and its two legs would double a total.
 //   - A reclass_purpose pair is one ReportMove, outside the walk. It shows
-//     when the purpose filter equals either side, and is hidden by a member or
-//     direction filter, which it has neither of.
+//     when the purpose filter equals either side, and is hidden by a member
+//     or direction filter.
 //   - Everything else is a ReportEntry on exactly one line of the walk
 //     (ADR-038, classifyReportRow): Saldo awal, Total masuk, Total keluar or
 //     Penyesuaian.
@@ -418,8 +406,7 @@ func (l *Ledger) monthlyReport(ctx context.Context, p ReportParams) (Report, err
 		return Report{}, err
 	}
 	// The ends of the walk are ledger sums, and only the whole fund or one pos
-	// has them. A purpose's are the same bounded figures as its Saldo per pos
-	// line; a purpose that did not exist yet simply sums to nothing.
+	// has them. A purpose that did not exist yet sums to nothing.
 	if r.Walk.Full {
 		dayBefore := monthStart.AddDate(0, 0, -1).Format(reportDayLayout)
 		r.Walk.StartOn, r.Walk.EndOn = dayBefore, r.AsOf
@@ -452,7 +439,7 @@ func (l *Ledger) monthlyReport(ctx context.Context, p ReportParams) (Report, err
 // reportBound is where a past month's figures stop (ADR-037): through is its
 // last day, compared against the ledger's day columns; before is the first
 // instant of the next month in Jakarta, compared against a count's
-// performed_at. Both nil is the running month, which reads every row - the
+// performed_at. Both nil is the running month, which reads every row, the
 // same figures Beranda shows.
 type reportBound struct {
 	through *string
@@ -542,12 +529,11 @@ func (l *Ledger) reportReconciliation(ctx context.Context, fundID int64, b repor
 }
 
 // reportPurposeBalances is the header's per-purpose figures as of the bound:
-// Kas Utama, each envelope open then, each pass-through that existed then -
+// Kas Utama, each envelope open then, each pass-through that existed then,
 // and any other purpose still holding money then, so the lines always sum to
-// Saldo kas. That last case is a purpose created or opened after the month
-// with rows dated inside it, which back-filling produces (#408). A closed
-// envelope holds nothing (ADR-031), so it stays hidden. In ListPurposesByFund's
-// order: Kas Utama first, then by name.
+// Saldo kas (a purpose created or opened after the month with rows dated
+// inside it, which back-filling produces, #408). A closed envelope holds
+// nothing (ADR-031), so it stays hidden. In ListPurposesByFund's order.
 func (l *Ledger) reportPurposeBalances(ctx context.Context, fundID int64, purposes []store.Purpose, envelopes []store.Incidental, b reportBound) ([]ReportPurposeBalance, error) {
 	envelopeByPurpose := make(map[int64]store.Incidental, len(envelopes))
 	for _, e := range envelopes {
@@ -605,10 +591,10 @@ func envelopeOpenAt(e store.Incidental, through *string) bool {
 }
 
 // MonthInOut is the running month's In and Out for the whole fund, as Beranda
-// shows them (ADR-038): the very figures the report's running month carries as
-// Walk.In and Walk.Out, because it reads them through the same reportRows
-// over the same unbounded, unfiltered month. The month is read in Asia/Jakarta
-// from now. In is net of reversals and so can be negative; Out is a magnitude.
+// shows them (ADR-038): the figures the report's running month carries as
+// Walk.In and Walk.Out, read through the same reportRows over the same
+// unbounded, unfiltered month. The month is read in Asia/Jakarta from now. In
+// is net of reversals and so can be negative; Out is a magnitude.
 func (l *Ledger) MonthInOut(ctx context.Context, fundID int64, now time.Time) (in, out money.Amount, err error) {
 	if now.IsZero() {
 		now = time.Now()
@@ -667,9 +653,8 @@ func (l *Ledger) reportRows(ctx context.Context, p ReportParams, monthStart time
 			case "between_accounts":
 				continue
 			case "reclass_purpose":
-				// Dipindah is the raw leg, whatever the display folds: a pair
-				// of corrections that folds to nothing still posted legs, and
-				// this purpose's balance moved by each.
+				// Dipindah is the raw leg, whatever the display folds: a pair of
+				// corrections that folds to nothing still posted legs.
 				if walk.Full && p.PurposeID != nil && row.PurposeID == *p.PurposeID {
 					leg := ReportEntry{Direction: row.Direction, Amount: money.FromDB(row.Amount)}
 					signed, err := leg.signed()
@@ -687,9 +672,8 @@ func (l *Ledger) reportRows(ctx context.Context, p ReportParams, monthStart time
 				}
 				moveSeen[*row.TransferID] = true
 
-				// Every correction of one row reads as a single net move
-				// (#280): emitted once, at the first leg met, and not at all
-				// when the corrections cancel out.
+				// Every correction of one row reads as a single net move (#280): emitted
+				// once, at the first leg met, and not at all when the corrections cancel.
 				if c := row.TransferCorrectsTransactionID; c != nil {
 					if correctedSeen[*c] {
 						continue
@@ -742,7 +726,7 @@ func (e ReportEntry) signed() (money.Amount, error) {
 }
 
 // add lands one entry on its line of the walk. A reversal is stored out and
-// lands on In as a minus; an adjustment is signed by its own direction.
+// lands on In as a minus; an adjustment is signed by its direction.
 func (w *ReportWalk) add(e ReportEntry) error {
 	signed, err := e.signed()
 	if err != nil {
@@ -754,8 +738,7 @@ func (w *ReportWalk) add(e ReportEntry) error {
 	case ReportLineIn:
 		w.In, err = w.In.Add(signed)
 	case ReportLineOut:
-		// Out is a magnitude: spending, shown as a positive figure and
-		// subtracted by the walk.
+		// Out is a magnitude: spending, shown positive and subtracted by the walk.
 		w.Out, err = w.Out.Add(e.Amount)
 	case ReportLineAdjustment:
 		w.Adjustments, err = w.Adjustments.Add(signed)
@@ -766,9 +749,8 @@ func (w *ReportWalk) add(e ReportEntry) error {
 }
 
 // classifyReportRow is ADR-038's one switch: the line a posted row lands on.
-// Total by construction - a kind it does not know is an error, not a guess,
-// so a trust report says the ledger is broken rather than drop a row.
-// Transfers never reach it; the caller folds or skips them first.
+// Total by construction: an unknown kind is an error, so a trust report says
+// the ledger is broken rather than drop a row. Transfers never reach it.
 func classifyReportRow(kind, direction string, reverses bool) (ReportLine, error) {
 	switch kind {
 	case "opening":
@@ -805,8 +787,8 @@ func reportEntryFrom(row store.ListReportTransactionsRow) (ReportEntry, error) {
 		Note:        row.Note,
 		HasReceipt:  row.HasReceipt != 0,
 	}
-	// A settlement's own row names no member and holds no note: both come from
-	// the claim it settles. At most one of the two member columns is ever set.
+	// A settlement's row names no member and holds no note: both come from the
+	// claim it settles. At most one of the two member columns is set.
 	if e.MemberName == nil {
 		e.MemberName = row.SettlementMemberName
 	}
@@ -818,15 +800,15 @@ func reportEntryFrom(row store.ListReportTransactionsRow) (ReportEntry, error) {
 
 // foldCorrections nets every purpose correction of the same row into one
 // move, keyed by the corrected row's id (#280). A row corrected Perpisahan ->
-// Kas Bidang -> Kas Utama -> Kas Bidang reads as Perpisahan -> Kas Bidang; one
-// corrected and then corrected back is absent. Display only: every leg stays
-// posted, and the balances above are sums of them all.
+// Kas Bidang -> Kas Utama -> Kas Bidang reads as Perpisahan -> Kas Bidang;
+// one corrected and then corrected back is absent. Display only: every leg
+// stays posted, and the balances are sums of them all.
 //
 // Each correction moves the whole row from wherever it is now, so the
 // corrections of one row form a path. Its ends are the purpose left once more
 // than entered (the start) and the one entered once more than left (the end),
-// which needs no ordering - ids are not an order to rely on. Every correction
-// carries the row's own date, so they all fall in that row's month together.
+// which needs no ordering (ids are not an order to rely on). Every correction
+// carries the row's date, so they all fall in that row's month.
 func foldCorrections(rows []store.ListReportTransactionsRow) (map[int64]ReportMove, error) {
 	type path struct {
 		move  ReportMove
@@ -926,8 +908,8 @@ func moveMatches(p ReportParams, m ReportMove) bool {
 
 // entryMatches applies the filters to one entry by its walk line (ADR-038): a
 // reversal filters as Uang masuk, and an opening or a Penyesuaian is neither
-// masuk nor keluar, so a direction or member filter hides it, as it hides a move.
-// A purpose filter matches the row's own purpose; an opening is always Kas Utama's.
+// masuk nor keluar, so a direction or member filter hides it, as it hides a
+// move. A purpose filter matches the row's purpose; an opening is Kas Utama's.
 func entryMatches(p ReportParams, row store.ListReportTransactionsRow, e ReportEntry) bool {
 	if p.PurposeID != nil && *p.PurposeID != e.PurposeID {
 		return false
@@ -992,12 +974,11 @@ func duesStatusMatches(filter string, s DuesStatus) bool {
 	}
 }
 
-// reportEnvelopes lists every envelope that was open at some point during
-// month - opened by its end, not closed before its start - each with its
-// recipients and participation table. For the current month that is every
-// open envelope plus any closed in it (ADR-035); for a past month it is the
-// envelopes as they stood then, so an occasion is readable in every month it
-// ran, not only the one it closed in. Oldest first, then by name.
+// reportEnvelopes lists every envelope open at some point during month
+// (opened by its end, not closed before its start), each with its recipients
+// and participation table. For the current month that is every open envelope
+// plus any closed in it (ADR-035); for a past month, the envelopes as they
+// stood then. Oldest first, then by name.
 func (l *Ledger) reportEnvelopes(ctx context.Context, fundID int64, month string, purposes []store.Purpose, envelopes []store.Incidental, b reportBound) ([]ReportEnvelope, error) {
 	nameByPurpose := make(map[int64]string, len(purposes))
 	for _, pu := range purposes {
@@ -1016,8 +997,8 @@ func (l *Ledger) reportEnvelopes(ctx context.Context, fundID int64, month string
 			continue
 		}
 
-		// Every figure on the card is as of the bound (ADR-037), so a past
-		// month's card agrees with the same envelope's Saldo per pos line.
+		// Every figure on the card is as of the bound (ADR-037), so a past month's
+		// card agrees with the same envelope's Saldo per pos line.
 		balance, err := l.reportPurposeBalance(ctx, fundID, e.PurposeID, b)
 		if err != nil {
 			return nil, err

@@ -13,15 +13,13 @@ import (
 )
 
 // accountRequest is POST /api/accounts's body: one more location for an
-// existing fund (#78's other half - setup asks for the first batch,
-// POST /api/accounts is what adds to them afterward). Shape only - a
-// malformed kind and a blank name are the schema's own CHECKs to refuse, not
-// re-checked here (ADR-027).
+// existing fund (setup asks for the first batch, #78). Shape only: a
+// malformed kind and a blank name are the schema's CHECKs to refuse (ADR-027).
 //
-// OpeningBalance is optional and, per #230's uniform rule, the only way left
-// to give a location added after setup a starting figure: a location and its
-// opening balance are born together, in the same database transaction, or
-// not at all. Absent is the same as an amount of 0 - neither posts a row.
+// OpeningBalance is optional and, per #230, the only way to give a location
+// added after setup a starting figure: a location and its opening balance are
+// born together in one transaction, or not at all. Absent is the same as 0;
+// neither posts a row.
 type accountRequest struct {
 	Kind           string                 `json:"kind"`
 	Name           string                 `json:"name"`
@@ -29,18 +27,17 @@ type accountRequest struct {
 }
 
 // openingBalanceRequest is accountRequest's and setupRequest's shared
-// opening-balance shape: an amount, the calendar date it is dated, and an
-// optional note. No purpose_id - an opening balance is always tagged to the
-// fund's one kind='main' purpose, resolved server-side.
+// opening-balance shape: an amount, its calendar date, and an optional note.
+// No purpose_id: an opening balance is always tagged to the fund's
+// kind='main' purpose, resolved server-side.
 type openingBalanceRequest struct {
 	Amount     int64   `json:"amount"`
 	OccurredOn string  `json:"occurred_on"`
 	Note       *string `json:"note"`
 }
 
-// toOpeningBalance converts the wire shape to the ledger's own value type, or
-// nil when req itself is nil - the same "absent means no opening balance"
-// rule accountRequest's own doc comment states.
+// toOpeningBalance converts the wire shape to the ledger's value type, or nil
+// when req is nil ("absent means no opening balance", see accountRequest).
 func (req *openingBalanceRequest) toOpeningBalance() *ledger.OpeningBalance {
 	if req == nil {
 		return nil
@@ -52,11 +49,10 @@ func (req *openingBalanceRequest) toOpeningBalance() *ledger.OpeningBalance {
 	}
 }
 
-// accountResponse is the wire shape of an account row. No fund_id, same
-// reasoning as memberResponse. kind is exposed because it is the whole point
-// of the row - cash and bank reconcile differently (PRD section 7.7). inactive_on
-// is #134's account-lifecycle half: null for a location still in use, a date
-// for one retired (mirrors memberResponse.InactiveOn exactly).
+// accountResponse is the wire shape of an account row. No fund_id, as for
+// memberResponse. kind is exposed because cash and bank reconcile differently
+// (PRD section 7.7). inactive_on (#134) is null for a location in use, a date
+// for a retired one.
 type accountResponse struct {
 	ID         int64   `json:"id"`
 	Kind       string  `json:"kind"`
@@ -69,16 +65,14 @@ func toAccountResponse(a store.Account) accountResponse {
 	return accountResponse{ID: a.ID, Kind: a.Kind, Name: a.Name, InactiveOn: a.InactiveOn, CreatedAt: a.CreatedAt}
 }
 
-// createAccount is POST /api/accounts. #78 overturned the assumption that
-// only SetUpFund ever creates an account - a treasurer who opens a second
-// bank account, or realizes setup under-counted, needs this afterward too.
+// createAccount is POST /api/accounts. #78 overturned the assumption that only
+// SetUpFund creates accounts: a treasurer who opens a second bank account, or
+// finds setup under-counted, needs this afterward.
 //
-// #230 moved this off the direct-CRUD path createMember and createDuesTier
-// still use: an optional opening balance now rides the same request, and
-// Ledger.CreateAccount is what posts it inside the same transaction as the
-// account itself - a location and its opening balance are born together, or
-// not at all, so mapLedgerError (not mapSQLiteError) is what answers a
-// refusal here, the same as every other ledger-backed write.
+// #230 moved it off the direct-CRUD path of createMember and createDuesTier:
+// an optional opening balance rides the request, and Ledger.CreateAccount
+// posts it in the account's transaction, so mapLedgerError (not
+// mapSQLiteError) answers a refusal.
 func (a *api) createAccount(w http.ResponseWriter, r *http.Request) {
 	var req accountRequest
 	if !decodeJSON(w, r, &req) {
@@ -104,11 +98,9 @@ func (a *api) createAccount(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, toAccountResponse(account))
 }
 
-// listAccounts is GET /api/accounts: every location the fund has - however
-// many the treasurer named at setup, plus anything added afterward through
-// POST /api/accounts above, retired ones (inactive_on set) included, since
-// history still needs to render them (PRD section 7.8's reconcile flow and PRD
-// section 7.9's report both read past entries against a location that no longer
+// listAccounts is GET /api/accounts: every location the fund has, retired
+// ones (inactive_on set) included, since history still renders them (PRD
+// sections 7.8, 7.9: past entries read against a location that no longer
 // takes new counts).
 func (a *api) listAccounts(w http.ResponseWriter, r *http.Request) {
 	fund, ok := a.resolveFund(w, r)
@@ -130,9 +122,8 @@ func (a *api) listAccounts(w http.ResponseWriter, r *http.Request) {
 }
 
 // resolveAccount looks up {id} within the fund, or answers the request and
-// reports false. Mirrors resolveMember exactly - fund-scoped in the query,
-// and a pre-fetch rather than leaning on sql.ErrNoRows, which a DELETE
-// affecting zero rows never raises.
+// reports false. Mirrors resolveMember: fund-scoped in the query, and a
+// pre-fetch because a DELETE affecting zero rows never raises sql.ErrNoRows.
 func (a *api) resolveAccount(w http.ResponseWriter, r *http.Request) (store.Account, bool) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
@@ -156,11 +147,9 @@ func (a *api) resolveAccount(w http.ResponseWriter, r *http.Request) (store.Acco
 	return account, true
 }
 
-// updateAccountRequest is PATCH /api/accounts/{id}'s body. An absent key
-// means "leave alone"; an explicit null on inactive_on means "reinstate" -
-// the same *Set-flag decode shape updateMemberRequest already uses for
-// exactly this ambiguity (absent vs. explicit null), rather than a second
-// convention for it in this package.
+// updateAccountRequest is PATCH /api/accounts/{id}'s body. An absent key means
+// "leave alone"; an explicit null on inactive_on means "reinstate", with the
+// *Set-flag decode of updateMemberRequest for that ambiguity.
 type updateAccountRequest struct {
 	Name          *string
 	NameSet       bool
@@ -201,18 +190,14 @@ func decodeUpdateAccountRequest(w http.ResponseWriter, r *http.Request) (updateA
 }
 
 // updateAccount is PATCH /api/accounts/{id}: a correction to a location's
-// own label, not a ledger event - account.name is a label on a location, not
-// a posted fact, so rule 3's immutability does not reach it (renaming breaks
-// nothing already posted, which still references the account by id).
-// kind is correctable the same way and for the same reason: nothing in
-// internal/ledger branches on it, so 'cash' vs 'bank' is a label on the
-// location, not a rule about the money in it. A location entered as the
-// wrong one is a typo, and the schema's CHECK still refuses anything but
-// the two (ADR-027 - shape is the schema's to police, not this handler's).
-// inactive_on is the other half of #134's account-lifecycle ruling: the
-// retirement date for a used-then-retired location, or an explicit null to
-// reinstate it. Retiring one that still holds money is 409
-// account_holds_money (#474), so the write goes through Ledger.UpdateAccount.
+// label, not a ledger event. account.name is a label, not a posted fact, so
+// rule 3's immutability does not reach it (posted rows reference the account
+// by id). kind is correctable alike: nothing in internal/ledger branches on
+// it, so 'cash' vs 'bank' is a label, and the wrong one is a typo (the
+// schema's CHECK still allows only the two, ADR-027). inactive_on is #134's
+// retirement date, or an explicit null to reinstate. Retiring a location that
+// holds money is 409 account_holds_money (#474), so the write goes through
+// Ledger.UpdateAccount.
 func (a *api) updateAccount(w http.ResponseWriter, r *http.Request) {
 	account, ok := a.resolveAccount(w, r)
 	if !ok {
@@ -245,12 +230,11 @@ func (a *api) updateAccount(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, toAccountResponse(updated))
 }
 
-// deleteAccount is DELETE /api/accounts/{id}: for a never-used duplicate
-// added at setup or by mistake, never for a location that was actually used
-// and then retired - that is inactive_on (updateAccount above). No
-// pre-check for referencing rows; the composite foreign keys already refuse
-// it, and a COUNT(*) first would only race them. Mirrors deleteMember
-// verbatim.
+// deleteAccount is DELETE /api/accounts/{id}: for a never-used duplicate added
+// at setup or by mistake, not a location used then retired (inactive_on, see
+// updateAccount). No pre-check for referencing rows: the composite foreign
+// keys refuse it, and a COUNT(*) first would only race them. Mirrors
+// deleteMember.
 func (a *api) deleteAccount(w http.ResponseWriter, r *http.Request) {
 	account, ok := a.resolveAccount(w, r)
 	if !ok {

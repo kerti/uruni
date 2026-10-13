@@ -9,22 +9,22 @@ import (
 	"github.com/kerti/uruni/internal/store"
 )
 
-// The month-as-a-walk trust claim (ADR-038): for every month, the balance the
-// month started on, plus the lines of the rows dated in it, is the balance it
-// ended on - to the rupiah, with no tolerance. The scenario below holds every
-// shape of row the ledger can post, so a new shape the classification forgets
-// breaks a month's footing instead of slipping through.
+// The month-as-a-walk trust claim (ADR-038): for every month, the balance it
+// started on plus the lines of the rows dated in it is the balance it ended
+// on, to the rupiah, with no tolerance. The scenario holds every shape of row
+// the ledger can post, so a shape the classification forgets breaks a month's
+// footing.
 
-// walkScenario is one fund from June to the running month (October 2026, "today"
-// being reportNow = 2 Oct), holding every row shape. Dates are the rows' own;
-// where a month's figures are hand-worked the arithmetic is in want.
+// walkScenario is one fund from June to the running month (October 2026,
+// "today" being reportNow = 2 Oct), holding every row shape. Where a month's
+// figures are hand-worked the arithmetic is in want.
 type walkScenario struct {
 	fundID int64
 
-	// The purposes the scenario walks: Kas Utama, an envelope that is closed
-	// and rolled (Sunatan, whose first contribution is corrected away and back,
-	// a correction that folds to nothing on display), another that stays open
-	// (Arisan), and a pass-through (Titipan).
+	// The purposes walked: Kas Utama, an envelope closed and rolled (Sunatan,
+	// whose first contribution is corrected away and back, a correction that
+	// folds to nothing on display), another left open (Arisan), and a
+	// pass-through (Titipan).
 	mainID, sunatanID, arisanID, passID int64
 }
 
@@ -105,9 +105,9 @@ func newWalkScenario(t *testing.T, l *Ledger) walkScenario {
 		t.Fatalf("SettleReimbursement() = %v, want no error", err)
 	}
 
-	// August: a location added mid-life with money already in it; a pass-through;
-	// two envelopes, one closed and rolled into Kas Utama; a purpose correction
-	// and a Pindah pos.
+	// August: a location added mid-life with money in it; a pass-through; two
+	// envelopes, one closed and rolled into Kas Utama; a purpose correction and a
+	// Pindah pos.
 	bankB, err := l.CreateAccount(ctx, CreateAccountParams{
 		FundID: fundID, Kind: "bank", Name: "Bank B", OpeningBalance: &OpeningBalance{Amount: 150_000, OccurredOn: "2026-08-02"},
 	})
@@ -123,10 +123,10 @@ func newWalkScenario(t *testing.T, l *Ledger) walkScenario {
 	if _, err := l.PostPurposeCorrection(ctx, PostPurposeCorrectionParams{FundID: fundID, TransactionID: misTagged.ID, PurposeID: pass}); err != nil {
 		t.Fatalf("PostPurposeCorrection() = %v, want no error", err)
 	}
-	// The spending is tagged to Kas Utama and then back to Sunatan (a named
+	// The spending is tagged to Kas Utama and back to Sunatan (a named
 	// contribution cannot be corrected, an unnamed row can): two corrections of
-	// one row, which the display folds to nothing (#280) but which post four
-	// legs, and each leg moves a pos's balance.
+	// one row, which the display folds to nothing (#280) but which post four legs
+	// that each move a pos's balance.
 	for _, to := range []int64{mainID, sunatan.PurposeID} {
 		if _, err := l.PostPurposeCorrection(ctx, PostPurposeCorrectionParams{FundID: fundID, TransactionID: sunatanSpend.ID, PurposeID: to}); err != nil {
 			t.Fatalf("PostPurposeCorrection(%d) = %v, want no error", to, err)
@@ -145,8 +145,8 @@ func newWalkScenario(t *testing.T, l *Ledger) walkScenario {
 	}
 
 	// September: standalone adjustments in and out; a contribution reversed in a
-	// later month than it was given; a cek kas that fixes both ways, one as an
-	// adjustment and one as an added entry.
+	// later month than given; a cek kas that fixes both ways, as an adjustment and
+	// as an added entry.
 	post(mainID, "in", 7_000, "2026-09-01", true, nil)
 	post(mainID, "out", 3_000, "2026-09-02", true, nil)
 	reverse(arisanGift, "2026-09-05")
@@ -160,8 +160,8 @@ func newWalkScenario(t *testing.T, l *Ledger) walkScenario {
 	if err != nil {
 		t.Fatalf("AccountBalance(bank) = %v, want no error", err)
 	}
-	// Cek kas counts every active location (#444), Bank B included - it holds
-	// what it was opened with and the count agrees.
+	// Cek kas counts every active location (#444), Bank B included; it holds what
+	// it was opened with and the count agrees.
 	bankBBalance, err := l.AccountBalance(ctx, fundID, bankB.ID)
 	if err != nil {
 		t.Fatalf("AccountBalance(bank B) = %v, want no error", err)
@@ -189,8 +189,8 @@ func newWalkScenario(t *testing.T, l *Ledger) walkScenario {
 }
 
 // ledgerSumThrough sums the fund's rows dated on or before through ("" for
-// every row) by raw SQL, a second route to the balance that shares nothing
-// with the report's own queries.
+// every row) by raw SQL, a route to the balance sharing nothing with the
+// report's queries.
 func ledgerSumThrough(t *testing.T, l *Ledger, fundID int64, through string) money.Amount {
 	t.Helper()
 	var sum int64
@@ -289,8 +289,7 @@ func TestMonthlyReportWalkFootsEveryMonthOfAScenarioHoldingEveryRowShape(t *test
 	}
 }
 
-// The scenario must really hold every shape, or the footing above proves less
-// than it says.
+// The scenario must hold every shape, or the footing proves less than it says.
 func TestWalkScenarioHoldsEveryRowShapeOnItsOwnLine(t *testing.T) {
 	t.Parallel()
 	l := newTestLedger(t)
@@ -342,7 +341,7 @@ func TestWalkScenarioHoldsEveryRowShapeOnItsOwnLine(t *testing.T) {
 }
 
 // A member or direction filter, with or without a purpose, has no balance to
-// walk: only the two lines of the rows that matched, and the ends left at zero.
+// walk: only the lines of the matched rows, the ends left at zero.
 func TestMonthlyReportWalkUnderAFilterIsOnlyMasukAndKeluar(t *testing.T) {
 	t.Parallel()
 	l := newTestLedger(t)
@@ -429,7 +428,7 @@ func TestMonthlyReportListsOpeningsAndAdjustmentsUnfiltered(t *testing.T) {
 }
 
 // The running month reads from its first day with no upper bound, so a row
-// dated after today is both listed and in the walk.
+// dated after today is listed and in the walk.
 func TestMonthlyReportRunningMonthIncludesRowsDatedAfterToday(t *testing.T) {
 	t.Parallel()
 	l := newTestLedger(t)
@@ -450,8 +449,8 @@ func TestMonthlyReportRunningMonthIncludesRowsDatedAfterToday(t *testing.T) {
 		}
 	}
 
-	// The same month, as a past one (a clock in November), stops where it ends:
-	// the walk is the same, because nothing is dated beyond the month.
+	// The same month as a past one (a clock in November) stops where it ends; the
+	// walk is the same, as nothing is dated beyond it.
 	past := monthlyReport(t, l, ReportParams{FundID: s.fundID, Month: "2026-10", Now: jakartaAt(2026, time.November, 3, 12, 0, 0)})
 	if past.Running {
 		t.Fatal("October is still the running month on 3 Nov")
@@ -461,8 +460,8 @@ func TestMonthlyReportRunningMonthIncludesRowsDatedAfterToday(t *testing.T) {
 	}
 }
 
-// A reversal in a month with nothing else in it takes Total masuk below zero,
-// and an adjustment is signed. Both are accepted by ADR-038, and both foot.
+// A reversal in a month with nothing else takes Total masuk below zero, and an
+// adjustment is signed. ADR-038 accepts both, and both foot.
 func TestMonthlyReportWalkAllowsANegativeTotalMasuk(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
@@ -496,9 +495,9 @@ func TestClassifyReportRowRefusesAKindItHasNoLineFor(t *testing.T) {
 	}
 }
 
-// purposeLedgerSum sums one purpose's rows by raw SQL, through a day ("" for
-// every row): a route to the pos's balance that shares nothing with the
-// report's own queries.
+// purposeLedgerSum sums one purpose's rows by raw SQL through a day ("" for
+// every row): a route to the pos's balance sharing nothing with the report's
+// queries.
 func purposeLedgerSum(t *testing.T, l *Ledger, fundID, purposeID int64, through string) money.Amount {
 	t.Helper()
 	var sum int64
@@ -539,10 +538,10 @@ func walkFootsMoved(t *testing.T, w ReportWalk) money.Amount {
 	return sum
 }
 
-// Every month is walked again for each pos on its own (ADR-038): Kas Utama, a
-// closed envelope that rolled into it, an open one, and a Titipan. The pos's
-// Start and End are its own bounded balances, Dipindah is the net of its raw
-// reclass legs, and the poses together make the fund's walk.
+// Every month is walked again for each pos (ADR-038): Kas Utama, a closed
+// envelope that rolled into it, an open one, and a Titipan. A pos's Start and
+// End are its bounded balances, Dipindah is the net of its raw reclass legs,
+// and the poses together make the fund's walk.
 func TestMonthlyReportWalkFootsEveryMonthForEveryPurpose(t *testing.T) {
 	t.Parallel()
 	l := newTestLedger(t)
@@ -605,9 +604,8 @@ func TestMonthlyReportWalkFootsEveryMonthForEveryPurpose(t *testing.T) {
 
 				want := wantByMonth[month]
 				if _, listed := wantByMonth[month]; !listed {
-					// A month the table leaves out is a quiet one: the balance
-					// carried through, no lines. Its figures are asserted by the
-					// footing and the ledger sums below.
+					// A month the table leaves out is quiet: the balance carries through with no
+					// lines. The footing and ledger sums below assert its figures.
 					want = W{Start: got.Start, End: got.End}
 				}
 				want.Full = true
@@ -627,8 +625,8 @@ func TestMonthlyReportWalkFootsEveryMonthForEveryPurpose(t *testing.T) {
 				previousEnd = got.End
 				ends[name][month] = got.End
 
-				// Both ends are the pos's own ledger sums by a second route, and
-				// Dipindah is the raw legs (not the folded display rows).
+				// Both ends are the pos's ledger sums by a second route, and Dipindah is the
+				// raw legs, not the folded display rows.
 				if start := purposeLedgerSum(t, l, s.fundID, id, got.StartOn); start != got.Start {
 					t.Errorf("Start = %d, but the ledger through %s sums to %d for this pos", got.Start, got.StartOn, start)
 				}
@@ -657,7 +655,7 @@ func TestMonthlyReportWalkFootsEveryMonthForEveryPurpose(t *testing.T) {
 	}
 
 	// The poses together are the fund: every month's Start and End sum to the
-	// whole fund's, so a purpose that lost a row to no line would show here.
+	// fund's, so a purpose that lost a row to no line would show here.
 	for _, month := range months {
 		fund := monthlyReport(t, l, ReportParams{FundID: s.fundID, Month: month})
 		var start, end money.Amount
@@ -676,10 +674,10 @@ func TestMonthlyReportWalkFootsEveryMonthForEveryPurpose(t *testing.T) {
 	}
 }
 
-// A correction that folds to nothing on display still posted legs, and each one
-// moved a pos's balance. Netted over the pair they cancel on every pos, so
-// Dipindah stays true to the balance whichever way it is summed - but it is the
-// raw legs that make it so, not the display.
+// A correction that folds to nothing on display still posted legs, each moving
+// a pos's balance. Netted over the pair they cancel on every pos, so Dipindah
+// stays true to the balance however summed, but it is the raw legs that make
+// it so, not the display.
 func TestPurposeWalkMovedCountsLegsADisplayFoldsAway(t *testing.T) {
 	t.Parallel()
 	l := newTestLedger(t)
@@ -695,8 +693,8 @@ func TestPurposeWalkMovedCountsLegsADisplayFoldsAway(t *testing.T) {
 		t.Errorf("Sunatan lists %d moves, want 2 (the Pindah pos in, the roll out)", len(moves(r.Rows)))
 	}
 
-	// Sunatan carries two correction legs (out when tagged away, in when tagged
-	// back), plus the allocation and the roll: four raw legs.
+	// Sunatan carries two correction legs (out when tagged away, in when back),
+	// plus the allocation and the roll: four raw legs.
 	moved, legs := purposeMovedInMonth(t, l, s.fundID, s.sunatanID, "2026-08")
 	if legs != 4 {
 		t.Errorf("raw reclass legs on Sunatan in August = %d, want 4", legs)

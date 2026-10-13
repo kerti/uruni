@@ -9,9 +9,8 @@ import (
 	"github.com/kerti/uruni/internal/store"
 )
 
-// The ledger's storage layer: what the database itself refuses, as opposed to
-// what the application remembers to check. Every test here fails by *not*
-// getting an error.
+// The ledger's storage layer: what the database itself refuses, not what the
+// application remembers to check. Every test here fails by not getting an error.
 
 func createAccount(t *testing.T, sqlDB *sql.DB, fundID int64, kind, name string) int64 {
 	t.Helper()
@@ -119,7 +118,7 @@ func TestPostedTransactionCannotBeUpdatedOrDeleted(t *testing.T) {
 		t.Errorf("DELETE error = %q, want it to contain %q", err, want)
 	}
 
-	// The row is still there and unchanged - the abort rolled nothing forward.
+	// The row is still there and unchanged.
 	got, err := store.New(sqlDB).GetTransaction(context.Background(), txID)
 	if err != nil {
 		t.Fatalf("GetTransaction(%d) = %v, want no error", txID, err)
@@ -137,8 +136,8 @@ func TestTransferCannotBeUpdatedOrDeleted(t *testing.T) {
 
 	const want = "transfer rows are immutable"
 
-	// Re-labelling a transfer after the fact would rewrite what its two
-	// transactions mean without touching either of them.
+	// Re-labelling a transfer afterward would rewrite what its two transactions
+	// mean without touching either.
 	if _, err := sqlDB.Exec(`UPDATE transfer SET kind = 'reclass_purpose' WHERE id = ?`, transferID); err == nil {
 		t.Error("UPDATE on a transfer = nil error, want the trigger to abort it")
 	} else if !strings.Contains(err.Error(), want) {
@@ -157,9 +156,9 @@ func TestImmutableTablesStillAcceptInserts(t *testing.T) {
 	sqlDB := migratedTestDB(t)
 	f := newLedgerFixture(t, sqlDB, "Test Fund", validSlug)
 
-	// ADR-012's import restores a database by inserting rows, so the triggers
-	// must guard UPDATE and DELETE only. (reconciliation and
-	// reconciliation_line get the same pair, and this test, in M2.4.)
+	// ADR-012's import restores by inserting rows, so the triggers guard UPDATE and
+	// DELETE only. (reconciliation and reconciliation_line get the same pair, and
+	// this test, in M2.4.)
 	if id := createTransfer(t, sqlDB, f.fundID, "between_accounts"); id == 0 {
 		t.Error("CreateTransfer returned id 0, want a real row")
 	}
@@ -263,12 +262,11 @@ func TestDuesFieldsBelongToDuesAndNothingElse(t *testing.T) {
 	})
 
 	t.Run("a non-adjustment claiming to reverse a dues payment", func(t *testing.T) {
-		// ADR-029's reverses_transaction_id guards itself: without that CHECK
-		// a kind='normal' row carrying no member and no period satisfies the
-		// dues CHECK and still sets the column, which hides the original
-		// payment from DuesPaidByPeriod (its NOT EXISTS only asks whether
-		// *something* points at the row) and consumes the reversed-once slot
-		// so the real reversal can never be posted.
+		// ADR-029's reverses_transaction_id guards itself: without that CHECK, a
+		// kind='normal' row with no member and no period satisfies the dues CHECK yet
+		// sets the column, hiding the original payment from DuesPaidByPeriod (its NOT
+		// EXISTS only asks whether something points at the row) and consuming the
+		// reversed-once slot so the real reversal can never post.
 		paid := base()
 		paid.Kind, paid.MemberID, paid.DuesPeriod = "dues", &f.memberID, &period
 		posted, err := q.CreateTransaction(ctx, paid)
@@ -321,9 +319,9 @@ func TestAdjustmentStandsAloneWithNoReconciliation(t *testing.T) {
 	sqlDB := migratedTestDB(t)
 	f := newLedgerFixture(t, sqlDB, "Test Fund", validSlug)
 
-	// CLAUDE.md rule 3 makes every correction an adjusting entry, not only the
-	// ones raised during a reconciliation. An earlier draft of the schema had a
-	// CHECK forcing a Tuesday-afternoon correction to masquerade as 'normal'.
+	// CLAUDE.md rule 3 makes every correction an adjusting entry, not only those
+	// raised during a reconciliation. An earlier schema draft had a CHECK forcing
+	// a Tuesday-afternoon correction to masquerade as 'normal'.
 	note := "cash discrepancy correction"
 	if _, err := store.New(sqlDB).CreateTransaction(context.Background(), store.CreateTransactionParams{
 		FundID: f.fundID, AccountID: f.accountID, PurposeID: f.purposeID,
@@ -349,8 +347,8 @@ func TestTransferKindRequiresATransfer(t *testing.T) {
 		t.Fatal("kind='transfer' with no transfer_id = nil error, want the CHECK to reject it")
 	}
 
-	// The pair itself: equal amounts, opposite directions, one transfer row, and
-	// a fund total that has not moved.
+	// The pair: equal amounts, opposite directions, one transfer row, and an
+	// unmoved fund total.
 	bankID := createAccount(t, sqlDB, f.fundID, "bank", "Bank Account")
 	transferID := createTransfer(t, sqlDB, f.fundID, "between_accounts")
 	f.post(t, sqlDB, "in", 100000)
@@ -390,8 +388,8 @@ func TestTransactionCannotBorrowAnotherFundsRow(t *testing.T) {
 	otherTransfer := createTransfer(t, sqlDB, b.fundID, "between_accounts")
 	period := "2026-08"
 
-	// Each row exists, so a single-column REFERENCES would accept every one of
-	// these. Only the composite (fund_id, ...) form knows it is the wrong fund.
+	// Each row exists, so a single-column REFERENCES would accept all of them;
+	// only the composite (fund_id, ...) form knows it is the wrong fund.
 	tests := []struct {
 		name  string
 		mutex func(p *store.CreateTransactionParams)
@@ -431,8 +429,8 @@ func TestTransactionAmountMustBePositive(t *testing.T) {
 	q := store.New(sqlDB)
 	f := newLedgerFixture(t, sqlDB, "Test Fund", validSlug)
 
-	// direction carries the sign. A negative or zero amount is a second way to
-	// say the same thing, and two ways is one too many.
+	// direction carries the sign; a negative or zero amount is a second way to say
+	// it, and two ways is one too many.
 	for _, amount := range []int64{0, -1000} {
 		if _, err := q.CreateTransaction(ctx, store.CreateTransactionParams{
 			FundID: f.fundID, AccountID: f.accountID, PurposeID: f.purposeID,
@@ -475,8 +473,8 @@ func TestReceiptCanBeAttachedAfterTheEntryIsPosted(t *testing.T) {
 	q := store.New(sqlDB)
 	f := newLedgerFixture(t, sqlDB, "Test Fund", validSlug)
 
-	// The whole reason receipt is its own table: the ledger row is immutable, so
-	// a photo taken later has nowhere to go if it lives as a column (ADR-011).
+	// Why receipt is its own table: the ledger row is immutable, so a photo taken
+	// later has nowhere to go as a column (ADR-011).
 	txID := f.post(t, sqlDB, "out", 30000)
 	if _, err := q.CreateReceipt(ctx, store.CreateReceiptParams{
 		FundID: f.fundID, TransactionID: &txID, Path: "receipts/nota.jpg", UploadedAt: 2,
@@ -511,7 +509,7 @@ func TestBalancesSumTheLedgerAndLandAsInt64(t *testing.T) {
 	}
 
 	// These assignments are the test: an uncast aggregate comes back as
-	// interface{} and stops compiling here rather than at M3 (ADR-024).
+	// interface{} and stops compiling here, not at M3 (ADR-024).
 	var fundBalance int64
 	fundBalance, err := q.FundBalance(ctx, f.fundID)
 	if err != nil {
@@ -532,7 +530,7 @@ func TestBalancesSumTheLedgerAndLandAsInt64(t *testing.T) {
 		t.Errorf("AccountBalance(cash) = %d, want 380000", cashBalance)
 	}
 
-	// An empty fund is zero, not NULL and not an error - COALESCE earns its keep.
+	// An empty fund is zero, not NULL or an error: COALESCE earns its keep.
 	empty := createFund(t, sqlDB, "Fund kosong", "bcdefghijklmnopqrstuvw")
 	var emptyBalance int64
 	emptyBalance, err = q.FundBalance(ctx, empty)

@@ -22,12 +22,11 @@ type CreateReimbursementParams struct {
 	Note       *string
 }
 
-// CreateReimbursement files a claim. It posts nothing - an unsettled claim
-// is off the ledger (ADR-024) - but a claim against a closed envelope can
-// only end in a refused payout, so it is refused here too, with
-// ErrIncidentalClosed (ADR-031, #473): reopen the envelope first, as for
-// any posting. Every other rule (a member or purpose naming no row, a
-// malformed incurred_on) stays the schema's to refuse.
+// CreateReimbursement files a claim. It posts nothing (an unsettled claim is
+// off the ledger, ADR-024), but a claim against a closed envelope can only
+// end in a refused payout, so it is refused with ErrIncidentalClosed
+// (ADR-031, #473): reopen the envelope first. Every other rule (a member or
+// purpose naming no row, a malformed incurred_on) is the schema's to refuse.
 func (l *Ledger) CreateReimbursement(ctx context.Context, p CreateReimbursementParams) (store.Reimbursement, error) {
 	if p.Amount <= 0 {
 		return store.Reimbursement{}, fmt.Errorf("%w: amount must be positive, got %d", ErrInvalidArgument, p.Amount.Int64())
@@ -58,10 +57,9 @@ func (l *Ledger) CreateReimbursement(ctx context.Context, p CreateReimbursementP
 // SettleReimbursementParams is every argument SettleReimbursement needs to pay
 // out one outstanding claim.
 //
-// There is deliberately no Amount and no PurposeID field: both come from the
-// reimbursement row itself once fetched, never from the caller. A settlement
-// that paid a different figure than the claim would not be a settlement of
-// that claim, so the amount is not this struct's to carry.
+// There is no Amount or PurposeID field: both come from the reimbursement row,
+// never the caller. A settlement paying a different figure would not settle
+// that claim.
 type SettleReimbursementParams struct {
 	FundID          int64
 	ReimbursementID int64
@@ -70,39 +68,35 @@ type SettleReimbursementParams struct {
 }
 
 // SettleReimbursement writes one kind='reimbursement', direction='out' row
-// paying out a claim that has been sitting off the ledger, and returns the
-// created row.
+// paying out a claim that has been off the ledger, and returns the created
+// row.
 //
-// A member fronting their own money does not move the kas, so there is no
-// ledger row until this call - that is why reimbursement is its own table and
-// why the recorded balance still matches the wallet in between (ADR-024).
-// This method posts exactly one row: the payout, dated on the settle date
-// (OccurredOn), not on incurred_on, which stays on the reimbursement row as
-// the truth about when the member actually spent the money.
+// A member fronting money does not move the kas, so there is no ledger row
+// until this call; that is why reimbursement is its own table and the
+// recorded balance still matches the wallet in between (ADR-024). It posts
+// exactly one row: the payout, dated on the settle date (OccurredOn), not
+// incurred_on, which stays on the reimbursement row as when the member spent
+// the money.
 //
-// Two pre-checks run inside the transaction before the write, each producing
-// a named error rather than closing a race that cannot happen: under
-// ADR-004's SetMaxOpenConns(1), no second connection can interleave a write
-// between either check and this method's own insert, so neither check is a
-// lock and neither closes a window the schema does not already close on its
-// own (the same reasoning ErrDuesPaymentAlreadyReversed's own comment gives
-// for ReverseDuesPayment's identical shape).
+// Two pre-checks run in the transaction before the write, each giving a named
+// error rather than closing a race: under ADR-004's SetMaxOpenConns(1) no
+// second connection can interleave a write, so neither is a lock or closes a
+// window the schema does not already close (as in
+// ErrDuesPaymentAlreadyReversed).
 //
-//   - If the claim has WaivedOn set, ErrReimbursementWaived: a claim that will
-//     never be repaid cannot be settled.
-//   - If GetReimbursementSettlement already finds a kind='reimbursement' row
-//     for this claim, ErrReimbursementAlreadySettled. The
-//     reimbursement_settled_once partial unique index is the actual
-//     guarantee - it refuses a second settling row even for a caller that
-//     bypasses this method entirely and inserts through raw store.Queries.
-//     This pre-check exists only to turn that into a clean, named error
-//     instead of a raw "UNIQUE constraint failed" string.
+//   - If the claim has WaivedOn set, ErrReimbursementWaived: a claim that
+//     will never be repaid cannot be settled.
+//   - If GetReimbursementSettlement finds a kind='reimbursement' row for this
+//     claim, ErrReimbursementAlreadySettled. The reimbursement_settled_once
+//     partial unique index is the guarantee, even for a caller inserting
+//     through raw store.Queries; the pre-check only gives a clean error
+//     instead of a raw "UNIQUE constraint failed".
 //
-// A retired AccountID (inactive_on set) is ErrAccountInactive: the claim
-// stays unsettled and nothing is written (#444). A claim whose purpose is a
-// closed envelope is ErrIncidentalClosed (ADR-031, #473): the payout would
-// leave the envelope's balance below the zero its close squared it to, so
-// the treasurer reopens it first, settles, and closes it again.
+// A retired AccountID (inactive_on set) is ErrAccountInactive: the claim stays
+// unsettled and nothing is written (#444). A claim whose purpose is a closed
+// envelope is ErrIncidentalClosed (ADR-031, #473): the payout would take the
+// envelope's balance below the zero its close squared it to, so the treasurer
+// reopens it, settles, and closes it again.
 func (l *Ledger) SettleReimbursement(ctx context.Context, p SettleReimbursementParams) (store.Transaction, error) {
 	if err := validateOccurredOn(p.OccurredOn); err != nil {
 		return store.Transaction{}, err
@@ -133,13 +127,11 @@ func (l *Ledger) SettleReimbursement(ctx context.Context, p SettleReimbursementP
 			return err
 		}
 
-		// The settlement row itself stores no note (#257: nothing generated
-		// is ever stored in transaction.note; a system row explains itself
-		// through a display label built from facts already on the row -
-		// here, the claim it settles - never through stored text). The
-		// claim's own note stays on the reimbursement row, unaffected; a
-		// client renders it as the settlement's "note line" by following
-		// reimbursement_id, not by reading anything written here.
+		// The settlement row stores no note (#257: nothing generated is stored in
+		// transaction.note; a system row explains itself through a display label
+		// built from facts on the row, here the claim it settles). The claim's note
+		// stays on the reimbursement row; a client shows it as the settlement's
+		// "note line" by following reimbursement_id.
 		posted, err = q.CreateTransaction(ctx, store.CreateTransactionParams{
 			FundID:          p.FundID,
 			AccountID:       p.AccountID,
@@ -159,12 +151,11 @@ func (l *Ledger) SettleReimbursement(ctx context.Context, p SettleReimbursementP
 	return posted, nil
 }
 
-// UpdateReimbursementParams is every argument UpdateReimbursement needs.
-// Each optional field is a pointer meaning "leave alone" when nil, except
-// the two nullable columns, where nil is ambiguous between "leave alone"
-// and "clear it" - so those carry a Set flag, the same split
-// store.UpdateReimbursementParams uses and PATCH /api/members already
-// speaks.
+// UpdateReimbursementParams is every argument UpdateReimbursement needs. Each
+// optional field is a pointer meaning "leave alone" when nil, except the two
+// nullable columns, where nil is ambiguous between "leave alone" and "clear
+// it", so those carry a Set flag, as store.UpdateReimbursementParams and
+// PATCH /api/members do.
 type UpdateReimbursementParams struct {
 	FundID          int64
 	ReimbursementID int64
@@ -181,32 +172,28 @@ type UpdateReimbursementParams struct {
 	SetWaivedOn bool
 }
 
-// UpdateReimbursement corrects a claim that has not been settled yet, and is
-// also how a claim is waived - waiving sets one column, so it rides on the
-// ordinary correction rather than a method of its own, which is what makes
-// un-waiving (SetWaivedOn with a nil WaivedOn) free.
+// UpdateReimbursement corrects a claim that has not been settled, and is how
+// a claim is waived: waiving sets one column, so it rides on the correction,
+// which makes un-waiving (SetWaivedOn with a nil WaivedOn) free.
 //
-// This is an UPDATE rather than an adjusting entry, and that is not a hole
-// in CLAUDE.md rule 3: an unsettled claim is off the ledger, which is the
-// whole point of the reimbursement table (ADR-024). The schema agrees -
+// This is an UPDATE, not an adjusting entry, and no hole in CLAUDE.md rule 3:
+// an unsettled claim is off the ledger (ADR-024). The schema agrees:
 // "transaction", transfer, reconciliation and reconciliation_line carry
 // immutability triggers and reimbursement deliberately does not.
 //
 // Settlement is the boundary. Settling copies the claim's amount and
-// purpose_id onto a transaction that is immutable forever, so a correction
-// afterwards would let the claim silently disagree with the row that paid
-// it - two records that both look authoritative. Once settled, the only
-// correction is an ordinary adjusting entry on the ledger, and this method
-// returns ErrReimbursementAlreadySettled.
+// purpose_id onto an immutable transaction, so a later correction would let
+// the claim disagree with the row that paid it, two records that both look
+// authoritative. Once settled, the only correction is an ordinary adjusting
+// entry, and this method returns ErrReimbursementAlreadySettled.
 //
-// The check and the write share one transaction for the same reason
-// SettleReimbursement's do: it is not a lock (ADR-004's SetMaxOpenConns(1)
-// makes an interleaved write structurally impossible) but a single,
-// coherent read-then-decide.
+// The check and write share one transaction as in SettleReimbursement: not a
+// lock (SetMaxOpenConns(1) makes interleaving impossible) but one coherent
+// read-then-decide.
 //
-// Moving the claim onto a closed envelope is ErrIncidentalClosed, for the
-// reason CreateReimbursement refuses filing one there (#473). Moving it off
-// one is allowed: that posts nothing and leaves the claim payable.
+// Moving the claim onto a closed envelope is ErrIncidentalClosed, as
+// CreateReimbursement refuses filing one there (#473). Moving it off one is
+// allowed: that posts nothing and leaves the claim payable.
 func (l *Ledger) UpdateReimbursement(ctx context.Context, p UpdateReimbursementParams) (store.Reimbursement, error) {
 	if p.Amount != nil && *p.Amount <= 0 {
 		return store.Reimbursement{}, fmt.Errorf("%w: amount must be positive, got %d", ErrInvalidArgument, p.Amount.Int64())
@@ -233,9 +220,9 @@ func (l *Ledger) UpdateReimbursement(ctx context.Context, p UpdateReimbursementP
 		if err != nil {
 			return err
 		}
-		// Only a move is guarded: a correction re-sends the claim's own
-		// purpose unchanged, and a claim already on a closed envelope must
-		// still take a fixed amount, date or note.
+		// Only a move is guarded: a correction re-sends the claim's purpose
+		// unchanged, and a claim already on a closed envelope must still take a fixed
+		// amount, date or note.
 		if p.PurposeID != nil && *p.PurposeID != claim.PurposeID {
 			if err := refuseClosedIncidental(ctx, q, *p.PurposeID, ErrIncidentalClosed); err != nil {
 				return err
@@ -270,15 +257,13 @@ func (l *Ledger) UpdateReimbursement(ctx context.Context, p UpdateReimbursementP
 	return updated, nil
 }
 
-// DeleteReimbursement removes a claim that should never have existed - the
-// treasurer's own typo, not a debt anyone forgave. A claim the member
-// actually waived is waived, not deleted: that one happened, and the record
-// should keep saying so.
+// DeleteReimbursement removes a claim that should never have existed (a
+// typo), not a debt anyone forgave: a waived claim is waived, not deleted, so
+// the record keeps saying it happened.
 //
-// Settled claims are refused for the same reason UpdateReimbursement
-// refuses them, and harder: the payout row references this claim's id and
-// can never be deleted itself, so removing the claim would leave the ledger
-// pointing at nothing.
+// Settled claims are refused as in UpdateReimbursement, and harder: the
+// payout row references this claim's id and can never be deleted, so removal
+// would leave the ledger pointing at nothing.
 func (l *Ledger) DeleteReimbursement(ctx context.Context, fundID, reimbursementID int64) error {
 	err := l.withTx(ctx, func(q store.Querier) error {
 		if _, err := unsettledClaim(ctx, q, fundID, reimbursementID); err != nil {
@@ -293,18 +278,16 @@ func (l *Ledger) DeleteReimbursement(ctx context.Context, fundID, reimbursementI
 }
 
 // unsettledClaim fetches the claim and returns it only if no payout row
-// references it yet, and ErrReimbursementAlreadySettled otherwise. It is the
-// one place the "mutable only until settled" rule is written - settle,
-// update and delete all go through it, so the three cannot drift apart.
+// references it yet, else ErrReimbursementAlreadySettled. It is the one place
+// the "mutable only until settled" rule is written; settle, update and delete
+// all use it, so they cannot drift.
 //
-// A claim that does not exist is sql.ErrNoRows from GetReimbursement,
-// wrapped and left to the caller's mapper, which is the shape
-// SettleReimbursement has always produced for an unknown id.
+// A missing claim is sql.ErrNoRows from GetReimbursement, wrapped and left to
+// the caller's mapper, as SettleReimbursement always produced.
 //
-// The settled check is not a lock. Under ADR-004's SetMaxOpenConns(1) no
-// second connection can interleave a write between this read and the
-// caller's own, and the reimbursement_settled_once partial index remains
-// the actual guarantee for settling; this exists to name the case.
+// The check is not a lock: under SetMaxOpenConns(1) no second connection can
+// interleave, and reimbursement_settled_once remains the guarantee for
+// settling; this names the case.
 func unsettledClaim(ctx context.Context, q store.Querier, fundID, reimbursementID int64) (store.Reimbursement, error) {
 	claim, err := q.GetReimbursement(ctx, store.GetReimbursementParams{
 		ID: reimbursementID, FundID: fundID,

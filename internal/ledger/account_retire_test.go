@@ -8,10 +8,10 @@ import (
 	"github.com/kerti/uruni/internal/store"
 )
 
-// #474: a location still holding money cannot be retired. Retired, it is
-// never counted in Cek kas (PRD 7.8) and refuses every posting (#444), yet
-// FundBalance still sums it - so its money would sit where nothing proves
-// it and nothing can move it. The treasurer moves the balance out first.
+// #474: a location holding money cannot be retired. Retired, it is never
+// counted in Cek kas (PRD 7.8) and refuses every posting (#444), yet
+// FundBalance still sums it, leaving its money where nothing proves it and
+// nothing can move it. The treasurer moves the balance out first.
 func TestRetireAccountRefusesALocationThatHoldsMoney(t *testing.T) {
 	t.Parallel()
 	l := newTestLedger(t)
@@ -46,9 +46,9 @@ func TestRetireAccountRefusesALocationThatHoldsMoney(t *testing.T) {
 	}
 }
 
-// A negative recorded balance is not empty either, but it is not money to
-// move: the ledger says more left than came in, and only a count finds that
-// gap. It gets its own error so the treasurer is told the true next step.
+// A negative recorded balance is not empty either, but not money to move: the
+// ledger says more left than came in, and only a count finds the gap. It gets
+// its own error so the treasurer is told the true next step.
 func TestRetireAccountRefusesANegativeBalance(t *testing.T) {
 	t.Parallel()
 	l := newTestLedger(t)
@@ -66,9 +66,9 @@ func TestRetireAccountRefusesANegativeBalance(t *testing.T) {
 	}
 }
 
-// A location retired while holding money - before #474, or restored from a
-// backup taken then - must still have a way out: reinstating is never
-// refused, so the treasurer can move its money and retire it again.
+// A location retired while holding money (before #474, or restored from such a
+// backup) needs a way out: reinstating is never refused, so the treasurer can
+// move its money and retire it again.
 func TestReinstatingALocationThatHoldsMoneyIsAllowed(t *testing.T) {
 	t.Parallel()
 	l := newTestLedger(t)

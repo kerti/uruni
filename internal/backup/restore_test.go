@@ -20,13 +20,10 @@ import (
 	"github.com/kerti/uruni/internal/store"
 )
 
-// realJPEGBytes is a genuine, decodable 1x1 JPEG - buildFixture's own
-// receiptFileBytes is deliberately *not* a real image (its own comment:
-// "Export never decodes it, only copies it"), which restore's own ADR-011
-// decode check now does care about. Tests that round-trip through
-// ParseUpload replace the fixture's stub bytes with this, on disk only, in
-// their own uploadsDir - never touching fixture_test.go's shared helper or
-// golden_test.go's separate database.
+// realJPEGBytes is a genuine, decodable 1x1 JPEG. buildFixture's
+// receiptFileBytes is not a real image (Export only copies it), which
+// restore's ADR-011 decode check cares about, so tests that round-trip
+// through ParseUpload replace the stub bytes with this, on disk only.
 func realJPEGBytes(t *testing.T) []byte {
 	t.Helper()
 	img := image.NewNRGBA(image.Rect(0, 0, 1, 1))
@@ -38,10 +35,9 @@ func realJPEGBytes(t *testing.T) []byte {
 	return buf.Bytes()
 }
 
-// exportFixture is the golden test's own recipe (golden_test.go), reused
-// here: a real, deterministic fund built through store.Queries directly,
-// exported through BuildDocument/BuildZip, ready to feed back into
-// ParseUpload/Restore as if it had just been uploaded.
+// exportFixture is the golden test's recipe (golden_test.go): a deterministic
+// fund built through store.Queries, exported through BuildDocument/BuildZip,
+// ready to feed back into ParseUpload/Restore as if just uploaded.
 func exportFixture(t *testing.T, sqlDB *sql.DB, uploadsDir string) (zipBytes []byte, doc Document) {
 	t.Helper()
 	ctx := context.Background()
@@ -57,9 +53,8 @@ func exportFixture(t *testing.T, sqlDB *sql.DB, uploadsDir string) (zipBytes []b
 }
 
 // assertBalancesMatch compares every figure doc.Totals names against what
-// destDB actually holds after a restore - the round trip's own proof,
-// independent of Restore's own internal verifyTotals check (which runs
-// inside the transaction, before this test ever gets to look).
+// destDB holds after a restore: the round trip's proof, independent of
+// Restore's internal verifyTotals.
 func assertBalancesMatch(t *testing.T, destDB *sql.DB, doc Document) {
 	t.Helper()
 	ctx := context.Background()
@@ -106,13 +101,10 @@ func assertBalancesMatch(t *testing.T, destDB *sql.DB, doc Document) {
 	}
 }
 
-// assertDocumentsEqual compares two exports byte-for-byte via their own
-// canonical JSON encoding - the same shape TestGoldenFixtureMatchesExport
-// already trusts for "these two documents are the same data" - except
-// Users, which is cleared on both sides first: the login ruling (ADR-012
-// amendment, #325) makes the live user row and the file's own Users
-// independent on purpose, so a restored instance's Users is never expected
-// to match the file it was restored from.
+// assertDocumentsEqual compares two exports byte-for-byte via their canonical
+// JSON, as TestGoldenFixtureMatchesExport does, except Users, cleared on both
+// sides first: the login ruling (ADR-012, #325) makes the live user row and
+// the file's Users independent on purpose.
 func assertDocumentsEqual(t *testing.T, got, want Document) {
 	t.Helper()
 	got.Users = []User{}
@@ -137,10 +129,10 @@ func restoreOrFatal(t *testing.T, destDB *sql.DB, uploadsDir, backupDir string, 
 	}
 }
 
-// TestRestoreRoundTripGoldenFixture is ADR-012's own requirement: export ->
-// fresh database -> import -> identical balances - on the fixture that
-// already carries a reversal, a transfer, a named contribution, a settled
-// reimbursement with its receipt, and a reconciliation.
+// TestRestoreRoundTripGoldenFixture is ADR-012's requirement: export -> fresh
+// database -> import -> identical balances, on the fixture that carries a
+// reversal, a transfer, a named contribution, a settled reimbursement with its
+// receipt, and a reconciliation.
 func TestRestoreRoundTripGoldenFixture(t *testing.T) {
 	t.Parallel()
 	srcDB := newTestDB(t)
@@ -171,7 +163,7 @@ func TestRestoreRoundTripGoldenFixture(t *testing.T) {
 	}
 	assertDocumentsEqual(t, gotDoc, wantDoc)
 
-	//nolint:gosec // destUploads and receiptFilename are both this test's own fixture values, never request input
+	//nolint:gosec // destUploads and receiptFilename are this test's fixture values, never request input
 	gotReceipt, err := os.ReadFile(filepath.Join(destUploads, receiptFilename))
 	if err != nil {
 		t.Fatalf("reading restored receipt file: %v", err)
@@ -181,8 +173,8 @@ func TestRestoreRoundTripGoldenFixture(t *testing.T) {
 	}
 }
 
-// TestRestoreRoundTripWithClosedEnvelope adds the one shape buildFixture's
-// own envelope leaves out: a closed incidental (ADR-034's closed_on).
+// TestRestoreRoundTripWithClosedEnvelope adds the shape buildFixture's
+// envelope leaves out: a closed incidental (ADR-034's closed_on).
 func TestRestoreRoundTripWithClosedEnvelope(t *testing.T) {
 	t.Parallel()
 	srcDB := newTestDB(t)
@@ -193,9 +185,8 @@ func TestRestoreRoundTripWithClosedEnvelope(t *testing.T) {
 	}
 
 	q := store.New(srcDB)
-	// buildFixture's own envelope purpose is the sole incidental it wrote -
-	// find it by IncidentalClosedOnForPurpose-shaped lookup: list the
-	// fund's incidentals and close the one there is.
+	// buildFixture's envelope purpose is the sole incidental it wrote: list the
+	// fund's incidentals and close it.
 	funds, err := q.ListFunds(context.Background())
 	if err != nil || len(funds) != 1 {
 		t.Fatalf("ListFunds() = (%v, %v), want exactly one fixture fund", funds, err)
@@ -233,10 +224,9 @@ func TestRestoreRoundTripWithClosedEnvelope(t *testing.T) {
 
 func strPtr(s string) *string { return &s }
 
-// minimalDocJSON is the smallest valid uruni.json ParseUpload will accept
-// on its own (every "always an array" field present, formatVersion
-// correct) - the refusal-case tests below start from this and mutate
-// exactly the one thing each test means to break.
+// minimalDocJSON is the smallest valid uruni.json ParseUpload accepts (every
+// "always an array" field present, formatVersion correct); the refusal tests
+// start here and break one thing.
 func minimalDocJSON(t *testing.T, formatVersion int64) []byte {
 	t.Helper()
 	doc := Document{
@@ -266,15 +256,12 @@ func minimalDocJSON(t *testing.T, formatVersion int64) []byte {
 }
 
 // zipOf builds a zip in memory holding jsonBytes under uruni.json plus one
-// entry per key in receipts - the same two-entry-kind shape BuildZip
-// produces, built by hand so a refusal-case test can hand it something
-// BuildZip itself would never write (an unknown field, a bad image, a
-// mismatched format_version, extra junk entries).
-// parseUploadBytes is every test's own stand-in for the staging file
-// stageAndInspect (internal/http/restore.go) writes before ever calling
-// ParseUpload - this package's own tests build a zip in memory (zipOf,
-// exportFixture) for convenience, but ParseUpload itself only ever reads
-// from disk (issue #344), so every call site writes that zip to a fresh
+// entry per key in receipts, the shape BuildZip produces, built by hand so a
+// refusal test can hand it what BuildZip never writes (an unknown field, a
+// bad image, a mismatched format_version, junk entries).
+// parseUploadBytes stands in for the staging file stageAndInspect
+// (internal/http/restore.go) writes: tests build zips in memory, but
+// ParseUpload reads only from disk (#344), so each call writes the zip to a
 // temp file first.
 func parseUploadBytes(t *testing.T, data []byte) (ParsedUpload, error) {
 	t.Helper()
@@ -351,8 +338,8 @@ func TestParseUploadRefusesOlderFormatVersionDistinctly(t *testing.T) {
 	}
 }
 
-// Serial on purpose, no t.Parallel: it shrinks a package-level upload cap, which
-// every parallel ParseUpload reads.
+// Serial on purpose, no t.Parallel: it shrinks a package-level upload cap
+// that every parallel ParseUpload reads.
 func TestParseUploadRefusesTooManyEntries(t *testing.T) {
 	orig := MaxZipEntries
 	MaxZipEntries = 2
@@ -365,8 +352,8 @@ func TestParseUploadRefusesTooManyEntries(t *testing.T) {
 	}
 }
 
-// Serial on purpose, no t.Parallel: it shrinks a package-level upload cap, which
-// every parallel ParseUpload reads.
+// Serial on purpose, no t.Parallel: it shrinks a package-level upload cap
+// that every parallel ParseUpload reads.
 func TestParseUploadRefusesUnzippedTooLarge(t *testing.T) {
 	orig := MaxUnzippedBytes
 	MaxUnzippedBytes = 4 // smaller than uruni.json's own minimal bytes
@@ -448,7 +435,7 @@ func TestParseUploadToleratesAMissingReceiptImage(t *testing.T) {
 		t.Fatalf("marshal: %v", err)
 	}
 
-	// No receipts/ entry at all for missing.jpg - ruling 5.
+	// No receipts/ entry at all for missing.jpg.
 	parsed, err := parseUploadBytes(t, zipOf(t, b, nil))
 	if err != nil {
 		t.Fatalf("ParseUpload() = %v, want no error (a missing image never blocks a restore)", err)
@@ -458,10 +445,9 @@ func TestParseUploadToleratesAMissingReceiptImage(t *testing.T) {
 	}
 }
 
-// TestRestoreTotalsMismatchRollsBack hand-builds a ParsedUpload whose
-// totals block disagrees with the rows it carries (bypassing ParseUpload,
-// which never itself computes a mismatched total) and checks Restore
-// refuses to commit and leaves the destination database exactly as it was.
+// TestRestoreTotalsMismatchRollsBack hand-builds a ParsedUpload whose totals
+// disagree with its rows (bypassing ParseUpload) and checks Restore refuses
+// to commit and leaves the destination exactly as it was.
 func TestRestoreTotalsMismatchRollsBack(t *testing.T) {
 	t.Parallel()
 	destDB := newTestDB(t)
@@ -494,11 +480,10 @@ func TestRestoreTotalsMismatchRollsBack(t *testing.T) {
 	}
 }
 
-// TestRestoreFailureRemovesOnlyTheReceiptsItCreated forces a totals
-// mismatch after receipt extraction has run: the image this restore wrote
-// must be gone again, so "nothing was changed" stays true - but an image
-// that was already on disk under the same name (the same file, ADR-011's
-// random names) must survive, since this restore never created it.
+// TestRestoreFailureRemovesOnlyTheReceiptsItCreated forces a totals mismatch
+// after receipt extraction: the image this restore wrote must be gone again,
+// so "nothing was changed" holds, but an image already on disk under the same
+// name (ADR-011's random names) must survive.
 func TestRestoreFailureRemovesOnlyTheReceiptsItCreated(t *testing.T) {
 	t.Parallel()
 	srcDB := newTestDB(t)
@@ -548,14 +533,14 @@ func TestRestoreFailureRemovesOnlyTheReceiptsItCreated(t *testing.T) {
 }
 
 // TestRestoreSafetyNetDumpFailureAborts makes WritePreRestoreDump fail (an
-// unwritable backup directory) and checks Restore aborts before touching
-// the database at all.
+// unwritable backup directory) and checks Restore aborts before touching the
+// database.
 func TestRestoreSafetyNetDumpFailureAborts(t *testing.T) {
 	t.Parallel()
 	destDB := newTestDB(t)
 	seedOneUser(t, destDB)
 
-	// A file, not a directory - os.CreateTemp inside it fails immediately.
+	// A file, not a directory: os.CreateTemp inside it fails immediately.
 	notADir := filepath.Join(t.TempDir(), "not-a-directory")
 	if err := os.WriteFile(notADir, []byte("x"), 0o600); err != nil {
 		t.Fatalf("writing stand-in file: %v", err)
@@ -576,10 +561,9 @@ func TestRestoreSafetyNetDumpFailureAborts(t *testing.T) {
 	}
 }
 
-// TestRestoreUserRowSurvives is the login ruling (ADR-012 amendment,
-// #325): the live user row is untouched by a restore, even though the
-// file's own Users are decoded and even though this test's file carries a
-// different user entirely.
+// TestRestoreUserRowSurvives is the login ruling (ADR-012, #325): the live
+// user row is untouched by a restore, though the file's Users are decoded
+// and differ.
 func TestRestoreUserRowSurvives(t *testing.T) {
 	t.Parallel()
 	destDB := newTestDB(t)
@@ -619,17 +603,14 @@ func TestRestoreClearsSessions(t *testing.T) {
 	}
 }
 
-// TestRestoreRecreatesImmutableTriggers is the drift guard restore.go's own
-// comment on immutableTriggers promises: after a restore, every one of the
-// eight dropped-then-recreated triggers still refuses exactly the
-// update/delete it always has, with the same message.
+// TestRestoreRecreatesImmutableTriggers is the drift guard immutableTriggers
+// promises: after a restore, each of the eight recreated triggers still
+// refuses the same update/delete with the same message.
 func TestRestoreRecreatesImmutableTriggers(t *testing.T) {
 	t.Parallel()
-	// The fixture, not minimalDocWithOneFund: a BEFORE trigger never fires
-	// against a statement that matches zero rows, so this test needs a
-	// restored database that actually has a row with id 1 in all four
-	// protected tables - which buildFixture's own transaction, transfer,
-	// reconciliation and reconciliation_line each are.
+	// The fixture, not minimalDocWithOneFund: a BEFORE trigger never fires on a
+	// statement matching zero rows, so this needs a restored database with a row
+	// with id 1 in all four protected tables, which buildFixture provides.
 	srcDB := newTestDB(t)
 	srcUploads := t.TempDir()
 	buildFixture(t, srcDB, srcUploads)
@@ -669,10 +650,9 @@ func TestRestoreRecreatesImmutableTriggers(t *testing.T) {
 	}
 }
 
-// seedOneUser writes the one row every test that calls Restore against a
-// non-fixture database needs first - Restore's own transaction clears every
-// fund-scoped table but never "user", and a database with no user row at
-// all is not a shape a live instance is ever actually in.
+// seedOneUser writes the row every Restore test on a non-fixture database
+// needs first: Restore clears every fund-scoped table but never "user", and
+// a live instance always has one.
 func seedOneUser(t *testing.T, sqlDB *sql.DB) store.User {
 	t.Helper()
 	//nolint:gosec // not a credential - a fixed test fixture value
@@ -685,9 +665,8 @@ func seedOneUser(t *testing.T, sqlDB *sql.DB) store.User {
 	return u
 }
 
-// minimalDocWithOneFund is the smallest Document Restore can actually
-// commit: one fund, no accounts/purposes/transactions at all, and a
-// correctly-zeroed totals block (an empty fund's own balance is always 0).
+// minimalDocWithOneFund is the smallest Document Restore can commit: one
+// fund, no accounts/purposes/transactions, and a zeroed totals block.
 func minimalDocWithOneFund(t *testing.T) Document {
 	t.Helper()
 	return Document{
@@ -703,27 +682,26 @@ func minimalDocWithOneFund(t *testing.T) Document {
 	}
 }
 
-// newestMomentEpoch/newestMomentDate are one fixed instant and its own
-// Asia/Jakarta calendar date, used only to check that Preview.Date reads
-// created_at rather than occurred_on or anything else.
+// newestMomentEpoch/newestMomentDate are one fixed instant and its
+// Asia/Jakarta calendar date, to check Preview.Date reads created_at rather
+// than occurred_on.
 const (
 	newestMomentEpoch = 1767225600 // 2026-01-01T00:00:00Z = 2026-01-01 07:00 WIB
 	newestMomentDate  = "2026-01-01"
 )
 
-// TestBuildPreviewReportsKeptRemovedAndAddedFunds is issue #325's own
-// per-fund confirm-step line: a fund in both sides is "kept" and names how
-// many of its live transactions sit past the file's own cutoff for it, a
-// live-only fund is "removed" outright, and a file-only fund is "added".
+// TestBuildPreviewReportsKeptRemovedAndAddedFunds covers the per-fund confirm
+// line: a fund on both sides is "kept" and names how many live transactions
+// sit past the file's cutoff, a live-only fund is "removed", a file-only fund
+// is "added".
 func TestBuildPreviewReportsKeptRemovedAndAddedFunds(t *testing.T) {
 	t.Parallel()
 	destDB := newTestDB(t)
 	ctx := context.Background()
 	q := store.New(destDB)
 
-	// Fund 1 lives on both sides: the file's own newest transaction for it
-	// is id 1 (2026-01-01); two more were posted live afterward and would
-	// be lost.
+	// Fund 1 lives on both sides: the file's newest transaction for it is id 1
+	// (2026-01-01); two more were posted live afterward and would be lost.
 	kept, err := q.CreateFund(ctx, store.CreateFundParams{Name: "Kept Fund", Currency: "IDR", ReportSlug: "0000000000000000000keptfund", CreatedAt: 1})
 	if err != nil {
 		t.Fatalf("CreateFund(kept): %v", err)
@@ -752,7 +730,7 @@ func TestBuildPreviewReportsKeptRemovedAndAddedFunds(t *testing.T) {
 		}
 	}
 
-	// Fund 2 lives only live - removed by the restore.
+	// Fund 2 lives only live: removed by the restore.
 	removed, err := q.CreateFund(ctx, store.CreateFundParams{Name: "Removed Fund", Currency: "IDR", ReportSlug: "0000000000000000000removedf", CreatedAt: 1})
 	if err != nil {
 		t.Fatalf("CreateFund(removed): %v", err)
@@ -765,9 +743,8 @@ func TestBuildPreviewReportsKeptRemovedAndAddedFunds(t *testing.T) {
 			{ID: 999, Name: "Added Fund", Currency: "IDR", ReportSlug: "0000000000000000000addedfund", CreatedAt: 1},
 		},
 		Transactions: []Transaction{
-			// CreatedAt, not OccurredOn, is what Preview.Date reads (its
-			// own comment: the newest created_at stands in for "when was
-			// this backup taken").
+			// CreatedAt, not OccurredOn, is what Preview.Date reads (the newest
+			// created_at stands in for "when was this backup taken").
 			{ID: fileTxn.ID, FundID: kept.ID, AccountID: cash.ID, PurposeID: main.ID, Direction: "in", Amount: 1000, OccurredOn: "2026-01-01", Kind: "opening", CreatedAt: newestMomentEpoch},
 		},
 		Totals: Totals{
@@ -803,10 +780,10 @@ func TestBuildPreviewReportsKeptRemovedAndAddedFunds(t *testing.T) {
 	}
 }
 
-// TestNewestMomentPicksTheLatestRowOfAnyTable is the confirm dialog's
-// "Cadangan dari <date>": the newest created_at (or a receipt's uploaded_at)
-// across every table, as a Jakarta calendar date - whichever table holds
-// it - and no date at all for a document with no rows.
+// TestNewestMomentPicksTheLatestRowOfAnyTable: the confirm dialog's "Cadangan
+// dari <date>" is the newest created_at (or a receipt's uploaded_at) across
+// every table, as a Jakarta calendar date, and no date for a document with no
+// rows.
 func TestNewestMomentPicksTheLatestRowOfAnyTable(t *testing.T) {
 	t.Parallel()
 	if got := newestMoment(Document{}); got != "" {
@@ -849,9 +826,8 @@ func TestNewestMomentPicksTheLatestRowOfAnyTable(t *testing.T) {
 }
 
 // TestRestoreRoundTripCarriesTransferReason pins ADR-036's two directions on
-// the golden fixture, which carries one allocation, one roll and one pair
-// with no reason: a new export names each pair's reason, and a restore
-// writes exactly those back.
+// the golden fixture (one allocation, one roll, one pair with no reason): an
+// export names each pair's reason, and a restore writes exactly those back.
 func TestRestoreRoundTripCarriesTransferReason(t *testing.T) {
 	t.Parallel()
 	srcDB := newTestDB(t)
@@ -899,11 +875,10 @@ func TestRestoreRoundTripCarriesTransferReason(t *testing.T) {
 }
 
 // TestRestoreOfAFileWithoutReasonReadsNull is ADR-036's no-bump promise: a
-// backup made before the column existed has no "reason" key on any transfer,
-// the importer reads that as empty rather than refusing the file, and every
-// restored transfer is NULL - which, for a reclass pair that corrects
-// nothing, is what a roll is. Balances still match, because reason moves no
-// money.
+// backup made before the column has no "reason" key on any transfer, the
+// importer reads that as empty rather than refusing, and every restored
+// transfer is NULL, which for a reclass pair that corrects nothing is a roll.
+// Balances still match: reason moves no money.
 func TestRestoreOfAFileWithoutReasonReadsNull(t *testing.T) {
 	t.Parallel()
 	srcDB := newTestDB(t)
@@ -914,8 +889,8 @@ func TestRestoreOfAFileWithoutReasonReadsNull(t *testing.T) {
 	}
 	_, wantDoc := exportFixture(t, srcDB, srcUploads)
 
-	// Re-encode the document the way an older server wrote it: transfers
-	// without the key at all.
+	// Re-encode the document as an older server wrote it: transfers without the
+	// key.
 	raw, err := json.Marshal(wantDoc)
 	if err != nil {
 		t.Fatalf("marshaling document: %v", err)
@@ -967,11 +942,10 @@ func TestRestoreOfAFileWithoutReasonReadsNull(t *testing.T) {
 	}
 }
 
-// TestRestoreOfANullJoinedOnReadsTheAdoptionDate is #471's promise to older
-// backups: member.joined_on became NOT NULL, but a format_version 1 file
-// written before that can carry null. Restore reads it as the day the fund's
-// history starts - its earliest opening-balance row - which is all "always
-// was a member" could ever reach back to, so no member's dues change.
+// TestRestoreOfANullJoinedOnReadsTheAdoptionDate (#471): member.joined_on
+// became NOT NULL, but a format_version 1 file written earlier can carry
+// null. Restore reads it as the day the fund's history starts (its earliest
+// opening-balance row), so no member's dues change.
 func TestRestoreOfANullJoinedOnReadsTheAdoptionDate(t *testing.T) {
 	t.Parallel()
 	srcDB := newTestDB(t)
@@ -982,8 +956,8 @@ func TestRestoreOfANullJoinedOnReadsTheAdoptionDate(t *testing.T) {
 	}
 	_, doc := exportFixture(t, srcDB, srcUploads)
 
-	// The earliest of the two openings is the adoption date, not the first
-	// one in file order.
+	// The earliest of the two openings is the adoption date, not the first in
+	// file order.
 	var openings int
 	for i := range doc.Transactions {
 		if doc.Transactions[i].Kind == "opening" {

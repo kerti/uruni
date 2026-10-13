@@ -19,7 +19,7 @@ import (
 
 // ErrServerRunning is what `migrate up` and `migrate down` return while another
 // process (normally `serve`) holds the instance lock. `migrate status` never
-// takes the lock, so it never returns this.
+// takes it.
 var ErrServerRunning = errors.New("uruni is already running against this database")
 
 // ErrBaselineDown is what `migrate down` returns when the step would roll the
@@ -27,30 +27,29 @@ var ErrServerRunning = errors.New("uruni is already running against this databas
 var ErrBaselineDown = errors.New("migrate down refuses to roll back the baseline migration, it would empty the database - restore a backup instead (Pengaturan > Cadangan, see SELF-HOSTING.md)")
 
 // migrateUsage lists the three verbs ADR-019 pins. `down` is one step, never a
-// range: the command exists for backing out a bad upgrade, and a flag away from
-// dropping the whole ledger is the wrong shape for that.
+// range: it exists to back out a bad upgrade, and a flag away from dropping
+// the ledger is the wrong shape.
 const migrateUsage = "try: uruni migrate up | down | status"
 
-// appliedAtFormat is local time, seconds resolution - `migrate status` is read by
-// an operator comparing it against when they ran the upgrade, not parsed.
+// appliedAtFormat is local time to the second: `migrate status` is read by an
+// operator comparing it to the upgrade, not parsed.
 const appliedAtFormat = "2006-01-02 15:04:05"
 
-// migrateTimeout bounds a CLI migration run. Generous on purpose: the bound
-// exists so a lock held by another process fails with a message instead of
-// hanging a terminal forever, not to police how long real work may take.
+// migrateTimeout bounds a CLI migration run. Generous: it exists so a lock held
+// by another process fails with a message instead of hanging a terminal, not
+// to police real work.
 const migrateTimeout = 2 * time.Minute
 
-// migrate runs one of the three migration verbs against the configured database,
-// writing operator output to out. It opens the database itself rather than taking
-// one: each verb is a whole process invocation (`uruni migrate up`), so there is
-// no connection to inherit.
+// migrate runs one of the three migration verbs against the configured
+// database, writing operator output to out. It opens the database itself: each
+// verb is a whole process invocation, so there is no connection to inherit.
 func migrate(ctx context.Context, args []string, out io.Writer) error {
 	if len(args) == 0 {
 		return fmt.Errorf("%w - %s", ErrNoCommand, migrateUsage)
 	}
 	verb := args[0]
-	// Checked before opening the database, so a typo doesn't create a file on the
-	// way to being rejected.
+	// Checked before opening the database, so a typo doesn't create a file before
+	// being rejected.
 	if verb != "up" && verb != "down" && verb != "status" {
 		return fmt.Errorf("%w: %q - %s", ErrUnknownCommand, verb, migrateUsage)
 	}
@@ -61,9 +60,9 @@ func migrate(ctx context.Context, args []string, out io.Writer) error {
 	}
 	logger := newLogger(cfg, os.Stderr)
 
-	// up and down change the schema, so they take the same instance lock `serve`
-	// holds at boot and refuse while it is held. status only reads, and an
-	// operator legitimately runs it while a server is up, so it stays lock-free.
+	// up and down change the schema, so they take the instance lock `serve` holds
+	// at boot and refuse while it is held. status only reads and an operator runs
+	// it while a server is up, so it stays lock-free.
 	if verb != "status" {
 		instanceLock, err := lock.Acquire(lock.PathFor(cfg.DBPath))
 		if errors.Is(err, lock.ErrLocked) {
@@ -91,9 +90,9 @@ func migrate(ctx context.Context, args []string, out io.Writer) error {
 	}
 }
 
-// migrateUp applies what is pending and says so either way. `serve` logs its
-// migrations and stays quiet when there are none; the CLI is the opposite - a
-// command that prints nothing leaves the operator unsure it ran.
+// migrateUp applies what is pending and says so either way. `serve` stays
+// quiet when there is nothing; the CLI is the opposite, as a command printing
+// nothing leaves the operator unsure it ran.
 func migrateUp(ctx context.Context, sqlDB *sql.DB, logger *slog.Logger, out io.Writer, dbPath string) error {
 	applied, err := db.Up(ctx, sqlDB, logger)
 	if err != nil {
@@ -108,9 +107,9 @@ func migrateUp(ctx context.Context, sqlDB *sql.DB, logger *slog.Logger, out io.W
 	return err
 }
 
-// dumpBeforeDown is the dump `migrate down` takes before it changes anything. It
-// goes to the directory `serve` writes its own to, so it shows up in the Cadangan
-// list; a missing or read-only directory fails here, before the rollback starts.
+// dumpBeforeDown is the dump `migrate down` takes before changing anything. It
+// goes to `serve`'s dump directory so it shows in the Cadangan list; a missing
+// or read-only directory fails here, before the rollback.
 func dumpBeforeDown(sqlDB *sql.DB, cfg config.Config) func(context.Context) (string, error) {
 	return func(ctx context.Context) (string, error) {
 		if err := config.EnsureBackupDirWritable(cfg.BackupDir); err != nil {
@@ -120,12 +119,12 @@ func dumpBeforeDown(sqlDB *sql.DB, cfg config.Config) func(context.Context) (str
 	}
 }
 
-// migrateDown reports an already-empty database as the non-event it is: rolling
-// back nothing is not a failure, and exiting non-zero for it would break any
-// script that rolls back before restoring a backup. Rolling back the baseline is
-// the opposite, refused (ErrBaselineDown). Any rollback that does run writes a
-// dump first via dump, and a dump that fails refuses it. fsys is the migration
-// set, nil for the embedded one (see db.Down).
+// migrateDown reports an already-empty database as a non-event: rolling back
+// nothing is not a failure, and a non-zero exit would break scripts that roll
+// back before restoring a backup. Rolling back the baseline is refused
+// (ErrBaselineDown). Any rollback that runs writes a dump first via dump, and
+// a failing dump refuses it. fsys is the migration set, nil for the embedded
+// one (see db.Down).
 func migrateDown(ctx context.Context, sqlDB *sql.DB, fsys fs.FS, logger *slog.Logger, out io.Writer, dump func(context.Context) (string, error)) error {
 	before := func(version int64) error {
 		name, err := dump(ctx)
@@ -151,10 +150,9 @@ func migrateDown(ctx context.Context, sqlDB *sql.DB, fsys fs.FS, logger *slog.Lo
 	return err
 }
 
-// printMigrationStatus writes every migration the binary carries, applied or not.
-// It names the database file first: the commonest migration surprise is having
-// migrated a different one than you meant to (URUNI_DB unset, or `.env` not
-// exported).
+// printMigrationStatus writes every migration the binary carries, applied or
+// not. It names the database file first: the commonest surprise is having
+// migrated a different one (URUNI_DB unset, or `.env` not exported).
 func printMigrationStatus(ctx context.Context, sqlDB *sql.DB, out io.Writer, dbPath string) error {
 	migrations, err := db.Status(ctx, sqlDB)
 	if err != nil {
@@ -184,11 +182,10 @@ func printMigrationStatus(ctx context.Context, sqlDB *sql.DB, out io.Writer, dbP
 	return printSchemaStatus(ctx, sqlDB, out)
 }
 
-// printSchemaStatus says whether the live schema is the one this binary creates.
-// goose's table above only knows version numbers, and ADR-025 edits the one
-// file in place, so this line is the only place a stale database shows up.
-// A mismatch is reported, not returned as an error: status reports, and exiting
-// non-zero for it would turn a diagnostic into a failure.
+// printSchemaStatus says whether the live schema is the one this binary
+// creates. goose's table knows only version numbers and ADR-025 edits the one
+// file in place, so this line is the only place a stale database shows. A
+// mismatch is reported, not returned as an error: status is a diagnostic.
 func printSchemaStatus(ctx context.Context, sqlDB *sql.DB, out io.Writer) error {
 	diff, err := db.CheckSchema(ctx, sqlDB)
 	if err != nil {

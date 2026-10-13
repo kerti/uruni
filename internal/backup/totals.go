@@ -1,11 +1,10 @@
 // totals.go is the one place a backup's numbers are compared with its rows
 // (ADR-012's "a restore proves its numbers", #496). Every path that makes or
-// accepts a backup goes through compareTotals: the download and the dumps
-// (CheckTotals on the document they just read, before a byte is written),
-// the restore inspect step (ParseUpload, before the password prompt), and
-// the restore itself (verifyTotals, against the rows it just inserted).
-// Integers, compared exactly - no tolerance, no float anywhere on the path
-// (ADR-015, CLAUDE.md rule 2).
+// accepts a backup goes through compareTotals: the download and dumps
+// (CheckTotals on the document just read, before a byte is written), the
+// restore inspect step (ParseUpload, before the password prompt), and the
+// restore (verifyTotals, against the rows just inserted). Integers, compared
+// exactly: no tolerance, no float (ADR-015, CLAUDE.md rule 2).
 
 package backup
 
@@ -15,20 +14,18 @@ import (
 	"github.com/kerti/uruni/internal/money"
 )
 
-// CheckTotals recomputes doc's fund, account and purpose balances from
-// doc's own transaction rows and compares them, exactly, with doc.Totals. A
-// document whose totals disagree with its rows - or whose totals do not
-// cover every fund, account and purpose it lists, or name one it does not -
-// is refused with ErrTotalsMismatch.
+// CheckTotals recomputes doc's fund, account and purpose balances from doc's
+// transaction rows and compares them exactly with doc.Totals. A document whose
+// totals disagree with its rows, or fail to cover every fund, account and
+// purpose it lists, or name one it does not, is refused with ErrTotalsMismatch.
 //
 // The sum mirrors the three generated balance queries (FundBalance,
 // AccountBalance, PurposeBalance: direction 'in' adds, anything else
 // subtracts, scoped by fund_id plus account_id or purpose_id) in checked
-// money.Amount arithmetic. It is a second implementation of the sum on
-// purpose: the export reads its totals with those queries inside the
-// transaction that read the rows, and this check - which has only the
-// finished document, not a database - proves the two agree before the
-// document is trusted anywhere.
+// money.Amount arithmetic. It is a second implementation on purpose: the
+// export reads totals with those queries inside the transaction that read the
+// rows, and this check, having only the finished document, proves the two
+// agree before the document is trusted anywhere.
 func CheckTotals(doc Document) error {
 	got, err := totalsFromRows(doc)
 	if err != nil {
@@ -39,8 +36,8 @@ func CheckTotals(doc Document) error {
 
 type scopedID struct{ fundID, id int64 }
 
-// totalsFromRows is the in-memory recompute behind CheckTotals: one total
-// per fund, account and purpose doc lists, in doc's own row order.
+// totalsFromRows is the in-memory recompute behind CheckTotals: one total per
+// fund, account and purpose doc lists, in doc's row order.
 func totalsFromRows(doc Document) (Totals, error) {
 	byFund := make(map[int64]money.Amount, len(doc.Funds))
 	byAccount := make(map[scopedID]money.Amount, len(doc.Accounts))
@@ -104,12 +101,11 @@ func signed(running money.Amount, t Transaction) (money.Amount, error) {
 	return v, nil
 }
 
-// compareTotals is the single comparison every path above shares: claimed
-// (a document's own totals block) against recomputed (from its rows, or from
-// the database a restore just filled). Both directions are checked - a
-// recomputed figure the claim lacks is as much a mismatch as a claimed
-// figure that differs - so a totals block cannot pass by leaving out the one
-// number that is wrong. Each id may appear once in claimed.
+// compareTotals is the one comparison every path shares: claimed (a document's
+// totals block) against recomputed (from its rows, or the database a restore
+// just filled). Both directions are checked: a recomputed figure the claim
+// lacks is as much a mismatch as a differing one, so a block cannot pass by
+// omitting the wrong number. Each id may appear once in claimed.
 func compareTotals(claimed, recomputed Totals) error {
 	if err := compareSet("fund", fundTotalPairs(claimed.Funds), fundTotalPairs(recomputed.Funds)); err != nil {
 		return err
