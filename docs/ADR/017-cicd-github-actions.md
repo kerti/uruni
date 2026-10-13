@@ -18,6 +18,8 @@ Two version pins have to move in lockstep or `make check` stops predicting CI: *
 
 Because the tooling was written before the code ([ADR-019](./019-cli-surface-and-runtime-config.md)), `ci.yml` and `codeql.yml` open with a `preflight` job that skips the backend/frontend jobs until `go.mod` and `web/package.json` actually exist. This keeps `main` green through the pre-scaffold window — "never tag a red `main`" only works if red means something — and goes permanently inert once M1 lands.
 
+**Erratum 2026-10-13.** Both `preflight` jobs and the matching guards in `make check` were removed ([#503](https://github.com/kerti/uruni/issues/503)) once they had passed on every run since M1. The *Current state* note in the branch-protection bullet is stale too: `main` now requires `Backend (lint + test)`, `Frontend (lint + typecheck + test + build)`, `E2E / Playwright`, `scan` and `CodeQL`. Struck as stale fact; the CI decision is unchanged.
+
 ## Amendments
 
 An amendment corrects a statement of fact about the code that has since become false. It never changes a decision, a trade-off or an accepted cost — that is still a superseding ADR. See the [ADR index](./README.md) for the rule.

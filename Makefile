@@ -472,33 +472,19 @@ start-task:
 # change the answer: govulncheck scans the stdlib you build with, and a patch
 # release can change export data under a pinned golangci-lint (go1.27.2 did). e2e is excluded: it has its own workflow
 # (e2e.yml, ADR-039) and its own target, `make e2e`.
-#
-# The go.mod / web/package.json guards mirror ci.yml's `preflight` job: the
-# tooling predates the code (ADR-019), so until M1 lands there is nothing to
-# lint. Without them this target fails for the entire pre-scaffold window, which
-# would (a) stop mirroring CI and (b) make the PreToolUse hook deny every single
-# `git push`. Both guards go permanently inert once M1 lands.
 check:
 	@fail=0; \
-	if [ -f go.mod ]; then \
-	  export GOTOOLCHAIN=$$(sed -n 's/^toolchain //p' go.mod); \
-	  printf '%-14s' 'golangci-lint'; golangci-lint run                >/tmp/uruni-check-go-lint.log 2>&1 && echo 'ok' || { echo 'FAIL -> /tmp/uruni-check-go-lint.log'; fail=1; }; \
-	  printf '%-14s' 'go test';       go test ./... -race              >/tmp/uruni-check-go-test.log 2>&1 && echo 'ok' || { echo 'FAIL -> /tmp/uruni-check-go-test.log'; fail=1; }; \
-	  printf '%-14s' 'go mod tidy';   go mod tidy -diff                >/tmp/uruni-check-go-tidy.log 2>&1 && echo 'ok' || { echo 'FAIL -> /tmp/uruni-check-go-tidy.log (make tidy)'; fail=1; }; \
-	  printf '%-14s' 'sqlc diff';     sqlc diff                        >/tmp/uruni-check-sqlc.log    2>&1 && echo 'ok' || { echo 'FAIL -> /tmp/uruni-check-sqlc.log (make sqlc; make doctor for the version)'; fail=1; }; \
-	  printf '%-14s' 'govulncheck';   go run golang.org/x/vuln/cmd/govulncheck@$(GOVULNCHECK_VERSION) ./... >/tmp/uruni-check-go-vuln.log 2>&1 && echo 'ok' || { echo 'FAIL -> /tmp/uruni-check-go-vuln.log'; fail=1; }; \
-	else \
-	  printf '%-14s' 'go'; echo '- skipped (no go.mod yet - ci.yml skips too)'; \
-	fi; \
-	if [ -f web/package.json ]; then \
-	  printf '%-14s' 'oxlint';        (cd web && npm run -s lint)      >/tmp/uruni-check-web-lint.log 2>&1 && echo 'ok' || { echo 'FAIL -> /tmp/uruni-check-web-lint.log'; fail=1; }; \
-	  printf '%-14s' 'prettier';      (cd web && npm run -s fmt:check) >/tmp/uruni-check-web-fmt.log  2>&1 && echo 'ok' || { echo 'FAIL -> /tmp/uruni-check-web-fmt.log (make web-fmt)';  fail=1; }; \
-	  printf '%-14s' 'tsc';           (cd web && npm run -s typecheck) >/tmp/uruni-check-web-tsc.log  2>&1 && echo 'ok' || { echo 'FAIL -> /tmp/uruni-check-web-tsc.log';  fail=1; }; \
-	  printf '%-14s' 'vitest';        (cd web && npm run -s test)      >/tmp/uruni-check-web-test.log 2>&1 && echo 'ok' || { echo 'FAIL -> /tmp/uruni-check-web-test.log'; fail=1; }; \
-	  printf '%-14s' 'web build';     (cd web && npm run -s build)     >/tmp/uruni-check-web-build.log 2>&1 && echo 'ok' || { echo 'FAIL -> /tmp/uruni-check-web-build.log'; fail=1; }; \
-	else \
-	  printf '%-14s' 'web'; echo '- skipped (no web/package.json yet - ci.yml skips too)'; \
-	fi; \
+	export GOTOOLCHAIN=$$(sed -n 's/^toolchain //p' go.mod); \
+	printf '%-14s' 'golangci-lint'; golangci-lint run                >/tmp/uruni-check-go-lint.log 2>&1 && echo 'ok' || { echo 'FAIL -> /tmp/uruni-check-go-lint.log'; fail=1; }; \
+	printf '%-14s' 'go test';       go test ./... -race              >/tmp/uruni-check-go-test.log 2>&1 && echo 'ok' || { echo 'FAIL -> /tmp/uruni-check-go-test.log'; fail=1; }; \
+	printf '%-14s' 'go mod tidy';   go mod tidy -diff                >/tmp/uruni-check-go-tidy.log 2>&1 && echo 'ok' || { echo 'FAIL -> /tmp/uruni-check-go-tidy.log (make tidy)'; fail=1; }; \
+	printf '%-14s' 'sqlc diff';     sqlc diff                        >/tmp/uruni-check-sqlc.log    2>&1 && echo 'ok' || { echo 'FAIL -> /tmp/uruni-check-sqlc.log (make sqlc; make doctor for the version)'; fail=1; }; \
+	printf '%-14s' 'govulncheck';   go run golang.org/x/vuln/cmd/govulncheck@$(GOVULNCHECK_VERSION) ./... >/tmp/uruni-check-go-vuln.log 2>&1 && echo 'ok' || { echo 'FAIL -> /tmp/uruni-check-go-vuln.log'; fail=1; }; \
+	printf '%-14s' 'oxlint';        (cd web && npm run -s lint)      >/tmp/uruni-check-web-lint.log 2>&1 && echo 'ok' || { echo 'FAIL -> /tmp/uruni-check-web-lint.log'; fail=1; }; \
+	printf '%-14s' 'prettier';      (cd web && npm run -s fmt:check) >/tmp/uruni-check-web-fmt.log  2>&1 && echo 'ok' || { echo 'FAIL -> /tmp/uruni-check-web-fmt.log (make web-fmt)';  fail=1; }; \
+	printf '%-14s' 'tsc';           (cd web && npm run -s typecheck) >/tmp/uruni-check-web-tsc.log  2>&1 && echo 'ok' || { echo 'FAIL -> /tmp/uruni-check-web-tsc.log';  fail=1; }; \
+	printf '%-14s' 'vitest';        (cd web && npm run -s test)      >/tmp/uruni-check-web-test.log 2>&1 && echo 'ok' || { echo 'FAIL -> /tmp/uruni-check-web-test.log'; fail=1; }; \
+	printf '%-14s' 'web build';     (cd web && npm run -s build)     >/tmp/uruni-check-web-build.log 2>&1 && echo 'ok' || { echo 'FAIL -> /tmp/uruni-check-web-build.log'; fail=1; }; \
 	if [ $$fail -eq 0 ]; then echo 'all green'; else echo 'FAILED - read the FAIL log(s) above'; exit 1; fi
 
 # Create or reset a local login, for curl smoke tests against authenticated

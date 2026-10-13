@@ -14,6 +14,12 @@ on:
 permissions:
   contents: read
 
+# A new push to a PR cancels that PR's run in progress: only the newest commit
+# can merge. Pushes to main group by SHA, so no run on main is ever cancelled.
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 env:
   # Keep in lockstep with the `version: "2"` schema in .golangci.yml and with
   # whatever `make lint` runs locally - that lockstep IS `make check`'s promise
@@ -30,34 +36,6 @@ env:
   GOVULNCHECK_VERSION: v1.9.0
 
 jobs:
-  # The Makefile, hooks and workflows were deliberately written before the
-  # scaffold (ADR-019), so between now and M1 there is no go.mod and no web/.
-  # Rather than let `main` sit red - which would break "never tag a red main"
-  # (ROADMAP) - each job waits until the tree it lints actually exists. Once M1
-  # lands, both flags flip to true permanently and this gate becomes inert.
-  preflight:
-    name: Detect what exists (CI)
-    runs-on: ubuntu-latest
-    outputs:
-      backend: ${{ steps.detect.outputs.backend }}
-      frontend: ${{ steps.detect.outputs.frontend }}
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - id: detect
-        run: |
-          if [ -f go.mod ]; then
-            echo "backend=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "backend=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::No go.mod yet - backend job skipped until the M1 scaffold lands."
-          fi
-          if [ -f web/package.json ]; then
-            echo "frontend=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "frontend=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::No web/package.json yet - frontend job skipped until the M1 scaffold lands."
-          fi
-
   # The backend is three jobs plus a fan-in. Under -race the Go suite needs
   # roughly 290 CPU-seconds, so one 4-core runner cannot finish it much under
   # two minutes no matter how parallel the tests are (#451/#453). internal/http
@@ -66,11 +44,12 @@ jobs:
   # whole suite in one `go test ./... -race` locally - the split is CI-only.
   backend-lint:
     name: Backend lint
-    needs: preflight
-    if: needs.preflight.outputs.backend == 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
@@ -112,9 +91,8 @@ jobs:
 
   backend-test:
     name: Backend test (${{ matrix.shard }})
-    needs: preflight
-    if: needs.preflight.outputs.backend == 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     strategy:
       # One shard failing must not cancel the other: a red run should show
       # every failing package, not just the first shard to finish.
@@ -125,6 +103,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
+          persist-credentials: false
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
@@ -151,14 +130,16 @@ jobs:
 
 
   # The name branch protection requires (see required status checks). It
-  # passes only when lint and both shards passed; `always()` makes it run - and
-  # fail - when one of them failed, instead of being skipped, which a required
-  # check would count as a pass.
+  # passes only when lint and both shards passed; `!cancelled()` makes it run -
+  # and fail - when one of them failed, instead of being skipped, which a
+  # required check would count as a pass. A run cancelled by a newer push skips
+  # it, harmlessly: protection reads the check on the PR's newest commit.
   backend:
     name: Backend (lint + test)
-    needs: [preflight, backend-lint, backend-test]
-    if: always() && needs.preflight.outputs.backend == 'true'
+    needs: [backend-lint, backend-test]
+    if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - name: Lint and every test shard passed
         run: |
@@ -166,9 +147,8 @@ jobs:
 
   frontend:
     name: Frontend (lint + typecheck + test + build)
-    needs: preflight
-    if: needs.preflight.outputs.frontend == 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     defaults:
       run:
         working-directory: web
@@ -176,6 +156,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
+          persist-credentials: false
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           # Resolved from the repo root: `defaults.run.working-directory` applies

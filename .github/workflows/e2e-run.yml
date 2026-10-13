@@ -33,8 +33,13 @@ jobs:
     # check names and break e2e.yml's one-stable-name promise.
     name: Playwright
     runs-on: ubuntu-latest
+    # The full tier takes about 2.5 minutes; this only stops a hung server
+    # from holding a runner for the 6-hour default.
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
