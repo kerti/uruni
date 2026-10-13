@@ -145,7 +145,7 @@ Entitas utama:
 - **Autentikasi:** **autentikasi lokal** untuk satu bendahara di v1 — mandiri, tanpa penyedia identitas eksternal yang perlu dikonfigurasi per instans. OIDC/OAuth opsional bisa menyusul. Halaman laporan publik (7.9) sengaja tanpa autentikasi.
 - **Minimalkan data:** kumpulkan hanya yang dibutuhkan tugas (nama, nominal, tanggal, catatan). Tidak perlu info kontak anggota.
 - **Platform klien: PWA** — bisa dipasang ke layar utama, tanpa app store (sekaligus melenyapkan nuansa lisensi app-store sebelumnya). Membutuhkan koneksi aktif untuk berfungsi (lihat 7.2).
-- **Lisensi:** AGPL-3.0 (klausul jaringan menjaga setiap instans yang di-host tetap terbuka).
+- **Lisensi:** AGPL-3.0 (klausul jaringan menjaga setiap instans yang dimodifikasi dan di-host tetap terbuka).
 - **Pelokalan:** Bahasa Indonesia lebih dulu; format IDR/Rupiah; salinan yang hangat dan manusiawi sesuai nada merek.
 
 ## 9. Kriteria keberhasilan

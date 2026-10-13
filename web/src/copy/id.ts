@@ -256,10 +256,9 @@ export const copy = {
       // entry for this code: the guard fires on the record form, not there.
       incidental_closed: 'Amplop ini sudah ditutup — buka lagi dulu untuk mencatat transaksi baru.',
       // ADR-033 (#267): POST /api/transactions/{id}/purpose-correction's own
-      // named refusals. The engine ships in this slice; the chip, dialog
-      // and row labels that would normally keep these unreachable are
-      // #276's job, so these strings exist ahead of their own UI - added
-      // here so the codes are not orphaned.
+      // named refusals. The chip, dialog and row labels (#276) normally keep
+      // these unreachable; the strings are here so a code that does arrive
+      // is never orphaned.
       purpose_correction_opening: 'Pos saldo awal tidak bisa diperbaiki.',
       purpose_correction_dues: 'Pos pembayaran iuran tidak bisa diperbaiki di sini.',
       purpose_correction_reimbursement: 'Pos talangan tidak bisa diperbaiki di sini — perbaiki lewat catatan talangannya.',
@@ -1122,9 +1121,8 @@ export const copy = {
       kindDaily: 'Harian',
       kindPreRestore: 'Sebelum pemulihan',
       // An older-format dump (ADR-012's compatibility rule): still listed,
-      // still downloadable, just never offered for restore - #326 builds
-      // the restore button itself, so this slice only needs the label that
-      // explains why one row has no such button beside it.
+      // still downloadable, just never offered for restore. This is the
+      // label that explains why one row has no restore button beside it.
       olderFormat: 'Dibuat versi lama',
       empty: 'Belum ada cadangan otomatis.',
       // The row's own download control - plain ink, not a button per row

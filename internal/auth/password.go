@@ -58,10 +58,9 @@ func hashPassword(password string) (string, error) {
 // hashPassword produced. The comparison is constant-time (crypto/subtle),
 // so a timing side channel can't leak how many leading bytes matched.
 //
-// Unused by this slice's handler (#114 only registers), but hashing without
-// a matching verify path is not a real round trip - the test that proves
-// hashPassword's output is actually checkable is what this exists for, and
-// #115 (POST /api/login) is its first production caller.
+// Authenticate (POST /api/login) is its production caller, and the round-trip
+// test is what proves hashPassword's output is actually checkable - hashing
+// without a matching verify path is not a real round trip.
 func verifyPassword(password, encoded string) (bool, error) {
 	parts := strings.Split(encoded, "$")
 	// "$argon2id$v=19$m=...,t=...,p=...$salt$hash" splits on "$" into 6

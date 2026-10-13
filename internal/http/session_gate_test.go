@@ -13,7 +13,7 @@ import (
 
 // gatedRoutes is every route #116 moved behind sessionRequired, transcribed
 // from api.go's second r.Group in registration order - including POST
-// /setup, ADR-030's explicit ruling and the whole point of this slice. A
+// /setup, ADR-030's explicit ruling and the whole point of the gate. A
 // path segment that names an id in the real route ({id}, {purposeID}) is
 // filled with a placeholder value here: sessionRequired runs before chi
 // resolves the wildcard or any handler reads it, so what the placeholder

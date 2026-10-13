@@ -39,8 +39,8 @@ DELETE FROM session
 WHERE token = ?;
 
 -- DeleteExpiredSessions is the lazy sweep: called as a side effect of a
--- session write, never by a background ticker (ADR-013's scope stays
--- untouched by this slice).
+-- session write, never by a background ticker (ADR-013's scheduler stays
+-- out of it).
 -- name: DeleteExpiredSessions :exec
 DELETE FROM session
 WHERE expires_at <= ?;

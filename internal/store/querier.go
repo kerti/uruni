@@ -126,8 +126,8 @@ type Querier interface {
 	// already deleted come back with it.
 	DeleteDuesTier(ctx context.Context, arg DeleteDuesTierParams) error
 	// DeleteExpiredSessions is the lazy sweep: called as a side effect of a
-	// session write, never by a background ticker (ADR-013's scope stays
-	// untouched by this slice).
+	// session write, never by a background ticker (ADR-013's scheduler stays
+	// out of it).
 	DeleteExpiredSessions(ctx context.Context, expiresAt int64) error
 	// The full-replace half of SetIncidentalParticipation (ADR-034): recipients
 	// are edited like occasion, not accumulated, so setting a new list clears the

@@ -183,7 +183,7 @@ func TestGetReconciliationDetailRequiresAFund(t *testing.T) {
 }
 
 // TestGetReconciliationLatestBeforeAnySnapshotIs404 is the "latest when
-// empty" decision this slice makes explicit: 404 "not_found," the same code
+// empty" decision, made explicit: 404 "not_found," the same code
 // every other "no such row yet" route in this package already answers with
 // (GET /api/fund before setup, GET /api/incidentals/{id} on an unknown id) -
 // not an empty 200. See latestReconciliation's own doc comment for why.
@@ -330,7 +330,7 @@ func TestTakeReconciliationMatchedRoundTripsThroughListAndDetail(t *testing.T) {
 }
 
 // TestTakeReconciliationAdjustedStoresTheGapFoundNotZero is the trust-core
-// regression this slice exists to re-assert at the HTTP layer: a fix posted
+// regression, re-asserted at the HTTP layer: a fix posted
 // as part of the same snapshot does NOT retroactively zero that snapshot's
 // own recorded difference. If the cutoff were taken after the fix landed,
 // difference_amount would be stored as 0 - schema-legal, and a permanent
@@ -533,7 +533,7 @@ func TestTakeReconciliationRejectsAnotherFundsAccount(t *testing.T) {
 }
 
 // TestGetReconciliationDetailOnAnotherFundsSnapshotIs404 is #105's standing
-// context applied to this slice's own detail route: GetReconciliation now
+// context applied to the detail route: GetReconciliation now
 // takes fund_id alongside id, so a real snapshot id belonging to another
 // fund must read as not-found through THIS app's router rather than being
 // fetched and only then rejected. The positive control - the same snapshot

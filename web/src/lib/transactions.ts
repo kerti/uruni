@@ -79,13 +79,11 @@ export interface TransactionsPage {
 /**
  * GET /api/transactions (M6.9, keyset-paged and searchable as of #225):
  * newest-first, 25 rows a page (internal/http/transactions.go's
- * listTransactions). Every caller in this codebase reads only the first
- * page today - Home and Reconcile take their first five rows straight off
- * it (no more `.slice(-5).reverse()`, the server's own order is already
- * what they want), History/Transactions renders the page as-is, and
+ * listTransactions). Home and Reconcile take their first five rows straight
+ * off the first page (the server's own order is already what they want),
  * MemberPayments passes memberId/duesPeriod instead of filtering
- * client-side. Building a "load more" loop over nextCursor is the
- * orchestrator's next slice, not this one's.
+ * client-side, and History/Transactions follows nextCursor for its "load
+ * more".
  */
 export function listTransactions(input: ListTransactionsInput = {}): Promise<TransactionsPage> {
   const params = new URLSearchParams()

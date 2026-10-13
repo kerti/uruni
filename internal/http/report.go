@@ -3,9 +3,9 @@ package http
 // The public report (ADR-035, #373): GET /report/{slug}, server-rendered with
 // html/template from ledger.MonthlyReport. No session, no resolveFund - the
 // slug names its fund (ADR-030's carve-out), and is a read capability, never an
-// authorization. This slice renders the header and the month selector; the
-// transactions, dues and envelopes sections fill in beneath it in later
-// slices, from the same Report.
+// authorization. The page is the header and month selector, then the balance,
+// per-purpose balances, what is owed to members, transactions, dues and
+// envelopes, all from the same Report.
 
 import (
 	"bytes"

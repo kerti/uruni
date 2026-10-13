@@ -42,7 +42,7 @@ Every comparable app is a *company's server* holding your community's financial 
 
 - **The project holds nothing.** Uruni runs no production service and stores none of your data. Ever.
 - **Self-hosted.** A community runs its own always-on instance — one source of truth, so a lost or broken phone loses nothing.
-- **AGPL-3.0.** Anyone who hosts Uruni for their community must keep the code open. The trust story is auditable and true by construction.
+- **AGPL-3.0.** The code is open, and anyone who modifies Uruni and makes it available to users over a network must offer those users the source of their modified version. The trust story is auditable and true by construction.
 - **Data minimization.** Names, amounts, dates, notes. No member emails or phone numbers are collected.
 
 Honest caveat: this is **not** a tap-to-install consumer app. Standing up an instance takes a technical helper, and we don't pretend otherwise. See [`SELF-HOSTING.md`](SELF-HOSTING.md).
@@ -70,7 +70,7 @@ If a proposed feature doesn't serve *the accidental treasurer looking after a sh
 
 ## How it's built
 
-A single **Go** binary serves the JSON API, server-renders the public report, and serves an embedded **React** PWA — one origin, one process, SQLite by default. Behind Caddy for automatic HTTPS.
+A single **Go** binary serves the JSON API, server-renders the public report, and serves an embedded **React** PWA — one origin, one process, SQLite as the only store. Behind Caddy for automatic HTTPS.
 
 The app is **connection-required by design**: no local data store, no write queue, no offline sync. When disconnected it shows a clear "butuh koneksi" state. That's a deliberate choice made with the validated user, who preferred no "which copy is valid?" ambiguity over any offline capability.
 
@@ -88,7 +88,7 @@ Contributions to copy and UI should keep this tone: warm, human, never corporate
 
 ## Status
 
-**Pre-release, built in supervised vertical slices.** The ledger works and is covered by tests, the JSON API is complete and sits behind a session cookie, and one binary serves it alongside the embedded React app. **M6 — everyday UI** shipped as `v0.6.0`, the first build a treasurer can actually use on a phone; **M7 — public report** completes `v0.7.0`.
+**Pre-release, built in supervised vertical slices.** The ledger works and is covered by tests, the JSON API sits behind a session cookie, and one binary serves it alongside the embedded React app. A treasurer can run the everyday loop on a phone, and neighbours can read the public report from its own link.
 
 Self-hosters can run the `0.x` alphas ([SELF-HOSTING.md](./SELF-HOSTING.md)); the upgrade contract starts at `v1.0.0`. What's in flight is the current GitHub milestone and its open issues — that board is the live cursor, not this file.
 
@@ -119,7 +119,7 @@ Start with [`CONTRIBUTING.md`](CONTRIBUTING.md).
 
 ## License
 
-[AGPL-3.0](LICENSE) — copyright and the applying notice are in [`NOTICE`](NOTICE). Uruni will always be free to use. The network clause means anyone who hosts Uruni for a community must keep the source open, which is what makes the trust story true by construction rather than by promise.
+[AGPL-3.0](LICENSE) — copyright and the applying notice are in [`NOTICE`](NOTICE). Uruni will always be free to use. The network clause means anyone who modifies Uruni and makes it available to users over a network must offer those users the source of their modified version, which is what makes the trust story true by construction rather than by promise.
 
 ---
 

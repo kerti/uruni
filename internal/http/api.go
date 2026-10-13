@@ -93,17 +93,16 @@ type api struct {
 	restoreStage *restoreStage
 }
 
-// routes registers the /api surface on the mount New creates. No handlers at
-// M4.1: this slice builds the router, the request log and the error mapping
-// every later handler shares, and the handlers themselves arrive one slice at
-// a time from M4.2 (first-run setup) onward.
+// routes registers the /api surface on the mount New creates: the cross-origin
+// guard and session middleware, the routes a stranger can reach, and the
+// session-gated routes behind them.
 //
-// What it does register is the pair below. Without them an unknown /api path
-// answers with chi's plain-text "404 page not found" while every other failure
-// under /api is the JSON envelope - a client would have to parse two shapes to
-// learn the same thing, and a mistyped path is exactly when it is least able
-// to. Registering them here rather than per-slice means the whole namespace
-// answers the same way from its first handler onward.
+// It also registers the NotFound and MethodNotAllowed pair first. Without them
+// an unknown /api path answers with chi's plain-text "404 page not found" while
+// every other failure under /api is the JSON envelope - a client would have to
+// parse two shapes to learn the same thing, and a mistyped path is exactly when
+// it is least able to. Registering them here rather than per handler means the
+// whole namespace answers the same way.
 func (a *api) routes(r chi.Router) {
 	r.NotFound(func(w http.ResponseWriter, _ *http.Request) {
 		writeAPIError(w, http.StatusNotFound, "not_found", "The requested resource was not found.")

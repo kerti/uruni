@@ -1,8 +1,8 @@
 // Package lock provides the single-instance advisory file lock that `uruni
 // serve` takes at boot (issue #62).
 //
-// M4's next slice adds a domain-level singleton guard: first-run setup
-// refuses to create a second fund. That guard is deliberately *not*
+// First-run setup carries a domain-level singleton guard: it refuses to
+// create a second fund (ErrFundAlreadyExists). That guard is deliberately *not*
 // schema-backed - PRD section 6 allows more than one fund in the model, so there is
 // no UNIQUE index a second CREATE could collide with, unlike
 // ErrReimbursementAlreadySettled or ErrDuesPaymentAlreadyReversed

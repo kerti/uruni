@@ -4,7 +4,7 @@ import "errors"
 
 // ErrInvalidArgument is the fourth error category ADR-027 adds to the three
 // this package's write methods otherwise produce (money.ErrOverflow, a raw
-// database error, and the business-state sentinels later slices define): the
+// database error, and the business-state sentinels this package defines): the
 // caller's own input failed a shape check before the write ever reached the
 // schema - a non-positive amount, an occurred_on that is not a real calendar
 // date, an empty required field.

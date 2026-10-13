@@ -143,7 +143,7 @@ Key entities:
 - **Authentication:** **local auth** for the single treasurer in v1 — self-contained, no external identity provider to configure per instance. Optional OIDC/OAuth may come later. The public report page (7.9) is unauthenticated by design.
 - **Data minimization:** collect only what the job needs (names, amounts, dates, notes). No member contact info required.
 - **Client platform: PWA** — installable to the home screen, no app store (which also dissolves the earlier app-store licensing nuance). Requires a live connection to function (see 7.2).
-- **License:** AGPL-3.0 (network clause keeps any hosted instance open).
+- **License:** AGPL-3.0 (network clause keeps any modified, hosted instance open).
 - **Localization:** Bahasa Indonesia first; IDR/Rupiah formatting; warm, human copy per the brand voice.
 
 ## 9. Success criteria

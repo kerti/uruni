@@ -1,12 +1,12 @@
 // Package backup is ADR-012's implementation: the whole fund, as one zip a
-// session-gated route streams to the treasurer, and (M6.38, #325) the
-// importer that restores it. Both halves live here together on the
-// maintainer's own ruling in ADR-012 - "the logic lives in one package so
-// that stays cheap" - rather than export and import drifting into two
-// packages that quietly disagree about the shape between them.
+// session-gated route streams to the treasurer, the daily dumps the server
+// writes on its own, and the restore that reads one back. The halves live here
+// together on the maintainer's own ruling in ADR-012 - "the logic lives in one
+// package so that stays cheap" - rather than export and import drifting into
+// two packages that quietly disagree about the shape between them.
 //
-// This slice (#323) is the export half only. Nothing here writes to the
-// database; Import has no code yet.
+// Export and the dumps only read the database; Restore (restore.go) is the one
+// place in this package that writes it.
 package backup
 
 // FormatVersion is uruni.json's own integer version (ADR-012's
@@ -45,7 +45,7 @@ const FormatVersion int64 = 1
 // first since nothing depends on it. Row order within each table is
 // whatever query this package already had reason to write for it - most
 // reuse an existing ORDER BY id (or an existing fully-ordered listing);
-// the few added for this slice (ListUsers, ListDuesRatesByFund,
+// the few added for the export (ListUsers, ListDuesRatesByFund,
 // ListReceiptsByFund, ListReconciliationLinesByFund,
 // ListIncidentalRecipientsByFund) order by id (or, where a table has no
 // single-column id, by its primary key columns) purely so the export is

@@ -17,7 +17,7 @@ import (
 // TakeReconciliation posts it as a new "transaction" row from these fields,
 // inside its own withTx, and never accepts a transaction id from the caller
 // (ADR-024, ADR-027): a caller-supplied id could name an entry the cutoff had
-// already counted, which is exactly the false-record bug this slice exists to
+// already counted, which is exactly the false-record bug this rule exists to
 // prevent.
 //
 // There is deliberately no AccountID field. The fix always posts against the
@@ -36,11 +36,11 @@ type Fix struct {
 // resolved.
 //
 // Fix is nested here rather than living in a second slice matched by
-// account_id, which is the shape ADR-027's own draft paragraph sketched
-// before this slice existed. A fix exists to square exactly one line, so
-// naming that line through a separate collection - by position, or by
-// repeating the account id - is exactly the kind of alignment a caller (and
-// this function) could get wrong silently: a fixes[2] meant to resolve
+// account_id, which is the shape ADR-027's own draft paragraph sketched.
+// A fix exists to square exactly one line, so naming that line through a
+// separate collection - by position, or by repeating the account id - is
+// exactly the kind of alignment a caller (and this function) could get wrong
+// silently: a fixes[2] meant to resolve
 // counts[2] would silently square counts[1] instead if a count were ever
 // skipped or reordered. That is the same failure shape ADR-027's transfer
 // leg already removed by construction rather than by validation, by

@@ -47,8 +47,8 @@ WHERE expires_at <= ?
 `
 
 // DeleteExpiredSessions is the lazy sweep: called as a side effect of a
-// session write, never by a background ticker (ADR-013's scope stays
-// untouched by this slice).
+// session write, never by a background ticker (ADR-013's scheduler stays
+// out of it).
 func (q *Queries) DeleteExpiredSessions(ctx context.Context, expiresAt int64) error {
 	_, err := q.db.ExecContext(ctx, deleteExpiredSessions, expiresAt)
 	return err

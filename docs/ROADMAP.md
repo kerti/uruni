@@ -38,7 +38,7 @@ Builds clean · tests pass (money/reconciliation especially) · matches PRD + de
 
 ## Release hygiene (learned from Balances)
 
-- **Label each PR at merge time** (`enhancement`/`bug`/`documentation`/`dependencies`) — unlabeled PRs fall through the auto-notes.
+- **Label each PR at creation** (`enhancement`/`bug`/`documentation`/`dependencies`) **and assign its milestone** — unlabeled PRs fall through the auto-notes.
 - **One migration file until `v1.0.0`** — `00001_schema.sql`, edited in place, never a second file (ADR-025). Nothing to renumber; `make db-reset` after pulling a schema change.
 - **Bump the pinned `URUNI_TAG` before tagging**, not after — the tagged tree must recommend itself.
 - **Release notes are a non-technical digest** (Added / Fixed / Behind the scenes) with the raw changelog folded beneath — written for a treasurer, not a developer.

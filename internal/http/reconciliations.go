@@ -73,7 +73,7 @@ func toReconciliationResponse(rec store.Reconciliation) reconciliationResponse {
 //
 // resolution is returned as the plain schema string ("matched", "left_open",
 // "adjusted", "entry_added"), never a color or an Indonesian label: those are
-// the SPA's concern, not this slice's, per the issue.
+// the SPA's concern, not the API's.
 type reconciliationLineResponse struct {
 	ID                      int64  `json:"id"`
 	AccountID               int64  `json:"account_id"`

@@ -41,9 +41,7 @@ export function login(email: string, password: string): Promise<AuthUser> {
   }).catch(plainConnectionError)
 }
 
-// Wired but deliberately not called from any screen this slice - a real
-// logout affordance belongs with the app shell chrome (M6.6). Exists now so
-// the route is proven reachable before a human has anything to click.
+// The shell's logout button (components/Shell.tsx) is the one caller.
 export function logout(): Promise<void> {
   return apiFetch<void>('/api/logout', { method: 'POST' }).catch(plainConnectionError)
 }

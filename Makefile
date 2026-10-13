@@ -174,7 +174,7 @@ setup: hooks-install claude-install web-install
 	fi
 	@mkdir -p "$(DEV_UPLOADS_DIR)"
 	@mkdir -p "$(DEV_BACKUP_DIR)"
-	@echo "ok setup complete - next: make migrate-up && make run"
+	@echo "ok setup complete - next: make run (API on :$(SERVER_PORT), applies migrations on boot), and make web-dev (Vite on :5173) in a second terminal"
 
 # Point git at the repo's own hooks directory and seed the local, gitignored
 # .pii-patterns denylist from the template + your git identity, so the
