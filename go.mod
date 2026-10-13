@@ -2,7 +2,7 @@ module github.com/kerti/uruni
 
 go 1.26.5
 
-toolchain go1.26.9
+toolchain go1.27.2
 
 require (
 	codeberg.org/go-pdf/fpdf v0.12.0

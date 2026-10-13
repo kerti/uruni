@@ -25,7 +25,7 @@ env:
     # what `make lint` runs locally - that lockstep IS `make check`'s promise that
     # green-locally means green-in-CI (ADR-020). golangci-lint-action v8 drives
     # golangci-lint v2; do not drop back to action v6 (v1 only).
-  GOLANGCI_VERSION: v2.13.2
+  GOLANGCI_VERSION: v2.14.0
     # Both in lockstep with the Makefile (SQLC_CI_VERSION, GOVULNCHECK_VERSION).
     # SQLC_VERSION must also match the `sqlc vX` header in internal/store, or
     # `sqlc diff` fails on code nobody touched. SQLC_SHA256 is the linux_amd64

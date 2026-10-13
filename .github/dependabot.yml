@@ -50,7 +50,8 @@ updates:
         update-types: [minor, patch]
   # Images are pinned as tag@sha256 (Dockerfile, compose); these keep the digests
   # moving. A golang bump must ride with go.mod's toolchain line
-  # (TestDockerfileGoMatchesToolchain).
+  # (TestDockerfileGoMatchesToolchain): amend the Dependabot PR with the new
+  # toolchain line rather than ignoring golang, so security patches still land.
   - package-ecosystem: docker
     directory: "/"
     schedule:
