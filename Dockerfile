@@ -6,7 +6,7 @@
 # the `npm ci` stage under QEMU instead would cost tens of minutes per release.
 
 # 1) Build the React PWA -> web/dist
-FROM --platform=$BUILDPLATFORM node:24-alpine AS web
+FROM --platform=$BUILDPLATFORM node:24.21.0-alpine@sha256:ebfe2f90462722a7a4de65e91990e97fe0d401c70e0e762c5b53302f905ec1c1 AS web
 WORKDIR /web
 COPY web/package*.json ./
 RUN npm ci
@@ -16,7 +16,7 @@ RUN npm run build
 # 2) Build the Go binary with the SPA embedded via embed.FS.
 #    CGO_ENABLED=0 requires the pure-Go SQLite driver (modernc.org/sqlite) so the
 #    final image can be static/distroless.
-FROM --platform=$BUILDPLATFORM golang:1.26-alpine AS build
+FROM --platform=$BUILDPLATFORM golang:1.26.9-alpine@sha256:3082400e369fa24d5fc60bca20edab3f6d604e0c5a690ec66b295eff4dd87ade AS build
 WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download
@@ -44,7 +44,7 @@ FROM build AS dirs
 RUN mkdir -p /stage/data /stage/uploads /stage/backups
 
 # 3) Minimal runtime
-FROM gcr.io/distroless/static-debian12:nonroot
+FROM gcr.io/distroless/static-debian12:nonroot@sha256:afa5c872c891853ca7fcf1f12c3edb23f7eeef36189728842dd51042ff57f7ab
 # 65532 is distroless' `nonroot` uid/gid - numeric so the chown never depends on
 # name lookup in the target image.
 COPY --from=dirs --chown=65532:65532 /stage/data /data
