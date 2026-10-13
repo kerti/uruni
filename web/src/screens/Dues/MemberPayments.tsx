@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { Undo2 } from 'lucide-react'
 
 import DateField from '@/components/DateField'
@@ -61,17 +61,16 @@ export default function MemberPayments({ memberId, period, onReversed }: { membe
   const [occurredOn, setOccurredOn] = useState(todayISODate)
   const [note, setNote] = useState('')
 
-  async function loadRows(): Promise<Transaction[]> {
+  const loadRows = useCallback(async (): Promise<Transaction[]> => {
     const page = await listTransactions({ memberId, duesPeriod: period })
     return page.transactions
-  }
+  }, [memberId, period])
 
   useEffect(() => {
     void run(loadRows)
     // run is a stable useCallback (useApi.ts); this component is mounted by
     // an expanded member row, so the fetch belongs to that expansion.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [run, memberId, period])
+  }, [run, loadRows])
 
   // The server already filtered to this member+period (#225) - everything
   // it returns for this filter is either the kind='dues' payment or a

@@ -1,5 +1,5 @@
 import { Search } from 'lucide-react'
-import { useEffect, useRef, useState, type FormEvent } from 'react'
+import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
 import { useSearchParams } from 'react-router-dom'
 
 import DateField from '@/components/DateField'
@@ -84,24 +84,25 @@ export default function Roster() {
   const [moreError, setMoreError] = useState<ApiError | null>(null)
   const generation = useRef(0)
 
-  async function loadFirstPage(): Promise<FirstPage> {
+  const loadFirstPage = useCallback(async (): Promise<FirstPage> => {
     const [page, tiers] = await Promise.all([listMembersPage(q || undefined), listDuesTiers()])
     return { page, tiers }
-  }
+  }, [q])
 
   useEffect(() => {
     generation.current += 1
+    // oxlint-disable-next-line react/set-state-in-effect -- reset the appended pages whenever the first page is refetched; the refetch is the external sync
     setMore(null)
     setMoreLoading(false)
     setMoreError(null)
     void run(loadFirstPage)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [run, q])
+  }, [run, loadFirstPage])
 
   // The URL changed under the field (back, forward, a link): follow it. A
   // draft that already trims to the same search is left alone, so a
   // trailing space she is still typing is not snatched away.
   useEffect(() => {
+    // oxlint-disable-next-line react/set-state-in-effect -- follow the URL back into the search field (back, forward, a link); the URL is the source of truth
     setDraft((current) => (current.trim() === q ? current : q))
   }, [q])
 
@@ -165,8 +166,7 @@ export default function Roster() {
     if (state.status !== 'success') return
     if (target.kind === 'edit' && editingMember !== null) return
     clear()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dialogValue, target.kind, state.status, editingMember])
+  }, [dialogValue, target.kind, state.status, editingMember, clear])
 
   function renderList() {
     if (state.status === 'idle' || state.status === 'loading') {
@@ -472,7 +472,7 @@ function EditMemberDialog({
       setJoinedOn(shown.joined_on)
       setConfirming(null)
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // oxlint-disable-next-line react/exhaustive-deps -- seed once per open, keyed on the record's id; a refetched copy of the same record would wipe the treasurer's edits
   }, [open, shown?.id])
 
   // onChanged closes the dialog, so it runs only once the request has

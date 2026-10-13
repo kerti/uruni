@@ -129,7 +129,6 @@ export default function RecordDuesPayment({
     void loadRun(loadFormData)
     // loadRun is a stable useCallback (useApi.ts); this fires once on mount,
     // same shape as RecordTransaction.tsx's own load.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loadRun])
 
   // Default location: the first active account. Deliberately not
@@ -141,11 +140,11 @@ export default function RecordDuesPayment({
     if (loadState.status !== 'success' || !loadState.data) return
     if (accountId !== null) return
     const active = loadState.data.accounts.filter((a) => a.inactive_on === null)
+    // oxlint-disable-next-line react/set-state-in-effect -- one-time default location once the accounts have loaded
     if (active.length > 0) setAccountId(active[0].id)
-    // accountId is this effect's own output; including it would fight the
-    // one-time default (same reasoning as RecordTransaction.tsx).
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loadState.status, loadState.data])
+    // accountId is this effect's own output; the early return above makes
+    // listing it a no-op once the default has been set.
+  }, [loadState.status, loadState.data, accountId])
 
   // Re-read what the member owes whenever the member or the window changes.
   // `through` is this client's local month, always sent: the server does not
@@ -156,7 +155,6 @@ export default function RecordDuesPayment({
     void outstandingRun(() => getOutstandingDues(memberId, through))
     // outstandingRun is a stable useCallback; memberId and through are the
     // deliberate dependencies.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [outstandingRun, memberId, through])
 
   // Pre-fill every newly offered period with what it would take to settle
@@ -165,8 +163,8 @@ export default function RecordDuesPayment({
   useEffect(() => {
     if (outstandingState.status !== 'success' || !outstandingState.data) return
     const fresh = Object.fromEntries(outstandingState.data.map((p) => [p.period, remainingOf(p)]))
+    // oxlint-disable-next-line react/set-state-in-effect -- pre-fill each newly offered period from the server's numbers once they have loaded
     setAmounts((current) => ({ ...fresh, ...current }))
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [outstandingState.status, outstandingState.data])
 
   const periods = outstandingState.data ?? []

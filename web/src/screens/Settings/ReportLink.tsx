@@ -62,8 +62,7 @@ export default function ReportLink() {
   useEffect(() => {
     if (!isOwn || confirming) return
     clear()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [value, isOwn, confirming])
+  }, [value, isOwn, confirming, clear])
 
   return (
     <section className="flex flex-col gap-3">
@@ -96,18 +95,16 @@ export default function ReportLink() {
 }
 
 function LinkActions({ url, reportUrl, onRenew }: { url: string; reportUrl: string; onRenew: () => void }) {
-  const [copied, setCopied] = useState(false)
+  // Which link was copied, not a bare flag: a new link is a new thing to copy,
+  // so `copied` falls back to false by itself when the url changes.
+  const [copiedUrl, setCopiedUrl] = useState<string | null>(null)
+  const copied = copiedUrl === url
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   // Feature-detected per render, not at module load: it is a property of the
   // browser the card is in, and a test can stub it either way.
   const canShare = typeof navigator !== 'undefined' && typeof navigator.share === 'function'
 
   useEffect(() => () => clearTimeout(timer.current), [])
-
-  // A new link is a new thing to copy.
-  useEffect(() => {
-    setCopied(false)
-  }, [url])
 
   async function handleCopy() {
     try {
@@ -117,9 +114,9 @@ function LinkActions({ url, reportUrl, onRenew }: { url: string; reportUrl: stri
       // screen and selectable, so there is nothing to report.
       return
     }
-    setCopied(true)
+    setCopiedUrl(url)
     clearTimeout(timer.current)
-    timer.current = setTimeout(() => setCopied(false), COPIED_MS)
+    timer.current = setTimeout(() => setCopiedUrl(null), COPIED_MS)
   }
 
   async function handleShare() {

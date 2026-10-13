@@ -67,8 +67,7 @@ export default function PassThrough() {
     if (listState.status !== 'success') return
     if (target.kind === 'edit' && editingPurpose !== null) return
     clear()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [value, target.kind, listState.status, editingPurpose])
+  }, [value, target.kind, listState.status, editingPurpose, clear])
 
   return (
     <section className="flex flex-col gap-3">

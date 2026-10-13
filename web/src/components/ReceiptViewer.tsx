@@ -57,7 +57,7 @@ export default function ReceiptViewer({
 
   useLayoutEffect(() => {
     if (open) centreOnAnchor()
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- re-centre per open/photo only
+    // oxlint-disable-next-line react/exhaustive-deps -- re-centre per open/photo only; a new anchor object or a re-render would yank the scroll from under her pinch
   }, [open, src])
 
   return (

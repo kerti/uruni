@@ -63,9 +63,9 @@ export default function CorrectPurposeDialog({
   // is now - so the field starts on a true statement, and the submit button
   // starts disabled until she actually changes something.
   useEffect(() => {
+    // oxlint-disable-next-line react/set-state-in-effect -- seed the picker from the record each time the dialog opens
     if (open && transaction !== null) setPurposeId(effectivePurposeId)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, transaction])
+  }, [open, transaction, effectivePurposeId])
 
   const busy = state.status === 'loading'
   const unchanged = purposeId === null || purposeId === effectivePurposeId

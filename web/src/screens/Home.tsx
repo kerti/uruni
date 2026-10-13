@@ -107,7 +107,6 @@ export default function Home({
     // run is a stable useCallback (useApi.ts); refetchKey is the deliberate
     // extra dependency that makes a fresh "recorded" navigation reload this
     // screen's data.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [run, refetchKey])
 
   // Re-read the fund whenever the app comes back to the foreground.
@@ -129,7 +128,6 @@ export default function Home({
     }
     document.addEventListener('visibilitychange', refreshWhenVisible)
     return () => document.removeEventListener('visibilitychange', refreshWhenVisible)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [run])
 
   if (state.status === 'idle' || state.status === 'loading') {

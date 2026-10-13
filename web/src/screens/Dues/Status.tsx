@@ -113,7 +113,6 @@ export default function DuesStatus({
     // run is a stable useCallback (useApi.ts); period is the deliberate
     // dependency that refetches whenever the selector changes, refetchKey
     // the one that reloads it after a payment was recorded.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [run, period, refetchKey])
 
   const rows = state.data ?? []

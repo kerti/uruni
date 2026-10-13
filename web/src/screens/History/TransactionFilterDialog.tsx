@@ -77,7 +77,7 @@ export default function TransactionFilterDialog({
   // A fresh draft every time the dialog opens, seeded with what is applied.
   useEffect(() => {
     if (open) setDraft(filters)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // oxlint-disable-next-line react/exhaustive-deps -- seed once per open; the parent hands a fresh filters object, and re-seeding would wipe what she is picking
   }, [open])
 
   function handleSubmit(event: FormEvent) {

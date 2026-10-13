@@ -228,7 +228,6 @@ export default function RecordTransaction({
     void loadRun(loadFormData)
     // loadRun is a stable useCallback (useApi.ts); this fires once on mount,
     // matching App.tsx's own session-probe effect.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loadRun])
 
   // Applies the smart defaults once the form data has loaded: location
@@ -283,7 +282,7 @@ export default function RecordTransaction({
     // Only re-run when the load itself changes - accountId/purposeId/memberId
     // are this effect's own output, including them would fight its one-time
     // default assignment on every keystroke that changes them.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // oxlint-disable-next-line react/exhaustive-deps -- seed the defaults once per load; clearing "Dari siapa?" back to null would otherwise re-seed it from initialMemberId
   }, [loadState.status, loadState.data])
 
   const submitting = submitState.status === 'loading'

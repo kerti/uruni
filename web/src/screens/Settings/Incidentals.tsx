@@ -94,8 +94,7 @@ export default function SettingsIncidentals() {
     if (target !== 'invalid') return
     if (listState.status !== 'success') return
     clear()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [target, listState.status])
+  }, [target, listState.status, clear])
 
   return (
     <section className="flex flex-col gap-3">

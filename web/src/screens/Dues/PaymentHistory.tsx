@@ -1,5 +1,5 @@
 import { ArrowDownLeft, ArrowUpRight, Search } from 'lucide-react'
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 
 import { Button } from '@/components/ui/button'
@@ -57,23 +57,22 @@ export default function PaymentHistory({ onOpenStatus, refetchKey }: { onOpenSta
   const [moreError, setMoreError] = useState<ApiError | null>(null)
   const generation = useRef(0)
 
-  async function loadFirstPage(): Promise<DuesPaymentsPage> {
-    return listDuesPayments({ q: q || undefined })
-  }
+  const loadFirstPage = useCallback((): Promise<DuesPaymentsPage> => listDuesPayments({ q: q || undefined }), [q])
 
   useEffect(() => {
     generation.current += 1
+    // oxlint-disable-next-line react/set-state-in-effect -- reset the appended pages whenever the first page is refetched; the refetch is the external sync
     setMore(null)
     setMoreLoading(false)
     setMoreError(null)
     void run(loadFirstPage)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [run, q, refetchKey])
+  }, [run, loadFirstPage, refetchKey])
 
   // The URL changed under the field (back, forward, a link): follow it. A
   // draft that already trims to the same search is left alone, so a
   // trailing space she is still typing is not snatched away.
   useEffect(() => {
+    // oxlint-disable-next-line react/set-state-in-effect -- follow the URL back into the search field (back, forward, a link); the URL is the source of truth
     setDraft((current) => (current.trim() === q ? current : q))
   }, [q])
 

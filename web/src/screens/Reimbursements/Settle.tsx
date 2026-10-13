@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from 'react'
+import { useCallback, useEffect, useState, type FormEvent } from 'react'
 import { Navigate } from 'react-router-dom'
 
 import DateField from '@/components/DateField'
@@ -16,7 +16,8 @@ import { getReimbursement, settleReimbursement } from '@/lib/reimbursements'
 import { useApi } from '@/lib/useApi'
 import type { Account } from '@/lib/accounts'
 import type { Reimbursement } from '@/lib/reimbursements'
-import { errorText, FormAlert, TALANGAN_PATH, todayISODate } from './shared'
+import { errorText, TALANGAN_PATH, todayISODate } from './helpers'
+import { FormAlert } from './shared'
 
 const text = copy.reimbursements
 
@@ -39,26 +40,27 @@ export default function Settle({ claimId, onDone, onCancel }: { claimId: number;
   const [submitState, submitRun] = useApi<unknown>()
   const [error, setError] = useState<string | null>(null)
 
-  function load(silent = false) {
-    return dataRun(
-      async () => {
-        const [claim, accounts] = await Promise.all([
-          getReimbursement(claimId).catch((err: unknown) => {
-            if (err instanceof ApiError && err.code === 'not_found') return null
-            throw err
-          }),
-          listAccounts(),
-        ])
-        return { claim, accounts }
-      },
-      { silent },
-    )
-  }
+  const load = useCallback(
+    (silent = false) =>
+      dataRun(
+        async () => {
+          const [claim, accounts] = await Promise.all([
+            getReimbursement(claimId).catch((err: unknown) => {
+              if (err instanceof ApiError && err.code === 'not_found') return null
+              throw err
+            }),
+            listAccounts(),
+          ])
+          return { claim, accounts }
+        },
+        { silent },
+      ),
+    [dataRun, claimId],
+  )
 
   useEffect(() => {
     void load()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dataRun, claimId])
+  }, [load])
 
   const submitting = submitState.status === 'loading'
 
@@ -73,7 +75,6 @@ export default function Settle({ claimId, onDone, onCancel }: { claimId: number;
         await settleUncertainWrite(err, () => load(true))
         const apiErr = err instanceof ApiError ? err : new ApiError('unknown_error', err instanceof Error ? err.message : String(err))
         setError(errorText(apiErr))
-        // eslint-disable-next-line no-console
         console.error('API error', apiErr.code, apiErr.message)
       }
     })

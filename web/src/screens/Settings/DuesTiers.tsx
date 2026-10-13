@@ -85,7 +85,6 @@ export default function DuesTiers() {
 
   useEffect(() => {
     void run(load)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [run])
 
   function reload() {
@@ -108,8 +107,7 @@ export default function DuesTiers() {
     if (target.kind === 'foreign' || target.kind === 'new') return
     if (state.status !== 'success') return
     clear()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [value, target.kind, state.status])
+  }, [value, target.kind, state.status, clear])
 
   const thisMonth = currentISOMonth()
 

@@ -153,7 +153,6 @@ export default function Reconcile({ onDone, onCancel }: { onDone: () => void; on
   useEffect(() => {
     void loadRun(loadReconcileData)
     // loadRun is a stable useCallback (useApi.ts); fires once on mount.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loadRun])
 
   // Seeds a LineState for every active account once the load succeeds -
@@ -163,6 +162,7 @@ export default function Reconcile({ onDone, onCancel }: { onDone: () => void; on
     if (loadState.status !== 'success' || !loadState.data) return
     const mainPurposeId = loadState.data.purposes.find((p) => p.kind === 'main')?.id ?? null
     const activeAccounts = loadState.data.accounts.filter((a) => a.inactive_on === null)
+    // oxlint-disable-next-line react/set-state-in-effect -- seed a count line per active account once the load succeeds
     setLines((prev) => {
       const next = { ...prev }
       let changed = false
@@ -174,7 +174,6 @@ export default function Reconcile({ onDone, onCancel }: { onDone: () => void; on
       }
       return changed ? next : prev
     })
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loadState.status, loadState.data])
 
   function updateLine(accountId: number, patch: Partial<LineState>) {

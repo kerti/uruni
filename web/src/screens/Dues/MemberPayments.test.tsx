@@ -105,7 +105,7 @@ describe('MemberPayments', () => {
     await waitFor(() => expect(onReversed).toHaveBeenCalledTimes(1))
     const post = fetchMock.mock.calls.find(([, init]) => (init as RequestInit | undefined)?.method === 'POST')
     expect(post?.[0]?.toString()).toBe('/api/dues-payments/10/reversal')
-    const body = JSON.parse(String((post?.[1] as RequestInit).body))
+    const body = JSON.parse(String((post?.[1] as RequestInit | undefined)?.body))
     // ADR-029: only a date and a note ever cross the wire.
     expect(Object.keys(body).sort()).toEqual(['note', 'occurred_on'])
     // #257: nothing generated is ever stored - a blank reason sends null,
@@ -125,7 +125,7 @@ describe('MemberPayments', () => {
 
     await waitFor(() => expect(fetchMock.mock.calls.some(([, i]) => (i as RequestInit | undefined)?.method === 'POST')).toBe(true))
     const post = fetchMock.mock.calls.find(([, init]) => (init as RequestInit | undefined)?.method === 'POST')
-    expect(JSON.parse(String((post?.[1] as RequestInit).body)).note).toBe('Salah orang')
+    expect(JSON.parse(String((post?.[1] as RequestInit | undefined)?.body)).note).toBe('Salah orang')
   })
 
   it('never offers to reverse a payment twice, and shows the reversal as its own row', async () => {
