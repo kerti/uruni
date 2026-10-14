@@ -1,7 +1,8 @@
-import { writeFileSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import tailwindcss from '@tailwindcss/vite'
 import react from '@vitejs/plugin-react'
+import licenseModule, { type Dependency, type Options as LicenseOptions } from 'rollup-plugin-license'
 import { VitePWA } from 'vite-plugin-pwa'
 import { configDefaults, defineConfig, type Plugin } from 'vitest/config'
 
@@ -97,15 +98,81 @@ function pwa(): Plugin[] {
       globPatterns: ['**/*.{js,css,html,svg,png,woff2}'],
       navigateFallback: '/index.html',
       // The Go binary owns these, not the SPA: /report is server-rendered
-      // (M7), /api is JSON, /healthz is the smoke check. Without this denylist
+      // (M7), /api is JSON, /healthz is the smoke check, /third-party-notices
+      // is the embedded licence text. Without this denylist
       // the service worker would answer them with index.html once installed.
-      navigateFallbackDenylist: [/^\/api\//, /^\/report/, /^\/healthz$/],
+      navigateFallbackDenylist: [/^\/api\//, /^\/report/, /^\/healthz$/, /^\/third-party-notices$/],
     },
   }) as Plugin[]
 }
 
+// The licence notices the bundle owes its upstreams (#521), as JSON for
+// `cmd/uruni-notices` to fold into THIRD-PARTY-NOTICES. Only when
+// URUNI_WEB_NOTICES_JSON names an output file: an ordinary build writes nothing.
+//
+// Two halves, because the bundle is built twice. The app bundle is read by
+// rollup-plugin-license from the modules that actually ended up in it - not the
+// lockfile, which would list dev tooling and miss nothing it ships. The service
+// worker is built afterwards by vite-plugin-pwa's own workbox-build, which that
+// plugin cannot see; its runtime (dist/workbox-*.js) carries a
+// `workbox:<module>:<version>` banner per module, from which we read the
+// packages and their LICENSE files in node_modules. Names only, never versions,
+// so a routine dependency bump leaves THIRD-PARTY-NOTICES unchanged.
+// The package is CommonJS with a types-only `export default`; under nodenext the
+// import is the module object, so reach for `.default` when it is there.
+type LicenseFactory = (options: LicenseOptions) => Plugin
+const licenseExport = licenseModule as unknown as LicenseFactory | { default: LicenseFactory }
+const license: LicenseFactory = typeof licenseExport === 'function' ? licenseExport : licenseExport.default
+
+const noticesOut = process.env.URUNI_WEB_NOTICES_JSON
+const bundled = new Map<string, string>()
+
+function addPackage(name: string, text: string | null | undefined) {
+  if (name && text && !bundled.has(name)) bundled.set(name, text.trim())
+}
+
+function notices(): Plugin[] {
+  if (!noticesOut) return []
+  const dist = path.resolve(import.meta.dirname, 'dist')
+  return [
+    license({
+      thirdParty(dependencies: Dependency[]) {
+        for (const dep of dependencies) addPackage(dep.name ?? '', dep.licenseText)
+      },
+    }),
+    {
+      name: 'uruni:notices-json',
+      apply: 'build',
+      enforce: 'post',
+      closeBundle: {
+        order: 'post',
+        handler() {
+          for (const file of existsSync(dist) ? readdirSync(dist) : []) {
+            if (!/^workbox-[0-9a-f]+\.js$/.test(file)) continue
+            const source = readFileSync(path.join(dist, file), 'utf8')
+            for (const m of source.matchAll(/workbox:([a-z-]+):\d/g)) {
+              const pkg = `workbox-${m[1]}`
+              const licenseFile = path.resolve(import.meta.dirname, 'node_modules', pkg, 'LICENSE')
+              addPackage(pkg, existsSync(licenseFile) ? readFileSync(licenseFile, 'utf8') : null)
+            }
+          }
+          const sorted = [...bundled].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+          writeFileSync(
+            noticesOut!,
+            JSON.stringify(
+              sorted.map(([name, text]) => ({ name, license: text })),
+              null,
+              2,
+            ) + '\n',
+          )
+        },
+      },
+    },
+  ]
+}
+
 export default defineConfig({
-  plugins: [react(), tailwindcss(), ...pwa(), keepDistPlaceholder()],
+  plugins: [react(), tailwindcss(), ...pwa(), keepDistPlaceholder(), ...notices()],
   resolve: {
     alias: {
       '@': path.resolve(import.meta.dirname, './src'),
@@ -133,6 +200,7 @@ export default defineConfig({
       '/api': { target: goServer, changeOrigin: true },
       '/report': { target: goServer, changeOrigin: true },
       '/healthz': { target: goServer, changeOrigin: true },
+      '/third-party-notices': { target: goServer, changeOrigin: true },
     },
   },
   test: {

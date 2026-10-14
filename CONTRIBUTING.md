@@ -48,8 +48,19 @@ Production build embeds the SPA into the Go binary — `make build` does it in t
 
 - **Tests.** Backend → `make test`; frontend → `make web-test`. The **money and reconciliation logic is the trust core — it must be covered.**
 - **`make check`** mirrors CI step for step: Go lint + test, `go mod tidy -diff`, `sqlc diff` and govulncheck, then frontend lint/format/typecheck/test and the build. Green locally ≈ green in CI. govulncheck reads the vulnerability database, so it needs network access; the Go steps run on `go.mod`'s `toolchain` line, not whatever Go is on your `PATH`.
+- **Dependencies change the licences we ship.** `THIRD-PARTY-NOTICES` is generated from the Go modules linked into the binary and the packages in the built web bundle (names only, no versions), and `make check` fails when it is stale. If it does, run `make notices` and commit the result.
 - **Scrub the diff.** No real names, real figures, or absolute local paths — this is a public repo. Use neutral fixtures and toy amounts. The pre-commit guard blocks additions matching your local `.pii-patterns`; add your own real-world terms to it (the file is gitignored — the terms themselves are the PII). Don't reach for `--no-verify`.
 - **Copy is Bahasa Indonesia**, sentence case, warm (see `docs/Design-System.md`).
+
+## Forks that distribute a modified build
+
+Uruni is AGPL-3.0, and section 13 says: if you modify it and let people use it over a network, you must offer those users the source of *your* version. The sign-in screen's "Kode sumber" link is how Uruni does that, and it points at upstream by default. **A fork that distributes a modified build must point it at its own source**: set `URUNI_SOURCE_URL` to your repository when you build the image.
+
+```sh
+docker build --build-arg URUNI_SOURCE_URL=https://github.com/you/uruni -t uruni .
+```
+
+The value becomes `VITE_SOURCE_URL` for the web build (`web/src/lib/project.ts`). Keep `LICENSE`, `NOTICE` and `THIRD-PARTY-NOTICES` in the image (the Dockerfile already copies them), and run `make notices` if your fork changes a dependency.
 
 ## Reporting bugs / requesting features
 

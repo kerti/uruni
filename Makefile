@@ -3,7 +3,7 @@
         web-install web-dev web-build web-lint web-fmt web-fmt-check web-typecheck web-test \
         server-stop server-restart web-stop web-restart restart servers-status \
         e2e e2e-ci e2e-install e2e-reset e2e-server stack-up stack-up-local stack-down stack-logs stack-ps \
-        dev-user start-task check
+        dev-user start-task check notices
 
 # `make` with no target prints help.
 .DEFAULT_GOAL := help
@@ -103,6 +103,7 @@ help:
 	@echo "  lint                    golangci-lint"
 	@echo "  fmt                     gofmt -w the tree"
 	@echo "  tidy                    go mod tidy"
+	@echo "  notices                 regenerate THIRD-PARTY-NOTICES (web build + Go modules)"
 	@echo "  sqlc                    regenerate sqlc code"
 	@echo "  migrate-up              apply pending migrations"
 	@echo "  migrate-down            roll back the last migration"
@@ -145,6 +146,14 @@ help:
 	@echo "  start-task              pre-flight: clean tree? GitHub access? then sync main"
 	@echo "  check                   pre-push gate: mirrors ci.yml, pass/fail only (logs in /tmp)"
 	@echo "  dev-user EMAIL=... PASSWORD=...  create/reset a local login for smoke tests"
+
+# THIRD-PARTY-NOTICES (#521). The web half is read from the *built* bundle and
+# service worker, not the lockfile (Workbox ships although it is a dev
+# dependency), so the build writes it as JSON when URUNI_WEB_NOTICES_JSON is
+# set (web/vite.config.ts). `make check` points its own web build at
+# NOTICES_CHECK_JSON and diffs, so it builds once.
+NOTICES_JSON       := /tmp/uruni-notices-web.json
+NOTICES_CHECK_JSON := /tmp/uruni-check-web-notices.json
 
 # ---- first run -------------------------------------------------------------
 # One command from a fresh clone to a runnable, guarded dev loop. Idempotent -
@@ -483,8 +492,14 @@ check:
 	printf '%-14s' 'prettier';      (cd web && npm run -s fmt:check) >/tmp/uruni-check-web-fmt.log  2>&1 && echo 'ok' || { echo 'FAIL -> /tmp/uruni-check-web-fmt.log (make web-fmt)';  fail=1; }; \
 	printf '%-14s' 'tsc';           (cd web && npm run -s typecheck) >/tmp/uruni-check-web-tsc.log  2>&1 && echo 'ok' || { echo 'FAIL -> /tmp/uruni-check-web-tsc.log';  fail=1; }; \
 	printf '%-14s' 'vitest';        (cd web && npm run -s test)      >/tmp/uruni-check-web-test.log 2>&1 && echo 'ok' || { echo 'FAIL -> /tmp/uruni-check-web-test.log'; fail=1; }; \
-	printf '%-14s' 'web build';     (cd web && npm run -s build)     >/tmp/uruni-check-web-build.log 2>&1 && echo 'ok' || { echo 'FAIL -> /tmp/uruni-check-web-build.log'; fail=1; }; \
+	printf '%-14s' 'web build';     (cd web && URUNI_WEB_NOTICES_JSON=$(NOTICES_CHECK_JSON) npm run -s build) >/tmp/uruni-check-web-build.log 2>&1 && echo 'ok' || { echo 'FAIL -> /tmp/uruni-check-web-build.log'; fail=1; }; \
+	printf '%-14s' 'notices';       go run ./cmd/uruni-notices -web $(NOTICES_CHECK_JSON) -out /tmp/uruni-check-notices.txt >/tmp/uruni-check-notices.log 2>&1 && diff -u THIRD-PARTY-NOTICES /tmp/uruni-check-notices.txt >>/tmp/uruni-check-notices.log 2>&1 && echo 'ok' || { echo 'FAIL -> /tmp/uruni-check-notices.log (make notices)'; fail=1; }; \
 	if [ $$fail -eq 0 ]; then echo 'all green'; else echo 'FAILED - read the FAIL log(s) above'; exit 1; fi
+
+# Regenerate THIRD-PARTY-NOTICES at the repo root and commit the result.
+notices:
+	( cd web && URUNI_WEB_NOTICES_JSON=$(NOTICES_JSON) npm run -s build )
+	go run ./cmd/uruni-notices -web $(NOTICES_JSON) -out THIRD-PARTY-NOTICES
 
 # Create or reset a local login, for curl smoke tests against authenticated
 # endpoints. Auth is local email/password (ADR-007), so there is no token to

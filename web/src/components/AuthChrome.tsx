@@ -4,7 +4,7 @@ import AppVersion from '@/components/AppVersion'
 import Logo from '@/components/Logo'
 import { copy } from '@/copy/id'
 import { useBuild } from '@/lib/build'
-import { licenseURL, maintainerURL, sourceURL } from '@/lib/project'
+import { licenseURL, maintainerURL, sourceURL, thirdPartyNoticesPath } from '@/lib/project'
 
 const text = copy.auth.chrome
 
@@ -47,6 +47,11 @@ export default function AuthChrome({ children }: { children: ReactNode }) {
           <li>
             <a className={footerLink} href={licenseURL(build)} target="_blank" rel="noreferrer">
               {text.license}
+            </a>
+          </li>
+          <li>
+            <a className={footerLink} href={thirdPartyNoticesPath} target="_blank" rel="noreferrer">
+              {text.thirdParty}
             </a>
           </li>
           <li>

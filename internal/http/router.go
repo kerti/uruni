@@ -22,6 +22,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/kerti/uruni"
 	"github.com/kerti/uruni/internal/auth"
 	"github.com/kerti/uruni/internal/backup"
 	"github.com/kerti/uruni/internal/ledger"
@@ -94,6 +95,11 @@ func newWithClock(assets fs.FS, build Build, l *ledger.Ledger, q store.Querier, 
 
 	r.Get("/healthz", healthz(build, dbFileCheck, pingStore(q), lastDumpIn(backupDir), logger))
 
+	// The third-party licence notices the binary carries (#521), public like
+	// the signed-out footer that links to it. Registered here so the SPA
+	// fallback never answers it with the shell.
+	r.Get("/third-party-notices", thirdPartyNotices)
+
 	// Every /api route lives under this one mount, so session middleware
 	// (LoadAndSave, then sessionRequired for all but the four public routes, see
 	// api.go) has one seam to wrap (ADR-021).
@@ -141,6 +147,15 @@ func newWithClock(assets fs.FS, build Build, l *ledger.Ledger, q store.Querier, 
 	r.NotFound(spa(assets))
 
 	return r
+}
+
+// thirdPartyNotices serves THIRD-PARTY-NOTICES, embedded in the binary, as
+// plain text: ~160 kB of licence text that is meant to be read, not rendered.
+// It changes only with a release, so a short public cache is safe.
+func thirdPartyNotices(w http.ResponseWriter, _ *http.Request) {
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	w.Header().Set("Cache-Control", "public, max-age=3600")
+	_, _ = w.Write(uruni.ThirdPartyNotices())
 }
 
 // health is what /healthz returns. Operator-facing, so English like the CLI

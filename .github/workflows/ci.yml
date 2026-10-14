@@ -180,4 +180,21 @@ jobs:
           network_prefix: web/
           flags: frontend
           token: ${{ secrets.CODECOV_TOKEN }}
-      - run: npm run build
+      - name: Build
+        run: npm run build
+        env:
+          # Also writes the web half of THIRD-PARTY-NOTICES (web/vite.config.ts),
+          # so the check below needs no second build. Mirrors `make check`'s
+          # web build + notices steps (NOTICES_CHECK_JSON in the Makefile).
+          URUNI_WEB_NOTICES_JSON: ${{ runner.temp }}/web-notices.json
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+      # Fails when a dependency change altered the licences we redistribute and
+      # nobody ran `make notices` (#521). Runs from the repo root: the generator
+      # reads the Go module cache and the committed licence texts.
+      - name: THIRD-PARTY-NOTICES is up to date
+        working-directory: .
+        run: |
+          go run ./cmd/uruni-notices -web "${{ runner.temp }}/web-notices.json" -out "${{ runner.temp }}/THIRD-PARTY-NOTICES"
+          diff -u THIRD-PARTY-NOTICES "${{ runner.temp }}/THIRD-PARTY-NOTICES" || { echo "::error::THIRD-PARTY-NOTICES is stale - run 'make notices' and commit it"; exit 1; }

@@ -122,5 +122,8 @@ describe('Register frame (#364)', () => {
       'href',
       'https://github.com/kerti/uruni/blob/v0.6.0-alpha.10/LICENSE',
     )
+    const notices = screen.getByRole('link', { name: copy.auth.chrome.thirdParty })
+    expect(notices).toHaveAttribute('href', '/third-party-notices')
+    expect(notices).toHaveAttribute('target', '_blank')
   })
 })
