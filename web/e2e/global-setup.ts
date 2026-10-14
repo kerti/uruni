@@ -18,9 +18,11 @@ export default async function globalSetup() {
 
   await run('go', ['build', '-o', binaryPath(), './cmd/uruni'], process.env)
 
-  // seed-e2e and migrate read the config but never listen or write a dump, so
-  // only the database path means anything here.
-  const scratch = { backupDir: join(root, 'unused-backups'), uploadsDir: join(root, 'unused-uploads'), port: 8099 }
+  // seed-e2e and migrate never listen or write a dump, but migrate up records
+  // the booted version (and any pre-upgrade snapshot) in the backup directory,
+  // so that one has to exist.
+  const scratch = { backupDir: join(root, 'template-backups'), uploadsDir: join(root, 'unused-uploads'), port: 8099 }
+  mkdirSync(scratch.backupDir, { recursive: true })
   for (const seeded of [true, false]) {
     const db = templatePath(seeded)
     mkdirSync(dirname(db), { recursive: true })

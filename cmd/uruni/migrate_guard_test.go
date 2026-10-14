@@ -90,12 +90,12 @@ func TestMigrateDownRefusesTheBaseline(t *testing.T) {
 	if len(statuses) == 0 || !statuses[0].Applied {
 		t.Errorf("status after a refused down = %+v, want the baseline still applied", statuses)
 	}
-	entries, err := os.ReadDir(backupDir)
+	dumps, err := backup.ListDumps(backupDir)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(entries) != 0 {
-		t.Errorf("a refused down wrote %d file(s) to the backup dir, want none", len(entries))
+	if len(dumps) != 0 {
+		t.Errorf("a refused down wrote %d dump(s) to the backup dir, want none", len(dumps))
 	}
 }
 

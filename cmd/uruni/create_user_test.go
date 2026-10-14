@@ -14,6 +14,7 @@ import (
 func TestRunDispatchesCreateUser(t *testing.T) {
 	t.Setenv("URUNI_DB", filepath.Join(t.TempDir(), "uruni.db"))
 	t.Setenv("URUNI_BASE_URL", "https://uruni.test")
+	t.Setenv("URUNI_BACKUP_DIR", t.TempDir())
 
 	if err := run([]string{"create-user", "treasurer@example.org", "correct-horse-battery"}); err != nil {
 		t.Fatalf("run([create-user ...]) = %v, want nil", err)
@@ -26,6 +27,7 @@ func TestRunDispatchesCreateUser(t *testing.T) {
 func TestCreateUserCreatesThenResets(t *testing.T) {
 	t.Setenv("URUNI_DB", filepath.Join(t.TempDir(), "uruni.db"))
 	t.Setenv("URUNI_BASE_URL", "https://uruni.test")
+	t.Setenv("URUNI_BACKUP_DIR", t.TempDir())
 	ctx := context.Background()
 
 	var first, second bytes.Buffer
@@ -55,6 +57,7 @@ func TestCreateUserCreatesThenResets(t *testing.T) {
 func TestCreateUserNormalisesTheEmail(t *testing.T) {
 	t.Setenv("URUNI_DB", filepath.Join(t.TempDir(), "uruni.db"))
 	t.Setenv("URUNI_BASE_URL", "https://uruni.test")
+	t.Setenv("URUNI_BACKUP_DIR", t.TempDir())
 	ctx := context.Background()
 
 	var first, second bytes.Buffer
@@ -75,6 +78,7 @@ func TestCreateUserNormalisesTheEmail(t *testing.T) {
 func TestCreateUserRefusesASecondLogin(t *testing.T) {
 	t.Setenv("URUNI_DB", filepath.Join(t.TempDir(), "uruni.db"))
 	t.Setenv("URUNI_BASE_URL", "https://uruni.test")
+	t.Setenv("URUNI_BACKUP_DIR", t.TempDir())
 	ctx := context.Background()
 
 	var out bytes.Buffer
