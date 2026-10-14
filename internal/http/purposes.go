@@ -76,7 +76,7 @@ func (a *api) listPurposes(w http.ResponseWriter, r *http.Request) {
 		purposes, err = a.queries.ListPurposesByFund(r.Context(), fund.ID)
 	}
 	if err != nil {
-		mapSQLiteError(w, a.logger, err)
+		mapSQLiteError(w, a.log(r), err)
 		return
 	}
 
@@ -108,7 +108,7 @@ func (a *api) createPassThroughPurpose(w http.ResponseWriter, r *http.Request) {
 		CreatedAt: time.Now().Unix(),
 	})
 	if err != nil {
-		mapSQLiteError(w, a.logger, err)
+		mapSQLiteError(w, a.log(r), err)
 		return
 	}
 
@@ -143,7 +143,7 @@ func (a *api) resolveRenameablePurpose(w http.ResponseWriter, r *http.Request) (
 
 	purpose, err := a.queries.GetPurposeForFund(r.Context(), store.GetPurposeForFundParams{ID: id, FundID: fund.ID})
 	if err != nil {
-		mapSQLiteError(w, a.logger, err) // sql.ErrNoRows -> 404 not_found
+		mapSQLiteError(w, a.log(r), err) // sql.ErrNoRows -> 404 not_found
 		return store.Purpose{}, false
 	}
 	if purpose.Kind == purposeKindMain {
@@ -198,7 +198,7 @@ func (a *api) updatePurposeName(w http.ResponseWriter, r *http.Request) {
 			FundID: fund.ID, PurposeID: purpose.ID, Occasion: *req.Name,
 		})
 		if err != nil {
-			mapLedgerError(w, a.logger, err)
+			mapLedgerError(w, a.log(r), err)
 			return
 		}
 		writeJSON(w, http.StatusOK, toPurposeResponse(store.Purpose{
@@ -210,7 +210,7 @@ func (a *api) updatePurposeName(w http.ResponseWriter, r *http.Request) {
 
 	updated, err := a.queries.UpdatePurposeName(r.Context(), store.UpdatePurposeNameParams{ID: purpose.ID, Name: *req.Name})
 	if err != nil {
-		mapSQLiteError(w, a.logger, err)
+		mapSQLiteError(w, a.log(r), err)
 		return
 	}
 

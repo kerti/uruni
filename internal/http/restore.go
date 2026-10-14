@@ -35,6 +35,7 @@ import (
 	"errors"
 	"io"
 	"io/fs"
+	"log/slog"
 	"mime/multipart"
 	"net/http"
 	"os"
@@ -206,7 +207,7 @@ func (a *api) inspectStoredBackup(w http.ResponseWriter, r *http.Request) {
 			writeAPIError(w, http.StatusNotFound, "not_found", "The requested resource was not found.")
 			return
 		}
-		a.logger.Error("opening stored backup for restore", "name", name, "error", err)
+		a.log(r).Error("opening stored backup for restore", "name", name, "error", err)
 		writeAPIError(w, http.StatusInternalServerError, "internal_error", "Something went wrong.")
 		return
 	}
@@ -228,7 +229,7 @@ func (a *api) inspectStoredBackup(w http.ResponseWriter, r *http.Request) {
 func (a *api) stageAndInspect(w http.ResponseWriter, r *http.Request, src io.Reader) {
 	tmp, err := backup.CreateRestoreStagingTemp(a.backupDir)
 	if err != nil {
-		a.logger.Error("creating restore staging temp file", "error", err)
+		a.log(r).Error("creating restore staging temp file", "error", err)
 		writeAPIError(w, http.StatusInternalServerError, "internal_error", "Something went wrong.")
 		return
 	}
@@ -246,32 +247,33 @@ func (a *api) stageAndInspect(w http.ResponseWriter, r *http.Request, src io.Rea
 		return
 	}
 	if err := tmp.Close(); err != nil {
-		a.logger.Error("closing restore staging temp file", "error", err)
+		a.log(r).Error("closing restore staging temp file", "error", err)
 		writeAPIError(w, http.StatusInternalServerError, "internal_error", "Something went wrong.")
 		return
 	}
 
 	parsed, err := backup.ParseUpload(tmpPath)
 	if err != nil {
-		writeRestoreParseError(w, a.logger, err)
+		writeRestoreParseError(w, a.log(r), err)
 		return
 	}
 
 	preview, err := backup.BuildPreview(r.Context(), a.queries, parsed.Document)
 	if err != nil {
-		a.logger.Error("building restore preview", "error", err)
+		a.log(r).Error("building restore preview", "error", err)
 		writeAPIError(w, http.StatusInternalServerError, "internal_error", "Something went wrong.")
 		return
 	}
 
 	token, err := a.restoreStage.stage(parsed)
 	if err != nil {
-		a.logger.Error("staging restore upload", "error", err)
+		a.log(r).Error("staging restore upload", "error", err)
 		writeAPIError(w, http.StatusInternalServerError, "internal_error", "Something went wrong.")
 		return
 	}
 	staged = true
 
+	a.securityEvent(r, slog.LevelInfo, "restore_inspected")
 	writeJSON(w, http.StatusOK, restoreInspectResponse{Token: token, Preview: preview})
 }
 
@@ -348,7 +350,7 @@ func (a *api) confirmRestore(w http.ResponseWriter, r *http.Request) {
 
 	users, err := a.queries.ListUsers(r.Context())
 	if err != nil {
-		a.logger.Error("listing the live user for restore confirm", "error", err)
+		a.log(r).Error("listing the live user for restore confirm", "error", err)
 		writeAPIError(w, http.StatusInternalServerError, "internal_error", "Something went wrong.")
 		return
 	}
@@ -356,7 +358,7 @@ func (a *api) confirmRestore(w http.ResponseWriter, r *http.Request) {
 		// ADR-030 decision 2: exactly one account exists for the life of a v1
 		// instance. Zero here would mean confirming a restore before register/setup
 		// ran, which sessionRequired makes unreachable.
-		a.logger.Error("restore confirm: unexpected user count", "count", len(users))
+		a.log(r).Error("restore confirm: unexpected user count", "count", len(users))
 		writeAPIError(w, http.StatusInternalServerError, "internal_error", "Something went wrong.")
 		return
 	}
@@ -367,14 +369,17 @@ func (a *api) confirmRestore(w http.ResponseWriter, r *http.Request) {
 	ip := "restore-ip:" + a.clientNetwork(r)
 	reservation, ok := a.loginLimiter.reserve(ip)
 	if !ok {
+		a.securityEvent(r, slog.LevelWarn, "restore_confirm_refused", "reason", "locked_out")
 		writeAPIError(w, http.StatusTooManyRequests, "too_many_requests", "Too many attempts. Try again later.")
 		return
 	}
 	if _, err := a.auth.Authenticate(r.Context(), users[0].Email, req.Password); err != nil {
-		if !errors.Is(err, auth.ErrInvalidCredentials) {
+		if errors.Is(err, auth.ErrInvalidCredentials) {
+			a.securityEvent(r, slog.LevelWarn, "restore_confirm_refused", "reason", "wrong_password")
+		} else {
 			reservation.release()
 		}
-		mapAuthError(w, a.logger, err)
+		mapAuthError(w, a.log(r), err)
 		return
 	}
 	a.loginLimiter.reset(ip)
@@ -390,12 +395,13 @@ func (a *api) confirmRestore(w http.ResponseWriter, r *http.Request) {
 	// alike: nothing could still confirm with this token.
 	restoreErr := backup.Restore(r.Context(), a.sqlDB, a.uploadsDir, a.backupDir, parsed, time.Now())
 	if err := os.Remove(parsed.StagingPath); err != nil && !errors.Is(err, os.ErrNotExist) {
-		a.logger.Error("removing restore staging file after confirm", "error", err)
+		a.log(r).Error("removing restore staging file after confirm", "error", err)
 		// Not a reason to report the restore as failed, like the session-destroy
 		// failure below.
 	}
 	if restoreErr != nil {
-		writeRestoreCommitError(w, a.logger, restoreErr)
+		a.securityEvent(r, slog.LevelWarn, "restore_confirm_failed")
+		writeRestoreCommitError(w, a.log(r), restoreErr)
 		return
 	}
 
@@ -406,11 +412,12 @@ func (a *api) confirmRestore(w http.ResponseWriter, r *http.Request) {
 	// Without this call the session that confirmed the restore would resurrect
 	// itself, backwards for the route that logs everyone out.
 	if err := a.sessionManager.Destroy(r.Context()); err != nil {
-		a.logger.Error("destroying the confirming session after restore", "error", err)
+		a.log(r).Error("destroying the confirming session after restore", "error", err)
 		// The restore already committed; this is a logout-hygiene failure, not a
 		// reason to report the restore as failed.
 	}
 
+	a.securityEvent(r, slog.LevelWarn, "restore_confirmed")
 	writeJSON(w, http.StatusOK, struct{}{})
 }
 

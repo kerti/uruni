@@ -45,7 +45,7 @@ func (a *api) createDuesTier(w http.ResponseWriter, r *http.Request) {
 		CreatedAt: time.Now().Unix(),
 	})
 	if err != nil {
-		mapSQLiteError(w, a.logger, err)
+		mapSQLiteError(w, a.log(r), err)
 		return
 	}
 
@@ -71,7 +71,7 @@ func (a *api) updateDuesTier(w http.ResponseWriter, r *http.Request) {
 		Name: req.Name,
 	})
 	if err != nil {
-		mapSQLiteError(w, a.logger, err)
+		mapSQLiteError(w, a.log(r), err)
 		return
 	}
 
@@ -87,7 +87,7 @@ func (a *api) listDuesTiers(w http.ResponseWriter, r *http.Request) {
 
 	tiers, err := a.queries.ListDuesTiersByFund(r.Context(), fund.ID)
 	if err != nil {
-		mapSQLiteError(w, a.logger, err)
+		mapSQLiteError(w, a.log(r), err)
 		return
 	}
 
@@ -116,7 +116,7 @@ func (a *api) deleteDuesTier(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := a.ledger.DeleteDuesTier(r.Context(), tier.FundID, tier.ID); err != nil {
-		mapSQLiteDeleteError(w, a.logger, err)
+		mapSQLiteDeleteError(w, a.log(r), err)
 		return
 	}
 

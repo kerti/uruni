@@ -59,14 +59,14 @@ func (a *api) register(w http.ResponseWriter, r *http.Request) {
 		if !errors.Is(err, auth.ErrInvalidArgument) && !errors.Is(err, auth.ErrAlreadyRegistered) {
 			reservation.release()
 		}
-		mapAuthError(w, a.logger, err)
+		mapAuthError(w, a.log(r), err)
 		return
 	}
 
 	// RenewToken before writing anything into the session: a token issued before
 	// the identity was known must never carry that identity (session fixation).
 	if err := a.sessionManager.RenewToken(r.Context()); err != nil {
-		a.logger.Error("renewing session token after register", "error", err)
+		a.log(r).Error("renewing session token after register", "error", err)
 		writeAPIError(w, http.StatusInternalServerError, "internal_error", "Something went wrong.")
 		return
 	}

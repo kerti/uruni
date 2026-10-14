@@ -71,10 +71,10 @@ func extendDeadlines(logger *slog.Logger, d time.Duration) func(http.Handler) ht
 			rc := http.NewResponseController(w)
 			deadline := time.Now().Add(d)
 			if err := rc.SetReadDeadline(deadline); err != nil {
-				logger.Warn("could not extend the read deadline", "error", err)
+				loggerFrom(r.Context(), logger).Warn("could not extend the read deadline", "error", err)
 			}
 			if err := rc.SetWriteDeadline(deadline); err != nil {
-				logger.Warn("could not extend the write deadline", "error", err)
+				loggerFrom(r.Context(), logger).Warn("could not extend the write deadline", "error", err)
 			}
 			next.ServeHTTP(w, r)
 		})
@@ -82,7 +82,9 @@ func extendDeadlines(logger *slog.Logger, d time.Duration) func(http.Handler) ht
 }
 
 // requestLogger logs one line per request: method, path, status and duration,
-// what ADR-022 promised as M4 middleware.
+// what ADR-022 promised as M4 middleware. It logs through the request-scoped
+// logger (requestID), so the line carries the request_id its handlers' lines
+// carry. No client address here: that appears on security events only.
 //
 // r.URL.Path only, never RawQuery or the body: a query string or body is
 // where a member name, a note or an amount would end up, and ADR-022 forbids
@@ -102,7 +104,14 @@ func requestLogger(logger *slog.Logger) func(http.Handler) http.Handler {
 
 			next.ServeHTTP(ww, r)
 
-			logger.Info("request",
+			// /healthz is polled every 30s by the container healthcheck: at info it
+			// would be nearly every line in the log. A failing probe still shows,
+			// healthz logs its own error.
+			level := slog.LevelInfo
+			if r.URL.Path == "/healthz" {
+				level = slog.LevelDebug
+			}
+			loggerFrom(r.Context(), logger).Log(r.Context(), level, "request",
 				"method", r.Method,
 				"path", logPath(r.URL.Path),
 				"status", ww.Status(),
@@ -129,7 +138,7 @@ func untrustedForwardedFor(logger *slog.Logger) func(http.Handler) http.Handler 
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if len(r.Header.Values("X-Forwarded-For")) > 0 && privatePeer(remoteAddr(r)) {
 				once.Do(func() {
-					logger.Warn("a private-range peer sent X-Forwarded-For but URUNI_TRUSTED_PROXIES is empty: the header is ignored, so behind a reverse proxy every client shares the proxy's address for rate limiting; set URUNI_TRUSTED_PROXIES to the proxy's address")
+					loggerFrom(r.Context(), logger).Warn("a private-range peer sent X-Forwarded-For but URUNI_TRUSTED_PROXIES is empty: the header is ignored, so behind a reverse proxy every client shares the proxy's address for rate limiting; set URUNI_TRUSTED_PROXIES to the proxy's address")
 				})
 			}
 			next.ServeHTTP(w, r)

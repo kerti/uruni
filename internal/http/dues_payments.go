@@ -83,7 +83,7 @@ func (a *api) createDuesPayment(w http.ResponseWriter, r *http.Request) {
 		Periods:    periods,
 	})
 	if err != nil {
-		mapLedgerError(w, a.logger, err)
+		mapLedgerError(w, a.log(r), err)
 		return
 	}
 
@@ -137,7 +137,7 @@ func (a *api) reverseDuesPayment(w http.ResponseWriter, r *http.Request) {
 		Note:          req.Note,
 	})
 	if err != nil {
-		mapLedgerError(w, a.logger, err)
+		mapLedgerError(w, a.log(r), err)
 		return
 	}
 
@@ -280,7 +280,7 @@ func (a *api) listDuesPayments(w http.ResponseWriter, r *http.Request) {
 
 	rows, err := a.queries.ListDuesPaymentsPage(r.Context(), params)
 	if err != nil {
-		mapSQLiteError(w, a.logger, err)
+		mapSQLiteError(w, a.log(r), err)
 		return
 	}
 

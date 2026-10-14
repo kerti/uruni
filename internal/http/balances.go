@@ -66,20 +66,20 @@ func (a *api) getBalances(w http.ResponseWriter, r *http.Request) {
 
 	fundTotal, err := a.ledger.FundBalance(r.Context(), fund.ID)
 	if err != nil {
-		mapLedgerError(w, a.logger, err)
+		mapLedgerError(w, a.log(r), err)
 		return
 	}
 
 	accounts, err := a.queries.ListAccountsByFund(r.Context(), fund.ID)
 	if err != nil {
-		mapSQLiteError(w, a.logger, err)
+		mapSQLiteError(w, a.log(r), err)
 		return
 	}
 	accountResp := make([]accountBalanceResponse, 0, len(accounts))
 	for _, acc := range accounts {
 		balance, err := a.ledger.AccountBalance(r.Context(), fund.ID, acc.ID)
 		if err != nil {
-			mapLedgerError(w, a.logger, err)
+			mapLedgerError(w, a.log(r), err)
 			return
 		}
 		accountResp = append(accountResp, accountBalanceResponse{
@@ -89,14 +89,14 @@ func (a *api) getBalances(w http.ResponseWriter, r *http.Request) {
 
 	purposes, err := a.queries.ListPurposesByFund(r.Context(), fund.ID)
 	if err != nil {
-		mapSQLiteError(w, a.logger, err)
+		mapSQLiteError(w, a.log(r), err)
 		return
 	}
 	purposeResp := make([]purposeBalanceResponse, 0, len(purposes))
 	for _, p := range purposes {
 		balance, err := a.ledger.PurposeBalance(r.Context(), fund.ID, p.ID)
 		if err != nil {
-			mapLedgerError(w, a.logger, err)
+			mapLedgerError(w, a.log(r), err)
 			return
 		}
 		purposeResp = append(purposeResp, purposeBalanceResponse{
@@ -106,13 +106,13 @@ func (a *api) getBalances(w http.ResponseWriter, r *http.Request) {
 
 	owed, err := a.ledger.OwedToMembers(r.Context(), fund.ID)
 	if err != nil {
-		mapLedgerError(w, a.logger, err)
+		mapLedgerError(w, a.log(r), err)
 		return
 	}
 
 	monthIn, monthOut, err := a.ledger.MonthInOut(r.Context(), fund.ID, a.now())
 	if err != nil {
-		mapLedgerError(w, a.logger, err)
+		mapLedgerError(w, a.log(r), err)
 		return
 	}
 

@@ -1,6 +1,7 @@
 package http
 
 import (
+	"log/slog"
 	"net/http"
 
 	"github.com/kerti/uruni/internal/ledger"
@@ -89,7 +90,7 @@ func (a *api) setupFund(w http.ResponseWriter, r *http.Request) {
 		Accounts: accounts,
 	})
 	if err != nil {
-		mapLedgerError(w, a.logger, err)
+		mapLedgerError(w, a.log(r), err)
 		return
 	}
 
@@ -151,7 +152,7 @@ func (a *api) updateFund(w http.ResponseWriter, r *http.Request) {
 
 	updated, err := a.queries.UpdateFund(r.Context(), store.UpdateFundParams{ID: fund.ID, Name: *req.Name})
 	if err != nil {
-		mapSQLiteError(w, a.logger, err)
+		mapSQLiteError(w, a.log(r), err)
 		return
 	}
 
@@ -168,9 +169,10 @@ func (a *api) replaceReportSlug(w http.ResponseWriter, r *http.Request) {
 	}
 	updated, err := a.ledger.ReplaceReportSlug(r.Context(), fund.ID)
 	if err != nil {
-		mapLedgerError(w, a.logger, err)
+		mapLedgerError(w, a.log(r), err)
 		return
 	}
+	a.securityEvent(r, slog.LevelInfo, "report_link_rotated")
 	writeJSON(w, http.StatusOK, toFundResponse(updated, a.baseURL))
 }
 
@@ -182,7 +184,7 @@ func (a *api) replaceReportSlug(w http.ResponseWriter, r *http.Request) {
 func (a *api) resolveFund(w http.ResponseWriter, r *http.Request) (store.Fund, bool) {
 	funds, err := a.queries.ListFunds(r.Context())
 	if err != nil {
-		mapSQLiteError(w, a.logger, err)
+		mapSQLiteError(w, a.log(r), err)
 		return store.Fund{}, false
 	}
 	if len(funds) == 0 {

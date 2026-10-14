@@ -58,8 +58,8 @@ func newSessionManager(q store.Querier, baseURL string, logger *slog.Logger) *sc
 	// that: a store outage is now hit here, ahead of handler error mapping, for
 	// ordinary authenticated traffic. This keeps the failure inside the one JSON
 	// envelope api.go promises for /api.
-	sm.ErrorFunc = func(w http.ResponseWriter, _ *http.Request, err error) {
-		logger.Error("session store failure", "error", err)
+	sm.ErrorFunc = func(w http.ResponseWriter, r *http.Request, err error) {
+		loggerFrom(r.Context(), logger).Error("session store failure", "error", err)
 		writeAPIError(w, http.StatusInternalServerError, "internal_error", "Something went wrong.")
 	}
 
@@ -94,7 +94,7 @@ func (a *api) getSession(w http.ResponseWriter, r *http.Request) {
 
 	count, err := a.queries.CountUsers(r.Context())
 	if err != nil {
-		a.logger.Error("counting users for GET /api/session", "error", err)
+		a.log(r).Error("counting users for GET /api/session", "error", err)
 		writeAPIError(w, http.StatusInternalServerError, "internal_error", "Something went wrong.")
 		return
 	}

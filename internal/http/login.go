@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
+	"log/slog"
 	"net/http"
 	"net/netip"
 	"strings"
@@ -98,16 +99,19 @@ func (a *api) login(w http.ResponseWriter, r *http.Request) {
 		)
 	}
 	if !ok {
+		a.securityEvent(r, slog.LevelWarn, "login_locked_out")
 		writeAPIError(w, http.StatusTooManyRequests, "too_many_requests", "Too many login attempts. Try again later.")
 		return
 	}
 
 	user, err := a.auth.Authenticate(r.Context(), req.Email, req.Password)
 	if err != nil {
-		if !errors.Is(err, auth.ErrInvalidCredentials) {
+		if errors.Is(err, auth.ErrInvalidCredentials) {
+			a.securityEvent(r, slog.LevelInfo, "login_failed")
+		} else {
 			held.release()
 		}
-		mapAuthError(w, a.logger, err)
+		mapAuthError(w, a.log(r), err)
 		return
 	}
 
@@ -130,7 +134,7 @@ func (a *api) login(w http.ResponseWriter, r *http.Request) {
 		a.loginLimiter.reset(ip, pair)
 		if token, err := a.devices.issue(who); err != nil {
 			// Not fatal: she is logged in, only without the device cookie.
-			a.logger.Error("issuing a device cookie after login", "error", err)
+			a.log(r).Error("issuing a device cookie after login", "error", err)
 		} else {
 			http.SetCookie(w, a.deviceCookie(token))
 		}
@@ -140,12 +144,13 @@ func (a *api) login(w http.ResponseWriter, r *http.Request) {
 	// the identity was known must never carry that identity (session fixation);
 	// register.go has the identical two lines.
 	if err := a.sessionManager.RenewToken(r.Context()); err != nil {
-		a.logger.Error("renewing session token after login", "error", err)
+		a.log(r).Error("renewing session token after login", "error", err)
 		writeAPIError(w, http.StatusInternalServerError, "internal_error", "Something went wrong.")
 		return
 	}
 	a.sessionManager.Put(r.Context(), sessionKeyUserID, user.ID)
 
+	a.securityEvent(r, slog.LevelInfo, "login_succeeded")
 	writeJSON(w, http.StatusOK, toUserResponse(user))
 }
 

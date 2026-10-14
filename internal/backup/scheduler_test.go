@@ -182,7 +182,7 @@ func TestSafeTickLogsTheTypeNotTheValue(t *testing.T) {
 			var buf bytes.Buffer
 			safeTick(tt.panicWith, jsonLogger(&buf))
 
-			// The stack is exempt from the check: stackWithoutArgs leaves source
+			// The stack is exempt from the check: stack.WithoutArgs leaves source
 			// paths and function names, with each frame's argument words dropped.
 			var rec map[string]any
 			if err := json.Unmarshal(buf.Bytes(), &rec); err != nil {

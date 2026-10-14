@@ -4,12 +4,11 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"fmt"
 	"log/slog"
-	"runtime"
 	"runtime/debug"
-	"strings"
 	"time"
+
+	"github.com/kerti/uruni/internal/stack"
 )
 
 // schedulerInterval is how often RunScheduler asks "does today have its dump
@@ -110,28 +109,7 @@ func safeTick(tick func(), logger *slog.Logger) {
 		if v == nil {
 			return
 		}
-		what := fmt.Sprintf("%T", v)
-		var rerr runtime.Error
-		if err, ok := v.(error); ok && errors.As(err, &rerr) {
-			what = rerr.Error()
-		}
-		logger.Error("scheduled backup tick panicked", "panic", what, "stack", stackWithoutArgs(debug.Stack()))
+		logger.Error("scheduled backup tick panicked", "panic", stack.Describe(v), "stack", stack.WithoutArgs(debug.Stack()))
 	}()
 	tick()
-}
-
-// stackWithoutArgs keeps a goroutine stack's function names and file:line
-// positions and drops each frame's argument words. debug.Stack prints those as
-// raw hex, and an int64 argument is an amount (ADR-022).
-func stackWithoutArgs(stack []byte) string {
-	lines := strings.Split(string(stack), "\n")
-	for i, line := range lines {
-		if line == "" || strings.HasPrefix(line, "\t") || !strings.HasSuffix(line, ")") {
-			continue
-		}
-		if open := strings.LastIndex(line, "("); open > 0 {
-			lines[i] = line[:open] + "(...)"
-		}
-	}
-	return strings.Join(lines, "\n")
 }

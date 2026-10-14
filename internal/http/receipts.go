@@ -83,7 +83,7 @@ func (a *api) resolveTransactionForReceipt(w http.ResponseWriter, r *http.Reques
 
 	txn, err := a.queries.GetTransactionForFund(r.Context(), store.GetTransactionForFundParams{FundID: fund.ID, ID: id})
 	if err != nil {
-		mapSQLiteError(w, a.logger, err) // sql.ErrNoRows -> 404 not_found
+		mapSQLiteError(w, a.log(r), err) // sql.ErrNoRows -> 404 not_found
 		return store.Transaction{}, false
 	}
 	return txn, true
@@ -105,7 +105,7 @@ func (a *api) resolveReimbursementForReceipt(w http.ResponseWriter, r *http.Requ
 
 	claim, err := a.queries.GetReimbursement(r.Context(), store.GetReimbursementParams{ID: id, FundID: fund.ID})
 	if err != nil {
-		mapSQLiteError(w, a.logger, err)
+		mapSQLiteError(w, a.log(r), err)
 		return store.Reimbursement{}, false
 	}
 	return claim, true
@@ -129,7 +129,7 @@ func (a *api) resolveReceipt(w http.ResponseWriter, r *http.Request) (store.Rece
 
 	receipt, err := a.queries.GetReceiptForFund(r.Context(), store.GetReceiptForFundParams{ID: id, FundID: fund.ID})
 	if err != nil {
-		mapSQLiteError(w, a.logger, err)
+		mapSQLiteError(w, a.log(r), err)
 		return store.Receipt{}, false
 	}
 	return receipt, true
@@ -163,7 +163,7 @@ func (a *api) processAndStoreReceipt(w http.ResponseWriter, r *http.Request, fun
 			writeAPIError(w, http.StatusUnsupportedMediaType, "unsupported_media_type",
 				"That file is not a supported image type. Use JPEG, PNG or WebP.")
 		default:
-			a.logger.Error("processing receipt image", "error", err)
+			a.log(r).Error("processing receipt image", "error", err)
 			writeAPIError(w, http.StatusInternalServerError, "internal_error", "Something went wrong.")
 		}
 		return
@@ -171,7 +171,7 @@ func (a *api) processAndStoreReceipt(w http.ResponseWriter, r *http.Request, fun
 
 	filename, err := writeReceiptFile(a.uploadsDir, processed)
 	if err != nil {
-		a.logger.Error("writing receipt file", "error", err)
+		a.log(r).Error("writing receipt file", "error", err)
 		writeAPIError(w, http.StatusInternalServerError, "internal_error", "Something went wrong.")
 		return
 	}
@@ -188,7 +188,7 @@ func (a *api) processAndStoreReceipt(w http.ResponseWriter, r *http.Request, fun
 		// accepts from a delete (reachable through its id until then), this one never
 		// had an id, so best-effort cleanup here is the only chance to remove it.
 		_ = os.Remove(filepath.Join(a.uploadsDir, filename))
-		mapSQLiteError(w, a.logger, err)
+		mapSQLiteError(w, a.log(r), err)
 		return
 	}
 
@@ -355,14 +355,14 @@ func (a *api) getReceipt(w http.ResponseWriter, r *http.Request) {
 	// bare filename writeReceiptFile generated. Refusing anything else keeps that
 	// true if something upstream changes.
 	if receipt.Path != filepath.Base(receipt.Path) {
-		a.logger.Error("receipt path is not a bare filename", "id", receipt.ID)
+		a.log(r).Error("receipt path is not a bare filename", "id", receipt.ID)
 		writeAPIError(w, http.StatusInternalServerError, "internal_error", "Something went wrong.")
 		return
 	}
 
 	file, err := os.Open(filepath.Join(a.uploadsDir, receipt.Path))
 	if err != nil {
-		a.logger.Error("opening receipt file", "error", err)
+		a.log(r).Error("opening receipt file", "error", err)
 		writeAPIError(w, http.StatusInternalServerError, "internal_error", "Something went wrong.")
 		return
 	}
@@ -398,7 +398,7 @@ func (a *api) deleteReceipt(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := a.queries.DeleteReceipt(r.Context(), receipt.ID); err != nil {
-		mapSQLiteDeleteError(w, a.logger, err)
+		mapSQLiteDeleteError(w, a.log(r), err)
 		return
 	}
 

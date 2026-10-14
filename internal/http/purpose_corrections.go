@@ -57,7 +57,7 @@ func (a *api) postPurposeCorrection(w http.ResponseWriter, r *http.Request) {
 		PurposeID:     req.PurposeID,
 	})
 	if err != nil {
-		mapLedgerError(w, a.logger, err)
+		mapLedgerError(w, a.log(r), err)
 		return
 	}
 

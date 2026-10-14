@@ -71,7 +71,7 @@ func (a *api) createTransfer(w http.ResponseWriter, r *http.Request) {
 		Note:          req.Note,
 	})
 	if err != nil {
-		mapLedgerError(w, a.logger, err)
+		mapLedgerError(w, a.log(r), err)
 		return
 	}
 

@@ -186,13 +186,13 @@ func (a *api) takeReconciliation(w http.ResponseWriter, r *http.Request) {
 		Counts: counts,
 	})
 	if err != nil {
-		mapLedgerError(w, a.logger, err)
+		mapLedgerError(w, a.log(r), err)
 		return
 	}
 
 	detail, err := a.ledger.GetReconciliationDetail(r.Context(), fund.ID, rec.ID)
 	if err != nil {
-		mapLedgerError(w, a.logger, err)
+		mapLedgerError(w, a.log(r), err)
 		return
 	}
 
@@ -281,7 +281,7 @@ func (a *api) listReconciliations(w http.ResponseWriter, r *http.Request) {
 
 	rows, err := a.queries.ListReconciliationsPage(r.Context(), params)
 	if err != nil {
-		mapSQLiteError(w, a.logger, err)
+		mapSQLiteError(w, a.log(r), err)
 		return
 	}
 
@@ -325,7 +325,7 @@ func (a *api) latestReconciliation(w http.ResponseWriter, r *http.Request) {
 
 	rec, err := a.queries.LatestReconciliation(r.Context(), fund.ID)
 	if err != nil {
-		mapSQLiteError(w, a.logger, err)
+		mapSQLiteError(w, a.log(r), err)
 		return
 	}
 
@@ -347,7 +347,7 @@ func (a *api) getReconciliation(w http.ResponseWriter, r *http.Request) {
 
 	detail, err := a.ledger.GetReconciliationDetail(r.Context(), fund.ID, id)
 	if err != nil {
-		mapLedgerError(w, a.logger, err)
+		mapLedgerError(w, a.log(r), err)
 		return
 	}
 
@@ -375,7 +375,7 @@ func (a *api) listOpenReconciliationLines(w http.ResponseWriter, r *http.Request
 
 	lines, err := a.queries.ListOpenReconciliationLinesByFund(r.Context(), fund.ID)
 	if err != nil {
-		mapSQLiteError(w, a.logger, err)
+		mapSQLiteError(w, a.log(r), err)
 		return
 	}
 

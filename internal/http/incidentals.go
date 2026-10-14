@@ -139,7 +139,7 @@ func (a *api) openIncidental(w http.ResponseWriter, r *http.Request) {
 		RecipientMemberIDs: req.RecipientMemberIDs,
 	})
 	if err != nil {
-		mapLedgerError(w, a.logger, err)
+		mapLedgerError(w, a.log(r), err)
 		return
 	}
 
@@ -175,7 +175,7 @@ func (a *api) listIncidentals(w http.ResponseWriter, r *http.Request) {
 		incidentals, err = a.queries.ListIncidentalsByFund(r.Context(), fund.ID)
 	}
 	if err != nil {
-		mapSQLiteError(w, a.logger, err)
+		mapSQLiteError(w, a.log(r), err)
 		return
 	}
 
@@ -202,7 +202,7 @@ func (a *api) getIncidental(w http.ResponseWriter, r *http.Request) {
 
 	detail, err := a.ledger.GetIncidentalDetail(r.Context(), fund.ID, purposeID)
 	if err != nil {
-		mapLedgerError(w, a.logger, err)
+		mapLedgerError(w, a.log(r), err)
 		return
 	}
 
@@ -258,7 +258,7 @@ func (a *api) closeIncidental(w http.ResponseWriter, r *http.Request) {
 		Note:      req.Note,
 	})
 	if err != nil {
-		mapLedgerError(w, a.logger, err)
+		mapLedgerError(w, a.log(r), err)
 		return
 	}
 
@@ -266,7 +266,7 @@ func (a *api) closeIncidental(w http.ResponseWriter, r *http.Request) {
 		PurposeID: purposeID, FundID: fund.ID,
 	})
 	if err != nil {
-		mapSQLiteError(w, a.logger, err)
+		mapSQLiteError(w, a.log(r), err)
 		return
 	}
 
@@ -298,7 +298,7 @@ func (a *api) reopenIncidental(w http.ResponseWriter, r *http.Request) {
 
 	reopened, err := a.ledger.ReopenIncidental(r.Context(), fund.ID, purposeID)
 	if err != nil {
-		mapLedgerError(w, a.logger, err)
+		mapLedgerError(w, a.log(r), err)
 		return
 	}
 
@@ -358,7 +358,7 @@ func (a *api) updateIncidentalParticipation(w http.ResponseWriter, r *http.Reque
 		RecipientMemberIDs: req.RecipientMemberIDs,
 	})
 	if err != nil {
-		mapLedgerError(w, a.logger, err)
+		mapLedgerError(w, a.log(r), err)
 		return
 	}
 
@@ -420,7 +420,7 @@ func (a *api) getIncidentalParticipation(w http.ResponseWriter, r *http.Request)
 
 	participation, err := a.ledger.GetIncidentalParticipation(r.Context(), fund.ID, purposeID)
 	if err != nil {
-		mapLedgerError(w, a.logger, err)
+		mapLedgerError(w, a.log(r), err)
 		return
 	}
 
