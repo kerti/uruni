@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"context"
 	"database/sql"
 	"errors"
@@ -8,6 +9,9 @@ import (
 	"io"
 	"log/slog"
 	"os"
+	"strings"
+
+	"golang.org/x/term"
 
 	"github.com/kerti/uruni/internal/auth"
 	"github.com/kerti/uruni/internal/config"
@@ -17,7 +21,16 @@ import (
 
 // errCreateUserUsage is returned for a wrong argument count, showing the shape
 // ADR-019's table gives the command.
-var errCreateUserUsage = errors.New("usage: uruni create-user <email> <password>")
+var errCreateUserUsage = errors.New("usage: uruni create-user <email> [password] (with no password, it asks for one, or reads one line from stdin)")
+
+// errNoPassword is a prompt or a stdin line that held nothing.
+var errNoPassword = errors.New("no password given")
+
+// warnPasswordArgument is printed when the password comes in as an argument
+// (#522): it still works, for scripts and `make dev-user`, but it lands in the
+// shell's history and in `ps` for every user on the host.
+const warnPasswordArgument = "warning: a password passed as an argument is kept in your shell history and visible in ps; " +
+	"run create-user with only the email to be asked for it, or pipe it on stdin\n"
 
 // createUser is ADR-019's `create-user <email> <password>` (#287): create the
 // instance's login, or reset its password when the email already names it.
@@ -29,15 +42,30 @@ var errCreateUserUsage = errors.New("usage: uruni create-user <email> <password>
 // refuses an unconfigured instance the same way. It migrates first, so it also
 // works on a database no server has opened.
 //
-// The password is never printed or logged; the email is echoed only to the
-// operator's terminal, on stdout.
-func createUser(ctx context.Context, args []string, out io.Writer) error {
-	if len(args) != 2 {
+// The password is read from a prompt when stdin is a terminal, else from the
+// first line of stdin, and taken from the argument only with a warning (#522).
+// It is never printed or logged; the email is echoed only to the operator's
+// terminal, on stdout.
+func createUser(ctx context.Context, args []string, in io.Reader, out, errOut io.Writer) error {
+	if len(args) != 1 && len(args) != 2 {
 		return errCreateUserUsage
 	}
 	// Echoed in the form it is stored and matched in (#500), so the operator reads
 	// the address she must log in with, whatever case she typed.
-	email, password := auth.NormalizeEmail(args[0]), args[1]
+	email := auth.NormalizeEmail(args[0])
+
+	var password string
+	if len(args) == 2 {
+		password = args[1]
+		if _, err := io.WriteString(errOut, warnPasswordArgument); err != nil {
+			return err
+		}
+	} else {
+		var err error
+		if password, err = readPassword(in, errOut); err != nil {
+			return err
+		}
+	}
 
 	cfg, err := config.Load()
 	if err != nil {
@@ -113,4 +141,50 @@ func migrateForCreateUser(ctx context.Context, sqlDB *sql.DB, cfg config.Config,
 		return fmt.Errorf("migrating %s: %w", cfg.DBPath, err)
 	}
 	return nil
+}
+
+// readPassword asks twice with echo off when in is a terminal, so a typo
+// cannot set a password nobody knows. Otherwise it reads the first line of in,
+// dropping only the line ending: spaces are part of a password.
+func readPassword(in io.Reader, prompt io.Writer) (string, error) {
+	if f, ok := in.(*os.File); ok && term.IsTerminal(int(f.Fd())) {
+		first, err := promptHidden(f, prompt, "password: ")
+		if err != nil {
+			return "", err
+		}
+		if first == "" {
+			return "", errNoPassword
+		}
+		again, err := promptHidden(f, prompt, "again: ")
+		if err != nil {
+			return "", err
+		}
+		if again != first {
+			return "", errors.New("the passwords do not match")
+		}
+		return first, nil
+	}
+
+	line, err := bufio.NewReader(in).ReadString('\n')
+	if err != nil && !errors.Is(err, io.EOF) {
+		return "", fmt.Errorf("reading the password from stdin: %w", err)
+	}
+	line = strings.TrimRight(line, "\r\n")
+	if line == "" {
+		return "", errNoPassword
+	}
+	return line, nil
+}
+
+func promptHidden(f *os.File, prompt io.Writer, label string) (string, error) {
+	if _, err := io.WriteString(prompt, label); err != nil {
+		return "", err
+	}
+	b, err := term.ReadPassword(int(f.Fd()))
+	// The newline the operator typed was not echoed either.
+	_, _ = io.WriteString(prompt, "\n")
+	if err != nil {
+		return "", fmt.Errorf("reading the password: %w", err)
+	}
+	return string(b), nil
 }

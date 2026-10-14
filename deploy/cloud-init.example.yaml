@@ -1,0 +1,58 @@
+#cloud-config
+# Uruni host, prepared at first boot (SELF-HOSTING.md, "Before you start").
+# Written for Ubuntu 24.04 LTS, amd64 or arm64. Paste as the provider's
+# "user data" when creating the VPS, after changing the two values marked
+# CHANGE ME. It prepares the host and fetches the release's files; the first
+# run (create-user, then Caddy) stays a step you do by hand over SSH.
+
+package_update: true
+package_upgrade: true
+packages:
+  - docker.io
+  - docker-compose-v2
+  - ufw
+  - unattended-upgrades
+
+ssh_authorized_keys:
+  - ssh-ed25519 AAAA... you@laptop # CHANGE ME: your public key
+
+write_files:
+  # Every container's logs rotate, not only the two in Uruni's compose file.
+  - path: /etc/docker/daemon.json
+    content: |
+      {
+        "log-driver": "json-file",
+        "log-opts": { "max-size": "10m", "max-file": "3" }
+      }
+  # Security updates install themselves; the host reboots at 04:00 when one
+  # needs it. Docker restarts the stack (restart: unless-stopped).
+  - path: /etc/apt/apt.conf.d/52uruni-unattended
+    content: |
+      Unattended-Upgrade::Automatic-Reboot "true";
+      Unattended-Upgrade::Automatic-Reboot-Time "04:00";
+
+runcmd:
+  # 1 GB swap, so a short memory spike slows the host instead of killing the app.
+  - fallocate -l 1G /swapfile
+  - chmod 600 /swapfile
+  - mkswap /swapfile
+  - swapon /swapfile
+  - echo '/swapfile none swap sw 0 0' >> /etc/fstab
+  # SSH, then HTTP and HTTPS (443/udp is HTTP/3). Nothing else is opened; the
+  # app's own port 8080 is never published by the compose file.
+  - ufw default deny incoming
+  - ufw allow OpenSSH
+  - ufw allow 80/tcp
+  - ufw allow 443/tcp
+  - ufw allow 443/udp
+  - ufw --force enable
+  - systemctl restart docker
+  # The release's three files, from the tag you chose - never from main.
+  - |
+    TAG=vX.Y.Z # CHANGE ME: the release to run, e.g. from github.com/kerti/uruni/releases
+    mkdir -p /opt/uruni && cd /opt/uruni
+    for f in docker-compose.yml Caddyfile env.example; do
+      curl -fsSLO "https://github.com/kerti/uruni/releases/download/$TAG/$f"
+    done
+    cp -n env.example .env
+    chmod 600 .env

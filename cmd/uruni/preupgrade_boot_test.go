@@ -164,7 +164,7 @@ func TestCreateUserTakesTheSnapshotAndTheLaterServeDoesNotRepeatIt(t *testing.T)
 	dbPath, backupDir := legacyInstance(t)
 	setVersion(t, "v2")
 
-	err := createUser(context.Background(), []string{"treasurer@example.org", "correct-horse-battery"}, io.Discard)
+	err := createUser(context.Background(), []string{"treasurer@example.org", "correct-horse-battery"}, nil, io.Discard, io.Discard)
 	if !errors.Is(err, ErrSchemaMismatch) { // it migrated, then refused the legacy table
 		t.Fatalf("createUser() = %v, want ErrSchemaMismatch", err)
 	}
@@ -190,7 +190,7 @@ func TestMigrateUpAndCreateUserStopWithNoBackupDirectory(t *testing.T) {
 	if err := migrate(context.Background(), []string{"up"}, io.Discard); !errors.Is(err, config.ErrInvalidConfig) {
 		t.Errorf("migrate([up]) = %v, want ErrInvalidConfig", err)
 	}
-	if err := createUser(context.Background(), []string{"treasurer@example.org", "correct-horse-battery"}, io.Discard); !errors.Is(err, config.ErrInvalidConfig) {
+	if err := createUser(context.Background(), []string{"treasurer@example.org", "correct-horse-battery"}, nil, io.Discard, io.Discard); !errors.Is(err, config.ErrInvalidConfig) {
 		t.Errorf("createUser() = %v, want ErrInvalidConfig", err)
 	}
 	if tablesOf(t, dbPath)["fund"] {
@@ -210,7 +210,7 @@ func TestCreateUserWorksUnderALiveServerOnlyWhenNothingIsPending(t *testing.T) {
 	}
 	defer func() { _ = held.Release() }()
 
-	err = createUser(context.Background(), []string{"treasurer@example.org", "correct-horse-battery"}, io.Discard)
+	err = createUser(context.Background(), []string{"treasurer@example.org", "correct-horse-battery"}, nil, io.Discard, io.Discard)
 	if !errors.Is(err, ErrServerRunning) {
 		t.Fatalf("createUser() with a migration pending under a live server = %v, want ErrServerRunning", err)
 	}
@@ -224,7 +224,7 @@ func TestCreateUserWorksUnderALiveServerOnlyWhenNothingIsPending(t *testing.T) {
 		t.Fatal(err)
 	}
 	_ = sqlDB.Close()
-	if err := createUser(context.Background(), []string{"treasurer@example.org", "correct-horse-battery"}, io.Discard); err != nil {
+	if err := createUser(context.Background(), []string{"treasurer@example.org", "correct-horse-battery"}, nil, io.Discard, io.Discard); err != nil {
 		t.Fatalf("createUser() with nothing pending = %v, want nil", err)
 	}
 	if snaps, _ := backup.ListPreUpgradeSnapshots(backupDir); len(snaps) != 0 {
