@@ -23,6 +23,9 @@ var gatedRoutes = []struct {
 	method string
 	path   string
 }{
+	{http.MethodGet, "/api/user"},
+	{http.MethodPost, "/api/user/email"},
+	{http.MethodPost, "/api/user/password"},
 	{http.MethodPost, "/api/setup"},
 	{http.MethodGet, "/api/fund"},
 	{http.MethodPatch, "/api/fund"},

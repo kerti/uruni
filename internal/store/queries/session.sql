@@ -45,3 +45,10 @@ WHERE expires_at <= ?;
 -- an old cookie working would not be a reset.
 -- name: DeleteAllSessions :exec
 DELETE FROM session;
+
+-- Signs every OTHER device out, for a treasurer changing her own email or
+-- password (#386): the session making the change keeps working, the rest stop.
+-- The sibling of DeleteAllSessions, which a reset by the operator uses.
+-- name: DeleteOtherSessions :exec
+DELETE FROM session
+WHERE token <> ?;

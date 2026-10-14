@@ -112,6 +112,10 @@ type Querier interface {
 	// Leans on the composite FKs from "transaction" and reimbursement to refuse
 	// once a real row references the member.
 	DeleteMember(ctx context.Context, id int64) error
+	// Signs every OTHER device out, for a treasurer changing her own email or
+	// password (#386): the session making the change keeps working, the rest stop.
+	// The sibling of DeleteAllSessions, which a reset by the operator uses.
+	DeleteOtherSessions(ctx context.Context, token string) error
 	// Removes a wrong or duplicate photo; receipt rows are deletable, unlike a
 	// ledger row (ADR-011). Scoped by id alone: the caller fund-scoped the row via
 	// GetReceiptForFund. Only the database row goes - the file on disk stays, an
@@ -227,6 +231,10 @@ type Querier interface {
 	// findable. The COLLATE NOCASE column rides the schema epic (#523); user holds
 	// one row, so the OR costs no index.
 	GetUserByEmail(ctx context.Context, arg GetUserByEmailParams) (User, error)
+	// The account page's reads and writes (#386): the one login, addressed by the
+	// id its session carries. An email change stores the normalized form
+	// (auth.NormalizeEmail), as register does.
+	GetUserByID(ctx context.Context, id int64) (User, error)
 	// What the occasion itself collected and disbursed (PRD section 7.5's detail
 	// screen), as opposed to IncidentalTotals' net-including-rolls. The LEFT JOIN
 	// excludes only a reclass_purpose leg that is a roll (CloseIncidentalAndRoll,
@@ -678,9 +686,11 @@ type Querier interface {
 	// "clear it", the two nullable ones can, and only a set_* flag tells that from
 	// "leave alone".
 	UpdateReimbursement(ctx context.Context, arg UpdateReimbursementParams) (Reimbursement, error)
+	UpdateUserEmail(ctx context.Context, arg UpdateUserEmailParams) (User, error)
 	// create-user's reset half (#287): the email is the key, matched as
 	// GetUserByEmail does (#500); the hash is computed by internal/auth.
 	UpdateUserPassword(ctx context.Context, arg UpdateUserPasswordParams) (User, error)
+	UpdateUserPasswordByID(ctx context.Context, arg UpdateUserPasswordByIDParams) (User, error)
 	// What a session store commits through, as one atomic statement: a delete then
 	// insert pair cannot stand in. ADR-004's SetMaxOpenConns(1) serialises the two
 	// statements but does not join them, so two concurrent requests carrying the

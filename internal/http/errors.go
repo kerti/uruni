@@ -160,6 +160,12 @@ func mapAuthError(w http.ResponseWriter, logger *slog.Logger, err error) {
 		// the case, so the response bytes cannot become the oracle Authenticate
 		// forbids.
 		writeAPIError(w, http.StatusUnauthorized, "invalid_credentials", "Invalid email or password.")
+	case errors.Is(err, auth.ErrWrongCurrentPassword):
+		// The current password typed to change the login's email or password (#386).
+		// Its own code, not invalid_credentials: the caller holds a session, so
+		// there is no account-existence oracle to protect, and the SPA words it for
+		// that dialog. 403, not 401: she is signed in, only not allowed this.
+		writeAPIError(w, http.StatusForbidden, "wrong_current_password", "The current password is incorrect.")
 	case errors.Is(err, auth.ErrBusy):
 		// Every password-hashing slot stayed taken for the whole wait
 		// (auth/password_gate.go, #495). 503, not 429: the server is saturated, not

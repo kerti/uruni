@@ -31,11 +31,11 @@ import (
 func (a *Auth) SetLogin(ctx context.Context, email, password string) (created bool, err error) {
 	exact := strings.TrimSpace(email)
 	email = NormalizeEmail(email)
-	if email == "" || !strings.Contains(email, "@") {
-		return false, fmt.Errorf("%w: email must be a valid address", ErrInvalidArgument)
+	if err := checkEmail(email); err != nil {
+		return false, err
 	}
-	if len(password) < MinPasswordLength {
-		return false, fmt.Errorf("%w: password must be at least %d characters", ErrInvalidArgument, MinPasswordLength)
+	if err := checkPassword(password); err != nil {
+		return false, err
 	}
 
 	// Hashed outside the transaction, for the reason Register gives.

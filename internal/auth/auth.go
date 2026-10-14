@@ -36,6 +36,23 @@ func NormalizeEmail(email string) string {
 	return strings.ToLower(strings.TrimSpace(email))
 }
 
+// checkEmail and checkPassword are the one shape check an address and a new
+// password pass wherever they enter: Register, SetLogin and the account
+// changes (change_login.go). email is already normalised.
+func checkEmail(email string) error {
+	if email == "" || !strings.Contains(email, "@") {
+		return fmt.Errorf("%w: email must be a valid address", ErrInvalidArgument)
+	}
+	return nil
+}
+
+func checkPassword(password string) error {
+	if len(password) < MinPasswordLength {
+		return fmt.Errorf("%w: password must be at least %d characters", ErrInvalidArgument, MinPasswordLength)
+	}
+	return nil
+}
+
 // Auth is the bootstrap-account service.
 type Auth struct {
 	db *sql.DB
@@ -111,11 +128,11 @@ func (a *Auth) withTx(ctx context.Context, fn func(store.Querier) error) error {
 // unreachable.
 func (a *Auth) Register(ctx context.Context, email, password string) (store.User, error) {
 	email = NormalizeEmail(email)
-	if email == "" || !strings.Contains(email, "@") {
-		return store.User{}, fmt.Errorf("%w: email must be a valid address", ErrInvalidArgument)
+	if err := checkEmail(email); err != nil {
+		return store.User{}, err
 	}
-	if len(password) < MinPasswordLength {
-		return store.User{}, fmt.Errorf("%w: password must be at least %d characters", ErrInvalidArgument, MinPasswordLength)
+	if err := checkPassword(password); err != nil {
+		return store.User{}, err
 	}
 
 	// A cheap pre-check before any hashing (#495): on an instance already set up,

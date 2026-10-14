@@ -1,6 +1,11 @@
 package http
 
 import (
+	"crypto/sha256"
+	"crypto/subtle"
+	"database/sql"
+	"encoding/hex"
+	"errors"
 	"log/slog"
 	"net/http"
 	"net/url"
@@ -9,6 +14,7 @@ import (
 
 	"github.com/alexedwards/scs/v2"
 
+	"github.com/kerti/uruni/internal/auth"
 	"github.com/kerti/uruni/internal/store"
 )
 
@@ -30,6 +36,63 @@ const sessionLifetimeCap = 100 * 365 * 24 * time.Hour
 // sessionKeyUserID is the one thing a session carries. ADR-030 decision 2: "a
 // session proves the treasurer, not a fund", so there is no fund key.
 const sessionKeyUserID = "user_id"
+
+// sessionKeyCredential is the other thing a session carries: a fingerprint of
+// the login it was issued for (credentialFingerprint), checked on every gated
+// request by signedIn.
+const sessionKeyCredential = "credential"
+
+// credentialFingerprint is what binds a session to the login behind it: a hex
+// SHA-256 over the stored password hash and the normalised email. The hash
+// carries its own salt, so any password change, even to the same text, gives a
+// new one; so does an email change. It is stored in the session, never sent, and
+// never a secret worth more than the hash it was made from.
+//
+// Why a session needs it (#386): with IdleTimeout set, scs marks every loaded
+// session Modified, so every authenticated request ends by writing its session
+// back (sessionStore.CommitCtx, an UPSERT). A request that loaded its session
+// before a password change commits after it, and puts back the row the change
+// deleted: deleting rows revokes nothing a request in flight can undo. The
+// fingerprint does not depend on the row being gone. The resurrected session
+// carries the old one, so the next request finds the mismatch and destroys it.
+//
+// One caveat: a restore keeps the live login (ADR-012), so its fingerprints are
+// unchanged and a session resurrected across a restore's DeleteAllSessions is
+// not caught here.
+func credentialFingerprint(u store.User) string {
+	sum := sha256.Sum256([]byte(u.PasswordHash + "\x00" + auth.NormalizeEmail(u.Email)))
+	return hex.EncodeToString(sum[:])
+}
+
+// signedIn reports whether the request's session proves the treasurer: it names
+// a user who still exists, and carries that user's current credentialFingerprint.
+// A session that does not (a password or email changed since, an unknown user,
+// or one issued before the fingerprint existed, which has none) is destroyed, so
+// the row is gone and scs does not write it back at the end of the request. No
+// session at all is simply false. Strict on purpose: a session without a
+// fingerprint is never stamped on the fly, since a resurrected one would be
+// stamped with the credential it was meant to lose. An error is a store failure.
+func (a *api) signedIn(r *http.Request) (bool, error) {
+	ctx := r.Context()
+	if !a.sessionManager.Exists(ctx, sessionKeyUserID) {
+		return false, nil
+	}
+	user, err := a.queries.GetUserByID(ctx, a.sessionManager.GetInt64(ctx, sessionKeyUserID))
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return false, err
+	}
+	if err == nil {
+		have := []byte(a.sessionManager.GetString(ctx, sessionKeyCredential))
+		if subtle.ConstantTimeCompare(have, []byte(credentialFingerprint(user))) == 1 {
+			return true, nil
+		}
+	}
+	if err := a.sessionManager.Destroy(ctx); err != nil {
+		// Still refused: a session that fails the check proves nothing, destroyed or not.
+		a.log(r).Error("destroying a session whose credential no longer matches", "error", err)
+	}
+	return false, nil
+}
 
 // newSessionManager wires scs/v2's LoadAndSave over sessionStore
 // (session_store.go), our store over #113's session table, never scs's
@@ -90,7 +153,14 @@ type sessionStatusResponse struct {
 // costs nothing new, and gives the SPA the one thing it cannot derive from
 // authenticated alone.
 func (a *api) getSession(w http.ResponseWriter, r *http.Request) {
-	authenticated := a.sessionManager.Exists(r.Context(), sessionKeyUserID)
+	// signedIn, not Exists: a session revoked by a credential change must read as
+	// logged out here too, or the SPA boots into screens that all answer 401.
+	authenticated, err := a.signedIn(r)
+	if err != nil {
+		a.log(r).Error("checking the session for GET /api/session", "error", err)
+		writeAPIError(w, http.StatusInternalServerError, "internal_error", "Something went wrong.")
+		return
+	}
 
 	count, err := a.queries.CountUsers(r.Context())
 	if err != nil {

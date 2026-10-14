@@ -23,3 +23,11 @@ var ErrOtherAccountExists = errors.New("auth: this instance already has a login 
 // wait. It says nothing about the caller or password: nothing was computed, so
 // a caller counting attempts must not count this one.
 var ErrBusy = errors.New("auth: password hashing is busy")
+
+// ErrWrongCurrentPassword is returned by ChangeEmail and ChangePassword when
+// the current password they were given does not verify. Its own sentinel, not
+// ErrInvalidCredentials: that one is Authenticate's single no-oracle answer for
+// a login, and mapAuthError turns it into the login's 401. Here the caller
+// already holds a session, so naming the failure leaks nothing, and the SPA
+// has its own sentence for it.
+var ErrWrongCurrentPassword = errors.New("auth: wrong current password")

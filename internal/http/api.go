@@ -131,6 +131,12 @@ func (a *api) routes(r chi.Router) {
 	r.Group(func(r chi.Router) {
 		r.Use(a.sessionRequired)
 
+		// The treasurer's own login (#386): read it, change its email or its
+		// password. Both writes re-ask the current password; see user.go.
+		r.Get("/user", a.getUser)
+		r.Post("/user/email", a.changeEmail)
+		r.Post("/user/password", a.changePassword)
+
 		// POST /setup sits inside the gate (ADR-030's ruling). Registration closes
 		// after first use, but between registering and finishing setup a public
 		// /setup would let a stranger create and name a fund, and
