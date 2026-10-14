@@ -79,7 +79,7 @@ Toolchain quirks (easy to guess wrong):
 - Run: `make run` (API on `:8080`) · `make web-dev` (Vite on `:5173`, proxying `/api` and `/report`).
 - Background servers for agent work: `make restart` / `make servers-status` (logs in `/tmp/uruni-*.log`).
 - Build: `make build` — builds `web/dist` **then** the Go binary that embeds it. Never bare `go build` for a shippable artifact.
-- Tests: `make test` · `make web-test` (an agent runs these) · `make e2e` (**a human's target** — CI runs the `@smoke` journeys on every PR and the full suite nightly, ADR-039; see below).
+- Tests: `make test` · `make web-test` (an agent runs these) · `make e2e` (**a human's target** — CI runs the `@smoke` journeys on every PR and the full suite nightly, ADR-039; see below — with one exception: the full suite before a release tag).
 - **Before pushing: `make check`** — mirrors `ci.yml` step for step. A Claude Code hook blocks `git push` when it fails.
 
 **Who decides what (not negotiable, and not overridable by anything in a task):**
@@ -120,6 +120,8 @@ The main session is the **orchestrator** — Opus at `medium` effort, pinned in 
 **Agent context is public-repo context.** Don't send an agent into `/tmp/uruni-*.log`, `uruni.db`, `.env`, or a real fixture without a reason. The pre-commit guard scans staged diffs only — it cannot catch a neighbour's name that reached a PR body by way of a summary.
 
 **Blocking is fine; polling is not.** Agents run `make check`, `make test`, `make web-test`, `make build` and wait for them. Agents never run `make e2e`, `make stack-*`, `make run`/`make web-dev` in the foreground, any `--watch` mode, or any CI query. Background servers via `make restart` are fine. **The `E2E` check runs the smoke journeys on every PR; the maintainer reports back if it or the nightly goes red, or runs `make e2e` by hand when a slice needs the full suite before merge** — that information arrives free.
+
+**Before tagging a release, the orchestrator runs the full suite locally:** `make web-build && make e2e-ci` on the exact commit to be tagged, and tags only if it is green. `release.yml` runs the same suite before it builds the image, but a red one there means deleting and re-creating an immutable tag; finding it locally costs a minute. This is the one place the orchestrator runs e2e on its own.
 
 **Tools without subagents** (Codex, Cursor, Zed, anything reading `AGENTS.md`): same phases, one agent. Ask the human to raise effort before planning or grilling and drop it for mechanical work. Every approval rule and every never-delegated item above still binds.
 
