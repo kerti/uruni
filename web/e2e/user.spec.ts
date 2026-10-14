@@ -35,6 +35,13 @@ test.describe('user', () => {
     await expect(page.getByText(copy.auth.login.heading)).toBeVisible()
   }
 
+  // Signing back in after logOut lands where she signed out - Pengaturan - not
+  // on Beranda.
+  async function expectBackOnSettings(page: Page) {
+    await expect(page.getByRole('heading', { name: copy.settings.heading })).toBeVisible()
+    await expect(page.getByText(copy.auth.login.heading)).toBeHidden()
+  }
+
   async function openSettings(page: Page) {
     await page.getByRole('link', { name: copy.shell.nav.settings }).click()
     await expect(page.getByRole('heading', { name: copy.settings.heading })).toBeVisible()
@@ -91,7 +98,7 @@ test.describe('user', () => {
       await submitLogin(page, seedEmail, seedPassword)
       await expect(page.getByText(copy.auth.login.invalidCredentials)).toBeVisible()
       await submitLogin(page, seedEmail, newPassword)
-      await expect(page.getByText(copy.home.balanceHeading)).toBeVisible()
+      await expectBackOnSettings(page)
     } finally {
       await otherContext.close()
     }
@@ -134,7 +141,7 @@ test.describe('user', () => {
       await submitLogin(page, seedEmail, newPassword)
       await expect(page.getByText(copy.auth.login.invalidCredentials)).toBeVisible()
       await submitLogin(page, newEmail, newPassword)
-      await expect(page.getByText(copy.home.balanceHeading)).toBeVisible()
+      await expectBackOnSettings(page)
 
       // And a reload still shows the new address: it is read from the server.
       await openSettings(page)
