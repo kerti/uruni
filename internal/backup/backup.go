@@ -16,8 +16,10 @@ package backup
 //
 // TestGoldenFixtureMatchesExport (golden_test.go) makes it conscious: any
 // change to an exported table or the shape below fails that test until
-// testdata/golden.json is regenerated and FormatVersion bumped (ADR-012's
-// schema-change-breaks-a-test promise).
+// testdata/golden.json is regenerated (ADR-012's schema-change-breaks-a-test
+// promise). Whether FormatVersion bumps with it is the 0.x rule's question: a
+// bump is only allowed in the PR that ships the step converting the previous
+// format, so the last release's backup stays restorable.
 const FormatVersion int64 = 1
 
 // Document is uruni.json's root object: every table but session (ADR-012:

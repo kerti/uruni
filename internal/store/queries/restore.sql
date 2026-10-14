@@ -7,6 +7,13 @@
 -- schema's dependency order; the statements need not run in it (see
 -- internal/backup/restore.go).
 
+-- The one insert into "user" the restore path has. In-app restore never calls
+-- it (the live login stays, ADR-012); `uruni rebuild` runs it on the scratch
+-- database to carry the backup's single login over, id included.
+-- name: RestoreUser :exec
+INSERT INTO "user" (id, email, password_hash, created_at)
+VALUES (?, ?, ?, ?);
+
 -- name: DeleteAllFunds :exec
 DELETE FROM fund;
 

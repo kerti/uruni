@@ -37,18 +37,9 @@ func (q *Queries) DeleteAllDuesTiers(ctx context.Context) error {
 }
 
 const deleteAllFunds = `-- name: DeleteAllFunds :exec
-
 DELETE FROM fund
 `
 
-// Restore's queries (ADR-012). A normal Create* never takes id, but restore
-// must preserve every id verbatim (ADR-012 obligation 2), so each table gets an
-// insert naming id. The DeleteAll* queries clear a table in full before
-// re-inserting exactly what the file holds.
-//
-// Table order follows Document's field order (internal/backup/backup.go), the
-// schema's dependency order; the statements need not run in it (see
-// internal/backup/restore.go).
 func (q *Queries) DeleteAllFunds(ctx context.Context) error {
 	_, err := q.db.ExecContext(ctx, deleteAllFunds)
 	return err
@@ -527,6 +518,40 @@ func (q *Queries) RestoreTransfer(ctx context.Context, arg RestoreTransferParams
 		arg.Kind,
 		arg.CorrectsTransactionID,
 		arg.Reason,
+		arg.CreatedAt,
+	)
+	return err
+}
+
+const restoreUser = `-- name: RestoreUser :exec
+
+INSERT INTO "user" (id, email, password_hash, created_at)
+VALUES (?, ?, ?, ?)
+`
+
+type RestoreUserParams struct {
+	ID           int64
+	Email        string
+	PasswordHash string
+	CreatedAt    int64
+}
+
+// Restore's queries (ADR-012). A normal Create* never takes id, but restore
+// must preserve every id verbatim (ADR-012 obligation 2), so each table gets an
+// insert naming id. The DeleteAll* queries clear a table in full before
+// re-inserting exactly what the file holds.
+//
+// Table order follows Document's field order (internal/backup/backup.go), the
+// schema's dependency order; the statements need not run in it (see
+// internal/backup/restore.go).
+// The one insert into "user" the restore path has. In-app restore never calls
+// it (the live login stays, ADR-012); `uruni rebuild` runs it on the scratch
+// database to carry the backup's single login over, id included.
+func (q *Queries) RestoreUser(ctx context.Context, arg RestoreUserParams) error {
+	_, err := q.db.ExecContext(ctx, restoreUser,
+		arg.ID,
+		arg.Email,
+		arg.PasswordHash,
 		arg.CreatedAt,
 	)
 	return err

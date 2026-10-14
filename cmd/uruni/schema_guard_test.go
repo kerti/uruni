@@ -45,7 +45,7 @@ func TestServeRefusesToStartOnAStaleSchema(t *testing.T) {
 	if !errors.Is(err, ErrSchemaMismatch) {
 		t.Fatalf("serve() on a stale database = %v, want ErrSchemaMismatch", err)
 	}
-	for _, want := range []string{path, "table fund changed", "SELF-HOSTING.md"} {
+	for _, want := range []string{path, "table fund changed", "uruni rebuild --from", "SELF-HOSTING.md"} {
 		if !strings.Contains(err.Error(), want) {
 			t.Errorf("serve() error = %q, want it to mention %q", err, want)
 		}

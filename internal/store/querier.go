@@ -65,14 +65,6 @@ type Querier interface {
 	DeleteAllAccounts(ctx context.Context) error
 	DeleteAllDuesRates(ctx context.Context) error
 	DeleteAllDuesTiers(ctx context.Context) error
-	// Restore's queries (ADR-012). A normal Create* never takes id, but restore
-	// must preserve every id verbatim (ADR-012 obligation 2), so each table gets an
-	// insert naming id. The DeleteAll* queries clear a table in full before
-	// re-inserting exactly what the file holds.
-	//
-	// Table order follows Document's field order (internal/backup/backup.go), the
-	// schema's dependency order; the statements need not run in it (see
-	// internal/backup/restore.go).
 	DeleteAllFunds(ctx context.Context) error
 	DeleteAllIncidentalRecipients(ctx context.Context) error
 	DeleteAllIncidentals(ctx context.Context) error
@@ -635,6 +627,18 @@ type Querier interface {
 	// reverses_transaction_id must be inserted after the row it names.
 	RestoreTransaction(ctx context.Context, arg RestoreTransactionParams) error
 	RestoreTransfer(ctx context.Context, arg RestoreTransferParams) error
+	// Restore's queries (ADR-012). A normal Create* never takes id, but restore
+	// must preserve every id verbatim (ADR-012 obligation 2), so each table gets an
+	// insert naming id. The DeleteAll* queries clear a table in full before
+	// re-inserting exactly what the file holds.
+	//
+	// Table order follows Document's field order (internal/backup/backup.go), the
+	// schema's dependency order; the statements need not run in it (see
+	// internal/backup/restore.go).
+	// The one insert into "user" the restore path has. In-app restore never calls
+	// it (the live login stays, ADR-012); `uruni rebuild` runs it on the scratch
+	// database to carry the backup's single login over, id included.
+	RestoreUser(ctx context.Context, arg RestoreUserParams) error
 	// The sliding 30-day idle timeout (#113): every read that proves the session
 	// valid pushes expires_at forward by a caller-computed window. No absolute cap.
 	TouchSession(ctx context.Context, arg TouchSessionParams) (Session, error)

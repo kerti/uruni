@@ -1,5 +1,5 @@
 .PHONY: help setup hooks-install claude-install doctor \
-        run serve-bin build test test-cover lint fmt tidy sqlc migrate-up migrate-down migrate-status db-reset \
+        run serve-bin build test test-cover lint fmt tidy sqlc migrate-up migrate-down migrate-status db-reset upgrade-rehearsal \
         web-install web-dev web-build web-lint web-fmt web-fmt-check web-typecheck web-test \
         server-stop server-restart web-stop web-restart restart servers-status \
         e2e e2e-ci e2e-install e2e-reset e2e-server stack-up stack-up-local stack-down stack-logs stack-ps \
@@ -109,6 +109,7 @@ help:
 	@echo "  migrate-down            roll back the last migration"
 	@echo "  migrate-status          show migration status"
 	@echo "  db-reset                delete $(DEV_DB) and re-migrate - run this after a schema change"
+	@echo "  upgrade-rehearsal BACKUP=<zip> [DB=<old file>]  run this tree's rebuild on a copy, in a temp dir"
 	@echo ""
 	@echo "Web (Vite/React, in web/):"
 	@echo "  web-install             npm install"
@@ -433,6 +434,30 @@ e2e-reset:
 
 e2e-server: e2e-reset
 	@URUNI_DB="$(E2E_DB)" URUNI_BACKUP_DIR="$(E2E_BACKUP_DIR)" URUNI_UPLOADS_DIR="$(E2E_UPLOADS_DIR)" PORT=$(E2E_PORT) URUNI_LOG_LEVEL=$(E2E_LOG_LEVEL) go run ./cmd/uruni serve
+
+# Rehearse a schema-changing upgrade (#516) before doing it on the real
+# instance: this tree's `rebuild` runs against a *copy* of the old database
+# (DB, optional - leave it out to rehearse a first install) and a backup the
+# old version wrote (BACKUP), with URUNI_DB, URUNI_UPLOADS_DIR and
+# URUNI_BACKUP_DIR all in one fresh temp directory, so nothing real is read for
+# write or changed. The directory is left in place and printed: it holds the
+# rebuilt database and the kept old one.
+upgrade-rehearsal:
+	@if [ -z "$(BACKUP)" ]; then \
+	  echo "usage: make upgrade-rehearsal BACKUP=<backup.zip> [DB=<old uruni.db>]" >&2; exit 1; \
+	fi
+	@set -e; \
+	d=$$(mktemp -d); \
+	mkdir "$$d/data" "$$d/uploads" "$$d/backups"; \
+	if [ -n "$(DB)" ]; then \
+	  cp "$(DB)" "$$d/data/uruni.db"; \
+	  for s in -wal -shm; do if [ -f "$(DB)$$s" ]; then cp "$(DB)$$s" "$$d/data/uruni.db$$s"; fi; done; \
+	fi; \
+	echo "rehearsal directory: $$d"; \
+	URUNI_DB="$$d/data/uruni.db" URUNI_UPLOADS_DIR="$$d/uploads" URUNI_BACKUP_DIR="$$d/backups" \
+	URUNI_BASE_URL="$${URUNI_BASE_URL:-http://localhost:8080}" \
+	go run ./cmd/uruni rebuild --from "$(BACKUP)"; \
+	echo "it holds a copy of real data: rm -rf $$d when done"
 
 # ---- self-host stack -------------------------------------------------------
 # Exercises docker-compose.yml - the artifact operators run (ADR-010 calls it a

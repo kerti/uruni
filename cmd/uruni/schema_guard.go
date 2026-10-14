@@ -22,7 +22,7 @@ const schemaDiffNamesShown = 5
 // file was edited in place, so after migrating, `serve` (and any command that
 // writes) asks whether the live schema is this binary's, and refuses if not.
 // The error is the one line the operator sees: it names the database, which
-// objects differ (names only, never DDL) and where the upgrade notes are.
+// objects differ (names only, never DDL) and the way across, `uruni rebuild`.
 func verifySchema(ctx context.Context, sqlDB *sql.DB, dbPath string) error {
 	diff, err := db.CheckSchema(ctx, sqlDB)
 	if err != nil {
@@ -32,6 +32,7 @@ func verifySchema(ctx context.Context, sqlDB *sql.DB, dbPath string) error {
 		return nil
 	}
 	return fmt.Errorf("%w: %s differs (%s) - "+
-		"0.x upgrades can need a fresh database, so read the release notes and the Upgrading section of SELF-HOSTING.md (ADR-025) before restarting",
+		"this is a schema-changing 0.x upgrade (ADR-025): with the app stopped, run `uruni rebuild --from <backup.zip>` on a backup the previous version wrote; "+
+		"see the Upgrading section of SELF-HOSTING.md",
 		ErrSchemaMismatch, dbPath, diff.Summary(schemaDiffNamesShown))
 }

@@ -71,6 +71,30 @@ func Open(ctx context.Context, path string) (*sql.DB, error) {
 	return sqlDB, nil
 }
 
+// OpenReadOnly opens an existing database file for reading only: it never
+// creates the file, never sets a journal mode and so writes nothing, not even
+// a -wal or -shm. For a file that must not change while it is checked, such as
+// the finished rebuild file before it is swapped in (`uruni rebuild`); it is
+// meant for a self-contained rollback-journal file like VACUUM INTO writes,
+// not a live WAL database.
+func OpenReadOnly(ctx context.Context, path string) (*sql.DB, error) {
+	q := url.Values{}
+	q.Set("mode", "ro")
+	q.Add("_pragma", "busy_timeout(5000)")
+	q.Add("_pragma", "foreign_keys(ON)")
+	sqlDB, err := sql.Open(driverName, "file:"+path+"?"+q.Encode())
+	if err != nil {
+		return nil, fmt.Errorf("opening the database at %s read-only: %w", path, err)
+	}
+	sqlDB.SetMaxOpenConns(1)
+	sqlDB.SetMaxIdleConns(1)
+	if err := sqlDB.PingContext(ctx); err != nil {
+		_ = sqlDB.Close()
+		return nil, fmt.Errorf("opening the database at %s read-only: %w", path, err)
+	}
+	return sqlDB, nil
+}
+
 // dsn builds the connection string: the file in SQLite's URI form, with the
 // pragmas as query parameters the driver executes on each new connection.
 //

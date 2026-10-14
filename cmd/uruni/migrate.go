@@ -206,7 +206,7 @@ func printSchemaStatus(ctx context.Context, sqlDB *sql.DB, out io.Writer) error 
 		return err
 	}
 	_, err = fmt.Fprintf(out, "\nschema: DIFFERS from this version (%s)\n"+
-		"        see the release notes and the Upgrading section of SELF-HOSTING.md (ADR-025)\n",
+		"        run `uruni rebuild --from <backup.zip>` with the app stopped; see the Upgrading section of SELF-HOSTING.md (ADR-025)\n",
 		diff.Summary(schemaDiffNamesShown))
 	return err
 }
