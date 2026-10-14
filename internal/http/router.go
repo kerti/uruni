@@ -108,7 +108,7 @@ func newWithClock(assets fs.FS, build Build, l *ledger.Ledger, q store.Querier, 
 	devices := newDeviceTokens()
 	devices.now = now
 
-	r.Route("/api", (&api{
+	a := &api{
 		ledger:          l,
 		queries:         q,
 		sqlDB:           sqlDB,
@@ -124,12 +124,17 @@ func newWithClock(assets fs.FS, build Build, l *ledger.Ledger, q store.Querier, 
 		baseURL:         strings.TrimRight(baseURL, "/"),
 		now:             now,
 		restoreStage:    newRestoreStage(),
-	}).routes)
+	}
+	r.Route("/api", a.routes)
 
 	// The public report (ADR-035): outside /api, so no session manager wraps it
 	// (no cookie read or set); the slug alone names the fund (ADR-030).
-	r.Get("/report/{slug}", reportHandler(l, q, logger, now))
-	r.Get("/report/{slug}/pdf", reportPDFHandler(l, q, logger, now))
+	//
+	// Both routes are throttled per client network (#520, report_limit.go), ahead
+	// of the slug lookup, so a probe of unknown slugs is counted too.
+	reportLimits := newReportLimiter(a, now)
+	r.With(reportLimits.middleware("html", reportHTMLLimit, logger)).Get("/report/{slug}", reportHandler(l, q, logger, now))
+	r.With(reportLimits.middleware("pdf", reportPDFLimit, logger)).Get("/report/{slug}/pdf", reportPDFHandler(l, q, logger, now))
 
 	// The SPA fallback is chi's NotFound handler (ADR-021): registered routes
 	// win, so /api and /report still 404 instead of falling through to the shell.

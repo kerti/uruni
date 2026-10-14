@@ -27,6 +27,8 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	"codeberg.org/go-pdf/fpdf"
@@ -161,15 +163,32 @@ func (d *pdfDoc) SetTitle(title string, isUTF8 bool) {
 	d.Fpdf.SetTitle(pdfSafe(title), isUTF8)
 }
 
+// pdfFontFiles are the two embedded TrueType files, read once per process
+// (#520) and shared by every PDF. What this saves is the per-request copy out
+// of embed.FS, not the parsing: fpdf parses a font inside AddUTF8FontFromBytes
+// into an unexported, per-document structure it also mutates while drawing
+// (which glyphs were used), and offers no way to hand a parsed font to a second
+// document. So each PDF still parses its two (small, subset) fonts; the bytes it
+// parses are shared and only read, which is safe across concurrent requests.
+// pdfFontReads counts the reads, for the test that proves it is one.
+var pdfFontFiles = sync.OnceValues(func() (fonts [2][]byte, err error) {
+	pdfFontReads.Add(1)
+	for i, name := range []string{"fonts/NotoSans-Regular.ttf", "fonts/NotoSans-Bold.ttf"} {
+		if fonts[i], err = reportFonts.ReadFile(name); err != nil {
+			return [2][]byte{}, err
+		}
+	}
+	return fonts, nil
+})
+
+var pdfFontReads atomic.Int32
+
 func drawReportPDF(page reportPage) ([]byte, error) {
-	regular, err := reportFonts.ReadFile("fonts/NotoSans-Regular.ttf")
+	fonts, err := pdfFontFiles()
 	if err != nil {
 		return nil, err
 	}
-	bold, err := reportFonts.ReadFile("fonts/NotoSans-Bold.ttf")
-	if err != nil {
-		return nil, err
-	}
+	regular, bold := fonts[0], fonts[1]
 
 	d := &pdfDoc{Fpdf: fpdf.New("P", "mm", "A4", "")}
 	d.AddUTF8FontFromBytes(pdfFont, "", regular)

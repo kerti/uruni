@@ -274,6 +274,18 @@ func (res *reservation) release() {
 	res.counters = nil
 }
 
+// lockedFor is how long key stays closed from now, or 0 when it is not
+// locked. It is what a refused caller is told to wait (Retry-After).
+func (rl *rateLimiter) lockedFor(key string) time.Duration {
+	rl.mu.Lock()
+	defer rl.mu.Unlock()
+	now := rl.now()
+	if c, ok := rl.counters[key]; ok && c.locked(now) {
+		return c.lockedUntil.Sub(now)
+	}
+	return 0
+}
+
 // reset clears every key's counter entirely, strikes included. A successful
 // login wipes the slate for its keys (#115) rather than leaving a partial
 // count to expire: a treasurer who mistyped twice should not stay two
