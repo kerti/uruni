@@ -1,9 +1,29 @@
 # Uruni self-host stack: the app (single Go binary serving API + report + SPA)
 # behind Caddy for automatic HTTPS. Copy .env.example to .env and fill it in.
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: 10m
+    max-file: "3"
+
 services:
   app:
-    image: ${URUNI_IMAGE:-ghcr.io/kerti/uruni}:${URUNI_TAG:-latest}
+    image: ${URUNI_IMAGE:-ghcr.io/kerti/uruni}:${URUNI_TAG:?set URUNI_TAG in .env}
     restart: unless-stopped
+    logging: *logging
+    # The app has 10s to drain in-flight requests on SIGTERM; 30s is the
+    # ceiling before Docker sends SIGKILL.
+    stop_grace_period: 30s
+    # Everything the app writes (SQLite + its lock + WAL, receipts, backups)
+    # sits on the three volumes below. /tmp is a backstop for the stdlib's
+    # multipart parser, which may spill an upload to os.TempDir.
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
     environment:
       - URUNI_BASE_URL=${URUNI_BASE_URL}
       - URUNI_DB=/data/uruni.db
@@ -25,12 +45,14 @@ services:
   caddy:
     image: caddy:2.11.7@sha256:f2a1290d0463aad60660d4ec134943f183ee2a5f6c3eb7bf32dd984f2f020772
     restart: unless-stopped
+    logging: *logging
     depends_on:
       app:
         condition: service_healthy
     ports:
       - "80:80"
       - "443:443"
+      - "443:443/udp" # HTTP/3
     environment:
       - URUNI_BASE_URL=${URUNI_BASE_URL}
     volumes:
