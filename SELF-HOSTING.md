@@ -7,10 +7,10 @@ Uruni is one small Go binary (API + public report + the embedded web app) behind
 ## Quick start (Docker Compose)
 
 ```sh
-# 1. Get docker-compose.yml, Caddyfile and .env.example from the release you will run
+# 1. Get docker-compose.yml, Caddyfile and env.example from the release you will run
 #    (github.com/kerti/uruni/releases, the assets of your tag) - not from the main branch,
-#    which may be ahead of the image you pin.
-cp .env.example .env
+#    which may be ahead of the image you pin. (In a repo checkout the file is .env.example.)
+cp env.example .env
 
 # 2. Edit .env — set URUNI_BASE_URL to your public https origin, and pin URUNI_TAG to the
 #    release you want (the compose file runs ghcr.io/kerti/uruni:$URUNI_TAG
