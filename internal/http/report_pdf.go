@@ -60,6 +60,7 @@ func reportPDFHandler(l *ledger.Ledger, q store.Querier, logger *slog.Logger, no
 	return func(w http.ResponseWriter, r *http.Request) {
 		setReportHeaders(w)
 
+		logger := loggerFrom(r.Context(), logger)
 		fund, ok := reportFundOr404(w, r, q, logger)
 		if !ok {
 			return

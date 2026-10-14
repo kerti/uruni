@@ -21,7 +21,6 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/go-chi/chi/v5/middleware"
 
 	"github.com/kerti/uruni/internal/auth"
 	"github.com/kerti/uruni/internal/backup"
@@ -81,8 +80,13 @@ func New(assets fs.FS, build Build, l *ledger.Ledger, q store.Querier, sqlDB *sq
 // time.Now.
 func newWithClock(assets fs.FS, build Build, l *ledger.Ledger, q store.Querier, sqlDB *sql.DB, dbFileCheck func() error, logger *slog.Logger, au *auth.Auth, baseURL string, uploadsDir string, backupDir string, trustedProxies []netip.Prefix, now func() time.Time) http.Handler {
 	r := chi.NewRouter()
-	r.Use(middleware.Recoverer)
+	// Order matters: requestID first, so everything below logs with the ID;
+	// requestLogger next, so the request line still appears when a handler
+	// panics; recoverer inside it, so the panic is answered (as a 500) before
+	// the request line reads the status.
+	r.Use(requestID(logger))
 	r.Use(requestLogger(logger))
+	r.Use(recoverer(logger))
 	if len(trustedProxies) == 0 {
 		r.Use(untrustedForwardedFor(logger))
 	}
@@ -209,7 +213,7 @@ func healthz(build Build, dbFileCheck func() error, ping func(context.Context) e
 		body := health{Status: "ok", Version: build.Version, Commit: build.Commit}
 		code := http.StatusOK
 		fail := func(msg string, err error) {
-			logger.Error(msg, "error", err)
+			loggerFrom(r.Context(), logger).Error(msg, "error", err)
 			body.Status = "error"
 			body.Error = "database unavailable"
 			code = http.StatusServiceUnavailable

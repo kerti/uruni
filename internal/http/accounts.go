@@ -91,7 +91,7 @@ func (a *api) createAccount(w http.ResponseWriter, r *http.Request) {
 		OpeningBalance: req.OpeningBalance.toOpeningBalance(),
 	})
 	if err != nil {
-		mapLedgerError(w, a.logger, err)
+		mapLedgerError(w, a.log(r), err)
 		return
 	}
 
@@ -110,7 +110,7 @@ func (a *api) listAccounts(w http.ResponseWriter, r *http.Request) {
 
 	accounts, err := a.queries.ListAccountsByFund(r.Context(), fund.ID)
 	if err != nil {
-		mapSQLiteError(w, a.logger, err)
+		mapSQLiteError(w, a.log(r), err)
 		return
 	}
 
@@ -141,7 +141,7 @@ func (a *api) resolveAccount(w http.ResponseWriter, r *http.Request) (store.Acco
 		FundID: fund.ID,
 	})
 	if err != nil {
-		mapSQLiteError(w, a.logger, err) // sql.ErrNoRows -> 404 not_found
+		mapSQLiteError(w, a.log(r), err) // sql.ErrNoRows -> 404 not_found
 		return store.Account{}, false
 	}
 	return account, true
@@ -223,7 +223,7 @@ func (a *api) updateAccount(w http.ResponseWriter, r *http.Request) {
 
 	updated, err := a.ledger.UpdateAccount(r.Context(), account.FundID, params)
 	if err != nil {
-		mapLedgerError(w, a.logger, err)
+		mapLedgerError(w, a.log(r), err)
 		return
 	}
 
@@ -242,7 +242,7 @@ func (a *api) deleteAccount(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := a.queries.DeleteAccount(r.Context(), account.ID); err != nil {
-		mapSQLiteDeleteError(w, a.logger, err)
+		mapSQLiteDeleteError(w, a.log(r), err)
 		return
 	}
 

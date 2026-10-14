@@ -16,7 +16,7 @@ import "net/http"
 func (a *api) logout(w http.ResponseWriter, r *http.Request) {
 	if a.sessionManager.Exists(r.Context(), sessionKeyUserID) {
 		if err := a.sessionManager.Destroy(r.Context()); err != nil {
-			a.logger.Error("destroying session on logout", "error", err)
+			a.log(r).Error("destroying session on logout", "error", err)
 			writeAPIError(w, http.StatusInternalServerError, "internal_error", "Something went wrong.")
 			return
 		}

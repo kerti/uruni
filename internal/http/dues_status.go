@@ -49,7 +49,7 @@ func (a *api) getDuesStatus(w http.ResponseWriter, r *http.Request) {
 
 	statuses, err := a.ledger.DuesStatusForPeriod(r.Context(), fund.ID, r.URL.Query().Get("period"))
 	if err != nil {
-		mapLedgerError(w, a.logger, err)
+		mapLedgerError(w, a.log(r), err)
 		return
 	}
 
@@ -105,7 +105,7 @@ func (a *api) getOutstandingDues(w http.ResponseWriter, r *http.Request) {
 
 	periods, err := a.ledger.OutstandingDuesForMember(r.Context(), fund.ID, memberID, r.URL.Query().Get("through"), a.now())
 	if err != nil {
-		mapLedgerError(w, a.logger, err)
+		mapLedgerError(w, a.log(r), err)
 		return
 	}
 

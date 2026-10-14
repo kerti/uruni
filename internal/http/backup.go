@@ -12,6 +12,7 @@ package http
 import (
 	"errors"
 	"io/fs"
+	"log/slog"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -64,10 +65,10 @@ type backupListItem struct {
 // filter ("one thing to browse, not to edit", see Backup.tsx). Unscoped by
 // fund like /api/backup: a dump is a whole-instance file (ADR-012's restore
 // scope).
-func (a *api) listBackups(w http.ResponseWriter, _ *http.Request) {
+func (a *api) listBackups(w http.ResponseWriter, r *http.Request) {
 	dumps, err := backup.ListDumps(a.backupDir)
 	if err != nil {
-		a.logger.Error("listing backups", "error", err)
+		a.log(r).Error("listing backups", "error", err)
 		writeAPIError(w, http.StatusInternalServerError, "internal_error", "Something went wrong.")
 		return
 	}
@@ -78,7 +79,7 @@ func (a *api) listBackups(w http.ResponseWriter, _ *http.Request) {
 	for _, d := range dumps {
 		info, err := os.Stat(filepath.Join(a.backupDir, d.Name))
 		if err != nil {
-			a.logger.Error("statting backup", "name", d.Name, "error", err)
+			a.log(r).Error("statting backup", "name", d.Name, "error", err)
 			writeAPIError(w, http.StatusInternalServerError, "internal_error", "Something went wrong.")
 			return
 		}
@@ -119,11 +120,12 @@ func (a *api) downloadStoredBackup(w http.ResponseWriter, r *http.Request) {
 			writeAPIError(w, http.StatusNotFound, "not_found", "The requested resource was not found.")
 			return
 		}
-		a.logger.Error("reading stored backup", "name", name, "error", err)
+		a.log(r).Error("reading stored backup", "name", name, "error", err)
 		writeAPIError(w, http.StatusInternalServerError, "internal_error", "Something went wrong.")
 		return
 	}
 
+	a.securityEvent(r, slog.LevelInfo, "backup_downloaded", "kind", "stored", "name", name)
 	w.Header().Set("Content-Type", "application/zip")
 	w.Header().Set("Content-Disposition", `attachment; filename="`+name+`"`)
 	w.WriteHeader(http.StatusOK)
@@ -149,7 +151,7 @@ func (a *api) downloadStoredBackup(w http.ResponseWriter, r *http.Request) {
 func (a *api) downloadBackup(w http.ResponseWriter, r *http.Request) {
 	zipBytes, missing, err := backup.Export(r.Context(), a.sqlDB, a.uploadsDir)
 	if err != nil {
-		a.logger.Error("building backup zip", "error", err)
+		a.log(r).Error("building backup zip", "error", err)
 		writeAPIError(w, http.StatusInternalServerError, "internal_error", "Something went wrong.")
 		return
 	}
@@ -157,9 +159,10 @@ func (a *api) downloadBackup(w http.ResponseWriter, r *http.Request) {
 	if len(missing) > 0 {
 		// Skipped, not failed (backup.Export): the operator learns a photo is gone
 		// from the uploads volume; the treasurer still gets her backup.
-		a.logger.Warn("backup: receipt images missing from uploads dir", "count", len(missing), "paths", missing)
+		a.log(r).Warn("backup: receipt images missing from uploads dir", "count", len(missing), "paths", missing)
 	}
 
+	a.securityEvent(r, slog.LevelInfo, "backup_downloaded", "kind", "fresh")
 	w.Header().Set("Content-Type", "application/zip")
 	w.Header().Set("Content-Disposition", `attachment; filename="`+backup.ZipFilename(a.now().In(tz.Jakarta))+`"`)
 	w.WriteHeader(http.StatusOK)

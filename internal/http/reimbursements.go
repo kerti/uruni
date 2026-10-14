@@ -126,7 +126,7 @@ func (a *api) createReimbursement(w http.ResponseWriter, r *http.Request) {
 		Note:       req.Note,
 	})
 	if err != nil {
-		mapLedgerError(w, a.logger, err)
+		mapLedgerError(w, a.log(r), err)
 		return
 	}
 
@@ -232,7 +232,7 @@ func (a *api) listReimbursements(w http.ResponseWriter, r *http.Request) {
 
 	rows, err := a.queries.ListReimbursementsPage(r.Context(), params)
 	if err != nil {
-		mapSQLiteError(w, a.logger, err)
+		mapSQLiteError(w, a.log(r), err)
 		return
 	}
 
@@ -252,7 +252,7 @@ func (a *api) listReimbursements(w http.ResponseWriter, r *http.Request) {
 	}
 	receiptIDs, err := a.receiptIDsForReimbursements(r.Context(), fund.ID, ids)
 	if err != nil {
-		mapSQLiteError(w, a.logger, err)
+		mapSQLiteError(w, a.log(r), err)
 		return
 	}
 
@@ -283,13 +283,13 @@ func (a *api) getReimbursement(w http.ResponseWriter, r *http.Request) {
 
 	row, err := a.queries.GetReimbursementWithSettled(r.Context(), store.GetReimbursementWithSettledParams{ID: id, FundID: fund.ID})
 	if err != nil {
-		mapSQLiteError(w, a.logger, err) // sql.ErrNoRows -> 404 not_found
+		mapSQLiteError(w, a.log(r), err) // sql.ErrNoRows -> 404 not_found
 		return
 	}
 
 	receiptIDs, err := a.receiptIDsForReimbursements(r.Context(), fund.ID, []int64{row.ID})
 	if err != nil {
-		mapSQLiteError(w, a.logger, err)
+		mapSQLiteError(w, a.log(r), err)
 		return
 	}
 
@@ -340,7 +340,7 @@ func (a *api) settleReimbursement(w http.ResponseWriter, r *http.Request) {
 		OccurredOn:      req.OccurredOn,
 	})
 	if err != nil {
-		mapLedgerError(w, a.logger, err)
+		mapLedgerError(w, a.log(r), err)
 		return
 	}
 
@@ -455,7 +455,7 @@ func (a *api) updateReimbursement(w http.ResponseWriter, r *http.Request) {
 
 	updated, err := a.ledger.UpdateReimbursement(r.Context(), params)
 	if err != nil {
-		mapLedgerError(w, a.logger, err)
+		mapLedgerError(w, a.log(r), err)
 		return
 	}
 
@@ -465,7 +465,7 @@ func (a *api) updateReimbursement(w http.ResponseWriter, r *http.Request) {
 	// (#154).
 	receiptIDs, err := a.receiptIDsForReimbursements(r.Context(), fund.ID, []int64{updated.ID})
 	if err != nil {
-		mapSQLiteError(w, a.logger, err)
+		mapSQLiteError(w, a.log(r), err)
 		return
 	}
 	resp.ReceiptIDs = orEmptyReceiptIDs(receiptIDs[updated.ID])
@@ -492,7 +492,7 @@ func (a *api) deleteReimbursement(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := a.ledger.DeleteReimbursement(r.Context(), fund.ID, id); err != nil {
-		mapLedgerDeleteError(w, a.logger, err)
+		mapLedgerDeleteError(w, a.log(r), err)
 		return
 	}
 

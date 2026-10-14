@@ -114,7 +114,7 @@ func (a *api) createMember(w http.ResponseWriter, r *http.Request) {
 		CreatedAt:  time.Now().Unix(),
 	})
 	if err != nil {
-		mapSQLiteError(w, a.logger, err)
+		mapSQLiteError(w, a.log(r), err)
 		return
 	}
 
@@ -207,7 +207,7 @@ func (a *api) listMembers(w http.ResponseWriter, r *http.Request) {
 
 	rows, err := a.queries.ListMembersPage(r.Context(), params)
 	if err != nil {
-		mapSQLiteError(w, a.logger, err)
+		mapSQLiteError(w, a.log(r), err)
 		return
 	}
 
@@ -223,7 +223,7 @@ func (a *api) listMembers(w http.ResponseWriter, r *http.Request) {
 	for _, m := range rows {
 		arrears, err := a.ledger.ArrearsMonthsForMember(r.Context(), fund.ID, m.ID, params.CurrentPeriod)
 		if err != nil {
-			mapLedgerError(w, a.logger, err)
+			mapLedgerError(w, a.log(r), err)
 			return
 		}
 		resp = append(resp, toMemberListResponse(m, arrears))
@@ -255,7 +255,7 @@ func (a *api) resolveMember(w http.ResponseWriter, r *http.Request) (store.Membe
 		FundID: fund.ID,
 	})
 	if err != nil {
-		mapSQLiteError(w, a.logger, err) // sql.ErrNoRows -> 404 not_found
+		mapSQLiteError(w, a.log(r), err) // sql.ErrNoRows -> 404 not_found
 		return store.Member{}, false
 	}
 	return member, true
@@ -349,7 +349,7 @@ func (a *api) updateMember(w http.ResponseWriter, r *http.Request) {
 
 	updated, err := a.queries.UpdateMember(r.Context(), params)
 	if err != nil {
-		mapSQLiteError(w, a.logger, err)
+		mapSQLiteError(w, a.log(r), err)
 		return
 	}
 
@@ -367,7 +367,7 @@ func (a *api) deleteMember(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := a.queries.DeleteMember(r.Context(), member.ID); err != nil {
-		mapSQLiteDeleteError(w, a.logger, err)
+		mapSQLiteDeleteError(w, a.log(r), err)
 		return
 	}
 

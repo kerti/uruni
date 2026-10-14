@@ -69,7 +69,7 @@ func (a *api) resolveDuesTier(w http.ResponseWriter, r *http.Request) (store.Due
 		FundID: fund.ID,
 	})
 	if err != nil {
-		mapSQLiteError(w, a.logger, err) // sql.ErrNoRows -> 404 not_found
+		mapSQLiteError(w, a.log(r), err) // sql.ErrNoRows -> 404 not_found
 		return store.DuesTier{}, false
 	}
 	return tier, true
@@ -94,7 +94,7 @@ func (a *api) createDuesRate(w http.ResponseWriter, r *http.Request) {
 	// Rates write through queries, not a Ledger method, so the ceiling (#499) is
 	// applied here with the ledger paths' check.
 	if err := ledger.CheckAmountCeiling("amount", money.Amount(req.Amount)); err != nil {
-		mapLedgerError(w, a.logger, err)
+		mapLedgerError(w, a.log(r), err)
 		return
 	}
 
@@ -105,7 +105,7 @@ func (a *api) createDuesRate(w http.ResponseWriter, r *http.Request) {
 		CreatedAt:     time.Now().Unix(),
 	})
 	if err != nil {
-		mapSQLiteError(w, a.logger, err)
+		mapSQLiteError(w, a.log(r), err)
 		return
 	}
 
@@ -133,7 +133,7 @@ func (a *api) resolveDuesRate(w http.ResponseWriter, r *http.Request) (store.Due
 		FundID: fund.ID,
 	})
 	if err != nil {
-		mapSQLiteError(w, a.logger, err) // sql.ErrNoRows -> 404 not_found
+		mapSQLiteError(w, a.log(r), err) // sql.ErrNoRows -> 404 not_found
 		return store.DuesRate{}, false
 	}
 	return rate, true
@@ -169,7 +169,7 @@ func (a *api) updateDuesRate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := ledger.CheckAmountCeiling("amount", money.Amount(*req.Amount)); err != nil {
-		mapLedgerError(w, a.logger, err)
+		mapLedgerError(w, a.log(r), err)
 		return
 	}
 
@@ -178,7 +178,7 @@ func (a *api) updateDuesRate(w http.ResponseWriter, r *http.Request) {
 		Amount: *req.Amount,
 	})
 	if err != nil {
-		mapSQLiteError(w, a.logger, err)
+		mapSQLiteError(w, a.log(r), err)
 		return
 	}
 
@@ -196,7 +196,7 @@ func (a *api) deleteDuesRate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := a.queries.DeleteDuesRate(r.Context(), rate.ID); err != nil {
-		mapSQLiteDeleteError(w, a.logger, err)
+		mapSQLiteDeleteError(w, a.log(r), err)
 		return
 	}
 
@@ -214,7 +214,7 @@ func (a *api) listDuesRates(w http.ResponseWriter, r *http.Request) {
 
 	rates, err := a.queries.ListDuesRatesByTier(r.Context(), tier.ID)
 	if err != nil {
-		mapSQLiteError(w, a.logger, err)
+		mapSQLiteError(w, a.log(r), err)
 		return
 	}
 

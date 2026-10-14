@@ -214,7 +214,7 @@ func (a *api) createTransaction(w http.ResponseWriter, r *http.Request) {
 		MemberID:     req.MemberID,
 	})
 	if err != nil {
-		mapLedgerError(w, a.logger, err)
+		mapLedgerError(w, a.log(r), err)
 		return
 	}
 
@@ -389,7 +389,7 @@ func (a *api) listTransactions(w http.ResponseWriter, r *http.Request) {
 
 	rows, err := a.queries.ListTransactionsPage(r.Context(), params)
 	if err != nil {
-		mapSQLiteError(w, a.logger, err)
+		mapSQLiteError(w, a.log(r), err)
 		return
 	}
 
@@ -409,7 +409,7 @@ func (a *api) listTransactions(w http.ResponseWriter, r *http.Request) {
 	}
 	receiptIDs, err := a.receiptIDsForTransactions(r.Context(), fund.ID, ids)
 	if err != nil {
-		mapSQLiteError(w, a.logger, err)
+		mapSQLiteError(w, a.log(r), err)
 		return
 	}
 
