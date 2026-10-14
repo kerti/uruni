@@ -1,11 +1,14 @@
 package http
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"errors"
 	"net/http"
+	"reflect"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/alexedwards/scs/v2"
@@ -20,15 +23,36 @@ import (
 // reviewed-SQL discipline (every query lives in internal/store/queries).
 type sessionStore struct {
 	q store.Querier
+	// codec decodes a loaded row and its commit to tell a pure idle refresh
+	// from a real change (#529). It is the session manager's own codec.
+	codec scs.Codec
+	// now is the store's clock, a field so tests can move it.
+	now func() time.Time
+	// lastSweep is when DeleteExpiredSessions last ran, in Unix seconds.
+	lastSweep atomic.Int64
 }
 
-// sessionLoads is the set of tokens one request found in the store. A commit
-// updates those and inserts the rest (CommitCtx). It is per request and
-// mutex-guarded, since a handler may touch the session from more than one
-// goroutine.
+// sessionRefreshInterval bounds how often an unchanged session is written back
+// and how often expired rows are swept (#529). scs's IdleTimeout makes every
+// authenticated request commit, plain GETs included; without this each one is
+// a write on ADR-004's single connection. The cost is that a row's expires_at
+// may lag its cookie by up to this much, so a session left idle for the full
+// 30 days ends up to an hour early.
+const sessionRefreshInterval = time.Hour
+
+// sessionLoads is the set of tokens one request found in the store, with the
+// row each one was read as. A commit updates those and inserts the rest
+// (CommitCtx). It is per request and mutex-guarded, since a handler may touch
+// the session from more than one goroutine.
 type sessionLoads struct {
 	mu     sync.Mutex
-	tokens map[string]struct{}
+	tokens map[string]loadedSession
+}
+
+// loadedSession is a row as FindCtx read it.
+type loadedSession struct {
+	data      []byte
+	expiresAt int64
 }
 
 type sessionLoadsKey struct{}
@@ -37,20 +61,20 @@ type sessionLoadsKey struct{}
 // sessionLoads: a wiring bug, surfaced as a 500 rather than guessed past.
 var errNoSessionLoads = errors.New("session store: commit without a request's loaded-session record (use sessionMiddleware)")
 
-func (l *sessionLoads) add(token string) {
+func (l *sessionLoads) add(token string, row loadedSession) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	if l.tokens == nil {
-		l.tokens = make(map[string]struct{})
+		l.tokens = make(map[string]loadedSession)
 	}
-	l.tokens[token] = struct{}{}
+	l.tokens[token] = row
 }
 
-func (l *sessionLoads) has(token string) bool {
+func (l *sessionLoads) get(token string) (loadedSession, bool) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	_, ok := l.tokens[token]
-	return ok
+	row, ok := l.tokens[token]
+	return row, ok
 }
 
 // trackSessionLoads puts a fresh sessionLoads in the request's context. It must
@@ -71,15 +95,15 @@ func sessionMiddleware(sm *scs.SessionManager) func(http.Handler) http.Handler {
 	}
 }
 
-func newSessionStore(q store.Querier) *sessionStore {
-	return &sessionStore{q: q}
+func newSessionStore(q store.Querier, codec scs.Codec) *sessionStore {
+	return &sessionStore{q: q, codec: codec, now: time.Now}
 }
 
 // FindCtx returns a session's data only inside its idle window (GetSession's
 // WHERE, #113), so an expired-but-unswept row reads as "not found", as scs's
 // Store.Find contract asks.
 func (s *sessionStore) FindCtx(ctx context.Context, token string) ([]byte, bool, error) {
-	sess, err := s.q.GetSession(ctx, store.GetSessionParams{Token: token, ExpiresAt: time.Now().Unix()})
+	sess, err := s.q.GetSession(ctx, store.GetSessionParams{Token: token, ExpiresAt: s.now().Unix()})
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, false, nil
@@ -87,7 +111,7 @@ func (s *sessionStore) FindCtx(ctx context.Context, token string) ([]byte, bool,
 		return nil, false, err
 	}
 	if loads, ok := ctx.Value(sessionLoadsKey{}).(*sessionLoads); ok {
-		loads.add(token)
+		loads.add(token, loadedSession{data: sess.Data, expiresAt: sess.ExpiresAt})
 	}
 	return sess.Data, true, nil
 }
@@ -117,27 +141,72 @@ func (s *sessionStore) FindCtx(ctx context.Context, token string) ([]byte, bool,
 // persists nothing), so it fails with errNoSessionLoads. Every real request
 // carries one: sessionMiddleware is the only wiring of LoadAndSave.
 //
+// A loaded session whose contents did not change and whose expiry would move by
+// less than sessionRefreshInterval is not written at all (#529): that is the
+// idle refresh of an ordinary GET. Skipping it cannot resurrect anything.
+//
 // The lazy sweep (#113: "never a background ticker", ADR-013) rides on this
-// write. It targets only expired rows, so it stays outside what the rule above
-// decides.
+// commit, at most once per sessionRefreshInterval. It targets only expired
+// rows, so it stays outside what the rule above decides.
 func (s *sessionStore) CommitCtx(ctx context.Context, token string, b []byte, expiry time.Time) error {
 	loads, ok := ctx.Value(sessionLoadsKey{}).(*sessionLoads)
 	if !ok {
 		return errNoSessionLoads
 	}
-	if loads.has(token) {
-		// 0 rows: revoked since it was loaded; it stays that way.
-		if _, err := s.q.UpdateSession(ctx, store.UpdateSessionParams{
-			Token: token, Data: b, ExpiresAt: expiry.Unix(),
-		}); err != nil {
-			return err
+	if row, loaded := loads.get(token); loaded {
+		if !s.onlyRefreshed(row, b, expiry) {
+			// 0 rows: revoked since it was loaded; it stays that way.
+			if _, err := s.q.UpdateSession(ctx, store.UpdateSessionParams{
+				Token: token, Data: b, ExpiresAt: expiry.Unix(),
+			}); err != nil {
+				return err
+			}
 		}
 	} else if _, err := s.q.CreateSession(ctx, store.CreateSessionParams{
 		Token: token, Data: b, ExpiresAt: expiry.Unix(),
 	}); err != nil {
 		return err
 	}
-	return s.q.DeleteExpiredSessions(ctx, time.Now().Unix())
+	return s.maybeSweep(ctx)
+}
+
+// onlyRefreshed reports whether committing b at expiry would change nothing
+// but a slide of expires_at shorter than sessionRefreshInterval. The contents
+// are compared decoded, not as bytes: the gob codec writes the values map in
+// Go's random iteration order, so equal sessions often encode differently. A
+// row that cannot be decoded is never skipped.
+func (s *sessionStore) onlyRefreshed(row loadedSession, b []byte, expiry time.Time) bool {
+	if expiry.Unix()-row.expiresAt >= int64(sessionRefreshInterval/time.Second) {
+		return false
+	}
+	if bytes.Equal(row.data, b) {
+		return true
+	}
+	oldDeadline, oldValues, err := s.codec.Decode(row.data)
+	if err != nil {
+		return false
+	}
+	newDeadline, newValues, err := s.codec.Decode(b)
+	if err != nil {
+		return false
+	}
+	return oldDeadline.Equal(newDeadline) && reflect.DeepEqual(oldValues, newValues)
+}
+
+// maybeSweep deletes expired rows when the last sweep is at least
+// sessionRefreshInterval old. The compare-and-swap lets one of several
+// concurrent commits claim it; a failed sweep gives its claim back.
+func (s *sessionStore) maybeSweep(ctx context.Context) error {
+	now := s.now()
+	last := s.lastSweep.Load()
+	if now.Unix()-last < int64(sessionRefreshInterval/time.Second) || !s.lastSweep.CompareAndSwap(last, now.Unix()) {
+		return nil
+	}
+	if err := s.q.DeleteExpiredSessions(ctx, now.Unix()); err != nil {
+		s.lastSweep.CompareAndSwap(now.Unix(), last)
+		return err
+	}
+	return nil
 }
 
 func (s *sessionStore) DeleteCtx(ctx context.Context, token string) error {
