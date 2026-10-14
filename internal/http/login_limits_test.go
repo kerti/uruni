@@ -259,7 +259,13 @@ func TestAnUnknownExpiredOrForgedDeviceTokenIsNoDevice(t *testing.T) {
 	const home = "203.0.113.20"
 	device := deviceFor(t, r, limitsEmail, home)
 
-	forged := requestCookie(deviceCookieName, "A"+device.Value[1:])
+	// One character changed, and never to itself: a token that already starts
+	// with "A" would otherwise make the "forged" cookie the real one (1 in 64).
+	first := "A"
+	if device.Value[0] == 'A' {
+		first = "B"
+	}
+	forged := requestCookie(deviceCookieName, first+device.Value[1:])
 	garbage := requestCookie(deviceCookieName, "not-a-token")
 	empty := requestCookie(deviceCookieName, "")
 
