@@ -257,27 +257,36 @@ func (a *api) routes(r chi.Router) {
 		// match. GET answers with image bytes and stays behind this session gate: a
 		// receipt "shows what the fund bought," and PRD section 7.9 does not ask for
 		// it on the public report.
-		r.Post("/transactions/{id}/receipts", a.uploadTransactionReceipt)
-		r.Post("/reimbursements/{id}/receipts", a.uploadReimbursementReceipt)
+		//
+		// A photo is up to 10 MB, and the SPA waits two minutes for it, so the upload
+		// routes extend the server's short read deadline to match (extendDeadlines).
+		receiptUpload := r.With(extendDeadlines(a.logger, receiptTransferTimeout))
+		receiptUpload.Post("/transactions/{id}/receipts", a.uploadTransactionReceipt)
+		receiptUpload.Post("/reimbursements/{id}/receipts", a.uploadReimbursementReceipt)
 		r.Get("/receipts/{id}", a.getReceipt)
 		r.Delete("/receipts/{id}", a.deleteReceipt)
 
 		// The whole fund as one zip (ADR-012): uruni.json plus every receipt image.
 		// Session-gated like every route here; it carries the password hash.
-		r.Get("/backup", a.downloadBackup)
+		//
+		// The backup and restore routes move up to 256 MB (and the zip sits in
+		// memory), so they extend the server's read and write deadlines
+		// (extendDeadlines); everything else keeps the short ones.
+		backupTransfer := r.With(extendDeadlines(a.logger, backupTransferTimeout))
+		backupTransfer.Get("/backup", a.downloadBackup)
 
 		// The Cadangan card's two routes (ADR-012/013): what server-side dumps
 		// exist, and downloading one by name. Distinct from the singular /backup,
 		// which builds a fresh zip on demand; these only read URUNI_BACKUP_DIR.
 		r.Get("/backups", a.listBackups)
-		r.Get("/backups/{name}", a.downloadStoredBackup)
+		backupTransfer.Get("/backups/{name}", a.downloadStoredBackup)
 
 		// Restore from an uploaded backup (ADR-012) or one of the server's stored
 		// dumps: inspect/preview, then confirm with a password re-entry. See
 		// restore.go for the three-route shape.
-		r.Post("/restore/inspect", a.inspectRestoreUpload)
-		r.Post("/restore/inspect-stored/{name}", a.inspectStoredBackup)
-		r.Post("/restore/confirm", a.confirmRestore)
+		backupTransfer.Post("/restore/inspect", a.inspectRestoreUpload)
+		backupTransfer.Post("/restore/inspect-stored/{name}", a.inspectStoredBackup)
+		backupTransfer.Post("/restore/confirm", a.confirmRestore)
 	})
 }
 
