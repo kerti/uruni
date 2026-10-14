@@ -50,9 +50,10 @@ const sessionKeyCredential = "credential"
 // never a secret worth more than the hash it was made from.
 //
 // Why a session needs it (#386): with IdleTimeout set, scs marks every loaded
-// session Modified, so every authenticated request ends by writing its session
-// back. Deleting rows revokes the other sessions, and sessionStore.CommitCtx
-// (#601) does not put a deleted one back. This is the second line: it does not
+// session Modified, so every authenticated request ends by committing its
+// session (the store writes an unchanged one back at most hourly, #529).
+// Deleting rows revokes the other sessions, and sessionStore.CommitCtx (#601)
+// does not put a deleted one back. This is the second line: it does not
 // depend on the row being gone, so a session that did come back (an older build,
 // a restored database file) carries the old fingerprint, and the next request
 // finds the mismatch and destroys it. It covers credential changes only; a
@@ -105,7 +106,7 @@ func (a *api) signedIn(r *http.Request) (bool, error) {
 // to explain why login looks broken.
 func newSessionManager(q store.Querier, baseURL string, logger *slog.Logger) *scs.SessionManager {
 	sm := scs.New()
-	sm.Store = newSessionStore(q)
+	sm.Store = newSessionStore(q, sm.Codec)
 	sm.Lifetime = sessionLifetimeCap
 	sm.IdleTimeout = sessionIdleTimeout
 	sm.Cookie.HttpOnly = true

@@ -45,8 +45,8 @@ DELETE FROM session
 WHERE expires_at <= ?
 `
 
-// The lazy sweep: a side effect of a session write, never a background ticker
-// (ADR-013).
+// The lazy sweep: a side effect of a session commit, at most hourly (#529),
+// never a background ticker (ADR-013).
 func (q *Queries) DeleteExpiredSessions(ctx context.Context, expiresAt int64) error {
 	_, err := q.db.ExecContext(ctx, deleteExpiredSessions, expiresAt)
 	return err

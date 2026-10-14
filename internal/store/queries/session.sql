@@ -34,8 +34,8 @@ RETURNING token, data, expires_at;
 DELETE FROM session
 WHERE token = ?;
 
--- The lazy sweep: a side effect of a session write, never a background ticker
--- (ADR-013).
+-- The lazy sweep: a side effect of a session commit, at most hourly (#529),
+-- never a background ticker (ADR-013).
 -- name: DeleteExpiredSessions :exec
 DELETE FROM session
 WHERE expires_at <= ?;

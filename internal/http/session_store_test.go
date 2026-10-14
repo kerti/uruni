@@ -1,14 +1,18 @@
 package http
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/alexedwards/scs/v2"
 
 	"github.com/kerti/uruni/internal/store"
 )
@@ -75,7 +79,7 @@ func TestConcurrentRequestsOnOneSessionDoNotCollide(t *testing.T) {
 func newTestSessionStore(t *testing.T) (*sessionStore, *sql.DB) {
 	t.Helper()
 	sqlDB := testStoreDB(t)
-	return newSessionStore(store.New(sqlDB)), sqlDB
+	return newSessionStore(store.New(sqlDB), scs.GobCodec{}), sqlDB
 }
 
 // requestCtx is what trackSessionLoads gives a request: a context that records
@@ -282,5 +286,162 @@ func TestSessionStoreSurfacesADatabaseError(t *testing.T) {
 	}
 	if err := s.DeleteCtx(ctx, "a-token"); err == nil {
 		t.Error("DeleteCtx() on a closed database = nil, want an error")
+	}
+}
+
+// encodedSession gob-encodes a session the way scs does. Two calls with equal
+// values may differ in bytes, since the codec walks the map in random order.
+func encodedSession(t *testing.T, deadline time.Time, values map[string]any) []byte {
+	t.Helper()
+	b, err := scs.GobCodec{}.Encode(deadline, values)
+	if err != nil {
+		t.Fatalf("encoding a session: %v", err)
+	}
+	return b
+}
+
+// TestSessionStoreRefreshesAnUnchangedSessionAtMostHourly is #529: an idle
+// refresh of an unchanged session is skipped until its expiry would move by an
+// hour or more, so the idle timeout still slides, an hour at a time. A change
+// to the session's contents is always written.
+func TestSessionStoreRefreshesAnUnchangedSessionAtMostHourly(t *testing.T) {
+	t.Parallel()
+	s, sqlDB := newTestSessionStore(t)
+	start := time.Now()
+	s.now = func() time.Time { return start }
+	deadline := start.Add(sessionLifetimeCap)
+	// Sixteen keys, so most encodings differ in order: two keys come out
+	// identical about seven times in eight, which made this loop flaky.
+	values := map[string]any{sessionKeyUserID: int64(1), sessionKeyCredential: "fingerprint"}
+	for i := range 14 {
+		values[fmt.Sprintf("pad-%02d", i)] = int64(i)
+	}
+
+	// Equal values encoded to different bytes, so the skip is decided on the
+	// decoded session and not on the bytes.
+	first := encodedSession(t, deadline, values)
+	second := first
+	for range 64 {
+		if second = encodedSession(t, deadline, values); !bytes.Equal(first, second) {
+			break
+		}
+	}
+	if bytes.Equal(first, second) {
+		t.Fatal("64 encodings of a sixteen-key map came out identical; the codec no longer shows the reordering this test needs")
+	}
+
+	expiry := start.Add(sessionIdleTimeout)
+	if err := s.CommitCtx(requestCtx(), "idle", first, expiry); err != nil {
+		t.Fatalf("CommitCtx(new) = %v", err)
+	}
+
+	commitLoaded := func(b []byte, at time.Time) {
+		t.Helper()
+		ctx := requestCtx()
+		if _, found, err := s.FindCtx(ctx, "idle"); err != nil || !found {
+			t.Fatalf("FindCtx() = found %v, err %v, want a hit", found, err)
+		}
+		if err := s.CommitCtx(ctx, "idle", b, at); err != nil {
+			t.Fatalf("CommitCtx(loaded) = %v", err)
+		}
+	}
+
+	commitLoaded(second, expiry.Add(59*time.Minute))
+	if got := sessionExpiry(t, sqlDB, "idle"); got != expiry.Unix() {
+		t.Errorf("expires_at after a refresh 59 minutes on = %d, want %d unchanged - an idle GET wrote the row", got, expiry.Unix())
+	}
+
+	slid := expiry.Add(time.Hour)
+	commitLoaded(second, slid)
+	if got := sessionExpiry(t, sqlDB, "idle"); got != slid.Unix() {
+		t.Errorf("expires_at after a refresh an hour on = %d, want %d - the idle timeout stopped sliding", got, slid.Unix())
+	}
+
+	// A changed value, and the same number under another Go type (gob keeps
+	// the type), are both changes and are written within the hour.
+	retyped := map[string]any{}
+	for k, v := range values {
+		retyped[k] = v
+	}
+	retyped[sessionKeyUserID] = 1
+	for i, b := range [][]byte{
+		encodedSession(t, deadline, map[string]any{sessionKeyUserID: int64(1), sessionKeyCredential: "new fingerprint"}),
+		encodedSession(t, deadline, retyped),
+	} {
+		commitLoaded(b, slid.Add(time.Duration(i+1)*time.Minute))
+		data, _, _ := s.FindCtx(context.Background(), "idle")
+		if !bytes.Equal(data, b) {
+			t.Errorf("change %d committed within the hour was not written", i)
+		}
+	}
+}
+
+// TestAnIdleGetDoesNotWriteTheSession is #529 through the real router: a plain
+// authenticated GET whose session is unchanged and was written less than an
+// hour ago leaves the row alone. The row is backdated ten minutes first, so a
+// write would show as expires_at moving forward.
+func TestAnIdleGetDoesNotWriteTheSession(t *testing.T) {
+	t.Parallel()
+	r, sqlDB := testRouterAndDB(t)
+
+	rec := postRegister(t, r, "bendahara@example.org", "kata-sandi-panjang")
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("register status = %d, want %d", rec.Code, http.StatusCreated)
+	}
+	token := sessionCookie(rec)
+	if _, err := sqlDB.Exec("UPDATE session SET expires_at = expires_at - 600 WHERE token = ?", token); err != nil {
+		t.Fatalf("backdating the session: %v", err)
+	}
+	before := sessionExpiry(t, sqlDB, token)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/session", nil)
+	req.AddCookie(&http.Cookie{Name: "session", Value: token}) //nolint:gosec // request-side cookie carries name and value only
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("GET /api/session status = %d, want %d", w.Code, http.StatusOK)
+	}
+	if after := sessionExpiry(t, sqlDB, token); after != before {
+		t.Errorf("expires_at = %d after an idle GET, want %d - the GET wrote the session", after, before)
+	}
+}
+
+// TestSessionStoreSweepsExpiredRowsAtMostHourly is #529's other half: the
+// expired-session sweep rides on a commit, but no more than once an hour.
+func TestSessionStoreSweepsExpiredRowsAtMostHourly(t *testing.T) {
+	t.Parallel()
+	s, sqlDB := newTestSessionStore(t)
+	now := time.Now()
+	s.now = func() time.Time { return now }
+	expired := func(token string) {
+		t.Helper()
+		if _, err := sqlDB.Exec("INSERT INTO session (token, data, expires_at) VALUES (?, x'00', ?)", token, now.Add(-time.Minute).Unix()); err != nil {
+			t.Fatalf("inserting an expired session: %v", err)
+		}
+	}
+	commit := func(token string) {
+		t.Helper()
+		if err := s.CommitCtx(requestCtx(), token, []byte("v"), now.Add(time.Hour)); err != nil {
+			t.Fatalf("CommitCtx(%q) = %v", token, err)
+		}
+	}
+
+	expired("old-1")
+	commit("a")
+	if n := sessionRowCount(t, sqlDB, "old-1"); n != 0 {
+		t.Errorf("first commit left the expired row (rows = %d), want it swept", n)
+	}
+
+	expired("old-2")
+	now = now.Add(59 * time.Minute)
+	commit("b")
+	if n := sessionRowCount(t, sqlDB, "old-2"); n != 1 {
+		t.Errorf("a commit 59 minutes after the last sweep swept again (rows = %d), want the row left", n)
+	}
+
+	now = now.Add(time.Minute)
+	commit("c")
+	if n := sessionRowCount(t, sqlDB, "old-2"); n != 0 {
+		t.Errorf("a commit an hour after the last sweep left the expired row (rows = %d), want it swept", n)
 	}
 }

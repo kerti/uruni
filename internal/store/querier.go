@@ -94,8 +94,8 @@ type Querier interface {
 	// FK onto the tier so it cannot go first, and if a member then refuses the
 	// tier the transaction rolls back and the deleted rates come back.
 	DeleteDuesTier(ctx context.Context, arg DeleteDuesTierParams) error
-	// The lazy sweep: a side effect of a session write, never a background ticker
-	// (ADR-013).
+	// The lazy sweep: a side effect of a session commit, at most hourly (#529),
+	// never a background ticker (ADR-013).
 	DeleteExpiredSessions(ctx context.Context, expiresAt int64) error
 	// The full-replace half of SetIncidentalParticipation (ADR-034): a new list
 	// clears the old one first. Unscoped for the reason CreateIncidentalRecipient
