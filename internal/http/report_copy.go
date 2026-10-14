@@ -115,6 +115,11 @@ type reportCopy struct {
 	NotFoundTitle string
 	NotFoundBody  string
 
+	// The 429 page (#520): "Laporan sedang ramai dibuka. Coba lagi sebentar
+	// lagi, ya." in two sentences, a heading and a line.
+	RateLimitedTitle string
+	RateLimitedBody  string
+
 	// Months are January through December, for "2 Oktober 2026" and the
 	// month selector's "Oktober 2026".
 	Months [12]string
@@ -204,6 +209,9 @@ var reportText = reportCopy{
 
 	NotFoundTitle: "Laporan tidak ditemukan",
 	NotFoundBody:  "Tautan laporan ini tidak berlaku. Minta tautan terbaru ke bendahara.",
+
+	RateLimitedTitle: "Laporan sedang ramai dibuka",
+	RateLimitedBody:  "Coba lagi sebentar lagi, ya.",
 
 	Months: [12]string{
 		"Januari", "Februari", "Maret", "April", "Mei", "Juni",

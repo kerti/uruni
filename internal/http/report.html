@@ -226,3 +226,10 @@ for (const b of document.querySelectorAll('form button')) b.hidden = true
 </header>
 <p>{{.Text.NotFoundBody}}</p>
 {{template "foot" .}}{{end}}
+
+{{define "ratelimited"}}{{template "head" .}}
+<header>
+  <h1>{{.Text.RateLimitedTitle}}</h1>
+</header>
+<p>{{.Text.RateLimitedBody}}</p>
+{{template "foot" .}}{{end}}
