@@ -52,6 +52,19 @@ func (q *Queries) DeleteExpiredSessions(ctx context.Context, expiresAt int64) er
 	return err
 }
 
+const deleteOtherSessions = `-- name: DeleteOtherSessions :exec
+DELETE FROM session
+WHERE token <> ?
+`
+
+// Signs every OTHER device out, for a treasurer changing her own email or
+// password (#386): the session making the change keeps working, the rest stop.
+// The sibling of DeleteAllSessions, which a reset by the operator uses.
+func (q *Queries) DeleteOtherSessions(ctx context.Context, token string) error {
+	_, err := q.db.ExecContext(ctx, deleteOtherSessions, token)
+	return err
+}
+
 const deleteSession = `-- name: DeleteSession :exec
 DELETE FROM session
 WHERE token = ?

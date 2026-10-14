@@ -71,6 +71,7 @@ func (a *api) register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	a.sessionManager.Put(r.Context(), sessionKeyUserID, user.ID)
+	a.sessionManager.Put(r.Context(), sessionKeyCredential, credentialFingerprint(user))
 
 	writeJSON(w, http.StatusCreated, toUserResponse(user))
 }

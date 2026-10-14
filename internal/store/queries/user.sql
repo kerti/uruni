@@ -37,3 +37,23 @@ RETURNING id, email, password_hash, created_at;
 SELECT id, email, password_hash, created_at
 FROM "user"
 ORDER BY id;
+
+-- The account page's reads and writes (#386): the one login, addressed by the
+-- id its session carries. An email change stores the normalized form
+-- (auth.NormalizeEmail), as register does.
+-- name: GetUserByID :one
+SELECT id, email, password_hash, created_at
+FROM "user"
+WHERE id = ?;
+
+-- name: UpdateUserEmail :one
+UPDATE "user"
+SET email = ?
+WHERE id = ?
+RETURNING id, email, password_hash, created_at;
+
+-- name: UpdateUserPasswordByID :one
+UPDATE "user"
+SET password_hash = ?
+WHERE id = ?
+RETURNING id, email, password_hash, created_at;

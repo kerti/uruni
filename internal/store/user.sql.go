@@ -77,6 +77,27 @@ func (q *Queries) GetUserByEmail(ctx context.Context, arg GetUserByEmailParams) 
 	return i, err
 }
 
+const getUserByID = `-- name: GetUserByID :one
+SELECT id, email, password_hash, created_at
+FROM "user"
+WHERE id = ?
+`
+
+// The account page's reads and writes (#386): the one login, addressed by the
+// id its session carries. An email change stores the normalized form
+// (auth.NormalizeEmail), as register does.
+func (q *Queries) GetUserByID(ctx context.Context, id int64) (User, error) {
+	row := q.db.QueryRowContext(ctx, getUserByID, id)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.Email,
+		&i.PasswordHash,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
 const listUsers = `-- name: ListUsers :many
 SELECT id, email, password_hash, created_at
 FROM "user"
@@ -115,6 +136,30 @@ func (q *Queries) ListUsers(ctx context.Context) ([]User, error) {
 	return items, nil
 }
 
+const updateUserEmail = `-- name: UpdateUserEmail :one
+UPDATE "user"
+SET email = ?
+WHERE id = ?
+RETURNING id, email, password_hash, created_at
+`
+
+type UpdateUserEmailParams struct {
+	Email string
+	ID    int64
+}
+
+func (q *Queries) UpdateUserEmail(ctx context.Context, arg UpdateUserEmailParams) (User, error) {
+	row := q.db.QueryRowContext(ctx, updateUserEmail, arg.Email, arg.ID)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.Email,
+		&i.PasswordHash,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
 const updateUserPassword = `-- name: UpdateUserPassword :one
 UPDATE "user"
 SET password_hash = ?1
@@ -132,6 +177,30 @@ type UpdateUserPasswordParams struct {
 // GetUserByEmail does (#500); the hash is computed by internal/auth.
 func (q *Queries) UpdateUserPassword(ctx context.Context, arg UpdateUserPasswordParams) (User, error) {
 	row := q.db.QueryRowContext(ctx, updateUserPassword, arg.PasswordHash, arg.Normalized, arg.Exact)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.Email,
+		&i.PasswordHash,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
+const updateUserPasswordByID = `-- name: UpdateUserPasswordByID :one
+UPDATE "user"
+SET password_hash = ?
+WHERE id = ?
+RETURNING id, email, password_hash, created_at
+`
+
+type UpdateUserPasswordByIDParams struct {
+	PasswordHash string
+	ID           int64
+}
+
+func (q *Queries) UpdateUserPasswordByID(ctx context.Context, arg UpdateUserPasswordByIDParams) (User, error) {
+	row := q.db.QueryRowContext(ctx, updateUserPasswordByID, arg.PasswordHash, arg.ID)
 	var i User
 	err := row.Scan(
 		&i.ID,

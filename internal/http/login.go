@@ -149,6 +149,7 @@ func (a *api) login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	a.sessionManager.Put(r.Context(), sessionKeyUserID, user.ID)
+	a.sessionManager.Put(r.Context(), sessionKeyCredential, credentialFingerprint(user))
 
 	a.securityEvent(r, slog.LevelInfo, "login_succeeded")
 	writeJSON(w, http.StatusOK, toUserResponse(user))

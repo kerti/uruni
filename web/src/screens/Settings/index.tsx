@@ -1,3 +1,4 @@
+import User from '@/screens/Settings/User'
 import Backup from '@/screens/Settings/Backup'
 import DuesTiers from '@/screens/Settings/DuesTiers'
 import FundName from '@/screens/Settings/FundName'
@@ -25,16 +26,18 @@ import type { Fund } from '@/lib/setup'
  * half of a screen she visits rarely, where she has no muscle memory for what
  * is behind the second panel.
  *
- * The sections share one URL and four of them own an `?edit=` dialog, so each
+ * The sections share one URL and several of them own an `?edit=` dialog, so each
  * parses that param against its own prefix and leaves every other value alone
  * - see lib/dialogTarget.ts for why that is load-bearing.
  *
  * Golongan & tarif lives here (moved from Anggota, see screens/Members/index.tsx).
  * Incidentals (ADR-032) sits beside Titipan - the two are kinds of one
  * `purpose` (CONTEXT.md). Laporan publik (ADR-035) comes after the admin
- * sections and before Cadangan (ADR-012), which stays last: downloading the
- * whole fund is rarer than any admin above it, and it is the one section with
- * no dialog and nothing to browse.
+ * sections, then Akun bendahara (#386): it is about the login, not the fund,
+ * and changed rarer still, so it sits below everything about the kas but
+ * above Cadangan (ADR-012), which stays last: downloading the whole fund is
+ * rarer than any admin above it, and it is the one section with no dialog and
+ * nothing to browse.
  *
  * No back control: Shell's footer is how every screen is left, and a second
  * way out would be one affordance too many.
@@ -57,6 +60,8 @@ export default function Settings({ onFundRenamed }: { onFundRenamed: (fund: Fund
       <DuesTiers />
       <SectionDivider />
       <ReportLink />
+      <SectionDivider />
+      <User />
       <SectionDivider />
       <Backup />
     </div>

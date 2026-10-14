@@ -212,6 +212,10 @@ export const copy = {
       invalid_argument: 'Ada isian yang belum sesuai. Coba periksa lagi.',
       already_registered: 'Akun bendahara untuk Uruni ini sudah pernah dibuat.',
       invalid_credentials: 'Email atau kata sandi salah.',
+      // The current password typed to change the login's email or password
+      // (Pengaturan, Akun bendahara). Unlike invalid_credentials above, she is
+      // signed in, so it can say plainly which field to check.
+      wrong_current_password: 'Kata sandi saat ini salah. Coba periksa lagi.',
       too_many_requests: 'Terlalu banyak percobaan. Tunggu dulu, lalu coba lagi nanti, ya.',
       // Every slot for checking a password is busy (503). Nothing is wrong with
       // what she typed and she is not locked out - the server is occupied for a
@@ -889,6 +893,38 @@ export const copy = {
       // needs to say which one.
       editTitle: 'Ubah nama kas',
       editAria: (name: string) => `Ubah ${name}`,
+    },
+    // The treasurer's own login (#386; "user" as CONTEXT.md names the login, not
+    // an account, which is a place money sits): who is signed in, and the two edits it
+    // offers. Each edit asks for the current password and signs the other
+    // devices out, which the notes say before she commits to it. The mismatch
+    // is caught in the browser; a too-short password reuses auth.register's
+    // sentence, and a wrong current password is common.errors'.
+    user: {
+      heading: 'Akun bendahara',
+      body: (email: string) => `Masuk sebagai ${email}`,
+      changeEmail: 'Ubah email',
+      changePassword: 'Ubah kata sandi',
+      email: {
+        title: 'Ubah email',
+        newLabel: 'Email baru',
+        currentLabel: 'Kata sandi saat ini',
+        note: 'Setelah ini, masuk dengan email baru. Perangkat lain yang sedang masuk akan keluar otomatis.',
+        save: 'Simpan email',
+        saving: 'Menyimpan…',
+        success: 'Email sudah diganti.',
+      },
+      password: {
+        title: 'Ubah kata sandi',
+        currentLabel: 'Kata sandi saat ini',
+        newLabel: 'Kata sandi baru',
+        repeatLabel: 'Ulangi kata sandi baru',
+        note: 'Perangkat lain yang sedang masuk akan keluar otomatis.',
+        save: 'Simpan kata sandi',
+        saving: 'Menyimpan…',
+        success: 'Kata sandi sudah diganti.',
+        mismatch: 'Kedua kata sandi baru belum sama.',
+      },
     },
     // The public report's link card (ADR-035): heading, Salin, Bagikan and the
     // confirm sentence, plus the smallest wording the card needs.

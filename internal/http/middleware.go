@@ -20,13 +20,24 @@ import (
 // not, so an empty fresh session and an authenticated one are both "a
 // session" and only the stored key tells them apart.
 //
+// It also requires the session's credential fingerprint to match the login as
+// it is now (signedIn, session.go), so a password or email change ends every
+// session issued before it, including one a slow request writes back afterwards.
+// That is one lookup of the one user row per request.
+//
 // It injects no context value. ADR-030 decision 2: a session proves "you are
 // the treasurer", nothing more; with one treasurer account per v1 instance,
 // no handler needs to know which identity passed. That also keeps this from
 // touching resolveFund or its call sites.
 func (a *api) sessionRequired(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if !a.sessionManager.Exists(r.Context(), sessionKeyUserID) {
+		ok, err := a.signedIn(r)
+		if err != nil {
+			a.log(r).Error("checking the session against the login", "error", err)
+			writeAPIError(w, http.StatusInternalServerError, "internal_error", "Something went wrong.")
+			return
+		}
+		if !ok {
 			writeAPIError(w, http.StatusUnauthorized, "unauthenticated", "You must be logged in to do that.")
 			return
 		}

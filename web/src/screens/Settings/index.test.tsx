@@ -25,7 +25,7 @@ function jsonResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } })
 }
 
-/** Every GET the four sections make, all answering non-empty so each list
+/** Every GET the sections make, all answering non-empty so each list
  * reaches `success` - the state that arms the cleanup effect under test. */
 function stubSettings() {
   return vi.fn((input: RequestInfo | URL) => {
@@ -47,6 +47,9 @@ function stubSettings() {
     }
     if (url.includes('/api/fund')) {
       return Promise.resolve(jsonResponse({ id: 1, name: 'Kas RT 05', report_url: 'https://kas.example.org/report/abc' }))
+    }
+    if (url.includes('/api/user')) {
+      return Promise.resolve(jsonResponse({ id: 1, email: 'bendahara@example.org', created_at: 1 }))
     }
     return Promise.reject(new Error(`unstubbed fetch: ${url}`))
   })
