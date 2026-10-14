@@ -2,9 +2,10 @@ package main
 
 import (
 	"bytes"
-	"context"
 	"errors"
+	"io"
 	"log/slog"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -157,7 +158,7 @@ func TestShutdownWaitsForTheSchedulerBeforeReturning(t *testing.T) {
 		close(done)
 	}()
 
-	if err := shutdown(&http.Server{ReadHeaderTimeout: time.Second}, done, time.Second, 5*time.Second, logger); err != nil {
+	if err := shutdown(&http.Server{ReadHeaderTimeout: time.Second}, newRequestTracker(), newSchedulerJoin(done), testBounds(time.Second, time.Second, 5*time.Second), logger); err != nil {
 		t.Fatalf("shutdown() = %v, want nil", err)
 	}
 	dbClosed.Store(true) // what the deferred sqlDB.Close stands for
@@ -179,7 +180,7 @@ func TestShutdownGivesUpOnAStuckSchedulerAndSaysSo(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(&logs, nil))
 
 	start := time.Now()
-	err := shutdown(&http.Server{ReadHeaderTimeout: time.Second}, make(chan struct{}), time.Second, 100*time.Millisecond, logger)
+	err := shutdown(&http.Server{ReadHeaderTimeout: time.Second}, newRequestTracker(), newSchedulerJoin(make(chan struct{})), testBounds(time.Second, time.Second, 100*time.Millisecond), logger)
 	if err != nil {
 		t.Errorf("shutdown() = %v, want nil (the HTTP side drained)", err)
 	}
@@ -191,20 +192,115 @@ func TestShutdownGivesUpOnAStuckSchedulerAndSaysSo(t *testing.T) {
 	}
 }
 
-// TestShutdownStillJoinsTheSchedulerWhenTheHTTPDrainTimesOut: a request that
-// will not finish must not skip the scheduler wait, and its error is the one
-// returned.
-func TestShutdownStillJoinsTheSchedulerWhenTheHTTPDrainTimesOut(t *testing.T) {
+func testBounds(drain, handlers, scheduler time.Duration) shutdownBounds {
+	return shutdownBounds{drain: drain, handlers: handlers, scheduler: scheduler}
+}
+
+// trackedServer starts a test server wired the way serve wires its own: the
+// request tracker attached to the *http.Server before it listens.
+func trackedServer(t *testing.T, h http.HandlerFunc) (*httptest.Server, *requestTracker) {
+	t.Helper()
+	ts := httptest.NewUnstartedServer(h)
+	requests := newRequestTracker()
+	requests.attach(ts.Config)
+	ts.Start()
+	t.Cleanup(ts.Close)
+	return ts, requests
+}
+
+// getAsync fires a request in the background and returns once its handler has
+// started; the channel carries the client's error, nil if it got an answer.
+func getAsync(t *testing.T, url string, started <-chan struct{}) <-chan error {
+	t.Helper()
+	errc := make(chan error, 1)
+	go func() {
+		resp, err := http.Get(url) //nolint:gosec,noctx // test client
+		if err == nil {
+			_ = resp.Body.Close()
+		}
+		errc <- err
+	}()
+	select {
+	case <-started:
+	case <-time.After(5 * time.Second):
+		t.Fatal("the handler never started")
+	}
+	return errc
+}
+
+// TestShutdownEndsARequestStillRunningAtTheDrainDeadline: the heart of #586. A
+// handler that outlasts the drain (a restore, in life) must be ended and must
+// have returned before shutdown does, because serve closes the database right
+// after. The handler stands for the restore's transaction: it stops on its
+// request context and records whether the "database" was already closed.
+func TestShutdownEndsARequestStillRunningAtTheDrainDeadline(t *testing.T) {
+	t.Parallel()
+	var dbClosed atomic.Bool
+	started := make(chan struct{})
+	returnedBeforeClose := make(chan bool, 1)
+	ts, requests := trackedServer(t, func(_ http.ResponseWriter, r *http.Request) {
+		close(started)
+		select {
+		case <-r.Context().Done():
+		case <-time.After(3 * time.Second): // only if the forced end is broken; keeps that failure fast
+		}
+		time.Sleep(50 * time.Millisecond) // the rollback and the error response
+		returnedBeforeClose <- !dbClosed.Load()
+	})
+	client := getAsync(t, ts.URL, started)
+
+	var logs bytes.Buffer
+	logger := slog.New(slog.NewTextHandler(&logs, nil))
+	done := make(chan struct{})
+	close(done)
+
+	start := time.Now()
+	err := shutdown(ts.Config, requests, newSchedulerJoin(done), testBounds(50*time.Millisecond, time.Second, time.Second), logger)
+	dbClosed.Store(true) // what the deferred sqlDB.Close stands for
+
+	if err != nil {
+		t.Errorf("shutdown() = %v, want nil (the forced end was clean)", err)
+	}
+	select {
+	case ok := <-returnedBeforeClose:
+		if !ok {
+			t.Error("the handler was still running when the database closed")
+		}
+	default:
+		t.Error("the handler was still running when the database closed")
+	}
+	if elapsed := time.Since(start); elapsed > 3*time.Second {
+		t.Errorf("shutdown took %v, want the drain bound plus the handler's own wind-down", elapsed)
+	}
+	if !strings.Contains(logs.String(), "level=WARN") || !strings.Contains(logs.String(), "http server did not drain in time") {
+		t.Errorf("log = %q, want the drain timeout logged as a warning", logs.String())
+	}
+	if strings.Contains(logs.String(), "level=ERROR") {
+		t.Errorf("a clean forced end logged an error: %s", logs.String())
+	}
+	select {
+	case err := <-client:
+		if err == nil {
+			t.Error("the client got a response, want its connection closed")
+		}
+	case <-time.After(5 * time.Second):
+		t.Error("the client's connection was never closed")
+	}
+}
+
+// TestShutdownGivesUpOnAHandlerThatIgnoresItsContext: the wait for handlers is
+// bounded for the same reason the scheduler's is, and the exit is non-zero
+// because the database is about to close under a request.
+func TestShutdownGivesUpOnAHandlerThatIgnoresItsContext(t *testing.T) {
 	t.Parallel()
 	release := make(chan struct{})
 	started := make(chan struct{})
-	ts := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+	ts, requests := trackedServer(t, func(http.ResponseWriter, *http.Request) {
 		close(started)
 		<-release
-	}))
-	t.Cleanup(func() { close(release); ts.Close() })
-	go func() { _, _ = http.Get(ts.URL) }() //nolint:gosec,noctx,bodyclose // test client; the handler never answers
-	<-started
+	})
+	t.Cleanup(func() { close(release) })
+	getAsync(t, ts.URL, started)
 
 	var logs bytes.Buffer
 	logger := slog.New(slog.NewTextHandler(&logs, nil))
@@ -216,15 +312,149 @@ func TestShutdownStillJoinsTheSchedulerWhenTheHTTPDrainTimesOut(t *testing.T) {
 		close(done)
 	}()
 
-	err := shutdown(ts.Config, done, 50*time.Millisecond, 5*time.Second, logger)
-	if !errors.Is(err, context.DeadlineExceeded) {
-		t.Errorf("shutdown() = %v, want context.DeadlineExceeded", err)
+	start := time.Now()
+	err := shutdown(ts.Config, requests, newSchedulerJoin(done), testBounds(50*time.Millisecond, 100*time.Millisecond, 5*time.Second), logger)
+	if !errors.Is(err, errHandlersOutlivedShutdown) {
+		t.Errorf("shutdown() = %v, want errHandlersOutlivedShutdown", err)
+	}
+	if elapsed := time.Since(start); elapsed > 3*time.Second {
+		t.Errorf("shutdown took %v, want about the 50ms drain plus the 100ms handler bound", elapsed)
 	}
 	if !joined.Load() {
-		t.Error("shutdown returned before the scheduler finished")
+		t.Error("shutdown returned before the scheduler finished: a stuck handler must not skip the join")
 	}
-	if !strings.Contains(logs.String(), "http server did not drain in time") {
-		t.Errorf("log = %q, want the drain timeout logged", logs.String())
+	if !strings.Contains(logs.String(), "requests still running at shutdown") {
+		t.Errorf("log = %q, want an error naming the requests", logs.String())
+	}
+}
+
+// TestShutdownWaitsForARequestThatFinishesInsideTheDrain: the ordinary case. No
+// forced end, no warning, and shutdown does not return until the handler has.
+func TestShutdownWaitsForARequestThatFinishesInsideTheDrain(t *testing.T) {
+	t.Parallel()
+	started := make(chan struct{})
+	var finished atomic.Bool
+	ts, requests := trackedServer(t, func(http.ResponseWriter, *http.Request) {
+		close(started)
+		time.Sleep(100 * time.Millisecond)
+		finished.Store(true)
+	})
+	client := getAsync(t, ts.URL, started)
+
+	var logs bytes.Buffer
+	logger := slog.New(slog.NewTextHandler(&logs, nil))
+	done := make(chan struct{})
+	close(done)
+
+	if err := shutdown(ts.Config, requests, newSchedulerJoin(done), testBounds(5*time.Second, time.Second, time.Second), logger); err != nil {
+		t.Errorf("shutdown() = %v, want nil", err)
+	}
+	if !finished.Load() {
+		t.Error("shutdown returned before the request finished")
+	}
+	if err := <-client; err != nil {
+		t.Errorf("the request failed: %v", err)
+	}
+	if strings.Contains(logs.String(), "level=WARN") || strings.Contains(logs.String(), "level=ERROR") {
+		t.Errorf("a clean drain logged: %s", logs.String())
+	}
+}
+
+// TestRequestTrackerRefusesWorkOnceWaitHasBegun: the gate that keeps wait exact.
+func TestRequestTrackerRefusesWorkOnceWaitHasBegun(t *testing.T) {
+	t.Parallel()
+	ran := false
+	srv := &http.Server{ReadHeaderTimeout: time.Second, Handler: http.HandlerFunc(func(http.ResponseWriter, *http.Request) { ran = true })}
+	requests := newRequestTracker()
+	requests.attach(srv)
+
+	<-requests.wait()
+	rec := httptest.NewRecorder()
+	srv.Handler.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/", nil))
+	if ran || rec.Code != http.StatusServiceUnavailable {
+		t.Errorf("after wait: handler ran = %v, status = %d, want refused with 503", ran, rec.Code)
+	}
+}
+
+// TestNewServerTracksItsRequests: serve builds its server through newServer, so
+// this is the wiring test. A server it returns must hold wait open while a
+// handler runs, and must cancel that handler's context on end() with the
+// connection still open. The handler is blocked on an unread streamed request
+// body, the real shape of a restore upload: nothing reads the connection, so
+// nothing but the BaseContext can cancel the context. (srv.Close would also
+// cancel it, by dropping the connection; this test must not depend on that.)
+func TestNewServerTracksItsRequests(t *testing.T) {
+	t.Parallel()
+	started := make(chan struct{})
+	cancelled := make(chan bool, 1)
+	srv, requests := newServer("", http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+		close(started)
+		select {
+		case <-r.Context().Done():
+			cancelled <- true
+		case <-time.After(3 * time.Second):
+			cancelled <- false
+		}
+	}))
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	go func() { _ = srv.Serve(ln) }()
+	t.Cleanup(func() { _ = srv.Close() })
+
+	body, bodyWriter := io.Pipe()
+	t.Cleanup(func() { _ = bodyWriter.Close() })
+	req, err := http.NewRequest(http.MethodPost, "http://"+ln.Addr().String(), body) //nolint:noctx // test client
+	if err != nil {
+		t.Fatal(err)
+	}
+	go func() {
+		if resp, err := http.DefaultClient.Do(req); err == nil { //nolint:gosec,bodyclose // test client
+			_ = resp.Body.Close()
+		}
+	}()
+	select {
+	case <-started:
+	case <-time.After(5 * time.Second):
+		t.Fatal("the handler never started")
+	}
+
+	idle := requests.wait()
+	select {
+	case <-idle:
+		t.Fatal("wait() reported idle while a handler was running")
+	case <-time.After(50 * time.Millisecond):
+	}
+
+	requests.end()
+	if !<-cancelled {
+		t.Error("end() did not cancel the request context")
+	}
+	select {
+	case <-idle:
+	case <-time.After(2 * time.Second):
+		t.Error("wait() never reported idle after the handler returned")
+	}
+}
+
+// TestSchedulerJoinWaitsOnlyOnce: shutdown and serve's deferred cleanup both
+// join the scheduler. The second call must not wait again, or a scheduler that
+// outlasted the first bound would be waited on for another full bound.
+func TestSchedulerJoinWaitsOnlyOnce(t *testing.T) {
+	t.Parallel()
+	j := newSchedulerJoin(make(chan struct{})) // never closes
+	start := time.Now()
+	if j.wait(80 * time.Millisecond) {
+		t.Fatal("wait() = true for a scheduler that never finished")
+	}
+	first := time.Since(start)
+	start = time.Now()
+	if j.wait(5 * time.Second) {
+		t.Error("second wait() = true, want the first call's outcome")
+	}
+	if second := time.Since(start); second > first/2 {
+		t.Errorf("second wait took %v after a first of %v, want it to return at once", second, first)
 	}
 }
 
@@ -244,7 +474,7 @@ func TestShutdownBudgetFitsTheComposeGracePeriod(t *testing.T) {
 	if err != nil {
 		t.Fatalf("stop_grace_period %q: %v", m[1], err)
 	}
-	if got := httpShutdownTimeout + schedulerShutdownTimeout; got > gracePeriod-5*time.Second {
+	if got := httpShutdownTimeout + handlerShutdownTimeout + schedulerShutdownTimeout; got > gracePeriod-5*time.Second {
 		t.Errorf("shutdown budget %v leaves under 5s of docker's %v stop_grace_period", got, gracePeriod)
 	}
 }

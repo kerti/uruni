@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"sync"
 	"syscall"
 	"time"
 
@@ -156,29 +157,20 @@ func serve() error {
 		defer close(schedulerDone)
 		backup.RunScheduler(ctx, sqlDB, cfg.UploadsDir, cfg.BackupDir, logger)
 	}()
+	scheduler := newSchedulerJoin(schedulerDone)
 	// Every return path, not only the signal: a listener that fails at boot
 	// (port in use) returns through errc with the scheduler still running.
 	// Deferred after sqlDB.Close, so it runs first. On the signal path shutdown
-	// has already joined, and this returns at once.
+	// has already joined, and the join remembers its outcome, so this returns at
+	// once even when that join timed out: the scheduler is never waited on twice.
 	defer func() {
 		stop()
-		waitFor(schedulerDone, schedulerShutdownTimeout)
+		scheduler.wait(schedulerShutdownTimeout)
 	}()
 
-	srv := &http.Server{
-		Addr: fmt.Sprintf(":%d", cfg.Port),
-		Handler: uruniHTTP.New(assets, uruniHTTP.Build{Version: version, Commit: buildCommit()}, l, q, sqlDB, dbFile.Check, logger,
-			au, cfg.BaseURL, cfg.UploadsDir, cfg.BackupDir, cfg.TrustedProxies),
-		// A server with no timeouts can be held open by a slow client, one goroutine
-		// and one buffered response each. ReadTimeout and WriteTimeout cover the
-		// ordinary routes; the ones that carry a file (backup download, restore,
-		// receipt upload) extend their own per request (internal/http,
-		// extendDeadlines).
-		ReadHeaderTimeout: 10 * time.Second,
-		ReadTimeout:       serverReadTimeout,
-		WriteTimeout:      serverWriteTimeout,
-		IdleTimeout:       serverIdleTimeout,
-	}
+	srv, requests := newServer(fmt.Sprintf(":%d", cfg.Port),
+		uruniHTTP.New(assets, uruniHTTP.Build{Version: version, Commit: buildCommit()}, l, q, sqlDB, dbFile.Check, logger,
+			au, cfg.BaseURL, cfg.UploadsDir, cfg.BackupDir, cfg.TrustedProxies))
 
 	errc := make(chan error, 1)
 	go func() {
@@ -196,12 +188,37 @@ func serve() error {
 		return err
 	case <-ctx.Done():
 		logger.Info("shutting down")
-		return shutdown(srv, schedulerDone, httpShutdownTimeout, schedulerShutdownTimeout, logger)
+		return shutdown(srv, requests, scheduler, shutdownBounds{
+			drain:     httpShutdownTimeout,
+			handlers:  handlerShutdownTimeout,
+			scheduler: schedulerShutdownTimeout,
+		}, logger)
 	}
 }
 
-// The server's deadlines for an ordinary request (see the http.Server literal
-// in serve).
+// newServer builds serve's http.Server around h, with its request tracker
+// already attached. The pair comes out of one function so a server cannot be
+// started untracked, and shutdown is handed the tracker that belongs to it.
+func newServer(addr string, h http.Handler) (*http.Server, *requestTracker) {
+	srv := &http.Server{
+		Addr:    addr,
+		Handler: h,
+		// A server with no timeouts can be held open by a slow client, one goroutine
+		// and one buffered response each. ReadTimeout and WriteTimeout cover the
+		// ordinary routes; the ones that carry a file (backup download, restore,
+		// receipt upload) extend their own per request (internal/http,
+		// extendDeadlines).
+		ReadHeaderTimeout: 10 * time.Second,
+		ReadTimeout:       serverReadTimeout,
+		WriteTimeout:      serverWriteTimeout,
+		IdleTimeout:       serverIdleTimeout,
+	}
+	requests := newRequestTracker()
+	requests.attach(srv)
+	return srv, requests
+}
+
+// The server's deadlines for an ordinary request (see newServer).
 const (
 	// serverReadTimeout bounds the whole request, body included. Every JSON body
 	// is capped small (maxJSONBodyBytes), so 30s is generous even on a bad phone
@@ -218,33 +235,87 @@ const (
 )
 
 // The shutdown budget. docker-compose gives the container stop_grace_period 30s
-// before SIGKILL, so the two bounded waits below sum to 20s and leave 10s for
-// the database close, the instance lock release and the runtime's own exit.
+// before SIGKILL, so the three bounded waits below sum to 23s at worst and
+// leave 7s for the database close, the instance lock release and the runtime's
+// own exit. In practice the first wait is the only long one: handlers return in
+// milliseconds once their context is cancelled, and the scheduler has been
+// stopping since the signal.
 const (
-	httpShutdownTimeout      = 10 * time.Second
+	httpShutdownTimeout      = 8 * time.Second
+	handlerShutdownTimeout   = 5 * time.Second
 	schedulerShutdownTimeout = 10 * time.Second
 )
 
-// shutdown stops the server, then waits for the scheduler to finish its tick,
-// each for a bounded time. The scheduler waits second but has been stopping the
-// whole time: it shares serve's ctx, which the signal already cancelled. The
-// caller's deferred sqlDB.Close runs after this returns, which is the point:
-// nothing should still be writing a dump when the database closes.
+// shutdownBounds are the three waits shutdown makes, in order; the constants
+// above are what serve passes, tests pass milliseconds.
+type shutdownBounds struct {
+	drain     time.Duration // srv.Shutdown: let requests in flight finish
+	handlers  time.Duration // after the forced end: wait for handlers to return
+	scheduler time.Duration // wait for the backup scheduler's tick to finish
+}
+
+// errHandlersOutlivedShutdown is what serve exits non-zero for: a handler was
+// still running, past the forced end, when the database was about to close.
+var errHandlersOutlivedShutdown = errors.New("requests still running at shutdown")
+
+// shutdown stops the server, ends whatever the drain could not finish, then
+// waits for the scheduler to finish its tick, each for a bounded time. The
+// scheduler waits last but has been stopping the whole time: it shares serve's
+// ctx, which the signal already cancelled. The caller's deferred sqlDB.Close
+// runs after this returns, which is the point: nothing should still be serving
+// a request or writing a dump when the database closes.
 //
-// A timeout on either side is logged and shutdown carries on to the other, so a
-// hung drain cannot also skip the join. The HTTP error is the one returned.
-func shutdown(srv *http.Server, schedulerDone <-chan struct{}, httpTimeout, schedulerTimeout time.Duration, logger *slog.Logger) error {
-	httpCtx, cancel := context.WithTimeout(context.Background(), httpTimeout)
+// Past the drain bound the requests are ended, not abandoned: their contexts
+// are cancelled (a restore's transaction rolls back and the handler answers
+// with an error) and the connections are closed. shutdown then waits, bounded,
+// for the handlers to actually return, because Close does not.
+//
+// The result is nil when every handler returned, even if the drain needed the
+// forced end (logged as a warning): the database closed with no request on it,
+// which is a clean stop with an interrupted request, not a failed one. It is
+// errHandlersOutlivedShutdown when a handler ignored the cancellation and was
+// still running at the end of the handler bound. Waiting longer would only get
+// the container SIGKILLed mid-close, so shutdown logs it, carries on to the
+// scheduler, lets the caller close the database under that handler, and the
+// non-zero exit tells the operator a request was cut off.
+func shutdown(srv *http.Server, requests *requestTracker, scheduler *schedulerJoin, bounds shutdownBounds, logger *slog.Logger) error {
+	httpCtx, cancel := context.WithTimeout(context.Background(), bounds.drain)
 	defer cancel()
-	httpErr := srv.Shutdown(httpCtx)
-	if httpErr != nil {
-		logger.Error("http server did not drain in time", "timeout", httpTimeout.String(), "error", httpErr)
+	if err := srv.Shutdown(httpCtx); err != nil {
+		logger.Warn("http server did not drain in time, ending the requests still running", "timeout", bounds.drain.String(), "error", err)
+		requests.end()
+		_ = srv.Close() // drops the connections; the handlers are waited for below
 	}
 
-	if !waitFor(schedulerDone, schedulerTimeout) {
-		logger.Error("backup scheduler still running at shutdown, closing the database anyway", "timeout", schedulerTimeout.String())
+	var result error
+	if !waitFor(requests.wait(), bounds.handlers) {
+		logger.Error("requests still running at shutdown, closing the database anyway", "timeout", bounds.handlers.String())
+		result = errHandlersOutlivedShutdown
 	}
-	return httpErr
+
+	if !scheduler.wait(bounds.scheduler) {
+		logger.Error("backup scheduler still running at shutdown, closing the database anyway", "timeout", bounds.scheduler.String())
+	}
+	return result
+}
+
+// schedulerJoin is the one wait on the backup scheduler. shutdown makes it on
+// the signal path and serve's deferred cleanup makes it on every path, so the
+// first call does the waiting and later calls return its outcome at once.
+// Without that, a join that timed out in shutdown would be waited on a second
+// time and the worst case would pass docker's stop_grace_period.
+type schedulerJoin struct {
+	done <-chan struct{}
+	once sync.Once
+	ok   bool
+}
+
+func newSchedulerJoin(done <-chan struct{}) *schedulerJoin { return &schedulerJoin{done: done} }
+
+// wait reports whether the scheduler finished, waiting at most d the first time.
+func (j *schedulerJoin) wait(d time.Duration) bool {
+	j.once.Do(func() { j.ok = waitFor(j.done, d) })
+	return j.ok
 }
 
 // waitFor reports whether done closed within d.
