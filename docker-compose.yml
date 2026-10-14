@@ -12,9 +12,10 @@ services:
     image: ${URUNI_IMAGE:-ghcr.io/kerti/uruni}:${URUNI_TAG:?set URUNI_TAG in .env}
     restart: unless-stopped
     logging: *logging
-    # On SIGTERM the app drains requests (10s), then waits for a backup dump in
-    # progress (10s), then closes the database; 30s is Docker's ceiling before
-    # SIGKILL (cmd/uruni/main.go, shutdown).
+    # On SIGTERM the app drains requests (8s), ends any still running and waits
+    # for them to return (5s), then waits for a backup dump in progress (10s),
+    # then closes the database; 30s is Docker's ceiling before SIGKILL
+    # (cmd/uruni/main.go, shutdown).
     stop_grace_period: 30s
     # Everything the app writes (SQLite + its lock + WAL, receipts, backups)
     # sits on the three volumes below. /tmp is a backstop for the stdlib's
