@@ -98,7 +98,7 @@ async function seedCeilingFigures(request: APIRequestContext) {
 function measureFigures() {
   const issues: string[] = []
   const viewport = document.documentElement.clientWidth
-  const figure = /-?Rp\s?[\d.]+/g
+  const figure = /-?\u2060?Rp\s?[\d.]+/g
   const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT)
   for (let node = walker.nextNode(); node; node = walker.nextNode()) {
     const text = node.textContent ?? ''
