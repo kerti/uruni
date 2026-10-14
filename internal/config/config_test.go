@@ -342,3 +342,21 @@ func TestLoadRefusesABadTrustedProxy(t *testing.T) {
 		t.Fatalf("Load() = %v, want ErrInvalidConfig naming URUNI_TRUSTED_PROXIES", err)
 	}
 }
+
+func TestPlaintextPublicBaseURL(t *testing.T) {
+	for url, want := range map[string]bool{
+		"http://uruni.example.com":  true,
+		"http://192.168.1.20:8080":  true,
+		"https://uruni.example.com": false,
+		"https://localhost":         false,
+		"http://localhost:5173":     false,
+		"http://127.0.0.1:8080":     false,
+		"http://127.1.2.3":          false,
+		"http://[::1]":              false,
+		"http://[::1]:8080":         false,
+	} {
+		if got := PlaintextPublicBaseURL(url); got != want {
+			t.Errorf("PlaintextPublicBaseURL(%q) = %v, want %v", url, got, want)
+		}
+	}
+}
