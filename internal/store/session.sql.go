@@ -117,28 +117,29 @@ func (q *Queries) TouchSession(ctx context.Context, arg TouchSessionParams) (Ses
 	return i, err
 }
 
-const upsertSession = `-- name: UpsertSession :one
-INSERT INTO session (token, data, expires_at)
-VALUES (?, ?, ?)
-ON CONFLICT (token) DO UPDATE
-SET data = excluded.data, expires_at = excluded.expires_at
-RETURNING token, data, expires_at
+const updateSession = `-- name: UpdateSession :execrows
+UPDATE session
+SET data = ?, expires_at = ?
+WHERE token = ?
 `
 
-type UpsertSessionParams struct {
-	Token     string
+type UpdateSessionParams struct {
 	Data      []byte
 	ExpiresAt int64
+	Token     string
 }
 
-// What a session store commits through, as one atomic statement: a delete then
-// insert pair cannot stand in. ADR-004's SetMaxOpenConns(1) serialises the two
-// statements but does not join them, so two concurrent requests carrying the
-// same cookie interleave as DELETE / DELETE / INSERT / INSERT and the second
-// INSERT trips session.token's primary key. ON CONFLICT closes that window.
-func (q *Queries) UpsertSession(ctx context.Context, arg UpsertSessionParams) (Session, error) {
-	row := q.db.QueryRowContext(ctx, upsertSession, arg.Token, arg.Data, arg.ExpiresAt)
-	var i Session
-	err := row.Scan(&i.Token, &i.Data, &i.ExpiresAt)
-	return i, err
+// What a session store writes back for a session the request loaded (#601):
+// an UPDATE, never an insert, so a row another actor deleted in the meantime
+// (a restore, a password or email change) stays deleted and the caller reads 0
+// rows affected. A new token goes through CreateSession instead. Being one
+// statement, it also keeps two concurrent requests on one cookie from
+// colliding: a delete-then-insert pair interleaves under ADR-004's
+// SetMaxOpenConns(1) and the second INSERT trips session.token's primary key.
+func (q *Queries) UpdateSession(ctx context.Context, arg UpdateSessionParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, updateSession, arg.Data, arg.ExpiresAt, arg.Token)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
 }

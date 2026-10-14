@@ -103,7 +103,7 @@ func (a *api) routes(r chi.Router) {
 
 	// Scoped to /api rather than the whole router (ADR-030): no cookie should be
 	// parsed or issued for a static asset or the SSR public report.
-	r.Use(a.sessionManager.LoadAndSave)
+	r.Use(sessionMiddleware(a.sessionManager))
 
 	// The four routes a stranger can reach with no session (#116). Nothing joins
 	// this group without an explicit reason; every other handler, setup

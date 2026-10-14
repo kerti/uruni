@@ -3,6 +3,7 @@ package http
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"sync"
@@ -18,8 +19,7 @@ import (
 // the old pair, two interleaved as DELETE / DELETE / INSERT / INSERT and the
 // second INSERT tripped session.token's primary key, a 500 on an ordinary
 // request. Two parallel fetches from one SPA is everyday, not exotic: it
-// reproduced at 7 failures in 60 requests before UpsertSession made the write
-// one statement.
+// reproduced at 7 failures in 60 requests before the write became one statement.
 func TestConcurrentRequestsOnOneSessionDoNotCollide(t *testing.T) {
 	t.Parallel()
 	r, sqlDB := testRouterAndDB(t)
@@ -78,16 +78,44 @@ func newTestSessionStore(t *testing.T) (*sessionStore, *sql.DB) {
 	return newSessionStore(store.New(sqlDB)), sqlDB
 }
 
-// TestSessionStoreRoundTripsThroughThePlainInterface exercises Find, Commit and
-// Delete, the non-ctx trio scs.Store requires. Production never calls them
-// (scs prefers the Ctx forms), so this alone proves they forward correctly,
-// not all three landing on one token.
+// requestCtx is what trackSessionLoads gives a request: a context that records
+// the tokens FindCtx finds. The store tests drive the scs.Store contract
+// directly, so they build one by hand.
+func requestCtx() context.Context {
+	return context.WithValue(context.Background(), sessionLoadsKey{}, &sessionLoads{})
+}
+
+func sessionRowCount(t *testing.T, sqlDB *sql.DB, token string) int {
+	t.Helper()
+	var rows int
+	if err := sqlDB.QueryRow("SELECT count(*) FROM session WHERE token = ?", token).Scan(&rows); err != nil {
+		t.Fatalf("counting sessions: %v", err)
+	}
+	return rows
+}
+
+func sessionExpiry(t *testing.T, sqlDB *sql.DB, token string) int64 {
+	t.Helper()
+	var at int64
+	if err := sqlDB.QueryRow("SELECT expires_at FROM session WHERE token = ?", token).Scan(&at); err != nil {
+		t.Fatalf("reading expires_at of %q: %v", token, err)
+	}
+	return at
+}
+
+// TestSessionStoreRoundTripsThroughThePlainInterface exercises Find and Delete,
+// the non-ctx forms scs.Store requires. Production never calls them (scs prefers
+// the Ctx forms), so this alone proves they forward correctly. Commit has no
+// request context to say which arm applies, so it refuses (#601).
 func TestSessionStoreRoundTripsThroughThePlainInterface(t *testing.T) {
 	t.Parallel()
 	s, _ := newTestSessionStore(t)
 
-	if err := s.Commit("a-token", []byte("session-data"), time.Now().Add(time.Hour)); err != nil {
-		t.Fatalf("Commit() = %v, want no error", err)
+	if err := s.CommitCtx(requestCtx(), "a-token", []byte("session-data"), time.Now().Add(time.Hour)); err != nil {
+		t.Fatalf("CommitCtx() = %v, want no error", err)
+	}
+	if err := s.Commit("a-token", []byte("again"), time.Now().Add(time.Hour)); !errors.Is(err, errNoSessionLoads) {
+		t.Errorf("Commit() = %v, want errNoSessionLoads", err)
 	}
 
 	data, found, err := s.Find("a-token")
@@ -109,6 +137,98 @@ func TestSessionStoreRoundTripsThroughThePlainInterface(t *testing.T) {
 	}
 }
 
+// TestSessionStoreCommitWithoutALoadRecordFails: a context that cannot say
+// whether the token was loaded is refused, never guessed (#601). Neither arm
+// leaves a row.
+func TestSessionStoreCommitWithoutALoadRecordFails(t *testing.T) {
+	t.Parallel()
+	s, sqlDB := newTestSessionStore(t)
+
+	if err := s.CommitCtx(context.Background(), "a-token", []byte("d"), time.Now().Add(time.Hour)); !errors.Is(err, errNoSessionLoads) {
+		t.Errorf("CommitCtx(no record) = %v, want errNoSessionLoads", err)
+	}
+	if n := sessionRowCount(t, sqlDB, "a-token"); n != 0 {
+		t.Errorf("rows = %d, want 0", n)
+	}
+}
+
+// TestSessionStoreWritesBackOnlyWhatTheRequestLoaded is #601's rule at the
+// store: a loaded token that was deleted meanwhile stays deleted; a loaded one
+// that is still there is updated (the sliding expiry moves); a token the
+// request never loaded is inserted.
+func TestSessionStoreWritesBackOnlyWhatTheRequestLoaded(t *testing.T) {
+	t.Parallel()
+	s, sqlDB := newTestSessionStore(t)
+	soon := time.Now().Add(time.Hour)
+	later := time.Now().Add(48 * time.Hour)
+
+	t.Run("a loaded token deleted since stays deleted", func(t *testing.T) {
+		ctx := requestCtx()
+		if err := s.CommitCtx(ctx, "gone", []byte("v1"), soon); err != nil { // new token: inserted
+			t.Fatalf("CommitCtx(new) = %v", err)
+		}
+		if _, found, err := s.FindCtx(ctx, "gone"); err != nil || !found {
+			t.Fatalf("FindCtx() = found %v, err %v, want a hit", found, err)
+		}
+		if err := s.DeleteCtx(context.Background(), "gone"); err != nil { // a restore, a password change
+			t.Fatalf("DeleteCtx() = %v", err)
+		}
+		if err := s.CommitCtx(ctx, "gone", []byte("v2"), later); err != nil {
+			t.Fatalf("CommitCtx(revoked) = %v, want no error: a revoked session is not a failure", err)
+		}
+		if n := sessionRowCount(t, sqlDB, "gone"); n != 0 {
+			t.Errorf("rows = %d, want 0 - the commit resurrected a deleted session", n)
+		}
+	})
+
+	t.Run("a loaded token still there is updated", func(t *testing.T) {
+		ctx := requestCtx()
+		if err := s.CommitCtx(ctx, "live", []byte("v1"), soon); err != nil {
+			t.Fatalf("CommitCtx(new) = %v", err)
+		}
+		if _, found, err := s.FindCtx(ctx, "live"); err != nil || !found {
+			t.Fatalf("FindCtx() = found %v, err %v, want a hit", found, err)
+		}
+		if err := s.CommitCtx(ctx, "live", []byte("v2"), later); err != nil {
+			t.Fatalf("CommitCtx(loaded) = %v", err)
+		}
+		data, _, _ := s.FindCtx(context.Background(), "live")
+		if string(data) != "v2" || sessionExpiry(t, sqlDB, "live") != later.Unix() {
+			t.Errorf("row = %q expiring %d, want v2 expiring %d", data, sessionExpiry(t, sqlDB, "live"), later.Unix())
+		}
+	})
+
+	t.Run("a new token is inserted", func(t *testing.T) {
+		if err := s.CommitCtx(requestCtx(), "fresh", []byte("v1"), soon); err != nil {
+			t.Fatalf("CommitCtx(new) = %v", err)
+		}
+		if n := sessionRowCount(t, sqlDB, "fresh"); n != 1 {
+			t.Errorf("rows = %d, want 1", n)
+		}
+	})
+
+	t.Run("another request's load does not license this one", func(t *testing.T) {
+		if err := s.CommitCtx(requestCtx(), "shared", []byte("v1"), soon); err != nil {
+			t.Fatalf("CommitCtx(new) = %v", err)
+		}
+		other := requestCtx()
+		if _, found, _ := s.FindCtx(other, "shared"); !found {
+			t.Fatal("FindCtx() found nothing")
+		}
+		if err := s.DeleteCtx(context.Background(), "shared"); err != nil {
+			t.Fatalf("DeleteCtx() = %v", err)
+		}
+		// A request that never loaded the token commits it as new, and the PK
+		// is free; the other request's record changes nothing for this one.
+		if err := s.CommitCtx(requestCtx(), "shared", []byte("v2"), soon); err != nil {
+			t.Fatalf("CommitCtx() = %v", err)
+		}
+		if n := sessionRowCount(t, sqlDB, "shared"); n != 1 {
+			t.Errorf("rows = %d, want 1", n)
+		}
+	})
+}
+
 // TestSessionStoreFindReportsAMissOnAnUnknownOrExpiredToken is scs's Store.Find
 // contract: "not found" is not an error, and a row past its idle window reads
 // absent even before the lazy sweep, or an expired cookie would work until a
@@ -125,7 +245,7 @@ func TestSessionStoreFindReportsAMissOnAnUnknownOrExpiredToken(t *testing.T) {
 		t.Errorf("FindCtx(unknown token) = %q, %v, want nil, false", data, found)
 	}
 
-	if err := s.CommitCtx(context.Background(), "stale", []byte("d"), time.Now().Add(-time.Minute)); err != nil {
+	if err := s.CommitCtx(requestCtx(), "stale", []byte("d"), time.Now().Add(-time.Minute)); err != nil {
 		t.Fatalf("CommitCtx() = %v, want no error", err)
 	}
 	if _, found, err = s.FindCtx(context.Background(), "stale"); err != nil || found {
@@ -157,7 +277,7 @@ func TestSessionStoreSurfacesADatabaseError(t *testing.T) {
 	if _, found, err := s.FindCtx(ctx, "a-token"); err == nil || found {
 		t.Errorf("FindCtx() on a closed database = found %v, err %v, want an error", found, err)
 	}
-	if err := s.CommitCtx(ctx, "a-token", []byte("d"), time.Now().Add(time.Hour)); err == nil {
+	if err := s.CommitCtx(requestCtx(), "a-token", []byte("d"), time.Now().Add(time.Hour)); err == nil {
 		t.Error("CommitCtx() on a closed database = nil, want an error")
 	}
 	if err := s.DeleteCtx(ctx, "a-token"); err == nil {

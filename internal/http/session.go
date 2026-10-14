@@ -21,7 +21,8 @@ import (
 // sessionIdleTimeout is the 30-day sliding timeout #113 built the schema for;
 // TouchSession notes there is no absolute cap, so this is the only timeout
 // that binds. scs's IdleTimeout marks every loaded session Modified on every
-// request (scs's data.go), which is why sessionStore.CommitCtx upserts.
+// request (scs's data.go), which is why sessionStore.CommitCtx must refuse to
+// re-create a row that was deleted after the request loaded it.
 const sessionIdleTimeout = 30 * 24 * time.Hour
 
 // sessionLifetimeCap is scs's absolute session deadline, computed once at
@@ -50,15 +51,13 @@ const sessionKeyCredential = "credential"
 //
 // Why a session needs it (#386): with IdleTimeout set, scs marks every loaded
 // session Modified, so every authenticated request ends by writing its session
-// back (sessionStore.CommitCtx, an UPSERT). A request that loaded its session
-// before a password change commits after it, and puts back the row the change
-// deleted: deleting rows revokes nothing a request in flight can undo. The
-// fingerprint does not depend on the row being gone. The resurrected session
-// carries the old one, so the next request finds the mismatch and destroys it.
-//
-// One caveat: a restore keeps the live login (ADR-012), so its fingerprints are
-// unchanged and a session resurrected across a restore's DeleteAllSessions is
-// not caught here.
+// back. Deleting rows revokes the other sessions, and sessionStore.CommitCtx
+// (#601) does not put a deleted one back. This is the second line: it does not
+// depend on the row being gone, so a session that did come back (an older build,
+// a restored database file) carries the old fingerprint, and the next request
+// finds the mismatch and destroys it. It covers credential changes only; a
+// restore keeps the live login (ADR-012), so its fingerprints do not change and
+// the store's rule is what keeps its sessions signed out.
 func credentialFingerprint(u store.User) string {
 	sum := sha256.Sum256([]byte(u.PasswordHash + "\x00" + auth.NormalizeEmail(u.Email)))
 	return hex.EncodeToString(sum[:])

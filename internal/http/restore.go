@@ -406,11 +406,11 @@ func (a *api) confirmRestore(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// backup.Restore's DeleteAllSessions (inside its transaction) clears every
-	// session row, including this request's, but scs's LoadAndSave middleware
-	// (api.go) holds this request's session in memory and writes it back after
-	// this handler returns unless it is Destroyed first (see logout.go).
-	// Without this call the session that confirmed the restore would resurrect
-	// itself, backwards for the route that logs everyone out.
+	// session row, including this request's. The store no longer re-creates a
+	// deleted row on commit (sessionStore.CommitCtx), but scs's LoadAndSave
+	// would still hand this browser a refreshed cookie unless the session is
+	// Destroyed (see logout.go): this clears it, so the route that logs everyone
+	// out leaves no stale cookie behind.
 	if err := a.sessionManager.Destroy(r.Context()); err != nil {
 		a.log(r).Error("destroying the confirming session after restore", "error", err)
 		// The restore already committed; this is a logout-hygiene failure, not a
