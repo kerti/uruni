@@ -19,7 +19,12 @@ const idrFormatter = new Intl.NumberFormat('id-ID', {
 
 /** Renders integer rupiah as "Rp 1.000.000" for display only. */
 export function formatIDR(amount: number): string {
-  return idrFormatter.format(amount)
+  // A word joiner after the minus: "-" before a letter is a line-break
+  // opportunity, so a narrow row could split "-Rp 999.999.999.999" into "-"
+  // and "Rp ...", and a clipped number is a wrong number. U+2060 is invisible
+  // and forbids that break; the non-breaking space Intl puts after "Rp"
+  // already holds the rest together.
+  return idrFormatter.format(amount).replace(/^-/, '-\u2060')
 }
 
 // The grouped form a treasurer sees while typing: no "Rp", just the digits

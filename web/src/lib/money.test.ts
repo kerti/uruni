@@ -15,6 +15,11 @@ describe('formatIDR', () => {
     expect(normalize(formatIDR(50_000))).toBe('Rp 50.000')
     expect(normalize(formatIDR(0))).toBe('Rp 0')
   })
+
+  it('joins a negative figure\'s minus to "Rp" so a line can never break between them', () => {
+    expect(normalize(formatIDR(-15_000))).toBe('-\u2060Rp 15.000')
+    expect(parseRupiah(formatIDR(-15_000))).toBe(15_000)
+  })
 })
 
 describe('formatRupiahDigits', () => {

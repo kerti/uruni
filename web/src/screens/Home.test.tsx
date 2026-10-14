@@ -629,7 +629,7 @@ describe('Home', () => {
       const inFigure = screen.getByText(copy.home.monthIn).nextElementSibling
       const outFigure = screen.getByText(copy.home.monthOut).nextElementSibling
       expect(inFigure).toHaveTextContent(money(-20_000))
-      expect(inFigure?.textContent).toMatch(/^-Rp/)
+      expect(inFigure?.textContent).toMatch(/^-\u2060Rp/)
       expect(outFigure).toHaveTextContent(money(85_000))
     })
 
