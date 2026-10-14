@@ -3,7 +3,9 @@ package http
 import (
 	"log/slog"
 	"net/http"
+	"net/netip"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/go-chi/chi/v5/middleware"
@@ -61,6 +63,37 @@ func requestLogger(logger *slog.Logger) func(http.Handler) http.Handler {
 			)
 		})
 	}
+}
+
+// untrustedForwardedFor warns, once per process, that a private-range peer sent
+// X-Forwarded-For while no proxy is trusted (URUNI_TRUSTED_PROXIES empty).
+// That is the signature of a reverse proxy the operator has not told the app
+// about: the header is ignored, so every client shares the proxy's address in
+// the login, register and restore limiters, and one person's failed attempts
+// lock everyone out. Router adds it only when the list is empty.
+//
+// Private or loopback, not any peer: a public peer sending the header is a
+// client or a hostile one, not a proxy, and warning on it would let a stranger
+// write the operator's log. Neither the header's value nor the peer's address
+// is logged (ADR-022).
+func untrustedForwardedFor(logger *slog.Logger) func(http.Handler) http.Handler {
+	var once sync.Once
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if len(r.Header.Values("X-Forwarded-For")) > 0 && privatePeer(remoteAddr(r)) {
+				once.Do(func() {
+					logger.Warn("a private-range peer sent X-Forwarded-For but URUNI_TRUSTED_PROXIES is empty: the header is ignored, so behind a reverse proxy every client shares the proxy's address for rate limiting; set URUNI_TRUSTED_PROXIES to the proxy's address")
+				})
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
+// privatePeer is RFC 1918 / ULA space or loopback: where a reverse proxy sits
+// (Docker's bridge is 172.16.0.0/12; a host-network Caddy arrives from loopback).
+func privatePeer(addr netip.Addr) bool {
+	return addr.IsPrivate() || addr.IsLoopback()
 }
 
 // reportPathPrefix is where the public report's slug sits in a path.

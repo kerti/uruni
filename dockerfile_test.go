@@ -30,3 +30,28 @@ func TestDockerfileGoMatchesToolchain(t *testing.T) {
 		t.Errorf("Dockerfile builds with golang:%s, go.mod's toolchain is go%s", image[1], toolchain[1])
 	}
 }
+
+// The compose file is downloaded on its own (a release asset), so its first
+// line says which Uruni it was written for. It must name the tag
+// .env.example pins; the release steps bump both together.
+func TestComposeVersionMatchesURUNITag(t *testing.T) {
+	compose, err := os.ReadFile("docker-compose.yml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	envExample, err := os.ReadFile(".env.example")
+	if err != nil {
+		t.Fatal(err)
+	}
+	header := regexp.MustCompile(`\A# Uruni (v\S+)\n`).FindSubmatch(compose)
+	if header == nil {
+		t.Fatal("docker-compose.yml's first line is not `# Uruni vX.Y.Z`")
+	}
+	tag := regexp.MustCompile(`(?m)^URUNI_TAG=(\S+)$`).FindSubmatch(envExample)
+	if tag == nil {
+		t.Fatal(".env.example has no URUNI_TAG=<tag> line")
+	}
+	if string(header[1]) != string(tag[1]) {
+		t.Errorf("docker-compose.yml is headed %s, .env.example pins URUNI_TAG=%s", header[1], tag[1])
+	}
+}

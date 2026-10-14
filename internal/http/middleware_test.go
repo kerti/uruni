@@ -6,8 +6,13 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"net/netip"
 	"strings"
 	"testing"
+
+	"github.com/kerti/uruni/internal/auth"
+	"github.com/kerti/uruni/internal/ledger"
+	"github.com/kerti/uruni/internal/store"
 )
 
 // TestRequestLoggingMiddlewareRoundTrips exercises requestLogger against a
@@ -180,5 +185,75 @@ func TestCrossOriginWritesAreRefused(t *testing.T) {
 				t.Errorf("%s: Set-Cookie = %q, want none: a refused request never reaches the session", tc.name, got)
 			}
 		}
+	}
+}
+
+// TestUntrustedForwardedForWarnsOnce is #515's: a private peer's
+// X-Forwarded-For with no trusted proxy is warned about once per process, and
+// the warning leaks neither the header nor the peer.
+func TestUntrustedForwardedForWarnsOnce(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name string
+		peer string
+		xff  string
+		want int
+	}{
+		{"docker bridge peer", "172.18.0.2:5555", "203.0.113.9", 1},
+		{"loopback peer", "127.0.0.1:5555", "203.0.113.9", 1},
+		{"public peer", "198.51.100.7:5555", "203.0.113.9", 0},
+		{"no header", "172.18.0.2:5555", "", 0},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			var buf bytes.Buffer
+			logger := slog.New(slog.NewTextHandler(&buf, nil))
+			h := untrustedForwardedFor(logger)(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
+			for range 3 {
+				req := httptest.NewRequest(http.MethodGet, "/x", nil)
+				req.RemoteAddr = tc.peer
+				if tc.xff != "" {
+					req.Header.Set("X-Forwarded-For", tc.xff)
+				}
+				h.ServeHTTP(httptest.NewRecorder(), req)
+			}
+			out := buf.String()
+			if got := strings.Count(out, "level=WARN"); got != tc.want {
+				t.Errorf("warnings = %d, want %d: %q", got, tc.want, out)
+			}
+			for _, leak := range []string{"203.0.113.9", "172.18.0.2", "127.0.0.1"} {
+				if strings.Contains(out, leak) {
+					t.Errorf("log leaks %q: %q", leak, out)
+				}
+			}
+		})
+	}
+}
+
+// The router installs the warning only while no proxy is trusted.
+func TestRouterForwardedForWarningFollowsTrustedProxies(t *testing.T) {
+	t.Parallel()
+	for name, tc := range map[string]struct {
+		trusted []netip.Prefix
+		want    bool
+	}{
+		"none trusted":  {nil, true},
+		"proxy trusted": {[]netip.Prefix{netip.MustParsePrefix("172.16.0.0/12")}, false},
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			var buf bytes.Buffer
+			logger := slog.New(slog.NewTextHandler(&buf, nil))
+			sqlDB := testStoreDB(t)
+			h := New(testAssets(), testBuild, ledger.New(sqlDB), store.New(sqlDB), sqlDB, nil, logger, auth.New(sqlDB), "", t.TempDir(), t.TempDir(), tc.trusted)
+			req := httptest.NewRequest(http.MethodGet, "/healthz", nil)
+			req.RemoteAddr = "172.18.0.2:5555"
+			req.Header.Set("X-Forwarded-For", "203.0.113.9")
+			h.ServeHTTP(httptest.NewRecorder(), req)
+			if got := strings.Contains(buf.String(), "URUNI_TRUSTED_PROXIES"); got != tc.want {
+				t.Errorf("warned = %v, want %v: %q", got, tc.want, buf.String())
+			}
+		})
 	}
 }

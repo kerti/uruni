@@ -109,6 +109,13 @@ func serve() error {
 	// (ADR-021).
 	logger := newLogger(cfg, os.Stderr)
 
+	// Load accepts http on purpose (local dev, a LAN-only box), so the cost is
+	// said once at boot instead: the base URL, not the request, decides the
+	// cookie's Secure flag. The origin is not logged; the operator just set it.
+	if config.PlaintextPublicBaseURL(cfg.BaseURL) {
+		logger.Warn("URUNI_BASE_URL is http on a non-loopback host: the session cookie is not marked Secure and the treasurer's login travels in clear text; set it to the public https origin")
+	}
+
 	// SIGINT/SIGTERM close in-flight requests cleanly (`make restart` and
 	// `docker compose down` stop the process this way). Set up before the store
 	// opens so a Ctrl-C during a long first migration is honoured.

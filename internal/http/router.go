@@ -83,6 +83,9 @@ func newWithClock(assets fs.FS, build Build, l *ledger.Ledger, q store.Querier, 
 	r := chi.NewRouter()
 	r.Use(middleware.Recoverer)
 	r.Use(requestLogger(logger))
+	if len(trustedProxies) == 0 {
+		r.Use(untrustedForwardedFor(logger))
+	}
 	r.Use(securityHeaders)
 
 	r.Get("/healthz", healthz(build, dbFileCheck, pingStore(q), lastDumpIn(backupDir), logger))

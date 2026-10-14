@@ -185,6 +185,26 @@ func loadBaseURL(cfg *Config) error {
 	return nil
 }
 
+// PlaintextPublicBaseURL reports whether baseURL is plain http at a host that
+// is not this machine: the combination that leaves the session cookie without
+// its Secure flag (internal/http/session.go) on an instance people reach over
+// a network. localhost, 127.0.0.0/8 and ::1 are the dev setup and do not count.
+// An unparseable value is not this function's to flag; Load already refused it.
+func PlaintextPublicBaseURL(baseURL string) bool {
+	u, err := url.Parse(strings.TrimSpace(baseURL))
+	if err != nil || u.Scheme != "http" {
+		return false
+	}
+	host := strings.ToLower(u.Hostname())
+	if host == "localhost" {
+		return false
+	}
+	if addr, err := netip.ParseAddr(host); err == nil && addr.Unmap().IsLoopback() {
+		return false
+	}
+	return true
+}
+
 func loadLogging(cfg *Config) error {
 	cfg.LogLevel = DefaultLogLevel
 	if raw := strings.TrimSpace(os.Getenv("URUNI_LOG_LEVEL")); raw != "" {
