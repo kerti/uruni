@@ -20,8 +20,9 @@ import (
 
 // #386: a session is bound to the login it was issued for. Deleting session rows
 // is not enough on its own: with IdleTimeout set every authenticated request
-// writes its session back, so a request in flight across a change puts the
-// deleted row back (session_store.go, credentialFingerprint).
+// writes its session back. The store no longer re-creates a deleted row
+// (#601, session_store.go), so the fingerprint is the second line: the tests
+// that put a stale row back by hand (resurrect) prove it holds without the first.
 
 // signalBody is a request body that says when the handler first reads it and
 // then blocks on the pipe: a request held mid-flight, past the session gate.
@@ -105,9 +106,7 @@ func TestASessionWithoutAFingerprintIsRefusedAndDestroyed(t *testing.T) {
 	if err != nil {
 		t.Fatalf("encoding: %v", err)
 	}
-	if _, err := store.New(e.db).UpsertSession(context.Background(), store.UpsertSessionParams{Token: e.b, Data: data, ExpiresAt: time.Now().Add(time.Hour).Unix()}); err != nil {
-		t.Fatalf("UpsertSession() = %v", err)
-	}
+	putSessionRow(t, e, e.b, data)
 
 	e.wantStatus(t, e.call(t, http.MethodGet, "/api/user", e.b, nil), http.StatusUnauthorized, "unauthenticated")
 	if sessionRowExists(e, e.b) {
@@ -147,14 +146,27 @@ func resurrect(t *testing.T, e *userEnv, token string, values map[string]any) {
 	if err != nil {
 		t.Fatalf("encoding: %v", err)
 	}
-	if _, err := store.New(e.db).UpsertSession(context.Background(), store.UpsertSessionParams{Token: token, Data: data, ExpiresAt: time.Now().Add(time.Hour).Unix()}); err != nil {
-		t.Fatalf("UpsertSession() = %v", err)
+	putSessionRow(t, e, token, data)
+}
+
+// putSessionRow sets a session row to data, whether or not one is there: the
+// store itself no longer writes a row back that was deleted (#601), so a test
+// that wants a stale one reaches past it.
+func putSessionRow(t *testing.T, e *userEnv, token string, data []byte) {
+	t.Helper()
+	q := store.New(e.db)
+	ctx := context.Background()
+	if err := q.DeleteSession(ctx, token); err != nil {
+		t.Fatalf("DeleteSession() = %v", err)
+	}
+	if _, err := q.CreateSession(ctx, store.CreateSessionParams{Token: token, Data: data, ExpiresAt: time.Now().Add(time.Hour).Unix()}); err != nil {
+		t.Fatalf("CreateSession() = %v", err)
 	}
 }
 
 // The race: a request holds its session open, the password is changed from
-// another device, the held request finishes and its session commit puts the row
-// back. The row is back, and the old cookie still gets 401.
+// another device, the held request finishes. Its session commit must not put the
+// deleted row back (#601), and the old cookie gets 401 either way.
 func TestARequestInFlightCannotResurrectASessionAcrossAPasswordChange(t *testing.T) {
 	t.Parallel()
 	e := newUserEnv(t)
@@ -187,7 +199,7 @@ func TestARequestInFlightCannotResurrectASessionAcrossAPasswordChange(t *testing
 		t.Fatal("the change left the other session's row in place")
 	}
 
-	// The held request finishes; scs writes its (old) session back.
+	// The held request finishes; scs tries to write its (old) session back.
 	if _, err := pw.Write([]byte("{}")); err != nil {
 		t.Fatalf("releasing the held request: %v", err)
 	}
@@ -197,14 +209,12 @@ func TestARequestInFlightCannotResurrectASessionAcrossAPasswordChange(t *testing
 	case <-time.After(5 * time.Second):
 		t.Fatal("the held request never finished")
 	}
-	if !sessionRowExists(e, oldB) {
-		t.Fatal("the row was not written back, so this test no longer exercises the race it exists for")
+	requireSessionCommitRan(t, held, oldB)
+	if sessionRowExists(e, oldB) {
+		t.Fatal("the held request's commit put the deleted session back")
 	}
 
 	e.wantStatus(t, e.call(t, http.MethodGet, "/api/user", oldB, nil), http.StatusUnauthorized, "unauthenticated")
-	if sessionRowExists(e, oldB) {
-		t.Error("the refused session's row was left in place")
-	}
 	if !e.alive(t, e.a) {
 		t.Error("the session that made the change was signed out")
 	}
@@ -350,4 +360,19 @@ func TestAnEmailChangeLeavesTheOldDeviceCookieHarmless(t *testing.T) {
 	if got := loginWith(t, e.r, newEmail, userPassword, "192.0.2.53", device).Code; got != http.StatusTooManyRequests {
 		t.Errorf("login past a full network key with the old device cookie = %d, want %d", got, http.StatusTooManyRequests)
 	}
+}
+
+// requireSessionCommitRan fails unless the held request reached scs's commit
+// for token: the response carries that session's cookie, which scs writes only
+// after the store's CommitCtx returned. Without it a race test whose held
+// request failed earlier would pass without exercising the write-back.
+func requireSessionCommitRan(t *testing.T, held *httptest.ResponseRecorder, token string) {
+	t.Helper()
+	for _, c := range held.Result().Cookies() {
+		if c.Name == "session" && c.Value == token {
+			return
+		}
+	}
+	t.Fatalf("the held request did not commit session %q (status %d, Set-Cookie %q), so this test no longer exercises the write-back",
+		token, held.Code, held.Header().Values("Set-Cookie"))
 }

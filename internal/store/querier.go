@@ -686,17 +686,19 @@ type Querier interface {
 	// "clear it", the two nullable ones can, and only a set_* flag tells that from
 	// "leave alone".
 	UpdateReimbursement(ctx context.Context, arg UpdateReimbursementParams) (Reimbursement, error)
+	// What a session store writes back for a session the request loaded (#601):
+	// an UPDATE, never an insert, so a row another actor deleted in the meantime
+	// (a restore, a password or email change) stays deleted and the caller reads 0
+	// rows affected. A new token goes through CreateSession instead. Being one
+	// statement, it also keeps two concurrent requests on one cookie from
+	// colliding: a delete-then-insert pair interleaves under ADR-004's
+	// SetMaxOpenConns(1) and the second INSERT trips session.token's primary key.
+	UpdateSession(ctx context.Context, arg UpdateSessionParams) (int64, error)
 	UpdateUserEmail(ctx context.Context, arg UpdateUserEmailParams) (User, error)
 	// create-user's reset half (#287): the email is the key, matched as
 	// GetUserByEmail does (#500); the hash is computed by internal/auth.
 	UpdateUserPassword(ctx context.Context, arg UpdateUserPasswordParams) (User, error)
 	UpdateUserPasswordByID(ctx context.Context, arg UpdateUserPasswordByIDParams) (User, error)
-	// What a session store commits through, as one atomic statement: a delete then
-	// insert pair cannot stand in. ADR-004's SetMaxOpenConns(1) serialises the two
-	// statements but does not join them, so two concurrent requests carrying the
-	// same cookie interleave as DELETE / DELETE / INSERT / INSERT and the second
-	// INSERT trips session.token's primary key. ON CONFLICT closes that window.
-	UpsertSession(ctx context.Context, arg UpsertSessionParams) (Session, error)
 }
 
 var _ Querier = (*Queries)(nil)
