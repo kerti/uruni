@@ -69,6 +69,7 @@ func TestMigrateStatusSaysWhetherTheSchemaMatches(t *testing.T) {
 
 	fresh := filepath.Join(t.TempDir(), "uruni.db")
 	t.Setenv("URUNI_DB", fresh)
+	t.Setenv("URUNI_BACKUP_DIR", t.TempDir())
 	if err := migrate(context.Background(), []string{"up"}, io.Discard); err != nil {
 		t.Fatalf("migrate([up]) = %v", err)
 	}

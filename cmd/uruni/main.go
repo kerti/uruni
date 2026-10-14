@@ -19,7 +19,6 @@ import (
 	"github.com/kerti/uruni/internal/auth"
 	"github.com/kerti/uruni/internal/backup"
 	"github.com/kerti/uruni/internal/config"
-	"github.com/kerti/uruni/internal/db"
 	uruniHTTP "github.com/kerti/uruni/internal/http"
 	"github.com/kerti/uruni/internal/ledger"
 	"github.com/kerti/uruni/internal/lock"
@@ -123,41 +122,12 @@ func serve() error {
 	defer stop()
 
 	// The store, opened once for the process (ADR-004: one connection, so
-	// everything serializes).
-	sqlDB, err := db.Open(ctx, cfg.DBPath)
+	// everything serializes), brought to this binary's schema and checked.
+	sqlDB, dbFile, err := openDatabase(ctx, cfg, logger)
 	if err != nil {
 		return err
 	}
 	defer func() { _ = sqlDB.Close() }()
-
-	// Which file the path names now, so /healthz can tell if it is later deleted
-	// or replaced under this process (#278).
-	dbFile, err := db.IdentifyFile(cfg.DBPath)
-	if err != nil {
-		return err
-	}
-
-	// Migrations run on boot, so self-hosting stays `docker compose up` with no
-	// migration step (ADR-019). The cost is a slower first boot after an
-	// upgrade, the right side of that trade for one small instance.
-	if _, err := db.Up(ctx, sqlDB, logger); err != nil {
-		return err
-	}
-
-	// ADR-025: goose cannot see that the one migration file was edited in place,
-	// so an older database migrates "successfully" and stays on the old schema.
-	// Refuse before serving or writing, rather than let /healthz say ok and the
-	// treasurer meet 500s.
-	if err := verifySchema(ctx, sqlDB, cfg.DBPath); err != nil {
-		return err
-	}
-
-	// A damaged file is refused too (#505): serving it would put new entries on
-	// pages SQLite can't read, and the boot dump would write the damage into the
-	// backup directory.
-	if err := db.QuickCheck(ctx, sqlDB); err != nil {
-		return fmt.Errorf("database integrity check failed for %s - restore a backup (see SELF-HOSTING.md): %w", cfg.DBPath, err)
-	}
 
 	// A second store.New(sqlDB) beside ledger.New(sqlDB): store.Queries is a
 	// stateless wrapper over the shared *sql.DB (ADR-004), so this costs nothing

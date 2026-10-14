@@ -34,6 +34,7 @@ func TestMigrateUpStatusDownAgainstAFreshFile(t *testing.T) {
 	dbPath := filepath.Join(t.TempDir(), "uruni.db")
 	t.Setenv("URUNI_DB", dbPath)
 	t.Setenv("URUNI_BASE_URL", "https://uruni.test")
+	t.Setenv("URUNI_BACKUP_DIR", t.TempDir())
 
 	run := func(t *testing.T, verb string) string {
 		t.Helper()

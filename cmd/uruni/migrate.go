@@ -82,6 +82,11 @@ func migrate(ctx context.Context, args []string, out io.Writer) error {
 
 	switch verb {
 	case "up":
+		// The same guard serve takes, so the snapshot is of the file the previous
+		// binary left and the later serve finds it already taken.
+		if err := guardBeforeMigrating(ctx, sqlDB, cfg, logger); err != nil {
+			return err
+		}
 		return migrateUp(ctx, sqlDB, logger, out, cfg.DBPath)
 	case "down":
 		return migrateDown(ctx, sqlDB, nil, logger, out, dumpBeforeDown(sqlDB, cfg))
