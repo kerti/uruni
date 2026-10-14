@@ -134,7 +134,10 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ github.ref_name }}
         run: |
-          assets=(docker-compose.yml Caddyfile .env.example)
+          # GitHub refuses an asset name starting with a dot and stores
+          # ".env.example" as "default.env.example", so it goes up as env.example.
+          cp .env.example env.example
+          assets=(docker-compose.yml Caddyfile env.example)
           # Re-running a failed job, or a release the maintainer already started,
           # must not fail here: just (re)attach the files.
           if gh release view "$TAG" > /dev/null 2>&1; then
