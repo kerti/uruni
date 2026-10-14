@@ -15,6 +15,7 @@ The rules the agents follow are in [`CLAUDE.md`](../CLAUDE.md); the reasoning is
 | `hooks/pre-push-gate.sh` | Before every Bash call | Denies `git push` when `make check` fails |
 | `hooks/agent-gate.sh` | Before every Agent call | Turns every subagent spawn into a permission prompt |
 | `hooks/format-file.sh` | After Edit/Write | Formats what was just written |
+| `skills/dependabot-batch/` | When asked to batch Dependabot PRs | One PR for all open Dependabot updates: exact versions, npm-regenerated lockfile, `make notices`, toolchain amend, no `Closes` lines (#594) |
 
 `make claude-install` re-arms the executable bit on all four hooks. Re-run it after any pull that touches `.claude/`.
 
