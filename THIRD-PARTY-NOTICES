@@ -679,6 +679,7 @@ golang.org/x/crypto
 golang.org/x/image
 golang.org/x/sync
 golang.org/x/sys
+golang.org/x/term
 
 [LICENSE]
 

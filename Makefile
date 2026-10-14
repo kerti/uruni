@@ -535,4 +535,4 @@ dev-user:
 	@if [ -z "$(EMAIL)" ] || [ -z "$(PASSWORD)" ]; then \
 	  echo "usage: make dev-user EMAIL=<email> PASSWORD=<password>" >&2; exit 1; \
 	fi
-	@go run ./cmd/uruni create-user "$(EMAIL)" "$(PASSWORD)"
+	@printf '%s\n' "$(PASSWORD)" | go run ./cmd/uruni create-user "$(EMAIL)"

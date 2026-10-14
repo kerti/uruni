@@ -86,7 +86,7 @@ func TestCreateUserRefusesAStaleSchema(t *testing.T) {
 	t.Setenv("URUNI_DB", staleDatabase(t))
 	t.Setenv("URUNI_BASE_URL", "https://uruni.test")
 
-	err := createUser(context.Background(), []string{"treasurer@example.org", "correct-horse-battery"}, io.Discard)
+	err := createUser(context.Background(), []string{"treasurer@example.org", "correct-horse-battery"}, nil, io.Discard, io.Discard)
 	if !errors.Is(err, ErrSchemaMismatch) {
 		t.Fatalf("createUser() on a stale database = %v, want ErrSchemaMismatch", err)
 	}
