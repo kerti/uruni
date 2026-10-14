@@ -11,7 +11,9 @@ Uruni is one small Go binary (API + public report + the embedded web app) behind
 cp .env.example .env
 
 # 2. Edit .env — set URUNI_BASE_URL to your public https origin, and pin URUNI_TAG to the
-#    release you want (the compose file runs ghcr.io/kerti/uruni:$URUNI_TAG).
+#    release you want (the compose file runs ghcr.io/kerti/uruni:$URUNI_TAG
+#    and refuses to start if it is unset). Open ports 80, 443/tcp and 443/udp
+#    (HTTP/3) on the host firewall.
 
 # 3. Bring it up (Caddy fetches a TLS cert automatically for your domain).
 docker compose up -d
@@ -23,7 +25,7 @@ Then open your domain and register the treasurer's account. A fresh instance ask
 
 | Variable | Purpose |
 |---|---|
-| `URUNI_TAG` | Pinned image version to run. |
+| `URUNI_TAG` | Pinned image version to run. **Required: compose refuses to start unset.** |
 | `URUNI_BASE_URL` | Public base URL — Caddy serves this host and fetches TLS for it — the shareable report link is built from it, and its scheme decides whether the session cookie is `Secure`. **Required: the app refuses to start unset or on the `https://uruni.example.com` placeholder.** |
 | `URUNI_LOG_LEVEL` | Optional — `debug`, `info` (default), `warn`, `error`. |
 | `URUNI_LOG_FORMAT` | Optional — `text` (default) or `json`. |

@@ -52,10 +52,19 @@ jobs:
           URUNI_BASE_URL: https://uruni.example.com
           URUNI_TAG: ci
         run: docker compose -f docker-compose.yml config -q
-      - name: Boot on fresh volumes
+      - name: Compose refuses to run without URUNI_TAG
+        env:
+          URUNI_BASE_URL: https://uruni.example.com
+        run: |
+          if docker compose -f docker-compose.yml config -q 2>err.txt; then
+            echo "compose accepted an unset URUNI_TAG"; exit 1
+          fi
+          grep -q 'set URUNI_TAG in .env' err.txt
+      - name: Boot on fresh volumes (hardened as in docker-compose.yml)
         run: |
           for v in data uploads backups; do docker volume create "uruni-ci-$v"; done
           docker run -d --name uruni-ci -p 127.0.0.1:8080:8080 \
+            --read-only --tmpfs /tmp --cap-drop ALL --security-opt no-new-privileges:true \
             -e URUNI_BASE_URL=http://localhost:8080 \
             -e URUNI_DB=/data/uruni.db \
             -e URUNI_UPLOADS_DIR=/uploads \
