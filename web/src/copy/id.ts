@@ -343,6 +343,9 @@ export const copy = {
       // the source of the version they are using.
       sourceCode: 'Kode sumber',
       license: 'Lisensi AGPL-3.0',
+      // The licence notices of everything Uruni ships with (#521), served by
+      // the app itself at /third-party-notices.
+      thirdParty: 'Lisensi pihak ketiga',
       // Links the maintainer's site. "Pemelihara" is the word Indonesian
       // open-source translations use for a project's maintainer.
       maintainer: 'Pemelihara',

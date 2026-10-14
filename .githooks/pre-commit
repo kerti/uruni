@@ -31,8 +31,8 @@ regex=$(grep -vE '^[[:space:]]*($|#)' "$pf" | paste -sd'|' -)
 # NOTICE matters immediately: `make hooks-install` seeds .pii-patterns with your
 # own git identity, and AGPL-3.0's "how to apply" appendix wants exactly that
 # name as the copyright holder - so without this rule the guard blocks the
-# project from stating its own copyright. (THIRD-PARTY-NOTICES doesn't exist
-# yet; the rule is here so it doesn't have to be rediscovered when it does.)
+# project from stating its own copyright. THIRD-PARTY-NOTICES (generated, #521)
+# reproduces upstream copyright lines the same way.
 is_attribution() {
   case "$1" in
     LICENSE|NOTICE|COPYRIGHT|THIRD-PARTY-NOTICES|web/licenses/*) return 0 ;;

@@ -110,6 +110,9 @@ describe('Login footer', () => {
       'href',
       'https://github.com/kerti/uruni/blob/v0.6.0-alpha.9/LICENSE',
     )
+    const notices = screen.getByRole('link', { name: copy.auth.chrome.thirdParty })
+    expect(notices).toHaveAttribute('href', '/third-party-notices')
+    expect(notices).toHaveAttribute('target', '_blank')
     expect(screen.getByRole('link', { name: copy.auth.chrome.maintainer })).toHaveAttribute('href', 'https://radityakertiyasa.com')
   })
 })

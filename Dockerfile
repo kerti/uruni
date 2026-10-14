@@ -11,6 +11,12 @@ WORKDIR /web
 COPY web/package*.json ./
 RUN npm ci
 COPY web/ ./
+# Where the signed-out footer's "Kode sumber" and licence links point (#521).
+# AGPL-3.0 section 13 owes a network user the source of the version they are
+# using, so a fork that distributes a modified build must set this to its own
+# repository (CONTRIBUTING.md). Upstream is the default.
+ARG URUNI_SOURCE_URL=https://github.com/kerti/uruni
+ENV VITE_SOURCE_URL=${URUNI_SOURCE_URL}
 RUN npm run build
 
 # 2) Build the Go binary with the SPA embedded via embed.FS.
@@ -51,6 +57,10 @@ COPY --from=dirs --chown=65532:65532 /stage/data /data
 COPY --from=dirs --chown=65532:65532 /stage/uploads /uploads
 COPY --from=dirs --chown=65532:65532 /stage/backups /backups
 COPY --from=build /out/uruni /uruni
+# The licence notices that must travel with the binary (#521): the project's own
+# licence and notice, and the third-party notices, which the binary also serves
+# at /third-party-notices.
+COPY --from=build /src/LICENSE /src/NOTICE /src/THIRD-PARTY-NOTICES /licenses/
 EXPOSE 8080
 USER nonroot:nonroot
 # No shell and no curl in distroless, so the binary checks itself (ADR-019).
