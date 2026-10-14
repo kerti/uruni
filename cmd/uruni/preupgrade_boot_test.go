@@ -179,18 +179,19 @@ func TestCreateUserTakesTheSnapshotAndTheLaterServeDoesNotRepeatIt(t *testing.T)
 	onlySnapshot(t, backupDir, "v2")
 }
 
-func TestMigrateUpAndCreateUserStopWhenTheSnapshotCannotBeWritten(t *testing.T) {
+func TestMigrateUpAndCreateUserStopWithNoBackupDirectory(t *testing.T) {
 	dbPath, backupDir := legacyInstance(t)
 	setVersion(t, "v2")
 	if err := os.RemoveAll(backupDir); err != nil {
 		t.Fatal(err)
 	}
 
-	if err := migrate(context.Background(), []string{"up"}, io.Discard); !errors.Is(err, backup.ErrPreUpgradeSnapshot) {
-		t.Errorf("migrate([up]) = %v, want ErrPreUpgradeSnapshot", err)
+	// The same refusal serve gives, before anything is copied or migrated.
+	if err := migrate(context.Background(), []string{"up"}, io.Discard); !errors.Is(err, config.ErrInvalidConfig) {
+		t.Errorf("migrate([up]) = %v, want ErrInvalidConfig", err)
 	}
-	if err := createUser(context.Background(), []string{"treasurer@example.org", "correct-horse-battery"}, io.Discard); !errors.Is(err, backup.ErrPreUpgradeSnapshot) {
-		t.Errorf("createUser() = %v, want ErrPreUpgradeSnapshot", err)
+	if err := createUser(context.Background(), []string{"treasurer@example.org", "correct-horse-battery"}, io.Discard); !errors.Is(err, config.ErrInvalidConfig) {
+		t.Errorf("createUser() = %v, want ErrInvalidConfig", err)
 	}
 	if tablesOf(t, dbPath)["fund"] {
 		t.Error("the database was migrated with no snapshot")

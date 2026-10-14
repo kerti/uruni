@@ -102,6 +102,9 @@ func migrateForCreateUser(ctx context.Context, sqlDB *sql.DB, cfg config.Config,
 		}
 		defer func() { _ = instanceLock.Release() }()
 
+		if err := config.EnsureBackupDirWritable(cfg.BackupDir); err != nil {
+			return err
+		}
 		if err := guardBeforeMigrating(ctx, sqlDB, cfg, logger); err != nil {
 			return err
 		}
