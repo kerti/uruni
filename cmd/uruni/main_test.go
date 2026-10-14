@@ -2,12 +2,16 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -131,5 +135,116 @@ func TestNewLoggerHonoursFormatAndLevel(t *testing.T) {
 	logger.Info("listening", "port", 8080)
 	if got := out.String(); !strings.Contains(got, "port=8080") {
 		t.Errorf("text format logged %q, want a key=value line", got)
+	}
+}
+
+// TestShutdownWaitsForTheSchedulerBeforeReturning: serve closes the database
+// right after shutdown returns, so a tick still writing a dump when it returns
+// would write against a closed database. The "scheduler" here finishes some
+// time after shutdown starts and records whether the database was already
+// closed by then.
+func TestShutdownWaitsForTheSchedulerBeforeReturning(t *testing.T) {
+	t.Parallel()
+	var logs bytes.Buffer
+	logger := slog.New(slog.NewTextHandler(&logs, nil))
+
+	var dbClosed atomic.Bool
+	finishedBeforeClose := make(chan bool, 1)
+	done := make(chan struct{})
+	go func() {
+		time.Sleep(100 * time.Millisecond)
+		finishedBeforeClose <- !dbClosed.Load()
+		close(done)
+	}()
+
+	if err := shutdown(&http.Server{ReadHeaderTimeout: time.Second}, done, time.Second, 5*time.Second, logger); err != nil {
+		t.Fatalf("shutdown() = %v, want nil", err)
+	}
+	dbClosed.Store(true) // what the deferred sqlDB.Close stands for
+
+	if !<-finishedBeforeClose {
+		t.Error("the database was closed while the scheduler was still running")
+	}
+	if strings.Contains(logs.String(), "level=ERROR") {
+		t.Errorf("clean shutdown logged an error: %s", logs.String())
+	}
+}
+
+// TestShutdownGivesUpOnAStuckSchedulerAndSaysSo: the wait is bounded so a hung
+// tick cannot hold the process past docker's stop_grace_period and get it
+// SIGKILLed mid-close; the cost is one error line.
+func TestShutdownGivesUpOnAStuckSchedulerAndSaysSo(t *testing.T) {
+	t.Parallel()
+	var logs bytes.Buffer
+	logger := slog.New(slog.NewTextHandler(&logs, nil))
+
+	start := time.Now()
+	err := shutdown(&http.Server{ReadHeaderTimeout: time.Second}, make(chan struct{}), time.Second, 100*time.Millisecond, logger)
+	if err != nil {
+		t.Errorf("shutdown() = %v, want nil (the HTTP side drained)", err)
+	}
+	if elapsed := time.Since(start); elapsed > 3*time.Second {
+		t.Errorf("shutdown took %v, want about the 100ms scheduler bound", elapsed)
+	}
+	if !strings.Contains(logs.String(), "level=ERROR") || !strings.Contains(logs.String(), "backup scheduler still running") {
+		t.Errorf("log = %q, want an error naming the scheduler", logs.String())
+	}
+}
+
+// TestShutdownStillJoinsTheSchedulerWhenTheHTTPDrainTimesOut: a request that
+// will not finish must not skip the scheduler wait, and its error is the one
+// returned.
+func TestShutdownStillJoinsTheSchedulerWhenTheHTTPDrainTimesOut(t *testing.T) {
+	t.Parallel()
+	release := make(chan struct{})
+	started := make(chan struct{})
+	ts := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+		close(started)
+		<-release
+	}))
+	t.Cleanup(func() { close(release); ts.Close() })
+	go func() { _, _ = http.Get(ts.URL) }() //nolint:gosec,noctx,bodyclose // test client; the handler never answers
+	<-started
+
+	var logs bytes.Buffer
+	logger := slog.New(slog.NewTextHandler(&logs, nil))
+	done := make(chan struct{})
+	var joined atomic.Bool
+	go func() {
+		time.Sleep(150 * time.Millisecond)
+		joined.Store(true)
+		close(done)
+	}()
+
+	err := shutdown(ts.Config, done, 50*time.Millisecond, 5*time.Second, logger)
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Errorf("shutdown() = %v, want context.DeadlineExceeded", err)
+	}
+	if !joined.Load() {
+		t.Error("shutdown returned before the scheduler finished")
+	}
+	if !strings.Contains(logs.String(), "http server did not drain in time") {
+		t.Errorf("log = %q, want the drain timeout logged", logs.String())
+	}
+}
+
+// The shutdown budget must fit docker-compose's stop_grace_period (30s) with
+// room for the database close and lock release.
+func TestShutdownBudgetFitsTheComposeGracePeriod(t *testing.T) {
+	t.Parallel()
+	compose, err := os.ReadFile(filepath.Join("..", "..", "docker-compose.yml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := regexp.MustCompile(`(?m)^\s*stop_grace_period:\s*(\S+)\s*$`).FindSubmatch(compose)
+	if m == nil {
+		t.Fatal("docker-compose.yml sets no stop_grace_period for the app")
+	}
+	gracePeriod, err := time.ParseDuration(string(m[1]))
+	if err != nil {
+		t.Fatalf("stop_grace_period %q: %v", m[1], err)
+	}
+	if got := httpShutdownTimeout + schedulerShutdownTimeout; got > gracePeriod-5*time.Second {
+		t.Errorf("shutdown budget %v leaves under 5s of docker's %v stop_grace_period", got, gracePeriod)
 	}
 }

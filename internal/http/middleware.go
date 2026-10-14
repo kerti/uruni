@@ -34,6 +34,53 @@ func (a *api) sessionRequired(next http.Handler) http.Handler {
 	})
 }
 
+// How long a route that moves a file may take, end to end. The server's own
+// ReadTimeout and WriteTimeout (cmd/uruni/main.go) are short, to bound a slow
+// client on the ordinary routes; these two are set per request on the routes
+// that carry a file, by extendDeadlines.
+//
+//   - receiptTransferTimeout matches the SPA's UPLOAD_TIMEOUT_MS (web/src/lib/api.ts,
+//     120s): the client waits that long for a receipt photo (up to 10 MB) on a
+//     poor phone connection, so the server must not give up sooner.
+//   - backupTransferTimeout covers a backup download (the zip is held whole in
+//     memory) and the restore routes. It is the server's ceiling, not what a
+//     phone gets: the SPA gives up on any file upload at UPLOAD_TIMEOUT_MS. The
+//     server stays out of the way up to the largest restore it accepts (256 MB,
+//     backup.MaxUploadBytes, is 15 minutes at about 2.3 Mbit/s), including the
+//     inspect and confirm work after the body arrives. Absolute, not per byte:
+//     it bounds one authenticated treasurer's transfer, not a crowd.
+const (
+	receiptTransferTimeout = 2 * time.Minute
+	backupTransferTimeout  = 15 * time.Minute
+)
+
+// extendDeadlines gives the routes behind it d to read the request and write
+// the response, replacing the server-wide deadlines for this request alone.
+// Both are set so a route is one line, whichever way it moves its bytes: the
+// read deadline is what an upload runs into, the write deadline what a download
+// (or the response after a long restore step) runs into.
+//
+// http.NewResponseController finds the connection by following Unwrap through
+// every wrapper above it (requestLogger's chi wrapper, scs's session writer);
+// a wrapper without Unwrap would make the call fail with http.ErrNotSupported.
+// That is logged rather than swallowed, because the symptom (a download cut off
+// at the server-wide WriteTimeout) shows far from the cause.
+func extendDeadlines(logger *slog.Logger, d time.Duration) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			rc := http.NewResponseController(w)
+			deadline := time.Now().Add(d)
+			if err := rc.SetReadDeadline(deadline); err != nil {
+				logger.Warn("could not extend the read deadline", "error", err)
+			}
+			if err := rc.SetWriteDeadline(deadline); err != nil {
+				logger.Warn("could not extend the write deadline", "error", err)
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
 // requestLogger logs one line per request: method, path, status and duration,
 // what ADR-022 promised as M4 middleware.
 //
