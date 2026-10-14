@@ -64,16 +64,29 @@ const (
 	sqliteNotADB  = 26 // SQLITE_NOTADB
 )
 
-// quickCheckError wraps err in ErrIntegrity when SQLite says the file is
-// damaged, and leaves anything else (a cancelled context, a busy database)
-// plain, so a caller never reports corruption that isn't.
-func quickCheckError(step string, err error) error {
+// IsDamage reports whether err says the file itself is damaged: ErrIntegrity
+// from QuickCheck, or SQLite's SQLITE_CORRUPT / SQLITE_NOTADB from any other
+// step. A busy, unopenable or out-of-space error is not damage.
+func IsDamage(err error) bool {
+	if errors.Is(err, ErrIntegrity) {
+		return true
+	}
 	var coded interface{ Code() int }
 	if errors.As(err, &coded) {
 		switch coded.Code() & 0xff { // extended codes keep the primary in the low byte
 		case sqliteCorrupt, sqliteNotADB:
-			return fmt.Errorf("%w: %v", ErrIntegrity, err) //nolint:errorlint // ErrIntegrity is what callers match
+			return true
 		}
+	}
+	return false
+}
+
+// quickCheckError wraps err in ErrIntegrity when SQLite says the file is
+// damaged, and leaves anything else (a cancelled context, a busy database)
+// plain, so a caller never reports corruption that isn't.
+func quickCheckError(step string, err error) error {
+	if IsDamage(err) {
+		return fmt.Errorf("%w: %v", ErrIntegrity, err) //nolint:errorlint // ErrIntegrity is what callers match
 	}
 	return fmt.Errorf("db: %s quick_check: %w", step, err)
 }

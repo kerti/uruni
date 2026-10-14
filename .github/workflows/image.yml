@@ -88,6 +88,41 @@ jobs:
           # Distroless has no shell or ls: list the volume from a throwaway image.
           docker run --rm -v uruni-ci-backups:/b:ro busybox:1.38.0@sha256:fd7dc98638c8e305f4dc34e979f1c0fdfdcaeb0fbf8fcff77ae834b6da3d7e6e ls /b | tee /tmp/dumps.txt
           grep -Eq '^uruni-[0-9]{8}-[0-9]{6}-daily-fv[0-9]+-[0-9a-f]{12}\.zip$' /tmp/dumps.txt
+      # `uruni rebuild` (#516) under the same hardening as the app: read-only root
+      # filesystem, no capabilities, scratch and swap on the data volume. The
+      # backup is made the way a person makes one (register, download) and the
+      # app is stopped first, as rebuild requires. Two runs: the current
+      # database is refused (its schema already matches), then a fresh data
+      # volume is rebuilt from the zip.
+      - name: Rebuild from a backup (hardened as in docker-compose.yml)
+        run: |
+          mkdir -p /tmp/rebuild-in && chmod 755 /tmp/rebuild-in
+          curl -fsS -c /tmp/rebuild-jar -H 'Content-Type: application/json' \
+            -d '{"email":"ci@example.org","password":"ci-rebuild-password"}' \
+            http://127.0.0.1:8080/api/register
+          curl -fsS -b /tmp/rebuild-jar -o /tmp/rebuild-in/backup.zip http://127.0.0.1:8080/api/backup
+          chmod 644 /tmp/rebuild-in/backup.zip
+          docker stop uruni-ci
+          docker volume create uruni-ci-data2
+          rebuild() {
+            docker run --rm --read-only --tmpfs /tmp --cap-drop ALL --security-opt no-new-privileges:true \
+              -e URUNI_BASE_URL=http://localhost:8080 \
+              -e URUNI_DB=/data/uruni.db \
+              -e URUNI_UPLOADS_DIR=/uploads \
+              -e URUNI_BACKUP_DIR=/backups \
+              -v "$1":/data -v uruni-ci-uploads:/uploads -v uruni-ci-backups:/backups \
+              -v /tmp/rebuild-in:/in:ro \
+              uruni-ci:test "${@:2}"
+          }
+          if rebuild uruni-ci-data rebuild --from /in/backup.zip 2>/tmp/rebuild-err.txt; then
+            echo "rebuild accepted a database that already has the current schema"; exit 1
+          fi
+          cat /tmp/rebuild-err.txt
+          grep -q "already has this version's schema" /tmp/rebuild-err.txt
+          rebuild uruni-ci-data2 rebuild --from /in/backup.zip | tee /tmp/rebuild-out.txt
+          grep -q '^login carried over: ci@example.org' /tmp/rebuild-out.txt
+          rebuild uruni-ci-data2 migrate status | tee /tmp/rebuild-status.txt
+          grep -q 'schema: matches this version' /tmp/rebuild-status.txt
       - name: Container logs on failure
         if: failure()
         run: docker logs uruni-ci || true
@@ -95,7 +130,7 @@ jobs:
         if: always()
         run: |
           docker rm -f uruni-ci || true
-          docker volume rm uruni-ci-data uruni-ci-uploads uruni-ci-backups || true
+          docker volume rm uruni-ci-data uruni-ci-data2 uruni-ci-uploads uruni-ci-backups || true
 
   # No QEMU: the Dockerfile cross-compiles on the build platform and its only
   # target-platform stage is COPY, so this checks exactly that claim.

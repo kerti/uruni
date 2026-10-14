@@ -43,7 +43,7 @@ var (
 )
 
 // usage lists every subcommand in ADR-019's table.
-const usage = "try: uruni serve | migrate up|down|status | create-user <email> <password> | version | healthcheck | seed-e2e"
+const usage = "try: uruni serve | migrate up|down|status | create-user <email> <password> | rebuild --from <backup.zip> | version | healthcheck | seed-e2e"
 
 func run(args []string) error {
 	if len(args) == 0 {
@@ -63,6 +63,13 @@ func run(args []string) error {
 		return healthcheck()
 	case "create-user":
 		return createUser(context.Background(), args[1:], os.Stdout)
+	case "rebuild":
+		// No timeout: a large backup takes as long as it takes. An interrupt
+		// cancels the context, and the rebuild's own cleanup leaves uruni.db as
+		// it was.
+		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+		defer stop()
+		return rebuild(ctx, args[1:], os.Stdout)
 	case "seed-e2e":
 		return seedE2E(context.Background())
 	default:

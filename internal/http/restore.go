@@ -306,7 +306,7 @@ func writeRestoreParseError(w http.ResponseWriter, logger interface {
 	case errors.Is(err, backup.ErrFormatVersionOlder):
 		writeAPIError(w, http.StatusUnprocessableEntity, "restore_format_too_old",
 			"This backup was made by an older version of Uruni that this server can no longer read.")
-	case errors.Is(err, backup.ErrTooManyEntries), errors.Is(err, backup.ErrUnzippedTooLarge):
+	case errors.Is(err, backup.ErrTooManyEntries), errors.Is(err, backup.ErrUnzippedTooLarge), errors.Is(err, backup.ErrUploadTooLarge):
 		writeAPIError(w, http.StatusRequestEntityTooLarge, "restore_file_too_large",
 			"This file is larger than a Uruni backup ever should be.")
 	case errors.Is(err, backup.ErrBadReceiptImage):

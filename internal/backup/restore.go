@@ -1,8 +1,9 @@
 // restore.go is the restore half of ADR-012: parsing and validating an
 // uploaded backup zip (ParseUpload), previewing what it would change
-// (BuildPreview), and the atomic restore itself (Restore). They are plain
-// package functions because restore is one-shot with no state to carry; a
-// future CLI `uruni import` calls the same trio.
+// (BuildPreview), and the restore itself, in two entry points over one core:
+// Restore, the in-app one, and RestoreForRebuild, which `uruni rebuild` runs
+// on a fresh database (cmd/uruni/rebuild.go). They are plain package functions
+// because restore is one-shot with no state to carry.
 //
 // (A blank line separates this from `package backup` so revive does not read
 // it as the package doc comment, which export.go owns.)
@@ -93,6 +94,7 @@ var (
 	// live receipt row's server-generated path).
 	ErrMalformedBackup  = errors.New("backup: the file is not a valid Uruni backup")
 	ErrTooManyEntries   = errors.New("backup: the zip holds more files than a backup ever should")
+	ErrUploadTooLarge   = errors.New("backup: the file is larger than a backup ever should be")
 	ErrUnzippedTooLarge = errors.New("backup: the zip's contents are larger, unzipped, than a backup ever should be")
 	// ErrBadReceiptImage is a receipt in the zip that fails the decode checks
 	// ADR-011 applies on upload. A missing file is not this: ParseUpload skips
@@ -103,6 +105,10 @@ var (
 	// is written (Export, the dumps), ParseUpload at inspect, and Restore inside
 	// the write transaction before COMMIT, which rolls back with nothing changed.
 	ErrTotalsMismatch = errors.New("backup: the restored totals did not match the file's own totals")
+	// ErrRebuildLogins is RestoreForRebuild's refusal of a backup that does not
+	// hold exactly one login: zero would leave a populated instance open to
+	// first registration (ADR-030), and two is not a shape this app produces.
+	ErrRebuildLogins = errors.New("backup: a rebuild needs a backup that holds exactly one login")
 )
 
 // ParsedUpload is ParseUpload's result: the decoded, validated document and
@@ -148,7 +154,7 @@ func ParseUpload(path string) (ParsedUpload, error) {
 	}
 	size := info.Size()
 	if size > MaxUploadBytes {
-		return ParsedUpload{}, fmt.Errorf("%w: %d bytes, more than the %d byte cap", ErrTooManyEntries, size, MaxUploadBytes)
+		return ParsedUpload{}, fmt.Errorf("%w: %d bytes, more than the %d byte cap", ErrUploadTooLarge, size, MaxUploadBytes)
 	}
 
 	zr, err := zip.NewReader(f, size)
@@ -480,10 +486,26 @@ var immutableTriggers = []string{
 	"reconciliation_line_immutable_delete",
 }
 
-// Restore is the write side of ADR-012's restore path: a safety-net dump,
-// additive receipt extraction, then one write transaction that clears every
-// fund-scoped table, re-inserts exactly what parsed.Document holds with
-// every id preserved, proves the totals, and commits - or changes nothing.
+// userMode is what a restore does with the "user" table. A named type, not a
+// bool: the two entry points differ in exactly this, and the call site should
+// say which one it is.
+type userMode int
+
+const (
+	// keepLiveUser is the in-app restore: the live login is left untouched
+	// (ADR-012 "Login is not restored"), so the treasurer cannot be locked out
+	// by a stale password hash.
+	keepLiveUser userMode = iota
+	// carryBackupUser is the rebuild: the target is a fresh database with no
+	// login, and the backup's one login is inserted with its id.
+	carryBackupUser
+)
+
+// Restore is the in-app write side of ADR-012's restore path: a safety-net
+// dump, additive receipt extraction, then one write transaction that clears
+// every fund-scoped table, re-inserts exactly what parsed.Document holds with
+// every id preserved, proves the totals, and commits - or changes nothing. The
+// live login is not touched; every session is cleared.
 //
 // sqlDB is the raw pool because this operation opens a transaction spanning
 // nearly every table, and ledger.Ledger's balance methods are bound to
@@ -499,10 +521,49 @@ func Restore(ctx context.Context, sqlDB *sql.DB, uploadsDir, backupDir string, p
 	if _, err := WritePreRestoreDump(ctx, sqlDB, uploadsDir, backupDir, now); err != nil {
 		return fmt.Errorf("backup: writing the safety-net dump: %w", err)
 	}
+	_, err := restoreCore(ctx, sqlDB, uploadsDir, parsed, keepLiveUser)
+	return err
+}
 
+// CheckRebuildLogin is the read-only half of RestoreForRebuild's login rule,
+// so `uruni rebuild` can refuse before it writes anything.
+func CheckRebuildLogin(doc Document) error {
+	if len(doc.Users) != 1 {
+		return fmt.Errorf("%w: this one holds %d", ErrRebuildLogins, len(doc.Users))
+	}
+	return nil
+}
+
+// RestoreForRebuild is the second entry point: it fills a freshly migrated,
+// empty database (the scratch file `uruni rebuild` builds) from a backup,
+// login included. No safety-net dump: nothing live is being replaced, the old
+// file stays where it is until the rebuild swaps. The same totals proof runs
+// before COMMIT. The login is carried over because the lockout reasoning of
+// "Login is not restored" does not apply: there is no live password to
+// preserve, and a populated instance with no login would be open to first
+// registration (ADR-030).
+//
+// It returns the receipt files it created in uploadsDir (not ones already on
+// disk). On error it has already removed them; on success the caller removes
+// them with RemoveCreatedReceipts if a later step of the rebuild fails.
+func RestoreForRebuild(ctx context.Context, sqlDB *sql.DB, uploadsDir string, parsed ParsedUpload) (created []string, err error) {
+	if err := CheckRebuildLogin(parsed.Document); err != nil {
+		return nil, err
+	}
+	return restoreCore(ctx, sqlDB, uploadsDir, parsed, carryBackupUser)
+}
+
+// RemoveCreatedReceipts deletes the files RestoreForRebuild reported, best
+// effort (see removeFiles).
+func RemoveCreatedReceipts(paths []string) { removeFiles(paths) }
+
+// restoreCore is what both entry points share: additive receipt extraction,
+// then the one write transaction. A restore that fails removes the receipt
+// files it created, so a refused restore changes nothing on disk but what the
+// caller wrote before it.
+func restoreCore(ctx context.Context, sqlDB *sql.DB, uploadsDir string, parsed ParsedUpload, users userMode) (created []string, err error) {
 	// Receipt files this restore created (not ones already on disk under the
-	// same name) are removed if anything fails before the commit, so a refused
-	// restore changes nothing but the safety-net dump.
+	// same name) are removed if anything fails before the commit.
 	written, err := extractReceipts(uploadsDir, parsed.Document, parsed.StagingPath)
 	committed := false
 	defer func() {
@@ -511,41 +572,55 @@ func Restore(ctx context.Context, sqlDB *sql.DB, uploadsDir, backupDir string, p
 		}
 	}()
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	tx, err := sqlDB.BeginTx(ctx, nil)
 	if err != nil {
-		return fmt.Errorf("backup: beginning the restore transaction: %w", err)
+		return nil, fmt.Errorf("backup: beginning the restore transaction: %w", err)
 	}
 	defer func() { _ = tx.Rollback() }() // no-op once Commit has run
 
 	if _, err := tx.ExecContext(ctx, "PRAGMA defer_foreign_keys = ON"); err != nil {
-		return fmt.Errorf("backup: setting defer_foreign_keys: %w", err)
+		return nil, fmt.Errorf("backup: setting defer_foreign_keys: %w", err)
 	}
 
 	triggerSQL := make([]string, len(immutableTriggers))
 	for i, name := range immutableTriggers {
 		if err := tx.QueryRowContext(ctx, "SELECT sql FROM sqlite_master WHERE type = 'trigger' AND name = ?", name).Scan(&triggerSQL[i]); err != nil {
-			return fmt.Errorf("backup: reading trigger %s: %w", name, err)
+			return nil, fmt.Errorf("backup: reading trigger %s: %w", name, err)
 		}
 		if _, err := tx.ExecContext(ctx, "DROP TRIGGER "+name); err != nil {
-			return fmt.Errorf("backup: dropping trigger %s: %w", name, err)
+			return nil, fmt.Errorf("backup: dropping trigger %s: %w", name, err)
 		}
 	}
 
 	tq := store.New(tx)
 
 	if err := clearFundScopedTables(ctx, tq); err != nil {
-		return err
+		return nil, err
+	}
+	if users == carryBackupUser {
+		// No clearing first: the target must hold no login. Checked, not left to a
+		// unique-email or primary-key clash, which a login with another id and
+		// email would not trip.
+		if n, err := tq.CountUsers(ctx); err != nil {
+			return nil, fmt.Errorf("backup: counting logins: %w", err)
+		} else if n != 0 {
+			return nil, fmt.Errorf("%w: the target database already has %d login(s)", ErrRebuildLogins, n)
+		}
+		u := parsed.Document.Users[0]
+		if err := tq.RestoreUser(ctx, store.RestoreUserParams{ID: u.ID, Email: u.Email, PasswordHash: u.PasswordHash, CreatedAt: u.CreatedAt}); err != nil {
+			return nil, fmt.Errorf("backup: carrying the login over: %w", err)
+		}
 	}
 	if err := insertDocument(ctx, tq, parsed.Document); err != nil {
-		return err
+		return nil, err
 	}
 
 	for i, name := range immutableTriggers {
 		if _, err := tx.ExecContext(ctx, triggerSQL[i]); err != nil {
-			return fmt.Errorf("backup: recreating trigger %s: %w", name, err)
+			return nil, fmt.Errorf("backup: recreating trigger %s: %w", name, err)
 		}
 	}
 
@@ -553,23 +628,23 @@ func Restore(ctx context.Context, sqlDB *sql.DB, uploadsDir, backupDir string, p
 	// exported, a restore logs everyone out), inside the same transaction, so a
 	// rolled-back restore leaves the treasurer's session untouched.
 	if err := tq.DeleteAllSessions(ctx); err != nil {
-		return fmt.Errorf("backup: clearing sessions: %w", err)
+		return nil, fmt.Errorf("backup: clearing sessions: %w", err)
 	}
 
 	if err := verifyTotals(ctx, tq, parsed.Document); err != nil {
-		return err
+		return nil, err
 	}
 
 	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("backup: committing the restore: %w", err)
+		return nil, fmt.Errorf("backup: committing the restore: %w", err)
 	}
 	committed = true
-	return nil
+	return written, nil
 }
 
 // clearFundScopedTables deletes every row from every table this package
 // restores, except "user" (ADR-012's login ruling) and "session" (cleared in
-// Restore). Listed child-before-parent for a reader; order does not matter
+// restoreCore). Listed child-before-parent for a reader; order does not matter
 // because defer_foreign_keys=ON defers every FK check to COMMIT.
 func clearFundScopedTables(ctx context.Context, q store.Querier) error {
 	deletes := []struct {
