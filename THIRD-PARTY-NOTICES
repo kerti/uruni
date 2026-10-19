@@ -2982,7 +2982,6 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 @radix-ui/react-use-effect-event
 @radix-ui/react-use-is-hydrated
 @radix-ui/react-use-layout-effect
-@radix-ui/react-use-previous
 @radix-ui/react-use-size
 @radix-ui/react-visually-hidden
 
