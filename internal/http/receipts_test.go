@@ -135,7 +135,7 @@ func solidBlockImage(w, h, blockW, blockH int, bg, block color.RGBA) *image.RGBA
 	return img
 }
 
-func encodeTestJPEG(t *testing.T, img image.Image) []byte {
+func encodeTestJPEG(t testing.TB, img image.Image) []byte {
 	t.Helper()
 	var buf bytes.Buffer
 	if err := jpeg.Encode(&buf, img, &jpeg.Options{Quality: 90}); err != nil {
@@ -148,7 +148,7 @@ func encodeTestJPEG(t *testing.T, img image.Image) []byte {
 // header, one IFD0 entry naming Orientation 0x0112) after jpegBytes' SOI. It
 // is the structure jpegOrientation reads, built independently of this
 // package's encoder so the test does not check the code against itself.
-func withEXIFOrientation(t *testing.T, jpegBytes []byte, orientation byte) []byte {
+func withEXIFOrientation(t testing.TB, jpegBytes []byte, orientation byte) []byte {
 	t.Helper()
 	if len(jpegBytes) < 2 || jpegBytes[0] != 0xFF || jpegBytes[1] != 0xD8 {
 		t.Fatalf("fixture does not start with a JPEG SOI marker")
