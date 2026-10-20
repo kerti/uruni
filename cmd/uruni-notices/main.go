@@ -48,6 +48,10 @@ func run(webJSON, out string) error {
 	if err != nil {
 		return err
 	}
+	data, err := dataComponents(".")
+	if err != nil {
+		return err
+	}
 	goMods, err := goComponents(".")
 	if err != nil {
 		return err
@@ -59,6 +63,7 @@ func run(webJSON, out string) error {
 
 	doc := render([]section{
 		{"FONTS", "Typefaces bundled with the app (the interface font) and the public report PDF.", fonts},
+		{"DATA", "Data files embedded in the uruni binary.", data},
 		{"GO", "Go modules linked into the uruni binary.", goMods},
 		{"WEB", "npm packages in the built web bundle and its service worker, and the vendored shadcn/ui components.", web},
 	})
@@ -81,6 +86,16 @@ func fontComponents(root string) ([]component, error) {
 		out = append(out, component{name: f.name, text: normalize(string(text))})
 	}
 	return out, nil
+}
+
+// dataComponents are the embedded data files that are someone else's work: the
+// SecLists common-passwords list (internal/auth/commonpasswords.go), MIT.
+func dataComponents(root string) ([]component, error) {
+	text, err := readFile(filepath.Join(root, "internal", "auth", "SecLists-MIT.txt"))
+	if err != nil {
+		return nil, err
+	}
+	return []component{{name: "SecLists (10k-most-common password list)", text: normalize(string(text))}}, nil
 }
 
 // webComponents reads the bundle's package list and adds shadcn/ui, whose
