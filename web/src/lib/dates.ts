@@ -125,6 +125,14 @@ export const periodBounds = {
   status(): DateBounds {
     return { min: `${EARLIEST_YEAR}-01`, max: addMonthsToPeriod(currentPeriod(), 12) }
   },
+  /** A member's tier start month ("Mulai bulan", ADR-040): from the join
+   * month to the later of the current month and the join month. No future
+   * start - a pending tier would be shown nowhere. */
+  tierStart(joinedOn: string): DateBounds {
+    const current = currentPeriod()
+    const join = /^\d{4}-\d{2}/.test(joinedOn) ? joinedOn.slice(0, 7) : current
+    return { min: join, max: join > current ? join : current }
+  },
   /** Riwayat's month filter: any month money could have moved in - back to
    * EARLIEST_YEAR, never past this one. */
   history(): DateBounds {

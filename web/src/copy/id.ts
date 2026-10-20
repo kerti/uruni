@@ -231,6 +231,10 @@ export const copy = {
       // pointing at deactivate; this is the shared fallback for the same code
       // reached elsewhere.
       referenced_by_other_records: 'Data ini sudah dipakai di catatan lain, jadi tidak bisa dihapus.',
+      // ADR-040: PATCH or DELETE of a rate that a correction has since
+      // replaced (or deleted), e.g. from a stale screen. The screen reloads
+      // the list when this arrives, so the sentence says to look again.
+      dues_rate_superseded: 'Tarif ini sudah diperbaiki atau dihapus. Daftar tarif sudah dimuat ulang, silakan periksa lagi.',
       // Renaming the fund's kas utama through this route - the one purpose it
       // refuses. A titipan and an amplop are renameable.
       purpose_not_renameable: 'Nama kas utama tidak bisa diganti.',
@@ -839,6 +843,9 @@ export const copy = {
       // "Tunggakan" is PRD-ID's word, not a coinage.
       arrearsBadge: (months: number) => `Tunggakan ${months} bulan`,
       joinedOnLabel: 'Mulai ikut',
+      // ADR-040: from which month a changed golongan holds. The same two words
+      // as a tarif's start month (settings.tiers.effectiveFromLabel).
+      tierFromLabel: 'Mulai bulan',
       add: 'Tambah anggota',
       adding: 'Menambahkan…',
       // The whole card is the edit affordance (as settings.locations), so
@@ -1010,7 +1017,7 @@ export const copy = {
     },
     tiers: {
       heading: 'Golongan & tarif',
-      body: 'Besar iuran per bulan menurut golongan. Tarif baru ditambahkan mulai bulan tertentu, bukan menimpa yang lama — supaya bulan-bulan lampau tetap terbaca dengan tarif yang berlaku waktu itu.',
+      body: 'Besar iuran per bulan menurut golongan. Tarif baru ditambahkan mulai bulan tertentu, jadi bulan-bulan sebelumnya tetap memakai tarif lama. Memperbaiki nominal tarif mengubah semua bulan yang dipakainya.',
       empty: 'Belum ada golongan.',
       nameLabel: 'Nama golongan',
       add: 'Tambah golongan',
@@ -1044,9 +1051,9 @@ export const copy = {
       delete: 'Hapus golongan',
       deleting: 'Menghapus…',
       deleteConfirm:
-        'Golongan ini akan dihapus selamanya, beserta daftar tarifnya. Hanya bisa untuk golongan yang belum dipakai anggota mana pun.',
+        'Golongan ini akan dihapus selamanya, beserta daftar tarifnya. Hanya bisa untuk golongan yang belum pernah dipakai anggota mana pun.',
       deleteConfirmAction: 'Ya, hapus',
-      deleteRefused: 'Golongan ini masih dipakai anggota — ganti golongan mereka dulu kalau memang mau dihapus.',
+      deleteRefused: 'Golongan ini pernah dipakai anggota, jadi tidak bisa dihapus. Kalau perlu, ganti saja namanya.',
       // A tier with no rate yet is an ordinary state, not a problem.
       noRates: 'Tarif belum ditentukan.',
       ratesHeading: 'Tarif',
@@ -1058,6 +1065,17 @@ export const copy = {
       // thing being added below are told apart without a bordered box.
       addRateHeading: 'Tarif baru',
       editRate: 'Perbaiki nominal',
+      // The step between "Simpan tarif" and the correction itself: a corrected
+      // amount reprices every month the rate covers (ADR-040), so it names
+      // that span first. span is rateSpanRange or rateSpanOpen (or one bare month).
+      rateCorrectConfirm: (oldAmount: string, newAmount: string, span: string) =>
+        `Nominal ${oldAmount} diganti ${newAmount} untuk ${span}. Pembayaran yang sudah tercatat tidak berubah, tetapi status iuran bulan-bulan itu bisa ikut berubah.`,
+      rateCorrectConfirmAction: 'Ya, perbaiki',
+      rateCorrecting: 'Memperbaiki…',
+      // The months a corrected rate covers, from its own month to the month
+      // before the next rate starts. Open-ended when no later rate stands.
+      rateSpanRange: (from: string, to: string) => `${from} sampai ${to}`,
+      rateSpanOpen: (from: string) => `${from} seterusnya`,
       deleteRate: 'Hapus tarif',
       deletingRate: 'Menghapus…',
       // From effective_from onward, since a rate has no end date - the next
