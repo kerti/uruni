@@ -47,8 +47,8 @@ func (a *api) resolveStoredBackupPath(name string) (string, bool) {
 }
 
 // backupListItem is one dump's wire shape (GET /api/backups): enough for the
-// Cadangan card to render a row (date, kind, whether it can still be
-// restored) and for the download route to be given the name to ask for. All
+// Cadangan card to render a row (date, kind, whether it can be restored) and for
+// the download route to be given the name to ask for. All
 // of it is read off DumpInfo, parsed from the file's name
 // (internal/backup/dumps.go); nothing is derived a second way.
 type backupListItem struct {
@@ -56,8 +56,12 @@ type backupListItem struct {
 	Date            string `json:"date"` // YYYY-MM-DD, Asia/Jakarta
 	Kind            string `json:"kind"` // "daily" | "pre-restore"
 	FormatVersion   int64  `json:"format_version"`
-	IsCurrentFormat bool   `json:"is_current_format"`
-	SizeBytes       int64  `json:"size_bytes"`
+	IsCurrentFormat bool   `json:"is_current_format"` // written by this build's format; false for an older one
+	// CanRestore is true for any format the importer can read, the current one or
+	// an older one it upgrades in ParseUpload (ADR-012, ADR-040): the restore
+	// button follows this, not is_current_format.
+	CanRestore bool  `json:"can_restore"`
+	SizeBytes  int64 `json:"size_bytes"`
 }
 
 // listBackups is GET /api/backups: every dump backup.ListDumps recognises in
@@ -89,6 +93,7 @@ func (a *api) listBackups(w http.ResponseWriter, r *http.Request) {
 			Kind:            string(d.Kind),
 			FormatVersion:   d.FormatVersion,
 			IsCurrentFormat: d.FormatVersion == backup.FormatVersion,
+			CanRestore:      backup.CanUpgradeFormat(d.FormatVersion),
 			SizeBytes:       info.Size(),
 		})
 	}

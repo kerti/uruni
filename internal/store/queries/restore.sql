@@ -53,7 +53,14 @@ VALUES (?, ?, ?, ?, ?);
 DELETE FROM member;
 
 -- name: RestoreMember :exec
-INSERT INTO member (id, fund_id, name, tier_id, joined_on, inactive_on, created_at)
+INSERT INTO member (id, fund_id, name, joined_on, inactive_on, created_at)
+VALUES (?, ?, ?, ?, ?, ?);
+
+-- name: DeleteAllMemberTiers :exec
+DELETE FROM member_tier;
+
+-- name: RestoreMemberTier :exec
+INSERT INTO member_tier (id, fund_id, member_id, tier_id, effective_from, correction, created_at)
 VALUES (?, ?, ?, ?, ?, ?, ?);
 
 -- name: DeleteAllTransfers :exec

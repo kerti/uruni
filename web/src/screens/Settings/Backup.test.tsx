@@ -169,6 +169,7 @@ describe('Settings backup card - automatic backup list', () => {
             kind: 'daily',
             format_version: 1,
             is_current_format: true,
+            can_restore: true,
             size_bytes: 51200,
           },
           {
@@ -177,6 +178,7 @@ describe('Settings backup card - automatic backup list', () => {
             kind: 'pre-restore',
             format_version: 1,
             is_current_format: true,
+            can_restore: true,
             size_bytes: 2048,
           },
         ]),
@@ -199,7 +201,9 @@ describe('Settings backup card - automatic backup list', () => {
     const name = 'uruni-20260101-010000-daily-fv0-cccccccccccc.zip'
     stubFetch({
       list: () =>
-        jsonResponse([{ name, date: '2026-01-01', kind: 'daily', format_version: 0, is_current_format: false, size_bytes: 1024 }]),
+        jsonResponse([
+          { name, date: '2026-01-01', kind: 'daily', format_version: 0, is_current_format: false, can_restore: false, size_bytes: 1024 },
+        ]),
     })
     render(<Backup />)
 
@@ -216,13 +220,18 @@ describe('Settings backup card - automatic backup list', () => {
   it('downloads a listed dump under its own name when its row control is tapped', async () => {
     const name = 'uruni-20260930-010000-daily-fv1-aaaaaaaaaaaa.zip'
     const fetchMock = stubFetch({
-      list: () => jsonResponse([{ name, date: '2026-09-30', kind: 'daily', format_version: 1, is_current_format: true, size_bytes: 1024 }]),
+      list: () =>
+        jsonResponse([
+          { name, date: '2026-09-30', kind: 'daily', format_version: 1, is_current_format: true, can_restore: true, size_bytes: 1024 },
+        ]),
     })
     fetchMock.mockImplementation((input: RequestInfo | URL) => {
       const url = requestURL(input)
       if (url === '/api/backups')
         return Promise.resolve(
-          jsonResponse([{ name, date: '2026-09-30', kind: 'daily', format_version: 1, is_current_format: true, size_bytes: 1024 }]),
+          jsonResponse([
+            { name, date: '2026-09-30', kind: 'daily', format_version: 1, is_current_format: true, can_restore: true, size_bytes: 1024 },
+          ]),
         )
       if (url === `/api/backups/${name}`) return Promise.resolve(zipResponse(name))
       throw new Error(`unexpected fetch to ${url}`)
@@ -266,6 +275,7 @@ describe('Settings backup card - automatic backup list', () => {
             kind: 'daily',
             format_version: 1,
             is_current_format: true,
+            can_restore: true,
             size_bytes: 1024,
           },
           {
@@ -274,6 +284,7 @@ describe('Settings backup card - automatic backup list', () => {
             kind: 'daily',
             format_version: 0,
             is_current_format: false,
+            can_restore: false,
             size_bytes: 1024,
           },
         ]),
@@ -287,10 +298,28 @@ describe('Settings backup card - automatic backup list', () => {
     expect(within(rows[1]).queryByRole('button', { name: /pulih/i })).not.toBeInTheDocument()
   })
 
+  it('offers restore on an older-format row the importer can upgrade, and still labels it', async () => {
+    const name = 'uruni-20260930-010000-daily-fv1-aaaaaaaaaaaa.zip'
+    stubFetch({
+      list: () =>
+        jsonResponse([
+          { name, date: '2026-09-30', kind: 'daily', format_version: 1, is_current_format: false, can_restore: true, size_bytes: 1024 },
+        ]),
+    })
+    render(<Backup />)
+
+    const row = (await screen.findAllByRole('listitem'))[0]
+    expect(within(row).getByText(new RegExp(text.olderFormat))).toBeInTheDocument()
+    expect(within(row).getByRole('button', { name: text.restoreRowAria(text.kindDaily, formatIsoDate('2026-09-30')) })).toBeInTheDocument()
+  })
+
   it('starts the restore flow from a stored backup when its row control is tapped', async () => {
     const name = 'uruni-20260930-010000-daily-fv1-aaaaaaaaaaaa.zip'
     const fetchMock = stubFetch({
-      list: () => jsonResponse([{ name, date: '2026-09-30', kind: 'daily', format_version: 1, is_current_format: true, size_bytes: 1024 }]),
+      list: () =>
+        jsonResponse([
+          { name, date: '2026-09-30', kind: 'daily', format_version: 1, is_current_format: true, can_restore: true, size_bytes: 1024 },
+        ]),
     })
 
     const user = userEvent.setup()
@@ -310,7 +339,10 @@ describe('Settings backup card - automatic backup list', () => {
   it('gives every row download control a touch target at least 44px', async () => {
     const name = 'uruni-20260930-010000-daily-fv1-aaaaaaaaaaaa.zip'
     stubFetch({
-      list: () => jsonResponse([{ name, date: '2026-09-30', kind: 'daily', format_version: 1, is_current_format: true, size_bytes: 1024 }]),
+      list: () =>
+        jsonResponse([
+          { name, date: '2026-09-30', kind: 'daily', format_version: 1, is_current_format: true, can_restore: true, size_bytes: 1024 },
+        ]),
     })
     render(<Backup />)
 

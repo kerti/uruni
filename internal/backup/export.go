@@ -213,6 +213,7 @@ func readDocument(ctx context.Context, q store.Querier) (Document, []store.Recei
 		DuesTiers:            []DuesTier{},
 		DuesRates:            []DuesRate{},
 		Members:              []Member{},
+		MemberTiers:          []MemberTier{},
 		Transfers:            []Transfer{},
 		Reimbursements:       []Reimbursement{},
 		Transactions:         []Transaction{},
@@ -264,6 +265,13 @@ func readDocument(ctx context.Context, q store.Querier) (Document, []store.Recei
 		}
 		byID(members, func(r store.Member) int64 { return r.ID })
 		doc.Members = append(doc.Members, toMembers(members)...)
+
+		// Every row, superseded ones included, not the standing view (ADR-040).
+		memberTiers, err := q.ListMemberTiersForExport(ctx, fund.ID)
+		if err != nil {
+			return Document{}, nil, fmt.Errorf("backup: listing member tiers for fund %d: %w", fund.ID, err)
+		}
+		doc.MemberTiers = append(doc.MemberTiers, toMemberTiers(memberTiers)...)
 
 		transfers, err := q.ListTransfersByFund(ctx, fund.ID)
 		if err != nil {

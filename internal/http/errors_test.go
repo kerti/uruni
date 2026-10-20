@@ -227,11 +227,17 @@ func TestMapSQLiteErrorMapsAGenuineForeignKeyViolation(t *testing.T) {
 	// tier_id 999 names no dues_tier row: the composite FK requires (fund_id,
 	// tier_id) to match a real one.
 	noSuchTier := int64(999)
-	_, err = q.CreateMember(ctx, store.CreateMemberParams{JoinedOn: "2000-01-01",
-		FundID: fund.ID, Name: "Jane", TierID: &noSuchTier, CreatedAt: 1,
+	jane, err := q.CreateMember(ctx, store.CreateMemberParams{JoinedOn: "2000-01-01",
+		FundID: fund.ID, Name: "Jane", CreatedAt: 1,
+	})
+	if err != nil {
+		t.Fatalf("CreateMember() = %v, want no error", err)
+	}
+	_, err = q.CreateMemberTier(ctx, store.CreateMemberTierParams{
+		FundID: fund.ID, MemberID: jane.ID, TierID: &noSuchTier, EffectiveFrom: "2000-01", CreatedAt: 1,
 	})
 	if err == nil {
-		t.Fatalf("CreateMember(tier_id=999) = nil error, want a FOREIGN KEY violation")
+		t.Fatalf("CreateMemberTier(tier_id=999) = nil error, want a FOREIGN KEY violation")
 	}
 
 	rec := httptest.NewRecorder()

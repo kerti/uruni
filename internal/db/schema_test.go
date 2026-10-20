@@ -272,40 +272,6 @@ func TestEffectiveDuesRateFollowsAMidYearChange(t *testing.T) {
 	}
 }
 
-func TestMemberCannotBorrowAnotherFundsTier(t *testing.T) {
-	t.Parallel()
-	sqlDB := migratedTestDB(t)
-	ctx := context.Background()
-	q := store.New(sqlDB)
-
-	fundA := createFund(t, sqlDB, "Fund A", validSlug)
-	fundB := createFund(t, sqlDB, "Fund B", "bcdefghijklmnopqrstuvw")
-	tierB := createDuesTier(t, sqlDB, fundB, "warga")
-
-	// The tier exists, so a single-column FK would accept this; only the composite
-	// (fund_id, tier_id) FK knows it belongs to the wrong fund.
-	if _, err := q.CreateMember(ctx, store.CreateMemberParams{JoinedOn: "2000-01-01",
-		FundID: fundA, Name: "Jane", TierID: &tierB, CreatedAt: 1,
-	}); err == nil {
-		t.Fatal("CreateMember with another fund's tier = nil error, want the composite FK to reject it")
-	}
-
-	tierA := createDuesTier(t, sqlDB, fundA, "warga")
-	if _, err := q.CreateMember(ctx, store.CreateMemberParams{JoinedOn: "2000-01-01",
-		FundID: fundA, Name: "Jane", TierID: &tierA, CreatedAt: 1,
-	}); err != nil {
-		t.Fatalf("CreateMember with its own fund's tier = %v, want no error", err)
-	}
-
-	// NULL tier_id is a member with no dues obligation, and SQLite's MATCH
-	// SIMPLE leaves the composite FK satisfied.
-	if _, err := q.CreateMember(ctx, store.CreateMemberParams{JoinedOn: "2000-01-01",
-		FundID: fundA, Name: "Alex", TierID: nil, CreatedAt: 1,
-	}); err != nil {
-		t.Fatalf("CreateMember with a NULL tier_id = %v, want no error", err)
-	}
-}
-
 func TestDuesTierNameIsUniquePerFund(t *testing.T) {
 	t.Parallel()
 	sqlDB := migratedTestDB(t)

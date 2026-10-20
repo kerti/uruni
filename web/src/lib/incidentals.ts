@@ -142,11 +142,15 @@ export function reopenIncidental(purposeId: number): Promise<Incidental> {
  * (ADR-014) - see copy.incidentals.participation.states. */
 export type ParticipationStateKind = 'sudah' | 'belum' | 'kurang'
 
+/** Who a participation row is about: a member without the roster's tier, rate
+ * and arrears, which an envelope never reads (ADR-034, ADR-040). */
+export type Participant = Pick<Member, 'id' | 'name' | 'joined_on' | 'inactive_on' | 'created_at'>
+
 /** One expected member's row on GET /api/incidentals/{purposeID}/participation
  * (ADR-034): who was expected, how much they have given, and the state that
  * answers from it. */
 export interface ParticipationState {
-  member: Member
+  member: Participant
   contributed_amount: number
   state: ParticipationStateKind
 }
@@ -154,7 +158,7 @@ export interface ParticipationState {
 /** One row of the "Sumbangan lain" list (ADR-034): a contribution from
  * someone the envelope did not expect. No state - only an amount. */
 export interface UnexpectedContribution {
-  member: Member
+  member: Participant
   contributed_amount: number
 }
 

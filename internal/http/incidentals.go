@@ -366,17 +366,32 @@ func (a *api) updateIncidentalParticipation(w http.ResponseWriter, r *http.Reque
 }
 
 // participationStateResponse is one expected member's row on GET
-// /api/incidentals/{purposeID}/participation (ADR-034). member is the full
-// roster shape members.go exposes, as duesStatusResponse does.
+// /api/incidentals/{purposeID}/participation (ADR-034). member is a
+// participant (no tier), not the roster shape.
 type participationStateResponse struct {
-	Member            memberResponse `json:"member"`
-	ContributedAmount int64          `json:"contributed_amount"`
-	State             string         `json:"state"`
+	Member            participantResponse `json:"member"`
+	ContributedAmount int64               `json:"contributed_amount"`
+	State             string              `json:"state"`
+}
+
+// participantResponse is who a participation row is about. It carries no tier,
+// rate or arrears: an envelope reads no tier (ADR-034, ADR-040), so those fields
+// are left out of the shape rather than sent as a null that reads as "no tier".
+type participantResponse struct {
+	ID         int64   `json:"id"`
+	Name       string  `json:"name"`
+	JoinedOn   string  `json:"joined_on"`
+	InactiveOn *string `json:"inactive_on"`
+	CreatedAt  int64   `json:"created_at"`
+}
+
+func participantMemberResponse(m store.Member) participantResponse {
+	return participantResponse{ID: m.ID, Name: m.Name, JoinedOn: m.JoinedOn, InactiveOn: m.InactiveOn, CreatedAt: m.CreatedAt}
 }
 
 func toParticipationStateResponse(p ledger.MemberParticipation) participationStateResponse {
 	return participationStateResponse{
-		Member:            toMemberResponse(p.Member),
+		Member:            participantMemberResponse(p.Member),
 		ContributedAmount: p.ContributedAmount.Int64(),
 		State:             string(p.State),
 	}
@@ -386,13 +401,13 @@ func toParticipationStateResponse(p ledger.MemberParticipation) participationSta
 // (ADR-034): a contribution from someone the envelope did not expect. Only an
 // amount, no state.
 type unexpectedContributionResponse struct {
-	Member            memberResponse `json:"member"`
-	ContributedAmount int64          `json:"contributed_amount"`
+	Member            participantResponse `json:"member"`
+	ContributedAmount int64               `json:"contributed_amount"`
 }
 
 func toUnexpectedContributionResponse(u ledger.UnexpectedContribution) unexpectedContributionResponse {
 	return unexpectedContributionResponse{
-		Member:            toMemberResponse(u.Member),
+		Member:            participantMemberResponse(u.Member),
 		ContributedAmount: u.ContributedAmount.Int64(),
 	}
 }

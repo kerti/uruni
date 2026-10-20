@@ -54,13 +54,30 @@ func createDuesMember(t *testing.T, q *store.Queries, fundID int64, p duesMember
 		joinedOn = *p.joinedOn
 	}
 	m, err := q.CreateMember(context.Background(), store.CreateMemberParams{
-		FundID: fundID, Name: p.name, TierID: p.tierID,
+		FundID: fundID, Name: p.name,
 		JoinedOn: joinedOn, InactiveOn: p.inactiveOn, CreatedAt: 1,
 	})
 	if err != nil {
 		t.Fatalf("CreateMember(%q) = %v, want no error", p.name, err)
 	}
+	if p.tierID != nil {
+		// The tier from the month of joined_on, what POST /api/members writes and
+		// what the backfill gives a v1 member (ADR-040).
+		setMemberTier(t, q, fundID, m.ID, p.tierID, joinedOn[:len(duesPeriodLayout)], 0)
+	}
 	return m.ID
+}
+
+// setMemberTier writes one member_tier row straight through the store, for tests
+// building a history the engine would refuse or that they want spelled out: a
+// tier from a month, at a given correction number. nil is "no tier from then".
+func setMemberTier(t *testing.T, q *store.Queries, fundID, memberID int64, tierID *int64, from string, correction int64) {
+	t.Helper()
+	if _, err := q.CreateMemberTier(context.Background(), store.CreateMemberTierParams{
+		FundID: fundID, MemberID: memberID, TierID: tierID, EffectiveFrom: from, Correction: correction, CreatedAt: 1,
+	}); err != nil {
+		t.Fatalf("CreateMemberTier(member=%d, from=%q, #%d) = %v, want no error", memberID, from, correction, err)
+	}
 }
 
 func statusFor(t *testing.T, rows []MemberDuesStatus, memberID int64) (MemberDuesStatus, bool) {
@@ -607,43 +624,51 @@ func TestDuesStatusForPeriodScopesToOneFund(t *testing.T) {
 	}
 }
 
-// --- the accepted limitation (ADR-024) --------------------------------------
+// --- a tier change does not reach back (ADR-040) --------------------------
 
-// member.tier_id is not effective-dated (ADR-024's accepted limitation), so a
-// member promoted mid-year has their CURRENT tier applied to every past
-// period. January's owed figure comes back at Tier B's rate, not the Tier A
-// rate in force then. That is the accepted wrong answer, not a bug; see
-// ADR-024 and dues_status.go.
-func TestDuesStatusForPeriodMidYearPromotionAppliesCurrentTierToPastPeriodsAcceptedLimitation(t *testing.T) {
+// A member promoted mid-year is priced at the tier in force in each period.
+// This replaces ADR-024's accepted limitation, which applied the CURRENT tier to
+// every past period: January now comes back at Tier A's rate, what was in force.
+func TestDuesStatusForPeriodMidYearPromotionLeavesPastPeriodsAtTheOldTier(t *testing.T) {
 	t.Parallel()
 	l := newTestLedger(t)
 	f := newFixture(t, l)
 	q := store.New(l.db)
 	ctx := context.Background()
 
-	tierA := createDuesTier(t, q, f.fundID, "Tier A") // the low tier, actually in force in January
+	tierA := createDuesTier(t, q, f.fundID, "Tier A") // the low tier, in force until June
 	createDuesRate(t, q, tierA, 10_000, "2026-01")
-
 	tierB := createDuesTier(t, q, f.fundID, "Tier B") // the tier the member was promoted to in June
 	createDuesRate(t, q, tierB, 50_000, "2026-01")
 
-	// The schema has no record of "Tier A until June, then Tier B";
-	// member.tier_id holds only the current tier.
-	memberID := createDuesMember(t, q, f.fundID, duesMemberParams{name: "Jane", tierID: &tierB})
+	joinedOn := "2026-01-01"
+	memberID := createDuesMember(t, q, f.fundID, duesMemberParams{name: "Jane", tierID: &tierA, joinedOn: &joinedOn})
+	setMemberTier(t, q, f.fundID, memberID, &tierB, "2026-06", 0)
 
-	rows, err := l.DuesStatusForPeriod(ctx, f.fundID, "2026-01")
-	if err != nil {
-		t.Fatalf("DuesStatusForPeriod() = %v, want no error", err)
-	}
-	got, ok := statusFor(t, rows, memberID)
-	if !ok {
-		t.Fatalf("member %d missing from January's roster", memberID)
-	}
-	if got.OwedAmount != 50_000 {
-		t.Fatalf("OwedAmount = %d, want 50000 - the CURRENT (Tier B) rate wrongly applied to January, "+
-			"not 10000 (Tier A, what was actually in force). This is ADR-024's accepted limitation, "+
-			"not a bug: fix it by editing member.tier_id's effective-dating decision in a superseding ADR, "+
-			"not by patching this code path.", got.OwedAmount)
+	for _, tt := range []struct {
+		period   string
+		wantOwed money.Amount
+		wantTier int64
+	}{
+		{"2026-01", 10_000, tierA},
+		{"2026-05", 10_000, tierA}, // the month before the promotion
+		{"2026-06", 50_000, tierB}, // the promotion applies from its own month
+		{"2026-12", 50_000, tierB},
+	} {
+		rows, err := l.DuesStatusForPeriod(ctx, f.fundID, tt.period)
+		if err != nil {
+			t.Fatalf("DuesStatusForPeriod(%s) = %v, want no error", tt.period, err)
+		}
+		got, ok := statusFor(t, rows, memberID)
+		if !ok {
+			t.Fatalf("member %d missing from %s's roster", memberID, tt.period)
+		}
+		if got.OwedAmount != tt.wantOwed {
+			t.Errorf("%s: OwedAmount = %d, want %d (the tier in force then)", tt.period, got.OwedAmount, tt.wantOwed)
+		}
+		if got.Member.TierID == nil || *got.Member.TierID != tt.wantTier {
+			t.Errorf("%s: the row's tier = %v, want %d - the tier that priced OwedAmount", tt.period, got.Member.TierID, tt.wantTier)
+		}
 	}
 }
 
@@ -1009,9 +1034,9 @@ func TestOutstandingDuesForMemberUnknownMemberIsNotFound(t *testing.T) {
 	}
 }
 
-// The mid-year-promotion limitation (ADR-024) carries over unchanged: it
-// comes from the reused GetEffectiveDuesRate call site.
-func TestOutstandingDuesForMemberMidYearPromotionAppliesCurrentTierToPastPeriodsAcceptedLimitation(t *testing.T) {
+// The opposite of ADR-024's accepted limitation: January stays at the tier the
+// member was in then, and the rows after the promotion carry the new one.
+func TestOutstandingDuesForMemberMidYearPromotionLeavesPastPeriodsAtTheOldTier(t *testing.T) {
 	t.Parallel()
 	l := newTestLedger(t)
 	f := newFixture(t, l)
@@ -1020,24 +1045,31 @@ func TestOutstandingDuesForMemberMidYearPromotionAppliesCurrentTierToPastPeriods
 
 	tierA := createDuesTier(t, q, f.fundID, "Tier A")
 	createDuesRate(t, q, tierA, 10_000, "2026-01")
-
 	tierB := createDuesTier(t, q, f.fundID, "Tier B")
 	createDuesRate(t, q, tierB, 50_000, "2026-01")
 
 	joinedOn := "2026-01-01"
-	memberID := createDuesMember(t, q, f.fundID, duesMemberParams{name: "Jane", tierID: &tierB, joinedOn: &joinedOn})
+	memberID := createDuesMember(t, q, f.fundID, duesMemberParams{name: "Jane", tierID: &tierA, joinedOn: &joinedOn})
+	setMemberTier(t, q, f.fundID, memberID, &tierB, "2026-04", 0)
 
-	rows, err := l.OutstandingDuesForMember(ctx, f.fundID, memberID, "2026-01", time.Time{})
+	rows, err := l.OutstandingDuesForMember(ctx, f.fundID, memberID, "2026-05", time.Time{})
 	if err != nil {
 		t.Fatalf("OutstandingDuesForMember() = %v, want no error", err)
 	}
-	if len(rows) != 1 {
-		t.Fatalf("OutstandingDuesForMember() returned %d rows, want 1", len(rows))
+	want := []OutstandingDuesPeriod{
+		{Period: "2026-01", OwedAmount: 10_000, Status: DuesStatusUnpaid},
+		{Period: "2026-02", OwedAmount: 10_000, Status: DuesStatusUnpaid},
+		{Period: "2026-03", OwedAmount: 10_000, Status: DuesStatusUnpaid},
+		{Period: "2026-04", OwedAmount: 50_000, Status: DuesStatusUnpaid},
+		{Period: "2026-05", OwedAmount: 50_000, Status: DuesStatusUnpaid},
 	}
-	if rows[0].OwedAmount != 50_000 {
-		t.Errorf("OwedAmount = %d, want 50000 - the CURRENT (Tier B) rate wrongly applied to January, "+
-			"the same accepted limitation DuesStatusForPeriod carries (ADR-024), not a bug to fix here.",
-			rows[0].OwedAmount)
+	if len(rows) != len(want) {
+		t.Fatalf("OutstandingDuesForMember() = %+v, want %d rows", rows, len(want))
+	}
+	for i, w := range want {
+		if rows[i] != w {
+			t.Errorf("row %d = %+v, want %+v", i, rows[i], w)
+		}
 	}
 }
 
@@ -1246,9 +1278,10 @@ func TestArrearsMonthsForMemberTierLessMemberReadsZero(t *testing.T) {
 }
 
 // PRD section 7.1: backdating a join date exposes arrears that were not there
-// before, because it widens OutstandingDuesForMember's walk. Proved against
-// UpdateMember directly, as this is the derivation's property, not the
-// route's.
+// before, because it widens OutstandingDuesForMember's walk - and, since the
+// tier is month by month, only because UpdateMember moves the member's first
+// tier row back with the join date (ADR-040). Proved against the ledger
+// directly, as this is the derivation's property, not the route's.
 func TestArrearsMonthsForMemberBackdatingJoinedOnMakesArrearsAppear(t *testing.T) {
 	t.Parallel()
 	l := newTestLedger(t)
@@ -1271,9 +1304,8 @@ func TestArrearsMonthsForMemberBackdatingJoinedOnMakesArrearsAppear(t *testing.T
 	}
 
 	backdated := p.twoBack + "-01"
-	setTierID := int64(1)
-	if _, err := q.UpdateMember(ctx, store.UpdateMemberParams{
-		ID: memberID, JoinedOn: &backdated, SetTierID: setTierID, TierID: &tierID,
+	if _, err := l.UpdateMember(ctx, UpdateMemberParams{
+		FundID: f.fundID, MemberID: memberID, JoinedOn: &backdated, Now: time.Now(),
 	}); err != nil {
 		t.Fatalf("UpdateMember(backdate joined_on) = %v, want no error", err)
 	}

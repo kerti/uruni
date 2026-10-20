@@ -65,8 +65,19 @@ func toMembers(rows []store.Member) []Member {
 	out := make([]Member, 0, len(rows))
 	for _, r := range rows {
 		out = append(out, Member{
-			ID: r.ID, FundID: r.FundID, Name: r.Name, TierID: r.TierID,
-			JoinedOn: &r.JoinedOn, InactiveOn: r.InactiveOn, CreatedAt: r.CreatedAt,
+			ID: r.ID, FundID: r.FundID, Name: r.Name,
+			JoinedOn: r.JoinedOn, InactiveOn: r.InactiveOn, CreatedAt: r.CreatedAt,
+		})
+	}
+	return out
+}
+
+func toMemberTiers(rows []store.MemberTier) []MemberTier {
+	out := make([]MemberTier, 0, len(rows))
+	for _, r := range rows {
+		out = append(out, MemberTier{
+			ID: r.ID, FundID: r.FundID, MemberID: r.MemberID, TierID: r.TierID,
+			EffectiveFrom: r.EffectiveFrom, Correction: r.Correction, CreatedAt: r.CreatedAt,
 		})
 	}
 	return out

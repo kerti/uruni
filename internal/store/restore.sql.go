@@ -63,6 +63,15 @@ func (q *Queries) DeleteAllIncidentals(ctx context.Context) error {
 	return err
 }
 
+const deleteAllMemberTiers = `-- name: DeleteAllMemberTiers :exec
+DELETE FROM member_tier
+`
+
+func (q *Queries) DeleteAllMemberTiers(ctx context.Context) error {
+	_, err := q.db.ExecContext(ctx, deleteAllMemberTiers)
+	return err
+}
+
 const deleteAllMembers = `-- name: DeleteAllMembers :exec
 DELETE FROM member
 `
@@ -276,15 +285,14 @@ func (q *Queries) RestoreIncidentalRecipient(ctx context.Context, arg RestoreInc
 }
 
 const restoreMember = `-- name: RestoreMember :exec
-INSERT INTO member (id, fund_id, name, tier_id, joined_on, inactive_on, created_at)
-VALUES (?, ?, ?, ?, ?, ?, ?)
+INSERT INTO member (id, fund_id, name, joined_on, inactive_on, created_at)
+VALUES (?, ?, ?, ?, ?, ?)
 `
 
 type RestoreMemberParams struct {
 	ID         int64
 	FundID     int64
 	Name       string
-	TierID     *int64
 	JoinedOn   string
 	InactiveOn *string
 	CreatedAt  int64
@@ -295,9 +303,36 @@ func (q *Queries) RestoreMember(ctx context.Context, arg RestoreMemberParams) er
 		arg.ID,
 		arg.FundID,
 		arg.Name,
-		arg.TierID,
 		arg.JoinedOn,
 		arg.InactiveOn,
+		arg.CreatedAt,
+	)
+	return err
+}
+
+const restoreMemberTier = `-- name: RestoreMemberTier :exec
+INSERT INTO member_tier (id, fund_id, member_id, tier_id, effective_from, correction, created_at)
+VALUES (?, ?, ?, ?, ?, ?, ?)
+`
+
+type RestoreMemberTierParams struct {
+	ID            int64
+	FundID        int64
+	MemberID      int64
+	TierID        *int64
+	EffectiveFrom string
+	Correction    int64
+	CreatedAt     int64
+}
+
+func (q *Queries) RestoreMemberTier(ctx context.Context, arg RestoreMemberTierParams) error {
+	_, err := q.db.ExecContext(ctx, restoreMemberTier,
+		arg.ID,
+		arg.FundID,
+		arg.MemberID,
+		arg.TierID,
+		arg.EffectiveFrom,
+		arg.Correction,
 		arg.CreatedAt,
 	)
 	return err

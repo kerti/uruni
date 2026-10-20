@@ -36,7 +36,8 @@ func ceilingDoc() Document {
 		},
 		DuesTiers:      []DuesTier{{ID: 1, FundID: 1, Name: "Tetap", CreatedAt: 1}},
 		DuesRates:      []DuesRate{{ID: 1, TierID: 1, Amount: 25000, EffectiveFrom: "2026-01", CreatedAt: 1}},
-		Members:        []Member{{ID: 1, FundID: 1, Name: "Jane", TierID: &one, JoinedOn: strPtr("2026-01-01"), CreatedAt: 1}},
+		Members:        []Member{{ID: 1, FundID: 1, Name: "Jane", JoinedOn: "2026-01-01", CreatedAt: 1}},
+		MemberTiers:    []MemberTier{{ID: 1, FundID: 1, MemberID: 1, TierID: &one, EffectiveFrom: "2026-01", CreatedAt: 1}},
 		Transfers:      []Transfer{},
 		Reimbursements: []Reimbursement{{ID: 1, FundID: 1, MemberID: 1, PurposeID: 1, Amount: 700, IncurredOn: "2026-08-01", CreatedAt: 1}},
 		Transactions: []Transaction{{

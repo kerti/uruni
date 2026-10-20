@@ -327,9 +327,11 @@ func TestParseUploadRefusesNewerFormatVersionDistinctly(t *testing.T) {
 	}
 }
 
+// "Older" is older than the oldest format an upgrade step covers; the previous
+// release's format is upgraded, not refused (upgrade_test.go).
 func TestParseUploadRefusesOlderFormatVersionDistinctly(t *testing.T) {
 	t.Parallel()
-	_, err := parseUploadBytes(t, zipOf(t, minimalDocJSON(t, FormatVersion-1), nil))
+	_, err := parseUploadBytes(t, zipOf(t, minimalDocJSON(t, minUpgradableFormat-1), nil))
 	if !errors.Is(err, ErrFormatVersionOlder) {
 		t.Errorf("ParseUpload() error = %v, want ErrFormatVersionOlder", err)
 	}
@@ -973,10 +975,11 @@ func TestRestoreOfANullJoinedOnReadsTheAdoptionDate(t *testing.T) {
 	if len(doc.Members) == 0 {
 		t.Fatal("fixture has no members")
 	}
-	for i := range doc.Members {
-		doc.Members[i].JoinedOn = nil
+	oldDoc := v1Of(doc)
+	for i := range oldDoc.Members {
+		oldDoc.Members[i].JoinedOn = nil
 	}
-	old, err := json.Marshal(doc)
+	old, err := json.Marshal(oldDoc)
 	if err != nil {
 		t.Fatalf("marshaling old-shaped document: %v", err)
 	}
@@ -999,6 +1002,15 @@ func TestRestoreOfANullJoinedOnReadsTheAdoptionDate(t *testing.T) {
 		if m.JoinedOn != "2025-12-20" {
 			t.Errorf("member %d restored with joined_on %q, want the adoption date %q", m.ID, m.JoinedOn, "2025-12-20")
 		}
+	}
+	// The backfilled tier row reaches back to that adoption month, so the dues the
+	// null date meant are priced from it too.
+	tiers, err := store.New(destDB).ListMemberTiersForExport(context.Background(), 1)
+	if err != nil {
+		t.Fatalf("ListMemberTiersForExport() = %v, want no error", err)
+	}
+	if len(tiers) != 1 || tiers[0].EffectiveFrom != "2025-12" || tiers[0].Correction != 0 {
+		t.Errorf("restored member_tier rows = %+v, want Andi's one row from 2025-12 at correction 0", tiers)
 	}
 }
 

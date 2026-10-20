@@ -114,12 +114,36 @@ func buildFixture(t *testing.T, sqlDB *sql.DB, uploadsDir string) {
 		t.Fatalf("CreateDuesRate: %v", err)
 	}
 
+	// A second tier, rateless (the madya TBD case). Andi was first put into it by
+	// a slip in January, which was corrected to Pelaksana, and moved into it
+	// properly from April: the export must carry the superseded row too (ADR-040).
+	madya, err := q.CreateDuesTier(ctx, store.CreateDuesTierParams{FundID: fund.ID, Name: "Madya", CreatedAt: 1700000000})
+	if err != nil {
+		t.Fatalf("CreateDuesTier(madya): %v", err)
+	}
+
 	joinedOn := "2026-01-01"
 	andi, err := q.CreateMember(ctx, store.CreateMemberParams{
-		FundID: fund.ID, Name: "Andi", TierID: &tier.ID, JoinedOn: joinedOn, CreatedAt: 1700000000,
+		FundID: fund.ID, Name: "Andi", JoinedOn: joinedOn, CreatedAt: 1700000000,
 	})
 	if err != nil {
 		t.Fatalf("CreateMember(andi): %v", err)
+	}
+	for i, r := range []struct {
+		tierID     int64
+		from       string
+		correction int64
+	}{
+		{madya.ID, "2026-01", 0}, // the slip, superseded below
+		{tier.ID, "2026-01", 1},  // what January really was
+		{madya.ID, "2026-04", 0}, // a change
+	} {
+		if _, err := q.CreateMemberTier(ctx, store.CreateMemberTierParams{
+			FundID: fund.ID, MemberID: andi.ID, TierID: &r.tierID, EffectiveFrom: r.from,
+			Correction: r.correction, CreatedAt: 1700000010 + int64(i),
+		}); err != nil {
+			t.Fatalf("CreateMemberTier(andi, %s #%d): %v", r.from, r.correction, err)
+		}
 	}
 	inactiveOn := "2026-06-01"
 	budi, err := q.CreateMember(ctx, store.CreateMemberParams{

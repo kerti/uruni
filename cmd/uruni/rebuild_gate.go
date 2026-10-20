@@ -51,6 +51,7 @@ func gateTables(doc backup.Document) []gateTable {
 		{"dues_tier", int64(len(doc.DuesTiers)), false},
 		{"dues_rate", int64(len(doc.DuesRates)), false},
 		{"member", int64(len(doc.Members)), true},
+		{"member_tier", int64(len(doc.MemberTiers)), false},
 		{"transfer", int64(len(doc.Transfers)), false},
 		{"reimbursement", int64(len(doc.Reimbursements)), false},
 		{"transaction", int64(len(doc.Transactions)), true},

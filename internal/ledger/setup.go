@@ -109,8 +109,8 @@ type SetUpFundResult struct {
 // balance's failures are refused before withTx opens (validateOpeningBalance
 // rejects a negative amount or malformed date on every account first), and a
 // location born without one has no later standalone way to gain one. Members,
-// tiers and rates are not here: members carry no cross-row invariant beyond
-// the schema (ADR-027's carve-out), and tiers/rates have ordinary unique
+// tiers and rates are not here: a member is written with its own first tier
+// row by CreateMember (ADR-040), and tiers/rates have ordinary unique
 // constraints a create-then-retry handles with a 409. Folding them in would
 // let one mistyped tier reference abort a good fund and its accounts. The
 // caller composes them afterward as retriable calls.

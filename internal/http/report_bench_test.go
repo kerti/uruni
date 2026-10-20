@@ -80,8 +80,8 @@ func seedYearFund(b *testing.B) (http.Handler, string) {
 		b.Fatalf("CreateDuesRate() = %v", err)
 	}
 	for i := range 60 {
-		m, err := q.CreateMember(ctx, store.CreateMemberParams{
-			FundID: res.Fund.ID, Name: fmt.Sprintf("Anggota %02d", i), TierID: &tier.ID, JoinedOn: "2025-01-01", CreatedAt: 1,
+		m, err := l.CreateMember(ctx, ledger.CreateMemberParams{
+			FundID: res.Fund.ID, Name: fmt.Sprintf("Anggota %02d", i), TierID: &tier.ID, JoinedOn: "2025-01-01",
 		})
 		if err != nil {
 			b.Fatalf("CreateMember() = %v", err)

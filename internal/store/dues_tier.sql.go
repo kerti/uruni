@@ -37,8 +37,8 @@ const deleteDuesRatesByTier = `-- name: DeleteDuesRatesByTier :exec
 DELETE FROM dues_rate WHERE tier_id = ?
 `
 
-// A tier no member is in priced nothing, so its rates are not history anyone
-// was charged under and go with it.
+// A tier no member was ever in priced nothing, so its rates are not history
+// anyone was charged under and go with it.
 func (q *Queries) DeleteDuesRatesByTier(ctx context.Context, tierID int64) error {
 	_, err := q.db.ExecContext(ctx, deleteDuesRatesByTier, tierID)
 	return err
@@ -54,8 +54,9 @@ type DeleteDuesTierParams struct {
 }
 
 // Removes a tier the fund never put anyone in (#232): the setup typo, never a
-// tier with history. No pre-check for members: member's composite
-// (fund_id, tier_id) FK refuses it, and a COUNT(*) first would only race it.
+// tier with history. "Ever": member_tier's composite (fund_id, tier_id) FK
+// refuses a tier any row names, a superseded one included (ADR-040). No
+// pre-check: the FK is the check, and a COUNT(*) first would only race it.
 //
 // The caller runs this in one transaction after DeleteDuesRatesByTier: rates
 // FK onto the tier so it cannot go first, and if a member then refuses the

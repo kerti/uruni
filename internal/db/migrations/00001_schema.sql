@@ -103,10 +103,11 @@ CREATE TABLE dues_rate (                  -- effective-dated, one-sided interval
 ) STRICT;
 
 CREATE TABLE member (
+  -- No tier column (ADR-040): a member's tier is effective-dated, so it lives in
+  -- member_tier below and the current tier is derived from those rows.
   id          INTEGER PRIMARY KEY,
   fund_id     INTEGER NOT NULL,
   name        TEXT    NOT NULL CHECK (length(trim(name)) > 0),
-  tier_id     INTEGER,                    -- NULL = no dues obligation
   -- NOT NULL (#471): a fund's history starts at adoption (PRD 7.1), so there
   -- is no "always was a member". The API defaults a missing date to today in
   -- Asia/Jakarta; backdating is the deliberate live-arrears exception.
@@ -114,11 +115,48 @@ CREATE TABLE member (
   inactive_on TEXT             CHECK (inactive_on IS NULL OR (date(inactive_on) IS NOT NULL AND inactive_on = date(inactive_on))),
   created_at  INTEGER NOT NULL,
   UNIQUE (fund_id, id),
-  FOREIGN KEY (fund_id) REFERENCES fund(id),
-  -- Composite, so a member cannot borrow another fund's tier. A NULL tier_id
-  -- passes: SQLite's MATCH SIMPLE skips a partly-NULL key.
-  FOREIGN KEY (fund_id, tier_id) REFERENCES dues_tier(fund_id, id)
+  FOREIGN KEY (fund_id) REFERENCES fund(id)
 ) STRICT;
+
+CREATE TABLE member_tier (                -- a member's tier, month by month (ADR-040)
+  -- One-sided month rows exactly like dues_rate: a row holds from its month
+  -- until the next row's month, with no effective_to, so a gap or an overlap
+  -- cannot be expressed. A mistake in one is corrected by a new row (the next
+  -- correction of the same month), never an overwrite; the highest correction
+  -- of a month stands and the rest are superseded. The UPDATE trigger at the
+  -- foot of this file is what holds that.
+  id             INTEGER PRIMARY KEY,
+  fund_id        INTEGER NOT NULL,
+  member_id      INTEGER NOT NULL,
+  tier_id        INTEGER,                 -- NULL = no dues obligation from this month
+  -- 'YYYY-MM' with the 2000-01 floor (#632's plausible-window floor for a month).
+  effective_from TEXT    NOT NULL CHECK (effective_from GLOB '[0-9][0-9][0-9][0-9]-[0-1][0-9]'
+                                         AND date(effective_from||'-01') IS NOT NULL
+                                         AND effective_from >= '2000-01'),
+  correction     INTEGER NOT NULL DEFAULT 0 CHECK (correction >= 0),
+  created_at     INTEGER NOT NULL,
+  UNIQUE (fund_id, id),
+  UNIQUE (member_id, effective_from, correction),
+  -- Deleting a member (setup duplicates only, ADR-024) takes their rows with it.
+  -- Unlike incidental_recipient these are a record, but the cascade is safe: a
+  -- member any posted row names is refused by that row's foreign key first.
+  FOREIGN KEY (fund_id, member_id) REFERENCES member(fund_id, id) ON DELETE CASCADE,
+  -- No cascade here: a tier any row names, even a superseded one, cannot be
+  -- deleted (ADR-040). A NULL tier_id passes the composite (MATCH SIMPLE).
+  FOREIGN KEY (fund_id, tier_id)   REFERENCES dues_tier(fund_id, id)
+) STRICT;
+
+-- The standing row of each month: the highest correction. Every dues read of
+-- member_tier goes through this view, never the table (internal/db's guard test
+-- fails a query that does not), so the rule "a month has one standing row" is
+-- written once. Named exceptions: the backup export, the next-correction read.
+CREATE VIEW member_tier_standing AS
+SELECT mt.id, mt.fund_id, mt.member_id, mt.tier_id, mt.effective_from, mt.correction, mt.created_at
+FROM member_tier mt
+WHERE mt.correction = (
+  SELECT MAX(c.correction) FROM member_tier c
+  WHERE c.member_id = mt.member_id AND c.effective_from = mt.effective_from
+);
 
 CREATE TABLE transfer (                   -- pair-holder: cash<->bank, or purpose reclass
   -- Value-neutral movements are two transactions of equal amount and opposite
@@ -440,8 +478,20 @@ CREATE TRIGGER reconciliation_line_immutable_delete BEFORE DELETE ON reconciliat
 END;
 -- +goose StatementEnd
 
+-- member_tier is immutable against UPDATE only (ADR-040): "a correction is a new
+-- row". No BEFORE DELETE trigger, deliberately: a member's deletion (the
+-- cascade), a never-named tier's and restore's clear-all all delete these rows,
+-- and the owners' foreign keys already refuse the deletions that would lose a
+-- record. A test fails when a query other than those deletes from the table.
+-- +goose StatementBegin
+CREATE TRIGGER member_tier_immutable_update BEFORE UPDATE ON member_tier BEGIN
+  SELECT RAISE(ABORT, 'member_tier rows are immutable - a correction is a new row');
+END;
+-- +goose StatementEnd
+
 -- +goose Down
 
+DROP TRIGGER member_tier_immutable_update;
 DROP TRIGGER reconciliation_line_immutable_delete;
 DROP TRIGGER reconciliation_line_immutable_update;
 DROP TRIGGER reconciliation_immutable_delete;
@@ -468,6 +518,8 @@ DROP TRIGGER transaction_named_row_shape;
 DROP TABLE "transaction";
 DROP TABLE reimbursement;
 DROP TABLE transfer;
+DROP VIEW member_tier_standing;
+DROP TABLE member_tier;
 DROP TABLE member;
 DROP TABLE dues_rate;
 DROP TABLE dues_tier;

@@ -52,3 +52,27 @@ FROM dues_rate
 JOIN dues_tier ON dues_tier.id = dues_rate.tier_id
 WHERE dues_tier.fund_id = ?
 ORDER BY dues_rate.id;
+
+-- The rates that price a roster (DuesStatusForPeriod): every tier's rates across
+-- the fund, ordered tier then month, the order the Go fold needs. Folded per
+-- (tier, period) as "the latest row at or before", so a roster costs one query
+-- however many members it holds. This and the next query are the rate reads the
+-- rate-correction work (ADR-040) points at the standing view.
+-- name: ListDuesRatesForPricing :many
+SELECT dues_rate.id, dues_rate.tier_id, dues_rate.amount, dues_rate.effective_from, dues_rate.created_at
+FROM dues_rate
+JOIN dues_tier ON dues_tier.id = dues_rate.tier_id
+WHERE dues_tier.fund_id = ?
+ORDER BY dues_rate.tier_id, dues_rate.effective_from;
+
+-- The rates that price one member (OutstandingDuesForMember, paidThrough): those
+-- of every tier the member has a standing row for. A tier named only by a
+-- superseded row prices nothing, so it is not fetched.
+-- name: ListDuesRatesForMemberPricing :many
+SELECT dr.id, dr.tier_id, dr.amount, dr.effective_from, dr.created_at
+FROM dues_rate dr
+WHERE dr.tier_id IN (
+  SELECT mt.tier_id FROM member_tier_standing mt
+  WHERE mt.fund_id = ? AND mt.member_id = ? AND mt.tier_id IS NOT NULL
+)
+ORDER BY dr.tier_id, dr.effective_from;

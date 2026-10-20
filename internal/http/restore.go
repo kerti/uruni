@@ -182,10 +182,10 @@ func (a *api) inspectRestoreUpload(w http.ResponseWriter, r *http.Request) {
 // not on disk (unknown, or pruned since the list was fetched) is a 404.
 //
 // Past that point it is backup.ParseUpload and the same errors and
-// writeRestoreParseError mapping. An older-format dump refuses here exactly
-// as an uploaded older-format zip (ErrFormatVersionOlder), so "only
-// current-format backups offer restore" holds with one place judging format
-// version.
+// writeRestoreParseError mapping. A dump of an older format the importer can
+// upgrade is accepted exactly as an uploaded zip of that format is, and one it
+// cannot read refuses here as an upload does (ErrFormatVersionOlder), so
+// ParseUpload is the one place judging format version.
 //
 // The dump is streamed into a staging file rather than read into memory. This
 // also fixes a correctness gap: WritePreRestoreDump's ApplyRetention call,
