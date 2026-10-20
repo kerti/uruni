@@ -10,8 +10,8 @@ import (
 )
 
 const accountBalance = `-- name: AccountBalance :one
-SELECT CAST(COALESCE(SUM(CASE WHEN direction = 'in' THEN amount ELSE -amount END), 0) AS INTEGER) AS balance_amount
-FROM "transaction"
+SELECT CAST(COALESCE(SUM(signed_amount), 0) AS INTEGER) AS balance_amount
+FROM ledger_entry
 WHERE fund_id = ? AND account_id = ?
 `
 
@@ -28,8 +28,8 @@ func (q *Queries) AccountBalance(ctx context.Context, arg AccountBalanceParams) 
 }
 
 const accountBalanceThrough = `-- name: AccountBalanceThrough :one
-SELECT CAST(COALESCE(SUM(CASE WHEN direction = 'in' THEN amount ELSE -amount END), 0) AS INTEGER) AS balance_amount
-FROM "transaction"
+SELECT CAST(COALESCE(SUM(signed_amount), 0) AS INTEGER) AS balance_amount
+FROM ledger_entry
 WHERE fund_id = ? AND account_id = ? AND id <= ?
 `
 
@@ -52,13 +52,11 @@ func (q *Queries) AccountBalanceThrough(ctx context.Context, arg AccountBalanceT
 
 const contributedByIncidentalMember = `-- name: ContributedByIncidentalMember :many
 SELECT member_id, CAST(COALESCE(SUM(amount), 0) AS INTEGER) AS contributed_amount
-FROM "transaction" t
+FROM ledger_entry t
 WHERE t.fund_id = ?1 AND t.purpose_id = ?2 AND t.kind = 'normal' AND t.direction = 'in'
   AND t.member_id IS NOT NULL
-  AND NOT EXISTS (
-    SELECT 1 FROM "transaction" r WHERE r.reverses_transaction_id = t.id
-      AND (CAST(?3 AS TEXT) IS NULL OR r.occurred_on <= CAST(?3 AS TEXT))
-  )
+  AND (t.reversed_on IS NULL
+       OR (CAST(?3 AS TEXT) IS NOT NULL AND t.reversed_on > CAST(?3 AS TEXT)))
   AND (CAST(?3 AS TEXT) IS NULL OR t.occurred_on <= CAST(?3 AS TEXT))
 GROUP BY member_id
 `
@@ -76,8 +74,9 @@ type ContributedByIncidentalMemberRow struct {
 
 // The named half of an envelope's participation (ADR-034): every named
 // contribution against one purpose_id, summed per member, excluding a row some
-// reversal points at (the NOT EXISTS of DuesPaidByPeriod, ADR-029) so a
-// reversed contribution disappears from "gave" rather than counting twice.
+// reversal points at (ADR-029) so a reversed contribution disappears from
+// "gave" rather than counting twice. Unlike DuesPaidByPeriod (ledger_entry.reversed)
+// it drops a reversal only if it is dated on or before through, via reversed_on.
 // member_id IS NOT NULL is redundant with the schema's CHECK but kept explicit.
 //
 // Says nothing about who was EXPECTED to give: that is ListMembersByFund plus
@@ -177,9 +176,9 @@ func (q *Queries) CreateTransaction(ctx context.Context, arg CreateTransactionPa
 
 const duesPaidByMemberGroupedByPeriod = `-- name: DuesPaidByMemberGroupedByPeriod :many
 SELECT CAST(dues_period AS TEXT) AS dues_period, CAST(COALESCE(SUM(amount), 0) AS INTEGER) AS paid_amount
-FROM "transaction" t
+FROM ledger_entry t
 WHERE t.fund_id = ? AND t.member_id = ? AND t.kind = 'dues'
-  AND NOT EXISTS (SELECT 1 FROM "transaction" r WHERE r.reverses_transaction_id = t.id)
+  AND t.reversed = 0
 GROUP BY dues_period
 `
 
@@ -223,9 +222,9 @@ func (q *Queries) DuesPaidByMemberGroupedByPeriod(ctx context.Context, arg DuesP
 
 const duesPaidByPeriod = `-- name: DuesPaidByPeriod :many
 SELECT member_id, CAST(COALESCE(SUM(amount), 0) AS INTEGER) AS paid_amount
-FROM "transaction" t
+FROM ledger_entry t
 WHERE t.fund_id = ? AND t.kind = 'dues' AND t.dues_period = ?
-  AND NOT EXISTS (SELECT 1 FROM "transaction" r WHERE r.reverses_transaction_id = t.id)
+  AND t.reversed = 0
 GROUP BY member_id
 `
 
@@ -241,7 +240,7 @@ type DuesPaidByPeriodRow struct {
 
 // The roster query behind "who has paid / partially / not yet" for one
 // dues_period, every member in one pass.
-// The AND NOT EXISTS clause is ADR-029's half of the reversal design: a
+// The reversed = 0 clause is ADR-029's half of the reversal design: a
 // reversal is kind='adjustment' so never matches kind = 'dues'; this drops the
 // ORIGINAL row once something reverses it, so a reversed payment disappears
 // from "paid" rather than counting twice.
@@ -269,14 +268,14 @@ func (q *Queries) DuesPaidByPeriod(ctx context.Context, arg DuesPaidByPeriodPara
 }
 
 const fundBalance = `-- name: FundBalance :one
-SELECT CAST(COALESCE(SUM(CASE WHEN direction = 'in' THEN amount ELSE -amount END), 0) AS INTEGER) AS balance_amount
-FROM "transaction"
+SELECT CAST(COALESCE(SUM(signed_amount), 0) AS INTEGER) AS balance_amount
+FROM ledger_entry
 WHERE fund_id = ?
 `
 
 // Every balance in Uruni is this shape: sum the ledger, never read a stored
-// total (CLAUDE.md rule 2). direction carries the sign, so the CASE is the
-// only place a minus appears. The CAST is not decoration - without it sqlc
+// total (CLAUDE.md rule 2). ledger_entry.signed_amount carries the sign, so the
+// view is the only place a minus appears. The CAST is not decoration - without it sqlc
 // emits interface{} for the aggregate and the trust core loses its compiler
 // exactly where it is needed most (ADR-024).
 func (q *Queries) FundBalance(ctx context.Context, fundID int64) (int64, error) {
@@ -454,25 +453,21 @@ func (q *Queries) GetTransactionForFund(ctx context.Context, arg GetTransactionF
 const incidentalActivityTotals = `-- name: IncidentalActivityTotals :one
 SELECT
   CAST(COALESCE(SUM(CASE
-    WHEN tr.reason = 'allocation' THEN CASE WHEN t.direction = 'in' THEN t.amount ELSE -t.amount END
-    WHEN COALESCE(o.direction, t.direction) = 'in'
-    THEN CASE WHEN o.id IS NULL OR t.direction = o.direction THEN t.amount ELSE -t.amount END
+    WHEN tr.reason = 'allocation' THEN t.signed_amount
+    WHEN COALESCE(o.direction, t.direction) = 'in' THEN t.signed_amount
     ELSE 0 END), 0) AS INTEGER) AS collected_amount,
   CAST(COALESCE(SUM(CASE
     WHEN tr.reason = 'allocation' THEN 0
-    WHEN COALESCE(o.direction, t.direction) = 'out'
-    THEN CASE WHEN o.id IS NULL OR t.direction = o.direction THEN t.amount ELSE -t.amount END
+    WHEN COALESCE(o.direction, t.direction) = 'out' THEN -t.signed_amount
     ELSE 0 END), 0) AS INTEGER) AS disbursed_amount
-FROM "transaction" t
+FROM ledger_entry t
 LEFT JOIN transfer tr ON tr.id = t.transfer_id AND tr.kind = 'reclass_purpose'
 LEFT JOIN "transaction" o ON o.fund_id = tr.fund_id AND o.id = tr.corrects_transaction_id
 WHERE t.fund_id = ?1 AND t.purpose_id = ?2
   AND (tr.id IS NULL OR tr.corrects_transaction_id IS NOT NULL OR tr.reason = 'allocation')
   AND t.reverses_transaction_id IS NULL
-  AND NOT EXISTS (
-    SELECT 1 FROM "transaction" r WHERE r.reverses_transaction_id = t.id
-      AND (CAST(?3 AS TEXT) IS NULL OR r.occurred_on <= CAST(?3 AS TEXT))
-  )
+  AND (t.reversed_on IS NULL
+       OR (CAST(?3 AS TEXT) IS NOT NULL AND t.reversed_on > CAST(?3 AS TEXT)))
   AND (CAST(?3 AS TEXT) IS NULL OR t.occurred_on <= CAST(?3 AS TEXT))
 `
 
@@ -497,9 +492,9 @@ type IncidentalActivityTotalsRow struct {
 // reclass_purpose transfer; a correction's legs come back in below.
 //
 // A cancelled contribution (ADR-034's widened ADR-029 reversal) is dropped
-// whole: the reversal row and the row it reverses, the same NOT EXISTS as
-// ContributedByIncidentalMember. Otherwise a cancellation reads as money
-// spent ("Terpakai") and the cancelled row as money collected. Both halves go,
+// whole: the reversal row and the row it reverses, by the same ledger_entry
+// reversed_on test as ContributedByIncidentalMember. Otherwise a cancellation
+// reads as money spent ("Terpakai") and the cancelled row as money collected. Both halves go,
 // so collected minus disbursed still equals the envelope's balance;
 // IncidentalTotals stays unfiltered because the pair nets to zero there.
 //
@@ -532,9 +527,9 @@ func (q *Queries) IncidentalActivityTotals(ctx context.Context, arg IncidentalAc
 
 const incidentalTotals = `-- name: IncidentalTotals :one
 SELECT
-  CAST(COALESCE(SUM(CASE WHEN direction = 'in' THEN amount ELSE 0 END), 0) AS INTEGER) AS collected_amount,
-  CAST(COALESCE(SUM(CASE WHEN direction = 'out' THEN amount ELSE 0 END), 0) AS INTEGER) AS disbursed_amount
-FROM "transaction"
+  CAST(COALESCE(SUM(CASE WHEN signed_amount > 0 THEN signed_amount ELSE 0 END), 0) AS INTEGER) AS collected_amount,
+  CAST(COALESCE(SUM(CASE WHEN signed_amount < 0 THEN -signed_amount ELSE 0 END), 0) AS INTEGER) AS disbursed_amount
+FROM ledger_entry
 WHERE fund_id = ? AND purpose_id = ?
 `
 
@@ -567,9 +562,9 @@ func (q *Queries) IncidentalTotals(ctx context.Context, arg IncidentalTotalsPara
 
 const latestDuesPeriodPaidByMember = `-- name: LatestDuesPeriodPaidByMember :many
 SELECT member_id, CAST(MAX(dues_period) AS TEXT) AS latest_period
-FROM "transaction" t
+FROM ledger_entry t
 WHERE t.fund_id = ? AND t.kind = 'dues'
-  AND NOT EXISTS (SELECT 1 FROM "transaction" r WHERE r.reverses_transaction_id = t.id)
+  AND t.reversed = 0
 GROUP BY member_id
 `
 
@@ -583,7 +578,7 @@ type LatestDuesPeriodPaidByMemberRow struct {
 // uncast, MAX(dues_period) generates interface{} (the ADR-024 trap for SUM,
 // reached through MAX), and a .(string) assertion on it can panic since drivers
 // commonly hand back []byte.
-// The AND NOT EXISTS clause is ADR-029's fix: without it a reversed row would
+// The reversed = 0 clause is ADR-029's fix: without it a reversed row would
 // still be the MAX(dues_period) for its member, reading as "paid in advance"
 // through a period that is no longer paid at all.
 func (q *Queries) LatestDuesPeriodPaidByMember(ctx context.Context, fundID int64) ([]LatestDuesPeriodPaidByMemberRow, error) {
@@ -676,12 +671,11 @@ const listDuesPaymentsPage = `-- name: ListDuesPaymentsPage :many
 SELECT
   t.id, t.kind, t.member_id, m.name AS member_name, t.dues_period, t.amount,
   t.occurred_on, a.name AS account_name, t.note, t.reverses_transaction_id,
-  rv.id AS reversed_by_transaction_id,
+  t.reversed_by_transaction_id,
   orig.occurred_on AS reverses_occurred_on
-FROM "transaction" t
+FROM ledger_entry t
 JOIN member m ON m.id = t.member_id
 JOIN account a ON a.id = t.account_id
-LEFT JOIN "transaction" rv ON rv.reverses_transaction_id = t.id
 LEFT JOIN "transaction" orig ON orig.id = t.reverses_transaction_id
 WHERE t.fund_id = ?1
   AND (t.kind = 'dues' OR (t.kind = 'adjustment' AND t.reverses_transaction_id IS NOT NULL))
@@ -729,8 +723,8 @@ type ListDuesPaymentsPageRow struct {
 // kind='dues' payment and every kind='adjustment' row that reverses one -
 // never a bare "every transaction".
 //
-// rv is the reversal that undoes THIS row when it is a payment
-// (reversed_by_transaction_id; null otherwise, as a reversal is never itself
+// reversed_by_transaction_id is the reversal that undoes THIS row when it is a
+// payment (ledger_entry; null otherwise, as a reversal is never itself
 // reversed). orig is the payment THIS row reverses, carried forward as
 // reverses_occurred_on so a reversal states the original's date even when that
 // payment sits on a later page.
@@ -1097,8 +1091,8 @@ func (q *Queries) MaxTransactionIDByFund(ctx context.Context, fundID int64) (int
 }
 
 const purposeBalance = `-- name: PurposeBalance :one
-SELECT CAST(COALESCE(SUM(CASE WHEN direction = 'in' THEN amount ELSE -amount END), 0) AS INTEGER) AS balance_amount
-FROM "transaction"
+SELECT CAST(COALESCE(SUM(signed_amount), 0) AS INTEGER) AS balance_amount
+FROM ledger_entry
 WHERE fund_id = ? AND purpose_id = ?
 `
 

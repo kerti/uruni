@@ -265,7 +265,8 @@ CREATE TABLE "transaction" (              -- the ledger. insert-only.
   purpose_id  INTEGER NOT NULL,
   direction   TEXT    NOT NULL CHECK (direction IN ('in','out')),
   -- The sign lives in direction, never in the amount, so summing the ledger is
-  -- one CASE and a negative amount is impossible rather than merely unexpected.
+  -- SUM(ledger_entry.signed_amount) (the view below) and a negative amount is
+  -- impossible rather than merely unexpected.
   amount      INTEGER NOT NULL CHECK (amount > 0 AND amount <= 999999999999),
   occurred_on TEXT    NOT NULL CHECK (date(occurred_on) IS NOT NULL AND occurred_on = date(occurred_on) AND occurred_on >= '2000-01-01'),
   kind        TEXT    NOT NULL CHECK (kind IN
@@ -307,8 +308,8 @@ CREATE TABLE "transaction" (              -- the ledger. insert-only.
   -- reversal may claim to reverse anything. Without this, a kind='normal' row
   -- with no member and no period satisfies the CHECK above yet sets
   -- reverses_transaction_id - which would hide the original dues payment from
-  -- DuesPaidByPeriod (its NOT EXISTS only asks whether *something* points at
-  -- the row) and consume the reversed-once slot, so the genuine reversal could
+  -- DuesPaidByPeriod (which reads ledger_entry.reversed, and that only asks
+  -- whether *something* points at the row) and consume the reversed-once slot, so the genuine reversal could
   -- never be posted. The schema makes that row unrepresentable (ADR-029).
   -- dues_period is deliberately not required here (ADR-034): reversing a named
   -- contribution carries none, reversing a dues payment must - which the
@@ -471,6 +472,38 @@ CREATE INDEX reimbursement_by_date  ON reimbursement(fund_id, incurred_on, id);
 -- Same shape: orders the (performed_at DESC, id DESC) keyset scan (#227).
 CREATE INDEX reconciliation_by_date ON reconciliation(fund_id, performed_at, id);
 
+-- The ledger as every sum reads it (#627): "transaction"'s columns plus the two
+-- derived facts that used to be re-written in each query, each defined here once.
+-- internal/db/ledger_entry_test.go fails a query under internal/store/queries
+-- that derives either one itself.
+--
+--   signed_amount        direction carries the sign (amount is always > 0), so this is
+--                        the only place a minus appears: SUM(signed_amount) is a
+--                        balance. CAST so sqlc types a sum of it as int64.
+--   reversed_by_transaction_id
+--                        the id of the reversal that points at this row (ADR-029),
+--                        NULL when none does. dues_payment_reversed_once makes it
+--                        at most one.
+--   reversed_on          the date of that reversal, NULL when none: what a dated
+--                        read (the public report's month-end, #408) compares with
+--                        its bound, since a reversal dated after the bound has not
+--                        happened yet.
+--   reversed             1 when any reversal points at this row, else 0: the
+--                        flag a read that is not dated filters on, and the one
+--                        reversal (ADR-042) will rely on.
+--
+-- Unused columns cost nothing: SQLite drops them when it flattens the view into
+-- the query, so a balance never runs the reversal lookup.
+CREATE VIEW ledger_entry AS
+SELECT t.id, t.fund_id, t.account_id, t.purpose_id, t.direction, t.amount, t.occurred_on, t.kind,
+       t.member_id, t.dues_period, t.reimbursement_id, t.transfer_id, t.reverses_transaction_id,
+       t.note, t.created_at,
+       CAST(CASE WHEN t.direction = 'in' THEN t.amount ELSE -t.amount END AS INTEGER) AS signed_amount,
+       (SELECT r.id FROM "transaction" r WHERE r.reverses_transaction_id = t.id) AS reversed_by_transaction_id,
+       (SELECT r.occurred_on FROM "transaction" r WHERE r.reverses_transaction_id = t.id) AS reversed_on,
+       CAST(EXISTS (SELECT 1 FROM "transaction" r WHERE r.reverses_transaction_id = t.id) AS INTEGER) AS reversed
+FROM "transaction" t;
+
 -- Immutability is a trigger, not a convention (ADR-024, CLAUDE.md rule 3).
 -- INSERT stays open, which lets ADR-012's import restore a database. A snapshot
 -- is a claim about a moment, so it is as immutable as the ledger: revisiting a
@@ -547,6 +580,7 @@ END;
 
 -- +goose Down
 
+DROP VIEW ledger_entry;
 DROP TRIGGER dues_rate_immutable_update;
 DROP TRIGGER member_tier_immutable_update;
 DROP TRIGGER reconciliation_line_immutable_delete;

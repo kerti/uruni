@@ -764,7 +764,7 @@ func TestRebuildFailsClosedWhenTheLedgerCannotBeCompared(t *testing.T) {
 	// An old schema in which the ledger's table has another name.
 	execRaw(t, f.dbPath,
 		`DROP TRIGGER transaction_immutable_update`, `DROP TRIGGER transaction_immutable_delete`,
-		`PRAGMA foreign_keys = OFF`, `ALTER TABLE "transaction" RENAME TO ledger_entry`)
+		`PRAGMA foreign_keys = OFF`, `ALTER TABLE "transaction" RENAME TO journal`)
 	before := readFile(t, f.dbPath)
 
 	err := f.run(backup.ReplaceHooks{}, rebuildNow)

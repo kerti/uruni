@@ -236,6 +236,8 @@ func countRows(ctx context.Context, sqlDB *sql.DB, table string) (int64, error) 
 // schema it cannot read, or a sum that would overflow int64 (SQLite raises
 // rather than wrap), is ok == false and printed as n/a.
 func rawLedgerSum(ctx context.Context, sqlDB *sql.DB) (sum int64, ok bool) {
+	// The sign CASE is deliberately hand-written against "transaction", not read from
+	// ledger_entry: an independent cross-check, and an old database may predate the view.
 	err := sqlDB.QueryRowContext(ctx,
 		`SELECT COALESCE(SUM(CASE WHEN direction = 'in' THEN amount ELSE -amount END), 0) FROM "transaction"`).Scan(&sum)
 	return sum, err == nil
