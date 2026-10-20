@@ -570,6 +570,44 @@ func TestRebuildRefusesABackupWhoseTotalsDisagreeWithItsRows(t *testing.T) {
 	assertNothingWritten(t, f, before)
 }
 
+// A backup holding a figure above the Rp 999.999.999.999 ceiling (#622) is
+// refused by the schema's CHECK while the scratch database is filled, with the
+// totals block made true for it so the totals proof cannot be what refuses.
+func TestRebuildRefusesABackupWithAnAmountAboveTheCeiling(t *testing.T) {
+	t.Parallel()
+	f := oldInstance(t)
+	rewriteBackup(t, f.zipPath, func(d *backup.Document) {
+		for i := range d.Transactions {
+			tx := &d.Transactions[i]
+			if tx.Direction != "in" {
+				continue
+			}
+			delta := int64(money.MaxAmount) + 1 - tx.Amount
+			tx.Amount += delta
+			d.Totals.Funds[0].Balance += delta
+			for j := range d.Totals.Accounts {
+				if d.Totals.Accounts[j].AccountID == tx.AccountID {
+					d.Totals.Accounts[j].Balance += delta
+				}
+			}
+			for j := range d.Totals.Purposes {
+				if d.Totals.Purposes[j].PurposeID == tx.PurposeID {
+					d.Totals.Purposes[j].Balance += delta
+				}
+			}
+			return
+		}
+		t.Fatal("the fixture backup holds no 'in' transaction to raise")
+	})
+	before := readFile(t, f.dbPath)
+
+	err := f.run(backup.ReplaceHooks{}, rebuildNow)
+	if err == nil || errors.Is(err, backup.ErrTotalsMismatch) || !strings.Contains(err.Error(), "CHECK constraint failed") {
+		t.Fatalf("rebuild = %v, want the schema's CHECK to refuse the figure above the ceiling", err)
+	}
+	assertUntouched(t, f, before) // refused while filling the scratch file: the snapshot is already taken
+}
+
 func TestRebuildRefusesAnExistingPreRebuildName(t *testing.T) {
 	t.Parallel()
 	f := oldInstance(t)
