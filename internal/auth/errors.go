@@ -1,12 +1,22 @@
 package auth
 
-import "errors"
+import (
+	"errors"
+	"fmt"
+)
 
 // ErrInvalidArgument mirrors internal/ledger's category (ADR-027): the
 // caller's input failed a shape check before reaching the database - an empty
 // or malformed email, a password under MinPasswordLength. Every returned error
 // wraps this with %w, so callers use errors.Is, not string matching.
 var ErrInvalidArgument = errors.New("auth: invalid argument")
+
+// ErrPasswordTooCommon is returned wherever a new password enters (Register,
+// SetLogin, the account change) when it is on the embedded common-passwords
+// list (#528). It wraps ErrInvalidArgument, so a caller that only cares that the
+// input was refused still matches that; mapAuthError checks this one first to
+// give it its own wire code.
+var ErrPasswordTooCommon = fmt.Errorf("%w: password is too common", ErrInvalidArgument)
 
 // ErrAlreadyRegistered is returned by Register when CountUsers finds any
 // existing row: ADR-030 decision 2's one-shot bootstrap gate. Keyed to the

@@ -92,6 +92,8 @@ func createUser(ctx context.Context, args []string, in io.Reader, out, errOut io
 	switch {
 	case errors.Is(err, auth.ErrOtherAccountExists):
 		return fmt.Errorf("%s holds one login and it is not %s - run create-user with that login's email to reset its password", cfg.DBPath, email)
+	case errors.Is(err, auth.ErrPasswordTooCommon):
+		return errors.New("that password is on the list of the most common passwords and is too easy to guess - choose another")
 	case err != nil:
 		return err
 	}

@@ -150,6 +150,10 @@ func mapLedgerError(w http.ResponseWriter, logger *slog.Logger, err error) {
 // taxonomy, one switch per domain package like mapLedgerError.
 func mapAuthError(w http.ResponseWriter, logger *slog.Logger, err error) {
 	switch {
+	case errors.Is(err, auth.ErrPasswordTooCommon):
+		// Before ErrInvalidArgument, which it wraps: the SPA has its own sentence
+		// for a password on the common-passwords list (#528).
+		writeAPIError(w, http.StatusBadRequest, "password_too_common", "This password is too common.")
 	case errors.Is(err, auth.ErrInvalidArgument):
 		writeAPIError(w, http.StatusBadRequest, "invalid_argument", "The request contains an invalid argument.")
 	case errors.Is(err, auth.ErrAlreadyRegistered):

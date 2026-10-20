@@ -341,7 +341,20 @@ func TestAShortNewPasswordIsRefusedAndIsNoGuess(t *testing.T) {
 		t.Error("a refused change signed another session out")
 	}
 	// Exactly the minimum is accepted.
-	e.wantStatus(t, e.changePassword(t, e.a, strings.Repeat("x", auth.MinPasswordLength), userPassword), http.StatusNoContent, "")
+	e.wantStatus(t, e.changePassword(t, e.a, strings.Repeat("xq", auth.MinPasswordLength/2), userPassword), http.StatusNoContent, "")
+}
+
+func TestACommonNewPasswordIsRefusedWithItsOwnCodeAndIsNoGuess(t *testing.T) {
+	t.Parallel()
+	e := newUserEnv(t)
+
+	for _, p := range []string{"password", "PASSWORD", "Qwertyuiop"} {
+		e.wantStatus(t, e.changePassword(t, e.a, p, userPassword), http.StatusBadRequest, "password_too_common")
+	}
+	if e.loginStatus(t, userEmail, userPassword) != http.StatusOK {
+		t.Error("a refused common password changed the login")
+	}
+	e.wantStatus(t, e.changePassword(t, e.a, "zk3-vq9-lunar-tide", userPassword), http.StatusNoContent, "")
 }
 
 func TestAMalformedNewEmailIsRefusedAndIsNoGuess(t *testing.T) {

@@ -66,7 +66,7 @@ A forgotten password, or a login you need to hand to a new treasurer, is reset o
 docker compose exec app /uruni create-user treasurer@example.org
 ```
 
-With the email of the existing login it sets the new password and signs out every session; with a different email it refuses, because there is only ever one login. The new treasurer can then change the email and password in Pengaturan.
+With the email of the existing login it sets the new password and signs out every session; with a different email it refuses, because there is only ever one login. The new treasurer can then change the email and password in Pengaturan. A password must be at least 8 characters and not one of the common passwords on a built-in list (the 10,000 most common, of which about two thousand are long enough to matter); `create-user` says so and writes nothing when it refuses one.
 
 `create-user` asks for the password when you run it in a terminal, and reads the first line of standard input otherwise (`docker compose exec -T app /uruni create-user treasurer@example.org < password.txt`). It still accepts the password as a second argument, but warns: an argument is kept in your shell history and is visible to every user on the host in `ps`.
 
