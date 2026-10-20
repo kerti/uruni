@@ -120,8 +120,8 @@ type UpdateMemberParams struct {
 	// month if that is later.
 	TierFrom string
 
-	// Now is the clock the current month is read from (through CurrentDuesPeriod,
-	// the seam that moves to the fund's zone with #639).
+	// Now is the clock the current month is read from, in the fund's zone
+	// (through CurrentDuesPeriod, ADR-041).
 	Now time.Time
 }
 
@@ -167,10 +167,19 @@ func (l *Ledger) UpdateMember(ctx context.Context, p UpdateMemberParams) (Member
 			return Member{}, err
 		}
 	}
-	current := CurrentDuesPeriod(p.Now)
 
 	var out Member
 	err := l.withTx(ctx, func(q store.Querier) error {
+		fund, err := q.GetFund(ctx, p.FundID)
+		if err != nil {
+			return fmt.Errorf("fetching fund: %w", err)
+		}
+		loc, err := FundLocation(fund)
+		if err != nil {
+			return err
+		}
+		current := CurrentDuesPeriod(p.Now, loc)
+
 		old, err := q.GetMemberForFund(ctx, store.GetMemberForFundParams{ID: p.MemberID, FundID: p.FundID})
 		if err != nil {
 			return fmt.Errorf("fetching member: %w", err)

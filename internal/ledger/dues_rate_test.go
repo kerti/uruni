@@ -386,7 +386,7 @@ func TestRateWritesAreScopedToTheFund(t *testing.T) {
 	h := newRateFixture(t)
 	jan := h.create(t, 10_000, "2026-01")
 	other, err := h.q.CreateFund(context.Background(), store.CreateFundParams{
-		Name: "Other Fund", Currency: "IDR", ReportSlug: "zyxwvutsrqponmlkjihgfe", CreatedAt: 1,
+		Name: "Other Fund", Currency: "IDR", TimeZone: "Asia/Jakarta", ReportSlug: "zyxwvutsrqponmlkjihgfe", CreatedAt: 1,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -469,7 +469,7 @@ func TestDeleteDuesTierOfAnotherFundIsNotFoundAndKeepsItsRates(t *testing.T) {
 	before := h.rowCount(t)
 
 	other, err := h.q.CreateFund(context.Background(), store.CreateFundParams{
-		Name: "Other Fund", Currency: "IDR", ReportSlug: "zyxwvutsrqponmlkjihgfe", CreatedAt: 1,
+		Name: "Other Fund", Currency: "IDR", TimeZone: "Asia/Jakarta", ReportSlug: "zyxwvutsrqponmlkjihgfe", CreatedAt: 1,
 	})
 	if err != nil {
 		t.Fatal(err)

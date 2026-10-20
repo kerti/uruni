@@ -4,16 +4,31 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import TimeZoneField from '@/components/TimeZoneField'
 import { copy } from '@/copy/id'
 
 const text = copy.setup
 
 /**
- * Setup step 1 of 4: name the fund. No request fires here - the name only
- * leaves the browser once locations are chosen too, in one
- * POST /api/setup (Setup.tsx).
+ * Setup step 1 of 4: name the fund and choose its time zone (ADR-041). No
+ * request fires here - the name and zone only leave the browser once locations
+ * are chosen too, in one POST /api/setup (Setup.tsx). The zone arrives
+ * pre-selected from the device's UTC offset, so most treasurers tap nothing;
+ * the field stays visible and editable.
  */
-export default function FundName({ name, onChange, onNext }: { name: string; onChange: (name: string) => void; onNext: () => void }) {
+export default function FundName({
+  name,
+  onChange,
+  timeZone,
+  onTimeZoneChange,
+  onNext,
+}: {
+  name: string
+  onChange: (name: string) => void
+  timeZone: string
+  onTimeZoneChange: (zone: string) => void
+  onNext: () => void
+}) {
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     if (name.trim() === '') return
@@ -33,6 +48,11 @@ export default function FundName({ name, onChange, onNext }: { name: string; onC
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="setup-fund-name">{text.fund.nameLabel}</Label>
               <Input id="setup-fund-name" type="text" required value={name} onChange={(event) => onChange(event.target.value)} />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="setup-fund-time-zone">{copy.timeZone.label}</Label>
+              <TimeZoneField id="setup-fund-time-zone" value={timeZone} onChange={onTimeZoneChange} />
+              <p className="text-sm text-muted-foreground">{copy.timeZone.setupHint}</p>
             </div>
             <Button type="submit" size="lg" disabled={name.trim() === ''}>
               {text.next}

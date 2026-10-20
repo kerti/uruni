@@ -18,7 +18,7 @@ func toUsers(rows []store.User) []User {
 func toFunds(rows []store.Fund) []Fund {
 	out := make([]Fund, 0, len(rows))
 	for _, r := range rows {
-		out = append(out, Fund{ID: r.ID, Name: r.Name, Currency: r.Currency, ReportSlug: r.ReportSlug, CreatedAt: r.CreatedAt})
+		out = append(out, Fund{ID: r.ID, Name: r.Name, Currency: r.Currency, TimeZone: r.TimeZone, ReportSlug: r.ReportSlug, CreatedAt: r.CreatedAt})
 	}
 	return out
 }

@@ -156,13 +156,13 @@ func TestMapSQLiteErrorMapsAGenuineUniqueViolation(t *testing.T) {
 
 	const slug = "abcdefghijklmnopqrstuv" // 22 chars, the schema's minimum
 	if _, err := q.CreateFund(ctx, store.CreateFundParams{
-		Name: "Test Fund", Currency: "IDR", ReportSlug: slug, CreatedAt: 1,
+		Name: "Test Fund", Currency: "IDR", TimeZone: "Asia/Jakarta", ReportSlug: slug, CreatedAt: 1,
 	}); err != nil {
 		t.Fatalf("first CreateFund() = %v, want no error", err)
 	}
 
 	_, err := q.CreateFund(ctx, store.CreateFundParams{
-		Name: "Second Fund", Currency: "IDR", ReportSlug: slug, CreatedAt: 2,
+		Name: "Second Fund", Currency: "IDR", TimeZone: "Asia/Jakarta", ReportSlug: slug, CreatedAt: 2,
 	})
 	if err == nil {
 		t.Fatalf("second CreateFund() with a duplicate report_slug = nil error, want a UNIQUE violation")
@@ -186,7 +186,7 @@ func TestMapSQLiteErrorMapsAGenuineCheckViolation(t *testing.T) {
 	ctx := context.Background()
 
 	fund, err := q.CreateFund(ctx, store.CreateFundParams{
-		Name: "Test Fund", Currency: "IDR", ReportSlug: "abcdefghijklmnopqrstuv", CreatedAt: 1,
+		Name: "Test Fund", Currency: "IDR", TimeZone: "Asia/Jakarta", ReportSlug: "abcdefghijklmnopqrstuv", CreatedAt: 1,
 	})
 	if err != nil {
 		t.Fatalf("CreateFund() = %v, want no error", err)
@@ -218,7 +218,7 @@ func TestMapSQLiteErrorMapsAGenuineForeignKeyViolation(t *testing.T) {
 	ctx := context.Background()
 
 	fund, err := q.CreateFund(ctx, store.CreateFundParams{
-		Name: "Test Fund", Currency: "IDR", ReportSlug: "abcdefghijklmnopqrstuv", CreatedAt: 1,
+		Name: "Test Fund", Currency: "IDR", TimeZone: "Asia/Jakarta", ReportSlug: "abcdefghijklmnopqrstuv", CreatedAt: 1,
 	})
 	if err != nil {
 		t.Fatalf("CreateFund() = %v, want no error", err)
@@ -261,7 +261,7 @@ func TestMapSQLiteDeleteErrorMapsAGenuineForeignKeyViolationTo409(t *testing.T) 
 	ctx := context.Background()
 
 	fund, err := q.CreateFund(ctx, store.CreateFundParams{
-		Name: "Test Fund", Currency: "IDR", ReportSlug: "abcdefghijklmnopqrstuv", CreatedAt: 1,
+		Name: "Test Fund", Currency: "IDR", TimeZone: "Asia/Jakarta", ReportSlug: "abcdefghijklmnopqrstuv", CreatedAt: 1,
 	})
 	if err != nil {
 		t.Fatalf("CreateFund() = %v, want no error", err)

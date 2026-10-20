@@ -332,9 +332,9 @@ describe('Roster', () => {
   // ADR-040: a tier change is stated "from a month".
   describe('Mulai bulan, for a tier change', () => {
     beforeEach(() => {
-      // Only Date is faked; the bounds read the local clock.
+      // Only Date is faked; the bounds read the fund's clock (WIB by default).
       vi.useFakeTimers({ toFake: ['Date'] })
-      vi.setSystemTime(new Date(2026, 9, 20))
+      vi.setSystemTime(new Date('2026-10-20T09:00:00+07:00'))
     })
     afterEach(() => {
       vi.useRealTimers()

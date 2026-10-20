@@ -13,6 +13,7 @@
       "id": 1,
       "name": "Test Fund",
       "currency": "IDR",
+      "time_zone": "Asia/Jakarta",
       "report_slug": "0000000000000000000fixture",
       "created_at": 1700000000
     }

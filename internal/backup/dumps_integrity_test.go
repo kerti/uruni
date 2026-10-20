@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/kerti/uruni/internal/db"
+	"github.com/kerti/uruni/internal/tz"
 )
 
 // TestDailyDumpOfADamagedDatabaseIsRefused (#505): a dump that would be
@@ -23,7 +24,7 @@ func TestDailyDumpOfADamagedDatabaseIsRefused(t *testing.T) {
 		return fmt.Errorf("%w: page 7 is never used", db.ErrIntegrity)
 	}
 
-	_, written, err := writeDailyIfNeeded(context.Background(), readDocumentFrom(sqlDB), assemble, damaged, uploadsDir, backupDir, jakartaTime(2026, 9, 30, 3, 0, 0))
+	_, written, err := writeDailyIfNeeded(context.Background(), readDocumentFrom(sqlDB), assemble, damaged, uploadsDir, backupDir, tz.Jakarta, jakartaTime(2026, 9, 30, 3, 0, 0))
 	if !errors.Is(err, db.ErrIntegrity) || written {
 		t.Fatalf("writeDailyIfNeeded with a failing check = (written=%v, err=%v), want (false, ErrIntegrity)", written, err)
 	}
@@ -56,11 +57,11 @@ func TestDailyDumpSkipsTheIntegrityCheckWhenNothingChanged(t *testing.T) {
 		return db.QuickCheck(ctx, sqlDB)
 	}
 
-	if _, written, err := writeDailyIfNeeded(ctx, read, assembleZip, check, uploadsDir, backupDir, jakartaTime(2026, 9, 29, 3, 0, 0)); err != nil || !written {
+	if _, written, err := writeDailyIfNeeded(ctx, read, assembleZip, check, uploadsDir, backupDir, tz.Jakarta, jakartaTime(2026, 9, 29, 3, 0, 0)); err != nil || !written {
 		t.Fatalf("first dump = (written=%v, err=%v), want (true, nil)", written, err)
 	}
 	for hour := 0; hour < 24; hour++ {
-		if _, written, err := writeDailyIfNeeded(ctx, read, assembleZip, check, uploadsDir, backupDir, jakartaTime(2026, 9, 30, hour, 0, 0)); err != nil || written {
+		if _, written, err := writeDailyIfNeeded(ctx, read, assembleZip, check, uploadsDir, backupDir, tz.Jakarta, jakartaTime(2026, 9, 30, hour, 0, 0)); err != nil || written {
 			t.Fatalf("writeDailyIfNeeded(hour %d) = (written=%v, err=%v), want (false, nil)", hour, written, err)
 		}
 	}

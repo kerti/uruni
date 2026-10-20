@@ -25,7 +25,6 @@ import (
 	"github.com/kerti/uruni/internal/lock"
 	"github.com/kerti/uruni/internal/money"
 	"github.com/kerti/uruni/internal/store"
-	"github.com/kerti/uruni/internal/tz"
 )
 
 // Tests for #516: `uruni rebuild`. Every test builds its own directory and
@@ -42,7 +41,7 @@ const (
 )
 
 // rebuildNow is the fixed clock; PreRebuildName renders it as 20261014-101500.
-var rebuildNow = time.Date(2026, 10, 14, 10, 15, 0, 0, tz.Jakarta)
+var rebuildNow = time.Date(2026, 10, 14, 10, 15, 0, 0, wib)
 
 type rebuildFixture struct {
 	dir        string
@@ -903,6 +902,11 @@ func TestRebuildGateStillComparesAVersion1BackupWithAnOlderShapedDatabase(t *tes
 		members, _ := doc["members"].([]any)
 		for _, m := range members {
 			m.(map[string]any)["tier_id"] = nil
+		}
+		// Format 1 had no time_zone either (ADR-041); the step fills Asia/Jakarta.
+		funds, _ := doc["funds"].([]any)
+		for _, fd := range funds {
+			delete(fd.(map[string]any), "time_zone")
 		}
 	})
 

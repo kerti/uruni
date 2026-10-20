@@ -173,12 +173,26 @@ type OutstandingDuesPeriod struct {
 }
 
 // CurrentDuesPeriod is the dues period ("YYYY-MM") that now falls in,
-// reckoned in Asia/Jakarta (tz.Jakarta), never the server's zone: production
-// runs UTC, so on a month's last evening the host clock still reads the old
-// month while the treasurer is in the next (#379). The report's "current
-// month" is reckoned the same way (ADR-035).
-func CurrentDuesPeriod(now time.Time) string {
-	return now.In(tz.Jakarta).Format(duesPeriodLayout)
+// reckoned in loc, the fund's time zone (ADR-041), never the server's zone:
+// production runs UTC, so on a month's last evening the host clock still reads
+// the old month while the treasurer is in the next (#379), and a WIT fund
+// turns the month over two hours before a WIB one. The report's "current
+// month" is reckoned the same way (ADR-035). It is the one seam every
+// "current month" read goes through; loc comes from FundLocation.
+func CurrentDuesPeriod(now time.Time, loc *time.Location) string {
+	return now.In(loc).Format(duesPeriodLayout)
+}
+
+// FundLocation is the fund's time zone as a *time.Location (ADR-041). A name
+// tz.Load refuses cannot get past the schema's CHECK, so an error here means the
+// database is broken: the caller fails the request and logs it, and nothing
+// falls back to UTC or WIB.
+func FundLocation(f store.Fund) (*time.Location, error) {
+	loc, err := tz.Load(f.TimeZone)
+	if err != nil {
+		return nil, fmt.Errorf("fund %d has an unusable time zone: %w", f.ID, err)
+	}
+	return loc, nil
 }
 
 // OutstandingDuesForMember returns, oldest first, every period fundID's
@@ -188,9 +202,9 @@ func CurrentDuesPeriod(now time.Time) string {
 // "you owe nothing" is a normal answer.
 //
 // through bounds the end of the range ("YYYY-MM"); empty defaults to
-// CurrentDuesPeriod(now). now is injected so a test can stand on either side
-// of a Jakarta month boundary (as ReportParams.Now does); it is read only
-// when through is empty.
+// CurrentDuesPeriod(now, the fund's zone). now is injected so a test can stand
+// on either side of a month boundary (as ReportParams.Now does); it is read
+// only when through is empty.
 //
 // The range:
 //   - End: through. A member who left owes nothing after they left, but that
@@ -222,7 +236,15 @@ func CurrentDuesPeriod(now time.Time) string {
 // them per period, a constant number of queries however long the walk.
 func (l *Ledger) OutstandingDuesForMember(ctx context.Context, fundID, memberID int64, through string, now time.Time) ([]OutstandingDuesPeriod, error) {
 	if through == "" {
-		through = CurrentDuesPeriod(now)
+		fund, err := l.q.GetFund(ctx, fundID)
+		if err != nil {
+			return nil, fmt.Errorf("fetching fund: %w", err)
+		}
+		loc, err := FundLocation(fund)
+		if err != nil {
+			return nil, err
+		}
+		through = CurrentDuesPeriod(now, loc)
 	} else if err := validateDuesPeriod(through); err != nil {
 		return nil, err
 	}

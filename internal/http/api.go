@@ -70,9 +70,10 @@ type api struct {
 	sqlDB *sql.DB
 
 	// now is the clock every handler that reckons a calendar day or month reads
-	// (#379), injectable so a test can stand on either side of a Jakarta month
-	// boundary. Production is time.Now; the handler converts to tz.Jakarta.
-	// Instants (created_at, session expiry) call time.Now directly.
+	// (#379), injectable so a test can stand on either side of a month boundary.
+	// Production is time.Now; the handler reads it in the fund's zone (ADR-041),
+	// via fundLocation. Instants (created_at, session expiry) call time.Now
+	// directly.
 	now func() time.Time
 
 	// restoreStage is the one-slot stash between the upload/inspect step and the

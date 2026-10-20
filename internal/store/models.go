@@ -43,6 +43,7 @@ type Fund struct {
 	ID         int64
 	Name       string
 	Currency   string
+	TimeZone   string
 	ReportSlug string
 	CreatedAt  int64
 }

@@ -174,7 +174,7 @@ func TestPostTransferBetweenAccountsLeavesNoRowsWhenTheSecondLegFails(t *testing
 	q := store.New(l.db)
 
 	other, err := q.CreateFund(ctx, store.CreateFundParams{
-		Name: "Other Fund", Currency: "IDR", ReportSlug: "zyxwvutsrqponmlkjihgfe", CreatedAt: 1,
+		Name: "Other Fund", Currency: "IDR", TimeZone: "Asia/Jakarta", ReportSlug: "zyxwvutsrqponmlkjihgfe", CreatedAt: 1,
 	})
 	if err != nil {
 		t.Fatalf("CreateFund() = %v, want no error", err)

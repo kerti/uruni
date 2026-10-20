@@ -448,7 +448,7 @@ func rebuiltTotal(ctx context.Context, sqlDB *sql.DB, doc backup.Document) (int6
 }
 
 func backupDate(doc backup.Document) string {
-	if d := backup.NewestDate(doc); d != "" {
+	if d, err := backup.NewestDate(doc); err == nil && d != "" {
 		return d
 	}
 	return "(no date)"

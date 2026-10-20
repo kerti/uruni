@@ -14,7 +14,7 @@ import { copy } from '@/copy/id'
 import { ApiError, settleUncertainWrite } from '@/lib/api'
 import { listAccounts } from '@/lib/accounts'
 import { getBalances } from '@/lib/balances'
-import { formatIsoDate, dateBounds } from '@/lib/dates'
+import { formatIsoDate, dateBounds, todayISODate } from '@/lib/dates'
 import { formatIDR } from '@/lib/money'
 import { listPurposes } from '@/lib/purposes'
 import { fixRemainder, takeReconciliation } from '@/lib/reconciliations'
@@ -33,15 +33,6 @@ const text = copy.reconciliation
  * newest-first) that Home.tsx takes, so the two screens agree on what
  * "recent" means. */
 const RECENT_ACTIVITY_COUNT = 5
-
-/** Local YYYY-MM-DD - never toISOString(), which is UTC and can read as
- * yesterday's date in WIB. */
-function todayISODate(): string {
-  const now = new Date()
-  const mm = String(now.getMonth() + 1).padStart(2, '0')
-  const dd = String(now.getDate()).padStart(2, '0')
-  return `${now.getFullYear()}-${mm}-${dd}`
-}
 
 type Resolution = 'entry_added' | 'adjusted' | 'left_open'
 

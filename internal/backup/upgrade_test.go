@@ -52,13 +52,22 @@ func v1Of(doc Document) documentV1 {
 	}
 	return documentV1{
 		FormatVersion: 1,
-		Users:         doc.Users, Funds: doc.Funds, Accounts: doc.Accounts, Purposes: doc.Purposes,
+		Users:         doc.Users, Funds: fundsV1Of(doc.Funds), Accounts: doc.Accounts, Purposes: doc.Purposes,
 		DuesTiers: doc.DuesTiers, DuesRates: rates, Members: members,
 		Transfers: doc.Transfers, Reimbursements: doc.Reimbursements, Transactions: doc.Transactions, Receipts: doc.Receipts,
 		Reconciliations: doc.Reconciliations, ReconciliationLines: doc.ReconciliationLines,
 		Incidentals: doc.Incidentals, IncidentalRecipients: doc.IncidentalRecipients,
 		Totals: doc.Totals,
 	}
+}
+
+// fundsV1Of drops the funds' time_zone, which format 1 never had.
+func fundsV1Of(funds []Fund) []fundV1 {
+	out := make([]fundV1, 0, len(funds))
+	for _, f := range funds {
+		out = append(out, fundV1{ID: f.ID, Name: f.Name, Currency: f.Currency, ReportSlug: f.ReportSlug, CreatedAt: f.CreatedAt})
+	}
+	return out
 }
 
 func v1Zip(t *testing.T, v1 documentV1) []byte {
@@ -150,7 +159,7 @@ func TestUpgradeV1NumbersTierRowsInMemberIDOrder(t *testing.T) {
 	one, two := int64(1), int64(2)
 	v1 := documentV1{
 		FormatVersion: 1,
-		Funds:         []Fund{{ID: 1, Name: "Dana", Currency: "IDR", ReportSlug: "0000000000000000000slug01", CreatedAt: 1}},
+		Funds:         []fundV1{{ID: 1, Name: "Dana", Currency: "IDR", ReportSlug: "0000000000000000000slug01", CreatedAt: 1}},
 		Members: []memberV1{
 			{ID: 9, FundID: 1, Name: "Sembilan", TierID: &two, JoinedOn: strPtr("2026-05-02"), CreatedAt: 90},
 			{ID: 3, FundID: 1, Name: "Tiga", TierID: &one, JoinedOn: strPtr("2026-02-10"), CreatedAt: 30},
@@ -183,7 +192,7 @@ func TestUpgradeV1RefusesAMemberJoinedOnThatIsNotADate(t *testing.T) {
 	t.Parallel()
 	v1 := documentV1{
 		FormatVersion: 1,
-		Funds:         []Fund{{ID: 1, CreatedAt: 1}},
+		Funds:         []fundV1{{ID: 1, CreatedAt: 1}},
 		Members:       []memberV1{{ID: 1, FundID: 1, Name: "Jane", JoinedOn: strPtr("2026-02-30")}},
 	}
 	if _, err := upgradeV1(v1); !errors.Is(err, ErrMalformedBackup) {
@@ -299,9 +308,9 @@ func TestRestoreKeepsSupersededTierRowsAndTheirUpdateTrigger(t *testing.T) {
 func TestUpgradeV1RefusesAMemberJoinedBefore2000(t *testing.T) {
 	t.Parallel()
 	one := int64(1)
-	fund := Fund{ID: 1, CreatedAt: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC).Unix()}
+	fund := fundV1{ID: 1, CreatedAt: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC).Unix()}
 
-	explicit := documentV1{FormatVersion: 1, Funds: []Fund{fund},
+	explicit := documentV1{FormatVersion: 1, Funds: []fundV1{fund},
 		Members: []memberV1{{ID: 1, FundID: 1, Name: "Kuno", TierID: &one, JoinedOn: strPtr("1999-12-31")}}}
 	if _, err := upgradeV1(explicit); !errors.Is(err, ErrMalformedBackup) {
 		t.Errorf("upgradeV1(joined_on 1999-12-31) = %v, want ErrMalformedBackup", err)
@@ -310,13 +319,13 @@ func TestUpgradeV1RefusesAMemberJoinedBefore2000(t *testing.T) {
 	// The adoption fallback: a fund with no opening row dates from its creation day.
 	old := fund
 	old.CreatedAt = time.Date(1999, 6, 1, 0, 0, 0, 0, time.UTC).Unix()
-	fallback := documentV1{FormatVersion: 1, Funds: []Fund{old},
+	fallback := documentV1{FormatVersion: 1, Funds: []fundV1{old},
 		Members: []memberV1{{ID: 1, FundID: 1, Name: "Tanpa tanggal", TierID: &one, JoinedOn: nil}}}
 	if _, err := upgradeV1(fallback); !errors.Is(err, ErrMalformedBackup) {
 		t.Errorf("upgradeV1(null joined_on, adoption 1999-06-01) = %v, want ErrMalformedBackup", err)
 	}
 
-	ok := documentV1{FormatVersion: 1, Funds: []Fund{fund},
+	ok := documentV1{FormatVersion: 1, Funds: []fundV1{fund},
 		Members: []memberV1{{ID: 1, FundID: 1, Name: "Tepat", TierID: &one, JoinedOn: strPtr("2000-01-01")}}}
 	if _, err := upgradeV1(ok); err != nil {
 		t.Errorf("upgradeV1(joined_on 2000-01-01) = %v, want no error", err)
@@ -333,7 +342,7 @@ func TestUpgradeV1AdoptionFallsBackToTheFundsCreationDayWhenItHasNoOpening(t *te
 	created := time.Date(2026, 8, 31, 17, 0, 0, 0, time.UTC).Unix() // 2026-09-01 in Jakarta
 	v1 := documentV1{
 		FormatVersion: 1,
-		Funds:         []Fund{{ID: 1, CreatedAt: created}, {ID: 2, CreatedAt: created}},
+		Funds:         []fundV1{{ID: 1, CreatedAt: created}, {ID: 2, CreatedAt: created}},
 		Members: []memberV1{
 			{ID: 1, FundID: 1, Name: "Tanpa pembukaan", TierID: &one, JoinedOn: nil, CreatedAt: 5},
 			{ID: 2, FundID: 2, Name: "Dengan pembukaan", TierID: &one, JoinedOn: nil, CreatedAt: 6},

@@ -1,19 +1,31 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import Setup from '@/screens/Setup/Setup'
+import { openSelect, selectedOptionName } from '@/test/select'
 import { copy } from '@/copy/id'
+import { resetFundTimeZone } from '@/lib/dates'
 
 afterEach(() => {
   vi.unstubAllGlobals()
   vi.useRealTimers()
+  vi.restoreAllMocks()
+  resetFundTimeZone()
 })
 
 const text = copy.setup
 
 const setupResult = {
-  fund: { id: 1, name: 'Kas RT 04', currency: 'IDR', report_slug: 'kas-rt-04', report_url: '/report/kas-rt-04', created_at: 1 },
+  fund: {
+    id: 1,
+    name: 'Kas RT 04',
+    currency: 'IDR',
+    time_zone: 'Asia/Jakarta',
+    report_slug: 'kas-rt-04',
+    report_url: '/report/kas-rt-04',
+    created_at: 1,
+  },
   main_purpose_id: 1,
   accounts: [
     { id: 10, kind: 'cash', name: 'Tunai', inactive_on: null, created_at: 1 },
@@ -311,10 +323,11 @@ describe('Setup', () => {
   // current month (never backdated, so nobody owes a month before adoption),
   // then each named member joined today on that tier.
   it('finishes the roster with the tier, its first rate this month, and members joined today', async () => {
-    // Only Date is faked, at a local time, so "today" and "this month" are the
-    // browser's local date and userEvent's timers keep running.
+    // Only Date is faked, at an explicit instant, so "today" and "this month" are
+    // the fund's (WIB until a zone is chosen) whatever zone this machine is in,
+    // and userEvent's timers keep running.
     vi.useFakeTimers({ toFake: ['Date'] })
-    vi.setSystemTime(new Date(2026, 2, 15, 9, 30))
+    vi.setSystemTime(new Date('2026-03-15T09:30:00+07:00'))
     const onDone = vi.fn()
     const fetchMock = routedFetch([
       { match: (m, u) => m === 'POST' && u.includes('/api/setup'), handle: () => Promise.resolve(jsonResponse(setupResult, 201)) },
@@ -405,5 +418,136 @@ describe('Setup', () => {
     await screen.findByText(text.roster.heading)
 
     expect(callsTo(fetchMock, '/opening-balance')).toHaveLength(0)
+  })
+})
+
+// ADR-041: step 1 asks for the fund's time zone, pre-selected from the device's
+// UTC offset, and Setup is the one place the client needs a zone before the
+// server has a fund.
+describe('Setup time zone (ADR-041)', () => {
+  const zones = copy.timeZone
+
+  /** Opens the zone field and taps one option. An option's accessible name is
+   * its label and its example line together, so it is matched by its label. */
+  async function chooseZone(zone: keyof typeof zones.options) {
+    const listbox = await openSelect(zones.label)
+    await userEvent.click(within(listbox).getByRole('option', { name: new RegExp(`^${zones.options[zone].label}`) }))
+  }
+
+  /** The device offset the pre-selection reads, in minutes WEST of UTC (as
+   * Date.getTimezoneOffset): WIB is -420. */
+  function deviceOffset(minutes: number) {
+    vi.spyOn(Date.prototype, 'getTimezoneOffset').mockReturnValue(minutes)
+  }
+
+  it('asks for the zone under the name, with the hint', () => {
+    deviceOffset(-420)
+    render(<Setup onDone={vi.fn()} />)
+    expect(screen.getByRole('combobox', { name: zones.label })).toBeInTheDocument()
+    expect(screen.getByText(zones.setupHint)).toBeInTheDocument()
+  })
+
+  it.each([
+    [-420, zones.options['Asia/Jakarta'].label],
+    [-480, zones.options['Asia/Makassar'].label],
+    [-540, zones.options['Asia/Jayapura'].label],
+    // Any other offset falls back to WIB.
+    [0, zones.options['Asia/Jakarta'].label],
+    [240, zones.options['Asia/Jakarta'].label],
+    [-330, zones.options['Asia/Jakarta'].label],
+  ])('pre-selects from a device %d minutes from UTC: %s', (offset, label) => {
+    deviceOffset(offset)
+    render(<Setup onDone={vi.fn()} />)
+    expect(selectedOptionName(zones.label)).toBe(label)
+  })
+
+  it('offers the three zones, each with its example line', async () => {
+    deviceOffset(-420)
+    render(<Setup onDone={vi.fn()} />)
+    await userEvent.click(screen.getByRole('combobox', { name: zones.label }))
+    const listbox = await screen.findByRole('listbox')
+    for (const option of Object.values(zones.options)) {
+      expect(listbox).toHaveTextContent(option.label)
+      expect(listbox).toHaveTextContent(option.example)
+    }
+  })
+
+  it('sends the zone on the one POST /api/setup: the pre-selected one, or the one she chose', async () => {
+    deviceOffset(-480)
+    const fetchMock = routedFetch([
+      { match: (m, u) => m === 'POST' && u.includes('/api/setup'), handle: () => Promise.resolve(jsonResponse(setupResult, 201)) },
+    ])
+    vi.stubGlobal('fetch', fetchMock)
+    render(<Setup onDone={vi.fn()} />)
+    // She taps nothing: WITA, from the device.
+    await goPastFundName()
+    await goPastLocations()
+    await userEvent.click(await screen.findByRole('button', { name: text.next }))
+    await screen.findByText(text.roster.heading)
+    expect(JSON.parse(callsTo(fetchMock, '/api/setup')[0][1]?.body as string)).toMatchObject({ time_zone: 'Asia/Makassar' })
+  })
+
+  it("sends a zone she chose over the device's", async () => {
+    deviceOffset(-420)
+    const fetchMock = routedFetch([
+      { match: (m, u) => m === 'POST' && u.includes('/api/setup'), handle: () => Promise.resolve(jsonResponse(setupResult, 201)) },
+    ])
+    vi.stubGlobal('fetch', fetchMock)
+    render(<Setup onDone={vi.fn()} />)
+    await chooseZone('Asia/Jayapura')
+    expect(selectedOptionName(zones.label)).toBe(zones.options['Asia/Jayapura'].label)
+    await goPastFundName()
+    await goPastLocations()
+    await userEvent.click(await screen.findByRole('button', { name: text.next }))
+    await screen.findByText(text.roster.heading)
+    expect(JSON.parse(callsTo(fetchMock, '/api/setup')[0][1]?.body as string)).toMatchObject({ time_zone: 'Asia/Jayapura' })
+  })
+
+  // 22:30 WIB on 30 September is 00:30 WIT on 1 October. The opening balance is
+  // dated in the zone she chose; then the roster step reads the zone the server
+  // stored (here WITA, which the server answered with), not her choice.
+  it('dates the opening balance in the chosen zone, and the roster step in the stored one', async () => {
+    deviceOffset(-420)
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(new Date('2026-09-30T22:30:00+07:00'))
+    const stored = { ...setupResult, fund: { ...setupResult.fund, time_zone: 'Asia/Makassar' } }
+    const fetchMock = routedFetch([
+      { match: (m, u) => m === 'POST' && u.includes('/api/setup'), handle: () => Promise.resolve(jsonResponse(stored, 201)) },
+      {
+        match: (m, u) => m === 'POST' && u.includes('/api/dues-tiers/7/rates'),
+        handle: () => Promise.resolve(jsonResponse({ id: 1, tier_id: 7, amount: 20000, effective_from: '2026-09' }, 201)),
+      },
+      {
+        match: (m, u) => m === 'POST' && u.endsWith('/api/dues-tiers'),
+        handle: () => Promise.resolve(jsonResponse({ id: 7, name: 'Reguler', created_at: 1 }, 201)),
+      },
+      { match: (m, u) => m === 'POST' && u.includes('/api/members'), handle: () => Promise.resolve(jsonResponse({ id: 1 }, 201)) },
+    ])
+    vi.stubGlobal('fetch', fetchMock)
+    render(<Setup onDone={vi.fn()} />)
+    await chooseZone('Asia/Jayapura')
+    await goPastFundName()
+    await goPastLocations()
+    await userEvent.type(await screen.findByLabelText(text.balances.amountLabel('Tunai')), '50000')
+    await userEvent.click(screen.getByRole('button', { name: text.next }))
+    await screen.findByText(text.roster.heading)
+
+    const setupBody = JSON.parse(callsTo(fetchMock, '/api/setup')[0][1]?.body as string) as {
+      accounts: { name: string; opening_balance?: { occurred_on: string } }[]
+    }
+    expect(setupBody.accounts.find((a) => a.name === 'Tunai')?.opening_balance?.occurred_on).toBe('2026-10-01')
+
+    await userEvent.type(screen.getByLabelText(text.roster.tierNameLabel), 'Reguler')
+    await userEvent.type(screen.getByLabelText(text.roster.rateAmountLabel), '20000')
+    await userEvent.click(screen.getByRole('button', { name: text.roster.addMember }))
+    await userEvent.type(screen.getAllByLabelText(text.roster.memberNameLabel)[0], 'Pak Budi')
+    await userEvent.click(screen.getByRole('button', { name: text.roster.finish }))
+
+    await waitFor(() => expect(callsTo(fetchMock, '/api/members')).toHaveLength(1))
+    expect(JSON.parse(callsTo(fetchMock, '/api/dues-tiers/7/rates')[0][1]?.body as string)).toEqual({
+      amount: 20000,
+      effective_from: '2026-09',
+    })
+    expect(JSON.parse(callsTo(fetchMock, '/api/members')[0][1]?.body as string)).toMatchObject({ joined_on: '2026-09-30' })
   })
 })

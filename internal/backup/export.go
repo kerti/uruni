@@ -22,8 +22,8 @@ import (
 // second download never lands as "uruni(1).zip". The app names the file with
 // the treasurer's local date (web/src/lib/backup.ts); this is the name a
 // direct request gets. exportedOn is formatted in whatever zone it carries,
-// so the handler passes it in tz.Jakarta (#379): the server clock may be
-// UTC, a day behind in WIB before 07:00.
+// so the handler passes it in the fund's zone (#379, ADR-041): the server clock
+// may be UTC, a day behind in WIB before 07:00 and in WIT before 09:00.
 func ZipFilename(exportedOn time.Time) string {
 	return "uruni-" + exportedOn.Format("2006-01-02") + ".zip"
 }

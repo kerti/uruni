@@ -79,7 +79,7 @@ func newFixture(t *testing.T, l *Ledger) fixture {
 	f := fixture{}
 
 	fund, err := q.CreateFund(ctx, store.CreateFundParams{
-		Name: "Test Fund", Currency: "IDR", ReportSlug: validSlug, CreatedAt: 1,
+		Name: "Test Fund", Currency: "IDR", TimeZone: "Asia/Jakarta", ReportSlug: validSlug, CreatedAt: 1,
 	})
 	if err != nil {
 		t.Fatalf("CreateFund() = %v, want no error", err)

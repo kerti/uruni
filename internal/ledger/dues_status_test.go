@@ -585,7 +585,7 @@ func TestDuesStatusForPeriodScopesToOneFund(t *testing.T) {
 	// Mirrors TestASecondFundsRowsNeverAppearInTheFirstFundsBalances: a second
 	// fund built by hand, since newFixture hard-codes the report_slug.
 	other, err := q.CreateFund(ctx, store.CreateFundParams{
-		Name: "Other Fund", Currency: "IDR", ReportSlug: "zyxwvutsrqponmlkjihgfe", CreatedAt: 1,
+		Name: "Other Fund", Currency: "IDR", TimeZone: "Asia/Jakarta", ReportSlug: "zyxwvutsrqponmlkjihgfe", CreatedAt: 1,
 	})
 	if err != nil {
 		t.Fatalf("CreateFund() = %v, want no error", err)
@@ -953,22 +953,35 @@ func TestOutstandingDuesForMemberThroughBoundsTheEnd(t *testing.T) {
 	}
 }
 
-// An omitted through defaults to the current month in Jakarta, not the host's
-// zone (#379): production runs UTC, so on a month's last day from 17:00:00Z
-// the treasurer is in the next month. The instants straddle that boundary by
-// one second, and a year boundary too.
-func TestOutstandingDuesForMemberOmittedThroughDefaultsToTheJakartaMonth(t *testing.T) {
+// An omitted through defaults to the current month in the fund's zone, not the
+// host's (#379, ADR-041): production runs UTC, so on a month's last day from
+// 17:00:00Z the WIB treasurer is in the next month, from 16:00:00Z the WITA one,
+// and from 15:00:00Z the WIT one. The instants straddle each boundary by one
+// second, a year boundary too, and 22:30 WIB is the instant the three zones
+// disagree about.
+func TestOutstandingDuesForMemberOmittedThroughDefaultsToTheFundsMonth(t *testing.T) {
 	t.Parallel()
 	cases := []struct {
 		name string
+		zone string
 		now  time.Time
 		want string
 	}{
-		{"last second of the month in Jakarta", time.Date(2026, 8, 31, 16, 59, 59, 0, time.UTC), "2026-08"},
-		{"first second of the next month in Jakarta", time.Date(2026, 8, 31, 17, 0, 0, 0, time.UTC), "2026-09"},
-		{"year boundary, before", time.Date(2026, 12, 31, 16, 59, 59, 0, time.UTC), "2026-12"},
-		{"year boundary, after", time.Date(2026, 12, 31, 17, 0, 0, 0, time.UTC), "2027-01"},
-		{"same instant written in another zone", time.Date(2026, 9, 1, 0, 0, 0, 0, time.FixedZone("UTC+7", 7*3600)), "2026-09"},
+		{"WIB: last second of the month", tz.Jakarta, time.Date(2026, 8, 31, 16, 59, 59, 0, time.UTC), "2026-08"},
+		{"WIB: first second of the next month", tz.Jakarta, time.Date(2026, 8, 31, 17, 0, 0, 0, time.UTC), "2026-09"},
+		{"WIB: year boundary, before", tz.Jakarta, time.Date(2026, 12, 31, 16, 59, 59, 0, time.UTC), "2026-12"},
+		{"WIB: year boundary, after", tz.Jakarta, time.Date(2026, 12, 31, 17, 0, 0, 0, time.UTC), "2027-01"},
+		{"WIB: same instant written in another zone", tz.Jakarta, time.Date(2026, 9, 1, 0, 0, 0, 0, time.FixedZone("UTC+7", 7*3600)), "2026-09"},
+		{"WITA: last second of the month", tz.Makassar, time.Date(2026, 8, 31, 15, 59, 59, 0, time.UTC), "2026-08"},
+		{"WITA: first second of the next month", tz.Makassar, time.Date(2026, 8, 31, 16, 0, 0, 0, time.UTC), "2026-09"},
+		{"WIT: last second of the month", tz.Jayapura, time.Date(2026, 8, 31, 14, 59, 59, 0, time.UTC), "2026-08"},
+		{"WIT: first second of the next month", tz.Jayapura, time.Date(2026, 8, 31, 15, 0, 0, 0, time.UTC), "2026-09"},
+		{"WIT: year boundary", tz.Jayapura, time.Date(2026, 12, 31, 15, 0, 0, 0, time.UTC), "2027-01"},
+		// 22:30 WIB on 31 August: still August for WIB and WITA (23:30), already
+		// September for WIT (00:30).
+		{"22:30 WIB read by a WIB fund", tz.Jakarta, time.Date(2026, 8, 31, 22, 30, 0, 0, wib), "2026-08"},
+		{"22:30 WIB read by a WITA fund", tz.Makassar, time.Date(2026, 8, 31, 22, 30, 0, 0, wib), "2026-08"},
+		{"22:30 WIB read by a WIT fund", tz.Jayapura, time.Date(2026, 8, 31, 22, 30, 0, 0, wib), "2026-09"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -976,6 +989,7 @@ func TestOutstandingDuesForMemberOmittedThroughDefaultsToTheJakartaMonth(t *test
 			l := newTestLedger(t)
 			f := newFixture(t, l)
 			q := store.New(l.db)
+			setFundZone(t, q, f.fundID, tc.zone)
 
 			tierID := createDuesTier(t, q, f.fundID, "Tier A")
 			createDuesRate(t, q, tierID, 25_000, "2020-01")
@@ -991,8 +1005,8 @@ func TestOutstandingDuesForMemberOmittedThroughDefaultsToTheJakartaMonth(t *test
 			if got := rows[len(rows)-1].Period; got != tc.want {
 				t.Errorf("last outstanding period at %s = %q, want %q", tc.now.Format(time.RFC3339), got, tc.want)
 			}
-			if got := CurrentDuesPeriod(tc.now); got != tc.want {
-				t.Errorf("CurrentDuesPeriod(%s) = %q, want %q", tc.now.Format(time.RFC3339), got, tc.want)
+			if got := CurrentDuesPeriod(tc.now, zoneLoc(t, tc.zone)); got != tc.want {
+				t.Errorf("CurrentDuesPeriod(%s, %s) = %q, want %q", tc.now.Format(time.RFC3339), tc.zone, got, tc.want)
 			}
 		})
 	}
@@ -1089,8 +1103,8 @@ func newArrearsPeriods(t *testing.T) arrearsPeriods {
 	t.Helper()
 	// First of the month in Jakarta (#379): no host-zone dependence, and no
 	// AddDate overflow from the 31st.
-	now := time.Now().In(tz.Jakarta)
-	first := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, tz.Jakarta)
+	now := time.Now().In(wib)
+	first := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, wib)
 	return arrearsPeriods{
 		twoBack: first.AddDate(0, -2, 0).Format(duesPeriodLayout),
 		oneBack: first.AddDate(0, -1, 0).Format(duesPeriodLayout),

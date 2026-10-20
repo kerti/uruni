@@ -729,7 +729,7 @@ func newFixtureWithSlug(t *testing.T, l *Ledger, name, slug string) fixture {
 	f := fixture{}
 
 	fund, err := q.CreateFund(ctx, store.CreateFundParams{
-		Name: name, Currency: "IDR", ReportSlug: slug, CreatedAt: 1,
+		Name: name, Currency: "IDR", TimeZone: "Asia/Jakarta", ReportSlug: slug, CreatedAt: 1,
 	})
 	if err != nil {
 		t.Fatalf("CreateFund() = %v, want no error", err)
@@ -808,7 +808,7 @@ func TestASecondFundsReconciliationIsInvisibleToTheFirstFund(t *testing.T) {
 
 	q := store.New(l.db)
 	other, err := q.CreateFund(ctx, store.CreateFundParams{
-		Name: "Other Fund", Currency: "IDR", ReportSlug: "zyxwvutsrqponmlkjihgfe", CreatedAt: 1,
+		Name: "Other Fund", Currency: "IDR", TimeZone: "Asia/Jakarta", ReportSlug: "zyxwvutsrqponmlkjihgfe", CreatedAt: 1,
 	})
 	if err != nil {
 		t.Fatalf("CreateFund() = %v, want no error", err)

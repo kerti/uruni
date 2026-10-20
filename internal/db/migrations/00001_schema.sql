@@ -46,6 +46,13 @@ CREATE TABLE fund (
   id          INTEGER PRIMARY KEY,
   name        TEXT    NOT NULL CHECK (length(trim(name)) > 0),
   currency    TEXT    NOT NULL DEFAULT 'IDR' CHECK (currency = 'IDR'),
+  -- The community's time zone (ADR-041): the one place an instant becomes a day
+  -- or a month. IANA names, because Go's time.LoadLocation and the browser's
+  -- Intl.DateTimeFormat take them as they are; WIB, WITA and WIT exist only as
+  -- copy. Exactly Indonesia's three zones, none with daylight saving. This list
+  -- is pinned to internal/tz and web/src/lib/timeZones.ts by TestTimeZoneListsAgree.
+  time_zone   TEXT    NOT NULL DEFAULT 'Asia/Jakarta'
+              CHECK (time_zone IN ('Asia/Jakarta', 'Asia/Makassar', 'Asia/Jayapura')),
   -- Unguessability of the public report link lives here, not in an id scheme
   -- (ADR-024): 22+ base62 chars is roughly a UUID's worth of entropy.
   report_slug TEXT    NOT NULL UNIQUE CHECK (length(report_slug) >= 22),

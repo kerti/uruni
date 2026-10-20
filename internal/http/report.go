@@ -201,7 +201,7 @@ type reportMonthOption struct {
 }
 
 // reportHandler serves GET /report/{slug}. now is injectable so a test can
-// pin the Jakarta month; production passes time.Now.
+// pin the month in the fund's zone; production passes time.Now.
 func reportHandler(l *ledger.Ledger, q store.Querier, logger *slog.Logger, now func() time.Time) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		setReportHeaders(w)

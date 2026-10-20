@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"slices"
 	"time"
+
+	"github.com/kerti/uruni/internal/tz"
 )
 
 // upgrade.go holds the steps that bring an older uruni.json up to the current
@@ -62,7 +64,7 @@ type documentV1 struct {
 	FormatVersion int64 `json:"format_version"`
 
 	Users     []User     `json:"users"`
-	Funds     []Fund     `json:"funds"`
+	Funds     []fundV1   `json:"funds"`
 	Accounts  []Account  `json:"accounts"`
 	Purposes  []Purpose  `json:"purposes"`
 	DuesTiers []DuesTier `json:"dues_tiers"`
@@ -80,6 +82,16 @@ type documentV1 struct {
 	IncidentalRecipients []IncidentalRecipient `json:"incidental_recipients"`
 
 	Totals Totals `json:"totals"`
+}
+
+// fundV1 is a v1 fund: no time_zone (ADR-041 added it in v2), so a v1 file
+// carrying one is refused as an unknown field, like any other field v1 never had.
+type fundV1 struct {
+	ID         int64  `json:"id"`
+	Name       string `json:"name"`
+	Currency   string `json:"currency"`
+	ReportSlug string `json:"report_slug"`
+	CreatedAt  int64  `json:"created_at"`
 }
 
 // rateV1 is a v1 rate: one row per tier and month, with no correction number and
@@ -104,9 +116,11 @@ type memberV1 struct {
 	CreatedAt  int64   `json:"created_at"`
 }
 
-// upgradeV1 is the v1 -> v2 step (ADR-040). The totals block is unchanged: no
-// ledger row moves.
+// upgradeV1 is the v1 -> v2 step (ADR-040, ADR-041). The totals block is
+// unchanged: no ledger row moves.
 //
+//   - Every fund takes time_zone Asia/Jakarta (tz.Default): every v1 file was
+//     written when the whole app reckoned in WIB, so nothing it says moves.
 //   - A null joined_on takes the fund's adoption date, what the column meant
 //     before #471 made it NOT NULL (see adoptionDates), so no member's dues move.
 //   - One member_tier row per tiered member: correction 0, from the month of
@@ -122,7 +136,7 @@ func upgradeV1(v1 documentV1) (Document, error) {
 	doc := Document{
 		FormatVersion:        FormatVersion,
 		Users:                v1.Users,
-		Funds:                v1.Funds,
+		Funds:                make([]Fund, 0, len(v1.Funds)),
 		Accounts:             v1.Accounts,
 		Purposes:             v1.Purposes,
 		DuesTiers:            v1.DuesTiers,
@@ -140,13 +154,21 @@ func upgradeV1(v1 documentV1) (Document, error) {
 		Totals:               v1.Totals,
 	}
 
+	for _, f := range v1.Funds {
+		doc.Funds = append(doc.Funds, Fund{
+			ID: f.ID, Name: f.Name, Currency: f.Currency, TimeZone: tz.Default, ReportSlug: f.ReportSlug, CreatedAt: f.CreatedAt,
+		})
+	}
 	for _, r := range v1.DuesRates {
 		doc.DuesRates = append(doc.DuesRates, DuesRate{
 			ID: r.ID, TierID: r.TierID, Amount: r.Amount, EffectiveFrom: r.EffectiveFrom, CreatedAt: r.CreatedAt,
 		})
 	}
 
-	adopted := adoptionDates(doc)
+	adopted, err := adoptionDates(doc)
+	if err != nil {
+		return Document{}, err
+	}
 	for _, m := range v1.Members {
 		joinedOn, ok := adopted[m.FundID]
 		if m.JoinedOn != nil {
@@ -200,13 +222,17 @@ func upgradeV1(v1 documentV1) (Document, error) {
 
 // adoptionDates maps each fund in doc to the day its Uruni history starts
 // (PRD 7.1): the earliest opening-balance row's occurred_on, or, for a fund
-// with none, the day the fund was created in Asia/Jakarta. It is what a null
+// with none, the day the fund was created in the fund's own zone (ADR-041). It is what a null
 // member.joined_on meant before #471 made the column NOT NULL, so upgrading an
 // older backup this way changes no member's dues.
-func adoptionDates(doc Document) map[int64]string {
+func adoptionDates(doc Document) (map[int64]string, error) {
 	out := make(map[int64]string, len(doc.Funds))
 	for _, f := range doc.Funds {
-		out[f.ID] = time.Unix(f.CreatedAt, 0).In(jakarta).Format("2006-01-02")
+		loc, err := tz.Load(f.TimeZone)
+		if err != nil {
+			return nil, fmt.Errorf("%w: fund %d's time_zone: %v", ErrMalformedBackup, f.ID, err) //nolint:errorlint
+		}
+		out[f.ID] = time.Unix(f.CreatedAt, 0).In(loc).Format("2006-01-02")
 	}
 	opened := make(map[int64]string, len(doc.Funds))
 	for _, t := range doc.Transactions {
@@ -220,5 +246,5 @@ func adoptionDates(doc Document) map[int64]string {
 	for id, d := range opened {
 		out[id] = d
 	}
-	return out
+	return out, nil
 }

@@ -68,7 +68,7 @@ function renderAt(entry: string) {
           path="/settings"
           element={
             <>
-              <Settings onFundRenamed={vi.fn()} />
+              <Settings onFundChanged={vi.fn()} />
               <LocationProbe />
             </>
           }

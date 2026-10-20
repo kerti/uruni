@@ -10,7 +10,6 @@ import (
 
 	"github.com/kerti/uruni/internal/money"
 	"github.com/kerti/uruni/internal/store"
-	"github.com/kerti/uruni/internal/tz"
 )
 
 // The report's trust claims, tested the way the rest of the ledger is: against
@@ -19,7 +18,7 @@ import (
 // --- helpers local to this file ----------------------------------------------
 
 func jakartaAt(year int, month time.Month, day, hour, minute, second int) time.Time {
-	return time.Date(year, month, day, hour, minute, second, 0, tz.Jakarta)
+	return time.Date(year, month, day, hour, minute, second, 0, wib)
 }
 
 // reportNow is a fixed "now" after every date the scenarios post on, so the
@@ -93,7 +92,7 @@ func newSecondFund(t *testing.T, l *Ledger) secondFund {
 	t.Helper()
 	q := store.New(l.db)
 	other, err := q.CreateFund(context.Background(), store.CreateFundParams{
-		Name: "Other Fund", Currency: "IDR", ReportSlug: "zyxwvutsrqponmlkjihgfe", CreatedAt: 1,
+		Name: "Other Fund", Currency: "IDR", TimeZone: "Asia/Jakarta", ReportSlug: "zyxwvutsrqponmlkjihgfe", CreatedAt: 1,
 	})
 	if err != nil {
 		t.Fatalf("CreateFund() = %v, want no error", err)
@@ -294,7 +293,7 @@ func TestMonthlyReportReconciliationAdjustingEntryIsCounted(t *testing.T) {
 	f := newFixture(t, l)
 	postEntry(t, l, f.fundID, f.cashID, f.mainID, "in", 100_000, "2026-09-03", nil)
 
-	today := time.Now().In(tz.Jakarta).Format("2006-01-02")
+	today := time.Now().In(wib).Format("2006-01-02")
 	if _, err := l.TakeReconciliation(ctx, TakeReconciliationParams{
 		FundID: f.fundID,
 		Counts: []AccountCount{{
@@ -974,7 +973,7 @@ func TestMonthlyReportMonthRangeIsReckonedInJakartaAcrossTheMonthBoundary(t *tes
 		},
 		{
 			"across a year boundary",
-			time.Date(2027, 1, 3, 0, 0, 0, 0, tz.Jakarta),
+			time.Date(2027, 1, 3, 0, 0, 0, 0, wib),
 			[]string{"2026-08", "2026-09", "2026-10", "2026-11", "2026-12", "2027-01"}, "2027-01-03",
 		},
 	}
@@ -1221,7 +1220,7 @@ func TestMonthlyReportWithNoClockReadsTodayInJakarta(t *testing.T) {
 	if err != nil {
 		t.Fatalf("MonthlyReport() = %v, want no error", err)
 	}
-	today := time.Now().In(tz.Jakarta)
+	today := time.Now().In(wib)
 	// Straddling midnight in Jakarta between the two reads is the only way this
 	// differs; accept either side.
 	if r.AsOf != today.Format("2006-01-02") && r.AsOf != today.Add(-time.Minute).Format("2006-01-02") {

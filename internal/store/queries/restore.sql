@@ -18,8 +18,8 @@ VALUES (?, ?, ?, ?);
 DELETE FROM fund;
 
 -- name: RestoreFund :exec
-INSERT INTO fund (id, name, currency, report_slug, created_at)
-VALUES (?, ?, ?, ?, ?);
+INSERT INTO fund (id, name, currency, time_zone, report_slug, created_at)
+VALUES (?, ?, ?, ?, ?, ?);
 
 -- name: DeleteAllAccounts :exec
 DELETE FROM account;

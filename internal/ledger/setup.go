@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/kerti/uruni/internal/store"
+	"github.com/kerti/uruni/internal/tz"
 )
 
 // reportSlugAlphabet is base62: digits and both cases, so the slug drops into
@@ -75,6 +76,12 @@ type SetUpFundParams struct {
 	// fund"). Non-empty after trimming.
 	FundName string
 
+	// TimeZone is the fund's time zone (ADR-041), one of tz.Names(). Empty means
+	// tz.Default: the field is optional on the wire, and absent means WIB. Any
+	// other name the schema's CHECK refuses (ADR-027), so it is not pre-validated
+	// here.
+	TimeZone string
+
 	// Accounts is every location the fund starts with (#78). At least one is
 	// required: a fund with no accounts could record nothing (every transaction
 	// needs an account_id).
@@ -126,6 +133,10 @@ func (l *Ledger) SetUpFund(ctx context.Context, p SetUpFundParams) (SetUpFundRes
 	if len(p.Accounts) == 0 {
 		return SetUpFundResult{}, fmt.Errorf("%w: at least one account is required", ErrInvalidArgument)
 	}
+	timeZone := p.TimeZone
+	if timeZone == "" {
+		timeZone = tz.Default
+	}
 	// Every opening balance is validated before withTx opens: a refused one
 	// anywhere in the batch must leave no fund and no account behind.
 	for _, a := range p.Accounts {
@@ -154,7 +165,7 @@ func (l *Ledger) SetUpFund(ctx context.Context, p SetUpFundParams) (SetUpFundRes
 		now := time.Now().Unix()
 
 		fund, err := q.CreateFund(ctx, store.CreateFundParams{
-			Name: name, Currency: "IDR", ReportSlug: slug, CreatedAt: now,
+			Name: name, Currency: "IDR", TimeZone: timeZone, ReportSlug: slug, CreatedAt: now,
 		})
 		if err != nil {
 			return fmt.Errorf("creating fund: %w", err)

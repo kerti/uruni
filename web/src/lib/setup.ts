@@ -3,6 +3,7 @@
 // dues_rates.go, members.go).
 
 import { apiFetch, fetchBlob } from '@/lib/api'
+import { setFundTimeZone } from '@/lib/dates'
 
 /** An account (location) row - cash or bank - as every route here returns it. */
 export interface Account {
@@ -18,6 +19,9 @@ export interface Fund {
   id: number
   name: string
   currency: string
+  /** The fund's IANA time zone (ADR-041): Asia/Jakarta, Asia/Makassar or
+   * Asia/Jayapura. WIB, WITA and WIT exist only as copy (copy.timeZone). */
+  time_zone: string
   report_slug: string
   /** The shareable link, built server-side from URUNI_BASE_URL. A bare
    * `/report/<slug>` path when no base URL is configured (local dev). */
@@ -137,24 +141,43 @@ export interface MembersPage {
   nextCursor: string | null
 }
 
+/**
+ * Every function below that returns a fund hands its `time_zone` to the date
+ * helpers (lib/dates.ts) before its promise resolves (ADR-041). It must not be
+ * left to an effect or a render: AuthedGate mounts the Shell on the very render
+ * that follows the fetch, and every `useState(todayISODate)` initialiser under
+ * it runs in that render, so a zone set later would let the first screen she
+ * opens read the default - the 00:30 bug again, in the form she opens first.
+ */
+function adoptZone(fund: Fund): Fund {
+  setFundTimeZone(fund.time_zone)
+  return fund
+}
+
 /** GET /api/fund - 404 not_found means "run setup". */
 export function getFund(): Promise<Fund> {
-  return apiFetch<Fund>('/api/fund')
+  return apiFetch<Fund>('/api/fund').then(adoptZone)
 }
 
 /**
- * PATCH /api/fund - renames the kas. The name is a display label: it heads
+ * PATCH /api/fund - renames the kas and/or changes its time zone; each is
+ * optional, at least one is required. The name is a display label: it heads
  * every screen and the public report, and nothing posted references it, so
- * this rewrites no history. currency and report_slug are not settable -
- * one is an invariant through 0.x, the other is the report's unguessable
- * address, which only replaceReportSlug changes.
+ * this rewrites no history. A zone change rewrites nothing either (ADR-041):
+ * every day and month is derived from it, so setting the old zone back restores
+ * every earlier reading. currency and report_slug are not settable - one is an
+ * invariant through 0.x, the other is the report's unguessable address, which
+ * only replaceReportSlug changes.
  */
-export function renameFund(name: string): Promise<Fund> {
+export function updateFund(patch: { name?: string; timeZone?: string }): Promise<Fund> {
+  const body: Record<string, string> = {}
+  if (patch.name !== undefined) body.name = patch.name
+  if (patch.timeZone !== undefined) body.time_zone = patch.timeZone
   return apiFetch<Fund>('/api/fund', {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ name }),
-  })
+    body: JSON.stringify(body),
+  }).then(adoptZone)
 }
 
 /**
@@ -163,19 +186,24 @@ export function renameFund(name: string): Promise<Fund> {
  * with the whole fund, so the caller swaps in the new report_url.
  */
 export function replaceReportSlug(): Promise<Fund> {
-  return apiFetch<Fund>('/api/fund/report-slug', { method: 'POST' })
+  return apiFetch<Fund>('/api/fund/report-slug', { method: 'POST' }).then(adoptZone)
 }
 
 /**
- * POST /api/setup - the fund's name plus every account it starts with, and
- * each opening balance, in one call: one database transaction, or nothing.
- * A second call for a fund that already exists is 409 fund_already_exists.
+ * POST /api/setup - the fund's name and time zone plus every account it starts
+ * with, and each opening balance, in one call: one database transaction, or
+ * nothing. A second call for a fund that already exists is 409
+ * fund_already_exists. The zone it answers with is the one stored, and is held
+ * for the roster step that follows.
  */
-export function postSetup(name: string, accounts: SetupAccountInput[]): Promise<SetupResult> {
+export function postSetup(name: string, timeZone: string, accounts: SetupAccountInput[]): Promise<SetupResult> {
   return apiFetch<SetupResult>('/api/setup', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ name, accounts }),
+    body: JSON.stringify({ name, time_zone: timeZone, accounts }),
+  }).then((result) => {
+    adoptZone(result.fund)
+    return result
   })
 }
 

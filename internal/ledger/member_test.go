@@ -9,14 +9,13 @@ import (
 	"time"
 
 	"github.com/kerti/uruni/internal/store"
-	"github.com/kerti/uruni/internal/tz"
 )
 
 // --- member writes (ADR-040) -------------------------------------------------
 //
 // The clock is fixed at mid-August 2026 so "the current month" is 2026-08.
 
-var augustNow = time.Date(2026, 8, 15, 12, 0, 0, 0, tz.Jakarta)
+var augustNow = time.Date(2026, 8, 15, 12, 0, 0, 0, wib)
 
 func strp(s string) *string { return &s }
 
@@ -93,7 +92,7 @@ func TestCreateMemberRefusesAnotherFundsTierAndLeavesNoMember(t *testing.T) {
 	l := newTestLedger(t)
 	f := newFixture(t, l)
 	q := store.New(l.db)
-	other, err := q.CreateFund(context.Background(), store.CreateFundParams{Name: "Other", Currency: "IDR", ReportSlug: "bcdefghijklmnopqrstuvw", CreatedAt: 1})
+	other, err := q.CreateFund(context.Background(), store.CreateFundParams{Name: "Other", Currency: "IDR", TimeZone: "Asia/Jakarta", ReportSlug: "bcdefghijklmnopqrstuvw", CreatedAt: 1})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -434,7 +433,7 @@ func TestUpdateMemberRefusesAnotherFundsTierAndRollsTheRestBack(t *testing.T) {
 	l := newTestLedger(t)
 	f := newFixture(t, l)
 	q := store.New(l.db)
-	other, _ := q.CreateFund(context.Background(), store.CreateFundParams{Name: "Other", Currency: "IDR", ReportSlug: "bcdefghijklmnopqrstuvw", CreatedAt: 1})
+	other, _ := q.CreateFund(context.Background(), store.CreateFundParams{Name: "Other", Currency: "IDR", TimeZone: "Asia/Jakarta", ReportSlug: "bcdefghijklmnopqrstuvw", CreatedAt: 1})
 	foreign := createDuesTier(t, q, other.ID, "Asing")
 
 	_, err := l.UpdateMember(context.Background(), UpdateMemberParams{

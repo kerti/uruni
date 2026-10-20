@@ -12,7 +12,6 @@ import (
 	"time"
 
 	"github.com/kerti/uruni/internal/ledger"
-	"github.com/kerti/uruni/internal/tz"
 )
 
 func postMember(t *testing.T, r http.Handler, req memberRequest) *httptest.ResponseRecorder {
@@ -871,8 +870,8 @@ func TestGetMembersRowShowsCurrentRateWhenOneIsEffective(t *testing.T) {
 func arrearsMonthPeriods() (twoBack, oneBack, current string) {
 	// First of the month in Jakarta, the zone the server reckons the current
 	// period in (#379), with no AddDate overflow from the 31st.
-	now := time.Now().In(tz.Jakarta)
-	first := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, tz.Jakarta)
+	now := time.Now().In(wib)
+	first := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, wib)
 	return first.AddDate(0, -2, 0).Format("2006-01"), first.AddDate(0, -1, 0).Format("2006-01"), first.Format("2006-01")
 }
 
@@ -907,7 +906,7 @@ func TestGetMembersRowArrearsMonthsReflectsPartPaidEarlierPeriod(t *testing.T) {
 		t.Fatalf("decoding member response: %v", err)
 	}
 
-	today := time.Now().In(tz.Jakarta).Format("2006-01-02")
+	today := time.Now().In(wib).Format("2006-01-02")
 	if rec := postDuesPayment(t, r, duesPaymentRequest{
 		AccountID: setup.CashAccountID(t), MemberID: member.ID,
 		OccurredOn: today,

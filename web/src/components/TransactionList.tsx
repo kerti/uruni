@@ -12,7 +12,7 @@ import { Label } from '@/components/ui/label'
 import { copy } from '@/copy/id'
 import { ApiError } from '@/lib/api'
 import { reverseDuesPayment } from '@/lib/dues'
-import { formatIsoDate, dateBounds } from '@/lib/dates'
+import { formatIsoDate, dateBounds, todayISODate } from '@/lib/dates'
 import { formatIDR } from '@/lib/money'
 import { canCorrectPurpose, canReverseContribution, noteForDisplay } from '@/lib/transactions'
 import { useApi } from '@/lib/useApi'
@@ -29,14 +29,6 @@ function reversalErrorText(err: ApiError): string {
   if (specific) return specific
   const common = copy.common.errors[err.code as keyof typeof copy.common.errors]
   return common ?? copy.common.unknownError
-}
-
-/** Local YYYY-MM-DD - never toISOString(). */
-function todayISODate(): string {
-  const now = new Date()
-  const mm = String(now.getMonth() + 1).padStart(2, '0')
-  const dd = String(now.getDate()).padStart(2, '0')
-  return `${now.getFullYear()}-${mm}-${dd}`
 }
 
 /**

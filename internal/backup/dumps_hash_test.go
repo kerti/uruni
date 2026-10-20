@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/kerti/uruni/internal/store"
+	"github.com/kerti/uruni/internal/tz"
 )
 
 // countingAssembler wraps assembleZip so a test can assert how many zips a call
@@ -33,7 +34,7 @@ func TestWriteDailyIfNeededUnchangedFundBuildsNoZip(t *testing.T) {
 	read := readDocumentFrom(sqlDB)
 	assemble, built := countingAssembler()
 
-	if _, written, err := writeDailyIfNeeded(ctx, read, assemble, nil, uploadsDir, backupDir, jakartaTime(2026, 9, 29, 3, 0, 0)); err != nil || !written {
+	if _, written, err := writeDailyIfNeeded(ctx, read, assemble, nil, uploadsDir, backupDir, tz.Jakarta, jakartaTime(2026, 9, 29, 3, 0, 0)); err != nil || !written {
 		t.Fatalf("writeDailyIfNeeded(yesterday) = (written=%v, err=%v), want (true, nil)", written, err)
 	}
 	if got := built.Load(); got != 1 {
@@ -42,7 +43,7 @@ func TestWriteDailyIfNeededUnchangedFundBuildsNoZip(t *testing.T) {
 
 	// Every hourly tick of the next day: no dump of its own yet, fund unchanged.
 	for hour := 0; hour < 24; hour++ {
-		_, written, err := writeDailyIfNeeded(ctx, read, assemble, nil, uploadsDir, backupDir, jakartaTime(2026, 9, 30, hour, 0, 0))
+		_, written, err := writeDailyIfNeeded(ctx, read, assemble, nil, uploadsDir, backupDir, tz.Jakarta, jakartaTime(2026, 9, 30, hour, 0, 0))
 		if err != nil || written {
 			t.Fatalf("writeDailyIfNeeded(hour %d) = (written=%v, err=%v), want (false, nil)", hour, written, err)
 		}
@@ -64,14 +65,14 @@ func TestWriteDailyIfNeededBuildsExactlyOneZipWhenTheFundChanged(t *testing.T) {
 	read := readDocumentFrom(sqlDB)
 	assemble, built := countingAssembler()
 
-	if _, written, err := writeDailyIfNeeded(ctx, read, assemble, nil, uploadsDir, backupDir, jakartaTime(2026, 9, 29, 3, 0, 0)); err != nil || !written {
+	if _, written, err := writeDailyIfNeeded(ctx, read, assemble, nil, uploadsDir, backupDir, tz.Jakarta, jakartaTime(2026, 9, 29, 3, 0, 0)); err != nil || !written {
 		t.Fatalf("first dump = (written=%v, err=%v), want (true, nil)", written, err)
 	}
 	// A receipt photo vanishing from disk (the row stays) is a real change.
 	if err := os.Remove(filepath.Join(uploadsDir, receiptFilename)); err != nil {
 		t.Fatalf("removing the receipt file: %v", err)
 	}
-	name, written, err := writeDailyIfNeeded(ctx, read, assemble, nil, uploadsDir, backupDir, jakartaTime(2026, 9, 30, 3, 0, 0))
+	name, written, err := writeDailyIfNeeded(ctx, read, assemble, nil, uploadsDir, backupDir, tz.Jakarta, jakartaTime(2026, 9, 30, 3, 0, 0))
 	if err != nil || !written {
 		t.Fatalf("second dump = (%q, written=%v, err=%v), want (_, true, nil)", name, written, err)
 	}
@@ -89,7 +90,7 @@ func TestRefusedDocumentBuildsNoZip(t *testing.T) {
 	backupDir := t.TempDir()
 	assemble, built := countingAssembler()
 
-	_, _, err := writeDailyIfNeeded(context.Background(), tamperedReader(t, sqlDB), assemble, nil, uploadsDir, backupDir, jakartaTime(2026, 9, 30, 3, 0, 0))
+	_, _, err := writeDailyIfNeeded(context.Background(), tamperedReader(t, sqlDB), assemble, nil, uploadsDir, backupDir, tz.Jakarta, jakartaTime(2026, 9, 30, 3, 0, 0))
 	if err == nil {
 		t.Fatal("writeDailyIfNeeded() = nil, want ErrTotalsMismatch")
 	}

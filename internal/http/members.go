@@ -12,7 +12,6 @@ import (
 
 	"github.com/kerti/uruni/internal/ledger"
 	"github.com/kerti/uruni/internal/store"
-	"github.com/kerti/uruni/internal/tz"
 )
 
 // memberRequest is POST /api/members's body. inactive_on is absent:
@@ -112,7 +111,11 @@ func (a *api) createMember(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	joinedOn := a.now().In(tz.Jakarta).Format(time.DateOnly)
+	loc, ok := a.fundLocation(w, r, fund)
+	if !ok {
+		return
+	}
+	joinedOn := a.now().In(loc).Format(time.DateOnly)
 	if req.JoinedOn != nil {
 		joinedOn = *req.JoinedOn
 	}
@@ -195,9 +198,13 @@ func (a *api) listMembers(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	loc, ok := a.fundLocation(w, r, fund)
+	if !ok {
+		return
+	}
 	params := store.ListMembersPageParams{
 		FundID:        fund.ID,
-		CurrentPeriod: ledger.CurrentDuesPeriod(a.now()),
+		CurrentPeriod: ledger.CurrentDuesPeriod(a.now(), loc),
 		PageLimit:     membersPageSize + 1,
 	}
 

@@ -9,11 +9,12 @@ import { apiFetch, fetchBlob, saveBlob } from '@/lib/api'
 import { todayISODate } from '@/lib/dates'
 
 /** One dump GET /api/backups lists (backupListItem) - date and format_version
- * are the server's read of the dump's filename, in Asia/Jakarta; the card
+ * are the server's read of the dump's filename, in the zone the name is
+ * stamped in (the fund's, ADR-041); the card
  * never parses a name itself. */
 export interface StoredBackup {
   name: string
-  date: string // YYYY-MM-DD, Asia/Jakarta
+  date: string // YYYY-MM-DD, in the zone the dump's name is stamped in
   kind: 'daily' | 'pre-restore'
   format_version: number
   /** Written in the format this build writes. An older one is labelled. */
@@ -31,9 +32,10 @@ export function listStoredBackups(): Promise<StoredBackup[]> {
 
 /**
  * Downloads the backup zip and hands it to the browser to save as
- * `uruni-{today}.zip`, dated with her local date (todayISODate) so a second
- * download never lands as "uruni(1).zip". Named here rather than from the
- * server's Content-Disposition: the server's clock may run in UTC, a day
+ * `uruni-{today}.zip`, dated with the fund's day (todayISODate, read in the
+ * fund's zone) so a second download never lands as "uruni(1).zip" and agrees
+ * with the name the server gives a direct request. Named here rather than from
+ * the server's Content-Disposition: the server's clock may run in UTC, a day
  * behind WIB before 07:00.
  */
 export async function downloadBackup(): Promise<void> {
@@ -43,8 +45,8 @@ export async function downloadBackup(): Promise<void> {
 
 /**
  * Downloads one already-written server-side dump (a StoredBackup's `name`)
- * and saves it under that exact name: it already carries the treasurer's WIB
- * date (internal/backup/dumps.go's BuildDumpName), and a different name than
+ * and saves it under that exact name: it already carries the fund's date, and
+ * its zone token outside WIB (internal/backup/dumps.go's BuildDumpName), and a different name than
  * the card shows would confuse.
  */
 export async function downloadStoredBackup(name: string): Promise<void> {

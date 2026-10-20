@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/kerti/uruni/internal/db"
+	"github.com/kerti/uruni/internal/tz"
 )
 
 // Tests for #517: the raw snapshot taken before a new version migrates.
@@ -129,7 +130,7 @@ func TestPreUpgradeNameKeepsUnsafeVersionsOutOfTheFilename(t *testing.T) {
 func TestPreUpgradeAndDumpNamesNeverMatchEachOther(t *testing.T) {
 	t.Parallel()
 	snap := BuildPreUpgradeName(at(0), "a", "b")
-	dump := BuildDumpName(at(0), KindDaily, 1, "3f9a2c8e10b4deadbeef")
+	dump := BuildDumpName(at(0), tz.Jakarta, KindDaily, 1, "3f9a2c8e10b4deadbeef")
 	if ValidDumpName(snap) {
 		t.Errorf("ValidDumpName(%q) = true, want false", snap)
 	}
@@ -520,10 +521,10 @@ func fillDir(t *testing.T) (dir string, snapshots, others []string) {
 		snapshots = append(snapshots, BuildPreUpgradeName(at(i), "a", fmt.Sprintf("b%d", i)))
 	}
 	others = []string{
-		BuildDumpName(at(0), KindDaily, 1, "3f9a2c8e10b4aaaa"),
-		BuildDumpName(at(1), KindDaily, 1, "3f9a2c8e10b4bbbb"),
-		BuildDumpName(at(2), KindPreRestore, 1, "3f9a2c8e10b4cccc"),
-		BuildDumpName(at(3), KindPreRestore, 1, "3f9a2c8e10b4dddd"),
+		BuildDumpName(at(0), tz.Jakarta, KindDaily, 1, "3f9a2c8e10b4aaaa"),
+		BuildDumpName(at(1), tz.Jakarta, KindDaily, 1, "3f9a2c8e10b4bbbb"),
+		BuildDumpName(at(2), tz.Jakarta, KindPreRestore, 1, "3f9a2c8e10b4cccc"),
+		BuildDumpName(at(3), tz.Jakarta, KindPreRestore, 1, "3f9a2c8e10b4dddd"),
 		bootMarkerName,
 		tempPrefix + "restore-1",
 		preUpgradeTempPrefix + "9",

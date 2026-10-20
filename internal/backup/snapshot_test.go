@@ -13,6 +13,7 @@ import (
 
 	"github.com/kerti/uruni/internal/db"
 	"github.com/kerti/uruni/internal/store"
+	"github.com/kerti/uruni/internal/tz"
 )
 
 // newFileTestDBs opens one migrated, file-backed database through two
@@ -194,7 +195,7 @@ func TestDumpRefusesADocumentWhoseTotalsDisagreeWithItsRows(t *testing.T) {
 	t.Run("WriteDump", func(t *testing.T) {
 		t.Parallel()
 		backupDir := t.TempDir()
-		name, err := writeDump(ctx, read, assembleZip, uploadsDir, backupDir, KindDaily, jakartaTime(2026, 9, 30, 10, 0, 0))
+		name, err := writeDump(ctx, read, assembleZip, uploadsDir, backupDir, tz.Jakarta, KindDaily, jakartaTime(2026, 9, 30, 10, 0, 0))
 		if !errors.Is(err, ErrTotalsMismatch) {
 			t.Fatalf("writeDump() = (%q, %v), want ErrTotalsMismatch", name, err)
 		}
@@ -203,7 +204,7 @@ func TestDumpRefusesADocumentWhoseTotalsDisagreeWithItsRows(t *testing.T) {
 	t.Run("WriteDailyIfNeeded", func(t *testing.T) {
 		t.Parallel()
 		backupDir := t.TempDir()
-		name, written, err := writeDailyIfNeeded(ctx, read, assembleZip, nil, uploadsDir, backupDir, jakartaTime(2026, 9, 30, 10, 0, 0))
+		name, written, err := writeDailyIfNeeded(ctx, read, assembleZip, nil, uploadsDir, backupDir, tz.Jakarta, jakartaTime(2026, 9, 30, 10, 0, 0))
 		if !errors.Is(err, ErrTotalsMismatch) || written {
 			t.Fatalf("writeDailyIfNeeded() = (%q, %v, %v), want (_, false, ErrTotalsMismatch)", name, written, err)
 		}

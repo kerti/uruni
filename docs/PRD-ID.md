@@ -63,7 +63,7 @@ Satu server komunitas menampung satu atau lebih **Dana (Fund)** (untuk pengguna 
 
 Entitas utama:
 
-- **Dana (Fund)** — kas bersama. Memiliki nama dan mata uang (IDR).
+- **Dana (Fund)** — kas bersama. Memiliki nama, mata uang (IDR), dan zona waktu (WIB, WITA, atau WIT).
 - **Akun/Lokasi** — tempat uang secara fisik berada: satu daftar yang dinamai sendiri oleh bendahara, masing-masing berjenis tunai atau bank. Satu dana boleh punya beberapa lokasi dari jenis mana pun, boleh juga hanya satu; nama yang tampil adalah nama yang ia ketik sendiri, dan bawaan awalnya "Tunai". Lokasi bisa ditambah dan diganti namanya kemudian, dan lokasi yang sudah terpakai dinonaktifkan, bukan dihapus - setelah uangnya dipindahkan ke tempat lain, karena lokasi yang nonaktif tidak pernah dihitung lagi. Saldo tercatat dilacak *per lokasi* karena pemisahan inilah sumber selisihnya. (v1 mengasumsikan rekening bank bisa jadi rekening pribadi; Uruni hanya melacak bagian yang merupakan kas sesuai yang dilaporkan bendahara.)
 - **Pos** — setiap transaksi diberi pos: `Kas Utama` (rutin), sebuah **amplop** bernama (mis. "Duka Pak Budi"), atau `Titipan/Pass-through` (mis. Kas Bidang). Satu saldo riil yang tergabung, dipisahkan *secara makna*, bukan uang yang dipisah-pisah secara fisik.
 - **Anggota** — nama + peran/jenjang. Tidak butuh email/nomor telepon (meminimalkan data yang disimpan).
@@ -76,7 +76,7 @@ Entitas utama:
 
 ### 7.1 Penyiapan & akses
 - Bendahara masuk ke server *komunitasnya sendiri* (satu peran bendahara di v1; peran "hanya-lihat" opsional menyusul). Tidak ada akun Uruni terpusat.
-- Penyiapan awal: memberi nama dana, menambahkan anggota beserta jenjangnya, mengatur tarif iuran, mengatur saldo awal untuk tiap lokasi.
+- Penyiapan awal: memberi nama dana dan memilih zona waktunya (WIB, WITA, atau WIT, terpilih otomatis dari ponsel), menambahkan anggota beserta jenjangnya, mengatur tarif iuran, mengatur saldo awal untuk tiap lokasi.
 - **Riwayat Uruni dimulai saat mulai dipakai.** Saldo awal sudah memuat segala hal sebelumnya, sehingga tanggal bergabung dan tarif iuran mengikuti saat penyiapan dan tidak ada periode lampau yang dihitung sebagai tagihan. Pembayaran yang sudah lunas tidak dicatat ulang: uangnya sudah *ada di dalam* saldo awal, dan mencatatnya kedua kali akan membuat saldo tercatat menggelembung selamanya. Pengecualiannya adalah **tunggakan yang masih nyata** — iuran yang memang belum dibayar anggota tidak pernah masuk ke saldo awal, jadi memundurkan tanggal bergabung anggota itu (beserta bulan berlaku tarifnya) membuat periode-periode tersebut tampil sebagai belum terbayar, dan pembayarannya bertanggal hari uang itu benar-benar masuk.
 
 ### 7.2 Mencatat transaksi (tindakan sehari-hari)
