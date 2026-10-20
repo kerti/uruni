@@ -91,4 +91,13 @@ describe('date picker bounds (#197)', () => {
     expect(periodBounds.rate()).toEqual({ min: '2000-01', max: '2028-10' })
     expect(periodBounds.status()).toEqual({ min: '2000-01', max: '2027-10' })
   })
+
+  it('bounds a tier start from the join month to the current month', () => {
+    expect(periodBounds.tierStart('2026-03-15')).toEqual({ min: '2026-03', max: '2026-10' })
+    expect(periodBounds.tierStart('2026-10-01')).toEqual({ min: '2026-10', max: '2026-10' })
+  })
+
+  it('lets the join month lift the tier start ceiling for a member who joins later', () => {
+    expect(periodBounds.tierStart('2026-12-05')).toEqual({ min: '2026-12', max: '2026-12' })
+  })
 })

@@ -260,6 +260,8 @@ export function createMember(name: string, tierId: number | null, joinedOn: stri
 export interface MemberPatch {
   name?: string
   tierId?: number | null
+  /** "YYYY-MM", from which month `tierId` holds (ADR-040's "Mulai bulan"). Only with `tierId`. */
+  tierEffectiveFrom?: string
   joinedOn?: string
   inactiveOn?: string | null
 }
@@ -268,6 +270,7 @@ export function updateMember(id: number, patch: MemberPatch): Promise<Member> {
   const body: Record<string, unknown> = {}
   if (patch.name !== undefined) body.name = patch.name
   if (patch.tierId !== undefined) body.tier_id = patch.tierId
+  if (patch.tierEffectiveFrom !== undefined) body.tier_effective_from = patch.tierEffectiveFrom
   if (patch.joinedOn !== undefined) body.joined_on = patch.joinedOn
   if (patch.inactiveOn !== undefined) body.inactive_on = patch.inactiveOn
   return apiFetch<Member>(`/api/members/${id}`, {
