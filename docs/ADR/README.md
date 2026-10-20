@@ -64,6 +64,8 @@ Standing decisions that no ADR owns go in [`../Decisions.md`](../Decisions.md).
 | [037](./037-report-shows-the-month-as-it-ended.md) | The report shows each month as it ended | implemented |
 | [038](./038-the-month-as-a-balance-walk.md) | The month as a balance walk: start, in, out, adjustments, end | implemented |
 | [039](./039-e2e-every-operation-gated-in-ci.md) | Testing: every operation has a journey, and CI runs them | implemented |
+| [040](./040-effective-dated-tiers-and-rate-corrections.md) | Effective-dated tiers, and rate corrections that leave a trail | `draft` |
+| [041](./041-the-funds-time-zone.md) | The fund's time zone: WIB, WITA or WIT | `draft` |
 
 The **Stage** column is the record, and it is all this index says about implementation: `draft` means editable in place, `implemented` means superseding-ADR-only. *Which* slice put code behind a given ADR belongs in that ADR and in the PR that dropped its tag — restated here, this index becomes a changelog.
 
