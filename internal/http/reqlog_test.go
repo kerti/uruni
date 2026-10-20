@@ -15,6 +15,7 @@ import (
 	"github.com/kerti/uruni/internal/backup"
 	"github.com/kerti/uruni/internal/ledger"
 	"github.com/kerti/uruni/internal/store"
+	"github.com/kerti/uruni/internal/tz"
 )
 
 const (
@@ -285,7 +286,7 @@ func TestBackupDownloadsAreLogged(t *testing.T) {
 	zipBytes := downloadRealBackupZip(t, h)
 	wantEvent(t, logs, "backup_downloaded", "INFO", "kind=fresh")
 
-	name := backup.BuildDumpName(time.Now(), backup.KindDaily, backup.FormatVersion, "eeeeeeeeeeeeeeee")
+	name := backup.BuildDumpName(time.Now(), tz.Jakarta, backup.KindDaily, backup.FormatVersion, "eeeeeeeeeeeeeeee")
 	writeTestDumpFile(t, backupDir, name, zipBytes)
 	logs.Reset()
 	if rec := getStoredBackup(t, h, name); rec.Code != http.StatusOK {

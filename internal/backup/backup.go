@@ -26,6 +26,12 @@ package backup
 // 2 (ADR-040): a member's tier is effective-dated. The member_tiers array
 // carries every member_tier row, superseded ones included, and members[].tier_id
 // is gone. Version 1 files are upgraded in ParseUpload.
+//
+// 2 also carries funds[].time_zone (ADR-041): the fund's zone, one of
+// Asia/Jakarta, Asia/Makassar, Asia/Jayapura. The v1 -> v2 step fills
+// Asia/Jakarta; ParseUpload refuses any other value, a missing field (the empty
+// string) included, and the schema's CHECK is the backstop. Edited into v2 in
+// place, as v2 had not shipped before the epic merged.
 const FormatVersion int64 = 2
 
 // Document is uruni.json's root object: every table but session (ADR-012:
@@ -96,6 +102,7 @@ type Fund struct {
 	ID         int64  `json:"id"`
 	Name       string `json:"name"`
 	Currency   string `json:"currency"`
+	TimeZone   string `json:"time_zone"`
 	ReportSlug string `json:"report_slug"`
 	CreatedAt  int64  `json:"created_at"`
 }

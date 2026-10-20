@@ -9,21 +9,13 @@ import Loading from '@/components/states/Loading'
 import ErrorState from '@/components/states/ErrorState'
 import { copy } from '@/copy/id'
 import { reverseDuesPayment } from '@/lib/dues'
-import { formatIsoDate, dateBounds } from '@/lib/dates'
+import { formatIsoDate, dateBounds, todayISODate } from '@/lib/dates'
 import { formatIDR } from '@/lib/money'
 import { listTransactions } from '@/lib/transactions'
 import { useApi } from '@/lib/useApi'
 import type { Transaction } from '@/lib/transactions'
 
 const text = copy.dues.history
-
-/** Local YYYY-MM-DD - never toISOString(). */
-function todayISODate(): string {
-  const now = new Date()
-  const mm = String(now.getMonth() + 1).padStart(2, '0')
-  const dd = String(now.getDate()).padStart(2, '0')
-  return `${now.getFullYear()}-${mm}-${dd}`
-}
 
 /**
  * One member's dues rows for one period, with a reversal action on each

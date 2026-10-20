@@ -15,15 +15,9 @@ import { useApi } from '@/lib/useApi'
 import { useDialogParam } from '@/lib/useDialogParam'
 import { useResetWhen } from '@/lib/useResetWhen'
 import type { DuesRate, DuesTier } from '@/lib/setup'
+import { currentPeriod } from '@/lib/dates'
 
 const text = copy.settings.tiers
-
-/** Local YYYY-MM - never toISOString(), which is UTC and can read a month
- * early in WIB. */
-function currentISOMonth(): string {
-  const now = new Date()
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
-}
 
 /** Every tier the fund has, each with its rate history. One shape for the
  * section: the card list reads the current price off it, and the dialog reads
@@ -101,7 +95,7 @@ export default function DuesTiers() {
     clear()
   }, [value, target.kind, state.status, clear])
 
-  const thisMonth = currentISOMonth()
+  const thisMonth = currentPeriod()
 
   return (
     <section className="flex flex-col gap-3">

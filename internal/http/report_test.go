@@ -16,7 +16,6 @@ import (
 	"github.com/kerti/uruni/internal/ledger"
 	"github.com/kerti/uruni/internal/money"
 	"github.com/kerti/uruni/internal/store"
-	"github.com/kerti/uruni/internal/tz"
 )
 
 // reportNow is 2026-10-02 10:00 in Asia/Jakarta: early enough in a month that
@@ -391,7 +390,7 @@ func TestReportReadsAPartialCekKasEntryAsSelisihForTheRemainder(t *testing.T) {
 	t.Parallel()
 	f := newReportFixture(t, "Kas RT 05")
 	f.post(t, "in", 100_000, "2026-09-03")
-	today := reportNow.In(tz.Jakarta).Format("2006-01-02")
+	today := reportNow.In(wib).Format("2006-01-02")
 
 	take := func(amount money.Amount) {
 		t.Helper()

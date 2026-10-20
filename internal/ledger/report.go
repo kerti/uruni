@@ -10,7 +10,6 @@ import (
 
 	"github.com/kerti/uruni/internal/money"
 	"github.com/kerti/uruni/internal/store"
-	"github.com/kerti/uruni/internal/tz"
 )
 
 const (
@@ -36,7 +35,7 @@ const (
 type ReportParams struct {
 	FundID int64
 
-	// Month is "YYYY-MM". Empty means the current month in Asia/Jakarta. A
+	// Month is "YYYY-MM". Empty means the current month in the fund's time zone. A
 	// malformed month is ErrInvalidArgument; reading an invalid ?month= as the
 	// current one is the HTTP edge's call (ADR-035).
 	Month string
@@ -60,7 +59,7 @@ type ReportParams struct {
 	DuesStatus string
 
 	// Now is the current instant, injectable so a test can stand on either side
-	// of a Jakarta month boundary; the zero value means time.Now().
+	// of a month boundary in the fund's time zone; the zero value means time.Now().
 	Now time.Time
 }
 
@@ -76,7 +75,7 @@ type Report struct {
 	FundName string
 
 	// AsOf is the day ("YYYY-MM-DD") every figure is true as of (ADR-037): the
-	// last day of a past month, or today in Asia/Jakarta for the running month
+	// last day of a past month, or today in the fund's time zone for the running month
 	// (marked by Running).
 	AsOf    string
 	Running bool
@@ -118,7 +117,7 @@ type Report struct {
 
 // ReportReconciliation is the latest cek kas as the home banner reads it.
 type ReportReconciliation struct {
-	// Date is the count's day in Asia/Jakarta ("YYYY-MM-DD").
+	// Date is the count's day in the fund's time zone ("YYYY-MM-DD").
 	Date string
 
 	// Difference is the sum, by magnitude, of every remainder still open
@@ -342,11 +341,22 @@ func (l *Ledger) monthlyReport(ctx context.Context, p ReportParams) (Report, err
 		return Report{}, fmt.Errorf("%w: dues status %q is not unpaid, partial or paid", ErrInvalidArgument, p.DuesStatus)
 	}
 
+	// The fund is read first: its zone decides what "today" and "this month"
+	// are (ADR-041), so no day is reckoned before it is known.
+	fund, err := l.q.GetFund(ctx, p.FundID)
+	if err != nil {
+		return Report{}, fmt.Errorf("fetching fund: %w", err)
+	}
+	loc, err := FundLocation(fund)
+	if err != nil {
+		return Report{}, err
+	}
+
 	now := p.Now
 	if now.IsZero() {
 		now = time.Now()
 	}
-	today := now.In(tz.Jakarta)
+	today := now.In(loc)
 	currentMonth := today.Format(reportMonthLayout)
 
 	month := p.Month
@@ -358,11 +368,6 @@ func (l *Ledger) monthlyReport(ctx context.Context, p ReportParams) (Report, err
 		return Report{}, err
 	}
 
-	fund, err := l.q.GetFund(ctx, p.FundID)
-	if err != nil {
-		return Report{}, fmt.Errorf("fetching fund: %w", err)
-	}
-
 	r := Report{
 		FundName: fund.Name,
 		AsOf:     today.Format(reportDayLayout),
@@ -371,7 +376,7 @@ func (l *Ledger) monthlyReport(ctx context.Context, p ReportParams) (Report, err
 	}
 	b := reportBound{}
 	if !r.Running {
-		b = boundAtMonthEnd(monthStart)
+		b = boundAtMonthEnd(monthStart, loc)
 		r.AsOf = *b.through
 	}
 
@@ -388,7 +393,7 @@ func (l *Ledger) monthlyReport(ctx context.Context, p ReportParams) (Report, err
 		return Report{}, fmt.Errorf("report owed to members: %w", err)
 	}
 	r.OwedToMembers = money.FromDB(owed)
-	if r.Reconciliation, err = l.reportReconciliation(ctx, p.FundID, b); err != nil {
+	if r.Reconciliation, err = l.reportReconciliation(ctx, p.FundID, b, loc); err != nil {
 		return Report{}, err
 	}
 
@@ -440,7 +445,7 @@ func (l *Ledger) monthlyReport(ctx context.Context, p ReportParams) (Report, err
 
 // reportBound is where a past month's figures stop (ADR-037): through is its
 // last day, compared against the ledger's day columns; before is the first
-// instant of the next month in Jakarta, compared against a count's
+// instant of the next month in the fund's time zone, compared against a count's
 // performed_at. Both nil is the running month, which reads every row, the
 // same figures Beranda shows.
 type reportBound struct {
@@ -448,9 +453,9 @@ type reportBound struct {
 	before  *int64
 }
 
-func boundAtMonthEnd(monthStart time.Time) reportBound {
+func boundAtMonthEnd(monthStart time.Time, loc *time.Location) reportBound {
 	last := monthStart.AddDate(0, 1, -1).Format(reportDayLayout)
-	next := time.Date(monthStart.Year(), monthStart.Month()+1, 1, 0, 0, 0, 0, tz.Jakarta).Unix()
+	next := time.Date(monthStart.Year(), monthStart.Month()+1, 1, 0, 0, 0, 0, loc).Unix()
 	return reportBound{through: &last, before: &next}
 }
 
@@ -465,7 +470,7 @@ func parseReportMonth(month string) (time.Time, error) {
 }
 
 // reportMonths lists the months the report offers, oldest first: the first
-// transaction's month through the current Jakarta month. An empty fund, or one
+// transaction's month through the current month in the fund's zone. An empty fund, or one
 // whose first row is dated after today, offers the current month alone.
 func (l *Ledger) reportMonths(ctx context.Context, fundID int64, today time.Time) ([]string, error) {
 	current := time.Date(today.Year(), today.Month(), 1, 0, 0, 0, 0, time.UTC)
@@ -499,7 +504,7 @@ func (l *Ledger) reportMonths(ctx context.Context, fundID int64, today time.Time
 // reportReconciliation reads the banner's three states as of the bound: nil
 // for never counted by then, otherwise the latest count's date and the
 // fund-wide remainder still open at the bound.
-func (l *Ledger) reportReconciliation(ctx context.Context, fundID int64, b reportBound) (*ReportReconciliation, error) {
+func (l *Ledger) reportReconciliation(ctx context.Context, fundID int64, b reportBound, loc *time.Location) (*ReportReconciliation, error) {
 	latest, err := l.q.ReportLatestReconciliation(ctx, store.ReportLatestReconciliationParams{FundID: fundID, Before: b.before})
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
@@ -524,7 +529,7 @@ func (l *Ledger) reportReconciliation(ctx context.Context, fundID int64, b repor
 	}
 
 	return &ReportReconciliation{
-		Date:       time.Unix(latest.PerformedAt, 0).In(tz.Jakarta).Format(reportDayLayout),
+		Date:       time.Unix(latest.PerformedAt, 0).In(loc).Format(reportDayLayout),
 		Matched:    difference == 0,
 		Difference: difference,
 	}, nil
@@ -595,13 +600,21 @@ func envelopeOpenAt(e store.Incidental, through *string) bool {
 // MonthInOut is the running month's In and Out for the whole fund, as Beranda
 // shows them (ADR-038): the figures the report's running month carries as
 // Walk.In and Walk.Out, read through the same reportRows over the same
-// unbounded, unfiltered month. The month is read in Asia/Jakarta from now. In
+// unbounded, unfiltered month. The month is read from now in the fund's time zone. In
 // is net of reversals and so can be negative; Out is a magnitude.
 func (l *Ledger) MonthInOut(ctx context.Context, fundID int64, now time.Time) (in, out money.Amount, err error) {
 	if now.IsZero() {
 		now = time.Now()
 	}
-	monthStart, err := parseReportMonth(now.In(tz.Jakarta).Format(reportMonthLayout))
+	fund, err := l.q.GetFund(ctx, fundID)
+	if err != nil {
+		return 0, 0, fmt.Errorf("fetching fund: %w", err)
+	}
+	loc, err := FundLocation(fund)
+	if err != nil {
+		return 0, 0, err
+	}
+	monthStart, err := parseReportMonth(now.In(loc).Format(reportMonthLayout))
 	if err != nil {
 		return 0, 0, err
 	}

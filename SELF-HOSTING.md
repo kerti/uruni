@@ -95,9 +95,11 @@ Your data lives on three Docker volumes: `uruni-data` (the database), `uruni-upl
 
 | File | When | Kept |
 |---|---|---|
-| `uruni-<date>-<time>-daily-...zip` | Once a day (Asia/Jakarta), only if something changed since the last one, and once at boot when no dump in the current format exists | the newest 7 |
+| `uruni-<date>-<time>-daily-...zip` | Once a day (in the fund's time zone, WIB unless the treasurer chose WITA or WIT), only if something changed since the last one, and once at boot when no dump in the current format exists | the newest 7 |
 | `uruni-<date>-<time>-pre-restore-...zip` | Just before a restore (or `migrate down`) changes anything | the newest 3 |
-| `uruni-pre-upgrade-<date>-<time>_from-<v>_to-<v>.sqlite` | The first time a new version starts, before it migrates: a raw copy of the database the previous version can open | the newest 3 |
+| `uruni-pre-upgrade-<date>-<time>_from-<v>_to-<v>.sqlite` | The first time a new version starts, before it migrates: a raw copy of the database the previous version can open (stamped in WIB, whatever the fund's zone: no fund can be read that early) | the newest 3 |
+
+A dump's name is stamped in the fund's time zone. A fund in WITA or WIT has `utc8` or `utc9` after the time (`uruni-20261002-003000-utc8-daily-...zip`); a name with no such token is Asia/Jakarta, so every name a WIB instance wrote keeps its meaning and its shape. The same token is why changing the zone never re-dates an older file.
 
 The dump list in Pengaturan > Cadangan shows the zips; download one there, and **restore happens in the app** from the same screen. The pre-upgrade copies are for rolling an upgrade back (see [Upgrading](#upgrading)) and do not appear in the app.
 

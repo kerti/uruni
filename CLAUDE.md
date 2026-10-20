@@ -58,7 +58,7 @@ A small, calm app that helps a reluctant, non-accountant **treasurer** keep a co
     config/      env config
     lock/        single-writer DB lock
     backup/      backup zip export, restore, daily dumps (ADR-012)
-    tz/          Asia/Jakarta, the one clock every "today" and month is read in
+    tz/          the three zones (WIB/WITA/WIT); each fund's day and month are read in its own zone
   web/           React + Vite app (embedded into the binary at build); e2e/ holds Playwright specs
   docs/          PRD, Tech-Design, ADR/, Design-System, Positioning, Decisions, ROADMAP
 ```

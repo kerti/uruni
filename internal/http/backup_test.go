@@ -17,6 +17,7 @@ import (
 	"github.com/kerti/uruni/internal/backup"
 	"github.com/kerti/uruni/internal/ledger"
 	"github.com/kerti/uruni/internal/store"
+	"github.com/kerti/uruni/internal/tz"
 )
 
 func getBackup(t *testing.T, r http.Handler) *httptest.ResponseRecorder {
@@ -169,13 +170,13 @@ func TestListBackupsReturnsEveryDumpNewestFirstWithFormatFlag(t *testing.T) {
 	t.Parallel()
 	r, backupDir := authedRouterWithBackupDir(t)
 
-	oldName := backup.BuildDumpName(time.Date(2026, 9, 28, 1, 0, 0, 0, time.UTC), backup.KindDaily, backup.FormatVersion-1, "aaaaaaaaaaaaaaaa")
-	newName := backup.BuildDumpName(time.Date(2026, 9, 30, 1, 0, 0, 0, time.UTC), backup.KindPreRestore, backup.FormatVersion, "bbbbbbbbbbbbbbbb")
+	oldName := backup.BuildDumpName(time.Date(2026, 9, 28, 1, 0, 0, 0, time.UTC), tz.Jakarta, backup.KindDaily, backup.FormatVersion-1, "aaaaaaaaaaaaaaaa")
+	newName := backup.BuildDumpName(time.Date(2026, 9, 30, 1, 0, 0, 0, time.UTC), tz.Jakarta, backup.KindPreRestore, backup.FormatVersion, "bbbbbbbbbbbbbbbb")
 	writeTestDumpFile(t, backupDir, oldName, []byte("older format stub"))
 	writeTestDumpFile(t, backupDir, newName, []byte("current format stub, a bit longer"))
 	// A format no step reads (older than the oldest the importer upgrades): listed
 	// and downloadable, never offered for restore.
-	unreadable := backup.BuildDumpName(time.Date(2026, 9, 27, 1, 0, 0, 0, time.UTC), backup.KindDaily, 0, "cccccccccccccccc")
+	unreadable := backup.BuildDumpName(time.Date(2026, 9, 27, 1, 0, 0, 0, time.UTC), tz.Jakarta, backup.KindDaily, 0, "cccccccccccccccc")
 	writeTestDumpFile(t, backupDir, unreadable, []byte("a format nobody reads"))
 
 	rec := getBackups(t, r)
@@ -232,7 +233,7 @@ func TestListBackupsReturnsEveryDumpNewestFirstWithFormatFlag(t *testing.T) {
 func TestDownloadStoredBackupServesExactBytesUnderItsOwnName(t *testing.T) {
 	t.Parallel()
 	r, backupDir := authedRouterWithBackupDir(t)
-	name := backup.BuildDumpName(time.Date(2026, 9, 30, 1, 0, 0, 0, time.UTC), backup.KindDaily, backup.FormatVersion, "cccccccccccccccc")
+	name := backup.BuildDumpName(time.Date(2026, 9, 30, 1, 0, 0, 0, time.UTC), tz.Jakarta, backup.KindDaily, backup.FormatVersion, "cccccccccccccccc")
 	want := []byte("a fixture zip's stub bytes")
 	writeTestDumpFile(t, backupDir, name, want)
 
@@ -257,7 +258,7 @@ func TestDownloadStoredBackupServesExactBytesUnderItsOwnName(t *testing.T) {
 func TestDownloadStoredBackupRejectsUnknownName(t *testing.T) {
 	t.Parallel()
 	r, _ := authedRouterWithBackupDir(t)
-	name := backup.BuildDumpName(time.Date(2026, 9, 30, 1, 0, 0, 0, time.UTC), backup.KindDaily, backup.FormatVersion, "dddddddddddddddd")
+	name := backup.BuildDumpName(time.Date(2026, 9, 30, 1, 0, 0, 0, time.UTC), tz.Jakarta, backup.KindDaily, backup.FormatVersion, "dddddddddddddddd")
 
 	rec := getStoredBackup(t, r, name)
 	if rec.Code != http.StatusNotFound {

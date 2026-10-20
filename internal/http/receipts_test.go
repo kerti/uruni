@@ -597,7 +597,7 @@ func TestReceiptRoutesOnAnotherFundsRowAre404(t *testing.T) {
 	q := store.New(sqlDB)
 	ctx := context.Background()
 	otherFund, err := q.CreateFund(ctx, store.CreateFundParams{
-		Name: "Other Fund", Currency: "IDR", ReportSlug: "zyxwvutsrqponmlkjihgfe", CreatedAt: 1,
+		Name: "Other Fund", Currency: "IDR", TimeZone: "Asia/Jakarta", ReportSlug: "zyxwvutsrqponmlkjihgfe", CreatedAt: 1,
 	})
 	if err != nil {
 		t.Fatalf("CreateFund(other) = %v, want no error", err)

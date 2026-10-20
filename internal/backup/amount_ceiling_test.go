@@ -28,7 +28,7 @@ func ceilingDoc() Document {
 	return Document{
 		FormatVersion: FormatVersion,
 		Users:         []User{},
-		Funds:         []Fund{{ID: 1, Name: "Dana", Currency: "IDR", ReportSlug: "0000000000000000000slug01", CreatedAt: 1}},
+		Funds:         []Fund{{ID: 1, Name: "Dana", Currency: "IDR", TimeZone: "Asia/Jakarta", ReportSlug: "0000000000000000000slug01", CreatedAt: 1}},
 		Accounts:      []Account{{ID: 1, FundID: 1, Kind: "cash", Name: "Kas", CreatedAt: 1}},
 		Purposes: []Purpose{
 			{ID: 1, FundID: 1, Kind: "main", Name: "Kas Utama", CreatedAt: 1},
@@ -185,7 +185,7 @@ func TestRestoreForRebuildRefusesAMoneyColumnAboveTheCeilingAndRollsBack(t *test
 func seedLiveFund(t *testing.T, destDB *sql.DB) store.Fund {
 	t.Helper()
 	f, err := store.New(destDB).CreateFund(context.Background(), store.CreateFundParams{
-		Name: "Live fund", Currency: "IDR", ReportSlug: "0000000000000000live01", CreatedAt: 1,
+		Name: "Live fund", Currency: "IDR", TimeZone: "Asia/Jakarta", ReportSlug: "0000000000000000live01", CreatedAt: 1,
 	})
 	if err != nil {
 		t.Fatalf("CreateFund() = %v, want no error", err)

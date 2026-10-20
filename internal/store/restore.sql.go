@@ -221,14 +221,15 @@ func (q *Queries) RestoreDuesTier(ctx context.Context, arg RestoreDuesTierParams
 }
 
 const restoreFund = `-- name: RestoreFund :exec
-INSERT INTO fund (id, name, currency, report_slug, created_at)
-VALUES (?, ?, ?, ?, ?)
+INSERT INTO fund (id, name, currency, time_zone, report_slug, created_at)
+VALUES (?, ?, ?, ?, ?, ?)
 `
 
 type RestoreFundParams struct {
 	ID         int64
 	Name       string
 	Currency   string
+	TimeZone   string
 	ReportSlug string
 	CreatedAt  int64
 }
@@ -238,6 +239,7 @@ func (q *Queries) RestoreFund(ctx context.Context, arg RestoreFundParams) error 
 		arg.ID,
 		arg.Name,
 		arg.Currency,
+		arg.TimeZone,
 		arg.ReportSlug,
 		arg.CreatedAt,
 	)

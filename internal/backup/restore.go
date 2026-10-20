@@ -34,6 +34,7 @@ import (
 
 	"github.com/kerti/uruni/internal/money"
 	"github.com/kerti/uruni/internal/store"
+	"github.com/kerti/uruni/internal/tz"
 )
 
 // Upload caps: 256 MB compressed (enforced by the handler's MaxBytesReader;
@@ -198,6 +199,16 @@ func ParseUpload(path string) (ParsedUpload, error) {
 	doc, err := decodeDocument(version, jsonBytes)
 	if err != nil {
 		return ParsedUpload{}, err
+	}
+
+	// Every fund's zone must be one of the three (ADR-041). The preview cannot
+	// date the file without it, so a zone tz.Load refuses, unknown or the empty
+	// string a missing field reads as, is refused here at inspect; the schema's
+	// CHECK stays the backstop at Restore.
+	for _, f := range doc.Funds {
+		if _, err := tz.Load(f.TimeZone); err != nil {
+			return ParsedUpload{}, fmt.Errorf("%w: fund %d's time_zone: %v", ErrMalformedBackup, f.ID, err) //nolint:errorlint
+		}
 	}
 
 	// Every receipt path must be a bare filename before any zip entry is
@@ -381,7 +392,11 @@ func BuildPreview(ctx context.Context, q store.Querier, doc Document) (Preview, 
 		}
 	}
 
-	preview := Preview{Date: newestMoment(doc), Total: total.Int64(), Funds: []FundPreview{}}
+	date, err := newestMoment(doc)
+	if err != nil {
+		return Preview{}, err
+	}
+	preview := Preview{Date: date, Total: total.Int64(), Funds: []FundPreview{}}
 
 	seen := make(map[int64]bool, len(liveFunds))
 	for _, live := range liveFunds {
@@ -418,8 +433,20 @@ func BuildPreview(ctx context.Context, q store.Querier, doc Document) (Preview, 
 }
 
 // newestMoment returns the latest timestamp Document carries (created_at, or
-// a receipt's uploaded_at) as a Jakarta calendar date; see Preview.Date.
-func newestMoment(doc Document) string {
+// a receipt's uploaded_at) as a calendar date in the file's own zone (the first
+// fund's, by the rule resolveFund applies; tz.Default for a file with no fund);
+// see Preview.Date. A zone tz.Load refuses is an error: ParseUpload has refused
+// such a file already, so this guards a Document built some other way.
+func newestMoment(doc Document) (string, error) {
+	zone := tz.Default
+	if len(doc.Funds) > 0 {
+		zone = doc.Funds[0].TimeZone
+	}
+	loc, err := tz.Load(zone)
+	if err != nil {
+		return "", fmt.Errorf("backup: dating the file: %w", err)
+	}
+
 	var latest int64
 	consider := func(t int64) {
 		if t > latest {
@@ -466,9 +493,9 @@ func newestMoment(doc Document) string {
 		consider(x.CreatedAt)
 	}
 	if latest == 0 {
-		return ""
+		return "", nil
 	}
-	return time.Unix(latest, 0).In(jakarta).Format("2006-01-02")
+	return time.Unix(latest, 0).In(loc).Format("2006-01-02"), nil
 }
 
 // immutableTriggers names 00001_schema.sql's eight BEFORE UPDATE/DELETE
@@ -691,7 +718,7 @@ func clearFundScopedTables(ctx context.Context, q store.Querier) error {
 func insertDocument(ctx context.Context, q store.Querier, doc Document) error {
 	for _, f := range doc.Funds {
 		if err := q.RestoreFund(ctx, store.RestoreFundParams{
-			ID: f.ID, Name: f.Name, Currency: f.Currency, ReportSlug: f.ReportSlug, CreatedAt: f.CreatedAt,
+			ID: f.ID, Name: f.Name, Currency: f.Currency, TimeZone: f.TimeZone, ReportSlug: f.ReportSlug, CreatedAt: f.CreatedAt,
 		}); err != nil {
 			return fmt.Errorf("backup: restoring fund %d: %w", f.ID, err)
 		}

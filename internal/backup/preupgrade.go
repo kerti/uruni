@@ -21,6 +21,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/kerti/uruni/internal/tz"
 )
 
 // PreUpgradeRetention is how many pre-upgrade snapshots are kept, newest
@@ -37,7 +39,7 @@ var ErrPreUpgradeSnapshot = errors.New("backup: pre-upgrade snapshot failed")
 //
 // uruni-pre-upgrade-<date>-<time>_from-<version>_to-<version>.sqlite, e.g.
 // uruni-pre-upgrade-20261014-101500_from-v0.9.0-alpha.2_to-v0.9.0-alpha.3.sqlite
-// (Asia/Jakarta, like a dump's name). Both versions are in the name so an
+// (Asia/Jakarta, tz.Default: ADR-041). Both versions are in the name so an
 // operator reads which file is "before the upgrade to X" without opening
 // anything. cleanVersion keeps a version to [0-9A-Za-z.-], so the "_"
 // separators are unambiguous and a name can neither hold a path separator
@@ -65,7 +67,22 @@ type PreUpgradeInfo struct {
 	Name string
 	From string
 	To   string
-	When time.Time // Asia/Jakarta
+	When time.Time // Asia/Jakarta (tz.Default)
+}
+
+// operatorLocation is the zone of the two files an operator keeps for rolling
+// back, the pre-upgrade snapshot and the old database set aside by a rebuild
+// (ADR-041): Asia/Jakarta, whatever the fund's zone is. Each is written under
+// the instance lock before migrations, on a database whose schema may predate
+// the fund's time_zone column, so no fund can be read then; neither is a day of
+// the fund's, and neither is read back as one. It is a function and not a
+// variable so no zone is held in a package.
+func operatorLocation() *time.Location {
+	loc, err := tz.Load(tz.Default)
+	if err != nil {
+		panic("backup: loading the operator-file zone: " + err.Error())
+	}
+	return loc
 }
 
 // cleanVersion turns a version string into what a filename and the marker can
@@ -89,7 +106,7 @@ func cleanVersion(v string) string {
 
 // BuildPreUpgradeName renders a snapshot's filename; see preUpgradeNamePattern.
 func BuildPreUpgradeName(when time.Time, from, to string) string {
-	t := when.In(jakarta)
+	t := when.In(operatorLocation())
 	return fmt.Sprintf("uruni-pre-upgrade-%s-%s_from-%s_to-%s.sqlite", t.Format("20060102"), t.Format("150405"), cleanVersion(from), cleanVersion(to))
 }
 
@@ -100,7 +117,7 @@ func ParsePreUpgradeName(name string) (PreUpgradeInfo, bool) {
 	if m == nil {
 		return PreUpgradeInfo{}, false
 	}
-	when, err := time.ParseInLocation("20060102-150405", m[1]+"-"+m[2], jakarta)
+	when, err := time.ParseInLocation("20060102-150405", m[1]+"-"+m[2], operatorLocation())
 	if err != nil {
 		return PreUpgradeInfo{}, false
 	}

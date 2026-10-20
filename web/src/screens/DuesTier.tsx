@@ -10,7 +10,7 @@ import { Label } from '@/components/ui/label'
 import Loading from '@/components/states/Loading'
 import ErrorState from '@/components/states/ErrorState'
 import { copy } from '@/copy/id'
-import { formatPeriod, periodBounds } from '@/lib/dates'
+import { formatPeriod, periodBounds, currentPeriod } from '@/lib/dates'
 import { formatIDR } from '@/lib/money'
 import { createDuesRate, deleteDuesRate, deleteDuesTier, listDuesRates, listDuesTiers, renameDuesTier, updateDuesRate } from '@/lib/setup'
 import { rateSpan } from '@/lib/rateSpan'
@@ -19,13 +19,6 @@ import { useResetWhen } from '@/lib/useResetWhen'
 import type { DuesRate, DuesTier } from '@/lib/setup'
 
 const text = copy.settings.tiers
-
-/** Local YYYY-MM - never toISOString(), which is UTC and can read a month
- * early in WIB. */
-function currentISOMonth(): string {
-  const now = new Date()
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
-}
 
 /** One golongan and its rates, fetched together - the screen needs both. */
 interface TierData {
@@ -372,7 +365,7 @@ function RateRow({
 function AddRate({ tierId, onAdded, refresh }: { tierId: number; onAdded: () => void; refresh: () => Promise<void> }) {
   const [state, run] = useApi<DuesRate>()
   const [amount, setAmount] = useState(0)
-  const [effectiveFrom, setEffectiveFrom] = useState(currentISOMonth)
+  const [effectiveFrom, setEffectiveFrom] = useState(currentPeriod)
 
   const busy = state.status === 'loading'
 
@@ -383,7 +376,7 @@ function AddRate({ tierId, onAdded, refresh }: { tierId: number; onAdded: () => 
       async () => {
         const created = await createDuesRate(tierId, amount, effectiveFrom)
         setAmount(0)
-        setEffectiveFrom(currentISOMonth())
+        setEffectiveFrom(currentPeriod())
         onAdded()
         return created
       },

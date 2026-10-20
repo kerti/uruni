@@ -530,9 +530,10 @@ describe('TransactionList entry detail (#359)', () => {
   const longNote = 'Beli semen 3 sak, pasir 1 pikap, dan upah tukang dua hari untuk perbaikan saluran air di gang belakang pos ronda'
 
   it('opens the entry in full on a tap of the card, with the whole note and when it was recorded', async () => {
-    // Built in local time, not Date.UTC: the dialog formats in the runner's
-    // timezone, WIB on a laptop and UTC in CI.
-    renderRows([transaction({ direction: 'out', note: longNote, created_at: new Date(2026, 9, 1, 13, 42).getTime() / 1000 })])
+    // An explicit instant: the dialog shows the time of day in the fund's zone
+    // (WIB until one is set, ADR-041), with its abbreviation, whatever zone the
+    // runner is in (a laptop, or UTC in CI).
+    renderRows([transaction({ direction: 'out', note: longNote, created_at: new Date('2026-10-01T13:42:00+07:00').getTime() / 1000 })])
 
     await userEvent.click(screen.getByRole('button', { name: /^Lihat rincian:/ }))
 
@@ -541,7 +542,7 @@ describe('TransactionList entry detail (#359)', () => {
     expect(within(dialog).getByText(copy.transactionDetail.directionOut)).toBeInTheDocument()
     expect(within(dialog).getByText('Tunai')).toBeInTheDocument()
     expect(within(dialog).getByText(copy.transactionDetail.recordedAtLabel)).toBeInTheDocument()
-    expect(within(dialog).getByText(/1 Oktober 2026.*13[.:]42/)).toBeInTheDocument()
+    expect(within(dialog).getByText('1 Oktober 2026 pukul 13.42 WIB')).toBeInTheDocument()
   })
 
   it('shows the pos the money is under now on a corrected row', async () => {

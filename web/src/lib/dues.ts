@@ -69,9 +69,9 @@ export interface OutstandingDuesPeriod {
  * this member still owes for, oldest first. An empty array is a normal 200:
  * the member is square, or has no tier at all.
  *
- * `through` is the *client's* local month, always passed explicitly: the
- * server does not share the treasurer's timezone, so defaulting to its own
- * current month can hide a month that has already started in WIB.
+ * `through` is the fund's current month as the client reads it (dates.ts,
+ * in the fund's zone), always passed explicitly, so the month the form shows
+ * and the month the arrears walk to are one.
  */
 export function getOutstandingDues(memberId: number, through: string): Promise<OutstandingDuesPeriod[]> {
   return apiFetch<OutstandingDuesPeriod[]>(`/api/members/${memberId}/outstanding-dues?through=${encodeURIComponent(through)}`)

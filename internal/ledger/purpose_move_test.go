@@ -415,7 +415,7 @@ func moveSecondFund(t *testing.T, l *Ledger) moveOtherFund {
 	t.Helper()
 	q := store.New(l.db)
 	fund, err := q.CreateFund(context.Background(), store.CreateFundParams{
-		Name: "Other Fund", Currency: "IDR", ReportSlug: "zyxwvutsrqponmlkjihgfe", CreatedAt: 1,
+		Name: "Other Fund", Currency: "IDR", TimeZone: "Asia/Jakarta", ReportSlug: "zyxwvutsrqponmlkjihgfe", CreatedAt: 1,
 	})
 	if err != nil {
 		t.Fatalf("CreateFund() = %v, want no error", err)

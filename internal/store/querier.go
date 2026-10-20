@@ -707,10 +707,13 @@ type Querier interface {
 	UpdateAccount(ctx context.Context, arg UpdateAccountParams) (Account, error)
 	// UpdateDuesTier renames a tier - reference data, not history.
 	UpdateDuesTier(ctx context.Context, arg UpdateDuesTierParams) (DuesTier, error)
-	// Renames the fund. name is a display label nothing posted references, so this
-	// changes no history. currency (an invariant through 0.x) and report_slug (the
-	// report's unguessable address; see UpdateFundReportSlug) are deliberately not
-	// settable here.
+	// Renames the fund and/or changes its time zone; a NULL argument leaves that
+	// column alone. name is a display label nothing posted references, and a time
+	// zone change rewrites nothing either (ADR-041: every day and month is derived
+	// from it, so setting the old zone back restores every earlier reading). The
+	// CHECK is the zone's validation. currency (an invariant through 0.x) and
+	// report_slug (the report's unguessable address; see UpdateFundReportSlug) are
+	// deliberately not settable here.
 	UpdateFund(ctx context.Context, arg UpdateFundParams) (Fund, error)
 	// Replaces the report's address (ADR-035's leak escape hatch). The old slug is
 	// simply gone: no redirect, an ordinary unknown slug from the next read on.

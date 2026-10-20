@@ -6,7 +6,7 @@ Where a concept's Indonesian name is the one the treasurer sees, the identifier 
 
 ## Core
 
-- **Fund** (kas) — a community's shared pool of money. One instance may hold one or more; one is enough for the validated user.
+- **Fund** (kas) — a community's shared pool of money. One instance may hold one or more; one is enough for the validated user. Has a name, a currency (IDR) and a **time zone** (`time_zone`; *zona waktu* in copy): WIB, WITA or WIT, stored as the IANA name (`Asia/Jakarta`, `Asia/Makassar`, `Asia/Jayapura`). It is a fact about the community, not the server or the phone, and decides when a day and a month turn over for the fund ([ADR-041](./docs/ADR/041-the-funds-time-zone.md)). One word: not "timezone", not "wilayah waktu".
 - **Account / Location** — *where money physically sits*: Cash (Tunai) or Bank — a fund may have several accounts of either kind, named by the treasurer. Balances are tracked per location because that split is where discrepancies come from.
 - **Purpose tag** (pos, `purpose`; *peruntukan* until #385) — what a transaction is *for*, over one pooled balance: **Kas Utama** (routine, `main`), a named **Incidental** (`incidental`), or **Pass-through** (`pass_through`). Exactly one Kas Utama per fund.
 - **User** (`user`) — the treasurer's login: an email and an argon2id password hash. One per instance, created once at first run ([ADR-030](./docs/ADR/030-multi-fund-scoping.md)). Distinct from **Member** (a person in the group, who never logs in) and from **Account** (a place money sits). The only entity in the schema that is not scoped to a fund.

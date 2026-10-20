@@ -57,7 +57,7 @@ func TestPatchMemberTierFromAMonthLeavesEarlierMonthsAtTheOldTier(t *testing.T) 
 		t.Fatalf("POST tier_id = %v, want %d", member.TierID, tierA)
 	}
 
-	now := ledger.CurrentDuesPeriod(time.Now())
+	now := ledger.CurrentDuesPeriod(time.Now(), wib)
 	got := decodeMember(t, patchMember(t, r, member.ID, fmt.Sprintf(`{"tier_id":%d,"tier_effective_from":%q}`, tierB, now)), http.StatusOK)
 	if got.TierID == nil || *got.TierID != tierB {
 		t.Errorf("PATCH tier_id = %v, want %d (current tier after the change)", got.TierID, tierB)
@@ -128,7 +128,7 @@ func TestPatchMemberJoinDateBackdatedCarriesTheTierBackToTheNewJoinMonth(t *test
 		t.Fatalf("POST /api/setup = %d", rec.Code)
 	}
 	tier := mustTier(t, r, "Pelaksana", 10_000)
-	joined := ledger.CurrentDuesPeriod(time.Now()) + "-01"
+	joined := ledger.CurrentDuesPeriod(time.Now(), wib) + "-01"
 	member := decodeMember(t, postMember(t, r, memberRequest{Name: "Jane", TierID: &tier, JoinedOn: &joined}), http.StatusCreated)
 
 	decodeMember(t, patchMember(t, r, member.ID, `{"joined_on":"2026-01-01"}`), http.StatusOK)

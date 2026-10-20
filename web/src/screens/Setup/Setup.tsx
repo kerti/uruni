@@ -1,6 +1,6 @@
 import { useState } from 'react'
 
-import { todayISODate } from '@/lib/dates'
+import { currentPeriod, setFundTimeZone, suggestedTimeZone, todayISODate } from '@/lib/dates'
 import { useApi } from '@/lib/useApi'
 import { parseRupiah } from '@/lib/money'
 import { createDuesRate, createDuesTier, createMember, postSetup } from '@/lib/setup'
@@ -13,12 +13,6 @@ import OpeningBalances from '@/screens/Setup/OpeningBalances'
 import Roster from '@/screens/Setup/Roster'
 
 type Step = 'fund' | 'locations' | 'balances' | 'roster'
-
-/** Local YYYY-MM, as lib/dates.ts's todayISODate. */
-function currentISOMonth(): string {
-  const now = new Date()
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
-}
 
 /**
  * The first-run setup wizard (PRD section 7.1). Four steps; only the fund's
@@ -42,6 +36,10 @@ function currentISOMonth(): string {
 export default function Setup({ onDone }: { onDone: () => void }) {
   const [step, setStep] = useState<Step>('fund')
   const [fundName, setFundName] = useState('')
+  // Pre-selected from the device's UTC offset (ADR-041), so most treasurers tap
+  // nothing; she can change it, and this is only a starting value, never the
+  // fund's zone until POST /api/setup stores it.
+  const [timeZone, setTimeZone] = useState<string>(suggestedTimeZone)
   // Lazy: newLocationRow mints a client id, so the seed rows are built once,
   // not on every render.
   const [locationRows, setLocationRows] = useState<LocationRow[]>(() => [newLocationRow('cash', 'Tunai'), newLocationRow('bank', 'Bank')])
@@ -55,6 +53,10 @@ export default function Setup({ onDone }: { onDone: () => void }) {
 
   function submitBalances() {
     void run(async () => {
+      // Setup is the one place the client needs a zone before the server has a
+      // fund: the opening-balance date is read in the zone she chose, and
+      // postSetup holds the stored one for the roster step.
+      setFundTimeZone(timeZone)
       const occurredOn = todayISODate()
       const accounts: SetupAccountInput[] = locationRows.map((row) => {
         const name = row.name.trim()
@@ -68,7 +70,7 @@ export default function Setup({ onDone }: { onDone: () => void }) {
         }
         return input
       })
-      const result = await postSetup(fundName.trim(), accounts)
+      const result = await postSetup(fundName.trim(), timeZone, accounts)
       setStep('roster')
       return result
     })
@@ -85,7 +87,7 @@ export default function Setup({ onDone }: { onDone: () => void }) {
         tierId = tier.id
         const rate = parseRupiah(rateAmount)
         if (rate > 0) {
-          await createDuesRate(tier.id, rate, currentISOMonth())
+          await createDuesRate(tier.id, rate, currentPeriod())
         }
       }
 
@@ -99,7 +101,15 @@ export default function Setup({ onDone }: { onDone: () => void }) {
   }
 
   if (step === 'fund') {
-    return <FundName name={fundName} onChange={setFundName} onNext={() => setStep('locations')} />
+    return (
+      <FundName
+        name={fundName}
+        onChange={setFundName}
+        timeZone={timeZone}
+        onTimeZoneChange={setTimeZone}
+        onNext={() => setStep('locations')}
+      />
+    )
   }
 
   if (step === 'locations') {

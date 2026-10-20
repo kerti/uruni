@@ -61,7 +61,7 @@ One community server holds one or more **Funds** (for the validated user, a sing
 
 Key entities:
 
-- **Fund** — the shared kas. Has a name and currency (IDR).
+- **Fund** — the shared kas. Has a name, a currency (IDR) and a time zone: WIB, WITA or WIT.
 - **Account/Location** — where money physically sits: a list the treasurer names, each entry either cash or bank. A fund may hold several of either kind, or only one; the display name is whatever she types, and the seeded default is "Tunai". Locations are added and renamed later, and one that has been used is retired rather than deleted - once its money has moved elsewhere, since a retired location is never counted again. The recorded balance is tracked *per location* because that split is the source of her discrepancies. (v1 assumes the bank is possibly a personal account; Uruni tracks only the kas portion the treasurer reports.)
 - **Purpose tag** — every transaction is tagged: `Kas Utama` (routine), a named **Incidental** (e.g. "Duka Pak Budi"), or `Pass-through` (e.g. Kas Bidang). One pooled real balance, separated *in meaning*, not in separate pots.
 - **Member** — name + role/tier. No email/phone required (minimize data held).
@@ -74,7 +74,7 @@ Key entities:
 
 ### 7.1 Setup & access
 - The treasurer signs in to *their community's* server (single treasurer role in v1; optional read-only viewer later). No central Uruni accounts.
-- First-run setup: name the fund, add members with tiers, set dues rates, set an opening balance per location.
+- First-run setup: name the fund and choose its time zone (WIB, WITA or WIT, pre-selected from the phone), add members with tiers, set dues rates, set an opening balance per location.
 - **Uruni's history starts at adoption.** The opening balance carries everything that came before it, so join dates and dues rates default to the moment of setup and no earlier period is generated as owed. Payments already settled are never re-entered: that money is *inside* the opening balance, and recording it a second time would inflate the recorded balance permanently. The exception is **live arrears** — dues a member genuinely still owes never arrived, so backdating that one member's join date (and the rate's effective month) makes those periods show as outstanding, and the payment is dated the day it actually comes in.
 
 ### 7.2 Record a transaction (the everyday action)

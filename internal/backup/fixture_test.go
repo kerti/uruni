@@ -72,7 +72,7 @@ func buildFixture(t *testing.T, sqlDB *sql.DB, uploadsDir string) {
 	}
 
 	fund, err := q.CreateFund(ctx, store.CreateFundParams{
-		Name: "Test Fund", Currency: "IDR", ReportSlug: "0000000000000000000fixture", CreatedAt: 1700000000,
+		Name: "Test Fund", Currency: "IDR", TimeZone: "Asia/Jakarta", ReportSlug: "0000000000000000000fixture", CreatedAt: 1700000000,
 	})
 	if err != nil {
 		t.Fatalf("CreateFund: %v", err)

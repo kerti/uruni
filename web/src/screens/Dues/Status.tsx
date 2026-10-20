@@ -9,20 +9,13 @@ import ErrorState from '@/components/states/ErrorState'
 import { copy } from '@/copy/id'
 import MemberPayments from '@/screens/Dues/MemberPayments'
 import { getDuesStatus } from '@/lib/dues'
-import { formatPeriod, periodBounds } from '@/lib/dates'
+import { currentPeriod, formatPeriod, periodBounds } from '@/lib/dates'
 import { formatIDR } from '@/lib/money'
 import { useApi } from '@/lib/useApi'
 import type { DuesStatusKind, DuesStatusRow } from '@/lib/dues'
 
 const text = copy.dues
 const historyText = copy.dues.history
-
-/** Local YYYY-MM - never toISOString(), which is UTC and can read a month
- * early in WIB. */
-function currentISOMonth(): string {
-  const now = new Date()
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
-}
 
 /** Rows the "belum bayar" filter isolates - unpaid and partial both still owe
  * something for the period (PRD section 7.3's "simple 'not yet paid' view").
@@ -92,7 +85,7 @@ export default function DuesStatus({
   refetchKey?: unknown
   notice?: string | null
 }) {
-  const [period, setPeriod] = useState(currentISOMonth)
+  const [period, setPeriod] = useState(currentPeriod)
   const [unpaidOnly, setUnpaidOnly] = useState(false)
   // Which member's payment history is open - one at a time, and never open
   // across a period change, since the history is period-scoped.

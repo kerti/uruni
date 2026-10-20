@@ -892,8 +892,8 @@ export const copy = {
     // perlu"). The name is a label - it heads every screen and the public
     // report - so this changes nothing already recorded.
     fund: {
-      heading: 'Nama kas',
-      body: 'Nama ini muncul di seluruh aplikasi dan di laporan publik. Menggantinya tidak mengubah catatan apa pun.',
+      heading: 'Kas ini',
+      body: 'Nama kas muncul di seluruh aplikasi dan di laporan publik; zona waktunya menentukan kapan hari dan bulan berganti. Menggantinya tidak mengubah catatan apa pun.',
       nameLabel: 'Nama kas',
       save: 'Simpan',
       saving: 'Menyimpan…',
@@ -903,6 +903,14 @@ export const copy = {
       // needs to say which one.
       editTitle: 'Ubah nama kas',
       editAria: (name: string) => `Ubah ${name}`,
+      // The zone is the fund's second setting (ADR-041): a second card under the
+      // name, opening a dialog at ?edit=fund:time_zone. The card shows the chosen
+      // option's own label (copy.timeZone.options), so it needs only these.
+      zone: {
+        editTitle: 'Ubah zona waktu',
+        body: 'Dipakai untuk tanggal hari ini, pergantian bulan, dan laporan publik. Menggantinya tidak mengubah catatan yang sudah ada.',
+        editAria: (optionLabel: string) => `Ubah zona waktu, ${optionLabel}`,
+      },
     },
     // The treasurer's own login (#386; "user" as CONTEXT.md names the login, not
     // an account, which is a place money sits): who is signed in, and the two edits it
@@ -1195,6 +1203,32 @@ export const copy = {
     emptyMonth: 'Pilih bulan',
     previousYear: 'Tahun sebelumnya',
     nextYear: 'Tahun berikutnya',
+  },
+  // The fund's time zone (ADR-041): the one place the app says WIB, WITA or WIT.
+  // The server stores IANA names (lib/timeZones.ts); these are only what she
+  // reads. Shared by Setup's field and Pengaturan's dialog, and the abbreviation
+  // is also what a displayed time of day carries ("pukul 13.42 WIB"), from here
+  // and not from Intl's engine-dependent zone names.
+  timeZone: {
+    label: 'Zona waktu',
+    setupHint: 'Menentukan kapan hari dan bulan berganti untuk kas ini. Bisa diganti nanti di Pengaturan.',
+    options: {
+      'Asia/Jakarta': {
+        abbreviation: 'WIB',
+        label: 'WIB - Waktu Indonesia Barat',
+        example: 'mis. Jakarta, Medan, Palembang',
+      },
+      'Asia/Makassar': {
+        abbreviation: 'WITA',
+        label: 'WITA - Waktu Indonesia Tengah',
+        example: 'mis. Makassar, Denpasar, Balikpapan',
+      },
+      'Asia/Jayapura': {
+        abbreviation: 'WIT',
+        label: 'WIT - Waktu Indonesia Timur',
+        example: 'mis. Jayapura, Ambon',
+      },
+    },
   },
   // One ledger entry read in full - opened by tapping a card in any
   // transaction list. Field labels reuse the record form's nouns (CONTEXT.md:

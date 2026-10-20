@@ -39,7 +39,7 @@ func richV1Fixture() documentV1 {
 
 	v1 := documentV1{
 		FormatVersion: 1,
-		Funds:         []Fund{{ID: 1, Name: "Dana", Currency: "IDR", ReportSlug: "0000000000000000000slug01", CreatedAt: created}},
+		Funds:         []fundV1{{ID: 1, Name: "Dana", Currency: "IDR", ReportSlug: "0000000000000000000slug01", CreatedAt: created}},
 		Accounts:      []Account{{ID: 1, FundID: 1, Kind: "cash", Name: "Kas", CreatedAt: created}},
 		Purposes:      []Purpose{{ID: 1, FundID: 1, Kind: "main", Name: "Kas Utama", CreatedAt: created}},
 		DuesTiers: []DuesTier{
