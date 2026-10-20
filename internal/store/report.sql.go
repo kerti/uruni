@@ -174,8 +174,8 @@ func (q *Queries) ListReportTransactions(ctx context.Context, arg ListReportTran
 
 const reportFundBalance = `-- name: ReportFundBalance :one
 
-SELECT CAST(COALESCE(SUM(CASE WHEN direction = 'in' THEN amount ELSE -amount END), 0) AS INTEGER) AS balance_amount
-FROM "transaction"
+SELECT CAST(COALESCE(SUM(signed_amount), 0) AS INTEGER) AS balance_amount
+FROM ledger_entry
 WHERE fund_id = ?1
   AND (CAST(?2 AS TEXT) IS NULL OR occurred_on <= CAST(?2 AS TEXT))
 `
@@ -238,21 +238,19 @@ SELECT rl.id, rl.fund_id, rl.reconciliation_id, rl.account_id, rl.recorded_amoun
          WHEN 'matched' THEN 0
          ELSE CASE
            WHEN fix.id IS NULL THEN 0
-           WHEN fix.direction = 'in' THEN rl.difference_amount - fix.amount
-           ELSE rl.difference_amount + fix.amount
+           ELSE rl.difference_amount - fix.signed_amount
          END
        END AS INTEGER) AS remainder_amount
 FROM reconciliation_line rl
 JOIN reconciliation r ON r.fund_id = rl.fund_id AND r.id = rl.reconciliation_id
-LEFT JOIN "transaction" fix ON fix.fund_id = rl.fund_id AND fix.id = rl.adjustment_transaction_id
+LEFT JOIN ledger_entry fix ON fix.fund_id = rl.fund_id AND fix.id = rl.adjustment_transaction_id
 WHERE rl.fund_id = ?1
   AND (CASE rl.resolution
          WHEN 'left_open' THEN rl.difference_amount
          WHEN 'matched' THEN 0
          ELSE CASE
            WHEN fix.id IS NULL THEN 0
-           WHEN fix.direction = 'in' THEN rl.difference_amount - fix.amount
-           ELSE rl.difference_amount + fix.amount
+           ELSE rl.difference_amount - fix.signed_amount
          END
        END) <> 0
   AND (CAST(?2 AS INTEGER) IS NULL OR r.performed_at < CAST(?2 AS INTEGER))
@@ -353,8 +351,8 @@ func (q *Queries) ReportOwedToMembers(ctx context.Context, arg ReportOwedToMembe
 }
 
 const reportPurposeBalance = `-- name: ReportPurposeBalance :one
-SELECT CAST(COALESCE(SUM(CASE WHEN direction = 'in' THEN amount ELSE -amount END), 0) AS INTEGER) AS balance_amount
-FROM "transaction"
+SELECT CAST(COALESCE(SUM(signed_amount), 0) AS INTEGER) AS balance_amount
+FROM ledger_entry
 WHERE fund_id = ?1 AND purpose_id = ?2
   AND (CAST(?3 AS TEXT) IS NULL OR occurred_on <= CAST(?3 AS TEXT))
 `

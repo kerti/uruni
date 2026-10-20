@@ -138,12 +138,11 @@ SELECT r.id, r.fund_id, r.performed_at, r.through_transaction_id, r.note, r.crea
          WHEN 'matched' THEN 0
          ELSE CASE
            WHEN fix.id IS NULL THEN 0
-           WHEN fix.direction = 'in' THEN rl.difference_amount - fix.amount
-           ELSE rl.difference_amount + fix.amount
+           ELSE rl.difference_amount - fix.signed_amount
          END
        END))
     FROM reconciliation_line rl
-    LEFT JOIN "transaction" fix ON fix.fund_id = rl.fund_id AND fix.id = rl.adjustment_transaction_id
+    LEFT JOIN ledger_entry fix ON fix.fund_id = rl.fund_id AND fix.id = rl.adjustment_transaction_id
     WHERE rl.reconciliation_id = r.id
   ), 0) AS INTEGER) AS open_difference_amount
 FROM reconciliation r

@@ -120,6 +120,23 @@ func TestCheckSchemaDetectsAMissingObject(t *testing.T) {
 	}
 }
 
+// ledger_entry (#627) is part of the schema the boot guard holds: a database
+// missing the view, or carrying a different one, is refused rather than served
+// with balances that read from nothing.
+func TestCheckSchemaCoversTheLedgerEntryView(t *testing.T) {
+	t.Parallel()
+	sqlDB := migratedDB(t)
+	mustExec(t, sqlDB, `DROP VIEW ledger_entry`)
+	if diff := checkSchema(t, sqlDB); strings.Join(diff.Missing, "|") != "view ledger_entry" {
+		t.Errorf("Missing = %v, want [view ledger_entry]", diff.Missing)
+	}
+
+	mustExec(t, sqlDB, `CREATE VIEW ledger_entry AS SELECT id FROM "transaction"`)
+	if diff := checkSchema(t, sqlDB); strings.Join(diff.Changed, "|") != "view ledger_entry" {
+		t.Errorf("Changed = %v, want [view ledger_entry]", diff.Changed)
+	}
+}
+
 func TestCheckSchemaDetectsAnUnexpectedObject(t *testing.T) {
 	t.Parallel()
 	sqlDB := migratedDB(t)

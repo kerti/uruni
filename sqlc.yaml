@@ -22,3 +22,15 @@ sql:
         emit_interface: true
         emit_empty_slices: true
         emit_pointers_for_null_types: true
+        # A scalar subquery is typed as NOT NULL by sqlc, but these two are NULL
+        # exactly when nothing reverses the row (the ledger_entry view). Without
+        # the override a NULL would fail to scan into a plain int64/string.
+        overrides:
+          - column: "ledger_entry.reversed_by_transaction_id"
+            go_type:
+              type: "int64"
+              pointer: true
+          - column: "ledger_entry.reversed_on"
+            go_type:
+              type: "string"
+              pointer: true

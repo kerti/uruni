@@ -64,6 +64,28 @@ type IncidentalRecipient struct {
 	MemberID  int64
 }
 
+type LedgerEntry struct {
+	ID                      int64
+	FundID                  int64
+	AccountID               int64
+	PurposeID               int64
+	Direction               string
+	Amount                  int64
+	OccurredOn              string
+	Kind                    string
+	MemberID                *int64
+	DuesPeriod              *string
+	ReimbursementID         *int64
+	TransferID              *int64
+	ReversesTransactionID   *int64
+	Note                    *string
+	CreatedAt               int64
+	SignedAmount            int64
+	ReversedByTransactionID *int64
+	ReversedOn              *string
+	Reversed                int64
+}
+
 type Member struct {
 	ID         int64
 	FundID     int64

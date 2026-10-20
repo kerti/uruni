@@ -20,8 +20,9 @@ type Querier interface {
 	CloseIncidental(ctx context.Context, arg CloseIncidentalParams) (Incidental, error)
 	// The named half of an envelope's participation (ADR-034): every named
 	// contribution against one purpose_id, summed per member, excluding a row some
-	// reversal points at (the NOT EXISTS of DuesPaidByPeriod, ADR-029) so a
-	// reversed contribution disappears from "gave" rather than counting twice.
+	// reversal points at (ADR-029) so a reversed contribution disappears from
+	// "gave" rather than counting twice. Unlike DuesPaidByPeriod (ledger_entry.reversed)
+	// it drops a reversal only if it is dated on or before through, via reversed_on.
 	// member_id IS NOT NULL is redundant with the schema's CHECK but kept explicit.
 	//
 	// Says nothing about who was EXPECTED to give: that is ListMembersByFund plus
@@ -139,7 +140,7 @@ type Querier interface {
 	DuesPaidByMemberGroupedByPeriod(ctx context.Context, arg DuesPaidByMemberGroupedByPeriodParams) ([]DuesPaidByMemberGroupedByPeriodRow, error)
 	// The roster query behind "who has paid / partially / not yet" for one
 	// dues_period, every member in one pass.
-	// The AND NOT EXISTS clause is ADR-029's half of the reversal design: a
+	// The reversed = 0 clause is ADR-029's half of the reversal design: a
 	// reversal is kind='adjustment' so never matches kind = 'dues'; this drops the
 	// ORIGINAL row once something reverses it, so a reversed payment disappears
 	// from "paid" rather than counting twice.
@@ -164,8 +165,8 @@ type Querier interface {
 	// this form is zero rows - a clean sql.ErrNoRows read as "no ledger yet".
 	FirstTransactionDateByFund(ctx context.Context, fundID int64) (string, error)
 	// Every balance in Uruni is this shape: sum the ledger, never read a stored
-	// total (CLAUDE.md rule 2). direction carries the sign, so the CASE is the
-	// only place a minus appears. The CAST is not decoration - without it sqlc
+	// total (CLAUDE.md rule 2). ledger_entry.signed_amount carries the sign, so the
+	// view is the only place a minus appears. The CAST is not decoration - without it sqlc
 	// emits interface{} for the aggregate and the trust core loses its compiler
 	// exactly where it is needed most (ADR-024).
 	FundBalance(ctx context.Context, fundID int64) (int64, error)
@@ -251,9 +252,9 @@ type Querier interface {
 	// reclass_purpose transfer; a correction's legs come back in below.
 	//
 	// A cancelled contribution (ADR-034's widened ADR-029 reversal) is dropped
-	// whole: the reversal row and the row it reverses, the same NOT EXISTS as
-	// ContributedByIncidentalMember. Otherwise a cancellation reads as money
-	// spent ("Terpakai") and the cancelled row as money collected. Both halves go,
+	// whole: the reversal row and the row it reverses, by the same ledger_entry
+	// reversed_on test as ContributedByIncidentalMember. Otherwise a cancellation
+	// reads as money spent ("Terpakai") and the cancelled row as money collected. Both halves go,
 	// so collected minus disbursed still equals the envelope's balance;
 	// IncidentalTotals stays unfiltered because the pair nets to zero there.
 	//
@@ -300,7 +301,7 @@ type Querier interface {
 	// uncast, MAX(dues_period) generates interface{} (the ADR-024 trap for SUM,
 	// reached through MAX), and a .(string) assertion on it can panic since drivers
 	// commonly hand back []byte.
-	// The AND NOT EXISTS clause is ADR-029's fix: without it a reversed row would
+	// The reversed = 0 clause is ADR-029's fix: without it a reversed row would
 	// still be the MAX(dues_period) for its member, reading as "paid in advance"
 	// through a period that is no longer paid at all.
 	LatestDuesPeriodPaidByMember(ctx context.Context, fundID int64) ([]LatestDuesPeriodPaidByMemberRow, error)
@@ -329,8 +330,8 @@ type Querier interface {
 	// kind='dues' payment and every kind='adjustment' row that reverses one -
 	// never a bare "every transaction".
 	//
-	// rv is the reversal that undoes THIS row when it is a payment
-	// (reversed_by_transaction_id; null otherwise, as a reversal is never itself
+	// reversed_by_transaction_id is the reversal that undoes THIS row when it is a
+	// payment (ledger_entry; null otherwise, as a reversal is never itself
 	// reversed). orig is the payment THIS row reverses, carried forward as
 	// reverses_occurred_on so a reversal states the original's date even when that
 	// payment sits on a later page.
@@ -453,8 +454,8 @@ type Querier interface {
 	// remainder_amount (#498) is what a line still has open: the part of its
 	// difference its fix did not square, signed like difference_amount
 	// (actual - recorded). left_open: the whole difference. matched: 0. adjusted
-	// and entry_added: difference - signed(fix), where the fix is the entry the
-	// line points at (+ for in, - for out). An entry_added line from before #498
+	// and entry_added: difference - fix.signed_amount (ledger_entry; + for in, -
+	// for out), where the fix is the entry the line points at. An entry_added line from before #498
 	// points at nothing and reads as closed (0): its remainder was never recorded
 	// and cannot be known. The same expression appears in
 	// ListOpenReconciliationLinesByFund, ListReconciliationsPage and
