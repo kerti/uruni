@@ -175,6 +175,9 @@ func (a *api) routes(r chi.Router) {
 
 		// Rates are created and listed under their tier but corrected by id: a rate
 		// is only reached through one tier, so {id} in the nested path means the tier.
+		// All three writes go through the ledger (ADR-040): a correction or a delete
+		// appends the next correction of the rate's month, so the response of a PATCH
+		// carries a new id and an old one is refused as superseded.
 		r.Post("/dues-tiers/{id}/rates", a.createDuesRate)
 		r.Get("/dues-tiers/{id}/rates", a.listDuesRates)
 		r.Patch("/dues-rates/{id}", a.updateDuesRate)

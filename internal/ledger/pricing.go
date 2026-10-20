@@ -16,7 +16,11 @@ import (
 // It is built from rows fetched once for a whole fund or one member and folded
 // here, so no read adds a per-member query. The rows must come from the
 // standing views' queries (one row per month, ordered by month): a superseded
-// month never reaches this type, which is why it takes no correction number.
+// row never reaches this type, which is why it takes no correction number, and a
+// month whose standing rate was deleted is not in dues_rate_standing at all, so
+// rateAt falls back to the earlier month with no deleted flag to check. Taking
+// store.DuesRateStanding rather than store.DuesRate is what keeps a raw table
+// row from being fed in.
 type pricing struct {
 	tiers map[int64][]tierSpan // by member id, oldest month first
 	rates map[int64][]rateSpan // by tier id, oldest month first
@@ -29,7 +33,8 @@ type tierSpan struct {
 	tierID *int64
 }
 
-// rateSpan is one dues_rate row: from this month the tier costs amount.
+// rateSpan is one standing, non-deleted dues_rate row: from this month the tier
+// costs amount.
 type rateSpan struct {
 	from   string // "YYYY-MM"
 	amount int64
@@ -38,7 +43,7 @@ type rateSpan struct {
 // newPricing folds standing member_tier rows (ordered by member, then month)
 // and dues_rate rows (ordered by tier, then month) into per-member and per-tier
 // timelines.
-func newPricing(tierRows []store.MemberTierStanding, rateRows []store.DuesRate) pricing {
+func newPricing(tierRows []store.MemberTierStanding, rateRows []store.DuesRateStanding) pricing {
 	p := pricing{tiers: make(map[int64][]tierSpan), rates: make(map[int64][]rateSpan)}
 	for _, r := range tierRows {
 		p.tiers[r.MemberID] = append(p.tiers[r.MemberID], tierSpan{from: r.EffectiveFrom, tierID: r.TierID})
@@ -73,8 +78,9 @@ func (p pricing) tierAt(memberID int64, period string) (tierID int64, ok bool) {
 	return *spans[i-1].tierID, true
 }
 
-// rateAt is the tier's rate at period: the latest row at or before it. ok is
-// false when no rate is decided yet (the "madya TBD" case): the period is
+// rateAt is the tier's rate at period: the latest month at or before it that
+// still has a rate (a deleted month is not among them). ok is false when no
+// rate is decided (the "madya TBD" case, or only deleted ones): the period is
 // skipped, never invented.
 func (p pricing) rateAt(tierID int64, period string) (amount int64, ok bool) {
 	spans := p.rates[tierID]

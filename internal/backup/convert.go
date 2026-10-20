@@ -55,7 +55,7 @@ func toDuesRates(rows []store.DuesRate) []DuesRate {
 	for _, r := range rows {
 		out = append(out, DuesRate{
 			ID: r.ID, TierID: r.TierID, Amount: r.Amount,
-			EffectiveFrom: r.EffectiveFrom, CreatedAt: r.CreatedAt,
+			EffectiveFrom: r.EffectiveFrom, Correction: r.Correction, Deleted: r.Deleted == 1, CreatedAt: r.CreatedAt,
 		})
 	}
 	return out

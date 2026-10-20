@@ -66,7 +66,7 @@ type documentV1 struct {
 	Accounts  []Account  `json:"accounts"`
 	Purposes  []Purpose  `json:"purposes"`
 	DuesTiers []DuesTier `json:"dues_tiers"`
-	DuesRates []DuesRate `json:"dues_rates"`
+	DuesRates []rateV1   `json:"dues_rates"`
 	Members   []memberV1 `json:"members"`
 
 	Transfers      []Transfer      `json:"transfers"`
@@ -80,6 +80,16 @@ type documentV1 struct {
 	IncidentalRecipients []IncidentalRecipient `json:"incidental_recipients"`
 
 	Totals Totals `json:"totals"`
+}
+
+// rateV1 is a v1 rate: one row per tier and month, with no correction number and
+// no deletion mark (ADR-040 added both in v2).
+type rateV1 struct {
+	ID            int64  `json:"id"`
+	TierID        int64  `json:"tier_id"`
+	Amount        int64  `json:"amount"`
+	EffectiveFrom string `json:"effective_from"`
+	CreatedAt     int64  `json:"created_at"`
 }
 
 // memberV1 is a v1 member: the tier lived on the row, and JoinedOn stayed a
@@ -104,8 +114,10 @@ type memberV1 struct {
 //     order (the order of the file's array is not trusted: CLAUDE.md, no
 //     primary-key order beyond the cutoff, and ids here are minted, so their
 //     order is only ever made deterministic). An untiered member gets no row.
-//   - A v1 rate has no correction number, and dues_rate is unchanged in v2 by
-//     this step (the rate-correction work edits v2 in place, ADR-040).
+//   - A v1 rate has no correction number and was never a deletion: it becomes
+//     correction 0, deleted false. (v2's rate fields were added in place by the
+//     rate-correction work, ADR-040, since v2 never shipped before the epic
+//     merged.)
 func upgradeV1(v1 documentV1) (Document, error) {
 	doc := Document{
 		FormatVersion:        FormatVersion,
@@ -114,7 +126,7 @@ func upgradeV1(v1 documentV1) (Document, error) {
 		Accounts:             v1.Accounts,
 		Purposes:             v1.Purposes,
 		DuesTiers:            v1.DuesTiers,
-		DuesRates:            v1.DuesRates,
+		DuesRates:            make([]DuesRate, 0, len(v1.DuesRates)),
 		Members:              make([]Member, 0, len(v1.Members)),
 		MemberTiers:          []MemberTier{},
 		Transfers:            v1.Transfers,
@@ -126,6 +138,12 @@ func upgradeV1(v1 documentV1) (Document, error) {
 		Incidentals:          v1.Incidentals,
 		IncidentalRecipients: v1.IncidentalRecipients,
 		Totals:               v1.Totals,
+	}
+
+	for _, r := range v1.DuesRates {
+		doc.DuesRates = append(doc.DuesRates, DuesRate{
+			ID: r.ID, TierID: r.TierID, Amount: r.Amount, EffectiveFrom: r.EffectiveFrom, CreatedAt: r.CreatedAt,
+		})
 	}
 
 	adopted := adoptionDates(doc)

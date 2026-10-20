@@ -78,7 +78,36 @@
       "tier_id": 1,
       "amount": 50000,
       "effective_from": "2026-01",
+      "correction": 0,
+      "deleted": false,
       "created_at": 1700000000
+    },
+    {
+      "id": 2,
+      "tier_id": 1,
+      "amount": 55000,
+      "effective_from": "2026-01",
+      "correction": 1,
+      "deleted": false,
+      "created_at": 1700000001
+    },
+    {
+      "id": 3,
+      "tier_id": 1,
+      "amount": 70000,
+      "effective_from": "2026-06",
+      "correction": 0,
+      "deleted": false,
+      "created_at": 1700000002
+    },
+    {
+      "id": 4,
+      "tier_id": 1,
+      "amount": 70000,
+      "effective_from": "2026-06",
+      "correction": 1,
+      "deleted": true,
+      "created_at": 1700000003
     }
   ],
   "members": [

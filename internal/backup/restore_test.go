@@ -13,6 +13,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -1022,5 +1023,66 @@ func TestAdoptionDatesFallsBackToTheFundsJakartaCreationDay(t *testing.T) {
 	got := adoptionDates(Document{Funds: []Fund{{ID: 7, CreatedAt: created}}})
 	if got[7] != "2026-09-01" {
 		t.Errorf("adoptionDates()[7] = %q, want %q", got[7], "2026-09-01")
+	}
+}
+
+// TestRestoreCarriesTheRateTrailAndLeavesTheUpdateTriggersAlone is ADR-040's claim
+// about restore, held by a test: an UPDATE-only trigger never fires on restore's
+// own deletes and inserts, so dues_rate_immutable_update (like member_tier's)
+// needs no place in immutableTriggers. The trail survives the round trip, the
+// standing view reads it as it did before, and both triggers still refuse after
+// a restore that replaced an existing trail (restore's clear-all deletes the old
+// rows, which no DELETE trigger stands in the way of).
+func TestRestoreCarriesTheRateTrailAndLeavesTheUpdateTriggersAlone(t *testing.T) {
+	t.Parallel()
+	srcDB := newTestDB(t)
+	srcUploads := t.TempDir()
+	buildFixture(t, srcDB, srcUploads)
+	if err := os.WriteFile(filepath.Join(srcUploads, receiptFilename), realJPEGBytes(t), 0o600); err != nil {
+		t.Fatalf("replacing fixture receipt with a real image: %v", err)
+	}
+	zipBytes, _ := exportFixture(t, srcDB, srcUploads)
+	parsed, err := parseUploadBytes(t, zipBytes)
+	if err != nil {
+		t.Fatalf("ParseUpload() = %v, want no error", err)
+	}
+
+	destDB := newTestDB(t)
+	restoreOrFatal(t, destDB, t.TempDir(), t.TempDir(), parsed)
+	restoreOrFatal(t, destDB, t.TempDir(), t.TempDir(), parsed) // over an existing trail
+
+	ctx := context.Background()
+	q := store.New(destDB)
+	all, err := q.ListDuesRatesByFund(ctx, 1)
+	if err != nil {
+		t.Fatalf("ListDuesRatesByFund() = %v, want no error", err)
+	}
+	type trail struct {
+		from       string
+		amount     int64
+		correction int64
+		deleted    int64
+	}
+	var got []trail
+	for _, r := range all {
+		got = append(got, trail{r.EffectiveFrom, r.Amount, r.Correction, r.Deleted})
+	}
+	want := []trail{{"2026-01", 50000, 0, 0}, {"2026-01", 55000, 1, 0}, {"2026-06", 70000, 0, 0}, {"2026-06", 70000, 1, 1}}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("restored dues_rate rows = %+v, want %+v: the superseded and deleting rows are the trail", got, want)
+	}
+
+	standing, err := q.ListDuesRatesByTier(ctx, all[0].TierID)
+	if err != nil || len(standing) != 1 || standing[0].Amount != 55000 || standing[0].EffectiveFrom != "2026-01" {
+		t.Errorf("standing rates after restore = %+v, %v, want January's corrected 55000 only (June was deleted)", standing, err)
+	}
+
+	for _, stmt := range []string{
+		`UPDATE dues_rate SET amount = 1 WHERE id = 1`,
+		`UPDATE member_tier SET tier_id = NULL WHERE id = 1`,
+	} {
+		if _, err := destDB.ExecContext(ctx, stmt); err == nil || !strings.Contains(err.Error(), "are immutable") {
+			t.Errorf("%s after a restore = %v, want the immutability trigger to refuse", stmt, err)
+		}
 	}
 }

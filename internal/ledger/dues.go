@@ -272,6 +272,13 @@ func validateDuesPeriod(s string) error {
 // does not prove the caller may touch it.
 func (l *Ledger) DeleteDuesTier(ctx context.Context, fundID, tierID int64) error {
 	return l.withTx(ctx, func(q store.Querier) error {
+		// Resolve the tier within the fund first: DeleteDuesRatesByTier is keyed by
+		// tier id alone, so without this a foreign fund's tier id would delete that
+		// fund's rate trail and commit before the fund-scoped tier delete ran. An id
+		// naming no tier of this fund answers sql.ErrNoRows (wrapped): not found.
+		if _, err := q.GetDuesTierForFund(ctx, store.GetDuesTierForFundParams{ID: tierID, FundID: fundID}); err != nil {
+			return fmt.Errorf("fetching dues tier: %w", err)
+		}
 		if err := q.DeleteDuesRatesByTier(ctx, tierID); err != nil {
 			return fmt.Errorf("deleting the tier's rates: %w", err)
 		}

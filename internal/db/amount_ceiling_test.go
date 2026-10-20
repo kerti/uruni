@@ -180,6 +180,9 @@ func TestEveryMoneyColumnIsListed(t *testing.T) {
 		if column == "correction" {
 			continue // the number of a restatement within a month (ADR-040), a counter, not rupiah
 		}
+		if table == "dues_rate" && column == "deleted" {
+			continue // the 0/1 mark of a deleting correction (ADR-040), a flag, not rupiah
+		}
 		found = append(found, table+"."+column)
 	}
 	if err := rows.Err(); err != nil {

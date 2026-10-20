@@ -171,8 +171,8 @@ func (q *Queries) RestoreAccount(ctx context.Context, arg RestoreAccountParams) 
 }
 
 const restoreDuesRate = `-- name: RestoreDuesRate :exec
-INSERT INTO dues_rate (id, tier_id, amount, effective_from, created_at)
-VALUES (?, ?, ?, ?, ?)
+INSERT INTO dues_rate (id, tier_id, amount, effective_from, correction, deleted, created_at)
+VALUES (?, ?, ?, ?, ?, ?, ?)
 `
 
 type RestoreDuesRateParams struct {
@@ -180,6 +180,8 @@ type RestoreDuesRateParams struct {
 	TierID        int64
 	Amount        int64
 	EffectiveFrom string
+	Correction    int64
+	Deleted       int64
 	CreatedAt     int64
 }
 
@@ -189,6 +191,8 @@ func (q *Queries) RestoreDuesRate(ctx context.Context, arg RestoreDuesRateParams
 		arg.TierID,
 		arg.Amount,
 		arg.EffectiveFrom,
+		arg.Correction,
+		arg.Deleted,
 		arg.CreatedAt,
 	)
 	return err

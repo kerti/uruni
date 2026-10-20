@@ -93,14 +93,43 @@ CREATE TABLE dues_rate (                  -- effective-dated, one-sided interval
   -- or before it, and ownership comes through tier_id. Two-sided intervals
   -- would need gaps and overlaps policed; this shape cannot express either.
   -- A tier with an undecided rate (madya, PRD section 6) simply has no row.
+  --
+  -- A mistake in a rate is corrected by a new row, never an overwrite (ADR-040):
+  -- the first row stated for a month is correction 0, each correction of that
+  -- month is the next number, and the highest number stands (the
+  -- dues_rate_standing view below). A deleting correction (deleted = 1) copies
+  -- the amount it withdraws and leaves the month with no rate; only a correction
+  -- can delete, so a month's first row never does. The UPDATE trigger at the
+  -- foot of this file is what holds that.
   id             INTEGER PRIMARY KEY,
   tier_id        INTEGER NOT NULL REFERENCES dues_tier(id),
   amount         INTEGER NOT NULL CHECK (amount >= 0 AND amount <= 999999999999),
   effective_from TEXT    NOT NULL CHECK (effective_from GLOB '[0-9][0-9][0-9][0-9]-[0-1][0-9]'
                                          AND date(effective_from||'-01') IS NOT NULL),
+  correction     INTEGER NOT NULL DEFAULT 0 CHECK (correction >= 0),
+  deleted        INTEGER NOT NULL DEFAULT 0 CHECK (deleted IN (0, 1)),
   created_at     INTEGER NOT NULL,
-  UNIQUE (tier_id, effective_from)
+  CHECK (deleted = 0 OR correction > 0),
+  UNIQUE (tier_id, effective_from, correction)
 ) STRICT;
+
+-- The rate in force for each month that has one: the highest correction of the
+-- month, and none at all when that standing row is a deletion. Dropping the
+-- deleted rows BEFORE taking the highest would be wrong (Jan 50.000, Jun 70.000
+-- then deleted, read at June: 70.000 instead of 50.000), which is why the
+-- deletion is judged here, on the row that stands, and the month leaves the view
+-- whole. Every dues read of dues_rate goes through this view, never the table
+-- (internal/db's guard test fails a query that does not), so the rule is written
+-- once. Named exceptions: the backup export, the by-id lookup PATCH and DELETE
+-- start from, the next-correction read.
+CREATE VIEW dues_rate_standing AS
+SELECT dr.id, dr.tier_id, dr.amount, dr.effective_from, dr.correction, dr.created_at
+FROM dues_rate dr
+WHERE dr.deleted = 0
+  AND dr.correction = (
+    SELECT MAX(c.correction) FROM dues_rate c
+    WHERE c.tier_id = dr.tier_id AND c.effective_from = dr.effective_from
+  );
 
 CREATE TABLE member (
   -- No tier column (ADR-040): a member's tier is effective-dated, so it lives in
@@ -489,8 +518,18 @@ CREATE TRIGGER member_tier_immutable_update BEFORE UPDATE ON member_tier BEGIN
 END;
 -- +goose StatementEnd
 
+-- dues_rate is immutable against UPDATE only, for the same reasons (ADR-040): a
+-- tier's deletion (DeleteDuesRatesByTier) and restore's clear-all delete these
+-- rows, and a test fails when any other statement does.
+-- +goose StatementBegin
+CREATE TRIGGER dues_rate_immutable_update BEFORE UPDATE ON dues_rate BEGIN
+  SELECT RAISE(ABORT, 'dues_rate rows are immutable - a correction is a new row');
+END;
+-- +goose StatementEnd
+
 -- +goose Down
 
+DROP TRIGGER dues_rate_immutable_update;
 DROP TRIGGER member_tier_immutable_update;
 DROP TRIGGER reconciliation_line_immutable_delete;
 DROP TRIGGER reconciliation_line_immutable_update;
@@ -521,6 +560,7 @@ DROP TABLE transfer;
 DROP VIEW member_tier_standing;
 DROP TABLE member_tier;
 DROP TABLE member;
+DROP VIEW dues_rate_standing;
 DROP TABLE dues_rate;
 DROP TABLE dues_tier;
 DROP INDEX purpose_single_main;

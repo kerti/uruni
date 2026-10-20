@@ -108,10 +108,26 @@ func buildFixture(t *testing.T, sqlDB *sql.DB, uploadsDir string) {
 	if err != nil {
 		t.Fatalf("CreateDuesTier: %v", err)
 	}
-	if _, err := q.CreateDuesRate(ctx, store.CreateDuesRateParams{
-		TierID: tier.ID, Amount: 50000, EffectiveFrom: "2026-01", CreatedAt: 1700000000,
-	}); err != nil {
-		t.Fatalf("CreateDuesRate: %v", err)
+	// Pelaksana's rate trail (ADR-040): January was filed as 50.000 and corrected
+	// to 55.000; a June rate of 70.000 was filed and then deleted, which leaves
+	// the row and a deleting correction behind. The export must carry all four.
+	for i, r := range []struct {
+		amount     int64
+		from       string
+		correction int64
+		deleted    int64
+	}{
+		{50000, "2026-01", 0, 0},
+		{55000, "2026-01", 1, 0},
+		{70000, "2026-06", 0, 0},
+		{70000, "2026-06", 1, 1},
+	} {
+		if _, err := q.CreateDuesRate(ctx, store.CreateDuesRateParams{
+			TierID: tier.ID, Amount: r.amount, EffectiveFrom: r.from, Correction: r.correction, Deleted: r.deleted,
+			CreatedAt: 1700000000 + int64(i),
+		}); err != nil {
+			t.Fatalf("CreateDuesRate(%s #%d): %v", r.from, r.correction, err)
+		}
 	}
 
 	// A second tier, rateless (the madya TBD case). Andi was first put into it by

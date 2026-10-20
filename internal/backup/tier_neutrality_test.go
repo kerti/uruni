@@ -48,7 +48,7 @@ func richV1Fixture() documentV1 {
 			{ID: 3, FundID: 1, Name: "Sepuh", CreatedAt: created},
 			{ID: 4, FundID: 1, Name: "Kolam", CreatedAt: created},
 		},
-		DuesRates: []DuesRate{
+		DuesRates: []rateV1{
 			{ID: 1, TierID: 1, Amount: 50_000, EffectiveFrom: "2024-01", CreatedAt: created},
 			{ID: 2, TierID: 1, Amount: 60_000, EffectiveFrom: "2025-01", CreatedAt: created}, // a raise
 			{ID: 3, TierID: 3, Amount: 30_000, EffectiveFrom: "2025-06", CreatedAt: created}, // starts late
