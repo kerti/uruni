@@ -223,6 +223,32 @@ func TestPostRegisterPasswordNeverAppearsInTheResponse(t *testing.T) {
 
 // TestPostRegisterRejectsAShortPassword covers the mapping for
 // auth.ErrInvalidArgument: 400, not 500, and no row written.
+func TestPostRegisterRejectsACommonPassword(t *testing.T) {
+	t.Parallel()
+	r, sqlDB := testRouterAndDB(t)
+
+	for _, p := range []string{"password", "PassWord", "12345678"} {
+		rec := postRegister(t, r, "treasurer@example.org", p)
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("POST /api/register(%q) = %d, want %d (body: %s)", p, rec.Code, http.StatusBadRequest, rec.Body.String())
+		}
+		if got := decodeError(t, rec); got.Code != "password_too_common" {
+			t.Errorf("error code = %q, want %q", got.Code, "password_too_common")
+		}
+	}
+
+	count, err := store.New(sqlDB).CountUsers(context.Background())
+	if err != nil {
+		t.Fatalf("CountUsers() = %v, want no error", err)
+	}
+	if count != 0 {
+		t.Errorf("CountUsers() = %d, want 0", count)
+	}
+	if rec := postRegister(t, r, "treasurer@example.org", "zk3-vq9-lunar-tide"); rec.Code != http.StatusCreated && rec.Code != http.StatusOK {
+		t.Errorf("POST /api/register(unlisted) = %d, want a success (body: %s)", rec.Code, rec.Body.String())
+	}
+}
+
 func TestPostRegisterRejectsAShortPassword(t *testing.T) {
 	t.Parallel()
 	r, sqlDB := testRouterAndDB(t)

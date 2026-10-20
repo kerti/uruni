@@ -104,6 +104,29 @@ func TestCreateUserWantsOneOrTwoArguments(t *testing.T) {
 	}
 }
 
+// TestCreateUserRefusesACommonPassword (#528): a listed password, in any case,
+// is refused with a message that names why, and no login is written.
+func TestCreateUserRefusesACommonPassword(t *testing.T) {
+	t.Setenv("URUNI_DB", filepath.Join(t.TempDir(), "uruni.db"))
+	t.Setenv("URUNI_BASE_URL", "https://uruni.test")
+	t.Setenv("URUNI_BACKUP_DIR", t.TempDir())
+	ctx := context.Background()
+
+	for _, p := range []string{"password", "PASSWORD"} {
+		var out bytes.Buffer
+		err := createUser(ctx, []string{"treasurer@example.org", p}, strings.NewReader(""), &out, io.Discard)
+		if err == nil || !strings.Contains(err.Error(), "most common passwords") {
+			t.Errorf("createUser(%q) = %v, want a most-common-passwords refusal", p, err)
+		}
+		if out.Len() != 0 {
+			t.Errorf("createUser(%q) printed %q, want nothing", p, out.String())
+		}
+	}
+	if err := createUser(ctx, []string{"treasurer@example.org", "zk3-vq9-lunar-tide"}, strings.NewReader(""), io.Discard, io.Discard); err != nil {
+		t.Errorf("createUser(unlisted) = %v, want nil", err)
+	}
+}
+
 // TestCreateUserReadsThePasswordFromStdin (#522): with only the email, the
 // password is the first line of stdin, line ending dropped and spaces kept, so
 // it never has to appear in shell history or ps. No warning is printed.

@@ -130,6 +130,20 @@ describe('Settings user', () => {
     expect(screen.queryByText(text.email.success)).not.toBeInTheDocument()
   })
 
+  it('shows the too-common-password sentence and keeps the dialog open', async () => {
+    const { fetchMock } = stubUser(() => jsonResponse({ error: { code: 'password_too_common', message: 'no' } }, 400))
+    vi.stubGlobal('fetch', fetchMock)
+    renderAt('/settings?edit=user:password')
+
+    await userEvent.type(await screen.findByLabelText(text.password.currentLabel), 'kata-sandi-lama')
+    await userEvent.type(screen.getByLabelText(text.password.newLabel), 'password')
+    await userEvent.type(screen.getByLabelText(text.password.repeatLabel), 'password')
+    await userEvent.click(screen.getByRole('button', { name: text.password.save }))
+
+    expect(await screen.findByText(copy.common.errors.password_too_common)).toBeInTheDocument()
+    expect(currentSearch()).toBe('?edit=user:password')
+  })
+
   it('will not submit an email dialog with an empty field', async () => {
     const { fetchMock, posts } = stubUser()
     vi.stubGlobal('fetch', fetchMock)

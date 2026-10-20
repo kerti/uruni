@@ -50,6 +50,9 @@ func checkPassword(password string) error {
 	if len(password) < MinPasswordLength {
 		return fmt.Errorf("%w: password must be at least %d characters", ErrInvalidArgument, MinPasswordLength)
 	}
+	if isCommonPassword(password) {
+		return ErrPasswordTooCommon
+	}
 	return nil
 }
 
