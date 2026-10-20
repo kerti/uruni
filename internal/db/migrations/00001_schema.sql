@@ -21,7 +21,13 @@
 
 CREATE TABLE "user" (                     -- the treasurer's login; the only table not scoped to a fund (ADR-030)
   id            INTEGER PRIMARY KEY,
-  email         TEXT    NOT NULL UNIQUE CHECK (length(trim(email)) > 0),
+  -- COLLATE NOCASE (#623): the UNIQUE index and every `email = ?` compare
+  -- case-insensitively, so A@x.org after a@x.org is refused whatever the Go side
+  -- did. NOCASE folds ASCII letters only; a non-ASCII capital is a different
+  -- character to it (an address like U-umlaut@x.org is matched by its stored
+  -- spelling, not folded). The stored bytes are never rewritten (a backup carries
+  -- the email unchanged). Go still trims and lower-cases on the way in (#500).
+  email         TEXT    NOT NULL COLLATE NOCASE UNIQUE CHECK (length(trim(email)) > 0),
   password_hash TEXT    NOT NULL CHECK (length(trim(password_hash)) > 0),
   created_at    INTEGER NOT NULL
 ) STRICT;

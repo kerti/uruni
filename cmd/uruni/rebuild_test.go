@@ -533,6 +533,70 @@ func TestRebuildRefusesAnotherInstancesBackup(t *testing.T) {
 	}
 }
 
+// rebuildMixedCaseEmail is a login typed with capitals, as an instance
+// registered before #500 holds it. Nothing normalises it any more.
+const rebuildMixedCaseEmail = "Bendahara.RT05@Rebuild.Test"
+
+// mixedCaseInstance is oldInstance with the live login stored in mixed case
+// before the backup is taken, so both sides hold the same mixed-case bytes.
+func mixedCaseInstance(t *testing.T) *rebuildFixture {
+	t.Helper()
+	f := newRebuildFixture(t)
+	seedInstance(t, f.dbPath, f.uploadsDir)
+	execRaw(t, f.dbPath, `UPDATE "user" SET email = '`+rebuildMixedCaseEmail+`'`)
+	exportZip(t, f.dbPath, f.uploadsDir, f.zipPath)
+	makeOld(t, f.dbPath)
+	f.uploadsDir = filepath.Join(f.dir, "uploads-new")
+	if err := os.Mkdir(f.uploadsDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	return f
+}
+
+// TestRebuildComparesAMixedCaseLoginAsStored (#623): "user".email is
+// COLLATE NOCASE, but the identity gate reads the stored bytes and compares them
+// exactly. A live mixed-case login that the backup carries unchanged is the
+// same instance's, and the importer writes it back as it was, never lower-cased.
+func TestRebuildComparesAMixedCaseLoginAsStored(t *testing.T) {
+	t.Parallel()
+	f := mixedCaseInstance(t)
+
+	if err := f.run(backup.ReplaceHooks{}, rebuildNow); err != nil {
+		t.Fatalf("rebuild with a mixed-case login on both sides = %v, want no error", err)
+	}
+
+	sqlDB := openRebuilt(t, f.dbPath)
+	ctx := context.Background()
+	users, err := store.New(sqlDB).ListUsers(ctx)
+	if err != nil || len(users) != 1 || users[0].Email != rebuildMixedCaseEmail {
+		t.Fatalf("ListUsers = (%v, %v), want the one login carried over as %s", users, err, rebuildMixedCaseEmail)
+	}
+	for _, typed := range []string{rebuildMixedCaseEmail, strings.ToLower(rebuildMixedCaseEmail)} {
+		if _, err := auth.New(sqlDB).Authenticate(ctx, typed, rebuildTestPassword); err != nil {
+			t.Errorf("Authenticate(%q) after the rebuild = %v, want no error", typed, err)
+		}
+	}
+	if want := "login carried over: " + rebuildMixedCaseEmail; !strings.Contains(f.out.String(), want) {
+		t.Errorf("output lacks %q:\n%s", want, f.out.String())
+	}
+}
+
+// TestRebuildRefusesALoginThatDiffersOnlyInCase pins "as stored": the gate does
+// not borrow the column's collation, so a backup whose login differs from the
+// live one by case alone is a different login and still another instance's.
+func TestRebuildRefusesALoginThatDiffersOnlyInCase(t *testing.T) {
+	t.Parallel()
+	f := mixedCaseInstance(t)
+	rewriteBackup(t, f.zipPath, func(d *backup.Document) { d.Users[0].Email = strings.ToLower(rebuildMixedCaseEmail) })
+	before := readFile(t, f.dbPath)
+
+	err := f.run(backup.ReplaceHooks{}, rebuildNow)
+	if !errors.Is(err, ErrOtherInstance) {
+		t.Fatalf("rebuild = %v, want ErrOtherInstance", err)
+	}
+	assertNothingWritten(t, f, before)
+}
+
 func TestRebuildNeedsExactlyOneLoginInTheBackup(t *testing.T) {
 	t.Parallel()
 	cases := map[string]func(*backup.Document){

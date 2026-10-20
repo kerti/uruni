@@ -215,13 +215,14 @@ type Querier interface {
 	// id from an untrusted request.
 	GetTransactionForFund(ctx context.Context, arg GetTransactionForFundParams) (Transaction, error)
 	GetTransfer(ctx context.Context, id int64) (Transfer, error)
-	// Finds the login case-insensitively without a schema change (#500). New rows
-	// are stored trimmed and lower-cased (auth.NormalizeEmail), but an older row
-	// keeps whatever case it was typed in, so the lookup matches the normalized
-	// form against lower(email) or the address exactly as stored. SQLite's lower()
-	// folds ASCII only: the exact arm keeps a legacy row with a non-ASCII capital
-	// findable. The COLLATE NOCASE column rides the schema epic (#523); user holds
-	// one row, so the OR costs no index.
+	// Finds the login case-insensitively at the column: "user".email is COLLATE
+	// NOCASE (#623), so `email = x` folds ASCII case by itself. New rows are stored
+	// trimmed and lower-cased (auth.NormalizeEmail, #500), but an older row keeps
+	// whatever case it was typed in. NOCASE folds ASCII only while Go's lower-casing
+	// is full Unicode, so the lookup keeps both spellings: the normalized form, and
+	// the address exactly as typed (trimmed), which finds a legacy row with a
+	// non-ASCII capital by its stored spelling. user holds one row, so the OR costs
+	// no index.
 	GetUserByEmail(ctx context.Context, arg GetUserByEmailParams) (User, error)
 	// The account page's reads and writes (#386): the one login, addressed by the
 	// id its session carries. An email change stores the normalized form
