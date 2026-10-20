@@ -41,6 +41,10 @@ type PostDuesPaymentsParams struct {
 	OccurredOn string // "YYYY-MM-DD", a real calendar date, shared by every row
 	Note       *string
 	Periods    []PeriodAmount
+
+	// Now is the clock the date's and the periods' ceilings are read from, in the
+	// fund's zone (ADR-041, #632). The zero value means time.Now().
+	Now time.Time
 }
 
 // PostDuesPayments writes one kind='dues' entry per element of Periods -
@@ -57,7 +61,9 @@ type PostDuesPaymentsParams struct {
 // Argument-shape failures - an empty Periods, a non-positive amount, a
 // malformed or calendar-invalid occurred_on, a malformed or calendar-invalid
 // dues_period on any period - are rejected before any row is written
-// (ADR-027). An empty Periods is ErrInvalidArgument here as the handler's 400:
+// (ADR-027), and so is a real date outside the plausible window (#632): an
+// occurred_on after today in the fund's zone, a dues_period past the current
+// month plus duesMonthsAhead, either before the floor (ErrDateOutOfRange). An empty Periods is ErrInvalidArgument here as the handler's 400:
 // "post a payment with nothing to post" is a caller mistake, not a silent
 // no-op answering 201.
 //
@@ -69,7 +75,11 @@ func (l *Ledger) PostDuesPayments(ctx context.Context, p PostDuesPaymentsParams)
 	if len(p.Periods) == 0 {
 		return nil, fmt.Errorf("%w: periods must not be empty", ErrInvalidArgument)
 	}
-	if err := validateOccurredOn(p.OccurredOn); err != nil {
+	window, err := l.windowFor(ctx, l.q, p.FundID, p.Now)
+	if err != nil {
+		return nil, err
+	}
+	if err := validateOccurredOn("occurred_on", p.OccurredOn, window.entry()); err != nil {
 		return nil, err
 	}
 	for _, period := range p.Periods {
@@ -79,13 +89,13 @@ func (l *Ledger) PostDuesPayments(ctx context.Context, p PostDuesPaymentsParams)
 		if err := CheckAmountCeiling("amount", period.Amount); err != nil {
 			return nil, err
 		}
-		if err := validateDuesPeriod(period.DuesPeriod); err != nil {
+		if err := validateDuesPeriod("dues_period", period.DuesPeriod, window.dues()); err != nil {
 			return nil, err
 		}
 	}
 
 	posted := make([]store.Transaction, 0, len(p.Periods))
-	err := l.withTx(ctx, func(q store.Querier) error {
+	err = l.withTx(ctx, func(q store.Querier) error {
 		if err := refuseInactiveAccount(ctx, q, p.FundID, p.AccountID); err != nil {
 			return err
 		}
@@ -135,6 +145,10 @@ type ReverseDuesPaymentParams struct {
 	TransactionID int64  // the kind='dues' row, or a named contribution, being reversed (ADR-034)
 	OccurredOn    string // "YYYY-MM-DD", the reversal's own date - not the original payment's
 	Note          *string
+
+	// Now is the clock the date's ceiling is read from, in the fund's zone
+	// (ADR-041, #632). The zero value means time.Now().
+	Now time.Time
 }
 
 // ReverseDuesPayment posts one kind='adjustment', direction='out' row that
@@ -172,12 +186,16 @@ type ReverseDuesPaymentParams struct {
 //     reopened first, as PostTransaction's guard requires. A dues payment is
 //     always on 'main' (#473), so this applies only to a named contribution.
 func (l *Ledger) ReverseDuesPayment(ctx context.Context, p ReverseDuesPaymentParams) (store.Transaction, error) {
-	if err := validateOccurredOn(p.OccurredOn); err != nil {
+	window, err := l.windowFor(ctx, l.q, p.FundID, p.Now)
+	if err != nil {
+		return store.Transaction{}, err
+	}
+	if err := validateOccurredOn("occurred_on", p.OccurredOn, window.entry()); err != nil {
 		return store.Transaction{}, err
 	}
 
 	var reversal store.Transaction
-	err := l.withTx(ctx, func(q store.Querier) error {
+	err = l.withTx(ctx, func(q store.Querier) error {
 		original, err := q.GetTransactionForFund(ctx, store.GetTransactionForFundParams{
 			FundID: p.FundID,
 			ID:     p.TransactionID,
@@ -233,21 +251,6 @@ func (l *Ledger) ReverseDuesPayment(ctx context.Context, p ReverseDuesPaymentPar
 		return store.Transaction{}, fmt.Errorf("reversing dues payment: %w", err)
 	}
 	return reversal, nil
-}
-
-// validateDuesPeriod rejects anything that is not a real "YYYY-MM" calendar
-// month, like validateOccurredOn: time.Parse with this strict layout refuses
-// an out-of-range month ("2026-13"), and the round-trip comparison catches a
-// short value like "2026-1" that Parse would accept.
-func validateDuesPeriod(s string) error {
-	t, err := time.Parse(duesPeriodLayout, s)
-	if err != nil {
-		return fmt.Errorf("%w: dues_period %q is not a valid \"YYYY-MM\" period: %v", ErrInvalidArgument, s, err)
-	}
-	if t.Format(duesPeriodLayout) != s {
-		return fmt.Errorf("%w: dues_period %q is not a valid \"YYYY-MM\" period", ErrInvalidArgument, s)
-	}
-	return nil
 }
 
 // DeleteDuesTier removes a tier and the rates that priced it, in one

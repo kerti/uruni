@@ -45,6 +45,7 @@ func (a *api) createPurposeMove(w http.ResponseWriter, r *http.Request) {
 	}
 
 	transfer, err := a.ledger.PostPurposeMove(r.Context(), ledger.PostPurposeMoveParams{
+		Now:           a.now(),
 		FundID:        fund.ID,
 		FromPurposeID: req.FromPurposeID,
 		ToPurposeID:   req.ToPurposeID,

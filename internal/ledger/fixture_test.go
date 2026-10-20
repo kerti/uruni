@@ -153,7 +153,7 @@ func accountIDByKind(t *testing.T, accounts []store.Account, kind string) int64 
 func postOpeningBalance(t *testing.T, l *Ledger, fundID, accountID, purposeID int64, amount money.Amount, occurredOn string) store.Transaction {
 	t.Helper()
 	ob := OpeningBalance{Amount: amount, OccurredOn: occurredOn}
-	if err := validateOpeningBalance(ob); err != nil {
+	if err := validateOpeningBalance(ob, noCeiling); err != nil {
 		t.Fatalf("validateOpeningBalance() = %v, want no error", err)
 	}
 

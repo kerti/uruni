@@ -27,13 +27,28 @@ var reportNow = jakartaAt(2026, time.October, 2, 12, 0, 0)
 
 func int64Ptr(v int64) *int64 { return &v }
 
+// onTheDay is an instant that falls on date in every one of the fund's zones
+// (noon UTC is 19:00 WIB, 20:00 WITA, 21:00 WIT). The report tests date their
+// rows by hand, some of them after the report's own "today" on purpose (the
+// running month has no upper bound, ADR-038), so each row is posted as if on its
+// own day: the ceiling (#632) is not their subject and has its own tests in
+// date_window_test.go, and no fixture depends on the machine's date. An
+// unparseable date gives the zero time, and the post is refused as it should be.
+func onTheDay(date string) time.Time {
+	t, err := time.Parse(time.DateOnly, date)
+	if err != nil {
+		return time.Time{}
+	}
+	return t.Add(12 * time.Hour)
+}
+
 // postEntry posts one kind='normal' (or, with adjustment, kind='adjustment')
 // row and returns it.
 func postEntry(t *testing.T, l *Ledger, fundID, accountID, purposeID int64, direction string, amount money.Amount, date string, note *string) store.Transaction {
 	t.Helper()
 	posted, err := l.PostTransaction(context.Background(), PostTransactionParams{
 		FundID: fundID, AccountID: accountID, PurposeID: purposeID,
-		Direction: direction, Amount: amount, OccurredOn: date, Note: note,
+		Direction: direction, Amount: amount, OccurredOn: date, Note: note, Now: onTheDay(date),
 	})
 	if err != nil {
 		t.Fatalf("PostTransaction(%s %d on %s) = %v, want no error", direction, amount, date, err)

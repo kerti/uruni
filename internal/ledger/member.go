@@ -8,28 +8,6 @@ import (
 	"github.com/kerti/uruni/internal/store"
 )
 
-// minJoinedOn is the earliest join date a member may be given. member_tier's
-// start month has a 2000-01 floor in the schema, and a member's first tier row
-// starts at the join month, so a join date before it could not be written with a
-// tier. Until #632 puts the same floor on member.joined_on as a CHECK, with its
-// typed error, the ledger refuses such a date here as ErrInvalidArgument rather
-// than let the member_tier CHECK surface as a constraint error. #632 replaces
-// this with its own check.
-const minJoinedOn = "2000-01-01"
-
-// refuseJoinedBeforeFloor refuses a well-formed date before minJoinedOn. A string
-// that is not a date is left for the schema's CHECK on joined_on to refuse.
-func refuseJoinedBeforeFloor(joinedOn string) error {
-	t, err := time.Parse(time.DateOnly, joinedOn)
-	if err != nil || t.Format(time.DateOnly) != joinedOn {
-		return nil
-	}
-	if joinedOn < minJoinedOn {
-		return fmt.Errorf("%w: joined_on %q is before %s", ErrInvalidArgument, joinedOn, minJoinedOn)
-	}
-	return nil
-}
-
 // Member is a member row with the one fact that is no longer a column of it: the
 // tier (ADR-040). The tier lives in member_tier, month by month, so a bare
 // store.Member cannot carry it.
@@ -51,8 +29,14 @@ type CreateMemberParams struct {
 	// member_tier row (no dues obligation), as ADR-040 requires.
 	TierID *int64
 	// JoinedOn is "YYYY-MM-DD". The caller owns the default (today, in the zone it
-	// reads "today" in); the schema's CHECK refuses a date that is not a real one.
+	// reads "today" in). A date that is not a real one is ErrInvalidArgument; one
+	// before 2000 or more than a year past today in the fund's zone is
+	// ErrDateOutOfRange (#632).
 	JoinedOn string
+
+	// Now is the clock JoinedOn's ceiling is read from, in the fund's zone
+	// (ADR-041, #632). The zero value means time.Now().
+	Now time.Time
 }
 
 // CreateMember writes a member and, when a tier is given, its first member_tier
@@ -61,16 +45,20 @@ type CreateMemberParams struct {
 // row when it is not"). The row is bounded by the join date's own ceiling
 // (#632), not by the tier-start ceiling, which applies to the edit form only.
 //
-// Neither the name nor the date nor the tier id is pre-checked: the schema's
-// CHECKs and foreign keys refuse them (ADR-027), and the HTTP layer classifies
-// the wrapped constraint error. The month is read off the stored row, which has
-// already passed the date CHECK, so it can never be a short or malformed string.
+// Neither the name nor the tier id is pre-checked: the schema's CHECKs and
+// foreign keys refuse them (ADR-027), and the HTTP layer classifies the wrapped
+// constraint error. The date is checked against the plausible window first
+// (#632), which also keeps the month read off the stored row a well-formed one.
 func (l *Ledger) CreateMember(ctx context.Context, p CreateMemberParams) (Member, error) {
-	if err := refuseJoinedBeforeFloor(p.JoinedOn); err != nil {
+	window, err := l.windowFor(ctx, l.q, p.FundID, p.Now)
+	if err != nil {
+		return Member{}, err
+	}
+	if err := validateOccurredOn("joined_on", p.JoinedOn, window.yearAhead()); err != nil {
 		return Member{}, err
 	}
 	var out Member
-	err := l.withTx(ctx, func(q store.Querier) error {
+	err = l.withTx(ctx, func(q store.Querier) error {
 		now := time.Now().Unix()
 		m, err := q.CreateMember(ctx, store.CreateMemberParams{
 			FundID: p.FundID, Name: p.Name, JoinedOn: p.JoinedOn, CreatedAt: now,
@@ -120,8 +108,8 @@ type UpdateMemberParams struct {
 	// month if that is later.
 	TierFrom string
 
-	// Now is the clock the current month is read from, in the fund's zone
-	// (through CurrentDuesPeriod, ADR-041).
+	// Now is the clock the current month and the dates' ceilings are read from,
+	// in the fund's zone (ADR-041, #632). The zero value means time.Now().
 	Now time.Time
 }
 
@@ -143,7 +131,7 @@ type UpdateMemberParams struct {
 //     untiered at first), the longer untiered stretch stays untiered.
 //  2. A statement "tier T from month M" is refused before the member's join month
 //     and after the current month (or the join month, if that is later) with
-//     ErrInvalidArgument. Otherwise it reads the tier in force at M: if that is
+//     ErrDateOutOfRange (#632). Otherwise it reads the tier in force at M: if that is
 //     already T it writes nothing, so re-saving the form leaves no stray rows and
 //     a later row is never cancelled by an earlier statement ("A from March"
 //     with B from June changes nothing); else it writes the next correction of
@@ -154,8 +142,15 @@ type UpdateMemberParams struct {
 // tier given without TierFrom is stated from the current month or the join month
 // if later.
 func (l *Ledger) UpdateMember(ctx context.Context, p UpdateMemberParams) (Member, error) {
+	// The shape and the floor of every date, before the transaction opens; the
+	// ceilings need the fund's zone and are checked inside, once it is read.
 	if p.JoinedOn != nil {
-		if err := refuseJoinedBeforeFloor(*p.JoinedOn); err != nil {
+		if err := validateOccurredOn("joined_on", *p.JoinedOn, noCeiling); err != nil {
+			return Member{}, err
+		}
+	}
+	if p.InactiveOn != nil {
+		if err := validateOccurredOn("inactive_on", *p.InactiveOn, noCeiling); err != nil {
 			return Member{}, err
 		}
 	}
@@ -163,7 +158,7 @@ func (l *Ledger) UpdateMember(ctx context.Context, p UpdateMemberParams) (Member
 		return Member{}, fmt.Errorf("%w: a tier start month needs a tier", ErrInvalidArgument)
 	}
 	if p.TierFrom != "" {
-		if err := validateDuesPeriod(p.TierFrom); err != nil {
+		if err := validateDuesPeriod("tier_effective_from", p.TierFrom, noCeilingMonth); err != nil {
 			return Member{}, err
 		}
 	}
@@ -178,7 +173,19 @@ func (l *Ledger) UpdateMember(ctx context.Context, p UpdateMemberParams) (Member
 		if err != nil {
 			return err
 		}
-		current := CurrentDuesPeriod(p.Now, loc)
+		now := clockOrNow(p.Now)
+		current := CurrentDuesPeriod(now, loc)
+		window := windowAt(now, loc)
+		if p.JoinedOn != nil {
+			if err := validateOccurredOn("joined_on", *p.JoinedOn, window.yearAhead()); err != nil {
+				return err
+			}
+		}
+		if p.InactiveOn != nil {
+			if err := validateOccurredOn("inactive_on", *p.InactiveOn, window.yearAhead()); err != nil {
+				return err
+			}
+		}
 
 		old, err := q.GetMemberForFund(ctx, store.GetMemberForFundParams{ID: p.MemberID, FundID: p.FundID})
 		if err != nil {
@@ -197,7 +204,7 @@ func (l *Ledger) UpdateMember(ctx context.Context, p UpdateMemberParams) (Member
 			return fmt.Errorf("updating member: %w", err)
 		}
 		oldMonth, newMonth := old.JoinedOn[:len(duesPeriodLayout)], updated.JoinedOn[:len(duesPeriodLayout)]
-		now := time.Now().Unix()
+		createdAt := time.Now().Unix()
 
 		// Rule 1: the earliest row follows the join date back.
 		if newMonth < oldMonth && len(timeline) > 0 {
@@ -205,7 +212,7 @@ func (l *Ledger) UpdateMember(ctx context.Context, p UpdateMemberParams) (Member
 			if newMonth < earliest.EffectiveFrom && earliest.EffectiveFrom <= oldMonth && earliest.TierID != nil {
 				row, err := q.CreateMemberTier(ctx, store.CreateMemberTierParams{
 					FundID: p.FundID, MemberID: p.MemberID, TierID: earliest.TierID,
-					EffectiveFrom: newMonth, Correction: 0, CreatedAt: now,
+					EffectiveFrom: newMonth, Correction: 0, CreatedAt: createdAt,
 				})
 				if err != nil {
 					return fmt.Errorf("moving the member's first tier back to the new join month: %w", err)
@@ -222,10 +229,10 @@ func (l *Ledger) UpdateMember(ctx context.Context, p UpdateMemberParams) (Member
 				from = ceiling
 			}
 			if from < newMonth {
-				return fmt.Errorf("%w: the tier cannot start before the member's join month %s", ErrInvalidArgument, newMonth)
+				return fmt.Errorf("%w: the tier cannot start before the member's join month %s", ErrDateOutOfRange, newMonth)
 			}
 			if from > ceiling {
-				return fmt.Errorf("%w: the tier cannot start after %s", ErrInvalidArgument, ceiling)
+				return fmt.Errorf("%w: the tier cannot start after %s", ErrDateOutOfRange, ceiling)
 			}
 
 			prices := newPricing(timeline, nil)
@@ -237,7 +244,7 @@ func (l *Ledger) UpdateMember(ctx context.Context, p UpdateMemberParams) (Member
 				}
 				row, err := q.CreateMemberTier(ctx, store.CreateMemberTierParams{
 					FundID: p.FundID, MemberID: p.MemberID, TierID: p.TierID,
-					EffectiveFrom: from, Correction: latest + 1, CreatedAt: now,
+					EffectiveFrom: from, Correction: latest + 1, CreatedAt: createdAt,
 				})
 				if err != nil {
 					return fmt.Errorf("writing the member's tier: %w", err)

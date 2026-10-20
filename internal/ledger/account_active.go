@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/kerti/uruni/internal/store"
 )
@@ -49,7 +50,20 @@ func refuseInactiveAccount(ctx context.Context, q store.Querier, fundID, account
 //
 // fundID scopes the balance; the caller resolved p.ID to this fund's account
 // (resolveAccount), so an id from elsewhere never gets here.
-func (l *Ledger) UpdateAccount(ctx context.Context, fundID int64, p store.UpdateAccountParams) (store.Account, error) {
+//
+// A retirement date is held to the plausible window (#632): from 2000-01-01 to
+// a year past today in the fund's zone, now being the clock that is read in.
+// ErrDateOutOfRange otherwise. Reinstating carries no date and checks none.
+func (l *Ledger) UpdateAccount(ctx context.Context, fundID int64, p store.UpdateAccountParams, now time.Time) (store.Account, error) {
+	if p.SetInactiveOn == 1 && p.InactiveOn != nil {
+		window, err := l.windowFor(ctx, l.q, fundID, now)
+		if err != nil {
+			return store.Account{}, err
+		}
+		if err := validateOccurredOn("inactive_on", *p.InactiveOn, window.yearAhead()); err != nil {
+			return store.Account{}, err
+		}
+	}
 	var updated store.Account
 	err := l.withTx(ctx, func(q store.Querier) error {
 		if p.SetInactiveOn == 1 && p.InactiveOn != nil {

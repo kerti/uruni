@@ -78,14 +78,19 @@ type SetUpFundParams struct {
 
 	// TimeZone is the fund's time zone (ADR-041), one of tz.Names(). Empty means
 	// tz.Default: the field is optional on the wire, and absent means WIB. Any
-	// other name the schema's CHECK refuses (ADR-027), so it is not pre-validated
-	// here.
+	// other name is ErrInvalidArgument, because the opening balances' ceiling
+	// cannot be read without it; the schema's CHECK stays the backstop.
 	TimeZone string
 
 	// Accounts is every location the fund starts with (#78). At least one is
 	// required: a fund with no accounts could record nothing (every transaction
 	// needs an account_id).
 	Accounts []AccountInput
+
+	// Now is the clock the opening balances' ceiling is read from, in TimeZone
+	// (ADR-041, #632): the fund row does not exist yet, so the zone comes from
+	// here and not from a fund. The zero value means time.Now().
+	Now time.Time
 }
 
 // SetUpFundResult names every row the caller needs immediately: the whole
@@ -137,18 +142,23 @@ func (l *Ledger) SetUpFund(ctx context.Context, p SetUpFundParams) (SetUpFundRes
 	if timeZone == "" {
 		timeZone = tz.Default
 	}
+	loc, err := tz.Load(timeZone)
+	if err != nil {
+		return SetUpFundResult{}, fmt.Errorf("%w: time_zone: %v", ErrInvalidArgument, err)
+	}
+	window := windowAt(p.Now, loc)
 	// Every opening balance is validated before withTx opens: a refused one
 	// anywhere in the batch must leave no fund and no account behind.
 	for _, a := range p.Accounts {
 		if a.OpeningBalance != nil {
-			if err := validateOpeningBalance(*a.OpeningBalance); err != nil {
+			if err := validateOpeningBalance(*a.OpeningBalance, window.entry()); err != nil {
 				return SetUpFundResult{}, err
 			}
 		}
 	}
 
 	var result SetUpFundResult
-	err := l.withTx(ctx, func(q store.Querier) error {
+	err = l.withTx(ctx, func(q store.Querier) error {
 		existing, err := q.ListFunds(ctx)
 		if err != nil {
 			return fmt.Errorf("checking for an existing fund: %w", err)

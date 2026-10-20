@@ -131,6 +131,7 @@ func (a *api) openIncidental(w http.ResponseWriter, r *http.Request) {
 	}
 
 	created, err := a.ledger.OpenIncidental(r.Context(), ledger.OpenIncidentalParams{
+		Now:                a.now(),
 		FundID:             fund.ID,
 		Occasion:           req.Occasion,
 		TargetAmount:       target,
@@ -251,6 +252,7 @@ func (a *api) closeIncidental(w http.ResponseWriter, r *http.Request) {
 	}
 
 	rolled, err := a.ledger.CloseIncidentalAndRoll(r.Context(), ledger.CloseIncidentalAndRollParams{
+		Now:       a.now(),
 		FundID:    fund.ID,
 		PurposeID: purposeID,
 		AccountID: req.AccountID,

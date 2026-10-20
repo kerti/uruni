@@ -29,6 +29,10 @@ type OpenIncidentalParams struct {
 	// RecipientMemberIDs are the members this envelope is for (ADR-034), never
 	// expected to contribute. nil and an empty slice both mean none.
 	RecipientMemberIDs []int64
+
+	// Now is the clock OpenedOn's ceiling is read from, in the fund's zone
+	// (ADR-041, #632). The zero value means time.Now().
+	Now time.Time
 }
 
 // OpenIncidental writes one purpose row (kind='incidental') and the 1:1
@@ -52,12 +56,16 @@ func (l *Ledger) OpenIncidental(ctx context.Context, p OpenIncidentalParams) (st
 	if err := checkParticipationCeilings(p.TargetAmount, p.MinimumPerMember); err != nil {
 		return store.Incidental{}, err
 	}
-	if err := validateOccurredOn(p.OpenedOn); err != nil {
+	window, err := l.windowFor(ctx, l.q, p.FundID, p.Now)
+	if err != nil {
+		return store.Incidental{}, err
+	}
+	if err := validateOccurredOn("opened_on", p.OpenedOn, window.entry()); err != nil {
 		return store.Incidental{}, err
 	}
 
 	var created store.Incidental
-	err := l.withTx(ctx, func(q store.Querier) error {
+	err = l.withTx(ctx, func(q store.Querier) error {
 		now := time.Now().Unix()
 
 		purpose, err := q.CreatePurpose(ctx, store.CreatePurposeParams{
@@ -249,6 +257,11 @@ type CloseIncidentalAndRollParams struct {
 	// sentence; the ledger writes none. A roll with no note gets a display label
 	// built at read time from the transfer's facts (#257).
 	Note *string
+
+	// Now is the clock ClosedOn's ceiling is read from, in the fund's zone
+	// (ADR-041, #632). The zero value means time.Now(). The roll's own legs are
+	// dated ClosedOn and are not checked again: the date was checked once, here.
+	Now time.Time
 }
 
 // CloseIncidentalAndRoll closes one envelope and squares its purpose balance
@@ -281,13 +294,17 @@ type CloseIncidentalAndRollParams struct {
 // Every outcome leaves PurposeBalance(purposeID) at exactly zero, the
 // invariant ADR-031 makes testable in place of ADR-027's sign-dependent rule.
 func (l *Ledger) CloseIncidentalAndRoll(ctx context.Context, p CloseIncidentalAndRollParams) (money.Amount, error) {
-	if err := validateOccurredOn(p.ClosedOn); err != nil {
+	window, err := l.windowFor(ctx, l.q, p.FundID, p.Now)
+	if err != nil {
+		return 0, err
+	}
+	if err := validateOccurredOn("closed_on", p.ClosedOn, window.entry()); err != nil {
 		return 0, err
 	}
 
 	var rolled money.Amount
 	reason := reasonRoll
-	err := l.withTx(ctx, func(q store.Querier) error {
+	err = l.withTx(ctx, func(q store.Querier) error {
 		envelope, err := q.GetIncidental(ctx, store.GetIncidentalParams{
 			PurposeID: p.PurposeID, FundID: p.FundID,
 		})

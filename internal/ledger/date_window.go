@@ -1,0 +1,201 @@
+package ledger
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"time"
+
+	"github.com/kerti/uruni/internal/store"
+)
+
+// The plausible date window (#632). Every business date and period a caller
+// supplies has to sit inside it: a static floor, the year 2000, which the
+// schema also enforces as a CHECK on every such column (a restore enforces only
+// that half), and a ceiling that moves with the clock and is read in the fund's
+// time zone (ADR-041). Both ends are inclusive and there is no grace day.
+//
+// The window exists for the slipped thumb and the typed year (a payment dated
+// 2062, a join date of 0202), not as an accounting rule: a date inside it is
+// the treasurer's to choose.
+
+const (
+	// minDay and minMonth are the floor. The schema's CHECKs carry the same two
+	// literals; internal/db's TestDateFloorLiteralsAreTheFloor pins them to
+	// these.
+	minDay   = "2000-01-01"
+	minMonth = "2000-01"
+
+	// duesMonthsAhead is how far past the current month a dues payment may name a
+	// period: the dues form offers exactly this many (a year is the longest anyone
+	// pays ahead).
+	duesMonthsAhead = 12
+	// rateMonthsAhead is how far ahead a rate's start month may be: a rise agreed
+	// in advance. A pending rate is shown on the Golongan screen, which is why it
+	// may reach further than a tier start (ADR-040).
+	rateMonthsAhead = 24
+)
+
+// ErrDateOutOfRange is returned by every write that takes a date or a month
+// outside the plausible window: before the year 2000, or past the ceiling its
+// column allows. The message names the field and the bound, never anything else.
+//
+// It does not wrap ErrInvalidArgument: the date is a real, well-formed one, and
+// the treasurer needs the one thing to change (the year she mistyped), not the
+// generic "invalid argument". The wire gives it date_out_of_range and the SPA
+// its own copy, as ErrAmountTooLarge has amount_too_large.
+//
+// Only a date the caller supplies is checked against a ceiling. A date the
+// ledger inherits (ADR-033's purpose-correction pair takes the corrected row's
+// own occurred_on) is not: the check lives in validateOccurredOn, an
+// argument-shape check, and not in postTransferPairTx, so a correction is never
+// refused for a date she cannot edit (ADR-041). The floor still applies to it,
+// as the schema's CHECK. A reversal, which supplies no date (ADR-042), checks
+// neither.
+var ErrDateOutOfRange = errors.New("ledger: date is outside the plausible window")
+
+// noCeiling is the ceiling for a check that wants the shape and the floor only:
+// the largest date the strict layout can write.
+const (
+	noCeiling      = "9999-12-31"
+	noCeilingMonth = "9999-12"
+)
+
+// clockOrNow is the instant a write reads "today" from. Every params struct that
+// carries a date has a Now field, as ReportParams does: production handlers pass
+// the api's injectable clock, and the zero value means time.Now(), so a caller
+// with nothing to inject (the e2e seed) is still right.
+func clockOrNow(now time.Time) time.Time {
+	if now.IsZero() {
+		return time.Now()
+	}
+	return now
+}
+
+// dateWindow is the ceilings of one fund at one instant, in the fund's zone.
+type dateWindow struct {
+	// today is the fund's calendar day, "YYYY-MM-DD".
+	today string
+}
+
+// windowAt reads the instant in loc, the fund's zone. It is the one place a
+// ceiling's "today" comes from (ADR-041: an injected instant read in the fund's
+// zone, never time.Now() plus a zone literal).
+func windowAt(now time.Time, loc *time.Location) dateWindow {
+	return dateWindow{today: clockOrNow(now).In(loc).Format(time.DateOnly)}
+}
+
+// windowFor reads the fund's zone from its row, through q. A caller outside a
+// transaction passes l.q; one inside passes the transaction's querier.
+func (l *Ledger) windowFor(ctx context.Context, q store.Querier, fundID int64, now time.Time) (dateWindow, error) {
+	fund, err := q.GetFund(ctx, fundID)
+	if err != nil {
+		return dateWindow{}, fmt.Errorf("fetching fund: %w", err)
+	}
+	loc, err := FundLocation(fund)
+	if err != nil {
+		return dateWindow{}, err
+	}
+	return windowAt(now, loc), nil
+}
+
+// entry is the ceiling of a date money moved on: a transaction, a claim, a
+// settlement, a reversal, a reconciliation fix, an envelope opening or closing.
+// It already happened, so at most today.
+func (w dateWindow) entry() string { return w.today }
+
+// yearAhead is the ceiling of a member's join or leaving date, and of a location's
+// retirement: at most today plus a year, the same day next year, or the month's
+// last day when that day does not exist (29 February reads as 28 February). The
+// join date reaches ahead for someone who has said they are joining.
+func (w dateWindow) yearAhead() string {
+	t, err := time.Parse(time.DateOnly, w.today)
+	if err != nil {
+		return w.today // unreachable: today was formatted by time.DateOnly
+	}
+	next := t.AddDate(1, 0, 0)
+	if next.Day() != t.Day() {
+		next = time.Date(t.Year()+1, t.Month()+1, 0, 0, 0, 0, 0, time.UTC)
+	}
+	return next.Format(time.DateOnly)
+}
+
+// month is the fund's current month, "YYYY-MM".
+func (w dateWindow) month() string { return w.today[:len(duesPeriodLayout)] }
+
+// dues is the ceiling of a dues payment's period: the current month plus
+// duesMonthsAhead.
+func (w dateWindow) dues() string { return addMonths(w.month(), duesMonthsAhead) }
+
+// rate is the ceiling of a rate's start month: the current month plus
+// rateMonthsAhead.
+func (w dateWindow) rate() string { return addMonths(w.month(), rateMonthsAhead) }
+
+// addMonths is the "YYYY-MM" n months after month (n may be negative), by
+// calendar arithmetic on the first of the month, which never overflows.
+func addMonths(month string, n int) string {
+	t, err := time.Parse(duesPeriodLayout, month)
+	if err != nil {
+		return month // callers pass a month they formatted themselves
+	}
+	return t.AddDate(0, n, 0).Format(duesPeriodLayout)
+}
+
+// validateOccurredOn rejects anything that is not a real YYYY-MM-DD calendar
+// date (ErrInvalidArgument), then anything before the floor or after ceiling
+// (ErrDateOutOfRange). field names the column in the message.
+//
+// time.Parse with this strict layout already refuses an out-of-range month or
+// day ("2026-02-30" fails rather than normalizing to "2026-03-02"), so no
+// separate range check is needed. The round-trip format comparison is a cheap
+// second defense should that parsing behavior change, not load-bearing today.
+//
+// Dates are fixed-width, so the comparisons below are string comparisons.
+func validateOccurredOn(field, s, ceiling string) error {
+	t, err := time.Parse(occurredOnLayout, s)
+	if err != nil {
+		return fmt.Errorf("%w: %s %q is not a valid calendar date: %v", ErrInvalidArgument, field, s, err)
+	}
+	if t.Format(occurredOnLayout) != s {
+		return fmt.Errorf("%w: %s %q is not a valid calendar date", ErrInvalidArgument, field, s)
+	}
+	if s < minDay {
+		return fmt.Errorf("%w: %s is before %s", ErrDateOutOfRange, field, minDay)
+	}
+	if s > ceiling {
+		return fmt.Errorf("%w: %s is after %s", ErrDateOutOfRange, field, ceiling)
+	}
+	return nil
+}
+
+// checkPeriodShape rejects anything that is not a real "YYYY-MM" calendar
+// month, wrapping ErrInvalidArgument: time.Parse with this strict layout refuses
+// an out-of-range month ("2026-13"), and the round-trip comparison catches a
+// short value like "2026-1" that Parse would accept. It is the whole check for a
+// READ (the dues status, the arrears count), which has no window: asking about a
+// month is not writing a date.
+func checkPeriodShape(field, s string) error {
+	t, err := time.Parse(duesPeriodLayout, s)
+	if err != nil {
+		return fmt.Errorf("%w: %s %q is not a valid \"YYYY-MM\" period: %v", ErrInvalidArgument, field, s, err)
+	}
+	if t.Format(duesPeriodLayout) != s {
+		return fmt.Errorf("%w: %s %q is not a valid \"YYYY-MM\" period", ErrInvalidArgument, field, s)
+	}
+	return nil
+}
+
+// validateDuesPeriod is checkPeriodShape plus the window of a WRITE: a month
+// before the floor or after ceiling is ErrDateOutOfRange.
+func validateDuesPeriod(field, s, ceiling string) error {
+	if err := checkPeriodShape(field, s); err != nil {
+		return err
+	}
+	if s < minMonth {
+		return fmt.Errorf("%w: %s is before %s", ErrDateOutOfRange, field, minMonth)
+	}
+	if s > ceiling {
+		return fmt.Errorf("%w: %s is after %s", ErrDateOutOfRange, field, ceiling)
+	}
+	return nil
+}

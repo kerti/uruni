@@ -65,7 +65,7 @@ Standing decisions that no ADR owns go in [`../Decisions.md`](../Decisions.md).
 | [038](./038-the-month-as-a-balance-walk.md) | The month as a balance walk: start, in, out, adjustments, end | implemented |
 | [039](./039-e2e-every-operation-gated-in-ci.md) | Testing: every operation has a journey, and CI runs them | implemented |
 | [040](./040-effective-dated-tiers-and-rate-corrections.md) | Effective-dated tiers, and rate corrections that leave a trail | implemented |
-| [041](./041-the-funds-time-zone.md) | The fund's time zone: WIB, WITA or WIT | `draft` |
+| [041](./041-the-funds-time-zone.md) | The fund's time zone: WIB, WITA or WIT | implemented |
 | [042](./042-reversing-any-ordinary-transaction.md) | Reversing any ordinary transaction | `draft` |
 | [043](./043-idempotency-keys-on-immutable-writes.md) | Idempotency keys on immutable writes | `draft` |
 

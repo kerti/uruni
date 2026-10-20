@@ -112,6 +112,10 @@ type PostTransferBetweenAccountsParams struct {
 	// leg alone reads in the list as an unexplained arrival elsewhere. nil and an
 	// empty string both mean no note; see normalizeNote.
 	Note *string
+
+	// Now is the clock OccurredOn's ceiling is read from, in the fund's zone
+	// (ADR-041, #632). The zero value means time.Now().
+	Now time.Time
 }
 
 // PostTransferBetweenAccounts moves money from one account to another within
@@ -127,7 +131,11 @@ func (l *Ledger) PostTransferBetweenAccounts(ctx context.Context, p PostTransfer
 	if err := CheckAmountCeiling("amount", p.Amount); err != nil {
 		return store.Transfer{}, err
 	}
-	if err := validateOccurredOn(p.OccurredOn); err != nil {
+	window, err := l.windowFor(ctx, l.q, p.FundID, p.Now)
+	if err != nil {
+		return store.Transfer{}, err
+	}
+	if err := validateOccurredOn("occurred_on", p.OccurredOn, window.entry()); err != nil {
 		return store.Transfer{}, err
 	}
 
@@ -141,7 +149,7 @@ func (l *Ledger) PostTransferBetweenAccounts(ctx context.Context, p PostTransfer
 	// leaves a retired location nor arrives in one (#444). To empty a retired
 	// location, reinstate it, move, retire again.
 	var transfer store.Transfer
-	err := l.withTx(ctx, func(q store.Querier) error {
+	err = l.withTx(ctx, func(q store.Querier) error {
 		for _, accountID := range [...]int64{p.FromAccountID, p.ToAccountID} {
 			if err := refuseInactiveAccount(ctx, q, p.FundID, accountID); err != nil {
 				return err

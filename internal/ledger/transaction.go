@@ -47,6 +47,10 @@ type PostTransactionParams struct {
 	// incidental inside the write's withTx, once PurposeID's kind is known
 	// (ErrContributionRequiresIncidentalPurpose).
 	MemberID *int64
+
+	// Now is the clock the date's ceiling is read from, in the fund's zone
+	// (ADR-041, #632). The zero value means time.Now().
+	Now time.Time
 }
 
 // PostTransaction writes one kind='normal' or kind='adjustment' entry and
@@ -55,9 +59,10 @@ type PostTransactionParams struct {
 // Argument-shape failures - amount <= 0, a malformed or calendar-invalid
 // occurred_on, an empty or unrecognized direction - are rejected before the
 // write reaches the schema's CHECKs, wrapping ErrInvalidArgument and naming
-// the field (ADR-027). Anything else the write can fail on, such as another
-// fund's account or an id nothing created, is a domain bug wrapped generically
-// for a 500.
+// the field (ADR-027). A real occurred_on outside the plausible window - before
+// 2000, or after today in the fund's zone - is ErrDateOutOfRange (#632).
+// Anything else the write can fail on, such as another fund's account or an id
+// nothing created, is a domain bug wrapped generically for a 500.
 //
 // Two business-state checks run first, in the write's transaction. A retired
 // AccountID (inactive_on set) is ErrAccountInactive, the rule PostPurposeMove
@@ -79,7 +84,11 @@ func (l *Ledger) PostTransaction(ctx context.Context, p PostTransactionParams) (
 	if p.Direction != "in" && p.Direction != "out" {
 		return store.Transaction{}, fmt.Errorf("%w: direction must be \"in\" or \"out\", got %q", ErrInvalidArgument, p.Direction)
 	}
-	if err := validateOccurredOn(p.OccurredOn); err != nil {
+	window, err := l.windowFor(ctx, l.q, p.FundID, p.Now)
+	if err != nil {
+		return store.Transaction{}, err
+	}
+	if err := validateOccurredOn("occurred_on", p.OccurredOn, window.entry()); err != nil {
 		return store.Transaction{}, err
 	}
 	if p.MemberID != nil {
@@ -97,7 +106,7 @@ func (l *Ledger) PostTransaction(ctx context.Context, p PostTransactionParams) (
 	}
 
 	var posted store.Transaction
-	err := l.withTx(ctx, func(q store.Querier) error {
+	err = l.withTx(ctx, func(q store.Querier) error {
 		if err := refuseInactiveAccount(ctx, q, p.FundID, p.AccountID); err != nil {
 			return err
 		}
@@ -162,7 +171,11 @@ type OpeningBalance struct {
 // OccurredOn is checked only when Amount > 0: a zero amount never reaches a
 // write (see postOpeningBalanceRow), so a bogus date beside it describes no
 // row.
-func validateOpeningBalance(ob OpeningBalance) error {
+//
+// ceiling is the last day an opening balance may be dated (#632): today in the
+// fund's zone, which SetUpFund reads from its params (no fund row exists yet)
+// and CreateAccount from the fund.
+func validateOpeningBalance(ob OpeningBalance, ceiling string) error {
 	if ob.Amount < 0 {
 		return fmt.Errorf("%w: opening balance amount must not be negative, got %d", ErrInvalidArgument, ob.Amount.Int64())
 	}
@@ -170,7 +183,7 @@ func validateOpeningBalance(ob OpeningBalance) error {
 		return err
 	}
 	if ob.Amount > 0 {
-		if err := validateOccurredOn(ob.OccurredOn); err != nil {
+		if err := validateOccurredOn("opening balance occurred_on", ob.OccurredOn, ceiling); err != nil {
 			return err
 		}
 	}
@@ -209,6 +222,10 @@ type CreateAccountParams struct {
 	Kind           string // "cash" or "bank" - the schema's own CHECK is the single source of truth (ADR-027)
 	Name           string // non-empty after trimming - the schema's own CHECK refuses it, not pre-validated here (ADR-027)
 	OpeningBalance *OpeningBalance
+
+	// Now is the clock the opening balance's ceiling is read from, in the fund's
+	// zone (ADR-041, #632). The zero value means time.Now().
+	Now time.Time
 }
 
 // CreateAccount writes one account row and, when OpeningBalance is present
@@ -219,7 +236,11 @@ type CreateAccountParams struct {
 // transaction before any opening balance is considered.
 func (l *Ledger) CreateAccount(ctx context.Context, p CreateAccountParams) (store.Account, error) {
 	if p.OpeningBalance != nil {
-		if err := validateOpeningBalance(*p.OpeningBalance); err != nil {
+		window, err := l.windowFor(ctx, l.q, p.FundID, p.Now)
+		if err != nil {
+			return store.Account{}, err
+		}
+		if err := validateOpeningBalance(*p.OpeningBalance, window.entry()); err != nil {
 			return store.Account{}, err
 		}
 	}
@@ -251,23 +272,4 @@ func (l *Ledger) CreateAccount(ctx context.Context, p CreateAccountParams) (stor
 		return store.Account{}, fmt.Errorf("creating account: %w", err)
 	}
 	return account, nil
-}
-
-// validateOccurredOn rejects anything that is not a real YYYY-MM-DD calendar
-// date.
-//
-// time.Parse with this strict layout already refuses an out-of-range month or
-// day ("2026-02-30" fails rather than normalizing to "2026-03-02"), so no
-// separate range check is needed. The round-trip format comparison is a
-// cheap second defense should that parsing behavior change, not load-bearing
-// today.
-func validateOccurredOn(s string) error {
-	t, err := time.Parse(occurredOnLayout, s)
-	if err != nil {
-		return fmt.Errorf("%w: occurred_on %q is not a valid calendar date: %v", ErrInvalidArgument, s, err)
-	}
-	if t.Format(occurredOnLayout) != s {
-		return fmt.Errorf("%w: occurred_on %q is not a valid calendar date", ErrInvalidArgument, s)
-	}
-	return nil
 }

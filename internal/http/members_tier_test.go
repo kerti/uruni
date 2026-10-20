@@ -92,7 +92,9 @@ func TestPatchMemberTierFromAMonthLeavesEarlierMonthsAtTheOldTier(t *testing.T) 
 
 func TestPatchMemberTierStartMonthIsRefusedOutsideItsBounds(t *testing.T) {
 	t.Parallel()
-	r := testRouter(t)
+	// The clock is pinned (mid-August 2026 in the fund's WIB), so the month after
+	// the current one is a constant and not the runner's date.
+	r := authedRouterAt(t, testStoreDB(t), fixedClock(time.Date(2026, 8, 15, 12, 0, 0, 0, wib)))
 	if rec := postSetup(t, r, "Test Fund"); rec.Code != http.StatusCreated {
 		t.Fatalf("POST /api/setup = %d", rec.Code)
 	}
@@ -100,17 +102,19 @@ func TestPatchMemberTierStartMonthIsRefusedOutsideItsBounds(t *testing.T) {
 	joined := "2026-03-01"
 	member := decodeMember(t, postMember(t, r, memberRequest{Name: "Jane", JoinedOn: &joined}), http.StatusCreated)
 
-	next := time.Now().AddDate(0, 1, 0).Format("2006-01")
-	for name, body := range map[string]string{
-		"before the join month":   fmt.Sprintf(`{"tier_id":%d,"tier_effective_from":"2026-02"}`, tier),
-		"after the current month": fmt.Sprintf(`{"tier_id":%d,"tier_effective_from":%q}`, tier, next),
-		"not a month":             fmt.Sprintf(`{"tier_id":%d,"tier_effective_from":"soon"}`, tier),
-		"null":                    fmt.Sprintf(`{"tier_id":%d,"tier_effective_from":null}`, tier),
-		"without a tier":          `{"tier_effective_from":"2026-04"}`,
+	const next = "2026-09"
+	// The two bounds are #632's typed date error (ADR-040: "not a new code"); a
+	// value that is not a month at all is still the generic invalid argument.
+	for name, tc := range map[string]struct{ body, code string }{
+		"before the join month":   {fmt.Sprintf(`{"tier_id":%d,"tier_effective_from":"2026-02"}`, tier), "date_out_of_range"},
+		"after the current month": {fmt.Sprintf(`{"tier_id":%d,"tier_effective_from":%q}`, tier, next), "date_out_of_range"},
+		"not a month":             {fmt.Sprintf(`{"tier_id":%d,"tier_effective_from":"soon"}`, tier), "invalid_argument"},
+		"null":                    {fmt.Sprintf(`{"tier_id":%d,"tier_effective_from":null}`, tier), "invalid_argument"},
+		"without a tier":          {`{"tier_effective_from":"2026-04"}`, "invalid_argument"},
 	} {
-		rec := patchMember(t, r, member.ID, body)
-		if rec.Code != http.StatusBadRequest || decodeError(t, rec).Code != "invalid_argument" {
-			t.Errorf("%s: PATCH = %d %s, want 400 invalid_argument", name, rec.Code, rec.Body.String())
+		rec := patchMember(t, r, member.ID, tc.body)
+		if rec.Code != http.StatusBadRequest || decodeError(t, rec).Code != tc.code {
+			t.Errorf("%s: PATCH = %d %s, want 400 %s", name, rec.Code, rec.Body.String(), tc.code)
 		}
 	}
 
