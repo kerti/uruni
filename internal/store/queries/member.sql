@@ -62,7 +62,9 @@ WHERE id = ?;
 -- must say. A tier with no rate yet effective (the "madya TBD" case, PRD
 -- section 6) and a member with no tier (NULL = NULL is never true) both read
 -- NULL, never an invented 0 or a stale figure. The dr2 NOT EXISTS picks the
--- single row with the latest effective_from <= current_period per tier.
+-- single row with the latest effective_from <= current_period per tier, among the
+-- months that still have a rate (dues_rate_standing leaves a deleted month out
+-- whole, so the month before it answers).
 --
 -- ?q= is a case-insensitive substring match on name alone (ADR-032): INSTR/LOWER,
 -- never "COLLATE NOCASE LIKE ... ESCAPE" - sqlc 1.31.1 silently drops a
@@ -84,11 +86,11 @@ LEFT JOIN member_tier_standing ct
          AND x.effective_from <= MAX(CAST(sqlc.arg('current_period') AS TEXT), SUBSTR(m.joined_on, 1, 7))
      )
 LEFT JOIN dues_tier dt ON dt.id = ct.tier_id
-LEFT JOIN dues_rate dr
+LEFT JOIN dues_rate_standing dr
   ON dr.tier_id = ct.tier_id
  AND dr.effective_from <= MAX(CAST(sqlc.arg('current_period') AS TEXT), SUBSTR(m.joined_on, 1, 7))
  AND NOT EXISTS (
-       SELECT 1 FROM dues_rate dr2
+       SELECT 1 FROM dues_rate_standing dr2
        WHERE dr2.tier_id = dr.tier_id
          AND dr2.effective_from <= MAX(CAST(sqlc.arg('current_period') AS TEXT), SUBSTR(m.joined_on, 1, 7))
          AND dr2.effective_from > dr.effective_from

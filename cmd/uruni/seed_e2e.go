@@ -102,8 +102,8 @@ func seedE2E(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("creating the e2e dues tier: %w", err)
 	}
-	if _, err := q.CreateDuesRate(ctx, store.CreateDuesRateParams{
-		TierID: tier.ID, Amount: money.Amount(50_000).Int64(), EffectiveFrom: "2024-01", CreatedAt: now,
+	if _, err := l.CreateDuesRate(ctx, ledger.CreateDuesRateParams{
+		FundID: setup.Fund.ID, TierID: tier.ID, Amount: 50_000, EffectiveFrom: "2024-01",
 	}); err != nil {
 		return fmt.Errorf("creating the e2e dues rate: %w", err)
 	}

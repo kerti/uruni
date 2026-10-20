@@ -242,3 +242,19 @@ var ErrReconciliationMissingLocation = errors.New("ledger: the count omits an ac
 // while a gap remains. Nothing is written. A forgotten entry that explains
 // part of a gap is "entry_added", which keeps the remainder open.
 var ErrReconciliationPlugMismatch = errors.New("ledger: an adjusted fix must equal the line's difference")
+
+// ErrDuesRateSuperseded is returned by CorrectDuesRate and DeleteDuesRate when the
+// row named is not the one that stands for its month (ADR-040): a correction is a
+// new row with a new id, so a page that still holds the old id is stale, and
+// applying its edit to the successor would overwrite a figure the caller has not
+// seen. A row that is itself a deleting correction counts: the month has no rate
+// to correct or delete. Nothing is written; the way forward is to reload the
+// list.
+var ErrDuesRateSuperseded = errors.New("ledger: the dues rate no longer stands")
+
+// ErrDuesRateMonthTaken is returned by CreateDuesRate when the tier already has a
+// rate standing for the month. Adding a rate into a month never replaces what it
+// says (that is PATCH, a correction); only a month whose standing row is a
+// deletion takes a new one. The wire keeps the 409 unique_violation it has
+// always answered.
+var ErrDuesRateMonthTaken = errors.New("ledger: the tier already has a rate for that month")

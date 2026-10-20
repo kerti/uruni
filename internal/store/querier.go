@@ -34,6 +34,15 @@ type Querier interface {
 	// (ADR-030): the gate is the count, not a duplicate-email collision.
 	CountUsers(ctx context.Context) (int64, error)
 	CreateAccount(ctx context.Context, arg CreateAccountParams) (Account, error)
+	// dues_rate (ADR-040): a tier's price, month by month. A mistake in a rate is a
+	// new row (the next correction of its month), never an UPDATE; a deletion is a
+	// deleting correction (deleted = 1). Every pricing read goes through the
+	// dues_rate_standing view (one row per tier and month that has a rate: the
+	// highest correction, and none when that is a deletion); internal/db's guard
+	// test fails a query that reads the table directly, except the ones named there
+	// (GetDuesRateForFund, LatestDuesRateOfMonth, ListDuesRatesByFund). Another test
+	// fails a statement that updates the table or deletes from it other than
+	// DeleteDuesRatesByTier (dues_tier.sql) and restore's clear-all.
 	CreateDuesRate(ctx context.Context, arg CreateDuesRateParams) (DuesRate, error)
 	CreateDuesTier(ctx context.Context, arg CreateDuesTierParams) (DuesTier, error)
 	CreateFund(ctx context.Context, arg CreateFundParams) (Fund, error)
@@ -86,9 +95,6 @@ type Querier interface {
 	DeleteAllSessions(ctx context.Context) error
 	DeleteAllTransactions(ctx context.Context) error
 	DeleteAllTransfers(ctx context.Context) error
-	// What makes a wrong-month rate correctable: UNIQUE (tier_id, effective_from)
-	// refuses the corrected row otherwise.
-	DeleteDuesRate(ctx context.Context, id int64) error
 	// A tier no member was ever in priced nothing, so its rates are not history
 	// anyone was charged under and go with it.
 	DeleteDuesRatesByTier(ctx context.Context, tierID int64) error
@@ -171,17 +177,17 @@ type Querier interface {
 	// dues_payment_reversed_once index is the actual guarantee - this only turns a
 	// raw constraint violation into a named error (ADR-029).
 	GetDuesPaymentReversal(ctx context.Context, arg GetDuesPaymentReversalParams) (Transaction, error)
-	// The lookup PATCH and DELETE both do ahead of the write: an UPDATE's
-	// RETURNING answers an unknown id with sql.ErrNoRows, but a DELETE affecting
-	// zero rows raises nothing. dues_rate has no fund_id, so scope comes through
-	// its tier (#188).
+	// The by-id lookup PATCH and DELETE start from (a named exception to the view
+	// rule: it must find a row that no longer stands, to refuse it). dues_rate has
+	// no fund_id, so scope comes through its tier (#188).
 	GetDuesRateForFund(ctx context.Context, arg GetDuesRateForFundParams) (DuesRate, error)
 	// Fund-scoped like GetMemberForFund (#188).
 	GetDuesTierForFund(ctx context.Context, arg GetDuesTierForFundParams) (DuesTier, error)
-	// The rate in force for a period: the latest row whose effective_from is at or
-	// before it. No row is a legitimate answer (a tier whose rate is not yet
-	// decided). effective_from is 'YYYY-MM', so string order is chronological.
-	GetEffectiveDuesRate(ctx context.Context, arg GetEffectiveDuesRateParams) (DuesRate, error)
+	// The rate in force for a period: the latest month at or before it that still
+	// has a rate. No row is a legitimate answer (a tier whose rate is not yet
+	// decided, or whose only rates were deleted). effective_from is 'YYYY-MM', so
+	// string order is chronological.
+	GetEffectiveDuesRate(ctx context.Context, arg GetEffectiveDuesRateParams) (DuesRateStanding, error)
 	GetFund(ctx context.Context, id int64) (Fund, error)
 	// The public report's only way in (ADR-030 carve-out, ADR-035): the slug names
 	// its fund, with no session. report_slug is UNIQUE: one row or sql.ErrNoRows.
@@ -298,6 +304,12 @@ type Querier interface {
 	// still be the MAX(dues_period) for its member, reading as "paid in advance"
 	// through a period that is no longer paid at all.
 	LatestDuesPeriodPaidByMember(ctx context.Context, fundID int64) ([]LatestDuesPeriodPaidByMemberRow, error)
+	// The next-correction read (a named exception to the view rule): the row that
+	// stands for this tier and month, deletion included, or no row when the month
+	// has none. It must see a deleting correction, which the view hides, because it
+	// decides between "next correction" and "UNIQUE collision". Ordered by
+	// correction, never by id or created_at.
+	LatestDuesRateOfMonth(ctx context.Context, arg LatestDuesRateOfMonthParams) (DuesRate, error)
 	// The next-correction read (a named exception to the view rule): the highest
 	// correction number any row of this member and month carries, or -1 when the
 	// month has none. It must see superseded rows, which the view hides.
@@ -327,21 +339,23 @@ type Querier interface {
 	//
 	// page_limit is page size + 1: peek at one extra row.
 	ListDuesPaymentsPage(ctx context.Context, arg ListDuesPaymentsPageParams) ([]ListDuesPaymentsPageRow, error)
-	// The backup export's read (ADR-012): every rate across the fund's tiers,
-	// scoped through dues_tier. Ordered by id only for deterministic export bytes,
-	// not by effective date.
+	// The backup export's read (ADR-012, a named exception to the view rule): every
+	// row of the fund's tiers, superseded and deleting ones included, because the
+	// trail is the data. Ordered by id only for deterministic export bytes, not by
+	// effective date.
 	ListDuesRatesByFund(ctx context.Context, fundID int64) ([]DuesRate, error)
-	ListDuesRatesByTier(ctx context.Context, tierID int64) ([]DuesRate, error)
+	// What the Golongan screen lists: the rates in force, oldest month first. A
+	// month whose rate was deleted does not show.
+	ListDuesRatesByTier(ctx context.Context, tierID int64) ([]DuesRateStanding, error)
 	// The rates that price one member (OutstandingDuesForMember, paidThrough): those
 	// of every tier the member has a standing row for. A tier named only by a
 	// superseded row prices nothing, so it is not fetched.
-	ListDuesRatesForMemberPricing(ctx context.Context, arg ListDuesRatesForMemberPricingParams) ([]DuesRate, error)
-	// The rates that price a roster (DuesStatusForPeriod): every tier's rates across
-	// the fund, ordered tier then month, the order the Go fold needs. Folded per
-	// (tier, period) as "the latest row at or before", so a roster costs one query
-	// however many members it holds. This and the next query are the rate reads the
-	// rate-correction work (ADR-040) points at the standing view.
-	ListDuesRatesForPricing(ctx context.Context, fundID int64) ([]DuesRate, error)
+	ListDuesRatesForMemberPricing(ctx context.Context, arg ListDuesRatesForMemberPricingParams) ([]DuesRateStanding, error)
+	// The rates that price a roster (DuesStatusForPeriod): every tier's rates in
+	// force across the fund, ordered tier then month, the order the Go fold needs.
+	// Folded per (tier, period) as "the latest row at or before", so a roster costs
+	// one query however many members it holds.
+	ListDuesRatesForPricing(ctx context.Context, fundID int64) ([]DuesRateStanding, error)
 	// By name, ignoring case (maintainer, 2026-10-05).
 	ListDuesTiersByFund(ctx context.Context, fundID int64) ([]DuesTier, error)
 	ListFunds(ctx context.Context) ([]Fund, error)
@@ -392,7 +406,9 @@ type Querier interface {
 	// must say. A tier with no rate yet effective (the "madya TBD" case, PRD
 	// section 6) and a member with no tier (NULL = NULL is never true) both read
 	// NULL, never an invented 0 or a stale figure. The dr2 NOT EXISTS picks the
-	// single row with the latest effective_from <= current_period per tier.
+	// single row with the latest effective_from <= current_period per tier, among the
+	// months that still have a rate (dues_rate_standing leaves a deleted month out
+	// whole, so the month before it answers).
 	//
 	// ?q= is a case-insensitive substring match on name alone (ADR-032): INSTR/LOWER,
 	// never "COLLATE NOCASE LIKE ... ESCAPE" - sqlc 1.31.1 silently drops a
@@ -689,9 +705,6 @@ type Querier interface {
 	// flag because a null argument is ambiguous between "leave alone" and
 	// "reinstate" (as in UpdateMember).
 	UpdateAccount(ctx context.Context, arg UpdateAccountParams) (Account, error)
-	// Corrects a mistyped amount. effective_from stays fixed: a rate filed against
-	// the wrong month is deleted and re-posted, not moved.
-	UpdateDuesRate(ctx context.Context, arg UpdateDuesRateParams) (DuesRate, error)
 	// UpdateDuesTier renames a tier - reference data, not history.
 	UpdateDuesTier(ctx context.Context, arg UpdateDuesTierParams) (DuesTier, error)
 	// Renames the fund. name is a display label nothing posted references, so this

@@ -131,12 +131,18 @@ type DuesTier struct {
 }
 
 // DuesRate mirrors the "dues_rate" table verbatim: an effective-dated rate
-// for one tier (CONTEXT.md).
+// for one tier (CONTEXT.md). Every row is exported, superseded and deleting ones
+// included (ADR-040): the trail is the data. Correction is the row's number
+// within its month (the highest stands) and Deleted marks a deleting correction,
+// which copies the amount it withdrew. A v1 file carries neither; the v1 to v2
+// step reads them as 0 and false.
 type DuesRate struct {
 	ID            int64  `json:"id"`
 	TierID        int64  `json:"tier_id"`
 	Amount        int64  `json:"amount"`
 	EffectiveFrom string `json:"effective_from"`
+	Correction    int64  `json:"correction"`
+	Deleted       bool   `json:"deleted"`
 	CreatedAt     int64  `json:"created_at"`
 }
 

@@ -18,6 +18,17 @@ type DuesRate struct {
 	TierID        int64
 	Amount        int64
 	EffectiveFrom string
+	Correction    int64
+	Deleted       int64
+	CreatedAt     int64
+}
+
+type DuesRateStanding struct {
+	ID            int64
+	TierID        int64
+	Amount        int64
+	EffectiveFrom string
+	Correction    int64
 	CreatedAt     int64
 }
 

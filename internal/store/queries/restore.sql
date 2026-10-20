@@ -46,8 +46,8 @@ VALUES (?, ?, ?, ?);
 DELETE FROM dues_rate;
 
 -- name: RestoreDuesRate :exec
-INSERT INTO dues_rate (id, tier_id, amount, effective_from, created_at)
-VALUES (?, ?, ?, ?, ?);
+INSERT INTO dues_rate (id, tier_id, amount, effective_from, correction, deleted, created_at)
+VALUES (?, ?, ?, ?, ?, ?, ?);
 
 -- name: DeleteAllMembers :exec
 DELETE FROM member;

@@ -222,7 +222,7 @@ func (c *pricingCalls) ListMemberTiersByFund(ctx context.Context, fundID int64) 
 	return c.Querier.ListMemberTiersByFund(ctx, fundID)
 }
 
-func (c *pricingCalls) ListDuesRatesForPricing(ctx context.Context, fundID int64) ([]store.DuesRate, error) {
+func (c *pricingCalls) ListDuesRatesForPricing(ctx context.Context, fundID int64) ([]store.DuesRateStanding, error) {
 	c.ratesForPricing++
 	return c.Querier.ListDuesRatesForPricing(ctx, fundID)
 }
@@ -232,12 +232,12 @@ func (c *pricingCalls) ListMemberTiersForMember(ctx context.Context, arg store.L
 	return c.Querier.ListMemberTiersForMember(ctx, arg)
 }
 
-func (c *pricingCalls) ListDuesRatesForMemberPricing(ctx context.Context, arg store.ListDuesRatesForMemberPricingParams) ([]store.DuesRate, error) {
+func (c *pricingCalls) ListDuesRatesForMemberPricing(ctx context.Context, arg store.ListDuesRatesForMemberPricingParams) ([]store.DuesRateStanding, error) {
 	c.ratesForMember++
 	return c.Querier.ListDuesRatesForMemberPricing(ctx, arg)
 }
 
-func (c *pricingCalls) GetEffectiveDuesRate(ctx context.Context, arg store.GetEffectiveDuesRateParams) (store.DuesRate, error) {
+func (c *pricingCalls) GetEffectiveDuesRate(ctx context.Context, arg store.GetEffectiveDuesRateParams) (store.DuesRateStanding, error) {
 	c.effectiveRate++
 	return c.Querier.GetEffectiveDuesRate(ctx, arg)
 }

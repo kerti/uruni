@@ -23,9 +23,8 @@ var ErrAmountTooLarge = errors.New("ledger: amount is above the ceiling")
 
 // CheckAmountCeiling returns ErrAmountTooLarge, wrapped with the field's name,
 // when a is above money.MaxAmount, else nil. It is the one place the ceiling
-// is applied: every write path here calls it after its sign check, and the
-// dues-rate routes (writing through queries, not a Ledger method) call it
-// first.
+// is applied: every write path here calls it after its sign check, rate writes
+// (CreateDuesRate, CorrectDuesRate) included.
 //
 // The message names the field, never the value (ADR-022: amounts are not
 // logged).

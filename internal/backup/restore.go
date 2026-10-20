@@ -719,7 +719,8 @@ func insertDocument(ctx context.Context, q store.Querier, doc Document) error {
 	}
 	for _, dr := range doc.DuesRates {
 		if err := q.RestoreDuesRate(ctx, store.RestoreDuesRateParams{
-			ID: dr.ID, TierID: dr.TierID, Amount: dr.Amount, EffectiveFrom: dr.EffectiveFrom, CreatedAt: dr.CreatedAt,
+			ID: dr.ID, TierID: dr.TierID, Amount: dr.Amount, EffectiveFrom: dr.EffectiveFrom,
+			Correction: dr.Correction, Deleted: boolToInt(dr.Deleted), CreatedAt: dr.CreatedAt,
 		}); err != nil {
 			return fmt.Errorf("backup: restoring dues rate %d: %w", dr.ID, err)
 		}
@@ -987,4 +988,12 @@ func writeReceiptFileFromZip(uploadsDir, name string, zf *zip.File) (created boo
 		return false, err
 	}
 	return statErr != nil, nil
+}
+
+// boolToInt is the stored form of a boolean column (0 or 1).
+func boolToInt(b bool) int64 {
+	if b {
+		return 1
+	}
+	return 0
 }

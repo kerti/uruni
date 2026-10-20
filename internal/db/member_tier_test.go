@@ -343,51 +343,168 @@ func queryStatements(t *testing.T) map[string]string {
 	return out
 }
 
-// TestNoQueryDeletesMemberTierRowsExceptRestoresClearAll is ADR-040's stand-in
-// for a BEFORE DELETE trigger: member_tier rows are a record, so the only
-// statement allowed to delete from the table is restore's clear-all. (A member's
-// deletion and a never-named tier's reach the table through the foreign key, not
-// through a statement of their own.)
-func TestNoQueryDeletesMemberTierRowsExceptRestoresClearAll(t *testing.T) {
-	t.Parallel()
-	deletes := regexp.MustCompile(`(?i)\bDELETE\s+FROM\s+"?member_tier"?\b`)
-	allowed := map[string]bool{"DeleteAllMemberTiers": true}
-	for name, body := range queryStatements(t) {
-		if deletes.MatchString(body) && !allowed[name] {
-			t.Errorf("query %s deletes from member_tier: a correction is a new row, and only restore's clear-all may delete", name)
-		}
-	}
-	if !deletes.MatchString(queryStatements(t)["DeleteAllMemberTiers"]) {
-		t.Error("DeleteAllMemberTiers no longer deletes from member_tier: the guard is looking at the wrong query")
-	}
+// versionedTable is a table ADR-040 makes append-only: its rows are a record, a
+// mistake is a new row, and a view says which row stands. The guard tests below
+// hold both tables to the same convention.
+type versionedTable struct {
+	table string
+	view  string
+	// deleters are the only statements allowed to delete from the table: restore's
+	// clear-all, and for dues_rate a never-named tier's deletion. (A member's
+	// deletion reaches member_tier through the foreign key, not a statement of its
+	// own.)
+	deleters map[string]string
+	// viewExceptions are the only statements allowed to read the table itself: they
+	// need a row the view hides.
+	viewExceptions map[string]string
 }
 
-// TestPricingReadsOfMemberTierGoThroughTheStandingView is the guard ADR-040
-// asks for: a query that read the member_tier table for a tier (rather than the
-// member_tier_standing view) would see a superseded row win its month. The
-// named exceptions are the reads that need every row.
-func TestPricingReadsOfMemberTierGoThroughTheStandingView(t *testing.T) {
+var versionedTables = []versionedTable{
+	{
+		table: "member_tier", view: "member_tier_standing",
+		deleters: map[string]string{"DeleteAllMemberTiers": "restore's clear-all"},
+		viewExceptions: map[string]string{
+			"LatestMemberTierCorrection": "the next-correction read must see superseded rows",
+			"ListMemberTiersForExport":   "the backup export carries every row",
+		},
+	},
+	{
+		table: "dues_rate", view: "dues_rate_standing",
+		deleters: map[string]string{
+			"DeleteAllDuesRates":    "restore's clear-all",
+			"DeleteDuesRatesByTier": "a tier nobody was ever in goes with its rates",
+		},
+		viewExceptions: map[string]string{
+			"GetDuesRateForFund":    "PATCH and DELETE look the row up by id, and must find one that no longer stands to refuse it",
+			"LatestDuesRateOfMonth": "the next-correction read must see superseded rows and deleting ones",
+			"ListDuesRatesByFund":   "the backup export carries every row",
+		},
+	},
+}
+
+// TestNoQueryDeletesVersionedRowsExceptTheNamedOnes is ADR-040's stand-in for a
+// BEFORE DELETE trigger: member_tier and dues_rate rows are a record, so the only
+// statements allowed to delete from them are the ones named above.
+func TestNoQueryDeletesVersionedRowsExceptTheNamedOnes(t *testing.T) {
 	t.Parallel()
-	reads := regexp.MustCompile(`(?i)\b(FROM|JOIN)\s+"?member_tier"?(\s|$|\))`)
-	exceptions := map[string]string{
-		"LatestMemberTierCorrection": "the next-correction read must see superseded rows",
-		"ListMemberTiersForExport":   "the backup export carries every row",
-	}
-	for name, body := range queryStatements(t) {
-		if reads.MatchString(body) {
-			if _, ok := exceptions[name]; !ok {
-				t.Errorf("query %s reads the member_tier table; read member_tier_standing so a superseded row cannot win a month", name)
+	queries := queryStatements(t)
+	for _, vt := range versionedTables {
+		deletes := regexp.MustCompile(`(?i)\bDELETE\s+FROM\s+"?` + vt.table + `"?\b`)
+		for name, body := range queries {
+			if _, ok := vt.deleters[name]; deletes.MatchString(body) && !ok {
+				t.Errorf("query %s deletes from %s: a correction is a new row, and only %v may delete", name, vt.table, vt.deleters)
+			}
+		}
+		for name := range vt.deleters {
+			if !deletes.MatchString(queries[name]) {
+				t.Errorf("%s no longer deletes from %s: the guard is looking at the wrong query", name, vt.table)
 			}
 		}
 	}
-	for name := range exceptions {
-		if !reads.MatchString(queryStatements(t)[name]) {
-			t.Errorf("the named exception %s no longer reads member_tier: drop it from the list", name)
+}
+
+// TestNoQueryUpdatesVersionedRows is the static half of the UPDATE triggers: a
+// query that updated either table would be caught by the trigger at run time, and
+// here before it ever runs.
+func TestNoQueryUpdatesVersionedRows(t *testing.T) {
+	t.Parallel()
+	for _, vt := range versionedTables {
+		updates := regexp.MustCompile(`(?i)\bUPDATE\s+"?` + vt.table + `"?\b`)
+		for name, body := range queryStatements(t) {
+			if updates.MatchString(body) {
+				t.Errorf("query %s updates %s: a correction is a new row", name, vt.table)
+			}
+		}
+	}
+}
+
+// tableReadPattern matches a query that reads table itself (not a view named
+// after it): after FROM or JOIN, or as a comma-joined table, with the name
+// ending at whitespace, a semicolon, a comma, a closing parenthesis or the end.
+// "dues_rate_standing" and "dues_rate.id" do not match "dues_rate".
+func tableReadPattern(table string) *regexp.Regexp {
+	const end = `(\s|;|,|$|\))`
+	return regexp.MustCompile(`(?i)(\b(FROM|JOIN)\s+|,\s*)"?` + table + `"?` + end)
+}
+
+// TestTableReadPatternSeesEveryShapeOfARead pins the guard's own regex: a
+// pattern that missed "FROM t;" or a comma join would let a raw read of a
+// versioned table pass the guard silently.
+func TestTableReadPatternSeesEveryShapeOfARead(t *testing.T) {
+	t.Parallel()
+	re := tableReadPattern("dues_rate")
+	for _, reads := range []string{
+		"SELECT * FROM dues_rate",
+		"SELECT * FROM dues_rate;",
+		"SELECT * FROM dues_rate WHERE id = 1",
+		"SELECT * FROM dues_rate dr",
+		"SELECT * FROM dues_rate\nWHERE id = 1",
+		`SELECT * FROM "dues_rate"`,
+		"SELECT * FROM dues_tier, dues_rate",
+		"SELECT * FROM dues_tier,dues_rate WHERE 1",
+		"SELECT * FROM dues_tier, dues_rate;",
+		"SELECT * FROM dues_tier JOIN dues_rate ON 1",
+		"SELECT * FROM (SELECT 1 FROM dues_rate)",
+		"select * from dues_rate",
+	} {
+		if !re.MatchString(reads) {
+			t.Errorf("pattern misses a read of the table: %q", reads)
+		}
+	}
+	for _, notReads := range []string{
+		"SELECT * FROM dues_rate_standing",
+		"SELECT * FROM dues_rate_standing;",
+		"SELECT * FROM dues_tier, dues_rate_standing",
+		"SELECT dues_rate.id FROM dues_tier",
+		"SELECT * FROM dues_tier WHERE a = b, c",
+		"INSERT INTO dues_rate (id) VALUES (1)",
+	} {
+		if re.MatchString(notReads) {
+			t.Errorf("pattern flags something that is not a read of the table: %q", notReads)
+		}
+	}
+}
+
+// TestPricingReadsGoThroughTheStandingViews is the guard ADR-040 asks for: a query
+// that read the table for a tier or a rate (rather than its standing view) would
+// see a superseded row win its month, or a deleted rate keep pricing. The named
+// exceptions are the reads that need every row.
+func TestPricingReadsGoThroughTheStandingViews(t *testing.T) {
+	t.Parallel()
+	queries := queryStatements(t)
+	for _, vt := range versionedTables {
+		reads := tableReadPattern(vt.table)
+		for name, body := range queries {
+			// A DELETE names the table in its FROM; the delete guard above holds those.
+			if strings.HasPrefix(strings.ToUpper(strings.TrimSpace(body)), "DELETE") {
+				continue
+			}
+			if reads.MatchString(body) {
+				if _, ok := vt.viewExceptions[name]; !ok {
+					t.Errorf("query %s reads the %s table; read %s so a superseded row cannot win a month", name, vt.table, vt.view)
+				}
+			}
+		}
+		for name := range vt.viewExceptions {
+			if !reads.MatchString(queries[name]) {
+				t.Errorf("the named exception %s no longer reads %s: drop it from the list", name, vt.table)
+			}
 		}
 	}
 
-	// The roster's page reads the tier through the view as well.
-	if !strings.Contains(queryStatements(t)["ListMembersPage"], "member_tier_standing") {
-		t.Error("ListMembersPage does not read member_tier_standing")
+	// The reads the rate work repointed, and the roster's page, read the views.
+	for name, view := range map[string]string{
+		"ListMembersPage":               "member_tier_standing",
+		"ListDuesRatesForPricing":       "dues_rate_standing",
+		"ListDuesRatesForMemberPricing": "dues_rate_standing",
+		"GetEffectiveDuesRate":          "dues_rate_standing",
+		"ListDuesRatesByTier":           "dues_rate_standing",
+	} {
+		if !strings.Contains(queries[name], view) {
+			t.Errorf("%s does not read %s", name, view)
+		}
+	}
+	if !strings.Contains(queries["ListMembersPage"], "dues_rate_standing") {
+		t.Error("ListMembersPage's current_rate does not read dues_rate_standing")
 	}
 }

@@ -49,6 +49,13 @@ func mapLedgerError(w http.ResponseWriter, logger *slog.Logger, err error) {
 		// thing to change. 400 like other ledger input refusals; the message names
 		// the limit, never the value sent.
 		writeAPIError(w, http.StatusBadRequest, "amount_too_large", "An amount cannot be larger than 999,999,999,999 rupiah.")
+	case errors.Is(err, ledger.ErrDuesRateSuperseded):
+		// A correction is a new row with a new id (ADR-040), so a page holding the
+		// old id is stale. 409, its own code: the SPA tells her to reload the list.
+		writeAPIError(w, http.StatusConflict, "dues_rate_superseded", "This rate has since been corrected or removed; reload the list.")
+	case errors.Is(err, ledger.ErrDuesRateMonthTaken):
+		// The code POST has always answered for a month that already has a rate.
+		writeAPIError(w, http.StatusConflict, "unique_violation", "This value conflicts with an existing record.")
 	case errors.Is(err, ledger.ErrReimbursementWaived):
 		writeAPIError(w, http.StatusConflict, "reimbursement_waived", "This reimbursement has been waived.")
 	case errors.Is(err, ledger.ErrReimbursementAlreadySettled):

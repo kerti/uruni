@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -34,10 +35,25 @@ func v1Of(doc Document) documentV1 {
 			JoinedOn: &joined, InactiveOn: m.InactiveOn, CreatedAt: m.CreatedAt,
 		})
 	}
+	// A v1 file holds one row per tier and month and no deletions: the rates in
+	// force now, which is what the standing rows of v2 say.
+	standingRate := map[[2]string]DuesRate{}
+	for _, r := range doc.DuesRates {
+		key := [2]string{strconv.FormatInt(r.TierID, 10), r.EffectiveFrom}
+		if cur, ok := standingRate[key]; !ok || r.Correction > cur.Correction {
+			standingRate[key] = r
+		}
+	}
+	rates := make([]rateV1, 0, len(standingRate))
+	for _, r := range doc.DuesRates {
+		if s := standingRate[[2]string{strconv.FormatInt(r.TierID, 10), r.EffectiveFrom}]; s.ID == r.ID && !r.Deleted {
+			rates = append(rates, rateV1{ID: r.ID, TierID: r.TierID, Amount: r.Amount, EffectiveFrom: r.EffectiveFrom, CreatedAt: r.CreatedAt})
+		}
+	}
 	return documentV1{
 		FormatVersion: 1,
 		Users:         doc.Users, Funds: doc.Funds, Accounts: doc.Accounts, Purposes: doc.Purposes,
-		DuesTiers: doc.DuesTiers, DuesRates: doc.DuesRates, Members: members,
+		DuesTiers: doc.DuesTiers, DuesRates: rates, Members: members,
 		Transfers: doc.Transfers, Reimbursements: doc.Reimbursements, Transactions: doc.Transactions, Receipts: doc.Receipts,
 		Reconciliations: doc.Reconciliations, ReconciliationLines: doc.ReconciliationLines,
 		Incidentals: doc.Incidentals, IncidentalRecipients: doc.IncidentalRecipients,
@@ -77,7 +93,8 @@ func TestParseUploadUpgradesAVersion1FileToTheCurrentShape(t *testing.T) {
 	buildFixture(t, srcDB, t.TempDir())
 	_, doc := exportFixture(t, srcDB, t.TempDir())
 
-	parsed, err := parseUploadBytes(t, v1Zip(t, v1Of(doc)))
+	v1 := v1Of(doc)
+	parsed, err := parseUploadBytes(t, v1Zip(t, v1))
 	if err != nil {
 		t.Fatalf("ParseUpload(v1) = %v, want no error", err)
 	}
@@ -110,8 +127,19 @@ func TestParseUploadUpgradesAVersion1FileToTheCurrentShape(t *testing.T) {
 	if !slices.Equal(got.Totals.Funds, doc.Totals.Funds) || !slices.Equal(got.Totals.Accounts, doc.Totals.Accounts) || !slices.Equal(got.Totals.Purposes, doc.Totals.Purposes) {
 		t.Errorf("upgraded totals = %+v, want the file's own %+v", got.Totals, doc.Totals)
 	}
-	if len(got.Transactions) != len(doc.Transactions) || len(got.DuesRates) != len(doc.DuesRates) || len(got.DuesTiers) != len(doc.DuesTiers) {
+	if len(got.Transactions) != len(doc.Transactions) || len(got.DuesTiers) != len(doc.DuesTiers) {
 		t.Errorf("the upgrade changed a table it should not touch")
+	}
+
+	// A v1 file holds the rates in force and nothing else (the fixture's v2 trail,
+	// a corrected January and a deleted June, is not in it), and every one becomes
+	// correction 0, not deleted.
+	if len(v1.DuesRates) != 1 || len(got.DuesRates) != len(v1.DuesRates) {
+		t.Fatalf("v1 rates = %+v, upgraded rates = %+v, want the same single standing rate", v1.DuesRates, got.DuesRates)
+	}
+	if r, in := got.DuesRates[0], v1.DuesRates[0]; r.ID != in.ID || r.TierID != in.TierID || r.Amount != in.Amount ||
+		r.EffectiveFrom != in.EffectiveFrom || r.CreatedAt != in.CreatedAt || r.Correction != 0 || r.Deleted {
+		t.Errorf("upgraded rate = %+v, want %+v as correction 0, not deleted", r, in)
 	}
 }
 
