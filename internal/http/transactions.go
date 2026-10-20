@@ -203,6 +203,7 @@ func (a *api) createTransaction(w http.ResponseWriter, r *http.Request) {
 	}
 
 	posted, err := a.ledger.PostTransaction(r.Context(), ledger.PostTransactionParams{
+		Now:          a.now(),
 		FundID:       fund.ID,
 		AccountID:    req.AccountID,
 		PurposeID:    req.PurposeID,

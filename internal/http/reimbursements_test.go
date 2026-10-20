@@ -671,7 +671,7 @@ func TestPostReimbursementsRejectsBadInput(t *testing.T) {
 		}, "invalid_argument"},
 		{"malformed incurred_on", func(s setupResponse, m int64) reimbursementRequest {
 			return reimbursementRequest{MemberID: m, PurposeID: s.MainPurposeID, Amount: 80_000, IncurredOn: "2026-02-30"}
-		}, "check_violation"},
+		}, "invalid_argument"},
 		{"unknown member", func(s setupResponse, _ int64) reimbursementRequest {
 			return reimbursementRequest{MemberID: 9_999, PurposeID: s.MainPurposeID, Amount: 80_000, IncurredOn: "2026-08-10"}
 		}, "invalid_argument"},

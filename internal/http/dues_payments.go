@@ -75,6 +75,7 @@ func (a *api) createDuesPayment(w http.ResponseWriter, r *http.Request) {
 	}
 
 	posted, err := a.ledger.PostDuesPayments(r.Context(), ledger.PostDuesPaymentsParams{
+		Now:        a.now(),
 		FundID:     fund.ID,
 		AccountID:  req.AccountID,
 		MemberID:   req.MemberID,
@@ -131,6 +132,7 @@ func (a *api) reverseDuesPayment(w http.ResponseWriter, r *http.Request) {
 	}
 
 	reversal, err := a.ledger.ReverseDuesPayment(r.Context(), ledger.ReverseDuesPaymentParams{
+		Now:           a.now(),
 		FundID:        fund.ID,
 		TransactionID: id,
 		OccurredOn:    req.OccurredOn,

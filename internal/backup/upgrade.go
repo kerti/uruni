@@ -181,8 +181,8 @@ func upgradeV1(v1 documentV1) (Document, error) {
 			return Document{}, fmt.Errorf("%w: member %d's joined_on %q is not a calendar date", ErrMalformedBackup, m.ID, joinedOn)
 		}
 		// member_tier's start month has a 2000-01 floor and the first row starts at the
-		// join month, so an earlier date cannot be backfilled. #632 adds the same floor
-		// to member.joined_on, which makes such a backup unrestorable anyway.
+		// join month, so an earlier date cannot be backfilled. member.joined_on has the
+		// same floor (#632), which makes such a backup unrestorable anyway.
 		if joinedOn < "2000-01-01" {
 			return Document{}, fmt.Errorf("%w: member %d's joined_on %q is before 2000-01-01", ErrMalformedBackup, m.ID, joinedOn)
 		}

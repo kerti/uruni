@@ -267,6 +267,12 @@ export const copy = {
       // amount input stops at 12 digits, so this is the fallback for a request
       // that got past it (a stale client, a direct API call).
       amount_too_large: 'Jumlahnya terlalu besar. Batasnya Rp 999.999.999.999 — cek lagi, mungkin ada nol yang kelebihan.',
+      // #632: a real date outside the plausible window - before the year 2000,
+      // or past what its field allows (today for money that has moved, a year
+      // ahead for a join date, 12 and 24 months ahead for a dues period and a
+      // rate). The pickers keep inside it, so this is the fallback for a stale
+      // form or a year typed wrong.
+      date_out_of_range: 'Tanggalnya di luar batas yang wajar — cek lagi, mungkin salah ketik tahunnya.',
       // ADR-036: POST /api/purpose-moves' named refusals. The form already
       // withholds Titipan, a closed envelope and an amount above the balance,
       // so these are the fallback for a stale form - a close or a posting that

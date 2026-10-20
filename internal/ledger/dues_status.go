@@ -79,7 +79,7 @@ type MemberDuesStatus struct {
 // It uses l.q directly rather than withTx: a handful of consistent SELECTs
 // with no write in between (ADR-027).
 func (l *Ledger) DuesStatusForPeriod(ctx context.Context, fundID int64, period string) ([]MemberDuesStatus, error) {
-	if err := validateDuesPeriod(period); err != nil {
+	if err := checkPeriodShape("period", period); err != nil {
 		return nil, err
 	}
 
@@ -245,7 +245,7 @@ func (l *Ledger) OutstandingDuesForMember(ctx context.Context, fundID, memberID 
 			return nil, err
 		}
 		through = CurrentDuesPeriod(now, loc)
-	} else if err := validateDuesPeriod(through); err != nil {
+	} else if err := checkPeriodShape("through", through); err != nil {
 		return nil, err
 	}
 
@@ -349,7 +349,7 @@ func (l *Ledger) OutstandingDuesForMember(ctx context.Context, fundID, memberID 
 // (ADR-032): OutstandingDuesForMember makes no Unpaid/Partial distinction,
 // so len() of its result is the count.
 func (l *Ledger) ArrearsMonthsForMember(ctx context.Context, fundID, memberID int64, currentPeriod string) (int, error) {
-	if err := validateDuesPeriod(currentPeriod); err != nil {
+	if err := checkPeriodShape("current period", currentPeriod); err != nil {
 		return 0, err
 	}
 

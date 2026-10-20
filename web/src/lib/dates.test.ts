@@ -16,6 +16,7 @@ import {
   suggestedTimeZone,
   todayISODate,
   toIsoDate,
+  yearAhead,
 } from '@/lib/dates'
 import { zoneForDeviceOffset } from '@/lib/timeZones'
 
@@ -213,5 +214,77 @@ describe('the zone Setup pre-selects (ADR-041)', () => {
     vi.spyOn(Date.prototype, 'getTimezoneOffset').mockReturnValue(-480)
     expect(suggestedTimeZone()).toBe('Asia/Makassar')
     vi.restoreAllMocks()
+  })
+})
+
+// #632: the server refuses a date outside its window (internal/ledger/date_window.go
+// and the schema's CHECKs), and no date a picker offers may be refused. The
+// server's limits are written out here by hand, per field, for the same fund
+// clock, so the table below is the contract both sides are held to: the Go side
+// pins the same numbers in date_window_test.go.
+describe('the pickers sit inside the server window (#632)', () => {
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+  })
+  afterEach(() => {
+    vi.useRealTimers()
+    resetFundTimeZone()
+  })
+
+  const FLOOR_DAY = '2000-01-01'
+  const FLOOR_MONTH = '2000-01'
+
+  // [fund zone, instant, today, join/leave ceiling, dues ceiling, rate ceiling]
+  it.each([
+    ['Asia/Jakarta', '2026-09-30T22:30:00+07:00', '2026-09-30', '2027-09-30', '2027-09', '2028-09'],
+    ['Asia/Jayapura', '2026-09-30T22:30:00+07:00', '2026-10-01', '2027-10-01', '2027-10', '2028-10'],
+    ['Asia/Makassar', '2026-12-31T23:30:00+07:00', '2027-01-01', '2028-01-01', '2028-01', '2029-01'],
+    // The leap day: a year ahead of 29 February 2028 is 28 February 2029.
+    ['Asia/Jakarta', '2028-02-29T12:00:00+07:00', '2028-02-29', '2029-02-28', '2029-02', '2030-02'],
+    ['Asia/Jakarta', '2028-02-28T12:00:00+07:00', '2028-02-28', '2029-02-28', '2029-02', '2030-02'],
+  ])('%s at %s (today %s): every picker ends where the server does', (zone, instant, today, person, dues, rate) => {
+    vi.setSystemTime(new Date(instant))
+    setFundTimeZone(zone)
+
+    // Money that has moved: at most today, never below the floor.
+    expect(dateBounds.entry().max).toBe(today)
+    expect(dateBounds.entry().min >= FLOOR_DAY).toBe(true)
+    // A join or leaving date: a year ahead, and the last day is a real date.
+    expect(dateBounds.membership().max).toBe(person)
+    expect(parseIsoDate(dateBounds.membership().max)).not.toBeNull()
+    expect(dateBounds.membership().min).toBe(FLOOR_DAY)
+    // A rate's start month: 24 months ahead.
+    expect(periodBounds.rate().max).toBe(rate)
+    expect(periodBounds.rate().min).toBe(FLOOR_MONTH)
+    // The dues form walks at most 12 months past the current month, and the
+    // status screen's month picker (a read) matches it.
+    expect(periodBounds.status().max).toBe(dues)
+    // A tier start: the current month, or the join month if later - the server's
+    // ceiling exactly - and never before the join month.
+    expect(periodBounds.tierStart('2026-01-05').max).toBe(today.slice(0, 7))
+  })
+
+  it('keeps every picker end a real date on every day of a leap year and the years around it', () => {
+    setFundTimeZone('Asia/Jakarta')
+    const first = Date.UTC(2027, 0, 1)
+    const last = Date.UTC(2029, 11, 31)
+    for (let t = first; t <= last; t += 24 * 60 * 60 * 1000) {
+      // Noon in WIB, so the fund's day is the UTC date of t.
+      vi.setSystemTime(new Date(t + 5 * 60 * 60 * 1000))
+      const today = new Date(t).toISOString().slice(0, 10)
+      expect(todayISODate()).toBe(today)
+      const max = dateBounds.membership().max
+      expect(parseIsoDate(max), `${today} -> ${max}`).not.toBeNull()
+      expect(max > today).toBe(true)
+    }
+  })
+
+  it('writes a year ahead as the same day, clamped to the month end', () => {
+    expect(yearAhead('2026-09-30')).toBe('2027-09-30')
+    expect(yearAhead('2026-12-31')).toBe('2027-12-31')
+    expect(yearAhead('2028-02-28')).toBe('2029-02-28')
+    expect(yearAhead('2028-02-29')).toBe('2029-02-28')
+    expect(yearAhead('2024-02-29')).toBe('2025-02-28')
+    expect(yearAhead('2027-02-28')).toBe('2028-02-28')
   })
 })

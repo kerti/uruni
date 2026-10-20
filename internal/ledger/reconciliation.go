@@ -61,6 +61,11 @@ type TakeReconciliationParams struct {
 	FundID int64
 	Note   *string
 	Counts []AccountCount
+
+	// Now is the clock each fix's occurred_on ceiling is read from, in the fund's
+	// zone (ADR-041, #632). The zero value means time.Now(). It dates nothing:
+	// PerformedAt is still stamped from the wall clock.
+	Now time.Time
 }
 
 // TakeReconciliation takes one reconciliation snapshot: for each counted
@@ -137,10 +142,16 @@ type TakeReconciliationParams struct {
 // naming one, a Fix with a non-positive amount, an unrecognised Fix
 // direction, a malformed OccurredOn, the same account counted twice, a
 // negative actual_amount - are ErrInvalidArgument before anything is written
-// (ADR-027). Anything else, such as an account or purpose id of another
-// fund, is a domain bug and surfaces wrapped generically.
+// (ADR-027). A Fix dated outside the plausible window (before 2000, or after
+// today in the fund's zone) is ErrDateOutOfRange (#632). Anything else, such as
+// an account or purpose id of another fund, is a domain bug and surfaces
+// wrapped generically.
 func (l *Ledger) TakeReconciliation(ctx context.Context, p TakeReconciliationParams) (store.Reconciliation, error) {
-	if err := validateTakeReconciliationParams(p); err != nil {
+	window, err := l.windowFor(ctx, l.q, p.FundID, p.Now)
+	if err != nil {
+		return store.Reconciliation{}, err
+	}
+	if err := validateTakeReconciliationParams(p, window); err != nil {
 		return store.Reconciliation{}, err
 	}
 
@@ -155,7 +166,7 @@ func (l *Ledger) TakeReconciliation(ctx context.Context, p TakeReconciliationPar
 	}
 
 	var rec store.Reconciliation
-	err := l.withTx(ctx, func(q store.Querier) error {
+	err = l.withTx(ctx, func(q store.Querier) error {
 		if err := requireEveryActiveLocationCounted(ctx, q, p); err != nil {
 			return err
 		}
@@ -382,7 +393,7 @@ func requireEveryActiveLocationCounted(ctx context.Context, q store.Querier, p T
 //
 // "matched" needing difference_amount == 0 is checked inside withTx, since it
 // needs the frozen recorded_amount this function cannot read.
-func validateTakeReconciliationParams(p TakeReconciliationParams) error {
+func validateTakeReconciliationParams(p TakeReconciliationParams, window dateWindow) error {
 	if len(p.Counts) == 0 {
 		return fmt.Errorf("%w: counts must not be empty", ErrInvalidArgument)
 	}
@@ -419,7 +430,7 @@ func validateTakeReconciliationParams(p TakeReconciliationParams) error {
 			if c.Fix.Direction != "in" && c.Fix.Direction != "out" {
 				return fmt.Errorf("%w: fix direction for account %d must be \"in\" or \"out\", got %q", ErrInvalidArgument, c.AccountID, c.Fix.Direction)
 			}
-			if err := validateOccurredOn(c.Fix.OccurredOn); err != nil {
+			if err := validateOccurredOn("fix occurred_on", c.Fix.OccurredOn, window.entry()); err != nil {
 				return err
 			}
 		default:

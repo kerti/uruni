@@ -234,21 +234,21 @@ func TestUpdateMemberTierStartMonthBounds(t *testing.T) {
 	tests := []struct {
 		name string
 		from string
-		ok   bool
+		want error // nil: accepted
 	}{
-		{"the join month itself", "2026-03", true},
-		{"one month before the join month", "2026-02", false},
-		{"the current month", "2026-08", true},
-		{"one month past the current month", "2026-09", false},
-		{"not a month", "2026-8", false},
+		{"the join month itself", "2026-03", nil},
+		{"one month before the join month", "2026-02", ErrDateOutOfRange},
+		{"the current month", "2026-08", nil},
+		{"one month past the current month", "2026-09", ErrDateOutOfRange},
+		{"not a month", "2026-8", ErrInvalidArgument},
 	}
 	for _, tt := range tests {
 		_, err := l.UpdateMember(context.Background(), UpdateMemberParams{FundID: f.fundID, MemberID: m.ID, SetTier: true, TierID: &b, TierFrom: tt.from, Now: augustNow})
-		if tt.ok && err != nil {
+		if tt.want == nil && err != nil {
 			t.Errorf("%s (%s): err = %v, want none", tt.name, tt.from, err)
 		}
-		if !tt.ok && !errors.Is(err, ErrInvalidArgument) {
-			t.Errorf("%s (%s): err = %v, want ErrInvalidArgument", tt.name, tt.from, err)
+		if tt.want != nil && !errors.Is(err, tt.want) {
+			t.Errorf("%s (%s): err = %v, want %v", tt.name, tt.from, err, tt.want)
 		}
 	}
 
@@ -278,8 +278,8 @@ func TestUpdateMemberCeilingIsTheJoinMonthWhenThatIsLater(t *testing.T) {
 		t.Errorf("a member who joins next month shows tier %v, want %d (the tier entered for them)", got.TierID, b)
 	}
 
-	if _, err := l.UpdateMember(context.Background(), UpdateMemberParams{FundID: f.fundID, MemberID: m.ID, SetTier: true, TierID: &a, TierFrom: "2026-10", Now: augustNow}); !errors.Is(err, ErrInvalidArgument) {
-		t.Errorf("a start after the join month: err = %v, want ErrInvalidArgument", err)
+	if _, err := l.UpdateMember(context.Background(), UpdateMemberParams{FundID: f.fundID, MemberID: m.ID, SetTier: true, TierID: &a, TierFrom: "2026-10", Now: augustNow}); !errors.Is(err, ErrDateOutOfRange) {
+		t.Errorf("a start after the join month: err = %v, want ErrDateOutOfRange", err)
 	}
 }
 
@@ -452,8 +452,8 @@ func TestUpdateMemberRefusesAnotherFundsTierAndRollsTheRestBack(t *testing.T) {
 }
 
 // member_tier's start month has a 2000-01 floor and a member's first row starts at
-// the join month, so the ledger refuses an earlier join date itself (until #632
-// puts the floor on member.joined_on) instead of leaking the CHECK.
+// the join month, so the join date has the same floor (#632), checked by the ledger
+// as the typed date error instead of leaking the CHECK.
 func TestCreateMemberRefusesAJoinDateBefore2000(t *testing.T) {
 	t.Parallel()
 	l := newTestLedger(t)
@@ -463,8 +463,8 @@ func TestCreateMemberRefusesAJoinDateBefore2000(t *testing.T) {
 
 	for _, tierID := range []*int64{&a, nil} {
 		_, err := l.CreateMember(context.Background(), CreateMemberParams{FundID: f.fundID, Name: "Kuno", TierID: tierID, JoinedOn: "1999-12-31"})
-		if !errors.Is(err, ErrInvalidArgument) {
-			t.Errorf("CreateMember(joined 1999-12-31, tier %v) = %v, want ErrInvalidArgument", tierID, err)
+		if !errors.Is(err, ErrDateOutOfRange) {
+			t.Errorf("CreateMember(joined 1999-12-31, tier %v) = %v, want ErrDateOutOfRange", tierID, err)
 		}
 	}
 	m, err := l.CreateMember(context.Background(), CreateMemberParams{FundID: f.fundID, Name: "Tepat", TierID: &a, JoinedOn: "2000-01-01"})
@@ -489,8 +489,8 @@ func TestUpdateMemberRefusesAJoinDateBefore2000AndChangesNothing(t *testing.T) {
 	_, err := l.UpdateMember(context.Background(), UpdateMemberParams{
 		FundID: f.fundID, MemberID: m.ID, Name: strp("Diganti"), JoinedOn: strp("1999-12-31"), Now: augustNow,
 	})
-	if !errors.Is(err, ErrInvalidArgument) {
-		t.Fatalf("UpdateMember(joined 1999-12-31) = %v, want ErrInvalidArgument", err)
+	if !errors.Is(err, ErrDateOutOfRange) {
+		t.Fatalf("UpdateMember(joined 1999-12-31) = %v, want ErrDateOutOfRange", err)
 	}
 	got, _ := q.GetMemberForFund(context.Background(), store.GetMemberForFundParams{ID: m.ID, FundID: f.fundID})
 	if got.Name != "Andi" || got.JoinedOn != "2026-03-01" {

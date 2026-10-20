@@ -37,7 +37,11 @@ type CreateDuesRateParams struct {
 	FundID        int64
 	TierID        int64
 	Amount        money.Amount
-	EffectiveFrom string // "YYYY-MM"; a malformed month is the schema CHECK's to refuse
+	EffectiveFrom string // "YYYY-MM"; a malformed month is ErrInvalidArgument, one outside the window ErrDateOutOfRange
+
+	// Now is the clock the start month's ceiling is read from, in the fund's zone
+	// (ADR-041, #632). The zero value means time.Now().
+	Now time.Time
 }
 
 // CreateDuesRate adds a rate for a tier from a month. It is a "change" in
@@ -46,12 +50,24 @@ type CreateDuesRateParams struct {
 // ErrDuesRateMonthTaken when the month already has a rate; a month whose
 // standing row is a deletion takes the next correction, so a deleted rate can
 // be re-added.
+//
+// The start month is held to the plausible window (#632): from 2000-01 to the
+// fund's current month plus rateMonthsAhead, inclusive. CorrectDuesRate and
+// DeleteDuesRate restate a month that already stands, so they choose no date
+// and check none.
 func (l *Ledger) CreateDuesRate(ctx context.Context, p CreateDuesRateParams) (store.DuesRate, error) {
 	if err := CheckAmountCeiling("amount", p.Amount); err != nil {
 		return store.DuesRate{}, err
 	}
+	window, err := l.windowFor(ctx, l.q, p.FundID, p.Now)
+	if err != nil {
+		return store.DuesRate{}, err
+	}
+	if err := validateDuesPeriod("effective_from", p.EffectiveFrom, window.rate()); err != nil {
+		return store.DuesRate{}, err
+	}
 	var out store.DuesRate
-	err := l.withTx(ctx, func(q store.Querier) error {
+	err = l.withTx(ctx, func(q store.Querier) error {
 		// Fund scope: an id names a row, it does not prove the caller may touch it (#188).
 		if _, err := q.GetDuesTierForFund(ctx, store.GetDuesTierForFundParams{ID: p.TierID, FundID: p.FundID}); err != nil {
 			return fmt.Errorf("fetching dues tier: %w", err)

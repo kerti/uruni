@@ -71,7 +71,7 @@ func newWalkScenario(t *testing.T, l *Ledger) walkScenario {
 		t.Helper()
 		posted, err := l.PostTransaction(ctx, PostTransactionParams{
 			FundID: fundID, AccountID: cashID, PurposeID: purpose, Direction: direction, Amount: amount,
-			OccurredOn: date, IsAdjustment: adjustment, MemberID: member,
+			OccurredOn: date, IsAdjustment: adjustment, MemberID: member, Now: onTheDay(date),
 		})
 		if err != nil {
 			t.Fatalf("PostTransaction(%s %d on %s) = %v, want no error", direction, amount, date, err)

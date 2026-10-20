@@ -159,20 +159,34 @@ export function currentPeriod(): string {
   return todayISODate().slice(0, 7)
 }
 
-/** The inclusive range a date picker offers. The server accepts any real
- * calendar date; these keep the treasurer from landing on a nonsensical one
- * by a slip of the thumb (a payment dated next year, a year of 20026) and
- * keep the calendar's year list short. */
+/** The inclusive range a date picker offers. The server refuses a date outside
+ * its plausible window (#632: a floor of 2000 in the schema, a ceiling per field
+ * read in the fund's zone, internal/ledger/date_window.go) with `date_out_of_range`.
+ * These bounds sit inside that window, so no date a picker offers is ever
+ * refused; they also keep the treasurer from landing on a nonsensical one by a
+ * slip of the thumb and keep the calendar's year list short. The window's table
+ * is pinned in dates.test.ts. */
 export interface DateBounds {
   min: string
   max: string
 }
 
-/** The earliest year any picker offers. A fund adopting Uruni carries its
- * history in the opening balance (PRD: history starts at adoption); only a
- * member's join date or a rate's start month reaches back further, for live
- * arrears, and not past this. */
+/** The earliest year any picker offers, and the server's floor (the schema's
+ * CHECKs, #632). A fund adopting Uruni carries its history in the opening
+ * balance (PRD: history starts at adoption); only a member's join date or a
+ * rate's start month reaches back further, for live arrears, and not past this. */
 const EARLIEST_YEAR = 2000
+
+/** The same day next year, or the month's last day when that day does not exist:
+ * 29 February reads as 28 February. The server's ceiling for a join or leaving
+ * date is exactly this (`dateWindow.person` in internal/ledger/date_window.go),
+ * so the picker's last day is a real date the server accepts. Plain integer
+ * arithmetic on the date's parts, never a Date round trip. */
+export function yearAhead(isoDate: string): string {
+  const [year, month, day] = isoDate.split('-').map(Number)
+  const lastDay = new Date(year + 1, month, 0).getDate()
+  return `${year + 1}-${String(month).padStart(2, '0')}-${String(Math.min(day, lastDay)).padStart(2, '0')}`
+}
 
 export const dateBounds = {
   /** Money that has moved - a transaction, a dues payment, a claim, a
@@ -184,10 +198,10 @@ export const dateBounds = {
     return { min: `${Number(today.slice(0, 4)) - 2}-01-01`, max: today }
   },
   /** A member's join date: back to EARLIEST_YEAR for live arrears, and up to
-   * a year ahead for someone who has said they are joining. */
+   * a year ahead for someone who has said they are joining. On 29 February the
+   * year ahead is 28 February (`yearAhead`), a day that exists. */
   membership(): DateBounds {
-    const today = todayISODate()
-    return { min: `${EARLIEST_YEAR}-01-01`, max: `${Number(today.slice(0, 4)) + 1}${today.slice(4)}` }
+    return { min: `${EARLIEST_YEAR}-01-01`, max: yearAhead(todayISODate()) }
   },
 }
 

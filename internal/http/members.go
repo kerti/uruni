@@ -115,12 +115,14 @@ func (a *api) createMember(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	joinedOn := a.now().In(loc).Format(time.DateOnly)
+	now := a.now()
+	joinedOn := now.In(loc).Format(time.DateOnly)
 	if req.JoinedOn != nil {
 		joinedOn = *req.JoinedOn
 	}
 
 	member, err := a.ledger.CreateMember(r.Context(), ledger.CreateMemberParams{
+		Now:      now,
 		FundID:   fund.ID,
 		Name:     req.Name,
 		TierID:   req.TierID,

@@ -20,13 +20,19 @@ type CreateReimbursementParams struct {
 	Amount     money.Amount // must be > 0
 	IncurredOn string       // "YYYY-MM-DD", a real calendar date
 	Note       *string
+
+	// Now is the clock IncurredOn's ceiling is read from, in the fund's zone
+	// (ADR-041, #632). The zero value means time.Now().
+	Now time.Time
 }
 
 // CreateReimbursement files a claim. It posts nothing (an unsettled claim is
 // off the ledger, ADR-024), but a claim against a closed envelope can only
 // end in a refused payout, so it is refused with ErrIncidentalClosed
-// (ADR-031, #473): reopen the envelope first. Every other rule (a member or
-// purpose naming no row, a malformed incurred_on) is the schema's to refuse.
+// (ADR-031, #473): reopen the envelope first. An incurred_on that is not a real
+// date is ErrInvalidArgument, and one outside the plausible window is
+// ErrDateOutOfRange (#632); every other rule (a member or purpose naming no
+// row) is the schema's to refuse.
 func (l *Ledger) CreateReimbursement(ctx context.Context, p CreateReimbursementParams) (store.Reimbursement, error) {
 	if p.Amount <= 0 {
 		return store.Reimbursement{}, fmt.Errorf("%w: amount must be positive, got %d", ErrInvalidArgument, p.Amount.Int64())
@@ -34,9 +40,16 @@ func (l *Ledger) CreateReimbursement(ctx context.Context, p CreateReimbursementP
 	if err := CheckAmountCeiling("amount", p.Amount); err != nil {
 		return store.Reimbursement{}, err
 	}
+	window, err := l.windowFor(ctx, l.q, p.FundID, p.Now)
+	if err != nil {
+		return store.Reimbursement{}, err
+	}
+	if err := validateOccurredOn("incurred_on", p.IncurredOn, window.entry()); err != nil {
+		return store.Reimbursement{}, err
+	}
 
 	var created store.Reimbursement
-	err := l.withTx(ctx, func(q store.Querier) error {
+	err = l.withTx(ctx, func(q store.Querier) error {
 		if err := refuseClosedIncidental(ctx, q, p.PurposeID, ErrIncidentalClosed); err != nil {
 			return err
 		}
@@ -65,6 +78,10 @@ type SettleReimbursementParams struct {
 	ReimbursementID int64
 	AccountID       int64  // which account pays the claim out
 	OccurredOn      string // "YYYY-MM-DD", a real calendar date - the settle date, not incurred_on
+
+	// Now is the clock OccurredOn's ceiling is read from, in the fund's zone
+	// (ADR-041, #632). The zero value means time.Now().
+	Now time.Time
 }
 
 // SettleReimbursement writes one kind='reimbursement', direction='out' row
@@ -98,12 +115,16 @@ type SettleReimbursementParams struct {
 // envelope's balance below the zero its close squared it to, so the treasurer
 // reopens it, settles, and closes it again.
 func (l *Ledger) SettleReimbursement(ctx context.Context, p SettleReimbursementParams) (store.Transaction, error) {
-	if err := validateOccurredOn(p.OccurredOn); err != nil {
+	window, err := l.windowFor(ctx, l.q, p.FundID, p.Now)
+	if err != nil {
+		return store.Transaction{}, err
+	}
+	if err := validateOccurredOn("occurred_on", p.OccurredOn, window.entry()); err != nil {
 		return store.Transaction{}, err
 	}
 
 	var posted store.Transaction
-	err := l.withTx(ctx, func(q store.Querier) error {
+	err = l.withTx(ctx, func(q store.Querier) error {
 		claim, err := unsettledClaim(ctx, q, p.FundID, p.ReimbursementID)
 		if err != nil {
 			return err
@@ -170,6 +191,10 @@ type UpdateReimbursementParams struct {
 
 	WaivedOn    *string // "YYYY-MM-DD" to waive, nil with SetWaivedOn to un-waive
 	SetWaivedOn bool
+
+	// Now is the clock the dates' ceiling is read from, in the fund's zone
+	// (ADR-041, #632). The zero value means time.Now().
+	Now time.Time
 }
 
 // UpdateReimbursement corrects a claim that has not been settled, and is how
@@ -194,6 +219,14 @@ type UpdateReimbursementParams struct {
 // Moving the claim onto a closed envelope is ErrIncidentalClosed, as
 // CreateReimbursement refuses filing one there (#473). Moving it off one is
 // allowed: that posts nothing and leaves the claim payable.
+//
+// IncurredOn and WaivedOn are checked against the plausible window (#632), the
+// floor and the ceiling, with one exception: a correction re-sends the claim's
+// incurred_on unchanged (the form always does), and a date that is not being
+// changed is not the caller's to defend. A claim dated ahead of today (a zone
+// change, ADR-041, or a row older than the ceiling) still takes a fixed amount,
+// as a claim on a closed envelope still takes one. Only the ceiling is waived
+// for it; the floor is the schema's CHECK either way.
 func (l *Ledger) UpdateReimbursement(ctx context.Context, p UpdateReimbursementParams) (store.Reimbursement, error) {
 	if p.Amount != nil && *p.Amount <= 0 {
 		return store.Reimbursement{}, fmt.Errorf("%w: amount must be positive, got %d", ErrInvalidArgument, p.Amount.Int64())
@@ -203,22 +236,33 @@ func (l *Ledger) UpdateReimbursement(ctx context.Context, p UpdateReimbursementP
 			return store.Reimbursement{}, err
 		}
 	}
-	if p.IncurredOn != nil {
-		if err := validateOccurredOn(*p.IncurredOn); err != nil {
+	window, err := l.windowFor(ctx, l.q, p.FundID, p.Now)
+	if err != nil {
+		return store.Reimbursement{}, err
+	}
+	if p.WaivedOn != nil {
+		if err := validateOccurredOn("waived_on", *p.WaivedOn, window.entry()); err != nil {
 			return store.Reimbursement{}, err
 		}
 	}
-	if p.WaivedOn != nil {
-		if err := validateOccurredOn(*p.WaivedOn); err != nil {
+	if p.IncurredOn != nil {
+		// The shape and the floor always; the ceiling is read inside, once the
+		// stored date can be compared.
+		if err := validateOccurredOn("incurred_on", *p.IncurredOn, noCeiling); err != nil {
 			return store.Reimbursement{}, err
 		}
 	}
 
 	var updated store.Reimbursement
-	err := l.withTx(ctx, func(q store.Querier) error {
+	err = l.withTx(ctx, func(q store.Querier) error {
 		claim, err := unsettledClaim(ctx, q, p.FundID, p.ReimbursementID)
 		if err != nil {
 			return err
+		}
+		if p.IncurredOn != nil && *p.IncurredOn != claim.IncurredOn {
+			if err := validateOccurredOn("incurred_on", *p.IncurredOn, window.entry()); err != nil {
+				return err
+			}
 		}
 		// Only a move is guarded: a correction re-sends the claim's purpose
 		// unchanged, and a claim already on a closed envelope must still take a fixed

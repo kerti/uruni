@@ -315,7 +315,12 @@ func TestGetBalancesMonthFollowsTheFundsZone(t *testing.T) {
 			t.Parallel()
 			r := authedRouterAt(t, testStoreDB(t), fixedClock(lateEveningWIB))
 			setup := setUpFund(t, r)
-			setFundZone(t, r, zone)
+			// 1 September is "today" only for a WIT fund at this instant (#632's ceiling
+			// refuses it for a WIB one), so the rows are posted in WIT and the fund moved
+			// to the zone under test afterwards: the row left a day ahead of a WIB fund's
+			// today is exactly what a zone change leaves (ADR-041), and the month still
+			// counts it.
+			setFundZone(t, r, tz.Jayapura)
 			cash, main := setup.Accounts[0].ID, setup.MainPurposeID
 			for _, tx := range []struct {
 				amount int64
@@ -328,6 +333,7 @@ func TestGetBalancesMonthFollowsTheFundsZone(t *testing.T) {
 					t.Fatalf("POST /api/transactions = %d (body: %s)", rec.Code, rec.Body.String())
 				}
 			}
+			setFundZone(t, r, zone)
 			rec := getBalances(t, r)
 			var got balancesResponse
 			if err := json.NewDecoder(rec.Body).Decode(&got); err != nil {

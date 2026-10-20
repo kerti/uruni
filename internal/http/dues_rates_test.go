@@ -116,15 +116,16 @@ func TestPostDuesRatesRejectsAMalformedEffectiveFrom(t *testing.T) {
 	r := testRouter(t)
 	tier := setUpTier(t, r, "Full")
 
-	// dues_rate.effective_from CHECK: GLOB 'YYYY-MM' and a real calendar month;
-	// "2026-13" matches the GLOB but names no month.
+	// "2026-13" has the shape of a month but names none; the ledger refuses it as
+	// an invalid argument (#632), ahead of the schema's CHECK, which stays the
+	// backstop.
 	rec := postDuesRate(t, r, tier.ID, duesRateRequest{Amount: 50_000, EffectiveFrom: "2026-13"})
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("POST .../rates with effective_from=2026-13 = %d, want %d (body: %s)", rec.Code, http.StatusBadRequest, rec.Body.String())
 	}
 	got := decodeError(t, rec)
-	if got.Code != "check_violation" {
-		t.Errorf("error code = %q, want %q", got.Code, "check_violation")
+	if got.Code != "invalid_argument" {
+		t.Errorf("error code = %q, want %q", got.Code, "invalid_argument")
 	}
 }
 

@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/kerti/uruni/internal/money"
 	"github.com/kerti/uruni/internal/store"
@@ -26,6 +27,10 @@ type PostPurposeMoveParams struct {
 
 	// Note is written to both legs, or to neither; see normalizeNote.
 	Note *string
+
+	// Now is the clock OccurredOn's ceiling is read from, in the fund's zone
+	// (ADR-041, #632). The zero value means time.Now().
+	Now time.Time
 }
 
 // PostPurposeMove moves Amount of what the fund holds from one purpose to
@@ -38,7 +43,8 @@ type PostPurposeMoveParams struct {
 // postTransferPairTx checks nothing, so every rule lives here as a named
 // error:
 //
-//   - Amount <= 0 or a malformed date: ErrInvalidArgument.
+//   - Amount <= 0 or a malformed date: ErrInvalidArgument. A real date outside
+//     the plausible window (#632): ErrDateOutOfRange.
 //   - FromPurposeID equal to ToPurposeID: ErrPurposeMoveSamePurpose.
 //   - A purpose not this fund's (including an id naming nothing):
 //     ErrPurposeMoveUnknownPurpose.
@@ -60,7 +66,11 @@ func (l *Ledger) PostPurposeMove(ctx context.Context, p PostPurposeMoveParams) (
 	if err := CheckAmountCeiling("amount", p.Amount); err != nil {
 		return store.Transfer{}, err
 	}
-	if err := validateOccurredOn(p.OccurredOn); err != nil {
+	window, err := l.windowFor(ctx, l.q, p.FundID, p.Now)
+	if err != nil {
+		return store.Transfer{}, err
+	}
+	if err := validateOccurredOn("occurred_on", p.OccurredOn, window.entry()); err != nil {
 		return store.Transfer{}, err
 	}
 	if p.FromPurposeID == p.ToPurposeID {
@@ -68,7 +78,7 @@ func (l *Ledger) PostPurposeMove(ctx context.Context, p PostPurposeMoveParams) (
 	}
 
 	var created store.Transfer
-	err := l.withTx(ctx, func(q store.Querier) error {
+	err = l.withTx(ctx, func(q store.Querier) error {
 		for _, id := range [...]int64{p.FromPurposeID, p.ToPurposeID} {
 			purpose, err := q.GetPurposeForFund(ctx, store.GetPurposeForFundParams{ID: id, FundID: p.FundID})
 			if err != nil {

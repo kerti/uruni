@@ -16,6 +16,15 @@
 -- The literal is plain digits because a CHECK cannot name a Go constant;
 -- internal/db/amount_ceiling_test.go pins it to money.MaxAmount and fails when a
 -- money column (minimum_per_member has no "amount" in its name) lacks it.
+--
+-- Every business date and period carries the same floor, 2000-01-01 (2000-01 for
+-- a month): the backstop for anything that writes around the ledger, a backup
+-- restore included, and the only half of the plausible date window a restore
+-- enforces (#632). The ceilings move with the clock and the fund's time zone, so
+-- they are the ledger's, on write. The literals are the ledger's minDay and
+-- minMonth (internal/ledger/date_window.go); internal/db/date_floor_test.go lists
+-- every date column and pins the literals, and the ledger's boundary tests fail
+-- if the two drift.
 
 -- +goose Up
 
@@ -67,7 +76,7 @@ CREATE TABLE account (                    -- location: where money physically si
   created_at INTEGER NOT NULL,
   -- A used-then-retired location (a bank switch, a tin no longer kept), not a
   -- never-used duplicate (that's DELETE). Same shape as member.inactive_on.
-  inactive_on TEXT CHECK (inactive_on IS NULL OR (date(inactive_on) IS NOT NULL AND inactive_on = date(inactive_on))),
+  inactive_on TEXT CHECK (inactive_on IS NULL OR (date(inactive_on) IS NOT NULL AND inactive_on = date(inactive_on) AND inactive_on >= '2000-01-01')),
   -- Children reference (fund_id, id) instead of id alone, so SQLite itself
   -- rejects a row whose parent belongs to another fund (ADR-024 composite FKs).
   UNIQUE (fund_id, id)
@@ -112,7 +121,8 @@ CREATE TABLE dues_rate (                  -- effective-dated, one-sided interval
   tier_id        INTEGER NOT NULL REFERENCES dues_tier(id),
   amount         INTEGER NOT NULL CHECK (amount >= 0 AND amount <= 999999999999),
   effective_from TEXT    NOT NULL CHECK (effective_from GLOB '[0-9][0-9][0-9][0-9]-[0-1][0-9]'
-                                         AND date(effective_from||'-01') IS NOT NULL),
+                                         AND date(effective_from||'-01') IS NOT NULL
+                                         AND effective_from >= '2000-01'),
   correction     INTEGER NOT NULL DEFAULT 0 CHECK (correction >= 0),
   deleted        INTEGER NOT NULL DEFAULT 0 CHECK (deleted IN (0, 1)),
   created_at     INTEGER NOT NULL,
@@ -146,9 +156,9 @@ CREATE TABLE member (
   name        TEXT    NOT NULL CHECK (length(trim(name)) > 0),
   -- NOT NULL (#471): a fund's history starts at adoption (PRD 7.1), so there
   -- is no "always was a member". The API defaults a missing date to today in
-  -- Asia/Jakarta; backdating is the deliberate live-arrears exception.
-  joined_on   TEXT    NOT NULL CHECK (date(joined_on) IS NOT NULL AND joined_on = date(joined_on)),
-  inactive_on TEXT             CHECK (inactive_on IS NULL OR (date(inactive_on) IS NOT NULL AND inactive_on = date(inactive_on))),
+  -- the fund's time zone; backdating is the deliberate live-arrears exception.
+  joined_on   TEXT    NOT NULL CHECK (date(joined_on) IS NOT NULL AND joined_on = date(joined_on) AND joined_on >= '2000-01-01'),
+  inactive_on TEXT             CHECK (inactive_on IS NULL OR (date(inactive_on) IS NOT NULL AND inactive_on = date(inactive_on) AND inactive_on >= '2000-01-01')),
   created_at  INTEGER NOT NULL,
   UNIQUE (fund_id, id),
   FOREIGN KEY (fund_id) REFERENCES fund(id)
@@ -238,8 +248,8 @@ CREATE TABLE reimbursement (              -- off-ledger until settled
   member_id   INTEGER NOT NULL,
   purpose_id  INTEGER NOT NULL,
   amount      INTEGER NOT NULL CHECK (amount > 0 AND amount <= 999999999999),
-  incurred_on TEXT    NOT NULL CHECK (date(incurred_on) IS NOT NULL AND incurred_on = date(incurred_on)),
-  waived_on   TEXT             CHECK (waived_on IS NULL OR (date(waived_on) IS NOT NULL AND waived_on = date(waived_on))),
+  incurred_on TEXT    NOT NULL CHECK (date(incurred_on) IS NOT NULL AND incurred_on = date(incurred_on) AND incurred_on >= '2000-01-01'),
+  waived_on   TEXT             CHECK (waived_on IS NULL OR (date(waived_on) IS NOT NULL AND waived_on = date(waived_on) AND waived_on >= '2000-01-01')),
   note        TEXT,
   created_at  INTEGER NOT NULL,
   UNIQUE (fund_id, id),
@@ -257,7 +267,7 @@ CREATE TABLE "transaction" (              -- the ledger. insert-only.
   -- The sign lives in direction, never in the amount, so summing the ledger is
   -- one CASE and a negative amount is impossible rather than merely unexpected.
   amount      INTEGER NOT NULL CHECK (amount > 0 AND amount <= 999999999999),
-  occurred_on TEXT    NOT NULL CHECK (date(occurred_on) IS NOT NULL AND occurred_on = date(occurred_on)),
+  occurred_on TEXT    NOT NULL CHECK (date(occurred_on) IS NOT NULL AND occurred_on = date(occurred_on) AND occurred_on >= '2000-01-01'),
   kind        TEXT    NOT NULL CHECK (kind IN
                 ('opening','normal','dues','reimbursement','adjustment','transfer')),
   member_id        INTEGER,               -- dues, or a named contribution (ADR-034)
@@ -278,7 +288,8 @@ CREATE TABLE "transaction" (              -- the ledger. insert-only.
   FOREIGN KEY (fund_id, transfer_id)      REFERENCES transfer(fund_id, id),
   FOREIGN KEY (fund_id, reverses_transaction_id) REFERENCES "transaction"(fund_id, id),
   CHECK (dues_period IS NULL OR (dues_period GLOB '[0-9][0-9][0-9][0-9]-[0-1][0-9]'
-                                 AND date(dues_period||'-01') IS NOT NULL)),
+                                 AND date(dues_period||'-01') IS NOT NULL
+                                 AND dues_period >= '2000-01')),
   CHECK (kind <> 'dues'          OR (member_id IS NOT NULL AND dues_period IS NOT NULL AND direction = 'in')),
   -- Two shapes of a non-dues row may carry a member: a dues reversal (the one
   -- kind='adjustment' shape, ADR-029) and a named contribution (the one
@@ -418,8 +429,8 @@ CREATE TABLE incidental (                 -- the envelope's lifecycle, 1:1 with 
   purpose_id    INTEGER PRIMARY KEY REFERENCES purpose(id),
   occasion      TEXT    NOT NULL CHECK (length(trim(occasion)) > 0),
   target_amount INTEGER CHECK (target_amount IS NULL OR (target_amount > 0 AND target_amount <= 999999999999)),
-  opened_on     TEXT    NOT NULL CHECK (date(opened_on) IS NOT NULL AND opened_on = date(opened_on)),
-  closed_on     TEXT             CHECK (closed_on IS NULL OR (date(closed_on) IS NOT NULL AND closed_on = date(closed_on))),
+  opened_on     TEXT    NOT NULL CHECK (date(opened_on) IS NOT NULL AND opened_on = date(opened_on) AND opened_on >= '2000-01-01'),
+  closed_on     TEXT             CHECK (closed_on IS NULL OR (date(closed_on) IS NOT NULL AND closed_on = date(closed_on) AND closed_on >= '2000-01-01')),
   -- One figure every expected member is asked to give (ADR-034). Not a dues
   -- rate: no tiers, no effective dates, editable like occasion.
   minimum_per_member INTEGER CHECK (minimum_per_member IS NULL OR (minimum_per_member > 0 AND minimum_per_member <= 999999999999)),

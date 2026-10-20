@@ -104,6 +104,7 @@ func (a *api) createDuesRate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	rate, err := a.ledger.CreateDuesRate(r.Context(), ledger.CreateDuesRateParams{
+		Now:           a.now(),
 		FundID:        tier.FundID,
 		TierID:        tier.ID,
 		Amount:        money.FromDB(req.Amount),
