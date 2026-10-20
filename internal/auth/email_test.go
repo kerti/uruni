@@ -159,24 +159,25 @@ func TestCreateUserFindsAMixedCaseRowFromBefore(t *testing.T) {
 }
 
 // TestANonASCIICapitalFromBeforeIsFoundOnlyByItsStoredSpelling pins the one case
-// the case-insensitive match cannot reach. SQLite's lower() folds ASCII only,
-// so for a legacy row with a non-ASCII capital the fully lower-cased
-// normalised form never equals lower(email); the row is found by the text it
-// was registered with, as always, and by no other spelling. Such an address is
-// very unlikely, and the treasurer's way out is create-user with the stored
-// spelling.
+// the case-insensitive match cannot fully reach. "user".email is COLLATE NOCASE
+// (#623), which folds ASCII only, so for a legacy row with a non-ASCII capital
+// the Go-normalised form (full Unicode lower-casing) never equals the stored
+// text. The row is found by the spelling of its non-ASCII letters as registered
+// (its ASCII letters fold, so the domain's case does not matter), and not by a
+// lower-cased U-umlaut. Such an address is very unlikely, and the treasurer's way
+// out is create-user with the stored spelling.
 func TestANonASCIICapitalFromBeforeIsFoundOnlyByItsStoredSpelling(t *testing.T) {
 	t.Parallel()
 	a, _ := newTestAuth(t)
 	ctx := context.Background()
 	legacyRow(t, a, "\u00dcnal@Example.org", "correct-horse-battery")
 
-	if _, err := a.Authenticate(ctx, " \u00dcnal@Example.org ", "correct-horse-battery"); err != nil {
-		t.Errorf("Authenticate(as registered, padded) = %v, want no error", err)
-	}
-	for _, email := range []string{"\u00fcnal@example.org", "\u00dcnal@example.org"} {
-		if _, err := a.Authenticate(ctx, email, "correct-horse-battery"); !errors.Is(err, ErrInvalidCredentials) {
-			t.Errorf("Authenticate(%q) = %v, want ErrInvalidCredentials", email, err)
+	for _, email := range []string{" \u00dcnal@Example.org ", "\u00dcnal@example.org"} {
+		if _, err := a.Authenticate(ctx, email, "correct-horse-battery"); err != nil {
+			t.Errorf("Authenticate(%q) = %v, want no error", email, err)
 		}
+	}
+	if _, err := a.Authenticate(ctx, "\u00fcnal@example.org", "correct-horse-battery"); !errors.Is(err, ErrInvalidCredentials) {
+		t.Errorf("Authenticate(lower-cased non-ASCII letter) = %v, want ErrInvalidCredentials", err)
 	}
 }

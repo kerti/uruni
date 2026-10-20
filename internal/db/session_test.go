@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/kerti/uruni/internal/store"
@@ -51,6 +52,42 @@ func TestUserEmailIsUnique(t *testing.T) {
 		Email: "treasurer@example.org", PasswordHash: "hash-2", CreatedAt: 2,
 	}); err == nil {
 		t.Fatal("second CreateUser() with the same email = nil error, want the UNIQUE constraint to reject it")
+	}
+}
+
+// TestUserEmailIsUniqueAcrossCase (#623): "user".email is COLLATE NOCASE, so
+// the UNIQUE index refuses A@x.org after a@x.org with the Go normalisation
+// bypassed, and a lookup by either spelling finds the one row as stored.
+func TestUserEmailIsUniqueAcrossCase(t *testing.T) {
+	t.Parallel()
+	sqlDB := migratedTestDB(t)
+	ctx := context.Background()
+
+	if _, err := sqlDB.ExecContext(ctx, `INSERT INTO "user" (email, password_hash, created_at) VALUES ('a@x.org', 'hash-1', 1)`); err != nil {
+		t.Fatalf("first raw insert = %v, want no error", err)
+	}
+	_, err := sqlDB.ExecContext(ctx, `INSERT INTO "user" (email, password_hash, created_at) VALUES ('A@x.org', 'hash-2', 2)`)
+	if err == nil || !strings.Contains(err.Error(), "UNIQUE") {
+		t.Fatalf("raw insert of A@x.org after a@x.org = %v, want the UNIQUE constraint to refuse it", err)
+	}
+
+	var stored string
+	if err := sqlDB.QueryRowContext(ctx, `SELECT email FROM "user" WHERE email = 'A@X.ORG'`).Scan(&stored); err != nil || stored != "a@x.org" {
+		t.Errorf(`lookup by A@X.ORG = (%q, %v), want the row as stored, "a@x.org"`, stored, err)
+	}
+}
+
+// TestUserEmailNoCaseFoldsAsciiOnly documents the limit written at the column:
+// NOCASE folds A-Z only, so a non-ASCII capital is a different address.
+func TestUserEmailNoCaseFoldsAsciiOnly(t *testing.T) {
+	t.Parallel()
+	sqlDB := migratedTestDB(t)
+	ctx := context.Background()
+
+	for i, email := range []string{"\u00fcnal@x.org", "\u00dcnal@x.org"} {
+		if _, err := sqlDB.ExecContext(ctx, `INSERT INTO "user" (email, password_hash, created_at) VALUES (?, 'hash', ?)`, email, i); err != nil {
+			t.Fatalf("insert %q = %v, want no error: NOCASE does not fold a non-ASCII capital", email, err)
+		}
 	}
 }
 
