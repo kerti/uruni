@@ -251,14 +251,18 @@ func validateDuesPeriod(s string) error {
 }
 
 // DeleteDuesTier removes a tier and the rates that priced it, in one
-// transaction (#232).
+// transaction (#232). Only a tier no member was EVER in can go (ADR-040).
 //
 // Not money, but it is the only place with a transaction, and the two
 // statements must share one. A tier's rates have an FK onto it, so the tier
-// cannot be deleted first; and if a member then refuses the tier through
-// member's composite (fund_id, tier_id) FK, the rollback takes the rate
+// cannot be deleted first; and if a member_tier row then refuses the tier
+// through its composite (fund_id, tier_id) FK, the rollback takes the rate
 // deletion with it. Split across two calls, a refused tier would leave its
 // rates gone.
+//
+// "Ever": a member_tier row is never deleted while its member exists, so a tier
+// any row names - a superseded one included - is refused, and a tier a member
+// was put into by a slip, since corrected, can no longer be deleted (rename it).
 //
 // No pre-check for members: the foreign key is the check, and a COUNT(*)
 // first would only race it (as DeleteAccount's handler documents). The

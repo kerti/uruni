@@ -255,11 +255,13 @@ type ReportWalk struct {
 }
 
 // ReportDuesRow is one member's standing for the month: DuesStatusForPeriod's
-// row with the member's tier by name, without their dates. Names and tiers
-// are public by the maintainer's call (2026-10-02); the slug is the guard.
+// row with the member's tier by name, without their dates. The tier is the one
+// in force in the month shown, the one that priced Owed (ADR-040), not today's.
+// Names and tiers are public by the maintainer's call (2026-10-02); the slug is
+// the guard.
 type ReportDuesRow struct {
 	MemberName  string
-	TierName    string // "" when the member has no tier
+	TierName    string // the tier in force in the month; "" when it names none
 	Owed        money.Amount
 	Paid        money.Amount
 	Status      DuesStatus

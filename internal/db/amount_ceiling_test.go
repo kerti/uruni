@@ -177,6 +177,9 @@ func TestEveryMoneyColumnIsListed(t *testing.T) {
 		if column == "id" || strings.HasSuffix(column, "_id") || strings.HasSuffix(column, "_at") {
 			continue // a key or a timestamp, not rupiah
 		}
+		if column == "correction" {
+			continue // the number of a restatement within a month (ADR-040), a counter, not rupiah
+		}
 		found = append(found, table+"."+column)
 	}
 	if err := rows.Err(); err != nil {

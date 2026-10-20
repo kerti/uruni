@@ -1,36 +1,36 @@
 -- name: CreateMember :one
-INSERT INTO member (fund_id, name, tier_id, joined_on, inactive_on, created_at)
-VALUES (?, ?, ?, ?, ?, ?)
-RETURNING id, fund_id, name, tier_id, joined_on, inactive_on, created_at;
+INSERT INTO member (fund_id, name, joined_on, inactive_on, created_at)
+VALUES (?, ?, ?, ?, ?)
+RETURNING id, fund_id, name, joined_on, inactive_on, created_at;
 
 -- The only single-member lookup, fund-scoped: a real id belonging to another
 -- fund answers sql.ErrNoRows rather than being found and then rejected. There
 -- is deliberately no unscoped GetMember (#188).
 -- name: GetMemberForFund :one
-SELECT id, fund_id, name, tier_id, joined_on, inactive_on, created_at
+SELECT id, fund_id, name, joined_on, inactive_on, created_at
 FROM member
 WHERE id = ? AND fund_id = ?;
 
 -- By name, ignoring case (maintainer, 2026-10-05): the order every member list
 -- reads, Iuran status included. id only breaks a tie between identical names.
 -- name: ListMembersByFund :many
-SELECT id, fund_id, name, tier_id, joined_on, inactive_on, created_at
+SELECT id, fund_id, name, joined_on, inactive_on, created_at
 FROM member
 WHERE fund_id = ?
 ORDER BY name COLLATE NOCASE, id;
 
 -- A correction to reference data, not a ledger event. name and joined_on are
--- NOT NULL, so COALESCE covers them: nil can only mean "leave alone". The two
--- nullable columns need the set_* flags, since there a null argument is
--- ambiguous between "leave alone" and "clear it".
+-- NOT NULL, so COALESCE covers them: nil can only mean "leave alone". The one
+-- nullable column needs the set_* flag, since there a null argument is
+-- ambiguous between "leave alone" and "clear it". The tier is not a column of
+-- member (ADR-040): it is member_tier rows, written by Ledger.UpdateMember.
 -- name: UpdateMember :one
 UPDATE member
 SET name        = COALESCE(sqlc.narg('name'), name),
     joined_on   = COALESCE(sqlc.narg('joined_on'), joined_on),
-    tier_id     = CASE WHEN CAST(sqlc.arg('set_tier_id')     AS INTEGER) = 1 THEN sqlc.narg('tier_id')     ELSE tier_id     END,
     inactive_on = CASE WHEN CAST(sqlc.arg('set_inactive_on') AS INTEGER) = 1 THEN sqlc.narg('inactive_on') ELSE inactive_on END
 WHERE id = sqlc.arg('id')
-RETURNING id, fund_id, name, tier_id, joined_on, inactive_on, created_at;
+RETURNING id, fund_id, name, joined_on, inactive_on, created_at;
 
 -- Leans on the composite FKs from "transaction" and reimbursement to refuse
 -- once a real row references the member.
@@ -44,12 +44,19 @@ WHERE id = ?;
 -- would skip or duplicate a member when equal names straddle a page boundary
 -- and a same-named member is inserted between fetches.
 --
--- tier_name is NULL for a member with no tier_id (plain LEFT JOIN).
+-- tier_id, tier_name and current_rate describe the member's CURRENT tier
+-- (ADR-040): the standing member_tier row of the latest month at or before
+-- max(current_period, the join month), so a member who joins next month shows
+-- the tier entered for them. The month comparison reads the member_tier_standing
+-- view, never the table (a superseded row must not win a month). A member with
+-- no row, or a NULL tier, reads NULL in all three (plain LEFT JOINs).
 --
--- current_rate is the rate GetEffectiveDuesRate would find for
--- sqlc.arg('current_period') ("YYYY-MM", the caller's one snapshot of "now",
+-- current_rate is the rate GetEffectiveDuesRate would find for that same month,
+-- max(current_period, the join month), so the tier and its rate are read at one
+-- month: a member who joins next month, on a tier whose first rate starts then,
+-- shows both. current_period is "YYYY-MM", the caller's one snapshot of "now",
 -- shared with the arrears figure computed in Go - see
--- Ledger.ArrearsMonthsForMember). A LEFT JOIN, not a scalar subquery, on
+-- Ledger.ArrearsMonthsForMember. A LEFT JOIN, not a scalar subquery, on
 -- purpose: a scalar subquery needs a CAST to get a concrete Go type, and this
 -- codebase's CAST idiom means "never NULL" - the opposite of what current_rate
 -- must say. A tier with no rate yet effective (the "madya TBD" case, PRD
@@ -64,18 +71,26 @@ WHERE id = ?;
 -- page_limit is page size + 1: peek at one extra row.
 -- name: ListMembersPage :many
 SELECT
-  m.id, m.fund_id, m.name, m.tier_id, m.joined_on, m.inactive_on, m.created_at,
+  m.id, m.fund_id, m.name, m.joined_on, m.inactive_on, m.created_at,
+  ct.tier_id AS tier_id,
   dt.name AS tier_name,
   dr.amount AS current_rate
 FROM member m
-LEFT JOIN dues_tier dt ON dt.id = m.tier_id
+LEFT JOIN member_tier_standing ct
+  ON ct.member_id = m.id
+ AND ct.effective_from = (
+       SELECT MAX(x.effective_from) FROM member_tier_standing x
+       WHERE x.member_id = m.id
+         AND x.effective_from <= MAX(CAST(sqlc.arg('current_period') AS TEXT), SUBSTR(m.joined_on, 1, 7))
+     )
+LEFT JOIN dues_tier dt ON dt.id = ct.tier_id
 LEFT JOIN dues_rate dr
-  ON dr.tier_id = m.tier_id
- AND dr.effective_from <= sqlc.arg('current_period')
+  ON dr.tier_id = ct.tier_id
+ AND dr.effective_from <= MAX(CAST(sqlc.arg('current_period') AS TEXT), SUBSTR(m.joined_on, 1, 7))
  AND NOT EXISTS (
        SELECT 1 FROM dues_rate dr2
        WHERE dr2.tier_id = dr.tier_id
-         AND dr2.effective_from <= sqlc.arg('current_period')
+         AND dr2.effective_from <= MAX(CAST(sqlc.arg('current_period') AS TEXT), SUBSTR(m.joined_on, 1, 7))
          AND dr2.effective_from > dr.effective_from
      )
 WHERE m.fund_id = sqlc.arg('fund_id')

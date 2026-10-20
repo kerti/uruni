@@ -2,8 +2,6 @@ package ledger
 
 import (
 	"context"
-	"database/sql"
-	"errors"
 	"fmt"
 	"time"
 
@@ -34,7 +32,10 @@ const (
 // owes dues for the period, what their tier's rate says they owe, what they
 // paid toward it, and the derived status.
 type MemberDuesStatus struct {
-	Member     store.Member
+	// Member.TierID is the tier at the requested period, the one that priced
+	// OwedAmount (ADR-040): a row must not show a tier beside an amount that tier
+	// did not set. It is not the member's current tier.
+	Member     Member
 	OwedAmount money.Amount
 	PaidAmount money.Amount
 	Status     DuesStatus
@@ -50,8 +51,11 @@ type MemberDuesStatus struct {
 // paid in advance.
 //
 // Who is on the roster at all:
-//   - member.tier_id IS NULL means no dues obligation: excluded, never shown
-//     as "unpaid".
+//   - A member with no tier in force at the period - no member_tier row reaches
+//     back that far, or the row in force says "no tier" - has no dues
+//     obligation: excluded, never shown as "unpaid". The tier is the one in
+//     force at the period, not today's (ADR-040), so promoting a member in June
+//     leaves January priced at the old tier.
 //   - A member whose tier has no dues_rate effective for this period (the
 //     "madya TBD" case, PRD 6) is omitted. Uruni does not invent an amount.
 //   - joined_on / inactive_on bound the active window, inclusive by month at
@@ -84,6 +88,18 @@ func (l *Ledger) DuesStatusForPeriod(ctx context.Context, fundID int64, period s
 		return nil, fmt.Errorf("listing members: %w", err)
 	}
 
+	// The whole roster is priced from two reads folded per member, not a query
+	// per member (ADR-040).
+	tierRows, err := l.q.ListMemberTiersByFund(ctx, fundID)
+	if err != nil {
+		return nil, fmt.Errorf("listing member tiers: %w", err)
+	}
+	rateRows, err := l.q.ListDuesRatesForPricing(ctx, fundID)
+	if err != nil {
+		return nil, fmt.Errorf("listing dues rates: %w", err)
+	}
+	prices := newPricing(tierRows, rateRows)
+
 	paidRows, err := l.q.DuesPaidByPeriod(ctx, store.DuesPaidByPeriodParams{FundID: fundID, DuesPeriod: &period})
 	if err != nil {
 		return nil, fmt.Errorf("dues paid by period: %w", err)
@@ -110,28 +126,19 @@ func (l *Ledger) DuesStatusForPeriod(ctx context.Context, fundID int64, period s
 
 	var statuses []MemberDuesStatus
 	for _, m := range members {
-		if m.TierID == nil {
-			continue // no dues obligation
-		}
 		if !memberOwesPeriod(m, period) {
 			continue // outside the joined_on..inactive_on window
 		}
 
-		// Accepted limitation (ADR-024): member.tier_id names the member's CURRENT
-		// tier, not the tier effective at `period`, so a period before a promotion
-		// can be misstated. See
-		// TestDuesStatusForPeriodMidYearPromotionAppliesCurrentTierToPastPeriodsAcceptedLimitation.
-		rate, err := l.q.GetEffectiveDuesRate(ctx, store.GetEffectiveDuesRateParams{
-			TierID: *m.TierID, EffectiveFrom: period,
-		})
-		if errors.Is(err, sql.ErrNoRows) {
-			continue // tier has no rate effective for this period ("madya TBD")
-		}
-		if err != nil {
-			return nil, fmt.Errorf("effective dues rate for tier %d: %w", *m.TierID, err)
+		// The tier in force at `period` and the rate that tier carried then. Either
+		// missing means nothing is owed: no tier is no obligation, and a tier with no
+		// rate yet effective is the "madya TBD" case.
+		tierID, rate, ok := prices.priceAt(m.ID, period)
+		if !ok {
+			continue
 		}
 
-		owed := money.FromDB(rate.Amount)
+		owed := money.FromDB(rate)
 		paid := paidByMember[m.ID] // zero value if the member paid nothing this period
 
 		status := classifyDuesStatus(owed, paid)
@@ -139,7 +146,7 @@ func (l *Ledger) DuesStatusForPeriod(ctx context.Context, fundID int64, period s
 		if status == DuesStatusPaid {
 			if latest, ok := latestByMember[m.ID]; ok && latest > period {
 				status = DuesStatusPaidInAdvance
-				through, err = l.paidThrough(ctx, fundID, m, period, latest)
+				through, err = l.paidThrough(ctx, fundID, m, prices, period, latest)
 				if err != nil {
 					return nil, err
 				}
@@ -147,7 +154,7 @@ func (l *Ledger) DuesStatusForPeriod(ctx context.Context, fundID int64, period s
 		}
 
 		statuses = append(statuses, MemberDuesStatus{
-			Member: m, OwedAmount: owed, PaidAmount: paid, Status: status, PaidThrough: through,
+			Member: Member{Member: m, TierID: &tierID}, OwedAmount: owed, PaidAmount: paid, Status: status, PaidThrough: through,
 		})
 	}
 
@@ -196,20 +203,23 @@ func CurrentDuesPeriod(now time.Time) string {
 //     that tier.
 //
 // Within the range DuesStatusForPeriod's rules decide what is owed:
-//   - member.tier_id == nil: no obligation, empty result.
+//   - a member with no tier in any period (no member_tier row, or only rows
+//     saying "no tier"): no obligation, empty result.
+//   - each period is priced at the tier in force then, not today's (ADR-040), so
+//     a promotion never reaches back and the chain of arrears follows the tiers
+//     the member was actually in.
 //   - memberOwesPeriod bounds every period, both ends inclusive by month.
-//   - a period whose tier has no dues_rate effective yet is skipped, not
-//     invented, and does not truncate the walk: a later period can still be
-//     owed once a rate exists.
-//   - the mid-year-promotion limitation (ADR-024) is accepted and carried
-//     over unchanged; see
-//     TestDuesStatusForPeriodMidYearPromotionAppliesCurrentTierToPastPeriodsAcceptedLimitation.
+//   - a period with no tier in force, or whose tier has no dues_rate effective
+//     yet, is skipped, not invented, and does not truncate the walk: a later
+//     period can still be owed once a tier or rate exists.
 //
 // A period appears only when classifyDuesStatus says Unpaid or Partial; Paid
 // and PaidInAdvance are "nothing outstanding" and dropped. So unlike
 // DuesStatusForPeriod it needs no LatestDuesPeriodPaidByMember call.
 //
 // It uses l.q directly rather than withTx, like DuesStatusForPeriod (ADR-027).
+// It reads the member's tier timeline and those tiers' rates once and folds
+// them per period, a constant number of queries however long the walk.
 func (l *Ledger) OutstandingDuesForMember(ctx context.Context, fundID, memberID int64, through string, now time.Time) ([]OutstandingDuesPeriod, error) {
 	if through == "" {
 		through = CurrentDuesPeriod(now)
@@ -222,15 +232,19 @@ func (l *Ledger) OutstandingDuesForMember(ctx context.Context, fundID, memberID 
 		return nil, fmt.Errorf("fetching member: %w", err)
 	}
 
-	if member.TierID == nil {
-		return nil, nil // no dues obligation
+	prices, err := l.memberPricing(ctx, fundID, memberID)
+	if err != nil {
+		return nil, err
+	}
+	if !prices.hasTier(memberID) {
+		return nil, nil // no dues obligation, in any period
 	}
 
 	// The end of the walk is `through` alone. inactive_on is deliberately not
 	// narrowed in here: memberOwesPeriod in the loop already refuses every period
 	// after the month a member left, and a second bound would be a second
 	// definition of the window rule that can drift. The cost is a few string
-	// comparisons before the rate query, so no extra database work.
+	// comparisons before the rate lookup, which reads rows already in memory.
 	end := through
 
 	start := member.JoinedOn[:7]
@@ -265,18 +279,14 @@ func (l *Ledger) OutstandingDuesForMember(ctx context.Context, fundID, memberID 
 			continue // outside the joined_on..inactive_on window
 		}
 
-		// Accepted limitation (ADR-024); see DuesStatusForPeriod.
-		rate, err := l.q.GetEffectiveDuesRate(ctx, store.GetEffectiveDuesRateParams{
-			TierID: *member.TierID, EffectiveFrom: period,
-		})
-		if errors.Is(err, sql.ErrNoRows) {
-			continue // tier has no rate effective for this period ("madya TBD")
-		}
-		if err != nil {
-			return nil, fmt.Errorf("effective dues rate for tier %d: %w", *member.TierID, err)
+		// The tier in force at this period and its rate then (ADR-040); see
+		// DuesStatusForPeriod. Neither found means nothing is owed this period.
+		_, rate, ok := prices.priceAt(memberID, period)
+		if !ok {
+			continue
 		}
 
-		owed := money.FromDB(rate.Amount)
+		owed := money.FromDB(rate)
 		paid := paidByPeriod[period] // zero value if the member paid nothing this period
 
 		status := classifyDuesStatus(owed, paid)
@@ -356,11 +366,12 @@ func classifyDuesStatus(owed, paid money.Amount) DuesStatus {
 // LatestDuesPeriodPaidByMember's value and bounds the walk.
 //
 // Each step applies DuesStatusForPeriod's rules: a period outside the
-// member's active window ends the run; a period whose tier has no effective
-// rate owes nothing, so it is skipped without breaking the run; a period
-// paid below its effective rate breaks it, so a rate rise in a prepaid month
-// reads honestly as not paid through.
-func (l *Ledger) paidThrough(ctx context.Context, fundID int64, m store.Member, period, latest string) (string, error) {
+// member's active window ends the run; a period with no tier in force or no
+// effective rate owes nothing, so it is skipped without breaking the run; a
+// period paid below what its own tier and rate say breaks it, so a rate or tier
+// rise in a prepaid month reads honestly as not paid through. Each period is
+// priced at the tier in force then (ADR-040), through prices.
+func (l *Ledger) paidThrough(ctx context.Context, fundID int64, m store.Member, prices pricing, period, latest string) (string, error) {
 	paidRows, err := l.q.DuesPaidByMemberGroupedByPeriod(ctx, store.DuesPaidByMemberGroupedByPeriodParams{
 		FundID: fundID, MemberID: &m.ID,
 	})
@@ -384,20 +395,30 @@ func (l *Ledger) paidThrough(ctx context.Context, fundID int64, m store.Member, 
 		if next > latest || !memberOwesPeriod(m, next) {
 			return through, nil
 		}
-		rate, err := l.q.GetEffectiveDuesRate(ctx, store.GetEffectiveDuesRateParams{
-			TierID: *m.TierID, EffectiveFrom: next,
-		})
-		if errors.Is(err, sql.ErrNoRows) {
+		_, rate, ok := prices.priceAt(m.ID, next)
+		if !ok {
 			continue // nothing owed this period - skipped, not a break
 		}
-		if err != nil {
-			return "", fmt.Errorf("effective dues rate for tier %d: %w", *m.TierID, err)
-		}
-		if classifyDuesStatus(money.FromDB(rate.Amount), paidByPeriod[next]) != DuesStatusPaid {
+		if classifyDuesStatus(money.FromDB(rate), paidByPeriod[next]) != DuesStatusPaid {
 			return through, nil
 		}
 		through = next
 	}
+}
+
+// memberPricing fetches what prices one member's walk: their standing tier rows
+// and the rates of the tiers those rows name, two queries however many periods
+// follow.
+func (l *Ledger) memberPricing(ctx context.Context, fundID, memberID int64) (pricing, error) {
+	tierRows, err := l.q.ListMemberTiersForMember(ctx, store.ListMemberTiersForMemberParams{FundID: fundID, MemberID: memberID})
+	if err != nil {
+		return pricing{}, fmt.Errorf("listing member tiers: %w", err)
+	}
+	rateRows, err := l.q.ListDuesRatesForMemberPricing(ctx, store.ListDuesRatesForMemberPricingParams{FundID: fundID, MemberID: memberID})
+	if err != nil {
+		return pricing{}, fmt.Errorf("listing dues rates: %w", err)
+	}
+	return newPricing(tierRows, rateRows), nil
 }
 
 // memberOwesPeriod reports whether period falls within the member's active

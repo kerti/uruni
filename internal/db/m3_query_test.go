@@ -117,19 +117,19 @@ func TestDuesPaidByPeriodCoversFullPartialAndUnpaidMembers(t *testing.T) {
 	period := "2026-08"
 
 	jane, err := q.CreateMember(ctx, store.CreateMemberParams{JoinedOn: "2000-01-01",
-		FundID: f.fundID, Name: "Jane Doe", TierID: &tierID, CreatedAt: 1,
+		FundID: f.fundID, Name: "Jane Doe", CreatedAt: 1,
 	})
 	if err != nil {
 		t.Fatalf("CreateMember(Jane Doe) = %v, want no error", err)
 	}
 	john, err := q.CreateMember(ctx, store.CreateMemberParams{JoinedOn: "2000-01-01",
-		FundID: f.fundID, Name: "John Doe", TierID: &tierID, CreatedAt: 1,
+		FundID: f.fundID, Name: "John Doe", CreatedAt: 1,
 	})
 	if err != nil {
 		t.Fatalf("CreateMember(John Doe) = %v, want no error", err)
 	}
 	jack, err := q.CreateMember(ctx, store.CreateMemberParams{JoinedOn: "2000-01-01",
-		FundID: f.fundID, Name: "Jack Doe", TierID: &tierID, CreatedAt: 1,
+		FundID: f.fundID, Name: "Jack Doe", CreatedAt: 1,
 	})
 	if err != nil {
 		t.Fatalf("CreateMember(Jack Doe) = %v, want no error", err)

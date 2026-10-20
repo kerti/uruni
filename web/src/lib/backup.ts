@@ -16,7 +16,11 @@ export interface StoredBackup {
   date: string // YYYY-MM-DD, Asia/Jakarta
   kind: 'daily' | 'pre-restore'
   format_version: number
+  /** Written in the format this build writes. An older one is labelled. */
   is_current_format: boolean
+  /** The importer can read it - the current format, or an older one it upgrades
+   * (ADR-040) - so the restore control follows this, not is_current_format. */
+  can_restore: boolean
   size_bytes: number
 }
 

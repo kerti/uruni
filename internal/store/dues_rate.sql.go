@@ -186,6 +186,95 @@ func (q *Queries) ListDuesRatesByTier(ctx context.Context, tierID int64) ([]Dues
 	return items, nil
 }
 
+const listDuesRatesForMemberPricing = `-- name: ListDuesRatesForMemberPricing :many
+SELECT dr.id, dr.tier_id, dr.amount, dr.effective_from, dr.created_at
+FROM dues_rate dr
+WHERE dr.tier_id IN (
+  SELECT mt.tier_id FROM member_tier_standing mt
+  WHERE mt.fund_id = ? AND mt.member_id = ? AND mt.tier_id IS NOT NULL
+)
+ORDER BY dr.tier_id, dr.effective_from
+`
+
+type ListDuesRatesForMemberPricingParams struct {
+	FundID   int64
+	MemberID int64
+}
+
+// The rates that price one member (OutstandingDuesForMember, paidThrough): those
+// of every tier the member has a standing row for. A tier named only by a
+// superseded row prices nothing, so it is not fetched.
+func (q *Queries) ListDuesRatesForMemberPricing(ctx context.Context, arg ListDuesRatesForMemberPricingParams) ([]DuesRate, error) {
+	rows, err := q.db.QueryContext(ctx, listDuesRatesForMemberPricing, arg.FundID, arg.MemberID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []DuesRate{}
+	for rows.Next() {
+		var i DuesRate
+		if err := rows.Scan(
+			&i.ID,
+			&i.TierID,
+			&i.Amount,
+			&i.EffectiveFrom,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listDuesRatesForPricing = `-- name: ListDuesRatesForPricing :many
+SELECT dues_rate.id, dues_rate.tier_id, dues_rate.amount, dues_rate.effective_from, dues_rate.created_at
+FROM dues_rate
+JOIN dues_tier ON dues_tier.id = dues_rate.tier_id
+WHERE dues_tier.fund_id = ?
+ORDER BY dues_rate.tier_id, dues_rate.effective_from
+`
+
+// The rates that price a roster (DuesStatusForPeriod): every tier's rates across
+// the fund, ordered tier then month, the order the Go fold needs. Folded per
+// (tier, period) as "the latest row at or before", so a roster costs one query
+// however many members it holds. This and the next query are the rate reads the
+// rate-correction work (ADR-040) points at the standing view.
+func (q *Queries) ListDuesRatesForPricing(ctx context.Context, fundID int64) ([]DuesRate, error) {
+	rows, err := q.db.QueryContext(ctx, listDuesRatesForPricing, fundID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []DuesRate{}
+	for rows.Next() {
+		var i DuesRate
+		if err := rows.Scan(
+			&i.ID,
+			&i.TierID,
+			&i.Amount,
+			&i.EffectiveFrom,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const updateDuesRate = `-- name: UpdateDuesRate :one
 UPDATE dues_rate
 SET amount = ?

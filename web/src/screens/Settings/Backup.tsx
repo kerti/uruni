@@ -83,9 +83,10 @@ function kindLabel(kind: StoredBackup['kind']): string {
  * restore controls are plain ink beside the row's text (no big outlined button
  * per row), each a 44px target.
  *
- * An older-format row (is_current_format false) gets the "older version" label
- * in place of the restore control - listed and downloadable, never offered for
- * restore.
+ * An older-format row (is_current_format false) gets the "older version" label.
+ * The restore control follows can_restore: a row the importer can upgrade (the
+ * previous format, ADR-040) has both; one it cannot read is listed and
+ * downloadable, never offered for restore.
  */
 function AutoBackupList({ onRestore }: { onRestore: (name: string) => void }) {
   const [listState, listRun] = useApi<StoredBackup[]>()
@@ -141,7 +142,7 @@ function AutoBackupList({ onRestore }: { onRestore: (name: string) => void }) {
                 </span>
               </div>
               <div className="flex shrink-0 items-center">
-                {item.is_current_format && (
+                {item.can_restore && (
                   <button
                     type="button"
                     aria-label={text.restoreRowAria(kindLabel(item.kind), formatIsoDate(item.date))}

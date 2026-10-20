@@ -56,10 +56,29 @@ type Member struct {
 	ID         int64
 	FundID     int64
 	Name       string
-	TierID     *int64
 	JoinedOn   string
 	InactiveOn *string
 	CreatedAt  int64
+}
+
+type MemberTier struct {
+	ID            int64
+	FundID        int64
+	MemberID      int64
+	TierID        *int64
+	EffectiveFrom string
+	Correction    int64
+	CreatedAt     int64
+}
+
+type MemberTierStanding struct {
+	ID            int64
+	FundID        int64
+	MemberID      int64
+	TierID        *int64
+	EffectiveFrom string
+	Correction    int64
+	CreatedAt     int64
 }
 
 type Purpose struct {

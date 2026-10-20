@@ -44,6 +44,11 @@ type Querier interface {
 	// the same transaction.
 	CreateIncidentalRecipient(ctx context.Context, arg CreateIncidentalRecipientParams) error
 	CreateMember(ctx context.Context, arg CreateMemberParams) (Member, error)
+	// member_tier (ADR-040): a member's tier, month by month. Every pricing read goes
+	// through the member_tier_standing view (one standing row per member and month,
+	// the highest correction); internal/db's guard test fails a query that reads
+	// the table directly, except the ones named there.
+	CreateMemberTier(ctx context.Context, arg CreateMemberTierParams) (MemberTier, error)
 	CreatePurpose(ctx context.Context, arg CreatePurposeParams) (Purpose, error)
 	CreateReceipt(ctx context.Context, arg CreateReceiptParams) (Receipt, error)
 	CreateReconciliation(ctx context.Context, arg CreateReconciliationParams) (Reconciliation, error)
@@ -68,6 +73,7 @@ type Querier interface {
 	DeleteAllFunds(ctx context.Context) error
 	DeleteAllIncidentalRecipients(ctx context.Context) error
 	DeleteAllIncidentals(ctx context.Context) error
+	DeleteAllMemberTiers(ctx context.Context) error
 	DeleteAllMembers(ctx context.Context) error
 	DeleteAllPurposes(ctx context.Context) error
 	DeleteAllReceipts(ctx context.Context) error
@@ -83,12 +89,13 @@ type Querier interface {
 	// What makes a wrong-month rate correctable: UNIQUE (tier_id, effective_from)
 	// refuses the corrected row otherwise.
 	DeleteDuesRate(ctx context.Context, id int64) error
-	// A tier no member is in priced nothing, so its rates are not history anyone
-	// was charged under and go with it.
+	// A tier no member was ever in priced nothing, so its rates are not history
+	// anyone was charged under and go with it.
 	DeleteDuesRatesByTier(ctx context.Context, tierID int64) error
 	// Removes a tier the fund never put anyone in (#232): the setup typo, never a
-	// tier with history. No pre-check for members: member's composite
-	// (fund_id, tier_id) FK refuses it, and a COUNT(*) first would only race it.
+	// tier with history. "Ever": member_tier's composite (fund_id, tier_id) FK
+	// refuses a tier any row names, a superseded one included (ADR-040). No
+	// pre-check: the FK is the check, and a COUNT(*) first would only race it.
 	//
 	// The caller runs this in one transaction after DeleteDuesRatesByTier: rates
 	// FK onto the tier so it cannot go first, and if a member then refuses the
@@ -291,6 +298,10 @@ type Querier interface {
 	// still be the MAX(dues_period) for its member, reading as "paid in advance"
 	// through a period that is no longer paid at all.
 	LatestDuesPeriodPaidByMember(ctx context.Context, fundID int64) ([]LatestDuesPeriodPaidByMemberRow, error)
+	// The next-correction read (a named exception to the view rule): the highest
+	// correction number any row of this member and month carries, or -1 when the
+	// month has none. It must see superseded rows, which the view hides.
+	LatestMemberTierCorrection(ctx context.Context, arg LatestMemberTierCorrectionParams) (int64, error)
 	LatestReconciliation(ctx context.Context, fundID int64) (Reconciliation, error)
 	// Cash before bank, then by name (maintainer, 2026-10-05): the order she
 	// counts in. Every list of locations reads this one order. id only breaks a
@@ -321,6 +332,16 @@ type Querier interface {
 	// not by effective date.
 	ListDuesRatesByFund(ctx context.Context, fundID int64) ([]DuesRate, error)
 	ListDuesRatesByTier(ctx context.Context, tierID int64) ([]DuesRate, error)
+	// The rates that price one member (OutstandingDuesForMember, paidThrough): those
+	// of every tier the member has a standing row for. A tier named only by a
+	// superseded row prices nothing, so it is not fetched.
+	ListDuesRatesForMemberPricing(ctx context.Context, arg ListDuesRatesForMemberPricingParams) ([]DuesRate, error)
+	// The rates that price a roster (DuesStatusForPeriod): every tier's rates across
+	// the fund, ordered tier then month, the order the Go fold needs. Folded per
+	// (tier, period) as "the latest row at or before", so a roster costs one query
+	// however many members it holds. This and the next query are the rate reads the
+	// rate-correction work (ADR-040) points at the standing view.
+	ListDuesRatesForPricing(ctx context.Context, fundID int64) ([]DuesRate, error)
 	// By name, ignoring case (maintainer, 2026-10-05).
 	ListDuesTiersByFund(ctx context.Context, fundID int64) ([]DuesTier, error)
 	ListFunds(ctx context.Context) ([]Fund, error)
@@ -334,6 +355,16 @@ type Querier interface {
 	ListIncidentalRecipientsByFund(ctx context.Context, fundID int64) ([]IncidentalRecipient, error)
 	// Joined through purpose, where fund ownership lives.
 	ListIncidentalsByFund(ctx context.Context, fundID int64) ([]Incidental, error)
+	// Every member's standing rows across the fund, for the readers that price a
+	// whole roster at once: folded per member in Go, so no read adds a per-member
+	// query. Ordered by month, the order the fold needs, never by id or created_at.
+	ListMemberTiersByFund(ctx context.Context, fundID int64) ([]MemberTierStanding, error)
+	// The backup export's read (ADR-012, a named exception to the view rule): every
+	// row, superseded ones included, because the trail is the data. Ordered by id
+	// only for deterministic export bytes.
+	ListMemberTiersForExport(ctx context.Context, fundID int64) ([]MemberTier, error)
+	// One member's standing rows, oldest month first.
+	ListMemberTiersForMember(ctx context.Context, arg ListMemberTiersForMemberParams) ([]MemberTierStanding, error)
 	// By name, ignoring case (maintainer, 2026-10-05): the order every member list
 	// reads, Iuran status included. id only breaks a tie between identical names.
 	ListMembersByFund(ctx context.Context, fundID int64) ([]Member, error)
@@ -343,12 +374,19 @@ type Querier interface {
 	// would skip or duplicate a member when equal names straddle a page boundary
 	// and a same-named member is inserted between fetches.
 	//
-	// tier_name is NULL for a member with no tier_id (plain LEFT JOIN).
+	// tier_id, tier_name and current_rate describe the member's CURRENT tier
+	// (ADR-040): the standing member_tier row of the latest month at or before
+	// max(current_period, the join month), so a member who joins next month shows
+	// the tier entered for them. The month comparison reads the member_tier_standing
+	// view, never the table (a superseded row must not win a month). A member with
+	// no row, or a NULL tier, reads NULL in all three (plain LEFT JOINs).
 	//
-	// current_rate is the rate GetEffectiveDuesRate would find for
-	// sqlc.arg('current_period') ("YYYY-MM", the caller's one snapshot of "now",
+	// current_rate is the rate GetEffectiveDuesRate would find for that same month,
+	// max(current_period, the join month), so the tier and its rate are read at one
+	// month: a member who joins next month, on a tier whose first rate starts then,
+	// shows both. current_period is "YYYY-MM", the caller's one snapshot of "now",
 	// shared with the arrears figure computed in Go - see
-	// Ledger.ArrearsMonthsForMember). A LEFT JOIN, not a scalar subquery, on
+	// Ledger.ArrearsMonthsForMember. A LEFT JOIN, not a scalar subquery, on
 	// purpose: a scalar subquery needs a CAST to get a concrete Go type, and this
 	// codebase's CAST idiom means "never NULL" - the opposite of what current_rate
 	// must say. A tier with no rate yet effective (the "madya TBD" case, PRD
@@ -617,6 +655,7 @@ type Querier interface {
 	RestoreIncidental(ctx context.Context, arg RestoreIncidentalParams) error
 	RestoreIncidentalRecipient(ctx context.Context, arg RestoreIncidentalRecipientParams) error
 	RestoreMember(ctx context.Context, arg RestoreMemberParams) error
+	RestoreMemberTier(ctx context.Context, arg RestoreMemberTierParams) error
 	RestorePurpose(ctx context.Context, arg RestorePurposeParams) error
 	RestoreReceipt(ctx context.Context, arg RestoreReceiptParams) error
 	RestoreReconciliation(ctx context.Context, arg RestoreReconciliationParams) error
@@ -672,9 +711,10 @@ type Querier interface {
 	// Renaming moves no money.
 	UpdateIncidentalOccasion(ctx context.Context, arg UpdateIncidentalOccasionParams) (Incidental, error)
 	// A correction to reference data, not a ledger event. name and joined_on are
-	// NOT NULL, so COALESCE covers them: nil can only mean "leave alone". The two
-	// nullable columns need the set_* flags, since there a null argument is
-	// ambiguous between "leave alone" and "clear it".
+	// NOT NULL, so COALESCE covers them: nil can only mean "leave alone". The one
+	// nullable column needs the set_* flag, since there a null argument is
+	// ambiguous between "leave alone" and "clear it". The tier is not a column of
+	// member (ADR-040): it is member_tier rows, written by Ledger.UpdateMember.
 	UpdateMember(ctx context.Context, arg UpdateMemberParams) (Member, error)
 	// Renames a purpose; a posted transaction references it by id and nothing in
 	// the ledger reads the text. Which purposes may be renamed is the handler's

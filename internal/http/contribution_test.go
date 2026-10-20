@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
@@ -232,6 +233,13 @@ func TestGetIncidentalParticipationReturnsExpectedAndUnexpected(t *testing.T) {
 	rec := getIncidentalParticipation(t, r, envelope.PurposeID)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("GET /api/incidentals/{id}/participation = %d, want %d (body: %s)", rec.Code, http.StatusOK, rec.Body.String())
+	}
+	// An envelope reads no tier (ADR-034, ADR-040): the member objects carry none of
+	// the roster's tier fields, not even a null.
+	for _, key := range []string{`"tier_id"`, `"tier_name"`, `"current_rate"`, `"arrears_months"`} {
+		if strings.Contains(rec.Body.String(), key) {
+			t.Errorf("participation body carries %s, want the participant shape without it", key)
+		}
 	}
 	var participation incidentalParticipationResponse
 	if err := json.NewDecoder(rec.Body).Decode(&participation); err != nil {

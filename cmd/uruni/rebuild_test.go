@@ -823,9 +823,36 @@ func TestRebuildTakesThePreviousReleasesBackup(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	// The fixture stays what the last tag wrote: format 1. The step that reads it is
+	// the one under test (ADR-040: v1 -> v2 -> totals).
+	var peek struct {
+		FormatVersion int64 `json:"format_version"`
+		Members       []struct {
+			TierID *int64 `json:"tier_id"`
+		} `json:"members"`
+	}
+	if err := json.Unmarshal(raw, &peek); err != nil {
+		t.Fatal(err)
+	}
+	if peek.FormatVersion != 1 {
+		t.Fatalf("testdata/previous-release is format_version %d, want 1: it must stay the last release's file, refreshed only when URUNI_TAG moves", peek.FormatVersion)
+	}
+	tiered := 0
+	for _, m := range peek.Members {
+		if m.TierID != nil {
+			tiered++
+		}
+	}
+
 	parsed, err := backup.ParseUpload(f.zipPath)
 	if err != nil {
 		t.Fatalf("ParseUpload(previous release) = %v, want no error", err)
+	}
+	if parsed.Document.FormatVersion != backup.FormatVersion {
+		t.Errorf("parsed FormatVersion = %d, want %d: ParseUpload hands the importer the current shape", parsed.Document.FormatVersion, backup.FormatVersion)
+	}
+	if len(parsed.Document.MemberTiers) != tiered || tiered == 0 {
+		t.Errorf("upgraded member_tiers = %d, tiered members in the file = %d, want one row per tiered member (and at least one)", len(parsed.Document.MemberTiers), tiered)
 	}
 	var want int64
 	for _, ft := range parsed.Document.Totals.Funds {
@@ -847,7 +874,94 @@ func TestRebuildTakesThePreviousReleasesBackup(t *testing.T) {
 	if got != want || want == 0 {
 		t.Errorf("rebuilt total = %d, backup total = %d, want them equal and non-zero", got, want)
 	}
+	var rows int
+	if err := sqlDB.QueryRow(`SELECT COUNT(*) FROM member_tier WHERE correction = 0`).Scan(&rows); err != nil {
+		t.Fatal(err)
+	}
+	if rows != tiered {
+		t.Errorf("rebuilt database holds %d backfilled member_tier rows, want %d", rows, tiered)
+	}
 	if !strings.Contains(f.out.String(), "backup says   "+formatRupiah(want)) || !strings.Contains(f.out.String(), "rebuilt says  "+formatRupiah(want)) {
 		t.Errorf("output does not show the proven totals:\n%s", f.out.String())
+	}
+}
+
+// TestRebuildGateStillComparesAVersion1BackupWithAnOlderShapedDatabase: the
+// database being replaced predates member_tier, as every live instance does at
+// this upgrade, and the backup is the format-1 file the old binary wrote. The
+// gate compares what both sides hold (members, ledger, funds, login) and says it
+// did not compare member_tier, which the old database does not have.
+func TestRebuildGateStillComparesAVersion1BackupWithAnOlderShapedDatabase(t *testing.T) {
+	t.Parallel()
+	f := oldInstance(t)
+	execRaw(t, f.dbPath, `DROP VIEW member_tier_standing`, `DROP TABLE member_tier`)
+	// Rewrite the current export as the old binary wrote it: format 1, no
+	// member_tiers, a tier on each member.
+	rewriteRawBackup(t, f.zipPath, func(doc map[string]any) {
+		doc["format_version"] = 1
+		delete(doc, "member_tiers")
+		members, _ := doc["members"].([]any)
+		for _, m := range members {
+			m.(map[string]any)["tier_id"] = nil
+		}
+	})
+
+	if err := f.run(backup.ReplaceHooks{}, rebuildNow); err != nil {
+		t.Fatalf("rebuild of a format-1 backup over an older-shaped database = %v, want no error\n%s", err, f.out.String())
+	}
+	out := f.out.String()
+	if !strings.Contains(out, "member count") || !strings.Contains(out, "transaction count") {
+		t.Errorf("output = %q, want the gate to have compared member and transaction counts", out)
+	}
+	if !strings.Contains(out, "member_tier (not in the database)") {
+		t.Errorf("output = %q, want member_tier reported as not compared", out)
+	}
+	openRebuilt(t, f.dbPath)
+}
+
+// rewriteRawBackup is rewriteBackup for a test that needs a shape backup.Document
+// can no longer hold: it edits uruni.json as a generic map.
+func rewriteRawBackup(t *testing.T, zipPath string, edit func(map[string]any)) {
+	t.Helper()
+	zr, err := zip.OpenReader(zipPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var out bytes.Buffer
+	zw := zip.NewWriter(&out)
+	for _, zf := range zr.File {
+		rc, err := zf.Open()
+		if err != nil {
+			t.Fatal(err)
+		}
+		data, err := io.ReadAll(rc)
+		_ = rc.Close()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if zf.Name == "uruni.json" {
+			var doc map[string]any
+			if err := json.Unmarshal(data, &doc); err != nil {
+				t.Fatal(err)
+			}
+			edit(doc)
+			if data, err = json.Marshal(doc); err != nil {
+				t.Fatal(err)
+			}
+		}
+		w, err := zw.Create(zf.Name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := w.Write(data); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := zw.Close(); err != nil {
+		t.Fatal(err)
+	}
+	_ = zr.Close()
+	if err := os.WriteFile(zipPath, out.Bytes(), 0o600); err != nil {
+		t.Fatal(err)
 	}
 }
