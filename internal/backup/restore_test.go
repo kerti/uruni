@@ -25,7 +25,7 @@ import (
 // receiptFileBytes is not a real image (Export only copies it), which
 // restore's ADR-011 decode check cares about, so tests that round-trip
 // through ParseUpload replace the stub bytes with this, on disk only.
-func realJPEGBytes(t *testing.T) []byte {
+func realJPEGBytes(t testing.TB) []byte {
 	t.Helper()
 	img := image.NewNRGBA(image.Rect(0, 0, 1, 1))
 	img.Set(0, 0, color.NRGBA{R: 10, G: 20, B: 30, A: 255})
@@ -228,7 +228,7 @@ func strPtr(s string) *string { return &s }
 // minimalDocJSON is the smallest valid uruni.json ParseUpload accepts (every
 // "always an array" field present, formatVersion correct); the refusal tests
 // start here and break one thing.
-func minimalDocJSON(t *testing.T, formatVersion int64) []byte {
+func minimalDocJSON(t testing.TB, formatVersion int64) []byte {
 	t.Helper()
 	doc := Document{
 		FormatVersion:        formatVersion,
@@ -273,7 +273,7 @@ func parseUploadBytes(t *testing.T, data []byte) (ParsedUpload, error) {
 	return ParseUpload(path)
 }
 
-func zipOf(t *testing.T, jsonBytes []byte, receipts map[string][]byte) []byte {
+func zipOf(t testing.TB, jsonBytes []byte, receipts map[string][]byte) []byte {
 	t.Helper()
 	var buf bytes.Buffer
 	zw := zip.NewWriter(&buf)

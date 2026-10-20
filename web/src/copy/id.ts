@@ -212,6 +212,9 @@ export const copy = {
       invalid_argument: 'Ada isian yang belum sesuai. Coba periksa lagi.',
       already_registered: 'Akun bendahara untuk Uruni ini sudah pernah dibuat.',
       invalid_credentials: 'Email atau kata sandi salah.',
+      // A new password on the list of the most common ones (register, and the
+      // password change in Pengaturan). No blame: the list is public and long.
+      password_too_common: 'Kata sandi ini terlalu umum dan mudah ditebak. Pilih yang lain, ya.',
       // The current password typed to change the login's email or password
       // (Pengaturan, Akun bendahara). Unlike invalid_credentials above, she is
       // signed in, so it can say plainly which field to check.
