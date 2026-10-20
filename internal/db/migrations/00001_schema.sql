@@ -8,6 +8,14 @@
 -- membership table).
 --
 -- Conventions follow docs/ADR/024-schema-conventions.md.
+--
+-- Every money column carries the same ceiling, 999999999999 (Rp 999.999.999.999,
+-- money.MaxAmount, #499): the backstop for anything that writes around the
+-- ledger, a backup restore included. A signed column is bounded on both sides.
+-- The one exception is reconciliation_line.difference_amount, which is derived.
+-- The literal is plain digits because a CHECK cannot name a Go constant;
+-- internal/db/amount_ceiling_test.go pins it to money.MaxAmount and fails when a
+-- money column (minimum_per_member has no "amount" in its name) lacks it.
 
 -- +goose Up
 
@@ -81,7 +89,7 @@ CREATE TABLE dues_rate (                  -- effective-dated, one-sided interval
   -- A tier with an undecided rate (madya, PRD section 6) simply has no row.
   id             INTEGER PRIMARY KEY,
   tier_id        INTEGER NOT NULL REFERENCES dues_tier(id),
-  amount         INTEGER NOT NULL CHECK (amount >= 0),
+  amount         INTEGER NOT NULL CHECK (amount >= 0 AND amount <= 999999999999),
   effective_from TEXT    NOT NULL CHECK (effective_from GLOB '[0-9][0-9][0-9][0-9]-[0-1][0-9]'
                                          AND date(effective_from||'-01') IS NOT NULL),
   created_at     INTEGER NOT NULL,
@@ -149,7 +157,7 @@ CREATE TABLE reimbursement (              -- off-ledger until settled
   fund_id     INTEGER NOT NULL,
   member_id   INTEGER NOT NULL,
   purpose_id  INTEGER NOT NULL,
-  amount      INTEGER NOT NULL CHECK (amount > 0),
+  amount      INTEGER NOT NULL CHECK (amount > 0 AND amount <= 999999999999),
   incurred_on TEXT    NOT NULL CHECK (date(incurred_on) IS NOT NULL AND incurred_on = date(incurred_on)),
   waived_on   TEXT             CHECK (waived_on IS NULL OR (date(waived_on) IS NOT NULL AND waived_on = date(waived_on))),
   note        TEXT,
@@ -168,7 +176,7 @@ CREATE TABLE "transaction" (              -- the ledger. insert-only.
   direction   TEXT    NOT NULL CHECK (direction IN ('in','out')),
   -- The sign lives in direction, never in the amount, so summing the ledger is
   -- one CASE and a negative amount is impossible rather than merely unexpected.
-  amount      INTEGER NOT NULL CHECK (amount > 0),
+  amount      INTEGER NOT NULL CHECK (amount > 0 AND amount <= 999999999999),
   occurred_on TEXT    NOT NULL CHECK (date(occurred_on) IS NOT NULL AND occurred_on = date(occurred_on)),
   kind        TEXT    NOT NULL CHECK (kind IN
                 ('opening','normal','dues','reimbursement','adjustment','transfer')),
@@ -299,8 +307,13 @@ CREATE TABLE reconciliation_line (        -- one counted location within a snaps
   fund_id           INTEGER NOT NULL,
   reconciliation_id INTEGER NOT NULL,
   account_id        INTEGER NOT NULL,
-  recorded_amount   INTEGER NOT NULL,     -- frozen at snapshot time
-  actual_amount     INTEGER NOT NULL,     -- what the treasurer counted
+  -- recorded and actual are signed (a recorded balance can be negative), so each
+  -- is bounded on both sides. difference_amount has no ceiling of its own: the
+  -- equality CHECK below fixes it at actual - recorded, so it is bounded by those
+  -- two (at most twice the ceiling, far inside int64), and a third bound would
+  -- refuse a legitimate line (recorded -max, actual +max).
+  recorded_amount   INTEGER NOT NULL CHECK (recorded_amount   BETWEEN -999999999999 AND 999999999999),  -- frozen at snapshot time
+  actual_amount     INTEGER NOT NULL CHECK (actual_amount     BETWEEN -999999999999 AND 999999999999),  -- what the treasurer counted
   difference_amount INTEGER NOT NULL,
   resolution        TEXT    NOT NULL CHECK (resolution IN ('matched','entry_added','adjusted','left_open')),
   adjustment_transaction_id INTEGER,      -- the entry that squared this line
@@ -324,12 +337,12 @@ CREATE TABLE incidental (                 -- the envelope's lifecycle, 1:1 with 
   -- here is a posted fact.
   purpose_id    INTEGER PRIMARY KEY REFERENCES purpose(id),
   occasion      TEXT    NOT NULL CHECK (length(trim(occasion)) > 0),
-  target_amount INTEGER CHECK (target_amount IS NULL OR target_amount > 0),
+  target_amount INTEGER CHECK (target_amount IS NULL OR (target_amount > 0 AND target_amount <= 999999999999)),
   opened_on     TEXT    NOT NULL CHECK (date(opened_on) IS NOT NULL AND opened_on = date(opened_on)),
   closed_on     TEXT             CHECK (closed_on IS NULL OR (date(closed_on) IS NOT NULL AND closed_on = date(closed_on))),
   -- One figure every expected member is asked to give (ADR-034). Not a dues
   -- rate: no tiers, no effective dates, editable like occasion.
-  minimum_per_member INTEGER CHECK (minimum_per_member IS NULL OR minimum_per_member > 0),
+  minimum_per_member INTEGER CHECK (minimum_per_member IS NULL OR (minimum_per_member > 0 AND minimum_per_member <= 999999999999)),
   created_at    INTEGER NOT NULL
 ) STRICT;
 

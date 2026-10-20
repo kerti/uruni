@@ -14,6 +14,30 @@ import (
 // nothing. Both sides of the boundary are pinned on every path, so a path that
 // forgets the check, or is off by one, fails here by name.
 
+// aroundTheCeiling runs write with the schema's amount CHECKs switched off on
+// one connection, to plant the row a database from before the ceiling can still
+// hold, so the code-side guards behind the schema stay covered (#622: a new
+// database refuses such a row outright, see db/amount_ceiling_test.go). The
+// pragma is reset before the connection goes back to the pool.
+func aroundTheCeiling(t *testing.T, l *Ledger, write func(q *store.Queries)) {
+	t.Helper()
+	ctx := context.Background()
+	conn, err := l.db.Conn(ctx)
+	if err != nil {
+		t.Fatalf("taking a connection = %v, want no error", err)
+	}
+	defer func() { _ = conn.Close() }()
+	if _, err := conn.ExecContext(ctx, "PRAGMA ignore_check_constraints = ON"); err != nil {
+		t.Fatalf("PRAGMA ignore_check_constraints = ON = %v, want no error", err)
+	}
+	defer func() {
+		if _, err := conn.ExecContext(ctx, "PRAGMA ignore_check_constraints = OFF"); err != nil {
+			t.Errorf("PRAGMA ignore_check_constraints = OFF = %v, want no error", err)
+		}
+	}()
+	write(store.New(conn))
+}
+
 const (
 	atMax    = money.MaxAmount
 	overMax  = money.MaxAmount + 1
@@ -113,10 +137,12 @@ func ceilingPaths() []ceilingPath {
 		},
 		{
 			// The payout copies the claim's stored amount. A claim past the ceiling
-			// (written before it existed, or restored) must not become a payout above it.
+			// (written before it existed; a new schema refuses it) must not become a
+			// payout above it.
 			name: "SettleReimbursement of a stored claim",
 			call: func(t *testing.T, l *Ledger, f fixture, a money.Amount) error {
-				claim := createReimbursement(t, store.New(l.db), f, a.Int64(), date, nil)
+				var claim store.Reimbursement
+				aroundTheCeiling(t, l, func(q *store.Queries) { claim = createReimbursement(t, q, f, a.Int64(), date, nil) })
 				_, err := l.SettleReimbursement(ctx, SettleReimbursementParams{
 					FundID: f.fundID, ReimbursementID: claim.ID, AccountID: f.cashID, OccurredOn: date,
 				})
