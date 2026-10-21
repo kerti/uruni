@@ -837,15 +837,8 @@ SELECT t.id, t.fund_id, t.account_id, t.purpose_id, t.direction, t.amount, t.occ
        tp.name AS transfer_to_purpose_name,
        tr.corrects_transaction_id AS transfer_corrects_transaction_id,
        tr.reason AS transfer_reason,
-       CAST(COALESCE((SELECT leg.purpose_id
-                      FROM transfer c
-                      JOIN "transaction" leg ON leg.transfer_id = c.id
-                      WHERE c.corrects_transaction_id = t.id
-                      GROUP BY leg.purpose_id
-                      HAVING SUM(CASE WHEN leg.direction = t.direction THEN 1 ELSE -1 END)
-                             + (leg.purpose_id = t.purpose_id) = 1
-                      LIMIT 1), t.purpose_id) AS INTEGER) AS effective_purpose_id
-FROM "transaction" t
+       t.effective_purpose_id
+FROM ledger_entry t
 JOIN purpose p ON p.id = t.purpose_id
 JOIN account a ON a.id = t.account_id
 LEFT JOIN member m ON m.id = t.member_id
@@ -997,9 +990,9 @@ type ListTransactionsPageRow struct {
 //
 //   - effective_purpose_id: the tag this row's money is under NOW - its own
 //     purpose_id until a correction (ADR-033) moves it, then the end of the
-//     path its corrections walk (EffectivePurposeForTransaction; transfer.sql
-//     has the reasoning, #411). COALESCEd to t.purpose_id, so an uncorrected
-//     row answers itself and "has this been corrected?" is effective <> stored.
+//     path its corrections walk. Read from ledger_entry, which defines it once
+//     (#628; the schema file has the reasoning, #411). An uncorrected row
+//     answers itself and "has this been corrected?" is effective <> stored.
 //
 //     The list keeps rendering the STORED tag (ADR-033): the ledger sums stored
 //     tags, so showing the effective one would put the screen out of step with

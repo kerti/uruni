@@ -821,9 +821,15 @@ func reportEntryFrom(row store.ListReportTransactionsRow) (ReportEntry, error) {
 //
 // Each correction moves the whole row from wherever it is now, so the
 // corrections of one row form a path. Its ends are the purpose left once more
-// than entered (the start) and the one entered once more than left (the end),
-// which needs no ordering (ids are not an order to rely on). Every correction
-// carries the row's date, so they all fall in that row's month.
+// than entered and the one entered once more than left, which needs no
+// ordering (ids are not an order to rely on). Every correction carries the
+// row's date, so they all fall in that row's month.
+//
+// A pair is named by its own legs: from is the 'out' leg, to the 'in' leg, and
+// PostPurposeCorrection puts the target on the leg moving the way the row did.
+// So the move's From and To are the row's start and end only for an 'in' row.
+// For an 'out' row they swap: its From is where the row ends up and its To where
+// it began. The move is kept in the pair's own terms either way.
 func foldCorrections(rows []store.ListReportTransactionsRow) (map[int64]ReportMove, error) {
 	type path struct {
 		move  ReportMove

@@ -182,9 +182,11 @@ func (l *Ledger) PostPurposeCorrection(ctx context.Context, p PostPurposeCorrect
 
 // effectivePeruntukan is the row's current tag (ADR-033): its stored
 // purpose_id until a correction moves it, then the end of the path its
-// corrections walk. EffectivePurposeForTransaction derives that end without
-// ordering the corrections (#411; see transfer.sql). See PostPurposeCorrection
-// for why the stored tag alone is unsafe once a correction exists.
+// corrections walk. EffectivePurposeForTransaction reads it from
+// ledger_entry.effective_purpose_id, which derives that end without ordering
+// the corrections (#411, #628; the definition is in 00001_schema.sql). See
+// PostPurposeCorrection for why the stored tag alone is unsafe once a
+// correction exists.
 func effectivePeruntukan(ctx context.Context, q store.Querier, fundID int64, original store.Transaction) (int64, error) {
 	id, err := q.EffectivePurposeForTransaction(ctx, store.EffectivePurposeForTransactionParams{
 		FundID: fundID, ID: original.ID,

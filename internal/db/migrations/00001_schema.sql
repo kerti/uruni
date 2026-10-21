@@ -472,10 +472,10 @@ CREATE INDEX reimbursement_by_date  ON reimbursement(fund_id, incurred_on, id);
 -- Same shape: orders the (performed_at DESC, id DESC) keyset scan (#227).
 CREATE INDEX reconciliation_by_date ON reconciliation(fund_id, performed_at, id);
 
--- The ledger as every sum reads it (#627): "transaction"'s columns plus the two
+-- The ledger as every read sees it (#627, #628): "transaction"'s columns plus the
 -- derived facts that used to be re-written in each query, each defined here once.
 -- internal/db/ledger_entry_test.go fails a query under internal/store/queries
--- that derives either one itself.
+-- that derives any of them itself.
 --
 --   signed_amount        direction carries the sign (amount is always > 0), so this is
 --                        the only place a minus appears: SUM(signed_amount) is a
@@ -491,9 +491,37 @@ CREATE INDEX reconciliation_by_date ON reconciliation(fund_id, performed_at, id)
 --   reversed             1 when any reversal points at this row, else 0: the
 --                        flag a read that is not dated filters on, and the one
 --                        reversal (ADR-042) will rely on.
+--   effective_purpose_id (#628) the tag this row's money is under NOW (ADR-033): its
+--                        own purpose_id until a purpose correction moves it, then the
+--                        end of the path its corrections walk. Each correction
+--                        moves the whole row to a new tag, so a row's corrections
+--                        form a path starting at purpose_id; the tag it ends on is
+--                        the one the money entered once more than it left, counting
+--                        the stored tag as the start. That needs no ordering of
+--                        corrections (ids are not an order to rely on), and a row
+--                        corrected and then corrected back ends where it began.
+--                        Which leg is "entering" depends on the row's direction:
+--                        PostPurposeCorrection puts the target on the leg moving
+--                        the same way as the row, so leg.direction = t.direction
+--                        reads back what it wrote. A row nothing corrects answers
+--                        its own purpose_id.
+--
+--                        This is NOT the tag a balance sums. Balances sum the
+--                        stored purpose_id: a correction is a pair of legs, and the
+--                        legs carry the move, so SUM(signed_amount) per stored
+--                        purpose_id already nets to where the money is. Reading
+--                        effective_purpose_id beside those legs would count a
+--                        correction twice. It is for the correction dialog (which
+--                        must build its pair from where the money is), for
+--                        EffectivePurposeForTransaction (which feeds the next
+--                        correction's from leg) and for the marker that says a
+--                        correction exists; Riwayat keeps listing the stored tag
+--                        (ADR-033).
 --
 -- Unused columns cost nothing: SQLite drops them when it flattens the view into
--- the query, so a balance never runs the reversal lookup.
+-- the query, so a balance never runs the reversal lookup or the correction walk.
+-- The list does run the correction walk (it selects effective_purpose_id), and
+-- skips only the reversal lookups.
 CREATE VIEW ledger_entry AS
 SELECT t.id, t.fund_id, t.account_id, t.purpose_id, t.direction, t.amount, t.occurred_on, t.kind,
        t.member_id, t.dues_period, t.reimbursement_id, t.transfer_id, t.reverses_transaction_id,
@@ -501,7 +529,15 @@ SELECT t.id, t.fund_id, t.account_id, t.purpose_id, t.direction, t.amount, t.occ
        CAST(CASE WHEN t.direction = 'in' THEN t.amount ELSE -t.amount END AS INTEGER) AS signed_amount,
        (SELECT r.id FROM "transaction" r WHERE r.reverses_transaction_id = t.id) AS reversed_by_transaction_id,
        (SELECT r.occurred_on FROM "transaction" r WHERE r.reverses_transaction_id = t.id) AS reversed_on,
-       CAST(EXISTS (SELECT 1 FROM "transaction" r WHERE r.reverses_transaction_id = t.id) AS INTEGER) AS reversed
+       CAST(EXISTS (SELECT 1 FROM "transaction" r WHERE r.reverses_transaction_id = t.id) AS INTEGER) AS reversed,
+       CAST(COALESCE((SELECT leg.purpose_id
+                      FROM transfer c
+                      JOIN "transaction" leg ON leg.transfer_id = c.id
+                      WHERE c.corrects_transaction_id = t.id
+                      GROUP BY leg.purpose_id
+                      HAVING SUM(CASE WHEN leg.direction = t.direction THEN 1 ELSE -1 END)
+                             + (leg.purpose_id = t.purpose_id) = 1
+                      LIMIT 1), t.purpose_id) AS INTEGER) AS effective_purpose_id
 FROM "transaction" t;
 
 -- Immutability is a trigger, not a convention (ADR-024, CLAUDE.md rule 3).

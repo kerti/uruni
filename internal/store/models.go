@@ -84,6 +84,7 @@ type LedgerEntry struct {
 	ReversedByTransactionID *int64
 	ReversedOn              *string
 	Reversed                int64
+	EffectivePurposeID      int64
 }
 
 type Member struct {

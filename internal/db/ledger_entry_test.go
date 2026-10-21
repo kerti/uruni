@@ -8,9 +8,10 @@ import (
 	"github.com/kerti/uruni/internal/store"
 )
 
-// ledger_entry (#627) defines two derived facts once: the signed amount and the
-// reversed flag. These tests hold the view itself, and then hold every query to
-// reading them from it rather than writing them again.
+// ledger_entry (#627, #628) defines three derived facts once: the signed amount,
+// the reversed flag and the effective pos. These tests hold the view
+// itself, and then hold every query to reading them from it rather than writing
+// them again.
 
 // TestLedgerEntryDefinesTheSignAndTheReversal pins the view's columns against a
 // ledger with an inflow, an outflow, and a dues payment that a later reversal
@@ -80,6 +81,123 @@ func TestLedgerEntryDefinesTheSignAndTheReversal(t *testing.T) {
 
 	// The view is a window, not a copy: one row per transaction, none added or
 	// dropped, so a sum over it is a sum over the ledger.
+	var rows, txs int64
+	if err := sqlDB.QueryRowContext(ctx, `SELECT count(*) FROM ledger_entry`).Scan(&rows); err != nil {
+		t.Fatal(err)
+	}
+	if err := sqlDB.QueryRowContext(ctx, `SELECT count(*) FROM "transaction"`).Scan(&txs); err != nil {
+		t.Fatal(err)
+	}
+	if rows != txs {
+		t.Errorf("ledger_entry has %d rows, \"transaction\" has %d, want them equal", rows, txs)
+	}
+}
+
+// TestLedgerEntryDefinesTheEffectivePurpose pins effective_purpose_id (ADR-033,
+// #628) against corrections written the way PostPurposeCorrection writes them:
+// a pair whose leg moving the row's way carries the target. A row nothing
+// corrects, and every transfer leg, answer their own stored tag; a corrected
+// row answers where its corrections end; and the answer does not depend on the
+// order the corrections' rows were written in.
+func TestLedgerEntryDefinesTheEffectivePurpose(t *testing.T) {
+	t.Parallel()
+	sqlDB := migratedTestDB(t)
+	ctx := context.Background()
+	q := store.New(sqlDB)
+	f := newLedgerFixture(t, sqlDB, "Test Fund", validSlug)
+	pass := createPurpose(t, sqlDB, f.fundID, "pass_through", "Pass-through")
+	other := createPurpose(t, sqlDB, f.fundID, "pass_through", "Other pass-through")
+	main := f.purposeID
+
+	post := func(direction string, purposeID int64, transferID *int64) int64 {
+		t.Helper()
+		kind := "normal"
+		if transferID != nil {
+			kind = "transfer"
+		}
+		row, err := q.CreateTransaction(ctx, store.CreateTransactionParams{
+			FundID: f.fundID, AccountID: f.accountID, PurposeID: purposeID,
+			Direction: direction, Amount: 40000, OccurredOn: "2026-08-12", Kind: kind,
+			TransferID: transferID, CreatedAt: 1,
+		})
+		if err != nil {
+			t.Fatalf("CreateTransaction(%s, purpose %d) = %v, want no error", direction, purposeID, err)
+		}
+		return row.ID
+	}
+	// correct writes one correction of the row the way PostPurposeCorrection
+	// does: from is the effective tag the pair takes the money out of, to the
+	// target it moves it into, and an 'out' row swaps which leg is which.
+	correct := func(rowID int64, rowDirection string, from, to int64) {
+		t.Helper()
+		tr, err := q.CreateTransfer(ctx, store.CreateTransferParams{
+			FundID: f.fundID, Kind: "reclass_purpose", CorrectsTransactionID: &rowID, CreatedAt: 1,
+		})
+		if err != nil {
+			t.Fatalf("CreateTransfer(corrects %d) = %v, want no error", rowID, err)
+		}
+		out, in := from, to
+		if rowDirection == "out" {
+			out, in = to, from
+		}
+		post("out", out, &tr.ID)
+		post("in", in, &tr.ID)
+	}
+	effective := func(id int64) int64 {
+		t.Helper()
+		var got int64
+		if err := sqlDB.QueryRowContext(ctx, `SELECT effective_purpose_id FROM ledger_entry WHERE id = ?`, id).Scan(&got); err != nil {
+			t.Fatalf("reading ledger_entry %d = %v, want no error", id, err)
+		}
+		return got
+	}
+
+	untouched := post("in", main, nil)
+	for _, direction := range []string{"in", "out"} {
+		once := post(direction, main, nil)
+		correct(once, direction, main, pass)
+
+		// main -> pass -> other -> pass, written as pass -> other, other -> pass,
+		// then main -> pass: the first correction has the highest id, so the
+		// answer cannot come from id order.
+		thrice := post(direction, main, nil)
+		correct(thrice, direction, pass, other)
+		correct(thrice, direction, other, pass)
+		correct(thrice, direction, main, pass)
+
+		back := post(direction, main, nil)
+		correct(back, direction, main, pass)
+		correct(back, direction, pass, main)
+
+		for _, tc := range []struct {
+			name string
+			id   int64
+			want int64
+		}{
+			{direction + " row corrected once", once, pass},
+			{direction + " row corrected three times, written out of order", thrice, pass},
+			{direction + " row corrected and corrected back", back, main},
+		} {
+			if got := effective(tc.id); got != tc.want {
+				t.Errorf("%s: effective_purpose_id = %d, want %d", tc.name, got, tc.want)
+			}
+		}
+	}
+	if got := effective(untouched); got != main {
+		t.Errorf("an uncorrected row: effective_purpose_id = %d, want its stored tag %d", got, main)
+	}
+
+	// Every row that is not corrected - legs included - answers its own tag, and
+	// the stored tag is still what the table holds: the view adds, it never edits.
+	var disagree int64
+	if err := sqlDB.QueryRowContext(ctx, `
+		SELECT count(*) FROM ledger_entry e
+		WHERE e.kind = 'transfer' AND e.effective_purpose_id <> e.purpose_id`).Scan(&disagree); err != nil {
+		t.Fatal(err)
+	}
+	if disagree != 0 {
+		t.Errorf("%d transfer legs have an effective purpose other than their stored one, want 0", disagree)
+	}
 	var rows, txs int64
 	if err := sqlDB.QueryRowContext(ctx, `SELECT count(*) FROM ledger_entry`).Scan(&rows); err != nil {
 		t.Fatal(err)
@@ -343,6 +461,95 @@ func TestTheLedgerReadsSelectFromTheView(t *testing.T) {
 		}
 		if !regexp.MustCompile(`(?i)\b(FROM|JOIN)\s+ledger_entry\b`).MatchString(body) {
 			t.Errorf("query %s does not select from ledger_entry", name)
+		}
+	}
+}
+
+// derivesTheEffectivePurpose matches a query walking a row's purpose corrections
+// itself (ADR-033, #628), by either of the two things the walk cannot do without:
+//
+//   - joining the corrections to the row they correct, as in
+//     c.corrects_transaction_id = t.id; and
+//   - comparing a correction's leg with the row by direction, as in
+//     leg.direction = t.direction, which is how "the leg that carries the target"
+//     is found.
+//
+// Reading a correction's link as a column (tr.corrects_transaction_id AS ...) and
+// finding the row a correction corrects (o.id = tr.corrects_transaction_id) are
+// not walks, so those pass. As with derivesTheReversal, the walk with its first
+// operands swapped (t.id = c.corrects_transaction_id) is textually the legitimate
+// o.id = tr.corrects_transaction_id and cannot be told from it; the second
+// pattern catches a walk that spells the join that way, and a person reviewing a
+// new query has to catch one that avoids both.
+var derivesTheEffectivePurpose = regexp.MustCompile(
+	`(?is)\bcorrects_transaction_id\s*=\s*\w+\.id\b|\b\w+\.direction\s*=\s*\w+\.direction\b`)
+
+// TestTheEffectivePurposeGuardSeesEveryShapeOfAWalk pins the guard's own
+// pattern, as TestTheGuardsSeeEveryShapeOfADerivation does for the other two.
+func TestTheEffectivePurposeGuardSeesEveryShapeOfAWalk(t *testing.T) {
+	t.Parallel()
+	for _, walk := range []string{
+		"SELECT leg.purpose_id FROM transfer c JOIN \"transaction\" leg ON leg.transfer_id = c.id WHERE c.corrects_transaction_id = t.id",
+		`WHERE c.corrects_transaction_id=t.id`,
+		"WHERE c.corrects_transaction_id\n = t.id",
+		`where C.CORRECTS_TRANSACTION_ID = T.ID`,
+		`HAVING SUM(CASE WHEN leg.direction = t.direction THEN 1 ELSE -1 END) = 1`,
+		`HAVING SUM(IIF(leg.direction=t.direction, 1, -1)) = 1`,
+		"CASE WHEN leg.direction\n = t.direction THEN 1 ELSE -1 END",
+	} {
+		if !derivesTheEffectivePurpose.MatchString(walk) {
+			t.Errorf("the effective purpose guard misses: %q", walk)
+		}
+	}
+	for _, notWalk := range []string{
+		`SELECT t.effective_purpose_id FROM ledger_entry t`,
+		`tr.corrects_transaction_id AS transfer_corrects_transaction_id`,
+		`LEFT JOIN "transaction" o ON o.fund_id = tr.fund_id AND o.id = tr.corrects_transaction_id`,
+		`AND tr.corrects_transaction_id IS NOT NULL`,
+		`LEFT JOIN "transaction" tf ON tf.transfer_id = t.transfer_id AND tf.direction = 'out'`,
+		`WHEN COALESCE(o.direction, t.direction) = 'in' THEN t.signed_amount`,
+		`INSERT INTO transfer (id, fund_id, kind, corrects_transaction_id, reason, created_at)`,
+	} {
+		if derivesTheEffectivePurpose.MatchString(notWalk) {
+			t.Errorf("the effective purpose guard flags something that is not a walk: %q", notWalk)
+		}
+	}
+}
+
+// TestNoQueryWalksTheCorrectionsOutsideTheView is #628's guard: the effective
+// pos is defined in 00001_schema.sql's ledger_entry and nowhere else, so
+// a new query that wants it selects ledger_entry.effective_purpose_id. One that
+// walked the corrections itself could disagree with the correction dialog about
+// where a row's money is, and the next correction would then be built from the
+// wrong "from" leg and drive a tag negative (ADR-033).
+func TestNoQueryWalksTheCorrectionsOutsideTheView(t *testing.T) {
+	t.Parallel()
+	for name, body := range queryStatements(t) {
+		if derivesTheEffectivePurpose.MatchString(body) {
+			t.Errorf("query %s walks a row's purpose corrections itself; select ledger_entry.effective_purpose_id", name)
+		}
+	}
+}
+
+// TestTheEffectivePurposeReadsSelectFromTheView holds the other half: the queries
+// that answer "where is this row's money now" read ledger_entry, so the guard
+// above cannot be satisfied by a query that quietly stopped following
+// corrections.
+func TestTheEffectivePurposeReadsSelectFromTheView(t *testing.T) {
+	t.Parallel()
+	queries := queryStatements(t)
+	for _, name := range []string{
+		"EffectivePurposeForTransaction", // the next correction's "from" leg
+		"ListTransactionsPage",           // the correction dialog's current tag and the "corrected" marker
+	} {
+		body, ok := queries[name]
+		if !ok {
+			t.Errorf("query %s no longer exists: the guard is looking at the wrong name", name)
+			continue
+		}
+		if !regexp.MustCompile(`(?i)\b(FROM|JOIN)\s+ledger_entry\b`).MatchString(body) ||
+			!regexp.MustCompile(`(?i)\beffective_purpose_id\b`).MatchString(body) {
+			t.Errorf("query %s does not select effective_purpose_id from ledger_entry", name)
 		}
 	}
 }
