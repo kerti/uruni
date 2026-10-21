@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from 'react'
 import { ArrowDownLeft, ArrowLeftRight, ArrowUpDown, ArrowUpRight, CalendarCheck, Shuffle } from 'lucide-react'
 
 import DateField from '@/components/DateField'
+import OpeningDateHint from '@/components/OpeningDateHint'
 import { dateBounds } from '@/lib/dates'
 import AmountInput from '@/components/money/AmountInput'
 import AccountPicker from '@/components/pickers/AccountPicker'
@@ -782,6 +783,14 @@ export default function RecordTransaction({
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="record-date">{text.dateLabel}</Label>
             <DateField id="record-date" value={occurredOn} onChange={setOccurredOn} bounds={dateBounds.entry()} disabled={submitting} />
+            {/* Which locations the entry touches decides the anchor: both for
+                Pindah lokasi, none for Pindah pos and a talangan claim (no
+                location - the fund's earliest opening applies). */}
+            <OpeningDateHint
+              date={occurredOn}
+              accounts={loadState.data.accounts}
+              accountIds={isTransfer ? [accountId, toAccountId] : isPurposeMove || isClaim ? [] : [accountId]}
+            />
           </div>
 
           <div className="flex flex-col gap-1.5">

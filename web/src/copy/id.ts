@@ -1177,6 +1177,17 @@ export const copy = {
     emptyMonth: 'Pilih bulan',
     previousYear: 'Tahun sebelumnya',
     nextYear: 'Tahun berikutnya',
+    // Under the date of every form that posts a dated entry when the date is
+    // before the opening balance (PRD section 7.1: history starts at adoption,
+    // and the opening balance carries everything before it). Never blocks - she
+    // may mean it - so it asks her to look and names the likelier reading.
+    // tanggal arrives formatted (lib/dates formatIsoDate). Two forms: the
+    // location's own opening, or the fund's earliest when the form has no
+    // location or the chosen one has no opening entry.
+    beforeOpening: (lokasi: string, tanggal: string) =>
+      `Tanggal ini sebelum saldo awal ${lokasi} (${tanggal}). Kalau uang ini sudah termasuk di saldo awal, tidak perlu dicatat lagi.`,
+    beforeOpeningFund: (tanggal: string) =>
+      `Tanggal ini sebelum saldo awal kas (${tanggal}). Kalau uang ini sudah termasuk di saldo awal, tidak perlu dicatat lagi.`,
   },
   // One ledger entry read in full - opened by tapping a card in any
   // transaction list. Field labels reuse the record form's nouns (CONTEXT.md:
