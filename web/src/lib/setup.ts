@@ -10,6 +10,10 @@ export interface Account {
   kind: 'cash' | 'bank'
   name: string
   inactive_on: string | null
+  /** The date of the location's opening entry; null when it has none. Only
+   * GET /api/accounts carries it (the entry forms' warning, #637); the other
+   * routes that answer an account leave it out, as do older fixtures. */
+  opening_on?: string | null
   created_at: number
 }
 

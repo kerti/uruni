@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react'
 
 import DateField from '@/components/DateField'
+import OpeningDateHint from '@/components/OpeningDateHint'
 import AmountInput from '@/components/money/AmountInput'
 import AccountPicker from '@/components/pickers/AccountPicker'
 import { Button } from '@/components/ui/button'
@@ -344,6 +345,7 @@ export default function RecordDuesPayment({
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="dues-payment-date">{text.dateLabel}</Label>
         <DateField id="dues-payment-date" value={occurredOn} onChange={setOccurredOn} bounds={dateBounds.entry()} disabled={submitting} />
+        <OpeningDateHint date={occurredOn} accounts={loadState.data.accounts} accountIds={[accountId]} />
       </div>
 
       {submitState.status === 'error' && submitState.error && <ErrorState error={submitState.error} />}

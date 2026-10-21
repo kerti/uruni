@@ -61,6 +61,15 @@ type accountResponse struct {
 	CreatedAt  int64   `json:"created_at"`
 }
 
+// accountListItem is an account as GET /api/accounts lists it: the row plus
+// opening_on (#637), the date of the location's opening entry, null when it has
+// none. Only the list carries it (the one read the entry forms load), so no
+// other route answers a null that would read as "no opening".
+type accountListItem struct {
+	accountResponse
+	OpeningOn *string `json:"opening_on"`
+}
+
 func toAccountResponse(a store.Account) accountResponse {
 	return accountResponse{ID: a.ID, Kind: a.Kind, Name: a.Name, InactiveOn: a.InactiveOn, CreatedAt: a.CreatedAt}
 }
@@ -114,9 +123,23 @@ func (a *api) listAccounts(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	resp := make([]accountResponse, 0, len(accounts))
+	openings, err := a.queries.ListAccountOpeningDates(r.Context(), fund.ID)
+	if err != nil {
+		mapSQLiteError(w, a.log(r), err)
+		return
+	}
+	openingOn := make(map[int64]string, len(openings))
+	for _, o := range openings {
+		openingOn[o.AccountID] = o.OpeningOn
+	}
+
+	resp := make([]accountListItem, 0, len(accounts))
 	for _, acc := range accounts {
-		resp = append(resp, toAccountResponse(acc))
+		item := accountListItem{accountResponse: toAccountResponse(acc)}
+		if on, ok := openingOn[acc.ID]; ok {
+			item.OpeningOn = &on
+		}
+		resp = append(resp, item)
 	}
 	writeJSON(w, http.StatusOK, resp)
 }

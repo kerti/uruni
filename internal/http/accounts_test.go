@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
@@ -549,14 +550,14 @@ func TestPostAccountsRejectsInvalidOpeningBalanceOccurredOnCreatesNoAccount(t *t
 
 // decodeAccountsList decodes GET /api/accounts, for the refusal tests to prove
 // a rejected create left the roster untouched.
-func decodeAccountsList(t *testing.T, r http.Handler) []accountResponse {
+func decodeAccountsList(t *testing.T, r http.Handler) []accountListItem {
 	t.Helper()
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/accounts", nil))
 	if rec.Code != http.StatusOK {
 		t.Fatalf("GET /api/accounts = %d, want %d (body: %s)", rec.Code, http.StatusOK, rec.Body.String())
 	}
-	var accounts []accountResponse
+	var accounts []accountListItem
 	if err := json.NewDecoder(rec.Body).Decode(&accounts); err != nil {
 		t.Fatalf("decoding response: %v", err)
 	}
@@ -744,4 +745,53 @@ func TestPatchAccountRefusesToRetireALocationBelowZero(t *testing.T) {
 	if code := decodeError(t, rec).Code; code != "account_balance_negative" {
 		t.Errorf("error code = %q, want %q", code, "account_balance_negative")
 	}
+}
+
+// #637: GET /api/accounts carries each location's opening-entry date so the
+// entry forms can warn about a date before it; a location with none reads null.
+func TestListAccountsCarriesOpeningDate(t *testing.T) {
+	t.Parallel()
+	r := testRouter(t)
+	setUpFund(t, r)
+
+	created := postAccount(t, r, accountRequest{
+		Kind: "cash", Name: "Kas RT 05",
+		OpeningBalance: &openingBalanceRequest{Amount: 100_000, OccurredOn: "2026-08-01"},
+	})
+	// Only the list carries the field: a create answers no opening_on at all,
+	// never a null that would read as "no opening".
+	if strings.Contains(created.Body.String(), "opening_on") {
+		t.Errorf("POST /api/accounts answered opening_on: %s", created.Body.String())
+	}
+	withOpening := decodeAccount(t, created)
+
+	var sawOpening, sawNone bool
+	for _, acc := range decodeAccountsList(t, r) {
+		switch {
+		case acc.ID == withOpening.ID:
+			sawOpening = true
+			if acc.OpeningOn == nil || *acc.OpeningOn != "2026-08-01" {
+				t.Errorf("opening_on = %v, want 2026-08-01", acc.OpeningOn)
+			}
+		case acc.OpeningOn != nil:
+			t.Errorf("account %d opening_on = %q, want null (no opening entry)", acc.ID, *acc.OpeningOn)
+		default:
+			sawNone = true
+		}
+	}
+	if !sawOpening || !sawNone {
+		t.Errorf("sawOpening=%v sawNone=%v, want both", sawOpening, sawNone)
+	}
+}
+
+func decodeAccount(t *testing.T, rec *httptest.ResponseRecorder) accountResponse {
+	t.Helper()
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("POST /api/accounts = %d, want %d (body: %s)", rec.Code, http.StatusCreated, rec.Body.String())
+	}
+	var got accountResponse
+	if err := json.NewDecoder(rec.Body).Decode(&got); err != nil {
+		t.Fatalf("decoding response: %v", err)
+	}
+	return got
 }
