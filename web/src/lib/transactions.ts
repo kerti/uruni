@@ -162,29 +162,13 @@ export function correctPurpose(transactionId: number, purposeId: number): Promis
  *
  * A named contribution (kind='normal' with member_id set) is excluded too
  * (ADR-034): moving it would leave participation counting the member against
- * an envelope the money has left.
+ * an envelope the money has left. So is a row something already reverses
+ * (ADR-042), on the server's `reversed` flag: the ledger refuses
+ * reverse-then-correct, and a row reversed on a page not fetched must not
+ * offer the control either.
  */
 export function canCorrectPurpose(transaction: Transaction): boolean {
+  if (transaction.reversed) return false
   if (transaction.kind === 'normal') return transaction.member_id === null
   return transaction.kind === 'adjustment' && transaction.reverses_transaction_id === null
-}
-
-/**
- * Whether this row may be reversed the way a dues payment can (ADR-034): a
- * named contribution - kind='normal', direction='in', member_id set - that is
- * not itself a reversal. `reversedIds` is the set of transaction ids some
- * OTHER loaded row already reverses (`reverses_transaction_id`), the same
- * technique Dues/MemberPayments.tsx uses. A row whose reversal sits on a page
- * not fetched yet still offers the control; the server's named 409
- * (transaction_already_reversed) is the backstop, never a silent
- * double-reversal.
- */
-export function canReverseContribution(transaction: Transaction, reversedIds: ReadonlySet<number>): boolean {
-  return (
-    transaction.kind === 'normal' &&
-    transaction.direction === 'in' &&
-    transaction.member_id !== null &&
-    transaction.reverses_transaction_id === null &&
-    !reversedIds.has(transaction.id)
-  )
 }

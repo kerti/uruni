@@ -319,7 +319,7 @@ describe('TransactionList purpose correction (#276, ADR-033)', () => {
   })
 })
 
-describe('TransactionList contribution reversal (ADR-034, #211, #333)', () => {
+describe('TransactionList reversal (ADR-042)', () => {
   const text = copy.history.transactions
 
   afterEach(() => {
@@ -330,73 +330,206 @@ describe('TransactionList contribution reversal (ADR-034, #211, #333)', () => {
     return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } })
   }
 
-  function renderReversible(rows: Transaction[], onContributionReversed = vi.fn()) {
+  function renderReversible(rows: Transaction[], onReversed = vi.fn()) {
     const result = render(
-      <TransactionList
-        transactions={rows}
-        purposeNames={purposeNames}
-        emptyMessage="Belum ada."
-        onContributionReversed={onContributionReversed}
-      />,
+      <TransactionList transactions={rows} purposeNames={purposeNames} emptyMessage="Belum ada." onReversed={onReversed} />,
     )
-    return { ...result, onContributionReversed }
+    return { ...result, onReversed }
   }
 
-  it('offers "Batalkan sumbangan" on a named contribution, and posts the reversal on confirm', async () => {
+  /** Taps the card, then the door in the entry detail. */
+  async function openForm() {
+    await userEvent.click(screen.getByRole('button', { name: /^Lihat rincian:/ }))
+    const dialog = await screen.findByRole('dialog', { name: copy.transactionDetail.heading })
+    await userEvent.click(within(dialog).getByRole('button', { name: text.reverse }))
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+  }
+
+  it('offers Batalkan transaksi in the entry detail of a reversible row, and the button posts nothing', async () => {
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+    renderReversible([transaction({ id: 30, reversible: true })])
+
+    // No control on the card itself: one list has one way in.
+    expect(screen.queryByRole('button', { name: text.reverse })).not.toBeInTheDocument()
+
+    await openForm()
+
+    // It handed off to the form under the row, and moved no money.
+    expect(fetchMock).not.toHaveBeenCalled()
+    expect(screen.getByRole('button', { name: text.reverseConfirm })).toBeInTheDocument()
+    expect(screen.getByText(text.reverseExplainer)).toBeInTheDocument()
+  })
+
+  it('offers it on a dues row too: the door follows the server, not the kind', async () => {
+    renderReversible([transaction({ id: 31, kind: 'dues', member_id: 3, member_name: 'Ani', dues_period: '2026-08', reversible: true })])
+
+    await userEvent.click(screen.getByRole('button', { name: /^Lihat rincian:/ }))
+
+    const dialog = await screen.findByRole('dialog')
+    expect(within(dialog).getByRole('button', { name: text.reverse })).toBeInTheDocument()
+  })
+
+  it.each([
+    ['a row the ledger would refuse', { reversible: false }],
+    ['a row with no flag at all', {}],
+    ['a row something already reverses', { reversed: true, reversible: false }],
+  ])('shows no door on %s', async (_name, flags) => {
+    renderReversible([transaction({ id: 32, ...flags })])
+
+    await userEvent.click(screen.getByRole('button', { name: /^Lihat rincian:/ }))
+
+    const dialog = await screen.findByRole('dialog')
+    expect(within(dialog).queryByRole('button', { name: text.reverse })).not.toBeInTheDocument()
+  })
+
+  it('shows no door where no handler is passed (Beranda)', async () => {
+    renderRows([transaction({ id: 35, reversible: true })])
+
+    await userEvent.click(screen.getByRole('button', { name: /^Lihat rincian:/ }))
+
+    const dialog = await screen.findByRole('dialog')
+    expect(within(dialog).queryByRole('button', { name: text.reverse })).not.toBeInTheDocument()
+  })
+
+  it("states the original's date when no cek kas has counted the row", async () => {
+    renderReversible([transaction({ id: 33, reversible: true, counted: false, occurred_on: '2026-08-12' })])
+
+    await openForm()
+
+    expect(screen.getByText(text.reverseDateOriginal('12 Agustus 2026'))).toBeInTheDocument()
+    expect(screen.getByText('Dicatat pada 12 Agustus 2026.')).toBeInTheDocument()
+    expect(screen.queryByText(text.reverseDateToday)).not.toBeInTheDocument()
+    // The ledger dates the reversal: the form asks for no date.
+    expect(screen.queryByText(copy.record.dateLabel)).not.toBeInTheDocument()
+  })
+
+  it('says it is recorded today once a cek kas has counted the row', async () => {
+    renderReversible([transaction({ id: 34, reversible: true, counted: true, occurred_on: '2026-08-12' })])
+
+    await openForm()
+
+    expect(screen.getByText('Dicatat hari ini, karena kas sudah dicek sejak transaksi ini.')).toBeInTheDocument()
+    expect(screen.queryByText(/^Dicatat pada/)).not.toBeInTheDocument()
+  })
+
+  it('posts only the reason on confirm, then hands the refetch to the caller', async () => {
     const fetchMock = vi.fn(() => Promise.resolve(jsonResponse(transaction({ id: 99, kind: 'adjustment', direction: 'out' }), 201)))
     vi.stubGlobal('fetch', fetchMock)
 
-    const { onContributionReversed } = renderReversible([transaction({ id: 30, purpose_id: 2, member_id: 9, member_name: 'Budi' })])
-
-    await userEvent.click(screen.getByRole('button', { name: text.reverse }))
+    const { onReversed } = renderReversible([transaction({ id: 36, reversible: true })])
+    await openForm()
+    await userEvent.type(screen.getByLabelText(text.reverseNoteLabel), '  Salah arah  ')
     await userEvent.click(screen.getByRole('button', { name: text.reverseConfirm }))
 
-    await waitFor(() => expect(onContributionReversed).toHaveBeenCalledTimes(1))
-    expect(fetchMock).toHaveBeenCalledWith('/api/transactions/30/reversal', expect.objectContaining({ method: 'POST' }))
+    await waitFor(() => expect(onReversed).toHaveBeenCalledTimes(1))
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/transactions/36/reversal',
+      expect.objectContaining({ method: 'POST', body: JSON.stringify({ note: 'Salah arah' }) }),
+    )
+    // The form is gone once it has posted.
+    expect(screen.queryByRole('button', { name: text.reverseConfirm })).not.toBeInTheDocument()
   })
 
-  it('renders no reversal control on an ordinary row with no member', () => {
-    renderReversible([transaction({ id: 31 })])
+  it('closes the form on Jangan jadi, posting nothing', async () => {
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+    renderReversible([transaction({ id: 37, reversible: true })])
 
-    expect(screen.queryByRole('button', { name: text.reverse })).not.toBeInTheDocument()
+    await openForm()
+    await userEvent.click(screen.getByRole('button', { name: text.reverseCancel }))
+
+    expect(screen.queryByRole('button', { name: text.reverseConfirm })).not.toBeInTheDocument()
+    expect(fetchMock).not.toHaveBeenCalled()
   })
 
-  it('renders no reversal control on a contribution already reversed by another loaded row', () => {
-    renderReversible([
-      transaction({ id: 32, purpose_id: 2, member_id: 9, member_name: 'Budi' }),
-      transaction({
-        id: 33,
-        kind: 'adjustment',
-        direction: 'out',
-        purpose_id: 2,
-        member_id: 9,
-        member_name: 'Budi',
-        reverses_transaction_id: 32,
-      }),
-    ])
-
-    expect(screen.queryByRole('button', { name: text.reverse })).not.toBeInTheDocument()
-  })
-
-  it('shows the sumbangan wording, not the iuran one, for a repeat reversal', async () => {
+  it('shows the transaksi wording, not the iuran one, for a repeat reversal', async () => {
     vi.stubGlobal(
       'fetch',
       vi.fn(() => Promise.resolve(jsonResponse({ error: { code: 'transaction_already_reversed', message: 'x' } }, 409))),
     )
 
-    renderReversible([transaction({ id: 34, purpose_id: 2, member_id: 9, member_name: 'Budi' })])
-
-    await userEvent.click(screen.getByRole('button', { name: text.reverse }))
+    renderReversible([transaction({ id: 38, reversible: true })])
+    await openForm()
     await userEvent.click(screen.getByRole('button', { name: text.reverseConfirm }))
 
-    expect(await screen.findByText(text.errors.transaction_already_reversed)).toBeInTheDocument()
+    expect(await screen.findByText('Transaksi ini sudah dibatalkan.')).toBeInTheDocument()
     expect(screen.queryByText(copy.common.errors.transaction_already_reversed)).not.toBeInTheDocument()
   })
 
-  it('renders no reversal control at all where no handler is passed', () => {
-    renderRows([transaction({ id: 35, purpose_id: 2, member_id: 9, member_name: 'Budi' })])
+  it('reads a refusal the page could not foresee from the shared error map', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => Promise.resolve(jsonResponse({ error: { code: 'reversal_reconciliation_fix', message: 'x' } }, 409))),
+    )
 
-    expect(screen.queryByRole('button', { name: text.reverse })).not.toBeInTheDocument()
+    renderReversible([transaction({ id: 39, reversible: true })])
+    await openForm()
+    await userEvent.click(screen.getByRole('button', { name: text.reverseConfirm }))
+
+    expect(await screen.findByText(copy.common.errors.reversal_reconciliation_fix)).toBeInTheDocument()
+  })
+})
+
+describe('TransactionList the pair read as linked (ADR-042)', () => {
+  it('marks the original Sudah dibatalkan, in the list and in the detail', async () => {
+    renderRows([transaction({ id: 40, reversed: true })])
+
+    expect(screen.getByText('Sudah dibatalkan')).toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole('button', { name: /^Lihat rincian:/ }))
+    const dialog = await screen.findByRole('dialog')
+    expect(within(dialog).getByText('Sudah dibatalkan')).toBeInTheDocument()
+  })
+
+  it('marks no row that nothing reverses', () => {
+    renderRows([transaction({ id: 41, reversed: false }), transaction({ id: 42 })])
+
+    expect(screen.queryByText('Sudah dibatalkan')).not.toBeInTheDocument()
+  })
+
+  it("labels a reversal that names no member with the original's date", () => {
+    const { container } = renderRows([
+      transaction({ id: 43, kind: 'adjustment', direction: 'out', reverses_transaction_id: 40, reverses_occurred_on: '2026-08-12' }),
+    ])
+
+    expect(container.querySelector('.lucide-undo-2')).toBeInTheDocument()
+    expect(screen.getByText('Pembatalan \u00b7 transaksi 12 Agustus 2026')).toBeInTheDocument()
+  })
+
+  it('leaves a dues and a named-contribution reversal label as it was', () => {
+    renderRows([
+      transaction({
+        id: 44,
+        kind: 'adjustment',
+        direction: 'out',
+        member_id: 5,
+        member_name: 'Budi',
+        reverses_transaction_id: 10,
+        reverses_occurred_on: '2026-08-12',
+      }),
+      transaction({
+        id: 45,
+        kind: 'adjustment',
+        direction: 'out',
+        member_id: 6,
+        member_name: 'Ani',
+        dues_period: '2026-08',
+        reverses_transaction_id: 11,
+        reverses_occurred_on: '2026-08-12',
+      }),
+    ])
+
+    expect(screen.getByText('Pembatalan \u00b7 Budi')).toBeInTheDocument()
+    expect(screen.getByText(`Pembatalan \u00b7 ${formatPeriod('2026-08')} \u00b7 Ani`)).toBeInTheDocument()
+    expect(screen.queryByText(/transaksi 12 Agustus 2026/)).not.toBeInTheDocument()
+  })
+
+  it('hides the pos correction control on a reversed row, though the row would otherwise be eligible', () => {
+    renderCorrectableRows([transaction({ id: 46, purpose_id: 1, reversed: true }), transaction({ id: 47, purpose_id: 1 })])
+
+    // Only the unreversed row's pos is a control.
+    expect(screen.getAllByRole('button', { name: copy.purposeCorrection.controlAria('Kas Utama') })).toHaveLength(1)
   })
 })
 

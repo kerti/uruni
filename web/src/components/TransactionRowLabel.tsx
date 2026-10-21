@@ -2,7 +2,7 @@ import { ArrowLeftRight, CalendarCheck, Flag, HandCoins, HandHelping, Mail, Scal
 import type { LucideIcon } from 'lucide-react'
 
 import { copy } from '@/copy/id'
-import { formatPeriod } from '@/lib/dates'
+import { formatIsoDate, formatPeriod } from '@/lib/dates'
 import type { Transaction } from '@/lib/transactions'
 
 /**
@@ -23,7 +23,7 @@ import type { Transaction } from '@/lib/transactions'
  * cek kas fix or a standalone adjustment (ADR-024) - is Penyesuaian, the
  * report's word for it (ADR-038).
  */
-function rowLabelFor(transaction: Transaction): { Icon: LucideIcon; srWord: string | null; text: string } | null {
+function rowLabelFor(transaction: Transaction): { Icon: LucideIcon; srWord: string | null; text: string; wraps?: boolean } | null {
   switch (transaction.kind) {
     case 'dues':
       return {
@@ -74,15 +74,22 @@ function rowLabelFor(transaction: Transaction): { Icon: LucideIcon; srWord: stri
     case 'adjustment':
       if (transaction.reverses_transaction_id !== null) {
         // A reversal copies its original's dues_period (ADR-029, ADR-034): a
-        // dues reversal carries one, a contribution reversal never does.
-        return {
-          Icon: Undo2,
-          srWord: null,
-          text:
-            transaction.dues_period !== null
-              ? copy.rowLabels.duesReversal.text(formatPeriod(transaction.dues_period), transaction.member_name ?? '')
-              : copy.rowLabels.contributionReversal.text(transaction.member_name ?? ''),
+        // dues reversal carries one, a contribution reversal never does. A
+        // reversal of a row naming nobody states the original's date instead
+        // (ADR-042).
+        let reversalText: string
+        if (transaction.dues_period !== null) {
+          reversalText = copy.rowLabels.duesReversal.text(formatPeriod(transaction.dues_period), transaction.member_name ?? '')
+        } else if (transaction.member_name) {
+          reversalText = copy.rowLabels.contributionReversal.text(transaction.member_name)
+        } else {
+          reversalText = copy.rowLabels.unnamedReversal.text(
+            transaction.reverses_occurred_on ? formatIsoDate(transaction.reverses_occurred_on) : '',
+          )
         }
+        // Wraps even in a list: an unnamed reversal ends in the date that
+        // says which row it undoes, the part truncation would cut at 390px.
+        return { Icon: Undo2, srWord: null, text: reversalText, wraps: true }
       }
       // Every other adjustment - a cek kas fix, or one she posted herself
       // (ADR-024) - is named for the line of the month's walk it sums into
@@ -129,11 +136,12 @@ export default function TransactionRowLabel({
   if (!label) return null
 
   const { Icon, srWord, text } = label
+  const wraps = wrap || label.wraps === true
   return (
-    <span className={`flex min-w-0 gap-1 text-sm text-muted-foreground ${wrap ? 'items-start' : 'items-center'}`}>
-      <Icon aria-hidden="true" className={`size-4 shrink-0 ${wrap ? 'mt-0.5' : ''}`} />
+    <span className={`flex min-w-0 gap-1 text-sm text-muted-foreground ${wraps ? 'items-start' : 'items-center'}`}>
+      <Icon aria-hidden="true" className={`size-4 shrink-0 ${wraps ? 'mt-0.5' : ''}`} />
       {srWord && <span className="sr-only">{srWord}</span>}
-      <span className={wrap ? 'break-words' : 'truncate'}>{text}</span>
+      <span className={wraps ? 'break-words' : 'truncate'}>{text}</span>
     </span>
   )
 }

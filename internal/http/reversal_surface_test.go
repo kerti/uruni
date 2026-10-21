@@ -361,3 +361,56 @@ func TestReversalRefusalsReachTheWireWithTheirCodes(t *testing.T) {
 		t.Errorf("error code = %q, want purpose_correction_already_reversed", got.Code)
 	}
 }
+
+// The pair reads as linked on the public report and in the PDF (ADR-042): the
+// original carries Sudah dibatalkan, the reversal of an unnamed row states the
+// original's date, and neither is a dues or contribution label. The date is the
+// original's (25 Juli), not the day the reversal was posted.
+func TestTheReportAndPDFReadAReversedPairAsLinked(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	f := newReportFixture(t, "Kas RT 05")
+	f.post(t, "in", 100_000, "2026-07-01")
+	out, err := f.l.PostTransaction(ctx, ledger.PostTransactionParams{
+		FundID: f.fund.ID, AccountID: f.cashID, PurposeID: f.mainID, Direction: "out", Amount: 12_000, OccurredOn: "2026-07-25",
+	})
+	if err != nil {
+		t.Fatalf("PostTransaction() = %v", err)
+	}
+	if _, err := f.l.ReverseTransaction(ctx, ledger.ReverseTransactionParams{
+		FundID: f.fund.ID, TransactionID: out.ID, Now: time.Date(2026, 7, 28, 3, 0, 0, 0, time.UTC),
+	}); err != nil {
+		t.Fatalf("ReverseTransaction() = %v", err)
+	}
+
+	label := "Pembatalan \u00b7 transaksi 25 Juli 2026"
+	page := f.get(t, "/report/"+f.fund.ReportSlug+"?month=2026-07")
+	if page.Code != http.StatusOK {
+		t.Fatalf("GET /report = %d, want 200", page.Code)
+	}
+	section := txnSection(t, page.Body.String())
+	if n := strings.Count(section, `<span class="label-line">`+label+`</span>`); n != 1 {
+		t.Errorf("reversal labels on the page = %d, want 1:\n%s", n, section)
+	}
+	if n := strings.Count(section, ">Sudah dibatalkan<"); n != 1 {
+		t.Errorf("Sudah dibatalkan marks on the page = %d, want 1 (the original only):\n%s", n, section)
+	}
+
+	pdf := f.get(t, "/report/"+f.fund.ReportSlug+"/pdf?month=2026-07")
+	if pdf.Code != http.StatusOK {
+		t.Fatalf("GET /report/pdf = %d, want 200", pdf.Code)
+	}
+	runs := pdfText(t, pdf.Body.Bytes())
+	var haveLabel, marks int
+	for _, run := range runs {
+		if strings.Contains(run, "Pembatalan") && strings.Contains(run, "transaksi 25 Juli 2026") {
+			haveLabel++
+		}
+		if run == "Sudah dibatalkan" {
+			marks++
+		}
+	}
+	if haveLabel != 1 || marks != 1 {
+		t.Errorf("PDF reversal labels = %d, marks = %d, want 1 and 1; runs:\n%s", haveLabel, marks, strings.Join(runs, "\n"))
+	}
+}

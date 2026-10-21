@@ -452,7 +452,7 @@ func TestTheLedgerReadsSelectFromTheView(t *testing.T) {
 		// dues
 		"DuesPaidByPeriod", "DuesPaidByMemberGroupedByPeriod", "LatestDuesPeriodPaidByMember", "ListDuesPaymentsPage",
 		// reversal (ADR-042): the target's facts and the reverse-then-correct refusal
-		"GetReversalTarget", "ReversedFlagForTransaction", "ListTransactionsPage",
+		"GetReversalTarget", "ReversedFlagForTransaction", "ListTransactionsPage", "ListReportTransactions",
 		// a reconciliation line's remainder reads its fix's signed amount
 		"ListReconciliationLines", "ListOpenReconciliationLinesByFund", "ListReconciliationsPage", "ReportOpenReconciliationLines",
 	} {

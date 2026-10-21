@@ -102,10 +102,9 @@ export default function Transactions({ refetchKey }: { refetchKey?: unknown }) {
   const correctionTarget = parseDialogTarget('purpose-correction', dialogValue)
   const filterOpen = dialogValue === 'filter'
   const [corrected, setCorrected] = useState(false)
-  // A named contribution's reversal (ADR-034) - a one-shot banner like
-  // `corrected` above, not component state that would survive a search or a
-  // page change.
-  const [contributionReversed, setContributionReversed] = useState(false)
+  // A reversal (ADR-042) - a one-shot banner like `corrected` above, not
+  // component state that would survive a search or a page change.
+  const [reversed, setReversed] = useState(false)
 
   const [state, run] = useApi<FirstPage>()
   // Pages after the first, appended in order. Reset whenever the first page is
@@ -300,7 +299,7 @@ export default function Transactions({ refetchKey }: { refetchKey?: unknown }) {
             {copy.purposeCorrection.success}
           </p>
         )}
-        {contributionReversed && (
+        {reversed && (
           <p role="status" className="rounded-lg bg-success-soft px-3 py-2 text-sm text-success">
             {text.reverseSuccess}
           </p>
@@ -314,15 +313,15 @@ export default function Transactions({ refetchKey }: { refetchKey?: unknown }) {
             openDialog(`purpose-correction:${transaction.id}`)
           }}
           onReceiptsChanged={() => void run(loadFirstPage, { silent: true })}
-          // A named contribution's undo (ADR-034) - reachable the way a dues
-          // payment's is. Refetches the first page, as a correction does: the
+          // The undo of any ordinary row (ADR-042), opened from the entry
+          // detail. Refetches the first page, as a correction does: the
           // reversal's row (kind='adjustment') belongs at the top of a
           // newest-first list.
-          onContributionReversed={() => {
-            setContributionReversed(true)
+          onReversed={() => {
+            setReversed(true)
             void run(loadFirstPage)
           }}
-          onContributionRefresh={() => run(loadFirstPage, { silent: true })}
+          onReversalRefresh={() => run(loadFirstPage, { silent: true })}
         />
         <CorrectPurposeDialog
           transaction={correcting}

@@ -184,6 +184,15 @@ type ReportEntry struct {
 	// no period, of an unnamed ordinary row when it names neither (ADR-042).
 	IsReversal bool
 
+	// Reversed is ledger_entry's flag: a reversal points at this row, so the
+	// report marks it Sudah dibatalkan (ADR-042).
+	Reversed bool
+
+	// ReversesOccurredOn is, on a reversal, the date of the row it reverses
+	// ("YYYY-MM-DD"), which the label of a reversal that names no member
+	// states; nil on every other row.
+	ReversesOccurredOn *string
+
 	// Note is what the treasurer typed. On a settled claim's payout, whose note
 	// is empty, it is the claim's note, as Riwayat shows it.
 	Note *string
@@ -819,8 +828,11 @@ func reportEntryFrom(row store.ListReportTransactionsRow) (ReportEntry, error) {
 		MemberName:  row.MemberName,
 		DuesPeriod:  row.DuesPeriod,
 		IsReversal:  row.ReversesTransactionID != nil,
+		Reversed:    row.Reversed != 0,
 		Note:        row.Note,
 		HasReceipt:  row.HasReceipt != 0,
+
+		ReversesOccurredOn: row.ReversesOccurredOn,
 	}
 	// A settlement's row names no member and holds no note: both come from the
 	// claim it settles. At most one of the two member columns is set.
