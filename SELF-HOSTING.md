@@ -143,7 +143,9 @@ The version is your **upgrade contract**: patch = drop-in; minor = additive migr
 3. `docker compose run --rm -v "$PWD:/in:ro" app rebuild --from /in/backup.zip`. It refuses a backup that is older than the database (or another instance's), builds a new database of the new schema with your login carried over, checks that every fund's balance came out the same, and keeps the old file next to it as `uruni.db.pre-<version>-<date>-<time>`.
 4. `docker compose up -d`, and sign in again.
 
-`make upgrade-rehearsal BACKUP=<backup.zip>` in a source checkout rehearses it on a copy first. The release notes say whether the new build still reads the old backup format.
+`make upgrade-rehearsal BACKUP=<backup.zip>` in a source checkout rehearses it on a copy first.
+
+**Backups across a format change.** A backup file carries a `format_version`. A build reads its own and every older one it has an upgrade step for, converting it as it reads (the in-app restore, the stored-dump list and `rebuild` all do), and refuses a newer one; the release notes say which formats a build reads. The release that moved the backup to format 2 (member tiers by month, the fund's time zone) reads the previous release's format-1 backups, so step 1 above works unchanged. It writes only format 2, which the previous release cannot restore: keep the backup from step 1 until you are sure of the upgrade.
 
 **Never run `uruni migrate down` on `0.x`.** There is one migration, so one step down is the whole schema: it empties the database. It takes a backup zip first and refuses while the app runs, but it is not a way back from an upgrade; the two below are.
 
