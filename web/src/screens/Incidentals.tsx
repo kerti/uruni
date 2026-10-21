@@ -2,6 +2,7 @@ import { ArrowLeft } from 'lucide-react'
 import { useEffect, useState, type FormEvent } from 'react'
 
 import DateField from '@/components/DateField'
+import OpeningDateHint from '@/components/OpeningDateHint'
 import { dateBounds, todayISODate } from '@/lib/dates'
 import AccountPicker from '@/components/pickers/AccountPicker'
 import { MemberMultiPicker } from '@/components/pickers/MemberPicker'
@@ -472,6 +473,7 @@ function CloseForm({
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="incidental-close-date">{text.close.dateLabel}</Label>
         <DateField id="incidental-close-date" value={closedOn} onChange={setClosedOn} bounds={dateBounds.entry()} disabled={submitting} />
+        <OpeningDateHint date={closedOn} accounts={accounts} accountIds={[accountId]} />
       </div>
 
       {/* The roll is a transfer the treasurer never asks for directly (#210),

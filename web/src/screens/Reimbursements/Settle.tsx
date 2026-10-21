@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState, type FormEvent } from 'react'
 import { Navigate } from 'react-router-dom'
 
 import DateField from '@/components/DateField'
+import OpeningDateHint from '@/components/OpeningDateHint'
 import AccountPicker from '@/components/pickers/AccountPicker'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
@@ -140,6 +141,7 @@ function SettleForm({
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="settle-date">{text.settle.dateLabel}</Label>
         <DateField id="settle-date" value={occurredOn} onChange={setOccurredOn} bounds={dateBounds.entry()} disabled={submitting} />
+        <OpeningDateHint date={occurredOn} accounts={accounts} accountIds={[accountId]} />
       </div>
 
       <div className="grid grid-cols-2 gap-2">

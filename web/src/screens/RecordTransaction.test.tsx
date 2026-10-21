@@ -4,6 +4,7 @@ import { MemoryRouter, useSearchParams } from 'react-router-dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import RecordTransaction from '@/screens/RecordTransaction'
+import { pickDate } from '@/test/datePicker'
 import { chooseOption, selectOptionNames, selectedOptionName } from '@/test/select'
 import { copy } from '@/copy/id'
 import { formatIDR } from '@/lib/money'
@@ -1065,5 +1066,84 @@ describe('RecordTransaction: Pengeluaran ini ditalangi (#368)', () => {
     await fillClaimWithPhoto()
 
     await waitFor(() => expect(onRecorded).toHaveBeenCalledWith('reimbursement', true))
+  })
+})
+
+// #637: a date before the opening entry asks her to look, and never blocks.
+describe('RecordTransaction: date before the opening balance', () => {
+  const withOpenings = [
+    { id: 1, kind: 'cash', name: 'Tunai', inactive_on: null, opening_on: '2026-03-01', created_at: 1 },
+    { id: 3, kind: 'bank', name: 'Bank Uji Coba', inactive_on: null, opening_on: '2026-05-10', created_at: 1 },
+  ]
+
+  function stub(accountRows: unknown[]) {
+    vi.stubGlobal(
+      'fetch',
+      routedFetch([
+        { match: (m, u) => m === 'GET' && u.includes('/api/accounts'), handle: () => Promise.resolve(jsonResponse(accountRows)) },
+        { match: (m, u) => m === 'GET' && u.includes('/api/balances'), handle: () => Promise.resolve(jsonResponse(balancesWith(30_000))) },
+        { match: (m, u) => m === 'GET' && u.includes('/api/purposes'), handle: () => Promise.resolve(jsonResponse(purposes)) },
+      ]),
+    )
+  }
+
+  async function open() {
+    render(<RecordTransaction onRecorded={vi.fn()} onCancel={vi.fn()} onDuesRecorded={vi.fn()} />)
+    await waitFor(() => expect(selectedOptionName(text.locationLabel)).toBe('Tunai'))
+  }
+
+  const tunaiWarning = (when: string) => copy.dateField.beforeOpening('Tunai', formatIsoDate(when))
+
+  it('warns before the location opening, naming it, and still lets her save', async () => {
+    stub(withOpenings)
+    await open()
+    await userEvent.type(screen.getByLabelText(text.amountLabel), '50000')
+    await pickDate(text.dateLabel, '2026-02-20')
+
+    expect(await screen.findByText(tunaiWarning('2026-03-01'))).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: text.submit })).toBeEnabled()
+  })
+
+  it('says nothing on the opening day or after it', async () => {
+    stub(withOpenings)
+    await open()
+    await pickDate(text.dateLabel, '2026-03-01')
+    expect(screen.queryByText(tunaiWarning('2026-03-01'))).not.toBeInTheDocument()
+    await pickDate(text.dateLabel, '2026-04-01')
+    expect(screen.queryByText(tunaiWarning('2026-03-01'))).not.toBeInTheDocument()
+  })
+
+  it('falls back to the fund earliest opening for a location with none', async () => {
+    stub([{ ...withOpenings[0], opening_on: null }, withOpenings[1]])
+    await open()
+    await pickDate(text.dateLabel, '2026-05-01')
+    expect(await screen.findByText(copy.dateField.beforeOpeningFund(formatIsoDate('2026-05-10')))).toBeInTheDocument()
+  })
+
+  it('says nothing when the fund has no opening entry at all', async () => {
+    stub(withOpenings.map((a) => ({ ...a, opening_on: null })))
+    await open()
+    await pickDate(text.dateLabel, '2026-01-05')
+    expect(screen.queryByText(/sebelum saldo awal/)).not.toBeInTheDocument()
+  })
+
+  it('anchors Pindah lokasi on the later of the two openings, naming it', async () => {
+    stub(withOpenings)
+    await open()
+    await userEvent.click(screen.getByRole('button', { name: text.directionTransfer }))
+    await chooseOption(text.fromLocationLabel, 'Tunai')
+    await chooseOption(text.toLocationLabel, 'Bank Uji Coba')
+    await pickDate(text.dateLabel, '2026-04-01')
+
+    expect(await screen.findByText(copy.dateField.beforeOpening('Bank Uji Coba', formatIsoDate('2026-05-10')))).toBeInTheDocument()
+  })
+
+  it('uses the fund earliest opening for Pindah pos, which has no location', async () => {
+    stub(withOpenings)
+    await open()
+    await userEvent.click(screen.getByRole('button', { name: text.directionPurpose }))
+    await pickDate(text.dateLabel, '2026-02-01')
+
+    expect(await screen.findByText(copy.dateField.beforeOpeningFund(formatIsoDate('2026-03-01')))).toBeInTheDocument()
   })
 })

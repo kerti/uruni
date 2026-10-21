@@ -39,3 +39,14 @@ RETURNING id, fund_id, kind, name, created_at, inactive_on;
 -- name: DeleteAccount :exec
 DELETE FROM account
 WHERE id = ?;
+
+-- Each location's opening-balance date, for the "this date is before the
+-- opening balance" hint (#637). Read-only and derived: the opening entry is the
+-- ledger's own row, so nothing is stored beside it. MIN because a location
+-- could in principle carry more than one opening row; the earliest is the one
+-- history starts from. Locations without an opening entry have no row here.
+-- name: ListAccountOpeningDates :many
+SELECT account_id, CAST(MIN(occurred_on) AS TEXT) AS opening_on
+FROM "transaction"
+WHERE fund_id = ? AND kind = 'opening'
+GROUP BY account_id;
