@@ -12,7 +12,8 @@
 -- Every money column carries the same ceiling, 999999999999 (Rp 999.999.999.999,
 -- money.MaxAmount, #499): the backstop for anything that writes around the
 -- ledger, a backup restore included. A signed column is bounded on both sides.
--- The one exception is reconciliation_line.difference_amount, which is derived.
+-- The exceptions are reconciliation_line's two derived figures: recorded_amount,
+-- the ledger's own balance, and difference_amount.
 -- The literal is plain digits because a CHECK cannot name a Go constant;
 -- internal/db/amount_ceiling_test.go pins it to money.MaxAmount and fails when a
 -- money column (minimum_per_member has no "amount" in its name) lacks it.
@@ -427,12 +428,13 @@ CREATE TABLE reconciliation_line (        -- one counted location within a snaps
   fund_id           INTEGER NOT NULL,
   reconciliation_id INTEGER NOT NULL,
   account_id        INTEGER NOT NULL,
-  -- recorded and actual are signed (a recorded balance can be negative), so each
-  -- is bounded on both sides. difference_amount has no ceiling of its own: the
-  -- equality CHECK below fixes it at actual - recorded, so it is bounded by those
-  -- two (at most twice the ceiling, far inside int64), and a third bound would
-  -- refuse a legitimate line (recorded -max, actual +max).
-  recorded_amount   INTEGER NOT NULL CHECK (recorded_amount   BETWEEN -999999999999 AND 999999999999),  -- frozen at snapshot time
+  -- recorded and actual are signed (a recorded balance can be negative).
+  -- actual is what she counted, so it carries the ceiling on both sides.
+  -- recorded carries none: it is the ledger's balance of the location, a sum of
+  -- bounded amounts that nothing refuses past the ceiling, and a bound here
+  -- would leave such a location impossible to count. difference_amount has none
+  -- either: the equality CHECK below fixes it at actual - recorded.
+  recorded_amount   INTEGER NOT NULL,  -- frozen at snapshot time
   actual_amount     INTEGER NOT NULL CHECK (actual_amount     BETWEEN -999999999999 AND 999999999999),  -- what the treasurer counted
   difference_amount INTEGER NOT NULL,
   resolution        TEXT    NOT NULL CHECK (resolution IN ('matched','entry_added','adjusted','left_open')),
