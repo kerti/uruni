@@ -6,3 +6,8 @@
 # appended), read as generic-api-key. Not a credential. The current line
 # carries gitleaks:allow.
 7e36d9b3d31e06cab43ca0c71580d815df26fccd:internal/backup/dumps_test.go:generic-api-key:66
+#
+# Two idempotency-key test fixtures (32 hex characters each), read as
+# generic-api-key. Not credentials. The current lines use low-entropy values.
+417f0f5118e4087c21dd2f3829c34e1480b2a0fc:internal/http/idempotency_test.go:generic-api-key:18
+417f0f5118e4087c21dd2f3829c34e1480b2a0fc:internal/http/idempotency_test.go:generic-api-key:19

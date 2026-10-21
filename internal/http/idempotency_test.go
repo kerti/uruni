@@ -14,9 +14,11 @@ import (
 
 // ADR-043 on the one route #634 keys, POST /api/transactions.
 
+// Plainly fixtures, and low in entropy so a secret scanner does not read them as
+// credentials (a random hex key here tripped gitleaks' generic-api-key).
 const (
-	testKey      = "0123456789abcdef0123456789abcdef"
-	testOtherKey = "fedcba9876543210fedcba9876543210"
+	testKey      = "test-key-one-0000"
+	testOtherKey = "test-key-two-0000"
 )
 
 // keyedFixture is a fund and a router whose clock the test moves.
