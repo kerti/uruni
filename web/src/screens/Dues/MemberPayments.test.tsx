@@ -115,6 +115,26 @@ describe('MemberPayments', () => {
     expect(body.note).toBeNull()
   })
 
+  it("states the original's date on the form when no cek kas has counted the payment", async () => {
+    vi.stubGlobal('fetch', stubTransactions([transaction({ id: 10, counted: false })]))
+    renderPayments()
+
+    await userEvent.click(await screen.findByRole('button', { name: text.reverse }))
+
+    expect(screen.getByText(copy.history.transactions.reverseDateOriginal('5 Januari 2026'))).toBeInTheDocument()
+    expect(screen.getByText('Dicatat pada 5 Januari 2026.')).toBeInTheDocument()
+  })
+
+  it('says it is recorded today once a cek kas has counted the payment', async () => {
+    vi.stubGlobal('fetch', stubTransactions([transaction({ id: 10, counted: true })]))
+    renderPayments()
+
+    await userEvent.click(await screen.findByRole('button', { name: text.reverse }))
+
+    expect(screen.getByText('Dicatat hari ini, karena kas sudah dicek sejak transaksi ini.')).toBeInTheDocument()
+    expect(screen.queryByText(/^Dicatat pada/)).not.toBeInTheDocument()
+  })
+
   it("sends the treasurer's own reason when she gives one", async () => {
     const fetchMock = stubTransactions()
     vi.stubGlobal('fetch', fetchMock)

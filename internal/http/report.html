@@ -113,6 +113,7 @@
         {{if .Label}}<span class="label-line">{{.Label}}</span>{{end}}
         {{if .Note}}<span class="note">{{.Note}}</span>{{end}}
         <span class="muted">{{if .Purpose}}{{.Purpose}}{{end}}{{if .HasReceipt}}{{if .Purpose}} &middot; {{end}}{{$.Text.HasReceipt}}{{end}}</span>
+        {{if .Reversed}}<span class="muted">{{$.Text.RowReversed}}</span>{{end}}
       </span>
       <span class="tabular amt {{.Class}}">{{.Amount}}</span>
     </li>

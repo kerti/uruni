@@ -93,10 +93,11 @@ type reportCopy struct {
 	RowDues                 func(period, member string) string
 	RowDuesReversal         func(period, member string) string
 	RowContributionReversal func(member string) string
-	// RowReversal labels a reversal that names no member (ADR-042): the bare word the
-	// other two reversal labels open with. The ADR's fuller label, with the
-	// original's date, is #631's copy slice.
-	RowReversal   string
+	// RowReversal labels a reversal that names no member (ADR-042), stating the
+	// original's date (already long-formatted).
+	RowReversal func(date string) string
+	// RowReversed is the mark on a row something reverses.
+	RowReversed   string
 	RowOpening    string
 	RowAdjustment string
 	RowMoved      func(from, to string) string
@@ -194,7 +195,8 @@ var reportText = reportCopy{
 	RowDues:                 func(period, member string) string { return period + " \u00b7 " + member },
 	RowDuesReversal:         func(period, member string) string { return "Pembatalan \u00b7 " + period + " \u00b7 " + member },
 	RowContributionReversal: func(member string) string { return "Pembatalan \u00b7 " + member },
-	RowReversal:             "Pembatalan",
+	RowReversal:             func(date string) string { return "Pembatalan \u00b7 transaksi " + date },
+	RowReversed:             "Sudah dibatalkan",
 	RowOpening:              "Saldo awal",
 	RowAdjustment:           "Penyesuaian",
 	RowMoved:                func(from, to string) string { return "Dipindah: " + from + " \u2192 " + to },

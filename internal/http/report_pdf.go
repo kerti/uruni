@@ -525,6 +525,9 @@ func (d *pdfDoc) transactions(p reportPage) {
 		if len(meta) > 0 {
 			note.lines = append(note.lines, pdfLine{text: strings.Join(meta, " \u00b7 "), size: pdfSmallSize, color: "muted-foreground"})
 		}
+		if r.Reversed {
+			note.lines = append(note.lines, pdfLine{text: reportText.RowReversed, size: pdfSmallSize, color: "muted-foreground"})
+		}
 		if len(note.lines) == 0 {
 			note.lines = []pdfLine{{text: "", size: pdfBodySize, color: "foreground"}}
 		}

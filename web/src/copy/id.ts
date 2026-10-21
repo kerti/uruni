@@ -70,24 +70,29 @@ export const copy = {
       memberFilterLabel: (name: string) => `Anggota: ${name}`,
       filterClear: (label: string) => `Hapus filter ${label}`,
       filterEmpty: 'Tidak ada transaksi yang cocok dengan filter ini.',
-      // Undoing a named contribution recorded against the wrong member
-      // (ADR-034) - the "reverse, then post again" shape dues.history gives a
-      // dues payment: a sumbangan is not edited away, a new entry undoes it.
-      // reversalRow/reversedBadge are dues.history's words, reused verbatim
-      // (CONTEXT.md: one word per concept) since both lists show the same two
-      // row shapes.
-      reverse: 'Batalkan sumbangan',
+      // Undoing any ordinary transaction (ADR-042): one door, the entry
+      // detail's button, which hands off to the inline form under the row.
+      // The reversal is a new entry, never an edit, so this copy says
+      // "batalkan", never "hapus". reverse is both the button and the form's
+      // title. reverseDate* state the date the ledger will give the reversal (the
+      // client cannot see the counts; the row's `counted` picks the line), and
+      // the Iuran screens' form shows the same two lines.
+      reverse: 'Batalkan transaksi',
+      reverseExplainer:
+        'Transaksi ini tidak dihapus. Pembatalannya dicatat sebagai entri baru, dan saldo kembali seperti sebelum transaksi ini dicatat.',
+      // date is already formatted (formatIsoDate) by the caller.
+      reverseDateOriginal: (date: string) => `Dicatat pada ${date}.`,
+      reverseDateToday: 'Dicatat hari ini, karena kas sudah dicek sejak transaksi ini.',
       reverseNoteLabel: 'Alasan (opsional)',
       reverseConfirm: 'Ya, batalkan',
       reverseCancel: 'Jangan jadi',
       reverseSubmitting: 'Membatalkan…',
-      reverseSuccess: 'Sumbangan dibatalkan.',
+      reverseSuccess: 'Transaksi dibatalkan.',
       // Scoped ahead of copy.common.errors' transaction_already_reversed
-      // (ErrorState.tsx's fallback chain): the server answers the same 409 for
-      // a repeat reversal on either path, and this list is the sumbangan one -
-      // "iuran" would be the wrong noun.
+      // (reversalErrorText): that one is worded for the Iuran screens, and this
+      // list names its rows "transaksi" whatever the kind.
       errors: {
-        transaction_already_reversed: 'Sumbangan ini sudah dibatalkan.',
+        transaction_already_reversed: 'Transaksi ini sudah dibatalkan.',
       },
     },
     // The Talangan tab's search and paging (ADR-032). A narrower placeholder
@@ -309,12 +314,21 @@ export const copy = {
       purpose_correction_named_contribution:
         'Pos sumbangan yang sudah bernama tidak bisa diperbaiki di sini — batalkan sumbangannya, lalu catat lagi.',
       // POST /api/transactions/{id}/reversal's named 409 for a second reversal of
-      // the same row (ADR-029, ADR-042) - the shared fallback, worded for the dues
-      // path, which still calls the route. Transaksi's own word is #631's.
-      // The contribution path (ADR-034) speaks of a sumbangan:
+      // the same row (ADR-029, ADR-042) - the shared fallback, worded for the
+      // Iuran screens. Riwayat > Transaksi speaks of a transaksi:
       // copy.history.transactions.errors, checked first by that screen's error
       // mapper.
       transaction_already_reversed: 'Pembayaran iuran ini sudah dibatalkan.',
+      // POST /api/transactions/{id}/reversal's other refusals (ADR-042). The
+      // entry detail offers the button only where the ledger would accept the
+      // row, so these are the fallback for a stale page or a direct call.
+      reversal_opening: 'Saldo awal tidak bisa dibatalkan.',
+      reversal_reimbursement: 'Pelunasan talangan tidak bisa dibatalkan.',
+      reversal_transfer: 'Pindahan tidak bisa dibatalkan satu sisi saja.',
+      reversal_of_reversal: 'Pembatalan tidak bisa dibatalkan lagi.',
+      reversal_adjustment: 'Penyesuaian tidak bisa dibatalkan.',
+      reversal_reconciliation_fix: 'Transaksi ini dipakai untuk menutup selisih cek kas, jadi tidak bisa dibatalkan.',
+      reversal_before_original: 'Transaksi ini bertanggal setelah hari ini — pembatalannya baru bisa dicatat mulai tanggal itu.',
       // The receipt upload routes (internal/http/receipts.go's
       // processAndStoreReceipt) - a phone shooting HEIC by default gets its own
       // wording, as in the Go comment beside that code.
@@ -607,6 +621,11 @@ export const copy = {
     },
     contributionReversal: {
       text: (memberName: string) => `Pembatalan · ${memberName}`,
+    },
+    // A reversal of a row that names no member (ADR-042): it states the
+    // original's date instead. date is already formatted (formatIsoDate).
+    unnamedReversal: {
+      text: (date: string) => `Pembatalan · transaksi ${date}`,
     },
     opening: {
       text: (accountName: string) => `Saldo awal · ${accountName}`,

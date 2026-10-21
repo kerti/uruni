@@ -50,7 +50,11 @@ func (c reportCopy) entryLabel(e ledger.ReportEntry) string {
 				return c.RowDuesReversal(period, member)
 			}
 			if e.MemberName == nil {
-				return c.RowReversal
+				date := ""
+				if e.ReversesOccurredOn != nil {
+					date = c.longDate(*e.ReversesOccurredOn)
+				}
+				return c.RowReversal(date)
 			}
 			return c.RowContributionReversal(member)
 		}

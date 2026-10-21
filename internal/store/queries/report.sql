@@ -34,6 +34,10 @@ LIMIT 1;
 -- pair's from leg and 'in' its to leg. Both legs carry identical from/to
 -- facts, so the Go fold keeps either.
 --
+-- reversed is ledger_entry's flag and reverses_occurred_on the date of the row a
+-- reversal reverses (ADR-042): the mark on the original and the unnamed
+-- reversal's label, both drawn on the page and in the PDF.
+--
 -- has_receipt is true for a receipt on the row itself or, on a reimbursement
 -- payout, on the claim it settles: that nota is the proof of the payout
 -- (ADR-011).
@@ -44,6 +48,8 @@ SELECT t.occurred_on, t.created_at, t.direction, t.amount, t.kind,
        rb.member_id AS settlement_member_id, rm.name AS settlement_member_name,
        rb.note AS claim_note,
        t.dues_period, t.reverses_transaction_id, t.note,
+       t.reversed,
+       orig.occurred_on AS reverses_occurred_on,
        t.transfer_id,
        tr.kind AS transfer_kind,
        tr.corrects_transaction_id AS transfer_corrects_transaction_id,
@@ -56,7 +62,7 @@ SELECT t.occurred_on, t.created_at, t.direction, t.amount, t.kind,
                    WHERE rc.fund_id = t.fund_id
                      AND (rc.transaction_id = t.id
                           OR (t.reimbursement_id IS NOT NULL AND rc.reimbursement_id = t.reimbursement_id))) AS INTEGER) AS has_receipt
-FROM "transaction" t
+FROM ledger_entry t
 JOIN purpose p ON p.id = t.purpose_id
 LEFT JOIN member m ON m.id = t.member_id
 LEFT JOIN reimbursement rb ON rb.id = t.reimbursement_id
@@ -66,6 +72,7 @@ LEFT JOIN "transaction" tf ON tf.transfer_id = t.transfer_id AND tf.direction = 
 LEFT JOIN "transaction" tt ON tt.transfer_id = t.transfer_id AND tt.direction = 'in'
 LEFT JOIN purpose fp ON fp.id = tf.purpose_id
 LEFT JOIN purpose tp ON tp.id = tt.purpose_id
+LEFT JOIN "transaction" orig ON orig.id = t.reverses_transaction_id
 WHERE t.fund_id = sqlc.arg('fund_id')
   AND t.occurred_on >= sqlc.arg('from_date')
   AND (CAST(sqlc.narg('to_date') AS TEXT) IS NULL OR t.occurred_on < CAST(sqlc.narg('to_date') AS TEXT))

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Undo2 } from 'lucide-react'
 
+import ReversalDateLine from '@/components/ReversalDateLine'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -146,6 +147,7 @@ export default function MemberPayments({ memberId, period, onReversed }: { membe
 
             {reversingId === row.id && (
               <div className="animate-reveal flex flex-col gap-2 rounded-lg bg-muted/40 p-3">
+                <ReversalDateLine transaction={row} />
                 <div className="flex flex-col gap-1.5">
                   <Label htmlFor={`dues-reversal-note-${row.id}`}>{text.noteLabel}</Label>
                   <Input
