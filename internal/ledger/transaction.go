@@ -234,6 +234,11 @@ type CreateAccountParams struct {
 	// Now is the clock the opening balance's ceiling is read from, in the fund's
 	// zone (ADR-041, #632). The zero value means time.Now().
 	Now time.Time
+
+	// Idempotency, when non-nil, makes the create safe to repeat: the same key
+	// with the same request answers the first location and writes nothing, never
+	// a second account or a second opening row (ADR-043). nil is an unkeyed call.
+	Idempotency *Idempotency
 }
 
 // CreateAccount writes one account row and, when OpeningBalance is present
@@ -242,6 +247,12 @@ type CreateAccountParams struct {
 // account: validateOpeningBalance runs before withTx opens, and a schema
 // violation on the account insert (malformed kind, blank name) aborts the
 // transaction before any opening balance is considered.
+//
+// With p.Idempotency set (ADR-043), a repeat of the same request returns the
+// first location, whether or not it came with a starting balance. An unkeyed
+// repeat is a second account and a second opening row, which no route can
+// delete (the row's foreign key holds the account, ErrAccountHoldsMoney the
+// retiring).
 func (l *Ledger) CreateAccount(ctx context.Context, p CreateAccountParams) (store.Account, error) {
 	if p.OpeningBalance != nil {
 		window, err := l.windowFor(ctx, l.q, p.FundID, p.Now)
@@ -253,28 +264,26 @@ func (l *Ledger) CreateAccount(ctx context.Context, p CreateAccountParams) (stor
 		}
 	}
 
-	var account store.Account
-	err := l.withTx(ctx, func(q store.Querier) error {
+	account, err := withIdempotency(ctx, l, p.Idempotency, func(q store.Querier) (store.Account, error) {
 		now := time.Now().Unix()
 
-		created, err := q.CreateAccount(ctx, store.CreateAccountParams{
+		account, err := q.CreateAccount(ctx, store.CreateAccountParams{
 			FundID: p.FundID, Kind: p.Kind, Name: p.Name, CreatedAt: now,
 		})
 		if err != nil {
-			return err
+			return store.Account{}, err
 		}
-		account = created
 
 		if p.OpeningBalance != nil && p.OpeningBalance.Amount > 0 {
 			purposeID, err := mainPurposeID(ctx, q, p.FundID)
 			if err != nil {
-				return err
+				return store.Account{}, err
 			}
 			if _, err := postOpeningBalanceRow(ctx, q, p.FundID, account.ID, purposeID, *p.OpeningBalance, now); err != nil {
-				return err
+				return store.Account{}, err
 			}
 		}
-		return nil
+		return account, nil
 	})
 	if err != nil {
 		return store.Account{}, fmt.Errorf("creating account: %w", err)

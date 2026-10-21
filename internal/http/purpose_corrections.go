@@ -34,6 +34,11 @@ type purposeCorrectionRequest struct {
 // The response is the posted transfer row, the transferResponse of POST
 // /api/transfers: a correction's two legs are ordinary transaction rows
 // readable through GET /api/transactions.
+//
+// The route is keyed (ADR-043) and answers 200, not 201, on a first success
+// and on a replay alike (Idempotent-Replayed marks the second). Under a key, a
+// repeat of the correction that worked is that 200, not the 409
+// purpose_correction_noop it would otherwise earn.
 func (a *api) postPurposeCorrection(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
@@ -51,15 +56,18 @@ func (a *api) postPurposeCorrection(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	idem := idempotencyFrom(r)
 	correction, err := a.ledger.PostPurposeCorrection(r.Context(), ledger.PostPurposeCorrectionParams{
 		FundID:        fund.ID,
 		TransactionID: id,
 		PurposeID:     req.PurposeID,
+		Idempotency:   idem,
 	})
 	if err != nil {
 		mapLedgerError(w, a.log(r), err)
 		return
 	}
 
+	markReplay(w, r, a.log(r), idem)
 	writeJSON(w, http.StatusOK, toTransferResponse(correction))
 }

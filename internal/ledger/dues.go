@@ -43,6 +43,11 @@ type PostDuesPaymentsParams struct {
 	// Now is the clock the date's and the periods' ceilings are read from, in the
 	// fund's zone (ADR-041, #632). The zero value means time.Now().
 	Now time.Time
+
+	// Idempotency, when non-nil, makes the payment safe to repeat: the same key
+	// with the same request answers the first result, every period's row, and
+	// posts nothing (ADR-043). nil is an unkeyed post.
+	Idempotency *Idempotency
 }
 
 // PostDuesPayments writes one kind='dues' entry per element of Periods -
@@ -69,6 +74,11 @@ type PostDuesPaymentsParams struct {
 // for the whole batch in the transaction before any row is written (#444).
 // Every row's purpose is Kas Utama, looked up once in the same transaction:
 // never a closed envelope, never a titipan (#473).
+//
+// With p.Idempotency set (ADR-043), a repeat of the same request returns the
+// first call's rows as one result and posts none; argument shape is still
+// checked first, and the account check inside the transaction does not run on a
+// replay.
 func (l *Ledger) PostDuesPayments(ctx context.Context, p PostDuesPaymentsParams) ([]store.Transaction, error) {
 	if len(p.Periods) == 0 {
 		return nil, fmt.Errorf("%w: periods must not be empty", ErrInvalidArgument)
@@ -92,23 +102,23 @@ func (l *Ledger) PostDuesPayments(ctx context.Context, p PostDuesPaymentsParams)
 		}
 	}
 
-	posted := make([]store.Transaction, 0, len(p.Periods))
-	err = l.withTx(ctx, func(q store.Querier) error {
+	posted, err := withIdempotency(ctx, l, p.Idempotency, func(q store.Querier) ([]store.Transaction, error) {
 		if err := refuseInactiveAccount(ctx, q, p.FundID, p.AccountID); err != nil {
-			return err
+			return nil, err
 		}
 		mainID, err := mainPurposeID(ctx, q, p.FundID)
 		if err != nil {
-			return err
+			return nil, err
 		}
+		rows := make([]store.Transaction, 0, len(p.Periods))
 		for _, period := range p.Periods {
 			row, err := l.postDuesPaymentTx(ctx, q, p, mainID, period)
 			if err != nil {
-				return err
+				return nil, err
 			}
-			posted = append(posted, row)
+			rows = append(rows, row)
 		}
-		return nil
+		return rows, nil
 	})
 	if err != nil {
 		return nil, fmt.Errorf("posting dues payments: %w", err)

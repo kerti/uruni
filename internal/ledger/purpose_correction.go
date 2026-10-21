@@ -22,6 +22,12 @@ type PostPurposeCorrectionParams struct {
 	FundID        int64
 	TransactionID int64 // the posted row whose peruntukan is wrong
 	PurposeID     int64 // the target: what it should have been tagged
+
+	// Idempotency, when non-nil, makes the correction safe to repeat: the same key
+	// with the same request answers the first pair and posts nothing, where an
+	// unkeyed repeat is a second pair or ErrPurposeCorrectionNoop (ADR-043). nil
+	// is an unkeyed post.
+	Idempotency *Idempotency
 }
 
 // PostPurposeCorrection posts a kind='reclass_purpose' pair that moves one
@@ -103,39 +109,42 @@ type PostPurposeCorrectionParams struct {
 //
 // Last, PurposeID equal to the effective peruntukan: ErrPurposeCorrectionNoop,
 // since nothing would move.
+//
+// With p.Idempotency set (ADR-043), a repeat of the same request returns the
+// first pair; none of the checks above runs on a replay, so the repeat of a
+// correction that worked is never the Noop its own result would make it.
 func (l *Ledger) PostPurposeCorrection(ctx context.Context, p PostPurposeCorrectionParams) (store.Transfer, error) {
-	var created store.Transfer
-	err := l.withTx(ctx, func(q store.Querier) error {
+	created, err := withIdempotency(ctx, l, p.Idempotency, func(q store.Querier) (store.Transfer, error) {
 		original, err := q.GetTransactionForFund(ctx, store.GetTransactionForFundParams{
 			FundID: p.FundID,
 			ID:     p.TransactionID,
 		})
 		if err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
-				return ErrPurposeCorrectionNotFound
+				return store.Transfer{}, ErrPurposeCorrectionNotFound
 			}
-			return fmt.Errorf("fetching transaction to correct: %w", err)
+			return store.Transfer{}, fmt.Errorf("fetching transaction to correct: %w", err)
 		}
 
 		switch original.Kind {
 		case "opening":
-			return ErrPurposeCorrectionOpening
+			return store.Transfer{}, ErrPurposeCorrectionOpening
 		case "dues":
-			return ErrPurposeCorrectionDues
+			return store.Transfer{}, ErrPurposeCorrectionDues
 		case "reimbursement":
-			return ErrPurposeCorrectionReimbursement
+			return store.Transfer{}, ErrPurposeCorrectionReimbursement
 		case "transfer":
-			return ErrPurposeCorrectionTransfer
+			return store.Transfer{}, ErrPurposeCorrectionTransfer
 		case "adjustment":
 			if original.ReversesTransactionID != nil {
-				return ErrPurposeCorrectionReversal
+				return store.Transfer{}, ErrPurposeCorrectionReversal
 			}
 		case "normal":
 			// A named contribution (ADR-034): moving it would leave participation
 			// counting the member against an envelope the money has left. Refused like a
 			// dues payment; an unnamed contribution (member_id NULL) is eligible.
 			if original.MemberID != nil {
-				return ErrPurposeCorrectionNamedContribution
+				return store.Transfer{}, ErrPurposeCorrectionNamedContribution
 			}
 		}
 		// "normal" with no member_id, and "adjustment" with no
@@ -150,26 +159,26 @@ func (l *Ledger) PostPurposeCorrection(ctx context.Context, p PostPurposeCorrect
 			ID:     p.TransactionID,
 		})
 		if err != nil {
-			return fmt.Errorf("checking whether the transaction was reversed: %w", err)
+			return store.Transfer{}, fmt.Errorf("checking whether the transaction was reversed: %w", err)
 		}
 		if reversed != 0 {
-			return ErrPurposeCorrectionAlreadyReversed
+			return store.Transfer{}, ErrPurposeCorrectionAlreadyReversed
 		}
 
 		effectivePurposeID, err := effectivePeruntukan(ctx, q, p.FundID, original)
 		if err != nil {
-			return err
+			return store.Transfer{}, err
 		}
 
 		if p.PurposeID == effectivePurposeID {
-			return ErrPurposeCorrectionNoop
+			return store.Transfer{}, ErrPurposeCorrectionNoop
 		}
 
 		if err := refuseClosedIncidental(ctx, q, p.PurposeID, ErrPurposeCorrectionTargetClosed); err != nil {
-			return err
+			return store.Transfer{}, err
 		}
 		if err := refuseClosedIncidental(ctx, q, effectivePurposeID, ErrPurposeCorrectionSourceClosed); err != nil {
-			return err
+			return store.Transfer{}, err
 		}
 
 		// The direction flip worked out in the doc comment: 'out' needs the
@@ -186,12 +195,12 @@ func (l *Ledger) PostPurposeCorrection(ctx context.Context, p PostPurposeCorrect
 		}
 
 		transactionID := p.TransactionID
-		created, err = l.postTransferPairTx(ctx, q, p.FundID, "reclass_purpose", from, to,
+		pair, err := l.postTransferPairTx(ctx, q, p.FundID, "reclass_purpose", from, to,
 			money.FromDB(original.Amount), original.OccurredOn, nil, &transactionID, nil)
 		if err != nil {
-			return fmt.Errorf("posting purpose correction: %w", err)
+			return store.Transfer{}, fmt.Errorf("posting purpose correction: %w", err)
 		}
-		return nil
+		return pair, nil
 	})
 	if err != nil {
 		return store.Transfer{}, fmt.Errorf("correcting purpose: %w", err)

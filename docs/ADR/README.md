@@ -67,7 +67,7 @@ Standing decisions that no ADR owns go in [`../Decisions.md`](../Decisions.md).
 | [040](./040-effective-dated-tiers-and-rate-corrections.md) | Effective-dated tiers, and rate corrections that leave a trail | implemented |
 | [041](./041-the-funds-time-zone.md) | The fund's time zone: WIB, WITA or WIT | implemented |
 | [042](./042-reversing-any-ordinary-transaction.md) | Reversing any ordinary transaction | implemented |
-| [043](./043-idempotency-keys-on-immutable-writes.md) | Idempotency keys on immutable writes | `draft` |
+| [043](./043-idempotency-keys-on-immutable-writes.md) | Idempotency keys on immutable writes | implemented |
 
 The **Stage** column is the record, and it is all this index says about implementation: `draft` means editable in place, `implemented` means superseding-ADR-only. *Which* slice put code behind a given ADR belongs in that ADR and in the PR that dropped its tag — restated here, this index becomes a changelog.
 

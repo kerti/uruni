@@ -149,6 +149,12 @@ func toReconciliationDetailResponse(d ledger.ReconciliationDetail) reconciliatio
 // what the treasurer counted per account, and posts each line's fix, in one
 // withTx (PRD section 7.8). See that method for the cutoff/resolution rules;
 // the handler decodes and passes through (ADR-027).
+//
+// The route is keyed (ADR-043). The ledger stores only the snapshot row; the
+// detail below is read after the commit for a replay as for a first success.
+// A snapshot and its lines never change, so both answer the same figures; the
+// lines' order follows the locations' current names, which a rename between
+// the two can change.
 func (a *api) takeReconciliation(w http.ResponseWriter, r *http.Request) {
 	var req takeReconciliationRequest
 	if !decodeJSON(w, r, &req) {
@@ -180,11 +186,14 @@ func (a *api) takeReconciliation(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
+	idem := idempotencyFrom(r)
 	rec, err := a.ledger.TakeReconciliation(r.Context(), ledger.TakeReconciliationParams{
 		Now:    a.now(),
 		FundID: fund.ID,
 		Note:   req.Note,
 		Counts: counts,
+
+		Idempotency: idem,
 	})
 	if err != nil {
 		mapLedgerError(w, a.log(r), err)
@@ -197,6 +206,7 @@ func (a *api) takeReconciliation(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	markReplay(w, r, a.log(r), idem)
 	writeJSON(w, http.StatusCreated, toReconciliationDetailResponse(detail))
 }
 

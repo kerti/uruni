@@ -33,6 +33,9 @@ type purposeMoveRequest struct {
 // named error, through mapLedgerError. It answers with POST /api/transfers'
 // transferResponse; the two legs are ordinary rows readable through GET
 // /api/transactions.
+//
+// The route is keyed (ADR-043): a replay is the same 201 with
+// Idempotent-Replayed, and posts no second pair.
 func (a *api) createPurposeMove(w http.ResponseWriter, r *http.Request) {
 	var req purposeMoveRequest
 	if !decodeJSON(w, r, &req) {
@@ -44,6 +47,7 @@ func (a *api) createPurposeMove(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	idem := idempotencyFrom(r)
 	transfer, err := a.ledger.PostPurposeMove(r.Context(), ledger.PostPurposeMoveParams{
 		Now:           a.now(),
 		FundID:        fund.ID,
@@ -53,11 +57,13 @@ func (a *api) createPurposeMove(w http.ResponseWriter, r *http.Request) {
 		Amount:        money.Amount(req.Amount),
 		OccurredOn:    req.OccurredOn,
 		Note:          req.Note,
+		Idempotency:   idem,
 	})
 	if err != nil {
 		mapLedgerError(w, a.log(r), err)
 		return
 	}
 
+	markReplay(w, r, a.log(r), idem)
 	writeJSON(w, http.StatusCreated, toTransferResponse(transfer))
 }
