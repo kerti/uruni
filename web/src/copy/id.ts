@@ -208,11 +208,14 @@ export const copy = {
       method_not_allowed: 'Aksi ini tidak didukung.',
       network_error: 'Belum tersambung — Uruni butuh koneksi.',
       // A write whose response never arrived. The server may already have saved
-      // it, and a retry would be an immutable duplicate - so say it is
-      // uncertain, and why to look first. The screen has re-read its data by
-      // the time this shows.
+      // it - so say it is uncertain, and to check before saving again. One line
+      // for every write (ADR-043): it names no place, because Riwayat does not
+      // list a member, a tier or a location, and it promises no more than the
+      // system keeps, because a key that makes a repeat safe is forgotten 15
+      // minutes after the last attempt and by a reload. The screen has re-read
+      // its data by the time this shows.
       write_outcome_unknown:
-        'Koneksinya terputus sebelum Uruni sempat menjawab, jadi belum pasti tersimpan. Cek Riwayat dulu sebelum menyimpan lagi, supaya tidak tercatat dua kali.',
+        'Koneksinya terputus sebelum Uruni sempat menjawab, jadi belum pasti tersimpan. Cek dulu apakah sudah tersimpan sebelum menyimpan lagi.',
       invalid_argument: 'Ada isian yang belum sesuai. Coba periksa lagi.',
       already_registered: 'Akun bendahara untuk Uruni ini sudah pernah dibuat.',
       invalid_credentials: 'Email atau kata sandi salah.',
@@ -233,6 +236,11 @@ export const copy = {
       // body.
       fund_already_exists: 'Kas ini sudah pernah disiapkan.',
       invalid_json: 'Ada yang tidak beres saat mengirim data. Coba lagi.',
+      // A malformed or reused idempotency key (ADR-043): the wrapper never sends
+      // either, so these are unreachable from the app and read as invalid_json
+      // does. The 409 is a definite answer, so her next try carries a new key.
+      invalid_idempotency_key: 'Ada yang tidak beres saat mengirim data. Coba lagi.',
+      idempotency_key_reused: 'Ada yang tidak beres saat mengirim data. Coba lagi.',
       // Deleting a location (or a member or tier) that something already
       // points at. The locations section renders more specific wording
       // pointing at deactivate; this is the shared fallback for the same code

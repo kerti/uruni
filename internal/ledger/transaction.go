@@ -51,10 +51,20 @@ type PostTransactionParams struct {
 	// Now is the clock the date's ceiling is read from, in the fund's zone
 	// (ADR-041, #632). The zero value means time.Now().
 	Now time.Time
+
+	// Idempotency, when non-nil, makes the post safe to repeat: the same key with
+	// the same request answers the first result and posts nothing (ADR-043). nil
+	// is an unkeyed post.
+	Idempotency *Idempotency
 }
 
 // PostTransaction writes one kind='normal' or kind='adjustment' entry and
 // returns the created row.
+//
+// With p.Idempotency set (ADR-043), a repeat of the same request returns the
+// first result and posts nothing; argument shape is still checked first, so a
+// replay re-runs it, and the business-state checks below do not run on a replay
+// at all. Another request under the same key is ErrIdempotencyKeyReused.
 //
 // Argument-shape failures - amount <= 0, a malformed or calendar-invalid
 // occurred_on, an empty or unrecognized direction - are rejected before the
@@ -105,17 +115,16 @@ func (l *Ledger) PostTransaction(ctx context.Context, p PostTransactionParams) (
 		kind = "adjustment"
 	}
 
-	var posted store.Transaction
-	err = l.withTx(ctx, func(q store.Querier) error {
+	posted, err := withIdempotency(ctx, l, p.Idempotency, func(q store.Querier) (store.Transaction, error) {
 		if err := refuseInactiveAccount(ctx, q, p.FundID, p.AccountID); err != nil {
-			return err
+			return store.Transaction{}, err
 		}
 
 		closedOn, err := q.IncidentalClosedOnForPurpose(ctx, p.PurposeID)
 		switch {
 		case err == nil:
 			if closedOn != nil {
-				return ErrIncidentalClosed
+				return store.Transaction{}, ErrIncidentalClosed
 			}
 		case errors.Is(err, sql.ErrNoRows):
 			// PurposeID does not name an incidental, so no closed-envelope guard applies.
@@ -123,13 +132,13 @@ func (l *Ledger) PostTransaction(ctx context.Context, p PostTransactionParams) (
 			// member on any other purpose is refused with a clean error now, not the
 			// BEFORE INSERT trigger's raw message.
 			if p.MemberID != nil {
-				return ErrContributionRequiresIncidentalPurpose
+				return store.Transaction{}, ErrContributionRequiresIncidentalPurpose
 			}
 		default:
-			return fmt.Errorf("checking incidental closed state: %w", err)
+			return store.Transaction{}, fmt.Errorf("checking incidental closed state: %w", err)
 		}
 
-		posted, err = q.CreateTransaction(ctx, store.CreateTransactionParams{
+		return q.CreateTransaction(ctx, store.CreateTransactionParams{
 			FundID:     p.FundID,
 			AccountID:  p.AccountID,
 			PurposeID:  p.PurposeID,
@@ -141,7 +150,6 @@ func (l *Ledger) PostTransaction(ctx context.Context, p PostTransactionParams) (
 			Note:       p.Note,
 			CreatedAt:  time.Now().Unix(),
 		})
-		return err
 	})
 	if err != nil {
 		return store.Transaction{}, fmt.Errorf("posting transaction: %w", err)

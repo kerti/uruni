@@ -85,6 +85,14 @@ function isoDateIn(zone: TimeZone, instant: Date): string {
   return `${parts.year}-${parts.month}-${parts.day}`
 }
 
+/** The device clock as an instant, for measuring elapsed wall time only (the
+ * fetch wrapper's 15-minute key window, ADR-043) - never a day, which is
+ * todayISODate's, in the fund's zone. Wall time, not performance.now(), which
+ * can stand still while a locked phone sleeps. */
+export function wallClockMs(): number {
+  return Date.now()
+}
+
 /** Today in the fund's zone, as YYYY-MM-DD - never `toISOString()` (UTC, which
  * reads as yesterday's date in WIB before 07:00) and never the device's own
  * calendar (a phone in another zone). The default `occurred_on`/`joined_on` a

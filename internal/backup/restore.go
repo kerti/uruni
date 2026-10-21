@@ -539,7 +539,7 @@ const (
 // dump, additive receipt extraction, then one write transaction that clears
 // every fund-scoped table, re-inserts exactly what parsed.Document holds with
 // every id preserved, proves the totals, and commits - or changes nothing. The
-// live login is not touched; every session is cleared.
+// live login is not touched; every session and idempotency key is cleared.
 //
 // sqlDB is the raw pool because this operation opens a transaction spanning
 // nearly every table, and ledger.Ledger's balance methods are bound to
@@ -665,6 +665,15 @@ func restoreCore(ctx context.Context, sqlDB *sql.DB, uploadsDir string, parsed P
 		return nil, fmt.Errorf("backup: clearing sessions: %w", err)
 	}
 
+	// So is every idempotency key (ADR-043, ADR-012): a restore returns the ledger
+	// to an older state, and a key from before it would replay a success whose rows
+	// the restore just removed, or whose ids now name other rows. Same transaction
+	// as the sessions, so a rolled-back restore forgets nothing. A rebuild runs
+	// this over a file it built itself, so there it clears an empty table.
+	if err := tq.DeleteAllIdempotencyKeys(ctx); err != nil {
+		return nil, fmt.Errorf("backup: clearing idempotency keys: %w", err)
+	}
+
 	if err := verifyTotals(ctx, tq, parsed.Document); err != nil {
 		return nil, err
 	}
@@ -677,8 +686,9 @@ func restoreCore(ctx context.Context, sqlDB *sql.DB, uploadsDir string, parsed P
 }
 
 // clearFundScopedTables deletes every row from every table this package
-// restores, except "user" (ADR-012's login ruling) and "session" (cleared in
-// restoreCore). Listed child-before-parent for a reader; order does not matter
+// restores, except "user" (ADR-012's login ruling), "session" and
+// "idempotency_key" (both cleared in restoreCore). Listed child-before-parent
+// for a reader; order does not matter
 // because defer_foreign_keys=ON defers every FK check to COMMIT.
 func clearFundScopedTables(ctx context.Context, q store.Querier) error {
 	deletes := []struct {

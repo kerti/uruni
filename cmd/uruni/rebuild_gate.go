@@ -39,9 +39,10 @@ type gateTable struct {
 	must bool
 }
 
-// gateTables lists what the backup holds, in Document's order. session and
-// goose's table are left out on purpose: a session is never exported and
-// goose's table is bookkeeping, so neither can say anything about the data.
+// gateTables lists what the backup holds, in Document's order. session,
+// idempotency_key and goose's table are left out on purpose: the first two are
+// state of the running server and never exported, and goose's table is
+// bookkeeping, so none of them can say anything about the data.
 func gateTables(doc backup.Document) []gateTable {
 	return []gateTable{
 		{"user", int64(len(doc.Users)), true},
@@ -79,7 +80,7 @@ type gateReport struct {
 //     (email, password_hash) must be the backup's. A different slug or login
 //     is another instance's backup, whatever the counts say.
 //   - Then row counts, equal in both directions, for every table both sides
-//     hold except session and goose's table.
+//     hold except session, idempotency_key and goose's table.
 //   - It fails closed: if transaction, fund, user or member cannot be read, it
 //     refuses (ErrCannotCompare) rather than skip them.
 //

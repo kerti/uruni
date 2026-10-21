@@ -1,6 +1,6 @@
 # ADR-043 - Idempotency keys on immutable writes
 
-**Status:** Proposed · `draft` - drafted 2026-10-20 ([#633](https://github.com/kerti/uruni/issues/633), epic [#523](https://github.com/kerti/uruni/issues/523)), grilled and approved by the maintainer 2026-10-20; nothing is built, so it is editable in place · supersedes nothing · reads [ADR-004](./004-database-sqlite-only.md), [ADR-008](./008-pwa-no-offline-data.md), [ADR-012](./012-backup-and-export.md) (one sentence gains a table, edited in #634's PR with the code), [ADR-013](./013-scheduling-in-process.md), [ADR-024](./024-schema-conventions.md) and [ADR-027](./027-ledger-domain-boundary.md) · [ADR index](./README.md)
+**Status:** Proposed · `draft` - drafted 2026-10-20 ([#633](https://github.com/kerti/uruni/issues/633), epic [#523](https://github.com/kerti/uruni/issues/523)), grilled and approved by the maintainer 2026-10-20; [#634](https://github.com/kerti/uruni/issues/634) builds the table, the wrapper and the first keyed route, and the other seven routes follow in #635, so it stays editable in place, an edit riding the PR of the code that makes it true · supersedes nothing · reads [ADR-004](./004-database-sqlite-only.md), [ADR-008](./008-pwa-no-offline-data.md), [ADR-012](./012-backup-and-export.md) (one sentence gains a table, edited in #634's PR with the code), [ADR-013](./013-scheduling-in-process.md), [ADR-024](./024-schema-conventions.md) and [ADR-027](./027-ledger-domain-boundary.md) · [ADR index](./README.md)
 
 **Context.** A treasurer on a phone taps *Simpan* and the connection drops. Either the request never arrived or its response never came back, and the browser cannot tell which. [#507](https://github.com/kerti/uruni/issues/507) made the app say so: a write waits a bounded 20 seconds (two minutes for an upload), a thrown fetch becomes `write_outcome_unknown`, the screen re-reads its data, and the copy asks her to check Riwayat before saving again. It kept [ADR-008](./008-pwa-no-offline-data.md) whole: nothing is queued, offline stays unavailable. What it could not do is make the retry safe. Transactions are immutable (CLAUDE.md rule 3), so a retry of a write that had in fact committed is a second row that only a reversal or a correction removes. That is TC-3 of the 2026-10-12 technical assessment, whose real fix #507 left to this epic.
 
@@ -17,7 +17,7 @@ Some routes are already safe to repeat, each for its own reason: settling a clai
 | `POST /api/reconciliations` | `TakeReconciliation` | 201 | a second snapshot, and for `entry_added` a second fix row (verified below) |
 | `POST /api/accounts` | `CreateAccount` | 201 | a second location, and with a starting balance a second `opening` row that cannot be deleted (verified below) |
 
-Drafted from #633 and read against #634, #635, #507 and ADRs 040-042; no code exists.
+Drafted from #633 and read against #634, #635, #507 and ADRs 040-042, before any of its code existed.
 
 ## Decided before the grill
 

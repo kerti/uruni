@@ -303,3 +303,9 @@ var ErrDuesRateSuperseded = errors.New("ledger: the dues rate no longer stands")
 // deletion takes a new one. The wire keeps the 409 unique_violation it has
 // always answered.
 var ErrDuesRateMonthTaken = errors.New("ledger: the tier already has a rate for that month")
+
+// ErrIdempotencyKeyReused is returned by a keyed write when its idempotency key
+// is on a live record made for another request (ADR-043): the same key with a
+// different fingerprint. Nothing is written. It is the one sentinel the key adds;
+// a replay is a success, not an error (see Idempotency.Replayed).
+var ErrIdempotencyKeyReused = errors.New("ledger: the idempotency key was used for another request")

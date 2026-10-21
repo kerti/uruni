@@ -63,6 +63,12 @@ func mapLedgerError(w http.ResponseWriter, logger *slog.Logger, err error) {
 	case errors.Is(err, ledger.ErrDuesRateMonthTaken):
 		// The code POST has always answered for a month that already has a rate.
 		writeAPIError(w, http.StatusConflict, "unique_violation", "This value conflicts with an existing record.")
+	case errors.Is(err, ledger.ErrIdempotencyKeyReused):
+		// The same key under another request (ADR-043). The app cannot produce it
+		// (a definite answer drops the key and a new request mints another), so
+		// someone is reusing keys by hand: worth a line, never the key or the body.
+		logger.Warn("an idempotency key was reused for another request")
+		writeAPIError(w, http.StatusConflict, "idempotency_key_reused", "This Idempotency-Key was already used for a different request.")
 	case errors.Is(err, ledger.ErrReimbursementWaived):
 		writeAPIError(w, http.StatusConflict, "reimbursement_waived", "This reimbursement has been waived.")
 	case errors.Is(err, ledger.ErrReimbursementAlreadySettled):

@@ -149,7 +149,7 @@ func addReceiptToZip(zw *zip.Writer, uploadsDir, path string) (found bool, err e
 	return true, nil
 }
 
-// BuildDocument reads every table but session (ADR-012) and the totals
+// BuildDocument reads every table but session and idempotency_key (ADR-012) and the totals
 // block, in the order of Document's comment. It is split out of Export so a
 // test can assert on the Document's shape without decoding a zip.
 //

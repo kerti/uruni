@@ -3,6 +3,7 @@ package db
 import (
 	"context"
 	"database/sql"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -114,6 +115,26 @@ func TestCheckSchemaDetectsAMissingObject(t *testing.T) {
 	want := []string{"index session_by_expiry", "trigger transaction_named_row_shape"}
 	if strings.Join(diff.Missing, "|") != strings.Join(want, "|") {
 		t.Errorf("Missing = %v, want %v", diff.Missing, want)
+	}
+	if len(diff.Changed) != 0 || len(diff.Unexpected) != 0 {
+		t.Errorf("Changed = %v, Unexpected = %v, want both empty", diff.Changed, diff.Unexpected)
+	}
+}
+
+// idempotency_key (ADR-043) is part of the schema the boot guard holds: a file
+// from before the table, which goose still reports as fully applied, is refused
+// rather than served by a binary whose keyed writes would fail on every request.
+func TestCheckSchemaCoversTheIdempotencyKeyTable(t *testing.T) {
+	t.Parallel()
+	sqlDB := migratedDB(t)
+	mustExec(t, sqlDB, `DROP TABLE idempotency_key`)
+
+	diff := checkSchema(t, sqlDB)
+	want := []string{"index idempotency_key_by_expiry", "table idempotency_key"}
+	got := append([]string(nil), diff.Missing...)
+	slices.Sort(got)
+	if strings.Join(got, "|") != strings.Join(want, "|") {
+		t.Errorf("Missing = %v, want %v", got, want)
 	}
 	if len(diff.Changed) != 0 || len(diff.Unexpected) != 0 {
 		t.Errorf("Changed = %v, Unexpected = %v, want both empty", diff.Changed, diff.Unexpected)

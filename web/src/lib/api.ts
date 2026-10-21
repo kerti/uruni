@@ -10,6 +10,9 @@
 // from an HTTP error response: the connectivity watcher and the copy map both
 // need to - a network failure means "we might be offline", an HTTP error does
 // not.
+
+import { wallClockMs } from '@/lib/dates'
+
 export class ApiError extends Error {
   readonly code: string
   /** True when fetch itself threw - no response reached the browser at all. */
@@ -44,6 +47,89 @@ export const WRITE_TIMEOUT_MS = 20_000
  * duplicate this code exists to prevent.
  */
 export const UPLOAD_TIMEOUT_MS = 120_000
+
+/** The header the server reads on its immutable write routes (ADR-043). */
+const IDEMPOTENCY_HEADER = 'Idempotency-Key'
+
+/**
+ * How long after its last attempt the client forgets a key (ADR-043). An
+ * identical request after that is a new request with a new key. The server
+ * keeps its record for 24 hours, which covers only the chain of retries this
+ * bounds, never a key older than its last failure plus this.
+ */
+export const IDEMPOTENCY_FORGET_MS = 15 * 60 * 1000
+
+/**
+ * The key of a write whose outcome nobody has seen yet, by the request's
+ * identity (method, path and body text), and when it was last attempted
+ * (`at`, in wallClockMs() milliseconds: elapsed wall time, so a phone that slept
+ * through the window still forgets the key). In memory only: nothing in
+ * localStorage or IndexedDB, so ADR-008 and rule 4 stand. A reload forgets it.
+ */
+const pendingKeys = new Map<string, { key: string; at: number }>()
+
+/** Forgets every remembered key. For tests: module state outlives a case. */
+export function resetIdempotencyKeys(): void {
+  pendingKeys.clear()
+}
+
+/** How many keys are remembered. For tests: the window must drop a body that is
+ * never retried, which no request can observe. */
+export function heldIdempotencyKeyCount(): number {
+  return pendingKeys.size
+}
+
+/** 16 random bytes as 32 hex characters. Not crypto.randomUUID, which throws on a non-secure origin (a phone testing against a LAN address). */
+function mintIdempotencyKey(): string {
+  const bytes = new Uint8Array(16)
+  crypto.getRandomValues(bytes)
+  return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('')
+}
+
+/**
+ * The key this write carries, and what to do with it once its outcome is known.
+ * An identical request issued while a key is remembered reuses it (a retry after
+ * a lost response, or a twin sent before the first has an outcome); otherwise
+ * the key is fresh. A body that is not text (a FormData upload) is never
+ * remembered: the server ignores a key on those routes anyway.
+ */
+function writeKey(method: string, path: string, body: BodyInit | null | undefined) {
+  if (body != null && typeof body !== 'string') return { key: mintIdempotencyKey(), settle: () => {}, keep: () => {} }
+
+  const id = `${method} ${path} ${body ?? ''}`
+  const now = wallClockMs()
+  // Forget every entry past the window, not only this request's: an entry holds
+  // the body text (a password change's included), which ADR-043 keeps no longer
+  // than a definite answer or 15 minutes, retried or not.
+  for (const [other, entry] of pendingKeys) {
+    if (now - entry.at >= IDEMPOTENCY_FORGET_MS) pendingKeys.delete(other)
+  }
+  const held = pendingKeys.get(id)
+  let key: string
+  if (held && now - held.at < IDEMPOTENCY_FORGET_MS) {
+    key = held.key
+  } else {
+    key = mintIdempotencyKey()
+    pendingKeys.set(id, { key, at: now })
+  }
+
+  return {
+    key,
+    // A definite answer (a 2xx or a 4xx proves the request was judged): drop the
+    // entry, but only if it still holds this request's own key, so a twin's late
+    // answer cannot drop the key of a newer identical request.
+    settle: () => {
+      if (pendingKeys.get(id)?.key === key) pendingKeys.delete(id)
+    },
+    // Anything else (a throw, a timeout, a caller's abort, any 5xx) leaves the key
+    // for the next identical request and moves `at`. It touches only an entry that
+    // still holds its own key and never creates one, so a late failure of an older
+    // twin cannot bring back a key a definite answer spent.
+    keep: () => {
+      if (pendingKeys.get(id)?.key === key) pendingKeys.set(id, { key, at: wallClockMs() })
+    },
+  }
+}
 
 interface ErrorEnvelope {
   error?: {
@@ -84,6 +170,11 @@ export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> 
 
   let res: Response
   let timeout: ReturnType<typeof setTimeout> | undefined
+  // Every write carries a key (ADR-043); the server honours it on its immutable
+  // routes and ignores it on the rest, so nothing here knows which is which. A
+  // caller that set the header itself keeps its own and is not tracked.
+  const callerKeyed = isWrite && new Headers(init?.headers).has(IDEMPOTENCY_HEADER)
+  const idem = isWrite && !callerKeyed ? writeKey(method, path, init?.body) : undefined
   try {
     if (isWrite) {
       // A write gets a bounded wait. Our controller carries the timeout and
@@ -95,11 +186,14 @@ export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> 
       else caller?.addEventListener('abort', () => controller.abort(caller.reason), { once: true })
       const wait = init?.body instanceof FormData ? UPLOAD_TIMEOUT_MS : WRITE_TIMEOUT_MS
       timeout = setTimeout(() => controller.abort(new Error('write timed out')), wait)
-      res = await fetch(path, { ...init, signal: controller.signal })
+      const headers = new Headers(init?.headers)
+      if (idem) headers.set(IDEMPOTENCY_HEADER, idem.key)
+      res = await fetch(path, { ...init, headers, signal: controller.signal })
     } else {
       res = await fetch(path, init)
     }
   } catch (err) {
+    idem?.keep()
     notifyConnectivity(false)
     const message = err instanceof Error ? err.message : 'network error'
     // A caller-initiated abort (e.g. unmount) is not an uncertain save: the
@@ -109,6 +203,11 @@ export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> 
   } finally {
     clearTimeout(timeout)
   }
+
+  // A 5xx is indefinite even with the API's error envelope: the app may have
+  // committed before it failed, or a proxy may have given up on an app that did.
+  if (res.status >= 500) idem?.keep()
+  else if (!res.ok) idem?.settle()
 
   if (!res.ok) {
     // A response - even a failing one - proves the network is up.
@@ -127,9 +226,22 @@ export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> 
   notifyConnectivity(true)
 
   if (res.status === 204) {
+    idem?.settle()
     return undefined as T
   }
-  return (await res.json()) as T
+  // A 2xx settles the key only once its body is read: a connection that dies
+  // mid-body leaves her with no answer, so it is a lost response like any other,
+  // and the key stays for her retry to replay.
+  let body: T
+  try {
+    body = (await res.json()) as T
+  } catch (err) {
+    if (!isWrite) throw err
+    idem?.keep()
+    throw new ApiError(WRITE_OUTCOME_UNKNOWN, err instanceof Error ? err.message : 'response body lost', true)
+  }
+  idem?.settle()
+  return body
 }
 
 /**
