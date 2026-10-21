@@ -607,6 +607,27 @@ func TestRestoreClearsSessions(t *testing.T) {
 	}
 }
 
+// TestRestoreClearsIdempotencyKeys is ADR-043's "restore clears it": a restore
+// returns the ledger to an older state, so a key from before it would replay a
+// success whose rows the restore just removed.
+func TestRestoreClearsIdempotencyKeys(t *testing.T) {
+	t.Parallel()
+	destDB := newTestDB(t)
+	seedOneUser(t, destDB)
+	q := store.New(destDB)
+	if err := q.CreateIdempotencyKey(context.Background(), store.CreateIdempotencyKeyParams{
+		Key: "a-key-from-before-the-restore", Fingerprint: strings.Repeat("f", 64), Result: []byte("{}"), CreatedAt: 100, ExpiresAt: 9999999999,
+	}); err != nil {
+		t.Fatalf("CreateIdempotencyKey() = %v, want no error", err)
+	}
+
+	restoreOrFatal(t, destDB, t.TempDir(), t.TempDir(), ParsedUpload{Document: minimalDocWithOneFund(t)})
+
+	if _, err := q.GetIdempotencyKey(context.Background(), store.GetIdempotencyKeyParams{Key: "a-key-from-before-the-restore", Now: 0}); !errors.Is(err, sql.ErrNoRows) {
+		t.Errorf("GetIdempotencyKey() after restore = %v, want sql.ErrNoRows (every key cleared)", err)
+	}
+}
+
 // TestRestoreRecreatesImmutableTriggers is the drift guard immutableTriggers
 // promises: after a restore, each of the eight recreated triggers still
 // refuses the same update/delete with the same message.

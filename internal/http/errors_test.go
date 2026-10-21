@@ -69,6 +69,7 @@ func TestMapLedgerErrorMapsSentinelsToStatusAndCode(t *testing.T) {
 		{"amount above the ceiling, wrapped", fmt.Errorf("posting transaction: %w", ledger.CheckAmountCeiling("amount", money.MaxAmount+1)), 400, "amount_too_large"},
 		{"date outside the window", ledger.ErrDateOutOfRange, 400, "date_out_of_range"},
 		{"date outside the window, wrapped", fmt.Errorf("posting transaction: %w: occurred_on is after 2026-10-20", ledger.ErrDateOutOfRange), 400, "date_out_of_range"},
+		{"idempotency key reused", ledger.ErrIdempotencyKeyReused, 409, "idempotency_key_reused"},
 		{"reimbursement waived", ledger.ErrReimbursementWaived, 409, "reimbursement_waived"},
 		{"reimbursement already settled", ledger.ErrReimbursementAlreadySettled, 409, "reimbursement_already_settled"},
 		{"incidental already closed", ledger.ErrIncidentalAlreadyClosed, 409, "incidental_already_closed"},

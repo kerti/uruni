@@ -188,7 +188,10 @@ func (a *api) routes(r chi.Router) {
 		// reconcile flow's read path (PRD section 7.8). A pass-through movement and a
 		// correction are ordinary POST /api/transactions calls (see
 		// transactionRequest), so neither has its own route.
-		r.Post("/transactions", a.createTransaction)
+		//
+		// Keyed (ADR-043): a repeat carrying the same Idempotency-Key answers the
+		// first result and posts nothing. Only the immutable routes are keyed.
+		r.With(a.keyed).Post("/transactions", a.createTransaction)
 		r.Get("/transactions", a.listTransactions)
 		// Fixing a posted row's peruntukan (ADR-033, #267): a reclass_purpose pair
 		// naming the row it corrects, addressed by that row's id like

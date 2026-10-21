@@ -47,6 +47,7 @@ type Querier interface {
 	CreateDuesRate(ctx context.Context, arg CreateDuesRateParams) (DuesRate, error)
 	CreateDuesTier(ctx context.Context, arg CreateDuesTierParams) (DuesTier, error)
 	CreateFund(ctx context.Context, arg CreateFundParams) (Fund, error)
+	CreateIdempotencyKey(ctx context.Context, arg CreateIdempotencyKeyParams) error
 	CreateIncidental(ctx context.Context, arg CreateIncidentalParams) (Incidental, error)
 	// The members an envelope is for (ADR-034). Unscoped: both callers
 	// (Ledger.OpenIncidental, Ledger.SetIncidentalParticipation) already proved
@@ -81,6 +82,9 @@ type Querier interface {
 	DeleteAllDuesRates(ctx context.Context) error
 	DeleteAllDuesTiers(ctx context.Context) error
 	DeleteAllFunds(ctx context.Context) error
+	// A restore returns the ledger to an older state, so a key from before it would
+	// replay a success whose rows are gone (ADR-043, ADR-012).
+	DeleteAllIdempotencyKeys(ctx context.Context) error
 	DeleteAllIncidentalRecipients(ctx context.Context) error
 	DeleteAllIncidentals(ctx context.Context) error
 	DeleteAllMemberTiers(ctx context.Context) error
@@ -108,6 +112,10 @@ type Querier interface {
 	// FK onto the tier so it cannot go first, and if a member then refuses the
 	// tier the transaction rolls back and the deleted rates come back.
 	DeleteDuesTier(ctx context.Context, arg DeleteDuesTierParams) error
+	// The purge: a side effect of a keyed write that found no record, in that
+	// write's own transaction (ADR-043), never a background ticker (ADR-013). It
+	// also clears an expired row of the very key about to be inserted.
+	DeleteExpiredIdempotencyKeys(ctx context.Context, now int64) error
 	// The lazy sweep: a side effect of a session commit, at most hourly (#529),
 	// never a background ticker (ADR-013).
 	DeleteExpiredSessions(ctx context.Context, expiresAt int64) error
@@ -182,6 +190,11 @@ type Querier interface {
 	// The public report's only way in (ADR-030 carve-out, ADR-035): the slug names
 	// its fund, with no session. report_slug is UNIQUE: one row or sql.ErrNoRows.
 	GetFundByReportSlug(ctx context.Context, reportSlug string) (Fund, error)
+	// Only a live record answers: an expired one is as good as absent, so
+	// correctness never waits on its removal. expires_at = now is expired. The
+	// records are written in the same transaction as the rows they cover, by the
+	// ledger's idempotency helper (ADR-043); never by a handler.
+	GetIdempotencyKey(ctx context.Context, arg GetIdempotencyKeyParams) (IdempotencyKey, error)
 	// Fund-scoped through purpose, where the envelope's fund_id lives. PRD section
 	// 6 allows a server to hold more than one fund, so a bare WHERE purpose_id = ?
 	// would be a cross-fund read the moment a second fund exists.

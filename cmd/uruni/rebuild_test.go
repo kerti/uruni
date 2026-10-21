@@ -351,6 +351,12 @@ func TestRebuildReplacesAnOldSchemaDatabaseFromABackup(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(f.uploadsDir, rebuildReceiptName)); err != nil {
 		t.Errorf("the receipt was not extracted into the uploads volume: %v", err)
 	}
+	// The rebuilt file has the table, empty (ADR-043): it is outside the backup.
+	// That the restore core clears keys is TestRestoreClearsIdempotencyKeys's.
+	var keys int
+	if err := sqlDB.QueryRow(`SELECT count(*) FROM idempotency_key`).Scan(&keys); err != nil || keys != 0 {
+		t.Errorf("idempotency_key rows after a rebuild = (%d, %v), want 0", keys, err)
+	}
 
 	// The old file is kept, byte for byte, under the documented name.
 	wantAside := filepath.Join(filepath.Dir(f.dbPath), "uruni.db.pre-v9.9.9-20261014-101500")

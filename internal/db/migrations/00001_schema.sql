@@ -51,6 +51,23 @@ CREATE TABLE session (                    -- a logged-in session; token is the c
 
 CREATE INDEX session_by_expiry ON session(expires_at);
 
+-- A write the treasurer's phone may repeat after a lost response (ADR-043).
+-- Request-scoped state of the running server like session, so it is outside the
+-- backup and a restore clears it: no fund_id, no foreign key, no immutability
+-- trigger (a row is written once, in the same transaction as the rows it posts,
+-- and deleted whole). result is what the ledger method returned, as JSON, never
+-- the HTTP reply. Expired rows are purged by the next keyed write, in its own
+-- transaction, never by a ticker (ADR-013); reads ignore them meanwhile.
+CREATE TABLE idempotency_key (
+  key         TEXT    PRIMARY KEY CHECK (length(key) BETWEEN 16 AND 64 AND key NOT GLOB '*[^A-Za-z0-9_-]*'),
+  fingerprint TEXT    NOT NULL CHECK (length(fingerprint) = 64),
+  result      BLOB    NOT NULL,
+  created_at  INTEGER NOT NULL,            -- UTC unix seconds (ADR-024)
+  expires_at  INTEGER NOT NULL CHECK (expires_at > created_at)
+) STRICT;
+
+CREATE INDEX idempotency_key_by_expiry ON idempotency_key(expires_at);
+
 CREATE TABLE fund (
   id          INTEGER PRIMARY KEY,
   name        TEXT    NOT NULL CHECK (length(trim(name)) > 0),
@@ -666,6 +683,8 @@ DROP INDEX purpose_single_main;
 DROP TABLE purpose;
 DROP TABLE account;
 DROP TABLE fund;
+DROP INDEX idempotency_key_by_expiry;
+DROP TABLE idempotency_key;
 DROP INDEX session_by_expiry;
 DROP TABLE session;
 DROP TABLE "user";

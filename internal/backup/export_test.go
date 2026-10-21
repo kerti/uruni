@@ -73,10 +73,12 @@ func TestBuildDocumentTotalsMatchLedgerBalances(t *testing.T) {
 }
 
 // TestBuildDocumentExcludesSession is ADR-012's "the backup holds every table
-// except session": a live session's token must never reach the export, or a
-// restored stale cookie (or a leaked token) would keep working. Document has
-// no Sessions field; this test is the second guard: seed a session row and
-// confirm its token appears nowhere in the marshaled document.
+// except session and idempotency_key": a live session's token must never reach
+// the export, or a restored stale cookie (or a leaked token) would keep working,
+// and an idempotency record is state of the running server (ADR-043), whose
+// stored result is a copy of a ledger row. Document has no field for either;
+// this test is the second guard: seed a row in each and confirm neither appears
+// anywhere in the marshaled document.
 func TestBuildDocumentExcludesSession(t *testing.T) {
 	t.Parallel()
 	sqlDB := newTestDB(t)
@@ -91,6 +93,15 @@ func TestBuildDocumentExcludesSession(t *testing.T) {
 		t.Fatalf("CreateSession: %v", err)
 	}
 
+	const sentinelKey = "idempotency-key-must-never-be-exported"
+	const sentinelResult = "result-must-never-be-exported"
+	if err := q.CreateIdempotencyKey(ctx, store.CreateIdempotencyKeyParams{
+		Key: sentinelKey, Fingerprint: strings.Repeat("f", 64), Result: []byte(`{"Note":"` + sentinelResult + `"}`),
+		CreatedAt: 100, ExpiresAt: 4102444800,
+	}); err != nil {
+		t.Fatalf("CreateIdempotencyKey: %v", err)
+	}
+
 	doc, _, err := BuildDocument(ctx, sqlDB)
 	if err != nil {
 		t.Fatalf("BuildDocument() = %v, want no error", err)
@@ -99,6 +110,14 @@ func TestBuildDocumentExcludesSession(t *testing.T) {
 	out, err := json.Marshal(doc)
 	if err != nil {
 		t.Fatalf("json.Marshal(doc) = %v, want no error", err)
+	}
+	for _, leaked := range []string{sentinelKey, sentinelResult} {
+		if strings.Contains(string(out), leaked) {
+			t.Errorf("exported document contains %q; idempotency_key must never be exported (ADR-043)", leaked)
+		}
+	}
+	if strings.Contains(strings.ToLower(string(out)), "idempotency") {
+		t.Error("exported document mentions \"idempotency\" anywhere; ADR-012 excludes the table entirely")
 	}
 	if strings.Contains(string(out), sentinelToken) {
 		t.Error("exported document contains the session token; session must never be exported (ADR-012)")

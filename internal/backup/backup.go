@@ -34,8 +34,9 @@ package backup
 // place, as v2 had not shipped before the epic merged.
 const FormatVersion int64 = 2
 
-// Document is uruni.json's root object: every table but session (ADR-012:
-// sessions are never exported, so a restore logs everyone out), ids preserved
+// Document is uruni.json's root object: every table but session and
+// idempotency_key (ADR-012: neither is exported, so a restore logs everyone out
+// and forgets every idempotency key), ids preserved
 // verbatim, plus the totals block a restore proves its numbers against. Field
 // names are snake_case json tags matching the schema's columns, so a restored
 // file reads like the database it came from.

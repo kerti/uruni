@@ -48,6 +48,14 @@ type Fund struct {
 	CreatedAt  int64
 }
 
+type IdempotencyKey struct {
+	Key         string
+	Fingerprint string
+	Result      []byte
+	CreatedAt   int64
+	ExpiresAt   int64
+}
+
 type Incidental struct {
 	PurposeID        int64
 	Occasion         string

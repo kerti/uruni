@@ -227,6 +227,9 @@ func toTransactionsPageResponse(t store.ListTransactionsPageRow, today string) t
 // createTransaction is POST /api/transactions: wraps Ledger.PostTransaction.
 // Handlers decode and pass through; amount > 0, direction shape and
 // occurred_on validity are PostTransaction's job alone (ADR-027).
+//
+// The route is keyed (ADR-043): the keyed middleware hands over the request's
+// idempotency key, and a replay is the same 201 with Idempotent-Replayed.
 func (a *api) createTransaction(w http.ResponseWriter, r *http.Request) {
 	var req transactionRequest
 	if !decodeJSON(w, r, &req) {
@@ -238,6 +241,7 @@ func (a *api) createTransaction(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	idem := idempotencyFrom(r)
 	posted, err := a.ledger.PostTransaction(r.Context(), ledger.PostTransactionParams{
 		Now:          a.now(),
 		FundID:       fund.ID,
@@ -249,12 +253,14 @@ func (a *api) createTransaction(w http.ResponseWriter, r *http.Request) {
 		Note:         req.Note,
 		IsAdjustment: req.IsAdjustment,
 		MemberID:     req.MemberID,
+		Idempotency:  idem,
 	})
 	if err != nil {
 		mapLedgerError(w, a.log(r), err)
 		return
 	}
 
+	markReplay(w, r, a.log(r), idem)
 	writeJSON(w, http.StatusCreated, toTransactionResponse(posted))
 }
 
