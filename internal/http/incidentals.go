@@ -108,6 +108,9 @@ func toIncidentalDetailResponse(d ledger.IncidentalDetail) incidentalDetailRespo
 // creates the purpose and the incidental row in one transaction. Handlers
 // decode and pass through; occasion, target_amount and opened_on shape checks
 // are OpenIncidental's alone (ADR-027).
+//
+// The route is keyed (ADR-043): no route deletes an envelope, so a repeat would
+// leave a twin for good. A replay is the same 201 with Idempotent-Replayed.
 func (a *api) openIncidental(w http.ResponseWriter, r *http.Request) {
 	var req openIncidentalRequest
 	if !decodeJSON(w, r, &req) {
@@ -130,6 +133,7 @@ func (a *api) openIncidental(w http.ResponseWriter, r *http.Request) {
 		minimum = &v
 	}
 
+	idem := idempotencyFrom(r)
 	created, err := a.ledger.OpenIncidental(r.Context(), ledger.OpenIncidentalParams{
 		Now:                a.now(),
 		FundID:             fund.ID,
@@ -138,12 +142,14 @@ func (a *api) openIncidental(w http.ResponseWriter, r *http.Request) {
 		OpenedOn:           req.OpenedOn,
 		MinimumPerMember:   minimum,
 		RecipientMemberIDs: req.RecipientMemberIDs,
+		Idempotency:        idem,
 	})
 	if err != nil {
 		mapLedgerError(w, a.log(r), err)
 		return
 	}
 
+	markReplay(w, r, a.log(r), idem)
 	writeJSON(w, http.StatusCreated, toIncidentalResponse(created))
 }
 

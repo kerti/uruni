@@ -48,6 +48,9 @@ type duesPaymentRequest struct {
 // row: the ledger validates every period before writing and writes all in
 // one transaction. (Looping a singular PostDuesPayment per period left an
 // earlier row standing when a later one failed, #96.)
+//
+// The route is keyed (ADR-043): a repeat under the same key answers the whole
+// array again, one result, with Idempotent-Replayed, and posts no second set.
 func (a *api) createDuesPayment(w http.ResponseWriter, r *http.Request) {
 	var req duesPaymentRequest
 	if !decodeJSON(w, r, &req) {
@@ -72,6 +75,7 @@ func (a *api) createDuesPayment(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
+	idem := idempotencyFrom(r)
 	posted, err := a.ledger.PostDuesPayments(r.Context(), ledger.PostDuesPaymentsParams{
 		Now:        a.now(),
 		FundID:     fund.ID,
@@ -80,6 +84,8 @@ func (a *api) createDuesPayment(w http.ResponseWriter, r *http.Request) {
 		OccurredOn: req.OccurredOn,
 		Note:       req.Note,
 		Periods:    periods,
+
+		Idempotency: idem,
 	})
 	if err != nil {
 		mapLedgerError(w, a.log(r), err)
@@ -91,6 +97,7 @@ func (a *api) createDuesPayment(w http.ResponseWriter, r *http.Request) {
 		resp = append(resp, toTransactionResponse(row))
 	}
 
+	markReplay(w, r, a.log(r), idem)
 	writeJSON(w, http.StatusCreated, resp)
 }
 

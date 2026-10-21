@@ -33,6 +33,11 @@ type OpenIncidentalParams struct {
 	// Now is the clock OpenedOn's ceiling is read from, in the fund's zone
 	// (ADR-041, #632). The zero value means time.Now().
 	Now time.Time
+
+	// Idempotency, when non-nil, makes opening the envelope safe to repeat: the
+	// same key with the same request answers the first envelope and opens no
+	// second (ADR-043). nil is an unkeyed call.
+	Idempotency *Idempotency
 }
 
 // OpenIncidental writes one purpose row (kind='incidental') and the 1:1
@@ -43,6 +48,10 @@ type OpenIncidentalParams struct {
 // orphan purpose: a tag that appears in purpose lists and accepts
 // transactions but has no occasion, target or opened_on (#42). Same
 // atomicity argument as ADR-027 makes for CloseIncidentalAndRoll.
+//
+// With p.Idempotency set (ADR-043), a repeat of the same request returns the
+// first envelope and opens none. A purpose has no uniqueness on its name and no
+// route removes one, so an unkeyed repeat leaves a twin for good.
 func (l *Ledger) OpenIncidental(ctx context.Context, p OpenIncidentalParams) (store.Incidental, error) {
 	if strings.TrimSpace(p.Occasion) == "" {
 		return store.Incidental{}, fmt.Errorf("%w: occasion must not be empty", ErrInvalidArgument)
@@ -64,15 +73,14 @@ func (l *Ledger) OpenIncidental(ctx context.Context, p OpenIncidentalParams) (st
 		return store.Incidental{}, err
 	}
 
-	var created store.Incidental
-	err = l.withTx(ctx, func(q store.Querier) error {
+	created, err := withIdempotency(ctx, l, p.Idempotency, func(q store.Querier) (store.Incidental, error) {
 		now := time.Now().Unix()
 
 		purpose, err := q.CreatePurpose(ctx, store.CreatePurposeParams{
 			FundID: p.FundID, Kind: "incidental", Name: p.Occasion, CreatedAt: now,
 		})
 		if err != nil {
-			return fmt.Errorf("creating purpose: %w", err)
+			return store.Incidental{}, fmt.Errorf("creating purpose: %w", err)
 		}
 
 		var targetAmount *int64
@@ -86,18 +94,18 @@ func (l *Ledger) OpenIncidental(ctx context.Context, p OpenIncidentalParams) (st
 			minimumPerMember = &v
 		}
 
-		created, err = q.CreateIncidental(ctx, store.CreateIncidentalParams{
+		incidental, err := q.CreateIncidental(ctx, store.CreateIncidentalParams{
 			PurposeID: purpose.ID, Occasion: p.Occasion, TargetAmount: targetAmount,
 			OpenedOn: p.OpenedOn, MinimumPerMember: minimumPerMember, CreatedAt: now,
 		})
 		if err != nil {
-			return fmt.Errorf("creating incidental: %w", err)
+			return store.Incidental{}, fmt.Errorf("creating incidental: %w", err)
 		}
 
 		if err := putIncidentalRecipientsTx(ctx, q, p.FundID, purpose.ID, p.RecipientMemberIDs); err != nil {
-			return err
+			return store.Incidental{}, err
 		}
-		return nil
+		return incidental, nil
 	})
 	if err != nil {
 		return store.Incidental{}, fmt.Errorf("opening incidental: %w", err)
