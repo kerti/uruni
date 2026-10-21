@@ -81,6 +81,46 @@ func (q *Queries) GetAccountForFund(ctx context.Context, arg GetAccountForFundPa
 	return i, err
 }
 
+const listAccountOpeningDates = `-- name: ListAccountOpeningDates :many
+SELECT account_id, CAST(MIN(occurred_on) AS TEXT) AS opening_on
+FROM "transaction"
+WHERE fund_id = ? AND kind = 'opening'
+GROUP BY account_id
+`
+
+type ListAccountOpeningDatesRow struct {
+	AccountID int64
+	OpeningOn string
+}
+
+// Each location's opening-balance date, for the "this date is before the
+// opening balance" hint (#637). Read-only and derived: the opening entry is the
+// ledger's own row, so nothing is stored beside it. MIN because a location
+// could in principle carry more than one opening row; the earliest is the one
+// history starts from. Locations without an opening entry have no row here.
+func (q *Queries) ListAccountOpeningDates(ctx context.Context, fundID int64) ([]ListAccountOpeningDatesRow, error) {
+	rows, err := q.db.QueryContext(ctx, listAccountOpeningDates, fundID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListAccountOpeningDatesRow{}
+	for rows.Next() {
+		var i ListAccountOpeningDatesRow
+		if err := rows.Scan(&i.AccountID, &i.OpeningOn); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listAccountsByFund = `-- name: ListAccountsByFund :many
 SELECT id, fund_id, kind, name, created_at, inactive_on
 FROM account

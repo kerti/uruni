@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState, type FormEvent } from 'react'
 import { Navigate } from 'react-router-dom'
 
 import DateField from '@/components/DateField'
+import OpeningDateHint from '@/components/OpeningDateHint'
 import AmountInput from '@/components/money/AmountInput'
 import MemberPicker from '@/components/pickers/MemberPicker'
 import PurposePicker from '@/components/pickers/PurposePicker'
@@ -10,12 +11,14 @@ import { Label } from '@/components/ui/label'
 import Loading from '@/components/states/Loading'
 import ErrorState from '@/components/states/ErrorState'
 import { copy } from '@/copy/id'
+import { listAccounts } from '@/lib/accounts'
 import { ApiError, settleUncertainWrite } from '@/lib/api'
 import { dateBounds } from '@/lib/dates'
 import { listPurposes } from '@/lib/purposes'
 import { getReimbursement, updateReimbursement } from '@/lib/reimbursements'
 import { listAllMembers } from '@/lib/setup'
 import { useApi } from '@/lib/useApi'
+import type { Account } from '@/lib/accounts'
 import type { Purpose } from '@/lib/purposes'
 import type { Reimbursement } from '@/lib/reimbursements'
 import type { Member } from '@/lib/setup'
@@ -28,6 +31,7 @@ type Patch = { member_id?: number; purpose_id?: number; amount?: number; incurre
 
 interface CorrectData {
   claim: Reimbursement | null
+  accounts: Account[]
   members: Member[]
   purposes: Purpose[]
 }
@@ -47,15 +51,16 @@ export default function Correct({ claimId, onDone, onCancel }: { claimId: number
     (silent = false) =>
       dataRun(
         async () => {
-          const [claim, members, purposes] = await Promise.all([
+          const [claim, accounts, members, purposes] = await Promise.all([
             getReimbursement(claimId).catch((err: unknown) => {
               if (err instanceof ApiError && err.code === 'not_found') return null
               throw err
             }),
+            listAccounts(),
             listAllMembers(),
             listPurposes(),
           ])
-          return { claim, members, purposes }
+          return { claim, accounts, members, purposes }
         },
         { silent },
       ),
@@ -89,7 +94,7 @@ export default function Correct({ claimId, onDone, onCancel }: { claimId: number
     return dataState.error ? <ErrorState error={dataState.error} onRetry={() => void load()} /> : null
   }
 
-  const { claim, members, purposes } = dataState.data
+  const { claim, accounts, members, purposes } = dataState.data
   if (claim === null || claim.settled || claim.waived_on) return <Navigate to={TALANGAN_PATH} replace />
 
   return (
@@ -97,6 +102,7 @@ export default function Correct({ claimId, onDone, onCancel }: { claimId: number
       <h1 className="text-xl font-semibold">{text.correct.heading}</h1>
       <FormAlert message={error} />
       <CorrectForm
+        accounts={accounts}
         members={members}
         purposes={purposes}
         claim={claim}
@@ -109,6 +115,7 @@ export default function Correct({ claimId, onDone, onCancel }: { claimId: number
 }
 
 function CorrectForm({
+  accounts,
   members,
   purposes,
   claim,
@@ -116,6 +123,7 @@ function CorrectForm({
   onCancel,
   submitting,
 }: {
+  accounts: Account[]
   members: Member[]
   purposes: Purpose[]
   claim: Reimbursement
@@ -169,6 +177,8 @@ function CorrectForm({
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="correct-date">{text.record.dateLabel}</Label>
         <DateField id="correct-date" value={occurredOn} onChange={setOccurredOn} bounds={dateBounds.entry()} disabled={submitting} />
+        {/* A claim has no location: the fund's earliest opening applies. */}
+        <OpeningDateHint date={occurredOn} accounts={accounts} />
       </div>
 
       <div className="flex flex-col gap-1.5">

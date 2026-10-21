@@ -348,6 +348,12 @@ type Querier interface {
 	// month has none. It must see superseded rows, which the view hides.
 	LatestMemberTierCorrection(ctx context.Context, arg LatestMemberTierCorrectionParams) (int64, error)
 	LatestReconciliation(ctx context.Context, fundID int64) (Reconciliation, error)
+	// Each location's opening-balance date, for the "this date is before the
+	// opening balance" hint (#637). Read-only and derived: the opening entry is the
+	// ledger's own row, so nothing is stored beside it. MIN because a location
+	// could in principle carry more than one opening row; the earliest is the one
+	// history starts from. Locations without an opening entry have no row here.
+	ListAccountOpeningDates(ctx context.Context, fundID int64) ([]ListAccountOpeningDatesRow, error)
 	// Cash before bank, then by name (maintainer, 2026-10-05): the order she
 	// counts in. Every list of locations reads this one order. id only breaks a
 	// tie between identical names.
