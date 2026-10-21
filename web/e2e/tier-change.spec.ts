@@ -86,6 +86,26 @@ test.describe('a tier change and a rate correction', () => {
     await api(request, 'POST', `/api/dues-tiers/${seniorId}/rates`, { amount: senior, effective_from: '2024-01' })
     await api(request, 'POST', `/api/dues-tiers/${seniorId}/rates`, { amount: seniorNow, effective_from: jakartaMonth() })
     await api(request, 'POST', '/api/members', { name: member, tier_id: regulerId, joined_on: `${jakartaMonth(-5)}-01` })
+
+    // The report offers the months from the first transaction on and reads any
+    // other ?month= as the current one (ADR-035). The fixture's first is today's
+    // opening, so one entry dated in the month before the promotion puts that
+    // month on the report.
+    type Named = { id: number; name: string }
+    const listed = async (path: string, key: string) => {
+      const b = await api<Named[] | Record<string, Named[]>>(request, 'GET', path)
+      return Array.isArray(b) ? b : b[key]
+    }
+    const tunai = (await listed('/api/accounts', 'accounts')).find((a) => a.name === 'Tunai')?.id
+    const kasUtama = (await listed('/api/purposes', 'purposes')).find((p) => p.name === 'Kas Utama')?.id
+    await api(request, 'POST', '/api/transactions', {
+      account_id: tunai,
+      purpose_id: kasUtama,
+      direction: 'in',
+      amount: 10_000,
+      occurred_on: `${before}-01`,
+      note: 'Sisa kas lama',
+    })
   })
 
   test('promote the member from a past month on the Anggota edit form', async ({ page }) => {

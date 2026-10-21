@@ -75,14 +75,16 @@ var moneyColumns = []moneyColumn{
 		})
 		return err
 	}},
-	{table: "reconciliation_line", column: "recorded_amount", signed: true, insert: func(t *testing.T, w *ceilingWriter, v int64) error {
-		// actual = 1 (or -1), so the difference stays small whichever side v is on.
-		other := int64(1)
-		if v < 0 {
-			other = -1
-		}
-		return w.line(t, v, other, other-v)
-	}},
+	{table: "reconciliation_line", column: "recorded_amount", signed: true,
+		derivedFrom: "the ledger's balance of the location, a sum of bounded amounts that may run past the ceiling",
+		insert: func(t *testing.T, w *ceilingWriter, v int64) error {
+			// actual = 1 (or -1), so the difference stays small whichever side v is on.
+			other := int64(1)
+			if v < 0 {
+				other = -1
+			}
+			return w.line(t, v, other, other-v)
+		}},
 	{table: "reconciliation_line", column: "actual_amount", signed: true, insert: func(t *testing.T, w *ceilingWriter, v int64) error {
 		other := int64(1)
 		if v < 0 {
@@ -91,7 +93,7 @@ var moneyColumns = []moneyColumn{
 		return w.line(t, other, v, v-other)
 	}},
 	{table: "reconciliation_line", column: "difference_amount", signed: true,
-		derivedFrom: "CHECK (difference_amount = actual_amount - recorded_amount) over the two bounded operands",
+		derivedFrom: "CHECK (difference_amount = actual_amount - recorded_amount)",
 		insert: func(t *testing.T, w *ceilingWriter, v int64) error {
 			// difference = actual - recorded, so reach v from two figures that
 			// stay inside the ceiling themselves: actual = max, recorded = max - v
@@ -220,9 +222,9 @@ func TestCeilingLiteralIsMoneyMaxAmount(t *testing.T) {
 		literals = append(literals, long.FindAllString(code, -1)...)
 	}
 	// dues_rate, reimbursement, transaction, target and minimum take one each;
-	// recorded_amount and actual_amount take two each (BETWEEN -x AND x).
-	// difference_amount takes none: it is derived (see moneyColumn.derivedFrom).
-	if want := 5 + 2*2; len(literals) != want {
+	// actual_amount takes two (BETWEEN -x AND x). recorded_amount and
+	// difference_amount take none: they are derived (see moneyColumn.derivedFrom).
+	if want := 5 + 2; len(literals) != want {
 		t.Errorf("ceiling literals in the schema = %d (%v), want %d", len(literals), literals, want)
 	}
 	for _, lit := range literals {
@@ -240,7 +242,7 @@ func TestMoneyColumnBoundaries(t *testing.T) {
 	t.Parallel()
 	for _, c := range moneyColumns {
 		if c.derivedFrom != "" {
-			continue // no literal of its own: TestDerivedDifferenceIsBoundedByItsOperands
+			continue // no literal of its own: TestDerivedFiguresTakeNoCeiling
 		}
 		t.Run(c.name(), func(t *testing.T) {
 			t.Parallel()
@@ -261,21 +263,25 @@ func TestMoneyColumnBoundaries(t *testing.T) {
 	}
 }
 
-// TestDerivedDifferenceIsBoundedByItsOperands: difference_amount has no ceiling
-// of its own. A legitimate line can have recorded = -max and actual = +max, a
-// difference of twice the ceiling, and the schema accepts it (and the mirror).
-// What bounds the column is the equality CHECK over the two bounded operands,
-// so a difference that is not actual - recorded is still refused, and an
-// operand past the ceiling is refused by its own CHECK (TestMoneyColumnBoundaries).
-func TestDerivedDifferenceIsBoundedByItsOperands(t *testing.T) {
+// TestDerivedFiguresTakeNoCeiling: recorded_amount and difference_amount have no
+// ceiling of their own. recorded_amount is the ledger's balance of the location,
+// which nothing refuses past the ceiling (three ceiling-sized deposits make one
+// location three times it), and such a location must still be countable. The
+// difference is fixed by the equality CHECK, so a difference that is not
+// actual - recorded is still refused, and actual_amount, what she counted, keeps
+// its own ceiling (TestMoneyColumnBoundaries).
+func TestDerivedFiguresTakeNoCeiling(t *testing.T) {
 	t.Parallel()
 	w := newCeilingWriter(t)
 
+	if err := w.line(t, 3*ceiling, 0, -3*ceiling); err != nil {
+		t.Errorf("recorded 3*max, counted 0: %v, want it accepted", err)
+	}
+	if err := w.line(t, -3*ceiling, 0, 3*ceiling); err != nil {
+		t.Errorf("recorded -3*max, counted 0: %v, want it accepted", err)
+	}
 	if err := w.line(t, -ceiling, ceiling, 2*ceiling); err != nil {
 		t.Errorf("recorded -max, actual +max, difference 2*max: %v, want it accepted", err)
-	}
-	if err := w.line(t, ceiling, -ceiling, -2*ceiling); err != nil {
-		t.Errorf("recorded +max, actual -max, difference -2*max: %v, want it accepted", err)
 	}
 	if err := w.line(t, -ceiling, ceiling, 2*ceiling+1); err == nil ||
 		!strings.Contains(err.Error(), "difference_amount = actual_amount - recorded_amount") {
