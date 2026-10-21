@@ -92,6 +92,19 @@ export interface Transaction {
    * and the correction dialog, which must build its pair from where the
    * money actually is. */
   effective_purpose_id?: number
+  /** Whether a reversal points at this row (ADR-042): ledger_entry's flag, on
+   * the server, so a row reversed on a page not fetched yet still reads
+   * reversed. */
+  reversed?: boolean
+  /** Whether the ledger would accept a reversal of this row now - the server's
+   * answer, so the client keeps no copy of the eligibility rule. */
+  reversible?: boolean
+  /** Whether a cek kas has counted this row, which picks the date a reversal
+   * would take: its own day (false) or today (true). */
+  counted?: boolean
+  /** On a reversal: the date of the row it reverses, so a label can state it
+   * though the original sits on another page. Null on every other row. */
+  reverses_occurred_on?: string | null
   /** Every receipt attached to this row, oldest first. Optional so existing
    * test fixtures need not grow the field; TransactionList reads it as
    * `transaction.receipt_ids ?? []`. */

@@ -63,9 +63,9 @@ func newWalkPage(t *testing.T) walkPage {
 		t.Fatalf("CreateAccount() = %v", err)
 	}
 	f.post(t, "in", 200_000, "2026-09-03")
-	if _, err := f.l.ReverseDuesPayment(ctx, ledger.ReverseDuesPaymentParams{FundID: f.fund.ID, TransactionID: gift.ID, OccurredOn: "2026-09-08"}); err != nil {
-		t.Fatalf("ReverseDuesPayment() = %v", err)
-	}
+	// Dated 8 September, a later month than the gift: the shape a cek kas and the
+	// clock produce in production (ADR-042), written directly.
+	postReversalRowOn(t, f.db, f.fund.ID, gift.ID, "2026-09-08")
 	if _, err := f.l.PostTransaction(ctx, ledger.PostTransactionParams{
 		FundID: f.fund.ID, AccountID: f.cashID, PurposeID: f.mainID, Direction: "out", Amount: 4_000, OccurredOn: "2026-09-10", IsAdjustment: true,
 	}); err != nil {

@@ -11,8 +11,8 @@
 ```
 Saldo <last day of previous month>
 + Saldo awal      openings dated in the month; shown only when non-zero
-+ Total masuk     income, net of reversals
-- Total keluar    spending
++ Total masuk     income, net of reversals          [ADR-042: of reversals of income]
+- Total keluar    spending                          [ADR-042: net of reversals of spending]
 +/- Penyesuaian   every adjustment that is not a reversal; shown only when non-zero
 +/- Dipindah      purpose filter only: that pos's reclass legs, net
 = Saldo <last day of the month>    (running month: today)
@@ -25,17 +25,17 @@ Saldo <last day of previous month>
 | `opening` | Saldo awal |
 | `normal`, `dues` going in | Total masuk |
 | `normal` going out, `reimbursement` payout | Total keluar |
-| `adjustment` with `reverses_transaction_id` | Total masuk, **negative** |
+| ~~`adjustment` with `reverses_transaction_id`~~ | ~~Total masuk, **negative**~~ **Superseded by [ADR-042](./042-reversing-any-ordinary-transaction.md)**: a reversal going out (it reverses income) is a negative Total masuk; a reversal going in (it reverses spending) is a negative Total keluar |
 | any other `adjustment` (a *cek kas* fix, a standalone one) | Penyesuaian |
 | `transfer`, `between_accounts` | none - moves no fund or pos total |
 | `transfer`, `reclass_purpose` | none on the whole fund; Dipindah under a purpose filter |
 
-- **A reversal nets against the month it is dated in**, even when the payment it reverses was in an earlier month. *Total masuk* can then read below zero for a month; accepted, and revisited if treasurers find it confusing (maintainer, 2026-10-05). The ledger itself stays gross - two rows, as ADR-029 decided; netting happens only on this summary.
+- **A reversal nets against the month it is dated in**, even when the payment it reverses was in an earlier month. ~~*Total masuk* can then read below zero for a month~~ **Superseded by [ADR-042](./042-reversing-any-ordinary-transaction.md)**: either total can read below zero, and only after a *cek kas* has counted the original (the reversal is then dated today); accepted, and revisited if treasurers find it confusing (maintainer, 2026-10-05). The ledger itself stays gross - two rows, as ADR-029 decided; netting happens only on this summary.
 - **Openings get their own line, not the starting balance**, so a month's start is always the previous month's end. In the setup month the walk starts at Rp 0.
 - **Dipindah sums the raw legs**, not #280's folded display rows: the line has to equal the change in the pos's balance, and folding is presentation only.
 - **The last line is a ledger sum, never computed from the lines above.** The walk *footing* - start plus lines equals end, to the rupiah - is asserted by tests over every month of a scenario holding every row shape, for the whole fund and each purpose. It is not checked at runtime: a public page does not 500 on a neighbour.
 
-**One class per row drives the list, the filter and the totals.** A reversal filters as *Uang masuk* and is counted there as a minus; it no longer shows under *Uang keluar*. Opening and Penyesuaian rows are listed, but hidden under a member or direction filter, as Dipindah rows already are.
+**One class per row drives the list, the filter and the totals.** ~~A reversal filters as *Uang masuk* and is counted there as a minus; it no longer shows under *Uang keluar*.~~ **Superseded by [ADR-042](./042-reversing-any-ordinary-transaction.md)**: a reversal filters as its own line (*Uang keluar* for the reversal of an out) and counts there as a minus. Opening and Penyesuaian rows are listed, but hidden under a member or direction filter, as Dipindah rows already are.
 
 **Which filters walk.**
 - **No filter, or a purpose filter:** the full walk. Under a purpose filter the start and end are that pos's balance (ADR-037's bounded `PurposeBalance`); openings only ever land on Kas Utama.
@@ -49,7 +49,7 @@ Saldo <last day of previous month>
 
 ## Consequences
 
-- One reversal now reads three ways on one page, each correct for what it measures: the dues section drops the payment (status, a stock), an envelope's *terkumpul* drops the pair, and *Total masuk* nets it on the reversal's date (a flow).
+- One reversal now reads three ways on one page, each correct for what it measures: the dues section drops the payment (status, a stock), ~~an envelope's *terkumpul* drops the pair~~ (**superseded by [ADR-042](./042-reversing-any-ordinary-transaction.md)**: the reversal nets against its original's bucket, the same figure inside one pos), and *Total masuk* nets it on the reversal's date (a flow).
 - A standalone adjustment gains a row label, *Penyesuaian*; it rendered blank before.
 - The report's assembly gains the walk; the page and the PDF render the same lines (ADR-035). The PDF takes no filters, so it always carries the whole-fund walk; the purpose walk is the page's.
 - Riwayat labels a standalone adjustment *Penyesuaian* too, as the report does (amended 2026-10-06, below).

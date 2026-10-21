@@ -1,7 +1,6 @@
 import { ArrowDownLeft, ArrowUpRight, Tags, Undo2 } from 'lucide-react'
 import { useState } from 'react'
 
-import DateField from '@/components/DateField'
 import ReceiptDialog from '@/components/ReceiptDialog'
 import ReceiptRowButton from '@/components/ReceiptRowButton'
 import TransactionDetailDialog from '@/components/TransactionDetailDialog'
@@ -11,10 +10,9 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { copy } from '@/copy/id'
 import { ApiError } from '@/lib/api'
-import { reverseDuesPayment } from '@/lib/dues'
-import { formatIsoDate, dateBounds, todayISODate } from '@/lib/dates'
+import { formatIsoDate } from '@/lib/dates'
 import { formatIDR } from '@/lib/money'
-import { canCorrectPurpose, canReverseContribution, noteForDisplay } from '@/lib/transactions'
+import { canCorrectPurpose, canReverseContribution, noteForDisplay, reverseTransaction } from '@/lib/transactions'
 import { useApi } from '@/lib/useApi'
 import { useDialogParam } from '@/lib/useDialogParam'
 import type { Transaction } from '@/lib/transactions'
@@ -22,7 +20,7 @@ import type { Transaction } from '@/lib/transactions'
 const reverseText = copy.history.transactions
 
 /** Wire error code -> Indonesian copy, scoped first to this list's sumbangan
- * wording (dues_payment_already_reversed reads as "iuran" in the shared map,
+ * wording (transaction_already_reversed reads as "iuran" in the shared map,
  * ADR-034) then falling back to it, as Incidentals.tsx's errorText does. */
 function reversalErrorText(err: ApiError): string {
   const specific = reverseText.errors[err.code as keyof typeof reverseText.errors]
@@ -258,8 +256,9 @@ function PurposeLine({
 /**
  * A named contribution's undo, reachable the way a dues payment's is
  * (ADR-034): the same button-then-inline-form shape as
- * Dues/MemberPayments.tsx, reusing reverseDuesPayment - the route reverses
- * any kind='normal' or kind='dues' row alike.
+ * Dues/MemberPayments.tsx, reusing reverseTransaction - the route reverses
+ * any kind='normal' or kind='dues' row alike (ADR-042). It asks no date: the
+ * ledger dates the reversal itself.
  *
  * Its own component, not lifted state on the list, because each row's
  * expand/collapse is independent and this is the one row shape that needs
@@ -275,7 +274,6 @@ function ContributionReversalControl({
   refresh?: () => Promise<void> | void
 }) {
   const [open, setOpen] = useState(false)
-  const [occurredOn, setOccurredOn] = useState(todayISODate)
   const [note, setNote] = useState('')
   const [state, run] = useApi<Transaction>()
 
@@ -285,7 +283,7 @@ function ContributionReversalControl({
     void run(
       async () => {
         const trimmed = note.trim()
-        const result = await reverseDuesPayment(transaction.id, occurredOn, trimmed === '' ? null : trimmed)
+        const result = await reverseTransaction(transaction.id, trimmed === '' ? null : trimmed)
         setOpen(false)
         onReversed()
         return result
@@ -310,17 +308,6 @@ function ContributionReversalControl({
   return (
     <div className="animate-reveal flex flex-col gap-2 rounded-lg bg-muted/40 p-3">
       <div className="flex flex-col gap-1.5">
-        <Label htmlFor={`contribution-reversal-date-${transaction.id}`}>{reverseText.reverseDateLabel}</Label>
-        <DateField
-          id={`contribution-reversal-date-${transaction.id}`}
-          value={occurredOn}
-          onChange={setOccurredOn}
-          bounds={dateBounds.entry()}
-          disabled={busy}
-        />
-      </div>
-
-      <div className="flex flex-col gap-1.5">
         <Label htmlFor={`contribution-reversal-note-${transaction.id}`}>{reverseText.reverseNoteLabel}</Label>
         <Input
           id={`contribution-reversal-note-${transaction.id}`}
@@ -333,7 +320,7 @@ function ContributionReversalControl({
       </div>
 
       {/* reversalErrorText, not ErrorState.tsx directly (#333): the shared
-          fallback chain reads dues_payment_already_reversed as "iuran",
+          fallback chain reads transaction_already_reversed as "iuran",
           which is the wrong noun on this list - see this file's own
           reversalErrorText. */}
       {state.status === 'error' && state.error && (
@@ -346,7 +333,7 @@ function ContributionReversalControl({
         <Button type="button" variant="outline" size="lg" disabled={busy} onClick={() => setOpen(false)}>
           {reverseText.reverseCancel}
         </Button>
-        <Button type="button" size="lg" disabled={busy || occurredOn === ''} onClick={handleSubmit}>
+        <Button type="button" size="lg" disabled={busy} onClick={handleSubmit}>
           {busy ? reverseText.reverseSubmitting : reverseText.reverseConfirm}
         </Button>
       </div>

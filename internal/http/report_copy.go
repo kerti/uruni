@@ -93,9 +93,13 @@ type reportCopy struct {
 	RowDues                 func(period, member string) string
 	RowDuesReversal         func(period, member string) string
 	RowContributionReversal func(member string) string
-	RowOpening              string
-	RowAdjustment           string
-	RowMoved                func(from, to string) string
+	// RowReversal labels a reversal that names no member (ADR-042): the bare word the
+	// other two reversal labels open with. The ADR's fuller label, with the
+	// original's date, is #631's copy slice.
+	RowReversal   string
+	RowOpening    string
+	RowAdjustment string
+	RowMoved      func(from, to string) string
 
 	// The monthly PDF (#378): the page footer's link and the words the statement
 	// adds. Section headings and labels already on the page are reused.
@@ -190,6 +194,7 @@ var reportText = reportCopy{
 	RowDues:                 func(period, member string) string { return period + " \u00b7 " + member },
 	RowDuesReversal:         func(period, member string) string { return "Pembatalan \u00b7 " + period + " \u00b7 " + member },
 	RowContributionReversal: func(member string) string { return "Pembatalan \u00b7 " + member },
+	RowReversal:             "Pembatalan",
 	RowOpening:              "Saldo awal",
 	RowAdjustment:           "Penyesuaian",
 	RowMoved:                func(from, to string) string { return "Dipindah: " + from + " \u2192 " + to },

@@ -418,6 +418,40 @@
       "reverses_transaction_id": null,
       "note": null,
       "created_at": 1700000322
+    },
+    {
+      "id": 14,
+      "fund_id": 1,
+      "account_id": 1,
+      "purpose_id": 1,
+      "direction": "in",
+      "amount": 8000,
+      "occurred_on": "2026-02-05",
+      "kind": "normal",
+      "member_id": null,
+      "dues_period": null,
+      "reimbursement_id": null,
+      "transfer_id": null,
+      "reverses_transaction_id": null,
+      "note": null,
+      "created_at": 1700000402
+    },
+    {
+      "id": 15,
+      "fund_id": 1,
+      "account_id": 1,
+      "purpose_id": 1,
+      "direction": "out",
+      "amount": 8000,
+      "occurred_on": "2026-02-05",
+      "kind": "adjustment",
+      "member_id": null,
+      "dues_period": null,
+      "reimbursement_id": null,
+      "transfer_id": null,
+      "reverses_transaction_id": 14,
+      "note": null,
+      "created_at": 1700000403
     }
   ],
   "receipts": [

@@ -94,7 +94,7 @@ describe('MemberPayments', () => {
     expect(screen.getAllByText(amountMatcher(50_000))).toHaveLength(1)
   })
 
-  it('reverses a payment with a date, sending null when she leaves the reason blank', async () => {
+  it('reverses a payment, sending null when she leaves the reason blank', async () => {
     const fetchMock = stubTransactions()
     vi.stubGlobal('fetch', fetchMock)
     const onReversed = renderPayments()
@@ -104,10 +104,11 @@ describe('MemberPayments', () => {
 
     await waitFor(() => expect(onReversed).toHaveBeenCalledTimes(1))
     const post = fetchMock.mock.calls.find(([, init]) => (init as RequestInit | undefined)?.method === 'POST')
-    expect(post?.[0]?.toString()).toBe('/api/dues-payments/10/reversal')
+    expect(post?.[0]?.toString()).toBe('/api/transactions/10/reversal')
     const body = JSON.parse(String((post?.[1] as RequestInit | undefined)?.body))
-    // ADR-029: only a date and a note ever cross the wire.
-    expect(Object.keys(body).sort()).toEqual(['note', 'occurred_on'])
+    // ADR-029, ADR-042: only a note ever crosses the wire - the date is the
+    // ledger's to pick.
+    expect(Object.keys(body)).toEqual(['note'])
     // Nothing generated is ever stored - a blank reason sends null, never a
     // derived default. The row explains itself through TransactionList's
     // display label.

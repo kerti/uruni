@@ -85,6 +85,17 @@ func windowAt(now time.Time, loc *time.Location) dateWindow {
 	return dateWindow{today: clockOrNow(now).In(loc).Format(time.DateOnly)}
 }
 
+// FundToday is the fund's calendar day at now, "YYYY-MM-DD", read in its zone
+// (ADR-041). The zero now means time.Now(). It is for a read that needs the same
+// "today" a write would, such as the page's reversible flag (ADR-042).
+func FundToday(f store.Fund, now time.Time) (string, error) {
+	loc, err := FundLocation(f)
+	if err != nil {
+		return "", err
+	}
+	return windowAt(now, loc).today, nil
+}
+
 // windowFor reads the fund's zone from its row, through q. A caller outside a
 // transaction passes l.q; one inside passes the transaction's querier.
 func (l *Ledger) windowFor(ctx context.Context, q store.Querier, fundID int64, now time.Time) (dateWindow, error) {

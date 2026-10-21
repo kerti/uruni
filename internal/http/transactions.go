@@ -7,6 +7,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/go-chi/chi/v5"
+
 	"github.com/kerti/uruni/internal/ledger"
 	"github.com/kerti/uruni/internal/money"
 	"github.com/kerti/uruni/internal/store"
@@ -58,7 +60,7 @@ type transactionResponse struct {
 	DuesPeriod      *string `json:"dues_period"`
 	ReimbursementID *int64  `json:"reimbursement_id"`
 	TransferID      *int64  `json:"transfer_id"`
-	// The dues payment this row reverses (ADR-029), set only on a reversal. A
+	// The row this one reverses (ADR-029, ADR-042), set only on a reversal. A
 	// client has no other way to tell a reversal from an ordinary correction.
 	ReversesTransactionID *int64  `json:"reverses_transaction_id"`
 	Note                  *string `json:"note"`
@@ -108,6 +110,24 @@ type transactionResponse struct {
 	// where the money is, and for the marker that a correction exists.
 	EffectivePurposeID int64 `json:"effective_purpose_id"`
 
+	// Reversed is ledger_entry.reversed (ADR-042): a reversal points at this row.
+	// The client keeps no copy of the ledger's eligibility rule, so a row reversed
+	// on a page it has not fetched still reads reversed.
+	Reversed bool `json:"reversed"`
+	// Reversible is true exactly when Ledger.ReverseTransaction would accept the
+	// row now (ledger.ReversalRefusal, the same function): the server's answer, so
+	// the client never works out from kind and direction whether to offer the
+	// control. False on a row the page did not compute it for (POST's reply).
+	Reversible bool `json:"reversible"`
+	// Counted is true when a cek kas has counted this row, which is what picks the
+	// date a reversal would take (the original's own day, or today). The client
+	// cannot see the counts, so the form's date line reads this.
+	Counted bool `json:"counted"`
+	// ReversesOccurredOn is the date of the row a reversal points at, set only on
+	// a reversal: an unnamed reversal's label states it, and the original may sit
+	// on another page.
+	ReversesOccurredOn *string `json:"reverses_occurred_on"`
+
 	// ReceiptIDs is every receipt attached to this row, oldest first (#154):
 	// always present, [] rather than null when none. A freshly posted row
 	// (every toTransactionResponse caller but toTransactionsPageResponse) gets
@@ -151,7 +171,10 @@ func toTransactionResponse(t store.Transaction) transactionResponse {
 //
 // TransferFromName/TransferToName pick the account pair or the purpose pair
 // by row.TransferKind, for the same sqlc reason.
-func toTransactionsPageResponse(t store.ListTransactionsPageRow) transactionResponse {
+//
+// today is the fund's calendar day, which the reversible flag needs (a counted
+// row dated after it cannot be reversed, ADR-042).
+func toTransactionsPageResponse(t store.ListTransactionsPageRow, today string) transactionResponse {
 	resp := toTransactionResponse(store.Transaction{
 		ID: t.ID, FundID: t.FundID, AccountID: t.AccountID, PurposeID: t.PurposeID,
 		Direction: t.Direction, Amount: t.Amount, OccurredOn: t.OccurredOn, Kind: t.Kind,
@@ -166,6 +189,19 @@ func toTransactionsPageResponse(t store.ListTransactionsPageRow) transactionResp
 	resp.TransferCorrectsTransactionID = t.TransferCorrectsTransactionID
 	resp.TransferReason = t.TransferReason
 	resp.EffectivePurposeID = t.EffectivePurposeID
+
+	resp.Reversed = t.Reversed != 0
+	resp.Counted = t.Counted != 0
+	resp.ReversesOccurredOn = t.ReversesOccurredOn
+	resp.Reversible = ledger.ReversalRefusal(ledger.ReversalFacts{
+		Kind:                t.Kind,
+		OccurredOn:          t.OccurredOn,
+		IsReversal:          t.ReversesTransactionID != nil,
+		Reversed:            resp.Reversed,
+		IsReconciliationFix: t.IsReconciliationFix != 0,
+		EffectiveClosed:     t.EffectiveClosedOn != nil,
+		Counted:             resp.Counted,
+	}, today) == nil
 
 	switch {
 	case t.MemberName != nil:
@@ -393,6 +429,12 @@ func (a *api) listTransactions(w http.ResponseWriter, r *http.Request) {
 		mapSQLiteError(w, a.log(r), err)
 		return
 	}
+	today, err := ledger.FundToday(fund, a.now())
+	if err != nil {
+		a.log(r).Error("reading the fund's day", "error", err)
+		writeAPIError(w, http.StatusInternalServerError, "internal_error", "Something went wrong.")
+		return
+	}
 
 	var nextCursor *string
 	if len(rows) > transactionsPageSize {
@@ -416,9 +458,62 @@ func (a *api) listTransactions(w http.ResponseWriter, r *http.Request) {
 
 	resp := make([]transactionResponse, 0, len(rows))
 	for _, t := range rows {
-		row := toTransactionsPageResponse(t)
+		row := toTransactionsPageResponse(t, today)
 		row.ReceiptIDs = orEmptyReceiptIDs(receiptIDs[t.ID])
 		resp = append(resp, row)
 	}
 	writeJSON(w, http.StatusOK, transactionsPageResponse{Transactions: resp, NextCursor: nextCursor})
+}
+
+// reverseTransactionRequest is POST /api/transactions/{id}/reversal's body: a
+// note and nothing else (ADR-042). account_id, purpose_id, amount, direction,
+// member_id, dues_period and occurred_on are never accepted here;
+// Ledger.ReverseTransaction copies the first six from the original row and
+// picks the date itself. decodeJSON ignores unknown fields, so a stray
+// occurred_on is dropped, never honoured.
+type reverseTransactionRequest struct {
+	Note *string `json:"note"`
+}
+
+// reverseTransaction is POST /api/transactions/{id}/reversal: wraps
+// Ledger.ReverseTransaction, in the nested-verb idiom of
+// /api/transactions/{id}/purpose-correction and /api/incidentals/{purposeID}/close
+// (the route names the row, the verb the action). {id} names the dues payment or
+// normal transaction being reversed; every refusal is the ledger's own named
+// error (ADR-042), reaching the client through mapLedgerError.
+//
+// It replaced POST /api/dues-payments/{id}/reversal, removed with no alias. The
+// route is once-only by the schema, so it carries no idempotency key (ADR-043).
+//
+// The response is the posted reversal row as transactionResponse, the wire
+// shape POST /api/transactions and GET /api/transactions use.
+func (a *api) reverseTransaction(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		writeAPIError(w, http.StatusBadRequest, "invalid_argument", "The transaction id is not a valid number.")
+		return
+	}
+
+	var req reverseTransactionRequest
+	if !decodeJSON(w, r, &req) {
+		return
+	}
+
+	fund, ok := a.resolveFund(w, r)
+	if !ok {
+		return
+	}
+
+	reversal, err := a.ledger.ReverseTransaction(r.Context(), ledger.ReverseTransactionParams{
+		Now:           a.now(),
+		FundID:        fund.ID,
+		TransactionID: id,
+		Note:          req.Note,
+	})
+	if err != nil {
+		mapLedgerError(w, a.log(r), err)
+		return
+	}
+
+	writeJSON(w, http.StatusCreated, toTransactionResponse(reversal))
 }

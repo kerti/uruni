@@ -37,7 +37,7 @@ var ErrReimbursementAlreadySettled = errors.New("ledger: reimbursement has alrea
 
 // ErrFundAlreadyExists is returned by SetUpFund when a fund already exists.
 //
-// Unlike ErrReimbursementAlreadySettled and ErrDuesPaymentAlreadyReversed,
+// Unlike ErrReimbursementAlreadySettled and ErrAlreadyReversed,
 // no unique index backs this: "at most one fund" is application policy, not a
 // schema fact (PRD section 6 keeps multiple funds open at the model level,
 // and a schema constraint would need a migration to lift). The pre-check in
@@ -46,30 +46,66 @@ var ErrReimbursementAlreadySettled = errors.New("ledger: reimbursement has alrea
 // single-instance lock rules out a second `uruni serve` on the same file.
 var ErrFundAlreadyExists = errors.New("ledger: a fund already exists")
 
-// ErrDuesPaymentNotFound is returned by ReverseDuesPayment when
-// GetTransactionForFund finds no row for the given fund and transaction id.
+// The reversal refusals (ADR-042). Each is its own error and its own wire code,
+// never one blanket rule (ADR-033's convention), and each is a pre-check ahead
+// of a guarantee the schema already gives, so the treasurer gets copy and not a
+// constraint string (ADR-027's ErrReimbursementAlreadySettled shape). The
+// sentinel names are the ledger's; the wire codes are the contract.
+
+// ErrReversalNotFound is returned by ReverseTransaction when GetReversalTarget
+// finds no row for the given fund and transaction id.
 //
 // The fetch is fund-scoped (WHERE fund_id = ? AND id = ?), so a real
 // transaction id belonging to another fund answers with this same sentinel
 // (ADR-029). That is what makes the composite FK on reverses_transaction_id
 // load-bearing: a treasurer of one fund cannot even name another fund's row.
-var ErrDuesPaymentNotFound = errors.New("ledger: no such transaction")
+var ErrReversalNotFound = errors.New("ledger: no such transaction")
 
-// ErrNotADuesPayment is returned by ReverseDuesPayment when the fetched row's
-// Kind is not "dues".
-//
-// This also rules out reversing a reversal: a reversal is posted as
-// kind='adjustment' (ADR-029), so it fails this same check.
-var ErrNotADuesPayment = errors.New("ledger: transaction is not a dues payment")
+// ErrReversalOpening is returned by ReverseTransaction for a kind='opening'
+// row: it is the Saldo awal line and opening_balance_once_per_account.
+var ErrReversalOpening = errors.New("ledger: an opening balance cannot be reversed")
 
-// ErrDuesPaymentAlreadyReversed is returned by ReverseDuesPayment when
-// GetDuesPaymentReversal finds an existing reversal row for the payment.
+// ErrReversalReimbursement is returned by ReverseTransaction for a
+// kind='reimbursement' payout: it is a claim's settled state
+// (reimbursement_settled_once), and a claim is corrected before it is settled.
+var ErrReversalReimbursement = errors.New("ledger: a reimbursement payout cannot be reversed")
+
+// ErrReversalTransfer is returned by ReverseTransaction for a kind='transfer'
+// leg: it is half of a value-neutral pair.
+var ErrReversalTransfer = errors.New("ledger: a transfer leg cannot be reversed")
+
+// ErrReversalOfReversal is returned by ReverseTransaction for a
+// kind='adjustment' row that itself reverses another.
+var ErrReversalOfReversal = errors.New("ledger: a reversal cannot be reversed")
+
+// ErrReversalAdjustment is returned by ReverseTransaction for any other
+// kind='adjustment' row: the plug a cek kas line names, or one posted alone.
+var ErrReversalAdjustment = errors.New("ledger: an adjustment cannot be reversed")
+
+// ErrReversalReconciliationFix is returned by ReverseTransaction for a
+// kind='normal' row a cek kas line names as its fix (resolution entry_added).
+// The line's open remainder is derived through that entry in four queries,
+// none of which reads a reversal, so reversing it would leave the line saying
+// an entry the ledger says never happened explains the gap. The way is the
+// hand-made opposite entry and a new count (ADR-042).
+var ErrReversalReconciliationFix = errors.New("ledger: a row a cek kas line names as its fix cannot be reversed")
+
+// ErrAlreadyReversed is returned by ReverseTransaction when ledger_entry says
+// something already reverses the row.
 //
 // The schema's dues_payment_reversed_once partial unique index is the actual
 // guarantee, under any caller. This pre-check only turns it into a named
 // error instead of a raw "UNIQUE constraint failed" (ADR-027); see
 // ErrReimbursementAlreadySettled for why it is not a race.
-var ErrDuesPaymentAlreadyReversed = errors.New("ledger: dues payment has already been reversed")
+var ErrAlreadyReversed = errors.New("ledger: transaction has already been reversed")
+
+// ErrReversalBeforeOriginal is returned by ReverseTransaction when a cek kas
+// has counted the row and it is dated after today, so the day the reversal
+// would take (today) precedes what it reverses. Only a row from before #632's
+// ceiling can be there. The hand-made opposite entry is the way out
+// (ADR-042); the schema does not check this, so a restore of a live file
+// holding such a pair is not refused.
+var ErrReversalBeforeOriginal = errors.New("ledger: a reversal cannot come before the row it reverses")
 
 // ErrIncidentalClosed is returned by PostTransaction when PurposeID names an
 // incidental whose closed_on is set (ADR-031).
@@ -95,7 +131,7 @@ var ErrIncidentalNotClosed = errors.New("ledger: incidental is not closed")
 // ErrIncidentalAlreadyClosed is returned by CloseIncidentalAndRoll when the
 // envelope's closed_on is already set.
 //
-// Unlike ErrReimbursementAlreadySettled and ErrDuesPaymentAlreadyReversed,
+// Unlike ErrReimbursementAlreadySettled and ErrAlreadyReversed,
 // no unique index backs this: incidental has no immutability trigger and
 // closing is a plain UPDATE (ADR-024), so this check is the entire
 // guarantee. Without it a second call would roll again, moving money out of
@@ -108,7 +144,7 @@ var ErrIncidentalAlreadyClosed = errors.New("ledger: incidental has already been
 
 // ErrPurposeCorrectionNotFound is returned by PostPurposeCorrection when
 // GetTransactionForFund finds no row for the fund and transaction id,
-// including a real id of another fund (fund-scoped like ErrDuesPaymentNotFound,
+// including a real id of another fund (fund-scoped like ErrReversalNotFound,
 // ADR-029 applied to ADR-033).
 var ErrPurposeCorrectionNotFound = errors.New("ledger: no such transaction")
 
@@ -135,11 +171,20 @@ var ErrPurposeCorrectionReimbursement = errors.New("ledger: cannot correct the p
 // of a correction impossible, with no depth limit or cycle rule.
 var ErrPurposeCorrectionTransfer = errors.New("ledger: cannot correct the peruntukan of a transfer leg")
 
-// ErrPurposeCorrectionDuesReversal is returned by PostPurposeCorrection when
-// the row being corrected is kind='adjustment' with reverses_transaction_id
-// set - a dues reversal (ADR-029), not the reconciliation-fix adjustment
-// ADR-033 opens this route for.
-var ErrPurposeCorrectionDuesReversal = errors.New("ledger: cannot correct the peruntukan of a dues reversal")
+// ErrPurposeCorrectionReversal is returned by PostPurposeCorrection when the
+// row being corrected is kind='adjustment' with reverses_transaction_id set -
+// a reversal of any row (ADR-029, ADR-042), not the reconciliation-fix
+// adjustment ADR-033 opens this route for.
+var ErrPurposeCorrectionReversal = errors.New("ledger: cannot correct the peruntukan of a reversal")
+
+// ErrPurposeCorrectionAlreadyReversed is returned by PostPurposeCorrection when
+// the row being corrected has been reversed (ADR-042). The reversal already took
+// the row's money out of its effective purpose; moving the original afterwards
+// would put the pair's legs on a purpose that no longer holds it and leave the
+// reversal netting against the wrong one. Correct-then-reverse is allowed (the
+// reversal copies the effective purpose); this is the other order, reachable
+// from a stale page.
+var ErrPurposeCorrectionAlreadyReversed = errors.New("ledger: cannot correct the peruntukan of a reversed transaction")
 
 // ErrPurposeCorrectionNoop is returned by PostPurposeCorrection when the
 // requested purpose_id is exactly the row's current effective peruntukan -
@@ -212,7 +257,7 @@ var ErrPurposeMoveAccountInactive = errors.New("ledger: the account is inactive"
 // API is shipped and the SPA speaks it.
 //
 // Not applied to postings that inherit their location from the row they
-// correct - ReverseDuesPayment and PostPurposeCorrection: the treasurer
+// correct - ReverseTransaction and PostPurposeCorrection: the treasurer
 // chooses nothing there, and refusing would make a mistake on a
 // since-retired location uncorrectable (CLAUDE.md rule 3).
 var ErrAccountInactive = errors.New("ledger: the account is retired")

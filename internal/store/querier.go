@@ -167,11 +167,6 @@ type Querier interface {
 	// Fund-scoped like GetMemberForFund (#188): another fund's account id answers
 	// sql.ErrNoRows rather than being found and then rejected.
 	GetAccountForFund(ctx context.Context, arg GetAccountForFundParams) (Account, error)
-	// The reversed-once pre-check, like GetReimbursementSettlement: sql.ErrNoRows
-	// means "not yet reversed, proceed"; a row means it already has been. The
-	// dues_payment_reversed_once index is the actual guarantee - this only turns a
-	// raw constraint violation into a named error (ADR-029).
-	GetDuesPaymentReversal(ctx context.Context, arg GetDuesPaymentReversalParams) (Transaction, error)
 	// The by-id lookup PATCH and DELETE start from (a named exception to the view
 	// rule: it must find a row that no longer stands, to refuse it). dues_rate has
 	// no fund_id, so scope comes through its tier (#188).
@@ -212,6 +207,29 @@ type Querier interface {
 	// One claim with its settled fact, for GET /api/reimbursements/{id}: the settle
 	// and correct screens must know whether it is still owed. Fund-scoped.
 	GetReimbursementWithSettled(ctx context.Context, arg GetReimbursementWithSettledParams) (GetReimbursementWithSettledRow, error)
+	// Everything Ledger.ReverseTransaction needs to decide one row's fate (ADR-042),
+	// in one fund-scoped read, so the refusal and the date come from the same
+	// facts the page's reversible flag is built from (ListTransactionsPage selects
+	// the same four): a row of another fund reads as sql.ErrNoRows.
+	//
+	//   reversed        ledger_entry.reversed: something already reverses this row.
+	//                   The reversed_once index is the guarantee; this turns it into
+	//                   a named error.
+	//   is_reconciliation_fix
+	//                   a cek kas line names this row as its fix
+	//                   (reconciliation_line.adjustment_transaction_id): reversing it
+	//                   would leave the line's open remainder saying an entry the
+	//                   ledger says never happened explains the gap.
+	//   effective_closed_on
+	//                   closed_on of the envelope the row's money is under NOW (the
+	//                   effective purpose, ADR-033), NULL when that is not a closed
+	//                   envelope. The reversal posts there.
+	//   counted         some cek kas of the fund has counted this row:
+	//                   through_transaction_id >= id. The one place the repo relies
+	//                   on id order, because the cutoff's own meaning is id order
+	//                   (ADR-024, ADR-012). A NULL cutoff (a count of an empty
+	//                   ledger) compares NULL and counts nothing.
+	GetReversalTarget(ctx context.Context, arg GetReversalTargetParams) (GetReversalTargetRow, error)
 	// Only a row still inside its idle window; a session past expires_at is gone
 	// even before DeleteExpiredSessions sweeps it.
 	GetSession(ctx context.Context, arg GetSessionParams) (Session, error)
@@ -245,11 +263,17 @@ type Querier interface {
 	// this screen has no reason to exclude. tr.id IS NULL keeps every row with no
 	// reclass_purpose transfer; a correction's legs come back in below.
 	//
-	// A cancelled contribution (ADR-034's widened ADR-029 reversal) is dropped
-	// whole: the reversal row and the row it reverses, by the same ledger_entry
-	// reversed_on test as ContributedByIncidentalMember. Otherwise a cancellation
-	// reads as money spent ("Terpakai") and the cancelled row as money collected. Both halves go,
-	// so collected minus disbursed still equals the envelope's balance;
+	// A reversal (ADR-029, ADR-034, ADR-042) is read the way a correction's legs
+	// are: as a minus on the bucket of the row it points at, in whichever purpose it
+	// sits. The join to o takes COALESCE(tr.corrects_transaction_id,
+	// t.reverses_transaction_id): a row has at most one of the two, and its fund
+	// comes from t, not tr, which is NULL on a reversal (written the other way every
+	// reversal reads as spending). So a cancelled contribution is collected and
+	// then un-collected, a cancelled expense is disbursed and then un-disbursed,
+	// and collected minus disbursed still equals the envelope's balance even after
+	// a purpose correction has put the pair in two purposes (the original and its
+	// legs against one, the reversal against the other). Inside one purpose it is
+	// the same figure as dropping both halves, which is what this query used to do.
 	// IncidentalTotals stays unfiltered because the pair nets to zero there.
 	//
 	// A peruntukan correction (ADR-033) is re-attributed, not dropped (#342). Its
@@ -259,9 +283,9 @@ type Querier interface {
 	// other way takes it back out. So an unnamed contribution corrected out of
 	// this envelope nets to zero collected here; one corrected in reads as
 	// collected; an expense corrected away un-spends. Each leg still moves
-	// collected minus disbursed by exactly its effect on the balance. The
-	// corrected row is never a reversal (ADR-033 refuses those), so the
-	// cancellation filters never meet it.
+	// collected minus disbursed by exactly its effect on the balance. A reversed
+	// row can be corrected before it is reversed but not after (ADR-042), and a
+	// reversal is never itself corrected, so the two readings never meet on one row.
 	//
 	// A purpose move (ADR-036, tr.reason = 'allocation') is kept and only ever
 	// counts as collected: money allocated in is money the envelope has to work
@@ -270,7 +294,8 @@ type Querier interface {
 	// or NULL on a row written before the column existed - stays excluded.
 	//
 	// through bounds it at a past month's last day for the public report (#408):
-	// only rows dated by then, and a reversal dated after it has not happened yet.
+	// only rows dated by then, each half of a pair by its own date, so a reversal
+	// dated after it has not happened yet and the original still reads in full.
 	// NULL (every other caller) is unbounded.
 	IncidentalActivityTotals(ctx context.Context, arg IncidentalActivityTotalsParams) (IncidentalActivityTotalsRow, error)
 	// The closed-envelope guard's one query (ADR-031): sql.ErrNoRows for a
@@ -322,7 +347,10 @@ type Querier interface {
 	//
 	// Both halves of a reversal share this list (PRD section 7.3, ADR-029): every
 	// kind='dues' payment and every kind='adjustment' row that reverses one -
-	// never a bare "every transaction".
+	// never a bare "every transaction". "One" is a dues payment: a dues reversal
+	// carries its payment's period, and a named contribution's reversal (member
+	// set, no period) or an unnamed one is not Iuran history (ADR-042). The
+	// INNER JOIN on member alone would let the first of those through.
 	//
 	// reversed_by_transaction_id is the reversal that undoes THIS row when it is a
 	// payment (ledger_entry; null otherwise, as a reversal is never itself
@@ -602,6 +630,14 @@ type Querier interface {
 	//     the balances. This column is for the correction dialog, which must build
 	//     its pair from where the money actually is, and for the marker that says a
 	//     correction exists.
+	//   - reversed, reverses_occurred_on, counted, is_reconciliation_fix,
+	//     effective_closed_on (ADR-042): the facts of a reversal. reversed is
+	//     ledger_entry's flag; reverses_occurred_on is the original's date, on a
+	//     reversal row, so an unnamed reversal can state the day it reverses even
+	//     when the original is on another page; the other three, with kind and the
+	//     reversal link, are what Ledger.ReversalRefusal reads (GetReversalTarget
+	//     has the reasoning), so the page's reversible flag and the ledger's answer
+	//     are one rule.
 	ListTransactionsPage(ctx context.Context, arg ListTransactionsPageParams) ([]ListTransactionsPageRow, error)
 	ListTransfersByFund(ctx context.Context, fundID int64) ([]Transfer, error)
 	// The backup export's read (ADR-012): the whole table, password hash included
@@ -690,6 +726,10 @@ type Querier interface {
 	// it (the live login stays, ADR-012); `uruni rebuild` runs it on the scratch
 	// database to carry the backup's single login over, id included.
 	RestoreUser(ctx context.Context, arg RestoreUserParams) error
+	// Whether a row has been reversed, for PostPurposeCorrection's refusal of a
+	// reverse-then-correct (ADR-042). The flag is ledger_entry's; sql.ErrNoRows is
+	// a row of another fund or none.
+	ReversedFlagForTransaction(ctx context.Context, arg ReversedFlagForTransactionParams) (int64, error)
 	// The sliding 30-day idle timeout (#113): every read that proves the session
 	// valid pushes expires_at forward by a caller-computed window. No absolute cap.
 	TouchSession(ctx context.Context, arg TouchSessionParams) (Session, error)

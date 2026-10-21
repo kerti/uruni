@@ -184,9 +184,9 @@ func TestGetDuesPaymentsSearchHitsMemberNameCaseInsensitiveIncludingAReversal(t 
 	paymentID := postOneDuesPayment(t, r, setup, memberID, "2026-08", "2026-08-01")
 	postOneDuesPayment(t, r, setup, otherMemberID, "2026-08", "2026-08-02")
 
-	reversalRec := postDuesPaymentReversal(t, r, paymentID, reverseDuesPaymentRequest{OccurredOn: "2026-08-10"})
+	reversalRec := postReversal(t, r, paymentID, reverseTransactionRequest{})
 	if reversalRec.Code != http.StatusCreated {
-		t.Fatalf("POST /api/dues-payments/{id}/reversal = %d, want %d (body: %s)", reversalRec.Code, http.StatusCreated, reversalRec.Body.String())
+		t.Fatalf("POST /api/transactions/{id}/reversal = %d, want %d (body: %s)", reversalRec.Code, http.StatusCreated, reversalRec.Body.String())
 	}
 	var reversal transactionResponse
 	if err := json.NewDecoder(reversalRec.Body).Decode(&reversal); err != nil {
@@ -221,9 +221,9 @@ func TestGetDuesPaymentsReversalAndOriginalAreLinkedBothWays(t *testing.T) {
 
 	paymentID := postOneDuesPayment(t, r, setup, memberID, "2026-08", "2026-08-01")
 
-	reversalRec := postDuesPaymentReversal(t, r, paymentID, reverseDuesPaymentRequest{OccurredOn: "2026-08-10"})
+	reversalRec := postReversal(t, r, paymentID, reverseTransactionRequest{})
 	if reversalRec.Code != http.StatusCreated {
-		t.Fatalf("POST /api/dues-payments/{id}/reversal = %d, want %d (body: %s)", reversalRec.Code, http.StatusCreated, reversalRec.Body.String())
+		t.Fatalf("POST /api/transactions/{id}/reversal = %d, want %d (body: %s)", reversalRec.Code, http.StatusCreated, reversalRec.Body.String())
 	}
 	var reversal transactionResponse
 	if err := json.NewDecoder(reversalRec.Body).Decode(&reversal); err != nil {
@@ -286,21 +286,23 @@ func TestGetDuesPaymentsReversalsOriginalOnAnotherPageStillCarriesReversesOccurr
 	// rows exist.
 	paymentID := postOneDuesPayment(t, r, setup, memberID, "2020-01", "2020-01-01")
 
-	// 25 more payments, each newer than the last (2026-01-01 onward), so page 1
-	// is entirely these and the original lands on page 2.
+	// 24 more payments, each newer than the last (2026-01-01 onward). The reversal
+	// takes the original's own day (ADR-042), so it sorts straight above its
+	// original: the 24 payments and the reversal fill page 1, and the original is
+	// the first row of page 2.
 	start, err := time.Parse("2006-01-02", "2026-01-01")
 	if err != nil {
 		t.Fatalf("parsing start date: %v", err)
 	}
-	for i := 0; i < 25; i++ {
+	for i := 0; i < 24; i++ {
 		date := start.AddDate(0, 0, i).Format("2006-01-02")
 		postOneDuesPayment(t, r, setup, memberID, periodAt(i+1), date)
 	}
 
-	// The reversal, newest of all, so it is the first row.
-	reversalRec := postDuesPaymentReversal(t, r, paymentID, reverseDuesPaymentRequest{OccurredOn: "2026-06-01"})
+	// The reversal, dated the original's day, so it is the last row of page 1.
+	reversalRec := postReversal(t, r, paymentID, reverseTransactionRequest{})
 	if reversalRec.Code != http.StatusCreated {
-		t.Fatalf("POST /api/dues-payments/{id}/reversal = %d, want %d (body: %s)", reversalRec.Code, http.StatusCreated, reversalRec.Body.String())
+		t.Fatalf("POST /api/transactions/{id}/reversal = %d, want %d (body: %s)", reversalRec.Code, http.StatusCreated, reversalRec.Body.String())
 	}
 	var reversal transactionResponse
 	if err := json.NewDecoder(reversalRec.Body).Decode(&reversal); err != nil {
@@ -311,15 +313,15 @@ func TestGetDuesPaymentsReversalsOriginalOnAnotherPageStillCarriesReversesOccurr
 	if len(page1.DuesPayments) != duesPaymentsPageSize {
 		t.Fatalf("page 1 = %d rows, want %d", len(page1.DuesPayments), duesPaymentsPageSize)
 	}
-	if page1.DuesPayments[0].ID != reversal.ID {
-		t.Fatalf("page 1 row 0 = id %d, want the reversal %d (newest)", page1.DuesPayments[0].ID, reversal.ID)
+	if last := page1.DuesPayments[len(page1.DuesPayments)-1]; last.ID != reversal.ID {
+		t.Fatalf("page 1's last row = id %d, want the reversal %d (it sits above its original)", last.ID, reversal.ID)
 	}
 	for _, row := range page1.DuesPayments {
 		if row.ID == paymentID {
 			t.Fatalf("the original payment (id %d) is on page 1 - this test's fixture must push it to page 2", paymentID)
 		}
 	}
-	reversalRow := page1.DuesPayments[0]
+	reversalRow := page1.DuesPayments[len(page1.DuesPayments)-1]
 	if reversalRow.ReversesOccurredOn == nil || *reversalRow.ReversesOccurredOn != "2020-01-01" {
 		t.Errorf("reversal reverses_occurred_on = %v, want %q - the original's date, even though it is on page 2", reversalRow.ReversesOccurredOn, "2020-01-01")
 	}

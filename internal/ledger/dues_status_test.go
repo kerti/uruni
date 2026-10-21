@@ -1498,8 +1498,8 @@ func TestDuesStatusForPeriodPaidThroughIgnoresAReversedPayment(t *testing.T) {
 	ctx := context.Background()
 
 	december := p.posted[2] // posted in Periods order
-	if _, err := p.l.ReverseDuesPayment(ctx, ReverseDuesPaymentParams{FundID: p.f.fundID, TransactionID: december.ID, OccurredOn: "2026-10-02"}); err != nil {
-		t.Fatalf("ReverseDuesPayment = %v, want no error", err)
+	if _, err := p.l.ReverseTransaction(ctx, ReverseTransactionParams{FundID: p.f.fundID, TransactionID: december.ID}); err != nil {
+		t.Fatalf("ReverseTransaction = %v, want no error", err)
 	}
 
 	got := p.october(t)

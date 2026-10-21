@@ -352,7 +352,7 @@ describe('TransactionList contribution reversal (ADR-034, #211, #333)', () => {
     await userEvent.click(screen.getByRole('button', { name: text.reverseConfirm }))
 
     await waitFor(() => expect(onContributionReversed).toHaveBeenCalledTimes(1))
-    expect(fetchMock).toHaveBeenCalledWith('/api/dues-payments/30/reversal', expect.objectContaining({ method: 'POST' }))
+    expect(fetchMock).toHaveBeenCalledWith('/api/transactions/30/reversal', expect.objectContaining({ method: 'POST' }))
   })
 
   it('renders no reversal control on an ordinary row with no member', () => {
@@ -381,7 +381,7 @@ describe('TransactionList contribution reversal (ADR-034, #211, #333)', () => {
   it('shows the sumbangan wording, not the iuran one, for a repeat reversal', async () => {
     vi.stubGlobal(
       'fetch',
-      vi.fn(() => Promise.resolve(jsonResponse({ error: { code: 'dues_payment_already_reversed', message: 'x' } }, 409))),
+      vi.fn(() => Promise.resolve(jsonResponse({ error: { code: 'transaction_already_reversed', message: 'x' } }, 409))),
     )
 
     renderReversible([transaction({ id: 34, purpose_id: 2, member_id: 9, member_name: 'Budi' })])
@@ -389,8 +389,8 @@ describe('TransactionList contribution reversal (ADR-034, #211, #333)', () => {
     await userEvent.click(screen.getByRole('button', { name: text.reverse }))
     await userEvent.click(screen.getByRole('button', { name: text.reverseConfirm }))
 
-    expect(await screen.findByText(text.errors.dues_payment_already_reversed)).toBeInTheDocument()
-    expect(screen.queryByText(copy.common.errors.dues_payment_already_reversed)).not.toBeInTheDocument()
+    expect(await screen.findByText(text.errors.transaction_already_reversed)).toBeInTheDocument()
+    expect(screen.queryByText(copy.common.errors.transaction_already_reversed)).not.toBeInTheDocument()
   })
 
   it('renders no reversal control at all where no handler is passed', () => {

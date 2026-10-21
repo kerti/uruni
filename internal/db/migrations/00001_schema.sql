@@ -275,13 +275,13 @@ CREATE TABLE "transaction" (              -- the ledger. insert-only.
   dues_period      TEXT,                  -- 'YYYY-MM'; several months paid at once = several rows
   reimbursement_id INTEGER,               -- the settling payout
   transfer_id      INTEGER,
-  reverses_transaction_id INTEGER,        -- the dues payment this adjustment reverses (ADR-029)
+  reverses_transaction_id INTEGER,        -- the dues or normal row this adjustment reverses (ADR-029, ADR-042)
   note        TEXT,
   created_at  INTEGER NOT NULL,
   UNIQUE (fund_id, id),
   -- Six composite FKs: each stops a transaction borrowing another fund's row,
   -- which a single-column REFERENCES would allow. The reverses_transaction_id
-  -- one stops naming another fund's row as the payment being reversed (ADR-029).
+  -- one stops naming another fund's row as the row being reversed (ADR-029).
   FOREIGN KEY (fund_id, account_id)       REFERENCES account(fund_id, id),
   FOREIGN KEY (fund_id, purpose_id)       REFERENCES purpose(fund_id, id),
   FOREIGN KEY (fund_id, member_id)        REFERENCES member(fund_id, id),
@@ -307,16 +307,19 @@ CREATE TABLE "transaction" (              -- the ledger. insert-only.
   -- ...and the column guards itself the other way: nothing that is not a
   -- reversal may claim to reverse anything. Without this, a kind='normal' row
   -- with no member and no period satisfies the CHECK above yet sets
-  -- reverses_transaction_id - which would hide the original dues payment from
-  -- DuesPaidByPeriod (which reads ledger_entry.reversed, and that only asks
-  -- whether *something* points at the row) and consume the reversed-once slot, so the genuine reversal could
+  -- reverses_transaction_id - which would hide the original row from every
+  -- read of ledger_entry.reversed (that only asks whether *something* points
+  -- at the row) and consume the reversed-once slot, so the genuine reversal could
   -- never be posted. The schema makes that row unrepresentable (ADR-029).
-  -- dues_period is deliberately not required here (ADR-034): reversing a named
-  -- contribution carries none, reversing a dues payment must - which the
-  -- trigger below checks against the reversed row, as this CHECK cannot.
-  CHECK (reverses_transaction_id IS NULL
-         OR (kind = 'adjustment' AND direction = 'out'
-             AND member_id IS NOT NULL)),
+  -- Only the kind is pinned here (ADR-042): a reversal goes the OTHER way from
+  -- the row it reverses, which a CHECK cannot see, so direction, amount and
+  -- location are the trigger's job below. dues_period is deliberately not
+  -- required either (ADR-034): reversing a named contribution carries none,
+  -- reversing a dues payment must - which the trigger checks against the
+  -- reversed row, as this CHECK cannot. An unnamed reversal satisfies the
+  -- "no member, no period" disjunct above; a named one is always an 'out'
+  -- (it reverses a named 'in' row), so the disjunct above keeps its 'out'.
+  CHECK (reverses_transaction_id IS NULL OR kind = 'adjustment'),
   CHECK (kind <> 'reimbursement' OR (reimbursement_id IS NOT NULL AND direction = 'out')),
   CHECK (kind <> 'transfer'      OR transfer_id IS NOT NULL)
   -- kind='adjustment' otherwise requires nothing extra: an ordinary correction
@@ -336,18 +339,25 @@ CREATE TRIGGER transaction_named_row_shape BEFORE INSERT ON "transaction" BEGIN
   WHERE NEW.kind = 'normal' AND NEW.member_id IS NOT NULL
     AND NOT EXISTS (SELECT 1 FROM purpose WHERE id = NEW.purpose_id AND kind = 'incidental');
 
-  -- A reversal (ADR-029, ADR-034) must target a dues payment or a named
-  -- contribution and carry that row's member_id and dues_period exactly, never
-  -- re-typed by the caller: a dues reversal keeps its period, a contribution
-  -- reversal carries none. "o.dues_period IS NEW.dues_period" is NULL-safe
-  -- equality.
-  SELECT RAISE(ABORT, 'a reversal must target a dues payment or a named contribution, carrying its member and period')
+  -- A reversal (ADR-029, ADR-034, ADR-042) must target a dues payment or a
+  -- normal row, go the other way, and copy that row's amount, location, member
+  -- and period exactly, never re-typed by the caller: a dues reversal keeps its
+  -- period, a contribution reversal carries none, a reversal of an unnamed row
+  -- carries no member. "IS" is NULL-safe equality: true for two unnamed rows and
+  -- for two equal members, where "=" is NULL and would refuse the unnamed case.
+  -- The purpose is the one copied field not checked: the effective purpose is a
+  -- fold over correction pairs, which a trigger could only restate. Nor is the
+  -- date: a restore keeps this trigger on, and a reversal already in a live file
+  -- may predate its original, which a date rule here would refuse.
+  SELECT RAISE(ABORT, 'a reversal must reverse a dues payment or a normal transaction: the other way, same amount and location, same member and period')
   WHERE NEW.reverses_transaction_id IS NOT NULL
     AND NOT EXISTS (
       SELECT 1 FROM "transaction" o
       WHERE o.id = NEW.reverses_transaction_id
-        AND o.member_id = NEW.member_id AND o.dues_period IS NEW.dues_period
-        AND (o.kind = 'dues' OR (o.kind = 'normal' AND o.member_id IS NOT NULL))
+        AND o.kind IN ('dues', 'normal')
+        AND o.direction <> NEW.direction
+        AND o.amount = NEW.amount AND o.account_id = NEW.account_id
+        AND o.member_id IS NEW.member_id AND o.dues_period IS NEW.dues_period
     );
 END;
 -- +goose StatementEnd
@@ -355,8 +365,9 @@ END;
 -- "Settle once" as a constraint, not prose. Partial, so other kinds are free.
 CREATE UNIQUE INDEX reimbursement_settled_once ON "transaction"(reimbursement_id) WHERE kind = 'reimbursement';
 
--- A dues payment is reversible at most once (ADR-029); partial, same shape as
--- reimbursement_settled_once.
+-- A row is reversible at most once (ADR-029, ADR-042); partial, same shape as
+-- reimbursement_settled_once. The name predates ADR-042 and stays: it is the
+-- index, and renaming it would rewrite drafts that quote it.
 CREATE UNIQUE INDEX dues_payment_reversed_once ON "transaction"(reverses_transaction_id) WHERE reverses_transaction_id IS NOT NULL;
 
 -- One opening entry per account: nothing else stops a second opening row, and
@@ -490,7 +501,7 @@ CREATE INDEX reconciliation_by_date ON reconciliation(fund_id, performed_at, id)
 --                        happened yet.
 --   reversed             1 when any reversal points at this row, else 0: the
 --                        flag a read that is not dated filters on, and the one
---                        reversal (ADR-042) will rely on.
+--                        reversal (ADR-042) relies on.
 --   effective_purpose_id (#628) the tag this row's money is under NOW (ADR-033): its
 --                        own purpose_id until a purpose correction moves it, then the
 --                        end of the path its corrections walk. Each correction

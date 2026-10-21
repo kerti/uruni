@@ -570,10 +570,10 @@ func TestMonthlyReportDuesReversalIsShownAndNetsAgainstThePaymentInTotalMasuk(t 
 	if err != nil {
 		t.Fatalf("PostDuesPayments() = %v, want no error", err)
 	}
-	if _, err := l.ReverseDuesPayment(ctx, ReverseDuesPaymentParams{
-		FundID: s.f.fundID, TransactionID: paid[0].ID, OccurredOn: "2026-09-22",
+	if _, err := l.ReverseTransaction(ctx, ReverseTransactionParams{
+		FundID: s.f.fundID, TransactionID: paid[0].ID,
 	}); err != nil {
-		t.Fatalf("ReverseDuesPayment() = %v, want no error", err)
+		t.Fatalf("ReverseTransaction() = %v, want no error", err)
 	}
 
 	r := monthlyReport(t, l, ReportParams{FundID: s.f.fundID, Month: "2026-09", MemberID: &s.memberThree})

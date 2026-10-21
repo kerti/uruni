@@ -103,15 +103,6 @@ var windowRoutes = []windowRoute{
 		return callJSON(t, e.r, "POST", "/api/dues-payments", map[string]any{
 			"account_id": e.cash, "member_id": e.member, "occurred_on": "2026-08-30", "periods": []map[string]any{{"dues_period": d, "amount": 1000}}})
 	}},
-	{"POST /api/dues-payments/{id}/reversal", wEntry, func(t *testing.T, e *windowEnv, d string) *httptest.ResponseRecorder {
-		rec := callJSON(t, e.r, "POST", "/api/dues-payments", map[string]any{
-			"account_id": e.cash, "member_id": e.member, "occurred_on": "2026-08-30", "periods": []map[string]any{{"dues_period": "2026-08", "amount": 1000}}})
-		var posted []map[string]any
-		if err := json.Unmarshal(rec.Body.Bytes(), &posted); err != nil || len(posted) != 1 {
-			t.Fatalf("dues payment for the reversal = %d %s", rec.Code, rec.Body.String())
-		}
-		return callJSON(t, e.r, "POST", fmt.Sprintf("/api/dues-payments/%d/reversal", idOf(posted[0], "id")), map[string]any{"occurred_on": d})
-	}},
 	{"POST /api/transfers", wEntry, func(t *testing.T, e *windowEnv, d string) *httptest.ResponseRecorder {
 		return callJSON(t, e.r, "POST", "/api/transfers", map[string]any{
 			"purpose_id": e.main, "from_account_id": e.cash, "to_account_id": e.bank, "amount": 1000, "occurred_on": d})

@@ -530,18 +530,18 @@ func TestPostPurposeCorrectionRejectsDuesReversal(t *testing.T) {
 		t.Fatalf("PostDuesPayments() = %v, want no error", err)
 	}
 
-	reversal, err := l.ReverseDuesPayment(ctx, ReverseDuesPaymentParams{
-		FundID: f.fundID, TransactionID: posted[0].ID, OccurredOn: "2026-09-06",
+	reversal, err := l.ReverseTransaction(ctx, ReverseTransactionParams{
+		FundID: f.fundID, TransactionID: posted[0].ID,
 	})
 	if err != nil {
-		t.Fatalf("ReverseDuesPayment() = %v, want no error", err)
+		t.Fatalf("ReverseTransaction() = %v, want no error", err)
 	}
 
 	_, err = l.PostPurposeCorrection(ctx, PostPurposeCorrectionParams{
 		FundID: f.fundID, TransactionID: reversal.ID, PurposeID: f.passID,
 	})
-	if !errors.Is(err, ErrPurposeCorrectionDuesReversal) {
-		t.Errorf("PostPurposeCorrection(dues reversal) = %v, want ErrPurposeCorrectionDuesReversal", err)
+	if !errors.Is(err, ErrPurposeCorrectionReversal) {
+		t.Errorf("PostPurposeCorrection(dues reversal) = %v, want ErrPurposeCorrectionReversal", err)
 	}
 }
 

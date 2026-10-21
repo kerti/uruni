@@ -482,10 +482,10 @@ func TestCorrectionsOnARowOfARetiredLocationStillWork(t *testing.T) {
 		t.Fatalf("bank balance before correcting = %d, want 185000", before.bank)
 	}
 
-	if _, err := w.l.ReverseDuesPayment(ctx, ReverseDuesPaymentParams{
-		FundID: w.fundID, TransactionID: paid[0].ID, OccurredOn: "2026-09-12",
+	if _, err := w.l.ReverseTransaction(ctx, ReverseTransactionParams{
+		FundID: w.fundID, TransactionID: paid[0].ID,
 	}); err != nil {
-		t.Fatalf("ReverseDuesPayment(row on a retired location) = %v, want no error", err)
+		t.Fatalf("ReverseTransaction(row on a retired location) = %v, want no error", err)
 	}
 	if _, err := w.l.PostPurposeCorrection(ctx, PostPurposeCorrectionParams{
 		FundID: w.fundID, TransactionID: spent.ID, PurposeID: w.passID,

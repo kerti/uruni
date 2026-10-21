@@ -257,9 +257,7 @@ func TestMonthlyReportLastDayBoundaries(t *testing.T) {
 	}
 	reverse := func(tx store.Transaction, on string) {
 		t.Helper()
-		if _, err := l.ReverseDuesPayment(ctx, ReverseDuesPaymentParams{FundID: f.fundID, TransactionID: tx.ID, OccurredOn: on}); err != nil {
-			t.Fatalf("ReverseDuesPayment() = %v, want no error", err)
-		}
+		postReversalOn(t, l, f.fundID, tx.ID, on)
 	}
 	waive := func(id int64, on string) {
 		t.Helper()

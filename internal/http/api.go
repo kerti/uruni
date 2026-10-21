@@ -195,6 +195,11 @@ func (a *api) routes(r chi.Router) {
 		// /api/incidentals/{purposeID}/close. It wraps Ledger.PostPurposeCorrection,
 		// not a second write path into PostTransaction (ADR-027).
 		r.Post("/transactions/{id}/purpose-correction", a.postPurposeCorrection)
+		// Reversing a dues payment or a normal transaction with one linked entry going
+		// the other way (ADR-042), through Ledger.ReverseTransaction. It replaced POST
+		// /api/dues-payments/{id}/reversal, removed with no alias. Once-only by the
+		// schema, so it carries no idempotency key (ADR-043).
+		r.Post("/transactions/{id}/reversal", a.reverseTransaction)
 		// Moving money between accounts without changing the fund's total (PRD
 		// section 6). No GET: the two legs are ordinary transaction rows and surface
 		// through GET /api/transactions.
@@ -218,7 +223,6 @@ func (a *api) routes(r chi.Router) {
 		r.Post("/reimbursements/{id}/settle", a.settleReimbursement)
 
 		r.Post("/dues-payments", a.createDuesPayment)
-		r.Post("/dues-payments/{id}/reversal", a.reverseDuesPayment)
 		// Dues payment history (#228, PRD section 7.3): every posted payment and
 		// reversal, newest-first, searchable by member name. GET /dues-status
 		// answers one period at a time and never lists what was posted.
