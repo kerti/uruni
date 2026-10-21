@@ -20,26 +20,11 @@ WHERE fund_id = ?
 ORDER BY id;
 
 -- The effective peruntukan (ADR-033, #411): the tag this row's money is under
--- now. Each correction moves the whole row to a new tag, so its corrections
--- form a path starting at the stored purpose_id; the tag it ends on is the one
--- the money entered once more than it left, counting the stored tag as the
--- start. That needs no ordering of corrections (transfer ids are not an order
--- to rely on), and a row corrected and then corrected back ends where it began.
---
--- Which leg is "entering" depends on the row's direction: PostPurposeCorrection
--- puts the target on the leg moving the same way as the row, so
--- leg.direction = t.direction reads back what it wrote. A row nothing corrects
--- answers its own purpose_id.
+-- now. It is defined once, as ledger_entry.effective_purpose_id (the schema
+-- file has the reasoning: a path of corrections, no ordering of them, a row
+-- corrected and corrected back ends where it began), and this query only reads
+-- it. A row nothing corrects answers its own purpose_id.
 -- name: EffectivePurposeForTransaction :one
-SELECT CAST(COALESCE((
-  SELECT leg.purpose_id
-  FROM transfer c
-  JOIN "transaction" leg ON leg.transfer_id = c.id
-  WHERE c.corrects_transaction_id = t.id
-  GROUP BY leg.purpose_id
-  HAVING SUM(CASE WHEN leg.direction = t.direction THEN 1 ELSE -1 END)
-         + (leg.purpose_id = t.purpose_id) = 1
-  LIMIT 1
-), t.purpose_id) AS INTEGER) AS effective_purpose_id
-FROM "transaction" t
-WHERE t.fund_id = ? AND t.id = ?;
+SELECT effective_purpose_id
+FROM ledger_entry
+WHERE fund_id = ? AND id = ?;

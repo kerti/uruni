@@ -137,6 +137,32 @@ func TestCheckSchemaCoversTheLedgerEntryView(t *testing.T) {
 	}
 }
 
+// The view as #627 shipped it, without effective_purpose_id (#628): the database
+// an older build left behind. goose still reports every migration applied, so the
+// boot guard is the only thing that notices the view is the old one.
+func TestCheckSchemaRefusesALedgerEntryWithoutTheEffectivePurpose(t *testing.T) {
+	t.Parallel()
+	sqlDB := migratedDB(t)
+	mustExec(t, sqlDB, `DROP VIEW ledger_entry`)
+	mustExec(t, sqlDB, `CREATE VIEW ledger_entry AS
+SELECT t.id, t.fund_id, t.account_id, t.purpose_id, t.direction, t.amount, t.occurred_on, t.kind,
+       t.member_id, t.dues_period, t.reimbursement_id, t.transfer_id, t.reverses_transaction_id,
+       t.note, t.created_at,
+       CAST(CASE WHEN t.direction = 'in' THEN t.amount ELSE -t.amount END AS INTEGER) AS signed_amount,
+       (SELECT r.id FROM "transaction" r WHERE r.reverses_transaction_id = t.id) AS reversed_by_transaction_id,
+       (SELECT r.occurred_on FROM "transaction" r WHERE r.reverses_transaction_id = t.id) AS reversed_on,
+       CAST(EXISTS (SELECT 1 FROM "transaction" r WHERE r.reverses_transaction_id = t.id) AS INTEGER) AS reversed
+FROM "transaction" t`)
+
+	diff := checkSchema(t, sqlDB)
+	if strings.Join(diff.Changed, "|") != "view ledger_entry" {
+		t.Errorf("Changed = %v, want [view ledger_entry]", diff.Changed)
+	}
+	if len(diff.Missing) != 0 || len(diff.Unexpected) != 0 {
+		t.Errorf("Missing = %v, Unexpected = %v, want both empty", diff.Missing, diff.Unexpected)
+	}
+}
+
 func TestCheckSchemaDetectsAnUnexpectedObject(t *testing.T) {
 	t.Parallel()
 	sqlDB := migratedDB(t)

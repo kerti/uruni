@@ -146,16 +146,10 @@ type Querier interface {
 	// from "paid" rather than counting twice.
 	DuesPaidByPeriod(ctx context.Context, arg DuesPaidByPeriodParams) ([]DuesPaidByPeriodRow, error)
 	// The effective peruntukan (ADR-033, #411): the tag this row's money is under
-	// now. Each correction moves the whole row to a new tag, so its corrections
-	// form a path starting at the stored purpose_id; the tag it ends on is the one
-	// the money entered once more than it left, counting the stored tag as the
-	// start. That needs no ordering of corrections (transfer ids are not an order
-	// to rely on), and a row corrected and then corrected back ends where it began.
-	//
-	// Which leg is "entering" depends on the row's direction: PostPurposeCorrection
-	// puts the target on the leg moving the same way as the row, so
-	// leg.direction = t.direction reads back what it wrote. A row nothing corrects
-	// answers its own purpose_id.
+	// now. It is defined once, as ledger_entry.effective_purpose_id (the schema
+	// file has the reasoning: a path of corrections, no ordering of them, a row
+	// corrected and corrected back ends where it began), and this query only reads
+	// it. A row nothing corrects answers its own purpose_id.
 	EffectivePurposeForTransaction(ctx context.Context, arg EffectivePurposeForTransactionParams) (int64, error)
 	// The public report's reads (ADR-035, #372): read-only, fund-scoped, and none
 	// orders by primary key - a month is read by date, ties left unordered on
@@ -599,9 +593,9 @@ type Querier interface {
 	//     from it.
 	//   - effective_purpose_id: the tag this row's money is under NOW - its own
 	//     purpose_id until a correction (ADR-033) moves it, then the end of the
-	//     path its corrections walk (EffectivePurposeForTransaction; transfer.sql
-	//     has the reasoning, #411). COALESCEd to t.purpose_id, so an uncorrected
-	//     row answers itself and "has this been corrected?" is effective <> stored.
+	//     path its corrections walk. Read from ledger_entry, which defines it once
+	//     (#628; the schema file has the reasoning, #411). An uncorrected row
+	//     answers itself and "has this been corrected?" is effective <> stored.
 	//
 	//     The list keeps rendering the STORED tag (ADR-033): the ledger sums stored
 	//     tags, so showing the effective one would put the screen out of step with
