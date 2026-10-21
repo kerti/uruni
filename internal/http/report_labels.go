@@ -41,12 +41,16 @@ func (c reportCopy) entryLabel(e ledger.ReportEntry) string {
 		return member
 	case "adjustment":
 		// A reversal first: a dues reversal carries a period, a contribution reversal
-		// never does. Every other adjustment (a cek kas fix, or one posted alone) is
+		// names a member and has no period, and the reversal of an unnamed row names
+		// nobody at all (ADR-042). Every other adjustment (a cek kas fix, or one posted alone) is
 		// "Penyesuaian", its line in the month's walk (ADR-038); the report says no
 		// more, never naming the location.
 		if e.IsReversal {
 			if e.DuesPeriod != nil {
 				return c.RowDuesReversal(period, member)
+			}
+			if e.MemberName == nil {
+				return c.RowReversal
 			}
 			return c.RowContributionReversal(member)
 		}

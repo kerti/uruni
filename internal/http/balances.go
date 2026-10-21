@@ -40,8 +40,9 @@ type balancesResponse struct {
 	Month monthInOutResponse `json:"month"`
 }
 
-// monthInOutResponse is the running month's In (net of reversals, so it can
-// be negative) and Out (a magnitude), in integer rupiah.
+// monthInOutResponse is the running month's In (net of the reversals of income)
+// and Out (net of the reversals of spending), in integer rupiah. Either can be
+// negative (ADR-042), but only after a cek kas counted the original.
 type monthInOutResponse struct {
 	In  int64 `json:"in"`
 	Out int64 `json:"out"`

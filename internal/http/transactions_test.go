@@ -728,9 +728,9 @@ func TestGetTransactionsMemberIDAndDuesPeriodFiltersIncludeTheReversal(t *testin
 		t.Fatalf("POST /api/dues-payments (other member) = %d, want %d (body: %s)", rec.Code, http.StatusCreated, rec.Body.String())
 	}
 
-	revRec := postDuesPaymentReversal(t, r, payment[0].ID, reverseDuesPaymentRequest{OccurredOn: "2026-08-20"})
+	revRec := postReversal(t, r, payment[0].ID, reverseTransactionRequest{})
 	if revRec.Code != http.StatusCreated {
-		t.Fatalf("POST /api/dues-payments/{id}/reversal = %d, want %d (body: %s)", revRec.Code, http.StatusCreated, revRec.Body.String())
+		t.Fatalf("POST /api/transactions/{id}/reversal = %d, want %d (body: %s)", revRec.Code, http.StatusCreated, revRec.Body.String())
 	}
 	var reversal transactionResponse
 	if err := json.NewDecoder(revRec.Body).Decode(&reversal); err != nil {
@@ -999,7 +999,7 @@ func TestGetTransactionsDuesReversalCarriesMemberName(t *testing.T) {
 		t.Fatalf("decoding dues payment response: %v", err)
 	}
 
-	revRec := postDuesPaymentReversal(t, r, posted[0].ID, reverseDuesPaymentRequest{OccurredOn: "2026-08-13"})
+	revRec := postReversal(t, r, posted[0].ID, reverseTransactionRequest{})
 	if revRec.Code != http.StatusCreated {
 		t.Fatalf("POST reversal = %d, want %d (body: %s)", revRec.Code, http.StatusCreated, revRec.Body.String())
 	}

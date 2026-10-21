@@ -289,6 +289,25 @@ func buildFixture(t *testing.T, sqlDB *sql.DB, uploadsDir string) {
 		t.Fatalf("CreateReceipt: %v", err)
 	}
 
+	// An ordinary, unnamed row and its reversal (ADR-042): the reversal goes the
+	// other way, same amount and location, no member and no period, which only the
+	// null-safe trigger lets in. They net to nothing on cash. (The cross-pos pair,
+	// a purpose-corrected row reversed, is restore_test.go's own round trip, so this
+	// fixture's transfer count stays three.)
+	ordinary, err := q.CreateTransaction(ctx, store.CreateTransactionParams{
+		FundID: fund.ID, AccountID: cash.ID, PurposeID: main.ID, Direction: "in", Amount: 8000,
+		OccurredOn: "2026-02-05", Kind: "normal", CreatedAt: 1700000402,
+	})
+	if err != nil {
+		t.Fatalf("CreateTransaction(ordinary in): %v", err)
+	}
+	if _, err := q.CreateTransaction(ctx, store.CreateTransactionParams{
+		FundID: fund.ID, AccountID: cash.ID, PurposeID: main.ID, Direction: "out", Amount: 8000,
+		OccurredOn: "2026-02-05", Kind: "adjustment", ReversesTransactionID: &ordinary.ID, CreatedAt: 1700000403,
+	}); err != nil {
+		t.Fatalf("CreateTransaction(ordinary reversal): %v", err)
+	}
+
 	// A reconciliation with one matched and one left-open line.
 	recon, err := q.CreateReconciliation(ctx, store.CreateReconciliationParams{
 		FundID: fund.ID, PerformedAt: 1700001000, Note: nil, CreatedAt: 1700001000,
@@ -297,7 +316,8 @@ func buildFixture(t *testing.T, sqlDB *sql.DB, uploadsDir string) {
 		t.Fatalf("CreateReconciliation: %v", err)
 	}
 	// Cash: 500000 (opening) + 50000 (dues) - 50000 (reversal) + 30000
-	// (contribution) - 100000 (transfer out) - 20000 (reimbursement) = 410000.
+	// (contribution) - 100000 (transfer out) - 20000 (reimbursement) = 410000;
+	// the ordinary reversal above nets to nothing.
 	if _, err := q.CreateReconciliationLine(ctx, store.CreateReconciliationLineParams{
 		FundID: fund.ID, ReconciliationID: recon.ID, AccountID: cash.ID,
 		RecordedAmount: 410000, ActualAmount: 410000, DifferenceAmount: 0, Resolution: "matched",

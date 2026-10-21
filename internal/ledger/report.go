@@ -150,9 +150,11 @@ type ReportLine string
 const (
 	// ReportLineOpening is an opening entry: Saldo awal.
 	ReportLineOpening ReportLine = "opening"
-	// ReportLineIn is income, and a reversal, which counts there as a minus.
+	// ReportLineIn is income, and the reversal of income (a reversal going out),
+	// which counts there as a minus.
 	ReportLineIn ReportLine = "in"
-	// ReportLineOut is spending.
+	// ReportLineOut is spending, and the reversal of spending (a reversal going
+	// in), which counts there as a minus (ADR-042).
 	ReportLineOut ReportLine = "out"
 	// ReportLineAdjustment is every adjustment that is not a reversal.
 	ReportLineAdjustment ReportLine = "adjustment"
@@ -178,7 +180,8 @@ type ReportEntry struct {
 	DuesPeriod *string
 
 	// IsReversal marks a reversal (kind adjustment): of a dues payment when
-	// DuesPeriod is set, of a named contribution when it is not.
+	// DuesPeriod is set, of a named contribution when it names a member and has
+	// no period, of an unnamed ordinary row when it names neither (ADR-042).
 	IsReversal bool
 
 	// Note is what the treasurer typed. On a settled claim's payout, whose note
@@ -218,7 +221,9 @@ type ReportMove struct {
 //
 //	Start + Openings + In - Out + Adjustments + Moved = End
 //
-// In is net of reversals, so it can read below zero; Adjustments and Moved
+// In is net of the reversals of income and Out of the reversals of spending
+// (ADR-042), so either can read below zero, but only after a cek kas counted
+// the original and its reversal landed in a later month; Adjustments and Moved
 // are signed. Start and End are ledger sums (the bounded fund or purpose
 // balance), never computed from the lines, so the equation is a property the
 // tests assert, not something the report forces or checks at runtime (a
@@ -601,7 +606,8 @@ func envelopeOpenAt(e store.Incidental, through *string) bool {
 // shows them (ADR-038): the figures the report's running month carries as
 // Walk.In and Walk.Out, read through the same reportRows over the same
 // unbounded, unfiltered month. The month is read from now in the fund's time zone. In
-// is net of reversals and so can be negative; Out is a magnitude.
+// is net of the reversals of income and Out of the reversals of spending, so
+// either can be negative (ADR-042); Out is otherwise a magnitude.
 func (l *Ledger) MonthInOut(ctx context.Context, fundID int64, now time.Time) (in, out money.Amount, err error) {
 	if now.IsZero() {
 		now = time.Now()
@@ -740,8 +746,11 @@ func (e ReportEntry) signed() (money.Amount, error) {
 	return money.Amount(0).Sub(e.Amount)
 }
 
-// add lands one entry on its line of the walk. A reversal is stored out and
-// lands on In as a minus; an adjustment is signed by its direction.
+// add lands one entry on its line of the walk. A reversal lands on its
+// original's line with its own signed effect (ADR-042): the reversal of income
+// is stored out and lands on In as a minus; the reversal of spending is stored
+// in and subtracts from Out, a magnitude. An adjustment is signed by its
+// direction.
 func (w *ReportWalk) add(e ReportEntry) error {
 	signed, err := e.signed()
 	if err != nil {
@@ -754,7 +763,12 @@ func (w *ReportWalk) add(e ReportEntry) error {
 		w.In, err = w.In.Add(signed)
 	case ReportLineOut:
 		// Out is a magnitude: spending, shown positive and subtracted by the walk.
-		w.Out, err = w.Out.Add(e.Amount)
+		// The reversal of spending takes its amount back off it.
+		if e.IsReversal {
+			w.Out, err = w.Out.Sub(e.Amount)
+		} else {
+			w.Out, err = w.Out.Add(e.Amount)
+		}
 	case ReportLineAdjustment:
 		w.Adjustments, err = w.Adjustments.Add(signed)
 	default:
@@ -777,6 +791,12 @@ func classifyReportRow(kind, direction string, reverses bool) (ReportLine, error
 		return ReportLineOut, nil
 	case "adjustment":
 		if reverses {
+			// The line follows the reversal's own direction, so no join to the
+			// original is needed: going out it reverses income (a minus on Total
+			// masuk), going in it reverses spending (a minus on Total keluar).
+			if direction == ReportDirectionIn {
+				return ReportLineOut, nil
+			}
 			return ReportLineIn, nil
 		}
 		return ReportLineAdjustment, nil
@@ -928,7 +948,7 @@ func moveMatches(p ReportParams, m ReportMove) bool {
 }
 
 // entryMatches applies the filters to one entry by its walk line (ADR-038): a
-// reversal filters as Uang masuk, and an opening or a Penyesuaian is neither
+// reversal filters as its own line (Uang keluar for the reversal of an out), and an opening or a Penyesuaian is neither
 // masuk nor keluar, so a direction or member filter hides it, as it hides a
 // move. A purpose filter matches the row's purpose; an opening is Kas Utama's.
 func entryMatches(p ReportParams, row store.ListReportTransactionsRow, e ReportEntry) bool {

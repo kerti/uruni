@@ -99,7 +99,7 @@ type SettleReimbursementParams struct {
 // error rather than closing a race: under ADR-004's SetMaxOpenConns(1) no
 // second connection can interleave a write, so neither is a lock or closes a
 // window the schema does not already close (as in
-// ErrDuesPaymentAlreadyReversed).
+// ErrAlreadyReversed).
 //
 //   - If the claim has WaivedOn set, ErrReimbursementWaived: a claim that
 //     will never be repaid cannot be settled.

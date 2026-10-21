@@ -77,18 +77,17 @@ export const copy = {
       // (CONTEXT.md: one word per concept) since both lists show the same two
       // row shapes.
       reverse: 'Batalkan sumbangan',
-      reverseDateLabel: 'Tanggal pembatalan',
       reverseNoteLabel: 'Alasan (opsional)',
       reverseConfirm: 'Ya, batalkan',
       reverseCancel: 'Jangan jadi',
       reverseSubmitting: 'Membatalkan…',
       reverseSuccess: 'Sumbangan dibatalkan.',
-      // Scoped ahead of copy.common.errors' dues_payment_already_reversed
+      // Scoped ahead of copy.common.errors' transaction_already_reversed
       // (ErrorState.tsx's fallback chain): the server answers the same 409 for
       // a repeat reversal on either path, and this list is the sumbangan one -
       // "iuran" would be the wrong noun.
       errors: {
-        dues_payment_already_reversed: 'Sumbangan ini sudah dibatalkan.',
+        transaction_already_reversed: 'Sumbangan ini sudah dibatalkan.',
       },
     },
     // The Talangan tab's search and paging (ADR-032). A narrower placeholder
@@ -259,7 +258,10 @@ export const copy = {
       purpose_correction_dues: 'Pos pembayaran iuran tidak bisa diperbaiki di sini.',
       purpose_correction_reimbursement: 'Pos talangan tidak bisa diperbaiki di sini — perbaiki lewat catatan talangannya.',
       purpose_correction_transfer: 'Pos hasil pindah tidak bisa diperbaiki lagi.',
-      purpose_correction_dues_reversal: 'Pos pembatalan iuran tidak bisa diperbaiki.',
+      // The refusal now covers every reversal, not only a dues one (ADR-042).
+      purpose_correction_reversal: 'Pos pembatalan tidak bisa diperbaiki.',
+      // Reverse-then-correct, reachable from a stale page (ADR-042).
+      purpose_correction_already_reversed: 'Transaksi ini sudah dibatalkan, posnya tidak bisa diperbaiki.',
       purpose_correction_target_closed: 'Amplop ini sudah ditutup — buka lagi dulu sebelum memindahkan transaksi ke sini.',
       purpose_correction_source_closed: 'Amplop ini sudah ditutup — buka lagi dulu sebelum memindahkan transaksi dari sini.',
       purpose_correction_noop: 'Baris ini sudah memakai pos itu.',
@@ -306,12 +308,13 @@ export const copy = {
       // purpose_correction_* codes above.
       purpose_correction_named_contribution:
         'Pos sumbangan yang sudah bernama tidak bisa diperbaiki di sini — batalkan sumbangannya, lalu catat lagi.',
-      // POST /api/dues-payments/{id}/reversal's named 409 for a second reversal
-      // of the same payment (ADR-029) - the shared fallback for the dues path.
+      // POST /api/transactions/{id}/reversal's named 409 for a second reversal of
+      // the same row (ADR-029, ADR-042) - the shared fallback, worded for the dues
+      // path, which still calls the route. Transaksi's own word is #631's.
       // The contribution path (ADR-034) speaks of a sumbangan:
       // copy.history.transactions.errors, checked first by that screen's error
       // mapper.
-      dues_payment_already_reversed: 'Pembayaran iuran ini sudah dibatalkan.',
+      transaction_already_reversed: 'Pembayaran iuran ini sudah dibatalkan.',
       // The receipt upload routes (internal/http/receipts.go's
       // processAndStoreReceipt) - a phone shooting HEIC by default gets its own
       // wording, as in the Go comment beside that code.
@@ -802,7 +805,6 @@ export const copy = {
       reversalRow: 'Pembatalan',
       reversedBadge: 'Sudah dibatalkan',
       reverse: 'Batalkan',
-      dateLabel: 'Tanggal pembatalan',
       noteLabel: 'Alasan (opsional)',
       // A yes to the question the open card is asking - short enough to share
       // one action row with Batal at 375px.

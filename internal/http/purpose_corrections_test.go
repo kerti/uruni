@@ -202,9 +202,9 @@ func TestPostPurposeCorrectionRefusalsHaveDistinctCodes(t *testing.T) {
 	transferLeg := findTransactionByKind(t, decodeTransactionsList(t, r), "transfer")
 
 	// A dues reversal: kind='adjustment' with reverses_transaction_id set.
-	reversalRec := postDuesPaymentReversal(t, r, duesPaymentID, reverseDuesPaymentRequest{OccurredOn: "2026-09-07"})
+	reversalRec := postReversal(t, r, duesPaymentID, reverseTransactionRequest{})
 	if reversalRec.Code != http.StatusCreated {
-		t.Fatalf("POST /api/dues-payments/{id}/reversal = %d, want %d (body: %s)", reversalRec.Code, http.StatusCreated, reversalRec.Body.String())
+		t.Fatalf("POST /api/transactions/{id}/reversal = %d, want %d (body: %s)", reversalRec.Code, http.StatusCreated, reversalRec.Body.String())
 	}
 	var reversal transactionResponse
 	if err := json.NewDecoder(reversalRec.Body).Decode(&reversal); err != nil {
@@ -265,7 +265,7 @@ func TestPostPurposeCorrectionRefusalsHaveDistinctCodes(t *testing.T) {
 		{"dues", duesPaymentID, titipan.ID, "purpose_correction_dues"},
 		{"reimbursement", settlement.ID, titipan.ID, "purpose_correction_reimbursement"},
 		{"transfer leg", transferLeg.ID, titipan.ID, "purpose_correction_transfer"},
-		{"dues reversal", reversal.ID, titipan.ID, "purpose_correction_dues_reversal"},
+		{"dues reversal", reversal.ID, titipan.ID, "purpose_correction_reversal"},
 		{"target closed", noopRow.ID, envelope.PurposeID, "purpose_correction_target_closed"},
 		{"source closed", sourceRow.ID, titipan.ID, "purpose_correction_source_closed"},
 		{"no-op", noopRow.ID, titipan.ID, "purpose_correction_noop"},

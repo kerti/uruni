@@ -4,7 +4,7 @@
 // First-run setup has a domain-level singleton guard: it refuses a second
 // fund (ErrFundAlreadyExists). It is not schema-backed (PRD section 6 allows
 // more than one fund in the model, so no UNIQUE index exists to collide with,
-// unlike ErrReimbursementAlreadySettled or ErrDuesPaymentAlreadyReversed in
+// unlike ErrReimbursementAlreadySettled or ErrAlreadyReversed in
 // internal/ledger/errors.go). So the in-process check is the entire guarantee,
 // and ADR-004's SetMaxOpenConns(1) protects one *sql.DB, not one database
 // file: nothing stops a second `uruni serve` opening the same file and

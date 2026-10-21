@@ -285,46 +285,6 @@ func (q *Queries) FundBalance(ctx context.Context, fundID int64) (int64, error) 
 	return balance_amount, err
 }
 
-const getDuesPaymentReversal = `-- name: GetDuesPaymentReversal :one
-SELECT id, fund_id, account_id, purpose_id, direction, amount, occurred_on, kind,
-       member_id, dues_period, reimbursement_id, transfer_id, reverses_transaction_id,
-       note, created_at
-FROM "transaction"
-WHERE fund_id = ? AND reverses_transaction_id = ?
-`
-
-type GetDuesPaymentReversalParams struct {
-	FundID                int64
-	ReversesTransactionID *int64
-}
-
-// The reversed-once pre-check, like GetReimbursementSettlement: sql.ErrNoRows
-// means "not yet reversed, proceed"; a row means it already has been. The
-// dues_payment_reversed_once index is the actual guarantee - this only turns a
-// raw constraint violation into a named error (ADR-029).
-func (q *Queries) GetDuesPaymentReversal(ctx context.Context, arg GetDuesPaymentReversalParams) (Transaction, error) {
-	row := q.db.QueryRowContext(ctx, getDuesPaymentReversal, arg.FundID, arg.ReversesTransactionID)
-	var i Transaction
-	err := row.Scan(
-		&i.ID,
-		&i.FundID,
-		&i.AccountID,
-		&i.PurposeID,
-		&i.Direction,
-		&i.Amount,
-		&i.OccurredOn,
-		&i.Kind,
-		&i.MemberID,
-		&i.DuesPeriod,
-		&i.ReimbursementID,
-		&i.TransferID,
-		&i.ReversesTransactionID,
-		&i.Note,
-		&i.CreatedAt,
-	)
-	return i, err
-}
-
 const getReimbursementSettlement = `-- name: GetReimbursementSettlement :one
 SELECT id, fund_id, account_id, purpose_id, direction, amount, occurred_on, kind,
        member_id, dues_period, reimbursement_id, transfer_id, note, created_at
@@ -374,6 +334,100 @@ func (q *Queries) GetReimbursementSettlement(ctx context.Context, arg GetReimbur
 		&i.TransferID,
 		&i.Note,
 		&i.CreatedAt,
+	)
+	return i, err
+}
+
+const getReversalTarget = `-- name: GetReversalTarget :one
+SELECT t.id, t.fund_id, t.account_id, t.purpose_id, t.direction, t.amount, t.occurred_on, t.kind,
+       t.member_id, t.dues_period, t.reimbursement_id, t.transfer_id, t.reverses_transaction_id,
+       t.note, t.created_at,
+       t.effective_purpose_id,
+       t.reversed,
+       CAST(EXISTS (SELECT 1 FROM reconciliation_line rl
+                    WHERE rl.fund_id = t.fund_id AND rl.adjustment_transaction_id = t.id) AS INTEGER) AS is_reconciliation_fix,
+       ei.closed_on AS effective_closed_on,
+       CAST(EXISTS (SELECT 1 FROM reconciliation rc
+                    WHERE rc.fund_id = t.fund_id AND rc.through_transaction_id >= t.id) AS INTEGER) AS counted
+FROM ledger_entry t
+LEFT JOIN incidental ei ON ei.purpose_id = t.effective_purpose_id
+WHERE t.fund_id = ? AND t.id = ?
+`
+
+type GetReversalTargetParams struct {
+	FundID int64
+	ID     int64
+}
+
+type GetReversalTargetRow struct {
+	ID                    int64
+	FundID                int64
+	AccountID             int64
+	PurposeID             int64
+	Direction             string
+	Amount                int64
+	OccurredOn            string
+	Kind                  string
+	MemberID              *int64
+	DuesPeriod            *string
+	ReimbursementID       *int64
+	TransferID            *int64
+	ReversesTransactionID *int64
+	Note                  *string
+	CreatedAt             int64
+	EffectivePurposeID    int64
+	Reversed              int64
+	IsReconciliationFix   int64
+	EffectiveClosedOn     *string
+	Counted               int64
+}
+
+// Everything Ledger.ReverseTransaction needs to decide one row's fate (ADR-042),
+// in one fund-scoped read, so the refusal and the date come from the same
+// facts the page's reversible flag is built from (ListTransactionsPage selects
+// the same four): a row of another fund reads as sql.ErrNoRows.
+//
+//	reversed        ledger_entry.reversed: something already reverses this row.
+//	                The reversed_once index is the guarantee; this turns it into
+//	                a named error.
+//	is_reconciliation_fix
+//	                a cek kas line names this row as its fix
+//	                (reconciliation_line.adjustment_transaction_id): reversing it
+//	                would leave the line's open remainder saying an entry the
+//	                ledger says never happened explains the gap.
+//	effective_closed_on
+//	                closed_on of the envelope the row's money is under NOW (the
+//	                effective purpose, ADR-033), NULL when that is not a closed
+//	                envelope. The reversal posts there.
+//	counted         some cek kas of the fund has counted this row:
+//	                through_transaction_id >= id. The one place the repo relies
+//	                on id order, because the cutoff's own meaning is id order
+//	                (ADR-024, ADR-012). A NULL cutoff (a count of an empty
+//	                ledger) compares NULL and counts nothing.
+func (q *Queries) GetReversalTarget(ctx context.Context, arg GetReversalTargetParams) (GetReversalTargetRow, error) {
+	row := q.db.QueryRowContext(ctx, getReversalTarget, arg.FundID, arg.ID)
+	var i GetReversalTargetRow
+	err := row.Scan(
+		&i.ID,
+		&i.FundID,
+		&i.AccountID,
+		&i.PurposeID,
+		&i.Direction,
+		&i.Amount,
+		&i.OccurredOn,
+		&i.Kind,
+		&i.MemberID,
+		&i.DuesPeriod,
+		&i.ReimbursementID,
+		&i.TransferID,
+		&i.ReversesTransactionID,
+		&i.Note,
+		&i.CreatedAt,
+		&i.EffectivePurposeID,
+		&i.Reversed,
+		&i.IsReconciliationFix,
+		&i.EffectiveClosedOn,
+		&i.Counted,
 	)
 	return i, err
 }
@@ -462,12 +516,9 @@ SELECT
     ELSE 0 END), 0) AS INTEGER) AS disbursed_amount
 FROM ledger_entry t
 LEFT JOIN transfer tr ON tr.id = t.transfer_id AND tr.kind = 'reclass_purpose'
-LEFT JOIN "transaction" o ON o.fund_id = tr.fund_id AND o.id = tr.corrects_transaction_id
+LEFT JOIN "transaction" o ON o.fund_id = t.fund_id AND o.id = COALESCE(tr.corrects_transaction_id, t.reverses_transaction_id)
 WHERE t.fund_id = ?1 AND t.purpose_id = ?2
   AND (tr.id IS NULL OR tr.corrects_transaction_id IS NOT NULL OR tr.reason = 'allocation')
-  AND t.reverses_transaction_id IS NULL
-  AND (t.reversed_on IS NULL
-       OR (CAST(?3 AS TEXT) IS NOT NULL AND t.reversed_on > CAST(?3 AS TEXT)))
   AND (CAST(?3 AS TEXT) IS NULL OR t.occurred_on <= CAST(?3 AS TEXT))
 `
 
@@ -491,11 +542,17 @@ type IncidentalActivityTotalsRow struct {
 // this screen has no reason to exclude. tr.id IS NULL keeps every row with no
 // reclass_purpose transfer; a correction's legs come back in below.
 //
-// A cancelled contribution (ADR-034's widened ADR-029 reversal) is dropped
-// whole: the reversal row and the row it reverses, by the same ledger_entry
-// reversed_on test as ContributedByIncidentalMember. Otherwise a cancellation
-// reads as money spent ("Terpakai") and the cancelled row as money collected. Both halves go,
-// so collected minus disbursed still equals the envelope's balance;
+// A reversal (ADR-029, ADR-034, ADR-042) is read the way a correction's legs
+// are: as a minus on the bucket of the row it points at, in whichever purpose it
+// sits. The join to o takes COALESCE(tr.corrects_transaction_id,
+// t.reverses_transaction_id): a row has at most one of the two, and its fund
+// comes from t, not tr, which is NULL on a reversal (written the other way every
+// reversal reads as spending). So a cancelled contribution is collected and
+// then un-collected, a cancelled expense is disbursed and then un-disbursed,
+// and collected minus disbursed still equals the envelope's balance even after
+// a purpose correction has put the pair in two purposes (the original and its
+// legs against one, the reversal against the other). Inside one purpose it is
+// the same figure as dropping both halves, which is what this query used to do.
 // IncidentalTotals stays unfiltered because the pair nets to zero there.
 //
 // A peruntukan correction (ADR-033) is re-attributed, not dropped (#342). Its
@@ -505,9 +562,9 @@ type IncidentalActivityTotalsRow struct {
 // other way takes it back out. So an unnamed contribution corrected out of
 // this envelope nets to zero collected here; one corrected in reads as
 // collected; an expense corrected away un-spends. Each leg still moves
-// collected minus disbursed by exactly its effect on the balance. The
-// corrected row is never a reversal (ADR-033 refuses those), so the
-// cancellation filters never meet it.
+// collected minus disbursed by exactly its effect on the balance. A reversed
+// row can be corrected before it is reversed but not after (ADR-042), and a
+// reversal is never itself corrected, so the two readings never meet on one row.
 //
 // A purpose move (ADR-036, tr.reason = 'allocation') is kept and only ever
 // counts as collected: money allocated in is money the envelope has to work
@@ -516,7 +573,8 @@ type IncidentalActivityTotalsRow struct {
 // or NULL on a row written before the column existed - stays excluded.
 //
 // through bounds it at a past month's last day for the public report (#408):
-// only rows dated by then, and a reversal dated after it has not happened yet.
+// only rows dated by then, each half of a pair by its own date, so a reversal
+// dated after it has not happened yet and the original still reads in full.
 // NULL (every other caller) is unbounded.
 func (q *Queries) IncidentalActivityTotals(ctx context.Context, arg IncidentalActivityTotalsParams) (IncidentalActivityTotalsRow, error) {
 	row := q.db.QueryRowContext(ctx, incidentalActivityTotals, arg.FundID, arg.PurposeID, arg.Through)
@@ -678,7 +736,7 @@ JOIN member m ON m.id = t.member_id
 JOIN account a ON a.id = t.account_id
 LEFT JOIN "transaction" orig ON orig.id = t.reverses_transaction_id
 WHERE t.fund_id = ?1
-  AND (t.kind = 'dues' OR (t.kind = 'adjustment' AND t.reverses_transaction_id IS NOT NULL))
+  AND (t.kind = 'dues' OR (t.kind = 'adjustment' AND t.reverses_transaction_id IS NOT NULL AND t.dues_period IS NOT NULL))
   AND (
     ?2 IS NULL
     OR (t.occurred_on, t.id) < (?2, CAST(?3 AS INTEGER))
@@ -721,7 +779,10 @@ type ListDuesPaymentsPageRow struct {
 //
 // Both halves of a reversal share this list (PRD section 7.3, ADR-029): every
 // kind='dues' payment and every kind='adjustment' row that reverses one -
-// never a bare "every transaction".
+// never a bare "every transaction". "One" is a dues payment: a dues reversal
+// carries its payment's period, and a named contribution's reversal (member
+// set, no period) or an unnamed one is not Iuran history (ADR-042). The
+// INNER JOIN on member alone would let the first of those through.
 //
 // reversed_by_transaction_id is the reversal that undoes THIS row when it is a
 // payment (ledger_entry; null otherwise, as a reversal is never itself
@@ -837,7 +898,14 @@ SELECT t.id, t.fund_id, t.account_id, t.purpose_id, t.direction, t.amount, t.occ
        tp.name AS transfer_to_purpose_name,
        tr.corrects_transaction_id AS transfer_corrects_transaction_id,
        tr.reason AS transfer_reason,
-       t.effective_purpose_id
+       t.effective_purpose_id,
+       t.reversed,
+       orig.occurred_on AS reverses_occurred_on,
+       CAST(EXISTS (SELECT 1 FROM reconciliation_line rl
+                    WHERE rl.fund_id = t.fund_id AND rl.adjustment_transaction_id = t.id) AS INTEGER) AS is_reconciliation_fix,
+       ei.closed_on AS effective_closed_on,
+       CAST(EXISTS (SELECT 1 FROM reconciliation rc
+                    WHERE rc.fund_id = t.fund_id AND rc.through_transaction_id >= t.id) AS INTEGER) AS counted
 FROM ledger_entry t
 JOIN purpose p ON p.id = t.purpose_id
 JOIN account a ON a.id = t.account_id
@@ -851,6 +919,8 @@ LEFT JOIN account fa ON fa.id = tf.account_id
 LEFT JOIN account ta ON ta.id = tt.account_id
 LEFT JOIN purpose fp ON fp.id = tf.purpose_id
 LEFT JOIN purpose tp ON tp.id = tt.purpose_id
+LEFT JOIN "transaction" orig ON orig.id = t.reverses_transaction_id
+LEFT JOIN incidental ei ON ei.purpose_id = t.effective_purpose_id
 WHERE t.fund_id = ?1
   AND (
     ?2 IS NULL
@@ -914,6 +984,11 @@ type ListTransactionsPageRow struct {
 	TransferCorrectsTransactionID *int64
 	TransferReason                *string
 	EffectivePurposeID            int64
+	Reversed                      int64
+	ReversesOccurredOn            *string
+	IsReconciliationFix           int64
+	EffectiveClosedOn             *string
+	Counted                       int64
 }
 
 // GET /api/transactions (#225, ADR-032): newest-first, keyset-paged on the pair
@@ -999,6 +1074,15 @@ type ListTransactionsPageRow struct {
 //     the balances. This column is for the correction dialog, which must build
 //     its pair from where the money actually is, and for the marker that says a
 //     correction exists.
+//
+//   - reversed, reverses_occurred_on, counted, is_reconciliation_fix,
+//     effective_closed_on (ADR-042): the facts of a reversal. reversed is
+//     ledger_entry's flag; reverses_occurred_on is the original's date, on a
+//     reversal row, so an unnamed reversal can state the day it reverses even
+//     when the original is on another page; the other three, with kind and the
+//     reversal link, are what Ledger.ReversalRefusal reads (GetReversalTarget
+//     has the reasoning), so the page's reversible flag and the ledger's answer
+//     are one rule.
 func (q *Queries) ListTransactionsPage(ctx context.Context, arg ListTransactionsPageParams) ([]ListTransactionsPageRow, error) {
 	rows, err := q.db.QueryContext(ctx, listTransactionsPage,
 		arg.FundID,
@@ -1048,6 +1132,11 @@ func (q *Queries) ListTransactionsPage(ctx context.Context, arg ListTransactions
 			&i.TransferCorrectsTransactionID,
 			&i.TransferReason,
 			&i.EffectivePurposeID,
+			&i.Reversed,
+			&i.ReversesOccurredOn,
+			&i.IsReconciliationFix,
+			&i.EffectiveClosedOn,
+			&i.Counted,
 		); err != nil {
 			return nil, err
 		}
@@ -1099,4 +1188,25 @@ func (q *Queries) PurposeBalance(ctx context.Context, arg PurposeBalanceParams) 
 	var balance_amount int64
 	err := row.Scan(&balance_amount)
 	return balance_amount, err
+}
+
+const reversedFlagForTransaction = `-- name: ReversedFlagForTransaction :one
+SELECT reversed
+FROM ledger_entry
+WHERE fund_id = ? AND id = ?
+`
+
+type ReversedFlagForTransactionParams struct {
+	FundID int64
+	ID     int64
+}
+
+// Whether a row has been reversed, for PostPurposeCorrection's refusal of a
+// reverse-then-correct (ADR-042). The flag is ledger_entry's; sql.ErrNoRows is
+// a row of another fund or none.
+func (q *Queries) ReversedFlagForTransaction(ctx context.Context, arg ReversedFlagForTransactionParams) (int64, error) {
+	row := q.db.QueryRowContext(ctx, reversedFlagForTransaction, arg.FundID, arg.ID)
+	var reversed int64
+	err := row.Scan(&reversed)
+	return reversed, err
 }

@@ -63,9 +63,7 @@ func newWalkScenario(t *testing.T, l *Ledger) walkScenario {
 	}
 	reverse := func(tx store.Transaction, date string) {
 		t.Helper()
-		if _, err := l.ReverseDuesPayment(ctx, ReverseDuesPaymentParams{FundID: fundID, TransactionID: tx.ID, OccurredOn: date}); err != nil {
-			t.Fatalf("ReverseDuesPayment(%s) = %v, want no error", date, err)
-		}
+		postReversalOn(t, l, fundID, tx.ID, date)
 	}
 	post := func(purpose int64, direction string, amount money.Amount, date string, adjustment bool, member *int64) store.Transaction {
 		t.Helper()
@@ -461,7 +459,10 @@ func TestMonthlyReportRunningMonthIncludesRowsDatedAfterToday(t *testing.T) {
 }
 
 // A reversal in a month with nothing else takes Total masuk below zero, and an
-// adjustment is signed. ADR-038 accepts both, and both foot.
+// adjustment is signed. ADR-038 accepts both, and both foot. Under ADR-042 the
+// month only arises as production builds it: the payment is counted by a cek
+// kas, and the reversal then takes the day the injected clock reads, in a later
+// month than its original.
 func TestMonthlyReportWalkAllowsANegativeTotalMasuk(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
@@ -474,8 +475,13 @@ func TestMonthlyReportWalkAllowsANegativeTotalMasuk(t *testing.T) {
 	if err != nil {
 		t.Fatalf("PostDuesPayments() = %v, want no error", err)
 	}
-	if _, err := l.ReverseDuesPayment(ctx, ReverseDuesPaymentParams{FundID: f.fundID, TransactionID: paid[0].ID, OccurredOn: "2026-09-02"}); err != nil {
-		t.Fatalf("ReverseDuesPayment() = %v, want no error", err)
+	countEverything(t, l, f.fundID, f.cashID, f.bankID)
+	reversal, err := l.ReverseTransaction(ctx, ReverseTransactionParams{FundID: f.fundID, TransactionID: paid[0].ID, Now: onTheDay("2026-09-02")})
+	if err != nil {
+		t.Fatalf("ReverseTransaction() = %v, want no error", err)
+	}
+	if reversal.OccurredOn != "2026-09-02" {
+		t.Fatalf("reversal OccurredOn = %q, want 2026-09-02: a counted payment is reversed today", reversal.OccurredOn)
 	}
 
 	r := monthlyReport(t, l, ReportParams{FundID: f.fundID, Month: "2026-09"})

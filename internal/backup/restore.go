@@ -713,7 +713,8 @@ func clearFundScopedTables(ctx context.Context, q store.Querier) error {
 // migration's dependency order, see backup.go), except doc.Transactions,
 // which goes through restoreTransactionsInOrder: the transaction_named_row_shape
 // trigger (ADR-012 obligation 1) checks at INSERT that a reversal's target
-// exists, and no PRAGMA defers that. Other foreign keys are declarative and
+// exists and that the reversal copies it the other way (ADR-042), and no PRAGMA
+// defers that. Other foreign keys are declarative and
 // land in any order under defer_foreign_keys=ON.
 func insertDocument(ctx context.Context, q store.Querier, doc Document) error {
 	for _, f := range doc.Funds {

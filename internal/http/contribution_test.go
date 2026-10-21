@@ -298,9 +298,9 @@ func TestPostDuesPaymentReversalAcceptsANamedContribution(t *testing.T) {
 		t.Fatalf("decoding contribution response: %v", err)
 	}
 
-	rec := postDuesPaymentReversal(t, r, contribution.ID, reverseDuesPaymentRequest{OccurredOn: "2026-08-15"})
+	rec := postReversal(t, r, contribution.ID, reverseTransactionRequest{})
 	if rec.Code != http.StatusCreated {
-		t.Fatalf("POST /api/dues-payments/{id}/reversal(contribution) = %d, want %d (body: %s)", rec.Code, http.StatusCreated, rec.Body.String())
+		t.Fatalf("POST /api/transactions/{id}/reversal(contribution) = %d, want %d (body: %s)", rec.Code, http.StatusCreated, rec.Body.String())
 	}
 	var reversal transactionResponse
 	if err := json.NewDecoder(rec.Body).Decode(&reversal); err != nil {

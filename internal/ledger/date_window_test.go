@@ -79,17 +79,6 @@ var datePaths = []datePath{
 		})
 		return err
 	}},
-	{"ReverseDuesPayment occurred_on", kindEntry, func(t *testing.T, l *Ledger, f fixture, date string, now time.Time) error {
-		paid, err := l.PostDuesPayments(context.Background(), PostDuesPaymentsParams{
-			FundID: f.fundID, AccountID: f.cashID, MemberID: f.memberID, OccurredOn: "2026-09-01", Now: now,
-			Periods: []PeriodAmount{{DuesPeriod: "2026-09", Amount: 1000}},
-		})
-		if err != nil {
-			t.Fatalf("PostDuesPayments (setup) = %v, want no error", err)
-		}
-		_, err = l.ReverseDuesPayment(context.Background(), ReverseDuesPaymentParams{FundID: f.fundID, TransactionID: paid[0].ID, OccurredOn: date, Now: now})
-		return err
-	}},
 	{"TakeReconciliation fix occurred_on", kindEntry, func(_ *testing.T, l *Ledger, f fixture, date string, now time.Time) error {
 		_, err := l.TakeReconciliation(context.Background(), TakeReconciliationParams{
 			FundID: f.fundID, Now: now,

@@ -14,7 +14,7 @@ import (
 // to fix one posted row's peruntukan (ADR-033, #267).
 //
 // There is no AccountID, Direction, Amount or OccurredOn field: all four are
-// read off the row being corrected, as ReverseDuesPaymentParams does. A
+// read off the row being corrected, as ReverseTransactionParams does. A
 // correction naming a different account or date would not correct that row,
 // and ADR-033 is explicit that the date is not an input: dating it today
 // would leave the month the mistake happened wrong in both tags.
@@ -75,15 +75,20 @@ type PostPurposeCorrectionParams struct {
 //     movement; correcting one breaks the pair. Since a correction's legs are
 //     kind='transfer', a correction of a correction is impossible, with no
 //     depth limit or cycle rule.
-//   - kind='adjustment' with reverses_transaction_id set (a dues reversal,
-//     ADR-029): ErrPurposeCorrectionDuesReversal - use ReverseDuesPayment.
+//   - kind='adjustment' with reverses_transaction_id set (a reversal of any
+//     row, ADR-029, ADR-042): ErrPurposeCorrectionReversal. The reversal copies
+//     its original's effective purpose and is never itself re-tagged.
 //   - kind='normal' with member_id set (a named contribution, ADR-034):
 //     ErrPurposeCorrectionNamedContribution - moving it would leave
 //     participation counting the member against an envelope the money has
 //     left; reverse and post again, as for a dues payment.
 //   - kind='normal' with no member_id, or kind='adjustment' with
 //     reverses_transaction_id NULL (an ordinary correction or an ADR-024
-//     reconciliation fix): eligible.
+//     reconciliation fix): eligible, unless a reversal already points at the
+//     row: ErrPurposeCorrectionAlreadyReversed (ADR-042). Correct-then-reverse
+//     is allowed, since the reversal copies the effective purpose;
+//     reverse-then-correct would put the pair's legs on a purpose that no
+//     longer holds the money.
 //
 // Two more refusals follow eligibility, against the closed-incidental state
 // ADR-031 guarantees (ADR-033):
@@ -123,7 +128,7 @@ func (l *Ledger) PostPurposeCorrection(ctx context.Context, p PostPurposeCorrect
 			return ErrPurposeCorrectionTransfer
 		case "adjustment":
 			if original.ReversesTransactionID != nil {
-				return ErrPurposeCorrectionDuesReversal
+				return ErrPurposeCorrectionReversal
 			}
 		case "normal":
 			// A named contribution (ADR-034): moving it would leave participation
@@ -136,6 +141,20 @@ func (l *Ledger) PostPurposeCorrection(ctx context.Context, p PostPurposeCorrect
 		// "normal" with no member_id, and "adjustment" with no
 		// reverses_transaction_id, are eligible: the cases the switch leaves
 		// unhandled on purpose.
+
+		// Reverse, then correct, is refused (ADR-042). The reversal already took the
+		// money out of the row's effective purpose; a pair moving the original
+		// afterwards would leave the reversal netting against the wrong one.
+		reversed, err := q.ReversedFlagForTransaction(ctx, store.ReversedFlagForTransactionParams{
+			FundID: p.FundID,
+			ID:     p.TransactionID,
+		})
+		if err != nil {
+			return fmt.Errorf("checking whether the transaction was reversed: %w", err)
+		}
+		if reversed != 0 {
+			return ErrPurposeCorrectionAlreadyReversed
+		}
 
 		effectivePurposeID, err := effectivePeruntukan(ctx, q, p.FundID, original)
 		if err != nil {

@@ -13,7 +13,7 @@ import (
 // body: one field, purpose_id (ADR-033, #267). There is no amount, account_id
 // or occurred_on: Ledger.PostPurposeCorrection copies account_id and
 // occurred_on from the row {id} names and accepts no amount, as
-// reverseDuesPaymentRequest does. One field makes immutability structural:
+// reverseTransactionRequest does. One field makes immutability structural:
 // nothing this route carries could let it edit the original row, even by
 // accident.
 type purposeCorrectionRequest struct {
@@ -23,11 +23,11 @@ type purposeCorrectionRequest struct {
 // postPurposeCorrection is POST /api/transactions/{id}/purpose-correction:
 // wraps Ledger.PostPurposeCorrection. {id} names the transaction row whose
 // peruntukan is wrong, the nested-verb idiom of
-// /api/incidentals/{purposeID}/close and /api/dues-payments/{id}/reversal
+// /api/incidentals/{purposeID}/close and /api/transactions/{id}/reversal
 // ("the route names the row, the verb the action").
 //
 // Nothing is validated here (ADR-027): every refusal (the four ineligible
-// kinds, a dues reversal, both closed-incidental directions, the no-op,
+// kinds, a reversal, both closed-incidental directions, the no-op,
 // another fund's transaction id) is PostPurposeCorrection's named error,
 // reaching the client through mapLedgerError with the ledger's message.
 //

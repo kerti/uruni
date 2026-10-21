@@ -422,8 +422,8 @@ func TestTheGuardsSeeEveryShapeOfADerivation(t *testing.T) {
 // ledger_entry and nowhere else, so a new query that wants either selects it
 // from the view. A query that wrote its own sign could disagree with every
 // balance about which way a row moves; one that wrote its own reversal test
-// could disagree about which rows still count. Reversal (ADR-042) will change
-// the second, and has exactly one place to do it.
+// could disagree about which rows still count. Reversal (ADR-042) changed the
+// second in exactly one place, the view.
 func TestNoQueryDerivesTheSignOrTheReversalOutsideTheView(t *testing.T) {
 	t.Parallel()
 	for name, body := range queryStatements(t) {
@@ -451,6 +451,8 @@ func TestTheLedgerReadsSelectFromTheView(t *testing.T) {
 		"IncidentalTotals", "IncidentalActivityTotals", "ContributedByIncidentalMember",
 		// dues
 		"DuesPaidByPeriod", "DuesPaidByMemberGroupedByPeriod", "LatestDuesPeriodPaidByMember", "ListDuesPaymentsPage",
+		// reversal (ADR-042): the target's facts and the reverse-then-correct refusal
+		"GetReversalTarget", "ReversedFlagForTransaction", "ListTransactionsPage",
 		// a reconciliation line's remainder reads its fix's signed amount
 		"ListReconciliationLines", "ListOpenReconciliationLinesByFund", "ListReconciliationsPage", "ReportOpenReconciliationLines",
 	} {
