@@ -17,7 +17,10 @@ import (
 )
 
 // errorEnvelope is the wire shape of every API error:
-// {"error":{"code":"snake_case_slug","message":"An English sentence."}}.
+// {"error":{"code":"snake_case_slug","message":"An English sentence."}}, plus
+// "field" on an invalid_argument that one request field is at fault for (#530):
+// its JSON key, dotted when nested ("counts.fix.amount"), or the query
+// parameter's name.
 //
 // Both fields are English: the API is ADR-014's "code" surface, and the SPA
 // maps code to the treasurer-facing Indonesian copy.
@@ -28,14 +31,32 @@ type errorEnvelope struct {
 type errorBody struct {
 	Code    string `json:"code"`
 	Message string `json:"message"`
+	Field   string `json:"field,omitempty"`
 }
 
 // writeAPIError writes the error envelope. Every failure goes through it, so
 // the shape cannot drift route by route.
 func writeAPIError(w http.ResponseWriter, status int, code, message string) {
+	writeAPIFieldError(w, status, code, "", message)
+}
+
+// writeAPIFieldError is writeAPIError naming the request field at fault.
+func writeAPIFieldError(w http.ResponseWriter, status int, code, field, message string) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(errorEnvelope{Error: errorBody{Code: code, Message: message}})
+	_ = json.NewEncoder(w).Encode(errorEnvelope{Error: errorBody{Code: code, Message: message, Field: field}})
+}
+
+// writeInvalidArgument answers a domain package's ErrInvalidArgument, with the
+// field its FieldError names, if any (ledger's and auth's both answer
+// InvalidField).
+func writeInvalidArgument(w http.ResponseWriter, err error) {
+	var named interface{ InvalidField() string }
+	field := ""
+	if errors.As(err, &named) {
+		field = named.InvalidField()
+	}
+	writeAPIFieldError(w, http.StatusBadRequest, "invalid_argument", field, "The request contains an invalid argument.")
 }
 
 // statusClientClosedRequest is nginx's 499: the request's context was
@@ -65,7 +86,7 @@ func mapLedgerError(w http.ResponseWriter, logger *slog.Logger, err error) {
 	}
 	switch {
 	case errors.Is(err, ledger.ErrInvalidArgument):
-		writeAPIError(w, http.StatusBadRequest, "invalid_argument", "The request contains an invalid argument.")
+		writeInvalidArgument(w, err)
 	case errors.Is(err, ledger.ErrAmountTooLarge):
 		// Rp 999.999.999.999 (money.MaxAmount, #499). Its own code, not
 		// invalid_argument: the amount is well-formed and the SPA tells her the one
@@ -212,7 +233,7 @@ func mapAuthError(w http.ResponseWriter, logger *slog.Logger, err error) {
 		// for a password on the common-passwords list (#528).
 		writeAPIError(w, http.StatusBadRequest, "password_too_common", "This password is too common.")
 	case errors.Is(err, auth.ErrInvalidArgument):
-		writeAPIError(w, http.StatusBadRequest, "invalid_argument", "The request contains an invalid argument.")
+		writeInvalidArgument(w, err)
 	case errors.Is(err, auth.ErrAlreadyRegistered):
 		writeAPIError(w, http.StatusConflict, "already_registered", "An account has already been registered on this instance.")
 	case errors.Is(err, auth.ErrInvalidCredentials):

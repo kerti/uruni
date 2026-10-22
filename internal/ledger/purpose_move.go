@@ -67,7 +67,7 @@ type PostPurposeMoveParams struct {
 // inside the transaction (the source balance among them) do not run on a replay.
 func (l *Ledger) PostPurposeMove(ctx context.Context, p PostPurposeMoveParams) (store.Transfer, error) {
 	if p.Amount <= 0 {
-		return store.Transfer{}, fmt.Errorf("%w: amount must be positive, got %d", ErrInvalidArgument, p.Amount.Int64())
+		return store.Transfer{}, invalidField("amount", "amount must be positive, got %d", p.Amount.Int64())
 	}
 	if err := CheckAmountCeiling("amount", p.Amount); err != nil {
 		return store.Transfer{}, err

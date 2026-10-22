@@ -126,29 +126,26 @@ func TestPostPassThroughPurposesCreatesAndListReturnsItAlongsideMain(t *testing.
 // The caller cannot choose the kind, so purpose_single_main is unreachable
 // through this route: a body naming kind='main' is ignored and the row is
 // created as a pass-through.
-func TestPostPassThroughPurposesIgnoresACallerSuppliedKind(t *testing.T) {
+func TestPostPassThroughPurposesRefusesACallerSuppliedKind(t *testing.T) {
 	t.Parallel()
 	r := testRouter(t)
 	if rec := postSetup(t, r, "Test Fund"); rec.Code != http.StatusCreated {
 		t.Fatalf("POST /api/setup = %d, want %d", rec.Code, http.StatusCreated)
 	}
 
+	// The kind is pinned server-side; a caller naming one is refused outright
+	// (#530) rather than quietly ignored, so a second main can never be asked for.
 	rec := httptest.NewRecorder()
 	body := `{"name":"Bukan utama","kind":"main"}`
 	r.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/api/pass-through-purposes", strings.NewReader(body)))
-	if rec.Code != http.StatusCreated {
-		t.Fatalf("POST with a kind in the body = %d, want %d (body: %s)", rec.Code, http.StatusCreated, rec.Body.String())
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("POST with a kind in the body = %d, want %d (body: %s)", rec.Code, http.StatusBadRequest, rec.Body.String())
+	}
+	if got := decodeError(t, rec); got.Code != "invalid_argument" || got.Field != "kind" {
+		t.Errorf("error = %+v, want invalid_argument naming kind", got)
 	}
 
-	var created purposeResponse
-	if err := json.NewDecoder(rec.Body).Decode(&created); err != nil {
-		t.Fatalf("decoding response: %v (body: %s)", err, rec.Body.String())
-	}
-	if created.Kind != "pass_through" {
-		t.Fatalf("purpose.kind = %q, want %q - the caller must not be able to pick", created.Kind, "pass_through")
-	}
-
-	// And main is still unique: exactly one, the one setup created.
+	// Nothing was created, and main is still unique: the one setup created.
 	list := getPurposes(t, r)
 	var got []purposeResponse
 	if err := json.NewDecoder(list.Body).Decode(&got); err != nil {
@@ -158,6 +155,9 @@ func TestPostPassThroughPurposesIgnoresACallerSuppliedKind(t *testing.T) {
 	for _, p := range got {
 		if p.Kind == "main" {
 			mains++
+		}
+		if p.Name == "Bukan utama" {
+			t.Errorf("the refused purpose was created: %+v", p)
 		}
 	}
 	if mains != 1 {

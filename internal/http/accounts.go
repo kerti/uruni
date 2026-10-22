@@ -204,6 +204,14 @@ func decodeUpdateAccountRequest(w http.ResponseWriter, r *http.Request) (updateA
 		{"kind", &req.KindSet, &req.Kind},
 		{"inactive_on", &req.InactiveOnSet, &req.InactiveOn},
 	}
+	known := make([]string, 0, len(fields))
+	for _, f := range fields {
+		known = append(known, f.key)
+	}
+	if key, unknown := unknownKey(raw, known); unknown {
+		writeUnknownField(w, key)
+		return updateAccountRequest{}, false
+	}
 	for _, f := range fields {
 		v, ok := raw[f.key]
 		if !ok {

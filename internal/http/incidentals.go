@@ -163,7 +163,7 @@ func (a *api) listIncidentals(w http.ResponseWriter, r *http.Request) {
 	if raw := r.URL.Query().Get("open"); raw != "" {
 		parsed, err := strconv.ParseBool(raw)
 		if err != nil {
-			writeAPIError(w, http.StatusBadRequest, "invalid_argument", "The open filter is not a valid boolean.")
+			writeAPIFieldError(w, http.StatusBadRequest, "invalid_argument", "open", "The open filter is not a valid boolean.")
 			return
 		}
 		openOnly = parsed

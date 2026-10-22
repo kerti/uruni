@@ -1,6 +1,9 @@
 package ledger
 
-import "errors"
+import (
+	"errors"
+	"fmt"
+)
 
 // ErrInvalidArgument is the fourth error category ADR-027 adds to the three
 // this package's writes otherwise produce (money.ErrOverflow, a raw database
@@ -18,6 +21,33 @@ import "errors"
 // caller mistakes, and surface wrapped generically as a 500. Re-deriving a
 // cross-row invariant here would be a second source of truth (ADR-027).
 var ErrInvalidArgument = errors.New("ledger: invalid argument")
+
+// FieldError is an ErrInvalidArgument that one request field is at fault for
+// (#530). Field is that field's JSON key, dotted for a nested one and without a
+// list position ("counts.fix.amount"; Reason says which item), so the HTTP
+// layer can hand it to the client as the error envelope's `field`. Its text is
+// what the %w form gave before it existed: "ledger: invalid argument: <reason>".
+//
+// A check that no single field fails (two fields that must differ, a rule
+// across rows) still wraps ErrInvalidArgument plainly, or names the field the
+// client would change.
+type FieldError struct {
+	Field  string
+	Reason string
+}
+
+func (e *FieldError) Error() string { return ErrInvalidArgument.Error() + ": " + e.Reason }
+
+func (e *FieldError) Unwrap() error { return ErrInvalidArgument }
+
+// InvalidField is how internal/http reads the field without importing this
+// type: auth's FieldError answers the same method.
+func (e *FieldError) InvalidField() string { return e.Field }
+
+// invalidField builds a FieldError; format and args are the reason.
+func invalidField(field, format string, args ...any) error {
+	return &FieldError{Field: field, Reason: fmt.Sprintf(format, args...)}
+}
 
 // ErrReimbursementWaived is returned by SettleReimbursement when the claim's
 // waived_on is set: a claim the treasurer has already written off as never

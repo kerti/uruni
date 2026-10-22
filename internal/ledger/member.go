@@ -150,7 +150,7 @@ func (l *Ledger) UpdateMember(ctx context.Context, p UpdateMemberParams) (Member
 		}
 	}
 	if p.TierFrom != "" && !p.SetTier {
-		return Member{}, fmt.Errorf("%w: a tier start month needs a tier", ErrInvalidArgument)
+		return Member{}, invalidField("tier_id", "a tier start month needs a tier")
 	}
 	if p.TierFrom != "" {
 		if err := validateDuesPeriod("tier_effective_from", p.TierFrom, noCeilingMonth); err != nil {

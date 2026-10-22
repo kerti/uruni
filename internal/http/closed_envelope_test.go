@@ -57,26 +57,24 @@ func TestClosedEnvelopeRefusesClaimsAndPayoutsWith409(t *testing.T) {
 // The server owns a dues payment's purpose (#473): a purpose_id on the wire,
 // from an older client or a hand-rolled request, is not read - the rows
 // land on Kas Utama regardless.
-func TestPostDuesPaymentsIgnoresAPurposeOnTheWire(t *testing.T) {
+func TestPostDuesPaymentsRefusesAPurposeOnTheWire(t *testing.T) {
 	t.Parallel()
 	r := testRouter(t)
 	setup := setUpFund(t, r)
 	memberID := memberFor(t, r, "Jane")
 	envelope := openIncidentalFor(t, r, "Sunatan", "2026-08-01")
 
+	// Dues always post to Kas Utama; naming another pos is refused (#530), so
+	// dues can never be steered into an envelope.
 	body := fmt.Sprintf(`{"account_id":%d,"purpose_id":%d,"member_id":%d,"occurred_on":"2026-08-12","periods":[{"dues_period":"2026-08","amount":25000}]}`,
 		setup.CashAccountID(t), envelope.PurposeID, memberID)
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/api/dues-payments", strings.NewReader(body)))
-	if rec.Code != http.StatusCreated {
-		t.Fatalf("POST /api/dues-payments = %d, want %d (body: %s)", rec.Code, http.StatusCreated, rec.Body.String())
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("POST /api/dues-payments with a purpose = %d, want %d (body: %s)", rec.Code, http.StatusBadRequest, rec.Body.String())
 	}
-	var posted []transactionResponse
-	if err := json.NewDecoder(rec.Body).Decode(&posted); err != nil {
-		t.Fatalf("decoding response: %v", err)
-	}
-	if len(posted) != 1 || posted[0].PurposeID != setup.MainPurposeID {
-		t.Errorf("posted = %+v, want one row on Kas Utama %d", posted, setup.MainPurposeID)
+	if got := decodeError(t, rec); got.Code != "invalid_argument" || got.Field != "purpose_id" {
+		t.Errorf("error = %+v, want invalid_argument naming purpose_id", got)
 	}
 }
 

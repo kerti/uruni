@@ -34,7 +34,7 @@ func (a *Auth) SetLogin(ctx context.Context, email, password string) (created bo
 	if err := checkEmail(email); err != nil {
 		return false, err
 	}
-	if err := checkPassword(password); err != nil {
+	if err := checkPassword("password", password); err != nil {
 		return false, err
 	}
 

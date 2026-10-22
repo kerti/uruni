@@ -71,7 +71,7 @@ type PostDuesPaymentsParams struct {
 // re-run on a replay.
 func (l *Ledger) PostDuesPayments(ctx context.Context, p PostDuesPaymentsParams) ([]store.Transaction, error) {
 	if len(p.Periods) == 0 {
-		return nil, fmt.Errorf("%w: periods must not be empty", ErrInvalidArgument)
+		return nil, invalidField("periods", "periods must not be empty")
 	}
 	window, err := l.windowFor(ctx, l.q, p.FundID, p.Now)
 	if err != nil {
@@ -82,7 +82,7 @@ func (l *Ledger) PostDuesPayments(ctx context.Context, p PostDuesPaymentsParams)
 	}
 	for _, period := range p.Periods {
 		if period.Amount <= 0 {
-			return nil, fmt.Errorf("%w: amount must be positive, got %d", ErrInvalidArgument, period.Amount.Int64())
+			return nil, invalidField("periods.amount", "amount must be positive, got %d", period.Amount.Int64())
 		}
 		if err := CheckAmountCeiling("amount", period.Amount); err != nil {
 			return nil, err

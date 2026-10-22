@@ -6,8 +6,12 @@ import (
 	"errors"
 	"io"
 	"log/slog"
+	"maps"
 	"net/http"
 	"net/netip"
+	"slices"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/alexedwards/scs/v2"
@@ -311,28 +315,80 @@ func writeJSON(w http.ResponseWriter, status int, body any) {
 }
 
 // decodeJSON decodes r's body into dst and reports whether the handler
-// should continue. An empty body (io.EOF) decodes to dst's zero value and
-// lets the ledger's ErrInvalidArgument checks name the missing field
-// (ADR-027): handlers pass through what the ledger validates. Malformed JSON
-// is the one case answered here.
+// should continue. The body must be exactly one JSON value whose keys dst
+// names (#530): a misspelt optional key is refused, never silently dropped to
+// its zero value, and so is an empty body or anything after the value. A key
+// dst does not know is invalid_argument naming it in `field`; a body that is
+// not one JSON value is invalid_json. Everything past the shape - a missing
+// value, a bad amount - is the ledger's ErrInvalidArgument (ADR-027): handlers
+// pass through what the ledger validates.
 //
 // The body is capped at maxJSONBodyBytes first (#447): login and register are
 // reachable by anyone. Every JSON body goes through here, so the cap is in
 // one place; the multipart routes (receipts, restore) set their own.
 func decodeJSON(w http.ResponseWriter, r *http.Request, dst any) bool {
 	r.Body = http.MaxBytesReader(w, r.Body, maxJSONBodyBytes)
-	if err := json.NewDecoder(r.Body).Decode(dst); err != nil && !errors.Is(err, io.EOF) {
-		var tooLarge *http.MaxBytesError
-		if errors.As(err, &tooLarge) {
-			// No copy: the SPA never sends a body near this size, so the treasurer
-			// would only see the generic error.
-			writeAPIError(w, http.StatusRequestEntityTooLarge, "request_too_large", "The request body is too large.")
+	dec := json.NewDecoder(r.Body)
+	dec.DisallowUnknownFields()
+	err := dec.Decode(dst)
+	if err == nil {
+		// One value, then nothing: a second Decode must find the end.
+		var extra json.RawMessage
+		if dec.Decode(&extra) != io.EOF {
+			writeAPIError(w, http.StatusBadRequest, "invalid_json", "The request body must be a single JSON value.")
+			return false
+		}
+		return true
+	}
+	var tooLarge *http.MaxBytesError
+	switch {
+	case errors.As(err, &tooLarge):
+		// No copy: the SPA never sends a body near this size, so the treasurer
+		// would only see the generic error.
+		writeAPIError(w, http.StatusRequestEntityTooLarge, "request_too_large", "The request body is too large.")
+	case errors.Is(err, io.EOF):
+		writeAPIError(w, http.StatusBadRequest, "invalid_json", "The request body is empty.")
+	default:
+		if field, ok := unknownJSONField(err); ok {
+			writeUnknownField(w, field)
 			return false
 		}
 		writeAPIError(w, http.StatusBadRequest, "invalid_json", "The request body is not valid JSON.")
-		return false
 	}
-	return true
+	return false
+}
+
+// unknownJSONField reads the key out of the error DisallowUnknownFields
+// produces. encoding/json has no typed error for it, only this text
+// (`json: unknown field "name"`), which a test pins.
+func unknownJSONField(err error) (string, bool) {
+	rest, ok := strings.CutPrefix(err.Error(), "json: unknown field ")
+	if !ok {
+		return "", false
+	}
+	field, uerr := strconv.Unquote(rest)
+	if uerr != nil {
+		return "", false
+	}
+	return field, true
+}
+
+// unknownKey is decodeJSON's unknown-field refusal for a PATCH body decoded
+// into a raw map, where every key would otherwise pass: the first key, in
+// sorted order, that is not one of known.
+func unknownKey(raw map[string]json.RawMessage, known []string) (string, bool) {
+	for _, key := range slices.Sorted(maps.Keys(raw)) {
+		if !slices.Contains(known, key) {
+			return key, true
+		}
+	}
+	return "", false
+}
+
+// writeUnknownField answers a body key the route does not take. A nested key
+// is named alone, without its parent: encoding/json does not say where it was.
+func writeUnknownField(w http.ResponseWriter, field string) {
+	writeAPIFieldError(w, http.StatusBadRequest, "invalid_argument", field, "The request body has a field this route does not take.")
 }
 
 // maxJSONBodyBytes caps a JSON request body. The SPA's largest (a transaction

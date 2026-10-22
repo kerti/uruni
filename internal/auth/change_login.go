@@ -62,7 +62,7 @@ func (a *Auth) ChangeEmail(ctx context.Context, userID int64, currentPassword, n
 // MinPasswordLength as Register holds it and hashed through the same gate. It
 // returns the updated row, whose new password_hash is the credential.
 func (a *Auth) ChangePassword(ctx context.Context, userID int64, currentPassword, newPassword, keepSession string) (store.User, error) {
-	if err := checkPassword(newPassword); err != nil {
+	if err := checkPassword("new_password", newPassword); err != nil {
 		return store.User{}, err
 	}
 	if err := a.verifyCurrent(ctx, userID, currentPassword); err != nil {

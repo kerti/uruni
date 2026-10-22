@@ -3,6 +3,7 @@ package ledger
 import (
 	"context"
 	"crypto/rand"
+	"errors"
 	"fmt"
 	"math/big"
 	"strings"
@@ -132,10 +133,10 @@ type SetUpFundResult struct {
 func (l *Ledger) SetUpFund(ctx context.Context, p SetUpFundParams) (SetUpFundResult, error) {
 	name := strings.TrimSpace(p.FundName)
 	if name == "" {
-		return SetUpFundResult{}, fmt.Errorf("%w: fund name must not be empty", ErrInvalidArgument)
+		return SetUpFundResult{}, invalidField("name", "fund name must not be empty")
 	}
 	if len(p.Accounts) == 0 {
-		return SetUpFundResult{}, fmt.Errorf("%w: at least one account is required", ErrInvalidArgument)
+		return SetUpFundResult{}, invalidField("accounts", "at least one account is required")
 	}
 	timeZone := p.TimeZone
 	if timeZone == "" {
@@ -143,7 +144,7 @@ func (l *Ledger) SetUpFund(ctx context.Context, p SetUpFundParams) (SetUpFundRes
 	}
 	loc, err := tz.Load(timeZone)
 	if err != nil {
-		return SetUpFundResult{}, fmt.Errorf("%w: time_zone: %v", ErrInvalidArgument, err)
+		return SetUpFundResult{}, invalidField("time_zone", "time_zone: %v", err)
 	}
 	window := windowAt(p.Now, loc)
 	// Every opening balance is validated before withTx opens: a refused one
@@ -151,6 +152,11 @@ func (l *Ledger) SetUpFund(ctx context.Context, p SetUpFundParams) (SetUpFundRes
 	for _, a := range p.Accounts {
 		if a.OpeningBalance != nil {
 			if err := validateOpeningBalance(*a.OpeningBalance, window.entry()); err != nil {
+				// The same check as POST /api/accounts, one level deeper on the wire.
+				var fe *FieldError
+				if errors.As(err, &fe) {
+					fe.Field = "accounts." + fe.Field
+				}
 				return SetUpFundResult{}, err
 			}
 		}
