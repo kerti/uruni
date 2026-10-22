@@ -146,7 +146,8 @@ func addMonths(month string, n int) string {
 
 // validateOccurredOn rejects anything that is not a real YYYY-MM-DD calendar
 // date (ErrInvalidArgument), then anything before the floor or after ceiling
-// (ErrDateOutOfRange). field names the column in the message.
+// (ErrDateOutOfRange). field is the value's JSON key: the message names it, and
+// so does the FieldError (#530).
 //
 // time.Parse with this strict layout already refuses "2026-02-30"; the
 // round-trip comparison is a cheap second defense, not load-bearing today.
@@ -154,10 +155,10 @@ func addMonths(month string, n int) string {
 func validateOccurredOn(field, s, ceiling string) error {
 	t, err := time.Parse(occurredOnLayout, s)
 	if err != nil {
-		return fmt.Errorf("%w: %s %q is not a valid calendar date: %v", ErrInvalidArgument, field, s, err)
+		return invalidField(field, "%s %q is not a valid calendar date: %v", field, s, err)
 	}
 	if t.Format(occurredOnLayout) != s {
-		return fmt.Errorf("%w: %s %q is not a valid calendar date", ErrInvalidArgument, field, s)
+		return invalidField(field, "%s %q is not a valid calendar date", field, s)
 	}
 	if s < minDay {
 		return fmt.Errorf("%w: %s is before %s", ErrDateOutOfRange, field, minDay)
@@ -177,10 +178,10 @@ func validateOccurredOn(field, s, ceiling string) error {
 func checkPeriodShape(field, s string) error {
 	t, err := time.Parse(duesPeriodLayout, s)
 	if err != nil {
-		return fmt.Errorf("%w: %s %q is not a valid \"YYYY-MM\" period: %v", ErrInvalidArgument, field, s, err)
+		return invalidField(field, "%s %q is not a valid \"YYYY-MM\" period: %v", field, s, err)
 	}
 	if t.Format(duesPeriodLayout) != s {
-		return fmt.Errorf("%w: %s %q is not a valid \"YYYY-MM\" period", ErrInvalidArgument, field, s)
+		return invalidField(field, "%s %q is not a valid \"YYYY-MM\" period", field, s)
 	}
 	return nil
 }

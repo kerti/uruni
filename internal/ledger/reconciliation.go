@@ -208,8 +208,8 @@ func (l *Ledger) TakeReconciliation(ctx context.Context, p TakeReconciliationPar
 				return store.Reconciliation{}, fmt.Errorf("computing difference for account %d: %w", c.AccountID, err)
 			}
 			if c.Resolution == "matched" && diff != 0 {
-				return store.Reconciliation{}, fmt.Errorf("%w: resolution \"matched\" for account %d has a difference of %d",
-					ErrInvalidArgument, c.AccountID, diff.Int64())
+				return store.Reconciliation{}, invalidField("counts.resolution", "resolution \"matched\" for account %d has a difference of %d",
+					c.AccountID, diff.Int64())
 			}
 
 			var adjustmentTransactionID *int64
@@ -311,7 +311,7 @@ func SignedFixAmount(f *Fix) (money.Amount, error) {
 	case "out":
 		return money.Amount(0).Sub(f.Amount)
 	default:
-		return 0, fmt.Errorf("%w: fix direction must be \"in\" or \"out\", got %q", ErrInvalidArgument, f.Direction)
+		return 0, invalidField("counts.fix.direction", "fix direction must be \"in\" or \"out\", got %q", f.Direction)
 	}
 }
 
@@ -401,18 +401,18 @@ func requireEveryActiveLocationCounted(ctx context.Context, q store.Querier, p T
 // needs the frozen recorded_amount this function cannot read.
 func validateTakeReconciliationParams(p TakeReconciliationParams, window dateWindow) error {
 	if len(p.Counts) == 0 {
-		return fmt.Errorf("%w: counts must not be empty", ErrInvalidArgument)
+		return invalidField("counts", "counts must not be empty")
 	}
 
 	seen := make(map[int64]bool, len(p.Counts))
 	for _, c := range p.Counts {
 		if seen[c.AccountID] {
-			return fmt.Errorf("%w: account %d is counted more than once", ErrInvalidArgument, c.AccountID)
+			return invalidField("counts.account_id", "account %d is counted more than once", c.AccountID)
 		}
 		seen[c.AccountID] = true
 
 		if c.ActualAmount < 0 {
-			return fmt.Errorf("%w: actual_amount must not be negative, got %d", ErrInvalidArgument, c.ActualAmount.Int64())
+			return invalidField("counts.actual_amount", "actual_amount must not be negative, got %d", c.ActualAmount.Int64())
 		}
 		if err := CheckAmountCeiling("actual_amount", c.ActualAmount); err != nil {
 			return err
@@ -421,26 +421,26 @@ func validateTakeReconciliationParams(p TakeReconciliationParams, window dateWin
 		switch c.Resolution {
 		case "matched", "left_open":
 			if c.Fix != nil {
-				return fmt.Errorf("%w: resolution %q for account %d must not name a fix", ErrInvalidArgument, c.Resolution, c.AccountID)
+				return invalidField("counts.fix", "resolution %q for account %d must not name a fix", c.Resolution, c.AccountID)
 			}
 		case "adjusted", "entry_added":
 			if c.Fix == nil {
-				return fmt.Errorf("%w: resolution %q for account %d requires a fix", ErrInvalidArgument, c.Resolution, c.AccountID)
+				return invalidField("counts.fix", "resolution %q for account %d requires a fix", c.Resolution, c.AccountID)
 			}
 			if c.Fix.Amount <= 0 {
-				return fmt.Errorf("%w: fix amount for account %d must be positive, got %d", ErrInvalidArgument, c.AccountID, c.Fix.Amount.Int64())
+				return invalidField("counts.fix.amount", "fix amount for account %d must be positive, got %d", c.AccountID, c.Fix.Amount.Int64())
 			}
 			if err := CheckAmountCeiling("fix amount", c.Fix.Amount); err != nil {
 				return err
 			}
 			if c.Fix.Direction != "in" && c.Fix.Direction != "out" {
-				return fmt.Errorf("%w: fix direction for account %d must be \"in\" or \"out\", got %q", ErrInvalidArgument, c.AccountID, c.Fix.Direction)
+				return invalidField("counts.fix.direction", "fix direction for account %d must be \"in\" or \"out\", got %q", c.AccountID, c.Fix.Direction)
 			}
-			if err := validateOccurredOn("fix occurred_on", c.Fix.OccurredOn, window.entry()); err != nil {
+			if err := validateOccurredOn("counts.fix.occurred_on", c.Fix.OccurredOn, window.entry()); err != nil {
 				return err
 			}
 		default:
-			return fmt.Errorf("%w: unrecognised resolution %q for account %d", ErrInvalidArgument, c.Resolution, c.AccountID)
+			return invalidField("counts.resolution", "unrecognised resolution %q for account %d", c.Resolution, c.AccountID)
 		}
 	}
 	return nil

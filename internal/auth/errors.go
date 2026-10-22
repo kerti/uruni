@@ -11,6 +11,21 @@ import (
 // wraps this with %w, so callers use errors.Is, not string matching.
 var ErrInvalidArgument = errors.New("auth: invalid argument")
 
+// FieldError is internal/ledger's FieldError for this package (#530): an
+// ErrInvalidArgument naming the JSON key at fault, which internal/http reads
+// through InvalidField. Its text is unchanged from the %w form.
+type FieldError struct {
+	Field  string
+	Reason string
+}
+
+func (e *FieldError) Error() string { return ErrInvalidArgument.Error() + ": " + e.Reason }
+
+func (e *FieldError) Unwrap() error { return ErrInvalidArgument }
+
+// InvalidField is what internal/http reads the field through.
+func (e *FieldError) InvalidField() string { return e.Field }
+
 // ErrPasswordTooCommon is returned wherever a new password enters (Register,
 // SetLogin, the account change) when it is on the embedded common-passwords
 // list (#528). It wraps ErrInvalidArgument, so a caller that only cares that the

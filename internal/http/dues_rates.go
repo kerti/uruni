@@ -162,7 +162,7 @@ func (a *api) updateDuesRate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if req.Amount == nil {
-		writeAPIError(w, http.StatusBadRequest, "invalid_argument", "The corrected amount is required.")
+		writeAPIFieldError(w, http.StatusBadRequest, "invalid_argument", "amount", "The corrected amount is required.")
 		return
 	}
 

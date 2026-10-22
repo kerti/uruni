@@ -38,17 +38,18 @@ func NormalizeEmail(email string) string {
 
 // checkEmail and checkPassword are the one shape check an address and a new
 // password pass wherever they enter: Register, SetLogin and the account
-// changes (change_login.go). email is already normalised.
+// changes (change_login.go). email is already normalised. field is the JSON key
+// the value arrived under, which the password's differs by route.
 func checkEmail(email string) error {
 	if email == "" || !strings.Contains(email, "@") {
-		return fmt.Errorf("%w: email must be a valid address", ErrInvalidArgument)
+		return &FieldError{Field: "email", Reason: "email must be a valid address"}
 	}
 	return nil
 }
 
-func checkPassword(password string) error {
+func checkPassword(field, password string) error {
 	if len(password) < MinPasswordLength {
-		return fmt.Errorf("%w: password must be at least %d characters", ErrInvalidArgument, MinPasswordLength)
+		return &FieldError{Field: field, Reason: fmt.Sprintf("password must be at least %d characters", MinPasswordLength)}
 	}
 	if isCommonPassword(password) {
 		return ErrPasswordTooCommon
@@ -134,7 +135,7 @@ func (a *Auth) Register(ctx context.Context, email, password string) (store.User
 	if err := checkEmail(email); err != nil {
 		return store.User{}, err
 	}
-	if err := checkPassword(password); err != nil {
+	if err := checkPassword("password", password); err != nil {
 		return store.User{}, err
 	}
 

@@ -258,8 +258,8 @@ func TestPostRegisterRejectsAShortPassword(t *testing.T) {
 		t.Fatalf("POST /api/register(short password) = %d, want %d (body: %s)", rec.Code, http.StatusBadRequest, rec.Body.String())
 	}
 	got := decodeError(t, rec)
-	if got.Code != "invalid_argument" {
-		t.Errorf("error code = %q, want %q", got.Code, "invalid_argument")
+	if got.Code != "invalid_argument" || got.Field != "password" {
+		t.Errorf("error = %+v, want invalid_argument naming password", got)
 	}
 
 	count, err := store.New(sqlDB).CountUsers(context.Background())

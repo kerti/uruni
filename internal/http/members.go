@@ -211,7 +211,7 @@ func (a *api) listMembers(w http.ResponseWriter, r *http.Request) {
 	if cursor := r.URL.Query().Get("cursor"); cursor != "" {
 		name, id, ok := decodeMembersCursor(cursor)
 		if !ok {
-			writeAPIError(w, http.StatusBadRequest, "invalid_argument", "The cursor is not valid.")
+			writeAPIFieldError(w, http.StatusBadRequest, "invalid_argument", "cursor", "The cursor is not valid.")
 			return
 		}
 		params.CursorName = name
@@ -327,6 +327,14 @@ func decodeUpdateMemberRequest(w http.ResponseWriter, r *http.Request) (updateMe
 		{"joined_on", &req.JoinedOnSet, &req.JoinedOn},
 		{"inactive_on", &req.InactiveOnSet, &req.InactiveOn},
 	}
+	known := make([]string, 0, len(fields))
+	for _, f := range fields {
+		known = append(known, f.key)
+	}
+	if key, unknown := unknownKey(raw, known); unknown {
+		writeUnknownField(w, key)
+		return updateMemberRequest{}, false
+	}
 	for _, f := range fields {
 		v, ok := raw[f.key]
 		if !ok {
@@ -367,14 +375,14 @@ func (a *api) updateMember(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.TierFromSet {
 		if req.TierFrom == nil {
-			writeAPIError(w, http.StatusBadRequest, "invalid_argument", "tier_effective_from cannot be null; leave it out for the current month.")
+			writeAPIFieldError(w, http.StatusBadRequest, "invalid_argument", "tier_effective_from", "tier_effective_from cannot be null; leave it out for the current month.")
 			return
 		}
 		params.TierFrom = *req.TierFrom
 	}
 	if req.JoinedOnSet {
 		if req.JoinedOn == nil {
-			writeAPIError(w, http.StatusBadRequest, "invalid_argument", "joined_on cannot be cleared; a member's history starts on a date.")
+			writeAPIFieldError(w, http.StatusBadRequest, "invalid_argument", "joined_on", "joined_on cannot be cleared; a member's history starts on a date.")
 			return
 		}
 		params.JoinedOn = req.JoinedOn

@@ -74,13 +74,13 @@ type PostTransactionParams struct {
 // IncidentalClosedOnForPurpose means the guard does not apply.
 func (l *Ledger) PostTransaction(ctx context.Context, p PostTransactionParams) (store.Transaction, error) {
 	if p.Amount <= 0 {
-		return store.Transaction{}, fmt.Errorf("%w: amount must be positive, got %d", ErrInvalidArgument, p.Amount.Int64())
+		return store.Transaction{}, invalidField("amount", "amount must be positive, got %d", p.Amount.Int64())
 	}
 	if err := CheckAmountCeiling("amount", p.Amount); err != nil {
 		return store.Transaction{}, err
 	}
 	if p.Direction != "in" && p.Direction != "out" {
-		return store.Transaction{}, fmt.Errorf("%w: direction must be \"in\" or \"out\", got %q", ErrInvalidArgument, p.Direction)
+		return store.Transaction{}, invalidField("direction", "direction must be \"in\" or \"out\", got %q", p.Direction)
 	}
 	window, err := l.windowFor(ctx, l.q, p.FundID, p.Now)
 	if err != nil {
@@ -91,10 +91,10 @@ func (l *Ledger) PostTransaction(ctx context.Context, p PostTransactionParams) (
 	}
 	if p.MemberID != nil {
 		if p.IsAdjustment {
-			return store.Transaction{}, fmt.Errorf("%w: member_id is only valid on a contribution, not an adjustment", ErrInvalidArgument)
+			return store.Transaction{}, invalidField("member_id", "member_id is only valid on a contribution, not an adjustment")
 		}
 		if p.Direction != "in" {
-			return store.Transaction{}, fmt.Errorf("%w: member_id is only valid on an incoming contribution", ErrInvalidArgument)
+			return store.Transaction{}, invalidField("member_id", "member_id is only valid on an incoming contribution")
 		}
 	}
 
@@ -171,13 +171,13 @@ type OpeningBalance struct {
 // CreateAccount from the fund.
 func validateOpeningBalance(ob OpeningBalance, ceiling string) error {
 	if ob.Amount < 0 {
-		return fmt.Errorf("%w: opening balance amount must not be negative, got %d", ErrInvalidArgument, ob.Amount.Int64())
+		return invalidField("opening_balance.amount", "opening balance amount must not be negative, got %d", ob.Amount.Int64())
 	}
 	if err := CheckAmountCeiling("opening balance amount", ob.Amount); err != nil {
 		return err
 	}
 	if ob.Amount > 0 {
-		if err := validateOccurredOn("opening balance occurred_on", ob.OccurredOn, ceiling); err != nil {
+		if err := validateOccurredOn("opening_balance.occurred_on", ob.OccurredOn, ceiling); err != nil {
 			return err
 		}
 	}

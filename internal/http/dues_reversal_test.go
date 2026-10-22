@@ -162,7 +162,7 @@ func TestPostReversalOfAnOrdinaryTransactionIs201(t *testing.T) {
 // The body is a note and nothing else: a stray occurred_on, amount or purpose is
 // dropped, never honoured (ADR-042). The old route took a date; a stale client
 // that still sends one gets the ledger's own pick.
-func TestPostReversalIgnoresEveryFieldButTheNote(t *testing.T) {
+func TestPostReversalTakesTheNoteAlone(t *testing.T) {
 	t.Parallel()
 	r := testRouter(t)
 	setup := setUpFund(t, r)
@@ -175,10 +175,23 @@ func TestPostReversalIgnoresEveryFieldButTheNote(t *testing.T) {
 	if err := json.NewDecoder(txRec.Body).Decode(&tx); err != nil {
 		t.Fatalf("decoding transaction response: %v", err)
 	}
+	path := fmt.Sprintf("/api/transactions/%d/reversal", tx.ID)
 
+	// A reversal copies the original; a caller naming its own day or amount is
+	// refused (#530), not quietly overruled.
 	rec := httptest.NewRecorder()
-	body := `{"occurred_on":"2026-09-30","amount":1,"purpose_id":999,"direction":"out","note":"salah arah"}`
-	r.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, fmt.Sprintf("/api/transactions/%d/reversal", tx.ID), strings.NewReader(body)))
+	body := `{"amount":1,"note":"salah arah"}`
+	r.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, path, strings.NewReader(body)))
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("POST reversal with an amount = %d, want %d (body: %s)", rec.Code, http.StatusBadRequest, rec.Body.String())
+	}
+	if got := decodeError(t, rec); got.Code != "invalid_argument" || got.Field != "amount" {
+		t.Errorf("error = %+v, want invalid_argument naming amount", got)
+	}
+
+	// The refusal reversed nothing: the note alone still reverses the original.
+	rec = httptest.NewRecorder()
+	r.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, path, strings.NewReader(`{"note":"salah arah"}`)))
 	if rec.Code != http.StatusCreated {
 		t.Fatalf("POST reversal = %d, want %d (body: %s)", rec.Code, http.StatusCreated, rec.Body.String())
 	}

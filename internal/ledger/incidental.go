@@ -53,13 +53,13 @@ type OpenIncidentalParams struct {
 // repeat leaves a twin for good.
 func (l *Ledger) OpenIncidental(ctx context.Context, p OpenIncidentalParams) (store.Incidental, error) {
 	if strings.TrimSpace(p.Occasion) == "" {
-		return store.Incidental{}, fmt.Errorf("%w: occasion must not be empty", ErrInvalidArgument)
+		return store.Incidental{}, invalidField("occasion", "occasion must not be empty")
 	}
 	if p.TargetAmount != nil && *p.TargetAmount <= 0 {
-		return store.Incidental{}, fmt.Errorf("%w: target_amount must be positive when set, got %d", ErrInvalidArgument, p.TargetAmount.Int64())
+		return store.Incidental{}, invalidField("target_amount", "target_amount must be positive when set, got %d", p.TargetAmount.Int64())
 	}
 	if p.MinimumPerMember != nil && *p.MinimumPerMember <= 0 {
-		return store.Incidental{}, fmt.Errorf("%w: minimum_per_member must be positive when set, got %d", ErrInvalidArgument, p.MinimumPerMember.Int64())
+		return store.Incidental{}, invalidField("minimum_per_member", "minimum_per_member must be positive when set, got %d", p.MinimumPerMember.Int64())
 	}
 	if err := checkParticipationCeilings(p.TargetAmount, p.MinimumPerMember); err != nil {
 		return store.Incidental{}, err
@@ -158,7 +158,7 @@ type RenameIncidentalParams struct {
 // belong to FundID.
 func (l *Ledger) RenameIncidental(ctx context.Context, p RenameIncidentalParams) (store.Incidental, error) {
 	if strings.TrimSpace(p.Occasion) == "" {
-		return store.Incidental{}, fmt.Errorf("%w: occasion must not be empty", ErrInvalidArgument)
+		return store.Incidental{}, invalidField("occasion", "occasion must not be empty")
 	}
 
 	var renamed store.Incidental
@@ -212,10 +212,10 @@ type SetIncidentalParticipationParams struct {
 // Fund-scoped through the GetIncidental fetch, as RenameIncidental is.
 func (l *Ledger) SetIncidentalParticipation(ctx context.Context, p SetIncidentalParticipationParams) (store.Incidental, error) {
 	if p.TargetAmount != nil && *p.TargetAmount <= 0 {
-		return store.Incidental{}, fmt.Errorf("%w: target_amount must be positive when set, got %d", ErrInvalidArgument, p.TargetAmount.Int64())
+		return store.Incidental{}, invalidField("target_amount", "target_amount must be positive when set, got %d", p.TargetAmount.Int64())
 	}
 	if p.MinimumPerMember != nil && *p.MinimumPerMember <= 0 {
-		return store.Incidental{}, fmt.Errorf("%w: minimum_per_member must be positive when set, got %d", ErrInvalidArgument, p.MinimumPerMember.Int64())
+		return store.Incidental{}, invalidField("minimum_per_member", "minimum_per_member must be positive when set, got %d", p.MinimumPerMember.Int64())
 	}
 	if err := checkParticipationCeilings(p.TargetAmount, p.MinimumPerMember); err != nil {
 		return store.Incidental{}, err

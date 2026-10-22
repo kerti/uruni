@@ -57,7 +57,7 @@ func (a *api) listPurposes(w http.ResponseWriter, r *http.Request) {
 	if raw := r.URL.Query().Get("selectable"); raw != "" {
 		parsed, err := strconv.ParseBool(raw)
 		if err != nil {
-			writeAPIError(w, http.StatusBadRequest, "invalid_argument", "The selectable filter is not a valid boolean.")
+			writeAPIFieldError(w, http.StatusBadRequest, "invalid_argument", "selectable", "The selectable filter is not a valid boolean.")
 			return
 		}
 		selectable = parsed
@@ -185,7 +185,7 @@ func (a *api) updatePurposeName(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if req.Name == nil {
-		writeAPIError(w, http.StatusBadRequest, "invalid_argument", "A name is required.")
+		writeAPIFieldError(w, http.StatusBadRequest, "invalid_argument", "name", "A name is required.")
 		return
 	}
 

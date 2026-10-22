@@ -281,7 +281,7 @@ func (a *api) listReconciliations(w http.ResponseWriter, r *http.Request) {
 	if cursor := r.URL.Query().Get("cursor"); cursor != "" {
 		performedAt, id, ok := decodeReconciliationsCursor(cursor)
 		if !ok {
-			writeAPIError(w, http.StatusBadRequest, "invalid_argument", "The cursor is not valid.")
+			writeAPIFieldError(w, http.StatusBadRequest, "invalid_argument", "cursor", "The cursor is not valid.")
 			return
 		}
 		params.CursorPerformedAt = performedAt

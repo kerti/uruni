@@ -35,7 +35,7 @@ type CreateReimbursementParams struct {
 // refuse.
 func (l *Ledger) CreateReimbursement(ctx context.Context, p CreateReimbursementParams) (store.Reimbursement, error) {
 	if p.Amount <= 0 {
-		return store.Reimbursement{}, fmt.Errorf("%w: amount must be positive, got %d", ErrInvalidArgument, p.Amount.Int64())
+		return store.Reimbursement{}, invalidField("amount", "amount must be positive, got %d", p.Amount.Int64())
 	}
 	if err := CheckAmountCeiling("amount", p.Amount); err != nil {
 		return store.Reimbursement{}, err
@@ -227,7 +227,7 @@ type UpdateReimbursementParams struct {
 // fixed amount. Only the ceiling is waived; the floor is the schema's CHECK.
 func (l *Ledger) UpdateReimbursement(ctx context.Context, p UpdateReimbursementParams) (store.Reimbursement, error) {
 	if p.Amount != nil && *p.Amount <= 0 {
-		return store.Reimbursement{}, fmt.Errorf("%w: amount must be positive, got %d", ErrInvalidArgument, p.Amount.Int64())
+		return store.Reimbursement{}, invalidField("amount", "amount must be positive, got %d", p.Amount.Int64())
 	}
 	if p.Amount != nil {
 		if err := CheckAmountCeiling("amount", *p.Amount); err != nil {

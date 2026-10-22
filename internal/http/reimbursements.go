@@ -198,7 +198,7 @@ func (a *api) listReimbursements(w http.ResponseWriter, r *http.Request) {
 	if raw := r.URL.Query().Get("outstanding"); raw != "" {
 		parsed, err := strconv.ParseBool(raw)
 		if err != nil {
-			writeAPIError(w, http.StatusBadRequest, "invalid_argument", "The outstanding filter is not a valid boolean.")
+			writeAPIFieldError(w, http.StatusBadRequest, "invalid_argument", "outstanding", "The outstanding filter is not a valid boolean.")
 			return
 		}
 		outstandingOnly = parsed
@@ -220,7 +220,7 @@ func (a *api) listReimbursements(w http.ResponseWriter, r *http.Request) {
 	if cursor := r.URL.Query().Get("cursor"); cursor != "" {
 		incurredOn, id, ok := decodeReimbursementsCursor(cursor)
 		if !ok {
-			writeAPIError(w, http.StatusBadRequest, "invalid_argument", "The cursor is not valid.")
+			writeAPIFieldError(w, http.StatusBadRequest, "invalid_argument", "cursor", "The cursor is not valid.")
 			return
 		}
 		params.CursorIncurredOn = incurredOn
@@ -390,6 +390,14 @@ func decodeUpdateReimbursementRequest(w http.ResponseWriter, r *http.Request) (u
 		{"incurred_on", &req.IncurredOnSet, &req.IncurredOn},
 		{"note", &req.NoteSet, &req.Note},
 		{"waived_on", &req.WaivedOnSet, &req.WaivedOn},
+	}
+	known := make([]string, 0, len(fields))
+	for _, f := range fields {
+		known = append(known, f.key)
+	}
+	if key, unknown := unknownKey(raw, known); unknown {
+		writeUnknownField(w, key)
+		return updateReimbursementRequest{}, false
 	}
 	for _, f := range fields {
 		v, ok := raw[f.key]

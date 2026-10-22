@@ -131,7 +131,7 @@ type PostTransferBetweenAccountsParams struct {
 // With p.Idempotency set (ADR-043), a repeat returns the first transfer.
 func (l *Ledger) PostTransferBetweenAccounts(ctx context.Context, p PostTransferBetweenAccountsParams) (store.Transfer, error) {
 	if p.Amount <= 0 {
-		return store.Transfer{}, fmt.Errorf("%w: amount must be positive, got %d", ErrInvalidArgument, p.Amount.Int64())
+		return store.Transfer{}, invalidField("amount", "amount must be positive, got %d", p.Amount.Int64())
 	}
 	if err := CheckAmountCeiling("amount", p.Amount); err != nil {
 		return store.Transfer{}, err
@@ -147,7 +147,7 @@ func (l *Ledger) PostTransferBetweenAccounts(ctx context.Context, p PostTransfer
 	from := leg{AccountID: p.FromAccountID, PurposeID: p.PurposeID}
 	to := leg{AccountID: p.ToAccountID, PurposeID: p.PurposeID}
 	if legsIdentical(from, to) {
-		return store.Transfer{}, fmt.Errorf("%w: from_account_id and to_account_id must differ, got %d for both", ErrInvalidArgument, p.FromAccountID)
+		return store.Transfer{}, invalidField("to_account_id", "from_account_id and to_account_id must differ, got %d for both", p.FromAccountID)
 	}
 
 	// Both locations are checked inside the write's transaction: money neither

@@ -332,6 +332,10 @@ func TestAShortNewPasswordIsRefusedAndIsNoGuess(t *testing.T) {
 	for i := 0; i < loginRateLimitMaxAttempts+1; i++ {
 		e.wantStatus(t, e.changePassword(t, e.a, "short", userPassword), http.StatusBadRequest, "invalid_argument")
 	}
+	// The refusal names the key the new password arrived under (#530).
+	if got := decodeError(t, e.changePassword(t, e.a, "short", userPassword)); got.Field != "new_password" {
+		t.Errorf("short new password field = %q, want %q", got.Field, "new_password")
+	}
 	// None of those spent the budget, and none changed anything.
 	e.wantStatus(t, e.changePassword(t, e.a, "a-brand-new-secret", "not-the-password"), http.StatusForbidden, "wrong_current_password")
 	if e.loginStatus(t, userEmail, userPassword) != http.StatusOK {

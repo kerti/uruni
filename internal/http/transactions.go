@@ -372,7 +372,7 @@ func (a *api) listTransactions(w http.ResponseWriter, r *http.Request) {
 	if cursor := r.URL.Query().Get("cursor"); cursor != "" {
 		occurredOn, id, ok := decodeTransactionsCursor(cursor)
 		if !ok {
-			writeAPIError(w, http.StatusBadRequest, "invalid_argument", "The cursor is not valid.")
+			writeAPIFieldError(w, http.StatusBadRequest, "invalid_argument", "cursor", "The cursor is not valid.")
 			return
 		}
 		params.CursorOccurredOn = occurredOn
@@ -393,7 +393,7 @@ func (a *api) listTransactions(w http.ResponseWriter, r *http.Request) {
 	if raw := r.URL.Query().Get("member_id"); raw != "" {
 		memberID, err := strconv.ParseInt(raw, 10, 64)
 		if err != nil {
-			writeAPIError(w, http.StatusBadRequest, "invalid_argument", "The member_id filter is not a valid number.")
+			writeAPIFieldError(w, http.StatusBadRequest, "invalid_argument", "member_id", "The member_id filter is not a valid number.")
 			return
 		}
 		params.MemberID = memberID
@@ -401,7 +401,7 @@ func (a *api) listTransactions(w http.ResponseWriter, r *http.Request) {
 
 	if duesPeriod := r.URL.Query().Get("dues_period"); duesPeriod != "" {
 		if !validDuesPeriod(duesPeriod) {
-			writeAPIError(w, http.StatusBadRequest, "invalid_argument", "The dues_period filter is not a valid \"YYYY-MM\" period.")
+			writeAPIFieldError(w, http.StatusBadRequest, "invalid_argument", "dues_period", "The dues_period filter is not a valid \"YYYY-MM\" period.")
 			return
 		}
 		params.DuesPeriod = duesPeriod
@@ -412,7 +412,7 @@ func (a *api) listTransactions(w http.ResponseWriter, r *http.Request) {
 	if raw := r.URL.Query().Get("purpose_id"); raw != "" {
 		purposeID, err := strconv.ParseInt(raw, 10, 64)
 		if err != nil || purposeID <= 0 {
-			writeAPIError(w, http.StatusBadRequest, "invalid_argument", "The purpose_id filter is not a valid number.")
+			writeAPIFieldError(w, http.StatusBadRequest, "invalid_argument", "purpose_id", "The purpose_id filter is not a valid number.")
 			return
 		}
 		params.PurposeID = purposeID
@@ -420,7 +420,7 @@ func (a *api) listTransactions(w http.ResponseWriter, r *http.Request) {
 
 	if month := r.URL.Query().Get("month"); month != "" {
 		if !validDuesPeriod(month) {
-			writeAPIError(w, http.StatusBadRequest, "invalid_argument", "The month filter is not a valid \"YYYY-MM\" month.")
+			writeAPIFieldError(w, http.StatusBadRequest, "invalid_argument", "month", "The month filter is not a valid \"YYYY-MM\" month.")
 			return
 		}
 		params.Month = month
@@ -428,7 +428,7 @@ func (a *api) listTransactions(w http.ResponseWriter, r *http.Request) {
 
 	if direction := r.URL.Query().Get("direction"); direction != "" {
 		if direction != "in" && direction != "out" {
-			writeAPIError(w, http.StatusBadRequest, "invalid_argument", "The direction filter must be \"in\" or \"out\".")
+			writeAPIFieldError(w, http.StatusBadRequest, "invalid_argument", "direction", "The direction filter must be \"in\" or \"out\".")
 			return
 		}
 		params.Direction = direction
