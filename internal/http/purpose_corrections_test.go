@@ -101,10 +101,16 @@ func TestPostPurposeCorrectionReturnsThePostedTransfer(t *testing.T) {
 			original.EffectivePurposeID, original.PurposeID)
 	}
 
+	// Both legs name the fix the way it was made, Titipan -> Kas Utama, though
+	// for this 'out' row the pair's money runs the other way (#654).
 	var correctionLegs int
 	for _, row := range rows {
 		if row.Kind == "transfer" && row.TransferCorrectsTransactionID != nil && *row.TransferCorrectsTransactionID == posted.ID {
 			correctionLegs++
+			if row.TransferFromName == nil || *row.TransferFromName != "Titipan" ||
+				row.TransferToName == nil || *row.TransferToName != "Kas Utama" {
+				t.Errorf("%s leg names = %q -> %q, want Titipan -> Kas Utama", row.Direction, derefOr(row.TransferFromName), derefOr(row.TransferToName))
+			}
 		}
 	}
 	if correctionLegs != 2 {
@@ -283,4 +289,11 @@ func TestPostPurposeCorrectionRefusalsHaveDistinctCodes(t *testing.T) {
 			}
 		})
 	}
+}
+
+func derefOr(s *string) string {
+	if s == nil {
+		return "<nil>"
+	}
+	return *s
 }

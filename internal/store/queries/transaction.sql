@@ -173,6 +173,7 @@ SELECT t.id, t.fund_id, t.account_id, t.purpose_id, t.direction, t.amount, t.occ
        fp.name AS transfer_from_purpose_name,
        tp.name AS transfer_to_purpose_name,
        tr.corrects_transaction_id AS transfer_corrects_transaction_id,
+       ct.direction AS transfer_corrects_direction,
        tr.reason AS transfer_reason,
        t.effective_purpose_id,
        t.reversed,
@@ -189,6 +190,7 @@ LEFT JOIN member m ON m.id = t.member_id
 LEFT JOIN reimbursement rb ON rb.id = t.reimbursement_id
 LEFT JOIN member rm ON rm.id = rb.member_id
 LEFT JOIN transfer tr ON tr.id = t.transfer_id
+LEFT JOIN "transaction" ct ON ct.id = tr.corrects_transaction_id
 LEFT JOIN "transaction" tf ON tf.transfer_id = t.transfer_id AND tf.direction = 'out'
 LEFT JOIN "transaction" tt ON tt.transfer_id = t.transfer_id AND tt.direction = 'in'
 LEFT JOIN account fa ON fa.id = tf.account_id

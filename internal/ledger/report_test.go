@@ -367,6 +367,40 @@ func TestMonthlyReportLocationTransferIsHiddenAndInNoTotal(t *testing.T) {
 	}
 }
 
+// An expense corrected to another pos reads the way the treasurer made the fix,
+// from the stored pos to the right one, as an income does (#654). The pair's own
+// money runs the other way, and the walk's Dipindah line still follows it.
+func TestMonthlyReportOutgoingCorrectionReadsFromTheStoredPos(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	l := newTestLedger(t)
+	f := newFixture(t, l)
+
+	postEntry(t, l, f.fundID, f.cashID, f.mainID, "in", 100_000, "2026-09-01", nil)
+	posted := postEntry(t, l, f.fundID, f.cashID, f.mainID, "out", 75_000, "2026-09-10", strPtr("Spent from the wrong pos"))
+	if _, err := l.PostPurposeCorrection(ctx, PostPurposeCorrectionParams{
+		FundID: f.fundID, TransactionID: posted.ID, PurposeID: f.passID,
+	}); err != nil {
+		t.Fatalf("PostPurposeCorrection() = %v, want no error", err)
+	}
+
+	r := monthlyReport(t, l, ReportParams{FundID: f.fundID, Month: "2026-09"})
+	mv := moves(r.Rows)
+	if len(mv) != 1 {
+		t.Fatalf("moves = %d, want 1", len(mv))
+	}
+	if m := mv[0]; m.Amount != 75_000 || m.FromPurposeName != "Primary Cash" || m.ToPurposeName != "Pass-through" || !m.IsCorrection {
+		t.Errorf("move = %+v, want 75000 from Primary Cash to Pass-through as a correction", m)
+	}
+
+	// Filtered to the pos the expense now belongs to: the pair's money left it,
+	// so its Dipindah line is the minus that carries the expense there.
+	pass := monthlyReport(t, l, ReportParams{FundID: f.fundID, Month: "2026-09", PurposeID: int64Ptr(f.passID)})
+	if pass.Walk.Moved != -75_000 {
+		t.Errorf("Pass-through's Moved = %d, want -75000", pass.Walk.Moved)
+	}
+}
+
 func TestMonthlyReportPurposeCorrectionIsOneMoveRowMatchedOnEitherSide(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
