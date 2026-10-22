@@ -11,10 +11,8 @@ import (
 )
 
 // upgrade.go holds the steps that bring an older uruni.json up to the current
-// FormatVersion (ADR-012: through 0.x the previous release's backup stays
-// restorable, and the step that converts it ships in the PR that changes the
-// shape). They run in ParseUpload, so the in-app restore, the inspect step and
-// `uruni rebuild` all take an older file, and nothing downstream of ParseUpload
+// FormatVersion (ADR-012). They run in ParseUpload, so the in-app restore, the
+// inspect step and `uruni rebuild` all take an older file and nothing downstream
 // ever sees one.
 
 // minUpgradableFormat is the oldest format_version the importer has a step for.
@@ -57,9 +55,8 @@ func decodeStrict(jsonBytes []byte, dst any) error {
 	return nil
 }
 
-// documentV1 is format_version 1's shape: Document before ADR-040. It differs in
-// two places only - members[] carries tier_id (and a joined_on that may be null,
-// from a file older than #471), and there is no member_tiers array.
+// documentV1 is format_version 1's shape: Document before ADR-040 and ADR-041.
+// Only fundV1, rateV1 and memberV1 differ, and there is no member_tiers array.
 type documentV1 struct {
 	FormatVersion int64 `json:"format_version"`
 
@@ -84,8 +81,8 @@ type documentV1 struct {
 	Totals Totals `json:"totals"`
 }
 
-// fundV1 is a v1 fund: no time_zone (ADR-041 added it in v2), so a v1 file
-// carrying one is refused as an unknown field, like any other field v1 never had.
+// fundV1 is a v1 fund: no time_zone (ADR-041), so a v1 file carrying one is
+// refused as an unknown field.
 type fundV1 struct {
 	ID         int64  `json:"id"`
 	Name       string `json:"name"`
@@ -94,8 +91,7 @@ type fundV1 struct {
 	CreatedAt  int64  `json:"created_at"`
 }
 
-// rateV1 is a v1 rate: one row per tier and month, with no correction number and
-// no deletion mark (ADR-040 added both in v2).
+// rateV1 is a v1 rate: no correction number and no deletion mark (ADR-040).
 type rateV1 struct {
 	ID            int64  `json:"id"`
 	TierID        int64  `json:"tier_id"`
@@ -119,19 +115,15 @@ type memberV1 struct {
 // upgradeV1 is the v1 -> v2 step (ADR-040, ADR-041). The totals block is
 // unchanged: no ledger row moves.
 //
-//   - Every fund takes time_zone Asia/Jakarta (tz.Default): every v1 file was
-//     written when the whole app reckoned in WIB, so nothing it says moves.
-//   - A null joined_on takes the fund's adoption date, what the column meant
-//     before #471 made it NOT NULL (see adoptionDates), so no member's dues move.
+//   - Every fund takes time_zone tz.Default: every v1 file was written when the
+//     whole app reckoned in WIB, so nothing it says moves.
+//   - A null joined_on takes the fund's adoption date (see adoptionDates), what
+//     the column meant before it became NOT NULL, so no member's dues move.
 //   - One member_tier row per tiered member: correction 0, from the month of
-//     joined_on, created_at taken from the member's own, ids 1.. in member-id
-//     order (the order of the file's array is not trusted: CLAUDE.md, no
-//     primary-key order beyond the cutoff, and ids here are minted, so their
-//     order is only ever made deterministic). An untiered member gets no row.
-//   - A v1 rate has no correction number and was never a deletion: it becomes
-//     correction 0, deleted false. (v2's rate fields were added in place by the
-//     rate-correction work, ADR-040, since v2 never shipped before the epic
-//     merged.)
+//     joined_on, created_at from the member's, ids 1.. in member-id order (the
+//     file's array order is not trusted; the ids are minted here, so their order
+//     is made deterministic). An untiered member gets no row.
+//   - A v1 rate becomes correction 0, deleted false.
 func upgradeV1(v1 documentV1) (Document, error) {
 	doc := Document{
 		FormatVersion:        FormatVersion,
@@ -180,9 +172,9 @@ func upgradeV1(v1 documentV1) (Document, error) {
 		if t, err := time.Parse(time.DateOnly, joinedOn); err != nil || t.Format(time.DateOnly) != joinedOn {
 			return Document{}, fmt.Errorf("%w: member %d's joined_on %q is not a calendar date", ErrMalformedBackup, m.ID, joinedOn)
 		}
-		// member_tier's start month has a 2000-01 floor and the first row starts at the
-		// join month, so an earlier date cannot be backfilled. member.joined_on has the
-		// same floor (#632), which makes such a backup unrestorable anyway.
+		// member_tier's first row starts at the join month, which has a 2000-01 floor,
+		// so an earlier date cannot be backfilled (and member.joined_on has the same
+		// floor, so such a backup is unrestorable anyway).
 		if joinedOn < "2000-01-01" {
 			return Document{}, fmt.Errorf("%w: member %d's joined_on %q is before 2000-01-01", ErrMalformedBackup, m.ID, joinedOn)
 		}

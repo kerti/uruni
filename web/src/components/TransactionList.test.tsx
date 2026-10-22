@@ -350,12 +350,10 @@ describe('TransactionList reversal (ADR-042)', () => {
     vi.stubGlobal('fetch', fetchMock)
     renderReversible([transaction({ id: 30, reversible: true })])
 
-    // No control on the card itself: one list has one way in.
     expect(screen.queryByRole('button', { name: text.reverse })).not.toBeInTheDocument()
 
     await openForm()
 
-    // It handed off to the form under the row, and moved no money.
     expect(fetchMock).not.toHaveBeenCalled()
     expect(screen.getByRole('button', { name: text.reverseConfirm })).toBeInTheDocument()
     expect(screen.getByText(text.reverseExplainer)).toBeInTheDocument()
@@ -400,7 +398,6 @@ describe('TransactionList reversal (ADR-042)', () => {
     expect(screen.getByText(text.reverseDateOriginal('12 Agustus 2026'))).toBeInTheDocument()
     expect(screen.getByText('Dicatat pada 12 Agustus 2026.')).toBeInTheDocument()
     expect(screen.queryByText(text.reverseDateToday)).not.toBeInTheDocument()
-    // The ledger dates the reversal: the form asks for no date.
     expect(screen.queryByText(copy.record.dateLabel)).not.toBeInTheDocument()
   })
 
@@ -427,7 +424,6 @@ describe('TransactionList reversal (ADR-042)', () => {
       '/api/transactions/36/reversal',
       expect.objectContaining({ method: 'POST', body: JSON.stringify({ note: 'Salah arah' }) }),
     )
-    // The form is gone once it has posted.
     expect(screen.queryByRole('button', { name: text.reverseConfirm })).not.toBeInTheDocument()
   })
 
@@ -528,7 +524,6 @@ describe('TransactionList the pair read as linked (ADR-042)', () => {
   it('hides the pos correction control on a reversed row, though the row would otherwise be eligible', () => {
     renderCorrectableRows([transaction({ id: 46, purpose_id: 1, reversed: true }), transaction({ id: 47, purpose_id: 1 })])
 
-    // Only the unreversed row's pos is a control.
     expect(screen.getAllByRole('button', { name: copy.purposeCorrection.controlAria('Kas Utama') })).toHaveLength(1)
   })
 })
@@ -663,9 +658,8 @@ describe('TransactionList entry detail (#359)', () => {
   const longNote = 'Beli semen 3 sak, pasir 1 pikap, dan upah tukang dua hari untuk perbaikan saluran air di gang belakang pos ronda'
 
   it('opens the entry in full on a tap of the card, with the whole note and when it was recorded', async () => {
-    // An explicit instant: the dialog shows the time of day in the fund's zone
-    // (WIB until one is set, ADR-041), with its abbreviation, whatever zone the
-    // runner is in (a laptop, or UTC in CI).
+    // An explicit instant: the dialog shows the time in the fund's zone (WIB
+    // until one is set, ADR-041), whatever zone the runner is in (CI is UTC).
     renderRows([transaction({ direction: 'out', note: longNote, created_at: new Date('2026-10-01T13:42:00+07:00').getTime() / 1000 })])
 
     await userEvent.click(screen.getByRole('button', { name: /^Lihat rincian:/ }))

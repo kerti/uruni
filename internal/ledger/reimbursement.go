@@ -21,18 +21,18 @@ type CreateReimbursementParams struct {
 	IncurredOn string       // "YYYY-MM-DD", a real calendar date
 	Note       *string
 
-	// Now is the clock IncurredOn's ceiling is read from, in the fund's zone
-	// (ADR-041, #632). The zero value means time.Now().
+	// Now is the clock IncurredOn's ceiling is read from (ADR-041).
+	// Zero means time.Now().
 	Now time.Time
 }
 
 // CreateReimbursement files a claim. It posts nothing (an unsettled claim is
 // off the ledger, ADR-024), but a claim against a closed envelope can only
 // end in a refused payout, so it is refused with ErrIncidentalClosed
-// (ADR-031, #473): reopen the envelope first. An incurred_on that is not a real
-// date is ErrInvalidArgument, and one outside the plausible window is
-// ErrDateOutOfRange (#632); every other rule (a member or purpose naming no
-// row) is the schema's to refuse.
+// (ADR-031): reopen the envelope first. An incurred_on that is not a real date
+// is ErrInvalidArgument, one outside the plausible window ErrDateOutOfRange;
+// every other rule (a member or purpose naming no row) is the schema's to
+// refuse.
 func (l *Ledger) CreateReimbursement(ctx context.Context, p CreateReimbursementParams) (store.Reimbursement, error) {
 	if p.Amount <= 0 {
 		return store.Reimbursement{}, fmt.Errorf("%w: amount must be positive, got %d", ErrInvalidArgument, p.Amount.Int64())
@@ -79,8 +79,8 @@ type SettleReimbursementParams struct {
 	AccountID       int64  // which account pays the claim out
 	OccurredOn      string // "YYYY-MM-DD", a real calendar date - the settle date, not incurred_on
 
-	// Now is the clock OccurredOn's ceiling is read from, in the fund's zone
-	// (ADR-041, #632). The zero value means time.Now().
+	// Now is the clock OccurredOn's ceiling is read from (ADR-041).
+	// Zero means time.Now().
 	Now time.Time
 }
 
@@ -192,8 +192,8 @@ type UpdateReimbursementParams struct {
 	WaivedOn    *string // "YYYY-MM-DD" to waive, nil with SetWaivedOn to un-waive
 	SetWaivedOn bool
 
-	// Now is the clock the dates' ceiling is read from, in the fund's zone
-	// (ADR-041, #632). The zero value means time.Now().
+	// Now is the clock the dates' ceiling is read from (ADR-041).
+	// Zero means time.Now().
 	Now time.Time
 }
 
@@ -220,13 +220,11 @@ type UpdateReimbursementParams struct {
 // CreateReimbursement refuses filing one there (#473). Moving it off one is
 // allowed: that posts nothing and leaves the claim payable.
 //
-// IncurredOn and WaivedOn are checked against the plausible window (#632), the
-// floor and the ceiling, with one exception: a correction re-sends the claim's
-// incurred_on unchanged (the form always does), and a date that is not being
-// changed is not the caller's to defend. A claim dated ahead of today (a zone
-// change, ADR-041, or a row older than the ceiling) still takes a fixed amount,
-// as a claim on a closed envelope still takes one. Only the ceiling is waived
-// for it; the floor is the schema's CHECK either way.
+// IncurredOn and WaivedOn are checked against the plausible window, with one
+// exception: a correction re-sends the claim's incurred_on unchanged (the form
+// always does), and a date that is not being changed is not the caller's to
+// defend. A claim dated ahead of today (a zone change, ADR-041) still takes a
+// fixed amount. Only the ceiling is waived; the floor is the schema's CHECK.
 func (l *Ledger) UpdateReimbursement(ctx context.Context, p UpdateReimbursementParams) (store.Reimbursement, error) {
 	if p.Amount != nil && *p.Amount <= 0 {
 		return store.Reimbursement{}, fmt.Errorf("%w: amount must be positive, got %d", ErrInvalidArgument, p.Amount.Int64())

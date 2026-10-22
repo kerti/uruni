@@ -626,9 +626,8 @@ func TestDuesStatusForPeriodScopesToOneFund(t *testing.T) {
 
 // --- a tier change does not reach back (ADR-040) --------------------------
 
-// A member promoted mid-year is priced at the tier in force in each period.
-// This replaces ADR-024's accepted limitation, which applied the CURRENT tier to
-// every past period: January now comes back at Tier A's rate, what was in force.
+// A member promoted mid-year is priced at the tier in force in each period:
+// January comes back at Tier A's rate.
 func TestDuesStatusForPeriodMidYearPromotionLeavesPastPeriodsAtTheOldTier(t *testing.T) {
 	t.Parallel()
 	l := newTestLedger(t)
@@ -1048,8 +1047,8 @@ func TestOutstandingDuesForMemberUnknownMemberIsNotFound(t *testing.T) {
 	}
 }
 
-// The opposite of ADR-024's accepted limitation: January stays at the tier the
-// member was in then, and the rows after the promotion carry the new one.
+// January stays at the tier the member was in then, and the rows after the
+// promotion carry the new one.
 func TestOutstandingDuesForMemberMidYearPromotionLeavesPastPeriodsAtTheOldTier(t *testing.T) {
 	t.Parallel()
 	l := newTestLedger(t)

@@ -12,7 +12,7 @@ import (
 	"time"
 )
 
-// ADR-043 on the one route #634 keys, POST /api/transactions.
+// ADR-043 on POST /api/transactions, the first keyed route.
 
 // Plainly fixtures, and low in entropy so a secret scanner does not read them as
 // credentials (a random hex key here tripped gitleaks' generic-api-key).

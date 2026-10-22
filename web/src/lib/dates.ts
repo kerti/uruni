@@ -13,14 +13,12 @@
  * midnight, which renders as the previous day west of Greenwich. Same for a
  * bare 'YYYY-MM'.
  *
- * **The fund's zone.** "Today" and "this month" are read in the fund's time
- * zone (WIB, WITA or WIT), which `lib/setup.ts` hands to `setFundTimeZone`
- * inside the functions that return a fund, before their promise resolves and
- * never from an effect or a render: the first screen's `useState(todayISODate)`
- * initialisers run on the render right after the fetch, so a zone set from an
- * effect would let that screen read the default. Until a zone is set the
- * helpers read the default zone (WIB), never the device's, so a test or a stray
- * early call is deterministic.
+ * **The fund's zone.** "Today" and "this month" are read in the fund's zone (WIB,
+ * WITA or WIT), which `lib/setup.ts` hands to `setFundTimeZone` inside the functions
+ * that return a fund, before their promise resolves - never from an effect or a
+ * render, which would be one render late for the first screen's
+ * `useState(todayISODate)`. Until a zone is set the helpers read WIB, never the
+ * device's, so a test or a stray early call is deterministic.
  */
 
 import { copy } from '@/copy/id'
@@ -28,10 +26,8 @@ import { DEFAULT_TIME_ZONE, isTimeZone, zoneForDeviceOffset, type TimeZone } fro
 
 let fundZone: TimeZone = DEFAULT_TIME_ZONE
 
-/** Holds the fund's zone for the module. Called by `lib/setup.ts` with the
- * `time_zone` of every fund payload it returns. A name outside the three is
- * ignored: the server's CHECK makes one unrepresentable, and the zone stays
- * what it was rather than becoming the device's. */
+/** Holds the fund's zone for the module; `lib/setup.ts` calls it with every fund payload's
+ * `time_zone`. A name outside the three is ignored (the server's CHECK forbids one). */
 export function setFundTimeZone(zone: string): void {
   if (isTimeZone(zone)) fundZone = zone
 }
@@ -85,18 +81,15 @@ function isoDateIn(zone: TimeZone, instant: Date): string {
   return `${parts.year}-${parts.month}-${parts.day}`
 }
 
-/** The device clock as an instant, for measuring elapsed wall time only (the
- * fetch wrapper's 15-minute key window, ADR-043) - never a day, which is
- * todayISODate's, in the fund's zone. Wall time, not performance.now(), which
- * can stand still while a locked phone sleeps. */
+/** The device clock as an instant, for measuring elapsed wall time only (the fetch
+ * wrapper's 15-minute key window, ADR-043), never a day. Not performance.now(), which can
+ * stand still while a locked phone sleeps. */
 export function wallClockMs(): number {
   return Date.now()
 }
 
-/** Today in the fund's zone, as YYYY-MM-DD - never `toISOString()` (UTC, which
- * reads as yesterday's date in WIB before 07:00) and never the device's own
- * calendar (a phone in another zone). The default `occurred_on`/`joined_on` a
- * form seeds itself with. */
+/** Today in the fund's zone, as YYYY-MM-DD - never `toISOString()` (UTC: yesterday in
+ * WIB before 07:00) nor the device's calendar. The default date a form seeds itself with. */
 export function todayISODate(): string {
   return isoDateIn(fundZone, new Date())
 }
@@ -118,10 +111,8 @@ export function formatUnixSeconds(unixSeconds: number): string {
   )
 }
 
-/** A unix-seconds timestamp with its time of day and the zone's abbreviation,
- * from copy and not from `Intl`'s engine-dependent `timeZoneName` -> "1 Oktober
- * 2026 pukul 13.42 WIB". A row's `created_at` in the entry detail, where when it
- * was actually recorded is the point. */
+/** A unix-seconds timestamp with its time of day and the zone's abbreviation (from
+ * copy, not Intl's engine-dependent `timeZoneName`) -> "1 Oktober 2026 pukul 13.42 WIB". */
 export function formatUnixSecondsWithTime(unixSeconds: number): string {
   const zone = fundZone
   const formatted = cached(
@@ -167,22 +158,18 @@ export function currentPeriod(): string {
   return todayISODate().slice(0, 7)
 }
 
-/** The inclusive range a date picker offers. The server refuses a date outside
- * its plausible window (#632: a floor of 2000 in the schema, a ceiling per field
- * read in the fund's zone, internal/ledger/date_window.go) with `date_out_of_range`.
- * These bounds sit inside that window, so no date a picker offers is ever
- * refused; they also keep the treasurer from landing on a nonsensical one by a
- * slip of the thumb and keep the calendar's year list short. The window's table
- * is pinned in dates.test.ts. */
+/** The inclusive range a date picker offers. The server refuses a date outside its
+ * plausible window (internal/ledger/date_window.go) with `date_out_of_range`; these
+ * bounds sit inside it, and also keep a slip of the thumb off nonsensical dates and the
+ * year list short. The window's table is pinned in dates.test.ts. */
 export interface DateBounds {
   min: string
   max: string
 }
 
-/** The earliest year any picker offers, and the server's floor (the schema's
- * CHECKs, #632). A fund adopting Uruni carries its history in the opening
- * balance (PRD: history starts at adoption); only a member's join date or a
- * rate's start month reaches back further, for live arrears, and not past this. */
+/** The earliest year any picker offers, and the server's floor (the schema's CHECKs).
+ * A fund's history before adoption lives in the opening balance (PRD); only a join
+ * date or a rate's start month reaches back, for live arrears, and not past this. */
 const EARLIEST_YEAR = 2000
 
 /** The same day next year, or the month's last day when that day does not exist:

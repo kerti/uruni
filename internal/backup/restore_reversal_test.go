@@ -12,12 +12,11 @@ import (
 	"github.com/kerti/uruni/internal/store"
 )
 
-// ADR-042 changes what the schema accepts as a reversal and adds no column, so
-// the backup format stays where it is; these tests hold what restore must do
-// about it. The triggers stay ON during a restore (ADR-012 obligation 1): they
-// are what refuses a hand-edited or corrupted file, and the one thing they must
-// not refuse is a reversal already in a live file that the ledger would not post
-// today (one dated before its original).
+// ADR-042 adds no column, so the backup format stays; these tests hold what
+// restore must do about it. The triggers stay ON during a restore (ADR-012
+// obligation 1): they refuse a hand-edited or corrupted file, and must not
+// refuse a reversal already in a live file that the ledger would not post today
+// (one dated before its original).
 
 type reversalFixture struct {
 	fundID, cashID, mainID, passThroughID int64

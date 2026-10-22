@@ -17,12 +17,9 @@ import (
 	"github.com/kerti/uruni/internal/ledger"
 )
 
-// Idempotency keys on the immutable writes (ADR-043). A client that carries an
-// Idempotency-Key on a keyed route can repeat the request after a lost response
-// without posting twice. The ledger owns the check, the write and the record in
-// one transaction (ledger.Idempotency); this file is the HTTP half: read the
-// header, fingerprint the request, hand the ledger a ledger.Idempotency, and
-// tell a replay apart on the way out.
+// Idempotency keys on the immutable writes (ADR-043). The ledger owns the check,
+// the write and the record in one transaction; this file is the HTTP half: read
+// the header, fingerprint the request, and tell a replay apart on the way out.
 
 const (
 	// idempotencyHeader is minted by the SPA's fetch wrapper: 16 random bytes as
@@ -60,17 +57,14 @@ func validIdempotencyKey(key string) bool {
 }
 
 // keyed wraps a route whose write is safe to repeat under an idempotency key
-// (ADR-043). Without the header it does nothing at all: the write is simply
-// unprotected, so curl, e2e seeding and a PWA bundle cached from before the
-// header existed keep working. A header that is not a valid key is 400
-// invalid_idempotency_key.
+// (ADR-043). Without the header it does nothing: the write is simply
+// unprotected, so curl, e2e seeding and a stale cached PWA bundle keep working.
+// An invalid key is 400 invalid_idempotency_key.
 //
-// With a valid one it reads the body (the same cap and 413 as decodeJSON), puts
-// it back for the handler, and stores in the request's context a
-// *ledger.Idempotency carrying the key, the request's fingerprint and the
-// record's times. It sits behind the session gate, so a replay is as gated as
-// the write it repeats. Routes other than the keyed ones never pass through it,
-// so the header is not even read on them.
+// With a valid one it reads the body (same cap and 413 as decodeJSON), puts it
+// back for the handler, and stores a *ledger.Idempotency in the request's
+// context. It sits behind the session gate, so a replay is as gated as the
+// write it repeats.
 func (a *api) keyed(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		values := r.Header.Values(idempotencyHeader)
@@ -114,11 +108,10 @@ func idempotencyFrom(r *http.Request) *ledger.Idempotency {
 	return idem
 }
 
-// markReplay is the handler's part after a successful ledger call: when the
-// ledger flagged the answer a replay, it adds Idempotent-Replayed (before the
-// body is written) and logs one info line with the route and the age of the
-// stored result. Never the key or the body (ADR-022). The age is what tells an
-// operator a retry (seconds) from a swallowed deliberate entry (minutes).
+// markReplay, when the ledger flagged the answer a replay, adds
+// Idempotent-Replayed (before the body is written) and logs the route and the
+// stored result's age, never the key or the body (ADR-022). The age tells a
+// retry (seconds) from a swallowed deliberate entry (minutes).
 func markReplay(w http.ResponseWriter, r *http.Request, logger *slog.Logger, idem *ledger.Idempotency) {
 	if idem == nil || !idem.Replayed {
 		return

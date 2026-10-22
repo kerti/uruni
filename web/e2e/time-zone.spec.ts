@@ -10,8 +10,6 @@ import { expect, test } from './fixtures'
 // and Vitest (lib/dates.test.ts, App.test.tsx); this walks only what needs a
 // real browser against the real server: the themed Select, the dialog on the
 // URL, and the round trip through POST /api/setup and PATCH /api/fund.
-//
-// Serial, one story on an instance with nothing in it, as first-run.spec.ts.
 
 const email = 'bendahara-zona@e2e.uruni.test'
 const password = 'kata-sandi-zona'
@@ -41,8 +39,6 @@ test.describe("the fund's time zone", () => {
     await page.getByLabel(copy.auth.register.passwordLabel, { exact: true }).fill(password)
     await page.getByRole('button', { name: copy.auth.register.submit }).click()
 
-    // Step 1 asks for the zone under the name, with its hint, and the field is
-    // there whatever the browser pre-selected.
     await expect(page.getByText(copy.setup.stepLabel(1))).toBeVisible()
     await page.getByLabel(copy.setup.fund.nameLabel).fill(fundName)
     await expect(page.getByText(zones.setupHint)).toBeVisible()
@@ -50,7 +46,6 @@ test.describe("the fund's time zone", () => {
     await expect(page.getByRole('combobox', { name: zones.label })).toHaveText(zones.options['Asia/Makassar'].label)
     await page.getByRole('button', { name: copy.setup.next }).click()
 
-    // Locations and balances are left as they come; the roster step is skipped.
     await expect(page.getByText(copy.setup.stepLabel(2))).toBeVisible()
     await page.getByRole('button', { name: copy.setup.next }).click()
     await expect(page.getByText(copy.setup.stepLabel(3))).toBeVisible()
@@ -59,7 +54,6 @@ test.describe("the fund's time zone", () => {
     await page.getByRole('button', { name: copy.setup.roster.skip }).click()
     await expect(page.getByRole('heading', { level: 1, name: fundName })).toBeVisible()
 
-    // Pengaturan's "Kas ini" holds the name and the zone she chose.
     await page.getByRole('link', { name: copy.shell.nav.settings }).click()
     await expect(page.getByRole('heading', { name: copy.settings.fund.heading })).toBeVisible()
     await expect(page.getByRole('button', { name: copy.settings.fund.editAria(fundName) })).toBeVisible()
@@ -76,13 +70,11 @@ test.describe("the fund's time zone", () => {
     await page.getByRole('link', { name: copy.shell.nav.settings }).click()
     await page.getByRole('button', { name: copy.settings.fund.zone.editAria(zones.options['Asia/Makassar'].label) }).click()
 
-    // A dialog on the URL (ADR-032), like every non-posting edit.
     await expect(page).toHaveURL(/[?&]edit=fund%3Atime_zone/)
     const dialog = page.getByRole('dialog', { name: copy.settings.fund.zone.editTitle })
     await expect(dialog).toBeVisible()
     await expect(dialog.getByText(copy.settings.fund.zone.body)).toBeVisible()
 
-    // Nothing to save until she picks a different zone.
     await expect(dialog.getByRole('button', { name: copy.settings.fund.save })).toBeDisabled()
     await chooseZone(page, 'Asia/Jayapura')
     await dialog.getByRole('button', { name: copy.settings.fund.save }).click()

@@ -453,7 +453,7 @@ func TestReverseTransactionRefusesWhatItWillNotTake(t *testing.T) {
 	t.Run("a counted row dated after today", func(t *testing.T) {
 		t.Parallel()
 		w := setup(t)
-		// A row from before #632's ceiling: posted when "today" was later.
+		// A row from before the date ceiling: posted when "today" was later.
 		ahead := postEntry(t, w.l, w.f.fundID, w.f.cashID, w.f.mainID, "in", 8_000, "2026-12-20", nil)
 		// Uncounted, it reverses on its own date, ahead of today.
 		if reversal := reverseAt(t, w.l, w.f.fundID, ahead.ID, onTheDay("2026-10-02")); reversal.OccurredOn != "2026-12-20" {
@@ -622,7 +622,7 @@ func TestPurposeCorrectionAndReversalOfTheSameRow(t *testing.T) {
 // The envelope's collected and disbursed read a reversal as a minus on the
 // original's bucket, so collected minus disbursed is the balance even when a
 // purpose correction put the two halves of a pair in two pos (ADR-042). Dropping
-// the pair whole, as the query used to, reads A -100 and B +100 here.
+// the pair whole would read A -100 and B +100 here.
 func TestIncidentalActivityTotalsNetAReversalAgainstItsOriginal(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
@@ -699,10 +699,9 @@ func TestIncidentalActivityTotalsNetAReversalAgainstItsOriginal(t *testing.T) {
 	}
 }
 
-// The Iuran history is dues payments and their reversals, nothing else. A named
-// contribution's reversal (member set, no period) used to leak into it, and an
-// unnamed one was kept out only by the INNER JOIN on member (ADR-042 narrows the
-// query to dues reversals).
+// The Iuran history is dues payments and their reversals, nothing else: a named
+// contribution's reversal (member set, no period) must not leak into it
+// (ADR-042 narrows the query to dues reversals).
 func TestDuesPaymentHistoryDoesNotCarryOtherReversals(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()

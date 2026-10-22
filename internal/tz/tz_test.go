@@ -10,8 +10,7 @@ import (
 )
 
 // The three zones are fixed offsets with no daylight saving, loaded from the
-// embedded tzdata (the runtime image ships no zoneinfo). ADR-041 leans on the
-// offset being constant.
+// embedded tzdata (the runtime image ships no zoneinfo).
 func TestZonesAreFixedOffsets(t *testing.T) {
 	t.Parallel()
 	for name, hours := range map[string]int{Jakarta: 7, Makassar: 8, Jayapura: 9} {
@@ -100,8 +99,7 @@ func TestTheSameInstantIsADifferentDayInEachZone(t *testing.T) {
 
 // ADR-041: the list of zones lives in three places, the schema's CHECK, Names()
 // and the web's options (web/src/lib/timeZones.ts). One test reads the other two
-// copies and fails when any list, its order, or the default differs, as
-// ADR-035's test does for the palette by reading web/src/index.css. No Vitest
+// copies and fails when any list, its order, or the default differs. No Vitest
 // reaches out of web/, so the pin lives here.
 func TestTimeZoneListsAgree(t *testing.T) {
 	t.Parallel()

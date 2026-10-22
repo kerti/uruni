@@ -31,8 +31,8 @@ func int64Ptr(v int64) *int64 { return &v }
 // (noon UTC is 19:00 WIB, 20:00 WITA, 21:00 WIT). The report tests date their
 // rows by hand, some of them after the report's own "today" on purpose (the
 // running month has no upper bound, ADR-038), so each row is posted as if on its
-// own day: the ceiling (#632) is not their subject and has its own tests in
-// date_window_test.go, and no fixture depends on the machine's date. An
+// own day: the date ceiling is not their subject (date_window_test.go has it),
+// and no fixture depends on the machine's date. An
 // unparseable date gives the zero time, and the post is refused as it should be.
 func onTheDay(date string) time.Time {
 	t, err := time.Parse(time.DateOnly, date)
@@ -704,10 +704,9 @@ func TestMonthlyReportTotalsRefuseToWrap(t *testing.T) {
 	l := newTestLedger(t)
 	f := newFixture(t, l)
 	big := money.Amount(math.MaxInt64/2 + 1)
-	// The ceiling (#499) means no ledger method writes a figure this large, and
-	// since #622 the schema refuses it too, so the rows go in with the CHECKs off,
-	// as a database from before the ceiling can still hold them. The report must
-	// refuse them, not show a wrapped total.
+	// No ledger method or new schema admits a figure this large, so the rows go in
+	// with the CHECKs off, as a database from before the ceiling can hold them.
+	// The report must refuse them, not show a wrapped total.
 	aroundTheCeiling(t, l, func(q *store.Queries) {
 		for _, on := range []string{"2026-09-01", "2026-09-02"} {
 			if _, err := q.CreateTransaction(context.Background(), store.CreateTransactionParams{

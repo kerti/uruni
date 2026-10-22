@@ -18,10 +18,9 @@ import (
 // the answer is a replay. A caller therefore reads Replayed only after the call
 // returned nil.
 //
-// It rides inside the params, not around the call, because a transaction opened
-// by a caller would make the ledger's own BeginTx wait for the only connection
-// (ADR-027, ADR-043): the check, the write and the record must share the
-// ledger's withTx.
+// It rides inside the params, not around the call, because a caller's own
+// transaction would make the ledger's BeginTx wait for the only connection: the
+// check, the write and the record must share the ledger's withTx (ADR-043).
 type Idempotency struct {
 	Key string
 	// Fingerprint is the SHA-256 of the request, 64 hex characters (the HTTP

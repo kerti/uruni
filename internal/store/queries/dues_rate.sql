@@ -1,11 +1,8 @@
--- dues_rate (ADR-040): a tier's price, month by month. A mistake in a rate is a
--- new row (the next correction of its month), never an UPDATE; a deletion is a
--- deleting correction (deleted = 1). Every pricing read goes through the
--- dues_rate_standing view (one row per tier and month that has a rate: the
--- highest correction, and none when that is a deletion); internal/db's guard
--- test fails a query that reads the table directly, except the ones named there
--- (GetDuesRateForFund, LatestDuesRateOfMonth, ListDuesRatesByFund). Another test
--- fails a statement that updates the table or deletes from it other than
+-- dues_rate (ADR-040): a mistake is a new row (the next correction of its month),
+-- never an UPDATE; a deletion is a deleting correction. Pricing reads go through
+-- the dues_rate_standing view (schema file). internal/db's guard test fails a
+-- direct read of the table other than GetDuesRateForFund, LatestDuesRateOfMonth
+-- and ListDuesRatesByFund, and any UPDATE or DELETE other than
 -- DeleteDuesRatesByTier (dues_tier.sql) and restore's clear-all.
 
 -- name: CreateDuesRate :one
@@ -45,8 +42,7 @@ WHERE tier_id = ? AND effective_from <= ?
 ORDER BY effective_from DESC
 LIMIT 1;
 
--- What the Golongan screen lists: the rates in force, oldest month first. A
--- month whose rate was deleted does not show.
+-- The Golongan screen's list: the rates in force, oldest month first.
 -- name: ListDuesRatesByTier :many
 SELECT id, tier_id, amount, effective_from, correction, created_at
 FROM dues_rate_standing
@@ -65,9 +61,7 @@ WHERE dues_tier.fund_id = ?
 ORDER BY dues_rate.id;
 
 -- The rates that price a roster (DuesStatusForPeriod): every tier's rates in
--- force across the fund, ordered tier then month, the order the Go fold needs.
--- Folded per (tier, period) as "the latest row at or before", so a roster costs
--- one query however many members it holds.
+-- force, ordered tier then month for the Go fold. One query however many members.
 -- name: ListDuesRatesForPricing :many
 SELECT dr.id, dr.tier_id, dr.amount, dr.effective_from, dr.correction, dr.created_at
 FROM dues_rate_standing dr

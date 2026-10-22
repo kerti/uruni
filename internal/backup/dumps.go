@@ -63,13 +63,11 @@ const (
 //   - date+time (YYYYMMDD-HHMMSS, in the fund's zone): retention counts
 //     versions, so a boot dump or a same-day change after the scheduled dump
 //     needs a name of its own; the name cannot be dated to the day alone.
-//   - zone token (ADR-041): "utc8" (Asia/Makassar, WITA) or "utc9"
-//     (Asia/Jayapura, WIT), written only outside WIB. A wall-clock time without
-//     its zone is ambiguous the moment the zone can change or the file leaves
-//     the host. A name with no token is Asia/Jakarta, whenever it was written,
-//     so every existing dump keeps its meaning and nothing a WIB instance
-//     writes changes shape. The parse reads the stamp in its own zone, so the
-//     instant stays exact whatever the fund's zone is now.
+//   - zone token (ADR-041): "utc8" (Asia/Makassar) or "utc9" (Asia/Jayapura),
+//     written only outside WIB. A wall-clock time without its zone is ambiguous
+//     once the zone can change. A name with no token is Asia/Jakarta, so every
+//     existing dump keeps its meaning. The parse reads the stamp in its own
+//     zone, so the instant stays exact whatever the fund's zone is now.
 //   - kind: "daily" or "pre-restore", so retention can group by kind from
 //     the name alone.
 //   - format version: readable without opening the zip, so
@@ -142,8 +140,8 @@ func shortHash(hash string) string {
 }
 
 // BuildDumpName renders a DumpInfo's filename; see dumpNamePattern. when is
-// stamped in zone, one of tz.Names() (a name outside them is a programming
-// error, since every caller takes it from a fund row or tz.Default, and panics).
+// stamped in zone, one of tz.Names() (any other panics: every caller takes it
+// from a fund row or tz.Default).
 // hash is ChangeHash's full hex digest; only shortHash's prefix goes in the name.
 func BuildDumpName(when time.Time, zone string, kind Kind, formatVersion int64, hash string) string {
 	loc, err := tz.Load(zone)
@@ -383,9 +381,6 @@ func writeThenRename(backupDir, name string, data []byte) error {
 // WriteDump writes one fresh dump of kind unconditionally; the change-only
 // check is WriteDailyIfNeeded's job. The boot-time format-version dump and
 // the restore safety net call this because both always want a fresh dump.
-//
-// The name is stamped in the instance's zone (InstanceZone): the first fund's,
-// or tz.Default before setup.
 func WriteDump(ctx context.Context, sqlDB *sql.DB, uploadsDir, backupDir string, kind Kind, now time.Time) (name string, err error) {
 	zone, err := InstanceZone(ctx, store.New(sqlDB))
 	if err != nil {

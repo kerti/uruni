@@ -60,10 +60,8 @@ type EffectivePurposeForTransactionParams struct {
 }
 
 // The effective peruntukan (ADR-033, #411): the tag this row's money is under
-// now. It is defined once, as ledger_entry.effective_purpose_id (the schema
-// file has the reasoning: a path of corrections, no ordering of them, a row
-// corrected and corrected back ends where it began), and this query only reads
-// it. A row nothing corrects answers its own purpose_id.
+// now. Defined once as ledger_entry.effective_purpose_id (schema file); this
+// only reads it. A row nothing corrects answers its own purpose_id.
 func (q *Queries) EffectivePurposeForTransaction(ctx context.Context, arg EffectivePurposeForTransactionParams) (int64, error) {
 	row := q.db.QueryRowContext(ctx, effectivePurposeForTransaction, arg.FundID, arg.ID)
 	var effective_purpose_id int64

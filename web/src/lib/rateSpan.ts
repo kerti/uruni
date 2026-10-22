@@ -1,11 +1,9 @@
 import { addMonthsToPeriod } from '@/lib/dates'
 import type { DuesRate } from '@/lib/setup'
 
-/** The months a rate's correction reprices (ADR-040): from the rate's own
- * month to the month before the next rate that still stands. `until` is null
- * when no later rate stands, i.e. the correction reaches every month onward.
- * Computed from the standing list the API returns (deleted months are already
- * absent), whatever its order. */
+/** The months a rate's correction reprices (ADR-040): from the rate's own month to
+ * the month before the next standing rate. `until` is null when none stands.
+ * Computed from the standing list the API returns, whatever its order. */
 export interface RateSpan {
   from: string
   until: string | null

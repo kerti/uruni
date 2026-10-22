@@ -17,8 +17,7 @@ type fundResponse struct {
 	ID       int64  `json:"id"`
 	Name     string `json:"name"`
 	Currency string `json:"currency"`
-	// TimeZone is the fund's IANA zone name (ADR-041): Asia/Jakarta,
-	// Asia/Makassar or Asia/Jayapura. WIB, WITA and WIT exist only as copy.
+	// TimeZone is the fund's IANA zone name (ADR-041).
 	TimeZone   string `json:"time_zone"`
 	ReportSlug string `json:"report_slug"`
 	// ReportURL is the shareable link: URUNI_BASE_URL + /report/ + slug. Only the
@@ -58,8 +57,8 @@ type setupAccountRequest struct {
 // setupRequest is POST /api/setup's body: the fund's name and time zone (PRD
 // section 7.1) and every account it starts with (#78), at least one (SetUpFund
 // refuses an empty list). TimeZone is optional: absent means Asia/Jakarta
-// (ADR-041), and anything but the three zones is the schema CHECK's to refuse. The main purpose is not on the wire: "Kas Utama" is a fixed
-// domain name (CONTEXT.md, ADR-014), never user input.
+// (ADR-041). The main purpose is not on the wire: "Kas Utama" is a fixed domain
+// name (CONTEXT.md, ADR-014), never user input.
 type setupRequest struct {
 	Name     string                `json:"name"`
 	TimeZone string                `json:"time_zone"`
@@ -148,7 +147,7 @@ type updateFundRequest struct {
 // location (updateAccount). The setup wizard's copy promises it: "bisa diganti
 // nanti kalau perlu." A zone change rewrites nothing either (ADR-041): every
 // day and month is derived from it, so setting the old zone back restores every
-// earlier reading. It is direct CRUD with no confirm step.
+// earlier reading.
 func (a *api) updateFund(w http.ResponseWriter, r *http.Request) {
 	fund, ok := a.resolveFund(w, r)
 	if !ok {
@@ -191,10 +190,8 @@ func (a *api) replaceReportSlug(w http.ResponseWriter, r *http.Request) {
 }
 
 // fundLocation is the fund's time zone as a *time.Location, the only way a
-// handler comes by one (ADR-041): from the fund resolveFund returned, never from
-// a request, and never a fallback. A zone tz.Load refuses cannot get past the
-// schema's CHECK, so one reaching here means the database is broken: the request
-// answers 500, is logged, and nothing is dated in UTC or WIB.
+// handler comes by one (ADR-041): never from a request, never a fallback. A zone
+// that fails to load means a broken database, so the request answers 500.
 func (a *api) fundLocation(w http.ResponseWriter, r *http.Request, fund store.Fund) (*time.Location, bool) {
 	loc, err := ledger.FundLocation(fund)
 	if err != nil {

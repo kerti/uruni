@@ -81,9 +81,8 @@ func seedE2E(ctx context.Context) error {
 	// #230: the cash account's opening balance is born with it, inside
 	// SetUpFund's transaction.
 	// The seeded fund is WIB (the e2e specs that compute today in Asia/Jakarta
-	// rely on it, ADR-041), and the date is the treasurer's day in that zone, not
-	// the host's (#379). The fund does not exist yet, so the zone is named here
-	// and passed to SetUpFund, not read.
+	// rely on it). The fund does not exist yet, so the zone is named here and
+	// passed to SetUpFund, not read.
 	loc, err := tz.Load(tz.Jakarta)
 	if err != nil {
 		return err

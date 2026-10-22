@@ -51,20 +51,15 @@ export const UPLOAD_TIMEOUT_MS = 120_000
 /** The header the server reads on its immutable write routes (ADR-043). */
 const IDEMPOTENCY_HEADER = 'Idempotency-Key'
 
-/**
- * How long after its last attempt the client forgets a key (ADR-043). An
- * identical request after that is a new request with a new key. The server
- * keeps its record for 24 hours, which covers only the chain of retries this
- * bounds, never a key older than its last failure plus this.
- */
+/** How long after its last attempt the client forgets a key (ADR-043). The server
+ * keeps its record 24 hours, which more than covers the retries this bounds. */
 export const IDEMPOTENCY_FORGET_MS = 15 * 60 * 1000
 
 /**
- * The key of a write whose outcome nobody has seen yet, by the request's
- * identity (method, path and body text), and when it was last attempted
- * (`at`, in wallClockMs() milliseconds: elapsed wall time, so a phone that slept
- * through the window still forgets the key). In memory only: nothing in
- * localStorage or IndexedDB, so ADR-008 and rule 4 stand. A reload forgets it.
+ * The key of a write whose outcome nobody has seen, by the request's identity
+ * (method, path, body text), and when it was last attempted (`at`, wallClockMs():
+ * elapsed wall time, so a phone that slept through the window still forgets it).
+ * In memory only - nothing in localStorage or IndexedDB (ADR-008, rule 4).
  */
 const pendingKeys = new Map<string, { key: string; at: number }>()
 
@@ -87,11 +82,10 @@ function mintIdempotencyKey(): string {
 }
 
 /**
- * The key this write carries, and what to do with it once its outcome is known.
- * An identical request issued while a key is remembered reuses it (a retry after
- * a lost response, or a twin sent before the first has an outcome); otherwise
- * the key is fresh. A body that is not text (a FormData upload) is never
- * remembered: the server ignores a key on those routes anyway.
+ * The key this write carries, and what to do once its outcome is known. An
+ * identical request while a key is remembered reuses it (a retry after a lost
+ * response, or a twin sent before the first has an outcome); otherwise it is fresh.
+ * A non-text body (FormData) is never remembered: the server ignores a key there.
  */
 function writeKey(method: string, path: string, body: BodyInit | null | undefined) {
   if (body != null && typeof body !== 'string') return { key: mintIdempotencyKey(), settle: () => {}, keep: () => {} }
@@ -170,9 +164,8 @@ export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> 
 
   let res: Response
   let timeout: ReturnType<typeof setTimeout> | undefined
-  // Every write carries a key (ADR-043); the server honours it on its immutable
-  // routes and ignores it on the rest, so nothing here knows which is which. A
-  // caller that set the header itself keeps its own and is not tracked.
+  // Every write carries a key (ADR-043); the server ignores it on non-immutable routes, so nothing
+  // here knows which is which. A caller that set the header itself keeps its own, untracked.
   const callerKeyed = isWrite && new Headers(init?.headers).has(IDEMPOTENCY_HEADER)
   const idem = isWrite && !callerKeyed ? writeKey(method, path, init?.body) : undefined
   try {

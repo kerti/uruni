@@ -2,15 +2,9 @@ import { describe, expect, it } from 'vitest'
 
 /**
  * ADR-041: the fund's day and month are the fund's zone's, never the device's.
- * The twelve private copies of `todayISODate` and `currentISOMonth` were born
- * because the shared helper was not at hand; this is what keeps a thirteenth
- * from growing back. Outside `lib/dates.ts` (which reads the clock once, in the
- * fund's zone) and tests, nothing may call `new Date()` with no argument or
- * `Date.now()`.
- *
- * A date built from arguments - `new Date(year, month, day)`, `new Date(seconds
- * * 1000)` - names a day or an instant it was handed and reads no clock, so it
- * is not matched.
+ * Outside `lib/dates.ts` and tests, nothing may call `new Date()` with no argument
+ * or `Date.now()`. A date built from arguments names a day it was handed and is
+ * not matched.
  */
 
 // Every source file, as text. Vite resolves the glob at build time, so this

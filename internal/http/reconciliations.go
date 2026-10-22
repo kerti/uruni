@@ -150,11 +150,9 @@ func toReconciliationDetailResponse(d ledger.ReconciliationDetail) reconciliatio
 // withTx (PRD section 7.8). See that method for the cutoff/resolution rules;
 // the handler decodes and passes through (ADR-027).
 //
-// The route is keyed (ADR-043). The ledger stores only the snapshot row; the
-// detail below is read after the commit for a replay as for a first success.
-// A snapshot and its lines never change, so both answer the same figures; the
-// lines' order follows the locations' current names, which a rename between
-// the two can change.
+// Keyed (ADR-043). The detail is read after the commit for a replay as for a
+// first success; a snapshot never changes, but the lines' order follows the
+// locations' current names, which a rename in between can change.
 func (a *api) takeReconciliation(w http.ResponseWriter, r *http.Request) {
 	var req takeReconciliationRequest
 	if !decodeJSON(w, r, &req) {

@@ -18,15 +18,11 @@ const occurredOnLayout = "2006-01-02"
 // PostTransactionParams is every argument PostTransaction needs to post one
 // ordinary or adjusting entry.
 //
-// There is no Kind field. PostTransaction (#39) covers kind='normal' and
-// kind='adjustment' only; dues, reimbursement and transfer each carry extra
-// schema invariants (member_id+dues_period, reimbursement_id, transfer_id)
-// this method does not check, and have their own methods (PostDuesPayments,
-// PostTransferBetweenAccounts, the reimbursement ones). A string Kind would
-// let a caller reach those kinds without the invariant that makes them safe;
-// the schema's CHECKs would reject most such calls but not all
-// (kind='opening' has no extra CHECK). IsAdjustment, a bool with two
-// outcomes, is the widest surface this method can expose safely.
+// There is no Kind field. PostTransaction covers kind='normal' and
+// kind='adjustment' only; dues, reimbursement and transfer carry extra schema
+// invariants and have their own methods. A string Kind would let a caller reach
+// those kinds without the invariant that makes them safe (kind='opening' has no
+// extra CHECK), so IsAdjustment, a bool, is the widest safe surface.
 type PostTransactionParams struct {
 	FundID     int64
 	AccountID  int64
@@ -41,49 +37,41 @@ type PostTransactionParams struct {
 	IsAdjustment bool
 
 	// MemberID optionally names the member a kind='normal', direction='in' row is
-	// a contribution from (ADR-034, #211); a guest or anonymous giver leaves it
-	// nil. It is valid only on that shape: naming a member on an adjustment or an
-	// outgoing row is refused before the write, and on a purpose that is not an
-	// incidental inside the write's withTx, once PurposeID's kind is known
+	// a contribution from (ADR-034); a guest or anonymous giver leaves it nil.
+	// Naming a member on an adjustment or an outgoing row is refused before the
+	// write, and on a non-incidental purpose inside it
 	// (ErrContributionRequiresIncidentalPurpose).
 	MemberID *int64
 
-	// Now is the clock the date's ceiling is read from, in the fund's zone
-	// (ADR-041, #632). The zero value means time.Now().
+	// Now is the clock the date's ceiling is read from (ADR-041).
+	// Zero means time.Now().
 	Now time.Time
 
-	// Idempotency, when non-nil, makes the post safe to repeat: the same key with
-	// the same request answers the first result and posts nothing (ADR-043). nil
-	// is an unkeyed post.
+	// Idempotency, when non-nil, makes the post safe to repeat (ADR-043).
 	Idempotency *Idempotency
 }
 
 // PostTransaction writes one kind='normal' or kind='adjustment' entry and
 // returns the created row.
 //
-// With p.Idempotency set (ADR-043), a repeat of the same request returns the
-// first result and posts nothing; argument shape is still checked first, so a
-// replay re-runs it, and the business-state checks below do not run on a replay
-// at all. Another request under the same key is ErrIdempotencyKeyReused.
+// With p.Idempotency set (ADR-043), a repeat returns the first result and posts
+// nothing; argument shape is still checked first, the business-state checks
+// below do not run on a replay.
 //
 // Argument-shape failures - amount <= 0, a malformed or calendar-invalid
 // occurred_on, an empty or unrecognized direction - are rejected before the
 // write reaches the schema's CHECKs, wrapping ErrInvalidArgument and naming
-// the field (ADR-027). A real occurred_on outside the plausible window - before
-// 2000, or after today in the fund's zone - is ErrDateOutOfRange (#632).
+// the field (ADR-027). A real occurred_on outside the plausible window is
+// ErrDateOutOfRange.
 // Anything else the write can fail on, such as another fund's account or an id
 // nothing created, is a domain bug wrapped generically for a 500.
 //
 // Two business-state checks run first, in the write's transaction. A retired
 // AccountID (inactive_on set) is ErrAccountInactive, the rule PostPurposeMove
-// applies and the record forms apply by not offering it (#444). Then
-// (ADR-031): if PurposeID names an incidental whose closed_on is set, the
-// post is ErrIncidentalClosed in both directions (a late bill deserves
-// attribution to the occasion as much as a late contribution).
-// IncidentalClosedOnForPurpose returns no rows for a 'main' or 'pass_through'
-// PurposeID, so no purpose.kind branch is needed; sql.ErrNoRows means the
-// guard does not apply. It is a read-before-write refusal, like
-// ErrReimbursementAlreadySettled, not a second write path.
+// applies and the record forms apply by not offering it. Then (ADR-031): if
+// PurposeID names an incidental whose closed_on is set, the post is
+// ErrIncidentalClosed in both directions. sql.ErrNoRows from
+// IncidentalClosedOnForPurpose means the guard does not apply.
 func (l *Ledger) PostTransaction(ctx context.Context, p PostTransactionParams) (store.Transaction, error) {
 	if p.Amount <= 0 {
 		return store.Transaction{}, fmt.Errorf("%w: amount must be positive, got %d", ErrInvalidArgument, p.Amount.Int64())
@@ -157,12 +145,10 @@ func (l *Ledger) PostTransaction(ctx context.Context, p PostTransactionParams) (
 	return posted, nil
 }
 
-// OpeningBalance is one account's starting figure (PRD section 7.1), carried
-// as a value, not posted through its own method: #230's rule is that a
-// location and its opening balance are born together in one database
-// transaction, with no standalone way to post one. SetUpFund and
-// Ledger.CreateAccount are the only places that turn one into a row, each in
-// the withTx that creates the account.
+// OpeningBalance is one account's starting figure (PRD section 7.1), carried as
+// a value: a location and its opening balance are born together in one
+// transaction. SetUpFund and Ledger.CreateAccount are the only places that turn
+// one into a row.
 //
 // There is no Direction field: an opening balance is always kind='opening',
 // direction='in', money the ledger begins with, never money it begins owing.
@@ -180,9 +166,9 @@ type OpeningBalance struct {
 // write (see postOpeningBalanceRow), so a bogus date beside it describes no
 // row.
 //
-// ceiling is the last day an opening balance may be dated (#632): today in the
-// fund's zone, which SetUpFund reads from its params (no fund row exists yet)
-// and CreateAccount from the fund.
+// ceiling is the last day an opening balance may be dated: today in the fund's
+// zone, which SetUpFund reads from its params (no fund row exists yet) and
+// CreateAccount from the fund.
 func validateOpeningBalance(ob OpeningBalance, ceiling string) error {
 	if ob.Amount < 0 {
 		return fmt.Errorf("%w: opening balance amount must not be negative, got %d", ErrInvalidArgument, ob.Amount.Int64())
@@ -231,28 +217,22 @@ type CreateAccountParams struct {
 	Name           string // non-empty after trimming - the schema's own CHECK refuses it, not pre-validated here (ADR-027)
 	OpeningBalance *OpeningBalance
 
-	// Now is the clock the opening balance's ceiling is read from, in the fund's
-	// zone (ADR-041, #632). The zero value means time.Now().
+	// Now is the clock the opening balance's ceiling is read from (ADR-041).
+	// Zero means time.Now().
 	Now time.Time
 
-	// Idempotency, when non-nil, makes the create safe to repeat: the same key
-	// with the same request answers the first location and writes nothing, never
-	// a second account or a second opening row (ADR-043). nil is an unkeyed call.
+	// Idempotency, when non-nil, makes the create safe to repeat (ADR-043).
 	Idempotency *Idempotency
 }
 
 // CreateAccount writes one account row and, when OpeningBalance is present
-// with a positive Amount, its opening balance row, in one withTx (#230's rule
-// for a location added after setup). A refused opening balance creates no
-// account: validateOpeningBalance runs before withTx opens, and a schema
-// violation on the account insert (malformed kind, blank name) aborts the
-// transaction before any opening balance is considered.
+// with a positive Amount, its opening balance row, in one withTx. A refused
+// opening balance creates no account: validateOpeningBalance runs before withTx
+// opens.
 //
-// With p.Idempotency set (ADR-043), a repeat of the same request returns the
-// first location, whether or not it came with a starting balance. An unkeyed
-// repeat is a second account and a second opening row, which no route can
-// delete (the row's foreign key holds the account, ErrAccountHoldsMoney the
-// retiring).
+// With p.Idempotency set (ADR-043), a repeat returns the first location. An
+// unkeyed repeat is a second account and a second opening row, which no route
+// can delete.
 func (l *Ledger) CreateAccount(ctx context.Context, p CreateAccountParams) (store.Account, error) {
 	if p.OpeningBalance != nil {
 		window, err := l.windowFor(ctx, l.q, p.FundID, p.Now)

@@ -10,11 +10,9 @@ import { copy } from '@/copy/id'
 const text = copy.setup
 
 /**
- * Setup step 1 of 4: name the fund and choose its time zone (ADR-041). No
- * request fires here - the name and zone only leave the browser once locations
- * are chosen too, in one POST /api/setup (Setup.tsx). The zone arrives
- * pre-selected from the device's UTC offset, so most treasurers tap nothing;
- * the field stays visible and editable.
+ * Setup step 1 of 4: name the fund and choose its time zone (ADR-041). No request
+ * fires here - name and zone leave the browser once, in one POST /api/setup
+ * (Setup.tsx). The zone arrives pre-selected from the device's UTC offset and stays editable.
  */
 export default function FundName({
   name,

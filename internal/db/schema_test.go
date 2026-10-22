@@ -151,8 +151,8 @@ func TestFundTimeZoneAcceptsTheThreeZonesAndNothingElse(t *testing.T) {
 	}
 }
 
-// The default is WIB, so a row written without the column (and both live
-// instances' existing rows) land on today's behaviour with no backfill.
+// The default is WIB, so a row written without the column lands on today's
+// behaviour with no backfill.
 func TestFundTimeZoneDefaultsToJakarta(t *testing.T) {
 	t.Parallel()
 	sqlDB := migratedTestDB(t)

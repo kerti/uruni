@@ -48,13 +48,12 @@ function effectiveRate(rates: DuesRate[], month: string): DuesRate | null {
  * two are read together on the roster and written together only rarely.
  * Naming and pricing a tier is rare admin; the roster is an everyday list.
  *
- * **A new price is added; a mistyped one is corrected.** A new price is a new
- * row effective from a new month, because the old one still explains the
- * months it covered. A correction (PATCH of the amount, on the golongan's
- * screen) is the deliberate exception: it reprices every month the rate
- * covers and leaves a superseded row behind (ADR-040), which is why that
- * screen names the span and asks first. DELETE withdraws a rate filed against
- * the wrong month, so it can be added again at the right one.
+ * **A new price is added; a mistyped one is corrected.** A new price is a new row
+ * effective from a new month, because the old one still explains the months it
+ * covered. A correction (PATCH of the amount, on the golongan's screen) reprices
+ * every month the rate covers and leaves a superseded row behind (ADR-040), so that
+ * screen names the span and asks first. DELETE withdraws a rate filed against the
+ * wrong month, so it can be added again at the right one.
  *
  * Rates load with the tiers rather than per card, so opening a tier's dialog
  * costs no further request and the card can show what the tier costs today.

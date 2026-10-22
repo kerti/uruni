@@ -451,7 +451,6 @@ describe('Setup time zone (ADR-041)', () => {
     [-420, zones.options['Asia/Jakarta'].label],
     [-480, zones.options['Asia/Makassar'].label],
     [-540, zones.options['Asia/Jayapura'].label],
-    // Any other offset falls back to WIB.
     [0, zones.options['Asia/Jakarta'].label],
     [240, zones.options['Asia/Jakarta'].label],
     [-330, zones.options['Asia/Jakarta'].label],
@@ -479,7 +478,6 @@ describe('Setup time zone (ADR-041)', () => {
     ])
     vi.stubGlobal('fetch', fetchMock)
     render(<Setup onDone={vi.fn()} />)
-    // She taps nothing: WITA, from the device.
     await goPastFundName()
     await goPastLocations()
     await userEvent.click(await screen.findByRole('button', { name: text.next }))

@@ -22,9 +22,7 @@ function stubFetch(body: unknown, status = 200) {
 }
 
 // ADR-041: every function that returns a fund hands its zone to the date helpers
-// before its promise resolves, so the render that follows the fetch (the Shell's
-// first screen, whose useState initialisers read "today") already reads it. A
-// zone set from an effect would be one render late.
+// before its promise resolves, so the render that follows already reads it.
 describe("the fund functions hold the fund's zone (ADR-041)", () => {
   beforeEach(() => {
     resetFundTimeZone()

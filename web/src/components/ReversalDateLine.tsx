@@ -5,11 +5,8 @@ import type { Transaction } from '@/lib/transactions'
 const text = copy.history.transactions
 
 /**
- * The line a reversal form states under its title: the date the ledger will
- * give the reversal (ADR-042). The client cannot see the cek kas counts, so
- * the row's `counted` picks the line: the original's own day, or today once a
- * count has covered it. The ledger decides at post time; this is only what it
- * will say now.
+ * The date the ledger will give a reversal (ADR-042), stated under the form's
+ * title. The row's `counted` picks the line; the ledger decides at post time.
  */
 export default function ReversalDateLine({ transaction }: { transaction: Transaction }) {
   return (

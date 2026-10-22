@@ -1,16 +1,14 @@
--- member_tier (ADR-040): a member's tier, month by month. Every pricing read goes
--- through the member_tier_standing view (one standing row per member and month,
--- the highest correction); internal/db's guard test fails a query that reads
--- the table directly, except the ones named there.
+-- member_tier (ADR-040): pricing reads go through the member_tier_standing view
+-- (schema file); internal/db's guard test fails a direct read of the table other
+-- than the ones named there.
 
 -- name: CreateMemberTier :one
 INSERT INTO member_tier (fund_id, member_id, tier_id, effective_from, correction, created_at)
 VALUES (?, ?, ?, ?, ?, ?)
 RETURNING id, fund_id, member_id, tier_id, effective_from, correction, created_at;
 
--- Every member's standing rows across the fund, for the readers that price a
--- whole roster at once: folded per member in Go, so no read adds a per-member
--- query. Ordered by month, the order the fold needs, never by id or created_at.
+-- Every member's standing rows across the fund, folded per member in Go so a
+-- roster costs no per-member query. Ordered by month, never by id or created_at.
 -- name: ListMemberTiersByFund :many
 SELECT id, fund_id, member_id, tier_id, effective_from, correction, created_at
 FROM member_tier_standing

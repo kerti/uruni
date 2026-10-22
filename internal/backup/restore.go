@@ -193,18 +193,16 @@ func ParseUpload(path string) (ParsedUpload, error) {
 		return ParsedUpload{}, err
 	}
 
-	// An older file is decoded in its own shape and upgraded to the current one
-	// here, so the restore, the inspect step and `uruni rebuild` only ever see the
-	// current Document (upgrade.go).
+	// An older file is decoded in its own shape and upgraded here, so everything
+	// downstream only ever sees the current Document (upgrade.go).
 	doc, err := decodeDocument(version, jsonBytes)
 	if err != nil {
 		return ParsedUpload{}, err
 	}
 
-	// Every fund's zone must be one of the three (ADR-041). The preview cannot
-	// date the file without it, so a zone tz.Load refuses, unknown or the empty
-	// string a missing field reads as, is refused here at inspect; the schema's
-	// CHECK stays the backstop at Restore.
+	// Every fund's zone must be one of the three (ADR-041): the preview cannot date
+	// the file without it. A missing field reads as "" and is refused too; the
+	// schema's CHECK stays the backstop at Restore.
 	for _, f := range doc.Funds {
 		if _, err := tz.Load(f.TimeZone); err != nil {
 			return ParsedUpload{}, fmt.Errorf("%w: fund %d's time_zone: %v", ErrMalformedBackup, f.ID, err) //nolint:errorlint
@@ -434,9 +432,9 @@ func BuildPreview(ctx context.Context, q store.Querier, doc Document) (Preview, 
 
 // newestMoment returns the latest timestamp Document carries (created_at, or
 // a receipt's uploaded_at) as a calendar date in the file's own zone (the first
-// fund's, by the rule resolveFund applies; tz.Default for a file with no fund);
-// see Preview.Date. A zone tz.Load refuses is an error: ParseUpload has refused
-// such a file already, so this guards a Document built some other way.
+// fund's; tz.Default for a file with no fund); see Preview.Date. A zone tz.Load
+// refuses is an error: ParseUpload already refused such a file, so this guards a
+// Document built another way.
 func newestMoment(doc Document) (string, error) {
 	zone := tz.Default
 	if len(doc.Funds) > 0 {
@@ -665,11 +663,9 @@ func restoreCore(ctx context.Context, sqlDB *sql.DB, uploadsDir string, parsed P
 		return nil, fmt.Errorf("backup: clearing sessions: %w", err)
 	}
 
-	// So is every idempotency key (ADR-043, ADR-012): a restore returns the ledger
-	// to an older state, and a key from before it would replay a success whose rows
-	// the restore just removed, or whose ids now name other rows. Same transaction
-	// as the sessions, so a rolled-back restore forgets nothing. A rebuild runs
-	// this over a file it built itself, so there it clears an empty table.
+	// So is every idempotency key (ADR-043, ADR-012): a key from before the restore
+	// would replay a success whose rows are gone or whose ids now name other rows.
+	// Same transaction as the sessions, so a rolled-back restore forgets nothing.
 	if err := tq.DeleteAllIdempotencyKeys(ctx); err != nil {
 		return nil, fmt.Errorf("backup: clearing idempotency keys: %w", err)
 	}

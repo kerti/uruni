@@ -62,14 +62,12 @@ type TakeReconciliationParams struct {
 	Note   *string
 	Counts []AccountCount
 
-	// Now is the clock each fix's occurred_on ceiling is read from, in the fund's
-	// zone (ADR-041, #632). The zero value means time.Now(). It dates nothing:
-	// PerformedAt is still stamped from the wall clock.
+	// Now is the clock each fix's occurred_on ceiling is read from (ADR-041). It
+	// dates nothing: PerformedAt is still stamped from the wall clock.
+	// Zero means time.Now().
 	Now time.Time
 
-	// Idempotency, when non-nil, makes the snapshot safe to repeat: the same key
-	// with the same request answers the first snapshot and posts nothing, no
-	// second snapshot and no second fix (ADR-043). nil is an unkeyed post.
+	// Idempotency, when non-nil, makes the snapshot safe to repeat (ADR-043).
 	Idempotency *Idempotency
 }
 
@@ -147,16 +145,13 @@ type TakeReconciliationParams struct {
 // naming one, a Fix with a non-positive amount, an unrecognised Fix
 // direction, a malformed OccurredOn, the same account counted twice, a
 // negative actual_amount - are ErrInvalidArgument before anything is written
-// (ADR-027). A Fix dated outside the plausible window (before 2000, or after
-// today in the fund's zone) is ErrDateOutOfRange (#632). Anything else, such as
-// an account or purpose id of another fund, is a domain bug and surfaces
-// wrapped generically.
+// (ADR-027). A Fix dated outside the plausible window is ErrDateOutOfRange.
+// Anything else, such as an account or purpose id of another fund, is a domain
+// bug and surfaces wrapped generically.
 //
-// With p.Idempotency set (ADR-043), a repeat of the same request returns the
-// first snapshot and takes none; the checks inside the transaction, the count of
-// every active location among them, do not run on a replay. The snapshot's
-// lines are not part of the result: the caller reads them with
-// GetReconciliationDetail, as it does after a first success.
+// With p.Idempotency set (ADR-043), a repeat returns the first snapshot and
+// takes none; the checks inside the transaction do not run on a replay. The
+// lines are read with GetReconciliationDetail, as after a first success.
 func (l *Ledger) TakeReconciliation(ctx context.Context, p TakeReconciliationParams) (store.Reconciliation, error) {
 	window, err := l.windowFor(ctx, l.q, p.FundID, p.Now)
 	if err != nil {

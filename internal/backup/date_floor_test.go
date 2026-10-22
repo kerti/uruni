@@ -9,17 +9,16 @@ import (
 	"time"
 )
 
-// #632: a restore enforces the plausible window's floor (the schema's CHECKs,
-// the year 2000) and nothing else. A file carrying a date below it is refused at
-// the first row that does, and the whole restore rolls back: the destination is
-// exactly what it was. The ceilings are the ledger's, on write, and a restore
-// does not apply them (ADR-041: existing rows are never invalid).
+// #632: a restore enforces the date window's floor (the schema's CHECKs) and
+// nothing else (ADR-041: existing rows are never invalid). A file with a date
+// below it is refused at the first row that has one and the whole restore rolls
+// back.
 
 const belowDay, belowMonth = "1999-12-31", "1999-12"
 
 // floorMutations puts a below-floor date in one column of a parsed upload. Every
-// column the schema floors is here; the audit in internal/db fails when a new one
-// is added without a CHECK, and this list is the restore half of the same fact.
+// column the schema floors is here (the audit in internal/db fails when a new one
+// lacks a CHECK).
 var floorMutations = []struct {
 	column string
 	mutate func(d *Document)

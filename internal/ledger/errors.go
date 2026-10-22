@@ -46,19 +46,12 @@ var ErrReimbursementAlreadySettled = errors.New("ledger: reimbursement has alrea
 // single-instance lock rules out a second `uruni serve` on the same file.
 var ErrFundAlreadyExists = errors.New("ledger: a fund already exists")
 
-// The reversal refusals (ADR-042). Each is its own error and its own wire code,
-// never one blanket rule (ADR-033's convention), and each is a pre-check ahead
-// of a guarantee the schema already gives, so the treasurer gets copy and not a
-// constraint string (ADR-027's ErrReimbursementAlreadySettled shape). The
-// sentinel names are the ledger's; the wire codes are the contract.
+// The reversal refusals (ADR-042): one error and one wire code each, never a
+// blanket rule (ADR-033), each a pre-check ahead of a schema guarantee.
 
 // ErrReversalNotFound is returned by ReverseTransaction when GetReversalTarget
-// finds no row for the given fund and transaction id.
-//
-// The fetch is fund-scoped (WHERE fund_id = ? AND id = ?), so a real
-// transaction id belonging to another fund answers with this same sentinel
-// (ADR-029). That is what makes the composite FK on reverses_transaction_id
-// load-bearing: a treasurer of one fund cannot even name another fund's row.
+// finds no row for the given fund and transaction id. The fetch is
+// fund-scoped, so another fund's id answers with this same sentinel (ADR-029).
 var ErrReversalNotFound = errors.New("ledger: no such transaction")
 
 // ErrReversalOpening is returned by ReverseTransaction for a kind='opening'
@@ -101,10 +94,9 @@ var ErrAlreadyReversed = errors.New("ledger: transaction has already been revers
 
 // ErrReversalBeforeOriginal is returned by ReverseTransaction when a cek kas
 // has counted the row and it is dated after today, so the day the reversal
-// would take (today) precedes what it reverses. Only a row from before #632's
-// ceiling can be there. The hand-made opposite entry is the way out
-// (ADR-042); the schema does not check this, so a restore of a live file
-// holding such a pair is not refused.
+// would take (today) precedes what it reverses. Only a row from before the date
+// ceiling can be there. The hand-made opposite entry is the way out (ADR-042);
+// the schema does not check this, so a restore is not refused.
 var ErrReversalBeforeOriginal = errors.New("ledger: a reversal cannot come before the row it reverses")
 
 // ErrIncidentalClosed is returned by PostTransaction when PurposeID names an
@@ -290,22 +282,17 @@ var ErrReconciliationPlugMismatch = errors.New("ledger: an adjusted fix must equ
 
 // ErrDuesRateSuperseded is returned by CorrectDuesRate and DeleteDuesRate when the
 // row named is not the one that stands for its month (ADR-040): a correction is a
-// new row with a new id, so a page that still holds the old id is stale, and
-// applying its edit to the successor would overwrite a figure the caller has not
-// seen. A row that is itself a deleting correction counts: the month has no rate
-// to correct or delete. Nothing is written; the way forward is to reload the
-// list.
+// new row with a new id, so a page holding the old id is stale, and applying its
+// edit to the successor would overwrite a figure the caller has not seen. A
+// deleting correction counts too. Nothing is written.
 var ErrDuesRateSuperseded = errors.New("ledger: the dues rate no longer stands")
 
 // ErrDuesRateMonthTaken is returned by CreateDuesRate when the tier already has a
-// rate standing for the month. Adding a rate into a month never replaces what it
-// says (that is PATCH, a correction); only a month whose standing row is a
-// deletion takes a new one. The wire keeps the 409 unique_violation it has
-// always answered.
+// rate standing for the month. Adding never replaces (that is a correction);
+// only a month whose standing row is a deletion takes a new one.
 var ErrDuesRateMonthTaken = errors.New("ledger: the tier already has a rate for that month")
 
 // ErrIdempotencyKeyReused is returned by a keyed write when its idempotency key
 // is on a live record made for another request (ADR-043): the same key with a
-// different fingerprint. Nothing is written. It is the one sentinel the key adds;
-// a replay is a success, not an error (see Idempotency.Replayed).
+// different fingerprint. Nothing is written. A replay is a success, not an error.
 var ErrIdempotencyKeyReused = errors.New("ledger: the idempotency key was used for another request")

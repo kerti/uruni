@@ -1,7 +1,6 @@
--- Only a live record answers: an expired one is as good as absent, so
--- correctness never waits on its removal. expires_at = now is expired. The
--- records are written in the same transaction as the rows they cover, by the
--- ledger's idempotency helper (ADR-043); never by a handler.
+-- Only a live record answers: an expired one (expires_at = now included) is as
+-- good as absent, so correctness never waits on its removal. Written in the same
+-- transaction as the rows it covers, by the ledger's idempotency helper (ADR-043).
 -- name: GetIdempotencyKey :one
 SELECT key, fingerprint, result, created_at, expires_at
 FROM idempotency_key
@@ -11,9 +10,9 @@ WHERE key = sqlc.arg('key') AND expires_at > sqlc.arg('now');
 INSERT INTO idempotency_key (key, fingerprint, result, created_at, expires_at)
 VALUES (?, ?, ?, ?, ?);
 
--- The purge: a side effect of a keyed write that found no record, in that
--- write's own transaction (ADR-043), never a background ticker (ADR-013). It
--- also clears an expired row of the very key about to be inserted.
+-- The purge: a side effect of a keyed write that found no record, in its own
+-- transaction (ADR-043), never a ticker (ADR-013). It also clears an expired row
+-- of the very key about to be inserted.
 -- name: DeleteExpiredIdempotencyKeys :exec
 DELETE FROM idempotency_key
 WHERE expires_at <= sqlc.arg('now');

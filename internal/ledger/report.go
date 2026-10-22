@@ -189,8 +189,7 @@ type ReportEntry struct {
 	Reversed bool
 
 	// ReversesOccurredOn is, on a reversal, the date of the row it reverses
-	// ("YYYY-MM-DD"), which the label of a reversal that names no member
-	// states; nil on every other row.
+	// ("YYYY-MM-DD"); nil on every other row.
 	ReversesOccurredOn *string
 
 	// Note is what the treasurer typed. On a settled claim's payout, whose note
@@ -355,8 +354,7 @@ func (l *Ledger) monthlyReport(ctx context.Context, p ReportParams) (Report, err
 		return Report{}, fmt.Errorf("%w: dues status %q is not unpaid, partial or paid", ErrInvalidArgument, p.DuesStatus)
 	}
 
-	// The fund is read first: its zone decides what "today" and "this month"
-	// are (ADR-041), so no day is reckoned before it is known.
+	// The fund is read first: its zone decides "today" and "this month" (ADR-041).
 	fund, err := l.q.GetFund(ctx, p.FundID)
 	if err != nil {
 		return Report{}, fmt.Errorf("fetching fund: %w", err)
@@ -756,9 +754,8 @@ func (e ReportEntry) signed() (money.Amount, error) {
 }
 
 // add lands one entry on its line of the walk. A reversal lands on its
-// original's line with its own signed effect (ADR-042): the reversal of income
-// is stored out and lands on In as a minus; the reversal of spending is stored
-// in and subtracts from Out, a magnitude. An adjustment is signed by its
+// original's line as a minus (ADR-042): income reversed subtracts from In,
+// spending reversed from Out, a magnitude. An adjustment is signed by its
 // direction.
 func (w *ReportWalk) add(e ReportEntry) error {
 	signed, err := e.signed()
@@ -801,8 +798,7 @@ func classifyReportRow(kind, direction string, reverses bool) (ReportLine, error
 	case "adjustment":
 		if reverses {
 			// The line follows the reversal's own direction, so no join to the
-			// original is needed: going out it reverses income (a minus on Total
-			// masuk), going in it reverses spending (a minus on Total keluar).
+			// original is needed: out reverses income, in reverses spending.
 			if direction == ReportDirectionIn {
 				return ReportLineOut, nil
 			}
@@ -960,9 +956,10 @@ func moveMatches(p ReportParams, m ReportMove) bool {
 }
 
 // entryMatches applies the filters to one entry by its walk line (ADR-038): a
-// reversal filters as its own line (Uang keluar for the reversal of an out), and an opening or a Penyesuaian is neither
-// masuk nor keluar, so a direction or member filter hides it, as it hides a
-// move. A purpose filter matches the row's purpose; an opening is Kas Utama's.
+// reversal filters as its own line (Uang keluar for the reversal of an out), and
+// an opening or a Penyesuaian is neither masuk nor keluar, so a direction or
+// member filter hides it, as it hides a move. A purpose filter matches the row's
+// purpose; an opening is Kas Utama's.
 func entryMatches(p ReportParams, row store.ListReportTransactionsRow, e ReportEntry) bool {
 	if p.PurposeID != nil && *p.PurposeID != e.PurposeID {
 		return false

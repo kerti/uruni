@@ -2,13 +2,10 @@
 // Indonesian zones a fund can keep its calendar in, and the one way to turn a
 // stored name into a *time.Location. A day or a month in Uruni is an injected
 // instant read in the fund's zone, never the server's clock (a container runs
-// UTC, so the host's reading puts a treasurer's evening in the wrong day and, on
-// a month's last evening, in the wrong month: #324, #379) and never the
-// device's.
+// UTC) and never the device's.
 //
-// The package exports names, not locations: there is no *time.Location variable
-// to reach for, so a stray now.In(tz.Jakarta) is a compile error and every
-// caller has to come by the fund's zone honestly.
+// The package exports names, not locations, so a stray now.In(tz.Jakarta) is a
+// compile error and every caller has to come by the fund's zone honestly.
 package tz
 
 import (
@@ -23,23 +20,19 @@ import (
 	_ "time/tzdata"
 )
 
-// The three zones, by IANA name: WIB, WITA and WIT. Go's time.LoadLocation and
-// the browser's Intl.DateTimeFormat take these as they are; the abbreviations
-// exist only as copy (web/src/copy/id.ts). None observes daylight saving, which
-// ADR-041 leans on: a zone's offset is constant.
+// The three zones, by IANA name: WIB, WITA and WIT. None observes daylight
+// saving, which ADR-041 leans on.
 const (
 	Jakarta  = "Asia/Jakarta"
 	Makassar = "Asia/Makassar"
 	Jayapura = "Asia/Jayapura"
 )
 
-// Default is WIB. It is read only where a request omits the zone (Setup, the
-// v1-to-v2 backup step) or where no fund can be read (the boot dump before
-// setup, the two operator-file stamps). It never dates a day of a fund that
-// exists.
+// Default is WIB, read only where a request omits the zone or no fund can be
+// read (the boot dump before setup, the operator-file stamps). It never dates a
+// day of a fund that exists.
 const Default = Jakarta
 
-// names is the closed list, in WIB, WITA, WIT order.
 var names = [...]string{Jakarta, Makassar, Jayapura}
 
 // locations holds each zone, loaded once at init. With the tzdata import,

@@ -51,9 +51,8 @@ func refuseInactiveAccount(ctx context.Context, q store.Querier, fundID, account
 // fundID scopes the balance; the caller resolved p.ID to this fund's account
 // (resolveAccount), so an id from elsewhere never gets here.
 //
-// A retirement date is held to the plausible window (#632): from 2000-01-01 to
-// a year past today in the fund's zone, now being the clock that is read in.
-// ErrDateOutOfRange otherwise. Reinstating carries no date and checks none.
+// A retirement date is held to the plausible window, up to a year past today in
+// the fund's zone (ErrDateOutOfRange). Reinstating carries no date.
 func (l *Ledger) UpdateAccount(ctx context.Context, fundID int64, p store.UpdateAccountParams, now time.Time) (store.Account, error) {
 	if p.SetInactiveOn == 1 && p.InactiveOn != nil {
 		window, err := l.windowFor(ctx, l.q, fundID, now)

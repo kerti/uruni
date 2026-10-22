@@ -37,21 +37,16 @@ const (
 )
 
 // ErrDateOutOfRange is returned by every write that takes a date or a month
-// outside the plausible window: before the year 2000, or past the ceiling its
-// column allows. The message names the field and the bound, never anything else.
+// outside the plausible window. The message names the field and the bound.
 //
-// It does not wrap ErrInvalidArgument: the date is a real, well-formed one, and
-// the treasurer needs the one thing to change (the year she mistyped), not the
-// generic "invalid argument". The wire gives it date_out_of_range and the SPA
-// its own copy, as ErrAmountTooLarge has amount_too_large.
+// It does not wrap ErrInvalidArgument: the date is well-formed, and the
+// treasurer needs the one thing to change (the year she mistyped).
 //
 // Only a date the caller supplies is checked against a ceiling. A date the
-// ledger inherits (ADR-033's purpose-correction pair takes the corrected row's
-// own occurred_on) is not: the check lives in validateOccurredOn, an
-// argument-shape check, and not in postTransferPairTx, so a correction is never
-// refused for a date she cannot edit (ADR-041). The floor still applies to it,
-// as the schema's CHECK. A reversal, which supplies no date (ADR-042), checks
-// neither.
+// ledger inherits (ADR-033's correction pair takes the corrected row's own
+// occurred_on) is not, so a correction is never refused for a date she cannot
+// edit (ADR-041); the floor still applies, as the schema's CHECK. A reversal
+// supplies no date (ADR-042) and checks neither.
 var ErrDateOutOfRange = errors.New("ledger: date is outside the plausible window")
 
 // noCeiling is the ceiling for a check that wants the shape and the floor only:
@@ -61,10 +56,8 @@ const (
 	noCeilingMonth = "9999-12"
 )
 
-// clockOrNow is the instant a write reads "today" from. Every params struct that
-// carries a date has a Now field, as ReportParams does: production handlers pass
-// the api's injectable clock, and the zero value means time.Now(), so a caller
-// with nothing to inject (the e2e seed) is still right.
+// clockOrNow is the instant a write reads "today" from: the params' Now field,
+// or time.Now() when zero.
 func clockOrNow(now time.Time) time.Time {
 	if now.IsZero() {
 		return time.Now()
@@ -78,16 +71,15 @@ type dateWindow struct {
 	today string
 }
 
-// windowAt reads the instant in loc, the fund's zone. It is the one place a
-// ceiling's "today" comes from (ADR-041: an injected instant read in the fund's
-// zone, never time.Now() plus a zone literal).
+// windowAt reads the instant in loc, the fund's zone: the one place a ceiling's
+// "today" comes from (ADR-041).
 func windowAt(now time.Time, loc *time.Location) dateWindow {
 	return dateWindow{today: clockOrNow(now).In(loc).Format(time.DateOnly)}
 }
 
 // FundToday is the fund's calendar day at now, "YYYY-MM-DD", read in its zone
-// (ADR-041). The zero now means time.Now(). It is for a read that needs the same
-// "today" a write would, such as the page's reversible flag (ADR-042).
+// (ADR-041). It is for a read that needs the same "today" a write would, such as
+// the page's reversible flag (ADR-042).
 func FundToday(f store.Fund, now time.Time) (string, error) {
 	loc, err := FundLocation(f)
 	if err != nil {
@@ -156,12 +148,9 @@ func addMonths(month string, n int) string {
 // date (ErrInvalidArgument), then anything before the floor or after ceiling
 // (ErrDateOutOfRange). field names the column in the message.
 //
-// time.Parse with this strict layout already refuses an out-of-range month or
-// day ("2026-02-30" fails rather than normalizing to "2026-03-02"), so no
-// separate range check is needed. The round-trip format comparison is a cheap
-// second defense should that parsing behavior change, not load-bearing today.
-//
-// Dates are fixed-width, so the comparisons below are string comparisons.
+// time.Parse with this strict layout already refuses "2026-02-30"; the
+// round-trip comparison is a cheap second defense, not load-bearing today.
+// Dates are fixed-width, so the bound comparisons are string comparisons.
 func validateOccurredOn(field, s, ceiling string) error {
 	t, err := time.Parse(occurredOnLayout, s)
 	if err != nil {

@@ -16,9 +16,9 @@ import (
 
 // aroundTheCeiling runs write with the schema's amount CHECKs switched off on
 // one connection, to plant the row a database from before the ceiling can still
-// hold, so the code-side guards behind the schema stay covered (#622: a new
-// database refuses such a row outright, see db/amount_ceiling_test.go). The
-// pragma is reset before the connection goes back to the pool.
+// hold, so the code-side guards behind the schema stay covered (a new database
+// refuses such a row outright, see db/amount_ceiling_test.go). The pragma is
+// reset before the connection goes back to the pool.
 func aroundTheCeiling(t *testing.T, l *Ledger, write func(q *store.Queries)) {
 	t.Helper()
 	ctx := context.Background()

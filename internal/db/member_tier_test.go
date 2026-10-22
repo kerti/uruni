@@ -492,7 +492,7 @@ func TestPricingReadsGoThroughTheStandingViews(t *testing.T) {
 		}
 	}
 
-	// The reads the rate work repointed, and the roster's page, read the views.
+	// These reads go through the standing views.
 	for name, view := range map[string]string{
 		"ListMembersPage":               "member_tier_standing",
 		"ListDuesRatesForPricing":       "dues_rate_standing",

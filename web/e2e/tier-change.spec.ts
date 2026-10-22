@@ -10,10 +10,6 @@ import { expect, logIn, test } from './fixtures'
 // (Rp 80.000) two months back; the month before keeps the old tier and amount
 // on Iuran and on the public report, and then a Senior rate is corrected and
 // the confirmation names the months it reprices.
-//
-// Everything is seeded over the API except the three things under test: the
-// tier change on the Anggota edit form, the two readings, and the correction.
-// Serial, one story on the seeded fixture.
 
 const reguler = 50_000
 const senior = 80_000
@@ -47,7 +43,6 @@ async function pickMonth(page: Page, field: Locator, period: string) {
   await grid.getByRole('button', { name: formatPeriod(period) }).click()
 }
 
-// One member's card on the Iuran status view.
 function statusCard(page: Page, name: string): Locator {
   return page
     .getByRole('main')
@@ -115,7 +110,6 @@ test.describe('a tier change and a rate correction', () => {
     await page.getByRole('button', { name: text.editAria(member) }).click()
     const dialog = page.getByRole('dialog', { name: text.editTitle })
 
-    // "Mulai bulan" appears only once the tier differs.
     await expect(dialog.getByLabel(text.tierFromLabel)).toHaveCount(0)
     await dialog.getByRole('combobox', { name: text.tierLabel }).click()
     await page.getByRole('listbox').getByRole('option', { name: 'Senior' }).click()
@@ -160,7 +154,6 @@ test.describe('a tier change and a rate correction', () => {
     const first = rows.filter({ hasText: text.effectiveFrom(formatPeriod('2024-01')) })
     await first.getByRole('button', { name: text.editRate }).click()
 
-    // While open the row is an editor without its "Mulai" line.
     const editor = rows.filter({ has: page.locator('[id^="rate-amount-"]') })
     const amount = editor.getByLabel(text.rateAmountLabel)
     await amount.fill('')
@@ -174,7 +167,6 @@ test.describe('a tier change and a rate correction', () => {
     await editor.getByRole('button', { name: text.rateCorrectConfirmAction }).click()
     await expect(first).toContainText(formatIDR(seniorCorrected))
 
-    // The promoted month is inside the span, so Iuran now owes the corrected amount.
     await page.goto('/')
     await openStatus(page)
     await pickMonth(page, page.getByLabel(copy.dues.periodLabel), promoted)

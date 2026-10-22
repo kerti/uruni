@@ -57,9 +57,8 @@ type backupListItem struct {
 	Kind            string `json:"kind"` // "daily" | "pre-restore"
 	FormatVersion   int64  `json:"format_version"`
 	IsCurrentFormat bool   `json:"is_current_format"` // written by this build's format; false for an older one
-	// CanRestore is true for any format the importer can read, the current one or
-	// an older one it upgrades in ParseUpload (ADR-012, ADR-040): the restore
-	// button follows this, not is_current_format.
+	// CanRestore is true for any format the importer can read or upgrade
+	// (ADR-012, ADR-040): the restore button follows this, not is_current_format.
 	CanRestore bool  `json:"can_restore"`
 	SizeBytes  int64 `json:"size_bytes"`
 }
@@ -154,9 +153,8 @@ func (a *api) downloadStoredBackup(w http.ResponseWriter, r *http.Request) {
 // so the download is too; backup.Export walks every fund ListFunds returns,
 // not the one resolveFund would answer with.
 func (a *api) downloadBackup(w http.ResponseWriter, r *http.Request) {
-	// The name's date is the fund's day (ADR-041). The download is instance-wide,
-	// so the zone is the one an instance-wide job follows: the first fund's, or
-	// tz.Default on an instance with none.
+	// The name's date is the fund's day (ADR-041); the download is instance-wide,
+	// so the zone is the first fund's, or tz.Default with none.
 	zone, err := backup.InstanceZone(r.Context(), a.queries)
 	if err != nil {
 		a.log(r).Error("reading the fund's time zone", "error", err)

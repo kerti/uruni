@@ -36,8 +36,7 @@ type Step = 'fund' | 'locations' | 'balances' | 'roster'
 export default function Setup({ onDone }: { onDone: () => void }) {
   const [step, setStep] = useState<Step>('fund')
   const [fundName, setFundName] = useState('')
-  // Pre-selected from the device's UTC offset (ADR-041), so most treasurers tap
-  // nothing; she can change it, and this is only a starting value, never the
+  // Pre-selected from the device's UTC offset (ADR-041): a starting value, never the
   // fund's zone until POST /api/setup stores it.
   const [timeZone, setTimeZone] = useState<string>(suggestedTimeZone)
   // Lazy: newLocationRow mints a client id, so the seed rows are built once,

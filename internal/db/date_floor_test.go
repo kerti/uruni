@@ -12,11 +12,9 @@ import (
 	"github.com/kerti/uruni/internal/store"
 )
 
-// The schema half of the plausible date window (#632): a static floor, the
-// year 2000, as a CHECK on every column that holds a business date or a period.
-// The ceilings are code (they move with the clock and the fund's zone); the
-// floor is the backstop for anything that writes around the ledger, a backup
-// restore included, and is the only half a restore enforces.
+// The schema half of the plausible date window (#632): a static floor, the year
+// 2000, as a CHECK on every column that holds a business date or a period. The
+// ceilings are code (see the schema header).
 
 const (
 	dayFloor   = "2000-01-01"
@@ -131,8 +129,6 @@ func (w *floorWriter) next(prefix string) string {
 // TestEveryDateColumnIsListed is the audit that does not rely on remembering a
 // column: every TEXT column named for a day (`*_on`), a dues period or a rate's
 // start month must be in dateColumns, and every listed column must still exist.
-// A new date column added to the schema without being listed here fails this
-// test; a listed one without the floor fails TestDateColumnFloors.
 func TestEveryDateColumnIsListed(t *testing.T) {
 	t.Parallel()
 	sqlDB := migratedTestDB(t)
@@ -173,9 +169,9 @@ func TestEveryDateColumnIsListed(t *testing.T) {
 	}
 }
 
-// TestDateFloorLiteralsAreTheFloor pins the literals: a CHECK cannot name a Go
-// constant, so the schema carries one floor literal per column (a day or a
-// month, as the column needs) and nothing else of that shape.
+// TestDateFloorLiteralsAreTheFloor pins the literals (a CHECK cannot name a Go
+// constant): one floor per column, a day or a month as needed, and nothing else
+// of that shape.
 func TestDateFloorLiteralsAreTheFloor(t *testing.T) {
 	t.Parallel()
 	body, err := migrationsFS.ReadFile("migrations/00001_schema.sql")
@@ -211,8 +207,7 @@ func TestDateFloorLiteralsAreTheFloor(t *testing.T) {
 }
 
 // TestDateColumnFloors is the per-column proof: the floor itself is accepted
-// and one step below it is refused by the floor CHECK, not by some other
-// constraint the test row happened to trip.
+// and one step below it is refused by the floor CHECK.
 func TestDateColumnFloors(t *testing.T) {
 	t.Parallel()
 	for _, c := range dateColumns {

@@ -153,9 +153,6 @@ func (a *api) routes(r chi.Router) {
 		// Purposes are read-only here except the one kind a treasurer creates
 		// (pass-through); the other kinds are written by SetUpFund and
 		// OpenIncidental. PATCH renames any kind except the fund's 'main' row (#264).
-		//
-		// POST is keyed (ADR-043), a create with a starting balance or without; PATCH,
-		// DELETE and the pass-through purpose below are not.
 		r.With(a.keyed).Post("/accounts", a.createAccount)
 		r.Get("/accounts", a.listAccounts)
 		r.Patch("/accounts/{id}", a.updateAccount)
@@ -179,9 +176,8 @@ func (a *api) routes(r chi.Router) {
 
 		// Rates are created and listed under their tier but corrected by id: a rate
 		// is only reached through one tier, so {id} in the nested path means the tier.
-		// All three writes go through the ledger (ADR-040): a correction or a delete
-		// appends the next correction of the rate's month, so the response of a PATCH
-		// carries a new id and an old one is refused as superseded.
+		// A correction or a delete appends the next correction of the rate's month
+		// (ADR-040): a PATCH answers a new id, and the old one is refused as superseded.
 		r.Post("/dues-tiers/{id}/rates", a.createDuesRate)
 		r.Get("/dues-tiers/{id}/rates", a.listDuesRates)
 		r.Patch("/dues-rates/{id}", a.updateDuesRate)
@@ -192,8 +188,7 @@ func (a *api) routes(r chi.Router) {
 		// correction are ordinary POST /api/transactions calls (see
 		// transactionRequest), so neither has its own route.
 		//
-		// Keyed (ADR-043): a repeat carrying the same Idempotency-Key answers the
-		// first result and posts nothing. Only the immutable routes are keyed.
+		// Only the immutable routes are keyed (ADR-043).
 		r.With(a.keyed).Post("/transactions", a.createTransaction)
 		r.Get("/transactions", a.listTransactions)
 		// Fixing a posted row's peruntukan (ADR-033, #267): a reclass_purpose pair
@@ -201,10 +196,8 @@ func (a *api) routes(r chi.Router) {
 		// /api/incidentals/{purposeID}/close. It wraps Ledger.PostPurposeCorrection,
 		// not a second write path into PostTransaction (ADR-027).
 		r.With(a.keyed).Post("/transactions/{id}/purpose-correction", a.postPurposeCorrection)
-		// Reversing a dues payment or a normal transaction with one linked entry going
-		// the other way (ADR-042), through Ledger.ReverseTransaction. It replaced POST
-		// /api/dues-payments/{id}/reversal, removed with no alias. Once-only by the
-		// schema, so it carries no idempotency key (ADR-043).
+		// Reversing a transaction with one linked entry going the other way (ADR-042).
+		// Once-only by the schema, so no idempotency key (ADR-043).
 		r.Post("/transactions/{id}/reversal", a.reverseTransaction)
 		// Moving money between accounts without changing the fund's total (PRD
 		// section 6). No GET: the two legs are ordinary transaction rows and surface

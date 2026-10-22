@@ -51,8 +51,7 @@ func toTransferResponse(t store.Transfer) transferResponse {
 // and identical from/to legs are the ledger's ErrInvalidArgument, a 400
 // through the shared mapper with the ledger's message.
 //
-// The route is keyed (ADR-043): a replay is the same 201 with
-// Idempotent-Replayed, and posts no second pair.
+// Keyed (ADR-043).
 func (a *api) createTransfer(w http.ResponseWriter, r *http.Request) {
 	var req transferRequest
 	if !decodeJSON(w, r, &req) {

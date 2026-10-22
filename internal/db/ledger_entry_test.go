@@ -8,10 +8,9 @@ import (
 	"github.com/kerti/uruni/internal/store"
 )
 
-// ledger_entry (#627, #628) defines three derived facts once: the signed amount,
-// the reversed flag and the effective pos. These tests hold the view
-// itself, and then hold every query to reading them from it rather than writing
-// them again.
+// ledger_entry (#627, #628) defines the signed amount, the reversed flag and the
+// effective purpose once. These tests hold the view, then hold every query to
+// reading them from it.
 
 // TestLedgerEntryDefinesTheSignAndTheReversal pins the view's columns against a
 // ledger with an inflow, an outflow, and a dues payment that a later reversal
@@ -417,13 +416,10 @@ func TestTheGuardsSeeEveryShapeOfADerivation(t *testing.T) {
 	}
 }
 
-// TestNoQueryDerivesTheSignOrTheReversalOutsideTheView is #627's guard: the
-// signed amount and the reversed flag are defined in 00001_schema.sql's
-// ledger_entry and nowhere else, so a new query that wants either selects it
-// from the view. A query that wrote its own sign could disagree with every
-// balance about which way a row moves; one that wrote its own reversal test
-// could disagree about which rows still count. Reversal (ADR-042) changed the
-// second in exactly one place, the view.
+// TestNoQueryDerivesTheSignOrTheReversalOutsideTheView is #627's guard: both are
+// defined in ledger_entry and nowhere else. A query with its own sign could
+// disagree with every balance about which way a row moves; one with its own
+// reversal test, about which rows still count.
 func TestNoQueryDerivesTheSignOrTheReversalOutsideTheView(t *testing.T) {
 	t.Parallel()
 	for name, body := range queryStatements(t) {
@@ -478,9 +474,9 @@ func TestTheLedgerReadsSelectFromTheView(t *testing.T) {
 //
 // Reading a correction's link as a column (tr.corrects_transaction_id AS ...) and
 // finding the row a correction corrects (o.id = tr.corrects_transaction_id) are
-// not walks, so those pass. As with derivesTheReversal, the walk with its first
-// operands swapped (t.id = c.corrects_transaction_id) is textually the legitimate
-// o.id = tr.corrects_transaction_id and cannot be told from it; the second
+// not walks, so those pass. As with derivesTheReversal, a walk with its operands
+// swapped (t.id = c.corrects_transaction_id) cannot be told from the legitimate
+// o.id = tr.corrects_transaction_id; the second
 // pattern catches a walk that spells the join that way, and a person reviewing a
 // new query has to catch one that avoids both.
 var derivesTheEffectivePurpose = regexp.MustCompile(
@@ -519,11 +515,10 @@ func TestTheEffectivePurposeGuardSeesEveryShapeOfAWalk(t *testing.T) {
 }
 
 // TestNoQueryWalksTheCorrectionsOutsideTheView is #628's guard: the effective
-// pos is defined in 00001_schema.sql's ledger_entry and nowhere else, so
-// a new query that wants it selects ledger_entry.effective_purpose_id. One that
-// walked the corrections itself could disagree with the correction dialog about
-// where a row's money is, and the next correction would then be built from the
-// wrong "from" leg and drive a tag negative (ADR-033).
+// purpose is defined in ledger_entry and nowhere else. A query that walked the
+// corrections itself could disagree with the correction dialog about where a
+// row's money is, and the next correction would build the wrong "from" leg and
+// drive a tag negative (ADR-033).
 func TestNoQueryWalksTheCorrectionsOutsideTheView(t *testing.T) {
 	t.Parallel()
 	for name, body := range queryStatements(t) {

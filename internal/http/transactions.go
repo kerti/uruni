@@ -115,13 +115,12 @@ type transactionResponse struct {
 	// on a page it has not fetched still reads reversed.
 	Reversed bool `json:"reversed"`
 	// Reversible is true exactly when Ledger.ReverseTransaction would accept the
-	// row now (ledger.ReversalRefusal, the same function): the server's answer, so
-	// the client never works out from kind and direction whether to offer the
-	// control. False on a row the page did not compute it for (POST's reply).
+	// row now (ledger.ReversalRefusal, the same function), so the client never
+	// works out eligibility itself. False on a row the page did not compute it for
+	// (POST's reply).
 	Reversible bool `json:"reversible"`
-	// Counted is true when a cek kas has counted this row, which is what picks the
-	// date a reversal would take (the original's own day, or today). The client
-	// cannot see the counts, so the form's date line reads this.
+	// Counted is true when a cek kas has counted this row, which picks the date a
+	// reversal would take (the original's own day, or today).
 	Counted bool `json:"counted"`
 	// ReversesOccurredOn is the date of the row a reversal points at, set only on
 	// a reversal: an unnamed reversal's label states it, and the original may sit
@@ -228,8 +227,7 @@ func toTransactionsPageResponse(t store.ListTransactionsPageRow, today string) t
 // Handlers decode and pass through; amount > 0, direction shape and
 // occurred_on validity are PostTransaction's job alone (ADR-027).
 //
-// The route is keyed (ADR-043): the keyed middleware hands over the request's
-// idempotency key, and a replay is the same 201 with Idempotent-Replayed.
+// Keyed (ADR-043).
 func (a *api) createTransaction(w http.ResponseWriter, r *http.Request) {
 	var req transactionRequest
 	if !decodeJSON(w, r, &req) {
@@ -482,17 +480,10 @@ type reverseTransactionRequest struct {
 }
 
 // reverseTransaction is POST /api/transactions/{id}/reversal: wraps
-// Ledger.ReverseTransaction, in the nested-verb idiom of
-// /api/transactions/{id}/purpose-correction and /api/incidentals/{purposeID}/close
-// (the route names the row, the verb the action). {id} names the dues payment or
-// normal transaction being reversed; every refusal is the ledger's own named
-// error (ADR-042), reaching the client through mapLedgerError.
-//
-// It replaced POST /api/dues-payments/{id}/reversal, removed with no alias. The
-// route is once-only by the schema, so it carries no idempotency key (ADR-043).
-//
-// The response is the posted reversal row as transactionResponse, the wire
-// shape POST /api/transactions and GET /api/transactions use.
+// Ledger.ReverseTransaction; every refusal is the ledger's own named error
+// (ADR-042), reaching the client through mapLedgerError. Once-only by the
+// schema, so no idempotency key (ADR-043). The response is the posted reversal
+// row as transactionResponse.
 func (a *api) reverseTransaction(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {

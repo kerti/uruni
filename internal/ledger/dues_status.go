@@ -33,8 +33,7 @@ const (
 // paid toward it, and the derived status.
 type MemberDuesStatus struct {
 	// Member.TierID is the tier at the requested period, the one that priced
-	// OwedAmount (ADR-040): a row must not show a tier beside an amount that tier
-	// did not set. It is not the member's current tier.
+	// OwedAmount (ADR-040), not the member's current tier.
 	Member     Member
 	OwedAmount money.Amount
 	PaidAmount money.Amount
@@ -54,8 +53,8 @@ type MemberDuesStatus struct {
 //   - A member with no tier in force at the period - no member_tier row reaches
 //     back that far, or the row in force says "no tier" - has no dues
 //     obligation: excluded, never shown as "unpaid". The tier is the one in
-//     force at the period, not today's (ADR-040), so promoting a member in June
-//     leaves January priced at the old tier.
+//     force at the period, not today's (ADR-040), so a June promotion leaves
+//     January priced at the old tier.
 //   - A member whose tier has no dues_rate effective for this period (the
 //     "madya TBD" case, PRD 6) is omitted. Uruni does not invent an amount.
 //   - joined_on / inactive_on bound the active window, inclusive by month at
@@ -88,8 +87,7 @@ func (l *Ledger) DuesStatusForPeriod(ctx context.Context, fundID int64, period s
 		return nil, fmt.Errorf("listing members: %w", err)
 	}
 
-	// The whole roster is priced from two reads folded per member, not a query
-	// per member (ADR-040).
+	// Two reads folded per member, not a query per member.
 	tierRows, err := l.q.ListMemberTiersByFund(ctx, fundID)
 	if err != nil {
 		return nil, fmt.Errorf("listing member tiers: %w", err)
@@ -130,9 +128,8 @@ func (l *Ledger) DuesStatusForPeriod(ctx context.Context, fundID int64, period s
 			continue // outside the joined_on..inactive_on window
 		}
 
-		// The tier in force at `period` and the rate that tier carried then. Either
-		// missing means nothing is owed: no tier is no obligation, and a tier with no
-		// rate yet effective is the "madya TBD" case.
+		// Either missing means nothing is owed: no tier is no obligation, and a
+		// tier with no rate yet effective is the "madya TBD" case.
 		tierID, rate, ok := prices.priceAt(m.ID, period)
 		if !ok {
 			continue
@@ -175,18 +172,15 @@ type OutstandingDuesPeriod struct {
 // CurrentDuesPeriod is the dues period ("YYYY-MM") that now falls in,
 // reckoned in loc, the fund's time zone (ADR-041), never the server's zone:
 // production runs UTC, so on a month's last evening the host clock still reads
-// the old month while the treasurer is in the next (#379), and a WIT fund
-// turns the month over two hours before a WIB one. The report's "current
-// month" is reckoned the same way (ADR-035). It is the one seam every
+// the old month while the treasurer is in the next. It is the one seam every
 // "current month" read goes through; loc comes from FundLocation.
 func CurrentDuesPeriod(now time.Time, loc *time.Location) string {
 	return now.In(loc).Format(duesPeriodLayout)
 }
 
 // FundLocation is the fund's time zone as a *time.Location (ADR-041). A name
-// tz.Load refuses cannot get past the schema's CHECK, so an error here means the
-// database is broken: the caller fails the request and logs it, and nothing
-// falls back to UTC or WIB.
+// tz.Load refuses cannot get past the schema's CHECK, so an error means a broken
+// database: the caller fails the request, and nothing falls back to UTC or WIB.
 func FundLocation(f store.Fund) (*time.Location, error) {
 	loc, err := tz.Load(f.TimeZone)
 	if err != nil {
@@ -219,9 +213,7 @@ func FundLocation(f store.Fund) (*time.Location, error) {
 // Within the range DuesStatusForPeriod's rules decide what is owed:
 //   - a member with no tier in any period (no member_tier row, or only rows
 //     saying "no tier"): no obligation, empty result.
-//   - each period is priced at the tier in force then, not today's (ADR-040), so
-//     a promotion never reaches back and the chain of arrears follows the tiers
-//     the member was actually in.
+//   - each period is priced at the tier in force then, not today's (ADR-040).
 //   - memberOwesPeriod bounds every period, both ends inclusive by month.
 //   - a period with no tier in force, or whose tier has no dues_rate effective
 //     yet, is skipped, not invented, and does not truncate the walk: a later
@@ -232,8 +224,7 @@ func FundLocation(f store.Fund) (*time.Location, error) {
 // DuesStatusForPeriod it needs no LatestDuesPeriodPaidByMember call.
 //
 // It uses l.q directly rather than withTx, like DuesStatusForPeriod (ADR-027).
-// It reads the member's tier timeline and those tiers' rates once and folds
-// them per period, a constant number of queries however long the walk.
+// The tier timeline and rates are read once and folded per period.
 func (l *Ledger) OutstandingDuesForMember(ctx context.Context, fundID, memberID int64, through string, now time.Time) ([]OutstandingDuesPeriod, error) {
 	if through == "" {
 		fund, err := l.q.GetFund(ctx, fundID)
@@ -301,8 +292,7 @@ func (l *Ledger) OutstandingDuesForMember(ctx context.Context, fundID, memberID 
 			continue // outside the joined_on..inactive_on window
 		}
 
-		// The tier in force at this period and its rate then (ADR-040); see
-		// DuesStatusForPeriod. Neither found means nothing is owed this period.
+		// Priced as in DuesStatusForPeriod; neither found means nothing is owed.
 		_, rate, ok := prices.priceAt(memberID, period)
 		if !ok {
 			continue
@@ -391,8 +381,7 @@ func classifyDuesStatus(owed, paid money.Amount) DuesStatus {
 // member's active window ends the run; a period with no tier in force or no
 // effective rate owes nothing, so it is skipped without breaking the run; a
 // period paid below what its own tier and rate say breaks it, so a rate or tier
-// rise in a prepaid month reads honestly as not paid through. Each period is
-// priced at the tier in force then (ADR-040), through prices.
+// rise in a prepaid month reads honestly as not paid through.
 func (l *Ledger) paidThrough(ctx context.Context, fundID int64, m store.Member, prices pricing, period, latest string) (string, error) {
 	paidRows, err := l.q.DuesPaidByMemberGroupedByPeriod(ctx, store.DuesPaidByMemberGroupedByPeriodParams{
 		FundID: fundID, MemberID: &m.ID,
@@ -429,8 +418,7 @@ func (l *Ledger) paidThrough(ctx context.Context, fundID int64, m store.Member, 
 }
 
 // memberPricing fetches what prices one member's walk: their standing tier rows
-// and the rates of the tiers those rows name, two queries however many periods
-// follow.
+// and those tiers' rates.
 func (l *Ledger) memberPricing(ctx context.Context, fundID, memberID int64) (pricing, error) {
 	tierRows, err := l.q.ListMemberTiersForMember(ctx, store.ListMemberTiersForMemberParams{FundID: fundID, MemberID: memberID})
 	if err != nil {

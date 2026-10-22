@@ -30,13 +30,12 @@ type OpenIncidentalParams struct {
 	// expected to contribute. nil and an empty slice both mean none.
 	RecipientMemberIDs []int64
 
-	// Now is the clock OpenedOn's ceiling is read from, in the fund's zone
-	// (ADR-041, #632). The zero value means time.Now().
+	// Now is the clock OpenedOn's ceiling is read from (ADR-041).
+	// Zero means time.Now().
 	Now time.Time
 
-	// Idempotency, when non-nil, makes opening the envelope safe to repeat: the
-	// same key with the same request answers the first envelope and opens no
-	// second (ADR-043). nil is an unkeyed call.
+	// Idempotency, when non-nil, makes opening the envelope safe to repeat
+	// (ADR-043).
 	Idempotency *Idempotency
 }
 
@@ -49,9 +48,9 @@ type OpenIncidentalParams struct {
 // transactions but has no occasion, target or opened_on (#42). Same
 // atomicity argument as ADR-027 makes for CloseIncidentalAndRoll.
 //
-// With p.Idempotency set (ADR-043), a repeat of the same request returns the
-// first envelope and opens none. A purpose has no uniqueness on its name and no
-// route removes one, so an unkeyed repeat leaves a twin for good.
+// With p.Idempotency set (ADR-043), a repeat returns the first envelope. A
+// purpose has no uniqueness on its name and no route removes one, so an unkeyed
+// repeat leaves a twin for good.
 func (l *Ledger) OpenIncidental(ctx context.Context, p OpenIncidentalParams) (store.Incidental, error) {
 	if strings.TrimSpace(p.Occasion) == "" {
 		return store.Incidental{}, fmt.Errorf("%w: occasion must not be empty", ErrInvalidArgument)
@@ -266,9 +265,9 @@ type CloseIncidentalAndRollParams struct {
 	// built at read time from the transfer's facts (#257).
 	Note *string
 
-	// Now is the clock ClosedOn's ceiling is read from, in the fund's zone
-	// (ADR-041, #632). The zero value means time.Now(). The roll's own legs are
-	// dated ClosedOn and are not checked again: the date was checked once, here.
+	// Now is the clock ClosedOn's ceiling is read from (ADR-041). The roll's own
+	// legs are dated ClosedOn and not checked again.
+	// Zero means time.Now().
 	Now time.Time
 }
 

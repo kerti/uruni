@@ -9,7 +9,7 @@ import (
 	"github.com/kerti/uruni/internal/money"
 )
 
-// ADR-043 on the seven routes #635 keys after POST /api/transactions: each
+// ADR-043 on the seven routes keyed after POST /api/transactions: each
 // answers a repeat of the same key and request with the first result, equal by
 // value (which is also the round trip of the stored type), and writes nothing.
 // idempotency_test.go holds the wrapper's own cases (retention, purge, reuse,

@@ -607,9 +607,8 @@ func TestRestoreClearsSessions(t *testing.T) {
 	}
 }
 
-// TestRestoreClearsIdempotencyKeys is ADR-043's "restore clears it": a restore
-// returns the ledger to an older state, so a key from before it would replay a
-// success whose rows the restore just removed.
+// TestRestoreClearsIdempotencyKeys is ADR-043's "restore clears it": a key from
+// before the restore would replay a success whose rows are gone.
 func TestRestoreClearsIdempotencyKeys(t *testing.T) {
 	t.Parallel()
 	destDB := newTestDB(t)
@@ -1091,13 +1090,12 @@ func TestAdoptionDatesFallsBackToTheFundsCreationDayInItsOwnZone(t *testing.T) {
 	}
 }
 
-// TestRestoreCarriesTheRateTrailAndLeavesTheUpdateTriggersAlone is ADR-040's claim
-// about restore, held by a test: an UPDATE-only trigger never fires on restore's
-// own deletes and inserts, so dues_rate_immutable_update (like member_tier's)
-// needs no place in immutableTriggers. The trail survives the round trip, the
-// standing view reads it as it did before, and both triggers still refuse after
-// a restore that replaced an existing trail (restore's clear-all deletes the old
-// rows, which no DELETE trigger stands in the way of).
+// TestRestoreCarriesTheRateTrailAndLeavesTheUpdateTriggersAlone is ADR-040's
+// claim about restore: an UPDATE-only trigger never fires on restore's deletes
+// and inserts, so dues_rate_immutable_update (like member_tier's) needs no place
+// in immutableTriggers. The trail survives the round trip, the standing view
+// reads it as before, and both triggers still refuse after a restore that
+// replaced an existing trail.
 func TestRestoreCarriesTheRateTrailAndLeavesTheUpdateTriggersAlone(t *testing.T) {
 	t.Parallel()
 	srcDB := newTestDB(t)

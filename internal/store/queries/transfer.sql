@@ -20,10 +20,8 @@ WHERE fund_id = ?
 ORDER BY id;
 
 -- The effective peruntukan (ADR-033, #411): the tag this row's money is under
--- now. It is defined once, as ledger_entry.effective_purpose_id (the schema
--- file has the reasoning: a path of corrections, no ordering of them, a row
--- corrected and corrected back ends where it began), and this query only reads
--- it. A row nothing corrects answers its own purpose_id.
+-- now. Defined once as ledger_entry.effective_purpose_id (schema file); this
+-- only reads it. A row nothing corrects answers its own purpose_id.
 -- name: EffectivePurposeForTransaction :one
 SELECT effective_purpose_id
 FROM ledger_entry

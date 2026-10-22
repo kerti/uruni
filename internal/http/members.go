@@ -50,8 +50,7 @@ type memberResponse struct {
 	// TierName is dues_tier.name for TierID; nil for a member with no tier, and
 	// nil on POST/PATCH's reply. Period-independent, so it is cheap per row.
 	TierName *string `json:"tier_name"`
-	// CurrentRate is the dues_rate in force for the member's current tier, read at
-	// the same month as the tier (the later of this month and the join month); nil
+	// CurrentRate is the dues_rate in force for the member's current tier; nil
 	// when there is no tier or no rate effective yet (the "madya TBD" case, PRD
 	// section 6), never an invented amount, and nil on POST/PATCH's reply.
 	CurrentRate *int64 `json:"current_rate"`
@@ -97,9 +96,7 @@ func toMemberListResponse(m store.ListMembersPageRow, arrearsMonths int) memberR
 // createMember is POST /api/members: Ledger.CreateMember writes the member and,
 // when a tier is given, its first member_tier row (ADR-040). Validation is
 // JSON-shape only: an empty name or a tier_id naming no dues_tier reaches
-// SQLite's CHECK/FOREIGN KEY and comes back through mapLedgerError, which
-// classifies the wrapped constraint error with mapSQLiteError, the single
-// source of truth for those rules (#65).
+// SQLite's CHECK/FOREIGN KEY and comes back through mapLedgerError (#65).
 func (a *api) createMember(w http.ResponseWriter, r *http.Request) {
 	var req memberRequest
 	if !decodeJSON(w, r, &req) {
@@ -341,8 +338,7 @@ func decodeUpdateMemberRequest(w http.ResponseWriter, r *http.Request) (updateMe
 // updateMember is PATCH /api/members/{id}: name, join date and leaving date are
 // corrections to reference data, not ledger events (a transaction references a
 // member by id, so a rename breaks nothing posted); the tier is stated "from a
-// month" and the ledger decides whether that is a new row, a correction of the
-// month or nothing (ADR-040), so it goes through Ledger.UpdateMember.
+// month" and the ledger decides what that writes (ADR-040).
 // inactive_on only exposes the column; DuesStatusForPeriod owns what it means.
 func (a *api) updateMember(w http.ResponseWriter, r *http.Request) {
 	member, ok := a.resolveMember(w, r)

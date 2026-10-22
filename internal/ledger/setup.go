@@ -76,10 +76,9 @@ type SetUpFundParams struct {
 	// fund"). Non-empty after trimming.
 	FundName string
 
-	// TimeZone is the fund's time zone (ADR-041), one of tz.Names(). Empty means
-	// tz.Default: the field is optional on the wire, and absent means WIB. Any
-	// other name is ErrInvalidArgument, because the opening balances' ceiling
-	// cannot be read without it; the schema's CHECK stays the backstop.
+	// TimeZone is the fund's time zone (ADR-041), one of tz.Names(); empty means
+	// tz.Default. Any other name is ErrInvalidArgument, because the opening
+	// balances' ceiling cannot be read without it.
 	TimeZone string
 
 	// Accounts is every location the fund starts with (#78). At least one is
@@ -88,8 +87,8 @@ type SetUpFundParams struct {
 	Accounts []AccountInput
 
 	// Now is the clock the opening balances' ceiling is read from, in TimeZone
-	// (ADR-041, #632): the fund row does not exist yet, so the zone comes from
-	// here and not from a fund. The zero value means time.Now().
+	// (ADR-041): the fund row does not exist yet, so the zone comes from here.
+	// Zero means time.Now().
 	Now time.Time
 }
 

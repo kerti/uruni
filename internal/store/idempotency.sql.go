@@ -49,9 +49,9 @@ DELETE FROM idempotency_key
 WHERE expires_at <= ?1
 `
 
-// The purge: a side effect of a keyed write that found no record, in that
-// write's own transaction (ADR-043), never a background ticker (ADR-013). It
-// also clears an expired row of the very key about to be inserted.
+// The purge: a side effect of a keyed write that found no record, in its own
+// transaction (ADR-043), never a ticker (ADR-013). It also clears an expired row
+// of the very key about to be inserted.
 func (q *Queries) DeleteExpiredIdempotencyKeys(ctx context.Context, now int64) error {
 	_, err := q.db.ExecContext(ctx, deleteExpiredIdempotencyKeys, now)
 	return err
@@ -68,10 +68,9 @@ type GetIdempotencyKeyParams struct {
 	Now int64
 }
 
-// Only a live record answers: an expired one is as good as absent, so
-// correctness never waits on its removal. expires_at = now is expired. The
-// records are written in the same transaction as the rows they cover, by the
-// ledger's idempotency helper (ADR-043); never by a handler.
+// Only a live record answers: an expired one (expires_at = now included) is as
+// good as absent, so correctness never waits on its removal. Written in the same
+// transaction as the rows it covers, by the ledger's idempotency helper (ADR-043).
 func (q *Queries) GetIdempotencyKey(ctx context.Context, arg GetIdempotencyKeyParams) (IdempotencyKey, error) {
 	row := q.db.QueryRowContext(ctx, getIdempotencyKey, arg.Key, arg.Now)
 	var i IdempotencyKey

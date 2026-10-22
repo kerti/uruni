@@ -286,11 +286,9 @@ describe('App (record loop)', () => {
     window.history.pushState({}, '', '/')
   })
 
-  // ADR-041: the zone reaches lib/dates inside getFund, before the Shell mounts
-  // on the render that follows the fetch, so the first screen she opens - this
-  // form, whose `useState(todayISODate)` runs in that render - already reads the
-  // fund's day. A zone set from an effect would let it read the default: at 00:30
-  // WIT the form would open on yesterday. The instant is the same in all three
+  // ADR-041: the zone reaches lib/dates inside getFund, before the Shell mounts,
+  // so the first form's `useState(todayISODate)` already reads the fund's day: at
+  // 00:30 WIT it must not open on yesterday. The instant is the same in all three
   // cases; only the fund's zone differs.
   it.each([
     ['Asia/Jakarta', '2026-09-30T22:30:00+07:00', '30 September 2026'],

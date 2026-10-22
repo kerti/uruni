@@ -158,9 +158,9 @@ func TestCheckSchemaCoversTheLedgerEntryView(t *testing.T) {
 	}
 }
 
-// The view as #627 shipped it, without effective_purpose_id (#628): the database
-// an older build left behind. goose still reports every migration applied, so the
-// boot guard is the only thing that notices the view is the old one.
+// The view without effective_purpose_id: the database an older build left
+// behind. goose still reports every migration applied, so only the boot guard
+// notices.
 func TestCheckSchemaRefusesALedgerEntryWithoutTheEffectivePurpose(t *testing.T) {
 	t.Parallel()
 	sqlDB := migratedDB(t)

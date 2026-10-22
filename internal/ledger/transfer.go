@@ -113,13 +113,11 @@ type PostTransferBetweenAccountsParams struct {
 	// empty string both mean no note; see normalizeNote.
 	Note *string
 
-	// Now is the clock OccurredOn's ceiling is read from, in the fund's zone
-	// (ADR-041, #632). The zero value means time.Now().
+	// Now is the clock OccurredOn's ceiling is read from (ADR-041).
+	// Zero means time.Now().
 	Now time.Time
 
-	// Idempotency, when non-nil, makes the transfer safe to repeat: the same key
-	// with the same request answers the first result and posts nothing
-	// (ADR-043). nil is an unkeyed post.
+	// Idempotency, when non-nil, makes the transfer safe to repeat (ADR-043).
 	Idempotency *Idempotency
 }
 
@@ -130,8 +128,7 @@ type PostTransferBetweenAccountsParams struct {
 // Either location being retired (inactive_on set) is ErrAccountInactive and
 // nothing is written (#444).
 //
-// With p.Idempotency set (ADR-043), a repeat of the same request returns the
-// first transfer and posts no second pair.
+// With p.Idempotency set (ADR-043), a repeat returns the first transfer.
 func (l *Ledger) PostTransferBetweenAccounts(ctx context.Context, p PostTransferBetweenAccountsParams) (store.Transfer, error) {
 	if p.Amount <= 0 {
 		return store.Transfer{}, fmt.Errorf("%w: amount must be positive, got %d", ErrInvalidArgument, p.Amount.Int64())

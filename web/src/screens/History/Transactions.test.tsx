@@ -410,7 +410,6 @@ describe('Transactions tab: reversing a row (ADR-042)', () => {
 
     expect(await screen.findByText('Transaksi dibatalkan.')).toBeInTheDocument()
     expect(posts).toEqual([{ url: '/api/transactions/5/reversal', body: { note: null } }])
-    // The refetch carried the flag: the original is marked, and the door is gone.
     expect(await screen.findByText('Sudah dibatalkan')).toBeInTheDocument()
   })
 })

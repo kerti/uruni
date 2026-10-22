@@ -83,9 +83,7 @@ func toAccountResponse(a store.Account) accountResponse {
 // posts it in the account's transaction, so mapLedgerError (not
 // mapSQLiteError) answers a refusal.
 //
-// The route is keyed (ADR-043), every create with a starting balance or without
-// (the rest of /api/accounts is not): a replay is the same 201 with
-// Idempotent-Replayed, and writes no second location or opening row.
+// Keyed (ADR-043).
 func (a *api) createAccount(w http.ResponseWriter, r *http.Request) {
 	var req accountRequest
 	if !decodeJSON(w, r, &req) {

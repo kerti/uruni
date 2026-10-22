@@ -23,15 +23,11 @@ package backup
 // bump is only allowed in the PR that ships the step converting the previous
 // format, so the last release's backup stays restorable.
 //
-// 2 (ADR-040): a member's tier is effective-dated. The member_tiers array
-// carries every member_tier row, superseded ones included, and members[].tier_id
-// is gone. Version 1 files are upgraded in ParseUpload.
-//
-// 2 also carries funds[].time_zone (ADR-041): the fund's zone, one of
-// Asia/Jakarta, Asia/Makassar, Asia/Jayapura. The v1 -> v2 step fills
-// Asia/Jakarta; ParseUpload refuses any other value, a missing field (the empty
-// string) included, and the schema's CHECK is the backstop. Edited into v2 in
-// place, as v2 had not shipped before the epic merged.
+// 2 (ADR-040, ADR-041): a member's tier is effective-dated (the member_tiers
+// array carries every member_tier row, superseded ones included; members[].tier_id
+// is gone) and funds[].time_zone is one of Asia/Jakarta, Asia/Makassar,
+// Asia/Jayapura. Version 1 files are upgraded in ParseUpload (the step fills
+// Asia/Jakarta); any other zone, a missing field included, is refused there.
 const FormatVersion int64 = 2
 
 // Document is uruni.json's root object: every table but session and
@@ -69,9 +65,8 @@ type Document struct {
 	DuesTiers []DuesTier `json:"dues_tiers"`
 	DuesRates []DuesRate `json:"dues_rates"`
 	Members   []Member   `json:"members"`
-	// MemberTiers holds every member_tier row, the superseded ones too: the trail
-	// is the data, and an export of standing rows only would lose it on the first
-	// restore (ADR-040).
+	// MemberTiers holds every member_tier row, superseded ones too: the trail is
+	// the data (ADR-040).
 	MemberTiers []MemberTier `json:"member_tiers"`
 
 	Transfers      []Transfer      `json:"transfers"`
@@ -140,10 +135,8 @@ type DuesTier struct {
 
 // DuesRate mirrors the "dues_rate" table verbatim: an effective-dated rate
 // for one tier (CONTEXT.md). Every row is exported, superseded and deleting ones
-// included (ADR-040): the trail is the data. Correction is the row's number
-// within its month (the highest stands) and Deleted marks a deleting correction,
-// which copies the amount it withdrew. A v1 file carries neither; the v1 to v2
-// step reads them as 0 and false.
+// included (ADR-040). A v1 file carries neither Correction nor Deleted; the v1 to
+// v2 step reads them as 0 and false.
 type DuesRate struct {
 	ID            int64  `json:"id"`
 	TierID        int64  `json:"tier_id"`

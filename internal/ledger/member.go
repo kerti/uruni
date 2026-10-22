@@ -12,10 +12,10 @@ import (
 // tier (ADR-040). The tier lives in member_tier, month by month, so a bare
 // store.Member cannot carry it.
 //
-// TierID's meaning depends on who built the value, and the builder says which:
-// every method of this file returns the member's CURRENT tier (the tier at the
-// later of the current month and the join month; nil is no tier), and
-// MemberDuesStatus.Member carries the tier at the requested period.
+// TierID depends on who built the value: every method of this file returns the
+// member's CURRENT tier (at the later of the current month and the join month;
+// nil is no tier), and MemberDuesStatus.Member carries the tier at the
+// requested period.
 type Member struct {
 	store.Member
 	TierID *int64
@@ -28,27 +28,23 @@ type CreateMemberParams struct {
 	// TierID is the member's tier from the month of JoinedOn; nil writes no
 	// member_tier row (no dues obligation), as ADR-040 requires.
 	TierID *int64
-	// JoinedOn is "YYYY-MM-DD". The caller owns the default (today, in the zone it
-	// reads "today" in). A date that is not a real one is ErrInvalidArgument; one
-	// before 2000 or more than a year past today in the fund's zone is
-	// ErrDateOutOfRange (#632).
+	// JoinedOn is "YYYY-MM-DD"; the caller owns the default. Not a real date is
+	// ErrInvalidArgument; outside the window is ErrDateOutOfRange.
 	JoinedOn string
 
-	// Now is the clock JoinedOn's ceiling is read from, in the fund's zone
-	// (ADR-041, #632). The zero value means time.Now().
+	// Now is the clock JoinedOn's ceiling is read from (ADR-041).
+	// Zero means time.Now().
 	Now time.Time
 }
 
 // CreateMember writes a member and, when a tier is given, its first member_tier
-// row at the month of joined_on, in one transaction (ADR-040: "POST /api/members
-// and Setup write the first row at the join month when a tier is given, and no
-// row when it is not"). The row is bounded by the join date's own ceiling
-// (#632), not by the tier-start ceiling, which applies to the edit form only.
+// row at the month of joined_on, in one transaction (ADR-040). The row is
+// bounded by the join date's own ceiling, not the tier-start ceiling, which
+// applies to the edit form only.
 //
 // Neither the name nor the tier id is pre-checked: the schema's CHECKs and
-// foreign keys refuse them (ADR-027), and the HTTP layer classifies the wrapped
-// constraint error. The date is checked against the plausible window first
-// (#632), which also keeps the month read off the stored row a well-formed one.
+// foreign keys refuse them (ADR-027). The date is checked first, which also
+// keeps the month read off the stored row a well-formed one.
 func (l *Ledger) CreateMember(ctx context.Context, p CreateMemberParams) (Member, error) {
 	window, err := l.windowFor(ctx, l.q, p.FundID, p.Now)
 	if err != nil {
@@ -108,8 +104,8 @@ type UpdateMemberParams struct {
 	// month if that is later.
 	TierFrom string
 
-	// Now is the clock the current month and the dates' ceilings are read from,
-	// in the fund's zone (ADR-041, #632). The zero value means time.Now().
+	// Now is the clock the current month and the dates' ceilings are read from.
+	// Zero means time.Now().
 	Now time.Time
 }
 
@@ -126,12 +122,11 @@ type UpdateMemberParams struct {
 //     month. "At or before", because a join date once moved later leaves the
 //     earliest row ahead of the join month. This holds "the earliest row reaches
 //     back to joined_on" as an invariant, without which a live-arrears backdating
-//     (PRD 7.1) would open months in which the member has no tier and owes
-//     nothing. If the earliest row began after the old join month (a member
+//     (PRD 7.1) would open months with no tier. If the earliest row began after the old join month (a member
 //     untiered at first), the longer untiered stretch stays untiered.
 //  2. A statement "tier T from month M" is refused before the member's join month
 //     and after the current month (or the join month, if that is later) with
-//     ErrDateOutOfRange (#632). Otherwise it reads the tier in force at M: if that is
+//     ErrDateOutOfRange. Otherwise it reads the tier in force at M: if that is
 //     already T it writes nothing, so re-saving the form leaves no stray rows and
 //     a later row is never cancelled by an earlier statement ("A from March"
 //     with B from June changes nothing); else it writes the next correction of

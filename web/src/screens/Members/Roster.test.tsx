@@ -404,7 +404,6 @@ describe('Roster', () => {
       expect(within(picker).getByRole('button', { name: 'Februari 2026' })).toBeDisabled()
       expect(within(picker).getByRole('button', { name: 'Maret 2026' })).toBeEnabled()
       expect(within(picker).getByRole('button', { name: 'Oktober 2026' })).toBeEnabled()
-      // The year arrows stop at the ceiling's year, so next month's year is not reachable.
       expect(within(picker).getByRole('button', { name: copy.dateField.nextYear })).toBeDisabled()
     })
 

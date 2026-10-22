@@ -158,7 +158,6 @@ describe('A golongan screen', () => {
     await userEvent.clear(input)
     await userEvent.type(input, '50000')
     await userEvent.click(screen.getByRole('button', { name: text.saveRate }))
-    // Nothing is sent until the confirmation is accepted.
     expect(calls).toHaveLength(0)
     await userEvent.click(screen.getByRole('button', { name: text.rateCorrectConfirmAction }))
 
@@ -231,9 +230,8 @@ describe('A golongan screen', () => {
     })
   })
 
-  // #625: a correction is a new row with a new id. A page still holding the old
-  // one is refused 409 dues_rate_superseded; the list must reload so the next
-  // try is against what stands.
+  // A correction is a new row with a new id: a stale page is refused 409
+  // dues_rate_superseded, and the list must reload.
   it('reloads the rate list and says so when a rate was already corrected elsewhere', async () => {
     let listed = [rate(1, 1, 50_000, '2026-01')]
     let rateReads = 0
@@ -264,10 +262,8 @@ describe('A golongan screen', () => {
     await userEvent.click(screen.getByRole('button', { name: text.rateCorrectConfirmAction }))
 
     expect(await screen.findByRole('alert')).toHaveTextContent(copy.common.errors.dues_rate_superseded)
-    // The list was read again and now shows the standing amount.
     await waitFor(() => expect(rateReads).toBeGreaterThan(1))
     expect(await screen.findByText(exactly(formatIDR(52_000)))).toBeInTheDocument()
-    // The row is the fresh one, back to reading mode.
     expect(screen.getByRole('button', { name: text.editRate })).toBeInTheDocument()
   })
 

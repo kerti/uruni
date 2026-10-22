@@ -62,12 +62,10 @@ export default function TransactionList({
    * state. Unlike onCorrectPurpose, both callers pass this: attaching a nota
    * after the fact is offered on Beranda's recent activity too. */
   onReceiptsChanged?: () => void
-  /** Reverses an ordinary transaction (ADR-042): optional like
-   * onCorrectPurpose - only Riwayat's Transaksi tab passes it, so Beranda
-   * stays inert. It gives the entry detail its Batalkan transaksi button,
-   * which opens the inline form under the row; this is called after the
-   * reversal posts so the caller refetches. Whether a row offers the button
-   * is the server's `reversible`, never a rule worked out here. */
+  /** Reverses an ordinary transaction (ADR-042): optional like onCorrectPurpose,
+   * so only Riwayat's Transaksi tab passes it and Beranda stays inert. Gives the
+   * entry detail its Batalkan transaksi button; called after the reversal posts so
+   * the caller refetches. Whether a row offers it is the server's `reversible`. */
   onReversed?: () => void
   /** Re-reads the caller's list in place when a reversal's response was lost. */
   onReversalRefresh?: () => Promise<void> | void
@@ -160,10 +158,7 @@ export default function TransactionList({
                 )}
               </span>
             </div>
-            {/* The reversal form (ADR-042), opened by the entry detail's
-                Batalkan transaksi and shown under the row it belongs to -
-                the row's own second line, like every other row control
-                here. Nothing renders it on Beranda: no door opens it. */}
+            {/* The reversal form (ADR-042), opened from the entry detail and shown under its row. */}
             {onReversed && reversingId === transaction.id && (
               <div className="pointer-events-none relative [&_button]:pointer-events-auto [&_input]:pointer-events-auto [&_label]:pointer-events-auto">
                 <ReversalForm
@@ -187,8 +182,6 @@ export default function TransactionList({
         onReverse={
           onReversed
             ? (transaction) => {
-                // The button posts nothing: it closes the dialog and hands
-                // off to the form under the row (ADR-032).
                 handoffId.current = transaction.id
                 entry.close()
                 setReversingId(transaction.id)
@@ -286,13 +279,10 @@ function PurposeLine({
 }
 
 /**
- * The inline form an ordinary transaction is reversed from (ADR-042, ADR-032):
- * the detail dialog's button opens it under the row, and it posts. Reason
- * (optional) and a yes/no, with the date line stating when the entry will be
- * dated; it asks no date, the ledger gives it.
- *
- * Its own component, because the note, the busy state and the error belong to
- * the one row it is open on.
+ * The inline form an ordinary transaction is reversed from (ADR-042, ADR-032),
+ * opened under the row by the detail dialog's button. Reason (optional) and a
+ * yes/no; the date line states when the entry will be dated, and it asks no date.
+ * Its own component: the note, busy state and error belong to the one open row.
  */
 function reversalFormId(transactionId: number): string {
   return `reversal-form-${transactionId}`

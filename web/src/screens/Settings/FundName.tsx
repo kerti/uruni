@@ -19,11 +19,9 @@ import { EditTimeZoneDialog } from '@/screens/Settings/FundTimeZone'
 const text = copy.settings.fund
 
 /**
- * The kas's own settings, "Kas ini": its name and its time zone, each a
- * card-plus-dialog (ADR-032 "Every non-posting edit is a dialog"). Tapping the
- * name opens the rename dialog at `?edit=fund:name`; tapping the zone opens
- * FundTimeZone's at `?edit=fund:time_zone` (ADR-041). The setup wizard promises
- * both - "bisa diganti nanti kalau perlu".
+ * The kas's own settings, "Kas ini": its name and its time zone, each a card-plus-dialog
+ * (ADR-032) at `?edit=fund:name` / `?edit=fund:time_zone` (ADR-041). The setup wizard
+ * promises both - "bisa diganti nanti kalau perlu".
  *
  * The name is a display label: it heads every screen and the public report,
  * and nothing posted references it, so a rename rewrites no history. It does
@@ -38,10 +36,8 @@ const text = copy.settings.fund
  * `onChanged` exists because the fund is also Shell's header, which App.tsx read
  * once on mount - without it the header would keep the old name until a reload.
  *
- * There is exactly one fund, so this section's dialogs have no id to carry:
- * `fund:name` and `fund:time_zone` are its only values, and `new` is a value it
- * never opens. An `?edit=fund:<anything else>` arriving by hand is cleared once,
- * like a dead id in any other section.
+ * There is exactly one fund, so the dialogs carry no id: `fund:name` and
+ * `fund:time_zone` are the only values; any other `?edit=fund:<x>` is cleared once.
  */
 export default function FundName({ onChanged }: { onChanged: (fund: Fund) => void }) {
   const [loadState, loadRun] = useApi<Fund>()

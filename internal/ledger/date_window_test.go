@@ -12,15 +12,13 @@ import (
 	"github.com/kerti/uruni/internal/tz"
 )
 
-// The plausible date window (#632): a floor of 2000 and, per column, a ceiling
-// read in the fund's zone from an injected clock. Both ends inclusive, no grace
-// day. Every instant here is named by its wall clock and none leans on the
-// machine's zone or date (CI is UTC).
+// The plausible date window: a floor of 2000 and, per column, a ceiling read in
+// the fund's zone from an injected clock. Both ends inclusive. No instant leans
+// on the machine's zone or date (CI is UTC).
 //
-// The instant the three zones disagree about is 22:30 WIB on 30 September 2026:
-// 23:30 WITA the same day, 00:30 WIT on 1 October. It sits on a month boundary,
-// so the day ceilings, the dues-period ceiling and the rate ceiling all disagree
-// between a WIB and a WIT fund.
+// edgeInstant is the instant the three zones disagree about: 22:30 WIB on 30
+// September 2026, 23:30 WITA the same day, 00:30 WIT on 1 October. It sits on a
+// month boundary, so every ceiling disagrees between a WIB and a WIT fund.
 var edgeInstant = time.Date(2026, 9, 30, 22, 30, 0, 0, wib)
 
 // bounds are the hand-worked limits at edgeInstant for one zone, so the test is
@@ -53,13 +51,11 @@ const (
 type datePath struct {
 	name string
 	kind pathKind
-	// noFloor is set for a path whose floor cannot be reached with a fixture the
-	// path can build (none today; kept honest by the loop below).
-	try func(t *testing.T, l *Ledger, f fixture, date string, now time.Time) error
+	try  func(t *testing.T, l *Ledger, f fixture, date string, now time.Time) error
 }
 
-// seed posts money so a purpose move or a roll has something to move, dated far
-// enough back to be valid in every zone.
+// seedMain posts money so a purpose move or a roll has something to move, dated
+// far enough back to be valid in every zone.
 func seedMain(t *testing.T, l *Ledger, f fixture, amount money.Amount) {
 	t.Helper()
 	postOpeningBalance(t, l, f.fundID, f.cashID, f.mainID, amount, "2026-01-01")

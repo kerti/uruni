@@ -34,8 +34,7 @@ type purposeMoveRequest struct {
 // transferResponse; the two legs are ordinary rows readable through GET
 // /api/transactions.
 //
-// The route is keyed (ADR-043): a replay is the same 201 with
-// Idempotent-Replayed, and posts no second pair.
+// Keyed (ADR-043).
 func (a *api) createPurposeMove(w http.ResponseWriter, r *http.Request) {
 	var req purposeMoveRequest
 	if !decodeJSON(w, r, &req) {

@@ -13,28 +13,24 @@ import (
 // ReverseTransactionParams is every argument ReverseTransaction needs to
 // reverse one previously-posted dues payment or normal transaction (ADR-042).
 //
-// There is no AccountID, PurposeID, Amount, Direction, MemberID, DuesPeriod or
-// OccurredOn field: the first seven are copied from the original row (the
-// purpose being its EFFECTIVE one, ADR-033) and the date is the ledger's pick,
-// so a reversal can never disagree with what it reverses. Only the note is
-// the caller's. A future idempotency key (ADR-043) rides as one more optional
-// field beside Now, which is why this is a struct and not a bare argument list.
+// There is no account, purpose, amount, direction, member, period or date
+// field: all but the date are copied from the original row (the purpose being
+// its EFFECTIVE one, ADR-033) and the date is the ledger's pick, so a reversal
+// can never disagree with what it reverses. Only the note is the caller's.
 type ReverseTransactionParams struct {
 	FundID        int64
 	TransactionID int64 // the kind='dues' or kind='normal' row being reversed
 	Note          *string
 
-	// Now is the clock "today" is read from, in the fund's zone (ADR-041). It
-	// only matters once a cek kas has counted the row, which is dated today. The
-	// zero value means time.Now().
+	// Now is the clock "today" is read from (ADR-041). It only matters once a
+	// cek kas has counted the row, which is dated today.
+	// Zero means time.Now().
 	Now time.Time
 }
 
 // ReversalFacts is what the ledger needs to know about one row to decide
-// whether it can be reversed. Ledger.ReverseTransaction fills it from
-// GetReversalTarget and GET /api/transactions from ListTransactionsPage's
-// columns, so the wire's reversible flag and the write's answer are one rule
-// (ReversalRefusal), not two that agree today.
+// whether it can be reversed. The write and the list's reversible flag both
+// fill it, so they share one rule (ReversalRefusal), not two that agree today.
 type ReversalFacts struct {
 	Kind       string // transaction.kind
 	OccurredOn string // the row's own date, "YYYY-MM-DD"
@@ -54,21 +50,12 @@ type ReversalFacts struct {
 
 // ReversalRefusal answers whether a row of the given facts can be reversed on a
 // day whose fund-zone date is today: nil when it can, otherwise the named error
-// ReverseTransaction returns. The order is the ADR-042 table's: the kind first,
-// then a cek kas fix, then a second reversal, then a closed envelope, then the
-// date assertion.
+// ReverseTransaction returns. The order is the ADR-042 table's.
 //
-//   - opening, reimbursement, transfer: ErrReversalOpening,
-//     ErrReversalReimbursement, ErrReversalTransfer - each carries a status a
-//     reversal would leave lying.
-//   - adjustment that reverses: ErrReversalOfReversal; any other adjustment (the
-//     plug a cek kas line names, or one posted alone): ErrReversalAdjustment.
-//   - normal that a cek kas line names as its fix: ErrReversalReconciliationFix.
-//   - already reversed: ErrAlreadyReversed.
-//   - the effective purpose is a closed envelope: ErrIncidentalClosed (ADR-031).
-//     The reversal posts there, so the envelope is reopened first.
-//   - counted, and dated after today: ErrReversalBeforeOriginal. The reversal
-//     would take today, ahead of what it reverses.
+// Opening, reimbursement and transfer rows each carry a status a reversal would
+// leave lying. A closed effective envelope refuses because the reversal posts
+// there (ADR-031). Counted and dated after today refuses because the reversal
+// would take today, ahead of what it reverses.
 func ReversalRefusal(f ReversalFacts, today string) error {
 	switch f.Kind {
 	case "dues":
@@ -129,13 +116,10 @@ func ReversalDate(occurredOn string, counted bool, today string) string {
 // only. The date is ReversalDate's; the note is the caller's own and never
 // copied from the original.
 //
-// The original is fetched fund-scoped (GetReversalTarget: WHERE fund_id = ? AND
-// id = ?), so ErrReversalNotFound answers for another fund's transaction id as
-// for a missing one. The composite FK backs this at the schema level, and the
-// BEFORE INSERT trigger transaction_named_row_shape verifies direction, amount,
-// location, member and period independently of this method.
-//
-// Every refusal is ReversalRefusal's, each its own named error.
+// The original is fetched fund-scoped, so ErrReversalNotFound answers for
+// another fund's id as for a missing one. The transaction_named_row_shape
+// trigger re-verifies direction, amount, location, member and period
+// independently of this method.
 //
 // A reversal inherits its location from the original even if the location has
 // since been retired, as PostPurposeCorrection does: refusing would make a

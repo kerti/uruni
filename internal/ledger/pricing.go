@@ -13,14 +13,12 @@ import (
 // it - applied to two series: member_tier (a member's tier) and dues_rate (a
 // tier's price).
 //
-// It is built from rows fetched once for a whole fund or one member and folded
-// here, so no read adds a per-member query. The rows must come from the
-// standing views' queries (one row per month, ordered by month): a superseded
-// row never reaches this type, which is why it takes no correction number, and a
-// month whose standing rate was deleted is not in dues_rate_standing at all, so
-// rateAt falls back to the earlier month with no deleted flag to check. Taking
-// store.DuesRateStanding rather than store.DuesRate is what keeps a raw table
-// row from being fed in.
+// It is built from rows fetched once for a whole fund or one member, so no read
+// adds a per-member query. The rows must come from the standing views (one row
+// per month, ordered by month): a superseded row never reaches this type, and a
+// month whose standing rate was deleted is absent, so rateAt falls back to the
+// earlier month with no deleted flag to check. Taking store.DuesRateStanding
+// keeps a raw table row from being fed in.
 type pricing struct {
 	tiers map[int64][]tierSpan // by member id, oldest month first
 	rates map[int64][]rateSpan // by tier id, oldest month first
@@ -54,9 +52,8 @@ func newPricing(tierRows []store.MemberTierStanding, rateRows []store.DuesRateSt
 	return p
 }
 
-// hasTier reports whether the member has any standing row naming a tier. A
-// member with none owes nothing in any period, so a walk over their months can
-// stop before it starts.
+// hasTier reports whether the member has any standing row naming a tier; with
+// none they owe nothing in any period.
 func (p pricing) hasTier(memberID int64) bool {
 	for _, s := range p.tiers[memberID] {
 		if s.tierID != nil {
@@ -108,8 +105,7 @@ func (p pricing) priceAt(memberID int64, period string) (tierID, amount int64, o
 
 // currentTier is the member's tier now (ADR-040): the tier at the later of the
 // current month and the join month, so a member who joins next month shows the
-// tier entered for them. nil is no tier. currentPeriod comes from
-// CurrentDuesPeriod, the one seam every "current month" read goes through.
+// tier entered for them. nil is no tier.
 func (p pricing) currentTier(memberID int64, joinedOn, currentPeriod string) *int64 {
 	at := currentPeriod
 	if joined := joinedOn[:len(duesPeriodLayout)]; joined > at {

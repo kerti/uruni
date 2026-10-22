@@ -3,14 +3,12 @@ INSERT INTO "user" (email, password_hash, created_at)
 VALUES (?, ?, ?)
 RETURNING id, email, password_hash, created_at;
 
--- Finds the login case-insensitively at the column: "user".email is COLLATE
--- NOCASE (#623), so `email = x` folds ASCII case by itself. New rows are stored
--- trimmed and lower-cased (auth.NormalizeEmail, #500), but an older row keeps
--- whatever case it was typed in. NOCASE folds ASCII only while Go's lower-casing
--- is full Unicode, so the lookup keeps both spellings: the normalized form, and
--- the address exactly as typed (trimmed), which finds a legacy row with a
--- non-ASCII capital by its stored spelling. user holds one row, so the OR costs
--- no index.
+-- "user".email is COLLATE NOCASE, so `email = x` folds ASCII case by itself. New
+-- rows are stored trimmed and lower-cased (auth.NormalizeEmail); an older row
+-- keeps its typed case. NOCASE folds ASCII only while Go's lower-casing is full
+-- Unicode, so the lookup keeps both the normalized form and the address as typed
+-- (trimmed), which finds a legacy row with a non-ASCII capital. user holds one
+-- row, so the OR costs no index.
 -- name: GetUserByEmail :one
 SELECT id, email, password_hash, created_at
 FROM "user"

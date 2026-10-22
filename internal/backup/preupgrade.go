@@ -71,12 +71,11 @@ type PreUpgradeInfo struct {
 }
 
 // operatorLocation is the zone of the two files an operator keeps for rolling
-// back, the pre-upgrade snapshot and the old database set aside by a rebuild
-// (ADR-041): Asia/Jakarta, whatever the fund's zone is. Each is written under
-// the instance lock before migrations, on a database whose schema may predate
-// the fund's time_zone column, so no fund can be read then; neither is a day of
-// the fund's, and neither is read back as one. It is a function and not a
-// variable so no zone is held in a package.
+// back, the pre-upgrade snapshot and the old database a rebuild sets aside
+// (ADR-041): Asia/Jakarta, whatever the fund's zone. Each is written before
+// migrations, on a database that may predate the fund's time_zone column, so no
+// fund can be read; neither is a day of the fund's. A function so no zone is
+// held in a package.
 func operatorLocation() *time.Location {
 	loc, err := tz.Load(tz.Default)
 	if err != nil {

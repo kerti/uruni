@@ -142,9 +142,8 @@ func TestReverseDuesPaymentTwiceIsRefused(t *testing.T) {
 }
 
 // TestReverseTransactionReversesAnOrdinaryTransaction: a kind='normal' row is
-// reversible (ADR-042, which flipped this test's meaning: it used to assert
-// that an ordinary row was refused, PRD section 4's "as wide as dues"). The
-// reversal goes the other way and the fund balance returns to what it was.
+// reversible (ADR-042). The reversal goes the other way and the fund balance
+// returns to what it was.
 func TestReverseTransactionReversesAnOrdinaryTransaction(t *testing.T) {
 	t.Parallel()
 	l := newTestLedger(t)
@@ -186,7 +185,7 @@ func TestReverseTransactionReversesAnOrdinaryTransaction(t *testing.T) {
 
 // TestReverseDuesPaymentRefusesReversingAReversal: a reversal is posted as
 // kind='adjustment' (ADR-029), and ADR-042 gives that refusal its own name,
-// ErrReversalOfReversal (it used to share ErrNotADuesPayment).
+// ErrReversalOfReversal.
 func TestReverseDuesPaymentRefusesReversingAReversal(t *testing.T) {
 	t.Parallel()
 	l := newTestLedger(t)
@@ -528,8 +527,7 @@ func TestReverseDuesPaymentReversesANamedContribution(t *testing.T) {
 
 // TestReverseTransactionReversesAnUnnamedContribution: an unnamed contribution
 // is a normal row, so ADR-042 reverses it, carrying no member (the null-safe
-// trigger is what lets the insert through). This test used to assert the
-// ErrNotADuesPayment refusal; ADR-042 flipped it. The envelope reads nothing
+// trigger is what lets the insert through). The envelope reads nothing
 // collected afterwards, and its balance returns to zero.
 func TestReverseTransactionReversesAnUnnamedContribution(t *testing.T) {
 	t.Parallel()

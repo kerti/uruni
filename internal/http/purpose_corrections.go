@@ -35,9 +35,8 @@ type purposeCorrectionRequest struct {
 // /api/transfers: a correction's two legs are ordinary transaction rows
 // readable through GET /api/transactions.
 //
-// The route is keyed (ADR-043) and answers 200, not 201, on a first success
-// and on a replay alike (Idempotent-Replayed marks the second). Under a key, a
-// repeat of the correction that worked is that 200, not the 409
+// Keyed (ADR-043): 200, not 201, on a first success and on a replay alike. Under
+// a key, a repeat of the correction that worked is that 200, not the 409
 // purpose_correction_noop it would otherwise earn.
 func (a *api) postPurposeCorrection(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)

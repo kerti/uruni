@@ -34,9 +34,8 @@ LIMIT 1;
 -- pair's from leg and 'in' its to leg. Both legs carry identical from/to
 -- facts, so the Go fold keeps either.
 --
--- reversed is ledger_entry's flag and reverses_occurred_on the date of the row a
--- reversal reverses (ADR-042): the mark on the original and the unnamed
--- reversal's label, both drawn on the page and in the PDF.
+-- reversed and reverses_occurred_on (ADR-042): the mark on the original and the
+-- unnamed reversal's label, on the page and in the PDF.
 --
 -- has_receipt is true for a receipt on the row itself or, on a reimbursement
 -- payout, on the claim it settles: that nota is the proof of the payout

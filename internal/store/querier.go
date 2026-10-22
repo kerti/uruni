@@ -35,14 +35,11 @@ type Querier interface {
 	// (ADR-030): the gate is the count, not a duplicate-email collision.
 	CountUsers(ctx context.Context) (int64, error)
 	CreateAccount(ctx context.Context, arg CreateAccountParams) (Account, error)
-	// dues_rate (ADR-040): a tier's price, month by month. A mistake in a rate is a
-	// new row (the next correction of its month), never an UPDATE; a deletion is a
-	// deleting correction (deleted = 1). Every pricing read goes through the
-	// dues_rate_standing view (one row per tier and month that has a rate: the
-	// highest correction, and none when that is a deletion); internal/db's guard
-	// test fails a query that reads the table directly, except the ones named there
-	// (GetDuesRateForFund, LatestDuesRateOfMonth, ListDuesRatesByFund). Another test
-	// fails a statement that updates the table or deletes from it other than
+	// dues_rate (ADR-040): a mistake is a new row (the next correction of its month),
+	// never an UPDATE; a deletion is a deleting correction. Pricing reads go through
+	// the dues_rate_standing view (schema file). internal/db's guard test fails a
+	// direct read of the table other than GetDuesRateForFund, LatestDuesRateOfMonth
+	// and ListDuesRatesByFund, and any UPDATE or DELETE other than
 	// DeleteDuesRatesByTier (dues_tier.sql) and restore's clear-all.
 	CreateDuesRate(ctx context.Context, arg CreateDuesRateParams) (DuesRate, error)
 	CreateDuesTier(ctx context.Context, arg CreateDuesTierParams) (DuesTier, error)
@@ -55,10 +52,9 @@ type Querier interface {
 	// the same transaction.
 	CreateIncidentalRecipient(ctx context.Context, arg CreateIncidentalRecipientParams) error
 	CreateMember(ctx context.Context, arg CreateMemberParams) (Member, error)
-	// member_tier (ADR-040): a member's tier, month by month. Every pricing read goes
-	// through the member_tier_standing view (one standing row per member and month,
-	// the highest correction); internal/db's guard test fails a query that reads
-	// the table directly, except the ones named there.
+	// member_tier (ADR-040): pricing reads go through the member_tier_standing view
+	// (schema file); internal/db's guard test fails a direct read of the table other
+	// than the ones named there.
 	CreateMemberTier(ctx context.Context, arg CreateMemberTierParams) (MemberTier, error)
 	CreatePurpose(ctx context.Context, arg CreatePurposeParams) (Purpose, error)
 	CreateReceipt(ctx context.Context, arg CreateReceiptParams) (Receipt, error)
@@ -112,9 +108,9 @@ type Querier interface {
 	// FK onto the tier so it cannot go first, and if a member then refuses the
 	// tier the transaction rolls back and the deleted rates come back.
 	DeleteDuesTier(ctx context.Context, arg DeleteDuesTierParams) error
-	// The purge: a side effect of a keyed write that found no record, in that
-	// write's own transaction (ADR-043), never a background ticker (ADR-013). It
-	// also clears an expired row of the very key about to be inserted.
+	// The purge: a side effect of a keyed write that found no record, in its own
+	// transaction (ADR-043), never a ticker (ADR-013). It also clears an expired row
+	// of the very key about to be inserted.
 	DeleteExpiredIdempotencyKeys(ctx context.Context, now int64) error
 	// The lazy sweep: a side effect of a session commit, at most hourly (#529),
 	// never a background ticker (ADR-013).
@@ -154,10 +150,8 @@ type Querier interface {
 	// from "paid" rather than counting twice.
 	DuesPaidByPeriod(ctx context.Context, arg DuesPaidByPeriodParams) ([]DuesPaidByPeriodRow, error)
 	// The effective peruntukan (ADR-033, #411): the tag this row's money is under
-	// now. It is defined once, as ledger_entry.effective_purpose_id (the schema
-	// file has the reasoning: a path of corrections, no ordering of them, a row
-	// corrected and corrected back ends where it began), and this query only reads
-	// it. A row nothing corrects answers its own purpose_id.
+	// now. Defined once as ledger_entry.effective_purpose_id (schema file); this
+	// only reads it. A row nothing corrects answers its own purpose_id.
 	EffectivePurposeForTransaction(ctx context.Context, arg EffectivePurposeForTransactionParams) (int64, error)
 	// The public report's reads (ADR-035, #372): read-only, fund-scoped, and none
 	// orders by primary key - a month is read by date, ties left unordered on
@@ -167,8 +161,7 @@ type Querier interface {
 	// this form is zero rows - a clean sql.ErrNoRows read as "no ledger yet".
 	FirstTransactionDateByFund(ctx context.Context, fundID int64) (string, error)
 	// Every balance in Uruni is this shape: sum the ledger, never read a stored
-	// total (CLAUDE.md rule 2). ledger_entry.signed_amount carries the sign, so the
-	// view is the only place a minus appears. The CAST is not decoration - without it sqlc
+	// total (CLAUDE.md rule 2). The CAST is not decoration - without it sqlc
 	// emits interface{} for the aggregate and the trust core loses its compiler
 	// exactly where it is needed most (ADR-024).
 	FundBalance(ctx context.Context, fundID int64) (int64, error)
@@ -190,10 +183,9 @@ type Querier interface {
 	// The public report's only way in (ADR-030 carve-out, ADR-035): the slug names
 	// its fund, with no session. report_slug is UNIQUE: one row or sql.ErrNoRows.
 	GetFundByReportSlug(ctx context.Context, reportSlug string) (Fund, error)
-	// Only a live record answers: an expired one is as good as absent, so
-	// correctness never waits on its removal. expires_at = now is expired. The
-	// records are written in the same transaction as the rows they cover, by the
-	// ledger's idempotency helper (ADR-043); never by a handler.
+	// Only a live record answers: an expired one (expires_at = now included) is as
+	// good as absent, so correctness never waits on its removal. Written in the same
+	// transaction as the rows it covers, by the ledger's idempotency helper (ADR-043).
 	GetIdempotencyKey(ctx context.Context, arg GetIdempotencyKeyParams) (IdempotencyKey, error)
 	// Fund-scoped through purpose, where the envelope's fund_id lives. PRD section
 	// 6 allows a server to hold more than one fund, so a bare WHERE purpose_id = ?
@@ -221,27 +213,24 @@ type Querier interface {
 	// and correct screens must know whether it is still owed. Fund-scoped.
 	GetReimbursementWithSettled(ctx context.Context, arg GetReimbursementWithSettledParams) (GetReimbursementWithSettledRow, error)
 	// Everything Ledger.ReverseTransaction needs to decide one row's fate (ADR-042),
-	// in one fund-scoped read, so the refusal and the date come from the same
-	// facts the page's reversible flag is built from (ListTransactionsPage selects
-	// the same four): a row of another fund reads as sql.ErrNoRows.
+	// in one fund-scoped read, from the same facts as the page's reversible flag
+	// (ListTransactionsPage selects the same four): another fund's row reads as
+	// sql.ErrNoRows.
 	//
-	//   reversed        ledger_entry.reversed: something already reverses this row.
-	//                   The reversed_once index is the guarantee; this turns it into
-	//                   a named error.
+	//   reversed        something already reverses this row; the reversed_once index
+	//                   is the guarantee, this turns it into a named error.
 	//   is_reconciliation_fix
-	//                   a cek kas line names this row as its fix
-	//                   (reconciliation_line.adjustment_transaction_id): reversing it
-	//                   would leave the line's open remainder saying an entry the
-	//                   ledger says never happened explains the gap.
+	//                   a cek kas line names this row as its fix: reversing it would
+	//                   leave the line's open remainder explained by an entry the
+	//                   ledger says never happened.
 	//   effective_closed_on
-	//                   closed_on of the envelope the row's money is under NOW (the
-	//                   effective purpose, ADR-033), NULL when that is not a closed
-	//                   envelope. The reversal posts there.
-	//   counted         some cek kas of the fund has counted this row:
-	//                   through_transaction_id >= id. The one place the repo relies
-	//                   on id order, because the cutoff's own meaning is id order
-	//                   (ADR-024, ADR-012). A NULL cutoff (a count of an empty
-	//                   ledger) compares NULL and counts nothing.
+	//                   closed_on of the envelope the row's money is under NOW
+	//                   (ADR-033), NULL when that is not a closed envelope. The
+	//                   reversal posts there.
+	//   counted         some cek kas of the fund has counted this row
+	//                   (through_transaction_id >= id). The one place the repo relies
+	//                   on id order: the cutoff's own meaning is id order (ADR-024,
+	//                   ADR-012). A NULL cutoff compares NULL and counts nothing.
 	GetReversalTarget(ctx context.Context, arg GetReversalTargetParams) (GetReversalTargetRow, error)
 	// Only a row still inside its idle window; a session past expires_at is gone
 	// even before DeleteExpiredSessions sweeps it.
@@ -254,14 +243,12 @@ type Querier interface {
 	// id from an untrusted request.
 	GetTransactionForFund(ctx context.Context, arg GetTransactionForFundParams) (Transaction, error)
 	GetTransfer(ctx context.Context, id int64) (Transfer, error)
-	// Finds the login case-insensitively at the column: "user".email is COLLATE
-	// NOCASE (#623), so `email = x` folds ASCII case by itself. New rows are stored
-	// trimmed and lower-cased (auth.NormalizeEmail, #500), but an older row keeps
-	// whatever case it was typed in. NOCASE folds ASCII only while Go's lower-casing
-	// is full Unicode, so the lookup keeps both spellings: the normalized form, and
-	// the address exactly as typed (trimmed), which finds a legacy row with a
-	// non-ASCII capital by its stored spelling. user holds one row, so the OR costs
-	// no index.
+	// "user".email is COLLATE NOCASE, so `email = x` folds ASCII case by itself. New
+	// rows are stored trimmed and lower-cased (auth.NormalizeEmail); an older row
+	// keeps its typed case. NOCASE folds ASCII only while Go's lower-casing is full
+	// Unicode, so the lookup keeps both the normalized form and the address as typed
+	// (trimmed), which finds a legacy row with a non-ASCII capital. user holds one
+	// row, so the OR costs no index.
 	GetUserByEmail(ctx context.Context, arg GetUserByEmailParams) (User, error)
 	// The account page's reads and writes (#386): the one login, addressed by the
 	// id its session carries. An email change stores the normalized form
@@ -281,13 +268,9 @@ type Querier interface {
 	// sits. The join to o takes COALESCE(tr.corrects_transaction_id,
 	// t.reverses_transaction_id): a row has at most one of the two, and its fund
 	// comes from t, not tr, which is NULL on a reversal (written the other way every
-	// reversal reads as spending). So a cancelled contribution is collected and
-	// then un-collected, a cancelled expense is disbursed and then un-disbursed,
-	// and collected minus disbursed still equals the envelope's balance even after
-	// a purpose correction has put the pair in two purposes (the original and its
-	// legs against one, the reversal against the other). Inside one purpose it is
-	// the same figure as dropping both halves, which is what this query used to do.
-	// IncidentalTotals stays unfiltered because the pair nets to zero there.
+	// reversal reads as spending). So collected minus disbursed still equals the
+	// envelope's balance even after a purpose correction has put the pair in two
+	// purposes. IncidentalTotals stays unfiltered because the pair nets to zero there.
 	//
 	// A peruntukan correction (ADR-033) is re-attributed, not dropped (#342). Its
 	// legs carry tr.corrects_transaction_id, which a roll's never do, so the join
@@ -386,17 +369,14 @@ type Querier interface {
 	// trail is the data. Ordered by id only for deterministic export bytes, not by
 	// effective date.
 	ListDuesRatesByFund(ctx context.Context, fundID int64) ([]DuesRate, error)
-	// What the Golongan screen lists: the rates in force, oldest month first. A
-	// month whose rate was deleted does not show.
+	// The Golongan screen's list: the rates in force, oldest month first.
 	ListDuesRatesByTier(ctx context.Context, tierID int64) ([]DuesRateStanding, error)
 	// The rates that price one member (OutstandingDuesForMember, paidThrough): those
 	// of every tier the member has a standing row for. A tier named only by a
 	// superseded row prices nothing, so it is not fetched.
 	ListDuesRatesForMemberPricing(ctx context.Context, arg ListDuesRatesForMemberPricingParams) ([]DuesRateStanding, error)
 	// The rates that price a roster (DuesStatusForPeriod): every tier's rates in
-	// force across the fund, ordered tier then month, the order the Go fold needs.
-	// Folded per (tier, period) as "the latest row at or before", so a roster costs
-	// one query however many members it holds.
+	// force, ordered tier then month for the Go fold. One query however many members.
 	ListDuesRatesForPricing(ctx context.Context, fundID int64) ([]DuesRateStanding, error)
 	// By name, ignoring case (maintainer, 2026-10-05).
 	ListDuesTiersByFund(ctx context.Context, fundID int64) ([]DuesTier, error)
@@ -411,9 +391,8 @@ type Querier interface {
 	ListIncidentalRecipientsByFund(ctx context.Context, fundID int64) ([]IncidentalRecipient, error)
 	// Joined through purpose, where fund ownership lives.
 	ListIncidentalsByFund(ctx context.Context, fundID int64) ([]Incidental, error)
-	// Every member's standing rows across the fund, for the readers that price a
-	// whole roster at once: folded per member in Go, so no read adds a per-member
-	// query. Ordered by month, the order the fold needs, never by id or created_at.
+	// Every member's standing rows across the fund, folded per member in Go so a
+	// roster costs no per-member query. Ordered by month, never by id or created_at.
 	ListMemberTiersByFund(ctx context.Context, fundID int64) ([]MemberTierStanding, error)
 	// The backup export's read (ADR-012, a named exception to the view rule): every
 	// row, superseded ones included, because the trail is the data. Ordered by id
@@ -432,25 +411,21 @@ type Querier interface {
 	//
 	// tier_id, tier_name and current_rate describe the member's CURRENT tier
 	// (ADR-040): the standing member_tier row of the latest month at or before
-	// max(current_period, the join month), so a member who joins next month shows
-	// the tier entered for them. The month comparison reads the member_tier_standing
-	// view, never the table (a superseded row must not win a month). A member with
-	// no row, or a NULL tier, reads NULL in all three (plain LEFT JOINs).
+	// max(current_period, the join month), so a member who joins next month shows the
+	// tier entered for them, with current_rate (what GetEffectiveDuesRate would find)
+	// read at that same month. Reads go through the *_standing views, never the
+	// tables. A member with no row, or a NULL tier, reads NULL in all three.
 	//
-	// current_rate is the rate GetEffectiveDuesRate would find for that same month,
-	// max(current_period, the join month), so the tier and its rate are read at one
-	// month: a member who joins next month, on a tier whose first rate starts then,
-	// shows both. current_period is "YYYY-MM", the caller's one snapshot of "now",
-	// shared with the arrears figure computed in Go - see
+	// current_period is "YYYY-MM", the caller's one snapshot of "now", shared with
+	// the arrears figure computed in Go - see
 	// Ledger.ArrearsMonthsForMember. A LEFT JOIN, not a scalar subquery, on
 	// purpose: a scalar subquery needs a CAST to get a concrete Go type, and this
 	// codebase's CAST idiom means "never NULL" - the opposite of what current_rate
 	// must say. A tier with no rate yet effective (the "madya TBD" case, PRD
 	// section 6) and a member with no tier (NULL = NULL is never true) both read
 	// NULL, never an invented 0 or a stale figure. The dr2 NOT EXISTS picks the
-	// single row with the latest effective_from <= current_period per tier, among the
-	// months that still have a rate (dues_rate_standing leaves a deleted month out
-	// whole, so the month before it answers).
+	// single row with the latest effective_from <= current_period per tier
+	// (dues_rate_standing leaves a deleted month out, so the month before answers).
 	//
 	// ?q= is a case-insensitive substring match on name alone (ADR-032): INSTR/LOWER,
 	// never "COLLATE NOCASE LIKE ... ESCAPE" - sqlc 1.31.1 silently drops a
@@ -561,9 +536,8 @@ type Querier interface {
 	// pair's from leg and 'in' its to leg. Both legs carry identical from/to
 	// facts, so the Go fold keeps either.
 	//
-	// reversed is ledger_entry's flag and reverses_occurred_on the date of the row a
-	// reversal reverses (ADR-042): the mark on the original and the unnamed
-	// reversal's label, both drawn on the page and in the PDF.
+	// reversed and reverses_occurred_on (ADR-042): the mark on the original and the
+	// unnamed reversal's label, on the page and in the PDF.
 	//
 	// has_receipt is true for a receipt on the row itself or, on a reimbursement
 	// payout, on the claim it settles: that nota is the proof of the payout
@@ -644,8 +618,7 @@ type Querier interface {
 	//     from it.
 	//   - effective_purpose_id: the tag this row's money is under NOW - its own
 	//     purpose_id until a correction (ADR-033) moves it, then the end of the
-	//     path its corrections walk. Read from ledger_entry, which defines it once
-	//     (#628; the schema file has the reasoning, #411). An uncorrected row
+	//     path its corrections walk (ledger_entry defines it). An uncorrected row
 	//     answers itself and "has this been corrected?" is effective <> stored.
 	//
 	//     The list keeps rendering the STORED tag (ADR-033): the ledger sums stored
@@ -654,13 +627,11 @@ type Querier interface {
 	//     its pair from where the money actually is, and for the marker that says a
 	//     correction exists.
 	//   - reversed, reverses_occurred_on, counted, is_reconciliation_fix,
-	//     effective_closed_on (ADR-042): the facts of a reversal. reversed is
-	//     ledger_entry's flag; reverses_occurred_on is the original's date, on a
-	//     reversal row, so an unnamed reversal can state the day it reverses even
-	//     when the original is on another page; the other three, with kind and the
-	//     reversal link, are what Ledger.ReversalRefusal reads (GetReversalTarget
-	//     has the reasoning), so the page's reversible flag and the ledger's answer
-	//     are one rule.
+	//     effective_closed_on (ADR-042): the facts of a reversal, one rule with
+	//     Ledger.ReversalRefusal (GetReversalTarget has the reasoning).
+	//     reverses_occurred_on is the original's date on a reversal row, so an
+	//     unnamed reversal can state the day it reverses when the original is on
+	//     another page.
 	ListTransactionsPage(ctx context.Context, arg ListTransactionsPageParams) ([]ListTransactionsPageRow, error)
 	ListTransfersByFund(ctx context.Context, fundID int64) ([]Transfer, error)
 	// The backup export's read (ADR-012): the whole table, password hash included
@@ -749,9 +720,8 @@ type Querier interface {
 	// it (the live login stays, ADR-012); `uruni rebuild` runs it on the scratch
 	// database to carry the backup's single login over, id included.
 	RestoreUser(ctx context.Context, arg RestoreUserParams) error
-	// Whether a row has been reversed, for PostPurposeCorrection's refusal of a
-	// reverse-then-correct (ADR-042). The flag is ledger_entry's; sql.ErrNoRows is
-	// a row of another fund or none.
+	// For PostPurposeCorrection's refusal of a reverse-then-correct (ADR-042);
+	// sql.ErrNoRows is another fund's row or none.
 	ReversedFlagForTransaction(ctx context.Context, arg ReversedFlagForTransactionParams) (int64, error)
 	// The sliding 30-day idle timeout (#113): every read that proves the session
 	// valid pushes expires_at forward by a caller-computed window. No absolute cap.
@@ -766,12 +736,10 @@ type Querier interface {
 	// UpdateDuesTier renames a tier - reference data, not history.
 	UpdateDuesTier(ctx context.Context, arg UpdateDuesTierParams) (DuesTier, error)
 	// Renames the fund and/or changes its time zone; a NULL argument leaves that
-	// column alone. name is a display label nothing posted references, and a time
-	// zone change rewrites nothing either (ADR-041: every day and month is derived
-	// from it, so setting the old zone back restores every earlier reading). The
-	// CHECK is the zone's validation. currency (an invariant through 0.x) and
-	// report_slug (the report's unguessable address; see UpdateFundReportSlug) are
-	// deliberately not settable here.
+	// column alone. Neither rewrites anything posted (ADR-041: every day and month is
+	// derived from the zone, so setting the old one back restores every earlier
+	// reading). The CHECK is the zone's validation. currency (an invariant through
+	// 0.x) and report_slug (see UpdateFundReportSlug) are deliberately not settable here.
 	UpdateFund(ctx context.Context, arg UpdateFundParams) (Fund, error)
 	// Replaces the report's address (ADR-035's leak escape hatch). The old slug is
 	// simply gone: no redirect, an ordinary unknown slug from the next read on.

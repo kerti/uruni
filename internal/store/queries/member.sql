@@ -46,25 +46,21 @@ WHERE id = ?;
 --
 -- tier_id, tier_name and current_rate describe the member's CURRENT tier
 -- (ADR-040): the standing member_tier row of the latest month at or before
--- max(current_period, the join month), so a member who joins next month shows
--- the tier entered for them. The month comparison reads the member_tier_standing
--- view, never the table (a superseded row must not win a month). A member with
--- no row, or a NULL tier, reads NULL in all three (plain LEFT JOINs).
+-- max(current_period, the join month), so a member who joins next month shows the
+-- tier entered for them, with current_rate (what GetEffectiveDuesRate would find)
+-- read at that same month. Reads go through the *_standing views, never the
+-- tables. A member with no row, or a NULL tier, reads NULL in all three.
 --
--- current_rate is the rate GetEffectiveDuesRate would find for that same month,
--- max(current_period, the join month), so the tier and its rate are read at one
--- month: a member who joins next month, on a tier whose first rate starts then,
--- shows both. current_period is "YYYY-MM", the caller's one snapshot of "now",
--- shared with the arrears figure computed in Go - see
+-- current_period is "YYYY-MM", the caller's one snapshot of "now", shared with
+-- the arrears figure computed in Go - see
 -- Ledger.ArrearsMonthsForMember. A LEFT JOIN, not a scalar subquery, on
 -- purpose: a scalar subquery needs a CAST to get a concrete Go type, and this
 -- codebase's CAST idiom means "never NULL" - the opposite of what current_rate
 -- must say. A tier with no rate yet effective (the "madya TBD" case, PRD
 -- section 6) and a member with no tier (NULL = NULL is never true) both read
 -- NULL, never an invented 0 or a stale figure. The dr2 NOT EXISTS picks the
--- single row with the latest effective_from <= current_period per tier, among the
--- months that still have a rate (dues_rate_standing leaves a deleted month out
--- whole, so the month before it answers).
+-- single row with the latest effective_from <= current_period per tier
+-- (dues_rate_standing leaves a deleted month out, so the month before answers).
 --
 -- ?q= is a case-insensitive substring match on name alone (ADR-032): INSTR/LOWER,
 -- never "COLLATE NOCASE LIKE ... ESCAPE" - sqlc 1.31.1 silently drops a

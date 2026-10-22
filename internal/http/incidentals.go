@@ -109,8 +109,8 @@ func toIncidentalDetailResponse(d ledger.IncidentalDetail) incidentalDetailRespo
 // decode and pass through; occasion, target_amount and opened_on shape checks
 // are OpenIncidental's alone (ADR-027).
 //
-// The route is keyed (ADR-043): no route deletes an envelope, so a repeat would
-// leave a twin for good. A replay is the same 201 with Idempotent-Replayed.
+// Keyed (ADR-043): no route deletes an envelope, so a repeat would leave a twin
+// for good.
 func (a *api) openIncidental(w http.ResponseWriter, r *http.Request) {
 	var req openIncidentalRequest
 	if !decodeJSON(w, r, &req) {

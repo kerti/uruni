@@ -14,9 +14,9 @@ import (
 	"github.com/kerti/uruni/internal/store"
 )
 
-// The schema half of the Rp 999.999.999.999 ceiling (#622). #499 enforces
-// money.MaxAmount in code; these tests pin the CHECK that stops a row written
-// around the ledger, a backup restore included, from passing it.
+// The schema half of the money ceiling (#622): these tests pin the CHECK that
+// stops a row written around the ledger, a restore included, from passing
+// money.MaxAmount.
 
 const ceiling = int64(money.MaxAmount)
 
@@ -27,15 +27,13 @@ type moneyColumn struct {
 	table, column string
 	// signed columns are bounded on both sides: -max..max.
 	signed bool
-	// derivedFrom, when set, names why the column has no ceiling literal of its
-	// own: it is fixed by a CHECK over other bounded columns. Such a column is
-	// still a listed money column (so the audit cannot silently lose it), but the
-	// boundary test does not expect it to refuse max+1.
+	// derivedFrom, when set, names why the column has no ceiling literal: a CHECK
+	// over other bounded columns fixes it. It stays listed so the audit cannot
+	// lose it, but the boundary test does not expect it to refuse max+1.
 	derivedFrom string
-	// insert writes a row carrying v in this column. For a signed reconciliation
-	// column the other two are chosen so that difference = actual - recorded
-	// still holds and the other two stay inside the ceiling, which isolates the
-	// column under test from the derived-figure CHECK.
+	// insert writes a row carrying v in this column. For a reconciliation column
+	// the other two are chosen so difference = actual - recorded still holds and
+	// both stay inside the ceiling.
 	insert func(t *testing.T, w *ceilingWriter, v int64) error
 }
 
@@ -150,11 +148,8 @@ func (w *ceilingWriter) line(t *testing.T, recorded, actual, difference int64) e
 func (c moneyColumn) name() string { return c.table + "." + c.column }
 
 // TestEveryMoneyColumnIsListed is the audit that does not rely on a column's
-// name. minimum_per_member has no "amount" in it, so grepping for amount (the
-// ADR-024 audit) misses it; instead, every INTEGER column that is not a key or a
-// timestamp is a money column, and must be in moneyColumns. A new one added to
-// the schema without being listed here fails this test, and a listed one
-// without the ceiling fails TestMoneyColumnBoundaries.
+// name (minimum_per_member has no "amount" in it): every INTEGER column that is
+// not a key or a timestamp is a money column and must be in moneyColumns.
 func TestEveryMoneyColumnIsListed(t *testing.T) {
 	t.Parallel()
 	sqlDB := migratedTestDB(t)
@@ -203,18 +198,16 @@ func TestEveryMoneyColumnIsListed(t *testing.T) {
 	}
 }
 
-// TestCeilingLiteralIsMoneyMaxAmount pins the SQL literal to the Go constant:
-// a CHECK cannot name money.MaxAmount, so the digits in the schema are a copy,
-// and this is what notices them drift apart.
+// TestCeilingLiteralIsMoneyMaxAmount pins the schema's digits (a CHECK cannot
+// name money.MaxAmount) to the Go constant.
 func TestCeilingLiteralIsMoneyMaxAmount(t *testing.T) {
 	t.Parallel()
 	body, err := migrationsFS.ReadFile("migrations/00001_schema.sql")
 	if err != nil {
 		t.Fatalf("reading the embedded schema = %v, want no error", err)
 	}
-	// Any run of nine or more digits in the schema is a ceiling; no other
-	// figure that long belongs in it. Comments are skipped so the header can
-	// quote the number.
+	// Any run of nine or more digits in the schema is a ceiling. Comments are
+	// skipped so the header can quote the number.
 	long := regexp.MustCompile(`\d{9,}`)
 	var literals []string
 	for _, line := range strings.Split(string(body), "\n") {
@@ -235,9 +228,9 @@ func TestCeilingLiteralIsMoneyMaxAmount(t *testing.T) {
 	}
 }
 
-// TestMoneyColumnBoundaries is the per-column proof, at the schema, for every
-// column that carries its own ceiling: the ceiling is accepted, one rupiah more is refused by the ceiling CHECK itself,
-// and for a signed column so are -max (accepted) and -max-1 (refused).
+// TestMoneyColumnBoundaries is the per-column proof: the ceiling is accepted, one
+// rupiah more is refused by the ceiling CHECK itself, and for a signed column
+// -max is accepted and -max-1 refused.
 func TestMoneyColumnBoundaries(t *testing.T) {
 	t.Parallel()
 	for _, c := range moneyColumns {
@@ -263,13 +256,11 @@ func TestMoneyColumnBoundaries(t *testing.T) {
 	}
 }
 
-// TestDerivedFiguresTakeNoCeiling: recorded_amount and difference_amount have no
-// ceiling of their own. recorded_amount is the ledger's balance of the location,
-// which nothing refuses past the ceiling (three ceiling-sized deposits make one
-// location three times it), and such a location must still be countable. The
-// difference is fixed by the equality CHECK, so a difference that is not
-// actual - recorded is still refused, and actual_amount, what she counted, keeps
-// its own ceiling (TestMoneyColumnBoundaries).
+// TestDerivedFiguresTakeNoCeiling: recorded_amount is the ledger's balance of a
+// location, which nothing refuses past the ceiling (three ceiling-sized deposits
+// make one location three times it), and such a location must still be
+// countable. The difference is still fixed by the equality CHECK, and
+// actual_amount keeps its own ceiling.
 func TestDerivedFiguresTakeNoCeiling(t *testing.T) {
 	t.Parallel()
 	w := newCeilingWriter(t)
@@ -290,8 +281,7 @@ func TestDerivedFiguresTakeNoCeiling(t *testing.T) {
 }
 
 // assertCeilingRefusal wants the refusal to be this column's ceiling CHECK, not
-// some other constraint the test row happened to trip: the message names the
-// column and the literal, and only a ceiling CHECK has both.
+// another constraint the row tripped: only that message names the column and the literal.
 func assertCeilingRefusal(t *testing.T, c moneyColumn, err error, v int64) {
 	t.Helper()
 	if err == nil {

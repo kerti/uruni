@@ -14,17 +14,16 @@ import (
 // The backfill is neutral (ADR-040): for every member and every period, the new
 // engine - reading the member_tier rows a v1 file is upgraded into - answers
 // exactly what the engine before it answered from member.tier_id. legacy* below
-// reproduces that old rule, in plain Go over the v1 document, with none of the
-// production code (no pricing fold, no SQL), so the two can disagree.
+// reproduces that old rule in plain Go over the v1 document, with none of the
+// production code, so the two can disagree.
 //
-// The v0.9.0 golden is two members, one tier and one rate, which proves little,
-// so this fixture is built to hold every shape the rule has branches for: a
-// rateless tier, a tier-less member, an inactive member, a late-starting rate, a
-// backdated rate, a rate raise, a prepaid run with a hole, an overpayment, a
-// reversed payment, a null joined_on from a pre-#471 file, and a member who joins
-// after the period range's first years. "A tier change" is each member's tier:
-// a v1 file holds only the current one, and the backfill (the current tier from
-// the join month) must price every past period as the old rule did.
+// The v0.9.0 golden proves little (two members, one tier, one rate), so this
+// fixture holds every shape the rule has branches for: a rateless tier, a
+// tier-less member, an inactive member, a late-starting rate, a backdated rate, a
+// rate raise, a prepaid run with a hole, an overpayment, a reversed payment, a
+// null joined_on from a pre-#471 file, and a late joiner. A v1 file holds only
+// each member's current tier; the backfill must price every past period as the
+// old rule did.
 
 const (
 	neutralityFrom = "2023-06" // before every join date and the fund

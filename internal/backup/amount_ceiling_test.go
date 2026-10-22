@@ -11,10 +11,10 @@ import (
 	"github.com/kerti/uruni/internal/store"
 )
 
-// A restore writes straight to the tables, around the ledger, so the Rp
-// 999.999.999.999 ceiling reaches it only through the schema's CHECKs (#622).
-// These tests hand-build a backup holding one row above the ceiling, per money
-// column, and want both entry points to refuse it and change nothing.
+// A restore writes straight to the tables, around the ledger, so the money
+// ceiling reaches it only through the schema's CHECKs (#622). These tests
+// hand-build a backup with one row above the ceiling per money column and want
+// both entry points to refuse it and change nothing.
 
 const ceilingMax = int64(money.MaxAmount)
 

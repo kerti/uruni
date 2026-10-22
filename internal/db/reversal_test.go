@@ -8,11 +8,9 @@ import (
 	"github.com/kerti/uruni/internal/store"
 )
 
-// ADR-042 relaxes the reversal column guard to "kind = 'adjustment'" and
-// rewrites the reversal half of transaction_named_row_shape: a reversal may
-// target a dues or normal row, must go the other way, and must copy amount,
-// location, member and period (null-safe, so an unnamed row can be reversed).
-// This is the matrix the ADR checked on a scratch copy.
+// ADR-042's reversal rule at the schema: a reversal may target a dues or normal
+// row, must go the other way, and must copy amount, location, member and period
+// (null-safe, so an unnamed row can be reversed).
 
 // TestAReversalMatrixAgainstTheSchema posts one original of each shape and then
 // every reversal the ADR says is accepted or refused, straight at the table.

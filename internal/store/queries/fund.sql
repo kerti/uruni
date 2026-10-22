@@ -21,12 +21,10 @@ FROM fund
 ORDER BY id;
 
 -- Renames the fund and/or changes its time zone; a NULL argument leaves that
--- column alone. name is a display label nothing posted references, and a time
--- zone change rewrites nothing either (ADR-041: every day and month is derived
--- from it, so setting the old zone back restores every earlier reading). The
--- CHECK is the zone's validation. currency (an invariant through 0.x) and
--- report_slug (the report's unguessable address; see UpdateFundReportSlug) are
--- deliberately not settable here.
+-- column alone. Neither rewrites anything posted (ADR-041: every day and month is
+-- derived from the zone, so setting the old one back restores every earlier
+-- reading). The CHECK is the zone's validation. currency (an invariant through
+-- 0.x) and report_slug (see UpdateFundReportSlug) are deliberately not settable here.
 -- name: UpdateFund :one
 UPDATE fund
 SET name = coalesce(sqlc.narg('name'), name),

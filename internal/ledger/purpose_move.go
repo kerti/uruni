@@ -28,13 +28,11 @@ type PostPurposeMoveParams struct {
 	// Note is written to both legs, or to neither; see normalizeNote.
 	Note *string
 
-	// Now is the clock OccurredOn's ceiling is read from, in the fund's zone
-	// (ADR-041, #632). The zero value means time.Now().
+	// Now is the clock OccurredOn's ceiling is read from (ADR-041).
+	// Zero means time.Now().
 	Now time.Time
 
-	// Idempotency, when non-nil, makes the move safe to repeat: the same key with
-	// the same request answers the first result and posts nothing (ADR-043). nil
-	// is an unkeyed post.
+	// Idempotency, when non-nil, makes the move safe to repeat (ADR-043).
 	Idempotency *Idempotency
 }
 
@@ -49,7 +47,7 @@ type PostPurposeMoveParams struct {
 // error:
 //
 //   - Amount <= 0 or a malformed date: ErrInvalidArgument. A real date outside
-//     the plausible window (#632): ErrDateOutOfRange.
+//     the plausible window: ErrDateOutOfRange.
 //   - FromPurposeID equal to ToPurposeID: ErrPurposeMoveSamePurpose.
 //   - A purpose not this fund's (including an id naming nothing):
 //     ErrPurposeMoveUnknownPurpose.
@@ -65,9 +63,8 @@ type PostPurposeMoveParams struct {
 //     not as of OccurredOn, so a backdated move can leave a purpose briefly
 //     negative on an earlier day, as every backdated posting can (ADR-036).
 //
-// With p.Idempotency set (ADR-043), a repeat of the same request returns the
-// first move and posts no second pair; the checks above that run inside the
-// transaction (the source purpose's balance among them) do not run on a replay.
+// With p.Idempotency set (ADR-043), a repeat returns the first move; the checks
+// inside the transaction (the source balance among them) do not run on a replay.
 func (l *Ledger) PostPurposeMove(ctx context.Context, p PostPurposeMoveParams) (store.Transfer, error) {
 	if p.Amount <= 0 {
 		return store.Transfer{}, fmt.Errorf("%w: amount must be positive, got %d", ErrInvalidArgument, p.Amount.Int64())

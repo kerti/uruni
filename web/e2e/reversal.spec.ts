@@ -37,7 +37,6 @@ async function byName(request: APIRequestContext, path: string, key: string, nam
   return row.id
 }
 
-// A row of Riwayat > Transaksi, found by the note she typed.
 function row(page: Page, note: string): Locator {
   return page
     .getByRole('main')
@@ -45,8 +44,6 @@ function row(page: Page, note: string): Locator {
     .filter({ has: page.getByText(note, { exact: true }) })
 }
 
-// The door: the card opens the entry, whose button hands off to the form
-// under the row.
 async function openForm(page: Page, note: string) {
   await row(page, note)
     .getByRole('button', { name: /^Lihat rincian:/ })
@@ -94,7 +91,6 @@ test.describe('reversing an ordinary transaction', () => {
     await logIn(page)
     await page.goto('/history')
     await expect(row(page, uncounted)).toBeVisible()
-    // One door: the card carries no button of its own.
     await expect(row(page, uncounted).getByRole('button', { name: t.reverse })).toHaveCount(0)
 
     await openForm(page, uncounted)
@@ -104,11 +100,9 @@ test.describe('reversing an ordinary transaction', () => {
     await form.getByRole('button', { name: t.reverseConfirm }).click()
 
     await expect(page.getByText(t.reverseSuccess)).toBeVisible()
-    // The original carries the mark; the reversal names the day it reverses.
     await expect(row(page, uncounted).getByText(copy.dues.history.reversedBadge)).toBeVisible()
     await expect(page.getByText(copy.rowLabels.unnamedReversal.text(formatIsoDate(firstOfMonth))).first()).toBeVisible()
 
-    // Reversed once: the entry detail no longer offers the door.
     await row(page, uncounted)
       .getByRole('button', { name: /^Lihat rincian:/ })
       .click()

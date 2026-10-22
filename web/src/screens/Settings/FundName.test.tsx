@@ -42,7 +42,6 @@ function stubFund() {
       if (method === 'GET') return Promise.resolve(jsonResponse(current))
       const body = init?.body ? (JSON.parse(String(init.body)) as { name?: string; time_zone?: string }) : undefined
       calls.push({ method, body })
-      // PATCH /api/fund answers with the whole fund, each field changed only if sent.
       current = { ...current, name: body?.name ?? current.name, time_zone: body?.time_zone ?? current.time_zone }
       return Promise.resolve(jsonResponse(current))
     }
@@ -198,7 +197,6 @@ describe('Settings fund (Kas ini)', () => {
     const card = await screen.findByRole('button', { name: text.zone.editAria(zones.options['Asia/Jakarta'].label) })
     expect(card).toHaveTextContent(zones.options['Asia/Jakarta'].label)
     expect(card).toHaveTextContent(zones.label)
-    // The inline field is gone: like the name, the zone has no form until she asks.
     expect(screen.queryByRole('combobox', { name: zones.label })).not.toBeInTheDocument()
   })
 
@@ -232,7 +230,6 @@ describe('Settings fund (Kas ini)', () => {
     renderAt('/settings?edit=fund:time_zone', onChanged)
 
     await screen.findByRole('dialog', { name: text.zone.editTitle })
-    // Nothing to save until she picks a different zone.
     expect(screen.getByRole('button', { name: text.save })).toBeDisabled()
     await chooseZoneOption('Asia/Jayapura')
     await userEvent.click(screen.getByRole('button', { name: text.save }))

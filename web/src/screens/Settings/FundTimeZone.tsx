@@ -15,15 +15,12 @@ import type { Fund } from '@/lib/setup'
 const text = copy.settings.fund
 
 /**
- * The fund's time-zone dialog (ADR-041), opened from Pengaturan's "Kas ini"
- * section at `?edit=fund:time_zone`. Direct CRUD like the rename: no confirm
- * step, because a change rewrites nothing and setting the old zone back
- * restores every earlier reading. `updateFund` hands the answer's zone to the
- * date helpers before it resolves, so the app is on the new zone the moment the
- * dialog closes.
+ * The fund's time-zone dialog (ADR-041), opened at `?edit=fund:time_zone`. Direct
+ * CRUD like the rename, no confirm step (see FundName). `updateFund` hands the
+ * answer's zone to the date helpers before it resolves.
  *
- * `fund` is null only while closing (the window EditFundNameDialog documents),
- * so the last known zone stays on screen rather than the field blanking.
+ * `fund` is null only while closing (the window EditFundNameDialog documents), so
+ * the last known zone stays on screen rather than the field blanking.
  */
 export function EditTimeZoneDialog({
   fund,

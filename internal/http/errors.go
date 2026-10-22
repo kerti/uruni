@@ -50,18 +50,15 @@ func mapLedgerError(w http.ResponseWriter, logger *slog.Logger, err error) {
 		// the limit, never the value sent.
 		writeAPIError(w, http.StatusBadRequest, "amount_too_large", "An amount cannot be larger than 999,999,999,999 rupiah.")
 	case errors.Is(err, ledger.ErrDateOutOfRange):
-		// A real date before 2000 or past its column's ceiling (#632): today for money
-		// that has moved, a year ahead for a join or leaving date, 12 months ahead for
-		// a dues period, 24 for a rate's start month. Its own code, not
-		// invalid_argument: the date is well-formed and the SPA tells her the one thing
-		// to check (the year). 400 like the amount ceiling; the message names no date.
+		// A real date before 2000 or past its column's ceiling. Its own code, not
+		// invalid_argument: the date is well-formed and the SPA tells her to check the
+		// year. The message names no date.
 		writeAPIError(w, http.StatusBadRequest, "date_out_of_range", "The date is outside the range Uruni accepts.")
 	case errors.Is(err, ledger.ErrDuesRateSuperseded):
 		// A correction is a new row with a new id (ADR-040), so a page holding the
 		// old id is stale. 409, its own code: the SPA tells her to reload the list.
 		writeAPIError(w, http.StatusConflict, "dues_rate_superseded", "This rate has since been corrected or removed; reload the list.")
 	case errors.Is(err, ledger.ErrDuesRateMonthTaken):
-		// The code POST has always answered for a month that already has a rate.
 		writeAPIError(w, http.StatusConflict, "unique_violation", "This value conflicts with an existing record.")
 	case errors.Is(err, ledger.ErrIdempotencyKeyReused):
 		// The same key under another request (ADR-043). The app cannot produce it

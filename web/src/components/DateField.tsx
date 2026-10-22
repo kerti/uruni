@@ -75,9 +75,8 @@ export default function DateField({
             locale={idLocale}
             captionLayout="dropdown"
             selected={selected}
-            // The calendar's highlighted "today" is the fund's day (ADR-041), not
-            // the device's: DayPicker's own default is `new Date()`, a phone in
-            // another zone reading another day.
+            // The fund's day (ADR-041), not the device's: DayPicker defaults to
+            // `new Date()`, so a phone in another zone would highlight another day.
             today={parseIsoDate(todayISODate()) ?? undefined}
             defaultMonth={selected ?? max}
             startMonth={min}

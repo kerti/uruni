@@ -6,10 +6,8 @@ import { openSelect } from '@/test/select'
 import type { TimeZone } from '@/lib/timeZones'
 
 /**
- * Opens the fund's time-zone field (components/TimeZoneField) and taps one
- * option. An option's accessible name is its label and its example line
- * together ("WIT - Waktu Indonesia Timurmis. Jayapura, Ambon"), so it is matched
- * by the start of its label.
+ * Opens the fund's time-zone field (components/TimeZoneField) and taps one option, by
+ * the start of its label (its accessible name carries the example line too).
  */
 export async function chooseZoneOption(zone: TimeZone): Promise<void> {
   const listbox = await openSelect(copy.timeZone.label)

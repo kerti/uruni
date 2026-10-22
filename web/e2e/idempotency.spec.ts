@@ -5,16 +5,12 @@ import { expect, logIn, test } from './fixtures'
 
 // A save whose answer is lost, then Simpan again, makes one row (ADR-043).
 //
-// Catat disables Simpan while a write is in flight, so a double tap cannot be
-// driven. The journey that can happen is this one: the request reaches the
-// server and commits, its answer never comes back, and she taps Simpan again.
-// `setOffline` cannot stand in for it (an offline request never arrives), so the
-// test lets the request through with route.fetch() and then drops the answer
-// with route.abort(). The second tap carries the same Idempotency-Key and is
-// answered with the first result, marked Idempotent-Replayed.
-//
-// Serial, one story on the seeded fixture (Tunai, Kas Utama). The rows are read
-// over the API; the journey itself is driven through the real form.
+// Simpan is disabled while a write is in flight, so a double tap cannot be driven.
+// The real journey: the request commits, its answer never comes back, she taps
+// again. `setOffline` cannot stand in (an offline request never arrives), so
+// route.fetch() lets it through and route.abort() drops the answer. The second
+// tap carries the same Idempotency-Key and gets the first result, marked
+// Idempotent-Replayed. Serial; rows are read over the API.
 
 type Balances = { fund_total: number }
 type Row = { id: number; note: string | null; amount: number }
@@ -59,12 +55,10 @@ test.describe('a lost response, then Simpan again', () => {
     await page.getByLabel(copy.record.noteLabel, { exact: true }).fill(note)
     await page.getByRole('button', { name: copy.record.submit }).click()
 
-    // The treasurer is told the save is uncertain and stays on the form.
     await expect(page.getByRole('alert').filter({ hasText: copy.common.errors.write_outcome_unknown })).toBeVisible()
     await expect(page.getByText(copy.record.successOut)).toBeHidden()
     expect(dropped).toBe(true)
 
-    // It did land, behind her back: one row, the fund down by the amount.
     const landed = await get<TransactionsPage>(request, '/api/transactions')
     expect(landed.transactions.filter((row) => row.note === note)).toHaveLength(1)
     expect((await get<Balances>(request, '/api/balances')).fund_total).toBe(before.fund_total - amount)

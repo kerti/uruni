@@ -10,7 +10,7 @@ import (
 	"time"
 )
 
-// ADR-043 on the seven routes #635 keys after POST /api/transactions, and on
+// ADR-043 on the routes keyed after POST /api/transactions, and on
 // the writes beside them that stay unkeyed. idempotency_test.go holds the
 // middleware's own cases (fingerprint, malformed keys, retention, twins) on
 // POST /api/transactions; these show each new route is behind it.

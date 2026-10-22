@@ -5,13 +5,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 const text = copy.timeZone
 
 /**
- * The fund's time zone (ADR-041): WIB, WITA or WIT, each with a plain example
- * line, in Setup's first step and Pengaturan's dialog. The closed trigger shows
- * the chosen option's own label; the list shows label and example.
- *
- * `value` is the IANA name the server stores. One it does not know (it cannot
- * come from the server, whose CHECK refuses it) reads as the default rather than
- * a blank field. The trigger carries `id`, so a `<Label htmlFor>` names it.
+ * The fund's time zone (ADR-041): WIB, WITA or WIT, each with an example line.
+ * `value` is the IANA name the server stores; one it does not know reads as the
+ * default rather than a blank field. The trigger carries `id` for a `<Label htmlFor>`.
  */
 export default function TimeZoneField({
   id,

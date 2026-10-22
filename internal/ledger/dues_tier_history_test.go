@@ -64,8 +64,7 @@ func (h tierHistoryFixture) status(t *testing.T, period string) (MemberDuesStatu
 	return statusFor(t, rows, h.memberID)
 }
 
-// A month paid in full at the old tier stays Paid after the promotion. Under the
-// old rule (the current tier everywhere) January read Bayar sebagian.
+// A month paid in full at the old tier stays Paid after the promotion.
 func TestDuesStatusForPeriodPastMonthPaidAtTheOldTierStaysPaidAfterAPromotion(t *testing.T) {
 	t.Parallel()
 	h := newTierHistory(t)
@@ -244,7 +243,7 @@ func (c *pricingCalls) GetEffectiveDuesRate(ctx context.Context, arg store.GetEf
 
 // The tier at a period costs no query per member: a roster is priced from two
 // reads however many members it holds, and one member's walk from two reads
-// however many months it covers (ADR-040: "no read adds a per-member query").
+// however many months it covers (ADR-040).
 func TestPricingReadsDoNotGrowWithMembersOrMonths(t *testing.T) {
 	t.Parallel()
 	l := newTestLedger(t)

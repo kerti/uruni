@@ -44,15 +44,12 @@ interface TierData {
  * prevent. On a screen there is one way back, so a row's correction is an
  * ordinary inline form.
  *
- * Why only a rate's amount is correctable: a new price is a new row
- * effective from a new month, because the old row still explains the months it
- * covered. PATCH is for a mistyped amount (ADR-040): it appends a correction
- * that deliberately reprices every month the rate covers, from its own month to
- * the month before the next rate that stands, so the screen names that span
- * and asks first. DELETE withdraws a rate filed against the wrong month, which
- * is how a wrong month is fixed: delete it, add one at the right month. Either
- * way the row that stood is replaced by a new id, so the list is reloaded after
- * every write and a stale id is answered with dues_rate_superseded.
+ * Why only a rate's amount is correctable: a new price is a new row effective
+ * from a new month, because the old row still explains the months it covered.
+ * PATCH fixes a mistyped amount (ADR-040): it reprices every month the rate covers,
+ * so the screen names that span and asks first. DELETE withdraws a rate filed
+ * against the wrong month; add one at the right month. Either way the row that stood
+ * is replaced by a new id, so the list reloads after every write.
  *
  * The rate history is deliberately not paged. A golongan carries a handful of
  * rates for all of 0.x, and paging for a volume that does not exist is the
@@ -238,15 +235,13 @@ function RateRow({
 
   const busy = state.status === 'loading'
 
-  // A refused write on an id that no longer stands: the section reloads the
-  // list and shows the notice (this row is about to be replaced).
+  // A refused write on an id that no longer stands: reload the list, show the notice.
   const supersededError = state.status === 'error' && state.error?.code === 'dues_rate_superseded'
   useEffect(() => {
     if (supersededError) onSuperseded()
     // oxlint-disable-next-line react/exhaustive-deps -- once per refusal; onSuperseded is a fresh closure every render
   }, [supersededError])
 
-  // The months this correction would reprice, named before it is sent.
   const span = rateSpan(rates, rate)
   const from = formatPeriod(span.from)
   const spanLabel =
@@ -258,7 +253,6 @@ function RateRow({
       setEditing(false)
       return
     }
-    // A changed amount asks first; the request goes on the confirm.
     setConfirming(true)
   }
 

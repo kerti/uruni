@@ -210,7 +210,6 @@ describe('apiFetch idempotency keys', () => {
     ])
     expect(new Set(keys.slice(0, 3)).size).toBe(3)
     expect(keys[3]).toBeNull()
-    // A read is passed through untouched.
     expect((fetchMock.mock.calls as unknown[][])[3]).toEqual(['/api/balances', undefined])
   })
 

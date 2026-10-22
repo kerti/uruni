@@ -16,9 +16,8 @@ const text = copy.transactionDetail
 /**
  * One ledger entry read in full: everything the row already carries, nothing
  * truncated. Read-only on purpose - the row's controls (pos correction,
- * photos) stay on the row, and the one button it has, Batalkan transaksi,
- * posts nothing: it hands off to the form under the row. So this dialog never
- * becomes a second place to change money.
+ * photos) stay on the row; its one button, Batalkan transaksi, posts nothing and
+ * hands off to the form under the row, so this is never a second place to change money.
  *
  * No fetch: the Transaction the list holds is all that is shown. The stored
  * pos leads, as on the row (ADR-033); a corrected row adds the tag the money
@@ -118,9 +117,7 @@ function Detail({
         )}
       </dl>
 
-      {/* The one door to reversing a row (ADR-042), on the server's
-          `reversible` - this dialog derives no rule. It posts nothing: it
-          hands off to the form under the row (ADR-032). */}
+      {/* The one door to reversing a row (ADR-042), on the server's `reversible`. */}
       {onReverse && transaction.reversible && (
         <Button type="button" variant="outline" size="lg" onClick={() => onReverse(transaction)}>
           <Undo2 aria-hidden="true" />

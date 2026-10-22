@@ -49,8 +49,7 @@ type duesPaymentRequest struct {
 // one transaction. (Looping a singular PostDuesPayment per period left an
 // earlier row standing when a later one failed, #96.)
 //
-// The route is keyed (ADR-043): a repeat under the same key answers the whole
-// array again, one result, with Idempotent-Replayed, and posts no second set.
+// Keyed (ADR-043): a replay answers the whole array again, one result.
 func (a *api) createDuesPayment(w http.ResponseWriter, r *http.Request) {
 	var req duesPaymentRequest
 	if !decodeJSON(w, r, &req) {

@@ -9,34 +9,26 @@
 --
 -- Conventions follow docs/ADR/024-schema-conventions.md.
 --
--- Every money column carries the same ceiling, 999999999999 (Rp 999.999.999.999,
--- money.MaxAmount, #499): the backstop for anything that writes around the
--- ledger, a backup restore included. A signed column is bounded on both sides.
--- The exceptions are reconciliation_line's two derived figures: recorded_amount,
--- the ledger's own balance, and difference_amount.
--- The literal is plain digits because a CHECK cannot name a Go constant;
--- internal/db/amount_ceiling_test.go pins it to money.MaxAmount and fails when a
--- money column (minimum_per_member has no "amount" in its name) lacks it.
+-- Every money column carries the ceiling 999999999999 (money.MaxAmount): the
+-- backstop for anything that writes around the ledger, a restore included. A
+-- signed column is bounded on both sides; reconciliation_line's two derived
+-- figures are the exceptions. A CHECK cannot name a Go constant, so
+-- internal/db/amount_ceiling_test.go pins the literal and fails on a money
+-- column that lacks it.
 --
--- Every business date and period carries the same floor, 2000-01-01 (2000-01 for
--- a month): the backstop for anything that writes around the ledger, a backup
--- restore included, and the only half of the plausible date window a restore
--- enforces (#632). The ceilings move with the clock and the fund's time zone, so
--- they are the ledger's, on write. The literals are the ledger's minDay and
--- minMonth (internal/ledger/date_window.go); internal/db/date_floor_test.go lists
--- every date column and pins the literals, and the ledger's boundary tests fail
--- if the two drift.
+-- Every business date and period carries the floor 2000-01-01 (2000-01 for a
+-- month): the only half of the plausible window a restore enforces. The ceilings
+-- move with the clock and the fund's zone, so they are the ledger's, on write.
+-- The literals mirror internal/ledger/date_window.go; internal/db/date_floor_test.go
+-- pins them.
 
 -- +goose Up
 
 CREATE TABLE "user" (                     -- the treasurer's login; the only table not scoped to a fund (ADR-030)
   id            INTEGER PRIMARY KEY,
-  -- COLLATE NOCASE (#623): the UNIQUE index and every `email = ?` compare
-  -- case-insensitively, so A@x.org after a@x.org is refused whatever the Go side
-  -- did. NOCASE folds ASCII letters only; a non-ASCII capital is a different
-  -- character to it (an address like U-umlaut@x.org is matched by its stored
-  -- spelling, not folded). The stored bytes are never rewritten (a backup carries
-  -- the email unchanged). Go still trims and lower-cases on the way in (#500).
+  -- NOCASE: the UNIQUE index and every `email = ?` compare case-insensitively.
+  -- It folds ASCII letters only (a non-ASCII capital is a different character),
+  -- and stored bytes are never rewritten. Go still trims and lower-cases on the way in.
   email         TEXT    NOT NULL COLLATE NOCASE UNIQUE CHECK (length(trim(email)) > 0),
   password_hash TEXT    NOT NULL CHECK (length(trim(password_hash)) > 0),
   created_at    INTEGER NOT NULL
@@ -52,13 +44,11 @@ CREATE TABLE session (                    -- a logged-in session; token is the c
 
 CREATE INDEX session_by_expiry ON session(expires_at);
 
--- A write the treasurer's phone may repeat after a lost response (ADR-043).
--- Request-scoped state of the running server like session, so it is outside the
--- backup and a restore clears it: no fund_id, no foreign key, no immutability
--- trigger (a row is written once, in the same transaction as the rows it posts,
--- and deleted whole). result is what the ledger method returned, as JSON, never
--- the HTTP reply. Expired rows are purged by the next keyed write, in its own
--- transaction, never by a ticker (ADR-013); reads ignore them meanwhile.
+-- A write the phone may repeat after a lost response (ADR-043). Request-scoped
+-- like session: outside the backup, cleared by a restore, no fund_id, foreign key
+-- or immutability trigger. result is what the ledger method returned, as JSON,
+-- never the HTTP reply. Expired rows are purged by the next keyed write, never
+-- by a ticker (ADR-013).
 CREATE TABLE idempotency_key (
   key         TEXT    PRIMARY KEY CHECK (length(key) BETWEEN 16 AND 64 AND key NOT GLOB '*[^A-Za-z0-9_-]*'),
   fingerprint TEXT    NOT NULL CHECK (length(fingerprint) = 64),
@@ -73,11 +63,9 @@ CREATE TABLE fund (
   id          INTEGER PRIMARY KEY,
   name        TEXT    NOT NULL CHECK (length(trim(name)) > 0),
   currency    TEXT    NOT NULL DEFAULT 'IDR' CHECK (currency = 'IDR'),
-  -- The community's time zone (ADR-041): the one place an instant becomes a day
-  -- or a month. IANA names, because Go's time.LoadLocation and the browser's
-  -- Intl.DateTimeFormat take them as they are; WIB, WITA and WIT exist only as
-  -- copy. Exactly Indonesia's three zones, none with daylight saving. This list
-  -- is pinned to internal/tz and web/src/lib/timeZones.ts by TestTimeZoneListsAgree.
+  -- ADR-041: the one place an instant becomes a day or a month. IANA names (Go and
+  -- Intl take them as is); WIB, WITA and WIT exist only as copy. Pinned to
+  -- internal/tz and web/src/lib/timeZones.ts by TestTimeZoneListsAgree.
   time_zone   TEXT    NOT NULL DEFAULT 'Asia/Jakarta'
               CHECK (time_zone IN ('Asia/Jakarta', 'Asia/Makassar', 'Asia/Jayapura')),
   -- Unguessability of the public report link lives here, not in an id scheme
@@ -128,13 +116,10 @@ CREATE TABLE dues_rate (                  -- effective-dated, one-sided interval
   -- would need gaps and overlaps policed; this shape cannot express either.
   -- A tier with an undecided rate (madya, PRD section 6) simply has no row.
   --
-  -- A mistake in a rate is corrected by a new row, never an overwrite (ADR-040):
-  -- the first row stated for a month is correction 0, each correction of that
-  -- month is the next number, and the highest number stands (the
-  -- dues_rate_standing view below). A deleting correction (deleted = 1) copies
-  -- the amount it withdraws and leaves the month with no rate; only a correction
-  -- can delete, so a month's first row never does. The UPDATE trigger at the
-  -- foot of this file is what holds that.
+  -- ADR-040: a mistake is corrected by a new row, never an overwrite. The highest
+  -- correction of a month stands (dues_rate_standing). A deleting correction
+  -- (deleted = 1) copies the amount it withdraws; only a correction can delete.
+  -- The UPDATE trigger at the foot of this file holds that.
   id             INTEGER PRIMARY KEY,
   tier_id        INTEGER NOT NULL REFERENCES dues_tier(id),
   amount         INTEGER NOT NULL CHECK (amount >= 0 AND amount <= 999999999999),
@@ -148,15 +133,12 @@ CREATE TABLE dues_rate (                  -- effective-dated, one-sided interval
   UNIQUE (tier_id, effective_from, correction)
 ) STRICT;
 
--- The rate in force for each month that has one: the highest correction of the
--- month, and none at all when that standing row is a deletion. Dropping the
--- deleted rows BEFORE taking the highest would be wrong (Jan 50.000, Jun 70.000
--- then deleted, read at June: 70.000 instead of 50.000), which is why the
--- deletion is judged here, on the row that stands, and the month leaves the view
--- whole. Every dues read of dues_rate goes through this view, never the table
--- (internal/db's guard test fails a query that does not), so the rule is written
--- once. Named exceptions: the backup export, the by-id lookup PATCH and DELETE
--- start from, the next-correction read.
+-- The rate in force per month: the highest correction, and none when that row is
+-- a deletion. Dropping deleted rows BEFORE taking the highest would be wrong (Jan
+-- 50.000, Jun 70.000 then deleted, read at June: 70.000 instead of 50.000). Every
+-- dues read goes through this view (internal/db's guard test fails a query that
+-- does not). Named exceptions: the backup export, the by-id lookup PATCH and
+-- DELETE start from, the next-correction read.
 CREATE VIEW dues_rate_standing AS
 SELECT dr.id, dr.tier_id, dr.amount, dr.effective_from, dr.correction, dr.created_at
 FROM dues_rate dr
@@ -183,17 +165,13 @@ CREATE TABLE member (
 ) STRICT;
 
 CREATE TABLE member_tier (                -- a member's tier, month by month (ADR-040)
-  -- One-sided month rows exactly like dues_rate: a row holds from its month
-  -- until the next row's month, with no effective_to, so a gap or an overlap
-  -- cannot be expressed. A mistake in one is corrected by a new row (the next
-  -- correction of the same month), never an overwrite; the highest correction
-  -- of a month stands and the rest are superseded. The UPDATE trigger at the
-  -- foot of this file is what holds that.
+  -- One-sided month rows exactly like dues_rate (no effective_to), corrected by a
+  -- new row, never an overwrite; the highest correction of a month stands. The
+  -- UPDATE trigger at the foot of this file holds that.
   id             INTEGER PRIMARY KEY,
   fund_id        INTEGER NOT NULL,
   member_id      INTEGER NOT NULL,
   tier_id        INTEGER,                 -- NULL = no dues obligation from this month
-  -- 'YYYY-MM' with the 2000-01 floor (#632's plausible-window floor for a month).
   effective_from TEXT    NOT NULL CHECK (effective_from GLOB '[0-9][0-9][0-9][0-9]-[0-1][0-9]'
                                          AND date(effective_from||'-01') IS NOT NULL
                                          AND effective_from >= '2000-01'),
@@ -201,19 +179,17 @@ CREATE TABLE member_tier (                -- a member's tier, month by month (AD
   created_at     INTEGER NOT NULL,
   UNIQUE (fund_id, id),
   UNIQUE (member_id, effective_from, correction),
-  -- Deleting a member (setup duplicates only, ADR-024) takes their rows with it.
-  -- Unlike incidental_recipient these are a record, but the cascade is safe: a
-  -- member any posted row names is refused by that row's foreign key first.
+  -- Deleting a member (setup duplicates only, ADR-024) takes their rows; safe,
+  -- because a member any posted row names is refused by that row's FK first.
   FOREIGN KEY (fund_id, member_id) REFERENCES member(fund_id, id) ON DELETE CASCADE,
-  -- No cascade here: a tier any row names, even a superseded one, cannot be
-  -- deleted (ADR-040). A NULL tier_id passes the composite (MATCH SIMPLE).
+  -- No cascade: a tier any row names, even a superseded one, cannot be deleted
+  -- (ADR-040). A NULL tier_id passes the composite (MATCH SIMPLE).
   FOREIGN KEY (fund_id, tier_id)   REFERENCES dues_tier(fund_id, id)
 ) STRICT;
 
--- The standing row of each month: the highest correction. Every dues read of
--- member_tier goes through this view, never the table (internal/db's guard test
--- fails a query that does not), so the rule "a month has one standing row" is
--- written once. Named exceptions: the backup export, the next-correction read.
+-- The standing row of each month: the highest correction. Every dues read goes
+-- through this view (internal/db's guard test fails a query that does not).
+-- Named exceptions: the backup export, the next-correction read.
 CREATE VIEW member_tier_standing AS
 SELECT mt.id, mt.fund_id, mt.member_id, mt.tier_id, mt.effective_from, mt.correction, mt.created_at
 FROM member_tier mt
@@ -329,14 +305,11 @@ CREATE TABLE "transaction" (              -- the ledger. insert-only.
   -- read of ledger_entry.reversed (that only asks whether *something* points
   -- at the row) and consume the reversed-once slot, so the genuine reversal could
   -- never be posted. The schema makes that row unrepresentable (ADR-029).
-  -- Only the kind is pinned here (ADR-042): a reversal goes the OTHER way from
-  -- the row it reverses, which a CHECK cannot see, so direction, amount and
-  -- location are the trigger's job below. dues_period is deliberately not
-  -- required either (ADR-034): reversing a named contribution carries none,
-  -- reversing a dues payment must - which the trigger checks against the
-  -- reversed row, as this CHECK cannot. An unnamed reversal satisfies the
-  -- "no member, no period" disjunct above; a named one is always an 'out'
-  -- (it reverses a named 'in' row), so the disjunct above keeps its 'out'.
+  -- Only the kind is pinned here (ADR-042): a reversal goes the OTHER way from the
+  -- row it reverses, which a CHECK cannot see, so the trigger below checks
+  -- direction, amount and location. dues_period is deliberately not required
+  -- (ADR-034): reversing a named contribution carries none, reversing a dues
+  -- payment must - which the trigger checks, as this CHECK cannot.
   CHECK (reverses_transaction_id IS NULL OR kind = 'adjustment'),
   CHECK (kind <> 'reimbursement' OR (reimbursement_id IS NOT NULL AND direction = 'out')),
   CHECK (kind <> 'transfer'      OR transfer_id IS NOT NULL)
@@ -357,16 +330,13 @@ CREATE TRIGGER transaction_named_row_shape BEFORE INSERT ON "transaction" BEGIN
   WHERE NEW.kind = 'normal' AND NEW.member_id IS NOT NULL
     AND NOT EXISTS (SELECT 1 FROM purpose WHERE id = NEW.purpose_id AND kind = 'incidental');
 
-  -- A reversal (ADR-029, ADR-034, ADR-042) must target a dues payment or a
-  -- normal row, go the other way, and copy that row's amount, location, member
-  -- and period exactly, never re-typed by the caller: a dues reversal keeps its
-  -- period, a contribution reversal carries none, a reversal of an unnamed row
-  -- carries no member. "IS" is NULL-safe equality: true for two unnamed rows and
-  -- for two equal members, where "=" is NULL and would refuse the unnamed case.
-  -- The purpose is the one copied field not checked: the effective purpose is a
-  -- fold over correction pairs, which a trigger could only restate. Nor is the
-  -- date: a restore keeps this trigger on, and a reversal already in a live file
-  -- may predate its original, which a date rule here would refuse.
+  -- A reversal (ADR-029, ADR-034, ADR-042) must reverse a dues or normal row, go
+  -- the other way, and copy its amount, location, member and period exactly, never
+  -- re-typed by the caller. "IS" is NULL-safe equality: "=" would refuse two
+  -- unnamed rows. The purpose is the one copied field not checked: the effective
+  -- purpose is a fold over correction pairs, which a trigger could only restate.
+  -- Nor is the date: a restore keeps this trigger on, and a reversal already in a
+  -- live file may predate its original.
   SELECT RAISE(ABORT, 'a reversal must reverse a dues payment or a normal transaction: the other way, same amount and location, same member and period')
   WHERE NEW.reverses_transaction_id IS NOT NULL
     AND NOT EXISTS (
@@ -384,8 +354,7 @@ END;
 CREATE UNIQUE INDEX reimbursement_settled_once ON "transaction"(reimbursement_id) WHERE kind = 'reimbursement';
 
 -- A row is reversible at most once (ADR-029, ADR-042); partial, same shape as
--- reimbursement_settled_once. The name predates ADR-042 and stays: it is the
--- index, and renaming it would rewrite drafts that quote it.
+-- reimbursement_settled_once. The name predates ADR-042 and stays.
 CREATE UNIQUE INDEX dues_payment_reversed_once ON "transaction"(reverses_transaction_id) WHERE reverses_transaction_id IS NOT NULL;
 
 -- One opening entry per account: nothing else stops a second opening row, and
@@ -428,12 +397,10 @@ CREATE TABLE reconciliation_line (        -- one counted location within a snaps
   fund_id           INTEGER NOT NULL,
   reconciliation_id INTEGER NOT NULL,
   account_id        INTEGER NOT NULL,
-  -- recorded and actual are signed (a recorded balance can be negative).
-  -- actual is what she counted, so it carries the ceiling on both sides.
-  -- recorded carries none: it is the ledger's balance of the location, a sum of
-  -- bounded amounts that nothing refuses past the ceiling, and a bound here
-  -- would leave such a location impossible to count. difference_amount has none
-  -- either: the equality CHECK below fixes it at actual - recorded.
+  -- actual is what she counted: bounded on both sides. recorded is the ledger's
+  -- balance of the location, a sum of bounded amounts that nothing refuses past
+  -- the ceiling; a bound here would leave such a location impossible to count.
+  -- difference is fixed by the equality CHECK below.
   recorded_amount   INTEGER NOT NULL,  -- frozen at snapshot time
   actual_amount     INTEGER NOT NULL CHECK (actual_amount     BETWEEN -999999999999 AND 999999999999),  -- what the treasurer counted
   difference_amount INTEGER NOT NULL,
@@ -502,56 +469,38 @@ CREATE INDEX reimbursement_by_date  ON reimbursement(fund_id, incurred_on, id);
 -- Same shape: orders the (performed_at DESC, id DESC) keyset scan (#227).
 CREATE INDEX reconciliation_by_date ON reconciliation(fund_id, performed_at, id);
 
--- The ledger as every read sees it (#627, #628): "transaction"'s columns plus the
--- derived facts that used to be re-written in each query, each defined here once.
--- internal/db/ledger_entry_test.go fails a query under internal/store/queries
--- that derives any of them itself.
+-- The ledger as every read sees it (#627, #628): "transaction" plus the derived
+-- facts each query used to re-write. internal/db/ledger_entry_test.go fails a
+-- query under internal/store/queries that derives any of them itself.
 --
---   signed_amount        direction carries the sign (amount is always > 0), so this is
---                        the only place a minus appears: SUM(signed_amount) is a
---                        balance. CAST so sqlc types a sum of it as int64.
---   reversed_by_transaction_id
---                        the id of the reversal that points at this row (ADR-029),
---                        NULL when none does. dues_payment_reversed_once makes it
---                        at most one.
---   reversed_on          the date of that reversal, NULL when none: what a dated
---                        read (the public report's month-end, #408) compares with
---                        its bound, since a reversal dated after the bound has not
---                        happened yet.
---   reversed             1 when any reversal points at this row, else 0: the
---                        flag a read that is not dated filters on, and the one
---                        reversal (ADR-042) relies on.
---   effective_purpose_id (#628) the tag this row's money is under NOW (ADR-033): its
---                        own purpose_id until a purpose correction moves it, then the
---                        end of the path its corrections walk. Each correction
---                        moves the whole row to a new tag, so a row's corrections
---                        form a path starting at purpose_id; the tag it ends on is
---                        the one the money entered once more than it left, counting
---                        the stored tag as the start. That needs no ordering of
---                        corrections (ids are not an order to rely on), and a row
---                        corrected and then corrected back ends where it began.
---                        Which leg is "entering" depends on the row's direction:
---                        PostPurposeCorrection puts the target on the leg moving
---                        the same way as the row, so leg.direction = t.direction
---                        reads back what it wrote. A row nothing corrects answers
---                        its own purpose_id.
+--   signed_amount        the only place a minus appears (amount is always > 0).
+--                        CAST so sqlc types a sum of it as int64.
+--   reversed_by_transaction_id, reversed_on, reversed
+--                        the reversal pointing at this row (ADR-029; at most one,
+--                        dues_payment_reversed_once), its date, and whether one
+--                        exists. A dated read (the public report's month-end)
+--                        compares reversed_on with its bound: a reversal dated
+--                        after the bound has not happened yet.
+--   effective_purpose_id the tag this row's money is under NOW (ADR-033): its own
+--                        purpose_id, moved by purpose corrections. A row's
+--                        corrections form a path starting at purpose_id; the tag
+--                        it ends on is the one the money entered once more than it
+--                        left, so no ordering of corrections is needed (ids are
+--                        not an order) and a row corrected back ends where it
+--                        began. PostPurposeCorrection puts the target on the leg
+--                        moving the same way as the row, so
+--                        leg.direction = t.direction reads back what it wrote.
 --
---                        This is NOT the tag a balance sums. Balances sum the
---                        stored purpose_id: a correction is a pair of legs, and the
---                        legs carry the move, so SUM(signed_amount) per stored
---                        purpose_id already nets to where the money is. Reading
---                        effective_purpose_id beside those legs would count a
---                        correction twice. It is for the correction dialog (which
---                        must build its pair from where the money is), for
---                        EffectivePurposeForTransaction (which feeds the next
---                        correction's from leg) and for the marker that says a
---                        correction exists; Riwayat keeps listing the stored tag
---                        (ADR-033).
+--                        NOT the tag a balance sums. Balances sum the stored
+--                        purpose_id: the correction's legs already carry the
+--                        move, so reading effective_purpose_id beside them would
+--                        count it twice. It is for the correction dialog, for
+--                        EffectivePurposeForTransaction and for the "corrected"
+--                        marker; Riwayat lists the stored tag (ADR-033).
 --
--- Unused columns cost nothing: SQLite drops them when it flattens the view into
--- the query, so a balance never runs the reversal lookup or the correction walk.
--- The list does run the correction walk (it selects effective_purpose_id), and
--- skips only the reversal lookups.
+-- Unused columns cost nothing: SQLite drops them when it flattens the view, so a
+-- balance never runs the reversal lookup or the correction walk; the list runs
+-- the walk and skips only the reversal lookups.
 CREATE VIEW ledger_entry AS
 SELECT t.id, t.fund_id, t.account_id, t.purpose_id, t.direction, t.amount, t.occurred_on, t.kind,
        t.member_id, t.dues_period, t.reimbursement_id, t.transfer_id, t.reverses_transaction_id,
@@ -624,20 +573,19 @@ CREATE TRIGGER reconciliation_line_immutable_delete BEFORE DELETE ON reconciliat
 END;
 -- +goose StatementEnd
 
--- member_tier is immutable against UPDATE only (ADR-040): "a correction is a new
--- row". No BEFORE DELETE trigger, deliberately: a member's deletion (the
--- cascade), a never-named tier's and restore's clear-all all delete these rows,
--- and the owners' foreign keys already refuse the deletions that would lose a
--- record. A test fails when a query other than those deletes from the table.
+-- member_tier is immutable against UPDATE only (ADR-040). No BEFORE DELETE
+-- trigger, deliberately: a member's deletion (the cascade), a never-named tier's
+-- and restore's clear-all delete these rows, and the owners' foreign keys already
+-- refuse the deletions that would lose a record. A test fails when any other
+-- query deletes from the table.
 -- +goose StatementBegin
 CREATE TRIGGER member_tier_immutable_update BEFORE UPDATE ON member_tier BEGIN
   SELECT RAISE(ABORT, 'member_tier rows are immutable - a correction is a new row');
 END;
 -- +goose StatementEnd
 
--- dues_rate is immutable against UPDATE only, for the same reasons (ADR-040): a
--- tier's deletion (DeleteDuesRatesByTier) and restore's clear-all delete these
--- rows, and a test fails when any other statement does.
+-- dues_rate: UPDATE only, for the same reasons (ADR-040); DeleteDuesRatesByTier
+-- and restore's clear-all delete rows, and a test fails when any other statement does.
 -- +goose StatementBegin
 CREATE TRIGGER dues_rate_immutable_update BEFORE UPDATE ON dues_rate BEGIN
   SELECT RAISE(ABORT, 'dues_rate rows are immutable - a correction is a new row');

@@ -25,10 +25,9 @@ type CreateMemberTierParams struct {
 	CreatedAt     int64
 }
 
-// member_tier (ADR-040): a member's tier, month by month. Every pricing read goes
-// through the member_tier_standing view (one standing row per member and month,
-// the highest correction); internal/db's guard test fails a query that reads
-// the table directly, except the ones named there.
+// member_tier (ADR-040): pricing reads go through the member_tier_standing view
+// (schema file); internal/db's guard test fails a direct read of the table other
+// than the ones named there.
 func (q *Queries) CreateMemberTier(ctx context.Context, arg CreateMemberTierParams) (MemberTier, error) {
 	row := q.db.QueryRowContext(ctx, createMemberTier,
 		arg.FundID,
@@ -79,9 +78,8 @@ WHERE fund_id = ?
 ORDER BY member_id, effective_from
 `
 
-// Every member's standing rows across the fund, for the readers that price a
-// whole roster at once: folded per member in Go, so no read adds a per-member
-// query. Ordered by month, the order the fold needs, never by id or created_at.
+// Every member's standing rows across the fund, folded per member in Go so a
+// roster costs no per-member query. Ordered by month, never by id or created_at.
 func (q *Queries) ListMemberTiersByFund(ctx context.Context, fundID int64) ([]MemberTierStanding, error) {
 	rows, err := q.db.QueryContext(ctx, listMemberTiersByFund, fundID)
 	if err != nil {

@@ -108,18 +108,14 @@ export function noteForDisplay(transaction: Transaction): string | null {
 /**
  * POST /api/transactions/{id}/reversal - undo a dues payment or a normal
  * transaction recorded in error (PRD section 7.3, ADR-042). {id} is the row
- * being reversed. It replaced POST /api/dues-payments/{id}/reversal, which is
- * gone with no alias.
+ * being reversed.
  *
- * Deliberately narrow: only a note is sent. The amount, location, purpose,
- * member, period AND the date are never sent - the ledger copies the first five
- * from the original row (the purpose being its effective one) and picks the date
- * itself: the original's own day, or today once a cek kas has counted it. The row
- * is not edited or deleted; a new linked entry is posted (CLAUDE.md rule 3).
+ * Deliberately narrow: only a note is sent. The ledger copies amount, location,
+ * purpose (the effective one), member and period from the original and picks the date
+ * itself: the original's own day, or today once a cek kas has counted it. A new
+ * linked entry is posted (CLAUDE.md rule 3).
  *
- * `note` holds only what the treasurer typed in the optional reason field -
- * blank sends null, never a generated default; the row explains itself through
- * TransactionList's display label.
+ * `note` holds only what the treasurer typed; blank sends null, never a generated default.
  */
 export function reverseTransaction(transactionId: number, note: string | null): Promise<Transaction> {
   return apiFetch<Transaction>(`/api/transactions/${transactionId}/reversal`, {
@@ -163,9 +159,8 @@ export function correctPurpose(transactionId: number, purposeId: number): Promis
  * A named contribution (kind='normal' with member_id set) is excluded too
  * (ADR-034): moving it would leave participation counting the member against
  * an envelope the money has left. So is a row something already reverses
- * (ADR-042), on the server's `reversed` flag: the ledger refuses
- * reverse-then-correct, and a row reversed on a page not fetched must not
- * offer the control either.
+ * (ADR-042), on the server's `reversed` flag, even on an unfetched page: the
+ * ledger refuses reverse-then-correct.
  */
 export function canCorrectPurpose(transaction: Transaction): boolean {
   if (transaction.reversed) return false

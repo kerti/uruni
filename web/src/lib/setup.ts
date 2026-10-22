@@ -96,9 +96,8 @@ export interface Transaction {
    * and the correction dialog, which must build its pair from where the
    * money actually is. */
   effective_purpose_id?: number
-  /** Whether a reversal points at this row (ADR-042): ledger_entry's flag, on
-   * the server, so a row reversed on a page not fetched yet still reads
-   * reversed. */
+  /** Whether a reversal points at this row (ADR-042): the server's flag, so a row
+   * reversed on an unfetched page still reads reversed. */
   reversed?: boolean
   /** Whether the ledger would accept a reversal of this row now - the server's
    * answer, so the client keeps no copy of the eligibility rule. */
@@ -160,11 +159,9 @@ export interface MembersPage {
 
 /**
  * Every function below that returns a fund hands its `time_zone` to the date
- * helpers (lib/dates.ts) before its promise resolves (ADR-041). It must not be
- * left to an effect or a render: AuthedGate mounts the Shell on the very render
- * that follows the fetch, and every `useState(todayISODate)` initialiser under
- * it runs in that render, so a zone set later would let the first screen she
- * opens read the default - the 00:30 bug again, in the form she opens first.
+ * helpers (lib/dates.ts) before its promise resolves (ADR-041), never from an
+ * effect or a render: AuthedGate mounts the Shell on the render right after the
+ * fetch, and every `useState(todayISODate)` under it runs then.
  */
 function adoptZone(fund: Fund): Fund {
   setFundTimeZone(fund.time_zone)
@@ -180,11 +177,8 @@ export function getFund(): Promise<Fund> {
  * PATCH /api/fund - renames the kas and/or changes its time zone; each is
  * optional, at least one is required. The name is a display label: it heads
  * every screen and the public report, and nothing posted references it, so
- * this rewrites no history. A zone change rewrites nothing either (ADR-041):
- * every day and month is derived from it, so setting the old zone back restores
- * every earlier reading. currency and report_slug are not settable - one is an
- * invariant through 0.x, the other is the report's unguessable address, which
- * only replaceReportSlug changes.
+ * this rewrites no history. A zone change rewrites nothing either (ADR-041).
+ * currency and report_slug are not settable - only replaceReportSlug changes the slug.
  */
 export function updateFund(patch: { name?: string; timeZone?: string }): Promise<Fund> {
   const body: Record<string, string> = {}

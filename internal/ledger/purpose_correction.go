@@ -11,22 +11,17 @@ import (
 )
 
 // PostPurposeCorrectionParams is every argument PostPurposeCorrection needs
-// to fix one posted row's peruntukan (ADR-033, #267).
+// to fix one posted row's peruntukan (ADR-033).
 //
 // There is no AccountID, Direction, Amount or OccurredOn field: all four are
-// read off the row being corrected, as ReverseTransactionParams does. A
-// correction naming a different account or date would not correct that row,
-// and ADR-033 is explicit that the date is not an input: dating it today
-// would leave the month the mistake happened wrong in both tags.
+// read off the row being corrected. The date is not an input because dating it
+// today would leave the month the mistake happened wrong in both tags.
 type PostPurposeCorrectionParams struct {
 	FundID        int64
 	TransactionID int64 // the posted row whose peruntukan is wrong
 	PurposeID     int64 // the target: what it should have been tagged
 
-	// Idempotency, when non-nil, makes the correction safe to repeat: the same key
-	// with the same request answers the first pair and posts nothing, where an
-	// unkeyed repeat is a second pair or ErrPurposeCorrectionNoop (ADR-043). nil
-	// is an unkeyed post.
+	// Idempotency, when non-nil, makes the correction safe to repeat (ADR-043).
 	Idempotency *Idempotency
 }
 
@@ -35,9 +30,8 @@ type PostPurposeCorrectionParams struct {
 // carrying the original row's account_id and occurred_on on both legs and
 // corrects_transaction_id naming the row it corrects.
 //
-// It is built on postTransferPairTx (transfer.go), which
-// CloseIncidentalAndRoll also reuses: no second write path (ADR-027's narrow
-// PostTransaction, ADR-033).
+// It is built on postTransferPairTx (transfer.go), which CloseIncidentalAndRoll
+// also reuses: no second write path.
 //
 // Direction is the crux (ADR-033): postTransferPairTx posts 'out' at its
 // "from" leg and 'in' at its "to" leg, but which purpose plays which role
@@ -63,56 +57,20 @@ type PostPurposeCorrectionParams struct {
 // out of postTransferPairTx's shape, with no separate check.
 //
 // The effective peruntukan, not the stored purpose_id, is what "undo the
-// original attribution" undoes. effectivePeruntukan follows every prior
-// correction pointing at TransactionID to where they end; with none, the
-// stored purpose_id is accurate. A correction built from the stored tag would
-// move money out of a tag that no longer holds it and drive it negative: the
-// defect #266 reports, recreated by the tool meant to fix it (ADR-033).
+// original attribution" undoes: a correction built from the stored tag would
+// move money out of a tag that no longer holds it and drive it negative
+// (ADR-033).
 //
-// Eligibility, each a named error (ADR-033):
+// Eligibility is ADR-033's table, each refusal its own named error
+// (ErrPurposeCorrection...). A correction's legs are kind='transfer', which is
+// what makes a correction of a correction impossible. Correct-then-reverse is
+// allowed (the reversal copies the effective purpose); reverse-then-correct is
+// refused, ADR-042. postTransferPairTx checks nothing by design, so a closed
+// target or source incidental is refused here, ahead of it (ADR-031).
 //
-//   - kind='opening': ErrPurposeCorrectionOpening - Kas Utama by
-//     construction, nothing to fix.
-//   - kind='dues': ErrPurposeCorrectionDues - a different entry, not a
-//     mis-tag.
-//   - kind='reimbursement': ErrPurposeCorrectionReimbursement - its payout
-//     inherits the claim's peruntukan; edit the claim.
-//   - kind='transfer': ErrPurposeCorrectionTransfer - a leg is half a
-//     movement; correcting one breaks the pair. Since a correction's legs are
-//     kind='transfer', a correction of a correction is impossible, with no
-//     depth limit or cycle rule.
-//   - kind='adjustment' with reverses_transaction_id set (a reversal of any
-//     row, ADR-029, ADR-042): ErrPurposeCorrectionReversal. The reversal copies
-//     its original's effective purpose and is never itself re-tagged.
-//   - kind='normal' with member_id set (a named contribution, ADR-034):
-//     ErrPurposeCorrectionNamedContribution - moving it would leave
-//     participation counting the member against an envelope the money has
-//     left; reverse and post again, as for a dues payment.
-//   - kind='normal' with no member_id, or kind='adjustment' with
-//     reverses_transaction_id NULL (an ordinary correction or an ADR-024
-//     reconciliation fix): eligible, unless a reversal already points at the
-//     row: ErrPurposeCorrectionAlreadyReversed (ADR-042). Correct-then-reverse
-//     is allowed, since the reversal copies the effective purpose;
-//     reverse-then-correct would put the pair's legs on a purpose that no
-//     longer holds the money.
-//
-// Two more refusals follow eligibility, against the closed-incidental state
-// ADR-031 guarantees (ADR-033):
-//
-//   - The target (PurposeID) names a closed incidental:
-//     ErrPurposeCorrectionTargetClosed. postTransferPairTx checks nothing by
-//     design, so this route would otherwise bypass PostTransaction's
-//     ErrIncidentalClosed guard.
-//   - The effective peruntukan names a closed incidental:
-//     ErrPurposeCorrectionSourceClosed - leaving it non-zero would break the
-//     zero-balance invariant #270's rollover derivation reads.
-//
-// Last, PurposeID equal to the effective peruntukan: ErrPurposeCorrectionNoop,
-// since nothing would move.
-//
-// With p.Idempotency set (ADR-043), a repeat of the same request returns the
-// first pair; none of the checks above runs on a replay, so the repeat of a
-// correction that worked is never the Noop its own result would make it.
+// With p.Idempotency set (ADR-043), a repeat returns the first pair and none of
+// the checks above runs, so the repeat of a correction that worked is never the
+// Noop its own result would make it.
 func (l *Ledger) PostPurposeCorrection(ctx context.Context, p PostPurposeCorrectionParams) (store.Transfer, error) {
 	created, err := withIdempotency(ctx, l, p.Idempotency, func(q store.Querier) (store.Transfer, error) {
 		original, err := q.GetTransactionForFund(ctx, store.GetTransactionForFundParams{
@@ -141,8 +99,7 @@ func (l *Ledger) PostPurposeCorrection(ctx context.Context, p PostPurposeCorrect
 			}
 		case "normal":
 			// A named contribution (ADR-034): moving it would leave participation
-			// counting the member against an envelope the money has left. Refused like a
-			// dues payment; an unnamed contribution (member_id NULL) is eligible.
+			// counting the member against an envelope the money has left.
 			if original.MemberID != nil {
 				return store.Transfer{}, ErrPurposeCorrectionNamedContribution
 			}
@@ -151,9 +108,8 @@ func (l *Ledger) PostPurposeCorrection(ctx context.Context, p PostPurposeCorrect
 		// reverses_transaction_id, are eligible: the cases the switch leaves
 		// unhandled on purpose.
 
-		// Reverse, then correct, is refused (ADR-042). The reversal already took the
-		// money out of the row's effective purpose; a pair moving the original
-		// afterwards would leave the reversal netting against the wrong one.
+		// Reverse, then correct, is refused (ADR-042): the reversal already took the
+		// money out of the row's effective purpose.
 		reversed, err := q.ReversedFlagForTransaction(ctx, store.ReversedFlagForTransactionParams{
 			FundID: p.FundID,
 			ID:     p.TransactionID,
@@ -212,9 +168,7 @@ func (l *Ledger) PostPurposeCorrection(ctx context.Context, p PostPurposeCorrect
 // purpose_id until a correction moves it, then the end of the path its
 // corrections walk. EffectivePurposeForTransaction reads it from
 // ledger_entry.effective_purpose_id, which derives that end without ordering
-// the corrections (#411, #628; the definition is in 00001_schema.sql). See
-// PostPurposeCorrection for why the stored tag alone is unsafe once a
-// correction exists.
+// the corrections. The stored tag alone is unsafe once a correction exists.
 func effectivePeruntukan(ctx context.Context, q store.Querier, fundID int64, original store.Transaction) (int64, error) {
 	id, err := q.EffectivePurposeForTransaction(ctx, store.EffectivePurposeForTransactionParams{
 		FundID: fundID, ID: original.ID,

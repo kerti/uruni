@@ -41,8 +41,7 @@ export default function MemberPayments({ memberId, period, onReversed }: { membe
   const [state, run] = useApi<Transaction[]>()
   const [submitState, submitRun] = useApi<unknown>()
 
-  // Which payment's reversal form is open, if any - one at a time, so the note
-  // always belongs to a single row.
+  // Which payment's reversal form is open, if any - one at a time.
   const [reversingId, setReversingId] = useState<number | null>(null)
   const [note, setNote] = useState('')
 
