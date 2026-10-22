@@ -86,6 +86,9 @@ func marshalDocument(doc Document) ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("backup: marshaling uruni.json: %w", err)
 	}
+	if int64(len(docBytes)) > MaxDocumentBytes {
+		return nil, fmt.Errorf("%w: %d bytes, more than the %d a restore reads", ErrDocumentTooLarge, len(docBytes), MaxDocumentBytes)
+	}
 	return docBytes, nil
 }
 

@@ -369,6 +369,35 @@ func TestParseUploadRefusesUnzippedTooLarge(t *testing.T) {
 	}
 }
 
+// Serial on purpose, no t.Parallel: it shrinks a package-level upload cap
+// that every parallel ParseUpload reads. uruni.json has its own cap below the
+// 1 GB unzipped one (#531), and its own refusal.
+func TestParseUploadRefusesADocumentPastItsOwnCap(t *testing.T) {
+	orig := MaxDocumentBytes
+	MaxDocumentBytes = 4
+	t.Cleanup(func() { MaxDocumentBytes = orig })
+
+	_, err := parseUploadBytes(t, zipOf(t, minimalDocJSON(t, FormatVersion), nil))
+	if !errors.Is(err, ErrDocumentTooLarge) {
+		t.Errorf("ParseUpload() error = %v, want ErrDocumentTooLarge", err)
+	}
+	if errors.Is(err, ErrUnzippedTooLarge) {
+		t.Error("ParseUpload() error also matches ErrUnzippedTooLarge, want the document's own refusal")
+	}
+}
+
+// Serial on purpose, as above. A backup Uruni writes must be one it can read
+// back, so the export refuses a document past the restore's cap.
+func TestExportRefusesADocumentARestoreWouldRefuse(t *testing.T) {
+	orig := MaxDocumentBytes
+	MaxDocumentBytes = 4
+	t.Cleanup(func() { MaxDocumentBytes = orig })
+
+	if _, err := marshalDocument(Document{FormatVersion: FormatVersion}); !errors.Is(err, ErrDocumentTooLarge) {
+		t.Errorf("marshalDocument() error = %v, want ErrDocumentTooLarge", err)
+	}
+}
+
 func TestParseUploadRefusesBadReceiptImage(t *testing.T) {
 	t.Parallel()
 	doc := Document{
