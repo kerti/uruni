@@ -257,7 +257,8 @@ func TestMonthlyReportRefusesCorrectionsThatAreNotAPath(t *testing.T) {
 	leg := func(transferID, from, to int64) store.ListReportTransactionsRow {
 		return store.ListReportTransactionsRow{
 			OccurredOn: "2026-09-10", Direction: "in", Amount: 1_000, Kind: "transfer", PurposeName: "Main",
-			TransferKind: str("reclass_purpose"), TransferID: id(transferID), TransferCorrectsTransactionID: id(99),
+			TransferKind: str("reclass_purpose"), TransferID: id(transferID),
+			TransferCorrectsTransactionID: id(99), TransferCorrectsDirection: str("in"),
 			TransferFromPurposeID: id(from), TransferToPurposeID: id(to),
 			TransferFromPurposeName: str("A"), TransferToPurposeName: str("B"),
 		}
@@ -268,6 +269,28 @@ func TestMonthlyReportRefusesCorrectionsThatAreNotAPath(t *testing.T) {
 	_, err := odd.monthlyReport(context.Background(), ReportParams{FundID: fundID, Month: "2026-09", Now: reportNow})
 	if err == nil || !strings.Contains(err.Error(), "do not form a path") {
 		t.Fatalf("monthlyReport() = %v, want an error naming the broken path", err)
+	}
+}
+
+// A correction's label is stated by the direction of the row it corrects
+// (#654), which the query joins; a leg without it is a broken read, not a
+// guess at either order.
+func TestMonthlyReportRefusesACorrectionWithNoDirection(t *testing.T) {
+	t.Parallel()
+	str := func(s string) *string { return &s }
+	id := func(n int64) *int64 { return &n }
+	row := store.ListReportTransactionsRow{
+		OccurredOn: "2026-09-10", Direction: "in", Amount: 1_000, Kind: "transfer", PurposeName: "Main",
+		TransferKind: str("reclass_purpose"), TransferID: id(1), TransferCorrectsTransactionID: id(99),
+		TransferFromPurposeID: id(1), TransferToPurposeID: id(2),
+		TransferFromPurposeName: str("A"), TransferToPurposeName: str("B"),
+	}
+	l, fundID := faultyReportFixture(t)
+	odd := &Ledger{db: l.db, q: faultQuerier{Querier: l.q, rows: []store.ListReportTransactionsRow{row}}}
+
+	_, err := odd.monthlyReport(context.Background(), ReportParams{FundID: fundID, Month: "2026-09", Now: reportNow})
+	if err == nil || !strings.Contains(err.Error(), "carries no direction") {
+		t.Fatalf("monthlyReport() = %v, want an error naming the missing direction", err)
 	}
 }
 

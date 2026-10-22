@@ -853,17 +853,19 @@ func reportEntryFrom(row store.ListReportTransactionsRow) (ReportEntry, error) {
 // ordering (ids are not an order to rely on). Every correction carries the
 // row's date, so they all fall in that row's month.
 //
-// A pair is named by its own legs: from is the 'out' leg, to the 'in' leg, and
-// PostPurposeCorrection puts the target on the leg moving the way the row did.
-// So the move's From and To are the row's start and end only for an 'in' row.
-// For an 'out' row they swap: its From is where the row ends up and its To where
-// it began. The move is kept in the pair's own terms either way.
+// A pair is named by its own legs (from is the 'out' leg, to the 'in' leg), and
+// PostPurposeCorrection puts the target on the leg moving the way the row did,
+// so for an 'out' row the pair's money runs from the target back to where the
+// row began. The path is worked out in the pair's terms and the result is then
+// stated as what happened to the row, From where it began To where it is now,
+// the same for both directions (#654).
 func foldCorrections(rows []store.ListReportTransactionsRow) (map[int64]ReportMove, error) {
 	type path struct {
-		move  ReportMove
-		net   map[int64]int // purpose id -> times entered minus times left
-		names map[int64]string
-		notes map[string]bool
+		move     ReportMove
+		net      map[int64]int // purpose id -> times entered minus times left
+		names    map[int64]string
+		notes    map[string]bool
+		outgoing bool // the corrected row is an 'out'
 	}
 	paths := make(map[int64]*path)
 	seen := make(map[int64]bool)
@@ -879,7 +881,13 @@ func foldCorrections(rows []store.ListReportTransactionsRow) (map[int64]ReportMo
 		}
 		pa, ok := paths[*c]
 		if !ok {
-			pa = &path{move: m, net: map[int64]int{}, names: map[int64]string{}, notes: map[string]bool{}}
+			if row.TransferCorrectsDirection == nil {
+				return nil, fmt.Errorf("correction of transaction %d carries no direction", *c)
+			}
+			pa = &path{
+				move: m, net: map[int64]int{}, names: map[int64]string{}, notes: map[string]bool{},
+				outgoing: *row.TransferCorrectsDirection == "out",
+			}
 			paths[*c] = pa
 		}
 		pa.net[m.FromPurposeID]--
@@ -909,6 +917,9 @@ func foldCorrections(rows []store.ListReportTransactionsRow) (map[int64]ReportMo
 		}
 		if from == 0 || to == 0 {
 			return nil, fmt.Errorf("corrections of transaction %d do not form a path", corrected)
+		}
+		if pa.outgoing {
+			from, to = to, from
 		}
 		m := pa.move
 		m.FromPurposeID, m.FromPurposeName = from, pa.names[from]

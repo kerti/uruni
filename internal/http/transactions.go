@@ -82,8 +82,8 @@ type transactionResponse struct {
 	// TransferKind is the pair's kind ('between_accounts' or 'reclass_purpose'),
 	// nil outside kind='transfer'. TransferFromName/TransferToName are that
 	// kind's two location or purpose names in the transfer's from->to order,
-	// whichever leg this row is (see ListTransactionsPage), nil outside
-	// kind='transfer'.
+	// whichever leg this row is, except on a purpose correction, which names
+	// the corrected row's pos before and after; nil outside kind='transfer'.
 	TransferKind     *string `json:"transfer_kind"`
 	TransferFromName *string `json:"transfer_from_name"`
 	TransferToName   *string `json:"transfer_to_name"`
@@ -217,6 +217,12 @@ func toTransactionsPageResponse(t store.ListTransactionsPageRow, today string) t
 		case "reclass_purpose":
 			resp.TransferFromName = t.TransferFromPurposeName
 			resp.TransferToName = t.TransferToPurposeName
+			// A correction reads as what happened to the row it corrects (#654):
+			// for an 'out' row the pair's money runs from the new pos back to
+			// the stored one, so the names swap.
+			if t.TransferCorrectsDirection != nil && *t.TransferCorrectsDirection == "out" {
+				resp.TransferFromName, resp.TransferToName = resp.TransferToName, resp.TransferFromName
+			}
 		}
 	}
 

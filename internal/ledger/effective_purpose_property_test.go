@@ -200,21 +200,13 @@ func assertEffectivePurposeMatchesTheFold(t *testing.T, q *store.Queries, l *Led
 		t.Fatalf("foldCorrections() = %v, want the corrections to form paths", err)
 	}
 
-	// The fold names a move by the pair's own legs: 'out' is its from leg and 'in'
-	// its to leg, and PostPurposeCorrection puts the target on the leg moving the
-	// way the row did. An 'in' row's destination is therefore the move's To, and an
-	// 'out' row's its From. ADR-033 describes the legs, not the report's wording;
-	// this is how foldCorrections names them.
+	// The fold states a move as what happened to the row (#654), so its To is the
+	// row's destination whichever way the row went.
 	destination := func(r store.ListTransactionsPageRow) int64 {
-		m, ok := folded[r.ID]
-		switch {
-		case !ok:
-			return r.PurposeID
-		case r.Direction == "in":
+		if m, ok := folded[r.ID]; ok {
 			return m.ToPurposeID
-		default:
-			return m.FromPurposeID
 		}
+		return r.PurposeID
 	}
 
 	byEffective := map[int64]int64{}

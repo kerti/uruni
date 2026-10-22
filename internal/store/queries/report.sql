@@ -52,6 +52,7 @@ SELECT t.occurred_on, t.created_at, t.direction, t.amount, t.kind,
        t.transfer_id,
        tr.kind AS transfer_kind,
        tr.corrects_transaction_id AS transfer_corrects_transaction_id,
+       ct.direction AS transfer_corrects_direction,
        tr.reason AS transfer_reason,
        tf.purpose_id AS transfer_from_purpose_id,
        tt.purpose_id AS transfer_to_purpose_id,
@@ -67,6 +68,7 @@ LEFT JOIN member m ON m.id = t.member_id
 LEFT JOIN reimbursement rb ON rb.id = t.reimbursement_id
 LEFT JOIN member rm ON rm.id = rb.member_id
 LEFT JOIN transfer tr ON tr.id = t.transfer_id
+LEFT JOIN "transaction" ct ON ct.id = tr.corrects_transaction_id
 LEFT JOIN "transaction" tf ON tf.transfer_id = t.transfer_id AND tf.direction = 'out'
 LEFT JOIN "transaction" tt ON tt.transfer_id = t.transfer_id AND tt.direction = 'in'
 LEFT JOIN purpose fp ON fp.id = tf.purpose_id
