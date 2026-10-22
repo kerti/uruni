@@ -268,3 +268,82 @@ func TestRestoreStageExpiryRemovesTheStagedFile(t *testing.T) {
 		t.Errorf("expired stage's file still on disk (stat err = %v)", err)
 	}
 }
+
+// A uruni.json past backup.MaxDocumentBytes (#531), at the real cap: blank
+// space deflates to a small upload, so only the unzipped read can refuse it,
+// and it does before decoding a byte.
+func TestRestoreInspectRefusesADocumentPastItsCap(t *testing.T) {
+	t.Parallel()
+	r := testRouter(t)
+	setUpFund(t, r)
+
+	var buf bytes.Buffer
+	zw := zip.NewWriter(&buf)
+	entry, err := zw.Create("uruni.json")
+	if err != nil {
+		t.Fatalf("creating entry: %v", err)
+	}
+	chunk := bytes.Repeat([]byte(" "), 1<<20)
+	for written := int64(0); written <= backup.MaxDocumentBytes; written += int64(len(chunk)) {
+		if _, err := entry.Write(chunk); err != nil {
+			t.Fatalf("writing entry: %v", err)
+		}
+	}
+	if err := zw.Close(); err != nil {
+		t.Fatalf("closing zip: %v", err)
+	}
+
+	rec := postRestoreInspect(t, r, buf.Bytes())
+	assertAPIError(t, rec, http.StatusRequestEntityTooLarge, "restore_file_too_large")
+}
+
+// An inspected upload nobody confirms is removed by its own timer (#531),
+// without waiting for a later inspect or confirm to notice it.
+func TestAnAbandonedRestoreStageIsSweptOnItsTimer(t *testing.T) {
+	t.Parallel()
+	path := createRestoreStagingTempOrFatal(t, t.TempDir())
+
+	s := newRestoreStage()
+	s.ttl = 20 * time.Millisecond
+	token, err := s.stage(backup.ParsedUpload{StagingPath: path})
+	if err != nil {
+		t.Fatalf("stage() = %v, want no error", err)
+	}
+
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		if _, err := os.Stat(path); errors.Is(err, os.ErrNotExist) {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("the abandoned stage's file is still on disk 5s after its 20ms lifetime")
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	if _, ok := s.take(token); ok {
+		t.Error("take() after the sweep = ok, want the stage gone")
+	}
+}
+
+// A stage confirm has taken belongs to confirm; its timer firing later must
+// not remove the file confirm is still reading.
+func TestTheSweepLeavesATakenStageAlone(t *testing.T) {
+	t.Parallel()
+	path := createRestoreStagingTempOrFatal(t, t.TempDir())
+
+	s := newRestoreStage()
+	s.ttl = 20 * time.Millisecond
+	token, err := s.stage(backup.ParsedUpload{StagingPath: path})
+	if err != nil {
+		t.Fatalf("stage() = %v, want no error", err)
+	}
+	if _, ok := s.take(token); !ok {
+		t.Fatal("take() = not ok, want the stage")
+	}
+	// The stopped timer is one guard; expire's token check is the other.
+	s.expire(token)
+	time.Sleep(60 * time.Millisecond)
+	if _, err := os.Stat(path); err != nil {
+		t.Errorf("stat(taken file) = %v, want it untouched", err)
+	}
+}

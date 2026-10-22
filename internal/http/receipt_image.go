@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"image"
+	"image/color"
 	"image/jpeg"
 	_ "image/png" // registers the PNG decoder with image.Decode (blank import, decode-only)
 	"math"
@@ -42,9 +43,15 @@ var (
 // Re-encoding unconditionally, even a file within the limits, is deliberate:
 // it strips the EXIF/GPS metadata phones embed (CLAUDE.md rule 6, data
 // minimization; PRD section 6 asks for names, amounts, dates and notes, not
-// GPS coordinates). The orientation tag is read and applied before that
+// GPS coordinates). The orientation tag is read from the raw bytes before that
 // strip, in jpegOrientation, or the rotation would be lost with the EXIF
 // block.
+//
+// The rotation runs after the downscale, on at most 1600px a side (#531).
+// applyOrientation copies pixel by pixel into a new RGBA image, which at the
+// 50 MP cap was about 200 MB before a single pixel was dropped. Rotating
+// after scaling gives the same dimensions and the same picture, up to
+// resampling rounding.
 func processReceiptImage(raw []byte) ([]byte, error) {
 	if isHEIC(raw) {
 		return nil, errReceiptHEICUnsupported
@@ -65,45 +72,15 @@ func processReceiptImage(raw []byte) ([]byte, error) {
 		return nil, errReceiptUnsupportedMediaType
 	}
 
+	img = downscale(img)
+
 	// Only a JPEG carries the EXIF orientation tag phones use for "held
 	// sideways" instead of rotating pixels. image/jpeg drops that tag when
-	// decoding, so it is read from the raw bytes before the decoded image is used.
+	// decoding, so it is read from the raw bytes.
 	if format == "jpeg" {
 		if orientation := jpegOrientation(raw); orientation > 1 {
 			img = applyOrientation(img, orientation)
 		}
-	}
-
-	return downscaleAndEncodeJPEG(img)
-}
-
-// downscaleAndEncodeJPEG resizes img so its long edge is at most
-// maxReceiptLongEdge, never upscaling, and re-encodes it as JPEG.
-func downscaleAndEncodeJPEG(img image.Image) ([]byte, error) {
-	b := img.Bounds()
-	w, h := b.Dx(), b.Dy()
-
-	longEdge := w
-	if h > longEdge {
-		longEdge = h
-	}
-
-	if longEdge > maxReceiptLongEdge {
-		scale := float64(maxReceiptLongEdge) / float64(longEdge)
-		newW := int(math.Round(float64(w) * scale))
-		newH := int(math.Round(float64(h) * scale))
-		if newW < 1 {
-			newW = 1
-		}
-		if newH < 1 {
-			newH = 1
-		}
-
-		dst := image.NewRGBA(image.Rect(0, 0, newW, newH))
-		// CatmullRom: a smooth, quality-first resample, fine because this runs once
-		// per upload, not per request.
-		draw.CatmullRom.Scale(dst, dst.Bounds(), img, b, draw.Over, nil)
-		img = dst
 	}
 
 	var buf bytes.Buffer
@@ -111,6 +88,91 @@ func downscaleAndEncodeJPEG(img image.Image) ([]byte, error) {
 		return nil, err
 	}
 	return buf.Bytes(), nil
+}
+
+// downscale resizes img so its long edge is at most maxReceiptLongEdge, never
+// upscaling. An image already within the limit is returned as it is.
+//
+// Memory is the constraint (#531): a 50 MP upload is allowed, and the decoded
+// image is already 75 MB (a JPEG's YCbCr) to 200 MB (a PNG's RGBA). A kernel
+// resample such as draw.CatmullRom keeps a float64 buffer of output width by
+// source height - about 330 MB for a 50 MP portrait photo - so it is not used
+// on the full image. Instead the source is first averaged down by a whole
+// factor (boxShrink, which allocates only its output), and the remaining step,
+// under 2x, is a bilinear one with no intermediate buffer. Averaging blocks is
+// the standard way to shrink text without aliasing; for a receipt that must be
+// legible, not archival, the result is as good.
+func downscale(img image.Image) image.Image {
+	b := img.Bounds()
+	w, h := b.Dx(), b.Dy()
+	longEdge := max(w, h)
+	if longEdge <= maxReceiptLongEdge {
+		return img
+	}
+
+	if k := longEdge / maxReceiptLongEdge; k >= 2 {
+		img = boxShrink(img, k)
+		b = img.Bounds()
+		w, h = b.Dx(), b.Dy()
+		longEdge = max(w, h)
+		if longEdge <= maxReceiptLongEdge {
+			return img
+		}
+	}
+
+	scale := float64(maxReceiptLongEdge) / float64(longEdge)
+	newW := max(1, int(math.Round(float64(w)*scale)))
+	newH := max(1, int(math.Round(float64(h)*scale)))
+	dst := image.NewRGBA(image.Rect(0, 0, newW, newH))
+	draw.ApproxBiLinear.Scale(dst, dst.Bounds(), img, b, draw.Src, nil)
+	return dst
+}
+
+// boxShrink averages each k-by-k block of src into one pixel; a partial block
+// at the right or bottom edge is dropped (at most k-1 pixels of a photo's
+// margin). A JPEG decodes to *image.YCbCr, read here plane by plane; any other
+// image goes through At, which is slower but rare (PNG and WebP receipts).
+func boxShrink(src image.Image, k int) *image.RGBA {
+	b := src.Bounds()
+	dw, dh := b.Dx()/k, b.Dy()/k
+	dst := image.NewRGBA(image.Rect(0, 0, dw, dh))
+	// k is at most the long edge over 1600 (about 5 at the 50 MP cap), and each
+	// sum over n samples divided by n is back within the sample's own range, so
+	// none of the narrowing conversions below can overflow.
+	n := uint32(k * k) //nolint:gosec // see above
+
+	if ycc, ok := src.(*image.YCbCr); ok {
+		for dy := 0; dy < dh; dy++ {
+			for dx := 0; dx < dw; dx++ {
+				var ys, cbs, crs uint32
+				for y := b.Min.Y + dy*k; y < b.Min.Y+(dy+1)*k; y++ {
+					for x := b.Min.X + dx*k; x < b.Min.X+(dx+1)*k; x++ {
+						ys += uint32(ycc.Y[ycc.YOffset(x, y)])
+						ci := ycc.COffset(x, y)
+						cbs += uint32(ycc.Cb[ci])
+						crs += uint32(ycc.Cr[ci])
+					}
+				}
+				r, g, bl := color.YCbCrToRGB(uint8(ys/n), uint8(cbs/n), uint8(crs/n)) //nolint:gosec // averages of uint8 samples
+				dst.SetRGBA(dx, dy, color.RGBA{R: r, G: g, B: bl, A: 0xff})
+			}
+		}
+		return dst
+	}
+
+	for dy := 0; dy < dh; dy++ {
+		for dx := 0; dx < dw; dx++ {
+			var rs, gs, bs, as uint32
+			for y := b.Min.Y + dy*k; y < b.Min.Y+(dy+1)*k; y++ {
+				for x := b.Min.X + dx*k; x < b.Min.X+(dx+1)*k; x++ {
+					r, g, bl, a := src.At(x, y).RGBA()
+					rs, gs, bs, as = rs+r, gs+g, bs+bl, as+a
+				}
+			}
+			dst.SetRGBA(dx, dy, color.RGBA{R: uint8(rs / n >> 8), G: uint8(gs / n >> 8), B: uint8(bs / n >> 8), A: uint8(as / n >> 8)}) //nolint:gosec // averages of 16-bit samples, shifted to 8
+		}
+	}
+	return dst
 }
 
 // isHEIC sniffs for the ISO base media "ftyp" box HEIC/HEIF photos are

@@ -28,7 +28,9 @@ package http
 // one under its mutex, so "one slot" is restoreStage's bookkeeping, not a
 // filesystem path two requests could collide on. A restart drops the
 // in-memory half (the file is swept by RemoveStaleTemps at boot), which just
-// means the upload step runs again.
+// means the upload step runs again. An abandoned stage - inspected, never
+// confirmed, never replaced - is removed by its own timer when it expires
+// (#531), so up to 256 MB does not sit on disk until the next inspect.
 import (
 	"crypto/rand"
 	"encoding/hex"
@@ -50,7 +52,7 @@ import (
 
 // restoreStageTTL is how long an inspected upload stays valid for
 // confirmation: long enough to read the dialog and type a password, short
-// enough that an abandoned upload does not sit in memory for the process.
+// enough that an abandoned upload does not hold its disk for long.
 const restoreStageTTL = 10 * time.Minute
 
 // restoreStage is the one-slot stash described at the top of this file: one
@@ -62,10 +64,13 @@ type restoreStage struct {
 	token   string
 	parsed  backup.ParsedUpload
 	expires time.Time
+	// sweep removes the current stage's file at expiry; replaced with the stage.
+	sweep *time.Timer
+	ttl   time.Duration
 }
 
 func newRestoreStage() *restoreStage {
-	return &restoreStage{}
+	return &restoreStage{ttl: restoreStageTTL}
 }
 
 // stage installs parsed as the current stage under the mutex and, in the same
@@ -88,8 +93,25 @@ func (s *restoreStage) stage(parsed backup.ParsedUpload) (string, error) {
 	}
 	s.token = token
 	s.parsed = parsed
-	s.expires = time.Now().Add(restoreStageTTL)
+	s.expires = time.Now().Add(s.ttl)
+	if s.sweep != nil {
+		s.sweep.Stop()
+	}
+	s.sweep = time.AfterFunc(s.ttl, func() { s.expire(token) })
 	return token, nil
+}
+
+// expire is the sweep timer's callback: it removes token's stage and its file,
+// unless that stage was already taken or replaced, which the token check
+// settles under the mutex whatever order the timer and a request arrive in.
+func (s *restoreStage) expire(token string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.token != token {
+		return
+	}
+	_ = os.Remove(s.parsed.StagingPath)
+	s.token, s.parsed = "", backup.ParsedUpload{}
 }
 
 // take consumes the staged upload if token matches and it has not expired.
@@ -118,6 +140,7 @@ func (s *restoreStage) take(token string) (backup.ParsedUpload, bool) {
 	}
 	parsed := s.parsed
 	s.token, s.parsed = "", backup.ParsedUpload{}
+	s.sweep.Stop()
 	return parsed, true
 }
 
@@ -304,6 +327,11 @@ func writeRestoreParseError(w http.ResponseWriter, logger interface {
 	case errors.Is(err, backup.ErrFormatVersionOlder):
 		writeAPIError(w, http.StatusUnprocessableEntity, "restore_format_too_old",
 			"This backup was made by an older version of Uruni that this server can no longer read.")
+	case errors.Is(err, backup.ErrDocumentTooLarge):
+		// Its own sentinel and message (#531), the same code: to her it is the
+		// same answer, a file larger than any backup Uruni makes.
+		writeAPIError(w, http.StatusRequestEntityTooLarge, "restore_file_too_large",
+			"This backup's data file is larger than 64 MB, more than a Uruni backup ever holds.")
 	case errors.Is(err, backup.ErrTooManyEntries), errors.Is(err, backup.ErrUnzippedTooLarge), errors.Is(err, backup.ErrUploadTooLarge):
 		writeAPIError(w, http.StatusRequestEntityTooLarge, "restore_file_too_large",
 			"This file is larger than a Uruni backup ever should be.")

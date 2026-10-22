@@ -42,10 +42,18 @@ import (
 // counted from bytes actually copied, never an entry's declared size, which
 // is what a zip bomb lies about - and 5,000 entries.
 //
+// uruni.json has its own, lower cap (#531): it is read whole into memory and
+// then decoded, where the receipts beside it are streamed to disk, so the 1 GB
+// meant for photos is no bound for it. 64 MB is about 190,000 transactions
+// (some 335 bytes each, as marshalDocument writes them) - more than a century
+// of a busy fund. Export refuses to write a larger one, so Uruni never makes a
+// backup it would refuse to restore.
+//
 // var, not const, so restore_test.go can shrink them.
 var (
 	MaxUploadBytes   int64 = 256 << 20
 	MaxUnzippedBytes int64 = 1 << 30
+	MaxDocumentBytes int64 = 64 << 20
 	MaxZipEntries          = 5000
 )
 
@@ -98,6 +106,9 @@ var (
 	ErrTooManyEntries   = errors.New("backup: the zip holds more files than a backup ever should")
 	ErrUploadTooLarge   = errors.New("backup: the file is larger than a backup ever should be")
 	ErrUnzippedTooLarge = errors.New("backup: the zip's contents are larger, unzipped, than a backup ever should be")
+	// ErrDocumentTooLarge is uruni.json past MaxDocumentBytes, on the way in or
+	// the way out.
+	ErrDocumentTooLarge = errors.New("backup: uruni.json is larger than a backup's data ever should be")
 	// ErrBadReceiptImage is a receipt in the zip that fails the decode checks
 	// ADR-011 applies on upload. A missing file is not this: ParseUpload skips
 	// it silently (a missing image never blocks a restore).
@@ -177,7 +188,11 @@ func ParseUpload(path string) (ParsedUpload, error) {
 		if zf.Name != jsonFilename {
 			continue
 		}
-		data, n, err := readCappedEntry(zf, remaining)
+		limit, tooLarge := remaining, ErrUnzippedTooLarge
+		if MaxDocumentBytes < limit {
+			limit, tooLarge = MaxDocumentBytes, ErrDocumentTooLarge
+		}
+		data, n, err := readCappedEntry(zf, limit, tooLarge)
 		if err != nil {
 			return ParsedUpload{}, err
 		}
@@ -238,7 +253,7 @@ func ParseUpload(path string) (ParsedUpload, error) {
 		if zf.Name == jsonFilename {
 			continue
 		}
-		data, n, err := readCappedEntry(zf, remaining)
+		data, n, err := readCappedEntry(zf, remaining, ErrUnzippedTooLarge)
 		if err != nil {
 			return ParsedUpload{}, err
 		}
@@ -259,22 +274,22 @@ func ParseUpload(path string) (ParsedUpload, error) {
 	return ParsedUpload{Document: doc, StagingPath: path}, nil
 }
 
-// readCappedEntry reads one zip entry fully, refusing to read past
-// remaining+1 bytes whatever the header claims: the read, not the header, is
-// what a zip bomb has to lie through.
-func readCappedEntry(f *zip.File, remaining int64) ([]byte, int64, error) {
+// readCappedEntry reads one zip entry fully, refusing to read past limit+1
+// bytes whatever the header claims: the read, not the header, is what a zip
+// bomb has to lie through. Past limit it answers tooLarge.
+func readCappedEntry(f *zip.File, limit int64, tooLarge error) ([]byte, int64, error) {
 	rc, err := f.Open()
 	if err != nil {
 		return nil, 0, fmt.Errorf("%w: opening %s: %v", ErrMalformedBackup, f.Name, err) //nolint:errorlint
 	}
 	defer func() { _ = rc.Close() }()
 
-	data, err := io.ReadAll(io.LimitReader(rc, remaining+1))
+	data, err := io.ReadAll(io.LimitReader(rc, limit+1))
 	if err != nil {
 		return nil, 0, fmt.Errorf("%w: reading %s: %v", ErrMalformedBackup, f.Name, err) //nolint:errorlint
 	}
-	if int64(len(data)) > remaining {
-		return nil, 0, fmt.Errorf("%w: more than %d bytes unzipped", ErrUnzippedTooLarge, MaxUnzippedBytes)
+	if int64(len(data)) > limit {
+		return nil, 0, fmt.Errorf("%w: %s is more than %d bytes unzipped", tooLarge, f.Name, limit)
 	}
 	return data, int64(len(data)), nil
 }
