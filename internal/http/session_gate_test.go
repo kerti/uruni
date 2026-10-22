@@ -46,7 +46,6 @@ var gatedRoutes = []struct {
 	{http.MethodPatch, "/api/dues-tiers/1"},
 	{http.MethodDelete, "/api/dues-tiers/1"},
 	{http.MethodPost, "/api/dues-tiers/1/rates"},
-	{http.MethodGet, "/api/dues-tiers/1/rates"},
 	{http.MethodPatch, "/api/dues-rates/1"},
 	{http.MethodDelete, "/api/dues-rates/1"},
 	{http.MethodPost, "/api/transactions"},

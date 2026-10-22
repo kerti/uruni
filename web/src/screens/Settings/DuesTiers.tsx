@@ -10,23 +10,14 @@ import ErrorState from '@/components/states/ErrorState'
 import { copy } from '@/copy/id'
 import { parseDialogTarget } from '@/lib/dialogTarget'
 import { formatIDR } from '@/lib/money'
-import { createDuesTier, listDuesRates, listDuesTiers } from '@/lib/setup'
+import { createDuesTier, listDuesTiers } from '@/lib/setup'
 import { useApi } from '@/lib/useApi'
 import { useDialogParam } from '@/lib/useDialogParam'
 import { useResetWhen } from '@/lib/useResetWhen'
-import type { DuesRate, DuesTier } from '@/lib/setup'
+import type { DuesRate, DuesTier, DuesTierWithRates } from '@/lib/setup'
 import { currentPeriod } from '@/lib/dates'
 
 const text = copy.settings.tiers
-
-/** Every tier the fund has, each with its rate history. One shape for the
- * section: the card list reads the current price off it, and the dialog reads
- * the same rows rather than fetching them again. */
-interface TiersData {
-  tiers: DuesTier[]
-  /** tier id -> that tier's rates, oldest first (listDuesRates' order). */
-  rates: Map<number, DuesRate[]>
-}
 
 /**
  * The rate in force for `month` - the latest row at or before it, as the
@@ -55,32 +46,26 @@ function effectiveRate(rates: DuesRate[], month: string): DuesRate | null {
  * screen names the span and asks first. DELETE withdraws a rate filed against the
  * wrong month, so it can be added again at the right one.
  *
- * Rates load with the tiers rather than per card, so opening a tier's dialog
- * costs no further request and the card can show what the tier costs today.
+ * Rates arrive with the tiers in one request, so opening a tier's dialog costs
+ * no further request and the card can show what the tier costs today.
  */
 export default function DuesTiers() {
-  const [state, run] = useApi<TiersData>()
+  const [state, run] = useApi<DuesTierWithRates[]>()
   const navigate = useNavigate()
   const { value, open, close, clear } = useDialogParam()
 
-  async function load(): Promise<TiersData> {
-    const tiers = await listDuesTiers()
-    const rateLists = await Promise.all(tiers.map((tier) => listDuesRates(tier.id)))
-    return { tiers, rates: new Map(tiers.map((tier, index) => [tier.id, rateLists[index]])) }
-  }
-
   useEffect(() => {
-    void run(load)
+    void run(listDuesTiers)
   }, [run])
 
   function reload() {
-    void run(load)
+    void run(listDuesTiers)
   }
 
   // After a write whose response was lost, re-read in place.
-  const refresh = () => run(load, { silent: true })
+  const refresh = () => run(listDuesTiers, { silent: true })
 
-  const tiers = state.data?.tiers ?? []
+  const tiers = state.data ?? []
   const target = parseDialogTarget('tier', value)
 
   // This section owns one dialog - `tier:new` (editing lives on the golongan's
@@ -112,7 +97,7 @@ export default function DuesTiers() {
       ) : (
         <ul className="flex flex-col gap-2">
           {tiers.map((tier) => {
-            const current = effectiveRate(state.data?.rates.get(tier.id) ?? [], thisMonth)
+            const current = effectiveRate(tier.rates, thisMonth)
             return (
               <li key={tier.id}>
                 <button

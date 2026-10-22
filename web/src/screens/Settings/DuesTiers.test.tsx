@@ -24,6 +24,10 @@ function rate(id: number, tierId: number, amount: number, effectiveFrom: string)
   return { id, tier_id: tierId, amount, effective_from: effectiveFrom, created_at: 1 }
 }
 
+function withRates(tiers: ReturnType<typeof tier>[], rates: ReturnType<typeof rate>[]) {
+  return tiers.map((t) => ({ ...t, rates: rates.filter((r) => r.tier_id === t.id) }))
+}
+
 function stubTiers(tiers: ReturnType<typeof tier>[], rates: ReturnType<typeof rate>[], writeResponse?: () => Response) {
   const calls: { method: string; url: string; body: Record<string, unknown> | undefined }[] = []
   const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
@@ -33,9 +37,11 @@ function stubTiers(tiers: ReturnType<typeof tier>[], rates: ReturnType<typeof ra
       calls.push({ method, url, body: init?.body ? JSON.parse(String(init.body)) : undefined })
       return Promise.resolve(writeResponse ? writeResponse() : jsonResponse(rate(9, 1, 50_000, '2026-09')))
     }
-    if (url.includes('/rates')) return method === 'GET' ? Promise.resolve(jsonResponse(rates)) : write()
     if (url.includes('/api/dues-rates')) return write()
-    if (url.includes('/api/dues-tiers')) return method === 'GET' ? Promise.resolve(jsonResponse(tiers)) : write()
+    // GET /api/dues-tiers carries each tier's rates (#672); nothing reads a
+    // tier's rates on their own any more.
+    if (url.includes('/api/dues-tiers') && method === 'GET') return Promise.resolve(jsonResponse(withRates(tiers, rates)))
+    if (url.includes('/api/dues-tiers')) return write()
     return Promise.reject(new Error(`unstubbed fetch: ${url}`))
   })
   return { fetchMock, calls }
@@ -98,6 +104,23 @@ describe('Settings dues tiers', () => {
     // same "latest row at or before this month" the server reads.
     await waitFor(() => expect(screen.getByText(/50\.000/)).toBeInTheDocument())
     expect(screen.queryByText(/60\.000/)).not.toBeInTheDocument()
+  })
+
+  // #672: one request for every tier and its rates, never one per tier after
+  // the list.
+  it('prices every tier from one request', async () => {
+    const thisYear = new Date().getFullYear()
+    const { fetchMock } = stubTiers(
+      [tier(1, 'Pelaksana'), tier(2, 'Madya'), tier(3, 'Utama')],
+      [rate(1, 1, 50_000, `${thisYear - 1}-01`), rate(2, 2, 75_000, `${thisYear - 1}-01`), rate(3, 3, 120_000, `${thisYear - 1}-01`)],
+    )
+    vi.stubGlobal('fetch', fetchMock)
+    renderAt()
+
+    await waitFor(() => expect(screen.getByText(/120\.000/)).toBeInTheDocument())
+    expect(screen.getByText(/50\.000/)).toBeInTheDocument()
+    expect(screen.getByText(/75\.000/)).toBeInTheDocument()
+    expect(fetchMock.mock.calls.map(([input]) => String(input))).toEqual(['/api/dues-tiers'])
   })
 
   it('renders a tier with no rates plainly, not as an error', async () => {

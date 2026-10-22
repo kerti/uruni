@@ -197,7 +197,7 @@ WHERE tier_id = ?
 ORDER BY effective_from
 `
 
-// The Golongan screen's list: the rates in force, oldest month first.
+// One tier's rates in force, oldest month first.
 func (q *Queries) ListDuesRatesByTier(ctx context.Context, tierID int64) ([]DuesRateStanding, error) {
 	rows, err := q.db.QueryContext(ctx, listDuesRatesByTier, tierID)
 	if err != nil {
@@ -284,8 +284,9 @@ WHERE dues_tier.fund_id = ?
 ORDER BY dr.tier_id, dr.effective_from
 `
 
-// The rates that price a roster (DuesStatusForPeriod): every tier's rates in
-// force, ordered tier then month for the Go fold. One query however many members.
+// The rates that price a roster (DuesStatusForPeriod), and GET /api/dues-tiers's
+// rate histories: every tier's rates in force, ordered tier then month for the
+// Go fold. One query however many members or tiers.
 func (q *Queries) ListDuesRatesForPricing(ctx context.Context, fundID int64) ([]DuesRateStanding, error) {
 	rows, err := q.db.QueryContext(ctx, listDuesRatesForPricing, fundID)
 	if err != nil {

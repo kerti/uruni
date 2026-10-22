@@ -21,7 +21,7 @@ type duesRateRequest struct {
 
 // duesRateResponse is the wire shape of a dues_rate row. tier_id is kept
 // (unlike fund_id elsewhere) as the one parent reference a client can act on:
-// GET .../rates takes it as a path segment, so echoing it confirms the
+// POST .../rates takes it as a path segment, so echoing it confirms the
 // request.
 type duesRateResponse struct {
 	ID            int64  `json:"id"`
@@ -54,7 +54,7 @@ func standingToDuesRateResponse(rate store.DuesRateStanding) duesRateResponse {
 	}
 }
 
-// resolveDuesTier reads the {id} path segment both dues-rate routes share and
+// resolveDuesTier reads the {id} path segment the tier routes share and
 // looks the tier up within the fund, or answers the request and reports
 // false. The scope lives in the query (GetDuesTierForFund, #188), so another
 // fund's tier is a 404. A non-numeric id is a shape problem only this layer
@@ -191,27 +191,4 @@ func (a *api) deleteDuesRate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.WriteHeader(http.StatusNoContent)
-}
-
-// listDuesRates is GET /api/dues-tiers/{id}/rates: the rates in force for one
-// tier, oldest effective_from first: one per month that has a rate, a deleted
-// month absent. The caller derives "the rate in force on date X" by the latest
-// row at or before it.
-func (a *api) listDuesRates(w http.ResponseWriter, r *http.Request) {
-	tier, ok := a.resolveDuesTier(w, r)
-	if !ok {
-		return
-	}
-
-	rates, err := a.queries.ListDuesRatesByTier(r.Context(), tier.ID)
-	if err != nil {
-		mapSQLiteError(w, a.log(r), err)
-		return
-	}
-
-	resp := make([]duesRateResponse, 0, len(rates))
-	for _, rate := range rates {
-		resp = append(resp, standingToDuesRateResponse(rate))
-	}
-	writeJSON(w, http.StatusOK, resp)
 }

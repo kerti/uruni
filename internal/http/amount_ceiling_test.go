@@ -3,7 +3,6 @@ package http
 import (
 	"bytes"
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -86,11 +85,7 @@ func TestDuesRatesRefuseAnAmountAboveTheCeiling(t *testing.T) {
 	}
 
 	// The refused PATCH left the first rate's figure alone.
-	list := getDuesRates(t, r, fmt.Sprintf("%d", tier.ID))
-	var rates []duesRateResponse
-	if err := json.NewDecoder(list.Body).Decode(&rates); err != nil {
-		t.Fatalf("decoding list: %v (body: %s)", err, list.Body.String())
-	}
+	rates := listedRates(t, r, tier.ID)
 	if len(rates) != 2 {
 		t.Fatalf("rates = %d, want 2 (the refused POST wrote nothing)", len(rates))
 	}

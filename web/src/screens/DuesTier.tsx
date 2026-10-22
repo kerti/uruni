@@ -12,7 +12,7 @@ import ErrorState from '@/components/states/ErrorState'
 import { copy } from '@/copy/id'
 import { formatPeriod, periodBounds, currentPeriod } from '@/lib/dates'
 import { formatIDR } from '@/lib/money'
-import { createDuesRate, deleteDuesRate, deleteDuesTier, listDuesRates, listDuesTiers, renameDuesTier, updateDuesRate } from '@/lib/setup'
+import { createDuesRate, deleteDuesRate, deleteDuesTier, listDuesTiers, renameDuesTier, updateDuesRate } from '@/lib/setup'
 import { rateSpan } from '@/lib/rateSpan'
 import { useApi } from '@/lib/useApi'
 import { useResetWhen } from '@/lib/useResetWhen'
@@ -59,8 +59,8 @@ export default function DuesTierScreen({ tierId, onBack }: { tierId: number; onB
   const [state, run] = useApi<TierData>()
 
   const load = useCallback(async (): Promise<TierData> => {
-    const [tiers, rates] = await Promise.all([listDuesTiers(), listDuesRates(tierId)])
-    return { tier: tiers.find((candidate) => candidate.id === tierId) ?? null, rates }
+    const tier = (await listDuesTiers()).find((candidate) => candidate.id === tierId) ?? null
+    return { tier, rates: tier?.rates ?? [] }
   }, [tierId])
 
   useEffect(() => {

@@ -128,6 +128,13 @@ export interface DuesRate {
   created_at: number
 }
 
+/** A row of GET /api/dues-tiers: the tier with its rate history, oldest month
+ * first. An empty `rates` is a legal state: a tier whose price is not decided
+ * yet. */
+export interface DuesTierWithRates extends DuesTier {
+  rates: DuesRate[]
+}
+
 /** A member row, as every route in this module returns it.
  *
  * tier_name and current_rate are period-independent: dues_tier.name for
@@ -329,9 +336,10 @@ export function deleteMember(id: number): Promise<void> {
   return apiFetch<void>(`/api/members/${id}`, { method: 'DELETE' })
 }
 
-/** GET /api/dues-tiers - the fund's tiers, for choosing a member's. */
-export function listDuesTiers(): Promise<DuesTier[]> {
-  return apiFetch<DuesTier[]>('/api/dues-tiers')
+/** GET /api/dues-tiers - the fund's tiers, each with its rate history, in
+ * one request however many tiers there are. */
+export function listDuesTiers(): Promise<DuesTierWithRates[]> {
+  return apiFetch<DuesTierWithRates[]>('/api/dues-tiers')
 }
 
 /** PATCH /api/dues-tiers/{id} - renames a tier. The name is a label; a
@@ -351,12 +359,6 @@ export function renameDuesTier(id: number, name: string): Promise<DuesTier> {
  * referenced_by_other_records and nothing is deleted. */
 export function deleteDuesTier(id: number): Promise<void> {
   return apiFetch<void>(`/api/dues-tiers/${id}`, { method: 'DELETE' })
-}
-
-/** GET /api/dues-tiers/{id}/rates - a tier's rate history, oldest first. An
- * empty list is a legal state: a tier whose price is not decided yet. */
-export function listDuesRates(tierId: number): Promise<DuesRate[]> {
-  return apiFetch<DuesRate[]>(`/api/dues-tiers/${tierId}/rates`)
 }
 
 /** PATCH /api/dues-rates/{id} - corrects a mistyped amount on a rate just

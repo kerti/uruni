@@ -25,6 +25,14 @@ func toDuesTierResponse(t store.DuesTier) duesTierResponse {
 	return duesTierResponse{ID: t.ID, Name: t.Name, CreatedAt: t.CreatedAt}
 }
 
+// duesTierListItem is one row of GET /api/dues-tiers: the tier and its rates
+// in force, oldest month first. rates is [] for a tier whose price is not
+// decided yet, never null.
+type duesTierListItem struct {
+	duesTierResponse
+	Rates []duesRateResponse `json:"rates"`
+}
+
 // createDuesTier is POST /api/dues-tiers: a direct-CRUD write (ADR-027). A
 // duplicate name for this fund hits UNIQUE (fund_id, name) and returns 409
 // through mapSQLiteError; not re-checked here.
@@ -78,7 +86,11 @@ func (a *api) updateDuesTier(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, toDuesTierResponse(updated))
 }
 
-// listDuesTiers is GET /api/dues-tiers: every tier for the one fund.
+// listDuesTiers is GET /api/dues-tiers: every tier for the one fund, each
+// with its rate history (#672). Two queries however many tiers, so Pengaturan
+// reads its Golongan cards in one round trip rather than one per tier after the
+// list. A client derives "the rate in force on date X" by the latest row at or
+// before it.
 func (a *api) listDuesTiers(w http.ResponseWriter, r *http.Request) {
 	fund, ok := a.resolveFund(w, r)
 	if !ok {
@@ -90,10 +102,23 @@ func (a *api) listDuesTiers(w http.ResponseWriter, r *http.Request) {
 		mapSQLiteError(w, a.log(r), err)
 		return
 	}
+	rates, err := a.queries.ListDuesRatesForPricing(r.Context(), fund.ID)
+	if err != nil {
+		mapSQLiteError(w, a.log(r), err)
+		return
+	}
 
-	resp := make([]duesTierResponse, 0, len(tiers))
+	byTier := make(map[int64][]duesRateResponse, len(tiers))
+	for _, rate := range rates {
+		byTier[rate.TierID] = append(byTier[rate.TierID], standingToDuesRateResponse(rate))
+	}
+	resp := make([]duesTierListItem, 0, len(tiers))
 	for _, t := range tiers {
-		resp = append(resp, toDuesTierResponse(t))
+		tierRates := byTier[t.ID]
+		if tierRates == nil {
+			tierRates = []duesRateResponse{}
+		}
+		resp = append(resp, duesTierListItem{duesTierResponse: toDuesTierResponse(t), Rates: tierRates})
 	}
 	writeJSON(w, http.StatusOK, resp)
 }
