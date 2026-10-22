@@ -10,7 +10,6 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { copy } from '@/copy/id'
 import { ApiError } from '@/lib/api'
-import { getBalances } from '@/lib/balances'
 import { formatPeriod } from '@/lib/dates'
 import { parseDialogTarget } from '@/lib/dialogTarget'
 import { listPurposes } from '@/lib/purposes'
@@ -21,7 +20,6 @@ import { useApi } from '@/lib/useApi'
 import { useDialogParam } from '@/lib/useDialogParam'
 import CorrectPurposeDialog from '@/screens/History/CorrectPurposeDialog'
 import TransactionFilterDialog from '@/screens/History/TransactionFilterDialog'
-import type { Balances } from '@/lib/balances'
 import type { Purpose } from '@/lib/purposes'
 import type { Member } from '@/lib/setup'
 import type { TransactionsPage } from '@/lib/transactions'
@@ -32,14 +30,24 @@ const text = copy.history.transactions
  * that the list follows her without a visible pause. */
 const SEARCH_DEBOUNCE_MS = 300
 
-interface FirstPage {
-  balances: Balances
-  page: TransactionsPage
+/** What the list is read against, fetched once per visit: a search or a
+ * filter change asks for the page alone. */
+interface Lookups {
+  /** Every purpose, a closed envelope's too: the rows' pos names, the filter
+   * dialog and its chip. */
+  purposes: Purpose[]
+  /** Every member, an inactive one too, for the filter dialog. */
+  members: Member[]
   /** For the correction dialog's picker. `selectable` excludes a closed
    * envelope's purpose, which this picker must not offer: correcting INTO a
-   * closed amplop is one of ADR-033's two named refusals. Fetched with the
-   * page so tapping a pos shows a filled picker instead of a spinner. */
-  purposes: Purpose[]
+   * closed amplop is one of ADR-033's two named refusals. Loaded with the
+   * first page so tapping a pos shows a filled picker instead of a spinner. */
+  selectable: Purpose[]
+}
+
+interface FirstPage {
+  page: TransactionsPage
+  lookups: Lookups
 }
 
 /** The list request for the URL's search and filters; `cursor` asks for the page after it. */
@@ -115,29 +123,33 @@ export default function Transactions({ refetchKey }: { refetchKey?: unknown }) {
   const [moreError, setMoreError] = useState<ApiError | null>(null)
   const generation = useRef(0)
 
-  // What the filter dialog offers and the chips are named from: every purpose
-  // (a closed envelope's too) and every member (an inactive one too). Fetched
-  // once, apart from the page, so changing a filter does not walk the whole
-  // roster again. A failure leaves the lists empty - the page's fetch reports
-  // a lost connection.
-  const [options, setOptions] = useState<{ purposes: Purpose[]; members: Member[] }>({ purposes: [], members: [] })
-  useEffect(() => {
-    let live = true
-    Promise.all([listPurposes(), listAllMembers()])
-      .then(([purposes, members]) => {
-        if (live) setOptions({ purposes, members })
+  // The lookups, requested once and shared by every first-page load after
+  // it, so a search costs one request rather than four. A failed request is
+  // forgotten, so the retry asks again. `options` is the same data for the
+  // filter dialog, which stays open across loads and must not blank while the
+  // page refetches.
+  const lookups = useRef<Promise<Lookups> | null>(null)
+  const [options, setOptions] = useState<Lookups>({ purposes: [], members: [], selectable: [] })
+  const loadLookups = useCallback(() => {
+    if (lookups.current === null) {
+      const pending = Promise.all([listPurposes(), listAllMembers(), listPurposes(true)]).then(([purposes, members, selectable]) => {
+        const loaded = { purposes, members, selectable }
+        setOptions(loaded)
+        return loaded
       })
-      .catch(() => {})
-    return () => {
-      live = false
+      pending.catch(() => {
+        if (lookups.current === pending) lookups.current = null
+      })
+      lookups.current = pending
     }
+    return lookups.current
   }, [])
 
   const loadFirstPage = useCallback(async (): Promise<FirstPage> => {
     const input = pageInput(q, { purposeId, memberId, month, direction })
-    const [balances, page, purposes] = await Promise.all([getBalances(), listTransactions(input), listPurposes(true)])
-    return { balances, page, purposes }
-  }, [q, purposeId, memberId, month, direction])
+    const [page, loaded] = await Promise.all([listTransactions(input), loadLookups()])
+    return { page, lookups: loaded }
+  }, [q, purposeId, memberId, month, direction, loadLookups])
 
   useEffect(() => {
     generation.current += 1
@@ -238,8 +250,8 @@ export default function Transactions({ refetchKey }: { refetchKey?: unknown }) {
       return state.error ? <ErrorState error={state.error} onRetry={() => void run(loadFirstPage)} /> : null
     }
 
-    const { balances, page } = state.data
-    const purposeNames = new Map(balances.purposes.map((purpose) => [purpose.id, purpose.name]))
+    const { page, lookups: loaded } = state.data
+    const purposeNames = new Map(loaded.purposes.map((purpose) => [purpose.id, purpose.name]))
     const transactions = more ? [...page.transactions, ...more.transactions] : page.transactions
     const nextCursor = more ? more.nextCursor : page.nextCursor
 
@@ -260,12 +272,12 @@ export default function Transactions({ refetchKey }: { refetchKey?: unknown }) {
           ? text.filterEmpty
           : copy.home.recentActivityEmpty
 
-    const purposeName = (id: number) => options.purposes.find((p) => p.id === id)?.name ?? purposeNames.get(id) ?? ''
+    const purposeName = (id: number) => purposeNames.get(id) ?? ''
     const chips: { label: string; clear: Partial<TransactionFilters> }[] = []
     if (month !== null) chips.push({ label: text.monthFilterLabel(formatPeriod(month)), clear: { month: null } })
     if (purposeId !== null) chips.push({ label: text.purposeFilterLabel(purposeName(purposeId)), clear: { purposeId: null } })
     if (memberId !== null) {
-      const name = options.members.find((m) => m.id === memberId)?.name ?? ''
+      const name = loaded.members.find((m) => m.id === memberId)?.name ?? ''
       chips.push({ label: text.memberFilterLabel(name), clear: { memberId: null } })
     }
     if (direction !== null) {
@@ -325,7 +337,7 @@ export default function Transactions({ refetchKey }: { refetchKey?: unknown }) {
         />
         <CorrectPurposeDialog
           transaction={correcting}
-          purposes={state.data.purposes}
+          purposes={loaded.selectable}
           purposeNames={purposeNames}
           open={correcting !== null}
           onClose={closeDialog}

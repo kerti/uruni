@@ -1,5 +1,6 @@
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { useState } from 'react'
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
@@ -7,6 +8,7 @@ import FundName from '@/screens/Settings/FundName'
 import { chooseZoneOption } from '@/test/timeZone'
 import { copy } from '@/copy/id'
 import { getFundTimeZone, resetFundTimeZone } from '@/lib/dates'
+import type { Fund } from '@/lib/setup'
 
 const text = copy.settings.fund
 const zones = copy.timeZone
@@ -20,7 +22,7 @@ function jsonResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } })
 }
 
-const fund = {
+const fund: Fund = {
   id: 1,
   name: 'Kas Ruang 3A',
   currency: 'IDR',
@@ -32,14 +34,13 @@ const fund = {
 
 function stubFund() {
   const calls: { method: string; body: unknown }[] = []
-  // The server's fund: a PATCH changes it, and the GET that follows (the card
-  // refreshes after a save) reads it back, as the real one does.
+  // The server's fund: a PATCH changes it and answers with the result, as the
+  // real one does. No GET: the section reads the fund it is handed.
   let current = fund
   const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
     const url = typeof input === 'string' ? input : input.toString()
     const method = init?.method ?? 'GET'
-    if (url.includes('/api/fund')) {
-      if (method === 'GET') return Promise.resolve(jsonResponse(current))
+    if (url.includes('/api/fund') && method === 'PATCH') {
       const body = init?.body ? (JSON.parse(String(init.body)) as { name?: string; time_zone?: string }) : undefined
       calls.push({ method, body })
       current = { ...current, name: body?.name ?? current.name, time_zone: body?.time_zone ?? current.time_zone }
@@ -57,7 +58,23 @@ function LocationProbe() {
   return <output data-testid="location-search">{location.search}</output>
 }
 
-function renderAt(entry = '/settings', onRenamed: () => void = vi.fn()) {
+/** Holds the fund the way App.tsx does: the section reads it from here, and a
+ * saved fund handed back through `onChanged` is what the section shows next. */
+function AppFund({ onChanged }: { onChanged: (fund: Fund) => void }) {
+  const [current, setCurrent] = useState(fund)
+  return (
+    <FundName
+      fund={current}
+      onChanged={(updated) => {
+        setCurrent(updated)
+        onChanged(updated)
+      }}
+      refresh={() => Promise.resolve()}
+    />
+  )
+}
+
+function renderAt(entry = '/settings', onRenamed: (fund: Fund) => void = vi.fn()) {
   return render(
     <MemoryRouter initialEntries={[entry]}>
       <Routes>
@@ -65,7 +82,7 @@ function renderAt(entry = '/settings', onRenamed: () => void = vi.fn()) {
           path="/settings"
           element={
             <>
-              <FundName onChanged={onRenamed} />
+              <AppFund onChanged={onRenamed} />
               <LocationProbe />
             </>
           }
@@ -127,6 +144,20 @@ describe('Settings fund (Kas ini)', () => {
     await waitFor(() => expect(onRenamed).toHaveBeenCalledWith(expect.objectContaining({ name: 'Kas Ruang 3B' })))
     // The dialog closing IS the confirmation now - no inline "saved" line.
     await waitFor(() => expect(currentSearch()).toBe(''))
+    // The card shows the fund handed back, with no GET to read it again.
+    expect(await screen.findByRole('button', { name: text.editAria('Kas Ruang 3B') })).toBeInTheDocument()
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+
+  // The app already holds the fund; fetching it here again was Pengaturan's
+  // duplicate GET /api/fund.
+  it('reads the fund it is handed, with no request of its own', async () => {
+    const { fetchMock } = stubFund()
+    vi.stubGlobal('fetch', fetchMock)
+    renderAt()
+
+    expect(screen.getByRole('button', { name: text.editAria('Kas Ruang 3A') })).toBeInTheDocument()
+    expect(fetchMock).not.toHaveBeenCalled()
   })
 
   it('will not submit a name that has not changed, or an empty one', async () => {

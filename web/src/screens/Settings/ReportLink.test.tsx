@@ -1,11 +1,13 @@
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { useState } from 'react'
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import ReportLink from '@/screens/Settings/ReportLink'
 import { copy } from '@/copy/id'
 import { saveBlob } from '@/lib/api'
+import type { Fund } from '@/lib/setup'
 
 // jsdom cannot save a file; what matters is what the card hands over.
 vi.mock('@/lib/api', async (importOriginal) => ({ ...(await importOriginal<typeof import('@/lib/api')>()), saveBlob: vi.fn() }))
@@ -23,7 +25,15 @@ function jsonResponse(body: unknown, status = 200) {
 
 const OLD_URL = 'https://kas.example.org/report/oldoldoldoldoldoldoldoldoldoldol'
 const NEW_URL = 'https://kas.example.org/report/newnewnewnewnewnewnewnewnewnewnew'
-const fund = { id: 1, name: 'Kas RT 05', currency: 'IDR', report_slug: 'old', report_url: OLD_URL, created_at: 1 }
+const fund: Fund = {
+  id: 1,
+  name: 'Kas RT 05',
+  currency: 'IDR',
+  time_zone: 'Asia/Jakarta',
+  report_slug: 'old',
+  report_url: OLD_URL,
+  created_at: 1,
+}
 
 const PDF_PATH = '/report/oldoldoldoldoldoldoldoldoldoldol/pdf'
 const PDF_NAME = 'laporan-kas-2026-10.pdf'
@@ -41,7 +51,6 @@ function stubFund({ pdf = 'ok' }: { pdf?: 'ok' | 'down' } = {}) {
   const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
     const url = typeof input === 'string' ? input : input.toString()
     const method = init?.method ?? 'GET'
-    if (url === '/api/fund' && method === 'GET') return Promise.resolve(jsonResponse(fund))
     if (url === PDF_PATH && method === 'GET') {
       pdfGets.push(url)
       return pdf === 'ok' ? Promise.resolve(pdfResponse()) : Promise.reject(new TypeError('Failed to fetch'))
@@ -53,7 +62,7 @@ function stubFund({ pdf = 'ok' }: { pdf?: 'ok' | 'down' } = {}) {
     return Promise.reject(new Error(`unstubbed fetch: ${method} ${url}`))
   })
   vi.stubGlobal('fetch', fetchMock)
-  return { posts, pdfGets }
+  return { posts, pdfGets, fetchMock }
 }
 
 function LocationProbe() {
@@ -61,7 +70,14 @@ function LocationProbe() {
   return <output data-testid="location-search">{location.search}</output>
 }
 
-function renderCard(entry = '/settings') {
+/** Holds the fund the way App.tsx does, so a new link handed back through
+ * `onChanged` is what the card shows next. */
+function AppFund({ initial }: { initial: Fund }) {
+  const [current, setCurrent] = useState(initial)
+  return <ReportLink fund={current} onChanged={setCurrent} refresh={() => Promise.resolve()} />
+}
+
+function renderCard(entry = '/settings', initial: Fund = fund) {
   return render(
     <MemoryRouter initialEntries={[entry]}>
       <Routes>
@@ -69,7 +85,7 @@ function renderCard(entry = '/settings') {
           path="/settings"
           element={
             <>
-              <ReportLink />
+              <AppFund initial={initial} />
               <LocationProbe />
             </>
           }
@@ -146,11 +162,19 @@ describe('ReportLink', () => {
     expect(saveBlob).not.toHaveBeenCalled()
   })
 
-  it('completes a bare path against the page origin', async () => {
-    const fetchMock = vi.fn(() => Promise.resolve(jsonResponse({ ...fund, report_url: '/report/abc' })))
-    vi.stubGlobal('fetch', fetchMock)
+  it('reads the link from the fund it is handed, with no request of its own', async () => {
+    const { fetchMock } = stubFund()
     stubNavigator({})
     renderCard()
+
+    expect(screen.getByText(OLD_URL)).toBeInTheDocument()
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('completes a bare path against the page origin', async () => {
+    stubFund()
+    stubNavigator({})
+    renderCard('/settings', { ...fund, report_url: '/report/abc' })
 
     expect(await screen.findByText(`${window.location.origin}/report/abc`)).toBeInTheDocument()
   })

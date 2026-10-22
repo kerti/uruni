@@ -4,12 +4,11 @@ import { Check, Copy, Download, ExternalLink, Share2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import ErrorState from '@/components/states/ErrorState'
-import Loading from '@/components/states/Loading'
 import { copy } from '@/copy/id'
 import { parseDialogTarget } from '@/lib/dialogTarget'
 import { saveBlob } from '@/lib/api'
 import type { ApiError } from '@/lib/api'
-import { fetchReportPdf, getFund, replaceReportSlug } from '@/lib/setup'
+import { fetchReportPdf, replaceReportSlug } from '@/lib/setup'
 import { useApi } from '@/lib/useApi'
 import { useDialogParam } from '@/lib/useDialogParam'
 import type { Fund } from '@/lib/setup'
@@ -41,16 +40,20 @@ function absoluteUrl(reportUrl: string): string {
  *
  * Bagikan is offered only where `navigator.share` exists (most phones, few
  * desktops); where it does not, the button is absent rather than disabled.
+ *
+ * The fund is App.tsx's, passed down as FundName's is; a new link goes back
+ * through `onChanged`, and `refresh` re-reads it after an unknown outcome.
  */
-export default function ReportLink() {
-  const [loadState, loadRun] = useApi<Fund>()
+export default function ReportLink({
+  fund,
+  onChanged,
+  refresh,
+}: {
+  fund: Fund
+  onChanged: (fund: Fund) => void
+  refresh: () => Promise<void>
+}) {
   const { value, open, close, clear } = useDialogParam()
-
-  useEffect(() => {
-    void loadRun(getFund)
-  }, [loadRun])
-
-  const fund = loadState.data ?? null
 
   // 'report' is this section's prefix (dialogTarget.ts); `new` is its only
   // value. Anything else carrying the prefix is cleared once, and a sibling's
@@ -71,24 +74,18 @@ export default function ReportLink() {
         <p className="text-sm text-muted-foreground">{text.body}</p>
       </div>
 
-      {loadState.status === 'idle' || loadState.status === 'loading' ? (
-        <Loading />
-      ) : loadState.status === 'error' || fund === null ? (
-        loadState.error && <ErrorState error={loadState.error} onRetry={() => void loadRun(getFund)} />
-      ) : (
-        <LinkActions url={absoluteUrl(fund.report_url)} reportUrl={fund.report_url} onRenew={() => open('report:new')} />
-      )}
+      <LinkActions url={absoluteUrl(fund.report_url)} reportUrl={fund.report_url} onRenew={() => open('report:new')} />
 
       <RenewDialog
-        open={confirming && fund !== null}
+        open={confirming}
         onClose={close}
         onRenewed={(updated) => {
-          // Straight into the card's state: no second fetch, and the old link
+          // Straight into the app's fund: no second fetch, and the old link
           // is never on screen once the new one exists.
-          void loadRun(() => Promise.resolve(updated), { silent: true })
+          onChanged(updated)
           close()
         }}
-        refresh={() => loadRun(getFund, { silent: true })}
+        refresh={refresh}
       />
     </section>
   )

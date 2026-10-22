@@ -18,12 +18,6 @@ function jsonResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } })
 }
 
-const balances = {
-  fund_total: 0,
-  accounts: [{ id: 1, kind: 'cash', name: 'Tunai', balance: 0 }],
-  purposes: [{ id: 11, kind: 'general', name: 'Kas Utama', balance: 0 }],
-}
-
 function row(id: number, note: string) {
   return {
     id,
@@ -60,19 +54,19 @@ const members = [
   { id: 22, fund_id: 1, name: 'Sari', tier_id: null, joined_on: '2026-01-01', inactive_on: '2026-06-01', created_at: 1 },
 ]
 
-/** Stubs fetch: balances and purposes always answer, GET /api/transactions
+/** Stubs fetch: purposes and members always answer, GET /api/transactions
  * answers whatever pageFor returns for the request's URL (throwing from
  * pageFor simulates fetch failing). Returns every transactions URL requested,
- * in order, so a test can assert on what reached the server. `posts` collects
- * any correction POST. */
-function stubApi(pageFor: (url: URL) => Page) {
+ * in order, so a test can assert on what reached the server; `everything`
+ * holds every request, path and query. Correction POSTs go to `posted`. */
+function stubApi(pageFor: (url: URL) => Page, everything: string[] = []) {
   const requests: URL[] = []
   vi.stubGlobal(
     'fetch',
     vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = new URL(String(input), 'http://localhost')
       const method = (init?.method ?? 'GET').toUpperCase()
-      if (url.pathname === '/api/balances') return jsonResponse(balances)
+      everything.push(`${method} ${url.pathname}${url.search}`)
       if (url.pathname === '/api/purposes') return jsonResponse(purposes)
       if (url.pathname === '/api/members') return jsonResponse({ members, next_cursor: null })
       if (method === 'POST' && url.pathname.endsWith('/purpose-correction')) {
@@ -159,6 +153,63 @@ describe('Transactions tab', () => {
     expect(await screen.findByText('Galon Aqua')).toBeInTheDocument()
     // Debounced: no request for "g", "ga", ... - only the finished word.
     expect(requests.filter((url) => url.searchParams.has('q')).map((url) => url.searchParams.get('q'))).toEqual(['galon'])
+  })
+
+  // Pos names, the filter options and the correction picker do not change
+  // with the search, so a search asks for the page alone.
+  it('fetches its lookups once, then only the page on a search', async () => {
+    const everything: string[] = []
+    stubApi(
+      (url) =>
+        url.searchParams.get('q') === 'galon'
+          ? { transactions: [row(4, 'Galon Aqua')], next_cursor: null }
+          : { transactions: [row(5, 'Beli sapu')], next_cursor: null },
+      everything,
+    )
+    const user = userEvent.setup()
+    renderAt('/history/transactions')
+
+    expect(await screen.findByText('Beli sapu')).toBeInTheDocument()
+    await user.type(screen.getByLabelText(text.searchLabel), 'galon')
+    expect(await screen.findByText('Galon Aqua')).toBeInTheDocument()
+    // The row's pos is named from the purpose list, not from balances.
+    expect(screen.getAllByText('Kas Utama').length).toBeGreaterThan(0)
+
+    expect(everything.toSorted()).toEqual(
+      [
+        'GET /api/members',
+        'GET /api/purposes',
+        'GET /api/purposes?selectable=true',
+        'GET /api/transactions',
+        'GET /api/transactions?q=galon',
+      ].toSorted(),
+    )
+  })
+
+  // The lookups are kept once loaded, but a failed load is not: Coba lagi
+  // asks for them again rather than replaying the failure.
+  it('asks for the lookups again on retry after they failed', async () => {
+    let purposesDown = true
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = new URL(String(input), 'http://localhost')
+        if (url.pathname === '/api/purposes') {
+          if (purposesDown) throw new TypeError('Failed to fetch')
+          return jsonResponse(purposes)
+        }
+        if (url.pathname === '/api/members') return jsonResponse({ members, next_cursor: null })
+        if (url.pathname === '/api/transactions') return jsonResponse({ transactions: [row(6, 'Galon')], next_cursor: null })
+        return jsonResponse({ error: { code: 'not_found', message: 'x' } }, 404)
+      }),
+    )
+    const user = userEvent.setup()
+    renderAt('/history/transactions')
+
+    const retry = await screen.findByRole('button', { name: copy.common.retry })
+    purposesDown = false
+    await user.click(retry)
+    expect(await screen.findByText('Galon')).toBeInTheDocument()
   })
 
   it('says nothing matched when a search comes back empty', async () => {
@@ -384,7 +435,6 @@ describe('Transactions tab: reversing a row (ADR-042)', () => {
       'fetch',
       vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
         const url = new URL(String(input), 'http://localhost')
-        if (url.pathname === '/api/balances') return jsonResponse(balances)
         if (url.pathname === '/api/purposes') return jsonResponse(purposes)
         if (url.pathname === '/api/members') return jsonResponse({ members, next_cursor: null })
         if (url.pathname.endsWith('/reversal') && init?.method === 'POST') {
