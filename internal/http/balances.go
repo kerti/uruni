@@ -52,76 +52,42 @@ type monthInOutResponse struct {
 // feeding the home screen's balance hero and per-location/per-purpose
 // breakdown (PRD section 7.7) in one trip.
 //
-// Every figure comes from a ledger call (FundBalance, AccountBalance,
-// PurposeBalance) over the rows ListAccountsByFund and ListPurposesByFund
-// name. The handler composes those reads and derives no number itself:
-// fund_total comes from FundBalance, never from adding the account balances,
-// though they agree (the test suite checks that). That is ADR-027's "thin
-// mapping" for a read: composing calls is handler work, arithmetic on the
-// results is not.
+// Every figure comes from one ledger call, Balances, which reads them all in a
+// single transaction: the hero total and its parts are one moment of the ledger,
+// and the cost does not grow with the number of accounts and purposes (#532).
+// The handler derives no number itself: fund_total is the ledger's own sum,
+// never the account balances added up, though they agree (the test suite checks
+// that). That is ADR-027's "thin mapping" for a read.
 func (a *api) getBalances(w http.ResponseWriter, r *http.Request) {
 	fund, ok := a.resolveFund(w, r)
 	if !ok {
 		return
 	}
 
-	fundTotal, err := a.ledger.FundBalance(r.Context(), fund.ID)
+	b, err := a.ledger.Balances(r.Context(), fund.ID, a.now())
 	if err != nil {
 		mapLedgerError(w, a.log(r), err)
 		return
 	}
 
-	accounts, err := a.queries.ListAccountsByFund(r.Context(), fund.ID)
-	if err != nil {
-		mapSQLiteError(w, a.log(r), err)
-		return
-	}
-	accountResp := make([]accountBalanceResponse, 0, len(accounts))
-	for _, acc := range accounts {
-		balance, err := a.ledger.AccountBalance(r.Context(), fund.ID, acc.ID)
-		if err != nil {
-			mapLedgerError(w, a.log(r), err)
-			return
-		}
+	accountResp := make([]accountBalanceResponse, 0, len(b.Accounts))
+	for _, row := range b.Accounts {
 		accountResp = append(accountResp, accountBalanceResponse{
-			ID: acc.ID, Kind: acc.Kind, Name: acc.Name, Balance: balance.Int64(),
+			ID: row.Account.ID, Kind: row.Account.Kind, Name: row.Account.Name, Balance: row.Balance.Int64(),
 		})
 	}
-
-	purposes, err := a.queries.ListPurposesByFund(r.Context(), fund.ID)
-	if err != nil {
-		mapSQLiteError(w, a.log(r), err)
-		return
-	}
-	purposeResp := make([]purposeBalanceResponse, 0, len(purposes))
-	for _, p := range purposes {
-		balance, err := a.ledger.PurposeBalance(r.Context(), fund.ID, p.ID)
-		if err != nil {
-			mapLedgerError(w, a.log(r), err)
-			return
-		}
+	purposeResp := make([]purposeBalanceResponse, 0, len(b.Purposes))
+	for _, row := range b.Purposes {
 		purposeResp = append(purposeResp, purposeBalanceResponse{
-			ID: p.ID, Kind: p.Kind, Name: p.Name, Balance: balance.Int64(),
+			ID: row.Purpose.ID, Kind: row.Purpose.Kind, Name: row.Purpose.Name, Balance: row.Balance.Int64(),
 		})
-	}
-
-	owed, err := a.ledger.OwedToMembers(r.Context(), fund.ID)
-	if err != nil {
-		mapLedgerError(w, a.log(r), err)
-		return
-	}
-
-	monthIn, monthOut, err := a.ledger.MonthInOut(r.Context(), fund.ID, a.now())
-	if err != nil {
-		mapLedgerError(w, a.log(r), err)
-		return
 	}
 
 	writeJSON(w, http.StatusOK, balancesResponse{
-		FundTotal:     fundTotal.Int64(),
+		FundTotal:     b.FundTotal.Int64(),
 		Accounts:      accountResp,
 		Purposes:      purposeResp,
-		OwedToMembers: owed.Int64(),
-		Month:         monthInOutResponse{In: monthIn.Int64(), Out: monthOut.Int64()},
+		OwedToMembers: b.OwedToMembers.Int64(),
+		Month:         monthInOutResponse{In: b.MonthIn.Int64(), Out: b.MonthOut.Int64()},
 	})
 }

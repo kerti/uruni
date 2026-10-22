@@ -616,6 +616,18 @@ func envelopeOpenAt(e store.Incidental, through *string) bool {
 // is net of the reversals of income and Out of the reversals of spending, so
 // either can be negative (ADR-042); Out is otherwise a magnitude.
 func (l *Ledger) MonthInOut(ctx context.Context, fundID int64, now time.Time) (in, out money.Amount, err error) {
+	err = l.withTx(ctx, func(q store.Querier) error {
+		var err error
+		in, out, err = (&Ledger{db: l.db, q: q}).monthInOut(ctx, fundID, now)
+		return err
+	})
+	return in, out, err
+}
+
+// monthInOut is MonthInOut's read over l.q, whatever that is: a transaction the
+// caller already opened (Balances reads it beside the rest of the home answer),
+// or the pool.
+func (l *Ledger) monthInOut(ctx context.Context, fundID int64, now time.Time) (in, out money.Amount, err error) {
 	if now.IsZero() {
 		now = time.Now()
 	}
@@ -631,15 +643,11 @@ func (l *Ledger) MonthInOut(ctx context.Context, fundID int64, now time.Time) (i
 	if err != nil {
 		return 0, 0, err
 	}
-	err = l.withTx(ctx, func(q store.Querier) error {
-		_, walk, err := (&Ledger{db: l.db, q: q}).reportRows(ctx, ReportParams{FundID: fundID}, monthStart, true)
-		if err != nil {
-			return err
-		}
-		in, out = walk.In, walk.Out
-		return nil
-	})
-	return in, out, err
+	_, walk, err := l.reportRows(ctx, ReportParams{FundID: fundID}, monthStart, true)
+	if err != nil {
+		return 0, 0, err
+	}
+	return walk.In, walk.Out, nil
 }
 
 // reportRows reads the month, folds transfer pairs, applies the filters, and
