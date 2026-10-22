@@ -7,6 +7,7 @@ import { formatIDR } from '../src/lib/money'
 import type { Page } from '@playwright/test'
 
 import { expect, logIn, seedEmail, seedPassword, test } from './fixtures'
+import { expectAccessible } from './a11y'
 
 // The fixture's money (cmd/uruni/seed_e2e.go): Tunai opens at Rp 1.000.000 and
 // Bank Uji Coba at zero. This file's instance is its own, so every figure below
@@ -70,6 +71,7 @@ test.describe('golden path', { tag: '@smoke' }, () => {
     // Login, not Register. The one real form login in the suite; every other
     // test signs in through logIn().
     await expect(page.getByText(copy.auth.login.heading)).toBeVisible()
+    await expectAccessible(page)
     await submitLogin(page)
 
     // Reaching home proves the login and the fund probe's 200 branch: the
@@ -93,6 +95,7 @@ test.describe('golden path', { tag: '@smoke' }, () => {
 
     await page.getByRole('link', { name: copy.shell.nav.record }).click()
     await expect(page.getByRole('heading', { name: copy.record.heading })).toBeVisible()
+    await expectAccessible(page)
 
     // The fixture's cash account ("Tunai") is the first active account, so it
     // is the default location - no need to touch the picker.
@@ -141,6 +144,7 @@ test.describe('golden path', { tag: '@smoke' }, () => {
     // only a count earns, and never an error.
     await expect(page.getByText(copy.reconciliation.neverChecked)).toBeVisible()
     await expect(page.getByText(copy.reconciliation.matched)).toBeHidden()
+    await expectAccessible(page)
   })
 
   test('reconcile (M6.10)', async ({ page }) => {
@@ -161,11 +165,13 @@ test.describe('golden path', { tag: '@smoke' }, () => {
     await page.getByLabel(copy.reconciliation.actualLabel('Tunai')).fill(String(afterRecords))
     // Each line says it matches, under its own count.
     await expect(page.getByText(copy.reconciliation.matched)).toHaveCount(2)
+    await expectAccessible(page)
     await page.getByRole('button', { name: copy.reconciliation.submit }).click()
 
     // The confirmation renders from POST /api/reconciliations's response, never
     // the pre-submit preview.
     await expect(page.getByRole('button', { name: copy.reconciliation.backToHome })).toBeVisible()
+    await expectAccessible(page)
     await page.getByRole('button', { name: copy.reconciliation.backToHome }).click()
 
     // Back on home without a manual refresh: the neutral copy is gone for good,
@@ -198,10 +204,12 @@ test.describe('golden path', { tag: '@smoke' }, () => {
     await page.getByRole('link', { name: copy.reconciliation.heading }).click()
     const rows = page.getByRole('button').filter({ hasText: /Selisih|Cocok/ })
     await expect(rows).toHaveCount(2)
+    await expectAccessible(page)
     await expect(rows.nth(0)).toContainText('Selisih')
     await expect(rows.nth(1)).toContainText(copy.reconciliation.resolutionOptions.matched)
     await rows.nth(0).click()
     await expect(page.getByText('Tunai', { exact: true })).toBeVisible()
     await expect(page.getByText(copy.reconciliation.resolutionOptions.left_open)).toBeVisible()
+    await expectAccessible(page)
   })
 })

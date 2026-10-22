@@ -50,7 +50,7 @@ Light theme is primary (dark mode deferred). Values are hex for clarity; plug in
 
 | Token | Hex | Use |
 |---|---|---|
-| `--success` | `#2E7D5B` | reconciled "cocok"; positive confirmations |
+| `--success` | `#2C7756` | reconciled "cocok"; positive confirmations - 4.65:1 on `--success-soft`, 4.92:1 on the page (AA; was `#2E7D5B`, [#526](https://github.com/kerti/uruni/issues/526)) |
 | `--success-soft` | `#E3F1E9` | success backgrounds |
 | `--attention` | `#C96C4A` | "selisih" / discrepancy — warm terracotta, **not** alarm-red |
 | `--attention-soft` | `#F6E6DD` | attention backgrounds |

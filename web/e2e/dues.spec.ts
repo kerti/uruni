@@ -1,5 +1,6 @@
 import { copy } from '../src/copy/id'
 import { expect, test, logIn } from './fixtures'
+import { expectAccessible } from './a11y'
 
 // The dues status roster (PRD section 7.3). The seeded fixture
 // (cmd/uruni/seed_e2e.go) creates two members - "Warga Satu" and "Warga Dua" -
@@ -68,6 +69,7 @@ test.describe('dues status', () => {
     const firstPeriodText = (await periods.nth(0).evaluate((el) => el.closest('label')?.textContent ?? '')).trim()
     await periods.nth(0).check()
     await periods.nth(1).check()
+    await expectAccessible(page)
 
     // Each amount arrives pre-filled with the period's rate and is edited down:
     // paying part of a month is a real path, and it leaves the reversal spec a
@@ -98,6 +100,7 @@ test.describe('dues status', () => {
     // Back on the roster, refreshed, with the confirmation for this navigation.
     await expect(page.getByLabel(copy.dues.periodLabel)).toBeVisible()
     await expect(page.getByText(copy.dues.payment.success)).toBeVisible()
+    await expectAccessible(page)
 
     // Back returns to Riwayat's Iuran tab, not home.
     await page.getByRole('button', { name: copy.dues.back }).click()

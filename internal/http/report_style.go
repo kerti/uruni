@@ -18,7 +18,7 @@ var reportPalette = map[string]string{
 	"muted-foreground":   "#5e6b71",
 	"border":             "#e4e0d7",
 	"input":              "#998a6c",
-	"success":            "#2e7d5b",
+	"success":            "#2c7756",
 	"success-soft":       "#e3f1e9",
 	"attention":          "#c96c4a",
 	"attention-soft":     "#f6e6dd",

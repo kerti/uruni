@@ -164,7 +164,7 @@ export default function Home({
           the top of the type scale, and inventing a larger size would put
           this screen outside the system.
           Deliberately not a filled Forest block either. Forest (#1F5D50) and
-          success (#2E7D5B) are neighbours, so a green slab sitting directly
+          success (#2C7756) are neighbours, so a green slab sitting directly
           above a green "cocok" banner would read as one green mass and blur
           the reconciliation signal the design system calls its emotional
           heart.

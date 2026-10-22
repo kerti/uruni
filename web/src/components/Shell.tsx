@@ -165,7 +165,7 @@ export default function Shell({
                   // min-h-15 with pb-2 leaves 8px over the icon row, matching
                   // the 8px under the caption.
                   `relative flex min-h-15 flex-col items-center justify-end gap-1 px-1 pb-2 text-[11px] leading-4 font-medium ${
-                    isActive ? 'text-primary' : 'text-muted-foreground/80'
+                    isActive ? 'text-primary' : 'text-muted-foreground'
                   }`
                 }
               >

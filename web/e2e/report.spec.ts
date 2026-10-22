@@ -3,6 +3,7 @@ import type { Page } from '@playwright/test'
 import { copy } from '../src/copy/id'
 import { formatIDR } from '../src/lib/money'
 import { expect, test, logIn } from './fixtures'
+import { expectAccessible } from './a11y'
 
 // The public report (ADR-015 "the public report renders"): reach it from the
 // Laporan publik card in Pengaturan, read its sections, use a filter, meet the
@@ -92,6 +93,7 @@ test.describe('report', () => {
     const envelope = envelopes.locator('details.envelope').filter({ hasText: seedEnvelope })
     await expect(envelope).toHaveCount(1)
     await expect(envelope.locator('summary .badge')).toHaveText('Berjalan')
+    await expectAccessible(page)
   })
 
   test('a filter is a GET query on the report URL', async ({ page }) => {
