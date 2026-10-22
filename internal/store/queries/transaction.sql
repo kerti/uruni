@@ -238,6 +238,22 @@ SELECT CAST(COALESCE(SUM(signed_amount), 0) AS INTEGER) AS balance_amount
 FROM ledger_entry
 WHERE fund_id = ? AND purpose_id = ?;
 
+-- AccountBalance and PurposeBalance for every account and purpose at once
+-- (GET /api/balances): one grouped pass each, instead of a query per row. An
+-- account or purpose with no entry has no row here, which the caller reads as
+-- zero. The same view and the same sum, so a row equals its single-row sibling.
+-- name: AccountBalancesByFund :many
+SELECT account_id, CAST(COALESCE(SUM(signed_amount), 0) AS INTEGER) AS balance_amount
+FROM ledger_entry
+WHERE fund_id = ?
+GROUP BY account_id;
+
+-- name: PurposeBalancesByFund :many
+SELECT purpose_id, CAST(COALESCE(SUM(signed_amount), 0) AS INTEGER) AS balance_amount
+FROM ledger_entry
+WHERE fund_id = ?
+GROUP BY purpose_id;
+
 -- The frozen half of a reconciliation: the same sum as AccountBalance, cut off
 -- at the snapshot's through_transaction_id. Ordered by id, not occurred_on, so
 -- a correction backdated after the count keeps its higher id and stays outside
@@ -395,6 +411,17 @@ FROM ledger_entry t
 WHERE t.fund_id = ? AND t.member_id = ? AND t.kind = 'dues'
   AND t.reversed = 0
 GROUP BY dues_period;
+
+-- DuesPaidByMemberGroupedByPeriod for a set of members in one pass: the members
+-- of one roster page (GET /api/members) or the paid-in-advance rows of a status
+-- roster, instead of a query per member. Same reversed-row exclusion (ADR-029)
+-- and the same casts.
+-- name: DuesPaidByMembersGroupedByPeriod :many
+SELECT member_id, CAST(dues_period AS TEXT) AS dues_period, CAST(COALESCE(SUM(amount), 0) AS INTEGER) AS paid_amount
+FROM ledger_entry t
+WHERE t.fund_id = ? AND t.member_id IN (sqlc.slice('member_ids')) AND t.kind = 'dues'
+  AND t.reversed = 0
+GROUP BY member_id, dues_period;
 
 -- The "paid in advance" signal. dues_period is 'YYYY-MM', so a lexicographic
 -- MAX is also the chronological one. The CAST(... AS TEXT) is load-bearing:

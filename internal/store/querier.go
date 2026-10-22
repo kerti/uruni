@@ -15,6 +15,11 @@ type Querier interface {
 	// a correction backdated after the count keeps its higher id and stays outside
 	// the old snapshot's arithmetic while counting toward today's balance.
 	AccountBalanceThrough(ctx context.Context, arg AccountBalanceThroughParams) (int64, error)
+	// AccountBalance and PurposeBalance for every account and purpose at once
+	// (GET /api/balances): one grouped pass each, instead of a query per row. An
+	// account or purpose with no entry has no row here, which the caller reads as
+	// zero. The same view and the same sum, so a row equals its single-row sibling.
+	AccountBalancesByFund(ctx context.Context, fundID int64) ([]AccountBalancesByFundRow, error)
 	// Closing an envelope moves no money: an UPDATE, not a ledger entry, which is
 	// why incidental carries no immutability trigger.
 	CloseIncidental(ctx context.Context, arg CloseIncidentalParams) (Incidental, error)
@@ -142,6 +147,11 @@ type Querier interface {
 	// LatestDuesPeriodPaidByMember - kind = 'dues' rows always carry a dues_period
 	// (schema CHECK), so it is never NULL, only untyped without the cast.
 	DuesPaidByMemberGroupedByPeriod(ctx context.Context, arg DuesPaidByMemberGroupedByPeriodParams) ([]DuesPaidByMemberGroupedByPeriodRow, error)
+	// DuesPaidByMemberGroupedByPeriod for a set of members in one pass: the members
+	// of one roster page (GET /api/members) or the paid-in-advance rows of a status
+	// roster, instead of a query per member. Same reversed-row exclusion (ADR-029)
+	// and the same casts.
+	DuesPaidByMembersGroupedByPeriod(ctx context.Context, arg DuesPaidByMembersGroupedByPeriodParams) ([]DuesPaidByMembersGroupedByPeriodRow, error)
 	// The roster query behind "who has paid / partially / not yet" for one
 	// dues_period, every member in one pass.
 	// The reversed = 0 clause is ADR-029's half of the reversal design: a
@@ -660,6 +670,7 @@ type Querier interface {
 	// dangerous; `LIMIT 1` losing its `1` does not. See ADR-024 and ADR-005.
 	Ping(ctx context.Context) (int64, error)
 	PurposeBalance(ctx context.Context, arg PurposeBalanceParams) (int64, error)
+	PurposeBalancesByFund(ctx context.Context, fundID int64) ([]PurposeBalancesByFundRow, error)
 	// Whether the fund as a whole came out even. Cast so the trust core gets an
 	// int64 rather than interface{} - sqlc's SQLite engine cannot infer the type of
 	// a summed expression (ADR-024).

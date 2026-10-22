@@ -7,6 +7,7 @@ package store
 
 import (
 	"context"
+	"strings"
 )
 
 const accountBalance = `-- name: AccountBalance :one
@@ -48,6 +49,45 @@ func (q *Queries) AccountBalanceThrough(ctx context.Context, arg AccountBalanceT
 	var balance_amount int64
 	err := row.Scan(&balance_amount)
 	return balance_amount, err
+}
+
+const accountBalancesByFund = `-- name: AccountBalancesByFund :many
+SELECT account_id, CAST(COALESCE(SUM(signed_amount), 0) AS INTEGER) AS balance_amount
+FROM ledger_entry
+WHERE fund_id = ?
+GROUP BY account_id
+`
+
+type AccountBalancesByFundRow struct {
+	AccountID     int64
+	BalanceAmount int64
+}
+
+// AccountBalance and PurposeBalance for every account and purpose at once
+// (GET /api/balances): one grouped pass each, instead of a query per row. An
+// account or purpose with no entry has no row here, which the caller reads as
+// zero. The same view and the same sum, so a row equals its single-row sibling.
+func (q *Queries) AccountBalancesByFund(ctx context.Context, fundID int64) ([]AccountBalancesByFundRow, error) {
+	rows, err := q.db.QueryContext(ctx, accountBalancesByFund, fundID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []AccountBalancesByFundRow{}
+	for rows.Next() {
+		var i AccountBalancesByFundRow
+		if err := rows.Scan(&i.AccountID, &i.BalanceAmount); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const contributedByIncidentalMember = `-- name: ContributedByIncidentalMember :many
@@ -207,6 +247,63 @@ func (q *Queries) DuesPaidByMemberGroupedByPeriod(ctx context.Context, arg DuesP
 	for rows.Next() {
 		var i DuesPaidByMemberGroupedByPeriodRow
 		if err := rows.Scan(&i.DuesPeriod, &i.PaidAmount); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const duesPaidByMembersGroupedByPeriod = `-- name: DuesPaidByMembersGroupedByPeriod :many
+SELECT member_id, CAST(dues_period AS TEXT) AS dues_period, CAST(COALESCE(SUM(amount), 0) AS INTEGER) AS paid_amount
+FROM ledger_entry t
+WHERE t.fund_id = ? AND t.member_id IN (/*SLICE:member_ids*/?) AND t.kind = 'dues'
+  AND t.reversed = 0
+GROUP BY member_id, dues_period
+`
+
+type DuesPaidByMembersGroupedByPeriodParams struct {
+	FundID    int64
+	MemberIds []*int64
+}
+
+type DuesPaidByMembersGroupedByPeriodRow struct {
+	MemberID   *int64
+	DuesPeriod string
+	PaidAmount int64
+}
+
+// DuesPaidByMemberGroupedByPeriod for a set of members in one pass: the members
+// of one roster page (GET /api/members) or the paid-in-advance rows of a status
+// roster, instead of a query per member. Same reversed-row exclusion (ADR-029)
+// and the same casts.
+func (q *Queries) DuesPaidByMembersGroupedByPeriod(ctx context.Context, arg DuesPaidByMembersGroupedByPeriodParams) ([]DuesPaidByMembersGroupedByPeriodRow, error) {
+	query := duesPaidByMembersGroupedByPeriod
+	var queryParams []interface{}
+	queryParams = append(queryParams, arg.FundID)
+	if len(arg.MemberIds) > 0 {
+		for _, v := range arg.MemberIds {
+			queryParams = append(queryParams, v)
+		}
+		query = strings.Replace(query, "/*SLICE:member_ids*/?", strings.Repeat(",?", len(arg.MemberIds))[1:], 1)
+	} else {
+		query = strings.Replace(query, "/*SLICE:member_ids*/?", "NULL", 1)
+	}
+	rows, err := q.db.QueryContext(ctx, query, queryParams...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []DuesPaidByMembersGroupedByPeriodRow{}
+	for rows.Next() {
+		var i DuesPaidByMembersGroupedByPeriodRow
+		if err := rows.Scan(&i.MemberID, &i.DuesPeriod, &i.PaidAmount); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -1181,6 +1278,41 @@ func (q *Queries) PurposeBalance(ctx context.Context, arg PurposeBalanceParams) 
 	var balance_amount int64
 	err := row.Scan(&balance_amount)
 	return balance_amount, err
+}
+
+const purposeBalancesByFund = `-- name: PurposeBalancesByFund :many
+SELECT purpose_id, CAST(COALESCE(SUM(signed_amount), 0) AS INTEGER) AS balance_amount
+FROM ledger_entry
+WHERE fund_id = ?
+GROUP BY purpose_id
+`
+
+type PurposeBalancesByFundRow struct {
+	PurposeID     int64
+	BalanceAmount int64
+}
+
+func (q *Queries) PurposeBalancesByFund(ctx context.Context, fundID int64) ([]PurposeBalancesByFundRow, error) {
+	rows, err := q.db.QueryContext(ctx, purposeBalancesByFund, fundID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []PurposeBalancesByFundRow{}
+	for rows.Next() {
+		var i PurposeBalancesByFundRow
+		if err := rows.Scan(&i.PurposeID, &i.BalanceAmount); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const reversedFlagForTransaction = `-- name: ReversedFlagForTransaction :one

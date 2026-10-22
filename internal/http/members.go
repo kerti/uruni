@@ -78,7 +78,7 @@ func toMemberResponse(m ledger.Member) memberResponse {
 // toMemberListResponse is GET /api/members' row mapper (#233, ADR-032):
 // toMemberResponse plus the three roster fields. arrearsMonths is passed in
 // because it takes a context and can fail, which a pure mapper should not
-// carry; listMembers computes it per row.
+// carry; listMembers computes it once for the page.
 func toMemberListResponse(m store.ListMembersPageRow, arrearsMonths int) memberResponse {
 	resp := toMemberResponse(ledger.Member{
 		Member: store.Member{
@@ -180,17 +180,18 @@ func decodeMembersCursor(raw string) (name string, id int64, ok bool) {
 // a direct-CRUD read (ADR-027) calling a.queries, as listTransactions does.
 //
 // Arrears is the one derived invariant on the row (CLAUDE.md rule 2), so it
-// alone goes through a.ledger: ArrearsMonthsForMember, once per row of the
-// page returned (at most membersPageSize+1, trimmed first), never per member
-// in the fund and never client-side (no N+1).
+// alone goes through a.ledger: ArrearsMonthsForMembers, once for the page
+// returned (at most membersPageSize+1, trimmed first), a fixed number of reads
+// however many members it holds or how long they have been members (#532), and
+// never client-side.
 //
 // currentPeriod is computed once and handed to ListMembersPage's
-// current_period (the current_rate column) and every row's
-// ArrearsMonthsForMember: one snapshot of "now", so a clock tick mid-page
-// cannot make rows disagree about the month. This route has no ?through= to
-// override it (ADR-032: a period selector does not belong in Anggota), so
-// unlike GET /api/members/{id}/outstanding-dues there is nothing to defer to
-// (see Ledger.ArrearsMonthsForMember).
+// current_period (the current_rate column) and to ArrearsMonthsForMembers: one
+// snapshot of "now", so a clock tick mid-page cannot make rows disagree about
+// the month. This route has no ?through= to override it (ADR-032: a period
+// selector does not belong in Anggota), so unlike
+// GET /api/members/{id}/outstanding-dues there is nothing to defer to (see
+// Ledger.ArrearsMonthsForMember).
 func (a *api) listMembers(w http.ResponseWriter, r *http.Request) {
 	fund, ok := a.resolveFund(w, r)
 	if !ok {
@@ -235,14 +236,19 @@ func (a *api) listMembers(w http.ResponseWriter, r *http.Request) {
 		nextCursor = &encoded
 	}
 
+	page := make([]store.Member, len(rows))
+	for i, m := range rows {
+		page[i] = store.Member{ID: m.ID, FundID: m.FundID, Name: m.Name, JoinedOn: m.JoinedOn, InactiveOn: m.InactiveOn, CreatedAt: m.CreatedAt}
+	}
+	arrears, err := a.ledger.ArrearsMonthsForMembers(r.Context(), fund.ID, page, params.CurrentPeriod)
+	if err != nil {
+		mapLedgerError(w, a.log(r), err)
+		return
+	}
+
 	resp := make([]memberResponse, 0, len(rows))
 	for _, m := range rows {
-		arrears, err := a.ledger.ArrearsMonthsForMember(r.Context(), fund.ID, m.ID, params.CurrentPeriod)
-		if err != nil {
-			mapLedgerError(w, a.log(r), err)
-			return
-		}
-		resp = append(resp, toMemberListResponse(m, arrears))
+		resp = append(resp, toMemberListResponse(m, arrears[m.ID]))
 	}
 	writeJSON(w, http.StatusOK, membersPageResponse{Members: resp, NextCursor: nextCursor})
 }

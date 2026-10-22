@@ -3,6 +3,7 @@ package ledger
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/kerti/uruni/internal/money"
 	"github.com/kerti/uruni/internal/store"
@@ -56,4 +57,92 @@ func (l *Ledger) OwedToMembers(ctx context.Context, fundID int64) (money.Amount,
 		return 0, fmt.Errorf("owed to members: %w", err)
 	}
 	return money.FromDB(v), nil
+}
+
+// AccountBalanceRow is one account with its AccountBalance.
+type AccountBalanceRow struct {
+	Account store.Account
+	Balance money.Amount
+}
+
+// PurposeBalanceRow is one purpose with its PurposeBalance.
+type PurposeBalanceRow struct {
+	Purpose store.Purpose
+	Balance money.Amount
+}
+
+// HomeBalances is everything GET /api/balances answers with, read at one
+// moment: the pooled total, each account's share, each purpose's running total,
+// what is owed to members and the running month's money in and out.
+type HomeBalances struct {
+	FundTotal     money.Amount
+	Accounts      []AccountBalanceRow // ListAccountsByFund's order
+	Purposes      []PurposeBalanceRow // ListPurposesByFund's order
+	OwedToMembers money.Amount
+	MonthIn       money.Amount
+	MonthOut      money.Amount
+}
+
+// Balances reads the home screen's figures in one transaction, so the hero total
+// and the parts under it come from the same ledger and cannot disagree for a
+// refresh, and in a fixed number of reads however many accounts and purposes
+// the fund has (#532): one grouped sum over the ledger for the accounts and one
+// for the purposes, each merged onto its ordered list. An account or purpose
+// with no entry reads Rp 0.
+//
+// Every figure is what FundBalance, AccountBalance, PurposeBalance,
+// OwedToMembers and MonthInOut return for it. The total is its own sum, not the
+// accounts added up, though the two agree (a test holds them to it). now is
+// MonthInOut's clock.
+func (l *Ledger) Balances(ctx context.Context, fundID int64, now time.Time) (HomeBalances, error) {
+	var b HomeBalances
+	err := l.withTx(ctx, func(q store.Querier) error {
+		tl := &Ledger{db: l.db, q: q}
+
+		var err error
+		if b.FundTotal, err = tl.FundBalance(ctx, fundID); err != nil {
+			return err
+		}
+
+		accounts, err := q.ListAccountsByFund(ctx, fundID)
+		if err != nil {
+			return fmt.Errorf("listing accounts: %w", err)
+		}
+		accountSums, err := q.AccountBalancesByFund(ctx, fundID)
+		if err != nil {
+			return fmt.Errorf("account balances: %w", err)
+		}
+		byAccount := make(map[int64]int64, len(accountSums))
+		for _, row := range accountSums {
+			byAccount[row.AccountID] = row.BalanceAmount
+		}
+		b.Accounts = make([]AccountBalanceRow, len(accounts))
+		for i, a := range accounts {
+			b.Accounts[i] = AccountBalanceRow{Account: a, Balance: money.FromDB(byAccount[a.ID])}
+		}
+
+		purposes, err := q.ListPurposesByFund(ctx, fundID)
+		if err != nil {
+			return fmt.Errorf("listing purposes: %w", err)
+		}
+		purposeSums, err := q.PurposeBalancesByFund(ctx, fundID)
+		if err != nil {
+			return fmt.Errorf("purpose balances: %w", err)
+		}
+		byPurpose := make(map[int64]int64, len(purposeSums))
+		for _, row := range purposeSums {
+			byPurpose[row.PurposeID] = row.BalanceAmount
+		}
+		b.Purposes = make([]PurposeBalanceRow, len(purposes))
+		for i, p := range purposes {
+			b.Purposes[i] = PurposeBalanceRow{Purpose: p, Balance: money.FromDB(byPurpose[p.ID])}
+		}
+
+		if b.OwedToMembers, err = tl.OwedToMembers(ctx, fundID); err != nil {
+			return err
+		}
+		b.MonthIn, b.MonthOut, err = tl.monthInOut(ctx, fundID, now)
+		return err
+	})
+	return b, err
 }
