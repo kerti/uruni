@@ -122,6 +122,9 @@ func newSessionManager(q store.Querier, baseURL string, logger *slog.Logger) *sc
 	// ordinary authenticated traffic. This keeps the failure inside the one JSON
 	// envelope api.go promises for /api.
 	sm.ErrorFunc = func(w http.ResponseWriter, r *http.Request, err error) {
+		if answeredClientGone(w, loggerFrom(r.Context(), logger), err) {
+			return
+		}
 		loggerFrom(r.Context(), logger).Error("session store failure", "error", err)
 		writeAPIError(w, http.StatusInternalServerError, "internal_error", "Something went wrong.")
 	}
