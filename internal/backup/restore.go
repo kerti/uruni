@@ -57,6 +57,19 @@ var (
 	MaxZipEntries          = 5000
 )
 
+// CreateDownloadTemp opens a uniquely-named temp file inside backupDir for the
+// fresh-backup download to stream Export into before serving it (#533), under
+// tempPrefix like every in-flight file here: never a dump name, never listed,
+// and swept by RemoveStaleTemps at boot if a crash leaves one behind. The
+// caller removes it once the response is written.
+func CreateDownloadTemp(backupDir string) (*os.File, error) {
+	f, err := os.CreateTemp(backupDir, tempPrefix+"download-*")
+	if err != nil {
+		return nil, fmt.Errorf("backup: creating a download temp file in %s: %w", backupDir, err)
+	}
+	return f, nil
+}
+
 // CreateRestoreStagingTemp opens a uniquely-named temp file inside backupDir
 // for an inspect route to stream an upload (or a copied stored dump) into
 // before it knows the file is a valid backup. The name is never shared, so

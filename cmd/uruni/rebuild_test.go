@@ -155,7 +155,9 @@ func exportZip(t *testing.T, dbPath, uploadsDir, zipPath string) {
 		t.Fatal(err)
 	}
 	defer func() { _ = sqlDB.Close() }()
-	data, _, err := backup.Export(context.Background(), sqlDB, uploadsDir)
+	var buf bytes.Buffer
+	_, err = backup.Export(context.Background(), sqlDB, uploadsDir, &buf)
+	data := buf.Bytes()
 	if err != nil {
 		t.Fatal(err)
 	}

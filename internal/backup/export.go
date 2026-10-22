@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -35,48 +36,47 @@ const (
 	receiptsDir  = "receipts/"
 )
 
-// Export builds the whole-instance backup zip: uruni.json plus every receipt
-// image, read from uploadsDir under its stored name (ADR-011). It writes and
-// deletes nothing, and returns the zip's bytes for the caller to stream or,
-// in a test, compare byte-for-byte to a golden fixture.
+// Export writes the whole-instance backup zip to w: uruni.json plus every
+// receipt image, read from uploadsDir under its stored name (ADR-011). It
+// changes nothing on disk but what w is.
 //
-// The zip is built in memory, not streamed: a community fund's backup is a
-// few megabytes of JSON and downscaled JPEGs (ADR-011 caps receipts at
-// ~1600px, roughly quality 80), never enough to make buffering costly.
+// The zip is streamed, never built in memory (#533): each receipt is copied
+// from its file into the archive through one small buffer, so memory stays at
+// uruni.json's bytes (capped at MaxDocumentBytes) however many years of photos
+// the uploads volume holds. Nothing is written to w until the document has
+// been read and checked, so a refusal leaves w empty; a failure while copying
+// a receipt can leave it holding a partial zip, which the caller discards.
 //
 // A receipt whose image file is gone never blocks the backup (maintainer,
 // 2026-09-30): its row still goes into uruni.json, the image is skipped, and
 // its stored name comes back in missing for the caller to log. The backup is
 // as complete as the live instance, never less. Any other read failure is a
 // real fault and fails.
-func Export(ctx context.Context, sqlDB *sql.DB, uploadsDir string) (zipBytes []byte, missing []string, err error) {
-	m, err := buildDumpMaterials(ctx, readDocumentFrom(sqlDB), assembleZip, uploadsDir)
+func Export(ctx context.Context, sqlDB *sql.DB, uploadsDir string, w io.Writer) (missing []string, err error) {
+	plan, err := planDump(ctx, readDocumentFrom(sqlDB), uploadsDir)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
-	return m.zipBytes, m.missing, nil
+	return assembleZip(w, plan.docBytes, plan.receipts, uploadsDir)
 }
 
-// BuildZip marshals doc to uruni.json and assembles the finished zip, split
-// out of Export so dumps.go's WriteDump reaches the same bytes without a
-// second export path (ADR-012: "the logic lives in one package so that stays
-// cheap").
-//
-// The producers no longer call BuildZip: they marshal once
-// (marshalDocument), hash those bytes for the change-only check (planDump),
-// and only then assemble the zip (assembleZip) from the same bytes, so an
-// unchanged fund never builds one (#501). BuildZip is both steps, for a
-// caller wanting the archive unconditionally.
+// BuildZip marshals doc to uruni.json and assembles the finished zip in
+// memory, for a caller that wants the archive as bytes - tests building a
+// fixture. The producers never call it: they marshal once (marshalDocument),
+// hash those bytes for the change-only check (planDump), and only then stream
+// the zip (assembleZip) from the same bytes, so an unchanged fund never builds
+// one (#501) and a changed one is never held in memory (#533).
 func BuildZip(doc Document, receipts []store.Receipt, uploadsDir string) (zipBytes []byte, docBytes []byte, missing []string, err error) {
 	docBytes, err = marshalDocument(doc)
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	zipBytes, missing, err = assembleZip(docBytes, receipts, uploadsDir)
+	var buf bytes.Buffer
+	missing, err = assembleZip(&buf, docBytes, receipts, uploadsDir)
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	return zipBytes, docBytes, missing, nil
+	return buf.Bytes(), docBytes, missing, nil
 }
 
 // marshalDocument is the one place uruni.json's bytes are produced. The
@@ -94,27 +94,27 @@ func marshalDocument(doc Document) ([]byte, error) {
 
 // zipAssembler is assembleZip's type: the seam a test swaps for a counting
 // wrapper to prove an unchanged fund assembles no zip.
-type zipAssembler func(docBytes []byte, receipts []store.Receipt, uploadsDir string) (zipBytes []byte, missing []string, err error)
+type zipAssembler func(w io.Writer, docBytes []byte, receipts []store.Receipt, uploadsDir string) (missing []string, err error)
 
-// assembleZip is the expensive half of BuildZip: it reads every receipt file
-// into the archive. Nothing that only needs to know whether the fund changed
-// may call it (planDump decides from the document bytes and a stat).
-func assembleZip(docBytes []byte, receipts []store.Receipt, uploadsDir string) (zipBytes []byte, missing []string, err error) {
-	var buf bytes.Buffer
-	zw := zip.NewWriter(&buf)
+// assembleZip is the expensive half of every producer: it streams the archive
+// to w, copying every receipt file in. Nothing that only needs to know whether
+// the fund changed may call it (planDump decides from the document bytes and a
+// stat).
+func assembleZip(w io.Writer, docBytes []byte, receipts []store.Receipt, uploadsDir string) (missing []string, err error) {
+	zw := zip.NewWriter(w)
 
 	jsonWriter, err := zw.Create(jsonFilename)
 	if err != nil {
-		return nil, nil, fmt.Errorf("backup: creating %s in zip: %w", jsonFilename, err)
+		return nil, fmt.Errorf("backup: creating %s in zip: %w", jsonFilename, err)
 	}
 	if _, err := jsonWriter.Write(docBytes); err != nil {
-		return nil, nil, fmt.Errorf("backup: writing %s: %w", jsonFilename, err)
+		return nil, fmt.Errorf("backup: writing %s: %w", jsonFilename, err)
 	}
 
 	for _, r := range receipts {
 		found, err := addReceiptToZip(zw, uploadsDir, r.Path)
 		if err != nil {
-			return nil, nil, err
+			return nil, err
 		}
 		if !found {
 			missing = append(missing, r.Path)
@@ -122,31 +122,34 @@ func assembleZip(docBytes []byte, receipts []store.Receipt, uploadsDir string) (
 	}
 
 	if err := zw.Close(); err != nil {
-		return nil, nil, fmt.Errorf("backup: closing zip: %w", err)
+		return nil, fmt.Errorf("backup: closing zip: %w", err)
 	}
-	return buf.Bytes(), missing, nil
+	return missing, nil
 }
 
 // addReceiptToZip copies one receipt image from the uploads volume into the
 // zip's receipts/ folder under its stored name, the name uruni.json's receipt
 // row carries in its path field, so an importer joins them without renaming.
+// The file is copied, never read whole.
 func addReceiptToZip(zw *zip.Writer, uploadsDir, path string) (found bool, err error) {
 	//nolint:gosec // path is receipt.path, always a crypto/rand filename
 	// this server generated itself on upload (ADR-011's randomReceiptFilename)
 	// and never derived from request input - the same trust boundary
 	// internal/http/receipts.go's own reads of this column already rely on.
-	data, err := os.ReadFile(filepath.Join(uploadsDir, path))
+	f, err := os.Open(filepath.Join(uploadsDir, path))
 	if errors.Is(err, fs.ErrNotExist) {
 		return false, nil
 	}
 	if err != nil {
 		return false, fmt.Errorf("backup: reading receipt %s: %w", path, err)
 	}
+	defer func() { _ = f.Close() }()
+
 	w, err := zw.Create(receiptsDir + path)
 	if err != nil {
 		return false, fmt.Errorf("backup: creating receipts/%s in zip: %w", path, err)
 	}
-	if _, err := w.Write(data); err != nil {
+	if _, err := io.Copy(w, f); err != nil {
 		return false, fmt.Errorf("backup: writing receipts/%s: %w", path, err)
 	}
 	return true, nil
