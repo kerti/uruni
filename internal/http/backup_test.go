@@ -112,9 +112,17 @@ func TestDownloadBackupReturnsAZipWithJSONAndReceipt(t *testing.T) {
 // writes it through the HTTP surface.
 func authedRouterWithBackupDir(t *testing.T) (http.Handler, string) {
 	t.Helper()
+	r, _, backupDir := authedRouterWithDirs(t)
+	return r, backupDir
+}
+
+// authedRouterWithDirs is authedRouterWithBackupDir handing back the uploads
+// directory too, for a test that reaches a receipt's file.
+func authedRouterWithDirs(t *testing.T) (h http.Handler, uploadsDir, backupDir string) {
+	t.Helper()
 	sqlDB := testStoreDB(t)
-	backupDir := t.TempDir()
-	r := New(testAssets(), testBuild, ledger.New(sqlDB), store.New(sqlDB), sqlDB, nil, testLogger(), auth.New(sqlDB), "", t.TempDir(), backupDir, nil)
+	uploadsDir, backupDir = t.TempDir(), t.TempDir()
+	r := New(testAssets(), testBuild, ledger.New(sqlDB), store.New(sqlDB), sqlDB, nil, testLogger(), auth.New(sqlDB), "", uploadsDir, backupDir, nil)
 
 	reg := postRegister(t, r, "treasurer@example.org", "correct-horse-battery")
 	if reg.Code != http.StatusCreated {
@@ -124,7 +132,7 @@ func authedRouterWithBackupDir(t *testing.T) (http.Handler, string) {
 	if token == "" {
 		t.Fatal("fixture register set no session cookie")
 	}
-	return withSessionCookie{Handler: r, token: token}, backupDir
+	return withSessionCookie{Handler: r, token: token}, uploadsDir, backupDir
 }
 
 func getBackups(t *testing.T, r http.Handler) *httptest.ResponseRecorder {
@@ -294,5 +302,70 @@ func TestDownloadStoredBackupRefusesPathTraversal(t *testing.T) {
 		if strings.Contains(rec.Body.String(), "should never be servable") {
 			t.Errorf("GET /api/backups/%s leaked the sibling file's contents", name)
 		}
+	}
+}
+
+// The fresh download is built in a temp file in backupDir and served from it
+// (#533): the response carries its length, and the temp file is gone after.
+func TestDownloadBackupSendsItsLengthAndLeavesNoTempFile(t *testing.T) {
+	t.Parallel()
+	r, _, backupDir := authedRouterWithDirs(t)
+	setup := setUpFund(t, r)
+	txnID := setUpTransactionForReceipt(t, r, setup)
+	fixture := encodeTestJPEG(t, solidBlockImage(64, 64, 16, 16, fixtureBG, fixtureBlock))
+	if rec := postReceiptFile(t, r, "/api/transactions/"+strconv.FormatInt(txnID, 10)+"/receipts", fixture); rec.Code != http.StatusCreated {
+		t.Fatalf("POST .../receipts = %d, want %d (body: %s)", rec.Code, http.StatusCreated, rec.Body.String())
+	}
+
+	rec := getBackup(t, r)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GET /api/backup = %d, want %d (body: %s)", rec.Code, http.StatusOK, rec.Body.String())
+	}
+	if got, want := rec.Header().Get("Content-Length"), strconv.Itoa(rec.Body.Len()); got != want {
+		t.Errorf("Content-Length = %q, want %q (the body's length)", got, want)
+	}
+	assertNoFilesIn(t, backupDir)
+}
+
+// A receipt that cannot be read (here a directory where the file should be)
+// fails the export after the zip is begun. Because it is built before the
+// response, that is still an honest 500, not a 200 with a cut-off zip, and
+// the half-built temp file is removed.
+func TestDownloadBackupThatFailsWhileBuildingIsA500AndLeavesNothing(t *testing.T) {
+	t.Parallel()
+	r, uploadsDir, backupDir := authedRouterWithDirs(t)
+	setup := setUpFund(t, r)
+	txnID := setUpTransactionForReceipt(t, r, setup)
+	fixture := encodeTestJPEG(t, solidBlockImage(64, 64, 16, 16, fixtureBG, fixtureBlock))
+	if rec := postReceiptFile(t, r, "/api/transactions/"+strconv.FormatInt(txnID, 10)+"/receipts", fixture); rec.Code != http.StatusCreated {
+		t.Fatalf("POST .../receipts = %d, want %d (body: %s)", rec.Code, http.StatusCreated, rec.Body.String())
+	}
+	entries, err := os.ReadDir(uploadsDir)
+	if err != nil || len(entries) != 1 {
+		t.Fatalf("uploads dir = %v, %v, want the one receipt", entries, err)
+	}
+	receipt := filepath.Join(uploadsDir, entries[0].Name())
+	if err := os.Remove(receipt); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(receipt, 0o750); err != nil {
+		t.Fatal(err)
+	}
+
+	rec := getBackup(t, r)
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("GET /api/backup = %d, want %d (body: %s)", rec.Code, http.StatusInternalServerError, rec.Body.String())
+	}
+	assertNoFilesIn(t, backupDir)
+}
+
+func assertNoFilesIn(t *testing.T, dir string) {
+	t.Helper()
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, e := range entries {
+		t.Errorf("%s holds %s, want nothing left behind", dir, e.Name())
 	}
 }

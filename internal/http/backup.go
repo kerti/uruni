@@ -11,11 +11,13 @@ package http
 
 import (
 	"errors"
+	"io"
 	"io/fs"
 	"log/slog"
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/go-chi/chi/v5"
@@ -101,9 +103,10 @@ func (a *api) listBackups(w http.ResponseWriter, r *http.Request) {
 }
 
 // downloadStoredBackup is GET /api/backups/{name}: streams one written dump
-// back byte for byte. name must be a filename backup.ListDumps returned, never
-// trusted as a bare path segment however chi routed it;
-// resolveStoredBackupPath validates it, and the os.ReadFile error below
+// back byte for byte, from the file to the response through one small buffer
+// (#533), never read whole. name must be a filename backup.ListDumps returned,
+// never trusted as a bare path segment however chi routed it;
+// resolveStoredBackupPath validates it, and the open error below
 // (fs.ErrNotExist) turns a valid but unknown or since-pruned name into a 404
 // instead of a 500.
 func (a *api) downloadStoredBackup(w http.ResponseWriter, r *http.Request) {
@@ -118,32 +121,23 @@ func (a *api) downloadStoredBackup(w http.ResponseWriter, r *http.Request) {
 	// been proven to match dumpNamePattern in full (ValidDumpName) - the
 	// same trust boundary internal/backup/export.go's own addReceiptToZip
 	// already relies on for a server-generated filename.
-	data, err := os.ReadFile(full)
+	f, err := os.Open(full)
 	if err != nil {
 		if errors.Is(err, fs.ErrNotExist) {
 			writeAPIError(w, http.StatusNotFound, "not_found", "The requested resource was not found.")
 			return
 		}
-		a.log(r).Error("reading stored backup", "name", name, "error", err)
+		a.log(r).Error("opening stored backup", "name", name, "error", err)
 		writeAPIError(w, http.StatusInternalServerError, "internal_error", "Something went wrong.")
 		return
 	}
+	defer func() { _ = f.Close() }()
 
 	a.securityEvent(r, slog.LevelInfo, "backup_downloaded", "kind", "stored", "name", name)
-	w.Header().Set("Content-Type", "application/zip")
-	w.Header().Set("Content-Disposition", `attachment; filename="`+name+`"`)
-	w.WriteHeader(http.StatusOK)
-	//nolint:gosec // G705: data is the raw bytes of a zip file read from
-	// full, which was just validated (ValidDumpName's full match against
-	// dumpNamePattern, then the filepath.Rel containment check above) - not
-	// attacker-controlled content reaching a template or a header, just a
-	// byte stream written under Content-Type: application/zip, the same
-	// shape downloadBackup's own w.Write(zipBytes) below is never flagged
-	// for because gosec's taint tracking has nothing to trace there.
-	_, _ = w.Write(data)
+	a.serveZip(w, r, f, name)
 }
 
-// downloadBackup answers with the finished zip, Content-Disposition set so the
+// downloadBackup answers with a fresh zip, Content-Disposition set so the
 // browser saves it under backup.ZipFilename's dated name rather than opening
 // it. Session-gated like every route in this group (api.go's second
 // r.Group); Pengaturan's Cadangan card tells the treasurer the file carries
@@ -152,6 +146,13 @@ func (a *api) downloadStoredBackup(w http.ResponseWriter, r *http.Request) {
 // Unscoped by fund on purpose: ADR-012's restore scope is the whole instance,
 // so the download is too; backup.Export walks every fund ListFunds returns,
 // not the one resolveFund would answer with.
+//
+// The zip is streamed into a temp file in backupDir, then from the file to the
+// response (#533): memory holds one buffer, never the archive. Building it
+// first is what keeps a failure an honest 500 - a zip streamed straight to the
+// response would already have answered 200 when a receipt read failed - and it
+// lets the response carry its length. The cost is disk: one more backup's size
+// in backupDir for as long as the download runs (SELF-HOSTING.md).
 func (a *api) downloadBackup(w http.ResponseWriter, r *http.Request) {
 	// The name's date is the fund's day (ADR-041); the download is instance-wide,
 	// so the zone is the first fund's, or tz.Default with none.
@@ -167,9 +168,26 @@ func (a *api) downloadBackup(w http.ResponseWriter, r *http.Request) {
 		writeAPIError(w, http.StatusInternalServerError, "internal_error", "Something went wrong.")
 		return
 	}
-	zipBytes, missing, err := backup.Export(r.Context(), a.sqlDB, a.uploadsDir)
+
+	tmp, err := backup.CreateDownloadTemp(a.backupDir)
+	if err != nil {
+		a.log(r).Error("creating the download's temp file", "error", err)
+		writeAPIError(w, http.StatusInternalServerError, "internal_error", "Something went wrong.")
+		return
+	}
+	defer func() {
+		_ = tmp.Close()
+		_ = os.Remove(tmp.Name())
+	}()
+
+	missing, err := backup.Export(r.Context(), a.sqlDB, a.uploadsDir, tmp)
 	if err != nil {
 		a.log(r).Error("building backup zip", "error", err)
+		writeAPIError(w, http.StatusInternalServerError, "internal_error", "Something went wrong.")
+		return
+	}
+	if _, err := tmp.Seek(0, io.SeekStart); err != nil {
+		a.log(r).Error("rewinding the download's temp file", "error", err)
 		writeAPIError(w, http.StatusInternalServerError, "internal_error", "Something went wrong.")
 		return
 	}
@@ -181,8 +199,25 @@ func (a *api) downloadBackup(w http.ResponseWriter, r *http.Request) {
 	}
 
 	a.securityEvent(r, slog.LevelInfo, "backup_downloaded", "kind", "fresh")
+	a.serveZip(w, r, tmp, backup.ZipFilename(a.now().In(loc)))
+}
+
+// serveZip writes a finished zip file to the response as an attachment named
+// name, with its length, copying from f rather than reading it whole.
+func (a *api) serveZip(w http.ResponseWriter, r *http.Request, f *os.File, name string) {
+	info, err := f.Stat()
+	if err != nil {
+		a.log(r).Error("reading the backup's size", "name", name, "error", err)
+		writeAPIError(w, http.StatusInternalServerError, "internal_error", "Something went wrong.")
+		return
+	}
 	w.Header().Set("Content-Type", "application/zip")
-	w.Header().Set("Content-Disposition", `attachment; filename="`+backup.ZipFilename(a.now().In(loc))+`"`)
+	w.Header().Set("Content-Disposition", `attachment; filename="`+name+`"`)
+	w.Header().Set("Content-Length", strconv.FormatInt(info.Size(), 10))
 	w.WriteHeader(http.StatusOK)
-	_, _ = w.Write(zipBytes)
+	if _, err := io.Copy(w, f); err != nil {
+		// The status is already sent; a cut-off copy is the client's to notice,
+		// and usually the client is why it was cut off.
+		a.log(r).Info("backup download ended early", "name", name, "error", err)
+	}
 }

@@ -8,7 +8,13 @@ Uruni is one small Go binary (API + public report + the embedded web app) behind
 
 **The host.** Any Linux machine with Docker Engine and Compose v2 (`docker compose`, not `docker-compose`), amd64 or arm64. A domain name whose DNS `A` (and `AAAA`, if the host has IPv6) record points at it, and ports 80, 443/tcp and 443/udp reachable from the internet: Caddy needs 80 and 443 to fetch the TLS certificate. The smallest VPS most providers sell (1 vCPU, 1 GB RAM) is plenty; the app's worst moment is four password hashes at once, about 80 MB.
 
-**Disk.** Budget the database plus about **11 times the receipt photos**: the live photos, and a copy of every one inside each of the 7 daily and 3 pre-restore backups the app keeps (see [Data & backups](#data--backups)). The database itself is small; three pre-upgrade copies of it are kept as well.
+**Disk.** Budget the database plus about **12 times the receipt photos**, and 256 MB on top:
+
+- the live photos, and a copy of every one inside each of the 7 daily and 3 pre-restore backups the app keeps (see [Data & backups](#data--backups));
+- one more backup's worth while a backup is being written or downloaded: each zip is built in a temporary file in `uruni-backups` and removed once it is renamed or sent;
+- up to 256 MB while a restore upload waits for its confirmation (it is removed after 10 minutes if nobody confirms).
+
+The database itself is small; three pre-upgrade copies of it are kept as well. Memory does not grow with the photos: a backup copies each photo from disk into the zip, holding only the data file in memory.
 
 **Host checklist.** None of this is Uruni's, all of it matters:
 

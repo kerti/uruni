@@ -4,10 +4,13 @@ import (
 	"archive/zip"
 	"bytes"
 	"context"
+	"crypto/rand"
 	"encoding/json"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -138,7 +141,9 @@ func TestExportIncludesReceiptsUnderStoredName(t *testing.T) {
 	buildFixture(t, sqlDB, uploadsDir)
 	ctx := context.Background()
 
-	zipBytes, _, err := Export(ctx, sqlDB, uploadsDir)
+	var buf bytes.Buffer
+	_, err := Export(ctx, sqlDB, uploadsDir, &buf)
+	zipBytes := buf.Bytes()
 	if err != nil {
 		t.Fatalf("Export() = %v, want no error", err)
 	}
@@ -182,7 +187,9 @@ func TestExportSkipsAMissingReceiptImageInsteadOfFailing(t *testing.T) {
 	}
 	ctx := context.Background()
 
-	zipBytes, missing, err := Export(ctx, sqlDB, uploadsDir)
+	var buf bytes.Buffer
+	missing, err := Export(ctx, sqlDB, uploadsDir, &buf)
+	zipBytes := buf.Bytes()
 	if err != nil {
 		t.Fatalf("Export() = %v, want no error - a missing image must not block the backup", err)
 	}
@@ -229,7 +236,9 @@ func TestExportProducesValidJSONMatchingFormatVersion(t *testing.T) {
 	buildFixture(t, sqlDB, uploadsDir)
 	ctx := context.Background()
 
-	zipBytes, _, err := Export(ctx, sqlDB, uploadsDir)
+	var buf bytes.Buffer
+	_, err := Export(ctx, sqlDB, uploadsDir, &buf)
+	zipBytes := buf.Bytes()
 	if err != nil {
 		t.Fatalf("Export() = %v, want no error", err)
 	}
@@ -252,5 +261,40 @@ func TestExportProducesValidJSONMatchingFormatVersion(t *testing.T) {
 	}
 	if doc.FormatVersion != FormatVersion {
 		t.Errorf("format_version = %d, want %d", doc.FormatVersion, FormatVersion)
+	}
+}
+
+// TestAssembleZipCopiesReceiptsWithoutHoldingThem pins #533: the zip streams
+// to its writer and each receipt is copied in, so memory does not grow with
+// the receipts. 64 MB of photos (random bytes, which deflate cannot shrink)
+// must cost a small fraction of that; reading each file whole, as before, cost
+// at least the files' total. Not parallel: the bound reads process-wide
+// allocation.
+func TestAssembleZipCopiesReceiptsWithoutHoldingThem(t *testing.T) {
+	uploadsDir := t.TempDir()
+	const count, size = 16, 4 << 20
+	receipts := make([]store.Receipt, count)
+	photo := make([]byte, size)
+	for i := range receipts {
+		if _, err := rand.Read(photo); err != nil {
+			t.Fatal(err)
+		}
+		name := fmt.Sprintf("receipt-%02d.jpg", i)
+		if err := os.WriteFile(filepath.Join(uploadsDir, name), photo, 0o600); err != nil {
+			t.Fatal(err)
+		}
+		receipts[i] = store.Receipt{Path: name}
+	}
+
+	runtime.GC()
+	var before, after runtime.MemStats
+	runtime.ReadMemStats(&before)
+	missing, err := assembleZip(io.Discard, []byte(`{}`), receipts, uploadsDir)
+	runtime.ReadMemStats(&after)
+	if err != nil || len(missing) != 0 {
+		t.Fatalf("assembleZip() = %v, %v, want every receipt and no error", missing, err)
+	}
+	if allocated, budget := after.TotalAlloc-before.TotalAlloc, uint64(count*size/4); allocated >= budget {
+		t.Errorf("assembleZip allocated %d bytes for %d bytes of receipts, want under %d: a receipt is being held whole", allocated, count*size, budget)
 	}
 }

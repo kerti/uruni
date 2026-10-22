@@ -212,8 +212,8 @@ func TestDumpRefusesADocumentWhoseTotalsDisagreeWithItsRows(t *testing.T) {
 	})
 	t.Run("Export", func(t *testing.T) {
 		t.Parallel()
-		if _, err := buildDumpMaterials(ctx, read, assembleZip, uploadsDir); !errors.Is(err, ErrTotalsMismatch) {
-			t.Fatalf("buildDumpMaterials() = %v, want ErrTotalsMismatch (the download shares this path)", err)
+		if _, err := planDump(ctx, read, uploadsDir); !errors.Is(err, ErrTotalsMismatch) {
+			t.Fatalf("planDump() = %v, want ErrTotalsMismatch (Export shares this path)", err)
 		}
 	})
 }

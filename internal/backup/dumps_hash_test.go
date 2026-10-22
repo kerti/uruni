@@ -2,6 +2,7 @@ package backup
 
 import (
 	"context"
+	"io"
 	"os"
 	"path/filepath"
 	"sync/atomic"
@@ -16,9 +17,9 @@ import (
 // built: the seam #501 added, not timing.
 func countingAssembler() (zipAssembler, *atomic.Int64) {
 	var n atomic.Int64
-	return func(docBytes []byte, receipts []store.Receipt, uploadsDir string) ([]byte, []string, error) {
+	return func(w io.Writer, docBytes []byte, receipts []store.Receipt, uploadsDir string) ([]string, error) {
 		n.Add(1)
-		return assembleZip(docBytes, receipts, uploadsDir)
+		return assembleZip(w, docBytes, receipts, uploadsDir)
 	}, &n
 }
 
@@ -202,12 +203,12 @@ func TestPlanHashMatchesTheHashOfTheZipPath(t *testing.T) {
 	read := readDocumentFrom(sqlDB)
 
 	planned := planHash(t, read, uploadsDir)
-	m, err := buildDumpMaterials(context.Background(), read, assembleZip, uploadsDir)
+	m, err := planDump(context.Background(), read, uploadsDir)
 	if err != nil {
-		t.Fatalf("buildDumpMaterials() = %v", err)
+		t.Fatalf("planDump() = %v", err)
 	}
 	if m.hash != planned {
-		t.Errorf("materials hash %s != plan hash %s", m.hash, planned)
+		t.Errorf("second plan's hash %s != first plan's %s", m.hash, planned)
 	}
 	zipBytes, docBytes, missing, err := BuildZip(m.doc, m.receipts, uploadsDir)
 	if err != nil {

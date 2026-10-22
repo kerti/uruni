@@ -1,7 +1,7 @@
 // dumps.go adds the daily server-side copy ADR-012 and ADR-013 describe, on
-// top of Export/BuildZip. Nothing here writes to the database (as in
-// export.go): it reads through BuildDocument/BuildZip and writes zip files
-// under URUNI_BACKUP_DIR.
+// top of export.go's document and zip. Nothing here writes to the database
+// (as in export.go): it reads through BuildDocument and streams zip files
+// (assembleZip) into URUNI_BACKUP_DIR.
 //
 // (A blank line separates this from `package backup` so revive does not read
 // it as a second package doc comment; export.go carries the real one.)
@@ -15,6 +15,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"log/slog"
 	"os"
@@ -308,35 +309,16 @@ func missingReceipts(uploadsDir string, receipts []store.Receipt) ([]string, err
 	return missing, nil
 }
 
-// dumpMaterials is a dumpPlan plus its zip: what a producer that has decided
-// to write (or download) holds.
-type dumpMaterials struct {
-	dumpPlan
-	zipBytes []byte
-}
-
-// zipFor builds the zip for a plan, reading every receipt file. missing is
-// replaced with what the zip pass found, which is what the archive really
-// lacks (a photo vanishing between the stat and now shows as a changed hash
-// on the next tick).
-func (p dumpPlan) zipFor(assemble zipAssembler, uploadsDir string) (dumpMaterials, error) {
-	zipBytes, missing, err := assemble(p.docBytes, p.receipts, uploadsDir)
-	if err != nil {
-		return dumpMaterials{}, err
-	}
-	p.missing = missing
-	return dumpMaterials{dumpPlan: p, zipBytes: zipBytes}, nil
-}
-
-// buildDumpMaterials is the one path every producer takes once it wants the
-// archive (download, boot dump, pre-restore dump, a changed daily dump):
-// planDump (read, CheckTotals, hash), then the zip.
-func buildDumpMaterials(ctx context.Context, read documentReader, assemble zipAssembler, uploadsDir string) (dumpMaterials, error) {
-	plan, err := planDump(ctx, read, uploadsDir)
-	if err != nil {
-		return dumpMaterials{}, err
-	}
-	return plan.zipFor(assemble, uploadsDir)
+// writeTo streams the plan's zip into a dump named name in backupDir, through
+// writeThenRename's temp file: the archive goes from the receipt files to the
+// disk, never through memory (#533). A photo that vanished between planDump's
+// stat and this copy is skipped, as Export skips one, and shows as a changed
+// hash on the next tick.
+func (p dumpPlan) writeTo(assemble zipAssembler, uploadsDir, backupDir, name string) error {
+	return writeThenRename(backupDir, name, func(w io.Writer) error {
+		_, err := assemble(w, p.docBytes, p.receipts, uploadsDir)
+		return err
+	})
 }
 
 // tempPrefix names writeThenRename's in-flight files. RemoveStaleTemps
@@ -366,13 +348,13 @@ func RemoveStaleTemps(backupDir string) (int, error) {
 	return removed, nil
 }
 
-// writeThenRename is every dump write's shape: build the whole file under a
+// writeThenRename is every dump write's shape: fill the whole file under a
 // temp name in backupDir, sync it, rename it into its final name, and sync
 // backupDir (WriteFileAtomic, atomic.go, says why each sync is there). A
 // crash can only leave a temp file behind, never a file under a dump name,
 // and with the syncs never a dump name pointing at an empty file.
-func writeThenRename(backupDir, name string, data []byte) error {
-	if err := writeBytesAtomic(backupDir, tempPrefix+"*", name, data); err != nil {
+func writeThenRename(backupDir, name string, fill func(io.Writer) error) error {
+	if err := WriteFileAtomic(backupDir, tempPrefix+"*", name, fill); err != nil {
 		return fmt.Errorf("backup: %w", err)
 	}
 	return nil
@@ -395,12 +377,12 @@ func writeDump(ctx context.Context, read documentReader, assemble zipAssembler, 
 	if _, err := tz.Load(zone); err != nil {
 		return "", fmt.Errorf("backup: %w", err)
 	}
-	m, err := buildDumpMaterials(ctx, read, assemble, uploadsDir)
+	plan, err := planDump(ctx, read, uploadsDir)
 	if err != nil {
 		return "", err
 	}
-	name = BuildDumpName(now, zone, kind, m.doc.FormatVersion, m.hash)
-	if err := writeThenRename(backupDir, name, m.zipBytes); err != nil {
+	name = BuildDumpName(now, zone, kind, plan.doc.FormatVersion, plan.hash)
+	if err := plan.writeTo(assemble, uploadsDir, backupDir, name); err != nil {
 		return "", err
 	}
 	return name, nil
@@ -476,13 +458,8 @@ func writeDailyIfNeeded(ctx context.Context, read documentReader, assemble zipAs
 			return "", false, fmt.Errorf("backup: not writing a daily dump: %w", err)
 		}
 	}
-	m, err := plan.zipFor(assemble, uploadsDir)
-	if err != nil {
-		return "", false, err
-	}
-
-	name = BuildDumpName(now, zone, KindDaily, m.doc.FormatVersion, m.hash)
-	if err := writeThenRename(backupDir, name, m.zipBytes); err != nil {
+	name = BuildDumpName(now, zone, KindDaily, plan.doc.FormatVersion, plan.hash)
+	if err := plan.writeTo(assemble, uploadsDir, backupDir, name); err != nil {
 		return "", false, err
 	}
 	return name, true, nil
