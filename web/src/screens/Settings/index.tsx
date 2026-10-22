@@ -42,14 +42,22 @@ import type { Fund } from '@/lib/setup'
  * No back control: Shell's footer is how every screen is left, and a second
  * way out would be one affordance too many.
  */
-export default function Settings({ onFundChanged }: { onFundChanged: (fund: Fund) => void }) {
+export default function Settings({
+  fund,
+  onFundChanged,
+  refreshFund,
+}: {
+  fund: Fund
+  onFundChanged: (fund: Fund) => void
+  refreshFund: () => Promise<void>
+}) {
   return (
     <div className="flex flex-col gap-6">
       <h1 className="text-xl font-semibold">{copy.settings.heading}</h1>
 
       {/* A hairline between each independent section (#319); gap-6 rather
           than gap-8, since the line now does part of the separating. */}
-      <FundName onChanged={onFundChanged} />
+      <FundName fund={fund} onChanged={onFundChanged} refresh={refreshFund} />
       <SectionDivider />
       <Locations />
       <SectionDivider />
@@ -59,7 +67,7 @@ export default function Settings({ onFundChanged }: { onFundChanged: (fund: Fund
       <SectionDivider />
       <DuesTiers />
       <SectionDivider />
-      <ReportLink />
+      <ReportLink fund={fund} onChanged={onFundChanged} refresh={refreshFund} />
       <SectionDivider />
       <User />
       <SectionDivider />
