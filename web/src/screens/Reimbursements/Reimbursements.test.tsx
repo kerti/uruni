@@ -7,6 +7,9 @@ import Correct from '@/screens/Reimbursements/Correct'
 import Settle from '@/screens/Reimbursements/Settle'
 import { chooseOption } from '@/test/select'
 import { copy } from '@/copy/id'
+import type { Purpose } from '@/lib/purposes'
+import type { Reimbursement } from '@/lib/reimbursements'
+import type { Account, Member, Transaction } from '@/lib/setup'
 
 const text = copy.reimbursements
 
@@ -15,16 +18,36 @@ afterEach(() => {
 })
 
 const members = [
-  { id: 1, name: 'Jane', tier_id: 1, joined_on: '2026-01-01', inactive_on: null, created_at: 1 },
-  { id: 2, name: 'John', tier_id: 2, joined_on: '2026-01-01', inactive_on: null, created_at: 1 },
-]
+  {
+    id: 1,
+    name: 'Jane',
+    tier_id: 1,
+    joined_on: '2026-01-01',
+    inactive_on: null,
+    created_at: 1,
+    tier_name: null,
+    current_rate: null,
+    arrears_months: 0,
+  },
+  {
+    id: 2,
+    name: 'John',
+    tier_id: 2,
+    joined_on: '2026-01-01',
+    inactive_on: null,
+    created_at: 1,
+    tier_name: null,
+    current_rate: null,
+    arrears_months: 0,
+  },
+] satisfies Member[]
 const purposes = [
   { id: 10, kind: 'pass_through', name: 'Kas Bidang', created_at: 1 },
   { id: 11, kind: 'main', name: 'Kas Utama', created_at: 1 },
-]
-const accounts = [{ id: 1, kind: 'cash', name: 'Tunai', inactive_on: null, created_at: 1 }]
+] satisfies Purpose[]
+const accounts = [{ id: 1, kind: 'cash', name: 'Tunai', inactive_on: null, created_at: 1 }] satisfies Account[]
 
-function claim(overrides: Record<string, unknown> = {}) {
+function claim(overrides: Partial<Reimbursement> = {}): Reimbursement {
   return {
     id: 1,
     member_id: 1,
@@ -94,7 +117,28 @@ function renderScreen(element: React.ReactNode) {
 describe('Settle', () => {
   const settle: Handler = {
     match: (m, u) => m === 'POST' && u.includes('/api/reimbursements/1/settle'),
-    handle: () => Promise.resolve(jsonResponse({ id: 1 }, 201)),
+    handle: () =>
+      Promise.resolve(
+        jsonResponse(
+          {
+            id: 1,
+            account_id: 1,
+            purpose_id: 11,
+            direction: 'out',
+            amount: 15_000,
+            occurred_on: '2026-09-02',
+            kind: 'reimbursement',
+            member_id: 1,
+            dues_period: null,
+            reimbursement_id: 1,
+            transfer_id: null,
+            reverses_transaction_id: null,
+            note: null,
+            created_at: 1,
+          } satisfies Transaction,
+          201,
+        ),
+      ),
   }
 
   it('settles the claim and calls onDone', async () => {

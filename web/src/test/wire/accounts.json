@@ -1,0 +1,18 @@
+[
+  {
+    "created_at": 1789444800,
+    "id": 1,
+    "inactive_on": null,
+    "kind": "cash",
+    "name": "Tunai",
+    "opening_on": "2026-08-01"
+  },
+  {
+    "created_at": 1789444800,
+    "id": 2,
+    "inactive_on": null,
+    "kind": "bank",
+    "name": "Bank",
+    "opening_on": null
+  }
+]

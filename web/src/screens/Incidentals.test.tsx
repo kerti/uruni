@@ -7,6 +7,9 @@ import Incidentals from '@/screens/Incidentals'
 import { chooseOption } from '@/test/select'
 import { copy } from '@/copy/id'
 import { formatIDR } from '@/lib/money'
+import type { Incidental, IncidentalDetail, IncidentalParticipation, Participant } from '@/lib/incidentals'
+import type { Purpose } from '@/lib/purposes'
+import type { Account, Member, Transaction } from '@/lib/setup'
 
 const text = copy.incidentals
 
@@ -18,34 +21,27 @@ function money(amount: number): string {
   return formatIDR(amount).replace(/\u00a0/g, ' ')
 }
 
-const accounts = [{ id: 1, kind: 'cash', name: 'Tunai', inactive_on: null, created_at: 1 }]
+const accounts = [{ id: 1, kind: 'cash', name: 'Tunai', inactive_on: null, created_at: 1 }] satisfies Account[]
 
-interface Envelope {
-  purpose_id: number
-  occasion: string
-  target_amount: number | null
-  opened_on: string
-  closed_on: string | null
-  created_at: number
-}
-
-const openEnvelope: Envelope = {
+const openEnvelope = {
   purpose_id: 1,
   occasion: 'Halal bihalal RT',
   target_amount: 500_000,
   opened_on: '2026-09-01',
   closed_on: null,
   created_at: 1,
-}
+  minimum_per_member: null,
+} satisfies Incidental
 
-const closedEnvelope: Envelope = {
+const closedEnvelope = {
   purpose_id: 2,
   occasion: '17 Agustus',
   target_amount: null,
   opened_on: '2026-08-01',
   closed_on: '2026-08-20',
   created_at: 2,
-}
+  minimum_per_member: null,
+} satisfies Incidental
 
 function jsonResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } })
@@ -124,7 +120,13 @@ function currentSearch() {
 
 describe('Incidentals', () => {
   it("shows an open envelope's detail for the given purposeId", async () => {
-    const detail = { ...openEnvelope, collected_amount: 0, disbursed_amount: 0, balance_amount: 0 }
+    const detail = {
+      ...openEnvelope,
+      collected_amount: 0,
+      disbursed_amount: 0,
+      balance_amount: 0,
+      recipients: [],
+    } satisfies IncidentalDetail
     vi.stubGlobal(
       'fetch',
       routedFetch([
@@ -146,7 +148,13 @@ describe('Incidentals', () => {
   // envelope's earlier roll makes wrong (here 300k - 120k would read 180k,
   // while the envelope holds 30k after its first roll).
   it('shows target, collected, used and remaining in order, remaining from the balance', async () => {
-    const detail = { ...openEnvelope, collected_amount: 300_000, disbursed_amount: 120_000, balance_amount: 30_000 }
+    const detail = {
+      ...openEnvelope,
+      collected_amount: 300_000,
+      disbursed_amount: 120_000,
+      balance_amount: 30_000,
+      recipients: [],
+    } satisfies IncidentalDetail
     vi.stubGlobal(
       'fetch',
       routedFetch([
@@ -172,7 +180,14 @@ describe('Incidentals', () => {
   })
 
   it('leaves the target row out when the envelope has none', async () => {
-    const detail = { ...openEnvelope, target_amount: null, collected_amount: 0, disbursed_amount: 0, balance_amount: 0 }
+    const detail = {
+      ...openEnvelope,
+      target_amount: null,
+      collected_amount: 0,
+      disbursed_amount: 0,
+      balance_amount: 0,
+      recipients: [],
+    } satisfies IncidentalDetail
     vi.stubGlobal(
       'fetch',
       routedFetch([
@@ -192,7 +207,13 @@ describe('Incidentals', () => {
     // Contributions and disbursements are not this screen's form - one action
     // navigates into RecordTransaction.tsx with the envelope's purpose picked
     // (App.tsx wires onRecordFor to /record?purpose=<id>).
-    const detail = { ...openEnvelope, collected_amount: 0, disbursed_amount: 0, balance_amount: 0 }
+    const detail = {
+      ...openEnvelope,
+      collected_amount: 0,
+      disbursed_amount: 0,
+      balance_amount: 0,
+      recipients: [],
+    } satisfies IncidentalDetail
     vi.stubGlobal(
       'fetch',
       routedFetch([
@@ -219,8 +240,15 @@ describe('Incidentals', () => {
     // is derived from those two figures, which is why the refetched detail
     // carries the same pair with closed_on set rather than the close response's
     // rolled_amount being remembered.
-    const detail = { ...openEnvelope, collected_amount: 120_000, disbursed_amount: 120_000, balance_amount: 0, target_amount: null }
-    const closed = { ...openEnvelope, closed_on: '2026-09-10' }
+    const detail = {
+      ...openEnvelope,
+      collected_amount: 120_000,
+      disbursed_amount: 120_000,
+      balance_amount: 0,
+      target_amount: null,
+      recipients: [],
+    } satisfies IncidentalDetail
+    const closed = { ...openEnvelope, closed_on: '2026-09-10' } satisfies Incidental
     let detailCalls = 0
     vi.stubGlobal(
       'fetch',
@@ -260,8 +288,15 @@ describe('Incidentals', () => {
     // The roll is a transfer the treasurer never asks for directly: without a
     // note it lands in the transaction list as two unexplained rows. An
     // untouched field is null, never "".
-    const detail = { ...openEnvelope, collected_amount: 120_000, disbursed_amount: 0, balance_amount: 120000, target_amount: null }
-    const closed = { ...openEnvelope, closed_on: '2026-09-10' }
+    const detail = {
+      ...openEnvelope,
+      collected_amount: 120_000,
+      disbursed_amount: 0,
+      balance_amount: 120000,
+      target_amount: null,
+      recipients: [],
+    } satisfies IncidentalDetail
+    const closed = { ...openEnvelope, closed_on: '2026-09-10' } satisfies Incidental
     let posted: unknown = null
     const closeHandler = (init?: RequestInit) => {
       posted = JSON.parse(String(init?.body))
@@ -298,8 +333,15 @@ describe('Incidentals', () => {
   })
 
   it('sends a null note when the close note was left empty', async () => {
-    const detail = { ...openEnvelope, collected_amount: 120_000, disbursed_amount: 0, balance_amount: 120000, target_amount: null }
-    const closed = { ...openEnvelope, closed_on: '2026-09-10' }
+    const detail = {
+      ...openEnvelope,
+      collected_amount: 120_000,
+      disbursed_amount: 0,
+      balance_amount: 120000,
+      target_amount: null,
+      recipients: [],
+    } satisfies IncidentalDetail
+    const closed = { ...openEnvelope, closed_on: '2026-09-10' } satisfies Incidental
     let posted: unknown = null
     const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
       const url = typeof input === 'string' ? input : input.toString()
@@ -334,7 +376,13 @@ describe('Incidentals', () => {
   })
 
   it('a second close attempt surfaces the named 409 refusal', async () => {
-    const detail = { ...openEnvelope, collected_amount: 50_000, disbursed_amount: 0, balance_amount: 50000 }
+    const detail = {
+      ...openEnvelope,
+      collected_amount: 50_000,
+      disbursed_amount: 0,
+      balance_amount: 50000,
+      recipients: [],
+    } satisfies IncidentalDetail
     vi.stubGlobal(
       'fetch',
       routedFetch([
@@ -365,7 +413,13 @@ describe('Incidentals', () => {
   })
 
   it('a closed envelope shows the reopen affordance instead of record/close', async () => {
-    const detail = { ...closedEnvelope, collected_amount: 50_000, disbursed_amount: 0, balance_amount: 0 }
+    const detail = {
+      ...closedEnvelope,
+      collected_amount: 50_000,
+      disbursed_amount: 0,
+      balance_amount: 0,
+      recipients: [],
+    } satisfies IncidentalDetail
     vi.stubGlobal(
       'fetch',
       routedFetch([
@@ -386,9 +440,21 @@ describe('Incidentals', () => {
   })
 
   it('reopening a closed envelope leads straight into the record/close actions of an open one', async () => {
-    const closedDetail = { ...closedEnvelope, collected_amount: 50_000, disbursed_amount: 0, balance_amount: 0 }
-    const reopened = { ...closedEnvelope, closed_on: null }
-    const reopenedDetail = { ...reopened, collected_amount: 50_000, disbursed_amount: 0, balance_amount: 50000 }
+    const closedDetail = {
+      ...closedEnvelope,
+      collected_amount: 50_000,
+      disbursed_amount: 0,
+      balance_amount: 0,
+      recipients: [],
+    } satisfies IncidentalDetail
+    const reopened = { ...closedEnvelope, closed_on: null } satisfies Incidental
+    const reopenedDetail = {
+      ...reopened,
+      collected_amount: 50_000,
+      disbursed_amount: 0,
+      balance_amount: 50000,
+      recipients: [],
+    } satisfies IncidentalDetail
     let detailCalls = 0
     const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
       const url = typeof input === 'string' ? input : input.toString()
@@ -426,7 +492,13 @@ describe('Incidentals', () => {
   })
 
   it('calls onBack, now leading to Pengaturan, when backToSettings is clicked', async () => {
-    const detail = { ...openEnvelope, collected_amount: 0, disbursed_amount: 0, balance_amount: 0 }
+    const detail = {
+      ...openEnvelope,
+      collected_amount: 0,
+      disbursed_amount: 0,
+      balance_amount: 0,
+      recipients: [],
+    } satisfies IncidentalDetail
     vi.stubGlobal(
       'fetch',
       routedFetch([
@@ -448,7 +520,13 @@ describe('Incidentals', () => {
   // to its record - which is why the button is here for a closed envelope, not
   // only an open one.
   it('links a closed envelope to its own transactions, the only route it has', async () => {
-    const detail = { ...closedEnvelope, collected_amount: 200_000, disbursed_amount: 200_000, balance_amount: 0 }
+    const detail = {
+      ...closedEnvelope,
+      collected_amount: 200_000,
+      disbursed_amount: 200_000,
+      balance_amount: 0,
+      recipients: [],
+    } satisfies IncidentalDetail
     vi.stubGlobal(
       'fetch',
       routedFetch([
@@ -486,7 +564,7 @@ describe('Incidentals', () => {
       reverses_transaction_id: null,
       note: 'Iuran halal bihalal',
       created_at: 7,
-    }
+    } satisfies Transaction
     const fetchMock = routedFetch([
       {
         match: (m: string, u: string) => m === 'GET' && u.includes('/api/incidentals/2'),
@@ -516,7 +594,13 @@ describe('Incidentals', () => {
   // balance. Every test here opens the screen cold - no close is performed.
 
   it("states a closed envelope's rollover on a cold visit, with no close in sight", async () => {
-    const detail = { ...closedEnvelope, collected_amount: 10_000, disbursed_amount: 0, balance_amount: 0 }
+    const detail = {
+      ...closedEnvelope,
+      collected_amount: 10_000,
+      disbursed_amount: 0,
+      balance_amount: 0,
+      recipients: [],
+    } satisfies IncidentalDetail
     vi.stubGlobal(
       'fetch',
       routedFetch([
@@ -538,7 +622,13 @@ describe('Incidentals', () => {
   })
 
   it('states a shortfall covered from Kas Utama, in its own direction', async () => {
-    const detail = { ...closedEnvelope, collected_amount: 50_000, disbursed_amount: 80_000, balance_amount: 0 }
+    const detail = {
+      ...closedEnvelope,
+      collected_amount: 50_000,
+      disbursed_amount: 80_000,
+      balance_amount: 0,
+      recipients: [],
+    } satisfies IncidentalDetail
     vi.stubGlobal(
       'fetch',
       routedFetch([
@@ -560,7 +650,13 @@ describe('Incidentals', () => {
   })
 
   it('states a square envelope as square, rather than saying nothing', async () => {
-    const detail = { ...closedEnvelope, collected_amount: 75_000, disbursed_amount: 75_000, balance_amount: 0 }
+    const detail = {
+      ...closedEnvelope,
+      collected_amount: 75_000,
+      disbursed_amount: 75_000,
+      balance_amount: 0,
+      recipients: [],
+    } satisfies IncidentalDetail
     vi.stubGlobal(
       'fetch',
       routedFetch([
@@ -580,7 +676,13 @@ describe('Incidentals', () => {
   })
 
   it('says nothing about a rollover on an envelope that is still open', async () => {
-    const detail = { ...openEnvelope, collected_amount: 120_000, disbursed_amount: 20_000, balance_amount: 100000 }
+    const detail = {
+      ...openEnvelope,
+      collected_amount: 120_000,
+      disbursed_amount: 20_000,
+      balance_amount: 100000,
+      recipients: [],
+    } satisfies IncidentalDetail
     vi.stubGlobal(
       'fetch',
       routedFetch([
@@ -602,9 +704,21 @@ describe('Incidentals', () => {
   it('a reopened envelope with a past roll does not claim to have rolled', async () => {
     // Reopening does not reverse the roll, so the ledger still carries it - but
     // the envelope is open again and must not read as finished.
-    const closedDetail = { ...closedEnvelope, collected_amount: 50_000, disbursed_amount: 0, balance_amount: 0 }
-    const reopened = { ...closedEnvelope, closed_on: null }
-    const reopenedDetail = { ...reopened, collected_amount: 50_000, disbursed_amount: 0, balance_amount: 50000 }
+    const closedDetail = {
+      ...closedEnvelope,
+      collected_amount: 50_000,
+      disbursed_amount: 0,
+      balance_amount: 0,
+      recipients: [],
+    } satisfies IncidentalDetail
+    const reopened = { ...closedEnvelope, closed_on: null } satisfies Incidental
+    const reopenedDetail = {
+      ...reopened,
+      collected_amount: 50_000,
+      disbursed_amount: 0,
+      balance_amount: 50000,
+      recipients: [],
+    } satisfies IncidentalDetail
     let detailCalls = 0
     vi.stubGlobal(
       'fetch',
@@ -636,7 +750,13 @@ describe('Incidentals', () => {
   // --- Rename: correcting a mistyped occasion ------------------------------
 
   it('opens the rename dialog, addressed by ?edit=incidental:<id>, when Ubah nama is clicked', async () => {
-    const detail = { ...openEnvelope, collected_amount: 0, disbursed_amount: 0, balance_amount: 0 }
+    const detail = {
+      ...openEnvelope,
+      collected_amount: 0,
+      disbursed_amount: 0,
+      balance_amount: 0,
+      recipients: [],
+    } satisfies IncidentalDetail
     vi.stubGlobal(
       'fetch',
       routedFetch([
@@ -658,9 +778,15 @@ describe('Incidentals', () => {
   })
 
   it("submits a rename, refetches the detail, and shows the corrected occasion through the screen's own feedback banner", async () => {
-    const detail = { ...openEnvelope, collected_amount: 0, disbursed_amount: 0, balance_amount: 0 }
-    const renamedPurpose = { id: 1, kind: 'incidental', name: 'Halal bihalal RT 2026', created_at: 1 }
-    const renamedDetail = { ...detail, occasion: 'Halal bihalal RT 2026' }
+    const detail = {
+      ...openEnvelope,
+      collected_amount: 0,
+      disbursed_amount: 0,
+      balance_amount: 0,
+      recipients: [],
+    } satisfies IncidentalDetail
+    const renamedPurpose = { id: 1, kind: 'incidental', name: 'Halal bihalal RT 2026', created_at: 1 } satisfies Purpose
+    const renamedDetail = { ...detail, occasion: 'Halal bihalal RT 2026' } satisfies IncidentalDetail
     let detailCalls = 0
     let patched: { method: string; url: string; body: unknown } | null = null
     const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
@@ -722,8 +848,8 @@ describe('Incidentals', () => {
       balance_amount: 0,
       minimum_per_member: null,
       recipients: [],
-    }
-    const updated = { ...openEnvelope, minimum_per_member: 25_000 }
+    } satisfies IncidentalDetail
+    const updated = { ...openEnvelope, minimum_per_member: 25_000 } satisfies Incidental
     let detailCalls = 0
     let patched: { body: unknown } | null = null
     const budi = member({ id: 7, name: 'Budi' })
@@ -778,7 +904,7 @@ describe('Incidentals', () => {
       balance_amount: 0,
       minimum_per_member: null,
       recipients: [],
-    }
+    } satisfies IncidentalDetail
     let patched: { body: unknown } | null = null
     const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
       const url = typeof input === 'string' ? input : input.toString()
@@ -815,7 +941,13 @@ describe('Incidentals', () => {
   // The typo is usually noticed after the occasion is over, so a closed
   // envelope must offer the same correction.
   it('offers the rename button for a closed envelope too', async () => {
-    const detail = { ...closedEnvelope, collected_amount: 50_000, disbursed_amount: 0, balance_amount: 0 }
+    const detail = {
+      ...closedEnvelope,
+      collected_amount: 50_000,
+      disbursed_amount: 0,
+      balance_amount: 0,
+      recipients: [],
+    } satisfies IncidentalDetail
     vi.stubGlobal(
       'fetch',
       routedFetch([
@@ -833,7 +965,7 @@ describe('Incidentals', () => {
   })
 })
 
-function member(overrides: Partial<{ id: number; name: string; inactive_on: string | null }> = {}) {
+function member(overrides: Partial<{ id: number; name: string; inactive_on: string | null }> = {}): Member {
   return {
     id: 1,
     name: 'Budi',
@@ -848,19 +980,16 @@ function member(overrides: Partial<{ id: number; name: string; inactive_on: stri
   }
 }
 
+/** What the participation route sends for a member: no tier, rate or arrears. */
+function participant(overrides: Partial<{ id: number; name: string; inactive_on: string | null }> = {}) {
+  const { id, name, joined_on, inactive_on, created_at } = member(overrides)
+  return { id, name, joined_on, inactive_on, created_at } satisfies Participant
+}
+
 describe('Incidentals participation table (ADR-034, #211, #333)', () => {
   const participationText = copy.incidentals.participation
 
-  function stub(
-    detail: Envelope & {
-      collected_amount: number
-      disbursed_amount: number
-      balance_amount?: number
-      recipients?: unknown[]
-      minimum_per_member?: number | null
-    },
-    participation: unknown,
-  ) {
+  function stub(detail: IncidentalDetail, participation: IncidentalParticipation) {
     vi.stubGlobal(
       'fetch',
       routedFetch(
@@ -884,12 +1013,12 @@ describe('Incidentals participation table (ADR-034, #211, #333)', () => {
       balance_amount: 150000,
       minimum_per_member: 50_000,
       recipients: [],
-    }
+    } satisfies IncidentalDetail
     stub(detail, {
       expected: [
-        { member: member({ id: 1, name: 'Budi' }), contributed_amount: 100_000, state: 'sudah' },
-        { member: member({ id: 2, name: 'Sri' }), contributed_amount: 0, state: 'belum' },
-        { member: member({ id: 3, name: 'Ani' }), contributed_amount: 20_000, state: 'kurang' },
+        { member: participant({ id: 1, name: 'Budi' }), contributed_amount: 100_000, state: 'sudah' },
+        { member: participant({ id: 2, name: 'Sri' }), contributed_amount: 0, state: 'belum' },
+        { member: participant({ id: 3, name: 'Ani' }), contributed_amount: 20_000, state: 'kurang' },
       ],
       unexpected: [],
     })
@@ -916,8 +1045,8 @@ describe('Incidentals participation table (ADR-034, #211, #333)', () => {
       balance_amount: 20000,
       minimum_per_member: 50_000,
       recipients: [],
-    }
-    stub(detail, { expected: [{ member: member(), contributed_amount: 20_000, state: 'kurang' }], unexpected: [] })
+    } satisfies IncidentalDetail
+    stub(detail, { expected: [{ member: participant(), contributed_amount: 20_000, state: 'kurang' }], unexpected: [] })
 
     renderIncidentals(<Incidentals onBack={vi.fn()} onRecordFor={vi.fn()} onViewTransactionsFor={vi.fn()} purposeId={1} />)
 
@@ -926,8 +1055,14 @@ describe('Incidentals participation table (ADR-034, #211, #333)', () => {
   })
 
   it('lists an unexpected giver under Sumbangan lain, with their amount and no state', async () => {
-    const detail = { ...openEnvelope, collected_amount: 999_000, disbursed_amount: 0, balance_amount: 999000, recipients: [] }
-    stub(detail, { expected: [], unexpected: [{ member: member({ id: 5, name: 'Tante Wati' }), contributed_amount: 30_000 }] })
+    const detail = {
+      ...openEnvelope,
+      collected_amount: 999_000,
+      disbursed_amount: 0,
+      balance_amount: 999000,
+      recipients: [],
+    } satisfies IncidentalDetail
+    stub(detail, { expected: [], unexpected: [{ member: participant({ id: 5, name: 'Tante Wati' }), contributed_amount: 30_000 }] })
 
     renderIncidentals(<Incidentals onBack={vi.fn()} onRecordFor={vi.fn()} onViewTransactionsFor={vi.fn()} purposeId={1} />)
 
@@ -946,7 +1081,7 @@ describe('Incidentals participation table (ADR-034, #211, #333)', () => {
         { member_id: 9, member_name: 'Keluarga Pak Joko' },
         { member_id: 10, member_name: 'Bu Joko' },
       ],
-    }
+    } satisfies IncidentalDetail
     stub(detail, { expected: [], unexpected: [] })
 
     renderIncidentals(<Incidentals onBack={vi.fn()} onRecordFor={vi.fn()} onViewTransactionsFor={vi.fn()} purposeId={1} />)
@@ -955,8 +1090,14 @@ describe('Incidentals participation table (ADR-034, #211, #333)', () => {
   })
 
   it('records a contribution with the member prefilled - one action per expected row', async () => {
-    const detail = { ...openEnvelope, collected_amount: 0, disbursed_amount: 0, balance_amount: 0, recipients: [] }
-    stub(detail, { expected: [{ member: member({ id: 7, name: 'Budi' }), contributed_amount: 0, state: 'belum' }], unexpected: [] })
+    const detail = {
+      ...openEnvelope,
+      collected_amount: 0,
+      disbursed_amount: 0,
+      balance_amount: 0,
+      recipients: [],
+    } satisfies IncidentalDetail
+    stub(detail, { expected: [{ member: participant({ id: 7, name: 'Budi' }), contributed_amount: 0, state: 'belum' }], unexpected: [] })
 
     const onRecordFor = vi.fn()
     renderIncidentals(<Incidentals onBack={vi.fn()} onRecordFor={onRecordFor} onViewTransactionsFor={vi.fn()} purposeId={1} />)
@@ -967,8 +1108,14 @@ describe('Incidentals participation table (ADR-034, #211, #333)', () => {
   })
 
   it('offers no reminder, share or message action anywhere on this screen (PRD sections 4 and 7.5)', async () => {
-    const detail = { ...openEnvelope, collected_amount: 0, disbursed_amount: 0, balance_amount: 0, recipients: [] }
-    stub(detail, { expected: [{ member: member({ id: 7, name: 'Budi' }), contributed_amount: 0, state: 'belum' }], unexpected: [] })
+    const detail = {
+      ...openEnvelope,
+      collected_amount: 0,
+      disbursed_amount: 0,
+      balance_amount: 0,
+      recipients: [],
+    } satisfies IncidentalDetail
+    stub(detail, { expected: [{ member: participant({ id: 7, name: 'Budi' }), contributed_amount: 0, state: 'belum' }], unexpected: [] })
 
     renderIncidentals(<Incidentals onBack={vi.fn()} onRecordFor={vi.fn()} onViewTransactionsFor={vi.fn()} purposeId={1} />)
     await screen.findByText('Budi')

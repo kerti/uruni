@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import User from '@/screens/Settings/User'
 import { copy } from '@/copy/id'
+import type { AuthUser } from '@/lib/auth'
 
 const text = copy.settings.user
 
@@ -16,7 +17,7 @@ function jsonResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } })
 }
 
-const user = { id: 1, email: 'bendahara@example.org', created_at: 1 }
+const user = { id: 1, email: 'bendahara@example.org', created_at: 1 } satisfies AuthUser
 
 /** GET /api/user answers the signed-in login; each POST is recorded and
  * answered by `reply` (a success by default). */

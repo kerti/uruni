@@ -1,0 +1,20 @@
+[
+  {
+    "created_at": 1789444800,
+    "id": 1,
+    "kind": "main",
+    "name": "Kas Utama"
+  },
+  {
+    "created_at": 1789444800,
+    "id": 3,
+    "kind": "incidental",
+    "name": "Halal bihalal"
+  },
+  {
+    "created_at": 1789444800,
+    "id": 2,
+    "kind": "pass_through",
+    "name": "Titipan sumbangan"
+  }
+]

@@ -10,6 +10,7 @@ import { copy } from '@/copy/id'
 import { formatPeriod } from '@/lib/dates'
 import { formatIDR } from '@/lib/money'
 import type { Transaction } from '@/lib/transactions'
+import type { ReceiptUploadResult } from '@/lib/receipts'
 
 // TransactionList keeps its entry-detail dialog in the URL (ADR-032), so
 // every render needs a router.
@@ -547,7 +548,9 @@ describe('TransactionList receipt photos (#154)', () => {
   }
 
   it('offers "Tambah foto nota" on a row with no photo, and uploads through the transactions route', async () => {
-    const fetchMock = vi.fn((_input: RequestInfo | URL) => Promise.resolve(jsonResponse({ id: 9, uploaded_at: 1 }, 201)))
+    const fetchMock = vi.fn((_input: RequestInfo | URL) =>
+      Promise.resolve(jsonResponse({ id: 9, uploaded_at: 1 } satisfies ReceiptUploadResult, 201)),
+    )
     vi.stubGlobal('fetch', fetchMock)
 
     const { onReceiptsChanged } = renderWithReceipts([transaction({ id: 20, receipt_ids: [] })])
@@ -607,7 +610,7 @@ describe('TransactionList receipt photos (#154)', () => {
     const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
       calls.push(`${(init?.method ?? 'GET').toUpperCase()} ${input.toString()}`)
       if ((init?.method ?? 'GET').toUpperCase() === 'DELETE') return Promise.resolve(new Response(null, { status: 204 }))
-      return Promise.resolve(jsonResponse({ id: 43, uploaded_at: 2 }, 201))
+      return Promise.resolve(jsonResponse({ id: 43, uploaded_at: 2 } satisfies ReceiptUploadResult, 201))
     })
     vi.stubGlobal('fetch', fetchMock)
 

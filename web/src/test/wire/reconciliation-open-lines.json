@@ -1,0 +1,13 @@
+[
+  {
+    "account_id": 2,
+    "actual_amount": 99000,
+    "adjustment_transaction_id": null,
+    "difference_amount": -1000,
+    "id": 2,
+    "reconciliation_id": 1,
+    "recorded_amount": 100000,
+    "remainder_amount": -1000,
+    "resolution": "left_open"
+  }
+]

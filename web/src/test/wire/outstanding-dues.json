@@ -1,0 +1,44 @@
+[
+  {
+    "owed_amount": 50000,
+    "paid_amount": 0,
+    "period": "2026-01",
+    "status": "unpaid"
+  },
+  {
+    "owed_amount": 50000,
+    "paid_amount": 0,
+    "period": "2026-02",
+    "status": "unpaid"
+  },
+  {
+    "owed_amount": 50000,
+    "paid_amount": 0,
+    "period": "2026-03",
+    "status": "unpaid"
+  },
+  {
+    "owed_amount": 50000,
+    "paid_amount": 0,
+    "period": "2026-04",
+    "status": "unpaid"
+  },
+  {
+    "owed_amount": 50000,
+    "paid_amount": 0,
+    "period": "2026-05",
+    "status": "unpaid"
+  },
+  {
+    "owed_amount": 50000,
+    "paid_amount": 0,
+    "period": "2026-06",
+    "status": "unpaid"
+  },
+  {
+    "owed_amount": 50000,
+    "paid_amount": 0,
+    "period": "2026-07",
+    "status": "unpaid"
+  }
+]

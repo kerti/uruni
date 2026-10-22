@@ -5,6 +5,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { copy } from '@/copy/id'
 import Reconciliations from '@/screens/History/Reconciliations'
+import type { ReconciliationDetail, ReconciliationListItem } from '@/lib/reconciliations'
+import type { Account } from '@/lib/setup'
 
 afterEach(() => {
   vi.unstubAllGlobals()
@@ -18,11 +20,11 @@ function jsonResponse(body: unknown, status = 200) {
 }
 
 const accounts = [
-  { id: 1, kind: 'cash', name: 'Tunai', inactive_on: null },
-  { id: 2, kind: 'bank', name: 'Bank', inactive_on: null },
-]
+  { id: 1, kind: 'cash', name: 'Tunai', inactive_on: null, created_at: 1 },
+  { id: 2, kind: 'bank', name: 'Bank', inactive_on: null, created_at: 1 },
+] satisfies Account[]
 
-function listRow(id: number, performedAt: number, openDifferenceAmount: number) {
+function listRow(id: number, performedAt: number, openDifferenceAmount: number): ReconciliationListItem {
   return {
     id,
     performed_at: performedAt,
@@ -33,7 +35,7 @@ function listRow(id: number, performedAt: number, openDifferenceAmount: number) 
   }
 }
 
-function detailFor(id: number, performedAt: number, note: string | null) {
+function detailFor(id: number, performedAt: number, note: string | null): ReconciliationDetail {
   return {
     id,
     performed_at: performedAt,
@@ -55,13 +57,13 @@ function detailFor(id: number, performedAt: number, note: string | null) {
   }
 }
 
-type Page = { reconciliations: unknown[]; next_cursor: string | null }
+type Page = { reconciliations: ReconciliationListItem[]; next_cursor: string | null }
 
 /** Stubs fetch: GET /api/accounts always answers the same roster,
  * GET /api/reconciliations answers whatever pageFor returns, and
  * GET /api/reconciliations/{id} answers whatever detailFor returns, as
  * Transactions.test.tsx's stubApi does. */
-function stubApi(pageFor: (url: URL) => Page, detailForId?: (id: number) => unknown) {
+function stubApi(pageFor: (url: URL) => Page, detailForId?: (id: number) => ReconciliationDetail) {
   const requests: URL[] = []
   vi.stubGlobal(
     'fetch',

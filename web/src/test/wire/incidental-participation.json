@@ -1,0 +1,16 @@
+{
+  "expected": [
+    {
+      "contributed_amount": 50000,
+      "member": {
+        "created_at": 1789444800,
+        "id": 1,
+        "inactive_on": null,
+        "joined_on": "2026-01-01",
+        "name": "Budi"
+      },
+      "state": "sudah"
+    }
+  ],
+  "unexpected": []
+}

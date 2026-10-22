@@ -6,6 +6,10 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import Reimbursements from '@/screens/History/Reimbursements'
 import { copy } from '@/copy/id'
 import { formatIDR } from '@/lib/money'
+import type { Purpose } from '@/lib/purposes'
+import type { ReceiptUploadResult } from '@/lib/receipts'
+import type { Reimbursement } from '@/lib/reimbursements'
+import type { Account, Member } from '@/lib/setup'
 
 const text = copy.reimbursements
 const searchText = copy.history.reimbursements
@@ -19,31 +23,38 @@ function money(amount: number): string {
 }
 
 const members = [
-  { id: 1, name: 'Jane', tier_id: 1, joined_on: '2026-01-01', inactive_on: null, created_at: 1 },
-  { id: 2, name: 'John', tier_id: 2, joined_on: '2026-01-01', inactive_on: null, created_at: 1 },
-]
+  {
+    id: 1,
+    name: 'Jane',
+    tier_id: 1,
+    joined_on: '2026-01-01',
+    inactive_on: null,
+    created_at: 1,
+    tier_name: null,
+    current_rate: null,
+    arrears_months: 0,
+  },
+  {
+    id: 2,
+    name: 'John',
+    tier_id: 2,
+    joined_on: '2026-01-01',
+    inactive_on: null,
+    created_at: 1,
+    tier_name: null,
+    current_rate: null,
+    arrears_months: 0,
+  },
+] satisfies Member[]
 
 const purposes = [
   { id: 10, kind: 'pass_through', name: 'Kas Bidang', created_at: 1 },
   { id: 11, kind: 'main', name: 'Kas Utama', created_at: 1 },
-]
+] satisfies Purpose[]
 
-const accounts = [{ id: 1, kind: 'cash', name: 'Tunai', inactive_on: null, created_at: 1 }]
+const accounts = [{ id: 1, kind: 'cash', name: 'Tunai', inactive_on: null, created_at: 1 }] satisfies Account[]
 
-interface Claim {
-  id: number
-  member_id: number
-  purpose_id: number
-  amount: number
-  incurred_on: string
-  waived_on: string | null
-  settled: boolean
-  note: string | null
-  created_at: number
-  receipt_ids?: number[]
-}
-
-function claim(id: number, overrides: Partial<Claim> = {}): Claim {
+function claim(id: number, overrides: Partial<Reimbursement> = {}): Reimbursement {
   return {
     id,
     member_id: id === 2 ? 2 : 1,
@@ -59,13 +70,13 @@ function claim(id: number, overrides: Partial<Claim> = {}): Claim {
 }
 
 /** Wraps rows in GET /api/reimbursements's envelope. */
-function page(rows: Claim[], nextCursor: string | null = null) {
+function page(rows: Reimbursement[], nextCursor: string | null = null) {
   return { reimbursements: rows, next_cursor: nextCursor }
 }
 
-const outstandingClaims: Claim[] = [claim(1)]
+const outstandingClaims: Reimbursement[] = [claim(1)]
 
-const allClaims: Claim[] = [claim(1), claim(2, { settled: true })]
+const allClaims: Reimbursement[] = [claim(1), claim(2, { settled: true })]
 
 function jsonResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } })
@@ -95,7 +106,7 @@ function routedFetch(handlers: Handler[]) {
 /** The default GET handlers backing every test: the reimbursements list
  * (outstanding vs all variants) plus the members/purposes/accounts form data
  * fetched when a record/settle/correct form is opened. */
-function getHandlers(opts: { outstanding?: Claim[]; all?: Claim[] } = {}) {
+function getHandlers(opts: { outstanding?: Reimbursement[]; all?: Reimbursement[] } = {}) {
   const outstanding = opts.outstanding ?? outstandingClaims
   const all = opts.all ?? allClaims
   return [
@@ -521,7 +532,7 @@ describe('Reimbursements tab', () => {
             match: (m: string, u: string) => m === 'POST' && u.includes('/api/reimbursements/1/receipts'),
             handle: () => {
               attached = true
-              return Promise.resolve(jsonResponse({ id: 9, uploaded_at: 1 }, 201))
+              return Promise.resolve(jsonResponse({ id: 9, uploaded_at: 1 } satisfies ReceiptUploadResult, 201))
             },
           },
           {

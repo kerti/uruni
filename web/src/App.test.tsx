@@ -6,6 +6,11 @@ import App from '@/App'
 import { selectedOptionName } from '@/test/select'
 import { copy } from '@/copy/id'
 import { resetFundTimeZone } from '@/lib/dates'
+import type { SessionStatus } from '@/lib/auth'
+import type { Balances } from '@/lib/balances'
+import type { Incidental, IncidentalDetail } from '@/lib/incidentals'
+import type { Purpose } from '@/lib/purposes'
+import type { Account, Fund, Transaction } from '@/lib/setup'
 
 afterEach(() => {
   vi.unstubAllGlobals()
@@ -26,7 +31,7 @@ function jsonResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } })
 }
 
-function sessionResponse(body: { authenticated: boolean; has_account: boolean }) {
+function sessionResponse(body: SessionStatus) {
   return jsonResponse(body)
 }
 
@@ -38,7 +43,24 @@ const fund = {
   report_slug: 'kas-rt-04',
   report_url: '/report/kas-rt-04',
   created_at: 1234,
-}
+} satisfies Fund
+
+const postedTransaction = {
+  id: 1,
+  account_id: 1,
+  purpose_id: 11,
+  direction: 'in',
+  amount: 1000,
+  occurred_on: '2026-09-01',
+  kind: 'normal',
+  member_id: null,
+  dues_period: null,
+  reimbursement_id: null,
+  transfer_id: null,
+  reverses_transaction_id: null,
+  note: null,
+  created_at: 1,
+} satisfies Transaction
 
 function fundFoundResponse() {
   return jsonResponse(fund)
@@ -56,7 +78,9 @@ const emptyHomeRoutes: { match: (method: string, url: string) => boolean; handle
   {
     match: (m, u) => m === 'GET' && u.includes('/api/balances'),
     handle: () =>
-      Promise.resolve(jsonResponse({ fund_total: 0, accounts: [], purposes: [], owed_to_members: 0, month: { in: 0, out: 0 } })),
+      Promise.resolve(
+        jsonResponse({ fund_total: 0, accounts: [], purposes: [], owed_to_members: 0, month: { in: 0, out: 0 } } satisfies Balances),
+      ),
   },
   // Home's purpose breakdown fetches the open envelopes list too - empty.
   { match: (m, u) => m === 'GET' && u.includes('/api/incidentals'), handle: () => Promise.resolve(jsonResponse([])) },
@@ -252,11 +276,11 @@ describe('App (app shell chrome)', () => {
 })
 
 describe('App (record loop)', () => {
-  const accounts = [{ id: 1, kind: 'cash', name: 'Tunai', inactive_on: null, created_at: 1 }]
+  const accounts = [{ id: 1, kind: 'cash', name: 'Tunai', inactive_on: null, created_at: 1 }] satisfies Account[]
   const purposes = [
     { id: 11, kind: 'main', name: 'Kas utama', created_at: 1 },
     { id: 12, kind: 'incidental', name: 'Halal bihalal RT', created_at: 1 },
-  ]
+  ] satisfies Purpose[]
 
   function authenticatedWithRecordRoutes(timeZone = 'Asia/Jakarta') {
     return routedFetch([
@@ -270,7 +294,10 @@ describe('App (record loop)', () => {
       },
       { match: (m, u) => m === 'GET' && u.includes('/api/accounts'), handle: () => Promise.resolve(jsonResponse(accounts)) },
       { match: (m, u) => m === 'GET' && u.includes('/api/purposes'), handle: () => Promise.resolve(jsonResponse(purposes)) },
-      { match: (m, u) => m === 'POST' && u.includes('/api/transactions'), handle: () => Promise.resolve(jsonResponse({ id: 1 }, 201)) },
+      {
+        match: (m, u) => m === 'POST' && u.includes('/api/transactions'),
+        handle: () => Promise.resolve(jsonResponse(postedTransaction, 201)),
+      },
       ...emptyHomeRoutes,
     ])
   }
@@ -357,14 +384,24 @@ describe('App (record loop)', () => {
       opened_on: '2026-09-01',
       closed_on: null,
       created_at: 1,
-    }
+      minimum_per_member: null,
+    } satisfies Incidental
     window.history.pushState({}, '', '/incidentals?purpose=12')
     vi.stubGlobal(
       'fetch',
       routedFetch([
         {
           match: (m, u) => m === 'GET' && u.includes('/api/incidentals/12'),
-          handle: () => Promise.resolve(jsonResponse({ ...envelope, collected_amount: 0, disbursed_amount: 0, balance_amount: 0 })),
+          handle: () =>
+            Promise.resolve(
+              jsonResponse({
+                ...envelope,
+                collected_amount: 0,
+                disbursed_amount: 0,
+                balance_amount: 0,
+                recipients: [],
+              } satisfies IncidentalDetail),
+            ),
         },
         {
           match: (m, u) => m === 'GET' && u.includes('/api/session'),

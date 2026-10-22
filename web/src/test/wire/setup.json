@@ -1,0 +1,28 @@
+{
+  "accounts": [
+    {
+      "created_at": 1789444800,
+      "id": 1,
+      "inactive_on": null,
+      "kind": "cash",
+      "name": "Tunai"
+    },
+    {
+      "created_at": 1789444800,
+      "id": 2,
+      "inactive_on": null,
+      "kind": "bank",
+      "name": "Bank"
+    }
+  ],
+  "fund": {
+    "created_at": 1789444800,
+    "currency": "IDR",
+    "id": 1,
+    "name": "Kas RT 05",
+    "report_slug": "report-slug",
+    "report_url": "/report/report-slug",
+    "time_zone": "Asia/Jakarta"
+  },
+  "main_purpose_id": 1
+}

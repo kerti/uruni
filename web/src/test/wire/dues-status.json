@@ -1,0 +1,19 @@
+[
+  {
+    "member": {
+      "arrears_months": 0,
+      "created_at": 1789444800,
+      "current_rate": null,
+      "id": 1,
+      "inactive_on": null,
+      "joined_on": "2026-01-01",
+      "name": "Budi",
+      "tier_id": 1,
+      "tier_name": null
+    },
+    "owed_amount": 50000,
+    "paid_amount": 50000,
+    "paid_through": null,
+    "status": "paid"
+  }
+]

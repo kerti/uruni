@@ -1,0 +1,18 @@
+{
+  "balance_amount": 50000,
+  "closed_on": null,
+  "collected_amount": 50000,
+  "created_at": 1789444800,
+  "disbursed_amount": 0,
+  "minimum_per_member": 20000,
+  "occasion": "Halal bihalal",
+  "opened_on": "2026-09-01",
+  "purpose_id": 3,
+  "recipients": [
+    {
+      "member_id": 2,
+      "member_name": "Sari"
+    }
+  ],
+  "target_amount": 300000
+}

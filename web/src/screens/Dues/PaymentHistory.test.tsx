@@ -7,6 +7,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import PaymentHistory from '@/screens/Dues/PaymentHistory'
 import { copy } from '@/copy/id'
 import { formatIDR } from '@/lib/money'
+import type { DuesPaymentHistoryRow } from '@/lib/dues'
 
 const text = copy.history.dues
 const rowText = copy.dues.history
@@ -23,7 +24,7 @@ function money(amount: number): string {
   return formatIDR(amount).replace(/\u00a0/g, ' ')
 }
 
-function payment(id: number, memberName: string, overrides: Partial<Record<string, unknown>> = {}) {
+function payment(id: number, memberName: string, overrides: Partial<DuesPaymentHistoryRow> = {}): DuesPaymentHistoryRow {
   return {
     id,
     is_reversal: false,
@@ -58,7 +59,7 @@ function render(ui: ReactElement, entry = '/history/dues') {
   return { ...result, rerender: (next: ReactElement) => result.rerender(wrap(next)) }
 }
 
-type Page = { dues_payments: unknown[]; next_cursor: string | null }
+type Page = { dues_payments: DuesPaymentHistoryRow[]; next_cursor: string | null }
 
 /** Stubs fetch: GET /api/dues-payments answers whatever pageFor returns for the
  * request's URL. Returns every requested URL, in order, so a test can assert

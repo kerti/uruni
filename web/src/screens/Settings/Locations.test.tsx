@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import Locations from '@/screens/Settings/Locations'
 import { copy } from '@/copy/id'
 import { chooseOption } from '@/test/select'
+import type { Account } from '@/lib/setup'
 
 const text = copy.settings.locations
 
@@ -17,14 +18,14 @@ function jsonResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } })
 }
 
-function account(id: number, name: string, kind = 'cash', inactiveOn: string | null = null) {
+function account(id: number, name: string, kind: Account['kind'] = 'cash', inactiveOn: string | null = null): Account {
   return { id, kind, name, inactive_on: inactiveOn, created_at: 1 }
 }
 
 /** One stub for the section: GET answers the current list, and every write is
  * recorded so a test can assert the request the row made (method, path, body)
  * rather than only what re-rendered. */
-function stubAccounts(initial: ReturnType<typeof account>[], writeResponse?: () => Response) {
+function stubAccounts(initial: Account[], writeResponse?: () => Response) {
   const calls: { method: string; url: string; body: unknown }[] = []
   const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
     const url = typeof input === 'string' ? input : input.toString()

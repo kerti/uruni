@@ -1,0 +1,17 @@
+{
+  "next_cursor": null,
+  "reimbursements": [
+    {
+      "amount": 30000,
+      "created_at": 1789444800,
+      "id": 1,
+      "incurred_on": "2026-09-07",
+      "member_id": 2,
+      "note": "Beli kabel",
+      "purpose_id": 1,
+      "receipt_ids": [],
+      "settled": false,
+      "waived_on": null
+    }
+  ]
+}

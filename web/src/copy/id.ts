@@ -234,6 +234,18 @@ export const copy = {
       // either, so these are unreachable from the app. The 409 is a definite answer.
       invalid_idempotency_key: 'Ada yang tidak beres saat mengirim data. Coba lagi.',
       idempotency_key_reused: 'Ada yang tidak beres saat mengirim data. Coba lagi.',
+      // A cross-site write the origin guard refused, and a body over the 1 MiB
+      // cap: the app sends neither, so they share the same wording.
+      cross_origin_request: 'Ada yang tidak beres saat mengirim data. Coba lagi.',
+      request_too_large: 'Ada yang tidak beres saat mengirim data. Coba lagi.',
+      // The session ended while she was in the app: it expired, or she was
+      // signed out from another device or by a restore.
+      unauthenticated: 'Sudah keluar otomatis. Masuk lagi untuk melanjutkan.',
+      // The database's CHECK refused what the app's own checks let through: the
+      // same sentence as invalid_argument, since to her it is the same thing.
+      check_violation: 'Ada isian yang belum sesuai. Coba periksa lagi.',
+      // A 500. The same sentence ErrorState shows for a code it does not know.
+      internal_error: 'Ada yang tidak beres. Coba lagi sebentar lagi.',
       // Deleting a location (or a member or tier) that something already
       // points at. The locations section renders more specific wording
       // pointing at deactivate; this is the shared fallback for the same code

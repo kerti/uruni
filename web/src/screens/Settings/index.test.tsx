@@ -4,7 +4,10 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import Settings from '@/screens/Settings/index'
 import { copy } from '@/copy/id'
-import type { Fund } from '@/lib/setup'
+import type { Account, Fund } from '@/lib/setup'
+import type { AuthUser } from '@/lib/auth'
+import type { Incidental } from '@/lib/incidentals'
+import type { Purpose } from '@/lib/purposes'
 
 // Pengaturan as a whole, rather than one section at a time - the only way this
 // suite's subject is visible at all.
@@ -34,20 +37,30 @@ function stubSettings() {
     if (url.includes('/api/incidentals')) {
       return Promise.resolve(
         jsonResponse([
-          { purpose_id: 7, occasion: 'Halal bihalal RT', target_amount: null, opened_on: '2026-09-01', closed_on: null, created_at: 7 },
-        ]),
+          {
+            purpose_id: 7,
+            occasion: 'Halal bihalal RT',
+            target_amount: null,
+            opened_on: '2026-09-01',
+            closed_on: null,
+            created_at: 7,
+            minimum_per_member: null,
+          },
+        ] satisfies Incidental[]),
       )
     }
     // Not "Tunai": that string is also the cash kind's badge, and these
     // assertions match on text, so the fixture's name must appear exactly once.
     if (url.includes('/api/accounts')) {
-      return Promise.resolve(jsonResponse([{ id: 1, name: 'Dompet Bendahara', kind: 'cash', inactive_on: null }]))
+      return Promise.resolve(
+        jsonResponse([{ id: 1, name: 'Dompet Bendahara', kind: 'cash', inactive_on: null, created_at: 1 }] satisfies Account[]),
+      )
     }
     if (url.includes('/api/purposes')) {
-      return Promise.resolve(jsonResponse([{ id: 2, kind: 'pass_through', name: 'Kas Bidang' }]))
+      return Promise.resolve(jsonResponse([{ id: 2, kind: 'pass_through', name: 'Kas Bidang', created_at: 1 }] satisfies Purpose[]))
     }
     if (url.includes('/api/user')) {
-      return Promise.resolve(jsonResponse({ id: 1, email: 'bendahara@example.org', created_at: 1 }))
+      return Promise.resolve(jsonResponse({ id: 1, email: 'bendahara@example.org', created_at: 1 } satisfies AuthUser))
     }
     return Promise.reject(new Error(`unstubbed fetch: ${url}`))
   })

@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import PassThrough from '@/screens/Settings/PassThrough'
 import { copy } from '@/copy/id'
+import type { Purpose } from '@/lib/purposes'
 
 const text = copy.settings.passThrough
 
@@ -16,11 +17,11 @@ function jsonResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } })
 }
 
-function purpose(id: number, kind: string, name: string) {
+function purpose(id: number, kind: string, name: string): Purpose {
   return { id, kind, name, created_at: 1 }
 }
 
-function stubPurposes(initial: ReturnType<typeof purpose>[]) {
+function stubPurposes(initial: Purpose[]) {
   const calls: { method: string; url: string; body: unknown }[] = []
   const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
     const url = typeof input === 'string' ? input : input.toString()

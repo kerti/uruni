@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import MemberPayments from '@/screens/Dues/MemberPayments'
 import { copy } from '@/copy/id'
 import { formatIDR } from '@/lib/money'
+import type { Transaction } from '@/lib/setup'
 
 const text = copy.dues.history
 
@@ -16,7 +17,7 @@ function jsonResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } })
 }
 
-function transaction(overrides: Record<string, unknown>) {
+function transaction(overrides: Partial<Transaction>): Transaction {
   return {
     id: 1,
     account_id: 7,
@@ -52,7 +53,7 @@ const rows = [
 // query params before answering, mirroring the server - a test against this
 // proves MemberPayments passes those params through, not that it filters
 // client-side (illegal for a paged list).
-function stubTransactions(body: Record<string, unknown>[] = rows) {
+function stubTransactions(body: Transaction[] = rows) {
   return vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
     const url = typeof input === 'string' ? input : input.toString()
     if (url.includes('/reversal') && init?.method === 'POST') {

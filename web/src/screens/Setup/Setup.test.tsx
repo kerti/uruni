@@ -6,6 +6,7 @@ import Setup from '@/screens/Setup/Setup'
 import { openSelect, selectedOptionName } from '@/test/select'
 import { copy } from '@/copy/id'
 import { resetFundTimeZone } from '@/lib/dates'
+import type { DuesRate, DuesTier, Member, SetupResult } from '@/lib/setup'
 
 afterEach(() => {
   vi.unstubAllGlobals()
@@ -31,7 +32,20 @@ const setupResult = {
     { id: 10, kind: 'cash', name: 'Tunai', inactive_on: null, created_at: 1 },
     { id: 11, kind: 'bank', name: 'Bank', inactive_on: null, created_at: 1 },
   ],
-}
+} satisfies SetupResult
+
+/** What POST /api/members answers: the zero-valued roster fields (lib/setup.ts's Member). */
+const createdMember = {
+  id: 1,
+  name: 'Warga',
+  tier_id: null,
+  joined_on: '2026-03-15',
+  inactive_on: null,
+  created_at: 1,
+  tier_name: null,
+  current_rate: null,
+  arrears_months: 0,
+} satisfies Member
 
 function jsonResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } })
@@ -333,13 +347,16 @@ describe('Setup', () => {
       { match: (m, u) => m === 'POST' && u.includes('/api/setup'), handle: () => Promise.resolve(jsonResponse(setupResult, 201)) },
       {
         match: (m, u) => m === 'POST' && u.includes('/api/dues-tiers/7/rates'),
-        handle: () => Promise.resolve(jsonResponse({ id: 1, tier_id: 7, amount: 20000, effective_from: '2026-03' }, 201)),
+        handle: () =>
+          Promise.resolve(
+            jsonResponse({ id: 1, tier_id: 7, amount: 20000, effective_from: '2026-03', created_at: 1 } satisfies DuesRate, 201),
+          ),
       },
       {
         match: (m, u) => m === 'POST' && u.endsWith('/api/dues-tiers'),
-        handle: () => Promise.resolve(jsonResponse({ id: 7, name: 'Rumah tinggal', created_at: 1 }, 201)),
+        handle: () => Promise.resolve(jsonResponse({ id: 7, name: 'Rumah tinggal', created_at: 1 } satisfies DuesTier, 201)),
       },
-      { match: (m, u) => m === 'POST' && u.includes('/api/members'), handle: () => Promise.resolve(jsonResponse({ id: 1 }, 201)) },
+      { match: (m, u) => m === 'POST' && u.includes('/api/members'), handle: () => Promise.resolve(jsonResponse(createdMember, 201)) },
     ])
     vi.stubGlobal('fetch', fetchMock)
     render(<Setup onDone={onDone} />)
@@ -381,7 +398,7 @@ describe('Setup', () => {
     const onDone = vi.fn()
     const fetchMock = routedFetch([
       { match: (m, u) => m === 'POST' && u.includes('/api/setup'), handle: () => Promise.resolve(jsonResponse(setupResult, 201)) },
-      { match: (m, u) => m === 'POST' && u.includes('/api/members'), handle: () => Promise.resolve(jsonResponse({ id: 1 }, 201)) },
+      { match: (m, u) => m === 'POST' && u.includes('/api/members'), handle: () => Promise.resolve(jsonResponse(createdMember, 201)) },
     ])
     vi.stubGlobal('fetch', fetchMock)
     render(<Setup onDone={onDone} />)
@@ -513,13 +530,16 @@ describe('Setup time zone (ADR-041)', () => {
       { match: (m, u) => m === 'POST' && u.includes('/api/setup'), handle: () => Promise.resolve(jsonResponse(stored, 201)) },
       {
         match: (m, u) => m === 'POST' && u.includes('/api/dues-tiers/7/rates'),
-        handle: () => Promise.resolve(jsonResponse({ id: 1, tier_id: 7, amount: 20000, effective_from: '2026-09' }, 201)),
+        handle: () =>
+          Promise.resolve(
+            jsonResponse({ id: 1, tier_id: 7, amount: 20000, effective_from: '2026-09', created_at: 1 } satisfies DuesRate, 201),
+          ),
       },
       {
         match: (m, u) => m === 'POST' && u.endsWith('/api/dues-tiers'),
-        handle: () => Promise.resolve(jsonResponse({ id: 7, name: 'Reguler', created_at: 1 }, 201)),
+        handle: () => Promise.resolve(jsonResponse({ id: 7, name: 'Reguler', created_at: 1 } satisfies DuesTier, 201)),
       },
-      { match: (m, u) => m === 'POST' && u.includes('/api/members'), handle: () => Promise.resolve(jsonResponse({ id: 1 }, 201)) },
+      { match: (m, u) => m === 'POST' && u.includes('/api/members'), handle: () => Promise.resolve(jsonResponse(createdMember, 201)) },
     ])
     vi.stubGlobal('fetch', fetchMock)
     render(<Setup onDone={vi.fn()} />)

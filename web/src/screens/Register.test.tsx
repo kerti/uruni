@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import Register from '@/screens/Register'
 import { copy } from '@/copy/id'
+import type { AuthUser } from '@/lib/auth'
 
 afterEach(() => {
   vi.unstubAllGlobals()
@@ -41,7 +42,7 @@ async function fillAndSubmit(email: string, password: string) {
 
 describe('Register', () => {
   it('registers and hands the new user back to the caller', async () => {
-    const user = { id: 1, email: 'bendahara@example.test', created_at: 1234 }
+    const user = { id: 1, email: 'bendahara@example.test', created_at: 1234 } satisfies AuthUser
     stubApi(() => Promise.resolve(new Response(JSON.stringify(user), { status: 201, headers: { 'Content-Type': 'application/json' } })))
     const onRegistered = vi.fn()
     render(<Register onRegistered={onRegistered} />)

@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import Roster from '@/screens/Members/Roster'
 import { copy } from '@/copy/id'
 import { chooseOption } from '@/test/select'
+import type { DuesTierWithRates, Member } from '@/lib/setup'
 
 const text = copy.members.roster
 
@@ -17,18 +18,7 @@ function jsonResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } })
 }
 
-function member(
-  id: number,
-  name: string,
-  overrides: Partial<{
-    tier_id: number | null
-    joined_on: string
-    inactive_on: string | null
-    tier_name: string | null
-    current_rate: number | null
-    arrears_months: number
-  }> = {},
-) {
+function member(id: number, name: string, overrides: Partial<Member> = {}): Member {
   return {
     id,
     name,
@@ -44,9 +34,9 @@ function member(
 }
 
 const tiers = [
-  { id: 1, name: 'Pelaksana', created_at: 1 },
-  { id: 2, name: 'Fungsional', created_at: 1 },
-]
+  { id: 1, name: 'Pelaksana', created_at: 1, rates: [] },
+  { id: 2, name: 'Fungsional', created_at: 1, rates: [] },
+] satisfies DuesTierWithRates[]
 
 /** One stub for the screen: GET /api/members answers the paged envelope
  * ({members, next_cursor}), GET /api/dues-tiers answers the picker's list, and
@@ -57,7 +47,7 @@ const tiers = [
  * `pages` lets a paging test hand back more than one page keyed by the cursor
  * requested; a plain array behaves as a single, unpaged page. */
 function stubRoster(
-  membersOrPages: ReturnType<typeof member>[] | Record<string, { members: ReturnType<typeof member>[]; next_cursor: string | null }>,
+  membersOrPages: Member[] | Record<string, { members: Member[]; next_cursor: string | null }>,
   writeResponse?: () => Response,
 ) {
   const calls: { method: string; url: string; body: Record<string, unknown> | undefined }[] = []
