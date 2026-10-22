@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/kerti/uruni/internal/store"
+	"github.com/kerti/uruni/internal/tz"
 )
 
 // jakartaTime constructs a time.Time directly in Asia/Jakarta, so a test about
@@ -31,7 +32,7 @@ func TestBuildDumpNameAndParseDumpNameRoundTrip(t *testing.T) {
 	t.Parallel()
 	when := jakartaTime(2026, 9, 30, 14, 5, 1)
 	hash := "3f9a2c8e10b4deadbeef"
-	name := BuildDumpName(when, KindDaily, 1, hash)
+	name := BuildDumpName(when, tz.Jakarta, KindDaily, 1, hash)
 
 	want := "uruni-20260930-140501-daily-fv1-3f9a2c8e10b4.zip"
 	if name != want {
@@ -257,7 +258,7 @@ func TestNeedsFormatVersionDumpWhenNoDumpsExistYet(t *testing.T) {
 func TestNeedsFormatVersionDumpWhenNewestMatchesCurrentVersion(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
-	writeDumpFile(t, dir, BuildDumpName(jakartaTime(2026, 9, 30, 1, 0, 0), KindDaily, FormatVersion, "aaaaaaaaaaaaaaaa"))
+	writeDumpFile(t, dir, BuildDumpName(jakartaTime(2026, 9, 30, 1, 0, 0), tz.Jakarta, KindDaily, FormatVersion, "aaaaaaaaaaaaaaaa"))
 
 	needed, err := NeedsFormatVersionDump(dir)
 	if err != nil {
@@ -271,8 +272,8 @@ func TestNeedsFormatVersionDumpWhenNewestMatchesCurrentVersion(t *testing.T) {
 func TestNeedsFormatVersionDumpWhenNewestIsAnOlderFormat(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
-	writeDumpFile(t, dir, BuildDumpName(jakartaTime(2026, 9, 29, 1, 0, 0), KindDaily, FormatVersion, "aaaaaaaaaaaaaaaa"))
-	writeDumpFile(t, dir, BuildDumpName(jakartaTime(2026, 9, 30, 1, 0, 0), KindDaily, FormatVersion-1, "bbbbbbbbbbbbbbbb"))
+	writeDumpFile(t, dir, BuildDumpName(jakartaTime(2026, 9, 29, 1, 0, 0), tz.Jakarta, KindDaily, FormatVersion, "aaaaaaaaaaaaaaaa"))
+	writeDumpFile(t, dir, BuildDumpName(jakartaTime(2026, 9, 30, 1, 0, 0), tz.Jakarta, KindDaily, FormatVersion-1, "bbbbbbbbbbbbbbbb"))
 
 	needed, err := NeedsFormatVersionDump(dir)
 	if err != nil {
@@ -326,7 +327,7 @@ func TestWriteDailyIfNeededSkipsWhenTodaysDumpAlreadyExists(t *testing.T) {
 	// A dump already exists for today, earlier, with a hash not matching the
 	// current fund: the "today already has one" check short-circuits before the
 	// hash is compared.
-	writeDumpFile(t, backupDir, BuildDumpName(jakartaTime(2026, 9, 30, 1, 0, 0), KindDaily, FormatVersion, "0000000000000000"))
+	writeDumpFile(t, backupDir, BuildDumpName(jakartaTime(2026, 9, 30, 1, 0, 0), tz.Jakarta, KindDaily, FormatVersion, "0000000000000000"))
 
 	name, written, err := WriteDailyIfNeeded(ctx, sqlDB, uploadsDir, backupDir, now)
 	if err != nil {
@@ -636,7 +637,7 @@ func TestEnsureBootDumpWritesAgainWhenFormatVersionChanged(t *testing.T) {
 	ctx := context.Background()
 	logger := testDiscardLogger()
 
-	writeDumpFile(t, backupDir, BuildDumpName(jakartaTime(2026, 9, 29, 0, 0, 0), KindDaily, FormatVersion-1, "aaaaaaaaaaaaaaaa"))
+	writeDumpFile(t, backupDir, BuildDumpName(jakartaTime(2026, 9, 29, 0, 0, 0), tz.Jakarta, KindDaily, FormatVersion-1, "aaaaaaaaaaaaaaaa"))
 
 	if err := EnsureBootDump(ctx, sqlDB, uploadsDir, backupDir, jakartaTime(2026, 9, 30, 0, 5, 0), logger); err != nil {
 		t.Fatalf("EnsureBootDump() = %v, want no error", err)
@@ -678,8 +679,8 @@ func TestDumpNameEdgeCases(t *testing.T) {
 	// deterministically by name; a subdirectory is never a dump.
 	dir := t.TempDir()
 	when := time.Date(2026, 9, 30, 14, 5, 1, 0, time.UTC)
-	a := BuildDumpName(when, KindDaily, FormatVersion, "aaaaaaaaaaaa")
-	b := BuildDumpName(when, KindPreRestore, FormatVersion, "bbbbbbbbbbbb")
+	a := BuildDumpName(when, tz.Jakarta, KindDaily, FormatVersion, "aaaaaaaaaaaa")
+	b := BuildDumpName(when, tz.Jakarta, KindPreRestore, FormatVersion, "bbbbbbbbbbbb")
 	for _, name := range []string{a, b} {
 		if err := os.WriteFile(filepath.Join(dir, name), []byte("x"), 0o600); err != nil {
 			t.Fatalf("writing %s: %v", name, err)

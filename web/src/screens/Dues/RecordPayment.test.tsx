@@ -146,7 +146,7 @@ describe('RecordDuesPayment', () => {
     // Only Date is faked: userEvent still needs real timers.
     beforeEach(() => {
       vi.useFakeTimers({ toFake: ['Date'] })
-      vi.setSystemTime(new Date(2026, 9, 1))
+      vi.setSystemTime(new Date('2026-10-01T09:00:00+07:00')) // the fund's day, whatever zone this machine is in
     })
     afterEach(() => {
       vi.useRealTimers()

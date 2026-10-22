@@ -17,6 +17,7 @@ import (
 	"github.com/kerti/uruni/internal/backup"
 	"github.com/kerti/uruni/internal/ledger"
 	"github.com/kerti/uruni/internal/store"
+	"github.com/kerti/uruni/internal/tz"
 )
 
 func getBackup(t *testing.T, r http.Handler) *httptest.ResponseRecorder {
@@ -164,15 +165,19 @@ func TestListBackupsIsEmptyWithNoDumpsYet(t *testing.T) {
 
 // TestListBackupsReturnsEveryDumpNewestFirstWithFormatFlag lists current- and
 // older-format dumps and checks every field the Cadangan card reads: date,
-// kind, format_version, is_current_format and size, newest first.
+// kind, format_version, is_current_format, can_restore and size, newest first.
 func TestListBackupsReturnsEveryDumpNewestFirstWithFormatFlag(t *testing.T) {
 	t.Parallel()
 	r, backupDir := authedRouterWithBackupDir(t)
 
-	oldName := backup.BuildDumpName(time.Date(2026, 9, 28, 1, 0, 0, 0, time.UTC), backup.KindDaily, backup.FormatVersion-1, "aaaaaaaaaaaaaaaa")
-	newName := backup.BuildDumpName(time.Date(2026, 9, 30, 1, 0, 0, 0, time.UTC), backup.KindPreRestore, backup.FormatVersion, "bbbbbbbbbbbbbbbb")
+	oldName := backup.BuildDumpName(time.Date(2026, 9, 28, 1, 0, 0, 0, time.UTC), tz.Jakarta, backup.KindDaily, backup.FormatVersion-1, "aaaaaaaaaaaaaaaa")
+	newName := backup.BuildDumpName(time.Date(2026, 9, 30, 1, 0, 0, 0, time.UTC), tz.Jakarta, backup.KindPreRestore, backup.FormatVersion, "bbbbbbbbbbbbbbbb")
 	writeTestDumpFile(t, backupDir, oldName, []byte("older format stub"))
 	writeTestDumpFile(t, backupDir, newName, []byte("current format stub, a bit longer"))
+	// A format no step reads (older than the oldest the importer upgrades): listed
+	// and downloadable, never offered for restore.
+	unreadable := backup.BuildDumpName(time.Date(2026, 9, 27, 1, 0, 0, 0, time.UTC), tz.Jakarta, backup.KindDaily, 0, "cccccccccccccccc")
+	writeTestDumpFile(t, backupDir, unreadable, []byte("a format nobody reads"))
 
 	rec := getBackups(t, r)
 	if rec.Code != http.StatusOK {
@@ -183,8 +188,8 @@ func TestListBackupsReturnsEveryDumpNewestFirstWithFormatFlag(t *testing.T) {
 	if err := json.NewDecoder(rec.Body).Decode(&items); err != nil {
 		t.Fatalf("decoding response: %v", err)
 	}
-	if len(items) != 2 {
-		t.Fatalf("len(items) = %d, want 2", len(items))
+	if len(items) != 3 {
+		t.Fatalf("len(items) = %d, want 3", len(items))
 	}
 
 	newest := items[0]
@@ -197,22 +202,29 @@ func TestListBackupsReturnsEveryDumpNewestFirstWithFormatFlag(t *testing.T) {
 	if newest.Date != "2026-09-30" {
 		t.Errorf("items[0].Date = %q, want 2026-09-30", newest.Date)
 	}
-	if !newest.IsCurrentFormat {
-		t.Error("items[0].IsCurrentFormat = false, want true")
+	if !newest.IsCurrentFormat || !newest.CanRestore {
+		t.Errorf("items[0] IsCurrentFormat, CanRestore = %v, %v, want true, true", newest.IsCurrentFormat, newest.CanRestore)
 	}
 	if newest.SizeBytes != int64(len("current format stub, a bit longer")) {
 		t.Errorf("items[0].SizeBytes = %d, want the file's real size", newest.SizeBytes)
 	}
 
-	oldest := items[1]
-	if oldest.Name != oldName {
-		t.Errorf("items[1].Name = %q, want the older dump %q", oldest.Name, oldName)
+	previous := items[1]
+	if previous.Name != oldName {
+		t.Errorf("items[1].Name = %q, want the older dump %q", previous.Name, oldName)
 	}
-	if oldest.IsCurrentFormat {
+	if previous.IsCurrentFormat {
 		t.Error("items[1].IsCurrentFormat = true, want false - it was written by an older FormatVersion")
 	}
-	if oldest.Kind != string(backup.KindDaily) {
-		t.Errorf("items[1].Kind = %q, want %q", oldest.Kind, backup.KindDaily)
+	if !previous.CanRestore {
+		t.Error("items[1].CanRestore = false, want true - the importer upgrades the previous format (ADR-040)")
+	}
+	if previous.Kind != string(backup.KindDaily) {
+		t.Errorf("items[1].Kind = %q, want %q", previous.Kind, backup.KindDaily)
+	}
+
+	if last := items[2]; last.Name != unreadable || last.IsCurrentFormat || last.CanRestore {
+		t.Errorf("items[2] = %+v, want the format-0 dump, not current and not restorable", last)
 	}
 }
 
@@ -221,7 +233,7 @@ func TestListBackupsReturnsEveryDumpNewestFirstWithFormatFlag(t *testing.T) {
 func TestDownloadStoredBackupServesExactBytesUnderItsOwnName(t *testing.T) {
 	t.Parallel()
 	r, backupDir := authedRouterWithBackupDir(t)
-	name := backup.BuildDumpName(time.Date(2026, 9, 30, 1, 0, 0, 0, time.UTC), backup.KindDaily, backup.FormatVersion, "cccccccccccccccc")
+	name := backup.BuildDumpName(time.Date(2026, 9, 30, 1, 0, 0, 0, time.UTC), tz.Jakarta, backup.KindDaily, backup.FormatVersion, "cccccccccccccccc")
 	want := []byte("a fixture zip's stub bytes")
 	writeTestDumpFile(t, backupDir, name, want)
 
@@ -246,7 +258,7 @@ func TestDownloadStoredBackupServesExactBytesUnderItsOwnName(t *testing.T) {
 func TestDownloadStoredBackupRejectsUnknownName(t *testing.T) {
 	t.Parallel()
 	r, _ := authedRouterWithBackupDir(t)
-	name := backup.BuildDumpName(time.Date(2026, 9, 30, 1, 0, 0, 0, time.UTC), backup.KindDaily, backup.FormatVersion, "dddddddddddddddd")
+	name := backup.BuildDumpName(time.Date(2026, 9, 30, 1, 0, 0, 0, time.UTC), tz.Jakarta, backup.KindDaily, backup.FormatVersion, "dddddddddddddddd")
 
 	rec := getStoredBackup(t, r, name)
 	if rec.Code != http.StatusNotFound {

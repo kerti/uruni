@@ -61,6 +61,14 @@ type TakeReconciliationParams struct {
 	FundID int64
 	Note   *string
 	Counts []AccountCount
+
+	// Now is the clock each fix's occurred_on ceiling is read from (ADR-041). It
+	// dates nothing: PerformedAt is still stamped from the wall clock.
+	// Zero means time.Now().
+	Now time.Time
+
+	// Idempotency, when non-nil, makes the snapshot safe to repeat (ADR-043).
+	Idempotency *Idempotency
 }
 
 // TakeReconciliation takes one reconciliation snapshot: for each counted
@@ -137,10 +145,19 @@ type TakeReconciliationParams struct {
 // naming one, a Fix with a non-positive amount, an unrecognised Fix
 // direction, a malformed OccurredOn, the same account counted twice, a
 // negative actual_amount - are ErrInvalidArgument before anything is written
-// (ADR-027). Anything else, such as an account or purpose id of another
-// fund, is a domain bug and surfaces wrapped generically.
+// (ADR-027). A Fix dated outside the plausible window is ErrDateOutOfRange.
+// Anything else, such as an account or purpose id of another fund, is a domain
+// bug and surfaces wrapped generically.
+//
+// With p.Idempotency set (ADR-043), a repeat returns the first snapshot and
+// takes none; the checks inside the transaction do not run on a replay. The
+// lines are read with GetReconciliationDetail, as after a first success.
 func (l *Ledger) TakeReconciliation(ctx context.Context, p TakeReconciliationParams) (store.Reconciliation, error) {
-	if err := validateTakeReconciliationParams(p); err != nil {
+	window, err := l.windowFor(ctx, l.q, p.FundID, p.Now)
+	if err != nil {
+		return store.Reconciliation{}, err
+	}
+	if err := validateTakeReconciliationParams(p, window); err != nil {
 		return store.Reconciliation{}, err
 	}
 
@@ -154,10 +171,10 @@ func (l *Ledger) TakeReconciliation(ctx context.Context, p TakeReconciliationPar
 		adjustmentTransactionID            *int64
 	}
 
-	var rec store.Reconciliation
-	err := l.withTx(ctx, func(q store.Querier) error {
+	rec, err := withIdempotency(ctx, l, p.Idempotency, func(q store.Querier) (store.Reconciliation, error) {
+		var rec store.Reconciliation
 		if err := requireEveryActiveLocationCounted(ctx, q, p); err != nil {
-			return err
+			return store.Reconciliation{}, err
 		}
 
 		now := time.Now().Unix()
@@ -170,7 +187,7 @@ func (l *Ledger) TakeReconciliation(ctx context.Context, p TakeReconciliationPar
 		case errors.Is(err, sql.ErrNoRows):
 			emptyLedger = true
 		default:
-			return fmt.Errorf("finding the reconciliation cutoff: %w", err)
+			return store.Reconciliation{}, fmt.Errorf("finding the reconciliation cutoff: %w", err)
 		}
 
 		lines := make([]lineInput, 0, len(p.Counts))
@@ -181,17 +198,17 @@ func (l *Ledger) TakeReconciliation(ctx context.Context, p TakeReconciliationPar
 					FundID: p.FundID, AccountID: c.AccountID, ID: cutoff,
 				})
 				if err != nil {
-					return fmt.Errorf("reading recorded amount for account %d: %w", c.AccountID, err)
+					return store.Reconciliation{}, fmt.Errorf("reading recorded amount for account %d: %w", c.AccountID, err)
 				}
 				recordedAmount = money.FromDB(v)
 			}
 
 			diff, err := c.ActualAmount.Sub(recordedAmount)
 			if err != nil {
-				return fmt.Errorf("computing difference for account %d: %w", c.AccountID, err)
+				return store.Reconciliation{}, fmt.Errorf("computing difference for account %d: %w", c.AccountID, err)
 			}
 			if c.Resolution == "matched" && diff != 0 {
-				return fmt.Errorf("%w: resolution \"matched\" for account %d has a difference of %d",
+				return store.Reconciliation{}, fmt.Errorf("%w: resolution \"matched\" for account %d has a difference of %d",
 					ErrInvalidArgument, c.AccountID, diff.Int64())
 			}
 
@@ -202,17 +219,17 @@ func (l *Ledger) TakeReconciliation(ctx context.Context, p TakeReconciliationPar
 				if c.Resolution == "adjusted" {
 					signed, err := SignedFixAmount(c.Fix)
 					if err != nil {
-						return fmt.Errorf("signing the fix for account %d: %w", c.AccountID, err)
+						return store.Reconciliation{}, fmt.Errorf("signing the fix for account %d: %w", c.AccountID, err)
 					}
 					if signed != diff {
-						return fmt.Errorf("%w: account %d has a difference of %d, the plug is %d",
+						return store.Reconciliation{}, fmt.Errorf("%w: account %d has a difference of %d, the plug is %d",
 							ErrReconciliationPlugMismatch, c.AccountID, diff.Int64(), signed.Int64())
 					}
 				}
 				// A fix is a posting like any other (ADR-031, #473): it may not land on a
 				// closed envelope.
 				if err := refuseClosedIncidental(ctx, q, c.Fix.PurposeID, ErrIncidentalClosed); err != nil {
-					return err
+					return store.Reconciliation{}, err
 				}
 				kind := "normal"
 				if c.Resolution == "adjusted" {
@@ -230,7 +247,7 @@ func (l *Ledger) TakeReconciliation(ctx context.Context, p TakeReconciliationPar
 					CreatedAt:  now,
 				})
 				if err != nil {
-					return fmt.Errorf("posting the fix for account %d: %w", c.AccountID, err)
+					return store.Reconciliation{}, fmt.Errorf("posting the fix for account %d: %w", c.AccountID, err)
 				}
 				// Both resolutions name the entry they posted (#498); the remainder of a
 				// partial entry_added is derived through it.
@@ -259,7 +276,7 @@ func (l *Ledger) TakeReconciliation(ctx context.Context, p TakeReconciliationPar
 			CreatedAt:            now,
 		})
 		if err != nil {
-			return fmt.Errorf("creating reconciliation: %w", err)
+			return store.Reconciliation{}, fmt.Errorf("creating reconciliation: %w", err)
 		}
 
 		for _, ln := range lines {
@@ -273,10 +290,10 @@ func (l *Ledger) TakeReconciliation(ctx context.Context, p TakeReconciliationPar
 				Resolution:              ln.resolution,
 				AdjustmentTransactionID: ln.adjustmentTransactionID,
 			}); err != nil {
-				return fmt.Errorf("creating reconciliation line for account %d: %w", ln.accountID, err)
+				return store.Reconciliation{}, fmt.Errorf("creating reconciliation line for account %d: %w", ln.accountID, err)
 			}
 		}
-		return nil
+		return rec, nil
 	})
 	if err != nil {
 		return store.Reconciliation{}, err
@@ -382,7 +399,7 @@ func requireEveryActiveLocationCounted(ctx context.Context, q store.Querier, p T
 //
 // "matched" needing difference_amount == 0 is checked inside withTx, since it
 // needs the frozen recorded_amount this function cannot read.
-func validateTakeReconciliationParams(p TakeReconciliationParams) error {
+func validateTakeReconciliationParams(p TakeReconciliationParams, window dateWindow) error {
 	if len(p.Counts) == 0 {
 		return fmt.Errorf("%w: counts must not be empty", ErrInvalidArgument)
 	}
@@ -419,7 +436,7 @@ func validateTakeReconciliationParams(p TakeReconciliationParams) error {
 			if c.Fix.Direction != "in" && c.Fix.Direction != "out" {
 				return fmt.Errorf("%w: fix direction for account %d must be \"in\" or \"out\", got %q", ErrInvalidArgument, c.AccountID, c.Fix.Direction)
 			}
-			if err := validateOccurredOn(c.Fix.OccurredOn); err != nil {
+			if err := validateOccurredOn("fix occurred_on", c.Fix.OccurredOn, window.entry()); err != nil {
 				return err
 			}
 		default:

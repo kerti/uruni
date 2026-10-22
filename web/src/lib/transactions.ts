@@ -106,6 +106,26 @@ export function noteForDisplay(transaction: Transaction): string | null {
 }
 
 /**
+ * POST /api/transactions/{id}/reversal - undo a dues payment or a normal
+ * transaction recorded in error (PRD section 7.3, ADR-042). {id} is the row
+ * being reversed.
+ *
+ * Deliberately narrow: only a note is sent. The ledger copies amount, location,
+ * purpose (the effective one), member and period from the original and picks the date
+ * itself: the original's own day, or today once a cek kas has counted it. A new
+ * linked entry is posted (CLAUDE.md rule 3).
+ *
+ * `note` holds only what the treasurer typed; blank sends null, never a generated default.
+ */
+export function reverseTransaction(transactionId: number, note: string | null): Promise<Transaction> {
+  return apiFetch<Transaction>(`/api/transactions/${transactionId}/reversal`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ note }),
+  })
+}
+
+/**
  * POST /api/transactions/{id}/purpose-correction (ADR-033) - moves a posted
  * row's pos to the tag it should always have had, by posting a value-neutral
  * reclass_purpose pair on the row's account and date.
@@ -133,34 +153,17 @@ export function correctPurpose(transactionId: number, purposeId: number): Promis
  * the row offers the control, so an ineligible row renders its pos as plain
  * text rather than a dead tap.
  *
- * kind='adjustment' is eligible EXCEPT a dues reversal, whose pos must track
- * the dues row it reverses (ADR-029).
+ * kind='adjustment' is eligible EXCEPT a reversal, which copies its original's
+ * effective pos (ADR-029, ADR-042).
  *
  * A named contribution (kind='normal' with member_id set) is excluded too
  * (ADR-034): moving it would leave participation counting the member against
- * an envelope the money has left.
+ * an envelope the money has left. So is a row something already reverses
+ * (ADR-042), on the server's `reversed` flag, even on an unfetched page: the
+ * ledger refuses reverse-then-correct.
  */
 export function canCorrectPurpose(transaction: Transaction): boolean {
+  if (transaction.reversed) return false
   if (transaction.kind === 'normal') return transaction.member_id === null
   return transaction.kind === 'adjustment' && transaction.reverses_transaction_id === null
-}
-
-/**
- * Whether this row may be reversed the way a dues payment can (ADR-034): a
- * named contribution - kind='normal', direction='in', member_id set - that is
- * not itself a reversal. `reversedIds` is the set of transaction ids some
- * OTHER loaded row already reverses (`reverses_transaction_id`), the same
- * technique Dues/MemberPayments.tsx uses. A row whose reversal sits on a page
- * not fetched yet still offers the control; the server's named 409
- * (dues_payment_already_reversed) is the backstop, never a silent
- * double-reversal.
- */
-export function canReverseContribution(transaction: Transaction, reversedIds: ReadonlySet<number>): boolean {
-  return (
-    transaction.kind === 'normal' &&
-    transaction.direction === 'in' &&
-    transaction.member_id !== null &&
-    transaction.reverses_transaction_id === null &&
-    !reversedIds.has(transaction.id)
-  )
 }

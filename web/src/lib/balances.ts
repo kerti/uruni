@@ -32,7 +32,7 @@ export interface Balances {
   /** Unsettled, unwaived talangan claims summed on the server - already
    * inside fund_total, never subtracted from it. */
   owed_to_members: number
-  /** The running month's money in and out, read in Asia/Jakarta by the same
+  /** The running month's money in and out, read in the fund's time zone by the same
    * ledger function the public report uses (ADR-038). In is net of reversals
    * and can be negative; out is a magnitude. */
   month: { in: number; out: number }

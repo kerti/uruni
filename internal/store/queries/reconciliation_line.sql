@@ -10,8 +10,8 @@ RETURNING id, fund_id, reconciliation_id, account_id, recorded_amount, actual_am
 -- remainder_amount (#498) is what a line still has open: the part of its
 -- difference its fix did not square, signed like difference_amount
 -- (actual - recorded). left_open: the whole difference. matched: 0. adjusted
--- and entry_added: difference - signed(fix), where the fix is the entry the
--- line points at (+ for in, - for out). An entry_added line from before #498
+-- and entry_added: difference - fix.signed_amount (ledger_entry; + for in, -
+-- for out), where the fix is the entry the line points at. An entry_added line from before #498
 -- points at nothing and reads as closed (0): its remainder was never recorded
 -- and cannot be known. The same expression appears in
 -- ListOpenReconciliationLinesByFund, ListReconciliationsPage and
@@ -26,13 +26,12 @@ SELECT rl.id, rl.fund_id, rl.reconciliation_id, rl.account_id, rl.recorded_amoun
          WHEN 'matched' THEN 0
          ELSE CASE
            WHEN fix.id IS NULL THEN 0
-           WHEN fix.direction = 'in' THEN rl.difference_amount - fix.amount
-           ELSE rl.difference_amount + fix.amount
+           ELSE rl.difference_amount - fix.signed_amount
          END
        END AS INTEGER) AS remainder_amount
 FROM reconciliation_line rl
 JOIN account a ON a.id = rl.account_id
-LEFT JOIN "transaction" fix ON fix.fund_id = rl.fund_id AND fix.id = rl.adjustment_transaction_id
+LEFT JOIN ledger_entry fix ON fix.fund_id = rl.fund_id AND fix.id = rl.adjustment_transaction_id
 WHERE rl.reconciliation_id = ?
 ORDER BY CASE a.kind WHEN 'cash' THEN 0 ELSE 1 END, a.name COLLATE NOCASE, a.id;
 
@@ -72,21 +71,19 @@ SELECT rl.id, rl.fund_id, rl.reconciliation_id, rl.account_id, rl.recorded_amoun
          WHEN 'matched' THEN 0
          ELSE CASE
            WHEN fix.id IS NULL THEN 0
-           WHEN fix.direction = 'in' THEN rl.difference_amount - fix.amount
-           ELSE rl.difference_amount + fix.amount
+           ELSE rl.difference_amount - fix.signed_amount
          END
        END AS INTEGER) AS remainder_amount
 FROM reconciliation_line rl
 JOIN reconciliation r ON r.fund_id = rl.fund_id AND r.id = rl.reconciliation_id
-LEFT JOIN "transaction" fix ON fix.fund_id = rl.fund_id AND fix.id = rl.adjustment_transaction_id
+LEFT JOIN ledger_entry fix ON fix.fund_id = rl.fund_id AND fix.id = rl.adjustment_transaction_id
 WHERE rl.fund_id = ?
   AND (CASE rl.resolution
          WHEN 'left_open' THEN rl.difference_amount
          WHEN 'matched' THEN 0
          ELSE CASE
            WHEN fix.id IS NULL THEN 0
-           WHEN fix.direction = 'in' THEN rl.difference_amount - fix.amount
-           ELSE rl.difference_amount + fix.amount
+           ELSE rl.difference_amount - fix.signed_amount
          END
        END) <> 0
   AND NOT EXISTS (

@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/kerti/uruni/internal/money"
 	"github.com/kerti/uruni/internal/store"
@@ -26,6 +27,13 @@ type PostPurposeMoveParams struct {
 
 	// Note is written to both legs, or to neither; see normalizeNote.
 	Note *string
+
+	// Now is the clock OccurredOn's ceiling is read from (ADR-041).
+	// Zero means time.Now().
+	Now time.Time
+
+	// Idempotency, when non-nil, makes the move safe to repeat (ADR-043).
+	Idempotency *Idempotency
 }
 
 // PostPurposeMove moves Amount of what the fund holds from one purpose to
@@ -38,7 +46,8 @@ type PostPurposeMoveParams struct {
 // postTransferPairTx checks nothing, so every rule lives here as a named
 // error:
 //
-//   - Amount <= 0 or a malformed date: ErrInvalidArgument.
+//   - Amount <= 0 or a malformed date: ErrInvalidArgument. A real date outside
+//     the plausible window: ErrDateOutOfRange.
 //   - FromPurposeID equal to ToPurposeID: ErrPurposeMoveSamePurpose.
 //   - A purpose not this fund's (including an id naming nothing):
 //     ErrPurposeMoveUnknownPurpose.
@@ -53,6 +62,9 @@ type PostPurposeMoveParams struct {
 //     transaction (ADR-004's single connection makes read-then-write atomic),
 //     not as of OccurredOn, so a backdated move can leave a purpose briefly
 //     negative on an earlier day, as every backdated posting can (ADR-036).
+//
+// With p.Idempotency set (ADR-043), a repeat returns the first move; the checks
+// inside the transaction (the source balance among them) do not run on a replay.
 func (l *Ledger) PostPurposeMove(ctx context.Context, p PostPurposeMoveParams) (store.Transfer, error) {
 	if p.Amount <= 0 {
 		return store.Transfer{}, fmt.Errorf("%w: amount must be positive, got %d", ErrInvalidArgument, p.Amount.Int64())
@@ -60,59 +72,62 @@ func (l *Ledger) PostPurposeMove(ctx context.Context, p PostPurposeMoveParams) (
 	if err := CheckAmountCeiling("amount", p.Amount); err != nil {
 		return store.Transfer{}, err
 	}
-	if err := validateOccurredOn(p.OccurredOn); err != nil {
+	window, err := l.windowFor(ctx, l.q, p.FundID, p.Now)
+	if err != nil {
+		return store.Transfer{}, err
+	}
+	if err := validateOccurredOn("occurred_on", p.OccurredOn, window.entry()); err != nil {
 		return store.Transfer{}, err
 	}
 	if p.FromPurposeID == p.ToPurposeID {
 		return store.Transfer{}, ErrPurposeMoveSamePurpose
 	}
 
-	var created store.Transfer
-	err := l.withTx(ctx, func(q store.Querier) error {
+	created, err := withIdempotency(ctx, l, p.Idempotency, func(q store.Querier) (store.Transfer, error) {
 		for _, id := range [...]int64{p.FromPurposeID, p.ToPurposeID} {
 			purpose, err := q.GetPurposeForFund(ctx, store.GetPurposeForFundParams{ID: id, FundID: p.FundID})
 			if err != nil {
 				if errors.Is(err, sql.ErrNoRows) {
-					return ErrPurposeMoveUnknownPurpose
+					return store.Transfer{}, ErrPurposeMoveUnknownPurpose
 				}
-				return fmt.Errorf("fetching purpose %d: %w", id, err)
+				return store.Transfer{}, fmt.Errorf("fetching purpose %d: %w", id, err)
 			}
 			if purpose.Kind == "pass_through" {
-				return ErrPurposeMovePassThrough
+				return store.Transfer{}, ErrPurposeMovePassThrough
 			}
 			if err := refuseClosedIncidental(ctx, q, id, ErrPurposeMoveClosed); err != nil {
-				return err
+				return store.Transfer{}, err
 			}
 		}
 
 		account, err := q.GetAccountForFund(ctx, store.GetAccountForFundParams{ID: p.AccountID, FundID: p.FundID})
 		if err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
-				return ErrPurposeMoveUnknownAccount
+				return store.Transfer{}, ErrPurposeMoveUnknownAccount
 			}
-			return fmt.Errorf("fetching account %d: %w", p.AccountID, err)
+			return store.Transfer{}, fmt.Errorf("fetching account %d: %w", p.AccountID, err)
 		}
 		if account.InactiveOn != nil {
-			return ErrPurposeMoveAccountInactive
+			return store.Transfer{}, ErrPurposeMoveAccountInactive
 		}
 
 		balance, err := q.PurposeBalance(ctx, store.PurposeBalanceParams{FundID: p.FundID, PurposeID: p.FromPurposeID})
 		if err != nil {
-			return fmt.Errorf("source purpose balance: %w", err)
+			return store.Transfer{}, fmt.Errorf("source purpose balance: %w", err)
 		}
 		if p.Amount.Int64() > balance {
-			return ErrPurposeMoveInsufficient
+			return store.Transfer{}, ErrPurposeMoveInsufficient
 		}
 
 		reason := reasonAllocation
 		from := leg{AccountID: p.AccountID, PurposeID: p.FromPurposeID}
 		to := leg{AccountID: p.AccountID, PurposeID: p.ToPurposeID}
-		created, err = l.postTransferPairTx(ctx, q, p.FundID, "reclass_purpose", from, to,
+		pair, err := l.postTransferPairTx(ctx, q, p.FundID, "reclass_purpose", from, to,
 			p.Amount, p.OccurredOn, normalizeNote(p.Note), nil, &reason)
 		if err != nil {
-			return fmt.Errorf("posting purpose move: %w", err)
+			return store.Transfer{}, fmt.Errorf("posting purpose move: %w", err)
 		}
-		return nil
+		return pair, nil
 	})
 	if err != nil {
 		return store.Transfer{}, err

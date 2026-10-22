@@ -36,11 +36,3 @@ export function errorText(err: ApiError): string {
   const common = copy.common.errors[err.code as keyof typeof copy.common.errors]
   return common ?? copy.common.unknownError
 }
-
-/** Local YYYY-MM-DD - same helper as RecordTransaction.tsx. */
-export function todayISODate(): string {
-  const now = new Date()
-  const mm = String(now.getMonth() + 1).padStart(2, '0')
-  const dd = String(now.getDate()).padStart(2, '0')
-  return `${now.getFullYear()}-${mm}-${dd}`
-}

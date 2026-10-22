@@ -10,7 +10,6 @@ import (
 
 	"github.com/kerti/uruni/internal/money"
 	"github.com/kerti/uruni/internal/store"
-	"github.com/kerti/uruni/internal/tz"
 )
 
 const (
@@ -36,7 +35,7 @@ const (
 type ReportParams struct {
 	FundID int64
 
-	// Month is "YYYY-MM". Empty means the current month in Asia/Jakarta. A
+	// Month is "YYYY-MM". Empty means the current month in the fund's time zone. A
 	// malformed month is ErrInvalidArgument; reading an invalid ?month= as the
 	// current one is the HTTP edge's call (ADR-035).
 	Month string
@@ -60,7 +59,7 @@ type ReportParams struct {
 	DuesStatus string
 
 	// Now is the current instant, injectable so a test can stand on either side
-	// of a Jakarta month boundary; the zero value means time.Now().
+	// of a month boundary in the fund's time zone; the zero value means time.Now().
 	Now time.Time
 }
 
@@ -76,7 +75,7 @@ type Report struct {
 	FundName string
 
 	// AsOf is the day ("YYYY-MM-DD") every figure is true as of (ADR-037): the
-	// last day of a past month, or today in Asia/Jakarta for the running month
+	// last day of a past month, or today in the fund's time zone for the running month
 	// (marked by Running).
 	AsOf    string
 	Running bool
@@ -118,7 +117,7 @@ type Report struct {
 
 // ReportReconciliation is the latest cek kas as the home banner reads it.
 type ReportReconciliation struct {
-	// Date is the count's day in Asia/Jakarta ("YYYY-MM-DD").
+	// Date is the count's day in the fund's time zone ("YYYY-MM-DD").
 	Date string
 
 	// Difference is the sum, by magnitude, of every remainder still open
@@ -151,9 +150,11 @@ type ReportLine string
 const (
 	// ReportLineOpening is an opening entry: Saldo awal.
 	ReportLineOpening ReportLine = "opening"
-	// ReportLineIn is income, and a reversal, which counts there as a minus.
+	// ReportLineIn is income, and the reversal of income (a reversal going out),
+	// which counts there as a minus.
 	ReportLineIn ReportLine = "in"
-	// ReportLineOut is spending.
+	// ReportLineOut is spending, and the reversal of spending (a reversal going
+	// in), which counts there as a minus (ADR-042).
 	ReportLineOut ReportLine = "out"
 	// ReportLineAdjustment is every adjustment that is not a reversal.
 	ReportLineAdjustment ReportLine = "adjustment"
@@ -179,8 +180,17 @@ type ReportEntry struct {
 	DuesPeriod *string
 
 	// IsReversal marks a reversal (kind adjustment): of a dues payment when
-	// DuesPeriod is set, of a named contribution when it is not.
+	// DuesPeriod is set, of a named contribution when it names a member and has
+	// no period, of an unnamed ordinary row when it names neither (ADR-042).
 	IsReversal bool
+
+	// Reversed is ledger_entry's flag: a reversal points at this row, so the
+	// report marks it Sudah dibatalkan (ADR-042).
+	Reversed bool
+
+	// ReversesOccurredOn is, on a reversal, the date of the row it reverses
+	// ("YYYY-MM-DD"); nil on every other row.
+	ReversesOccurredOn *string
 
 	// Note is what the treasurer typed. On a settled claim's payout, whose note
 	// is empty, it is the claim's note, as Riwayat shows it.
@@ -219,7 +229,9 @@ type ReportMove struct {
 //
 //	Start + Openings + In - Out + Adjustments + Moved = End
 //
-// In is net of reversals, so it can read below zero; Adjustments and Moved
+// In is net of the reversals of income and Out of the reversals of spending
+// (ADR-042), so either can read below zero, but only after a cek kas counted
+// the original and its reversal landed in a later month; Adjustments and Moved
 // are signed. Start and End are ledger sums (the bounded fund or purpose
 // balance), never computed from the lines, so the equation is a property the
 // tests assert, not something the report forces or checks at runtime (a
@@ -255,11 +267,13 @@ type ReportWalk struct {
 }
 
 // ReportDuesRow is one member's standing for the month: DuesStatusForPeriod's
-// row with the member's tier by name, without their dates. Names and tiers
-// are public by the maintainer's call (2026-10-02); the slug is the guard.
+// row with the member's tier by name, without their dates. The tier is the one
+// in force in the month shown, the one that priced Owed (ADR-040), not today's.
+// Names and tiers are public by the maintainer's call (2026-10-02); the slug is
+// the guard.
 type ReportDuesRow struct {
 	MemberName  string
-	TierName    string // "" when the member has no tier
+	TierName    string // the tier in force in the month; "" when it names none
 	Owed        money.Amount
 	Paid        money.Amount
 	Status      DuesStatus
@@ -340,11 +354,21 @@ func (l *Ledger) monthlyReport(ctx context.Context, p ReportParams) (Report, err
 		return Report{}, fmt.Errorf("%w: dues status %q is not unpaid, partial or paid", ErrInvalidArgument, p.DuesStatus)
 	}
 
+	// The fund is read first: its zone decides "today" and "this month" (ADR-041).
+	fund, err := l.q.GetFund(ctx, p.FundID)
+	if err != nil {
+		return Report{}, fmt.Errorf("fetching fund: %w", err)
+	}
+	loc, err := FundLocation(fund)
+	if err != nil {
+		return Report{}, err
+	}
+
 	now := p.Now
 	if now.IsZero() {
 		now = time.Now()
 	}
-	today := now.In(tz.Jakarta)
+	today := now.In(loc)
 	currentMonth := today.Format(reportMonthLayout)
 
 	month := p.Month
@@ -356,11 +380,6 @@ func (l *Ledger) monthlyReport(ctx context.Context, p ReportParams) (Report, err
 		return Report{}, err
 	}
 
-	fund, err := l.q.GetFund(ctx, p.FundID)
-	if err != nil {
-		return Report{}, fmt.Errorf("fetching fund: %w", err)
-	}
-
 	r := Report{
 		FundName: fund.Name,
 		AsOf:     today.Format(reportDayLayout),
@@ -369,7 +388,7 @@ func (l *Ledger) monthlyReport(ctx context.Context, p ReportParams) (Report, err
 	}
 	b := reportBound{}
 	if !r.Running {
-		b = boundAtMonthEnd(monthStart)
+		b = boundAtMonthEnd(monthStart, loc)
 		r.AsOf = *b.through
 	}
 
@@ -386,7 +405,7 @@ func (l *Ledger) monthlyReport(ctx context.Context, p ReportParams) (Report, err
 		return Report{}, fmt.Errorf("report owed to members: %w", err)
 	}
 	r.OwedToMembers = money.FromDB(owed)
-	if r.Reconciliation, err = l.reportReconciliation(ctx, p.FundID, b); err != nil {
+	if r.Reconciliation, err = l.reportReconciliation(ctx, p.FundID, b, loc); err != nil {
 		return Report{}, err
 	}
 
@@ -438,7 +457,7 @@ func (l *Ledger) monthlyReport(ctx context.Context, p ReportParams) (Report, err
 
 // reportBound is where a past month's figures stop (ADR-037): through is its
 // last day, compared against the ledger's day columns; before is the first
-// instant of the next month in Jakarta, compared against a count's
+// instant of the next month in the fund's time zone, compared against a count's
 // performed_at. Both nil is the running month, which reads every row, the
 // same figures Beranda shows.
 type reportBound struct {
@@ -446,9 +465,9 @@ type reportBound struct {
 	before  *int64
 }
 
-func boundAtMonthEnd(monthStart time.Time) reportBound {
+func boundAtMonthEnd(monthStart time.Time, loc *time.Location) reportBound {
 	last := monthStart.AddDate(0, 1, -1).Format(reportDayLayout)
-	next := time.Date(monthStart.Year(), monthStart.Month()+1, 1, 0, 0, 0, 0, tz.Jakarta).Unix()
+	next := time.Date(monthStart.Year(), monthStart.Month()+1, 1, 0, 0, 0, 0, loc).Unix()
 	return reportBound{through: &last, before: &next}
 }
 
@@ -463,7 +482,7 @@ func parseReportMonth(month string) (time.Time, error) {
 }
 
 // reportMonths lists the months the report offers, oldest first: the first
-// transaction's month through the current Jakarta month. An empty fund, or one
+// transaction's month through the current month in the fund's zone. An empty fund, or one
 // whose first row is dated after today, offers the current month alone.
 func (l *Ledger) reportMonths(ctx context.Context, fundID int64, today time.Time) ([]string, error) {
 	current := time.Date(today.Year(), today.Month(), 1, 0, 0, 0, 0, time.UTC)
@@ -497,7 +516,7 @@ func (l *Ledger) reportMonths(ctx context.Context, fundID int64, today time.Time
 // reportReconciliation reads the banner's three states as of the bound: nil
 // for never counted by then, otherwise the latest count's date and the
 // fund-wide remainder still open at the bound.
-func (l *Ledger) reportReconciliation(ctx context.Context, fundID int64, b reportBound) (*ReportReconciliation, error) {
+func (l *Ledger) reportReconciliation(ctx context.Context, fundID int64, b reportBound, loc *time.Location) (*ReportReconciliation, error) {
 	latest, err := l.q.ReportLatestReconciliation(ctx, store.ReportLatestReconciliationParams{FundID: fundID, Before: b.before})
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
@@ -522,7 +541,7 @@ func (l *Ledger) reportReconciliation(ctx context.Context, fundID int64, b repor
 	}
 
 	return &ReportReconciliation{
-		Date:       time.Unix(latest.PerformedAt, 0).In(tz.Jakarta).Format(reportDayLayout),
+		Date:       time.Unix(latest.PerformedAt, 0).In(loc).Format(reportDayLayout),
 		Matched:    difference == 0,
 		Difference: difference,
 	}, nil
@@ -593,13 +612,22 @@ func envelopeOpenAt(e store.Incidental, through *string) bool {
 // MonthInOut is the running month's In and Out for the whole fund, as Beranda
 // shows them (ADR-038): the figures the report's running month carries as
 // Walk.In and Walk.Out, read through the same reportRows over the same
-// unbounded, unfiltered month. The month is read in Asia/Jakarta from now. In
-// is net of reversals and so can be negative; Out is a magnitude.
+// unbounded, unfiltered month. The month is read from now in the fund's time zone. In
+// is net of the reversals of income and Out of the reversals of spending, so
+// either can be negative (ADR-042); Out is otherwise a magnitude.
 func (l *Ledger) MonthInOut(ctx context.Context, fundID int64, now time.Time) (in, out money.Amount, err error) {
 	if now.IsZero() {
 		now = time.Now()
 	}
-	monthStart, err := parseReportMonth(now.In(tz.Jakarta).Format(reportMonthLayout))
+	fund, err := l.q.GetFund(ctx, fundID)
+	if err != nil {
+		return 0, 0, fmt.Errorf("fetching fund: %w", err)
+	}
+	loc, err := FundLocation(fund)
+	if err != nil {
+		return 0, 0, err
+	}
+	monthStart, err := parseReportMonth(now.In(loc).Format(reportMonthLayout))
 	if err != nil {
 		return 0, 0, err
 	}
@@ -725,8 +753,10 @@ func (e ReportEntry) signed() (money.Amount, error) {
 	return money.Amount(0).Sub(e.Amount)
 }
 
-// add lands one entry on its line of the walk. A reversal is stored out and
-// lands on In as a minus; an adjustment is signed by its direction.
+// add lands one entry on its line of the walk. A reversal lands on its
+// original's line as a minus (ADR-042): income reversed subtracts from In,
+// spending reversed from Out, a magnitude. An adjustment is signed by its
+// direction.
 func (w *ReportWalk) add(e ReportEntry) error {
 	signed, err := e.signed()
 	if err != nil {
@@ -739,7 +769,12 @@ func (w *ReportWalk) add(e ReportEntry) error {
 		w.In, err = w.In.Add(signed)
 	case ReportLineOut:
 		// Out is a magnitude: spending, shown positive and subtracted by the walk.
-		w.Out, err = w.Out.Add(e.Amount)
+		// The reversal of spending takes its amount back off it.
+		if e.IsReversal {
+			w.Out, err = w.Out.Sub(e.Amount)
+		} else {
+			w.Out, err = w.Out.Add(e.Amount)
+		}
 	case ReportLineAdjustment:
 		w.Adjustments, err = w.Adjustments.Add(signed)
 	default:
@@ -762,6 +797,11 @@ func classifyReportRow(kind, direction string, reverses bool) (ReportLine, error
 		return ReportLineOut, nil
 	case "adjustment":
 		if reverses {
+			// The line follows the reversal's own direction, so no join to the
+			// original is needed: out reverses income, in reverses spending.
+			if direction == ReportDirectionIn {
+				return ReportLineOut, nil
+			}
 			return ReportLineIn, nil
 		}
 		return ReportLineAdjustment, nil
@@ -784,8 +824,11 @@ func reportEntryFrom(row store.ListReportTransactionsRow) (ReportEntry, error) {
 		MemberName:  row.MemberName,
 		DuesPeriod:  row.DuesPeriod,
 		IsReversal:  row.ReversesTransactionID != nil,
+		Reversed:    row.Reversed != 0,
 		Note:        row.Note,
 		HasReceipt:  row.HasReceipt != 0,
+
+		ReversesOccurredOn: row.ReversesOccurredOn,
 	}
 	// A settlement's row names no member and holds no note: both come from the
 	// claim it settles. At most one of the two member columns is set.
@@ -806,9 +849,15 @@ func reportEntryFrom(row store.ListReportTransactionsRow) (ReportEntry, error) {
 //
 // Each correction moves the whole row from wherever it is now, so the
 // corrections of one row form a path. Its ends are the purpose left once more
-// than entered (the start) and the one entered once more than left (the end),
-// which needs no ordering (ids are not an order to rely on). Every correction
-// carries the row's date, so they all fall in that row's month.
+// than entered and the one entered once more than left, which needs no
+// ordering (ids are not an order to rely on). Every correction carries the
+// row's date, so they all fall in that row's month.
+//
+// A pair is named by its own legs: from is the 'out' leg, to the 'in' leg, and
+// PostPurposeCorrection puts the target on the leg moving the way the row did.
+// So the move's From and To are the row's start and end only for an 'in' row.
+// For an 'out' row they swap: its From is where the row ends up and its To where
+// it began. The move is kept in the pair's own terms either way.
 func foldCorrections(rows []store.ListReportTransactionsRow) (map[int64]ReportMove, error) {
 	type path struct {
 		move  ReportMove
@@ -907,9 +956,10 @@ func moveMatches(p ReportParams, m ReportMove) bool {
 }
 
 // entryMatches applies the filters to one entry by its walk line (ADR-038): a
-// reversal filters as Uang masuk, and an opening or a Penyesuaian is neither
-// masuk nor keluar, so a direction or member filter hides it, as it hides a
-// move. A purpose filter matches the row's purpose; an opening is Kas Utama's.
+// reversal filters as its own line (Uang keluar for the reversal of an out), and
+// an opening or a Penyesuaian is neither masuk nor keluar, so a direction or
+// member filter hides it, as it hides a move. A purpose filter matches the row's
+// purpose; an opening is Kas Utama's.
 func entryMatches(p ReportParams, row store.ListReportTransactionsRow, e ReportEntry) bool {
 	if p.PurposeID != nil && *p.PurposeID != e.PurposeID {
 		return false

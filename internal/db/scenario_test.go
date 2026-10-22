@@ -152,7 +152,7 @@ func TestPartialAndAdvanceDuesAreOrdinaryRows(t *testing.T) {
 		t.Fatalf("CreateDuesRate = %v, want no error", err)
 	}
 	memberID, err := q.CreateMember(ctx, store.CreateMemberParams{JoinedOn: "2000-01-01",
-		FundID: f.fundID, Name: "John", TierID: &tierID, CreatedAt: 1,
+		FundID: f.fundID, Name: "John", CreatedAt: 1,
 	})
 	if err != nil {
 		t.Fatalf("CreateMember = %v, want no error", err)

@@ -12,7 +12,7 @@ import ErrorState from '@/components/states/ErrorState'
 import { copy } from '@/copy/id'
 import { listAccounts } from '@/lib/accounts'
 import { createDuesPayment, getOutstandingDues } from '@/lib/dues'
-import { formatPeriod, dateBounds } from '@/lib/dates'
+import { formatPeriod, dateBounds, currentPeriod, todayISODate } from '@/lib/dates'
 import { formatIDR } from '@/lib/money'
 import { listAllMembers } from '@/lib/setup'
 import { useApi } from '@/lib/useApi'
@@ -21,20 +21,6 @@ import type { OutstandingDuesPeriod } from '@/lib/dues'
 import type { Member } from '@/lib/setup'
 
 const text = copy.dues.payment
-
-/** Local YYYY-MM-DD / YYYY-MM - never toISOString(), which is UTC and can read
- * a day (and so a month) early in WIB. */
-function todayISODate(): string {
-  const now = new Date()
-  const mm = String(now.getMonth() + 1).padStart(2, '0')
-  const dd = String(now.getDate()).padStart(2, '0')
-  return `${now.getFullYear()}-${mm}-${dd}`
-}
-
-function currentISOMonth(): string {
-  const now = new Date()
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
-}
 
 /** The YYYY-MM `months` after `period` - integer month arithmetic, never a
  * Date, so no timezone can shift it. */
@@ -113,7 +99,7 @@ export default function RecordDuesPayment({
   // How many months past the current one the period list reaches - 0 is "what
   // is owed up to now", each tap of the add-month button one more.
   const [monthsAhead, setMonthsAhead] = useState(0)
-  const through = addMonths(currentISOMonth(), monthsAhead)
+  const through = addMonths(currentPeriod(), monthsAhead)
 
   async function loadFormData(): Promise<FormData> {
     const [members, accounts] = await Promise.all([listAllMembers(), listAccounts()])

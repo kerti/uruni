@@ -1,9 +1,11 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import DuesTierScreen from '@/screens/DuesTier'
 import { copy } from '@/copy/id'
+import { formatPeriod } from '@/lib/dates'
+import { formatIDR } from '@/lib/money'
 import { pickMonth } from '@/test/datePicker'
 
 const text = copy.settings.tiers
@@ -39,6 +41,12 @@ function stubTier(tiers: ReturnType<typeof tier>[], rates: ReturnType<typeof rat
     return Promise.reject(new Error(`unstubbed fetch: ${url}`))
   })
   return { fetchMock, calls }
+}
+
+/** Exact text of an element, including the no-break space formatIDR writes
+ * (the default matcher folds it to a plain space on one side only). */
+function exactly(expected: string) {
+  return (_content: string, element: Element | null) => element?.children.length === 0 && element.textContent === expected
 }
 
 function renderScreen(tierId = 1) {
@@ -150,6 +158,8 @@ describe('A golongan screen', () => {
     await userEvent.clear(input)
     await userEvent.type(input, '50000')
     await userEvent.click(screen.getByRole('button', { name: text.saveRate }))
+    expect(calls).toHaveLength(0)
+    await userEvent.click(screen.getByRole('button', { name: text.rateCorrectConfirmAction }))
 
     await waitFor(() => expect(calls).toHaveLength(1))
     expect(calls[0]).toMatchObject({
@@ -158,6 +168,103 @@ describe('A golongan screen', () => {
       body: { amount: 50000 },
     })
     expect(calls[0].body).not.toHaveProperty('effective_from')
+  })
+
+  // ADR-040: a correction reprices the months the rate covers, so the
+  // confirmation names them before anything is sent.
+  describe('confirming a correction', () => {
+    async function startCorrection(rates: ReturnType<typeof rate>[], rateId: number, typed: string) {
+      const { fetchMock, calls } = stubTier([tier(1, 'Pelaksana')], rates)
+      vi.stubGlobal('fetch', fetchMock)
+      renderScreen()
+      await screen.findByRole('heading', { name: 'Pelaksana', level: 1 })
+      const row = screen.getByText(text.effectiveFrom(formatPeriod(rates.find((r) => r.id === rateId)!.effective_from))).closest('li')!
+      await userEvent.click(within(row).getByRole('button', { name: text.editRate }))
+      const input = within(row).getByLabelText(text.rateAmountLabel)
+      await userEvent.clear(input)
+      await userEvent.type(input, typed)
+      await userEvent.click(within(row).getByRole('button', { name: text.saveRate }))
+      return { calls, row }
+    }
+
+    it('names the months up to the next rate that stands', async () => {
+      const { calls, row } = await startCorrection([rate(1, 1, 50_000, '2026-01'), rate(2, 1, 60_000, '2026-07')], 1, '55000')
+
+      expect(
+        within(row).getByText(exactly(text.rateCorrectConfirm(formatIDR(50_000), formatIDR(55_000), 'Januari 2026 sampai Juni 2026'))),
+      ).toBeInTheDocument()
+      expect(calls).toHaveLength(0)
+    })
+
+    it('says "seterusnya" for the last rate', async () => {
+      const { row } = await startCorrection([rate(1, 1, 50_000, '2026-01'), rate(2, 1, 60_000, '2026-07')], 2, '65000')
+
+      expect(
+        within(row).getByText(exactly(text.rateCorrectConfirm(formatIDR(60_000), formatIDR(65_000), 'Juli 2026 seterusnya'))),
+      ).toBeInTheDocument()
+    })
+
+    it('names a single month when the next rate starts right after', async () => {
+      const { row } = await startCorrection([rate(1, 1, 50_000, '2026-03'), rate(2, 1, 60_000, '2026-04')], 1, '51000')
+
+      expect(
+        within(row).getByText(exactly(text.rateCorrectConfirm(formatIDR(50_000), formatIDR(51_000), 'Maret 2026'))),
+      ).toBeInTheDocument()
+    })
+
+    it('sends nothing when she backs out, and keeps the form to edit again', async () => {
+      const { calls, row } = await startCorrection([rate(1, 1, 50_000, '2026-01')], 1, '55000')
+
+      await userEvent.click(within(row).getByRole('button', { name: text.cancel }))
+
+      expect(within(row).getByRole('button', { name: text.saveRate })).toBeInTheDocument()
+      expect(within(row).queryByText(/seterusnya/)).not.toBeInTheDocument()
+      expect(calls).toHaveLength(0)
+    })
+
+    it('asks nothing when the amount is unchanged', async () => {
+      const { calls, row } = await startCorrection([rate(1, 1, 50_000, '2026-01')], 1, '50000')
+
+      expect(within(row).queryByRole('button', { name: text.rateCorrectConfirmAction })).not.toBeInTheDocument()
+      expect(calls).toHaveLength(0)
+    })
+  })
+
+  // A correction is a new row with a new id: a stale page is refused 409
+  // dues_rate_superseded, and the list must reload.
+  it('reloads the rate list and says so when a rate was already corrected elsewhere', async () => {
+    let listed = [rate(1, 1, 50_000, '2026-01')]
+    let rateReads = 0
+    const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = typeof input === 'string' ? input : input.toString()
+      const method = init?.method ?? 'GET'
+      if (url.includes('/rates')) {
+        rateReads++
+        return Promise.resolve(jsonResponse(listed))
+      }
+      if (url.includes('/api/dues-rates/1') && method === 'PATCH') {
+        // Meanwhile another screen corrected it: id 1 no longer stands.
+        listed = [rate(7, 1, 52_000, '2026-01')]
+        return Promise.resolve(jsonResponse({ error: { code: 'dues_rate_superseded', message: 'superseded' } }, 409))
+      }
+      if (url.includes('/api/dues-tiers')) return Promise.resolve(jsonResponse([tier(1, 'Pelaksana')]))
+      return Promise.reject(new Error(`unstubbed fetch: ${url}`))
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    renderScreen()
+    await screen.findByText(text.effectiveFrom('Januari 2026'))
+
+    await userEvent.click(screen.getByRole('button', { name: text.editRate }))
+    const input = screen.getByLabelText(text.rateAmountLabel, { selector: '#rate-amount-1' })
+    await userEvent.clear(input)
+    await userEvent.type(input, '55000')
+    await userEvent.click(screen.getByRole('button', { name: text.saveRate }))
+    await userEvent.click(screen.getByRole('button', { name: text.rateCorrectConfirmAction }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(copy.common.errors.dues_rate_superseded)
+    await waitFor(() => expect(rateReads).toBeGreaterThan(1))
+    expect(await screen.findByText(exactly(formatIDR(52_000)))).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: text.editRate })).toBeInTheDocument()
   })
 
   it('backs out of a correction without sending anything', async () => {
@@ -223,7 +330,7 @@ describe('A golongan screen', () => {
     await userEvent.click(screen.getByRole('button', { name: text.deleteConfirmAction }))
 
     expect(await screen.findByRole('alert')).toHaveTextContent(text.deleteRefused)
-    // Still here, so she can go and change those members' golongan.
+    // Still here, so she can read why and rename it instead.
     expect(onBack).not.toHaveBeenCalled()
   })
 

@@ -1,13 +1,14 @@
 import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { useState } from 'react'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import DateField from '@/components/DateField'
 import MonthField from '@/components/MonthField'
 import { Label } from '@/components/ui/label'
 import { copy } from '@/copy/id'
 import { pickDate, pickMonth } from '@/test/datePicker'
+import { resetFundTimeZone, setFundTimeZone } from '@/lib/dates'
 
 function DateHarness({ initial, onChange = vi.fn() }: { initial: string; onChange?: (iso: string) => void }) {
   const [value, setValue] = useState(initial)
@@ -112,5 +113,35 @@ describe('MonthField (#197)', () => {
     await userEvent.click(within(dialog).getByRole('button', { name: copy.dateField.previousYear }))
     expect(within(dialog).getByRole('button', { name: 'Februari 2025' })).toBeDisabled()
     expect(within(dialog).getByRole('button', { name: copy.dateField.previousYear })).toBeDisabled()
+  })
+})
+
+// ADR-041: the calendar's highlighted "today" is the fund's day. DayPicker's own
+// default is the device's `new Date()`, so DateField hands it the fund's.
+describe("DateField highlights the fund's today (ADR-041)", () => {
+  afterEach(() => {
+    vi.useRealTimers()
+    resetFundTimeZone()
+  })
+
+  /** The day cell DayPicker marks as today, in the month the calendar shows. */
+  async function todayCell(initial: string): Promise<string | null> {
+    render(<DateHarness initial={initial} />)
+    await userEvent.click(screen.getByLabelText('Tanggal'))
+    const dialog = await screen.findByRole('dialog')
+    const cell = dialog.querySelector('[data-today="true"]')
+    return cell?.textContent ?? null
+  }
+
+  // 22:30 WIB on 30 September is 00:30 WIT on 1 October.
+  it.each([
+    ['Asia/Jakarta', '2026-09-15', '30'],
+    ['Asia/Makassar', '2026-09-15', '30'],
+    ['Asia/Jayapura', '2026-10-01', '1'],
+  ])('a %s fund at 22:30 WIB shows the %s calendar with day %s as today', async (zone, shown, day) => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(new Date('2026-09-30T22:30:00+07:00'))
+    setFundTimeZone(zone)
+    expect(await todayCell(shown)).toBe(day)
   })
 })

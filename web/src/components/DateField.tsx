@@ -6,7 +6,7 @@ import { id as idLocale } from 'react-day-picker/locale'
 import 'react-day-picker/style.css'
 
 import { copy } from '@/copy/id'
-import { formatIsoDate, parseIsoDate, toIsoDate, type DateBounds } from '@/lib/dates'
+import { formatIsoDate, parseIsoDate, todayISODate, toIsoDate, type DateBounds } from '@/lib/dates'
 import { cn } from '@/lib/utils'
 
 /** The calendar in the design system's tokens: Forest for the chosen day,
@@ -75,6 +75,9 @@ export default function DateField({
             locale={idLocale}
             captionLayout="dropdown"
             selected={selected}
+            // The fund's day (ADR-041), not the device's: DayPicker defaults to
+            // `new Date()`, so a phone in another zone would highlight another day.
+            today={parseIsoDate(todayISODate()) ?? undefined}
             defaultMonth={selected ?? max}
             startMonth={min}
             endMonth={max}

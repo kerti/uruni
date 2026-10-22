@@ -7,8 +7,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/go-chi/chi/v5"
-
 	"github.com/kerti/uruni/internal/ledger"
 	"github.com/kerti/uruni/internal/money"
 	"github.com/kerti/uruni/internal/store"
@@ -50,6 +48,8 @@ type duesPaymentRequest struct {
 // row: the ledger validates every period before writing and writes all in
 // one transaction. (Looping a singular PostDuesPayment per period left an
 // earlier row standing when a later one failed, #96.)
+//
+// Keyed (ADR-043): a replay answers the whole array again, one result.
 func (a *api) createDuesPayment(w http.ResponseWriter, r *http.Request) {
 	var req duesPaymentRequest
 	if !decodeJSON(w, r, &req) {
@@ -74,13 +74,17 @@ func (a *api) createDuesPayment(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
+	idem := idempotencyFrom(r)
 	posted, err := a.ledger.PostDuesPayments(r.Context(), ledger.PostDuesPaymentsParams{
+		Now:        a.now(),
 		FundID:     fund.ID,
 		AccountID:  req.AccountID,
 		MemberID:   req.MemberID,
 		OccurredOn: req.OccurredOn,
 		Note:       req.Note,
 		Periods:    periods,
+
+		Idempotency: idem,
 	})
 	if err != nil {
 		mapLedgerError(w, a.log(r), err)
@@ -92,56 +96,8 @@ func (a *api) createDuesPayment(w http.ResponseWriter, r *http.Request) {
 		resp = append(resp, toTransactionResponse(row))
 	}
 
+	markReplay(w, r, a.log(r), idem)
 	writeJSON(w, http.StatusCreated, resp)
-}
-
-// reverseDuesPaymentRequest is POST /api/dues-payments/{id}/reversal's body.
-// Narrow on purpose: account_id, purpose_id, amount, member_id and dues_period
-// are never accepted here; Ledger.ReverseDuesPayment copies all five from the
-// original row (ADR-029), as the settle-reimbursement route does for its
-// claim.
-type reverseDuesPaymentRequest struct {
-	OccurredOn string  `json:"occurred_on"`
-	Note       *string `json:"note"`
-}
-
-// reverseDuesPayment is POST /api/dues-payments/{id}/reversal: wraps
-// Ledger.ReverseDuesPayment. {id} names the kind='dues' transaction being
-// reversed; there is no dues-payment entity, only transaction rows (PRD
-// section 4's "stay exactly as wide as dues": this reverses a dues payment and
-// nothing else, never a generic "reverse any transaction").
-//
-// The response is the posted reversal row as transactionResponse, the wire
-// shape POST /api/dues-payments and GET /api/transactions use.
-func (a *api) reverseDuesPayment(w http.ResponseWriter, r *http.Request) {
-	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
-	if err != nil {
-		writeAPIError(w, http.StatusBadRequest, "invalid_argument", "The transaction id is not a valid number.")
-		return
-	}
-
-	var req reverseDuesPaymentRequest
-	if !decodeJSON(w, r, &req) {
-		return
-	}
-
-	fund, ok := a.resolveFund(w, r)
-	if !ok {
-		return
-	}
-
-	reversal, err := a.ledger.ReverseDuesPayment(r.Context(), ledger.ReverseDuesPaymentParams{
-		FundID:        fund.ID,
-		TransactionID: id,
-		OccurredOn:    req.OccurredOn,
-		Note:          req.Note,
-	})
-	if err != nil {
-		mapLedgerError(w, a.log(r), err)
-		return
-	}
-
-	writeJSON(w, http.StatusCreated, toTransactionResponse(reversal))
 }
 
 // duesPaymentHistoryResponse is one row of GET /api/dues-payments (#228,

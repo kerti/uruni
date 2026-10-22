@@ -633,6 +633,25 @@ describe('Home', () => {
       expect(outFigure).toHaveTextContent(money(85_000))
     })
 
+    it('shows a negative keluar as served: a counted spend reversed in a later month (ADR-042)', async () => {
+      vi.stubGlobal('fetch', stubHome({ balancesOverride: { ...balances, month: { in: 0, out: -12_000 } } }))
+      render(
+        <Home
+          refetchKey="1"
+          onReconcile={vi.fn()}
+          onOpenIncidental={vi.fn()}
+          onViewTransactionsFor={vi.fn()}
+          onViewHistory={vi.fn()}
+          onViewOwed={vi.fn()}
+        />,
+      )
+
+      await screen.findByText(copy.home.monthOut)
+      const outFigure = screen.getByText(copy.home.monthOut).nextElementSibling
+      expect(outFigure).toHaveTextContent(money(-12_000))
+      expect(outFigure?.textContent).toMatch(/^-\u2060Rp/)
+    })
+
     it('sits in its own Arus kas section, ahead of the recent activity', async () => {
       vi.stubGlobal('fetch', stubHome({}))
       render(

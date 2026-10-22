@@ -67,6 +67,9 @@ func TestMapLedgerErrorMapsSentinelsToStatusAndCode(t *testing.T) {
 		{"invalid argument", ledger.ErrInvalidArgument, 400, "invalid_argument"},
 		{"amount above the ceiling", ledger.ErrAmountTooLarge, 400, "amount_too_large"},
 		{"amount above the ceiling, wrapped", fmt.Errorf("posting transaction: %w", ledger.CheckAmountCeiling("amount", money.MaxAmount+1)), 400, "amount_too_large"},
+		{"date outside the window", ledger.ErrDateOutOfRange, 400, "date_out_of_range"},
+		{"date outside the window, wrapped", fmt.Errorf("posting transaction: %w: occurred_on is after 2026-10-20", ledger.ErrDateOutOfRange), 400, "date_out_of_range"},
+		{"idempotency key reused", ledger.ErrIdempotencyKeyReused, 409, "idempotency_key_reused"},
 		{"reimbursement waived", ledger.ErrReimbursementWaived, 409, "reimbursement_waived"},
 		{"reimbursement already settled", ledger.ErrReimbursementAlreadySettled, 409, "reimbursement_already_settled"},
 		{"incidental already closed", ledger.ErrIncidentalAlreadyClosed, 409, "incidental_already_closed"},
@@ -156,13 +159,13 @@ func TestMapSQLiteErrorMapsAGenuineUniqueViolation(t *testing.T) {
 
 	const slug = "abcdefghijklmnopqrstuv" // 22 chars, the schema's minimum
 	if _, err := q.CreateFund(ctx, store.CreateFundParams{
-		Name: "Test Fund", Currency: "IDR", ReportSlug: slug, CreatedAt: 1,
+		Name: "Test Fund", Currency: "IDR", TimeZone: "Asia/Jakarta", ReportSlug: slug, CreatedAt: 1,
 	}); err != nil {
 		t.Fatalf("first CreateFund() = %v, want no error", err)
 	}
 
 	_, err := q.CreateFund(ctx, store.CreateFundParams{
-		Name: "Second Fund", Currency: "IDR", ReportSlug: slug, CreatedAt: 2,
+		Name: "Second Fund", Currency: "IDR", TimeZone: "Asia/Jakarta", ReportSlug: slug, CreatedAt: 2,
 	})
 	if err == nil {
 		t.Fatalf("second CreateFund() with a duplicate report_slug = nil error, want a UNIQUE violation")
@@ -186,7 +189,7 @@ func TestMapSQLiteErrorMapsAGenuineCheckViolation(t *testing.T) {
 	ctx := context.Background()
 
 	fund, err := q.CreateFund(ctx, store.CreateFundParams{
-		Name: "Test Fund", Currency: "IDR", ReportSlug: "abcdefghijklmnopqrstuv", CreatedAt: 1,
+		Name: "Test Fund", Currency: "IDR", TimeZone: "Asia/Jakarta", ReportSlug: "abcdefghijklmnopqrstuv", CreatedAt: 1,
 	})
 	if err != nil {
 		t.Fatalf("CreateFund() = %v, want no error", err)
@@ -218,7 +221,7 @@ func TestMapSQLiteErrorMapsAGenuineForeignKeyViolation(t *testing.T) {
 	ctx := context.Background()
 
 	fund, err := q.CreateFund(ctx, store.CreateFundParams{
-		Name: "Test Fund", Currency: "IDR", ReportSlug: "abcdefghijklmnopqrstuv", CreatedAt: 1,
+		Name: "Test Fund", Currency: "IDR", TimeZone: "Asia/Jakarta", ReportSlug: "abcdefghijklmnopqrstuv", CreatedAt: 1,
 	})
 	if err != nil {
 		t.Fatalf("CreateFund() = %v, want no error", err)
@@ -227,11 +230,17 @@ func TestMapSQLiteErrorMapsAGenuineForeignKeyViolation(t *testing.T) {
 	// tier_id 999 names no dues_tier row: the composite FK requires (fund_id,
 	// tier_id) to match a real one.
 	noSuchTier := int64(999)
-	_, err = q.CreateMember(ctx, store.CreateMemberParams{JoinedOn: "2000-01-01",
-		FundID: fund.ID, Name: "Jane", TierID: &noSuchTier, CreatedAt: 1,
+	jane, err := q.CreateMember(ctx, store.CreateMemberParams{JoinedOn: "2000-01-01",
+		FundID: fund.ID, Name: "Jane", CreatedAt: 1,
+	})
+	if err != nil {
+		t.Fatalf("CreateMember() = %v, want no error", err)
+	}
+	_, err = q.CreateMemberTier(ctx, store.CreateMemberTierParams{
+		FundID: fund.ID, MemberID: jane.ID, TierID: &noSuchTier, EffectiveFrom: "2000-01", CreatedAt: 1,
 	})
 	if err == nil {
-		t.Fatalf("CreateMember(tier_id=999) = nil error, want a FOREIGN KEY violation")
+		t.Fatalf("CreateMemberTier(tier_id=999) = nil error, want a FOREIGN KEY violation")
 	}
 
 	rec := httptest.NewRecorder()
@@ -255,7 +264,7 @@ func TestMapSQLiteDeleteErrorMapsAGenuineForeignKeyViolationTo409(t *testing.T) 
 	ctx := context.Background()
 
 	fund, err := q.CreateFund(ctx, store.CreateFundParams{
-		Name: "Test Fund", Currency: "IDR", ReportSlug: "abcdefghijklmnopqrstuv", CreatedAt: 1,
+		Name: "Test Fund", Currency: "IDR", TimeZone: "Asia/Jakarta", ReportSlug: "abcdefghijklmnopqrstuv", CreatedAt: 1,
 	})
 	if err != nil {
 		t.Fatalf("CreateFund() = %v, want no error", err)

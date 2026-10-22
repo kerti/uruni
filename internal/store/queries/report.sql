@@ -34,6 +34,9 @@ LIMIT 1;
 -- pair's from leg and 'in' its to leg. Both legs carry identical from/to
 -- facts, so the Go fold keeps either.
 --
+-- reversed and reverses_occurred_on (ADR-042): the mark on the original and the
+-- unnamed reversal's label, on the page and in the PDF.
+--
 -- has_receipt is true for a receipt on the row itself or, on a reimbursement
 -- payout, on the claim it settles: that nota is the proof of the payout
 -- (ADR-011).
@@ -44,6 +47,8 @@ SELECT t.occurred_on, t.created_at, t.direction, t.amount, t.kind,
        rb.member_id AS settlement_member_id, rm.name AS settlement_member_name,
        rb.note AS claim_note,
        t.dues_period, t.reverses_transaction_id, t.note,
+       t.reversed,
+       orig.occurred_on AS reverses_occurred_on,
        t.transfer_id,
        tr.kind AS transfer_kind,
        tr.corrects_transaction_id AS transfer_corrects_transaction_id,
@@ -56,7 +61,7 @@ SELECT t.occurred_on, t.created_at, t.direction, t.amount, t.kind,
                    WHERE rc.fund_id = t.fund_id
                      AND (rc.transaction_id = t.id
                           OR (t.reimbursement_id IS NOT NULL AND rc.reimbursement_id = t.reimbursement_id))) AS INTEGER) AS has_receipt
-FROM "transaction" t
+FROM ledger_entry t
 JOIN purpose p ON p.id = t.purpose_id
 LEFT JOIN member m ON m.id = t.member_id
 LEFT JOIN reimbursement rb ON rb.id = t.reimbursement_id
@@ -66,6 +71,7 @@ LEFT JOIN "transaction" tf ON tf.transfer_id = t.transfer_id AND tf.direction = 
 LEFT JOIN "transaction" tt ON tt.transfer_id = t.transfer_id AND tt.direction = 'in'
 LEFT JOIN purpose fp ON fp.id = tf.purpose_id
 LEFT JOIN purpose tp ON tp.id = tt.purpose_id
+LEFT JOIN "transaction" orig ON orig.id = t.reverses_transaction_id
 WHERE t.fund_id = sqlc.arg('fund_id')
   AND t.occurred_on >= sqlc.arg('from_date')
   AND (CAST(sqlc.narg('to_date') AS TEXT) IS NULL OR t.occurred_on < CAST(sqlc.narg('to_date') AS TEXT))
@@ -81,14 +87,14 @@ ORDER BY t.occurred_on DESC, t.created_at DESC;
 -- (ADR-024).
 
 -- name: ReportFundBalance :one
-SELECT CAST(COALESCE(SUM(CASE WHEN direction = 'in' THEN amount ELSE -amount END), 0) AS INTEGER) AS balance_amount
-FROM "transaction"
+SELECT CAST(COALESCE(SUM(signed_amount), 0) AS INTEGER) AS balance_amount
+FROM ledger_entry
 WHERE fund_id = sqlc.arg('fund_id')
   AND (CAST(sqlc.narg('through') AS TEXT) IS NULL OR occurred_on <= CAST(sqlc.narg('through') AS TEXT));
 
 -- name: ReportPurposeBalance :one
-SELECT CAST(COALESCE(SUM(CASE WHEN direction = 'in' THEN amount ELSE -amount END), 0) AS INTEGER) AS balance_amount
-FROM "transaction"
+SELECT CAST(COALESCE(SUM(signed_amount), 0) AS INTEGER) AS balance_amount
+FROM ledger_entry
 WHERE fund_id = sqlc.arg('fund_id') AND purpose_id = sqlc.arg('purpose_id')
   AND (CAST(sqlc.narg('through') AS TEXT) IS NULL OR occurred_on <= CAST(sqlc.narg('through') AS TEXT));
 
@@ -128,21 +134,19 @@ SELECT rl.id, rl.fund_id, rl.reconciliation_id, rl.account_id, rl.recorded_amoun
          WHEN 'matched' THEN 0
          ELSE CASE
            WHEN fix.id IS NULL THEN 0
-           WHEN fix.direction = 'in' THEN rl.difference_amount - fix.amount
-           ELSE rl.difference_amount + fix.amount
+           ELSE rl.difference_amount - fix.signed_amount
          END
        END AS INTEGER) AS remainder_amount
 FROM reconciliation_line rl
 JOIN reconciliation r ON r.fund_id = rl.fund_id AND r.id = rl.reconciliation_id
-LEFT JOIN "transaction" fix ON fix.fund_id = rl.fund_id AND fix.id = rl.adjustment_transaction_id
+LEFT JOIN ledger_entry fix ON fix.fund_id = rl.fund_id AND fix.id = rl.adjustment_transaction_id
 WHERE rl.fund_id = sqlc.arg('fund_id')
   AND (CASE rl.resolution
          WHEN 'left_open' THEN rl.difference_amount
          WHEN 'matched' THEN 0
          ELSE CASE
            WHEN fix.id IS NULL THEN 0
-           WHEN fix.direction = 'in' THEN rl.difference_amount - fix.amount
-           ELSE rl.difference_amount + fix.amount
+           ELSE rl.difference_amount - fix.signed_amount
          END
        END) <> 0
   AND (CAST(sqlc.narg('before') AS INTEGER) IS NULL OR r.performed_at < CAST(sqlc.narg('before') AS INTEGER))

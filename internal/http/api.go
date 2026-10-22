@@ -70,9 +70,10 @@ type api struct {
 	sqlDB *sql.DB
 
 	// now is the clock every handler that reckons a calendar day or month reads
-	// (#379), injectable so a test can stand on either side of a Jakarta month
-	// boundary. Production is time.Now; the handler converts to tz.Jakarta.
-	// Instants (created_at, session expiry) call time.Now directly.
+	// (#379), injectable so a test can stand on either side of a month boundary.
+	// Production is time.Now; the handler reads it in the fund's zone (ADR-041),
+	// via fundLocation. Instants (created_at, session expiry) call time.Now
+	// directly.
 	now func() time.Time
 
 	// restoreStage is the one-slot stash between the upload/inspect step and the
@@ -152,7 +153,7 @@ func (a *api) routes(r chi.Router) {
 		// Purposes are read-only here except the one kind a treasurer creates
 		// (pass-through); the other kinds are written by SetUpFund and
 		// OpenIncidental. PATCH renames any kind except the fund's 'main' row (#264).
-		r.Post("/accounts", a.createAccount)
+		r.With(a.keyed).Post("/accounts", a.createAccount)
 		r.Get("/accounts", a.listAccounts)
 		r.Patch("/accounts/{id}", a.updateAccount)
 		r.Delete("/accounts/{id}", a.deleteAccount)
@@ -175,6 +176,8 @@ func (a *api) routes(r chi.Router) {
 
 		// Rates are created and listed under their tier but corrected by id: a rate
 		// is only reached through one tier, so {id} in the nested path means the tier.
+		// A correction or a delete appends the next correction of the rate's month
+		// (ADR-040): a PATCH answers a new id, and the old one is refused as superseded.
 		r.Post("/dues-tiers/{id}/rates", a.createDuesRate)
 		r.Get("/dues-tiers/{id}/rates", a.listDuesRates)
 		r.Patch("/dues-rates/{id}", a.updateDuesRate)
@@ -184,21 +187,26 @@ func (a *api) routes(r chi.Router) {
 		// reconcile flow's read path (PRD section 7.8). A pass-through movement and a
 		// correction are ordinary POST /api/transactions calls (see
 		// transactionRequest), so neither has its own route.
-		r.Post("/transactions", a.createTransaction)
+		//
+		// Only the immutable routes are keyed (ADR-043).
+		r.With(a.keyed).Post("/transactions", a.createTransaction)
 		r.Get("/transactions", a.listTransactions)
 		// Fixing a posted row's peruntukan (ADR-033, #267): a reclass_purpose pair
 		// naming the row it corrects, addressed by that row's id like
 		// /api/incidentals/{purposeID}/close. It wraps Ledger.PostPurposeCorrection,
 		// not a second write path into PostTransaction (ADR-027).
-		r.Post("/transactions/{id}/purpose-correction", a.postPurposeCorrection)
+		r.With(a.keyed).Post("/transactions/{id}/purpose-correction", a.postPurposeCorrection)
+		// Reversing a transaction with one linked entry going the other way (ADR-042).
+		// Once-only by the schema, so no idempotency key (ADR-043).
+		r.Post("/transactions/{id}/reversal", a.reverseTransaction)
 		// Moving money between accounts without changing the fund's total (PRD
 		// section 6). No GET: the two legs are ordinary transaction rows and surface
 		// through GET /api/transactions.
-		r.Post("/transfers", a.createTransfer)
+		r.With(a.keyed).Post("/transfers", a.createTransfer)
 		// Moving money between purposes without moving any money (ADR-036, #383),
 		// through Ledger.PostPurposeMove; its legs surface through GET
 		// /api/transactions like a transfer's.
-		r.Post("/purpose-moves", a.createPurposeMove)
+		r.With(a.keyed).Post("/purpose-moves", a.createPurposeMove)
 
 		// A member fronting their money (PRD section 7.4). Recording the claim moves
 		// nothing; only settling posts a ledger row, so the recorded balance still
@@ -213,8 +221,7 @@ func (a *api) routes(r chi.Router) {
 		r.Delete("/reimbursements/{id}", a.deleteReimbursement)
 		r.Post("/reimbursements/{id}/settle", a.settleReimbursement)
 
-		r.Post("/dues-payments", a.createDuesPayment)
-		r.Post("/dues-payments/{id}/reversal", a.reverseDuesPayment)
+		r.With(a.keyed).Post("/dues-payments", a.createDuesPayment)
 		// Dues payment history (#228, PRD section 7.3): every posted payment and
 		// reversal, newest-first, searchable by member name. GET /dues-status
 		// answers one period at a time and never lists what was posted.
@@ -228,7 +235,7 @@ func (a *api) routes(r chi.Router) {
 		// and closed when over (PRD section 7.5). Addressed by purpose id. There is
 		// no contribute route: a contribution is an ordinary transaction tagged to
 		// the envelope's purpose, posted through POST /api/transactions (#67).
-		r.Post("/incidentals", a.openIncidental)
+		r.With(a.keyed).Post("/incidentals", a.openIncidental)
 		r.Get("/incidentals", a.listIncidentals)
 		r.Get("/incidentals/{purposeID}", a.getIncidental)
 		// The minimum and the recipients (ADR-034, #211): editable like occasion,
@@ -246,7 +253,7 @@ func (a *api) routes(r chi.Router) {
 		// section 7.7's home banner, section 7.8's reconcile flow). "latest" and
 		// "open-lines" are literal segments, registered ahead of {id} so chi does not
 		// swallow them as an id.
-		r.Post("/reconciliations", a.takeReconciliation)
+		r.With(a.keyed).Post("/reconciliations", a.takeReconciliation)
 		r.Get("/reconciliations", a.listReconciliations)
 		r.Get("/reconciliations/latest", a.latestReconciliation)
 		r.Get("/reconciliations/open-lines", a.listOpenReconciliationLines)

@@ -34,7 +34,7 @@ Dari wawancara #1 (bendahara unit kantor, 8 orang, ~Rp 1–2 juta/bulan):
 
 1. Mencatat transaksi apa pun dari ponsel dalam beberapa ketukan, di mana saja.
 2. Selalu menampilkan saldo berjalan yang jujur, dan membuat rekonsiliasi (catatan vs. uang tunai + bank yang sebenarnya) menjadi mudah.
-3. Memodelkan bentuk uang kelompok yang sebenarnya: dua lokasi, pos, iuran berjenjang, dan talangan (reimbursement).
+3. Memodelkan bentuk uang kelompok yang sebenarnya: dua lokasi, pos, iuran per golongan, dan talangan (reimbursement).
 4. Cukup andal untuk menjadi satu-satunya catatan — aman meski ponsel hilang.
 5. Lebih sederhana daripada spreadsheet yang digantikannya.
 
@@ -63,12 +63,12 @@ Satu server komunitas menampung satu atau lebih **Dana (Fund)** (untuk pengguna 
 
 Entitas utama:
 
-- **Dana (Fund)** — kas bersama. Memiliki nama dan mata uang (IDR).
+- **Dana (Fund)** — kas bersama. Memiliki nama, mata uang (IDR), dan zona waktu (WIB, WITA, atau WIT).
 - **Akun/Lokasi** — tempat uang secara fisik berada: satu daftar yang dinamai sendiri oleh bendahara, masing-masing berjenis tunai atau bank. Satu dana boleh punya beberapa lokasi dari jenis mana pun, boleh juga hanya satu; nama yang tampil adalah nama yang ia ketik sendiri, dan bawaan awalnya "Tunai". Lokasi bisa ditambah dan diganti namanya kemudian, dan lokasi yang sudah terpakai dinonaktifkan, bukan dihapus - setelah uangnya dipindahkan ke tempat lain, karena lokasi yang nonaktif tidak pernah dihitung lagi. Saldo tercatat dilacak *per lokasi* karena pemisahan inilah sumber selisihnya. (v1 mengasumsikan rekening bank bisa jadi rekening pribadi; Uruni hanya melacak bagian yang merupakan kas sesuai yang dilaporkan bendahara.)
 - **Pos** — setiap transaksi diberi pos: `Kas Utama` (rutin), sebuah **amplop** bernama (mis. "Duka Pak Budi"), atau `Titipan/Pass-through` (mis. Kas Bidang). Satu saldo riil yang tergabung, dipisahkan *secara makna*, bukan uang yang dipisah-pisah secara fisik.
-- **Anggota** — nama + peran/jenjang. Tidak butuh email/nomor telepon (meminimalkan data yang disimpan).
-- **Tarif iuran** — nominal per jenjang (mis. pelaksana 50rb, fungsional pertama 70rb, muda 80rb, madya belum ditentukan); dapat diubah; berlaku menurut waktu.
-- **Transaksi** — pemasukan atau pengeluaran; nominal; tanggal; lokasi; pos; kaitan anggota opsional (untuk iuran/talangan); catatan opsional; foto nota opsional. Bersifat permanen setelah diposting (koreksi dibuat sebagai entri penyesuaian baru) agar catatan tetap tepercaya.
+- **Anggota** — nama + peran/golongan, dengan golongan yang dicatat bulan demi bulan: perubahan berlaku mulai suatu bulan dan tidak pernah menghitung ulang bulan-bulan sebelumnya. Tidak butuh email/nomor telepon (meminimalkan data yang disimpan).
+- **Tarif iuran** — nominal per golongan (mis. pelaksana 50rb, fungsional pertama 70rb, muda 80rb, madya belum ditentukan), berlaku mulai suatu bulan sampai tarif berikutnya. Tarif yang salah diperbaiki dengan menyatakan bulannya lagi: semua bulan yang dicakupnya dihitung ulang, baris sebelumnya tetap tersimpan, dan yang sudah dibayar tidak bergerak.
+- **Transaksi** — pemasukan atau pengeluaran; nominal; tanggal; lokasi; pos; kaitan anggota opsional (untuk iuran/talangan); kaitan opsional ke transaksi yang dibatalkannya; catatan opsional; foto nota opsional. Bersifat permanen setelah diposting (koreksi dibuat sebagai entri penyesuaian baru) agar catatan tetap tepercaya. Nominal paling besar Rp 999.999.999.999 dan tanggal jatuh dari tahun 2000 sampai hari ini menurut zona waktu dana, sehingga jempol yang terpeleset ditolak, bukan diposting. Menyimpan entri yang sama lagi tepat setelah jawabannya hilang tidak mencatatnya dua kali: tiap pengiriman membawa kunci, dan server mengingatnya selama sehari (di luar cadangan).
 - **Amplop** — pengumpulan ringan untuk satu peristiwa: keperluan/peristiwa, sumbangan masuk, penyaluran keluar, dan **sisa** yang dialihkan ke Kas Utama saat amplop ditutup.
 - **Snapshot rekonsiliasi** — rekaman pada satu titik waktu tentang saldo yang diharapkan vs. yang sebenarnya per lokasi, selisih yang ada, dan cara penyelesaiannya.
 
@@ -76,19 +76,20 @@ Entitas utama:
 
 ### 7.1 Penyiapan & akses
 - Bendahara masuk ke server *komunitasnya sendiri* (satu peran bendahara di v1; peran "hanya-lihat" opsional menyusul). Tidak ada akun Uruni terpusat.
-- Penyiapan awal: memberi nama dana, menambahkan anggota beserta jenjangnya, mengatur tarif iuran, mengatur saldo awal untuk tiap lokasi.
+- Penyiapan awal: memberi nama dana dan memilih zona waktunya (WIB, WITA, atau WIT, terpilih otomatis dari ponsel), menambahkan anggota beserta golongannya, mengatur tarif iuran, mengatur saldo awal untuk tiap lokasi.
 - **Riwayat Uruni dimulai saat mulai dipakai.** Saldo awal sudah memuat segala hal sebelumnya, sehingga tanggal bergabung dan tarif iuran mengikuti saat penyiapan dan tidak ada periode lampau yang dihitung sebagai tagihan. Pembayaran yang sudah lunas tidak dicatat ulang: uangnya sudah *ada di dalam* saldo awal, dan mencatatnya kedua kali akan membuat saldo tercatat menggelembung selamanya. Pengecualiannya adalah **tunggakan yang masih nyata** — iuran yang memang belum dibayar anggota tidak pernah masuk ke saldo awal, jadi memundurkan tanggal bergabung anggota itu (beserta bulan berlaku tarifnya) membuat periode-periode tersebut tampil sebagai belum terbayar, dan pembayarannya bertanggal hari uang itu benar-benar masuk.
 
 ### 7.2 Mencatat transaksi (tindakan sehari-hari)
 - Tombol "tambah" yang menonjol dan bisa dijangkau dengan satu ketukan dari layar utama.
 - Kolom minimal dengan nilai bawaan yang cerdas: nominal, masuk/keluar, lokasi (mengingat yang terakhir), pos (bawaan Kas Utama), tanggal (bawaan hari ini). Catatan dan foto opsional.
 - Uang yang hanya berpindah tempat (tunai ke bank, "Pindah lokasi") atau berpindah pos ("Pindah pos") dicatat sebagai pemindahan yang tidak mengubah nilai, dan pos sebuah baris yang sudah tercatat bisa diperbaiki belakangan ("Perbaiki pos") - keduanya tidak menggerakkan saldo kas.
+- Transaksi yang salah dicatat dibatalkan dengan entri baru, bukan dihapus: pembatalan itu bertanggal sama dengan transaksi aslinya, kecuali kas sudah dicek sejak itu, dan kalau begitu bertanggal hari ini.
 - Pencatatan harus terasa responsif; server adalah satu-satunya sumber kebenaran dan mengonfirmasi penulisan dengan cepat.
 - Konektivitas: **aplikasi membutuhkan koneksi aktif.** Saat offline, aplikasi sengaja tidak tersedia — dengan status "butuh koneksi" yang jelas, tanpa data lokal dan tanpa antrean. Ini pilihan pengguna: ia lebih memilih tidak ada kerancuan "salinan mana yang benar?" ketimbang kemampuan offline apa pun.
 
 ### 7.3 Iuran
 - Melihat anggota dan, untuk periode berjalan, siapa yang sudah bayar / bayar sebagian / bayar di muka (ada yang membayar beberapa bulan sekaligus).
-- Menandai pembayaran iuran (nominal terisi otomatis dari jenjang anggota, dapat diubah; lokasi; tunai/transfer).
+- Menandai pembayaran iuran (nominal terisi otomatis dari golongan anggota, dapat diubah; lokasi; tunai/transfer).
 - Membatalkan pembayaran iuran yang salah dicatat (salah anggota, tercatat dua kali) — pembayaran itu dibalik dengan entri baru, bukan dihapus, dan anggota kembali terbaca belum bayar untuk periode tersebut.
 - Tampilan sederhana "belum bayar". **Tanpa pengingat, tanpa penagihan otomatis.**
 

@@ -2,7 +2,7 @@
 // Member shape is lib/setup.ts's, imported rather than redefined.
 
 import { apiFetch } from '@/lib/api'
-import type { Member, Transaction } from '@/lib/setup'
+import type { Member } from '@/lib/setup'
 
 /** The schema's four dues-status values (internal/ledger's MemberDuesStatus,
  * ADR-014: English on the wire and in code, Indonesian only on screen - see
@@ -31,29 +31,6 @@ export function getDuesStatus(period: string): Promise<DuesStatusRow[]> {
   return apiFetch<DuesStatusRow[]>(`/api/dues-status?period=${encodeURIComponent(period)}`)
 }
 
-/**
- * POST /api/dues-payments/{id}/reversal - undo a dues payment recorded in
- * error (PRD section 7.3). {id} is the kind='dues' transaction being reversed.
- *
- * Deliberately narrow, per ADR-029: account, purpose, amount, member and
- * period are never sent - Ledger.ReverseDuesPayment copies all five from the
- * original row, so a reversal can never disagree with what it reverses. The
- * payment is not edited or deleted; a new linked row is posted (CLAUDE.md
- * rule 3).
- *
- * `note` holds only what the treasurer typed in the optional reason field -
- * blank sends null, never a generated default; the row explains itself
- * through TransactionList's display label ("Pembatalan - {period} -
- * {anggota}").
- */
-export function reverseDuesPayment(transactionId: number, occurredOn: string, note: string | null): Promise<Transaction> {
-  return apiFetch<Transaction>(`/api/dues-payments/${transactionId}/reversal`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ occurred_on: occurredOn, note }),
-  })
-}
-
 /** One row of GET /api/members/{id}/outstanding-dues: one period this member
  * still owes something for, oldest first. No nested member (the id was the
  * path segment), and `status` is only ever 'unpaid' or 'partial'. */
@@ -69,9 +46,8 @@ export interface OutstandingDuesPeriod {
  * this member still owes for, oldest first. An empty array is a normal 200:
  * the member is square, or has no tier at all.
  *
- * `through` is the *client's* local month, always passed explicitly: the
- * server does not share the treasurer's timezone, so defaulting to its own
- * current month can hide a month that has already started in WIB.
+ * `through` is the fund's current month (dates.ts), always passed explicitly, so
+ * the month the form shows and the month the arrears walk to are one.
  */
 export function getOutstandingDues(memberId: number, through: string): Promise<OutstandingDuesPeriod[]> {
   return apiFetch<OutstandingDuesPeriod[]>(`/api/members/${memberId}/outstanding-dues?through=${encodeURIComponent(through)}`)

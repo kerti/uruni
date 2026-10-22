@@ -3,6 +3,7 @@ package http
 import (
 	"log/slog"
 	"net/http"
+	"time"
 
 	"github.com/kerti/uruni/internal/ledger"
 	"github.com/kerti/uruni/internal/store"
@@ -13,9 +14,11 @@ import (
 // than the wire needs a shortcut), so this package owns the wire shape, as
 // errorEnvelope and health do.
 type fundResponse struct {
-	ID         int64  `json:"id"`
-	Name       string `json:"name"`
-	Currency   string `json:"currency"`
+	ID       int64  `json:"id"`
+	Name     string `json:"name"`
+	Currency string `json:"currency"`
+	// TimeZone is the fund's IANA zone name (ADR-041).
+	TimeZone   string `json:"time_zone"`
 	ReportSlug string `json:"report_slug"`
 	// ReportURL is the shareable link: URUNI_BASE_URL + /report/ + slug. Only the
 	// server knows the base URL, so the SPA gets the finished link, not one built
@@ -32,6 +35,7 @@ func toFundResponse(f store.Fund, baseURL string) fundResponse {
 		ID:         f.ID,
 		Name:       f.Name,
 		Currency:   f.Currency,
+		TimeZone:   f.TimeZone,
 		ReportSlug: f.ReportSlug,
 		CreatedAt:  f.CreatedAt,
 	}
@@ -50,12 +54,14 @@ type setupAccountRequest struct {
 	OpeningBalance *openingBalanceRequest `json:"opening_balance"`
 }
 
-// setupRequest is POST /api/setup's body: the fund's name (PRD section 7.1)
-// and every account it starts with (#78), at least one (SetUpFund refuses an
-// empty list). The main purpose is not on the wire: "Kas Utama" is a fixed
-// domain name (CONTEXT.md, ADR-014), never user input.
+// setupRequest is POST /api/setup's body: the fund's name and time zone (PRD
+// section 7.1) and every account it starts with (#78), at least one (SetUpFund
+// refuses an empty list). TimeZone is optional: absent means Asia/Jakarta
+// (ADR-041). The main purpose is not on the wire: "Kas Utama" is a fixed domain
+// name (CONTEXT.md, ADR-014), never user input.
 type setupRequest struct {
 	Name     string                `json:"name"`
+	TimeZone string                `json:"time_zone"`
 	Accounts []setupAccountRequest `json:"accounts"`
 }
 
@@ -86,7 +92,9 @@ func (a *api) setupFund(w http.ResponseWriter, r *http.Request) {
 	}
 
 	result, err := a.ledger.SetUpFund(r.Context(), ledger.SetUpFundParams{
+		Now:      a.now(),
 		FundName: req.Name,
+		TimeZone: req.TimeZone,
 		Accounts: accounts,
 	})
 	if err != nil {
@@ -118,23 +126,28 @@ func (a *api) getFund(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, toFundResponse(fund, a.baseURL))
 }
 
-// updateFundRequest is PATCH /api/fund's body: the display name only. No
-// currency (an invariant through 0.x) and no report_slug, the public report's
-// unguessable address, whose change is its own decision
-// (POST /api/fund/report-slug), not a side effect of fixing a typo.
+// updateFundRequest is PATCH /api/fund's body: the display name and the time
+// zone, each optional, at least one required. No currency (an invariant
+// through 0.x) and no report_slug, the public report's unguessable address,
+// whose change is its own decision (POST /api/fund/report-slug), not a side
+// effect of fixing a typo.
 //
-// Name is a pointer so a body with no name ({}, a misspelt key) is a 400, not
-// a silent rename to the empty string, as updateDuesRateRequest.Amount. The
-// schema's CHECK still refuses a blank one (ADR-027).
+// Both are pointers so a body with neither ({}, a misspelt key) is a 400, not a
+// silent rename to the empty string, as updateDuesRateRequest.Amount. The
+// schema's CHECKs still refuse a blank name and a zone outside the three
+// (ADR-027, ADR-041).
 type updateFundRequest struct {
-	Name *string `json:"name"`
+	Name     *string `json:"name"`
+	TimeZone *string `json:"time_zone"`
 }
 
-// updateFund is PATCH /api/fund: renames the kas. The name is a display label
-// (it heads every screen and the public report) and nothing posted
-// references it, so no history is rewritten, like renaming a location
-// (updateAccount). The setup wizard's copy promises it: "bisa diganti nanti
-// kalau perlu."
+// updateFund is PATCH /api/fund: renames the kas and/or changes its time zone.
+// The name is a display label (it heads every screen and the public report) and
+// nothing posted references it, so no history is rewritten, like renaming a
+// location (updateAccount). The setup wizard's copy promises it: "bisa diganti
+// nanti kalau perlu." A zone change rewrites nothing either (ADR-041): every
+// day and month is derived from it, so setting the old zone back restores every
+// earlier reading.
 func (a *api) updateFund(w http.ResponseWriter, r *http.Request) {
 	fund, ok := a.resolveFund(w, r)
 	if !ok {
@@ -145,12 +158,12 @@ func (a *api) updateFund(w http.ResponseWriter, r *http.Request) {
 	if !decodeJSON(w, r, &req) {
 		return
 	}
-	if req.Name == nil {
-		writeAPIError(w, http.StatusBadRequest, "invalid_argument", "A name is required.")
+	if req.Name == nil && req.TimeZone == nil {
+		writeAPIError(w, http.StatusBadRequest, "invalid_argument", "A name or a time zone is required.")
 		return
 	}
 
-	updated, err := a.queries.UpdateFund(r.Context(), store.UpdateFundParams{ID: fund.ID, Name: *req.Name})
+	updated, err := a.queries.UpdateFund(r.Context(), store.UpdateFundParams{ID: fund.ID, Name: req.Name, TimeZone: req.TimeZone})
 	if err != nil {
 		mapSQLiteError(w, a.log(r), err)
 		return
@@ -174,6 +187,19 @@ func (a *api) replaceReportSlug(w http.ResponseWriter, r *http.Request) {
 	}
 	a.securityEvent(r, slog.LevelInfo, "report_link_rotated")
 	writeJSON(w, http.StatusOK, toFundResponse(updated, a.baseURL))
+}
+
+// fundLocation is the fund's time zone as a *time.Location, the only way a
+// handler comes by one (ADR-041): never from a request, never a fallback. A zone
+// that fails to load means a broken database, so the request answers 500.
+func (a *api) fundLocation(w http.ResponseWriter, r *http.Request, fund store.Fund) (*time.Location, bool) {
+	loc, err := ledger.FundLocation(fund)
+	if err != nil {
+		a.log(r).Error("fund has an unusable time zone", "fund_id", fund.ID, "time_zone", fund.TimeZone, "error", err)
+		writeAPIError(w, http.StatusInternalServerError, "internal_error", "Something went wrong.")
+		return nil, false
+	}
+	return loc, true
 }
 
 // resolveFund returns the single fund every fund-scoped route operates

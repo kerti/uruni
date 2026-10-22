@@ -22,6 +22,13 @@ describe('ErrorState', () => {
     expect(screen.queryByText(copy.common.unknownError)).not.toBeInTheDocument()
   })
 
+  it('has its own sentence for a date outside the window (#632), not the generic fallback', () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    render(<ErrorState error={new ApiError('date_out_of_range', 'The date is outside the range Uruni accepts.')} />)
+    expect(screen.getByText(copy.common.errors.date_out_of_range)).toBeInTheDocument()
+    expect(screen.queryByText(copy.common.unknownError)).not.toBeInTheDocument()
+  })
+
   it('falls back to the warm generic sentence for an unknown code', () => {
     render(<ErrorState error={new ApiError('some_future_code', 'Something the map has never seen.')} />)
     expect(screen.getByText(copy.common.unknownError)).toBeInTheDocument()

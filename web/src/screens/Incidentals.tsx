@@ -3,7 +3,7 @@ import { useEffect, useState, type FormEvent } from 'react'
 
 import DateField from '@/components/DateField'
 import OpeningDateHint from '@/components/OpeningDateHint'
-import { dateBounds } from '@/lib/dates'
+import { dateBounds, todayISODate } from '@/lib/dates'
 import AccountPicker from '@/components/pickers/AccountPicker'
 import { MemberMultiPicker } from '@/components/pickers/MemberPicker'
 import AmountInput from '@/components/money/AmountInput'
@@ -54,14 +54,6 @@ function errorText(err: ApiError): string {
   if (specific) return specific
   const common = copy.common.errors[err.code as keyof typeof copy.common.errors]
   return common ?? copy.common.unknownError
-}
-
-/** Local YYYY-MM-DD - the helper every record form uses. */
-function todayISODate(): string {
-  const now = new Date()
-  const mm = String(now.getMonth() + 1).padStart(2, '0')
-  const dd = String(now.getDate()).padStart(2, '0')
-  return `${now.getFullYear()}-${mm}-${dd}`
 }
 
 /**

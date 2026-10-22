@@ -3,7 +3,6 @@ package http
 import (
 	"net/http"
 	"strconv"
-	"time"
 
 	"github.com/go-chi/chi/v5"
 
@@ -32,7 +31,20 @@ type duesRateResponse struct {
 	CreatedAt     int64  `json:"created_at"`
 }
 
+// toDuesRateResponse is the wire shape of a rate that stands. The correction
+// number and the deleted flag are not on the wire: a client sees the rates in
+// force, and a correction shows as a new id (ADR-040).
 func toDuesRateResponse(rate store.DuesRate) duesRateResponse {
+	return duesRateResponse{
+		ID:            rate.ID,
+		TierID:        rate.TierID,
+		Amount:        rate.Amount,
+		EffectiveFrom: rate.EffectiveFrom,
+		CreatedAt:     rate.CreatedAt,
+	}
+}
+
+func standingToDuesRateResponse(rate store.DuesRateStanding) duesRateResponse {
 	return duesRateResponse{
 		ID:            rate.ID,
 		TierID:        rate.TierID,
@@ -75,11 +87,10 @@ func (a *api) resolveDuesTier(w http.ResponseWriter, r *http.Request) (store.Due
 	return tier, true
 }
 
-// createDuesRate is POST /api/dues-tiers/{id}/rates. A rate is edited by
-// adding a row for a new period, never repricing an existing one (PRD section
-// 6, "editable, effective over time"); #81's PATCH is the narrower case of a
-// mistyped amount on the row you have. A duplicate (tier_id, effective_from)
-// hits dues_rate's UNIQUE and returns 409 through mapSQLiteError.
+// createDuesRate is POST /api/dues-tiers/{id}/rates. A rate is added for a new
+// period; it never reprices an existing one (PATCH is the correction, ADR-040).
+// A month that already has a rate answers 409 unique_violation; a month whose
+// rate was deleted takes the new one.
 func (a *api) createDuesRate(w http.ResponseWriter, r *http.Request) {
 	var req duesRateRequest
 	if !decodeJSON(w, r, &req) {
@@ -91,52 +102,36 @@ func (a *api) createDuesRate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Rates write through queries, not a Ledger method, so the ceiling (#499) is
-	// applied here with the ledger paths' check.
-	if err := ledger.CheckAmountCeiling("amount", money.Amount(req.Amount)); err != nil {
-		mapLedgerError(w, a.log(r), err)
-		return
-	}
-
-	rate, err := a.queries.CreateDuesRate(r.Context(), store.CreateDuesRateParams{
+	rate, err := a.ledger.CreateDuesRate(r.Context(), ledger.CreateDuesRateParams{
+		Now:           a.now(),
+		FundID:        tier.FundID,
 		TierID:        tier.ID,
-		Amount:        req.Amount,
+		Amount:        money.FromDB(req.Amount),
 		EffectiveFrom: req.EffectiveFrom,
-		CreatedAt:     time.Now().Unix(),
 	})
 	if err != nil {
-		mapSQLiteError(w, a.log(r), err)
+		mapLedgerError(w, a.log(r), err)
 		return
 	}
 
 	writeJSON(w, http.StatusCreated, toDuesRateResponse(rate))
 }
 
-// resolveDuesRate is resolveDuesTier for dues_rate, and a pre-fetch for the
-// same reason: a DELETE affecting zero rows never raises sql.ErrNoRows.
-// dues_rate has no fund_id, so GetDuesRateForFund reaches the fund through
-// the rate's tier (#188).
-func (a *api) resolveDuesRate(w http.ResponseWriter, r *http.Request) (store.DuesRate, bool) {
-	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+// parseDuesRateID reads the {id} path segment both rate routes share and the
+// fund the request is scoped to, or answers the request and reports false. Whether
+// the id names a rate in the fund, and whether that rate still stands, is the
+// ledger's to say: it fetches the row before it writes (ADR-040).
+func (a *api) parseDuesRateID(w http.ResponseWriter, r *http.Request) (fundID, rateID int64, ok bool) {
+	rateID, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
 		writeAPIError(w, http.StatusBadRequest, "invalid_argument", "The dues rate id is not a valid number.")
-		return store.DuesRate{}, false
+		return 0, 0, false
 	}
-
 	fund, ok := a.resolveFund(w, r)
 	if !ok {
-		return store.DuesRate{}, false
+		return 0, 0, false
 	}
-
-	rate, err := a.queries.GetDuesRateForFund(r.Context(), store.GetDuesRateForFundParams{
-		ID:     id,
-		FundID: fund.ID,
-	})
-	if err != nil {
-		mapSQLiteError(w, a.log(r), err) // sql.ErrNoRows -> 404 not_found
-		return store.DuesRate{}, false
-	}
-	return rate, true
+	return fund.ID, rateID, true
 }
 
 // updateDuesRateRequest is PATCH /api/dues-rates/{id}'s body: the corrected
@@ -151,11 +146,13 @@ type updateDuesRateRequest struct {
 	Amount *int64 `json:"amount"`
 }
 
-// updateDuesRate is PATCH /api/dues-rates/{id}: corrects a mistyped amount. It
-// retroactively changes derived dues status for the periods the rate covers,
-// deliberately: the alternative is a wrong number nobody can fix.
+// updateDuesRate is PATCH /api/dues-rates/{id}: corrects a mistyped amount by
+// appending the next correction of the rate's month (ADR-040), so the response
+// carries a NEW id. It reprices every period the row covers, deliberately: the
+// alternative is a wrong number nobody can fix. An amount equal to the standing
+// one writes nothing; an id that no longer stands is 409 dues_rate_superseded.
 func (a *api) updateDuesRate(w http.ResponseWriter, r *http.Request) {
-	rate, ok := a.resolveDuesRate(w, r)
+	fundID, rateID, ok := a.parseDuesRateID(w, r)
 	if !ok {
 		return
 	}
@@ -168,44 +165,38 @@ func (a *api) updateDuesRate(w http.ResponseWriter, r *http.Request) {
 		writeAPIError(w, http.StatusBadRequest, "invalid_argument", "The corrected amount is required.")
 		return
 	}
-	if err := ledger.CheckAmountCeiling("amount", money.Amount(*req.Amount)); err != nil {
-		mapLedgerError(w, a.log(r), err)
-		return
-	}
 
-	updated, err := a.queries.UpdateDuesRate(r.Context(), store.UpdateDuesRateParams{
-		ID:     rate.ID,
-		Amount: *req.Amount,
-	})
+	updated, err := a.ledger.CorrectDuesRate(r.Context(), fundID, rateID, money.FromDB(*req.Amount))
 	if err != nil {
-		mapSQLiteError(w, a.log(r), err)
+		mapLedgerError(w, a.log(r), err)
 		return
 	}
 
 	writeJSON(w, http.StatusOK, toDuesRateResponse(updated))
 }
 
-// deleteDuesRate is DELETE /api/dues-rates/{id}: what makes a rate filed
-// against the wrong month correctable, since UNIQUE (tier_id, effective_from)
-// otherwise refuses the corrected row. Nothing references a dues_rate (a
-// payment stores the amount paid, not the rate), so no foreign key fires.
+// deleteDuesRate is DELETE /api/dues-rates/{id}: what makes a rate filed against
+// the wrong month removable. It appends a deleting correction (ADR-040), so the
+// month then holds no rate and its periods fall back to the earlier month's. An
+// id that no longer stands is 409 dues_rate_superseded.
 func (a *api) deleteDuesRate(w http.ResponseWriter, r *http.Request) {
-	rate, ok := a.resolveDuesRate(w, r)
+	fundID, rateID, ok := a.parseDuesRateID(w, r)
 	if !ok {
 		return
 	}
 
-	if err := a.queries.DeleteDuesRate(r.Context(), rate.ID); err != nil {
-		mapSQLiteDeleteError(w, a.log(r), err)
+	if err := a.ledger.DeleteDuesRate(r.Context(), fundID, rateID); err != nil {
+		mapLedgerError(w, a.log(r), err)
 		return
 	}
 
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// listDuesRates is GET /api/dues-tiers/{id}/rates: every rate ever set for one
-// tier, oldest effective_from first (ListDuesRatesByTier); the caller derives
-// "the rate in force on date X", or uses GetEffectiveDuesRate (#67).
+// listDuesRates is GET /api/dues-tiers/{id}/rates: the rates in force for one
+// tier, oldest effective_from first: one per month that has a rate, a deleted
+// month absent. The caller derives "the rate in force on date X" by the latest
+// row at or before it.
 func (a *api) listDuesRates(w http.ResponseWriter, r *http.Request) {
 	tier, ok := a.resolveDuesTier(w, r)
 	if !ok {
@@ -220,7 +211,7 @@ func (a *api) listDuesRates(w http.ResponseWriter, r *http.Request) {
 
 	resp := make([]duesRateResponse, 0, len(rates))
 	for _, rate := range rates {
-		resp = append(resp, toDuesRateResponse(rate))
+		resp = append(resp, standingToDuesRateResponse(rate))
 	}
 	writeJSON(w, http.StatusOK, resp)
 }

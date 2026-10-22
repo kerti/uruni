@@ -79,7 +79,7 @@ func newFixture(t *testing.T, l *Ledger) fixture {
 	f := fixture{}
 
 	fund, err := q.CreateFund(ctx, store.CreateFundParams{
-		Name: "Test Fund", Currency: "IDR", ReportSlug: validSlug, CreatedAt: 1,
+		Name: "Test Fund", Currency: "IDR", TimeZone: "Asia/Jakarta", ReportSlug: validSlug, CreatedAt: 1,
 	})
 	if err != nil {
 		t.Fatalf("CreateFund() = %v, want no error", err)
@@ -153,7 +153,7 @@ func accountIDByKind(t *testing.T, accounts []store.Account, kind string) int64 
 func postOpeningBalance(t *testing.T, l *Ledger, fundID, accountID, purposeID int64, amount money.Amount, occurredOn string) store.Transaction {
 	t.Helper()
 	ob := OpeningBalance{Amount: amount, OccurredOn: occurredOn}
-	if err := validateOpeningBalance(ob); err != nil {
+	if err := validateOpeningBalance(ob, noCeiling); err != nil {
 		t.Fatalf("validateOpeningBalance() = %v, want no error", err)
 	}
 
@@ -179,4 +179,56 @@ func createPurpose(t *testing.T, q *store.Queries, fundID int64, kind, name stri
 		t.Fatalf("CreatePurpose(%q) = %v, want no error", kind, err)
 	}
 	return p.ID
+}
+
+// postReversalOn posts the row ReverseTransaction would post for the original,
+// dated on a day the ledger would not pick. The ledger dates a reversal on the
+// original's own day, or today once a cek kas has counted it (ADR-042), so a
+// test whose subject is the walk, a report or a total over reversals scattered
+// across months writes the row directly, exactly as a legacy file or a restore
+// holds one. The copied fields are the ledger's: the other way, the original's
+// amount, account, member and period, and its EFFECTIVE purpose.
+func postReversalOn(t *testing.T, l *Ledger, fundID, originalID int64, on string) store.Transaction {
+	t.Helper()
+	ctx := context.Background()
+	q := store.New(l.db)
+	original, err := q.GetReversalTarget(ctx, store.GetReversalTargetParams{FundID: fundID, ID: originalID})
+	if err != nil {
+		t.Fatalf("GetReversalTarget(%d) = %v, want no error", originalID, err)
+	}
+	direction := "in"
+	if original.Direction == "in" {
+		direction = "out"
+	}
+	row, err := q.CreateTransaction(ctx, store.CreateTransactionParams{
+		FundID: fundID, AccountID: original.AccountID, PurposeID: original.EffectivePurposeID,
+		Direction: direction, Amount: original.Amount, OccurredOn: on, Kind: "adjustment",
+		MemberID: original.MemberID, DuesPeriod: original.DuesPeriod,
+		ReversesTransactionID: &originalID, CreatedAt: time.Now().Unix(),
+	})
+	if err != nil {
+		t.Fatalf("posting the reversal of %d on %s = %v, want no error", originalID, on, err)
+	}
+	return row
+}
+
+// countEverything takes a cek kas that finds every named location matched at
+// its recorded balance. It covers every row posted so far: the count's cutoff is
+// the fund's highest transaction id.
+func countEverything(t *testing.T, l *Ledger, fundID int64, accountIDs ...int64) store.Reconciliation {
+	t.Helper()
+	ctx := context.Background()
+	counts := make([]AccountCount, 0, len(accountIDs))
+	for _, id := range accountIDs {
+		balance, err := l.AccountBalance(ctx, fundID, id)
+		if err != nil {
+			t.Fatalf("AccountBalance(%d) = %v, want no error", id, err)
+		}
+		counts = append(counts, AccountCount{AccountID: id, ActualAmount: balance, Resolution: "matched"})
+	}
+	rec, err := l.TakeReconciliation(ctx, TakeReconciliationParams{FundID: fundID, Counts: counts})
+	if err != nil {
+		t.Fatalf("TakeReconciliation() = %v, want no error", err)
+	}
+	return rec
 }

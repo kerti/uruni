@@ -18,6 +18,17 @@ type DuesRate struct {
 	TierID        int64
 	Amount        int64
 	EffectiveFrom string
+	Correction    int64
+	Deleted       int64
+	CreatedAt     int64
+}
+
+type DuesRateStanding struct {
+	ID            int64
+	TierID        int64
+	Amount        int64
+	EffectiveFrom string
+	Correction    int64
 	CreatedAt     int64
 }
 
@@ -32,8 +43,17 @@ type Fund struct {
 	ID         int64
 	Name       string
 	Currency   string
+	TimeZone   string
 	ReportSlug string
 	CreatedAt  int64
+}
+
+type IdempotencyKey struct {
+	Key         string
+	Fingerprint string
+	Result      []byte
+	CreatedAt   int64
+	ExpiresAt   int64
 }
 
 type Incidental struct {
@@ -52,14 +72,56 @@ type IncidentalRecipient struct {
 	MemberID  int64
 }
 
+type LedgerEntry struct {
+	ID                      int64
+	FundID                  int64
+	AccountID               int64
+	PurposeID               int64
+	Direction               string
+	Amount                  int64
+	OccurredOn              string
+	Kind                    string
+	MemberID                *int64
+	DuesPeriod              *string
+	ReimbursementID         *int64
+	TransferID              *int64
+	ReversesTransactionID   *int64
+	Note                    *string
+	CreatedAt               int64
+	SignedAmount            int64
+	ReversedByTransactionID *int64
+	ReversedOn              *string
+	Reversed                int64
+	EffectivePurposeID      int64
+}
+
 type Member struct {
 	ID         int64
 	FundID     int64
 	Name       string
-	TierID     *int64
 	JoinedOn   string
 	InactiveOn *string
 	CreatedAt  int64
+}
+
+type MemberTier struct {
+	ID            int64
+	FundID        int64
+	MemberID      int64
+	TierID        *int64
+	EffectiveFrom string
+	Correction    int64
+	CreatedAt     int64
+}
+
+type MemberTierStanding struct {
+	ID            int64
+	FundID        int64
+	MemberID      int64
+	TierID        *int64
+	EffectiveFrom string
+	Correction    int64
+	CreatedAt     int64
 }
 
 type Purpose struct {

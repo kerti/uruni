@@ -55,11 +55,11 @@ func TestReverseDuesPaymentRoundTripsBalanceAndPaidStatus(t *testing.T) {
 		t.Fatalf("member status before reversal = %+v, ok=%v, want Paid", gotBefore, ok)
 	}
 
-	reversal, err := l.ReverseDuesPayment(ctx, ReverseDuesPaymentParams{
-		FundID: f.fundID, TransactionID: paymentID, OccurredOn: "2026-08-15",
+	reversal, err := l.ReverseTransaction(ctx, ReverseTransactionParams{
+		FundID: f.fundID, TransactionID: paymentID,
 	})
 	if err != nil {
-		t.Fatalf("ReverseDuesPayment() = %v, want no error", err)
+		t.Fatalf("ReverseTransaction() = %v, want no error", err)
 	}
 	if reversal.Kind != "adjustment" {
 		t.Errorf("reversal Kind = %q, want %q", reversal.Kind, "adjustment")
@@ -105,7 +105,7 @@ func TestReverseDuesPaymentRoundTripsBalanceAndPaidStatus(t *testing.T) {
 
 // TestReverseDuesPaymentTwiceIsRefused: a payment is reversible at most once
 // (the dues_payment_reversed_once partial unique index), surfaced as the named
-// ErrDuesPaymentAlreadyReversed, not a raw constraint string.
+// ErrAlreadyReversed, not a raw constraint string.
 func TestReverseDuesPaymentTwiceIsRefused(t *testing.T) {
 	t.Parallel()
 	l := newTestLedger(t)
@@ -127,29 +127,33 @@ func TestReverseDuesPaymentTwiceIsRefused(t *testing.T) {
 	}
 	paymentID := posted[0].ID
 
-	if _, err := l.ReverseDuesPayment(ctx, ReverseDuesPaymentParams{
-		FundID: f.fundID, TransactionID: paymentID, OccurredOn: "2026-08-15",
+	if _, err := l.ReverseTransaction(ctx, ReverseTransactionParams{
+		FundID: f.fundID, TransactionID: paymentID,
 	}); err != nil {
-		t.Fatalf("first ReverseDuesPayment() = %v, want no error", err)
+		t.Fatalf("first ReverseTransaction() = %v, want no error", err)
 	}
 
-	_, err = l.ReverseDuesPayment(ctx, ReverseDuesPaymentParams{
-		FundID: f.fundID, TransactionID: paymentID, OccurredOn: "2026-08-20",
+	_, err = l.ReverseTransaction(ctx, ReverseTransactionParams{
+		FundID: f.fundID, TransactionID: paymentID,
 	})
-	if !errors.Is(err, ErrDuesPaymentAlreadyReversed) {
-		t.Fatalf("second ReverseDuesPayment() = %v, want an error wrapping ErrDuesPaymentAlreadyReversed", err)
+	if !errors.Is(err, ErrAlreadyReversed) {
+		t.Fatalf("second ReverseTransaction() = %v, want an error wrapping ErrAlreadyReversed", err)
 	}
 }
 
-// TestReverseDuesPaymentRefusesANonDuesTransaction: only a kind='dues' row can
-// be reversed here; PRD section 4 keeps it as wide as dues, never a generic
-// reverse-any-transaction.
-func TestReverseDuesPaymentRefusesANonDuesTransaction(t *testing.T) {
+// TestReverseTransactionReversesAnOrdinaryTransaction: a kind='normal' row is
+// reversible (ADR-042). The reversal goes the other way and the fund balance
+// returns to what it was.
+func TestReverseTransactionReversesAnOrdinaryTransaction(t *testing.T) {
 	t.Parallel()
 	l := newTestLedger(t)
 	f := newFixture(t, l)
 	ctx := context.Background()
 
+	balanceBefore, err := l.FundBalance(ctx, f.fundID)
+	if err != nil {
+		t.Fatalf("FundBalance() before = %v, want no error", err)
+	}
 	ordinary, err := l.PostTransaction(ctx, PostTransactionParams{
 		FundID: f.fundID, AccountID: f.cashID, PurposeID: f.mainID,
 		Direction: "in", Amount: 50_000, OccurredOn: "2026-08-01",
@@ -158,17 +162,30 @@ func TestReverseDuesPaymentRefusesANonDuesTransaction(t *testing.T) {
 		t.Fatalf("PostTransaction() = %v, want no error", err)
 	}
 
-	_, err = l.ReverseDuesPayment(ctx, ReverseDuesPaymentParams{
-		FundID: f.fundID, TransactionID: ordinary.ID, OccurredOn: "2026-08-02",
+	reversal, err := l.ReverseTransaction(ctx, ReverseTransactionParams{
+		FundID: f.fundID, TransactionID: ordinary.ID,
 	})
-	if !errors.Is(err, ErrNotADuesPayment) {
-		t.Fatalf("ReverseDuesPayment(ordinary transaction) = %v, want an error wrapping ErrNotADuesPayment", err)
+	if err != nil {
+		t.Fatalf("ReverseTransaction(ordinary transaction) = %v, want no error", err)
+	}
+	if reversal.Kind != "adjustment" || reversal.Direction != "out" || reversal.Amount != 50_000 {
+		t.Errorf("reversal = kind %q direction %q amount %d, want an adjustment going out for 50000", reversal.Kind, reversal.Direction, reversal.Amount)
+	}
+	if reversal.MemberID != nil || reversal.DuesPeriod != nil {
+		t.Errorf("reversal of an unnamed row carries member %v period %v, want neither", reversal.MemberID, reversal.DuesPeriod)
+	}
+	balanceAfter, err := l.FundBalance(ctx, f.fundID)
+	if err != nil {
+		t.Fatalf("FundBalance() after = %v, want no error", err)
+	}
+	if balanceAfter != balanceBefore {
+		t.Errorf("FundBalance() after reversal = %d, want %d (the pre-transaction balance)", balanceAfter, balanceBefore)
 	}
 }
 
 // TestReverseDuesPaymentRefusesReversingAReversal: a reversal is posted as
-// kind='adjustment', never kind='dues' (ADR-029), so it fails the same
-// ErrNotADuesPayment check, with no separate check.
+// kind='adjustment' (ADR-029), and ADR-042 gives that refusal its own name,
+// ErrReversalOfReversal.
 func TestReverseDuesPaymentRefusesReversingAReversal(t *testing.T) {
 	t.Parallel()
 	l := newTestLedger(t)
@@ -189,18 +206,18 @@ func TestReverseDuesPaymentRefusesReversingAReversal(t *testing.T) {
 		t.Fatalf("PostDuesPayments() = %v, want no error", err)
 	}
 
-	reversal, err := l.ReverseDuesPayment(ctx, ReverseDuesPaymentParams{
-		FundID: f.fundID, TransactionID: posted[0].ID, OccurredOn: "2026-08-15",
+	reversal, err := l.ReverseTransaction(ctx, ReverseTransactionParams{
+		FundID: f.fundID, TransactionID: posted[0].ID,
 	})
 	if err != nil {
-		t.Fatalf("ReverseDuesPayment() = %v, want no error", err)
+		t.Fatalf("ReverseTransaction() = %v, want no error", err)
 	}
 
-	_, err = l.ReverseDuesPayment(ctx, ReverseDuesPaymentParams{
-		FundID: f.fundID, TransactionID: reversal.ID, OccurredOn: "2026-08-20",
+	_, err = l.ReverseTransaction(ctx, ReverseTransactionParams{
+		FundID: f.fundID, TransactionID: reversal.ID,
 	})
-	if !errors.Is(err, ErrNotADuesPayment) {
-		t.Fatalf("ReverseDuesPayment(a reversal) = %v, want an error wrapping ErrNotADuesPayment", err)
+	if !errors.Is(err, ErrReversalOfReversal) {
+		t.Fatalf("ReverseTransaction(a reversal) = %v, want an error wrapping ErrReversalOfReversal", err)
 	}
 }
 
@@ -208,7 +225,7 @@ func TestReverseDuesPaymentRefusesReversingAReversal(t *testing.T) {
 // fund-scoped (GetTransactionForFund), backing the composite FK on
 // reverses_transaction_id at the schema level. A real transaction id of
 // another fund must fail for the same reason as one that does not exist:
-// ErrDuesPaymentNotFound, not a generic error or a silent cross-fund reversal.
+// ErrReversalNotFound, not a generic error or a silent cross-fund reversal.
 func TestReverseDuesPaymentRefusesAnotherFundsTransaction(t *testing.T) {
 	t.Parallel()
 	l := newTestLedger(t)
@@ -233,56 +250,25 @@ func TestReverseDuesPaymentRefusesAnotherFundsTransaction(t *testing.T) {
 	// A second fund, built by hand (as in TestDuesStatusForPeriodScopesToOneFund):
 	// newFixture hard-codes report_slug, so a second needs its own.
 	other, err := q.CreateFund(ctx, store.CreateFundParams{
-		Name: "Other Fund", Currency: "IDR", ReportSlug: "zyxwvutsrqponmlkjihgfe", CreatedAt: 1,
+		Name: "Other Fund", Currency: "IDR", TimeZone: "Asia/Jakarta", ReportSlug: "zyxwvutsrqponmlkjihgfe", CreatedAt: 1,
 	})
 	if err != nil {
 		t.Fatalf("CreateFund() = %v, want no error", err)
 	}
 
-	_, err = l.ReverseDuesPayment(ctx, ReverseDuesPaymentParams{
-		FundID: other.ID, TransactionID: paymentID, OccurredOn: "2026-08-15",
+	_, err = l.ReverseTransaction(ctx, ReverseTransactionParams{
+		FundID: other.ID, TransactionID: paymentID,
 	})
-	if !errors.Is(err, ErrDuesPaymentNotFound) {
-		t.Fatalf("ReverseDuesPayment(fund 2, fund 1's transaction id) = %v, want an error wrapping ErrDuesPaymentNotFound", err)
+	if !errors.Is(err, ErrReversalNotFound) {
+		t.Fatalf("ReverseTransaction(fund 2, fund 1's transaction id) = %v, want an error wrapping ErrReversalNotFound", err)
 	}
 
 	// The payment is still reversible from its real fund, so the refusal above
 	// was scoping, not a corrupted or consumed row.
-	if _, err := l.ReverseDuesPayment(ctx, ReverseDuesPaymentParams{
-		FundID: f1.fundID, TransactionID: paymentID, OccurredOn: "2026-08-16",
+	if _, err := l.ReverseTransaction(ctx, ReverseTransactionParams{
+		FundID: f1.fundID, TransactionID: paymentID,
 	}); err != nil {
-		t.Fatalf("ReverseDuesPayment(fund 1, fund 1's own transaction) = %v, want no error", err)
-	}
-}
-
-// TestReverseDuesPaymentRejectsInvalidOccurredOn mirrors PostDuesPayments'
-// argument-shape validation (ADR-027): checked before anything is fetched or
-// written.
-func TestReverseDuesPaymentRejectsInvalidOccurredOn(t *testing.T) {
-	t.Parallel()
-	l := newTestLedger(t)
-	f := newFixture(t, l)
-	q := store.New(l.db)
-	ctx := context.Background()
-
-	tierID := createDuesTier(t, q, f.fundID, "Tier A")
-	createDuesRate(t, q, tierID, 25_000, "2026-01")
-	memberID := createDuesMember(t, q, f.fundID, duesMemberParams{name: "Jane", tierID: &tierID})
-
-	posted, err := l.PostDuesPayments(ctx, PostDuesPaymentsParams{
-		FundID: f.fundID, AccountID: f.cashID,
-		MemberID: memberID, OccurredOn: "2026-08-12",
-		Periods: []PeriodAmount{{DuesPeriod: "2026-08", Amount: 25_000}},
-	})
-	if err != nil {
-		t.Fatalf("PostDuesPayments() = %v, want no error", err)
-	}
-
-	_, err = l.ReverseDuesPayment(ctx, ReverseDuesPaymentParams{
-		FundID: f.fundID, TransactionID: posted[0].ID, OccurredOn: "2026-02-30",
-	})
-	if !errors.Is(err, ErrInvalidArgument) {
-		t.Fatalf("ReverseDuesPayment() = %v, want an error wrapping ErrInvalidArgument", err)
+		t.Fatalf("ReverseTransaction(fund 1, fund 1's own transaction) = %v, want no error", err)
 	}
 }
 
@@ -317,10 +303,10 @@ func TestReverseDuesPaymentReversedPeriodNoLongerCountsTowardDuesPaidByPeriod(t 
 		t.Fatalf("DuesPaidByPeriod() before reversal = %+v, want one row of 25000", before)
 	}
 
-	if _, err := l.ReverseDuesPayment(ctx, ReverseDuesPaymentParams{
-		FundID: f.fundID, TransactionID: posted[0].ID, OccurredOn: "2026-08-15",
+	if _, err := l.ReverseTransaction(ctx, ReverseTransactionParams{
+		FundID: f.fundID, TransactionID: posted[0].ID,
 	}); err != nil {
-		t.Fatalf("ReverseDuesPayment() = %v, want no error", err)
+		t.Fatalf("ReverseTransaction() = %v, want no error", err)
 	}
 
 	after, err := q.DuesPaidByPeriod(ctx, store.DuesPaidByPeriodParams{FundID: f.fundID, DuesPeriod: &period})
@@ -380,10 +366,10 @@ func TestReverseDuesPaymentReversedPeriodDoesNotReadAsPaidInAdvance(t *testing.T
 	}
 
 	// Reverse the wrongly-entered June payment.
-	if _, err := l.ReverseDuesPayment(ctx, ReverseDuesPaymentParams{
-		FundID: f.fundID, TransactionID: junePosted[0].ID, OccurredOn: "2026-08-01",
+	if _, err := l.ReverseTransaction(ctx, ReverseTransactionParams{
+		FundID: f.fundID, TransactionID: junePosted[0].ID,
 	}); err != nil {
-		t.Fatalf("ReverseDuesPayment(June) = %v, want no error", err)
+		t.Fatalf("ReverseTransaction(June) = %v, want no error", err)
 	}
 
 	// March must now read plain Paid, not paid in advance through a June that no
@@ -435,11 +421,11 @@ func TestReverseDuesPaymentNoteFollowsNormalizeNoteContract(t *testing.T) {
 			t.Fatalf("PostDuesPayments() = %v, want no error", err)
 		}
 
-		reversal, err := l.ReverseDuesPayment(ctx, ReverseDuesPaymentParams{
-			FundID: f.fundID, TransactionID: posted[0].ID, OccurredOn: "2026-08-13", Note: note,
+		reversal, err := l.ReverseTransaction(ctx, ReverseTransactionParams{
+			FundID: f.fundID, TransactionID: posted[0].ID, Note: note,
 		})
 		if err != nil {
-			t.Fatalf("ReverseDuesPayment() = %v, want no error", err)
+			t.Fatalf("ReverseTransaction() = %v, want no error", err)
 		}
 		return reversal.Note
 	}
@@ -484,11 +470,11 @@ func TestReverseDuesPaymentReversesANamedContribution(t *testing.T) {
 		t.Fatalf("PostTransaction(named contribution) = %v, want no error", err)
 	}
 
-	reversal, err := l.ReverseDuesPayment(ctx, ReverseDuesPaymentParams{
-		FundID: f.fundID, TransactionID: contribution.ID, OccurredOn: "2026-08-15",
+	reversal, err := l.ReverseTransaction(ctx, ReverseTransactionParams{
+		FundID: f.fundID, TransactionID: contribution.ID,
 	})
 	if err != nil {
-		t.Fatalf("ReverseDuesPayment(named contribution) = %v, want no error", err)
+		t.Fatalf("ReverseTransaction(named contribution) = %v, want no error", err)
 	}
 	if reversal.Kind != "adjustment" {
 		t.Errorf("reversal Kind = %q, want %q", reversal.Kind, "adjustment")
@@ -539,10 +525,11 @@ func TestReverseDuesPaymentReversesANamedContribution(t *testing.T) {
 	}
 }
 
-// TestReverseDuesPaymentRefusesAnUnnamedContribution: an unnamed contribution
-// is neither dues nor a named contribution, so it gets the ErrNotADuesPayment
-// refusal of TestReverseDuesPaymentRefusesANonDuesTransaction.
-func TestReverseDuesPaymentRefusesAnUnnamedContribution(t *testing.T) {
+// TestReverseTransactionReversesAnUnnamedContribution: an unnamed contribution
+// is a normal row, so ADR-042 reverses it, carrying no member (the null-safe
+// trigger is what lets the insert through). The envelope reads nothing
+// collected afterwards, and its balance returns to zero.
+func TestReverseTransactionReversesAnUnnamedContribution(t *testing.T) {
 	t.Parallel()
 	l := newTestLedger(t)
 	f := newFixture(t, l)
@@ -557,11 +544,24 @@ func TestReverseDuesPaymentRefusesAnUnnamedContribution(t *testing.T) {
 		t.Fatalf("PostTransaction(unnamed contribution) = %v, want no error", err)
 	}
 
-	_, err = l.ReverseDuesPayment(ctx, ReverseDuesPaymentParams{
-		FundID: f.fundID, TransactionID: unnamed.ID, OccurredOn: "2026-08-15",
+	reversal, err := l.ReverseTransaction(ctx, ReverseTransactionParams{
+		FundID: f.fundID, TransactionID: unnamed.ID,
 	})
-	if !errors.Is(err, ErrNotADuesPayment) {
-		t.Fatalf("ReverseDuesPayment(unnamed contribution) = %v, want an error wrapping ErrNotADuesPayment", err)
+	if err != nil {
+		t.Fatalf("ReverseTransaction(unnamed contribution) = %v, want no error", err)
+	}
+	if reversal.MemberID != nil {
+		t.Errorf("reversal MemberID = %v, want nil: the original names nobody", reversal.MemberID)
+	}
+	if reversal.PurposeID != envelope.PurposeID {
+		t.Errorf("reversal PurposeID = %d, want %d", reversal.PurposeID, envelope.PurposeID)
+	}
+	balance, err := l.PurposeBalance(ctx, f.fundID, envelope.PurposeID)
+	if err != nil {
+		t.Fatalf("PurposeBalance() = %v, want no error", err)
+	}
+	if balance != 0 {
+		t.Errorf("envelope balance after reversal = %d, want 0", balance)
 	}
 }
 
@@ -589,10 +589,10 @@ func TestReverseDuesPaymentRefusesAClosedEnvelope(t *testing.T) {
 		t.Fatalf("CloseIncidentalAndRoll() = %v, want no error", err)
 	}
 
-	_, err = l.ReverseDuesPayment(ctx, ReverseDuesPaymentParams{
-		FundID: f.fundID, TransactionID: contribution.ID, OccurredOn: "2026-08-21",
+	_, err = l.ReverseTransaction(ctx, ReverseTransactionParams{
+		FundID: f.fundID, TransactionID: contribution.ID,
 	})
 	if !errors.Is(err, ErrIncidentalClosed) {
-		t.Fatalf("ReverseDuesPayment() on a closed envelope = %v, want an error wrapping ErrIncidentalClosed", err)
+		t.Fatalf("ReverseTransaction() on a closed envelope = %v, want an error wrapping ErrIncidentalClosed", err)
 	}
 }

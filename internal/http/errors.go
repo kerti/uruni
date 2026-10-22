@@ -49,23 +49,52 @@ func mapLedgerError(w http.ResponseWriter, logger *slog.Logger, err error) {
 		// thing to change. 400 like other ledger input refusals; the message names
 		// the limit, never the value sent.
 		writeAPIError(w, http.StatusBadRequest, "amount_too_large", "An amount cannot be larger than 999,999,999,999 rupiah.")
+	case errors.Is(err, ledger.ErrDateOutOfRange):
+		// A real date before 2000 or past its column's ceiling. Its own code, not
+		// invalid_argument: the date is well-formed and the SPA tells her to check the
+		// year. The message names no date.
+		writeAPIError(w, http.StatusBadRequest, "date_out_of_range", "The date is outside the range Uruni accepts.")
+	case errors.Is(err, ledger.ErrDuesRateSuperseded):
+		// A correction is a new row with a new id (ADR-040), so a page holding the
+		// old id is stale. 409, its own code: the SPA tells her to reload the list.
+		writeAPIError(w, http.StatusConflict, "dues_rate_superseded", "This rate has since been corrected or removed; reload the list.")
+	case errors.Is(err, ledger.ErrDuesRateMonthTaken):
+		writeAPIError(w, http.StatusConflict, "unique_violation", "This value conflicts with an existing record.")
+	case errors.Is(err, ledger.ErrIdempotencyKeyReused):
+		// The same key under another request (ADR-043). The app cannot produce it
+		// (a definite answer drops the key and a new request mints another), so
+		// someone is reusing keys by hand: worth a line, never the key or the body.
+		logger.Warn("an idempotency key was reused for another request")
+		writeAPIError(w, http.StatusConflict, "idempotency_key_reused", "This Idempotency-Key was already used for a different request.")
 	case errors.Is(err, ledger.ErrReimbursementWaived):
 		writeAPIError(w, http.StatusConflict, "reimbursement_waived", "This reimbursement has been waived.")
 	case errors.Is(err, ledger.ErrReimbursementAlreadySettled):
 		writeAPIError(w, http.StatusConflict, "reimbursement_already_settled", "This reimbursement has already been settled.")
-	case errors.Is(err, ledger.ErrDuesPaymentNotFound):
+	case errors.Is(err, ledger.ErrReversalNotFound):
 		writeAPIError(w, http.StatusNotFound, "not_found", "The requested resource was not found.")
 	case errors.Is(err, sql.ErrNoRows):
 		// A ledger method that fetches the row it is about before writing
 		// (SettleReimbursement's GetReimbursement) wraps the driver's sql.ErrNoRows
 		// when the id names nothing. That is a 404 for the reason
-		// ErrDuesPaymentNotFound is: the id came from the path. Without this case it
+		// ErrReversalNotFound is: the id came from the path. Without this case it
 		// reaches the default and answers 500 for a wrong id (#69).
 		writeAPIError(w, http.StatusNotFound, "not_found", "The requested resource was not found.")
-	case errors.Is(err, ledger.ErrNotADuesPayment):
-		writeAPIError(w, http.StatusBadRequest, "invalid_argument", "That transaction is not a dues payment and cannot be reversed.")
-	case errors.Is(err, ledger.ErrDuesPaymentAlreadyReversed):
-		writeAPIError(w, http.StatusConflict, "dues_payment_already_reversed", "This dues payment has already been reversed.")
+	case errors.Is(err, ledger.ErrReversalOpening):
+		writeAPIError(w, http.StatusConflict, "reversal_opening", "An opening balance cannot be reversed.")
+	case errors.Is(err, ledger.ErrReversalReimbursement):
+		writeAPIError(w, http.StatusConflict, "reversal_reimbursement", "A reimbursement payout cannot be reversed.")
+	case errors.Is(err, ledger.ErrReversalTransfer):
+		writeAPIError(w, http.StatusConflict, "reversal_transfer", "A transfer leg cannot be reversed.")
+	case errors.Is(err, ledger.ErrReversalOfReversal):
+		writeAPIError(w, http.StatusConflict, "reversal_of_reversal", "A reversal cannot be reversed.")
+	case errors.Is(err, ledger.ErrReversalAdjustment):
+		writeAPIError(w, http.StatusConflict, "reversal_adjustment", "An adjustment cannot be reversed.")
+	case errors.Is(err, ledger.ErrReversalReconciliationFix):
+		writeAPIError(w, http.StatusConflict, "reversal_reconciliation_fix", "An entry a cash count names as its fix cannot be reversed.")
+	case errors.Is(err, ledger.ErrReversalBeforeOriginal):
+		writeAPIError(w, http.StatusConflict, "reversal_before_original", "A cash count has covered this transaction and it is dated after today, so its reversal would come before it.")
+	case errors.Is(err, ledger.ErrAlreadyReversed):
+		writeAPIError(w, http.StatusConflict, "transaction_already_reversed", "This transaction has already been reversed.")
 	case errors.Is(err, ledger.ErrIncidentalAlreadyClosed):
 		writeAPIError(w, http.StatusConflict, "incidental_already_closed", "This incidental has already been closed.")
 	case errors.Is(err, ledger.ErrAccountHoldsMoney):
@@ -88,8 +117,10 @@ func mapLedgerError(w http.ResponseWriter, logger *slog.Logger, err error) {
 		writeAPIError(w, http.StatusConflict, "purpose_correction_reimbursement", "A reimbursement payout's purpose cannot be corrected here - correct the claim itself instead.")
 	case errors.Is(err, ledger.ErrPurposeCorrectionTransfer):
 		writeAPIError(w, http.StatusConflict, "purpose_correction_transfer", "A transfer leg's purpose cannot be corrected.")
-	case errors.Is(err, ledger.ErrPurposeCorrectionDuesReversal):
-		writeAPIError(w, http.StatusConflict, "purpose_correction_dues_reversal", "A dues reversal's purpose cannot be corrected.")
+	case errors.Is(err, ledger.ErrPurposeCorrectionReversal):
+		writeAPIError(w, http.StatusConflict, "purpose_correction_reversal", "A reversal's purpose cannot be corrected.")
+	case errors.Is(err, ledger.ErrPurposeCorrectionAlreadyReversed):
+		writeAPIError(w, http.StatusConflict, "purpose_correction_already_reversed", "A reversed transaction's purpose cannot be corrected.")
 	case errors.Is(err, ledger.ErrPurposeCorrectionTargetClosed):
 		writeAPIError(w, http.StatusConflict, "purpose_correction_target_closed", "This incidental is closed - reopen it before correcting into it.")
 	case errors.Is(err, ledger.ErrPurposeCorrectionSourceClosed):

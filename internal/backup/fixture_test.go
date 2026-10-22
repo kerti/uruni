@@ -72,7 +72,7 @@ func buildFixture(t *testing.T, sqlDB *sql.DB, uploadsDir string) {
 	}
 
 	fund, err := q.CreateFund(ctx, store.CreateFundParams{
-		Name: "Test Fund", Currency: "IDR", ReportSlug: "0000000000000000000fixture", CreatedAt: 1700000000,
+		Name: "Test Fund", Currency: "IDR", TimeZone: "Asia/Jakarta", ReportSlug: "0000000000000000000fixture", CreatedAt: 1700000000,
 	})
 	if err != nil {
 		t.Fatalf("CreateFund: %v", err)
@@ -108,18 +108,58 @@ func buildFixture(t *testing.T, sqlDB *sql.DB, uploadsDir string) {
 	if err != nil {
 		t.Fatalf("CreateDuesTier: %v", err)
 	}
-	if _, err := q.CreateDuesRate(ctx, store.CreateDuesRateParams{
-		TierID: tier.ID, Amount: 50000, EffectiveFrom: "2026-01", CreatedAt: 1700000000,
-	}); err != nil {
-		t.Fatalf("CreateDuesRate: %v", err)
+	// Pelaksana's rate trail (ADR-040): January was filed as 50.000 and corrected
+	// to 55.000; a June rate of 70.000 was filed and then deleted, which leaves
+	// the row and a deleting correction behind. The export must carry all four.
+	for i, r := range []struct {
+		amount     int64
+		from       string
+		correction int64
+		deleted    int64
+	}{
+		{50000, "2026-01", 0, 0},
+		{55000, "2026-01", 1, 0},
+		{70000, "2026-06", 0, 0},
+		{70000, "2026-06", 1, 1},
+	} {
+		if _, err := q.CreateDuesRate(ctx, store.CreateDuesRateParams{
+			TierID: tier.ID, Amount: r.amount, EffectiveFrom: r.from, Correction: r.correction, Deleted: r.deleted,
+			CreatedAt: 1700000000 + int64(i),
+		}); err != nil {
+			t.Fatalf("CreateDuesRate(%s #%d): %v", r.from, r.correction, err)
+		}
+	}
+
+	// A second tier, rateless (the madya TBD case). Andi was first put into it by
+	// a slip in January, which was corrected to Pelaksana, and moved into it
+	// properly from April: the export must carry the superseded row too (ADR-040).
+	madya, err := q.CreateDuesTier(ctx, store.CreateDuesTierParams{FundID: fund.ID, Name: "Madya", CreatedAt: 1700000000})
+	if err != nil {
+		t.Fatalf("CreateDuesTier(madya): %v", err)
 	}
 
 	joinedOn := "2026-01-01"
 	andi, err := q.CreateMember(ctx, store.CreateMemberParams{
-		FundID: fund.ID, Name: "Andi", TierID: &tier.ID, JoinedOn: joinedOn, CreatedAt: 1700000000,
+		FundID: fund.ID, Name: "Andi", JoinedOn: joinedOn, CreatedAt: 1700000000,
 	})
 	if err != nil {
 		t.Fatalf("CreateMember(andi): %v", err)
+	}
+	for i, r := range []struct {
+		tierID     int64
+		from       string
+		correction int64
+	}{
+		{madya.ID, "2026-01", 0}, // the slip, superseded below
+		{tier.ID, "2026-01", 1},  // what January really was
+		{madya.ID, "2026-04", 0}, // a change
+	} {
+		if _, err := q.CreateMemberTier(ctx, store.CreateMemberTierParams{
+			FundID: fund.ID, MemberID: andi.ID, TierID: &r.tierID, EffectiveFrom: r.from,
+			Correction: r.correction, CreatedAt: 1700000010 + int64(i),
+		}); err != nil {
+			t.Fatalf("CreateMemberTier(andi, %s #%d): %v", r.from, r.correction, err)
+		}
 	}
 	inactiveOn := "2026-06-01"
 	budi, err := q.CreateMember(ctx, store.CreateMemberParams{
@@ -249,6 +289,25 @@ func buildFixture(t *testing.T, sqlDB *sql.DB, uploadsDir string) {
 		t.Fatalf("CreateReceipt: %v", err)
 	}
 
+	// An ordinary, unnamed row and its reversal (ADR-042): the reversal goes the
+	// other way, same amount and location, no member and no period, which only the
+	// null-safe trigger lets in. They net to nothing on cash. (The cross-pos pair,
+	// a purpose-corrected row reversed, is restore_test.go's own round trip, so this
+	// fixture's transfer count stays three.)
+	ordinary, err := q.CreateTransaction(ctx, store.CreateTransactionParams{
+		FundID: fund.ID, AccountID: cash.ID, PurposeID: main.ID, Direction: "in", Amount: 8000,
+		OccurredOn: "2026-02-05", Kind: "normal", CreatedAt: 1700000402,
+	})
+	if err != nil {
+		t.Fatalf("CreateTransaction(ordinary in): %v", err)
+	}
+	if _, err := q.CreateTransaction(ctx, store.CreateTransactionParams{
+		FundID: fund.ID, AccountID: cash.ID, PurposeID: main.ID, Direction: "out", Amount: 8000,
+		OccurredOn: "2026-02-05", Kind: "adjustment", ReversesTransactionID: &ordinary.ID, CreatedAt: 1700000403,
+	}); err != nil {
+		t.Fatalf("CreateTransaction(ordinary reversal): %v", err)
+	}
+
 	// A reconciliation with one matched and one left-open line.
 	recon, err := q.CreateReconciliation(ctx, store.CreateReconciliationParams{
 		FundID: fund.ID, PerformedAt: 1700001000, Note: nil, CreatedAt: 1700001000,
@@ -257,7 +316,8 @@ func buildFixture(t *testing.T, sqlDB *sql.DB, uploadsDir string) {
 		t.Fatalf("CreateReconciliation: %v", err)
 	}
 	// Cash: 500000 (opening) + 50000 (dues) - 50000 (reversal) + 30000
-	// (contribution) - 100000 (transfer out) - 20000 (reimbursement) = 410000.
+	// (contribution) - 100000 (transfer out) - 20000 (reimbursement) = 410000;
+	// the ordinary reversal above nets to nothing.
 	if _, err := q.CreateReconciliationLine(ctx, store.CreateReconciliationLineParams{
 		FundID: fund.ID, ReconciliationID: recon.ID, AccountID: cash.ID,
 		RecordedAmount: 410000, ActualAmount: 410000, DifferenceAmount: 0, Resolution: "matched",

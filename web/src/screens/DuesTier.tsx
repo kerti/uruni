@@ -10,21 +10,15 @@ import { Label } from '@/components/ui/label'
 import Loading from '@/components/states/Loading'
 import ErrorState from '@/components/states/ErrorState'
 import { copy } from '@/copy/id'
-import { formatPeriod, periodBounds } from '@/lib/dates'
+import { formatPeriod, periodBounds, currentPeriod } from '@/lib/dates'
 import { formatIDR } from '@/lib/money'
 import { createDuesRate, deleteDuesRate, deleteDuesTier, listDuesRates, listDuesTiers, renameDuesTier, updateDuesRate } from '@/lib/setup'
+import { rateSpan } from '@/lib/rateSpan'
 import { useApi } from '@/lib/useApi'
 import { useResetWhen } from '@/lib/useResetWhen'
 import type { DuesRate, DuesTier } from '@/lib/setup'
 
 const text = copy.settings.tiers
-
-/** Local YYYY-MM - never toISOString(), which is UTC and can read a month
- * early in WIB. */
-function currentISOMonth(): string {
-  const now = new Date()
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
-}
 
 /** One golongan and its rates, fetched together - the screen needs both. */
 interface TierData {
@@ -51,13 +45,11 @@ interface TierData {
  * ordinary inline form.
  *
  * Why only a rate's amount is correctable: a new price is a new row effective
- * from a new month, because the old row still explains the months it covered
- * - GetEffectiveDuesRate reads the latest row at or before the period asked
- * about, so overwriting one would silently restate every settled month it
- * touched. PATCH is for a mistyped amount on the row just entered, and DELETE
- * for one filed against the wrong month, which is what makes that
- * correctable: UNIQUE (tier_id, effective_from) refuses the corrected row
- * while the wrong one stands.
+ * from a new month, because the old row still explains the months it covered.
+ * PATCH fixes a mistyped amount (ADR-040): it reprices every month the rate covers,
+ * so the screen names that span and asks first. DELETE withdraws a rate filed
+ * against the wrong month; add one at the right month. Either way the row that stood
+ * is replaced by a new id, so the list reloads after every write.
  *
  * The rate history is deliberately not paged. A golongan carries a handful of
  * rates for all of 0.x, and paging for a volume that does not exist is the
@@ -177,15 +169,41 @@ function TierRates({
   onChanged: () => void
   refresh: () => Promise<void>
 }) {
+  // A row superseded from another screen unmounts when the list reloads,
+  // taking any message of its own with it, so the notice lives here.
+  const [superseded, setSuperseded] = useState(false)
+
+  // The reload is silent (refresh): the screen stays mounted, so this notice
+  // survives it. A loud one would drop the whole screen to Loading.
+  function handleSuperseded() {
+    setSuperseded(true)
+    void refresh()
+  }
+
   return (
     <section className="flex flex-col gap-3">
       <h2 className="text-base font-semibold">{text.ratesHeading}</h2>
+      {superseded && (
+        <p role="alert" className="text-sm text-attention-text">
+          {copy.common.errors.dues_rate_superseded}
+        </p>
+      )}
       {rates.length === 0 ? (
         <p className="text-sm text-muted-foreground">{text.noRates}</p>
       ) : (
         <ul className="flex flex-col gap-2">
           {rates.map((rate) => (
-            <RateRow key={rate.id} rate={rate} onChanged={onChanged} refresh={refresh} />
+            <RateRow
+              key={rate.id}
+              rate={rate}
+              rates={rates}
+              onChanged={() => {
+                setSuperseded(false)
+                onChanged()
+              }}
+              onSuperseded={handleSuperseded}
+              refresh={refresh}
+            />
           ))}
         </ul>
       )}
@@ -197,12 +215,37 @@ function TierRates({
 /** One rate: what it costs, the month it starts, and the two corrections the
  * API allows. Correcting happens in the row - there is one back on this
  * screen, so an inline form has no escape route to compete with. */
-function RateRow({ rate, onChanged, refresh }: { rate: DuesRate; onChanged: () => void; refresh: () => Promise<void> }) {
+function RateRow({
+  rate,
+  rates,
+  onChanged,
+  onSuperseded,
+  refresh,
+}: {
+  rate: DuesRate
+  rates: DuesRate[]
+  onChanged: () => void
+  onSuperseded: () => void
+  refresh: () => Promise<void>
+}) {
   const [state, run] = useApi<unknown>()
   const [editing, setEditing] = useState(false)
+  const [confirming, setConfirming] = useState(false)
   const [amount, setAmount] = useState(rate.amount)
 
   const busy = state.status === 'loading'
+
+  // A refused write on an id that no longer stands: reload the list, show the notice.
+  const supersededError = state.status === 'error' && state.error?.code === 'dues_rate_superseded'
+  useEffect(() => {
+    if (supersededError) onSuperseded()
+    // oxlint-disable-next-line react/exhaustive-deps -- once per refusal; onSuperseded is a fresh closure every render
+  }, [supersededError])
+
+  const span = rateSpan(rates, rate)
+  const from = formatPeriod(span.from)
+  const spanLabel =
+    span.until === null ? text.rateSpanOpen(from) : span.until === span.from ? from : text.rateSpanRange(from, formatPeriod(span.until))
 
   function handleSubmit(event: FormEvent) {
     event.preventDefault()
@@ -210,10 +253,15 @@ function RateRow({ rate, onChanged, refresh }: { rate: DuesRate; onChanged: () =
       setEditing(false)
       return
     }
+    setConfirming(true)
+  }
+
+  function applyCorrection() {
     void run(
       async () => {
         const updated = await updateDuesRate(rate.id, amount)
         setEditing(false)
+        setConfirming(false)
         onChanged()
         return updated
       },
@@ -225,47 +273,67 @@ function RateRow({ rate, onChanged, refresh }: { rate: DuesRate; onChanged: () =
     <li className="flex flex-col gap-2 rounded-lg bg-card px-4 py-3 shadow-card ring-1 ring-foreground/10">
       {editing ? (
         <form className="flex flex-col gap-2" onSubmit={handleSubmit} noValidate>
-          <AmountInput id={`rate-amount-${rate.id}`} label={text.rateAmountLabel} value={amount} onChange={setAmount} disabled={busy} />
+          <AmountInput
+            id={`rate-amount-${rate.id}`}
+            label={text.rateAmountLabel}
+            value={amount}
+            onChange={setAmount}
+            disabled={busy || confirming}
+          />
+          {confirming && (
+            <p className="text-sm text-attention-text">{text.rateCorrectConfirm(formatIDR(rate.amount), formatIDR(amount), spanLabel)}</p>
+          )}
           {/* One row, primary right (#235). Deleting lives here rather than
               on the reading row: a rate is removed to re-file it against
               the right month, which is a correction, not a glance. */}
-          <div className="flex items-center gap-2">
-            <Button
-              type="button"
-              variant="ghost"
-              size="lg"
-              className="text-attention-text"
-              disabled={busy}
-              onClick={() =>
-                void run(
-                  async () => {
-                    await deleteDuesRate(rate.id)
-                    setEditing(false)
-                    onChanged()
-                  },
-                  { settle: refresh },
-                )
-              }
-            >
-              {busy ? text.deletingRate : text.deleteRate}
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              size="lg"
-              className="ml-auto"
-              disabled={busy}
-              onClick={() => {
-                setAmount(rate.amount)
-                setEditing(false)
-              }}
-            >
-              {text.cancel}
-            </Button>
-            <Button type="submit" size="lg" disabled={busy}>
-              {busy ? text.saving : text.saveRate}
-            </Button>
-          </div>
+          {confirming ? (
+            <div className="flex items-center gap-2">
+              <Button type="button" variant="outline" size="lg" className="ml-auto" disabled={busy} onClick={() => setConfirming(false)}>
+                {text.cancel}
+              </Button>
+              <Button type="button" size="lg" disabled={busy} onClick={applyCorrection}>
+                {busy ? text.rateCorrecting : text.rateCorrectConfirmAction}
+              </Button>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2">
+              <Button
+                type="button"
+                variant="ghost"
+                size="lg"
+                className="text-attention-text"
+                disabled={busy}
+                onClick={() =>
+                  void run(
+                    async () => {
+                      await deleteDuesRate(rate.id)
+                      setEditing(false)
+                      onChanged()
+                    },
+                    { settle: refresh },
+                  )
+                }
+              >
+                {busy ? text.deletingRate : text.deleteRate}
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="lg"
+                className="ml-auto"
+                disabled={busy}
+                onClick={() => {
+                  setAmount(rate.amount)
+                  setEditing(false)
+                }}
+              >
+                {text.cancel}
+              </Button>
+              <Button type="submit" size="lg" disabled={busy}>
+                {busy ? text.saving : text.saveRate}
+              </Button>
+            </div>
+          )}
         </form>
       ) : (
         <div className="flex items-center justify-between gap-3">
@@ -278,7 +346,7 @@ function RateRow({ rate, onChanged, refresh }: { rate: DuesRate; onChanged: () =
           </Button>
         </div>
       )}
-      {state.status === 'error' && state.error && <ErrorState error={state.error} />}
+      {state.status === 'error' && state.error && !supersededError && <ErrorState error={state.error} />}
     </li>
   )
 }
@@ -291,7 +359,7 @@ function RateRow({ rate, onChanged, refresh }: { rate: DuesRate; onChanged: () =
 function AddRate({ tierId, onAdded, refresh }: { tierId: number; onAdded: () => void; refresh: () => Promise<void> }) {
   const [state, run] = useApi<DuesRate>()
   const [amount, setAmount] = useState(0)
-  const [effectiveFrom, setEffectiveFrom] = useState(currentISOMonth)
+  const [effectiveFrom, setEffectiveFrom] = useState(currentPeriod)
 
   const busy = state.status === 'loading'
 
@@ -302,7 +370,7 @@ function AddRate({ tierId, onAdded, refresh }: { tierId: number; onAdded: () => 
       async () => {
         const created = await createDuesRate(tierId, amount, effectiveFrom)
         setAmount(0)
-        setEffectiveFrom(currentISOMonth())
+        setEffectiveFrom(currentPeriod())
         onAdded()
         return created
       },

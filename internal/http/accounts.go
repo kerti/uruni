@@ -82,6 +82,8 @@ func toAccountResponse(a store.Account) accountResponse {
 // an optional opening balance rides the request, and Ledger.CreateAccount
 // posts it in the account's transaction, so mapLedgerError (not
 // mapSQLiteError) answers a refusal.
+//
+// Keyed (ADR-043).
 func (a *api) createAccount(w http.ResponseWriter, r *http.Request) {
 	var req accountRequest
 	if !decodeJSON(w, r, &req) {
@@ -93,17 +95,21 @@ func (a *api) createAccount(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	idem := idempotencyFrom(r)
 	account, err := a.ledger.CreateAccount(r.Context(), ledger.CreateAccountParams{
+		Now:            a.now(),
 		FundID:         fund.ID,
 		Kind:           req.Kind,
 		Name:           req.Name,
 		OpeningBalance: req.OpeningBalance.toOpeningBalance(),
+		Idempotency:    idem,
 	})
 	if err != nil {
 		mapLedgerError(w, a.log(r), err)
 		return
 	}
 
+	markReplay(w, r, a.log(r), idem)
 	writeJSON(w, http.StatusCreated, toAccountResponse(account))
 }
 
@@ -244,7 +250,7 @@ func (a *api) updateAccount(w http.ResponseWriter, r *http.Request) {
 		params.InactiveOn = req.InactiveOn
 	}
 
-	updated, err := a.ledger.UpdateAccount(r.Context(), account.FundID, params)
+	updated, err := a.ledger.UpdateAccount(r.Context(), account.FundID, params, a.now())
 	if err != nil {
 		mapLedgerError(w, a.log(r), err)
 		return

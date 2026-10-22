@@ -10,15 +10,14 @@ import (
 )
 
 const createMember = `-- name: CreateMember :one
-INSERT INTO member (fund_id, name, tier_id, joined_on, inactive_on, created_at)
-VALUES (?, ?, ?, ?, ?, ?)
-RETURNING id, fund_id, name, tier_id, joined_on, inactive_on, created_at
+INSERT INTO member (fund_id, name, joined_on, inactive_on, created_at)
+VALUES (?, ?, ?, ?, ?)
+RETURNING id, fund_id, name, joined_on, inactive_on, created_at
 `
 
 type CreateMemberParams struct {
 	FundID     int64
 	Name       string
-	TierID     *int64
 	JoinedOn   string
 	InactiveOn *string
 	CreatedAt  int64
@@ -28,7 +27,6 @@ func (q *Queries) CreateMember(ctx context.Context, arg CreateMemberParams) (Mem
 	row := q.db.QueryRowContext(ctx, createMember,
 		arg.FundID,
 		arg.Name,
-		arg.TierID,
 		arg.JoinedOn,
 		arg.InactiveOn,
 		arg.CreatedAt,
@@ -38,7 +36,6 @@ func (q *Queries) CreateMember(ctx context.Context, arg CreateMemberParams) (Mem
 		&i.ID,
 		&i.FundID,
 		&i.Name,
-		&i.TierID,
 		&i.JoinedOn,
 		&i.InactiveOn,
 		&i.CreatedAt,
@@ -59,7 +56,7 @@ func (q *Queries) DeleteMember(ctx context.Context, id int64) error {
 }
 
 const getMemberForFund = `-- name: GetMemberForFund :one
-SELECT id, fund_id, name, tier_id, joined_on, inactive_on, created_at
+SELECT id, fund_id, name, joined_on, inactive_on, created_at
 FROM member
 WHERE id = ? AND fund_id = ?
 `
@@ -79,7 +76,6 @@ func (q *Queries) GetMemberForFund(ctx context.Context, arg GetMemberForFundPara
 		&i.ID,
 		&i.FundID,
 		&i.Name,
-		&i.TierID,
 		&i.JoinedOn,
 		&i.InactiveOn,
 		&i.CreatedAt,
@@ -88,7 +84,7 @@ func (q *Queries) GetMemberForFund(ctx context.Context, arg GetMemberForFundPara
 }
 
 const listMembersByFund = `-- name: ListMembersByFund :many
-SELECT id, fund_id, name, tier_id, joined_on, inactive_on, created_at
+SELECT id, fund_id, name, joined_on, inactive_on, created_at
 FROM member
 WHERE fund_id = ?
 ORDER BY name COLLATE NOCASE, id
@@ -109,7 +105,6 @@ func (q *Queries) ListMembersByFund(ctx context.Context, fundID int64) ([]Member
 			&i.ID,
 			&i.FundID,
 			&i.Name,
-			&i.TierID,
 			&i.JoinedOn,
 			&i.InactiveOn,
 			&i.CreatedAt,
@@ -129,18 +124,26 @@ func (q *Queries) ListMembersByFund(ctx context.Context, fundID int64) ([]Member
 
 const listMembersPage = `-- name: ListMembersPage :many
 SELECT
-  m.id, m.fund_id, m.name, m.tier_id, m.joined_on, m.inactive_on, m.created_at,
+  m.id, m.fund_id, m.name, m.joined_on, m.inactive_on, m.created_at,
+  ct.tier_id AS tier_id,
   dt.name AS tier_name,
   dr.amount AS current_rate
 FROM member m
-LEFT JOIN dues_tier dt ON dt.id = m.tier_id
-LEFT JOIN dues_rate dr
-  ON dr.tier_id = m.tier_id
- AND dr.effective_from <= ?1
+LEFT JOIN member_tier_standing ct
+  ON ct.member_id = m.id
+ AND ct.effective_from = (
+       SELECT MAX(x.effective_from) FROM member_tier_standing x
+       WHERE x.member_id = m.id
+         AND x.effective_from <= MAX(CAST(?1 AS TEXT), SUBSTR(m.joined_on, 1, 7))
+     )
+LEFT JOIN dues_tier dt ON dt.id = ct.tier_id
+LEFT JOIN dues_rate_standing dr
+  ON dr.tier_id = ct.tier_id
+ AND dr.effective_from <= MAX(CAST(?1 AS TEXT), SUBSTR(m.joined_on, 1, 7))
  AND NOT EXISTS (
-       SELECT 1 FROM dues_rate dr2
+       SELECT 1 FROM dues_rate_standing dr2
        WHERE dr2.tier_id = dr.tier_id
-         AND dr2.effective_from <= ?1
+         AND dr2.effective_from <= MAX(CAST(?1 AS TEXT), SUBSTR(m.joined_on, 1, 7))
          AND dr2.effective_from > dr.effective_from
      )
 WHERE m.fund_id = ?2
@@ -169,10 +172,10 @@ type ListMembersPageRow struct {
 	ID          int64
 	FundID      int64
 	Name        string
-	TierID      *int64
 	JoinedOn    string
 	InactiveOn  *string
 	CreatedAt   int64
+	TierID      *int64
 	TierName    *string
 	CurrentRate *int64
 }
@@ -183,18 +186,23 @@ type ListMembersPageRow struct {
 // would skip or duplicate a member when equal names straddle a page boundary
 // and a same-named member is inserted between fetches.
 //
-// tier_name is NULL for a member with no tier_id (plain LEFT JOIN).
+// tier_id, tier_name and current_rate describe the member's CURRENT tier
+// (ADR-040): the standing member_tier row of the latest month at or before
+// max(current_period, the join month), so a member who joins next month shows the
+// tier entered for them, with current_rate (what GetEffectiveDuesRate would find)
+// read at that same month. Reads go through the *_standing views, never the
+// tables. A member with no row, or a NULL tier, reads NULL in all three.
 //
-// current_rate is the rate GetEffectiveDuesRate would find for
-// sqlc.arg('current_period') ("YYYY-MM", the caller's one snapshot of "now",
-// shared with the arrears figure computed in Go - see
-// Ledger.ArrearsMonthsForMember). A LEFT JOIN, not a scalar subquery, on
+// current_period is "YYYY-MM", the caller's one snapshot of "now", shared with
+// the arrears figure computed in Go - see
+// Ledger.ArrearsMonthsForMember. A LEFT JOIN, not a scalar subquery, on
 // purpose: a scalar subquery needs a CAST to get a concrete Go type, and this
 // codebase's CAST idiom means "never NULL" - the opposite of what current_rate
 // must say. A tier with no rate yet effective (the "madya TBD" case, PRD
 // section 6) and a member with no tier (NULL = NULL is never true) both read
 // NULL, never an invented 0 or a stale figure. The dr2 NOT EXISTS picks the
-// single row with the latest effective_from <= current_period per tier.
+// single row with the latest effective_from <= current_period per tier
+// (dues_rate_standing leaves a deleted month out, so the month before answers).
 //
 // ?q= is a case-insensitive substring match on name alone (ADR-032): INSTR/LOWER,
 // never "COLLATE NOCASE LIKE ... ESCAPE" - sqlc 1.31.1 silently drops a
@@ -221,10 +229,10 @@ func (q *Queries) ListMembersPage(ctx context.Context, arg ListMembersPageParams
 			&i.ID,
 			&i.FundID,
 			&i.Name,
-			&i.TierID,
 			&i.JoinedOn,
 			&i.InactiveOn,
 			&i.CreatedAt,
+			&i.TierID,
 			&i.TierName,
 			&i.CurrentRate,
 		); err != nil {
@@ -245,32 +253,28 @@ const updateMember = `-- name: UpdateMember :one
 UPDATE member
 SET name        = COALESCE(?1, name),
     joined_on   = COALESCE(?2, joined_on),
-    tier_id     = CASE WHEN CAST(?3     AS INTEGER) = 1 THEN ?4     ELSE tier_id     END,
-    inactive_on = CASE WHEN CAST(?5 AS INTEGER) = 1 THEN ?6 ELSE inactive_on END
-WHERE id = ?7
-RETURNING id, fund_id, name, tier_id, joined_on, inactive_on, created_at
+    inactive_on = CASE WHEN CAST(?3 AS INTEGER) = 1 THEN ?4 ELSE inactive_on END
+WHERE id = ?5
+RETURNING id, fund_id, name, joined_on, inactive_on, created_at
 `
 
 type UpdateMemberParams struct {
 	Name          *string
 	JoinedOn      *string
-	SetTierID     int64
-	TierID        *int64
 	SetInactiveOn int64
 	InactiveOn    *string
 	ID            int64
 }
 
 // A correction to reference data, not a ledger event. name and joined_on are
-// NOT NULL, so COALESCE covers them: nil can only mean "leave alone". The two
-// nullable columns need the set_* flags, since there a null argument is
-// ambiguous between "leave alone" and "clear it".
+// NOT NULL, so COALESCE covers them: nil can only mean "leave alone". The one
+// nullable column needs the set_* flag, since there a null argument is
+// ambiguous between "leave alone" and "clear it". The tier is not a column of
+// member (ADR-040): it is member_tier rows, written by Ledger.UpdateMember.
 func (q *Queries) UpdateMember(ctx context.Context, arg UpdateMemberParams) (Member, error) {
 	row := q.db.QueryRowContext(ctx, updateMember,
 		arg.Name,
 		arg.JoinedOn,
-		arg.SetTierID,
-		arg.TierID,
 		arg.SetInactiveOn,
 		arg.InactiveOn,
 		arg.ID,
@@ -280,7 +284,6 @@ func (q *Queries) UpdateMember(ctx context.Context, arg UpdateMemberParams) (Mem
 		&i.ID,
 		&i.FundID,
 		&i.Name,
-		&i.TierID,
 		&i.JoinedOn,
 		&i.InactiveOn,
 		&i.CreatedAt,

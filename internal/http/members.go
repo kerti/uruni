@@ -12,12 +12,14 @@ import (
 
 	"github.com/kerti/uruni/internal/ledger"
 	"github.com/kerti/uruni/internal/store"
-	"github.com/kerti/uruni/internal/tz"
 )
 
 // memberRequest is POST /api/members's body. inactive_on is absent:
 // deactivation is out of scope for #65 (no UpdateMember query), so nothing on
 // the wire can set it at creation; CreateMember always gets a nil InactiveOn.
+//
+// tier_id is the member's tier from the month of joined_on (ADR-040); absent or
+// null writes no tier row, and the member owes nothing.
 //
 // joined_on may be absent or null: the server owns PRD 7.1's "history starts
 // at adoption" default (#471), so createMember dates such a member today in
@@ -48,7 +50,7 @@ type memberResponse struct {
 	// TierName is dues_tier.name for TierID; nil for a member with no tier, and
 	// nil on POST/PATCH's reply. Period-independent, so it is cheap per row.
 	TierName *string `json:"tier_name"`
-	// CurrentRate is the dues_rate in force this month for the member's tier; nil
+	// CurrentRate is the dues_rate in force for the member's current tier; nil
 	// when there is no tier or no rate effective yet (the "madya TBD" case, PRD
 	// section 6), never an invented amount, and nil on POST/PATCH's reply.
 	CurrentRate *int64 `json:"current_rate"`
@@ -59,7 +61,10 @@ type memberResponse struct {
 	ArrearsMonths int `json:"arrears_months"`
 }
 
-func toMemberResponse(m store.Member) memberResponse {
+// toMemberResponse maps a ledger.Member: its TierID is the tier in force now
+// (the later of the current month and the join month), except on a
+// GET /api/dues-status row, where it is the tier at the requested period.
+func toMemberResponse(m ledger.Member) memberResponse {
 	return memberResponse{
 		ID:         m.ID,
 		Name:       m.Name,
@@ -75,9 +80,12 @@ func toMemberResponse(m store.Member) memberResponse {
 // because it takes a context and can fail, which a pure mapper should not
 // carry; listMembers computes it per row.
 func toMemberListResponse(m store.ListMembersPageRow, arrearsMonths int) memberResponse {
-	resp := toMemberResponse(store.Member{
-		ID: m.ID, FundID: m.FundID, Name: m.Name, TierID: m.TierID,
-		JoinedOn: m.JoinedOn, InactiveOn: m.InactiveOn, CreatedAt: m.CreatedAt,
+	resp := toMemberResponse(ledger.Member{
+		Member: store.Member{
+			ID: m.ID, FundID: m.FundID, Name: m.Name,
+			JoinedOn: m.JoinedOn, InactiveOn: m.InactiveOn, CreatedAt: m.CreatedAt,
+		},
+		TierID: m.TierID,
 	})
 	resp.TierName = m.TierName
 	resp.CurrentRate = m.CurrentRate
@@ -85,10 +93,10 @@ func toMemberListResponse(m store.ListMembersPageRow, arrearsMonths int) memberR
 	return resp
 }
 
-// createMember is POST /api/members: a direct-CRUD write (ADR-027) calling
-// a.queries. Validation is JSON-shape only: an empty name or a tier_id naming
-// no dues_tier reaches SQLite's CHECK/FOREIGN KEY and comes back through
-// mapSQLiteError, the single source of truth for those rules (#65).
+// createMember is POST /api/members: Ledger.CreateMember writes the member and,
+// when a tier is given, its first member_tier row (ADR-040). Validation is
+// JSON-shape only: an empty name or a tier_id naming no dues_tier reaches
+// SQLite's CHECK/FOREIGN KEY and comes back through mapLedgerError (#65).
 func (a *api) createMember(w http.ResponseWriter, r *http.Request) {
 	var req memberRequest
 	if !decodeJSON(w, r, &req) {
@@ -100,21 +108,25 @@ func (a *api) createMember(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	joinedOn := a.now().In(tz.Jakarta).Format(time.DateOnly)
+	loc, ok := a.fundLocation(w, r, fund)
+	if !ok {
+		return
+	}
+	now := a.now()
+	joinedOn := now.In(loc).Format(time.DateOnly)
 	if req.JoinedOn != nil {
 		joinedOn = *req.JoinedOn
 	}
 
-	member, err := a.queries.CreateMember(r.Context(), store.CreateMemberParams{
-		FundID:     fund.ID,
-		Name:       req.Name,
-		TierID:     req.TierID,
-		JoinedOn:   joinedOn,
-		InactiveOn: nil,
-		CreatedAt:  time.Now().Unix(),
+	member, err := a.ledger.CreateMember(r.Context(), ledger.CreateMemberParams{
+		Now:      now,
+		FundID:   fund.ID,
+		Name:     req.Name,
+		TierID:   req.TierID,
+		JoinedOn: joinedOn,
 	})
 	if err != nil {
-		mapSQLiteError(w, a.log(r), err)
+		mapLedgerError(w, a.log(r), err)
 		return
 	}
 
@@ -185,9 +197,13 @@ func (a *api) listMembers(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	loc, ok := a.fundLocation(w, r, fund)
+	if !ok {
+		return
+	}
 	params := store.ListMembersPageParams{
 		FundID:        fund.ID,
-		CurrentPeriod: ledger.CurrentDuesPeriod(a.now()),
+		CurrentPeriod: ledger.CurrentDuesPeriod(a.now(), loc),
 		PageLimit:     membersPageSize + 1,
 	}
 
@@ -263,9 +279,13 @@ func (a *api) resolveMember(w http.ResponseWriter, r *http.Request) (store.Membe
 
 // updateMemberRequest is PATCH /api/members/{id}'s body. An absent key means
 // "leave alone"; an explicit null on tier_id or inactive_on means "clear it"
-// (clearing tier_id drops the dues obligation, clearing inactive_on
-// reinstates the member). An explicit null on joined_on is refused (#471):
-// there is no "always was a member" to clear it back to.
+// (clearing tier_id drops the dues obligation from the start month on, clearing
+// inactive_on reinstates the member). An explicit null on joined_on is refused
+// (#471): there is no "always was a member" to clear it back to.
+//
+// tier_effective_from ("YYYY-MM", ADR-040's "Mulai bulan") says from which month
+// tier_id holds. Absent, it is the current month, or the join month if that is
+// later. It needs tier_id in the same body.
 //
 // Hence the *Set flags and the map decode below: no struct tag carries this
 // distinction. Both *T and **T leave the field nil for a missing key and an
@@ -275,6 +295,8 @@ type updateMemberRequest struct {
 	NameSet       bool
 	TierID        *int64
 	TierIDSet     bool
+	TierFrom      *string
+	TierFromSet   bool
 	JoinedOn      *string
 	JoinedOnSet   bool
 	InactiveOn    *string
@@ -295,6 +317,7 @@ func decodeUpdateMemberRequest(w http.ResponseWriter, r *http.Request) (updateMe
 	}{
 		{"name", &req.NameSet, &req.Name},
 		{"tier_id", &req.TierIDSet, &req.TierID},
+		{"tier_effective_from", &req.TierFromSet, &req.TierFrom},
 		{"joined_on", &req.JoinedOnSet, &req.JoinedOn},
 		{"inactive_on", &req.InactiveOnSet, &req.InactiveOn},
 	}
@@ -312,10 +335,11 @@ func decodeUpdateMemberRequest(w http.ResponseWriter, r *http.Request) (updateMe
 	return req, true
 }
 
-// updateMember is PATCH /api/members/{id}: a correction to reference data,
-// not a ledger event: a transaction references a member by id, so a rename or
-// tier change breaks nothing posted. inactive_on only exposes the column;
-// DuesStatusForPeriod owns what it means.
+// updateMember is PATCH /api/members/{id}: name, join date and leaving date are
+// corrections to reference data, not ledger events (a transaction references a
+// member by id, so a rename breaks nothing posted); the tier is stated "from a
+// month" and the ledger decides what that writes (ADR-040).
+// inactive_on only exposes the column; DuesStatusForPeriod owns what it means.
 func (a *api) updateMember(w http.ResponseWriter, r *http.Request) {
 	member, ok := a.resolveMember(w, r)
 	if !ok {
@@ -327,13 +351,20 @@ func (a *api) updateMember(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	params := store.UpdateMemberParams{ID: member.ID}
+	params := ledger.UpdateMemberParams{FundID: member.FundID, MemberID: member.ID, Now: a.now()}
 	if req.NameSet {
 		params.Name = req.Name
 	}
 	if req.TierIDSet {
-		params.SetTierID = 1
+		params.SetTier = true
 		params.TierID = req.TierID
+	}
+	if req.TierFromSet {
+		if req.TierFrom == nil {
+			writeAPIError(w, http.StatusBadRequest, "invalid_argument", "tier_effective_from cannot be null; leave it out for the current month.")
+			return
+		}
+		params.TierFrom = *req.TierFrom
 	}
 	if req.JoinedOnSet {
 		if req.JoinedOn == nil {
@@ -343,13 +374,13 @@ func (a *api) updateMember(w http.ResponseWriter, r *http.Request) {
 		params.JoinedOn = req.JoinedOn
 	}
 	if req.InactiveOnSet {
-		params.SetInactiveOn = 1
+		params.SetInactiveOn = true
 		params.InactiveOn = req.InactiveOn
 	}
 
-	updated, err := a.queries.UpdateMember(r.Context(), params)
+	updated, err := a.ledger.UpdateMember(r.Context(), params)
 	if err != nil {
-		mapSQLiteError(w, a.log(r), err)
+		mapLedgerError(w, a.log(r), err)
 		return
 	}
 

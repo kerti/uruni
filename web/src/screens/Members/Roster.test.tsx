@@ -1,7 +1,7 @@
 import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import Roster from '@/screens/Members/Roster'
 import { copy } from '@/copy/id'
@@ -327,5 +327,111 @@ describe('Roster', () => {
     await userEvent.click(within(dialog).getByRole('button', { name: text.deleteConfirmAction }))
 
     expect(await within(dialog).findByRole('alert')).toHaveTextContent(text.deleteRefused)
+  })
+
+  // ADR-040: a tier change is stated "from a month".
+  describe('Mulai bulan, for a tier change', () => {
+    beforeEach(() => {
+      // Only Date is faked; the bounds read the fund's clock (WIB by default).
+      vi.useFakeTimers({ toFake: ['Date'] })
+      vi.setSystemTime(new Date('2026-10-20T09:00:00+07:00'))
+    })
+    afterEach(() => {
+      vi.useRealTimers()
+    })
+
+    async function openEdit(name: string) {
+      await screen.findByRole('button', { name: text.editAria(name) })
+      await userEvent.click(screen.getByRole('button', { name: text.editAria(name) }))
+      return screen.getByRole('dialog', { name: text.editTitle })
+    }
+
+    it('is absent until the tier changes, and a plain edit sends no start month', async () => {
+      const { fetchMock, calls } = stubRoster([member(1, 'Warga Satu')])
+      vi.stubGlobal('fetch', fetchMock)
+      renderAt()
+      const dialog = await openEdit('Warga Satu')
+
+      expect(within(dialog).queryByLabelText(text.tierFromLabel)).not.toBeInTheDocument()
+      await userEvent.type(within(dialog).getByLabelText(text.nameLabel), ' B')
+      await userEvent.click(within(dialog).getByRole('button', { name: text.save }))
+
+      await waitFor(() => expect(calls).toHaveLength(1))
+      expect(calls[0].body).not.toHaveProperty('tier_id')
+      expect(calls[0].body).not.toHaveProperty('tier_effective_from')
+    })
+
+    it('defaults to the current month and sends it with the new tier', async () => {
+      const { fetchMock, calls } = stubRoster([member(1, 'Warga Satu')])
+      vi.stubGlobal('fetch', fetchMock)
+      renderAt()
+      const dialog = await openEdit('Warga Satu')
+
+      await chooseOption(text.tierLabel, 'Fungsional', within(dialog))
+      expect(within(dialog).getByLabelText(text.tierFromLabel)).toHaveTextContent('Oktober 2026')
+      await userEvent.click(within(dialog).getByRole('button', { name: text.save }))
+
+      await waitFor(() => expect(calls).toHaveLength(1))
+      expect(calls[0].body).toMatchObject({ tier_id: 2, tier_effective_from: '2026-10' })
+    })
+
+    it('sends a past month picked from the join month on', async () => {
+      const { fetchMock, calls } = stubRoster([member(1, 'Warga Satu')])
+      vi.stubGlobal('fetch', fetchMock)
+      renderAt()
+      const dialog = await openEdit('Warga Satu')
+
+      await chooseOption(text.tierLabel, 'Fungsional', within(dialog))
+      // The month grid opens over the edit dialog, so it is the last dialog.
+      await userEvent.click(within(dialog).getByLabelText(text.tierFromLabel))
+      const picker = (await screen.findAllByRole('dialog')).at(-1) as HTMLElement
+      await userEvent.click(within(picker).getByRole('button', { name: 'Juni 2026' }))
+      await userEvent.click(within(dialog).getByRole('button', { name: text.save }))
+
+      await waitFor(() => expect(calls).toHaveLength(1))
+      expect(calls[0].body).toMatchObject({ tier_id: 2, tier_effective_from: '2026-06' })
+    })
+
+    it('offers no month before the join month or after the current one', async () => {
+      const { fetchMock } = stubRoster([member(1, 'Warga Satu', { joined_on: '2026-03-05' })])
+      vi.stubGlobal('fetch', fetchMock)
+      renderAt()
+      const dialog = await openEdit('Warga Satu')
+
+      await chooseOption(text.tierLabel, 'Fungsional', within(dialog))
+      await userEvent.click(within(dialog).getByLabelText(text.tierFromLabel))
+      const picker = (await screen.findAllByRole('dialog')).at(-1) as HTMLElement
+      expect(within(picker).getByRole('button', { name: 'Februari 2026' })).toBeDisabled()
+      expect(within(picker).getByRole('button', { name: 'Maret 2026' })).toBeEnabled()
+      expect(within(picker).getByRole('button', { name: 'Oktober 2026' })).toBeEnabled()
+      expect(within(picker).getByRole('button', { name: copy.dateField.nextYear })).toBeDisabled()
+    })
+
+    it('defaults to the join month when it is later than the current month', async () => {
+      const { fetchMock, calls } = stubRoster([member(1, 'Warga Satu', { joined_on: '2026-12-05' })])
+      vi.stubGlobal('fetch', fetchMock)
+      renderAt()
+      const dialog = await openEdit('Warga Satu')
+
+      await chooseOption(text.tierLabel, 'Fungsional', within(dialog))
+      expect(within(dialog).getByLabelText(text.tierFromLabel)).toHaveTextContent('Desember 2026')
+      await userEvent.click(within(dialog).getByRole('button', { name: text.save }))
+
+      await waitFor(() => expect(calls).toHaveLength(1))
+      expect(calls[0].body).toMatchObject({ tier_id: 2, tier_effective_from: '2026-12' })
+    })
+
+    it('sends the start month for "tanpa golongan" too', async () => {
+      const { fetchMock, calls } = stubRoster([member(1, 'Warga Satu')])
+      vi.stubGlobal('fetch', fetchMock)
+      renderAt()
+      const dialog = await openEdit('Warga Satu')
+
+      await chooseOption(text.tierLabel, text.tierNone, within(dialog))
+      await userEvent.click(within(dialog).getByRole('button', { name: text.save }))
+
+      await waitFor(() => expect(calls).toHaveLength(1))
+      expect(calls[0].body).toMatchObject({ tier_id: null, tier_effective_from: '2026-10' })
+    })
   })
 })

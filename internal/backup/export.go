@@ -22,8 +22,8 @@ import (
 // second download never lands as "uruni(1).zip". The app names the file with
 // the treasurer's local date (web/src/lib/backup.ts); this is the name a
 // direct request gets. exportedOn is formatted in whatever zone it carries,
-// so the handler passes it in tz.Jakarta (#379): the server clock may be
-// UTC, a day behind in WIB before 07:00.
+// so the handler passes it in the fund's zone (#379, ADR-041): the server clock
+// may be UTC, a day behind in WIB before 07:00 and in WIT before 09:00.
 func ZipFilename(exportedOn time.Time) string {
 	return "uruni-" + exportedOn.Format("2006-01-02") + ".zip"
 }
@@ -149,7 +149,7 @@ func addReceiptToZip(zw *zip.Writer, uploadsDir, path string) (found bool, err e
 	return true, nil
 }
 
-// BuildDocument reads every table but session (ADR-012) and the totals
+// BuildDocument reads every table but session and idempotency_key (ADR-012) and the totals
 // block, in the order of Document's comment. It is split out of Export so a
 // test can assert on the Document's shape without decoding a zip.
 //
@@ -213,6 +213,7 @@ func readDocument(ctx context.Context, q store.Querier) (Document, []store.Recei
 		DuesTiers:            []DuesTier{},
 		DuesRates:            []DuesRate{},
 		Members:              []Member{},
+		MemberTiers:          []MemberTier{},
 		Transfers:            []Transfer{},
 		Reimbursements:       []Reimbursement{},
 		Transactions:         []Transaction{},
@@ -264,6 +265,13 @@ func readDocument(ctx context.Context, q store.Querier) (Document, []store.Recei
 		}
 		byID(members, func(r store.Member) int64 { return r.ID })
 		doc.Members = append(doc.Members, toMembers(members)...)
+
+		// Every row, superseded ones included, not the standing view (ADR-040).
+		memberTiers, err := q.ListMemberTiersForExport(ctx, fund.ID)
+		if err != nil {
+			return Document{}, nil, fmt.Errorf("backup: listing member tiers for fund %d: %w", fund.ID, err)
+		}
+		doc.MemberTiers = append(doc.MemberTiers, toMemberTiers(memberTiers)...)
 
 		transfers, err := q.ListTransfersByFund(ctx, fund.ID)
 		if err != nil {

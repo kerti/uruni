@@ -34,6 +34,7 @@ import (
 
 	"github.com/kerti/uruni/internal/money"
 	"github.com/kerti/uruni/internal/store"
+	"github.com/kerti/uruni/internal/tz"
 )
 
 // Upload caps: 256 MB compressed (enforced by the handler's MaxBytesReader;
@@ -82,9 +83,10 @@ const MaxReceiptPixels = 50_000_000
 // Callers distinguish them with errors.Is.
 var (
 	// ErrFormatVersionNewer and ErrFormatVersionOlder are distinct: a newer file
-	// means the binary needs upgrading first; an older one is refused outright
-	// through 0.x (ADR-012: restoring onto an older binary is refused, rolling
-	// the image back is the operator's job). Both refuse today, for different
+	// means the binary needs upgrading first; an older one means this binary has
+	// no step to bring it up to date (CanUpgradeFormat) - the previous release's
+	// format always has one (ADR-012). Restoring onto an older binary is refused,
+	// rolling the image back is the operator's job. Both refuse, for different
 	// reasons a treasurer would act on differently.
 	ErrFormatVersionNewer = errors.New("backup: the file was made by a newer version of Uruni than this server runs")
 	ErrFormatVersionOlder = errors.New("backup: the file was made by an older version of Uruni than this server understands")
@@ -186,15 +188,25 @@ func ParseUpload(path string) (ParsedUpload, error) {
 		return ParsedUpload{}, fmt.Errorf("%w: no %s entry", ErrMalformedBackup, jsonFilename)
 	}
 
-	if err := checkFormatVersion(jsonBytes); err != nil {
+	version, err := checkFormatVersion(jsonBytes)
+	if err != nil {
 		return ParsedUpload{}, err
 	}
 
-	var doc Document
-	dec := json.NewDecoder(bytes.NewReader(jsonBytes))
-	dec.DisallowUnknownFields()
-	if err := dec.Decode(&doc); err != nil {
-		return ParsedUpload{}, fmt.Errorf("%w: decoding %s: %v", ErrMalformedBackup, jsonFilename, err) //nolint:errorlint
+	// An older file is decoded in its own shape and upgraded here, so everything
+	// downstream only ever sees the current Document (upgrade.go).
+	doc, err := decodeDocument(version, jsonBytes)
+	if err != nil {
+		return ParsedUpload{}, err
+	}
+
+	// Every fund's zone must be one of the three (ADR-041): the preview cannot date
+	// the file without it. A missing field reads as "" and is refused too; the
+	// schema's CHECK stays the backstop at Restore.
+	for _, f := range doc.Funds {
+		if _, err := tz.Load(f.TimeZone); err != nil {
+			return ParsedUpload{}, fmt.Errorf("%w: fund %d's time_zone: %v", ErrMalformedBackup, f.ID, err) //nolint:errorlint
+		}
 	}
 
 	// Every receipt path must be a bare filename before any zip entry is
@@ -270,21 +282,22 @@ func readCappedEntry(f *zip.File, remaining int64) ([]byte, int64, error) {
 // checkFormatVersion peeks format_version out of the raw JSON before the
 // strict decode, so a file from a differently-shaped future version gets
 // the "newer version" refusal instead of a generic DisallowUnknownFields
-// error.
-func checkFormatVersion(jsonBytes []byte) error {
+// error, and returns it for decodeDocument to pick the shape. A version the
+// importer has no step for (CanUpgradeFormat) is the "older version" refusal.
+func checkFormatVersion(jsonBytes []byte) (int64, error) {
 	var peek struct {
 		FormatVersion int64 `json:"format_version"`
 	}
 	if err := json.Unmarshal(jsonBytes, &peek); err != nil {
-		return fmt.Errorf("%w: %v", ErrMalformedBackup, err) //nolint:errorlint
+		return 0, fmt.Errorf("%w: %v", ErrMalformedBackup, err) //nolint:errorlint
 	}
 	switch {
 	case peek.FormatVersion > FormatVersion:
-		return fmt.Errorf("%w: file is format_version %d, this server understands %d", ErrFormatVersionNewer, peek.FormatVersion, FormatVersion)
-	case peek.FormatVersion < FormatVersion:
-		return fmt.Errorf("%w: file is format_version %d, this server understands %d", ErrFormatVersionOlder, peek.FormatVersion, FormatVersion)
+		return 0, fmt.Errorf("%w: file is format_version %d, this server understands %d", ErrFormatVersionNewer, peek.FormatVersion, FormatVersion)
+	case !CanUpgradeFormat(peek.FormatVersion):
+		return 0, fmt.Errorf("%w: file is format_version %d, this server understands %d", ErrFormatVersionOlder, peek.FormatVersion, FormatVersion)
 	default:
-		return nil
+		return peek.FormatVersion, nil
 	}
 }
 
@@ -377,7 +390,11 @@ func BuildPreview(ctx context.Context, q store.Querier, doc Document) (Preview, 
 		}
 	}
 
-	preview := Preview{Date: newestMoment(doc), Total: total.Int64(), Funds: []FundPreview{}}
+	date, err := newestMoment(doc)
+	if err != nil {
+		return Preview{}, err
+	}
+	preview := Preview{Date: date, Total: total.Int64(), Funds: []FundPreview{}}
 
 	seen := make(map[int64]bool, len(liveFunds))
 	for _, live := range liveFunds {
@@ -414,8 +431,20 @@ func BuildPreview(ctx context.Context, q store.Querier, doc Document) (Preview, 
 }
 
 // newestMoment returns the latest timestamp Document carries (created_at, or
-// a receipt's uploaded_at) as a Jakarta calendar date; see Preview.Date.
-func newestMoment(doc Document) string {
+// a receipt's uploaded_at) as a calendar date in the file's own zone (the first
+// fund's; tz.Default for a file with no fund); see Preview.Date. A zone tz.Load
+// refuses is an error: ParseUpload already refused such a file, so this guards a
+// Document built another way.
+func newestMoment(doc Document) (string, error) {
+	zone := tz.Default
+	if len(doc.Funds) > 0 {
+		zone = doc.Funds[0].TimeZone
+	}
+	loc, err := tz.Load(zone)
+	if err != nil {
+		return "", fmt.Errorf("backup: dating the file: %w", err)
+	}
+
 	var latest int64
 	consider := func(t int64) {
 		if t > latest {
@@ -440,6 +469,9 @@ func newestMoment(doc Document) string {
 	for _, x := range doc.Members {
 		consider(x.CreatedAt)
 	}
+	for _, x := range doc.MemberTiers {
+		consider(x.CreatedAt)
+	}
 	for _, x := range doc.Transfers {
 		consider(x.CreatedAt)
 	}
@@ -459,9 +491,9 @@ func newestMoment(doc Document) string {
 		consider(x.CreatedAt)
 	}
 	if latest == 0 {
-		return ""
+		return "", nil
 	}
-	return time.Unix(latest, 0).In(jakarta).Format("2006-01-02")
+	return time.Unix(latest, 0).In(loc).Format("2006-01-02"), nil
 }
 
 // immutableTriggers names 00001_schema.sql's eight BEFORE UPDATE/DELETE
@@ -505,7 +537,7 @@ const (
 // dump, additive receipt extraction, then one write transaction that clears
 // every fund-scoped table, re-inserts exactly what parsed.Document holds with
 // every id preserved, proves the totals, and commits - or changes nothing. The
-// live login is not touched; every session is cleared.
+// live login is not touched; every session and idempotency key is cleared.
 //
 // sqlDB is the raw pool because this operation opens a transaction spanning
 // nearly every table, and ledger.Ledger's balance methods are bound to
@@ -631,6 +663,13 @@ func restoreCore(ctx context.Context, sqlDB *sql.DB, uploadsDir string, parsed P
 		return nil, fmt.Errorf("backup: clearing sessions: %w", err)
 	}
 
+	// So is every idempotency key (ADR-043, ADR-012): a key from before the restore
+	// would replay a success whose rows are gone or whose ids now name other rows.
+	// Same transaction as the sessions, so a rolled-back restore forgets nothing.
+	if err := tq.DeleteAllIdempotencyKeys(ctx); err != nil {
+		return nil, fmt.Errorf("backup: clearing idempotency keys: %w", err)
+	}
+
 	if err := verifyTotals(ctx, tq, parsed.Document); err != nil {
 		return nil, err
 	}
@@ -643,8 +682,9 @@ func restoreCore(ctx context.Context, sqlDB *sql.DB, uploadsDir string, parsed P
 }
 
 // clearFundScopedTables deletes every row from every table this package
-// restores, except "user" (ADR-012's login ruling) and "session" (cleared in
-// restoreCore). Listed child-before-parent for a reader; order does not matter
+// restores, except "user" (ADR-012's login ruling), "session" and
+// "idempotency_key" (both cleared in restoreCore). Listed child-before-parent
+// for a reader; order does not matter
 // because defer_foreign_keys=ON defers every FK check to COMMIT.
 func clearFundScopedTables(ctx context.Context, q store.Querier) error {
 	deletes := []struct {
@@ -659,6 +699,7 @@ func clearFundScopedTables(ctx context.Context, q store.Querier) error {
 		{"transaction", q.DeleteAllTransactions},
 		{"reimbursement", q.DeleteAllReimbursements},
 		{"transfer", q.DeleteAllTransfers},
+		{"member_tier", q.DeleteAllMemberTiers},
 		{"member", q.DeleteAllMembers},
 		{"dues_rate", q.DeleteAllDuesRates},
 		{"dues_tier", q.DeleteAllDuesTiers},
@@ -674,41 +715,17 @@ func clearFundScopedTables(ctx context.Context, q store.Querier) error {
 	return nil
 }
 
-// adoptionDates maps each fund in doc to the day its Uruni history starts
-// (PRD 7.1): the earliest opening-balance row's occurred_on, or, for a fund
-// with none, the day the fund was created in Asia/Jakarta. It is what a null
-// member.joined_on meant before #471 made the column NOT NULL, so restoring
-// an older backup this way changes no member's dues.
-func adoptionDates(doc Document) map[int64]string {
-	out := make(map[int64]string, len(doc.Funds))
-	for _, f := range doc.Funds {
-		out[f.ID] = time.Unix(f.CreatedAt, 0).In(jakarta).Format("2006-01-02")
-	}
-	opened := make(map[int64]string, len(doc.Funds))
-	for _, t := range doc.Transactions {
-		if t.Kind != "opening" {
-			continue
-		}
-		if d, ok := opened[t.FundID]; !ok || t.OccurredOn < d {
-			opened[t.FundID] = t.OccurredOn
-		}
-	}
-	for id, d := range opened {
-		out[id] = d
-	}
-	return out
-}
-
 // insertDocument writes every row doc holds in Document's field order (the
 // migration's dependency order, see backup.go), except doc.Transactions,
 // which goes through restoreTransactionsInOrder: the transaction_named_row_shape
 // trigger (ADR-012 obligation 1) checks at INSERT that a reversal's target
-// exists, and no PRAGMA defers that. Other foreign keys are declarative and
+// exists and that the reversal copies it the other way (ADR-042), and no PRAGMA
+// defers that. Other foreign keys are declarative and
 // land in any order under defer_foreign_keys=ON.
 func insertDocument(ctx context.Context, q store.Querier, doc Document) error {
 	for _, f := range doc.Funds {
 		if err := q.RestoreFund(ctx, store.RestoreFundParams{
-			ID: f.ID, Name: f.Name, Currency: f.Currency, ReportSlug: f.ReportSlug, CreatedAt: f.CreatedAt,
+			ID: f.ID, Name: f.Name, Currency: f.Currency, TimeZone: f.TimeZone, ReportSlug: f.ReportSlug, CreatedAt: f.CreatedAt,
 		}); err != nil {
 			return fmt.Errorf("backup: restoring fund %d: %w", f.ID, err)
 		}
@@ -736,22 +753,26 @@ func insertDocument(ctx context.Context, q store.Querier, doc Document) error {
 	}
 	for _, dr := range doc.DuesRates {
 		if err := q.RestoreDuesRate(ctx, store.RestoreDuesRateParams{
-			ID: dr.ID, TierID: dr.TierID, Amount: dr.Amount, EffectiveFrom: dr.EffectiveFrom, CreatedAt: dr.CreatedAt,
+			ID: dr.ID, TierID: dr.TierID, Amount: dr.Amount, EffectiveFrom: dr.EffectiveFrom,
+			Correction: dr.Correction, Deleted: boolToInt(dr.Deleted), CreatedAt: dr.CreatedAt,
 		}); err != nil {
 			return fmt.Errorf("backup: restoring dues rate %d: %w", dr.ID, err)
 		}
 	}
-	adopted := adoptionDates(doc)
 	for _, m := range doc.Members {
-		joinedOn := adopted[m.FundID]
-		if m.JoinedOn != nil {
-			joinedOn = *m.JoinedOn
-		}
 		if err := q.RestoreMember(ctx, store.RestoreMemberParams{
-			ID: m.ID, FundID: m.FundID, Name: m.Name, TierID: m.TierID,
-			JoinedOn: joinedOn, InactiveOn: m.InactiveOn, CreatedAt: m.CreatedAt,
+			ID: m.ID, FundID: m.FundID, Name: m.Name,
+			JoinedOn: m.JoinedOn, InactiveOn: m.InactiveOn, CreatedAt: m.CreatedAt,
 		}); err != nil {
 			return fmt.Errorf("backup: restoring member %d: %w", m.ID, err)
+		}
+	}
+	for _, mt := range doc.MemberTiers {
+		if err := q.RestoreMemberTier(ctx, store.RestoreMemberTierParams{
+			ID: mt.ID, FundID: mt.FundID, MemberID: mt.MemberID, TierID: mt.TierID,
+			EffectiveFrom: mt.EffectiveFrom, Correction: mt.Correction, CreatedAt: mt.CreatedAt,
+		}); err != nil {
+			return fmt.Errorf("backup: restoring member tier %d: %w", mt.ID, err)
 		}
 	}
 	for _, tr := range doc.Transfers {
@@ -1001,4 +1022,12 @@ func writeReceiptFileFromZip(uploadsDir, name string, zf *zip.File) (created boo
 		return false, err
 	}
 	return statErr != nil, nil
+}
+
+// boolToInt is the stored form of a boolean column (0 or 1).
+func boolToInt(b bool) int64 {
+	if b {
+		return 1
+	}
+	return 0
 }

@@ -8,19 +8,20 @@ import Loading from '@/components/states/Loading'
 import ErrorState from '@/components/states/ErrorState'
 import { copy } from '@/copy/id'
 import { parseDialogTarget } from '@/lib/dialogTarget'
-import { getFund, renameFund } from '@/lib/setup'
+import { getFund, updateFund } from '@/lib/setup'
 import { useApi } from '@/lib/useApi'
+import { isTimeZone, DEFAULT_TIME_ZONE } from '@/lib/timeZones'
 import { useDialogParam } from '@/lib/useDialogParam'
 import { useResetWhen } from '@/lib/useResetWhen'
 import type { Fund } from '@/lib/setup'
+import { EditTimeZoneDialog } from '@/screens/Settings/FundTimeZone'
 
 const text = copy.settings.fund
 
 /**
- * Renaming the kas, as a card-plus-dialog (ADR-032 "Every non-posting edit is a
- * dialog"): the name reads as a card, and tapping it opens the rename dialog at
- * `?edit=fund:name`. The setup wizard promises this - "bisa diganti nanti kalau
- * perlu".
+ * The kas's own settings, "Kas ini": its name and its time zone, each a card-plus-dialog
+ * (ADR-032) at `?edit=fund:name` / `?edit=fund:time_zone` (ADR-041). The setup wizard
+ * promises both - "bisa diganti nanti kalau perlu".
  *
  * The name is a display label: it heads every screen and the public report,
  * and nothing posted references it, so a rename rewrites no history. It does
@@ -28,16 +29,17 @@ const text = copy.settings.fund
  * is its own decision (Laporan publik's "Buat tautan baru"), not a side effect
  * of fixing a typo.
  *
- * `onRenamed` exists because the fund's name is also Shell's header, which
- * App.tsx read once on mount - without it the header would keep the old name
- * until a reload.
+ * A zone change rewrites nothing either (ADR-041): every day and month is read
+ * from it, so setting the old zone back restores every earlier reading, and
+ * there is no confirm step.
  *
- * There is exactly one fund, so this section's dialog has no id to carry:
- * `fund:name` is its only value, and `new` is a value it never opens. An
- * `?edit=fund:<anything else>` arriving by hand is cleared once, like a dead id
- * in any other section.
+ * `onChanged` exists because the fund is also Shell's header, which App.tsx read
+ * once on mount - without it the header would keep the old name until a reload.
+ *
+ * There is exactly one fund, so the dialogs carry no id: `fund:name` and
+ * `fund:time_zone` are the only values; any other `?edit=fund:<x>` is cleared once.
  */
-export default function FundName({ onRenamed }: { onRenamed: (fund: Fund) => void }) {
+export default function FundName({ onChanged }: { onChanged: (fund: Fund) => void }) {
   const [loadState, loadRun] = useApi<Fund>()
   const { value, open, close, clear } = useDialogParam()
 
@@ -54,14 +56,15 @@ export default function FundName({ onRenamed }: { onRenamed: (fund: Fund) => voi
   const target = parseDialogTarget('fund', value)
   const isOwn = target.kind !== 'foreign'
   const editing = value === 'fund:name'
+  const editingZone = value === 'fund:time_zone'
 
   // A `fund:` value this section cannot use: strip it once, rather than leave a
   // param no dialog answers to. Never a `foreign` value - that belongs to a
   // sibling section. `clear`, not `close`, for the reason Locations documents.
   useEffect(() => {
-    if (!isOwn || editing) return
+    if (!isOwn || editing || editingZone) return
     clear()
-  }, [value, isOwn, editing, clear])
+  }, [value, isOwn, editing, editingZone, clear])
 
   return (
     <section className="flex flex-col gap-3">
@@ -75,14 +78,15 @@ export default function FundName({ onRenamed }: { onRenamed: (fund: Fund) => voi
       ) : loadState.status === 'error' || fund === null ? (
         loadState.error && <ErrorState error={loadState.error} onRetry={() => void loadRun(getFund)} />
       ) : (
-        <button
-          type="button"
-          aria-label={text.editAria(fund.name)}
-          onClick={() => open('fund:name')}
-          className="flex min-h-11 w-full items-center rounded-lg bg-card px-4 py-3 text-left shadow-card ring-1 ring-foreground/10 select-none transition-colors hover:bg-muted/40"
-        >
-          <span className="min-w-0 truncate font-medium">{fund.name}</span>
-        </button>
+        <div className="flex flex-col gap-2">
+          <SettingCard label={text.nameLabel} value={fund.name} aria-label={text.editAria(fund.name)} onClick={() => open('fund:name')} />
+          <SettingCard
+            label={copy.timeZone.label}
+            value={copy.timeZone.options[isTimeZone(fund.time_zone) ? fund.time_zone : DEFAULT_TIME_ZONE].label}
+            aria-label={text.zone.editAria(copy.timeZone.options[isTimeZone(fund.time_zone) ? fund.time_zone : DEFAULT_TIME_ZONE].label)}
+            onClick={() => open('fund:time_zone')}
+          />
+        </div>
       )}
 
       <EditFundNameDialog
@@ -90,13 +94,40 @@ export default function FundName({ onRenamed }: { onRenamed: (fund: Fund) => voi
         open={editing && fund !== null}
         onClose={close}
         onRenamed={(updated) => {
-          onRenamed(updated)
+          onChanged(updated)
+          close()
+          void loadRun(getFund)
+        }}
+        refresh={() => loadRun(getFund, { silent: true })}
+      />
+      <EditTimeZoneDialog
+        fund={fund}
+        open={editingZone && fund !== null}
+        onClose={close}
+        onChanged={(updated) => {
+          onChanged(updated)
           close()
           void loadRun(getFund)
         }}
         refresh={() => loadRun(getFund, { silent: true })}
       />
     </section>
+  )
+}
+
+/** One setting as a card: its label small above its value, the whole card the
+ * edit affordance. */
+function SettingCard({ label, value, onClick, ...rest }: { label: string; value: string; onClick: () => void; 'aria-label': string }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="flex min-h-11 w-full flex-col items-start rounded-lg bg-card px-4 py-3 text-left shadow-card ring-1 ring-foreground/10 select-none transition-colors hover:bg-muted/40"
+      {...rest}
+    >
+      <span className="text-xs text-muted-foreground">{label}</span>
+      <span className="w-full min-w-0 truncate font-medium">{value}</span>
+    </button>
   )
 }
 
@@ -136,7 +167,7 @@ function EditFundNameDialog({
     if (trimmed === '' || unchanged) return
     void run(
       async () => {
-        const updated = await renameFund(trimmed)
+        const updated = await updateFund({ name: trimmed })
         onRenamed(updated)
         return updated
       },

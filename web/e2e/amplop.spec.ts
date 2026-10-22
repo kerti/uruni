@@ -131,8 +131,14 @@ test.describe('amplop in depth', () => {
       .getByRole('main')
       .getByRole('listitem')
       .filter({ has: page.getByText('Sumbangan Warga Dua', { exact: true }) })
-    await row.getByRole('button', { name: copy.history.transactions.reverse }).click()
-    await page.getByRole('button', { name: copy.history.transactions.reverseConfirm }).click()
+    // One door (ADR-042): the card opens the entry, whose Batalkan transaksi
+    // hands off to the form under the row.
+    await row.getByRole('button', { name: /^Lihat rincian:/ }).click()
+    await page
+      .getByRole('dialog', { name: copy.transactionDetail.heading })
+      .getByRole('button', { name: copy.history.transactions.reverse })
+      .click()
+    await row.getByRole('button', { name: copy.history.transactions.reverseConfirm }).click()
     await expect(page.getByText(copy.history.transactions.reverseSuccess)).toBeVisible()
 
     await openFromBeranda(page, occasion)

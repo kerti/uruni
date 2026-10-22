@@ -10,7 +10,6 @@ import (
 
 	"github.com/kerti/uruni/internal/money"
 	"github.com/kerti/uruni/internal/store"
-	"github.com/kerti/uruni/internal/tz"
 )
 
 // The report's trust claims, tested the way the rest of the ledger is: against
@@ -19,7 +18,7 @@ import (
 // --- helpers local to this file ----------------------------------------------
 
 func jakartaAt(year int, month time.Month, day, hour, minute, second int) time.Time {
-	return time.Date(year, month, day, hour, minute, second, 0, tz.Jakarta)
+	return time.Date(year, month, day, hour, minute, second, 0, wib)
 }
 
 // reportNow is a fixed "now" after every date the scenarios post on, so the
@@ -28,13 +27,28 @@ var reportNow = jakartaAt(2026, time.October, 2, 12, 0, 0)
 
 func int64Ptr(v int64) *int64 { return &v }
 
+// onTheDay is an instant that falls on date in every one of the fund's zones
+// (noon UTC is 19:00 WIB, 20:00 WITA, 21:00 WIT). The report tests date their
+// rows by hand, some of them after the report's own "today" on purpose (the
+// running month has no upper bound, ADR-038), so each row is posted as if on its
+// own day: the date ceiling is not their subject (date_window_test.go has it),
+// and no fixture depends on the machine's date. An
+// unparseable date gives the zero time, and the post is refused as it should be.
+func onTheDay(date string) time.Time {
+	t, err := time.Parse(time.DateOnly, date)
+	if err != nil {
+		return time.Time{}
+	}
+	return t.Add(12 * time.Hour)
+}
+
 // postEntry posts one kind='normal' (or, with adjustment, kind='adjustment')
 // row and returns it.
 func postEntry(t *testing.T, l *Ledger, fundID, accountID, purposeID int64, direction string, amount money.Amount, date string, note *string) store.Transaction {
 	t.Helper()
 	posted, err := l.PostTransaction(context.Background(), PostTransactionParams{
 		FundID: fundID, AccountID: accountID, PurposeID: purposeID,
-		Direction: direction, Amount: amount, OccurredOn: date, Note: note,
+		Direction: direction, Amount: amount, OccurredOn: date, Note: note, Now: onTheDay(date),
 	})
 	if err != nil {
 		t.Fatalf("PostTransaction(%s %d on %s) = %v, want no error", direction, amount, date, err)
@@ -93,7 +107,7 @@ func newSecondFund(t *testing.T, l *Ledger) secondFund {
 	t.Helper()
 	q := store.New(l.db)
 	other, err := q.CreateFund(context.Background(), store.CreateFundParams{
-		Name: "Other Fund", Currency: "IDR", ReportSlug: "zyxwvutsrqponmlkjihgfe", CreatedAt: 1,
+		Name: "Other Fund", Currency: "IDR", TimeZone: "Asia/Jakarta", ReportSlug: "zyxwvutsrqponmlkjihgfe", CreatedAt: 1,
 	})
 	if err != nil {
 		t.Fatalf("CreateFund() = %v, want no error", err)
@@ -294,7 +308,7 @@ func TestMonthlyReportReconciliationAdjustingEntryIsCounted(t *testing.T) {
 	f := newFixture(t, l)
 	postEntry(t, l, f.fundID, f.cashID, f.mainID, "in", 100_000, "2026-09-03", nil)
 
-	today := time.Now().In(tz.Jakarta).Format("2006-01-02")
+	today := time.Now().In(wib).Format("2006-01-02")
 	if _, err := l.TakeReconciliation(ctx, TakeReconciliationParams{
 		FundID: f.fundID,
 		Counts: []AccountCount{{
@@ -556,10 +570,10 @@ func TestMonthlyReportDuesReversalIsShownAndNetsAgainstThePaymentInTotalMasuk(t 
 	if err != nil {
 		t.Fatalf("PostDuesPayments() = %v, want no error", err)
 	}
-	if _, err := l.ReverseDuesPayment(ctx, ReverseDuesPaymentParams{
-		FundID: s.f.fundID, TransactionID: paid[0].ID, OccurredOn: "2026-09-22",
+	if _, err := l.ReverseTransaction(ctx, ReverseTransactionParams{
+		FundID: s.f.fundID, TransactionID: paid[0].ID,
 	}); err != nil {
-		t.Fatalf("ReverseDuesPayment() = %v, want no error", err)
+		t.Fatalf("ReverseTransaction() = %v, want no error", err)
 	}
 
 	r := monthlyReport(t, l, ReportParams{FundID: s.f.fundID, Month: "2026-09", MemberID: &s.memberThree})
@@ -690,17 +704,19 @@ func TestMonthlyReportTotalsRefuseToWrap(t *testing.T) {
 	l := newTestLedger(t)
 	f := newFixture(t, l)
 	big := money.Amount(math.MaxInt64/2 + 1)
-	// The ceiling (#499) means no ledger method writes a figure this large, so the
-	// rows go in around it, as a database from before the ceiling or a restored
-	// backup can hold. The report must refuse them, not show a wrapped total.
-	for _, on := range []string{"2026-09-01", "2026-09-02"} {
-		if _, err := store.New(l.db).CreateTransaction(context.Background(), store.CreateTransactionParams{
-			FundID: f.fundID, AccountID: f.cashID, PurposeID: f.mainID, Direction: "in",
-			Amount: big.Int64(), OccurredOn: on, Kind: "normal", CreatedAt: 1,
-		}); err != nil {
-			t.Fatalf("CreateTransaction(%d on %s) = %v, want no error", big, on, err)
+	// No ledger method or new schema admits a figure this large, so the rows go in
+	// with the CHECKs off, as a database from before the ceiling can hold them.
+	// The report must refuse them, not show a wrapped total.
+	aroundTheCeiling(t, l, func(q *store.Queries) {
+		for _, on := range []string{"2026-09-01", "2026-09-02"} {
+			if _, err := q.CreateTransaction(context.Background(), store.CreateTransactionParams{
+				FundID: f.fundID, AccountID: f.cashID, PurposeID: f.mainID, Direction: "in",
+				Amount: big.Int64(), OccurredOn: on, Kind: "normal", CreatedAt: 1,
+			}); err != nil {
+				t.Fatalf("CreateTransaction(%d on %s) = %v, want no error", big, on, err)
+			}
 		}
-	}
+	})
 
 	// SQLite's own SUM() in FundBalance trips first, before the checked Add
 	// over the rows could; either way an error, never a wrapped figure.
@@ -971,7 +987,7 @@ func TestMonthlyReportMonthRangeIsReckonedInJakartaAcrossTheMonthBoundary(t *tes
 		},
 		{
 			"across a year boundary",
-			time.Date(2027, 1, 3, 0, 0, 0, 0, tz.Jakarta),
+			time.Date(2027, 1, 3, 0, 0, 0, 0, wib),
 			[]string{"2026-08", "2026-09", "2026-10", "2026-11", "2026-12", "2027-01"}, "2027-01-03",
 		},
 	}
@@ -1218,7 +1234,7 @@ func TestMonthlyReportWithNoClockReadsTodayInJakarta(t *testing.T) {
 	if err != nil {
 		t.Fatalf("MonthlyReport() = %v, want no error", err)
 	}
-	today := time.Now().In(tz.Jakarta)
+	today := time.Now().In(wib)
 	// Straddling midnight in Jakarta between the two reads is the only way this
 	// differs; accept either side.
 	if r.AsOf != today.Format("2006-01-02") && r.AsOf != today.Add(-time.Minute).Format("2006-01-02") {

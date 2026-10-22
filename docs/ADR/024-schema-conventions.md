@@ -1,6 +1,6 @@
 # ADR-024 — Schema conventions: STRICT SQLite, integer ids, two time types
 
-**Status:** Accepted · implemented — change only by adding a superseding ADR · [ADR index](./README.md)
+**Status:** Accepted · implemented — change only by adding a superseding ADR · **partly superseded by [ADR-040](./040-effective-dated-tiers-and-rate-corrections.md)**: a member's tier is effective-dated (`member_tier`) and `member.tier_id` is gone, so the "accepted limitation" paragraph below no longer holds · [ADR index](./README.md)
 
 **Context.** M2 lays down every table Uruni will ever have a strong opinion about. The schema stays editable in place through the whole `0.x` ramp and freezes at the first live treasurer's instance ([ADR-025](./025-one-migration-file-until-1.0.md)) — so the *wording* of a table can still change, but a convention chosen loosely here is one the app is built on long before then. SQLite is the only engine through `0.x` ([ADR-004](./004-database-sqlite-only.md)), which removes the usual reason to write a cautious portable subset — the escape hatch is [ADR-012](./012-backup-and-export.md)'s canonical JSON, not dialect discipline.
 
@@ -50,7 +50,7 @@ The earlier reading of the same symptom — that a bare `SELECT 1` truncates to 
 
 **The rule that matters is coverage:** *every* nullable pointer to a fund-scoped table gets the composite form. Single-column `REFERENCES` on a fund-scoped parent is a bug, not a shortcut — it checks existence and says nothing about ownership.
 
-**Foreign keys point one way — toward the ledger — and no two tables reference each other.** The create order is `fund → account/purpose/dues_tier/member/reimbursement/transfer → transaction → reconciliation → reconciliation_line → incidental → receipt`, with no forward references anywhere. SQLite would have tolerated a cycle (it resolves FKs at DML time, not DDL time), which is exactly why the rule has to be stated rather than discovered.
+**Foreign keys point one way — toward the ledger — and no two tables reference each other.** The create order is `fund → account/purpose/dues_tier/member/reimbursement/transfer → member_tier (after member and dues_tier, [ADR-040](./040-effective-dated-tiers-and-rate-corrections.md)) → transaction → reconciliation → reconciliation_line → incidental → receipt`, with no forward references anywhere. SQLite would have tolerated a cycle (it resolves FKs at DML time, not DDL time), which is exactly why the rule has to be stated rather than discovered.
 
 The cycle this rule removed: an early draft had `reconciliation.through_transaction_id` pointing at the ledger *and* `"transaction".reconciliation_id` pointing back, so an adjusting entry could name the reconciliation that prompted it. The link belongs on `reconciliation_line.adjustment_transaction_id` instead, because an adjustment squares **one account's line**, not a whole snapshot — and `CHECK (resolution <> 'adjusted' OR adjustment_transaction_id IS NOT NULL)` is a stronger invariant than the one it replaced, since "this line was adjusted" is the claim capable of being a lie.
 
@@ -80,7 +80,7 @@ Accepted cost, decided 2026-08-12: there is no way to plan for a levy or to reco
 
 **A reconciliation snapshot stores numbers, and that is not a cache.** `recorded_amount` is a frozen fact about a past moment, reproducible because `"transaction"` rows can never be deleted, so `through_transaction_id` is a stable cutoff. `resolution` is set at insert and never revised: revisiting a `left_open` difference next week is a *new* snapshot, and a backdated correcting entry gets a higher id, so it lands outside the old snapshot's math and inside the live balance the next one compares against. This is the one place a derived number is stored, and it is bounded on purpose.
 
-**Accepted limitation: `member.tier_id` is not effective-dated** while `dues_rate` is. A member promoted mid-year has their *current* tier applied to past periods, so dues owed for those months can be misstated. For 5–20 people with roughly annual tier changes, a temporal member-tier table is more machinery than the error it prevents. Revisit only if a real instance disagrees.
+**Superseded by [ADR-040](./040-effective-dated-tiers-and-rate-corrections.md) (#624): a member's tier is effective-dated in `member_tier`, and `member.tier_id` is gone. The paragraph is kept as the decision it replaced.** *Accepted limitation: `member.tier_id` is not effective-dated* while `dues_rate` is. A member promoted mid-year has their *current* tier applied to past periods, so dues owed for those months can be misstated. For 5–20 people with roughly annual tier changes, a temporal member-tier table is more machinery than the error it prevents. Revisit only if a real instance disagrees.
 
 ## Consequences
 

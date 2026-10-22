@@ -11,8 +11,10 @@ package backup
 
 // FormatVersion is uruni.json's integer version (ADR-012's "compatibility
 // across versions"), separate from the app's build version (ADR-018) and
-// bumped only when the exported shape changes. Through 0.x the importer
-// accepts only its FormatVersion, so a bump is a conscious act.
+// bumped only when the exported shape changes. The importer reads its own
+// FormatVersion and upgrades every older one it still has a step for
+// (upgrade.go); a version it has no step for is refused, so a bump is a
+// conscious act.
 //
 // TestGoldenFixtureMatchesExport (golden_test.go) makes it conscious: any
 // change to an exported table or the shape below fails that test until
@@ -20,10 +22,17 @@ package backup
 // promise). Whether FormatVersion bumps with it is the 0.x rule's question: a
 // bump is only allowed in the PR that ships the step converting the previous
 // format, so the last release's backup stays restorable.
-const FormatVersion int64 = 1
+//
+// 2 (ADR-040, ADR-041): a member's tier is effective-dated (the member_tiers
+// array carries every member_tier row, superseded ones included; members[].tier_id
+// is gone) and funds[].time_zone is one of Asia/Jakarta, Asia/Makassar,
+// Asia/Jayapura. Version 1 files are upgraded in ParseUpload (the step fills
+// Asia/Jakarta); any other zone, a missing field included, is refused there.
+const FormatVersion int64 = 2
 
-// Document is uruni.json's root object: every table but session (ADR-012:
-// sessions are never exported, so a restore logs everyone out), ids preserved
+// Document is uruni.json's root object: every table but session and
+// idempotency_key (ADR-012: neither is exported, so a restore logs everyone out
+// and forgets every idempotency key), ids preserved
 // verbatim, plus the totals block a restore proves its numbers against. Field
 // names are snake_case json tags matching the schema's columns, so a restored
 // file reads like the database it came from.
@@ -36,13 +45,13 @@ const FormatVersion int64 = 1
 //
 // Table order follows the migration's CREATE TABLE order (00001_schema.sql),
 // already the dependency order ADR-024 documents (fund ->
-// account/purpose/dues_tier/dues_rate/member/transfer/reimbursement ->
+// account/purpose/dues_tier/dues_rate/member/member_tier/transfer/reimbursement ->
 // transaction -> receipt -> reconciliation/reconciliation_line ->
 // incidental/incidental_recipient), plus "user" first since nothing depends
 // on it. Row order within a table is whatever query already existed for it
 // (mostly ORDER BY id); the queries added for the export (ListUsers,
-// ListDuesRatesByFund, ListReceiptsByFund, ListReconciliationLinesByFund,
-// ListIncidentalRecipientsByFund) order by id, or by primary key columns
+// ListDuesRatesByFund, ListMemberTiersForExport, ListReceiptsByFund,
+// ListReconciliationLinesByFund, ListIncidentalRecipientsByFund) order by id, or by primary key columns
 // where there is no single id, only so the export is byte-for-byte
 // reproducible across two runs. That is not a claim that id order means
 // anything (CLAUDE.md's "no primary-key order" rule); each query spells it out.
@@ -56,6 +65,9 @@ type Document struct {
 	DuesTiers []DuesTier `json:"dues_tiers"`
 	DuesRates []DuesRate `json:"dues_rates"`
 	Members   []Member   `json:"members"`
+	// MemberTiers holds every member_tier row, superseded ones too: the trail is
+	// the data (ADR-040).
+	MemberTiers []MemberTier `json:"member_tiers"`
 
 	Transfers      []Transfer      `json:"transfers"`
 	Reimbursements []Reimbursement `json:"reimbursements"`
@@ -86,6 +98,7 @@ type Fund struct {
 	ID         int64  `json:"id"`
 	Name       string `json:"name"`
 	Currency   string `json:"currency"`
+	TimeZone   string `json:"time_zone"`
 	ReportSlug string `json:"report_slug"`
 	CreatedAt  int64  `json:"created_at"`
 }
@@ -121,27 +134,41 @@ type DuesTier struct {
 }
 
 // DuesRate mirrors the "dues_rate" table verbatim: an effective-dated rate
-// for one tier (CONTEXT.md).
+// for one tier (CONTEXT.md). Every row is exported, superseded and deleting ones
+// included (ADR-040). A v1 file carries neither Correction nor Deleted; the v1 to
+// v2 step reads them as 0 and false.
 type DuesRate struct {
 	ID            int64  `json:"id"`
 	TierID        int64  `json:"tier_id"`
 	Amount        int64  `json:"amount"`
 	EffectiveFrom string `json:"effective_from"`
+	Correction    int64  `json:"correction"`
+	Deleted       bool   `json:"deleted"`
 	CreatedAt     int64  `json:"created_at"`
 }
 
 // Member mirrors the "member" table verbatim: a person in the group
-// (CONTEXT.md). JoinedOn stays a pointer though the column is NOT NULL
-// (#471): a format_version 1 backup from before can carry null, which restore
-// reads as the fund's adoption date (see adoptionDates).
+// (CONTEXT.md). It carries no tier (ADR-040): that is MemberTier rows.
 type Member struct {
 	ID         int64   `json:"id"`
 	FundID     int64   `json:"fund_id"`
 	Name       string  `json:"name"`
-	TierID     *int64  `json:"tier_id"`
-	JoinedOn   *string `json:"joined_on"`
+	JoinedOn   string  `json:"joined_on"`
 	InactiveOn *string `json:"inactive_on"`
 	CreatedAt  int64   `json:"created_at"`
+}
+
+// MemberTier mirrors the "member_tier" table verbatim: a member's tier from a
+// month on, or no tier (null) from that month. Correction numbers the restatements
+// of one month; the highest stands and the rest are superseded but kept.
+type MemberTier struct {
+	ID            int64  `json:"id"`
+	FundID        int64  `json:"fund_id"`
+	MemberID      int64  `json:"member_id"`
+	TierID        *int64 `json:"tier_id"`
+	EffectiveFrom string `json:"effective_from"`
+	Correction    int64  `json:"correction"`
+	CreatedAt     int64  `json:"created_at"`
 }
 
 // Transfer mirrors the "transfer" table verbatim: the pair-holder behind a

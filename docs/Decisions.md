@@ -2,7 +2,7 @@
 
 *A running record of what we've decided and why. Anything here can still change.*
 
-Last updated: 2026-10-07 (Excel parked, M8 becomes audit and e2e coverage)
+Last updated: 2026-10-21 (epic #523 closed out: the schema before v1.0)
 
 ## What belongs in this file
 
@@ -373,7 +373,7 @@ Rejected: a purpose dropdown on the Transaksi tab. It is more useful standalone,
 
 [#232](https://github.com/kerti/uruni/issues/232) moved tiers to Pengaturan and, in its acceptance criteria only, asked that "deleting a tier still in use is refused with copy naming why". There was no tier delete at all — `/api/dues-tiers` had POST, GET and PATCH — so the slice needed an endpoint, not just a UI move.
 
-**The ruling: deleting a golongan deletes its rates with it, in one transaction.** A tier no member is in priced nobody, so its rate rows explain no settled month and are its own children rather than history. A tier a member references is refused by that member's composite foreign key — 409 `referenced_by_other_records`, the same answer a used lokasi or anggota already gives — and the rollback restores the rates the same transaction had already deleted.
+**The ruling: deleting a golongan deletes its rates with it, in one transaction.** A tier no member has *ever* been in ([ADR-040](./ADR/040-effective-dated-tiers-and-rate-corrections.md)) priced nobody, so its rate rows explain no settled month and are its own children rather than history. A tier a member references is refused by that member's composite foreign key — 409 `referenced_by_other_records`, the same answer a used lokasi or anggota already gives — and the rollback restores the rates the same transaction had already deleted. Since tier history (ADR-040), a superseded `member_tier` row still names its tier, so a golongan someone was put in by a slip, since corrected, is kept; rename it instead.
 
 Rejected: refusing any tier that still has rates, leaving her to delete each one by hand first. It is simpler on the server and reads as busywork for a golongan nobody was ever charged under.
 
@@ -411,7 +411,7 @@ Grill A, pulled into M6. The rulings live in [ADR-012](./ADR/012-backup-and-expo
 [#197](https://github.com/kerti/uruni/issues/197). The native `<input type="date">` writes its own text, "3 Sep 2026" on iOS, "09/03/2026" on Android and "yyyy-mm-dd" on desktop Firefox, and no CSS reaches it. Every date field is now `DateField` (react-day-picker in a popover, month and year lists in its header) or, for the two month-only fields, `MonthField` (a year with a 4x3 month grid, the shape Balances' `MonthPickerPopover` settled on).
 
 - **react-day-picker is a deliberate new dependency** (about 24 KB gzipped with date-fns). Mocked against three dropdowns and native-plus-text, it won on taps-per-change and on showing the day of the week, which is how a treasurer remembers when something happened.
-- **Every picker is bounded**, in `lib/dates`: money dates run from two calendar years back to today; a join date from 2000 to a year ahead; a rate's start month from 2000 to two years ahead; the status period from 2000 to a year ahead. The server still accepts any real date. The bounds are the UI's guard against a slipped thumb, not a ledger rule.
+- **Every picker is bounded**, in `lib/dates`: money dates run from two calendar years back to today; a join date from 2000 to a year ahead; a rate's start month from 2000 to two years ahead; the status period from 2000 to a year ahead. ~~The server still accepts any real date.~~ Superseded 2026-10-19 by the plausible date window below.
 
 ## Excel is parked, and M8 becomes audit and e2e coverage (decided 2026-10-07)
 
@@ -425,3 +425,20 @@ The app is treated as feature-complete apart from the Excel workbook. #386 (chan
 - **The Fly.io demo ([#144](https://github.com/kerti/uruni/issues/144)) moves to M9**, beside the rest of the deploy work. Moved again to Production on 2026-10-19, so M9 could close as `v0.9.0`; nothing in M9's definition of done depends on it.
 - **A Cek kas fix must close what it claims to close** ([#498](https://github.com/kerti/uruni/issues/498), 2026-10-12). An *adjusted* line is a plug: its signed amount must equal the difference exactly, or it is refused. An *entry_added* line may close part of the gap, and the remainder (difference minus the signed entry) keeps it open. "Open" means a non-zero remainder on Beranda, in the open lines and on the public report.
 - **A login lockout can't be aimed at the treasurer** ([#500](https://github.com/kerti/uruni/issues/500), 2026-10-13). An account-wide ceiling (50 an hour) still bounds a distributed guesser, and a browser that has logged in before carries a device cookie that skips it, so a stranger who knows her email can't keep her out. A network-keyed "known logins" list was rejected: her phone's address changes.
+
+## A plausible window on every date (decided 2026-10-19, built 2026-10-20)
+
+[#632](https://github.com/kerti/uruni/issues/632). A slipped year is a wrong ledger row, not only a slipped thumb, so the server now refuses it too. Floor `2000-01-01` / `2000-01` as schema `CHECK`s on every date column (restore enforces the floor only); ceilings in code, in the fund's zone, inclusive, no grace: money dates today, join and leave dates a year ahead (29 February clamps to 28 February), a rate's start month +24, a tier's start the current month or the join month, a dues period the form's +12. Dates the ledger picks or a correction inherits are not checked. One error, `date_out_of_range`. Every picker stays inside the server's window.
+
+## Epic #523: the schema before v1.0 (decided 2026-10-19 to 2026-10-21)
+
+[#523](https://github.com/kerti/uruni/issues/523). The ADRs hold the reasoning; these are the rulings that outlive them.
+
+- **One backup format bump for the whole epic.** `format_version` 2 ([ADR-040](./ADR/040-effective-dated-tiers-and-rate-corrections.md)); the importer upgrades a v1 file to v2, so this build reads the previous release's backups. The first step of ADR-012's upgrade chain.
+- **Each fund keeps its own time zone**, WIB, WITA or WIT, chosen at setup and changeable in Pengaturan. Every "today" and every month, on the server and the phone, is the fund's ([ADR-041](./ADR/041-the-funds-time-zone.md)). Eastern Indonesia is treated as equal to Western Indonesia, not as an edge case.
+- **Any ordinary transaction can be reversed**, not only a dues payment. "Ordinary" means a dues payment or a normal entry; openings, transfer legs, talangan payouts, adjustments, cek kas fixes and reversals are not reversible. The reversal is dated the original's day until a cek kas counts the original, and today after. There is one door, the entry detail ([ADR-042](./ADR/042-reversing-any-ordinary-transaction.md)).
+- **Eight immutable writes are safe to repeat after a lost answer:** transactions, dues payments, both kinds of transfer, the purpose correction, opening an envelope, cek kas, and creating a location ([ADR-043](./ADR/043-idempotency-keys-on-immutable-writes.md)).
+  - Creating a location is keyed because an opening balance moves money and a duplicate can't be deleted.
+  - Pass-through purposes stay unkeyed: a duplicate moves no money and can be deleted. That's the accepted risk.
+  - The phone forgets a key 15 minutes after the last failed try; the server keeps its answer for 24 hours.
+- **A recorded balance carries no ceiling** ([#661](https://github.com/kerti/uruni/pull/661)). A location's ledger sum may pass Rp 999.999.999.999 and must still be countable; what she types still stops at the ceiling.

@@ -59,9 +59,9 @@ func TestGetBalancesMonthMatchesTheReportsRunningWalk(t *testing.T) {
 	post("in", 200_000, "2026-10-01", false)
 	post("out", 30_000, "2026-10-01", false)
 	post("out", 4_000, "2026-10-02", true)
-	if _, err := l.ReverseDuesPayment(ctx, ledger.ReverseDuesPaymentParams{FundID: fundID, TransactionID: gift.ID, OccurredOn: "2026-10-02"}); err != nil {
-		t.Fatalf("ReverseDuesPayment() = %v", err)
-	}
+	// Dated 2 October, a later month than the gift (a cek kas and the clock, in
+	// production, ADR-042), written directly.
+	postReversalRowOn(t, sqlDB, fundID, gift.ID, "2026-10-02")
 	if _, err := l.CreateAccount(ctx, ledger.CreateAccountParams{
 		FundID: fundID, Kind: "cash", Name: "Kotak",
 		OpeningBalance: &ledger.OpeningBalance{Amount: 100_000, OccurredOn: "2026-10-01"},

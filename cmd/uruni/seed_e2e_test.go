@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/kerti/uruni/internal/auth"
+	"github.com/kerti/uruni/internal/db"
 )
 
 // TestSeedE2ERefusesAnUnsetURUNI_DB is the guard's key case: no silent
@@ -61,6 +62,24 @@ func TestSeedE2ESeedsAThrowawayDatabase(t *testing.T) {
 
 	if err := seedE2E(context.Background()); err != nil {
 		t.Fatalf("seedE2E() = %v, want no error against a fresh throwaway path", err)
+	}
+
+	// The seeded members are tiered through member_tier (ADR-040), from their join
+	// month, so the e2e journeys that read dues see a tier.
+	sqlDB, err := db.Open(context.Background(), path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = sqlDB.Close() }()
+	var members, rows int
+	if err := sqlDB.QueryRow(`SELECT COUNT(*) FROM member`).Scan(&members); err != nil {
+		t.Fatal(err)
+	}
+	if err := sqlDB.QueryRow(`SELECT COUNT(*) FROM member_tier WHERE effective_from = '2024-01' AND correction = 0 AND tier_id IS NOT NULL`).Scan(&rows); err != nil {
+		t.Fatal(err)
+	}
+	if members != 2 || rows != 2 {
+		t.Errorf("seeded %d members and %d first tier rows, want 2 and 2", members, rows)
 	}
 }
 

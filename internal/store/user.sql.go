@@ -50,7 +50,7 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 const getUserByEmail = `-- name: GetUserByEmail :one
 SELECT id, email, password_hash, created_at
 FROM "user"
-WHERE lower(email) = ?1 OR email = ?2
+WHERE email = ?1 OR email = ?2
 `
 
 type GetUserByEmailParams struct {
@@ -58,13 +58,12 @@ type GetUserByEmailParams struct {
 	Exact      string
 }
 
-// Finds the login case-insensitively without a schema change (#500). New rows
-// are stored trimmed and lower-cased (auth.NormalizeEmail), but an older row
-// keeps whatever case it was typed in, so the lookup matches the normalized
-// form against lower(email) or the address exactly as stored. SQLite's lower()
-// folds ASCII only: the exact arm keeps a legacy row with a non-ASCII capital
-// findable. The COLLATE NOCASE column rides the schema epic (#523); user holds
-// one row, so the OR costs no index.
+// "user".email is COLLATE NOCASE, so `email = x` folds ASCII case by itself. New
+// rows are stored trimmed and lower-cased (auth.NormalizeEmail); an older row
+// keeps its typed case. NOCASE folds ASCII only while Go's lower-casing is full
+// Unicode, so the lookup keeps both the normalized form and the address as typed
+// (trimmed), which finds a legacy row with a non-ASCII capital. user holds one
+// row, so the OR costs no index.
 func (q *Queries) GetUserByEmail(ctx context.Context, arg GetUserByEmailParams) (User, error) {
 	row := q.db.QueryRowContext(ctx, getUserByEmail, arg.Normalized, arg.Exact)
 	var i User
@@ -163,7 +162,7 @@ func (q *Queries) UpdateUserEmail(ctx context.Context, arg UpdateUserEmailParams
 const updateUserPassword = `-- name: UpdateUserPassword :one
 UPDATE "user"
 SET password_hash = ?1
-WHERE lower(email) = ?2 OR email = ?3
+WHERE email = ?2 OR email = ?3
 RETURNING id, email, password_hash, created_at
 `
 

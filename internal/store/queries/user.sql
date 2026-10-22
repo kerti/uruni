@@ -3,17 +3,16 @@ INSERT INTO "user" (email, password_hash, created_at)
 VALUES (?, ?, ?)
 RETURNING id, email, password_hash, created_at;
 
--- Finds the login case-insensitively without a schema change (#500). New rows
--- are stored trimmed and lower-cased (auth.NormalizeEmail), but an older row
--- keeps whatever case it was typed in, so the lookup matches the normalized
--- form against lower(email) or the address exactly as stored. SQLite's lower()
--- folds ASCII only: the exact arm keeps a legacy row with a non-ASCII capital
--- findable. The COLLATE NOCASE column rides the schema epic (#523); user holds
--- one row, so the OR costs no index.
+-- "user".email is COLLATE NOCASE, so `email = x` folds ASCII case by itself. New
+-- rows are stored trimmed and lower-cased (auth.NormalizeEmail); an older row
+-- keeps its typed case. NOCASE folds ASCII only while Go's lower-casing is full
+-- Unicode, so the lookup keeps both the normalized form and the address as typed
+-- (trimmed), which finds a legacy row with a non-ASCII capital. user holds one
+-- row, so the OR costs no index.
 -- name: GetUserByEmail :one
 SELECT id, email, password_hash, created_at
 FROM "user"
-WHERE lower(email) = sqlc.arg(normalized) OR email = sqlc.arg(exact);
+WHERE email = sqlc.arg(normalized) OR email = sqlc.arg(exact);
 
 -- How register (#114) knows whether the one-shot bootstrap account exists
 -- (ADR-030): the gate is the count, not a duplicate-email collision.
@@ -26,7 +25,7 @@ FROM "user";
 -- name: UpdateUserPassword :one
 UPDATE "user"
 SET password_hash = sqlc.arg(password_hash)
-WHERE lower(email) = sqlc.arg(normalized) OR email = sqlc.arg(exact)
+WHERE email = sqlc.arg(normalized) OR email = sqlc.arg(exact)
 RETURNING id, email, password_hash, created_at;
 
 -- The backup export's read (ADR-012): the whole table, password hash included

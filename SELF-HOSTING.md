@@ -95,9 +95,11 @@ Your data lives on three Docker volumes: `uruni-data` (the database), `uruni-upl
 
 | File | When | Kept |
 |---|---|---|
-| `uruni-<date>-<time>-daily-...zip` | Once a day (Asia/Jakarta), only if something changed since the last one, and once at boot when no dump in the current format exists | the newest 7 |
+| `uruni-<date>-<time>-daily-...zip` | Once a day (in the fund's time zone, WIB unless the treasurer chose WITA or WIT), only if something changed since the last one, and once at boot when no dump in the current format exists | the newest 7 |
 | `uruni-<date>-<time>-pre-restore-...zip` | Just before a restore (or `migrate down`) changes anything | the newest 3 |
-| `uruni-pre-upgrade-<date>-<time>_from-<v>_to-<v>.sqlite` | The first time a new version starts, before it migrates: a raw copy of the database the previous version can open | the newest 3 |
+| `uruni-pre-upgrade-<date>-<time>_from-<v>_to-<v>.sqlite` | The first time a new version starts, before it migrates: a raw copy of the database the previous version can open (stamped in WIB, whatever the fund's zone: no fund can be read that early) | the newest 3 |
+
+A dump's name is stamped in the fund's time zone. A fund in WITA or WIT has `utc8` or `utc9` after the time (`uruni-20261002-003000-utc8-daily-...zip`); a name with no such token is Asia/Jakarta, so every name a WIB instance wrote keeps its meaning and its shape. The same token is why changing the zone never re-dates an older file.
 
 The dump list in Pengaturan > Cadangan shows the zips; download one there, and **restore happens in the app** from the same screen. The pre-upgrade copies are for rolling an upgrade back (see [Upgrading](#upgrading)) and do not appear in the app.
 
@@ -141,7 +143,9 @@ The version is your **upgrade contract**: patch = drop-in; minor = additive migr
 3. `docker compose run --rm -v "$PWD:/in:ro" app rebuild --from /in/backup.zip`. It refuses a backup that is older than the database (or another instance's), builds a new database of the new schema with your login carried over, checks that every fund's balance came out the same, and keeps the old file next to it as `uruni.db.pre-<version>-<date>-<time>`.
 4. `docker compose up -d`, and sign in again.
 
-`make upgrade-rehearsal BACKUP=<backup.zip>` in a source checkout rehearses it on a copy first. The release notes say whether the new build still reads the old backup format.
+`make upgrade-rehearsal BACKUP=<backup.zip>` in a source checkout rehearses it on a copy first.
+
+**Backups across a format change.** A backup file carries a `format_version`. A build reads its own and every older one it has an upgrade step for, converting it as it reads (the in-app restore, the stored-dump list and `rebuild` all do), and refuses a newer one; the release notes say which formats a build reads. The release that moved the backup to format 2 (member tiers by month, the fund's time zone) reads the previous release's format-1 backups, so step 1 above works unchanged. It writes only format 2, which the previous release cannot restore: keep the backup from step 1 until you are sure of the upgrade.
 
 **Never run `uruni migrate down` on `0.x`.** There is one migration, so one step down is the whole schema: it empties the database. It takes a backup zip first and refuses while the app runs, but it is not a way back from an upgrade; the two below are.
 

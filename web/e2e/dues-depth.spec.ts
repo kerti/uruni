@@ -200,6 +200,8 @@ test.describe('dues in depth', () => {
     await amount.fill('')
     await amount.fill('80000')
     await editor.getByRole('button', { name: text.saveRate }).click()
+    // A correction reprices every month the rate covers, so it asks first.
+    await editor.getByRole('button', { name: text.rateCorrectConfirmAction }).click()
     await expect(rateRow).toContainText(formatIDR(80_000))
     await expect(rateRow).toContainText(text.effectiveFrom(formatPeriod(jakartaMonth())))
 

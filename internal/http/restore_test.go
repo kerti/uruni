@@ -19,6 +19,7 @@ import (
 	"github.com/kerti/uruni/internal/backup"
 	"github.com/kerti/uruni/internal/ledger"
 	"github.com/kerti/uruni/internal/store"
+	"github.com/kerti/uruni/internal/tz"
 )
 
 // restoreStagingTempPrefix mirrors backup.CreateRestoreStagingTemp's
@@ -255,7 +256,7 @@ func TestRestoreInspectStoredHappyPath(t *testing.T) {
 	setup := setUpFund(t, r)
 
 	zipBytes := downloadRealBackupZip(t, r)
-	name := backup.BuildDumpName(time.Now(), backup.KindDaily, backup.FormatVersion, "eeeeeeeeeeeeeeee")
+	name := backup.BuildDumpName(time.Now(), tz.Jakarta, backup.KindDaily, backup.FormatVersion, "eeeeeeeeeeeeeeee")
 	writeTestDumpFile(t, backupDir, name, zipBytes)
 
 	inspectRec := postRestoreInspectStored(t, r, name)
@@ -294,7 +295,7 @@ func TestRestoreInspectStoredRejectsUnknownName(t *testing.T) {
 	r, _ := authedRouterWithBackupDir(t)
 	setUpFund(t, r)
 
-	name := backup.BuildDumpName(time.Date(2026, 9, 30, 1, 0, 0, 0, time.UTC), backup.KindDaily, backup.FormatVersion, "ffffffffffffffff")
+	name := backup.BuildDumpName(time.Date(2026, 9, 30, 1, 0, 0, 0, time.UTC), tz.Jakarta, backup.KindDaily, backup.FormatVersion, "ffffffffffffffff")
 
 	rec := postRestoreInspectStored(t, r, name)
 	if rec.Code != http.StatusNotFound {
@@ -324,18 +325,35 @@ func TestRestoreInspectStoredRefusesPathTraversal(t *testing.T) {
 	}
 }
 
-// TestRestoreInspectStoredRefusesOlderFormatBackup: an older-format dump is
-// still listed and downloadable (Backup.tsx's "Dibuat versi lama") but never
-// offered for restore. This route enforces that through the same
-// backup.ParseUpload check as an upload (ErrFormatVersionOlder), not a second
-// check against IsCurrentFormat.
-func TestRestoreInspectStoredRefusesOlderFormatBackup(t *testing.T) {
+// TestRestoreInspectStoredAcceptsAnOlderFormatItCanUpgrade: a format-1 dump is
+// listed with its restore button (can_restore) and inspects like any other,
+// because backup.ParseUpload upgrades it (ADR-012, ADR-040). The route has no
+// format check of its own: ParseUpload is the one place judging a version.
+func TestRestoreInspectStoredAcceptsAnOlderFormatItCanUpgrade(t *testing.T) {
 	t.Parallel()
 	r, backupDir := authedRouterWithBackupDir(t)
 	setUpFund(t, r)
 
-	name := backup.BuildDumpName(time.Now(), backup.KindDaily, backup.FormatVersion-1, "0123456789ab")
-	writeTestDumpFile(t, backupDir, name, minimalDumpZip(t, backup.FormatVersion-1))
+	name := backup.BuildDumpName(time.Now(), tz.Jakarta, backup.KindDaily, 1, "0123456789ab")
+	writeTestDumpFile(t, backupDir, name, minimalDumpZip(t, 1))
+
+	rec := postRestoreInspectStored(t, r, name)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("POST /api/restore/inspect-stored/%s = %d, want %d (body: %s)", name, rec.Code, http.StatusOK, rec.Body.String())
+	}
+}
+
+// TestRestoreInspectStoredRefusesAFormatNoStepCovers: a dump older than the
+// oldest format the importer can upgrade is still listed and downloadable but
+// never offered for restore, and this route refuses it through the same
+// backup.ParseUpload check as an upload (ErrFormatVersionOlder).
+func TestRestoreInspectStoredRefusesAFormatNoStepCovers(t *testing.T) {
+	t.Parallel()
+	r, backupDir := authedRouterWithBackupDir(t)
+	setUpFund(t, r)
+
+	name := backup.BuildDumpName(time.Now(), tz.Jakarta, backup.KindDaily, 0, "0123456789ab")
+	writeTestDumpFile(t, backupDir, name, minimalDumpZip(t, 0))
 
 	rec := postRestoreInspectStored(t, r, name)
 	if rec.Code != http.StatusUnprocessableEntity {
@@ -607,7 +625,7 @@ func TestRestoreInspectStoredThenOriginalDeletedStillConfirms(t *testing.T) {
 	setup := setUpFund(t, r)
 	zipBytes := downloadRealBackupZip(t, r)
 
-	name := backup.BuildDumpName(time.Now(), backup.KindDaily, backup.FormatVersion, "0123456789ab")
+	name := backup.BuildDumpName(time.Now(), tz.Jakarta, backup.KindDaily, backup.FormatVersion, "0123456789ab")
 	dumpPath := filepath.Join(backupDir, name)
 	writeTestDumpFile(t, backupDir, name, zipBytes)
 

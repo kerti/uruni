@@ -50,10 +50,17 @@ func newDuesScenario(t *testing.T) duesScenario {
 			joinedOn = *joined
 		}
 		m, err := q.CreateMember(ctx, store.CreateMemberParams{
-			FundID: f.fund.ID, Name: name, TierID: tierID, JoinedOn: joinedOn, InactiveOn: inactive, CreatedAt: 1,
+			FundID: f.fund.ID, Name: name, JoinedOn: joinedOn, InactiveOn: inactive, CreatedAt: 1,
 		})
 		if err != nil {
 			t.Fatalf("CreateMember(%s) = %v", name, err)
+		}
+		if tierID != nil { // the tier from the join month, as POST /api/members writes it
+			if _, err := q.CreateMemberTier(ctx, store.CreateMemberTierParams{
+				FundID: f.fund.ID, MemberID: m.ID, TierID: tierID, EffectiveFrom: joinedOn[:7], CreatedAt: 1,
+			}); err != nil {
+				t.Fatalf("CreateMemberTier(%s) = %v", name, err)
+			}
 		}
 		return m.ID
 	}
@@ -282,8 +289,12 @@ func TestReportDuesSectionHidden(t *testing.T) {
 			t.Fatalf("CreateDuesRate() = %v", err)
 		}
 		joined := "2026-12-01"
-		if _, err := q.CreateMember(ctx, store.CreateMemberParams{FundID: f.fund.ID, Name: "Fina", TierID: &tier.ID, JoinedOn: joined, CreatedAt: 1}); err != nil {
+		fina, err := q.CreateMember(ctx, store.CreateMemberParams{FundID: f.fund.ID, Name: "Fina", JoinedOn: joined, CreatedAt: 1})
+		if err != nil {
 			t.Fatalf("CreateMember() = %v", err)
+		}
+		if _, err := q.CreateMemberTier(ctx, store.CreateMemberTierParams{FundID: f.fund.ID, MemberID: fina.ID, TierID: &tier.ID, EffectiveFrom: joined[:7], CreatedAt: 1}); err != nil {
+			t.Fatalf("CreateMemberTier() = %v", err)
 		}
 		body := f.get(t, "/report/"+f.fund.ReportSlug+"?month=2026-09").Body.String()
 		if strings.Contains(body, `id="dues"`) || strings.Contains(body, `name="dues"`) {
@@ -320,5 +331,46 @@ func TestReportDuesAndTransactionFormsCarryEachOther(t *testing.T) {
 	}
 	if strings.Contains(sec, `type="hidden" name="dues"`) {
 		t.Error("the dues form repeats dues as a hidden field")
+	}
+}
+
+// The report's Golongan column is the tier in force in the month shown (ADR-040),
+// not today's: Ani is promoted from October, and September's report still reads
+// Madya beside the amount Madya set.
+func TestReportDuesShowsTheTierInForceInTheMonthShown(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	s := newDuesScenario(t)
+	q := store.New(s.db)
+
+	sepuh, err := q.CreateDuesTier(ctx, store.CreateDuesTierParams{FundID: s.fund.ID, Name: "Sepuh", CreatedAt: 1})
+	if err != nil {
+		t.Fatalf("CreateDuesTier() = %v", err)
+	}
+	if _, err := q.CreateDuesRate(ctx, store.CreateDuesRateParams{TierID: sepuh.ID, Amount: 40_000, EffectiveFrom: "2026-01", CreatedAt: 1}); err != nil {
+		t.Fatalf("CreateDuesRate() = %v", err)
+	}
+	members, err := q.ListMembersByFund(ctx, s.fund.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, m := range members {
+		if m.Name != "Ani" {
+			continue
+		}
+		if _, err := q.CreateMemberTier(ctx, store.CreateMemberTierParams{
+			FundID: s.fund.ID, MemberID: m.ID, TierID: &sepuh.ID, EffectiveFrom: "2026-10", CreatedAt: 1,
+		}); err != nil {
+			t.Fatalf("CreateMemberTier() = %v", err)
+		}
+	}
+
+	september := duesSection(t, s.get(t, s.base).Body.String())
+	if !strings.Contains(september, "Madya") || strings.Contains(september, "Sepuh") {
+		t.Errorf("September's dues section lists %q, want Madya for everyone and no Sepuh yet", september)
+	}
+	october := duesSection(t, s.get(t, "/report/"+s.fund.ReportSlug+"?month=2026-10").Body.String())
+	if !strings.Contains(october, "Sepuh") {
+		t.Errorf("October's dues section lists %q, want Ani in Sepuh", october)
 	}
 }

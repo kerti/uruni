@@ -47,17 +47,20 @@ func (a *api) resolveStoredBackupPath(name string) (string, bool) {
 }
 
 // backupListItem is one dump's wire shape (GET /api/backups): enough for the
-// Cadangan card to render a row (date, kind, whether it can still be
-// restored) and for the download route to be given the name to ask for. All
+// Cadangan card to render a row (date, kind, whether it can be restored) and for
+// the download route to be given the name to ask for. All
 // of it is read off DumpInfo, parsed from the file's name
 // (internal/backup/dumps.go); nothing is derived a second way.
 type backupListItem struct {
 	Name            string `json:"name"`
-	Date            string `json:"date"` // YYYY-MM-DD, Asia/Jakarta
+	Date            string `json:"date"` // YYYY-MM-DD, in the zone the dump's name is stamped in
 	Kind            string `json:"kind"` // "daily" | "pre-restore"
 	FormatVersion   int64  `json:"format_version"`
-	IsCurrentFormat bool   `json:"is_current_format"`
-	SizeBytes       int64  `json:"size_bytes"`
+	IsCurrentFormat bool   `json:"is_current_format"` // written by this build's format; false for an older one
+	// CanRestore is true for any format the importer can read or upgrade
+	// (ADR-012, ADR-040): the restore button follows this, not is_current_format.
+	CanRestore bool  `json:"can_restore"`
+	SizeBytes  int64 `json:"size_bytes"`
 }
 
 // listBackups is GET /api/backups: every dump backup.ListDumps recognises in
@@ -85,10 +88,11 @@ func (a *api) listBackups(w http.ResponseWriter, r *http.Request) {
 		}
 		items = append(items, backupListItem{
 			Name:            d.Name,
-			Date:            d.When.Format("2006-01-02"),
+			Date:            d.When.Format("2006-01-02"), // the name's own date, in the zone it names
 			Kind:            string(d.Kind),
 			FormatVersion:   d.FormatVersion,
 			IsCurrentFormat: d.FormatVersion == backup.FormatVersion,
+			CanRestore:      backup.CanUpgradeFormat(d.FormatVersion),
 			SizeBytes:       info.Size(),
 		})
 	}
@@ -149,6 +153,20 @@ func (a *api) downloadStoredBackup(w http.ResponseWriter, r *http.Request) {
 // so the download is too; backup.Export walks every fund ListFunds returns,
 // not the one resolveFund would answer with.
 func (a *api) downloadBackup(w http.ResponseWriter, r *http.Request) {
+	// The name's date is the fund's day (ADR-041); the download is instance-wide,
+	// so the zone is the first fund's, or tz.Default with none.
+	zone, err := backup.InstanceZone(r.Context(), a.queries)
+	if err != nil {
+		a.log(r).Error("reading the fund's time zone", "error", err)
+		writeAPIError(w, http.StatusInternalServerError, "internal_error", "Something went wrong.")
+		return
+	}
+	loc, err := tz.Load(zone)
+	if err != nil {
+		a.log(r).Error("fund has an unusable time zone", "time_zone", zone, "error", err)
+		writeAPIError(w, http.StatusInternalServerError, "internal_error", "Something went wrong.")
+		return
+	}
 	zipBytes, missing, err := backup.Export(r.Context(), a.sqlDB, a.uploadsDir)
 	if err != nil {
 		a.log(r).Error("building backup zip", "error", err)
@@ -164,7 +182,7 @@ func (a *api) downloadBackup(w http.ResponseWriter, r *http.Request) {
 
 	a.securityEvent(r, slog.LevelInfo, "backup_downloaded", "kind", "fresh")
 	w.Header().Set("Content-Type", "application/zip")
-	w.Header().Set("Content-Disposition", `attachment; filename="`+backup.ZipFilename(a.now().In(tz.Jakarta))+`"`)
+	w.Header().Set("Content-Disposition", `attachment; filename="`+backup.ZipFilename(a.now().In(loc))+`"`)
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write(zipBytes)
 }

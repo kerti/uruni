@@ -61,12 +61,12 @@ One community server holds one or more **Funds** (for the validated user, a sing
 
 Key entities:
 
-- **Fund** — the shared kas. Has a name and currency (IDR).
+- **Fund** — the shared kas. Has a name, a currency (IDR) and a time zone: WIB, WITA or WIT.
 - **Account/Location** — where money physically sits: a list the treasurer names, each entry either cash or bank. A fund may hold several of either kind, or only one; the display name is whatever she types, and the seeded default is "Tunai". Locations are added and renamed later, and one that has been used is retired rather than deleted - once its money has moved elsewhere, since a retired location is never counted again. The recorded balance is tracked *per location* because that split is the source of her discrepancies. (v1 assumes the bank is possibly a personal account; Uruni tracks only the kas portion the treasurer reports.)
 - **Purpose tag** — every transaction is tagged: `Kas Utama` (routine), a named **Incidental** (e.g. "Duka Pak Budi"), or `Pass-through` (e.g. Kas Bidang). One pooled real balance, separated *in meaning*, not in separate pots.
-- **Member** — name + role/tier. No email/phone required (minimize data held).
-- **Dues rate** — amount per tier (e.g. pelaksana 50k, fungsional pertama 70k, muda 80k, madya TBD); editable; effective over time.
-- **Transaction** — income or expense; amount; date; location; purpose tag; optional member link (for dues/reimbursement); optional note; optional receipt photo. Immutable once posted (corrections are new adjusting entries) so the ledger stays trustworthy.
+- **Member** — name + role/tier, with the tier held month by month: a change takes effect from a month and never reprices the months before it. No email/phone required (minimize data held).
+- **Dues rate** — amount per tier (e.g. pelaksana 50k, fungsional pertama 70k, muda 80k, madya TBD), effective from a month until the next rate. A mistaken rate is corrected by stating its month again: every month it covers is repriced, the earlier row stays behind, and nothing already paid moves.
+- **Transaction** — income or expense; amount; date; location; purpose tag; optional member link (for dues/reimbursement); optional link to the transaction it reverses; optional note; optional receipt photo. Immutable once posted (corrections are new adjusting entries) so the ledger stays trustworthy. An amount is at most Rp 999.999.999.999 and a date falls from 2000 up to today in the fund's time zone, so a slipped thumb is refused instead of posted. Saving the same entry again right after a lost answer does not record it twice: each submission carries a key, and the server remembers it for a day (outside the backup).
 - **Incidental collection** — a lightweight envelope: target/occasion, contributions in, disbursement out, and a **leftover** that rolls into Kas Utama when it closes.
 - **Reconciliation snapshot** — a point-in-time record of expected vs. actual balance per location, any difference, and how it was resolved.
 
@@ -74,13 +74,14 @@ Key entities:
 
 ### 7.1 Setup & access
 - The treasurer signs in to *their community's* server (single treasurer role in v1; optional read-only viewer later). No central Uruni accounts.
-- First-run setup: name the fund, add members with tiers, set dues rates, set an opening balance per location.
+- First-run setup: name the fund and choose its time zone (WIB, WITA or WIT, pre-selected from the phone), add members with tiers, set dues rates, set an opening balance per location.
 - **Uruni's history starts at adoption.** The opening balance carries everything that came before it, so join dates and dues rates default to the moment of setup and no earlier period is generated as owed. Payments already settled are never re-entered: that money is *inside* the opening balance, and recording it a second time would inflate the recorded balance permanently. The exception is **live arrears** — dues a member genuinely still owes never arrived, so backdating that one member's join date (and the rate's effective month) makes those periods show as outstanding, and the payment is dated the day it actually comes in.
 
 ### 7.2 Record a transaction (the everyday action)
 - A prominent "add" action reachable in one tap from the home screen.
 - Minimum fields with smart defaults: amount, in/out, location (remembers last), purpose (defaults to Kas Utama), date (defaults to today). Note and photo optional.
 - Money that only changes place (cash to the bank, "Pindah lokasi") or purpose ("Pindah pos") is recorded as a value-neutral transfer, and a posted row's pos can be corrected after the fact ("Perbaiki pos") - neither moves the fund's balance.
+- A transaction recorded in error is reversed by a new entry, never edited away: the reversal is dated the original's date, unless a cek kas has counted the original since, and then today.
 - Recording should feel responsive; the server is the single source of truth and confirms the write quickly.
 - Connectivity: **the app requires a live connection.** When offline it is deliberately unavailable — a clear "butuh koneksi" state, with no local data and no queue. This is a user-driven choice: she prefers no "which copy is valid?" ambiguity over any offline capability.
 

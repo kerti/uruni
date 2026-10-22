@@ -3,6 +3,7 @@
 // dues_rates.go, members.go).
 
 import { apiFetch, fetchBlob } from '@/lib/api'
+import { setFundTimeZone } from '@/lib/dates'
 
 /** An account (location) row - cash or bank - as every route here returns it. */
 export interface Account {
@@ -22,6 +23,9 @@ export interface Fund {
   id: number
   name: string
   currency: string
+  /** The fund's IANA time zone (ADR-041): Asia/Jakarta, Asia/Makassar or
+   * Asia/Jayapura. WIB, WITA and WIT exist only as copy (copy.timeZone). */
+  time_zone: string
   report_slug: string
   /** The shareable link, built server-side from URUNI_BASE_URL. A bare
    * `/report/<slug>` path when no base URL is configured (local dev). */
@@ -92,6 +96,18 @@ export interface Transaction {
    * and the correction dialog, which must build its pair from where the
    * money actually is. */
   effective_purpose_id?: number
+  /** Whether a reversal points at this row (ADR-042): the server's flag, so a row
+   * reversed on an unfetched page still reads reversed. */
+  reversed?: boolean
+  /** Whether the ledger would accept a reversal of this row now - the server's
+   * answer, so the client keeps no copy of the eligibility rule. */
+  reversible?: boolean
+  /** Whether a cek kas has counted this row, which picks the date a reversal
+   * would take: its own day (false) or today (true). */
+  counted?: boolean
+  /** On a reversal: the date of the row it reverses, so a label can state it
+   * though the original sits on another page. Null on every other row. */
+  reverses_occurred_on?: string | null
   /** Every receipt attached to this row, oldest first. Optional so existing
    * test fixtures need not grow the field; TransactionList reads it as
    * `transaction.receipt_ids ?? []`. */
@@ -141,24 +157,38 @@ export interface MembersPage {
   nextCursor: string | null
 }
 
+/**
+ * Every function below that returns a fund hands its `time_zone` to the date
+ * helpers (lib/dates.ts) before its promise resolves (ADR-041), never from an
+ * effect or a render: AuthedGate mounts the Shell on the render right after the
+ * fetch, and every `useState(todayISODate)` under it runs then.
+ */
+function adoptZone(fund: Fund): Fund {
+  setFundTimeZone(fund.time_zone)
+  return fund
+}
+
 /** GET /api/fund - 404 not_found means "run setup". */
 export function getFund(): Promise<Fund> {
-  return apiFetch<Fund>('/api/fund')
+  return apiFetch<Fund>('/api/fund').then(adoptZone)
 }
 
 /**
- * PATCH /api/fund - renames the kas. The name is a display label: it heads
+ * PATCH /api/fund - renames the kas and/or changes its time zone; each is
+ * optional, at least one is required. The name is a display label: it heads
  * every screen and the public report, and nothing posted references it, so
- * this rewrites no history. currency and report_slug are not settable -
- * one is an invariant through 0.x, the other is the report's unguessable
- * address, which only replaceReportSlug changes.
+ * this rewrites no history. A zone change rewrites nothing either (ADR-041).
+ * currency and report_slug are not settable - only replaceReportSlug changes the slug.
  */
-export function renameFund(name: string): Promise<Fund> {
+export function updateFund(patch: { name?: string; timeZone?: string }): Promise<Fund> {
+  const body: Record<string, string> = {}
+  if (patch.name !== undefined) body.name = patch.name
+  if (patch.timeZone !== undefined) body.time_zone = patch.timeZone
   return apiFetch<Fund>('/api/fund', {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ name }),
-  })
+    body: JSON.stringify(body),
+  }).then(adoptZone)
 }
 
 /**
@@ -167,19 +197,24 @@ export function renameFund(name: string): Promise<Fund> {
  * with the whole fund, so the caller swaps in the new report_url.
  */
 export function replaceReportSlug(): Promise<Fund> {
-  return apiFetch<Fund>('/api/fund/report-slug', { method: 'POST' })
+  return apiFetch<Fund>('/api/fund/report-slug', { method: 'POST' }).then(adoptZone)
 }
 
 /**
- * POST /api/setup - the fund's name plus every account it starts with, and
- * each opening balance, in one call: one database transaction, or nothing.
- * A second call for a fund that already exists is 409 fund_already_exists.
+ * POST /api/setup - the fund's name and time zone plus every account it starts
+ * with, and each opening balance, in one call: one database transaction, or
+ * nothing. A second call for a fund that already exists is 409
+ * fund_already_exists. The zone it answers with is the one stored, and is held
+ * for the roster step that follows.
  */
-export function postSetup(name: string, accounts: SetupAccountInput[]): Promise<SetupResult> {
+export function postSetup(name: string, timeZone: string, accounts: SetupAccountInput[]): Promise<SetupResult> {
   return apiFetch<SetupResult>('/api/setup', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ name, accounts }),
+    body: JSON.stringify({ name, time_zone: timeZone, accounts }),
+  }).then((result) => {
+    adoptZone(result.fund)
+    return result
   })
 }
 
@@ -264,6 +299,8 @@ export function createMember(name: string, tierId: number | null, joinedOn: stri
 export interface MemberPatch {
   name?: string
   tierId?: number | null
+  /** "YYYY-MM", from which month `tierId` holds (ADR-040's "Mulai bulan"). Only with `tierId`. */
+  tierEffectiveFrom?: string
   joinedOn?: string
   inactiveOn?: string | null
 }
@@ -272,6 +309,7 @@ export function updateMember(id: number, patch: MemberPatch): Promise<Member> {
   const body: Record<string, unknown> = {}
   if (patch.name !== undefined) body.name = patch.name
   if (patch.tierId !== undefined) body.tier_id = patch.tierId
+  if (patch.tierEffectiveFrom !== undefined) body.tier_effective_from = patch.tierEffectiveFrom
   if (patch.joinedOn !== undefined) body.joined_on = patch.joinedOn
   if (patch.inactiveOn !== undefined) body.inactive_on = patch.inactiveOn
   return apiFetch<Member>(`/api/members/${id}`, {

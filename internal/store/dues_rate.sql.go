@@ -10,23 +10,34 @@ import (
 )
 
 const createDuesRate = `-- name: CreateDuesRate :one
-INSERT INTO dues_rate (tier_id, amount, effective_from, created_at)
-VALUES (?, ?, ?, ?)
-RETURNING id, tier_id, amount, effective_from, created_at
+
+INSERT INTO dues_rate (tier_id, amount, effective_from, correction, deleted, created_at)
+VALUES (?, ?, ?, ?, ?, ?)
+RETURNING id, tier_id, amount, effective_from, correction, deleted, created_at
 `
 
 type CreateDuesRateParams struct {
 	TierID        int64
 	Amount        int64
 	EffectiveFrom string
+	Correction    int64
+	Deleted       int64
 	CreatedAt     int64
 }
 
+// dues_rate (ADR-040): a mistake is a new row (the next correction of its month),
+// never an UPDATE; a deletion is a deleting correction. Pricing reads go through
+// the dues_rate_standing view (schema file). internal/db's guard test fails a
+// direct read of the table other than GetDuesRateForFund, LatestDuesRateOfMonth
+// and ListDuesRatesByFund, and any UPDATE or DELETE other than
+// DeleteDuesRatesByTier (dues_tier.sql) and restore's clear-all.
 func (q *Queries) CreateDuesRate(ctx context.Context, arg CreateDuesRateParams) (DuesRate, error) {
 	row := q.db.QueryRowContext(ctx, createDuesRate,
 		arg.TierID,
 		arg.Amount,
 		arg.EffectiveFrom,
+		arg.Correction,
+		arg.Deleted,
 		arg.CreatedAt,
 	)
 	var i DuesRate
@@ -35,25 +46,15 @@ func (q *Queries) CreateDuesRate(ctx context.Context, arg CreateDuesRateParams) 
 		&i.TierID,
 		&i.Amount,
 		&i.EffectiveFrom,
+		&i.Correction,
+		&i.Deleted,
 		&i.CreatedAt,
 	)
 	return i, err
 }
 
-const deleteDuesRate = `-- name: DeleteDuesRate :exec
-DELETE FROM dues_rate
-WHERE id = ?
-`
-
-// What makes a wrong-month rate correctable: UNIQUE (tier_id, effective_from)
-// refuses the corrected row otherwise.
-func (q *Queries) DeleteDuesRate(ctx context.Context, id int64) error {
-	_, err := q.db.ExecContext(ctx, deleteDuesRate, id)
-	return err
-}
-
 const getDuesRateForFund = `-- name: GetDuesRateForFund :one
-SELECT dues_rate.id, dues_rate.tier_id, dues_rate.amount, dues_rate.effective_from, dues_rate.created_at
+SELECT dues_rate.id, dues_rate.tier_id, dues_rate.amount, dues_rate.effective_from, dues_rate.correction, dues_rate.deleted, dues_rate.created_at
 FROM dues_rate
 JOIN dues_tier ON dues_tier.id = dues_rate.tier_id
 WHERE dues_rate.id = ? AND dues_tier.fund_id = ?
@@ -64,10 +65,9 @@ type GetDuesRateForFundParams struct {
 	FundID int64
 }
 
-// The lookup PATCH and DELETE both do ahead of the write: an UPDATE's
-// RETURNING answers an unknown id with sql.ErrNoRows, but a DELETE affecting
-// zero rows raises nothing. dues_rate has no fund_id, so scope comes through
-// its tier (#188).
+// The by-id lookup PATCH and DELETE start from (a named exception to the view
+// rule: it must find a row that no longer stands, to refuse it). dues_rate has
+// no fund_id, so scope comes through its tier (#188).
 func (q *Queries) GetDuesRateForFund(ctx context.Context, arg GetDuesRateForFundParams) (DuesRate, error) {
 	row := q.db.QueryRowContext(ctx, getDuesRateForFund, arg.ID, arg.FundID)
 	var i DuesRate
@@ -76,14 +76,16 @@ func (q *Queries) GetDuesRateForFund(ctx context.Context, arg GetDuesRateForFund
 		&i.TierID,
 		&i.Amount,
 		&i.EffectiveFrom,
+		&i.Correction,
+		&i.Deleted,
 		&i.CreatedAt,
 	)
 	return i, err
 }
 
 const getEffectiveDuesRate = `-- name: GetEffectiveDuesRate :one
-SELECT id, tier_id, amount, effective_from, created_at
-FROM dues_rate
+SELECT id, tier_id, amount, effective_from, correction, created_at
+FROM dues_rate_standing
 WHERE tier_id = ? AND effective_from <= ?
 ORDER BY effective_from DESC
 LIMIT 1
@@ -94,33 +96,69 @@ type GetEffectiveDuesRateParams struct {
 	EffectiveFrom string
 }
 
-// The rate in force for a period: the latest row whose effective_from is at or
-// before it. No row is a legitimate answer (a tier whose rate is not yet
-// decided). effective_from is 'YYYY-MM', so string order is chronological.
-func (q *Queries) GetEffectiveDuesRate(ctx context.Context, arg GetEffectiveDuesRateParams) (DuesRate, error) {
+// The rate in force for a period: the latest month at or before it that still
+// has a rate. No row is a legitimate answer (a tier whose rate is not yet
+// decided, or whose only rates were deleted). effective_from is 'YYYY-MM', so
+// string order is chronological.
+func (q *Queries) GetEffectiveDuesRate(ctx context.Context, arg GetEffectiveDuesRateParams) (DuesRateStanding, error) {
 	row := q.db.QueryRowContext(ctx, getEffectiveDuesRate, arg.TierID, arg.EffectiveFrom)
+	var i DuesRateStanding
+	err := row.Scan(
+		&i.ID,
+		&i.TierID,
+		&i.Amount,
+		&i.EffectiveFrom,
+		&i.Correction,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
+const latestDuesRateOfMonth = `-- name: LatestDuesRateOfMonth :one
+SELECT id, tier_id, amount, effective_from, correction, deleted, created_at
+FROM dues_rate
+WHERE tier_id = ? AND effective_from = ?
+ORDER BY correction DESC
+LIMIT 1
+`
+
+type LatestDuesRateOfMonthParams struct {
+	TierID        int64
+	EffectiveFrom string
+}
+
+// The next-correction read (a named exception to the view rule): the row that
+// stands for this tier and month, deletion included, or no row when the month
+// has none. It must see a deleting correction, which the view hides, because it
+// decides between "next correction" and "UNIQUE collision". Ordered by
+// correction, never by id or created_at.
+func (q *Queries) LatestDuesRateOfMonth(ctx context.Context, arg LatestDuesRateOfMonthParams) (DuesRate, error) {
+	row := q.db.QueryRowContext(ctx, latestDuesRateOfMonth, arg.TierID, arg.EffectiveFrom)
 	var i DuesRate
 	err := row.Scan(
 		&i.ID,
 		&i.TierID,
 		&i.Amount,
 		&i.EffectiveFrom,
+		&i.Correction,
+		&i.Deleted,
 		&i.CreatedAt,
 	)
 	return i, err
 }
 
 const listDuesRatesByFund = `-- name: ListDuesRatesByFund :many
-SELECT dues_rate.id, dues_rate.tier_id, dues_rate.amount, dues_rate.effective_from, dues_rate.created_at
+SELECT dues_rate.id, dues_rate.tier_id, dues_rate.amount, dues_rate.effective_from, dues_rate.correction, dues_rate.deleted, dues_rate.created_at
 FROM dues_rate
 JOIN dues_tier ON dues_tier.id = dues_rate.tier_id
 WHERE dues_tier.fund_id = ?
 ORDER BY dues_rate.id
 `
 
-// The backup export's read (ADR-012): every rate across the fund's tiers,
-// scoped through dues_tier. Ordered by id only for deterministic export bytes,
-// not by effective date.
+// The backup export's read (ADR-012, a named exception to the view rule): every
+// row of the fund's tiers, superseded and deleting ones included, because the
+// trail is the data. Ordered by id only for deterministic export bytes, not by
+// effective date.
 func (q *Queries) ListDuesRatesByFund(ctx context.Context, fundID int64) ([]DuesRate, error) {
 	rows, err := q.db.QueryContext(ctx, listDuesRatesByFund, fundID)
 	if err != nil {
@@ -135,6 +173,8 @@ func (q *Queries) ListDuesRatesByFund(ctx context.Context, fundID int64) ([]Dues
 			&i.TierID,
 			&i.Amount,
 			&i.EffectiveFrom,
+			&i.Correction,
+			&i.Deleted,
 			&i.CreatedAt,
 		); err != nil {
 			return nil, err
@@ -151,26 +191,28 @@ func (q *Queries) ListDuesRatesByFund(ctx context.Context, fundID int64) ([]Dues
 }
 
 const listDuesRatesByTier = `-- name: ListDuesRatesByTier :many
-SELECT id, tier_id, amount, effective_from, created_at
-FROM dues_rate
+SELECT id, tier_id, amount, effective_from, correction, created_at
+FROM dues_rate_standing
 WHERE tier_id = ?
 ORDER BY effective_from
 `
 
-func (q *Queries) ListDuesRatesByTier(ctx context.Context, tierID int64) ([]DuesRate, error) {
+// The Golongan screen's list: the rates in force, oldest month first.
+func (q *Queries) ListDuesRatesByTier(ctx context.Context, tierID int64) ([]DuesRateStanding, error) {
 	rows, err := q.db.QueryContext(ctx, listDuesRatesByTier, tierID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []DuesRate{}
+	items := []DuesRateStanding{}
 	for rows.Next() {
-		var i DuesRate
+		var i DuesRateStanding
 		if err := rows.Scan(
 			&i.ID,
 			&i.TierID,
 			&i.Amount,
 			&i.EffectiveFrom,
+			&i.Correction,
 			&i.CreatedAt,
 		); err != nil {
 			return nil, err
@@ -186,29 +228,90 @@ func (q *Queries) ListDuesRatesByTier(ctx context.Context, tierID int64) ([]Dues
 	return items, nil
 }
 
-const updateDuesRate = `-- name: UpdateDuesRate :one
-UPDATE dues_rate
-SET amount = ?
-WHERE id = ?
-RETURNING id, tier_id, amount, effective_from, created_at
+const listDuesRatesForMemberPricing = `-- name: ListDuesRatesForMemberPricing :many
+SELECT dr.id, dr.tier_id, dr.amount, dr.effective_from, dr.correction, dr.created_at
+FROM dues_rate_standing dr
+WHERE dr.tier_id IN (
+  SELECT mt.tier_id FROM member_tier_standing mt
+  WHERE mt.fund_id = ? AND mt.member_id = ? AND mt.tier_id IS NOT NULL
+)
+ORDER BY dr.tier_id, dr.effective_from
 `
 
-type UpdateDuesRateParams struct {
-	Amount int64
-	ID     int64
+type ListDuesRatesForMemberPricingParams struct {
+	FundID   int64
+	MemberID int64
 }
 
-// Corrects a mistyped amount. effective_from stays fixed: a rate filed against
-// the wrong month is deleted and re-posted, not moved.
-func (q *Queries) UpdateDuesRate(ctx context.Context, arg UpdateDuesRateParams) (DuesRate, error) {
-	row := q.db.QueryRowContext(ctx, updateDuesRate, arg.Amount, arg.ID)
-	var i DuesRate
-	err := row.Scan(
-		&i.ID,
-		&i.TierID,
-		&i.Amount,
-		&i.EffectiveFrom,
-		&i.CreatedAt,
-	)
-	return i, err
+// The rates that price one member (OutstandingDuesForMember, paidThrough): those
+// of every tier the member has a standing row for. A tier named only by a
+// superseded row prices nothing, so it is not fetched.
+func (q *Queries) ListDuesRatesForMemberPricing(ctx context.Context, arg ListDuesRatesForMemberPricingParams) ([]DuesRateStanding, error) {
+	rows, err := q.db.QueryContext(ctx, listDuesRatesForMemberPricing, arg.FundID, arg.MemberID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []DuesRateStanding{}
+	for rows.Next() {
+		var i DuesRateStanding
+		if err := rows.Scan(
+			&i.ID,
+			&i.TierID,
+			&i.Amount,
+			&i.EffectiveFrom,
+			&i.Correction,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listDuesRatesForPricing = `-- name: ListDuesRatesForPricing :many
+SELECT dr.id, dr.tier_id, dr.amount, dr.effective_from, dr.correction, dr.created_at
+FROM dues_rate_standing dr
+JOIN dues_tier ON dues_tier.id = dr.tier_id
+WHERE dues_tier.fund_id = ?
+ORDER BY dr.tier_id, dr.effective_from
+`
+
+// The rates that price a roster (DuesStatusForPeriod): every tier's rates in
+// force, ordered tier then month for the Go fold. One query however many members.
+func (q *Queries) ListDuesRatesForPricing(ctx context.Context, fundID int64) ([]DuesRateStanding, error) {
+	rows, err := q.db.QueryContext(ctx, listDuesRatesForPricing, fundID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []DuesRateStanding{}
+	for rows.Next() {
+		var i DuesRateStanding
+		if err := rows.Scan(
+			&i.ID,
+			&i.TierID,
+			&i.Amount,
+			&i.EffectiveFrom,
+			&i.Correction,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }

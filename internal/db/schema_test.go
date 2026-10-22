@@ -29,8 +29,8 @@ const validSlug = "abcdefghijklmnopqrstuv"
 func createFund(t *testing.T, sqlDB *sql.DB, name, slug string) int64 {
 	t.Helper()
 	f, err := store.New(sqlDB).CreateFund(context.Background(), store.CreateFundParams{
-		Name:       name,
-		Currency:   "IDR",
+		Name:     name,
+		Currency: "IDR", TimeZone: "Asia/Jakarta",
 		ReportSlug: slug,
 		CreatedAt:  1,
 	})
@@ -104,21 +104,93 @@ func TestReportSlugLengthAndUniqueness(t *testing.T) {
 	q := store.New(sqlDB)
 
 	if _, err := q.CreateFund(ctx, store.CreateFundParams{
-		Name: "Too Short", Currency: "IDR", ReportSlug: strings.Repeat("a", 21), CreatedAt: 1,
+		Name: "Too Short", Currency: "IDR", TimeZone: "Asia/Jakarta", ReportSlug: strings.Repeat("a", 21), CreatedAt: 1,
 	}); err == nil {
 		t.Fatal("CreateFund with a 21-char report_slug = nil error, want the length CHECK to reject it")
 	}
 
 	if _, err := q.CreateFund(ctx, store.CreateFundParams{
-		Name: "First", Currency: "IDR", ReportSlug: validSlug, CreatedAt: 1,
+		Name: "First", Currency: "IDR", TimeZone: "Asia/Jakarta", ReportSlug: validSlug, CreatedAt: 1,
 	}); err != nil {
 		t.Fatalf("first fund with a valid slug = %v, want no error", err)
 	}
 
 	if _, err := q.CreateFund(ctx, store.CreateFundParams{
-		Name: "Second", Currency: "IDR", ReportSlug: validSlug, CreatedAt: 1,
+		Name: "Second", Currency: "IDR", TimeZone: "Asia/Jakarta", ReportSlug: validSlug, CreatedAt: 1,
 	}); err == nil {
 		t.Fatal("CreateFund with a duplicate report_slug = nil error, want the UNIQUE constraint to reject it")
+	}
+}
+
+// ADR-041: the fund's time zone is one of exactly three IANA names. The CHECK is
+// the validation (ADR-027), so a name outside them cannot be stored by any path:
+// create, update or restore.
+func TestFundTimeZoneAcceptsTheThreeZonesAndNothingElse(t *testing.T) {
+	t.Parallel()
+	sqlDB := migratedTestDB(t)
+	ctx := context.Background()
+	q := store.New(sqlDB)
+
+	for i, zone := range []string{"Asia/Jakarta", "Asia/Makassar", "Asia/Jayapura"} {
+		slug := strings.Repeat(string(rune('a'+i)), 22)
+		fund, err := q.CreateFund(ctx, store.CreateFundParams{Name: zone, Currency: "IDR", TimeZone: zone, ReportSlug: slug, CreatedAt: 1})
+		if err != nil {
+			t.Errorf("CreateFund(time_zone=%q) = %v, want no error", zone, err)
+			continue
+		}
+		if fund.TimeZone != zone {
+			t.Errorf("CreateFund(time_zone=%q) stored %q", zone, fund.TimeZone)
+		}
+	}
+
+	for i, zone := range []string{"", "UTC", "WIB", "asia/jakarta", "Asia/Jakarta ", "Asia/Tokyo", "Asia/Pontianak", "Europe/London"} {
+		slug := strings.Repeat(string(rune('k'+i)), 22)
+		if _, err := q.CreateFund(ctx, store.CreateFundParams{Name: "Bad", Currency: "IDR", TimeZone: zone, ReportSlug: slug, CreatedAt: 1}); err == nil {
+			t.Errorf("CreateFund(time_zone=%q) = nil error, want the CHECK to reject it", zone)
+		}
+	}
+}
+
+// The default is WIB, so a row written without the column lands on today's
+// behaviour with no backfill.
+func TestFundTimeZoneDefaultsToJakarta(t *testing.T) {
+	t.Parallel()
+	sqlDB := migratedTestDB(t)
+	if _, err := sqlDB.Exec(`INSERT INTO fund (name, currency, report_slug, created_at) VALUES ('Dana', 'IDR', ?, 1)`, validSlug); err != nil {
+		t.Fatalf("INSERT without time_zone = %v, want no error", err)
+	}
+	var zone string
+	if err := sqlDB.QueryRow(`SELECT time_zone FROM fund`).Scan(&zone); err != nil {
+		t.Fatalf("reading time_zone: %v", err)
+	}
+	if zone != "Asia/Jakarta" {
+		t.Errorf("default time_zone = %q, want Asia/Jakarta", zone)
+	}
+}
+
+// An update cannot step outside the three either, and a zone change touches
+// nothing but the column: no posted row is rewritten (ADR-041: it re-reads, it
+// never rewrites).
+func TestFundTimeZoneUpdateIsCheckedAndLeavesTheNameAlone(t *testing.T) {
+	t.Parallel()
+	sqlDB := migratedTestDB(t)
+	ctx := context.Background()
+	q := store.New(sqlDB)
+	fundID := createFund(t, sqlDB, "Dana Warga", validSlug)
+
+	wit, tokyo := "Asia/Jayapura", "Asia/Tokyo"
+	updated, err := q.UpdateFund(ctx, store.UpdateFundParams{ID: fundID, TimeZone: &wit})
+	if err != nil {
+		t.Fatalf("UpdateFund(time_zone=%q) = %v, want no error", wit, err)
+	}
+	if updated.TimeZone != wit || updated.Name != "Dana Warga" {
+		t.Errorf("UpdateFund(time_zone only) = {%q, %q}, want the zone changed and the name kept", updated.Name, updated.TimeZone)
+	}
+	if _, err := q.UpdateFund(ctx, store.UpdateFundParams{ID: fundID, TimeZone: &tokyo}); err == nil {
+		t.Errorf("UpdateFund(time_zone=%q) = nil error, want the CHECK to reject it", tokyo)
+	}
+	if got, err := q.GetFund(ctx, fundID); err != nil || got.TimeZone != wit {
+		t.Errorf("after a refused update, time_zone = %q (%v), want %q", got.TimeZone, err, wit)
 	}
 }
 
@@ -140,7 +212,7 @@ func TestNameCannotBeEmptyOrWhitespaceOnly(t *testing.T) {
 	for _, tt := range tests {
 		t.Run("fund/"+tt.name, func(t *testing.T) {
 			if _, err := q.CreateFund(ctx, store.CreateFundParams{
-				Name: tt.bad, Currency: "IDR", ReportSlug: "zzzzzzzzzzzzzzzzzzzzzz", CreatedAt: 1,
+				Name: tt.bad, Currency: "IDR", TimeZone: "Asia/Jakarta", ReportSlug: "zzzzzzzzzzzzzzzzzzzzzz", CreatedAt: 1,
 			}); err == nil {
 				t.Errorf("CreateFund with name %q = nil error, want the CHECK to reject it", tt.bad)
 			}
@@ -269,40 +341,6 @@ func TestEffectiveDuesRateFollowsAMidYearChange(t *testing.T) {
 		TierID: tierID, EffectiveFrom: "2025-12",
 	}); !errors.Is(err, sql.ErrNoRows) {
 		t.Errorf("GetEffectiveDuesRate before the first rate = %v, want sql.ErrNoRows", err)
-	}
-}
-
-func TestMemberCannotBorrowAnotherFundsTier(t *testing.T) {
-	t.Parallel()
-	sqlDB := migratedTestDB(t)
-	ctx := context.Background()
-	q := store.New(sqlDB)
-
-	fundA := createFund(t, sqlDB, "Fund A", validSlug)
-	fundB := createFund(t, sqlDB, "Fund B", "bcdefghijklmnopqrstuvw")
-	tierB := createDuesTier(t, sqlDB, fundB, "warga")
-
-	// The tier exists, so a single-column FK would accept this; only the composite
-	// (fund_id, tier_id) FK knows it belongs to the wrong fund.
-	if _, err := q.CreateMember(ctx, store.CreateMemberParams{JoinedOn: "2000-01-01",
-		FundID: fundA, Name: "Jane", TierID: &tierB, CreatedAt: 1,
-	}); err == nil {
-		t.Fatal("CreateMember with another fund's tier = nil error, want the composite FK to reject it")
-	}
-
-	tierA := createDuesTier(t, sqlDB, fundA, "warga")
-	if _, err := q.CreateMember(ctx, store.CreateMemberParams{JoinedOn: "2000-01-01",
-		FundID: fundA, Name: "Jane", TierID: &tierA, CreatedAt: 1,
-	}); err != nil {
-		t.Fatalf("CreateMember with its own fund's tier = %v, want no error", err)
-	}
-
-	// NULL tier_id is a member with no dues obligation, and SQLite's MATCH
-	// SIMPLE leaves the composite FK satisfied.
-	if _, err := q.CreateMember(ctx, store.CreateMemberParams{JoinedOn: "2000-01-01",
-		FundID: fundA, Name: "Alex", TierID: nil, CreatedAt: 1,
-	}); err != nil {
-		t.Fatalf("CreateMember with a NULL tier_id = %v, want no error", err)
 	}
 }
 

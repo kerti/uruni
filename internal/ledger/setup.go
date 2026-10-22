@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/kerti/uruni/internal/store"
+	"github.com/kerti/uruni/internal/tz"
 )
 
 // reportSlugAlphabet is base62: digits and both cases, so the slug drops into
@@ -75,10 +76,20 @@ type SetUpFundParams struct {
 	// fund"). Non-empty after trimming.
 	FundName string
 
+	// TimeZone is the fund's time zone (ADR-041), one of tz.Names(); empty means
+	// tz.Default. Any other name is ErrInvalidArgument, because the opening
+	// balances' ceiling cannot be read without it.
+	TimeZone string
+
 	// Accounts is every location the fund starts with (#78). At least one is
 	// required: a fund with no accounts could record nothing (every transaction
 	// needs an account_id).
 	Accounts []AccountInput
+
+	// Now is the clock the opening balances' ceiling is read from, in TimeZone
+	// (ADR-041): the fund row does not exist yet, so the zone comes from here.
+	// Zero means time.Now().
+	Now time.Time
 }
 
 // SetUpFundResult names every row the caller needs immediately: the whole
@@ -109,8 +120,8 @@ type SetUpFundResult struct {
 // balance's failures are refused before withTx opens (validateOpeningBalance
 // rejects a negative amount or malformed date on every account first), and a
 // location born without one has no later standalone way to gain one. Members,
-// tiers and rates are not here: members carry no cross-row invariant beyond
-// the schema (ADR-027's carve-out), and tiers/rates have ordinary unique
+// tiers and rates are not here: a member is written with its own first tier
+// row by CreateMember (ADR-040), and tiers/rates have ordinary unique
 // constraints a create-then-retry handles with a 409. Folding them in would
 // let one mistyped tier reference abort a good fund and its accounts. The
 // caller composes them afterward as retriable calls.
@@ -126,18 +137,27 @@ func (l *Ledger) SetUpFund(ctx context.Context, p SetUpFundParams) (SetUpFundRes
 	if len(p.Accounts) == 0 {
 		return SetUpFundResult{}, fmt.Errorf("%w: at least one account is required", ErrInvalidArgument)
 	}
+	timeZone := p.TimeZone
+	if timeZone == "" {
+		timeZone = tz.Default
+	}
+	loc, err := tz.Load(timeZone)
+	if err != nil {
+		return SetUpFundResult{}, fmt.Errorf("%w: time_zone: %v", ErrInvalidArgument, err)
+	}
+	window := windowAt(p.Now, loc)
 	// Every opening balance is validated before withTx opens: a refused one
 	// anywhere in the batch must leave no fund and no account behind.
 	for _, a := range p.Accounts {
 		if a.OpeningBalance != nil {
-			if err := validateOpeningBalance(*a.OpeningBalance); err != nil {
+			if err := validateOpeningBalance(*a.OpeningBalance, window.entry()); err != nil {
 				return SetUpFundResult{}, err
 			}
 		}
 	}
 
 	var result SetUpFundResult
-	err := l.withTx(ctx, func(q store.Querier) error {
+	err = l.withTx(ctx, func(q store.Querier) error {
 		existing, err := q.ListFunds(ctx)
 		if err != nil {
 			return fmt.Errorf("checking for an existing fund: %w", err)
@@ -154,7 +174,7 @@ func (l *Ledger) SetUpFund(ctx context.Context, p SetUpFundParams) (SetUpFundRes
 		now := time.Now().Unix()
 
 		fund, err := q.CreateFund(ctx, store.CreateFundParams{
-			Name: name, Currency: "IDR", ReportSlug: slug, CreatedAt: now,
+			Name: name, Currency: "IDR", TimeZone: timeZone, ReportSlug: slug, CreatedAt: now,
 		})
 		if err != nil {
 			return fmt.Errorf("creating fund: %w", err)

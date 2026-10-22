@@ -1,29 +1,20 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Undo2 } from 'lucide-react'
 
-import DateField from '@/components/DateField'
+import ReversalDateLine from '@/components/ReversalDateLine'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import Loading from '@/components/states/Loading'
 import ErrorState from '@/components/states/ErrorState'
 import { copy } from '@/copy/id'
-import { reverseDuesPayment } from '@/lib/dues'
-import { formatIsoDate, dateBounds } from '@/lib/dates'
+import { formatIsoDate } from '@/lib/dates'
 import { formatIDR } from '@/lib/money'
-import { listTransactions } from '@/lib/transactions'
+import { listTransactions, reverseTransaction } from '@/lib/transactions'
 import { useApi } from '@/lib/useApi'
 import type { Transaction } from '@/lib/transactions'
 
 const text = copy.dues.history
-
-/** Local YYYY-MM-DD - never toISOString(). */
-function todayISODate(): string {
-  const now = new Date()
-  const mm = String(now.getMonth() + 1).padStart(2, '0')
-  const dd = String(now.getDate()).padStart(2, '0')
-  return `${now.getFullYear()}-${mm}-${dd}`
-}
 
 /**
  * One member's dues rows for one period, with a reversal action on each
@@ -42,18 +33,16 @@ function todayISODate(): string {
  * would hide the correction that is the point of never editing a posted row.
  *
  * Nothing here decides what a reversal contains: the request carries only a
- * date and a note, and the ledger copies account, purpose, amount, member and
- * period from the reversed row. A blank reason sends null, never a generated
+ * note, and the ledger copies account, purpose, amount, member and period from
+ * the reversed row and dates it itself (ADR-042). A blank reason sends null, never a generated
  * default - the row explains itself through TransactionList's display label.
  */
 export default function MemberPayments({ memberId, period, onReversed }: { memberId: number; period: string; onReversed: () => void }) {
   const [state, run] = useApi<Transaction[]>()
   const [submitState, submitRun] = useApi<unknown>()
 
-  // Which payment's reversal form is open, if any - one at a time, so the date
-  // and note always belong to a single row.
+  // Which payment's reversal form is open, if any - one at a time.
   const [reversingId, setReversingId] = useState<number | null>(null)
-  const [occurredOn, setOccurredOn] = useState(todayISODate)
   const [note, setNote] = useState('')
 
   const loadRows = useCallback(async (): Promise<Transaction[]> => {
@@ -79,7 +68,6 @@ export default function MemberPayments({ memberId, period, onReversed }: { membe
 
   function openReversal(transactionId: number) {
     setReversingId(transactionId)
-    setOccurredOn(todayISODate())
     setNote('')
   }
 
@@ -90,7 +78,7 @@ export default function MemberPayments({ memberId, period, onReversed }: { membe
         // A blank reason sends null, never a generated default: the reversal
         // explains itself through TransactionList's display label
         // ("Pembatalan - {period} - {anggota}").
-        const result = await reverseDuesPayment(transactionId, occurredOn, trimmed === '' ? null : trimmed)
+        const result = await reverseTransaction(transactionId, trimmed === '' ? null : trimmed)
         setReversingId(null)
         // Refetch this list *and* tell the roster above to refetch: the member
         // reads as unpaid for the period again, and neither refresh is the
@@ -158,17 +146,7 @@ export default function MemberPayments({ memberId, period, onReversed }: { membe
 
             {reversingId === row.id && (
               <div className="animate-reveal flex flex-col gap-2 rounded-lg bg-muted/40 p-3">
-                <div className="flex flex-col gap-1.5">
-                  <Label htmlFor={`dues-reversal-date-${row.id}`}>{text.dateLabel}</Label>
-                  <DateField
-                    id={`dues-reversal-date-${row.id}`}
-                    value={occurredOn}
-                    onChange={setOccurredOn}
-                    bounds={dateBounds.entry()}
-                    disabled={submitting}
-                  />
-                </div>
-
+                <ReversalDateLine transaction={row} />
                 <div className="flex flex-col gap-1.5">
                   <Label htmlFor={`dues-reversal-note-${row.id}`}>{text.noteLabel}</Label>
                   <Input
@@ -187,7 +165,7 @@ export default function MemberPayments({ memberId, period, onReversed }: { membe
                   <Button type="button" variant="outline" size="lg" disabled={submitting} onClick={() => setReversingId(null)}>
                     {text.cancel}
                   </Button>
-                  <Button type="button" size="lg" disabled={submitting || occurredOn === ''} onClick={() => submitReversal(row.id)}>
+                  <Button type="button" size="lg" disabled={submitting} onClick={() => submitReversal(row.id)}>
                     {submitting ? text.submitting : text.confirm}
                   </Button>
                 </div>

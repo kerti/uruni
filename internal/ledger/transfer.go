@@ -112,6 +112,13 @@ type PostTransferBetweenAccountsParams struct {
 	// leg alone reads in the list as an unexplained arrival elsewhere. nil and an
 	// empty string both mean no note; see normalizeNote.
 	Note *string
+
+	// Now is the clock OccurredOn's ceiling is read from (ADR-041).
+	// Zero means time.Now().
+	Now time.Time
+
+	// Idempotency, when non-nil, makes the transfer safe to repeat (ADR-043).
+	Idempotency *Idempotency
 }
 
 // PostTransferBetweenAccounts moves money from one account to another within
@@ -120,6 +127,8 @@ type PostTransferBetweenAccountsParams struct {
 //
 // Either location being retired (inactive_on set) is ErrAccountInactive and
 // nothing is written (#444).
+//
+// With p.Idempotency set (ADR-043), a repeat returns the first transfer.
 func (l *Ledger) PostTransferBetweenAccounts(ctx context.Context, p PostTransferBetweenAccountsParams) (store.Transfer, error) {
 	if p.Amount <= 0 {
 		return store.Transfer{}, fmt.Errorf("%w: amount must be positive, got %d", ErrInvalidArgument, p.Amount.Int64())
@@ -127,7 +136,11 @@ func (l *Ledger) PostTransferBetweenAccounts(ctx context.Context, p PostTransfer
 	if err := CheckAmountCeiling("amount", p.Amount); err != nil {
 		return store.Transfer{}, err
 	}
-	if err := validateOccurredOn(p.OccurredOn); err != nil {
+	window, err := l.windowFor(ctx, l.q, p.FundID, p.Now)
+	if err != nil {
+		return store.Transfer{}, err
+	}
+	if err := validateOccurredOn("occurred_on", p.OccurredOn, window.entry()); err != nil {
 		return store.Transfer{}, err
 	}
 
@@ -140,16 +153,13 @@ func (l *Ledger) PostTransferBetweenAccounts(ctx context.Context, p PostTransfer
 	// Both locations are checked inside the write's transaction: money neither
 	// leaves a retired location nor arrives in one (#444). To empty a retired
 	// location, reinstate it, move, retire again.
-	var transfer store.Transfer
-	err := l.withTx(ctx, func(q store.Querier) error {
+	transfer, err := withIdempotency(ctx, l, p.Idempotency, func(q store.Querier) (store.Transfer, error) {
 		for _, accountID := range [...]int64{p.FromAccountID, p.ToAccountID} {
 			if err := refuseInactiveAccount(ctx, q, p.FundID, accountID); err != nil {
-				return err
+				return store.Transfer{}, err
 			}
 		}
-		var err error
-		transfer, err = l.postTransferPairTx(ctx, q, p.FundID, "between_accounts", from, to, p.Amount, p.OccurredOn, normalizeNote(p.Note), nil, nil)
-		return err
+		return l.postTransferPairTx(ctx, q, p.FundID, "between_accounts", from, to, p.Amount, p.OccurredOn, normalizeNote(p.Note), nil, nil)
 	})
 	if err != nil {
 		return store.Transfer{}, fmt.Errorf("posting transfer between accounts: %w", err)

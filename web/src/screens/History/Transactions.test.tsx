@@ -375,3 +375,41 @@ describe('Transactions tab: correcting a pos (#276, ADR-033)', () => {
     expect(screen.queryByText(copy.purposeCorrection.heading)).not.toBeInTheDocument()
   })
 })
+
+describe('Transactions tab: reversing a row (ADR-042)', () => {
+  it('reverses from the entry detail, shows the one success line, and reloads the list', async () => {
+    const posts: { url: string; body: unknown }[] = []
+    let reversedNow = false
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = new URL(String(input), 'http://localhost')
+        if (url.pathname === '/api/balances') return jsonResponse(balances)
+        if (url.pathname === '/api/purposes') return jsonResponse(purposes)
+        if (url.pathname === '/api/members') return jsonResponse({ members, next_cursor: null })
+        if (url.pathname.endsWith('/reversal') && init?.method === 'POST') {
+          posts.push({ url: url.pathname, body: JSON.parse(String(init.body)) })
+          reversedNow = true
+          return jsonResponse({ ...row(99, ''), kind: 'adjustment' }, 201)
+        }
+        if (url.pathname === '/api/transactions') {
+          return jsonResponse({
+            transactions: [{ ...row(5, 'Salah arah'), reversible: !reversedNow, reversed: reversedNow, counted: false }],
+            next_cursor: null,
+          })
+        }
+        return jsonResponse({ error: { code: 'not_found', message: 'x' } }, 404)
+      }),
+    )
+    const user = userEvent.setup()
+    renderAt('/history/transactions')
+
+    await user.click(await screen.findByRole('button', { name: /^Lihat rincian:/ }))
+    await user.click(await screen.findByRole('button', { name: text.reverse }))
+    await user.click(await screen.findByRole('button', { name: text.reverseConfirm }))
+
+    expect(await screen.findByText('Transaksi dibatalkan.')).toBeInTheDocument()
+    expect(posts).toEqual([{ url: '/api/transactions/5/reversal', body: { note: null } }])
+    expect(await screen.findByText('Sudah dibatalkan')).toBeInTheDocument()
+  })
+})

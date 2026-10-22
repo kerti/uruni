@@ -50,6 +50,8 @@ func toTransferResponse(t store.Transfer) transferResponse {
 // Nothing is validated here (ADR-027): a non-positive amount, malformed date
 // and identical from/to legs are the ledger's ErrInvalidArgument, a 400
 // through the shared mapper with the ledger's message.
+//
+// Keyed (ADR-043).
 func (a *api) createTransfer(w http.ResponseWriter, r *http.Request) {
 	var req transferRequest
 	if !decodeJSON(w, r, &req) {
@@ -61,7 +63,9 @@ func (a *api) createTransfer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	idem := idempotencyFrom(r)
 	transfer, err := a.ledger.PostTransferBetweenAccounts(r.Context(), ledger.PostTransferBetweenAccountsParams{
+		Now:           a.now(),
 		FundID:        fund.ID,
 		PurposeID:     req.PurposeID,
 		FromAccountID: req.FromAccountID,
@@ -69,11 +73,13 @@ func (a *api) createTransfer(w http.ResponseWriter, r *http.Request) {
 		Amount:        money.Amount(req.Amount),
 		OccurredOn:    req.OccurredOn,
 		Note:          req.Note,
+		Idempotency:   idem,
 	})
 	if err != nil {
 		mapLedgerError(w, a.log(r), err)
 		return
 	}
 
+	markReplay(w, r, a.log(r), idem)
 	writeJSON(w, http.StatusCreated, toTransferResponse(transfer))
 }

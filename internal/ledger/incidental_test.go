@@ -386,7 +386,7 @@ func TestRenameIncidentalIsFundScoped(t *testing.T) {
 
 	q := store.New(l.db)
 	other, err := q.CreateFund(ctx, store.CreateFundParams{
-		Name: "Other Fund", Currency: "IDR", ReportSlug: "zyxwvutsrqponmlkjihgfe", CreatedAt: 1,
+		Name: "Other Fund", Currency: "IDR", TimeZone: "Asia/Jakarta", ReportSlug: "zyxwvutsrqponmlkjihgfe", CreatedAt: 1,
 	})
 	if err != nil {
 		t.Fatalf("CreateFund() = %v, want no error", err)
@@ -705,7 +705,7 @@ func TestCloseIncidentalAndRollPairFailureLeavesEnvelopeOpen(t *testing.T) {
 	}
 
 	other, err := q.CreateFund(ctx, store.CreateFundParams{
-		Name: "Other Fund", Currency: "IDR", ReportSlug: "zyxwvutsrqponmlkjihgfe", CreatedAt: 1,
+		Name: "Other Fund", Currency: "IDR", TimeZone: "Asia/Jakarta", ReportSlug: "zyxwvutsrqponmlkjihgfe", CreatedAt: 1,
 	})
 	if err != nil {
 		t.Fatalf("CreateFund() = %v, want no error", err)
@@ -780,7 +780,7 @@ func TestASecondFundsIncidentalIsInvisibleToTheFirstFund(t *testing.T) {
 
 	q := store.New(l.db)
 	other, err := q.CreateFund(ctx, store.CreateFundParams{
-		Name: "Other Fund", Currency: "IDR", ReportSlug: "zyxwvutsrqponmlkjihgfe", CreatedAt: 1,
+		Name: "Other Fund", Currency: "IDR", TimeZone: "Asia/Jakarta", ReportSlug: "zyxwvutsrqponmlkjihgfe", CreatedAt: 1,
 	})
 	if err != nil {
 		t.Fatalf("CreateFund() = %v, want no error", err)
@@ -812,7 +812,7 @@ func TestClosingASecondFundsIncidentalAcrossTheBoundaryIsRefused(t *testing.T) {
 
 	q := store.New(l.db)
 	other, err := q.CreateFund(ctx, store.CreateFundParams{
-		Name: "Other Fund", Currency: "IDR", ReportSlug: "zyxwvutsrqponmlkjihgfe", CreatedAt: 1,
+		Name: "Other Fund", Currency: "IDR", TimeZone: "Asia/Jakarta", ReportSlug: "zyxwvutsrqponmlkjihgfe", CreatedAt: 1,
 	})
 	if err != nil {
 		t.Fatalf("CreateFund() = %v, want no error", err)
@@ -973,9 +973,10 @@ func TestGetIncidentalDetailExcludesTheRolledOutLegAfterAPositiveClose(t *testin
 // A cancelled contribution (ADR-034) is neither collected nor spent: a dev
 // envelope read "Terkumpul 345.000 / Terpakai 210.000" with nothing paid out,
 // because the reversals counted as disbursements and the cancelled rows as
-// collections. Both halves drop; collected minus disbursed still equals the
+// collections. The reversal nets as a minus on its original's bucket (ADR-042),
+// so the pair reads as nothing; collected minus disbursed still equals the
 // envelope's balance.
-func TestGetIncidentalDetailDropsBothHalvesOfACancelledContribution(t *testing.T) {
+func TestGetIncidentalDetailNetsACancelledContributionAgainstItsReversal(t *testing.T) {
 	t.Parallel()
 	l := newTestLedger(t)
 	f := newFixture(t, l)
@@ -1005,8 +1006,8 @@ func TestGetIncidentalDetailDropsBothHalvesOfACancelledContribution(t *testing.T
 	triasRow := post(200_000, &trias)
 
 	for _, id := range []int64{triasRow, ijahSecond} {
-		if _, err := l.ReverseDuesPayment(ctx, ReverseDuesPaymentParams{FundID: f.fundID, TransactionID: id, OccurredOn: "2026-08-03"}); err != nil {
-			t.Fatalf("ReverseDuesPayment(%d) = %v, want no error", id, err)
+		if _, err := l.ReverseTransaction(ctx, ReverseTransactionParams{FundID: f.fundID, TransactionID: id}); err != nil {
+			t.Fatalf("ReverseTransaction(%d) = %v, want no error", id, err)
 		}
 	}
 
@@ -1252,7 +1253,7 @@ func TestReopenIncidentalIsFundScoped(t *testing.T) {
 	q := store.New(l.db)
 
 	other, err := q.CreateFund(ctx, store.CreateFundParams{
-		Name: "Other Fund", Currency: "IDR", ReportSlug: "zyxwvutsrqponmlkjihgfe", CreatedAt: 1,
+		Name: "Other Fund", Currency: "IDR", TimeZone: "Asia/Jakarta", ReportSlug: "zyxwvutsrqponmlkjihgfe", CreatedAt: 1,
 	})
 	if err != nil {
 		t.Fatalf("CreateFund() = %v, want no error", err)

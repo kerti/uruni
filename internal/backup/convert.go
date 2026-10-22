@@ -18,7 +18,7 @@ func toUsers(rows []store.User) []User {
 func toFunds(rows []store.Fund) []Fund {
 	out := make([]Fund, 0, len(rows))
 	for _, r := range rows {
-		out = append(out, Fund{ID: r.ID, Name: r.Name, Currency: r.Currency, ReportSlug: r.ReportSlug, CreatedAt: r.CreatedAt})
+		out = append(out, Fund{ID: r.ID, Name: r.Name, Currency: r.Currency, TimeZone: r.TimeZone, ReportSlug: r.ReportSlug, CreatedAt: r.CreatedAt})
 	}
 	return out
 }
@@ -55,7 +55,7 @@ func toDuesRates(rows []store.DuesRate) []DuesRate {
 	for _, r := range rows {
 		out = append(out, DuesRate{
 			ID: r.ID, TierID: r.TierID, Amount: r.Amount,
-			EffectiveFrom: r.EffectiveFrom, CreatedAt: r.CreatedAt,
+			EffectiveFrom: r.EffectiveFrom, Correction: r.Correction, Deleted: r.Deleted == 1, CreatedAt: r.CreatedAt,
 		})
 	}
 	return out
@@ -65,8 +65,19 @@ func toMembers(rows []store.Member) []Member {
 	out := make([]Member, 0, len(rows))
 	for _, r := range rows {
 		out = append(out, Member{
-			ID: r.ID, FundID: r.FundID, Name: r.Name, TierID: r.TierID,
-			JoinedOn: &r.JoinedOn, InactiveOn: r.InactiveOn, CreatedAt: r.CreatedAt,
+			ID: r.ID, FundID: r.FundID, Name: r.Name,
+			JoinedOn: r.JoinedOn, InactiveOn: r.InactiveOn, CreatedAt: r.CreatedAt,
+		})
+	}
+	return out
+}
+
+func toMemberTiers(rows []store.MemberTier) []MemberTier {
+	out := make([]MemberTier, 0, len(rows))
+	for _, r := range rows {
+		out = append(out, MemberTier{
+			ID: r.ID, FundID: r.FundID, MemberID: r.MemberID, TierID: r.TierID,
+			EffectiveFrom: r.EffectiveFrom, Correction: r.Correction, CreatedAt: r.CreatedAt,
 		})
 	}
 	return out

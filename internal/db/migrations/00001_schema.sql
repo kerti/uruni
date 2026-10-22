@@ -8,12 +8,28 @@
 -- membership table).
 --
 -- Conventions follow docs/ADR/024-schema-conventions.md.
+--
+-- Every money column carries the ceiling 999999999999 (money.MaxAmount): the
+-- backstop for anything that writes around the ledger, a restore included. A
+-- signed column is bounded on both sides; reconciliation_line's two derived
+-- figures are the exceptions. A CHECK cannot name a Go constant, so
+-- internal/db/amount_ceiling_test.go pins the literal and fails on a money
+-- column that lacks it.
+--
+-- Every business date and period carries the floor 2000-01-01 (2000-01 for a
+-- month): the only half of the plausible window a restore enforces. The ceilings
+-- move with the clock and the fund's zone, so they are the ledger's, on write.
+-- The literals mirror internal/ledger/date_window.go; internal/db/date_floor_test.go
+-- pins them.
 
 -- +goose Up
 
 CREATE TABLE "user" (                     -- the treasurer's login; the only table not scoped to a fund (ADR-030)
   id            INTEGER PRIMARY KEY,
-  email         TEXT    NOT NULL UNIQUE CHECK (length(trim(email)) > 0),
+  -- NOCASE: the UNIQUE index and every `email = ?` compare case-insensitively.
+  -- It folds ASCII letters only (a non-ASCII capital is a different character),
+  -- and stored bytes are never rewritten. Go still trims and lower-cases on the way in.
+  email         TEXT    NOT NULL COLLATE NOCASE UNIQUE CHECK (length(trim(email)) > 0),
   password_hash TEXT    NOT NULL CHECK (length(trim(password_hash)) > 0),
   created_at    INTEGER NOT NULL
 ) STRICT;
@@ -28,10 +44,30 @@ CREATE TABLE session (                    -- a logged-in session; token is the c
 
 CREATE INDEX session_by_expiry ON session(expires_at);
 
+-- A write the phone may repeat after a lost response (ADR-043). Request-scoped
+-- like session: outside the backup, cleared by a restore, no fund_id, foreign key
+-- or immutability trigger. result is what the ledger method returned, as JSON,
+-- never the HTTP reply. Expired rows are purged by the next keyed write, never
+-- by a ticker (ADR-013).
+CREATE TABLE idempotency_key (
+  key         TEXT    PRIMARY KEY CHECK (length(key) BETWEEN 16 AND 64 AND key NOT GLOB '*[^A-Za-z0-9_-]*'),
+  fingerprint TEXT    NOT NULL CHECK (length(fingerprint) = 64),
+  result      BLOB    NOT NULL,
+  created_at  INTEGER NOT NULL,            -- UTC unix seconds (ADR-024)
+  expires_at  INTEGER NOT NULL CHECK (expires_at > created_at)
+) STRICT;
+
+CREATE INDEX idempotency_key_by_expiry ON idempotency_key(expires_at);
+
 CREATE TABLE fund (
   id          INTEGER PRIMARY KEY,
   name        TEXT    NOT NULL CHECK (length(trim(name)) > 0),
   currency    TEXT    NOT NULL DEFAULT 'IDR' CHECK (currency = 'IDR'),
+  -- ADR-041: the one place an instant becomes a day or a month. IANA names (Go and
+  -- Intl take them as is); WIB, WITA and WIT exist only as copy. Pinned to
+  -- internal/tz and web/src/lib/timeZones.ts by TestTimeZoneListsAgree.
+  time_zone   TEXT    NOT NULL DEFAULT 'Asia/Jakarta'
+              CHECK (time_zone IN ('Asia/Jakarta', 'Asia/Makassar', 'Asia/Jayapura')),
   -- Unguessability of the public report link lives here, not in an id scheme
   -- (ADR-024): 22+ base62 chars is roughly a UUID's worth of entropy.
   report_slug TEXT    NOT NULL UNIQUE CHECK (length(report_slug) >= 22),
@@ -46,7 +82,7 @@ CREATE TABLE account (                    -- location: where money physically si
   created_at INTEGER NOT NULL,
   -- A used-then-retired location (a bank switch, a tin no longer kept), not a
   -- never-used duplicate (that's DELETE). Same shape as member.inactive_on.
-  inactive_on TEXT CHECK (inactive_on IS NULL OR (date(inactive_on) IS NOT NULL AND inactive_on = date(inactive_on))),
+  inactive_on TEXT CHECK (inactive_on IS NULL OR (date(inactive_on) IS NOT NULL AND inactive_on = date(inactive_on) AND inactive_on >= '2000-01-01')),
   -- Children reference (fund_id, id) instead of id alone, so SQLite itself
   -- rejects a row whose parent belongs to another fund (ADR-024 composite FKs).
   UNIQUE (fund_id, id)
@@ -79,32 +115,88 @@ CREATE TABLE dues_rate (                  -- effective-dated, one-sided interval
   -- or before it, and ownership comes through tier_id. Two-sided intervals
   -- would need gaps and overlaps policed; this shape cannot express either.
   -- A tier with an undecided rate (madya, PRD section 6) simply has no row.
+  --
+  -- ADR-040: a mistake is corrected by a new row, never an overwrite. The highest
+  -- correction of a month stands (dues_rate_standing). A deleting correction
+  -- (deleted = 1) copies the amount it withdraws; only a correction can delete.
+  -- The UPDATE trigger at the foot of this file holds that.
   id             INTEGER PRIMARY KEY,
   tier_id        INTEGER NOT NULL REFERENCES dues_tier(id),
-  amount         INTEGER NOT NULL CHECK (amount >= 0),
+  amount         INTEGER NOT NULL CHECK (amount >= 0 AND amount <= 999999999999),
   effective_from TEXT    NOT NULL CHECK (effective_from GLOB '[0-9][0-9][0-9][0-9]-[0-1][0-9]'
-                                         AND date(effective_from||'-01') IS NOT NULL),
+                                         AND date(effective_from||'-01') IS NOT NULL
+                                         AND effective_from >= '2000-01'),
+  correction     INTEGER NOT NULL DEFAULT 0 CHECK (correction >= 0),
+  deleted        INTEGER NOT NULL DEFAULT 0 CHECK (deleted IN (0, 1)),
   created_at     INTEGER NOT NULL,
-  UNIQUE (tier_id, effective_from)
+  CHECK (deleted = 0 OR correction > 0),
+  UNIQUE (tier_id, effective_from, correction)
 ) STRICT;
 
+-- The rate in force per month: the highest correction, and none when that row is
+-- a deletion. Dropping deleted rows BEFORE taking the highest would be wrong (Jan
+-- 50.000, Jun 70.000 then deleted, read at June: 70.000 instead of 50.000). Every
+-- dues read goes through this view (internal/db's guard test fails a query that
+-- does not). Named exceptions: the backup export, the by-id lookup PATCH and
+-- DELETE start from, the next-correction read.
+CREATE VIEW dues_rate_standing AS
+SELECT dr.id, dr.tier_id, dr.amount, dr.effective_from, dr.correction, dr.created_at
+FROM dues_rate dr
+WHERE dr.deleted = 0
+  AND dr.correction = (
+    SELECT MAX(c.correction) FROM dues_rate c
+    WHERE c.tier_id = dr.tier_id AND c.effective_from = dr.effective_from
+  );
+
 CREATE TABLE member (
+  -- No tier column (ADR-040): a member's tier is effective-dated, so it lives in
+  -- member_tier below and the current tier is derived from those rows.
   id          INTEGER PRIMARY KEY,
   fund_id     INTEGER NOT NULL,
   name        TEXT    NOT NULL CHECK (length(trim(name)) > 0),
-  tier_id     INTEGER,                    -- NULL = no dues obligation
   -- NOT NULL (#471): a fund's history starts at adoption (PRD 7.1), so there
   -- is no "always was a member". The API defaults a missing date to today in
-  -- Asia/Jakarta; backdating is the deliberate live-arrears exception.
-  joined_on   TEXT    NOT NULL CHECK (date(joined_on) IS NOT NULL AND joined_on = date(joined_on)),
-  inactive_on TEXT             CHECK (inactive_on IS NULL OR (date(inactive_on) IS NOT NULL AND inactive_on = date(inactive_on))),
+  -- the fund's time zone; backdating is the deliberate live-arrears exception.
+  joined_on   TEXT    NOT NULL CHECK (date(joined_on) IS NOT NULL AND joined_on = date(joined_on) AND joined_on >= '2000-01-01'),
+  inactive_on TEXT             CHECK (inactive_on IS NULL OR (date(inactive_on) IS NOT NULL AND inactive_on = date(inactive_on) AND inactive_on >= '2000-01-01')),
   created_at  INTEGER NOT NULL,
   UNIQUE (fund_id, id),
-  FOREIGN KEY (fund_id) REFERENCES fund(id),
-  -- Composite, so a member cannot borrow another fund's tier. A NULL tier_id
-  -- passes: SQLite's MATCH SIMPLE skips a partly-NULL key.
-  FOREIGN KEY (fund_id, tier_id) REFERENCES dues_tier(fund_id, id)
+  FOREIGN KEY (fund_id) REFERENCES fund(id)
 ) STRICT;
+
+CREATE TABLE member_tier (                -- a member's tier, month by month (ADR-040)
+  -- One-sided month rows exactly like dues_rate (no effective_to), corrected by a
+  -- new row, never an overwrite; the highest correction of a month stands. The
+  -- UPDATE trigger at the foot of this file holds that.
+  id             INTEGER PRIMARY KEY,
+  fund_id        INTEGER NOT NULL,
+  member_id      INTEGER NOT NULL,
+  tier_id        INTEGER,                 -- NULL = no dues obligation from this month
+  effective_from TEXT    NOT NULL CHECK (effective_from GLOB '[0-9][0-9][0-9][0-9]-[0-1][0-9]'
+                                         AND date(effective_from||'-01') IS NOT NULL
+                                         AND effective_from >= '2000-01'),
+  correction     INTEGER NOT NULL DEFAULT 0 CHECK (correction >= 0),
+  created_at     INTEGER NOT NULL,
+  UNIQUE (fund_id, id),
+  UNIQUE (member_id, effective_from, correction),
+  -- Deleting a member (setup duplicates only, ADR-024) takes their rows; safe,
+  -- because a member any posted row names is refused by that row's FK first.
+  FOREIGN KEY (fund_id, member_id) REFERENCES member(fund_id, id) ON DELETE CASCADE,
+  -- No cascade: a tier any row names, even a superseded one, cannot be deleted
+  -- (ADR-040). A NULL tier_id passes the composite (MATCH SIMPLE).
+  FOREIGN KEY (fund_id, tier_id)   REFERENCES dues_tier(fund_id, id)
+) STRICT;
+
+-- The standing row of each month: the highest correction. Every dues read goes
+-- through this view (internal/db's guard test fails a query that does not).
+-- Named exceptions: the backup export, the next-correction read.
+CREATE VIEW member_tier_standing AS
+SELECT mt.id, mt.fund_id, mt.member_id, mt.tier_id, mt.effective_from, mt.correction, mt.created_at
+FROM member_tier mt
+WHERE mt.correction = (
+  SELECT MAX(c.correction) FROM member_tier c
+  WHERE c.member_id = mt.member_id AND c.effective_from = mt.effective_from
+);
 
 CREATE TABLE transfer (                   -- pair-holder: cash<->bank, or purpose reclass
   -- Value-neutral movements are two transactions of equal amount and opposite
@@ -149,9 +241,9 @@ CREATE TABLE reimbursement (              -- off-ledger until settled
   fund_id     INTEGER NOT NULL,
   member_id   INTEGER NOT NULL,
   purpose_id  INTEGER NOT NULL,
-  amount      INTEGER NOT NULL CHECK (amount > 0),
-  incurred_on TEXT    NOT NULL CHECK (date(incurred_on) IS NOT NULL AND incurred_on = date(incurred_on)),
-  waived_on   TEXT             CHECK (waived_on IS NULL OR (date(waived_on) IS NOT NULL AND waived_on = date(waived_on))),
+  amount      INTEGER NOT NULL CHECK (amount > 0 AND amount <= 999999999999),
+  incurred_on TEXT    NOT NULL CHECK (date(incurred_on) IS NOT NULL AND incurred_on = date(incurred_on) AND incurred_on >= '2000-01-01'),
+  waived_on   TEXT             CHECK (waived_on IS NULL OR (date(waived_on) IS NOT NULL AND waived_on = date(waived_on) AND waived_on >= '2000-01-01')),
   note        TEXT,
   created_at  INTEGER NOT NULL,
   UNIQUE (fund_id, id),
@@ -167,22 +259,23 @@ CREATE TABLE "transaction" (              -- the ledger. insert-only.
   purpose_id  INTEGER NOT NULL,
   direction   TEXT    NOT NULL CHECK (direction IN ('in','out')),
   -- The sign lives in direction, never in the amount, so summing the ledger is
-  -- one CASE and a negative amount is impossible rather than merely unexpected.
-  amount      INTEGER NOT NULL CHECK (amount > 0),
-  occurred_on TEXT    NOT NULL CHECK (date(occurred_on) IS NOT NULL AND occurred_on = date(occurred_on)),
+  -- SUM(ledger_entry.signed_amount) (the view below) and a negative amount is
+  -- impossible rather than merely unexpected.
+  amount      INTEGER NOT NULL CHECK (amount > 0 AND amount <= 999999999999),
+  occurred_on TEXT    NOT NULL CHECK (date(occurred_on) IS NOT NULL AND occurred_on = date(occurred_on) AND occurred_on >= '2000-01-01'),
   kind        TEXT    NOT NULL CHECK (kind IN
                 ('opening','normal','dues','reimbursement','adjustment','transfer')),
   member_id        INTEGER,               -- dues, or a named contribution (ADR-034)
   dues_period      TEXT,                  -- 'YYYY-MM'; several months paid at once = several rows
   reimbursement_id INTEGER,               -- the settling payout
   transfer_id      INTEGER,
-  reverses_transaction_id INTEGER,        -- the dues payment this adjustment reverses (ADR-029)
+  reverses_transaction_id INTEGER,        -- the dues or normal row this adjustment reverses (ADR-029, ADR-042)
   note        TEXT,
   created_at  INTEGER NOT NULL,
   UNIQUE (fund_id, id),
   -- Six composite FKs: each stops a transaction borrowing another fund's row,
   -- which a single-column REFERENCES would allow. The reverses_transaction_id
-  -- one stops naming another fund's row as the payment being reversed (ADR-029).
+  -- one stops naming another fund's row as the row being reversed (ADR-029).
   FOREIGN KEY (fund_id, account_id)       REFERENCES account(fund_id, id),
   FOREIGN KEY (fund_id, purpose_id)       REFERENCES purpose(fund_id, id),
   FOREIGN KEY (fund_id, member_id)        REFERENCES member(fund_id, id),
@@ -190,7 +283,8 @@ CREATE TABLE "transaction" (              -- the ledger. insert-only.
   FOREIGN KEY (fund_id, transfer_id)      REFERENCES transfer(fund_id, id),
   FOREIGN KEY (fund_id, reverses_transaction_id) REFERENCES "transaction"(fund_id, id),
   CHECK (dues_period IS NULL OR (dues_period GLOB '[0-9][0-9][0-9][0-9]-[0-1][0-9]'
-                                 AND date(dues_period||'-01') IS NOT NULL)),
+                                 AND date(dues_period||'-01') IS NOT NULL
+                                 AND dues_period >= '2000-01')),
   CHECK (kind <> 'dues'          OR (member_id IS NOT NULL AND dues_period IS NOT NULL AND direction = 'in')),
   -- Two shapes of a non-dues row may carry a member: a dues reversal (the one
   -- kind='adjustment' shape, ADR-029) and a named contribution (the one
@@ -207,16 +301,16 @@ CREATE TABLE "transaction" (              -- the ledger. insert-only.
   -- ...and the column guards itself the other way: nothing that is not a
   -- reversal may claim to reverse anything. Without this, a kind='normal' row
   -- with no member and no period satisfies the CHECK above yet sets
-  -- reverses_transaction_id - which would hide the original dues payment from
-  -- DuesPaidByPeriod (its NOT EXISTS only asks whether *something* points at
-  -- the row) and consume the reversed-once slot, so the genuine reversal could
+  -- reverses_transaction_id - which would hide the original row from every
+  -- read of ledger_entry.reversed (that only asks whether *something* points
+  -- at the row) and consume the reversed-once slot, so the genuine reversal could
   -- never be posted. The schema makes that row unrepresentable (ADR-029).
-  -- dues_period is deliberately not required here (ADR-034): reversing a named
-  -- contribution carries none, reversing a dues payment must - which the
-  -- trigger below checks against the reversed row, as this CHECK cannot.
-  CHECK (reverses_transaction_id IS NULL
-         OR (kind = 'adjustment' AND direction = 'out'
-             AND member_id IS NOT NULL)),
+  -- Only the kind is pinned here (ADR-042): a reversal goes the OTHER way from the
+  -- row it reverses, which a CHECK cannot see, so the trigger below checks
+  -- direction, amount and location. dues_period is deliberately not required
+  -- (ADR-034): reversing a named contribution carries none, reversing a dues
+  -- payment must - which the trigger checks, as this CHECK cannot.
+  CHECK (reverses_transaction_id IS NULL OR kind = 'adjustment'),
   CHECK (kind <> 'reimbursement' OR (reimbursement_id IS NOT NULL AND direction = 'out')),
   CHECK (kind <> 'transfer'      OR transfer_id IS NOT NULL)
   -- kind='adjustment' otherwise requires nothing extra: an ordinary correction
@@ -236,18 +330,22 @@ CREATE TRIGGER transaction_named_row_shape BEFORE INSERT ON "transaction" BEGIN
   WHERE NEW.kind = 'normal' AND NEW.member_id IS NOT NULL
     AND NOT EXISTS (SELECT 1 FROM purpose WHERE id = NEW.purpose_id AND kind = 'incidental');
 
-  -- A reversal (ADR-029, ADR-034) must target a dues payment or a named
-  -- contribution and carry that row's member_id and dues_period exactly, never
-  -- re-typed by the caller: a dues reversal keeps its period, a contribution
-  -- reversal carries none. "o.dues_period IS NEW.dues_period" is NULL-safe
-  -- equality.
-  SELECT RAISE(ABORT, 'a reversal must target a dues payment or a named contribution, carrying its member and period')
+  -- A reversal (ADR-029, ADR-034, ADR-042) must reverse a dues or normal row, go
+  -- the other way, and copy its amount, location, member and period exactly, never
+  -- re-typed by the caller. "IS" is NULL-safe equality: "=" would refuse two
+  -- unnamed rows. The purpose is the one copied field not checked: the effective
+  -- purpose is a fold over correction pairs, which a trigger could only restate.
+  -- Nor is the date: a restore keeps this trigger on, and a reversal already in a
+  -- live file may predate its original.
+  SELECT RAISE(ABORT, 'a reversal must reverse a dues payment or a normal transaction: the other way, same amount and location, same member and period')
   WHERE NEW.reverses_transaction_id IS NOT NULL
     AND NOT EXISTS (
       SELECT 1 FROM "transaction" o
       WHERE o.id = NEW.reverses_transaction_id
-        AND o.member_id = NEW.member_id AND o.dues_period IS NEW.dues_period
-        AND (o.kind = 'dues' OR (o.kind = 'normal' AND o.member_id IS NOT NULL))
+        AND o.kind IN ('dues', 'normal')
+        AND o.direction <> NEW.direction
+        AND o.amount = NEW.amount AND o.account_id = NEW.account_id
+        AND o.member_id IS NEW.member_id AND o.dues_period IS NEW.dues_period
     );
 END;
 -- +goose StatementEnd
@@ -255,8 +353,8 @@ END;
 -- "Settle once" as a constraint, not prose. Partial, so other kinds are free.
 CREATE UNIQUE INDEX reimbursement_settled_once ON "transaction"(reimbursement_id) WHERE kind = 'reimbursement';
 
--- A dues payment is reversible at most once (ADR-029); partial, same shape as
--- reimbursement_settled_once.
+-- A row is reversible at most once (ADR-029, ADR-042); partial, same shape as
+-- reimbursement_settled_once. The name predates ADR-042 and stays.
 CREATE UNIQUE INDEX dues_payment_reversed_once ON "transaction"(reverses_transaction_id) WHERE reverses_transaction_id IS NOT NULL;
 
 -- One opening entry per account: nothing else stops a second opening row, and
@@ -299,8 +397,12 @@ CREATE TABLE reconciliation_line (        -- one counted location within a snaps
   fund_id           INTEGER NOT NULL,
   reconciliation_id INTEGER NOT NULL,
   account_id        INTEGER NOT NULL,
-  recorded_amount   INTEGER NOT NULL,     -- frozen at snapshot time
-  actual_amount     INTEGER NOT NULL,     -- what the treasurer counted
+  -- actual is what she counted: bounded on both sides. recorded is the ledger's
+  -- balance of the location, a sum of bounded amounts that nothing refuses past
+  -- the ceiling; a bound here would leave such a location impossible to count.
+  -- difference is fixed by the equality CHECK below.
+  recorded_amount   INTEGER NOT NULL,  -- frozen at snapshot time
+  actual_amount     INTEGER NOT NULL CHECK (actual_amount     BETWEEN -999999999999 AND 999999999999),  -- what the treasurer counted
   difference_amount INTEGER NOT NULL,
   resolution        TEXT    NOT NULL CHECK (resolution IN ('matched','entry_added','adjusted','left_open')),
   adjustment_transaction_id INTEGER,      -- the entry that squared this line
@@ -324,12 +426,12 @@ CREATE TABLE incidental (                 -- the envelope's lifecycle, 1:1 with 
   -- here is a posted fact.
   purpose_id    INTEGER PRIMARY KEY REFERENCES purpose(id),
   occasion      TEXT    NOT NULL CHECK (length(trim(occasion)) > 0),
-  target_amount INTEGER CHECK (target_amount IS NULL OR target_amount > 0),
-  opened_on     TEXT    NOT NULL CHECK (date(opened_on) IS NOT NULL AND opened_on = date(opened_on)),
-  closed_on     TEXT             CHECK (closed_on IS NULL OR (date(closed_on) IS NOT NULL AND closed_on = date(closed_on))),
+  target_amount INTEGER CHECK (target_amount IS NULL OR (target_amount > 0 AND target_amount <= 999999999999)),
+  opened_on     TEXT    NOT NULL CHECK (date(opened_on) IS NOT NULL AND opened_on = date(opened_on) AND opened_on >= '2000-01-01'),
+  closed_on     TEXT             CHECK (closed_on IS NULL OR (date(closed_on) IS NOT NULL AND closed_on = date(closed_on) AND closed_on >= '2000-01-01')),
   -- One figure every expected member is asked to give (ADR-034). Not a dues
   -- rate: no tiers, no effective dates, editable like occasion.
-  minimum_per_member INTEGER CHECK (minimum_per_member IS NULL OR minimum_per_member > 0),
+  minimum_per_member INTEGER CHECK (minimum_per_member IS NULL OR (minimum_per_member > 0 AND minimum_per_member <= 999999999999)),
   created_at    INTEGER NOT NULL
 ) STRICT;
 
@@ -366,6 +468,56 @@ CREATE INDEX reimbursement_by_date  ON reimbursement(fund_id, incurred_on, id);
 
 -- Same shape: orders the (performed_at DESC, id DESC) keyset scan (#227).
 CREATE INDEX reconciliation_by_date ON reconciliation(fund_id, performed_at, id);
+
+-- The ledger as every read sees it (#627, #628): "transaction" plus the derived
+-- facts each query used to re-write. internal/db/ledger_entry_test.go fails a
+-- query under internal/store/queries that derives any of them itself.
+--
+--   signed_amount        the only place a minus appears (amount is always > 0).
+--                        CAST so sqlc types a sum of it as int64.
+--   reversed_by_transaction_id, reversed_on, reversed
+--                        the reversal pointing at this row (ADR-029; at most one,
+--                        dues_payment_reversed_once), its date, and whether one
+--                        exists. A dated read (the public report's month-end)
+--                        compares reversed_on with its bound: a reversal dated
+--                        after the bound has not happened yet.
+--   effective_purpose_id the tag this row's money is under NOW (ADR-033): its own
+--                        purpose_id, moved by purpose corrections. A row's
+--                        corrections form a path starting at purpose_id; the tag
+--                        it ends on is the one the money entered once more than it
+--                        left, so no ordering of corrections is needed (ids are
+--                        not an order) and a row corrected back ends where it
+--                        began. PostPurposeCorrection puts the target on the leg
+--                        moving the same way as the row, so
+--                        leg.direction = t.direction reads back what it wrote.
+--
+--                        NOT the tag a balance sums. Balances sum the stored
+--                        purpose_id: the correction's legs already carry the
+--                        move, so reading effective_purpose_id beside them would
+--                        count it twice. It is for the correction dialog, for
+--                        EffectivePurposeForTransaction and for the "corrected"
+--                        marker; Riwayat lists the stored tag (ADR-033).
+--
+-- Unused columns cost nothing: SQLite drops them when it flattens the view, so a
+-- balance never runs the reversal lookup or the correction walk; the list runs
+-- the walk and skips only the reversal lookups.
+CREATE VIEW ledger_entry AS
+SELECT t.id, t.fund_id, t.account_id, t.purpose_id, t.direction, t.amount, t.occurred_on, t.kind,
+       t.member_id, t.dues_period, t.reimbursement_id, t.transfer_id, t.reverses_transaction_id,
+       t.note, t.created_at,
+       CAST(CASE WHEN t.direction = 'in' THEN t.amount ELSE -t.amount END AS INTEGER) AS signed_amount,
+       (SELECT r.id FROM "transaction" r WHERE r.reverses_transaction_id = t.id) AS reversed_by_transaction_id,
+       (SELECT r.occurred_on FROM "transaction" r WHERE r.reverses_transaction_id = t.id) AS reversed_on,
+       CAST(EXISTS (SELECT 1 FROM "transaction" r WHERE r.reverses_transaction_id = t.id) AS INTEGER) AS reversed,
+       CAST(COALESCE((SELECT leg.purpose_id
+                      FROM transfer c
+                      JOIN "transaction" leg ON leg.transfer_id = c.id
+                      WHERE c.corrects_transaction_id = t.id
+                      GROUP BY leg.purpose_id
+                      HAVING SUM(CASE WHEN leg.direction = t.direction THEN 1 ELSE -1 END)
+                             + (leg.purpose_id = t.purpose_id) = 1
+                      LIMIT 1), t.purpose_id) AS INTEGER) AS effective_purpose_id
+FROM "transaction" t;
 
 -- Immutability is a trigger, not a convention (ADR-024, CLAUDE.md rule 3).
 -- INSERT stays open, which lets ADR-012's import restore a database. A snapshot
@@ -421,8 +573,30 @@ CREATE TRIGGER reconciliation_line_immutable_delete BEFORE DELETE ON reconciliat
 END;
 -- +goose StatementEnd
 
+-- member_tier is immutable against UPDATE only (ADR-040). No BEFORE DELETE
+-- trigger, deliberately: a member's deletion (the cascade), a never-named tier's
+-- and restore's clear-all delete these rows, and the owners' foreign keys already
+-- refuse the deletions that would lose a record. A test fails when any other
+-- query deletes from the table.
+-- +goose StatementBegin
+CREATE TRIGGER member_tier_immutable_update BEFORE UPDATE ON member_tier BEGIN
+  SELECT RAISE(ABORT, 'member_tier rows are immutable - a correction is a new row');
+END;
+-- +goose StatementEnd
+
+-- dues_rate: UPDATE only, for the same reasons (ADR-040); DeleteDuesRatesByTier
+-- and restore's clear-all delete rows, and a test fails when any other statement does.
+-- +goose StatementBegin
+CREATE TRIGGER dues_rate_immutable_update BEFORE UPDATE ON dues_rate BEGIN
+  SELECT RAISE(ABORT, 'dues_rate rows are immutable - a correction is a new row');
+END;
+-- +goose StatementEnd
+
 -- +goose Down
 
+DROP VIEW ledger_entry;
+DROP TRIGGER dues_rate_immutable_update;
+DROP TRIGGER member_tier_immutable_update;
 DROP TRIGGER reconciliation_line_immutable_delete;
 DROP TRIGGER reconciliation_line_immutable_update;
 DROP TRIGGER reconciliation_immutable_delete;
@@ -449,13 +623,18 @@ DROP TRIGGER transaction_named_row_shape;
 DROP TABLE "transaction";
 DROP TABLE reimbursement;
 DROP TABLE transfer;
+DROP VIEW member_tier_standing;
+DROP TABLE member_tier;
 DROP TABLE member;
+DROP VIEW dues_rate_standing;
 DROP TABLE dues_rate;
 DROP TABLE dues_tier;
 DROP INDEX purpose_single_main;
 DROP TABLE purpose;
 DROP TABLE account;
 DROP TABLE fund;
+DROP INDEX idempotency_key_by_expiry;
+DROP TABLE idempotency_key;
 DROP INDEX session_by_expiry;
 DROP TABLE session;
 DROP TABLE "user";

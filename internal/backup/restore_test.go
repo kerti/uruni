@@ -13,11 +13,13 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/kerti/uruni/internal/ledger"
 	"github.com/kerti/uruni/internal/store"
+	"github.com/kerti/uruni/internal/tz"
 )
 
 // realJPEGBytes is a genuine, decodable 1x1 JPEG. buildFixture's
@@ -327,9 +329,11 @@ func TestParseUploadRefusesNewerFormatVersionDistinctly(t *testing.T) {
 	}
 }
 
+// "Older" is older than the oldest format an upgrade step covers; the previous
+// release's format is upgraded, not refused (upgrade_test.go).
 func TestParseUploadRefusesOlderFormatVersionDistinctly(t *testing.T) {
 	t.Parallel()
-	_, err := parseUploadBytes(t, zipOf(t, minimalDocJSON(t, FormatVersion-1), nil))
+	_, err := parseUploadBytes(t, zipOf(t, minimalDocJSON(t, minUpgradableFormat-1), nil))
 	if !errors.Is(err, ErrFormatVersionOlder) {
 		t.Errorf("ParseUpload() error = %v, want ErrFormatVersionOlder", err)
 	}
@@ -459,7 +463,7 @@ func TestRestoreTotalsMismatchRollsBack(t *testing.T) {
 		DuesRates: []DuesRate{}, Members: []Member{}, Transfers: []Transfer{}, Reimbursements: []Reimbursement{},
 		Transactions: []Transaction{}, Receipts: []Receipt{}, Reconciliations: []Reconciliation{},
 		ReconciliationLines: []ReconciliationLine{}, Incidentals: []Incidental{}, IncidentalRecipients: []IncidentalRecipient{},
-		Funds: []Fund{{ID: 1, Name: "Dana", Currency: "IDR", ReportSlug: "0000000000000000000slug01", CreatedAt: 1}},
+		Funds: []Fund{{ID: 1, Name: "Dana", Currency: "IDR", TimeZone: "Asia/Jakarta", ReportSlug: "0000000000000000000slug01", CreatedAt: 1}},
 		Totals: Totals{
 			Funds:    []FundTotal{{FundID: 1, Balance: 999}}, // the fund carries zero transactions, so its real balance is 0
 			Accounts: []AccountTotal{}, Purposes: []PurposeTotal{},
@@ -603,6 +607,26 @@ func TestRestoreClearsSessions(t *testing.T) {
 	}
 }
 
+// TestRestoreClearsIdempotencyKeys is ADR-043's "restore clears it": a key from
+// before the restore would replay a success whose rows are gone.
+func TestRestoreClearsIdempotencyKeys(t *testing.T) {
+	t.Parallel()
+	destDB := newTestDB(t)
+	seedOneUser(t, destDB)
+	q := store.New(destDB)
+	if err := q.CreateIdempotencyKey(context.Background(), store.CreateIdempotencyKeyParams{
+		Key: "a-key-from-before-the-restore", Fingerprint: strings.Repeat("f", 64), Result: []byte("{}"), CreatedAt: 100, ExpiresAt: 9999999999,
+	}); err != nil {
+		t.Fatalf("CreateIdempotencyKey() = %v, want no error", err)
+	}
+
+	restoreOrFatal(t, destDB, t.TempDir(), t.TempDir(), ParsedUpload{Document: minimalDocWithOneFund(t)})
+
+	if _, err := q.GetIdempotencyKey(context.Background(), store.GetIdempotencyKeyParams{Key: "a-key-from-before-the-restore", Now: 0}); !errors.Is(err, sql.ErrNoRows) {
+		t.Errorf("GetIdempotencyKey() after restore = %v, want sql.ErrNoRows (every key cleared)", err)
+	}
+}
+
 // TestRestoreRecreatesImmutableTriggers is the drift guard immutableTriggers
 // promises: after a restore, each of the eight recreated triggers still
 // refuses the same update/delete with the same message.
@@ -675,7 +699,7 @@ func minimalDocWithOneFund(t *testing.T) Document {
 		DuesRates: []DuesRate{}, Members: []Member{}, Transfers: []Transfer{}, Reimbursements: []Reimbursement{},
 		Transactions: []Transaction{}, Receipts: []Receipt{}, Reconciliations: []Reconciliation{},
 		ReconciliationLines: []ReconciliationLine{}, Incidentals: []Incidental{}, IncidentalRecipients: []IncidentalRecipient{},
-		Funds: []Fund{{ID: 1, Name: "Dana", Currency: "IDR", ReportSlug: "0000000000000000000slug01", CreatedAt: 1}},
+		Funds: []Fund{{ID: 1, Name: "Dana", Currency: "IDR", TimeZone: "Asia/Jakarta", ReportSlug: "0000000000000000000slug01", CreatedAt: 1}},
 		Totals: Totals{
 			Funds: []FundTotal{{FundID: 1, Balance: 0}}, Accounts: []AccountTotal{}, Purposes: []PurposeTotal{},
 		},
@@ -702,7 +726,7 @@ func TestBuildPreviewReportsKeptRemovedAndAddedFunds(t *testing.T) {
 
 	// Fund 1 lives on both sides: the file's newest transaction for it is id 1
 	// (2026-01-01); two more were posted live afterward and would be lost.
-	kept, err := q.CreateFund(ctx, store.CreateFundParams{Name: "Kept Fund", Currency: "IDR", ReportSlug: "0000000000000000000keptfund", CreatedAt: 1})
+	kept, err := q.CreateFund(ctx, store.CreateFundParams{Name: "Kept Fund", Currency: "IDR", TimeZone: "Asia/Jakarta", ReportSlug: "0000000000000000000keptfund", CreatedAt: 1})
 	if err != nil {
 		t.Fatalf("CreateFund(kept): %v", err)
 	}
@@ -731,7 +755,7 @@ func TestBuildPreviewReportsKeptRemovedAndAddedFunds(t *testing.T) {
 	}
 
 	// Fund 2 lives only live: removed by the restore.
-	removed, err := q.CreateFund(ctx, store.CreateFundParams{Name: "Removed Fund", Currency: "IDR", ReportSlug: "0000000000000000000removedf", CreatedAt: 1})
+	removed, err := q.CreateFund(ctx, store.CreateFundParams{Name: "Removed Fund", Currency: "IDR", TimeZone: "Asia/Jakarta", ReportSlug: "0000000000000000000removedf", CreatedAt: 1})
 	if err != nil {
 		t.Fatalf("CreateFund(removed): %v", err)
 	}
@@ -739,8 +763,8 @@ func TestBuildPreviewReportsKeptRemovedAndAddedFunds(t *testing.T) {
 	doc := Document{
 		FormatVersion: FormatVersion,
 		Funds: []Fund{
-			{ID: kept.ID, Name: "Kept Fund (restored name)", Currency: "IDR", ReportSlug: kept.ReportSlug, CreatedAt: 1},
-			{ID: 999, Name: "Added Fund", Currency: "IDR", ReportSlug: "0000000000000000000addedfund", CreatedAt: 1},
+			{ID: kept.ID, Name: "Kept Fund (restored name)", Currency: "IDR", TimeZone: "Asia/Jakarta", ReportSlug: kept.ReportSlug, CreatedAt: 1},
+			{ID: 999, Name: "Added Fund", Currency: "IDR", TimeZone: "Asia/Jakarta", ReportSlug: "0000000000000000000addedfund", CreatedAt: 1},
 		},
 		Transactions: []Transaction{
 			// CreatedAt, not OccurredOn, is what Preview.Date reads (the newest
@@ -782,19 +806,19 @@ func TestBuildPreviewReportsKeptRemovedAndAddedFunds(t *testing.T) {
 
 // TestNewestMomentPicksTheLatestRowOfAnyTable: the confirm dialog's "Cadangan
 // dari <date>" is the newest created_at (or a receipt's uploaded_at) across
-// every table, as a Jakarta calendar date, and no date for a document with no
-// rows.
+// every table, as a calendar date in the file's own zone (ADR-041), and no date
+// for a document with no rows.
 func TestNewestMomentPicksTheLatestRowOfAnyTable(t *testing.T) {
 	t.Parallel()
-	if got := newestMoment(Document{}); got != "" {
-		t.Errorf("newestMoment(empty) = %q, want empty", got)
+	if got, err := newestMoment(Document{}); err != nil || got != "" {
+		t.Errorf("newestMoment(empty) = (%q, %v), want empty", got, err)
 	}
 
 	// 2026-09-30 23:30 UTC is already 1 October in Jakarta (UTC+7).
 	latest := time.Date(2026, 9, 30, 23, 30, 0, 0, time.UTC).Unix()
 	earlier := latest - 86400*10
 	tables := map[string]func(*Document, int64){
-		"funds":          func(d *Document, ts int64) { d.Funds = append(d.Funds, Fund{CreatedAt: ts}) },
+		"funds":          func(d *Document, ts int64) { d.Funds = append(d.Funds, Fund{CreatedAt: ts, TimeZone: tz.Jakarta}) },
 		"accounts":       func(d *Document, ts int64) { d.Accounts = append(d.Accounts, Account{CreatedAt: ts}) },
 		"purposes":       func(d *Document, ts int64) { d.Purposes = append(d.Purposes, Purpose{CreatedAt: ts}) },
 		"dues tiers":     func(d *Document, ts int64) { d.DuesTiers = append(d.DuesTiers, DuesTier{CreatedAt: ts}) },
@@ -818,10 +842,39 @@ func TestNewestMomentPicksTheLatestRowOfAnyTable(t *testing.T) {
 				}
 			}
 			addNewest(&doc, latest)
-			if got := newestMoment(doc); got != "2026-10-01" {
-				t.Errorf("newestMoment() = %q, want %q", got, "2026-10-01")
+			// Every table's newest row is read in the WIB the document's fund is in
+			// (a document with no fund is WIB by default): 23:30 UTC is already 1 October.
+			if doc.Funds == nil {
+				doc.Funds = []Fund{{ID: 1, TimeZone: tz.Jakarta}}
+			}
+			if got, err := newestMoment(doc); err != nil || got != "2026-10-01" {
+				t.Errorf("newestMoment() = (%q, %v), want %q", got, err, "2026-10-01")
 			}
 		})
+	}
+}
+
+// The preview's date is the file's own zone's calendar day (ADR-041): the same
+// instant is 30 September for a WIB file, and 1 October for a WIT one, which
+// has already turned the day over by 00:30. A zone tz.Load refuses cannot date
+// the file, so the preview errors rather than falling back.
+func TestNewestMomentReadsTheFilesOwnZone(t *testing.T) {
+	t.Parallel()
+	instant := time.Date(2026, 9, 30, 22, 30, 0, 0, jakarta).Unix() // 22:30 WIB = 23:30 WITA = 00:30 WIT
+	for zone, want := range map[string]string{tz.Jakarta: "2026-09-30", tz.Makassar: "2026-09-30", tz.Jayapura: "2026-10-01"} {
+		doc := Document{Funds: []Fund{{ID: 1, TimeZone: zone, CreatedAt: instant}}}
+		if got, err := newestMoment(doc); err != nil || got != want {
+			t.Errorf("%s: newestMoment() = (%q, %v), want %q", zone, got, err, want)
+		}
+		if got, err := NewestDate(doc); err != nil || got != want {
+			t.Errorf("%s: NewestDate() = (%q, %v), want %q", zone, got, err, want)
+		}
+	}
+	for _, bad := range []string{"", "UTC", "Asia/Tokyo"} {
+		doc := Document{Funds: []Fund{{ID: 1, TimeZone: bad, CreatedAt: instant}}}
+		if got, err := newestMoment(doc); err == nil {
+			t.Errorf("zone %q: newestMoment() = %q, want an error", bad, got)
+		}
 	}
 }
 
@@ -973,10 +1026,11 @@ func TestRestoreOfANullJoinedOnReadsTheAdoptionDate(t *testing.T) {
 	if len(doc.Members) == 0 {
 		t.Fatal("fixture has no members")
 	}
-	for i := range doc.Members {
-		doc.Members[i].JoinedOn = nil
+	oldDoc := v1Of(doc)
+	for i := range oldDoc.Members {
+		oldDoc.Members[i].JoinedOn = nil
 	}
-	old, err := json.Marshal(doc)
+	old, err := json.Marshal(oldDoc)
 	if err != nil {
 		t.Fatalf("marshaling old-shaped document: %v", err)
 	}
@@ -1000,15 +1054,98 @@ func TestRestoreOfANullJoinedOnReadsTheAdoptionDate(t *testing.T) {
 			t.Errorf("member %d restored with joined_on %q, want the adoption date %q", m.ID, m.JoinedOn, "2025-12-20")
 		}
 	}
+	// The backfilled tier row reaches back to that adoption month, so the dues the
+	// null date meant are priced from it too.
+	tiers, err := store.New(destDB).ListMemberTiersForExport(context.Background(), 1)
+	if err != nil {
+		t.Fatalf("ListMemberTiersForExport() = %v, want no error", err)
+	}
+	if len(tiers) != 1 || tiers[0].EffectiveFrom != "2025-12" || tiers[0].Correction != 0 {
+		t.Errorf("restored member_tier rows = %+v, want Andi's one row from 2025-12 at correction 0", tiers)
+	}
 }
 
 // A fund that never posted an opening balance starts its history the day it
-// was created, read in Asia/Jakarta: 17:00Z is already the next day there.
-func TestAdoptionDatesFallsBackToTheFundsJakartaCreationDay(t *testing.T) {
+// was created, read in the fund's own zone (ADR-041): 17:00Z is already the
+// next day in WIB, and 15:00Z already in WIT.
+func TestAdoptionDatesFallsBackToTheFundsCreationDayInItsOwnZone(t *testing.T) {
 	t.Parallel()
 	created := time.Date(2026, 8, 31, 17, 0, 0, 0, time.UTC).Unix()
-	got := adoptionDates(Document{Funds: []Fund{{ID: 7, CreatedAt: created}}})
-	if got[7] != "2026-09-01" {
-		t.Errorf("adoptionDates()[7] = %q, want %q", got[7], "2026-09-01")
+	got, err := adoptionDates(Document{Funds: []Fund{
+		{ID: 7, CreatedAt: created, TimeZone: tz.Jakarta},
+		{ID: 8, CreatedAt: created - 2*3600, TimeZone: tz.Jayapura},
+		{ID: 9, CreatedAt: created - 3600, TimeZone: tz.Makassar},
+		{ID: 10, CreatedAt: created - 1, TimeZone: tz.Jakarta},
+	}})
+	if err != nil {
+		t.Fatalf("adoptionDates() = %v, want no error", err)
+	}
+	for id, want := range map[int64]string{7: "2026-09-01", 8: "2026-09-01", 9: "2026-09-01", 10: "2026-08-31"} {
+		if got[id] != want {
+			t.Errorf("adoptionDates()[%d] = %q, want %q", id, got[id], want)
+		}
+	}
+	if _, err := adoptionDates(Document{Funds: []Fund{{ID: 1, TimeZone: ""}}}); !errors.Is(err, ErrMalformedBackup) {
+		t.Errorf("adoptionDates(empty zone) = %v, want ErrMalformedBackup", err)
+	}
+}
+
+// TestRestoreCarriesTheRateTrailAndLeavesTheUpdateTriggersAlone is ADR-040's
+// claim about restore: an UPDATE-only trigger never fires on restore's deletes
+// and inserts, so dues_rate_immutable_update (like member_tier's) needs no place
+// in immutableTriggers. The trail survives the round trip, the standing view
+// reads it as before, and both triggers still refuse after a restore that
+// replaced an existing trail.
+func TestRestoreCarriesTheRateTrailAndLeavesTheUpdateTriggersAlone(t *testing.T) {
+	t.Parallel()
+	srcDB := newTestDB(t)
+	srcUploads := t.TempDir()
+	buildFixture(t, srcDB, srcUploads)
+	if err := os.WriteFile(filepath.Join(srcUploads, receiptFilename), realJPEGBytes(t), 0o600); err != nil {
+		t.Fatalf("replacing fixture receipt with a real image: %v", err)
+	}
+	zipBytes, _ := exportFixture(t, srcDB, srcUploads)
+	parsed, err := parseUploadBytes(t, zipBytes)
+	if err != nil {
+		t.Fatalf("ParseUpload() = %v, want no error", err)
+	}
+
+	destDB := newTestDB(t)
+	restoreOrFatal(t, destDB, t.TempDir(), t.TempDir(), parsed)
+	restoreOrFatal(t, destDB, t.TempDir(), t.TempDir(), parsed) // over an existing trail
+
+	ctx := context.Background()
+	q := store.New(destDB)
+	all, err := q.ListDuesRatesByFund(ctx, 1)
+	if err != nil {
+		t.Fatalf("ListDuesRatesByFund() = %v, want no error", err)
+	}
+	type trail struct {
+		from       string
+		amount     int64
+		correction int64
+		deleted    int64
+	}
+	var got []trail
+	for _, r := range all {
+		got = append(got, trail{r.EffectiveFrom, r.Amount, r.Correction, r.Deleted})
+	}
+	want := []trail{{"2026-01", 50000, 0, 0}, {"2026-01", 55000, 1, 0}, {"2026-06", 70000, 0, 0}, {"2026-06", 70000, 1, 1}}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("restored dues_rate rows = %+v, want %+v: the superseded and deleting rows are the trail", got, want)
+	}
+
+	standing, err := q.ListDuesRatesByTier(ctx, all[0].TierID)
+	if err != nil || len(standing) != 1 || standing[0].Amount != 55000 || standing[0].EffectiveFrom != "2026-01" {
+		t.Errorf("standing rates after restore = %+v, %v, want January's corrected 55000 only (June was deleted)", standing, err)
+	}
+
+	for _, stmt := range []string{
+		`UPDATE dues_rate SET amount = 1 WHERE id = 1`,
+		`UPDATE member_tier SET tier_id = NULL WHERE id = 1`,
+	} {
+		if _, err := destDB.ExecContext(ctx, stmt); err == nil || !strings.Contains(err.Error(), "are immutable") {
+			t.Errorf("%s after a restore = %v, want the immutability trigger to refuse", stmt, err)
+		}
 	}
 }

@@ -70,25 +70,26 @@ export const copy = {
       memberFilterLabel: (name: string) => `Anggota: ${name}`,
       filterClear: (label: string) => `Hapus filter ${label}`,
       filterEmpty: 'Tidak ada transaksi yang cocok dengan filter ini.',
-      // Undoing a named contribution recorded against the wrong member
-      // (ADR-034) - the "reverse, then post again" shape dues.history gives a
-      // dues payment: a sumbangan is not edited away, a new entry undoes it.
-      // reversalRow/reversedBadge are dues.history's words, reused verbatim
-      // (CONTEXT.md: one word per concept) since both lists show the same two
-      // row shapes.
-      reverse: 'Batalkan sumbangan',
-      reverseDateLabel: 'Tanggal pembatalan',
+      // Undoing an ordinary transaction (ADR-042): one door, the entry detail's
+      // button, which hands off to the inline form. A reversal is a new entry, never
+      // an edit, so the copy says "batalkan", never "hapus". reverse is both the
+      // button and the form's title; reverseDate* state the date the ledger will give it.
+      reverse: 'Batalkan transaksi',
+      reverseExplainer:
+        'Transaksi ini tidak dihapus. Pembatalannya dicatat sebagai entri baru, dan saldo kembali seperti sebelum transaksi ini dicatat.',
+      // date is already formatted (formatIsoDate) by the caller.
+      reverseDateOriginal: (date: string) => `Dicatat pada ${date}.`,
+      reverseDateToday: 'Dicatat hari ini, karena kas sudah dicek sejak transaksi ini.',
       reverseNoteLabel: 'Alasan (opsional)',
       reverseConfirm: 'Ya, batalkan',
       reverseCancel: 'Jangan jadi',
       reverseSubmitting: 'Membatalkan…',
-      reverseSuccess: 'Sumbangan dibatalkan.',
-      // Scoped ahead of copy.common.errors' dues_payment_already_reversed
-      // (ErrorState.tsx's fallback chain): the server answers the same 409 for
-      // a repeat reversal on either path, and this list is the sumbangan one -
-      // "iuran" would be the wrong noun.
+      reverseSuccess: 'Transaksi dibatalkan.',
+      // Scoped ahead of copy.common.errors' transaction_already_reversed
+      // (reversalErrorText): that one is worded for the Iuran screens, and this
+      // list names its rows "transaksi" whatever the kind.
       errors: {
-        dues_payment_already_reversed: 'Sumbangan ini sudah dibatalkan.',
+        transaction_already_reversed: 'Transaksi ini sudah dibatalkan.',
       },
     },
     // The Talangan tab's search and paging (ADR-032). A narrower placeholder
@@ -204,11 +205,11 @@ export const copy = {
       method_not_allowed: 'Aksi ini tidak didukung.',
       network_error: 'Belum tersambung — Uruni butuh koneksi.',
       // A write whose response never arrived. The server may already have saved
-      // it, and a retry would be an immutable duplicate - so say it is
-      // uncertain, and why to look first. The screen has re-read its data by
-      // the time this shows.
+      // it - so say it is uncertain, and to check before saving again. One line for
+      // every write (ADR-043): it names no place and promises no more than the system
+      // keeps (a repeat-safe key is forgotten after 15 minutes or a reload).
       write_outcome_unknown:
-        'Koneksinya terputus sebelum Uruni sempat menjawab, jadi belum pasti tersimpan. Cek Riwayat dulu sebelum menyimpan lagi, supaya tidak tercatat dua kali.',
+        'Koneksinya terputus sebelum Uruni sempat menjawab, jadi belum pasti tersimpan. Cek dulu apakah sudah tersimpan sebelum menyimpan lagi.',
       invalid_argument: 'Ada isian yang belum sesuai. Coba periksa lagi.',
       already_registered: 'Akun bendahara untuk Uruni ini sudah pernah dibuat.',
       invalid_credentials: 'Email atau kata sandi salah.',
@@ -229,11 +230,18 @@ export const copy = {
       // body.
       fund_already_exists: 'Kas ini sudah pernah disiapkan.',
       invalid_json: 'Ada yang tidak beres saat mengirim data. Coba lagi.',
+      // A malformed or reused idempotency key (ADR-043): the wrapper never sends
+      // either, so these are unreachable from the app. The 409 is a definite answer.
+      invalid_idempotency_key: 'Ada yang tidak beres saat mengirim data. Coba lagi.',
+      idempotency_key_reused: 'Ada yang tidak beres saat mengirim data. Coba lagi.',
       // Deleting a location (or a member or tier) that something already
       // points at. The locations section renders more specific wording
       // pointing at deactivate; this is the shared fallback for the same code
       // reached elsewhere.
       referenced_by_other_records: 'Data ini sudah dipakai di catatan lain, jadi tidak bisa dihapus.',
+      // ADR-040: a rate a correction has since replaced or deleted (a stale screen).
+      // The list reloads when this arrives, so the sentence says to look again.
+      dues_rate_superseded: 'Tarif ini sudah diperbaiki atau dihapus. Daftar tarif sudah dimuat ulang, silakan periksa lagi.',
       // Renaming the fund's kas utama through this route - the one purpose it
       // refuses. A titipan and an amplop are renameable.
       purpose_not_renameable: 'Nama kas utama tidak bisa diganti.',
@@ -255,7 +263,10 @@ export const copy = {
       purpose_correction_dues: 'Pos pembayaran iuran tidak bisa diperbaiki di sini.',
       purpose_correction_reimbursement: 'Pos talangan tidak bisa diperbaiki di sini — perbaiki lewat catatan talangannya.',
       purpose_correction_transfer: 'Pos hasil pindah tidak bisa diperbaiki lagi.',
-      purpose_correction_dues_reversal: 'Pos pembatalan iuran tidak bisa diperbaiki.',
+      // The refusal now covers every reversal, not only a dues one (ADR-042).
+      purpose_correction_reversal: 'Pos pembatalan tidak bisa diperbaiki.',
+      // Reverse-then-correct, reachable from a stale page (ADR-042).
+      purpose_correction_already_reversed: 'Transaksi ini sudah dibatalkan, posnya tidak bisa diperbaiki.',
       purpose_correction_target_closed: 'Amplop ini sudah ditutup — buka lagi dulu sebelum memindahkan transaksi ke sini.',
       purpose_correction_source_closed: 'Amplop ini sudah ditutup — buka lagi dulu sebelum memindahkan transaksi dari sini.',
       purpose_correction_noop: 'Baris ini sudah memakai pos itu.',
@@ -263,6 +274,9 @@ export const copy = {
       // amount input stops at 12 digits, so this is the fallback for a request
       // that got past it (a stale client, a direct API call).
       amount_too_large: 'Jumlahnya terlalu besar. Batasnya Rp 999.999.999.999 — cek lagi, mungkin ada nol yang kelebihan.',
+      // A date outside the plausible window (before 2000, or past the field's
+      // ceiling). The pickers keep inside it; this covers a stale form or a mistyped year.
+      date_out_of_range: 'Tanggalnya di luar batas yang wajar — cek lagi, mungkin salah ketik tahunnya.',
       // ADR-036: POST /api/purpose-moves' named refusals. The form already
       // withholds Titipan, a closed envelope and an amount above the balance,
       // so these are the fallback for a stale form - a close or a posting that
@@ -296,12 +310,19 @@ export const copy = {
       // purpose_correction_* codes above.
       purpose_correction_named_contribution:
         'Pos sumbangan yang sudah bernama tidak bisa diperbaiki di sini — batalkan sumbangannya, lalu catat lagi.',
-      // POST /api/dues-payments/{id}/reversal's named 409 for a second reversal
-      // of the same payment (ADR-029) - the shared fallback for the dues path.
-      // The contribution path (ADR-034) speaks of a sumbangan:
-      // copy.history.transactions.errors, checked first by that screen's error
-      // mapper.
-      dues_payment_already_reversed: 'Pembayaran iuran ini sudah dibatalkan.',
+      // The named 409 for a second reversal of the same row (ADR-029, ADR-042): the
+      // shared fallback, worded for the Iuran screens; Riwayat's mapper checks
+      // copy.history.transactions.errors first.
+      transaction_already_reversed: 'Pembayaran iuran ini sudah dibatalkan.',
+      // The reversal route's other refusals (ADR-042). The entry detail offers the
+      // button only where the ledger would accept, so these cover a stale page.
+      reversal_opening: 'Saldo awal tidak bisa dibatalkan.',
+      reversal_reimbursement: 'Pelunasan talangan tidak bisa dibatalkan.',
+      reversal_transfer: 'Pindahan tidak bisa dibatalkan satu sisi saja.',
+      reversal_of_reversal: 'Pembatalan tidak bisa dibatalkan lagi.',
+      reversal_adjustment: 'Penyesuaian tidak bisa dibatalkan.',
+      reversal_reconciliation_fix: 'Transaksi ini dipakai untuk menutup selisih cek kas, jadi tidak bisa dibatalkan.',
+      reversal_before_original: 'Transaksi ini bertanggal setelah hari ini — pembatalannya baru bisa dicatat mulai tanggal itu.',
       // The receipt upload routes (internal/http/receipts.go's
       // processAndStoreReceipt) - a phone shooting HEIC by default gets its own
       // wording, as in the Go comment beside that code.
@@ -595,6 +616,10 @@ export const copy = {
     contributionReversal: {
       text: (memberName: string) => `Pembatalan · ${memberName}`,
     },
+    // A reversal of a row naming no member (ADR-042) states the original's date.
+    unnamedReversal: {
+      text: (date: string) => `Pembatalan · transaksi ${date}`,
+    },
     opening: {
       text: (accountName: string) => `Saldo awal · ${accountName}`,
     },
@@ -792,7 +817,6 @@ export const copy = {
       reversalRow: 'Pembatalan',
       reversedBadge: 'Sudah dibatalkan',
       reverse: 'Batalkan',
-      dateLabel: 'Tanggal pembatalan',
       noteLabel: 'Alasan (opsional)',
       // A yes to the question the open card is asking - short enough to share
       // one action row with Batal at 375px.
@@ -842,6 +866,9 @@ export const copy = {
       // "Tunggakan" is PRD-ID's word, not a coinage.
       arrearsBadge: (months: number) => `Tunggakan ${months} bulan`,
       joinedOnLabel: 'Mulai ikut',
+      // ADR-040: from which month a changed golongan holds. The same two words
+      // as a tarif's start month (settings.tiers.effectiveFromLabel).
+      tierFromLabel: 'Mulai bulan',
       add: 'Tambah anggota',
       adding: 'Menambahkan…',
       // The whole card is the edit affordance (as settings.locations), so
@@ -885,8 +912,8 @@ export const copy = {
     // perlu"). The name is a label - it heads every screen and the public
     // report - so this changes nothing already recorded.
     fund: {
-      heading: 'Nama kas',
-      body: 'Nama ini muncul di seluruh aplikasi dan di laporan publik. Menggantinya tidak mengubah catatan apa pun.',
+      heading: 'Kas ini',
+      body: 'Nama kas muncul di seluruh aplikasi dan di laporan publik; zona waktunya menentukan kapan hari dan bulan berganti. Menggantinya tidak mengubah catatan apa pun.',
       nameLabel: 'Nama kas',
       save: 'Simpan',
       saving: 'Menyimpan…',
@@ -896,6 +923,13 @@ export const copy = {
       // needs to say which one.
       editTitle: 'Ubah nama kas',
       editAria: (name: string) => `Ubah ${name}`,
+      // The fund's second setting (ADR-041): a card opening a dialog at
+      // ?edit=fund:time_zone, showing the zone's label from copy.timeZone.options.
+      zone: {
+        editTitle: 'Ubah zona waktu',
+        body: 'Dipakai untuk tanggal hari ini, pergantian bulan, dan laporan publik. Menggantinya tidak mengubah catatan yang sudah ada.',
+        editAria: (optionLabel: string) => `Ubah zona waktu, ${optionLabel}`,
+      },
     },
     // The treasurer's own login (#386; "user" as CONTEXT.md names the login, not
     // an account, which is a place money sits): who is signed in, and the two edits it
@@ -1013,7 +1047,7 @@ export const copy = {
     },
     tiers: {
       heading: 'Golongan & tarif',
-      body: 'Besar iuran per bulan menurut golongan. Tarif baru ditambahkan mulai bulan tertentu, bukan menimpa yang lama — supaya bulan-bulan lampau tetap terbaca dengan tarif yang berlaku waktu itu.',
+      body: 'Besar iuran per bulan menurut golongan. Tarif baru ditambahkan mulai bulan tertentu, jadi bulan-bulan sebelumnya tetap memakai tarif lama. Memperbaiki nominal tarif mengubah semua bulan yang dipakainya.',
       empty: 'Belum ada golongan.',
       nameLabel: 'Nama golongan',
       add: 'Tambah golongan',
@@ -1047,9 +1081,9 @@ export const copy = {
       delete: 'Hapus golongan',
       deleting: 'Menghapus…',
       deleteConfirm:
-        'Golongan ini akan dihapus selamanya, beserta daftar tarifnya. Hanya bisa untuk golongan yang belum dipakai anggota mana pun.',
+        'Golongan ini akan dihapus selamanya, beserta daftar tarifnya. Hanya bisa untuk golongan yang belum pernah dipakai anggota mana pun.',
       deleteConfirmAction: 'Ya, hapus',
-      deleteRefused: 'Golongan ini masih dipakai anggota — ganti golongan mereka dulu kalau memang mau dihapus.',
+      deleteRefused: 'Golongan ini pernah dipakai anggota, jadi tidak bisa dihapus. Kalau perlu, ganti saja namanya.',
       // A tier with no rate yet is an ordinary state, not a problem.
       noRates: 'Tarif belum ditentukan.',
       ratesHeading: 'Tarif',
@@ -1061,6 +1095,16 @@ export const copy = {
       // thing being added below are told apart without a bordered box.
       addRateHeading: 'Tarif baru',
       editRate: 'Perbaiki nominal',
+      // The step before a correction: it reprices every month the rate covers (ADR-040),
+      // so it names that span first. span is rateSpanRange, rateSpanOpen or one bare month.
+      rateCorrectConfirm: (oldAmount: string, newAmount: string, span: string) =>
+        `Nominal ${oldAmount} diganti ${newAmount} untuk ${span}. Pembayaran yang sudah tercatat tidak berubah, tetapi status iuran bulan-bulan itu bisa ikut berubah.`,
+      rateCorrectConfirmAction: 'Ya, perbaiki',
+      rateCorrecting: 'Memperbaiki…',
+      // The months a corrected rate covers, from its own month to the month
+      // before the next rate starts. Open-ended when no later rate stands.
+      rateSpanRange: (from: string, to: string) => `${from} sampai ${to}`,
+      rateSpanOpen: (from: string) => `${from} seterusnya`,
       deleteRate: 'Hapus tarif',
       deletingRate: 'Menghapus…',
       // From effective_from onward, since a rate has no end date - the next
@@ -1188,6 +1232,30 @@ export const copy = {
       `Tanggal ini sebelum saldo awal ${lokasi} (${tanggal}). Kalau uang ini sudah termasuk di saldo awal, tidak perlu dicatat lagi.`,
     beforeOpeningFund: (tanggal: string) =>
       `Tanggal ini sebelum saldo awal kas (${tanggal}). Kalau uang ini sudah termasuk di saldo awal, tidak perlu dicatat lagi.`,
+  },
+  // The fund's time zone (ADR-041): the one place the app says WIB, WITA or WIT.
+  // The server stores IANA names (lib/timeZones.ts). The abbreviation also
+  // rides a displayed time of day ("pukul 13.42 WIB"), not Intl's zone names.
+  timeZone: {
+    label: 'Zona waktu',
+    setupHint: 'Menentukan kapan hari dan bulan berganti untuk kas ini. Bisa diganti nanti di Pengaturan.',
+    options: {
+      'Asia/Jakarta': {
+        abbreviation: 'WIB',
+        label: 'WIB - Waktu Indonesia Barat',
+        example: 'mis. Jakarta, Medan, Palembang',
+      },
+      'Asia/Makassar': {
+        abbreviation: 'WITA',
+        label: 'WITA - Waktu Indonesia Tengah',
+        example: 'mis. Makassar, Denpasar, Balikpapan',
+      },
+      'Asia/Jayapura': {
+        abbreviation: 'WIT',
+        label: 'WIT - Waktu Indonesia Timur',
+        example: 'mis. Jayapura, Ambon',
+      },
+    },
   },
   // One ledger entry read in full - opened by tapping a card in any
   // transaction list. Field labels reuse the record form's nouns (CONTEXT.md:

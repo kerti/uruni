@@ -26,6 +26,7 @@ import (
 
 	"github.com/kerti/uruni/internal/db"
 	"github.com/kerti/uruni/internal/store"
+	"github.com/kerti/uruni/internal/tz"
 )
 
 // Kind is a dump's kind (ADR-012's "date and kind"): what wrote it, not how it
@@ -56,12 +57,17 @@ const (
 // ApplyRetention (which must touch nothing this package did not write) all
 // go through it.
 //
-// uruni-<date>-<time>-<kind>-fv<format version>-<hash12>.zip, e.g.
-// uruni-20260930-140501-daily-fv1-3f9a2c8e10b4.zip. Every field is in the
+// uruni-<date>-<time>[-<zone token>]-<kind>-fv<format version>-<hash12>.zip,
+// e.g. uruni-20260930-140501-daily-fv2-3f9a2c8e10b4.zip. Every field is in the
 // name rather than a separate index file:
-//   - date+time (Asia/Jakarta, YYYYMMDD-HHMMSS): retention counts versions,
-//     so a boot dump or a same-day change after the scheduled dump needs a
-//     name of its own; the name cannot be dated to the day alone.
+//   - date+time (YYYYMMDD-HHMMSS, in the fund's zone): retention counts
+//     versions, so a boot dump or a same-day change after the scheduled dump
+//     needs a name of its own; the name cannot be dated to the day alone.
+//   - zone token (ADR-041): "utc8" (Asia/Makassar) or "utc9" (Asia/Jayapura),
+//     written only outside WIB. A wall-clock time without its zone is ambiguous
+//     once the zone can change. A name with no token is Asia/Jakarta, so every
+//     existing dump keeps its meaning. The parse reads the stamp in its own
+//     zone, so the instant stays exact whatever the fund's zone is now.
 //   - kind: "daily" or "pre-restore", so retention can group by kind from
 //     the name alone.
 //   - format version: readable without opening the zip, so
@@ -71,7 +77,7 @@ const (
 //
 // The character classes contain no path separator and no "..", so a full
 // match already rules out path traversal; ValidDumpName adds no allowlist.
-var dumpNamePattern = regexp.MustCompile(`^uruni-(\d{8})-(\d{6})-(daily|pre-restore)-fv(\d+)-([0-9a-f]{12})\.zip$`)
+var dumpNamePattern = regexp.MustCompile(`^uruni-(\d{8})-(\d{6})(?:-(utc8|utc9))?-(daily|pre-restore)-fv(\d+)-([0-9a-f]{12})\.zip$`)
 
 // DumpInfo is one dump file's identity, parsed from its name, never from a
 // database row or sidecar index, so the metadata cannot drift from the file.
@@ -80,7 +86,40 @@ type DumpInfo struct {
 	Kind          Kind
 	FormatVersion int64
 	Hash          string
-	When          time.Time // Asia/Jakarta
+	Zone          string    // the zone the name is stamped in: one of tz.Names()
+	When          time.Time // in Zone
+}
+
+// zoneTokens maps a zone to the token its dump names carry. WIB has none: a
+// name without a token is Asia/Jakarta (ADR-041).
+var zoneTokens = map[string]string{tz.Jakarta: "", tz.Makassar: "utc8", tz.Jayapura: "utc9"}
+
+// zoneForToken is zoneTokens read backwards; "" (no token) is WIB.
+func zoneForToken(token string) string {
+	for zone, t := range zoneTokens {
+		if t == token {
+			return zone
+		}
+	}
+	return ""
+}
+
+// InstanceZone is the zone an instance-wide job reckons its day in: the first
+// fund's, by the rule resolveFund applies (ADR-030, ADR-041), or tz.Default when
+// no fund exists yet (the boot dump before setup). A zone tz.Load refuses is an
+// error, not a fallback.
+func InstanceZone(ctx context.Context, q store.Querier) (string, error) {
+	funds, err := q.ListFunds(ctx)
+	if err != nil {
+		return "", fmt.Errorf("backup: reading the fund's time zone: %w", err)
+	}
+	if len(funds) == 0 {
+		return tz.Default, nil
+	}
+	if _, err := tz.Load(funds[0].TimeZone); err != nil {
+		return "", fmt.Errorf("backup: fund %d: %w", funds[0].ID, err)
+	}
+	return funds[0].TimeZone, nil
 }
 
 // hashPrefixLen is how much of ChangeHash's sha256 hex digest goes into a
@@ -100,11 +139,21 @@ func shortHash(hash string) string {
 	return hash
 }
 
-// BuildDumpName renders a DumpInfo's filename; see dumpNamePattern. hash is
-// ChangeHash's full hex digest; only shortHash's prefix goes in the name.
-func BuildDumpName(when time.Time, kind Kind, formatVersion int64, hash string) string {
-	t := when.In(jakarta)
-	return fmt.Sprintf("uruni-%s-%s-%s-fv%d-%s.zip", t.Format("20060102"), t.Format("150405"), kind, formatVersion, shortHash(hash))
+// BuildDumpName renders a DumpInfo's filename; see dumpNamePattern. when is
+// stamped in zone, one of tz.Names() (any other panics: every caller takes it
+// from a fund row or tz.Default).
+// hash is ChangeHash's full hex digest; only shortHash's prefix goes in the name.
+func BuildDumpName(when time.Time, zone string, kind Kind, formatVersion int64, hash string) string {
+	loc, err := tz.Load(zone)
+	if err != nil {
+		panic("backup: BuildDumpName: " + err.Error())
+	}
+	t := when.In(loc)
+	token := zoneTokens[zone]
+	if token != "" {
+		token = "-" + token
+	}
+	return fmt.Sprintf("uruni-%s-%s%s-%s-fv%d-%s.zip", t.Format("20060102"), t.Format("150405"), token, kind, formatVersion, shortHash(hash))
 }
 
 // ParseDumpName is BuildDumpName's inverse. ok is false for anything that
@@ -116,15 +165,20 @@ func ParseDumpName(name string) (DumpInfo, bool) {
 	if m == nil {
 		return DumpInfo{}, false
 	}
-	when, err := time.ParseInLocation("20060102-150405", m[1]+"-"+m[2], jakarta)
+	zone := zoneForToken(m[3])
+	loc, err := tz.Load(zone)
+	if err != nil {
+		return DumpInfo{}, false
+	}
+	when, err := time.ParseInLocation("20060102-150405", m[1]+"-"+m[2], loc)
 	if err != nil {
 		return DumpInfo{}, false
 	}
 	var formatVersion int64
-	if _, err := fmt.Sscanf(m[4], "%d", &formatVersion); err != nil {
+	if _, err := fmt.Sscanf(m[5], "%d", &formatVersion); err != nil {
 		return DumpInfo{}, false
 	}
-	return DumpInfo{Name: name, Kind: Kind(m[3]), FormatVersion: formatVersion, Hash: m[5], When: when}, true
+	return DumpInfo{Name: name, Kind: Kind(m[4]), FormatVersion: formatVersion, Hash: m[6], Zone: zone, When: when}, true
 }
 
 // ValidDumpName reports whether name is exactly a filename this package could
@@ -328,16 +382,24 @@ func writeThenRename(backupDir, name string, data []byte) error {
 // check is WriteDailyIfNeeded's job. The boot-time format-version dump and
 // the restore safety net call this because both always want a fresh dump.
 func WriteDump(ctx context.Context, sqlDB *sql.DB, uploadsDir, backupDir string, kind Kind, now time.Time) (name string, err error) {
-	return writeDump(ctx, readDocumentFrom(sqlDB), assembleZip, uploadsDir, backupDir, kind, now)
+	zone, err := InstanceZone(ctx, store.New(sqlDB))
+	if err != nil {
+		return "", err
+	}
+	return writeDump(ctx, readDocumentFrom(sqlDB), assembleZip, uploadsDir, backupDir, zone, kind, now)
 }
 
-// writeDump is WriteDump over an injectable document reader and zip assembler.
-func writeDump(ctx context.Context, read documentReader, assemble zipAssembler, uploadsDir, backupDir string, kind Kind, now time.Time) (name string, err error) {
+// writeDump is WriteDump over an injectable document reader and zip assembler,
+// with the zone the name is stamped in already resolved.
+func writeDump(ctx context.Context, read documentReader, assemble zipAssembler, uploadsDir, backupDir, zone string, kind Kind, now time.Time) (name string, err error) {
+	if _, err := tz.Load(zone); err != nil {
+		return "", fmt.Errorf("backup: %w", err)
+	}
 	m, err := buildDumpMaterials(ctx, read, assemble, uploadsDir)
 	if err != nil {
 		return "", err
 	}
-	name = BuildDumpName(now, kind, m.doc.FormatVersion, m.hash)
+	name = BuildDumpName(now, zone, kind, m.doc.FormatVersion, m.hash)
 	if err := writeThenRename(backupDir, name, m.zipBytes); err != nil {
 		return "", err
 	}
@@ -347,9 +409,11 @@ func writeDump(ctx context.Context, read documentReader, assemble zipAssembler, 
 // WriteDailyIfNeeded is the scheduler's tick (scheduler.go): write a fresh
 // "daily" dump exactly when both are true -
 //
-//  1. no daily dump exists yet for today in Asia/Jakarta (not the most
+//  1. no daily dump exists yet for today in the fund's zone (not the most
 //     recent dump's date: a boot-time dump earlier today already counts as
-//     today's daily copy); and
+//     today's daily copy; and the comparison is of instants, both read in the
+//     zone the fund has now, so a zone change never makes yesterday evening's
+//     dump count as today's); and
 //  2. the fund has changed since the most recent daily dump of any date
 //     (ChangeHash against that DumpInfo's Hash, parsed from its filename,
 //     never recomputed from the old dump).
@@ -358,19 +422,28 @@ func writeDump(ctx context.Context, read documentReader, assemble zipAssembler, 
 // writes nothing (ADR-012: retention counts versions, not days), and a fund
 // that changed twice in a day still gets one daily dump.
 func WriteDailyIfNeeded(ctx context.Context, sqlDB *sql.DB, uploadsDir, backupDir string, now time.Time) (name string, written bool, err error) {
+	zone, err := InstanceZone(ctx, store.New(sqlDB))
+	if err != nil {
+		return "", false, err
+	}
 	check := func(ctx context.Context) error { return db.QuickCheck(ctx, sqlDB) }
-	return writeDailyIfNeeded(ctx, readDocumentFrom(sqlDB), assembleZip, check, uploadsDir, backupDir, now)
+	return writeDailyIfNeeded(ctx, readDocumentFrom(sqlDB), assembleZip, check, uploadsDir, backupDir, zone, now)
 }
 
 // writeDailyIfNeeded is WriteDailyIfNeeded over an injectable document reader,
-// zip assembler and integrity check (nil skips the check).
-func writeDailyIfNeeded(ctx context.Context, read documentReader, assemble zipAssembler, check func(context.Context) error, uploadsDir, backupDir string, now time.Time) (name string, written bool, err error) {
+// zip assembler and integrity check (nil skips the check), with the fund's zone
+// already resolved.
+func writeDailyIfNeeded(ctx context.Context, read documentReader, assemble zipAssembler, check func(context.Context) error, uploadsDir, backupDir, zone string, now time.Time) (name string, written bool, err error) {
+	loc, err := tz.Load(zone)
+	if err != nil {
+		return "", false, fmt.Errorf("backup: %w", err)
+	}
 	dumps, err := ListDumps(backupDir)
 	if err != nil {
 		return "", false, err
 	}
 
-	today := now.In(jakarta).Format("2006-01-02")
+	today := now.In(loc).Format("2006-01-02")
 	var mostRecentDailyHash string
 	haveMostRecentDaily := false
 	for _, d := range dumps { // newest first
@@ -381,7 +454,7 @@ func writeDailyIfNeeded(ctx context.Context, read documentReader, assemble zipAs
 			mostRecentDailyHash = d.Hash
 			haveMostRecentDaily = true
 		}
-		if d.When.In(jakarta).Format("2006-01-02") == today {
+		if d.When.In(loc).Format("2006-01-02") == today {
 			return "", false, nil
 		}
 	}
@@ -408,7 +481,7 @@ func writeDailyIfNeeded(ctx context.Context, read documentReader, assemble zipAs
 		return "", false, err
 	}
 
-	name = BuildDumpName(now, KindDaily, m.doc.FormatVersion, m.hash)
+	name = BuildDumpName(now, zone, KindDaily, m.doc.FormatVersion, m.hash)
 	if err := writeThenRename(backupDir, name, m.zipBytes); err != nil {
 		return "", false, err
 	}

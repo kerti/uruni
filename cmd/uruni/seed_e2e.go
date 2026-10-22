@@ -80,9 +80,17 @@ func seedE2E(ctx context.Context) error {
 
 	// #230: the cash account's opening balance is born with it, inside
 	// SetUpFund's transaction.
-	occurredOn := time.Now().In(tz.Jakarta).Format("2006-01-02") // the treasurer's day, not the host's (#379)
+	// The seeded fund is WIB (the e2e specs that compute today in Asia/Jakarta
+	// rely on it). The fund does not exist yet, so the zone is named here and
+	// passed to SetUpFund, not read.
+	loc, err := tz.Load(tz.Jakarta)
+	if err != nil {
+		return err
+	}
+	occurredOn := time.Now().In(loc).Format("2006-01-02")
 	setup, err := l.SetUpFund(ctx, ledger.SetUpFundParams{
 		FundName: seedE2EFundName,
+		TimeZone: tz.Jakarta,
 		Accounts: []ledger.AccountInput{
 			{
 				Kind: "cash", Name: "Tunai",
@@ -102,8 +110,8 @@ func seedE2E(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("creating the e2e dues tier: %w", err)
 	}
-	if _, err := q.CreateDuesRate(ctx, store.CreateDuesRateParams{
-		TierID: tier.ID, Amount: money.Amount(50_000).Int64(), EffectiveFrom: "2024-01", CreatedAt: now,
+	if _, err := l.CreateDuesRate(ctx, ledger.CreateDuesRateParams{
+		FundID: setup.Fund.ID, TierID: tier.ID, Amount: 50_000, EffectiveFrom: "2024-01",
 	}); err != nil {
 		return fmt.Errorf("creating the e2e dues rate: %w", err)
 	}
@@ -111,8 +119,8 @@ func seedE2E(ctx context.Context) error {
 	joinedOn := "2024-01-01"
 	tierID := tier.ID
 	for _, name := range []string{"Warga Satu", "Warga Dua"} {
-		if _, err := q.CreateMember(ctx, store.CreateMemberParams{
-			FundID: setup.Fund.ID, Name: name, TierID: &tierID, JoinedOn: joinedOn, CreatedAt: now,
+		if _, err := l.CreateMember(ctx, ledger.CreateMemberParams{
+			FundID: setup.Fund.ID, Name: name, TierID: &tierID, JoinedOn: joinedOn,
 		}); err != nil {
 			return fmt.Errorf("creating e2e member %q: %w", name, err)
 		}

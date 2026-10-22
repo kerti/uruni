@@ -1,5 +1,5 @@
 {
-  "format_version": 1,
+  "format_version": 2,
   "users": [
     {
       "id": 1,
@@ -13,6 +13,7 @@
       "id": 1,
       "name": "Test Fund",
       "currency": "IDR",
+      "time_zone": "Asia/Jakarta",
       "report_slug": "0000000000000000000fixture",
       "created_at": 1700000000
     }
@@ -64,6 +65,12 @@
       "fund_id": 1,
       "name": "Pelaksana",
       "created_at": 1700000000
+    },
+    {
+      "id": 2,
+      "fund_id": 1,
+      "name": "Madya",
+      "created_at": 1700000000
     }
   ],
   "dues_rates": [
@@ -72,7 +79,36 @@
       "tier_id": 1,
       "amount": 50000,
       "effective_from": "2026-01",
+      "correction": 0,
+      "deleted": false,
       "created_at": 1700000000
+    },
+    {
+      "id": 2,
+      "tier_id": 1,
+      "amount": 55000,
+      "effective_from": "2026-01",
+      "correction": 1,
+      "deleted": false,
+      "created_at": 1700000001
+    },
+    {
+      "id": 3,
+      "tier_id": 1,
+      "amount": 70000,
+      "effective_from": "2026-06",
+      "correction": 0,
+      "deleted": false,
+      "created_at": 1700000002
+    },
+    {
+      "id": 4,
+      "tier_id": 1,
+      "amount": 70000,
+      "effective_from": "2026-06",
+      "correction": 1,
+      "deleted": true,
+      "created_at": 1700000003
     }
   ],
   "members": [
@@ -80,7 +116,6 @@
       "id": 1,
       "fund_id": 1,
       "name": "Andi",
-      "tier_id": 1,
       "joined_on": "2026-01-01",
       "inactive_on": null,
       "created_at": 1700000000
@@ -89,10 +124,38 @@
       "id": 2,
       "fund_id": 1,
       "name": "Budi",
-      "tier_id": null,
       "joined_on": "2026-01-01",
       "inactive_on": "2026-06-01",
       "created_at": 1700000000
+    }
+  ],
+  "member_tiers": [
+    {
+      "id": 1,
+      "fund_id": 1,
+      "member_id": 1,
+      "tier_id": 2,
+      "effective_from": "2026-01",
+      "correction": 0,
+      "created_at": 1700000010
+    },
+    {
+      "id": 2,
+      "fund_id": 1,
+      "member_id": 1,
+      "tier_id": 1,
+      "effective_from": "2026-01",
+      "correction": 1,
+      "created_at": 1700000011
+    },
+    {
+      "id": 3,
+      "fund_id": 1,
+      "member_id": 1,
+      "tier_id": 2,
+      "effective_from": "2026-04",
+      "correction": 0,
+      "created_at": 1700000012
     }
   ],
   "transfers": [
@@ -355,6 +418,40 @@
       "reverses_transaction_id": null,
       "note": null,
       "created_at": 1700000322
+    },
+    {
+      "id": 14,
+      "fund_id": 1,
+      "account_id": 1,
+      "purpose_id": 1,
+      "direction": "in",
+      "amount": 8000,
+      "occurred_on": "2026-02-05",
+      "kind": "normal",
+      "member_id": null,
+      "dues_period": null,
+      "reimbursement_id": null,
+      "transfer_id": null,
+      "reverses_transaction_id": null,
+      "note": null,
+      "created_at": 1700000402
+    },
+    {
+      "id": 15,
+      "fund_id": 1,
+      "account_id": 1,
+      "purpose_id": 1,
+      "direction": "out",
+      "amount": 8000,
+      "occurred_on": "2026-02-05",
+      "kind": "adjustment",
+      "member_id": null,
+      "dues_period": null,
+      "reimbursement_id": null,
+      "transfer_id": null,
+      "reverses_transaction_id": 14,
+      "note": null,
+      "created_at": 1700000403
     }
   ],
   "receipts": [

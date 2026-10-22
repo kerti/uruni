@@ -30,11 +30,11 @@ const RebuildScratchPrefix = ".uruni-rebuild-"
 var ErrPreRebuildExists = errors.New("backup: the file the old database would be kept as already exists")
 
 // PreRebuildName is the base name the old database file is copied aside to:
-// uruni.db.pre-<to-version>-<date>-<time> (Asia/Jakarta, like a dump's name),
+// uruni.db.pre-<to-version>-<date>-<time> (Asia/Jakarta, the operator's stamp: ADR-041),
 // e.g. uruni.db.pre-v0.9.0-alpha.3-20261014-101500. It sits next to the
 // database, on its own volume, so the way back is one rename away.
 func PreRebuildName(dbPath, toVersion string, when time.Time) string {
-	return fmt.Sprintf("%s.pre-%s-%s", filepath.Base(dbPath), cleanVersion(toVersion), when.In(jakarta).Format("20060102-150405"))
+	return fmt.Sprintf("%s.pre-%s-%s", filepath.Base(dbPath), cleanVersion(toVersion), when.In(operatorLocation()).Format("20060102-150405"))
 }
 
 // RemoveRebuildScratch deletes every regular file in dir whose name starts
@@ -198,4 +198,4 @@ func copyAside(ops atomicOps, src, dst string) error {
 }
 
 // NewestDate is the date the backup was taken, as BuildPreview shows it.
-func NewestDate(doc Document) string { return newestMoment(doc) }
+func NewestDate(doc Document) (string, error) { return newestMoment(doc) }

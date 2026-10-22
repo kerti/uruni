@@ -131,6 +131,8 @@ type reportRow struct {
 	Amount     string
 	Class      string
 	HasReceipt bool
+	// Reversed marks the original of a pair: Sudah dibatalkan (ADR-042).
+	Reversed bool
 }
 
 // reportNote is a row's note as the report prints it: trimmed, "" for none.
@@ -201,7 +203,7 @@ type reportMonthOption struct {
 }
 
 // reportHandler serves GET /report/{slug}. now is injectable so a test can
-// pin the Jakarta month; production passes time.Now.
+// pin the month in the fund's zone; production passes time.Now.
 func reportHandler(l *ledger.Ledger, q store.Querier, logger *slog.Logger, now func() time.Time) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		setReportHeaders(w)
@@ -482,7 +484,7 @@ func buildReportPage(r ledger.Report, empty bool) reportPage {
 			}
 			page.Rows = append(page.Rows, reportRow{
 				Date: date, Label: reportText.entryLabel(*e), Note: reportNote(e.Note), Purpose: e.PurposeName,
-				Amount: sign + money.FormatIDR(e.Amount), Class: e.Direction, HasReceipt: e.HasReceipt,
+				Amount: sign + money.FormatIDR(e.Amount), Class: e.Direction, HasReceipt: e.HasReceipt, Reversed: e.Reversed,
 			})
 		case row.Move != nil:
 			page.Rows = append(page.Rows, reportRow{

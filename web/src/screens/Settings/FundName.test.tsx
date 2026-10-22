@@ -4,12 +4,16 @@ import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import FundName from '@/screens/Settings/FundName'
+import { chooseZoneOption } from '@/test/timeZone'
 import { copy } from '@/copy/id'
+import { getFundTimeZone, resetFundTimeZone } from '@/lib/dates'
 
 const text = copy.settings.fund
+const zones = copy.timeZone
 
 afterEach(() => {
   vi.unstubAllGlobals()
+  resetFundTimeZone()
 })
 
 function jsonResponse(body: unknown, status = 200) {
@@ -20,6 +24,7 @@ const fund = {
   id: 1,
   name: 'Kas Ruang 3A',
   currency: 'IDR',
+  time_zone: 'Asia/Jakarta',
   report_slug: 'abcdefghijklmnopqrstuv',
   report_url: '/report/abcdefghijklmnopqrstuv',
   created_at: 1,
@@ -27,13 +32,18 @@ const fund = {
 
 function stubFund() {
   const calls: { method: string; body: unknown }[] = []
+  // The server's fund: a PATCH changes it, and the GET that follows (the card
+  // refreshes after a save) reads it back, as the real one does.
+  let current = fund
   const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
     const url = typeof input === 'string' ? input : input.toString()
     const method = init?.method ?? 'GET'
     if (url.includes('/api/fund')) {
-      if (method === 'GET') return Promise.resolve(jsonResponse(fund))
-      calls.push({ method, body: init?.body ? JSON.parse(String(init.body)) : undefined })
-      return Promise.resolve(jsonResponse({ ...fund, name: 'Kas Ruang 3B' }))
+      if (method === 'GET') return Promise.resolve(jsonResponse(current))
+      const body = init?.body ? (JSON.parse(String(init.body)) as { name?: string; time_zone?: string }) : undefined
+      calls.push({ method, body })
+      current = { ...current, name: body?.name ?? current.name, time_zone: body?.time_zone ?? current.time_zone }
+      return Promise.resolve(jsonResponse(current))
     }
     return Promise.reject(new Error(`unstubbed fetch: ${url}`))
   })
@@ -55,7 +65,7 @@ function renderAt(entry = '/settings', onRenamed: () => void = vi.fn()) {
           path="/settings"
           element={
             <>
-              <FundName onRenamed={onRenamed} />
+              <FundName onChanged={onRenamed} />
               <LocationProbe />
             </>
           }
@@ -69,7 +79,7 @@ function currentSearch() {
   return screen.getByTestId('location-search').textContent
 }
 
-describe('Settings fund name', () => {
+describe('Settings fund (Kas ini)', () => {
   it("shows the fund's name as a card, with no form until the dialog opens", async () => {
     const { fetchMock } = stubFund()
     vi.stubGlobal('fetch', fetchMock)
@@ -167,5 +177,99 @@ describe('Settings fund name', () => {
     await waitFor(() => expect(input).toHaveFocus())
     expect(input.selectionStart).toBe(input.value.length)
     expect(input.selectionEnd).toBe(input.value.length)
+  })
+
+  it('is headed "Kas ini", with an intro for both settings', async () => {
+    const { fetchMock } = stubFund()
+    vi.stubGlobal('fetch', fetchMock)
+    renderAt()
+
+    await screen.findByRole('button', { name: text.editAria('Kas Ruang 3A') })
+    expect(screen.getByRole('heading', { name: 'Kas ini' })).toBeInTheDocument()
+    expect(screen.getByText(text.body)).toBeInTheDocument()
+  })
+
+  it("shows the zone as a second card, in the chosen option's own words", async () => {
+    const { fetchMock } = stubFund()
+    vi.stubGlobal('fetch', fetchMock)
+    renderAt()
+
+    const card = await screen.findByRole('button', { name: text.zone.editAria(zones.options['Asia/Jakarta'].label) })
+    expect(card).toHaveTextContent(zones.options['Asia/Jakarta'].label)
+    expect(card).toHaveTextContent(zones.label)
+    expect(screen.queryByRole('combobox', { name: zones.label })).not.toBeInTheDocument()
+  })
+
+  it('opens the zone dialog on the URL, seeded with the current zone', async () => {
+    const { fetchMock } = stubFund()
+    vi.stubGlobal('fetch', fetchMock)
+    renderAt()
+
+    await userEvent.click(await screen.findByRole('button', { name: text.zone.editAria(zones.options['Asia/Jakarta'].label) }))
+
+    expect(await screen.findByRole('dialog', { name: text.zone.editTitle })).toBeInTheDocument()
+    expect(screen.getByRole('combobox', { name: zones.label })).toHaveTextContent(zones.options['Asia/Jakarta'].label)
+    expect(screen.getByText(text.zone.body)).toBeInTheDocument()
+    expect(currentSearch()).toBe('?edit=fund%3Atime_zone')
+  })
+
+  it('opens the zone dialog straight from a deep link', async () => {
+    const { fetchMock } = stubFund()
+    vi.stubGlobal('fetch', fetchMock)
+    renderAt('/settings?edit=fund:time_zone')
+
+    expect(await screen.findByRole('dialog', { name: text.zone.editTitle })).toBeInTheDocument()
+    // And it is not mistaken for the name's dead link and stripped.
+    expect(currentSearch()).toBe('?edit=fund:time_zone')
+  })
+
+  it('changes the zone with PATCH /api/fund, sends only the zone, hands the fund back and closes', async () => {
+    const { fetchMock, calls } = stubFund()
+    vi.stubGlobal('fetch', fetchMock)
+    const onChanged = vi.fn()
+    renderAt('/settings?edit=fund:time_zone', onChanged)
+
+    await screen.findByRole('dialog', { name: text.zone.editTitle })
+    expect(screen.getByRole('button', { name: text.save })).toBeDisabled()
+    await chooseZoneOption('Asia/Jayapura')
+    await userEvent.click(screen.getByRole('button', { name: text.save }))
+
+    await waitFor(() => expect(calls).toHaveLength(1))
+    expect(calls[0]).toEqual({ method: 'PATCH', body: { time_zone: 'Asia/Jayapura' } })
+    await waitFor(() =>
+      expect(onChanged).toHaveBeenCalledWith(expect.objectContaining({ time_zone: 'Asia/Jayapura', name: 'Kas Ruang 3A' })),
+    )
+    await waitFor(() => expect(currentSearch()).toBe(''))
+    // The app is on the new zone the moment the PATCH answered: the date helpers
+    // hold it, with no reload.
+    expect(getFundTimeZone()).toBe('Asia/Jayapura')
+  })
+
+  it("leaves the date helpers' zone alone when she cancels", async () => {
+    const { fetchMock, calls } = stubFund()
+    vi.stubGlobal('fetch', fetchMock)
+    renderAt('/settings?edit=fund:time_zone')
+
+    await screen.findByRole('dialog', { name: text.zone.editTitle })
+    await chooseZoneOption('Asia/Makassar')
+    await userEvent.click(screen.getByRole('button', { name: text.cancel }))
+
+    await waitFor(() => expect(currentSearch()).toBe(''))
+    expect(calls).toHaveLength(0)
+    expect(getFundTimeZone()).toBe('Asia/Jakarta')
+  })
+
+  it('keeps a half-made choice from one opening to the next', async () => {
+    const { fetchMock } = stubFund()
+    vi.stubGlobal('fetch', fetchMock)
+    renderAt('/settings?edit=fund:time_zone')
+
+    await screen.findByRole('dialog', { name: text.zone.editTitle })
+    await chooseZoneOption('Asia/Makassar')
+    await userEvent.click(screen.getByRole('button', { name: text.cancel }))
+    await waitFor(() => expect(currentSearch()).toBe(''))
+
+    await userEvent.click(await screen.findByRole('button', { name: text.zone.editAria(zones.options['Asia/Jakarta'].label) }))
+    expect(await screen.findByRole('combobox', { name: zones.label })).toHaveTextContent(zones.options['Asia/Jakarta'].label)
   })
 })

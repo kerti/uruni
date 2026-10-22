@@ -15,15 +15,9 @@ import { useApi } from '@/lib/useApi'
 import { useDialogParam } from '@/lib/useDialogParam'
 import { useResetWhen } from '@/lib/useResetWhen'
 import type { DuesRate, DuesTier } from '@/lib/setup'
+import { currentPeriod } from '@/lib/dates'
 
 const text = copy.settings.tiers
-
-/** Local YYYY-MM - never toISOString(), which is UTC and can read a month
- * early in WIB. */
-function currentISOMonth(): string {
-  const now = new Date()
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
-}
 
 /** Every tier the fund has, each with its rate history. One shape for the
  * section: the card list reads the current price off it, and the dialog reads
@@ -54,14 +48,12 @@ function effectiveRate(rates: DuesRate[], month: string): DuesRate | null {
  * two are read together on the roster and written together only rarely.
  * Naming and pricing a tier is rare admin; the roster is an everyday list.
  *
- * **A rate is added, never repriced in place.** A new price is a new row
+ * **A new price is added; a mistyped one is corrected.** A new price is a new row
  * effective from a new month, because the old one still explains the months it
- * covered - GetEffectiveDuesRate reads the latest row at or before the period
- * asked about, so overwriting one would silently restate every settled month
- * it touched. PATCH is only for a mistyped amount on the row just entered, and
- * DELETE for one filed against the wrong month - which makes that correctable,
- * since UNIQUE (tier_id, effective_from) refuses the corrected row while the
- * wrong one stands.
+ * covered. A correction (PATCH of the amount, on the golongan's screen) reprices
+ * every month the rate covers and leaves a superseded row behind (ADR-040), so that
+ * screen names the span and asks first. DELETE withdraws a rate filed against the
+ * wrong month, so it can be added again at the right one.
  *
  * Rates load with the tiers rather than per card, so opening a tier's dialog
  * costs no further request and the card can show what the tier costs today.
@@ -102,7 +94,7 @@ export default function DuesTiers() {
     clear()
   }, [value, target.kind, state.status, clear])
 
-  const thisMonth = currentISOMonth()
+  const thisMonth = currentPeriod()
 
   return (
     <section className="flex flex-col gap-3">

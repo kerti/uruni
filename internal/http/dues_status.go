@@ -14,6 +14,8 @@ import (
 // section 7.3). member is the full roster shape of members.go, not a trimmed
 // id+name: the reconcile flow wants the fields the roster screen shows.
 type duesStatusResponse struct {
+	// Member.tier_id is the tier at the requested period (ADR-040), not the
+	// member's current tier.
 	Member     memberResponse `json:"member"`
 	OwedAmount int64          `json:"owed_amount"`
 	PaidAmount int64          `json:"paid_amount"`

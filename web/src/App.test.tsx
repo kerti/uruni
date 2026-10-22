@@ -5,9 +5,12 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import App from '@/App'
 import { selectedOptionName } from '@/test/select'
 import { copy } from '@/copy/id'
+import { resetFundTimeZone } from '@/lib/dates'
 
 afterEach(() => {
   vi.unstubAllGlobals()
+  vi.useRealTimers()
+  resetFundTimeZone()
 })
 
 /** A promise this test resolves by hand, to hold the session probe in flight. */
@@ -27,7 +30,15 @@ function sessionResponse(body: { authenticated: boolean; has_account: boolean })
   return jsonResponse(body)
 }
 
-const fund = { id: 1, name: 'Kas RT 04', currency: 'IDR', report_slug: 'kas-rt-04', report_url: '/report/kas-rt-04', created_at: 1234 }
+const fund = {
+  id: 1,
+  name: 'Kas RT 04',
+  currency: 'IDR',
+  time_zone: 'Asia/Jakarta',
+  report_slug: 'kas-rt-04',
+  report_url: '/report/kas-rt-04',
+  created_at: 1234,
+}
 
 function fundFoundResponse() {
   return jsonResponse(fund)
@@ -247,13 +258,16 @@ describe('App (record loop)', () => {
     { id: 12, kind: 'incidental', name: 'Halal bihalal RT', created_at: 1 },
   ]
 
-  function authenticatedWithRecordRoutes() {
+  function authenticatedWithRecordRoutes(timeZone = 'Asia/Jakarta') {
     return routedFetch([
       {
         match: (m, u) => m === 'GET' && u.includes('/api/session'),
         handle: () => Promise.resolve(sessionResponse({ authenticated: true, has_account: true })),
       },
-      { match: (m, u) => m === 'GET' && u.includes('/api/fund'), handle: () => Promise.resolve(fundFoundResponse()) },
+      {
+        match: (m, u) => m === 'GET' && u.includes('/api/fund'),
+        handle: () => Promise.resolve(jsonResponse({ ...fund, time_zone: timeZone })),
+      },
       { match: (m, u) => m === 'GET' && u.includes('/api/accounts'), handle: () => Promise.resolve(jsonResponse(accounts)) },
       { match: (m, u) => m === 'GET' && u.includes('/api/purposes'), handle: () => Promise.resolve(jsonResponse(purposes)) },
       { match: (m, u) => m === 'POST' && u.includes('/api/transactions'), handle: () => Promise.resolve(jsonResponse({ id: 1 }, 201)) },
@@ -269,6 +283,27 @@ describe('App (record loop)', () => {
 
     await screen.findByRole('heading', { name: copy.record.heading })
     await waitFor(() => expect(selectedOptionName(copy.record.purposeLabel)).toBe('Halal bihalal RT'))
+    window.history.pushState({}, '', '/')
+  })
+
+  // ADR-041: the zone reaches lib/dates inside getFund, before the Shell mounts,
+  // so the first form's `useState(todayISODate)` already reads the fund's day: at
+  // 00:30 WIT it must not open on yesterday. The instant is the same in all three
+  // cases; only the fund's zone differs.
+  it.each([
+    ['Asia/Jakarta', '2026-09-30T22:30:00+07:00', '30 September 2026'],
+    ['Asia/Makassar', '2026-09-30T23:30:00+07:00', '1 Oktober 2026'],
+    ['Asia/Jayapura', '2026-09-30T22:30:00+07:00', '1 Oktober 2026'],
+  ])("opens the record form on the fund's day for a %s fund at %s", async (zone, instant, want) => {
+    // Only Date is faked: the fetches and userEvent keep their real timers.
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(new Date(instant))
+    window.history.pushState({}, '', '/record')
+    vi.stubGlobal('fetch', authenticatedWithRecordRoutes(zone))
+    render(<App />)
+
+    await screen.findByRole('heading', { name: copy.record.heading })
+    expect(screen.getByLabelText(copy.record.dateLabel)).toHaveTextContent(want)
     window.history.pushState({}, '', '/')
   })
 

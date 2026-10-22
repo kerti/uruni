@@ -30,6 +30,8 @@ func TestReportRowLabelsMatchTheSPA(t *testing.T) {
 		{"dues reversal", ledger.ReportEntry{Kind: "adjustment", IsReversal: true, MemberName: str("Ani"), DuesPeriod: str("2026-06")}, "Pembatalan \u00b7 Juni 2026 \u00b7 Ani"},
 		// rowLabels.contributionReversal.text
 		{"contribution reversal", ledger.ReportEntry{Kind: "adjustment", IsReversal: true, MemberName: str("Budi")}, "Pembatalan \u00b7 Budi"},
+		// ADR-042: the reversal of an unnamed row names nobody.
+		{"unnamed reversal", ledger.ReportEntry{Kind: "adjustment", IsReversal: true, ReversesOccurredOn: str("2026-08-12")}, "Pembatalan \u00b7 transaksi 12 Agustus 2026"},
 		// rowLabels.contribution.text
 		{"contribution", ledger.ReportEntry{Kind: "normal", MemberName: str("Budi")}, "Budi"},
 		// rowLabels.settlement.text

@@ -39,9 +39,10 @@ type gateTable struct {
 	must bool
 }
 
-// gateTables lists what the backup holds, in Document's order. session and
-// goose's table are left out on purpose: a session is never exported and
-// goose's table is bookkeeping, so neither can say anything about the data.
+// gateTables lists what the backup holds, in Document's order. session,
+// idempotency_key and goose's table are left out on purpose: the first two are
+// state of the running server and never exported, and goose's table is
+// bookkeeping, so none of them can say anything about the data.
 func gateTables(doc backup.Document) []gateTable {
 	return []gateTable{
 		{"user", int64(len(doc.Users)), true},
@@ -51,6 +52,7 @@ func gateTables(doc backup.Document) []gateTable {
 		{"dues_tier", int64(len(doc.DuesTiers)), false},
 		{"dues_rate", int64(len(doc.DuesRates)), false},
 		{"member", int64(len(doc.Members)), true},
+		{"member_tier", int64(len(doc.MemberTiers)), false},
 		{"transfer", int64(len(doc.Transfers)), false},
 		{"reimbursement", int64(len(doc.Reimbursements)), false},
 		{"transaction", int64(len(doc.Transactions)), true},
@@ -78,7 +80,7 @@ type gateReport struct {
 //     (email, password_hash) must be the backup's. A different slug or login
 //     is another instance's backup, whatever the counts say.
 //   - Then row counts, equal in both directions, for every table both sides
-//     hold except session and goose's table.
+//     hold except session, idempotency_key and goose's table.
 //   - It fails closed: if transaction, fund, user or member cannot be read, it
 //     refuses (ErrCannotCompare) rather than skip them.
 //
@@ -235,6 +237,8 @@ func countRows(ctx context.Context, sqlDB *sql.DB, table string) (int64, error) 
 // schema it cannot read, or a sum that would overflow int64 (SQLite raises
 // rather than wrap), is ok == false and printed as n/a.
 func rawLedgerSum(ctx context.Context, sqlDB *sql.DB) (sum int64, ok bool) {
+	// The sign CASE is deliberately hand-written against "transaction", not read from
+	// ledger_entry: an independent cross-check, and an old database may predate the view.
 	err := sqlDB.QueryRowContext(ctx,
 		`SELECT COALESCE(SUM(CASE WHEN direction = 'in' THEN amount ELSE -amount END), 0) FROM "transaction"`).Scan(&sum)
 	return sum, err == nil

@@ -3,7 +3,7 @@ import { ArrowDownLeft, ArrowLeftRight, ArrowUpDown, ArrowUpRight, CalendarCheck
 
 import DateField from '@/components/DateField'
 import OpeningDateHint from '@/components/OpeningDateHint'
-import { dateBounds } from '@/lib/dates'
+import { dateBounds, todayISODate } from '@/lib/dates'
 import AmountInput from '@/components/money/AmountInput'
 import AccountPicker from '@/components/pickers/AccountPicker'
 import MemberPicker, { OptionalMemberPicker } from '@/components/pickers/MemberPicker'
@@ -59,15 +59,6 @@ function rememberAccountId(accountId: number) {
     // Private window, storage disabled, quota - the remembered default is a
     // convenience; losing it costs one extra tap.
   }
-}
-
-/** Local YYYY-MM-DD - never toISOString(), which is UTC and can read as
- * yesterday's date in WIB. */
-function todayISODate(): string {
-  const now = new Date()
-  const mm = String(now.getMonth() + 1).padStart(2, '0')
-  const dd = String(now.getDate()).padStart(2, '0')
-  return `${now.getFullYear()}-${mm}-${dd}`
 }
 
 /**

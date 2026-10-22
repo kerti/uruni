@@ -25,7 +25,6 @@ import (
 	"github.com/kerti/uruni/internal/lock"
 	"github.com/kerti/uruni/internal/money"
 	"github.com/kerti/uruni/internal/store"
-	"github.com/kerti/uruni/internal/tz"
 )
 
 // Tests for #516: `uruni rebuild`. Every test builds its own directory and
@@ -42,7 +41,7 @@ const (
 )
 
 // rebuildNow is the fixed clock; PreRebuildName renders it as 20261014-101500.
-var rebuildNow = time.Date(2026, 10, 14, 10, 15, 0, 0, tz.Jakarta)
+var rebuildNow = time.Date(2026, 10, 14, 10, 15, 0, 0, wib)
 
 type rebuildFixture struct {
 	dir        string
@@ -352,6 +351,12 @@ func TestRebuildReplacesAnOldSchemaDatabaseFromABackup(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(f.uploadsDir, rebuildReceiptName)); err != nil {
 		t.Errorf("the receipt was not extracted into the uploads volume: %v", err)
 	}
+	// The rebuilt file has the table, empty (ADR-043): it is outside the backup.
+	// That the restore core clears keys is TestRestoreClearsIdempotencyKeys's.
+	var keys int
+	if err := sqlDB.QueryRow(`SELECT count(*) FROM idempotency_key`).Scan(&keys); err != nil || keys != 0 {
+		t.Errorf("idempotency_key rows after a rebuild = (%d, %v), want 0", keys, err)
+	}
 
 	// The old file is kept, byte for byte, under the documented name.
 	wantAside := filepath.Join(filepath.Dir(f.dbPath), "uruni.db.pre-v9.9.9-20261014-101500")
@@ -533,6 +538,70 @@ func TestRebuildRefusesAnotherInstancesBackup(t *testing.T) {
 	}
 }
 
+// rebuildMixedCaseEmail is a login typed with capitals, as an instance
+// registered before #500 holds it. Nothing normalises it any more.
+const rebuildMixedCaseEmail = "Bendahara.RT05@Rebuild.Test"
+
+// mixedCaseInstance is oldInstance with the live login stored in mixed case
+// before the backup is taken, so both sides hold the same mixed-case bytes.
+func mixedCaseInstance(t *testing.T) *rebuildFixture {
+	t.Helper()
+	f := newRebuildFixture(t)
+	seedInstance(t, f.dbPath, f.uploadsDir)
+	execRaw(t, f.dbPath, `UPDATE "user" SET email = '`+rebuildMixedCaseEmail+`'`)
+	exportZip(t, f.dbPath, f.uploadsDir, f.zipPath)
+	makeOld(t, f.dbPath)
+	f.uploadsDir = filepath.Join(f.dir, "uploads-new")
+	if err := os.Mkdir(f.uploadsDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	return f
+}
+
+// TestRebuildComparesAMixedCaseLoginAsStored (#623): "user".email is
+// COLLATE NOCASE, but the identity gate reads the stored bytes and compares them
+// exactly. A live mixed-case login that the backup carries unchanged is the
+// same instance's, and the importer writes it back as it was, never lower-cased.
+func TestRebuildComparesAMixedCaseLoginAsStored(t *testing.T) {
+	t.Parallel()
+	f := mixedCaseInstance(t)
+
+	if err := f.run(backup.ReplaceHooks{}, rebuildNow); err != nil {
+		t.Fatalf("rebuild with a mixed-case login on both sides = %v, want no error", err)
+	}
+
+	sqlDB := openRebuilt(t, f.dbPath)
+	ctx := context.Background()
+	users, err := store.New(sqlDB).ListUsers(ctx)
+	if err != nil || len(users) != 1 || users[0].Email != rebuildMixedCaseEmail {
+		t.Fatalf("ListUsers = (%v, %v), want the one login carried over as %s", users, err, rebuildMixedCaseEmail)
+	}
+	for _, typed := range []string{rebuildMixedCaseEmail, strings.ToLower(rebuildMixedCaseEmail)} {
+		if _, err := auth.New(sqlDB).Authenticate(ctx, typed, rebuildTestPassword); err != nil {
+			t.Errorf("Authenticate(%q) after the rebuild = %v, want no error", typed, err)
+		}
+	}
+	if want := "login carried over: " + rebuildMixedCaseEmail; !strings.Contains(f.out.String(), want) {
+		t.Errorf("output lacks %q:\n%s", want, f.out.String())
+	}
+}
+
+// TestRebuildRefusesALoginThatDiffersOnlyInCase pins "as stored": the gate does
+// not borrow the column's collation, so a backup whose login differs from the
+// live one by case alone is a different login and still another instance's.
+func TestRebuildRefusesALoginThatDiffersOnlyInCase(t *testing.T) {
+	t.Parallel()
+	f := mixedCaseInstance(t)
+	rewriteBackup(t, f.zipPath, func(d *backup.Document) { d.Users[0].Email = strings.ToLower(rebuildMixedCaseEmail) })
+	before := readFile(t, f.dbPath)
+
+	err := f.run(backup.ReplaceHooks{}, rebuildNow)
+	if !errors.Is(err, ErrOtherInstance) {
+		t.Fatalf("rebuild = %v, want ErrOtherInstance", err)
+	}
+	assertNothingWritten(t, f, before)
+}
+
 func TestRebuildNeedsExactlyOneLoginInTheBackup(t *testing.T) {
 	t.Parallel()
 	cases := map[string]func(*backup.Document){
@@ -568,6 +637,44 @@ func TestRebuildRefusesABackupWhoseTotalsDisagreeWithItsRows(t *testing.T) {
 		t.Fatalf("rebuild = %v, want ErrTotalsMismatch", err)
 	}
 	assertNothingWritten(t, f, before)
+}
+
+// A backup holding a figure above the Rp 999.999.999.999 ceiling (#622) is
+// refused by the schema's CHECK while the scratch database is filled, with the
+// totals block made true for it so the totals proof cannot be what refuses.
+func TestRebuildRefusesABackupWithAnAmountAboveTheCeiling(t *testing.T) {
+	t.Parallel()
+	f := oldInstance(t)
+	rewriteBackup(t, f.zipPath, func(d *backup.Document) {
+		for i := range d.Transactions {
+			tx := &d.Transactions[i]
+			if tx.Direction != "in" {
+				continue
+			}
+			delta := int64(money.MaxAmount) + 1 - tx.Amount
+			tx.Amount += delta
+			d.Totals.Funds[0].Balance += delta
+			for j := range d.Totals.Accounts {
+				if d.Totals.Accounts[j].AccountID == tx.AccountID {
+					d.Totals.Accounts[j].Balance += delta
+				}
+			}
+			for j := range d.Totals.Purposes {
+				if d.Totals.Purposes[j].PurposeID == tx.PurposeID {
+					d.Totals.Purposes[j].Balance += delta
+				}
+			}
+			return
+		}
+		t.Fatal("the fixture backup holds no 'in' transaction to raise")
+	})
+	before := readFile(t, f.dbPath)
+
+	err := f.run(backup.ReplaceHooks{}, rebuildNow)
+	if err == nil || errors.Is(err, backup.ErrTotalsMismatch) || !strings.Contains(err.Error(), "CHECK constraint failed") {
+		t.Fatalf("rebuild = %v, want the schema's CHECK to refuse the figure above the ceiling", err)
+	}
+	assertUntouched(t, f, before) // refused while filling the scratch file: the snapshot is already taken
 }
 
 func TestRebuildRefusesAnExistingPreRebuildName(t *testing.T) {
@@ -663,7 +770,7 @@ func TestRebuildFailsClosedWhenTheLedgerCannotBeCompared(t *testing.T) {
 	// An old schema in which the ledger's table has another name.
 	execRaw(t, f.dbPath,
 		`DROP TRIGGER transaction_immutable_update`, `DROP TRIGGER transaction_immutable_delete`,
-		`PRAGMA foreign_keys = OFF`, `ALTER TABLE "transaction" RENAME TO ledger_entry`)
+		`PRAGMA foreign_keys = OFF`, `ALTER TABLE "transaction" RENAME TO journal`)
 	before := readFile(t, f.dbPath)
 
 	err := f.run(backup.ReplaceHooks{}, rebuildNow)
@@ -721,9 +828,36 @@ func TestRebuildTakesThePreviousReleasesBackup(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	// The fixture stays what the last tag wrote: format 1. The step that reads it is
+	// the one under test (ADR-040: v1 -> v2 -> totals).
+	var peek struct {
+		FormatVersion int64 `json:"format_version"`
+		Members       []struct {
+			TierID *int64 `json:"tier_id"`
+		} `json:"members"`
+	}
+	if err := json.Unmarshal(raw, &peek); err != nil {
+		t.Fatal(err)
+	}
+	if peek.FormatVersion != 1 {
+		t.Fatalf("testdata/previous-release is format_version %d, want 1: it must stay the last release's file, refreshed only when URUNI_TAG moves", peek.FormatVersion)
+	}
+	tiered := 0
+	for _, m := range peek.Members {
+		if m.TierID != nil {
+			tiered++
+		}
+	}
+
 	parsed, err := backup.ParseUpload(f.zipPath)
 	if err != nil {
 		t.Fatalf("ParseUpload(previous release) = %v, want no error", err)
+	}
+	if parsed.Document.FormatVersion != backup.FormatVersion {
+		t.Errorf("parsed FormatVersion = %d, want %d: ParseUpload hands the importer the current shape", parsed.Document.FormatVersion, backup.FormatVersion)
+	}
+	if len(parsed.Document.MemberTiers) != tiered || tiered == 0 {
+		t.Errorf("upgraded member_tiers = %d, tiered members in the file = %d, want one row per tiered member (and at least one)", len(parsed.Document.MemberTiers), tiered)
 	}
 	var want int64
 	for _, ft := range parsed.Document.Totals.Funds {
@@ -745,7 +879,99 @@ func TestRebuildTakesThePreviousReleasesBackup(t *testing.T) {
 	if got != want || want == 0 {
 		t.Errorf("rebuilt total = %d, backup total = %d, want them equal and non-zero", got, want)
 	}
+	var rows int
+	if err := sqlDB.QueryRow(`SELECT COUNT(*) FROM member_tier WHERE correction = 0`).Scan(&rows); err != nil {
+		t.Fatal(err)
+	}
+	if rows != tiered {
+		t.Errorf("rebuilt database holds %d backfilled member_tier rows, want %d", rows, tiered)
+	}
 	if !strings.Contains(f.out.String(), "backup says   "+formatRupiah(want)) || !strings.Contains(f.out.String(), "rebuilt says  "+formatRupiah(want)) {
 		t.Errorf("output does not show the proven totals:\n%s", f.out.String())
+	}
+}
+
+// TestRebuildGateStillComparesAVersion1BackupWithAnOlderShapedDatabase: the
+// database being replaced predates member_tier, as every live instance does at
+// this upgrade, and the backup is the format-1 file the old binary wrote. The
+// gate compares what both sides hold (members, ledger, funds, login) and says it
+// did not compare member_tier, which the old database does not have.
+func TestRebuildGateStillComparesAVersion1BackupWithAnOlderShapedDatabase(t *testing.T) {
+	t.Parallel()
+	f := oldInstance(t)
+	execRaw(t, f.dbPath, `DROP VIEW member_tier_standing`, `DROP TABLE member_tier`)
+	// Rewrite the current export as the old binary wrote it: format 1, no
+	// member_tiers, a tier on each member.
+	rewriteRawBackup(t, f.zipPath, func(doc map[string]any) {
+		doc["format_version"] = 1
+		delete(doc, "member_tiers")
+		members, _ := doc["members"].([]any)
+		for _, m := range members {
+			m.(map[string]any)["tier_id"] = nil
+		}
+		// Format 1 had no time_zone either (ADR-041); the step fills Asia/Jakarta.
+		funds, _ := doc["funds"].([]any)
+		for _, fd := range funds {
+			delete(fd.(map[string]any), "time_zone")
+		}
+	})
+
+	if err := f.run(backup.ReplaceHooks{}, rebuildNow); err != nil {
+		t.Fatalf("rebuild of a format-1 backup over an older-shaped database = %v, want no error\n%s", err, f.out.String())
+	}
+	out := f.out.String()
+	if !strings.Contains(out, "member count") || !strings.Contains(out, "transaction count") {
+		t.Errorf("output = %q, want the gate to have compared member and transaction counts", out)
+	}
+	if !strings.Contains(out, "member_tier (not in the database)") {
+		t.Errorf("output = %q, want member_tier reported as not compared", out)
+	}
+	openRebuilt(t, f.dbPath)
+}
+
+// rewriteRawBackup is rewriteBackup for a test that needs a shape backup.Document
+// can no longer hold: it edits uruni.json as a generic map.
+func rewriteRawBackup(t *testing.T, zipPath string, edit func(map[string]any)) {
+	t.Helper()
+	zr, err := zip.OpenReader(zipPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var out bytes.Buffer
+	zw := zip.NewWriter(&out)
+	for _, zf := range zr.File {
+		rc, err := zf.Open()
+		if err != nil {
+			t.Fatal(err)
+		}
+		data, err := io.ReadAll(rc)
+		_ = rc.Close()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if zf.Name == "uruni.json" {
+			var doc map[string]any
+			if err := json.Unmarshal(data, &doc); err != nil {
+				t.Fatal(err)
+			}
+			edit(doc)
+			if data, err = json.Marshal(doc); err != nil {
+				t.Fatal(err)
+			}
+		}
+		w, err := zw.Create(zf.Name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := w.Write(data); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := zw.Close(); err != nil {
+		t.Fatal(err)
+	}
+	_ = zr.Close()
+	if err := os.WriteFile(zipPath, out.Bytes(), 0o600); err != nil {
+		t.Fatal(err)
 	}
 }

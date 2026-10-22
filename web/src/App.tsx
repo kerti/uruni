@@ -408,7 +408,7 @@ function AuthedGate({ onLoggedOut }: { onLoggedOut: () => void }) {
         path="/settings"
         element={
           <Shell title={title} onLoggedOut={onLoggedOut}>
-            <Settings onFundRenamed={(fund) => void run(async () => fund)} />
+            <Settings onFundChanged={(fund) => void run(async () => fund)} />
           </Shell>
         }
       />

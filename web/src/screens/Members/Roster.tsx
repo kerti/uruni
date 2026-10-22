@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
 import { useSearchParams } from 'react-router-dom'
 
 import DateField from '@/components/DateField'
+import MonthField from '@/components/MonthField'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
@@ -12,7 +13,7 @@ import Loading from '@/components/states/Loading'
 import ErrorState from '@/components/states/ErrorState'
 import { copy } from '@/copy/id'
 import { ApiError } from '@/lib/api'
-import { todayISODate, dateBounds } from '@/lib/dates'
+import { todayISODate, dateBounds, periodBounds } from '@/lib/dates'
 import { parseDialogTarget } from '@/lib/dialogTarget'
 import { formatIDR } from '@/lib/money'
 import { createMember, deleteMember, listDuesTiers, listMembersPage, updateMember } from '@/lib/setup'
@@ -448,9 +449,18 @@ function EditMemberDialog({
   const [name, setName] = useState(shown?.name ?? '')
   const [tierId, setTierId] = useState<number | null>(shown?.tier_id ?? null)
   const [joinedOn, setJoinedOn] = useState(shown?.joined_on ?? '')
+  // Null until she picks a month: the field then follows the ceiling (the
+  // current month, or the join month if later), which moves with joinedOn.
+  const [tierFromPick, setTierFromPick] = useState<string | null>(null)
   const [confirming, setConfirming] = useState<ConfirmKind>(null)
 
   const busy = state.status === 'loading'
+  // "Mulai bulan" belongs to a tier change, so it appears only when the tier
+  // differs from the one the member has now. Its bounds read the join date as
+  // edited, because the server reads the join month after this same save.
+  const tierChanged = shown !== null && tierId !== shown.tier_id
+  const tierBounds = periodBounds.tierStart(joinedOn)
+  const tierFrom = tierFromPick !== null && tierFromPick >= tierBounds.min && tierFromPick <= tierBounds.max ? tierFromPick : tierBounds.max
   const inactive = shown?.inactive_on !== null && shown?.inactive_on !== undefined
 
   // A fresh copy of the member's fields each time the dialog opens for it, and
@@ -461,6 +471,7 @@ function EditMemberDialog({
       setName(shown.name)
       setTierId(shown.tier_id)
       setJoinedOn(shown.joined_on)
+      setTierFromPick(null)
       setConfirming(null)
     }
     // oxlint-disable-next-line react/exhaustive-deps -- seed once per open, keyed on the record's id; a refetched copy of the same record would wipe the treasurer's edits
@@ -499,7 +510,8 @@ function EditMemberDialog({
     void submit(() =>
       updateMember(shown.id, {
         name: trimmed === shown.name ? undefined : trimmed,
-        tierId: tierId === shown.tier_id ? undefined : tierId,
+        tierId: tierChanged ? tierId : undefined,
+        tierEffectiveFrom: tierChanged ? tierFrom : undefined,
         joinedOn: joinedOn === shown.joined_on ? undefined : joinedOn,
       }),
     )
@@ -539,6 +551,18 @@ function EditMemberDialog({
             />
           </div>
           <TierField id="edit-member-tier" tiers={tiers} tierId={tierId} disabled={confirming !== null} onChange={setTierId} />
+          {tierChanged && (
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="edit-member-tier-from">{text.tierFromLabel}</Label>
+              <MonthField
+                id="edit-member-tier-from"
+                value={tierFrom}
+                onChange={setTierFromPick}
+                bounds={tierBounds}
+                disabled={confirming !== null}
+              />
+            </div>
+          )}
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="edit-member-joined">{text.joinedOnLabel}</Label>
             <DateField

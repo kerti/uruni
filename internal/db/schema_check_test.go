@@ -3,6 +3,7 @@ package db
 import (
 	"context"
 	"database/sql"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -117,6 +118,69 @@ func TestCheckSchemaDetectsAMissingObject(t *testing.T) {
 	}
 	if len(diff.Changed) != 0 || len(diff.Unexpected) != 0 {
 		t.Errorf("Changed = %v, Unexpected = %v, want both empty", diff.Changed, diff.Unexpected)
+	}
+}
+
+// idempotency_key (ADR-043) is part of the schema the boot guard holds: a file
+// from before the table, which goose still reports as fully applied, is refused
+// rather than served by a binary whose keyed writes would fail on every request.
+func TestCheckSchemaCoversTheIdempotencyKeyTable(t *testing.T) {
+	t.Parallel()
+	sqlDB := migratedDB(t)
+	mustExec(t, sqlDB, `DROP TABLE idempotency_key`)
+
+	diff := checkSchema(t, sqlDB)
+	want := []string{"index idempotency_key_by_expiry", "table idempotency_key"}
+	got := append([]string(nil), diff.Missing...)
+	slices.Sort(got)
+	if strings.Join(got, "|") != strings.Join(want, "|") {
+		t.Errorf("Missing = %v, want %v", got, want)
+	}
+	if len(diff.Changed) != 0 || len(diff.Unexpected) != 0 {
+		t.Errorf("Changed = %v, Unexpected = %v, want both empty", diff.Changed, diff.Unexpected)
+	}
+}
+
+// ledger_entry (#627) is part of the schema the boot guard holds: a database
+// missing the view, or carrying a different one, is refused rather than served
+// with balances that read from nothing.
+func TestCheckSchemaCoversTheLedgerEntryView(t *testing.T) {
+	t.Parallel()
+	sqlDB := migratedDB(t)
+	mustExec(t, sqlDB, `DROP VIEW ledger_entry`)
+	if diff := checkSchema(t, sqlDB); strings.Join(diff.Missing, "|") != "view ledger_entry" {
+		t.Errorf("Missing = %v, want [view ledger_entry]", diff.Missing)
+	}
+
+	mustExec(t, sqlDB, `CREATE VIEW ledger_entry AS SELECT id FROM "transaction"`)
+	if diff := checkSchema(t, sqlDB); strings.Join(diff.Changed, "|") != "view ledger_entry" {
+		t.Errorf("Changed = %v, want [view ledger_entry]", diff.Changed)
+	}
+}
+
+// The view without effective_purpose_id: the database an older build left
+// behind. goose still reports every migration applied, so only the boot guard
+// notices.
+func TestCheckSchemaRefusesALedgerEntryWithoutTheEffectivePurpose(t *testing.T) {
+	t.Parallel()
+	sqlDB := migratedDB(t)
+	mustExec(t, sqlDB, `DROP VIEW ledger_entry`)
+	mustExec(t, sqlDB, `CREATE VIEW ledger_entry AS
+SELECT t.id, t.fund_id, t.account_id, t.purpose_id, t.direction, t.amount, t.occurred_on, t.kind,
+       t.member_id, t.dues_period, t.reimbursement_id, t.transfer_id, t.reverses_transaction_id,
+       t.note, t.created_at,
+       CAST(CASE WHEN t.direction = 'in' THEN t.amount ELSE -t.amount END AS INTEGER) AS signed_amount,
+       (SELECT r.id FROM "transaction" r WHERE r.reverses_transaction_id = t.id) AS reversed_by_transaction_id,
+       (SELECT r.occurred_on FROM "transaction" r WHERE r.reverses_transaction_id = t.id) AS reversed_on,
+       CAST(EXISTS (SELECT 1 FROM "transaction" r WHERE r.reverses_transaction_id = t.id) AS INTEGER) AS reversed
+FROM "transaction" t`)
+
+	diff := checkSchema(t, sqlDB)
+	if strings.Join(diff.Changed, "|") != "view ledger_entry" {
+		t.Errorf("Changed = %v, want [view ledger_entry]", diff.Changed)
+	}
+	if len(diff.Missing) != 0 || len(diff.Unexpected) != 0 {
+		t.Errorf("Missing = %v, Unexpected = %v, want both empty", diff.Missing, diff.Unexpected)
 	}
 }
 

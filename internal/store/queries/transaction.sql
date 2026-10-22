@@ -28,16 +28,46 @@ SELECT id, fund_id, account_id, purpose_id, direction, amount, occurred_on, kind
 FROM "transaction"
 WHERE fund_id = ? AND id = ?;
 
--- The reversed-once pre-check, like GetReimbursementSettlement: sql.ErrNoRows
--- means "not yet reversed, proceed"; a row means it already has been. The
--- dues_payment_reversed_once index is the actual guarantee - this only turns a
--- raw constraint violation into a named error (ADR-029).
--- name: GetDuesPaymentReversal :one
-SELECT id, fund_id, account_id, purpose_id, direction, amount, occurred_on, kind,
-       member_id, dues_period, reimbursement_id, transfer_id, reverses_transaction_id,
-       note, created_at
-FROM "transaction"
-WHERE fund_id = ? AND reverses_transaction_id = ?;
+-- Everything Ledger.ReverseTransaction needs to decide one row's fate (ADR-042),
+-- in one fund-scoped read, from the same facts as the page's reversible flag
+-- (ListTransactionsPage selects the same four): another fund's row reads as
+-- sql.ErrNoRows.
+--
+--   reversed        something already reverses this row; the reversed_once index
+--                   is the guarantee, this turns it into a named error.
+--   is_reconciliation_fix
+--                   a cek kas line names this row as its fix: reversing it would
+--                   leave the line's open remainder explained by an entry the
+--                   ledger says never happened.
+--   effective_closed_on
+--                   closed_on of the envelope the row's money is under NOW
+--                   (ADR-033), NULL when that is not a closed envelope. The
+--                   reversal posts there.
+--   counted         some cek kas of the fund has counted this row
+--                   (through_transaction_id >= id). The one place the repo relies
+--                   on id order: the cutoff's own meaning is id order (ADR-024,
+--                   ADR-012). A NULL cutoff compares NULL and counts nothing.
+-- name: GetReversalTarget :one
+SELECT t.id, t.fund_id, t.account_id, t.purpose_id, t.direction, t.amount, t.occurred_on, t.kind,
+       t.member_id, t.dues_period, t.reimbursement_id, t.transfer_id, t.reverses_transaction_id,
+       t.note, t.created_at,
+       t.effective_purpose_id,
+       t.reversed,
+       CAST(EXISTS (SELECT 1 FROM reconciliation_line rl
+                    WHERE rl.fund_id = t.fund_id AND rl.adjustment_transaction_id = t.id) AS INTEGER) AS is_reconciliation_fix,
+       ei.closed_on AS effective_closed_on,
+       CAST(EXISTS (SELECT 1 FROM reconciliation rc
+                    WHERE rc.fund_id = t.fund_id AND rc.through_transaction_id >= t.id) AS INTEGER) AS counted
+FROM ledger_entry t
+LEFT JOIN incidental ei ON ei.purpose_id = t.effective_purpose_id
+WHERE t.fund_id = ? AND t.id = ?;
+
+-- For PostPurposeCorrection's refusal of a reverse-then-correct (ADR-042);
+-- sql.ErrNoRows is another fund's row or none.
+-- name: ReversedFlagForTransaction :one
+SELECT reversed
+FROM ledger_entry
+WHERE fund_id = ? AND id = ?;
 
 -- name: ListTransactionsByFund :many
 SELECT id, fund_id, account_id, purpose_id, direction, amount, occurred_on, kind,
@@ -115,15 +145,20 @@ ORDER BY occurred_on, id;
 --     from it.
 --   - effective_purpose_id: the tag this row's money is under NOW - its own
 --     purpose_id until a correction (ADR-033) moves it, then the end of the
---     path its corrections walk (EffectivePurposeForTransaction; transfer.sql
---     has the reasoning, #411). COALESCEd to t.purpose_id, so an uncorrected
---     row answers itself and "has this been corrected?" is effective <> stored.
+--     path its corrections walk (ledger_entry defines it). An uncorrected row
+--     answers itself and "has this been corrected?" is effective <> stored.
 --
 --     The list keeps rendering the STORED tag (ADR-033): the ledger sums stored
 --     tags, so showing the effective one would put the screen out of step with
 --     the balances. This column is for the correction dialog, which must build
 --     its pair from where the money actually is, and for the marker that says a
 --     correction exists.
+--   - reversed, reverses_occurred_on, counted, is_reconciliation_fix,
+--     effective_closed_on (ADR-042): the facts of a reversal, one rule with
+--     Ledger.ReversalRefusal (GetReversalTarget has the reasoning).
+--     reverses_occurred_on is the original's date on a reversal row, so an
+--     unnamed reversal can state the day it reverses when the original is on
+--     another page.
 -- name: ListTransactionsPage :many
 SELECT t.id, t.fund_id, t.account_id, t.purpose_id, t.direction, t.amount, t.occurred_on, t.kind,
        t.member_id, t.dues_period, t.reimbursement_id, t.transfer_id, t.reverses_transaction_id,
@@ -139,15 +174,15 @@ SELECT t.id, t.fund_id, t.account_id, t.purpose_id, t.direction, t.amount, t.occ
        tp.name AS transfer_to_purpose_name,
        tr.corrects_transaction_id AS transfer_corrects_transaction_id,
        tr.reason AS transfer_reason,
-       CAST(COALESCE((SELECT leg.purpose_id
-                      FROM transfer c
-                      JOIN "transaction" leg ON leg.transfer_id = c.id
-                      WHERE c.corrects_transaction_id = t.id
-                      GROUP BY leg.purpose_id
-                      HAVING SUM(CASE WHEN leg.direction = t.direction THEN 1 ELSE -1 END)
-                             + (leg.purpose_id = t.purpose_id) = 1
-                      LIMIT 1), t.purpose_id) AS INTEGER) AS effective_purpose_id
-FROM "transaction" t
+       t.effective_purpose_id,
+       t.reversed,
+       orig.occurred_on AS reverses_occurred_on,
+       CAST(EXISTS (SELECT 1 FROM reconciliation_line rl
+                    WHERE rl.fund_id = t.fund_id AND rl.adjustment_transaction_id = t.id) AS INTEGER) AS is_reconciliation_fix,
+       ei.closed_on AS effective_closed_on,
+       CAST(EXISTS (SELECT 1 FROM reconciliation rc
+                    WHERE rc.fund_id = t.fund_id AND rc.through_transaction_id >= t.id) AS INTEGER) AS counted
+FROM ledger_entry t
 JOIN purpose p ON p.id = t.purpose_id
 JOIN account a ON a.id = t.account_id
 LEFT JOIN member m ON m.id = t.member_id
@@ -160,6 +195,8 @@ LEFT JOIN account fa ON fa.id = tf.account_id
 LEFT JOIN account ta ON ta.id = tt.account_id
 LEFT JOIN purpose fp ON fp.id = tf.purpose_id
 LEFT JOIN purpose tp ON tp.id = tt.purpose_id
+LEFT JOIN "transaction" orig ON orig.id = t.reverses_transaction_id
+LEFT JOIN incidental ei ON ei.purpose_id = t.effective_purpose_id
 WHERE t.fund_id = sqlc.arg('fund_id')
   AND (
     sqlc.narg('cursor_occurred_on') IS NULL
@@ -181,23 +218,22 @@ ORDER BY t.occurred_on DESC, t.id DESC
 LIMIT sqlc.arg('page_limit');
 
 -- Every balance in Uruni is this shape: sum the ledger, never read a stored
--- total (CLAUDE.md rule 2). direction carries the sign, so the CASE is the
--- only place a minus appears. The CAST is not decoration - without it sqlc
+-- total (CLAUDE.md rule 2). The CAST is not decoration - without it sqlc
 -- emits interface{} for the aggregate and the trust core loses its compiler
 -- exactly where it is needed most (ADR-024).
 -- name: FundBalance :one
-SELECT CAST(COALESCE(SUM(CASE WHEN direction = 'in' THEN amount ELSE -amount END), 0) AS INTEGER) AS balance_amount
-FROM "transaction"
+SELECT CAST(COALESCE(SUM(signed_amount), 0) AS INTEGER) AS balance_amount
+FROM ledger_entry
 WHERE fund_id = ?;
 
 -- name: AccountBalance :one
-SELECT CAST(COALESCE(SUM(CASE WHEN direction = 'in' THEN amount ELSE -amount END), 0) AS INTEGER) AS balance_amount
-FROM "transaction"
+SELECT CAST(COALESCE(SUM(signed_amount), 0) AS INTEGER) AS balance_amount
+FROM ledger_entry
 WHERE fund_id = ? AND account_id = ?;
 
 -- name: PurposeBalance :one
-SELECT CAST(COALESCE(SUM(CASE WHEN direction = 'in' THEN amount ELSE -amount END), 0) AS INTEGER) AS balance_amount
-FROM "transaction"
+SELECT CAST(COALESCE(SUM(signed_amount), 0) AS INTEGER) AS balance_amount
+FROM ledger_entry
 WHERE fund_id = ? AND purpose_id = ?;
 
 -- The frozen half of a reconciliation: the same sum as AccountBalance, cut off
@@ -205,8 +241,8 @@ WHERE fund_id = ? AND purpose_id = ?;
 -- a correction backdated after the count keeps its higher id and stays outside
 -- the old snapshot's arithmetic while counting toward today's balance.
 -- name: AccountBalanceThrough :one
-SELECT CAST(COALESCE(SUM(CASE WHEN direction = 'in' THEN amount ELSE -amount END), 0) AS INTEGER) AS balance_amount
-FROM "transaction"
+SELECT CAST(COALESCE(SUM(signed_amount), 0) AS INTEGER) AS balance_amount
+FROM ledger_entry
 WHERE fund_id = ? AND account_id = ? AND id <= ?;
 
 -- name: ListDuesPaymentsByMember :many
@@ -223,10 +259,13 @@ ORDER BY dues_period, id;
 --
 -- Both halves of a reversal share this list (PRD section 7.3, ADR-029): every
 -- kind='dues' payment and every kind='adjustment' row that reverses one -
--- never a bare "every transaction".
+-- never a bare "every transaction". "One" is a dues payment: a dues reversal
+-- carries its payment's period, and a named contribution's reversal (member
+-- set, no period) or an unnamed one is not Iuran history (ADR-042). The
+-- INNER JOIN on member alone would let the first of those through.
 --
--- rv is the reversal that undoes THIS row when it is a payment
--- (reversed_by_transaction_id; null otherwise, as a reversal is never itself
+-- reversed_by_transaction_id is the reversal that undoes THIS row when it is a
+-- payment (ledger_entry; null otherwise, as a reversal is never itself
 -- reversed). orig is the payment THIS row reverses, carried forward as
 -- reverses_occurred_on so a reversal states the original's date even when that
 -- payment sits on a later page.
@@ -238,15 +277,14 @@ ORDER BY dues_period, id;
 SELECT
   t.id, t.kind, t.member_id, m.name AS member_name, t.dues_period, t.amount,
   t.occurred_on, a.name AS account_name, t.note, t.reverses_transaction_id,
-  rv.id AS reversed_by_transaction_id,
+  t.reversed_by_transaction_id,
   orig.occurred_on AS reverses_occurred_on
-FROM "transaction" t
+FROM ledger_entry t
 JOIN member m ON m.id = t.member_id
 JOIN account a ON a.id = t.account_id
-LEFT JOIN "transaction" rv ON rv.reverses_transaction_id = t.id
 LEFT JOIN "transaction" orig ON orig.id = t.reverses_transaction_id
 WHERE t.fund_id = sqlc.arg('fund_id')
-  AND (t.kind = 'dues' OR (t.kind = 'adjustment' AND t.reverses_transaction_id IS NOT NULL))
+  AND (t.kind = 'dues' OR (t.kind = 'adjustment' AND t.reverses_transaction_id IS NOT NULL AND t.dues_period IS NOT NULL))
   AND (
     sqlc.narg('cursor_occurred_on') IS NULL
     OR (t.occurred_on, t.id) < (sqlc.narg('cursor_occurred_on'), CAST(sqlc.narg('cursor_id') AS INTEGER))
@@ -270,9 +308,9 @@ LIMIT sqlc.arg('page_limit');
 -- IncidentalActivityTotals. Conflating the two was #215.
 -- name: IncidentalTotals :one
 SELECT
-  CAST(COALESCE(SUM(CASE WHEN direction = 'in' THEN amount ELSE 0 END), 0) AS INTEGER) AS collected_amount,
-  CAST(COALESCE(SUM(CASE WHEN direction = 'out' THEN amount ELSE 0 END), 0) AS INTEGER) AS disbursed_amount
-FROM "transaction"
+  CAST(COALESCE(SUM(CASE WHEN signed_amount > 0 THEN signed_amount ELSE 0 END), 0) AS INTEGER) AS collected_amount,
+  CAST(COALESCE(SUM(CASE WHEN signed_amount < 0 THEN -signed_amount ELSE 0 END), 0) AS INTEGER) AS disbursed_amount
+FROM ledger_entry
 WHERE fund_id = ? AND purpose_id = ?;
 
 -- What the occasion itself collected and disbursed (PRD section 7.5's detail
@@ -284,12 +322,14 @@ WHERE fund_id = ? AND purpose_id = ?;
 -- this screen has no reason to exclude. tr.id IS NULL keeps every row with no
 -- reclass_purpose transfer; a correction's legs come back in below.
 --
--- A cancelled contribution (ADR-034's widened ADR-029 reversal) is dropped
--- whole: the reversal row and the row it reverses, the same NOT EXISTS as
--- ContributedByIncidentalMember. Otherwise a cancellation reads as money
--- spent ("Terpakai") and the cancelled row as money collected. Both halves go,
--- so collected minus disbursed still equals the envelope's balance;
--- IncidentalTotals stays unfiltered because the pair nets to zero there.
+-- A reversal (ADR-029, ADR-034, ADR-042) is read the way a correction's legs
+-- are: as a minus on the bucket of the row it points at, in whichever purpose it
+-- sits. The join to o takes COALESCE(tr.corrects_transaction_id,
+-- t.reverses_transaction_id): a row has at most one of the two, and its fund
+-- comes from t, not tr, which is NULL on a reversal (written the other way every
+-- reversal reads as spending). So collected minus disbursed still equals the
+-- envelope's balance even after a purpose correction has put the pair in two
+-- purposes. IncidentalTotals stays unfiltered because the pair nets to zero there.
 --
 -- A peruntukan correction (ADR-033) is re-attributed, not dropped (#342). Its
 -- legs carry tr.corrects_transaction_id, which a roll's never do, so the join
@@ -298,9 +338,9 @@ WHERE fund_id = ? AND purpose_id = ?;
 -- other way takes it back out. So an unnamed contribution corrected out of
 -- this envelope nets to zero collected here; one corrected in reads as
 -- collected; an expense corrected away un-spends. Each leg still moves
--- collected minus disbursed by exactly its effect on the balance. The
--- corrected row is never a reversal (ADR-033 refuses those), so the
--- cancellation filters never meet it.
+-- collected minus disbursed by exactly its effect on the balance. A reversed
+-- row can be corrected before it is reversed but not after (ADR-042), and a
+-- reversal is never itself corrected, so the two readings never meet on one row.
 --
 -- A purpose move (ADR-036, tr.reason = 'allocation') is kept and only ever
 -- counts as collected: money allocated in is money the envelope has to work
@@ -309,43 +349,37 @@ WHERE fund_id = ? AND purpose_id = ?;
 -- or NULL on a row written before the column existed - stays excluded.
 --
 -- through bounds it at a past month's last day for the public report (#408):
--- only rows dated by then, and a reversal dated after it has not happened yet.
+-- only rows dated by then, each half of a pair by its own date, so a reversal
+-- dated after it has not happened yet and the original still reads in full.
 -- NULL (every other caller) is unbounded.
 -- name: IncidentalActivityTotals :one
 SELECT
   CAST(COALESCE(SUM(CASE
-    WHEN tr.reason = 'allocation' THEN CASE WHEN t.direction = 'in' THEN t.amount ELSE -t.amount END
-    WHEN COALESCE(o.direction, t.direction) = 'in'
-    THEN CASE WHEN o.id IS NULL OR t.direction = o.direction THEN t.amount ELSE -t.amount END
+    WHEN tr.reason = 'allocation' THEN t.signed_amount
+    WHEN COALESCE(o.direction, t.direction) = 'in' THEN t.signed_amount
     ELSE 0 END), 0) AS INTEGER) AS collected_amount,
   CAST(COALESCE(SUM(CASE
     WHEN tr.reason = 'allocation' THEN 0
-    WHEN COALESCE(o.direction, t.direction) = 'out'
-    THEN CASE WHEN o.id IS NULL OR t.direction = o.direction THEN t.amount ELSE -t.amount END
+    WHEN COALESCE(o.direction, t.direction) = 'out' THEN -t.signed_amount
     ELSE 0 END), 0) AS INTEGER) AS disbursed_amount
-FROM "transaction" t
+FROM ledger_entry t
 LEFT JOIN transfer tr ON tr.id = t.transfer_id AND tr.kind = 'reclass_purpose'
-LEFT JOIN "transaction" o ON o.fund_id = tr.fund_id AND o.id = tr.corrects_transaction_id
+LEFT JOIN "transaction" o ON o.fund_id = t.fund_id AND o.id = COALESCE(tr.corrects_transaction_id, t.reverses_transaction_id)
 WHERE t.fund_id = sqlc.arg('fund_id') AND t.purpose_id = sqlc.arg('purpose_id')
   AND (tr.id IS NULL OR tr.corrects_transaction_id IS NOT NULL OR tr.reason = 'allocation')
-  AND t.reverses_transaction_id IS NULL
-  AND NOT EXISTS (
-    SELECT 1 FROM "transaction" r WHERE r.reverses_transaction_id = t.id
-      AND (CAST(sqlc.narg('through') AS TEXT) IS NULL OR r.occurred_on <= CAST(sqlc.narg('through') AS TEXT))
-  )
   AND (CAST(sqlc.narg('through') AS TEXT) IS NULL OR t.occurred_on <= CAST(sqlc.narg('through') AS TEXT));
 
 -- The roster query behind "who has paid / partially / not yet" for one
 -- dues_period, every member in one pass.
 -- name: DuesPaidByPeriod :many
--- The AND NOT EXISTS clause is ADR-029's half of the reversal design: a
+-- The reversed = 0 clause is ADR-029's half of the reversal design: a
 -- reversal is kind='adjustment' so never matches kind = 'dues'; this drops the
 -- ORIGINAL row once something reverses it, so a reversed payment disappears
 -- from "paid" rather than counting twice.
 SELECT member_id, CAST(COALESCE(SUM(amount), 0) AS INTEGER) AS paid_amount
-FROM "transaction" t
+FROM ledger_entry t
 WHERE t.fund_id = ? AND t.kind = 'dues' AND t.dues_period = ?
-  AND NOT EXISTS (SELECT 1 FROM "transaction" r WHERE r.reverses_transaction_id = t.id)
+  AND t.reversed = 0
 GROUP BY member_id;
 
 -- DuesPaidByPeriod's transpose: every period one member has paid toward, in one
@@ -355,9 +389,9 @@ GROUP BY member_id;
 -- (schema CHECK), so it is never NULL, only untyped without the cast.
 -- name: DuesPaidByMemberGroupedByPeriod :many
 SELECT CAST(dues_period AS TEXT) AS dues_period, CAST(COALESCE(SUM(amount), 0) AS INTEGER) AS paid_amount
-FROM "transaction" t
+FROM ledger_entry t
 WHERE t.fund_id = ? AND t.member_id = ? AND t.kind = 'dues'
-  AND NOT EXISTS (SELECT 1 FROM "transaction" r WHERE r.reverses_transaction_id = t.id)
+  AND t.reversed = 0
 GROUP BY dues_period;
 
 -- The "paid in advance" signal. dues_period is 'YYYY-MM', so a lexicographic
@@ -366,13 +400,13 @@ GROUP BY dues_period;
 -- reached through MAX), and a .(string) assertion on it can panic since drivers
 -- commonly hand back []byte.
 -- name: LatestDuesPeriodPaidByMember :many
--- The AND NOT EXISTS clause is ADR-029's fix: without it a reversed row would
+-- The reversed = 0 clause is ADR-029's fix: without it a reversed row would
 -- still be the MAX(dues_period) for its member, reading as "paid in advance"
 -- through a period that is no longer paid at all.
 SELECT member_id, CAST(MAX(dues_period) AS TEXT) AS latest_period
-FROM "transaction" t
+FROM ledger_entry t
 WHERE t.fund_id = ? AND t.kind = 'dues'
-  AND NOT EXISTS (SELECT 1 FROM "transaction" r WHERE r.reverses_transaction_id = t.id)
+  AND t.reversed = 0
 GROUP BY member_id;
 
 -- The reconciliation cutoff. Deliberately not an aggregate: CAST(MAX(id) AS
@@ -390,8 +424,9 @@ LIMIT 1;
 
 -- The named half of an envelope's participation (ADR-034): every named
 -- contribution against one purpose_id, summed per member, excluding a row some
--- reversal points at (the NOT EXISTS of DuesPaidByPeriod, ADR-029) so a
--- reversed contribution disappears from "gave" rather than counting twice.
+-- reversal points at (ADR-029) so a reversed contribution disappears from
+-- "gave" rather than counting twice. Unlike DuesPaidByPeriod (ledger_entry.reversed)
+-- it drops a reversal only if it is dated on or before through, via reversed_on.
 -- member_id IS NOT NULL is redundant with the schema's CHECK but kept explicit.
 --
 -- Says nothing about who was EXPECTED to give: that is ListMembersByFund plus
@@ -401,13 +436,11 @@ LIMIT 1;
 -- through bounds it as in IncidentalActivityTotals (#408).
 -- name: ContributedByIncidentalMember :many
 SELECT member_id, CAST(COALESCE(SUM(amount), 0) AS INTEGER) AS contributed_amount
-FROM "transaction" t
+FROM ledger_entry t
 WHERE t.fund_id = sqlc.arg('fund_id') AND t.purpose_id = sqlc.arg('purpose_id') AND t.kind = 'normal' AND t.direction = 'in'
   AND t.member_id IS NOT NULL
-  AND NOT EXISTS (
-    SELECT 1 FROM "transaction" r WHERE r.reverses_transaction_id = t.id
-      AND (CAST(sqlc.narg('through') AS TEXT) IS NULL OR r.occurred_on <= CAST(sqlc.narg('through') AS TEXT))
-  )
+  AND (t.reversed_on IS NULL
+       OR (CAST(sqlc.narg('through') AS TEXT) IS NOT NULL AND t.reversed_on > CAST(sqlc.narg('through') AS TEXT)))
   AND (CAST(sqlc.narg('through') AS TEXT) IS NULL OR t.occurred_on <= CAST(sqlc.narg('through') AS TEXT))
 GROUP BY member_id;
 

@@ -63,6 +63,15 @@ func (q *Queries) DeleteAllIncidentals(ctx context.Context) error {
 	return err
 }
 
+const deleteAllMemberTiers = `-- name: DeleteAllMemberTiers :exec
+DELETE FROM member_tier
+`
+
+func (q *Queries) DeleteAllMemberTiers(ctx context.Context) error {
+	_, err := q.db.ExecContext(ctx, deleteAllMemberTiers)
+	return err
+}
+
 const deleteAllMembers = `-- name: DeleteAllMembers :exec
 DELETE FROM member
 `
@@ -162,8 +171,8 @@ func (q *Queries) RestoreAccount(ctx context.Context, arg RestoreAccountParams) 
 }
 
 const restoreDuesRate = `-- name: RestoreDuesRate :exec
-INSERT INTO dues_rate (id, tier_id, amount, effective_from, created_at)
-VALUES (?, ?, ?, ?, ?)
+INSERT INTO dues_rate (id, tier_id, amount, effective_from, correction, deleted, created_at)
+VALUES (?, ?, ?, ?, ?, ?, ?)
 `
 
 type RestoreDuesRateParams struct {
@@ -171,6 +180,8 @@ type RestoreDuesRateParams struct {
 	TierID        int64
 	Amount        int64
 	EffectiveFrom string
+	Correction    int64
+	Deleted       int64
 	CreatedAt     int64
 }
 
@@ -180,6 +191,8 @@ func (q *Queries) RestoreDuesRate(ctx context.Context, arg RestoreDuesRateParams
 		arg.TierID,
 		arg.Amount,
 		arg.EffectiveFrom,
+		arg.Correction,
+		arg.Deleted,
 		arg.CreatedAt,
 	)
 	return err
@@ -208,14 +221,15 @@ func (q *Queries) RestoreDuesTier(ctx context.Context, arg RestoreDuesTierParams
 }
 
 const restoreFund = `-- name: RestoreFund :exec
-INSERT INTO fund (id, name, currency, report_slug, created_at)
-VALUES (?, ?, ?, ?, ?)
+INSERT INTO fund (id, name, currency, time_zone, report_slug, created_at)
+VALUES (?, ?, ?, ?, ?, ?)
 `
 
 type RestoreFundParams struct {
 	ID         int64
 	Name       string
 	Currency   string
+	TimeZone   string
 	ReportSlug string
 	CreatedAt  int64
 }
@@ -225,6 +239,7 @@ func (q *Queries) RestoreFund(ctx context.Context, arg RestoreFundParams) error 
 		arg.ID,
 		arg.Name,
 		arg.Currency,
+		arg.TimeZone,
 		arg.ReportSlug,
 		arg.CreatedAt,
 	)
@@ -276,15 +291,14 @@ func (q *Queries) RestoreIncidentalRecipient(ctx context.Context, arg RestoreInc
 }
 
 const restoreMember = `-- name: RestoreMember :exec
-INSERT INTO member (id, fund_id, name, tier_id, joined_on, inactive_on, created_at)
-VALUES (?, ?, ?, ?, ?, ?, ?)
+INSERT INTO member (id, fund_id, name, joined_on, inactive_on, created_at)
+VALUES (?, ?, ?, ?, ?, ?)
 `
 
 type RestoreMemberParams struct {
 	ID         int64
 	FundID     int64
 	Name       string
-	TierID     *int64
 	JoinedOn   string
 	InactiveOn *string
 	CreatedAt  int64
@@ -295,9 +309,36 @@ func (q *Queries) RestoreMember(ctx context.Context, arg RestoreMemberParams) er
 		arg.ID,
 		arg.FundID,
 		arg.Name,
-		arg.TierID,
 		arg.JoinedOn,
 		arg.InactiveOn,
+		arg.CreatedAt,
+	)
+	return err
+}
+
+const restoreMemberTier = `-- name: RestoreMemberTier :exec
+INSERT INTO member_tier (id, fund_id, member_id, tier_id, effective_from, correction, created_at)
+VALUES (?, ?, ?, ?, ?, ?, ?)
+`
+
+type RestoreMemberTierParams struct {
+	ID            int64
+	FundID        int64
+	MemberID      int64
+	TierID        *int64
+	EffectiveFrom string
+	Correction    int64
+	CreatedAt     int64
+}
+
+func (q *Queries) RestoreMemberTier(ctx context.Context, arg RestoreMemberTierParams) error {
+	_, err := q.db.ExecContext(ctx, restoreMemberTier,
+		arg.ID,
+		arg.FundID,
+		arg.MemberID,
+		arg.TierID,
+		arg.EffectiveFrom,
+		arg.Correction,
 		arg.CreatedAt,
 	)
 	return err

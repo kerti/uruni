@@ -300,9 +300,9 @@ func TestReversalOfARowOnARetiredLocationStillWorks(t *testing.T) {
 	}
 	w.retireBank(t, r)
 
-	rev := postDuesPaymentReversal(t, r, posted[0].ID, reverseDuesPaymentRequest{OccurredOn: "2026-09-12"})
+	rev := postReversal(t, r, posted[0].ID, reverseTransactionRequest{})
 	if rev.Code != http.StatusCreated {
-		t.Fatalf("POST /api/dues-payments/{id}/reversal on a retired location = %d, want %d (body: %s)", rev.Code, http.StatusCreated, rev.Body.String())
+		t.Fatalf("POST /api/transactions/{id}/reversal on a retired location = %d, want %d (body: %s)", rev.Code, http.StatusCreated, rev.Body.String())
 	}
 	if got := w.state(t, r); got.bank != -25_000 || got.fund != 750_000 {
 		t.Errorf("bank/fund = %d/%d, want -25000/750000 after payment, move and reversal", got.bank, got.fund)

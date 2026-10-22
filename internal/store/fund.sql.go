@@ -10,14 +10,15 @@ import (
 )
 
 const createFund = `-- name: CreateFund :one
-INSERT INTO fund (name, currency, report_slug, created_at)
-VALUES (?, ?, ?, ?)
-RETURNING id, name, currency, report_slug, created_at
+INSERT INTO fund (name, currency, time_zone, report_slug, created_at)
+VALUES (?, ?, ?, ?, ?)
+RETURNING id, name, currency, time_zone, report_slug, created_at
 `
 
 type CreateFundParams struct {
 	Name       string
 	Currency   string
+	TimeZone   string
 	ReportSlug string
 	CreatedAt  int64
 }
@@ -26,6 +27,7 @@ func (q *Queries) CreateFund(ctx context.Context, arg CreateFundParams) (Fund, e
 	row := q.db.QueryRowContext(ctx, createFund,
 		arg.Name,
 		arg.Currency,
+		arg.TimeZone,
 		arg.ReportSlug,
 		arg.CreatedAt,
 	)
@@ -34,6 +36,7 @@ func (q *Queries) CreateFund(ctx context.Context, arg CreateFundParams) (Fund, e
 		&i.ID,
 		&i.Name,
 		&i.Currency,
+		&i.TimeZone,
 		&i.ReportSlug,
 		&i.CreatedAt,
 	)
@@ -41,7 +44,7 @@ func (q *Queries) CreateFund(ctx context.Context, arg CreateFundParams) (Fund, e
 }
 
 const getFund = `-- name: GetFund :one
-SELECT id, name, currency, report_slug, created_at
+SELECT id, name, currency, time_zone, report_slug, created_at
 FROM fund
 WHERE id = ?
 `
@@ -53,6 +56,7 @@ func (q *Queries) GetFund(ctx context.Context, id int64) (Fund, error) {
 		&i.ID,
 		&i.Name,
 		&i.Currency,
+		&i.TimeZone,
 		&i.ReportSlug,
 		&i.CreatedAt,
 	)
@@ -60,7 +64,7 @@ func (q *Queries) GetFund(ctx context.Context, id int64) (Fund, error) {
 }
 
 const getFundByReportSlug = `-- name: GetFundByReportSlug :one
-SELECT id, name, currency, report_slug, created_at
+SELECT id, name, currency, time_zone, report_slug, created_at
 FROM fund
 WHERE report_slug = ?
 `
@@ -74,6 +78,7 @@ func (q *Queries) GetFundByReportSlug(ctx context.Context, reportSlug string) (F
 		&i.ID,
 		&i.Name,
 		&i.Currency,
+		&i.TimeZone,
 		&i.ReportSlug,
 		&i.CreatedAt,
 	)
@@ -81,7 +86,7 @@ func (q *Queries) GetFundByReportSlug(ctx context.Context, reportSlug string) (F
 }
 
 const listFunds = `-- name: ListFunds :many
-SELECT id, name, currency, report_slug, created_at
+SELECT id, name, currency, time_zone, report_slug, created_at
 FROM fund
 ORDER BY id
 `
@@ -99,6 +104,7 @@ func (q *Queries) ListFunds(ctx context.Context) ([]Fund, error) {
 			&i.ID,
 			&i.Name,
 			&i.Currency,
+			&i.TimeZone,
 			&i.ReportSlug,
 			&i.CreatedAt,
 		); err != nil {
@@ -117,27 +123,31 @@ func (q *Queries) ListFunds(ctx context.Context) ([]Fund, error) {
 
 const updateFund = `-- name: UpdateFund :one
 UPDATE fund
-SET name = ?
-WHERE id = ?
-RETURNING id, name, currency, report_slug, created_at
+SET name = coalesce(?1, name),
+    time_zone = coalesce(?2, time_zone)
+WHERE id = ?3
+RETURNING id, name, currency, time_zone, report_slug, created_at
 `
 
 type UpdateFundParams struct {
-	Name string
-	ID   int64
+	Name     *string
+	TimeZone *string
+	ID       int64
 }
 
-// Renames the fund. name is a display label nothing posted references, so this
-// changes no history. currency (an invariant through 0.x) and report_slug (the
-// report's unguessable address; see UpdateFundReportSlug) are deliberately not
-// settable here.
+// Renames the fund and/or changes its time zone; a NULL argument leaves that
+// column alone. Neither rewrites anything posted (ADR-041: every day and month is
+// derived from the zone, so setting the old one back restores every earlier
+// reading). The CHECK is the zone's validation. currency (an invariant through
+// 0.x) and report_slug (see UpdateFundReportSlug) are deliberately not settable here.
 func (q *Queries) UpdateFund(ctx context.Context, arg UpdateFundParams) (Fund, error) {
-	row := q.db.QueryRowContext(ctx, updateFund, arg.Name, arg.ID)
+	row := q.db.QueryRowContext(ctx, updateFund, arg.Name, arg.TimeZone, arg.ID)
 	var i Fund
 	err := row.Scan(
 		&i.ID,
 		&i.Name,
 		&i.Currency,
+		&i.TimeZone,
 		&i.ReportSlug,
 		&i.CreatedAt,
 	)
@@ -148,7 +158,7 @@ const updateFundReportSlug = `-- name: UpdateFundReportSlug :one
 UPDATE fund
 SET report_slug = ?
 WHERE id = ?
-RETURNING id, name, currency, report_slug, created_at
+RETURNING id, name, currency, time_zone, report_slug, created_at
 `
 
 type UpdateFundReportSlugParams struct {
@@ -165,6 +175,7 @@ func (q *Queries) UpdateFundReportSlug(ctx context.Context, arg UpdateFundReport
 		&i.ID,
 		&i.Name,
 		&i.Currency,
+		&i.TimeZone,
 		&i.ReportSlug,
 		&i.CreatedAt,
 	)

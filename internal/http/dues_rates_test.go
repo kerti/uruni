@@ -116,15 +116,16 @@ func TestPostDuesRatesRejectsAMalformedEffectiveFrom(t *testing.T) {
 	r := testRouter(t)
 	tier := setUpTier(t, r, "Full")
 
-	// dues_rate.effective_from CHECK: GLOB 'YYYY-MM' and a real calendar month;
-	// "2026-13" matches the GLOB but names no month.
+	// "2026-13" has the shape of a month but names none; the ledger refuses it as
+	// an invalid argument (#632), ahead of the schema's CHECK, which stays the
+	// backstop.
 	rec := postDuesRate(t, r, tier.ID, duesRateRequest{Amount: 50_000, EffectiveFrom: "2026-13"})
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("POST .../rates with effective_from=2026-13 = %d, want %d (body: %s)", rec.Code, http.StatusBadRequest, rec.Body.String())
 	}
 	got := decodeError(t, rec)
-	if got.Code != "check_violation" {
-		t.Errorf("error code = %q, want %q", got.Code, "check_violation")
+	if got.Code != "invalid_argument" {
+		t.Errorf("error code = %q, want %q", got.Code, "invalid_argument")
 	}
 }
 
@@ -444,5 +445,136 @@ func TestPostDuesRatesRejectsMalformedJSON(t *testing.T) {
 	got := decodeError(t, rec)
 	if got.Code != "invalid_json" {
 		t.Errorf("error code = %q, want %q", got.Code, "invalid_json")
+	}
+}
+
+// --- corrections leave a trail (ADR-040) -------------------------------------
+
+func mustPostRate(t *testing.T, r http.Handler, tierID, amount int64, from string) duesRateResponse {
+	t.Helper()
+	rec := postDuesRate(t, r, tierID, duesRateRequest{Amount: amount, EffectiveFrom: from})
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("POST .../rates (%s) = %d, want %d (body: %s)", from, rec.Code, http.StatusCreated, rec.Body.String())
+	}
+	var rate duesRateResponse
+	if err := json.NewDecoder(rec.Body).Decode(&rate); err != nil {
+		t.Fatalf("decoding response: %v", err)
+	}
+	return rate
+}
+
+func listedRates(t *testing.T, r http.Handler, tierID int64) []duesRateResponse {
+	t.Helper()
+	list := getDuesRates(t, r, fmt.Sprintf("%d", tierID))
+	var rates []duesRateResponse
+	if err := json.NewDecoder(list.Body).Decode(&rates); err != nil {
+		t.Fatalf("decoding response: %v (body: %s)", err, list.Body.String())
+	}
+	return rates
+}
+
+func TestPatchDuesRatesAnswersANewIDAndTheOldOneIsThenRefused(t *testing.T) {
+	t.Parallel()
+	r := testRouter(t)
+	tier := setUpTier(t, r, "Full")
+	old := mustPostRate(t, r, tier.ID, 50_000, "2026-01")
+
+	rec := patchDuesRate(t, r, old.ID, 75_000)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("PATCH = %d, want %d (body: %s)", rec.Code, http.StatusOK, rec.Body.String())
+	}
+	var corrected duesRateResponse
+	if err := json.NewDecoder(rec.Body).Decode(&corrected); err != nil {
+		t.Fatal(err)
+	}
+	if corrected.ID == old.ID {
+		t.Errorf("a correction answered id %d, want a new row's id: the old row stays behind", corrected.ID)
+	}
+	if rates := listedRates(t, r, tier.ID); len(rates) != 1 || rates[0] != corrected {
+		t.Errorf("GET .../rates = %+v, want only the corrected row %+v", rates, corrected)
+	}
+
+	// A stale page still holds the old id: refused, never applied to the successor.
+	stale := patchDuesRate(t, r, old.ID, 99_000)
+	if stale.Code != http.StatusConflict || decodeError(t, stale).Code != "dues_rate_superseded" {
+		t.Errorf("PATCH on a superseded id = %d %s, want 409 dues_rate_superseded", stale.Code, stale.Body.String())
+	}
+	staleDel := deleteDuesRate(t, r, old.ID)
+	if staleDel.Code != http.StatusConflict || decodeError(t, staleDel).Code != "dues_rate_superseded" {
+		t.Errorf("DELETE on a superseded id = %d %s, want 409 dues_rate_superseded", staleDel.Code, staleDel.Body.String())
+	}
+	if rates := listedRates(t, r, tier.ID); len(rates) != 1 || rates[0].Amount != 75_000 {
+		t.Errorf("GET .../rates = %+v, want the successor untouched at 75000", rates)
+	}
+}
+
+func TestPatchDuesRatesWithTheStandingAmountIsANoOp(t *testing.T) {
+	t.Parallel()
+	r := testRouter(t)
+	tier := setUpTier(t, r, "Full")
+	rate := mustPostRate(t, r, tier.ID, 50_000, "2026-01")
+
+	rec := patchDuesRate(t, r, rate.ID, 50_000)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("PATCH with the standing amount = %d, want %d (body: %s)", rec.Code, http.StatusOK, rec.Body.String())
+	}
+	var got duesRateResponse
+	if err := json.NewDecoder(rec.Body).Decode(&got); err != nil {
+		t.Fatal(err)
+	}
+	if got != rate {
+		t.Errorf("PATCH with the standing amount answered %+v, want the standing row %+v: nothing written", got, rate)
+	}
+	// Still addressable: the id did not change, so it is not refused as superseded.
+	if again := patchDuesRate(t, r, rate.ID, 60_000); again.Code != http.StatusOK {
+		t.Errorf("PATCH after a no-op = %d, want %d", again.Code, http.StatusOK)
+	}
+}
+
+func TestPatchDuesRatesAboveTheCeilingIsRefusedAndLeavesTheRate(t *testing.T) {
+	t.Parallel()
+	r := testRouter(t)
+	tier := setUpTier(t, r, "Full")
+	rate := mustPostRate(t, r, tier.ID, 50_000, "2026-01")
+
+	rec := patchDuesRate(t, r, rate.ID, 1_000_000_000_000)
+	if rec.Code != http.StatusBadRequest || decodeError(t, rec).Code != "amount_too_large" {
+		t.Errorf("PATCH above the ceiling = %d %s, want 400 amount_too_large", rec.Code, rec.Body.String())
+	}
+	if rates := listedRates(t, r, tier.ID); len(rates) != 1 || rates[0] != rate {
+		t.Errorf("GET .../rates = %+v, want the rate untouched", rates)
+	}
+}
+
+func TestDeleteDuesRatesWithdrawsTheRateAndAReAddIntoTheSameMonthSucceeds(t *testing.T) {
+	t.Parallel()
+	r := testRouter(t)
+	tier := setUpTier(t, r, "Full")
+	jan := mustPostRate(t, r, tier.ID, 50_000, "2026-01")
+	jun := mustPostRate(t, r, tier.ID, 70_000, "2026-06")
+
+	if rec := deleteDuesRate(t, r, jun.ID); rec.Code != http.StatusNoContent {
+		t.Fatalf("DELETE = %d, want %d (body: %s)", rec.Code, http.StatusNoContent, rec.Body.String())
+	}
+	if rates := listedRates(t, r, tier.ID); len(rates) != 1 || rates[0] != jan {
+		t.Errorf("GET .../rates = %+v, want January only: a deleted month does not show", rates)
+	}
+	// Deleting twice is a stale request, not a second deletion.
+	if rec := deleteDuesRate(t, r, jun.ID); rec.Code != http.StatusConflict {
+		t.Errorf("DELETE of an already-deleted rate = %d, want %d", rec.Code, http.StatusConflict)
+	}
+
+	// A month whose standing row is a deletion takes a new rate (a month with a
+	// rate still answers 409 unique_violation, tested above).
+	again := mustPostRate(t, r, tier.ID, 80_000, "2026-06")
+	if again.ID == jun.ID {
+		t.Error("the re-added rate reused the withdrawn row's id")
+	}
+	if rates := listedRates(t, r, tier.ID); len(rates) != 2 || rates[1] != again {
+		t.Errorf("GET .../rates = %+v, want January and the re-added June", rates)
+	}
+	if dup := postDuesRate(t, r, tier.ID, duesRateRequest{Amount: 1, EffectiveFrom: "2026-06"}); dup.Code != http.StatusConflict ||
+		decodeError(t, dup).Code != "unique_violation" {
+		t.Errorf("POST into a month that has a rate again = %d %s, want 409 unique_violation", dup.Code, dup.Body.String())
 	}
 }
