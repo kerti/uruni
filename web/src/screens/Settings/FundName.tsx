@@ -4,11 +4,10 @@ import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import Loading from '@/components/states/Loading'
 import ErrorState from '@/components/states/ErrorState'
 import { copy } from '@/copy/id'
 import { parseDialogTarget } from '@/lib/dialogTarget'
-import { getFund, updateFund } from '@/lib/setup'
+import { updateFund } from '@/lib/setup'
 import { useApi } from '@/lib/useApi'
 import { isTimeZone, DEFAULT_TIME_ZONE } from '@/lib/timeZones'
 import { useDialogParam } from '@/lib/useDialogParam'
@@ -33,21 +32,24 @@ const text = copy.settings.fund
  * from it, so setting the old zone back restores every earlier reading, and
  * there is no confirm step.
  *
- * `onChanged` exists because the fund is also Shell's header, which App.tsx read
- * once on mount - without it the header would keep the old name until a reload.
+ * The fund is App.tsx's, read once at boot and passed down rather than fetched
+ * again here. `onChanged` hands a saved fund back to it, which updates Shell's
+ * header and this section together; `refresh` re-reads it after a write whose
+ * outcome is unknown.
  *
  * There is exactly one fund, so the dialogs carry no id: `fund:name` and
  * `fund:time_zone` are the only values; any other `?edit=fund:<x>` is cleared once.
  */
-export default function FundName({ onChanged }: { onChanged: (fund: Fund) => void }) {
-  const [loadState, loadRun] = useApi<Fund>()
+export default function FundName({
+  fund,
+  onChanged,
+  refresh,
+}: {
+  fund: Fund
+  onChanged: (fund: Fund) => void
+  refresh: () => Promise<void>
+}) {
   const { value, open, close, clear } = useDialogParam()
-
-  useEffect(() => {
-    void loadRun(getFund)
-  }, [loadRun])
-
-  const fund = loadState.data ?? null
 
   // 'fund' is this section's prefix (dialogTarget.ts). The rename dialog is
   // addressed by name rather than id, so it lands as `invalid` on that parser -
@@ -73,43 +75,35 @@ export default function FundName({ onChanged }: { onChanged: (fund: Fund) => voi
         <p className="text-sm text-muted-foreground">{text.body}</p>
       </div>
 
-      {loadState.status === 'idle' || loadState.status === 'loading' ? (
-        <Loading />
-      ) : loadState.status === 'error' || fund === null ? (
-        loadState.error && <ErrorState error={loadState.error} onRetry={() => void loadRun(getFund)} />
-      ) : (
-        <div className="flex flex-col gap-2">
-          <SettingCard label={text.nameLabel} value={fund.name} aria-label={text.editAria(fund.name)} onClick={() => open('fund:name')} />
-          <SettingCard
-            label={copy.timeZone.label}
-            value={copy.timeZone.options[isTimeZone(fund.time_zone) ? fund.time_zone : DEFAULT_TIME_ZONE].label}
-            aria-label={text.zone.editAria(copy.timeZone.options[isTimeZone(fund.time_zone) ? fund.time_zone : DEFAULT_TIME_ZONE].label)}
-            onClick={() => open('fund:time_zone')}
-          />
-        </div>
-      )}
+      <div className="flex flex-col gap-2">
+        <SettingCard label={text.nameLabel} value={fund.name} aria-label={text.editAria(fund.name)} onClick={() => open('fund:name')} />
+        <SettingCard
+          label={copy.timeZone.label}
+          value={copy.timeZone.options[isTimeZone(fund.time_zone) ? fund.time_zone : DEFAULT_TIME_ZONE].label}
+          aria-label={text.zone.editAria(copy.timeZone.options[isTimeZone(fund.time_zone) ? fund.time_zone : DEFAULT_TIME_ZONE].label)}
+          onClick={() => open('fund:time_zone')}
+        />
+      </div>
 
       <EditFundNameDialog
         fund={fund}
-        open={editing && fund !== null}
+        open={editing}
         onClose={close}
         onRenamed={(updated) => {
           onChanged(updated)
           close()
-          void loadRun(getFund)
         }}
-        refresh={() => loadRun(getFund, { silent: true })}
+        refresh={refresh}
       />
       <EditTimeZoneDialog
         fund={fund}
-        open={editingZone && fund !== null}
+        open={editingZone}
         onClose={close}
         onChanged={(updated) => {
           onChanged(updated)
           close()
-          void loadRun(getFund)
         }}
-        refresh={() => loadRun(getFund, { silent: true })}
+        refresh={refresh}
       />
     </section>
   )

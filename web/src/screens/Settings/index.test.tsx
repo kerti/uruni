@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import Settings from '@/screens/Settings/index'
 import { copy } from '@/copy/id'
+import type { Fund } from '@/lib/setup'
 
 // Pengaturan as a whole, rather than one section at a time - the only way this
 // suite's subject is visible at all.
@@ -45,14 +46,21 @@ function stubSettings() {
     if (url.includes('/api/purposes')) {
       return Promise.resolve(jsonResponse([{ id: 2, kind: 'pass_through', name: 'Kas Bidang' }]))
     }
-    if (url.includes('/api/fund')) {
-      return Promise.resolve(jsonResponse({ id: 1, name: 'Kas RT 05', report_url: 'https://kas.example.org/report/abc' }))
-    }
     if (url.includes('/api/user')) {
       return Promise.resolve(jsonResponse({ id: 1, email: 'bendahara@example.org', created_at: 1 }))
     }
     return Promise.reject(new Error(`unstubbed fetch: ${url}`))
   })
+}
+
+const fund: Fund = {
+  id: 1,
+  name: 'Kas RT 05',
+  currency: 'IDR',
+  time_zone: 'Asia/Jakarta',
+  report_slug: 'abc',
+  report_url: 'https://kas.example.org/report/abc',
+  created_at: 1,
 }
 
 function LocationProbe() {
@@ -68,7 +76,7 @@ function renderAt(entry: string) {
           path="/settings"
           element={
             <>
-              <Settings onFundChanged={vi.fn()} />
+              <Settings fund={fund} onFundChanged={vi.fn()} refreshFund={() => Promise.resolve()} />
               <LocationProbe />
             </>
           }

@@ -408,7 +408,16 @@ function AuthedGate({ onLoggedOut }: { onLoggedOut: () => void }) {
         path="/settings"
         element={
           <Shell title={title} onLoggedOut={onLoggedOut}>
-            <Settings onFundChanged={(fund) => void run(async () => fund)} />
+            {/* Pengaturan reads the fund this gate already holds rather than
+                fetching it again, and a change lands here silently: a visible
+                run would drop to the loading screen and remount every section. */}
+            {state.data && (
+              <Settings
+                fund={state.data}
+                onFundChanged={(fund) => void run(async () => fund, { silent: true })}
+                refreshFund={() => run(getFund, { silent: true })}
+              />
+            )}
           </Shell>
         }
       />
