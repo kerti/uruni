@@ -179,7 +179,6 @@ func (a *api) routes(r chi.Router) {
 		// A correction or a delete appends the next correction of the rate's month
 		// (ADR-040): a PATCH answers a new id, and the old one is refused as superseded.
 		r.Post("/dues-tiers/{id}/rates", a.createDuesRate)
-		r.Get("/dues-tiers/{id}/rates", a.listDuesRates)
 		r.Patch("/dues-rates/{id}", a.updateDuesRate)
 		r.Delete("/dues-rates/{id}", a.deleteDuesRate)
 

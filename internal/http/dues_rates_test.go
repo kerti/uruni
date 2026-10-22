@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
-	"strconv"
 	"strings"
 	"testing"
 )
@@ -23,12 +22,31 @@ func postDuesRate(t *testing.T, r http.Handler, tierID int64, req duesRateReques
 	return rec
 }
 
-func getDuesRates(t *testing.T, r http.Handler, tierIDPathSegment string) *httptest.ResponseRecorder {
+// listDuesTiers is GET /api/dues-tiers, decoded: every tier with its rates.
+func listDuesTiers(t *testing.T, r http.Handler) []duesTierListItem {
 	t.Helper()
 	rec := httptest.NewRecorder()
-	path := fmt.Sprintf("/api/dues-tiers/%s/rates", tierIDPathSegment)
-	r.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, path, nil))
-	return rec
+	r.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/dues-tiers", nil))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GET /api/dues-tiers = %d, want %d (body: %s)", rec.Code, http.StatusOK, rec.Body.String())
+	}
+	var tiers []duesTierListItem
+	if err := json.NewDecoder(rec.Body).Decode(&tiers); err != nil {
+		t.Fatalf("decoding response: %v (body: %s)", err, rec.Body.String())
+	}
+	return tiers
+}
+
+// listedRates is one tier's rates as GET /api/dues-tiers lists them.
+func listedRates(t *testing.T, r http.Handler, tierID int64) []duesRateResponse {
+	t.Helper()
+	for _, tier := range listDuesTiers(t, r) {
+		if tier.ID == tierID {
+			return tier.Rates
+		}
+	}
+	t.Fatalf("GET /api/dues-tiers does not list tier %d", tierID)
+	return nil
 }
 
 // setUpTier is the fixture every dues-rate test needs: a fund, then a tier to
@@ -76,14 +94,7 @@ func TestPostDuesRatesCreatesAndListReturnsIt(t *testing.T) {
 		t.Errorf("dues_rate.effective_from = %q, want %q", created.EffectiveFrom, "2026-01")
 	}
 
-	list := getDuesRates(t, r, fmt.Sprintf("%d", tier.ID))
-	if list.Code != http.StatusOK {
-		t.Fatalf("GET .../rates = %d, want %d (body: %s)", list.Code, http.StatusOK, list.Body.String())
-	}
-	var rates []duesRateResponse
-	if err := json.NewDecoder(list.Body).Decode(&rates); err != nil {
-		t.Fatalf("decoding response: %v (body: %s)", err, list.Body.String())
-	}
+	rates := listedRates(t, r, tier.ID)
 	if len(rates) != 1 || rates[0] != created {
 		t.Errorf("GET .../rates = %+v, want [%+v]", rates, created)
 	}
@@ -165,49 +176,20 @@ func TestPostDuesRatesReturns400ForANonNumericTierID(t *testing.T) {
 	}
 }
 
-func TestGetDuesRatesReturnsAnEmptyListForATierWithNoRateYet(t *testing.T) {
+func TestGetDuesTiersListsATierWithNoRateYetWithAnEmptyList(t *testing.T) {
 	t.Parallel()
 	// dues_rate.sql: "a tier whose rate is undecided simply has no row", a
-	// legitimate state, not an error.
+	// legitimate state, not an error - and on the wire it is [], never null.
 	r := testRouter(t)
-	tier := setUpTier(t, r, "Madya")
+	setUpTier(t, r, "Madya")
 
-	rec := getDuesRates(t, r, fmt.Sprintf("%d", tier.ID))
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/dues-tiers", nil))
 	if rec.Code != http.StatusOK {
-		t.Fatalf("GET .../rates for a tier with no rate = %d, want %d", rec.Code, http.StatusOK)
+		t.Fatalf("GET /api/dues-tiers = %d, want %d", rec.Code, http.StatusOK)
 	}
-	if got := rec.Body.String(); got != "[]\n" {
-		t.Errorf("GET .../rates body = %q, want %q", got, "[]\n")
-	}
-}
-
-func TestGetDuesRatesReturns404ForAnUnknownTierID(t *testing.T) {
-	t.Parallel()
-	r := testRouter(t)
-	setUpTier(t, r, "Full")
-
-	rec := getDuesRates(t, r, "999")
-	if rec.Code != http.StatusNotFound {
-		t.Fatalf("GET .../rates for an unknown tier = %d, want %d (body: %s)", rec.Code, http.StatusNotFound, rec.Body.String())
-	}
-	got := decodeError(t, rec)
-	if got.Code != "not_found" {
-		t.Errorf("error code = %q, want %q", got.Code, "not_found")
-	}
-}
-
-func TestGetDuesRatesReturns400ForANonNumericTierID(t *testing.T) {
-	t.Parallel()
-	r := testRouter(t)
-	setUpTier(t, r, "Full")
-
-	rec := getDuesRates(t, r, "abc")
-	if rec.Code != http.StatusBadRequest {
-		t.Fatalf("GET .../rates with a non-numeric tier id = %d, want %d (body: %s)", rec.Code, http.StatusBadRequest, rec.Body.String())
-	}
-	got := decodeError(t, rec)
-	if got.Code != "invalid_argument" {
-		t.Errorf("error code = %q, want %q", got.Code, "invalid_argument")
+	if got := rec.Body.String(); !strings.Contains(got, `"rates":[]`) {
+		t.Errorf("GET /api/dues-tiers body = %q, want the tier with \"rates\":[]", got)
 	}
 }
 
@@ -291,11 +273,7 @@ func TestPatchDuesRatesRejectsABodyWithNoAmount(t *testing.T) {
 			}
 
 			// The rate must be untouched, not zeroed.
-			rates := getDuesRates(t, r, strconv.FormatInt(tier.ID, 10))
-			var got []duesRateResponse
-			if err := json.NewDecoder(rates.Body).Decode(&got); err != nil {
-				t.Fatalf("decoding rates: %v", err)
-			}
+			got := listedRates(t, r, tier.ID)
 			if len(got) != 1 || got[0].Amount != 50_000 {
 				t.Errorf("rates after refused PATCH = %+v, want the original 50000 unchanged", got)
 			}
@@ -389,11 +367,7 @@ func TestDeleteDuesRatesThenRepostingForTheRightMonthSucceeds(t *testing.T) {
 		t.Fatalf("POST .../rates for the corrected month = %d, want %d (body: %s)", right.Code, http.StatusCreated, right.Body.String())
 	}
 
-	list := getDuesRates(t, r, fmt.Sprintf("%d", tier.ID))
-	var rates []duesRateResponse
-	if err := json.NewDecoder(list.Body).Decode(&rates); err != nil {
-		t.Fatalf("decoding response: %v", err)
-	}
+	rates := listedRates(t, r, tier.ID)
 	if len(rates) != 1 || rates[0].EffectiveFrom != "2026-01" {
 		t.Errorf("GET .../rates = %+v, want a single rate effective 2026-01", rates)
 	}
@@ -461,16 +435,6 @@ func mustPostRate(t *testing.T, r http.Handler, tierID, amount int64, from strin
 		t.Fatalf("decoding response: %v", err)
 	}
 	return rate
-}
-
-func listedRates(t *testing.T, r http.Handler, tierID int64) []duesRateResponse {
-	t.Helper()
-	list := getDuesRates(t, r, fmt.Sprintf("%d", tierID))
-	var rates []duesRateResponse
-	if err := json.NewDecoder(list.Body).Decode(&rates); err != nil {
-		t.Fatalf("decoding response: %v (body: %s)", err, list.Body.String())
-	}
-	return rates
 }
 
 func TestPatchDuesRatesAnswersANewIDAndTheOldOneIsThenRefused(t *testing.T) {

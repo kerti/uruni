@@ -26,6 +26,10 @@ function rate(id: number, tierId: number, amount: number, effectiveFrom: string)
   return { id, tier_id: tierId, amount, effective_from: effectiveFrom, created_at: 1 }
 }
 
+function withRates(tiers: ReturnType<typeof tier>[], rates: ReturnType<typeof rate>[]) {
+  return tiers.map((t) => ({ ...t, rates: rates.filter((r) => r.tier_id === t.id) }))
+}
+
 function stubTier(tiers: ReturnType<typeof tier>[], rates: ReturnType<typeof rate>[], writeResponse?: () => Response) {
   const calls: { method: string; url: string; body: Record<string, unknown> | undefined }[] = []
   const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
@@ -35,9 +39,11 @@ function stubTier(tiers: ReturnType<typeof tier>[], rates: ReturnType<typeof rat
       calls.push({ method, url, body: init?.body ? JSON.parse(String(init.body)) : undefined })
       return Promise.resolve(writeResponse ? writeResponse() : jsonResponse(rate(9, 1, 50_000, '2026-09')))
     }
-    if (url.includes('/rates')) return method === 'GET' ? Promise.resolve(jsonResponse(rates)) : write()
     if (url.includes('/api/dues-rates')) return write()
-    if (url.includes('/api/dues-tiers')) return method === 'GET' ? Promise.resolve(jsonResponse(tiers)) : write()
+    // GET /api/dues-tiers carries each tier's rates (#672); nothing reads a
+    // tier's rates on their own any more.
+    if (url.includes('/api/dues-tiers') && method === 'GET') return Promise.resolve(jsonResponse(withRates(tiers, rates)))
+    if (url.includes('/api/dues-tiers')) return write()
     return Promise.reject(new Error(`unstubbed fetch: ${url}`))
   })
   return { fetchMock, calls }
@@ -238,16 +244,15 @@ describe('A golongan screen', () => {
     const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
       const url = typeof input === 'string' ? input : input.toString()
       const method = init?.method ?? 'GET'
-      if (url.includes('/rates')) {
-        rateReads++
-        return Promise.resolve(jsonResponse(listed))
-      }
       if (url.includes('/api/dues-rates/1') && method === 'PATCH') {
         // Meanwhile another screen corrected it: id 1 no longer stands.
         listed = [rate(7, 1, 52_000, '2026-01')]
         return Promise.resolve(jsonResponse({ error: { code: 'dues_rate_superseded', message: 'superseded' } }, 409))
       }
-      if (url.includes('/api/dues-tiers')) return Promise.resolve(jsonResponse([tier(1, 'Pelaksana')]))
+      if (url.includes('/api/dues-tiers')) {
+        rateReads++
+        return Promise.resolve(jsonResponse(withRates([tier(1, 'Pelaksana')], listed)))
+      }
       return Promise.reject(new Error(`unstubbed fetch: ${url}`))
     })
     vi.stubGlobal('fetch', fetchMock)

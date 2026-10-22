@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"testing"
 )
 
@@ -68,6 +69,62 @@ func TestPostDuesTiersCreatesAndListReturnsIt(t *testing.T) {
 	}
 	if len(tiers) != 1 || tiers[0] != created {
 		t.Errorf("GET /api/dues-tiers = %+v, want [%+v]", tiers, created)
+	}
+}
+
+// TestGetDuesTiersCarriesEachTiersRatesInForce is #672: the list carries every
+// tier's rate history, so Pengaturan needs no request per tier. Each tier gets
+// its own rates, oldest month first, and a corrected month shows its
+// correction alone - the same rows the pricing reads (dues_rate_standing).
+func TestGetDuesTiersCarriesEachTiersRatesInForce(t *testing.T) {
+	t.Parallel()
+	r := testRouter(t)
+	if rec := postSetup(t, r, "Test Fund"); rec.Code != http.StatusCreated {
+		t.Fatalf("POST /api/setup = %d, want %d", rec.Code, http.StatusCreated)
+	}
+	full := decodeDuesTier(t, postDuesTier(t, r, "Penuh"))
+	half := decodeDuesTier(t, postDuesTier(t, r, "Separuh"))
+	empty := decodeDuesTier(t, postDuesTier(t, r, "Madya"))
+
+	post := func(tierID, amount int64, from string) duesRateResponse {
+		t.Helper()
+		rec := postDuesRate(t, r, tierID, duesRateRequest{Amount: amount, EffectiveFrom: from})
+		if rec.Code != http.StatusCreated {
+			t.Fatalf("POST rate %s = %d, want %d (body: %s)", from, rec.Code, http.StatusCreated, rec.Body.String())
+		}
+		var rate duesRateResponse
+		if err := json.NewDecoder(rec.Body).Decode(&rate); err != nil {
+			t.Fatalf("decoding rate: %v", err)
+		}
+		return rate
+	}
+	// Posted out of month order, to show the list is ordered by month.
+	june := post(full.ID, 60_000, "2026-06")
+	january := post(full.ID, 50_000, "2026-01")
+	halfRate := post(half.ID, 25_000, "2026-01")
+
+	fixed := patchDuesRate(t, r, january.ID, 55_000)
+	if fixed.Code != http.StatusOK {
+		t.Fatalf("PATCH rate = %d, want %d (body: %s)", fixed.Code, http.StatusOK, fixed.Body.String())
+	}
+	var corrected duesRateResponse
+	if err := json.NewDecoder(fixed.Body).Decode(&corrected); err != nil {
+		t.Fatalf("decoding corrected rate: %v", err)
+	}
+
+	want := map[int64][]duesRateResponse{
+		full.ID:  {corrected, june},
+		half.ID:  {halfRate},
+		empty.ID: {},
+	}
+	tiers := listDuesTiers(t, r)
+	if len(tiers) != len(want) {
+		t.Fatalf("GET /api/dues-tiers lists %d tiers, want %d: %+v", len(tiers), len(want), tiers)
+	}
+	for _, tier := range tiers {
+		if !slices.Equal(tier.Rates, want[tier.ID]) {
+			t.Errorf("tier %q rates = %+v, want %+v", tier.Name, tier.Rates, want[tier.ID])
+		}
 	}
 }
 
@@ -287,9 +344,6 @@ func TestDeleteDuesTierTakesItsRatesWithIt(t *testing.T) {
 			t.Errorf("deleted tier %d is still listed", tier.ID)
 		}
 	}
-	if ratesRec := getDuesRates(t, r, fmt.Sprintf("%d", tier.ID)); ratesRec.Code != http.StatusNotFound {
-		t.Errorf("GET rates for the deleted tier = %d, want %d (body: %s)", ratesRec.Code, http.StatusNotFound, ratesRec.Body.String())
-	}
 }
 
 // TestDeleteDuesTierRefusesOneAMemberIsIn is the acceptance criterion, and why
@@ -320,14 +374,7 @@ func TestDeleteDuesTierRefusesOneAMemberIsIn(t *testing.T) {
 
 	// The rollback's point: the rate deletion ran in the same transaction and must
 	// not have survived it.
-	ratesRec := getDuesRates(t, r, fmt.Sprintf("%d", tier.ID))
-	if ratesRec.Code != http.StatusOK {
-		t.Fatalf("GET rates after a refused delete = %d, want %d (body: %s)", ratesRec.Code, http.StatusOK, ratesRec.Body.String())
-	}
-	var rates []duesRateResponse
-	if err := json.NewDecoder(ratesRec.Body).Decode(&rates); err != nil {
-		t.Fatalf("decoding dues rates: %v", err)
-	}
+	rates := listedRates(t, r, tier.ID)
 	if len(rates) != 1 {
 		t.Errorf("tier has %d rates after a refused delete, want 1 - the rollback did not restore them: %+v", len(rates), rates)
 	}

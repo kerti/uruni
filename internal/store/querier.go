@@ -379,14 +379,15 @@ type Querier interface {
 	// trail is the data. Ordered by id only for deterministic export bytes, not by
 	// effective date.
 	ListDuesRatesByFund(ctx context.Context, fundID int64) ([]DuesRate, error)
-	// The Golongan screen's list: the rates in force, oldest month first.
+	// One tier's rates in force, oldest month first.
 	ListDuesRatesByTier(ctx context.Context, tierID int64) ([]DuesRateStanding, error)
 	// The rates that price one member (OutstandingDuesForMember, paidThrough): those
 	// of every tier the member has a standing row for. A tier named only by a
 	// superseded row prices nothing, so it is not fetched.
 	ListDuesRatesForMemberPricing(ctx context.Context, arg ListDuesRatesForMemberPricingParams) ([]DuesRateStanding, error)
-	// The rates that price a roster (DuesStatusForPeriod): every tier's rates in
-	// force, ordered tier then month for the Go fold. One query however many members.
+	// The rates that price a roster (DuesStatusForPeriod), and GET /api/dues-tiers's
+	// rate histories: every tier's rates in force, ordered tier then month for the
+	// Go fold. One query however many members or tiers.
 	ListDuesRatesForPricing(ctx context.Context, fundID int64) ([]DuesRateStanding, error)
 	// By name, ignoring case (maintainer, 2026-10-05).
 	ListDuesTiersByFund(ctx context.Context, fundID int64) ([]DuesTier, error)

@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"net/http"
 	"net/http/httptest"
-	"strconv"
 	"testing"
 
 	"github.com/kerti/uruni/internal/store"
@@ -145,9 +144,6 @@ func fundScopedRouteCases() []struct {
 		}},
 		{"PATCH /api/dues-tiers/{id}", func(t *testing.T, r http.Handler, o otherFundFixture) *httptest.ResponseRecorder {
 			return patchDuesTier(t, r, o.tierID, "Renamed")
-		}},
-		{"GET /api/dues-tiers/{id}/rates", func(t *testing.T, r http.Handler, o otherFundFixture) *httptest.ResponseRecorder {
-			return getDuesRates(t, r, strconv.FormatInt(o.tierID, 10))
 		}},
 		{"POST /api/dues-tiers/{id}/rates", func(t *testing.T, r http.Handler, o otherFundFixture) *httptest.ResponseRecorder {
 			return postDuesRate(t, r, o.tierID, duesRateRequest{Amount: 50_000, EffectiveFrom: "2026-03"})

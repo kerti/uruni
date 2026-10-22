@@ -42,7 +42,7 @@ WHERE tier_id = ? AND effective_from <= ?
 ORDER BY effective_from DESC
 LIMIT 1;
 
--- The Golongan screen's list: the rates in force, oldest month first.
+-- One tier's rates in force, oldest month first.
 -- name: ListDuesRatesByTier :many
 SELECT id, tier_id, amount, effective_from, correction, created_at
 FROM dues_rate_standing
@@ -60,8 +60,9 @@ JOIN dues_tier ON dues_tier.id = dues_rate.tier_id
 WHERE dues_tier.fund_id = ?
 ORDER BY dues_rate.id;
 
--- The rates that price a roster (DuesStatusForPeriod): every tier's rates in
--- force, ordered tier then month for the Go fold. One query however many members.
+-- The rates that price a roster (DuesStatusForPeriod), and GET /api/dues-tiers's
+-- rate histories: every tier's rates in force, ordered tier then month for the
+-- Go fold. One query however many members or tiers.
 -- name: ListDuesRatesForPricing :many
 SELECT dr.id, dr.tier_id, dr.amount, dr.effective_from, dr.correction, dr.created_at
 FROM dues_rate_standing dr
