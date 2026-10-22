@@ -1,6 +1,7 @@
 package http
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"encoding/json"
@@ -8,7 +9,9 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/kerti/uruni/internal/auth"
@@ -331,4 +334,41 @@ func TestMapSQLiteErrorMapsAnUnrecognizedErrorTo500(t *testing.T) {
 	if got.Code != "internal_error" {
 		t.Errorf("code = %q, want %q", got.Code, "internal_error")
 	}
+}
+
+// #667: an error that is only the request's context being canceled is the
+// client going away, not a server fault - 499 and an INFO line, never a 500
+// and an ERROR, from every general fallback. A deadline stays the server's.
+func TestMapErrorsAnswerACanceledRequestWith499AndNoErrorLine(t *testing.T) {
+	t.Parallel()
+	canceled := fmt.Errorf("listing rates: %w", context.Canceled)
+	mappers := map[string]func(http.ResponseWriter, *slog.Logger, error){
+		"mapLedgerError":       mapLedgerError,
+		"mapAuthError":         mapAuthError,
+		"mapSQLiteError":       mapSQLiteError,
+		"mapSQLiteDeleteError": mapSQLiteDeleteError,
+	}
+	for name, mapErr := range mappers {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			var logs bytes.Buffer
+			rec := httptest.NewRecorder()
+			mapErr(rec, slog.New(slog.NewTextHandler(&logs, nil)), canceled)
+			if rec.Code != statusClientClosedRequest {
+				t.Errorf("status = %d, want %d", rec.Code, statusClientClosedRequest)
+			}
+			if strings.Contains(logs.String(), "level=ERROR") || !strings.Contains(logs.String(), "level=INFO") {
+				t.Errorf("log = %q, want one INFO line and no ERROR", logs.String())
+			}
+		})
+	}
+
+	t.Run("a deadline is still a 500", func(t *testing.T) {
+		t.Parallel()
+		rec := httptest.NewRecorder()
+		mapSQLiteError(rec, testLogger(), fmt.Errorf("listing rates: %w", context.DeadlineExceeded))
+		if rec.Code != http.StatusInternalServerError {
+			t.Errorf("status = %d, want 500", rec.Code)
+		}
+	})
 }

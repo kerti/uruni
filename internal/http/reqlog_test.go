@@ -2,6 +2,7 @@ package http
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"log/slog"
 	"net/http"
@@ -322,4 +323,24 @@ func TestRestoreSecurityEvents(t *testing.T) {
 	}
 	wantEvent(t, logs, "restore_confirmed", "WARN")
 	wantNoSecrets(t, logs)
+}
+
+// #667: a phone that drops its connection mid-load cancels the request's
+// context. The request line records 499, and nothing logs an ERROR, wherever
+// the cancellation surfaces first (here the session store, ahead of the
+// handler).
+func TestACanceledRequestIsRecordedAs499WithNoErrorLine(t *testing.T) {
+	t.Parallel()
+	h, logs, _ := loggedRouter(t, slog.LevelInfo)
+	logs.Reset()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	req := httptest.NewRequest(http.MethodGet, "/api/dues-tiers", nil).WithContext(ctx)
+	h.ServeHTTP(httptest.NewRecorder(), req)
+
+	if strings.Contains(logs.String(), "level=ERROR") {
+		t.Errorf("logs carry an ERROR for a canceled request:\n%s", logs.String())
+	}
+	logLine(t, logs, "msg=request", "path=/api/dues-tiers", "status=499")
 }

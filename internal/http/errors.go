@@ -1,6 +1,7 @@
 package http
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"errors"
@@ -37,9 +38,31 @@ func writeAPIError(w http.ResponseWriter, status int, code, message string) {
 	_ = json.NewEncoder(w).Encode(errorEnvelope{Error: errorBody{Code: code, Message: message}})
 }
 
+// statusClientClosedRequest is nginx's 499: the request's context was
+// canceled before the answer was written. No client reads it; it is what the
+// request log records.
+const statusClientClosedRequest = 499
+
+// answeredClientGone handles an error that is only the request's context being
+// canceled - the client reloaded, navigated away or lost its connection, or
+// shutdown ended the request (#667). That is not a server fault, so it is
+// logged at INFO and recorded as 499 rather than an ERROR and a 500. A
+// deadline is left to the caller: it is the server's own time limit.
+func answeredClientGone(w http.ResponseWriter, logger *slog.Logger, err error) bool {
+	if !errors.Is(err, context.Canceled) {
+		return false
+	}
+	logger.Info("request canceled before it finished", "error", err)
+	w.WriteHeader(statusClientClosedRequest)
+	return true
+}
+
 // mapLedgerError answers an error from an internal/ledger call, per ADR-027's
 // sentinel taxonomy. Every ledger-calling route shares this one switch.
 func mapLedgerError(w http.ResponseWriter, logger *slog.Logger, err error) {
+	if answeredClientGone(w, logger, err) {
+		return
+	}
 	switch {
 	case errors.Is(err, ledger.ErrInvalidArgument):
 		writeAPIError(w, http.StatusBadRequest, "invalid_argument", "The request contains an invalid argument.")
@@ -180,6 +203,9 @@ func mapLedgerError(w http.ResponseWriter, logger *slog.Logger, err error) {
 // mapAuthError answers an error from an internal/auth call, per its sentinel
 // taxonomy, one switch per domain package like mapLedgerError.
 func mapAuthError(w http.ResponseWriter, logger *slog.Logger, err error) {
+	if answeredClientGone(w, logger, err) {
+		return
+	}
 	switch {
 	case errors.Is(err, auth.ErrPasswordTooCommon):
 		// Before ErrInvalidArgument, which it wraps: the SPA has its own sentence
@@ -241,6 +267,9 @@ func mapLedgerDeleteError(w http.ResponseWriter, logger *slog.Logger, err error)
 // constants, never a string match: the message is not stable across driver
 // releases, the extended result code is.
 func mapSQLiteError(w http.ResponseWriter, logger *slog.Logger, err error) {
+	if answeredClientGone(w, logger, err) {
+		return
+	}
 	if errors.Is(err, sql.ErrNoRows) {
 		writeAPIError(w, http.StatusNotFound, "not_found", "The requested resource was not found.")
 		return
