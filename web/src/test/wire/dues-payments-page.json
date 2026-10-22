@@ -1,0 +1,33 @@
+{
+  "dues_payments": [
+    {
+      "account_name": "Tunai",
+      "amount": 50000,
+      "dues_period": "2026-09",
+      "id": 3,
+      "is_reversal": false,
+      "member_id": 1,
+      "member_name": "Budi",
+      "note": null,
+      "occurred_on": "2026-09-05",
+      "reversed_by_transaction_id": null,
+      "reverses_occurred_on": null,
+      "reverses_transaction_id": null
+    },
+    {
+      "account_name": "Tunai",
+      "amount": 50000,
+      "dues_period": "2026-08",
+      "id": 2,
+      "is_reversal": false,
+      "member_id": 1,
+      "member_name": "Budi",
+      "note": null,
+      "occurred_on": "2026-09-05",
+      "reversed_by_transaction_id": null,
+      "reverses_occurred_on": null,
+      "reverses_transaction_id": null
+    }
+  ],
+  "next_cursor": null
+}

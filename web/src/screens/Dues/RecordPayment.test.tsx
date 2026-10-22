@@ -6,6 +6,9 @@ import RecordDuesPayment from '@/screens/Dues/RecordPayment'
 import { copy } from '@/copy/id'
 import { chooseOption } from '@/test/select'
 import { formatIDR } from '@/lib/money'
+import type { OutstandingDuesPeriod } from '@/lib/dues'
+import type { Purpose } from '@/lib/purposes'
+import type { Account, Member } from '@/lib/setup'
 
 const text = copy.dues.payment
 
@@ -18,21 +21,41 @@ function jsonResponse(body: unknown, status = 200) {
 }
 
 const members = [
-  { id: 1, name: 'Warga Satu', tier_id: 1, joined_on: '2026-01-01', inactive_on: null, created_at: 1 },
-  { id: 2, name: 'Warga Dua', tier_id: 1, joined_on: '2026-01-01', inactive_on: null, created_at: 1 },
-]
+  {
+    id: 1,
+    name: 'Warga Satu',
+    tier_id: 1,
+    joined_on: '2026-01-01',
+    inactive_on: null,
+    created_at: 1,
+    tier_name: null,
+    current_rate: null,
+    arrears_months: 0,
+  },
+  {
+    id: 2,
+    name: 'Warga Dua',
+    tier_id: 1,
+    joined_on: '2026-01-01',
+    inactive_on: null,
+    created_at: 1,
+    tier_name: null,
+    current_rate: null,
+    arrears_months: 0,
+  },
+] satisfies Member[]
 
-const accounts = [{ id: 7, kind: 'cash', name: 'Kas tunai', inactive_on: null, created_at: 1 }]
-const purposes = [{ id: 3, kind: 'main', name: 'Kas umum', created_at: 1 }]
+const accounts = [{ id: 7, kind: 'cash', name: 'Kas tunai', inactive_on: null, created_at: 1 }] satisfies Account[]
+const purposes = [{ id: 3, kind: 'main', name: 'Kas umum', created_at: 1 }] satisfies Purpose[]
 
 // One unpaid period and one part-paid one: the pre-fill is the whole rate
 // for the first and only the sisa for the second.
 const outstanding = [
   { period: '2026-01', owed_amount: 50_000, paid_amount: 0, status: 'unpaid' },
   { period: '2026-02', owed_amount: 50_000, paid_amount: 20_000, status: 'partial' },
-]
+] satisfies OutstandingDuesPeriod[]
 
-function stubApi(periods: unknown = outstanding) {
+function stubApi(periods: OutstandingDuesPeriod[] = outstanding) {
   return vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
     const url = typeof input === 'string' ? input : input.toString()
     if (url.includes('/outstanding-dues')) return Promise.resolve(jsonResponse(periods))
@@ -160,7 +183,7 @@ describe('RecordDuesPayment', () => {
         const url = typeof input === 'string' ? input : input.toString()
         if (!url.includes('/outstanding-dues')) return base(input, init)
         const through = decodeURIComponent(new URL(url, 'http://x').searchParams.get('through') ?? '')
-        const periods = []
+        const periods: OutstandingDuesPeriod[] = []
         for (let m = from; m <= through;) {
           periods.push({ period: m, owed_amount: 50_000, paid_amount: 0, status: 'unpaid' })
           const [y, mo] = m.split('-').map(Number)

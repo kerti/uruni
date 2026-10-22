@@ -6,6 +6,9 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { copy } from '@/copy/id'
 import Transactions from '@/screens/History/Transactions'
 import { chooseOption } from '@/test/select'
+import type { Purpose } from '@/lib/purposes'
+import type { Member, Transaction } from '@/lib/setup'
+import type { Transfer } from '@/lib/transfers'
 
 afterEach(() => {
   vi.unstubAllGlobals()
@@ -18,7 +21,7 @@ function jsonResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } })
 }
 
-function row(id: number, note: string) {
+function row(id: number, note: string): Transaction {
   return {
     id,
     account_id: 1,
@@ -37,7 +40,7 @@ function row(id: number, note: string) {
   }
 }
 
-type Page = { transactions: unknown[]; next_cursor: string | null }
+type Page = { transactions: Transaction[]; next_cursor: string | null }
 
 /** Every purpose the correction picker may offer. `?selectable=true` is what
  * the screen asks for, so a closed envelope is excluded server-side -
@@ -45,14 +48,34 @@ type Page = { transactions: unknown[]; next_cursor: string | null }
 const purposes = [
   { id: 11, kind: 'main', name: 'Kas Utama', created_at: 1 },
   { id: 12, kind: 'pass_through', name: 'Titipan', created_at: 1 },
-]
+] satisfies Purpose[]
 
 /** The roster the filter dialog offers - an inactive member too, since her
  * rows are still history. */
 const members = [
-  { id: 21, fund_id: 1, name: 'Budi', tier_id: null, joined_on: '2026-01-01', inactive_on: null, created_at: 1 },
-  { id: 22, fund_id: 1, name: 'Sari', tier_id: null, joined_on: '2026-01-01', inactive_on: '2026-06-01', created_at: 1 },
-]
+  {
+    id: 21,
+    name: 'Budi',
+    tier_id: null,
+    joined_on: '2026-01-01',
+    inactive_on: null,
+    created_at: 1,
+    tier_name: null,
+    current_rate: null,
+    arrears_months: 0,
+  },
+  {
+    id: 22,
+    name: 'Sari',
+    tier_id: null,
+    joined_on: '2026-01-01',
+    inactive_on: '2026-06-01',
+    created_at: 1,
+    tier_name: null,
+    current_rate: null,
+    arrears_months: 0,
+  },
+] satisfies Member[]
 
 /** Stubs fetch: purposes and members always answer, GET /api/transactions
  * answers whatever pageFor returns for the request's URL (throwing from
@@ -71,7 +94,7 @@ function stubApi(pageFor: (url: URL) => Page, everything: string[] = []) {
       if (url.pathname === '/api/members') return jsonResponse({ members, next_cursor: null })
       if (method === 'POST' && url.pathname.endsWith('/purpose-correction')) {
         posted.push({ url: url.pathname, body: JSON.parse(String(init?.body)) })
-        return jsonResponse({ id: 1, kind: 'reclass_purpose', created_at: 1 })
+        return jsonResponse({ id: 1, kind: 'reclass_purpose', created_at: 1 } satisfies Transfer)
       }
       if (url.pathname === '/api/transactions') {
         requests.push(url)
@@ -444,7 +467,9 @@ describe('Transactions tab: reversing a row (ADR-042)', () => {
         }
         if (url.pathname === '/api/transactions') {
           return jsonResponse({
-            transactions: [{ ...row(5, 'Salah arah'), reversible: !reversedNow, reversed: reversedNow, counted: false }],
+            transactions: [
+              { ...row(5, 'Salah arah'), reversible: !reversedNow, reversed: reversedNow, counted: false },
+            ] satisfies Transaction[],
             next_cursor: null,
           })
         }

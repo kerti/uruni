@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import Members from '@/screens/Members'
 import { copy } from '@/copy/id'
 import { openSelect } from '@/test/select'
+import type { DuesTier, DuesTierWithRates, Member } from '@/lib/setup'
 
 // Roster.tsx reads and writes `?q=`/`?edit=` through useSearchParams (ADR-032),
 // so this screen needs a Router in its tree even where a test never looks at
@@ -45,7 +46,7 @@ function stubMembersScreen() {
       current_rate: 50_000,
       arrears_months: 0,
     },
-  ]
+  ] satisfies Member[]
 
   const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
     const url = typeof input === 'string' ? input : input.toString()
@@ -53,9 +54,10 @@ function stubMembersScreen() {
 
     if (url.includes('/rates')) return Promise.resolve(jsonResponse([]))
     if (url.includes('/api/dues-tiers')) {
-      if (method === 'GET') return Promise.resolve(jsonResponse([{ id: 1, name: tierName, created_at: 1 }]))
+      if (method === 'GET')
+        return Promise.resolve(jsonResponse([{ id: 1, name: tierName, created_at: 1, rates: [] }] satisfies DuesTierWithRates[]))
       tierName = JSON.parse(String(init?.body)).name as string
-      return Promise.resolve(jsonResponse({ id: 1, name: tierName, created_at: 1 }))
+      return Promise.resolve(jsonResponse({ id: 1, name: tierName, created_at: 1 } satisfies DuesTier))
     }
     if (url.includes('/api/members')) {
       // The roster card renders the tier_name the row carries, not a second

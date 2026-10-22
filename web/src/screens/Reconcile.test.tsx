@@ -5,6 +5,10 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import Reconcile from '@/screens/Reconcile'
 import { copy } from '@/copy/id'
 import { formatIDR } from '@/lib/money'
+import type { Balances } from '@/lib/balances'
+import type { Purpose } from '@/lib/purposes'
+import type { ReconciliationDetail, ReconciliationLine } from '@/lib/reconciliations'
+import type { Account, Transaction } from '@/lib/setup'
 
 const text = copy.reconciliation
 
@@ -16,16 +20,18 @@ const accounts = [
   { id: 1, kind: 'cash', name: 'Tunai', inactive_on: null, created_at: 1 },
   { id: 2, kind: 'bank', name: 'Bank lama', inactive_on: '2026-01-01', created_at: 1 },
   { id: 3, kind: 'bank', name: 'Bank Uji Coba', inactive_on: null, created_at: 1 },
-]
+] satisfies Account[]
 
 const purposes = [
   { id: 10, kind: 'pass_through', name: 'Kas Bidang', created_at: 1 },
   { id: 11, kind: 'main', name: 'Kas utama', created_at: 1 },
-]
+] satisfies Purpose[]
 
-function balancesBody(tunai: number, bankUjiCoba: number) {
+function balancesBody(tunai: number, bankUjiCoba: number): Balances {
   return {
     fund_total: tunai + bankUjiCoba,
+    owed_to_members: 0,
+    month: { in: 0, out: 0 },
     accounts: [
       { id: 1, kind: 'cash', name: 'Tunai', balance: tunai },
       { id: 2, kind: 'bank', name: 'Bank lama', balance: 0 },
@@ -38,7 +44,7 @@ function balancesBody(tunai: number, bankUjiCoba: number) {
   }
 }
 
-const transactionsPage = { transactions: [] as unknown[], next_cursor: null }
+const transactionsPage = { transactions: [] as Transaction[], next_cursor: null as string | null }
 
 function jsonResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } })
@@ -59,7 +65,7 @@ function routedFetch(handlers: { match: (method: string, url: string) => boolean
 
 function stubLoad(
   balances = balancesBody(100_000, 200_000),
-  page: { transactions: unknown[]; next_cursor: string | null } = transactionsPage,
+  page: { transactions: Transaction[]; next_cursor: string | null } = transactionsPage,
 ) {
   return [
     { match: (m: string, u: string) => m === 'GET' && u.includes('/api/accounts'), handle: () => Promise.resolve(jsonResponse(accounts)) },
@@ -72,7 +78,7 @@ function stubLoad(
   ]
 }
 
-function transaction(id: number, overrides: Record<string, unknown> = {}) {
+function transaction(id: number, overrides: Partial<Transaction> = {}): Transaction {
   return {
     id,
     account_id: 1,
@@ -92,7 +98,7 @@ function transaction(id: number, overrides: Record<string, unknown> = {}) {
   }
 }
 
-function reconciliationDetail(lines: Array<Record<string, unknown>>) {
+function reconciliationDetail(lines: ReconciliationLine[]): ReconciliationDetail {
   return {
     id: 1,
     performed_at: 1_756_000_000,
@@ -635,7 +641,7 @@ describe('Reconcile', () => {
   // location added after the screen loaded makes the list stale; the screen
   // re-reads it, shows the refusal, and keeps what she typed.
   it('re-reads the location list when the server says an active location was not counted', async () => {
-    const added = { id: 4, kind: 'bank', name: 'Bank Baru', inactive_on: null, created_at: 2 }
+    const added = { id: 4, kind: 'bank', name: 'Bank Baru', inactive_on: null, created_at: 2 } satisfies Account
     let accountsCallCount = 0
     const fetchMock = routedFetch([
       {

@@ -5,6 +5,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import SettingsIncidentals, { ClosedIncidentals } from '@/screens/Settings/Incidentals'
 import { copy } from '@/copy/id'
+import type { Incidental } from '@/lib/incidentals'
+import type { Member } from '@/lib/setup'
 
 const text = copy.settings.incidentals
 
@@ -16,8 +18,16 @@ function jsonResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } })
 }
 
-function envelope(purposeId: number, occasion: string, closedOn: string | null = null) {
-  return { purpose_id: purposeId, occasion, target_amount: null, opened_on: '2026-09-01', closed_on: closedOn, created_at: purposeId }
+function envelope(purposeId: number, occasion: string, closedOn: string | null = null): Incidental {
+  return {
+    purpose_id: purposeId,
+    occasion,
+    target_amount: null,
+    opened_on: '2026-09-01',
+    closed_on: closedOn,
+    created_at: purposeId,
+    minimum_per_member: null,
+  }
 }
 
 /** One stub for the section: GET /api/incidentals?open=false answers the
@@ -25,7 +35,7 @@ function envelope(purposeId: number, occasion: string, closedOn: string | null =
  * recorded so a test can assert what was sent. `members` answers the
  * recipients picker's roster (ADR-034) - empty by default, since most of this
  * suite is not about that field. */
-function stubIncidentals(initial: ReturnType<typeof envelope>[], writeResponse?: () => Response, members: unknown[] = []) {
+function stubIncidentals(initial: Incidental[], writeResponse?: () => Response, members: Member[] = []) {
   const calls: { method: string; url: string; body: unknown }[] = []
   const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
     const url = typeof input === 'string' ? input : input.toString()
@@ -41,7 +51,7 @@ function stubIncidentals(initial: ReturnType<typeof envelope>[], writeResponse?:
   return { fetchMock, calls }
 }
 
-function member(overrides: Partial<{ id: number; name: string }> = {}) {
+function member(overrides: Partial<{ id: number; name: string }> = {}): Member {
   return {
     id: 1,
     name: 'Budi',

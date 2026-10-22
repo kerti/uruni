@@ -9,6 +9,12 @@ import { chooseOption, selectOptionNames, selectedOptionName } from '@/test/sele
 import { copy } from '@/copy/id'
 import { formatIDR } from '@/lib/money'
 import { formatIsoDate, todayISODate } from '@/lib/dates'
+import type { Balances } from '@/lib/balances'
+import type { Purpose } from '@/lib/purposes'
+import type { ReceiptUploadResult } from '@/lib/receipts'
+import type { Reimbursement } from '@/lib/reimbursements'
+import type { Account, Member, Transaction } from '@/lib/setup'
+import type { Transfer } from '@/lib/transfers'
 
 const text = copy.record
 
@@ -27,13 +33,13 @@ const accounts = [
   { id: 1, kind: 'cash', name: 'Tunai', inactive_on: null, created_at: 1 },
   { id: 2, kind: 'bank', name: 'Bank lama', inactive_on: '2026-01-01', created_at: 1 },
   { id: 3, kind: 'bank', name: 'Bank Uji Coba', inactive_on: null, created_at: 1 },
-]
+] satisfies Account[]
 
 const purposes = [
   { id: 10, kind: 'pass_through', name: 'Kas Bidang', created_at: 1 },
   { id: 11, kind: 'main', name: 'Kas utama', created_at: 1 },
   { id: 12, kind: 'incidental', name: 'Halal bihalal RT', created_at: 1 },
-]
+] satisfies Purpose[]
 
 const postedTransaction = {
   id: 1,
@@ -50,7 +56,7 @@ const postedTransaction = {
   reverses_transaction_id: null,
   note: null,
   created_at: 1,
-}
+} satisfies Transaction
 
 function jsonResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } })
@@ -75,9 +81,11 @@ function routedFetch(handlers: { match: (method: string, url: string) => boolean
 /** Purpose balances, which the form fetches so the Titipan warning can answer
  * as she types. Kas Bidang holds 30.000 of somebody else's money; an out
  * larger than that is the mis-tag the warning is about. */
-function balancesWith(passThroughBalance: number, tunaiBalance = 1_000_000, bankBalance = 250_000) {
+function balancesWith(passThroughBalance: number, tunaiBalance = 1_000_000, bankBalance = 250_000): Balances {
   return {
     fund_total: 1_000_000,
+    owed_to_members: 0,
+    month: { in: 0, out: 0 },
     accounts: [
       { id: 1, kind: 'cash', name: 'Tunai', balance: tunaiBalance },
       { id: 3, kind: 'bank', name: 'Bank Uji Coba', balance: bankBalance },
@@ -344,7 +352,7 @@ describe('RecordTransaction: Pindah lokasi (#235)', () => {
         { match: (m, u) => m === 'GET' && u.includes('/api/purposes'), handle: () => Promise.resolve(jsonResponse(purposes)) },
         {
           match: (m, u) => m === 'POST' && u.includes('/api/transfers'),
-          handle: () => Promise.resolve(jsonResponse({ id: 1, kind: 'between_accounts', created_at: 1 }, 201)),
+          handle: () => Promise.resolve(jsonResponse({ id: 1, kind: 'between_accounts', created_at: 1 } satisfies Transfer, 201)),
         },
       ]),
     )
@@ -393,7 +401,7 @@ describe('RecordTransaction: Pindah lokasi (#235)', () => {
         const method = (init?.method ?? 'GET').toUpperCase()
         if (method === 'POST' && url.includes('/api/transfers')) {
           posts.push({ url, body: JSON.parse(String(init?.body)) })
-          return Promise.resolve(jsonResponse({ id: 1, kind: 'between_accounts', created_at: 1 }, 201))
+          return Promise.resolve(jsonResponse({ id: 1, kind: 'between_accounts', created_at: 1 } satisfies Transfer, 201))
         }
         if (url.includes('/api/accounts')) return Promise.resolve(jsonResponse(accounts))
         if (url.includes('/api/balances')) return Promise.resolve(jsonResponse(balancesWith(30_000)))
@@ -471,7 +479,7 @@ describe('RecordTransaction: moving money, with its balances in view (#235 revis
         { match: (m, u) => m === 'GET' && u.includes('/api/purposes'), handle: () => Promise.resolve(jsonResponse(purposes)) },
         {
           match: (m, u) => m === 'POST' && u.includes('/api/transfers'),
-          handle: () => Promise.resolve(jsonResponse({ id: 1, kind: 'between_accounts', created_at: 1 }, 201)),
+          handle: () => Promise.resolve(jsonResponse({ id: 1, kind: 'between_accounts', created_at: 1 } satisfies Transfer, 201)),
         },
       ]),
     )
@@ -569,7 +577,9 @@ describe('RecordTransaction: moving money, with its balances in view (#235 revis
     }
 
     it('uploads the picked photo after the transaction posts, and calls onRecorded with photoFailed: false', async () => {
-      const fetchMock = stubWithReceiptRoute(() => Promise.resolve(jsonResponse({ id: 5, uploaded_at: 1 }, 201)))
+      const fetchMock = stubWithReceiptRoute(() =>
+        Promise.resolve(jsonResponse({ id: 5, uploaded_at: 1 } satisfies ReceiptUploadResult, 201)),
+      )
       vi.stubGlobal('fetch', fetchMock)
 
       const onRecorded = vi.fn()
@@ -603,7 +613,9 @@ describe('RecordTransaction: moving money, with its balances in view (#235 revis
     })
 
     it('skipping the photo is the normal path: no receipts request is ever made', async () => {
-      const fetchMock = stubWithReceiptRoute(() => Promise.resolve(jsonResponse({ id: 5, uploaded_at: 1 }, 201)))
+      const fetchMock = stubWithReceiptRoute(() =>
+        Promise.resolve(jsonResponse({ id: 5, uploaded_at: 1 } satisfies ReceiptUploadResult, 201)),
+      )
       vi.stubGlobal('fetch', fetchMock)
 
       const onRecorded = vi.fn()
@@ -620,7 +632,7 @@ describe('RecordTransaction: moving money, with its balances in view (#235 revis
 })
 
 describe('RecordTransaction: "Dari siapa? (opsional)" (ADR-034, #211)', () => {
-  const members = [
+  const members: Member[] = [
     {
       id: 7,
       name: 'Budi',
@@ -735,7 +747,7 @@ describe('RecordTransaction: Pindah pos (ADR-036, #383)', () => {
         const method = (init?.method ?? 'GET').toUpperCase()
         if (method === 'POST' && url.includes('/api/purpose-moves')) {
           posts.push({ url, body: JSON.parse(String(init?.body)) })
-          return Promise.resolve(jsonResponse({ id: 1, kind: 'reclass_purpose', created_at: 1 }, 201))
+          return Promise.resolve(jsonResponse({ id: 1, kind: 'reclass_purpose', created_at: 1 } satisfies Transfer, 201))
         }
         if (url.includes('/api/accounts')) return Promise.resolve(jsonResponse(accounts))
         if (url.includes('/api/balances')) return Promise.resolve(jsonResponse(balances))
@@ -890,7 +902,19 @@ describe('RecordTransaction: Pindah pos (ADR-036, #383)', () => {
 })
 
 describe('RecordTransaction: Pengeluaran ini ditalangi (#368)', () => {
-  const claimMembers = [{ id: 1, name: 'Jane', tier_id: 1, joined_on: '2026-01-01', inactive_on: null, created_at: 1 }]
+  const claimMembers = [
+    {
+      id: 1,
+      name: 'Jane',
+      tier_id: 1,
+      joined_on: '2026-01-01',
+      inactive_on: null,
+      created_at: 1,
+      tier_name: null,
+      current_rate: null,
+      arrears_months: 0,
+    },
+  ] satisfies Member[]
   // The picker is selectable=true (no closed envelope), for a claim too.
   const selectablePurposes = purposes.filter((p) => p.id !== 12)
 
@@ -915,7 +939,24 @@ describe('RecordTransaction: Pengeluaran ini ditalangi (#368)', () => {
     const inner = routedFetch([
       {
         match: (m, u) => m === 'POST' && u.endsWith('/api/reimbursements'),
-        handle: () => Promise.resolve(jsonResponse({ id: 7, member_id: 1, purpose_id: 11, amount: 25_000, receipt_ids: [] }, 201)),
+        handle: () =>
+          Promise.resolve(
+            jsonResponse(
+              {
+                id: 7,
+                member_id: 1,
+                purpose_id: 11,
+                amount: 25_000,
+                incurred_on: '2026-09-02',
+                waived_on: null,
+                settled: false,
+                note: null,
+                created_at: 1,
+                receipt_ids: [],
+              } satisfies Reimbursement,
+              201,
+            ),
+          ),
       },
       ...extra,
       {
@@ -1043,7 +1084,7 @@ describe('RecordTransaction: Pengeluaran ini ditalangi (#368)', () => {
     const fetchMock = stub([
       {
         match: (m, u) => m === 'POST' && u.includes('/api/reimbursements/7/receipts'),
-        handle: () => Promise.resolve(jsonResponse({ id: 9, uploaded_at: 1 }, 201)),
+        handle: () => Promise.resolve(jsonResponse({ id: 9, uploaded_at: 1 } satisfies ReceiptUploadResult, 201)),
       },
     ])
     const onRecorded = renderRouted(vi.fn(), '/record?fronted=1')
@@ -1074,9 +1115,9 @@ describe('RecordTransaction: date before the opening balance', () => {
   const withOpenings = [
     { id: 1, kind: 'cash', name: 'Tunai', inactive_on: null, opening_on: '2026-03-01', created_at: 1 },
     { id: 3, kind: 'bank', name: 'Bank Uji Coba', inactive_on: null, opening_on: '2026-05-10', created_at: 1 },
-  ]
+  ] satisfies Account[]
 
-  function stub(accountRows: unknown[]) {
+  function stub(accountRows: Account[]) {
     vi.stubGlobal(
       'fetch',
       routedFetch([

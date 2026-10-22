@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import Login from '@/screens/Login'
 import { copy } from '@/copy/id'
+import type { AuthUser } from '@/lib/auth'
 
 afterEach(() => {
   vi.unstubAllGlobals()
@@ -70,7 +71,7 @@ describe('Login', () => {
   })
 
   it('logs in and hands the user back to the caller', async () => {
-    const user = { id: 1, email: 'bendahara@example.test', created_at: 1234 }
+    const user = { id: 1, email: 'bendahara@example.test', created_at: 1234 } satisfies AuthUser
     // A fresh Response per call: the footer's /healthz read (AppVersion) would
     // otherwise consume the one body the login call needs.
     vi.stubGlobal(

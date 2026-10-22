@@ -1,0 +1,27 @@
+{
+  "members": [
+    {
+      "arrears_months": 7,
+      "created_at": 1789444800,
+      "current_rate": 50000,
+      "id": 1,
+      "inactive_on": null,
+      "joined_on": "2026-01-01",
+      "name": "Budi",
+      "tier_id": 1,
+      "tier_name": "Rumah"
+    },
+    {
+      "arrears_months": 0,
+      "created_at": 1789444800,
+      "current_rate": null,
+      "id": 2,
+      "inactive_on": null,
+      "joined_on": "2026-02-01",
+      "name": "Sari",
+      "tier_id": null,
+      "tier_name": null
+    }
+  ],
+  "next_cursor": null
+}

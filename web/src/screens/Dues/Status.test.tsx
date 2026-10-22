@@ -7,6 +7,8 @@ import { copy } from '@/copy/id'
 import { formatIDR } from '@/lib/money'
 import { pickMonth } from '@/test/datePicker'
 import { currentPeriod, formatPeriod } from '@/lib/dates'
+import type { DuesStatusRow } from '@/lib/dues'
+import type { Member } from '@/lib/setup'
 
 const text = copy.dues
 
@@ -18,8 +20,18 @@ function jsonResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } })
 }
 
-function member(id: number, name: string) {
-  return { id, name, tier_id: 1, joined_on: '2026-01-01', inactive_on: null, created_at: 1 }
+function member(id: number, name: string): Member {
+  return {
+    id,
+    name,
+    tier_id: 1,
+    joined_on: '2026-01-01',
+    inactive_on: null,
+    created_at: 1,
+    tier_name: null,
+    current_rate: null,
+    arrears_months: 0,
+  }
 }
 
 // One row per status the schema defines, plus a tier-less member left out of
@@ -31,9 +43,9 @@ const rows = [
   { member: member(2, 'Warga Dua'), owed_amount: 50_000, paid_amount: 20_000, status: 'partial', paid_through: null },
   { member: member(3, 'Warga Tiga'), owed_amount: 50_000, paid_amount: 50_000, status: 'paid', paid_through: null },
   { member: member(4, 'Warga Empat'), owed_amount: 50_000, paid_amount: 100_000, status: 'paid_in_advance', paid_through: null },
-]
+] satisfies DuesStatusRow[]
 
-function stubDuesStatus(body: unknown = rows) {
+function stubDuesStatus(body: DuesStatusRow[] = rows) {
   return vi.fn((input: RequestInfo | URL) => {
     const url = typeof input === 'string' ? input : input.toString()
     if (url.includes('/api/dues-status')) return Promise.resolve(jsonResponse(body))
@@ -45,7 +57,7 @@ describe('DuesStatus', () => {
   it('names the last paid month for a member paid ahead (#357)', async () => {
     const ahead = [
       { member: member(5, 'Warga Lima'), owed_amount: 50_000, paid_amount: 50_000, status: 'paid_in_advance', paid_through: '2027-02' },
-    ]
+    ] satisfies DuesStatusRow[]
     vi.stubGlobal('fetch', stubDuesStatus(ahead))
     render(<DuesStatus onBack={vi.fn()} onRecordPayment={vi.fn()} />)
 

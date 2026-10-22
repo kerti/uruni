@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import RestoreDialog from '@/screens/Settings/RestoreDialog'
 import { copy } from '@/copy/id'
 import type { RestoreDialogHandle } from '@/screens/Settings/RestoreDialog'
+import type { RestoreInspectResult } from '@/lib/restore'
 
 const text = copy.settings.backup
 const confirmText = copy.restoreConfirm
@@ -32,7 +33,7 @@ const stagedPreview = {
       { fund_id: 3, name: 'Kas Baru', status: 'added', transactions_lost: 0 },
     ],
   },
-}
+} satisfies RestoreInspectResult
 
 function stubFetch(overrides: { inspect?: () => Response; inspectStored?: () => Response; confirm?: () => Response }) {
   const fetchMock = vi.fn((input: RequestInfo | URL) => {

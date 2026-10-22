@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { getFundTimeZone, resetFundTimeZone } from '@/lib/dates'
 import { getFund, postSetup, replaceReportSlug, updateFund } from '@/lib/setup'
+import type { Fund, SetupResult } from '@/lib/setup'
 
 const fund = {
   id: 1,
@@ -11,7 +12,7 @@ const fund = {
   report_slug: 'kas-rt-04',
   report_url: '/report/kas-rt-04',
   created_at: 1,
-}
+} satisfies Fund
 
 function stubFetch(body: unknown, status = 200) {
   const fetchMock = vi.fn(() =>
@@ -67,7 +68,10 @@ describe("the fund functions hold the fund's zone (ADR-041)", () => {
   })
 
   it('postSetup sends the zone and holds the one the server stored', async () => {
-    const fetchMock = stubFetch({ fund: { ...fund, time_zone: 'Asia/Makassar' }, main_purpose_id: 1, accounts: [] }, 201)
+    const fetchMock = stubFetch(
+      { fund: { ...fund, time_zone: 'Asia/Makassar' }, main_purpose_id: 1, accounts: [] } satisfies SetupResult,
+      201,
+    )
     await postSetup('Kas RT 04', 'Asia/Makassar', [{ kind: 'cash', name: 'Tunai' }])
     expect(getFundTimeZone()).toBe('Asia/Makassar')
     const init = (fetchMock.mock.calls[0] as unknown as [string, RequestInit])[1]

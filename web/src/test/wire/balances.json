@@ -1,0 +1,42 @@
+{
+  "accounts": [
+    {
+      "balance": 475000,
+      "id": 1,
+      "kind": "cash",
+      "name": "Tunai"
+    },
+    {
+      "balance": 100000,
+      "id": 2,
+      "kind": "bank",
+      "name": "Bank"
+    }
+  ],
+  "fund_total": 575000,
+  "month": {
+    "in": 150000,
+    "out": 75000
+  },
+  "owed_to_members": 30000,
+  "purposes": [
+    {
+      "balance": 600000,
+      "id": 1,
+      "kind": "main",
+      "name": "Kas Utama"
+    },
+    {
+      "balance": 50000,
+      "id": 3,
+      "kind": "incidental",
+      "name": "Halal bihalal"
+    },
+    {
+      "balance": -75000,
+      "id": 2,
+      "kind": "pass_through",
+      "name": "Titipan sumbangan"
+    }
+  ]
+}

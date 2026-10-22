@@ -1,0 +1,29 @@
+{
+  "created_at": 1789444800,
+  "id": 1,
+  "lines": [
+    {
+      "account_id": 1,
+      "actual_amount": 475000,
+      "adjustment_transaction_id": null,
+      "difference_amount": 0,
+      "id": 1,
+      "recorded_amount": 475000,
+      "remainder_amount": 0,
+      "resolution": "matched"
+    },
+    {
+      "account_id": 2,
+      "actual_amount": 99000,
+      "adjustment_transaction_id": null,
+      "difference_amount": -1000,
+      "id": 2,
+      "recorded_amount": 100000,
+      "remainder_amount": -1000,
+      "resolution": "left_open"
+    }
+  ],
+  "note": "Hitung September",
+  "performed_at": 1789444800,
+  "through_transaction_id": 11
+}

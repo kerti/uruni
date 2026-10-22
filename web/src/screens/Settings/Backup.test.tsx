@@ -6,6 +6,8 @@ import Backup from '@/screens/Settings/Backup'
 import { copy } from '@/copy/id'
 import { formatIsoDate } from '@/lib/dates'
 import { todayISODate } from '@/lib/dates'
+import type { StoredBackup } from '@/lib/backup'
+import type { RestoreInspectResult } from '@/lib/restore'
 
 const text = copy.settings.backup
 const confirmText = copy.restoreConfirm
@@ -14,7 +16,7 @@ const common = copy.common
 const stagedPreview = {
   token: 'a-fresh-token',
   preview: { date: '2026-09-30', total: 1_000_000, funds: [{ fund_id: 1, name: 'Kas RT 05', status: 'kept', transactions_lost: 0 }] },
-}
+} satisfies RestoreInspectResult
 
 afterEach(() => {
   vi.unstubAllGlobals()
@@ -181,7 +183,7 @@ describe('Settings backup card - automatic backup list', () => {
             can_restore: true,
             size_bytes: 2048,
           },
-        ]),
+        ] satisfies StoredBackup[]),
     })
     render(<Backup />)
 
@@ -203,7 +205,7 @@ describe('Settings backup card - automatic backup list', () => {
       list: () =>
         jsonResponse([
           { name, date: '2026-01-01', kind: 'daily', format_version: 0, is_current_format: false, can_restore: false, size_bytes: 1024 },
-        ]),
+        ] satisfies StoredBackup[]),
     })
     render(<Backup />)
 
@@ -223,7 +225,7 @@ describe('Settings backup card - automatic backup list', () => {
       list: () =>
         jsonResponse([
           { name, date: '2026-09-30', kind: 'daily', format_version: 1, is_current_format: true, can_restore: true, size_bytes: 1024 },
-        ]),
+        ] satisfies StoredBackup[]),
     })
     fetchMock.mockImplementation((input: RequestInfo | URL) => {
       const url = requestURL(input)
@@ -231,7 +233,7 @@ describe('Settings backup card - automatic backup list', () => {
         return Promise.resolve(
           jsonResponse([
             { name, date: '2026-09-30', kind: 'daily', format_version: 1, is_current_format: true, can_restore: true, size_bytes: 1024 },
-          ]),
+          ] satisfies StoredBackup[]),
         )
       if (url === `/api/backups/${name}`) return Promise.resolve(zipResponse(name))
       throw new Error(`unexpected fetch to ${url}`)
@@ -287,7 +289,7 @@ describe('Settings backup card - automatic backup list', () => {
             can_restore: false,
             size_bytes: 1024,
           },
-        ]),
+        ] satisfies StoredBackup[]),
     })
     render(<Backup />)
 
@@ -304,7 +306,7 @@ describe('Settings backup card - automatic backup list', () => {
       list: () =>
         jsonResponse([
           { name, date: '2026-09-30', kind: 'daily', format_version: 1, is_current_format: false, can_restore: true, size_bytes: 1024 },
-        ]),
+        ] satisfies StoredBackup[]),
     })
     render(<Backup />)
 
@@ -319,7 +321,7 @@ describe('Settings backup card - automatic backup list', () => {
       list: () =>
         jsonResponse([
           { name, date: '2026-09-30', kind: 'daily', format_version: 1, is_current_format: true, can_restore: true, size_bytes: 1024 },
-        ]),
+        ] satisfies StoredBackup[]),
     })
 
     const user = userEvent.setup()
@@ -342,7 +344,7 @@ describe('Settings backup card - automatic backup list', () => {
       list: () =>
         jsonResponse([
           { name, date: '2026-09-30', kind: 'daily', format_version: 1, is_current_format: true, can_restore: true, size_bytes: 1024 },
-        ]),
+        ] satisfies StoredBackup[]),
     })
     render(<Backup />)
 

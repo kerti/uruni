@@ -7,6 +7,10 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import Home from '@/screens/Home'
 import { copy } from '@/copy/id'
 import { formatIDR } from '@/lib/money'
+import type { Balances } from '@/lib/balances'
+import type { Incidental } from '@/lib/incidentals'
+import type { LatestReconciliation, OpenReconciliationLine } from '@/lib/reconciliations'
+import type { Transaction } from '@/lib/setup'
 
 // The recent-activity list keeps its entry-detail dialog in the URL, so Home
 // needs a router around it.
@@ -47,7 +51,7 @@ const balances = {
     { id: 13, kind: 'incidental', name: 'Halal bihalal RT', balance: 300_000 },
     { id: 14, kind: 'incidental', name: '17 Agustus', balance: 0 },
   ],
-}
+} satisfies Balances
 
 const openIncidentalEnvelope = {
   purpose_id: 13,
@@ -56,7 +60,8 @@ const openIncidentalEnvelope = {
   opened_on: '2026-09-01',
   closed_on: null,
   created_at: 1,
-}
+  minimum_per_member: null,
+} satisfies Incidental
 
 // Newest-first, as GET /api/transactions answers.
 const transactionsPage = {
@@ -93,11 +98,17 @@ const transactionsPage = {
       note: 'Beli galon',
       created_at: 1,
     },
-  ],
+  ] satisfies Transaction[],
   next_cursor: null,
 }
 
-const latestReconciliation = { id: 1, performed_at: 1_756_000_000, through_transaction_id: 5, note: null, created_at: 1_756_000_000 }
+const latestReconciliation = {
+  id: 1,
+  performed_at: 1_756_000_000,
+  through_transaction_id: 5,
+  note: null,
+  created_at: 1_756_000_000,
+} satisfies LatestReconciliation
 
 /** Routes a stubbed fetch by method + path substring, as
  * RecordTransaction.test.tsx's routedFetch does. */
@@ -112,10 +123,10 @@ function routedFetch(handlers: { match: (method: string, url: string) => boolean
 }
 
 function stubHome({
-  openLines = [] as unknown[],
+  openLines = [] as OpenReconciliationLine[],
   latest = 'ok' as 'ok' | 'not_found',
-  openIncidentals = [openIncidentalEnvelope] as unknown[],
-  balancesOverride = balances,
+  openIncidentals = [openIncidentalEnvelope] as Incidental[],
+  balancesOverride = balances as Balances,
 } = {}) {
   return routedFetch([
     { match: (m, u) => m === 'GET' && u.includes('/api/balances'), handle: () => Promise.resolve(jsonResponse(balancesOverride)) },
@@ -466,7 +477,7 @@ describe('Home', () => {
         month: { in: 0, out: 0 },
         accounts: balances.accounts,
         purposes: [{ id: 11, kind: 'main', name: 'Kas Utama', balance: 1_450_000 }],
-      }
+      } satisfies Balances
       vi.stubGlobal('fetch', stubHome({ balancesOverride: bareBalances, openIncidentals: [] }))
       render(
         <Home
@@ -489,7 +500,7 @@ describe('Home', () => {
       const negativeBalances = {
         ...balances,
         purposes: [balances.purposes[0], { id: 12, kind: 'pass_through', name: 'Kas Bidang', balance: -75_000 }, balances.purposes[2]],
-      }
+      } satisfies Balances
       vi.stubGlobal('fetch', stubHome({ balancesOverride: negativeBalances }))
       render(
         <Home

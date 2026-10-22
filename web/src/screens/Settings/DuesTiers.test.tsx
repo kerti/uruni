@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import DuesTiers from '@/screens/Settings/DuesTiers'
 import { copy } from '@/copy/id'
+import type { DuesRate, DuesTier, DuesTierWithRates } from '@/lib/setup'
 
 const text = copy.settings.tiers
 
@@ -16,19 +17,19 @@ function jsonResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } })
 }
 
-function tier(id: number, name: string) {
+function tier(id: number, name: string): DuesTier {
   return { id, name, created_at: 1 }
 }
 
-function rate(id: number, tierId: number, amount: number, effectiveFrom: string) {
+function rate(id: number, tierId: number, amount: number, effectiveFrom: string): DuesRate {
   return { id, tier_id: tierId, amount, effective_from: effectiveFrom, created_at: 1 }
 }
 
-function withRates(tiers: ReturnType<typeof tier>[], rates: ReturnType<typeof rate>[]) {
+function withRates(tiers: DuesTier[], rates: DuesRate[]): DuesTierWithRates[] {
   return tiers.map((t) => ({ ...t, rates: rates.filter((r) => r.tier_id === t.id) }))
 }
 
-function stubTiers(tiers: ReturnType<typeof tier>[], rates: ReturnType<typeof rate>[], writeResponse?: () => Response) {
+function stubTiers(tiers: DuesTier[], rates: DuesRate[], writeResponse?: () => Response) {
   const calls: { method: string; url: string; body: Record<string, unknown> | undefined }[] = []
   const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
     const url = typeof input === 'string' ? input : input.toString()
