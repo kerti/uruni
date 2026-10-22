@@ -266,7 +266,7 @@ test:
 	go test ./...
 
 test-cover:
-	go test ./... -race -covermode=atomic -coverprofile=coverage.out
+	go test ./... -race -covermode=atomic -coverpkg=./... -coverprofile=coverage.out
 
 lint:
 	golangci-lint run

@@ -113,7 +113,7 @@ jobs:
           fi
           # Unquoted on purpose: one argument per package.
           # shellcheck disable=SC2086
-          go test $pkgs -race -covermode=atomic -coverprofile=coverage.out
+          go test $pkgs -race -covermode=atomic -coverpkg=./... -coverprofile=coverage.out
             # The token is an input, not step env: the action builds its CLI
             # invocation and passes `-t` only from the input, so an env-only token left
             # every upload tokenless. Codecov rejects those even from a public repo,

@@ -77,7 +77,12 @@ func run(args []string) error {
 	}
 }
 
-func serve() error {
+func serve() error { return serveContext(context.Background()) }
+
+// serveContext is serve under a caller's context, so a test can stop the server
+// without signalling the test process. Production passes Background; SIGINT and
+// SIGTERM still end it, as before.
+func serveContext(parent context.Context) error {
 	cfg, err := config.Load()
 	if err != nil {
 		return err
@@ -126,7 +131,7 @@ func serve() error {
 	// SIGINT/SIGTERM close in-flight requests cleanly (`make restart` and
 	// `docker compose down` stop the process this way). Set up before the store
 	// opens so a Ctrl-C during a long first migration is honoured.
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	ctx, stop := signal.NotifyContext(parent, os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
 	// The store, opened once for the process (ADR-004: one connection, so
