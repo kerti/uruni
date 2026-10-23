@@ -62,6 +62,49 @@ func (a *api) getDuesStatus(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, resp)
 }
 
+// duesGridResponse is GET /api/dues-status/grid (ADR-044): the twelve-month
+// dues status table. periods are "YYYY-MM", oldest first, and every member's
+// cells run parallel to them. A cell is "paid", "partial", "unpaid" or "none"
+// (no obligation that month); paying ahead is "paid". Status only: no amounts,
+// counts or totals, by design.
+type duesGridResponse struct {
+	Periods []string                 `json:"periods"`
+	Members []duesGridMemberResponse `json:"members"`
+}
+
+type duesGridMemberResponse struct {
+	ID    int64    `json:"id"`
+	Name  string   `json:"name"`
+	Cells []string `json:"cells"`
+}
+
+// getDuesStatusGrid is GET /api/dues-status/grid: wraps DuesGrid for the
+// fund's current month, read on the server in the fund's zone (ADR-041). It
+// takes no parameters: the client names no month, so the window cannot reach
+// past the present or be asked for anything the report does not already show.
+func (a *api) getDuesStatusGrid(w http.ResponseWriter, r *http.Request) {
+	fund, ok := a.resolveFund(w, r)
+	if !ok {
+		return
+	}
+
+	grid, err := a.ledger.DuesGrid(r.Context(), fund.ID, "", a.now())
+	if err != nil {
+		mapLedgerError(w, a.log(r), err)
+		return
+	}
+
+	resp := duesGridResponse{Periods: grid.Periods, Members: make([]duesGridMemberResponse, 0, len(grid.Rows))}
+	for _, row := range grid.Rows {
+		cells := make([]string, len(row.Cells))
+		for i, c := range row.Cells {
+			cells[i] = string(c)
+		}
+		resp.Members = append(resp.Members, duesGridMemberResponse{ID: row.MemberID, Name: row.Name, Cells: cells})
+	}
+	writeJSON(w, http.StatusOK, resp)
+}
+
 // outstandingDuesResponse is one row of GET /api/members/{id}/outstanding-dues:
 // a period the path's member still owes something for, oldest first. No nested
 // member (the id is the path segment); status is only "unpaid" or "partial"

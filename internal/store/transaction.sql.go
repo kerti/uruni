@@ -364,6 +364,54 @@ func (q *Queries) DuesPaidByPeriod(ctx context.Context, arg DuesPaidByPeriodPara
 	return items, nil
 }
 
+const duesPaidByPeriodRange = `-- name: DuesPaidByPeriodRange :many
+SELECT member_id, CAST(dues_period AS TEXT) AS dues_period, CAST(COALESCE(SUM(amount), 0) AS INTEGER) AS paid_amount
+FROM ledger_entry t
+WHERE t.fund_id = ?1 AND t.kind = 'dues'
+  AND t.dues_period >= ?2 AND t.dues_period <= ?3
+  AND t.reversed = 0
+GROUP BY member_id, dues_period
+`
+
+type DuesPaidByPeriodRangeParams struct {
+	FundID     int64
+	FromPeriod *string
+	ToPeriod   *string
+}
+
+type DuesPaidByPeriodRangeRow struct {
+	MemberID   *int64
+	DuesPeriod string
+	PaidAmount int64
+}
+
+// Every member's payments toward the periods from_period..to_period inclusive,
+// fund-wide, in one pass: the twelve-month dues grid (ADR-044). Same
+// reversed-row exclusion (ADR-029) and the same casts as the reads above; the
+// range compares "YYYY-MM" text, which sorts chronologically (ADR-024).
+func (q *Queries) DuesPaidByPeriodRange(ctx context.Context, arg DuesPaidByPeriodRangeParams) ([]DuesPaidByPeriodRangeRow, error) {
+	rows, err := q.db.QueryContext(ctx, duesPaidByPeriodRange, arg.FundID, arg.FromPeriod, arg.ToPeriod)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []DuesPaidByPeriodRangeRow{}
+	for rows.Next() {
+		var i DuesPaidByPeriodRangeRow
+		if err := rows.Scan(&i.MemberID, &i.DuesPeriod, &i.PaidAmount); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const fundBalance = `-- name: FundBalance :one
 SELECT CAST(COALESCE(SUM(signed_amount), 0) AS INTEGER) AS balance_amount
 FROM ledger_entry

@@ -159,6 +159,11 @@ type Querier interface {
 	// ORIGINAL row once something reverses it, so a reversed payment disappears
 	// from "paid" rather than counting twice.
 	DuesPaidByPeriod(ctx context.Context, arg DuesPaidByPeriodParams) ([]DuesPaidByPeriodRow, error)
+	// Every member's payments toward the periods from_period..to_period inclusive,
+	// fund-wide, in one pass: the twelve-month dues grid (ADR-044). Same
+	// reversed-row exclusion (ADR-029) and the same casts as the reads above; the
+	// range compares "YYYY-MM" text, which sorts chronologically (ADR-024).
+	DuesPaidByPeriodRange(ctx context.Context, arg DuesPaidByPeriodRangeParams) ([]DuesPaidByPeriodRangeRow, error)
 	// The effective peruntukan (ADR-033, #411): the tag this row's money is under
 	// now. Defined once as ledger_entry.effective_purpose_id (schema file); this
 	// only reads it. A row nothing corrects answers its own purpose_id.
