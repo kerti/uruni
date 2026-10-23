@@ -195,3 +195,15 @@ curl https://your-domain/healthz         # {"status":"ok","version":"v0.1.0-alph
 ```
 
 `/healthz` is unauthenticated, so the second one works from anywhere and needs no shell on the host — handy for confirming an upgrade actually took.
+
+### Verifying an image
+
+Every release image is built by this repository's release workflow from the tagged commit, and carries a signed attestation saying so. Before you pull a new `URUNI_TAG`, check it with the [GitHub CLI](https://cli.github.com) (signed in, `gh auth login`):
+
+```sh
+gh attestation verify oci://ghcr.io/kerti/uruni:<tag> \
+  --repo kerti/uruni \
+  --signer-workflow kerti/uruni/.github/workflows/release.yml
+```
+
+It succeeds only if the image's digest was attested by that workflow; it names the commit and the run. Anything else means the image did not come from this repository: do not run it. The image also carries its software bill of materials (the Go modules compiled into the binary and the base image's packages, as SPDX) and its full build provenance: `docker buildx imagetools inspect ghcr.io/kerti/uruni:<tag> --format '{{ json .SBOM }}'` prints the first, `'{{ json .Provenance }}'` the second.
