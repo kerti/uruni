@@ -89,6 +89,7 @@ func TestWireSamples(t *testing.T) {
 		{"/api/transactions", "transactions-page"},
 		{"/api/dues-payments", "dues-payments-page"},
 		{"/api/dues-status?period=2026-09", "dues-status"},
+		{"/api/dues-status/grid", "dues-status-grid"},
 		{fmt.Sprintf("/api/members/%d/outstanding-dues", budi), "outstanding-dues"},
 		{"/api/incidentals", "incidentals"},
 		{fmt.Sprintf("/api/incidentals/%d", envelopeID), "incidental"},

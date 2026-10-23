@@ -230,6 +230,8 @@ func (a *api) routes(r chi.Router) {
 		// answers one period at a time and never lists what was posted.
 		r.Get("/dues-payments", a.listDuesPayments)
 		r.Get("/dues-status", a.getDuesStatus)
+		// The same reading over the twelve months ending now (ADR-044), one call.
+		r.Get("/dues-status/grid", a.getDuesStatusGrid)
 		// Which periods one member still owes (#186), so the record-a-dues-payment
 		// screen has a server-side answer instead of one request per month.
 		r.Get("/members/{id}/outstanding-dues", a.getOutstandingDues)

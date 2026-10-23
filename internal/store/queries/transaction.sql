@@ -423,6 +423,18 @@ WHERE t.fund_id = ? AND t.member_id IN (sqlc.slice('member_ids')) AND t.kind = '
   AND t.reversed = 0
 GROUP BY member_id, dues_period;
 
+-- Every member's payments toward the periods from_period..to_period inclusive,
+-- fund-wide, in one pass: the twelve-month dues grid (ADR-044). Same
+-- reversed-row exclusion (ADR-029) and the same casts as the reads above; the
+-- range compares "YYYY-MM" text, which sorts chronologically (ADR-024).
+-- name: DuesPaidByPeriodRange :many
+SELECT member_id, CAST(dues_period AS TEXT) AS dues_period, CAST(COALESCE(SUM(amount), 0) AS INTEGER) AS paid_amount
+FROM ledger_entry t
+WHERE t.fund_id = sqlc.arg('fund_id') AND t.kind = 'dues'
+  AND t.dues_period >= sqlc.arg('from_period') AND t.dues_period <= sqlc.arg('to_period')
+  AND t.reversed = 0
+GROUP BY member_id, dues_period;
+
 -- The "paid in advance" signal. dues_period is 'YYYY-MM', so a lexicographic
 -- MAX is also the chronological one. The CAST(... AS TEXT) is load-bearing:
 -- uncast, MAX(dues_period) generates interface{} (the ADR-024 trap for SUM,

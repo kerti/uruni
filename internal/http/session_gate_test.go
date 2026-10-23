@@ -63,6 +63,7 @@ var gatedRoutes = []struct {
 	{http.MethodPost, "/api/transactions/1/reversal"},
 	{http.MethodGet, "/api/dues-payments"},
 	{http.MethodGet, "/api/dues-status"},
+	{http.MethodGet, "/api/dues-status/grid"},
 	{http.MethodGet, "/api/members/1/outstanding-dues"},
 	{http.MethodPost, "/api/incidentals"},
 	{http.MethodGet, "/api/incidentals"},
