@@ -31,6 +31,32 @@ export function getDuesStatus(period: string): Promise<DuesStatusRow[]> {
   return apiFetch<DuesStatusRow[]>(`/api/dues-status?period=${encodeURIComponent(period)}`)
 }
 
+/** One cell of the twelve-month grid (ADR-044): the three statuses
+ * `DuesStatusForPeriod` reports (a month it reads as paid in advance arrives as
+ * 'paid'), or 'none' - the member owes nothing that month, whatever the reason. */
+export type DuesGridCell = 'paid' | 'partial' | 'unpaid' | 'none'
+
+/** One member's row: `cells[i]` is the status for `periods[i]`. */
+export interface DuesGridMember {
+  id: number
+  name: string
+  cells: DuesGridCell[]
+}
+
+/** GET /api/dues-status/grid: the months, oldest first ("YYYY-MM", at most
+ * twelve, ending at the fund's current month), and a row per member who owes in
+ * any of them, in the server's order. */
+export interface DuesGrid {
+  periods: string[]
+  members: DuesGridMember[]
+}
+
+/** GET /api/dues-status/grid - takes no parameters; the server reads the
+ * fund's current month itself (ADR-041). */
+export function getDuesGrid(): Promise<DuesGrid> {
+  return apiFetch<DuesGrid>('/api/dues-status/grid')
+}
+
 /** One row of GET /api/members/{id}/outstanding-dues: one period this member
  * still owes something for, oldest first. No nested member (the id was the
  * path segment), and `status` is only ever 'unpaid' or 'partial'. */

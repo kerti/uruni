@@ -4,11 +4,11 @@
   "lines": [
     {
       "account_id": 1,
-      "actual_amount": 475000,
+      "actual_amount": 495000,
       "adjustment_transaction_id": null,
       "difference_amount": 0,
       "id": 1,
-      "recorded_amount": 475000,
+      "recorded_amount": 495000,
       "remainder_amount": 0,
       "resolution": "matched"
     },
@@ -25,5 +25,5 @@
   ],
   "note": "Hitung September",
   "performed_at": 1789444800,
-  "through_transaction_id": 11
+  "through_transaction_id": 12
 }

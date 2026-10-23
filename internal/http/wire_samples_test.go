@@ -38,6 +38,11 @@ func TestWireSamples(t *testing.T) {
 	sari := w.id(w.send(http.MethodPost, "/api/members", `{"name":"Sari","tier_id":null,"joined_on":"2026-02-01"}`, ""))
 	w.send(http.MethodPost, "/api/dues-payments", fmt.Sprintf(`{"account_id":%d,"member_id":%d,"occurred_on":"2026-09-05","note":null,
 		"periods":[{"dues_period":"2026-08","amount":50000},{"dues_period":"2026-09","amount":50000}]}`, cash, budi), "")
+	// Citra joins in March (January and February are no obligation for her) and
+	// part-pays July, so the grid sample carries all four cell states.
+	citra := w.id(w.send(http.MethodPost, "/api/members", fmt.Sprintf(`{"name":"Citra","tier_id":%d,"joined_on":"2026-03-01"}`, tier), ""))
+	w.send(http.MethodPost, "/api/dues-payments", fmt.Sprintf(`{"account_id":%d,"member_id":%d,"occurred_on":"2026-07-05","note":null,
+		"periods":[{"dues_period":"2026-07","amount":20000}]}`, cash, citra), "")
 
 	lamp := w.id(w.send(http.MethodPost, "/api/transactions", fmt.Sprintf(`{"account_id":%d,"purpose_id":%d,"direction":"out",
 		"amount":75000,"occurred_on":"2026-09-02","note":"Beli lampu","is_adjustment":false,"member_id":null}`, cash, main), ""))

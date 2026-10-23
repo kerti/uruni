@@ -1,7 +1,7 @@
 {
   "accounts": [
     {
-      "balance": 475000,
+      "balance": 495000,
       "id": 1,
       "kind": "cash",
       "name": "Tunai"
@@ -13,7 +13,7 @@
       "name": "Bank"
     }
   ],
-  "fund_total": 575000,
+  "fund_total": 595000,
   "month": {
     "in": 150000,
     "out": 75000
@@ -21,7 +21,7 @@
   "owed_to_members": 30000,
   "purposes": [
     {
-      "balance": 600000,
+      "balance": 620000,
       "id": 1,
       "kind": "main",
       "name": "Kas Utama"

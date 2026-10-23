@@ -1,13 +1,16 @@
 import { useEffect, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { ChevronDown, Circle, CircleCheck, CircleDashed } from 'lucide-react'
 
 import MonthField from '@/components/MonthField'
+import { segmentedItemClass, segmentedTrackClass } from '@/components/segmented'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import Loading from '@/components/states/Loading'
 import ErrorState from '@/components/states/ErrorState'
 import { copy } from '@/copy/id'
 import MemberPayments from '@/screens/Dues/MemberPayments'
+import DuesStatusGrid from '@/screens/Dues/StatusGrid'
 import { getDuesStatus } from '@/lib/dues'
 import { currentPeriod, formatPeriod, periodBounds } from '@/lib/dates'
 import { formatIDR } from '@/lib/money'
@@ -15,6 +18,7 @@ import { useApi } from '@/lib/useApi'
 import type { DuesStatusKind, DuesStatusRow } from '@/lib/dues'
 
 const text = copy.dues
+const gridText = copy.dues.grid
 const historyText = copy.dues.history
 
 /** Rows the "belum bayar" filter isolates - unpaid and partial both still owe
@@ -85,6 +89,20 @@ export default function DuesStatus({
   refetchKey?: unknown
   notice?: string | null
 }) {
+  // The view lives in the URL (?view=grid), a pushed entry like Reimbursements'
+  // ?show=all: back returns to the view she came from. The list is the default.
+  const [searchParams, setSearchParams] = useSearchParams()
+  const showGrid = searchParams.get('view') === 'grid'
+  function showView(next: 'list' | 'grid') {
+    if ((next === 'grid') === showGrid) return
+    setSearchParams((current) => {
+      const params = new URLSearchParams(current)
+      if (next === 'grid') params.set('view', 'grid')
+      else params.delete('view')
+      return params
+    })
+  }
+
   const [period, setPeriod] = useState(currentPeriod)
   const [unpaidOnly, setUnpaidOnly] = useState(false)
   // Which member's payment history is open - one at a time, and never open
@@ -111,98 +129,134 @@ export default function DuesStatus({
         </p>
       )}
 
-      <div className="flex flex-col gap-1.5">
-        <Label htmlFor="dues-period">{text.periodLabel}</Label>
-        <MonthField
-          id="dues-period"
-          value={period}
-          onChange={(next) => {
-            setPeriod(next)
-            setExpandedMemberId(null)
-          }}
-          bounds={periodBounds.status()}
-        />
+      <div role="group" aria-label={gridText.heading} className={segmentedTrackClass(2)}>
+        <Button
+          type="button"
+          variant={showGrid ? 'ghost' : 'default'}
+          aria-pressed={!showGrid}
+          className={segmentedItemClass(!showGrid)}
+          onClick={() => showView('list')}
+        >
+          {gridText.viewOneMonth}
+        </Button>
+        <Button
+          type="button"
+          variant={showGrid ? 'default' : 'ghost'}
+          aria-pressed={showGrid}
+          className={segmentedItemClass(showGrid)}
+          onClick={() => showView('grid')}
+        >
+          {gridText.viewTwelveMonths}
+        </Button>
       </div>
 
-      <label className="flex items-center gap-2 text-sm">
-        <input
-          type="checkbox"
-          className="size-4 rounded border-input"
-          checked={unpaidOnly}
-          onChange={(event) => setUnpaidOnly(event.target.checked)}
-        />
-        {text.unpaidFilterLabel}
-      </label>
-
-      {(state.status === 'idle' || state.status === 'loading') && <Loading />}
-
-      {state.status === 'error' && state.error && <ErrorState error={state.error} onRetry={() => void run(() => getDuesStatus(period))} />}
-
-      {state.status === 'success' && (
+      {showGrid ? (
+        <DuesStatusGrid refetchKey={refetchKey} />
+      ) : (
         <>
-          {visibleRows.length === 0 ? (
-            <p className="text-muted-foreground">{unpaidOnly ? text.emptyFiltered : text.empty}</p>
-          ) : (
-            <ul className="flex flex-col gap-2">
-              {visibleRows.map((row) => (
-                <li key={row.member.id} className="flex flex-col gap-2 rounded-lg bg-card px-4 py-3 shadow-card ring-1 ring-foreground/10">
-                  <div className="flex items-center justify-between gap-3">
-                    <span className="font-medium">{row.member.name}</span>
-                    {/* Paid ahead with a known end (#357): the badge stays a
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="dues-period">{text.periodLabel}</Label>
+            <MonthField
+              id="dues-period"
+              value={period}
+              onChange={(next) => {
+                setPeriod(next)
+                setExpandedMemberId(null)
+              }}
+              bounds={periodBounds.status()}
+            />
+          </div>
+
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              className="size-4 rounded border-input"
+              checked={unpaidOnly}
+              onChange={(event) => setUnpaidOnly(event.target.checked)}
+            />
+            {text.unpaidFilterLabel}
+          </label>
+
+          {(state.status === 'idle' || state.status === 'loading') && <Loading />}
+
+          {state.status === 'error' && state.error && (
+            <ErrorState error={state.error} onRetry={() => void run(() => getDuesStatus(period))} />
+          )}
+
+          {state.status === 'success' && (
+            <>
+              {visibleRows.length === 0 ? (
+                <p className="text-muted-foreground">{unpaidOnly ? text.emptyFiltered : text.empty}</p>
+              ) : (
+                <ul className="flex flex-col gap-2">
+                  {visibleRows.map((row) => (
+                    <li
+                      key={row.member.id}
+                      className="flex flex-col gap-2 rounded-lg bg-card px-4 py-3 shadow-card ring-1 ring-foreground/10"
+                    >
+                      <div className="flex items-center justify-between gap-3">
+                        <span className="font-medium">{row.member.name}</span>
+                        {/* Paid ahead with a known end (#357): the badge stays a
                         plain "Lunas" and the month moves to its own line
                         below, so neither the name nor the badge wraps. */}
-                    <StatusBadge status={row.status === 'paid_in_advance' && row.paid_through ? 'paid' : row.status} />
-                  </div>
-                  <div className="tabular flex items-center justify-between text-sm text-muted-foreground">
-                    <span>
-                      {text.owedLabel}: {formatIDR(row.owed_amount)}
-                    </span>
-                    <span>
-                      {text.paidLabel}: {formatIDR(row.paid_amount)}
-                    </span>
-                  </div>
-                  {row.status === 'paid_in_advance' && row.paid_through && (
-                    <p className="text-right text-sm text-success">{text.paidThrough(formatPeriod(row.paid_through))}</p>
-                  )}
+                        <StatusBadge status={row.status === 'paid_in_advance' && row.paid_through ? 'paid' : row.status} />
+                      </div>
+                      <div className="tabular flex items-center justify-between text-sm text-muted-foreground">
+                        <span>
+                          {text.owedLabel}: {formatIDR(row.owed_amount)}
+                        </span>
+                        <span>
+                          {text.paidLabel}: {formatIDR(row.paid_amount)}
+                        </span>
+                      </div>
+                      {row.status === 'paid_in_advance' && row.paid_through && (
+                        <p className="text-right text-sm text-success">{text.paidThrough(formatPeriod(row.paid_through))}</p>
+                      )}
 
-                  {/* A disclosure, not a link: the panel opens in place
+                      {/* A disclosure, not a link: the panel opens in place
                       inside this card, so the control names the panel and
                       carries its state (aria-expanded + aria-controls), and
                       the chevron turns with it. Full-width and `lg` for the
                       44px touch target Design-System.md sets. */}
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="lg"
-                    className="-mx-2 justify-between px-2"
-                    aria-expanded={expandedMemberId === row.member.id}
-                    aria-controls={`dues-history-${row.member.id}`}
-                    onClick={() => setExpandedMemberId(expandedMemberId === row.member.id ? null : row.member.id)}
-                  >
-                    {historyText.title}
-                    {/* The chevron turns on its own composited layer
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="lg"
+                        className="-mx-2 justify-between px-2"
+                        aria-expanded={expandedMemberId === row.member.id}
+                        aria-controls={`dues-history-${row.member.id}`}
+                        onClick={() => setExpandedMemberId(expandedMemberId === row.member.id ? null : row.member.id)}
+                      >
+                        {historyText.title}
+                        {/* The chevron turns on its own composited layer
                         (transform-gpu + will-change), not as a transform on
                         the SVG itself: iOS Safari rasterizes an SVG once at
                         its pre-transform size, so rotating the element
                         directly re-uses that bitmap and the strokes crawl.
                         Wrapping it and promoting the wrapper is what keeps
                         the turn smooth on a phone. */}
-                    <span
-                      className="flex size-4 transform-gpu items-center justify-center transition-transform duration-200 ease-out will-change-transform data-[open=true]:rotate-180"
-                      data-open={expandedMemberId === row.member.id}
-                    >
-                      <ChevronDown aria-hidden="true" />
-                    </span>
-                  </Button>
+                        <span
+                          className="flex size-4 transform-gpu items-center justify-center transition-transform duration-200 ease-out will-change-transform data-[open=true]:rotate-180"
+                          data-open={expandedMemberId === row.member.id}
+                        >
+                          <ChevronDown aria-hidden="true" />
+                        </span>
+                      </Button>
 
-                  {expandedMemberId === row.member.id && (
-                    <div id={`dues-history-${row.member.id}`} className="animate-reveal rounded-lg bg-muted/30 px-3 py-3">
-                      <MemberPayments memberId={row.member.id} period={period} onReversed={() => void run(() => getDuesStatus(period))} />
-                    </div>
-                  )}
-                </li>
-              ))}
-            </ul>
+                      {expandedMemberId === row.member.id && (
+                        <div id={`dues-history-${row.member.id}`} className="animate-reveal rounded-lg bg-muted/30 px-3 py-3">
+                          <MemberPayments
+                            memberId={row.member.id}
+                            period={period}
+                            onReversed={() => void run(() => getDuesStatus(period))}
+                          />
+                        </div>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </>
           )}
         </>
       )}

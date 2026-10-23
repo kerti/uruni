@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import accountsSample from '@/test/wire/accounts.json'
 import balancesSample from '@/test/wire/balances.json'
 import duesPaymentsSample from '@/test/wire/dues-payments-page.json'
+import duesGridSample from '@/test/wire/dues-status-grid.json'
 import duesStatusSample from '@/test/wire/dues-status.json'
 import duesTiersSample from '@/test/wire/dues-tiers.json'
 import errorSample from '@/test/wire/error.json'
@@ -31,7 +32,7 @@ import { listMembersPage } from '@/lib/setup'
 import { listTransactions } from '@/lib/transactions'
 import type { AuthUser, SessionStatus } from '@/lib/auth'
 import type { AccountBalance, Balances, PurposeBalance } from '@/lib/balances'
-import type { DuesPaymentHistoryRow, DuesStatusRow, OutstandingDuesPeriod } from '@/lib/dues'
+import type { DuesGrid, DuesGridMember, DuesPaymentHistoryRow, DuesStatusRow, OutstandingDuesPeriod } from '@/lib/dues'
 import type {
   Incidental,
   IncidentalDetail,
@@ -191,6 +192,8 @@ const latestKeys: Keys<LatestReconciliation> = { id: true, performed_at: true, t
 const detailKeys: Keys<ReconciliationDetail> = { ...latestKeys, lines: true }
 const listItemKeys: Keys<ReconciliationListItem> = { ...latestKeys, open_difference_amount: true }
 const duesStatusKeys: Keys<DuesStatusRow> = { member: true, owed_amount: true, paid_amount: true, status: true, paid_through: true }
+const duesGridKeys: Keys<DuesGrid> = { periods: true, members: true }
+const duesGridMemberKeys: Keys<DuesGridMember> = { id: true, name: true, cells: true }
 const outstandingKeys: Keys<OutstandingDuesPeriod> = { period: true, owed_amount: true, paid_amount: true, status: true }
 const duesPaymentKeys: Keys<DuesPaymentHistoryRow> = {
   id: true,
@@ -235,6 +238,8 @@ void (latestSample satisfies Has<LatestReconciliation>)
 void (reconciliationsSample.reconciliations satisfies Has<ReconciliationListItem>[])
 void (duesStatusSample satisfies Has<DuesStatusRow>[])
 void (duesStatusSample.map((row) => row.member) satisfies Has<Member>[])
+void (duesGridSample satisfies Has<DuesGrid>)
+void (duesGridSample.members satisfies Has<DuesGridMember>[])
 void (outstandingSample satisfies Has<OutstandingDuesPeriod>[])
 void (duesPaymentsSample.dues_payments satisfies Has<DuesPaymentHistoryRow>[])
 void (transferSample satisfies Has<Transfer>)
@@ -267,6 +272,8 @@ describe('the wire samples carry no key their interface does not declare', () =>
     ['LatestReconciliation', [latestSample], latestKeys],
     ['ReconciliationListItem', reconciliationsSample.reconciliations, listItemKeys],
     ['DuesStatusRow', duesStatusSample, duesStatusKeys],
+    ['DuesGrid', [duesGridSample], duesGridKeys],
+    ['DuesGridMember', duesGridSample.members, duesGridMemberKeys],
     ['OutstandingDuesPeriod', outstandingSample, outstandingKeys],
     ['DuesPaymentHistoryRow', duesPaymentsSample.dues_payments, duesPaymentKeys],
     ['Transfer', [transferSample], transferKeys],
