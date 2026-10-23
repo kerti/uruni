@@ -776,6 +776,20 @@ export const copy = {
     // paid_in_advance label above stays for the rare member who is ahead with
     // a gap right after this month.
     paidThrough: (period: string) => `Sudah dibayar sampai ${period}`,
+    // The twelve-month grid, a second view of this screen (ADR-044). Status
+    // words are `statuses` above; this holds what is new. Short month heads are
+    // the one place a month is abbreviated.
+    grid: {
+      heading: 'Status iuran 12 bulan',
+      range: (from: string, to: string) => `${from} \u2013 ${to}`,
+      viewOneMonth: 'Satu bulan',
+      viewTwelveMonths: '12 bulan',
+      none: 'Tidak ada iuran',
+      empty: 'Belum ada anggota dengan iuran dalam 12 bulan terakhir.',
+      monthHeads: ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'],
+      // Visually hidden label on each cell: "Oktober 2025: Lunas".
+      cellLabel: (period: string, status: string) => `${period}: ${status}`,
+    },
     // The matrix is its own screen, opened from Riwayat's Iuran tab, so back
     // returns to that tab rather than home. Just "Kembali": the screen's
     // heading already names where it leads, and a longer label did not fit

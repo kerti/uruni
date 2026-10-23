@@ -10,6 +10,17 @@
         "name": "Budi"
       },
       "state": "sudah"
+    },
+    {
+      "contributed_amount": 0,
+      "member": {
+        "created_at": 1789444800,
+        "id": 3,
+        "inactive_on": null,
+        "joined_on": "2026-03-01",
+        "name": "Citra"
+      },
+      "state": "belum"
     }
   ],
   "unexpected": []

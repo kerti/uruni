@@ -27,6 +27,20 @@
       "reversed_by_transaction_id": null,
       "reverses_occurred_on": null,
       "reverses_transaction_id": null
+    },
+    {
+      "account_name": "Tunai",
+      "amount": 20000,
+      "dues_period": "2026-07",
+      "id": 4,
+      "is_reversal": false,
+      "member_id": 3,
+      "member_name": "Citra",
+      "note": null,
+      "occurred_on": "2026-07-05",
+      "reversed_by_transaction_id": null,
+      "reverses_occurred_on": null,
+      "reverses_transaction_id": null
     }
   ],
   "next_cursor": null

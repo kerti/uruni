@@ -14,6 +14,21 @@
       ],
       "id": 1,
       "name": "Budi"
+    },
+    {
+      "cells": [
+        "none",
+        "none",
+        "unpaid",
+        "unpaid",
+        "unpaid",
+        "unpaid",
+        "partial",
+        "unpaid",
+        "unpaid"
+      ],
+      "id": 3,
+      "name": "Citra"
     }
   ],
   "periods": [
