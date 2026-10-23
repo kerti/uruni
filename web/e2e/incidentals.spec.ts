@@ -2,6 +2,7 @@ import type { Page } from '@playwright/test'
 
 import { copy } from '../src/copy/id'
 import { expect, test, logIn } from './fixtures'
+import { expectAccessible } from './a11y'
 
 // Open an envelope, contribute to it through the real record form (reused, not
 // duplicated), then close it and verify the (honest, possibly zero) rollover.
@@ -33,12 +34,14 @@ test.describe('incidentals', () => {
     // Pengaturan's, beside Titipan - reached through the footer nav.
     await page.getByRole('link', { name: copy.shell.nav.settings }).click()
     await expect(page.getByRole('heading', { name: copy.settings.heading })).toBeVisible()
+    await expectAccessible(page)
 
     // Add is a dialog (ADR-032), addressed by ?edit=incidental:new.
     await page.getByRole('button', { name: copy.settings.incidentals.add }).click()
     await expect(page).toHaveURL(/[?&]edit=incidental%3Anew/)
     const openDialog = page.getByRole('dialog', { name: copy.incidentals.open.heading })
     await expect(openDialog).toBeVisible()
+    await expectAccessible(page)
 
     // Fill occasion and target amount, leave date at today's default
     await openDialog.getByLabel(copy.incidentals.open.occasionLabel).fill(occasion)
@@ -101,6 +104,7 @@ test.describe('incidentals', () => {
       // ambiguous). toContainText retries, so this waits for the detail view.
       const collectedRow = page.getByText(copy.incidentals.detail.collectedLabel).locator('..')
       await expect(collectedRow).toContainText('Rp 60.000')
+      await expectAccessible(page)
     },
   )
 

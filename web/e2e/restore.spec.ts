@@ -2,6 +2,7 @@ import type { Page } from '@playwright/test'
 
 import { copy } from '../src/copy/id'
 import { expect, logIn, seedPassword, test } from './fixtures'
+import { expectAccessible } from './a11y'
 
 // Restore (ADR-012), driven through a real browser. vitest covers
 // RestoreDialog's states against stubbed fetches; this proves what only the
@@ -52,6 +53,7 @@ test.describe('restore', () => {
     await page.goto('/')
     await expect(page.getByText(copy.home.balanceHeading)).toBeVisible()
     await openSettings(page)
+    await expectAccessible(page)
 
     // exact: every server-side row's download control is labelled "Unduh
     // cadangan <kind> <date>", which a substring match also hits.
