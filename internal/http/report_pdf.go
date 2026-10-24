@@ -578,11 +578,11 @@ func (d *pdfDoc) dues(p reportPage) {
 }
 
 // The grid's geometry, in millimetres: a fixed column, so a fund with fewer
-// months gets a narrower grid rather than wider shapes, and the name column is
-// what twelve columns leave.
+// months gets a narrower grid rather than wider shapes. The columns are
+// right-aligned - the last month always ends at the content edge, under the
+// section's rule - and the name column is what they leave.
 const (
 	pdfGridColW      = 9.0
-	pdfGridMaxCols   = 12
 	pdfGridShapeR    = 1.7
 	pdfGridRowPad    = 1.8
 	pdfGridLegendGap = 6.0
@@ -605,7 +605,7 @@ func (d *pdfDoc) duesGrid(p reportPage) {
 	}
 	d.SetY(d.GetY() + 3)
 
-	nameW := pdfContentW - pdfGridMaxCols*pdfGridColW
+	nameW := pdfContentW - float64(len(g.Heads))*pdfGridColW
 	colX := func(i int) float64 { return pdfMarginX + nameW + float64(i)*pdfGridColW }
 
 	head := func() {
