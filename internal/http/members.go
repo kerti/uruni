@@ -119,7 +119,6 @@ func (a *api) createMember(w http.ResponseWriter, r *http.Request) {
 	}
 
 	member, err := a.ledger.CreateMember(r.Context(), ledger.CreateMemberParams{
-		Now:      now,
 		FundID:   fund.ID,
 		Name:     req.Name,
 		TierID:   req.TierID,
@@ -365,7 +364,7 @@ func (a *api) updateMember(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	params := ledger.UpdateMemberParams{FundID: member.FundID, MemberID: member.ID, Now: a.now()}
+	params := ledger.UpdateMemberParams{FundID: member.FundID, MemberID: member.ID}
 	if req.NameSet {
 		params.Name = req.Name
 	}

@@ -119,8 +119,8 @@ func TestUpdateMemberAStatementOnAMonthWithoutARowIsANewRow(t *testing.T) {
 	a, b := createDuesTier(t, q, f.fundID, "A"), createDuesTier(t, q, f.fundID, "B")
 	m, _ := l.CreateMember(context.Background(), CreateMemberParams{FundID: f.fundID, Name: "Andi", TierID: &a, JoinedOn: "2026-01-10"})
 
-	got, err := l.UpdateMember(context.Background(), UpdateMemberParams{
-		FundID: f.fundID, MemberID: m.ID, SetTier: true, TierID: &b, TierFrom: "2026-06", Now: augustNow,
+	got, err := l.at(augustNow).UpdateMember(context.Background(), UpdateMemberParams{
+		FundID: f.fundID, MemberID: m.ID, SetTier: true, TierID: &b, TierFrom: "2026-06",
 	})
 	if err != nil {
 		t.Fatalf("UpdateMember() = %v, want no error", err)
@@ -140,8 +140,8 @@ func TestUpdateMemberAStatementOnAMonthThatHasARowIsTheNextCorrection(t *testing
 	m, _ := l.CreateMember(context.Background(), CreateMemberParams{FundID: f.fundID, Name: "Andi", TierID: &a, JoinedOn: "2026-01-10"})
 	state := func(tier int64) {
 		t.Helper()
-		if _, err := l.UpdateMember(context.Background(), UpdateMemberParams{
-			FundID: f.fundID, MemberID: m.ID, SetTier: true, TierID: &tier, TierFrom: "2026-06", Now: augustNow,
+		if _, err := l.at(augustNow).UpdateMember(context.Background(), UpdateMemberParams{
+			FundID: f.fundID, MemberID: m.ID, SetTier: true, TierID: &tier, TierFrom: "2026-06",
 		}); err != nil {
 			t.Fatalf("UpdateMember(%d from June) = %v, want no error", tier, err)
 		}
@@ -167,8 +167,8 @@ func TestUpdateMemberRestatingTheTierInForceWritesNothing(t *testing.T) {
 	m, _ := l.CreateMember(context.Background(), CreateMemberParams{FundID: f.fundID, Name: "Andi", TierID: &a, JoinedOn: "2026-01-10"})
 
 	for _, from := range []string{"", "2026-01", "2026-05"} { // re-saving the form, and a month inside the row
-		if _, err := l.UpdateMember(context.Background(), UpdateMemberParams{
-			FundID: f.fundID, MemberID: m.ID, SetTier: true, TierID: &a, TierFrom: from, Now: augustNow,
+		if _, err := l.at(augustNow).UpdateMember(context.Background(), UpdateMemberParams{
+			FundID: f.fundID, MemberID: m.ID, SetTier: true, TierID: &a, TierFrom: from,
 		}); err != nil {
 			t.Fatalf("UpdateMember(A from %q) = %v, want no error", from, err)
 		}
@@ -177,15 +177,15 @@ func TestUpdateMemberRestatingTheTierInForceWritesNothing(t *testing.T) {
 
 	// A statement does not cancel a later row: A from January and B from June,
 	// "A from March" changes nothing; undoing the promotion is "A from June".
-	if _, err := l.UpdateMember(context.Background(), UpdateMemberParams{FundID: f.fundID, MemberID: m.ID, SetTier: true, TierID: &b, TierFrom: "2026-06", Now: augustNow}); err != nil {
+	if _, err := l.at(augustNow).UpdateMember(context.Background(), UpdateMemberParams{FundID: f.fundID, MemberID: m.ID, SetTier: true, TierID: &b, TierFrom: "2026-06"}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := l.UpdateMember(context.Background(), UpdateMemberParams{FundID: f.fundID, MemberID: m.ID, SetTier: true, TierID: &a, TierFrom: "2026-03", Now: augustNow}); err != nil {
+	if _, err := l.at(augustNow).UpdateMember(context.Background(), UpdateMemberParams{FundID: f.fundID, MemberID: m.ID, SetTier: true, TierID: &a, TierFrom: "2026-03"}); err != nil {
 		t.Fatal(err)
 	}
 	wantRows(t, l, m.ID, "2026-01#0="+strconv.FormatInt(a, 10), "2026-06#0="+strconv.FormatInt(b, 10))
 
-	got, err := l.UpdateMember(context.Background(), UpdateMemberParams{FundID: f.fundID, MemberID: m.ID, SetTier: true, TierID: &a, TierFrom: "2026-06", Now: augustNow})
+	got, err := l.at(augustNow).UpdateMember(context.Background(), UpdateMemberParams{FundID: f.fundID, MemberID: m.ID, SetTier: true, TierID: &a, TierFrom: "2026-06"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -203,7 +203,7 @@ func TestUpdateMemberChoosingNoTierIsANullRowFromThatMonth(t *testing.T) {
 	a := createDuesTier(t, q, f.fundID, "A")
 	m, _ := l.CreateMember(context.Background(), CreateMemberParams{FundID: f.fundID, Name: "Andi", TierID: &a, JoinedOn: "2026-01-10"})
 
-	got, err := l.UpdateMember(context.Background(), UpdateMemberParams{FundID: f.fundID, MemberID: m.ID, SetTier: true, TierID: nil, TierFrom: "2026-07", Now: augustNow})
+	got, err := l.at(augustNow).UpdateMember(context.Background(), UpdateMemberParams{FundID: f.fundID, MemberID: m.ID, SetTier: true, TierID: nil, TierFrom: "2026-07"})
 	if err != nil {
 		t.Fatalf("UpdateMember(no tier from July) = %v, want no error", err)
 	}
@@ -213,7 +213,7 @@ func TestUpdateMemberChoosingNoTierIsANullRowFromThatMonth(t *testing.T) {
 	}
 
 	// Clearing a tier a member never had writes nothing.
-	jane, err := l.UpdateMember(context.Background(), UpdateMemberParams{FundID: f.fundID, MemberID: f.memberID, SetTier: true, TierID: nil, Now: augustNow})
+	jane, err := l.at(augustNow).UpdateMember(context.Background(), UpdateMemberParams{FundID: f.fundID, MemberID: f.memberID, SetTier: true, TierID: nil})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -243,7 +243,7 @@ func TestUpdateMemberTierStartMonthBounds(t *testing.T) {
 		{"not a month", "2026-8", ErrInvalidArgument},
 	}
 	for _, tt := range tests {
-		_, err := l.UpdateMember(context.Background(), UpdateMemberParams{FundID: f.fundID, MemberID: m.ID, SetTier: true, TierID: &b, TierFrom: tt.from, Now: augustNow})
+		_, err := l.at(augustNow).UpdateMember(context.Background(), UpdateMemberParams{FundID: f.fundID, MemberID: m.ID, SetTier: true, TierID: &b, TierFrom: tt.from})
 		if tt.want == nil && err != nil {
 			t.Errorf("%s (%s): err = %v, want none", tt.name, tt.from, err)
 		}
@@ -253,7 +253,7 @@ func TestUpdateMemberTierStartMonthBounds(t *testing.T) {
 	}
 
 	// A tier start month needs a tier to start.
-	if _, err := l.UpdateMember(context.Background(), UpdateMemberParams{FundID: f.fundID, MemberID: m.ID, TierFrom: "2026-05", Now: augustNow}); !errors.Is(err, ErrInvalidArgument) {
+	if _, err := l.at(augustNow).UpdateMember(context.Background(), UpdateMemberParams{FundID: f.fundID, MemberID: m.ID, TierFrom: "2026-05"}); !errors.Is(err, ErrInvalidArgument) {
 		t.Errorf("a start month without a tier: err = %v, want ErrInvalidArgument", err)
 	}
 }
@@ -269,7 +269,7 @@ func TestUpdateMemberCeilingIsTheJoinMonthWhenThatIsLater(t *testing.T) {
 
 	// The default start is the join month, and the member shows the tier entered
 	// for them, as today.
-	got, err := l.UpdateMember(context.Background(), UpdateMemberParams{FundID: f.fundID, MemberID: m.ID, SetTier: true, TierID: &b, Now: augustNow})
+	got, err := l.at(augustNow).UpdateMember(context.Background(), UpdateMemberParams{FundID: f.fundID, MemberID: m.ID, SetTier: true, TierID: &b})
 	if err != nil {
 		t.Fatalf("UpdateMember() = %v, want no error", err)
 	}
@@ -278,7 +278,7 @@ func TestUpdateMemberCeilingIsTheJoinMonthWhenThatIsLater(t *testing.T) {
 		t.Errorf("a member who joins next month shows tier %v, want %d (the tier entered for them)", got.TierID, b)
 	}
 
-	if _, err := l.UpdateMember(context.Background(), UpdateMemberParams{FundID: f.fundID, MemberID: m.ID, SetTier: true, TierID: &a, TierFrom: "2026-10", Now: augustNow}); !errors.Is(err, ErrDateOutOfRange) {
+	if _, err := l.at(augustNow).UpdateMember(context.Background(), UpdateMemberParams{FundID: f.fundID, MemberID: m.ID, SetTier: true, TierID: &a, TierFrom: "2026-10"}); !errors.Is(err, ErrDateOutOfRange) {
 		t.Errorf("a start after the join month: err = %v, want ErrDateOutOfRange", err)
 	}
 }
@@ -293,7 +293,7 @@ func TestUpdateMemberChangeInTheJoiningMonthCorrectsTheJoinRow(t *testing.T) {
 	createDuesRate(t, q, b, 50_000, "2026-01")
 	m, _ := l.CreateMember(context.Background(), CreateMemberParams{FundID: f.fundID, Name: "Andi", TierID: &a, JoinedOn: "2026-06-05"})
 
-	if _, err := l.UpdateMember(context.Background(), UpdateMemberParams{FundID: f.fundID, MemberID: m.ID, SetTier: true, TierID: &b, TierFrom: "2026-06", Now: augustNow}); err != nil {
+	if _, err := l.at(augustNow).UpdateMember(context.Background(), UpdateMemberParams{FundID: f.fundID, MemberID: m.ID, SetTier: true, TierID: &b, TierFrom: "2026-06"}); err != nil {
 		t.Fatalf("UpdateMember() = %v, want no error", err)
 	}
 	wantRows(t, l, m.ID, "2026-06#0="+strconv.FormatInt(a, 10), "2026-06#1="+strconv.FormatInt(b, 10))
@@ -315,11 +315,11 @@ func TestUpdateMemberJoinDateMovedEarlierCarriesTheEarliestTierBack(t *testing.T
 	q := store.New(l.db)
 	a, b := createDuesTier(t, q, f.fundID, "A"), createDuesTier(t, q, f.fundID, "B")
 	m, _ := l.CreateMember(context.Background(), CreateMemberParams{FundID: f.fundID, Name: "Andi", TierID: &a, JoinedOn: "2026-06-05"})
-	if _, err := l.UpdateMember(context.Background(), UpdateMemberParams{FundID: f.fundID, MemberID: m.ID, SetTier: true, TierID: &b, TierFrom: "2026-07", Now: augustNow}); err != nil {
+	if _, err := l.at(augustNow).UpdateMember(context.Background(), UpdateMemberParams{FundID: f.fundID, MemberID: m.ID, SetTier: true, TierID: &b, TierFrom: "2026-07"}); err != nil {
 		t.Fatal(err)
 	}
 
-	got, err := l.UpdateMember(context.Background(), UpdateMemberParams{FundID: f.fundID, MemberID: m.ID, JoinedOn: strp("2026-02-01"), Now: augustNow})
+	got, err := l.at(augustNow).UpdateMember(context.Background(), UpdateMemberParams{FundID: f.fundID, MemberID: m.ID, JoinedOn: strp("2026-02-01")})
 	if err != nil {
 		t.Fatalf("UpdateMember(join date back to February) = %v, want no error", err)
 	}
@@ -342,7 +342,7 @@ func TestUpdateMemberJoinDateMovedLaterLeavesTheEarliestRowAheadAndMovingItBackA
 
 	// Moved later: no row is touched, and the earliest row (March) now sits ahead
 	// of the join month (May).
-	if _, err := l.UpdateMember(context.Background(), UpdateMemberParams{FundID: f.fundID, MemberID: m.ID, JoinedOn: strp("2026-05-01"), Now: augustNow}); err != nil {
+	if _, err := l.at(augustNow).UpdateMember(context.Background(), UpdateMemberParams{FundID: f.fundID, MemberID: m.ID, JoinedOn: strp("2026-05-01")}); err != nil {
 		t.Fatal(err)
 	}
 	wantRows(t, l, m.ID, "2026-03#0="+strconv.FormatInt(a, 10))
@@ -350,12 +350,12 @@ func TestUpdateMemberJoinDateMovedLaterLeavesTheEarliestRowAheadAndMovingItBackA
 	// Moved back to January: the earliest row (March) starts at or before the old
 	// join month (May), so January gets a row - without the "at or before" the
 	// live-arrears backdating would open months with no tier.
-	if _, err := l.UpdateMember(context.Background(), UpdateMemberParams{FundID: f.fundID, MemberID: m.ID, JoinedOn: strp("2026-01-01"), Now: augustNow}); err != nil {
+	if _, err := l.at(augustNow).UpdateMember(context.Background(), UpdateMemberParams{FundID: f.fundID, MemberID: m.ID, JoinedOn: strp("2026-01-01")}); err != nil {
 		t.Fatal(err)
 	}
 	wantRows(t, l, m.ID, "2026-01#0="+strconv.FormatInt(a, 10), "2026-03#0="+strconv.FormatInt(a, 10))
 
-	out, err := l.OutstandingDuesForMember(context.Background(), f.fundID, m.ID, "2026-04", time.Time{})
+	out, err := l.OutstandingDuesForMember(context.Background(), f.fundID, m.ID, "2026-04")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -373,13 +373,13 @@ func TestUpdateMemberJoinDateMovedEarlierLeavesAnUntieredStretchUntiered(t *test
 	createDuesRate(t, q, a, 10_000, "2026-01")
 	// Joined in March with no tier, given tier A from June.
 	m, _ := l.CreateMember(context.Background(), CreateMemberParams{FundID: f.fundID, Name: "Citra", JoinedOn: "2026-03-01"})
-	if _, err := l.UpdateMember(context.Background(), UpdateMemberParams{FundID: f.fundID, MemberID: m.ID, SetTier: true, TierID: &a, TierFrom: "2026-06", Now: augustNow}); err != nil {
+	if _, err := l.at(augustNow).UpdateMember(context.Background(), UpdateMemberParams{FundID: f.fundID, MemberID: m.ID, SetTier: true, TierID: &a, TierFrom: "2026-06"}); err != nil {
 		t.Fatal(err)
 	}
 
 	// The earliest row (June) began AFTER the old join month (March): the longer
 	// untiered stretch stays untiered, no row is invented.
-	if _, err := l.UpdateMember(context.Background(), UpdateMemberParams{FundID: f.fundID, MemberID: m.ID, JoinedOn: strp("2026-01-01"), Now: augustNow}); err != nil {
+	if _, err := l.at(augustNow).UpdateMember(context.Background(), UpdateMemberParams{FundID: f.fundID, MemberID: m.ID, JoinedOn: strp("2026-01-01")}); err != nil {
 		t.Fatal(err)
 	}
 	wantRows(t, l, m.ID, "2026-06#0="+strconv.FormatInt(a, 10))
@@ -387,7 +387,7 @@ func TestUpdateMemberJoinDateMovedEarlierLeavesAnUntieredStretchUntiered(t *test
 	// And an earliest row that says "no tier" is not carried back either.
 	n, _ := l.CreateMember(context.Background(), CreateMemberParams{FundID: f.fundID, Name: "Dewi", JoinedOn: "2026-03-01"})
 	setMemberTier(t, q, f.fundID, n.ID, nil, "2026-03", 0)
-	if _, err := l.UpdateMember(context.Background(), UpdateMemberParams{FundID: f.fundID, MemberID: n.ID, JoinedOn: strp("2026-01-01"), Now: augustNow}); err != nil {
+	if _, err := l.at(augustNow).UpdateMember(context.Background(), UpdateMemberParams{FundID: f.fundID, MemberID: n.ID, JoinedOn: strp("2026-01-01")}); err != nil {
 		t.Fatal(err)
 	}
 	wantRows(t, l, n.ID, "2026-03#0=0")
@@ -401,8 +401,8 @@ func TestUpdateMemberRenameAndLeavingDateTouchNoTierRow(t *testing.T) {
 	a := createDuesTier(t, q, f.fundID, "A")
 	m, _ := l.CreateMember(context.Background(), CreateMemberParams{FundID: f.fundID, Name: "Andi", TierID: &a, JoinedOn: "2026-03-01"})
 
-	got, err := l.UpdateMember(context.Background(), UpdateMemberParams{
-		FundID: f.fundID, MemberID: m.ID, Name: strp("Andi S."), SetInactiveOn: true, InactiveOn: strp("2026-07-31"), Now: augustNow,
+	got, err := l.at(augustNow).UpdateMember(context.Background(), UpdateMemberParams{
+		FundID: f.fundID, MemberID: m.ID, Name: strp("Andi S."), SetInactiveOn: true, InactiveOn: strp("2026-07-31"),
 	})
 	if err != nil {
 		t.Fatalf("UpdateMember() = %v, want no error", err)
@@ -419,10 +419,10 @@ func TestUpdateMemberUnknownMemberOrAnotherFundsIsNotFound(t *testing.T) {
 	f := newFixture(t, l)
 
 	for _, p := range []UpdateMemberParams{
-		{FundID: f.fundID, MemberID: 999_999, Now: augustNow},
-		{FundID: f.fundID + 1, MemberID: f.memberID, Now: augustNow}, // a real member of another fund
+		{FundID: f.fundID, MemberID: 999_999},
+		{FundID: f.fundID + 1, MemberID: f.memberID}, // a real member of another fund
 	} {
-		if _, err := l.UpdateMember(context.Background(), p); err == nil {
+		if _, err := l.at(augustNow).UpdateMember(context.Background(), p); err == nil {
 			t.Errorf("UpdateMember(%+v) = nil error, want not found", p)
 		}
 	}
@@ -436,8 +436,8 @@ func TestUpdateMemberRefusesAnotherFundsTierAndRollsTheRestBack(t *testing.T) {
 	other, _ := q.CreateFund(context.Background(), store.CreateFundParams{Name: "Other", Currency: "IDR", TimeZone: "Asia/Jakarta", ReportSlug: "bcdefghijklmnopqrstuvw", CreatedAt: 1})
 	foreign := createDuesTier(t, q, other.ID, "Asing")
 
-	_, err := l.UpdateMember(context.Background(), UpdateMemberParams{
-		FundID: f.fundID, MemberID: f.memberID, Name: strp("Diganti"), SetTier: true, TierID: &foreign, Now: augustNow,
+	_, err := l.at(augustNow).UpdateMember(context.Background(), UpdateMemberParams{
+		FundID: f.fundID, MemberID: f.memberID, Name: strp("Diganti"), SetTier: true, TierID: &foreign,
 	})
 	if err == nil {
 		t.Fatal("UpdateMember(another fund's tier) = nil error, want the composite FK to refuse")
@@ -486,8 +486,8 @@ func TestUpdateMemberRefusesAJoinDateBefore2000AndChangesNothing(t *testing.T) {
 	a := createDuesTier(t, q, f.fundID, "A")
 	m, _ := l.CreateMember(context.Background(), CreateMemberParams{FundID: f.fundID, Name: "Andi", TierID: &a, JoinedOn: "2026-03-01"})
 
-	_, err := l.UpdateMember(context.Background(), UpdateMemberParams{
-		FundID: f.fundID, MemberID: m.ID, Name: strp("Diganti"), JoinedOn: strp("1999-12-31"), Now: augustNow,
+	_, err := l.at(augustNow).UpdateMember(context.Background(), UpdateMemberParams{
+		FundID: f.fundID, MemberID: m.ID, Name: strp("Diganti"), JoinedOn: strp("1999-12-31"),
 	})
 	if !errors.Is(err, ErrDateOutOfRange) {
 		t.Fatalf("UpdateMember(joined 1999-12-31) = %v, want ErrDateOutOfRange", err)

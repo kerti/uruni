@@ -119,14 +119,14 @@ func newRichFund(t *testing.T) richFund {
 	tierB := createDuesTier(t, q, f.fundID, "B")
 	createDuesRate(t, q, tierB, 20_000, "2025-01")
 	// A rise entered wrongly and corrected, and a rise entered and taken back.
-	rise, err := l.CreateDuesRate(ctx, CreateDuesRateParams{FundID: f.fundID, TierID: tierB, Amount: 40_000, EffectiveFrom: "2026-03", Now: richNow})
+	rise, err := l.at(richNow).CreateDuesRate(ctx, CreateDuesRateParams{FundID: f.fundID, TierID: tierB, Amount: 40_000, EffectiveFrom: "2026-03"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if _, err := l.CorrectDuesRate(ctx, f.fundID, rise.ID, 30_000); err != nil {
 		t.Fatal(err)
 	}
-	taken, err := l.CreateDuesRate(ctx, CreateDuesRateParams{FundID: f.fundID, TierID: tierB, Amount: 50_000, EffectiveFrom: "2026-08", Now: richNow})
+	taken, err := l.at(richNow).CreateDuesRate(ctx, CreateDuesRateParams{FundID: f.fundID, TierID: tierB, Amount: 50_000, EffectiveFrom: "2026-08"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -164,8 +164,8 @@ func newRichFund(t *testing.T) richFund {
 		for i, p := range periods {
 			rows[i] = PeriodAmount{DuesPeriod: p, Amount: amount}
 		}
-		posted, err := l.PostDuesPayments(ctx, PostDuesPaymentsParams{
-			FundID: f.fundID, AccountID: f.cashID, MemberID: memberID, OccurredOn: richOccurred, Periods: rows, Now: richNow,
+		posted, err := l.at(richNow).PostDuesPayments(ctx, PostDuesPaymentsParams{
+			FundID: f.fundID, AccountID: f.cashID, MemberID: memberID, OccurredOn: richOccurred, Periods: rows,
 		})
 		if err != nil {
 			t.Fatalf("PostDuesPayments(member %d, %v) = %v", memberID, periods, err)
@@ -181,7 +181,7 @@ func newRichFund(t *testing.T) richFund {
 	pay(fajar, 15_000, span("2026-06", 6)...)
 	pay(gita, 10_000, span("2025-01", 6)...)
 	reversed := pay(hari, 10_000, "2026-01", "2026-02", "2026-03", "2026-04")
-	if _, err := l.ReverseTransaction(ctx, ReverseTransactionParams{FundID: f.fundID, TransactionID: reversed[1].ID, Now: richNow}); err != nil {
+	if _, err := l.at(richNow).ReverseTransaction(ctx, ReverseTransactionParams{FundID: f.fundID, TransactionID: reversed[1].ID}); err != nil {
 		t.Fatal(err)
 	}
 	pay(joko, 4_000, span("2025-03", 5)...) // short every month it paid
@@ -196,9 +196,9 @@ func newRichFund(t *testing.T) richFund {
 
 	post := func(account, purpose int64, direction string, amount money.Amount, adjustment bool) store.Transaction {
 		t.Helper()
-		tx, err := l.PostTransaction(ctx, PostTransactionParams{
+		tx, err := l.at(richNow).PostTransaction(ctx, PostTransactionParams{
 			FundID: f.fundID, AccountID: account, PurposeID: purpose, Direction: direction, Amount: amount,
-			OccurredOn: richOccurred, IsAdjustment: adjustment, Now: richNow,
+			OccurredOn: richOccurred, IsAdjustment: adjustment,
 		})
 		if err != nil {
 			t.Fatalf("PostTransaction(%s %d) = %v", direction, amount, err)
@@ -210,11 +210,11 @@ func newRichFund(t *testing.T) richFund {
 	post(f.bankID, f.passID, "in", 90_000, false) // a pass-through never touches Kas Utama
 	post(f.bankID, f.passID, "out", 30_000, false)
 	post(f.cashID, f.mainID, "out", 2_500, true) // an adjusting entry
-	if _, err := l.ReverseTransaction(ctx, ReverseTransactionParams{FundID: f.fundID, TransactionID: spend.ID, Now: richNow}); err != nil {
+	if _, err := l.at(richNow).ReverseTransaction(ctx, ReverseTransactionParams{FundID: f.fundID, TransactionID: spend.ID}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := l.PostTransferBetweenAccounts(ctx, PostTransferBetweenAccountsParams{
-		FundID: f.fundID, PurposeID: f.mainID, FromAccountID: f.cashID, ToAccountID: f.bankID, Amount: 70_000, OccurredOn: richOccurred, Now: richNow,
+	if _, err := l.at(richNow).PostTransferBetweenAccounts(ctx, PostTransferBetweenAccountsParams{
+		FundID: f.fundID, PurposeID: f.mainID, FromAccountID: f.cashID, ToAccountID: f.bankID, Amount: 70_000, OccurredOn: richOccurred,
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -232,8 +232,8 @@ func newRichFund(t *testing.T) richFund {
 	post(f.cashID, r.envelope, "out", 20_000, false)
 	r.closedEnv = open("Arisan")
 	post(f.bankID, r.closedEnv, "in", 60_000, false)
-	if _, err := l.CloseIncidentalAndRoll(ctx, CloseIncidentalAndRollParams{
-		FundID: f.fundID, PurposeID: r.closedEnv, AccountID: f.bankID, ClosedOn: richOccurred, Now: richNow,
+	if _, err := l.at(richNow).CloseIncidentalAndRoll(ctx, CloseIncidentalAndRollParams{
+		FundID: f.fundID, PurposeID: r.closedEnv, AccountID: f.bankID, ClosedOn: richOccurred,
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -242,15 +242,15 @@ func newRichFund(t *testing.T) richFund {
 	if _, err := l.PostPurposeCorrection(ctx, PostPurposeCorrectionParams{FundID: f.fundID, TransactionID: wrong.ID, PurposeID: r.envelope}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := l.PostPurposeMove(ctx, PostPurposeMoveParams{
-		FundID: f.fundID, FromPurposeID: f.mainID, ToPurposeID: r.envelope, AccountID: f.cashID, Amount: 15_000, OccurredOn: richOccurred, Now: richNow,
+	if _, err := l.at(richNow).PostPurposeMove(ctx, PostPurposeMoveParams{
+		FundID: f.fundID, FromPurposeID: f.mainID, ToPurposeID: r.envelope, AccountID: f.cashID, Amount: 15_000, OccurredOn: richOccurred,
 	}); err != nil {
 		t.Fatal(err)
 	}
 
 	// A claim someone fronted and nobody paid yet: owed, and inside the total.
-	if _, err := l.CreateReimbursement(ctx, CreateReimbursementParams{
-		FundID: f.fundID, MemberID: ani, PurposeID: f.mainID, Amount: 25_000, IncurredOn: richOccurred, Now: richNow,
+	if _, err := l.at(richNow).CreateReimbursement(ctx, CreateReimbursementParams{
+		FundID: f.fundID, MemberID: ani, PurposeID: f.mainID, Amount: 25_000, IncurredOn: richOccurred,
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -355,7 +355,7 @@ func TestDuesStatusRosterEqualsTheOneAtATimeRoster(t *testing.T) {
 			if row.PaidThrough != "" {
 				through = true
 			}
-			outstanding, err := r.l.OutstandingDuesForMember(ctx, r.f.fundID, row.Member.ID, period, time.Time{})
+			outstanding, err := r.l.OutstandingDuesForMember(ctx, r.f.fundID, row.Member.ID, period)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -402,7 +402,7 @@ func TestBalancesEqualTheOneAtATimeBalances(t *testing.T) {
 	ctx := context.Background()
 	r := newRichFund(t)
 
-	got, err := r.l.Balances(ctx, r.f.fundID, richNow)
+	got, err := r.l.at(richNow).Balances(ctx, r.f.fundID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -450,7 +450,7 @@ func TestBalancesEqualTheOneAtATimeBalances(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	wantIn, wantOut, err := r.l.MonthInOut(ctx, r.f.fundID, richNow)
+	wantIn, wantOut, err := r.l.at(richNow).MonthInOut(ctx, r.f.fundID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -490,7 +490,7 @@ func TestBalancesEqualTheOneAtATimeBalances(t *testing.T) {
 		t.Errorf("pass-through %d, envelope %d, owed %d, want 60000, non-zero, 25000", balanceOf(r.f.passID), balanceOf(r.envelope), got.OwedToMembers)
 	}
 
-	if _, err := r.l.Balances(ctx, 999, richNow); err == nil {
+	if _, err := r.l.at(richNow).Balances(ctx, 999); err == nil {
 		t.Error("Balances(missing fund) = nil error, want an error")
 	}
 }
@@ -511,8 +511,8 @@ func TestRosterAndBalanceReadsDoNotGrowWithTheFund(t *testing.T) {
 		}
 		for i := 0; i < extraPurposes; i++ {
 			p := createPurpose(t, q, sf.f.fundID, "incidental", fmt.Sprintf("Acara %d", i))
-			if _, err := l.PostTransaction(ctx, PostTransactionParams{
-				FundID: sf.f.fundID, AccountID: sf.f.cashID, PurposeID: p, Direction: "in", Amount: 1_000, OccurredOn: "2026-10-01", Now: scaleNow,
+			if _, err := l.at(scaleNow).PostTransaction(ctx, PostTransactionParams{
+				FundID: sf.f.fundID, AccountID: sf.f.cashID, PurposeID: p, Direction: "in", Amount: 1_000, OccurredOn: "2026-10-01",
 			}); err != nil {
 				t.Fatal(err)
 			}
@@ -548,7 +548,7 @@ func TestRosterAndBalanceReadsDoNotGrowWithTheFund(t *testing.T) {
 			}
 		})
 		c.balances = queriesRun(n, func() {
-			if _, err := l.Balances(ctx, sf.f.fundID, scaleNow); err != nil {
+			if _, err := l.at(scaleNow).Balances(ctx, sf.f.fundID); err != nil {
 				t.Fatal(err)
 			}
 		})

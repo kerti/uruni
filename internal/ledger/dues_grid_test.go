@@ -72,7 +72,7 @@ func TestDuesGridEqualsTwelveCallsToDuesStatusForPeriod(t *testing.T) {
 			}
 		}
 
-		got, err := r.l.DuesGrid(ctx, r.f.fundID, end, farNow)
+		got, err := r.l.at(farNow).DuesGrid(ctx, r.f.fundID, end)
 		if err != nil {
 			t.Fatalf("DuesGrid(%s) = %v", end, err)
 		}
@@ -144,7 +144,7 @@ func TestDuesGridNamedCells(t *testing.T) {
 
 	grid := func(end string) DuesGrid {
 		t.Helper()
-		g, err := r.l.DuesGrid(ctx, r.f.fundID, end, richNow)
+		g, err := r.l.at(richNow).DuesGrid(ctx, r.f.fundID, end)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -215,7 +215,7 @@ func TestDuesGridLeadingMonthsAndTheCurrentMonthCap(t *testing.T) {
 	q := store.New(l.db)
 	now := time.Date(2026, time.October, 15, 12, 0, 0, 0, time.UTC)
 
-	empty, err := l.DuesGrid(ctx, f.fundID, "", now)
+	empty, err := l.at(now).DuesGrid(ctx, f.fundID, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -249,7 +249,7 @@ func TestDuesGridLeadingMonthsAndTheCurrentMonthCap(t *testing.T) {
 		{"the current month is read in the fund's zone", "", time.Date(2026, time.September, 30, 18, 0, 0, 0, time.UTC), "2026-07", "2026-10", 4},
 		{"and the host's month does not leak in", "", time.Date(2026, time.September, 30, 12, 0, 0, 0, time.UTC), "2026-07", "2026-09", 3},
 	} {
-		got, err := l.DuesGrid(ctx, f.fundID, tt.end, tt.now)
+		got, err := l.at(tt.now).DuesGrid(ctx, f.fundID, tt.end)
 		if err != nil {
 			t.Fatalf("%s: %v", tt.name, err)
 		}
@@ -277,7 +277,7 @@ func TestDuesGridLeadingMonthsAndTheCurrentMonthCap(t *testing.T) {
 	// ago in this variant.
 	old := "2020-01-01"
 	createDuesMember(t, q, f.fundID, duesMemberParams{name: "Citra", tierID: &tier, joinedOn: &old})
-	got, err := l.DuesGrid(ctx, f.fundID, "", now)
+	got, err := l.at(now).DuesGrid(ctx, f.fundID, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -293,11 +293,11 @@ func TestDuesGridLeadingMonthsAndTheCurrentMonthCap(t *testing.T) {
 	}
 
 	for _, bad := range []string{"2026-13", "2026", "junk", "2026-1"} {
-		if _, err := l.DuesGrid(ctx, f.fundID, bad, now); !errors.Is(err, ErrInvalidArgument) {
+		if _, err := l.at(now).DuesGrid(ctx, f.fundID, bad); !errors.Is(err, ErrInvalidArgument) {
 			t.Errorf("DuesGrid(end %q) = %v, want ErrInvalidArgument", bad, err)
 		}
 	}
-	if _, err := l.DuesGrid(ctx, 999, "", now); err == nil {
+	if _, err := l.at(now).DuesGrid(ctx, 999, ""); err == nil {
 		t.Error("DuesGrid(missing fund) = nil error, want an error")
 	}
 }
@@ -318,7 +318,7 @@ func TestDuesGridFollowsPaymentsAndTheirReversal(t *testing.T) {
 
 	cells := func() []DuesGridCell {
 		t.Helper()
-		g, err := l.DuesGrid(ctx, f.fundID, "", now)
+		g, err := l.at(now).DuesGrid(ctx, f.fundID, "")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -335,8 +335,8 @@ func TestDuesGridFollowsPaymentsAndTheirReversal(t *testing.T) {
 	}
 	want("nothing paid", DuesCellUnpaid, DuesCellUnpaid, DuesCellUnpaid)
 
-	posted, err := l.PostDuesPayments(ctx, PostDuesPaymentsParams{
-		FundID: f.fundID, AccountID: f.cashID, MemberID: id, OccurredOn: "2026-10-10", Now: now,
+	posted, err := l.at(now).PostDuesPayments(ctx, PostDuesPaymentsParams{
+		FundID: f.fundID, AccountID: f.cashID, MemberID: id, OccurredOn: "2026-10-10",
 		Periods: []PeriodAmount{{DuesPeriod: "2026-08", Amount: money.Amount(10_000)}, {DuesPeriod: "2026-09", Amount: money.Amount(4_000)}},
 	})
 	if err != nil {
@@ -344,14 +344,14 @@ func TestDuesGridFollowsPaymentsAndTheirReversal(t *testing.T) {
 	}
 	want("one paid, one part-paid", DuesCellPaid, DuesCellPartial, DuesCellUnpaid)
 
-	if _, err := l.ReverseTransaction(ctx, ReverseTransactionParams{FundID: f.fundID, TransactionID: posted[0].ID, Now: now}); err != nil {
+	if _, err := l.at(now).ReverseTransaction(ctx, ReverseTransactionParams{FundID: f.fundID, TransactionID: posted[0].ID}); err != nil {
 		t.Fatal(err)
 	}
 	want("the paid one reversed", DuesCellUnpaid, DuesCellPartial, DuesCellUnpaid)
 
 	// Paid ahead of the current month still draws paid in every month it covers.
-	if _, err := l.PostDuesPayments(ctx, PostDuesPaymentsParams{
-		FundID: f.fundID, AccountID: f.cashID, MemberID: id, OccurredOn: "2026-10-11", Now: now,
+	if _, err := l.at(now).PostDuesPayments(ctx, PostDuesPaymentsParams{
+		FundID: f.fundID, AccountID: f.cashID, MemberID: id, OccurredOn: "2026-10-11",
 		Periods: []PeriodAmount{{DuesPeriod: "2026-10", Amount: money.Amount(10_000)}, {DuesPeriod: "2026-11", Amount: money.Amount(10_000)}},
 	}); err != nil {
 		t.Fatal(err)
@@ -369,7 +369,7 @@ func TestDuesGridReadsDoNotGrowWithTheFund(t *testing.T) {
 		var grid DuesGrid
 		cost := queriesRun(n, func() {
 			var err error
-			if grid, err = l.DuesGrid(ctx, sf.f.fundID, scalePeriod, scaleNow); err != nil {
+			if grid, err = l.at(scaleNow).DuesGrid(ctx, sf.f.fundID, scalePeriod); err != nil {
 				t.Fatal(err)
 			}
 		})

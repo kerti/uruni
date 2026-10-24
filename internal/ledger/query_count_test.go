@@ -155,8 +155,8 @@ func newScaleFund(t *testing.T, l *Ledger, members, months int) scaleFund {
 		if len(periods) == 0 {
 			continue
 		}
-		if _, err := l.PostDuesPayments(ctx, PostDuesPaymentsParams{
-			FundID: f.fundID, AccountID: f.cashID, MemberID: id, OccurredOn: "2026-10-01", Periods: periods, Now: scaleNow,
+		if _, err := l.at(scaleNow).PostDuesPayments(ctx, PostDuesPaymentsParams{
+			FundID: f.fundID, AccountID: f.cashID, MemberID: id, OccurredOn: "2026-10-01", Periods: periods,
 		}); err != nil {
 			t.Fatalf("PostDuesPayments(member %d) = %v, want no error", id, err)
 		}

@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"testing"
-	"time"
 
 	"github.com/kerti/uruni/internal/store"
 )
@@ -22,7 +21,7 @@ func TestRetireAccountRefusesALocationThatHoldsMoney(t *testing.T) {
 
 	retire := func() error {
 		on := "2026-08-31"
-		_, err := l.UpdateAccount(ctx, f.fundID, store.UpdateAccountParams{ID: f.bankID, SetInactiveOn: 1, InactiveOn: &on}, time.Time{})
+		_, err := l.UpdateAccount(ctx, f.fundID, store.UpdateAccountParams{ID: f.bankID, SetInactiveOn: 1, InactiveOn: &on})
 		return err
 	}
 	if err := retire(); !errors.Is(err, ErrAccountHoldsMoney) {
@@ -62,7 +61,7 @@ func TestRetireAccountRefusesANegativeBalance(t *testing.T) {
 		t.Fatalf("PostTransaction() = %v, want no error", err)
 	}
 	on := "2026-08-31"
-	if _, err := l.UpdateAccount(ctx, f.fundID, store.UpdateAccountParams{ID: f.cashID, SetInactiveOn: 1, InactiveOn: &on}, time.Time{}); !errors.Is(err, ErrAccountBalanceNegative) {
+	if _, err := l.UpdateAccount(ctx, f.fundID, store.UpdateAccountParams{ID: f.cashID, SetInactiveOn: 1, InactiveOn: &on}); !errors.Is(err, ErrAccountBalanceNegative) {
 		t.Fatalf("UpdateAccount(retire, at -5000) = %v, want an error wrapping ErrAccountBalanceNegative", err)
 	}
 }
@@ -81,7 +80,7 @@ func TestReinstatingALocationThatHoldsMoneyIsAllowed(t *testing.T) {
 		t.Fatalf("retiring through the store (pre-#474 data) = %v, want no error", err)
 	}
 
-	reinstated, err := l.UpdateAccount(ctx, f.fundID, store.UpdateAccountParams{ID: f.bankID, SetInactiveOn: 1}, time.Time{})
+	reinstated, err := l.UpdateAccount(ctx, f.fundID, store.UpdateAccountParams{ID: f.bankID, SetInactiveOn: 1})
 	if err != nil {
 		t.Fatalf("UpdateAccount(reinstate, holding 100000) = %v, want no error", err)
 	}

@@ -65,7 +65,6 @@ func (a *api) createTransfer(w http.ResponseWriter, r *http.Request) {
 
 	idem := idempotencyFrom(r)
 	transfer, err := a.ledger.PostTransferBetweenAccounts(r.Context(), ledger.PostTransferBetweenAccountsParams{
-		Now:           a.now(),
 		FundID:        fund.ID,
 		PurposeID:     req.PurposeID,
 		FromAccountID: req.FromAccountID,

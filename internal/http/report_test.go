@@ -34,7 +34,7 @@ type reportFixture struct {
 func newReportFixture(t *testing.T, fundName string) reportFixture {
 	t.Helper()
 	sqlDB := testStoreDB(t)
-	l := ledger.New(sqlDB)
+	l := ledger.New(sqlDB, ledger.WithClock(fixedClock(reportNow)))
 	res, err := l.SetUpFund(context.Background(), ledger.SetUpFundParams{
 		FundName: fundName,
 		Accounts: []ledger.AccountInput{{Kind: "cash", Name: "Tunai"}},
@@ -43,8 +43,8 @@ func newReportFixture(t *testing.T, fundName string) reportFixture {
 		t.Fatalf("SetUpFund() = %v, want no error", err)
 	}
 	r := chi.NewRouter()
-	r.Get("/report/{slug}", reportHandler(l, store.New(sqlDB), testLogger(), func() time.Time { return reportNow }))
-	r.Get("/report/{slug}/pdf", reportPDFHandler(l, store.New(sqlDB), testLogger(), func() time.Time { return reportNow }))
+	r.Get("/report/{slug}", reportHandler(l, store.New(sqlDB), testLogger()))
+	r.Get("/report/{slug}/pdf", reportPDFHandler(l, store.New(sqlDB), testLogger()))
 	return reportFixture{db: sqlDB, router: r, l: l, fund: res.Fund, cashID: res.Accounts[0].ID, mainID: res.MainPurposeID}
 }
 

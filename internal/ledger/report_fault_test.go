@@ -204,9 +204,9 @@ func TestMonthlyReportSurfacesEveryReadFailure(t *testing.T) {
 	} {
 		t.Run(method, func(t *testing.T) {
 			l, fundID := faultyReportFixture(t)
-			broken := &Ledger{db: l.db, q: faultQuerier{Querier: l.q, fail: method}}
+			broken := l.onQuerier(faultQuerier{Querier: l.q, fail: method})
 
-			_, err := broken.monthlyReport(context.Background(), ReportParams{FundID: fundID, Month: "2026-09", Now: reportNow})
+			_, err := broken.at(reportNow).monthlyReport(context.Background(), ReportParams{FundID: fundID, Month: "2026-09"})
 			if !errors.Is(err, errFault) {
 				t.Fatalf("monthlyReport() with %s failing = %v, want the injected fault, not a partial report", method, err)
 			}
@@ -237,9 +237,9 @@ func TestMonthlyReportRefusesALedgerShapeItCannotHaveWritten(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			l, fundID := faultyReportFixture(t)
-			odd := &Ledger{db: l.db, q: faultQuerier{Querier: l.q, rows: []store.ListReportTransactionsRow{tt.row}}}
+			odd := l.onQuerier(faultQuerier{Querier: l.q, rows: []store.ListReportTransactionsRow{tt.row}})
 
-			_, err := odd.monthlyReport(context.Background(), ReportParams{FundID: fundID, Month: "2026-09", Now: reportNow})
+			_, err := odd.at(reportNow).monthlyReport(context.Background(), ReportParams{FundID: fundID, Month: "2026-09"})
 			if err == nil || !strings.Contains(err.Error(), tt.want) {
 				t.Fatalf("monthlyReport() = %v, want an error mentioning %q - a trust report says the ledger is broken rather than dropping a row", err, tt.want)
 			}
@@ -264,9 +264,9 @@ func TestMonthlyReportRefusesCorrectionsThatAreNotAPath(t *testing.T) {
 		}
 	}
 	l, fundID := faultyReportFixture(t)
-	odd := &Ledger{db: l.db, q: faultQuerier{Querier: l.q, rows: []store.ListReportTransactionsRow{leg(1, 1, 2), leg(2, 1, 3)}}}
+	odd := l.onQuerier(faultQuerier{Querier: l.q, rows: []store.ListReportTransactionsRow{leg(1, 1, 2), leg(2, 1, 3)}})
 
-	_, err := odd.monthlyReport(context.Background(), ReportParams{FundID: fundID, Month: "2026-09", Now: reportNow})
+	_, err := odd.at(reportNow).monthlyReport(context.Background(), ReportParams{FundID: fundID, Month: "2026-09"})
 	if err == nil || !strings.Contains(err.Error(), "do not form a path") {
 		t.Fatalf("monthlyReport() = %v, want an error naming the broken path", err)
 	}
@@ -286,9 +286,9 @@ func TestMonthlyReportRefusesACorrectionWithNoDirection(t *testing.T) {
 		TransferFromPurposeName: str("A"), TransferToPurposeName: str("B"),
 	}
 	l, fundID := faultyReportFixture(t)
-	odd := &Ledger{db: l.db, q: faultQuerier{Querier: l.q, rows: []store.ListReportTransactionsRow{row}}}
+	odd := l.onQuerier(faultQuerier{Querier: l.q, rows: []store.ListReportTransactionsRow{row}})
 
-	_, err := odd.monthlyReport(context.Background(), ReportParams{FundID: fundID, Month: "2026-09", Now: reportNow})
+	_, err := odd.at(reportNow).monthlyReport(context.Background(), ReportParams{FundID: fundID, Month: "2026-09"})
 	if err == nil || !strings.Contains(err.Error(), "carries no direction") {
 		t.Fatalf("monthlyReport() = %v, want an error naming the missing direction", err)
 	}
@@ -298,9 +298,9 @@ func TestMonthlyReportRefusesAMalformedFirstTransactionDate(t *testing.T) {
 	t.Parallel()
 	l, fundID := faultyReportFixture(t)
 	bad := "20x6-09-10"
-	odd := &Ledger{db: l.db, q: faultQuerier{Querier: l.q, firstDate: &bad}}
+	odd := l.onQuerier(faultQuerier{Querier: l.q, firstDate: &bad})
 
-	_, err := odd.monthlyReport(context.Background(), ReportParams{FundID: fundID, Month: "2026-09", Now: reportNow})
+	_, err := odd.at(reportNow).monthlyReport(context.Background(), ReportParams{FundID: fundID, Month: "2026-09"})
 	if err == nil || !strings.Contains(err.Error(), "first transaction date") {
 		t.Fatalf("monthlyReport() = %v, want an error naming the first transaction date", err)
 	}
@@ -309,9 +309,9 @@ func TestMonthlyReportRefusesAMalformedFirstTransactionDate(t *testing.T) {
 func TestMonthlyReportSurfacesAClosedEnvelopesBalanceFailure(t *testing.T) {
 	t.Parallel()
 	l, fundID, closedPurpose := faultyReportFixtureWithClosed(t)
-	broken := &Ledger{db: l.db, q: faultQuerier{Querier: l.q, failPurpose: closedPurpose}}
+	broken := l.onQuerier(faultQuerier{Querier: l.q, failPurpose: closedPurpose})
 
-	_, err := broken.monthlyReport(context.Background(), ReportParams{FundID: fundID, Month: "2026-09", Now: reportNow})
+	_, err := broken.at(reportNow).monthlyReport(context.Background(), ReportParams{FundID: fundID, Month: "2026-09"})
 	if !errors.Is(err, errFault) {
 		t.Fatalf("monthlyReport() = %v, want the injected fault from the closed envelope's balance", err)
 	}
@@ -329,8 +329,8 @@ func TestMonthlyReportOwnSumsRefuseToWrap(t *testing.T) {
 
 	t.Run("totals", func(t *testing.T) {
 		l, fundID := faultyReportFixture(t)
-		odd := &Ledger{db: l.db, q: faultQuerier{Querier: l.q, rows: []store.ListReportTransactionsRow{row, row}}}
-		_, err := odd.monthlyReport(context.Background(), ReportParams{FundID: fundID, Month: "2026-09", Now: reportNow})
+		odd := l.onQuerier(faultQuerier{Querier: l.q, rows: []store.ListReportTransactionsRow{row, row}})
+		_, err := odd.at(reportNow).monthlyReport(context.Background(), ReportParams{FundID: fundID, Month: "2026-09"})
 		if err == nil || !strings.Contains(err.Error(), "totalling") {
 			t.Fatalf("monthlyReport() = %v, want a totalling overflow", err)
 		}
@@ -339,8 +339,8 @@ func TestMonthlyReportOwnSumsRefuseToWrap(t *testing.T) {
 	t.Run("open differences", func(t *testing.T) {
 		l, fundID := faultyReportFixture(t)
 		line := store.ReportOpenReconciliationLinesRow{RemainderAmount: huge}
-		odd := &Ledger{db: l.db, q: faultQuerier{Querier: l.q, openLines: []store.ReportOpenReconciliationLinesRow{line, line}}}
-		_, err := odd.monthlyReport(context.Background(), ReportParams{FundID: fundID, Month: "2026-09", Now: reportNow})
+		odd := l.onQuerier(faultQuerier{Querier: l.q, openLines: []store.ReportOpenReconciliationLinesRow{line, line}})
+		_, err := odd.at(reportNow).monthlyReport(context.Background(), ReportParams{FundID: fundID, Month: "2026-09"})
 		if err == nil || !strings.Contains(err.Error(), "summing open differences") {
 			t.Fatalf("monthlyReport() = %v, want a difference overflow", err)
 		}

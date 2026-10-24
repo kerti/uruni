@@ -28,9 +28,9 @@ func TestGetTransactionsRowsCarryTheReversalFacts(t *testing.T) {
 	now := time.Date(2026, 10, 2, 3, 0, 0, 0, time.UTC) // 2 October, 10:00 in Asia/Jakarta
 	post := func(direction string, amount money.Amount, on string) int64 {
 		t.Helper()
-		row, err := f.l.PostTransaction(ctx, ledger.PostTransactionParams{
+		row, err := ledgerAt(f.db, time.Date(2026, 12, 31, 3, 0, 0, 0, time.UTC)).PostTransaction(ctx, ledger.PostTransactionParams{
 			FundID: f.fund.ID, AccountID: f.cashID, PurposeID: f.mainID, Direction: direction, Amount: amount,
-			OccurredOn: on, Now: time.Date(2026, 12, 31, 3, 0, 0, 0, time.UTC),
+			OccurredOn: on,
 		})
 		if err != nil {
 			t.Fatalf("PostTransaction(%s %d on %s) = %v", direction, amount, on, err)
@@ -49,7 +49,7 @@ func TestGetTransactionsRowsCarryTheReversalFacts(t *testing.T) {
 	countedOut := post("out", 12_000, "2026-07-25")
 	ahead := post("in", 4_000, "2026-12-20") // from before #632's ceiling: dated after today
 	// A cek kas that finds 1.000 too little and adds the entry that explains it.
-	rec, err := f.l.TakeReconciliation(ctx, ledger.TakeReconciliationParams{FundID: f.fund.ID, Now: now, Counts: []ledger.AccountCount{
+	rec, err := ledgerAt(f.db, now).TakeReconciliation(ctx, ledger.TakeReconciliationParams{FundID: f.fund.ID, Counts: []ledger.AccountCount{
 		{AccountID: f.cashID, ActualAmount: balance() - 1_000, Resolution: "entry_added",
 			Fix: &ledger.Fix{PurposeID: f.mainID, Direction: "out", Amount: 1_000, OccurredOn: "2026-10-02"}},
 	}})
@@ -72,11 +72,11 @@ func TestGetTransactionsRowsCarryTheReversalFacts(t *testing.T) {
 	uncounted := post("in", 5_000, "2026-10-01")
 	uncountedReversed := post("in", 6_000, "2026-10-01")
 
-	reversalOfCounted, err := f.l.ReverseTransaction(ctx, ledger.ReverseTransactionParams{FundID: f.fund.ID, TransactionID: countedOut, Now: now})
+	reversalOfCounted, err := ledgerAt(f.db, now).ReverseTransaction(ctx, ledger.ReverseTransactionParams{FundID: f.fund.ID, TransactionID: countedOut})
 	if err != nil {
 		t.Fatalf("ReverseTransaction(counted) = %v", err)
 	}
-	reversalOfUncounted, err := f.l.ReverseTransaction(ctx, ledger.ReverseTransactionParams{FundID: f.fund.ID, TransactionID: uncountedReversed, Now: now})
+	reversalOfUncounted, err := ledgerAt(f.db, now).ReverseTransaction(ctx, ledger.ReverseTransactionParams{FundID: f.fund.ID, TransactionID: uncountedReversed})
 	if err != nil {
 		t.Fatalf("ReverseTransaction(uncounted) = %v", err)
 	}
@@ -141,7 +141,7 @@ func TestANegativeTotalKeluarIsPrintedEverywhere(t *testing.T) {
 	}
 	// Reversed on 10 August by the injected clock: a later month than the spend.
 	august := time.Date(2026, 8, 10, 3, 0, 0, 0, time.UTC)
-	reversal, err := f.l.ReverseTransaction(ctx, ledger.ReverseTransactionParams{FundID: f.fund.ID, TransactionID: out.ID, Now: august})
+	reversal, err := ledgerAt(f.db, august).ReverseTransaction(ctx, ledger.ReverseTransactionParams{FundID: f.fund.ID, TransactionID: out.ID})
 	if err != nil {
 		t.Fatalf("ReverseTransaction() = %v", err)
 	}
@@ -207,9 +207,9 @@ func TestReversalRefusalsReachTheWireWithTheirCodes(t *testing.T) {
 
 	post := func(direction string, amount money.Amount, on string, purpose int64) int64 {
 		t.Helper()
-		row, err := f.l.PostTransaction(ctx, ledger.PostTransactionParams{
+		row, err := ledgerAt(f.db, ahead).PostTransaction(ctx, ledger.PostTransactionParams{
 			FundID: f.fund.ID, AccountID: f.cashID, PurposeID: purpose, Direction: direction,
-			Amount: amount, OccurredOn: on, Now: ahead,
+			Amount: amount, OccurredOn: on,
 		})
 		if err != nil {
 			t.Fatalf("PostTransaction(%s %d on %s) = %v", direction, amount, on, err)
@@ -248,17 +248,17 @@ func TestReversalRefusalsReachTheWireWithTheirCodes(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	payout, err := f.l.SettleReimbursement(ctx, ledger.SettleReimbursementParams{
-		FundID: f.fund.ID, ReimbursementID: claim.ID, AccountID: f.cashID, OccurredOn: "2026-07-04", Now: today,
+	payout, err := ledgerAt(f.db, today).SettleReimbursement(ctx, ledger.SettleReimbursementParams{
+		FundID: f.fund.ID, ReimbursementID: claim.ID, AccountID: f.cashID, OccurredOn: "2026-07-04",
 	})
 	if err != nil {
 		t.Fatalf("SettleReimbursement() = %v", err)
 	}
 
 	// A transfer leg.
-	transfer, err := f.l.PostTransferBetweenAccounts(ctx, ledger.PostTransferBetweenAccountsParams{
+	transfer, err := ledgerAt(f.db, today).PostTransferBetweenAccounts(ctx, ledger.PostTransferBetweenAccountsParams{
 		FundID: f.fund.ID, PurposeID: f.mainID, FromAccountID: f.cashID, ToAccountID: bank.ID,
-		Amount: 5_000, OccurredOn: "2026-07-05", Now: today,
+		Amount: 5_000, OccurredOn: "2026-07-05",
 	})
 	if err != nil {
 		t.Fatalf("PostTransferBetweenAccounts() = %v", err)
@@ -285,7 +285,7 @@ func TestReversalRefusalsReachTheWireWithTheirCodes(t *testing.T) {
 
 	// A reversed row, for reverse-then-correct.
 	reversed := post("out", 3_000, "2026-07-07", f.mainID)
-	if _, err := f.l.ReverseTransaction(ctx, ledger.ReverseTransactionParams{FundID: f.fund.ID, TransactionID: reversed, Now: today}); err != nil {
+	if _, err := ledgerAt(f.db, today).ReverseTransaction(ctx, ledger.ReverseTransactionParams{FundID: f.fund.ID, TransactionID: reversed}); err != nil {
 		t.Fatalf("ReverseTransaction() = %v", err)
 	}
 
@@ -299,7 +299,7 @@ func TestReversalRefusalsReachTheWireWithTheirCodes(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	count, err := f.l.TakeReconciliation(ctx, ledger.TakeReconciliationParams{FundID: f.fund.ID, Now: today, Counts: []ledger.AccountCount{
+	count, err := ledgerAt(f.db, today).TakeReconciliation(ctx, ledger.TakeReconciliationParams{FundID: f.fund.ID, Counts: []ledger.AccountCount{
 		{AccountID: f.cashID, ActualAmount: cashNow - 1_000, Resolution: "entry_added",
 			Fix: &ledger.Fix{PurposeID: f.mainID, Direction: "out", Amount: 1_000, OccurredOn: "2026-10-02"}},
 		{AccountID: bank.ID, ActualAmount: bankNow, Resolution: "matched"},
@@ -320,7 +320,7 @@ func TestReversalRefusalsReachTheWireWithTheirCodes(t *testing.T) {
 	aheadRow := post("in", 4_000, "2026-12-20", f.mainID)
 	cashNow, _ = f.l.AccountBalance(ctx, f.fund.ID, f.cashID)
 	bankNow, _ = f.l.AccountBalance(ctx, f.fund.ID, bank.ID)
-	if _, err := f.l.TakeReconciliation(ctx, ledger.TakeReconciliationParams{FundID: f.fund.ID, Now: today, Counts: []ledger.AccountCount{
+	if _, err := ledgerAt(f.db, today).TakeReconciliation(ctx, ledger.TakeReconciliationParams{FundID: f.fund.ID, Counts: []ledger.AccountCount{
 		{AccountID: f.cashID, ActualAmount: cashNow, Resolution: "matched"},
 		{AccountID: bank.ID, ActualAmount: bankNow, Resolution: "matched"},
 	}}); err != nil {
@@ -377,8 +377,8 @@ func TestTheReportAndPDFReadAReversedPairAsLinked(t *testing.T) {
 	if err != nil {
 		t.Fatalf("PostTransaction() = %v", err)
 	}
-	if _, err := f.l.ReverseTransaction(ctx, ledger.ReverseTransactionParams{
-		FundID: f.fund.ID, TransactionID: out.ID, Now: time.Date(2026, 7, 28, 3, 0, 0, 0, time.UTC),
+	if _, err := ledgerAt(f.db, time.Date(2026, 7, 28, 3, 0, 0, 0, time.UTC)).ReverseTransaction(ctx, ledger.ReverseTransactionParams{
+		FundID: f.fund.ID, TransactionID: out.ID,
 	}); err != nil {
 		t.Fatalf("ReverseTransaction() = %v", err)
 	}

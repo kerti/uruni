@@ -213,8 +213,7 @@ func FundLocation(f store.Fund) (*time.Location, error) {
 // "you owe nothing" is a normal answer.
 //
 // through bounds the end of the range ("YYYY-MM"); empty defaults to
-// CurrentDuesPeriod(now, the fund's zone). now is injected so a test can stand
-// on either side of a month boundary (as ReportParams.Now does); it is read
+// CurrentDuesPeriod(the ledger's clock, the fund's zone); the clock is read
 // only when through is empty.
 //
 // The range:
@@ -242,7 +241,7 @@ func FundLocation(f store.Fund) (*time.Location, error) {
 //
 // It uses l.q directly rather than withTx, like DuesStatusForPeriod (ADR-027).
 // The tier timeline and rates are read once and folded per period.
-func (l *Ledger) OutstandingDuesForMember(ctx context.Context, fundID, memberID int64, through string, now time.Time) ([]OutstandingDuesPeriod, error) {
+func (l *Ledger) OutstandingDuesForMember(ctx context.Context, fundID, memberID int64, through string) ([]OutstandingDuesPeriod, error) {
 	if through == "" {
 		fund, err := l.q.GetFund(ctx, fundID)
 		if err != nil {
@@ -252,7 +251,7 @@ func (l *Ledger) OutstandingDuesForMember(ctx context.Context, fundID, memberID 
 		if err != nil {
 			return nil, err
 		}
-		through = CurrentDuesPeriod(now, loc)
+		through = CurrentDuesPeriod(l.now(), loc)
 	} else if err := checkPeriodShape("through", through); err != nil {
 		return nil, err
 	}
@@ -381,7 +380,7 @@ func (l *Ledger) ArrearsMonthsForMember(ctx context.Context, fundID, memberID in
 	}
 	through := t.AddDate(0, -1, 0).Format(duesPeriodLayout)
 
-	outstanding, err := l.OutstandingDuesForMember(ctx, fundID, memberID, through, time.Time{}) // through is non-empty: now is never read
+	outstanding, err := l.OutstandingDuesForMember(ctx, fundID, memberID, through) // through is non-empty: the clock is never read
 	if err != nil {
 		return 0, err
 	}

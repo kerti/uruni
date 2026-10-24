@@ -19,7 +19,9 @@ func TestGetBalancesMonthMatchesTheReportsRunningWalk(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
 	sqlDB := testStoreDB(t)
-	l := ledger.New(sqlDB)
+	// 2026-10-02 10:00 in Asia/Jakarta.
+	now := time.Date(2026, 10, 2, 3, 0, 0, 0, time.UTC)
+	l := ledger.New(sqlDB, ledger.WithClock(func() time.Time { return now }))
 	res, err := l.SetUpFund(ctx, ledger.SetUpFundParams{
 		FundName: "Kas RT 05",
 		Accounts: []ledger.AccountInput{{Kind: "cash", Name: "Tunai"}, {Kind: "bank", Name: "Bank"}},
@@ -29,8 +31,6 @@ func TestGetBalancesMonthMatchesTheReportsRunningWalk(t *testing.T) {
 	}
 	fundID, cash, bank, main := res.Fund.ID, res.Accounts[0].ID, res.Accounts[1].ID, res.MainPurposeID
 
-	// 2026-10-02 10:00 in Asia/Jakarta.
-	now := time.Date(2026, 10, 2, 3, 0, 0, 0, time.UTC)
 	post := func(direction string, amount int64, on string, adjustment bool) int64 {
 		t.Helper()
 		tx, err := l.PostTransaction(ctx, ledger.PostTransactionParams{
@@ -79,7 +79,7 @@ func TestGetBalancesMonthMatchesTheReportsRunningWalk(t *testing.T) {
 		t.Fatalf("PostPurposeMove() = %v", err)
 	}
 
-	report, err := l.MonthlyReport(ctx, ledger.ReportParams{FundID: fundID, Now: now})
+	report, err := l.MonthlyReport(ctx, ledger.ReportParams{FundID: fundID})
 	if err != nil {
 		t.Fatalf("MonthlyReport() = %v", err)
 	}

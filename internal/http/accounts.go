@@ -97,7 +97,6 @@ func (a *api) createAccount(w http.ResponseWriter, r *http.Request) {
 
 	idem := idempotencyFrom(r)
 	account, err := a.ledger.CreateAccount(r.Context(), ledger.CreateAccountParams{
-		Now:            a.now(),
 		FundID:         fund.ID,
 		Kind:           req.Kind,
 		Name:           req.Name,
@@ -258,7 +257,7 @@ func (a *api) updateAccount(w http.ResponseWriter, r *http.Request) {
 		params.InactiveOn = req.InactiveOn
 	}
 
-	updated, err := a.ledger.UpdateAccount(r.Context(), account.FundID, params, a.now())
+	updated, err := a.ledger.UpdateAccount(r.Context(), account.FundID, params)
 	if err != nil {
 		mapLedgerError(w, a.log(r), err)
 		return

@@ -126,7 +126,7 @@ func TestReversalWalkFootsEveryMonthForTheFund(t *testing.T) {
 	}
 	// Beranda reads the same walk (Arus kas bulan ini), and the negative Keluar
 	// reaches it as it is.
-	in, out, err := l.MonthInOut(context.Background(), w.fundID, onTheDay("2026-08-20"))
+	in, out, err := l.at(onTheDay("2026-08-20")).MonthInOut(context.Background(), w.fundID)
 	if err != nil {
 		t.Fatalf("MonthInOut() = %v, want no error", err)
 	}

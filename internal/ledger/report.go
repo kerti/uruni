@@ -57,10 +57,6 @@ type ReportParams struct {
 	// DuesStatus is ReportDuesUnpaid, ReportDuesPartial, ReportDuesPaid or
 	// "". It filters the dues table only, never the transactions (ADR-035).
 	DuesStatus string
-
-	// Now is the current instant, injectable so a test can stand on either side
-	// of a month boundary in the fund's time zone; the zero value means time.Now().
-	Now time.Time
 }
 
 // Report is one fund's public report for one month (ADR-035): the single
@@ -349,7 +345,7 @@ func (l *Ledger) MonthlyReport(ctx context.Context, p ReportParams) (Report, err
 	var r Report
 	err := l.withTx(ctx, func(ctx context.Context, q store.Querier) error {
 		var err error
-		r, err = (&Ledger{db: l.db, q: q}).monthlyReport(ctx, p)
+		r, err = l.onQuerier(q).monthlyReport(ctx, p)
 		return err
 	})
 	return r, err
@@ -375,10 +371,7 @@ func (l *Ledger) monthlyReport(ctx context.Context, p ReportParams) (Report, err
 		return Report{}, err
 	}
 
-	now := p.Now
-	if now.IsZero() {
-		now = time.Now()
-	}
+	now := l.now()
 	today := now.In(loc)
 	currentMonth := today.Format(reportMonthLayout)
 
@@ -461,7 +454,7 @@ func (l *Ledger) monthlyReport(ctx context.Context, p ReportParams) (Report, err
 		return Report{}, err
 	}
 	// The running month passes its own month; DuesGrid caps at the current one.
-	if r.DuesGrid, err = l.DuesGrid(ctx, p.FundID, month, now); err != nil {
+	if r.DuesGrid, err = l.duesGrid(ctx, p.FundID, month, now); err != nil {
 		return Report{}, err
 	}
 	if r.Envelopes, err = l.reportEnvelopes(ctx, p.FundID, month, purposes, envelopes, b); err != nil {
@@ -628,13 +621,13 @@ func envelopeOpenAt(e store.Incidental, through *string) bool {
 // MonthInOut is the running month's In and Out for the whole fund, as Beranda
 // shows them (ADR-038): the figures the report's running month carries as
 // Walk.In and Walk.Out, read through the same reportRows over the same
-// unbounded, unfiltered month. The month is read from now in the fund's time zone. In
+// unbounded, unfiltered month. The month is read from the ledger clock in the fund's time zone. In
 // is net of the reversals of income and Out of the reversals of spending, so
 // either can be negative (ADR-042); Out is otherwise a magnitude.
-func (l *Ledger) MonthInOut(ctx context.Context, fundID int64, now time.Time) (in, out money.Amount, err error) {
+func (l *Ledger) MonthInOut(ctx context.Context, fundID int64) (in, out money.Amount, err error) {
 	err = l.withTx(ctx, func(ctx context.Context, q store.Querier) error {
 		var err error
-		in, out, err = (&Ledger{db: l.db, q: q}).monthInOut(ctx, fundID, now)
+		in, out, err = l.onQuerier(q).monthInOut(ctx, fundID, l.now())
 		return err
 	})
 	return in, out, err
@@ -644,9 +637,6 @@ func (l *Ledger) MonthInOut(ctx context.Context, fundID int64, now time.Time) (i
 // caller already opened (Balances reads it beside the rest of the home answer),
 // or the pool.
 func (l *Ledger) monthInOut(ctx context.Context, fundID int64, now time.Time) (in, out money.Amount, err error) {
-	if now.IsZero() {
-		now = time.Now()
-	}
 	fund, err := l.q.GetFund(ctx, fundID)
 	if err != nil {
 		return 0, 0, fmt.Errorf("fetching fund: %w", err)

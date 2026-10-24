@@ -113,7 +113,7 @@ func TestMonthlyReportPastMonthIsAsOfItsLastDay(t *testing.T) {
 	l := newTestLedger(t)
 	s := newMonthEndScenario(t, l)
 
-	aug := monthlyReport(t, l, ReportParams{FundID: s.f.fundID, Month: "2026-08", Now: reportNow})
+	aug := monthlyReportAt(t, l, reportNow, ReportParams{FundID: s.f.fundID, Month: "2026-08"})
 	if aug.Running || aug.AsOf != "2026-08-31" {
 		t.Errorf("August Running, AsOf = %v, %q; want false, 2026-08-31", aug.Running, aug.AsOf)
 	}
@@ -147,7 +147,7 @@ func TestMonthlyReportPastMonthIsAsOfItsLastDay(t *testing.T) {
 		t.Errorf("August envelope card's givers sum to %d, want 20000 - the September gift had not happened", given)
 	}
 
-	sep := monthlyReport(t, l, ReportParams{FundID: s.f.fundID, Month: "2026-09", Now: reportNow})
+	sep := monthlyReportAt(t, l, reportNow, ReportParams{FundID: s.f.fundID, Month: "2026-09"})
 	if sep.Running || sep.AsOf != "2026-09-30" {
 		t.Errorf("September Running, AsOf = %v, %q; want false, 2026-09-30", sep.Running, sep.AsOf)
 	}
@@ -176,7 +176,7 @@ func TestMonthlyReportRunningMonthIsToday(t *testing.T) {
 	s := newMonthEndScenario(t, l)
 	ctx := context.Background()
 
-	oct := monthlyReport(t, l, ReportParams{FundID: s.f.fundID, Now: reportNow})
+	oct := monthlyReportAt(t, l, reportNow, ReportParams{FundID: s.f.fundID})
 	if !oct.Running || oct.Month != "2026-10" || oct.AsOf != "2026-10-02" {
 		t.Errorf("Running, Month, AsOf = %v, %q, %q; want true, 2026-10, 2026-10-02", oct.Running, oct.Month, oct.AsOf)
 	}
@@ -222,7 +222,7 @@ func TestMonthlyReportRunningMonthTurnsOverInJakarta(t *testing.T) {
 	}
 
 	now := time.Date(2026, time.October, 31, 18, 0, 0, 0, time.UTC)
-	oct := monthlyReport(t, l, ReportParams{FundID: s.f.fundID, Month: "2026-10", Now: now})
+	oct := monthlyReportAt(t, l, now, ReportParams{FundID: s.f.fundID, Month: "2026-10"})
 	if oct.Running || oct.AsOf != "2026-10-31" {
 		t.Errorf("October Running, AsOf = %v, %q; want false, 2026-10-31", oct.Running, oct.AsOf)
 	}
@@ -242,7 +242,7 @@ func TestMonthlyReportLastDayBoundaries(t *testing.T) {
 	q := store.New(l.db)
 	f := newFixture(t, l)
 	aug := func() Report {
-		return monthlyReport(t, l, ReportParams{FundID: f.fundID, Month: "2026-08", Now: reportNow})
+		return monthlyReportAt(t, l, reportNow, ReportParams{FundID: f.fundID, Month: "2026-08"})
 	}
 	contribute := func(purposeID int64, amount money.Amount, on string) store.Transaction {
 		t.Helper()

@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"time"
 
 	"github.com/kerti/uruni/internal/money"
 	"github.com/kerti/uruni/internal/store"
@@ -20,10 +19,6 @@ type CreateReimbursementParams struct {
 	Amount     money.Amount // must be > 0
 	IncurredOn string       // "YYYY-MM-DD", a real calendar date
 	Note       *string
-
-	// Now is the clock IncurredOn's ceiling is read from (ADR-041).
-	// Zero means time.Now().
-	Now time.Time
 }
 
 // CreateReimbursement files a claim. It posts nothing (an unsettled claim is
@@ -40,7 +35,7 @@ func (l *Ledger) CreateReimbursement(ctx context.Context, p CreateReimbursementP
 	if err := CheckAmountCeiling("amount", p.Amount); err != nil {
 		return store.Reimbursement{}, err
 	}
-	window, err := l.windowFor(ctx, l.q, p.FundID, p.Now)
+	window, err := l.windowFor(ctx, l.q, p.FundID)
 	if err != nil {
 		return store.Reimbursement{}, err
 	}
@@ -57,7 +52,7 @@ func (l *Ledger) CreateReimbursement(ctx context.Context, p CreateReimbursementP
 		created, err = q.CreateReimbursement(ctx, store.CreateReimbursementParams{
 			FundID: p.FundID, MemberID: p.MemberID, PurposeID: p.PurposeID,
 			Amount: p.Amount.Int64(), IncurredOn: p.IncurredOn, Note: p.Note,
-			CreatedAt: time.Now().Unix(),
+			CreatedAt: l.now().Unix(),
 		})
 		return err
 	})
@@ -78,10 +73,6 @@ type SettleReimbursementParams struct {
 	ReimbursementID int64
 	AccountID       int64  // which account pays the claim out
 	OccurredOn      string // "YYYY-MM-DD", a real calendar date - the settle date, not incurred_on
-
-	// Now is the clock OccurredOn's ceiling is read from (ADR-041).
-	// Zero means time.Now().
-	Now time.Time
 }
 
 // SettleReimbursement writes one kind='reimbursement', direction='out' row
@@ -115,7 +106,7 @@ type SettleReimbursementParams struct {
 // envelope's balance below the zero its close squared it to, so the treasurer
 // reopens it, settles, and closes it again.
 func (l *Ledger) SettleReimbursement(ctx context.Context, p SettleReimbursementParams) (store.Transaction, error) {
-	window, err := l.windowFor(ctx, l.q, p.FundID, p.Now)
+	window, err := l.windowFor(ctx, l.q, p.FundID)
 	if err != nil {
 		return store.Transaction{}, err
 	}
@@ -162,7 +153,7 @@ func (l *Ledger) SettleReimbursement(ctx context.Context, p SettleReimbursementP
 			OccurredOn:      p.OccurredOn,
 			Kind:            "reimbursement",
 			ReimbursementID: &p.ReimbursementID,
-			CreatedAt:       time.Now().Unix(),
+			CreatedAt:       l.now().Unix(),
 		})
 		return err
 	})
@@ -191,10 +182,6 @@ type UpdateReimbursementParams struct {
 
 	WaivedOn    *string // "YYYY-MM-DD" to waive, nil with SetWaivedOn to un-waive
 	SetWaivedOn bool
-
-	// Now is the clock the dates' ceiling is read from (ADR-041).
-	// Zero means time.Now().
-	Now time.Time
 }
 
 // UpdateReimbursement corrects a claim that has not been settled, and is how
@@ -234,7 +221,7 @@ func (l *Ledger) UpdateReimbursement(ctx context.Context, p UpdateReimbursementP
 			return store.Reimbursement{}, err
 		}
 	}
-	window, err := l.windowFor(ctx, l.q, p.FundID, p.Now)
+	window, err := l.windowFor(ctx, l.q, p.FundID)
 	if err != nil {
 		return store.Reimbursement{}, err
 	}

@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"time"
 
 	"github.com/kerti/uruni/internal/store"
 )
@@ -21,11 +20,6 @@ type ReverseTransactionParams struct {
 	FundID        int64
 	TransactionID int64 // the kind='dues' or kind='normal' row being reversed
 	Note          *string
-
-	// Now is the clock "today" is read from (ADR-041). It only matters once a
-	// cek kas has counted the row, which is dated today.
-	// Zero means time.Now().
-	Now time.Time
 }
 
 // ReversalFacts is what the ledger needs to know about one row to decide
@@ -139,7 +133,7 @@ func (l *Ledger) ReverseTransaction(ctx context.Context, p ReverseTransactionPar
 			return fmt.Errorf("fetching transaction to reverse: %w", err)
 		}
 
-		window, err := l.windowFor(ctx, q, p.FundID, p.Now)
+		window, err := l.windowFor(ctx, q, p.FundID)
 		if err != nil {
 			return err
 		}
@@ -172,7 +166,7 @@ func (l *Ledger) ReverseTransaction(ctx context.Context, p ReverseTransactionPar
 			DuesPeriod:            original.DuesPeriod,
 			ReversesTransactionID: &p.TransactionID,
 			Note:                  normalizeNote(p.Note),
-			CreatedAt:             time.Now().Unix(),
+			CreatedAt:             l.now().Unix(),
 		})
 		return err
 	})

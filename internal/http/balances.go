@@ -64,7 +64,7 @@ func (a *api) getBalances(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	b, err := a.ledger.Balances(r.Context(), fund.ID, a.now())
+	b, err := a.ledger.Balances(r.Context(), fund.ID)
 	if err != nil {
 		mapLedgerError(w, a.log(r), err)
 		return

@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"time"
 
 	"github.com/kerti/uruni/internal/money"
 	"github.com/kerti/uruni/internal/store"
@@ -56,16 +55,11 @@ type AccountCount struct {
 // There is no PerformedAt field: a reconciliation is done right now, in one
 // sitting, with no reason to backdate it (unlike a transaction's OccurredOn).
 // TakeReconciliation stamps PerformedAt and CreatedAt with the same
-// time.Now().Unix(), as every write in this package stamps CreatedAt.
+// ledger clock reading, as every write in this package stamps CreatedAt.
 type TakeReconciliationParams struct {
 	FundID int64
 	Note   *string
 	Counts []AccountCount
-
-	// Now is the clock each fix's occurred_on ceiling is read from (ADR-041). It
-	// dates nothing: PerformedAt is still stamped from the wall clock.
-	// Zero means time.Now().
-	Now time.Time
 
 	// Idempotency, when non-nil, makes the snapshot safe to repeat (ADR-043).
 	Idempotency *Idempotency
@@ -153,7 +147,7 @@ type TakeReconciliationParams struct {
 // takes none; the checks inside the transaction do not run on a replay. The
 // lines are read with GetReconciliationDetail, as after a first success.
 func (l *Ledger) TakeReconciliation(ctx context.Context, p TakeReconciliationParams) (store.Reconciliation, error) {
-	window, err := l.windowFor(ctx, l.q, p.FundID, p.Now)
+	window, err := l.windowFor(ctx, l.q, p.FundID)
 	if err != nil {
 		return store.Reconciliation{}, err
 	}
@@ -177,7 +171,7 @@ func (l *Ledger) TakeReconciliation(ctx context.Context, p TakeReconciliationPar
 			return store.Reconciliation{}, err
 		}
 
-		now := time.Now().Unix()
+		now := l.now().Unix()
 
 		cutoff, err := q.MaxTransactionIDByFund(ctx, p.FundID)
 		emptyLedger := false

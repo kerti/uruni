@@ -3,7 +3,6 @@ package ledger
 import (
 	"context"
 	"fmt"
-	"time"
 
 	"github.com/kerti/uruni/internal/store"
 )
@@ -31,10 +30,6 @@ type CreateMemberParams struct {
 	// JoinedOn is "YYYY-MM-DD"; the caller owns the default. Not a real date is
 	// ErrInvalidArgument; outside the window is ErrDateOutOfRange.
 	JoinedOn string
-
-	// Now is the clock JoinedOn's ceiling is read from (ADR-041).
-	// Zero means time.Now().
-	Now time.Time
 }
 
 // CreateMember writes a member and, when a tier is given, its first member_tier
@@ -46,7 +41,7 @@ type CreateMemberParams struct {
 // foreign keys refuse them (ADR-027). The date is checked first, which also
 // keeps the month read off the stored row a well-formed one.
 func (l *Ledger) CreateMember(ctx context.Context, p CreateMemberParams) (Member, error) {
-	window, err := l.windowFor(ctx, l.q, p.FundID, p.Now)
+	window, err := l.windowFor(ctx, l.q, p.FundID)
 	if err != nil {
 		return Member{}, err
 	}
@@ -55,7 +50,7 @@ func (l *Ledger) CreateMember(ctx context.Context, p CreateMemberParams) (Member
 	}
 	var out Member
 	err = l.withTx(ctx, func(ctx context.Context, q store.Querier) error {
-		now := time.Now().Unix()
+		now := l.now().Unix()
 		m, err := q.CreateMember(ctx, store.CreateMemberParams{
 			FundID: p.FundID, Name: p.Name, JoinedOn: p.JoinedOn, CreatedAt: now,
 		})
@@ -103,10 +98,6 @@ type UpdateMemberParams struct {
 	// TierFrom is "YYYY-MM"; empty defaults to the current month, or the join
 	// month if that is later.
 	TierFrom string
-
-	// Now is the clock the current month and the dates' ceilings are read from.
-	// Zero means time.Now().
-	Now time.Time
 }
 
 // UpdateMember changes a member's name, join date, leaving date and tier in one
@@ -168,7 +159,7 @@ func (l *Ledger) UpdateMember(ctx context.Context, p UpdateMemberParams) (Member
 		if err != nil {
 			return err
 		}
-		now := clockOrNow(p.Now)
+		now := l.now()
 		current := CurrentDuesPeriod(now, loc)
 		window := windowAt(now, loc)
 		if p.JoinedOn != nil {
@@ -199,7 +190,7 @@ func (l *Ledger) UpdateMember(ctx context.Context, p UpdateMemberParams) (Member
 			return fmt.Errorf("updating member: %w", err)
 		}
 		oldMonth, newMonth := old.JoinedOn[:len(duesPeriodLayout)], updated.JoinedOn[:len(duesPeriodLayout)]
-		createdAt := time.Now().Unix()
+		createdAt := l.now().Unix()
 
 		// Rule 1: the earliest row follows the join date back.
 		if newMonth < oldMonth && len(timeline) > 0 {

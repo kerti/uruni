@@ -46,9 +46,9 @@ func onTheDay(date string) time.Time {
 // row and returns it.
 func postEntry(t *testing.T, l *Ledger, fundID, accountID, purposeID int64, direction string, amount money.Amount, date string, note *string) store.Transaction {
 	t.Helper()
-	posted, err := l.PostTransaction(context.Background(), PostTransactionParams{
+	posted, err := l.at(onTheDay(date)).PostTransaction(context.Background(), PostTransactionParams{
 		FundID: fundID, AccountID: accountID, PurposeID: purposeID,
-		Direction: direction, Amount: amount, OccurredOn: date, Note: note, Now: onTheDay(date),
+		Direction: direction, Amount: amount, OccurredOn: date, Note: note,
 	})
 	if err != nil {
 		t.Fatalf("PostTransaction(%s %d on %s) = %v, want no error", direction, amount, date, err)
@@ -56,12 +56,16 @@ func postEntry(t *testing.T, l *Ledger, fundID, accountID, purposeID int64, dire
 	return posted
 }
 
+// monthlyReport is l's MonthlyReport on reportNow.
 func monthlyReport(t *testing.T, l *Ledger, p ReportParams) Report {
 	t.Helper()
-	if p.Now.IsZero() {
-		p.Now = reportNow
-	}
-	r, err := l.MonthlyReport(context.Background(), p)
+	return monthlyReportAt(t, l, reportNow, p)
+}
+
+// monthlyReportAt is l's MonthlyReport with the clock standing on at.
+func monthlyReportAt(t *testing.T, l *Ledger, at time.Time, p ReportParams) Report {
+	t.Helper()
+	r, err := l.at(at).MonthlyReport(context.Background(), p)
 	if err != nil {
 		t.Fatalf("MonthlyReport(%+v) = %v, want no error", p, err)
 	}
@@ -320,7 +324,7 @@ func TestMonthlyReportReconciliationAdjustingEntryIsCounted(t *testing.T) {
 	}
 
 	month := today[:7]
-	r := monthlyReport(t, l, ReportParams{FundID: f.fundID, Month: month, Now: time.Now()})
+	r := monthlyReportAt(t, l, time.Now(), ReportParams{FundID: f.fundID, Month: month})
 
 	var fix *ReportEntry
 	for _, e := range entries(r.Rows) {
@@ -754,7 +758,7 @@ func TestMonthlyReportTotalsRefuseToWrap(t *testing.T) {
 
 	// SQLite's own SUM() in FundBalance trips first, before the checked Add
 	// over the rows could; either way an error, never a wrapped figure.
-	_, err := l.MonthlyReport(context.Background(), ReportParams{FundID: f.fundID, Month: "2026-09", Now: reportNow})
+	_, err := l.at(reportNow).MonthlyReport(context.Background(), ReportParams{FundID: f.fundID, Month: "2026-09"})
 	if err == nil {
 		t.Fatal("MonthlyReport() = nil error, want an overflow refused rather than a wrapped total")
 	}
@@ -1027,7 +1031,7 @@ func TestMonthlyReportMonthRangeIsReckonedInJakartaAcrossTheMonthBoundary(t *tes
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			r := monthlyReport(t, l, ReportParams{FundID: f.fundID, Now: tt.now})
+			r := monthlyReportAt(t, l, tt.now, ReportParams{FundID: f.fundID})
 
 			if len(r.Months) != len(tt.wantMonths) {
 				t.Fatalf("Months = %v, want %v", r.Months, tt.wantMonths)
@@ -1171,8 +1175,8 @@ func TestMonthlyReportRefusesMalformedArguments(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			p := tt.p
-			p.FundID, p.Now = f.fundID, reportNow
-			if _, err := l.MonthlyReport(context.Background(), p); !errors.Is(err, ErrInvalidArgument) {
+			p.FundID = f.fundID
+			if _, err := l.at(reportNow).MonthlyReport(context.Background(), p); !errors.Is(err, ErrInvalidArgument) {
 				t.Errorf("MonthlyReport(%+v) error = %v, want ErrInvalidArgument", p, err)
 			}
 		})
@@ -1182,7 +1186,7 @@ func TestMonthlyReportRefusesMalformedArguments(t *testing.T) {
 func TestMonthlyReportUnknownFundIsAnError(t *testing.T) {
 	t.Parallel()
 	l := newTestLedger(t)
-	if _, err := l.MonthlyReport(context.Background(), ReportParams{FundID: 424_242, Now: reportNow}); err == nil {
+	if _, err := l.at(reportNow).MonthlyReport(context.Background(), ReportParams{FundID: 424_242}); err == nil {
 		t.Error("MonthlyReport(unknown fund) = nil error, want one")
 	}
 }
@@ -1211,7 +1215,7 @@ func TestMonthlyReportEnvelopeCarriesItsTargetAndUnexpectedGivers(t *testing.T) 
 		t.Fatalf("PostTransaction() = %v, want no error", err)
 	}
 
-	r := monthlyReport(t, l, ReportParams{FundID: f.fundID, Month: "2026-09", Now: reportNow})
+	r := monthlyReportAt(t, l, reportNow, ReportParams{FundID: f.fundID, Month: "2026-09"})
 	if len(r.Envelopes) != 1 {
 		t.Fatalf("Envelopes = %d, want 1", len(r.Envelopes))
 	}
@@ -1237,7 +1241,7 @@ func TestMonthlyReportEnvelopesOpenedTheSameDayAreOrderedByName(t *testing.T) {
 	openTestIncidental(t, l, f.fundID, "Zeta Collection", "2026-09-01")
 	openTestIncidental(t, l, f.fundID, "Alpha Collection", "2026-09-01")
 
-	r := monthlyReport(t, l, ReportParams{FundID: f.fundID, Month: "2026-09", Now: reportNow})
+	r := monthlyReportAt(t, l, reportNow, ReportParams{FundID: f.fundID, Month: "2026-09"})
 
 	var envelopes, header []string
 	for _, e := range r.Envelopes {

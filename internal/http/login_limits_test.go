@@ -27,7 +27,7 @@ const (
 	limitsPassword = "correct-horse-battery"
 )
 
-// fakeClock is the one clock the router's limiters read (newWithClock).
+// fakeClock is the one clock the router's limiters read (ledger.WithClock).
 type fakeClock struct {
 	mu sync.Mutex
 	t  time.Time
@@ -61,7 +61,7 @@ func limitsRouter(t *testing.T, trusted []netip.Prefix) (http.Handler, *fakeCloc
 		func(p string) (string, error) { return "stub:" + p, nil },
 		func(p, encoded string) (bool, error) { return encoded == "stub:"+p, nil },
 	))
-	r := newWithClock(testAssets(), testBuild, ledger.New(sqlDB), store.New(sqlDB), sqlDB, nil, testLogger(), au, "", t.TempDir(), t.TempDir(), trusted, clk.now)
+	r := New(testAssets(), testBuild, ledger.New(sqlDB, ledger.WithClock(clk.now)), store.New(sqlDB), sqlDB, nil, testLogger(), au, "", t.TempDir(), t.TempDir(), trusted)
 	if rec := postRegister(t, r, limitsEmail, limitsPassword); rec.Code != http.StatusCreated {
 		t.Fatalf("POST /api/register = %d, want %d (body: %s)", rec.Code, http.StatusCreated, rec.Body.String())
 	}
@@ -308,7 +308,7 @@ func TestLoginSetsADeviceCookieWithTheSessionCookiesAttributes(t *testing.T) {
 				func(p string) (string, error) { return "stub:" + p, nil },
 				func(p, encoded string) (bool, error) { return encoded == "stub:"+p, nil },
 			))
-			r := newWithClock(testAssets(), testBuild, ledger.New(sqlDB), store.New(sqlDB), sqlDB, nil, testLogger(), au, tc.baseURL, t.TempDir(), t.TempDir(), nil, clk.now)
+			r := New(testAssets(), testBuild, ledger.New(sqlDB, ledger.WithClock(clk.now)), store.New(sqlDB), sqlDB, nil, testLogger(), au, tc.baseURL, t.TempDir(), t.TempDir(), nil)
 			if rec := postRegister(t, r, limitsEmail, limitsPassword); rec.Code != http.StatusCreated {
 				t.Fatalf("POST /api/register = %d", rec.Code)
 			}

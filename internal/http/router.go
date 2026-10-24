@@ -73,13 +73,11 @@ func init() {
 // trustedProxies (Config.TrustedProxies) are the peers whose X-Forwarded-For
 // clientIP believes. nil believes none.
 func New(assets fs.FS, build Build, l *ledger.Ledger, q store.Querier, sqlDB *sql.DB, dbFileCheck func() error, logger *slog.Logger, au *auth.Auth, baseURL string, uploadsDir string, backupDir string, trustedProxies []netip.Prefix) http.Handler {
-	return newWithClock(assets, build, l, q, sqlDB, dbFileCheck, logger, au, baseURL, uploadsDir, backupDir, trustedProxies, time.Now)
-}
+	// The ledger's clock is the process's only one: the report and every route
+	// that reckons a calendar day or month read it here, so a handler and the
+	// ledger it calls read one clock, not two that could be set apart.
+	now := l.Now
 
-// newWithClock is New with the wall clock injectable (#379): the report and
-// every route that reckons a calendar day or month read now. New passes
-// time.Now.
-func newWithClock(assets fs.FS, build Build, l *ledger.Ledger, q store.Querier, sqlDB *sql.DB, dbFileCheck func() error, logger *slog.Logger, au *auth.Auth, baseURL string, uploadsDir string, backupDir string, trustedProxies []netip.Prefix, now func() time.Time) http.Handler {
 	r := chi.NewRouter()
 	// Order matters: requestID first, so everything below logs with the ID;
 	// requestLogger next, so the request line still appears when a handler
@@ -139,8 +137,8 @@ func newWithClock(assets fs.FS, build Build, l *ledger.Ledger, q store.Querier, 
 	// Both routes are throttled per client network (#520, report_limit.go), ahead
 	// of the slug lookup, so a probe of unknown slugs is counted too.
 	reportLimits := newReportLimiter(a, now)
-	r.With(reportLimits.middleware("html", reportHTMLLimit, logger)).Get("/report/{slug}", reportHandler(l, q, logger, now))
-	r.With(reportLimits.middleware("pdf", reportPDFLimit, logger)).Get("/report/{slug}/pdf", reportPDFHandler(l, q, logger, now))
+	r.With(reportLimits.middleware("html", reportHTMLLimit, logger)).Get("/report/{slug}", reportHandler(l, q, logger))
+	r.With(reportLimits.middleware("pdf", reportPDFLimit, logger)).Get("/report/{slug}/pdf", reportPDFHandler(l, q, logger))
 
 	// The SPA fallback is chi's NotFound handler (ADR-021): registered routes
 	// win, so /api and /report still 404 instead of falling through to the shell.

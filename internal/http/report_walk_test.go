@@ -132,8 +132,13 @@ func TestReportWalkOfTheRunningMonthEndsOnToday(t *testing.T) {
 	t.Parallel()
 	w := newWalkPage(t)
 	w.post(t, "in", 1_000, "2026-10-01")
-	// Dated after today (the clock reads 2 Oct): still in the walk.
-	w.post(t, "out", 250, "2026-10-20")
+	// Dated after the report's today (its clock reads 2 Oct), posted once that
+	// day had come: still in the walk.
+	if _, err := ledgerAt(w.db, reportNow.AddDate(0, 0, 30)).PostTransaction(context.Background(), ledger.PostTransactionParams{
+		FundID: w.fund.ID, AccountID: w.cashID, PurposeID: w.mainID, Direction: "out", Amount: 250, OccurredOn: "2026-10-20",
+	}); err != nil {
+		t.Fatalf("PostTransaction(out 250 on 2026-10-20) = %v, want no error", err)
+	}
 
 	got := totalsOf(t, w.get(t, "/report/"+w.fund.ReportSlug).Body.String())
 	want := []totalLine{

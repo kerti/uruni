@@ -53,7 +53,7 @@ func TestMonthlyReportsRunningMonthAndTodayFollowTheFundsZone(t *testing.T) {
 			f := fundInZone(t, l, tc.zone)
 			postEntry(t, l, f.fundID, f.cashID, f.mainID, "in", 10_000, "2026-07-15", nil)
 
-			r := monthlyReport(t, l, ReportParams{FundID: f.fundID, Now: tc.now})
+			r := monthlyReportAt(t, l, tc.now, ReportParams{FundID: f.fundID})
 			if r.Month != tc.wantMonth || r.AsOf != tc.wantAsOf || !r.Running {
 				t.Errorf("Month/AsOf/Running = %q/%q/%v, want %q/%q/true", r.Month, r.AsOf, r.Running, tc.wantMonth, tc.wantAsOf)
 			}
@@ -105,7 +105,7 @@ func TestMonthlyReportPastMonthCekKasBoundFollowsTheFundsZone(t *testing.T) {
 			}
 			now := time.Date(2026, 10, 5, 12, 0, 0, 0, wib)
 
-			sept := monthlyReport(t, l, ReportParams{FundID: f.fundID, Month: "2026-09", Now: now})
+			sept := monthlyReportAt(t, l, now, ReportParams{FundID: f.fundID, Month: "2026-09"})
 			switch {
 			case tc.inSeptember && (sept.Reconciliation == nil || sept.Reconciliation.Date != "2026-09-30"):
 				t.Errorf("September report Reconciliation = %+v, want the count dated 2026-09-30", sept.Reconciliation)
@@ -116,7 +116,7 @@ func TestMonthlyReportPastMonthCekKasBoundFollowsTheFundsZone(t *testing.T) {
 				t.Errorf("September balance = %d, want 100000: no ledger sum depends on the zone", sept.Balance)
 			}
 
-			oct := monthlyReport(t, l, ReportParams{FundID: f.fundID, Now: now})
+			oct := monthlyReportAt(t, l, now, ReportParams{FundID: f.fundID})
 			if oct.Reconciliation == nil || oct.Reconciliation.Date != tc.runningDate {
 				t.Errorf("running report Reconciliation = %+v, want the count dated %s in the fund's zone", oct.Reconciliation, tc.runningDate)
 			}
@@ -148,7 +148,7 @@ func TestMonthInOutReadsTheRunningMonthInTheFundsZone(t *testing.T) {
 			postEntry(t, l, f.fundID, f.cashID, f.mainID, "in", 50_000, "2026-09-15", nil)
 			postEntry(t, l, f.fundID, f.cashID, f.mainID, "in", 7_000, "2026-10-01", nil)
 
-			in, out, err := l.MonthInOut(context.Background(), f.fundID, now)
+			in, out, err := l.at(now).MonthInOut(context.Background(), f.fundID)
 			if err != nil {
 				t.Fatalf("MonthInOut() = %v, want no error", err)
 			}
@@ -176,7 +176,7 @@ func TestUpdateMemberTierDefaultsToTheFundsCurrentMonth(t *testing.T) {
 			if err != nil {
 				t.Fatalf("CreateMember() = %v", err)
 			}
-			if _, err := l.UpdateMember(context.Background(), UpdateMemberParams{FundID: f.fundID, MemberID: m.ID, SetTier: true, TierID: &b, Now: now}); err != nil {
+			if _, err := l.at(now).UpdateMember(context.Background(), UpdateMemberParams{FundID: f.fundID, MemberID: m.ID, SetTier: true, TierID: &b}); err != nil {
 				t.Fatalf("UpdateMember() = %v, want no error", err)
 			}
 			wantRows(t, l, m.ID, "2026-01#0="+strconv.FormatInt(a, 10), wantFrom+"#0="+strconv.FormatInt(b, 10))
@@ -252,8 +252,8 @@ func TestChangingTheZoneNeverInvalidatesARowAndIsExactlyReversible(t *testing.T)
 	// across zones; on the 30th it is the running month for WIB and past for WIT.
 	later := time.Date(2026, 10, 5, 12, 0, 0, 0, wib)
 	readAll := func() (Report, Report) {
-		return monthlyReport(t, l, ReportParams{FundID: f.fundID, Now: now}),
-			monthlyReport(t, l, ReportParams{FundID: f.fundID, Month: "2026-09", Now: later})
+		return monthlyReportAt(t, l, now, ReportParams{FundID: f.fundID}),
+			monthlyReportAt(t, l, later, ReportParams{FundID: f.fundID, Month: "2026-09"})
 	}
 	witRunning, witSept := readAll()
 	if witRunning.Month != "2026-10" {
@@ -289,13 +289,13 @@ func TestSettingTheOldZoneBackRestoresEveryReading(t *testing.T) {
 	postEntry(t, l, f.fundID, f.cashID, f.mainID, "in", 100_000, "2026-09-03", nil)
 	now := time.Date(2026, 9, 30, 23, 30, 0, 0, wib)
 
-	before := monthlyReport(t, l, ReportParams{FundID: f.fundID, Now: now})
+	before := monthlyReportAt(t, l, now, ReportParams{FundID: f.fundID})
 	setFundZone(t, q, f.fundID, tz.Jakarta)
-	if mid := monthlyReport(t, l, ReportParams{FundID: f.fundID, Now: now}); mid.Month == before.Month {
+	if mid := monthlyReportAt(t, l, now, ReportParams{FundID: f.fundID}); mid.Month == before.Month {
 		t.Fatalf("WIB and WITA agree on the month at 23:30 WIB (%q): the fixture proves nothing", mid.Month)
 	}
 	setFundZone(t, q, f.fundID, tz.Makassar)
-	after := monthlyReport(t, l, ReportParams{FundID: f.fundID, Now: now})
+	after := monthlyReportAt(t, l, now, ReportParams{FundID: f.fundID})
 	if !reflect.DeepEqual(before, after) {
 		t.Errorf("report after changing the zone and back differs:\nbefore %+v\nafter  %+v", before, after)
 	}
@@ -306,7 +306,7 @@ func TestSettingTheOldZoneBackRestoresEveryReading(t *testing.T) {
 func TestMonthInOutOfAMissingFundIsAnError(t *testing.T) {
 	t.Parallel()
 	l := newTestLedger(t)
-	if _, _, err := l.MonthInOut(context.Background(), 999, time.Now()); err == nil || !strings.Contains(err.Error(), "fund") {
+	if _, _, err := l.MonthInOut(context.Background(), 999); err == nil || !strings.Contains(err.Error(), "fund") {
 		t.Errorf("MonthInOut(missing fund) = %v, want an error naming the fund", err)
 	}
 }

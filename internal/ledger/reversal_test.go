@@ -20,7 +20,7 @@ import (
 // reverseAt is ReverseTransaction at a clock, failing the test on a refusal.
 func reverseAt(t *testing.T, l *Ledger, fundID, id int64, now time.Time) store.Transaction {
 	t.Helper()
-	row, err := l.ReverseTransaction(context.Background(), ReverseTransactionParams{FundID: fundID, TransactionID: id, Now: now})
+	row, err := l.at(now).ReverseTransaction(context.Background(), ReverseTransactionParams{FundID: fundID, TransactionID: id})
 	if err != nil {
 		t.Fatalf("ReverseTransaction(%d) = %v, want no error", id, err)
 	}
@@ -280,7 +280,7 @@ func TestReverseTransactionRefusesWhatItWillNotTake(t *testing.T) {
 	refused := func(t *testing.T, w world, id int64, want error) {
 		t.Helper()
 		before := transactionCount(t, w.l, w.f.fundID)
-		_, err := w.l.ReverseTransaction(ctx, ReverseTransactionParams{FundID: w.f.fundID, TransactionID: id, Now: onTheDay("2026-10-02")})
+		_, err := w.l.at(onTheDay("2026-10-02")).ReverseTransaction(ctx, ReverseTransactionParams{FundID: w.f.fundID, TransactionID: id})
 		if !errors.Is(err, want) {
 			t.Fatalf("ReverseTransaction(%d) = %v, want an error wrapping %v", id, err, want)
 		}
@@ -301,8 +301,8 @@ func TestReverseTransactionRefusesWhatItWillNotTake(t *testing.T) {
 		w := setup(t)
 		postEntry(t, w.l, w.f.fundID, w.f.cashID, w.f.mainID, "in", 100_000, "2026-08-01", nil)
 		claim := createReimbursement(t, w.q, w.f, 30_000, "2026-08-05", nil)
-		payout, err := w.l.SettleReimbursement(ctx, SettleReimbursementParams{
-			FundID: w.f.fundID, ReimbursementID: claim.ID, AccountID: w.f.cashID, OccurredOn: "2026-08-10", Now: onTheDay("2026-08-10"),
+		payout, err := w.l.at(onTheDay("2026-08-10")).SettleReimbursement(ctx, SettleReimbursementParams{
+			FundID: w.f.fundID, ReimbursementID: claim.ID, AccountID: w.f.cashID, OccurredOn: "2026-08-10",
 		})
 		if err != nil {
 			t.Fatalf("SettleReimbursement() = %v, want no error", err)
@@ -314,9 +314,9 @@ func TestReverseTransactionRefusesWhatItWillNotTake(t *testing.T) {
 		t.Parallel()
 		w := setup(t)
 		postEntry(t, w.l, w.f.fundID, w.f.cashID, w.f.mainID, "in", 100_000, "2026-08-01", nil)
-		transfer, err := w.l.PostTransferBetweenAccounts(ctx, PostTransferBetweenAccountsParams{
+		transfer, err := w.l.at(onTheDay("2026-08-02")).PostTransferBetweenAccounts(ctx, PostTransferBetweenAccountsParams{
 			FundID: w.f.fundID, PurposeID: w.f.mainID, FromAccountID: w.f.cashID, ToAccountID: w.f.bankID,
-			Amount: 40_000, OccurredOn: "2026-08-02", Now: onTheDay("2026-08-02"),
+			Amount: 40_000, OccurredOn: "2026-08-02",
 		})
 		if err != nil {
 			t.Fatalf("PostTransferBetweenAccounts() = %v, want no error", err)
@@ -364,7 +364,7 @@ func TestReverseTransactionRefusesWhatItWillNotTake(t *testing.T) {
 		t.Parallel()
 		w := setup(t)
 		postEntry(t, w.l, w.f.fundID, w.f.cashID, w.f.mainID, "in", 100_000, "2026-08-01", nil)
-		rec, err := w.l.TakeReconciliation(ctx, TakeReconciliationParams{FundID: w.f.fundID, Now: onTheDay("2026-08-20"), Counts: []AccountCount{
+		rec, err := w.l.at(onTheDay("2026-08-20")).TakeReconciliation(ctx, TakeReconciliationParams{FundID: w.f.fundID, Counts: []AccountCount{
 			{AccountID: w.f.cashID, ActualAmount: 95_000, Resolution: "adjusted",
 				Fix: &Fix{PurposeID: w.f.mainID, Direction: "out", Amount: 5_000, OccurredOn: "2026-08-20"}},
 			w.f.bankZero(),
@@ -379,7 +379,7 @@ func TestReverseTransactionRefusesWhatItWillNotTake(t *testing.T) {
 		t.Parallel()
 		w := setup(t)
 		postEntry(t, w.l, w.f.fundID, w.f.cashID, w.f.mainID, "in", 100_000, "2026-08-01", nil)
-		rec, err := w.l.TakeReconciliation(ctx, TakeReconciliationParams{FundID: w.f.fundID, Now: onTheDay("2026-08-20"), Counts: []AccountCount{
+		rec, err := w.l.at(onTheDay("2026-08-20")).TakeReconciliation(ctx, TakeReconciliationParams{FundID: w.f.fundID, Counts: []AccountCount{
 			{AccountID: w.f.cashID, ActualAmount: 95_000, Resolution: "entry_added",
 				Fix: &Fix{PurposeID: w.f.mainID, Direction: "out", Amount: 5_000, OccurredOn: "2026-08-20"}},
 			w.f.bankZero(),

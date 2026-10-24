@@ -34,6 +34,14 @@ func newTestLedger(t *testing.T) *Ledger {
 	return New(newTestDB(t))
 }
 
+// at is l reading the clock as t: a copy over the same database, so the calls
+// that follow stand on that instant and l itself keeps its own clock.
+func (l *Ledger) at(t time.Time) *Ledger {
+	tl := *l
+	tl.now = func() time.Time { return t }
+	return &tl
+}
+
 func newTestDB(t *testing.T) *sql.DB {
 	t.Helper()
 

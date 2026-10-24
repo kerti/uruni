@@ -120,10 +120,9 @@ func checkEffectivePurposeSequence(t *testing.T, seed int64, cov *effectiveCover
 			if from == to {
 				continue
 			}
-			_, err := l.PostPurposeMove(ctx, PostPurposeMoveParams{
+			_, err := l.at(onTheDay("2026-09-30")).PostPurposeMove(ctx, PostPurposeMoveParams{
 				FundID: f.fundID, FromPurposeID: from, ToPurposeID: to, AccountID: f.cashID,
 				Amount: money.Amount(1 + rng.Intn(50)*100), OccurredOn: dates[rng.Intn(len(dates))],
-				Now: onTheDay("2026-09-30"),
 			})
 			if err != nil {
 				t.Fatalf("PostPurposeMove() = %v, want no error", err)

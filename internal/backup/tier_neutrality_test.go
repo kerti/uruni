@@ -328,7 +328,7 @@ func TestBackfillOfAVersion1FileIsNeutralForEveryMemberAndPeriod(t *testing.T) {
 	for _, m := range v1.Members {
 		through := "2028-02"
 		wantOut := world.outstanding(m, through)
-		gotOut, err := l.OutstandingDuesForMember(ctx, 1, m.ID, through, time.Time{})
+		gotOut, err := l.OutstandingDuesForMember(ctx, 1, m.ID, through)
 		if err != nil {
 			t.Fatalf("OutstandingDuesForMember(%s) = %v", m.Name, err)
 		}
