@@ -81,7 +81,7 @@ test.describe('report', () => {
     // Dues: a member who owes this month has a row with the tier.
     // reportText.DuesLabel / DuesTier
     const dues = page.locator('#dues')
-    await expect(dues.getByRole('heading', { name: 'Status iuran' })).toBeVisible()
+    await expect(dues.getByRole('heading', { name: 'Status iuran', exact: true })).toBeVisible()
     const member = dues.locator('ul.dues li').filter({ hasText: 'Warga Satu' })
     await expect(member).toHaveCount(1)
     await expect(member).toContainText('Golongan Reguler')

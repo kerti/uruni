@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"regexp"
+	"strconv"
 	"strings"
 	"testing"
 	"unicode/utf16"
@@ -101,6 +102,49 @@ func tjRuns(content []byte) []string {
 		i = j
 	}
 	return runs
+}
+
+// pdfRunX is one text run with the x it is drawn at, in points from the
+// page's left edge.
+type pdfRunX struct {
+	text string
+	x    float64
+}
+
+// pdfTdRE is how fpdf opens every text run: "BT <x> <y> Td (...)Tj".
+var pdfTdRE = regexp.MustCompile(`BT ([0-9.]+) [0-9.]+ Td `)
+
+// pdfPagesAt is pdfPages with each run's x, for the few tests that pin where
+// something is drawn rather than only that it is.
+func pdfPagesAt(t *testing.T, pdf []byte) [][]pdfRunX {
+	t.Helper()
+	var pages [][]pdfRunX
+	for _, m := range pdfStreamRE.FindAllSubmatch(pdf, -1) {
+		body := m[1]
+		if zr, err := zlib.NewReader(bytes.NewReader(body)); err == nil {
+			inflated, err := io.ReadAll(zr)
+			if err != nil {
+				t.Fatalf("inflating a content stream: %v", err)
+			}
+			body = inflated
+		}
+		var runs []pdfRunX
+		for _, loc := range pdfTdRE.FindAllSubmatchIndex(body, -1) {
+			text := tjRuns(body[loc[1]:])
+			if len(text) == 0 {
+				continue
+			}
+			x, err := strconv.ParseFloat(string(body[loc[2]:loc[3]]), 64)
+			if err != nil {
+				t.Fatalf("parsing a Td x: %v", err)
+			}
+			runs = append(runs, pdfRunX{text: text[0], x: x})
+		}
+		if len(runs) > 0 {
+			pages = append(pages, runs)
+		}
+	}
+	return pages
 }
 
 func pdfHas(runs []string, want string) bool {
@@ -531,7 +575,7 @@ func TestReportPDFStartsEachSectionOnItsOwnPage(t *testing.T) {
 	s := newPDFScenario(t)
 	pages := pdfPages(t, s.get(t, "/report/"+s.fund.ReportSlug+"/pdf?month=2026-09").Body.Bytes())
 
-	sections := []string{reportText.PDFSummary, reportText.TransactionsLabel, reportText.DuesLabel, reportText.EnvelopesLabel}
+	sections := []string{reportText.PDFSummary, reportText.TransactionsLabel, reportText.DuesLabel, reportText.GridHeading, reportText.EnvelopesLabel}
 	if len(pages) != len(sections) {
 		t.Fatalf("pages = %d, want %d (one per section, each fits one page)", len(pages), len(sections))
 	}

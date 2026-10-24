@@ -91,7 +91,11 @@ func newDuesScenario(t *testing.T) duesScenario {
 	return duesScenario{reportFixture: f, base: "/report/" + f.fund.ReportSlug + "?month=2026-09"}
 }
 
-// duesSection is the dues section's markup alone, unescaped.
+// gridBlockRE is the twelve-month grid's markup inside the dues section.
+var gridBlockRE = regexp.MustCompile(`(?s)<div class="grid">.*?</ul>\s*</div>`)
+
+// duesSection is the dues section's markup alone, unescaped, without the
+// twelve-month grid that opens it (gridBlock reads that).
 func duesSection(t *testing.T, body string) string {
 	t.Helper()
 	i := strings.Index(body, `id="dues"`)
@@ -99,7 +103,7 @@ func duesSection(t *testing.T, body string) string {
 		return ""
 	}
 	j := strings.Index(body[i:], "</section>")
-	return html.UnescapeString(body[i : i+j])
+	return html.UnescapeString(gridBlockRE.ReplaceAllString(body[i:i+j], ""))
 }
 
 func duesNames(sec string) []string {

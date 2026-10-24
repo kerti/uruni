@@ -115,6 +115,28 @@ ul.dues li{flex-direction:column;gap:6px}
 .badge.partial{background:var(--attention-soft);color:var(--attention-text)}
 .badge.paid{background:var(--success-soft);color:var(--success)}
 .badge.paid_in_advance{background:var(--success-soft);color:var(--success);box-shadow:inset 0 0 0 1px var(--success)}
+.grid{display:flex;flex-direction:column;gap:4px;margin-bottom:20px}
+.grid h3{margin:0;font-size:16px;font-weight:600}
+.grid table{width:100%;table-layout:fixed;border-collapse:collapse;margin-top:8px}
+.grid table col,.grid td,.grid th{padding:0}
+.grid thead td,.grid thead th{font-size:10px;font-weight:400;color:var(--muted-foreground);text-align:left;padding-bottom:2px}
+.grid thead th{text-align:center;padding-bottom:4px}
+.grid thead td:first-child,.grid thead th:first-child{width:6.5rem}
+.grid tbody tr{border-top:1px solid var(--border)}
+.grid tbody th{width:6.5rem;text-align:left;font-size:14px;font-weight:500;padding:8px 8px 8px 0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.grid tbody td{padding:8px 0;text-align:center}
+.grid .ys{border-left:1px solid var(--border);padding-left:2px}
+.grid tbody td.ys{padding-left:0}
+.grid tbody td{position:relative}
+.shape{display:block;width:14px;height:14px;margin:0 auto}
+.g-paid{fill:var(--success)}
+.g-ring{fill:none;stroke:var(--attention);stroke-width:1.5}
+.g-half{fill:var(--attention)}
+.g-hollow{fill:none;stroke:var(--muted-foreground);stroke-width:1.5}
+.g-none{stroke:var(--muted-foreground);stroke-width:1.5;stroke-linecap:round}
+.legend{list-style:none;margin:8px 0 0;padding:0;display:flex;flex-wrap:wrap;gap:6px 16px;font-size:14px;color:var(--muted-foreground)}
+.legend li{display:flex;align-items:center;gap:6px}
+.legend .shape{margin:0}
 .envelopes{display:flex;flex-direction:column;gap:8px}
 details.envelope{background:var(--card);border-radius:8px;padding:12px 16px;
   box-shadow:0 1px 2px rgb(34 50 58 / .06),0 4px 12px rgb(34 50 58 / .08)}

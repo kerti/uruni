@@ -69,8 +69,9 @@ type ReportParams struct {
 // text is built at render time, as Riwayat does.
 //
 // It deliberately omits a location's name or balance, a receipt's path or id,
-// a transaction id, a dues arrears count, and a member's join or leave date
-// (rule 6).
+// a transaction id and a dues arrears count (rule 6). A member's join and leave
+// dates are never stated either, but the dues grid's no-obligation cells show
+// the months they fall in (ADR-044), as paging the one-month tables already did.
 type Report struct {
 	FundName string
 
@@ -79,6 +80,10 @@ type Report struct {
 	// (marked by Running).
 	AsOf    string
 	Running bool
+
+	// Today is the current day ("YYYY-MM-DD") in the fund's time zone, whatever
+	// month is shown: what the dues grid is read as of (ADR-044).
+	Today string
 
 	// Month is the month shown ("YYYY-MM"); Months is every month offered,
 	// oldest first: the first transaction's month through the current one.
@@ -110,6 +115,12 @@ type Report struct {
 
 	// Dues is every member's status for Month, after the dues filter.
 	Dues []ReportDuesRow
+
+	// DuesGrid is the twelve months of dues status ending at Month (ADR-044),
+	// as of today. It ignores every filter, the dues filter included: no filter
+	// selects members by their grid. Empty (no periods) when nobody owes in any
+	// of the twelve; the renderers draw it only from two periods up.
+	DuesGrid DuesGrid
 
 	// Envelopes are every envelope open at some point during Month.
 	Envelopes []ReportEnvelope
@@ -384,6 +395,7 @@ func (l *Ledger) monthlyReport(ctx context.Context, p ReportParams) (Report, err
 		FundName: fund.Name,
 		AsOf:     today.Format(reportDayLayout),
 		Running:  month >= currentMonth,
+		Today:    today.Format(reportDayLayout),
 		Month:    month,
 	}
 	b := reportBound{}
@@ -446,6 +458,10 @@ func (l *Ledger) monthlyReport(ctx context.Context, p ReportParams) (Report, err
 	}
 
 	if r.Dues, err = l.reportDues(ctx, p.FundID, month, p.DuesStatus); err != nil {
+		return Report{}, err
+	}
+	// The running month passes its own month; DuesGrid caps at the current one.
+	if r.DuesGrid, err = l.DuesGrid(ctx, p.FundID, month, now); err != nil {
 		return Report{}, err
 	}
 	if r.Envelopes, err = l.reportEnvelopes(ctx, p.FundID, month, purposes, envelopes, b); err != nil {

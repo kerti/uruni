@@ -84,6 +84,10 @@ type reportPage struct {
 	HasDues bool
 	Dues    []reportDuesRow
 
+	// Grid is the twelve-month dues grid (ADR-044) that opens the dues section;
+	// nil when fewer than two months owe anything. It ignores every filter.
+	Grid *reportGrid
+
 	// The envelopes section (#338): every envelope the ledger listed for the
 	// month, narrowed by the purpose filter; hidden when empty.
 	Envelopes []reportEnvelope
@@ -166,6 +170,89 @@ type reportDuesRow struct {
 	Class       string
 	Status      string
 	PaidThrough string
+}
+
+// reportGrid is the twelve-month dues grid, already display text: the page and
+// the PDF draw the same cells. Status only; no count, total, amount or order
+// beyond the ledger's (by name).
+type reportGrid struct {
+	Heading string
+	Range   string // "Oktober 2025 - September 2026"
+	Caption string // "Status per 24 Oktober 2026" on a past month; "" on the running one
+	Years   []reportGridYear
+	Heads   []reportGridHead
+	Rows    []reportGridRow
+	Legend  []reportGridCell
+}
+
+// reportGridYear is the year above its first column and each January.
+type reportGridYear struct {
+	Year string
+	Span int
+}
+
+// reportGridHead is a column head: the short name drawn, the full month read
+// aloud. Start marks the first column of a year.
+type reportGridHead struct {
+	Short string
+	Full  string
+	Year  string
+	Start bool
+}
+
+type reportGridRow struct {
+	Name  string
+	Cells []reportGridCell
+}
+
+// reportGridCell is one shape. Class is the ledger's cell value ("paid",
+// "partial", "unpaid", "none"), which picks the shape and the tone; Label is
+// the month and status as text for assistive technology (the legend's is the
+// bare word). Start marks the first column of a year.
+type reportGridCell struct {
+	Class string
+	Label string
+	Start bool
+}
+
+// buildReportGrid shapes the ledger's grid, nil when fewer than two months owe
+// anything: a one-column grid repeats the table.
+func buildReportGrid(r ledger.Report) *reportGrid {
+	g := r.DuesGrid
+	if len(g.Periods) < 2 {
+		return nil
+	}
+	out := &reportGrid{
+		Heading: reportText.GridHeading,
+		Range:   reportText.GridRange(reportText.monthName(g.Periods[0]), reportText.monthName(g.Periods[len(g.Periods)-1])),
+	}
+	if !r.Running {
+		out.Caption = reportText.GridAsOf(reportText.longDate(r.Today))
+	}
+	fulls := make([]string, len(g.Periods))
+	starts := make([]bool, len(g.Periods))
+	for i, period := range g.Periods {
+		fulls[i] = reportText.monthName(period)
+		year, month := period[:4], period[5:]
+		starts[i] = i == 0 || month == "01"
+		if starts[i] {
+			out.Years = append(out.Years, reportGridYear{Year: year, Span: 0})
+		}
+		out.Years[len(out.Years)-1].Span++
+		m, _ := strconv.Atoi(month)
+		out.Heads = append(out.Heads, reportGridHead{Short: reportText.MonthHeads[m-1], Full: fulls[i], Year: year, Start: starts[i]})
+	}
+	for _, row := range g.Rows {
+		cells := make([]reportGridCell, len(row.Cells))
+		for i, c := range row.Cells {
+			cells[i] = reportGridCell{Class: string(c), Label: reportText.GridCellLabel(fulls[i], reportText.gridWord(c)), Start: starts[i]}
+		}
+		out.Rows = append(out.Rows, reportGridRow{Name: row.Name, Cells: cells})
+	}
+	for _, c := range []ledger.DuesGridCell{ledger.DuesCellPaid, ledger.DuesCellPartial, ledger.DuesCellUnpaid, ledger.DuesCellNone} {
+		out.Legend = append(out.Legend, reportGridCell{Class: string(c), Label: reportText.gridWord(c)})
+	}
+	return out
 }
 
 // reportEnvelope is one envelope's <details>: the summary's facts, who it is
@@ -509,6 +596,8 @@ func buildReportPage(r ledger.Report, empty bool) reportPage {
 		}
 		page.Dues = append(page.Dues, row)
 	}
+
+	page.Grid = buildReportGrid(r)
 
 	for _, e := range r.Envelopes {
 		env := reportEnvelope{

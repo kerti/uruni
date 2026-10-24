@@ -91,6 +91,7 @@ Entitas utama:
 - Melihat anggota dan, untuk periode berjalan, siapa yang sudah bayar / bayar sebagian / bayar di muka (ada yang membayar beberapa bulan sekaligus).
 - Menandai pembayaran iuran (nominal terisi otomatis dari golongan anggota, dapat diubah; lokasi; tunai/transfer).
 - Membatalkan pembayaran iuran yang salah dicatat (salah anggota, tercatat dua kali) — pembayaran itu dibalik dengan entri baru, bukan dihapus, dan anggota kembali terbaca belum bayar untuk periode tersebut.
+- Status tiap anggota selama dua belas bulan terakhir dalam sekali lihat - hanya status, tanpa hitungan atau nominal ([ADR-044](./ADR/044-twelve-months-of-dues.md)).
 - Tampilan sederhana "belum bayar". **Tanpa pengingat, tanpa penagihan otomatis.**
 
 ### 7.4 Talangan (reimbursement)
@@ -130,7 +131,7 @@ Entitas utama:
 - Halaman menampilkan **semuanya secara bawaan** dan menyediakan **filter** (bulan, pos, anggota, pemasukan/pengeluaran, status iuran) agar pemirsa publik mudah menelusuri data.
 - Pengaman: slug acak yang panjang + `noindex` agar tidak terindeks mesin pencari; ada opsi **"buat ulang tautan"** sebagai jalan darurat bila tautan bocor (tidak diperlukan dalam pemakaian normal). Konsekuensi yang diterima: karena semuanya ditampilkan, URL publik menampakkan nama anggota dan status pembayaran — dapat diterima mengingat niat transparansi bendahara dan rendahnya sensitivitas data.
 - Ini halaman bersama, bukan portal anggota — tanpa akun, tanpa login anggota.
-- Satu bulan per tampilan, dipilih di bagian paling atas: bagian atas memuat saldo, cek kas terakhir, saldo per pos (tidak per lokasi), dan yang masih harus dibayar ke anggota, masing-masing **per akhir bulan itu** - atau per hari ini untuk bulan yang sedang berjalan, ditandai "bulan berjalan" - lalu bulan itu sebagai alur dari saldo awal bulannya, lewat uang masuk, uang keluar, dan penyesuaian, sampai saldo akhir bulannya ([ADR-038](./ADR/038-the-month-as-a-balance-walk.md)), transaksi bulan itu, status iurannya (tanpa hitungan tunggakan), dan amplopnya. Foto nota hanya ditandai, tidak ditampilkan. Tautan ditampilkan, disalin, dan dibuat ulang dari Pengaturan. ([ADR-035](./ADR/035-public-report.md), [ADR-037](./ADR/037-report-shows-the-month-as-it-ended.md))
+- Satu bulan per tampilan, dipilih di bagian paling atas: bagian atas memuat saldo, cek kas terakhir, saldo per pos (tidak per lokasi), dan yang masih harus dibayar ke anggota, masing-masing **per akhir bulan itu** - atau per hari ini untuk bulan yang sedang berjalan, ditandai "bulan berjalan" - lalu bulan itu sebagai alur dari saldo awal bulannya, lewat uang masuk, uang keluar, dan penyesuaian, sampai saldo akhir bulannya ([ADR-038](./ADR/038-the-month-as-a-balance-walk.md)), transaksi bulan itu, status iurannya (tanpa hitungan tunggakan) yang diawali status tiap anggota hingga dua belas bulan sampai bulan itu ([ADR-044](./ADR/044-twelve-months-of-dues.md)), dan amplopnya. Foto nota hanya ditandai, tidak ditampilkan. Tautan ditampilkan, disalin, dan dibuat ulang dari Pengaturan. ([ADR-035](./ADR/035-public-report.md), [ADR-037](./ADR/037-report-shows-the-month-as-it-ended.md))
 - **PDF bulanan** dari laporan yang sama, bisa diunduh dari halaman, untuk dicetak atau dikirim ke grup. (Ditambahkan 2026-10-02.)
 
 ### 7.10 Cadangan / ekspor
