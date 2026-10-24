@@ -60,7 +60,7 @@ func generateReportSlug() (string, error) {
 // lets her choose and name each one, rather than SetUpFund fixing a
 // cash/bank pair.
 type AccountInput struct {
-	Kind string // "cash" or "bank" - the schema's own CHECK (kind IN (...)) is the single source of truth for the set
+	Kind AccountKind
 	Name string // non-empty after trimming - the schema's own CHECK (length(trim(name)) > 0) refuses it, not pre-validated here (ADR-027)
 
 	// OpeningBalance is this account's starting figure, optional (#230): a
@@ -183,7 +183,7 @@ func (l *Ledger) SetUpFund(ctx context.Context, p SetUpFundParams) (SetUpFundRes
 		// "Kas Utama" is the domain's name for the routine purpose (CONTEXT.md,
 		// ADR-014), not user input, so SetUpFundParams has no field for it.
 		mainPurpose, err := q.CreatePurpose(ctx, store.CreatePurposeParams{
-			FundID: fund.ID, Kind: "main", Name: "Kas Utama", CreatedAt: now,
+			FundID: fund.ID, Kind: string(PurposeKindMain), Name: "Kas Utama", CreatedAt: now,
 		})
 		if err != nil {
 			return fmt.Errorf("creating main purpose: %w", err)
@@ -196,7 +196,7 @@ func (l *Ledger) SetUpFund(ctx context.Context, p SetUpFundParams) (SetUpFundRes
 		accounts := make([]store.Account, 0, len(p.Accounts))
 		for _, a := range p.Accounts {
 			account, err := q.CreateAccount(ctx, store.CreateAccountParams{
-				FundID: fund.ID, Kind: a.Kind, Name: a.Name, CreatedAt: now,
+				FundID: fund.ID, Kind: string(a.Kind), Name: a.Name, CreatedAt: now,
 			})
 			if err != nil {
 				return fmt.Errorf("creating account %q: %w", a.Name, err)

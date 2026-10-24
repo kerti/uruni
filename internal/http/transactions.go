@@ -21,13 +21,13 @@ import (
 // PostTransactionParams on the wire rather than exposing a raw kind (as
 // passThroughPurposeRequest omits Kind, ADR-027).
 type transactionRequest struct {
-	AccountID    int64   `json:"account_id"`
-	PurposeID    int64   `json:"purpose_id"`
-	Direction    string  `json:"direction"`
-	Amount       int64   `json:"amount"`
-	OccurredOn   string  `json:"occurred_on"`
-	Note         *string `json:"note"`
-	IsAdjustment bool    `json:"is_adjustment"`
+	AccountID    int64            `json:"account_id"`
+	PurposeID    int64            `json:"purpose_id"`
+	Direction    ledger.Direction `json:"direction"`
+	Amount       int64            `json:"amount"`
+	OccurredOn   string           `json:"occurred_on"`
+	Note         *string          `json:"note"`
+	IsAdjustment bool             `json:"is_adjustment"`
 
 	// MemberID optionally names who a contribution into an open envelope is from
 	// (ADR-034, #211), Catat's "Dari siapa? (opsional)"; meaningful only on a
@@ -193,7 +193,7 @@ func toTransactionsPageResponse(t store.ListTransactionsPageRow, today string) t
 	resp.Counted = t.Counted != 0
 	resp.ReversesOccurredOn = t.ReversesOccurredOn
 	resp.Reversible = ledger.ReversalRefusal(ledger.ReversalFacts{
-		Kind:                t.Kind,
+		Kind:                ledger.TransactionKind(t.Kind),
 		OccurredOn:          t.OccurredOn,
 		IsReversal:          t.ReversesTransactionID != nil,
 		Reversed:            resp.Reversed,
@@ -211,16 +211,16 @@ func toTransactionsPageResponse(t store.ListTransactionsPageRow, today string) t
 
 	if t.TransferKind != nil {
 		switch *t.TransferKind {
-		case "between_accounts":
+		case string(ledger.TransferKindBetweenAccounts):
 			resp.TransferFromName = t.TransferFromAccountName
 			resp.TransferToName = t.TransferToAccountName
-		case "reclass_purpose":
+		case string(ledger.TransferKindReclassPurpose):
 			resp.TransferFromName = t.TransferFromPurposeName
 			resp.TransferToName = t.TransferToPurposeName
 			// A correction reads as what happened to the row it corrects (#654):
 			// for an 'out' row the pair's money runs from the new pos back to
 			// the stored one, so the names swap.
-			if t.TransferCorrectsDirection != nil && *t.TransferCorrectsDirection == "out" {
+			if t.TransferCorrectsDirection != nil && *t.TransferCorrectsDirection == string(ledger.DirectionOut) {
 				resp.TransferFromName, resp.TransferToName = resp.TransferToName, resp.TransferFromName
 			}
 		}
@@ -426,7 +426,7 @@ func (a *api) listTransactions(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if direction := r.URL.Query().Get("direction"); direction != "" {
-		if direction != "in" && direction != "out" {
+		if direction != string(ledger.DirectionIn) && direction != string(ledger.DirectionOut) {
 			writeAPIFieldError(w, http.StatusBadRequest, "invalid_argument", "direction", "The direction filter must be \"in\" or \"out\".")
 			return
 		}

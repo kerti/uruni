@@ -3,6 +3,7 @@
 // reconcile screen builds around (PRD section 7.8).
 
 import { apiFetch } from '@/lib/api'
+import type { Direction, Resolution } from '@/lib/enums'
 
 /** One still-open counted line across every reconciliation snapshot - a gap
  * found at a count that hasn't been resolved yet. */
@@ -12,7 +13,7 @@ export interface OpenReconciliationLine {
   recorded_amount: number
   actual_amount: number
   difference_amount: number
-  resolution: string
+  resolution: Resolution
   adjustment_transaction_id: number | null
   /** What the line still has open: difference_amount minus its fix, signed
    * like difference_amount. Every "selisih" reads this, never
@@ -59,7 +60,7 @@ export function getLatestReconciliation(): Promise<LatestReconciliation> {
  */
 export interface FixInput {
   purposeId: number
-  direction: 'in' | 'out'
+  direction: Direction
   amount: number
   occurredOn: string
   note: string | null
@@ -74,7 +75,7 @@ export interface FixInput {
 export interface AccountCountInput {
   accountId: number
   actualAmount: number
-  resolution: 'matched' | 'entry_added' | 'adjusted' | 'left_open'
+  resolution: Resolution
   fix?: FixInput
 }
 
@@ -87,7 +88,7 @@ export interface ReconciliationLine {
   recorded_amount: number
   actual_amount: number
   difference_amount: number
-  resolution: string
+  resolution: Resolution
   adjustment_transaction_id: number | null
   /** See OpenReconciliationLine.remainder_amount. 0 means closed. */
   remainder_amount: number
@@ -99,7 +100,7 @@ export interface ReconciliationLine {
  * positive and "out" negative - the same arithmetic the server does, for the
  * live "masih tersisa" line. Plain integers.
  */
-export function fixRemainder(difference: number, direction: 'in' | 'out', amount: number): number {
+export function fixRemainder(difference: number, direction: Direction, amount: number): number {
   return difference - (direction === 'in' ? amount : -amount)
 }
 

@@ -143,7 +143,7 @@ func toDuesPaymentHistoryResponse(row store.ListDuesPaymentsPageRow) duesPayment
 	}
 	return duesPaymentHistoryResponse{
 		ID:                      row.ID,
-		IsReversal:              row.Kind == "adjustment",
+		IsReversal:              row.Kind == string(ledger.TransactionKindAdjustment),
 		MemberID:                memberID,
 		MemberName:              row.MemberName,
 		DuesPeriod:              duesPeriod,

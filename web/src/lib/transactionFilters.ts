@@ -1,13 +1,15 @@
 // Riwayat -> Transaksi's filters as URL state - read by
 // History/Transactions.tsx, edited in TransactionFilterDialog.
 
+import type { Direction } from '@/lib/enums'
+
 /** The public report's four filters, under the report's URL params -
  * `month`, `purpose`, `member`, `dir`. */
 export interface TransactionFilters {
   month: string | null
   purposeId: number | null
   memberId: number | null
-  direction: 'in' | 'out' | null
+  direction: Direction | null
 }
 
 export const noFilters: TransactionFilters = { month: null, purposeId: null, memberId: null, direction: null }

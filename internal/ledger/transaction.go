@@ -26,7 +26,7 @@ type PostTransactionParams struct {
 	FundID     int64
 	AccountID  int64
 	PurposeID  int64
-	Direction  string       // "in" or "out"
+	Direction  Direction
 	Amount     money.Amount // must be > 0
 	OccurredOn string       // "YYYY-MM-DD", a real calendar date
 	Note       *string
@@ -74,7 +74,7 @@ func (l *Ledger) PostTransaction(ctx context.Context, p PostTransactionParams) (
 	if err := CheckAmountCeiling("amount", p.Amount); err != nil {
 		return store.Transaction{}, err
 	}
-	if p.Direction != "in" && p.Direction != "out" {
+	if p.Direction != DirectionIn && p.Direction != DirectionOut {
 		return store.Transaction{}, invalidField("direction", "direction must be \"in\" or \"out\", got %q", p.Direction)
 	}
 	window, err := l.windowFor(ctx, l.q, p.FundID)
@@ -93,9 +93,9 @@ func (l *Ledger) PostTransaction(ctx context.Context, p PostTransactionParams) (
 		}
 	}
 
-	kind := "normal"
+	kind := TransactionKindNormal
 	if p.IsAdjustment {
-		kind = "adjustment"
+		kind = TransactionKindAdjustment
 	}
 
 	posted, err := withIdempotency(ctx, l, p.Idempotency, func(ctx context.Context, q store.Querier) (store.Transaction, error) {
@@ -125,10 +125,10 @@ func (l *Ledger) PostTransaction(ctx context.Context, p PostTransactionParams) (
 			FundID:     p.FundID,
 			AccountID:  p.AccountID,
 			PurposeID:  p.PurposeID,
-			Direction:  p.Direction,
+			Direction:  string(p.Direction),
 			Amount:     p.Amount.Int64(),
 			OccurredOn: p.OccurredOn,
-			Kind:       kind,
+			Kind:       string(kind),
 			MemberID:   p.MemberID,
 			Note:       p.Note,
 			CreatedAt:  l.now().Unix(),
@@ -195,10 +195,10 @@ func postOpeningBalanceRow(ctx context.Context, q store.Querier, fundID, account
 		FundID:     fundID,
 		AccountID:  accountID,
 		PurposeID:  purposeID,
-		Direction:  "in",
+		Direction:  string(DirectionIn),
 		Amount:     ob.Amount.Int64(),
 		OccurredOn: ob.OccurredOn,
-		Kind:       "opening",
+		Kind:       string(TransactionKindOpening),
 		Note:       normalizeNote(ob.Note),
 		CreatedAt:  now,
 	})
@@ -208,7 +208,7 @@ func postOpeningBalanceRow(ctx context.Context, q store.Querier, fundID, account
 // location, optionally with its starting figure.
 type CreateAccountParams struct {
 	FundID         int64
-	Kind           string // "cash" or "bank" - the schema's own CHECK is the single source of truth (ADR-027)
+	Kind           AccountKind
 	Name           string // non-empty after trimming - the schema's own CHECK refuses it, not pre-validated here (ADR-027)
 	OpeningBalance *OpeningBalance
 
@@ -239,7 +239,7 @@ func (l *Ledger) CreateAccount(ctx context.Context, p CreateAccountParams) (stor
 		now := l.now().Unix()
 
 		account, err := q.CreateAccount(ctx, store.CreateAccountParams{
-			FundID: p.FundID, Kind: p.Kind, Name: p.Name, CreatedAt: now,
+			FundID: p.FundID, Kind: string(p.Kind), Name: p.Name, CreatedAt: now,
 		})
 		if err != nil {
 			return store.Account{}, err

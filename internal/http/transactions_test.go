@@ -14,6 +14,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/kerti/uruni/internal/ledger"
 	"github.com/kerti/uruni/internal/store"
 )
 
@@ -760,7 +761,7 @@ func TestGetTransactionsMonthAndDirectionFilters(t *testing.T) {
 	r := testRouter(t)
 	setup := setUpFund(t, r)
 
-	post := func(direction, occurredOn string) int64 {
+	post := func(direction ledger.Direction, occurredOn string) int64 {
 		t.Helper()
 		rec := postTransaction(t, r, transactionRequest{
 			AccountID: setup.CashAccountID(t), PurposeID: setup.MainPurposeID,

@@ -49,7 +49,7 @@ func toFundResponse(f store.Fund, baseURL string) fundResponse {
 // opening balance are born together, or not at all). Absent equals 0; neither
 // posts a row.
 type setupAccountRequest struct {
-	Kind           string                 `json:"kind"`
+	Kind           ledger.AccountKind     `json:"kind"`
 	Name           string                 `json:"name"`
 	OpeningBalance *openingBalanceRequest `json:"opening_balance"`
 }

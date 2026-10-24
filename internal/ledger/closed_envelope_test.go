@@ -167,7 +167,7 @@ func TestTakeReconciliationRefusesAFixOnAClosedEnvelope(t *testing.T) {
 	postOpeningBalance(t, l, f.fundID, f.cashID, f.mainID, 100_000, "2026-08-01")
 	envelopeID, _ := closedEnvelopeWithClaim(t, l, f)
 
-	for _, resolution := range []string{"adjusted", "entry_added"} {
+	for _, resolution := range []Resolution{ResolutionAdjusted, ResolutionEntryAdded} {
 		_, err := l.TakeReconciliation(ctx, TakeReconciliationParams{
 			FundID: f.fundID,
 			Counts: []AccountCount{{

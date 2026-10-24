@@ -69,11 +69,11 @@ func normalizeNote(note *string) *string {
 // CloseIncidentalAndRoll needs the pair and the incidental UPDATE in one
 // atomic write, and a nested l.withTx is refused with txguard.ErrNested:
 // under ADR-004's SetMaxOpenConns(1) the outer one holds the only connection. Every caller opens its withTx and passes its Querier in.
-func (l *Ledger) postTransferPairTx(ctx context.Context, q store.Querier, fundID int64, kind string, from, to leg, amount money.Amount, occurredOn string, note *string, correctsTransactionID *int64, reason *string) (store.Transfer, error) {
+func (l *Ledger) postTransferPairTx(ctx context.Context, q store.Querier, fundID int64, kind TransferKind, from, to leg, amount money.Amount, occurredOn string, note *string, correctsTransactionID *int64, reason *string) (store.Transfer, error) {
 	now := l.now().Unix()
 
 	transfer, err := q.CreateTransfer(ctx, store.CreateTransferParams{
-		FundID: fundID, Kind: kind, CorrectsTransactionID: correctsTransactionID, Reason: reason, CreatedAt: now,
+		FundID: fundID, Kind: string(kind), CorrectsTransactionID: correctsTransactionID, Reason: reason, CreatedAt: now,
 	})
 	if err != nil {
 		return store.Transfer{}, fmt.Errorf("creating transfer: %w", err)
@@ -81,12 +81,12 @@ func (l *Ledger) postTransferPairTx(ctx context.Context, q store.Querier, fundID
 
 	for _, p := range [...]struct {
 		leg       leg
-		direction string
-	}{{from, "out"}, {to, "in"}} {
+		direction Direction
+	}{{from, DirectionOut}, {to, DirectionIn}} {
 		if _, err := q.CreateTransaction(ctx, store.CreateTransactionParams{
 			FundID: fundID, AccountID: p.leg.AccountID, PurposeID: p.leg.PurposeID,
-			Direction: p.direction, Amount: amount.Int64(), OccurredOn: occurredOn,
-			Kind: "transfer", TransferID: &transfer.ID, Note: note, CreatedAt: now,
+			Direction: string(p.direction), Amount: amount.Int64(), OccurredOn: occurredOn,
+			Kind: string(TransactionKindTransfer), TransferID: &transfer.ID, Note: note, CreatedAt: now,
 		}); err != nil {
 			return store.Transfer{}, fmt.Errorf("posting transfer leg (%s): %w", p.direction, err)
 		}
@@ -153,7 +153,7 @@ func (l *Ledger) PostTransferBetweenAccounts(ctx context.Context, p PostTransfer
 				return store.Transfer{}, err
 			}
 		}
-		return l.postTransferPairTx(ctx, q, p.FundID, "between_accounts", from, to, p.Amount, p.OccurredOn, normalizeNote(p.Note), nil, nil)
+		return l.postTransferPairTx(ctx, q, p.FundID, TransferKindBetweenAccounts, from, to, p.Amount, p.OccurredOn, normalizeNote(p.Note), nil, nil)
 	})
 	if err != nil {
 		return store.Transfer{}, fmt.Errorf("posting transfer between accounts: %w", err)

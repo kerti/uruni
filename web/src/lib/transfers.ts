@@ -1,13 +1,14 @@
 // Typed call over apiFetch for POST /api/transfers.
 
 import { apiFetch } from '@/lib/api'
+import type { TransferKind } from '@/lib/enums'
 
 /** The transfer row POST /api/transfers answers with. The two legs it binds
  * are ordinary transactions, already readable through GET /api/transactions,
  * which is why there is no GET /api/transfers to pair with this. */
 export interface Transfer {
   id: number
-  kind: string
+  kind: TransferKind
   created_at: number
 }
 

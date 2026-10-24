@@ -148,10 +148,10 @@ func (l *Ledger) SettleReimbursement(ctx context.Context, p SettleReimbursementP
 			FundID:          p.FundID,
 			AccountID:       p.AccountID,
 			PurposeID:       claim.PurposeID,
-			Direction:       "out",
+			Direction:       string(DirectionOut),
 			Amount:          claim.Amount,
 			OccurredOn:      p.OccurredOn,
-			Kind:            "reimbursement",
+			Kind:            string(TransactionKindReimbursement),
 			ReimbursementID: &p.ReimbursementID,
 			CreatedAt:       l.now().Unix(),
 		})

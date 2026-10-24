@@ -506,7 +506,7 @@ func TestCorrectionsOnARowOfARetiredLocationStillWork(t *testing.T) {
 
 // --- Cek kas: each active location, no retired one ---
 
-func countOf(accountID int64, amount money.Amount, resolution string) AccountCount {
+func countOf(accountID int64, amount money.Amount, resolution Resolution) AccountCount {
 	return AccountCount{AccountID: accountID, ActualAmount: amount, Resolution: resolution}
 }
 

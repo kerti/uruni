@@ -117,7 +117,7 @@ func seedInstance(t *testing.T, path, uploadsDir string) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	post := func(direction string, amount int64) store.Transaction {
+	post := func(direction ledger.Direction, amount int64) store.Transaction {
 		txn, err := l.PostTransaction(ctx, ledger.PostTransactionParams{
 			FundID: setup.Fund.ID, AccountID: setup.Accounts[0].ID, PurposeID: setup.MainPurposeID,
 			Direction: direction, Amount: money.Amount(amount), OccurredOn: "2026-10-05",

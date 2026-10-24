@@ -86,7 +86,7 @@ function transaction(id: number, overrides: Partial<Transaction> = {}): Transact
     direction: 'in',
     amount: 10_000,
     occurred_on: '2026-09-01',
-    kind: 'standard',
+    kind: 'normal',
     member_id: null,
     dues_period: null,
     reimbursement_id: null,

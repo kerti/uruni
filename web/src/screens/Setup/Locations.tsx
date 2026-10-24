@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { copy } from '@/copy/id'
 import { newLocationRow } from '@/screens/Setup/locationRow'
 import type { LocationRow } from '@/screens/Setup/locationRow'
+import type { AccountKind } from '@/lib/enums'
 
 const text = copy.setup
 
@@ -67,7 +68,7 @@ export default function Locations({
               <div key={row.clientId} className="flex flex-col gap-1.5 rounded-lg border border-border p-3">
                 <div className="flex flex-col gap-1.5">
                   <Label htmlFor={`setup-location-kind-${row.clientId}`}>{text.locations.kindLabel}</Label>
-                  <Select value={row.kind} onValueChange={(next) => updateRow(row.clientId, { kind: next as 'cash' | 'bank' })}>
+                  <Select value={row.kind} onValueChange={(next) => updateRow(row.clientId, { kind: next as AccountKind })}>
                     <SelectTrigger id={`setup-location-kind-${row.clientId}`} aria-label={text.locations.kindLabel}>
                       <SelectValue>{row.kind === 'bank' ? text.locations.kindBank : text.locations.kindCash}</SelectValue>
                     </SelectTrigger>

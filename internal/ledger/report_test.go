@@ -44,7 +44,7 @@ func onTheDay(date string) time.Time {
 
 // postEntry posts one kind='normal' (or, with adjustment, kind='adjustment')
 // row and returns it.
-func postEntry(t *testing.T, l *Ledger, fundID, accountID, purposeID int64, direction string, amount money.Amount, date string, note *string) store.Transaction {
+func postEntry(t *testing.T, l *Ledger, fundID, accountID, purposeID int64, direction Direction, amount money.Amount, date string, note *string) store.Transaction {
 	t.Helper()
 	posted, err := l.at(onTheDay(date)).PostTransaction(context.Background(), PostTransactionParams{
 		FundID: fundID, AccountID: accountID, PurposeID: purposeID,

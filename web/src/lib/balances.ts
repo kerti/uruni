@@ -1,6 +1,7 @@
 // Typed call over apiFetch for GET /api/balances.
 
 import { apiFetch } from '@/lib/api'
+import type { AccountKind, PurposeKind } from '@/lib/enums'
 
 /** One account's (location's) share of the fund total within GET
  * /api/balances. No `inactive_on` here, so this row can't say whether the
@@ -9,7 +10,7 @@ import { apiFetch } from '@/lib/api'
  * order returned. */
 export interface AccountBalance {
   id: number
-  kind: string
+  kind: AccountKind
   name: string
   balance: number
 }
@@ -18,7 +19,7 @@ export interface AccountBalance {
  * by the home screen, but part of the same response body. */
 export interface PurposeBalance {
   id: number
-  kind: string
+  kind: PurposeKind
   name: string
   balance: number
 }

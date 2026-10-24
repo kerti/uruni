@@ -4,6 +4,7 @@
 
 import { apiFetch } from '@/lib/api'
 import type { Account } from '@/lib/setup'
+import type { AccountKind } from '@/lib/enums'
 
 export type { Account }
 
@@ -31,7 +32,7 @@ export function listAccounts(): Promise<Account[]> {
  * row explains itself through a display label.
  */
 export function createAccount(
-  kind: string,
+  kind: AccountKind,
   name: string,
   openingBalance?: { amount: number; occurredOn: string; note?: string | null },
 ): Promise<Account> {
@@ -58,7 +59,7 @@ export function createAccount(
  * Kind is editable because nothing in the ledger branches on it: 'cash' vs
  * 'bank' is a label on the location, not a rule about the money in it.
  */
-export function updateAccount(id: number, patch: { name?: string; kind?: string }): Promise<Account> {
+export function updateAccount(id: number, patch: { name?: string; kind?: AccountKind }): Promise<Account> {
   const body: Record<string, string> = {}
   if (patch.name !== undefined) body.name = patch.name
   if (patch.kind !== undefined) body.kind = patch.kind

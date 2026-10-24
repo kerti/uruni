@@ -18,21 +18,21 @@ import (
 // occurred_on) are TakeReconciliation's job (ADR-027); the handler passes
 // through.
 type fixRequest struct {
-	PurposeID  int64   `json:"purpose_id"`
-	Direction  string  `json:"direction"`
-	Amount     int64   `json:"amount"`
-	OccurredOn string  `json:"occurred_on"`
-	Note       *string `json:"note"`
+	PurposeID  int64            `json:"purpose_id"`
+	Direction  ledger.Direction `json:"direction"`
+	Amount     int64            `json:"amount"`
+	OccurredOn string           `json:"occurred_on"`
+	Note       *string          `json:"note"`
 }
 
 // accountCountRequest is one counted location within POST
 // /api/reconciliations's body: an account, what the treasurer found, how the
 // gap (if any) was resolved, and the fix where the resolution calls for one.
 type accountCountRequest struct {
-	AccountID    int64       `json:"account_id"`
-	ActualAmount int64       `json:"actual_amount"`
-	Resolution   string      `json:"resolution"`
-	Fix          *fixRequest `json:"fix"`
+	AccountID    int64             `json:"account_id"`
+	ActualAmount int64             `json:"actual_amount"`
+	Resolution   ledger.Resolution `json:"resolution"`
+	Fix          *fixRequest       `json:"fix"`
 }
 
 // takeReconciliationRequest is POST /api/reconciliations's body: one snapshot

@@ -12,6 +12,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/kerti/uruni/internal/ledger"
 	"github.com/kerti/uruni/internal/store"
 )
 
@@ -1003,7 +1004,7 @@ func TestGetReconciliationsOpenDifferenceAmount(t *testing.T) {
 
 // takeCashCount posts a Cek kas counting the cash account with one
 // resolution and one fix (the bank always counts 0, matched).
-func takeCashCount(t *testing.T, r http.Handler, setup setupResponse, actual int64, resolution, direction string, amount int64) *httptest.ResponseRecorder {
+func takeCashCount(t *testing.T, r http.Handler, setup setupResponse, actual int64, resolution ledger.Resolution, direction ledger.Direction, amount int64) *httptest.ResponseRecorder {
 	t.Helper()
 	return postReconciliation(t, r, takeReconciliationRequest{
 		Counts: []accountCountRequest{{
@@ -1028,7 +1029,7 @@ func seedCash(t *testing.T, r http.Handler, setup setupResponse, amount int64) {
 func TestTakeReconciliationAdjustedPlugThatMissesTheDifferenceIs409(t *testing.T) {
 	t.Parallel()
 	for name, tc := range map[string]struct {
-		direction string
+		direction ledger.Direction
 		amount    int64
 	}{
 		"undershoot":      {"in", 20_000},

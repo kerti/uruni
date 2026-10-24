@@ -1106,7 +1106,7 @@ func TestGetIncidentalDetailReadsCorrectionsIntoAndOutOfTheEnvelope(t *testing.T
 			t.Errorf("%s: Collected - Disbursed = %d, want it to equal PurposeBalance() = %d", step, detail.Collected-detail.Disbursed, balance)
 		}
 	}
-	post := func(purposeID int64, direction string, amount money.Amount) int64 {
+	post := func(purposeID int64, direction Direction, amount money.Amount) int64 {
 		t.Helper()
 		posted, err := l.PostTransaction(ctx, PostTransactionParams{
 			FundID: f.fundID, AccountID: f.cashID, PurposeID: purposeID,

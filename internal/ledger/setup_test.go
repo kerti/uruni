@@ -143,7 +143,7 @@ func TestSetUpFundWritesEveryRequestedAccountAtomically(t *testing.T) {
 	}
 	for i, want := range requested {
 		got := result.Accounts[i]
-		if got.Kind != want.Kind || got.Name != want.Name {
+		if got.Kind != string(want.Kind) || got.Name != want.Name {
 			t.Errorf("result.Accounts[%d] = {Kind: %q, Name: %q}, want {Kind: %q, Name: %q}",
 				i, got.Kind, got.Name, want.Kind, want.Name)
 		}

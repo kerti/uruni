@@ -31,7 +31,7 @@ func TestGetBalancesMonthMatchesTheReportsRunningWalk(t *testing.T) {
 	}
 	fundID, cash, bank, main := res.Fund.ID, res.Accounts[0].ID, res.Accounts[1].ID, res.MainPurposeID
 
-	post := func(direction string, amount int64, on string, adjustment bool) int64 {
+	post := func(direction ledger.Direction, amount int64, on string, adjustment bool) int64 {
 		t.Helper()
 		tx, err := l.PostTransaction(ctx, ledger.PostTransactionParams{
 			FundID: fundID, AccountID: cash, PurposeID: main, Direction: direction, Amount: money.Amount(amount), OccurredOn: on, IsAdjustment: adjustment,
