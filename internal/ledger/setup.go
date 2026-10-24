@@ -163,7 +163,7 @@ func (l *Ledger) SetUpFund(ctx context.Context, p SetUpFundParams) (SetUpFundRes
 	}
 
 	var result SetUpFundResult
-	err = l.withTx(ctx, func(q store.Querier) error {
+	err = l.withTx(ctx, func(ctx context.Context, q store.Querier) error {
 		existing, err := q.ListFunds(ctx)
 		if err != nil {
 			return fmt.Errorf("checking for an existing fund: %w", err)
@@ -242,7 +242,7 @@ func (l *Ledger) ReplaceReportSlug(ctx context.Context, fundID int64) (store.Fun
 		return store.Fund{}, err
 	}
 	var fund store.Fund
-	err = l.withTx(ctx, func(q store.Querier) error {
+	err = l.withTx(ctx, func(ctx context.Context, q store.Querier) error {
 		var err error
 		fund, err = q.UpdateFundReportSlug(ctx, store.UpdateFundReportSlugParams{ReportSlug: slug, ID: fundID})
 		return err

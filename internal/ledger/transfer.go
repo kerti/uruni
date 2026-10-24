@@ -68,9 +68,8 @@ func normalizeNote(note *string) *string {
 //
 // It takes an open store.Querier rather than opening its own transaction:
 // CloseIncidentalAndRoll needs the pair and the incidental UPDATE in one
-// atomic write, and a nested l.withTx would ask ADR-004's
-// SetMaxOpenConns(1) for a second connection while the outer holds the only
-// one: a deadlock. Every caller opens its withTx and passes its Querier in.
+// atomic write, and a nested l.withTx is refused with txguard.ErrNested:
+// under ADR-004's SetMaxOpenConns(1) the outer one holds the only connection. Every caller opens its withTx and passes its Querier in.
 func (l *Ledger) postTransferPairTx(ctx context.Context, q store.Querier, fundID int64, kind string, from, to leg, amount money.Amount, occurredOn string, note *string, correctsTransactionID *int64, reason *string) (store.Transfer, error) {
 	now := time.Now().Unix()
 
@@ -153,7 +152,7 @@ func (l *Ledger) PostTransferBetweenAccounts(ctx context.Context, p PostTransfer
 	// Both locations are checked inside the write's transaction: money neither
 	// leaves a retired location nor arrives in one (#444). To empty a retired
 	// location, reinstate it, move, retire again.
-	transfer, err := withIdempotency(ctx, l, p.Idempotency, func(q store.Querier) (store.Transfer, error) {
+	transfer, err := withIdempotency(ctx, l, p.Idempotency, func(ctx context.Context, q store.Querier) (store.Transfer, error) {
 		for _, accountID := range [...]int64{p.FromAccountID, p.ToAccountID} {
 			if err := refuseInactiveAccount(ctx, q, p.FundID, accountID); err != nil {
 				return store.Transfer{}, err

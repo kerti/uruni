@@ -3,10 +3,13 @@ package ledger
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/kerti/uruni/internal/store"
+	"github.com/kerti/uruni/internal/txguard"
 )
 
 // The harness is worth something only if it reaches the real schema, so these
@@ -77,7 +80,7 @@ func TestWithTxCommits(t *testing.T) {
 	ctx := context.Background()
 
 	var id int64
-	if err := l.withTx(ctx, func(q store.Querier) error {
+	if err := l.withTx(ctx, func(ctx context.Context, q store.Querier) error {
 		posted, err := q.CreateTransaction(ctx, store.CreateTransactionParams{
 			FundID: f.fundID, AccountID: f.cashID, PurposeID: f.mainID,
 			Direction: "in", Amount: 120_000, OccurredOn: "2026-08-12", Kind: "normal",
@@ -104,7 +107,7 @@ func TestWithTxRollsBackAndReturnsTheError(t *testing.T) {
 
 	// Two writes, then a failure: the second row proves the rollback covers the
 	// whole function, not only its last statement.
-	err := l.withTx(ctx, func(q store.Querier) error {
+	err := l.withTx(ctx, func(ctx context.Context, q store.Querier) error {
 		for _, amount := range []int64{50_000, 70_000} {
 			if _, err := q.CreateTransaction(ctx, store.CreateTransactionParams{
 				FundID: f.fundID, AccountID: f.cashID, PurposeID: f.mainID,
@@ -139,7 +142,7 @@ func TestWithTxReportsAFailureToBegin(t *testing.T) {
 	}
 
 	called := false
-	err := l.withTx(context.Background(), func(store.Querier) error {
+	err := l.withTx(context.Background(), func(context.Context, store.Querier) error {
 		called = true
 		return nil
 	})
@@ -160,7 +163,7 @@ func TestWithTxRollsBackWhenTheSchemaRefusesAWrite(t *testing.T) {
 	f := newFixture(t, l)
 	ctx := context.Background()
 
-	err := l.withTx(ctx, func(q store.Querier) error {
+	err := l.withTx(ctx, func(ctx context.Context, q store.Querier) error {
 		if _, err := q.CreateTransaction(ctx, store.CreateTransactionParams{
 			FundID: f.fundID, AccountID: f.cashID, PurposeID: f.mainID,
 			Direction: "in", Amount: 50_000, OccurredOn: "2026-08-12", Kind: "normal",
@@ -186,5 +189,87 @@ func TestWithTxRollsBackWhenTheSchemaRefusesAWrite(t *testing.T) {
 	}
 	if len(rows) != 0 {
 		t.Errorf("ledger holds %d rows after a refused write, want 0", len(rows))
+	}
+}
+
+// The pool holds one connection and withTx's transaction owns it, so a nested
+// withTx or any pool read inside fn would wait on a connection its own caller
+// holds. Each case runs under
+// a short deadline: a regression fails with a deadline error here instead of
+// hanging the suite.
+func TestWithTxRefusesWhatWouldDeadlockOnTheHeldConnection(t *testing.T) {
+	t.Parallel()
+	l := newTestLedger(t)
+	f := newFixture(t, l)
+
+	cases := []struct {
+		name string
+		do   func(ctx context.Context) error
+	}{
+		{"a nested withTx", func(ctx context.Context) error {
+			return l.withTx(ctx, func(context.Context, store.Querier) error { return nil })
+		}},
+		{"a public read method", func(ctx context.Context) error {
+			_, err := l.FundBalance(ctx, f.fundID)
+			return err
+		}},
+		{"a many-row read through l.q", func(ctx context.Context) error {
+			_, err := l.q.ListTransactionsByFund(ctx, f.fundID)
+			return err
+		}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+			defer cancel()
+
+			err := l.withTx(ctx, func(ctx context.Context, _ store.Querier) error {
+				return tc.do(ctx)
+			})
+			if !errors.Is(err, txguard.ErrNested) {
+				t.Fatalf("withTx(%s) = %v, want txguard.ErrNested", tc.name, err)
+			}
+			if ctx.Err() != nil {
+				t.Errorf("withTx(%s) ran into its deadline: it blocked instead of refusing", tc.name)
+			}
+		})
+	}
+
+	// withIdempotency's write runs inside the same transaction, keyed or not:
+	// it gets the marked context, so a pool read there is refused too.
+	for _, idem := range []*Idempotency{nil, {Key: "k", Fingerprint: strings.Repeat("0", 64), Now: 1, ExpiresAt: 2}} {
+		t.Run(fmt.Sprintf("a pool read in an idempotent write, keyed=%t", idem != nil), func(t *testing.T) {
+			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+			defer cancel()
+
+			_, err := withIdempotency(ctx, l, idem, func(ctx context.Context, _ store.Querier) (store.Transaction, error) {
+				_, err := l.FundBalance(ctx, f.fundID)
+				return store.Transaction{}, err
+			})
+			if !errors.Is(err, txguard.ErrNested) {
+				t.Fatalf("withIdempotency() = %v, want txguard.ErrNested", err)
+			}
+			if ctx.Err() != nil {
+				t.Errorf("withIdempotency() ran into its deadline: it blocked instead of refusing")
+			}
+		})
+	}
+}
+
+// The refusal comes before BeginTx, and it leaves the connection free: the
+// next withTx works.
+func TestWithTxStillWorksAfterANestedRefusal(t *testing.T) {
+	t.Parallel()
+	l := newTestLedger(t)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	_ = l.withTx(ctx, func(ctx context.Context, _ store.Querier) error {
+		return l.withTx(ctx, func(context.Context, store.Querier) error { return nil })
+	})
+
+	if err := l.withTx(ctx, func(context.Context, store.Querier) error { return nil }); err != nil {
+		t.Fatalf("withTx() after a refused nested call = %v, want no error", err)
 	}
 }

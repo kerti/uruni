@@ -54,7 +54,7 @@ func (l *Ledger) CreateMember(ctx context.Context, p CreateMemberParams) (Member
 		return Member{}, err
 	}
 	var out Member
-	err = l.withTx(ctx, func(q store.Querier) error {
+	err = l.withTx(ctx, func(ctx context.Context, q store.Querier) error {
 		now := time.Now().Unix()
 		m, err := q.CreateMember(ctx, store.CreateMemberParams{
 			FundID: p.FundID, Name: p.Name, JoinedOn: p.JoinedOn, CreatedAt: now,
@@ -159,7 +159,7 @@ func (l *Ledger) UpdateMember(ctx context.Context, p UpdateMemberParams) (Member
 	}
 
 	var out Member
-	err := l.withTx(ctx, func(q store.Querier) error {
+	err := l.withTx(ctx, func(ctx context.Context, q store.Querier) error {
 		fund, err := q.GetFund(ctx, p.FundID)
 		if err != nil {
 			return fmt.Errorf("fetching fund: %w", err)

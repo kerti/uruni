@@ -83,7 +83,7 @@ func (l *Ledger) PostPurposeMove(ctx context.Context, p PostPurposeMoveParams) (
 		return store.Transfer{}, ErrPurposeMoveSamePurpose
 	}
 
-	created, err := withIdempotency(ctx, l, p.Idempotency, func(q store.Querier) (store.Transfer, error) {
+	created, err := withIdempotency(ctx, l, p.Idempotency, func(ctx context.Context, q store.Querier) (store.Transfer, error) {
 		for _, id := range [...]int64{p.FromPurposeID, p.ToPurposeID} {
 			purpose, err := q.GetPurposeForFund(ctx, store.GetPurposeForFundParams{ID: id, FundID: p.FundID})
 			if err != nil {

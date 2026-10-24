@@ -103,7 +103,7 @@ func (l *Ledger) PostTransaction(ctx context.Context, p PostTransactionParams) (
 		kind = "adjustment"
 	}
 
-	posted, err := withIdempotency(ctx, l, p.Idempotency, func(q store.Querier) (store.Transaction, error) {
+	posted, err := withIdempotency(ctx, l, p.Idempotency, func(ctx context.Context, q store.Querier) (store.Transaction, error) {
 		if err := refuseInactiveAccount(ctx, q, p.FundID, p.AccountID); err != nil {
 			return store.Transaction{}, err
 		}
@@ -244,7 +244,7 @@ func (l *Ledger) CreateAccount(ctx context.Context, p CreateAccountParams) (stor
 		}
 	}
 
-	account, err := withIdempotency(ctx, l, p.Idempotency, func(q store.Querier) (store.Account, error) {
+	account, err := withIdempotency(ctx, l, p.Idempotency, func(ctx context.Context, q store.Querier) (store.Account, error) {
 		now := time.Now().Unix()
 
 		account, err := q.CreateAccount(ctx, store.CreateAccountParams{

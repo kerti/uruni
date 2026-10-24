@@ -72,7 +72,7 @@ func (l *Ledger) OpenIncidental(ctx context.Context, p OpenIncidentalParams) (st
 		return store.Incidental{}, err
 	}
 
-	created, err := withIdempotency(ctx, l, p.Idempotency, func(q store.Querier) (store.Incidental, error) {
+	created, err := withIdempotency(ctx, l, p.Idempotency, func(ctx context.Context, q store.Querier) (store.Incidental, error) {
 		now := time.Now().Unix()
 
 		purpose, err := q.CreatePurpose(ctx, store.CreatePurposeParams{
@@ -162,7 +162,7 @@ func (l *Ledger) RenameIncidental(ctx context.Context, p RenameIncidentalParams)
 	}
 
 	var renamed store.Incidental
-	err := l.withTx(ctx, func(q store.Querier) error {
+	err := l.withTx(ctx, func(ctx context.Context, q store.Querier) error {
 		if _, err := q.GetIncidental(ctx, store.GetIncidentalParams{PurposeID: p.PurposeID, FundID: p.FundID}); err != nil {
 			return fmt.Errorf("fetching incidental: %w", err)
 		}
@@ -222,7 +222,7 @@ func (l *Ledger) SetIncidentalParticipation(ctx context.Context, p SetIncidental
 	}
 
 	var updated store.Incidental
-	err := l.withTx(ctx, func(q store.Querier) error {
+	err := l.withTx(ctx, func(ctx context.Context, q store.Querier) error {
 		if _, err := q.GetIncidental(ctx, store.GetIncidentalParams{PurposeID: p.PurposeID, FundID: p.FundID}); err != nil {
 			return fmt.Errorf("fetching incidental: %w", err)
 		}
@@ -311,7 +311,7 @@ func (l *Ledger) CloseIncidentalAndRoll(ctx context.Context, p CloseIncidentalAn
 
 	var rolled money.Amount
 	reason := reasonRoll
-	err = l.withTx(ctx, func(q store.Querier) error {
+	err = l.withTx(ctx, func(ctx context.Context, q store.Querier) error {
 		envelope, err := q.GetIncidental(ctx, store.GetIncidentalParams{
 			PurposeID: p.PurposeID, FundID: p.FundID,
 		})
@@ -473,7 +473,7 @@ func (l *Ledger) GetIncidentalDetail(ctx context.Context, fundID, purposeID int6
 // twice is refused, not a silent no-op.
 func (l *Ledger) ReopenIncidental(ctx context.Context, fundID, purposeID int64) (store.Incidental, error) {
 	var reopened store.Incidental
-	err := l.withTx(ctx, func(q store.Querier) error {
+	err := l.withTx(ctx, func(ctx context.Context, q store.Querier) error {
 		envelope, err := q.GetIncidental(ctx, store.GetIncidentalParams{
 			PurposeID: purposeID, FundID: fundID,
 		})

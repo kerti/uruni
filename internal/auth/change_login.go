@@ -41,7 +41,7 @@ func (a *Auth) ChangeEmail(ctx context.Context, userID int64, currentPassword, n
 	}
 
 	var user store.User
-	err := a.withTx(ctx, func(q store.Querier) error {
+	err := a.withTx(ctx, func(ctx context.Context, q store.Querier) error {
 		var err error
 		user, err = q.UpdateUserEmail(ctx, store.UpdateUserEmailParams{Email: email, ID: userID})
 		if err != nil {
@@ -76,7 +76,7 @@ func (a *Auth) ChangePassword(ctx context.Context, userID int64, currentPassword
 	}
 
 	var user store.User
-	err = a.withTx(ctx, func(q store.Querier) error {
+	err = a.withTx(ctx, func(ctx context.Context, q store.Querier) error {
 		var err error
 		user, err = q.UpdateUserPasswordByID(ctx, store.UpdateUserPasswordByIDParams{PasswordHash: hash, ID: userID})
 		if err != nil {

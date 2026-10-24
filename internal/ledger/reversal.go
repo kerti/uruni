@@ -127,7 +127,7 @@ func ReversalDate(occurredOn string, counted bool, today string) string {
 // ErrAccountInactive does not apply.
 func (l *Ledger) ReverseTransaction(ctx context.Context, p ReverseTransactionParams) (store.Transaction, error) {
 	var reversal store.Transaction
-	err := l.withTx(ctx, func(q store.Querier) error {
+	err := l.withTx(ctx, func(ctx context.Context, q store.Querier) error {
 		original, err := q.GetReversalTarget(ctx, store.GetReversalTargetParams{
 			FundID: p.FundID,
 			ID:     p.TransactionID,

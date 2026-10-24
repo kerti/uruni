@@ -159,7 +159,7 @@ func postOpeningBalance(t *testing.T, l *Ledger, fundID, accountID, purposeID in
 
 	ctx := context.Background()
 	var posted store.Transaction
-	err := l.withTx(ctx, func(q store.Querier) error {
+	err := l.withTx(ctx, func(ctx context.Context, q store.Querier) error {
 		var err error
 		posted, err = postOpeningBalanceRow(ctx, q, fundID, accountID, purposeID, ob, time.Now().Unix())
 		return err

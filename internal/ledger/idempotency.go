@@ -19,8 +19,9 @@ import (
 // returned nil.
 //
 // It rides inside the params, not around the call, because a caller's own
-// transaction would make the ledger's BeginTx wait for the only connection: the
-// check, the write and the record must share the ledger's withTx (ADR-043).
+// transaction would hold the only connection and the ledger's withTx would be
+// refused with txguard.ErrNested: the check, the write and the record must share
+// the ledger's withTx (ADR-043).
 type Idempotency struct {
 	Key string
 	// Fingerprint is the SHA-256 of the request, 64 hex characters (the HTTP
@@ -55,18 +56,18 @@ type Idempotency struct {
 // The result is stored as the Go value the method returns, not as the HTTP
 // reply, so T must be a store type (integers, strings and pointers to them),
 // which round-trips through JSON without loss. write takes the transaction's
-// own querier, the ...Tx idiom, never a second withTx.
+// marked context and own querier, the ...Tx idiom, never a second withTx.
 //
 // No "in progress" state is needed: under ADR-004's single connection a
 // concurrent twin runs after the first has committed and finds its record. If a
 // writer/reader split ever lands, the check must run in a write-locking
 // (BEGIN IMMEDIATE) transaction instead.
-func withIdempotency[T any](ctx context.Context, l *Ledger, idem *Idempotency, write func(q store.Querier) (T, error)) (T, error) {
+func withIdempotency[T any](ctx context.Context, l *Ledger, idem *Idempotency, write func(ctx context.Context, q store.Querier) (T, error)) (T, error) {
 	var result T
-	err := l.withTx(ctx, func(q store.Querier) error {
+	err := l.withTx(ctx, func(ctx context.Context, q store.Querier) error {
 		if idem == nil {
 			var err error
-			result, err = write(q)
+			result, err = write(ctx, q)
 			return err
 		}
 
@@ -92,7 +93,7 @@ func withIdempotency[T any](ctx context.Context, l *Ledger, idem *Idempotency, w
 			return fmt.Errorf("reading an idempotency key: %w", err)
 		}
 
-		result, err = write(q)
+		result, err = write(ctx, q)
 		if err != nil {
 			return err
 		}
