@@ -20,6 +20,7 @@ import (
 	"fmt"
 
 	"github.com/kerti/uruni/internal/store"
+	"github.com/kerti/uruni/internal/txguard"
 )
 
 // Ledger is the domain service. It holds the generated queries for reads and
@@ -32,8 +33,11 @@ type Ledger struct {
 
 // New returns a Ledger over an already-open database. It does not migrate:
 // callers run internal/db.Up, as cmd/ does at boot.
+//
+// l.q reads through the pool, guarded (internal/txguard): inside withTx it
+// refuses instead of waiting on the connection the transaction holds.
 func New(sqlDB *sql.DB) *Ledger {
-	return &Ledger{db: sqlDB, q: store.New(sqlDB)}
+	return &Ledger{db: sqlDB, q: store.New(txguard.Wrap(sqlDB))}
 }
 
 // withTx runs fn inside one database transaction, committing on nil and
@@ -43,7 +47,17 @@ func New(sqlDB *sql.DB) *Ledger {
 // pattern, not a per-operation judgment of which write "needs" a transaction,
 // and under ADR-004's SetMaxOpenConns(1) a transaction never contends with
 // anything else, so it costs nothing.
-func (l *Ledger) withTx(ctx context.Context, fn func(store.Querier) error) error {
+//
+// fn gets a context marked as inside the transaction and must use it, not the
+// caller's: the single connection is held, so a second withTx or any read
+// through l.q or a ledger method on a marked context returns txguard.ErrNested
+// instead of waiting forever for it. Inside fn, reads go through q.
+func (l *Ledger) withTx(ctx context.Context, fn func(context.Context, store.Querier) error) error {
+	if txguard.Marked(ctx) {
+		return fmt.Errorf("beginning a transaction: %w", txguard.ErrNested)
+	}
+	ctx = txguard.Mark(ctx)
+
 	tx, err := l.db.BeginTx(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("beginning a transaction: %w", err)
@@ -53,7 +67,7 @@ func (l *Ledger) withTx(ctx context.Context, fn func(store.Querier) error) error
 	// before it, a panic included.
 	defer func() { _ = tx.Rollback() }()
 
-	if err := fn(store.New(tx)); err != nil {
+	if err := fn(ctx, store.New(tx)); err != nil {
 		return err
 	}
 

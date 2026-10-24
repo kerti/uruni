@@ -96,7 +96,7 @@ type HomeBalances struct {
 // MonthInOut's clock.
 func (l *Ledger) Balances(ctx context.Context, fundID int64, now time.Time) (HomeBalances, error) {
 	var b HomeBalances
-	err := l.withTx(ctx, func(q store.Querier) error {
+	err := l.withTx(ctx, func(ctx context.Context, q store.Querier) error {
 		tl := &Ledger{db: l.db, q: q}
 
 		var err error

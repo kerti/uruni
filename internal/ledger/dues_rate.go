@@ -54,7 +54,7 @@ func (l *Ledger) CreateDuesRate(ctx context.Context, p CreateDuesRateParams) (st
 		return store.DuesRate{}, err
 	}
 	var out store.DuesRate
-	err = l.withTx(ctx, func(q store.Querier) error {
+	err = l.withTx(ctx, func(ctx context.Context, q store.Querier) error {
 		// Fund scope: an id names a row, it does not prove the caller may touch it (#188).
 		if _, err := q.GetDuesTierForFund(ctx, store.GetDuesTierForFundParams{ID: p.TierID, FundID: p.FundID}); err != nil {
 			return fmt.Errorf("fetching dues tier: %w", err)
@@ -99,7 +99,7 @@ func (l *Ledger) CorrectDuesRate(ctx context.Context, fundID, rateID int64, amou
 		return store.DuesRate{}, err
 	}
 	var out store.DuesRate
-	err := l.withTx(ctx, func(q store.Querier) error {
+	err := l.withTx(ctx, func(ctx context.Context, q store.Querier) error {
 		standing, err := standingRate(ctx, q, fundID, rateID)
 		if err != nil {
 			return err
@@ -128,7 +128,7 @@ func (l *Ledger) CorrectDuesRate(ctx context.Context, fundID, rateID int64, amou
 // back to the earlier month's rate, or to "not decided"; nothing is destroyed.
 // rateID must be the row that stands, as for CorrectDuesRate.
 func (l *Ledger) DeleteDuesRate(ctx context.Context, fundID, rateID int64) error {
-	return l.withTx(ctx, func(q store.Querier) error {
+	return l.withTx(ctx, func(ctx context.Context, q store.Querier) error {
 		standing, err := standingRate(ctx, q, fundID, rateID)
 		if err != nil {
 			return err

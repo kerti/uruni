@@ -92,7 +92,7 @@ func (l *Ledger) PostDuesPayments(ctx context.Context, p PostDuesPaymentsParams)
 		}
 	}
 
-	posted, err := withIdempotency(ctx, l, p.Idempotency, func(q store.Querier) ([]store.Transaction, error) {
+	posted, err := withIdempotency(ctx, l, p.Idempotency, func(ctx context.Context, q store.Querier) ([]store.Transaction, error) {
 		if err := refuseInactiveAccount(ctx, q, p.FundID, p.AccountID); err != nil {
 			return nil, err
 		}
@@ -144,7 +144,7 @@ func (l *Ledger) postDuesPaymentTx(ctx context.Context, q store.Querier, p PostD
 // No pre-check for members: the foreign key is the check. The caller maps the
 // constraint error to 409.
 func (l *Ledger) DeleteDuesTier(ctx context.Context, fundID, tierID int64) error {
-	return l.withTx(ctx, func(q store.Querier) error {
+	return l.withTx(ctx, func(ctx context.Context, q store.Querier) error {
 		// Resolve the tier within the fund first: DeleteDuesRatesByTier is keyed by
 		// tier id alone, so without this a foreign fund's tier id would delete that
 		// fund's rate trail before the fund-scoped tier delete ran.

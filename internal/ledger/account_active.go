@@ -64,7 +64,7 @@ func (l *Ledger) UpdateAccount(ctx context.Context, fundID int64, p store.Update
 		}
 	}
 	var updated store.Account
-	err := l.withTx(ctx, func(q store.Querier) error {
+	err := l.withTx(ctx, func(ctx context.Context, q store.Querier) error {
 		if p.SetInactiveOn == 1 && p.InactiveOn != nil {
 			balance, err := q.AccountBalance(ctx, store.AccountBalanceParams{FundID: fundID, AccountID: p.ID})
 			if err != nil {

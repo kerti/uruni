@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/kerti/uruni/internal/store"
+	"github.com/kerti/uruni/internal/txguard"
 )
 
 // MinPasswordLength is the one floor Register enforces. PRD/ADR-007 name no
@@ -79,7 +80,7 @@ type Auth struct {
 func New(sqlDB *sql.DB, opts ...Option) *Auth {
 	a := &Auth{
 		db:       sqlDB,
-		q:        store.New(sqlDB),
+		q:        store.New(txguard.Wrap(sqlDB)),
 		slots:    make(chan struct{}, defaultMaxConcurrentHashes()),
 		slotWait: defaultSlotWait,
 		hashFn:   hashPassword,
@@ -96,7 +97,13 @@ func New(sqlDB *sql.DB, opts ...Option) *Auth {
 // rather than shared: sharing would mean importing internal/ledger for a
 // six-line helper or moving it somewhere both import, and ADR-030 decision 2
 // keeps this package's one table apart from the fund-scoped ones ledger owns.
-func (a *Auth) withTx(ctx context.Context, fn func(store.Querier) error) error {
+// fn's context is marked and a.q is guarded exactly as there.
+func (a *Auth) withTx(ctx context.Context, fn func(context.Context, store.Querier) error) error {
+	if txguard.Marked(ctx) {
+		return fmt.Errorf("beginning a transaction: %w", txguard.ErrNested)
+	}
+	ctx = txguard.Mark(ctx)
+
 	tx, err := a.db.BeginTx(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("beginning a transaction: %w", err)
@@ -106,7 +113,7 @@ func (a *Auth) withTx(ctx context.Context, fn func(store.Querier) error) error {
 	// before it, a panic included.
 	defer func() { _ = tx.Rollback() }()
 
-	if err := fn(store.New(tx)); err != nil {
+	if err := fn(ctx, store.New(tx)); err != nil {
 		return err
 	}
 
@@ -160,7 +167,7 @@ func (a *Auth) Register(ctx context.Context, email, password string) (store.User
 	}
 
 	var user store.User
-	err = a.withTx(ctx, func(q store.Querier) error {
+	err = a.withTx(ctx, func(ctx context.Context, q store.Querier) error {
 		count, err := q.CountUsers(ctx)
 		if err != nil {
 			return fmt.Errorf("checking for an existing account: %w", err)

@@ -72,7 +72,7 @@ type PostPurposeCorrectionParams struct {
 // the checks above runs, so the repeat of a correction that worked is never the
 // Noop its own result would make it.
 func (l *Ledger) PostPurposeCorrection(ctx context.Context, p PostPurposeCorrectionParams) (store.Transfer, error) {
-	created, err := withIdempotency(ctx, l, p.Idempotency, func(q store.Querier) (store.Transfer, error) {
+	created, err := withIdempotency(ctx, l, p.Idempotency, func(ctx context.Context, q store.Querier) (store.Transfer, error) {
 		original, err := q.GetTransactionForFund(ctx, store.GetTransactionForFundParams{
 			FundID: p.FundID,
 			ID:     p.TransactionID,

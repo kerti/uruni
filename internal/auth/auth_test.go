@@ -5,8 +5,10 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/kerti/uruni/internal/store"
+	"github.com/kerti/uruni/internal/txguard"
 )
 
 // TestRegisterCreatesTheAccount is the happy path: the returned row is real (a
@@ -124,5 +126,64 @@ func TestRegisterValidationFailureWritesNoRow(t *testing.T) {
 	}
 	if count != 0 {
 		t.Errorf("CountUsers() = %d, want 0", count)
+	}
+}
+
+// The pool holds one connection and withTx's transaction owns it, so a nested
+// withTx or a pool read inside fn would wait on a connection its own caller
+// holds. Each case runs under a
+// short deadline: a regression fails here instead of hanging the suite.
+func TestWithTxRefusesWhatWouldDeadlockOnTheHeldConnection(t *testing.T) {
+	t.Parallel()
+	a, _ := newTestAuth(t)
+
+	cases := []struct {
+		name string
+		do   func(ctx context.Context) error
+	}{
+		{"a nested withTx", func(ctx context.Context) error {
+			return a.withTx(ctx, func(context.Context, store.Querier) error { return nil })
+		}},
+		{"a read through a.q", func(ctx context.Context) error {
+			_, err := a.q.CountUsers(ctx)
+			return err
+		}},
+		{"a many-row read through a.q", func(ctx context.Context) error {
+			_, err := a.q.ListUsers(ctx)
+			return err
+		}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+			defer cancel()
+
+			err := a.withTx(ctx, func(ctx context.Context, _ store.Querier) error {
+				return tc.do(ctx)
+			})
+			if !errors.Is(err, txguard.ErrNested) {
+				t.Fatalf("withTx(%s) = %v, want txguard.ErrNested", tc.name, err)
+			}
+			if ctx.Err() != nil {
+				t.Errorf("withTx(%s) ran into its deadline: it blocked instead of refusing", tc.name)
+			}
+		})
+	}
+}
+
+// A refused nested call leaves the connection free: the next withTx works.
+func TestWithTxStillWorksAfterANestedRefusal(t *testing.T) {
+	t.Parallel()
+	a, _ := newTestAuth(t)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	_ = a.withTx(ctx, func(ctx context.Context, _ store.Querier) error {
+		return a.withTx(ctx, func(context.Context, store.Querier) error { return nil })
+	})
+
+	if err := a.withTx(ctx, func(context.Context, store.Querier) error { return nil }); err != nil {
+		t.Fatalf("withTx() after a refused nested call = %v, want no error", err)
 	}
 }

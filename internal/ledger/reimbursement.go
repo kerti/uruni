@@ -49,7 +49,7 @@ func (l *Ledger) CreateReimbursement(ctx context.Context, p CreateReimbursementP
 	}
 
 	var created store.Reimbursement
-	err = l.withTx(ctx, func(q store.Querier) error {
+	err = l.withTx(ctx, func(ctx context.Context, q store.Querier) error {
 		if err := refuseClosedIncidental(ctx, q, p.PurposeID, ErrIncidentalClosed); err != nil {
 			return err
 		}
@@ -124,7 +124,7 @@ func (l *Ledger) SettleReimbursement(ctx context.Context, p SettleReimbursementP
 	}
 
 	var posted store.Transaction
-	err = l.withTx(ctx, func(q store.Querier) error {
+	err = l.withTx(ctx, func(ctx context.Context, q store.Querier) error {
 		claim, err := unsettledClaim(ctx, q, p.FundID, p.ReimbursementID)
 		if err != nil {
 			return err
@@ -252,7 +252,7 @@ func (l *Ledger) UpdateReimbursement(ctx context.Context, p UpdateReimbursementP
 	}
 
 	var updated store.Reimbursement
-	err = l.withTx(ctx, func(q store.Querier) error {
+	err = l.withTx(ctx, func(ctx context.Context, q store.Querier) error {
 		claim, err := unsettledClaim(ctx, q, p.FundID, p.ReimbursementID)
 		if err != nil {
 			return err
@@ -307,7 +307,7 @@ func (l *Ledger) UpdateReimbursement(ctx context.Context, p UpdateReimbursementP
 // payout row references this claim's id and can never be deleted, so removal
 // would leave the ledger pointing at nothing.
 func (l *Ledger) DeleteReimbursement(ctx context.Context, fundID, reimbursementID int64) error {
-	err := l.withTx(ctx, func(q store.Querier) error {
+	err := l.withTx(ctx, func(ctx context.Context, q store.Querier) error {
 		if _, err := unsettledClaim(ctx, q, fundID, reimbursementID); err != nil {
 			return err
 		}

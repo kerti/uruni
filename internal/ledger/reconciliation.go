@@ -171,7 +171,7 @@ func (l *Ledger) TakeReconciliation(ctx context.Context, p TakeReconciliationPar
 		adjustmentTransactionID            *int64
 	}
 
-	rec, err := withIdempotency(ctx, l, p.Idempotency, func(q store.Querier) (store.Reconciliation, error) {
+	rec, err := withIdempotency(ctx, l, p.Idempotency, func(ctx context.Context, q store.Querier) (store.Reconciliation, error) {
 		var rec store.Reconciliation
 		if err := requireEveryActiveLocationCounted(ctx, q, p); err != nil {
 			return store.Reconciliation{}, err

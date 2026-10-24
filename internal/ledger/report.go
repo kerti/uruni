@@ -347,7 +347,7 @@ type ReportContributor struct {
 // must be folded before a purpose filter can ask whether either side matches.
 func (l *Ledger) MonthlyReport(ctx context.Context, p ReportParams) (Report, error) {
 	var r Report
-	err := l.withTx(ctx, func(q store.Querier) error {
+	err := l.withTx(ctx, func(ctx context.Context, q store.Querier) error {
 		var err error
 		r, err = (&Ledger{db: l.db, q: q}).monthlyReport(ctx, p)
 		return err
@@ -632,7 +632,7 @@ func envelopeOpenAt(e store.Incidental, through *string) bool {
 // is net of the reversals of income and Out of the reversals of spending, so
 // either can be negative (ADR-042); Out is otherwise a magnitude.
 func (l *Ledger) MonthInOut(ctx context.Context, fundID int64, now time.Time) (in, out money.Amount, err error) {
-	err = l.withTx(ctx, func(q store.Querier) error {
+	err = l.withTx(ctx, func(ctx context.Context, q store.Querier) error {
 		var err error
 		in, out, err = (&Ledger{db: l.db, q: q}).monthInOut(ctx, fundID, now)
 		return err

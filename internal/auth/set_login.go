@@ -44,7 +44,7 @@ func (a *Auth) SetLogin(ctx context.Context, email, password string) (created bo
 		return false, fmt.Errorf("hashing password: %w", err)
 	}
 
-	err = a.withTx(ctx, func(q store.Querier) error {
+	err = a.withTx(ctx, func(ctx context.Context, q store.Querier) error {
 		_, err := q.UpdateUserPassword(ctx, store.UpdateUserPasswordParams{PasswordHash: hash, Normalized: email, Exact: exact})
 		switch {
 		case err == nil:
