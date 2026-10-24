@@ -4,11 +4,12 @@
 
 import { apiFetch, fetchBlob } from '@/lib/api'
 import { setFundTimeZone } from '@/lib/dates'
+import type { AccountKind, Direction, TransactionKind, TransferKind } from '@/lib/enums'
 
 /** An account (location) row - cash or bank - as every route here returns it. */
 export interface Account {
   id: number
-  kind: 'cash' | 'bank'
+  kind: AccountKind
   name: string
   inactive_on: string | null
   /** The date of the location's opening entry; null when it has none. Only
@@ -46,7 +47,7 @@ export interface SetupResult {
  * typed; the wizard has no field for it, so it is omitted in practice (the
  * row explains itself through a display label). */
 export interface SetupAccountInput {
-  kind: 'cash' | 'bank'
+  kind: AccountKind
   name: string
   opening_balance?: { amount: number; occurred_on: string; note?: string | null }
 }
@@ -60,10 +61,10 @@ export interface Transaction {
   id: number
   account_id: number
   purpose_id: number
-  direction: string
+  direction: Direction
   amount: number
   occurred_on: string
-  kind: string
+  kind: TransactionKind
   member_id: number | null
   dues_period: string | null
   reimbursement_id: number | null
@@ -76,7 +77,7 @@ export interface Transaction {
   account_name?: string
   member_name?: string | null
   claim_note?: string | null
-  transfer_kind?: 'between_accounts' | 'reclass_purpose' | null
+  transfer_kind?: TransferKind | null
   transfer_from_name?: string | null
   transfer_to_name?: string | null
   /** Non-null only on a purpose correction's two legs (ADR-033); nil on every

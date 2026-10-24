@@ -104,16 +104,16 @@ func checkEffectivePurposeSequence(t *testing.T, seed int64, cov *effectiveCover
 	for step := 0; step < 45; step++ {
 		switch roll := rng.Intn(10); {
 		case roll < 3 || len(posted) == 0: // a posting
-			direction := "in"
+			direction := DirectionIn
 			if rng.Intn(2) == 0 {
-				direction = "out"
+				direction = DirectionOut
 			}
 			purposeID := purposes[rng.Intn(len(purposes))]
 			amount := money.Amount((1 + rng.Intn(200)) * 500)
 			row := postEntry(t, l, f.fundID, f.cashID, purposeID, direction, amount, dates[rng.Intn(len(dates))], nil)
 			posted = append(posted, row.ID)
 			storedAt[row.ID] = purposeID
-			directionOf[row.ID] = direction
+			directionOf[row.ID] = string(direction)
 
 		case roll < 4: // a purpose move: a reclass_purpose pair that corrects nothing
 			from, to := purposes[rng.Intn(2)*3], purposes[rng.Intn(2)*3] // main or envelope

@@ -65,7 +65,7 @@ func newWalkScenario(t *testing.T, l *Ledger) walkScenario {
 		t.Helper()
 		postReversalOn(t, l, fundID, tx.ID, date)
 	}
-	post := func(purpose int64, direction string, amount money.Amount, date string, adjustment bool, member *int64) store.Transaction {
+	post := func(purpose int64, direction Direction, amount money.Amount, date string, adjustment bool, member *int64) store.Transaction {
 		t.Helper()
 		posted, err := l.at(onTheDay(date)).PostTransaction(ctx, PostTransactionParams{
 			FundID: fundID, AccountID: cashID, PurposeID: purpose, Direction: direction, Amount: amount,
@@ -294,8 +294,8 @@ func TestWalkScenarioHoldsEveryRowShapeOnItsOwnLine(t *testing.T) {
 	s := newWalkScenario(t, l)
 
 	type shape struct {
-		kind       string
-		direction  string
+		kind       TransactionKind
+		direction  Direction
 		reversal   bool
 		dues       bool
 		wantLine   ReportLine
@@ -391,7 +391,7 @@ func TestMonthlyReportWalkUnderAFilterIsOnlyMasukAndKeluar(t *testing.T) {
 				if (p.Direction != "" || p.MemberID != nil) && e.Line != ReportLineIn && e.Line != ReportLineOut {
 					t.Errorf("row %+v is listed under a member or direction filter, want only masuk and keluar rows", e)
 				}
-				if p.Direction != "" && string(e.Line) != p.Direction {
+				if p.Direction != "" && string(e.Line) != string(p.Direction) {
 					t.Errorf("row %+v (%q) is listed under direction %q", e, e.Line, p.Direction)
 				}
 			}

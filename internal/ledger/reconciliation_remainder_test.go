@@ -27,14 +27,14 @@ func remainderFixture(t *testing.T) (*Ledger, fixture, store.Querier) {
 
 // takeCash counts the cash account (the bank always counts 0, matched) with
 // one resolution and one fix.
-func takeCash(l *Ledger, f fixture, actual money.Amount, resolution string, fix *Fix) (store.Reconciliation, error) {
+func takeCash(l *Ledger, f fixture, actual money.Amount, resolution Resolution, fix *Fix) (store.Reconciliation, error) {
 	return l.TakeReconciliation(context.Background(), TakeReconciliationParams{
 		FundID: f.fundID,
 		Counts: []AccountCount{{AccountID: f.cashID, ActualAmount: actual, Resolution: resolution, Fix: fix}, f.bankZero()},
 	})
 }
 
-func fixOf(f fixture, direction string, amount money.Amount) *Fix {
+func fixOf(f fixture, direction Direction, amount money.Amount) *Fix {
 	return &Fix{PurposeID: f.mainID, Direction: direction, Amount: amount, OccurredOn: "2026-08-12"}
 }
 
@@ -52,7 +52,7 @@ func TestTakeReconciliationAdjustedExactPlugIsAcceptedAndClosesTheLine(t *testin
 	cases := []struct {
 		name      string
 		actual    money.Amount
-		direction string
+		direction Direction
 		amount    money.Amount
 		diff      int64
 	}{
@@ -95,7 +95,7 @@ func TestTakeReconciliationAdjustedPlugThatDoesNotEqualTheDifferenceIsRefused(t 
 	cases := []struct {
 		name      string
 		actual    money.Amount
-		direction string
+		direction Direction
 		amount    money.Amount
 	}{
 		{"undershoot (the old 20000 against 30000)", 130_000, "in", 20_000},
@@ -183,7 +183,7 @@ func TestTakeReconciliationEntryAddedPartialEntryKeepsTheRemainderOpen(t *testin
 	cases := []struct {
 		name          string
 		actual        money.Amount
-		direction     string
+		direction     Direction
 		amount        money.Amount
 		wantDiff      int64
 		wantRemainder int64

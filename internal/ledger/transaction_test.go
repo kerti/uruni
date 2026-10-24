@@ -15,7 +15,7 @@ func TestPostTransactionMovesFundAndAccountBalanceByExactlyTheAmount(t *testing.
 	t.Parallel()
 	tests := []struct {
 		name      string
-		direction string
+		direction Direction
 		amount    money.Amount
 		want      money.Amount
 	}{
@@ -43,7 +43,7 @@ func TestPostTransactionMovesFundAndAccountBalanceByExactlyTheAmount(t *testing.
 			if posted.Kind != "normal" {
 				t.Errorf("Kind = %q, want %q", posted.Kind, "normal")
 			}
-			if posted.Direction != tt.direction || posted.Amount != tt.amount.Int64() {
+			if posted.Direction != string(tt.direction) || posted.Amount != tt.amount.Int64() {
 				t.Errorf("posted = (%q, %d), want (%q, %d)", posted.Direction, posted.Amount, tt.direction, tt.amount.Int64())
 			}
 
@@ -212,8 +212,8 @@ func TestPostTransactionWrapsASchemaViolationGenerically(t *testing.T) {
 // TestPostTransactionRejectsNonPositiveAmountBeforeTheWrite.
 func TestPostTransactionRefusesAClosedIncidentalBothDirections(t *testing.T) {
 	t.Parallel()
-	for _, direction := range []string{"in", "out"} {
-		t.Run(direction, func(t *testing.T) {
+	for _, direction := range []Direction{DirectionIn, DirectionOut} {
+		t.Run(string(direction), func(t *testing.T) {
 			t.Parallel()
 			l := newTestLedger(t)
 			f := newFixture(t, l)

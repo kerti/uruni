@@ -116,8 +116,8 @@ func (l *Ledger) PostDuesPayments(ctx context.Context, p PostDuesPaymentsParams)
 func (l *Ledger) postDuesPaymentTx(ctx context.Context, q store.Querier, p PostDuesPaymentsParams, purposeID int64, period PeriodAmount) (store.Transaction, error) {
 	return q.CreateTransaction(ctx, store.CreateTransactionParams{
 		FundID: p.FundID, AccountID: p.AccountID, PurposeID: purposeID,
-		Direction: "in", Amount: period.Amount.Int64(), OccurredOn: p.OccurredOn,
-		Kind:       "dues",
+		Direction: string(DirectionIn), Amount: period.Amount.Int64(), OccurredOn: p.OccurredOn,
+		Kind:       string(TransactionKindDues),
 		MemberID:   &p.MemberID,
 		DuesPeriod: &period.DuesPeriod,
 		Note:       normalizeNote(p.Note),

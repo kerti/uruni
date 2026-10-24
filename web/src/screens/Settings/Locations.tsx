@@ -17,6 +17,7 @@ import { parseDialogTarget } from '@/lib/dialogTarget'
 import { useDialogParam } from '@/lib/useDialogParam'
 import { useResetWhen } from '@/lib/useResetWhen'
 import type { Account } from '@/lib/accounts'
+import type { AccountKind } from '@/lib/enums'
 
 const text = copy.settings.locations
 
@@ -142,14 +143,14 @@ function KindField({
   onChange,
 }: {
   id: string
-  kind: 'cash' | 'bank'
+  kind: AccountKind
   disabled?: boolean
-  onChange: (kind: 'cash' | 'bank') => void
+  onChange: (kind: AccountKind) => void
 }) {
   return (
     <div className="flex flex-col gap-1.5">
       <Label htmlFor={id}>{text.kindLabel}</Label>
-      <Select value={kind} onValueChange={(next) => onChange(next as 'cash' | 'bank')} disabled={disabled}>
+      <Select value={kind} onValueChange={(next) => onChange(next as AccountKind)} disabled={disabled}>
         <SelectTrigger id={id} aria-label={text.kindLabel}>
           <SelectValue>{kind === 'bank' ? text.kindBank : text.kindCash}</SelectValue>
         </SelectTrigger>
@@ -179,7 +180,7 @@ function AddLocationDialog({
   refresh: () => Promise<void>
 }) {
   const [state, run] = useApi<Account>()
-  const [kind, setKind] = useState<'cash' | 'bank'>('cash')
+  const [kind, setKind] = useState<AccountKind>('cash')
   const [name, setName] = useState('')
   const [openingBalance, setOpeningBalance] = useState(0)
 
@@ -291,7 +292,7 @@ function EditLocationDialog({
 
   const [state, run] = useApi<unknown>()
   const [name, setName] = useState(shown?.name ?? '')
-  const [kind, setKind] = useState<'cash' | 'bank'>(shown?.kind === 'bank' ? 'bank' : 'cash')
+  const [kind, setKind] = useState<AccountKind>(shown?.kind === 'bank' ? 'bank' : 'cash')
   const [confirming, setConfirming] = useState<ConfirmKind>(null)
 
   const busy = state.status === 'loading'

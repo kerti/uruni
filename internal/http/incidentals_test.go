@@ -9,6 +9,8 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/kerti/uruni/internal/ledger"
 )
 
 func postIncidental(t *testing.T, r http.Handler, req openIncidentalRequest) *httptest.ResponseRecorder {
@@ -710,8 +712,8 @@ func TestCloseIncidentalWritesTheNoteToBothRollLegs(t *testing.T) {
 // nothing.
 func TestPostTransactionRefusesAClosedIncidentalBothDirections(t *testing.T) {
 	t.Parallel()
-	for _, direction := range []string{"in", "out"} {
-		t.Run(direction, func(t *testing.T) {
+	for _, direction := range []ledger.Direction{ledger.DirectionIn, ledger.DirectionOut} {
+		t.Run(string(direction), func(t *testing.T) {
 			r := testRouter(t)
 			setup := setUpFund(t, r)
 			envelope := openIncidentalFor(t, r, "Jane's wedding", "2026-08-01")
@@ -736,7 +738,7 @@ func TestPostTransactionRefusesAClosedIncidentalBothDirections(t *testing.T) {
 			list := getTransactions(t, r)
 			rows := decodeTransactionsPage(t, list).Transactions
 			for _, row := range rows {
-				if row.Direction == direction && row.Amount == 10_000 {
+				if row.Direction == string(direction) && row.Amount == 10_000 {
 					t.Errorf("found a posted row for the refused %s transaction: %+v", direction, row)
 				}
 			}

@@ -26,7 +26,7 @@ type ReverseTransactionParams struct {
 // whether it can be reversed. The write and the list's reversible flag both
 // fill it, so they share one rule (ReversalRefusal), not two that agree today.
 type ReversalFacts struct {
-	Kind       string // transaction.kind
+	Kind       TransactionKind
 	OccurredOn string // the row's own date, "YYYY-MM-DD"
 
 	// IsReversal: the row carries reverses_transaction_id (a kind='adjustment' one).
@@ -52,18 +52,18 @@ type ReversalFacts struct {
 // would take today, ahead of what it reverses.
 func ReversalRefusal(f ReversalFacts, today string) error {
 	switch f.Kind {
-	case "dues":
-	case "normal":
+	case TransactionKindDues:
+	case TransactionKindNormal:
 		if f.IsReconciliationFix {
 			return ErrReversalReconciliationFix
 		}
-	case "opening":
+	case TransactionKindOpening:
 		return ErrReversalOpening
-	case "reimbursement":
+	case TransactionKindReimbursement:
 		return ErrReversalReimbursement
-	case "transfer":
+	case TransactionKindTransfer:
 		return ErrReversalTransfer
-	case "adjustment":
+	case TransactionKindAdjustment:
 		if f.IsReversal {
 			return ErrReversalOfReversal
 		}
@@ -139,7 +139,7 @@ func (l *Ledger) ReverseTransaction(ctx context.Context, p ReverseTransactionPar
 		}
 		counted := original.Counted != 0
 		if err := ReversalRefusal(ReversalFacts{
-			Kind:                original.Kind,
+			Kind:                TransactionKind(original.Kind),
 			OccurredOn:          original.OccurredOn,
 			IsReversal:          original.ReversesTransactionID != nil,
 			Reversed:            original.Reversed != 0,
@@ -150,18 +150,18 @@ func (l *Ledger) ReverseTransaction(ctx context.Context, p ReverseTransactionPar
 			return err
 		}
 
-		direction := "in"
-		if original.Direction == "in" {
-			direction = "out"
+		direction := DirectionIn
+		if original.Direction == string(DirectionIn) {
+			direction = DirectionOut
 		}
 		reversal, err = q.CreateTransaction(ctx, store.CreateTransactionParams{
 			FundID:                p.FundID,
 			AccountID:             original.AccountID,
 			PurposeID:             original.EffectivePurposeID,
-			Direction:             direction,
+			Direction:             string(direction),
 			Amount:                original.Amount,
 			OccurredOn:            ReversalDate(original.OccurredOn, counted, window.today),
-			Kind:                  "adjustment",
+			Kind:                  string(TransactionKindAdjustment),
 			MemberID:              original.MemberID,
 			DuesPeriod:            original.DuesPeriod,
 			ReversesTransactionID: &p.TransactionID,

@@ -11,16 +11,6 @@ import (
 	"github.com/kerti/uruni/internal/store"
 )
 
-// purposeKindPassThrough is the only kind this package writes; 'main' is set
-// by SetUpFund and 'incidental' by OpenIncidental. All three are named
-// because renaming reads them: it refuses 'main' and sends 'incidental' down
-// a different path (updatePurposeName).
-const (
-	purposeKindPassThrough = "pass_through"
-	purposeKindMain        = "main"
-	purposeKindIncidental  = "incidental"
-)
-
 // passThroughPurposeRequest is POST /api/pass-through-purposes's body. Name
 // only, no kind: a caller that could name the kind could ask for a second
 // 'main' and trip purpose_single_main, which the schema refuses and the API
@@ -103,7 +93,7 @@ func (a *api) createPassThroughPurpose(w http.ResponseWriter, r *http.Request) {
 
 	purpose, err := a.queries.CreatePurpose(r.Context(), store.CreatePurposeParams{
 		FundID:    fund.ID,
-		Kind:      purposeKindPassThrough,
+		Kind:      string(ledger.PurposeKindPassThrough),
 		Name:      req.Name,
 		CreatedAt: time.Now().Unix(),
 	})
@@ -146,7 +136,7 @@ func (a *api) resolveRenameablePurpose(w http.ResponseWriter, r *http.Request) (
 		mapSQLiteError(w, a.log(r), err) // sql.ErrNoRows -> 404 not_found
 		return store.Purpose{}, false
 	}
-	if purpose.Kind == purposeKindMain {
+	if purpose.Kind == string(ledger.PurposeKindMain) {
 		writeAPIError(w, http.StatusConflict, "purpose_not_renameable",
 			"The fund's Kas Utama purpose cannot be renamed.")
 		return store.Purpose{}, false
@@ -189,7 +179,7 @@ func (a *api) updatePurposeName(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if purpose.Kind == purposeKindIncidental {
+	if purpose.Kind == string(ledger.PurposeKindIncidental) {
 		fund, ok := a.resolveFund(w, r)
 		if !ok {
 			return

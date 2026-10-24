@@ -495,7 +495,7 @@ func TestCloseIncidentalAndRollWritesReasonRoll(t *testing.T) {
 	t.Parallel()
 	for _, tc := range []struct {
 		name    string
-		posting string
+		posting Direction
 		amount  money.Amount
 	}{
 		{"leftover rolls out", "in", 70_000},

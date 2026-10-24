@@ -25,6 +25,7 @@ import type { Balances } from '@/lib/balances'
 import type { Purpose } from '@/lib/purposes'
 import type { AccountCountInput, ReconciliationDetail } from '@/lib/reconciliations'
 import type { Transaction } from '@/lib/transactions'
+import type { Direction } from '@/lib/enums'
 
 const text = copy.reconciliation
 
@@ -44,7 +45,7 @@ interface LineState {
   actualAmount: number
   resolution: Resolution | null
   fixPurposeId: number | null
-  fixDirection: 'in' | 'out'
+  fixDirection: Direction
   fixAmount: number
   fixOccurredOn: string
   fixNote: string

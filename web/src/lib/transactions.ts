@@ -3,6 +3,7 @@
 
 import { apiFetch } from '@/lib/api'
 import type { Transaction } from '@/lib/setup'
+import type { Direction } from '@/lib/enums'
 
 export type { Transaction }
 
@@ -11,7 +12,7 @@ export type { Transaction }
 export interface CreateTransactionInput {
   accountId: number
   purposeId: number
-  direction: 'in' | 'out'
+  direction: Direction
   amount: number
   occurredOn: string
   note: string | null
@@ -61,7 +62,7 @@ export interface ListTransactionsInput {
   purposeId?: number
   /** "YYYY-MM" - the rows dated in that month. */
   month?: string
-  direction?: 'in' | 'out'
+  direction?: Direction
 }
 
 /** One page of GET /api/transactions, camelCase on this side of the wire

@@ -22,7 +22,7 @@ import (
 // enclosing AccountCount, which is derived rather than repeated.
 type Fix struct {
 	PurposeID  int64
-	Direction  string       // "in" or "out"
+	Direction  Direction
 	Amount     money.Amount // must be > 0
 	OccurredOn string       // "YYYY-MM-DD", a real calendar date
 	Note       *string
@@ -41,7 +41,7 @@ type Fix struct {
 type AccountCount struct {
 	AccountID    int64
 	ActualAmount money.Amount // what the treasurer actually counted; must not be negative
-	Resolution   string       // "matched", "left_open", "adjusted", "entry_added"
+	Resolution   Resolution
 
 	// Fix carries the raw data behind the entry that resolves this line.
 	// Required (non-nil) when Resolution is "adjusted" or "entry_added"; must be
@@ -161,7 +161,7 @@ func (l *Ledger) TakeReconciliation(ctx context.Context, p TakeReconciliationPar
 	type lineInput struct {
 		accountID                          int64
 		recordedAmount, actualAmount, diff money.Amount
-		resolution                         string
+		resolution                         Resolution
 		adjustmentTransactionID            *int64
 	}
 
@@ -201,7 +201,7 @@ func (l *Ledger) TakeReconciliation(ctx context.Context, p TakeReconciliationPar
 			if err != nil {
 				return store.Reconciliation{}, fmt.Errorf("computing difference for account %d: %w", c.AccountID, err)
 			}
-			if c.Resolution == "matched" && diff != 0 {
+			if c.Resolution == ResolutionMatched && diff != 0 {
 				return store.Reconciliation{}, invalidField("counts.resolution", "resolution \"matched\" for account %d has a difference of %d",
 					c.AccountID, diff.Int64())
 			}
@@ -210,7 +210,7 @@ func (l *Ledger) TakeReconciliation(ctx context.Context, p TakeReconciliationPar
 			if c.Fix != nil {
 				// A plug must square the gap exactly (#498). Checked against the frozen
 				// difference before the fix is posted, so a refusal leaves nothing behind.
-				if c.Resolution == "adjusted" {
+				if c.Resolution == ResolutionAdjusted {
 					signed, err := SignedFixAmount(c.Fix)
 					if err != nil {
 						return store.Reconciliation{}, fmt.Errorf("signing the fix for account %d: %w", c.AccountID, err)
@@ -225,18 +225,18 @@ func (l *Ledger) TakeReconciliation(ctx context.Context, p TakeReconciliationPar
 				if err := refuseClosedIncidental(ctx, q, c.Fix.PurposeID, ErrIncidentalClosed); err != nil {
 					return store.Reconciliation{}, err
 				}
-				kind := "normal"
-				if c.Resolution == "adjusted" {
-					kind = "adjustment"
+				kind := TransactionKindNormal
+				if c.Resolution == ResolutionAdjusted {
+					kind = TransactionKindAdjustment
 				}
 				fix, err := q.CreateTransaction(ctx, store.CreateTransactionParams{
 					FundID:     p.FundID,
 					AccountID:  c.AccountID,
 					PurposeID:  c.Fix.PurposeID,
-					Direction:  c.Fix.Direction,
+					Direction:  string(c.Fix.Direction),
 					Amount:     c.Fix.Amount.Int64(),
 					OccurredOn: c.Fix.OccurredOn,
-					Kind:       kind,
+					Kind:       string(kind),
 					Note:       normalizeNote(c.Fix.Note),
 					CreatedAt:  now,
 				})
@@ -281,7 +281,7 @@ func (l *Ledger) TakeReconciliation(ctx context.Context, p TakeReconciliationPar
 				RecordedAmount:          ln.recordedAmount.Int64(),
 				ActualAmount:            ln.actualAmount.Int64(),
 				DifferenceAmount:        ln.diff.Int64(),
-				Resolution:              ln.resolution,
+				Resolution:              string(ln.resolution),
 				AdjustmentTransactionID: ln.adjustmentTransactionID,
 			}); err != nil {
 				return store.Reconciliation{}, fmt.Errorf("creating reconciliation line for account %d: %w", ln.accountID, err)
@@ -300,9 +300,9 @@ func (l *Ledger) TakeReconciliation(ctx context.Context, p TakeReconciliationPar
 // reached, so negation cannot overflow.
 func SignedFixAmount(f *Fix) (money.Amount, error) {
 	switch f.Direction {
-	case "in":
+	case DirectionIn:
 		return f.Amount, nil
-	case "out":
+	case DirectionOut:
 		return money.Amount(0).Sub(f.Amount)
 	default:
 		return 0, invalidField("counts.fix.direction", "fix direction must be \"in\" or \"out\", got %q", f.Direction)
@@ -413,11 +413,11 @@ func validateTakeReconciliationParams(p TakeReconciliationParams, window dateWin
 		}
 
 		switch c.Resolution {
-		case "matched", "left_open":
+		case ResolutionMatched, ResolutionLeftOpen:
 			if c.Fix != nil {
 				return invalidField("counts.fix", "resolution %q for account %d must not name a fix", c.Resolution, c.AccountID)
 			}
-		case "adjusted", "entry_added":
+		case ResolutionAdjusted, ResolutionEntryAdded:
 			if c.Fix == nil {
 				return invalidField("counts.fix", "resolution %q for account %d requires a fix", c.Resolution, c.AccountID)
 			}
@@ -427,7 +427,7 @@ func validateTakeReconciliationParams(p TakeReconciliationParams, window dateWin
 			if err := CheckAmountCeiling("fix amount", c.Fix.Amount); err != nil {
 				return err
 			}
-			if c.Fix.Direction != "in" && c.Fix.Direction != "out" {
+			if c.Fix.Direction != DirectionIn && c.Fix.Direction != DirectionOut {
 				return invalidField("counts.fix.direction", "fix direction for account %d must be \"in\" or \"out\", got %q", c.AccountID, c.Fix.Direction)
 			}
 			if err := validateOccurredOn("counts.fix.occurred_on", c.Fix.OccurredOn, window.entry()); err != nil {

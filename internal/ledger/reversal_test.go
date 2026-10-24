@@ -631,7 +631,7 @@ func TestIncidentalActivityTotalsNetAReversalAgainstItsOriginal(t *testing.T) {
 	a := openTestIncidental(t, l, f.fundID, "Sunatan", "2026-08-01")
 	b := openTestIncidental(t, l, f.fundID, "Arisan", "2026-08-01")
 
-	post := func(purpose int64, direction string, amount money.Amount, member *int64) store.Transaction {
+	post := func(purpose int64, direction Direction, amount money.Amount, member *int64) store.Transaction {
 		t.Helper()
 		row, err := l.PostTransaction(ctx, PostTransactionParams{
 			FundID: f.fundID, AccountID: f.cashID, PurposeID: purpose, Direction: direction,

@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/kerti/uruni/internal/ledger"
 	"github.com/kerti/uruni/internal/store"
 )
 
@@ -230,7 +231,7 @@ func TestPostReversalRefusalsHaveTheirOwnCodes(t *testing.T) {
 	setup := setUpFund(t, r)
 	cash, main := setup.CashAccountID(t), setup.MainPurposeID
 
-	post := func(direction string, amount int64) transactionResponse {
+	post := func(direction ledger.Direction, amount int64) transactionResponse {
 		t.Helper()
 		rec := postTransaction(t, r, transactionRequest{AccountID: cash, PurposeID: main, Direction: direction, Amount: amount, OccurredOn: "2026-08-01"})
 		var tx transactionResponse

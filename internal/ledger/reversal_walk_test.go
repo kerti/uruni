@@ -253,7 +253,7 @@ func TestClassifyReportRowPutsAReversalOnItsOriginalsLine(t *testing.T) {
 	t.Parallel()
 	for _, tc := range []struct {
 		name      string
-		direction string
+		direction Direction
 		reverses  bool
 		want      ReportLine
 	}{

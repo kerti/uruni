@@ -18,9 +18,9 @@ const (
 
 	// ReportDirectionIn is one of the two values the direction filter takes;
 	// "" means no direction filter.
-	ReportDirectionIn = "in"
+	ReportDirectionIn = DirectionIn
 	// ReportDirectionOut is the other direction filter value.
-	ReportDirectionOut = "out"
+	ReportDirectionOut = DirectionOut
 
 	// ReportDuesUnpaid is the dues filter's value for DuesStatusUnpaid.
 	ReportDuesUnpaid = "unpaid"
@@ -52,7 +52,7 @@ type ReportParams struct {
 
 	// Direction is ReportDirectionIn, ReportDirectionOut or "". A purpose
 	// move is neither, so a direction filter hides moves.
-	Direction string
+	Direction Direction
 
 	// DuesStatus is ReportDuesUnpaid, ReportDuesPartial, ReportDuesPaid or
 	// "". It filters the dues table only, never the transactions (ADR-035).
@@ -139,7 +139,7 @@ type ReportReconciliation struct {
 type ReportPurposeBalance struct {
 	PurposeID int64
 	Name      string
-	Kind      string // "main", "incidental" or "pass_through"
+	Kind      PurposeKind
 	Balance   money.Amount
 }
 
@@ -172,8 +172,8 @@ type ReportEntry struct {
 	// Line is the walk line the row lands on; see classifyReportRow.
 	Line ReportLine
 
-	Kind        string // transaction.kind: opening, normal, dues, reimbursement or adjustment
-	Direction   string // "in" or "out"
+	Kind        TransactionKind
+	Direction   Direction
 	Amount      money.Amount
 	PurposeName string
 	PurposeID   int64
@@ -579,7 +579,7 @@ func (l *Ledger) reportPurposeBalances(ctx context.Context, fundID int64, purpos
 		switch {
 		case isEnvelope:
 			existed = envelopeOpenAt(e, b.through)
-		case pu.Kind == "pass_through" && b.before != nil:
+		case pu.Kind == string(PurposeKindPassThrough) && b.before != nil:
 			// A pass-through has no opening date; it existed once created.
 			existed = pu.CreatedAt < *b.before
 		}
@@ -595,7 +595,7 @@ func (l *Ledger) reportPurposeBalances(ctx context.Context, fundID int64, purpos
 
 	out := make([]ReportPurposeBalance, 0, len(shown))
 	for _, s := range shown {
-		out = append(out, ReportPurposeBalance{PurposeID: s.purpose.ID, Name: s.purpose.Name, Kind: s.purpose.Kind, Balance: s.balance})
+		out = append(out, ReportPurposeBalance{PurposeID: s.purpose.ID, Name: s.purpose.Name, Kind: PurposeKind(s.purpose.Kind), Balance: s.balance})
 	}
 	return out, nil
 }
@@ -687,18 +687,18 @@ func (l *Ledger) reportRows(ctx context.Context, p ReportParams, monthStart time
 		correctedSeen = make(map[int64]bool)
 	)
 	for _, row := range rows {
-		if row.Kind == "transfer" {
+		if row.Kind == string(TransactionKindTransfer) {
 			if row.TransferKind == nil || row.TransferID == nil {
 				return nil, ReportWalk{}, fmt.Errorf("transfer row dated %s carries no transfer", row.OccurredOn)
 			}
 			switch *row.TransferKind {
-			case "between_accounts":
+			case string(TransferKindBetweenAccounts):
 				continue
-			case "reclass_purpose":
+			case string(TransferKindReclassPurpose):
 				// Dipindah is the raw leg, whatever the display folds: a pair of
 				// corrections that folds to nothing still posted legs.
 				if walk.Full && p.PurposeID != nil && row.PurposeID == *p.PurposeID {
-					leg := ReportEntry{Direction: row.Direction, Amount: money.FromDB(row.Amount)}
+					leg := ReportEntry{Direction: Direction(row.Direction), Amount: money.FromDB(row.Amount)}
 					signed, err := leg.signed()
 					if err != nil {
 						return nil, ReportWalk{}, err
@@ -800,16 +800,16 @@ func (w *ReportWalk) add(e ReportEntry) error {
 // classifyReportRow is ADR-038's one switch: the line a posted row lands on.
 // Total by construction: an unknown kind is an error, so a trust report says
 // the ledger is broken rather than drop a row. Transfers never reach it.
-func classifyReportRow(kind, direction string, reverses bool) (ReportLine, error) {
+func classifyReportRow(kind TransactionKind, direction Direction, reverses bool) (ReportLine, error) {
 	switch kind {
-	case "opening":
+	case TransactionKindOpening:
 		return ReportLineOpening, nil
-	case "normal", "dues", "reimbursement":
+	case TransactionKindNormal, TransactionKindDues, TransactionKindReimbursement:
 		if direction == ReportDirectionIn {
 			return ReportLineIn, nil
 		}
 		return ReportLineOut, nil
-	case "adjustment":
+	case TransactionKindAdjustment:
 		if reverses {
 			// The line follows the reversal's own direction, so no join to the
 			// original is needed: out reverses income, in reverses spending.
@@ -824,14 +824,14 @@ func classifyReportRow(kind, direction string, reverses bool) (ReportLine, error
 }
 
 func reportEntryFrom(row store.ListReportTransactionsRow) (ReportEntry, error) {
-	line, err := classifyReportRow(row.Kind, row.Direction, row.ReversesTransactionID != nil)
+	line, err := classifyReportRow(TransactionKind(row.Kind), Direction(row.Direction), row.ReversesTransactionID != nil)
 	if err != nil {
 		return ReportEntry{}, err
 	}
 	e := ReportEntry{
 		Line:        line,
-		Kind:        row.Kind,
-		Direction:   row.Direction,
+		Kind:        TransactionKind(row.Kind),
+		Direction:   Direction(row.Direction),
 		Amount:      money.FromDB(row.Amount),
 		PurposeName: row.PurposeName,
 		PurposeID:   row.PurposeID,
@@ -849,7 +849,7 @@ func reportEntryFrom(row store.ListReportTransactionsRow) (ReportEntry, error) {
 	if e.MemberName == nil {
 		e.MemberName = row.SettlementMemberName
 	}
-	if row.Kind == "reimbursement" {
+	if row.Kind == string(TransactionKindReimbursement) {
 		e.Note = row.ClaimNote
 	}
 	return e, nil
@@ -900,7 +900,7 @@ func foldCorrections(rows []store.ListReportTransactionsRow) (map[int64]ReportMo
 			}
 			pa = &path{
 				move: m, net: map[int64]int{}, names: map[int64]string{}, notes: map[string]bool{},
-				outgoing: *row.TransferCorrectsDirection == "out",
+				outgoing: *row.TransferCorrectsDirection == string(DirectionOut),
 			}
 			paths[*c] = pa
 		}
@@ -989,7 +989,7 @@ func entryMatches(p ReportParams, row store.ListReportTransactionsRow, e ReportE
 	if p.PurposeID != nil && *p.PurposeID != e.PurposeID {
 		return false
 	}
-	if p.Direction != "" && string(e.Line) != p.Direction {
+	if p.Direction != "" && string(e.Line) != string(p.Direction) {
 		return false
 	}
 	if p.MemberID != nil {

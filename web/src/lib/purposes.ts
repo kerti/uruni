@@ -1,6 +1,7 @@
 // Typed call over apiFetch for GET /api/purposes.
 
 import { apiFetch } from '@/lib/api'
+import type { PurposeKind } from '@/lib/enums'
 
 /** A purpose tag row (internal/http/purposes.go). `kind` is 'main',
  * 'pass_through' or 'incidental' - the fund always has exactly one 'main'
@@ -8,7 +9,7 @@ import { apiFetch } from '@/lib/api'
  * (PRD section 7.2). */
 export interface Purpose {
   id: number
-  kind: string
+  kind: PurposeKind
   name: string
   created_at: number
 }

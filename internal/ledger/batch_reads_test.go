@@ -194,7 +194,7 @@ func newRichFund(t *testing.T) richFund {
 	postOpeningBalance(t, l, f.fundID, f.cashID, f.mainID, 500_000, "2025-01-01")
 	postOpeningBalance(t, l, f.fundID, f.bankID, f.mainID, 300_000, "2025-01-01")
 
-	post := func(account, purpose int64, direction string, amount money.Amount, adjustment bool) store.Transaction {
+	post := func(account, purpose int64, direction Direction, amount money.Amount, adjustment bool) store.Transaction {
 		t.Helper()
 		tx, err := l.at(richNow).PostTransaction(ctx, PostTransactionParams{
 			FundID: f.fundID, AccountID: account, PurposeID: purpose, Direction: direction, Amount: amount,

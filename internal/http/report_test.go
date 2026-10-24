@@ -48,7 +48,7 @@ func newReportFixture(t *testing.T, fundName string) reportFixture {
 	return reportFixture{db: sqlDB, router: r, l: l, fund: res.Fund, cashID: res.Accounts[0].ID, mainID: res.MainPurposeID}
 }
 
-func (f reportFixture) post(t *testing.T, direction string, amount money.Amount, on string) {
+func (f reportFixture) post(t *testing.T, direction ledger.Direction, amount money.Amount, on string) {
 	t.Helper()
 	if _, err := f.l.PostTransaction(context.Background(), ledger.PostTransactionParams{
 		FundID: f.fund.ID, AccountID: f.cashID, PurposeID: f.mainID,

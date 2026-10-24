@@ -84,20 +84,20 @@ func (l *Ledger) PostPurposeCorrection(ctx context.Context, p PostPurposeCorrect
 			return store.Transfer{}, fmt.Errorf("fetching transaction to correct: %w", err)
 		}
 
-		switch original.Kind {
-		case "opening":
+		switch TransactionKind(original.Kind) {
+		case TransactionKindOpening:
 			return store.Transfer{}, ErrPurposeCorrectionOpening
-		case "dues":
+		case TransactionKindDues:
 			return store.Transfer{}, ErrPurposeCorrectionDues
-		case "reimbursement":
+		case TransactionKindReimbursement:
 			return store.Transfer{}, ErrPurposeCorrectionReimbursement
-		case "transfer":
+		case TransactionKindTransfer:
 			return store.Transfer{}, ErrPurposeCorrectionTransfer
-		case "adjustment":
+		case TransactionKindAdjustment:
 			if original.ReversesTransactionID != nil {
 				return store.Transfer{}, ErrPurposeCorrectionReversal
 			}
-		case "normal":
+		case TransactionKindNormal:
 			// A named contribution (ADR-034): moving it would leave participation
 			// counting the member against an envelope the money has left.
 			if original.MemberID != nil {
@@ -141,8 +141,8 @@ func (l *Ledger) PostPurposeCorrection(ctx context.Context, p PostPurposeCorrect
 		// effective purpose to receive the pair's 'in' leg and the target the 'out'
 		// leg; 'in' is the mirror image.
 		var from, to leg
-		switch original.Direction {
-		case "out":
+		switch Direction(original.Direction) {
+		case DirectionOut:
 			from = leg{AccountID: original.AccountID, PurposeID: p.PurposeID}
 			to = leg{AccountID: original.AccountID, PurposeID: effectivePurposeID}
 		default: // "in" - the schema's own CHECK admits no third value.
@@ -151,7 +151,7 @@ func (l *Ledger) PostPurposeCorrection(ctx context.Context, p PostPurposeCorrect
 		}
 
 		transactionID := p.TransactionID
-		pair, err := l.postTransferPairTx(ctx, q, p.FundID, "reclass_purpose", from, to,
+		pair, err := l.postTransferPairTx(ctx, q, p.FundID, TransferKindReclassPurpose, from, to,
 			money.FromDB(original.Amount), original.OccurredOn, nil, &transactionID, nil)
 		if err != nil {
 			return store.Transfer{}, fmt.Errorf("posting purpose correction: %w", err)

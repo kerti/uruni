@@ -26,7 +26,7 @@ func TestGetTransactionsRowsCarryTheReversalFacts(t *testing.T) {
 	ctx := context.Background()
 	f := newReportFixture(t, "Kas RT 05")
 	now := time.Date(2026, 10, 2, 3, 0, 0, 0, time.UTC) // 2 October, 10:00 in Asia/Jakarta
-	post := func(direction string, amount money.Amount, on string) int64 {
+	post := func(direction ledger.Direction, amount money.Amount, on string) int64 {
 		t.Helper()
 		row, err := ledgerAt(f.db, time.Date(2026, 12, 31, 3, 0, 0, 0, time.UTC)).PostTransaction(ctx, ledger.PostTransactionParams{
 			FundID: f.fund.ID, AccountID: f.cashID, PurposeID: f.mainID, Direction: direction, Amount: amount,
@@ -205,7 +205,7 @@ func TestReversalRefusalsReachTheWireWithTheirCodes(t *testing.T) {
 	ahead := time.Date(2026, 12, 31, 3, 0, 0, 0, time.UTC)
 	r := authedRouterAt(t, f.db, func() time.Time { return today })
 
-	post := func(direction string, amount money.Amount, on string, purpose int64) int64 {
+	post := func(direction ledger.Direction, amount money.Amount, on string, purpose int64) int64 {
 		t.Helper()
 		row, err := ledgerAt(f.db, ahead).PostTransaction(ctx, ledger.PostTransactionParams{
 			FundID: f.fund.ID, AccountID: f.cashID, PurposeID: purpose, Direction: direction,

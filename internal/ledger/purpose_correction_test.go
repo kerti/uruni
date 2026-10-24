@@ -827,8 +827,8 @@ func TestEffectivePurposeFollowsTheCorrectionPathWithoutIDOrder(t *testing.T) {
 		return 0
 	}
 
-	for _, direction := range []string{"in", "out"} {
-		t.Run(direction, func(t *testing.T) {
+	for _, direction := range []Direction{DirectionIn, DirectionOut} {
+		t.Run(string(direction), func(t *testing.T) {
 			row := postEntry(t, l, f.fundID, f.cashID, f.mainID, direction, 40_000, "2026-09-10", nil)
 			for _, step := range []struct{ to, want int64 }{
 				{f.passID, f.passID},

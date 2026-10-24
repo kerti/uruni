@@ -55,9 +55,9 @@ func seedYearFund(b *testing.B) (http.Handler, string) {
 	day := time.Date(2025, 10, 1, 0, 0, 0, 0, time.UTC)
 	for i := range 1500 {
 		d := day.AddDate(0, 0, i/4%363)
-		dir, amount := "in", money.Amount(20_000+i%7*5_000)
+		dir, amount := ledger.DirectionIn, money.Amount(20_000+i%7*5_000)
 		if i%3 == 0 {
-			dir = "out"
+			dir = ledger.DirectionOut
 		}
 		note := fmt.Sprintf("Catatan %d", i)
 		acct := cash

@@ -87,7 +87,7 @@ func (l *Ledger) PostPurposeMove(ctx context.Context, p PostPurposeMoveParams) (
 				}
 				return store.Transfer{}, fmt.Errorf("fetching purpose %d: %w", id, err)
 			}
-			if purpose.Kind == "pass_through" {
+			if purpose.Kind == string(PurposeKindPassThrough) {
 				return store.Transfer{}, ErrPurposeMovePassThrough
 			}
 			if err := refuseClosedIncidental(ctx, q, id, ErrPurposeMoveClosed); err != nil {
@@ -117,7 +117,7 @@ func (l *Ledger) PostPurposeMove(ctx context.Context, p PostPurposeMoveParams) (
 		reason := reasonAllocation
 		from := leg{AccountID: p.AccountID, PurposeID: p.FromPurposeID}
 		to := leg{AccountID: p.AccountID, PurposeID: p.ToPurposeID}
-		pair, err := l.postTransferPairTx(ctx, q, p.FundID, "reclass_purpose", from, to,
+		pair, err := l.postTransferPairTx(ctx, q, p.FundID, TransferKindReclassPurpose, from, to,
 			p.Amount, p.OccurredOn, normalizeNote(p.Note), nil, &reason)
 		if err != nil {
 			return store.Transfer{}, fmt.Errorf("posting purpose move: %w", err)

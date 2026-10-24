@@ -21,7 +21,7 @@ import (
 // born together in one transaction, or not at all. Absent is the same as 0;
 // neither posts a row.
 type accountRequest struct {
-	Kind           string                 `json:"kind"`
+	Kind           ledger.AccountKind     `json:"kind"`
 	Name           string                 `json:"name"`
 	OpeningBalance *openingBalanceRequest `json:"opening_balance"`
 }

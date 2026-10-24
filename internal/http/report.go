@@ -444,13 +444,13 @@ func readReportFilter(query url.Values, fundID int64, purposes []store.Purpose, 
 	}
 
 	dir := query.Get("dir")
-	if dir == ledger.ReportDirectionIn || dir == ledger.ReportDirectionOut {
-		params.Direction = dir
+	if dir == string(ledger.ReportDirectionIn) || dir == string(ledger.ReportDirectionOut) {
+		params.Direction = ledger.Direction(dir)
 		filter.Active.Set("dir", dir)
 	}
 	filter.Directions = []reportOption{
-		{Value: ledger.ReportDirectionIn, Label: reportText.DirectionIn, Selected: params.Direction == ledger.ReportDirectionIn},
-		{Value: ledger.ReportDirectionOut, Label: reportText.DirectionOut, Selected: params.Direction == ledger.ReportDirectionOut},
+		{Value: string(ledger.ReportDirectionIn), Label: reportText.DirectionIn, Selected: params.Direction == ledger.ReportDirectionIn},
+		{Value: string(ledger.ReportDirectionOut), Label: reportText.DirectionOut, Selected: params.Direction == ledger.ReportDirectionOut},
 	}
 
 	wantDues := query.Get("dues")
@@ -569,7 +569,7 @@ func buildReportPage(r ledger.Report, empty bool) reportPage {
 			}
 			page.Rows = append(page.Rows, reportRow{
 				Date: date, Label: reportText.entryLabel(*e), Note: reportNote(e.Note), Purpose: e.PurposeName,
-				Amount: sign + money.FormatIDR(e.Amount), Class: e.Direction, HasReceipt: e.HasReceipt, Reversed: e.Reversed,
+				Amount: sign + money.FormatIDR(e.Amount), Class: string(e.Direction), HasReceipt: e.HasReceipt, Reversed: e.Reversed,
 			})
 		case row.Move != nil:
 			page.Rows = append(page.Rows, reportRow{

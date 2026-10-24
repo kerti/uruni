@@ -33,13 +33,13 @@ func (c reportCopy) entryLabel(e ledger.ReportEntry) string {
 	}
 
 	switch e.Kind {
-	case "dues":
+	case ledger.TransactionKindDues:
 		return c.RowDues(period, member)
-	case "opening":
+	case ledger.TransactionKindOpening:
 		return c.RowOpening
-	case "reimbursement":
+	case ledger.TransactionKindReimbursement:
 		return member
-	case "adjustment":
+	case ledger.TransactionKindAdjustment:
 		// A reversal first: a dues reversal carries a period, a contribution reversal
 		// names a member and has no period, and the reversal of an unnamed row names
 		// nobody at all (ADR-042). Every other adjustment is "Penyesuaian", its line
@@ -59,7 +59,7 @@ func (c reportCopy) entryLabel(e ledger.ReportEntry) string {
 			return c.RowContributionReversal(member)
 		}
 		return c.RowAdjustment
-	case "normal":
+	case ledger.TransactionKindNormal:
 		// A named contribution says who gave; any other normal row is plain.
 		if e.MemberName != nil {
 			return member
