@@ -90,6 +90,7 @@ Key entities:
 - Mark a dues payment (amount auto-filled from the member's tier, editable; location; cash/transfer).
 - Undo a dues payment recorded in error (wrong member, entered twice) — the payment is reversed by a new entry, never edited away, and the member reads as unpaid for that period again.
 - A simple "not yet paid" view. **No reminders, no nagging automation.**
+- Each member's status across the last twelve months at a glance - status only, no counts or amounts ([ADR-044](./ADR/044-twelve-months-of-dues.md)).
 
 ### 7.4 Reimbursements
 - Record that a member fronted money → it becomes owed to them.
@@ -128,7 +129,7 @@ Key entities:
 - The page shows **everything by default** and provides **filters** (month, purpose/tag, member, income/expense, dues status) so a public viewer can sift the data easily.
 - Safeguards: long random slug + `noindex` so it isn't discoverable via search; an optional **"regenerate link"** escape hatch if it ever leaks (not required in normal use). Trade-off accepted: because everything is shown, the public URL exposes member names and payment status — fine given the treasurer's transparency intent and the low sensitivity of the data.
 - This is a shared page, not a member portal — no accounts, no member logins.
-- One month at a time, chosen at the top: a header with the balance, the latest cash check, the balance per purpose (never per location) and what is owed to members, each **as of the month's last day** - or today for the running month, marked "bulan berjalan" - then the month as a walk from the balance it started on, through money in, money out and any adjustment, to the balance it ended on ([ADR-038](./ADR/038-the-month-as-a-balance-walk.md)), that month's transactions, its dues status (no arrears count), and its envelopes. Receipts show as a marker only; the photos stay private. The link is shown, copied and replaced from Pengaturan. ([ADR-035](./ADR/035-public-report.md), [ADR-037](./ADR/037-report-shows-the-month-as-it-ended.md))
+- One month at a time, chosen at the top: a header with the balance, the latest cash check, the balance per purpose (never per location) and what is owed to members, each **as of the month's last day** - or today for the running month, marked "bulan berjalan" - then the month as a walk from the balance it started on, through money in, money out and any adjustment, to the balance it ended on ([ADR-038](./ADR/038-the-month-as-a-balance-walk.md)), that month's transactions, its dues status (no arrears count) opened by up to twelve months of each member's status ending at the month ([ADR-044](./ADR/044-twelve-months-of-dues.md)), and its envelopes. Receipts show as a marker only; the photos stay private. The link is shown, copied and replaced from Pengaturan. ([ADR-035](./ADR/035-public-report.md), [ADR-037](./ADR/037-report-shows-the-month-as-it-ended.md))
 - A **monthly PDF** of the same report, downloadable from the page, for printing or posting in the group chat. (Added 2026-10-02.)
 
 ### 7.10 Backup / export

@@ -17,6 +17,8 @@
 </html>
 {{end}}
 
+{{define "gridshape"}}<svg class="shape" viewBox="0 0 14 14" aria-hidden="true" focusable="false">{{if eq .Class "paid"}}<circle class="g-paid" cx="7" cy="7" r="6"/>{{else if eq .Class "partial"}}<circle class="g-ring" cx="7" cy="7" r="5.5"/><path class="g-half" d="M7 1.5 A5.5 5.5 0 0 0 7 12.5 Z"/>{{else if eq .Class "unpaid"}}<circle class="g-hollow" cx="7" cy="7" r="5.5"/>{{else}}<line class="g-none" x1="3.5" y1="7" x2="10.5" y2="7"/>{{end}}</svg>{{end}}
+
 {{define "report"}}{{template "head" .}}
 <header>
   <p class="eyebrow">{{.Text.Eyebrow}}</p>
@@ -121,9 +123,44 @@
   </ul>
   {{end}}
 </section>
-{{if .HasDues}}
+{{if or .HasDues .Grid}}
 <section id="dues" aria-labelledby="dues-heading">
   <h2 id="dues-heading">{{.Text.DuesLabel}}</h2>
+  {{with .Grid}}
+  <div class="grid">
+    <h3>{{.Heading}}</h3>
+    <p class="muted">{{.Range}}</p>
+    {{if .Caption}}<p class="muted">{{.Caption}}</p>{{end}}
+    <table>
+      <thead>
+        <tr aria-hidden="true">
+          <td></td>
+          {{range .Years}}<td colspan="{{.Span}}" class="ys">{{.Year}}</td>
+          {{end}}
+        </tr>
+        <tr>
+          <td></td>
+          {{range .Heads}}<th scope="col"{{if .Start}} class="ys"{{end}}><span aria-hidden="true">{{.Short}}</span><span class="sr-only">{{.Full}}</span></th>
+          {{end}}
+        </tr>
+      </thead>
+      <tbody>
+        {{range .Rows}}
+        <tr>
+          <th scope="row">{{.Name}}</th>
+          {{range .Cells}}<td{{if .Start}} class="ys"{{end}}>{{template "gridshape" .}}<span class="sr-only">{{.Label}}</span></td>
+          {{end}}
+        </tr>
+        {{end}}
+      </tbody>
+    </table>
+    <ul class="legend">
+      {{range .Legend}}<li>{{template "gridshape" .}}{{.Label}}</li>
+      {{end}}
+    </ul>
+  </div>
+  {{end}}
+  {{if .HasDues}}
   <form class="filters" method="get" action="#dues">
     <input type="hidden" name="month" value="{{.Month}}">
     {{range $name, $values := .Filter.Active}}{{if ne $name "dues"}}{{range $values}}<input type="hidden" name="{{$name}}" value="{{.}}">{{end}}{{end}}{{end}}
@@ -150,6 +187,7 @@
     {{end}}
   </ul>
   {{else}}<p class="empty">{{.Text.DuesNoRows}}</p>{{end}}
+  {{end}}
 </section>
 {{end}}
 {{if .Envelopes}}

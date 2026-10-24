@@ -35,8 +35,8 @@ test.describe('dues status, twelve months', () => {
     // Twelve month heads (the corner cell is not a column head).
     await expect(table.getByRole('columnheader')).toHaveCount(12)
 
-    // Rows in the API's order; each row carries twelve labelled cells, none paid.
-    await expect(table.getByRole('rowheader')).toHaveText(['Warga Satu', 'Warga Dua'])
+    // Rows by name (ADR-044), so Dua before Satu; each carries twelve labelled cells, none paid.
+    await expect(table.getByRole('rowheader')).toHaveText(['Warga Dua', 'Warga Satu'])
     for (const name of ['Warga Satu', 'Warga Dua']) {
       const row = table.getByRole('row').filter({ has: page.getByRole('rowheader', { name }) })
       await expect(row.getByText(new RegExp(`: ${copy.dues.statuses.unpaid}$`))).toHaveCount(12)

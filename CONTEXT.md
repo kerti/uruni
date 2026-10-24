@@ -37,5 +37,5 @@ Where a concept's Indonesian name is the one the treasurer sees, the identifier 
 
 ## Sharing
 
-- **Public report** (laporan publik) — an unauthenticated, filterable, read-only page at a stable unguessable link the treasurer shares once. One month at a time; shows everything the PRD accepts making public (names, amounts, payment status), with filters. Not a member portal (no accounts). The link changes only when the treasurer deliberately makes a new one ([ADR-035](./docs/ADR/035-public-report.md)).
+- **Public report** (laporan publik) — an unauthenticated, filterable, read-only page at a stable unguessable link the treasurer shares once. One month at a time - except the dues **grid** (*Status iuran 12 bulan*), each member's status over up to twelve months ending at the month, status only ([ADR-044](./docs/ADR/044-twelve-months-of-dues.md)); shows everything the PRD accepts making public (names, amounts, payment status), with filters. Not a member portal (no accounts). The link changes only when the treasurer deliberately makes a new one ([ADR-035](./docs/ADR/035-public-report.md)).
 - **Backup / export** — one full-data backup file (canonical, restorable: the ledger as JSON plus every receipt photo) + optional **Excel**; automatic daily server-side backups, restorable in the app. No emailed backups.

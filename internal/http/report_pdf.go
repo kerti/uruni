@@ -24,6 +24,7 @@ import (
 	"embed"
 	"fmt"
 	"log/slog"
+	"math"
 	"net/http"
 	"strconv"
 	"strings"
@@ -207,6 +208,7 @@ func drawReportPDF(page reportPage) ([]byte, error) {
 	d.header(page)
 	d.transactions(page)
 	d.dues(page)
+	d.duesGrid(page)
 	d.envelopes(page)
 
 	var buf bytes.Buffer
@@ -573,6 +575,145 @@ func (d *pdfDoc) dues(p reportPage) {
 		}, true)
 	}
 	d.endTable()
+}
+
+// The grid's geometry, in millimetres: a fixed column, so a fund with fewer
+// months gets a narrower grid rather than wider shapes, and the name column is
+// what twelve columns leave.
+const (
+	pdfGridColW      = 9.0
+	pdfGridMaxCols   = 12
+	pdfGridShapeR    = 1.7
+	pdfGridRowPad    = 1.8
+	pdfGridLegendGap = 6.0
+)
+
+// duesGrid is the twelve-month status grid (ADR-044) on its own page after the
+// dues table: heading, range and caption, then a row per member, the column
+// heads repeating on a new page and the legend kept with the last rows. Status
+// is a drawn shape (filled, half-filled, hollow, a dash), never a glyph: the
+// font subset has none, and a shape reads in a greyscale print.
+func (d *pdfDoc) duesGrid(p reportPage) {
+	g := p.Grid
+	if g == nil {
+		return
+	}
+	d.section(g.Heading, true)
+	d.text(pdfLine{text: g.Range, size: pdfBodySize, color: "muted-foreground"}, pdfContentW, "L")
+	if g.Caption != "" {
+		d.text(pdfLine{text: g.Caption, size: pdfBodySize, color: "muted-foreground"}, pdfContentW, "L")
+	}
+	d.SetY(d.GetY() + 3)
+
+	nameW := pdfContentW - pdfGridMaxCols*pdfGridColW
+	colX := func(i int) float64 { return pdfMarginX + nameW + float64(i)*pdfGridColW }
+
+	head := func() {
+		const yearH, monthH = 3.6, 4.2
+		top := d.GetY()
+		d.face(false, 7.5)
+		d.ink("muted-foreground")
+		x := 0
+		for _, y := range g.Years {
+			d.SetXY(colX(x)+0.8, top)
+			d.CellFormat(pdfGridColW*float64(y.Span)-0.8, yearH, y.Year, "", 0, "L", false, 0, "")
+			x += y.Span
+		}
+		d.face(true, 7.5)
+		for i, h := range g.Heads {
+			d.SetXY(colX(i), top+yearH)
+			d.CellFormat(pdfGridColW, monthH, h.Short, "", 0, "C", false, 0, "")
+		}
+		d.rule("input")
+		bottom := top + yearH + monthH + 0.6
+		d.Line(pdfMarginX, bottom, pdfMarginX+pdfContentW, bottom)
+		d.SetXY(pdfMarginX, bottom)
+	}
+	d.repeat = head
+	head()
+
+	legendH := pdfGridLegendGap + 2*pdfGridShapeR + 2
+	for i, r := range g.Rows {
+		lines := d.wrap(pdfCell{w: nameW - pdfColumnGap, lines: []pdfLine{{text: r.Name, size: pdfBodySize, color: "foreground"}}})
+		textH := 0.0
+		for _, l := range lines {
+			textH += pdfLineHeight(l.size)
+		}
+		h := max(textH, 2*pdfGridShapeR) + 2*pdfGridRowPad
+		if i == len(g.Rows)-1 {
+			// The last row brings the legend with it to a new page, never leaving
+			// it alone there.
+			d.need(h + legendH)
+		} else {
+			d.need(h)
+		}
+		top := d.GetY()
+		y := top + pdfGridRowPad + (max(textH, 2*pdfGridShapeR)-textH)/2
+		for _, l := range lines {
+			d.face(l.bold, l.size)
+			d.ink(l.color)
+			d.SetXY(pdfMarginX, y)
+			d.CellFormat(nameW-pdfColumnGap, pdfLineHeight(l.size), l.text, "", 0, "L", false, 0, "")
+			y += pdfLineHeight(l.size)
+		}
+		cy := top + h/2
+		for j, c := range r.Cells {
+			d.gridShape(c.Class, colX(j)+pdfGridColW/2, cy, pdfGridShapeR)
+		}
+		d.rule("border")
+		d.Line(pdfMarginX, top+h, pdfMarginX+pdfContentW, top+h)
+		d.SetXY(pdfMarginX, top+h)
+	}
+	d.endTable()
+
+	// The legend, on one line: shape, then its word.
+	d.SetY(d.GetY() + pdfGridLegendGap)
+	y := d.GetY() + pdfGridShapeR
+	x := pdfMarginX
+	d.face(false, pdfSmallSize)
+	d.ink("muted-foreground")
+	for _, c := range g.Legend {
+		d.gridShape(c.Class, x+pdfGridShapeR, y, pdfGridShapeR)
+		x += 2*pdfGridShapeR + 1.8
+		w := d.GetStringWidth(c.Label)
+		d.SetXY(x, y-pdfLineHeight(pdfSmallSize)/2)
+		d.CellFormat(w+1, pdfLineHeight(pdfSmallSize), c.Label, "", 0, "L", false, 0, "")
+		x += w + 7
+	}
+	d.SetXY(pdfMarginX, y+pdfGridShapeR+1)
+}
+
+// gridShape draws one cell's mark centred on (cx, cy): a filled disc for
+// Lunas, a ring with its left half filled for Bayar sebagian, a bare ring for
+// Belum bayar, and a short dash for no obligation. Tones as the page's.
+func (d *pdfDoc) gridShape(class string, cx, cy, r float64) {
+	d.SetLineWidth(0.4)
+	defer d.SetLineWidth(pdfRuleWidthMM)
+	switch class {
+	case string(ledger.DuesCellPaid):
+		d.fill("success")
+		d.Circle(cx, cy, r, "F")
+	case string(ledger.DuesCellPartial):
+		d.fill("attention")
+		d.rule("attention")
+		// The left half-disc as a polygon: fpdf has no pie slice.
+		const steps = 24
+		pts := make([]fpdf.PointType, 0, steps+1)
+		for i := 0; i <= steps; i++ {
+			a := math.Pi/2 + math.Pi*float64(i)/steps
+			pts = append(pts, fpdf.PointType{X: cx + r*math.Cos(a), Y: cy - r*math.Sin(a)})
+		}
+		d.Polygon(pts, "F")
+		d.Circle(cx, cy, r, "D")
+	case string(ledger.DuesCellUnpaid):
+		d.rule("muted-foreground")
+		d.Circle(cx, cy, r, "D")
+	default:
+		d.rule("muted-foreground")
+		d.SetLineCapStyle("round")
+		d.Line(cx-r*0.6, cy, cx+r*0.6, cy)
+		d.SetLineCapStyle("butt")
+	}
 }
 
 // duesColor is the page's badge colouring: paid is green, partial terracotta,

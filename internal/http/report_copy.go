@@ -70,6 +70,17 @@ type reportCopy struct {
 	DuesPaidStatus    string
 	DuesPaidInAdvance string
 
+	// The twelve-month dues grid (ADR-044). The status words are the dues
+	// section's own above. GridCellLabel is the hidden per-cell label; GridAsOf
+	// the caption on a past month, since the grid is read as of today.
+	GridHeading   string
+	GridRange     func(from, to string) string
+	GridAsOf      func(date string) string
+	GridNone      string
+	GridCellLabel func(month, status string) string
+	// MonthHeads are the grid's three-letter column heads, January first.
+	MonthHeads [12]string
+
 	// The envelopes section (#338). All but EnvelopeGiven is the envelope screen's
 	// wording from web/src/copy/id.ts (incidentals.heading, detail.collectedLabel,
 	// status, participation), verbatim; EnvelopeGiven is the report's: the screen
@@ -178,6 +189,13 @@ var reportText = reportCopy{
 	DuesPaidStatus:    "Lunas",
 	DuesPaidInAdvance: "Lunas \u2014 sudah bayar di muka",
 
+	GridHeading:   "Status iuran 12 bulan",
+	GridRange:     func(from, to string) string { return from + " \u2013 " + to },
+	GridAsOf:      func(date string) string { return "Status per " + date },
+	GridNone:      "Tidak ada iuran",
+	GridCellLabel: func(month, status string) string { return month + ": " + status },
+	MonthHeads:    [12]string{"Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agu", "Sep", "Okt", "Nov", "Des"},
+
 	EnvelopesLabel:    "Amplop",
 	EnvelopeCollected: "Terkumpul",
 	EnvelopeOpen:      "Berjalan",
@@ -272,5 +290,20 @@ func (c reportCopy) participationStatus(s ledger.ParticipationState) string {
 		return c.ParticipationUnder
 	default:
 		return c.ParticipationNot
+	}
+}
+
+// gridWord is the word for one grid cell: the dues section's own status words,
+// plus the grid's for no obligation.
+func (c reportCopy) gridWord(cell ledger.DuesGridCell) string {
+	switch cell {
+	case ledger.DuesCellPaid:
+		return c.DuesPaidStatus
+	case ledger.DuesCellPartial:
+		return c.DuesPartial
+	case ledger.DuesCellUnpaid:
+		return c.DuesUnpaid
+	default:
+		return c.GridNone
 	}
 }

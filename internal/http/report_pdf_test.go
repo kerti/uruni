@@ -531,7 +531,7 @@ func TestReportPDFStartsEachSectionOnItsOwnPage(t *testing.T) {
 	s := newPDFScenario(t)
 	pages := pdfPages(t, s.get(t, "/report/"+s.fund.ReportSlug+"/pdf?month=2026-09").Body.Bytes())
 
-	sections := []string{reportText.PDFSummary, reportText.TransactionsLabel, reportText.DuesLabel, reportText.EnvelopesLabel}
+	sections := []string{reportText.PDFSummary, reportText.TransactionsLabel, reportText.DuesLabel, reportText.GridHeading, reportText.EnvelopesLabel}
 	if len(pages) != len(sections) {
 		t.Fatalf("pages = %d, want %d (one per section, each fits one page)", len(pages), len(sections))
 	}
