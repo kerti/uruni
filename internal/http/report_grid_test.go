@@ -206,3 +206,45 @@ func TestReportPDFDrawsTheGridWithoutSplittingARowAcrossPages(t *testing.T) {
 		}
 	}
 }
+
+// A grid with fewer than twelve months ends at the content edge, not where a
+// twelve-month grid would: the last month's head is drawn inside the last
+// column before the right margin. September's report on the dues scenario has
+// nine months (January to September).
+func TestReportPDFGridEndsAtTheContentEdge(t *testing.T) {
+	t.Parallel()
+	s := newDuesScenario(t)
+	rec := s.get(t, "/report/"+s.fund.ReportSlug+"/pdf?month=2026-09")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GET pdf = %d", rec.Code)
+	}
+	const ptPerMM = 72 / 25.4
+	right := (pdfMarginX + pdfContentW) * ptPerMM
+	lastCol := right - pdfGridColW*ptPerMM
+
+	for _, page := range pdfPagesAt(t, rec.Body.Bytes()) {
+		var onGridPage bool
+		for _, r := range page {
+			if r.text == reportText.GridHeading {
+				onGridPage = true
+			}
+		}
+		if !onGridPage {
+			continue
+		}
+		var sep *pdfRunX
+		for i, r := range page {
+			if r.text == reportText.MonthHeads[8] { // Sep, the last column
+				sep = &page[i]
+			}
+		}
+		if sep == nil {
+			t.Fatalf("the grid page has no %q head: %v", reportText.MonthHeads[8], page)
+		}
+		if sep.x < lastCol || sep.x >= right {
+			t.Errorf("the last month's head is drawn at x=%.1fpt, want inside the last column [%.1f, %.1f) - the grid does not end at the content edge", sep.x, lastCol, right)
+		}
+		return
+	}
+	t.Fatalf("no page carries %q", reportText.GridHeading)
+}
