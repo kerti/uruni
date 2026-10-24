@@ -536,7 +536,7 @@ func TestOutstandingDuesForMemberBackdatedRateReachesOnlyTheBackdatedMember(t *t
 		{"joined at adoption", ani, "2026-01", 3},
 		{"backdated for arrears", budi, "2025-10", 6},
 	} {
-		rows, err := l.OutstandingDuesForMember(ctx, f.fundID, tt.memberID, "2026-03", time.Time{})
+		rows, err := l.OutstandingDuesForMember(ctx, f.fundID, tt.memberID, "2026-03")
 		if err != nil {
 			t.Fatalf("%s: OutstandingDuesForMember() = %v, want no error", tt.name, err)
 		}
@@ -702,7 +702,7 @@ func TestOutstandingDuesForMemberReturnsUnpaidAndPartialOldestFirstMatchingDuesS
 		t.Fatalf("PostDuesPayments() = %v, want no error", err)
 	}
 
-	rows, err := l.OutstandingDuesForMember(ctx, f.fundID, memberID, "2026-03", time.Time{})
+	rows, err := l.OutstandingDuesForMember(ctx, f.fundID, memberID, "2026-03")
 	if err != nil {
 		t.Fatalf("OutstandingDuesForMember() = %v, want no error", err)
 	}
@@ -767,7 +767,7 @@ func TestOutstandingDuesForMemberFullyPaidMemberReturnsEmpty(t *testing.T) {
 		t.Fatalf("PostDuesPayments() = %v, want no error", err)
 	}
 
-	rows, err := l.OutstandingDuesForMember(ctx, f.fundID, memberID, "2026-02", time.Time{})
+	rows, err := l.OutstandingDuesForMember(ctx, f.fundID, memberID, "2026-02")
 	if err != nil {
 		t.Fatalf("OutstandingDuesForMember() = %v, want no error", err)
 	}
@@ -785,7 +785,7 @@ func TestOutstandingDuesForMemberTierLessMemberReturnsEmpty(t *testing.T) {
 
 	memberID := createDuesMember(t, q, f.fundID, duesMemberParams{name: "Jane"}) // tierID left nil
 
-	rows, err := l.OutstandingDuesForMember(ctx, f.fundID, memberID, "2026-06", time.Time{})
+	rows, err := l.OutstandingDuesForMember(ctx, f.fundID, memberID, "2026-06")
 	if err != nil {
 		t.Fatalf("OutstandingDuesForMember() = %v, want no error", err)
 	}
@@ -808,7 +808,7 @@ func TestOutstandingDuesForMemberRatelessTierReturnsEmpty(t *testing.T) {
 		name: "Jane", tierID: &tierID,
 	})
 
-	rows, err := l.OutstandingDuesForMember(ctx, f.fundID, memberID, "2026-06", time.Time{})
+	rows, err := l.OutstandingDuesForMember(ctx, f.fundID, memberID, "2026-06")
 	if err != nil {
 		t.Fatalf("OutstandingDuesForMember() = %v, want no error", err)
 	}
@@ -833,7 +833,7 @@ func TestOutstandingDuesForMemberJoinedAfterThroughReturnsEmpty(t *testing.T) {
 		name: "Jane", tierID: &tierID, joinedOn: &joinedOn,
 	})
 
-	rows, err := l.OutstandingDuesForMember(ctx, f.fundID, memberID, "2026-06", time.Time{})
+	rows, err := l.OutstandingDuesForMember(ctx, f.fundID, memberID, "2026-06")
 	if err != nil {
 		t.Fatalf("OutstandingDuesForMember() = %v, want no error", err)
 	}
@@ -854,7 +854,7 @@ func TestOutstandingDuesForMemberJoinedOnBoundsTheStart(t *testing.T) {
 	joinedOn := "2026-03-20"                        // joined mid-month
 	memberID := createDuesMember(t, q, f.fundID, duesMemberParams{name: "Jane", tierID: &tierID, joinedOn: &joinedOn})
 
-	rows, err := l.OutstandingDuesForMember(ctx, f.fundID, memberID, "2026-04", time.Time{})
+	rows, err := l.OutstandingDuesForMember(ctx, f.fundID, memberID, "2026-04")
 	if err != nil {
 		t.Fatalf("OutstandingDuesForMember() = %v, want no error", err)
 	}
@@ -885,7 +885,7 @@ func TestOutstandingDuesForMemberInactiveOnBoundsTheEnd(t *testing.T) {
 	})
 
 	// through reaches well past inactive_on's month; the answer stops at 2026-03.
-	rows, err := l.OutstandingDuesForMember(ctx, f.fundID, memberID, "2026-06", time.Time{})
+	rows, err := l.OutstandingDuesForMember(ctx, f.fundID, memberID, "2026-06")
 	if err != nil {
 		t.Fatalf("OutstandingDuesForMember() = %v, want no error", err)
 	}
@@ -912,7 +912,7 @@ func TestOutstandingDuesForMemberSkipsPeriodWithNoEffectiveRateWithoutTruncating
 	joinedOn := "2026-01-01"                        // joined well before the rate exists
 	memberID := createDuesMember(t, q, f.fundID, duesMemberParams{name: "Jane", tierID: &tierID, joinedOn: &joinedOn})
 
-	rows, err := l.OutstandingDuesForMember(ctx, f.fundID, memberID, "2026-05", time.Time{})
+	rows, err := l.OutstandingDuesForMember(ctx, f.fundID, memberID, "2026-05")
 	if err != nil {
 		t.Fatalf("OutstandingDuesForMember() = %v, want no error", err)
 	}
@@ -940,7 +940,7 @@ func TestOutstandingDuesForMemberThroughBoundsTheEnd(t *testing.T) {
 	joinedOn := "2026-01-01"
 	memberID := createDuesMember(t, q, f.fundID, duesMemberParams{name: "Jane", tierID: &tierID, joinedOn: &joinedOn})
 
-	rows, err := l.OutstandingDuesForMember(ctx, f.fundID, memberID, "2026-02", time.Time{})
+	rows, err := l.OutstandingDuesForMember(ctx, f.fundID, memberID, "2026-02")
 	if err != nil {
 		t.Fatalf("OutstandingDuesForMember() = %v, want no error", err)
 	}
@@ -994,7 +994,7 @@ func TestOutstandingDuesForMemberOmittedThroughDefaultsToTheFundsMonth(t *testin
 			createDuesRate(t, q, tierID, 25_000, "2020-01")
 			memberID := createDuesMember(t, q, f.fundID, duesMemberParams{name: "Jane", tierID: &tierID}) // joined long before every period here
 
-			rows, err := l.OutstandingDuesForMember(context.Background(), f.fundID, memberID, "", tc.now)
+			rows, err := l.at(tc.now).OutstandingDuesForMember(context.Background(), f.fundID, memberID, "")
 			if err != nil {
 				t.Fatalf("OutstandingDuesForMember(through=\"\", now=%s) = %v, want no error", tc.now.Format(time.RFC3339), err)
 			}
@@ -1024,7 +1024,7 @@ func TestOutstandingDuesForMemberRejectsMalformedThrough(t *testing.T) {
 			tierID := createDuesTier(t, q, f.fundID, "Tier A")
 			memberID := createDuesMember(t, q, f.fundID, duesMemberParams{name: "Jane", tierID: &tierID})
 
-			_, err := l.OutstandingDuesForMember(ctx, f.fundID, memberID, through, time.Time{})
+			_, err := l.OutstandingDuesForMember(ctx, f.fundID, memberID, through)
 			if !errors.Is(err, ErrInvalidArgument) {
 				t.Errorf("OutstandingDuesForMember(through=%q) = %v, want an error wrapping ErrInvalidArgument", through, err)
 			}
@@ -1041,7 +1041,7 @@ func TestOutstandingDuesForMemberUnknownMemberIsNotFound(t *testing.T) {
 	f := newFixture(t, l)
 	ctx := context.Background()
 
-	_, err := l.OutstandingDuesForMember(ctx, f.fundID, 999_999, "2026-06", time.Time{})
+	_, err := l.OutstandingDuesForMember(ctx, f.fundID, 999_999, "2026-06")
 	if !errors.Is(err, sql.ErrNoRows) {
 		t.Errorf("OutstandingDuesForMember(unknown member) = %v, want an error wrapping sql.ErrNoRows", err)
 	}
@@ -1065,7 +1065,7 @@ func TestOutstandingDuesForMemberMidYearPromotionLeavesPastPeriodsAtTheOldTier(t
 	memberID := createDuesMember(t, q, f.fundID, duesMemberParams{name: "Jane", tierID: &tierA, joinedOn: &joinedOn})
 	setMemberTier(t, q, f.fundID, memberID, &tierB, "2026-04", 0)
 
-	rows, err := l.OutstandingDuesForMember(ctx, f.fundID, memberID, "2026-05", time.Time{})
+	rows, err := l.OutstandingDuesForMember(ctx, f.fundID, memberID, "2026-05")
 	if err != nil {
 		t.Fatalf("OutstandingDuesForMember() = %v, want no error", err)
 	}
@@ -1318,7 +1318,7 @@ func TestArrearsMonthsForMemberBackdatingJoinedOnMakesArrearsAppear(t *testing.T
 
 	backdated := p.twoBack + "-01"
 	if _, err := l.UpdateMember(ctx, UpdateMemberParams{
-		FundID: f.fundID, MemberID: memberID, JoinedOn: &backdated, Now: time.Now(),
+		FundID: f.fundID, MemberID: memberID, JoinedOn: &backdated,
 	}); err != nil {
 		t.Fatalf("UpdateMember(backdate joined_on) = %v, want no error", err)
 	}

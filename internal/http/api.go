@@ -73,11 +73,10 @@ type api struct {
 	// every table. See router.go's New.
 	sqlDB *sql.DB
 
-	// now is the clock every handler that reckons a calendar day or month reads
-	// (#379), injectable so a test can stand on either side of a month boundary.
-	// Production is time.Now; the handler reads it in the fund's zone (ADR-041),
-	// via fundLocation. Instants (created_at, session expiry) call time.Now
-	// directly.
+	// now is the ledger's clock (ledger.Ledger.Now), the one every handler that
+	// reckons a calendar day or month reads, the idempotency record's timestamps
+	// included. The handler reads it in the fund's zone (ADR-041), via
+	// fundLocation.
 	now func() time.Time
 
 	// restoreStage is the one-slot stash between the upload/inspect step and the

@@ -63,21 +63,21 @@ func seedMain(t *testing.T, l *Ledger, f fixture, amount money.Amount) {
 
 var datePaths = []datePath{
 	{"PostTransaction occurred_on", kindEntry, func(_ *testing.T, l *Ledger, f fixture, date string, now time.Time) error {
-		_, err := l.PostTransaction(context.Background(), PostTransactionParams{
-			FundID: f.fundID, AccountID: f.cashID, PurposeID: f.mainID, Direction: "in", Amount: 1000, OccurredOn: date, Now: now,
+		_, err := l.at(now).PostTransaction(context.Background(), PostTransactionParams{
+			FundID: f.fundID, AccountID: f.cashID, PurposeID: f.mainID, Direction: "in", Amount: 1000, OccurredOn: date,
 		})
 		return err
 	}},
 	{"PostDuesPayments occurred_on", kindEntry, func(_ *testing.T, l *Ledger, f fixture, date string, now time.Time) error {
-		_, err := l.PostDuesPayments(context.Background(), PostDuesPaymentsParams{
-			FundID: f.fundID, AccountID: f.cashID, MemberID: f.memberID, OccurredOn: date, Now: now,
+		_, err := l.at(now).PostDuesPayments(context.Background(), PostDuesPaymentsParams{
+			FundID: f.fundID, AccountID: f.cashID, MemberID: f.memberID, OccurredOn: date,
 			Periods: []PeriodAmount{{DuesPeriod: "2026-09", Amount: 1000}},
 		})
 		return err
 	}},
 	{"TakeReconciliation fix occurred_on", kindEntry, func(_ *testing.T, l *Ledger, f fixture, date string, now time.Time) error {
-		_, err := l.TakeReconciliation(context.Background(), TakeReconciliationParams{
-			FundID: f.fundID, Now: now,
+		_, err := l.at(now).TakeReconciliation(context.Background(), TakeReconciliationParams{
+			FundID: f.fundID,
 			Counts: []AccountCount{
 				{AccountID: f.cashID, ActualAmount: 1000, Resolution: "entry_added",
 					Fix: &Fix{PurposeID: f.mainID, Direction: "in", Amount: 1000, OccurredOn: date}},
@@ -89,88 +89,88 @@ var datePaths = []datePath{
 	{"PostPurposeMove occurred_on", kindEntry, func(t *testing.T, l *Ledger, f fixture, date string, now time.Time) error {
 		seedMain(t, l, f, 10_000)
 		env := openTestIncidental(t, l, f.fundID, "Kurban", "2026-01-02")
-		_, err := l.PostPurposeMove(context.Background(), PostPurposeMoveParams{
-			FundID: f.fundID, FromPurposeID: f.mainID, ToPurposeID: env.PurposeID, AccountID: f.cashID, Amount: 1000, OccurredOn: date, Now: now,
+		_, err := l.at(now).PostPurposeMove(context.Background(), PostPurposeMoveParams{
+			FundID: f.fundID, FromPurposeID: f.mainID, ToPurposeID: env.PurposeID, AccountID: f.cashID, Amount: 1000, OccurredOn: date,
 		})
 		return err
 	}},
 	{"PostTransferBetweenAccounts occurred_on", kindEntry, func(t *testing.T, l *Ledger, f fixture, date string, now time.Time) error {
 		seedMain(t, l, f, 10_000)
-		_, err := l.PostTransferBetweenAccounts(context.Background(), PostTransferBetweenAccountsParams{
-			FundID: f.fundID, PurposeID: f.mainID, FromAccountID: f.cashID, ToAccountID: f.bankID, Amount: 1000, OccurredOn: date, Now: now,
+		_, err := l.at(now).PostTransferBetweenAccounts(context.Background(), PostTransferBetweenAccountsParams{
+			FundID: f.fundID, PurposeID: f.mainID, FromAccountID: f.cashID, ToAccountID: f.bankID, Amount: 1000, OccurredOn: date,
 		})
 		return err
 	}},
 	{"OpenIncidental opened_on", kindEntry, func(_ *testing.T, l *Ledger, f fixture, date string, now time.Time) error {
-		_, err := l.OpenIncidental(context.Background(), OpenIncidentalParams{FundID: f.fundID, Occasion: "Kurban", OpenedOn: date, Now: now})
+		_, err := l.at(now).OpenIncidental(context.Background(), OpenIncidentalParams{FundID: f.fundID, Occasion: "Kurban", OpenedOn: date})
 		return err
 	}},
 	{"CloseIncidentalAndRoll closed_on", kindEntry, func(t *testing.T, l *Ledger, f fixture, date string, now time.Time) error {
 		env := openTestIncidental(t, l, f.fundID, "Kurban", "2026-01-02")
-		_, err := l.CloseIncidentalAndRoll(context.Background(), CloseIncidentalAndRollParams{
-			FundID: f.fundID, PurposeID: env.PurposeID, AccountID: f.cashID, ClosedOn: date, Now: now,
+		_, err := l.at(now).CloseIncidentalAndRoll(context.Background(), CloseIncidentalAndRollParams{
+			FundID: f.fundID, PurposeID: env.PurposeID, AccountID: f.cashID, ClosedOn: date,
 		})
 		return err
 	}},
 	{"CreateReimbursement incurred_on", kindEntry, func(_ *testing.T, l *Ledger, f fixture, date string, now time.Time) error {
-		_, err := l.CreateReimbursement(context.Background(), CreateReimbursementParams{
-			FundID: f.fundID, MemberID: f.memberID, PurposeID: f.mainID, Amount: 1000, IncurredOn: date, Now: now,
+		_, err := l.at(now).CreateReimbursement(context.Background(), CreateReimbursementParams{
+			FundID: f.fundID, MemberID: f.memberID, PurposeID: f.mainID, Amount: 1000, IncurredOn: date,
 		})
 		return err
 	}},
 	{"UpdateReimbursement incurred_on", kindEntry, func(t *testing.T, l *Ledger, f fixture, date string, now time.Time) error {
 		claim := createReimbursement(t, store.New(l.db), f, 1000, "2026-01-05", nil)
-		_, err := l.UpdateReimbursement(context.Background(), UpdateReimbursementParams{
-			FundID: f.fundID, ReimbursementID: claim.ID, IncurredOn: &date, Now: now,
+		_, err := l.at(now).UpdateReimbursement(context.Background(), UpdateReimbursementParams{
+			FundID: f.fundID, ReimbursementID: claim.ID, IncurredOn: &date,
 		})
 		return err
 	}},
 	{"UpdateReimbursement waived_on", kindEntry, func(t *testing.T, l *Ledger, f fixture, date string, now time.Time) error {
 		claim := createReimbursement(t, store.New(l.db), f, 1000, "2026-01-05", nil)
-		_, err := l.UpdateReimbursement(context.Background(), UpdateReimbursementParams{
-			FundID: f.fundID, ReimbursementID: claim.ID, SetWaivedOn: true, WaivedOn: &date, Now: now,
+		_, err := l.at(now).UpdateReimbursement(context.Background(), UpdateReimbursementParams{
+			FundID: f.fundID, ReimbursementID: claim.ID, SetWaivedOn: true, WaivedOn: &date,
 		})
 		return err
 	}},
 	{"SettleReimbursement occurred_on", kindEntry, func(t *testing.T, l *Ledger, f fixture, date string, now time.Time) error {
 		claim := createReimbursement(t, store.New(l.db), f, 1000, "2026-01-05", nil)
-		_, err := l.SettleReimbursement(context.Background(), SettleReimbursementParams{
-			FundID: f.fundID, ReimbursementID: claim.ID, AccountID: f.cashID, OccurredOn: date, Now: now,
+		_, err := l.at(now).SettleReimbursement(context.Background(), SettleReimbursementParams{
+			FundID: f.fundID, ReimbursementID: claim.ID, AccountID: f.cashID, OccurredOn: date,
 		})
 		return err
 	}},
 	{"CreateAccount opening balance", kindEntry, func(_ *testing.T, l *Ledger, f fixture, date string, now time.Time) error {
-		_, err := l.CreateAccount(context.Background(), CreateAccountParams{
-			FundID: f.fundID, Kind: "cash", Name: "Laci", Now: now, OpeningBalance: &OpeningBalance{Amount: 1000, OccurredOn: date},
+		_, err := l.at(now).CreateAccount(context.Background(), CreateAccountParams{
+			FundID: f.fundID, Kind: "cash", Name: "Laci", OpeningBalance: &OpeningBalance{Amount: 1000, OccurredOn: date},
 		})
 		return err
 	}},
 	{"CreateMember joined_on", kindPerson, func(_ *testing.T, l *Ledger, f fixture, date string, now time.Time) error {
-		_, err := l.CreateMember(context.Background(), CreateMemberParams{FundID: f.fundID, Name: "Siti", JoinedOn: date, Now: now})
+		_, err := l.at(now).CreateMember(context.Background(), CreateMemberParams{FundID: f.fundID, Name: "Siti", JoinedOn: date})
 		return err
 	}},
 	{"UpdateMember joined_on", kindPerson, func(_ *testing.T, l *Ledger, f fixture, date string, now time.Time) error {
-		_, err := l.UpdateMember(context.Background(), UpdateMemberParams{FundID: f.fundID, MemberID: f.memberID, JoinedOn: &date, Now: now})
+		_, err := l.at(now).UpdateMember(context.Background(), UpdateMemberParams{FundID: f.fundID, MemberID: f.memberID, JoinedOn: &date})
 		return err
 	}},
 	{"UpdateMember inactive_on", kindPerson, func(_ *testing.T, l *Ledger, f fixture, date string, now time.Time) error {
-		_, err := l.UpdateMember(context.Background(), UpdateMemberParams{FundID: f.fundID, MemberID: f.memberID, SetInactiveOn: true, InactiveOn: &date, Now: now})
+		_, err := l.at(now).UpdateMember(context.Background(), UpdateMemberParams{FundID: f.fundID, MemberID: f.memberID, SetInactiveOn: true, InactiveOn: &date})
 		return err
 	}},
 	{"UpdateAccount inactive_on", kindPerson, func(_ *testing.T, l *Ledger, f fixture, date string, now time.Time) error {
-		_, err := l.UpdateAccount(context.Background(), f.fundID, store.UpdateAccountParams{ID: f.bankID, SetInactiveOn: 1, InactiveOn: &date}, now)
+		_, err := l.at(now).UpdateAccount(context.Background(), f.fundID, store.UpdateAccountParams{ID: f.bankID, SetInactiveOn: 1, InactiveOn: &date})
 		return err
 	}},
 	{"PostDuesPayments dues_period", kindDues, func(_ *testing.T, l *Ledger, f fixture, date string, now time.Time) error {
-		_, err := l.PostDuesPayments(context.Background(), PostDuesPaymentsParams{
-			FundID: f.fundID, AccountID: f.cashID, MemberID: f.memberID, OccurredOn: "2026-09-01", Now: now,
+		_, err := l.at(now).PostDuesPayments(context.Background(), PostDuesPaymentsParams{
+			FundID: f.fundID, AccountID: f.cashID, MemberID: f.memberID, OccurredOn: "2026-09-01",
 			Periods: []PeriodAmount{{DuesPeriod: date, Amount: 1000}},
 		})
 		return err
 	}},
 	{"CreateDuesRate effective_from", kindRate, func(t *testing.T, l *Ledger, f fixture, date string, now time.Time) error {
 		tier := createDuesTier(t, store.New(l.db), f.fundID, "Warga")
-		_, err := l.CreateDuesRate(context.Background(), CreateDuesRateParams{FundID: f.fundID, TierID: tier, Amount: 1000, EffectiveFrom: date, Now: now})
+		_, err := l.at(now).CreateDuesRate(context.Background(), CreateDuesRateParams{FundID: f.fundID, TierID: tier, Amount: 1000, EffectiveFrom: date})
 		return err
 	}},
 }
@@ -256,8 +256,8 @@ func TestSetUpFundOpeningBalanceCeilingReadsTheParamsZone(t *testing.T) {
 			t.Run(zone+"/"+c.name, func(t *testing.T) {
 				t.Parallel()
 				l := newTestLedger(t)
-				_, err := l.SetUpFund(context.Background(), SetUpFundParams{
-					FundName: "Kas", TimeZone: zone, Now: edgeInstant,
+				_, err := l.at(edgeInstant).SetUpFund(context.Background(), SetUpFundParams{
+					FundName: "Kas", TimeZone: zone,
 					Accounts: []AccountInput{{Kind: "cash", Name: "Tunai", OpeningBalance: &OpeningBalance{Amount: 5000, OccurredOn: c.date}}},
 				})
 				if c.want == nil && err != nil {
@@ -313,8 +313,8 @@ func TestACeilingFollowsAZoneChangeButNeverRewritesARow(t *testing.T) {
 	l := newTestLedger(t)
 	f := fundInZone(t, l, tz.Jayapura)
 	post := func(date string) error {
-		_, err := l.PostTransaction(context.Background(), PostTransactionParams{
-			FundID: f.fundID, AccountID: f.cashID, PurposeID: f.mainID, Direction: "in", Amount: 1000, OccurredOn: date, Now: edgeInstant,
+		_, err := l.at(edgeInstant).PostTransaction(context.Background(), PostTransactionParams{
+			FundID: f.fundID, AccountID: f.cashID, PurposeID: f.mainID, Direction: "in", Amount: 1000, OccurredOn: date,
 		})
 		return err
 	}
@@ -374,15 +374,15 @@ func TestUpdateReimbursementDoesNotDefendAnUnchangedDate(t *testing.T) {
 	same := claim.IncurredOn
 	amount := money.Amount(2000)
 
-	if _, err := l.UpdateReimbursement(ctx, UpdateReimbursementParams{FundID: f.fundID, ReimbursementID: claim.ID, Amount: &amount, IncurredOn: &same, Now: edgeInstant}); err != nil {
+	if _, err := l.at(edgeInstant).UpdateReimbursement(ctx, UpdateReimbursementParams{FundID: f.fundID, ReimbursementID: claim.ID, Amount: &amount, IncurredOn: &same}); err != nil {
 		t.Errorf("fixing the amount of a claim dated ahead, re-sending its date = %v, want no error", err)
 	}
 	other := "2099-01-02"
-	if _, err := l.UpdateReimbursement(ctx, UpdateReimbursementParams{FundID: f.fundID, ReimbursementID: claim.ID, IncurredOn: &other, Now: edgeInstant}); !errors.Is(err, ErrDateOutOfRange) {
+	if _, err := l.at(edgeInstant).UpdateReimbursement(ctx, UpdateReimbursementParams{FundID: f.fundID, ReimbursementID: claim.ID, IncurredOn: &other}); !errors.Is(err, ErrDateOutOfRange) {
 		t.Errorf("moving the claim to another date past the ceiling = %v, want ErrDateOutOfRange", err)
 	}
 	below := "1999-12-31"
-	if _, err := l.UpdateReimbursement(ctx, UpdateReimbursementParams{FundID: f.fundID, ReimbursementID: claim.ID, IncurredOn: &below, Now: edgeInstant}); !errors.Is(err, ErrDateOutOfRange) {
+	if _, err := l.at(edgeInstant).UpdateReimbursement(ctx, UpdateReimbursementParams{FundID: f.fundID, ReimbursementID: claim.ID, IncurredOn: &below}); !errors.Is(err, ErrDateOutOfRange) {
 		t.Errorf("moving the claim below the floor = %v, want ErrDateOutOfRange", err)
 	}
 }
@@ -393,8 +393,8 @@ func TestADatedWriteRefusedByTheWindowLeavesNothingBehind(t *testing.T) {
 	t.Parallel()
 	l := newTestLedger(t)
 	f := fundInZone(t, l, tz.Jakarta)
-	_, err := l.PostDuesPayments(context.Background(), PostDuesPaymentsParams{
-		FundID: f.fundID, AccountID: f.cashID, MemberID: f.memberID, OccurredOn: "2026-09-01", Now: edgeInstant,
+	_, err := l.at(edgeInstant).PostDuesPayments(context.Background(), PostDuesPaymentsParams{
+		FundID: f.fundID, AccountID: f.cashID, MemberID: f.memberID, OccurredOn: "2026-09-01",
 		Periods: []PeriodAmount{{DuesPeriod: "2026-09", Amount: 1000}, {DuesPeriod: "2027-10", Amount: 1000}},
 	})
 	if !errors.Is(err, ErrDateOutOfRange) {

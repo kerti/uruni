@@ -76,7 +76,6 @@ func (a *api) createDuesPayment(w http.ResponseWriter, r *http.Request) {
 
 	idem := idempotencyFrom(r)
 	posted, err := a.ledger.PostDuesPayments(r.Context(), ledger.PostDuesPaymentsParams{
-		Now:        a.now(),
 		FundID:     fund.ID,
 		AccountID:  req.AccountID,
 		MemberID:   req.MemberID,

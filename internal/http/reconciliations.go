@@ -186,7 +186,6 @@ func (a *api) takeReconciliation(w http.ResponseWriter, r *http.Request) {
 
 	idem := idempotencyFrom(r)
 	rec, err := a.ledger.TakeReconciliation(r.Context(), ledger.TakeReconciliationParams{
-		Now:    a.now(),
 		FundID: fund.ID,
 		Note:   req.Note,
 		Counts: counts,

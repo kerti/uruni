@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"math/big"
 	"strings"
-	"time"
 
 	"github.com/kerti/uruni/internal/store"
 	"github.com/kerti/uruni/internal/tz"
@@ -86,11 +85,6 @@ type SetUpFundParams struct {
 	// required: a fund with no accounts could record nothing (every transaction
 	// needs an account_id).
 	Accounts []AccountInput
-
-	// Now is the clock the opening balances' ceiling is read from, in TimeZone
-	// (ADR-041): the fund row does not exist yet, so the zone comes from here.
-	// Zero means time.Now().
-	Now time.Time
 }
 
 // SetUpFundResult names every row the caller needs immediately: the whole
@@ -146,7 +140,7 @@ func (l *Ledger) SetUpFund(ctx context.Context, p SetUpFundParams) (SetUpFundRes
 	if err != nil {
 		return SetUpFundResult{}, invalidField("time_zone", "time_zone: %v", err)
 	}
-	window := windowAt(p.Now, loc)
+	window := windowAt(l.now(), loc)
 	// Every opening balance is validated before withTx opens: a refused one
 	// anywhere in the batch must leave no fund and no account behind.
 	for _, a := range p.Accounts {
@@ -177,7 +171,7 @@ func (l *Ledger) SetUpFund(ctx context.Context, p SetUpFundParams) (SetUpFundRes
 			return err
 		}
 
-		now := time.Now().Unix()
+		now := l.now().Unix()
 
 		fund, err := q.CreateFund(ctx, store.CreateFundParams{
 			Name: name, Currency: "IDR", TimeZone: timeZone, ReportSlug: slug, CreatedAt: now,

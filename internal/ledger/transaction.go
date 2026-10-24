@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"time"
 
 	"github.com/kerti/uruni/internal/money"
 	"github.com/kerti/uruni/internal/store"
@@ -43,10 +42,6 @@ type PostTransactionParams struct {
 	// (ErrContributionRequiresIncidentalPurpose).
 	MemberID *int64
 
-	// Now is the clock the date's ceiling is read from (ADR-041).
-	// Zero means time.Now().
-	Now time.Time
-
 	// Idempotency, when non-nil, makes the post safe to repeat (ADR-043).
 	Idempotency *Idempotency
 }
@@ -82,7 +77,7 @@ func (l *Ledger) PostTransaction(ctx context.Context, p PostTransactionParams) (
 	if p.Direction != "in" && p.Direction != "out" {
 		return store.Transaction{}, invalidField("direction", "direction must be \"in\" or \"out\", got %q", p.Direction)
 	}
-	window, err := l.windowFor(ctx, l.q, p.FundID, p.Now)
+	window, err := l.windowFor(ctx, l.q, p.FundID)
 	if err != nil {
 		return store.Transaction{}, err
 	}
@@ -136,7 +131,7 @@ func (l *Ledger) PostTransaction(ctx context.Context, p PostTransactionParams) (
 			Kind:       kind,
 			MemberID:   p.MemberID,
 			Note:       p.Note,
-			CreatedAt:  time.Now().Unix(),
+			CreatedAt:  l.now().Unix(),
 		})
 	})
 	if err != nil {
@@ -217,10 +212,6 @@ type CreateAccountParams struct {
 	Name           string // non-empty after trimming - the schema's own CHECK refuses it, not pre-validated here (ADR-027)
 	OpeningBalance *OpeningBalance
 
-	// Now is the clock the opening balance's ceiling is read from (ADR-041).
-	// Zero means time.Now().
-	Now time.Time
-
 	// Idempotency, when non-nil, makes the create safe to repeat (ADR-043).
 	Idempotency *Idempotency
 }
@@ -235,7 +226,7 @@ type CreateAccountParams struct {
 // can delete.
 func (l *Ledger) CreateAccount(ctx context.Context, p CreateAccountParams) (store.Account, error) {
 	if p.OpeningBalance != nil {
-		window, err := l.windowFor(ctx, l.q, p.FundID, p.Now)
+		window, err := l.windowFor(ctx, l.q, p.FundID)
 		if err != nil {
 			return store.Account{}, err
 		}
@@ -245,7 +236,7 @@ func (l *Ledger) CreateAccount(ctx context.Context, p CreateAccountParams) (stor
 	}
 
 	account, err := withIdempotency(ctx, l, p.Idempotency, func(ctx context.Context, q store.Querier) (store.Account, error) {
-		now := time.Now().Unix()
+		now := l.now().Unix()
 
 		account, err := q.CreateAccount(ctx, store.CreateAccountParams{
 			FundID: p.FundID, Kind: p.Kind, Name: p.Name, CreatedAt: now,

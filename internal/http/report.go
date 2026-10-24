@@ -21,7 +21,6 @@ import (
 	"slices"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/go-chi/chi/v5"
 
@@ -289,9 +288,9 @@ type reportMonthOption struct {
 	Selected bool
 }
 
-// reportHandler serves GET /report/{slug}. now is injectable so a test can
-// pin the month in the fund's zone; production passes time.Now.
-func reportHandler(l *ledger.Ledger, q store.Querier, logger *slog.Logger, now func() time.Time) http.HandlerFunc {
+// reportHandler serves GET /report/{slug}. The running month is the ledger
+// clock's, read in the fund's zone.
+func reportHandler(l *ledger.Ledger, q store.Querier, logger *slog.Logger) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		setReportHeaders(w)
 
@@ -301,7 +300,7 @@ func reportHandler(l *ledger.Ledger, q store.Querier, logger *slog.Logger, now f
 			return
 		}
 
-		page, err := assembleReportPage(r.Context(), l, q, fund.ID, r.URL.Query(), now())
+		page, err := assembleReportPage(r.Context(), l, q, fund.ID, r.URL.Query())
 		if err != nil {
 			logger.Error("report: assembling the month", "fund_id", fund.ID, "error", err)
 			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
@@ -336,7 +335,7 @@ func reportFundOr404(w http.ResponseWriter, r *http.Request, q store.Querier, lo
 
 // assembleReportPage reads the filter, the month and the fund's emptiness,
 // and builds the page from them.
-func assembleReportPage(ctx context.Context, l *ledger.Ledger, q store.Querier, fundID int64, query url.Values, now time.Time) (reportPage, error) {
+func assembleReportPage(ctx context.Context, l *ledger.Ledger, q store.Querier, fundID int64, query url.Values) (reportPage, error) {
 	purposes, err := q.ListPurposesByFund(ctx, fundID)
 	if err != nil {
 		return reportPage{}, err
@@ -346,7 +345,7 @@ func assembleReportPage(ctx context.Context, l *ledger.Ledger, q store.Querier, 
 		return reportPage{}, err
 	}
 	params, filter := readReportFilter(query, fundID, purposes, members)
-	report, err := monthlyReportOrCurrent(ctx, l, params, now)
+	report, err := monthlyReportOrCurrent(ctx, l, params)
 	if err != nil {
 		return reportPage{}, err
 	}
@@ -472,8 +471,7 @@ func readReportFilter(query url.Values, fundID int64, purposes []store.Purpose, 
 // out-of-range month is the current one, never an error page. Malformed is
 // the ledger's ErrInvalidArgument; out-of-range assembles fine but names a
 // month the selector does not offer, so it is re-read as the current month.
-func monthlyReportOrCurrent(ctx context.Context, l *ledger.Ledger, params ledger.ReportParams, now time.Time) (ledger.Report, error) {
-	params.Now = now
+func monthlyReportOrCurrent(ctx context.Context, l *ledger.Ledger, params ledger.ReportParams) (ledger.Report, error) {
 	report, err := l.MonthlyReport(ctx, params)
 	if err == nil && slices.Contains(report.Months, report.Month) {
 		return report, nil

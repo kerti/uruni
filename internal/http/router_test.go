@@ -61,7 +61,7 @@ func authedRouterFor(t *testing.T, sqlDB *sql.DB) http.Handler {
 // a test can stand on either side of a Jakarta month boundary.
 func authedRouterAt(t *testing.T, sqlDB *sql.DB, now func() time.Time) http.Handler {
 	t.Helper()
-	r := newWithClock(testAssets(), testBuild, ledger.New(sqlDB), store.New(sqlDB), sqlDB, nil, testLogger(), auth.New(sqlDB), "", t.TempDir(), t.TempDir(), nil, now)
+	r := New(testAssets(), testBuild, ledger.New(sqlDB, ledger.WithClock(now)), store.New(sqlDB), sqlDB, nil, testLogger(), auth.New(sqlDB), "", t.TempDir(), t.TempDir(), nil)
 
 	reg := postRegister(t, r, "treasurer@example.org", "correct-horse-battery")
 	if reg.Code != http.StatusCreated {

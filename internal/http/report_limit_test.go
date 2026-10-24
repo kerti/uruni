@@ -30,15 +30,15 @@ func newLimitedReport(t *testing.T) limitedReport {
 	logs := &bytes.Buffer{}
 	logger := slog.New(slog.NewTextHandler(logs, &slog.HandlerOptions{Level: slog.LevelInfo}))
 	sqlDB := testStoreDB(t)
-	l := ledger.New(sqlDB)
+	now := reportNow
+	l := ledger.New(sqlDB, ledger.WithClock(func() time.Time { return now }))
 	res, err := l.SetUpFund(context.Background(), ledger.SetUpFundParams{
 		FundName: "Kas RT 05", Accounts: []ledger.AccountInput{{Kind: "cash", Name: "Tunai"}},
 	})
 	if err != nil {
 		t.Fatalf("SetUpFund() = %v", err)
 	}
-	now := reportNow
-	h := newWithClock(testAssets(), testBuild, l, store.New(sqlDB), sqlDB, nil, logger, auth.New(sqlDB), "", t.TempDir(), t.TempDir(), nil, func() time.Time { return now })
+	h := New(testAssets(), testBuild, l, store.New(sqlDB), sqlDB, nil, logger, auth.New(sqlDB), "", t.TempDir(), t.TempDir(), nil)
 	return limitedReport{h: h, slug: res.Fund.ReportSlug, logs: logs, now: &now}
 }
 

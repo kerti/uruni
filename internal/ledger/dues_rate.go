@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"time"
 
 	"github.com/kerti/uruni/internal/money"
 	"github.com/kerti/uruni/internal/store"
@@ -28,10 +27,6 @@ type CreateDuesRateParams struct {
 	TierID        int64
 	Amount        money.Amount
 	EffectiveFrom string // "YYYY-MM"; a malformed month is ErrInvalidArgument, one outside the window ErrDateOutOfRange
-
-	// Now is the clock the start month's ceiling is read from (ADR-041).
-	// Zero means time.Now().
-	Now time.Time
 }
 
 // CreateDuesRate adds a rate for a tier from a month: correction 0 into a month
@@ -46,7 +41,7 @@ func (l *Ledger) CreateDuesRate(ctx context.Context, p CreateDuesRateParams) (st
 	if err := CheckAmountCeiling("amount", p.Amount); err != nil {
 		return store.DuesRate{}, err
 	}
-	window, err := l.windowFor(ctx, l.q, p.FundID, p.Now)
+	window, err := l.windowFor(ctx, l.q, p.FundID)
 	if err != nil {
 		return store.DuesRate{}, err
 	}
@@ -72,7 +67,7 @@ func (l *Ledger) CreateDuesRate(ctx context.Context, p CreateDuesRateParams) (st
 		}
 		out, err = q.CreateDuesRate(ctx, store.CreateDuesRateParams{
 			TierID: p.TierID, Amount: p.Amount.Int64(), EffectiveFrom: p.EffectiveFrom,
-			Correction: correction, Deleted: 0, CreatedAt: time.Now().Unix(),
+			Correction: correction, Deleted: 0, CreatedAt: l.now().Unix(),
 		})
 		if err != nil {
 			return fmt.Errorf("writing the dues rate: %w", err)
@@ -110,7 +105,7 @@ func (l *Ledger) CorrectDuesRate(ctx context.Context, fundID, rateID int64, amou
 		}
 		out, err = q.CreateDuesRate(ctx, store.CreateDuesRateParams{
 			TierID: standing.TierID, Amount: amount.Int64(), EffectiveFrom: standing.EffectiveFrom,
-			Correction: standing.Correction + 1, Deleted: 0, CreatedAt: time.Now().Unix(),
+			Correction: standing.Correction + 1, Deleted: 0, CreatedAt: l.now().Unix(),
 		})
 		if err != nil {
 			return fmt.Errorf("writing the corrected dues rate: %w", err)
@@ -135,7 +130,7 @@ func (l *Ledger) DeleteDuesRate(ctx context.Context, fundID, rateID int64) error
 		}
 		if _, err := q.CreateDuesRate(ctx, store.CreateDuesRateParams{
 			TierID: standing.TierID, Amount: standing.Amount, EffectiveFrom: standing.EffectiveFrom,
-			Correction: standing.Correction + 1, Deleted: 1, CreatedAt: time.Now().Unix(),
+			Correction: standing.Correction + 1, Deleted: 1, CreatedAt: l.now().Unix(),
 		}); err != nil {
 			return fmt.Errorf("withdrawing the dues rate: %w", err)
 		}

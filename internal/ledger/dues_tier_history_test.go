@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"errors"
 	"testing"
-	"time"
 
 	"github.com/kerti/uruni/internal/money"
 	"github.com/kerti/uruni/internal/store"
@@ -93,7 +92,7 @@ func TestOutstandingDuesAndArrearsFollowTheTiersTheMemberWasIn(t *testing.T) {
 	h.pay(t, 10_000, "2026-01", "2026-02", "2026-03") // January..March settled at the old tier
 	h.pay(t, 10_000, "2026-06")                       // June paid at the OLD rate: short against the new one
 
-	out, err := h.l.OutstandingDuesForMember(context.Background(), h.f.fundID, h.memberID, "2026-07", time.Time{})
+	out, err := h.l.OutstandingDuesForMember(context.Background(), h.f.fundID, h.memberID, "2026-07")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -163,7 +162,7 @@ func TestTierRemovalOwesNothingFromThatMonthAndNeverReadsUnpaid(t *testing.T) {
 		t.Error("2027-03 lists the member, want no obligation")
 	}
 
-	out, err := h.l.OutstandingDuesForMember(context.Background(), h.f.fundID, h.memberID, "2026-12", time.Time{})
+	out, err := h.l.OutstandingDuesForMember(context.Background(), h.f.fundID, h.memberID, "2026-12")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -185,7 +184,7 @@ func TestTierGivenLaterLeavesTheEarlierMonthsUntiered(t *testing.T) {
 	memberID := createDuesMember(t, q, f.fundID, duesMemberParams{name: "Citra", joinedOn: &joinedOn})
 	setMemberTier(t, q, f.fundID, memberID, &a, "2026-04", 0)
 
-	out, err := l.OutstandingDuesForMember(context.Background(), f.fundID, memberID, "2026-05", time.Time{})
+	out, err := l.OutstandingDuesForMember(context.Background(), f.fundID, memberID, "2026-05")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -278,7 +277,7 @@ func TestPricingReadsDoNotGrowWithMembersOrMonths(t *testing.T) {
 			calls.tiersByFund, calls.ratesForPricing, calls.effectiveRate)
 	}
 
-	if _, err := l.OutstandingDuesForMember(context.Background(), f.fundID, last, "2026-08", time.Time{}); err != nil {
+	if _, err := l.OutstandingDuesForMember(context.Background(), f.fundID, last, "2026-08"); err != nil {
 		t.Fatal(err)
 	}
 	if calls.tiersForMember != 1 || calls.ratesForMember != 1 || calls.effectiveRate != 0 {

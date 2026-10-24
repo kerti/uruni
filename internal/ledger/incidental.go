@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"strings"
-	"time"
 
 	"github.com/kerti/uruni/internal/money"
 	"github.com/kerti/uruni/internal/store"
@@ -29,10 +28,6 @@ type OpenIncidentalParams struct {
 	// RecipientMemberIDs are the members this envelope is for (ADR-034), never
 	// expected to contribute. nil and an empty slice both mean none.
 	RecipientMemberIDs []int64
-
-	// Now is the clock OpenedOn's ceiling is read from (ADR-041).
-	// Zero means time.Now().
-	Now time.Time
 
 	// Idempotency, when non-nil, makes opening the envelope safe to repeat
 	// (ADR-043).
@@ -64,7 +59,7 @@ func (l *Ledger) OpenIncidental(ctx context.Context, p OpenIncidentalParams) (st
 	if err := checkParticipationCeilings(p.TargetAmount, p.MinimumPerMember); err != nil {
 		return store.Incidental{}, err
 	}
-	window, err := l.windowFor(ctx, l.q, p.FundID, p.Now)
+	window, err := l.windowFor(ctx, l.q, p.FundID)
 	if err != nil {
 		return store.Incidental{}, err
 	}
@@ -73,7 +68,7 @@ func (l *Ledger) OpenIncidental(ctx context.Context, p OpenIncidentalParams) (st
 	}
 
 	created, err := withIdempotency(ctx, l, p.Idempotency, func(ctx context.Context, q store.Querier) (store.Incidental, error) {
-		now := time.Now().Unix()
+		now := l.now().Unix()
 
 		purpose, err := q.CreatePurpose(ctx, store.CreatePurposeParams{
 			FundID: p.FundID, Kind: "incidental", Name: p.Occasion, CreatedAt: now,
@@ -264,11 +259,6 @@ type CloseIncidentalAndRollParams struct {
 	// sentence; the ledger writes none. A roll with no note gets a display label
 	// built at read time from the transfer's facts (#257).
 	Note *string
-
-	// Now is the clock ClosedOn's ceiling is read from (ADR-041). The roll's own
-	// legs are dated ClosedOn and not checked again.
-	// Zero means time.Now().
-	Now time.Time
 }
 
 // CloseIncidentalAndRoll closes one envelope and squares its purpose balance
@@ -301,7 +291,7 @@ type CloseIncidentalAndRollParams struct {
 // Every outcome leaves PurposeBalance(purposeID) at exactly zero, the
 // invariant ADR-031 makes testable in place of ADR-027's sign-dependent rule.
 func (l *Ledger) CloseIncidentalAndRoll(ctx context.Context, p CloseIncidentalAndRollParams) (money.Amount, error) {
-	window, err := l.windowFor(ctx, l.q, p.FundID, p.Now)
+	window, err := l.windowFor(ctx, l.q, p.FundID)
 	if err != nil {
 		return 0, err
 	}

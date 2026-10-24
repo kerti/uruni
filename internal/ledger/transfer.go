@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"strings"
-	"time"
 
 	"github.com/kerti/uruni/internal/money"
 	"github.com/kerti/uruni/internal/store"
@@ -71,7 +70,7 @@ func normalizeNote(note *string) *string {
 // atomic write, and a nested l.withTx is refused with txguard.ErrNested:
 // under ADR-004's SetMaxOpenConns(1) the outer one holds the only connection. Every caller opens its withTx and passes its Querier in.
 func (l *Ledger) postTransferPairTx(ctx context.Context, q store.Querier, fundID int64, kind string, from, to leg, amount money.Amount, occurredOn string, note *string, correctsTransactionID *int64, reason *string) (store.Transfer, error) {
-	now := time.Now().Unix()
+	now := l.now().Unix()
 
 	transfer, err := q.CreateTransfer(ctx, store.CreateTransferParams{
 		FundID: fundID, Kind: kind, CorrectsTransactionID: correctsTransactionID, Reason: reason, CreatedAt: now,
@@ -112,10 +111,6 @@ type PostTransferBetweenAccountsParams struct {
 	// empty string both mean no note; see normalizeNote.
 	Note *string
 
-	// Now is the clock OccurredOn's ceiling is read from (ADR-041).
-	// Zero means time.Now().
-	Now time.Time
-
 	// Idempotency, when non-nil, makes the transfer safe to repeat (ADR-043).
 	Idempotency *Idempotency
 }
@@ -135,7 +130,7 @@ func (l *Ledger) PostTransferBetweenAccounts(ctx context.Context, p PostTransfer
 	if err := CheckAmountCeiling("amount", p.Amount); err != nil {
 		return store.Transfer{}, err
 	}
-	window, err := l.windowFor(ctx, l.q, p.FundID, p.Now)
+	window, err := l.windowFor(ctx, l.q, p.FundID)
 	if err != nil {
 		return store.Transfer{}, err
 	}

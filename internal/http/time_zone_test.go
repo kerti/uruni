@@ -359,7 +359,7 @@ func TestPublicReportIsDatedInTheFundsZone(t *testing.T) {
 		t.Run(zone, func(t *testing.T) {
 			t.Parallel()
 			sqlDB := testStoreDB(t)
-			l := ledger.New(sqlDB)
+			l := ledger.New(sqlDB, ledger.WithClock(fixedClock(lateEveningWIB)))
 			res, err := l.SetUpFund(context.Background(), ledger.SetUpFundParams{
 				FundName: "Kas RT 05", TimeZone: zone, Accounts: []ledger.AccountInput{{Kind: "cash", Name: "Tunai"}},
 			})
@@ -367,7 +367,7 @@ func TestPublicReportIsDatedInTheFundsZone(t *testing.T) {
 				t.Fatalf("SetUpFund() = %v", err)
 			}
 			rt := chi.NewRouter()
-			rt.Get("/report/{slug}", reportHandler(l, store.New(sqlDB), testLogger(), fixedClock(lateEveningWIB)))
+			rt.Get("/report/{slug}", reportHandler(l, store.New(sqlDB), testLogger()))
 			rec := httptest.NewRecorder()
 			rt.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/report/"+res.Fund.ReportSlug, nil))
 			if rec.Code != http.StatusOK {

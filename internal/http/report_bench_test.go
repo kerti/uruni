@@ -32,7 +32,7 @@ func seedYearFund(b *testing.B) (http.Handler, string) {
 		b.Fatalf("db.Up() = %v", err)
 	}
 
-	l := ledger.New(sqlDB)
+	l := ledger.New(sqlDB, ledger.WithClock(fixedClock(reportNow)))
 	q := store.New(sqlDB)
 	res, err := l.SetUpFund(ctx, ledger.SetUpFundParams{
 		FundName: "Kas RT 05",
@@ -113,10 +113,9 @@ func seedYearFund(b *testing.B) (http.Handler, string) {
 		b.Fatalf("TakeReconciliation() = %v", err)
 	}
 
-	now := func() time.Time { return reportNow }
 	r := chi.NewRouter()
-	r.Get("/report/{slug}", reportHandler(l, q, testLogger(), now))
-	r.Get("/report/{slug}/pdf", reportPDFHandler(l, q, testLogger(), now))
+	r.Get("/report/{slug}", reportHandler(l, q, testLogger()))
+	r.Get("/report/{slug}/pdf", reportPDFHandler(l, q, testLogger()))
 	return r, res.Fund.ReportSlug
 }
 

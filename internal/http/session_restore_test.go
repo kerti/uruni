@@ -20,7 +20,7 @@ import (
 func TestARequestInFlightCannotResurrectASessionAcrossARestore(t *testing.T) {
 	t.Parallel()
 	sqlDB := testStoreDB(t)
-	r := newWithClock(testAssets(), testBuild, ledger.New(sqlDB), store.New(sqlDB), sqlDB, nil, testLogger(), auth.New(sqlDB), "", t.TempDir(), t.TempDir(), nil, time.Now)
+	r := New(testAssets(), testBuild, ledger.New(sqlDB), store.New(sqlDB), sqlDB, nil, testLogger(), auth.New(sqlDB), "", t.TempDir(), t.TempDir(), nil)
 
 	reg := postRegister(t, r, userEmail, fixturePassword)
 	if reg.Code != http.StatusCreated {

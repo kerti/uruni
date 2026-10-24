@@ -67,9 +67,9 @@ func newWalkScenario(t *testing.T, l *Ledger) walkScenario {
 	}
 	post := func(purpose int64, direction string, amount money.Amount, date string, adjustment bool, member *int64) store.Transaction {
 		t.Helper()
-		posted, err := l.PostTransaction(ctx, PostTransactionParams{
+		posted, err := l.at(onTheDay(date)).PostTransaction(ctx, PostTransactionParams{
 			FundID: fundID, AccountID: cashID, PurposeID: purpose, Direction: direction, Amount: amount,
-			OccurredOn: date, IsAdjustment: adjustment, MemberID: member, Now: onTheDay(date),
+			OccurredOn: date, IsAdjustment: adjustment, MemberID: member,
 		})
 		if err != nil {
 			t.Fatalf("PostTransaction(%s %d on %s) = %v, want no error", direction, amount, date, err)
@@ -449,7 +449,7 @@ func TestMonthlyReportRunningMonthIncludesRowsDatedAfterToday(t *testing.T) {
 
 	// The same month as a past one (a clock in November) stops where it ends; the
 	// walk is the same, as nothing is dated beyond it.
-	past := monthlyReport(t, l, ReportParams{FundID: s.fundID, Month: "2026-10", Now: jakartaAt(2026, time.November, 3, 12, 0, 0)})
+	past := monthlyReportAt(t, l, jakartaAt(2026, time.November, 3, 12, 0, 0), ReportParams{FundID: s.fundID, Month: "2026-10"})
 	if past.Running {
 		t.Fatal("October is still the running month on 3 Nov")
 	}
@@ -476,7 +476,7 @@ func TestMonthlyReportWalkAllowsANegativeTotalMasuk(t *testing.T) {
 		t.Fatalf("PostDuesPayments() = %v, want no error", err)
 	}
 	countEverything(t, l, f.fundID, f.cashID, f.bankID)
-	reversal, err := l.ReverseTransaction(ctx, ReverseTransactionParams{FundID: f.fundID, TransactionID: paid[0].ID, Now: onTheDay("2026-09-02")})
+	reversal, err := l.at(onTheDay("2026-09-02")).ReverseTransaction(ctx, ReverseTransactionParams{FundID: f.fundID, TransactionID: paid[0].ID})
 	if err != nil {
 		t.Fatalf("ReverseTransaction() = %v, want no error", err)
 	}

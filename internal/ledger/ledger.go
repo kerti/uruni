@@ -18,6 +18,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"time"
 
 	"github.com/kerti/uruni/internal/store"
 	"github.com/kerti/uruni/internal/txguard"
@@ -27,8 +28,21 @@ import (
 // the *sql.DB for writes, as a write needs a real *sql.Tx the Querier cannot
 // start.
 type Ledger struct {
-	db *sql.DB
-	q  store.Querier
+	db  *sql.DB
+	q   store.Querier
+	now func() time.Time
+}
+
+// Option configures New. The defaults are the production values; an option lets
+// a test stand the process on a chosen instant.
+type Option func(*Ledger)
+
+// WithClock sets the clock the ledger reads: every created_at stamp, the fund's
+// "today" a date is checked against (ADR-041), and the running month. It is the
+// process's one clock, so the HTTP layer reads it through Now rather than
+// holding a second one that could disagree.
+func WithClock(now func() time.Time) Option {
+	return func(l *Ledger) { l.now = now }
 }
 
 // New returns a Ledger over an already-open database. It does not migrate:
@@ -36,8 +50,25 @@ type Ledger struct {
 //
 // l.q reads through the pool, guarded (internal/txguard): inside withTx it
 // refuses instead of waiting on the connection the transaction holds.
-func New(sqlDB *sql.DB) *Ledger {
-	return &Ledger{db: sqlDB, q: store.New(txguard.Wrap(sqlDB))}
+func New(sqlDB *sql.DB, opts ...Option) *Ledger {
+	l := &Ledger{db: sqlDB, q: store.New(txguard.Wrap(sqlDB)), now: time.Now}
+	for _, opt := range opts {
+		opt(l)
+	}
+	return l
+}
+
+// Now is the clock's current instant. A write stamps created_at from it, in UTC
+// unix seconds; a date's ceiling and the running month read it in the fund's
+// zone (FundLocation).
+func (l *Ledger) Now() time.Time { return l.now() }
+
+// onQuerier is l reading through q, the querier of a transaction already open,
+// with everything else (the database, the clock) l's own.
+func (l *Ledger) onQuerier(q store.Querier) *Ledger {
+	tl := *l
+	tl.q = q
+	return &tl
 }
 
 // withTx runs fn inside one database transaction, committing on nil and

@@ -3,12 +3,15 @@ package http
 import (
 	"archive/zip"
 	"bytes"
+	"database/sql"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/kerti/uruni/internal/ledger"
 )
 
 // The server runs UTC but the treasurer lives in Asia/Jakarta (UTC+7), so a
@@ -21,6 +24,11 @@ var (
 )
 
 func fixedClock(at time.Time) func() time.Time { return func() time.Time { return at } }
+
+// ledgerAt is a ledger over sqlDB whose clock stands on at.
+func ledgerAt(sqlDB *sql.DB, at time.Time) *ledger.Ledger {
+	return ledger.New(sqlDB, ledger.WithClock(fixedClock(at)))
+}
 
 // clockFixture is a fund whose one member joined in August 2026 and owes 25000
 // a month from 2020, with a 30000 rate taking over in September. Nothing is

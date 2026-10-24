@@ -56,15 +56,6 @@ const (
 	noCeilingMonth = "9999-12"
 )
 
-// clockOrNow is the instant a write reads "today" from: the params' Now field,
-// or time.Now() when zero.
-func clockOrNow(now time.Time) time.Time {
-	if now.IsZero() {
-		return time.Now()
-	}
-	return now
-}
-
 // dateWindow is the ceilings of one fund at one instant, in the fund's zone.
 type dateWindow struct {
 	// today is the fund's calendar day, "YYYY-MM-DD".
@@ -72,9 +63,9 @@ type dateWindow struct {
 }
 
 // windowAt reads the instant in loc, the fund's zone: the one place a ceiling's
-// "today" comes from (ADR-041).
+// "today" comes from (ADR-041). now is the ledger's clock, read by the caller.
 func windowAt(now time.Time, loc *time.Location) dateWindow {
-	return dateWindow{today: clockOrNow(now).In(loc).Format(time.DateOnly)}
+	return dateWindow{today: now.In(loc).Format(time.DateOnly)}
 }
 
 // FundToday is the fund's calendar day at now, "YYYY-MM-DD", read in its zone
@@ -88,9 +79,10 @@ func FundToday(f store.Fund, now time.Time) (string, error) {
 	return windowAt(now, loc).today, nil
 }
 
-// windowFor reads the fund's zone from its row, through q. A caller outside a
-// transaction passes l.q; one inside passes the transaction's querier.
-func (l *Ledger) windowFor(ctx context.Context, q store.Querier, fundID int64, now time.Time) (dateWindow, error) {
+// windowFor reads the fund's zone from its row, through q, and "today" from the
+// ledger's clock. A caller outside a transaction passes l.q; one inside passes
+// the transaction's querier.
+func (l *Ledger) windowFor(ctx context.Context, q store.Querier, fundID int64) (dateWindow, error) {
 	fund, err := q.GetFund(ctx, fundID)
 	if err != nil {
 		return dateWindow{}, fmt.Errorf("fetching fund: %w", err)
@@ -99,7 +91,7 @@ func (l *Ledger) windowFor(ctx context.Context, q store.Querier, fundID int64, n
 	if err != nil {
 		return dateWindow{}, err
 	}
-	return windowAt(now, loc), nil
+	return windowAt(l.now(), loc), nil
 }
 
 // entry is the ceiling of a date money moved on: a transaction, a claim, a

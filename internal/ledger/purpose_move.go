@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"time"
 
 	"github.com/kerti/uruni/internal/money"
 	"github.com/kerti/uruni/internal/store"
@@ -27,10 +26,6 @@ type PostPurposeMoveParams struct {
 
 	// Note is written to both legs, or to neither; see normalizeNote.
 	Note *string
-
-	// Now is the clock OccurredOn's ceiling is read from (ADR-041).
-	// Zero means time.Now().
-	Now time.Time
 
 	// Idempotency, when non-nil, makes the move safe to repeat (ADR-043).
 	Idempotency *Idempotency
@@ -72,7 +67,7 @@ func (l *Ledger) PostPurposeMove(ctx context.Context, p PostPurposeMoveParams) (
 	if err := CheckAmountCeiling("amount", p.Amount); err != nil {
 		return store.Transfer{}, err
 	}
-	window, err := l.windowFor(ctx, l.q, p.FundID, p.Now)
+	window, err := l.windowFor(ctx, l.q, p.FundID)
 	if err != nil {
 		return store.Transfer{}, err
 	}

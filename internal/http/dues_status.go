@@ -88,7 +88,7 @@ func (a *api) getDuesStatusGrid(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	grid, err := a.ledger.DuesGrid(r.Context(), fund.ID, "", a.now())
+	grid, err := a.ledger.DuesGrid(r.Context(), fund.ID, "")
 	if err != nil {
 		mapLedgerError(w, a.log(r), err)
 		return
@@ -148,7 +148,7 @@ func (a *api) getOutstandingDues(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	periods, err := a.ledger.OutstandingDuesForMember(r.Context(), fund.ID, memberID, r.URL.Query().Get("through"), a.now())
+	periods, err := a.ledger.OutstandingDuesForMember(r.Context(), fund.ID, memberID, r.URL.Query().Get("through"))
 	if err != nil {
 		mapLedgerError(w, a.log(r), err)
 		return

@@ -118,7 +118,6 @@ func (a *api) createReimbursement(w http.ResponseWriter, r *http.Request) {
 	}
 
 	claim, err := a.ledger.CreateReimbursement(r.Context(), ledger.CreateReimbursementParams{
-		Now:        a.now(),
 		FundID:     fund.ID,
 		MemberID:   req.MemberID,
 		PurposeID:  req.PurposeID,
@@ -335,7 +334,6 @@ func (a *api) settleReimbursement(w http.ResponseWriter, r *http.Request) {
 	}
 
 	posted, err := a.ledger.SettleReimbursement(r.Context(), ledger.SettleReimbursementParams{
-		Now:             a.now(),
 		FundID:          fund.ID,
 		ReimbursementID: id,
 		AccountID:       req.AccountID,
@@ -440,7 +438,7 @@ func (a *api) updateReimbursement(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	params := ledger.UpdateReimbursementParams{FundID: fund.ID, ReimbursementID: id, Now: a.now()}
+	params := ledger.UpdateReimbursementParams{FundID: fund.ID, ReimbursementID: id}
 	if req.MemberIDSet {
 		params.MemberID = req.MemberID
 	}

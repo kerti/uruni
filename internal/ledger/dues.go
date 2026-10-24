@@ -3,7 +3,6 @@ package ledger
 import (
 	"context"
 	"fmt"
-	"time"
 
 	"github.com/kerti/uruni/internal/money"
 	"github.com/kerti/uruni/internal/store"
@@ -39,10 +38,6 @@ type PostDuesPaymentsParams struct {
 	Note       *string
 	Periods    []PeriodAmount
 
-	// Now is the clock the date's and the periods' ceilings are read from (ADR-041).
-	// Zero means time.Now().
-	Now time.Time
-
 	// Idempotency, when non-nil, makes the payment safe to repeat (ADR-043).
 	Idempotency *Idempotency
 }
@@ -73,7 +68,7 @@ func (l *Ledger) PostDuesPayments(ctx context.Context, p PostDuesPaymentsParams)
 	if len(p.Periods) == 0 {
 		return nil, invalidField("periods", "periods must not be empty")
 	}
-	window, err := l.windowFor(ctx, l.q, p.FundID, p.Now)
+	window, err := l.windowFor(ctx, l.q, p.FundID)
 	if err != nil {
 		return nil, err
 	}
@@ -126,7 +121,7 @@ func (l *Ledger) postDuesPaymentTx(ctx context.Context, q store.Querier, p PostD
 		MemberID:   &p.MemberID,
 		DuesPeriod: &period.DuesPeriod,
 		Note:       normalizeNote(p.Note),
-		CreatedAt:  time.Now().Unix(),
+		CreatedAt:  l.now().Unix(),
 	})
 }
 

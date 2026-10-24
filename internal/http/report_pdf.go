@@ -30,7 +30,6 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
-	"time"
 
 	"codeberg.org/go-pdf/fpdf"
 
@@ -58,8 +57,8 @@ const (
 
 // reportPDFHandler serves GET /report/{slug}/pdf with the page's edge: the
 // same headers, the same 404 for an unknown slug, a missing or malformed month
-// is the current one, and now is injectable likewise.
-func reportPDFHandler(l *ledger.Ledger, q store.Querier, logger *slog.Logger, now func() time.Time) http.HandlerFunc {
+// is the current one.
+func reportPDFHandler(l *ledger.Ledger, q store.Querier, logger *slog.Logger) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		setReportHeaders(w)
 
@@ -69,7 +68,7 @@ func reportPDFHandler(l *ledger.Ledger, q store.Querier, logger *slog.Logger, no
 			return
 		}
 
-		body, month, err := renderReportPDF(r.Context(), l, fund.ID, r.URL.Query().Get("month"), now())
+		body, month, err := renderReportPDF(r.Context(), l, fund.ID, r.URL.Query().Get("month"))
 		if err != nil {
 			logger.Error("report: rendering the pdf", "fund_id", fund.ID, "error", err)
 			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
@@ -89,8 +88,8 @@ func reportPDFHandler(l *ledger.Ledger, q store.Querier, logger *slog.Logger, no
 // renderReportPDF assembles the month as the page does (same bad-month
 // fallback, same shaping) and draws it. It returns the month it rendered, for
 // the filename.
-func renderReportPDF(ctx context.Context, l *ledger.Ledger, fundID int64, month string, now time.Time) ([]byte, string, error) {
-	report, err := monthlyReportOrCurrent(ctx, l, ledger.ReportParams{FundID: fundID, Month: month}, now)
+func renderReportPDF(ctx context.Context, l *ledger.Ledger, fundID int64, month string) ([]byte, string, error) {
+	report, err := monthlyReportOrCurrent(ctx, l, ledger.ReportParams{FundID: fundID, Month: month})
 	if err != nil {
 		return nil, "", err
 	}

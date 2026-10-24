@@ -247,7 +247,6 @@ func (a *api) createTransaction(w http.ResponseWriter, r *http.Request) {
 
 	idem := idempotencyFrom(r)
 	posted, err := a.ledger.PostTransaction(r.Context(), ledger.PostTransactionParams{
-		Now:          a.now(),
 		FundID:       fund.ID,
 		AccountID:    req.AccountID,
 		PurposeID:    req.PurposeID,
@@ -508,7 +507,6 @@ func (a *api) reverseTransaction(w http.ResponseWriter, r *http.Request) {
 	}
 
 	reversal, err := a.ledger.ReverseTransaction(r.Context(), ledger.ReverseTransactionParams{
-		Now:           a.now(),
 		FundID:        fund.ID,
 		TransactionID: id,
 		Note:          req.Note,

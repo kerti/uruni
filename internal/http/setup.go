@@ -92,7 +92,6 @@ func (a *api) setupFund(w http.ResponseWriter, r *http.Request) {
 	}
 
 	result, err := a.ledger.SetUpFund(r.Context(), ledger.SetUpFundParams{
-		Now:      a.now(),
 		FundName: req.Name,
 		TimeZone: req.TimeZone,
 		Accounts: accounts,

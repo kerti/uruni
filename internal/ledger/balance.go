@@ -3,7 +3,6 @@ package ledger
 import (
 	"context"
 	"fmt"
-	"time"
 
 	"github.com/kerti/uruni/internal/money"
 	"github.com/kerti/uruni/internal/store"
@@ -92,12 +91,12 @@ type HomeBalances struct {
 //
 // Every figure is what FundBalance, AccountBalance, PurposeBalance,
 // OwedToMembers and MonthInOut return for it. The total is its own sum, not the
-// accounts added up, though the two agree (a test holds them to it). now is
-// MonthInOut's clock.
-func (l *Ledger) Balances(ctx context.Context, fundID int64, now time.Time) (HomeBalances, error) {
+// accounts added up, though the two agree (a test holds them to it). The month
+// MonthInOut reads is the ledger clock's.
+func (l *Ledger) Balances(ctx context.Context, fundID int64) (HomeBalances, error) {
 	var b HomeBalances
 	err := l.withTx(ctx, func(ctx context.Context, q store.Querier) error {
-		tl := &Ledger{db: l.db, q: q}
+		tl := l.onQuerier(q)
 
 		var err error
 		if b.FundTotal, err = tl.FundBalance(ctx, fundID); err != nil {
@@ -141,7 +140,7 @@ func (l *Ledger) Balances(ctx context.Context, fundID int64, now time.Time) (Hom
 		if b.OwedToMembers, err = tl.OwedToMembers(ctx, fundID); err != nil {
 			return err
 		}
-		b.MonthIn, b.MonthOut, err = tl.monthInOut(ctx, fundID, now)
+		b.MonthIn, b.MonthOut, err = tl.monthInOut(ctx, fundID, l.now())
 		return err
 	})
 	return b, err

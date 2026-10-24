@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"errors"
 	"testing"
-	"time"
 
 	"github.com/kerti/uruni/internal/money"
 	"github.com/kerti/uruni/internal/store"
@@ -252,7 +251,7 @@ func TestDeletingALaterRateFallsBackToTheEarlierMonthsRate(t *testing.T) {
 	if andiRate == nil || *andiRate != 50_000 {
 		t.Errorf("roster current_rate = %v, want 50000", andiRate)
 	}
-	out, err := h.l.OutstandingDuesForMember(context.Background(), h.f.fundID, h.memberID, "2026-07", time.Time{})
+	out, err := h.l.OutstandingDuesForMember(context.Background(), h.f.fundID, h.memberID, "2026-07")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -276,7 +275,7 @@ func TestDeletingTheFirstRateLeavesTheTierUndecided(t *testing.T) {
 	if _, ok := h.owed(t, "2026-03"); ok {
 		t.Error("2026-03 lists the member, want no rate decided (the madya case): skipped, never invented")
 	}
-	out, err := h.l.OutstandingDuesForMember(context.Background(), h.f.fundID, h.memberID, "2026-05", time.Time{})
+	out, err := h.l.OutstandingDuesForMember(context.Background(), h.f.fundID, h.memberID, "2026-05")
 	if err != nil || len(out) != 0 {
 		t.Errorf("outstanding = %+v, %v, want none", out, err)
 	}

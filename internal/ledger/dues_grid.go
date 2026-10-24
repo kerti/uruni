@@ -53,8 +53,7 @@ type DuesGrid struct {
 //
 // endPeriod empty means the fund's current month; a later one is capped to it,
 // both read in the fund's zone (ADR-041), so the grid never reaches past the
-// present. now is injected like OutstandingDuesForMember's, and read only to
-// find the current month.
+// present. The ledger clock is read only to find the current month.
 //
 // Leading months in which no member owes anything are dropped, so a young fund
 // has fewer than twelve columns; only leading ones, so a gap in the middle stays.
@@ -66,7 +65,13 @@ type DuesGrid struct {
 // (memberOwesPeriod, pricing.priceAt, classifyDuesStatus). The paid-in-advance
 // upgrade and its paidThrough walk are not needed: the grid draws both as paid.
 // Like it, this uses l.q directly (ADR-027).
-func (l *Ledger) DuesGrid(ctx context.Context, fundID int64, endPeriod string, now time.Time) (DuesGrid, error) {
+func (l *Ledger) DuesGrid(ctx context.Context, fundID int64, endPeriod string) (DuesGrid, error) {
+	return l.duesGrid(ctx, fundID, endPeriod, l.now())
+}
+
+// duesGrid is DuesGrid at an instant its caller already read, so a report that
+// reckons its own month from now finds the grid's current month at the same one.
+func (l *Ledger) duesGrid(ctx context.Context, fundID int64, endPeriod string, now time.Time) (DuesGrid, error) {
 	if endPeriod != "" {
 		if err := checkPeriodShape("end period", endPeriod); err != nil {
 			return DuesGrid{}, err
