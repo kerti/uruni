@@ -1,4 +1,9 @@
-package http
+// Package receipt turns an uploaded receipt photo into what is stored:
+// EXIF-corrected, downscaled, always re-encoded as JPEG with the metadata
+// stripped. It owns the bytes-to-bytes transform and its rejections; it knows
+// nothing of HTTP, the uploads volume or the receipt table, so callers map its
+// errors to their own wire codes.
+package receipt
 
 import (
 	"bytes"
@@ -26,18 +31,18 @@ const (
 	receiptJPEGQuality = 80
 )
 
-// errReceiptUnsupportedMediaType and errReceiptHEICUnsupported are the two
+// ErrUnsupportedMediaType and ErrHEICUnsupported are the two
 // distinct rejections: any format this package cannot decode, and HEIC/HEIF
 // specifically. A phone defaulting to HEIC is the most common reason an
 // upload reaches this path, so the treasurer needs to know to re-export as
 // JPEG, not just that something was wrong.
 var (
-	errReceiptUnsupportedMediaType = errors.New("unsupported receipt media type")
-	errReceiptHEICUnsupported      = errors.New("HEIC/HEIF receipts are not supported")
-	errReceiptTooManyPixels        = errors.New("receipt image dimensions too large")
+	ErrUnsupportedMediaType = errors.New("unsupported receipt media type")
+	ErrHEICUnsupported      = errors.New("HEIC/HEIF receipts are not supported")
+	ErrTooManyPixels        = errors.New("receipt image dimensions too large")
 )
 
-// processReceiptImage turns an uploaded file's raw bytes into what is written
+// Process turns an uploaded file's raw bytes into what is written
 // to disk: EXIF-corrected, downscaled if needed, always re-encoded as JPEG.
 //
 // Re-encoding unconditionally, even a file within the limits, is deliberate:
@@ -52,24 +57,24 @@ var (
 // 50 MP cap was about 200 MB before a single pixel was dropped. Rotating
 // after scaling gives the same dimensions and the same picture, up to
 // resampling rounding.
-func processReceiptImage(raw []byte) ([]byte, error) {
+func Process(raw []byte) ([]byte, error) {
 	if isHEIC(raw) {
-		return nil, errReceiptHEICUnsupported
+		return nil, ErrHEICUnsupported
 	}
 
 	// DecodeConfig reads only the header, so the dimension check is free and
 	// runs before any decoder sizes a pixel buffer.
 	cfg, _, err := image.DecodeConfig(bytes.NewReader(raw))
 	if err != nil {
-		return nil, errReceiptUnsupportedMediaType
+		return nil, ErrUnsupportedMediaType
 	}
 	if int64(cfg.Width)*int64(cfg.Height) > backup.MaxReceiptPixels {
-		return nil, errReceiptTooManyPixels
+		return nil, ErrTooManyPixels
 	}
 
 	img, format, err := image.Decode(bytes.NewReader(raw))
 	if err != nil {
-		return nil, errReceiptUnsupportedMediaType
+		return nil, ErrUnsupportedMediaType
 	}
 
 	img = downscale(img)
@@ -183,7 +188,7 @@ func boxShrink(src image.Image, k int) *image.RGBA {
 // The layout is a 4-byte big-endian size, the ASCII "ftyp", then a 4-byte
 // major brand. avif/avis (a sibling container ADR-011 does not name) are left
 // out: they fall through to image.Decode, fail, and report as the generic
-// errReceiptUnsupportedMediaType.
+// ErrUnsupportedMediaType.
 func isHEIC(b []byte) bool {
 	if len(b) < 12 {
 		return false

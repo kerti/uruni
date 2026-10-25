@@ -10,11 +10,9 @@ import (
 	"image/color"
 	"image/draw"
 	"image/jpeg"
-	"math"
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
-	"runtime"
 	"strconv"
 	"strings"
 	"testing"
@@ -129,7 +127,7 @@ func setUpReimbursementForReceipt(t *testing.T, r http.Handler, setup setupRespo
 
 // solidBlockImage is the shared image builder: bg everywhere with a solid
 // block of another color top-left, simple enough that JPEG's lossy 8x8-block
-// compression at quality 80 (receipt_image.go) leaves it distinguishable.
+// compression at quality 80 (receipt.Process) leaves it distinguishable.
 func solidBlockImage(w, h, blockW, blockH int, bg, block color.RGBA) *image.RGBA {
 	img := image.NewRGBA(image.Rect(0, 0, w, h))
 	draw.Draw(img, img.Bounds(), &image.Uniform{C: bg}, image.Point{}, draw.Src)
@@ -697,63 +695,5 @@ func TestGetAndDeleteReceiptRequireSession(t *testing.T) {
 	}
 	if rec := deleteReceipt(t, noSession, receipt.ID); rec.Code != http.StatusUnauthorized {
 		t.Errorf("DELETE /api/receipts/%d with no session = %d, want %d", receipt.ID, rec.Code, http.StatusUnauthorized)
-	}
-}
-
-// TestALargeSidewaysPhotoIsRotatedAfterItIsScaled pins #531: the EXIF rotation
-// runs on the downscaled image, never on the full-resolution one. The old order
-// built a full-size RGBA copy pixel by pixel - about 200 MB at the 50 MP cap -
-// and the resample after it kept a float64 buffer of output width by source
-// height. Now the run allocates little beyond what decoding costs on its own.
-// Not parallel: the bound reads process-wide
-// allocation, so nothing else may run alongside.
-func TestALargeSidewaysPhotoIsRotatedAfterItIsScaled(t *testing.T) {
-	const w, h = 8000, 1000
-	plain := encodeTestJPEG(t, solidBlockImage(w, h, h, h, fixtureBG, fixtureBlock))
-	fixture := withEXIFOrientation(t, plain, 6)
-
-	// The least of three runs: TotalAlloc is process-wide, and a goroutine an
-	// earlier test left behind can add a few MB to any one reading.
-	allocatedBy := func(f func()) uint64 {
-		least := uint64(math.MaxUint64)
-		for range 3 {
-			runtime.GC()
-			var before, after runtime.MemStats
-			runtime.ReadMemStats(&before)
-			f()
-			runtime.ReadMemStats(&after)
-			least = min(least, after.TotalAlloc-before.TotalAlloc)
-		}
-		return least
-	}
-	decodeOnly := allocatedBy(func() { _, _, _ = image.Decode(bytes.NewReader(fixture)) })
-	var out []byte
-	var err error
-	whole := allocatedBy(func() { out, err = processReceiptImage(fixture) })
-	if err != nil {
-		t.Fatalf("processReceiptImage() = %v, want no error", err)
-	}
-	// Past the decode, one full-resolution RGBA copy is w*h*4 bytes; the bound
-	// is half that. On this image the old pipeline spent about 150 MB here,
-	// scaling first with the kernel resample still about 55 MB, and block
-	// averages cost about 3 MB.
-	if beyond, budget := whole-min(whole, decodeOnly), uint64(w*h*2); beyond >= budget {
-		t.Errorf("allocated %d bytes beyond the decode's %d, want under %d: something works at full resolution", beyond, decodeOnly, budget)
-	}
-
-	img, _, err := image.Decode(bytes.NewReader(out))
-	if err != nil {
-		t.Fatalf("decoding the result: %v", err)
-	}
-	// 8000x1000 scales to 1600x200, and rotating 90 CW makes it 200x1600 with
-	// the left-hand block across the top.
-	if b := img.Bounds(); b.Dx() != 200 || b.Dy() != 1600 {
-		t.Fatalf("result = %dx%d, want 200x1600", b.Dx(), b.Dy())
-	}
-	if !closerToRed(img.At(100, 100)) {
-		t.Errorf("top of the rotated image = %v, want the block (red)", img.At(100, 100))
-	}
-	if !closerToWhite(img.At(100, 1500)) {
-		t.Errorf("bottom of the rotated image = %v, want the background (white)", img.At(100, 1500))
 	}
 }

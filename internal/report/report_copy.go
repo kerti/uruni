@@ -1,4 +1,4 @@
-package http
+package report
 
 import (
 	"strconv"
@@ -7,7 +7,7 @@ import (
 	"github.com/kerti/uruni/internal/ledger"
 )
 
-// reportCopy is every Indonesian string the public report prints: the Go half
+// Copy is every Indonesian string the public report prints: the Go half
 // of ADR-014, as web/src/copy/id.ts is the SPA's. One place, so a locale is
 // one more value of this type, not a hunt through a template. Existing app
 // wording is reused verbatim (balanceHeading, lastChecked, matched,
@@ -16,7 +16,7 @@ import (
 //
 // Source files are ASCII (CLAUDE.md rule 10): a character beyond it is a \u
 // escape here, never a raw byte.
-type reportCopy struct {
+type Copy struct {
 	// Title is the <title>: the fund's name, then what the page is.
 	Title func(fundName string) string
 
@@ -141,7 +141,8 @@ type reportCopy struct {
 	Months [12]string
 }
 
-var reportText = reportCopy{
+// Text is the report's copy, the only value of Copy.
+var Text = Copy{
 	Title:         func(fundName string) string { return fundName + " - Laporan kas" },
 	Eyebrow:       "Laporan kas",
 	AsOf:          func(date string) string { return "per " + date },
@@ -250,7 +251,7 @@ const reportMonthLayout = "2006-01"
 // longDate renders "YYYY-MM-DD" as "2 Oktober 2026", as the app's date field
 // reads. An unparseable value comes back as given: the ledger only hands this
 // a valid date, and a raw ISO date beats a blank.
-func (c reportCopy) longDate(iso string) string {
+func (c Copy) longDate(iso string) string {
 	t, err := time.Parse(time.DateOnly, iso)
 	if err != nil {
 		return iso
@@ -259,7 +260,7 @@ func (c reportCopy) longDate(iso string) string {
 }
 
 // monthName renders "YYYY-MM" as "Oktober 2026".
-func (c reportCopy) monthName(month string) string {
+func (c Copy) monthName(month string) string {
 	t, err := time.Parse(reportMonthLayout, month)
 	if err != nil {
 		return month
@@ -268,7 +269,7 @@ func (c reportCopy) monthName(month string) string {
 }
 
 // duesStatus is the app's own word for a dues status.
-func (c reportCopy) duesStatus(s ledger.DuesStatus) string {
+func (c Copy) duesStatus(s ledger.DuesStatus) string {
 	switch s {
 	case ledger.DuesStatusPartial:
 		return c.DuesPartial
@@ -282,7 +283,7 @@ func (c reportCopy) duesStatus(s ledger.DuesStatus) string {
 }
 
 // participationStatus is the app's own word for an expected member's standing.
-func (c reportCopy) participationStatus(s ledger.ParticipationState) string {
+func (c Copy) participationStatus(s ledger.ParticipationState) string {
 	switch s {
 	case ledger.ParticipationSudah:
 		return c.ParticipationGiven
@@ -295,7 +296,7 @@ func (c reportCopy) participationStatus(s ledger.ParticipationState) string {
 
 // gridWord is the word for one grid cell: the dues section's own status words,
 // plus the grid's for no obligation.
-func (c reportCopy) gridWord(cell ledger.DuesGridCell) string {
+func (c Copy) gridWord(cell ledger.DuesGridCell) string {
 	switch cell {
 	case ledger.DuesCellPaid:
 		return c.DuesPaidStatus

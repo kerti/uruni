@@ -1,4 +1,4 @@
-package http
+package report
 
 import "github.com/kerti/uruni/internal/ledger"
 
@@ -22,7 +22,7 @@ import "github.com/kerti/uruni/internal/ledger"
 
 // entryLabel is the label line for an ordinary row, or "" for a plain row
 // (shown with only its purpose and amount).
-func (c reportCopy) entryLabel(e ledger.ReportEntry) string {
+func (c Copy) entryLabel(e ledger.ReportEntry) string {
 	member := ""
 	if e.MemberName != nil {
 		member = *e.MemberName
@@ -70,6 +70,6 @@ func (c reportCopy) entryLabel(e ledger.ReportEntry) string {
 }
 
 // moveLabel is "Dipindah: <from> -> <to>", with a real arrow.
-func (c reportCopy) moveLabel(m ledger.ReportMove) string {
+func (c Copy) moveLabel(m ledger.ReportMove) string {
 	return c.RowMoved(m.FromPurposeName, m.ToPurposeName)
 }

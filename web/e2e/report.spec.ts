@@ -10,7 +10,7 @@ import { expectAccessible } from './a11y'
 // 404 page, then make a new link and see the old one die.
 //
 // The report is server-rendered Go, so its strings are not in copy/id.ts; each
-// literal below names the reportText field in internal/http/report_copy.go it
+// literal below names the Text field in internal/report/report_copy.go it
 // mirrors. The fixture (cmd/uruni/seed_e2e.go) supplies what it reads: the
 // opening balance (a "Saldo awal" row), two members on a tier (dues rows) and
 // one open envelope, all dated the month the fixture was seeded.

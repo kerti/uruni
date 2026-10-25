@@ -131,7 +131,7 @@ Swept first. `CONTEXT.md` has no term for it. `PRD-ID.md` says *membatalkan* and
 - Under the form's title, one sentence of what it does, in ADR-033's manner: "Transaksi ini tidak dihapus. Pembatalannya dicatat sebagai entri baru, dan saldo kembali seperti sebelum transaksi ini dicatat."
 - The reversal's label where there is no member: "Pembatalan · transaksi 12 Agustus 2026" (the original's date, as `copy.history.dues.reversesLabel` does, which needs the date on the two selects named above); a named contribution's and a dues reversal's labels are unchanged. The mark on the original: *Sudah dibatalkan*.
 - Refusals the screen can reach: `transaction_already_reversed` "Transaksi ini sudah dibatalkan." (the Iuran screens keep their scoped *iuran* wording under the new code); `purpose_correction_already_reversed`, from a stale page, "Transaksi ini sudah dibatalkan, posnya tidak bisa diperbaiki."; `incidental_closed` already reads "Buka lagi amplop ini dulu". The other new codes are unreachable from the UI, which hides the control, and get entries in the shared error map as every wire code has.
-- The public report and PDF carry the same strings from `internal/http/report_copy.go` (a third reversal label and the mark; ASCII-escaped there).
+- The public report and PDF carry the same strings from `internal/report/report_copy.go` (a third reversal label and the mark; ASCII-escaped there).
 
 ## Consequences
 
@@ -185,3 +185,5 @@ An amendment corrects a statement of fact about the code that has since become f
 **2026-10-22 ([#530](https://github.com/kerti/uruni/issues/530))**: the request decoder stopped accepting unknown fields. The route's bullet said "(the decoder ignores unknown fields, so a stray `occurred_on` is dropped, never honoured)". A stray key is now refused with 400 `invalid_argument` naming it in `field`. The point of the parenthesis is unchanged: a reversal never takes a caller's day, amount or pos.
 
 **2026-10-24 ([#689](https://github.com/kerti/uruni/issues/689))**: `ReverseTransactionParams` no longer carries `Now`. The method's paragraph said "`Now` is the injected clock every dated write carries (zero means `time.Now()`)". No params struct carries a clock now: the `Ledger` holds the one injected clock (`ledger.WithClock`, default `time.Now`) and reads it for "today", in the fund's zone. The rule is unchanged: "today" is an injected instant read in the fund's zone, and the reversal supplies no date of its own.
+
+**2026-10-25 ([#694](https://github.com/kerti/uruni/issues/694))**: the report's copy moved with the report into its own package. The path `internal/http/report_copy.go` is now `internal/report/report_copy.go`; the copy itself is unchanged.

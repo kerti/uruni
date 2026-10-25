@@ -21,12 +21,13 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/kerti/uruni/internal/backup"
+	"github.com/kerti/uruni/internal/receipt"
 	"github.com/kerti/uruni/internal/store"
 )
 
 // maxReceiptRequestBytes caps the raw request body at 10 MB (#153), enforced
 // with http.MaxBytesReader before any of the multipart form is parsed. A
-// phone photo under it downscales to a few hundred KB (receipt_image.go), so
+// phone photo under it downscales to a few hundred KB (receipt.Process), so
 // the cap refuses something absurd early; it is not the stored size.
 const maxReceiptRequestBytes = 10 << 20 // 10 MiB
 
@@ -137,7 +138,7 @@ func (a *api) resolveReceipt(w http.ResponseWriter, r *http.Request) (store.Rece
 
 // processAndStoreReceipt is the two upload routes' shared body: read the
 // multipart file (capped by maxReceiptRequestBytes), downscale and re-encode
-// it (receipt_image.go), write it to the uploads volume under a
+// it (receipt.Process), write it to the uploads volume under a
 // server-generated name, and insert the row. Exactly one of transactionID and
 // reimbursementID is non-nil (the schema's CHECK); the two callers enforce
 // that.
@@ -147,19 +148,19 @@ func (a *api) processAndStoreReceipt(w http.ResponseWriter, r *http.Request, fun
 		return
 	}
 
-	processed, err := processReceiptImage(raw)
+	processed, err := receipt.Process(raw)
 	if err != nil {
 		switch {
-		case errors.Is(err, errReceiptHEICUnsupported):
+		case errors.Is(err, receipt.ErrHEICUnsupported):
 			// Distinct from the generic rejection below (#153): a phone shooting HEIC by
 			// default is the likeliest way to reach this, and the fix (re-export or share
 			// as JPEG) differs from "pick a different kind of file."
 			writeAPIError(w, http.StatusUnsupportedMediaType, "heic_unsupported",
 				"HEIC/HEIF photos are not supported here - share or export the photo as JPEG or PNG instead.")
-		case errors.Is(err, errReceiptTooManyPixels):
+		case errors.Is(err, receipt.ErrTooManyPixels):
 			writeAPIError(w, http.StatusRequestEntityTooLarge, "image_too_large",
 				"The photo's dimensions are too large. Use a photo of 50 megapixels or less.")
-		case errors.Is(err, errReceiptUnsupportedMediaType):
+		case errors.Is(err, receipt.ErrUnsupportedMediaType):
 			writeAPIError(w, http.StatusUnsupportedMediaType, "unsupported_media_type",
 				"That file is not a supported image type. Use JPEG, PNG or WebP.")
 		default:
@@ -263,7 +264,7 @@ func writeReceiptFile(uploadsDir string, data []byte) (string, error) {
 // randomReceiptFilename returns a fresh crypto/rand name, never derived from
 // the client's filename (#153): nothing about a stored receipt's name is
 // attacker-influenced, so there is no path-traversal surface to sanitize.
-// Every receipt is re-encoded as JPEG (receipt_image.go), so the extension is
+// Every receipt is re-encoded as JPEG (receipt.Process), so the extension is
 // always .jpg.
 func randomReceiptFilename() (string, error) {
 	buf := make([]byte, 16)
@@ -368,7 +369,7 @@ func (a *api) getReceipt(w http.ResponseWriter, r *http.Request) {
 	}
 	defer func() { _ = file.Close() }()
 
-	// Every receipt is stored as JPEG (receipt_image.go re-encodes), so the type
+	// Every receipt is stored as JPEG (receipt.Process re-encodes), so the type
 	// is a known constant, not sniffed or trusted from the row.
 	w.Header().Set("Content-Type", "image/jpeg")
 	// The browser must not guess past the Content-Type: this is an uploaded

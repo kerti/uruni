@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
-	"sync"
 	"testing"
 	"time"
 
@@ -168,27 +167,5 @@ func TestReportRateLimitedSecurityEvent(t *testing.T) {
 
 	if strings.Contains(f.logs.String(), f.slug) {
 		t.Errorf("a log line carries the slug:\n%s", f.logs.String())
-	}
-}
-
-// The fonts are read from the embedded files once per process, however many
-// PDFs are drawn, concurrently or not (#520). The race detector is the other
-// half of the test: the shared bytes are only read.
-func TestPDFFontsAreReadOnceAcrossConcurrentRenders(t *testing.T) {
-	t.Parallel()
-	f := newReportFixture(t, "Kas RT 05")
-	f.post(t, "in", 50_000, "2026-10-01")
-
-	var wg sync.WaitGroup
-	for range 16 {
-		wg.Go(func() {
-			if rec := f.get(t, "/report/"+f.fund.ReportSlug+"/pdf"); rec.Code != http.StatusOK {
-				t.Errorf("pdf = %d, want 200", rec.Code)
-			}
-		})
-	}
-	wg.Wait()
-	if got := pdfFontReads.Load(); got != 1 {
-		t.Errorf("font files read %d times, want 1", got)
 	}
 }

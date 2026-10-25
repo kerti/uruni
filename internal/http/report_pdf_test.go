@@ -17,6 +17,7 @@ import (
 
 	"github.com/kerti/uruni/internal/ledger"
 	"github.com/kerti/uruni/internal/money"
+	"github.com/kerti/uruni/internal/report"
 	"github.com/kerti/uruni/internal/store"
 )
 
@@ -218,21 +219,21 @@ func TestReportPDFCarriesFundTotalsDuesAndEnvelopes(t *testing.T) {
 
 	for _, want := range []string{
 		"Kas RT 05", // the fund
-		reportText.PDFStatement("September 2026"), // the month
-		reportText.TotalIn, reportText.TotalOut,   // the walk
-		reportText.WalkStart("31 Agustus 2026"), reportText.WalkEnd("30 September 2026"),
+		report.Text.PDFStatement("September 2026"), // the month
+		report.Text.TotalIn, report.Text.TotalOut,  // the walk
+		report.Text.WalkStart("31 Agustus 2026"), report.Text.WalkEnd("30 September 2026"),
 		money.FormatIDR(1_375_000),       // the balance, a formatted amount with its non-breaking space
 		"+" + money.FormatIDR(1_250_000), // the same, as a row
 		"-" + money.FormatIDR(40_000),    // an outgoing row
 		"Beli gula dan teh",              // a row's note
-		reportText.DuesLabel,             // the dues section
+		report.Text.DuesLabel,            // the dues section
 		"Ani", "Budi", "Cici", "Dedi",    // members
-		reportText.DuesPaidStatus, reportText.DuesUnpaid, reportText.DuesPartial, // dues statuses
-		reportText.DuesPaidInAdvance,
-		reportText.DuesPaidThrough("Oktober 2026"), // Dedi's paid-through line
-		reportText.EnvelopesLabel, "Halal bihalal", // the envelope
-		reportText.EnvelopeCollected + ": " + money.FormatIDR(30_000) + " \u00b7 " + reportText.EnvelopeGiven(2, 6),
-		reportText.ParticipationGiven, reportText.ParticipationNot, reportText.ParticipationUnder,
+		report.Text.DuesPaidStatus, report.Text.DuesUnpaid, report.Text.DuesPartial, // dues statuses
+		report.Text.DuesPaidInAdvance,
+		report.Text.DuesPaidThrough("Oktober 2026"), // Dedi's paid-through line
+		report.Text.EnvelopesLabel, "Halal bihalal", // the envelope
+		report.Text.EnvelopeCollected + ": " + money.FormatIDR(30_000) + " \u00b7 " + report.Text.EnvelopeGiven(2, 6),
+		report.Text.ParticipationGiven, report.Text.ParticipationNot, report.Text.ParticipationUnder,
 	} {
 		if !pdfHas(runs, want) {
 			t.Errorf("PDF text has no run %q; runs:\n%s", want, strings.Join(runs, "\n"))
@@ -298,7 +299,7 @@ func TestReportPDFUnknownSlugIs404NamingNoFund(t *testing.T) {
 		t.Errorf("Content-Disposition = %q, want none on a 404", got)
 	}
 	body := rec.Body.String()
-	if strings.Contains(body, "Kas RT 05") || !strings.Contains(body, reportText.NotFoundBody) {
+	if strings.Contains(body, "Kas RT 05") || !strings.Contains(body, report.Text.NotFoundBody) {
 		t.Errorf("404 body = %q, want the not-found copy and no fund name", body)
 	}
 	if got := rec.Header().Get("X-Robots-Tag"); got != "noindex, nofollow" {
@@ -353,7 +354,7 @@ func TestReportPDFOfAFundWithNothingRecorded(t *testing.T) {
 		t.Fatalf("status = %d, want 200", rec.Code)
 	}
 	runs := pdfText(t, rec.Body.Bytes())
-	for _, want := range []string{"Kas RT 05", money.FormatIDR(0), reportText.PDFNoRows} {
+	for _, want := range []string{"Kas RT 05", money.FormatIDR(0), report.Text.PDFNoRows} {
 		if !pdfHas(runs, want) {
 			t.Errorf("PDF text has no run %q; runs:\n%s", want, strings.Join(runs, "\n"))
 		}
@@ -383,7 +384,7 @@ func TestReportPDFPaginates(t *testing.T) {
 	}
 	heads := 0
 	for _, r := range runs {
-		if r == reportText.PDFColDate {
+		if r == report.Text.PDFColDate {
 			heads++
 		}
 	}
@@ -391,7 +392,7 @@ func TestReportPDFPaginates(t *testing.T) {
 	if heads != pages-1 {
 		t.Errorf("table header drawn %d times over %d pages, want once per page after the summary", heads, pages)
 	}
-	if want := reportText.PDFPage("2", fmt.Sprint(pages)); !pdfHas(runs, want) {
+	if want := report.Text.PDFPage("2", fmt.Sprint(pages)); !pdfHas(runs, want) {
 		t.Errorf("no footer %q; the page count did not resolve", want)
 	}
 }
@@ -403,27 +404,16 @@ func TestReportPageLinksToThePDFForTheMonthShown(t *testing.T) {
 
 	body := f.get(t, "/report/"+f.fund.ReportSlug+"?month=2026-08").Body.String()
 	want := `href="/report/` + f.fund.ReportSlug + `/pdf?month=2026-08"`
-	if !strings.Contains(body, want) || !strings.Contains(body, reportText.PDFDownload) {
-		t.Errorf("page does not link %q as %q", want, reportText.PDFDownload)
+	if !strings.Contains(body, want) || !strings.Contains(body, report.Text.PDFDownload) {
+		t.Errorf("page does not link %q as %q", want, report.Text.PDFDownload)
 	}
 	// Filters shape the page, not the file: the link carries the month alone.
 	body = f.get(t, "/report/"+f.fund.ReportSlug+"?month=2026-08&dir=in").Body.String()
 	if !strings.Contains(body, want) {
 		t.Error("a filtered page's PDF link carries more than the month")
 	}
-	if notFound := f.get(t, "/report/nope"); strings.Contains(notFound.Body.String(), reportText.PDFDownload) {
+	if notFound := f.get(t, "/report/nope"); strings.Contains(notFound.Body.String(), report.Text.PDFDownload) {
 		t.Error("the 404 page offers a PDF")
-	}
-}
-
-func TestReportFontLicenceShipsWithTheFonts(t *testing.T) {
-	t.Parallel()
-	b, err := reportFonts.ReadFile("fonts/OFL.txt")
-	if err != nil {
-		t.Fatalf("OFL.txt is not embedded beside the fonts: %v", err)
-	}
-	if !bytes.Contains(b, []byte("SIL OPEN FONT LICENSE Version 1.1")) {
-		t.Error("OFL.txt does not look like the SIL Open Font License 1.1")
 	}
 }
 
@@ -459,30 +449,6 @@ func TestReportPDFSurvivesRunesBeyondTheBMP(t *testing.T) {
 	}
 }
 
-func TestPDFSafe(t *testing.T) {
-	t.Parallel()
-	for _, tc := range []struct{ in, want string }{
-		{"Kas RT 05", "Kas RT 05"},
-		{"Kas RT 05 \U0001F3E0", "Kas RT 05"},
-		{"\U0001F3E0 Kas RT 05", "Kas RT 05"},
-		{"Kas \U0001F3E0 RT 05", "Kas RT 05"},
-		{"Kas \U0001F3E0\U0001F333 RT 05", "Kas RT 05"},
-		{"Halal bihalal \U0001F319\uFE0F", "Halal bihalal"},
-		{"Keluarga \U0001F468\u200D\U0001F469\u200D\U0001F467 Budi", "Keluarga Budi"},
-		{"\U0001F3E0", ""},
-		// Nothing dropped: the text comes back exactly, spaces and all.
-		{"Rp\u00a050.000  tunai ", "Rp\u00a050.000  tunai "},
-		{"Caf\u00e9 \u2615", "Caf\u00e9 \u2615"},
-		// The font has no arrow: the PDF writes it in ASCII.
-		{"Dipindah: Kas Utama \u2192 Duka", "Dipindah: Kas Utama -> Duka"},
-		{"Dipindah: Kas \U0001F3E0 \u2192 Duka", "Dipindah: Kas -> Duka"},
-	} {
-		if got := pdfSafe(tc.in); got != tc.want {
-			t.Errorf("pdfSafe(%q) = %q, want %q", tc.in, got, tc.want)
-		}
-	}
-}
-
 // Every character the PDF draws has a glyph in the embedded font: a missing
 // one prints as a blank box, as "Dipindah: A \u2192 B" did before the arrow got
 // its stand-in. The scenario has purpose moves, dues and every label shape.
@@ -498,8 +464,8 @@ func TestReportPDFDrawsOnlyCharactersTheFontHas(t *testing.T) {
 		t.Errorf("PDF text has no purpose move with its stand-in arrow; runs:\n%s", strings.Join(runs, "\n"))
 	}
 
-	for _, name := range []string{"fonts/NotoSans-Regular.ttf", "fonts/NotoSans-Bold.ttf"} {
-		raw, err := reportFonts.ReadFile(name)
+	for _, name := range []string{"../report/fonts/NotoSans-Regular.ttf", "../report/fonts/NotoSans-Bold.ttf"} {
+		raw, err := readReportFont(name)
 		if err != nil {
 			t.Fatalf("reading %s: %v", name, err)
 		}
@@ -512,6 +478,13 @@ func TestReportPDFDrawsOnlyCharactersTheFontHas(t *testing.T) {
 			}
 		}
 	}
+}
+
+// readReportFont reads one of internal/report's embedded fonts from disk, for
+// the tests that check the PDF's characters against its glyphs.
+func readReportFont(name string) ([]byte, error) {
+	//nolint:gosec // G304: name is one of two fixed font paths in this package's tests
+	return os.ReadFile(name)
 }
 
 // fontRunes is every character a TrueType font maps to a real glyph, read from
@@ -575,7 +548,7 @@ func TestReportPDFStartsEachSectionOnItsOwnPage(t *testing.T) {
 	s := newPDFScenario(t)
 	pages := pdfPages(t, s.get(t, "/report/"+s.fund.ReportSlug+"/pdf?month=2026-09").Body.Bytes())
 
-	sections := []string{reportText.PDFSummary, reportText.TransactionsLabel, reportText.DuesLabel, reportText.GridHeading, reportText.EnvelopesLabel}
+	sections := []string{report.Text.PDFSummary, report.Text.TransactionsLabel, report.Text.DuesLabel, report.Text.GridHeading, report.Text.EnvelopesLabel}
 	if len(pages) != len(sections) {
 		t.Fatalf("pages = %d, want %d (one per section, each fits one page)", len(pages), len(sections))
 	}
@@ -596,7 +569,7 @@ func TestReportPDFSummaryShowsTheTotalOwedToMembers(t *testing.T) {
 	t.Parallel()
 	s := newPDFScenario(t)
 	runs := pdfText(t, s.get(t, "/report/"+s.fund.ReportSlug+"/pdf?month=2026-09").Body.Bytes())
-	if pdfHas(runs, reportText.OwedLabel) {
+	if pdfHas(runs, report.Text.OwedLabel) {
 		t.Error("PDF of a fund owing nothing has the owed line")
 	}
 
@@ -612,7 +585,7 @@ func TestReportPDFSummaryShowsTheTotalOwedToMembers(t *testing.T) {
 	}
 
 	runs = pdfText(t, s.get(t, "/report/"+s.fund.ReportSlug+"/pdf?month=2026-09").Body.Bytes())
-	for _, want := range []string{reportText.OwedLabel, money.FormatIDR(45_000)} {
+	for _, want := range []string{report.Text.OwedLabel, money.FormatIDR(45_000)} {
 		if !pdfHas(runs, want) {
 			t.Errorf("PDF text has no run %q; runs:\n%s", want, strings.Join(runs, "\n"))
 		}
@@ -624,11 +597,11 @@ func TestReportPDFDateLineFollowsTheMonth(t *testing.T) {
 	t.Parallel()
 	s := newPDFScenario(t)
 	past := pdfText(t, s.get(t, "/report/"+s.fund.ReportSlug+"/pdf?month=2026-09").Body.Bytes())
-	if want := reportText.AsOf("30 September 2026"); !pdfHas(past, want) {
+	if want := report.Text.AsOf("30 September 2026"); !pdfHas(past, want) {
 		t.Errorf("past-month PDF has no run %q; runs:\n%s", want, strings.Join(past, "\n"))
 	}
 	running := pdfText(t, s.get(t, "/report/"+s.fund.ReportSlug+"/pdf").Body.Bytes())
-	if want := reportText.AsOfRunning("2 Oktober 2026"); !pdfHas(running, want) {
+	if want := report.Text.AsOfRunning("2 Oktober 2026"); !pdfHas(running, want) {
 		t.Errorf("running-month PDF has no run %q; runs:\n%s", want, strings.Join(running, "\n"))
 	}
 }

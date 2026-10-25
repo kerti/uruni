@@ -1,4 +1,4 @@
-package http
+package report
 
 import "html/template"
 
@@ -25,14 +25,14 @@ var reportPalette = map[string]string{
 	"attention-text":     "#a55031",
 }
 
-// reportStyle is the page's one inline <style> block. System fonts, not the
+// style is the page's one inline <style> block. System fonts, not the
 // app's Plus Jakarta Sans: the page loads nothing but itself. Amounts use
 // tabular figures (Design-System.md), in a single phone-width column, since
 // the link mostly opens from a WhatsApp message.
 //
 // Colours come from reportPalette through CSS custom properties, naming tokens
 // as the SPA's Tailwind classes do.
-func reportStyle() template.CSS {
+func style() template.CSS {
 	vars := ":root{"
 	for _, name := range reportPaletteOrder {
 		vars += "--" + name + ":" + reportPalette[name] + ";"

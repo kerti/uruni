@@ -1,7 +1,6 @@
-package http
+package report
 
 import (
-	"strconv"
 	"testing"
 
 	"github.com/kerti/uruni/internal/ledger"
@@ -47,17 +46,15 @@ func TestReportRowLabelsMatchTheSPA(t *testing.T) {
 		{"own adjustment", ledger.ReportEntry{Kind: "adjustment"}, "Penyesuaian"},
 	}
 	for _, tt := range tests {
-		if got := reportText.entryLabel(tt.entry); got != tt.want {
+		if got := Text.entryLabel(tt.entry); got != tt.want {
 			t.Errorf("%s: label = %q, want %q", tt.name, got, tt.want)
 		}
 	}
 
 	// rowLabels.transferPurpose*.text is `${from} \u2192 ${to}`; the report
 	// prefixes "Dipindah: " to every purpose move (ADR-035, #374).
-	got := reportText.moveLabel(ledger.ReportMove{FromPurposeName: "Duka", ToPurposeName: "Kas Utama"})
+	got := Text.moveLabel(ledger.ReportMove{FromPurposeName: "Duka", ToPurposeName: "Kas Utama"})
 	if want := "Dipindah: Duka \u2192 Kas Utama"; got != want {
 		t.Errorf("move label = %q, want %q", got, want)
 	}
 }
-
-func itoa(n int64) string { return strconv.FormatInt(n, 10) }

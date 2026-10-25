@@ -2,7 +2,7 @@
 
 **Status:** Accepted · implemented at M7 ([#377](https://github.com/kerti/uruni/issues/377)) — change only by adding a superseding ADR · [ADR index](./README.md)
 
-**Decision.** Ship **Indonesian only** for v1, but centralize copy: **react-i18next** (or a light equivalent) on the client - as built, the light equivalent: one typed `copy` object in `web/src/copy/id.ts` that every screen imports, and no i18n library yet - and centralized message strings for the Go-rendered report (`go-i18n` if needed - as built, not needed: one file of constants, `internal/http/report_copy.go`). A second language stays additive.
+**Decision.** Ship **Indonesian only** for v1, but centralize copy: **react-i18next** (or a light equivalent) on the client - as built, the light equivalent: one typed `copy` object in `web/src/copy/id.ts` that every screen imports, and no i18n library yet - and centralized message strings for the Go-rendered report (`go-i18n` if needed - as built, not needed: one file of constants, `internal/report/report_copy.go`). A second language stays additive.
 
 **Where the boundary runs.** "Indonesian-first" is about the **treasurer's** surface — the SPA and the public report. The **operator's** surface is **English**: the CLI and its errors, server logs, `README`/`SELF-HOSTING`, and anything else a self-hoster reads at a terminal. Added 2026-08-10, after the M1.1 scaffold shipped Indonesian CLI errors on the strength of "Indonesian-first" alone.
 
@@ -13,3 +13,9 @@ Without this line, "Indonesian-first" reads as licence to name an enum value `ka
 **A row's generated description is treasurer copy, so it is rendered, never stored** (added 2026-09-15, [#257](https://github.com/kerti/uruni/issues/257)). When the app posts a row on the treasurer's behalf — a dues payment, a transfer, a settlement — its description is a label built at display from the row's own facts and this surface's strings; `transaction.note` holds only what she typed. Text written into the ledger would be the presentation layer's language inside the database: frozen in the wording of the day it was posted, and out of reach of a second language.
 
 **Consequences.** Slight upfront structure, no runtime cost, future-proof. Two audiences means one question per string — treasurer or operator? — and the answer decides its language.
+
+## Amendments
+
+An amendment corrects a statement of fact about the code that has since become false. It never changes a decision, a trade-off or an accepted cost; that is still a superseding ADR. See the [ADR index](./README.md) for the rule.
+
+**2026-10-25 ([#694](https://github.com/kerti/uruni/issues/694))**: the report's copy moved with the report into its own package. The path `internal/http/report_copy.go` is now `internal/report/report_copy.go`; the copy itself is unchanged.

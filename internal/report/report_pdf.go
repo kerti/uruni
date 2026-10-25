@@ -1,11 +1,11 @@
-package http
+package report
 
-// The monthly PDF (ADR-035, #378): GET /report/{slug}/pdf?month=YYYY-MM, the
-// whole month with no filters, to print or drop in the group chat. A second
-// renderer over the page's shaping: buildReportPage has turned the ledger's
-// Report into display text (money.FormatIDR rupiah, Indonesian dates and
-// labels), so nothing is computed or queried here and a number cannot read
-// one way on the page and another in the file.
+// The monthly PDF (ADR-035, #378): the whole month with no filters,
+// to print or drop in the group chat. A second renderer over the page's
+// shaping: NewPage has turned the ledger's Report into display text
+// (money.FormatIDR rupiah, Indonesian dates and labels), so nothing is
+// computed or queried here and a number cannot read one way on the page and
+// another in the file.
 //
 // Fonts. fpdf's UTF-8 path embeds a TrueType font, so "Rp", the non-breaking
 // space and Indonesian text are selectable, searchable text. fonts/ holds
@@ -23,9 +23,7 @@ import (
 	"context"
 	"embed"
 	"fmt"
-	"log/slog"
 	"math"
-	"net/http"
 	"strconv"
 	"strings"
 	"sync"
@@ -34,11 +32,10 @@ import (
 	"codeberg.org/go-pdf/fpdf"
 
 	"github.com/kerti/uruni/internal/ledger"
-	"github.com/kerti/uruni/internal/store"
 )
 
 //go:embed fonts/NotoSans-Regular.ttf fonts/NotoSans-Bold.ttf fonts/OFL.txt
-var reportFonts embed.FS
+var fontFS embed.FS
 
 const (
 	pdfFont = "NotoSans"
@@ -55,45 +52,15 @@ const (
 	pdfRuleWidthMM = 0.2
 )
 
-// reportPDFHandler serves GET /report/{slug}/pdf with the page's edge: the
-// same headers, the same 404 for an unknown slug, a missing or malformed month
-// is the current one.
-func reportPDFHandler(l *ledger.Ledger, q store.Querier, logger *slog.Logger) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		setReportHeaders(w)
-
-		logger := loggerFrom(r.Context(), logger)
-		fund, ok := reportFundOr404(w, r, q, logger)
-		if !ok {
-			return
-		}
-
-		body, month, err := renderReportPDF(r.Context(), l, fund.ID, r.URL.Query().Get("month"))
-		if err != nil {
-			logger.Error("report: rendering the pdf", "fund_id", fund.ID, "error", err)
-			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
-			return
-		}
-
-		h := w.Header()
-		h.Set("Content-Type", "application/pdf")
-		// month is the ledger's validated "YYYY-MM", never the raw query value.
-		h.Set("Content-Disposition", `attachment; filename="`+reportText.PDFFilename(month)+`"`)
-		h.Set("Content-Length", strconv.Itoa(len(body)))
-		//nolint:gosec // G705 is an HTML-injection rule; this body is application/pdf bytes drawn by fpdf, served as an attachment, never parsed as markup
-		_, _ = w.Write(body)
-	}
-}
-
-// renderReportPDF assembles the month as the page does (same bad-month
-// fallback, same shaping) and draws it. It returns the month it rendered, for
-// the filename.
-func renderReportPDF(ctx context.Context, l *ledger.Ledger, fundID int64, month string) ([]byte, string, error) {
-	report, err := monthlyReportOrCurrent(ctx, l, ledger.ReportParams{FundID: fundID, Month: month})
+// PDF assembles the month as the page does (same bad-month fallback, same
+// shaping) and draws it, with no filters. It returns the month it rendered
+// (the ledger's validated "YYYY-MM"), for the filename.
+func PDF(ctx context.Context, l *ledger.Ledger, fundID int64, month string) ([]byte, string, error) {
+	report, err := monthlyOrCurrent(ctx, l, ledger.ReportParams{FundID: fundID, Month: month})
 	if err != nil {
 		return nil, "", err
 	}
-	body, err := drawReportPDF(buildReportPage(report, false))
+	body, err := RenderPDF(NewPage(report, false))
 	return body, report.Month, err
 }
 
@@ -174,7 +141,7 @@ func (d *pdfDoc) SetTitle(title string, isUTF8 bool) {
 var pdfFontFiles = sync.OnceValues(func() (fonts [2][]byte, err error) {
 	pdfFontReads.Add(1)
 	for i, name := range []string{"fonts/NotoSans-Regular.ttf", "fonts/NotoSans-Bold.ttf"} {
-		if fonts[i], err = reportFonts.ReadFile(name); err != nil {
+		if fonts[i], err = fontFS.ReadFile(name); err != nil {
 			return [2][]byte{}, err
 		}
 	}
@@ -183,7 +150,8 @@ var pdfFontFiles = sync.OnceValues(func() (fonts [2][]byte, err error) {
 
 var pdfFontReads atomic.Int32
 
-func drawReportPDF(page reportPage) ([]byte, error) {
+// RenderPDF draws the page as an A4 statement. The bytes are the whole file.
+func RenderPDF(page Page) ([]byte, error) {
 	fonts, err := pdfFontFiles()
 	if err != nil {
 		return nil, err
@@ -197,7 +165,7 @@ func drawReportPDF(page reportPage) ([]byte, error) {
 	d.SetCellMargin(0)
 	d.SetAutoPageBreak(false, 0)
 	d.SetLineWidth(pdfRuleWidthMM)
-	d.SetTitle(reportText.PDFStatement(reportText.monthName(page.Month))+" - "+page.FundName, true)
+	d.SetTitle(Text.PDFStatement(Text.monthName(page.Month))+" - "+page.FundName, true)
 	d.SetCreator("Uruni", true)
 	d.SetLang("id")
 	d.AliasNbPages("{nb}")
@@ -365,8 +333,8 @@ func (d *pdfDoc) footer(fundName string) {
 	d.rule("border")
 	d.Line(pdfMarginX, d.GetY(), pdfMarginX+pdfContentW, d.GetY())
 	d.SetY(d.GetY() + 2)
-	left := pdfLine{text: reportText.PDFFooterSource(fundName), size: pdfSmallSize, color: "muted-foreground"}
-	right := pdfLine{text: reportText.PDFPage(strconv.Itoa(d.PageNo()), "{nb}"), size: pdfSmallSize, color: "muted-foreground"}
+	left := pdfLine{text: Text.PDFFooterSource(fundName), size: pdfSmallSize, color: "muted-foreground"}
+	right := pdfLine{text: Text.PDFPage(strconv.Itoa(d.PageNo()), "{nb}"), size: pdfSmallSize, color: "muted-foreground"}
 	y := d.GetY()
 	h := pdfLineHeight(pdfSmallSize)
 	// The mark leads the line, centred on it, with clear space after it.
@@ -418,11 +386,11 @@ func (d *pdfDoc) mark(x, y, size float64) {
 // per-pos balances and what is owed to members, every figure as of the
 // month's last day or today for the running month (ADR-037), as the date line
 // under the title says.
-func (d *pdfDoc) header(p reportPage) {
+func (d *pdfDoc) header(p Page) {
 	d.text(pdfLine{text: p.FundName, bold: true, size: 22, color: "primary"}, pdfContentW, "L")
-	d.text(pdfLine{text: reportText.PDFStatement(reportText.monthName(p.Month)), bold: true, size: 13, color: "foreground"}, pdfContentW, "L")
+	d.text(pdfLine{text: Text.PDFStatement(Text.monthName(p.Month)), bold: true, size: 13, color: "foreground"}, pdfContentW, "L")
 	d.text(pdfLine{text: p.AsOf, size: pdfBodySize, color: "muted-foreground"}, pdfContentW, "L")
-	d.section(reportText.PDFSummary, false)
+	d.section(Text.PDFSummary, false)
 	d.SetY(d.GetY() + 2)
 
 	// The balance, in a quiet panel: ink-light for print, Forest for the figure.
@@ -432,7 +400,7 @@ func (d *pdfDoc) header(p reportPage) {
 	d.face(false, 10)
 	d.ink("muted-foreground")
 	d.SetXY(pdfMarginX+5, y+4.6)
-	d.CellFormat(70, 6, reportText.BalanceLabel, "", 0, "L", false, 0, "")
+	d.CellFormat(70, 6, Text.BalanceLabel, "", 0, "L", false, 0, "")
 	d.face(true, 16)
 	d.ink("primary")
 	d.SetXY(pdfMarginX+70, y+3.6)
@@ -453,7 +421,7 @@ func (d *pdfDoc) header(p reportPage) {
 
 	if len(p.Purposes) > 0 {
 		d.SetY(d.GetY() + 3)
-		d.text(pdfLine{text: reportText.PurposesLabel, bold: true, size: pdfSmallSize, color: "muted-foreground"}, pdfContentW, "L")
+		d.text(pdfLine{text: Text.PurposesLabel, bold: true, size: pdfSmallSize, color: "muted-foreground"}, pdfContentW, "L")
 		for _, pu := range p.Purposes {
 			color := "foreground"
 			if pu.Negative {
@@ -471,20 +439,20 @@ func (d *pdfDoc) header(p reportPage) {
 	if p.Owed != "" {
 		d.SetY(d.GetY() + 3)
 		d.row([]pdfCell{
-			{w: pdfContentW * 0.6, align: "L", lines: []pdfLine{{text: reportText.OwedLabel, size: pdfBodySize, color: "foreground"}}},
+			{w: pdfContentW * 0.6, align: "L", lines: []pdfLine{{text: Text.OwedLabel, size: pdfBodySize, color: "foreground"}}},
 			{w: pdfContentW * 0.4, align: "R", lines: []pdfLine{{text: p.Owed, size: pdfBodySize, color: "foreground"}}},
 		}, true)
 	}
 }
 
-func (d *pdfDoc) transactions(p reportPage) {
-	d.section(reportText.TransactionsLabel, true)
+func (d *pdfDoc) transactions(p Page) {
+	d.section(Text.TransactionsLabel, true)
 	for _, t := range p.Totals {
 		color := "foreground"
 		switch {
 		case t.Last:
 			color = "primary"
-		case t.Label == reportText.TotalIn:
+		case t.Label == Text.TotalIn:
 			color = "success"
 		}
 		d.pair(t.Label, t.Value, t.Last, color)
@@ -492,7 +460,7 @@ func (d *pdfDoc) transactions(p reportPage) {
 
 	if len(p.Rows) == 0 {
 		d.SetY(d.GetY() + 3)
-		d.text(pdfLine{text: reportText.PDFNoRows, size: pdfBodySize, color: "muted-foreground"}, pdfContentW, "L")
+		d.text(pdfLine{text: Text.PDFNoRows, size: pdfBodySize, color: "muted-foreground"}, pdfContentW, "L")
 		return
 	}
 	// amountW fits "+Rp 999.999.999.999" (33mm in bold 9.5pt, #540) with room
@@ -501,9 +469,9 @@ func (d *pdfDoc) transactions(p reportPage) {
 	noteW := pdfContentW - dateW - amountW
 	d.SetY(d.GetY() + 4)
 	d.tableHead([]pdfCell{
-		headCell(dateW, "L", reportText.PDFColDate),
-		headCell(noteW, "L", reportText.PDFColNote),
-		headCell(amountW, "R", reportText.PDFColAmount),
+		headCell(dateW, "L", Text.PDFColDate),
+		headCell(noteW, "L", Text.PDFColNote),
+		headCell(amountW, "R", Text.PDFColAmount),
 	})
 	for _, r := range p.Rows {
 		note := pdfCell{w: noteW, align: "L"}
@@ -521,13 +489,13 @@ func (d *pdfDoc) transactions(p reportPage) {
 			meta = append(meta, r.Purpose)
 		}
 		if r.HasReceipt {
-			meta = append(meta, reportText.HasReceipt)
+			meta = append(meta, Text.HasReceipt)
 		}
 		if len(meta) > 0 {
 			note.lines = append(note.lines, pdfLine{text: strings.Join(meta, " \u00b7 "), size: pdfSmallSize, color: "muted-foreground"})
 		}
 		if r.Reversed {
-			note.lines = append(note.lines, pdfLine{text: reportText.RowReversed, size: pdfSmallSize, color: "muted-foreground"})
+			note.lines = append(note.lines, pdfLine{text: Text.RowReversed, size: pdfSmallSize, color: "muted-foreground"})
 		}
 		if len(note.lines) == 0 {
 			note.lines = []pdfLine{{text: "", size: pdfBodySize, color: "foreground"}}
@@ -545,18 +513,18 @@ func (d *pdfDoc) transactions(p reportPage) {
 	d.endTable()
 }
 
-func (d *pdfDoc) dues(p reportPage) {
+func (d *pdfDoc) dues(p Page) {
 	if len(p.Dues) == 0 {
 		return
 	}
-	d.section(reportText.DuesLabel, true)
+	d.section(Text.DuesLabel, true)
 	const amountW, statusW = 38.0, 54.0
 	nameW := pdfContentW - 2*amountW - statusW
 	d.tableHead([]pdfCell{
-		headCell(nameW, "L", reportText.PDFColMember),
-		headCell(amountW, "R", reportText.DuesOwed),
-		headCell(amountW, "R", reportText.DuesPaid),
-		headCell(statusW, "L", reportText.PDFColStatus),
+		headCell(nameW, "L", Text.PDFColMember),
+		headCell(amountW, "R", Text.DuesOwed),
+		headCell(amountW, "R", Text.DuesPaid),
+		headCell(statusW, "L", Text.PDFColStatus),
 	})
 	for _, r := range p.Dues {
 		status := pdfCell{w: statusW, align: "L", lines: []pdfLine{{text: r.Status, bold: true, size: pdfBodySize, color: duesColor(r.Class)}}}
@@ -566,7 +534,7 @@ func (d *pdfDoc) dues(p reportPage) {
 		d.row([]pdfCell{
 			{w: nameW, align: "L", lines: []pdfLine{
 				{text: r.Name, size: pdfBodySize, color: "foreground"},
-				{text: reportText.DuesTier + " " + r.Tier, size: pdfSmallSize, color: "muted-foreground"},
+				{text: Text.DuesTier + " " + r.Tier, size: pdfSmallSize, color: "muted-foreground"},
 			}},
 			{w: amountW, align: "R", lines: []pdfLine{{text: r.Owed, size: pdfBodySize, color: "foreground"}}},
 			{w: amountW, align: "R", lines: []pdfLine{{text: r.Paid, size: pdfBodySize, color: "foreground"}}},
@@ -592,7 +560,7 @@ const (
 // heads repeating on a new page and the legend kept with the last rows. Status
 // is a drawn shape (filled, half-filled, hollow, a dash), never a glyph: the
 // font subset has none, and a shape reads in a greyscale print.
-func (d *pdfDoc) duesGrid(p reportPage) {
+func (d *pdfDoc) duesGrid(p Page) {
 	g := p.Grid
 	if g == nil {
 		return
@@ -739,11 +707,11 @@ func participationColor(class string) string {
 	}
 }
 
-func (d *pdfDoc) envelopes(p reportPage) {
+func (d *pdfDoc) envelopes(p Page) {
 	if len(p.Envelopes) == 0 {
 		return
 	}
-	d.section(reportText.EnvelopesLabel, true)
+	d.section(Text.EnvelopesLabel, true)
 	const amountW, statusW = 38.0, 52.0
 	nameW := pdfContentW - amountW - statusW
 	for _, e := range p.Envelopes {
@@ -758,7 +726,7 @@ func (d *pdfDoc) envelopes(p reportPage) {
 			{w: pdfContentW - 40, align: "L", lines: []pdfLine{{text: e.Name, bold: true, size: 11, color: "foreground"}}},
 			{w: 40, align: "R", lines: []pdfLine{{text: e.Status, bold: true, size: pdfBodySize, color: statusColor}}},
 		}, false)
-		facts := reportText.EnvelopeCollected + ": " + e.Collected
+		facts := Text.EnvelopeCollected + ": " + e.Collected
 		if e.Given != "" {
 			facts += " \u00b7 " + e.Given
 		}
@@ -769,12 +737,12 @@ func (d *pdfDoc) envelopes(p reportPage) {
 		d.SetY(d.GetY() + 1)
 
 		if e.NoneExpect {
-			d.text(pdfLine{text: reportText.EnvelopeNoneExpect, size: pdfBodySize, color: "muted-foreground"}, pdfContentW, "L")
+			d.text(pdfLine{text: Text.EnvelopeNoneExpect, size: pdfBodySize, color: "muted-foreground"}, pdfContentW, "L")
 		} else {
 			d.tableHead([]pdfCell{
-				headCell(nameW, "L", reportText.PDFColMember),
-				headCell(statusW, "L", reportText.PDFColStatus),
-				headCell(amountW, "R", reportText.PDFColAmount),
+				headCell(nameW, "L", Text.PDFColMember),
+				headCell(statusW, "L", Text.PDFColStatus),
+				headCell(amountW, "R", Text.PDFColAmount),
 			})
 			for _, pe := range e.Expected {
 				d.row([]pdfCell{
@@ -788,7 +756,7 @@ func (d *pdfDoc) envelopes(p reportPage) {
 		if len(e.Others) > 0 {
 			d.need(20)
 			d.SetY(d.GetY() + 3)
-			d.text(pdfLine{text: reportText.EnvelopeOthers, bold: true, size: pdfSmallSize, color: "muted-foreground"}, pdfContentW, "L")
+			d.text(pdfLine{text: Text.EnvelopeOthers, bold: true, size: pdfSmallSize, color: "muted-foreground"}, pdfContentW, "L")
 			for _, o := range e.Others {
 				d.row([]pdfCell{
 					{w: nameW + statusW, align: "L", lines: []pdfLine{{text: o.Name, size: pdfBodySize, color: "foreground"}}},

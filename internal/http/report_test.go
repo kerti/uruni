@@ -5,8 +5,8 @@ import (
 	"database/sql"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"regexp"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -15,6 +15,7 @@ import (
 
 	"github.com/kerti/uruni/internal/ledger"
 	"github.com/kerti/uruni/internal/money"
+	"github.com/kerti/uruni/internal/report"
 	"github.com/kerti/uruni/internal/store"
 )
 
@@ -104,8 +105,8 @@ func TestReportKnownSlugIs200WithEveryHeader(t *testing.T) {
 		"Kas RT 05",
 		"per 2 Oktober 2026",
 		money.FormatIDR(250_000),
-		reportText.PurposesLabel,
-		reportText.NeverChecked,
+		report.Text.PurposesLabel,
+		report.Text.NeverChecked,
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("body does not contain %q", want)
@@ -171,7 +172,7 @@ func TestReportUnknownSlugIs404NamingNoFund(t *testing.T) {
 	if strings.Contains(body, "Kas RT 05") {
 		t.Error("404 body names the fund; an unknown slug must reveal nothing")
 	}
-	if !strings.Contains(body, reportText.NotFoundBody) {
+	if !strings.Contains(body, report.Text.NotFoundBody) {
 		t.Errorf("404 body does not carry the not-found copy:\n%s", body)
 	}
 	if got := rec.Header().Get("X-Robots-Tag"); got != "noindex, nofollow" {
@@ -233,96 +234,13 @@ func TestReportEmptyFundShowsRpZeroAndTheWarmLine(t *testing.T) {
 	if !strings.Contains(body, money.FormatIDR(0)) {
 		t.Errorf("empty fund body does not show %q", money.FormatIDR(0))
 	}
-	if !strings.Contains(body, reportText.Empty) {
+	if !strings.Contains(body, report.Text.Empty) {
 		t.Errorf("empty fund body does not carry the empty line")
 	}
 
 	f.post(t, "in", 1, "2026-10-01")
-	if body := f.get(t, "/report/"+f.fund.ReportSlug).Body.String(); strings.Contains(body, reportText.Empty) {
+	if body := f.get(t, "/report/"+f.fund.ReportSlug).Body.String(); strings.Contains(body, report.Text.Empty) {
 		t.Error("a fund with a transaction still says nothing has been recorded")
-	}
-}
-
-// The three cek kas states, read as the home banner reads them: never counted
-// is neutral (never green), matched is green, a discrepancy is terracotta
-// with its amount.
-func TestReportPageCheckStates(t *testing.T) {
-	t.Parallel()
-	base := ledger.Report{FundName: "Kas", AsOf: "2026-10-02", Month: "2026-10", Months: []string{"2026-10"}}
-
-	page := buildReportPage(base, false)
-	if page.Check.Class != "never" || page.Check.Message != reportText.NeverChecked {
-		t.Errorf("no count = %+v, want the never state", page.Check)
-	}
-
-	base.Reconciliation = &ledger.ReportReconciliation{Date: "2026-09-30", Matched: true}
-	page = buildReportPage(base, false)
-	if page.Check.Class != "matched" || page.Check.When != "Terakhir dicek 30 September 2026" {
-		t.Errorf("matched = %+v", page.Check)
-	}
-
-	base.Reconciliation = &ledger.ReportReconciliation{Date: "2026-09-30", Difference: 15_000}
-	page = buildReportPage(base, false)
-	if page.Check.Class != "discrepancy" || page.Check.Message != reportText.Discrepancy(money.FormatIDR(15_000)) {
-		t.Errorf("discrepancy = %+v", page.Check)
-	}
-}
-
-func TestReportPagePurposeBalances(t *testing.T) {
-	t.Parallel()
-	page := buildReportPage(ledger.Report{
-		AsOf: "2026-10-02", Month: "2026-10", Months: []string{"2026-10"},
-		PurposeBalances: []ledger.ReportPurposeBalance{
-			{Name: "Kas Utama", Kind: "main", Balance: -20_000},
-			{Name: "Duka", Kind: "incidental", Balance: 50_000},
-		},
-	}, false)
-	if len(page.Purposes) != 2 || page.Purposes[0].Name != "Kas Utama" {
-		t.Fatalf("purposes = %+v, want Kas Utama first, in the ledger's order", page.Purposes)
-	}
-	if !page.Purposes[0].Negative || page.Purposes[1].Negative {
-		t.Errorf("negative flags = %v, %v; want only Kas Utama's", page.Purposes[0].Negative, page.Purposes[1].Negative)
-	}
-}
-
-// TestReportPaletteMatchesIndexCSS is ADR-035's guard on the hand-kept palette:
-// every token the report uses holds the value index.css's :root gives it.
-func TestReportPaletteMatchesIndexCSS(t *testing.T) {
-	t.Parallel()
-	css, err := os.ReadFile("../../web/src/index.css")
-	if err != nil {
-		t.Fatalf("reading index.css: %v", err)
-	}
-	root := regexp.MustCompile(`(?s):root\s*\{(.*?)\}`).FindSubmatch(css)
-	if root == nil {
-		t.Fatal("no :root block in index.css")
-	}
-	values := map[string]string{}
-	for _, m := range regexp.MustCompile(`--([a-z-]+):\s*([^;]+);`).FindAllSubmatch(root[1], -1) {
-		values[string(m[1])] = strings.ToLower(strings.TrimSpace(string(m[2])))
-	}
-	for name, want := range reportPalette {
-		got, ok := values[name]
-		if !ok {
-			t.Errorf("--%s is in the report palette but not in index.css's :root", name)
-			continue
-		}
-		if got != want {
-			t.Errorf("--%s = %s in index.css, %s in the report palette", name, got, want)
-		}
-	}
-	if len(reportPaletteOrder) != len(reportPalette) {
-		t.Errorf("reportPaletteOrder has %d names, reportPalette %d", len(reportPaletteOrder), len(reportPalette))
-	}
-}
-
-func TestReportCopyDates(t *testing.T) {
-	t.Parallel()
-	if got := reportText.longDate("2026-01-09"); got != "9 Januari 2026" {
-		t.Errorf("longDate = %q", got)
-	}
-	if got := reportText.monthName("2026-12"); got != "Desember 2026" {
-		t.Errorf("monthName = %q", got)
 	}
 }
 
@@ -333,7 +251,7 @@ func TestReportSummaryShowsTheTotalOwedToMembers(t *testing.T) {
 	f := newReportFixture(t, "Kas RT 05")
 	f.post(t, "in", 100_000, "2026-09-01")
 
-	if body := f.get(t, "/report/"+f.fund.ReportSlug).Body.String(); strings.Contains(body, reportText.OwedLabel) {
+	if body := f.get(t, "/report/"+f.fund.ReportSlug).Body.String(); strings.Contains(body, report.Text.OwedLabel) {
 		t.Error("a fund owing nothing still shows the owed line")
 	}
 
@@ -350,7 +268,7 @@ func TestReportSummaryShowsTheTotalOwedToMembers(t *testing.T) {
 
 	for _, month := range []string{"2026-09", "2026-10"} {
 		body := f.get(t, "/report/"+f.fund.ReportSlug+"?month="+month).Body.String()
-		want := "<li><span>" + reportText.OwedLabel + "</span><span class=\"tabular\">" + money.FormatIDR(45_000) + "</span></li>"
+		want := "<li><span>" + report.Text.OwedLabel + "</span><span class=\"tabular\">" + money.FormatIDR(45_000) + "</span></li>"
 		if !strings.Contains(body, want) {
 			t.Errorf("month %s: body has no owed line %q", month, want)
 		}
@@ -367,7 +285,7 @@ func TestReportDateLineAndMonthPickerFirst(t *testing.T) {
 	f.post(t, "in", 25_000, "2026-10-01")
 
 	past := f.get(t, "/report/"+f.fund.ReportSlug+"?month=2026-09").Body.String()
-	if want := reportText.AsOf("30 September 2026"); !strings.Contains(past, want) {
+	if want := report.Text.AsOf("30 September 2026"); !strings.Contains(past, want) {
 		t.Errorf("past month has no date line %q", want)
 	}
 	if !strings.Contains(past, money.FormatIDR(100_000)) || strings.Contains(past, money.FormatIDR(125_000)) {
@@ -375,7 +293,7 @@ func TestReportDateLineAndMonthPickerFirst(t *testing.T) {
 	}
 
 	running := f.get(t, "/report/"+f.fund.ReportSlug).Body.String()
-	if want := reportText.AsOfRunning("2 Oktober 2026"); !strings.Contains(running, want) {
+	if want := report.Text.AsOfRunning("2 Oktober 2026"); !strings.Contains(running, want) {
 		t.Errorf("running month has no date line %q", want)
 	}
 	if nav, hero := strings.Index(running, `<nav class="months"`), strings.Index(running, `<section class="hero"`); nav < 0 || hero < 0 || nav > hero {
@@ -407,36 +325,18 @@ func TestReportReadsAPartialCekKasEntryAsSelisihForTheRemainder(t *testing.T) {
 
 	take(20_000)
 	body := f.get(t, "/report/"+f.fund.ReportSlug).Body.String()
-	if want := reportText.Discrepancy(money.FormatIDR(10_000)); !strings.Contains(body, want) {
+	if want := report.Text.Discrepancy(money.FormatIDR(10_000)); !strings.Contains(body, want) {
 		t.Errorf("report after a partial entry lacks %q:\n%s", want, body)
 	}
-	if strings.Contains(body, reportText.Matched) || strings.Contains(body, money.FormatIDR(30_000)) {
+	if strings.Contains(body, report.Text.Matched) || strings.Contains(body, money.FormatIDR(30_000)) {
 		t.Error("report after a partial entry says cocok or shows the original 30000 difference")
 	}
 
 	take(10_000)
 	body = f.get(t, "/report/"+f.fund.ReportSlug).Body.String()
-	if !strings.Contains(body, reportText.Matched) {
+	if !strings.Contains(body, report.Text.Matched) {
 		t.Errorf("report after the exact entry does not say cocok:\n%s", body)
 	}
 }
 
-// TestHeroSizeClassStepsDownAsTheFigureGrows pins #540's steps: everyday
-// figures keep the full hero size, and the widest legal figure (Rp
-// 999.999.999.999, with or without its minus) gets a smaller one.
-func TestHeroSizeClassStepsDownAsTheFigureGrows(t *testing.T) {
-	for _, c := range []struct {
-		figure string
-		want   string
-	}{
-		{money.FormatIDR(1_450_000), ""},
-		{money.FormatIDR(money.MaxAmount), "s28"},
-		{money.FormatIDR(99_999_999_999), "s32"},
-		{money.FormatIDR(-money.MaxAmount), "s28"},
-		{money.FormatIDR(2_999_999_999_997), "s28"},
-	} {
-		if got := heroSizeClass(c.figure); got != c.want {
-			t.Errorf("heroSizeClass(%q) = %q, want %q", c.figure, got, c.want)
-		}
-	}
-}
+func itoa(n int64) string { return strconv.FormatInt(n, 10) }

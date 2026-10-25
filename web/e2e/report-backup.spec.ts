@@ -15,7 +15,7 @@ import { expect, logIn, seedPassword, test } from './fixtures'
 // the point of the two refusals is that the fund is exactly as it was.
 //
 // The report is server-rendered Go, so its strings are not in copy/id.ts; each
-// literal below names the reportText field in internal/http/report_copy.go it
+// literal below names the Text field in internal/report/report_copy.go it
 // mirrors. Serial, one story on the seeded fixture (Tunai Rp 1.000.000, Kas
 // Utama, Warga Satu and Warga Dua on Reguler Rp 50.000, one open envelope).
 // Rows are seeded over the API after logging in; the report itself is public.
