@@ -101,6 +101,32 @@ func TestMapLedgerErrorMapsSentinelsToStatusAndCode(t *testing.T) {
 	}
 }
 
+// The constraint refusals the ledger names answer with the sentences the
+// driver-error mapping gave the same routes before they moved below HTTP: the
+// SPA and the API's readers hold the message too.
+func TestLedgerConstraintRefusalsKeepTheirWireMessages(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		err     error
+		message string
+	}{
+		{ledger.ErrDataConstraint, "The request violates a data constraint."},
+		{ledger.ErrValueTaken, "This value conflicts with an existing record."},
+		{ledger.ErrReferenceMissing, "The request references a record that does not exist."},
+		{ledger.ErrReferencedByOtherRecords, "This record is referenced by other data and cannot be deleted."},
+		{ledger.ErrPurposeNotRenameable, "The fund's Kas Utama purpose cannot be renamed."},
+	}
+	for _, tc := range cases {
+		t.Run(tc.err.Error(), func(t *testing.T) {
+			rec := httptest.NewRecorder()
+			mapLedgerError(rec, testLogger(), fmt.Errorf("deleting account: %w", tc.err))
+			if got := decodeError(t, rec); got.Message != tc.message {
+				t.Errorf("message = %q, want %q", got.Message, tc.message)
+			}
+		})
+	}
+}
+
 // TestMapAuthErrorMapsSentinelsToStatusAndCode is mapLedgerError's twin for
 // internal/auth. The unrecognized arm matters most: a database fault out of
 // Register must read 500, never the 409 telling the treasurer an account
@@ -257,59 +283,6 @@ func TestMapSQLiteErrorMapsAGenuineForeignKeyViolation(t *testing.T) {
 	}
 }
 
-// TestMapSQLiteDeleteErrorMapsAGenuineForeignKeyViolationTo409 is the foreign-
-// key test above for a DELETE: the same SQLITE_CONSTRAINT_FOREIGNKEY read the
-// opposite way (#81).
-func TestMapSQLiteDeleteErrorMapsAGenuineForeignKeyViolationTo409(t *testing.T) {
-	t.Parallel()
-	sqlDB := testStoreDB(t)
-	q := store.New(sqlDB)
-	ctx := context.Background()
-
-	fund, err := q.CreateFund(ctx, store.CreateFundParams{
-		Name: "Test Fund", Currency: "IDR", TimeZone: "Asia/Jakarta", ReportSlug: "abcdefghijklmnopqrstuv", CreatedAt: 1,
-	})
-	if err != nil {
-		t.Fatalf("CreateFund() = %v, want no error", err)
-	}
-	if _, err := q.CreateMember(ctx, store.CreateMemberParams{JoinedOn: "2000-01-01", FundID: fund.ID, Name: "Jane", CreatedAt: 1}); err != nil {
-		t.Fatalf("CreateMember() = %v, want no error", err)
-	}
-
-	// fund is referenced by member.fund_id (plain FOREIGN KEY): deleting it under
-	// a real member is a genuine "row exists, real data points at it" violation.
-	_, err = sqlDB.ExecContext(ctx, "DELETE FROM fund WHERE id = ?", fund.ID)
-	if err == nil {
-		t.Fatalf("DELETE FROM fund with a real member = nil error, want a FOREIGN KEY violation")
-	}
-
-	rec := httptest.NewRecorder()
-	mapSQLiteDeleteError(rec, testLogger(), err)
-	if rec.Code != 409 {
-		t.Fatalf("status = %d, want 409", rec.Code)
-	}
-	got := decodeError(t, rec)
-	if got.Code != "referenced_by_other_records" {
-		t.Errorf("code = %q, want %q", got.Code, "referenced_by_other_records")
-	}
-}
-
-// TestMapSQLiteDeleteErrorDelegatesNonForeignKeyViolations: every other class
-// (CHECK, UNIQUE, no-rows, unrecognized) behaves as mapSQLiteError, so the
-// DELETE override is scoped to the one class it exists for.
-func TestMapSQLiteDeleteErrorDelegatesNonForeignKeyViolations(t *testing.T) {
-	t.Parallel()
-	rec := httptest.NewRecorder()
-	mapSQLiteDeleteError(rec, testLogger(), sql.ErrNoRows)
-	if rec.Code != 404 {
-		t.Fatalf("status = %d, want 404", rec.Code)
-	}
-	got := decodeError(t, rec)
-	if got.Code != "not_found" {
-		t.Errorf("code = %q, want %q", got.Code, "not_found")
-	}
-}
-
 func TestMapSQLiteErrorMapsNoRowsToNotFound(t *testing.T) {
 	t.Parallel()
 	rec := httptest.NewRecorder()
@@ -343,10 +316,9 @@ func TestMapErrorsAnswerACanceledRequestWith499AndNoErrorLine(t *testing.T) {
 	t.Parallel()
 	canceled := fmt.Errorf("listing rates: %w", context.Canceled)
 	mappers := map[string]func(http.ResponseWriter, *slog.Logger, error){
-		"mapLedgerError":       mapLedgerError,
-		"mapAuthError":         mapAuthError,
-		"mapSQLiteError":       mapSQLiteError,
-		"mapSQLiteDeleteError": mapSQLiteDeleteError,
+		"mapLedgerError": mapLedgerError,
+		"mapAuthError":   mapAuthError,
+		"mapSQLiteError": mapSQLiteError,
 	}
 	for name, mapErr := range mappers {
 		t.Run(name, func(t *testing.T) {
@@ -429,6 +401,11 @@ func TestEveryLedgerErrorKeepsItsWireStatusAndCode(t *testing.T) {
 		ledger.ErrDuesRateSuperseded:                    {409, "dues_rate_superseded"},
 		ledger.ErrDuesRateMonthTaken:                    {409, "unique_violation"},
 		ledger.ErrIdempotencyKeyReused:                  {409, "idempotency_key_reused"},
+		ledger.ErrDataConstraint:                        {400, "check_violation"},
+		ledger.ErrValueTaken:                            {409, "unique_violation"},
+		ledger.ErrReferenceMissing:                      {400, "invalid_argument"},
+		ledger.ErrReferencedByOtherRecords:              {409, "referenced_by_other_records"},
+		ledger.ErrPurposeNotRenameable:                  {409, "purpose_not_renameable"},
 	}
 	errs := ledger.Errors()
 	if len(errs) != len(want) {

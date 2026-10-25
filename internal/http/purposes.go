@@ -3,7 +3,6 @@ package http
 import (
 	"net/http"
 	"strconv"
-	"time"
 
 	"github.com/go-chi/chi/v5"
 
@@ -91,14 +90,9 @@ func (a *api) createPassThroughPurpose(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	purpose, err := a.queries.CreatePurpose(r.Context(), store.CreatePurposeParams{
-		FundID:    fund.ID,
-		Kind:      string(ledger.PurposeKindPassThrough),
-		Name:      req.Name,
-		CreatedAt: time.Now().Unix(),
-	})
+	purpose, err := a.ledger.CreatePassThroughPurpose(r.Context(), ledger.CreatePassThroughPurposeParams{FundID: fund.ID, Name: req.Name})
 	if err != nil {
-		mapSQLiteError(w, a.log(r), err)
+		mapLedgerError(w, a.log(r), err)
 		return
 	}
 
@@ -137,8 +131,9 @@ func (a *api) resolveRenameablePurpose(w http.ResponseWriter, r *http.Request) (
 		return store.Purpose{}, false
 	}
 	if purpose.Kind == string(ledger.PurposeKindMain) {
-		writeAPIError(w, http.StatusConflict, "purpose_not_renameable",
-			"The fund's Kas Utama purpose cannot be renamed.")
+		// Ahead of decoding the body, so Kas Utama answers 409 whatever it holds;
+		// the wire answer is the ledger's own refusal.
+		mapLedgerError(w, a.log(r), ledger.ErrPurposeNotRenameable)
 		return store.Purpose{}, false
 	}
 	return purpose, true
@@ -163,7 +158,7 @@ type updatePurposeNameRequest struct {
 // An incidental's name lives on two rows (purpose.name and
 // incidental.occasion, see OpenIncidental), so that branch goes through
 // ledger.RenameIncidental to move both in one transaction; a pass-through is
-// a plain UPDATE on purpose alone.
+// a plain UPDATE on purpose alone (ledger.RenamePurpose).
 func (a *api) updatePurposeName(w http.ResponseWriter, r *http.Request) {
 	purpose, ok := a.resolveRenameablePurpose(w, r)
 	if !ok {
@@ -198,9 +193,9 @@ func (a *api) updatePurposeName(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	updated, err := a.queries.UpdatePurposeName(r.Context(), store.UpdatePurposeNameParams{ID: purpose.ID, Name: *req.Name})
+	updated, err := a.ledger.RenamePurpose(r.Context(), ledger.RenamePurposeParams{FundID: purpose.FundID, PurposeID: purpose.ID, Name: *req.Name})
 	if err != nil {
-		mapSQLiteError(w, a.log(r), err)
+		mapLedgerError(w, a.log(r), err)
 		return
 	}
 

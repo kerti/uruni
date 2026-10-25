@@ -21,6 +21,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/kerti/uruni/internal/backup"
+	"github.com/kerti/uruni/internal/ledger"
 	"github.com/kerti/uruni/internal/receipt"
 	"github.com/kerti/uruni/internal/store"
 )
@@ -177,19 +178,18 @@ func (a *api) processAndStoreReceipt(w http.ResponseWriter, r *http.Request, fun
 		return
 	}
 
-	receipt, err := a.queries.CreateReceipt(r.Context(), store.CreateReceiptParams{
+	receipt, err := a.ledger.CreateReceipt(r.Context(), ledger.CreateReceiptParams{
 		FundID:          fundID,
 		TransactionID:   transactionID,
 		ReimbursementID: reimbursementID,
 		Path:            filename,
-		UploadedAt:      time.Now().Unix(),
 	})
 	if err != nil {
 		// The file is on disk with no row naming it. Unlike the orphan ADR-011
 		// accepts from a delete (reachable through its id until then), this one never
 		// had an id, so best-effort cleanup here is the only chance to remove it.
 		_ = os.Remove(filepath.Join(a.uploadsDir, filename))
-		mapSQLiteError(w, a.log(r), err)
+		mapLedgerError(w, a.log(r), err)
 		return
 	}
 
@@ -398,8 +398,8 @@ func (a *api) deleteReceipt(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := a.queries.DeleteReceipt(r.Context(), receipt.ID); err != nil {
-		mapSQLiteDeleteError(w, a.log(r), err)
+	if err := a.ledger.DeleteReceipt(r.Context(), ledger.DeleteReceiptParams{FundID: receipt.FundID, ReceiptID: receipt.ID}); err != nil {
+		mapLedgerError(w, a.log(r), err)
 		return
 	}
 

@@ -25,9 +25,9 @@ import (
 // api holds what every /api handler needs, so a route is a method rather than
 // a closure repeated at each registration.
 //
-// It holds both a ledger and a plain Querier: routes with a derived invariant
-// go through the ledger, and the direct-CRUD routes ADR-027 keeps out of it
-// (members, dues tiers, dues rates) call queries themselves.
+// It holds both a ledger and a plain Querier: every write goes through the
+// ledger, and a handler reads through queries when a read is one SELECT with no
+// derived figure (ADR-027).
 type api struct {
 	ledger  *ledger.Ledger
 	queries store.Querier
@@ -150,12 +150,11 @@ func (a *api) routes(r chi.Router) {
 		r.Patch("/fund", a.updateFund)
 		r.Post("/fund/report-slug", a.replaceReportSlug)
 
-		// The fund's structure. PATCH and DELETE are direct-CRUD (ADR-027), like
-		// members below; POST goes through the ledger (#230) because it may carry an
-		// opening balance that must post in the same transaction as the account.
-		// Purposes are read-only here except the one kind a treasurer creates
-		// (pass-through); the other kinds are written by SetUpFund and
-		// OpenIncidental. PATCH renames any kind except the fund's 'main' row (#264).
+		// The fund's structure. A POST may carry an opening balance that must post in
+		// the same transaction as the account, so it is keyed (ADR-043). Purposes are
+		// read-only here except the one kind a treasurer creates (pass-through); the
+		// other kinds are written by SetUpFund and OpenIncidental. PATCH renames any
+		// kind except the fund's 'main' row.
 		r.With(a.keyed).Post("/accounts", a.createAccount)
 		r.Get("/accounts", a.listAccounts)
 		r.Patch("/accounts/{id}", a.updateAccount)
@@ -164,9 +163,8 @@ func (a *api) routes(r chi.Router) {
 		r.Post("/pass-through-purposes", a.createPassThroughPurpose)
 		r.Patch("/purposes/{id}", a.updatePurposeName)
 
-		// The roster. Direct-CRUD (ADR-027): no derived invariant, so these call
-		// a.queries rather than a.ledger. DELETE is only for a duplicate added at
-		// setup; a member who leaves gets inactive_on, a PATCH.
+		// The roster. DELETE is only for a duplicate added at setup; a member who
+		// leaves gets inactive_on, a PATCH.
 		r.Post("/members", a.createMember)
 		r.Get("/members", a.listMembers)
 		r.Patch("/members/{id}", a.updateMember)

@@ -377,7 +377,7 @@ Rejected: a purpose dropdown on the Transaksi tab. It is more useful standalone,
 
 Rejected: refusing any tier that still has rates, leaving her to delete each one by hand first. It is simpler on the server and reads as busywork for a golongan nobody was ever charged under.
 
-`Ledger.DeleteDuesTier` owns it, which is the one place in the dues-tier routes that is not direct CRUD ([ADR-027](./ADR/027-ledger-domain-boundary.md)): the two statements have to share a transaction, and the ledger is what has one. No pre-check for members — the foreign key is the check, and a `COUNT(*)` first would only race it.
+`Ledger.DeleteDuesTier` owns it, which is the one dues-tier write that runs two statements ([ADR-027](./ADR/027-ledger-domain-boundary.md)): the two statements have to share a transaction, and the ledger is what has one. No pre-check for members — the foreign key is the check, and a `COUNT(*)` first would only race it.
 
 ## An amplop's name is a label, not the envelope itself (decided 2026-09-17)
 

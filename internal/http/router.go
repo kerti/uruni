@@ -57,9 +57,8 @@ type Deps struct {
 	// Ledger and Queries are both passed: store.Queries is a stateless wrapper
 	// over the shared *sql.DB (ADR-004's single connection), so a second
 	// store.New(sqlDB) beside ledger.New(sqlDB) costs nothing and avoids a
-	// Querier accessor on ADR-027's boundary. Direct-CRUD routes (members,
-	// accounts, purposes - ADR-027's "no domain wrapper" list) call Queries;
-	// routes with a derived invariant call Ledger.
+	// Querier accessor on ADR-027's boundary. Reads that are one SELECT call
+	// Queries; every write calls Ledger.
 	Ledger  *ledger.Ledger
 	Queries store.Querier
 

@@ -78,10 +78,8 @@ func toAccountResponse(a store.Account) accountResponse {
 // SetUpFund creates accounts: a treasurer who opens a second bank account, or
 // finds setup under-counted, needs this afterward.
 //
-// #230 moved it off the direct-CRUD path of createMember and createDuesTier:
-// an optional opening balance rides the request, and Ledger.CreateAccount
-// posts it in the account's transaction, so mapLedgerError (not
-// mapSQLiteError) answers a refusal.
+// An optional opening balance rides the request, and Ledger.CreateAccount
+// posts it in the account's transaction.
 //
 // Keyed (ADR-043).
 func (a *api) createAccount(w http.ResponseWriter, r *http.Request) {
@@ -269,16 +267,16 @@ func (a *api) updateAccount(w http.ResponseWriter, r *http.Request) {
 // deleteAccount is DELETE /api/accounts/{id}: for a never-used duplicate added
 // at setup or by mistake, not a location used then retired (inactive_on, see
 // updateAccount). No pre-check for referencing rows: the composite foreign
-// keys refuse it, and a COUNT(*) first would only race them. Mirrors
-// deleteMember.
+// keys refuse it (409 referenced_by_other_records), and a COUNT(*) first would
+// only race them. Mirrors deleteMember.
 func (a *api) deleteAccount(w http.ResponseWriter, r *http.Request) {
 	account, ok := a.resolveAccount(w, r)
 	if !ok {
 		return
 	}
 
-	if err := a.queries.DeleteAccount(r.Context(), account.ID); err != nil {
-		mapSQLiteDeleteError(w, a.log(r), err)
+	if err := a.ledger.DeleteAccount(r.Context(), ledger.DeleteAccountParams{FundID: account.FundID, AccountID: account.ID}); err != nil {
+		mapLedgerError(w, a.log(r), err)
 		return
 	}
 

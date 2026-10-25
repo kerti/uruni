@@ -189,24 +189,6 @@ func mapAuthError(w http.ResponseWriter, logger *slog.Logger, err error) {
 	}
 }
 
-// mapLedgerDeleteError is mapLedgerError for a DELETE through the ledger,
-// mirroring the mapSQLiteError / mapSQLiteDeleteError pair:
-// SQLITE_CONSTRAINT_FOREIGNKEY means "you named a row that doesn't exist" on
-// a write and "real data still points at this row" on a delete (400 and 409,
-// one result code).
-//
-// The ledger sentinels are checked first and identically, so a settled claim
-// is still its named 409.
-func mapLedgerDeleteError(w http.ResponseWriter, logger *slog.Logger, err error) {
-	var sqliteErr *sqlite.Error
-	if errors.As(err, &sqliteErr) && sqliteErr.Code() == sqlite3.SQLITE_CONSTRAINT_FOREIGNKEY {
-		writeAPIError(w, http.StatusConflict, "referenced_by_other_records",
-			"This record is referenced by other data and cannot be deleted.")
-		return
-	}
-	mapLedgerError(w, logger, err)
-}
-
 // mapSQLiteError answers an error from a direct-CRUD route, one calling
 // store.Queries rather than internal/ledger, so none of ADR-027's sentinels
 // apply. It reads the driver's result code.
@@ -244,20 +226,4 @@ func mapSQLiteError(w http.ResponseWriter, logger *slog.Logger, err error) {
 
 	logger.Error("unhandled sqlite error", "error", err)
 	writeAPIError(w, http.StatusInternalServerError, "internal_error", "Something went wrong.")
-}
-
-// mapSQLiteDeleteError is mapSQLiteError for a DELETE. SQLITE_CONSTRAINT_FOREIGNKEY
-// has two opposite meanings and one result code, so the handler distinguishes
-// them: on a create or update, "you named a row that doesn't exist" (400); on
-// a delete, the row exists and real data points at it (a member with posted
-// transactions), a conflict. Every other class means the same either way and
-// delegates unchanged.
-func mapSQLiteDeleteError(w http.ResponseWriter, logger *slog.Logger, err error) {
-	var sqliteErr *sqlite.Error
-	if errors.As(err, &sqliteErr) && sqliteErr.Code() == sqlite3.SQLITE_CONSTRAINT_FOREIGNKEY {
-		writeAPIError(w, http.StatusConflict, "referenced_by_other_records",
-			"This record is referenced by other data and cannot be deleted.")
-		return
-	}
-	mapSQLiteError(w, logger, err)
 }
