@@ -15,6 +15,7 @@ import { formatIDR } from '@/lib/money'
 import { createDuesRate, deleteDuesRate, deleteDuesTier, listDuesTiers, renameDuesTier, updateDuesRate } from '@/lib/setup'
 import { rateSpan } from '@/lib/rateSpan'
 import { useApi } from '@/lib/useApi'
+import { errorCode } from '@/lib/api'
 import { useResetWhen } from '@/lib/useResetWhen'
 import type { DuesRate, DuesTier } from '@/lib/setup'
 
@@ -236,7 +237,7 @@ function RateRow({
   const busy = state.status === 'loading'
 
   // A refused write on an id that no longer stands: reload the list, show the notice.
-  const supersededError = state.status === 'error' && state.error?.code === 'dues_rate_superseded'
+  const supersededError = state.status === 'error' && errorCode(state.error) === 'dues_rate_superseded'
   useEffect(() => {
     if (supersededError) onSuperseded()
     // oxlint-disable-next-line react/exhaustive-deps -- once per refusal; onSuperseded is a fresh closure every render

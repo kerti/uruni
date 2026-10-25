@@ -35,6 +35,7 @@ import { useRefetchKey } from '@/lib/useDialogParam'
 import type { SessionStatus, AuthUser } from '@/lib/auth'
 import type { Fund } from '@/lib/setup'
 import { copy } from '@/copy/id'
+import { errorCode } from '@/lib/api'
 
 /**
  * Router root for the whole SPA.
@@ -238,7 +239,7 @@ function AuthedGate({ onLoggedOut }: { onLoggedOut: () => void }) {
   }
 
   if (state.status === 'error') {
-    if (state.error?.code === 'not_found') {
+    if (errorCode(state.error) === 'not_found') {
       return <Setup onDone={() => void run(getFund)} />
     }
     return (

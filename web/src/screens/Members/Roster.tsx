@@ -12,7 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import Loading from '@/components/states/Loading'
 import ErrorState from '@/components/states/ErrorState'
 import { copy } from '@/copy/id'
-import { ApiError } from '@/lib/api'
+import { ApiError, errorCode } from '@/lib/api'
 import { todayISODate, dateBounds, periodBounds } from '@/lib/dates'
 import { parseDialogTarget } from '@/lib/dialogTarget'
 import { formatIDR } from '@/lib/money'
@@ -607,7 +607,7 @@ function EditMemberDialog({
               ErrorState. */}
           {state.status === 'error' &&
             state.error &&
-            (state.error instanceof ApiError && state.error.code === 'referenced_by_other_records' ? (
+            (errorCode(state.error) === 'referenced_by_other_records' ? (
               <p role="alert" className="text-sm text-attention-text">
                 {text.deleteRefused}
               </p>

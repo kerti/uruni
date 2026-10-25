@@ -773,7 +773,7 @@ func TestGetMembersQMatchesCaseInsensitiveSubstringServerSide(t *testing.T) {
 	}
 }
 
-// A malformed cursor is 400 invalid_argument, as decodeTransactionsCursor
+// A malformed cursor is 400 invalid_argument, as decodeDateCursor
 // gives GET /api/transactions (#225).
 func TestGetMembersMalformedCursorReturns400InvalidArgument(t *testing.T) {
 	t.Parallel()

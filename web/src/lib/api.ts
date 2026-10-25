@@ -26,6 +26,11 @@ export class ApiError extends Error {
   }
 }
 
+/** The envelope code of a thrown value, or undefined when it is not an ApiError. */
+export function errorCode(err: unknown): string | undefined {
+  return err instanceof ApiError ? err.code : undefined
+}
+
 /** The one code used for a request that never got a response. */
 export const NETWORK_ERROR_CODE = 'network_error'
 

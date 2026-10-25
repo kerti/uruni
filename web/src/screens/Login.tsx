@@ -11,6 +11,7 @@ import { Label } from '@/components/ui/label'
 import ErrorState from '@/components/states/ErrorState'
 import { login } from '@/lib/auth'
 import { useApi } from '@/lib/useApi'
+import { errorCode } from '@/lib/api'
 import { copy } from '@/copy/id'
 import type { AuthUser } from '@/lib/auth'
 
@@ -42,7 +43,7 @@ export default function Login({ onLoggedIn }: { onLoggedIn: (user: AuthUser) => 
     })
   }
 
-  const code = state.status === 'error' ? state.error?.code : undefined
+  const code = state.status === 'error' ? errorCode(state.error) : undefined
 
   return (
     <AuthChrome>

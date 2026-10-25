@@ -12,7 +12,7 @@ import Loading from '@/components/states/Loading'
 import ErrorState from '@/components/states/ErrorState'
 import { copy } from '@/copy/id'
 import { listAccounts } from '@/lib/accounts'
-import { ApiError, settleUncertainWrite } from '@/lib/api'
+import { ApiError, errorCode, settleUncertainWrite } from '@/lib/api'
 import { dateBounds } from '@/lib/dates'
 import { listPurposes } from '@/lib/purposes'
 import { getReimbursement, updateReimbursement } from '@/lib/reimbursements'
@@ -53,7 +53,7 @@ export default function Correct({ claimId, onDone, onCancel }: { claimId: number
         async () => {
           const [claim, accounts, members, purposes] = await Promise.all([
             getReimbursement(claimId).catch((err: unknown) => {
-              if (err instanceof ApiError && err.code === 'not_found') return null
+              if (errorCode(err) === 'not_found') return null
               throw err
             }),
             listAccounts(),
