@@ -1,8 +1,10 @@
-import type { APIRequestContext, Page } from '@playwright/test'
+import type { APIRequestContext, Locator, Page } from '@playwright/test'
 
 import { copy } from '../src/copy/id'
+import { formatPeriod } from '../src/lib/dates'
+import { formatIDR } from '../src/lib/money'
 import { expect, logIn, test } from './fixtures'
-import { chooseOption } from './popper'
+import { chooseOption, popperContent } from './popper'
 
 // Finding things again. Riwayat's four tabs (search, the Transaksi filter
 // dialog and its chips, paging), the roster (search, paging, the arrears
@@ -22,6 +24,27 @@ type Named = { id: number; name: string }
 // Today in Asia/Jakarta, the one clock the app reads (internal/tz).
 function jakartaToday(): string {
   return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Jakarta' }).format(new Date())
+}
+
+// A month before today's, as YYYY-MM (Asia/Jakarta, like jakartaToday).
+function previousMonth(): string {
+  const [y, m] = jakartaToday().split('-').map(Number)
+  const d = new Date(Date.UTC(y, m - 2, 1))
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`
+}
+
+// Opens a month grid by its field, steps to the period's year and taps the
+// month (as tier-change.spec.ts).
+async function pickMonth(page: Page, field: Locator, period: string) {
+  await field.click()
+  const grid = popperContent(page)
+  const target = Number(period.slice(0, 4))
+  for (let guard = 0; guard < 40; guard++) {
+    const shown = Number(await grid.getByText(/^\d{4}$/).textContent())
+    if (shown === target) break
+    await grid.getByRole('button', { name: shown > target ? copy.dateField.previousYear : copy.dateField.nextYear }).click()
+  }
+  await grid.getByRole('button', { name: formatPeriod(period) }).click()
 }
 
 async function api<T>(request: APIRequestContext, method: 'GET' | 'POST', path: string, data?: unknown): Promise<T> {
@@ -198,6 +221,41 @@ test.describe('browsing Riwayat, the roster and the locations', () => {
     await expect(rows(page)).toHaveCount(PAGE)
   })
 
+  test('Riwayat > Transaksi: the Bulan picker in the filter dialog, and the deep link by pos', async ({ page }) => {
+    await logIn(page)
+    const request = page.context().request
+    const text = copy.history.transactions
+    const thisMonth = jakartaToday().slice(0, 7)
+
+    // The picker, opened by its param: every row was posted today, so this
+    // month keeps a full page.
+    await page.goto('/history/transactions?edit=filter')
+    const dialog = page.getByRole('dialog', { name: text.filterHeading })
+    await expect(dialog).toBeVisible()
+    await pickMonth(page, dialog.getByLabel(text.filterMonth), thisMonth)
+    await dialog.getByRole('button', { name: text.filterApply }).click()
+    await expect(dialog).toBeHidden()
+    await expect(page).toHaveURL(new RegExp(`[?&]month=${thisMonth}`))
+    await expect(page.getByText(text.monthFilterLabel(formatPeriod(thisMonth)))).toBeVisible()
+    await expect(rows(page)).toHaveCount(PAGE)
+
+    // The month before has nothing in it.
+    const before = previousMonth()
+    await page.getByRole('button', { name: text.filterButtonActive(1) }).click()
+    await pickMonth(page, dialog.getByLabel(text.filterMonth), before)
+    await dialog.getByRole('button', { name: text.filterApply }).click()
+    await expect(page.getByText(text.monthFilterLabel(formatPeriod(before)))).toBeVisible()
+    await expect(rows(page)).toHaveCount(0)
+
+    // The deep link by pos: ?purpose=<id> alone narrows to that pos.
+    const amplop = await byName(request, '/api/purposes', 'purposes', envelope)
+    await page.goto(`/history/transactions?purpose=${amplop}`)
+    await expect(noteRow(page, 'Sumbangan halal bihalal')).toBeVisible()
+    await expect(rows(page)).toHaveCount(1)
+    await expect(page.getByText(text.purposeFilterLabel(envelope))).toBeVisible()
+    await expect(page.getByRole('button', { name: text.filterButtonActive(1) })).toBeVisible()
+  })
+
   test('Riwayat > Iuran, Talangan and Cek kas: search and paging', async ({ page }) => {
     await logIn(page)
     await page.goto('/')
@@ -288,10 +346,14 @@ test.describe('browsing Riwayat, the roster and the locations', () => {
     await page.getByRole('button', { name: text.editAria('Bank Uji Coba') }).click()
     let dialog = page.getByRole('dialog', { name: text.editTitle })
     await dialog.getByLabel(text.nameLabel).fill('Bank Uji Baru')
+    // The fixture's bank becomes a cash box: the kind is a label on the
+    // location, so it changes with no history to stop it.
+    await chooseOption(page, dialog.getByRole('combobox', { name: text.kindLabel }), text.kindCash)
     await dialog.getByRole('button', { name: text.save }).click()
     await expect(dialog).toBeHidden()
     const row = page.getByRole('button', { name: text.editAria('Bank Uji Baru') })
     await expect(row).toBeVisible()
+    await expect(row).toContainText(text.kindCash)
 
     await row.click()
     dialog = page.getByRole('dialog', { name: text.editTitle })
@@ -312,5 +374,33 @@ test.describe('browsing Riwayat, the roster and the locations', () => {
     await dialog.getByRole('button', { name: text.reinstate }).click()
     await expect(dialog).toBeHidden()
     await expect(row).not.toContainText(text.inactiveBadge)
+  })
+
+  test('locations: add a bank with an opening balance, and it shows on Beranda', async ({ page }) => {
+    await logIn(page)
+    await page.goto('/settings')
+    const text = copy.settings.locations
+    const name = 'Rekening Uji Awal'
+    const opening = 250_000
+
+    await page.getByRole('button', { name: text.add }).click()
+    const dialog = page.getByRole('dialog', { name: text.add })
+    await chooseOption(page, dialog.getByRole('combobox', { name: text.kindLabel }), text.kindBank)
+    await dialog.getByLabel(text.nameLabel).fill(name)
+    await dialog.getByLabel(text.openingBalanceLabel).fill(String(opening))
+    await dialog.getByRole('button', { name: text.add }).click()
+    await expect(dialog).toBeHidden()
+
+    // The list shows the new location with its kind.
+    const row = page.getByRole('button', { name: text.editAria(name) })
+    await expect(row).toBeVisible()
+    await expect(row).toContainText(text.kindBank)
+
+    // The opening balance is a real entry: Beranda carries it as the
+    // location's balance.
+    await page.goto('/')
+    await expect(page.getByText(copy.home.balanceHeading)).toBeVisible()
+    const balance = page.getByRole('listitem').filter({ has: page.getByText(name, { exact: true }) })
+    await expect(balance).toContainText(formatIDR(opening))
   })
 })

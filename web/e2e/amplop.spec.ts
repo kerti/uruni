@@ -151,12 +151,15 @@ test.describe('amplop in depth', () => {
     await expect(participant(page, 'Warga Dua')).toContainText(t.participation.states.notGiven)
   })
 
-  test('correct the occasion, the minimum and the recipients', async ({ page }) => {
+  test('correct the occasion, the target, the minimum and the recipients', async ({ page }) => {
     await logIn(page)
     await openFromBeranda(page, occasion)
     await page.getByRole('button', { name: t.actions.rename, exact: true }).click()
     const dialog = page.getByRole('dialog', { name: t.rename.heading })
     await dialog.getByLabel(t.rename.nameLabel).fill(renamed)
+    const target = dialog.getByLabel(t.open.targetLabel)
+    await target.fill('')
+    await target.fill('120000')
     const minimum = dialog.getByLabel(t.open.minimumLabel)
     await minimum.fill('')
     await minimum.fill('60000')
@@ -166,6 +169,8 @@ test.describe('amplop in depth', () => {
     await expect(page.getByText(t.rename.success)).toBeVisible()
 
     await expect(page.getByRole('heading', { name: renamed })).toBeVisible()
+    // The totals card reads the corrected target; what came in and went out stays.
+    await expectTotals(page, { target: 120_000, collected: 50_000, disbursed: 45_000, balance: 5_000 })
     await expect(page.getByText(t.participation.recipientsLine('Warga Satu'))).toBeVisible()
     // Warga Satu gave anyway, so the gift stays, under Sumbangan lain.
     await expect(page.getByText(t.participation.otherHeading)).toBeVisible()
