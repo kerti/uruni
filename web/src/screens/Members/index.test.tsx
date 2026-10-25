@@ -7,6 +7,7 @@ import Members from '@/screens/Members'
 import { copy } from '@/copy/id'
 import { openSelect } from '@/test/select'
 import type { DuesTier, DuesTierWithRates, Member } from '@/lib/setup'
+import { cardName } from '@/test/card'
 
 // Roster.tsx reads and writes `?q=`/`?edit=` through useSearchParams (ADR-032),
 // so this screen needs a Router in its tree even where a test never looks at
@@ -92,7 +93,7 @@ describe('Members screen', () => {
 
     renderMembers()
 
-    const card = await screen.findByRole('button', { name: copy.members.roster.editAria('Warga Satu') })
+    const card = await screen.findByRole('button', { name: cardName(copy.members.roster.editVerb, 'Warga Satu') })
     const renamedLine = copy.members.roster.tierRateLine('Pelaksana Muda', 'Rp 50.000')
     const staleLine = copy.members.roster.tierRateLine('Pelaksana', 'Rp 50.000')
     await waitFor(() => expect(within(card).getByText(renamedLine)).toBeInTheDocument())

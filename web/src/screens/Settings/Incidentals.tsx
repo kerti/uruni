@@ -143,13 +143,8 @@ function EnvelopeCards({
     <ul className="flex flex-col gap-2">
       {openOnes.map((envelope) => (
         <li key={envelope.purpose_id}>
-          <button
-            type="button"
-            aria-label={text.cardAria(envelope.occasion)}
-            onClick={() => onOpen(envelope.purpose_id)}
-            className={cardClass}
-          >
-            <span className="min-w-0 truncate font-medium">{envelope.occasion}</span>
+          <button type="button" onClick={() => onOpen(envelope.purpose_id)} className={cardClass}>
+            <span className="sr-only">{text.cardVerb}</span> <span className="min-w-0 truncate font-medium">{envelope.occasion}</span>
             <StatusBadge envelope={envelope} />
           </button>
         </li>
@@ -353,12 +348,8 @@ export function ClosedIncidentals({ onBack, onOpen }: { onBack: () => void; onOp
         <ul className="flex flex-col gap-2">
           {closed.map((envelope) => (
             <li key={envelope.purpose_id}>
-              <button
-                type="button"
-                aria-label={text.cardAria(envelope.occasion)}
-                onClick={() => onOpen(envelope.purpose_id)}
-                className={cardClass}
-              >
+              <button type="button" onClick={() => onOpen(envelope.purpose_id)} className={cardClass}>
+                <span className="sr-only">{text.cardVerb}</span>{' '}
                 <span className="flex min-w-0 flex-col">
                   <span className="truncate font-medium">{envelope.occasion}</span>
                   <span className="text-sm text-muted-foreground">{text.closedOn(formatIsoDate(envelope.closed_on))}</span>

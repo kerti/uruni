@@ -901,7 +901,9 @@ export const copy = {
       // "Ubah" lives on the dialog it opens rather than on a button beside the
       // card.
       editTitle: 'Ubah anggota',
-      editAria: (name: string) => `Ubah ${name}`,
+      // Read before the card's visible text (a visually hidden prefix), so the
+      // button's name is "Ubah <label> <value>" and holds every visible word.
+      editVerb: 'Ubah',
       save: 'Simpan',
       saving: 'Menyimpan…',
       cancel: 'Batal',
@@ -948,13 +950,15 @@ export const copy = {
       // lives on the dialog it opens. There is one kas, so the card never
       // needs to say which one.
       editTitle: 'Ubah nama kas',
-      editAria: (name: string) => `Ubah ${name}`,
+      // Read before the card's visible text (a visually hidden prefix), so the
+      // button's name is "Ubah <label> <value>" and holds every visible word.
+      editVerb: 'Ubah',
       // The fund's second setting (ADR-041): a card opening a dialog at
       // ?edit=fund:time_zone, showing the zone's label from copy.timeZone.options.
       zone: {
         editTitle: 'Ubah zona waktu',
         body: 'Dipakai untuk tanggal hari ini, pergantian bulan, dan laporan publik. Menggantinya tidak mengubah catatan yang sudah ada.',
-        editAria: (optionLabel: string) => `Ubah zona waktu, ${optionLabel}`,
+        editVerb: 'Ubah',
       },
     },
     // The treasurer's own login (#386; "user" as CONTEXT.md names the login, not
@@ -1029,7 +1033,9 @@ export const copy = {
       // The whole card is the edit affordance - no separate "Ubah" button, so
       // its label lives on the dialog it opens.
       editTitle: 'Ubah lokasi',
-      editAria: (name: string) => `Ubah ${name}`,
+      // Read before the card's visible text (a visually hidden prefix), so the
+      // button's name is "Ubah <label> <value>" and holds every visible word.
+      editVerb: 'Ubah',
       save: 'Simpan',
       saving: 'Menyimpan…',
       cancel: 'Batal',
@@ -1066,7 +1072,9 @@ export const copy = {
       // affordance, so "Ubah" is the dialog's title and the card's accessible
       // name, not a button beside it.
       editTitle: 'Ubah titipan',
-      editAria: (name: string) => `Ubah ${name}`,
+      // Read before the card's visible text (a visually hidden prefix), so the
+      // button's name is "Ubah <label> <value>" and holds every visible word.
+      editVerb: 'Ubah',
       save: 'Simpan',
       saving: 'Menyimpan…',
       cancel: 'Batal',
@@ -1083,7 +1091,7 @@ export const copy = {
       // neither the height for the second nor one unambiguous way out of
       // correcting a row inside it. The card still answers what it costs this
       // month without going in.
-      cardAria: (name: string) => `Atur ${name}`,
+      cardVerb: 'Atur',
       // The screen's way back. Pengaturan is where it was opened from, and the
       // only place it is reached from - as the envelope detail's back control.
       backToSettings: 'Kembali ke pengaturan',
@@ -1160,7 +1168,7 @@ export const copy = {
       // The dialog heading's word (copy.incidentals.open.heading) - one word
       // for "start a new envelope", not two.
       add: 'Buka amplop',
-      cardAria: (occasion: string) => `Lihat ${occasion}`,
+      cardVerb: 'Lihat',
     },
     // The whole fund as one file (ADR-012), plus - ADR-013 - the list of
     // copies the server already keeps once a day. Two things: download now
@@ -1191,7 +1199,7 @@ export const copy = {
       empty: 'Belum ada cadangan otomatis.',
       // The row's download control - plain ink, not a button per row (review
       // standard against an outlined button on every row) - so it needs an
-      // aria-label naming which dump it downloads, as Incidentals' cardAria
+      // aria-label naming which dump it downloads, as any icon-only control
       // does for its dense list.
       downloadRowAria: (kind: string, date: string) => `Unduh cadangan ${kind} ${date}`,
       // The row's "pulihkan" control, plain ink beside the download one,

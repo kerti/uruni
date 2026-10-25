@@ -5,6 +5,7 @@ import { formatPeriod } from '../src/lib/dates'
 import { formatIDR } from '../src/lib/money'
 import { expect, logIn, test } from './fixtures'
 import { chooseOption, popperContent } from './popper'
+import { cardButton } from './card'
 
 // ADR-040: a tier is stated "from a month", and a rate is corrected with its
 // span named. One member is promoted from Reguler (Rp 50.000) to Senior
@@ -108,7 +109,7 @@ test.describe('a tier change and a rate correction', () => {
     await logIn(page)
     await page.goto('/members')
     const text = copy.members.roster
-    await page.getByRole('button', { name: text.editAria(member) }).click()
+    await cardButton(page, text.editVerb, member).click()
     const dialog = page.getByRole('dialog', { name: text.editTitle })
 
     await expect(dialog.getByLabel(text.tierFromLabel)).toHaveCount(0)
@@ -118,7 +119,7 @@ test.describe('a tier change and a rate correction', () => {
     await pickMonth(page, dialog.getByLabel(text.tierFromLabel), promoted)
     await dialog.getByRole('button', { name: text.save }).click()
     await expect(dialog).toBeHidden()
-    await expect(page.getByRole('button', { name: text.editAria(member) })).toContainText('Senior')
+    await expect(cardButton(page, text.editVerb, member)).toContainText('Senior')
   })
 
   test('Iuran: the earlier month keeps the old amount, the promoted month has the new one', async ({ page }) => {

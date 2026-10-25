@@ -102,11 +102,10 @@ export default function DuesTiers() {
               <li key={tier.id}>
                 <button
                   type="button"
-                  aria-label={text.cardAria(tier.name)}
                   onClick={() => navigate(`/dues-tiers?tier=${tier.id}`)}
                   className="flex min-h-11 w-full items-center justify-between gap-3 rounded-lg bg-card px-4 py-3 text-left shadow-card ring-1 ring-foreground/10 select-none transition-colors hover:bg-muted/40"
                 >
-                  <span className="min-w-0 truncate font-medium">{tier.name}</span>
+                  <span className="sr-only">{text.cardVerb}</span> <span className="min-w-0 truncate font-medium">{tier.name}</span>
                   {/* What it costs this month, which is the one number she
                       came to check. A tier with no rate yet says so rather
                       than showing a zero it does not mean. */}

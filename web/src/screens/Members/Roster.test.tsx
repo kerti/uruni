@@ -7,6 +7,7 @@ import Roster from '@/screens/Members/Roster'
 import { copy } from '@/copy/id'
 import { chooseOption } from '@/test/select'
 import type { DuesTierWithRates, Member } from '@/lib/setup'
+import { cardName } from '@/test/card'
 
 const text = copy.members.roster
 
@@ -115,10 +116,10 @@ describe('Roster', () => {
     vi.stubGlobal('fetch', fetchMock)
     renderAt()
 
-    const cardOne = await screen.findByRole('button', { name: text.editAria('Warga Satu') })
+    const cardOne = await screen.findByRole('button', { name: cardName(text.editVerb, 'Warga Satu') })
     expect(within(cardOne).getByText(text.tierRateLine('Pelaksana', 'Rp 50.000'))).toBeInTheDocument()
 
-    const cardTwo = screen.getByRole('button', { name: text.editAria('Warga Dua') })
+    const cardTwo = screen.getByRole('button', { name: cardName(text.editVerb, 'Warga Dua') })
     // A member with no tier owes no dues - a real state, shown as such rather
     // than as a blank, and with no rate appended.
     expect(within(cardTwo).getByText(text.tierNone)).toBeInTheDocument()
@@ -130,7 +131,7 @@ describe('Roster', () => {
     vi.stubGlobal('fetch', fetchMock)
     renderAt()
 
-    const card = await screen.findByRole('button', { name: text.editAria('Warga Satu') })
+    const card = await screen.findByRole('button', { name: cardName(text.editVerb, 'Warga Satu') })
     expect(within(card).getByText(text.tierRateLine('Pelaksana', text.noRateYet))).toBeInTheDocument()
   })
 
@@ -139,10 +140,10 @@ describe('Roster', () => {
     vi.stubGlobal('fetch', fetchMock)
     renderAt()
 
-    const withArrears = await screen.findByRole('button', { name: text.editAria('Ada Tunggakan') })
+    const withArrears = await screen.findByRole('button', { name: cardName(text.editVerb, 'Ada Tunggakan') })
     expect(within(withArrears).getByText(text.arrearsBadge(2))).toBeInTheDocument()
 
-    const withoutArrears = screen.getByRole('button', { name: text.editAria('Lunas Semua') })
+    const withoutArrears = screen.getByRole('button', { name: cardName(text.editVerb, 'Lunas Semua') })
     expect(within(withoutArrears).queryByText(/Tunggakan/)).not.toBeInTheDocument()
 
     // The badge never borrows the current period's vocabulary - a row with no
@@ -156,7 +157,7 @@ describe('Roster', () => {
     })
     vi.stubGlobal('fetch', fetchMock)
     renderAt()
-    await screen.findByRole('button', { name: text.editAria('Budi') })
+    await screen.findByRole('button', { name: cardName(text.editVerb, 'Budi') })
 
     await userEvent.type(screen.getByLabelText(text.searchLabel), 'Bud')
 
@@ -171,13 +172,13 @@ describe('Roster', () => {
     })
     vi.stubGlobal('fetch', fetchMock)
     renderAt()
-    await screen.findByRole('button', { name: text.editAria('Ana') })
-    expect(screen.queryByRole('button', { name: text.editAria('Budi') })).not.toBeInTheDocument()
+    await screen.findByRole('button', { name: cardName(text.editVerb, 'Ana') })
+    expect(screen.queryByRole('button', { name: cardName(text.editVerb, 'Budi') })).not.toBeInTheDocument()
 
     await userEvent.click(screen.getByRole('button', { name: text.loadMore }))
 
-    expect(await screen.findByRole('button', { name: text.editAria('Budi') })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: text.editAria('Ana') })).toBeInTheDocument()
+    expect(await screen.findByRole('button', { name: cardName(text.editVerb, 'Budi') })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: cardName(text.editVerb, 'Ana') })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: text.loadMore })).not.toBeInTheDocument()
   })
 
@@ -185,9 +186,9 @@ describe('Roster', () => {
     const { fetchMock } = stubRoster([member(1, 'Warga Satu')])
     vi.stubGlobal('fetch', fetchMock)
     renderAt()
-    await screen.findByRole('button', { name: text.editAria('Warga Satu') })
+    await screen.findByRole('button', { name: cardName(text.editVerb, 'Warga Satu') })
 
-    await userEvent.click(screen.getByRole('button', { name: text.editAria('Warga Satu') }))
+    await userEvent.click(screen.getByRole('button', { name: cardName(text.editVerb, 'Warga Satu') }))
 
     expect(currentSearch()).toBe('?edit=member%3A1')
     const dialog = screen.getByRole('dialog', { name: text.editTitle })
@@ -220,9 +221,9 @@ describe('Roster', () => {
     const { fetchMock, calls } = stubRoster([member(1, 'Warga Satu')])
     vi.stubGlobal('fetch', fetchMock)
     renderAt()
-    await screen.findByRole('button', { name: text.editAria('Warga Satu') })
+    await screen.findByRole('button', { name: cardName(text.editVerb, 'Warga Satu') })
 
-    await userEvent.click(screen.getByRole('button', { name: text.editAria('Warga Satu') }))
+    await userEvent.click(screen.getByRole('button', { name: cardName(text.editVerb, 'Warga Satu') }))
     const dialog = screen.getByRole('dialog', { name: text.editTitle })
     const input = within(dialog).getByLabelText(text.nameLabel)
     await userEvent.clear(input)
@@ -240,9 +241,9 @@ describe('Roster', () => {
     const { fetchMock, calls } = stubRoster([member(1, 'Warga Satu')])
     vi.stubGlobal('fetch', fetchMock)
     renderAt()
-    await screen.findByRole('button', { name: text.editAria('Warga Satu') })
+    await screen.findByRole('button', { name: cardName(text.editVerb, 'Warga Satu') })
 
-    await userEvent.click(screen.getByRole('button', { name: text.editAria('Warga Satu') }))
+    await userEvent.click(screen.getByRole('button', { name: cardName(text.editVerb, 'Warga Satu') }))
     const dialog = screen.getByRole('dialog', { name: text.editTitle })
     await chooseOption(text.tierLabel, text.tierNone, within(dialog))
     await userEvent.click(within(dialog).getByRole('button', { name: text.save }))
@@ -256,9 +257,9 @@ describe('Roster', () => {
     const { fetchMock, calls } = stubRoster([member(1, 'Warga Satu')])
     vi.stubGlobal('fetch', fetchMock)
     renderAt()
-    await screen.findByRole('button', { name: text.editAria('Warga Satu') })
+    await screen.findByRole('button', { name: cardName(text.editVerb, 'Warga Satu') })
 
-    await userEvent.click(screen.getByRole('button', { name: text.editAria('Warga Satu') }))
+    await userEvent.click(screen.getByRole('button', { name: cardName(text.editVerb, 'Warga Satu') }))
     const dialog = screen.getByRole('dialog', { name: text.editTitle })
 
     await userEvent.click(within(dialog).getByRole('button', { name: text.deactivate }))
@@ -275,9 +276,9 @@ describe('Roster', () => {
     const { fetchMock, calls } = stubRoster([member(1, 'Warga Satu', { inactive_on: '2026-08-01' })])
     vi.stubGlobal('fetch', fetchMock)
     renderAt()
-    await screen.findByRole('button', { name: text.editAria('Warga Satu') })
+    await screen.findByRole('button', { name: cardName(text.editVerb, 'Warga Satu') })
 
-    await userEvent.click(screen.getByRole('button', { name: text.editAria('Warga Satu') }))
+    await userEvent.click(screen.getByRole('button', { name: cardName(text.editVerb, 'Warga Satu') }))
     const dialog = screen.getByRole('dialog', { name: text.editTitle })
     await userEvent.click(within(dialog).getByRole('button', { name: text.reinstate }))
 
@@ -289,9 +290,9 @@ describe('Roster', () => {
     const { fetchMock, calls } = stubRoster([member(1, 'Duplikat')], () => new Response(null, { status: 204 }))
     vi.stubGlobal('fetch', fetchMock)
     renderAt()
-    await screen.findByRole('button', { name: text.editAria('Duplikat') })
+    await screen.findByRole('button', { name: cardName(text.editVerb, 'Duplikat') })
 
-    await userEvent.click(screen.getByRole('button', { name: text.editAria('Duplikat') }))
+    await userEvent.click(screen.getByRole('button', { name: cardName(text.editVerb, 'Duplikat') }))
     const dialog = screen.getByRole('dialog', { name: text.editTitle })
 
     await userEvent.click(within(dialog).getByRole('button', { name: text.delete }))
@@ -309,9 +310,9 @@ describe('Roster', () => {
     )
     vi.stubGlobal('fetch', fetchMock)
     renderAt()
-    await screen.findByRole('button', { name: text.editAria('Warga Satu') })
+    await screen.findByRole('button', { name: cardName(text.editVerb, 'Warga Satu') })
 
-    await userEvent.click(screen.getByRole('button', { name: text.editAria('Warga Satu') }))
+    await userEvent.click(screen.getByRole('button', { name: cardName(text.editVerb, 'Warga Satu') }))
     const dialog = screen.getByRole('dialog', { name: text.editTitle })
     await userEvent.click(within(dialog).getByRole('button', { name: text.delete }))
     await userEvent.click(within(dialog).getByRole('button', { name: text.deleteConfirmAction }))
@@ -331,8 +332,8 @@ describe('Roster', () => {
     })
 
     async function openEdit(name: string) {
-      await screen.findByRole('button', { name: text.editAria(name) })
-      await userEvent.click(screen.getByRole('button', { name: text.editAria(name) }))
+      await screen.findByRole('button', { name: cardName(text.editVerb, name) })
+      await userEvent.click(screen.getByRole('button', { name: cardName(text.editVerb, name) }))
       return screen.getByRole('dialog', { name: text.editTitle })
     }
 

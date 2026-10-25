@@ -7,6 +7,7 @@ import Locations from '@/screens/Settings/Locations'
 import { copy } from '@/copy/id'
 import { chooseOption } from '@/test/select'
 import type { Account } from '@/lib/setup'
+import { cardName } from '@/test/card'
 
 const text = copy.settings.locations
 
@@ -76,12 +77,28 @@ describe('Settings locations', () => {
     renderAt()
 
     expect(await screen.findByRole('list')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: text.editAria('Kotak kas') })).toBeInTheDocument()
-    const bankCard = screen.getByRole('button', { name: text.editAria('Bank Jago') })
+    expect(screen.getByRole('button', { name: cardName(text.editVerb, 'Kotak kas') })).toBeInTheDocument()
+    const bankCard = screen.getByRole('button', { name: cardName(text.editVerb, 'Bank Jago') })
     expect(within(bankCard).getByText(text.kindBank)).toBeInTheDocument()
     // The retired one is listed and labelled, not hidden: it may still hold a
     // balance, and this screen is where it gets reinstated.
     expect(within(bankCard).getByText(text.inactiveBadge)).toBeInTheDocument()
+  })
+
+  // WCAG 2.5.3 (Label in Name): a card's accessible name must hold every word
+  // it shows, which an aria-label that replaces the text does not guarantee.
+  // The name is built from the content: a hidden verb, then the visible text.
+  it('names a card from its content, so the name holds every visible word', async () => {
+    const { fetchMock } = stubAccounts([account(1, 'Bank Jago', 'bank', '2026-08-01')])
+    vi.stubGlobal('fetch', fetchMock)
+    renderAt()
+    const card = await screen.findByRole('button', { name: cardName(text.editVerb, 'Bank Jago') })
+
+    expect(card).not.toHaveAttribute('aria-label')
+    expect(card).toHaveAccessibleName(new RegExp(`^${text.editVerb} `))
+    for (const visible of ['Bank Jago', text.kindBank, text.inactiveBadge]) {
+      expect(card).toHaveAccessibleName(expect.stringContaining(visible))
+    }
   })
 
   it('opens the edit dialog from the card, with ?edit=location:<id> and the name shown', async () => {
@@ -90,7 +107,7 @@ describe('Settings locations', () => {
     renderAt()
     await screen.findByRole('list')
 
-    await userEvent.click(screen.getByRole('button', { name: text.editAria('Kotak kas') }))
+    await userEvent.click(screen.getByRole('button', { name: cardName(text.editVerb, 'Kotak kas') }))
 
     expect(currentSearch()).toBe('?edit=location%3A1')
     const dialog = screen.getByRole('dialog', { name: text.editTitle })
@@ -184,7 +201,7 @@ describe('Settings locations', () => {
     renderAt()
     await screen.findByRole('list')
 
-    await userEvent.click(screen.getByRole('button', { name: text.editAria('Kotak kas') }))
+    await userEvent.click(screen.getByRole('button', { name: cardName(text.editVerb, 'Kotak kas') }))
     const dialog = screen.getByRole('dialog', { name: text.editTitle })
     expect(within(dialog).queryByLabelText(text.openingBalanceLabel)).not.toBeInTheDocument()
   })
@@ -195,7 +212,7 @@ describe('Settings locations', () => {
     renderAt()
     await screen.findByRole('list')
 
-    await userEvent.click(screen.getByRole('button', { name: text.editAria('Tunia') }))
+    await userEvent.click(screen.getByRole('button', { name: cardName(text.editVerb, 'Tunia') }))
     const dialog = screen.getByRole('dialog', { name: text.editTitle })
     const input = within(dialog).getByLabelText(text.nameLabel)
     await userEvent.clear(input)
@@ -213,7 +230,7 @@ describe('Settings locations', () => {
     renderAt()
     await screen.findByRole('list')
 
-    await userEvent.click(screen.getByRole('button', { name: text.editAria('Kotak kas') }))
+    await userEvent.click(screen.getByRole('button', { name: cardName(text.editVerb, 'Kotak kas') }))
     const dialog = screen.getByRole('dialog', { name: text.editTitle })
 
     await userEvent.click(within(dialog).getByRole('button', { name: text.deactivate }))
@@ -236,7 +253,7 @@ describe('Settings locations', () => {
     renderAt()
     await screen.findByRole('list')
 
-    await userEvent.click(screen.getByRole('button', { name: text.editAria('Kotak kas') }))
+    await userEvent.click(screen.getByRole('button', { name: cardName(text.editVerb, 'Kotak kas') }))
     const dialog = screen.getByRole('dialog', { name: text.editTitle })
     await userEvent.click(within(dialog).getByRole('button', { name: text.reinstate }))
 
@@ -250,7 +267,7 @@ describe('Settings locations', () => {
     renderAt()
     await screen.findByRole('list')
 
-    await userEvent.click(screen.getByRole('button', { name: text.editAria('Duplikat') }))
+    await userEvent.click(screen.getByRole('button', { name: cardName(text.editVerb, 'Duplikat') }))
     const dialog = screen.getByRole('dialog', { name: text.editTitle })
 
     await userEvent.click(within(dialog).getByRole('button', { name: text.delete }))
@@ -270,7 +287,7 @@ describe('Settings locations', () => {
     renderAt()
     await screen.findByRole('list')
 
-    await userEvent.click(screen.getByRole('button', { name: text.editAria('Kotak kas') }))
+    await userEvent.click(screen.getByRole('button', { name: cardName(text.editVerb, 'Kotak kas') }))
     const dialog = screen.getByRole('dialog', { name: text.editTitle })
     await userEvent.click(within(dialog).getByRole('button', { name: text.delete }))
     await userEvent.click(within(dialog).getByRole('button', { name: text.deleteConfirmAction }))
@@ -294,7 +311,7 @@ describe('Settings locations', () => {
     renderAt()
     await screen.findByRole('list')
 
-    await userEvent.click(screen.getByRole('button', { name: text.editAria('Kotak kas') }))
+    await userEvent.click(screen.getByRole('button', { name: cardName(text.editVerb, 'Kotak kas') }))
     const dialog = screen.getByRole('dialog', { name: text.editTitle })
     await userEvent.click(within(dialog).getByRole('button', { name: text.deactivate }))
     await userEvent.click(within(dialog).getByRole('button', { name: text.deactivateConfirmAction }))
@@ -314,7 +331,7 @@ describe('Settings locations', () => {
     renderAt()
     await screen.findByRole('list')
 
-    await userEvent.click(screen.getByRole('button', { name: text.editAria('Kotak kas') }))
+    await userEvent.click(screen.getByRole('button', { name: cardName(text.editVerb, 'Kotak kas') }))
     const dialog = screen.getByRole('dialog', { name: text.editTitle })
     await userEvent.click(within(dialog).getByRole('button', { name: text.deactivate }))
     await userEvent.click(within(dialog).getByRole('button', { name: text.deactivateConfirmAction }))
@@ -349,7 +366,7 @@ describe('Settings locations', () => {
     renderAt()
     await screen.findByRole('list')
 
-    await userEvent.click(screen.getByRole('button', { name: text.editAria('Kotak kas') }))
+    await userEvent.click(screen.getByRole('button', { name: cardName(text.editVerb, 'Kotak kas') }))
     expect(currentSearch()).toBe('?edit=location%3A1')
 
     const dialog = screen.getByRole('dialog', { name: text.editTitle })

@@ -1,6 +1,7 @@
 import { copy } from '../src/copy/id'
 import { expect, test, logIn } from './fixtures'
 import { chooseOption } from './popper'
+import { cardButton } from './card'
 
 // The settings screen's locations section (PRD section 7.1: a location can be
 // added later).
@@ -46,7 +47,7 @@ test.describe('settings', () => {
 
     // A successful add closes the dialog and drops the param.
     await expect(addDialog).toBeHidden()
-    const row = page.getByRole('button', { name: copy.settings.locations.editAria(locationName) })
+    const row = cardButton(page, copy.settings.locations.editVerb, locationName)
     await expect(row).toBeVisible()
 
     // Rename and retire/delete live inside the edit dialog it opens.
