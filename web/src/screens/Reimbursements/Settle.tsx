@@ -10,7 +10,7 @@ import Loading from '@/components/states/Loading'
 import ErrorState from '@/components/states/ErrorState'
 import { copy } from '@/copy/id'
 import { listAccounts } from '@/lib/accounts'
-import { ApiError, settleUncertainWrite } from '@/lib/api'
+import { ApiError, errorCode, settleUncertainWrite } from '@/lib/api'
 import { dateBounds, todayISODate } from '@/lib/dates'
 import { formatIDR } from '@/lib/money'
 import { getReimbursement, settleReimbursement } from '@/lib/reimbursements'
@@ -47,7 +47,7 @@ export default function Settle({ claimId, onDone, onCancel }: { claimId: number;
         async () => {
           const [claim, accounts] = await Promise.all([
             getReimbursement(claimId).catch((err: unknown) => {
-              if (err instanceof ApiError && err.code === 'not_found') return null
+              if (errorCode(err) === 'not_found') return null
               throw err
             }),
             listAccounts(),

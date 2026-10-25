@@ -1,12 +1,10 @@
 package http
 
 import (
-	"encoding/base64"
 	"encoding/json"
 	"net/http"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/go-chi/chi/v5"
 
@@ -144,38 +142,6 @@ type reimbursementsPageResponse struct {
 	NextCursor     *string                 `json:"next_cursor"`
 }
 
-// encodeReimbursementsCursor/decodeReimbursementsCursor have the shape of the
-// transactions cursor (base64 of "incurred_on|id", the pair
-// ListReimbursementsPage's keyset WHERE compares), kept local: the cursors
-// are opaque wire formats over different tables and date columns, and
-// generalizing would add an indirection neither needs.
-func encodeReimbursementsCursor(incurredOn string, id int64) string {
-	return base64.RawURLEncoding.EncodeToString([]byte(incurredOn + "|" + strconv.FormatInt(id, 10)))
-}
-
-// decodeReimbursementsCursor rejects anything that does not round-trip to a
-// real calendar date plus a positive id; listReimbursements answers 400
-// invalid_argument.
-func decodeReimbursementsCursor(raw string) (incurredOn string, id int64, ok bool) {
-	decoded, err := base64.RawURLEncoding.DecodeString(raw)
-	if err != nil {
-		return "", 0, false
-	}
-	incurredOn, idPart, found := strings.Cut(string(decoded), "|")
-	if !found {
-		return "", 0, false
-	}
-	t, err := time.Parse(occurredOnLayout, incurredOn)
-	if err != nil || t.Format(occurredOnLayout) != incurredOn {
-		return "", 0, false
-	}
-	id, err = strconv.ParseInt(idPart, 10, 64)
-	if err != nil || id <= 0 {
-		return "", 0, false
-	}
-	return incurredOn, id, true
-}
-
 // listReimbursements is GET /api/reimbursements (#226, ADR-032): newest-first,
 // keyset-paged on (incurred_on DESC, id DESC), 25 a page, like
 // GET /api/transactions (see ListReimbursementsPage for the keyset
@@ -217,7 +183,7 @@ func (a *api) listReimbursements(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if cursor := r.URL.Query().Get("cursor"); cursor != "" {
-		incurredOn, id, ok := decodeReimbursementsCursor(cursor)
+		incurredOn, id, ok := decodeDateCursor(cursor)
 		if !ok {
 			writeAPIFieldError(w, http.StatusBadRequest, "invalid_argument", "cursor", "The cursor is not valid.")
 			return
@@ -240,7 +206,7 @@ func (a *api) listReimbursements(w http.ResponseWriter, r *http.Request) {
 	if len(rows) > reimbursementsPageSize {
 		rows = rows[:reimbursementsPageSize]
 		last := rows[len(rows)-1]
-		encoded := encodeReimbursementsCursor(last.IncurredOn, last.ID)
+		encoded := encodeCursor(last.IncurredOn, last.ID)
 		nextCursor = &encoded
 	}
 

@@ -1,11 +1,8 @@
 package http
 
 import (
-	"encoding/base64"
 	"net/http"
-	"strconv"
 	"strings"
-	"time"
 
 	"github.com/kerti/uruni/internal/ledger"
 	"github.com/kerti/uruni/internal/money"
@@ -168,36 +165,6 @@ type duesPaymentsPageResponse struct {
 	NextCursor   *string                      `json:"next_cursor"`
 }
 
-// encodeDuesPaymentsCursor/decodeDuesPaymentsCursor have the shape of the
-// reimbursements cursor (base64 of "occurred_on|id"), kept local for the same
-// reason: an opaque wire format over this route's own query.
-func encodeDuesPaymentsCursor(occurredOn string, id int64) string {
-	return base64.RawURLEncoding.EncodeToString([]byte(occurredOn + "|" + strconv.FormatInt(id, 10)))
-}
-
-// decodeDuesPaymentsCursor rejects anything that does not round-trip to a real
-// calendar date plus a positive id; listDuesPayments answers 400
-// invalid_argument.
-func decodeDuesPaymentsCursor(raw string) (occurredOn string, id int64, ok bool) {
-	decoded, err := base64.RawURLEncoding.DecodeString(raw)
-	if err != nil {
-		return "", 0, false
-	}
-	occurredOn, idPart, found := strings.Cut(string(decoded), "|")
-	if !found {
-		return "", 0, false
-	}
-	t, err := time.Parse(occurredOnLayout, occurredOn)
-	if err != nil || t.Format(occurredOnLayout) != occurredOn {
-		return "", 0, false
-	}
-	id, err = strconv.ParseInt(idPart, 10, 64)
-	if err != nil || id <= 0 {
-		return "", 0, false
-	}
-	return occurredOn, id, true
-}
-
 // listDuesPayments is GET /api/dues-payments (#228, ADR-032): dues payment
 // history (PRD section 7.3), which GET /api/dues-status never answered: that
 // reads one period at a time, this answers "when did that payment come in?"
@@ -220,7 +187,7 @@ func (a *api) listDuesPayments(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if cursor := r.URL.Query().Get("cursor"); cursor != "" {
-		occurredOn, id, ok := decodeDuesPaymentsCursor(cursor)
+		occurredOn, id, ok := decodeDateCursor(cursor)
 		if !ok {
 			writeAPIFieldError(w, http.StatusBadRequest, "invalid_argument", "cursor", "The cursor is not valid.")
 			return
@@ -243,7 +210,7 @@ func (a *api) listDuesPayments(w http.ResponseWriter, r *http.Request) {
 	if len(rows) > duesPaymentsPageSize {
 		rows = rows[:duesPaymentsPageSize]
 		last := rows[len(rows)-1]
-		encoded := encodeDuesPaymentsCursor(last.OccurredOn, last.ID)
+		encoded := encodeCursor(last.OccurredOn, last.ID)
 		nextCursor = &encoded
 	}
 

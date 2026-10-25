@@ -1,10 +1,8 @@
 package http
 
 import (
-	"encoding/base64"
 	"net/http"
 	"strconv"
-	"strings"
 
 	"github.com/go-chi/chi/v5"
 
@@ -227,37 +225,6 @@ type reconciliationsPageResponse struct {
 	NextCursor      *string                          `json:"next_cursor"`
 }
 
-// encodeReconciliationsCursor/decodeReconciliationsCursor have the shape of
-// the transactions cursor (base64 of "performed_at|id", the pair
-// ListReconciliationsPage's keyset WHERE compares), except performed_at is a
-// Unix timestamp integer (see CreateReconciliation), so both halves are
-// validated as positive integers.
-func encodeReconciliationsCursor(performedAt, id int64) string {
-	return base64.RawURLEncoding.EncodeToString([]byte(strconv.FormatInt(performedAt, 10) + "|" + strconv.FormatInt(id, 10)))
-}
-
-// decodeReconciliationsCursor rejects anything that does not round-trip to
-// two positive integers; listReconciliations answers 400 invalid_argument.
-func decodeReconciliationsCursor(raw string) (performedAt, id int64, ok bool) {
-	decoded, err := base64.RawURLEncoding.DecodeString(raw)
-	if err != nil {
-		return 0, 0, false
-	}
-	performedAtPart, idPart, found := strings.Cut(string(decoded), "|")
-	if !found {
-		return 0, 0, false
-	}
-	performedAt, err = strconv.ParseInt(performedAtPart, 10, 64)
-	if err != nil || performedAt <= 0 {
-		return 0, 0, false
-	}
-	id, err = strconv.ParseInt(idPart, 10, 64)
-	if err != nil || id <= 0 {
-		return 0, 0, false
-	}
-	return performedAt, id, true
-}
-
 // listReconciliations is GET /api/reconciliations (#227, ADR-032):
 // newest-first, keyset-paged on (performed_at DESC, id DESC), 25 a page, like
 // GET /api/transactions and GET /api/reimbursements (see
@@ -278,7 +245,7 @@ func (a *api) listReconciliations(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if cursor := r.URL.Query().Get("cursor"); cursor != "" {
-		performedAt, id, ok := decodeReconciliationsCursor(cursor)
+		performedAt, id, ok := decodeInt64Cursor(cursor)
 		if !ok {
 			writeAPIFieldError(w, http.StatusBadRequest, "invalid_argument", "cursor", "The cursor is not valid.")
 			return
@@ -297,7 +264,7 @@ func (a *api) listReconciliations(w http.ResponseWriter, r *http.Request) {
 	if len(rows) > reconciliationsPageSize {
 		rows = rows[:reconciliationsPageSize]
 		last := rows[len(rows)-1]
-		encoded := encodeReconciliationsCursor(last.PerformedAt, last.ID)
+		encoded := encodeCursor(strconv.FormatInt(last.PerformedAt, 10), last.ID)
 		nextCursor = &encoded
 	}
 

@@ -1,7 +1,6 @@
 package http
 
 import (
-	"encoding/base64"
 	"encoding/json"
 	"net/http"
 	"strconv"
@@ -144,35 +143,6 @@ type membersPageResponse struct {
 	NextCursor *string          `json:"next_cursor"`
 }
 
-// encodeMembersCursor/decodeMembersCursor mirror the transactions cursor:
-// base64 of "name|id", opaque to the client. The keyset pair is (name, id),
-// not (occurred_on, id), because this list orders ascending by name with id
-// as tiebreak (ADR-032: a roster read alphabetically, not a feed).
-func encodeMembersCursor(name string, id int64) string {
-	return base64.RawURLEncoding.EncodeToString([]byte(name + "|" + strconv.FormatInt(id, 10)))
-}
-
-// decodeMembersCursor rejects anything that does not round-trip to a
-// non-empty name plus a positive id, answering 400 invalid_argument as
-// decodeTransactionsCursor does. A name has no calendar to validate, so
-// "non-empty" is the shape check (strings.Cut proves the "|", ParseInt the
-// id).
-func decodeMembersCursor(raw string) (name string, id int64, ok bool) {
-	decoded, err := base64.RawURLEncoding.DecodeString(raw)
-	if err != nil {
-		return "", 0, false
-	}
-	name, idPart, found := strings.Cut(string(decoded), "|")
-	if !found || name == "" {
-		return "", 0, false
-	}
-	id, err = strconv.ParseInt(idPart, 10, 64)
-	if err != nil || id <= 0 {
-		return "", 0, false
-	}
-	return name, id, true
-}
-
 // listMembers is GET /api/members (#233, ADR-032): the roster, alphabetical
 // by name with id as tiebreak, keyset-paged and searchable by name; always
 // this envelope, never the bare array #65 shipped. The paging and search are
@@ -208,7 +178,7 @@ func (a *api) listMembers(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if cursor := r.URL.Query().Get("cursor"); cursor != "" {
-		name, id, ok := decodeMembersCursor(cursor)
+		name, id, ok := decodeNameCursor(cursor)
 		if !ok {
 			writeAPIFieldError(w, http.StatusBadRequest, "invalid_argument", "cursor", "The cursor is not valid.")
 			return
@@ -231,7 +201,7 @@ func (a *api) listMembers(w http.ResponseWriter, r *http.Request) {
 	if len(rows) > membersPageSize {
 		rows = rows[:membersPageSize]
 		last := rows[len(rows)-1]
-		encoded := encodeMembersCursor(last.Name, last.ID)
+		encoded := encodeCursor(last.Name, last.ID)
 		nextCursor = &encoded
 	}
 

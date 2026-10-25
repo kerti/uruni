@@ -1,7 +1,6 @@
 package http
 
 import (
-	"encoding/base64"
 	"net/http"
 	"strconv"
 	"strings"
@@ -290,37 +289,6 @@ type transactionsPageResponse struct {
 	NextCursor   *string               `json:"next_cursor"`
 }
 
-// encodeTransactionsCursor/decodeTransactionsCursor turn a page's last row
-// into an opaque cursor and back: base64 of "occurred_on|id", the pair
-// ListTransactionsPage's keyset WHERE compares. Opaque on purpose; the
-// client only round-trips it.
-func encodeTransactionsCursor(occurredOn string, id int64) string {
-	return base64.RawURLEncoding.EncodeToString([]byte(occurredOn + "|" + strconv.FormatInt(id, 10)))
-}
-
-// decodeTransactionsCursor rejects anything that does not round-trip to a
-// real calendar date plus a positive id; listTransactions answers 400
-// invalid_argument for it (#225).
-func decodeTransactionsCursor(raw string) (occurredOn string, id int64, ok bool) {
-	decoded, err := base64.RawURLEncoding.DecodeString(raw)
-	if err != nil {
-		return "", 0, false
-	}
-	occurredOn, idPart, found := strings.Cut(string(decoded), "|")
-	if !found {
-		return "", 0, false
-	}
-	t, err := time.Parse(occurredOnLayout, occurredOn)
-	if err != nil || t.Format(occurredOnLayout) != occurredOn {
-		return "", 0, false
-	}
-	id, err = strconv.ParseInt(idPart, 10, 64)
-	if err != nil || id <= 0 {
-		return "", 0, false
-	}
-	return occurredOn, id, true
-}
-
 // isAllDigits is the "what was that 50.000?" detector (#225, ADR-032): a
 // trimmed q of ASCII digits also becomes an exact amount match. s is assumed
 // non-empty.
@@ -369,7 +337,7 @@ func (a *api) listTransactions(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if cursor := r.URL.Query().Get("cursor"); cursor != "" {
-		occurredOn, id, ok := decodeTransactionsCursor(cursor)
+		occurredOn, id, ok := decodeDateCursor(cursor)
 		if !ok {
 			writeAPIFieldError(w, http.StatusBadRequest, "invalid_argument", "cursor", "The cursor is not valid.")
 			return
@@ -449,7 +417,7 @@ func (a *api) listTransactions(w http.ResponseWriter, r *http.Request) {
 	if len(rows) > transactionsPageSize {
 		rows = rows[:transactionsPageSize]
 		last := rows[len(rows)-1]
-		encoded := encodeTransactionsCursor(last.OccurredOn, last.ID)
+		encoded := encodeCursor(last.OccurredOn, last.ID)
 		nextCursor = &encoded
 	}
 

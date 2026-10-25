@@ -8,7 +8,7 @@ import Loading from '@/components/states/Loading'
 import ErrorState from '@/components/states/ErrorState'
 import { Button } from '@/components/ui/button'
 import { copy } from '@/copy/id'
-import { ApiError } from '@/lib/api'
+import { errorCode } from '@/lib/api'
 import { getBalances } from '@/lib/balances'
 import { formatUnixSeconds } from '@/lib/dates'
 import { listIncidentals } from '@/lib/incidentals'
@@ -88,7 +88,7 @@ export default function Home({
       // first-run state, not a load failure. Any other error still fails the
       // whole load, as for the other three calls.
       getLatestReconciliation().catch((err: unknown) => {
-        if (err instanceof ApiError && err.code === 'not_found') return null
+        if (errorCode(err) === 'not_found') return null
         throw err
       }),
     ])
