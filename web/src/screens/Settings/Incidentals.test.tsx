@@ -7,6 +7,7 @@ import SettingsIncidentals, { ClosedIncidentals } from '@/screens/Settings/Incid
 import { copy } from '@/copy/id'
 import type { Incidental } from '@/lib/incidentals'
 import type { Member } from '@/lib/setup'
+import { cardName } from '@/test/card'
 
 const text = copy.settings.incidentals
 
@@ -118,9 +119,9 @@ describe('Settings incidentals', () => {
     vi.stubGlobal('fetch', fetchMock)
     renderAt()
 
-    expect(await screen.findByRole('button', { name: text.cardAria('Halal bihalal RT') })).toBeInTheDocument()
+    expect(await screen.findByRole('button', { name: cardName(text.cardVerb, 'Halal bihalal RT') })).toBeInTheDocument()
     expect(screen.getByText(copy.incidentals.status.open)).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: text.cardAria('17 Agustus') })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: cardName(text.cardVerb, '17 Agustus') })).not.toBeInTheDocument()
 
     const closedRow = screen.getByRole('button', { name: new RegExp(text.closedRow) })
     expect(within(closedRow).getByText('2')).toBeInTheDocument()
@@ -133,7 +134,7 @@ describe('Settings incidentals', () => {
     vi.stubGlobal('fetch', fetchMock)
     renderAt()
 
-    expect(await screen.findByRole('button', { name: text.cardAria('Halal bihalal RT') })).toBeInTheDocument()
+    expect(await screen.findByRole('button', { name: cardName(text.cardVerb, 'Halal bihalal RT') })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: new RegExp(text.closedRow) })).not.toBeInTheDocument()
   })
 
@@ -217,7 +218,7 @@ describe('Settings incidentals', () => {
     vi.stubGlobal('fetch', fetchMock)
     renderAt()
 
-    await userEvent.click(await screen.findByRole('button', { name: text.cardAria('Halal bihalal RT') }))
+    await userEvent.click(await screen.findByRole('button', { name: cardName(text.cardVerb, 'Halal bihalal RT') }))
 
     expect(currentLocation()).toBe('/incidentals?purpose=1')
   })
@@ -247,7 +248,7 @@ describe('Closed incidentals', () => {
     render(<ClosedIncidentals onBack={vi.fn()} onOpen={onOpen} />)
 
     const cards = await screen.findAllByRole('button', { name: /^Lihat / })
-    expect(cards.map((card) => card.getAttribute('aria-label'))).toEqual([text.cardAria('17 Agustus'), text.cardAria('Kerja bakti')])
+    expect(cards.map((card) => card.querySelector('.truncate')?.textContent)).toEqual(['17 Agustus', 'Kerja bakti'])
     await userEvent.click(cards[0])
     expect(onOpen).toHaveBeenCalledWith(3)
   })

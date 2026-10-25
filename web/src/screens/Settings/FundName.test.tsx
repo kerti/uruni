@@ -9,6 +9,7 @@ import { chooseZoneOption } from '@/test/timeZone'
 import { copy } from '@/copy/id'
 import { getFundTimeZone, resetFundTimeZone } from '@/lib/dates'
 import type { Fund } from '@/lib/setup'
+import { cardName } from '@/test/card'
 
 const text = copy.settings.fund
 const zones = copy.timeZone
@@ -102,7 +103,7 @@ describe('Settings fund (Kas ini)', () => {
     vi.stubGlobal('fetch', fetchMock)
     renderAt()
 
-    expect(await screen.findByRole('button', { name: text.editAria('Kas Ruang 3A') })).toBeInTheDocument()
+    expect(await screen.findByRole('button', { name: cardName(text.editVerb, 'Kas Ruang 3A') })).toBeInTheDocument()
     // The inline form is gone: Pengaturan has no form until she asks for one.
     expect(screen.queryByLabelText(text.nameLabel)).not.toBeInTheDocument()
   })
@@ -112,7 +113,7 @@ describe('Settings fund (Kas ini)', () => {
     vi.stubGlobal('fetch', fetchMock)
     renderAt()
 
-    await userEvent.click(await screen.findByRole('button', { name: text.editAria('Kas Ruang 3A') }))
+    await userEvent.click(await screen.findByRole('button', { name: cardName(text.editVerb, 'Kas Ruang 3A') }))
 
     expect(await screen.findByLabelText(text.nameLabel)).toHaveValue('Kas Ruang 3A')
     expect(currentSearch()).toBe('?edit=fund%3Aname')
@@ -145,7 +146,7 @@ describe('Settings fund (Kas ini)', () => {
     // The dialog closing IS the confirmation now - no inline "saved" line.
     await waitFor(() => expect(currentSearch()).toBe(''))
     // The card shows the fund handed back, with no GET to read it again.
-    expect(await screen.findByRole('button', { name: text.editAria('Kas Ruang 3B') })).toBeInTheDocument()
+    expect(await screen.findByRole('button', { name: cardName(text.editVerb, 'Kas Ruang 3B') })).toBeInTheDocument()
     expect(fetchMock).toHaveBeenCalledTimes(1)
   })
 
@@ -156,7 +157,7 @@ describe('Settings fund (Kas ini)', () => {
     vi.stubGlobal('fetch', fetchMock)
     renderAt()
 
-    expect(screen.getByRole('button', { name: text.editAria('Kas Ruang 3A') })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: cardName(text.editVerb, 'Kas Ruang 3A') })).toBeInTheDocument()
     expect(fetchMock).not.toHaveBeenCalled()
   })
 
@@ -190,7 +191,7 @@ describe('Settings fund (Kas ini)', () => {
     vi.stubGlobal('fetch', fetchMock)
     renderAt('/settings?edit=location:3')
 
-    await screen.findByRole('button', { name: text.editAria('Kas Ruang 3A') })
+    await screen.findByRole('button', { name: cardName(text.editVerb, 'Kas Ruang 3A') })
     // Byte for byte as it arrived: this section never rewrote it, so it is not
     // re-encoded as a value this section set would be.
     expect(currentSearch()).toBe('?edit=location:3')
@@ -215,7 +216,7 @@ describe('Settings fund (Kas ini)', () => {
     vi.stubGlobal('fetch', fetchMock)
     renderAt()
 
-    await screen.findByRole('button', { name: text.editAria('Kas Ruang 3A') })
+    await screen.findByRole('button', { name: cardName(text.editVerb, 'Kas Ruang 3A') })
     expect(screen.getByRole('heading', { name: 'Kas ini' })).toBeInTheDocument()
     expect(screen.getByText(text.body)).toBeInTheDocument()
   })
@@ -225,7 +226,7 @@ describe('Settings fund (Kas ini)', () => {
     vi.stubGlobal('fetch', fetchMock)
     renderAt()
 
-    const card = await screen.findByRole('button', { name: text.zone.editAria(zones.options['Asia/Jakarta'].label) })
+    const card = await screen.findByRole('button', { name: cardName(text.zone.editVerb, copy.timeZone.options['Asia/Jakarta'].label) })
     expect(card).toHaveTextContent(zones.options['Asia/Jakarta'].label)
     expect(card).toHaveTextContent(zones.label)
     expect(screen.queryByRole('combobox', { name: zones.label })).not.toBeInTheDocument()
@@ -236,7 +237,9 @@ describe('Settings fund (Kas ini)', () => {
     vi.stubGlobal('fetch', fetchMock)
     renderAt()
 
-    await userEvent.click(await screen.findByRole('button', { name: text.zone.editAria(zones.options['Asia/Jakarta'].label) }))
+    await userEvent.click(
+      await screen.findByRole('button', { name: cardName(text.zone.editVerb, copy.timeZone.options['Asia/Jakarta'].label) }),
+    )
 
     expect(await screen.findByRole('dialog', { name: text.zone.editTitle })).toBeInTheDocument()
     expect(screen.getByRole('combobox', { name: zones.label })).toHaveTextContent(zones.options['Asia/Jakarta'].label)
@@ -300,7 +303,9 @@ describe('Settings fund (Kas ini)', () => {
     await userEvent.click(screen.getByRole('button', { name: text.cancel }))
     await waitFor(() => expect(currentSearch()).toBe(''))
 
-    await userEvent.click(await screen.findByRole('button', { name: text.zone.editAria(zones.options['Asia/Jakarta'].label) }))
+    await userEvent.click(
+      await screen.findByRole('button', { name: cardName(text.zone.editVerb, copy.timeZone.options['Asia/Jakarta'].label) }),
+    )
     expect(await screen.findByRole('combobox', { name: zones.label })).toHaveTextContent(zones.options['Asia/Jakarta'].label)
   })
 })

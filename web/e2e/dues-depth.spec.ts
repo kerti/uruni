@@ -5,6 +5,7 @@ import { formatPeriod } from '../src/lib/dates'
 import { formatIDR } from '../src/lib/money'
 import { expect, logIn, test } from './fixtures'
 import { chooseOption, popperContent } from './popper'
+import { cardButton } from './card'
 
 // Dues past the one multi-month payment dues.spec.ts walks: paying a month
 // ahead, paying part of a month, the belum-bayar filter, a backdated join date
@@ -153,7 +154,7 @@ test.describe('dues in depth', () => {
     await page.goto('/')
     await page.getByRole('link', { name: copy.shell.nav.members }).click()
     const text = copy.members.roster
-    const card = page.getByRole('button', { name: text.editAria('Warga Baru') })
+    const card = cardButton(page, text.editVerb, 'Warga Baru')
 
     // Joined this month: nothing before it is owed, so no badge.
     await expect(card).toBeVisible()
@@ -194,7 +195,7 @@ test.describe('dues in depth', () => {
 
     // A new tier has no rate yet; its screen adds one from a month (the form's
     // default, this month).
-    const tierCard = page.getByRole('button', { name: text.cardAria('Madya') })
+    const tierCard = cardButton(page, text.cardVerb, 'Madya')
     await expect(tierCard).toContainText(text.noRates)
     await tierCard.click()
 
@@ -255,6 +256,6 @@ test.describe('dues in depth', () => {
     // Hapus golongan: no member is on it, so it goes.
     await page.getByRole('button', { name: text.delete }).click()
     await page.getByRole('button', { name: text.deleteConfirmAction }).click()
-    await expect(page.getByRole('button', { name: text.cardAria(renamed) })).toHaveCount(0)
+    await expect(cardButton(page, text.cardVerb, renamed)).toHaveCount(0)
   })
 })

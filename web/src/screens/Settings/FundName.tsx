@@ -76,11 +76,11 @@ export default function FundName({
       </div>
 
       <div className="flex flex-col gap-2">
-        <SettingCard label={text.nameLabel} value={fund.name} aria-label={text.editAria(fund.name)} onClick={() => open('fund:name')} />
+        <SettingCard verb={text.editVerb} label={text.nameLabel} value={fund.name} onClick={() => open('fund:name')} />
         <SettingCard
+          verb={text.zone.editVerb}
           label={copy.timeZone.label}
           value={copy.timeZone.options[isTimeZone(fund.time_zone) ? fund.time_zone : DEFAULT_TIME_ZONE].label}
-          aria-label={text.zone.editAria(copy.timeZone.options[isTimeZone(fund.time_zone) ? fund.time_zone : DEFAULT_TIME_ZONE].label)}
           onClick={() => open('fund:time_zone')}
         />
       </div>
@@ -111,15 +111,17 @@ export default function FundName({
 
 /** One setting as a card: its label small above its value, the whole card the
  * edit affordance. */
-function SettingCard({ label, value, onClick, ...rest }: { label: string; value: string; onClick: () => void; 'aria-label': string }) {
+function SettingCard({ verb, label, value, onClick }: { verb: string; label: string; value: string; onClick: () => void }) {
   return (
     <button
       type="button"
       onClick={onClick}
       className="flex min-h-11 w-full flex-col items-start rounded-lg bg-card px-4 py-3 text-left shadow-card ring-1 ring-foreground/10 select-none transition-colors hover:bg-muted/40"
-      {...rest}
     >
-      <span className="text-xs text-muted-foreground">{label}</span>
+      {/* The verb is visually hidden text, first in the button, so the
+          accessible name is built from the content and holds every visible
+          word (WCAG 2.5.3) - an aria-label would replace it. */}
+      <span className="sr-only">{verb}</span> <span className="text-xs text-muted-foreground">{label}</span>
       <span className="w-full min-w-0 truncate font-medium">{value}</span>
     </button>
   )

@@ -5,6 +5,7 @@ import { formatPeriod } from '../src/lib/dates'
 import { formatIDR } from '../src/lib/money'
 import { expect, logIn, test } from './fixtures'
 import { chooseOption, popperContent } from './popper'
+import { cardButton } from './card'
 
 // Finding things again. Riwayat's four tabs (search, the Transaksi filter
 // dialog and its chips, paging), the roster (search, paging, the arrears
@@ -308,18 +309,18 @@ test.describe('browsing Riwayat, the roster and the locations', () => {
     // search stays on for the edits below: unfiltered, Warga Dua sorts after the
     // 25 seeded members, onto the second page.
     await search.fill('Warga Dua')
-    const card = page.getByRole('button', { name: text.editAria('Warga Dua') })
+    const card = cardButton(page, text.editVerb, 'Warga Dua')
     await expect(card).toBeVisible()
-    await expect(page.getByRole('button', { name: text.editAria('Warga Satu') })).toHaveCount(0)
+    await expect(cardButton(page, text.editVerb, 'Warga Satu')).toHaveCount(0)
     await expect(card).toContainText(/Tunggakan \d+ bulan/)
 
     // Edit: rename.
-    await page.getByRole('button', { name: text.editAria('Warga Dua') }).click()
+    await cardButton(page, text.editVerb, 'Warga Dua').click()
     let dialog = page.getByRole('dialog', { name: text.editTitle })
     await dialog.getByLabel(text.nameLabel).fill('Warga Dua Baru')
     await dialog.getByRole('button', { name: text.save }).click()
     await expect(dialog).toBeHidden()
-    const renamed = page.getByRole('button', { name: text.editAria('Warga Dua Baru') })
+    const renamed = cardButton(page, text.editVerb, 'Warga Dua Baru')
     await expect(renamed).toBeVisible()
 
     // Retire, confirmed in place: the card stays, marked inactive.
@@ -343,7 +344,7 @@ test.describe('browsing Riwayat, the roster and the locations', () => {
     await page.goto('/settings')
     const text = copy.settings.locations
 
-    await page.getByRole('button', { name: text.editAria('Bank Uji Coba') }).click()
+    await cardButton(page, text.editVerb, 'Bank Uji Coba').click()
     let dialog = page.getByRole('dialog', { name: text.editTitle })
     await dialog.getByLabel(text.nameLabel).fill('Bank Uji Baru')
     // The fixture's bank becomes a cash box: the kind is a label on the
@@ -351,7 +352,7 @@ test.describe('browsing Riwayat, the roster and the locations', () => {
     await chooseOption(page, dialog.getByRole('combobox', { name: text.kindLabel }), text.kindCash)
     await dialog.getByRole('button', { name: text.save }).click()
     await expect(dialog).toBeHidden()
-    const row = page.getByRole('button', { name: text.editAria('Bank Uji Baru') })
+    const row = cardButton(page, text.editVerb, 'Bank Uji Baru')
     await expect(row).toBeVisible()
     await expect(row).toContainText(text.kindCash)
 
@@ -392,7 +393,7 @@ test.describe('browsing Riwayat, the roster and the locations', () => {
     await expect(dialog).toBeHidden()
 
     // The list shows the new location with its kind.
-    const row = page.getByRole('button', { name: text.editAria(name) })
+    const row = cardButton(page, text.editVerb, name)
     await expect(row).toBeVisible()
     await expect(row).toContainText(text.kindBank)
 

@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import DuesTiers from '@/screens/Settings/DuesTiers'
 import { copy } from '@/copy/id'
 import type { DuesRate, DuesTier, DuesTierWithRates } from '@/lib/setup'
+import { cardName } from '@/test/card'
 
 const text = copy.settings.tiers
 
@@ -183,7 +184,7 @@ describe('Settings dues tiers', () => {
     vi.stubGlobal('fetch', fetchMock)
     renderAt()
 
-    await userEvent.click(await screen.findByRole('button', { name: text.cardAria('Pelaksana') }))
+    await userEvent.click(await screen.findByRole('button', { name: cardName(text.cardVerb, 'Pelaksana') }))
 
     expect(await screen.findByTestId('tier-screen')).toHaveTextContent('tier=1')
   })

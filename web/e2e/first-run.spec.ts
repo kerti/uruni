@@ -4,6 +4,7 @@ import { copy } from '../src/copy/id'
 import { formatIDR } from '../src/lib/money'
 import { expectAccessible } from './a11y'
 import { expect, test } from './fixtures'
+import { cardButton } from './card'
 
 // The treasurer's first hour, on an instance with nothing in it - register, the
 // four-step setup wizard, a first record - then the access paths around it: a
@@ -111,7 +112,7 @@ test.describe('first run and access', () => {
     await expect(page.getByRole('heading', { level: 1, name: fundName })).toBeVisible()
 
     await page.getByRole('link', { name: copy.shell.nav.settings }).click()
-    await page.getByRole('button', { name: copy.settings.fund.editAria(fundName) }).click()
+    await cardButton(page, copy.settings.fund.editVerb, fundName).click()
     await page.getByRole('textbox', { name: copy.settings.fund.nameLabel }).fill(renamedFund)
     await page.getByRole('button', { name: copy.settings.fund.save }).click()
 

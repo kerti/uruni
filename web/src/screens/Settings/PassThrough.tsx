@@ -87,11 +87,10 @@ export default function PassThrough() {
             <li key={purpose.id}>
               <button
                 type="button"
-                aria-label={text.editAria(purpose.name)}
                 onClick={() => open(`pass-through:${purpose.id}`)}
                 className="flex min-h-11 w-full items-center rounded-lg bg-card px-4 py-3 text-left shadow-card ring-1 ring-foreground/10 select-none transition-colors hover:bg-muted/40"
               >
-                <span className="min-w-0 truncate font-medium">{purpose.name}</span>
+                <span className="sr-only">{text.editVerb}</span> <span className="min-w-0 truncate font-medium">{purpose.name}</span>
               </button>
             </li>
           ))}

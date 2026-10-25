@@ -5,6 +5,7 @@ import { formatIDR } from '../src/lib/money'
 import { expectAccessible } from './a11y'
 import { expect, logIn, test } from './fixtures'
 import { chooseMenuItem, chooseOption } from './popper'
+import { cardButton } from './card'
 
 // The two ways money sits in the fund without being the fund's own. Talangan -
 // a member's money paid for the kas (removing a claim, its receipt photo, what
@@ -256,7 +257,7 @@ test.describe('talangan and titipan', () => {
     await dialog.getByLabel(copy.settings.passThrough.nameLabel).fill(titipan)
     await dialog.getByRole('button', { name: copy.settings.passThrough.add }).click()
     await expect(dialog).toBeHidden()
-    await expect(page.getByRole('button', { name: copy.settings.passThrough.editAria(titipan) })).toBeVisible()
+    await expect(cardButton(page, copy.settings.passThrough.editVerb, titipan)).toBeVisible()
 
     const card = page.locator('section').filter({ has: page.getByRole('heading', { name: copy.settings.report.heading }) })
     const href = await card.getByRole('link', { name: copy.settings.report.open }).getAttribute('href')
@@ -298,13 +299,13 @@ test.describe('talangan and titipan', () => {
   test('rename it: the new name shows in Pengaturan, Beranda and the report, the money stays', async ({ page }) => {
     await logIn(page)
     await page.goto('/settings')
-    await page.getByRole('button', { name: copy.settings.passThrough.editAria(titipan) }).click()
+    await cardButton(page, copy.settings.passThrough.editVerb, titipan).click()
     const dialog = page.getByRole('dialog', { name: copy.settings.passThrough.editTitle })
     await dialog.getByLabel(copy.settings.passThrough.nameLabel).fill(titipanRenamed)
     await dialog.getByRole('button', { name: copy.settings.passThrough.save }).click()
     await expect(dialog).toBeHidden()
-    await expect(page.getByRole('button', { name: copy.settings.passThrough.editAria(titipanRenamed) })).toBeVisible()
-    await expect(page.getByRole('button', { name: copy.settings.passThrough.editAria(titipan) })).toHaveCount(0)
+    await expect(cardButton(page, copy.settings.passThrough.editVerb, titipanRenamed)).toBeVisible()
+    await expect(cardButton(page, copy.settings.passThrough.editVerb, titipan)).toHaveCount(0)
 
     await page.goto('/')
     await expect(berandaRow(page, titipanRenamed)).toContainText(formatIDR(150_000))

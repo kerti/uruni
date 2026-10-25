@@ -1,5 +1,6 @@
 import { copy } from '../src/copy/id'
 import { expect, test, logIn } from './fixtures'
+import { cardButton } from './card'
 
 // The roster as a card list with dialog editing, server-side search and keyset
 // paging (ADR-032).
@@ -27,14 +28,14 @@ test.describe('members', () => {
     await expect(page.getByRole('heading', { name: copy.members.heading, exact: true })).toBeVisible()
 
     // The fixture's own roster is already listed.
-    await expect(page.getByRole('button', { name: copy.members.roster.editAria('Warga Satu') })).toBeVisible()
+    await expect(cardButton(page, copy.members.roster.editVerb, 'Warga Satu')).toBeVisible()
 
     await page.getByRole('button', { name: copy.members.roster.add }).click()
     const addDialog = page.getByRole('dialog', { name: copy.members.roster.add })
     await addDialog.getByLabel(copy.members.roster.nameLabel).fill(memberName)
     await addDialog.getByRole('button', { name: copy.members.roster.add }).click()
 
-    const card = page.getByRole('button', { name: copy.members.roster.editAria(memberName) })
+    const card = cardButton(page, copy.members.roster.editVerb, memberName)
     await expect(card).toBeVisible()
 
     // Never referenced by a transaction, so the delete is allowed - a member
@@ -44,7 +45,7 @@ test.describe('members', () => {
     const editDialog = page.getByRole('dialog', { name: copy.members.roster.editTitle })
     await editDialog.getByRole('button', { name: copy.members.roster.delete }).click()
     await editDialog.getByRole('button', { name: copy.members.roster.deleteConfirmAction }).click()
-    await expect(page.getByRole('button', { name: copy.members.roster.editAria(memberName) })).toHaveCount(0)
+    await expect(cardButton(page, copy.members.roster.editVerb, memberName)).toHaveCount(0)
   })
 
   // The header's fund name is the app's second way home. Proven here rather than

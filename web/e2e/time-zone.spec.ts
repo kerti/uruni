@@ -3,6 +3,7 @@ import type { Page } from '@playwright/test'
 import { copy } from '../src/copy/id'
 import { expect, test } from './fixtures'
 import { chooseOption } from './popper'
+import { cardButton } from './card'
 
 // The fund's time zone (ADR-041), end to end: chosen in Setup's first step,
 // shown in Pengaturan's "Kas ini" section, changed there, and still the server's
@@ -51,8 +52,8 @@ test.describe("the fund's time zone", () => {
 
     await page.getByRole('link', { name: copy.shell.nav.settings }).click()
     await expect(page.getByRole('heading', { name: copy.settings.fund.heading })).toBeVisible()
-    await expect(page.getByRole('button', { name: copy.settings.fund.editAria(fundName) })).toBeVisible()
-    await expect(page.getByRole('button', { name: copy.settings.fund.zone.editAria(zones.options['Asia/Makassar'].label) })).toBeVisible()
+    await expect(cardButton(page, copy.settings.fund.editVerb, fundName)).toBeVisible()
+    await expect(cardButton(page, copy.settings.fund.zone.editVerb, zones.options['Asia/Makassar'].label)).toBeVisible()
   })
 
   test('is changed from Pengaturan, with no confirm step, and survives a reload', async ({ page }) => {
@@ -63,7 +64,7 @@ test.describe("the fund's time zone", () => {
     await expect(page.getByRole('heading', { level: 1, name: fundName })).toBeVisible()
 
     await page.getByRole('link', { name: copy.shell.nav.settings }).click()
-    await page.getByRole('button', { name: copy.settings.fund.zone.editAria(zones.options['Asia/Makassar'].label) }).click()
+    await cardButton(page, copy.settings.fund.zone.editVerb, zones.options['Asia/Makassar'].label).click()
 
     await expect(page).toHaveURL(/[?&]edit=fund%3Atime_zone/)
     const dialog = page.getByRole('dialog', { name: copy.settings.fund.zone.editTitle })
@@ -75,7 +76,7 @@ test.describe("the fund's time zone", () => {
     await dialog.getByRole('button', { name: copy.settings.fund.save }).click()
     await expect(dialog).toBeHidden()
 
-    const witCard = page.getByRole('button', { name: copy.settings.fund.zone.editAria(zones.options['Asia/Jayapura'].label) })
+    const witCard = cardButton(page, copy.settings.fund.zone.editVerb, zones.options['Asia/Jayapura'].label)
     await expect(witCard).toBeVisible()
 
     // The server's zone, not only the screen's: a fresh load says it too, and
@@ -88,6 +89,6 @@ test.describe("the fund's time zone", () => {
       .getByRole('dialog', { name: copy.settings.fund.zone.editTitle })
       .getByRole('button', { name: copy.settings.fund.save })
       .click()
-    await expect(page.getByRole('button', { name: copy.settings.fund.zone.editAria(zones.options['Asia/Makassar'].label) })).toBeVisible()
+    await expect(cardButton(page, copy.settings.fund.zone.editVerb, zones.options['Asia/Makassar'].label)).toBeVisible()
   })
 })

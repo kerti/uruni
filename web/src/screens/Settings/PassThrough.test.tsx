@@ -7,6 +7,7 @@ import PassThrough from '@/screens/Settings/PassThrough'
 import { copy } from '@/copy/id'
 import type { PurposeKind } from '@/lib/enums'
 import type { Purpose } from '@/lib/purposes'
+import { cardName } from '@/test/card'
 
 const text = copy.settings.passThrough
 
@@ -133,7 +134,7 @@ describe('Settings pass-through', () => {
     renderAt()
     await screen.findByText('Kas Bidan')
 
-    await userEvent.click(screen.getByRole('button', { name: text.editAria('Kas Bidan') }))
+    await userEvent.click(screen.getByRole('button', { name: cardName(text.editVerb, 'Kas Bidan') }))
     expect(currentSearch()).toBe('?edit=pass-through%3A2')
 
     const input = await screen.findByLabelText(text.nameLabel)
