@@ -31,6 +31,20 @@ async function api<T>(request: APIRequestContext, method: 'GET' | 'POST', path: 
   return (await response.json()) as T
 }
 
+// Opens a month grid by the label of its field, steps to the period's year and
+// taps the month. Scoped to the popover (see tier-change.spec.ts).
+async function pickMonth(page: Page, field: Locator, period: string) {
+  await field.click()
+  const grid = popperContent(page)
+  const target = Number(period.slice(0, 4))
+  for (let guard = 0; guard < 40; guard++) {
+    const shown = Number(await grid.getByText(/^\d{4}$/).textContent())
+    if (shown === target) break
+    await grid.getByRole('button', { name: shown > target ? copy.dateField.previousYear : copy.dateField.nextYear }).click()
+  }
+  await grid.getByRole('button', { name: formatPeriod(period) }).click()
+}
+
 async function openStatus(page: Page) {
   await page.getByRole('link', { name: copy.shell.nav.history }).click()
   await page.getByRole('link', { name: copy.history.tabs.dues }).click()
@@ -104,6 +118,7 @@ test.describe('dues in depth', () => {
     const card = statusCard(page, 'Warga Muka')
     await expect(card).toContainText(copy.dues.statuses.paid)
     await expect(card).toContainText(copy.dues.paidThrough(formatPeriod(jakartaMonth(1))))
+    await expect(card).not.toContainText(copy.dues.statuses.paid_in_advance)
   })
 
   test('pay part of a month, and the card reads "Bayar sebagian"', async ({ page }) => {
@@ -164,7 +179,9 @@ test.describe('dues in depth', () => {
     await expect(card).toContainText(text.arrearsBadge(3))
   })
 
-  test('golongan and tarif: add a tier, add a rate, correct it, delete the rate and the tier', async ({ page }) => {
+  test('golongan and tarif: add and rename a tier, add a past and a current rate, correct one, delete the rates and the tier', async ({
+    page,
+  }) => {
     await logIn(page)
     await page.goto('/settings')
     const text = copy.settings.tiers
@@ -180,7 +197,27 @@ test.describe('dues in depth', () => {
     const tierCard = page.getByRole('button', { name: text.cardAria('Madya') })
     await expect(tierCard).toContainText(text.noRates)
     await tierCard.click()
+
+    // Rename: the name on its own section, saved by its own button.
+    const renamed = 'Madya Utama'
+    await page.getByLabel(text.nameLabel).fill(renamed)
+    await page.getByRole('button', { name: text.saveName }).click()
+    await expect(page.getByRole('heading', { name: renamed, level: 1 })).toBeVisible()
+
+    // A rate from a past month: the month field is free, so a fund's history
+    // can start before today.
     const addRate = page.getByRole('form', { name: text.addRate })
+    const past = jakartaMonth(-2)
+    await addRate.getByLabel(text.rateAmountLabel).fill('60000')
+    await pickMonth(page, addRate.getByLabel(text.effectiveFromLabel), past)
+    await addRate.getByRole('button', { name: text.addRate }).click()
+    const pastRow = page
+      .getByRole('main')
+      .getByRole('listitem')
+      .filter({ hasText: text.effectiveFrom(formatPeriod(past)) })
+    await expect(pastRow).toContainText(formatIDR(60_000))
+
+    // Then one from this month (the form is back on its default).
     await addRate.getByLabel(text.rateAmountLabel).fill('75000')
     await addRate.getByRole('button', { name: text.addRate }).click()
     const rateRow = page
@@ -209,11 +246,15 @@ test.describe('dues in depth', () => {
     // Hapus tarif, from the same editor.
     await rateRow.getByRole('button', { name: text.editRate }).click()
     await editor.getByRole('button', { name: text.deleteRate }).click()
+    await expect(rateRow).toHaveCount(0)
+    await expect(pastRow).toContainText(formatIDR(60_000))
+    await pastRow.getByRole('button', { name: text.editRate }).click()
+    await editor.getByRole('button', { name: text.deleteRate }).click()
     await expect(page.getByText(text.noRates)).toBeVisible()
 
     // Hapus golongan: no member is on it, so it goes.
     await page.getByRole('button', { name: text.delete }).click()
     await page.getByRole('button', { name: text.deleteConfirmAction }).click()
-    await expect(page.getByRole('button', { name: text.cardAria('Madya') })).toHaveCount(0)
+    await expect(page.getByRole('button', { name: text.cardAria(renamed) })).toHaveCount(0)
   })
 })

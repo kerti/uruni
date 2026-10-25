@@ -2,6 +2,7 @@ import type { APIRequestContext, Locator, Page } from '@playwright/test'
 
 import { copy } from '../src/copy/id'
 import { formatIDR } from '../src/lib/money'
+import { expectAccessible } from './a11y'
 import { expect, logIn, test } from './fixtures'
 import { chooseMenuItem, chooseOption } from './popper'
 
@@ -150,6 +151,7 @@ test.describe('talangan and titipan', () => {
     await expect(claim(page, terpal)).toBeVisible()
     // The settled one is not on Belum dibayar.
     await expect(claim(page, galon)).toHaveCount(0)
+    await expectAccessible(page)
   })
 
   test('the Semua tab searches the whole history, a settled claim included', async ({ page }) => {
@@ -264,6 +266,7 @@ test.describe('talangan and titipan', () => {
     await page.goto('/')
     await expect(page.getByText(copy.home.purposeBreakdownHeading)).toBeVisible()
     await expect(berandaRow(page, titipan)).toContainText(formatIDR(0))
+    await expectAccessible(page)
   })
 
   test('receive money for it, then forward part of it: its own pos moves, the fund total follows', async ({ page }) => {

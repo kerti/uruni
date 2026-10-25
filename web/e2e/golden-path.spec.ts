@@ -125,6 +125,17 @@ test.describe('golden path', { tag: '@smoke' }, () => {
     await expect(page.getByText(copy.record.successIn)).toBeVisible()
     await expect(recent.getByText(formatIDR(received))).toBeVisible()
     await expectBalances(page, afterRecords, 0)
+
+    // "Lihat semua" opens Riwayat on its Transaksi tab, where both rows are.
+    await recent.getByRole('button', { name: copy.home.recentActivityViewAll }).click()
+    await expect(page).toHaveURL(/\/history\/transactions$/)
+    await expect(page.getByRole('searchbox', { name: copy.history.transactions.searchLabel })).toBeVisible()
+    await expect(
+      page
+        .getByRole('main')
+        .getByRole('listitem')
+        .filter({ hasText: formatIDR(spent) }),
+    ).toBeVisible()
   })
 
   test('home: balance hero + reconciliation status (M6.9)', async ({ page }) => {

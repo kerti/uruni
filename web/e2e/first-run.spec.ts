@@ -2,6 +2,7 @@ import type { Page } from '@playwright/test'
 
 import { copy } from '../src/copy/id'
 import { formatIDR } from '../src/lib/money'
+import { expectAccessible } from './a11y'
 import { expect, test } from './fixtures'
 
 // The treasurer's first hour, on an instance with nothing in it - register, the
@@ -43,28 +44,33 @@ test.describe('first run and access', () => {
 
     // No account yet, so the app opens on Register, not Login.
     await expect(page.getByText(copy.auth.register.heading)).toBeVisible()
+    await expectAccessible(page)
     await page.getByLabel(copy.auth.register.emailLabel).fill(email)
     await page.getByLabel(copy.auth.register.passwordLabel, { exact: true }).fill(password)
     await page.getByRole('button', { name: copy.auth.register.submit }).click()
 
     // Step 1: the fund's name.
     await expect(page.getByText(copy.setup.stepLabel(1))).toBeVisible()
+    await expectAccessible(page)
     await page.getByLabel(copy.setup.fund.nameLabel).fill(fundName)
     await page.getByRole('button', { name: copy.setup.next }).click()
 
     // Step 2: locations. The wizard offers a Tunai and a Bank row; both stay.
     await expect(page.getByText(copy.setup.stepLabel(2))).toBeVisible()
     await expect(page.getByLabel(copy.setup.locations.nameLabel)).toHaveCount(2)
+    await expectAccessible(page)
     await page.getByRole('button', { name: copy.setup.next }).click()
 
     // Step 3: opening balances - Tunai has money, the bank is left blank,
     // which posts nothing for it.
     await expect(page.getByText(copy.setup.stepLabel(3))).toBeVisible()
+    await expectAccessible(page)
     await page.getByLabel(copy.setup.balances.amountLabel('Tunai')).fill(String(opening))
     await page.getByRole('button', { name: copy.setup.next }).click()
 
     // Step 4: a dues tier with its rate, and one member.
     await expect(page.getByText(copy.setup.stepLabel(4))).toBeVisible()
+    await expectAccessible(page)
     await page.getByLabel(copy.setup.roster.tierNameLabel).fill('Reguler')
     await page.getByLabel(copy.setup.roster.rateAmountLabel).fill('25000')
     await page.getByRole('button', { name: copy.setup.roster.addMember }).click()
