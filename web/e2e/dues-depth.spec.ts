@@ -4,6 +4,7 @@ import { copy } from '../src/copy/id'
 import { formatPeriod } from '../src/lib/dates'
 import { formatIDR } from '../src/lib/money'
 import { expect, logIn, test } from './fixtures'
+import { chooseOption, popperContent } from './popper'
 
 // Dues past the one multi-month payment dues.spec.ts walks: paying a month
 // ahead, paying part of a month, the belum-bayar filter, a backdated join date
@@ -50,8 +51,7 @@ function statusCard(page: Page, name: string): Locator {
 async function pay(page: Page, member: string, periods: { period: string; amount: number }[], monthsAhead = 0) {
   await page.getByRole('button', { name: copy.dues.recordLink }).click()
   await expect(page.getByRole('heading', { name: copy.dues.payment.heading })).toBeVisible()
-  await page.getByRole('combobox', { name: copy.dues.payment.memberLabel }).click()
-  await page.getByRole('listbox').getByRole('option', { name: member }).click()
+  await chooseOption(page, copy.dues.payment.memberLabel, member)
   for (let i = 0; i < monthsAhead; i++) {
     await page.getByRole('button', { name: copy.dues.payment.addMonth(formatPeriod(jakartaMonth(i + 1))) }).click()
   }
@@ -151,10 +151,11 @@ test.describe('dues in depth', () => {
     await card.click()
     const dialog = page.getByRole('dialog', { name: text.editTitle })
     await dialog.getByLabel(text.joinedOnLabel).click()
-    const calendar = page.locator('[data-radix-popper-content-wrapper]').last()
+    const calendar = popperContent(page)
     const monthName = new Intl.DateTimeFormat('id-ID', { month: 'long', timeZone: 'UTC' }).format(new Date(Date.UTC(year, month - 1, 1)))
-    await calendar.locator('select').nth(1).selectOption(String(year))
-    await calendar.locator('select').nth(0).selectOption({ label: monthName })
+    // The caption's two native selects, named by react-day-picker's id locale.
+    await calendar.getByRole('combobox', { name: 'Pilih tahun' }).selectOption(String(year))
+    await calendar.getByRole('combobox', { name: 'Pilih bulan' }).selectOption({ label: monthName })
     await calendar.getByRole('gridcell').getByRole('button').filter({ hasText: /^1$/ }).first().click()
     await dialog.getByRole('button', { name: text.save }).click()
     await expect(dialog).toBeHidden()

@@ -2,6 +2,7 @@ import type { APIRequestContext, Page } from '@playwright/test'
 
 import { copy } from '../src/copy/id'
 import { expect, logIn, test } from './fixtures'
+import { chooseOption } from './popper'
 
 // Finding things again. Riwayat's four tabs (search, the Transaksi filter
 // dialog and its chips, paging), the roster (search, paging, the arrears
@@ -169,8 +170,7 @@ test.describe('browsing Riwayat, the roster and the locations', () => {
       [copy.history.transactions.filterMember, 'Warga Dua'],
       [copy.record.directionLabel, copy.record.directionIn],
     ]) {
-      await dialog.getByRole('combobox', { name: label }).click()
-      await page.getByRole('listbox').getByRole('option', { name: option }).click()
+      await chooseOption(page, dialog.getByRole('combobox', { name: label }), option)
     }
     await dialog.getByRole('button', { name: copy.history.transactions.filterApply }).click()
 

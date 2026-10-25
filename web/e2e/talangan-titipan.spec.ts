@@ -3,6 +3,7 @@ import type { APIRequestContext, Locator, Page } from '@playwright/test'
 import { copy } from '../src/copy/id'
 import { formatIDR } from '../src/lib/money'
 import { expect, logIn, test } from './fixtures'
+import { chooseMenuItem, chooseOption } from './popper'
 
 // The two ways money sits in the fund without being the fund's own. Talangan -
 // a member's money paid for the kas (removing a claim, its receipt photo, what
@@ -72,15 +73,11 @@ async function openTalangan(page: Page) {
   await expect(page.getByRole('button', { name: copy.reimbursements.outstandingTab })).toBeVisible()
 }
 
-// The row's "more" menu, then Hapus. Retried as a pair, for the reason
-// choosePhotoAction gives: a menu still animating closed turns the trigger
-// click into a toggle.
+// The row's "more" menu, then Hapus.
 async function chooseHapus(card: Locator, page: Page) {
-  await expect(async () => {
-    const item = page.getByRole('menuitem', { name: copy.reimbursements.actions.delete, exact: true })
-    if (!(await item.isVisible())) await card.getByRole('button', { name: copy.reimbursements.actions.menuAria }).click()
-    await item.click({ timeout: 2_000 })
-  }).toPass()
+  await chooseMenuItem(page, card.getByRole('button', { name: copy.reimbursements.actions.menuAria }), copy.reimbursements.actions.delete, {
+    exact: true,
+  })
 }
 
 // Hapus from the menu, then the confirmation's own Hapus.
@@ -89,23 +86,12 @@ async function removeClaim(card: Locator, page: Page) {
   await card.getByRole('button', { name: copy.reimbursements.actions.delete, exact: true }).click()
 }
 
-// The photo's "more" menu, then one of its items. Retried as a pair - see
-// receipts.spec.ts, which this is copied from.
-async function choosePhotoAction(page: Page, dialog: Locator, item: string) {
-  await expect(async () => {
-    const menuItem = page.getByRole('menuitem', { name: item })
-    if (!(await menuItem.isVisible())) await dialog.getByRole('button', { name: copy.receipts.photoMenuAria }).click()
-    await menuItem.click({ timeout: 2_000 })
-  }).toPass()
-}
-
 // Catat -> Masuk or Keluar -> Pos -> amount -> Simpan; lands on Beranda.
 async function recordForPos(page: Page, direction: 'in' | 'out', pos: string, amount: number) {
   await page.getByRole('link', { name: copy.shell.nav.record }).click()
   await expect(page.getByRole('heading', { name: copy.record.heading })).toBeVisible()
   await page.getByRole('button', { name: direction === 'in' ? copy.record.directionIn : copy.record.directionOut }).click()
-  await page.getByRole('combobox', { name: copy.record.purposeLabel }).click()
-  await page.getByRole('listbox').getByRole('option', { name: pos }).click()
+  await chooseOption(page, copy.record.purposeLabel, pos)
   await page.getByLabel(copy.record.amountLabel).fill(String(amount))
   await page.getByRole('button', { name: copy.record.submit }).click()
   await expect(page.getByText(direction === 'in' ? copy.record.successIn : copy.record.successOut)).toBeVisible()
@@ -224,7 +210,7 @@ test.describe('talangan and titipan', () => {
     // Delete the photo behind its own confirm.
     await card.getByRole('button', { name: copy.receipts.rowControlAria(true) }).click()
     await expect(dialog).toBeVisible()
-    await choosePhotoAction(page, dialog, copy.receipts.delete)
+    await chooseMenuItem(page, dialog.getByRole('button', { name: copy.receipts.photoMenuAria }), copy.receipts.delete)
     await expect(dialog.getByText(copy.receipts.deleteConfirm)).toBeVisible()
     await dialog.getByRole('button', { name: copy.receipts.delete }).click()
     await expect(dialog.getByText(copy.receipts.emptyReimbursement)).toBeVisible()

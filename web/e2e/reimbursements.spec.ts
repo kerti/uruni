@@ -2,6 +2,7 @@ import type { Page } from '@playwright/test'
 
 import { copy } from '../src/copy/id'
 import { expect, test, logIn } from './fixtures'
+import { chooseMenuItem, chooseOption } from './popper'
 
 // Records a claim the way she does: Catat -> Keluar -> "Pengeluaran ini
 // ditalangi" -> member and amount -> Simpan. Lands on Beranda with the
@@ -18,10 +19,7 @@ async function recordClaim(page: Page, amount: string): Promise<string> {
   await expect(page).toHaveURL(/\/record\?fronted=1$/)
   // No location while a member's own money paid: nothing leaves the kas yet.
   await expect(page.getByLabel(copy.record.locationLabel, { exact: true })).toHaveCount(0)
-  await page.getByRole('combobox', { name: copy.reimbursements.record.memberLabel }).click()
-  const firstOption = page.getByRole('option').first()
-  const name = (await firstOption.textContent())?.trim() ?? ''
-  await firstOption.click()
+  const name = await chooseOption(page, copy.reimbursements.record.memberLabel)
   await page.getByLabel(copy.record.amountLabel).fill(amount)
   await page.getByRole('button', { name: copy.record.submit }).click()
   await expect(page.getByText(copy.record.successFronted)).toBeVisible()
@@ -82,8 +80,7 @@ test.describe('reimbursements', () => {
     await expect(page.getByRole('heading', { name: copy.reimbursements.settle.heading })).toBeVisible()
 
     // Pick where the money is paid from - the account has no default.
-    await page.getByRole('combobox', { name: copy.reimbursements.settle.accountLabel }).click()
-    await page.getByRole('option').first().click()
+    await chooseOption(page, copy.reimbursements.settle.accountLabel)
 
     // Submit settle (date defaults to today)
     await page.getByRole('button', { name: copy.reimbursements.settle.submit, exact: true }).click()
@@ -111,8 +108,12 @@ test.describe('reimbursements', () => {
     await expect(page.getByText('Rp 30.000')).toBeVisible()
 
     // Perbaiki sits in the row's "more" menu and opens the claim's screen.
-    await page.locator('li', { hasText: 'Rp 30.000' }).getByRole('button', { name: copy.reimbursements.actions.menuAria }).click()
-    await page.getByRole('menuitem', { name: copy.reimbursements.actions.correct, exact: true }).click()
+    await chooseMenuItem(
+      page,
+      page.locator('li', { hasText: 'Rp 30.000' }).getByRole('button', { name: copy.reimbursements.actions.menuAria }),
+      copy.reimbursements.actions.correct,
+      { exact: true },
+    )
     await expect(page).toHaveURL(/\/reimbursements\/correct\?id=\d+$/)
     await expect(page.getByRole('heading', { name: copy.reimbursements.correct.heading })).toBeVisible()
 
@@ -132,8 +133,7 @@ test.describe('reimbursements', () => {
 
     // Settle it so the next test starts from an empty outstanding list.
     await page.getByRole('button', { name: copy.reimbursements.actions.settle, exact: true }).first().click()
-    await page.getByRole('combobox', { name: copy.reimbursements.settle.accountLabel }).click()
-    await page.getByRole('option').first().click()
+    await chooseOption(page, copy.reimbursements.settle.accountLabel)
     await page.getByRole('button', { name: copy.reimbursements.settle.submit, exact: true }).click()
     await expect(page.getByText(copy.reimbursements.settle.success)).toBeVisible()
   })
@@ -151,8 +151,12 @@ test.describe('reimbursements', () => {
 
     // Waive it: the row leaves the outstanding list and feedback confirms.
     // Putihkan sits in the row's "more" menu, behind the one plain Bayar.
-    await page.locator('li', { hasText: 'Rp 20.000' }).getByRole('button', { name: copy.reimbursements.actions.menuAria }).click()
-    await page.getByRole('menuitem', { name: copy.reimbursements.actions.waive, exact: true }).click()
+    await chooseMenuItem(
+      page,
+      page.locator('li', { hasText: 'Rp 20.000' }).getByRole('button', { name: copy.reimbursements.actions.menuAria }),
+      copy.reimbursements.actions.waive,
+      { exact: true },
+    )
     await expect(page.getByText(copy.reimbursements.waive.success)).toBeVisible()
     await expect(page.getByText('Rp 20.000')).not.toBeVisible()
 

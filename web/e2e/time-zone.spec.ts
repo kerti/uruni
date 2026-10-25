@@ -2,6 +2,7 @@ import type { Page } from '@playwright/test'
 
 import { copy } from '../src/copy/id'
 import { expect, test } from './fixtures'
+import { chooseOption } from './popper'
 
 // The fund's time zone (ADR-041), end to end: chosen in Setup's first step,
 // shown in Pengaturan's "Kas ini" section, changed there, and still the server's
@@ -18,15 +19,9 @@ const fundName = 'Kas RT Zona Waktu'
 const zones = copy.timeZone
 
 /** Opens the zone field and taps one option, by the start of its label (an
- * option's accessible name carries its example line too). Scoped to the open
- * listbox: Radix also renders a hidden native select whose <option> elements
- * carry the same role and text. */
+ * option's accessible name carries its example line too). */
 async function chooseZone(page: Page, zone: keyof typeof zones.options) {
-  await page.getByRole('combobox', { name: zones.label }).click()
-  await page
-    .getByRole('listbox')
-    .getByRole('option', { name: new RegExp(`^${zones.options[zone].label}`) })
-    .click()
+  await chooseOption(page, zones.label, new RegExp(`^${zones.options[zone].label}`))
 }
 
 test.describe("the fund's time zone", () => {
