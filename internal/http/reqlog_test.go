@@ -37,7 +37,7 @@ func loggedRouter(t *testing.T, level slog.Level) (h http.Handler, logs *bytes.B
 		func(p, encoded string) (bool, error) { return encoded == "stub:"+p, nil },
 	))
 	backupDir = t.TempDir()
-	r := New(testAssets(), testBuild, ledger.New(sqlDB), store.New(sqlDB), sqlDB, nil, logger, au, "https://kas.example.org", t.TempDir(), backupDir, nil)
+	r := New(Deps{Assets: testAssets(), Build: testBuild, Ledger: ledger.New(sqlDB), Queries: store.New(sqlDB), DB: sqlDB, Logger: logger, Auth: au, BaseURL: "https://kas.example.org", UploadsDir: t.TempDir(), BackupDir: backupDir})
 	reg := postRegister(t, r, logEmail, logPassword)
 	if reg.Code != http.StatusCreated {
 		t.Fatalf("fixture register = %d (body: %s)", reg.Code, reg.Body.String())
@@ -84,7 +84,7 @@ func TestRequestIDJoinsTheRequestLineAndTheHandlerLine(t *testing.T) {
 	logs := &bytes.Buffer{}
 	logger := slog.New(slog.NewTextHandler(logs, nil))
 	sqlDB := testStoreDB(t)
-	h := New(testAssets(), testBuild, ledger.New(sqlDB), store.New(sqlDB), sqlDB, nil, logger, auth.New(sqlDB), "", t.TempDir(), t.TempDir(), nil)
+	h := New(Deps{Assets: testAssets(), Build: testBuild, Ledger: ledger.New(sqlDB), Queries: store.New(sqlDB), DB: sqlDB, Logger: logger, Auth: auth.New(sqlDB), BaseURL: "", UploadsDir: t.TempDir(), BackupDir: t.TempDir()})
 	if err := sqlDB.Close(); err != nil { // GET /api/session then fails in its handler and logs an error
 		t.Fatal(err)
 	}

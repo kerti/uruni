@@ -22,7 +22,7 @@ import (
 func testRouterAndDB(t *testing.T) (http.Handler, *sql.DB) {
 	t.Helper()
 	sqlDB := testStoreDB(t)
-	return New(testAssets(), testBuild, ledger.New(sqlDB), store.New(sqlDB), sqlDB, nil, testLogger(), auth.New(sqlDB), "", t.TempDir(), t.TempDir(), nil), sqlDB
+	return New(Deps{Assets: testAssets(), Build: testBuild, Ledger: ledger.New(sqlDB), Queries: store.New(sqlDB), DB: sqlDB, Logger: testLogger(), Auth: auth.New(sqlDB), BaseURL: "", UploadsDir: t.TempDir(), BackupDir: t.TempDir()}), sqlDB
 }
 
 func postRegister(t *testing.T, r http.Handler, email, password string) *httptest.ResponseRecorder {
@@ -143,7 +143,7 @@ func TestSessionCookieSecureFollowsBaseURLScheme(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			sqlDB := testStoreDB(t)
-			r := New(testAssets(), testBuild, ledger.New(sqlDB), store.New(sqlDB), sqlDB, nil, testLogger(), auth.New(sqlDB), tc.baseURL, t.TempDir(), t.TempDir(), nil)
+			r := New(Deps{Assets: testAssets(), Build: testBuild, Ledger: ledger.New(sqlDB), Queries: store.New(sqlDB), DB: sqlDB, Logger: testLogger(), Auth: auth.New(sqlDB), BaseURL: tc.baseURL, UploadsDir: t.TempDir(), BackupDir: t.TempDir()})
 
 			rec := postRegister(t, r, "treasurer@example.org", "correct-horse-battery")
 			if rec.Code != http.StatusCreated {

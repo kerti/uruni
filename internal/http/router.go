@@ -46,36 +46,54 @@ func init() {
 	}
 }
 
-// New builds the router over the embedded SPA assets. build is what /healthz
-// reports, so which binary is live can be read over HTTP.
-//
-// l and q are both passed: store.Queries is a stateless wrapper over the
-// shared *sql.DB (ADR-004's single connection), so a second store.New(sqlDB)
-// beside ledger.New(sqlDB) costs nothing and avoids a Querier accessor on
-// ADR-027's boundary. Direct-CRUD routes (members, accounts, purposes -
-// ADR-027's "no domain wrapper" list) call q; routes with a derived invariant
-// call l.
-//
-// au is the bootstrap-account service POST /api/register calls. baseURL is
-// read once, to derive the session cookie's Secure flag from its scheme
-// (session.go).
-//
-// uploadsDir is the local volume receipt photos live on (ADR-011);
-// Config.EnsureUploadsDirWritable proved it before `serve` builds a router.
-//
-// sqlDB is the same *sql.DB l and q wrap, passed because restore.go's confirm
-// route calls internal/backup.Restore, which needs its own write transaction
-// spanning nearly every table (see backup.Restore).
-//
-// dbFileCheck is /healthz's check that the configured database path still
-// names the file this process opened (see db.FileIdentity). nil skips it.
-//
-// trustedProxies (Config.TrustedProxies) are the peers whose X-Forwarded-For
-// clientIP believes. nil believes none.
-func New(assets fs.FS, build Build, l *ledger.Ledger, q store.Querier, sqlDB *sql.DB, dbFileCheck func() error, logger *slog.Logger, au *auth.Auth, baseURL string, uploadsDir string, backupDir string, trustedProxies []netip.Prefix) http.Handler {
-	// The ledger's clock is the process's only one: the report and every route
-	// that reckons a calendar day or month read it here, so a handler and the
-	// ledger it calls read one clock, not two that could be set apart.
+// Deps is everything New wires the router from.
+type Deps struct {
+	// Assets is the embedded SPA the fallback route serves.
+	Assets fs.FS
+	// Build is what /healthz reports, so which binary is live can be read over
+	// HTTP.
+	Build Build
+
+	// Ledger and Queries are both passed: store.Queries is a stateless wrapper
+	// over the shared *sql.DB (ADR-004's single connection), so a second
+	// store.New(sqlDB) beside ledger.New(sqlDB) costs nothing and avoids a
+	// Querier accessor on ADR-027's boundary. Direct-CRUD routes (members,
+	// accounts, purposes - ADR-027's "no domain wrapper" list) call Queries;
+	// routes with a derived invariant call Ledger.
+	Ledger  *ledger.Ledger
+	Queries store.Querier
+
+	// DB is the same *sql.DB Ledger and Queries wrap, passed because
+	// restore.go's confirm route calls internal/backup.Restore, which needs its
+	// own write transaction spanning nearly every table (see backup.Restore).
+	DB *sql.DB
+
+	// DBFileCheck is /healthz's check that the configured database path still
+	// names the file this process opened (see db.FileIdentity). nil skips it.
+	DBFileCheck func() error
+
+	Logger *slog.Logger
+
+	// Auth is the bootstrap-account service POST /api/register calls.
+	Auth *auth.Auth
+	// BaseURL is read once, to derive the session cookie's Secure flag from its
+	// scheme (session.go).
+	BaseURL string
+
+	// UploadsDir is the local volume receipt photos live on (ADR-011);
+	// Config.EnsureUploadsDirWritable proved it before `serve` builds a router.
+	UploadsDir string
+	BackupDir  string
+
+	// TrustedProxies (Config.TrustedProxies) are the peers whose X-Forwarded-For
+	// clientIP believes. nil believes none.
+	TrustedProxies []netip.Prefix
+}
+
+// New builds the router over the embedded SPA assets.
+func New(d Deps) http.Handler {
+	l, q, sqlDB, logger := d.Ledger, d.Queries, d.DB, d.Logger
+	baseURL, backupDir, trustedProxies := d.BaseURL, d.BackupDir, d.TrustedProxies
 	now := l.Now
 
 	r := chi.NewRouter()
@@ -91,7 +109,7 @@ func New(assets fs.FS, build Build, l *ledger.Ledger, q store.Querier, sqlDB *sq
 	}
 	r.Use(securityHeaders)
 
-	r.Get("/healthz", healthz(build, dbFileCheck, pingStore(q), lastDumpIn(backupDir), logger))
+	r.Get("/healthz", healthz(d.Build, d.DBFileCheck, pingStore(q), lastDumpIn(backupDir), logger))
 
 	// The third-party licence notices the binary carries (#521), public like
 	// the signed-out footer that links to it. Registered here so the SPA
@@ -117,13 +135,13 @@ func New(assets fs.FS, build Build, l *ledger.Ledger, q store.Querier, sqlDB *sq
 		queries:         q,
 		sqlDB:           sqlDB,
 		logger:          logger,
-		auth:            au,
+		auth:            d.Auth,
 		sessionManager:  sm,
 		loginLimiter:    loginLimiter,
 		registerLimiter: registerLimiter,
 		devices:         devices,
 		trustedProxies:  trustedProxies,
-		uploadsDir:      uploadsDir,
+		uploadsDir:      d.UploadsDir,
 		backupDir:       backupDir,
 		baseURL:         strings.TrimRight(baseURL, "/"),
 		now:             now,
@@ -142,7 +160,7 @@ func New(assets fs.FS, build Build, l *ledger.Ledger, q store.Querier, sqlDB *sq
 
 	// The SPA fallback is chi's NotFound handler (ADR-021): registered routes
 	// win, so /api and /report still 404 instead of falling through to the shell.
-	r.NotFound(spa(assets))
+	r.NotFound(spa(d.Assets))
 
 	return r
 }

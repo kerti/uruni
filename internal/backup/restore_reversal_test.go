@@ -180,7 +180,7 @@ func TestRestoreRefusesAReversalTheTriggerRejects(t *testing.T) {
 
 	destDB := newTestDB(t)
 	seedOneUser(t, destDB)
-	err = Restore(context.Background(), destDB, t.TempDir(), t.TempDir(), parsed, time.Unix(1800000000, 0))
+	err = Restore(context.Background(), RestoreParams{DB: destDB, UploadsDir: t.TempDir(), BackupDir: t.TempDir(), Parsed: parsed, Now: time.Unix(1800000000, 0)})
 	if err == nil {
 		t.Fatal("Restore() = nil, want the trigger to refuse the same-direction reversal")
 	}

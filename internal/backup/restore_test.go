@@ -126,7 +126,7 @@ func assertDocumentsEqual(t *testing.T, got, want Document) {
 
 func restoreOrFatal(t *testing.T, destDB *sql.DB, uploadsDir, backupDir string, parsed ParsedUpload) {
 	t.Helper()
-	if err := Restore(context.Background(), destDB, uploadsDir, backupDir, parsed, time.Unix(1800000000, 0)); err != nil {
+	if err := Restore(context.Background(), RestoreParams{DB: destDB, UploadsDir: uploadsDir, BackupDir: backupDir, Parsed: parsed, Now: time.Unix(1800000000, 0)}); err != nil {
 		t.Fatalf("Restore() = %v, want no error", err)
 	}
 }
@@ -499,7 +499,7 @@ func TestRestoreTotalsMismatchRollsBack(t *testing.T) {
 		},
 	}
 
-	err := Restore(context.Background(), destDB, t.TempDir(), t.TempDir(), ParsedUpload{Document: doc}, time.Unix(1800000000, 0))
+	err := Restore(context.Background(), RestoreParams{DB: destDB, UploadsDir: t.TempDir(), BackupDir: t.TempDir(), Parsed: ParsedUpload{Document: doc}, Now: time.Unix(1800000000, 0)})
 	if !errors.Is(err, ErrTotalsMismatch) {
 		t.Fatalf("Restore() error = %v, want ErrTotalsMismatch", err)
 	}
@@ -549,7 +549,7 @@ func TestRestoreFailureRemovesOnlyTheReceiptsItCreated(t *testing.T) {
 				}
 			}
 
-			err = Restore(context.Background(), destDB, destUploads, t.TempDir(), parsed, time.Unix(1800000000, 0))
+			err = Restore(context.Background(), RestoreParams{DB: destDB, UploadsDir: destUploads, BackupDir: t.TempDir(), Parsed: parsed, Now: time.Unix(1800000000, 0)})
 			if !errors.Is(err, ErrTotalsMismatch) {
 				t.Fatalf("Restore() error = %v, want ErrTotalsMismatch", err)
 			}
@@ -580,7 +580,7 @@ func TestRestoreSafetyNetDumpFailureAborts(t *testing.T) {
 	}
 
 	doc := minimalDocWithOneFund(t)
-	err := Restore(context.Background(), destDB, t.TempDir(), notADir, ParsedUpload{Document: doc}, time.Unix(1800000000, 0))
+	err := Restore(context.Background(), RestoreParams{DB: destDB, UploadsDir: t.TempDir(), BackupDir: notADir, Parsed: ParsedUpload{Document: doc}, Now: time.Unix(1800000000, 0)})
 	if err == nil {
 		t.Fatal("Restore() = nil, want an error when the safety-net dump cannot be written")
 	}

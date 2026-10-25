@@ -690,7 +690,7 @@ func TestGetAndDeleteReceiptRequireSession(t *testing.T) {
 	uploadRec := postReceiptFile(t, authed, "/api/transactions/"+strconv.FormatInt(txnID, 10)+"/receipts", fixture)
 	receipt := decodeReceiptResponse(t, uploadRec)
 
-	noSession := New(testAssets(), testBuild, ledger.New(sqlDB), store.New(sqlDB), sqlDB, nil, testLogger(), auth.New(sqlDB), "", t.TempDir(), t.TempDir(), nil)
+	noSession := New(Deps{Assets: testAssets(), Build: testBuild, Ledger: ledger.New(sqlDB), Queries: store.New(sqlDB), DB: sqlDB, Logger: testLogger(), Auth: auth.New(sqlDB), BaseURL: "", UploadsDir: t.TempDir(), BackupDir: t.TempDir()})
 
 	if rec := getReceipt(t, noSession, receipt.ID); rec.Code != http.StatusUnauthorized {
 		t.Errorf("GET /api/receipts/%d with no session = %d, want %d", receipt.ID, rec.Code, http.StatusUnauthorized)

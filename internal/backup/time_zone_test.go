@@ -393,7 +393,7 @@ func TestRestoreRefusesAZoneOutsideTheThreeThroughTheCheck(t *testing.T) {
 	if err := os.WriteFile(path, zipOfDocument(t, bad), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	err = Restore(context.Background(), destDB, t.TempDir(), t.TempDir(), ParsedUpload{Document: bad, StagingPath: path}, time.Unix(1800000000, 0))
+	err = Restore(context.Background(), RestoreParams{DB: destDB, UploadsDir: t.TempDir(), BackupDir: t.TempDir(), Parsed: ParsedUpload{Document: bad, StagingPath: path}, Now: time.Unix(1800000000, 0)})
 	if err == nil || !strings.Contains(err.Error(), "CHECK") {
 		t.Fatalf("Restore(time_zone=Asia/Tokyo) = %v, want the CHECK to refuse it", err)
 	}

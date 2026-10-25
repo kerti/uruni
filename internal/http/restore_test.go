@@ -378,7 +378,7 @@ func TestRestoreInspectStoredRefusesAFormatNoStepCovers(t *testing.T) {
 func TestInspectStoredBackupRequiresASession(t *testing.T) {
 	t.Parallel()
 	sqlDB := testStoreDB(t)
-	r := New(testAssets(), testBuild, ledger.New(sqlDB), store.New(sqlDB), sqlDB, nil, testLogger(), auth.New(sqlDB), "", t.TempDir(), t.TempDir(), nil)
+	r := New(Deps{Assets: testAssets(), Build: testBuild, Ledger: ledger.New(sqlDB), Queries: store.New(sqlDB), DB: sqlDB, Logger: testLogger(), Auth: auth.New(sqlDB), BaseURL: "", UploadsDir: t.TempDir(), BackupDir: t.TempDir()})
 
 	rec := postRestoreInspectStored(t, r, "uruni-20260930-140501-daily-fv1-3f9a2c8e10b4.zip")
 	if rec.Code != http.StatusUnauthorized {
@@ -395,7 +395,7 @@ func TestRestoreFromStoredSafetyNetBackupEndToEnd(t *testing.T) {
 	t.Parallel()
 	sqlDB := testStoreDB(t)
 	backupDir := t.TempDir()
-	raw := New(testAssets(), testBuild, ledger.New(sqlDB), store.New(sqlDB), sqlDB, nil, testLogger(), auth.New(sqlDB), "", t.TempDir(), backupDir, nil)
+	raw := New(Deps{Assets: testAssets(), Build: testBuild, Ledger: ledger.New(sqlDB), Queries: store.New(sqlDB), DB: sqlDB, Logger: testLogger(), Auth: auth.New(sqlDB), BaseURL: "", UploadsDir: t.TempDir(), BackupDir: backupDir})
 
 	const email = "treasurer@example.org"
 	reg := postRegister(t, raw, email, fixturePassword)

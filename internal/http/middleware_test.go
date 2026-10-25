@@ -246,7 +246,7 @@ func TestRouterForwardedForWarningFollowsTrustedProxies(t *testing.T) {
 			var buf bytes.Buffer
 			logger := slog.New(slog.NewTextHandler(&buf, nil))
 			sqlDB := testStoreDB(t)
-			h := New(testAssets(), testBuild, ledger.New(sqlDB), store.New(sqlDB), sqlDB, nil, logger, auth.New(sqlDB), "", t.TempDir(), t.TempDir(), tc.trusted)
+			h := New(Deps{Assets: testAssets(), Build: testBuild, Ledger: ledger.New(sqlDB), Queries: store.New(sqlDB), DB: sqlDB, Logger: logger, Auth: auth.New(sqlDB), BaseURL: "", UploadsDir: t.TempDir(), BackupDir: t.TempDir(), TrustedProxies: tc.trusted})
 			req := httptest.NewRequest(http.MethodGet, "/healthz", nil)
 			req.RemoteAddr = "172.18.0.2:5555"
 			req.Header.Set("X-Forwarded-For", "203.0.113.9")

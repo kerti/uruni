@@ -47,7 +47,7 @@ func newUserEnv(t *testing.T, opts ...auth.Option) *userEnv {
 	)}, opts...)...)
 	var logs bytes.Buffer
 	logger := slog.New(slog.NewTextHandler(&logs, nil))
-	r := New(testAssets(), testBuild, ledger.New(sqlDB, ledger.WithClock(newFakeClock().now)), store.New(sqlDB), sqlDB, nil, logger, au, "", t.TempDir(), t.TempDir(), nil)
+	r := New(Deps{Assets: testAssets(), Build: testBuild, Ledger: ledger.New(sqlDB, ledger.WithClock(newFakeClock().now)), Queries: store.New(sqlDB), DB: sqlDB, Logger: logger, Auth: au, BaseURL: "", UploadsDir: t.TempDir(), BackupDir: t.TempDir()})
 
 	reg := postRegister(t, r, userEmail, userPassword)
 	if reg.Code != http.StatusCreated {
