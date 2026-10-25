@@ -30,10 +30,10 @@ WHERE p.fund_id = ? AND i.closed_on IS NULL
 ORDER BY p.kind <> 'main', p.name COLLATE NOCASE, p.id;
 
 -- Renames a purpose; a posted transaction references it by id and nothing in
--- the ledger reads the text. Which purposes may be renamed is the handler's
--- call (policy, not shape). For an incidental this is one half of the pair
--- Ledger.RenameIncidental runs with UpdateIncidentalOccasion, since the
--- occasion is stored on both rows (#264).
+-- the ledger reads the text. Which purposes may be renamed is
+-- Ledger.RenamePurpose's call (policy, not shape). For an incidental this is
+-- one half of the pair Ledger.RenameIncidental runs with
+-- UpdateIncidentalOccasion, since the occasion is stored on both rows.
 -- name: UpdatePurposeName :one
 UPDATE purpose
 SET name = ?

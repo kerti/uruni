@@ -292,7 +292,8 @@ func (l *Ledger) UpdateReimbursement(ctx context.Context, p UpdateReimbursementP
 //
 // Settled claims are refused as in UpdateReimbursement, and harder: the
 // payout row references this claim's id and can never be deleted, so removal
-// would leave the ledger pointing at nothing.
+// would leave the ledger pointing at nothing. A claim a receipt still names is
+// ErrReferencedByOtherRecords.
 func (l *Ledger) DeleteReimbursement(ctx context.Context, fundID, reimbursementID int64) error {
 	err := l.withTx(ctx, func(ctx context.Context, q store.Querier) error {
 		if _, err := unsettledClaim(ctx, q, fundID, reimbursementID); err != nil {
@@ -301,7 +302,7 @@ func (l *Ledger) DeleteReimbursement(ctx context.Context, fundID, reimbursementI
 		return q.DeleteReimbursement(ctx, reimbursementID)
 	})
 	if err != nil {
-		return fmt.Errorf("deleting reimbursement: %w", err)
+		return fmt.Errorf("deleting reimbursement: %w", refuseDelete(err))
 	}
 	return nil
 }

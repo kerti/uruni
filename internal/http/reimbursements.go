@@ -466,7 +466,7 @@ func (a *api) deleteReimbursement(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := a.ledger.DeleteReimbursement(r.Context(), fund.ID, id); err != nil {
-		mapLedgerDeleteError(w, a.log(r), err)
+		mapLedgerError(w, a.log(r), err)
 		return
 	}
 

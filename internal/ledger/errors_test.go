@@ -45,13 +45,13 @@ func TestDomainErrorsShareACodeOnlyWhereTheyAlwaysHave(t *testing.T) {
 	allowed := map[string]int{
 		// A reversal's or a correction's id that names no row of this fund.
 		"not_found": 2,
-		// The generic shape refusal, and the three refusals that point at a field
+		// The generic shape refusal, and the four refusals that point at a field
 		// without a code of their own: a purpose, an account, a named contribution's
-		// purpose.
-		"invalid_argument": 4,
-		// A second rate for a month the tier already has, answered as the schema's
-		// own UNIQUE would be.
-		"unique_violation": 1,
+		// purpose, and a write's foreign key naming a row that does not exist.
+		"invalid_argument": 5,
+		// A second rate for a month the tier already has, and a write the schema's
+		// own UNIQUE refused (a tier's name): the same answer to the client.
+		"unique_violation": 2,
 	}
 	count := map[string]int{}
 	class := map[string]Class{}

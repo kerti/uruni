@@ -76,7 +76,8 @@ func Errors() []*Error { return append([]*Error(nil), refusals...) }
 //
 // Not for composite-FK violations, an account of another fund, an unknown
 // id - anything the schema already enforces. Those are domain bugs, not
-// caller mistakes, and surface wrapped generically as a 500. Re-deriving a
+// caller mistakes: outside the reference-data writes, whose refusals
+// refuseWrite names, they surface wrapped generically as a 500. Re-deriving a
 // cross-row invariant here would be a second source of truth (ADR-027).
 var ErrInvalidArgument = refuse("ledger: invalid argument",
 	ClassInvalid, "invalid_argument",
@@ -470,3 +471,42 @@ var ErrDuesRateMonthTaken = refuse("ledger: the tier already has a rate for that
 var ErrIdempotencyKeyReused = refuse("ledger: the idempotency key was used for another request",
 	ClassConflict, "idempotency_key_reused",
 	"This Idempotency-Key was already used for a different request.")
+
+// The constraint refusals: the schema's own CHECK, UNIQUE and FOREIGN KEY, named
+// for the writes that carry the caller's input straight into a column (reference
+// data, a receipt's row). The schema is the guarantee and these only give its
+// refusal a name (refuseWrite, refuseDelete); a write that has a business reason
+// to refuse has its own error above.
+
+// ErrDataConstraint is a CHECK the schema refused: a blank name, a time zone
+// outside the three, a receipt without exactly one parent.
+var ErrDataConstraint = refuse("ledger: the data violates a constraint",
+	ClassInvalid, "check_violation",
+	"The request violates a data constraint.")
+
+// ErrValueTaken is a UNIQUE the schema refused: a second tier of the same name
+// in one fund.
+var ErrValueTaken = refuse("ledger: the value conflicts with an existing record",
+	ClassConflict, "unique_violation",
+	"This value conflicts with an existing record.")
+
+// ErrReferenceMissing is a FOREIGN KEY refused on an insert or an update: the
+// row a field names does not exist.
+var ErrReferenceMissing = refuse("ledger: the write references a record that does not exist",
+	ClassInvalid, "invalid_argument",
+	"The request references a record that does not exist.")
+
+// ErrReferencedByOtherRecords is a FOREIGN KEY refused on a delete: other rows
+// still name the one asked to go (a location or a member with posted rows, a
+// tier any member was ever in). Nothing is deleted.
+var ErrReferencedByOtherRecords = refuse("ledger: the record is referenced by other data",
+	ClassConflict, "referenced_by_other_records",
+	"This record is referenced by other data and cannot be deleted.")
+
+// ErrPurposeNotRenameable is returned by RenamePurpose for the fund's Kas Utama:
+// the system row purpose_single_main guarantees exactly one of, with no
+// treasurer-typed name to have mistyped. A pass-through and an incidental are
+// renameable, because renaming moves no money.
+var ErrPurposeNotRenameable = refuse("ledger: the main purpose cannot be renamed",
+	ClassConflict, "purpose_not_renameable",
+	"The fund's Kas Utama purpose cannot be renamed.")

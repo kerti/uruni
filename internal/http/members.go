@@ -380,8 +380,8 @@ func (a *api) deleteMember(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := a.queries.DeleteMember(r.Context(), member.ID); err != nil {
-		mapSQLiteDeleteError(w, a.log(r), err)
+	if err := a.ledger.DeleteMember(r.Context(), ledger.DeleteMemberParams{FundID: member.FundID, MemberID: member.ID}); err != nil {
+		mapLedgerError(w, a.log(r), err)
 		return
 	}
 

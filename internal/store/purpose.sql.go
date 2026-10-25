@@ -158,10 +158,10 @@ type UpdatePurposeNameParams struct {
 }
 
 // Renames a purpose; a posted transaction references it by id and nothing in
-// the ledger reads the text. Which purposes may be renamed is the handler's
-// call (policy, not shape). For an incidental this is one half of the pair
-// Ledger.RenameIncidental runs with UpdateIncidentalOccasion, since the
-// occasion is stored on both rows (#264).
+// the ledger reads the text. Which purposes may be renamed is
+// Ledger.RenamePurpose's call (policy, not shape). For an incidental this is
+// one half of the pair Ledger.RenameIncidental runs with
+// UpdateIncidentalOccasion, since the occasion is stored on both rows.
 func (q *Queries) UpdatePurposeName(ctx context.Context, arg UpdatePurposeNameParams) (Purpose, error) {
 	row := q.db.QueryRowContext(ctx, updatePurposeName, arg.Name, arg.ID)
 	var i Purpose

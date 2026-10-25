@@ -2,8 +2,8 @@ package http
 
 import (
 	"net/http"
-	"time"
 
+	"github.com/kerti/uruni/internal/ledger"
 	"github.com/kerti/uruni/internal/store"
 )
 
@@ -33,9 +33,9 @@ type duesTierListItem struct {
 	Rates []duesRateResponse `json:"rates"`
 }
 
-// createDuesTier is POST /api/dues-tiers: a direct-CRUD write (ADR-027). A
-// duplicate name for this fund hits UNIQUE (fund_id, name) and returns 409
-// through mapSQLiteError; not re-checked here.
+// createDuesTier is POST /api/dues-tiers. A duplicate name for this fund hits
+// UNIQUE (fund_id, name) and the ledger answers it as 409 unique_violation; not
+// re-checked here.
 func (a *api) createDuesTier(w http.ResponseWriter, r *http.Request) {
 	var req duesTierRequest
 	if !decodeJSON(w, r, &req) {
@@ -47,13 +47,9 @@ func (a *api) createDuesTier(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tier, err := a.queries.CreateDuesTier(r.Context(), store.CreateDuesTierParams{
-		FundID:    fund.ID,
-		Name:      req.Name,
-		CreatedAt: time.Now().Unix(),
-	})
+	tier, err := a.ledger.CreateDuesTier(r.Context(), ledger.CreateDuesTierParams{FundID: fund.ID, Name: req.Name})
 	if err != nil {
-		mapSQLiteError(w, a.log(r), err)
+		mapLedgerError(w, a.log(r), err)
 		return
 	}
 
@@ -74,12 +70,9 @@ func (a *api) updateDuesTier(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	updated, err := a.queries.UpdateDuesTier(r.Context(), store.UpdateDuesTierParams{
-		ID:   tier.ID,
-		Name: req.Name,
-	})
+	updated, err := a.ledger.RenameDuesTier(r.Context(), ledger.RenameDuesTierParams{FundID: tier.FundID, TierID: tier.ID, Name: req.Name})
 	if err != nil {
-		mapSQLiteError(w, a.log(r), err)
+		mapLedgerError(w, a.log(r), err)
 		return
 	}
 
@@ -127,13 +120,11 @@ func (a *api) listDuesTiers(w http.ResponseWriter, r *http.Request) {
 // never put anyone in (a setup typo, a golongan named twice), never one with
 // members.
 //
-// It uses Ledger.DeleteDuesTier, not a.queries, the one non-plain-CRUD place
-// here (ADR-027): the tier and its rates must go in one transaction, which the
-// ledger owns (see its ordering note).
+// The tier and its rates must go in one transaction, which the ledger owns (see
+// Ledger.DeleteDuesTier's ordering note).
 //
-// A tier a member still references returns from SQLite as a foreign-key
-// violation and leaves as 409 referenced_by_other_records, like deleting a
-// used location or member.
+// A tier a member still references is refused by the foreign key and leaves as
+// 409 referenced_by_other_records, like deleting a used location or member.
 func (a *api) deleteDuesTier(w http.ResponseWriter, r *http.Request) {
 	tier, ok := a.resolveDuesTier(w, r)
 	if !ok {
@@ -141,7 +132,7 @@ func (a *api) deleteDuesTier(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := a.ledger.DeleteDuesTier(r.Context(), tier.FundID, tier.ID); err != nil {
-		mapSQLiteDeleteError(w, a.log(r), err)
+		mapLedgerError(w, a.log(r), err)
 		return
 	}
 

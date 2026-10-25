@@ -162,9 +162,9 @@ func (a *api) updateFund(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	updated, err := a.queries.UpdateFund(r.Context(), store.UpdateFundParams{ID: fund.ID, Name: req.Name, TimeZone: req.TimeZone})
+	updated, err := a.ledger.UpdateFund(r.Context(), ledger.UpdateFundParams{FundID: fund.ID, Name: req.Name, TimeZone: req.TimeZone})
 	if err != nil {
-		mapSQLiteError(w, a.log(r), err)
+		mapLedgerError(w, a.log(r), err)
 		return
 	}
 

@@ -136,10 +136,10 @@ func (l *Ledger) postDuesPaymentTx(ctx context.Context, q store.Querier, p PostD
 // any row names - a superseded one included - is refused, and a tier a member
 // was put into by a slip, since corrected, can no longer be deleted (rename it).
 //
-// No pre-check for members: the foreign key is the check. The caller maps the
-// constraint error to 409.
+// No pre-check for members: the foreign key is the check. A tier any member_tier
+// row names is ErrReferencedByOtherRecords, and nothing is deleted.
 func (l *Ledger) DeleteDuesTier(ctx context.Context, fundID, tierID int64) error {
-	return l.withTx(ctx, func(ctx context.Context, q store.Querier) error {
+	err := l.withTx(ctx, func(ctx context.Context, q store.Querier) error {
 		// Resolve the tier within the fund first: DeleteDuesRatesByTier is keyed by
 		// tier id alone, so without this a foreign fund's tier id would delete that
 		// fund's rate trail before the fund-scoped tier delete ran.
@@ -154,4 +154,5 @@ func (l *Ledger) DeleteDuesTier(ctx context.Context, fundID, tierID int64) error
 		}
 		return nil
 	})
+	return refuseDelete(err)
 }
