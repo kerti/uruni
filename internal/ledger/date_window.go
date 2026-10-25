@@ -2,7 +2,6 @@ package ledger
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"time"
 
@@ -47,7 +46,9 @@ const (
 // occurred_on) is not, so a correction is never refused for a date she cannot
 // edit (ADR-041); the floor still applies, as the schema's CHECK. A reversal
 // supplies no date (ADR-042) and checks neither.
-var ErrDateOutOfRange = errors.New("ledger: date is outside the plausible window")
+var ErrDateOutOfRange = refuse("ledger: date is outside the plausible window",
+	ClassInvalid, "date_out_of_range",
+	"The date is outside the range Uruni accepts.")
 
 // noCeiling is the ceiling for a check that wants the shape and the floor only:
 // the largest date the strict layout can write.

@@ -10,10 +10,13 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/kerti/uruni/internal/ledger"
 )
 
 // TestErrorCodesMatchTheWebList keeps web/src/test/wire/error-codes.json equal to
-// every code this package can send, read from the source: the first string
+// every code this package can send: the ledger's own (each ledger.Error names
+// its code), and those read from this package's source, the first string
 // argument after the status of each writeAPIError and writeAPIFieldError call.
 // The web side asserts each one has copy (#524), so a new code cannot reach the
 // treasurer as the generic "Ada yang tidak beres".
@@ -28,6 +31,9 @@ func TestErrorCodesMatchTheWebList(t *testing.T) {
 	}
 	fset := token.NewFileSet()
 	codes := map[string]bool{}
+	for _, e := range ledger.Errors() {
+		codes[e.Code()] = true
+	}
 	for _, name := range files {
 		if strings.HasSuffix(name, "_test.go") {
 			continue
@@ -45,9 +51,18 @@ func TestErrorCodesMatchTheWebList(t *testing.T) {
 			if !ok || (fn.Name != "writeAPIError" && fn.Name != "writeAPIFieldError") || len(call.Args) < 3 {
 				return true
 			}
-			// writeAPIError's own body forwards its parameter; that is not a code.
-			if _, inner := call.Args[2].(*ast.Ident); inner && name == "errors.go" {
-				return true
+			// writeAPIError's own body forwards its parameter, and mapLedgerError sends
+			// a ledger.Error's Code(); neither is a literal, and the second is listed
+			// above from ledger.Errors().
+			if name == "errors.go" {
+				if _, inner := call.Args[2].(*ast.Ident); inner {
+					return true
+				}
+				if c, ok := call.Args[2].(*ast.CallExpr); ok {
+					if sel, ok := c.Fun.(*ast.SelectorExpr); ok && sel.Sel.Name == "Code" {
+						return true
+					}
+				}
 			}
 			lit, ok := call.Args[2].(*ast.BasicLit)
 			if !ok || lit.Kind != token.STRING {

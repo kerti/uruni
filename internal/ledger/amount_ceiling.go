@@ -1,7 +1,6 @@
 package ledger
 
 import (
-	"errors"
 	"fmt"
 
 	"github.com/kerti/uruni/internal/money"
@@ -19,7 +18,9 @@ import (
 // CHECK for it yet (it rides the schema epic, as it forces a migration of live
 // instances), so this package is the only server-side guarantee, and a row
 // written around it is not refused.
-var ErrAmountTooLarge = errors.New("ledger: amount is above the ceiling")
+var ErrAmountTooLarge = refuse("ledger: amount is above the ceiling",
+	ClassInvalid, "amount_too_large",
+	"An amount cannot be larger than 999,999,999,999 rupiah.")
 
 // CheckAmountCeiling returns ErrAmountTooLarge, wrapped with the field's name,
 // when a is above money.MaxAmount, else nil. It is the one place the ceiling

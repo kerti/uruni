@@ -47,16 +47,33 @@ func writeAPIFieldError(w http.ResponseWriter, status int, code, field, message 
 	_ = json.NewEncoder(w).Encode(errorEnvelope{Error: errorBody{Code: code, Message: message, Field: field}})
 }
 
-// writeInvalidArgument answers a domain package's ErrInvalidArgument, with the
-// field its FieldError names, if any (ledger's and auth's both answer
-// InvalidField).
-func writeInvalidArgument(w http.ResponseWriter, err error) {
+// invalidFieldOf is the request field a domain package's FieldError names, or
+// "" (ledger's and auth's both answer InvalidField).
+func invalidFieldOf(err error) string {
 	var named interface{ InvalidField() string }
-	field := ""
 	if errors.As(err, &named) {
-		field = named.InvalidField()
+		return named.InvalidField()
 	}
-	writeAPIFieldError(w, http.StatusBadRequest, "invalid_argument", field, "The request contains an invalid argument.")
+	return ""
+}
+
+// writeInvalidArgument answers auth's ErrInvalidArgument, with the field its
+// FieldError names, if any.
+func writeInvalidArgument(w http.ResponseWriter, err error) {
+	writeAPIFieldError(w, http.StatusBadRequest, "invalid_argument", invalidFieldOf(err), "The request contains an invalid argument.")
+}
+
+// ledgerStatus is the one place a ledger.Class becomes an HTTP status.
+func ledgerStatus(c ledger.Class) int {
+	switch c {
+	case ledger.ClassInvalid:
+		return http.StatusBadRequest
+	case ledger.ClassNotFound:
+		return http.StatusNotFound
+	case ledger.ClassConflict:
+		return http.StatusConflict
+	}
+	return http.StatusInternalServerError
 }
 
 // statusClientClosedRequest is nginx's 499: the request's context was
@@ -79,124 +96,34 @@ func answeredClientGone(w http.ResponseWriter, logger *slog.Logger, err error) b
 }
 
 // mapLedgerError answers an error from an internal/ledger call, per ADR-027's
-// sentinel taxonomy. Every ledger-calling route shares this one switch.
+// sentinel taxonomy. Every ledger-calling route shares this one function.
+//
+// A ledger.Error says its own wire code, message and class, so a new refusal
+// needs nothing here. What follows it are the failures that are not ledger
+// domain errors: a numeric overflow, a missing row, a raw driver error.
 func mapLedgerError(w http.ResponseWriter, logger *slog.Logger, err error) {
 	if answeredClientGone(w, logger, err) {
 		return
 	}
+	var refusal *ledger.Error
+	if errors.As(err, &refusal) {
+		if errors.Is(err, ledger.ErrIdempotencyKeyReused) {
+			// The app cannot produce this (ADR-043: a definite answer drops the key and
+			// a new request mints another), so someone is reusing keys by hand: worth a
+			// line, never the key or the body.
+			logger.Warn("an idempotency key was reused for another request")
+		}
+		writeAPIFieldError(w, ledgerStatus(refusal.Class()), refusal.Code(), invalidFieldOf(err), refusal.Message())
+		return
+	}
 	switch {
-	case errors.Is(err, ledger.ErrInvalidArgument):
-		writeInvalidArgument(w, err)
-	case errors.Is(err, ledger.ErrAmountTooLarge):
-		// Rp 999.999.999.999 (money.MaxAmount, #499). Its own code, not
-		// invalid_argument: the amount is well-formed and the SPA tells her the one
-		// thing to change. 400 like other ledger input refusals; the message names
-		// the limit, never the value sent.
-		writeAPIError(w, http.StatusBadRequest, "amount_too_large", "An amount cannot be larger than 999,999,999,999 rupiah.")
-	case errors.Is(err, ledger.ErrDateOutOfRange):
-		// A real date before 2000 or past its column's ceiling. Its own code, not
-		// invalid_argument: the date is well-formed and the SPA tells her to check the
-		// year. The message names no date.
-		writeAPIError(w, http.StatusBadRequest, "date_out_of_range", "The date is outside the range Uruni accepts.")
-	case errors.Is(err, ledger.ErrDuesRateSuperseded):
-		// A correction is a new row with a new id (ADR-040), so a page holding the
-		// old id is stale. 409, its own code: the SPA tells her to reload the list.
-		writeAPIError(w, http.StatusConflict, "dues_rate_superseded", "This rate has since been corrected or removed; reload the list.")
-	case errors.Is(err, ledger.ErrDuesRateMonthTaken):
-		writeAPIError(w, http.StatusConflict, "unique_violation", "This value conflicts with an existing record.")
-	case errors.Is(err, ledger.ErrIdempotencyKeyReused):
-		// The same key under another request (ADR-043). The app cannot produce it
-		// (a definite answer drops the key and a new request mints another), so
-		// someone is reusing keys by hand: worth a line, never the key or the body.
-		logger.Warn("an idempotency key was reused for another request")
-		writeAPIError(w, http.StatusConflict, "idempotency_key_reused", "This Idempotency-Key was already used for a different request.")
-	case errors.Is(err, ledger.ErrReimbursementWaived):
-		writeAPIError(w, http.StatusConflict, "reimbursement_waived", "This reimbursement has been waived.")
-	case errors.Is(err, ledger.ErrReimbursementAlreadySettled):
-		writeAPIError(w, http.StatusConflict, "reimbursement_already_settled", "This reimbursement has already been settled.")
-	case errors.Is(err, ledger.ErrReversalNotFound):
-		writeAPIError(w, http.StatusNotFound, "not_found", "The requested resource was not found.")
 	case errors.Is(err, sql.ErrNoRows):
 		// A ledger method that fetches the row it is about before writing
 		// (SettleReimbursement's GetReimbursement) wraps the driver's sql.ErrNoRows
-		// when the id names nothing. That is a 404 for the reason
-		// ErrReversalNotFound is: the id came from the path. Without this case it
-		// reaches the default and answers 500 for a wrong id (#69).
+		// when the id names nothing. That is a 404 for the reason a ledger NotFound
+		// is: the id came from the path. Without this case it reaches the default
+		// and answers 500 for a wrong id (#69).
 		writeAPIError(w, http.StatusNotFound, "not_found", "The requested resource was not found.")
-	case errors.Is(err, ledger.ErrReversalOpening):
-		writeAPIError(w, http.StatusConflict, "reversal_opening", "An opening balance cannot be reversed.")
-	case errors.Is(err, ledger.ErrReversalReimbursement):
-		writeAPIError(w, http.StatusConflict, "reversal_reimbursement", "A reimbursement payout cannot be reversed.")
-	case errors.Is(err, ledger.ErrReversalTransfer):
-		writeAPIError(w, http.StatusConflict, "reversal_transfer", "A transfer leg cannot be reversed.")
-	case errors.Is(err, ledger.ErrReversalOfReversal):
-		writeAPIError(w, http.StatusConflict, "reversal_of_reversal", "A reversal cannot be reversed.")
-	case errors.Is(err, ledger.ErrReversalAdjustment):
-		writeAPIError(w, http.StatusConflict, "reversal_adjustment", "An adjustment cannot be reversed.")
-	case errors.Is(err, ledger.ErrReversalReconciliationFix):
-		writeAPIError(w, http.StatusConflict, "reversal_reconciliation_fix", "An entry a cash count names as its fix cannot be reversed.")
-	case errors.Is(err, ledger.ErrReversalBeforeOriginal):
-		writeAPIError(w, http.StatusConflict, "reversal_before_original", "A cash count has covered this transaction and it is dated after today, so its reversal would come before it.")
-	case errors.Is(err, ledger.ErrAlreadyReversed):
-		writeAPIError(w, http.StatusConflict, "transaction_already_reversed", "This transaction has already been reversed.")
-	case errors.Is(err, ledger.ErrIncidentalAlreadyClosed):
-		writeAPIError(w, http.StatusConflict, "incidental_already_closed", "This incidental has already been closed.")
-	case errors.Is(err, ledger.ErrAccountHoldsMoney):
-		writeAPIError(w, http.StatusConflict, "account_holds_money", "This location still holds money; move it out before retiring the location.")
-	case errors.Is(err, ledger.ErrAccountBalanceNegative):
-		writeAPIError(w, http.StatusConflict, "account_balance_negative", "This location's recorded balance is negative; reconcile it before retiring the location.")
-	case errors.Is(err, ledger.ErrIncidentalClosed):
-		writeAPIError(w, http.StatusConflict, "incidental_closed", "This incidental is closed and cannot accept new transactions.")
-	case errors.Is(err, ledger.ErrIncidentalNotClosed):
-		writeAPIError(w, http.StatusConflict, "incidental_not_closed", "This incidental is not closed.")
-	case errors.Is(err, ledger.ErrFundAlreadyExists):
-		writeAPIError(w, http.StatusConflict, "fund_already_exists", "A fund has already been set up.")
-	case errors.Is(err, ledger.ErrPurposeCorrectionNotFound):
-		writeAPIError(w, http.StatusNotFound, "not_found", "The requested resource was not found.")
-	case errors.Is(err, ledger.ErrPurposeCorrectionOpening):
-		writeAPIError(w, http.StatusConflict, "purpose_correction_opening", "An opening balance's purpose cannot be corrected.")
-	case errors.Is(err, ledger.ErrPurposeCorrectionDues):
-		writeAPIError(w, http.StatusConflict, "purpose_correction_dues", "A dues payment's purpose cannot be corrected.")
-	case errors.Is(err, ledger.ErrPurposeCorrectionReimbursement):
-		writeAPIError(w, http.StatusConflict, "purpose_correction_reimbursement", "A reimbursement payout's purpose cannot be corrected here - correct the claim itself instead.")
-	case errors.Is(err, ledger.ErrPurposeCorrectionTransfer):
-		writeAPIError(w, http.StatusConflict, "purpose_correction_transfer", "A transfer leg's purpose cannot be corrected.")
-	case errors.Is(err, ledger.ErrPurposeCorrectionReversal):
-		writeAPIError(w, http.StatusConflict, "purpose_correction_reversal", "A reversal's purpose cannot be corrected.")
-	case errors.Is(err, ledger.ErrPurposeCorrectionAlreadyReversed):
-		writeAPIError(w, http.StatusConflict, "purpose_correction_already_reversed", "A reversed transaction's purpose cannot be corrected.")
-	case errors.Is(err, ledger.ErrPurposeCorrectionTargetClosed):
-		writeAPIError(w, http.StatusConflict, "purpose_correction_target_closed", "This incidental is closed - reopen it before correcting into it.")
-	case errors.Is(err, ledger.ErrPurposeCorrectionSourceClosed):
-		writeAPIError(w, http.StatusConflict, "purpose_correction_source_closed", "This incidental is closed - reopen it before correcting out of it.")
-	case errors.Is(err, ledger.ErrPurposeCorrectionNoop):
-		writeAPIError(w, http.StatusConflict, "purpose_correction_noop", "This row is already tagged to that purpose.")
-	case errors.Is(err, ledger.ErrPurposeCorrectionNamedContribution):
-		writeAPIError(w, http.StatusConflict, "purpose_correction_named_contribution", "A named contribution's purpose cannot be corrected - reverse it and post again instead.")
-	case errors.Is(err, ledger.ErrPurposeMoveSamePurpose):
-		writeAPIError(w, http.StatusBadRequest, "purpose_move_same_purpose", "A purpose move needs two different purposes.")
-	case errors.Is(err, ledger.ErrPurposeMoveUnknownPurpose):
-		writeAPIError(w, http.StatusBadRequest, "invalid_argument", "The request references a purpose that does not exist.")
-	case errors.Is(err, ledger.ErrPurposeMoveUnknownAccount):
-		writeAPIError(w, http.StatusBadRequest, "invalid_argument", "The request references an account that does not exist.")
-	case errors.Is(err, ledger.ErrPurposeMovePassThrough):
-		writeAPIError(w, http.StatusConflict, "purpose_move_pass_through", "Pass-through money cannot be moved between purposes.")
-	case errors.Is(err, ledger.ErrPurposeMoveClosed):
-		writeAPIError(w, http.StatusConflict, "purpose_move_closed", "This incidental is closed - reopen it before moving money into or out of it.")
-	case errors.Is(err, ledger.ErrPurposeMoveInsufficient):
-		writeAPIError(w, http.StatusConflict, "purpose_move_insufficient", "The source purpose holds less than that amount.")
-	case errors.Is(err, ledger.ErrPurposeMoveAccountInactive):
-		writeAPIError(w, http.StatusConflict, "purpose_move_account_inactive", "This account is inactive.")
-	case errors.Is(err, ledger.ErrAccountInactive):
-		// Any posting (and a Cek kas count) naming a retired location (#444).
-		// PostPurposeMove keeps its purpose_move_account_inactive above.
-		writeAPIError(w, http.StatusConflict, "account_inactive", "This location has been retired and cannot take new entries.")
-	case errors.Is(err, ledger.ErrReconciliationMissingLocation):
-		writeAPIError(w, http.StatusConflict, "reconciliation_location_missing", "A cash count must include every active location.")
-	case errors.Is(err, ledger.ErrReconciliationPlugMismatch):
-		writeAPIError(w, http.StatusConflict, "reconciliation_plug_mismatch", "An adjusting entry must equal the difference exactly.")
-	case errors.Is(err, ledger.ErrContributionRequiresIncidentalPurpose):
-		writeAPIError(w, http.StatusBadRequest, "invalid_argument", "A named contribution must be tagged to an incidental (envelope) purpose.")
 	case errors.Is(err, money.ErrOverflow):
 		// err's message embeds the operands that overflowed - the amounts - which
 		// ADR-022 forbids logging. Other unrecognized errors reaching the default
