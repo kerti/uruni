@@ -135,7 +135,10 @@ func TestRequireThrowawayDBPath(t *testing.T) {
 		{name: "relative dev db", path: "./uruni.db", wantErr: true},
 		{name: "absolute dev db", path: "/home/treasurer/uruni.db", wantErr: true},
 		{name: "temp dir without e2e in the name", path: filepath.Join(t.TempDir(), "uruni.db"), wantErr: true},
-		{name: "the makefile's own e2e db", path: "/tmp/uruni-e2e.db", wantErr: false},
+		{name: "a tmp e2e db", path: "/tmp/uruni-e2e.db", wantErr: false},
+		{name: "the makefile's own e2e db", path: "/work/uruni/.run/e2e.db", wantErr: false},
+		{name: "a .run file without e2e in the name", path: "/work/uruni/.run/uruni.db", wantErr: true},
+		{name: "a file merely named .run-e2e", path: "/work/uruni/.run-x/e2e.db", wantErr: true},
 		{name: "another e2e-named file under a temp dir", path: filepath.Join(t.TempDir(), "uruni-e2e.db"), wantErr: false},
 	}
 	for _, tc := range cases {

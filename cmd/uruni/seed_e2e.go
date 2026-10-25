@@ -146,14 +146,15 @@ func seedE2E(ctx context.Context) error {
 //     config.DefaultDBPath ("./uruni.db") as `serve`/`migrate` do: a bare
 //     `go run ./cmd/uruni seed-e2e` in a working copy would wipe the real dev
 //     database.
-//   - The path must resolve under the OS temp directory (matching both
-//     os.TempDir() and the literal "/tmp" the Makefile's E2E_DB uses; on
-//     macOS they differ, /tmp being a symlink into a per-user temp root).
+//   - The path must resolve under the OS temp directory (os.TempDir(), and
+//     the literal "/tmp"; on macOS they differ, /tmp being a symlink into a
+//     per-user temp root) or sit inside a directory named ".run", the
+//     gitignored per-clone scratch directory the Makefile's E2E_DB lives in.
 //   - Its base filename must contain "e2e", so a stray temp file with another
 //     name is still refused.
 //
-// Both together are what "/tmp/uruni-e2e.db" satisfies and "./uruni.db" (or
-// any path under the repo) does not.
+// Both together are what ".run/e2e.db" satisfies and "./uruni.db" (or any
+// other path under the repo) does not.
 func requireThrowawayDBPath(dbPath string) error {
 	if dbPath == "" {
 		return fmt.Errorf("seed-e2e refuses to run: URUNI_DB is unset - point it at a throwaway path (e.g. %s) before seeding", e2eExampleDBPath)
@@ -164,19 +165,30 @@ func requireThrowawayDBPath(dbPath string) error {
 		return fmt.Errorf("seed-e2e refuses to run: could not resolve URUNI_DB=%q: %w", dbPath, err)
 	}
 
-	if !underTempDir(abs) || !strings.Contains(strings.ToLower(filepath.Base(abs)), "e2e") {
-		return fmt.Errorf("seed-e2e refuses to run against %q - it does not look like a throwaway e2e database (expected a path like %s under a temp directory, with \"e2e\" in the filename)", dbPath, e2eExampleDBPath)
+	if (!underTempDir(abs) && !inRunDir(abs)) || !strings.Contains(strings.ToLower(filepath.Base(abs)), "e2e") {
+		return fmt.Errorf("seed-e2e refuses to run against %q - it does not look like a throwaway e2e database (expected a path like %s under a temp directory or a .run directory, with \"e2e\" in the filename)", dbPath, e2eExampleDBPath)
 	}
 	return nil
 }
 
 // e2eExampleDBPath is named in refusal messages so an operator has something
-// to copy: the Makefile's E2E_DB.
+// to copy.
 const e2eExampleDBPath = "/tmp/uruni-e2e.db"
 
+// inRunDir reports whether abs has a ".run" directory among its parents.
+func inRunDir(abs string) bool {
+	for dir := filepath.Dir(filepath.Clean(abs)); ; dir = filepath.Dir(dir) {
+		if filepath.Base(dir) == ".run" {
+			return true
+		}
+		if dir == filepath.Dir(dir) {
+			return false
+		}
+	}
+}
+
 // underTempDir reports whether abs sits inside a temp directory: os.TempDir()
-// or the literal "/tmp" the Makefile hardcodes as E2E_DB (the same directory
-// on Linux, not always on macOS, where /tmp is a symlink into a per-user root
+// or the literal "/tmp" (the same directory on Linux, not always on macOS, where /tmp is a symlink into a per-user root
 // that os.TempDir() returns resolved). Both abs and each root go through
 // resolveExistingPrefix, so a database file that does not exist yet (seed-e2e
 // creates it) still compares correctly against a symlinked root.

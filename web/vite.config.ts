@@ -10,8 +10,12 @@ import { copy } from './src/copy/id.ts'
 
 // In production the Go binary is the single origin (ADR-001). In dev the two
 // halves run apart for hot-reload, so vite proxies the server's routes - `/api`
-// (JSON) and `/report` (SSR public report) - to Go on :8080 (ADR-020).
+// (JSON) and `/report` (SSR public report) - to the Go server (ADR-020). Both
+// ports come from the environment, as the Makefile passes them: PORT is the Go
+// server's (the same variable it listens on, default 8080), WEB_PORT is this
+// dev server's (default 5173).
 const goServer = `http://localhost:${process.env.PORT ?? 8080}`
+const webPort = Number(process.env.WEB_PORT ?? 5173)
 
 // Vite rejects Host headers it doesn't recognise (DNS-rebinding protection), so
 // reaching the dev server through a tunnel or a LAN hostname needs that host
@@ -194,7 +198,7 @@ export default defineConfig({
     },
   },
   server: {
-    port: 5173,
+    port: webPort,
     allowedHosts,
     proxy: {
       '/api': { target: goServer, changeOrigin: true },
