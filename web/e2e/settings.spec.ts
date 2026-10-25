@@ -1,5 +1,6 @@
 import { copy } from '../src/copy/id'
 import { expect, test, logIn } from './fixtures'
+import { chooseOption } from './popper'
 
 // The settings screen's locations section (PRD section 7.1: a location can be
 // added later).
@@ -39,10 +40,7 @@ test.describe('settings', () => {
 
     // 'Tunai' is already the default kind, but choosing it explicitly proves the
     // themed Select works in a real browser - vitest proves it only in jsdom.
-    await addDialog.getByRole('combobox', { name: copy.settings.locations.kindLabel }).click()
-    // Scoped to the open listbox: Radix also renders a hidden native select
-    // whose <option> elements carry the same role and text.
-    await page.getByRole('listbox').getByRole('option', { name: copy.settings.locations.kindCash }).click()
+    await chooseOption(page, addDialog.getByRole('combobox', { name: copy.settings.locations.kindLabel }), copy.settings.locations.kindCash)
     await addDialog.getByLabel(copy.settings.locations.nameLabel).fill(locationName)
     await addDialog.getByRole('button', { name: copy.settings.locations.add }).click()
 

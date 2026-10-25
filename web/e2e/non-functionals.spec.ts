@@ -60,7 +60,10 @@ function cashflow(page: Page) {
   return page.locator('section').filter({ has: page.getByRole('heading', { name: copy.home.cashflowHeading }) })
 }
 function figure(page: Page, label: string) {
-  return cashflow(page).getByText(label, { exact: true }).locator('..')
+  // The card's <dl> holds one <div> per figure: its term and its value.
+  return cashflow(page)
+    .locator('dl > div')
+    .filter({ has: page.getByText(label, { exact: true }) })
 }
 
 function berandaRow(page: Page, name: string) {
@@ -145,6 +148,7 @@ async function expectOneColumn(page: Page, path: string) {
   const links = page.getByRole('navigation', { name: copy.shell.nav.label }).getByRole('link')
   expect(await links.count()).toBe(5)
   for (let i = 0; i < 5; i++) {
+    // nth: the five destinations are checked one by one, position is the loop.
     const b = await box(links.nth(i))
     expect(b.height, `${where}: footer link ${i} is ${b.height}px tall`).toBeGreaterThanOrEqual(44)
     expect(b.width, `${where}: footer link ${i} is ${b.width}px wide`).toBeGreaterThanOrEqual(44)

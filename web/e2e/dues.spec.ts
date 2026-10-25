@@ -1,5 +1,6 @@
 import { copy } from '../src/copy/id'
 import { expect, test, logIn } from './fixtures'
+import { chooseOption } from './popper'
 import { expectAccessible } from './a11y'
 
 // The dues status roster (PRD section 7.3). The seeded fixture
@@ -56,16 +57,14 @@ test.describe('dues status', () => {
 
     // The themed Select is a button plus a portalled listbox, not a native
     // <select>, so picking is open-then-click.
-    await page.getByRole('combobox', { name: copy.dues.payment.memberLabel }).click()
-    // Scoped to the open listbox - Radix's hidden native select carries the same
-    // option text.
-    await page.getByRole('listbox').getByRole('option', { name: 'Warga Satu' }).click()
+    await chooseOption(page, copy.dues.payment.memberLabel, 'Warga Satu')
 
     const periods = page.getByRole('checkbox')
     await expect(periods.first()).toBeVisible()
     // Captured before checking, for the label assertion below: the oldest
     // outstanding period is never a fixed month, so the label text expected on
     // home is read off the form just paid, not hardcoded.
+    // nth: the form lists periods oldest first; the first two are the ones paid.
     const firstPeriodText = (await periods.nth(0).evaluate((el) => el.closest('label')?.textContent ?? '')).trim()
     await periods.nth(0).check()
     await periods.nth(1).check()
@@ -84,6 +83,7 @@ test.describe('dues status', () => {
     // focused (AmountInput), and one fill() over that lands as the two runs of
     // digits concatenated - 50000 then 12345 posted as Rp 5.000.012.345.
     // Clearing first matches the empty state golden-path.spec.ts fills.
+    // nth below: each amount field is addressed by its period's position.
     for (const [index, value] of [
       [0, '20000'],
       [1, '30000'],

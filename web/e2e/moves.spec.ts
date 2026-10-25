@@ -3,6 +3,7 @@ import type { Page } from '@playwright/test'
 import { copy } from '../src/copy/id'
 import { formatIDR } from '../src/lib/money'
 import { expect, logIn, test } from './fixtures'
+import { chooseOption } from './popper'
 
 // Money that moves without leaving the fund. Pindah lokasi moves it between
 // places, Pindah pos between purposes, and Perbaiki pos re-tags a posted row
@@ -40,11 +41,7 @@ async function expectBeranda(page: Page, f: { tunai: number; bank: number; main:
 }
 
 async function pick(page: Page, label: string, option: string) {
-  // The themed Select is a button plus a portalled listbox; the option is
-  // scoped to the listbox because Radix's hidden native select carries the same
-  // text.
-  await page.getByRole('combobox', { name: label }).click()
-  await page.getByRole('listbox').getByRole('option', { name: option }).click()
+  await chooseOption(page, label, option)
 }
 
 async function openRecord(page: Page) {

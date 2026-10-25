@@ -2,6 +2,7 @@ import type { Page } from '@playwright/test'
 
 import { copy } from '../src/copy/id'
 import { expect, test, logIn } from './fixtures'
+import { chooseOption } from './popper'
 import { expectAccessible } from './a11y'
 
 // Open an envelope, contribute to it through the real record form (reused, not
@@ -102,7 +103,7 @@ test.describe('incidentals', () => {
       // contribution, and the detail view this means. A bare getByText matched
       // whichever the navigation had not yet torn down (racy before it was
       // ambiguous). toContainText retries, so this waits for the detail view.
-      const collectedRow = page.getByText(copy.incidentals.detail.collectedLabel).locator('..')
+      const collectedRow = page.locator(`div:has(> span:text-is(${JSON.stringify(copy.incidentals.detail.collectedLabel)}))`)
       await expect(collectedRow).toContainText('Rp 60.000')
       await expectAccessible(page)
     },
@@ -122,8 +123,7 @@ test.describe('incidentals', () => {
     await expect(page.getByText(copy.incidentals.close.heading)).toBeVisible()
 
     // Pick where the leftover rolls to, submit (date defaults to today)
-    await page.getByRole('combobox', { name: copy.incidentals.close.accountLabel }).click()
-    await page.getByRole('option').first().click()
+    await chooseOption(page, copy.incidentals.close.accountLabel)
     // The roll is a transfer nobody asked for directly - the note stops it
     // reading as two unexplained rows in the ledger.
     await page.getByLabel(copy.incidentals.close.noteLabel).fill('Sisa halal bihalal')

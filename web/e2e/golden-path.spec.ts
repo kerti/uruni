@@ -205,6 +205,7 @@ test.describe('golden path', { tag: '@smoke' }, () => {
     const rows = page.getByRole('button').filter({ hasText: /Selisih|Cocok/ })
     await expect(rows).toHaveCount(2)
     await expectAccessible(page)
+    // nth: position is the assertion - the list is newest first.
     await expect(rows.nth(0)).toContainText('Selisih')
     await expect(rows.nth(1)).toContainText(copy.reconciliation.resolutionOptions.matched)
     await rows.nth(0).click()

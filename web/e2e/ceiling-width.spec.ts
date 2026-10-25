@@ -221,6 +221,7 @@ test.describe('the ceiling figure fits', () => {
       const inputs = page.locator('input[inputmode="numeric"]')
       const count = await inputs.count()
       for (let i = 0; i < count; i++) {
+        // nth: every amount input on the form in turn; they share no distinct name.
         await inputs.nth(i).fill('999999999999')
         // Typing: the bare digits fit; blurred: "Rp 999.999.999.999" does.
         await expectFiguresFit(page, `${path} input ${i} while typing`)

@@ -3,6 +3,7 @@ import type { Page } from '@playwright/test'
 import { copy } from '../src/copy/id'
 import { formatIDR } from '../src/lib/money'
 import { expect, logIn, test } from './fixtures'
+import { chooseOption } from './popper'
 
 // One amplop's whole life, past the open-contribute-close that
 // incidentals.spec.ts walks. Named contributions and the participation list,
@@ -29,9 +30,15 @@ async function openFromBeranda(page: Page, name: string) {
   await expect(page.getByText(t.detail.collectedLabel)).toBeVisible()
 }
 
+// The line a label sits on, by its immediate parent: the totals card and the
+// rollover note put the label and its figure side by side in one div.
+function labelledLine(page: Page, label: string) {
+  return page.locator(`div:has(> span:text-is(${JSON.stringify(label)}))`)
+}
+
 // The detail's totals card: each figure on the line its label names.
 async function expectTotals(page: Page, f: { target?: number; collected: number; disbursed: number; balance: number }) {
-  const line = (label: string) => page.getByText(label, { exact: true }).locator('..')
+  const line = (label: string) => labelledLine(page, label)
   if (f.target !== undefined) await expect(line(t.detail.targetLabel)).toContainText(formatIDR(f.target))
   await expect(line(t.detail.collectedLabel)).toContainText(formatIDR(f.collected))
   await expect(line(t.detail.disbursedLabel)).toContainText(formatIDR(f.disbursed))
@@ -61,8 +68,7 @@ async function finishRecord(page: Page, direction: 'in' | 'out', amount: number,
 
 async function close(page: Page) {
   await page.getByRole('button', { name: t.actions.close, exact: true }).click()
-  await page.getByRole('combobox', { name: t.close.accountLabel }).click()
-  await page.getByRole('listbox').getByRole('option', { name: 'Tunai' }).click()
+  await chooseOption(page, t.close.accountLabel, 'Tunai')
   await page.getByRole('button', { name: t.close.submit, exact: true }).click()
   await expect(page.getByText(t.close.success)).toBeVisible()
 }
@@ -102,8 +108,7 @@ test.describe('amplop in depth', () => {
     await openFromBeranda(page, occasion)
     await page.getByRole('button', { name: t.actions.record, exact: true }).click()
     await page.getByRole('button', { name: copy.record.directionIn }).click()
-    await page.getByRole('combobox', { name: copy.record.contributorLabel }).click()
-    await page.getByRole('listbox').getByRole('option', { name: 'Warga Dua' }).click()
+    await chooseOption(page, copy.record.contributorLabel, 'Warga Dua')
     await finishRecord(page, 'in', 20_000, 'Sumbangan Warga Dua')
 
     await openFromBeranda(page, occasion)
@@ -179,7 +184,7 @@ test.describe('amplop in depth', () => {
     await expectTotals(page, { collected: 50_000, disbursed: 60_000, balance: -10_000 })
     await close(page)
     await expect(page.getByText(t.close.rolledLabel(-10_000))).toBeVisible()
-    await expect(page.getByText(t.detail.remainingLabel, { exact: true }).locator('..')).toContainText(formatIDR(0))
+    await expect(labelledLine(page, t.detail.remainingLabel)).toContainText(formatIDR(0))
   })
 
   test('reopen, take a late entry that nets to zero, and close again', async ({ page }) => {
@@ -207,7 +212,7 @@ test.describe('amplop in depth', () => {
     // (Incidentals.tsx): the late entry nets to zero, so the shortfall Kas Utama
     // covered at the first close still stands.
     await expect(page.getByText(t.close.rolledLabel(-10_000))).toBeVisible()
-    await expect(page.getByText(t.close.rolledLabel(-10_000)).locator('..')).toContainText(formatIDR(10_000))
+    await expect(labelledLine(page, t.close.rolledLabel(-10_000))).toContainText(formatIDR(10_000))
   })
 
   test('close an amplop that comes out exactly even', async ({ page }) => {

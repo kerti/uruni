@@ -4,6 +4,7 @@ import { copy } from '../src/copy/id'
 import { formatPeriod } from '../src/lib/dates'
 import { formatIDR } from '../src/lib/money'
 import { expect, logIn, test } from './fixtures'
+import { chooseOption, popperContent } from './popper'
 
 // ADR-040: a tier is stated "from a month", and a rate is corrected with its
 // span named. One member is promoted from Reguler (Rp 50.000) to Senior
@@ -33,7 +34,7 @@ async function api<T>(request: APIRequestContext, method: 'GET' | 'POST', path: 
 // taps the month. Scoped to the popover, which opens over any dialog.
 async function pickMonth(page: Page, field: Locator, period: string) {
   await field.click()
-  const grid = page.locator('[data-radix-popper-content-wrapper]').last()
+  const grid = popperContent(page)
   const target = Number(period.slice(0, 4))
   for (let guard = 0; guard < 40; guard++) {
     const shown = Number(await grid.getByText(/^\d{4}$/).textContent())
@@ -111,8 +112,7 @@ test.describe('a tier change and a rate correction', () => {
     const dialog = page.getByRole('dialog', { name: text.editTitle })
 
     await expect(dialog.getByLabel(text.tierFromLabel)).toHaveCount(0)
-    await dialog.getByRole('combobox', { name: text.tierLabel }).click()
-    await page.getByRole('listbox').getByRole('option', { name: 'Senior' }).click()
+    await chooseOption(page, dialog.getByRole('combobox', { name: text.tierLabel }), 'Senior')
     await expect(dialog.getByLabel(text.tierFromLabel)).toContainText(formatPeriod(jakartaMonth()))
 
     await pickMonth(page, dialog.getByLabel(text.tierFromLabel), promoted)
