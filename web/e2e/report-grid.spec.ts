@@ -14,7 +14,7 @@ import { expectAccessible } from './a11y'
 // its status is read on.
 //
 // The report is server-rendered Go, so its strings are not in copy/id.ts; each
-// literal below names the reportText field in internal/http/report_copy.go it
+// literal below names the Text field in internal/report/report_copy.go it
 // mirrors. Pages under /report are public; logging in only reads the slug.
 test.describe('report, twelve months of dues', () => {
   test.describe.configure({ mode: 'serial' })

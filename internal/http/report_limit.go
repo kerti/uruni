@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"strconv"
 	"time"
+
+	"github.com/kerti/uruni/internal/report"
 )
 
 // The public report's per-client budgets (#520). The link is shared in group
@@ -56,11 +58,7 @@ func (rlm *reportLimiter) middleware(kind string, limit int, logger *slog.Logger
 				rlm.api.securityEvent(r, slog.LevelWarn, "report_rate_limited", "kind", kind)
 				setReportHeaders(w)
 				w.Header().Set("Retry-After", strconv.Itoa(max(1, int(math.Ceil(rlm.rl.lockedFor(key).Seconds())))))
-				renderReport(w, loggerFrom(r.Context(), logger), http.StatusTooManyRequests, "ratelimited", reportPage{
-					Title: reportText.RateLimitedTitle,
-					Style: reportStyle(),
-					Text:  reportText,
-				})
+				writeReportHTML(w, loggerFrom(r.Context(), logger), http.StatusTooManyRequests, "ratelimited", report.RenderRateLimited)
 				return
 			}
 			next.ServeHTTP(w, r)

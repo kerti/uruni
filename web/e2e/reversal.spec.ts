@@ -131,7 +131,7 @@ test.describe('reversing an ordinary transaction', () => {
     const fund = await api<{ report_slug: string }>(page.context().request, 'GET', '/api/fund')
 
     await page.goto(`/report/${fund.report_slug}`)
-    // reportText.RowReversal and reportText.RowReversed (report_copy.go): two
+    // report.Text.RowReversal and report.Text.RowReversed (report_copy.go): two
     // originals marked, two reversals naming the day they reverse.
     await expect(page.getByText('Sudah dibatalkan', { exact: true })).toHaveCount(2)
     await expect(page.getByText(`Pembatalan \u00b7 transaksi ${formatIsoDate(firstOfMonth)}`).first()).toBeVisible()

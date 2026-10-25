@@ -4,7 +4,6 @@ import (
 	"context"
 	"html"
 	"net/http"
-	"net/url"
 	"regexp"
 	"slices"
 	"strings"
@@ -12,6 +11,7 @@ import (
 
 	"github.com/kerti/uruni/internal/ledger"
 	"github.com/kerti/uruni/internal/money"
+	"github.com/kerti/uruni/internal/report"
 	"github.com/kerti/uruni/internal/store"
 )
 
@@ -144,8 +144,8 @@ func totalsOf(t *testing.T, body string) []totalLine {
 // inOut is the two lines every filter keeps.
 func inOut(in, out int64) []totalLine {
 	return []totalLine{
-		{reportText.TotalIn, money.FormatIDR(money.Amount(in))},
-		{reportText.TotalOut, money.FormatIDR(money.Amount(out))},
+		{report.Text.TotalIn, money.FormatIDR(money.Amount(in))},
+		{report.Text.TotalOut, money.FormatIDR(money.Amount(out))},
 	}
 }
 
@@ -181,10 +181,10 @@ func TestReportListsTheMonthWithLabelsAndTotals(t *testing.T) {
 	// neither; September ended on 187.000. No Saldo awal or Penyesuaian (none
 	// recorded), so neither line shows, and there is no Bersih.
 	want := []totalLine{
-		{reportText.WalkStart("31 Agustus 2026"), money.FormatIDR(7_000)},
-		{reportText.TotalIn, money.FormatIDR(240_000)},
-		{reportText.TotalOut, money.FormatIDR(60_000)},
-		{reportText.WalkEnd("30 September 2026"), money.FormatIDR(187_000)},
+		{report.Text.WalkStart("31 Agustus 2026"), money.FormatIDR(7_000)},
+		{report.Text.TotalIn, money.FormatIDR(240_000)},
+		{report.Text.TotalOut, money.FormatIDR(60_000)},
+		{report.Text.WalkEnd("30 September 2026"), money.FormatIDR(187_000)},
 	}
 	if got := totalsOf(t, body); !equalLines(got, want) {
 		t.Errorf("totals = %v, want %v", got, want)
@@ -294,8 +294,8 @@ func TestReportReceiptIsAMarkerNeverALink(t *testing.T) {
 	s := newTxnScenario(t)
 	body := s.get(t, s.base).Body.String()
 
-	if n := strings.Count(txnSection(t, body), reportText.HasReceipt); n != 1 {
-		t.Fatalf("%q appears %d times, want once (one row has a receipt)", reportText.HasReceipt, n)
+	if n := strings.Count(txnSection(t, body), report.Text.HasReceipt); n != 1 {
+		t.Fatalf("%q appears %d times, want once (one row has a receipt)", report.Text.HasReceipt, n)
 	}
 	for _, leak := range []string{receiptPath, "receipt", "nota/", ".jpg", "<img"} {
 		if strings.Contains(body, leak) {
@@ -317,8 +317,8 @@ func TestReportEmptyFilteredMonthSaysSoCalmly(t *testing.T) {
 	// Budi gave to Duka only; filtered to money out there is nothing.
 	body := s.get(t, s.base+"&member="+itoa(s.budi)+"&dir=out").Body.String()
 
-	if !strings.Contains(body, reportText.NoRows) {
-		t.Errorf("body does not carry %q", reportText.NoRows)
+	if !strings.Contains(body, report.Text.NoRows) {
+		t.Errorf("body does not carry %q", report.Text.NoRows)
 	}
 	if strings.Contains(body, `<ul class="rows txns">`) {
 		t.Error("an empty filtered month renders an empty list")
@@ -327,21 +327,8 @@ func TestReportEmptyFilteredMonthSaysSoCalmly(t *testing.T) {
 		t.Errorf("totals = %v, want Total masuk and Total keluar at zero, no walk under a filter", got)
 	}
 	// A quiet month is not "nothing recorded at all".
-	if strings.Contains(body, reportText.Empty) {
+	if strings.Contains(body, report.Text.Empty) {
 		t.Error("a filtered month reads as a fund with nothing recorded")
-	}
-}
-
-func TestReportMonthStepKeepsTheFilters(t *testing.T) {
-	t.Parallel()
-	active := url.Values{}
-	if got, want := monthHref("2026-08", active), "?month=2026-08#months"; got != want {
-		t.Errorf("unfiltered: got %q, want %q", got, want)
-	}
-	active.Set("purpose", "3")
-	active.Set("dir", "out")
-	if got, want := monthHref("2026-08", active), "?month=2026-08&dir=out&purpose=3#months"; got != want {
-		t.Errorf("filtered: got %q, want %q", got, want)
 	}
 }
 

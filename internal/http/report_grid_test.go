@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/kerti/uruni/internal/report"
 	"github.com/kerti/uruni/internal/store"
 )
 
@@ -81,7 +82,7 @@ func TestReportGridIsAbsentUnderTwoMonths(t *testing.T) {
 		t.Errorf("a one-month grid was drawn:\n%s", body)
 	}
 	pdf := f.get(t, "/report/"+f.fund.ReportSlug+"/pdf")
-	if pdfHas(pdfText(t, pdf.Body.Bytes()), reportText.GridHeading) {
+	if pdfHas(pdfText(t, pdf.Body.Bytes()), report.Text.GridHeading) {
 		t.Error("the PDF drew a one-month grid")
 	}
 }
@@ -170,19 +171,19 @@ func TestReportPDFDrawsTheGridWithoutSplittingARowAcrossPages(t *testing.T) {
 	pages := pdfPages(t, rec.Body.Bytes())
 	first := -1
 	for i, p := range pages {
-		if pdfHas(p, reportText.GridHeading) {
+		if pdfHas(p, report.Text.GridHeading) {
 			first = i
 			break
 		}
 	}
 	if first < 0 {
-		t.Fatalf("no page carries %q", reportText.GridHeading)
+		t.Fatalf("no page carries %q", report.Text.GridHeading)
 	}
 	gridPages := pages[first:]
 	if len(gridPages) < 2 {
 		t.Fatalf("%d grid page(s) for %d members, want the roster to run over", len(gridPages), extra+5)
 	}
-	if !pdfHas(gridPages[0], reportText.GridRange("Januari 2026", "September 2026")) || !pdfHas(gridPages[0], reportText.GridAsOf("2 Oktober 2026")) {
+	if !pdfHas(gridPages[0], report.Text.GridRange("Januari 2026", "September 2026")) || !pdfHas(gridPages[0], report.Text.GridAsOf("2 Oktober 2026")) {
 		t.Errorf("first grid page lacks its range or its caption: %v", gridPages[0])
 	}
 	seen := map[string]int{}
@@ -200,7 +201,7 @@ func TestReportPDFDrawsTheGridWithoutSplittingARowAcrossPages(t *testing.T) {
 		}
 	}
 	last := gridPages[len(gridPages)-1]
-	for _, word := range []string{reportText.DuesPaidStatus, reportText.DuesPartial, reportText.DuesUnpaid, reportText.GridNone} {
+	for _, word := range []string{report.Text.DuesPaidStatus, report.Text.DuesPartial, report.Text.DuesUnpaid, report.Text.GridNone} {
 		if !pdfHas(last, word) {
 			t.Errorf("the legend word %q is not with the grid's last rows; page: %v", word, last)
 		}
@@ -218,14 +219,21 @@ func TestReportPDFGridEndsAtTheContentEdge(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("GET pdf = %d", rec.Code)
 	}
-	const ptPerMM = 72 / 25.4
-	right := (pdfMarginX + pdfContentW) * ptPerMM
-	lastCol := right - pdfGridColW*ptPerMM
+	// The A4 page's geometry in mm, as internal/report lays it out: an 18mm
+	// margin each side (a 174mm content width) and 9mm grid columns.
+	const (
+		ptPerMM  = 72 / 25.4
+		marginX  = 18.0
+		contentW = 174.0
+		gridColW = 9.0
+	)
+	right := (marginX + contentW) * ptPerMM
+	lastCol := right - gridColW*ptPerMM
 
 	for _, page := range pdfPagesAt(t, rec.Body.Bytes()) {
 		var onGridPage bool
 		for _, r := range page {
-			if r.text == reportText.GridHeading {
+			if r.text == report.Text.GridHeading {
 				onGridPage = true
 			}
 		}
@@ -234,17 +242,17 @@ func TestReportPDFGridEndsAtTheContentEdge(t *testing.T) {
 		}
 		var sep *pdfRunX
 		for i, r := range page {
-			if r.text == reportText.MonthHeads[8] { // Sep, the last column
+			if r.text == report.Text.MonthHeads[8] { // Sep, the last column
 				sep = &page[i]
 			}
 		}
 		if sep == nil {
-			t.Fatalf("the grid page has no %q head: %v", reportText.MonthHeads[8], page)
+			t.Fatalf("the grid page has no %q head: %v", report.Text.MonthHeads[8], page)
 		}
 		if sep.x < lastCol || sep.x >= right {
 			t.Errorf("the last month's head is drawn at x=%.1fpt, want inside the last column [%.1f, %.1f) - the grid does not end at the content edge", sep.x, lastCol, right)
 		}
 		return
 	}
-	t.Fatalf("no page carries %q", reportText.GridHeading)
+	t.Fatalf("no page carries %q", report.Text.GridHeading)
 }

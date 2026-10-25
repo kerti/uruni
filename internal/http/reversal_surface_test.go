@@ -12,6 +12,7 @@ import (
 
 	"github.com/kerti/uruni/internal/ledger"
 	"github.com/kerti/uruni/internal/money"
+	"github.com/kerti/uruni/internal/report"
 	"github.com/kerti/uruni/internal/store"
 )
 
@@ -151,10 +152,10 @@ func TestANegativeTotalKeluarIsPrintedEverywhere(t *testing.T) {
 
 	// The report page: Saldo 31 Juli 88.000, nothing in, -12.000 out, Saldo 31 Agustus 100.000.
 	want := []totalLine{
-		{reportText.WalkStart("31 Juli 2026"), money.FormatIDR(88_000)},
-		{reportText.TotalIn, money.FormatIDR(0)},
-		{reportText.TotalOut, money.FormatIDR(-12_000)},
-		{reportText.WalkEnd("31 Agustus 2026"), money.FormatIDR(100_000)},
+		{report.Text.WalkStart("31 Juli 2026"), money.FormatIDR(88_000)},
+		{report.Text.TotalIn, money.FormatIDR(0)},
+		{report.Text.TotalOut, money.FormatIDR(-12_000)},
+		{report.Text.WalkEnd("31 Agustus 2026"), money.FormatIDR(100_000)},
 	}
 	page := f.get(t, "/report/"+f.fund.ReportSlug+"?month=2026-08")
 	if page.Code != http.StatusOK {

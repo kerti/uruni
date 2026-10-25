@@ -77,7 +77,7 @@ func fontComponents(root string) ([]component, error) {
 	var out []component
 	for _, f := range []struct{ name, path string }{
 		{"Plus Jakarta Sans", filepath.Join("web", "licenses", "PlusJakartaSans-OFL.txt")},
-		{"Noto Sans", filepath.Join("internal", "http", "fonts", "OFL.txt")},
+		{"Noto Sans", filepath.Join("internal", "report", "fonts", "OFL.txt")},
 	} {
 		text, err := readFile(filepath.Join(root, f.path))
 		if err != nil {

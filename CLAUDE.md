@@ -52,6 +52,8 @@ A small, calm app that helps a reluctant, non-accountant **treasurer** keep a co
     money/       int64 money package — the trust core
     ledger/      transactions, balances, reconciliation, dues, incidental, reimbursement, transfer — the core
     http/        router, handlers, session auth, middleware
+    report/      the public report: page model, HTML template, PDF and its fonts (no HTTP)
+    receipt/     receipt photo processing: EXIF rotation, downscale, JPEG re-encode (no HTTP)
     store/       sqlc-generated Go (single-writer — regenerate, don't hand-edit)
     db/          goose migrations
     auth/        local auth

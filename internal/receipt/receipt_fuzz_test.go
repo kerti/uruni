@@ -1,4 +1,4 @@
-package http
+package receipt
 
 import (
 	"testing"
