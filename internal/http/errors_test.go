@@ -372,3 +372,76 @@ func TestMapErrorsAnswerACanceledRequestWith499AndNoErrorLine(t *testing.T) {
 		}
 	})
 }
+
+// TestEveryLedgerErrorKeepsItsWireStatusAndCode pins each domain error's answer.
+// A ledger.Error declares its own class and code, so nothing else would notice
+// a refusal moving from 409 to 400: changing one here is a wire change, made on
+// purpose. A new error needs its row.
+func TestEveryLedgerErrorKeepsItsWireStatusAndCode(t *testing.T) {
+	t.Parallel()
+	type answer struct {
+		status int
+		code   string
+	}
+	want := map[*ledger.Error]answer{
+		ledger.ErrAmountTooLarge:                        {400, "amount_too_large"},
+		ledger.ErrDateOutOfRange:                        {400, "date_out_of_range"},
+		ledger.ErrInvalidArgument:                       {400, "invalid_argument"},
+		ledger.ErrReimbursementWaived:                   {409, "reimbursement_waived"},
+		ledger.ErrReimbursementAlreadySettled:           {409, "reimbursement_already_settled"},
+		ledger.ErrFundAlreadyExists:                     {409, "fund_already_exists"},
+		ledger.ErrReversalNotFound:                      {404, "not_found"},
+		ledger.ErrReversalOpening:                       {409, "reversal_opening"},
+		ledger.ErrReversalReimbursement:                 {409, "reversal_reimbursement"},
+		ledger.ErrReversalTransfer:                      {409, "reversal_transfer"},
+		ledger.ErrReversalOfReversal:                    {409, "reversal_of_reversal"},
+		ledger.ErrReversalAdjustment:                    {409, "reversal_adjustment"},
+		ledger.ErrReversalReconciliationFix:             {409, "reversal_reconciliation_fix"},
+		ledger.ErrAlreadyReversed:                       {409, "transaction_already_reversed"},
+		ledger.ErrReversalBeforeOriginal:                {409, "reversal_before_original"},
+		ledger.ErrIncidentalClosed:                      {409, "incidental_closed"},
+		ledger.ErrContributionRequiresIncidentalPurpose: {400, "invalid_argument"},
+		ledger.ErrIncidentalNotClosed:                   {409, "incidental_not_closed"},
+		ledger.ErrIncidentalAlreadyClosed:               {409, "incidental_already_closed"},
+		ledger.ErrPurposeCorrectionNotFound:             {404, "not_found"},
+		ledger.ErrPurposeCorrectionOpening:              {409, "purpose_correction_opening"},
+		ledger.ErrPurposeCorrectionDues:                 {409, "purpose_correction_dues"},
+		ledger.ErrPurposeCorrectionReimbursement:        {409, "purpose_correction_reimbursement"},
+		ledger.ErrPurposeCorrectionTransfer:             {409, "purpose_correction_transfer"},
+		ledger.ErrPurposeCorrectionReversal:             {409, "purpose_correction_reversal"},
+		ledger.ErrPurposeCorrectionAlreadyReversed:      {409, "purpose_correction_already_reversed"},
+		ledger.ErrPurposeCorrectionNoop:                 {409, "purpose_correction_noop"},
+		ledger.ErrPurposeCorrectionNamedContribution:    {409, "purpose_correction_named_contribution"},
+		ledger.ErrPurposeCorrectionTargetClosed:         {409, "purpose_correction_target_closed"},
+		ledger.ErrPurposeCorrectionSourceClosed:         {409, "purpose_correction_source_closed"},
+		ledger.ErrPurposeMoveSamePurpose:                {400, "purpose_move_same_purpose"},
+		ledger.ErrPurposeMoveUnknownPurpose:             {400, "invalid_argument"},
+		ledger.ErrPurposeMovePassThrough:                {409, "purpose_move_pass_through"},
+		ledger.ErrPurposeMoveClosed:                     {409, "purpose_move_closed"},
+		ledger.ErrPurposeMoveInsufficient:               {409, "purpose_move_insufficient"},
+		ledger.ErrPurposeMoveUnknownAccount:             {400, "invalid_argument"},
+		ledger.ErrPurposeMoveAccountInactive:            {409, "purpose_move_account_inactive"},
+		ledger.ErrAccountInactive:                       {409, "account_inactive"},
+		ledger.ErrAccountHoldsMoney:                     {409, "account_holds_money"},
+		ledger.ErrAccountBalanceNegative:                {409, "account_balance_negative"},
+		ledger.ErrReconciliationMissingLocation:         {409, "reconciliation_location_missing"},
+		ledger.ErrReconciliationPlugMismatch:            {409, "reconciliation_plug_mismatch"},
+		ledger.ErrDuesRateSuperseded:                    {409, "dues_rate_superseded"},
+		ledger.ErrDuesRateMonthTaken:                    {409, "unique_violation"},
+		ledger.ErrIdempotencyKeyReused:                  {409, "idempotency_key_reused"},
+	}
+	errs := ledger.Errors()
+	if len(errs) != len(want) {
+		t.Errorf("ledger.Errors() has %d errors, the table %d: add or remove the row", len(errs), len(want))
+	}
+	for _, e := range errs {
+		w, ok := want[e]
+		if !ok {
+			t.Errorf("%q: no row in the table", e.Error())
+			continue
+		}
+		if got := (answer{ledgerStatus(e.Class()), e.Code()}); got != w {
+			t.Errorf("%q answers %d %s, want %d %s", e.Error(), got.status, got.code, w.status, w.code)
+		}
+	}
+}
