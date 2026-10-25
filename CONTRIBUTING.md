@@ -20,10 +20,10 @@ Thanks for your interest. Uruni is a **small, opinionated** project — a calm t
 Prerequisites: Go (see `go.mod`), Node 24 (`.nvmrc`), `jq`. Docker is only needed to exercise the self-host stack — the dev loop uses SQLite and runs without containers.
 
 ```sh
-make setup     # hooks + Claude Code hooks + web deps + .env (idempotent)
+make setup     # hooks + Claude Code hooks + pinned Go tools in ./bin + web deps + .env (idempotent)
 make doctor    # what's installed, what's missing
 make run       # API on :8080; applies pending migrations on boot
-make web-dev   # Vite on :5173, proxies /api and /report -> :8080
+make web-dev   # Vite on :5173 (WEB_PORT), proxies /api and /report -> :8080
 ```
 
 `make` with no target lists everything. `make setup` also arms the **pre-commit PII guard** — see "Scrub the diff" below; it's the mechanism behind that rule.

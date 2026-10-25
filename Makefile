@@ -1,4 +1,4 @@
-.PHONY: help setup hooks-install claude-install doctor \
+.PHONY: help setup hooks-install claude-install tools doctor \
         run serve-bin build test test-cover lint fmt tidy sqlc migrate-up migrate-down migrate-status db-reset upgrade-rehearsal \
         web-install web-dev web-build web-lint web-fmt web-fmt-check web-typecheck web-test \
         server-stop server-restart web-stop web-restart restart servers-status \
@@ -17,19 +17,40 @@ export
 # targets exercise it locally, they are not the dev loop.
 COMPOSE := docker-compose.yml
 
-# Background dev-server logs. tail -f to follow.
-SERVER_LOG := /tmp/uruni-server.log
-WEB_LOG    := /tmp/uruni-web.log
+# Everything this Makefile writes at run time - dev-server logs and pid files,
+# the by-hand e2e instance, check logs, the notices JSON - lives under the
+# clone's own gitignored .run/, never a path shared across clones. Created on
+# demand by the targets that write there.
+RUN_DIR := $(CURDIR)/.run
 
-# Process match for *this clone's* vite. Anchored to $(CURDIR): a bare
-# `pkill -f 'npm run dev'` would take down every other project's dev server. It
-# matches vite's real argv - npm execs the resolved script
-# (node .../web/node_modules/vite/bin/vite.js), not the .bin/ shim.
-WEB_PROC := $(CURDIR)/web/node_modules
+# Background dev-server logs. tail -f to follow.
+SERVER_LOG := $(RUN_DIR)/server.log
+WEB_LOG    := $(RUN_DIR)/web.log
+
+# The background servers' pid files. stop and status act on the pid recorded
+# here (and its descendants: `go run` and `npm run dev` each spawn the process
+# that holds the port), never on a match by process name - a pkill pattern
+# cannot tell this clone's server from another clone's, or another project's.
+SERVER_PID := $(RUN_DIR)/server.pid
+WEB_PID    := $(RUN_DIR)/web.pid
+
+# Shell helpers for those pid files, used inside recipes (each recipe line is
+# its own shell, so the functions are defined on the lines that call them).
+#   kill_tree PID SIGNAL  signal PID's descendants first, then PID
+#   pid_alive FILE CMD    FILE names a live process whose command line contains
+#                         CMD; a recycled pid (a different program) reads as
+#                         stale
+SHELL_PID_FUNCS := \
+  kill_tree() { for c in $$(pgrep -P "$$1" 2>/dev/null); do kill_tree "$$c" "$$2"; done; kill "$$2" "$$1" 2>/dev/null || true; }; \
+  pid_alive() { p=$$(cat "$$1" 2>/dev/null); [ -n "$$p" ] && kill -0 "$$p" 2>/dev/null && ps -p "$$p" -o command= 2>/dev/null | grep -q -- "$$2"; }
 
 # Port the Go server listens on (the config default); used by the readiness
-# poll in `server-restart`. Override by setting PORT in .env.
+# poll in `server-restart` and by vite's proxy. Override by setting PORT in .env.
 SERVER_PORT := $(or $(PORT),8080)
+
+# Port the vite dev server listens on (web/vite.config.ts reads WEB_PORT from
+# the environment). Override by setting WEB_PORT in .env or on the command line.
+WEB_PORT ?= 5173
 
 # The dev database `db-reset` deletes. Matches the binary's default
 # (config.DefaultDBPath); URUNI_DB in .env wins, as it does for `run`.
@@ -54,13 +75,13 @@ DEV_BACKUP_DIR := $(or $(URUNI_BACKUP_DIR),./backups)
 # backup and uploads directory under the OS temp dir (web/e2e/fixtures.ts).
 # These are the one instance `make e2e-server` runs for debugging by hand, on a
 # port away from the 8080/5173 dev servers.
-E2E_DB   := /tmp/uruni-e2e.db
+E2E_DB   := $(RUN_DIR)/e2e.db
 E2E_PORT := 8099
 # Its own backup and uploads directories, not the dev ones: restore writes
 # dumps and receipts write photos, so sharing ./backups or ./uploads would mix
 # e2e files into the dev server's. Reset with the database.
-E2E_BACKUP_DIR := /tmp/uruni-e2e-backups
-E2E_UPLOADS_DIR := /tmp/uruni-e2e-uploads
+E2E_BACKUP_DIR := $(RUN_DIR)/e2e-backups
+E2E_UPLOADS_DIR := $(RUN_DIR)/e2e-uploads
 # The request logger writes one info line per request
 # (internal/http/middleware.go), which buries Playwright's results in a full
 # run. `make e2e` wants quiet; for debugging:
@@ -85,6 +106,15 @@ SQLC_CI_VERSION := v1.31.1
 # (env.GOVULNCHECK_VERSION there) - nothing to install, nothing to drift.
 GOVULNCHECK_VERSION := v1.9.0
 
+# `make tools` installs the three tools above at their pinned versions into
+# ./bin (gitignored). A target uses ./bin/<tool> when it is there and the one on
+# PATH otherwise, so CI - which installs the same versions its own way - works
+# unchanged.
+BIN_DIR := $(CURDIR)/bin
+GOLANGCI_LINT := $(if $(wildcard $(BIN_DIR)/golangci-lint),$(BIN_DIR)/golangci-lint,golangci-lint)
+SQLC          := $(if $(wildcard $(BIN_DIR)/sqlc),$(BIN_DIR)/sqlc,sqlc)
+GOVULNCHECK   := $(if $(wildcard $(BIN_DIR)/govulncheck),$(BIN_DIR)/govulncheck,go run golang.org/x/vuln/cmd/govulncheck@$(GOVULNCHECK_VERSION))
+
 help:
 	@echo "uruni - make targets (run 'make <target>')"
 	@echo ""
@@ -92,6 +122,7 @@ help:
 	@echo "  setup                   fresh-clone entry point: hooks + Claude Code + deps + .env"
 	@echo "  hooks-install           enable the pre-commit pii-guard (git hooks)"
 	@echo "  claude-install          arm the Claude Code hooks + seed personal settings"
+	@echo "  tools                   install the pinned golangci-lint, sqlc and govulncheck into ./bin"
 	@echo "  doctor                  report what's installed and what's missing"
 	@echo ""
 	@echo "Go server (repo root):"
@@ -113,7 +144,7 @@ help:
 	@echo ""
 	@echo "Web (Vite/React, in web/):"
 	@echo "  web-install             npm install"
-	@echo "  web-dev                 run the vite dev server in the foreground (:5173)"
+	@echo "  web-dev                 run the vite dev server in the foreground (:$(WEB_PORT))"
 	@echo "  web-build               production build to web/dist (embedded by 'build')"
 	@echo "  web-lint                oxlint"
 	@echo "  web-fmt                 prettier --write over src/, e2e/ and *.config.ts"
@@ -145,7 +176,7 @@ help:
 	@echo ""
 	@echo "Workflow helpers (terse output):"
 	@echo "  start-task              pre-flight: clean tree? GitHub access? then sync main"
-	@echo "  check                   pre-push gate: mirrors ci.yml, pass/fail only (logs in /tmp)"
+	@echo "  check                   pre-push gate: mirrors ci.yml, pass/fail only (logs in .run/)"
 	@echo "  dev-user EMAIL=... PASSWORD=...  create/reset a local login for smoke tests"
 
 # THIRD-PARTY-NOTICES (#521). The web half is read from the *built* bundle and
@@ -153,8 +184,8 @@ help:
 # dependency), so the build writes it as JSON when URUNI_WEB_NOTICES_JSON is
 # set (web/vite.config.ts). `make check` points its own web build at
 # NOTICES_CHECK_JSON and diffs, so it builds once.
-NOTICES_JSON       := /tmp/uruni-notices-web.json
-NOTICES_CHECK_JSON := /tmp/uruni-check-web-notices.json
+NOTICES_JSON       := $(RUN_DIR)/notices-web.json
+NOTICES_CHECK_JSON := $(RUN_DIR)/check-web-notices.json
 
 # ---- first run -------------------------------------------------------------
 # One command from a fresh clone to a runnable, guarded dev loop. Idempotent -
@@ -172,8 +203,8 @@ NOTICES_CHECK_JSON := /tmp/uruni-check-web-notices.json
 # template value in local dev would set a Secure cookie on a plain-HTTP origin,
 # which the browser declines to keep on any dev origin that is not localhost -
 # phone testing over the LAN being the case that matters. Only the scheme is
-# read, so the port need not match `make web-dev`'s 5173.
-setup: hooks-install claude-install web-install
+# read, so the port need not match `make web-dev`'s.
+setup: hooks-install claude-install tools web-install
 	@if [ ! -f .env ]; then \
 	  sed -e "s|^URUNI_BASE_URL=.*|URUNI_BASE_URL=http://localhost:8080|" \
 	    .env.example > .env; \
@@ -181,7 +212,7 @@ setup: hooks-install claude-install web-install
 	fi
 	@mkdir -p "$(DEV_UPLOADS_DIR)"
 	@mkdir -p "$(DEV_BACKUP_DIR)"
-	@echo "ok setup complete - next: make run (API on :$(SERVER_PORT), applies migrations on boot), and make web-dev (Vite on :5173) in a second terminal"
+	@echo "ok setup complete - next: make run (API on :$(SERVER_PORT), applies migrations on boot), and make web-dev (Vite on :$(WEB_PORT)) in a second terminal"
 
 # Point git at the repo's hooks directory and seed the local, gitignored
 # .pii-patterns denylist from the template + your git identity, so the
@@ -213,22 +244,32 @@ claude-install:
 	fi
 	@echo "ok Claude Code hooks armed (session-start, pre-push gate, agent gate, format-on-write)"
 
+# The pinned Go tools, in ./bin. golangci-lint ships a documented installer
+# script (a `go install` build is not a supported way to get it); sqlc and
+# govulncheck build from source at their pinned module versions. Idempotent.
+tools:
+	@mkdir -p "$(BIN_DIR)"
+	@curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/$(GOLANGCI_CI_VERSION)/install.sh | sh -s -- -b "$(BIN_DIR)" $(GOLANGCI_CI_VERSION)
+	@GOBIN="$(BIN_DIR)" go install github.com/sqlc-dev/sqlc/cmd/sqlc@$(SQLC_CI_VERSION)
+	@GOBIN="$(BIN_DIR)" go install golang.org/x/vuln/cmd/govulncheck@$(GOVULNCHECK_VERSION)
+	@echo "ok tools installed in $(BIN_DIR): golangci-lint $(GOLANGCI_CI_VERSION), sqlc $(SQLC_CI_VERSION), govulncheck $(GOVULNCHECK_VERSION)"
+
 # Report on what the Makefile can't install for you. Never fails - a status
 # readout, not a gate.
 doctor:
 	@printf '%-16s' 'go';            command -v go            >/dev/null 2>&1 && go version | awk '{print $$3}' || echo 'MISSING'
 	@printf '%-16s' 'node';          command -v node          >/dev/null 2>&1 && node --version                 || echo 'MISSING'
 	@printf '%-16s' 'jq';            command -v jq            >/dev/null 2>&1 && echo 'ok'                      || echo 'MISSING (Claude Code hooks need it)'
-	@printf '%-16s' 'golangci-lint'; if command -v golangci-lint >/dev/null 2>&1; then \
-	  v=$$(golangci-lint version 2>/dev/null | sed -n 's/.*has version \([0-9.]*\).*/\1/p'); \
+	@printf '%-16s' 'golangci-lint'; if command -v $(GOLANGCI_LINT) >/dev/null 2>&1; then \
+	  v=$$($(GOLANGCI_LINT) version 2>/dev/null | sed -n 's/.*has version \([0-9.]*\).*/\1/p'); \
 	  if [ "v$$v" = "$(GOLANGCI_CI_VERSION)" ]; then echo "v$$v"; \
-	  else echo "v$$v - CI pins $(GOLANGCI_CI_VERSION). Different linter versions disagree about real code; install the pinned one."; fi; \
-	else echo 'MISSING (make lint / make check)'; fi
-	@printf '%-16s' 'sqlc';          if command -v sqlc >/dev/null 2>&1; then \
-	  v=$$(sqlc version 2>/dev/null); \
+	  else echo "v$$v - CI pins $(GOLANGCI_CI_VERSION). Different linter versions disagree about real code; run make tools."; fi; \
+	else echo 'MISSING (make tools)'; fi
+	@printf '%-16s' 'sqlc';          if command -v $(SQLC) >/dev/null 2>&1; then \
+	  v=$$($(SQLC) version 2>/dev/null); \
 	  if [ "$$v" = "$(SQLC_CI_VERSION)" ]; then echo "$$v"; \
-	  else echo "$$v - CI pins $(SQLC_CI_VERSION). Another version writes different code into internal/store; install the pinned one."; fi; \
-	else echo 'MISSING (make sqlc / make check)'; fi
+	  else echo "$$v - CI pins $(SQLC_CI_VERSION). Another version writes different code into internal/store; run make tools."; fi; \
+	else echo 'MISSING (make tools)'; fi
 	@printf '%-16s' 'claude';        command -v claude        >/dev/null 2>&1 && echo 'ok'                      || echo 'not on PATH (install separately; the Makefile cannot)'
 	@printf '%-16s' 'git hooks';     [ "$$(git config core.hooksPath)" = ".githooks" ] && echo 'armed'          || echo 'NOT armed - run make hooks-install'
 	@printf '%-16s' 'pii-patterns';  [ -f .pii-patterns ] && echo 'present'                                     || echo 'MISSING - run make hooks-install'
@@ -269,7 +310,7 @@ test-cover:
 	go test ./... -race -covermode=atomic -coverpkg=./... -coverprofile=coverage.out
 
 lint:
-	golangci-lint run
+	$(GOLANGCI_LINT) run
 
 fmt:
 	gofmt -w .
@@ -278,7 +319,7 @@ tidy:
 	go mod tidy
 
 sqlc:
-	sqlc generate
+	$(SQLC) generate
 
 migrate-up:
 	go run ./cmd/uruni migrate up
@@ -306,7 +347,7 @@ web-install:
 	( cd web && npm install )
 
 web-dev:
-	( cd web && npm run dev )
+	( cd web && WEB_PORT=$(WEB_PORT) npm run dev )
 
 web-build:
 	( cd web && npm run build )
@@ -327,8 +368,8 @@ web-test:
 	( cd web && npm run -s test )
 
 # ---- background dev servers ------------------------------------------------
-# `make restart` kills any running server + vite processes and starts fresh
-# ones in the background, logging to files. Useful after a migration change
+# `make restart` stops this clone's recorded server + vite processes and starts
+# fresh ones in the background, logging to files under .run/. Useful after a migration change
 # (the server runs goose on serve) or when iterating on env vars.
 #
 # Stops wait for the process to exit; starts poll for real readiness (server
@@ -339,22 +380,26 @@ web-test:
 # came up.
 
 server-stop:
-	@pkill -f 'go run ./cmd/uruni' 2>/dev/null || true
-	@pkill -x uruni 2>/dev/null || true
-	@for i in $$(seq 1 50); do \
-	  pgrep -x uruni >/dev/null 2>&1 || pgrep -f 'go run ./cmd/uruni' >/dev/null 2>&1 || break; \
-	  sleep 0.1; \
-	done
-	@pkill -9 -x uruni 2>/dev/null || true
-	@echo "server: stopped"
+	@$(SHELL_PID_FUNCS); \
+	if pid_alive "$(SERVER_PID)" 'cmd/uruni'; then \
+	  p=$$(cat "$(SERVER_PID)"); \
+	  kill_tree "$$p" -TERM; \
+	  for i in $$(seq 1 50); do kill -0 "$$p" 2>/dev/null || break; sleep 0.1; done; \
+	  kill -0 "$$p" 2>/dev/null && kill_tree "$$p" -KILL; \
+	fi; \
+	rm -f "$(SERVER_PID)"; \
+	echo "server: stopped"
 
 server-restart: server-stop
-	@mkdir -p "$(DEV_UPLOADS_DIR)"
-	@mkdir -p "$(DEV_BACKUP_DIR)"
-	@( exec nohup go run ./cmd/uruni serve ) > $(SERVER_LOG) 2>&1 < /dev/null &
-	@seen=0; for i in $$(seq 1 100); do \
+	@if curl -fsS http://localhost:$(SERVER_PORT)/healthz >/dev/null 2>&1; then \
+	  echo "FAIL :$(SERVER_PORT) is already served by a process this clone did not start (no live $(SERVER_PID)) - stop it, or set PORT" >&2; exit 1; \
+	fi
+	@mkdir -p "$(RUN_DIR)" "$(DEV_UPLOADS_DIR)" "$(DEV_BACKUP_DIR)"
+	@( exec nohup go run ./cmd/uruni serve ) > $(SERVER_LOG) 2>&1 < /dev/null & echo $$! > "$(SERVER_PID)"
+	@$(SHELL_PID_FUNCS); \
+	for i in $$(seq 1 100); do \
+	  pid_alive "$(SERVER_PID)" 'cmd/uruni' || break; \
 	  curl -fsS http://localhost:$(SERVER_PORT)/healthz >/dev/null 2>&1 && { echo "server: started (log: $(SERVER_LOG))"; exit 0; }; \
-	  if pgrep -f 'go run ./cmd/uruni serve' >/dev/null 2>&1 || pgrep -x uruni >/dev/null 2>&1; then seen=1; elif [ $$seen = 1 ]; then break; fi; \
 	  sleep 0.1; \
 	done; \
 	echo "FAIL server failed to start (died or timed out) - tail of $(SERVER_LOG):" >&2; \
@@ -362,19 +407,24 @@ server-restart: server-stop
 	exit 1
 
 web-stop:
-	@pkill -f '$(WEB_PROC)' 2>/dev/null || true
-	@for i in $$(seq 1 50); do \
-	  pgrep -f '$(WEB_PROC)' >/dev/null 2>&1 || break; \
-	  sleep 0.1; \
-	done
-	@echo "web: stopped"
+	@$(SHELL_PID_FUNCS); \
+	if pid_alive "$(WEB_PID)" 'npm run dev'; then \
+	  p=$$(cat "$(WEB_PID)"); \
+	  kill_tree "$$p" -TERM; \
+	  for i in $$(seq 1 50); do kill -0 "$$p" 2>/dev/null || break; sleep 0.1; done; \
+	  kill -0 "$$p" 2>/dev/null && kill_tree "$$p" -KILL; \
+	fi; \
+	rm -f "$(WEB_PID)"; \
+	echo "web: stopped"
 
 web-restart: web-stop
+	@mkdir -p "$(RUN_DIR)"
 	@: > $(WEB_LOG)
-	@( cd web && exec nohup npm run dev ) > $(WEB_LOG) 2>&1 < /dev/null &
-	@seen=0; for i in $$(seq 1 150); do \
+	@( cd web && exec nohup npm run dev ) > $(WEB_LOG) 2>&1 < /dev/null & echo $$! > "$(WEB_PID)"
+	@$(SHELL_PID_FUNCS); \
+	for i in $$(seq 1 150); do \
+	  pid_alive "$(WEB_PID)" 'npm run dev' || break; \
 	  grep -q 'Local:' $(WEB_LOG) 2>/dev/null && { echo "web: started (log: $(WEB_LOG))"; exit 0; }; \
-	  if pgrep -f '$(WEB_PROC)' >/dev/null 2>&1; then seen=1; elif [ $$seen = 1 ]; then break; fi; \
 	  sleep 0.1; \
 	done; \
 	echo "FAIL web failed to start (died or timed out) - tail of $(WEB_LOG):" >&2; \
@@ -385,16 +435,9 @@ restart: server-restart web-restart
 	@echo "both servers restarted"
 
 servers-status:
-	@if pgrep -f 'cmd/uruni serve' >/dev/null; then \
-	  echo "server: running (pid $$(pgrep -f 'cmd/uruni serve' | head -1))"; \
-	else \
-	  echo "server: stopped"; \
-	fi
-	@if pgrep -f '$(WEB_PROC)' >/dev/null; then \
-	  echo "web:    running (pid $$(pgrep -f '$(WEB_PROC)' | head -1))"; \
-	else \
-	  echo "web:    stopped"; \
-	fi
+	@$(SHELL_PID_FUNCS); \
+	if pid_alive "$(SERVER_PID)" 'cmd/uruni'; then echo "server: running (pid $$(cat "$(SERVER_PID)"))"; else echo "server: stopped"; fi; \
+	if pid_alive "$(WEB_PID)" 'npm run dev'; then echo "web:    running (pid $$(cat "$(WEB_PID)"))"; else echo "web:    stopped"; fi
 
 # ---- e2e (Playwright; ADR-039) ---------------------------------------------
 # `make e2e` needs no reset step: Playwright's global setup builds the binary
@@ -427,6 +470,7 @@ e2e-install:
 # Not part of `make e2e`: this and e2e-server run the one seeded instance by
 # hand, e.g. to click through what a spec sees.
 e2e-reset:
+	@mkdir -p "$(RUN_DIR)"
 	@rm -f $(E2E_DB) $(E2E_DB)-wal $(E2E_DB)-shm
 	@rm -rf $(E2E_BACKUP_DIR) $(E2E_UPLOADS_DIR) && mkdir -p $(E2E_BACKUP_DIR) $(E2E_UPLOADS_DIR)
 	@URUNI_DB="$(E2E_DB)" URUNI_LOG_LEVEL=$(E2E_LOG_LEVEL) go run ./cmd/uruni seed-e2e
@@ -483,7 +527,7 @@ stack-ps:
 
 # ---- workflow helpers ------------------------------------------------------
 # Each emits a single status line per step so they're cheap to read in an
-# agent's context; verbose output goes to a /tmp log, read only on failure.
+# agent's context; verbose output goes to a log under .run/, read only on failure.
 
 # Pre-task pre-flight: refuse on a dirty tree, verify GitHub access, then
 # fast-forward main, so you never branch off a stale local main.
@@ -506,23 +550,25 @@ start-task:
 # release can change export data under a pinned golangci-lint (go1.27.2 did).
 # e2e is excluded: it has its own workflow (e2e.yml, ADR-039) and target.
 check:
+	@mkdir -p "$(RUN_DIR)"
 	@fail=0; \
 	export GOTOOLCHAIN=$$(sed -n 's/^toolchain //p' go.mod); \
-	printf '%-14s' 'golangci-lint'; golangci-lint run                >/tmp/uruni-check-go-lint.log 2>&1 && echo 'ok' || { echo 'FAIL -> /tmp/uruni-check-go-lint.log'; fail=1; }; \
-	printf '%-14s' 'go test';       go test ./... -race              >/tmp/uruni-check-go-test.log 2>&1 && echo 'ok' || { echo 'FAIL -> /tmp/uruni-check-go-test.log'; fail=1; }; \
-	printf '%-14s' 'go mod tidy';   go mod tidy -diff                >/tmp/uruni-check-go-tidy.log 2>&1 && echo 'ok' || { echo 'FAIL -> /tmp/uruni-check-go-tidy.log (make tidy)'; fail=1; }; \
-	printf '%-14s' 'sqlc diff';     sqlc diff                        >/tmp/uruni-check-sqlc.log    2>&1 && echo 'ok' || { echo 'FAIL -> /tmp/uruni-check-sqlc.log (make sqlc; make doctor for the version)'; fail=1; }; \
-	printf '%-14s' 'govulncheck';   go run golang.org/x/vuln/cmd/govulncheck@$(GOVULNCHECK_VERSION) ./... >/tmp/uruni-check-go-vuln.log 2>&1 && echo 'ok' || { echo 'FAIL -> /tmp/uruni-check-go-vuln.log'; fail=1; }; \
-	printf '%-14s' 'oxlint';        (cd web && npm run -s lint)      >/tmp/uruni-check-web-lint.log 2>&1 && echo 'ok' || { echo 'FAIL -> /tmp/uruni-check-web-lint.log'; fail=1; }; \
-	printf '%-14s' 'prettier';      (cd web && npm run -s fmt:check) >/tmp/uruni-check-web-fmt.log  2>&1 && echo 'ok' || { echo 'FAIL -> /tmp/uruni-check-web-fmt.log (make web-fmt)';  fail=1; }; \
-	printf '%-14s' 'tsc';           (cd web && npm run -s typecheck) >/tmp/uruni-check-web-tsc.log  2>&1 && echo 'ok' || { echo 'FAIL -> /tmp/uruni-check-web-tsc.log';  fail=1; }; \
-	printf '%-14s' 'vitest';        (cd web && npm run -s test)      >/tmp/uruni-check-web-test.log 2>&1 && echo 'ok' || { echo 'FAIL -> /tmp/uruni-check-web-test.log'; fail=1; }; \
-	printf '%-14s' 'web build';     (cd web && URUNI_WEB_NOTICES_JSON=$(NOTICES_CHECK_JSON) npm run -s build) >/tmp/uruni-check-web-build.log 2>&1 && echo 'ok' || { echo 'FAIL -> /tmp/uruni-check-web-build.log'; fail=1; }; \
-	printf '%-14s' 'notices';       go run ./cmd/uruni-notices -web $(NOTICES_CHECK_JSON) -out /tmp/uruni-check-notices.txt >/tmp/uruni-check-notices.log 2>&1 && diff -u THIRD-PARTY-NOTICES /tmp/uruni-check-notices.txt >>/tmp/uruni-check-notices.log 2>&1 && echo 'ok' || { echo 'FAIL -> /tmp/uruni-check-notices.log (make notices)'; fail=1; }; \
+	printf '%-14s' 'golangci-lint'; $(GOLANGCI_LINT) run                >$(RUN_DIR)/check-go-lint.log 2>&1 && echo 'ok' || { echo 'FAIL -> $(RUN_DIR)/check-go-lint.log'; fail=1; }; \
+	printf '%-14s' 'go test';       go test ./... -race              >$(RUN_DIR)/check-go-test.log 2>&1 && echo 'ok' || { echo 'FAIL -> $(RUN_DIR)/check-go-test.log'; fail=1; }; \
+	printf '%-14s' 'go mod tidy';   go mod tidy -diff                >$(RUN_DIR)/check-go-tidy.log 2>&1 && echo 'ok' || { echo 'FAIL -> $(RUN_DIR)/check-go-tidy.log (make tidy)'; fail=1; }; \
+	printf '%-14s' 'sqlc diff';     $(SQLC) diff                        >$(RUN_DIR)/check-sqlc.log    2>&1 && echo 'ok' || { echo 'FAIL -> $(RUN_DIR)/check-sqlc.log (make sqlc; make doctor for the version)'; fail=1; }; \
+	printf '%-14s' 'govulncheck';   $(GOVULNCHECK) ./... >$(RUN_DIR)/check-go-vuln.log 2>&1 && echo 'ok' || { echo 'FAIL -> $(RUN_DIR)/check-go-vuln.log'; fail=1; }; \
+	printf '%-14s' 'oxlint';        (cd web && npm run -s lint)      >$(RUN_DIR)/check-web-lint.log 2>&1 && echo 'ok' || { echo 'FAIL -> $(RUN_DIR)/check-web-lint.log'; fail=1; }; \
+	printf '%-14s' 'prettier';      (cd web && npm run -s fmt:check) >$(RUN_DIR)/check-web-fmt.log  2>&1 && echo 'ok' || { echo 'FAIL -> $(RUN_DIR)/check-web-fmt.log (make web-fmt)';  fail=1; }; \
+	printf '%-14s' 'tsc';           (cd web && npm run -s typecheck) >$(RUN_DIR)/check-web-tsc.log  2>&1 && echo 'ok' || { echo 'FAIL -> $(RUN_DIR)/check-web-tsc.log';  fail=1; }; \
+	printf '%-14s' 'vitest';        (cd web && npm run -s test)      >$(RUN_DIR)/check-web-test.log 2>&1 && echo 'ok' || { echo 'FAIL -> $(RUN_DIR)/check-web-test.log'; fail=1; }; \
+	printf '%-14s' 'web build';     (cd web && URUNI_WEB_NOTICES_JSON=$(NOTICES_CHECK_JSON) npm run -s build) >$(RUN_DIR)/check-web-build.log 2>&1 && echo 'ok' || { echo 'FAIL -> $(RUN_DIR)/check-web-build.log'; fail=1; }; \
+	printf '%-14s' 'notices';       go run ./cmd/uruni-notices -web $(NOTICES_CHECK_JSON) -out $(RUN_DIR)/check-notices.txt >$(RUN_DIR)/check-notices.log 2>&1 && diff -u THIRD-PARTY-NOTICES $(RUN_DIR)/check-notices.txt >>$(RUN_DIR)/check-notices.log 2>&1 && echo 'ok' || { echo 'FAIL -> $(RUN_DIR)/check-notices.log (make notices)'; fail=1; }; \
 	if [ $$fail -eq 0 ]; then echo 'all green'; else echo 'FAILED - read the FAIL log(s) above'; exit 1; fi
 
 # Regenerate THIRD-PARTY-NOTICES at the repo root and commit the result.
 notices:
+	@mkdir -p "$(RUN_DIR)"
 	( cd web && URUNI_WEB_NOTICES_JSON=$(NOTICES_JSON) npm run -s build )
 	go run ./cmd/uruni-notices -web $(NOTICES_JSON) -out THIRD-PARTY-NOTICES
 

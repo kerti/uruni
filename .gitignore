@@ -1,6 +1,11 @@
 # Go build output
 /uruni
 /bin/
+
+# Per-clone run-time scratch (make restart's logs and pid files, make check's
+# logs, the by-hand e2e instance): the Makefile writes here, never to a path
+# shared between clones.
+/.run/
 *.out
 coverage.*
 # ...but not the e2e coverage map (case-insensitive filesystems match it)
