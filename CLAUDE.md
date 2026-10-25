@@ -95,7 +95,7 @@ Two guards are armed by `make setup` and are not optional: a **pre-commit PII gu
 
 ## How agents work here (ADR-023)
 
-The main session is the **orchestrator** — Opus at `medium` effort, pinned in `.claude/settings.json`. It holds the plan, reads the diffs, writes the PR body, and asks for the commit. Bulk reading, bulk writing and bulk reasoning go to the role agents in `.claude/agents/`, each pinned to a model and an effort level in its frontmatter. **That frontmatter is the mechanism; this table is only the map.**
+The main session is the **orchestrator** — Opus at `medium` effort, pinned in `.claude/settings.json`. It holds the plan, reads the diffs, writes the PR body, and asks for the commit. Bulk reading, bulk writing and bulk reasoning go to the role agents in `.claude/agents/`, each pinned to a model tier and an effort level in its frontmatter (`sonnet`/`opus` are aliases: the model behind a tier floats). **That frontmatter is the mechanism; this table is only the map.**
 
 | Agent | Model · effort | Give it |
 |---|---|---|
