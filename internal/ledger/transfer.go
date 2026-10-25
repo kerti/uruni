@@ -38,27 +38,43 @@ func normalizeNote(note *string) *string {
 	return &trimmed
 }
 
+// transferPair is everything postTransferPairTx needs beyond its context and
+// Querier. Fields are named at every call site: FundID, the two legs, and the
+// two optional pointers are all the same few types a positional list would let
+// transpose.
+//
+// Kind selects which the transfer row records; the two rows posted are the
+// same either way, since the "same purpose" or "same account" constraint each
+// caller upholds lives in the legs it passes.
+//
+// CorrectsTransactionID is nil except for a purpose correction (ADR-033).
+//
+// Reason is nil except for the two that say why a purpose pair moved
+// (ADR-036): reasonRoll from CloseIncidentalAndRoll, reasonAllocation from
+// PostPurposeMove. Corrections and between_accounts pairs leave it nil; the
+// schema's CHECK refuses a reason elsewhere.
+type transferPair struct {
+	FundID                int64
+	Kind                  TransferKind
+	From, To              leg
+	Amount                money.Amount
+	OccurredOn            string
+	Note                  *string
+	CorrectsTransactionID *int64
+	Reason                *string
+}
+
 // postTransferPairTx is the one primitive behind every value-neutral movement
 // (ADR-024, ADR-027): insert one transfer row, then two "transaction" rows
 // referencing it, equal amount, opposite direction. The fund's total is
 // unchanged by construction: only where the money sits (between_accounts) or
 // what it is for (reclass_purpose) moves.
 //
-// kind selects which the transfer row records; the two rows posted are the
-// same either way, since the "same purpose" or "same account" constraint each
-// caller upholds lives in the legs it passes. This function does not check
-// which fields its callers hold equal, so CloseIncidentalAndRoll (#42) needs
-// no second code path, only different legs and kind='reclass_purpose'.
-//
-// correctsTransactionID is nil except for a purpose correction (ADR-033,
-// #267): PostPurposeCorrection reuses this primitive rather than opening a
-// second write path (ADR-027); the schema's CHECK stops a between_accounts
-// pair or a roll from setting it.
-//
-// reason is nil except for the two that say why a purpose pair moved
-// (ADR-036): reasonRoll from CloseIncidentalAndRoll, reasonAllocation from
-// PostPurposeMove. Corrections and between_accounts pairs pass nil; the
-// schema's CHECK refuses a reason elsewhere.
+// This function does not check which fields its callers hold equal, so
+// CloseIncidentalAndRoll needs no second code path, only different legs and
+// kind='reclass_purpose'. PostPurposeCorrection reuses this primitive rather
+// than opening a second write path (ADR-027); the schema's CHECK stops a
+// between_accounts pair or a roll from setting CorrectsTransactionID.
 //
 // No argument-shape validation happens here (ADR-027): each exported caller
 // validates, because the message ("from_account_id and to_account_id must
@@ -68,12 +84,13 @@ func normalizeNote(note *string) *string {
 // It takes an open store.Querier rather than opening its own transaction:
 // CloseIncidentalAndRoll needs the pair and the incidental UPDATE in one
 // atomic write, and a nested l.withTx is refused with txguard.ErrNested:
-// under ADR-004's SetMaxOpenConns(1) the outer one holds the only connection. Every caller opens its withTx and passes its Querier in.
-func (l *Ledger) postTransferPairTx(ctx context.Context, q store.Querier, fundID int64, kind TransferKind, from, to leg, amount money.Amount, occurredOn string, note *string, correctsTransactionID *int64, reason *string) (store.Transfer, error) {
+// under ADR-004's SetMaxOpenConns(1) the outer one holds the only connection.
+// Every caller opens its withTx and passes its Querier in.
+func (l *Ledger) postTransferPairTx(ctx context.Context, q store.Querier, tp transferPair) (store.Transfer, error) {
 	now := l.now().Unix()
 
 	transfer, err := q.CreateTransfer(ctx, store.CreateTransferParams{
-		FundID: fundID, Kind: string(kind), CorrectsTransactionID: correctsTransactionID, Reason: reason, CreatedAt: now,
+		FundID: tp.FundID, Kind: string(tp.Kind), CorrectsTransactionID: tp.CorrectsTransactionID, Reason: tp.Reason, CreatedAt: now,
 	})
 	if err != nil {
 		return store.Transfer{}, fmt.Errorf("creating transfer: %w", err)
@@ -82,11 +99,11 @@ func (l *Ledger) postTransferPairTx(ctx context.Context, q store.Querier, fundID
 	for _, p := range [...]struct {
 		leg       leg
 		direction Direction
-	}{{from, DirectionOut}, {to, DirectionIn}} {
+	}{{tp.From, DirectionOut}, {tp.To, DirectionIn}} {
 		if _, err := q.CreateTransaction(ctx, store.CreateTransactionParams{
-			FundID: fundID, AccountID: p.leg.AccountID, PurposeID: p.leg.PurposeID,
-			Direction: string(p.direction), Amount: amount.Int64(), OccurredOn: occurredOn,
-			Kind: string(TransactionKindTransfer), TransferID: &transfer.ID, Note: note, CreatedAt: now,
+			FundID: tp.FundID, AccountID: p.leg.AccountID, PurposeID: p.leg.PurposeID,
+			Direction: string(p.direction), Amount: tp.Amount.Int64(), OccurredOn: tp.OccurredOn,
+			Kind: string(TransactionKindTransfer), TransferID: &transfer.ID, Note: tp.Note, CreatedAt: now,
 		}); err != nil {
 			return store.Transfer{}, fmt.Errorf("posting transfer leg (%s): %w", p.direction, err)
 		}
@@ -153,7 +170,10 @@ func (l *Ledger) PostTransferBetweenAccounts(ctx context.Context, p PostTransfer
 				return store.Transfer{}, err
 			}
 		}
-		return l.postTransferPairTx(ctx, q, p.FundID, TransferKindBetweenAccounts, from, to, p.Amount, p.OccurredOn, normalizeNote(p.Note), nil, nil)
+		return l.postTransferPairTx(ctx, q, transferPair{
+			FundID: p.FundID, Kind: TransferKindBetweenAccounts, From: from, To: to,
+			Amount: p.Amount, OccurredOn: p.OccurredOn, Note: normalizeNote(p.Note),
+		})
 	})
 	if err != nil {
 		return store.Transfer{}, fmt.Errorf("posting transfer between accounts: %w", err)

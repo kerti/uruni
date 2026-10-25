@@ -181,8 +181,11 @@ func serveContext(parent context.Context) error {
 	}()
 
 	srv, requests := newServer(fmt.Sprintf(":%d", cfg.Port),
-		uruniHTTP.New(assets, uruniHTTP.Build{Version: version, Commit: buildCommit()}, l, q, sqlDB, dbFile.Check, logger,
-			au, cfg.BaseURL, cfg.UploadsDir, cfg.BackupDir, cfg.TrustedProxies))
+		uruniHTTP.New(uruniHTTP.Deps{
+			Assets: assets, Build: uruniHTTP.Build{Version: version, Commit: buildCommit()},
+			Ledger: l, Queries: q, DB: sqlDB, DBFileCheck: dbFile.Check, Logger: logger,
+			Auth: au, BaseURL: cfg.BaseURL, UploadsDir: cfg.UploadsDir, BackupDir: cfg.BackupDir, TrustedProxies: cfg.TrustedProxies,
+		}))
 
 	errc := make(chan error, 1)
 	go func() {

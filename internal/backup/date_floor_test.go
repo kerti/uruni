@@ -75,7 +75,7 @@ func TestRestoreRefusesADateBelowTheFloorAndRollsBack(t *testing.T) {
 				t.Fatalf("BuildDocument(dest) = %v, want no error", err)
 			}
 
-			err = Restore(context.Background(), destDB, destUploads, t.TempDir(), parsed, time.Unix(1800000000, 0))
+			err = Restore(context.Background(), RestoreParams{DB: destDB, UploadsDir: destUploads, BackupDir: t.TempDir(), Parsed: parsed, Now: time.Unix(1800000000, 0)})
 			if err == nil {
 				t.Fatalf("Restore(%s = a day below the floor) = nil error, want the floor CHECK to refuse it", m.column)
 			}

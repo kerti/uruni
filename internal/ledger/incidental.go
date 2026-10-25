@@ -341,7 +341,10 @@ func (l *Ledger) CloseIncidentalAndRoll(ctx context.Context, p CloseIncidentalAn
 			}
 			from := leg{AccountID: p.AccountID, PurposeID: p.PurposeID}
 			to := leg{AccountID: p.AccountID, PurposeID: mainID}
-			if _, err := l.postTransferPairTx(ctx, q, p.FundID, TransferKindReclassPurpose, from, to, leftover, p.ClosedOn, normalizeNote(p.Note), nil, &reason); err != nil {
+			if _, err := l.postTransferPairTx(ctx, q, transferPair{
+				FundID: p.FundID, Kind: TransferKindReclassPurpose, From: from, To: to,
+				Amount: leftover, OccurredOn: p.ClosedOn, Note: normalizeNote(p.Note), Reason: &reason,
+			}); err != nil {
 				return fmt.Errorf("rolling incidental leftover: %w", err)
 			}
 			rolled = leftover
@@ -359,7 +362,10 @@ func (l *Ledger) CloseIncidentalAndRoll(ctx context.Context, p CloseIncidentalAn
 			}
 			from := leg{AccountID: p.AccountID, PurposeID: mainID}
 			to := leg{AccountID: p.AccountID, PurposeID: p.PurposeID}
-			if _, err := l.postTransferPairTx(ctx, q, p.FundID, TransferKindReclassPurpose, from, to, covering, p.ClosedOn, normalizeNote(p.Note), nil, &reason); err != nil {
+			if _, err := l.postTransferPairTx(ctx, q, transferPair{
+				FundID: p.FundID, Kind: TransferKindReclassPurpose, From: from, To: to,
+				Amount: covering, OccurredOn: p.ClosedOn, Note: normalizeNote(p.Note), Reason: &reason,
+			}); err != nil {
 				return fmt.Errorf("covering incidental shortfall: %w", err)
 			}
 			rolled = leftover // stays negative: covered from Kas Utama.

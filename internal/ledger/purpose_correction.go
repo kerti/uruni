@@ -151,8 +151,10 @@ func (l *Ledger) PostPurposeCorrection(ctx context.Context, p PostPurposeCorrect
 		}
 
 		transactionID := p.TransactionID
-		pair, err := l.postTransferPairTx(ctx, q, p.FundID, TransferKindReclassPurpose, from, to,
-			money.FromDB(original.Amount), original.OccurredOn, nil, &transactionID, nil)
+		pair, err := l.postTransferPairTx(ctx, q, transferPair{
+			FundID: p.FundID, Kind: TransferKindReclassPurpose, From: from, To: to,
+			Amount: money.FromDB(original.Amount), OccurredOn: original.OccurredOn, CorrectsTransactionID: &transactionID,
+		})
 		if err != nil {
 			return store.Transfer{}, fmt.Errorf("posting purpose correction: %w", err)
 		}

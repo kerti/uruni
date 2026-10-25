@@ -38,7 +38,7 @@ func newLimitedReport(t *testing.T) limitedReport {
 	if err != nil {
 		t.Fatalf("SetUpFund() = %v", err)
 	}
-	h := New(testAssets(), testBuild, l, store.New(sqlDB), sqlDB, nil, logger, auth.New(sqlDB), "", t.TempDir(), t.TempDir(), nil)
+	h := New(Deps{Assets: testAssets(), Build: testBuild, Ledger: l, Queries: store.New(sqlDB), DB: sqlDB, Logger: logger, Auth: auth.New(sqlDB), BaseURL: "", UploadsDir: t.TempDir(), BackupDir: t.TempDir()})
 	return limitedReport{h: h, slug: res.Fund.ReportSlug, logs: logs, now: &now}
 }
 

@@ -344,7 +344,7 @@ func TestPostLoginBehindATrustedProxyCountsEachForwardedClientApart(t *testing.T
 	t.Parallel()
 	sqlDB := testStoreDB(t)
 	trusted := []netip.Prefix{netip.MustParsePrefix("192.0.2.0/24")}
-	r := New(testAssets(), testBuild, ledger.New(sqlDB), store.New(sqlDB), sqlDB, nil, testLogger(), auth.New(sqlDB), "", t.TempDir(), t.TempDir(), trusted)
+	r := New(Deps{Assets: testAssets(), Build: testBuild, Ledger: ledger.New(sqlDB), Queries: store.New(sqlDB), DB: sqlDB, Logger: testLogger(), Auth: auth.New(sqlDB), BaseURL: "", UploadsDir: t.TempDir(), BackupDir: t.TempDir(), TrustedProxies: trusted})
 
 	post := func(email, forwardedFor string) *httptest.ResponseRecorder {
 		//nolint:gosec // not a credential leak - this is the request body POST /api/login's own contract requires

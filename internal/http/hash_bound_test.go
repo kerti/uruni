@@ -85,7 +85,7 @@ func (p *hashProbe) drain() {
 func probedRouter(t *testing.T, opts ...auth.Option) http.Handler {
 	t.Helper()
 	sqlDB := testStoreDB(t)
-	return New(testAssets(), testBuild, ledger.New(sqlDB), store.New(sqlDB), sqlDB, nil, testLogger(), auth.New(sqlDB, opts...), "", t.TempDir(), t.TempDir(), nil)
+	return New(Deps{Assets: testAssets(), Build: testBuild, Ledger: ledger.New(sqlDB), Queries: store.New(sqlDB), DB: sqlDB, Logger: testLogger(), Auth: auth.New(sqlDB, opts...), BaseURL: "", UploadsDir: t.TempDir(), BackupDir: t.TempDir()})
 }
 
 func postRegisterFrom(r http.Handler, email, password, ip string) *httptest.ResponseRecorder {

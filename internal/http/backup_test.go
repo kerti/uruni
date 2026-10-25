@@ -34,7 +34,7 @@ func getBackup(t *testing.T, r http.Handler) *httptest.ResponseRecorder {
 func TestDownloadBackupRequiresASession(t *testing.T) {
 	t.Parallel()
 	sqlDB := testStoreDB(t)
-	r := New(testAssets(), testBuild, ledger.New(sqlDB), store.New(sqlDB), sqlDB, nil, testLogger(), auth.New(sqlDB), "", t.TempDir(), t.TempDir(), nil)
+	r := New(Deps{Assets: testAssets(), Build: testBuild, Ledger: ledger.New(sqlDB), Queries: store.New(sqlDB), DB: sqlDB, Logger: testLogger(), Auth: auth.New(sqlDB), BaseURL: "", UploadsDir: t.TempDir(), BackupDir: t.TempDir()})
 
 	rec := getBackup(t, r)
 	if rec.Code != http.StatusUnauthorized {
@@ -122,7 +122,7 @@ func authedRouterWithDirs(t *testing.T) (h http.Handler, uploadsDir, backupDir s
 	t.Helper()
 	sqlDB := testStoreDB(t)
 	uploadsDir, backupDir = t.TempDir(), t.TempDir()
-	r := New(testAssets(), testBuild, ledger.New(sqlDB), store.New(sqlDB), sqlDB, nil, testLogger(), auth.New(sqlDB), "", uploadsDir, backupDir, nil)
+	r := New(Deps{Assets: testAssets(), Build: testBuild, Ledger: ledger.New(sqlDB), Queries: store.New(sqlDB), DB: sqlDB, Logger: testLogger(), Auth: auth.New(sqlDB), BaseURL: "", UploadsDir: uploadsDir, BackupDir: backupDir})
 
 	reg := postRegister(t, r, "treasurer@example.org", "correct-horse-battery")
 	if reg.Code != http.StatusCreated {

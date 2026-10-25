@@ -561,13 +561,25 @@ const (
 	carryBackupUser
 )
 
+// RestoreParams is every argument Restore needs beyond its context. DB is the
+// live database, UploadsDir the receipt volume the backup's photos are
+// extracted into, BackupDir where the safety-net dump is written, and Now the
+// dump's timestamp.
+type RestoreParams struct {
+	DB         *sql.DB
+	UploadsDir string
+	BackupDir  string
+	Parsed     ParsedUpload
+	Now        time.Time
+}
+
 // Restore is the in-app write side of ADR-012's restore path: a safety-net
 // dump, additive receipt extraction, then one write transaction that clears
 // every fund-scoped table, re-inserts exactly what parsed.Document holds with
 // every id preserved, proves the totals, and commits - or changes nothing. The
 // live login is not touched; every session and idempotency key is cleared.
 //
-// sqlDB is the raw pool because this operation opens a transaction spanning
+// RestoreParams.DB is the raw pool because this operation opens a transaction spanning
 // nearly every table, and ledger.Ledger's balance methods are bound to
 // sqlDB, not the open transaction: calling them here would ask ADR-004's
 // single connection for a second one and deadlock. verifyTotals calls the
@@ -577,11 +589,11 @@ const (
 // WritePreRestoreDump runs before the transaction opens, reads the live
 // state in its own read transaction (BuildDocument), and releases the
 // connection before the write transaction asks for it.
-func Restore(ctx context.Context, sqlDB *sql.DB, uploadsDir, backupDir string, parsed ParsedUpload, now time.Time) error {
-	if _, err := WritePreRestoreDump(ctx, sqlDB, uploadsDir, backupDir, now); err != nil {
+func Restore(ctx context.Context, p RestoreParams) error {
+	if _, err := WritePreRestoreDump(ctx, p.DB, p.UploadsDir, p.BackupDir, p.Now); err != nil {
 		return fmt.Errorf("backup: writing the safety-net dump: %w", err)
 	}
-	_, err := restoreCore(ctx, sqlDB, uploadsDir, parsed, keepLiveUser)
+	_, err := restoreCore(ctx, p.DB, p.UploadsDir, p.Parsed, keepLiveUser)
 	return err
 }
 

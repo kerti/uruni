@@ -116,7 +116,7 @@ func TestRestoreAcceptsEveryMoneyColumnAtTheCeiling(t *testing.T) {
 			tc.set(&doc, ceilingMax)
 			doc = withTotals(doc)
 
-			err := Restore(context.Background(), destDB, t.TempDir(), t.TempDir(), ParsedUpload{Document: doc}, time.Unix(1800000000, 0))
+			err := Restore(context.Background(), RestoreParams{DB: destDB, UploadsDir: t.TempDir(), BackupDir: t.TempDir(), Parsed: ParsedUpload{Document: doc}, Now: time.Unix(1800000000, 0)})
 			if err != nil {
 				t.Fatalf("Restore() with %s = %d: %v, want it restored", tc.name, ceilingMax, err)
 			}
@@ -142,7 +142,7 @@ func TestRestoreRefusesAMoneyColumnAboveTheCeilingAndRollsBack(t *testing.T) {
 			tc.set(&doc, ceilingMax+1)
 			doc = withTotals(doc)
 
-			err := Restore(context.Background(), destDB, t.TempDir(), t.TempDir(), ParsedUpload{Document: doc}, time.Unix(1800000000, 0))
+			err := Restore(context.Background(), RestoreParams{DB: destDB, UploadsDir: t.TempDir(), BackupDir: t.TempDir(), Parsed: ParsedUpload{Document: doc}, Now: time.Unix(1800000000, 0)})
 			assertRefusedByTheCeiling(t, tc.name, tc.restoring, err)
 			assertLiveFundSurvived(t, destDB, live)
 		})

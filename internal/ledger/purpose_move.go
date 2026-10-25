@@ -117,8 +117,10 @@ func (l *Ledger) PostPurposeMove(ctx context.Context, p PostPurposeMoveParams) (
 		reason := reasonAllocation
 		from := leg{AccountID: p.AccountID, PurposeID: p.FromPurposeID}
 		to := leg{AccountID: p.AccountID, PurposeID: p.ToPurposeID}
-		pair, err := l.postTransferPairTx(ctx, q, p.FundID, TransferKindReclassPurpose, from, to,
-			p.Amount, p.OccurredOn, normalizeNote(p.Note), nil, &reason)
+		pair, err := l.postTransferPairTx(ctx, q, transferPair{
+			FundID: p.FundID, Kind: TransferKindReclassPurpose, From: from, To: to,
+			Amount: p.Amount, OccurredOn: p.OccurredOn, Note: normalizeNote(p.Note), Reason: &reason,
+		})
 		if err != nil {
 			return store.Transfer{}, fmt.Errorf("posting purpose move: %w", err)
 		}

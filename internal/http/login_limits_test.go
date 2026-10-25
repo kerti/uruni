@@ -61,7 +61,7 @@ func limitsRouter(t *testing.T, trusted []netip.Prefix) (http.Handler, *fakeCloc
 		func(p string) (string, error) { return "stub:" + p, nil },
 		func(p, encoded string) (bool, error) { return encoded == "stub:"+p, nil },
 	))
-	r := New(testAssets(), testBuild, ledger.New(sqlDB, ledger.WithClock(clk.now)), store.New(sqlDB), sqlDB, nil, testLogger(), au, "", t.TempDir(), t.TempDir(), trusted)
+	r := New(Deps{Assets: testAssets(), Build: testBuild, Ledger: ledger.New(sqlDB, ledger.WithClock(clk.now)), Queries: store.New(sqlDB), DB: sqlDB, Logger: testLogger(), Auth: au, BaseURL: "", UploadsDir: t.TempDir(), BackupDir: t.TempDir(), TrustedProxies: trusted})
 	if rec := postRegister(t, r, limitsEmail, limitsPassword); rec.Code != http.StatusCreated {
 		t.Fatalf("POST /api/register = %d, want %d (body: %s)", rec.Code, http.StatusCreated, rec.Body.String())
 	}
@@ -308,7 +308,7 @@ func TestLoginSetsADeviceCookieWithTheSessionCookiesAttributes(t *testing.T) {
 				func(p string) (string, error) { return "stub:" + p, nil },
 				func(p, encoded string) (bool, error) { return encoded == "stub:"+p, nil },
 			))
-			r := New(testAssets(), testBuild, ledger.New(sqlDB, ledger.WithClock(clk.now)), store.New(sqlDB), sqlDB, nil, testLogger(), au, tc.baseURL, t.TempDir(), t.TempDir(), nil)
+			r := New(Deps{Assets: testAssets(), Build: testBuild, Ledger: ledger.New(sqlDB, ledger.WithClock(clk.now)), Queries: store.New(sqlDB), DB: sqlDB, Logger: testLogger(), Auth: au, BaseURL: tc.baseURL, UploadsDir: t.TempDir(), BackupDir: t.TempDir()})
 			if rec := postRegister(t, r, limitsEmail, limitsPassword); rec.Code != http.StatusCreated {
 				t.Fatalf("POST /api/register = %d", rec.Code)
 			}

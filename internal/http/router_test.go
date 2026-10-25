@@ -61,7 +61,7 @@ func authedRouterFor(t *testing.T, sqlDB *sql.DB) http.Handler {
 // a test can stand on either side of a Jakarta month boundary.
 func authedRouterAt(t *testing.T, sqlDB *sql.DB, now func() time.Time) http.Handler {
 	t.Helper()
-	r := New(testAssets(), testBuild, ledger.New(sqlDB, ledger.WithClock(now)), store.New(sqlDB), sqlDB, nil, testLogger(), auth.New(sqlDB), "", t.TempDir(), t.TempDir(), nil)
+	r := New(Deps{Assets: testAssets(), Build: testBuild, Ledger: ledger.New(sqlDB, ledger.WithClock(now)), Queries: store.New(sqlDB), DB: sqlDB, Logger: testLogger(), Auth: auth.New(sqlDB), BaseURL: "", UploadsDir: t.TempDir(), BackupDir: t.TempDir()})
 
 	reg := postRegister(t, r, "treasurer@example.org", "correct-horse-battery")
 	if reg.Code != http.StatusCreated {
@@ -126,7 +126,7 @@ func TestHealthzReportsTheBuildItWasStampedWith(t *testing.T) {
 	untagged := Build{Version: "dev", Commit: "deadbee"}
 	sqlDB := testStoreDB(t)
 	rec := httptest.NewRecorder()
-	New(testAssets(), untagged, ledger.New(sqlDB), store.New(sqlDB), sqlDB, nil, testLogger(), auth.New(sqlDB), "", t.TempDir(), t.TempDir(), nil).
+	New(Deps{Assets: testAssets(), Build: untagged, Ledger: ledger.New(sqlDB), Queries: store.New(sqlDB), DB: sqlDB, Logger: testLogger(), Auth: auth.New(sqlDB), BaseURL: "", UploadsDir: t.TempDir(), BackupDir: t.TempDir()}).
 		ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/healthz", nil))
 
 	var got health
@@ -146,7 +146,7 @@ func TestHealthzFailsWhenTheDatabaseFileCheckFails(t *testing.T) {
 	sqlDB := testStoreDB(t)
 	replaced := func() error { return errors.New("the database file was replaced") }
 	rec := httptest.NewRecorder()
-	New(testAssets(), testBuild, ledger.New(sqlDB), store.New(sqlDB), sqlDB, replaced, testLogger(), auth.New(sqlDB), "", t.TempDir(), t.TempDir(), nil).
+	New(Deps{Assets: testAssets(), Build: testBuild, Ledger: ledger.New(sqlDB), Queries: store.New(sqlDB), DB: sqlDB, DBFileCheck: replaced, Logger: testLogger(), Auth: auth.New(sqlDB), BaseURL: "", UploadsDir: t.TempDir(), BackupDir: t.TempDir()}).
 		ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/healthz", nil))
 
 	if rec.Code != http.StatusServiceUnavailable {
