@@ -69,6 +69,7 @@ Standing decisions that no ADR owns go in [`../Decisions.md`](../Decisions.md).
 | [042](./042-reversing-any-ordinary-transaction.md) | Reversing any ordinary transaction | implemented |
 | [043](./043-idempotency-keys-on-immutable-writes.md) | Idempotency keys on immutable writes | implemented |
 | [044](./044-twelve-months-of-dues.md) | Twelve months of dues, in the app and on the report | implemented |
+| [045](./045-a-public-demo-on-fly.md) | A public demo on Fly.io: the shipped image plus `URUNI_DEMO`, reset on every start | `draft` |
 
 The **Stage** column is the record, and it is all this index says about implementation: `draft` means editable in place, `implemented` means superseding-ADR-only. *Which* slice put code behind a given ADR belongs in that ADR and in the PR that dropped its tag — restated here, this index becomes a changelog.
 
