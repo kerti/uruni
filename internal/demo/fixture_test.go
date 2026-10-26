@@ -577,7 +577,14 @@ func TestFixtureCoversEveryCase(t *testing.T) {
 // Seeding is well under a second at boot (ADR-045). The test runs against a
 // file database, as production does, and holds it to a loose bound so a slow
 // shared runner (or -race) does not fail it; BenchmarkSeed is the figure to read.
+// TestSeedStaysQuick holds the seed to ADR-045's "well under a second" at boot.
+// Speed is a property of the release build, so it is skipped under -race,
+// which instruments the pure-Go SQLite driver and runs the seed some 16x
+// slower; BenchmarkSeed is the number to read.
 func TestSeedStaysQuick(t *testing.T) {
+	if raceEnabled {
+		t.Skip("timing is meaningless under -race")
+	}
 	sqlDB := newFileDB(t)
 	uploads := t.TempDir()
 	start := time.Now()
@@ -586,8 +593,8 @@ func TestSeedStaysQuick(t *testing.T) {
 	}
 	elapsed := time.Since(start)
 	t.Logf("seeded on a file database in %v", elapsed)
-	if elapsed > 5*time.Second {
-		t.Errorf("seeding took %v, want well under a second (bound: 5s, for a loaded runner)", elapsed)
+	if elapsed > time.Second {
+		t.Errorf("seeding took %v, want well under a second", elapsed)
 	}
 }
 

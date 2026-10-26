@@ -59,10 +59,14 @@ func startServe(t *testing.T) (<-chan error, context.CancelFunc) {
 }
 
 // waitHealthy polls /healthz until 200, or fails if serve returns first or the
-// deadline passes.
+// deadline passes. The deadline only catches a hang: under CI's -race and
+// coverage on a two-core runner, the demo's boot seed alone took 9s (the
+// pure-Go SQLite driver is instrumented too), against about 0.1s in a release
+// build.
 func waitHealthy(t *testing.T, base string, done <-chan error) {
 	t.Helper()
-	deadline := time.Now().Add(10 * time.Second)
+	const limit = 60 * time.Second
+	deadline := time.Now().Add(limit)
 	for time.Now().Before(deadline) {
 		select {
 		case err := <-done:
@@ -78,7 +82,7 @@ func waitHealthy(t *testing.T, base string, done <-chan error) {
 		}
 		time.Sleep(25 * time.Millisecond)
 	}
-	t.Fatal("serve did not report healthy within 10s")
+	t.Fatalf("serve did not report healthy within %v", limit)
 }
 
 func TestServeBootsMigratesAndShutsDownCleanly(t *testing.T) {
