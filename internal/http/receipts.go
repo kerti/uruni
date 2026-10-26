@@ -8,8 +8,6 @@ package http
 
 import (
 	"context"
-	"crypto/rand"
-	"encoding/hex"
 	"errors"
 	"io"
 	"net/http"
@@ -20,7 +18,6 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
-	"github.com/kerti/uruni/internal/backup"
 	"github.com/kerti/uruni/internal/ledger"
 	"github.com/kerti/uruni/internal/receipt"
 	"github.com/kerti/uruni/internal/store"
@@ -171,7 +168,7 @@ func (a *api) processAndStoreReceipt(w http.ResponseWriter, r *http.Request, fun
 		return
 	}
 
-	filename, err := writeReceiptFile(a.uploadsDir, processed)
+	filename, err := receipt.Store(a.uploadsDir, processed)
 	if err != nil {
 		a.log(r).Error("writing receipt file", "error", err)
 		writeAPIError(w, http.StatusInternalServerError, "internal_error", "Something went wrong.")
@@ -233,45 +230,6 @@ func (a *api) readReceiptUpload(w http.ResponseWriter, r *http.Request) ([]byte,
 		return nil, false
 	}
 	return raw, true
-}
-
-// writeReceiptFile writes data under a fresh, server-generated name inside
-// uploadsDir and returns that name (the path CreateReceipt stores, relative
-// to uploadsDir, never derived from client input, so no path-traversal
-// surface). It writes a temp file in the same directory and renames into
-// place, so a reader never sees a partial file under the final name.
-func writeReceiptFile(uploadsDir string, data []byte) (string, error) {
-	name, err := randomReceiptFilename()
-	if err != nil {
-		return "", err
-	}
-
-	// In uploadsDir, not os.TempDir(): os.Rename across filesystems fails, and a
-	// container's /uploads volume is often a different filesystem from the OS
-	// temp directory. WriteFileAtomic also fsyncs the file before the rename and
-	// the directory after, so a power loss cannot leave a receipt row naming an
-	// empty file (#501).
-	err = backup.WriteFileAtomic(uploadsDir, ".receipt-upload-*.tmp", name, func(w io.Writer) error {
-		_, err := w.Write(data)
-		return err
-	})
-	if err != nil {
-		return "", err
-	}
-	return name, nil
-}
-
-// randomReceiptFilename returns a fresh crypto/rand name, never derived from
-// the client's filename (#153): nothing about a stored receipt's name is
-// attacker-influenced, so there is no path-traversal surface to sanitize.
-// Every receipt is re-encoded as JPEG (receipt.Process), so the extension is
-// always .jpg.
-func randomReceiptFilename() (string, error) {
-	buf := make([]byte, 16)
-	if _, err := rand.Read(buf); err != nil {
-		return "", err
-	}
-	return hex.EncodeToString(buf) + ".jpg", nil
 }
 
 // receiptIDsForTransactions batch-loads receipt_ids for a fund-scoped page of
@@ -353,7 +311,7 @@ func (a *api) getReceipt(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Defense in depth, not a check this path can fail today: receipt.Path is the
-	// bare filename writeReceiptFile generated. Refusing anything else keeps that
+	// bare filename receipt.Store generated. Refusing anything else keeps that
 	// true if something upstream changes.
 	if receipt.Path != filepath.Base(receipt.Path) {
 		a.log(r).Error("receipt path is not a bare filename", "id", receipt.ID)

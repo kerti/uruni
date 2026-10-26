@@ -155,7 +155,7 @@ func serveContext(parent context.Context) error {
 	// listener, so the server never answers on a half-seeded demo.
 	var demoLogin *uruniHTTP.DemoLogin
 	if cfg.Demo {
-		if err := demo.Ensure(ctx, sqlDB, time.Now); err != nil {
+		if err := demo.Ensure(ctx, sqlDB, cfg.UploadsDir, time.Now); err != nil {
 			return err
 		}
 		demoLogin = &uruniHTTP.DemoLogin{Email: demo.Email, Password: demo.Password}

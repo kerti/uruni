@@ -57,8 +57,10 @@ var ErrForeignData = errors.New("URUNI_DEMO is set, but this database already ho
 //   - any other login, or a fund with no login: someone's real data, so
 //     ErrForeignData.
 //
-// now is the clock the fixture is dated by; production passes time.Now.
-func Ensure(ctx context.Context, sqlDB *sql.DB, now func() time.Time) error {
+// uploadsDir is the receipt volume the fixture's few receipt photos are written
+// to, the one `serve` already proved writable. now is the clock the fixture is
+// dated by; production passes time.Now.
+func Ensure(ctx context.Context, sqlDB *sql.DB, uploadsDir string, now func() time.Time) error {
 	q := store.New(sqlDB)
 	users, err := q.ListUsers(ctx)
 	if err != nil {
@@ -80,49 +82,45 @@ func Ensure(ctx context.Context, sqlDB *sql.DB, now func() time.Time) error {
 	if len(funds) > 0 {
 		return ErrForeignData
 	}
-	return seed(ctx, sqlDB, now)
+	return seed(ctx, sqlDB, uploadsDir, now)
 }
 
-// seed writes the demo fixture into an empty database. The login is registered
+// seed writes the demo fixture into an empty database: the fund set up at the
+// start of the window (M-13) with opening balances, fourteen months of history
+// replayed through the real ledger, and then the login. The login is registered
 // last: "the demo login exists" then means "the fixture was written", which is
 // what Ensure reads it as.
-func seed(ctx context.Context, sqlDB *sql.DB, now func() time.Time) error {
-	today := now()
-	// ledgerAt is the seam for the replayed history (ADR-045 decision 5): the real
-	// ledger with its clock stood on a chosen instant, so every entry passes the
-	// same date checks live use does. Setup itself is written "today" for now; the
-	// history will move it to the start of the window.
+func seed(ctx context.Context, sqlDB *sql.DB, uploadsDir string, now func() time.Time) error {
+	cal, err := newCalendar(now())
+	if err != nil {
+		return fmt.Errorf("reading the fund's zone: %w", err)
+	}
+	// ledgerAt is the real ledger with its clock stood on a chosen instant, so
+	// every entry passes the same date checks live use does (ADR-045 decision 5).
 	ledgerAt := func(t time.Time) *ledger.Ledger {
 		return ledger.New(sqlDB, ledger.WithClock(func() time.Time { return t }))
 	}
 
-	setup, err := ledgerAt(today).SetUpFund(ctx, ledger.SetUpFundParams{
+	opened := cal.date(firstMonth, 1)
+	setup, err := ledgerAt(cal.instant(firstMonth, 1)).SetUpFund(ctx, ledger.SetUpFundParams{
 		FundName:   FundName,
 		TimeZone:   tz.Jakarta,
 		ReportSlug: ReportSlug,
 		Accounts: []ledger.AccountInput{
-			{Kind: "cash", Name: "Tunai"},
-			{Kind: "bank", Name: "Rekening Bank"},
+			{Kind: ledger.AccountKindCash, Name: "Tunai", OpeningBalance: &ledger.OpeningBalance{Amount: openingCash, OccurredOn: opened}},
+			{Kind: ledger.AccountKindBank, Name: "Rekening Bank", OpeningBalance: &ledger.OpeningBalance{Amount: openingBank, OccurredOn: opened}},
 		},
 	})
 	if err != nil {
 		return fmt.Errorf("setting up the demo fund: %w", err)
 	}
 
-	if err := replayHistory(ctx, ledgerAt, setup, today); err != nil {
+	if err := replayHistory(ctx, ledgerAt, cal, setup, uploadsDir); err != nil {
 		return fmt.Errorf("replaying the demo history: %w", err)
 	}
 
 	if _, err := auth.New(sqlDB).Register(ctx, Email, Password); err != nil {
 		return fmt.Errorf("registering the demo login: %w", err)
 	}
-	return nil
-}
-
-// replayHistory is where the fourteen months of entries go (ADR-045 decision 5):
-// members, tiers, rates, dues, envelopes, movements and cek kas, each posted
-// through ledgerAt at its own day, in date order. Nothing yet; the fund starts
-// empty.
-func replayHistory(_ context.Context, _ func(time.Time) *ledger.Ledger, _ ledger.SetUpFundResult, _ time.Time) error {
 	return nil
 }
