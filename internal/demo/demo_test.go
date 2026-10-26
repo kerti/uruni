@@ -40,7 +40,7 @@ func TestEnsureSeedsAnEmptyDatabase(t *testing.T) {
 	sqlDB := newDB(t)
 	ctx := context.Background()
 
-	if err := Ensure(ctx, sqlDB, fixedNow); err != nil {
+	if err := Ensure(ctx, sqlDB, t.TempDir(), fixedNow); err != nil {
 		t.Fatalf("Ensure() on an empty database = %v, want nil", err)
 	}
 
@@ -59,8 +59,10 @@ func TestEnsureSeedsAnEmptyDatabase(t *testing.T) {
 	if fund.ReportSlug != "CsShiftSoreDemoUruni2026" {
 		t.Errorf("report slug = %q, want the fixed %q", fund.ReportSlug, "CsShiftSoreDemoUruni2026")
 	}
-	if got := time.Unix(fund.CreatedAt, 0).UTC(); !got.Equal(fixedNow()) {
-		t.Errorf("fund created_at = %v, want the injected clock %v", got, fixedNow())
+	// The fund is set up at the start of the window, M-13: 1 September 2025 for the
+	// fixed 26 October 2026, stamped midday in Jakarta.
+	if got, want := time.Unix(fund.CreatedAt, 0).UTC(), time.Date(2025, 9, 1, 5, 0, 0, 0, time.UTC); !got.Equal(want) {
+		t.Errorf("fund created_at = %v, want %v (M-13)", got, want)
 	}
 
 	accounts, err := q.ListAccountsByFund(ctx, fund.ID)
@@ -90,7 +92,7 @@ func TestEnsureLeavesAnExistingDemoAlone(t *testing.T) {
 	t.Parallel()
 	sqlDB := newDB(t)
 	ctx := context.Background()
-	if err := Ensure(ctx, sqlDB, fixedNow); err != nil {
+	if err := Ensure(ctx, sqlDB, t.TempDir(), fixedNow); err != nil {
 		t.Fatalf("first Ensure() = %v", err)
 	}
 	funds, err := store.New(sqlDB).ListFunds(ctx)
@@ -102,7 +104,7 @@ func TestEnsureLeavesAnExistingDemoAlone(t *testing.T) {
 		t.Fatalf("renaming the fund: %v", err)
 	}
 
-	if err := Ensure(ctx, sqlDB, fixedNow); err != nil {
+	if err := Ensure(ctx, sqlDB, t.TempDir(), fixedNow); err != nil {
 		t.Fatalf("second Ensure() = %v, want nil on the demo's own database", err)
 	}
 	var name string
@@ -125,7 +127,7 @@ func TestEnsureRefusesAForeignLogin(t *testing.T) {
 		t.Fatalf("Register() = %v", err)
 	}
 
-	err := Ensure(ctx, sqlDB, fixedNow)
+	err := Ensure(ctx, sqlDB, t.TempDir(), fixedNow)
 	if !errors.Is(err, ErrForeignData) {
 		t.Fatalf("Ensure() over someone's login = %v, want ErrForeignData", err)
 	}
@@ -151,7 +153,7 @@ func TestEnsureRefusesAFundWithNoLogin(t *testing.T) {
 		t.Fatalf("SetUpFund() = %v", err)
 	}
 
-	if err := Ensure(ctx, sqlDB, fixedNow); !errors.Is(err, ErrForeignData) {
+	if err := Ensure(ctx, sqlDB, t.TempDir(), fixedNow); !errors.Is(err, ErrForeignData) {
 		t.Fatalf("Ensure() over a fund with no login = %v, want ErrForeignData", err)
 	}
 }
@@ -165,7 +167,7 @@ func TestEnsureAcceptsTheDemoLoginInAnyCase(t *testing.T) {
 	if _, err := sqlDB.ExecContext(ctx, `INSERT INTO "user" (email, password_hash, created_at) VALUES ('Demo@Uruni.Test', 'x', 1)`); err != nil {
 		t.Fatalf("inserting the login: %v", err)
 	}
-	if err := Ensure(ctx, sqlDB, fixedNow); err != nil {
+	if err := Ensure(ctx, sqlDB, t.TempDir(), fixedNow); err != nil {
 		t.Fatalf("Ensure() = %v, want nil: the login is the demo's", err)
 	}
 }

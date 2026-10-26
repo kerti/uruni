@@ -69,12 +69,12 @@ A reset logs every visitor out, back to a filled-in login form. The fixture's da
 |---|---|
 | M-13 | The fund is set up: opening balances on cash and bank, dues members paid before the fund existed settled with an adjusted *cek kas* plug, 11 members on three tiers |
 | M-10 | An agent joins from Shift Pagi |
-| M-8 | The Supervisor moves to another unit (*pindah*): *Perpisahan Bu Ratna* opened with her as recipient, closed, its leftover rolled into Kas Utama. The Supervisor tier stays empty from here |
+| M-8 | The Supervisor moves to another unit (*pindah*): *Perpisahan Bu Erna* opened with her as recipient, closed, its leftover rolled into Kas Utama. The Supervisor tier stays empty from here |
 | M-6 | Every rate rises (*Mulai bulan* that month) |
 | M-5 | An Agen is promoted to Team Leader |
 | M-4 | An agent resigns and goes inactive, owing through that month |
 | M-3 | A second agent joins |
-| M-2 | *Jenguk Pak Hendra* opened and closed, then reopened when late contributions come in |
+| M-2 | *Jenguk Pak Arga* opened and closed, then reopened when late contributions come in |
 | M0 | *Kelahiran anak Mbak Sari* open, with a minimum per member and a recipient; a reimbursement still owed; the latest *cek kas*, which matches |
 
 **Tiers and rates:**
