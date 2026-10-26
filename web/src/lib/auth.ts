@@ -9,6 +9,20 @@ import { apiFetch, plainConnectionError } from '@/lib/api'
 export interface SessionStatus {
   authenticated: boolean
   has_account: boolean
+  /** The public demo's shared login (ADR-045): both present under URUNI_DEMO,
+   * both absent everywhere else. */
+  demo_email?: string
+  demo_password?: string
+}
+
+/** The demo login a probe carries, or null on every real instance. */
+export interface DemoLogin {
+  email: string
+  password: string
+}
+
+export function demoLoginOf(session: SessionStatus): DemoLogin | null {
+  return session.demo_email && session.demo_password ? { email: session.demo_email, password: session.demo_password } : null
 }
 
 /** The user shape POST /api/register and POST /api/login both answer with. */

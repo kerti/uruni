@@ -83,6 +83,10 @@ type Config struct {
 	// ignores the header and keys on the TCP peer. docker-compose.yml sets it so
 	// the shipped Caddy is trusted.
 	TrustedProxies []netip.Prefix
+	// Demo is URUNI_DEMO (ADR-045): the public demo's switch. Off by default, and
+	// with it off none of the demo behaviors exist; only the project's own demo
+	// instance sets it.
+	Demo bool
 }
 
 // Load reads and validates the whole environment table in ADR-019. It returns
@@ -121,8 +125,27 @@ func Load() (Config, error) {
 	if err := loadTrustedProxies(&cfg); err != nil {
 		return Config{}, err
 	}
+	if err := loadDemo(&cfg); err != nil {
+		return Config{}, err
+	}
 
 	return cfg, nil
+}
+
+// loadDemo reads URUNI_DEMO. Unset or empty is off. Anything strconv.ParseBool
+// does not recognise is refused rather than read as off: a typo must not leave
+// an operator believing a demo switch is set (or unset) when it is not.
+func loadDemo(cfg *Config) error {
+	raw := strings.TrimSpace(os.Getenv("URUNI_DEMO"))
+	if raw == "" {
+		return nil
+	}
+	on, err := strconv.ParseBool(raw)
+	if err != nil {
+		return invalidValue("URUNI_DEMO", raw, "want true or false")
+	}
+	cfg.Demo = on
+	return nil
 }
 
 // loadTrustedProxies reads URUNI_TRUSTED_PROXIES: a comma-separated list of

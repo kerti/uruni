@@ -7,6 +7,7 @@
   "check_violation",
   "cross_origin_request",
   "date_out_of_range",
+  "demo_login_locked",
   "dues_rate_superseded",
   "fund_already_exists",
   "heic_unsupported",

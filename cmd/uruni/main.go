@@ -20,6 +20,7 @@ import (
 	"github.com/kerti/uruni/internal/auth"
 	"github.com/kerti/uruni/internal/backup"
 	"github.com/kerti/uruni/internal/config"
+	"github.com/kerti/uruni/internal/demo"
 	uruniHTTP "github.com/kerti/uruni/internal/http"
 	"github.com/kerti/uruni/internal/ledger"
 	"github.com/kerti/uruni/internal/lock"
@@ -149,6 +150,18 @@ func serveContext(parent context.Context) error {
 	l := ledger.New(sqlDB)
 	au := auth.New(sqlDB)
 
+	// URUNI_DEMO (ADR-045): the project's public demo. Seeds an empty database,
+	// and refuses to boot over anyone's real data. Before the boot dump and the
+	// listener, so the server never answers on a half-seeded demo.
+	var demoLogin *uruniHTTP.DemoLogin
+	if cfg.Demo {
+		if err := demo.Ensure(ctx, sqlDB, time.Now); err != nil {
+			return err
+		}
+		demoLogin = &uruniHTTP.DemoLogin{Email: demo.Email, Password: demo.Password}
+		logger.Info("demo mode: the demo login is shown on the login screen and the server exits after the uptime limit", "uptime_limit", demoMaxUptime.String())
+	}
+
 	// The boot-time dump ADR-012 promises: once serve has booted, a restorable
 	// backup in the running binary's format exists, even the first time this
 	// version runs against an instance whose newest dump is older. Non-fatal
@@ -184,7 +197,7 @@ func serveContext(parent context.Context) error {
 		uruniHTTP.New(uruniHTTP.Deps{
 			Assets: assets, Build: uruniHTTP.Build{Version: version, Commit: buildCommit()},
 			Ledger: l, Queries: q, DB: sqlDB, DBFileCheck: dbFile.Check, Logger: logger,
-			Auth: au, BaseURL: cfg.BaseURL, UploadsDir: cfg.UploadsDir, BackupDir: cfg.BackupDir, TrustedProxies: cfg.TrustedProxies,
+			Auth: au, BaseURL: cfg.BaseURL, UploadsDir: cfg.UploadsDir, BackupDir: cfg.BackupDir, TrustedProxies: cfg.TrustedProxies, Demo: demoLogin,
 		}))
 
 	errc := make(chan error, 1)
@@ -198,18 +211,41 @@ func serveContext(parent context.Context) error {
 		close(errc)
 	}()
 
+	// The demo's uptime limit (ADR-045 decision 3). A nil channel never fires, so
+	// every other instance selects on it for free.
+	var uptimeLimit <-chan time.Time
+	if cfg.Demo {
+		timer := time.NewTimer(demoMaxUptime)
+		defer timer.Stop()
+		uptimeLimit = timer.C
+	}
+
+	bounds := shutdownBounds{
+		drain:     httpShutdownTimeout,
+		handlers:  handlerShutdownTimeout,
+		scheduler: schedulerShutdownTimeout,
+	}
 	select {
 	case err := <-errc:
 		return err
 	case <-ctx.Done():
 		logger.Info("shutting down")
-		return shutdown(srv, requests, scheduler, shutdownBounds{
-			drain:     httpShutdownTimeout,
-			handlers:  handlerShutdownTimeout,
-			scheduler: schedulerShutdownTimeout,
-		}, logger)
+		return shutdown(srv, requests, scheduler, bounds, logger)
+	case <-uptimeLimit:
+		// The same graceful path a SIGTERM takes, and a nil return, so the process
+		// exits 0: Fly reads that as a stop and the next visitor starts a fresh
+		// demo. stop() cancels ctx, which is what tells the backup scheduler to end
+		// before shutdown waits on it.
+		logger.Info("demo uptime limit reached, shutting down so the next start is a fresh demo", "uptime_limit", demoMaxUptime.String())
+		stop()
+		return shutdown(srv, requests, scheduler, bounds, logger)
 	}
 }
+
+// demoMaxUptime is how long `serve` runs under URUNI_DEMO before it shuts down
+// and exits 0 (ADR-045 decision 3): no demo state outlives an hour. A variable
+// only so a test can shorten it; nothing sets it in production.
+var demoMaxUptime = time.Hour
 
 // newServer builds serve's http.Server around h, with its request tracker
 // already attached. The pair comes out of one function so a server cannot be

@@ -87,6 +87,12 @@ type Deps struct {
 	// TrustedProxies (Config.TrustedProxies) are the peers whose X-Forwarded-For
 	// clientIP believes. nil believes none.
 	TrustedProxies []netip.Prefix
+
+	// Demo is the public demo's login (ADR-045), non-nil only under URUNI_DEMO. It
+	// is shown on GET /api/session, the two writes that would change it are
+	// refused, and every response carries X-Robots-Tag. nil is every other
+	// instance, where none of that exists.
+	Demo *DemoLogin
 }
 
 // New builds the router over the embedded SPA assets.
@@ -107,6 +113,9 @@ func New(d Deps) http.Handler {
 		r.Use(untrustedForwardedFor(logger))
 	}
 	r.Use(securityHeaders)
+	if d.Demo != nil {
+		r.Use(noIndex)
+	}
 
 	r.Get("/healthz", healthz(d.Build, d.DBFileCheck, pingStore(q), lastDumpIn(backupDir), logger))
 
@@ -143,6 +152,7 @@ func New(d Deps) http.Handler {
 		uploadsDir:      d.UploadsDir,
 		backupDir:       backupDir,
 		baseURL:         strings.TrimRight(baseURL, "/"),
+		demo:            d.Demo,
 		now:             now,
 		restoreStage:    newRestoreStage(),
 	}
