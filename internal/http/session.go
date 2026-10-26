@@ -141,9 +141,15 @@ func secureFromBaseURL(baseURL string) bool {
 // more. Fund and setup state stay out: an authenticated client gets them from
 // GET /api/fund, and putting them here would reopen the "how much can an
 // unauthenticated caller learn" question ADR-030 closed.
+//
+// The one addition is the public demo's shared login (ADR-045), present only
+// under URUNI_DEMO and omitted from the body otherwise, so on every real
+// instance the bytes are exactly the two fields above.
 type sessionStatusResponse struct {
-	Authenticated bool `json:"authenticated"`
-	HasAccount    bool `json:"has_account"`
+	Authenticated bool   `json:"authenticated"`
+	HasAccount    bool   `json:"has_account"`
+	DemoEmail     string `json:"demo_email,omitempty"`
+	DemoPassword  string `json:"demo_password,omitempty"`
 }
 
 // getSession is GET /api/session, the other route that never answers 401 (see
@@ -172,8 +178,9 @@ func (a *api) getSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, sessionStatusResponse{
-		Authenticated: authenticated,
-		HasAccount:    count > 0,
-	})
+	resp := sessionStatusResponse{Authenticated: authenticated, HasAccount: count > 0}
+	if a.demo != nil {
+		resp.DemoEmail, resp.DemoPassword = a.demo.Email, a.demo.Password
+	}
+	writeJSON(w, http.StatusOK, resp)
 }

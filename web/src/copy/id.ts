@@ -1,6 +1,12 @@
 // Every user-facing string lives here: Bahasa Indonesia, sentence case, warm
 // (ADR-014). Centralized from the first screen so a second language stays
 // additive — no copy inline in components.
+
+// The one sentence the public demo (ADR-045) says about its shared login, in two
+// places: under the save button of the two Akun bendahara dialogs, and as the
+// words for the demo_login_locked code if a request ever gets past the button.
+const demoLoginLocked = 'Di demo, email dan kata sandi tidak bisa diubah supaya pengunjung lain tetap bisa masuk.'
+
 export const copy = {
   app: {
     name: 'uruni',
@@ -221,6 +227,9 @@ export const copy = {
       // signed in, so it can say plainly which field to check.
       wrong_current_password: 'Kata sandi saat ini salah. Coba periksa lagi.',
       too_many_requests: 'Terlalu banyak percobaan. Tunggu dulu, lalu coba lagi nanti, ya.',
+      // The public demo refuses a change of its shared login (ADR-045); the save
+      // button is disabled there, so this is the backstop.
+      demo_login_locked: demoLoginLocked,
       // Every slot for checking a password is busy (503). Nothing is wrong with
       // what she typed and she is not locked out - the server is occupied for a
       // moment - so it says to try again right away, unlike too_many_requests
@@ -407,6 +416,15 @@ export const copy = {
       submitting: 'Sedang masuk…',
       invalidCredentials: 'Email atau kata sandi salah. Coba periksa lagi.',
       tooManyRequests: 'Terlalu banyak percobaan masuk. Tunggu dulu, lalu coba lagi nanti, ya.',
+      // The notice the public demo (ADR-045) shows above the form: what this is,
+      // and the credentials spelled out for a visitor who clears the pre-filled
+      // fields. Title is bold, the two values are monospace.
+      demo: {
+        title: 'Ini demo Uruni.',
+        body: 'Semua datanya rekaan, dan siapa pun yang masuk bisa mengubahnya, jadi jangan simpan data asli di sini. Demo kembali bersih sendiri, paling lama setiap jam.',
+        emailLabel: 'Email',
+        passwordLabel: 'Kata sandi',
+      },
     },
   },
   // The first-run setup wizard (PRD section 7.1): four steps, only the first
@@ -977,6 +995,7 @@ export const copy = {
         newLabel: 'Email baru',
         currentLabel: 'Kata sandi saat ini',
         note: 'Setelah ini, masuk dengan email baru. Perangkat lain yang sedang masuk akan keluar otomatis.',
+        demoLocked: demoLoginLocked,
         save: 'Simpan email',
         saving: 'Menyimpan…',
         success: 'Email sudah diganti.',
@@ -987,6 +1006,7 @@ export const copy = {
         newLabel: 'Kata sandi baru',
         repeatLabel: 'Ulangi kata sandi baru',
         note: 'Perangkat lain yang sedang masuk akan keluar otomatis.',
+        demoLocked: demoLoginLocked,
         save: 'Simpan kata sandi',
         saving: 'Menyimpan…',
         success: 'Kata sandi sudah diganti.',

@@ -219,6 +219,42 @@ describe('App (app shell chrome)', () => {
     expect(await screen.findByText(copy.home.balanceHeading)).toBeInTheDocument()
   })
 
+  // ADR-045: the demo's login rides on the probe, and has to survive the
+  // optimistic handoffs, which would otherwise answer with only two fields.
+  it('in the demo, offers the login filled in, and again after a login and a logout', async () => {
+    let signedIn = false
+    const demoSession = (authenticated: boolean) =>
+      sessionResponse({ authenticated, has_account: true, demo_email: 'demo@uruni.test', demo_password: 'coba-uruni' })
+    vi.stubGlobal(
+      'fetch',
+      routedFetch([
+        { match: (m, u) => m === 'GET' && u.includes('/api/session'), handle: () => Promise.resolve(demoSession(signedIn)) },
+        {
+          match: (m, u) => m === 'POST' && u.includes('/api/login'),
+          handle: () => {
+            signedIn = true
+            return Promise.resolve(jsonResponse({ id: 1, email: 'demo@uruni.test', created_at: 1 }))
+          },
+        },
+        { match: (m, u) => m === 'GET' && u.includes('/api/fund'), handle: () => Promise.resolve(fundFoundResponse()) },
+        { match: (m, u) => m === 'POST' && u.includes('/api/logout'), handle: () => Promise.resolve(new Response(null, { status: 204 })) },
+        ...emptyHomeRoutes,
+      ]),
+    )
+    render(<App />)
+
+    expect(await screen.findByLabelText(copy.auth.login.emailLabel)).toHaveValue('demo@uruni.test')
+    expect(screen.getByLabelText(copy.auth.login.passwordLabel)).toHaveValue('coba-uruni')
+    expect(screen.getByRole('note')).toHaveTextContent(copy.auth.login.demo.title)
+
+    await userEvent.click(screen.getByRole('button', { name: copy.auth.login.submit }))
+    await screen.findByText(copy.home.balanceHeading)
+    await userEvent.click(screen.getByRole('button', { name: copy.shell.logout }))
+
+    expect(await screen.findByLabelText(copy.auth.login.emailLabel)).toHaveValue('demo@uruni.test')
+    expect(screen.getByLabelText(copy.auth.login.passwordLabel)).toHaveValue('coba-uruni')
+  })
+
   it('logs out from the shell and lands back on Login, not Register', async () => {
     vi.stubGlobal(
       'fetch',

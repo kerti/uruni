@@ -10,6 +10,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { copy } from '@/copy/id'
 import { changeEmail, changePassword, getUser } from '@/lib/auth'
+import { useDemoMode } from '@/lib/demoMode'
 import { parseDialogTarget } from '@/lib/dialogTarget'
 import { useApi } from '@/lib/useApi'
 import { useDialogParam } from '@/lib/useDialogParam'
@@ -146,12 +147,13 @@ function EmailForm({ onChanged }: { onChanged: (user: AuthUser) => void }) {
   const [state, run] = useApi<AuthUser>()
   const [email, setEmail] = useState('')
   const [current, setCurrent] = useState('')
+  const demo = useDemoMode()
 
   const busy = state.status === 'loading'
 
   function handleSubmit(event: FormEvent) {
     event.preventDefault()
-    if (email.trim() === '' || current === '') return
+    if (demo || email.trim() === '' || current === '') return
     void run(async () => {
       const updated = await changeEmail(email, current)
       onChanged(updated)
@@ -183,9 +185,10 @@ function EmailForm({ onChanged }: { onChanged: (user: AuthUser) => void }) {
         />
       </div>
       <p className="text-sm text-muted-foreground">{text.email.note}</p>
+      {demo && <p className="text-sm text-attention-text">{text.email.demoLocked}</p>}
       {state.status === 'error' && state.error && <ErrorState error={state.error} />}
       <DialogFooter className="mt-1">
-        <Button type="submit" size="lg" disabled={busy || email.trim() === '' || current === ''}>
+        <Button type="submit" size="lg" disabled={demo || busy || email.trim() === '' || current === ''}>
           {busy ? text.email.saving : text.email.save}
         </Button>
       </DialogFooter>
@@ -199,12 +202,13 @@ function PasswordForm({ onChanged }: { onChanged: () => void }) {
   const [next, setNext] = useState('')
   const [repeat, setRepeat] = useState('')
   const [localError, setLocalError] = useState<'short' | 'mismatch' | null>(null)
+  const demo = useDemoMode()
 
   const busy = state.status === 'loading'
 
   function handleSubmit(event: FormEvent) {
     event.preventDefault()
-    if (current === '' || next === '' || repeat === '') return
+    if (demo || current === '' || next === '' || repeat === '') return
 
     // Checked before the request leaves the browser: neither needs the server,
     // and a wrong guess at the current password is rate limited, so a typo in
@@ -265,6 +269,7 @@ function PasswordForm({ onChanged }: { onChanged: () => void }) {
         />
       </div>
       <p className="text-sm text-muted-foreground">{text.password.note}</p>
+      {demo && <p className="text-sm text-attention-text">{text.password.demoLocked}</p>}
       {localError && (
         <p role="alert" className="flex items-center gap-2 text-attention-text">
           <CircleAlert aria-hidden="true" />
@@ -273,7 +278,7 @@ function PasswordForm({ onChanged }: { onChanged: () => void }) {
       )}
       {state.status === 'error' && state.error && <ErrorState error={state.error} />}
       <DialogFooter className="mt-1">
-        <Button type="submit" size="lg" disabled={busy || current === '' || next === '' || repeat === ''}>
+        <Button type="submit" size="lg" disabled={demo || busy || current === '' || next === '' || repeat === ''}>
           {busy ? text.password.saving : text.password.save}
         </Button>
       </DialogFooter>

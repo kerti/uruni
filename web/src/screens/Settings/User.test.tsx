@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import User from '@/screens/Settings/User'
 import { copy } from '@/copy/id'
+import { DemoMode } from '@/lib/demoMode'
 import type { AuthUser } from '@/lib/auth'
 
 const text = copy.settings.user
@@ -43,27 +44,76 @@ function LocationProbe() {
   return <output data-testid="location-search">{location.search}</output>
 }
 
-function renderAt(entry = '/settings') {
+function renderAt(entry = '/settings', demo = false) {
   return render(
-    <MemoryRouter initialEntries={[entry]}>
-      <Routes>
-        <Route
-          path="/settings"
-          element={
-            <>
-              <User />
-              <LocationProbe />
-            </>
-          }
-        />
-      </Routes>
-    </MemoryRouter>,
+    <DemoMode.Provider value={demo}>
+      <MemoryRouter initialEntries={[entry]}>
+        <Routes>
+          <Route
+            path="/settings"
+            element={
+              <>
+                <User />
+                <LocationProbe />
+              </>
+            }
+          />
+        </Routes>
+      </MemoryRouter>
+    </DemoMode.Provider>,
   )
 }
 
 function currentSearch() {
   return screen.getByTestId('location-search').textContent
 }
+
+describe('Settings user in the public demo (ADR-045)', () => {
+  it('shows the usual email form with its save disabled under the demo line', async () => {
+    const { fetchMock, posts } = stubUser()
+    vi.stubGlobal('fetch', fetchMock)
+    renderAt('/settings?edit=user:email', true)
+
+    await userEvent.type(await screen.findByLabelText(text.email.newLabel), 'baru@example.org')
+    await userEvent.type(screen.getByLabelText(text.email.currentLabel), 'coba-uruni')
+
+    expect(screen.getByText(text.email.demoLocked)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: text.email.save })).toBeDisabled()
+    expect(posts).toHaveLength(0)
+  })
+
+  it('shows the usual password form with its save disabled under the demo line', async () => {
+    const { fetchMock, posts } = stubUser()
+    vi.stubGlobal('fetch', fetchMock)
+    renderAt('/settings?edit=user:password', true)
+
+    await userEvent.type(await screen.findByLabelText(text.password.currentLabel), 'coba-uruni')
+    await userEvent.type(screen.getByLabelText(text.password.newLabel), 'kata-sandi-baru')
+    await userEvent.type(screen.getByLabelText(text.password.repeatLabel), 'kata-sandi-baru')
+
+    expect(screen.getByText(text.password.demoLocked)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: text.password.save })).toBeDisabled()
+    expect(posts).toHaveLength(0)
+  })
+
+  it('says the same sentence for the server refusing, if a request ever gets through', () => {
+    expect(copy.common.errors.demo_login_locked).toBe(text.email.demoLocked)
+    expect(copy.common.errors.demo_login_locked).toBe(text.password.demoLocked)
+    expect(text.email.demoLocked).toBe('Di demo, email dan kata sandi tidak bisa diubah supaya pengunjung lain tetap bisa masuk.')
+  })
+
+  it('leaves both buttons on the card, and the forms enabled, outside the demo', async () => {
+    const { fetchMock } = stubUser()
+    vi.stubGlobal('fetch', fetchMock)
+    renderAt('/settings?edit=user:email')
+
+    await userEvent.type(await screen.findByLabelText(text.email.newLabel), 'baru@example.org')
+    await userEvent.type(screen.getByLabelText(text.email.currentLabel), 'kata-sandi-lama')
+
+    expect(screen.queryByText(text.email.demoLocked)).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: text.email.save })).toBeEnabled()
+  })
+})
 
 describe('Settings user', () => {
   it('says who is signed in and offers the two edits, with no form until one is opened', async () => {

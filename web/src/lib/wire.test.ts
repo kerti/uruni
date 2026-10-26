@@ -210,7 +210,7 @@ const duesPaymentKeys: Keys<DuesPaymentHistoryRow> = {
   reverses_occurred_on: true,
 }
 const transferKeys: Keys<Transfer> = { id: true, kind: true, created_at: true }
-const sessionKeys: Keys<SessionStatus> = { authenticated: true, has_account: true }
+const sessionKeys: Keys<SessionStatus> = { authenticated: true, has_account: true, demo_email: true, demo_password: true }
 const userKeys: Keys<AuthUser> = { id: true, email: true, created_at: true }
 
 // tsc: every sample carries every key its interface requires.

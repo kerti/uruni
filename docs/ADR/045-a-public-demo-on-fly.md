@@ -26,7 +26,12 @@ Uruni has an advantage Balances did not: its only store is a SQLite file. On a m
 - **It seeds an empty database at boot.** No login yet means the demo fixture (decision 5) is written before the server listens.
 - **It refuses to boot on someone else's data.** A database whose one login is not the demo login makes `serve` stop with an error naming `URUNI_DEMO`. The setting cannot be turned on over a real fund by accident.
 - **The login screen offers the demo credentials.** `GET /api/session`, the unauthenticated probe the login screen already makes, carries the demo email and password beside `authenticated` and `has_account`. The form arrives filled in, under a notice that also spells the credentials out, so a visitor who clears the fields can type them back:
-  > **Ini demo Uruni.** Semua datanya rekaan, dan siapa pun yang masuk bisa mengubahnya - jadi jangan simpan data asli di sini. Demo kembali bersih sendiri, paling lama setiap jam. Email `demo@uruni.test` · Kata sandi `coba-uruni`
+  > **Ini demo Uruni.**
+  >
+  > Semua datanya rekaan, dan siapa pun yang masuk bisa mengubahnya, jadi jangan simpan data asli di sini. Demo kembali bersih sendiri, paling lama setiap jam.
+  >
+  > Email `demo@uruni.test`<br>
+  > Kata sandi `coba-uruni`
 
   The email sits under the reserved `.test` domain, like `seed-e2e`'s. The password must clear the `password_too_common` denylist.
 - **The demo login cannot be changed.** `POST /api/user/password` and `POST /api/user/email` are refused with one error code of their own. Both settings screens stay reachable and show their usual form - a visitor deciding whether to adopt Uruni should see that the login can be changed - with the save button disabled under one line: *Di demo, email dan kata sandi tidak bisa diubah supaya pengunjung lain tetap bisa masuk.* Either change would lock every later visitor out of the pre-filled login until the next reset - Uruni's version of Balances' blocked Erasure. Nothing else is blocked:

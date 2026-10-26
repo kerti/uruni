@@ -201,6 +201,54 @@ func TestSetUpFundGeneratesDistinctReportSlugs(t *testing.T) {
 	}
 }
 
+// ADR-045: the demo seeder may name the report slug. It is stored as given; an
+// empty one (every real fund) still draws a random slug.
+func TestSetUpFundTakesAnOptionalReportSlug(t *testing.T) {
+	t.Parallel()
+	const slug = "CsShiftSoreDemoUruni2026"
+	res, err := newTestLedger(t).SetUpFund(context.Background(), SetUpFundParams{FundName: "Fund", Accounts: defaultSetupAccounts, ReportSlug: slug})
+	if err != nil {
+		t.Fatalf("SetUpFund(ReportSlug) = %v, want no error", err)
+	}
+	if res.Fund.ReportSlug != slug {
+		t.Errorf("ReportSlug = %q, want %q", res.Fund.ReportSlug, slug)
+	}
+}
+
+// A chosen slug is held to the shape of a generated one, and a refusal writes
+// no fund.
+func TestSetUpFundRejectsAMalformedReportSlug(t *testing.T) {
+	t.Parallel()
+	cases := map[string]string{
+		"one short of the floor": "abcdefghijklmnopqrstu",
+		"not base62 (hyphen)":    "abcdefghijklmnopqrstuv-w",
+		"not base62 (space)":     "abcdefghijklmnopqrstuv w",
+		"not base62 (non-ASCII)": "abcdefghijklmnopqrstuv\u00e9w",
+	}
+	for name, slug := range cases {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			l := newTestLedger(t)
+			_, err := l.SetUpFund(context.Background(), SetUpFundParams{FundName: "Fund", Accounts: defaultSetupAccounts, ReportSlug: slug})
+			if !errors.Is(err, ErrInvalidArgument) {
+				t.Fatalf("SetUpFund(slug %q) = %v, want an error wrapping ErrInvalidArgument", slug, err)
+			}
+			var fe *FieldError
+			if !errors.As(err, &fe) || fe.Field != "report_slug" {
+				t.Errorf("SetUpFund(slug %q) = %v, want a FieldError naming report_slug", slug, err)
+			}
+			funds, listErr := store.New(l.db).ListFunds(context.Background())
+			if listErr != nil || len(funds) != 0 {
+				t.Errorf("ListFunds() = %d rows, %v; want none after a rejected call", len(funds), listErr)
+			}
+		})
+	}
+	// Exactly the floor passes.
+	if _, err := newTestLedger(t).SetUpFund(context.Background(), SetUpFundParams{FundName: "Fund", Accounts: defaultSetupAccounts, ReportSlug: "abcdefghijklmnopqrstuv"}); err != nil {
+		t.Errorf("SetUpFund(22-character slug) = %v, want no error", err)
+	}
+}
+
 func TestSetUpFundRejectsEmptyFundName(t *testing.T) {
 	t.Parallel()
 	l := newTestLedger(t)

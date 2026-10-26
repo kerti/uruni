@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
@@ -84,6 +84,49 @@ describe('Login', () => {
     await fillAndSubmit('bendahara@example.test', 'super-secret-1')
 
     await vi.waitFor(() => expect(onLoggedIn).toHaveBeenCalledWith(user))
+  })
+})
+
+describe('Login in the public demo (ADR-045)', () => {
+  const demo = { email: 'demo@uruni.test', password: 'coba-uruni' }
+
+  it('starts filled in with the demo login, under a notice that spells it out', () => {
+    render(<Login onLoggedIn={vi.fn()} demo={demo} />)
+
+    expect(screen.getByLabelText(copy.auth.login.emailLabel)).toHaveValue(demo.email)
+    expect(screen.getByLabelText(copy.auth.login.passwordLabel)).toHaveValue(demo.password)
+
+    const notice = screen.getByRole('note')
+    expect(notice).toHaveTextContent(copy.auth.login.demo.title)
+    expect(notice).toHaveTextContent(copy.auth.login.demo.body)
+    // The credentials in the notice itself, for a visitor who clears the fields.
+    expect(within(notice).getByText(demo.email)).toBeInTheDocument()
+    expect(within(notice).getByText(demo.password)).toBeInTheDocument()
+  })
+
+  it('signs in with the pre-filled login as it stands', async () => {
+    const user = { id: 1, email: demo.email, created_at: 1 } satisfies AuthUser
+    const fetchMock = vi.fn((_input: RequestInfo | URL, _init?: RequestInit) =>
+      Promise.resolve(new Response(JSON.stringify(user), { status: 200, headers: { 'Content-Type': 'application/json' } })),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+    const onLoggedIn = vi.fn()
+    render(<Login onLoggedIn={onLoggedIn} demo={demo} />)
+
+    await userEvent.click(screen.getByRole('button', { name: copy.auth.login.submit }))
+
+    await vi.waitFor(() => expect(onLoggedIn).toHaveBeenCalledWith(user))
+    const login = fetchMock.mock.calls.find(([url]) => String(url) === '/api/login')
+    expect(JSON.parse(String(login?.[1]?.body))).toEqual({ email: demo.email, password: demo.password })
+  })
+
+  it('is an empty form with no notice everywhere else', () => {
+    render(<Login onLoggedIn={vi.fn()} />)
+
+    expect(screen.getByLabelText(copy.auth.login.emailLabel)).toHaveValue('')
+    expect(screen.getByLabelText(copy.auth.login.passwordLabel)).toHaveValue('')
+    expect(screen.queryByRole('note')).not.toBeInTheDocument()
+    expect(screen.queryByText(copy.auth.login.demo.title)).not.toBeInTheDocument()
   })
 })
 

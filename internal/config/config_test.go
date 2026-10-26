@@ -20,7 +20,7 @@ func env(t *testing.T, overrides map[string]string) {
 	t.Helper()
 	for _, name := range []string{
 		"URUNI_DB", "PORT", "URUNI_BASE_URL", "URUNI_UPLOADS_DIR", "URUNI_BACKUP_DIR",
-		"URUNI_LOG_LEVEL", "URUNI_LOG_FORMAT", "URUNI_TRUSTED_PROXIES",
+		"URUNI_LOG_LEVEL", "URUNI_LOG_FORMAT", "URUNI_TRUSTED_PROXIES", "URUNI_DEMO",
 	} {
 		t.Setenv(name, "")
 	}
@@ -61,6 +61,9 @@ func TestLoadDefaultsEverythingItCan(t *testing.T) {
 	}
 	if len(cfg.TrustedProxies) != 0 {
 		t.Errorf("TrustedProxies = %v, want none - no header is believed by default", cfg.TrustedProxies)
+	}
+	if cfg.Demo {
+		t.Error("Demo = true, want off by default (ADR-045)")
 	}
 }
 
@@ -114,6 +117,7 @@ func TestLoadRejectsBadValues(t *testing.T) {
 		{"base url no scheme", map[string]string{"URUNI_BASE_URL": "uruni.example.com"}, "URUNI_BASE_URL"},
 		{"log level unknown", map[string]string{"URUNI_LOG_LEVEL": "chatty"}, "URUNI_LOG_LEVEL"},
 		{"log format unknown", map[string]string{"URUNI_LOG_FORMAT": "xml"}, "URUNI_LOG_FORMAT"},
+		{"demo not a boolean", map[string]string{"URUNI_DEMO": "maybe"}, "URUNI_DEMO"},
 	}
 
 	for _, tc := range cases {
@@ -357,6 +361,26 @@ func TestPlaintextPublicBaseURL(t *testing.T) {
 	} {
 		if got := PlaintextPublicBaseURL(url); got != want {
 			t.Errorf("PlaintextPublicBaseURL(%q) = %v, want %v", url, got, want)
+		}
+	}
+}
+
+// ADR-045: URUNI_DEMO is a boolean, off unless it reads as true. A value that
+// is neither is refused (see TestLoadRejectsBadValues), not read as off.
+func TestLoadReadsDemo(t *testing.T) {
+	cases := map[string]bool{
+		"": false, "false": false, "FALSE": false, "0": false,
+		"true": true, "TRUE": true, "1": true, " true ": true,
+	}
+	for raw, want := range cases {
+		env(t, map[string]string{"URUNI_BASE_URL": testBaseURL, "URUNI_DEMO": raw})
+
+		cfg, err := Load()
+		if err != nil {
+			t.Fatalf("Load() with URUNI_DEMO=%q = %v, want nil", raw, err)
+		}
+		if cfg.Demo != want {
+			t.Errorf("Demo with URUNI_DEMO=%q = %v, want %v", raw, cfg.Demo, want)
 		}
 	}
 }

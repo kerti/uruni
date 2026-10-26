@@ -1,4 +1,4 @@
-import { useCallback, useEffect } from 'react'
+import { useCallback, useEffect, useRef } from 'react'
 import { CircleCheck } from 'lucide-react'
 import { BrowserRouter, Navigate, Route, Routes, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 
@@ -28,9 +28,10 @@ import Home from '@/screens/Home'
 import Members from '@/screens/Members'
 import Settings from '@/screens/Settings'
 import { ClosedIncidentals } from '@/screens/Settings/Incidentals'
-import { getSession } from '@/lib/auth'
+import { demoLoginOf, getSession } from '@/lib/auth'
 import { getFund } from '@/lib/setup'
 import { useApi } from '@/lib/useApi'
+import { DemoMode } from '@/lib/demoMode'
 import { useRefetchKey } from '@/lib/useDialogParam'
 import type { SessionStatus, AuthUser } from '@/lib/auth'
 import type { Fund } from '@/lib/setup'
@@ -59,11 +60,18 @@ export default function App() {
     void run(getSession)
   }, [run])
 
+  // The last probe, for the handoffs below: a demo's login rides on the probe
+  // (ADR-045), and a logout must land on a Login that still knows it.
+  const probe = useRef<SessionStatus | undefined>(undefined)
+  useEffect(() => {
+    probe.current = state.data
+  }, [state.data])
+
   function handleAuthenticated(_user: AuthUser) {
     // The server session is already established (register.go and login.go both
     // RenewToken + Put before answering 2xx) - this syncs the client's view of
     // /api/session without a second round trip.
-    void run(async () => ({ authenticated: true, has_account: true }))
+    void run(async () => ({ ...demoFields(probe.current), authenticated: true, has_account: true }))
   }
 
   // Mirror image of handleAuthenticated, for the shell's logout button:
@@ -72,7 +80,7 @@ export default function App() {
   // session is gone - so this lands on Login, never Register. useCallback
   // because Shell's success effect depends on this identity.
   const handleLoggedOut = useCallback(() => {
-    void run(async () => ({ authenticated: false, has_account: true }))
+    void run(async () => ({ ...demoFields(probe.current), authenticated: false, has_account: true }))
   }, [run])
 
   return (
@@ -127,11 +135,23 @@ function AuthGate({
     return <Register onRegistered={onAuthenticated} />
   }
 
+  const demo = demoLoginOf(state.data)
+
   if (!state.data.authenticated) {
-    return <Login onLoggedIn={onAuthenticated} />
+    return <Login onLoggedIn={onAuthenticated} demo={demo} />
   }
 
-  return <AuthedGate onLoggedOut={onLoggedOut} />
+  return (
+    <DemoMode.Provider value={demo !== null}>
+      <AuthedGate onLoggedOut={onLoggedOut} />
+    </DemoMode.Provider>
+  )
+}
+
+/** The part of a probe that outlives a login or a logout: the demo's shared
+ * login, if the server sent one. */
+function demoFields(session: SessionStatus | undefined): Pick<SessionStatus, 'demo_email' | 'demo_password'> {
+  return session ? { demo_email: session.demo_email, demo_password: session.demo_password } : {}
 }
 
 /** What a successful record hands to home through the history entry it

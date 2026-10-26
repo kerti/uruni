@@ -24,6 +24,10 @@ const reportSlugAlphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz
 // at the free cost of a longer URL nobody types.
 const reportSlugLength = 32
 
+// minReportSlugLength is the schema's own floor (CHECK (length(report_slug) >=
+// 22)), the one a caller-chosen slug is held to before it reaches the database.
+const minReportSlugLength = 22
+
 // randInt is crypto/rand.Int, indirected so tests can drive the failure
 // below. A failing random source is not a real condition, but this is the one
 // call in setup whose silent failure would matter: the link is only
@@ -56,6 +60,20 @@ func generateReportSlug() (string, error) {
 	return string(b), nil
 }
 
+// validateReportSlug holds a caller-chosen slug to the shape generateReportSlug
+// produces: base62 only, at least the schema's floor in length.
+func validateReportSlug(slug string) error {
+	if len(slug) < minReportSlugLength {
+		return invalidField("report_slug", "report slug must be at least %d characters", minReportSlugLength)
+	}
+	for _, c := range slug {
+		if !strings.ContainsRune(reportSlugAlphabet, c) {
+			return invalidField("report_slug", "report slug must be base62 (letters and digits only)")
+		}
+	}
+	return nil
+}
+
 // AccountInput is one location the treasurer names at setup (#78): the wizard
 // lets her choose and name each one, rather than SetUpFund fixing a
 // cash/bank pair.
@@ -85,6 +103,13 @@ type SetUpFundParams struct {
 	// required: a fund with no accounts could record nothing (every transaction
 	// needs an account_id).
 	Accounts []AccountInput
+
+	// ReportSlug is optional and meant for one caller: the public demo's seeder
+	// (ADR-045), whose report link the README prints and so cannot be random.
+	// Empty, which is every real fund, draws a random slug. When set it must be
+	// base62 and at least the schema's 22 characters, the shape every slug has;
+	// anything else is ErrInvalidArgument. No HTTP route fills it.
+	ReportSlug string
 }
 
 // SetUpFundResult names every row the caller needs immediately: the whole
@@ -136,6 +161,11 @@ func (l *Ledger) SetUpFund(ctx context.Context, p SetUpFundParams) (SetUpFundRes
 	if timeZone == "" {
 		timeZone = tz.Default
 	}
+	if p.ReportSlug != "" {
+		if err := validateReportSlug(p.ReportSlug); err != nil {
+			return SetUpFundResult{}, err
+		}
+	}
 	loc, err := tz.Load(timeZone)
 	if err != nil {
 		return SetUpFundResult{}, invalidField("time_zone", "time_zone: %v", err)
@@ -166,9 +196,12 @@ func (l *Ledger) SetUpFund(ctx context.Context, p SetUpFundParams) (SetUpFundRes
 			return ErrFundAlreadyExists
 		}
 
-		slug, err := generateReportSlug()
-		if err != nil {
-			return err
+		slug := p.ReportSlug
+		if slug == "" {
+			var err error
+			if slug, err = generateReportSlug(); err != nil {
+				return err
+			}
 		}
 
 		now := l.now().Unix()
