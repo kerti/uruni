@@ -86,6 +86,10 @@ Uruni speaks like a helpful friend, not software.
 
 Contributions to copy and UI should keep this tone: warm, human, never corporate. All user-facing copy is Bahasa Indonesia, sentence case.
 
+## Try the demo
+
+[demo.uruni.kerti.dev](https://demo.uruni.kerti.dev) runs the latest release over fourteen months of an invented office fund, *CS Shift Sore*. The login is filled in for you (`demo@uruni.test` / `coba-uruni`). Anyone can change anything, and the demo starts clean again at least every hour. Its public report is at [demo.uruni.kerti.dev/report/CsShiftSoreDemoUruni2026](https://demo.uruni.kerti.dev/report/CsShiftSoreDemoUruni2026).
+
 ## Status
 
 **Pre-release, built in supervised vertical slices.** The ledger works and is covered by tests, the JSON API sits behind a session cookie, and one binary serves it alongside the embedded React app. A treasurer can run the everyday loop on a phone, and neighbours can read the public report from its own link.

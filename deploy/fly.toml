@@ -1,0 +1,55 @@
+# The project's public demo at https://demo.uruni.kerti.dev (ADR-045). Not a
+# self-host recipe - self-hosting is docker-compose.yml behind Caddy
+# (SELF-HOSTING.md). Everything here is public on purpose: there are no Fly
+# secrets, and the demo's login is printed on its own login screen.
+#
+# .github/workflows/demo.yml deploys the published release image by reference
+# (`flyctl deploy --config deploy/fly.toml --image ghcr.io/kerti/uruni:<tag>`),
+# so the demo runs byte for byte what self-hosters pull. There is no [build].
+app = "uruni-demo"
+primary_region = "sin"
+
+[env]
+  # serve seeds an empty database with the CS Shift Sore fixture, refuses to
+  # boot over any other data, shows the login, refuses changes to it, sends
+  # X-Robots-Tag, and exits 0 after an hour of uptime.
+  URUNI_DEMO = "true"
+  URUNI_BASE_URL = "https://demo.uruni.kerti.dev"
+  # No volume: these live on the machine's root filesystem, which Fly rebuilds
+  # from the image at every start. Every start is a fresh demo.
+  URUNI_DB = "/data/uruni.db"
+  URUNI_UPLOADS_DIR = "/uploads"
+  URUNI_BACKUP_DIR = "/backups"
+  # Fly's edge is the only way in. It connects from the private range and
+  # writes X-Forwarded-For as "<visitor>, <this app's ingress address>", so
+  # both ingress addresses (`fly ips list`) are trusted too and the walk from
+  # the right lands on the visitor; the login limiter keys on the visitor
+  # rather than on Fly. Re-check if the app's IPs are ever reallocated.
+  URUNI_TRUSTED_PROXIES = "172.16.0.0/12,66.241.124.166/32,2a09:8280:1::1cf:d9b3:0/128"
+  URUNI_LOG_FORMAT = "json"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  # Scale to zero: Fly stops the machine a few minutes after the last request
+  # and starts a fresh one for the next visitor.
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 0
+
+  [[http_service.checks]]
+    interval = "15s"
+    timeout = "3s"
+    grace_period = "10s"
+    method = "GET"
+    path = "/healthz"
+
+# The hourly exit is a clean exit 0. On-failure leaves the machine stopped
+# rather than restarting it, so the next request auto-starts a fresh demo.
+[[restart]]
+  policy = "on-failure"
+  retries = 3
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "256mb"

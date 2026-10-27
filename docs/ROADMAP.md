@@ -61,7 +61,7 @@ The repo is **already public**, so this stopped being a pre-flight checklist and
 
 Balances is a bigger app and carries machinery Uruni should *not* copy wholesale:
 
-- **One environment**, not preview/demo/production — the maintainer's instance is the only deploy target until there's reason for more.
+- **One environment**, not preview/demo/production — the maintainer's instance is the only deploy target, plus the public demo that follows each release ([ADR-045](./ADR/045-a-public-demo-on-fly.md)).
 - **No elaborate QA invariant matrix**: no IDs, `covers:` annotations or generated coverage gate. M8's coverage map is one hand-kept table, and the money/reconciliation core still gets real, non-negotiable test coverage.
 - **No multi-currency/decimal** — Uruni is IDR-only, so `int64` is correct and simpler (Balances needs decimals for FX/investments; that complexity doesn't apply here).
 - **No OAuth/central accounts** — Balances added local auth *for* self-hosters after starting on Google OAuth; Uruni is self-host-only, so it starts and stays on local auth.
