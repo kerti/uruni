@@ -68,14 +68,37 @@ jobs:
         with:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ steps.pw.outputs.version }}
+            # Both install steps go through apt, and a slow Ubuntu mirror once held
+            # one for most of the job's 20 minutes (2026-10-26). apt now retries a
+            # failed fetch and gives up on a stalled connection, and each step has
+            # its own limit, so a bad mirror costs minutes, not the job.
+      - name: Make apt fail fast
+        run: |
+          printf '%s\n' 'Acquire::Retries "3";' 'Acquire::http::Timeout "30";' \
+            'Acquire::https::Timeout "30";' 'DPkg::Lock::Timeout "120";' \
+            | sudo tee /etc/apt/apt.conf.d/80-ci-fail-fast > /dev/null
       - name: Install the browser
         if: steps.pw-cache.outputs.cache-hit != 'true'
         working-directory: web
+        timeout-minutes: 8
         run: npx playwright install --with-deps chromium
+            # Normally under a minute. One retry, as its own step: a step that hits
+            # its limit has its whole process tree killed, so no apt is left holding
+            # the lock, and dpkg --configure -a finishes anything it interrupted.
       - name: Install the browser's OS packages
+        id: os-deps
         if: steps.pw-cache.outputs.cache-hit == 'true'
         working-directory: web
+        timeout-minutes: 5
+        continue-on-error: true
         run: npx playwright install-deps chromium
+      - name: Install the browser's OS packages (retry)
+        if: steps.os-deps.outcome == 'failure'
+        working-directory: web
+        timeout-minutes: 5
+        run: |
+          sudo dpkg --configure -a
+          npx playwright install-deps chromium
       - name: Run the ${{ inputs.tier }} tier
         env:
           CI: 'true'
