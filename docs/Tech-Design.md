@@ -48,4 +48,4 @@ None open. The two once listed here - the JSON export's shape and version strate
 
 ## Not deciding yet (deferred)
 
-Error monitoring/observability, a multi-environment (preview/demo/production) split, and any nightly migration-rehearsal CI — all deferred until there's real production data or a second deploy target to justify them. (CI/CD and release/versioning are now decided — [ADR-017](./ADR/017-cicd-github-actions.md)/[ADR-018](./ADR/018-release-and-versioning.md).)
+Error monitoring/observability, a multi-environment (preview/production) split, and any nightly migration-rehearsal CI — all deferred until there's real production data or a second deploy target to justify them. (CI/CD and release/versioning are now decided — [ADR-017](./ADR/017-cicd-github-actions.md)/[ADR-018](./ADR/018-release-and-versioning.md); the one public demo is [ADR-045](./ADR/045-a-public-demo-on-fly.md).)

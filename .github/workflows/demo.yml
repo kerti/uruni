@@ -1,0 +1,86 @@
+# Deploy the public demo, https://demo.uruni.kerti.dev (ADR-045), from an image
+# release.yml already published - never a rebuild, so the demo runs byte for
+# byte what self-hosters pull. Runs after every successful release, and by
+# hand with a tag for a redeploy or a rollback. Never a required check: a red
+# run blocks nothing, the demo just trails the product.
+#
+# One credential: FLY_API_TOKEN, a deploy token scoped to the uruni-demo app
+# (`fly tokens create deploy -a uruni-demo`). Nothing runs on a schedule.
+name: Demo
+
+on:
+  workflow_run:
+    workflows: ["Release image"]
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing release tag to deploy (e.g. v0.10.0-alpha.4)"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: demo
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      packages: read
+    env:
+      # A tag push's workflow_run carries the tag as head_branch. Through env,
+      # never interpolated into the script, so no input reaches a shell as code.
+      TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.event.workflow_run.head_branch }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - name: The tag is a release with a published image
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if [[ ! "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-(alpha|beta|rc)\.[0-9]+)?$ ]]; then
+            echo "::error::'$TAG' is not a release tag (e.g. v0.10.0-alpha.4)"; exit 1
+          fi
+          # A release cut before URUNI_DEMO existed ignores the setting and boots
+          # an empty public instance that any visitor could register on. So a
+          # tag deploys only if it contains the switch (#717); this guards a
+          # rollback as much as a release.
+          if ! git merge-base --is-ancestor 9025a82fb43619960919bd3cede3987edeb095f2 "$TAG"; then
+            echo "::error::$TAG predates URUNI_DEMO (#717); deploying it would open a blank public instance"; exit 1
+          fi
+          echo "$GH_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+          if ! docker manifest inspect "ghcr.io/kerti/uruni:$TAG" >/dev/null; then
+            echo "::error::no image ghcr.io/kerti/uruni:$TAG - was that tag released?"; exit 1
+          fi
+      - uses: superfly/flyctl-actions/setup-flyctl@ed8efb33836e8b2096c7fd3ba1c8afe303ebbff1 # master-pinned 2026-06-13
+      - name: Deploy
+        # --ha=false: on an app with no machines flyctl would otherwise create
+        # two, each seeding its own database, and a session would bounce
+        # between them.
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: flyctl deploy --config deploy/fly.toml --image "ghcr.io/kerti/uruni:$TAG" --ha=false
+      - name: The demo serves the tag
+        # flyctl deploy succeeding proves one health check passed, not that this
+        # tag is what answers. /healthz reports the version release.yml stamped.
+        # The request also wakes the machine if Fly already stopped it.
+        run: |
+          url=https://demo.uruni.kerti.dev/healthz
+          for i in $(seq 1 12); do
+            got="$(curl -fsS "$url" | jq -r .version 2>/dev/null || true)"
+            if [[ "$got" == "$TAG" ]]; then
+              echo "verified: $url reports $got"; exit 0
+            fi
+            echo "attempt $i/12: got '$got', want '$TAG'; retrying in 5s"
+            sleep 5
+          done
+          echo "::error::$url never reported $TAG"; exit 1
