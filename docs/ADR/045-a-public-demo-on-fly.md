@@ -18,7 +18,7 @@ Uruni has an advantage Balances did not: its only store is a SQLite file. On a m
 
 **1. One public demo at `https://demo.uruni.kerti.dev`, run by the project.**
 - Fly app `uruni-demo`, in the maintainer's existing Fly account and organization, beside Balances. Region `sin`, closest to Indonesia.
-- One `shared-cpu-1x` machine with 256 MB. `auto_stop_machines = "stop"`, `auto_start_machines = true` and `min_machines_running = 0`: it costs close to nothing while nobody is looking at it.
+- One `shared-cpu-1x` machine with 256 MB. `min_machines_running = 1` with `auto_start_machines = true`: Fly never stops it for being idle, and starts it again after the app's own hourly exit (decision 3). About $2 a month. Scale to zero was the first plan and failed on the live demo: Fly's idle stop fires a few minutes after the last open connection, the app holds none between clicks, and every start is a fresh demo, so a visitor who paused to read lost what they had entered and could fairly take the app for a static front.
 - The hostname is a Cloudflare DNS-only CNAME to `uruni-demo.fly.dev`, with Fly's own Let's Encrypt certificate, as Balances does. No Fly volume.
 
 **2. The demo is the shipped image with one setting: `URUNI_DEMO=true`.** `flyctl deploy --image ghcr.io/kerti/uruni:<tag>` runs no build of its own. Every other instance leaves the setting unset, and with it unset nothing below exists. With it set, `serve` changes exactly five things - the four below, and the uptime limit of decision 3:
@@ -42,13 +42,12 @@ Uruni has an advantage Balances did not: its only store is a SQLite file. On a m
 Responses also carry `X-Robots-Tag: noindex, nofollow` (decision 6).
 
 **3. Every start is a reset, and no demo lives longer than an hour.** A Fly machine's root filesystem is rebuilt from its image at every start (`persist_rootfs = "never"`, the default). With decision 2, every start is therefore a fresh demo:
-- **Idle:** Fly stops the machine a few minutes after the last request, and the next visitor starts a new demo.
-- **One hour of uptime:** a machine someone keeps warm never idles, so under `URUNI_DEMO`, `serve` shuts down gracefully after one hour of uptime and exits 0. Fly treats that like an idle stop, and the next request starts a fresh machine. That bounds anything a visitor leaves behind to one hour: spam in the notes the public report shows, a stranger's backup restored over the fund, or 50 failed logins that close the demo account under the identifier ceiling (`login.go`, which lives in memory).
+- **One hour of uptime:** the machine is never stopped for idling (decision 1), so under `URUNI_DEMO`, `serve` shuts down gracefully after one hour of uptime and exits 0. Under `[[restart]] policy = "on-failure"` Fly leaves the machine stopped, and the next request starts a fresh one. That bounds anything a visitor leaves behind to one hour: spam in the notes the public report shows, a stranger's backup restored over the fund, or 50 failed logins that close the demo account under the identifier ceiling (`login.go`, which lives in memory).
 
 This is a fifth behavior of the switch, chosen over an hourly `flyctl machine restart` from a GitHub `schedule`:
 - A scheduled job runs late or not at all under load, is disabled after 60 days without repo activity, and holds a deploy-capable token every hour.
 - A restart *starts* a stopped machine, so a careless cron wakes an idle demo 24 times a day.
-- The uptime limit only ever stops a machine sooner. The demo runs, and is billed, only while someone is using it, as Balances' does.
+- The uptime limit only ever stops a machine. It never wakes one, so a demo nobody visits stays stopped after its hour.
 
 Balances rejected an in-process reset because it couples to process uptime. Here that coupling is the property wanted: no demo state outlives an hour. It is tested in Go. That Fly treats exit 0 as a stop and auto-starts cleanly afterward, with no restart loop, is confirmed against the running demo in the PR that ships it.
 
@@ -112,7 +111,7 @@ There are no Fly secrets. `noindex` is a header `serve` sets under `URUNI_DEMO`,
 - **The product carries a demo setting and a fixture.** That is code no self-hoster uses, the cost of deploying the published image unchanged. The boot refusal in decision 2 keeps it from ever touching a real fund. Its tests run in `make check` like any other.
 - **The demo never exercises the upgrade contract** ([ADR-018](./018-release-and-versioning.md)). Each start re-seeds from scratch, so a release with a schema change reaches it with no `rebuild` and no backup.
 - **Visitors share one demo.** Two visitors at once see each other's writes. No per-visitor isolation is built, as Balances also decided.
-- **The release cut gains no step.** The demo follows the release by itself, and the maintainer holds one more credential (`FLY_API_TOKEN`) and one more Fly app, close to $0 when idle.
+- **The release cut gains no step.** The demo follows the release by itself, and the maintainer holds one more credential (`FLY_API_TOKEN`) and one more Fly app, about $2 a month.
 
 ## Supersedes
 

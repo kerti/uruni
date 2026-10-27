@@ -31,11 +31,13 @@ primary_region = "sin"
 [http_service]
   internal_port = 8080
   force_https = true
-  # Scale to zero: Fly stops the machine a few minutes after the last request
-  # and starts a fresh one for the next visitor.
+  # One machine stays up: Fly's idle stop fires minutes after the last open
+  # connection, and every start is a fresh demo, so a visitor reading a screen
+  # would lose what they entered. The app's own exit after an hour is the
+  # reset; auto-start brings the machine back for the next request.
   auto_stop_machines = "stop"
   auto_start_machines = true
-  min_machines_running = 0
+  min_machines_running = 1
 
   [[http_service.checks]]
     interval = "15s"
