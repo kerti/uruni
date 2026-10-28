@@ -147,7 +147,7 @@ Asset files live in [`/brand`](./brand):
 </svg>
 ```
 
-**Usage.** Clear space ≥ the dot's diameter on all sides. Minimum mark size 16px (it stays legible — tested). Colorways: primary on light, reversed on Forest/dark, single-color ink `#22323A` where only one color is available. **Don't** recolor outside the palette, add gradients or shadows, stretch/distort, rotate, or outline the wordmark in a different typeface. For production print/export, convert the wordmark text to outlines (the SVGs currently use live Plus Jakarta Sans text).
+**Usage.** Clear space ≥ the dot's diameter on all sides. Minimum mark size 16px (it stays legible — tested). Colorways: primary on light, reversed on Forest/dark, single-color ink `#22323A` where only one color is available. **Don't** recolor outside the palette, add gradients or shadows, stretch/distort, rotate, or outline the wordmark in a different typeface. The lockup SVGs carry the wordmark as outlines (Plus Jakarta Sans 700), so they render the same anywhere without the font; the app's `Logo` component sets it as live text in the loaded font.
 
 ## Deferred
 

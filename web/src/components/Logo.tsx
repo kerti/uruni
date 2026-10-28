@@ -4,8 +4,8 @@ import { cn } from '@/lib/utils'
  * The stacked lockup (docs/brand/uruni-lockup-stacked.svg): the U-vessel mark
  * over the lowercase wordmark. Drawn inline rather than loaded as an image so
  * it takes the theme's tokens - Forest vessel, Sage dot, ink wordmark - and
- * the wordmark is live text in the app's Plus Jakarta Sans, as the brand
- * asset specifies. Design-System.md's usage rules apply: no shadow, gradient
+ * the wordmark is live text in the app's Plus Jakarta Sans (the brand SVG
+ * carries the same glyphs as outlines, for use where the font isn't loaded). Design-System.md's usage rules apply: no shadow, gradient
  * or recolour, and clear space of at least the dot's diameter all round.
  *
  * Decorative next to a heading that already names the app, so it is hidden
