@@ -9,12 +9,12 @@ import { cardButton } from './card'
 
 // The two ways money sits in the fund without being the fund's own. Talangan -
 // a member's money paid for the kas (removing a claim, its receipt photo, what
-// Beranda says the fund owes, the Semua tab) - and Titipan, money held for
+// Beranda says the fund owes, the full list) - and Titipan, money held for
 // someone else (made in Pengaturan, received and forwarded as two ordinary
 // records, its own pos on Beranda and on the public report, renamed).
 //
-// Paging and search on Belum dibayar live in browsing.spec.ts; this file adds
-// the Semua tab's search, where a settled claim is still found.
+// Paging and search on the outstanding list live in browsing.spec.ts; this file adds
+// the full list's search, where a settled claim is still found.
 //
 // Serial, one story on the seeded fixture (Tunai Rp1.000.000, Kas Utama, Warga
 // Satu and Warga Dua). Claims are seeded over the API: the record form has its
@@ -72,7 +72,7 @@ function berandaRow(page: Page, name: string) {
 async function openTalangan(page: Page) {
   await page.getByRole('link', { name: copy.shell.nav.history }).click()
   await page.getByRole('link', { name: copy.history.tabs.reimbursements }).click()
-  await expect(page.getByRole('button', { name: copy.reimbursements.outstandingTab })).toBeVisible()
+  await expect(page.getByRole('checkbox', { name: copy.reimbursements.outstandingFilterLabel })).toBeChecked()
 }
 
 // The row's "more" menu, then Hapus.
@@ -147,7 +147,7 @@ test.describe('talangan and titipan', () => {
 
     await owed.click()
     await expect(page).toHaveURL(/\/history\/reimbursements$/)
-    await expect(page.getByRole('button', { name: copy.reimbursements.outstandingTab })).toBeVisible()
+    await expect(page.getByRole('checkbox', { name: copy.reimbursements.outstandingFilterLabel })).toBeChecked()
     await expect(claim(page, salah)).toBeVisible()
     await expect(claim(page, terpal)).toBeVisible()
     // The settled one is not on Belum dibayar.
@@ -155,7 +155,7 @@ test.describe('talangan and titipan', () => {
     await expectAccessible(page)
   })
 
-  test('the Semua tab searches the whole history, a settled claim included', async ({ page }) => {
+  test('the full list searches the whole history, a settled claim included', async ({ page }) => {
     await logIn(page)
     await page.goto('/')
     await openTalangan(page)
@@ -165,9 +165,9 @@ test.describe('talangan and titipan', () => {
     await search.fill('galon')
     await expect(page.getByText(copy.history.reimbursements.noResults('galon'))).toBeVisible()
 
-    // Semua: the same search finds it, marked Dibayar. The search survives
-    // the tab switch (it is in the URL).
-    await page.getByRole('button', { name: copy.reimbursements.allTab }).click()
+    // Unticked: the same search finds it, marked Dibayar. The search survives
+    // the filter change (it is in the URL).
+    await page.getByRole('checkbox', { name: copy.reimbursements.outstandingFilterLabel }).uncheck()
     await expect(claim(page, galon)).toBeVisible()
     await expect(claim(page, galon).getByText(copy.reimbursements.status.settled)).toBeVisible()
     await expect(claim(page, terpal)).toHaveCount(0)

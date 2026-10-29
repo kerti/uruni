@@ -1369,8 +1369,9 @@ export const copy = {
   reimbursements: {
     heading: 'Talangan',
     body: 'Uang yang ditanggung anggota untuk kas, sudah tercatat.',
-    outstandingTab: 'Belum dibayar',
-    allTab: 'Semua',
+    // Ticked by default: the tab opens on claims still owed. The same plain
+    // checkbox as dues.unpaidFilterLabel - one list narrowed, not two views.
+    outstandingFilterLabel: 'Tampilkan yang belum dibayar saja',
     emptyOutstanding: 'Tidak ada talangan yang belum dibayar.',
     emptyAll: 'Belum ada talangan tercatat.',
     record: {

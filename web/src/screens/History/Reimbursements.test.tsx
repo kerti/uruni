@@ -162,9 +162,10 @@ describe('Reimbursements tab', () => {
     renderAt()
 
     await waitFor(() => expect(screen.getByText('Jane')).toBeInTheDocument())
+    expect(screen.getByRole('checkbox', { name: text.outstandingFilterLabel })).toBeChecked()
     expect(screen.getByText('Parkir')).toBeInTheDocument()
     expect(screen.getByText(formatIDR(15_000))).toBeInTheDocument()
-    // The outstanding tab labels a still-owed claim "Belum dibayar". `settled`
+    // The outstanding list labels a still-owed claim "Belum dibayar". `settled`
     // rides the wire (the list queries compute it), so the badge is a fact, not
     // a tab-dependent guess.
     expect(screen.getByText(text.status.outstanding, { selector: 'span' })).toBeInTheDocument()
@@ -206,13 +207,13 @@ describe('Reimbursements tab', () => {
     await waitFor(() => expect(screen.getByText('Jane')).toBeInTheDocument())
     expect(screen.getByText(text.settle.success)).toBeInTheDocument()
 
-    await userEvent.click(screen.getByRole('button', { name: text.allTab }))
+    await userEvent.click(screen.getByRole('checkbox', { name: text.outstandingFilterLabel }))
     expect(screen.queryByText(text.settle.success)).not.toBeInTheDocument()
   })
 
-  it('waive is reversible: un-waive is reachable from the all tab', async () => {
+  it('waive is reversible: un-waive is reachable from the full list', async () => {
     // The outstanding list never contains a waived claim, so after a waive the
-    // row leaves it; the all tab shows the waived row with "Batalkan
+    // row leaves it; the full list shows the waived row with "Batalkan
     // pemutihan", which un-waives it straight back. The outstanding GET can
     // never present a row with that affordance.
     let waived = false
@@ -258,8 +259,8 @@ describe('Reimbursements tab', () => {
     await waitFor(() => expect(screen.getByText(text.waive.success)).toBeInTheDocument())
     expect(screen.queryByRole('button', { name: text.actions.unwaive })).not.toBeInTheDocument()
 
-    // The all tab shows the waived row, where the un-waive affordance lives.
-    await userEvent.click(screen.getByRole('button', { name: text.allTab }))
+    // The full list shows the waived row, where the un-waive affordance lives.
+    await userEvent.click(screen.getByRole('checkbox', { name: text.outstandingFilterLabel }))
     await waitFor(() => expect(screen.getByRole('button', { name: text.actions.unwaive })).toBeInTheDocument())
     expect(screen.getByText(text.status.waived, { selector: 'span' })).toBeInTheDocument()
 
@@ -269,15 +270,15 @@ describe('Reimbursements tab', () => {
     expect(screen.getByText(text.unwaive.success)).toBeInTheDocument()
   })
 
-  it('all tab is honest history: Dibayar only when the ledger settled it', async () => {
-    // The all tab mixes a settled row (id 2) and a still-owed row (id 1). The
+  it('the full list is honest history: Dibayar only when the ledger settled it', async () => {
+    // The full list mixes a settled row (id 2) and a still-owed row (id 1). The
     // badges must reflect the flag: never "Dibayar" on an unsettled claim, and
     // no action buttons at all.
     vi.stubGlobal('fetch', routedFetch(getHandlers({ outstanding: [], all: allClaims })))
     renderAt()
 
-    await waitFor(() => expect(screen.getByRole('button', { name: text.allTab })).toBeInTheDocument())
-    await userEvent.click(screen.getByRole('button', { name: text.allTab }))
+    await waitFor(() => expect(screen.getByRole('checkbox', { name: text.outstandingFilterLabel })).toBeInTheDocument())
+    await userEvent.click(screen.getByRole('checkbox', { name: text.outstandingFilterLabel }))
 
     await waitFor(() => expect(screen.getByText(formatIDR(25_000))).toBeInTheDocument())
     expect(screen.getByText(text.status.settled, { selector: 'span' })).toBeInTheDocument()
@@ -287,7 +288,7 @@ describe('Reimbursements tab', () => {
   })
 
   it('delete calls DELETE and re-fetches', async () => {
-    // The outstanding tab shows Jane (id 1); deleting her empties it.
+    // The outstanding list shows Jane (id 1); deleting her empties it.
     let deleted = false
     vi.stubGlobal(
       'fetch',
@@ -380,16 +381,15 @@ describe('Reimbursements tab', () => {
     renderAt('/history/reimbursements?q=parkir&show=all')
 
     expect(await screen.findByText('Parkir')).toBeInTheDocument()
-    expect(screen.getByRole('group', { name: text.heading })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: text.allTab })).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByRole('checkbox', { name: text.outstandingFilterLabel })).not.toBeChecked()
     expect(requests.at(-1)?.searchParams.has('outstanding')).toBe(false)
 
-    await user.click(screen.getByRole('button', { name: text.outstandingTab }))
+    await user.click(screen.getByRole('checkbox', { name: text.outstandingFilterLabel }))
     await waitFor(() => expect(screen.getByTestId('location').textContent).toBe('?q=parkir'))
     await waitFor(() => expect(requests.at(-1)?.searchParams.get('outstanding')).toBe('true'))
     expect(requests.at(-1)?.searchParams.get('q')).toBe('parkir')
 
-    await user.click(screen.getByRole('button', { name: text.allTab }))
+    await user.click(screen.getByRole('checkbox', { name: text.outstandingFilterLabel }))
     await waitFor(() => expect(screen.getByTestId('location').textContent).toBe('?q=parkir&show=all'))
   })
 

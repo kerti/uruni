@@ -29,7 +29,7 @@ async function recordClaim(page: Page, amount: string): Promise<string> {
 async function openTalangan(page: Page) {
   await page.getByRole('link', { name: copy.shell.nav.history }).click()
   await page.getByRole('link', { name: copy.history.tabs.reimbursements }).click()
-  await expect(page.getByRole('button', { name: copy.reimbursements.outstandingTab })).toBeVisible()
+  await expect(page.getByRole('checkbox', { name: copy.reimbursements.outstandingFilterLabel })).toBeChecked()
 }
 
 // Record a reimbursement claim, verify it appears in the outstanding list,
@@ -69,12 +69,12 @@ test.describe('reimbursements', () => {
     // Navigate to Riwayat's Talangan tab.
     await page.getByRole('link', { name: copy.shell.nav.history }).click()
     await page.getByRole('link', { name: copy.history.tabs.reimbursements }).click()
-    await expect(page.getByRole('button', { name: copy.reimbursements.outstandingTab })).toBeVisible()
+    await expect(page.getByRole('checkbox', { name: copy.reimbursements.outstandingFilterLabel })).toBeChecked()
 
     // There is at least one outstanding claim from the previous test (serial
     // mode). Open settle form. `exact: true` is required: name matching is a
     // case-insensitive substring search, so "Bayar" otherwise also matches the
-    // "Belum dibayar" tab button.
+    // "Belum dibayar" row badge.
     await page.getByRole('button', { name: copy.reimbursements.actions.settle, exact: true }).first().click()
     await expect(page).toHaveURL(/\/reimbursements\/settle\?id=\d+$/)
     await expect(page.getByRole('heading', { name: copy.reimbursements.settle.heading })).toBeVisible()
@@ -138,7 +138,7 @@ test.describe('reimbursements', () => {
     await expect(page.getByText(copy.reimbursements.settle.success)).toBeVisible()
   })
 
-  test('waive a fresh claim, then un-waive it from the all tab', async ({ page }) => {
+  test('waive a fresh claim, then un-waive it from the full list', async ({ page }) => {
     await logIn(page)
     await page.goto('/')
     await expect(page.getByText(copy.home.balanceHeading)).toBeVisible()
@@ -160,10 +160,10 @@ test.describe('reimbursements', () => {
     await expect(page.getByText(copy.reimbursements.waive.success)).toBeVisible()
     await expect(page.getByText('Rp20.000')).not.toBeVisible()
 
-    // The all tab carries the waived row, with "Batalkan pemutihan" where the
-    // outstanding tab (which filters waived rows out) can never reach. The
-    // row-scoped badge locators avoid the tab button's identical label.
-    await page.getByRole('button', { name: copy.reimbursements.allTab }).click()
+    // The full list carries the waived row, with "Batalkan pemutihan" where the
+    // outstanding filter (which drops waived rows) can never reach. The
+    // row-scoped badge locators keep the match to that row.
+    await page.getByRole('checkbox', { name: copy.reimbursements.outstandingFilterLabel }).uncheck()
     const row = page.locator('li', { hasText: 'Rp20.000' })
     await expect(row.getByText(copy.reimbursements.status.waived)).toBeVisible()
     await expect(page.getByRole('button', { name: copy.reimbursements.actions.unwaive, exact: true })).toBeVisible()
