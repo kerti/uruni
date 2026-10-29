@@ -666,7 +666,8 @@ func TestNoContributeRouteExists(t *testing.T) {
 // the list is the confusion this field fixes.
 func TestCloseIncidentalWritesTheNoteToBothRollLegs(t *testing.T) {
 	t.Parallel()
-	r := testRouter(t)
+	sqlDB := testStoreDB(t)
+	r := authedRouterFor(t, sqlDB)
 	setup := setUpFund(t, r)
 
 	incRec := postIncidental(t, r, openIncidentalRequest{Occasion: "Kerja bakti", OpenedOn: "2026-08-01"})
@@ -690,20 +691,30 @@ func TestCloseIncidentalWritesTheNoteToBothRollLegs(t *testing.T) {
 		t.Fatalf("close = %d, want %d (body: %s)", closeRec.Code, http.StatusOK, closeRec.Body.String())
 	}
 
-	listRec := getTransactions(t, r)
-	rows := decodeTransactionsPage(t, listRec).Transactions
-	legs := 0
-	for _, row := range rows {
+	// The list shows the roll once (#738); both ledger legs carry the note.
+	var transferID int64
+	listed := 0
+	for _, row := range decodeTransactionsPage(t, getTransactions(t, r)).Transactions {
 		if row.Kind != "transfer" {
 			continue
 		}
-		legs++
+		listed++
+		transferID = *row.TransferID
 		if row.Note == nil || *row.Note != note {
-			t.Errorf("roll leg %s note = %v, want %q", row.Direction, row.Note, note)
+			t.Errorf("listed roll row note = %v, want %q", row.Note, note)
 		}
 	}
-	if legs != 2 {
-		t.Fatalf("transfer legs = %d, want 2", legs)
+	if listed != 1 {
+		t.Fatalf("listed roll rows = %d, want 1", listed)
+	}
+	legs := ledgerLegs(t, sqlDB, setup.Fund.ID, transferID)
+	for _, leg := range legs {
+		if leg.Note == nil || *leg.Note != note {
+			t.Errorf("roll leg %s note = %v, want %q", leg.Direction, leg.Note, note)
+		}
+	}
+	if len(legs) != 2 {
+		t.Fatalf("transfer legs = %d, want 2", len(legs))
 	}
 }
 

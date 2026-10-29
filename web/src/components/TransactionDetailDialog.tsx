@@ -1,6 +1,7 @@
 import { ArrowDownLeft, ArrowUpRight, Undo2 } from 'lucide-react'
 import type { ReactNode } from 'react'
 
+import { isPurposePair, isTransfer, rowLabelFor, transferKind } from '@/components/rowLabel'
 import TransactionRowLabel from '@/components/TransactionRowLabel'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -68,6 +69,12 @@ function Detail({
   onReverse?: (transaction: Transaction) => void
 }) {
   const incoming = transaction.direction === 'in'
+  // A transfer is one row for two legs (#738): it has no direction, and its
+  // from -> to is in the label under the amount. The leg the list picked
+  // would mislead on the direction, on a location transfer's location, and on
+  // a pos pair's pos, so those three are left out.
+  const transfer = isTransfer(transaction)
+  const TransferIcon = transfer ? rowLabelFor(transaction)?.Icon : undefined
   const purposeName = purposeNames.get(transaction.purpose_id) ?? copy.home.purposeUnknown
   const corrected = transaction.effective_purpose_id !== undefined && transaction.effective_purpose_id !== transaction.purpose_id
   const note = noteForDisplay(transaction)
@@ -76,34 +83,48 @@ function Detail({
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-col gap-1">
-        <span className="flex items-center gap-2 text-sm text-muted-foreground">
-          {incoming ? (
-            <ArrowDownLeft aria-hidden="true" className="size-4 text-success" />
-          ) : (
-            <ArrowUpRight aria-hidden="true" className="size-4 text-attention" />
-          )}
-          {incoming ? text.directionIn : text.directionOut}
-        </span>
+        {/* Where an entry says Masuk or Keluar, a transfer says what kind of
+            movement it is (#738), in the same place and the same words as its
+            row. */}
+        {transfer ? (
+          <span className="flex items-center gap-2 text-sm text-muted-foreground">
+            {TransferIcon && <TransferIcon aria-hidden="true" className="size-4" />}
+            {transferKind(transaction)}
+          </span>
+        ) : (
+          <span className="flex items-center gap-2 text-sm text-muted-foreground">
+            {incoming ? (
+              <ArrowDownLeft aria-hidden="true" className="size-4 text-success" />
+            ) : (
+              <ArrowUpRight aria-hidden="true" className="size-4 text-attention" />
+            )}
+            {incoming ? text.directionIn : text.directionOut}
+          </span>
+        )}
         <span className="tabular text-2xl font-semibold">{formatIDR(transaction.amount)}</span>
-        <TransactionRowLabel transaction={transaction} wrap />
+        <TransactionRowLabel transaction={transaction} wrap bare={transfer} kindShown={transfer} />
         {transaction.reversed && <span className="text-sm text-muted-foreground">{copy.dues.history.reversedBadge}</span>}
       </div>
 
       <dl className="flex flex-col gap-3 text-sm">
-        <Field label={text.purposeLabel}>
-          {purposeName}
-          {corrected && transaction.effective_purpose_id !== undefined && (
-            <span className="block text-muted-foreground">
-              {copy.purposeCorrection.currentLabel(purposeNames.get(transaction.effective_purpose_id) ?? copy.home.purposeUnknown)}
-            </span>
-          )}
-        </Field>
+        {!isPurposePair(transaction) && (
+          <Field label={text.purposeLabel}>
+            {purposeName}
+            {corrected && transaction.effective_purpose_id !== undefined && (
+              <span className="block text-muted-foreground">
+                {copy.purposeCorrection.currentLabel(purposeNames.get(transaction.effective_purpose_id) ?? copy.home.purposeUnknown)}
+              </span>
+            )}
+          </Field>
+        )}
         {note && (
           <Field label={text.noteLabel}>
             <span className="break-words whitespace-pre-wrap">{note}</span>
           </Field>
         )}
-        {transaction.account_name && <Field label={text.locationLabel}>{transaction.account_name}</Field>}
+        {transaction.account_name && !(transfer && transaction.transfer_kind === 'between_accounts') && (
+          <Field label={text.locationLabel}>{transaction.account_name}</Field>
+        )}
         <Field label={text.dateLabel}>{formatIsoDate(transaction.occurred_on)}</Field>
         <Field label={text.recordedAtLabel}>{formatUnixSecondsWithTime(transaction.created_at)}</Field>
         {receiptIds.length > 0 && (
@@ -118,7 +139,7 @@ function Detail({
       </dl>
 
       {/* The one door to reversing a row (ADR-042), on the server's `reversible`. */}
-      {onReverse && transaction.reversible && (
+      {onReverse && transaction.reversible && !transfer && (
         <Button type="button" variant="outline" size="lg" onClick={() => onReverse(transaction)}>
           <Undo2 aria-hidden="true" />
           {copy.history.transactions.reverse}

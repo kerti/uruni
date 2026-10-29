@@ -115,10 +115,46 @@ test.describe('moves and corrections', () => {
     // The posted row is never edited (it is immutable); it now says it was
     // corrected.
     await expect(row.getByText(copy.purposeCorrection.corrected)).toBeAttached()
+    // And the correction is ONE row beside it (#738), not its two legs: the
+    // original, plus a single neutral Perbaikan pos.
+    await expect(row).toHaveCount(2)
+    await expect(row.filter({ hasText: copy.rowLabels.transferPurposeCorrection.text('Kas Utama', envelope) })).toHaveCount(1)
 
     // Back on Beranda: the cash and the fund total are untouched, and the
     // spend has moved from Kas Utama to the amplop.
     await page.getByRole('link', { name: copy.shell.nav.home }).click()
     await expectBeranda(page, { ...afterSpend, main: afterSpend.main + spent, envelope: afterSpend.envelope - spent })
+  })
+
+  // One movement is one row (#738): the two ledger legs of a Pindah lokasi, a
+  // Pindah pos and a correction never show as a pair of near-identical rows,
+  // and a transfer is neither money in nor money out.
+  test('Riwayat lists each movement once, with no in or out arrow, and nothing to cancel', async ({ page }) => {
+    await logIn(page)
+    await page.goto('/')
+    await page.getByRole('link', { name: copy.shell.nav.history }).click()
+    const rows = page.getByRole('main').getByRole('listitem')
+
+    const location = rows.filter({ hasText: copy.rowLabels.transferLocation.text('Tunai', 'Bank Uji Coba') })
+    const allocation = rows
+      .filter({ hasText: copy.rowLabels.transferPurposeMove.kind })
+      .filter({ hasText: copy.rowLabels.transferPurposeMove.text('Kas Utama', envelope) })
+    // A Pindah pos and a correction can share a from -> to, so each is told
+    // apart by its kind word.
+    const correction = rows
+      .filter({ hasText: copy.rowLabels.transferPurposeCorrection.kind })
+      .filter({ hasText: copy.rowLabels.transferPurposeCorrection.text('Kas Utama', envelope) })
+    for (const movement of [location, allocation, correction]) {
+      await expect(movement).toHaveCount(1)
+      await expect(movement.locator('.lucide-arrow-down-left, .lucide-arrow-up-right')).toHaveCount(0)
+    }
+
+    // The detail reads the movement, not a direction, and cannot be reversed.
+    await location.getByRole('button', { name: /^Lihat rincian:/ }).click()
+    const dialog = page.getByRole('dialog', { name: copy.transactionDetail.heading })
+    await expect(dialog.getByText(copy.rowLabels.transferLocation.text('Tunai', 'Bank Uji Coba'))).toBeVisible()
+    await expect(dialog.getByText(copy.transactionDetail.directionIn)).toHaveCount(0)
+    await expect(dialog.getByText(copy.transactionDetail.directionOut)).toHaveCount(0)
+    await expect(dialog.getByRole('button', { name: copy.history.transactions.reverse })).toHaveCount(0)
   })
 })

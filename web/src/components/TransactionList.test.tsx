@@ -187,10 +187,10 @@ describe('TransactionList row labels (#257)', () => {
     expect(screen.getByText(copy.rowLabels.transferPurpose.kind)).toBeInTheDocument()
   })
 
-  it('labels a reconciliation adjusted fix with Scale and "Penyesuaian - {lokasi}", with no duplicate screen-reader word', () => {
+  it('labels a reconciliation adjusted fix with SlidersHorizontal and "Penyesuaian - {lokasi}", with no duplicate screen-reader word', () => {
     const { container } = renderRows([transaction({ kind: 'adjustment', direction: 'out', account_name: 'Tunai' })])
 
-    expect(container.querySelector('.lucide-scale')).toBeInTheDocument()
+    expect(container.querySelector('.lucide-sliders-horizontal')).toBeInTheDocument()
     expect(screen.getByText(copy.rowLabels.adjustment.text('Tunai'))).toBeInTheDocument()
     // The visible text already starts with the kind word: no sr-only copy.
     expect(document.querySelector('.sr-only')).toBeNull()
@@ -224,7 +224,7 @@ describe('TransactionList row labels (#257)', () => {
       '.lucide-hand-helping',
       '.lucide-arrow-left-right',
       '.lucide-mail',
-      '.lucide-scale',
+      '.lucide-sliders-horizontal',
     ]) {
       expect(container.querySelector(cls)).not.toBeInTheDocument()
     }
@@ -238,14 +238,14 @@ describe('TransactionList row labels (#257)', () => {
     ])
 
     expect(container.querySelector('.lucide-undo-2')).not.toBeInTheDocument()
-    expect(container.querySelector('.lucide-scale')).toBeInTheDocument()
+    expect(container.querySelector('.lucide-sliders-horizontal')).toBeInTheDocument()
     expect(screen.getByText(copy.rowLabels.adjustment.text('Tunai'))).toBeInTheDocument()
     expect(screen.getByText('Koreksi salah catat')).toBeInTheDocument()
   })
 })
 
 describe('TransactionList purpose correction (#276, ADR-033)', () => {
-  it('labels a correction leg with Tags and Perbaikan pos, never Tutup amplop', () => {
+  it('labels a correction leg with PenLine and Perbaikan pos, never Tutup amplop', () => {
     // A roll and a correction are the same shape on the wire - kind='transfer',
     // transfer_kind='reclass_purpose' - and only corrects_transaction_id tells
     // them apart.
@@ -260,7 +260,7 @@ describe('TransactionList purpose correction (#276, ADR-033)', () => {
       }),
     ])
 
-    expect(container.querySelector('.lucide-tags')).toBeInTheDocument()
+    expect(container.querySelector('.lucide-pen-line')).toBeInTheDocument()
     expect(container.querySelector('.lucide-mail')).not.toBeInTheDocument()
     expect(screen.getByText(copy.rowLabels.transferPurposeCorrection.kind)).toBeInTheDocument()
     expect(screen.queryByText(copy.rowLabels.transferPurpose.kind)).not.toBeInTheDocument()
@@ -319,14 +319,14 @@ describe('TransactionList purpose correction (#276, ADR-033)', () => {
     const { container } = renderCorrectableRows([transaction({ id: 16, purpose_id: 2, effective_purpose_id: 1 })])
 
     expect(screen.getByText("Jane's wedding")).toBeInTheDocument()
-    expect(container.querySelector('.lucide-tags')).toBeInTheDocument()
+    expect(container.querySelector('.lucide-pen-line')).toBeInTheDocument()
     expect(screen.getByText(copy.purposeCorrection.corrected)).toBeInTheDocument()
   })
 
   it('marks nothing on a row whose effective tag is its own', () => {
     const { container } = renderCorrectableRows([transaction({ id: 17, purpose_id: 1, effective_purpose_id: 1 })])
 
-    expect(container.querySelector('.lucide-tags')).not.toBeInTheDocument()
+    expect(container.querySelector('.lucide-pen-line')).not.toBeInTheDocument()
     expect(screen.queryByText(copy.purposeCorrection.corrected)).not.toBeInTheDocument()
   })
 
@@ -764,7 +764,178 @@ describe('TransactionList purpose-pair labels (ADR-036, #383)', () => {
     const { container } = renderRows([transaction({ ...pair, transfer_corrects_transaction_id: 4, transfer_reason: null })])
 
     expect(screen.getByText(copy.rowLabels.transferPurposeCorrection.kind)).toBeInTheDocument()
-    expect(container.querySelector('.lucide-tags')).toBeInTheDocument()
+    expect(container.querySelector('.lucide-pen-line')).toBeInTheDocument()
     expect(container.querySelector('.lucide-shuffle')).not.toBeInTheDocument()
+  })
+})
+
+describe('TransactionList one row per movement (#738)', () => {
+  // The list shows a transfer ONCE, as whichever leg the server picked, so the
+  // row must read the same whether that leg is the out or the in one.
+  const location: Partial<Transaction> = {
+    kind: 'transfer',
+    transfer_id: 7,
+    transfer_kind: 'between_accounts',
+    transfer_from_name: 'Tunai',
+    transfer_to_name: 'Bank',
+  }
+  const pair: Partial<Transaction> = {
+    kind: 'transfer',
+    transfer_id: 9,
+    transfer_kind: 'reclass_purpose',
+    transfer_from_name: 'Kas Utama',
+    transfer_to_name: "Jane's wedding",
+    transfer_reason: 'allocation',
+  }
+
+  it('draws a transfer with no in/out arrow or colour, whichever leg it is', () => {
+    for (const direction of ['in', 'out'] as const) {
+      const { container, unmount } = renderRows([transaction({ ...location, direction })])
+
+      expect(container.querySelector('.lucide-arrow-down-left')).not.toBeInTheDocument()
+      expect(container.querySelector('.lucide-arrow-up-right')).not.toBeInTheDocument()
+      expect(container.querySelector('.text-success')).not.toBeInTheDocument()
+      expect(container.querySelector('.text-attention')).not.toBeInTheDocument()
+      // The movement's own glyph leads, once: the label does not repeat it.
+      expect(container.querySelectorAll('.lucide-arrow-left-right')).toHaveLength(1)
+      unmount()
+    }
+  })
+
+  it('keeps the amount in plain ink, unsigned', () => {
+    renderRows([transaction({ ...location, direction: 'in', amount: 300_000 })])
+
+    const amount = screen.getByText(formatIDR(300_000))
+    expect(amount.className).not.toMatch(/text-(success|attention)/)
+    expect(amount.textContent).toBe(formatIDR(300_000))
+  })
+
+  it('leads a location transfer with its kind word, then from -> to, not by a leg', () => {
+    renderRows([transaction({ ...location, direction: 'in', account_name: 'Bank' })])
+
+    expect(screen.getByText(copy.rowLabels.transferLocation.kind)).toBeInTheDocument()
+    expect(screen.getByText(copy.rowLabels.transferLocation.text('Tunai', 'Bank'))).toBeInTheDocument()
+    // The kind word is visible, so it is not repeated sr-only.
+    expect(screen.getAllByText(copy.rowLabels.transferLocation.kind)).toHaveLength(1)
+  })
+
+  it("leads a pos pair with its kind word: neither leg's pos is the row's", () => {
+    // The picked leg is tagged to the envelope, but the movement is Kas Utama -> envelope.
+    renderRows([transaction({ ...pair, direction: 'in', purpose_id: 2 })])
+
+    expect(screen.getByText(copy.rowLabels.transferPurposeMove.kind)).toBeInTheDocument()
+    expect(screen.getByText(copy.rowLabels.transferPurposeMove.text('Kas Utama', "Jane's wedding"))).toBeInTheDocument()
+    expect(screen.queryByText("Jane's wedding", { exact: true })).not.toBeInTheDocument()
+  })
+
+  it("names the card for a screen reader by the movement, not the leg's pos", () => {
+    renderRows([transaction({ ...pair, direction: 'in', purpose_id: 2 })])
+
+    const movement = `${copy.rowLabels.transferPurposeMove.kind}: ${copy.rowLabels.transferPurposeMove.text('Kas Utama', "Jane's wedding")}`
+    expect(
+      screen.getByRole('button', { name: copy.transactionDetail.openAria(movement, formatIDR(25_000), '12 Agustus 2026') }),
+    ).toBeInTheDocument()
+  })
+
+  it('offers no pos correction on a transfer, even where a handler is passed', () => {
+    renderCorrectableRows([transaction({ ...location })])
+
+    expect(screen.queryByRole('button', { name: /^Perbaiki pos:/ })).not.toBeInTheDocument()
+  })
+
+  it('shows a corrected row and its correction as two rows: the stored pos with the mark, and one Perbaikan pos row', () => {
+    const { container } = renderRows([
+      transaction({ id: 3, purpose_id: 2, effective_purpose_id: 1, direction: 'out' }),
+      transaction({
+        id: 5,
+        kind: 'transfer',
+        transfer_id: 9,
+        transfer_kind: 'reclass_purpose',
+        transfer_corrects_transaction_id: 3,
+        transfer_from_name: "Jane's wedding",
+        transfer_to_name: 'Kas Utama',
+        direction: 'out',
+        purpose_id: 2,
+      }),
+    ])
+
+    expect(screen.getAllByRole('listitem')).toHaveLength(2)
+    expect(screen.getByText(copy.purposeCorrection.corrected)).toBeInTheDocument()
+    expect(screen.getByText(copy.rowLabels.transferPurposeCorrection.kind)).toBeInTheDocument()
+    expect(screen.getByText(copy.rowLabels.transferPurposeCorrection.text("Jane's wedding", 'Kas Utama'))).toBeInTheDocument()
+    // The original still shows its stored pos (ADR-033); the PenLine glyph is on both rows.
+    expect(screen.getByText("Jane's wedding", { selector: 'span.truncate' })).toBeInTheDocument()
+    expect(container.querySelectorAll('.lucide-pen-line')).toHaveLength(2)
+  })
+})
+
+describe('TransactionList transfer detail (#738)', () => {
+  const location: Partial<Transaction> = {
+    kind: 'transfer',
+    transfer_id: 7,
+    transfer_kind: 'between_accounts',
+    transfer_from_name: 'Tunai',
+    transfer_to_name: 'Bank',
+    note: 'Setor ke bank',
+    receipt_ids: [41, 42],
+    reversible: false,
+  }
+
+  async function openDetail() {
+    await userEvent.click(screen.getByRole('button', { name: /^Lihat rincian:/ }))
+    return screen.findByRole('dialog', { name: copy.transactionDetail.heading })
+  }
+
+  it('reads from -> to, amount, date, note and photos, with no direction', async () => {
+    renderRows([transaction({ ...location, direction: 'in', account_name: 'Bank', amount: 300_000 })])
+
+    const dialog = await openDetail()
+
+    expect(within(dialog).queryByText(copy.transactionDetail.directionIn)).not.toBeInTheDocument()
+    expect(within(dialog).queryByText(copy.transactionDetail.directionOut)).not.toBeInTheDocument()
+    expect(within(dialog).getByText(copy.rowLabels.transferLocation.text('Tunai', 'Bank'))).toBeInTheDocument()
+    expect(within(dialog).getByText(formatIDR(300_000))).toBeInTheDocument()
+    expect(within(dialog).getByText('Setor ke bank')).toBeInTheDocument()
+    expect(within(dialog).getByText(copy.transactionDetail.dateLabel)).toBeInTheDocument()
+    expect(dialog.querySelectorAll('img')).toHaveLength(2)
+    // The picked leg's own location would say only half the movement.
+    expect(within(dialog).queryByText(copy.transactionDetail.locationLabel)).not.toBeInTheDocument()
+  })
+
+  it("leaves a pos pair's pos out, since the legs carry two", async () => {
+    renderRows([
+      transaction({
+        kind: 'transfer',
+        transfer_id: 9,
+        transfer_kind: 'reclass_purpose',
+        transfer_from_name: 'Kas Utama',
+        transfer_to_name: "Jane's wedding",
+        transfer_reason: 'allocation',
+        purpose_id: 2,
+      }),
+    ])
+
+    const dialog = await openDetail()
+
+    expect(within(dialog).queryByText(copy.transactionDetail.purposeLabel)).not.toBeInTheDocument()
+    expect(within(dialog).getByText(copy.rowLabels.transferPurposeMove.text('Kas Utama', "Jane's wedding"))).toBeInTheDocument()
+    // Both legs sit at one location, so it is still true to say it.
+    expect(within(dialog).getByText(copy.transactionDetail.locationLabel)).toBeInTheDocument()
+  })
+
+  it('offers no Batalkan transaksi on a transfer, whatever the server says', async () => {
+    const onReversed = vi.fn()
+    render(
+      <TransactionList
+        transactions={[transaction({ ...location, reversible: true })]}
+        purposeNames={purposeNames}
+        emptyMessage="Belum ada."
+        onReversed={onReversed}
+      />,
+    )
+
+    const dialog = await openDetail()
+
+    expect(within(dialog).queryByRole('button', { name: copy.history.transactions.reverse })).not.toBeInTheDocument()
   })
 })

@@ -119,7 +119,8 @@ func TestRetiredWorldStartsWhereTheTestsExpect(t *testing.T) {
 	r := testRouter(t)
 	w := newRetiredWorld(t, r)
 	got := w.state(t, r)
-	want := worldState{rows: 5, fund: 750_000, cash: 750_000, bank: 0, envelope: 50_000}
+	// 4 rows: three postings and the bank-emptying transfer, which the list shows once (#738).
+	want := worldState{rows: 4, fund: 750_000, cash: 750_000, bank: 0, envelope: 50_000}
 	if got != want {
 		t.Fatalf("starting state = %+v, want %+v", got, want)
 	}

@@ -1,10 +1,12 @@
-import { ArrowDownLeft, ArrowUpRight, Tags } from 'lucide-react'
+import { PenLine } from 'lucide-react'
 import { useRef, useState } from 'react'
 
 import ReceiptDialog from '@/components/ReceiptDialog'
 import ReceiptRowButton from '@/components/ReceiptRowButton'
 import ReversalDateLine from '@/components/ReversalDateLine'
 import TransactionDetailDialog from '@/components/TransactionDetailDialog'
+import { transferHeadline, transferKind } from '@/components/rowLabel'
+import TransactionGlyph from '@/components/TransactionGlyph'
 import TransactionRowLabel from '@/components/TransactionRowLabel'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -96,6 +98,7 @@ export default function TransactionList({
     <ul className="flex flex-col gap-2">
       {transactions.map((transaction) => {
         const note = noteForDisplay(transaction)
+        const kind = transferKind(transaction)
         return (
           <li
             key={transaction.id}
@@ -112,7 +115,7 @@ export default function TransactionList({
             <button
               type="button"
               aria-label={copy.transactionDetail.openAria(
-                purposeNames.get(transaction.purpose_id) ?? copy.home.purposeUnknown,
+                transferHeadline(transaction) ?? purposeNames.get(transaction.purpose_id) ?? copy.home.purposeUnknown,
                 formatIDR(transaction.amount),
                 formatIsoDate(transaction.occurred_on),
               )}
@@ -121,11 +124,7 @@ export default function TransactionList({
             />
             <div className="pointer-events-none relative flex items-start justify-between gap-3 [&_button]:pointer-events-auto">
               <span className="flex min-w-0 items-start gap-2">
-                {transaction.direction === 'in' ? (
-                  <ArrowDownLeft aria-hidden="true" className="mt-0.5 shrink-0 text-success" />
-                ) : (
-                  <ArrowUpRight aria-hidden="true" className="mt-0.5 shrink-0 text-attention" />
-                )}
+                <TransactionGlyph transaction={transaction} />
                 <span className="flex min-w-0 flex-col">
                   {/* The purpose tag is what an entry *was*; a row the app
                       created explains itself on the next line (#257 - a
@@ -134,8 +133,16 @@ export default function TransactionList({
                       that (for a settlement, the settled claim's own note -
                       see noteForDisplay). Date is always last, so the row
                       still answers "what is this?" at a glance. */}
-                  <PurposeLine transaction={transaction} purposeNames={purposeNames} onCorrectPurpose={onCorrectPurpose} />
-                  <TransactionRowLabel transaction={transaction} />
+                  {/* A transfer is one row for its two legs (#738), and every
+                      kind of it reads the same: neutral, its glyph its
+                      label's, its kind word where a pos would lead (the leg's
+                      pos is not the movement's), from -> to under it. */}
+                  {kind !== null ? (
+                    <span className="truncate">{kind}</span>
+                  ) : (
+                    <PurposeLine transaction={transaction} purposeNames={purposeNames} onCorrectPurpose={onCorrectPurpose} />
+                  )}
+                  <TransactionRowLabel transaction={transaction} bare={kind !== null} kindShown={kind !== null} />
                   {note && <span className="truncate text-sm text-muted-foreground">{note}</span>}
                   <span className="text-sm text-muted-foreground">{formatIsoDate(transaction.occurred_on)}</span>
                   {transaction.reversed && <span className="text-sm text-muted-foreground">{copy.dues.history.reversedBadge}</span>}
@@ -233,8 +240,8 @@ export default function TransactionList({
  * The stored pos is what renders, never the effective one, even after a
  * correction has moved the money: the ledger sums stored tags, so showing the
  * effective tag would put the screen out of step with the balances
- * (ADR-033). The Tags glyph says a correction exists - the same glyph its two
- * legs carry a few rows down, which ties them together - and is hidden from
+ * (ADR-033). The PenLine glyph says a correction exists - the same glyph its
+ * Perbaikan pos row carries a few rows down, which ties them together - and is hidden from
  * screen readers, with the sentence beside it in sr-only text.
  */
 function PurposeLine({
@@ -251,7 +258,7 @@ function PurposeLine({
 
   const marker = corrected ? (
     <>
-      <Tags aria-hidden="true" className="size-4 shrink-0 text-muted-foreground" />
+      <PenLine aria-hidden="true" className="size-4 shrink-0 text-muted-foreground" />
       <span className="sr-only">{copy.purposeCorrection.corrected}</span>
     </>
   ) : null

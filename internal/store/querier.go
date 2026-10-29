@@ -656,12 +656,25 @@ type Querier interface {
 	//     the balances. This column is for the correction dialog, which must build
 	//     its pair from where the money actually is, and for the marker that says a
 	//     correction exists.
+	//   - transfer_out_leg_id/transfer_in_leg_id (#738): the ids of the transfer's two
+	//     legs, so the handler can merge both legs' receipts onto the one row.
 	//   - reversed, reverses_occurred_on, counted, is_reconciliation_fix,
 	//     effective_closed_on (ADR-042): the facts of a reversal, one rule with
 	//     Ledger.ReversalRefusal (GetReversalTarget has the reasoning).
 	//     reverses_occurred_on is the original's date on a reversal row, so an
 	//     unnamed reversal can state the day it reverses when the original is on
 	//     another page.
+	//
+	// One row per movement (#738): a transfer pair is two ledger rows, but the list
+	// shows it once. The `matched` CTE applies every filter to every leg FIRST, so
+	// filtering by either leg's pos finds the pair; `kept` then keeps one matched
+	// leg per transfer_id (the 'out' leg when both matched, the only one
+	// otherwise; the id tiebreak only orders a malformed pair, it is not an order
+	// the list relies on), and only then does the keyset cursor cut the page. The
+	// representative is fixed by the filters alone, never by the cursor, so the
+	// next page cannot return the other leg of a pair already shown. A transfer is
+	// neither in nor out, so a direction filter excludes it outright. Non-transfer
+	// rows (transfer_id NULL) pass untouched.
 	ListTransactionsPage(ctx context.Context, arg ListTransactionsPageParams) ([]ListTransactionsPageRow, error)
 	ListTransfersByFund(ctx context.Context, fundID int64) ([]Transfer, error)
 	// The backup export's read (ADR-012): the whole table, password hash included

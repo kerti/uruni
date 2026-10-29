@@ -305,6 +305,24 @@ func TestPostTransactionsRejectsAnUnrecognizedDirection(t *testing.T) {
 	}
 }
 
+// ledgerLegs is every ledger row of one transfer, read straight from the store.
+// GET /api/transactions shows a transfer ONCE (#738), so a test that asserts on
+// the pair's two legs - their directions, amounts, notes - reads them here.
+func ledgerLegs(t *testing.T, sqlDB *sql.DB, fundID, transferID int64) []store.Transaction {
+	t.Helper()
+	all, err := store.New(sqlDB).ListTransactionsByFund(context.Background(), fundID)
+	if err != nil {
+		t.Fatalf("ListTransactionsByFund() = %v", err)
+	}
+	var legs []store.Transaction
+	for _, row := range all {
+		if row.TransferID != nil && *row.TransferID == transferID {
+			legs = append(legs, row)
+		}
+	}
+	return legs
+}
+
 // ---- #225: keyset paging and search --------------------------------------
 
 // seedTransactions writes n ordinary 'normal' transactions straight through
@@ -1092,9 +1110,10 @@ func TestGetTransactionsSettlementCarriesClaimMemberAndNote(t *testing.T) {
 	}
 }
 
-// A location transfer's two legs carry the same from/to account names in the
-// transfer's out->in order, whichever leg this is (see ListTransactionsPage).
-func TestGetTransactionsLocationTransferBothLegsNameTheSameFromTo(t *testing.T) {
+// A location transfer is one listed row (#738), and the row names the
+// transfer's out->in accounts, whichever leg ListTransactionsPage picked
+// (see ListTransactionsPage).
+func TestGetTransactionsLocationTransferIsOneRowNamingFromTo(t *testing.T) {
 	t.Parallel()
 	r := testRouter(t)
 	setup := setUpFund(t, r)
@@ -1125,8 +1144,8 @@ func TestGetTransactionsLocationTransferBothLegsNameTheSameFromTo(t *testing.T) 
 			legs = append(legs, row)
 		}
 	}
-	if len(legs) != 2 {
-		t.Fatalf("legs = %d, want 2", len(legs))
+	if len(legs) != 1 {
+		t.Fatalf("listed rows for the transfer = %d, want 1 (a pair is one row, #738)", len(legs))
 	}
 	for _, leg := range legs {
 		if leg.TransferKind == nil || *leg.TransferKind != "between_accounts" {
@@ -1180,8 +1199,8 @@ func TestGetTransactionsIncidentalRollLeftoverCarriesEnvelopeToMainPurposeNames(
 			t.Errorf("transfer_to_name = %v, want %q", row.TransferToName, "Kas Utama")
 		}
 	}
-	if found != 2 {
-		t.Fatalf("kind='transfer' rows = %d, want 2 (both roll legs)", found)
+	if found != 1 {
+		t.Fatalf("kind='transfer' rows = %d, want 1 (the roll's two legs list as one row, #738)", found)
 	}
 }
 
@@ -1227,8 +1246,8 @@ func TestGetTransactionsIncidentalRollShortfallCarriesMainToEnvelopePurposeNames
 			t.Errorf("transfer_to_name = %v, want the envelope's own occasion %q", row.TransferToName, "Flood relief")
 		}
 	}
-	if found != 2 {
-		t.Fatalf("kind='transfer' rows = %d, want 2 (both roll legs)", found)
+	if found != 1 {
+		t.Fatalf("kind='transfer' rows = %d, want 1 (the roll's two legs list as one row, #738)", found)
 	}
 }
 

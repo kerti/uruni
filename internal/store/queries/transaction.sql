@@ -155,13 +155,49 @@ ORDER BY occurred_on, id;
 --     the balances. This column is for the correction dialog, which must build
 --     its pair from where the money actually is, and for the marker that says a
 --     correction exists.
+--   - transfer_out_leg_id/transfer_in_leg_id (#738): the ids of the transfer's two
+--     legs, so the handler can merge both legs' receipts onto the one row.
 --   - reversed, reverses_occurred_on, counted, is_reconciliation_fix,
 --     effective_closed_on (ADR-042): the facts of a reversal, one rule with
 --     Ledger.ReversalRefusal (GetReversalTarget has the reasoning).
 --     reverses_occurred_on is the original's date on a reversal row, so an
 --     unnamed reversal can state the day it reverses when the original is on
 --     another page.
+--
+-- One row per movement (#738): a transfer pair is two ledger rows, but the list
+-- shows it once. The `matched` CTE applies every filter to every leg FIRST, so
+-- filtering by either leg's pos finds the pair; `kept` then keeps one matched
+-- leg per transfer_id (the 'out' leg when both matched, the only one
+-- otherwise; the id tiebreak only orders a malformed pair, it is not an order
+-- the list relies on), and only then does the keyset cursor cut the page. The
+-- representative is fixed by the filters alone, never by the cursor, so the
+-- next page cannot return the other leg of a pair already shown. A transfer is
+-- neither in nor out, so a direction filter excludes it outright. Non-transfer
+-- rows (transfer_id NULL) pass untouched.
 -- name: ListTransactionsPage :many
+WITH matched AS (
+  SELECT t.id, t.transfer_id,
+         ROW_NUMBER() OVER (PARTITION BY t.transfer_id ORDER BY (t.direction <> 'out'), t.id) AS leg_rank
+  FROM ledger_entry t
+  JOIN purpose p ON p.id = t.purpose_id
+  LEFT JOIN member m ON m.id = t.member_id
+  WHERE t.fund_id = sqlc.arg('fund_id')
+    AND (
+      sqlc.narg('q') IS NULL
+      OR INSTR(LOWER(t.note), LOWER(sqlc.narg('q'))) > 0
+      OR INSTR(LOWER(p.name), LOWER(sqlc.narg('q'))) > 0
+      OR INSTR(LOWER(m.name), LOWER(sqlc.narg('q'))) > 0
+      OR t.amount = sqlc.narg('q_amount')
+    )
+    AND (sqlc.narg('member_id') IS NULL OR t.member_id = sqlc.narg('member_id'))
+    AND (sqlc.narg('dues_period') IS NULL OR t.dues_period = sqlc.narg('dues_period'))
+    AND (sqlc.narg('purpose_id') IS NULL OR t.purpose_id = sqlc.narg('purpose_id'))
+    AND (sqlc.narg('month') IS NULL OR substr(t.occurred_on, 1, 7) = sqlc.narg('month'))
+    AND (sqlc.narg('direction') IS NULL OR (t.direction = sqlc.narg('direction') AND t.kind <> 'transfer'))
+),
+kept AS (
+  SELECT id FROM matched WHERE transfer_id IS NULL OR leg_rank = 1
+)
 SELECT t.id, t.fund_id, t.account_id, t.purpose_id, t.direction, t.amount, t.occurred_on, t.kind,
        t.member_id, t.dues_period, t.reimbursement_id, t.transfer_id, t.reverses_transaction_id,
        t.note, t.created_at,
@@ -184,6 +220,8 @@ SELECT t.id, t.fund_id, t.account_id, t.purpose_id, t.direction, t.amount, t.occ
        CAST(EXISTS (SELECT 1 FROM reconciliation_line rl
                     WHERE rl.fund_id = t.fund_id AND rl.adjustment_transaction_id = t.id) AS INTEGER) AS is_reconciliation_fix,
        ei.closed_on AS effective_closed_on,
+       tf.id AS transfer_out_leg_id,
+       tt.id AS transfer_in_leg_id,
        CAST(EXISTS (SELECT 1 FROM reconciliation rc
                     WHERE rc.fund_id = t.fund_id AND rc.through_transaction_id >= t.id) AS INTEGER) AS counted
 FROM ledger_entry t
@@ -202,23 +240,11 @@ LEFT JOIN purpose fp ON fp.id = tf.purpose_id
 LEFT JOIN purpose tp ON tp.id = tt.purpose_id
 LEFT JOIN "transaction" orig ON orig.id = t.reverses_transaction_id
 LEFT JOIN incidental ei ON ei.purpose_id = t.effective_purpose_id
-WHERE t.fund_id = sqlc.arg('fund_id')
+WHERE t.id IN (SELECT id FROM kept)
   AND (
     sqlc.narg('cursor_occurred_on') IS NULL
     OR (t.occurred_on, t.id) < (sqlc.narg('cursor_occurred_on'), CAST(sqlc.narg('cursor_id') AS INTEGER))
   )
-  AND (
-    sqlc.narg('q') IS NULL
-    OR INSTR(LOWER(t.note), LOWER(sqlc.narg('q'))) > 0
-    OR INSTR(LOWER(p.name), LOWER(sqlc.narg('q'))) > 0
-    OR INSTR(LOWER(m.name), LOWER(sqlc.narg('q'))) > 0
-    OR t.amount = sqlc.narg('q_amount')
-  )
-  AND (sqlc.narg('member_id') IS NULL OR t.member_id = sqlc.narg('member_id'))
-  AND (sqlc.narg('dues_period') IS NULL OR t.dues_period = sqlc.narg('dues_period'))
-  AND (sqlc.narg('purpose_id') IS NULL OR t.purpose_id = sqlc.narg('purpose_id'))
-  AND (sqlc.narg('month') IS NULL OR substr(t.occurred_on, 1, 7) = sqlc.narg('month'))
-  AND (sqlc.narg('direction') IS NULL OR t.direction = sqlc.narg('direction'))
 ORDER BY t.occurred_on DESC, t.id DESC
 LIMIT sqlc.arg('page_limit');
 
