@@ -393,6 +393,23 @@ describe('Reimbursements tab', () => {
     await waitFor(() => expect(screen.getByTestId('location').textContent).toBe('?q=parkir&show=all'))
   })
 
+  it('the checkbox follows the click at once, before the URL change commits', async () => {
+    // The router applies a location change inside startTransition, so a
+    // checkbox driven by the URL alone snaps back for a render after the click
+    // (Playwright's uncheck() fails on exactly that). A raw click - outside
+    // act(), which would flush the transition - sees the box as the browser
+    // does, the moment the event ends.
+    vi.stubGlobal('fetch', routedFetch(getHandlers()))
+    renderAt()
+    await waitFor(() => expect(screen.getByText('Jane')).toBeInTheDocument())
+    const box = screen.getByRole<HTMLInputElement>('checkbox', { name: text.outstandingFilterLabel })
+
+    box.click()
+    expect(box.checked).toBe(false)
+    await waitFor(() => expect(screen.getByTestId('location').textContent).toBe('?show=all'))
+    expect(box.checked).toBe(false)
+  })
+
   it('writes a typed search to the URL once, after the pause, and refetches with it', async () => {
     const requests: URL[] = []
     vi.stubGlobal(
