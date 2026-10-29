@@ -175,7 +175,7 @@ test.describe('golden path', { tag: '@smoke' }, () => {
     await page.getByLabel(copy.reconciliation.actualLabel('Bank Uji Coba')).fill('0')
     await page.getByLabel(copy.reconciliation.actualLabel('Tunai')).fill(String(afterRecords))
     // Each line says it matches, under its own count.
-    await expect(page.getByText(copy.reconciliation.matched)).toHaveCount(2)
+    await expect(page.getByText(copy.reconciliation.lineMatched)).toHaveCount(2)
     await expectAccessible(page)
     await page.getByRole('button', { name: copy.reconciliation.submit }).click()
 
@@ -199,7 +199,7 @@ test.describe('golden path', { tag: '@smoke' }, () => {
     await expect(page.getByRole('heading', { name: copy.reconciliation.heading })).toBeVisible()
     await page.getByLabel(copy.reconciliation.actualLabel('Bank Uji Coba')).fill('0')
     await page.getByLabel(copy.reconciliation.actualLabel('Tunai')).fill('1')
-    await page.getByRole('button', { name: copy.reconciliation.resolutionOptions.left_open }).click()
+    await page.getByRole('radio', { name: copy.reconciliation.resolutionOptions.left_open }).click()
     await page.getByRole('button', { name: copy.reconciliation.submit }).click()
     await page.getByRole('button', { name: copy.reconciliation.backToHome }).click()
 

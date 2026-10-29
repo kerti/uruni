@@ -710,12 +710,17 @@ export const copy = {
     // amount is already formatted (formatIDR) by the caller - never a raw
     // number crosses into copy.
     discrepancy: (amount: string) => `Ada selisih ${amount}. Mau dicek bareng?`,
+    // The per-location verdict while counting; the whole-fund strings above
+    // stay for Beranda's banner and the result headline. amount is formatted.
+    lineMatched: 'Cocok.',
+    lineDiscrepancy: (amount: string) => `Selisih ${amount}.`,
     heading: 'Cek kas',
     intro: 'Hitung uang yang benar-benar ada di setiap lokasi, lalu bandingkan dengan catatan.',
     recordedLabel: 'Menurut catatan',
+    countedLabel: 'Dihitung',
     // accountName is the location's name (e.g. "Tunai") - the per-field
     // labelling AmountInput's callers do.
-    actualLabel: (accountName: string) => `Jumlah sebenarnya — ${accountName}`,
+    actualLabel: (accountName: string) => `Jumlah sebenarnya di ${accountName}`,
     resolutionLabel: 'Bagaimana selisih ini diselesaikan?',
     // Keyed by the schema's resolution string (reconciliation.go's four
     // values) so both the choice buttons and the confirmation list's per-line
@@ -744,7 +749,7 @@ export const copy = {
     // the count and the submit (reconciliation.go:185-188). Never phrased
     // as an error or a loss: the numbers were refreshed, nothing was
     // discarded, she just needs to look again.
-    staleNotice: 'Ada transaksi baru sejak kamu mulai menghitung tadi. Angkanya sudah diperbarui — yuk, cek selisihnya sekali lagi.',
+    staleNotice: 'Ada transaksi baru sejak kamu mulai menghitung tadi. Angkanya sudah diperbarui. Yuk, cek selisihnya sekali lagi.',
     backToHome: 'Kembali ke beranda',
     // Per-line difference (#227): the shared line list (ReconciliationLines,
     // used by Confirmation and Cek kas's detail sheet) shows this whenever a

@@ -1,5 +1,5 @@
-import { useEffect, useState, type FormEvent } from 'react'
-import { ArrowDownLeft, ArrowUpRight, ChevronDown, CircleCheck, TriangleAlert } from 'lucide-react'
+import { useEffect, useState, type FormEvent, type KeyboardEvent } from 'react'
+import { ArrowDownLeft, ArrowUpRight, ChevronDown, CircleCheck, Search } from 'lucide-react'
 
 import DateField from '@/components/DateField'
 import AmountInput from '@/components/money/AmountInput'
@@ -11,6 +11,7 @@ import { Label } from '@/components/ui/label'
 import Loading from '@/components/states/Loading'
 import ErrorState from '@/components/states/ErrorState'
 import { copy } from '@/copy/id'
+import { cn } from '@/lib/utils'
 import { ApiError, settleUncertainWrite } from '@/lib/api'
 import { listAccounts } from '@/lib/accounts'
 import { getBalances } from '@/lib/balances'
@@ -337,7 +338,7 @@ export default function Reconcile({ onDone, onCancel }: { onDone: () => void; on
 
       {staleNotice && (
         <p role="status" className="flex items-center gap-2 rounded-lg bg-attention-soft px-4 py-3 text-attention-text">
-          <TriangleAlert aria-hidden="true" />
+          <Search aria-hidden="true" />
           {text.staleNotice}
         </p>
       )}
@@ -475,41 +476,29 @@ function AccountCountRow({
         {showMatched && (
           <p className="flex items-center gap-2 text-success">
             <CircleCheck aria-hidden="true" />
-            {text.matched}
+            {text.lineMatched}
           </p>
         )}
 
         {showGap && (
           <>
             <p className="flex items-center gap-2 text-attention-text">
-              <TriangleAlert aria-hidden="true" />
-              {text.discrepancy(formatIDR(Math.abs(diff)))}
+              <Search aria-hidden="true" />
+              {text.lineDiscrepancy(formatIDR(Math.abs(diff)))}
             </p>
 
-            <div role="group" aria-label={text.resolutionLabel} className="flex flex-col gap-2">
-              {(['entry_added', 'adjusted', 'left_open'] as const).map((option) => (
-                <Button
-                  key={option}
-                  type="button"
-                  variant={line.resolution === option ? 'default' : 'outline'}
-                  aria-pressed={line.resolution === option}
-                  size="lg"
-                  className="justify-start"
-                  // Re-tapping the option already chosen does nothing.
-                  // resolutionDefaults() resets the fix fields to the
-                  // gap-derived defaults, so without this guard a stray second
-                  // tap - easy on a phone, and these read as toggles - would
-                  // silently discard a custom amount, a backdated date or a
-                  // note she had typed for this line.
-                  onClick={() => {
-                    if (line.resolution !== option) onChange(resolutionDefaults(option, diff, mainPurposeId))
-                  }}
-                  disabled={disabled}
-                >
-                  {text.resolutionOptions[option]}
-                </Button>
-              ))}
-            </div>
+            <ResolutionChoice
+              value={line.resolution}
+              disabled={disabled}
+              // Re-choosing the option already chosen does nothing.
+              // resolutionDefaults() resets the fix fields to the
+              // gap-derived defaults, so without this guard a stray second
+              // tap would silently discard a custom amount, a backdated date
+              // or a note she had typed for this line.
+              onChoose={(option) => {
+                if (line.resolution !== option) onChange(resolutionDefaults(option, diff, mainPurposeId))
+              }}
+            />
 
             {showFixFields && (
               <div className="flex flex-col gap-3 rounded-lg bg-muted p-3">
@@ -574,7 +563,7 @@ function AccountCountRow({
                   ) : (
                     <>
                       <p className="tabular flex items-center gap-2 text-attention-text">
-                        <TriangleAlert aria-hidden="true" className="size-4 shrink-0" />
+                        <Search aria-hidden="true" className="size-4 shrink-0" />
                         {text.remainingGap(formatIDR(Math.abs(remaining)))}
                       </p>
                       {line.resolution === 'adjusted' && <p className="text-muted-foreground">{text.adjustedMustMatch}</p>}
@@ -657,7 +646,7 @@ function Confirmation({
         role="status"
         className={`flex items-center gap-2 rounded-lg px-4 py-3 ${hasOpenGap ? 'bg-attention-soft text-attention-text' : 'bg-success-soft text-success'}`}
       >
-        {hasOpenGap ? <TriangleAlert aria-hidden="true" /> : <CircleCheck aria-hidden="true" />}
+        {hasOpenGap ? <Search aria-hidden="true" /> : <CircleCheck aria-hidden="true" />}
         {hasOpenGap ? text.discrepancy(formatIDR(openTotal)) : text.matched}
       </div>
 
@@ -666,6 +655,72 @@ function Confirmation({
       <Button size="lg" onClick={onDone}>
         {text.backToHome}
       </Button>
+    </div>
+  )
+}
+
+const resolutionChoices = ['entry_added', 'adjusted', 'left_open'] as const
+type ResolutionChoiceValue = (typeof resolutionChoices)[number]
+
+/**
+ * The three ways to settle a gap, as a radio group: an empty circle for the
+ * options not taken, a filled Forest one for the choice, which also gets a
+ * border and tint. Hover is only a faint background, so it can no longer pass
+ * for a selection (it did, as outline buttons). Nothing is chosen at first.
+ * Roving tabindex: one tab stop, arrow keys move and choose.
+ */
+function ResolutionChoice({
+  value,
+  disabled,
+  onChoose,
+}: {
+  value: LineState['resolution']
+  disabled: boolean
+  onChoose: (option: ResolutionChoiceValue) => void
+}) {
+  const move = (e: KeyboardEvent<HTMLButtonElement>, index: number) => {
+    const step = e.key === 'ArrowDown' || e.key === 'ArrowRight' ? 1 : e.key === 'ArrowUp' || e.key === 'ArrowLeft' ? -1 : 0
+    if (step === 0) return
+    e.preventDefault()
+    const next = (index + step + resolutionChoices.length) % resolutionChoices.length
+    onChoose(resolutionChoices[next])
+    const radios = e.currentTarget.parentElement?.querySelectorAll<HTMLButtonElement>('[role="radio"]')
+    radios?.[next]?.focus()
+  }
+  const tabStop = resolutionChoices.findIndex((option) => option === value)
+
+  return (
+    <div role="radiogroup" aria-label={text.resolutionLabel} className="flex flex-col gap-2">
+      {resolutionChoices.map((option, index) => {
+        const checked = value === option
+        return (
+          <button
+            key={option}
+            type="button"
+            role="radio"
+            aria-checked={checked}
+            tabIndex={index === (tabStop === -1 ? 0 : tabStop) ? 0 : -1}
+            disabled={disabled}
+            onClick={() => onChoose(option)}
+            onKeyDown={(e) => move(e, index)}
+            className={cn(
+              'flex min-h-11 w-full items-center gap-3 rounded-xl border px-4 py-2 text-left text-base outline-none transition-colors focus-visible:ring-3 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50',
+              checked ? 'border-primary bg-primary/10 font-medium' : 'border-border bg-card hover:bg-muted',
+            )}
+          >
+            <span
+              aria-hidden="true"
+              className={cn(
+                'flex size-5 shrink-0 items-center justify-center rounded-full border-2',
+                checked ? 'border-primary' : 'border-muted-foreground/50',
+              )}
+            >
+              {checked && <span className="size-2.5 rounded-full bg-primary" />}
+            </span>
+            {text.resolutionOptions[option]}
+          </button>
+        )
+      })}
     </div>
   )
 }

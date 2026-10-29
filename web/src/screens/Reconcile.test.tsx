@@ -181,7 +181,7 @@ describe('Reconcile', () => {
 
     // A zero-gap line needs no resolution choice - matched is reached without
     // touching a resolution button.
-    expect(await screen.findAllByText(text.matched)).toHaveLength(2)
+    expect(await screen.findAllByText(text.lineMatched)).toHaveLength(2)
     expect(screen.getByRole('button', { name: text.submit })).not.toBeDisabled()
 
     await userEvent.click(screen.getByRole('button', { name: text.submit }))
@@ -242,14 +242,18 @@ describe('Reconcile', () => {
     await userEvent.type(screen.getByLabelText(text.actualLabel('Tunai')), '150000')
     await userEvent.type(screen.getByLabelText(text.actualLabel('Bank Uji Coba')), '200000')
 
-    expect(await screen.findByText(text.discrepancy('Rp50.000'))).toBeInTheDocument()
+    expect(await screen.findByText(text.lineDiscrepancy('Rp50.000'))).toBeInTheDocument()
 
-    // All three resolutions are reachable from the same gap.
-    expect(screen.getByRole('button', { name: text.resolutionOptions.entry_added })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: text.resolutionOptions.adjusted })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: text.resolutionOptions.left_open })).toBeInTheDocument()
+    // A radio group, nothing chosen until she chooses.
+    expect(screen.getByRole('radiogroup', { name: text.resolutionLabel })).toBeInTheDocument()
+    for (const radio of screen.getAllByRole('radio')) expect(radio).toHaveAttribute('aria-checked', 'false')
+    expect(screen.getByRole('radio', { name: text.resolutionOptions.entry_added })).toBeInTheDocument()
+    expect(screen.getByRole('radio', { name: text.resolutionOptions.adjusted })).toBeInTheDocument()
+    expect(screen.getByRole('radio', { name: text.resolutionOptions.left_open })).toBeInTheDocument()
 
-    await userEvent.click(screen.getByRole('button', { name: text.resolutionOptions.entry_added }))
+    await userEvent.click(screen.getByRole('radio', { name: text.resolutionOptions.entry_added }))
+    expect(screen.getByRole('radio', { name: text.resolutionOptions.entry_added })).toHaveAttribute('aria-checked', 'true')
+    expect(screen.getByRole('radio', { name: text.resolutionOptions.adjusted })).toHaveAttribute('aria-checked', 'false')
 
     // The fix's amount/direction default off the gap: actual > recorded is an
     // unrecorded inflow, so direction defaults to "in" and amount to the gap's
@@ -313,7 +317,7 @@ describe('Reconcile', () => {
     await userEvent.type(screen.getByLabelText(text.actualLabel('Tunai')), '80000')
     await userEvent.type(screen.getByLabelText(text.actualLabel('Bank Uji Coba')), '200000')
 
-    await userEvent.click(await screen.findByRole('button', { name: text.resolutionOptions.adjusted }))
+    await userEvent.click(await screen.findByRole('radio', { name: text.resolutionOptions.adjusted }))
     // actual < recorded is an unrecorded outflow - direction defaults "out".
     expect(screen.getByRole('button', { name: copy.record.directionOut })).toHaveAttribute('aria-pressed', 'true')
 
@@ -337,7 +341,7 @@ describe('Reconcile', () => {
 
     await userEvent.type(screen.getByLabelText(text.actualLabel('Tunai')), '150000')
     await userEvent.type(screen.getByLabelText(text.actualLabel('Bank Uji Coba')), '200000')
-    await userEvent.click(await screen.findByRole('button', { name: text.resolutionOptions.entry_added }))
+    await userEvent.click(await screen.findByRole('radio', { name: text.resolutionOptions.entry_added }))
 
     // The default fix is the whole gap: nothing remains.
     expect(screen.getByText(text.remainingNone)).toBeInTheDocument()
@@ -371,7 +375,7 @@ describe('Reconcile', () => {
 
     await userEvent.type(screen.getByLabelText(text.actualLabel('Tunai')), '80000')
     await userEvent.type(screen.getByLabelText(text.actualLabel('Bank Uji Coba')), '200000')
-    await userEvent.click(await screen.findByRole('button', { name: text.resolutionOptions.adjusted }))
+    await userEvent.click(await screen.findByRole('radio', { name: text.resolutionOptions.adjusted }))
 
     const submit = screen.getByRole('button', { name: text.submit })
     expect(screen.getByText(text.remainingNone)).toBeInTheDocument()
@@ -440,7 +444,7 @@ describe('Reconcile', () => {
 
     await userEvent.type(screen.getByLabelText(text.actualLabel('Tunai')), '150000')
     await userEvent.type(screen.getByLabelText(text.actualLabel('Bank Uji Coba')), '200000')
-    await userEvent.click(await screen.findByRole('button', { name: text.resolutionOptions.entry_added }))
+    await userEvent.click(await screen.findByRole('radio', { name: text.resolutionOptions.entry_added }))
     await userEvent.click(screen.getByRole('button', { name: text.submit }))
 
     // The headline reads the 30_000 left, not the 50_000 found and not cocok.
@@ -472,7 +476,7 @@ describe('Reconcile', () => {
 
     await userEvent.type(screen.getByLabelText(text.actualLabel('Tunai')), '80000')
     await userEvent.type(screen.getByLabelText(text.actualLabel('Bank Uji Coba')), '200000')
-    await userEvent.click(await screen.findByRole('button', { name: text.resolutionOptions.adjusted }))
+    await userEvent.click(await screen.findByRole('radio', { name: text.resolutionOptions.adjusted }))
     await userEvent.click(screen.getByRole('button', { name: text.submit }))
 
     await screen.findByText(copy.common.errors.reconciliation_plug_mismatch)
@@ -521,7 +525,7 @@ describe('Reconcile', () => {
     await userEvent.type(screen.getByLabelText(text.actualLabel('Tunai')), '80000')
     await userEvent.type(screen.getByLabelText(text.actualLabel('Bank Uji Coba')), '200000')
 
-    await userEvent.click(await screen.findByRole('button', { name: text.resolutionOptions.left_open }))
+    await userEvent.click(await screen.findByRole('radio', { name: text.resolutionOptions.left_open }))
     // Choosing "left_open" surfaces no fix fields - nothing to fill in for a
     // gap she is deliberately leaving open.
     expect(screen.queryByLabelText(text.fixAmountLabel)).not.toBeInTheDocument()
@@ -580,7 +584,7 @@ describe('Reconcile', () => {
 
     await userEvent.type(screen.getByLabelText(text.actualLabel('Tunai')), '100000')
     await userEvent.type(screen.getByLabelText(text.actualLabel('Bank Uji Coba')), '200000')
-    expect(await screen.findAllByText(text.matched)).toHaveLength(2)
+    expect(await screen.findAllByText(text.lineMatched)).toHaveLength(2)
 
     const callsBeforeSubmit = fetchMock.mock.calls.length
     await userEvent.click(screen.getByRole('button', { name: text.submit }))
@@ -589,7 +593,7 @@ describe('Reconcile', () => {
     // shows against the updated recorded figure - all without a second POST
     // /api/reconciliations.
     await screen.findByText(text.staleNotice)
-    await waitFor(() => expect(screen.getByText(text.discrepancy('Rp30.000'))).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByText(text.lineDiscrepancy('Rp30.000'))).toBeInTheDocument())
 
     const postCallsAfter = fetchMock.mock.calls.filter(([input]) => (input as string).toString().includes('/api/reconciliations')).length
     expect(postCallsAfter).toBe(1)
@@ -601,7 +605,7 @@ describe('Reconcile', () => {
     // there and she is asked to resolve again, resolution buttons intact.
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
     expect(screen.getByLabelText(text.actualLabel('Tunai'))).toHaveValue('Rp100.000')
-    expect(screen.getByRole('button', { name: text.resolutionOptions.entry_added })).toBeInTheDocument()
+    expect(screen.getByRole('radio', { name: text.resolutionOptions.entry_added })).toBeInTheDocument()
   })
 
   // The same `invalid_argument` code covers every ledger validation failure
@@ -691,7 +695,7 @@ describe('Reconcile', () => {
     await waitForForm()
 
     await userEvent.type(screen.getByLabelText(text.actualLabel('Tunai')), '70000')
-    await userEvent.click(screen.getByRole('button', { name: text.resolutionOptions.entry_added }))
+    await userEvent.click(screen.getByRole('radio', { name: text.resolutionOptions.entry_added }))
 
     const noteField = screen.getByLabelText(text.fixNoteLabel)
     await userEvent.type(noteField, 'Beli galon, lupa dicatat')
@@ -699,7 +703,7 @@ describe('Reconcile', () => {
     // A stray second tap on the option already chosen must not reset the fix to
     // its gap-derived defaults - these buttons read as toggles and a phone makes
     // a double tap easy.
-    await userEvent.click(screen.getByRole('button', { name: text.resolutionOptions.entry_added }))
+    await userEvent.click(screen.getByRole('radio', { name: text.resolutionOptions.entry_added }))
     expect(noteField).toHaveValue('Beli galon, lupa dicatat')
   })
 
@@ -801,17 +805,17 @@ describe('Reconcile', () => {
 
     // Both counted, but Bank Uji Coba carries an unresolved gap.
     await userEvent.type(screen.getByLabelText(text.actualLabel('Bank Uji Coba')), '150000')
-    await screen.findByRole('button', { name: text.resolutionOptions.entry_added })
+    await screen.findByRole('radio', { name: text.resolutionOptions.entry_added })
     expect(submit).toBeDisabled()
 
     // A fix-bearing resolution is enough only while its fix is valid.
-    await userEvent.click(screen.getByRole('button', { name: text.resolutionOptions.entry_added }))
+    await userEvent.click(screen.getByRole('radio', { name: text.resolutionOptions.entry_added }))
     expect(submit).not.toBeDisabled()
     await userEvent.clear(screen.getByLabelText(text.fixAmountLabel))
     expect(submit).toBeDisabled()
 
     // Leaving it open needs no fix at all.
-    await userEvent.click(screen.getByRole('button', { name: text.resolutionOptions.left_open }))
+    await userEvent.click(screen.getByRole('radio', { name: text.resolutionOptions.left_open }))
     expect(submit).not.toBeDisabled()
   })
 

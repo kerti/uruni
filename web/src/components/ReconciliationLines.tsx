@@ -18,7 +18,7 @@ export default function ReconciliationLines({ lines, accountNames }: { lines: Re
         <li key={line.id} className="flex flex-col gap-1 rounded-lg bg-card p-4 shadow-card ring-1 ring-foreground/10">
           <span className="font-medium">{accountNames.get(line.account_id) ?? copy.home.purposeUnknown}</span>
           <span className="tabular text-sm text-muted-foreground">
-            {text.recordedLabel}: {formatIDR(line.recorded_amount)} {'\u00b7'} {formatIDR(line.actual_amount)}
+            {text.recordedLabel} {formatIDR(line.recorded_amount)} {'\u00b7'} {text.countedLabel} {formatIDR(line.actual_amount)}
           </span>
           {line.difference_amount !== 0 && (
             <span className="tabular text-sm text-muted-foreground">
