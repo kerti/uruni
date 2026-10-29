@@ -1,4 +1,4 @@
-import { ChevronRight, CircleCheck, CircleHelp, TriangleAlert } from 'lucide-react'
+import { ChevronRight, CircleCheck, CircleHelp, Search } from 'lucide-react'
 import type { ReactNode } from 'react'
 
 import { copy } from '@/copy/id'
@@ -71,7 +71,7 @@ export default function ReconciliationBanner({
 
   return (
     <Wrapper onClick={onClick} className="bg-attention-soft text-attention-text">
-      <TriangleAlert aria-hidden="true" />
+      <Search aria-hidden="true" />
       {copy.reconciliation.discrepancy(formatIDR(totalDifference))}
     </Wrapper>
   )
