@@ -24,6 +24,30 @@ WHERE fund_id = ?
 ORDER BY performed_at DESC, id DESC
 LIMIT 1;
 
+-- Whether the fund holds any row after a count (#734): the yes/no behind "ada
+-- catatan baru sejak itu". after_id is the count's through_transaction_id, the
+-- ONE place id order may be relied on (see the reconciliation table); NULL is a
+-- count taken over an empty ledger, so any row at all is newer. Every row
+-- counts - reversals, transfer legs, corrections - since a yes/no cannot
+-- over-count. The one exception is the count's own fixes: TakeReconciliation
+-- posts an "adjusted" or "entry_added" entry after taking the cutoff, so it
+-- always sits above it (ADR-024), and it is part of the count, not news since
+-- it. through (the public report's past-month bound, a "YYYY-MM-DD" day) hides
+-- rows dated after the bound, as the figures beside it do; NULL reads every
+-- row. The CASTs keep sqlc from falling back to interface{} (ADR-024).
+-- name: FundHasTransactionsAfter :one
+SELECT EXISTS (
+  SELECT 1 FROM "transaction" t
+  WHERE t.fund_id = sqlc.arg('fund_id')
+    AND (CAST(sqlc.narg('after_id') AS INTEGER) IS NULL OR t.id > CAST(sqlc.narg('after_id') AS INTEGER))
+    AND (CAST(sqlc.narg('through') AS TEXT) IS NULL OR t.occurred_on <= CAST(sqlc.narg('through') AS TEXT))
+    AND NOT EXISTS (
+      SELECT 1 FROM reconciliation_line rl
+      WHERE rl.reconciliation_id = sqlc.arg('reconciliation_id')
+        AND rl.adjustment_transaction_id = t.id
+    )
+) AS has_transactions;
+
 -- GET /api/reconciliations (#227, ADR-032): newest-first, keyset-paged on
 -- (performed_at, id) like ListTransactionsPage (which has the reasoning). No
 -- search - a handful of snapshots a year.

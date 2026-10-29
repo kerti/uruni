@@ -324,6 +324,61 @@ func TestTakeReconciliationMatchedRoundTripsThroughListAndDetail(t *testing.T) {
 	}
 }
 
+// TestLatestReconciliationHasNewEntries: GET /api/reconciliations/latest says,
+// once and from the server, whether anything was recorded after the count
+// (#734): false straight after it, even when the count posted its own fix, true
+// once a row lands above the cutoff.
+func TestLatestReconciliationHasNewEntries(t *testing.T) {
+	t.Parallel()
+	r := testRouter(t)
+	setup := setUpFund(t, r)
+
+	if rec := postTransaction(t, r, transactionRequest{
+		AccountID: setup.CashAccountID(t), PurposeID: setup.MainPurposeID,
+		Direction: "in", Amount: 100_000, OccurredOn: "2026-08-01",
+	}); rec.Code != http.StatusCreated {
+		t.Fatalf("seed transaction = %d, want %d (body: %s)", rec.Code, http.StatusCreated, rec.Body.String())
+	}
+	hasNewEntries := func() bool {
+		t.Helper()
+		rec := getLatestReconciliation(t, r)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("GET /api/reconciliations/latest = %d, want %d (body: %s)", rec.Code, http.StatusOK, rec.Body.String())
+		}
+		var got latestReconciliationResponse
+		if err := json.NewDecoder(rec.Body).Decode(&got); err != nil {
+			t.Fatalf("decoding latest: %v", err)
+		}
+		return got.HasNewEntries
+	}
+
+	// A short cash count squared by an adjusting entry: the fix sits above the
+	// cutoff by construction, and is still part of the count.
+	takeRec := postReconciliation(t, r, takeReconciliationRequest{
+		Counts: []accountCountRequest{
+			{AccountID: setup.CashAccountID(t), ActualAmount: 97_000, Resolution: "adjusted",
+				Fix: &fixRequest{PurposeID: setup.MainPurposeID, Direction: "out", Amount: 3_000, OccurredOn: "2026-08-02"}},
+			{AccountID: setup.BankAccountID(t), ActualAmount: 0, Resolution: "matched"},
+		},
+	})
+	if takeRec.Code != http.StatusCreated {
+		t.Fatalf("POST /api/reconciliations = %d, want %d (body: %s)", takeRec.Code, http.StatusCreated, takeRec.Body.String())
+	}
+	if hasNewEntries() {
+		t.Fatal("has_new_entries = true straight after the count, want false")
+	}
+
+	if rec := postTransaction(t, r, transactionRequest{
+		AccountID: setup.CashAccountID(t), PurposeID: setup.MainPurposeID,
+		Direction: "out", Amount: 1_000, OccurredOn: "2026-08-03",
+	}); rec.Code != http.StatusCreated {
+		t.Fatalf("later transaction = %d, want %d (body: %s)", rec.Code, http.StatusCreated, rec.Body.String())
+	}
+	if !hasNewEntries() {
+		t.Error("has_new_entries = false after a later transaction, want true")
+	}
+}
+
 // TestTakeReconciliationAdjustedStoresTheGapFoundNotZero is the trust-core
 // regression at the HTTP layer: a fix posted in the same snapshot does not
 // retroactively zero that snapshot's difference. A cutoff taken after the

@@ -122,7 +122,7 @@ Calm and quick: 150–250ms ease-out. The reconciled confirmation may use a gent
 
 Warm, human, Bahasa Indonesia first (see Positioning). Examples:
 
-- Success: *"Pengeluaran berhasil dicatat."* · *"Kas dan catatan sudah cocok. 🎉"*
+- Success: *"Pengeluaran berhasil dicatat."* · *"Kas dan catatan cocok saat dicek. 🎉"*
 - Attention: *"Ada selisih Rp15.000 — mau dicek bareng?"*
 - Dues: *"Masih ada 3 teman yang belum sempat membayar."*
 

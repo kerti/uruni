@@ -52,6 +52,14 @@ type reconciliationResponse struct {
 	CreatedAt            int64   `json:"created_at"`
 }
 
+// latestReconciliationResponse is GET /api/reconciliations/latest: the snapshot
+// plus has_new_entries, whether the fund holds any transaction recorded after
+// the count (#734), computed here once so the browser never derives it.
+type latestReconciliationResponse struct {
+	reconciliationResponse
+	HasNewEntries bool `json:"has_new_entries"`
+}
+
 func toReconciliationResponse(rec store.Reconciliation) reconciliationResponse {
 	return reconciliationResponse{
 		ID:                   rec.ID,
@@ -304,7 +312,18 @@ func (a *api) latestReconciliation(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, toReconciliationResponse(rec))
+	newEntries, err := a.queries.FundHasTransactionsAfter(r.Context(), store.FundHasTransactionsAfterParams{
+		FundID: fund.ID, AfterID: rec.ThroughTransactionID, ReconciliationID: rec.ID,
+	})
+	if err != nil {
+		mapSQLiteError(w, a.log(r), err)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, latestReconciliationResponse{
+		reconciliationResponse: toReconciliationResponse(rec),
+		HasNewEntries:          newEntries,
+	})
 }
 
 // getReconciliation is GET /api/reconciliations/{id}: wraps

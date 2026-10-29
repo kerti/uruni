@@ -38,6 +38,8 @@ export interface LatestReconciliation {
   through_transaction_id: number | null
   note: string | null
   created_at: number
+  /** The server's yes/no: any transaction recorded after this count ("cocok" is about the count, not now). */
+  has_new_entries: boolean
 }
 
 /**

@@ -53,6 +53,13 @@ func (f faultQuerier) ReportLatestReconciliation(ctx context.Context, arg store.
 	return f.Querier.ReportLatestReconciliation(ctx, arg)
 }
 
+func (f faultQuerier) FundHasTransactionsAfter(ctx context.Context, arg store.FundHasTransactionsAfterParams) (bool, error) {
+	if f.fail == "FundHasTransactionsAfter" {
+		return false, errFault
+	}
+	return f.Querier.FundHasTransactionsAfter(ctx, arg)
+}
+
 func (f faultQuerier) ReportOpenReconciliationLines(ctx context.Context, arg store.ReportOpenReconciliationLinesParams) ([]store.ReportOpenReconciliationLinesRow, error) {
 	if f.fail == "ReportOpenReconciliationLines" {
 		return nil, errFault
@@ -189,6 +196,7 @@ func TestMonthlyReportSurfacesEveryReadFailure(t *testing.T) {
 		"FirstTransactionDateByFund",
 		"ReportLatestReconciliation",
 		"ReportOpenReconciliationLines",
+		"FundHasTransactionsAfter",
 		"ListIncidentalsByFund",
 		"ListPurposesByFund",
 		"ListReportTransactions",

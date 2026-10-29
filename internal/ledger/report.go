@@ -133,6 +133,11 @@ type ReportReconciliation struct {
 	// cancel into "cocok". Matched is Difference == 0.
 	Matched    bool
 	Difference money.Amount
+
+	// NewEntries is whether anything was recorded after the count (as of the
+	// bound, for a past month): "cocok" is a claim about the count, and this
+	// says it may no longer be about now (#734).
+	NewEntries bool
 }
 
 // ReportPurposeBalance is one purpose's running total.
@@ -549,10 +554,18 @@ func (l *Ledger) reportReconciliation(ctx context.Context, fundID int64, b repor
 		}
 	}
 
+	newEntries, err := l.q.FundHasTransactionsAfter(ctx, store.FundHasTransactionsAfterParams{
+		FundID: fundID, AfterID: latest.ThroughTransactionID, Through: b.through, ReconciliationID: latest.ID,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("checking for entries after the count: %w", err)
+	}
+
 	return &ReportReconciliation{
 		Date:       time.Unix(latest.PerformedAt, 0).In(loc).Format(reportDayLayout),
 		Matched:    difference == 0,
 		Difference: difference,
+		NewEntries: newEntries,
 	}, nil
 }
 

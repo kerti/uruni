@@ -213,7 +213,11 @@ export default function Home({
             onRecorded/onCancel already use - Home stays router-agnostic,
             same as every other screen in this app. */}
         <ReconciliationBanner openLines={openLines} everReconciled={latest !== null} onClick={onReconcile} />
-        {latest && <p className="text-sm text-muted-foreground">{copy.home.lastChecked(formatUnixSeconds(latest.performed_at))}</p>}
+        {latest && (
+          <p className="text-sm text-muted-foreground">
+            {copy.home.lastChecked(formatUnixSeconds(latest.performed_at), latest.has_new_entries)}
+          </p>
+        )}
       </section>
 
       {/* Incidentals are not history, they are a live balance sitting in the

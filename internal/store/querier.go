@@ -180,6 +180,18 @@ type Querier interface {
 	// emits interface{} for the aggregate and the trust core loses its compiler
 	// exactly where it is needed most (ADR-024).
 	FundBalance(ctx context.Context, fundID int64) (int64, error)
+	// Whether the fund holds any row after a count (#734): the yes/no behind "ada
+	// catatan baru sejak itu". after_id is the count's through_transaction_id, the
+	// ONE place id order may be relied on (see the reconciliation table); NULL is a
+	// count taken over an empty ledger, so any row at all is newer. Every row
+	// counts - reversals, transfer legs, corrections - since a yes/no cannot
+	// over-count. The one exception is the count's own fixes: TakeReconciliation
+	// posts an "adjusted" or "entry_added" entry after taking the cutoff, so it
+	// always sits above it (ADR-024), and it is part of the count, not news since
+	// it. through (the public report's past-month bound, a "YYYY-MM-DD" day) hides
+	// rows dated after the bound, as the figures beside it do; NULL reads every
+	// row. The CASTs keep sqlc from falling back to interface{} (ADR-024).
+	FundHasTransactionsAfter(ctx context.Context, arg FundHasTransactionsAfterParams) (bool, error)
 	// Fund-scoped like GetMemberForFund (#188): another fund's account id answers
 	// sql.ErrNoRows rather than being found and then rejected.
 	GetAccountForFund(ctx context.Context, arg GetAccountForFundParams) (Account, error)
