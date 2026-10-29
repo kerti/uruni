@@ -58,7 +58,10 @@ function participant(page: Page, name: string) {
 // The record form, already on this amplop's pos (the detail's Catat, or a
 // participation row's), finished with a direction, an amount and a note.
 async function finishRecord(page: Page, direction: 'in' | 'out', amount: number, note: string) {
-  await expect(page.getByRole('heading', { name: copy.record.heading })).toBeVisible()
+  // Keluar until a giver is preset or Masuk is chosen, then Catat sumbangan.
+  await expect(
+    page.getByRole('heading', { name: new RegExp(`^(${copy.record.headingOut}|${copy.record.headingDonation})$`) }),
+  ).toBeVisible()
   await page.getByRole('button', { name: direction === 'in' ? copy.record.directionIn : copy.record.directionOut }).click()
   await page.getByLabel(copy.record.amountLabel).fill(String(amount))
   await page.getByLabel(copy.record.noteLabel).fill(note)

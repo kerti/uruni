@@ -117,6 +117,8 @@ ORDER BY occurred_on, id;
 --   - account_name: this row's account - opening balance and a reconciliation
 --     fix label themselves by it. INNER join: account_id is NOT NULL and
 --     DeleteAccount refuses an account any transaction references.
+--   - purpose_kind: the kind of the row's stored purpose, so a contribution
+--     into an envelope that names nobody can label itself "Tanpa nama".
 --   - member_name/settlement_member_name: the dues member for a dues payment
 --     or reversal (t.member_id), or, separately, the settled claim's member
 --     for a reimbursement payout (t.member_id is NULL on kind='reimbursement',
@@ -164,6 +166,7 @@ SELECT t.id, t.fund_id, t.account_id, t.purpose_id, t.direction, t.amount, t.occ
        t.member_id, t.dues_period, t.reimbursement_id, t.transfer_id, t.reverses_transaction_id,
        t.note, t.created_at,
        a.name AS account_name,
+       p.kind AS purpose_kind,
        m.name AS member_name,
        rm.name AS settlement_member_name,
        rb.note AS claim_note,

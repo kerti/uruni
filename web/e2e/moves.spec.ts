@@ -46,7 +46,7 @@ async function pick(page: Page, label: string, option: string) {
 
 async function openRecord(page: Page) {
   await page.getByRole('link', { name: copy.shell.nav.record }).click()
-  await expect(page.getByRole('heading', { name: copy.record.heading })).toBeVisible()
+  await expect(page.getByRole('heading', { name: copy.record.headingOut })).toBeVisible()
 }
 
 test.describe('moves and corrections', () => {

@@ -94,7 +94,7 @@ test.describe('golden path', { tag: '@smoke' }, () => {
     await expectBalances(page, opening, 0)
 
     await page.getByRole('link', { name: copy.shell.nav.record }).click()
-    await expect(page.getByRole('heading', { name: copy.record.heading })).toBeVisible()
+    await expect(page.getByRole('heading', { name: copy.record.headingOut })).toBeVisible()
     await expectAccessible(page)
 
     // The fixture's cash account ("Tunai") is the first active account, so it
@@ -117,7 +117,7 @@ test.describe('golden path', { tag: '@smoke' }, () => {
     // Money in, to Kas Utama: the form's default purpose, so only the direction
     // and amount are touched.
     await page.getByRole('link', { name: copy.shell.nav.record }).click()
-    await expect(page.getByRole('heading', { name: copy.record.heading })).toBeVisible()
+    await expect(page.getByRole('heading', { name: copy.record.headingOut })).toBeVisible()
     await page.getByRole('button', { name: copy.record.directionIn }).click()
     await page.getByLabel(copy.record.amountLabel).fill(String(received))
     await page.getByRole('button', { name: copy.record.submit }).click()

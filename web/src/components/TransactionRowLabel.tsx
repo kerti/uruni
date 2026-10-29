@@ -111,6 +111,10 @@ function rowLabelFor(transaction: Transaction): { Icon: LucideIcon; srWord: stri
           text: copy.rowLabels.contribution.text(transaction.member_name ?? ''),
         }
       }
+      // A contribution nobody gave a name for: money in to an envelope.
+      if (transaction.direction === 'in' && transaction.purpose_kind === 'incidental') {
+        return { Icon: HandCoins, srWord: copy.rowLabels.contribution.kind, text: copy.rowLabels.contribution.anonymous }
+      }
       return null
     default:
       return null

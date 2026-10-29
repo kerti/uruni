@@ -247,8 +247,29 @@ describe('RecordTransaction', () => {
     expect(screen.queryByLabelText(text.amountLabel)).not.toBeInTheDocument()
 
     await userEvent.click(screen.getByRole('button', { name: text.directionOut }))
-    expect(screen.getByRole('heading', { name: text.heading })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: text.headingOut })).toBeInTheDocument()
     expect(screen.getByLabelText(text.amountLabel)).toHaveValue(formatIDR(5_000))
+  })
+
+  // The h1 follows what is being recorded, switching as the kind does.
+  it('titles the page for the kind being recorded, switching with it', async () => {
+    vi.stubGlobal('fetch', stubFormLoad())
+    render(<RecordTransaction onRecorded={vi.fn()} onCancel={vi.fn()} onDuesRecorded={vi.fn()} />)
+    const h1 = async (name: string) => expect(await screen.findByRole('heading', { level: 1, name })).toBeInTheDocument()
+
+    await h1(text.headingOut)
+    await userEvent.click(screen.getByRole('button', { name: text.directionIn }))
+    await h1(text.headingIn)
+    await chooseOption(text.purposeLabel, 'Halal bihalal RT')
+    await h1(text.headingDonation)
+    await userEvent.click(screen.getByRole('button', { name: text.directionTransfer }))
+    await h1(text.directionTransfer)
+    await userEvent.click(screen.getByRole('button', { name: text.directionPurpose }))
+    await h1(text.directionPurpose)
+    await userEvent.click(screen.getByRole('button', { name: text.directionDues }))
+    await h1(copy.dues.payment.heading)
+    await userEvent.click(screen.getByRole('button', { name: text.directionOut }))
+    await h1(text.headingOut)
   })
 
   it('keeps the submit button disabled until an amount is entered', async () => {
@@ -998,6 +1019,14 @@ describe('RecordTransaction: Pengeluaran ini ditalangi (#368)', () => {
     expect(screen.getByLabelText(text.frontedLabel)).toBeChecked()
     expect(screen.queryByRole('combobox', { name: text.locationLabel })).not.toBeInTheDocument()
     expect(screen.getByRole('combobox', { name: copy.reimbursements.record.memberLabel })).toBeInTheDocument()
+  })
+
+  it('titles a ticked claim Catat talangan', async () => {
+    stub()
+    renderRouted()
+    await screen.findByLabelText(text.locationLabel)
+    await userEvent.click(screen.getByLabelText(text.frontedLabel))
+    expect(screen.getByRole('heading', { level: 1, name: copy.reimbursements.record.heading })).toBeInTheDocument()
   })
 
   it('unticking brings the location back and clears the URL', async () => {

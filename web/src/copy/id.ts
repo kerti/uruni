@@ -472,8 +472,14 @@ export const copy = {
   // location, purpose, date, optional note. Reached from the footer nav's
   // "Catat" tab. successIn/successOut are shown on home after a successful
   // post, worded per Design-System.md's voice examples for each direction.
+  // The h1 follows what is being recorded (RecordTransaction.tsx): headingOut,
+  // headingIn, headingDonation (Masuk onto an envelope), the talangan record
+  // heading for a ticked claim, the two move names, and the dues payment
+  // heading for Iuran.
   record: {
-    heading: 'Catat transaksi',
+    headingOut: 'Catat pengeluaran',
+    headingIn: 'Catat pemasukan',
+    headingDonation: 'Catat sumbangan',
     directionLabel: 'Jenis',
     directionIn: 'Uang masuk',
     directionOut: 'Uang keluar',
@@ -645,6 +651,9 @@ export const copy = {
     contribution: {
       kind: 'Sumbangan',
       text: (memberName: string) => memberName,
+      // A contribution into an envelope that names nobody: the visible text
+      // says so rather than leaving the row with only a pos and a date.
+      anonymous: 'Tanpa nama',
     },
     contributionReversal: {
       text: (memberName: string) => `Pembatalan · ${memberName}`,
@@ -1474,8 +1483,11 @@ export const copy = {
       // What the envelope holds now - PRD-ID's "sisa" for an envelope's
       // leftover (section 7.5). Rp0 once closed: the leftover rolled out.
       remainingLabel: 'Sisa',
-      // An envelope's card list lives in Pengaturan, so this leads there.
+      // The way back follows where the detail was opened from: Beranda's
+      // per-pos list or a card in Pengaturan. Pengaturan is also the label
+      // for a deep link or a reload, which carry no origin.
       backToSettings: 'Kembali ke pengaturan',
+      backToHome: 'Kembali ke beranda',
     },
     close: {
       heading: 'Tutup amplop',

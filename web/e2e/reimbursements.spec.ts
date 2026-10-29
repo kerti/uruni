@@ -9,7 +9,7 @@ import { chooseMenuItem, chooseOption } from './popper'
 // confirmation. Returns the first member's name.
 async function recordClaim(page: Page, amount: string): Promise<string> {
   await page.getByRole('link', { name: copy.shell.nav.record }).click()
-  await expect(page.getByRole('heading', { name: copy.record.heading })).toBeVisible()
+  await expect(page.getByRole('heading', { name: copy.record.headingOut })).toBeVisible()
   await page.getByRole('button', { name: copy.record.directionOut }).click()
   // click(), not check(): the box mirrors ?fronted=1, which the router
   // commits a tick after the click, and check() reads the state at once.

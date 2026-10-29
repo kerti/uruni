@@ -97,6 +97,24 @@ describe('TransactionList row labels (#257)', () => {
     expect(screen.getByText(copy.rowLabels.contribution.kind)).toHaveClass('sr-only')
   })
 
+  it('labels a contribution into an envelope that names nobody "Tanpa nama", with Sumbangan for screen readers', () => {
+    const { container } = renderRows([transaction({ purpose_id: 2, purpose_kind: 'incidental' })])
+
+    expect(container.querySelector('.lucide-hand-coins')).toBeInTheDocument()
+    expect(screen.getByText(copy.rowLabels.contribution.anonymous)).toBeInTheDocument()
+    expect(screen.getByText(copy.rowLabels.contribution.kind)).toHaveClass('sr-only')
+  })
+
+  it('leaves an unnamed row on the main pos, or going out of an envelope, unlabelled', () => {
+    const { container } = renderRows([
+      transaction({ id: 1, purpose_kind: 'main' }),
+      transaction({ id: 2, purpose_id: 2, direction: 'out', purpose_kind: 'incidental' }),
+    ])
+
+    expect(container.querySelector('.lucide-hand-coins')).toBeNull()
+    expect(screen.queryByText(copy.rowLabels.contribution.anonymous)).not.toBeInTheDocument()
+  })
+
   it('labels a contribution reversal "Pembatalan - {anggota}", with no empty period', () => {
     const { container } = renderRows([
       transaction({ kind: 'adjustment', direction: 'out', purpose_id: 2, member_id: 5, member_name: 'Budi', reverses_transaction_id: 10 }),

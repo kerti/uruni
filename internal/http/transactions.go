@@ -69,6 +69,10 @@ type transactionResponse struct {
 	// reconciliation-fix labels are built from it. Always present on a listed row
 	// (account_id is NOT NULL and an account with transactions is never deleted).
 	AccountName string `json:"account_name"`
+	// PurposeKind is the kind of this row's stored purpose ('main',
+	// 'incidental', 'pass_through'); an anonymous contribution is a 'normal'
+	// 'in' row into an 'incidental' one.
+	PurposeKind string `json:"purpose_kind"`
 	// MemberName is the dues member for a dues payment or reversal, or the
 	// settled claim's member for a reimbursement payout; never both, nil
 	// otherwise. See toTransactionsPageResponse.
@@ -182,6 +186,7 @@ func toTransactionsPageResponse(t store.ListTransactionsPageRow, today string) t
 	})
 
 	resp.AccountName = t.AccountName
+	resp.PurposeKind = t.PurposeKind
 	resp.ClaimNote = t.ClaimNote
 	resp.TransferKind = t.TransferKind
 	resp.TransferCorrectsTransactionID = t.TransferCorrectsTransactionID
