@@ -4,7 +4,6 @@ import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 
 import ReceiptDialog from '@/components/ReceiptDialog'
 import ReceiptRowButton from '@/components/ReceiptRowButton'
-import { segmentedItemClass, segmentedTrackClass } from '@/components/segmented'
 import { Button } from '@/components/ui/button'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Input } from '@/components/ui/input'
@@ -297,7 +296,7 @@ export default function Reimbursements({ refetchKey }: { refetchKey?: unknown })
                     The photo affordance (#154) on the left - the same shared
                     control as TransactionList.tsx's, shown on every tab,
                     since a settled claim's nota is exactly as worth keeping.
-                    On the right, only on the outstanding tab: Bayar in plain
+                    On the right, only on the outstanding list: Bayar in plain
                     ink, the everyday action, one tap; the rarer three behind
                     a "more" menu, two. */}
                 <div className="flex items-center justify-between gap-3">
@@ -417,28 +416,17 @@ export default function Reimbursements({ refetchKey }: { refetchKey?: unknown })
         </p>
       )}
 
-      {/* View toggle - a segmented control, not tabs: the Riwayat tab strip
-          above is the only tablist on this screen. */}
-      <div role="group" aria-label={text.heading} className={segmentedTrackClass(2)}>
-        <Button
-          type="button"
-          variant={tab === 'outstanding' ? 'default' : 'ghost'}
-          aria-pressed={tab === 'outstanding'}
-          className={segmentedItemClass(tab === 'outstanding')}
-          onClick={() => chooseTab('outstanding')}
-        >
-          {text.outstandingTab}
-        </Button>
-        <Button
-          type="button"
-          variant={tab === 'all' ? 'default' : 'ghost'}
-          aria-pressed={tab === 'all'}
-          className={segmentedItemClass(tab === 'all')}
-          onClick={() => chooseTab('all')}
-        >
-          {text.allTab}
-        </Button>
-      </div>
+      {/* Outstanding is a subset of all, so a plain filter checkbox - the
+          same control as Dues/Status.tsx's "belum bayar" filter. */}
+      <label className="flex items-center gap-2 text-sm">
+        <input
+          type="checkbox"
+          className="size-4 rounded border-input"
+          checked={tab === 'outstanding'}
+          onChange={(event) => chooseTab(event.target.checked ? 'outstanding' : 'all')}
+        />
+        {text.outstandingFilterLabel}
+      </label>
 
       <div className="relative">
         <Label htmlFor="reimbursement-search" className="sr-only">
