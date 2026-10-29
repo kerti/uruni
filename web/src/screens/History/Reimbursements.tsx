@@ -1,5 +1,5 @@
 import { MoreHorizontal, Search } from 'lucide-react'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { startTransition, useCallback, useEffect, useOptimistic, useRef, useState } from 'react'
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 
 import ReceiptDialog from '@/components/ReceiptDialog'
@@ -75,6 +75,11 @@ export default function Reimbursements({ refetchKey }: { refetchKey?: unknown })
   // Anything but `all` reads as the default view, so a stale or hand-typed
   // value lands on the outstanding list rather than an error.
   const tab: 'outstanding' | 'all' = searchParams.get('show') === 'all' ? 'all' : 'outstanding'
+  // What the filter checkbox shows. The router commits a URL change inside
+  // startTransition, so a box bound to `tab` alone would snap back for a
+  // render after the click; the optimistic value holds the click until the
+  // new URL lands, then gives way to it.
+  const [outstandingShown, showOutstanding] = useOptimistic(tab === 'outstanding')
   const [listState, listRun] = useApi<ReimbursementsPage>()
   // Pages after the first, appended in order - reset whenever the first page
   // is refetched (a tab switch, a search, a write, or refetchKey).
@@ -422,8 +427,14 @@ export default function Reimbursements({ refetchKey }: { refetchKey?: unknown })
         <input
           type="checkbox"
           className="size-4 rounded border-input"
-          checked={tab === 'outstanding'}
-          onChange={(event) => chooseTab(event.target.checked ? 'outstanding' : 'all')}
+          checked={outstandingShown}
+          onChange={(event) => {
+            const next = event.target.checked
+            startTransition(() => {
+              showOutstanding(next)
+              chooseTab(next ? 'outstanding' : 'all')
+            })
+          }}
         />
         {text.outstandingFilterLabel}
       </label>
